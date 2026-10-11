@@ -383,7 +383,7 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
       modelRef: params.modelRef,
       tools,
       codemode: params.codemode,
-      toolDiscovery: params.toolDiscovery,
+      mcp: params.mcp,
       systemPrompt: [systemPrompt, rootInstructions].filter(Boolean).join('\n\n'),
       thinkingLevel: configuredThinking ?? thinkingLevel ?? 'medium',
       transcriptRuntime,

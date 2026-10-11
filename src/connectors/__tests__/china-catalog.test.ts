@@ -36,7 +36,7 @@ describe('China connector catalog', () => {
       if (connector.runtime.localPackage) {
         expect(connector.runtime.localPackage.version).toMatch(/^\d+\.\d+\.\d+$/);
       } else {
-        expect(connector.runtime.serverTemplate).toMatchObject({ transport: 'streamable-http' });
+        expect(connector.runtime.serverTemplate).toMatchObject({ type: 'http' });
       }
       expect(JSON.stringify(connector.runtime.serverTemplate)).not.toContain('@latest');
     }
@@ -118,7 +118,7 @@ describe('China connector catalog', () => {
   ])('preserves the official authentication contract for %s', async (id, key, url, authorization) => {
     const definition = getConnectorDefinition(id)!;
     const { server } = materializeConnectorMcpServer(definition, { secrets: { [key]: 'input-secret' } });
-    expect(server).toMatchObject({ url, transport: 'streamable-http' });
+    expect(server).toMatchObject({ url, type: 'http' });
     expect(JSON.stringify(server)).not.toContain('input-secret');
     const resolved = await resolveConnectorSecretReferences(server, { resolveApiKey: async () => 'stored-token' } as never);
     expect(resolved).toMatchObject({ headers: { Authorization: authorization } });

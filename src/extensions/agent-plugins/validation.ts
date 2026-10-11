@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { existsSync, lstatSync, readFileSync, readdirSync, realpathSync, statSync } from 'node:fs';
 import { validateHeaderName, validateHeaderValue } from 'node:http';
 import { isAbsolute, join, relative, resolve, dirname } from 'node:path';
@@ -18,7 +19,6 @@ const strings = z.record(z.string(), z.string());
 const serverSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('stdio'), command: z.string().min(1), args: z.array(z.string()).optional(), env: strings.optional(), cwd: z.string().optional() }),
   z.strictObject({ type: z.literal('streamable-http'), url: z.string().min(1), headers: strings.optional() }),
-  z.strictObject({ type: z.literal('sse'), url: z.string().min(1), headers: strings.optional() }),
 ]);
 export type PluginManifest = z.infer<typeof manifestSchema>;
 export type PluginServer = z.infer<typeof serverSchema>;
@@ -168,5 +168,5 @@ export function inspectAgentPlugin(rootDir: string, dataDir = join(rootDir, '.in
 }
 
 export function pluginServerId(pluginId: string, serverName: string): string {
-  return `plugin/${encodeURIComponent(pluginId)}/${encodeURIComponent(serverName)}`;
+  return `plugin_${pluginId.replace(/[^a-zA-Z0-9_]/g, '_')}_${createHash('sha256').update(JSON.stringify([pluginId, serverName])).digest('hex').slice(0, 16)}`;
 }

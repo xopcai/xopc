@@ -2,21 +2,14 @@ import type { ReactNode } from 'react';
 
 import { McpHeadersEditor } from '@/features/connectors/mcp/mcp-headers-editor';
 import {
-  connectionTimeoutSeconds,
-  parseConnectionTimeoutSeconds,
-  parseRequestTimeoutSeconds,
-  requestTimeoutSeconds,
-  type McpServerRow,
-  type McpAuthKind,
-  type McpTransportKind,
+  type McpServerRow, type McpTransportKind,
 } from '@/features/connectors/mcp/mcp-config-api';
 import type { McpSettingsMessages } from '@/i18n/messages';
 import { settingsInputFocusClass } from '@/lib/form-field-width';
 import { cn } from '@/lib/cn';
 import { Select, SelectOption } from '@/components/ui/popover-select';
 
-const TRANSPORTS: McpTransportKind[] = ['stdio', 'sse', 'streamable-http'];
-const AUTH_KINDS: McpAuthKind[] = ['none', 'oauth'];
+const TRANSPORTS: McpTransportKind[] = ['stdio', 'streamable-http'];
 
 function Field({
   label,
@@ -146,39 +139,9 @@ export function McpServerFormFields({ row, t, onUpdate, idConflictMessage, varia
               </Field>
             </div>
           ) : null}
-          {showBasic && row.transport === 'streamable-http' ? (
-            <>
-              <Field label={t.authLabel} description={t.authHint}>
-                <Select
-                  className={inputClassName()}
-                  value={row.auth}
-                  onChange={(event) => {
-                    const auth = event.target.value as McpAuthKind;
-                    onUpdate({
-                      auth,
-                      headers: auth === 'oauth'
-                        ? row.headers.filter((header) => header.key.trim().toLowerCase() !== 'authorization')
-                        : row.headers,
-                    });
-                  }}
-                >
-                  {AUTH_KINDS.map((auth) => (
-                    <SelectOption key={auth} value={auth}>{t.authLabels[auth]}</SelectOption>
-                  ))}
-                </Select>
-              </Field>
-              {row.auth === 'oauth' ? (
-                <Field label={t.oauthClientIdLabel} description={t.oauthClientIdHint}>
-                  <input
-                    className={cn(inputClassName(), 'font-mono text-xs')}
-                    value={row.oauthClientId}
-                    placeholder={t.oauthClientIdPlaceholder}
-                    onChange={(event) => onUpdate({ oauthClientId: event.target.value })}
-                  />
-                </Field>
-              ) : null}
-            </>
-          ) : null}
+          {showBasic ? <Field label={t.oauthClientIdLabel} description={t.oauthClientIdHint}>
+            <input className={inputClassName()} value={row.oauthClientId} onChange={e => onUpdate({ oauthClientId: e.target.value })} />
+          </Field> : null}
           {showAdvanced ? (
             <McpHeadersEditor
               label={t.headersLabel}
@@ -190,50 +153,22 @@ export function McpServerFormFields({ row, t, onUpdate, idConflictMessage, varia
               keyPlaceholder={t.headerKeyPlaceholder}
               valuePlaceholder={t.headerValuePlaceholder}
               headers={row.headers}
-              onChange={(headers) => onUpdate({
-                headers: row.auth === 'oauth'
-                  ? headers.filter((header) => header.key.trim().toLowerCase() !== 'authorization')
-                  : headers,
-              })}
+              onChange={(headers) => onUpdate({ headers })}
             />
           ) : null}
         </>
       )}
 
-      {showAdvanced ? (
-        <Field label={t.timeoutLabel} description={t.timeoutHint}>
-          <input
-            type="number"
-            min={1}
-            max={600}
-            className={inputClassName()}
-            value={connectionTimeoutSeconds(row)}
-            placeholder={t.timeoutPlaceholder}
-            onChange={(e) =>
-              onUpdate({
-                connectionTimeoutMs: parseConnectionTimeoutSeconds(e.target.value),
-              })
-            }
-          />
-        </Field>
-      ) : null}
-      {showAdvanced ? (
-        <Field label={t.requestTimeoutLabel} description={t.requestTimeoutHint}>
-          <input
-            type="number"
-            min={1}
-            max={14_400}
-            className={inputClassName()}
-            value={requestTimeoutSeconds(row)}
-            placeholder={t.requestTimeoutPlaceholder}
-            onChange={(e) =>
-              onUpdate({
-                requestTimeoutMs: parseRequestTimeoutSeconds(e.target.value),
-              })
-            }
-          />
-        </Field>
-      ) : null}
+      <Field label="Exposure">
+        <Select className={inputClassName()} value={row.exposure} onChange={e => onUpdate({ exposure: e.target.value as McpServerRow['exposure'] })}>
+          {(['codemode', 'deferred', 'direct', 'hidden'] as const).map(value => <SelectOption key={value} value={value}>{value}</SelectOption>)}
+        </Select>
+      </Field>
+      {showAdvanced ? <Field label={t.requestTimeoutLabel}>
+        <input type="number" min={1} className={inputClassName()} value={row.timeout ?? ''} placeholder="60"
+          onChange={e => onUpdate({ timeout: e.target.value ? Number(e.target.value) : undefined })} />
+      </Field> : null}
+
     </div>
   );
 }

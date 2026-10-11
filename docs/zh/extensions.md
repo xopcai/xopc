@@ -10,7 +10,9 @@
 xopc extensions inspect ./my-plugin
 xopc extensions install ./my-plugin --yes
 xopc extensions enable plugin:my-plugin
-xopc extensions connect plugin:my-plugin --mcp main
+xopc mcp list
+# 使用 list 或插件详情中显示的服务 ID
+xopc mcp login <server-id>
 xopc extensions verify plugin:my-plugin
 xopc extensions update plugin:my-plugin
 xopc extensions rollback plugin:my-plugin
@@ -20,13 +22,13 @@ xopc extensions remove plugin:my-plugin
 
 支持 Gateway 主机上的目录、ZIP、HTTPS ZIP 直链，以及 `store:包名[@版本]`。界面中的路径是 **Gateway 本地路径**，不是上传浏览器所在电脑的目录。HTTPS 下载不接受重定向。首次安装需要确认能力且**默认停用**；非交互 CLI 必须传 `--yes`。更新新增或改变程序执行、网络访问能力时需要再次确认。检查安装包不会启动服务或执行安装脚本。
 
-启用后，在插件详情或「连接器」点击「测试连接」。公开 HTTP MCP 无需登录；需要授权时，OAuth 使用「连接账号」，API Key 使用「设置密钥」（HTTP header 或 stdio 环境变量）。聊天需要尚未连接的插件 MCP 时，xopc 会保留当前目标，并显示与「连接器」一致的连接操作区。OAuth 只在用户点击「连接账号」后发起；xopc 验证返回的工具后会自动继续原任务，无需重新发送提示。远程 Gateway 的 loopback 回调无法从浏览器访问时，可把浏览器地址栏中的完整回调 URL 粘贴到连接操作区。
+启用后使用 `xopc mcp list` 运行 pi 原生诊断。需要 OAuth 的 HTTP 服务在 Gateway 主机运行 `xopc mcp login <server-id>`，浏览器与回调由 pi 处理。插件详情可配置 HTTP header 或 stdio 环境变量中的静态密钥。旧网页 OAuth、远程回调粘贴、插件自动连接恢复和 SSE 已删除，详见 [MCP](./mcp.md)。
 
-凭据保存在现有宿主凭据存储中，按 owner、插件、服务及端点隔离，不写入安装包或 `xopc.json`。更新改变端点时不继承旧凭据绑定。支持标准 streamable HTTP OAuth；SSE 使用公开访问或显式 header，stdio 使用环境变量。要求预注册专用 OAuth client 或厂商特有登录流程的服务，可能需要额外宿主集成。
+静态密钥保存在 xopc 凭据存储中，在配置投影时解析。OAuth 凭据由 pi 保存于 xopc 状态目录的 `pi/` 子目录，不写入安装包或 `xopc.json`。预注册客户端使用原生 `oauth` 配置；旧 OAuth 凭据不迁移。
 
-插件启停由安装记录管理，不使用原生扩展的 `extensions.disabled`。MCP 使用保留命名空间 `plugin/<包名>/<服务名>`。更新、回滚通过原子切换版本完成，保留 `PLUGIN_DATA`；修改已安装文件会阻止激活，需重新安装修复。本地 stdio MCP 是受信任程序，**没有进程沙箱**，启用前必须检查命令。HTTP 阻止非 loopback 私网地址及重定向，允许显式配置的 loopback 服务。
+插件启停由安装记录管理，不使用 `extensions.disabled`。MCP 服务 ID 为 `plugin_<规范化包名>_<稳定散列>`，在插件详情中显示。更新、回滚原子切换版本，保留 `PLUGIN_DATA`；修改已安装文件会阻止激活。本地 stdio 程序及 HTTP 连接遵循 pi 的原生行为，插件 ZIP 下载保留宿主下载校验。
 
-卸载删除该包所有已安装版本，默认保留数据和本地凭据。可通过 `--remove-data`、`--remove-credentials` 或界面复选框明确删除；删除本地凭据不等于撤销服务商侧授权。历史版本保留至卸载，支持回滚上一版本。当前是单 owner 连接模型，不按聊天用户分别授权。市场 SHA 校验、安装包完整性检查不代表发布者签名认证。
+卸载删除该包所有已安装版本，默认保留数据和本地凭据。可通过 `--remove-data`、`--remove-credentials` 或界面复选框明确删除；remove-credentials 只清理宿主静态密钥；需要清理原生 OAuth 时，请在卸载前运行 `xopc mcp logout <server-id>`。删除本地凭据不等于撤销服务商侧授权。历史版本保留至卸载，支持回滚上一版本。当前是单 owner 连接模型，不按聊天用户分别授权。市场 SHA 校验、安装包完整性检查不代表发布者签名认证。
 
 ## 浏览与检查
 

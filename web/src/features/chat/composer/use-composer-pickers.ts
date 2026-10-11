@@ -104,13 +104,7 @@ export function contextRefFromAtMentionItem(item: AtMentionItem): ComposerContex
       expectedVersion: item.tabRef.expectedVersion, title: item.name,
     };
   }
-  if (item.kind === 'mcp_resource') {
-    return {
-      refId: crypto.randomUUID(),
-      kind: 'mcp_resource', sourceId: item.resourceRef.sourceId,
-      expectedVersion: item.resourceRef.expectedVersion, title: item.name,
-    };
-  }
+
   return null;
 }
 
@@ -260,13 +254,6 @@ export function useComposerPickers(opts: UseComposerPickersOptions): UseComposer
         const next = replaceRange(valueRef.current, range.start, range.end, '');
         resetEditor({ nextText: next, caretOffset: range.start, focus: true });
         onChatAgentChange?.(item.agentId);
-        return;
-      }
-
-      if (item.kind === 'mcp_server') {
-        const insert = `@mcp:${encodeURIComponent(item.serverId)}/`;
-        const next = replaceRange(valueRef.current, range.start, range.end, insert);
-        resetEditor({ nextText: next, caretOffset: range.start + insert.length, focus: true });
         return;
       }
 

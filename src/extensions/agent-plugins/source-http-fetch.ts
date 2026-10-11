@@ -13,20 +13,20 @@ const loopback = (host: string) => host === 'localhost' || host === '[::1]' || /
 const publicDispatcher = new Agent({ connect: { lookup(host, options, callback) {
   lookup(host, { ...options, all: true }, (error, addresses) => {
     if (error) return callback(error, []);
-    if (!addresses.length || addresses.some(entry => isBlocked(entry.address))) return callback(new Error('Plugin MCP cannot access private network addresses'), []);
+    if (!addresses.length || addresses.some(entry => isBlocked(entry.address))) return callback(new Error('Plugin download cannot access private network addresses'), []);
     if (options.all) callback(null, addresses);
     else callback(null, addresses[0].address, addresses[0].family);
   });
 } } });
 
-export function createPluginHttpFetch(endpoint: URL, configuredHeaders: Record<string, string>): FetchLike {
+export function createPluginSourceFetch(endpoint: URL, configuredHeaders: Record<string, string>): FetchLike {
   return async (input, init) => {
     const url = new URL(input);
-    if (!['https:', 'http:'].includes(url.protocol) || url.username || url.password || url.hash) throw new Error('Invalid plugin MCP request URL');
+    if (!['https:', 'http:'].includes(url.protocol) || url.username || url.password || url.hash) throw new Error('Invalid plugin download request URL');
     const local = loopback(endpoint.hostname) && url.origin === endpoint.origin;
-    if (!local && url.protocol !== 'https:') throw new Error('Plugin MCP requires HTTPS');
+    if (!local && url.protocol !== 'https:') throw new Error('Plugin download requires HTTPS');
     const address = url.hostname.replace(/^\[|\]$/g, '');
-    if (!local && isIP(address) && isBlocked(address)) throw new Error('Plugin MCP cannot access private network addresses');
+    if (!local && isIP(address) && isBlocked(address)) throw new Error('Plugin download cannot access private network addresses');
     const headers = new Headers(url.origin === endpoint.origin ? configuredHeaders : undefined);
     new Headers(init?.headers).forEach((value, key) => headers.set(key, value));
     // A redirect is a connection error, not implicit permission to forward credentials.

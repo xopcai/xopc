@@ -44,6 +44,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test:codemode:gateway": "node --import tsx/esm scripts/verify-codemode-gateway.mjs",
     "test:tool-discovery:gateway": "cross-env XOPC_TOOL_DISCOVERY_SMOKE=1 node --import tsx/esm scripts/verify-codemode-gateway.mjs",
+    "test:native-tools:gateway": "cross-env XOPC_NATIVE_TOOLS_SMOKE=1 node --import tsx/esm scripts/verify-codemode-gateway.mjs",
     "eval:codemode": "tsx scripts/evaluate-codemode.mts",
     "eval:codemode:check": "tsc -p scripts/codemode-evaluation/tsconfig.json",
     "build:web": "pnpm -C web run build",

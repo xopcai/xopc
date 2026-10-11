@@ -4,14 +4,11 @@ import { resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { seedTestAgentCatalog } from '../../agent-catalog/test-support.js';
 import { openXopcDatabase, closeXopcDatabase, resetXopcDatabaseSingletonForTest } from '../../storage/sqlite/index.js';
-
-import * as bundleMcpGateway from '../../agent/mcp/bundle-mcp-gateway.js';
 import type { CredentialResolver } from '../../auth/credentials.js';
 import type { Config } from '../../config/schema.js';
-import { getConnectorDefinition, listConnectorCatalog } from '../catalog.js';
+import { listConnectorCatalog } from '../catalog.js';
 import { BUILTIN_CONNECTORS } from '../builtin-catalog.js';
 import { installConnector, installConnectorDefinition, uninstallConnector, updateConnectorConfig } from '../install.js';
-import { previewConnectorDefinition } from '../health.js';
 import { setConnectorEnabled } from '../lifecycle.js';
 import { listConnectorInstances } from '../instances.js';
 import {
@@ -173,7 +170,7 @@ describe('connector install and instances', () => {
       runtime: {
         type: 'mcp',
         serverId: 'store_demo',
-        serverTemplate: { url: 'https://mcp.example.com/mcp', transport: 'streamable-http' },
+        serverTemplate: { url: 'https://mcp.example.com/mcp', type: 'http' },
       },
     } as const;
 
@@ -208,47 +205,6 @@ describe('connector install and instances', () => {
 
     await expect(installConnector(config, 'filesystem', { config: { rootPath: '/tmp/files' } })).rejects.toThrow(/not managed by Connectors/);
     expect(() => uninstallConnector(config, 'filesystem')).toThrow(/not managed by Connectors/);
-    expect(listConnectorInstances(config)).toEqual([]);
-  });
-
-  it('previews MCP connector capabilities without saving the server config', async () => {
-    const config = { mcp: { servers: {} } } as Config;
-    const filesystem = getConnectorDefinition('filesystem');
-    expect(filesystem).toBeDefined();
-    const capabilitySpy = vi
-      .spyOn(bundleMcpGateway, 'listBundleMcpServerCapabilitiesForGateway')
-      .mockResolvedValue({
-        serverId: 'filesystem',
-        toolCount: 1,
-        resourceCount: 0,
-        promptCount: 0,
-        tools: [{ name: 'read_file', shortName: 'read_file', description: 'Read a file.' }],
-        resources: [],
-        prompts: [],
-      });
-
-    const preview = await previewConnectorDefinition(config, filesystem!, { config: { rootPath: '/tmp/files' } });
-
-    expect(preview).toMatchObject({
-      serverId: 'filesystem',
-      ok: true,
-      status: 'ok',
-      toolCount: 1,
-      tools: [{ name: 'read_file', shortName: 'read_file', description: 'Read a file.' }],
-    });
-    expect(capabilitySpy).toHaveBeenCalledWith(expect.objectContaining({
-      serverId: 'filesystem',
-      cfg: expect.objectContaining({
-        mcp: expect.objectContaining({
-          servers: expect.objectContaining({
-            filesystem: expect.objectContaining({
-              xopcConnector: expect.objectContaining({ managed: true, connectorId: 'filesystem' }),
-            }),
-          }),
-        }),
-      }),
-    }));
-    expect(config.mcp?.servers?.filesystem).toBeUndefined();
     expect(listConnectorInstances(config)).toEqual([]);
   });
 

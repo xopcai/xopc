@@ -3,13 +3,6 @@ export type ConnectorConnectionTarget = {
   connectorId: string;
 };
 
-export type PluginMcpConnectionTarget = {
-  type: 'plugin-mcp';
-  pluginId: string;
-  serverId: string;
-  serverName: string;
-};
-
 export type StoreConnectorConnectionTarget = {
   type: 'store-connector';
   packageName: string;
@@ -20,7 +13,7 @@ export type StoreConnectorConnectionTarget = {
   description: string;
 };
 
-export type ConnectionTarget = ConnectorConnectionTarget | PluginMcpConnectionTarget | StoreConnectorConnectionTarget;
+export type ConnectionTarget = ConnectorConnectionTarget | StoreConnectorConnectionTarget;
 
 export type ConnectionNeed = {
   key: string;

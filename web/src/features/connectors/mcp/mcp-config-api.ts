@@ -7,51 +7,15 @@ import {
 import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 
-export type McpToolInfo = {
-  name: string;
-  shortName?: string;
-  description?: string;
-};
-
-export type McpResourceInfo = {
-  uri: string;
-  name: string;
-  title?: string;
-  description?: string;
-  mimeType?: string;
-};
-
-export type McpPromptInfo = {
-  name: string;
-  title?: string;
-  description?: string;
-  argumentCount: number;
-};
-
-export type McpTransportKind = 'stdio' | 'sse' | 'streamable-http';
-export type McpAuthKind = 'none' | 'oauth';
-
+export type McpTransportKind = 'stdio' | 'streamable-http';
 export type McpServerRow = {
-  /** Stable React list key; not persisted to config. */
-  clientKey: string;
-  id: string;
-  transport: McpTransportKind;
-  command: string;
-  argsText: string;
-  envJson: string;
-  cwd: string;
-  url: string;
-  headers: McpHeaderEntry[];
-  auth: McpAuthKind;
-  oauthClientId: string;
-  connectionTimeoutMs: number | undefined;
-  requestTimeoutMs: number | undefined;
+  clientKey: string; id: string; transport: McpTransportKind;
+  command: string; argsText: string; envJson: string; cwd: string; url: string;
+  headers: McpHeaderEntry[]; oauthClientId: string; timeout: number | undefined;
+  exposure: 'codemode' | 'deferred' | 'direct' | 'hidden';
+  extra: Record<string, unknown>;
 };
-
-export type McpSettingsState = {
-  sessionIdleTtlMinutes: number | undefined;
-  servers: McpServerRow[];
-};
+export type McpSettingsState = { servers: McpServerRow[] };
 
 export function isManagedConnectorServerConfig(server: unknown): boolean {
   if (!server || typeof server !== 'object' || Array.isArray(server)) {
@@ -101,348 +65,56 @@ function parseJsonObject(text: string): Record<string, unknown> | undefined {
 }
 
 function rowToServerConfig(row: McpServerRow): Record<string, unknown> {
+  const config: Record<string, unknown> = { ...row.extra, exposure: row.exposure };
+  delete config.command; delete config.args; delete config.env; delete config.cwd;
+  delete config.url; delete config.headers; delete config.type;
   if (row.transport === 'stdio') {
-    const config: Record<string, unknown> = {
-      command: row.command.trim(),
-    };
-    const args = parseArgsText(row.argsText);
-    if (args?.length) config.args = args;
+    config.type = 'stdio'; config.command = row.command.trim();
+    const args = parseArgsText(row.argsText); if (args) config.args = args;
     if (row.cwd.trim()) config.cwd = row.cwd.trim();
     if (row.envJson.trim()) config.env = parseJsonObject(row.envJson);
-    if (row.connectionTimeoutMs != null && Number.isFinite(row.connectionTimeoutMs)) {
-      config.connectionTimeoutMs = row.connectionTimeoutMs;
-    }
-    if (row.requestTimeoutMs != null && Number.isFinite(row.requestTimeoutMs)) {
-      config.requestTimeoutMs = row.requestTimeoutMs;
-    }
-    return config;
+    delete config.oauth;
+  } else {
+    config.type = 'http'; config.url = row.url.trim();
+    const headers = headersToRecord(row.headers); if (headers) config.headers = headers;
+    const oauth = { ...(config.oauth as Record<string, unknown> ?? {}) };
+    if (row.oauthClientId.trim()) oauth.clientId = row.oauthClientId.trim(); else delete oauth.clientId;
+    if (Object.keys(oauth).length) config.oauth = oauth; else delete config.oauth;
   }
-
-  const config: Record<string, unknown> = {
-    url: row.url.trim(),
-    transport: row.transport,
-  };
-  const headers = headersToRecord(row.headers);
-  if (headers) config.headers = headers;
-  if (row.transport === 'streamable-http' && row.auth === 'oauth') {
-    config.auth = {
-      type: 'oauth',
-      ...(row.oauthClientId.trim() ? { clientId: row.oauthClientId.trim() } : {}),
-    };
-  }
-  if (row.connectionTimeoutMs != null && Number.isFinite(row.connectionTimeoutMs)) {
-    config.connectionTimeoutMs = row.connectionTimeoutMs;
-  }
-  if (row.requestTimeoutMs != null && Number.isFinite(row.requestTimeoutMs)) {
-    config.requestTimeoutMs = row.requestTimeoutMs;
-  }
+  if (row.timeout !== undefined) config.timeout = row.timeout; else delete config.timeout;
   return config;
 }
-
 function serverConfigToRow(id: string, raw: Record<string, unknown>): McpServerRow {
-  const hasUrl = typeof raw.url === 'string' && raw.url.trim().length > 0;
-  const transportRaw = typeof raw.transport === 'string' ? raw.transport.trim().toLowerCase() : '';
-  const transport: McpTransportKind = hasUrl
-    ? transportRaw === 'sse'
-      ? 'sse'
-      : 'streamable-http'
-    : 'stdio';
-
-  const headersRaw =
-    raw.headers && typeof raw.headers === 'object' && !Array.isArray(raw.headers)
-      ? (raw.headers as Record<string, unknown>)
-      : undefined;
-  const authRaw =
-    raw.auth && typeof raw.auth === 'object' && !Array.isArray(raw.auth)
-      ? (raw.auth as Record<string, unknown>)
-      : undefined;
-  const auth: McpAuthKind = authRaw?.type === 'oauth' ? 'oauth' : 'none';
-
-  return {
-    clientKey: id,
-    id,
-    transport,
-    command: typeof raw.command === 'string' ? raw.command : '',
-    argsText: Array.isArray(raw.args) ? raw.args.map(String).join(' ') : '',
-    envJson: raw.env && typeof raw.env === 'object' ? JSON.stringify(raw.env, null, 2) : '',
-    cwd: typeof raw.cwd === 'string' ? raw.cwd : typeof raw.workingDirectory === 'string' ? raw.workingDirectory : '',
-    url: typeof raw.url === 'string' ? raw.url : '',
-    headers: recordToHeaders(headersRaw),
-    auth,
-    oauthClientId: typeof authRaw?.clientId === 'string' ? authRaw.clientId : '',
-    connectionTimeoutMs:
-      typeof raw.connectionTimeoutMs === 'number' && Number.isFinite(raw.connectionTimeoutMs)
-        ? raw.connectionTimeoutMs
-        : undefined,
-    requestTimeoutMs:
-      typeof raw.requestTimeoutMs === 'number' && Number.isFinite(raw.requestTimeoutMs)
-        ? raw.requestTimeoutMs
-        : undefined,
+  const oauth = raw.oauth as Record<string, unknown> | undefined;
+  return { clientKey: id, id, transport: typeof raw.url === 'string' ? 'streamable-http' : 'stdio',
+    command: typeof raw.command === 'string' ? raw.command : '', argsText: Array.isArray(raw.args) ? raw.args.join(' ') : '',
+    envJson: raw.env ? JSON.stringify(raw.env, null, 2) : '', cwd: typeof raw.cwd === 'string' ? raw.cwd : '',
+    url: typeof raw.url === 'string' ? raw.url : '', headers: recordToHeaders(raw.headers as Record<string, unknown> | undefined),
+    oauthClientId: typeof oauth?.clientId === 'string' ? oauth.clientId : '',
+    timeout: typeof raw.timeout === 'number' ? raw.timeout : undefined,
+    exposure: (raw.exposure as McpServerRow['exposure']) ?? 'codemode', extra: raw,
   };
 }
-
 export function emptyMcpServerRow(id = ''): McpServerRow {
-  return {
-    clientKey: crypto.randomUUID(),
-    id,
-    transport: 'stdio',
-    command: '',
-    argsText: '',
-    envJson: '',
-    cwd: '',
-    url: '',
-    headers: [{ key: 'Authorization', value: '' }],
-    auth: 'none',
-    oauthClientId: '',
-    connectionTimeoutMs: undefined,
-    requestTimeoutMs: undefined,
-  };
+  return { clientKey: crypto.randomUUID(), id, transport: 'stdio', command: '', argsText: '', envJson: '', cwd: '',
+    url: '', headers: [], oauthClientId: '', timeout: undefined, exposure: 'codemode', extra: {} };
 }
-
 export function normalizeMcpSettingsFromConfig(cfg: unknown): McpSettingsState {
-  const mcp =
-    cfg && typeof cfg === 'object' && 'mcp' in cfg ? (cfg as { mcp?: unknown }).mcp : undefined;
-  const root = mcp && typeof mcp === 'object' ? (mcp as Record<string, unknown>) : {};
-  const serversRaw = root.servers;
-  const servers: McpServerRow[] =
-    serversRaw && typeof serversRaw === 'object' && !Array.isArray(serversRaw)
-      ? Object.entries(serversRaw as Record<string, unknown>)
-          .flatMap(([id, v]) => {
-            if (!v || typeof v !== 'object' || Array.isArray(v)) return [];
-            if (isManagedConnectorServerConfig(v)) return [];
-            return [serverConfigToRow(id, v as Record<string, unknown>)];
-          })
-          .sort((a, b) => a.id.localeCompare(b.id))
-      : [];
-
-  const ttlMs = typeof root.sessionIdleTtlMs === 'number' ? root.sessionIdleTtlMs : undefined;
-  const sessionIdleTtlMinutes =
-    ttlMs == null ? undefined : ttlMs === 0 ? 0 : Math.round(ttlMs / 60_000);
-
-  return { sessionIdleTtlMinutes, servers };
+  const servers = (cfg as { mcp?: { servers?: Record<string, Record<string, unknown>> } } | undefined)?.mcp?.servers ?? {};
+  return { servers: Object.entries(servers).filter(([, raw]) => !isManagedConnectorServerConfig(raw))
+    .map(([id, raw]) => serverConfigToRow(id, raw)).sort((a, b) => a.id.localeCompare(b.id)) };
 }
-
-export function buildMcpServerConfigFromRow(row: McpServerRow): Record<string, unknown> {
-  return rowToServerConfig(row);
-}
-
-export async function patchMcpSettings(
-  state: McpSettingsState,
-  managedServers: Record<string, Record<string, unknown>> = {},
-): Promise<void> {
-  const customServers: Record<string, unknown> = {};
+export function buildMcpServerConfigFromRow(row: McpServerRow): Record<string, unknown> { return rowToServerConfig(row); }
+export async function patchMcpSettings(state: McpSettingsState, managedServers: Record<string, Record<string, unknown>> = {}): Promise<void> {
+  const servers = { ...managedServers };
   for (const row of state.servers) {
     const id = row.id.trim();
-    if (!id) continue;
-    if (managedServers[id]) {
-      throw new Error(`Server id "${id}" is reserved by an installed connector.`);
-    }
-    customServers[id] = rowToServerConfig(row);
+    if (!/^[a-zA-Z0-9_-]+$/.test(id)) throw new Error('MCP IDs require letters, digits, underscores or hyphens.');
+    if (managedServers[id]) throw new Error(`Server id "${id}" is reserved by an installed connector.`);
+    servers[id] = rowToServerConfig(row);
   }
-
-  const mcp: Record<string, unknown> = {
-    servers: { ...managedServers, ...customServers },
-  };
-  if (state.sessionIdleTtlMinutes != null && Number.isFinite(state.sessionIdleTtlMinutes)) {
-    mcp.sessionIdleTtlMs =
-      state.sessionIdleTtlMinutes === 0 ? 0 : Math.round(state.sessionIdleTtlMinutes * 60_000);
-  }
-
-  await fetchJson(apiUrl('/api/config'), {
-    method: 'PATCH',
-    body: JSON.stringify({ mcp }),
-  });
+  await fetchJson(apiUrl('/api/config'), { method: 'PATCH', body: JSON.stringify({ mcp: { servers } }) });
   void revalidateGatewayConfig();
-}
-
-export type McpServerTestResult = {
-  serverId: string;
-  toolCount: number;
-  resourceCount: number;
-  promptCount: number;
-  tools: McpToolInfo[];
-  resources: McpResourceInfo[];
-  prompts: McpPromptInfo[];
-};
-
-export type McpOAuthStatus = {
-  configured: boolean;
-  status: 'not_configured' | 'disconnected' | 'authorizing' | 'connected' | 'error';
-  session?: {
-    status: string;
-    authorizationUrl?: string;
-    error?: string;
-  };
-};
-
-async function requestMcpOAuth(
-  serverId: string,
-  method: 'GET' | 'POST' | 'DELETE',
-  suffix = '',
-): Promise<McpOAuthStatus> {
-  const response = await fetchJson<{ ok?: boolean; payload?: McpOAuthStatus; error?: string }>(
-    apiUrl(`/api/mcp/servers/${encodeURIComponent(serverId)}/oauth${suffix}`),
-    { method },
-  );
-  if (!response.payload) throw new Error(response.error ?? 'MCP OAuth request failed');
-  return response.payload;
-}
-
-export function getMcpOAuthStatus(serverId: string): Promise<McpOAuthStatus> {
-  return requestMcpOAuth(serverId, 'GET');
-}
-
-export function startMcpOAuth(serverId: string): Promise<McpOAuthStatus> {
-  return requestMcpOAuth(serverId, 'POST', '/start');
-}
-
-export function disconnectMcpOAuth(serverId: string): Promise<McpOAuthStatus> {
-  return requestMcpOAuth(serverId, 'DELETE');
-}
-
-function normalizeMcpTools(tools: unknown): McpToolInfo[] {
-  if (!Array.isArray(tools)) return [];
-  const out: McpToolInfo[] = [];
-  for (const item of tools) {
-    if (!item || typeof item !== 'object') continue;
-    const raw = item as { name?: unknown; shortName?: unknown; description?: unknown };
-    if (typeof raw.name !== 'string') continue;
-    const name = raw.name.trim();
-    if (!name) continue;
-    const shortName =
-      typeof raw.shortName === 'string' && raw.shortName.trim() ? raw.shortName.trim() : undefined;
-    const description =
-      typeof raw.description === 'string' && raw.description.trim()
-        ? raw.description.trim()
-        : undefined;
-    out.push({ name, shortName, description });
-  }
-  return out;
-}
-
-function normalizeMcpResources(resources: unknown): McpResourceInfo[] {
-  if (!Array.isArray(resources)) return [];
-  const out: McpResourceInfo[] = [];
-  for (const item of resources) {
-    if (!item || typeof item !== 'object') continue;
-    const raw = item as {
-      uri?: unknown;
-      name?: unknown;
-      title?: unknown;
-      description?: unknown;
-      mimeType?: unknown;
-    };
-    if (typeof raw.uri !== 'string' || typeof raw.name !== 'string') continue;
-    const uri = raw.uri.trim();
-    const name = raw.name.trim();
-    if (!uri || !name) continue;
-    out.push({
-      uri,
-      name,
-      title: typeof raw.title === 'string' && raw.title.trim() ? raw.title.trim() : undefined,
-      description:
-        typeof raw.description === 'string' && raw.description.trim()
-          ? raw.description.trim()
-          : undefined,
-      mimeType:
-        typeof raw.mimeType === 'string' && raw.mimeType.trim() ? raw.mimeType.trim() : undefined,
-    });
-  }
-  return out;
-}
-
-function normalizeMcpPrompts(prompts: unknown): McpPromptInfo[] {
-  if (!Array.isArray(prompts)) return [];
-  const out: McpPromptInfo[] = [];
-  for (const item of prompts) {
-    if (!item || typeof item !== 'object') continue;
-    const raw = item as {
-      name?: unknown;
-      title?: unknown;
-      description?: unknown;
-      argumentCount?: unknown;
-    };
-    if (typeof raw.name !== 'string') continue;
-    const name = raw.name.trim();
-    if (!name) continue;
-    out.push({
-      name,
-      title: typeof raw.title === 'string' && raw.title.trim() ? raw.title.trim() : undefined,
-      description:
-        typeof raw.description === 'string' && raw.description.trim()
-          ? raw.description.trim()
-          : undefined,
-      argumentCount: typeof raw.argumentCount === 'number' ? raw.argumentCount : 0,
-    });
-  }
-  return out;
-}
-
-export async function testMcpServer(
-  serverId: string,
-  server?: Record<string, unknown>,
-): Promise<McpServerTestResult> {
-  const res = await fetchJson<{
-    ok?: boolean;
-    payload?: {
-      serverId?: string;
-      toolCount?: number;
-      resourceCount?: number;
-      promptCount?: number;
-      tools?: unknown;
-      resources?: unknown;
-      prompts?: unknown;
-    };
-    error?: string;
-  }>(
-    apiUrl(`/api/mcp/servers/${encodeURIComponent(serverId)}/test`),
-    {
-      method: 'POST',
-      body: server ? JSON.stringify({ server }) : undefined,
-    },
-  );
-  if (!res.payload) {
-    throw new Error(res.error ?? 'MCP test failed');
-  }
-  const tools = normalizeMcpTools(res.payload.tools);
-  const resources = normalizeMcpResources(res.payload.resources);
-  const prompts = normalizeMcpPrompts(res.payload.prompts);
-  return {
-    serverId: res.payload.serverId ?? serverId,
-    toolCount: typeof res.payload.toolCount === 'number' ? res.payload.toolCount : tools.length,
-    resourceCount:
-      typeof res.payload.resourceCount === 'number' ? res.payload.resourceCount : resources.length,
-    promptCount: typeof res.payload.promptCount === 'number' ? res.payload.promptCount : prompts.length,
-    tools,
-    resources,
-    prompts,
-  };
-}
-
-export function connectionTimeoutSeconds(row: McpServerRow): string {
-  if (row.connectionTimeoutMs == null || !Number.isFinite(row.connectionTimeoutMs)) return '';
-  return String(Math.round(row.connectionTimeoutMs / 1000));
-}
-
-export function parseConnectionTimeoutSeconds(raw: string): number | undefined {
-  const trimmed = raw.trim();
-  if (!trimmed) return undefined;
-  const seconds = Number.parseInt(trimmed, 10);
-  if (!Number.isFinite(seconds) || seconds < 1 || seconds > 600) return undefined;
-  return seconds * 1000;
-}
-
-export function requestTimeoutSeconds(row: McpServerRow): string {
-  if (row.requestTimeoutMs == null || !Number.isFinite(row.requestTimeoutMs)) return '';
-  return String(Math.round(row.requestTimeoutMs / 1000));
-}
-
-export function parseRequestTimeoutSeconds(raw: string): number | undefined {
-  const trimmed = raw.trim();
-  if (!trimmed) return undefined;
-  const seconds = Number.parseInt(trimmed, 10);
-  if (!Number.isFinite(seconds) || seconds < 1 || seconds > 14_400) return undefined;
-  return seconds * 1000;
 }
 
 export function mcpServerCardKey(row: McpServerRow, _index: number): string {

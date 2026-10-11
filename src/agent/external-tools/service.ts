@@ -46,6 +46,8 @@ function descriptorRevision(descriptor: Omit<VersionedExternalToolDescriptor, 'r
       outputSchema: descriptor.outputSchema,
       annotations: descriptor.annotations,
       batchRead: descriptor.batchRead === true,
+      contractRevision: descriptor.contractRevision,
+      exposure: descriptor.exposure,
     }))
     .digest('hex')
     .slice(0, 16);
@@ -68,6 +70,18 @@ export class ExternalToolService {
 
   constructor(providers: ExternalToolProvider[]) {
     this.providerBySource = new Map(providers.map((provider) => [provider.source, provider]));
+  }
+
+  /** Materialize an authorized local directory without keyword ranking or model round trips. */
+  async catalog(sources: readonly ExternalToolSource[]): Promise<VersionedExternalToolDescriptor[]> {
+    const descriptors: VersionedExternalToolDescriptor[] = [];
+    for (const source of sources) {
+      const provider = this.providerBySource.get(source);
+      if (!provider) continue;
+      const refs = [...new Set((await provider.search('')).map(hit => hit.toolRef))];
+      for (const ref of refs) descriptors.push(...(await this.describe([ref])).tools);
+    }
+    return descriptors;
   }
 
   async search(params: {
@@ -182,10 +196,15 @@ export class ExternalToolService {
     } catch (error) {
       throw new Error(`Tool contract is invalid: ${params.toolRef}`, { cause: error });
     }
-    if (!validate(args)) {
-      throw new Error(`Arguments do not match ${params.toolRef}: ${this.ajv.errorsText(validate.errors)}`);
-    }
-    return provider.execute(params.toolRef, args, params.approvalId, params.context);
+    const validateArguments = (input: Record<string, unknown>) => {
+      if (!validate(input)) {
+        throw new Error(`Arguments do not match ${params.toolRef}: ${this.ajv.errorsText(validate.errors)}`);
+      }
+    };
+    validateArguments(args);
+    return provider.execute(params.toolRef, args, params.approvalId, {
+      ...params.context, contractRevision: current.contractRevision, validateArguments,
+    });
   }
 
   private providerForRef(toolRef: string): ExternalToolProvider | undefined {

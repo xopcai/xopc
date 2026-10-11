@@ -100,7 +100,7 @@ describe('@ mention context references', () => {
     })).toBeNull();
   });
 
-  it('maps browser tabs and MCP resources without serializing magic text tokens', () => {
+  it('maps browser tabs without serializing magic text tokens', () => {
     expect(contextRefFromAtMentionItem({
       id: 'browser-tab:binding-1', kind: 'browser_tab', name: 'Example',
       description: 'https://example.com', url: 'https://example.com',
@@ -109,13 +109,6 @@ describe('@ mention context references', () => {
       refId: expect.any(String),
       kind: 'browser_tab', sourceId: 'binding-1', expectedVersion: 'doc-1', title: 'Example',
     }));
-    expect(contextRefFromAtMentionItem({
-      id: 'mcp-resource:resource-1', kind: 'mcp_resource', name: 'Launch brief',
-      description: 'docs', serverId: 'docs', uri: 'file:///launch.md',
-      resourceRef: { sourceId: 'resource-1', expectedVersion: 'rev-1' },
-    })).toEqual(expect.objectContaining({
-      refId: expect.any(String),
-      kind: 'mcp_resource', sourceId: 'resource-1', expectedVersion: 'rev-1', title: 'Launch brief',
-    }));
+
   });
 });

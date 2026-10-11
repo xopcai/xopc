@@ -3,13 +3,9 @@ import { join, resolve } from 'node:path';
 import { Command } from 'commander';
 import { confirm } from '@inquirer/prompts';
 import { AgentPluginStore } from '../../extensions/agent-plugins/store.js';
-import { materializePluginServers } from '../../extensions/agent-plugins/mcp-adapter.js';
-import { pluginServerId } from '../../extensions/agent-plugins/validation.js';
-import { getMcpOAuthManager } from '../../agent/mcp/oauth/mcp-oauth-manager.js';
 import { withAgentPluginSource, isAgentPluginArchive } from '../../extensions/agent-plugins/sources.js';
 import { loadConfig } from '../../config/loader.js';
 import { getContextWithOpts } from '../context.js';
-import { savePluginAuthBinding } from '../../extensions/agent-plugins/auth.js';
 import { removePluginCredentials } from '../../extensions/agent-plugins/credentials.js';
 
 export function isAgentPluginSource(source: string): boolean {
@@ -49,14 +45,5 @@ export function addAgentPluginLifecycleCommands(command: Command): void {
     if (options.removeCredentials) await removePluginCredentials(store, id);
     store.remove(id, options.removeData);
     console.log(`Removed ${raw}; credentials ${options.removeCredentials ? 'deleted' : 'retained'}${options.removeData ? ', plugin data deleted' : ', plugin data retained'}.`);
-  });
-  command.command('connect').argument('<id>', 'plugin:<name>').requiredOption('--mcp <server>', 'MCP server name').action(async (raw: string, options: { mcp: string }) => {
-    const store = new AgentPluginStore(); const id = raw.replace(/^plugin:/, ''); const plugin = store.get(id);
-    if (!plugin || plugin.readiness === 'blocked') throw new Error('Plugin is unavailable');
-    await savePluginAuthBinding(store, id, options.mcp, { mode: 'oauth' });
-    const serverId = pluginServerId(id, options.mcp); const server = materializePluginServers(plugin, store)[serverId];
-    if (!server) throw new Error('MCP server not found');
-    const status = await getMcpOAuthManager(server).start({ serverId, rawServer: server });
-    console.log(JSON.stringify(status, null, 2));
   });
 }

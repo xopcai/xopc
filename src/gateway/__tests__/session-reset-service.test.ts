@@ -11,10 +11,6 @@ vi.mock('../../agent/embedded/runs.js', () => ({
   abortEmbeddedRun: vi.fn().mockResolvedValue(false),
 }));
 
-vi.mock('../../agent/mcp/bundle-mcp-tools.js', () => ({
-  retireSessionMcpRuntimeForConversationId: vi.fn().mockResolvedValue(undefined),
-}));
-
 describe('performSessionReset', () => {
   it('archives transcript, assigns new session id, and evicts agent runtime', async () => {
     const conversationId = "17305fb5-e9c2-4028-8aa3-1b2b6b86fedc";

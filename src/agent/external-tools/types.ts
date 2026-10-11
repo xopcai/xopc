@@ -4,7 +4,7 @@ import type {
 } from '@earendil-works/pi-agent-core';
 import type { TurnOrigin } from '@xopcai/endpoint-tools-protocol';
 
-export const EXTERNAL_TOOL_SOURCES = ['cli', 'mcp', 'composio', 'extension', 'memory', 'endpoint'] as const;
+export const EXTERNAL_TOOL_SOURCES = ['cli', 'composio', 'extension', 'memory', 'endpoint'] as const;
 
 export type ExternalToolSource = (typeof EXTERNAL_TOOL_SOURCES)[number];
 
@@ -30,6 +30,9 @@ export interface ExternalToolDescriptor extends ExternalToolSearchHit {
   inputSchema: Record<string, unknown>;
   outputSchema?: Record<string, unknown>;
   annotations?: import('@earendil-works/pi-coding-agent').ToolAnnotations;
+  /** Provider execution identity, including connection epochs and policy contracts. */
+  contractRevision?: string;
+  exposure?: import('@earendil-works/pi-coding-agent').ToolExposure;
   /** Host-curated contract; never copied from remote readOnlyHint annotations. */
   batchRead?: boolean;
 }
@@ -42,6 +45,8 @@ export interface ExternalToolExecutionContext {
   toolCallId: string;
   signal?: AbortSignal;
   onUpdate?: AgentToolUpdateCallback<Record<string, unknown>>;
+  contractRevision?: string;
+  validateArguments?: (args: Record<string, unknown>) => void;
 }
 
 export interface ExternalToolTurnContext {

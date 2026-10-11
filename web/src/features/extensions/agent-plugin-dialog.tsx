@@ -4,15 +4,12 @@ import { useEffect, useId, useRef, useState, type DragEvent as ReactDragEvent } 
 import { Link } from 'react-router-dom';
 import { useSWRConfig } from 'swr';
 import { Button } from '@/components/ui/button';
-import { Skeleton } from '@/components/ui/skeleton';
 import { WorkingDirectoryPickerModal } from '@/features/fs/working-directory-picker-modal';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
-import { apiFetch, fetchJson } from '@/lib/fetch';
+import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 import { useLocaleStore } from '@/stores/locale-store';
-import { getMcpOAuthStatus, startMcpOAuth, disconnectMcpOAuth, type McpOAuthStatus } from '@/features/connectors/mcp/mcp-config-api';
-import { reserveOAuthAuthorizationWindow, openOAuthAuthorizationUrl, closeOAuthAuthorizationWindow } from '@/features/settings/oauth-authorization-window';
 import type { ExtensionApiRow } from './types';
 import type { ExtensionMarketplacePackageDetail } from './extension-marketplace-api';
 
@@ -47,94 +44,22 @@ async function request<T>(path: string, method: string, body?: unknown): Promise
 }
 
 export function PluginMcpConnection({ pluginId, server, enabled }: { pluginId: string; server: { id: string; name: string; type: string }; enabled: boolean }) {
-  const { mutate } = useSWRConfig();
   const zh = useLocaleStore(s => s.language).startsWith('zh');
-  const [busy, setBusy] = useState(false);
-  const [status, setStatus] = useState<McpOAuthStatus | null>(null);
-  const [message, setMessage] = useState('');
-  const [authRequired, setAuthRequired] = useState(false);
-  const [showSecret, setShowSecret] = useState(false);
-  const [secret, setSecret] = useState('');
+  const [secret, setSecret] = useState(''); const [busy, setBusy] = useState(false); const [message, setMessage] = useState('');
   const [key, setKey] = useState(server.type === 'stdio' ? 'API_KEY' : 'Authorization');
   const [prefix, setPrefix] = useState(server.type === 'stdio' ? '' : 'Bearer ');
-  const [loaded, setLoaded] = useState(false);
-  const [callbackUrl, setCallbackUrl] = useState('');
-  const path = `/api/mcp/servers/${encodeURIComponent(server.id)}`;
-  async function test() {
-    const response = await apiFetch(apiUrl(`${path}/test`), { method: 'POST', body: '{}' });
-    const result = await response.json();
-    void mutate('gateway-extensions-list');
-    setAuthRequired(result.code === 'MCP_AUTHORIZATION_REQUIRED');
-    if (!response.ok || !result.ok) throw new Error(result.error ?? 'Connection failed');
-    setMessage(zh ? `连接成功 · ${result.payload.toolCount} 个工具` : `Connected · ${result.payload.toolCount} tools`);
-  }
-  useEffect(() => {
-    if (!enabled || server.type !== 'streamable-http') return;
-    let cancelled = false;
-    void getMcpOAuthStatus(server.id).then(value => { if (!cancelled) { setStatus(value); setLoaded(true); } }).catch(error => { if (!cancelled) { setMessage(String(error)); setLoaded(true); } });
-    return () => { cancelled = true; };
-  }, [enabled, server.id, server.type]);
-  useEffect(() => {
-    if (status?.status !== 'authorizing') return;
-    let cancelled = false;
-    const timer = window.setInterval(() => {
-      void getMcpOAuthStatus(server.id).then(next => {
-        if (cancelled) return;
-        setStatus(next);
-        if (next.status === 'connected') { setAuthRequired(false); setMessage(zh ? '已连接，可以重试原任务' : 'Connected. Retry your task.'); void mutate('gateway-extensions-list'); }
-        if (next.status === 'error') setMessage(next.session?.error ?? 'Authorization failed');
-      }).catch(error => { if (!cancelled) setMessage(String(error)); });
-    }, 1500);
-    return () => { cancelled = true; window.clearInterval(timer); };
-  }, [status?.status, server.id, zh, mutate]);
-  async function run(fn: () => Promise<unknown>) {
-    setBusy(true); setMessage('');
-    try { await fn(); } catch (error) { setMessage(error instanceof Error ? error.message : String(error)); }
-    finally { setBusy(false); }
-  }
-  return <div className="rounded-lg border border-edge p-3 text-sm">
-    <div className="mb-2 flex flex-wrap items-center gap-2"><span className="font-medium">{server.name}</span><span className="text-xs text-fg-muted">{pluginId} · {server.type}</span></div>
-    {!enabled ? <p className="text-fg-muted">{zh ? '启用插件后连接服务' : 'Enable the plugin to connect'}</p> : <>
-      {server.type === 'streamable-http' && !loaded ? <Skeleton className="mb-2 h-4 w-24" /> : null}
-      <div className="flex flex-wrap gap-2">
-        <Button variant="secondary" disabled={busy} onClick={() => void run(test)}>{zh ? '测试连接' : 'Test connection'}</Button>
-        {server.type === 'streamable-http' && status?.status !== 'connected' ? <Button variant={authRequired ? 'primary' : 'secondary'} disabled={busy} onClick={() => {
-          const popup = reserveOAuthAuthorizationWindow();
-          void run(async () => {
-            try {
-              const next = await startMcpOAuth(server.id); setStatus(next);
-              if (next.session?.authorizationUrl) {
-                if (!await openOAuthAuthorizationUrl(next.session.authorizationUrl, popup)) throw new Error(zh ? '无法打开授权页面' : 'Could not open authorization page');
-              } else { closeOAuthAuthorizationWindow(popup); if (next.session?.error) throw new Error(next.session.error); }
-            } catch (error) { closeOAuthAuthorizationWindow(popup); throw error; }
-          });
-        }}>{zh ? '连接账号' : 'Connect account'}</Button> : null}
-        {status?.status === 'connected' ? <Button variant="secondary" disabled={busy} onClick={() => void run(async () => { setStatus(await disconnectMcpOAuth(server.id)); void mutate('gateway-extensions-list'); })}>{zh ? '断开连接' : 'Disconnect'}</Button> : null}
-        <Button variant="ghost" disabled={busy} onClick={() => setShowSecret(!showSecret)}>{zh ? '设置密钥' : 'Set API key'}</Button>
-      </div>
-      {showSecret ? <form className="mt-3 space-y-2" onSubmit={event => { event.preventDefault(); void run(async () => {
-        await request(`/api/extensions/agent-plugins/${encodeURIComponent(pluginId)}/mcp/${encodeURIComponent(server.name)}/auth`, 'PUT', {
-          mode: 'api-key', secrets: [{ target: server.type === 'stdio' ? 'env' : 'headers', key, value: secret, prefix }],
-        }); setSecret(''); setShowSecret(false); setStatus(null); setAuthRequired(false); await test();
-      }); }}>
-        <label className="block">{zh ? '字段名' : 'Field name'}<input className={fieldClass} value={key} onChange={e => setKey(e.target.value)} required /></label>
-        <label className="block">{zh ? '前缀（可选）' : 'Prefix (optional)'}<input className={fieldClass} value={prefix} onChange={e => setPrefix(e.target.value)} /></label>
-        <label className="block">{zh ? '密钥' : 'Secret'}<input className={fieldClass} type="password" autoComplete="off" value={secret} onChange={e => setSecret(e.target.value)} required /></label>
-        <Button type="submit" disabled={busy || !secret}>{zh ? '保存并测试' : 'Save and test'}</Button>
-      </form> : null}
-    </>}
-    {status?.status === 'authorizing' ? <div className="mt-2 space-y-2 text-fg-muted">
-      <p>{zh ? '请在浏览器完成授权' : 'Complete authorization in your browser'}</p>
-      <details><summary>{zh ? '使用远程 Gateway？' : 'Using a remote Gateway?'}</summary>
-        <form className="mt-2 space-y-2" onSubmit={event => { event.preventDefault(); void run(async () => {
-          setStatus(await request<McpOAuthStatus>(`${path}/oauth/callback`, 'POST', { callbackUrl })); setCallbackUrl('');
-        }); }}>
-          <label>{zh ? '如果浏览器跳转后无法连接，请粘贴地址栏中的完整回调 URL' : 'If the browser cannot reach the callback, paste its full address-bar URL'}<input type="password" autoComplete="off" className={fieldClass} value={callbackUrl} onChange={e => setCallbackUrl(e.target.value)} /></label>
-          <Button type="submit" disabled={busy || !callbackUrl}>{zh ? '完成连接' : 'Complete connection'}</Button>
-        </form>
-      </details>
-    </div> : null}
-    {message ? <p role="status" className="mt-2 break-words text-fg-muted">{message}</p> : null}
+  return <div className="rounded-lg border border-edge p-3 text-sm"><p className="font-medium">{server.name} · {server.type}</p>
+    <p className="mt-2 break-all font-mono text-xs text-fg-muted">{server.type === 'stdio' ? 'xopc mcp list' : `xopc mcp login ${server.id}`}</p>
+    <form className="mt-3 space-y-2" onSubmit={event => { event.preventDefault(); setBusy(true); setMessage('');
+      void request(`/api/extensions/agent-plugins/${encodeURIComponent(pluginId)}/mcp/${encodeURIComponent(server.name)}/auth`, 'PUT', {
+        mode: 'api-key', secrets: [{ target: server.type === 'stdio' ? 'env' : 'headers', key, value: secret, prefix }],
+      }).then(() => { setSecret(''); setMessage(zh ? '已保存' : 'Saved'); }).catch(error => setMessage(String(error))).finally(() => setBusy(false));
+    }}>
+      <label className="block">{zh ? '字段名' : 'Field name'}<input className={fieldClass} value={key} onChange={e => setKey(e.target.value)} required /></label>
+      <label className="block">{zh ? '前缀' : 'Prefix'}<input className={fieldClass} value={prefix} onChange={e => setPrefix(e.target.value)} /></label>
+      <label className="block">{zh ? '密钥' : 'Secret'}<input type="password" autoComplete="off" className={fieldClass} value={secret} onChange={e => setSecret(e.target.value)} required /></label>
+      <Button type="submit" disabled={!enabled || busy || !secret}>{zh ? '保存密钥' : 'Save API key'}</Button>
+    </form>{message ? <p className="mt-2 text-fg-muted">{message}</p> : null}
   </div>;
 }
 

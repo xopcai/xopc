@@ -9,7 +9,6 @@ const allowed = new Set([
   'src/agent/coding/repository-instructions.ts',
   'src/agent/coding/workspace-revision.ts',
   'src/agent/context/workspace-seed.ts',
-  'src/agent/mcp/mcp-stdio-transport.ts',
   'src/agent/skills/hub-pull.ts',
   'src/agent/tools/repository-search.ts',
   'src/agent/tools/review-workspace.ts',

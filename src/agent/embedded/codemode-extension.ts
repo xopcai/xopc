@@ -27,6 +27,8 @@ export function createXopcCodemodeExtension(
 ): ExtensionFactory {
   const allowed = new Set(tools.filter(tool => isCodemodeCoreRead(tool)
     || getXopcToolMetadata(tool)?.external?.readOnly === true).map(tool => tool.name));
+  const isAllowed = (name: string) => allowed.has(name) || name.startsWith('mcp__')
+    || ['list_mcp_resources', 'list_mcp_resource_templates', 'read_mcp_resource'].includes(name);
   const inlineReads = tools.filter(isCodemodeCoreRead).map(tool => tool.name);
   const execution = new AsyncLocalStorage<Execution>();
   const original = createCodemodeExtension({ mode: 'on', models: false });
@@ -45,7 +47,7 @@ export function createXopcCodemodeExtension(
     pi.on('tool_call', async event => {
       if (!event.parentToolCallId) return;
       const active = execution.getStore();
-      if (!active || active.parentId !== event.parentToolCallId || !allowed.has(event.toolName)) {
+      if (!active || active.parentId !== event.parentToolCallId || !isAllowed(event.toolName)) {
         return { block: true, reason: 'Codemode tool is not authorized' };
       }
       active.signal.throwIfAborted();
@@ -95,10 +97,10 @@ export function createXopcCodemodeExtension(
         pi.registerTool({
           ...definition,
           prepareLoadout(loadout) {
-            const changes = prepare?.({ ...loadout, callable: loadout.callable.filter(tool => allowed.has(tool.name)) });
+            const changes = prepare?.({ ...loadout, callable: loadout.callable.filter(tool => isAllowed(tool.name)) });
             return { ...changes, descriptions: {
               ...changes?.descriptions,
-              codemode: `${changes?.descriptions?.codemode ?? definition.description}\n\nCore reads: ${inlineReads.join(', ') || '(none)'}. Host-approved deferred MCP reads can be found with searchTools(). Host limits: ${policy.timeoutMs}ms, ${policy.maxConcurrentCalls} concurrent calls, ${policy.maxCalls} calls, ${policy.maxOutputTokens} estimated output tokens. Store: 64 keys / 64 KiB. Models APIs are unavailable.`,
+              codemode: `${changes?.descriptions?.codemode ?? definition.description}\n\nCore reads: ${inlineReads.join(', ') || '(none)'}. Host-approved deferred reads and native MCP tools can be found with searchTools(). Host limits: ${policy.timeoutMs}ms, ${policy.maxConcurrentCalls} concurrent calls, ${policy.maxCalls} calls, ${policy.maxOutputTokens} estimated output tokens. Store: 64 keys / 64 KiB. Models APIs are unavailable.`,
             } };
           },
           async execute(id, params, signal, onUpdate, ctx) {
@@ -114,9 +116,9 @@ export function createXopcCodemodeExtension(
             const waiting = new Set<() => void>();
             const boundedContext: ExtensionToolContext = {
               ...ctx,
-              tools: ctx.tools.filter(tool => allowed.has(tool.name)),
+              tools: ctx.tools.filter(tool => isAllowed(tool.name)),
               async executeTool(name, args, options) {
-                if (!allowed.has(name)) throw new Error(`Codemode tool ${name} is not authorized`);
+                if (!isAllowed(name)) throw new Error(`Codemode tool ${name} is not authorized`);
                 if (++calls > policy.maxCalls) {
                   const error = new Error(`Codemode exceeds ${policy.maxCalls} calls`);
                   budgetAbort.abort(error);

@@ -67,6 +67,12 @@ function snapshot(connection: EndpointConnection): EndpointConnectionSnapshot {
 
 export class EndpointRegistry {
   private readonly connectionByEndpointId = new Map<string, EndpointConnection>();
+  private readonly changeListeners = new Set<(endpointId: string) => void>();
+
+  onChange(listener: (endpointId: string) => void): () => void {
+    this.changeListeners.add(listener);
+    return () => { this.changeListeners.delete(listener); };
+  }
 
   constructor(private readonly policy = new EndpointToolPolicy()) {}
 
@@ -110,6 +116,7 @@ export class EndpointRegistry {
       toolByName,
     };
     this.connectionByEndpointId.set(connection.endpointId, connection);
+    for (const listener of this.changeListeners) listener(connection.endpointId);
     return { connection: snapshot(connection), turnToken: connection.turnToken };
   }
 
@@ -117,6 +124,7 @@ export class EndpointRegistry {
     const connection = this.connectionByEndpointId.get(endpointId);
     if (!connection || connection.connectionId !== connectionId) return false;
     this.connectionByEndpointId.delete(endpointId);
+    for (const listener of this.changeListeners) listener(endpointId);
     return true;
   }
 

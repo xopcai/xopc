@@ -7,19 +7,37 @@ function seedConversationFixtures(): void {
   ensureFixtureConversation("6d9217fe-77c7-411d-8cc9-92aabe81a2d0", '', {"agentId":"main","sourceChannel":"main","sourceChatId":"","sessionType":"chat","routing":{"agentId":"main","source":"main","accountId":"default","peerKind":"direct","peerId":""}});
 }
 import type { AgentTool } from '@earendil-works/pi-agent-core';
-import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { describe, expect, it, vi } from 'vitest';
 
-import { initializeTestAgentCatalog } from '../../../agent-catalog/test-support.js';
-import type { Config } from '../../../config/schema.js';
 import { ExtensionRegistryImpl } from '../../../extensions/extension-registry-impl.js';
+import type { ExtensionHookRunner } from '../../../extensions/index.js';
 import type { MemoryManager } from '../../memory/manager.js';
 import { ExtensionToolProvider } from '../extension-provider.js';
 import { MemoryToolProvider } from '../memory-provider.js';
-import { McpToolProvider } from '../mcp-provider.js';
-import type { SessionMcpRuntime } from '../../mcp/bundle-mcp-types.js';
+import { ExternalToolService } from '../service.js';
 
 describe('external tool providers', () => {
+  it.each(['extension', 'memory'] as const)('validates final %s arguments after plugin hooks', async source => {
+    const execute = vi.fn(async () => ({ content: [{ type: 'text' as const, text: 'ok' }], details: {} }));
+    const tool = { name: 'read_value', label: 'Read', description: 'Read a value',
+      parameters: { type: 'object', properties: { value: { type: 'number' } }, required: ['value'] }, execute } as AgentTool;
+    const hook = vi.fn(async () => ({ allowed: true, params: { value: 'invalid' } as Record<string, unknown> }));
+    const deps = { getConversationId: () => undefined, hookRunner: { runBeforeToolCall: hook } as unknown as ExtensionHookRunner,
+      toolExecutorConfig: { enableRetry: false, enableTimeout: false } };
+    const registry = new ExtensionRegistryImpl(); registry.addTool(tool, 'fixture');
+    const provider = source === 'extension' ? new ExtensionToolProvider({ ...deps, registry })
+      : new MemoryToolProvider({ ...deps, canAccess: () => true,
+        getMemoryManager: () => ({ getExternalToolEntries: () => [{ providerId: 'fixture', tool }] }) as unknown as MemoryManager });
+    const service = new ExternalToolService([provider]);
+    const descriptor = (await service.describe([`${source}:fixture:read_value`])).tools[0]!;
+    const call = () => service.execute({ toolRef: descriptor.toolRef, revision: descriptor.revision,
+      arguments: { value: 1 }, context: { toolCallId: 'final-args' } });
+    await expect(call()).rejects.toThrow('Arguments do not match'); expect(execute).not.toHaveBeenCalled();
+    hook.mockResolvedValue({ allowed: true, params: { value: 2 } });
+    await expect(call()).resolves.toMatchObject({ content: [{ text: 'ok' }] });
+    expect(execute).toHaveBeenCalledWith('final-args', { value: 2 }, expect.any(AbortSignal), undefined);
+  });
+
   it('preserves extension ownership and executes through the delegated boundary', async () => {
     seedConversationFixtures();
     const registry = new ExtensionRegistryImpl();
@@ -63,153 +81,6 @@ describe('external tool providers', () => {
       expect.any(AbortSignal),
       undefined,
     );
-  });
-
-  it('discovers and executes MCP tools without materializing model-visible tools', async () => {
-    seedConversationFixtures();
-    const callTool = vi.fn(async (): Promise<CallToolResult> => ({
-      content: [{ type: 'text' as const, text: 'mcp-ok' }],
-      structuredContent: { records: 7 },
-    }));
-    const runtime = {
-      markUsed: vi.fn(),
-      acquireLease: vi.fn(() => vi.fn()),
-      getCatalog: vi.fn(async () => ({
-        version: 1,
-        generatedAt: 1,
-        servers: {},
-        resources: [],
-        prompts: [],
-        tools: [{
-          serverName: 'demo server',
-          safeServerName: 'demo-server',
-          toolName: 'lookup',
-          description: 'Look up a demo record.',
-          inputSchema: {
-            type: 'object',
-            properties: { id: { type: 'string' } },
-            required: ['id'],
-          },
-          fallbackDescription: 'lookup',
-          outputSchema: { type: 'object', properties: { records: { type: 'number' } } },
-          annotations: { readOnlyHint: true },
-        }],
-      })),
-      callTool,
-    } as unknown as SessionMcpRuntime;
-    const provider = new McpToolProvider({
-      workspace: '/tmp/workspace',
-      getConfig: () => ({ mcp: { servers: { 'demo server': { command: 'demo' } } } }) as Config,
-      getConversationId: () => undefined,
-      getRuntime: vi.fn(async () => runtime),
-    });
-
-    const hits = await provider.search('lookup');
-    expect(hits).toEqual([expect.objectContaining({
-      toolRef: 'mcp:demo-server:lookup',
-      source: 'mcp',
-    })]);
-    await expect(provider.describe('mcp:demo-server:lookup')).resolves.toMatchObject({
-      inputSchema: { type: 'object' },
-      outputSchema: { type: 'object', properties: { records: { type: 'number' } } },
-      annotations: { readOnlyHint: true },
-    });
-    await expect(provider.execute(
-      'mcp:demo-server:lookup',
-      { id: '42' },
-      undefined,
-      { toolCallId: 'call-mcp' },
-    )).resolves.toMatchObject({ content: [{ text: 'mcp-ok' }], structuredContent: { records: 7 } });
-    expect(callTool).toHaveBeenCalledWith('demo server', 'lookup', { id: '42' }, undefined);
-    callTool.mockResolvedValueOnce({ content: [{ type: 'text', text: 'lookup failed' }], isError: true });
-    await expect(provider.execute('mcp:demo-server:lookup', { id: '42' }, undefined,
-      { toolCallId: 'failed-mcp' })).resolves.toMatchObject({ details: { status: 'failed' } });
-  });
-
-  it('turns a plugin MCP tool authorization challenge into a connection request', async () => {
-    const runtime = {
-      markUsed: vi.fn(),
-      acquireLease: vi.fn(() => vi.fn()),
-      getCatalog: vi.fn(async () => ({
-        version: 1,
-        generatedAt: 1,
-        servers: {},
-        resources: [],
-        prompts: [],
-        tools: [{
-          serverName: 'plugin/oauth-demo/local-oauth',
-          safeServerName: 'plugin-oauth-demo-local-oauth',
-          toolName: 'whoami',
-          description: 'Read the connected Demo identity.',
-          inputSchema: { type: 'object', properties: {} },
-          fallbackDescription: 'whoami',
-        }],
-      })),
-      callTool: vi.fn(async () => ({
-        content: [{ type: 'text' as const, text: 'Authorization required.' }],
-        isError: true,
-        _meta: { 'mcp/www_authenticate': ['Bearer error="invalid_token"'] },
-      })),
-    } as unknown as SessionMcpRuntime;
-    const provider = new McpToolProvider({
-      workspace: '/tmp/workspace',
-      getConfig: () => ({}) as Config,
-      getConversationId: () => undefined,
-      getRuntime: vi.fn(async () => runtime),
-    });
-
-    await expect(provider.execute(
-      'mcp:plugin-oauth-demo-local-oauth:whoami',
-      {},
-      undefined,
-      { toolCallId: 'call-mcp' },
-    )).resolves.toMatchObject({
-      content: [{ text: expect.stringContaining('requires an account connection') }],
-      details: { status: 'connection_required' },
-    });
-  });
-
-  it('enforces flat MCP tool and timeout policies', async () => {
-    initializeTestAgentCatalog({
-      defaults: {
-        models: { chat: { primary: 'openai/gpt-4.1', fallbacks: [] }, intents: {} },
-        skills: { mode: 'all-enabled', exclude: [] },
-        tools: {
-          'mcp:demo:write': { mode: 'deny' },
-          'mcp:demo:read': { mode: 'allow', timeoutMs: 1_000 },
-        },
-        workflows: {},
-        runtime: {},
-      },
-    });
-    seedConversationFixtures();
-    const callTool = vi.fn(async () => ({ content: [{ type: 'text' as const, text: 'ok' }] }));
-    const runtime = {
-      markUsed: vi.fn(),
-      getCatalog: vi.fn(async () => ({
-        version: 1,
-        generatedAt: 1,
-        servers: {},
-        resources: [],
-        prompts: [],
-        tools: [
-          { serverName: 'demo', safeServerName: 'demo', toolName: 'read', annotations: { readOnlyHint: true }, inputSchema: { type: 'object' }, fallbackDescription: 'read' },
-          { serverName: 'demo', safeServerName: 'demo', toolName: 'write', annotations: { readOnlyHint: false }, inputSchema: { type: 'object' }, fallbackDescription: 'write' },
-        ],
-      })),
-      callTool,
-    } as unknown as SessionMcpRuntime;
-    const config = {} as Config;
-    const provider = new McpToolProvider({
-      workspace: '/tmp/workspace',
-      getConfig: () => config,
-      getConversationId: () => "78fcccd3-a14f-4a70-87d9-69d9471f63d7",
-      getRuntime: vi.fn(async () => runtime),
-    });
-
-    expect((await provider.search('')).map((tool) => tool.title)).toEqual(['read']);
-    await provider.execute('mcp:demo:read', {}, undefined, { toolCallId: 'call' });
-    expect(callTool.mock.calls[0]?.[3]).toBeInstanceOf(AbortSignal);
   });
 
   it('catalogs dynamic memory provider tools instead of injecting them', async () => {

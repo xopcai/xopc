@@ -8,7 +8,6 @@ import { createBackgroundTask } from '../infra/background-task.js';
 import { buildTaskAgentContext } from '../agent/source-context/task-context.js';
 import { buildFileAgentContext } from '../agent/source-context/file-context.js';
 import { buildSessionAgentContext } from '../agent/source-context/session-context.js';
-import { buildMcpResourceAgentContext } from '../agent/source-context/mcp-resource-context.js';
 import { buildBrowserTabAgentContext } from '../agent/source-context/browser-tab.js';
 import { buildUserAssertionAgentContext } from '../agent/source-context/user-assertion-context.js';
 import { RealtimeExtensionBrowserProvider } from '../browser/providers/realtime-extension.js';
@@ -107,7 +106,7 @@ import { TaskRunRepository } from '../tasks/task-run-repository.js';
 import { TaskSignalService } from '../tasks/task-signal-service.js';
 import { createRuntimeBrowserAutomationService, type BrowserAutomationService } from '../browser/automations/index.js';
 
-import { disposeAllSessionMcpRuntimes } from '../agent/mcp/bundle-mcp-tools.js';
+import { evictAllEmbeddedSessionRunners, drainEmbeddedSessionRunnerShutdowns } from '../agent/embedded/session-runner.js';
 import { getDefaultAgentId } from '../routing/resolve-route.js';
 import { resolveConversationId, sanitizeSegment } from '../routing/session-key.js';
 import { scheduleGatewayUpdateCheck } from '../infra/update-startup.js';
@@ -590,14 +589,7 @@ export class GatewayService {
           ]);
           return buildSessionAgentContext(metadata, messages, ref.expectedVersion);
         }
-        if (ref.kind === 'mcp_resource') {
-          return buildMcpResourceAgentContext({
-            workspaceDir: this.currentWorkspacePath,
-            config: this.config,
-            sourceId: ref.sourceId,
-            expectedVersion: ref.expectedVersion,
-          });
-        }
+
         if (ref.kind === 'browser_tab') {
           const binding = getBrowserTabBindingById(ref.sourceId);
           if (!binding
@@ -1777,9 +1769,8 @@ export class GatewayService {
     registerClarificationChannelRuntime(null);
     this.connectionRecovery.stop();
     this.agentRunner.disposeClarifications();
-    await disposeAllSessionMcpRuntimes().catch((err) => {
-      log.warn({ err }, 'MCP runtime shutdown failed');
-    });
+    evictAllEmbeddedSessionRunners('gateway_stop');
+    await drainEmbeddedSessionRunnerShutdowns();
     await this._agentService?.stop();
 
     // Unblock `consumeOutbound()` / `consumeInbound()` waiters before stopping channels (CLI agent does the same).

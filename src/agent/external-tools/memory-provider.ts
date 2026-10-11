@@ -3,6 +3,7 @@ import type { AgentTool } from '@earendil-works/pi-agent-core';
 import type { ExtensionHookRunner } from '../../extensions/index.js';
 import type { MemoryManager } from '../memory/manager.js';
 import { executeToolWithProtection, type ToolExecutorConfig } from '../tools/executor.js';
+import { getXopcToolMetadata } from '../embedded/tool-metadata.js';
 import { externalToolRef, parseExternalToolRef } from './refs.js';
 import type {
   ExternalToolDescriptor,
@@ -43,6 +44,8 @@ export class MemoryToolProvider implements ExternalToolProvider {
     const resolved = this.resolve(toolRef);
     if (!resolved) return undefined;
     const summary = toolSummary(resolved.tool);
+    const metadata = getXopcToolMetadata(resolved.tool);
+    if (metadata?.exposure === 'hidden') return undefined;
     return {
       toolRef,
       source: this.source,
@@ -51,6 +54,9 @@ export class MemoryToolProvider implements ExternalToolProvider {
       summary,
       description: summary,
       inputSchema: resolved.tool.parameters as Record<string, unknown>,
+      outputSchema: metadata?.outputSchema as Record<string, unknown> | undefined,
+      annotations: metadata?.annotations,
+      exposure: metadata?.exposure,
     };
   }
 
@@ -70,6 +76,7 @@ export class MemoryToolProvider implements ExternalToolProvider {
       if (!hook.allowed) throw new Error(hook.reason ?? 'Memory provider tool call blocked by policy hook.');
       executionArgs = hook.params ?? args;
     }
+    context.validateArguments?.(executionArgs);
     return executeToolWithProtection(
       resolved.tool,
       context.toolCallId,

@@ -113,6 +113,6 @@ describe('single connection action area', () => {
     await click('Install Demo Connector');
     expect(mocked.fetchPlan).toHaveBeenCalledWith('demo-connector', '1.0.0');
     await click('Finish installation');
-    expect(mocked.state.act).toHaveBeenCalledWith('install_complete', 'store-demo', undefined, undefined, undefined, 'demo-instance');
+    expect(mocked.state.act).toHaveBeenCalledWith('install_complete', 'store-demo', undefined, undefined, 'demo-instance');
   });
 });

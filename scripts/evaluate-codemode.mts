@@ -58,7 +58,7 @@ const modeInstructions: Record<EvalMode, string> = {
 const sourceFiles = [import.meta.filename, fileURLToPath(new URL('./codemode-evaluation/fixtures.ts', import.meta.url)),
   fileURLToPath(new URL('./codemode-evaluation/metrics.ts', import.meta.url))];
 const harnessHash = createHash('sha256').update((await Promise.all(sourceFiles.map(path => readFile(path, 'utf8')))).join('\0')).digest('hex');
-const runtimeFiles = ['run-turn', 'session-runner', 'codemode-extension', 'mcp-discovery', 'tool-search-extension'].map(name =>
+const runtimeFiles = ['run-turn', 'session-runner', 'codemode-extension', 'tool-search-extension'].map(name =>
   fileURLToPath(new URL(`../src/agent/embedded/${name}.ts`, import.meta.url)));
 const runtimeHash = createHash('sha256').update((await Promise.all(runtimeFiles.map(path => readFile(path, 'utf8')))).join('\0')).digest('hex');
 const { headers: _headers, ...publicModel } = model;
@@ -84,10 +84,10 @@ const { writeKnowledgeItem } = await import('../src/knowledge-memory/index.js');
 const { loadConfig } = await import('../src/config/loader.js');
 const { runXopcEmbeddedTurn } = await import('../src/agent/embedded/run-turn.js');
 const { InMemoryTranscriptRuntime } = await import('../src/agent/embedded/transcript-runtime.js');
-const { evictEmbeddedSessionRunner, evictAllEmbeddedSessionRunners, getEmbeddedSessionRunnerStats } = await import('../src/agent/embedded/session-runner.js');
+const { drainEmbeddedSessionRunnerShutdowns, evictEmbeddedSessionRunner, evictAllEmbeddedSessionRunners, getEmbeddedSessionRunnerStats } = await import('../src/agent/embedded/session-runner.js');
 const { createAgentTurnPolicy } = await import('../src/agent/orchestration/agent-turn-policy.js');
 const { createDefaultExternalToolGatewayTools } = await import('../src/agent/external-tools/index.js');
-const { materializeDeferredMcpTools } = await import('../src/agent/embedded/mcp-discovery.js');
+const { prepareNativeMcpConfig } = await import('../src/agent/mcp/native-mcp.js');
 const { markCodemodeCoreRead } = await import('../src/agent/tools/codemode-permissions.js');
 const { createReadFileTool } = await import('../src/agent/tools/read.js');
 const { createGrepTool } = await import('../src/agent/tools/grep.js');
@@ -96,13 +96,12 @@ const { createListDirTool } = await import('../src/agent/tools/list-dir.js');
 const { createExecCommandTool } = await import('../src/agent/tools/exec-command.js');
 const { createKnowledgeSearchTool, createKnowledgeGetTool } = await import('../src/agent/tools/knowledge-memory-tool.js');
 const { createDataBatchTool } = await import('../src/agent/tools/dataBatch.js');
-const { disposeSessionMcpRuntime, disposeAllSessionMcpRuntimes, getSessionMcpRuntimeManager } = await import('../src/agent/mcp/bundle-mcp-runtime.js');
 const { commandRegistry } = await import('../src/agent/commands/command-registry.js');
 
 const database = openXopcDatabase({ path: join(state, 'xopc.db') });
 const catalog = new AgentCatalogRepository();
 catalog.ensureInitialized(AgentDefaultsSchema.parse({ models: { chat: { primary: values.model }, intents: {} },
-  skills: { mode: 'selected', include: [] }, tools: { 'mcp:eval:lookup': { mode: 'allow', readOnly: true } }, runtime: {} }));
+  skills: { mode: 'selected', include: [] }, tools: { 'mcp__eval__lookup': { mode: 'allow', readOnly: true } }, runtime: {} }));
 const stored = catalog.get('main')!;
 catalog.update('main', stored.revision, { id: 'main', enabled: true, workspace });
 catalog.markProvisioned('main');
@@ -114,7 +113,7 @@ for (let group = 0; group < 4; group++) for (const [index, suffix] of ['a', 'b']
 }
 const mcpEntry = join(state, 'mcp.mjs');
 await writeFile(mcpEntry, mcpFixtureSource);
-await writeFile(process.env.XOPC_CONFIG_PATH, JSON.stringify({ mcp: { servers: { eval: { command: process.execPath, args: [mcpEntry] } } } }));
+await writeFile(process.env.XOPC_CONFIG_PATH, JSON.stringify({ mcp: { servers: { eval: { command: process.execPath, args: [mcpEntry], exposure: 'deferred' } } } }));
 const config = loadConfig();
 
 const samplesPath = join(out, 'samples.jsonl');
@@ -174,9 +173,10 @@ async function execute(job: typeof jobs[number]): Promise<Sample> {
     const gateway = createDefaultExternalToolGatewayTools({ workspace, getConfig: () => config,
       getCurrentContext: () => ({ conversationId, channel: 'cli', chatId: 'evaluation', origin: { type: 'system', source: 'cli' } }), agentId: 'main', canAccessMemory: () => false });
     const gateways = gateway.filter(tool => ['xopc_tool_search', 'xopc_tool_describe', 'xopc_tool_execute'].includes(tool.name)).map(track);
-    const external = job.mode === 'codemode' ? await materializeDeferredMcpTools({ conversationId, workspaceDir: workspace, config, server: 'eval', tools: gateways }) : [];
+    const mcp = await prepareNativeMcpConfig(config, workspace);
+
     const exec = track(createExecCommandTool(workspace));
-    const tools = [...core, exec, ...gateways, ...external];
+    const tools = [...core, exec, ...gateways];
     const batch = markCodemodeCoreRead(track(createDataBatchTool(workspace, () => new Set(tools.map(tool => tool.name)), { getTools: () => tools })));
     tools.push(batch);
     const runtime = new InMemoryTranscriptRuntime({ runtimeId: conversationId, cwd: workspace });
@@ -187,7 +187,7 @@ async function execute(job: typeof jobs[number]): Promise<Sample> {
       workspaceDir: workspace, transcriptRuntime: runtime, thinkingLevel: 'off', timeoutMs,
       userMessage: { role: 'user', content: job.test.prompt + '\n' + modeInstructions[job.mode], timestamp: Date.now() },
       systemPrompt, codemode: job.mode === 'codemode' ? RuntimePolicySchema.parse({ codemode: { enabled: true } }).codemode : undefined,
-      toolDiscovery: job.mode === 'codemode' ? { enabled: true, mcpServer: 'eval' } : undefined,
+      mcp,
       abortSignal: abort, requireVisibleReply: true,
       turnPolicy: createAgentTurnPolicy({ maxTurns: 8, maxToolFailures: 4, authorizeToolCall: async context => {
         const args = context.args as Record<string, unknown>;
@@ -213,6 +213,10 @@ async function execute(job: typeof jobs[number]): Promise<Sample> {
           sample.toolTrace.push({ id: event.toolCallId, name: event.toolName, parentId: event.parentToolCallId, args: event.args });
         }
         if (event.type === 'tool_execution_end') {
+          if (event.toolName.startsWith('mcp__') && !event.isError) {
+            const evidence = JSON.stringify(event.result);
+            for (const source of job.test.sources) if (evidence.includes(source)) observed.add(source);
+          }
           const trace = sample.toolTrace.find(item => item.id === event.toolCallId);
           if (trace) { trace.isError = event.isError; trace.durationMs = event.durationMs ?? 0; }
         }
@@ -226,7 +230,7 @@ async function execute(job: typeof jobs[number]): Promise<Sample> {
     sample.sourcesComplete = grade.sourcesComplete;
     sample.passed = outcome.ok && grade.passed && !sample.forbiddenAccesses && !sample.stateLeaks;
   } catch (error) { sample.error = error instanceof Error ? error.message : String(error); }
-  finally { evictEmbeddedSessionRunner(conversationId); await disposeSessionMcpRuntime(conversationId); }
+  finally { evictEmbeddedSessionRunner(conversationId); await drainEmbeddedSessionRunnerShutdowns(); }
   sample.infrastructureFailure = classifyInfrastructureFailure(sample.error);
   sample.observedSources = [...observed].sort();
   sample.elapsedMs = Math.round(performance.now() - started);
@@ -253,11 +257,10 @@ try {
   }));
   await reportWrites;
   const complete = samples.length === selectedCases.length * repeats * 3;
-  await disposeAllSessionMcpRuntimes();
+  await drainEmbeddedSessionRunnerShutdowns();
   const audit = { pooledRunners: getEmbeddedSessionRunnerStats().pooled,
-    mcpRuntimes: getSessionMcpRuntimeManager().listSessionIds().length,
     integrity: database.db.prepare('PRAGMA integrity_check').all() };
-  const auditPassed = audit.pooledRunners === 0 && audit.mcpRuntimes === 0
+  const auditPassed = audit.pooledRunners === 0
     && JSON.stringify(audit.integrity) === '[{"integrity_check":"ok"}]';
   const comparison = compareStrategies(samples);
   await writeFile(join(out, 'summary.json'), JSON.stringify({ manifest, completed: samples.length,
@@ -267,7 +270,7 @@ try {
   if (!complete || !comparison.validComparison || !auditPassed) process.exitCode = 2;
 } finally {
   evictAllEmbeddedSessionRunners();
-  await disposeAllSessionMcpRuntimes();
+  await drainEmbeddedSessionRunnerShutdowns();
   commandRegistry().shutdown();
   closeXopcDatabase();
 }

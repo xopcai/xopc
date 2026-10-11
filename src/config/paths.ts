@@ -89,9 +89,6 @@ export function resolveOAuthPath(provider: string): string {
 }
 
 /** Resolve the credential record for one canonical remote MCP endpoint. */
-export function resolveMcpOAuthPath(serverKey: string): string {
-  return join(resolveCredentialsDir(), 'mcp', `${serverKey}.json`);
-}
 
 /**
  * Internal agent state dir: `stateDir/agents/<id>/agent/`

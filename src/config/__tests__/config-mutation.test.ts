@@ -9,12 +9,12 @@ describe('persistConfigMutation', () => {
     await expect(persistConfigMutation({
       config,
       mutate: () => {
-        config.mcp!.sessionIdleTtlMs = 123;
+        config.mcp!.servers!.fixture = { command: 'fixture', timeout: 123 };
         return 'saved';
       },
       save: async () => ({ saved: true }),
     })).resolves.toBe('saved');
-    expect(config.mcp?.sessionIdleTtlMs).toBe(123);
+    expect(config.mcp?.servers?.fixture?.timeout).toBe(123);
   });
 
   it('restores the full config when persistence fails', async () => {
@@ -37,7 +37,7 @@ describe('persistConfigMutation', () => {
     await expect(persistConfigMutation({
       config,
       mutate: () => {
-        config.mcp!.sessionIdleTtlMs = 456;
+        config.mcp!.servers!.fixture = { command: 'fixture', timeout: 456 };
         throw new Error('mutation failed');
       },
       save: async () => ({ saved: true }),
@@ -50,7 +50,7 @@ describe('persistConfigMutation', () => {
     const operation = persistConfigMutation({
       config,
       mutate: () => {
-        config.mcp!.sessionIdleTtlMs = 789;
+        config.mcp!.servers!.fixture = { command: 'fixture', timeout: 789 };
       },
       save: async () => { throw new Error('storage unavailable'); },
     });

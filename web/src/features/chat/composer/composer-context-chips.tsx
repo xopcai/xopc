@@ -1,4 +1,4 @@
-import { AppWindow, Database, FileText, Folder, MessagesSquare, NotebookPen, X } from 'lucide-react';
+import { AppWindow, FileText, Folder, MessagesSquare, NotebookPen, X } from 'lucide-react';
 
 import type { ComposerContextRef } from '@/features/chat/composer/composer.types';
 
@@ -28,8 +28,6 @@ export function ComposerContextChips({
             <MessagesSquare className="size-3.5 shrink-0 text-accent-fg" aria-hidden />
           ) : ref.kind === 'browser_tab' ? (
             <AppWindow className="size-3.5 shrink-0 text-accent-fg" aria-hidden />
-          ) : ref.kind === 'mcp_resource' ? (
-            <Database className="size-3.5 shrink-0 text-accent-fg" aria-hidden />
           ) : (
             <NotebookPen className="size-3.5 shrink-0 text-accent-fg" aria-hidden />
           )}

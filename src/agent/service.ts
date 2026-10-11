@@ -1,4 +1,5 @@
 import { configureTracing, flushTracing } from '../observability/runtime.js';
+import { drainEmbeddedSessionRunnerShutdowns } from './embedded/session-runner.js';
 import { resolveAgentIdFromConversationId } from '../routing/agent-session-key.js';
 import type { AgentEvent, AgentMessage, ThinkingLevel } from '@earendil-works/pi-agent-core';
 import { MAX_WEBCHAT_ATTACHMENT_FILE_BYTES } from '../gateway/chat-limits.js';
@@ -870,6 +871,7 @@ export class AgentService {
     this.inboundLoop.stop();
     this.agentManager.dispose();
     this.dispose();
+    await drainEmbeddedSessionRunnerShutdowns();
 
     this.hookHandler.trigger('gateway_stop', { reason: 'stopped' });
     log.debug('Agent service stopped');
@@ -1033,14 +1035,12 @@ export class AgentService {
     key: string,
   ): Promise<{ transcriptId: string; previousTranscriptId: string } | null> {
     const { abortEmbeddedRun } = await import('./embedded/runs.js');
-    const { retireSessionMcpRuntimeForConversationId } = await import('./mcp/bundle-mcp-tools.js');
     await abortEmbeddedRun(key);
     const task = await this.sessionStore.reset(key);
     if (!task) {
       return null;
     }
     this.agentManager.removeAgent(key);
-    await retireSessionMcpRuntimeForConversationId({ conversationId: key, reason: 'session-reset' });
     return task;
   }
 

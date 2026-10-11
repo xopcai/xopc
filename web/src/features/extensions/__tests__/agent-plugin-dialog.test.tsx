@@ -9,8 +9,6 @@ vi.mock('@/lib/fetch', () => ({ fetchJson: mocks.request, apiFetch: mocks.fetch 
 vi.mock('@/lib/url', () => ({ apiUrl: (path: string) => path }));
 vi.mock('swr', () => ({ useSWRConfig: () => ({ mutate: mocks.mutate }) }));
 vi.mock('@/stores/locale-store', () => ({ useLocaleStore: (select: (state: { language: string }) => unknown) => select({ language: 'en' }) }));
-vi.mock('@/features/connectors/mcp/mcp-config-api', () => ({ getMcpOAuthStatus: mocks.status, startMcpOAuth: mocks.start, disconnectMcpOAuth: vi.fn() }));
-vi.mock('@/features/settings/oauth-authorization-window', () => ({ reserveOAuthAuthorizationWindow: mocks.reserve, openOAuthAuthorizationUrl: mocks.open, closeOAuthAuthorizationWindow: mocks.close }));
 import { AgentPluginDialog, PluginMcpConnection } from '../agent-plugin-dialog';
 
 let host: HTMLDivElement;
@@ -144,16 +142,15 @@ it('supports native package picking and dropped plugin paths in the desktop app'
   expect(getPathForFile).toHaveBeenCalledWith(file);
   expect((document.querySelector('input[placeholder="/plugin/folder/or/plugin.zip"]') as HTMLInputElement).value).toBe('/tmp/dropped-plugin.zip');
 });
-it('does not start OAuth on render and clears a secret after host-managed storage', async () => {
+it('provides native MCP login instructions and clears a saved API key', async () => {
   mocks.request.mockResolvedValue({ ok: true });
   mocks.fetch.mockResolvedValue({ ok: true, json: async () => ({ ok: true, payload: { toolCount: 2 } }) });
   await render(<PluginMcpConnection pluginId="sample" server={{ id: 'plugin/sample/main', name: 'main', type: 'streamable-http' }} enabled />);
-  expect(mocks.start).not.toHaveBeenCalled(); expect(mocks.reserve).not.toHaveBeenCalled();
-  await click('Set API key');
+  expect(document.body.textContent).toContain('xopc mcp login');
   await input(document.querySelector('input[type=password]')!, 'private-token');
-  await click('Save and test');
+  await click('Save API key');
   expect(mocks.request).toHaveBeenCalledWith('/api/extensions/agent-plugins/sample/mcp/main/auth', expect.objectContaining({ method: 'PUT', body: expect.stringContaining('private-token') }));
-  expect(document.querySelector('input[type=password]')).toBeNull();
+  expect((document.querySelector('input[type=password]') as HTMLInputElement).value).toBe('');
   expect(document.body.textContent).not.toContain('private-token');
-  expect(document.body.textContent).toContain('Connected · 2 tools');
+  expect(mocks.fetch).not.toHaveBeenCalled();
 });

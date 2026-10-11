@@ -1,24 +1,13 @@
-import { describe, expect, it } from 'vitest';
-
-import { McpServerSchema } from '../schema.js';
-
-describe('McpServerSchema OAuth', () => {
-  it('accepts a streamable HTTP OAuth server', () => {
-    expect(McpServerSchema.safeParse({
-      url: 'https://mcp.example.com/api',
-      auth: { type: 'oauth' },
-    }).success).toBe(true);
-  });
-
-  it.each([
-    { command: 'node', auth: { type: 'oauth' } },
-    { url: 'https://mcp.example.com/sse', transport: 'sse', auth: { type: 'oauth' } },
-    {
-      url: 'https://mcp.example.com/api',
-      headers: { authorization: 'Bearer static' },
-      auth: { type: 'oauth' },
-    },
-  ])('rejects unsupported or ambiguous OAuth config: %o', (config) => {
-    expect(McpServerSchema.safeParse(config).success).toBe(false);
-  });
+import { expect, it } from 'vitest';
+import { McpConfigSchema, McpServerSchema } from '../schema.js';
+it('accepts native OAuth options, exposure and seconds-based timeout', () => {
+  expect(McpServerSchema.safeParse({ type: 'http', url: 'https://mcp.example.com', oauth: { clientId: 'registered', callbackPort: 8765 }, timeout: 30, exposure: 'deferred' }).success).toBe(true);
+});
+it.each([{ type: 'sse', url: 'https://example.com' }, { url: 'https://example.com', transport: 'sse' },
+  { url: 'https://example.com', auth: { type: 'oauth' } }, { command: 'node', requestTimeoutMs: 3000 },
+  { command: 'node', url: 'https://example.com' }])('rejects removed or conflicting configuration %o', value => {
+  expect(McpServerSchema.safeParse(value).success).toBe(false);
+});
+it('rejects names colliding under native pi normalization', () => {
+  expect(McpConfigSchema.safeParse({ servers: { 'a-b': { command: 'node' }, a_b: { command: 'node' } } }).success).toBe(false);
 });
