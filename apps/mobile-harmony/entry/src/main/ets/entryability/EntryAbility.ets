@@ -19,12 +19,13 @@ export default class EntryAbility extends UIAbility {
   private mainWindow?: window.Window;
   private onAvoidArea = (data: window.AvoidAreaOptions): void => {
     if (data.type === window.AvoidAreaType.TYPE_KEYBOARD) layoutState.keyboardVisible = data.area.bottomRect.height > 0;
+    if (data.type === window.AvoidAreaType.TYPE_SYSTEM) layoutState.systemTopInsetPx = data.area.topRect.height;
   };
   onWindowStageDestroy(): void {
     cancelAllDeviceLocations();
     try { this.mainWindow?.off('avoidAreaChange', this.onAvoidArea); }
     catch (_error) { hilog.warn(0x0000, 'XopcApp', 'Window listener cleanup failed'); }
-    this.mainWindow = undefined; layoutState.keyboardVisible = false;
+    this.mainWindow = undefined; layoutState.keyboardVisible = false; layoutState.systemTopInsetPx = 0;
   }
   private receiveWant(want: Want): void {
     if (want.uri === SHARE_INTAKE_URI) {
@@ -59,6 +60,9 @@ export default class EntryAbility extends UIAbility {
           attachDeviceLocation(this.context, this.mainWindow.getUIContext());
           this.mainWindow.getUIContext().setKeyboardAvoidMode(KeyboardAvoidMode.RESIZE);
           this.mainWindow.on('avoidAreaChange', this.onAvoidArea);
+          layoutState.systemTopInsetPx = this.mainWindow.getWindowAvoidArea(window.AvoidAreaType.TYPE_SYSTEM).topRect.height;
+          void this.mainWindow.setWindowSystemBarProperties({ statusBarColor: '#00000000' })
+            .catch((): void => { hilog.warn(0x0000, 'XopcApp', 'Status bar transparency initialization failed'); });
           layoutState.keyboardVisible = this.mainWindow.getWindowAvoidArea(window.AvoidAreaType.TYPE_KEYBOARD).bottomRect.height > 0;
         } catch (_error) { hilog.warn(0x0000, 'XopcApp', 'Keyboard layout initialization failed'); }
         pushNotifications.onWindowReady();
