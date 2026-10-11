@@ -91,13 +91,13 @@ describe('VoiceRealtimeRuntime playback over WebSocket', () => {
     await once(socket, 'open');
     send('session.start', { sessionId: session.sessionId, ticket: session.ticket });
     await vi.waitFor(() => expect(events.some((event) => event.type === 'session.ready')).toBe(true));
-    if (!initialUserTurn) return { delegate };
+    if (!initialUserTurn) return { delegate, session };
     onSttEvent({ type: 'transcript_final', utteranceId: 'u1', revision: 1, text: 'Hi' });
     await vi.waitFor(() => expect(frames.reduce((sum, bytes) => sum + bytes, 0)).toBe(96_000));
     const created = events.find((event) => event.type === 'response.created');
     if (created?.type !== 'response.created') throw new Error('Response was not created');
     responseId = created.payload.responseId;
-    return { delegate };
+    return { delegate, session };
   }
 
   it('delivers a background Task update through the live assistant call', async () => {
@@ -180,6 +180,29 @@ describe('VoiceRealtimeRuntime playback over WebSocket', () => {
     expect(events.some((event) => event.type === 'session.error')).toBe(false);
     expect(runtime.hasConversation('agent:main:webchat:default:direct:voice')).toBe(false);
     await expect(runtime.createSession({ purpose: 'conversation', mode: 'assistant', conversationId: 'agent:main:webchat:default:direct:voice', supportedProtocolVersions: [3], mediaPreferences: ['websocket-pcm'] }, 'user-1')).resolves.toHaveProperty('ticket');
+  });
+
+  it('waits for an already closing session before acknowledging cancellation for reconnect', async () => {
+    let finish!: () => void;
+    const saved = new Promise<void>((resolve) => { finish = resolve; });
+    const record = vi.fn(async () => { await saved; });
+    const { session } = await start(true, record);
+    send('response.stop_playback', { responseId });
+    await vi.waitFor(() => expect(record).toHaveBeenCalledOnce());
+    send('session.stop', { reason: 'user_finished' });
+    await vi.waitFor(() => expect(abortStt).toHaveBeenCalled());
+    let cancelled = false;
+    const cancellation = runtime.cancelSession(session.sessionId, session.ticket, 'user-1')
+      .then((result) => { cancelled = true; return result; });
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    expect(cancelled).toBe(false);
+    const closed = once(socket, 'close');
+    finish();
+    await expect(cancellation).resolves.toBe(true);
+    await closed;
+    await expect(runtime.createSession({ purpose: 'conversation', mode: 'assistant',
+      conversationId: 'agent:main:webchat:default:direct:voice', supportedProtocolVersions: [3],
+      mediaPreferences: ['websocket-pcm'] }, 'user-1')).resolves.toHaveProperty('ticket');
   });
 
   it('rejects acknowledgements for audio that was never sent', async () => {
