@@ -31,6 +31,11 @@ describe('Device Tools', () => {
     expect(resolver.resolve('chat', origin, 'desktop', 'desktop.device.get_state')).toBeUndefined();
     expect(resolver.resolve('chat', origin, 'desktop', 'desktop.file.save')?.endpointId).toBe('desktop');
     expect(resolver.resolve('chat', origin, 'mobile', 'mobile.file.share')).toBeUndefined();
+    for (const name of ['mobile.file.pick', 'mobile.contacts.pick', 'mobile.media.pick', 'mobile.camera.capture', 'mobile.calendar.query_events', 'mobile.calendar.query_free_busy']) {
+      expect(resolver.resolve('chat', origin, 'mobile', name)?.endpointId).toBe('mobile');
+      expect(resolver.resolve('chat', origin, 'desktop', name)).toBeUndefined();
+      expect(resolver.resolve('chat', { type: 'channel', channel: 'telegram' }, 'desktop', name)).toBeUndefined();
+    }
   });
   it('does not fall back from an offline binding or use a server host for unknown origin', () => {
     const { resolver, registry } = fixture();

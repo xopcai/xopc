@@ -13,6 +13,7 @@ private struct DeviceCompatibility: Decodable {
     let deviceId: String?
     let turnDeviceContextV1: Bool?
     let deviceLocationTasksV1: Bool?
+    let mobilePersonalToolsV1: Bool?
     let deviceStateToolsV1: Bool?
 }
 
@@ -105,6 +106,8 @@ actor DeviceEndpointHost {
         }
         let catalogJson: String = if compatibility.payload?.deviceStateToolsV1 != true {
             "[]"
+        } else if compatibility.payload?.mobilePersonalToolsV1 == true {
+            DeviceToolCatalog.personalJson
         } else if compatibility.payload?.deviceLocationTasksV1 == true {
             DeviceToolCatalog.json
         } else {
@@ -192,6 +195,56 @@ actor DeviceEndpointHost {
         invocations.removeValue(forKey: id)
     }
 
+    private static let personalNames = ["mobile.file.pick", "mobile.media.pick", "mobile.camera.capture", "mobile.contacts.pick", "mobile.calendar.query_events", "mobile.calendar.query_free_busy"]
+
+    private func invokePersonal(_ data: Data, id: String) async throws {
+        do {
+            let request = try JSONDecoder().decode(PersonalDeviceRequest.self, from: data)
+            guard let index = Self.personalNames.firstIndex(of: request.toolName), request.descriptorRevision == DeviceToolCatalog.revisions[index + 3] else { throw PersonalDeviceFailure(code: "TOOL_REVISION_MISMATCH") }
+            let calendar = request.toolName.hasPrefix("mobile.calendar.")
+            guard request.confirmationRequired == calendar else { throw PersonalDeviceFailure(code: "INVALID_ARGUMENTS") }
+            if calendar {
+                guard let start = request.arguments.startAt, let end = request.arguments.endAt, start >= 0, end > start, end - start <= 7 * 86400000 else { throw PersonalDeviceFailure(code: "INVALID_ARGUMENTS") }
+            }
+            if request.toolName == "mobile.contacts.pick", !["phone", "email"].contains(request.arguments.field ?? "") { throw PersonalDeviceFailure(code: "INVALID_ARGUMENTS") }
+            let remaining = request.deadlineAt - Self.now()
+            guard remaining > 0 else { throw PersonalDeviceFailure(code: "TOOL_TIMEOUT") }
+            try await send("tool.received", ["invocationId": id])
+            let timeout = Task {
+                try? await Task.sleep(for: .milliseconds(min(remaining, 120000)))
+                if !Task.isCancelled { self.invocations[id]?.cancel() }
+            }
+            defer { timeout.cancel() }
+            let selected = try await DevicePersonalTools.shared.acquire(request)
+            try Task.checkCancellation()
+            let contentData: Data
+            if calendar || request.toolName == "mobile.contacts.pick" {
+                contentData = selected
+            } else {
+                let file = try JSONDecoder().decode(DevicePersonalTools.SelectionWire.self, from: selected)
+                guard let grant = request.uploadGrant, grant.path == "/api/endpoint-tools/invocations/\(id)/files", grant.expiresAt > Self.now(), file.data.count <= grant.maxBytes,
+                      let endpointId = claim?.endpointId else { throw PersonalDeviceFailure(code: "PERMISSION_DENIED") }
+                var upload = URLRequest(url: try client.makeURL(path: grant.path, queryItems: [URLQueryItem(name: "name", value: file.name)]))
+                upload.httpMethod = "POST"; upload.httpBody = file.data
+                upload.setValue("Bearer \(client.configuration.token)", forHTTPHeaderField: "Authorization")
+                upload.setValue(file.mimeType, forHTTPHeaderField: "Content-Type")
+                upload.setValue(endpointId, forHTTPHeaderField: "x-endpoint-id")
+                upload.setValue(grant.token, forHTTPHeaderField: "x-endpoint-upload-token")
+                let (body, response) = try await client.session.data(for: upload)
+                guard (response as? HTTPURLResponse)?.statusCode == 201,
+                      let envelope = try JSONSerialization.jsonObject(with: body) as? [String: Any], let payload = envelope["payload"] as? [String: Any] else { throw PersonalDeviceFailure(code: "PERMISSION_DENIED") }
+                contentData = try Self.json(payload)
+            }
+            try Task.checkCancellation()
+            let content = try JSONSerialization.jsonObject(with: contentData)
+            try await send("tool.result", ["invocationId": id, "content": [content]])
+        } catch is CancellationError { try await send("tool.cancelled", ["invocationId": id]) }
+        catch {
+            let code = (error as? PersonalDeviceFailure)?.code ?? "PERMISSION_DENIED"
+            try await send("tool.error", ["invocationId": id, "code": code, "message": "Personal device request failed: \(code)"])
+        }
+    }
+
     private func invoke(_ requestData: Data) async throws {
         guard let request = try JSONSerialization.jsonObject(with: requestData) as? [String: Any] else { throw GatewayClientError.invalidResponse }
         guard let id = request["invocationId"] as? String else { throw GatewayClientError.invalidResponse }
@@ -201,6 +254,9 @@ actor DeviceEndpointHost {
         if request["toolName"] as? String == "mobile.device.get_location" {
             try await invokeLocation(request, id: id)
             return
+        }
+        if let name = request["toolName"] as? String, Self.personalNames.contains(name) {
+            try await invokePersonal(requestData, id: id); return
         }
         let index: Int
         switch request["toolName"] as? String {
