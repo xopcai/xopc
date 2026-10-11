@@ -72,6 +72,9 @@ class BucketRegistry {
   private authFailureSignature?: string;
 
   private identityChallengeLimiter?: RateLimiter;
+  private publicDeviceGlobalLimiter?: RateLimiter;
+  private publicDeviceSourceLimiter?: RateLimiter;
+  private deviceRefreshLimiter?: RateLimiter;
   private strictApiLimiter?: RateLimiter;
   private chatApiLimiter?: RateLimiter;
   private mediaApiLimiter?: RateLimiter;
@@ -101,6 +104,18 @@ class BucketRegistry {
       this.authFailureSignature = sig;
     }
     return this.authFailureLimiter;
+  }
+
+  publicDeviceGlobal(): RateLimiter {
+    return this.publicDeviceGlobalLimiter ??= new RateLimiter({ maxRequests: 1200, windowMs: 60_000 });
+  }
+
+  publicDeviceSource(): RateLimiter {
+    return this.publicDeviceSourceLimiter ??= new RateLimiter({ maxRequests: 300, windowMs: 60_000 });
+  }
+
+  deviceRefresh(): RateLimiter {
+    return this.deviceRefreshLimiter ??= new RateLimiter({ maxRequests: 30, windowMs: 60_000 });
   }
 
   /** Global pre-authentication signing budget; independent of authenticated traffic. */
@@ -208,6 +223,9 @@ class BucketRegistry {
   destroyAll(): void {
     this.authFailureLimiter?.destroy();
     this.identityChallengeLimiter?.destroy();
+    this.publicDeviceGlobalLimiter?.destroy();
+    this.publicDeviceSourceLimiter?.destroy();
+    this.deviceRefreshLimiter?.destroy();
     this.strictApiLimiter?.destroy();
     this.chatApiLimiter?.destroy();
     this.mediaApiLimiter?.destroy();
@@ -220,6 +238,9 @@ class BucketRegistry {
     this.sharePublicLongLimiter?.destroy();
     this.authFailureLimiter = undefined;
     this.identityChallengeLimiter = undefined;
+    this.publicDeviceGlobalLimiter = undefined;
+    this.publicDeviceSourceLimiter = undefined;
+    this.deviceRefreshLimiter = undefined;
     this.strictApiLimiter = undefined;
     this.chatApiLimiter = undefined;
     this.mediaApiLimiter = undefined;
@@ -236,6 +257,10 @@ class BucketRegistry {
   /** @internal */
   resetAllForTests(): void {
     this.authFailureLimiter?.resetForTests();
+    this.identityChallengeLimiter?.resetForTests();
+    this.publicDeviceGlobalLimiter?.resetForTests();
+    this.publicDeviceSourceLimiter?.resetForTests();
+    this.deviceRefreshLimiter?.resetForTests();
     this.strictApiLimiter?.resetForTests();
     this.chatApiLimiter?.resetForTests();
     this.mediaApiLimiter?.resetForTests();

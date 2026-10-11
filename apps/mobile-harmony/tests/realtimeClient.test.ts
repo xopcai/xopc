@@ -1,3 +1,4 @@
+vi.mock('../entry/src/main/ets/service/requestProof.ets', () => ({ connectionProof: async () => ({ 'X-Xopc-Proof': 'test-proof' }) }));
 import { randomUUID } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -50,7 +51,7 @@ describe('Harmony realtime lifecycle', () => {
   async function connect() { client.start(); await vi.advanceTimersByTimeAsync(0); sockets.at(-1)!.ready(); return sockets.at(-1)!; }
   it('authenticates with v2 hello and reconnects with the last sequence without duplicate events', async () => {
     client.subscribe('run:r1'); const socket = await connect(); const events = vi.fn(); client.onEvent = events;
-    expect(socket.connect).toHaveBeenCalledWith('wss://gateway.example/api/realtime/v1/ws');
+    expect(socket.connect).toHaveBeenCalledWith('wss://gateway.example/api/realtime/v1/ws', { header: { 'X-Xopc-Proof': 'test-proof' } });
     expect(JSON.parse(mocks.request.mock.calls.find(([path]) => path.endsWith('/tickets'))![2])).toEqual({
       clientId: 'harmonyos:device-1', clientKind: 'mobile', protocolVersion: 2,
     });

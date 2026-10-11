@@ -1,3 +1,4 @@
+import { verifyDeviceConnectionProof } from '../../gateway/security/device-request-proof.js';
 import crypto from 'node:crypto';
 import type { IncomingMessage } from 'node:http';
 import { createRequire } from 'node:module';
@@ -547,6 +548,12 @@ export class VoiceRealtimeRuntime {
     };
 
     const authenticate = async (message: Extract<VoiceClientMessage, { type: 'session.start' }>) => {
+      const pendingClaim = this.tickets.get(ticketKey(message.payload.ticket));
+      if (pendingClaim && !verifyDeviceConnectionProof(pendingClaim.principalId, message.payload.ticket,
+        new URL(request.url!, 'http://localhost').pathname + new URL(request.url!, 'http://localhost').search, typeof request.headers['x-xopc-proof'] === 'string' ? request.headers['x-xopc-proof'] : undefined)) {
+        socket.close(4401, 'Invalid voice session proof');
+        return;
+      }
       const consumed = this.consumeTicket(message.payload.ticket, message.payload.sessionId);
       if (!consumed || this.options.isPrincipalActive?.(consumed.principalId) === false) {
         if (consumed) this.releaseConversationReservation(consumed);

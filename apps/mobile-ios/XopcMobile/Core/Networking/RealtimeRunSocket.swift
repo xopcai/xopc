@@ -26,7 +26,9 @@ actor RealtimeRunSocket {
     }
 
     func consume(into continuation: AsyncThrowingStream<RunStreamEvent, Error>.Continuation) async throws {
-        let socket = try session.webSocketTask(with: webSocketURL())
+        var request = URLRequest(url: try webSocketURL())
+        request.setValue(try await GatewayPairingService.shared.connectionProof(url: request.url!, ticket: ticket), forHTTPHeaderField: "X-Xopc-Proof")
+        let socket = session.webSocketTask(with: request)
         self.socket = socket
         socket.resume()
         try await socket.send(.data(JSONEncoder().encode(helloFrame())))

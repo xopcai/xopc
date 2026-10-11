@@ -1,3 +1,4 @@
+import { signedHttpRequest } from './requestProof';
 import { http } from '@kit.NetworkKit';
 import { util } from '@kit.ArkTS';
 import { gatewaySession } from './gatewaySession';
@@ -22,7 +23,7 @@ export async function fetchPersonalAgentAvatar(agentId: string, reference: strin
   const headers: Record<string, string> = {};
   if (!reference?.startsWith('https://')) headers['Authorization'] = 'Bearer ' + auth.token;
   try {
-    const response = await request.request(reference?.startsWith('https://') ? reference : auth.origin + '/api/agents/' + encodeURIComponent(agentId) + '/avatar' + (reference !== undefined ? '?resolve=1' : ''), {
+    const response = await signedHttpRequest(request, reference?.startsWith('https://') ? reference : auth.origin + '/api/agents/' + encodeURIComponent(agentId) + '/avatar' + (reference !== undefined ? '?resolve=1' : ''), {
       method: http.RequestMethod.GET,
       header: headers,
       expectDataType: http.HttpDataType.ARRAY_BUFFER,
