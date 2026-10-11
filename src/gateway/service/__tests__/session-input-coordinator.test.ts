@@ -8,6 +8,8 @@ import { SessionInputCoordinator } from '../session-input-coordinator.js';
 import { appContextToAgentContext } from '../../../agent/source-context/app-context.js';
 import {
   appendTranscriptEntry,
+  claimNextSessionInput,
+  finishSessionInputRun,
   closeXopcDatabase,
   ensureSessionRecord,
   getSessionInputById,
@@ -388,6 +390,13 @@ describe('SessionInputCoordinator', () => {
 
   it('runs replacement cleanup before atomically queuing the edited latest turn', async () => {
     ensureSessionRecord(conversationId, '/tmp/workspace', { agentId: "main" });
+    const originalOrigin = { type: 'endpoint' as const, endpointId: 'original-phone' };
+    const deviceContext = { kind: 'device_context' as const, sourceId: 'original-phone', version: 'v1', text: '{\"name\":\"Phone\"}' };
+    insertSessionInput({ id: crypto.randomUUID(), conversationId, clientMessageId: 'old-client',
+      requestedDelivery: 'next', effectiveDelivery: 'next', status: 'queued', content: 'old',
+      origin: originalOrigin, contextSnapshots: [deviceContext] });
+    claimNextSessionInput(conversationId, 'turn-1');
+    finishSessionInputRun(conversationId, 'turn-1', 'completed');
     appendTranscriptEntry(conversationId, { role: 'user', content: 'old', turnId: 'turn-1' } as never);
     appendTranscriptEntry(conversationId, {
       role: 'assistant',
@@ -426,7 +435,7 @@ describe('SessionInputCoordinator', () => {
     expect(beforeReplace).toHaveBeenCalledOnce();
     expect(loadTranscriptRowsForSession(conversationId)).toEqual([]);
     await vi.waitFor(() => expect(execute).toHaveBeenCalledOnce());
-    expect(execute.mock.calls[0]?.[0]).toMatchObject({ content: 'edited' });
+    expect(execute.mock.calls[0]?.[0]).toMatchObject({ content: 'edited', origin: originalOrigin, sourceContexts: [deviceContext] });
 
     complete({ status: 'ok', summary: 'done' });
     await vi.waitFor(() => expect(coordinator.snapshot(conversationId).inputs).toEqual([]));

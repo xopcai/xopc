@@ -731,7 +731,12 @@ class ConversationRepository(private val gateway: GatewaySession, context: Conte
         .put("expectedTranscriptId", transcriptId).put("configVersion", configVersion)
         .put("delivery", "next").put("input", JSONObject().put("content", content)
           .apply { if (refs.isNotEmpty()) put("contextRefs", contextRefs) })
-    }).also { pendingStore?.write(key, it.toString()) }
+    }).also {
+      if (claim.supportsDeviceContext) it.getJSONObject("input").put("endpointContext", JSONObject()
+        .put("version", 1).put("capturedAt", System.currentTimeMillis())
+        .put("locale", java.util.Locale.getDefault().toLanguageTag()).put("timezone", java.util.TimeZone.getDefault().id))
+      pendingStore?.write(key, it.toString())
+    }
     val messageId = command.getString("clientMessageId")
     val path = "/api/sessions/$conversationId"
     var result: String? = null

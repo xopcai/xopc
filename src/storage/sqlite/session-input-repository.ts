@@ -202,6 +202,12 @@ export function listActiveSessionInputExecutions(): Array<{
   }));
 }
 
+export function findSessionInputByRunId(conversationId: string, runId: string): SessionInput | undefined {
+  const row = getSqliteDatabase().prepare(`${SELECT_INPUTS} WHERE conversation_id = ? AND run_id = ? ORDER BY created_at_ms LIMIT 1`)
+    .get(conversationId, runId) as InputRow | undefined;
+  return row ? mapInput(row) : undefined;
+}
+
 export function findSessionInput(conversationId: string, clientMessageId: string): SessionInput | undefined {
   const row = getSqliteDatabase().prepare(`${SELECT_INPUTS} WHERE conversation_id = ? AND client_message_id = ?`)
     .get(conversationId, clientMessageId) as InputRow | undefined;

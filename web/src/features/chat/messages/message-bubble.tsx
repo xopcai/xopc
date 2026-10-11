@@ -704,6 +704,9 @@ export const MessageBubble = memo(function MessageBubble({
               />
             ) : null}
 
+            {isUser && message.sourceDevice ? <p className="mt-1 text-xs text-fg-subtle">
+              {language === 'zh' ? '来自 ' : 'From '}{message.sourceDevice.name}
+            </p> : null}
             {isUser && detachedContextRefs?.length ? (
               <MessageContextAttachments
                 refs={detachedContextRefs}

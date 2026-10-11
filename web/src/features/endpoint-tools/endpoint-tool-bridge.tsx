@@ -1,6 +1,10 @@
 import { useEffect } from 'react';
 
+import { apiFetch } from '@/lib/fetch';
+import { apiUrl } from '@/lib/url';
+
 import { isElectron } from '@/lib/electron-env';
+import { publishTurnEnvironmentSupport } from './turn-environment';
 import { DESKTOP_ENDPOINT_TOOL_DEFINITIONS } from './desktop-tools';
 import { EndpointToolConfirmationDialog } from './confirmation-dialog';
 import { EndpointToolHost } from './host';
@@ -14,6 +18,10 @@ export function EndpointToolBridge() {
     const desktop = isElectron();
     if (desktop && window.electronAPI?.computer) {
       let stopped = false;
+      void apiFetch(apiUrl('/api/endpoint-tools/compatibility')).then(async response => {
+        const body = await response.json();
+        if (!stopped) publishTurnEnvironmentSupport(response.ok && body?.payload?.turnDeviceContextV1 === true);
+      }).catch(() => { if (!stopped) publishTurnEnvironmentSupport(false); });
       const sync = async () => {
         try {
           const state = await window.electronAPI!.computer!.status();
@@ -24,7 +32,7 @@ export function EndpointToolBridge() {
       };
       void sync();
       const timer = window.setInterval(() => { void sync(); }, 1000);
-      return () => { stopped = true; window.clearInterval(timer); clearEndpointTurnClaim(); };
+      return () => { stopped = true; publishTurnEnvironmentSupport(false); window.clearInterval(timer); clearEndpointTurnClaim(); };
     }
     const host = new EndpointToolHost(desktop ? {
       kind: 'desktop',

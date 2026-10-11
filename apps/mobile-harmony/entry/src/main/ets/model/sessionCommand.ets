@@ -7,7 +7,8 @@ export interface XopcSessionCreation {
   temporary: boolean; model: string; thinkingLevel: string;
 }
 export interface XopcInputAttachment { type: string; name: string; mimeType: string; size: number; data: string; workspaceRelativePath?: string; uri?: string; durationSeconds?: number; }
-export interface XopcSessionInputContent { content: string; attachments?: XopcInputAttachment[]; contextRefs?: XopcContextRef[]; }
+export interface XopcEndpointContext { version: number; capturedAt: number; timezone: string; locale: string; }
+export interface XopcSessionInputContent { content: string; attachments?: XopcInputAttachment[]; contextRefs?: XopcContextRef[]; endpointContext?: XopcEndpointContext; }
 export interface XopcMaterialization { commandId: string; purpose: string; }
 export interface XopcMaterializeCommand { commandId: string; purpose: string; creation: XopcSessionCreation; }
 export interface XopcSessionCommand {

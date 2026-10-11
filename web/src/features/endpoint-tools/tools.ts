@@ -3,10 +3,13 @@ import type {
   EndpointToolExecutionResult,
 } from '@xopcai/endpoint-tools-client';
 import {
+  deviceStateDescriptor,
   ENDPOINT_FILE_OUTPUT_SCHEMA,
   ENDPOINT_MAX_FILE_BYTES,
   ENDPOINT_TEXT_OUTPUT_SCHEMA,
 } from '@xopcai/endpoint-tools-protocol';
+
+import { WEB_LOCATION_TOOL } from './location-tool';
 
 function textResult(text: string): EndpointToolExecutionResult {
   return { content: [{ type: 'text', text }] };
@@ -76,6 +79,13 @@ function requireExactKeys(args: Record<string, unknown>, keys: string[]): void {
 }
 
 export const WEB_ENDPOINT_TOOL_DEFINITIONS: readonly EndpointToolDefinition[] = [
+  WEB_LOCATION_TOOL,
+  { descriptor: deviceStateDescriptor('web', 'state'), async execute(args) {
+    if (Object.keys(args).length) throw new TypeError('Expected no arguments');
+    return { content: [{ type: 'json', value: { capturedAt: Date.now(), platform: 'web', systemVersion: '',
+      locale: navigator.language.slice(0, 80), timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      online: navigator.onLine } }] };
+  } },
   {
     descriptor: {
       name: 'web.file.pick',

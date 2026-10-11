@@ -314,3 +314,49 @@ export function endpointHelloSigningPayload(payload: EndpointHelloPayload): stri
   const { signature: _signature, ...unsigned } = payload;
   return canonicalJson(unsigned);
 }
+
+export const DEVICE_EMPTY_INPUT_SCHEMA = { type: 'object', properties: {}, additionalProperties: false } as const;
+
+export const DEVICE_STATE_OUTPUT_SCHEMA = {
+  type: 'array', minItems: 1, maxItems: 1,
+  items: { type: 'object', additionalProperties: false, required: ['type', 'value'], properties: {
+    type: { const: 'json' },
+    value: { type: 'object', additionalProperties: false, required: ['capturedAt', 'platform', 'systemVersion', 'locale', 'timezone'],
+      properties: {
+        capturedAt: { type: 'integer', minimum: 0 }, platform: { type: 'string', minLength: 1, maxLength: 40 },
+        systemVersion: { type: 'string', maxLength: 80 }, locale: { type: 'string', maxLength: 80 },
+        timezone: { type: 'string', maxLength: 80 }, online: { type: 'boolean' },
+      } },
+  } },
+} as const;
+
+export const DEVICE_POWER_OUTPUT_SCHEMA = {
+  type: 'array', minItems: 1, maxItems: 1,
+  items: { type: 'object', additionalProperties: false, required: ['type', 'value'], properties: {
+    type: { const: 'json' },
+    value: { type: 'object', additionalProperties: false, required: ['capturedAt', 'levelPercent', 'charging'],
+      properties: { capturedAt: { type: 'integer', minimum: 0 },
+        levelPercent: { type: ['number', 'null'], minimum: 0, maximum: 100 },
+        charging: { type: ['boolean', 'null'] } },
+    },
+  } },
+} as const;
+
+/** Fixed bounded contracts shared by Gateway and native adapters. */
+export function deviceStateDescriptor(kind: EndpointKind, capability: 'state' | 'power'): EndpointToolDescriptor {
+  return {
+    name: `${kind}.device.get_${capability}`,
+    title: capability === 'power' ? 'Read this device’s battery' : 'Read this device’s environment',
+    description: capability === 'power'
+      ? 'Read a fresh battery sample from the device that sent this user message. Unknown readings are null.'
+      : 'Read bounded platform, system version, language and timezone from the device that sent this user message. No files, page content, network addresses or identifiers are collected.',
+    inputSchema: DEVICE_EMPTY_INPUT_SCHEMA,
+    outputSchema: capability === 'power' ? DEVICE_POWER_OUTPUT_SCHEMA : DEVICE_STATE_OUTPUT_SCHEMA,
+    policyId: 'public.background-read', sensitivity: 'public', effect: 'read', confirmation: 'never',
+    requiresForeground: false, requiredPermissions: [], timeoutMs: 10_000, maxConcurrency: 1,
+    supportsCancellation: true, idempotent: true, resultKinds: ['json'],
+  };
+}
+
+export { bridgeDescriptor, BRIDGE_RESOURCE_SCHEMA, BRIDGE_READ_INPUT_SCHEMA, BRIDGE_LIST_OUTPUT_SCHEMA, BRIDGE_READ_OUTPUT_SCHEMA } from './bridge.js';
+export { locationDescriptor, locationRequestSchema, locationSampleSchema, LOCATION_INPUT_SCHEMA, LOCATION_OUTPUT_SCHEMA, type LocationRequest, type LocationSample } from './location.js';

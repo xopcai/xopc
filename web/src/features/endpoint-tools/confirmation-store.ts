@@ -5,6 +5,7 @@ const PREVIEW_LIMIT = 600;
 export interface EndpointConfirmationRequest {
   invocationId: string;
   title: string;
+  toolName?: string;
   argumentsPreview: string;
 }
 
@@ -38,6 +39,7 @@ export function formatEndpointToolArguments(args: Record<string, unknown>): stri
 export function requestEndpointConfirmation(input: {
   invocationId: string;
   title: string;
+  toolName?: string;
   args: Record<string, unknown>;
   deadlineAt: number;
 }): Promise<boolean> {
@@ -50,6 +52,7 @@ export function requestEndpointConfirmation(input: {
     pending.push({
       invocationId: input.invocationId,
       title: input.title,
+      toolName: input.toolName,
       argumentsPreview: formatEndpointToolArguments(input.args),
       resolve,
       timeout,

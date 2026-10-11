@@ -5,6 +5,7 @@ import {
   type EndpointHelloPayload,
 } from '@xopcai/endpoint-tools-protocol';
 
+import { recordDeviceGrantEvent } from '../storage/sqlite/device-grant-audit-repository.js';
 import { resolveStateDir } from '../config/paths.js';
 import {
   bindEndpointPrincipal,
@@ -19,6 +20,7 @@ import {
 } from '../storage/sqlite/index.js';
 import { createLogger } from '../utils/logger.js';
 import { EndpointAuthenticator, type EndpointAuthenticatorDeps } from './auth.js';
+import { DeviceGrantService } from './grant-service.js';
 import { EndpointBindingService } from './binding-service.js';
 import {
   EndpointInvocationService,
@@ -37,6 +39,7 @@ const MAX_MESSAGE_CLOCK_SKEW_MS = 60_000;
 
 export class EndpointToolRuntime {
   readonly registry: EndpointRegistry;
+  readonly grants: DeviceGrantService;
   readonly invocations: EndpointInvocationService;
   readonly uploads: EndpointUploadService;
   readonly bindings: EndpointBindingService;
@@ -51,6 +54,7 @@ export class EndpointToolRuntime {
   } = {}) {
     const policy = new EndpointToolPolicy();
     this.registry = new EndpointRegistry(policy);
+    this.grants = new DeviceGrantService(this.registry, Date.now, recordDeviceGrantEvent);
     this.bindings = new EndpointBindingService(this.registry, {
       get: getEndpointSessionBinding,
       set: setEndpointSessionBinding,
@@ -81,6 +85,8 @@ export class EndpointToolRuntime {
   ): EndpointRegistration {
     if (this.closed) throw new Error('Endpoint runtime is closed');
     this.authenticator.authenticate(hello);
+    const previous = this.registry.get(hello.endpointId);
+    if (previous) { this.grants.revokeEndpoint(previous.endpointId, previous.principalId); this.invocations.failEndpoint(previous.endpointId); }
     const registration = this.registry.register(hello, connectionId, transport);
     log.info({ endpointId: hello.endpointId, connectionId, kind: hello.kind }, 'Endpoint connected');
     return registration;
@@ -108,19 +114,23 @@ export class EndpointToolRuntime {
   }
 
   remove(endpointId: string, connectionId: string): void {
+    const principalId = this.registry.get(endpointId)?.principalId;
     if (!this.registry.remove(endpointId, connectionId)) return;
+    this.grants.revokeEndpoint(endpointId, principalId);
     this.invocations.failEndpoint(endpointId);
     deleteBrowserTabBindingsByEndpoint(endpointId);
     log.info({ endpointId, connectionId }, 'Endpoint disconnected');
   }
 
   disconnect(endpointId: string, reason: string): void {
+    this.grants.revokeEndpoint(endpointId);
     this.registry.disconnect(endpointId, 4003, reason);
   }
 
   close(): void {
     if (this.closed) return;
     this.closed = true;
+    this.grants.close();
     this.invocations.close();
     this.uploads.close();
     this.registry.closeAll();

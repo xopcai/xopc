@@ -38,6 +38,7 @@ export interface ManagedDevice {
   access: (ManagedDeviceIdentity & { scopes: string[] }) | null;
   principal: ManagedDeviceIdentity | null;
   endpoints: ManagedEndpoint[];
+  settingsRevision?: number;
 }
 
 export interface ManagedEndpointInvocation {
@@ -113,4 +114,10 @@ export async function revokeManagedDevices(ids: string[]): Promise<void> {
 
 export async function fetchEndpointInvocations(filters: InvocationFilters): Promise<ManagedEndpointInvocationPage> {
   return payload<ManagedEndpointInvocationPage>(await apiFetch(endpointInvocationsKey(filters)));
+}
+
+export async function renameManagedDevice(id: string, nickname: string, expectedRevision: number): Promise<void> {
+  await payload(await apiFetch(apiUrl(`/api/endpoint-tools/devices/${encodeURIComponent(id)}`), {
+    method: 'PATCH', body: JSON.stringify({ nickname, expectedRevision }),
+  }));
 }

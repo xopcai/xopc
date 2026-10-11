@@ -1,3 +1,4 @@
+import { release } from 'node:os';
 import { generateKeyPairSync, randomUUID, sign } from 'node:crypto';
 import { readFile, writeFile, stat } from 'node:fs/promises';
 import { basename, extname, join } from 'node:path';
@@ -194,9 +195,13 @@ export class DesktopEndpointHost {
     };
     await registerIdentity();
     if (this.stopped) return;
+    const compatibilityResponse = await fetch(base + '/api/endpoint-tools/compatibility', { headers, redirect: 'error', signal: this.lifetime.signal });
+    if (!compatibilityResponse.ok) throw new Error('Gateway compatibility is unavailable');
+    const compatibility = await compatibilityResponse.json() as { payload?: { deviceStateToolsV1?: boolean } };
     const endpointId = `${identity.data.principalId}:${randomUUID()}`;
     const registry = new EndpointToolRegistry([
       ...createDesktopEndpointToolDefinitions(() => ({
+        device: { readState: async () => ({ platform: process.platform, systemVersion: release(), locale: app.getLocale(), timezone: Intl.DateTimeFormat().resolvedOptions().timeZone }) },
         file: {
           pickEndpointFile: async () => {
             const result = await dialog.showOpenDialog({ properties: ['openFile'] });
@@ -216,7 +221,7 @@ export class DesktopEndpointHost {
         clipboard: { readText: async () => clipboard.readText(), writeText: async (text) => { clipboard.writeText(text); return true; } },
         shell: { openExternalUrl: async (url) => { const normalized = normalizeExternalHttpUrl(url); if (!normalized) return { ok: false, error: 'Invalid URL' }; await shell.openExternal(normalized); return { ok: true }; } },
         system: { showEndpointNotification: async (input) => showEndpointNotification(input) },
-      })),
+      })).filter(definition => compatibility.payload?.deviceStateToolsV1 === true || !definition.descriptor.name.includes('.device.get_')),
       { descriptor: structuredClone(COMPUTER_DESCRIPTOR) as any, execute: async (args, context) => {
         const command = ComputerCommandSchema.parse(args);
         if (this.controlPaused && command.op !== 'status' && command.op !== 'release') throw new Error('COMPUTER_CONTROL_PAUSED');

@@ -114,6 +114,7 @@ describe('endpoint tool principal routes', () => {
     };
     const disconnect = () => undefined;
     const app = new Hono();
+    app.use('*', async (c, next) => { setGatewayPrincipal(c, { kind: 'owner', principalId: 'local-owner', scopes: ['gateway.admin'] }); await next(); });
     registerEndpointToolRoutes(app, {
       service: {
         realtime: { disconnectPrincipal: disconnect },

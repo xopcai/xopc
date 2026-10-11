@@ -1,3 +1,4 @@
+import { captureTurnEnvironment } from '@/features/endpoint-tools/turn-environment';
 import { useChatSessionStore } from '../session/chat-session-store';
 import {
   SESSION_INPUT_REQUEST_TIMEOUT_MS,
@@ -407,9 +408,10 @@ export class MessageSender {
       const origin = await waitForEndpointTurnClaim(controller.signal);
       const fingerprint = `${sessionInputFingerprint({ content, attachments: capped, thinking: thinkingLevel, contextRefs, appContext: capturedContext })}:${configVersion ?? ''}${replaceTurnId ? `:replace:${replaceTurnId}` : ''}`;
       let clientMessageId = claimSubmissionId(chatId, fingerprint);
-      const input = { content, attachments: capped, contextRefs, appContext: capturedContext };
+      const input = { content, attachments: capped, contextRefs, appContext: capturedContext, endpointContext: undefined as import('@xopcai/gateway-contract').EndpointContext | undefined };
       let body: object;
       if (taskId || replaceTurnId) {
+        if (!replaceTurnId) input.endpointContext = await captureTurnEnvironment();
         body = { clientMessageId, configVersion, delivery: 'next', ...input, thinking: thinkingLevel, origin };
       } else {
         assertScope();
@@ -417,10 +419,12 @@ export class MessageSender {
         const draft = await readLocalSessionDraft(chatId);
         assertScope();
         if (pending) {
+          input.endpointContext = pending.input.endpointContext;
           if (canonicalSessionCommand(pending.input) !== canonicalSessionCommand(input)) throw new Error('The previous input is awaiting confirmation');
           clientMessageId = pending.clientMessageId;
           body = sessionInputCommandSchema.parse({ ...pending, origin });
         } else if (draft) {
+          input.endpointContext = draft.submission?.input.endpointContext ?? await captureTurnEnvironment();
           if (draft.materialization) throw new Error('Conversation materialization is awaiting confirmation');
           const proposed = { kind: 'start' as const, clientMessageId, creation: draft.creation, input };
           if (draft.submission && canonicalSessionCommand(draft.submission.input) !== canonicalSessionCommand(input)) {
@@ -431,6 +435,7 @@ export class MessageSender {
           draft.submission ??= proposed;
           await saveLocalSessionDraft(draft);
         } else {
+          input.endpointContext = await captureTurnEnvironment();
           body = sessionInputCommandSchema.parse({ kind: 'append', clientMessageId,
             expectedTranscriptId: await readSessionTranscript(chatId), configVersion, delivery: 'next', input, origin });
         }

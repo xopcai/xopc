@@ -3,7 +3,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({ create: vi.fn(), request: vi.fn() }));
 vi.mock('@kit.NetworkKit', () => ({ webSocket: { createWebSocket: mocks.create } }));
-vi.mock('@kit.BasicServicesKit', () => ({}));
+vi.mock('../entry/src/main/ets/service/deviceLocation.ets', () => ({ invokeDeviceLocation: vi.fn(), cancelDeviceLocation: vi.fn(), cancelAllDeviceLocations: vi.fn() }));
+vi.mock('@kit.BasicServicesKit', () => ({ batteryInfo: { batterySOC: 0, isBatteryPresent: true, chargingStatus: 0, BatteryChargeState: { NONE: 0, ENABLE: 1, FULL: 2 } } }));
+vi.mock('@kit.LocalizationKit', () => ({ i18n: {} }));
 vi.mock('@kit.PerformanceAnalysisKit', () => ({ hilog: { warn: vi.fn(), info: vi.fn() } }));
 vi.mock('../entry/src/main/ets/common/appInfo.ets', () => ({ xopcAppVersion: () => '0.1.0-test' }));
 vi.mock('../entry/src/main/ets/service/deviceCrypto.ets', () => ({ XopcDeviceCrypto: class {
@@ -16,6 +18,8 @@ vi.mock('../entry/src/main/ets/service/gatewaySession.ets', () => ({ gatewaySess
 vi.mock('../entry/src/main/ets/service/transport.ets', () => ({ XopcHttpError: class extends Error {
   constructor(public status: number, public body: string = '') { super('HTTP_' + status); }
 } }));
+import { DEVICE_TOOL_REVISIONS } from '../entry/src/main/ets/common/deviceToolCatalog';
+import { cancelDeviceLocation } from '../entry/src/main/ets/service/deviceLocation.ets';
 import { XopcRealtimeClient } from '../entry/src/main/ets/service/realtimeClient.ets';
 import { XopcHttpError } from '../entry/src/main/ets/service/transport.ets';
 
@@ -35,7 +39,8 @@ describe('Harmony realtime lifecycle', () => {
   beforeEach(() => {
     vi.useFakeTimers(); vi.clearAllMocks(); sockets = [];
     mocks.create.mockImplementation(() => { const socket = new FakeSocket(); sockets.push(socket); return socket; });
-    mocks.request.mockImplementation(async (path: string) => path.endsWith('/tickets')
+    mocks.request.mockImplementation(async (path: string) => path.endsWith('/compatibility')
+      ? JSON.stringify({ payload: { deviceStateToolsV1: true } }) : path.endsWith('/tickets')
       ? JSON.stringify({ payload: { ticket: 'ticket', realtime: { minVersion: 2, maxVersion: 2, capabilities: [] } } })
       : '{}');
     client = new XopcRealtimeClient();
@@ -55,6 +60,16 @@ describe('Harmony realtime lifecycle', () => {
     socket.listeners.get('close')?.(null, { code: 1006 }); await vi.advanceTimersByTimeAsync(1500);
     expect(sockets).toHaveLength(2); expect(sockets[1]!.frames()[0].payload.subscriptions).toEqual([{ topic: 'run:r1', afterSeq: 1, view: 'compact' }]);
     expect(socket.listeners.size).toBe(0);
+  });
+  it('round-trips endpoint envelopes and cancels location through the same realtime wire', async () => {
+    const socket = await connect();
+    socket.frame('endpoint.message', { protocolVersion: 2, type: 'tool.invoke', payload: {
+      invocationId: 'read-power', toolName: 'mobile.device.get_power', descriptorRevision: DEVICE_TOOL_REVISIONS[1],
+      arguments: {}, confirmationRequired: false, deadlineAt: Date.now() + 10000,
+    } });
+    expect(socket.frames().at(-1)).toMatchObject({ kind: 'endpoint.message', payload: { protocolVersion: 2, type: 'tool.result', payload: { invocationId: 'read-power' } } });
+    socket.frame('endpoint.message', { protocolVersion: 2, type: 'tool.cancel', payload: { invocationId: 'location' } });
+    expect(cancelDeviceLocation).toHaveBeenCalledWith('location');
   });
   it('rebases restarted topic cursors and requests live subscription after an unrecoverable gap', async () => {
     client.subscribe('run:r1'); const socket = await connect(); const gap = vi.fn(); const event = vi.fn(); client.onGap = gap; client.onEvent = event;
@@ -87,7 +102,8 @@ describe('Harmony realtime lifecycle', () => {
   });
   it('rejects an incompatible successful ticket before opening a socket', async () => {
     const states = vi.fn(); client.onState = states;
-    mocks.request.mockImplementation(async (path: string) => path.endsWith('/tickets')
+    mocks.request.mockImplementation(async (path: string) => path.endsWith('/compatibility')
+      ? JSON.stringify({ payload: { deviceStateToolsV1: true } }) : path.endsWith('/tickets')
       ? JSON.stringify({ payload: { ticket: 'ticket', realtime: { minVersion: 3, maxVersion: 3, capabilities: [] } } })
       : '{}');
     client.start(); await vi.advanceTimersByTimeAsync(60000);

@@ -37,7 +37,7 @@ export interface SourceContextRefSummary {
 
 export interface AgentSourceContext {
   refId?: string;
-  kind: SessionSourceBinding['kind'] | 'task' | 'file' | 'session' | 'browser_tab' | 'browser_page' | 'app_context' | 'user_assertion';
+  kind: SessionSourceBinding['kind'] | 'task' | 'file' | 'session' | 'browser_tab' | 'browser_page' | 'app_context' | 'user_assertion' | 'device_context';
   sourceId: string;
   version: string;
   title: string;
