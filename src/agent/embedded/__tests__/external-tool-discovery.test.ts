@@ -37,7 +37,8 @@ function fixture() {
   const runtime = { registry: {
     get: (id: string) => state.available && id === state.endpointId ? snapshot() : undefined,
     getTool: (id: string, name: string) => state.available && id === state.endpointId && name === descriptor.name ? tool : undefined,
-  }, bindings: { get: () => undefined, resolve: () => undefined }, invocations: { invoke } } as unknown as EndpointToolRuntime;
+  }, bindings: { get: () => undefined, resolve: () => undefined },
+  grants: { find: () => undefined, candidates: () => [] }, invocations: { invoke } } as unknown as EndpointToolRuntime;
   const context = () => ({ conversationId, channel: 'webchat', chatId: 'chat',
     origin: { type: 'endpoint' as const, endpointId: state.endpointId } });
   const provider = new EndpointToolProvider({ runtime, getCurrentContext: context });
