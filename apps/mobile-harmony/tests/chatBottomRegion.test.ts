@@ -62,7 +62,9 @@ describe('chat bottom region composition', () => {
   it('masks content at the lower dock corners while keeping the floating surface transparent', () => {
     expect(chat).toContain('@Local bottomRegionHeight: number = 0;');
     expect(chat).toContain('Stack({ alignContent: Alignment.Bottom })');
-    expect(chat).toContain('.contentEndOffset(this.bottomRegionHeight + 24 + this.replySpaceHeight)');
+    expect(chat).toContain(".id('chat-reply-clearance')");
+    expect(chat).toContain('.height(this.bottomRegionHeight + 48 + this.replySpaceHeight - 20)');
+    expect(chat).not.toContain('.contentEndOffset(');
     expect(chat).toContain('this.bottomRegionHeight = Number(current.height);');
     expect(chat).toContain("}.id('chat-content-viewport').width('100%').height('100%')");
     expect(chat).not.toContain('.padding({ bottom: this.bottomRegionHeight }).clip(true)');
