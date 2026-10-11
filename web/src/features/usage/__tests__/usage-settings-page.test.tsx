@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { UsageSettingsPage } from '../usage-settings-page';
 
-const data = vi.hoisted(() => ({ summary: undefined as unknown, events: undefined as unknown }));
+const data = vi.hoisted((): { summary: unknown; events: unknown } => ({ summary: undefined, events: undefined }));
 vi.mock('swr', () => ({ default: (key: string[]) => ({ data: key[0] === 'usage-summary' ? data.summary : data.events, mutate: vi.fn() }) }));
 vi.mock('@/stores/locale-store', () => ({ useLocaleStore: (selector: (state: { language: string }) => unknown) => selector({ language: 'zh' }) }));
 vi.mock('@/features/settings/models-hub/xopc-cloud-account-card', () => ({ XopcCloudAccountCard: () => <div>Cloud wallet</div> }));
