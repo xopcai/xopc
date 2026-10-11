@@ -45,7 +45,7 @@ struct MessageInputCommand: Encodable {
     let content: String
     let attachments: [MessageAttachmentCommand]?
     let contextRefs: [ContextReferenceCommand]?
-    var endpointContext: DeviceTurnEnvironment? = nil
+    var endpointContext: DeviceTurnEnvironment?
 }
 
 struct MessageAttachmentCommand: Encodable {
