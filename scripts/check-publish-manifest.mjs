@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const packageJson = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
@@ -25,5 +25,7 @@ if (invalid.length > 0) {
   );
   process.exitCode = 1;
 } else {
+  const gatewayModule = join(root, 'dist/src/cli/commands/gateway.js');
+  await import(pathToFileURL(gatewayModule).href);
   console.log('Publish manifest check passed.');
 }
