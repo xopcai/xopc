@@ -88,7 +88,7 @@ internal class RealtimeClient(
       } catch (error: CancellationException) {
         throw error
       } catch (_: Exception) {
-        DeviceLocation.cancelAll()
+        DeviceLocation.cancelAll(); DevicePersonalTools.cancelAll()
         claim = null
         onState("reconnecting")
         delay((1_000L shl attempt.coerceAtMost(4)).coerceAtMost(30_000L))
@@ -105,6 +105,7 @@ internal class RealtimeClient(
     val registration = JSONObject().put("principalId", profile.deviceId).put("displayName", displayName)
       .put("kind", "mobile").put("platform", "android").put("publicKey", identity.publicKeyDer())
     val compatibility = runInterruptible(Dispatchers.IO) { JSONObject(gateway.request("/api/endpoint-tools/compatibility")) }
+    val supportsPersonalTools = compatibility.optJSONObject("payload")?.optBoolean("mobilePersonalToolsV1") == true
     val supportsLocationTools = compatibility.optJSONObject("payload")?.optBoolean("deviceLocationTasksV1") == true
     val supportsDeviceTools = compatibility.optJSONObject("payload")?.optBoolean("deviceStateToolsV1") == true
     val supportsDeviceContext = compatibility.optJSONObject("payload")?.optBoolean("turnDeviceContextV1") == true
@@ -117,7 +118,7 @@ internal class RealtimeClient(
     val ticketPayload = ticketResponse.getJSONObject("payload")
     require(ticketResponse.optBoolean("ok") && ticketPayload.getJSONObject("realtime").getInt("minVersion") <= 2 &&
       ticketPayload.getJSONObject("realtime").getInt("maxVersion") >= 2) { "INVALID_REALTIME_TICKET" }
-    val endpoint = runInterruptible(Dispatchers.IO) { endpointHello(profile.deviceId, clientId, displayName, supportsDeviceTools, supportsLocationTools) }
+    val endpoint = runInterruptible(Dispatchers.IO) { endpointHello(profile.deviceId, clientId, displayName, supportsDeviceTools, supportsLocationTools, supportsPersonalTools) }
     val origin = runInterruptible(Dispatchers.IO) { gateway.activeVerifiedOrigin() }
     val events = Channel<String>(Channel.BUFFERED)
     val listener = object : WebSocketListener() {
@@ -170,7 +171,7 @@ internal class RealtimeClient(
             val inner = message.getJSONObject("payload")
             when (inner.getString("type")) {
               "tool.invoke" -> deviceTools?.invoke(inner.getJSONObject("payload")) { kind, payload -> socket.send(endpointFrame(kind, payload)) }
-              "tool.cancel" -> DeviceLocation.cancel(inner.getJSONObject("payload").getString("invocationId"))
+              "tool.cancel" -> { val id = inner.getJSONObject("payload").getString("invocationId"); DeviceLocation.cancel(id); DevicePersonalTools.cancel(id) }
             }
           }
           "realtime.event" -> {
@@ -208,7 +209,7 @@ internal class RealtimeClient(
       }
       throw IllegalStateException("REALTIME_DISCONNECTED")
     } finally {
-      DeviceLocation.cancelAll()
+      DeviceLocation.cancelAll(); DevicePersonalTools.cancelAll()
         claim = null
       synchronized(this) { if (readySocket === socket) readySocket = null }
       socket.close(1000, "Closing")
@@ -216,12 +217,12 @@ internal class RealtimeClient(
     }
   }
 
-  private fun endpointHello(principalId: String, endpointId: String, displayName: String, supportsDeviceTools: Boolean, supportsLocationTools: Boolean): JSONObject {
+  private fun endpointHello(principalId: String, endpointId: String, displayName: String, supportsDeviceTools: Boolean, supportsLocationTools: Boolean, supportsPersonalTools: Boolean): JSONObject {
     val unsigned = JSONObject().put("appVersion", "1.0").put("availability", "foreground")
       .put("connectionInstanceId", UUID.randomUUID().toString()).put("displayName", displayName)
       .put("endpointId", endpointId).put("kind", "mobile").put("nonce", UUID.randomUUID().toString())
       .put("platform", "android").put("principalId", principalId).put("signedAt", System.currentTimeMillis())
-      .put("tools", if (supportsDeviceTools) deviceTools?.catalog(supportsLocationTools) ?: JSONArray() else JSONArray())
+      .put("tools", if (supportsDeviceTools) deviceTools?.catalog(supportsLocationTools, supportsPersonalTools) ?: JSONArray() else JSONArray())
     val canonical = canonicalEndpointJson(unsigned)
     return unsigned.put("signature", identity.sign(canonical))
   }

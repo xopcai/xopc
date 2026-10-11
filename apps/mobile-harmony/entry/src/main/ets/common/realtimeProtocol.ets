@@ -1,11 +1,11 @@
-import { DEVICE_TOOL_CATALOG_JSON, DEVICE_STATE_TOOL_CATALOG_JSON } from './deviceToolCatalog';
+import { DEVICE_PERSONAL_TOOL_CATALOG_JSON, DEVICE_TOOL_CATALOG_JSON, DEVICE_STATE_TOOL_CATALOG_JSON } from './deviceToolCatalog';
 import type { XopcEndpointHello, XopcSubscription } from '../model/realtime';
 
 export const XOPC_REALTIME_PROTOCOL_VERSION: number = 2;
 
 // Descriptors are generated in the Gateway canonical order.
 export function endpointProof(hello: XopcEndpointHello): string {
-  const catalog = hello.tools.length === 0 ? '[]' : hello.tools.length === 2 ? DEVICE_STATE_TOOL_CATALOG_JSON : DEVICE_TOOL_CATALOG_JSON;
+  const catalog = hello.tools.length === 0 ? '[]' : hello.tools.length === 2 ? DEVICE_STATE_TOOL_CATALOG_JSON : hello.tools.length === 9 ? DEVICE_PERSONAL_TOOL_CATALOG_JSON : DEVICE_TOOL_CATALOG_JSON;
   if (JSON.stringify(hello.tools) !== catalog) throw new Error('UNSUPPORTED_ENDPOINT_TOOLS');
   return '{"appVersion":' + JSON.stringify(hello.appVersion)
     + ',"availability":' + JSON.stringify(hello.availability)

@@ -28,6 +28,7 @@ interface PendingInvocation {
   endpointId: string;
   toolName: string;
   descriptor: EndpointToolDescriptor;
+  arguments: Record<string, unknown>;
   state: PendingState;
   receiptTimer: ReturnType<typeof setTimeout>;
   deadlineTimer: ReturnType<typeof setTimeout>;
@@ -109,9 +110,15 @@ export class EndpointInvocationService {
     if (tool.revision !== params.descriptorRevision) {
       return Promise.reject(this.error('TOOL_REVISION_MISMATCH', 'Endpoint tool contract changed'));
     }
-    if (params.toolName.endsWith('.device.get_location')) {
+    {
       const validateInput = this.ajv.compile(tool.descriptor.inputSchema);
-      if (!validateInput(params.arguments)) return Promise.reject(this.error('INVALID_ARGUMENTS', 'Invalid location task request'));
+      if (!validateInput(params.arguments)) return Promise.reject(this.error('INVALID_ARGUMENTS', 'Invalid endpoint tool arguments'));
+    }
+    if (params.toolName.startsWith('mobile.calendar.')) {
+      const { startAt, endAt } = params.arguments;
+      if (typeof startAt !== 'number' || typeof endAt !== 'number' || endAt <= startAt || endAt - startAt > 7 * 86400000) {
+        return Promise.reject(this.error('INVALID_ARGUMENTS', 'Calendar range must be positive and at most seven days'));
+      }
     }
     let confirmationRequired: boolean;
     try {
@@ -126,6 +133,10 @@ export class EndpointInvocationService {
       return Promise.reject(this.error('TOOL_CANCELLED', 'Endpoint tool call was cancelled'));
     }
     const endpointPending = [...this.pending.values()].filter((item) => item.endpointId === params.endpointId);
+    if (tool.descriptor.sensitivity === 'personal' && tool.descriptor.requiresForeground
+      && endpointPending.some(item => item.descriptor.sensitivity === 'personal' && item.descriptor.requiresForeground)) {
+      return Promise.reject(this.error('TOOL_BUSY', 'A personal device request is already awaiting user participation'));
+    }
     if (endpointPending.length >= ENDPOINT_MAX_CONCURRENT_INVOCATIONS) {
       return Promise.reject(this.error('TOOL_BUSY', 'Endpoint has reached its invocation limit'));
     }
@@ -136,7 +147,7 @@ export class EndpointInvocationService {
     const invocationId = crypto.randomUUID();
     const startedAt = Date.now();
     const uploadGrant = tool.descriptor.resultKinds.includes('file')
-      ? this.options.uploads?.createGrant(invocationId, params.endpointId, startedAt, params.toolName === 'desktop.computer.control' ? 'computer-frame' : 'durable')
+      ? this.options.uploads?.createGrant(invocationId, params.endpointId, startedAt, params.toolName === 'desktop.computer.control' ? 'computer-frame' : params.toolName.startsWith('mobile.') ? 'personal' : 'durable', endpoint.principalId)
       : undefined;
     try {
       this.options.audit?.started({
@@ -160,6 +171,7 @@ export class EndpointInvocationService {
         endpointId: params.endpointId,
         toolName: params.toolName,
         descriptor: tool.descriptor,
+        arguments: params.arguments,
         state: 'sent',
         receiptTimer: setTimeout(() => {
           this.fail(invocationId, this.error('TOOL_TIMEOUT', 'Endpoint did not receive the invocation'));
@@ -206,7 +218,7 @@ export class EndpointInvocationService {
         clearTimeout(pending.receiptTimer);
         return;
       case 'tool.progress':
-        if (pending.toolName.endsWith('.device.get_location')) return;
+        if ((pending.descriptor.sensitivity === 'personal' && pending.descriptor.effect === 'read')) return;
         if (pending.state !== 'running') return;
         pending.onProgress?.({
           ...(message.payload.message === undefined ? {} : { message: message.payload.message }),
@@ -220,21 +232,37 @@ export class EndpointInvocationService {
           if (!validate(message.payload.content)) {
             throw new Error(`Endpoint result does not match its contract: ${this.ajv.errorsText(validate.errors)}`);
           }
+          const reading = message.payload.content[0];
+          if (pending.toolName.startsWith('mobile.calendar.') && reading?.type === 'json') {
+            const value = reading.value as { startAt: number; endAt: number; events: Array<{ title?: string; startAt: number; endAt: number }> };
+            if (value.startAt !== pending.arguments.startAt || value.endAt !== pending.arguments.endAt
+              || value.events.some(event => event.endAt <= event.startAt || event.endAt <= value.startAt || event.startAt >= value.endAt)
+              || (pending.toolName.endsWith('free_busy') && value.events.some(event => event.title !== undefined))) {
+              throw new Error('Calendar result exceeded the approved scope');
+            }
+          }
+          if (pending.toolName === 'mobile.contacts.pick' && reading?.type === 'json' && pending.arguments.field) {
+            const value = reading.value as { phones: string[]; emails: string[] };
+            if ((pending.arguments.field === 'phone' && (value.phones.length > 1 || value.emails.length))
+              || (pending.arguments.field === 'email' && (value.emails.length > 1 || value.phones.length))) {
+              throw new Error('Contact result exceeded the selected field');
+            }
+          }
           this.options.uploads?.validateAndClose(invocationId, message.payload.content);
         } catch (error) {
           this.fail(invocationId, this.error(
             'PROTOCOL_ERROR',
-            pending.toolName.endsWith('.device.get_location') ? 'Invalid location result' : error instanceof Error ? error.message : String(error),
+            (pending.descriptor.sensitivity === 'personal' && pending.descriptor.effect === 'read') ? 'Invalid personal device result' : error instanceof Error ? error.message : String(error),
           ));
           return;
         }
         this.succeed(invocationId, {
           content: message.payload.content,
-          ...(message.payload.details === undefined ? {} : { details: message.payload.details }),
+          ...(message.payload.details === undefined || (pending.descriptor.sensitivity === 'personal' && pending.descriptor.effect === 'read') ? {} : { details: message.payload.details }),
         });
         return;
       case 'tool.error':
-        this.fail(invocationId, this.error(message.payload.code, pending.toolName.endsWith('.device.get_location') ? `Location request failed: ${message.payload.code}` : message.payload.message));
+        this.fail(invocationId, this.error(message.payload.code, (pending.descriptor.sensitivity === 'personal' && pending.descriptor.effect === 'read') ? `Personal device request failed: ${message.payload.code}` : message.payload.message));
         return;
       case 'tool.cancelled':
         this.fail(invocationId, this.error('TOOL_CANCELLED', 'Endpoint cancelled the tool call'));
