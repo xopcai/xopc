@@ -60,6 +60,8 @@ export class XopcVoiceCall {
   private context?: common.UIAbilityContext;
   private generation: number = 0;
   private reconnectTimer: number = -1;
+  private cleanup: Promise<void> = Promise.resolve();
+  private releaseInProgress: boolean = false;
   private reconnectAttempt: number = 0;
   private connectedAt: number = 0;
   private queueTimer: number = -1;
@@ -123,7 +125,7 @@ export class XopcVoiceCall {
         onRtt: (milliseconds: number): void => { if (generation === this.generation) this.networkQuality = milliseconds > 800 ? 'degraded' : 'good'; }
       });
       this.transport = transport;
-      await transport.connect(auth.origin, session);
+      await transport.connect(auth.origin, session, recovering && this.reconnectAttempt % 2 === 1);
       if (generation !== this.generation) return;
       this.phase = 'connected'; this.connectedAt = Date.now();
       this.appliedMuted = undefined; this.syncInput();
@@ -133,9 +135,8 @@ export class XopcVoiceCall {
       if (this.speaker) await voiceCallAudio.setSpeaker(true);
     } catch (error) {
       if (generation !== this.generation) return;
-      this.error = (error as Error).message || 'SERVICE_UNAVAILABLE';
-      const failedSession = this.session; this.session = undefined;
-      await this.release(false); if (failedSession) await this.cancelSession(failedSession); this.phase = 'paused';
+      const reason = (error as Error).message || 'SERVICE_UNAVAILABLE';
+      await this.pause(reason, xopcVoiceShouldReconnect(reason));
     }
   }
 
@@ -354,15 +355,21 @@ export class XopcVoiceCall {
 
   async resume(): Promise<void> {
     if (this.phase !== 'paused' && this.phase !== 'recovering') return;
+    await this.cleanup;
+    if (this.phase !== 'paused' && this.phase !== 'recovering') return;
+    clearTimeout(this.reconnectTimer); this.reconnectTimer = -1;
     await this.open(true);
   }
 
   private async pause(reason: string, reconnect: boolean = false): Promise<void> {
-    if (this.phase === 'idle' || this.phase === 'ending') return;
+    if (this.phase === 'idle' || this.phase === 'ending' || this.releaseInProgress) return;
+    this.releaseInProgress = true;
     this.error = reason; this.phase = reconnect ? 'recovering' : 'paused';
     const oldSession = this.session; this.session = undefined;
-    await this.release(false); if (oldSession) await this.cancelSession(oldSession);
-    if (!reconnect || this.reconnectAttempt >= 5) return;
+    this.cleanup = this.releaseSession(oldSession);
+    await this.cleanup; this.releaseInProgress = false;
+    if (this.phase === 'idle' || this.phase === 'ending') return;
+    if (!reconnect || this.reconnectAttempt >= 5) { this.phase = 'paused'; return; }
     const delays: number[] = [500, 1000, 2000, 4000, 8000];
     const delay = delays[this.reconnectAttempt++]; clearTimeout(this.reconnectTimer);
     this.reconnectTimer = setTimeout((): void => { if (this.phase === 'recovering') this.open(true); }, delay);
@@ -376,10 +383,16 @@ export class XopcVoiceCall {
     this.phase = 'ending'; ++this.generation; clearTimeout(this.reconnectTimer); clearInterval(this.queueTimer);
     clearInterval(this.approvalTimer); this.approvalTimer = -1;
     clearTimeout(this.limitTimer); this.limitTimer = -1;
+    await this.cleanup;
     this.transport?.send('session.stop', { reason: 'user_finished' });
     const session = this.session; await this.release(false); if (session) await this.cancelSession(session);
     this.target = undefined; this.context = undefined; this.session = undefined; this.phase = 'idle'; this.error = '';
     this.responseId = ''; this.taskId = ''; this.clarification = undefined; this.approval = undefined;
+  }
+
+  private async releaseSession(session?: XopcVoiceSession): Promise<void> {
+    await this.release(false);
+    if (session) await this.cancelSession(session);
   }
 
   private async release(clearSession: boolean): Promise<void> {
