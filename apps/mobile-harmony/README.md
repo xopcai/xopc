@@ -14,7 +14,7 @@ ohpm install
 hvigorw assembleHap --mode module -p module=entry@default -p product=default --no-daemon
 ```
 
-The unsigned output is `entry/build/default/outputs/default/entry-default-unsigned.hap`. The registered bundle is `ai.xopc.mobile` (AGC APP ID `6917616647856901107`), version `0.1.0` / code `1`. Configure signing before device distribution. Keep certificates, private keys, passwords and AGC service-account files outside source control. No signing secrets or machine-specific SDK paths are committed to the app configuration. See [GitHub Actions and phone testing](docs/ci.md).
+The unsigned output is `entry/build/default/outputs/default/entry-default-unsigned.hap`. The target bundle is `ai.xopc.xopc` (AGC APP ID `6917618744771171142`; Release Profile and locally verified signed APP ready; Debug Profile pending; legacy APP ID `6917616647856901107` belongs to `ai.xopc.mobile`), version `0.1.0` / code `1`. Configure signing before device distribution. Keep certificates, private keys, passwords and AGC service-account files outside source control. No signing secrets or machine-specific SDK paths are committed to the app configuration. See [GitHub Actions and phone testing](docs/ci.md).
 
 ## Verification
 
@@ -40,10 +40,10 @@ hvigorw assembleHap --mode module -p module=entry@ohosTest -p product=default --
 hdc -t DEVICE rport tcp:9443 tcp:9443
 hdc -t DEVICE install -r entry/build/default/outputs/default/entry-default-unsigned.hap
 hdc -t DEVICE install -r entry/build/default/outputs/ohosTest/entry-ohosTest-unsigned.hap
-hdc -t DEVICE shell aa force-stop ai.xopc.mobile
-hdc -t DEVICE shell aa test -b ai.xopc.mobile -m entry_test -s unittest OpenHarmonyTestRunner -s class XopcNativeSecurity,XopcNativePairing -s timeout 60000 -w 90
-hdc -t DEVICE shell aa force-stop ai.xopc.mobile
-hdc -t DEVICE shell aa test -b ai.xopc.mobile -m entry_test -s unittest OpenHarmonyTestRunner -s class XopcUiSmoke -w 90
+hdc -t DEVICE shell aa force-stop ai.xopc.xopc
+hdc -t DEVICE shell aa test -b ai.xopc.xopc -m entry_test -s unittest OpenHarmonyTestRunner -s class XopcNativeSecurity,XopcNativePairing -s timeout 60000 -w 90
+hdc -t DEVICE shell aa force-stop ai.xopc.xopc
+hdc -t DEVICE shell aa test -b ai.xopc.xopc -m entry_test -s unittest OpenHarmonyTestRunner -s class XopcUiSmoke -w 90
 ```
 
 Inspect `OHOS_REPORT_RESULT`: HDC's exit code can be zero even when a test fails. Expected results are 4/4 security + pairing and 1/1 UI. Stop the harness with Ctrl-C after testing (it removes only its own temporary database/certificate directory), inspect `hdc -t DEVICE fport ls`, and remove only the test's forward with `hdc -t DEVICE fport rm tcp:9443 tcp:9443`. The public test CA is ignored by Git and never included in the production HAP. Production transport retains normal TLS validation and rejects HTTP/redirects.
