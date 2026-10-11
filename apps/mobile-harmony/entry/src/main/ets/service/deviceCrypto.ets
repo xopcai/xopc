@@ -51,6 +51,14 @@ export class XopcDeviceCrypto {
 
   async publicKeyDer(): Promise<string> { return encodeBase64Url((await this.key()).pubKey.getEncoded().data); }
 
+  encodeText(text: string): Uint8Array { return utf8(text); }
+
+  async digest(bytes: Uint8Array): Promise<string> {
+    const hash = cryptoFramework.createMd('SHA256');
+    if (bytes.length > 0) await hash.update({ data: bytes });
+    return Array.from((await hash.digest()).data).map((byte: number): string => byte.toString(16).padStart(2, '0')).join('');
+  }
+
   async sign(message: string): Promise<string> {
     const signer = cryptoFramework.createSign('ECC256|SHA256');
     await signer.init((await this.key()).priKey);

@@ -43,6 +43,11 @@ export class RealtimeTicketStore {
     return { ticket, ...claim };
   }
 
+  peek(ticket: string, now = Date.now()): RealtimeTicketClaim | undefined {
+    const claim = this.claims.get(ticketKey(ticket));
+    return claim && claim.expiresAt >= now ? claim : undefined;
+  }
+
   consume(
     ticket: string,
     clientId: string,

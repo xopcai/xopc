@@ -430,10 +430,15 @@ export const TunnelConsentSchema = z.object({
   acceptedAt: z.string().min(1),
 });
 
+export const TunnelBrokerUrlSchema = z.string().url().refine(value => {
+  const url = new URL(value);
+  return url.protocol === 'https:' && !url.username && !url.password;
+}, 'Tunnel broker requires HTTPS without URL credentials');
+
 export const TunnelConfigSchema = z
   .object({
     enabled: z.boolean().default(false),
-    brokerUrl: z.string().url().default('https://frp.xopc.ai/api'),
+    brokerUrl: TunnelBrokerUrlSchema.default('https://frp.xopc.ai/api'),
     /** Broker register API secret. */
     registrationSecret: z.string().min(1).optional(),
     autoStart: z.boolean().default(false),

@@ -14,7 +14,7 @@ struct ChatImageLoader: Sendable {
             return data
         }
         guard let request = source.request(configuration: configuration) else { throw ChatImageError.invalidSource }
-        let (bytes, response) = try await session.bytes(for: request, delegate: ChatImageRedirectBlocker())
+        let (bytes, response) = try await session.bytes(for: GatewayPairingService.shared.signedRequest(request), delegate: ChatImageRedirectBlocker())
         guard let response = response as? HTTPURLResponse, response.statusCode == 200,
               response.value(forHTTPHeaderField: "Content-Type")?.lowercased().hasPrefix("image/") == true
         else { throw ChatImageError.invalidResponse }
@@ -46,7 +46,7 @@ struct ChatAudioLoader: Sendable {
               let request = ChatImageSource.resolve(uri, conversationID: conversationID)?
               .request(configuration: configuration)
         else { throw ChatImageError.invalidSource }
-        let (bytes, response) = try await session.bytes(for: request, delegate: ChatImageRedirectBlocker())
+        let (bytes, response) = try await session.bytes(for: GatewayPairingService.shared.signedRequest(request), delegate: ChatImageRedirectBlocker())
         guard let response = response as? HTTPURLResponse, response.statusCode == 200,
               response.value(forHTTPHeaderField: "Content-Type")?.lowercased().hasPrefix("audio/") == true
         else { throw ChatImageError.invalidResponse }
