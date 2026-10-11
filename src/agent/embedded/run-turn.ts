@@ -70,6 +70,7 @@ import { getSessionMetadata } from '../../storage/sqlite/session-repository.js';
 import { resolveEffectiveAgentConfigForSession } from '../../config/agent-profile.js';
 import { getModelThinking } from '../../providers/model-thinking.js';
 import { NO_REPLY } from '../messaging/no-reply.js';
+import { withCloudCreditBudget, reportCloudCreditError, isCloudCreditBudgetExhausted, cloudCreditBudgetStopMessage } from '../../providers/xopc-cloud-credit-budget.js';
 
 const log = createLogger('EmbeddedRun');
 const LOG_PREVIEW_MAX_CHARS = 300;
@@ -322,7 +323,28 @@ async function maybeRecoverInterruptedContext(params: {
 }
 
 export async function runXopcEmbeddedTurn(params: RunXopcEmbeddedTurnParams): Promise<RunXopcEmbeddedTurnResult> {
-  return traceRun('agent.run', { conversationId: params.conversationId, runId: params.runId }, () => runXopcEmbeddedTurnInner(params), params.userMessage);
+  const limitCreditMicro = isXopcDatabaseOpen() && getSessionMetadata(params.conversationId)
+    ? resolveEffectiveAgentConfigForSession(params.conversationId).config.runtime.cloudCreditLimitPerRunMicro
+    : undefined;
+  return withCloudCreditBudget({ conversationId: params.conversationId, runId: params.runId, limitCreditMicro }, async () => {
+    try {
+      const result = await traceRun('agent.run', { conversationId: params.conversationId, runId: params.runId }, () => runXopcEmbeddedTurnInner(params), params.userMessage);
+      const stopped = cloudCreditBudgetStopMessage();
+      if (stopped) return { ...result, ok: false, retryable: false, errorMessage: stopped };
+      if (result.errorMessage && isCloudCreditBudgetExhausted(result.errorMessage)) {
+        reportCloudCreditError(result.errorMessage);
+        return { ...result, retryable: false };
+      }
+      return result;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (isCloudCreditBudgetExhausted(message)) {
+        reportCloudCreditError(message);
+        return { ok: false, retryable: false, errorMessage: message };
+      }
+      throw error;
+    }
+  });
 }
 
 async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Promise<RunXopcEmbeddedTurnResult> {

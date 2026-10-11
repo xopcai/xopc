@@ -1,3 +1,4 @@
+import { rejectUnbudgetedCloudTransport } from '../providers/xopc-cloud-credit-budget.js';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import {
@@ -87,6 +88,7 @@ export class ComputerRuntime {
     const config = this.getConfig();
     if (!config.computer.enabled) { await this.close(owner); throw new Error('COMPUTER_DISABLED'); }
     let s = this.sessions.get(owner);
+    if (s?.binding.modelRef.startsWith('xopc-cloud/')) rejectUnbudgetedCloudTransport('computer use');
     if (input.op === 'discover') {
       const endpoint = this.resolveEndpoint(owner);
       const id = randomUUID();
@@ -107,6 +109,7 @@ export class ComputerRuntime {
       let deployment: { revision: string; origin?: string } | undefined;
       let serviceLimits: ComputerServiceLimits | undefined;
       if (model.provider === 'xopc-cloud') {
+        rejectUnbudgetedCloudTransport('computer use');
         const response = await fetch(`${model.baseUrl.replace(/\/$/, '')}/models`, { headers: { Authorization: `Bearer ${apiKey}` },
           redirect: 'error', signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(15_000)]) : AbortSignal.timeout(15_000) });
         if (!response.ok) { await response.body?.cancel(); throw new Error('COMPUTER_DEPLOYMENT_UNAVAILABLE'); }

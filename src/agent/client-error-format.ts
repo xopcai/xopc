@@ -12,6 +12,7 @@ export type AgentRunErrorKind =
   | 'billing'
   | 'xopc_quota_exhausted'
   | 'xopc_platform_limit'
+  | 'xopc_credit_budget_exhausted'
   | 'unknown';
 
 export type AgentRunErrorPayload = {
@@ -114,6 +115,12 @@ export function formatAgentRunErrorForClient(
       provider,
       deepLink: '/settings/capabilities/models',
       message: trimmed,
+    } satisfies AgentRunErrorPayload);
+  }
+
+  if (/credit_budget_exhausted|(?:task Credit|Credit task) budget exhausted/i.test(trimmed)) {
+    return JSON.stringify({ kind: 'xopc_credit_budget_exhausted', code: 'credit_budget_exhausted',
+      message: trimmed, provider: 'xopc-cloud', deepLink: '/settings/agent-defaults?panel=runtime',
     } satisfies AgentRunErrorPayload);
   }
 

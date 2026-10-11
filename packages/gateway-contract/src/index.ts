@@ -28,6 +28,7 @@ export * from './browser-page-context.js';
 export * from './browser-tab-binding.js';
 
 export * from './model-selection.js';
+export * from './cloud-credits.js';
 
 export * from './connection-waits.js';
 export * from './clarifications.js';
