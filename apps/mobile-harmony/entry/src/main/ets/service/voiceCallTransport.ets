@@ -41,6 +41,8 @@ export class XopcVoiceCallTransport {
   private socket?: webSocket.WebSocket;
   private session?: XopcVoiceSession;
   private generation: number = 0;
+  private rejectPending?: (error: Error) => void;
+  private sessionStartSent: boolean = false;
   private ready: boolean = false;
   private closed: boolean = true;
   private eventSeq: number = 0;
@@ -64,18 +66,20 @@ export class XopcVoiceCallTransport {
 
   constructor(callbacks: XopcVoiceTransportCallbacks) { this.callbacks = callbacks; }
 
-  async connect(origin: string, session: XopcVoiceSession): Promise<void> {
+  async connect(origin: string, session: XopcVoiceSession, preferProxy: boolean = false): Promise<void> {
     if (!origin.startsWith('https://') || session.protocolVersion !== XOPC_VOICE_PROTOCOL_VERSION
       || session.inputFormat.sampleRate !== 16000 || session.websocketPath !== '/api/voice/realtime/v3/ws') throw new Error('SECURE_ROUTE_REQUIRED');
     await this.close();
     const generation = ++this.generation;
-    this.closed = false; this.ready = false; this.session = session; this.eventSeq = 0; this.audioSeq = 0;
+    this.sessionStartSent = false; this.closed = false; this.ready = false; this.session = session; this.eventSeq = 0; this.audioSeq = 0;
     this.inputMuted = true; this.rotateUtterance(); this.lastPong = Date.now();
     const direct = origin.replace(/^https:/, 'wss:') + session.websocketPath;
     const proxy = origin.replace(/^https:/, 'wss:') + XOPC_VOICE_PROXY_WS_PATH;
-    try { await this.open(direct, generation); }
-    catch (_) {
-      if (generation !== this.generation || this.closed) throw new Error('CANCELLED');
+    try { await this.open(preferProxy ? proxy : direct, generation); }
+    catch (error) {
+      if (generation !== this.generation) throw new Error('CANCELLED');
+      // Never reuse a ticket after session.start; the next retry creates a new session.
+      if (this.sessionStartSent || this.closed || preferProxy || (error as Error).message === 'PROTOCOL_ERROR') throw new Error((error as Error).message || 'NETWORK');
       await this.releaseSocket(); await this.open(proxy, generation);
     }
   }
@@ -84,18 +88,23 @@ export class XopcVoiceCallTransport {
     return new Promise<void>((resolve, reject): void => {
       const socket = webSocket.createWebSocket(); this.socket = socket;
       let settled = false;
-      const timeout = setTimeout((): void => { if (!settled) { settled = true; reject(new Error('CONNECT_TIMEOUT')); } }, 15000);
+      const timeout = setTimeout((): void => { if (!settled) { settled = true; reject(new Error('CONNECT_TIMEOUT')); } }, 30000);
+      this.rejectPending = (error: Error): void => {
+        if (!settled) { settled = true; clearTimeout(timeout); reject(error); }
+      };
       socket.on('open', (_error: BusinessError, _value: Object): void => {
-        if (generation !== this.generation || !this.session) return;
+        if (generation !== this.generation || this.socket !== socket || settled || !this.session) return;
+        this.sessionStartSent = true;
         this.send('session.start', { sessionId: this.session.sessionId, ticket: this.session.ticket });
       });
       socket.on('message', (_error: BusinessError, value: string | ArrayBuffer): void => {
-        if (generation !== this.generation) return;
+        if (generation !== this.generation || this.socket !== socket) return;
         try {
           if (typeof value === 'string') {
+            if (settled && !this.ready) return;
             const event = xopcParseVoiceEvent(value); this.receiveEvent(event);
             if (event.type === 'session.ready' && !settled) {
-              settled = true; clearTimeout(timeout); this.ready = true; this.startHeartbeat(generation, event.payload.heartbeatIntervalMs ?? 15000); resolve();
+              settled = true; clearTimeout(timeout); this.rejectPending = undefined; this.ready = true; this.startHeartbeat(generation, event.payload.heartbeatIntervalMs ?? 15000); resolve();
             }
           } else {
             if (!this.ready) throw new Error('PROTOCOL_ERROR');
@@ -108,13 +117,13 @@ export class XopcVoiceCallTransport {
         }
       });
       socket.on('close', (_error: BusinessError, value: webSocket.CloseResult): void => {
-        if (generation !== this.generation) return;
+        if (generation !== this.generation || this.socket !== socket) return;
         hilog.info(0x0000, 'XopcVoice', 'Voice socket closed: %{public}d', value.code);
         if (!settled) { settled = true; clearTimeout(timeout); reject(new Error('NETWORK')); }
         else if (!this.closed) this.fail('NETWORK', generation);
       });
       socket.on('error', (error: BusinessError): void => {
-        if (generation !== this.generation) return;
+        if (generation !== this.generation || this.socket !== socket) return;
         hilog.warn(0x0000, 'XopcVoice', 'Voice socket failed: %{public}d', error.code);
         if (!settled) { settled = true; clearTimeout(timeout); reject(new Error('NETWORK')); }
         else this.fail('NETWORK', generation);
@@ -260,8 +269,10 @@ export class XopcVoiceCallTransport {
   private fail(reason: string, generation: number): void {
     if (generation !== this.generation || this.closed) return;
     hilog.warn(0x0000, 'XopcVoice', 'Voice transport stopped: %{public}s', reason);
+    const wasReady = this.ready;
+    this.rejectPending?.(new Error(reason)); this.rejectPending = undefined;
     this.closed = true; this.ready = false; clearInterval(this.heartbeatTimer); this.heartbeatTimer = -1;
-    this.releaseSocket(); this.callbacks.onClose(reason);
+    this.releaseSocket(); if (wasReady) this.callbacks.onClose(reason);
   }
 
   private async releaseSocket(): Promise<void> {
@@ -272,6 +283,7 @@ export class XopcVoiceCallTransport {
   }
 
   async close(): Promise<void> {
+    this.rejectPending?.(new Error('CANCELLED')); this.rejectPending = undefined;
     ++this.generation; this.closed = true; this.ready = false; this.session = undefined;
     this.inputMuted = true; clearInterval(this.heartbeatTimer); this.heartbeatTimer = -1;
     ++this.inputGeneration; this.pendingBytes = 0; this.pendingWireBytes = 0; this.pendingFrames = [];

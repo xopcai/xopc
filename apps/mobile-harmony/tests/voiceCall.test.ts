@@ -2,18 +2,18 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => {
   Object.assign(globalThis, { ObservedV2: (value: unknown) => value, Trace: () => undefined });
-  return { request: vi.fn(), send: vi.fn(), enqueue: vi.fn(), finish: vi.fn(), flush: vi.fn(async () => {}), stop: vi.fn(async () => {}), duck: vi.fn(), setMuted: vi.fn(), now: 1000 };
+  return { connect: vi.fn(async () => {}), start: vi.fn(async () => {}), request: vi.fn(), send: vi.fn(), enqueue: vi.fn(), finish: vi.fn(), flush: vi.fn(async () => {}), stop: vi.fn(async () => {}), duck: vi.fn(), setMuted: vi.fn(), now: 1000 };
 });
 vi.mock('@kit.AbilityKit', () => ({}));
 vi.mock('@kit.BasicServicesKit', () => ({ systemDateTime: { TimeType: { STARTUP: 1 }, getUptime: () => mocks.now } }));
 vi.mock('@kit.ArkTS', () => ({ util: {} }));
 vi.mock('@kit.PerformanceAnalysisKit', () => ({ hilog: { info: vi.fn(), warn: vi.fn() } }));
-vi.mock('../entry/src/main/ets/service/gatewaySession.ets', () => ({ gatewaySession: { request: mocks.request } }));
-vi.mock('../entry/src/main/ets/repository/chatRepository.ets', () => ({ XopcChatRepository: class {} }));
-vi.mock('../entry/src/main/ets/service/voiceCapture.ets', () => ({ voiceCapture: {} }));
-vi.mock('../entry/src/main/ets/service/chatReadAloud.ets', () => ({ chatReadAloud: {} }));
+vi.mock('../entry/src/main/ets/service/gatewaySession.ets', () => ({ gatewaySession: { request: mocks.request, transferAuth: async () => ({ origin: "https://gateway.example" }) } }));
+vi.mock('../entry/src/main/ets/repository/chatRepository.ets', () => ({ XopcChatRepository: class { async materialize() {} } }));
+vi.mock('../entry/src/main/ets/service/voiceCapture.ets', () => ({ voiceCapture: { async cancel() {} } }));
+vi.mock('../entry/src/main/ets/service/chatReadAloud.ets', () => ({ chatReadAloud: { async disableContinuous() {} } }));
 vi.mock('../entry/src/main/ets/service/voiceCallAudio.ets', () => ({ voiceCallAudio: mocks }));
-vi.mock('../entry/src/main/ets/service/voiceCallTransport.ets', () => ({ XopcVoiceCallTransport: class {} }));
+vi.mock('../entry/src/main/ets/service/voiceCallTransport.ets', () => ({ XopcVoiceCallTransport: class { connect = mocks.connect; send = mocks.send; async close() {} } }));
 
 import { XopcVoiceCall } from '../entry/src/main/ets/service/voiceCall.ets';
 import type { XopcVoiceAudioFrame, XopcVoiceServerEvent } from '../entry/src/main/ets/model/voice.ets';
@@ -183,4 +183,73 @@ describe('Harmony continuous voice call response handoff', () => {
     expect(mocks.send).not.toHaveBeenCalledWith('input.mute', { muted: true });
   });
 
+});
+
+
+describe('Harmony voice connection recovery', () => {
+  let call: XopcVoiceCall;
+  let issued: number;
+  beforeEach(() => {
+    vi.clearAllMocks(); vi.useFakeTimers(); issued = 0;
+    mocks.connect.mockReset().mockResolvedValue(undefined);
+    mocks.stop.mockReset().mockResolvedValue(undefined);
+    mocks.request.mockImplementation(async (path: string) => {
+      if (path.endsWith('/status')) return JSON.stringify({ payload: { enabled: true, capabilities: {
+        natural: { available: true }, assistant: { available: true }
+      } } });
+      if (path.endsWith('/preflight')) return JSON.stringify({ ok: true });
+      if (path.endsWith('/sessions')) return JSON.stringify({ payload: {
+        sessionId: `session-${++issued}`, ticket: `ticket-${issued}`, limits: { maxSessionMs: 600000 }
+      } });
+      return JSON.stringify({ ok: true });
+    });
+    call = new XopcVoiceCall();
+  });
+
+  it('creates a fresh session and uses the proxy after a first connection timeout', async () => {
+    try {
+      mocks.connect.mockRejectedValueOnce(new Error('CONNECT_TIMEOUT'));
+      await call.start({} as never, { conversationId: 'chat', mode: 'natural', name: 'AI', background: false });
+      expect(call.phase).toBe('recovering');
+      await vi.advanceTimersByTimeAsync(500);
+      expect(call.phase).toBe('connected');
+      expect(issued).toBe(2);
+      expect(mocks.connect.mock.calls.map((args) => [args[1].ticket, args[2]]))
+        .toEqual([['ticket-1', false], ['ticket-2', true]]);
+      expect(mocks.request).toHaveBeenCalledWith('/api/voice/realtime/sessions/cancel', 'POST',
+        JSON.stringify({ sessionId: 'session-1', ticket: 'ticket-1' }));
+      await call.end();
+    } finally { vi.useRealTimers(); }
+  });
+
+  it('bounds repeated initialization failures and ends recovery in paused state', async () => {
+    try {
+      mocks.connect.mockRejectedValue(new Error('CONNECT_TIMEOUT'));
+      await call.start({} as never, { conversationId: 'chat', mode: 'assistant', name: 'AI', background: false });
+      await vi.advanceTimersByTimeAsync(15500);
+      expect(issued).toBe(6);
+      expect(call.phase).toBe('paused');
+      await vi.advanceTimersByTimeAsync(30000);
+      expect(issued).toBe(6);
+      await call.end();
+    } finally { vi.useRealTimers(); }
+  });
+
+  it('waits for old audio cleanup before manual reconnection', async () => {
+    try {
+      let finish!: () => void;
+      mocks.stop.mockImplementationOnce(() => new Promise<void>((resolve) => { finish = resolve; }));
+      mocks.connect.mockRejectedValueOnce(new Error('CONNECT_TIMEOUT'));
+      const starting = call.start({} as never, { conversationId: 'chat', mode: 'natural', name: 'AI', background: false });
+      await vi.advanceTimersByTimeAsync(0);
+      const resumed = call.resume();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(issued).toBe(1);
+      finish(); await starting; await resumed;
+      expect(issued).toBe(2); expect(call.phase).toBe('connected');
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(issued).toBe(2);
+      await call.end();
+    } finally { vi.useRealTimers(); }
+  });
 });

@@ -1,10 +1,24 @@
 package ai.xopc.mobile.ui.main
 
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertThrows
 import org.junit.Test
 
 class VoiceReplyHandoffTest {
+  @Test fun setupTimeoutIsRetryableWhileCallerCancellationRemainsCancellation() = runBlocking {
+    val timeout = runCatching { awaitVoiceReady(CompletableDeferred(), timeoutMs = 1) }.exceptionOrNull()
+    assertEquals("CONNECT_TIMEOUT", timeout?.message)
+    assertEquals(false, timeout is CancellationException)
+    val cancelled = CompletableDeferred<Unit>()
+    cancelled.cancel(CancellationException("caller stopped"))
+    val cancellation = runCatching { awaitVoiceReady(cancelled) }.exceptionOrNull()
+    assertEquals(true, cancellation is CancellationException)
+    awaitVoiceReady(CompletableDeferred(Unit))
+  }
+
   @Test fun nextReplyWaitsForAudibleTailAndReplaysInWireOrder() {
     assertEquals(VoiceReplyDisposition.START, voiceReplyDisposition("", false, "reply-1"))
     assertEquals(VoiceReplyDisposition.REJECT, voiceReplyDisposition("reply-1", false, "reply-2"))
@@ -40,6 +54,8 @@ class VoiceReplyHandoffTest {
   @Test fun transientVoiceFailuresHaveBoundedBackoff() {
     assertEquals(listOf(500L, 1000L, 2000L, 4000L, 8000L),
       (0..4).map { voiceReconnectDelay("NETWORK", it) })
+    assertEquals(500L, voiceReconnectDelay("CONNECT_TIMEOUT", 0))
+    assertEquals(null, voiceReconnectDelay("CONNECT_TIMEOUT", 5))
     assertEquals(null, voiceReconnectDelay("NETWORK", 5))
     assertEquals(null, voiceReconnectDelay("TIME_LIMIT", 0))
     assertEquals(null, voiceReconnectDelay("PROTOCOL_ERROR", 0))
