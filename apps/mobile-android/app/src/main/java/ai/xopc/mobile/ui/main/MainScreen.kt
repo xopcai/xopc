@@ -475,7 +475,7 @@ fun MainScreen(
   onTranscribeAudio: suspend (ByteArray, String) -> String = { _, _ ->
     throw IllegalStateException("TRANSCRIPTION_UNAVAILABLE")
   },
-  onCreateVoiceCall: suspend (String, String) -> VoiceCallConnection = { _, _ ->
+  onCreateVoiceCall: suspend (String, String, String, Boolean) -> VoiceCallConnection = { _, _, _, _ ->
     throw IllegalStateException("VOICE_UNAVAILABLE")
   },
   onCancelVoiceCall: suspend (VoiceCallConnection) -> Unit = {},
@@ -529,7 +529,7 @@ fun MainScreen(
   onLoadPersonalAgent: () -> Unit = {},
   onOpenPersonalAgent: () -> Unit = {},
   onLoadPersonalVoiceChoices: () -> Unit = {},
-  onUpdatePersonalAgentProfile: (String, String, Map<String, String>, String?) -> Unit = { _, _, _, _ -> },
+  onUpdatePersonalAgentProfile: (String, String, Map<String, String>, String?, Boolean) -> Unit = { _, _, _, _, _ -> },
   onLoadPersonalProactivity: suspend () -> ai.xopc.mobile.gateway.PersonalProactivitySettings = { error("UNAVAILABLE") },
   onSavePersonalProactivity: suspend (ai.xopc.mobile.gateway.PersonalProactivitySettings) -> ai.xopc.mobile.gateway.PersonalProactivitySettings = { error("UNAVAILABLE") },
   onUploadPersonalAvatar: suspend (ByteArray) -> Unit = {},
@@ -977,7 +977,7 @@ internal fun MainContent(
   onTranscribeAudio: suspend (ByteArray, String) -> String = { _, _ ->
     throw IllegalStateException("TRANSCRIPTION_UNAVAILABLE")
   },
-  onCreateVoiceCall: suspend (String, String) -> VoiceCallConnection = { _, _ ->
+  onCreateVoiceCall: suspend (String, String, String, Boolean) -> VoiceCallConnection = { _, _, _, _ ->
     throw IllegalStateException("VOICE_UNAVAILABLE")
   },
   onCancelVoiceCall: suspend (VoiceCallConnection) -> Unit = {},
@@ -1031,7 +1031,7 @@ internal fun MainContent(
   onLoadPersonalAgent: () -> Unit = {},
   onOpenPersonalAgent: () -> Unit = {},
   onLoadPersonalVoiceChoices: () -> Unit = {},
-  onUpdatePersonalAgentProfile: (String, String, Map<String, String>, String?) -> Unit = { _, _, _, _ -> },
+  onUpdatePersonalAgentProfile: (String, String, Map<String, String>, String?, Boolean) -> Unit = { _, _, _, _, _ -> },
   onLoadPersonalProactivity: suspend () -> ai.xopc.mobile.gateway.PersonalProactivitySettings = { error("UNAVAILABLE") },
   onSavePersonalProactivity: suspend (ai.xopc.mobile.gateway.PersonalProactivitySettings) -> ai.xopc.mobile.gateway.PersonalProactivitySettings = { error("UNAVAILABLE") },
   onUploadPersonalAvatar: suspend (ByteArray) -> Unit = {},
@@ -1066,7 +1066,7 @@ internal fun MainContent(
   val currentRespondVoiceApproval by rememberUpdatedState(onRespondVoiceApproval)
   val voiceCall = remember(connection.profile?.gatewayId) {
     RealtimeVoiceController(voiceContext, voiceScope,
-      { id, mode -> currentVoiceCreate(id, mode) }, { call -> currentVoiceCancel(call) },
+      { id, mode, callId, recovery -> currentVoiceCreate(id, mode, callId, recovery) }, { call -> currentVoiceCancel(call) },
       { id, version, action, answer -> currentVoiceClarification(id, version, action, answer) },
       { id -> currentPendingVoiceApproval(id) },
       { approval, allow -> currentRespondVoiceApproval(approval, allow) })
@@ -2478,7 +2478,7 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
   referenceQuery: String, onReferenceQueryChange: (String) -> Unit,
   onActionsOpenChange: (Boolean) -> Unit,
   onLoadAgentVoices: () -> Unit = {},
-  onUpdateAgentProfile: (String, String, Map<String, String>, String?) -> Unit = { _, _, _, _ -> },
+  onUpdateAgentProfile: (String, String, Map<String, String>, String?, Boolean) -> Unit = { _, _, _, _, _ -> },
   onLoadProactivity: suspend () -> ai.xopc.mobile.gateway.PersonalProactivitySettings = { error("UNAVAILABLE") },
   onSaveProactivity: suspend (ai.xopc.mobile.gateway.PersonalProactivitySettings) -> ai.xopc.mobile.gateway.PersonalProactivitySettings = { error("UNAVAILABLE") },
   onUploadAvatar: suspend (ByteArray) -> Unit = {}, personalModelRequestRevision: Int = 0, onPersonalModelRequestHandled: () -> Unit = {}) {

@@ -220,6 +220,7 @@ export function registerVoiceRoutes(authenticated: Hono, deps: AuthenticatedRout
     });
     return c.json({ ok: true, payload: {
       enabled,
+      openingGreeting: true,
       capabilities: {
         dictation: availability(Boolean(stt)),
         assistant: availability(Boolean(stt && tts)),

@@ -13,6 +13,7 @@ export interface XopcVoiceCapabilities {
 }
 
 export interface XopcVoiceStatus {
+  openingGreeting?: boolean;
   enabled: boolean;
   defaultMode: string;
   capabilities: XopcVoiceCapabilities;
@@ -40,7 +41,17 @@ export interface XopcVoiceRoute {
   engine: string;
 }
 
+export interface XopcVoiceOpeningGreetingRequest {
+  logicalCallId: string;
+  initiation: string;
+  supportsOutputReady: boolean;
+}
+export interface XopcVoiceOpeningGreeting {
+  accepted: boolean;
+  greetingResponseId?: string;
+}
 export interface XopcVoiceSession {
+  openingGreeting?: XopcVoiceOpeningGreeting;
   sessionId: string;
   ticket: string;
   ticketExpiresAt: string;
@@ -58,6 +69,7 @@ export interface XopcVoiceSession {
 }
 
 export interface XopcVoiceSessionRequest {
+  openingGreeting?: XopcVoiceOpeningGreetingRequest;
   purpose: string;
   conversationId?: string;
   mode?: string;
@@ -130,6 +142,7 @@ export interface XopcVoiceApprovalsPayload {
 }
 
 export interface XopcVoiceClientPayload {
+  connectionEpoch?: number;
   sessionId?: string;
   ticket?: string;
   muted?: boolean;

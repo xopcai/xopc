@@ -6,6 +6,7 @@ import { showComposerNotification } from '@/features/chat/composer/composer-noti
 import { VoiceSessionClient } from '@/features/voice/realtime/voice-session-client';
 import { PcmPlayer } from '@/features/voice/realtime/pcm-player';
 import { voiceInputConstraints } from '@/stores/voice-preferences-store';
+import { getLanguage } from '@/lib/storage';
 import { apiUrl } from '@/lib/url';
 import { fetchJson } from '@/lib/fetch';
 import type { ChatMessages } from '@/i18n/messages';
@@ -140,6 +141,7 @@ export function useRealtimeVoice(options: UseRealtimeVoiceOptions): UseRealtimeV
   const captureRef = useRef<PcmFrameCapture | null>(null);
   const encoderRef = useRef<PcmStreamEncoder | null>(null);
   const clientRef = useRef<VoiceSessionClient | null>(null);
+  const logicalCallIdRef = useRef<string | undefined>(undefined);
   const callModeRef = useRef<VoiceMode | undefined>(undefined);
   const playerRef = useRef<PcmPlayer | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
@@ -286,7 +288,7 @@ export function useRealtimeVoice(options: UseRealtimeVoiceOptions): UseRealtimeV
     }, 200);
   }, [finishIdle, stopTimer]);
 
-  const beginCapture = useCallback(async (purpose: VoiceSessionMode, callMode?: VoiceMode, conversationKey?: string) => {
+  const beginCapture = useCallback(async (purpose: VoiceSessionMode, callMode?: VoiceMode, conversationKey?: string, recovery = false) => {
     if (disabled || phaseRef.current !== 'idle') return;
     if (purpose === 'conversation' && !conversationKey) return;
     if (!acquireMicrophoneLease(ownerRef.current)) {
@@ -304,6 +306,7 @@ export function useRealtimeVoice(options: UseRealtimeVoiceOptions): UseRealtimeV
     const isCurrent = () => attempt === attemptRef.current;
     setMode(purpose);
     setCallConnectionStage(purpose === 'conversation' ? 'preparing' : null);
+    if (!recovery || !logicalCallIdRef.current) logicalCallIdRef.current = crypto.randomUUID();
     callModeRef.current = callMode;
     setResponseText('');
     updatePhase('connecting');
@@ -362,6 +365,9 @@ export function useRealtimeVoice(options: UseRealtimeVoiceOptions): UseRealtimeV
       dictationRef.current.clear();
       const client = await wait(VoiceSessionClient.connect({
         timingMetrics,
+        logicalCallId: logicalCallIdRef.current,
+        recovery,
+        language: getLanguage(),
         purpose,
         signal: controller.signal,
         ...(purpose === 'conversation' ? { mode: callMode, conversationId: conversationKey } : {}),
@@ -520,6 +526,7 @@ export function useRealtimeVoice(options: UseRealtimeVoiceOptions): UseRealtimeV
       updatePhase('recording');
       setCallConnectionStage(null);
       startTimer();
+      client.outputReady();
     } catch (error) {
       if (!isCurrent()) return;
       const failureKind = classifyVoiceCaptureFailure(stage, error);
@@ -595,7 +602,7 @@ export function useRealtimeVoice(options: UseRealtimeVoiceOptions): UseRealtimeV
     if (phaseRef.current !== 'error') return;
     reset();
     updatePhase('idle');
-    void beginCapture(mode, callModeRef.current, callConversationIdRef.current);
+    void beginCapture(mode, callModeRef.current, callConversationIdRef.current, true);
   }, [beginCapture, mode, reset, updatePhase]);
 
   const startVoiceInput = useCallback(() => beginCapture('dictation'), [beginCapture]);

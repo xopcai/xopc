@@ -604,7 +604,7 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
   }
 
   fun updatePersonalAgentProfile(name: String, appearance: String, preferences: Map<String, String>,
-    voiceId: String?) {
+    voiceId: String?, openingGreetingEnabled: Boolean) {
     val gatewayId = mutableState.value.profile?.gatewayId ?: return
     val agent = mutableState.value.personal.agent?.takeIf { it.state == "ready" } ?: return
     if (mutableState.value.personal.agentProfileSaving) return
@@ -618,7 +618,7 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
           else if (voiceId.isEmpty()) null
           else PersonalVoicePreference(route.provider, route.model, voiceId)
         val updated = runInterruptible(Dispatchers.IO) {
-          personalAgentRepository.updateProfile(agent, name, appearance, preferences, voice)
+          personalAgentRepository.updateProfile(agent, name, appearance, preferences, voice, openingGreetingEnabled)
         }
         if (mutableState.value.profile?.gatewayId != gatewayId) return@launch
         mutableState.update { it.copy(personal = it.personal.copy(agent = updated,
@@ -1133,7 +1133,7 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
   suspend fun noteAttachmentBytes(noteId: String, attachmentId: String): ByteArray =
     runInterruptible(Dispatchers.IO) { noteRepository.mediaBytes(noteId, attachmentId) }
 
-  suspend fun createVoiceCall(conversationId: String, mode: String): VoiceCallConnection =
+  suspend fun createVoiceCall(conversationId: String, mode: String, logicalCallId: String, recovery: Boolean): VoiceCallConnection =
     runInterruptible(Dispatchers.IO) {
       require(mode == "natural" || mode == "assistant") { "INVALID_VOICE_MODE" }
       conversations.materializeForVoice(conversationId)
@@ -1145,6 +1145,10 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
       }
       val body = org.json.JSONObject().put("purpose", "conversation")
         .put("conversationId", conversationId).put("mode", mode)
+        .put("language", if (java.util.Locale.getDefault().language == "zh") "zh" else "en")
+        .apply { if (status.optBoolean("openingGreeting") && mode == "assistant") put("openingGreeting",
+          org.json.JSONObject().put("logicalCallId", logicalCallId).put("initiation", if (recovery) "recovery" else "user")
+            .put("supportsOutputReady", true)) }
         .put("supportedProtocolVersions", org.json.JSONArray().put(3))
         .put("mediaPreferences", org.json.JSONArray().put("websocket-pcm")).toString()
       val timing = org.json.JSONObject(session.request("/api/voice/realtime/preflight", "POST", body))
@@ -1159,7 +1163,8 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
       VoiceCallConnection(result.getString("sessionId"), result.getString("ticket"),
         result.getString("websocketPath"), result.getInt("connectionEpoch"), auth.origin,
         auth.bearer, result.getJSONObject("limits").getLong("maxSessionMs"),
-        result.getJSONObject("route").getString("engine"), result.optBoolean("bargeIn", true), timingMetrics)
+        result.getJSONObject("route").getString("engine"), result.optBoolean("bargeIn", true), timingMetrics,
+        result.optJSONObject("openingGreeting")?.takeIf { it.optBoolean("accepted") }?.optString("greetingResponseId")?.takeIf { it.isNotBlank() })
     }
 
   suspend fun cancelVoiceCall(call: VoiceCallConnection) = runInterruptible(Dispatchers.IO) {

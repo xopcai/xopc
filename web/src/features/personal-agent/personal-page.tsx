@@ -35,6 +35,7 @@ export type PersonalAgent = {
   displayName: string;
   userCallName?: string | null;
   appearance: PersonalAppearance;
+  voiceCallPreferences?: { openingGreetingEnabled: boolean };
   voicePreference: { provider: string; model: string; voice: string } | null;
   preferences: Preferences;
   revision: number;
@@ -49,6 +50,7 @@ type ProfileChanges = {
   appearance?: PersonalAppearance;
   preferences?: Partial<Preferences>;
   voicePreference?: PersonalAgent['voicePreference'];
+  voiceCallPreferences?: PersonalAgent['voiceCallPreferences'];
 };
 const ACTIVITY_PAGE_SIZE = 5;
 
@@ -209,12 +211,14 @@ export function PersonalPage() {
       const voicePreference = changes.voicePreference === undefined ? current.voicePreference : changes.voicePreference;
       if (displayName === current.displayName && appearance === current.appearance
         && JSON.stringify(preferences) === JSON.stringify(current.preferences)
-        && JSON.stringify(voicePreference) === JSON.stringify(current.voicePreference)) return true;
+        && JSON.stringify(voicePreference) === JSON.stringify(current.voicePreference)
+        && (!changes.voiceCallPreferences || JSON.stringify(changes.voiceCallPreferences) === JSON.stringify(current.voiceCallPreferences))) return true;
       try {
         const response = await fetchJson<ApiResult<PersonalAgent>>(apiUrl('/api/personal-agent/profile'), {
           method: 'PATCH',
           body: JSON.stringify({ revision: current.revision, displayName, appearance, preferences,
-            ...(changes.voicePreference !== undefined ? { voicePreference } : {}) }),
+            ...(changes.voicePreference !== undefined ? { voicePreference } : {}),
+            ...(changes.voiceCallPreferences ? { voiceCallPreferences: changes.voiceCallPreferences } : {}) }),
         });
         recordRef.current = response.payload;
         setRecord(response.payload);
@@ -474,7 +478,7 @@ export function PersonalPage() {
                 { value: 'playful', label: zh ? '活泼' : 'Playful' },
               ]} placeholder={zh ? '选择程度' : 'Choose level'} allowEmpty={false} onChange={value => { const next = value as Preferences['humor']; setHumor(next); void queueProfileUpdate({ preferences: { humor: next } }); }} /></div></details>
               <PersonalProactivitySetting zh={zh} />
-              <PersonalVoiceSetting record={record} zh={zh} onSelectVoice={voicePreference => queueProfileUpdate({ voicePreference })} />
+              <PersonalVoiceSetting onGreetingChange={openingGreetingEnabled => queueProfileUpdate({ voiceCallPreferences: { openingGreetingEnabled } })} record={record} zh={zh} onSelectVoice={voicePreference => queueProfileUpdate({ voicePreference })} />
               <div className="border-t border-edge pt-5">
                 <PersonalModelSetting conversationId={record.conversationId} zh={zh} onSaved={async () => {
                   const response = await fetchJson<ApiResult<PersonalAgent | null>>(apiUrl('/api/personal-agent'));
