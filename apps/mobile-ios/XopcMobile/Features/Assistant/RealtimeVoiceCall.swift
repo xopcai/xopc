@@ -295,7 +295,9 @@ final class RealtimeVoiceCall {
     private func release() async {
         // The task invoking release must finish cancelling the server reservation first.
         let tasks = [connectTimeoutTask, approvalTask, limitTask, captureTask, receiveTask]
-        defer { for task in tasks { task?.cancel() } }
+        defer { for task in tasks {
+            task?.cancel()
+        } }
         connectTimeoutTask = nil
         approvalTask = nil
         limitTask = nil
