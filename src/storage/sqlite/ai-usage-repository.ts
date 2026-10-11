@@ -1,4 +1,6 @@
 import type { AiUsageEvent, AiUsageFinish } from '../../usage/types.js';
+import type { CloudBillingReceipt, UsageBilling, UsageTotals } from '@xopcai/gateway-contract';
+import { creditMicroSchema } from '@xopcai/gateway-contract';
 import { getSqliteDatabase, runSqliteWriteTransaction } from './transaction.js';
 
 const ERROR_SUMMARY_LIMIT = 512;
@@ -70,6 +72,37 @@ export function getAiUsageEvent(id: string): Record<string, unknown> | undefined
   return getSqliteDatabase().prepare('SELECT * FROM ai_usage_events WHERE id = ?').get(id) as Record<string, unknown> | undefined;
 }
 
+export function setAiUsageCloudRequest(id: string, requestId: string): void {
+  if (!/^[A-Za-z0-9_.:-]{1,128}$/.test(requestId)) return;
+  runSqliteWriteTransaction(db => {
+    db.prepare(`UPDATE ai_usage_events SET cloud_request_id = ?, updated_at = ?
+      WHERE id = ? AND provider = 'xopc-cloud' AND cloud_billing_json IS NULL`)
+      .run(requestId, Date.now(), id);
+  });
+}
+
+export function setAiUsageCloudReceipt(id: string, receipt: CloudBillingReceipt): void {
+  if (!['settled', 'released', 'expired', 'reserved', 'pending'].includes(receipt.state)) return;
+  const state = receipt.state === 'settled' ? 'settled'
+    : ['released', 'expired'].includes(receipt.state) ? 'released' : 'pending';
+  const charged = state === 'settled' ? receipt.chargedCreditMicro : state === 'released' ? '0' : null;
+  if (state === 'settled' && charged === null) return;
+  creditMicroSchema.parse(receipt.reservedCreditMicro);
+  creditMicroSchema.parse(receipt.releasedCreditMicro);
+  if (charged !== null) creditMicroSchema.parse(charged);
+  const billing: UsageBilling = {
+    source: 'xopc_cloud', state, requestId: receipt.requestId,
+    reservedCreditMicro: state === 'pending' ? receipt.reservedCreditMicro : '0',
+    chargedCreditMicro: charged, releasedCreditMicro: receipt.releasedCreditMicro,
+  };
+  runSqliteWriteTransaction(db => {
+    db.prepare(`UPDATE ai_usage_events SET cloud_billing_json = ?, updated_at = ?
+      WHERE id = ? AND provider = 'xopc-cloud' AND cloud_request_id = ?
+      AND COALESCE(json_extract(cloud_billing_json, '$.state'), '') NOT IN ('settled', 'released')`)
+      .run(JSON.stringify(billing), Date.now(), id, receipt.requestId);
+  });
+}
+
 export type AiUsageQuery = {
   from: number;
   to: number;
@@ -99,6 +132,21 @@ function queryWhere(query: AiUsageQuery): { sql: string; values: Array<string | 
   return { sql: clauses.join(' AND '), values };
 }
 
+export function pendingAiUsageCloudReceiptIds(query: AiUsageQuery): string[] {
+  const { sql, values } = queryWhere(query);
+  return (getSqliteDatabase().prepare(`SELECT id FROM ai_usage_events WHERE ${sql}
+    AND provider = 'xopc-cloud' AND cloud_request_id IS NOT NULL
+    AND COALESCE(json_extract(cloud_billing_json, '$.state'), '') NOT IN ('settled', 'released')
+    ORDER BY updated_at ASC, id ASC LIMIT 4`).all(...values) as { id: string }[]).map(row => row.id);
+}
+
+export function markAiUsageCloudReceiptAttempt(id: string): void {
+  runSqliteWriteTransaction(db => {
+    db.prepare(`UPDATE ai_usage_events SET updated_at = ? WHERE id = ? AND provider = 'xopc-cloud'`)
+      .run(Date.now(), id);
+  });
+}
+
 function usd(microusd: number): string {
   return (microusd / 1_000_000).toFixed(6).replace(/0+$/, '').replace(/\.$/, '') || '0';
 }
@@ -115,6 +163,7 @@ export type AiUsageTotals = {
   totalTokens: number;
   knownCostUsd: string;
   costCompleteness: 'complete' | 'partial' | 'unknown';
+  billing: NonNullable<UsageTotals['billing']>;
 };
 
 export type ConversationAiUsageTotals = Pick<
@@ -136,22 +185,39 @@ function totalsFromRow(row: UsageRow): AiUsageTotals {
     cacheWriteTokens: Number(row.cache_write_tokens ?? 0),
     totalTokens: Number(row.total_tokens ?? 0),
     knownCostUsd: usd(Number(row.known_cost_microusd ?? 0)),
-    costCompleteness: calls === 0 || unknownCostCalls === calls
+    costCompleteness: Number(row.external_calls ?? 0) === 0 || unknownCostCalls === Number(row.external_calls)
       ? 'unknown'
       : unknownCostCalls > 0 ? 'partial' : 'complete',
+    billing: {
+      external: { calls: Number(row.external_calls ?? 0), estimatedCostUsd: usd(Number(row.known_cost_microusd ?? 0)), unknownCostCalls },
+      localCalls: Number(row.local_calls ?? 0),
+      cloud: { calls: Number(row.cloud_calls ?? 0), settledCalls: Number(row.cloud_final_calls ?? 0),
+        pendingCalls: Number(row.cloud_pending_calls ?? 0), unavailableCalls: Number(row.cloud_unavailable_calls ?? 0),
+        chargedCreditMicro: Number(row.cloud_final_calls ?? 0) > 0 ? String(row.cloud_charged_micro ?? '0') : null,
+        reservedCreditMicro: Number(row.cloud_known_reservations ?? 0) > 0 ? String(row.cloud_reserved_micro ?? '0') : null },
+    },
   };
 }
 
 const TOTALS_SQL = `COUNT(*) AS calls,
   SUM(CASE WHEN status = 'succeeded' THEN 1 ELSE 0 END) AS succeeded_calls,
   SUM(CASE WHEN status IN ('failed', 'aborted', 'unknown') THEN 1 ELSE 0 END) AS failed_calls,
-  SUM(CASE WHEN cost_source <> 'local' AND estimated_cost_microusd IS NULL THEN 1 ELSE 0 END) AS unknown_cost_calls,
+  SUM(CASE WHEN provider <> 'xopc-cloud' AND cost_source <> 'local' AND estimated_cost_microusd IS NULL THEN 1 ELSE 0 END) AS unknown_cost_calls,
+  SUM(CASE WHEN provider <> 'xopc-cloud' AND cost_source <> 'local' THEN 1 ELSE 0 END) AS external_calls,
+  SUM(CASE WHEN provider <> 'xopc-cloud' AND cost_source = 'local' THEN 1 ELSE 0 END) AS local_calls,
+  SUM(CASE WHEN provider = 'xopc-cloud' THEN 1 ELSE 0 END) AS cloud_calls,
+  SUM(CASE WHEN provider = 'xopc-cloud' AND json_extract(cloud_billing_json, '$.state') IN ('settled', 'released') THEN 1 ELSE 0 END) AS cloud_final_calls,
+  SUM(CASE WHEN provider = 'xopc-cloud' AND json_extract(cloud_billing_json, '$.state') = 'pending' THEN 1 ELSE 0 END) AS cloud_pending_calls,
+  SUM(CASE WHEN provider = 'xopc-cloud' AND cloud_billing_json IS NULL THEN 1 ELSE 0 END) AS cloud_unavailable_calls,
+  SUM(CASE WHEN provider = 'xopc-cloud' AND cloud_billing_json IS NOT NULL THEN 1 ELSE 0 END) AS cloud_known_reservations,
+  CAST(COALESCE(SUM(CASE WHEN provider = 'xopc-cloud' THEN CAST(json_extract(cloud_billing_json, '$.chargedCreditMicro') AS INTEGER) ELSE 0 END), 0) AS TEXT) AS cloud_charged_micro,
+  CAST(COALESCE(SUM(CASE WHEN provider = 'xopc-cloud' THEN CAST(json_extract(cloud_billing_json, '$.reservedCreditMicro') AS INTEGER) ELSE 0 END), 0) AS TEXT) AS cloud_reserved_micro,
   COALESCE(SUM(input_tokens), 0) AS input_tokens,
   COALESCE(SUM(output_tokens), 0) AS output_tokens,
   COALESCE(SUM(cache_read_tokens), 0) AS cache_read_tokens,
   COALESCE(SUM(cache_write_tokens), 0) AS cache_write_tokens,
   COALESCE(SUM(total_tokens), 0) AS total_tokens,
-  COALESCE(SUM(estimated_cost_microusd), 0) AS known_cost_microusd`;
+  COALESCE(SUM(CASE WHEN provider <> 'xopc-cloud' AND cost_source <> 'local' THEN estimated_cost_microusd ELSE 0 END), 0) AS known_cost_microusd`;
 
 /** Aggregate all retained AI usage records for the requested conversations. */
 export function summarizeAiUsageByConversations(
@@ -205,6 +271,14 @@ function eventFromRow(row: UsageRow) {
   const pricingSnapshot = typeof row.pricing_snapshot_json === 'string'
     ? JSON.parse(row.pricing_snapshot_json) as Record<string, number>
     : undefined;
+  const estimatedCostUsd = row.provider === 'xopc-cloud' || row.cost_source === 'local' || row.estimated_cost_microusd === null
+    ? undefined : usd(Number(row.estimated_cost_microusd));
+  const billing: UsageBilling = row.provider === 'xopc-cloud'
+    ? (row.cloud_billing_json ? JSON.parse(String(row.cloud_billing_json)) : {
+        source: 'xopc_cloud', state: 'unavailable', requestId: row.cloud_request_id ?? undefined,
+        reservedCreditMicro: null, chargedCreditMicro: null, releasedCreditMicro: null,
+      })
+    : row.cost_source === 'local' ? { source: 'local' } : { source: 'external_provider', currency: 'USD', estimatedCostUsd };
   return {
     id: String(row.id), traceId: String(row.trace_id),
     otelTraceId: row.otel_trace_id ? String(row.otel_trace_id) : undefined,
@@ -224,7 +298,7 @@ function eventFromRow(row: UsageRow) {
     cacheWriteTokens: row.cache_write_tokens === null ? undefined : Number(row.cache_write_tokens),
     reasoningTokens: row.reasoning_tokens === null ? undefined : Number(row.reasoning_tokens),
     totalTokens: row.total_tokens === null ? undefined : Number(row.total_tokens),
-    estimatedCostUsd: row.estimated_cost_microusd === null ? undefined : usd(Number(row.estimated_cost_microusd)),
+    estimatedCostUsd, billing,
     costSource: String(row.cost_source), pricingSnapshot,
     errorSummary: row.error_summary ? String(row.error_summary) : undefined,
   };

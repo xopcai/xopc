@@ -51,6 +51,7 @@ private struct PersonalProfileUpdate: Encodable {
 struct PersonalVoiceOption: Decodable, Identifiable, Sendable {
     let id: String
     let name: String
+    let displayNames: [String: String]?
 }
 
 struct PersonalVoiceSelection: Sendable {

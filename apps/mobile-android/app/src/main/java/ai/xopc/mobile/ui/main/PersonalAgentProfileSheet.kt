@@ -2,6 +2,7 @@ package ai.xopc.mobile.ui.main
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -38,106 +39,73 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.intl.Locale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 import ai.xopc.mobile.R
-import ai.xopc.mobile.gateway.PersonalProactivitySettings
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun PersonalAgentProfileSheet(state: PersonalUiState, onDismiss: () -> Unit,
   onLoadAgentVoices: () -> Unit,
   onUpdateAgentProfile: (String, String, Map<String, String>, String?) -> Unit,
-  onLoadProactivity: suspend () -> PersonalProactivitySettings,
-  onSaveProactivity: suspend (PersonalProactivitySettings) -> PersonalProactivitySettings,
   onUploadAvatar: suspend (ByteArray) -> Unit) {
   var agentName by rememberSaveable(state.gatewayId) { mutableStateOf("") }
   var agentAppearance by rememberSaveable(state.gatewayId) { mutableStateOf("loopi") }
-  var agentAddress by rememberSaveable(state.gatewayId) { mutableStateOf("") }
   var agentDetail by rememberSaveable(state.gatewayId) { mutableStateOf("balanced") }
   var agentVoice by rememberSaveable(state.gatewayId) { mutableStateOf("") }
-  var outreach by remember(state.gatewayId) { mutableStateOf<PersonalProactivitySettings?>(null) }
-  var outreachMode by rememberSaveable(state.gatewayId) { mutableStateOf<String?>(null) }
-  var loading by remember(state.gatewayId) { mutableStateOf(true) }
-  var loadFailed by remember(state.gatewayId) { mutableStateOf(false) }
-  var saveFailed by remember(state.gatewayId) { mutableStateOf(false) }
-  var saving by remember(state.gatewayId) { mutableStateOf(false) }
   var uploading by remember(state.gatewayId) { mutableStateOf(false) }
-  val scope = rememberCoroutineScope()
-  val busy = saving || uploading || state.agentProfileSaving
+  val busy = uploading || state.agentProfileSaving
   val currentBusy by rememberUpdatedState(busy)
   val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true,
     confirmValueChange = { it != SheetValue.Hidden || !currentBusy })
   val agentSaveRevision = remember(state.gatewayId, state.agent?.agentId) { state.agentProfileSavedRevision }
-  LaunchedEffect(state.gatewayId, state.agent?.agentId) {
+  LaunchedEffect(state.gatewayId, state.agent?.agentId, state.agent?.revision) {
     val agent = state.agent ?: return@LaunchedEffect
     agentName = agent.displayName
     agentAppearance = agent.appearance
-    agentAddress = agent.userCallName ?: agent.preferences["addressAs"].orEmpty()
     agentDetail = agent.preferences["detailLevel"] ?: "balanced"
-    agentVoice = agent.voicePreference?.voice.orEmpty()
+    agentVoice = agent.voicePreference?.voice?.takeUnless { it == "default" }.orEmpty()
   }
-  suspend fun loadOutreach() {
-    loading = true; loadFailed = false
-    try { outreach = onLoadProactivity() }
-    catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
-    catch (_: Exception) { loadFailed = true }
-    finally { loading = false }
-  }
-  LaunchedEffect(state.gatewayId) { onLoadAgentVoices(); loadOutreach() }
+  LaunchedEffect(state.gatewayId) { onLoadAgentVoices() }
   LaunchedEffect(state.agentProfileSavedRevision) {
     if (state.agentProfileSavedRevision > agentSaveRevision) onDismiss()
   }
   ModalBottomSheet(onDismissRequest = { if (!busy) onDismiss() }, sheetState = sheetState,
     modifier = Modifier.testTag("personal-agent-profile-sheet")) {
-    Column(Modifier.fillMaxWidth().fillMaxHeight(0.9f).imePadding()) {
+    Column(Modifier.fillMaxWidth().fillMaxHeight(0.65f).imePadding()) {
       Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-        Text(stringResource(R.string.personal_agent_configure), style = MaterialTheme.typography.titleLarge)
+        Text(stringResource(R.string.personal_agent_settings_title, state.agent?.displayName?.takeIf { it.isNotBlank() } ?: "ADA"),
+          modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleLarge)
         TextButton(onClick = onDismiss, enabled = !busy) { Text(stringResource(R.string.personal_agent_done)) }
       }
       Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        PersonalAvatarUpload(state, onUploadAvatar, { agentAppearance = "custom" }, busy, { uploading = it })
+        PersonalAvatarUpload(state, onUploadAvatar, { agentAppearance = "custom" }, busy || state.agentLoading, { uploading = it })
         OutlinedTextField(agentName, { agentName = it.take(60) }, Modifier.fillMaxWidth(),
-          label = { Text(stringResource(R.string.personal_agent_name)) }, singleLine = true, enabled = !busy)
-        OutlinedTextField(agentAddress, { agentAddress = it.take(60) }, Modifier.fillMaxWidth(),
-          label = { Text(stringResource(R.string.personal_agent_address)) }, singleLine = true, enabled = !busy)
+          label = { Text(stringResource(R.string.personal_agent_name)) }, singleLine = true, enabled = !busy && !state.agentLoading)
         PersonalSettingsChoice(stringResource(R.string.personal_agent_detail), agentDetail,
           listOf("brief" to stringResource(R.string.personal_agent_brief),
             "balanced" to stringResource(R.string.personal_agent_balanced),
             "detailed" to stringResource(R.string.personal_agent_detailed)), !busy, { agentDetail = it })
-        HorizontalDivider()
-        Text(stringResource(R.string.chat_personal_outreach), style = MaterialTheme.typography.titleSmall)
-        if (loading) BrandLoadingPanel()
-        outreach?.let { current ->
-          PersonalSettingsChoice(null, outreachMode ?: current.mode,
-            listOf("off" to stringResource(R.string.chat_personal_outreach_off),
-              "follow_up" to stringResource(R.string.chat_personal_outreach_followup),
-              "balanced" to stringResource(R.string.chat_personal_outreach_balanced)), !busy,
-            { outreachMode = it; saveFailed = false }, Modifier.testTag("personal-outreach-options"))
-          Text(stringResource(R.string.personal_agent_outreach_hint), style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-        if (loadFailed) {
-          Text(stringResource(R.string.personal_agent_outreach_load_error), color = MaterialTheme.colorScheme.error)
-          TextButton(onClick = { scope.launch { loadOutreach() } }, enabled = !busy && !loading) {
-            Text(stringResource(R.string.personal_retry))
-          }
-        }
         state.agentVoiceChoices?.takeIf { it.voices.isNotEmpty() }?.let { choices ->
           HorizontalDivider()
           var expanded by remember { mutableStateOf(false) }
           val options = listOf("" to stringResource(R.string.personal_agent_default_voice)) +
-            choices.voices.map { it.id to it.name } +
-            state.agent?.voicePreference?.takeIf { voice -> choices.voices.none { it.id == voice.voice } }
+            choices.voices.filter { it.id != "default" }.map {
+              it.id to (it.displayNames[if (Locale.current.language == "zh") "zh-CN" else "en"] ?: it.name)
+            } +
+            state.agent?.voicePreference?.takeIf { voice -> voice.voice != "default" && choices.voices.none { it.id == voice.voice } }
               ?.let { listOf(it.voice to it.voice) }.orEmpty()
           Box {
             TextButton(onClick = { expanded = true }, enabled = !busy) {
@@ -151,38 +119,27 @@ internal fun PersonalAgentProfileSheet(state: PersonalUiState, onDismiss: () -> 
             }
           }
         }
+        TextButton(onClick = onLoadAgentVoices, enabled = !busy) {
+          Text(stringResource(R.string.personal_agent_refresh_voices))
+        }
         Text(stringResource(R.string.personal_agent_advanced_hint), style = MaterialTheme.typography.bodySmall,
           color = MaterialTheme.colorScheme.onSurfaceVariant)
       }
       HorizontalDivider()
       Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        if (saveFailed || state.agentProfileError) {
-          Text(stringResource(if (saveFailed) R.string.personal_agent_outreach_save_error else R.string.personal_agent_save_error),
-            color = MaterialTheme.colorScheme.error)
+        if (state.agentProfileError) {
+          Text(stringResource(R.string.personal_agent_save_error), color = MaterialTheme.colorScheme.error)
         }
         Button(onClick = {
-          scope.launch {
-            saving = true; saveFailed = false
-            try {
-              val current = outreach
-              if (current != null && outreachMode != null && outreachMode != current.mode) {
-                // Keep Gateway-owned quiet hours, timezone and budgets intact.
-                outreach = onSaveProactivity(current.copy(mode = outreachMode!!))
-              }
-              val preferences = state.agent?.preferences.orEmpty().toMutableMap().apply {
-                put("addressAs", agentAddress.trim())
-                put("detailLevel", agentDetail)
-              }
-              onUpdateAgentProfile(agentName.trim(), agentAppearance, preferences,
-                agentVoice.takeIf { state.agentVoiceChoices?.voices?.isNotEmpty() == true })
-            } catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
-            catch (_: Exception) { saveFailed = true }
-            finally { saving = false }
+          val preferences = state.agent?.preferences.orEmpty().toMutableMap().apply {
+            put("detailLevel", agentDetail)
           }
-        }, enabled = !busy && state.agent != null && agentName.isNotBlank(),
+          onUpdateAgentProfile(agentName.trim(), agentAppearance, preferences,
+            agentVoice.takeIf { state.agentVoiceChoices?.voices?.isNotEmpty() == true })
+        }, enabled = !busy && !state.agentLoading && state.agent != null && agentName.isNotBlank(),
           modifier = Modifier.fillMaxWidth().testTag("personal-agent-profile-save")) {
-          Text(stringResource(if (saving || state.agentProfileSaving) R.string.personal_agent_saving else R.string.personal_agent_save))
+          Text(stringResource(if (state.agentProfileSaving) R.string.personal_agent_saving else R.string.personal_agent_save))
         }
       }
     }
@@ -234,11 +191,11 @@ private fun PersonalAvatarUpload(state: PersonalUiState, onUpload: suspend (Byte
       finally { busy = false; onBusyChange(false) }
     }
   }
-  Row(verticalAlignment = Alignment.CenterVertically) {
-    PersonalAgentAvatar(preview ?: state.agentAvatar, if (preview != null) "custom" else state.agent?.appearance ?: "loopi", 64.dp, true)
-    TextButton(onClick = { picker.launch("image/*") }, enabled = !busy && !disabled) {
-      Text(stringResource(R.string.chat_personal_upload_avatar))
-    }
+  val uploadLabel = stringResource(R.string.chat_personal_upload_avatar)
+  Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
+    PersonalAgentAvatar(preview ?: state.agentAvatar, if (preview != null) "custom" else state.agent?.appearance ?: "loopi", 64.dp, true,
+      modifier = Modifier.testTag("personal-setting-avatar").semantics { contentDescription = uploadLabel }
+        .clickable(enabled = !busy && !disabled, role = Role.Button) { picker.launch("image/*") })
   }
   if (error) Text(stringResource(R.string.personal_agent_save_error), color = MaterialTheme.colorScheme.error)
 }

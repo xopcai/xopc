@@ -6,6 +6,10 @@ import {
 } from '../client-error-format.js';
 
 describe('formatAgentRunErrorForClient', () => {
+  it('keeps Credit run budget errors separate from wallet exhaustion', () => {
+    const payload = JSON.parse(formatAgentRunErrorForClient('402 Task Credit budget exhausted; increase its limit to continue', { provider: 'xopc-cloud' }));
+    expect(payload).toMatchObject({ kind: 'xopc_credit_budget_exhausted', code: 'credit_budget_exhausted', deepLink: '/settings/agent-defaults?panel=runtime' });
+  });
   it('maps missing API key to provider_setup_required', () => {
     const raw = 'No API key found for dashscope.';
     const out = JSON.parse(formatAgentRunErrorForClient(raw)) as { kind: string; provider: string };
