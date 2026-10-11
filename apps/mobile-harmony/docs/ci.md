@@ -26,18 +26,18 @@ HARMONY_TOOLS_DIR=/absolute/path/to/command-line-tools node apps/mobile-harmony/
 
 ## 应用身份与待完成门禁
 
-- Bundle Name：`ai.xopc.mobile`
-- AGC APP ID：`6917616647856901107`
+- Bundle Name：`ai.xopc.xopc`
+- AGC APP ID：`6917618744771171142`；旧 `ai.xopc.mobile` 的 APP ID 为 `6917616647856901107`。
 - AGC 项目：`xopc`（`101653523865066304`）
 - 最低 API 23（HarmonyOS 6.1）/ 目标 API 26；低于 API 23 的手机不在支持范围。
 
-应用注册及本机 DevEco 调试签名生成已完成。签名配置备份在 Git 忽略的 `signing/build-profile.local.json`（仅本机），材料在用户的 `.ohos/config` 目录。手机设备范围及测试分发仍需完成；DevEco 登录或生成模拟器配置不等于真机安装已通过。
+旧包名的应用注册及本机 DevEco 调试签名生成已完成；新包名 ai.xopc.xopc 已注册，已生成匹配 Release Profile 并完成本地签名回验；CI 使用的 Debug Profile 及签名 Secrets 仍需更新。签名配置备份在 Git 忽略的 `signing/build-profile.local.json`（仅本机），材料在用户的 `.ohos/config` 目录。手机设备范围及测试分发仍需完成；DevEco 登录或生成模拟器配置不等于真机安装已通过。
 
 调试安装需要匹配设备范围的调试 Profile；手机独立下载安装应使用华为测试分发渠道及其要求的签名包、账号和检查流程，不能以 GitHub Release 链接绕过平台签名/安装限制。
 
 ## 受限测试签名
 
-在 Actions 手动运行本流程，分支选择 `main`，启用 `sign_test_hap`。签名只接受 `ai.xopc.mobile` 的有效 Debug Profile 和 API 23 Debug HAP，不执行正式上架签名。
+在 Actions 手动运行本流程，分支选择 `main`，启用 `sign_test_hap`。签名只接受 `ai.xopc.xopc` 的有效 Debug Profile 和 API 23 Debug HAP，不执行正式上架签名。
 
 GitHub Environment `harmony-testing` 的分支策略仅允许 `main`。以下 Secrets 仅注入手动签名步骤：`HARMONY_TEST_KEY_ALIAS`、`HARMONY_TEST_STORE_PASSWORD`、`HARMONY_TEST_KEY_PASSWORD`、`HARMONY_TEST_KEYSTORE_BASE64`、`HARMONY_TEST_PROFILE_BASE64`、`HARMONY_TEST_CERT_BASE64`、`HARMONY_TEST_ARTIFACT_KEY`。前三个是别名和可移植密码，中间三个是对应文件的 Base64，最后一个是随机 32 字节十六进制加密密钥。不要把 DevEco 本机加密密码直接当作可移植密码；不得上传 `.ohos/config/material` 主密钥目录。
 

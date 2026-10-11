@@ -142,7 +142,7 @@ The skill's `onDeviceTest` runner could compile but required a signed main HAP; 
 To repeat on an **unpaired test emulator**, build `entry@default` and `entry@ohosTest`, install both with `install -r`, and run:
 
 ```sh
-hdc -t DEVICE shell aa test -b ai.xopc.mobile -m entry_test -s unittest OpenHarmonyTestRunner -s class XopcRichChat -s timeout 30000 -w 100
+hdc -t DEVICE shell aa test -b ai.xopc.xopc -m entry_test -s unittest OpenHarmonyTestRunner -s class XopcRichChat -s timeout 30000 -w 100
 ```
 
 Read `OHOS_REPORT_RESULT`, not just the process exit code. Do not run the fixture suite on the user's paired phone: its initial connection-page guard deliberately requires an isolated emulator. Mate 60 is currently absent from HDC; this pass is **not physically accepted or installed on that phone**.

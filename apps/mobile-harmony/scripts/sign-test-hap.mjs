@@ -38,14 +38,14 @@ try {
     if (!material[field]) throw new Error(`Missing signing field ${field}.`);
   }
   const provision = JSON.parse(run('openssl', ['cms', '-verify', '-noverify', '-inform', 'DER', '-in', material.profile], 'Profile inspection'));
-  if (provision.type !== 'debug' || provision['bundle-info']?.['bundle-name'] !== 'ai.xopc.mobile') {
-    throw new Error('Only ai.xopc.mobile debug profiles are permitted by this testing workflow.');
+  if (provision.type !== 'debug' || provision['bundle-info']?.['bundle-name'] !== 'ai.xopc.xopc') {
+    throw new Error('Only ai.xopc.xopc debug profiles are permitted by this testing workflow.');
   }
   const now = Math.floor(Date.now() / 1000);
   if (provision.validity['not-before'] > now || provision.validity['not-after'] <= now) throw new Error('Profile is not currently valid.');
   const input = join(project, '.test/ci/debug-entry-default-unsigned.hap');
   const manifest = JSON.parse(run('unzip', ['-p', input, 'module.json'], 'HAP inspection'));
-  if (manifest.app.bundleName !== 'ai.xopc.mobile' || manifest.app.minAPIVersion !== 60100023 || !manifest.app.debug) {
+  if (manifest.app.bundleName !== 'ai.xopc.xopc' || manifest.app.minAPIVersion !== 60100023 || !manifest.app.debug) {
     throw new Error('Expected an API 23-compatible xopc debug HAP.');
   }
   const java = process.env.JAVA_HOME ? join(process.env.JAVA_HOME, 'bin/java') : 'java';
@@ -64,7 +64,7 @@ try {
   const encrypted = Buffer.concat([Buffer.from('XOPCHAP1'), iv, cipher.getAuthTag(), ciphertext]);
   writeFileSync(join(project, '.test/ci/xopc-test-signed.hap.enc'), encrypted, { mode: 0o600 });
   writeFileSync(join(project, '.test/ci/signed-build-info.json'), JSON.stringify({
-    commit: process.env.GITHUB_SHA ?? 'local', bundleName: 'ai.xopc.mobile', minimumApi: 23,
+    commit: process.env.GITHUB_SHA ?? 'local', bundleName: 'ai.xopc.xopc', minimumApi: 23,
     signatureVerified: true, profileType: 'debug', profileExpiresAt: provision.validity['not-after'],
     artifact: 'xopc-test-signed.hap.enc', encryption: 'AES-256-GCM (XOPCHAP1 + IV12 + tag16 + ciphertext)',
     sha256: createHash('sha256').update(encrypted).digest('hex'),

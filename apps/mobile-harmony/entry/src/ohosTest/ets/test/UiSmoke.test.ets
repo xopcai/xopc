@@ -5,7 +5,7 @@ export default function uiSmokeTest(): void {
   describe('XopcUiSmoke', (): void => {
     it('rejectsInvalidPairingAndSwitchesPreferences', 0, async (): Promise<void> => {
       const driver = Driver.create();
-      await abilityDelegatorRegistry.getAbilityDelegator().startAbility({ bundleName: 'ai.xopc.mobile', abilityName: 'EntryAbility' });
+      await abilityDelegatorRegistry.getAbilityDelegator().startAbility({ bundleName: 'ai.xopc.xopc', abilityName: 'EntryAbility' });
       await driver.waitForComponent(ON.id('connect-title'), 10000);
       await (await driver.findComponent(ON.id('pairing-manual'))).click();
       const input = await driver.findComponent(ON.id('pairing-link'));
