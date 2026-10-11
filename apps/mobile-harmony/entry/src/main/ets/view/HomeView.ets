@@ -423,18 +423,9 @@ export struct XopcHomeView {
         onNavigate: (route: XopcMobileRoute): void => { this.navigate(route); } })
     } else if (page === 'task-conversation') {
       NavDestination() {
-        Column() {
-          Row({ space: 8 }) {
-            Text((param as XopcMobileRoute).title || $r('app.string.task_open_conversation'))
-              .fontSize(18).fontWeight(FontWeight.Medium).fontColor(this.colors.foreground)
-              .layoutWeight(1).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-          }.width('100%').padding({ left: 20, right: 20, top: 8, bottom: 4 })
-          Column() {
-            XopcChatView({ requestedId: (param as XopcMobileRoute).prompt ?? '',
-              taskId: (param as XopcMobileRoute).itemId, activePage: true, embedded: true,
-              onNavigate: (route: XopcMobileRoute): void => { this.navigate(route); } })
-          }.layoutWeight(1).width('100%')
-        }.width('100%').height('100%').backgroundColor(this.colors.surface)
+        XopcChatView({ requestedId: (param as XopcMobileRoute).prompt ?? '',
+          taskId: (param as XopcMobileRoute).itemId, activePage: true, embedded: false,
+          onNavigate: (route: XopcMobileRoute): void => { this.navigate(route); } })
       }.hideTitleBar(true).onBackPressed((): boolean => { this.pathStack.pop(); return true; })
     } else if (page === 'tasks' || page === 'projects' || page === 'automations' || page === 'project-settings'
       || page === 'task-create' || page === 'automation-create') {
