@@ -1,3 +1,4 @@
+import { connectionProof } from './requestProof';
 import { cancelDevicePersonalTool, cancelAllDevicePersonalTools } from './devicePersonalTools';
 import { cancelDeviceLocation, cancelAllDeviceLocations } from './deviceLocation';
 import { i18n } from '@kit.LocalizationKit';
@@ -183,7 +184,8 @@ export class XopcRealtimeClient {
         else if (this.ready) this.send('realtime.ping', new XopcEmptyPayload());
       }, 5000);
       phase = 'socket';
-      await socket.connect(origin.replace(/^https:/, 'wss:') + '/api/realtime/v1/ws');
+      const socketUrl = origin.replace(/^https:/, 'wss:') + '/api/realtime/v1/ws';
+      await socket.connect(socketUrl, { header: await connectionProof(socketUrl, response.payload.ticket) });
     } catch (error) {
       if (generation !== this.generation) return;
       const reason = (error as Error).message ?? '';

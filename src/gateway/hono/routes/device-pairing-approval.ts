@@ -1,6 +1,5 @@
 import os from 'node:os';
 
-import { getConnInfo } from '@hono/node-server/conninfo';
 import {
   devicePairingCompleteSchema, devicePairingProofSchema, devicePairingRequestSchema,
 } from '@xopcai/gateway-contract';
@@ -13,25 +12,10 @@ import {
   operateDevicePairingRequest, readDevicePairingSetup, submitDevicePairingRequest,
 } from '../../../storage/sqlite/device-pairing-approval.js';
 import { getOrCreateGatewayIdentity, signGatewayPayload } from '../../../storage/sqlite/gateway-identity-repository.js';
-import { resolveClientIpFromRequest } from '../../client-ip.js';
 import { buckets } from '../../rate-limit/index.js';
+import { pairingClientKey, publicDeviceRateLimit, type PairingPublicRouteOptions } from '../middleware/public-device-rate-limit.js';
 
-export type PairingPublicRouteOptions = {
-  getTrustedProxyContext?: () => { trustedProxies?: string[]; allowRealIpFallback?: boolean };
-};
-
-export function pairingClientKey(c: Context, options?: PairingPublicRouteOptions): string {
-  let remoteAddress: string | undefined;
-  try { remoteAddress = getConnInfo(c).remote.address; }
-  catch { remoteAddress = undefined; }
-  const proxy = options?.getTrustedProxyContext?.();
-  return resolveClientIpFromRequest({
-    remoteAddress,
-    getHeader: name => c.req.header(name),
-    trustedProxies: proxy?.trustedProxies,
-    allowRealIpFallback: proxy?.allowRealIpFallback,
-  });
-}
+export { pairingClientKey, type PairingPublicRouteOptions } from '../middleware/public-device-rate-limit.js';
 
 function pairingBlocked(c: Context, key: string) {
   const blocked = buckets.pairingExchange().check(key);
@@ -48,7 +32,7 @@ function pairingError(c: Context, error: unknown) {
 export function registerPairingApprovalPublicRoutes(app: Hono, options?: PairingPublicRouteOptions): void {
   for (const action of ['request', 'status', 'complete', 'cancel'] as const) {
     const path = action === 'request' ? '/api/device-pairing/requests' : `/api/device-pairing/requests/:id/${action}`;
-    app.post(path, bodyLimit({ maxSize: 4 * 1024 }), async (c) => {
+    app.post(path, publicDeviceRateLimit('pairing', options), bodyLimit({ maxSize: 4 * 1024 }), async (c) => {
       const clientKey = pairingClientKey(c, options);
       const blocked = pairingBlocked(c, clientKey);
       if (blocked) return blocked;

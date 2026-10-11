@@ -1,3 +1,4 @@
+import { signedHttpRequest } from '../service/requestProof';
 import { http } from '@kit.NetworkKit';
 import { cryptoFramework } from '@kit.CryptoArchitectureKit';
 import { gatewaySession } from '../service/gatewaySession';
@@ -57,13 +58,13 @@ export class XopcDiscussionCaptureRepository {
     const headers: XopcDiscussionHeaders = { Authorization: 'Bearer ' + auth.token, 'Content-Type': 'application/octet-stream',
       'x-audio-sha256': sha256 };
     try {
-      const recording = await request.request(auth.origin + '/api/discussions/' + encodeURIComponent(id) +
+      const recording = await signedHttpRequest(request, auth.origin + '/api/discussions/' + encodeURIComponent(id) +
         '/recording/chunks/' + sequence, { method: http.RequestMethod.PUT, header: headers, extraData: data,
         expectDataType: http.HttpDataType.STRING, maxRedirects: 0, connectTimeout: 8000, readTimeout: 60000, usingCache: false });
       gatewaySession.assertConnection(revision);
       if (recording.responseCode !== 201) throw new XopcHttpError(recording.responseCode);
       const multipartHeaders: XopcDiscussionHeaders = { Authorization: 'Bearer ' + auth.token, 'Content-Type': 'multipart/form-data' };
-      const segment = await request.request(auth.origin + '/api/discussions/' + encodeURIComponent(id) + '/segments/' + sequence, {
+      const segment = await signedHttpRequest(request, auth.origin + '/api/discussions/' + encodeURIComponent(id) + '/segments/' + sequence, {
         method: http.RequestMethod.PUT, header: multipartHeaders, expectDataType: http.HttpDataType.STRING,
         multiFormDataList: [
           { name: 'file', contentType: 'audio/wav', remoteFileName: 'segment-' + sequence + '.wav', data },

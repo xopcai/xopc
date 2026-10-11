@@ -29,6 +29,13 @@ describe('redact', () => {
     expect(out).not.toContain('12345678901234567890123456789012');
   });
 
+  it('redacts request proofs in header text and structured logs', () => {
+    const proof = '1700000000000.' + 'a'.repeat(32) + '.' + 'b'.repeat(64) + '.' + 'c'.repeat(86);
+    expect(redactSensitiveInfo('X-Xopc-Proof: ' + proof)).not.toContain(proof);
+    expect(redactSensitiveOutput(JSON.stringify({ signature: proof }))).not.toContain(proof);
+    expect(JSON.stringify(redactObject({ 'X-Xopc-Proof': proof }))).not.toContain(proof);
+  });
+
   it('redacts PEM blocks', () => {
     const pem = `-----BEGIN RSA PRIVATE KEY-----\nabc\n-----END RSA PRIVATE KEY-----`;
     expect(redactPemBlock(pem)).toContain('[REDACTED]');

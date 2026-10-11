@@ -46,9 +46,9 @@ export interface XopcTokens {
   refreshToken: string; refreshTokenExpiresAt: number;
 }
 export interface XopcRefreshAttempt { refreshToken: string; nextRefreshToken: string; requestId: string; }
-export interface XopcRefreshBody extends XopcRefreshAttempt { timestamp: number; nonce: string; signature: string; }
-export interface XopcIdentityProof { purpose: string; gatewayId: string; nonce: string; expiresAt: number; }
-export interface XopcRefreshProof extends XopcIdentityProof { requestId: string; tokens: XopcTokens; }
+export interface XopcRefreshBody extends XopcRefreshAttempt { timestamp: number; nonce: string; signature: string; requestProofVersion?: number; }
+export interface XopcIdentityProof { purpose: string; gatewayId: string; nonce: string; expiresAt: number; serverTime?: number; }
+export interface XopcRefreshProof extends XopcIdentityProof { requestId: string; tokens: XopcTokens; requestProofVersion?: number; }
 export interface XopcNonceBody { nonce: string; }
 export interface XopcProbeBody { pairingId: string; }
 export interface XopcProbeProof { gatewayId: string; pairingId: string; issuedAt: number; }

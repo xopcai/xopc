@@ -40,7 +40,8 @@ function secretsEqual(actual: string, expected: string): boolean {
 
 export function registerPublicGatewayRoutes(app: Hono, service: GatewayService): void {
   app.get('/health', (c) => {
-    return c.json(service.getHealth());
+    const health = service.getHealth();
+    return c.json({ status: health.ready ? 'ok' : 'starting', ready: health.ready });
   });
 
   /** Public liveness probe (no auth) — minimal payload for CLI / load balancers. */
@@ -49,10 +50,6 @@ export function registerPublicGatewayRoutes(app: Hono, service: GatewayService):
     return c.json({
       status: health.ready ? 'ok' : 'starting',
       ready: health.ready,
-      httpListening: health.httpListening,
-      version: health.version,
-      uptime: health.uptime,
-      startupDurationMs: health.startupDurationMs,
     });
   });
 

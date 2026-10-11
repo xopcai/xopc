@@ -1,3 +1,4 @@
+import { signedHttpRequest } from './requestProof';
 import { http } from '@kit.NetworkKit';
 import { common, Want, wantConstant } from '@kit.AbilityKit';
 import { fileIo as fs, fileUri, picker } from '@kit.CoreFileKit';
@@ -153,7 +154,7 @@ async function fetchChatMedia(file: XopcHistoryMedia, conversationId: string): P
   const headers: XopcChatMediaHeaders | undefined = auth ? { Authorization: 'Bearer ' + auth.token } : undefined;
   try {
     // Never attach the gateway token to a URL supplied in a transcript.
-    const result = await request.request(source.external ? source.path : auth!.origin + source.path, { method: http.RequestMethod.GET, header: headers,
+    const result = await signedHttpRequest(request, source.external ? source.path : auth!.origin + source.path, { method: http.RequestMethod.GET, header: headers,
       expectDataType: http.HttpDataType.ARRAY_BUFFER, maxRedirects: 0, maxLimit: CHAT_MEDIA_LIMIT,
       connectTimeout: 8000, readTimeout: 30000, usingCache: false });
     if (!source.external) gatewaySession.assertConnection(revision);

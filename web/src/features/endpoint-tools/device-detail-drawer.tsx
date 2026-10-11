@@ -79,6 +79,9 @@ export function DeviceDetailDrawer({
                   {device.access ? (
                     <>
                       <p>{device.access.revokedAt ? copy.accessRevoked : copy.accessActive}</p>
+                      <p className="mt-1">{device.access.requestProofVersion === 1
+                        ? (language === 'zh' ? '设备请求签名已启用' : 'Device request signing enabled')
+                        : (language === 'zh' ? '旧版兼容：尚未启用请求签名' : 'Legacy compatibility: request signing not enabled')}</p>
                       <p className="mt-1 break-words">{copy.permissions}: {device.access.scopes.join(', ') || copy.noPermissions}</p>
                     </>
                   ) : <p>{copy.noAccessIdentity}</p>}

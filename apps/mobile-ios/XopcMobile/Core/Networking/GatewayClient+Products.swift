@@ -147,7 +147,7 @@ extension GatewayClient {
         if !configuration.token.isEmpty {
             request.setValue("Bearer \(configuration.token)", forHTTPHeaderField: "Authorization")
         }
-        let (data, response) = try await session.data(for: request)
+        let (data, response) = try await session.data(for: GatewayPairingService.shared.signedRequest(request))
         guard let http = response as? HTTPURLResponse else { throw GatewayClientError.invalidResponse }
         guard (200 ..< 300).contains(http.statusCode) else {
             let payload = try? decoder.decode(GatewayErrorPayload.self, from: data)
@@ -176,7 +176,7 @@ extension GatewayClient {
         if !configuration.token.isEmpty {
             request.setValue("Bearer \(configuration.token)", forHTTPHeaderField: "Authorization")
         }
-        let (responseData, response) = try await session.data(for: request)
+        let (responseData, response) = try await session.data(for: GatewayPairingService.shared.signedRequest(request))
         guard let http = response as? HTTPURLResponse else { throw GatewayClientError.invalidResponse }
         guard (200 ..< 300).contains(http.statusCode) else {
             let payload = try? decoder.decode(GatewayErrorPayload.self, from: responseData)
@@ -431,7 +431,7 @@ extension GatewayClient {
         if !configuration.token.isEmpty {
             request.setValue("Bearer \(configuration.token)", forHTTPHeaderField: "Authorization")
         }
-        let (responseData, response) = try await session.data(for: request)
+        let (responseData, response) = try await session.data(for: GatewayPairingService.shared.signedRequest(request))
         guard let http = response as? HTTPURLResponse else { throw GatewayClientError.invalidResponse }
         guard (200 ..< 300).contains(http.statusCode) else {
             let payload = try? decoder.decode(GatewayErrorPayload.self, from: responseData)
@@ -445,7 +445,7 @@ extension GatewayClient {
         if !configuration.token.isEmpty {
             request.setValue("Bearer \(configuration.token)", forHTTPHeaderField: "Authorization")
         }
-        let (temporaryURL, response) = try await session.download(for: request)
+        let (temporaryURL, response) = try await session.download(for: GatewayPairingService.shared.signedRequest(request))
         guard let http = response as? HTTPURLResponse else { throw GatewayClientError.invalidResponse }
         guard (200 ..< 300).contains(http.statusCode) else {
             throw GatewayClientError.http(statusCode: http.statusCode, message: nil)
@@ -542,7 +542,7 @@ extension GatewayClient {
         if !configuration.token.isEmpty {
             request.setValue("Bearer \(configuration.token)", forHTTPHeaderField: "Authorization")
         }
-        let (data, response) = try await session.data(for: request)
+        let (data, response) = try await session.data(for: GatewayPairingService.shared.signedRequest(request))
         guard let http = response as? HTTPURLResponse else { throw GatewayClientError.invalidResponse }
         guard (200 ..< 300).contains(http.statusCode) else {
             let payload = try? decoder.decode(GatewayErrorPayload.self, from: data)
@@ -593,7 +593,7 @@ extension GatewayClient {
         if !configuration.token.isEmpty {
             request.setValue("Bearer \(configuration.token)", forHTTPHeaderField: "Authorization")
         }
-        let (data, response) = try await session.data(for: request)
+        let (data, response) = try await session.data(for: GatewayPairingService.shared.signedRequest(request))
         guard let http = response as? HTTPURLResponse else { throw GatewayClientError.invalidResponse }
         guard (200 ..< 300).contains(http.statusCode) else {
             let payload = try? decoder.decode(GatewayErrorPayload.self, from: data)

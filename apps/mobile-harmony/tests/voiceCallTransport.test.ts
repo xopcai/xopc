@@ -1,3 +1,4 @@
+vi.mock('../entry/src/main/ets/service/requestProof.ets', () => ({ connectionProof: async () => ({ 'X-Xopc-Proof': 'test-proof' }) }));
 import { randomUUID } from 'node:crypto';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 

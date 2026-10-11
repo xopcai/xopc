@@ -27,6 +27,9 @@ class GatewaySession(
   private val identity: DeviceIdentity = DeviceIdentity(),
   private val store: AndroidSecureStore = AndroidSecureStore(context),
 ) {
+  private val verifiedRoutes = mutableMapOf<String, Long>()
+  private var clockOffsetMs: Long = 0
+
   @Synchronized
   fun voiceAuth(): VoiceGatewayAuth {
     val current = profile ?: throw IllegalStateException("NOT_PAIRED")
@@ -148,7 +151,7 @@ class GatewaySession(
   @Synchronized
   fun token(): String {
     val current = profile ?: throw IllegalStateException("NOT_PAIRED")
-    val now = System.currentTimeMillis()
+    val now = System.currentTimeMillis() + clockOffsetMs
     accessToken?.let { if (accessExpiresAt > now + 30_000) return it }
     val refreshKey = "refresh.${current.gatewayId}"
     val saved = store.read(refreshKey) ?: throw IllegalStateException("NOT_PAIRED")
@@ -166,16 +169,17 @@ class GatewaySession(
     for (route in current.routes.sortedBy { if (it.id == current.activeRouteId) 0 else 1 }) {
       try {
         verifyRoute(current, route)
-        val timestamp = System.currentTimeMillis()
+        val timestamp = System.currentTimeMillis() + clockOffsetMs
         val nonce = identity.nonce()
         val body = JSONObject().put("refreshToken", saved).put("nextRefreshToken", next)
           .put("requestId", requestId).put("timestamp", timestamp).put("nonce", nonce)
-          .put("signature", identity.sign(DeviceProof.refresh(credentialId, timestamp, nonce, requestId, next)))
+          .put("requestProofVersion", 1)
+          .put("signature", identity.sign(DeviceProof.refresh(credentialId, timestamp, nonce, requestId, next) + "\nrequest-proof:1"))
         val proof = verifiedJson(PairingProtocol.decodeBase64Url(current.gatewayPublicKey),
           http.request(route.url, "/api/device-auth/refresh", "POST", body.toString()))
         val expiresAt = proof.getLong("expiresAt")
         val tokens = proof.getJSONObject("tokens")
-        val checkedAt = System.currentTimeMillis()
+        val checkedAt = System.currentTimeMillis() + clockOffsetMs
         require(proof.getString("purpose") == "device-refresh-v3" && proof.getString("gatewayId") == current.gatewayId &&
           proof.getString("nonce") == nonce && proof.getString("requestId") == requestId &&
           expiresAt > checkedAt && expiresAt <= checkedAt + 60_000 &&
@@ -185,6 +189,8 @@ class GatewaySession(
         require(access.isNotBlank()) { "GATEWAY_IDENTITY_MISMATCH" }
         store.write(refreshKey, next)
         store.remove(attemptKey)
+        require(proof.getInt("requestProofVersion") == 1) { "GATEWAY_IDENTITY_MISMATCH" }
+        DeviceRequestProof.register(access, current.gatewayId, current.routes, identity, clockOffsetMs)
         accessToken = access
         accessExpiresAt = tokens.getLong("accessTokenExpiresAt")
         return access
@@ -441,14 +447,19 @@ class GatewaySession(
   }
 
   private fun verifyRoute(current: GatewayProfile, route: GatewayRoute) {
+    val cacheKey = "${current.gatewayId}:${current.gatewayPublicKey}:${route.url}"
+    if ((verifiedRoutes[cacheKey] ?: 0) > System.currentTimeMillis()) return
     val nonce = identity.nonce()
     val body = JSONObject().put("nonce", nonce).toString()
     val proof = verifiedJson(PairingProtocol.decodeBase64Url(current.gatewayPublicKey),
       http.request(route.url, "/api/gateway-identity/challenge", "POST", body))
     val now = System.currentTimeMillis()
+    val serverTime = proof.optLong("serverTime", now)
     val expiry = proof.getLong("expiresAt")
     require(proof.getString("purpose") == "gateway-route-v1" && proof.getString("gatewayId") == current.gatewayId &&
-      proof.getString("nonce") == nonce && expiry > now && expiry <= now + 60_000) { "GATEWAY_IDENTITY_MISMATCH" }
+      proof.getString("nonce") == nonce && expiry > serverTime && expiry <= serverTime + 60_000) { "GATEWAY_IDENTITY_MISMATCH" }
+    clockOffsetMs = serverTime - now
+    verifiedRoutes[cacheKey] = now + 30_000
   }
 
   private fun parseRoutes(value: JSONArray): List<GatewayRoute> {

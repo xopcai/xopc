@@ -1,3 +1,4 @@
+import { signedHttpRequest } from './requestProof';
 import { common } from '@kit.AbilityKit';
 import { util } from '@kit.ArkTS';
 import { http } from '@kit.NetworkKit';
@@ -69,7 +70,7 @@ export class XopcNoteMediaService {
     };
     try {
       const path = '/api/notes/' + encodeURIComponent(noteId) + '/media';
-      const response = await request.request(auth.origin + path, options);
+      const response = await signedHttpRequest(request, auth.origin + path, options);
       if (response.responseCode !== 201) throw new XopcHttpError(response.responseCode);
       const result = JSON.parse(response.result as string) as XopcNoteMediaResult;
       if (!result.attachment?.id) throw new Error('INVALID_NOTE_ATTACHMENT_UPLOAD');

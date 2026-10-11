@@ -2,6 +2,8 @@ import crypto from 'node:crypto';
 
 import { initialDeviceRefreshTokenSchema } from '@xopcai/gateway-contract';
 
+import { buckets } from '../../gateway/rate-limit/index.js';
+
 import type { GatewayScope } from '../../gateway/security/gateway-scopes.js';
 import { parseGatewayScopes } from '../../gateway/security/gateway-scopes.js';
 import { getSqliteDatabase, runSqliteWriteTransaction } from './transaction.js';
@@ -21,6 +23,7 @@ export type DeviceRecord = {
   platform: DevicePlatform;
   extensionId?: string;
   publicKeyJwk: DevicePublicKeyJwk;
+  requestProofVersion: number;
   scopes: GatewayScope[];
   createdAt: number;
   lastSeenAt?: number;
@@ -45,6 +48,7 @@ type DeviceRow = {
   display_name: string;
   platform: DevicePlatform;
   public_key_jwk: string;
+  request_proof_version: number;
   extension_id: string | null;
   scopes_json: string;
   created_at: number;
@@ -83,6 +87,7 @@ function deviceFromRow(row: DeviceRow): DeviceRecord {
     displayName: row.display_name,
     platform: row.platform,
     publicKeyJwk: JSON.parse(row.public_key_jwk) as DevicePublicKeyJwk,
+    requestProofVersion: row.request_proof_version,
     ...(row.extension_id ? { extensionId: row.extension_id } : {}),
     scopes: parseGatewayScopes(row.scopes_json),
     createdAt: row.created_at,
@@ -221,8 +226,9 @@ export function buildRefreshProofMessage(input: {
   nonce: string;
   requestId: string;
   nextRefreshToken: string;
+  requestProofVersion?: number;
 }): string {
-  return `xopc-device-refresh-v2\n${input.credentialId}\n${input.timestamp}\n${input.nonce}\n${input.requestId}\n${input.nextRefreshToken}`;
+  return `xopc-device-refresh-v2\n${input.credentialId}\n${input.timestamp}\n${input.nonce}\n${input.requestId}\n${input.nextRefreshToken}${input.requestProofVersion ? `\nrequest-proof:${input.requestProofVersion}` : ''}`;
 }
 
 function verifyRefreshProof(
@@ -243,6 +249,10 @@ function verifyRefreshProof(
   }
 }
 
+export class DeviceRefreshRateLimitError extends Error {
+  constructor(readonly retryAfterMs: number) { super('Too many device refresh requests'); }
+}
+
 export function rotateDeviceRefreshToken(input: {
   refreshToken: string;
   timestamp: number;
@@ -250,6 +260,7 @@ export function rotateDeviceRefreshToken(input: {
   requestId: string;
   nextRefreshToken: string;
   signature: string;
+  requestProofVersion?: number;
   now?: number;
 }): DeviceTokenPair {
   const now = input.now ?? Date.now();
@@ -277,9 +288,17 @@ export function rotateDeviceRefreshToken(input: {
       nonce: input.nonce,
       requestId: input.requestId,
       nextRefreshToken: input.nextRefreshToken,
+      requestProofVersion: input.requestProofVersion,
     });
     if (!verifyRefreshProof(JSON.parse(deviceRow.public_key_jwk) as DevicePublicKeyJwk, message, input.signature)) {
       throw new Error('Invalid refresh proof');
+    }
+    const refreshBudget = buckets.deviceRefresh().consume(credential.device_id);
+    if (!refreshBudget.allowed) throw new DeviceRefreshRateLimitError(refreshBudget.retryAfterMs);
+    if (deviceRow.request_proof_version > (input.requestProofVersion ?? 0)) throw new Error('Request proof downgrade denied');
+    if (input.requestProofVersion === 1 && deviceRow.request_proof_version === 0) {
+      db.prepare('UPDATE devices SET request_proof_version = 1 WHERE device_id = ?').run(credential.device_id);
+      db.prepare('UPDATE device_access_sessions SET revoked_at = ? WHERE device_id = ? AND revoked_at IS NULL').run(now, credential.device_id);
     }
     if (
       credential.replaced_by === nextParsed.id

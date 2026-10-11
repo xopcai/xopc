@@ -337,7 +337,7 @@ private extension DeviceEndpointHost {
                 upload.setValue(file.mimeType, forHTTPHeaderField: "Content-Type")
                 upload.setValue(endpointId, forHTTPHeaderField: "x-endpoint-id")
                 upload.setValue(grant.token, forHTTPHeaderField: "x-endpoint-upload-token")
-                let (body, response) = try await client.session.data(for: upload)
+                let (body, response) = try await client.session.data(for: GatewayPairingService.shared.signedRequest(upload))
                 guard (response as? HTTPURLResponse)?.statusCode == 201,
                       let envelope = try JSONSerialization.jsonObject(with: body) as? [String: Any], let payload = envelope["payload"] as? [String: Any] else { throw PersonalDeviceFailure(code: "PERMISSION_DENIED") }
                 contentData = try Self.json(payload)

@@ -27,7 +27,10 @@ const registrationResponseSchema = z.object({
 });
 
 export class TunnelBrokerClient {
-  constructor(private readonly baseUrl: string) {}
+  constructor(private readonly baseUrl: string) {
+    const url = new URL(baseUrl);
+    if (url.protocol !== 'https:' || url.username || url.password) throw new Error('Tunnel broker requires HTTPS without URL credentials');
+  }
 
   private apiUrl(path: string): string {
     const base = this.baseUrl.replace(/\/+$/, '');

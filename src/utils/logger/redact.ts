@@ -7,8 +7,9 @@ const KEEP_PREFIX_LENGTH = 6;
 const KEEP_SUFFIX_LENGTH = 4;
 
 const DEFAULT_REDACT_PATTERNS: RegExp[] = [
+  /X-Xopc-Proof\s*[:=]\s*([A-Za-z0-9._-]+)/gi,
   /\b[A-Z0-9_]*(?:KEY|TOKEN|SECRET|PASSWORD|PASSWD)\b\s*[=:]\s*((?:\\?["'])?)([^\s"'\\]+)\1/gi,
-  /"(?:apiKey|token|secret|password|passwd|accessToken|refreshToken|privateKey)"\s*:\s*"([^"]+)"/gi,
+  /"(?:apiKey|token|secret|password|passwd|accessToken|refreshToken|privateKey|signature|x-xopc-proof)"\s*:\s*"([^"]+)"/gi,
   /(?:__Host-xopc-session|xopc-local-session)=([A-Za-z0-9_-]{43})/g,
   /Authorization\s*[:=]\s*Bearer\s+([A-Za-z0-9._\-+=]+)/gi,
   /\b(sk-[A-Za-z0-9_-]{8,})\b/gi,
@@ -34,6 +35,8 @@ const SENSITIVE_KEYS = new Set([
   'cookie',
   'set-cookie',
   'signedpayload',
+  'signature',
+  'x-xopc-proof',
   'credential',
   'credentials',
 ]);

@@ -1,3 +1,4 @@
+import { connectionProof } from './requestProof';
 import { webSocket } from '@kit.NetworkKit';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { systemDateTime } from '@kit.BasicServicesKit';
@@ -128,7 +129,7 @@ export class XopcVoiceCallTransport {
         if (!settled) { settled = true; clearTimeout(timeout); reject(new Error('NETWORK')); }
         else this.fail('NETWORK', generation);
       });
-      socket.connect(url).catch((error: Error): void => {
+      connectionProof(url, this.session!.ticket).then((headers): Promise<boolean> => socket.connect(url, { header: headers })).catch((error: Error): void => {
         hilog.warn(0x0000, 'XopcVoice', 'Voice connection failed: %{public}s', error.message || 'NETWORK');
         if (!settled) { settled = true; clearTimeout(timeout); reject(new Error('NETWORK')); }
       });

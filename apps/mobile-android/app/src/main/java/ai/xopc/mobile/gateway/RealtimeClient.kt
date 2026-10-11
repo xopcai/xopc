@@ -137,8 +137,10 @@ internal class RealtimeClient(
       override fun onClosed(webSocket: WebSocket, code: Int, reason: String) { events.close() }
       override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) { events.close() }
     }
+    val connectionProof = runInterruptible(Dispatchers.IO) { DeviceRequestProof.connection(origin, "/api/realtime/v1/ws", ticketPayload.getString("ticket")) }
     val socket = http.newWebSocket(Request.Builder()
-      .url(origin.replaceFirst("https:", "wss:") + "/api/realtime/v1/ws").build(), listener)
+      .url(origin.replaceFirst("https:", "wss:") + "/api/realtime/v1/ws")
+      .header("X-Xopc-Proof", connectionProof).build(), listener)
     try {
       val first = withTimeoutOrNull(10_000) { events.receiveCatching().getOrNull() }
         ?: throw IllegalStateException("REALTIME_HELLO_TIMEOUT")

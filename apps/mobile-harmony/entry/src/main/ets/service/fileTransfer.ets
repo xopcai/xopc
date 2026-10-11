@@ -1,3 +1,4 @@
+import { signedHttpRequest } from './requestProof';
 import { http } from '@kit.NetworkKit';
 import { fileIo as fs, picker, fileUri } from '@kit.CoreFileKit';
 import { common } from '@kit.AbilityKit';
@@ -38,7 +39,7 @@ export class XopcFileTransfer {
       ]
     };
     try {
-      const response = await request.request(auth.origin + '/api/files/spaces/' + encodeURIComponent(spaceId) + '/upload', optionsHttp);
+      const response = await signedHttpRequest(request, auth.origin + '/api/files/spaces/' + encodeURIComponent(spaceId) + '/upload', optionsHttp);
       gatewaySession.assertConnection(revision);
       if (response.responseCode !== 201) throw new XopcHttpError(response.responseCode);
       const result = JSON.parse(response.result as string) as XopcFileResult;
@@ -57,7 +58,7 @@ export class XopcFileTransfer {
       const options: http.HttpRequestOptions = { method: http.RequestMethod.GET, header: headers,
         expectDataType: http.HttpDataType.ARRAY_BUFFER, maxLimit: 16 * 1024 * 1024,
         maxRedirects: 0, connectTimeout: 8000, readTimeout: 60000, usingCache: false };
-      const response = await request.request(auth.origin + '/api/files/' + encodeURIComponent(file.id) + '/content', options);
+      const response = await signedHttpRequest(request, auth.origin + '/api/files/' + encodeURIComponent(file.id) + '/content', options);
       if (response.responseCode !== 200) throw new XopcHttpError(response.responseCode);
       data = response.result as ArrayBuffer;
       if (data.byteLength !== file.size) throw new Error('FILE_CHANGED_REFRESH_FIRST');

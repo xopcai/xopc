@@ -35,7 +35,7 @@ export interface ManagedDevice {
   platform: string;
   createdAt: number;
   lastSeenAt?: number;
-  access: (ManagedDeviceIdentity & { scopes: string[] }) | null;
+  access: (ManagedDeviceIdentity & { scopes: string[]; requestProofVersion?: number }) | null;
   principal: ManagedDeviceIdentity | null;
   endpoints: ManagedEndpoint[];
   settingsRevision?: number;

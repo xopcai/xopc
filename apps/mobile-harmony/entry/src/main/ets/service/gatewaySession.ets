@@ -1,3 +1,4 @@
+import { registerRequestProof } from './requestProof';
 import { XopcDeviceCrypto } from './deviceCrypto';
 import { chatHistoryCache } from './chatHistoryCache';
 import { chatSessionCache } from './chatSessionCache';
@@ -20,6 +21,7 @@ export class XopcGatewaySession {
   private transport: XopcTransport;
   private profile?: XopcProfile;
   private tokens?: XopcTokens;
+  private clockOffsetMs: number = 0;
   private refreshTask?: Promise<string>;
   private pairingTask?: Promise<XopcProfile>;
   private generation: number = 0;
@@ -94,7 +96,7 @@ export class XopcGatewaySession {
       if (this.refreshTask) { try { await this.refreshTask; } catch (_) {} }
       this.changing = true; ++this.generation;
       await this.profiles.activate(gatewayId);
-      this.profile = candidate.profile; this.tokens = candidate.tokens; this.verifiedUntil.clear();
+      this.profile = candidate.profile; this.tokens = candidate.tokens; this.clockOffsetMs = candidate.clockOffsetMs; this.verifiedUntil.clear();
     } finally { this.changing = false; this.switching = false; }
   }
 
@@ -243,14 +245,16 @@ export class XopcGatewaySession {
     const body: XopcNonceBody = { nonce: await this.crypto.nonce() };
     const envelope = JSON.parse(await this.transport.request(origin, '/api/gateway-identity/challenge', 'POST', JSON.stringify(body))) as XopcSignedEnvelope;
     const proof = JSON.parse(await this.crypto.verify(profile.gatewayPublicKey, envelope)) as XopcIdentityProof;
+    const serverTime = proof.serverTime ?? Date.now();
     if (proof.purpose !== 'gateway-route-v1' || proof.gatewayId !== profile.gatewayId || proof.nonce !== body.nonce
-      || !(proof.expiresAt > Date.now()) || proof.expiresAt > Date.now() + 60000) throw new Error('GATEWAY_IDENTITY_MISMATCH');
-    this.verifiedUntil.set(cacheKey, Math.min(proof.expiresAt, Date.now() + 30000));
+      || !(proof.expiresAt > serverTime) || proof.expiresAt > serverTime + 60000) throw new Error('GATEWAY_IDENTITY_MISMATCH');
+    this.clockOffsetMs = serverTime - Date.now();
+    this.verifiedUntil.set(cacheKey, Date.now() + 30000);
   }
 
   async accessToken(): Promise<string> {
     if (this.changing) throw new Error('GATEWAY_OPERATION_BUSY');
-    if (this.tokens && this.tokens.accessTokenExpiresAt > Date.now() + 30000) return this.tokens.accessToken;
+    if (this.tokens && this.tokens.accessTokenExpiresAt > Date.now() + this.clockOffsetMs + 30000) return this.tokens.accessToken;
     if (this.refreshTask) return this.refreshTask;
     this.refreshTask = this.refresh();
     try { return await this.refreshTask; } finally { this.refreshTask = undefined; }
@@ -272,26 +276,28 @@ export class XopcGatewaySession {
       attempt = { refreshToken, nextRefreshToken: await this.crypto.refreshToken(), requestId: this.crypto.uuid() };
       await this.store.write(attemptKey, JSON.stringify(attempt));
     }
-    const body: XopcRefreshBody = {
-      refreshToken, nextRefreshToken: attempt.nextRefreshToken, requestId: attempt.requestId,
-      timestamp: Date.now(), nonce: await this.crypto.nonce(), signature: ''
-    };
-    body.signature = await this.crypto.sign('xopc-device-refresh-v2\n' + refreshToken.slice(8).split('_')[0] + '\n'
-      + body.timestamp + '\n' + body.nonce + '\n' + attempt.requestId + '\n' + attempt.nextRefreshToken);
     for (const route of profile.routes) {
       try {
         await this.verifyRoute(profile, route.url);
+        const body: XopcRefreshBody = {
+          refreshToken, nextRefreshToken: attempt.nextRefreshToken, requestId: attempt.requestId,
+          timestamp: Date.now() + this.clockOffsetMs, nonce: await this.crypto.nonce(), signature: '', requestProofVersion: 1
+        };
+        body.signature = await this.crypto.sign('xopc-device-refresh-v2\n' + refreshToken.slice(8).split('_')[0] + '\n'
+          + body.timestamp + '\n' + body.nonce + '\n' + attempt.requestId + '\n' + attempt.nextRefreshToken + '\nrequest-proof:1');
         this.assertGeneration(generation);
         const envelope = JSON.parse(await this.transport.request(route.url, '/api/device-auth/refresh', 'POST', JSON.stringify(body))) as XopcSignedEnvelope;
         const proof = JSON.parse(await this.crypto.verify(profile.gatewayPublicKey, envelope)) as XopcRefreshProof;
         if (proof.purpose !== 'device-refresh-v3' || proof.gatewayId !== profile.gatewayId || proof.nonce !== body.nonce
-          || proof.requestId !== body.requestId || !(proof.expiresAt > Date.now()) || proof.expiresAt > Date.now() + 60000
+          || proof.requestId !== body.requestId || !(proof.expiresAt > Date.now() + this.clockOffsetMs) || proof.expiresAt > Date.now() + this.clockOffsetMs + 60000
           || !proof.tokens || !proof.tokens.accessToken || proof.tokens.refreshToken !== attempt.nextRefreshToken
-          || !(proof.tokens.accessTokenExpiresAt > Date.now()) || !(proof.tokens.refreshTokenExpiresAt > Date.now())) throw new Error('GATEWAY_IDENTITY_MISMATCH');
+          || !(proof.tokens.accessTokenExpiresAt > Date.now() + this.clockOffsetMs) || !(proof.tokens.refreshTokenExpiresAt > Date.now() + this.clockOffsetMs)) throw new Error('GATEWAY_IDENTITY_MISMATCH');
         this.assertGeneration(generation);
         await this.store.write(refreshKey, proof.tokens.refreshToken);
         await this.store.remove(attemptKey);
         this.assertGeneration(generation);
+        if (proof.requestProofVersion !== 1) throw new Error('GATEWAY_IDENTITY_MISMATCH');
+        registerRequestProof(proof.tokens.accessToken, profile.gatewayId, profile.routes.map((route): string => route.url), this.crypto, this.clockOffsetMs);
         this.tokens = proof.tokens;
         profile.activeRouteId = route.id;
         return this.tokens.accessToken;

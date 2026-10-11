@@ -1,8 +1,11 @@
-import { authenticateBrowserSession } from '../../../storage/sqlite/browser-session-repository.js';
-import { browserCookieRequestAllowed, readBrowserSessionCookie, writeBrowserSessionCookie } from '../../security/browser-session.js';
 import { createMiddleware } from 'hono/factory';
 import type { Context } from 'hono';
 import { getConnInfo } from '@hono/node-server/conninfo';
+
+import { getOrCreateGatewayIdentity } from '../../../storage/sqlite/gateway-identity-repository.js';
+import { acquireProofBodyBudget, parseRequestProof, requestProofMessage, verifyRequestProofSignature, consumeRequestNonce, proofDigest, PROOF_HEADER, REQUEST_PROOF_WINDOW_MS } from '../../security/device-request-proof.js';
+import { authenticateBrowserSession } from '../../../storage/sqlite/browser-session-repository.js';
+import { browserCookieRequestAllowed, readBrowserSessionCookie, writeBrowserSessionCookie } from '../../security/browser-session.js';
 
 import type { GatewayAuthConfig } from '../../../config/schema.js';
 import type { ResolvedGatewayAuth } from '../../auth.js';
@@ -268,16 +271,44 @@ export function auth(config?: AuthConfig) {
       )) {
         return c.json({ error: 'Forbidden', code: 'extension_origin_mismatch' }, 403);
       }
-      recordSuccess(rl);
-      setGatewayPrincipal(c, {
-        kind: 'device',
-        principalId: deviceIdentity.deviceId,
-        deviceId: deviceIdentity.deviceId,
-        accessSessionId: deviceIdentity.accessSessionId,
-        scopes: deviceIdentity.scopes,
-      });
-      await next();
-      return;
+      let releaseBodyBudget = () => {};
+      try {
+        const proofHeader = c.req.header(PROOF_HEADER);
+        if (device?.requestProofVersion || proofHeader) {
+          const proof = parseRequestProof(proofHeader);
+          const url = new URL(c.req.url);
+          if (!device || !proof || Math.abs(Date.now() - proof.timestamp) > REQUEST_PROOF_WINDOW_MS
+            || !verifyRequestProofSignature(device, proof, requestProofMessage({
+              gatewayId: getOrCreateGatewayIdentity().id, credential: providedCredential!, method: c.req.method,
+              target: url.pathname + url.search, headers: name => c.req.header(name), proof,
+            }))) return c.json({ error: 'Unauthorized', code: 'REQUEST_PROOF_INVALID' }, 401);
+          const isUpload = /^(multipart\/form-data|application\/octet-stream)/i.test(c.req.header('content-type') ?? '')
+            || Number(c.req.header('content-length') ?? 0) > 65_536;
+          const release = isUpload ? acquireProofBodyBudget(device.id) : () => {};
+          if (!release) {
+            c.header('Retry-After', '1');
+            return c.json({ error: 'Too Many Requests', code: 'REQUEST_CONCURRENCY_LIMIT' }, 429);
+          }
+          releaseBodyBudget = release;
+          // Preserve the original stream and MIME headers for Hono formData parsing.
+          if (proofDigest(Buffer.from(await c.req.raw.clone().arrayBuffer())) !== proof.digest) {
+            return c.json({ error: 'Unauthorized', code: 'REQUEST_BODY_MISMATCH' }, 401);
+          }
+          if (!consumeRequestNonce(device.id, proof)) {
+            return c.json({ error: 'Unauthorized', code: 'REQUEST_REPLAYED' }, 401);
+          }
+        }
+        recordSuccess(rl);
+        setGatewayPrincipal(c, {
+          kind: 'device',
+          principalId: deviceIdentity.deviceId,
+          deviceId: deviceIdentity.deviceId,
+          accessSessionId: deviceIdentity.accessSessionId,
+          scopes: deviceIdentity.scopes,
+        });
+        await next();
+        return;
+      } finally { releaseBodyBudget(); }
     }
 
     const blocked = checkBlocked(rl);

@@ -342,7 +342,7 @@ struct GatewayClient: GatewayServing, Sendable {
         let data: Data
         let response: URLResponse
         do {
-            (data, response) = try await session.data(for: request)
+            (data, response) = try await session.data(for: GatewayPairingService.shared.signedRequest(request))
         } catch is CancellationError {
             throw CancellationError()
         } catch {
@@ -378,7 +378,7 @@ struct GatewayClient: GatewayServing, Sendable {
         }
         let (data, response): (Data, URLResponse)
         do {
-            (data, response) = try await session.data(for: request)
+            (data, response) = try await session.data(for: GatewayPairingService.shared.signedRequest(request))
         } catch is CancellationError {
             throw CancellationError()
         } catch {

@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 import type { Config } from '../config/schema.js';
-import { TunnelConfigSchema, TunnelConsentSchema } from '../config/schema.js';
+import { TunnelConfigSchema, TunnelConsentSchema, TunnelBrokerUrlSchema } from '../config/schema.js';
 
 import {
   assertTunnelAutoStartAllowed,
@@ -12,7 +12,7 @@ import { getTunnelRegistrationSecretMeta, isMaskedTunnelSecretPatchValue } from 
 
 const TunnelConfigPatchSchema = z.object({
   enabled: z.boolean().optional(),
-  brokerUrl: z.string().url().optional(),
+  brokerUrl: TunnelBrokerUrlSchema.optional(),
   registrationSecret: z.union([z.string(), z.null()]).optional(),
   autoStart: z.boolean().optional(),
   subdomain: z.string().optional(),
