@@ -1,4 +1,5 @@
-import { DEVICE_EMPTY_INPUT_SCHEMA, ENDPOINT_CONTACT_OUTPUT_SCHEMA, ENDPOINT_FILE_OUTPUT_SCHEMA, type EndpointToolDescriptor } from './index.js';
+import type { EndpointToolDescriptor } from './index.js';
+import { DEVICE_EMPTY_INPUT_SCHEMA, ENDPOINT_CONTACT_OUTPUT_SCHEMA, ENDPOINT_FILE_OUTPUT_SCHEMA } from './shared-schemas.js';
 
 export const PERSONAL_TOOL_NAMES = ['mobile.file.pick', 'mobile.media.pick', 'mobile.camera.capture', 'mobile.contacts.pick', 'mobile.calendar.query_events', 'mobile.calendar.query_free_busy'] as const;
 export type PersonalToolName = typeof PERSONAL_TOOL_NAMES[number];
