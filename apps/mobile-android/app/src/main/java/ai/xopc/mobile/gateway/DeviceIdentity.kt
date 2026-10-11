@@ -44,7 +44,11 @@ class DeviceIdentity(private val keyAlias: String = "xopc.gateway.device.p256.v1
 
   fun refreshToken(): String = "xopc_rt_${UUID.randomUUID()}_${nonce(32)}"
 
-  private fun keyPair(): KeyPair {
+  private val cachedKeyPair: KeyPair by lazy { loadKeyPair() }
+
+  private fun keyPair(): KeyPair = cachedKeyPair
+
+  private fun loadKeyPair(): KeyPair {
     val keyStore = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
     val existing = keyStore.getEntry(keyAlias, null) as? KeyStore.PrivateKeyEntry
     if (existing != null) return KeyPair(existing.certificate.publicKey, existing.privateKey)

@@ -1,3 +1,4 @@
+import { signedHttpRequest } from './requestProof';
 import { http } from '@kit.NetworkKit';
 import { secureOrigin } from '../common/protocol';
 
@@ -28,7 +29,7 @@ export class XopcTransport {
     };
     if (body) options.extraData = body;
     try {
-      const response = await connection.request(secureOrigin(origin) + path, options);
+      const response = await signedHttpRequest(connection, secureOrigin(origin) + path, options);
       if (response.responseCode < 200 || response.responseCode >= 300) {
         throw new XopcHttpError(response.responseCode, typeof response.result === 'string' ? response.result : '');
       }

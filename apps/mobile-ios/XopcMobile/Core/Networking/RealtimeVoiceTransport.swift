@@ -163,6 +163,7 @@ actor RealtimeVoiceTransport {
     private func receive(route: URL, session: RealtimeVoiceSession, epoch: Int) async throws {
         var request = URLRequest(url: route)
         request.timeoutInterval = 15
+        request.setValue(try await GatewayPairingService.shared.connectionProof(url: route, ticket: session.ticket), forHTTPHeaderField: "X-Xopc-Proof")
         let socket = URLSession.shared.webSocketTask(with: request)
         self.socket = socket
         socket.resume()

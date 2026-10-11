@@ -1,5 +1,6 @@
 package ai.xopc.mobile.ui.main
 
+import ai.xopc.mobile.gateway.DeviceRequestProof
 import ai.xopc.mobile.gateway.VoiceCallConnection
 import ai.xopc.mobile.gateway.VOICE_PROXY_WS_PATH
 import ai.xopc.mobile.gateway.parseVoiceDownlink
@@ -253,7 +254,9 @@ internal class RealtimeVoiceController(private val context: Context, private val
         }
       }
     }
-    val attempt = client.newWebSocket(Request.Builder().url(url).build(), listener)
+    val connectionProof = withContext(Dispatchers.IO) { DeviceRequestProof.connection(session.origin, path, session.ticket) }
+    val attempt = client.newWebSocket(Request.Builder().url(url)
+      .header("X-Xopc-Proof", connectionProof).build(), listener)
     socketForAttempt = attempt
     socket = attempt
     try { awaitVoiceReady(ready) }

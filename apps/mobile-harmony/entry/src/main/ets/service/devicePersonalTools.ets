@@ -1,3 +1,4 @@
+import { signedHttpRequest } from './requestProof';
 import { abilityAccessCtrl, common, Permissions } from '@kit.AbilityKit';
 import { UIContext } from '@kit.ArkUI';
 import { util } from '@kit.ArkTS';
@@ -122,7 +123,7 @@ export function invokeDevicePersonalTool(payload: Object, send: (kind: string, b
         const headers: XopcPersonalHeaders = { Authorization: 'Bearer ' + auth.token, 'Content-Type': file.mimeType, 'x-endpoint-id': 'harmonyos:' + profile.deviceId, 'x-endpoint-upload-token': grant.token };
         upload = http.createHttp();
         try {
-          const response = await upload.request(auth.origin + grant.path + '?name=' + encodeURIComponent(file.name), { method: http.RequestMethod.POST, header: headers, extraData: bytes.buffer, maxRedirects: 0, readTimeout: 60000, expectDataType: http.HttpDataType.STRING, usingCache: false });
+          const response = await signedHttpRequest(upload, auth.origin + grant.path + '?name=' + encodeURIComponent(file.name), { method: http.RequestMethod.POST, header: headers, extraData: bytes.buffer, maxRedirects: 0, readTimeout: 60000, expectDataType: http.HttpDataType.STRING, usingCache: false });
           assertActive();
           const result = JSON.parse(response.result as string) as XopcPersonalFileEnvelope;
           if (response.responseCode !== 201 || !result.ok || !result.payload) throw new Error('PERMISSION_DENIED');

@@ -1,3 +1,4 @@
+import { verifyDeviceConnectionProof } from '../gateway/security/device-request-proof.js';
 import crypto from 'node:crypto';
 import type { IncomingMessage } from 'node:http';
 import { createRequire } from 'node:module';
@@ -244,6 +245,12 @@ export class RealtimeRuntime {
       if (!authenticated) {
         if (message.kind !== 'realtime.hello') {
           socket.close(4401, 'First realtime message must be hello');
+          return;
+        }
+        const pendingClaim = this.tickets.peek(message.payload.ticket);
+        if (!pendingClaim || (pendingClaim.deviceId && !verifyDeviceConnectionProof(pendingClaim.deviceId, message.payload.ticket,
+          new URL(request.url!, 'http://localhost').pathname + new URL(request.url!, 'http://localhost').search, typeof request.headers['x-xopc-proof'] === 'string' ? request.headers['x-xopc-proof'] : undefined))) {
+          socket.close(4401, 'Realtime authentication failed');
           return;
         }
         const claim = this.tickets.consume(

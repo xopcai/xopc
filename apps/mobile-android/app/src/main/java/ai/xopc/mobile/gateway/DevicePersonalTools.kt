@@ -208,6 +208,8 @@ internal object DevicePersonalTools {
       val url = (auth.origin + path).toHttpUrl().newBuilder().addQueryParameter("name", fileName).build()
       val upload = Request.Builder().url(url).header("Authorization", "Bearer ${auth.bearer}")
         .header("x-endpoint-id", "android:${profile.deviceId}").header("x-endpoint-upload-token", grant.getString("token"))
+        .header("X-Xopc-Proof", DeviceRequestProof.upload(auth.bearer, "POST", url.encodedPath + (url.encodedQuery?.let { "?$it" } ?: ""), bytes,
+          listOf(mime, "", "", "android:${profile.deviceId}", grant.getString("token"))))
         .post(bytes.toRequestBody(mime.toMediaType())).build()
       val result = suspendCancellableCoroutine<String> { continuation ->
         val call = http.newCall(upload); continuation.invokeOnCancellation { call.cancel() }

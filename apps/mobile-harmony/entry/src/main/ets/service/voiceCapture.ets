@@ -1,3 +1,4 @@
+import { signedHttpRequest } from './requestProof';
 import { abilityAccessCtrl, common } from '@kit.AbilityKit';
 import { media } from '@kit.MediaKit';
 import { fileIo as fs } from '@kit.CoreFileKit';
@@ -201,7 +202,7 @@ export class XopcVoiceCapture {
       const parts: http.MultiFormData[] = [{ name: 'audio', contentType: 'audio/m4a', remoteFileName: 'voice.m4a', data }];
       if (language === 'zh' || language === 'en') parts.push({ name: 'language', contentType: 'text/plain', data: language });
       this.request = http.createHttp();
-      const result = await this.request.request(auth.origin + '/api/voice/transcriptions', {
+      const result = await signedHttpRequest(this.request, auth.origin + '/api/voice/transcriptions', {
         method: http.RequestMethod.POST, header: headers, multiFormDataList: parts,
         expectDataType: http.HttpDataType.STRING, maxLimit: 1024 * 1024,
         maxRedirects: 0, connectTimeout: 8000, readTimeout: 60000, usingCache: false

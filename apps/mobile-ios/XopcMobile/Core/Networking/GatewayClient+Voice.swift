@@ -81,7 +81,7 @@ extension GatewayClient {
         let data: Data
         let response: URLResponse
         do {
-            (data, response) = try await session.data(for: request)
+            (data, response) = try await session.data(for: GatewayPairingService.shared.signedRequest(request))
         } catch is CancellationError {
             throw CancellationError()
         } catch {

@@ -88,6 +88,7 @@ export function registerEndpointToolRoutes(
         ...(lastSeenAt ? { lastSeenAt } : {}),
         access: access ? {
           scopes: access.scopes,
+          requestProofVersion: access.requestProofVersion,
           createdAt: access.createdAt,
           ...(access.lastSeenAt ? { lastSeenAt: access.lastSeenAt } : {}),
           ...(access.revokedAt ? { revokedAt: access.revokedAt } : {}),
