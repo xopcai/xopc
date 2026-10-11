@@ -1,7 +1,5 @@
 import type { Config } from '../../config/schema.js';
 import { resolveEffectiveAgentConfigForAgent, resolveEffectiveAgentConfigForSession } from '../../config/agent-profile.js';
-import { parseExternalToolRef } from '../external-tools/refs.js';
-import { mcpToolPolicyId } from '../mcp/bundle-mcp-policy.js';
 import { createAgentTurnPolicy } from '../orchestration/agent-turn-policy.js';
 
 /** Noninteractive callers cannot silently turn an ask policy into an allow. */
@@ -17,9 +15,8 @@ export function createDelegationParentPolicy(options: { getConfig: () => Config 
       names.push(`${name.slice(0, -5)}_${command}`);
     }
     if (name === 'xopc_tool_execute') {
-      const parsed = parseExternalToolRef(String((args as { toolRef?: unknown })?.toolRef ?? ''), 'mcp');
       const ref = String((args as { toolRef?: unknown })?.toolRef ?? '');
-      names.push(parsed ? mcpToolPolicyId(parsed.namespace, parsed.toolName) : ref);
+      names.push(ref);
     }
     return names.flatMap(id => resolved.config.tools[id] ? [{ id, ...resolved.config.tools[id] }] : []);
   };

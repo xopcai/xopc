@@ -602,14 +602,14 @@ export function useChatSessionStreaming(deps: {
       const wireAtt = messageAttachmentsToWire(msg.attachments);
       if (!text.trim() && !wireAtt?.length && !msg.contextRefs?.length) return;
 
-      const contextRefs = msg.contextRefs?.map((ref) => ({
+      const contextRefs = msg.contextRefs?.flatMap((ref) => ref.kind === 'mcp_resource' ? [] : [{
         refId: ref.refId,
         kind: ref.kind,
         sourceId: ref.sourceId,
         expectedVersion: ref.version,
         title: ref.title,
         fileKind: ref.fileKind,
-      }));
+      }]);
       const failedSubmissionId = msg.deliveryStatus === 'failed' ? msg.clientSubmissionId : undefined;
       if (!failedSubmissionId && !msg.turnId) {
         return;

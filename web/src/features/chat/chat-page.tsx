@@ -709,14 +709,14 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
         ? serializeUserTurnDocument(message.userTurnDocument)
         : extractUserMessagePlainText(message.content),
       messageAttachmentsToWire(message.attachments),
-      message.contextRefs?.map((ref) => ({
+      message.contextRefs?.flatMap((ref) => ref.kind === 'mcp_resource' ? [] : [{
         refId: ref.refId,
         kind: ref.kind,
         sourceId: ref.sourceId,
         expectedVersion: ref.version,
         title: ref.title,
         fileKind: ref.fileKind,
-      })),
+      }]),
     );
   }, []);
 

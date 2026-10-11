@@ -5,7 +5,8 @@ import { BROWSER_CONTROL_ENDPOINT_TOOL_NAME } from '@xopcai/browser-control-cont
 import { COMPUTER_CONTROL_TOOL } from '@xopcai/computer-control-contract';
 
 import type { EndpointToolRuntime } from '../../endpoint-tools/index.js';
-import { executeExternalOperation } from '../../capabilities/runtime/external-operations.js';
+import { EndpointToolExecutionError } from '../../endpoint-tools/invocation-service.js';
+import { executeExternalOperation, ExternalEffectNotAppliedError } from '../../capabilities/runtime/external-operations.js';
 import { canonicalCapabilityJson } from '../../capabilities/runtime/dispatcher.js';
 import { externalToolRef, parseExternalToolRef } from './refs.js';
 import type {
@@ -55,6 +56,13 @@ export class EndpointToolProvider implements ExternalToolProvider {
       summary: `${resolved.tool.descriptor.description} (${resolved.displayName})`,
       description: resolved.tool.descriptor.description,
       inputSchema: resolved.tool.descriptor.inputSchema,
+      outputSchema: { type: 'object', properties: { content: resolved.tool.descriptor.outputSchema }, required: ['content'], additionalProperties: false },
+      contractRevision: resolved.contractRevision,
+      annotations: { readOnlyHint: resolved.tool.descriptor.effect === 'read',
+        destructiveHint: resolved.tool.descriptor.effect === 'destructive', idempotentHint: resolved.tool.descriptor.idempotent },
+      batchRead: resolved.tool.descriptor.effect === 'read' && resolved.tool.descriptor.sensitivity === 'public'
+        && !resolved.tool.descriptor.requiresForeground && resolved.tool.descriptor.confirmation === 'never'
+        && resolved.tool.descriptor.requiredPermissions.length === 0,
     };
   }
 
@@ -66,7 +74,13 @@ export class EndpointToolProvider implements ExternalToolProvider {
   ): Promise<AgentToolResult<Record<string, unknown>>> {
     const resolved = this.resolve(toolRef);
     if (!resolved) throw new Error(`Endpoint tool is unavailable for this turn: ${toolRef}`);
-    const invoke = () => this.deps.runtime.invocations.invoke({
+    const revision = context.contractRevision ?? resolved.contractRevision;
+    const invoke = () => {
+      context.signal?.throwIfAborted();
+      if (this.resolve(toolRef)?.contractRevision !== revision) {
+        throw new ExternalEffectNotAppliedError('Endpoint connection, binding or tool contract changed');
+      }
+      return this.deps.runtime.invocations.invoke({
       endpointId: resolved.endpointId,
       toolCallId: context.toolCallId,
       toolName: resolved.tool.descriptor.name,
@@ -82,7 +96,14 @@ export class EndpointToolProvider implements ExternalToolProvider {
           },
         });
       },
-    });
+      }).catch(error => {
+        if (resolved.tool.descriptor.confirmation === 'always'
+          && error instanceof EndpointToolExecutionError && error.code === 'USER_DENIED') {
+          throw new ExternalEffectNotAppliedError(error.message, { cause: error });
+        }
+        throw error;
+      });
+    };
     const result = resolved.tool.descriptor.effect === 'read' ? await invoke() : await executeExternalOperation({
       principalId: resolved.principalId,
       capabilityId: toolRef,
@@ -94,6 +115,7 @@ export class EndpointToolProvider implements ExternalToolProvider {
     const files = result.content.filter((item) => item.type === 'file');
     return {
       content: result.content.map((item) => ({ type: 'text' as const, text: contentText(item) })),
+      structuredContent: JSON.parse(JSON.stringify({ content: result.content })),
       details: {
         endpointId: resolved.endpointId,
         endpointToolName: resolved.tool.descriptor.name,
@@ -121,6 +143,9 @@ export class EndpointToolProvider implements ExternalToolProvider {
     if (!endpoint || endpoint.endpointId !== parsed.namespace) return undefined;
     const tool = this.deps.runtime.registry.getTool(endpoint.endpointId, parsed.toolName);
     if (tool && [BROWSER_CONTROL_ENDPOINT_TOOL_NAME, COMPUTER_CONTROL_TOOL].includes(tool.descriptor.name)) return undefined;
-    return tool ? { endpointId: endpoint.endpointId, principalId: endpoint.principalId, displayName: endpoint.displayName, tool } : undefined;
+    return tool ? { endpointId: endpoint.endpointId, principalId: endpoint.principalId, displayName: endpoint.displayName, tool,
+      contractRevision: createHash('sha256').update(JSON.stringify([endpoint.principalId, endpoint.connectionId, tool.revision,
+        this.deps.runtime.bindings.get(this.deps.getCurrentContext()!.conversationId)?.boundAt ?? null])).digest('hex'),
+    } : undefined;
   }
 }
