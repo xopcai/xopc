@@ -231,6 +231,7 @@ export struct XopcChatView {
   private messagesScroller: Scroller = new Scroller();
   private scrollTimer: number = -1;
   private layoutScrollAnimating: boolean = false;
+  private messageScrollFromUser: boolean = false;
   private firstVisible: number = 0;
   @Local loadingOlder: boolean = false;
   @Local olderFailed: boolean = false;
@@ -369,9 +370,9 @@ export struct XopcChatView {
     this.layoutScrollAnimating = true;
     this.scrollTimer = setTimeout((): void => {
       if (!this.visible || !this.atBottom || this.loadingOlder) { this.layoutScrollAnimating = false; return; }
-      const last = this.presentationRows.length - 1 + (this.chat.hasOlder ? 1 : 0);
+      const last = this.presentationRows.length + (this.chat.hasOlder ? 1 : 0);
       if (last < 0 || this.messagesScroller.isAtEnd()) { this.layoutScrollAnimating = false; return; }
-      // Native smooth alignment includes contentEndOffset and remains interruptible by touch.
+      // Align the trailing spacer so the composer clearance is included in the scroll target.
       this.messagesScroller.scrollToIndex(last, true, ScrollAlign.END);
     }, 16);
   }
@@ -391,14 +392,29 @@ export struct XopcChatView {
     if (!this.atBottom || (!!this.chat.runId && delivery === 'next')) return;
     this.replyAnchorId = rowId;
     this.replyRowHeights.clear();
-    this.replyBudget = chatReplySpaceBudget(this.messageViewportHeight, this.bottomRegionHeight + 24);
+    this.replyBudget = chatReplySpaceBudget(this.messageViewportHeight, this.bottomRegionHeight + 48 + (this.embedded ? 0 : 72));
     this.replySpaceHeight = this.replyBudget;
     this.onMessageChange();
   }
   private recordReplyRowHeight(rowId: string, rowHeight: number): void {
-    if (!this.replyAnchorId || this.replySpaceHeight <= 0) return;
+    const previousHeight = this.replyRowHeights.get(rowId);
+    if (previousHeight !== undefined && Math.abs(previousHeight - rowHeight) < 0.5) return;
     this.replyRowHeights.set(rowId, rowHeight);
     this.updateReplySpace();
+    // Streaming Markdown can finish layout after the message update's deferred scroll.
+    if (rowId === this.presentationRows[this.presentationRows.length - 1]?.id) this.onMessageChange();
+  }
+  private onMessageScrollSource(source: ScrollSource): void {
+    this.messageScrollFromUser = source !== ScrollSource.SCROLLER && source !== ScrollSource.SCROLLER_ANIMATION;
+  }
+  private onMessageScroll(offset: number, state: ScrollState): void {
+    if (!this.messageScrollFromUser || this.layoutScrollAnimating || this.initialScrollPending
+      || this.loadingOlder || this.chat.loading || state === ScrollState.Idle) return;
+    this.atBottom = this.messagesScroller.isAtEnd();
+    if (this.atBottom) { this.showJumpBottom = false; this.updateReplySpace(); }
+    else if (offset > 0) this.showJumpBottom = true;
+    else if (offset < 0) this.showJumpBottom = false;
+    if (offset < 0 && this.messagesScroller.currentOffset().yOffset < 960 && !this.olderFailed) this.loadOlder();
   }
   private updateReplySpace(): void {
     if (!this.replyAnchorId || !this.atBottom || this.loadingOlder || this.replySpaceHeight <= 0) return;
@@ -410,7 +426,7 @@ export struct XopcChatView {
       replyHeight += (this.replyRowHeights.get(rows[index].id) || 0) + 20;
     }
     this.replySpaceHeight = consumeChatReplySpace(this.replyBudget, this.replySpaceHeight, replyHeight,
-      chatReplySpaceBudget(this.messageViewportHeight, this.bottomRegionHeight + 24), this.atBottom);
+      chatReplySpaceBudget(this.messageViewportHeight, this.bottomRegionHeight + 48 + (this.embedded ? 0 : 72)), this.atBottom);
   }
   private sendFlightRect(area: Area): XopcSendFlightRect {
     return { x: Number(area.globalPosition.x), y: Number(area.globalPosition.y),
@@ -1331,21 +1347,22 @@ export struct XopcChatView {
           this.recordReplyRowHeight(item.item.id, Number(current.height));
         })
       }).key((row: XopcChatRow): string => this.chat.selectedId + ':' + row.id).virtualScroll({ totalCount: this.presentationRows.length })
+      ListItem() {
+        Column().id('chat-reply-clearance').width('100%')
+          .height(this.bottomRegionHeight + 48 + this.replySpaceHeight - 20)
+      }.onAreaChange((previous: Area, current: Area): void => {
+        if (Number(previous.height) !== Number(current.height)) this.onMessageChange();
+      })
     }.id('chat-message-list').height('100%').width('100%').padding({ left: 20, right: 20 }).cachedCount(3)
       .contentStartOffset(this.embedded ? 0 : 72)
-      .contentEndOffset(this.bottomRegionHeight + 24 + this.replySpaceHeight)
       .onAreaChange((previous: Area, current: Area): void => { this.onMessageViewportChange(previous, current); })
       .onScrollIndex((start: number, end: number): void => {
         this.firstVisible = start;
       })
-      .onDidScroll((offset: number, state: ScrollState): void => {
-        if (this.layoutScrollAnimating || this.initialScrollPending || this.loadingOlder || this.chat.loading || state === ScrollState.Idle) return;
-        this.atBottom = this.messagesScroller.isAtEnd();
-        if (this.atBottom) { this.showJumpBottom = false; this.updateReplySpace(); }
-        else if (offset > 0) this.showJumpBottom = true;
-        else if (offset < 0) this.showJumpBottom = false;
-        if (offset < 0 && this.messagesScroller.currentOffset().yOffset < 960 && !this.olderFailed) this.loadOlder();
+      .onWillScroll((_offset: number, _state: ScrollState, source: ScrollSource): void => {
+        this.onMessageScrollSource(source);
       })
+      .onDidScroll((offset: number, state: ScrollState): void => { this.onMessageScroll(offset, state); })
       .onScrollStop((): void => { this.finishLayoutScroll(); })
       .onTouch((event: TouchEvent): void => {
         if (event.type === TouchType.Down) {
@@ -1698,7 +1715,7 @@ export struct XopcChatView {
   }
 
   build() {
-    Stack({ alignContent: Alignment.Start }) {
+    Stack({ alignContent: Alignment.TopStart }) {
     Column() {
       if (this.hasConnectionIssue() || this.chat.cachedHistory || this.chat.error) {
       Column() {
@@ -1729,7 +1746,7 @@ export struct XopcChatView {
       this.conversation()
       Column().width('100%').height(0)
         .bindSheet($$this.personalSettingsOpen, this.personalSettingsSheet, { height: '90%', dragBar: false,
-          showClose: false, backgroundColor: this.colors.panel, onDisappear: (): void => {
+          keyboardAvoidMode: SheetKeyboardAvoidMode.RESIZE_ONLY, showClose: false, backgroundColor: this.colors.panel, onDisappear: (): void => {
             if (this.personalSettingsNextMode) { const mode = this.personalSettingsNextMode; this.personalSettingsNextMode = ''; this.openSheet(mode); }
           } })
       Column().id('chat-image-editor-sheet-host').width('100%').height(0)

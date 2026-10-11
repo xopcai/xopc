@@ -3,9 +3,9 @@ import { chatReplySpaceBudget, consumeChatReplySpace } from '../entry/src/main/e
 
 describe('chat reply space', () => {
   it('uses the visible viewport above the composer and safe clearance', () => {
-    expect(chatReplySpaceBudget(720, 120)).toBe(60);
-    expect(chatReplySpaceBudget(1600, 120)).toBe(64);
-    expect(chatReplySpaceBudget(320, 120)).toBe(20);
+    expect(chatReplySpaceBudget(720, 120)).toBe(270);
+    expect(chatReplySpaceBudget(1600, 120)).toBe(320);
+    expect(chatReplySpaceBudget(320, 120)).toBe(90);
     expect(chatReplySpaceBudget(80, 120)).toBe(0);
   });
 
