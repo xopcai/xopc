@@ -11,7 +11,7 @@ Baseline: `retired mobile client/src/features/chat/ChatScreen.tsx`, the componen
 | History | Loading/empty/error/retry; older-page anchoring; follow streaming only at bottom; markdown and media; thinking/tool rendering; copy/edit/retry/save-to-note/regenerate/read-aloud |
 | Inputs | Queue polling and realtime invalidation; versioned edit/cancel; idempotent retries; no cross-conversation late result |
 | Context | Project/local/worktree switch creates a new conversation; references; directory picker with lock state; context explanation |
-| Attention | Clarification choices/free text/agent decides/cancel; pending attention opens correct destination |
+| Attention | Clarification choices/free text/agent decides/cancel; global pending items are shown in Progress only |
 | Voice | Dictation/record preview/transcribe; read aloud; continuous reading; assistant/natural voice call capability gating |
 | Recovery | Gateway reconnect/error; resume active run; hidden root and detail realtime ownership; navigation during requests; background cleanup |
 
@@ -53,7 +53,7 @@ The script edits only local starter and `/` drafts, verifies draft persistence a
 
 - Native Markdown now renders horizontally scrollable tables (alignment, escaped/code pipes, missing cells), task-list markers, list indentation, strikethrough, code-language headers and explicit code copying. HTTP(S) links require a tap and display the actual target before opening in the system handler; executable/file/credentialed links remain inert. Markdown images are links, not implicit remote downloads. Streaming updates invalidate changed render keys.
 - Persisted tool calls/results are grouped by call ID, including out-of-order parallel results and older-page boundaries. Completed/error states, arguments, expandable full results and output attachments are retained. Ambiguous/orphan results stay visible; results never cross a user-turn boundary.
-- Chat attention opens a three-item sheet with unseen-first ordering, internal destinations, review details enriched from `decisions`, gated approval controls, retry/acknowledge actions, pending/error feedback and a Progress destination. Local seen revisions are encrypted and Gateway-scoped; changed items reappear. Mutation responses after navigation cannot update a different screen.
+- Global pending items and decision actions are available in Progress only. Chat has no attention banner, sheet or local seen-revision state.
 - Empty-chat starters use native English/Chinese copy and selection logic for empty/directory/project/task contexts, task attention/failure/review/next steps, project blockers/recovery, Agent specialization and date-seeded exploration. Shipped Agent names are localized; custom names are retained. Context-fetch failure keeps usable suggestions and exposes retry. Tapping a starter fills an editable draft only.
 
 Follow-up evidence:
@@ -65,7 +65,7 @@ Follow-up evidence:
 | CodeLinter | Empty diagnostic report |
 | Brand, Gateway contract, generated welcome copy | Current |
 | Paired phone emulator | Seven journeys passed, including three directory starters, prefill without send, clearing the test draft and the prior dock/drawer/navigation/persistence checks |
-| Attention UI | Explicitly skipped: paired Gateway has no unseen attention fixture. Action and destination behavior is host-tested, not claimed as device-tested |
+| Attention UI | Removed from Chat; global pending items and actions remain in Progress. |
 | Remaining device coverage | Rich Markdown/tool fixtures, approval/retry writes and task/project welcome variants still need an isolated Gateway/device journey; current smoke tests do not cover them |
 | Physical phone | Not connected; no new physical-device installation or acceptance claimed |
 
@@ -79,7 +79,7 @@ The UI runner now waits for loaded content and the actual keyboard/dock state, r
 - Single deletion uses retired cross-platform client's 5-second undo deadline. Batch operations serialize requests, block duplicates, retain only failed targets for retry and do not replay successful items. Selected later-page rows survive refresh, page offsets count raw records, stale queries/disposed views cannot overwrite newer state, and delayed/batch writes cannot follow a Gateway switch.
 - Skeleton/empty/error/retry states reuse native components and theme resources. Batch controls use a neutral capsule with small icons rather than filled primary buttons. English/Chinese strings are included.
 
-Verification: 152 host tests across 30 files; debug/release HAP and CodeLinter passed (empty diagnostic report); brand/contract/welcome generated checks are current. Eight Pura 90 Pro emulator journeys passed, including manager navigation, search/empty/clear, long-press menu, rename cancellation, explicit selection, batch-delete confirmation cancellation and detail→manager→main return with the original draft intact. The temporary slash draft was cleared. Screenshots/UI trees/results remain ignored in `.test/chat-ui/`. Attention UI is still explicitly skipped because the paired Gateway has no unseen attention fixture. Tests exercise API paths, all-channel queries, paging, search races, rename failures, partial batches, refresh failures, undo deadlines, navigation and Gateway isolation using mocks. No real conversation mutations were used for verification. Mate 60 is not connected; no new physical-device acceptance is claimed.
+Verification: 152 host tests across 30 files; debug/release HAP and CodeLinter passed (empty diagnostic report); brand/contract/welcome generated checks are current. Eight Pura 90 Pro emulator journeys passed, including manager navigation, search/empty/clear, long-press menu, rename cancellation, explicit selection, batch-delete confirmation cancellation and detail→manager→main return with the original draft intact. The temporary slash draft was cleared. Screenshots/UI trees/results remain ignored in `.test/chat-ui/`. The former chat attention UI has since been removed; pending items remain in Progress. Tests exercise API paths, all-channel queries, paging, search races, rename failures, partial batches, refresh failures, undo deadlines, navigation and Gateway isolation using mocks. No real conversation mutations were used for verification. Mate 60 is not connected; no new physical-device acceptance is claimed.
 
 Session-specific remaining acceptance: committed rename/pin/archive/delete flows against an isolated paired test Gateway; custom/DiceBear Agent-avatar rendering (rows currently use a native conversation symbol); matched screenshots in both locales/themes and physical-device acceptance. The first empty-search UI assertion used a punctuation-separated phrase; Gateway FTS intentionally joins its tokens with OR, so it matched existing `xopc` history. The test now uses a single random token without changing Gateway search semantics.
 

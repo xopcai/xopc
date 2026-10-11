@@ -14,6 +14,8 @@ import { createExtensionAwareStreamFn } from './extension-stream-bridge.js';
 import { getApiKey } from './index.js';
 import { finishAiUsageFromMessage, observeAiUsageStream, startAiUsageCall } from '../usage/recorder.js';
 import type { AiUsageContext } from '../usage/types.js';
+import { withCloudUsageResponse } from '../usage/cloud-receipts.js';
+import { assertCloudCreditBudgetActive, cloudCreditBudgetHeaders, reportCloudCreditError } from './xopc-cloud-credit-budget.js';
 
 export function isLocalModelBaseUrl(baseUrl: string | undefined): boolean {
   if (!baseUrl) return false;
@@ -56,6 +58,8 @@ export async function resolveModelCallOptions(
   options: SimpleStreamOptions = {},
   credentialOptions?: CredentialResolverOptions,
 ): Promise<SimpleStreamOptions> {
+  assertCloudCreditBudgetActive();
+  if (model.provider === 'xopc-cloud') options = withCloudUsageResponse(options);
   const apiKey = options.apiKey ?? await resolveModelCallApiKey(model, credentialOptions);
   if (!apiKey) {
     throw new Error(`No API key for provider: ${model.provider}`);
@@ -65,6 +69,7 @@ export async function resolveModelCallOptions(
   return {
     ...rest,
     apiKey,
+    ...(model.provider === 'xopc-cloud' ? { headers: { ...options.headers, ...await cloudCreditBudgetHeaders() } } : {}),
     ...(temperature !== undefined ? { temperature } : {}),
   };
 }
@@ -89,9 +94,11 @@ export async function completeWithResolvedCredentials(
       return result;
     }
     const result = await usageCall.run(() => completeSimple(model, context, resolvedOptions));
+    if (result.errorMessage) reportCloudCreditError(result.errorMessage);
     finishAiUsageFromMessage(usageCall, result);
     return result;
   } catch (error) {
+    reportCloudCreditError(error instanceof Error ? error.message : String(error));
     usageCall?.finish({ status: 'failed', errorSummary: error instanceof Error ? error.message : String(error) });
     throw error;
   }
@@ -113,6 +120,9 @@ export async function createResolvedModelStream(
   const usageCall = startAiUsageCall(model, usageContext, { context, options: { reasoning: options.reasoning, temperature: options.temperature, maxTokens: options.maxTokens } });
   try {
     const stream = await usageCall.run(() => createExtensionAwareStreamFn()(model, normalizeContext(context), resolvedOptions));
+    void stream.result().then(message => {
+      if (message.errorMessage) reportCloudCreditError(message.errorMessage);
+    }).catch(() => {});
     return observeAiUsageStream(stream, usageCall);
   } catch (error) {
     usageCall?.finish({ status: 'failed', errorSummary: error instanceof Error ? error.message : String(error) });

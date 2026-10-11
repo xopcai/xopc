@@ -41,6 +41,17 @@ struct PersonalAgentTests {
         #expect(failure.error?.message == "No compatible model")
     }
 
+    @Test func decodesSelectableVoicesAndLocalizedNames() throws {
+        let options = try JSONDecoder().decode([PersonalVoiceOption].self, from: Data(#"""
+        [{"id":"default","name":"Default voice"},
+         {"id":"voice-warm","name":"Warm voice","displayNames":{"zh-CN":"温暖","en":"Warm voice"}}]
+        """#.utf8))
+        #expect(options.count == 2)
+        #expect(options[0].displayNames == nil)
+        #expect(options[1].displayNames?["zh-CN"] == "温暖")
+        #expect(options[1].id == "voice-warm")
+    }
+
     @Test func proactiveSettingsRetainVersionAndDailyLimitsWhenEditingQuietHours() throws {
         let decoded = try JSONDecoder().decode(
             PersonalProactivitySettings.self,

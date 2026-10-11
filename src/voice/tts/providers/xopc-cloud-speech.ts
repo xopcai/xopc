@@ -1,3 +1,6 @@
+import { captureCloudUsageResponse } from '../../../usage/cloud-receipts.js';
+import { trackCloudCapabilityUsage } from '../../../usage/cloud-capability.js';
+import { cloudCreditBudgetHeaders, reportCloudCreditError, rejectUnbudgetedCloudTransport } from '../../../providers/xopc-cloud-credit-budget.js';
 import { getModelCatalogStore } from '../../../providers/model-catalog-store.js';
 import { compareCatalogModels } from '../../../providers/model-catalog-ranking.js';
 import { getProviderAuthService } from '../../../providers/provider-auth-service.js';
@@ -82,28 +85,34 @@ export const xopcCloudSpeechProvider: SpeechProviderPlugin = {
       ? 'opus' : catalogModel.tts?.outputFormats.includes('mp3') ? 'mp3' : catalogModel.tts?.outputFormats[0] ?? 'wav';
     const token = await getProviderAuthService().resolveApiKey('xopc-cloud');
     if (!token) throw new Error('XOPC Cloud authorization is unavailable');
-    const response = await fetch(`${config.baseUrl.replace(/\/+$/, '')}/audio/speech`, {
-      method: 'POST', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
-      body: JSON.stringify({
-        model,
-        input: request.text,
-        voice,
-        response_format: outputFormat,
-        ...(speed !== undefined && catalogModel.tts?.speed ? { speed } : {}),
-        ...(instructions && catalogModel.tts?.instructions ? { instructions } : {}),
-      }),
-      signal: request.signal, redirect: 'error',
+    return trackCloudCapabilityUsage(model, 'audio.speech', async () => {
+      const response = await fetch(`${config.baseUrl.replace(/\/+$/, '')}/audio/speech`, {
+        method: 'POST', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json', ...await cloudCreditBudgetHeaders() },
+        body: JSON.stringify({
+          model,
+          input: request.text,
+          voice,
+          response_format: outputFormat,
+          ...(speed !== undefined && catalogModel.tts?.speed ? { speed } : {}),
+          ...(instructions && catalogModel.tts?.instructions ? { instructions } : {}),
+        }),
+        signal: request.signal, redirect: 'error',
+      });
+      captureCloudUsageResponse(response);
+      if (!response.ok) {
+        const body = await response.json().catch(() => null) as { error?: { message?: unknown; code?: unknown } } | null;
+        const message = `${body?.error?.code ?? ''}: ${typeof body?.error?.message === 'string' ? body.error.message : `XOPC Cloud TTS failed (${response.status})`}`;
+        reportCloudCreditError(message);
+        throw new Error(message);
+      }
+      const audioBuffer = Buffer.from(await response.arrayBuffer());
+      if (audioBuffer.length === 0) throw new Error('XOPC Cloud TTS returned empty audio');
+      const fileExtension = extension(response.headers.get('content-type'), outputFormat);
+      return { audioBuffer, outputFormat: fileExtension, fileExtension, voiceCompatible: fileExtension === 'opus' || fileExtension === 'ogg' };
     });
-    if (!response.ok) {
-      const body = await response.json().catch(() => null) as { error?: { message?: unknown } } | null;
-      throw new Error(typeof body?.error?.message === 'string' ? body.error.message : `XOPC Cloud TTS failed (${response.status})`);
-    }
-    const audioBuffer = Buffer.from(await response.arrayBuffer());
-    if (audioBuffer.length === 0) throw new Error('XOPC Cloud TTS returned empty audio');
-    const fileExtension = extension(response.headers.get('content-type'), outputFormat);
-    return { audioBuffer, outputFormat: fileExtension, fileExtension, voiceCompatible: fileExtension === 'opus' || fileExtension === 'ogg' };
   },
   synthesizeStream: async (request) => {
+    rejectUnbudgetedCloudTransport();
     const config = readConfig(request.providerConfig);
     const model = typeof request.providerOverrides?.model === 'string' ? request.providerOverrides.model : config.model;
     const voice = typeof request.providerOverrides?.voice === 'string' ? request.providerOverrides.voice : config.voice;

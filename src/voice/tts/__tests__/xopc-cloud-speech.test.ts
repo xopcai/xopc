@@ -63,6 +63,18 @@ describe('xopcCloudSpeechProvider', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it('preserves multiple selectable voices and localized names from the cloud catalog', async () => {
+    const source = getModelCatalogStore().getSource('xopc-cloud')!;
+    source.models[0]!.voice!.voices.push({ id: 'voice-b', name: 'Warm voice', displayNames: { 'zh-CN': '温暖', en: 'Warm voice' }, languages: ['zh', 'en'] });
+    getModelCatalogStore().saveSource('xopc-cloud', source);
+    const providerConfig = xopcCloudSpeechProvider.resolveConfig({ cfg: {} as Config,
+      rawConfig: { 'xopc-cloud': { model: 'cloud-tts' } }, timeoutMs: 30_000 });
+    expect(await xopcCloudSpeechProvider.listVoices?.({ providerConfig })).toEqual([
+      { id: 'voice-a', name: 'Voice A' },
+      { id: 'voice-b', name: 'Warm voice', displayNames: { 'zh-CN': '温暖', en: 'Warm voice' } },
+    ]);
+  });
+
   it('passes supported voice controls to the unified speech endpoint', async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(Uint8Array.from([1, 2, 3]), {
       headers: { 'content-type': 'audio/mpeg' },

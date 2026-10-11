@@ -27,7 +27,7 @@ export interface XopcPersonalPreferences {
   humor?: string;
 }
 export interface XopcPersonalVoicePreference { provider: string; model: string; voice: string; }
-export interface XopcPersonalVoiceOption { id: string; name: string; }
+export interface XopcPersonalVoiceOption { id: string; name: string; displayNames?: Record<string, string>; }
 export interface XopcPersonalProactivity {
   revision: number; mode: string; timezone: string; quietStart: number; quietEnd: number;
   dailyMessages: number; dailyModelCalls: number;

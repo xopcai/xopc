@@ -3004,7 +3004,7 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
     pendingModelChoice = null; pendingThinkingChoice = null
   }
   if (personalSettingsOpen) PersonalAgentProfileSheet(connection.personal, { personalSettingsOpen = false },
-    onLoadAgentVoices, onUpdateAgentProfile, onLoadProactivity, onSaveProactivity, onUploadAvatar)
+    onLoadAgentVoices, onUpdateAgentProfile, onUploadAvatar)
   if (messageSearchOpen) ChatMessageSearch(connection.messages, connection.historyBefore != null,
     connection.historyLoadingOlder, onLoadOlderHistory, onClose = { messageSearchOpen = false },
     onSelect = { id -> messageSearchOpen = false; messageDetailId = id })

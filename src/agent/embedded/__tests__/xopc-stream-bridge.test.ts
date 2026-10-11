@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, afterEach } from 'vitest';
-import { normalizeContext, type Model, type Api } from '@earendil-works/pi-ai';
+import { createAssistantMessageEventStream, normalizeContext, type Model, type Api } from '@earendil-works/pi-ai';
 
 import { wrapStreamFnForXopcExtensions } from '../xopc-stream-bridge.js';
 import {
@@ -9,6 +9,8 @@ import {
 } from '../../../providers/plugin-registry.js';
 import { EXTENSION_PROVIDER_BASE_URL } from '../../../providers/index.js';
 import type { ProviderPlugin } from '../../../extensions/types/providers.js';
+import { XopcCloudAccountService } from '../../../providers/xopc-cloud-account-service.js';
+import { withCloudCreditBudget } from '../../../providers/xopc-cloud-credit-budget.js';
 
 const FAKE_TOOLS = [{ name: 'search', description: 'Search', parameters: {} }];
 const FAKE_CONTEXT = normalizeContext({
@@ -37,7 +39,31 @@ function makeExtensionModel(providerId: string): Model<Api> {
 
 describe('wrapStreamFnForXopcExtensions', () => {
   afterEach(() => {
+    vi.restoreAllMocks();
     setProviderRegistry(new ProviderPluginRegistry());
+  });
+
+  it('attaches a shared budget to Cloud requests and stops fallback after exhaustion', async () => {
+    vi.spyOn(XopcCloudAccountService.prototype, 'createBudget').mockResolvedValue({
+      id: '00000000-0000-4000-8000-000000000001', limitCreditMicro: '10000', remainingCreditMicro: '10000',
+      chargedCreditMicro: '0', reservedCreditMicro: '0', revision: 1, createdAt: 1,
+    });
+    const original = vi.fn(() => {
+      const stream = createAssistantMessageEventStream();
+      const message = { role: 'assistant', content: [], api: 'openai-completions', provider: 'xopc-cloud', model: 'cloud',
+        stopReason: 'error', errorMessage: '402 Task Credit budget exhausted; increase its limit to continue',
+        usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } }, timestamp: Date.now() } as const;
+      stream.push({ type: 'error', reason: 'error', error: message as never });
+      return stream;
+    });
+    const wrapped = wrapStreamFnForXopcExtensions(original);
+    await withCloudCreditBudget({ conversationId: 'chat', runId: 'run', limitCreditMicro: '10000' }, async () => {
+      const stream = await wrapped({ ...makeBuiltinModel(), provider: 'xopc-cloud' }, FAKE_CONTEXT, { headers: { 'x-test': '1' } });
+      await stream.result();
+      expect(original.mock.calls[0][2].headers).toEqual({ 'x-test': '1', 'x-xopc-credit-budget': '00000000-0000-4000-8000-000000000001' });
+      expect(() => wrapped(makeBuiltinModel(), FAKE_CONTEXT)).toThrow('credit_budget_exhausted');
+    });
+    expect(original).toHaveBeenCalledOnce();
   });
 
   it('delegates builtin models with the prompt-cache adapter', async () => {

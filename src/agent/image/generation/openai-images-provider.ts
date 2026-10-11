@@ -60,6 +60,7 @@ export interface OpenAiImagesEndpointResolution {
 }
 
 export interface OpenAiImagesProviderOptions {
+  onResponse?: (response: Response) => void;
   id: string;
   label: string;
   defaultModel: string;
@@ -73,7 +74,7 @@ export interface OpenAiImagesProviderOptions {
   resolveApiKey: (req: ImageGenerationRequest) => string | null | undefined | Promise<string | null | undefined>;
 
   /** Resolve endpoint info per-request (region, baseUrl override, Azure deployment, …). */
-  resolveEndpoint: (req: ImageGenerationRequest) => OpenAiImagesEndpointResolution;
+  resolveEndpoint: (req: ImageGenerationRequest) => OpenAiImagesEndpointResolution | Promise<OpenAiImagesEndpointResolution>;
 
   /** Default per-call timeout. Combined with provider-level config in provider-http. */
   defaultTimeoutMs?: number;
@@ -98,7 +99,7 @@ export function createOpenAiImagesProvider(
     isConfigured: options.isConfigured,
     async generateImage(req): Promise<ImageGenerationResult> {
       const apiKey = await options.resolveApiKey(req) ?? null;
-      const endpoint = options.resolveEndpoint(req);
+      const endpoint = await options.resolveEndpoint(req);
       const httpDefaults = resolveProviderHttpRequestConfig({
         providerId: options.id,
         cfg: req.cfg,
@@ -146,6 +147,7 @@ export function createOpenAiImagesProvider(
             size,
             httpDefaults,
             ssrfGuardOptions,
+            onResponse: options.onResponse,
           })
         : await postGenerateRequest({
             providerId: options.id,
@@ -156,6 +158,7 @@ export function createOpenAiImagesProvider(
             size,
             httpDefaults,
             ssrfGuardOptions,
+            onResponse: options.onResponse,
           });
 
       const mapped = mapOpenAiImagesResponse(responseJson, { ...req, count });
@@ -176,6 +179,7 @@ export function createOpenAiImagesProvider(
 // ============================================
 
 interface PostHelperParams {
+  onResponse?: (response: Response) => void;
   providerId: string;
   req: ImageGenerationRequest;
   url: string;
@@ -209,6 +213,7 @@ async function postGenerateRequest(params: PostHelperParams): Promise<unknown> {
     headers: params.headers,
     ...params.ssrfGuardOptions,
   });
+  params.onResponse?.(res);
   return await readJsonResponseLimited(res, MAX_RESPONSE_BYTES);
 }
 
@@ -257,6 +262,7 @@ async function postEditRequest(params: PostHelperParams): Promise<unknown> {
     headers,
     ...params.ssrfGuardOptions,
   });
+  params.onResponse?.(res);
   return await readJsonResponseLimited(res, MAX_RESPONSE_BYTES);
 }
 

@@ -16,6 +16,8 @@ import {
   withPromptCachePayloadTransform,
 } from '../../providers/prompt-cache-payload.js';
 import type { PromptCachePolicy } from '../../providers/prompt-cache-plan.js';
+import { withCloudUsageResponse } from '../../usage/cloud-receipts.js';
+import { assertCloudCreditBudgetActive, cloudCreditBudgetHeaders, hasCloudCreditBudget, reportCloudCreditError } from '../../providers/xopc-cloud-credit-budget.js';
 
 /**
  * pi-coding-agent's default {@link createAgentSession} streamFn always routes through
@@ -33,6 +35,8 @@ export function wrapStreamFnForXopcExtensions(
   const extensionStreamFn = createExtensionAwareStreamFn();
 
   return ((model: Model<Api>, context: TranscriptContext, options?: SimpleStreamOptions) => {
+    assertCloudCreditBudgetActive();
+    if (model.provider === 'xopc-cloud') options = withCloudUsageResponse(options);
     const promptContext = {
       systemPrompt: getCurrentSystemPrompt(context.messages),
       tools: getCurrentTools(context.messages),
@@ -47,6 +51,18 @@ export function wrapStreamFnForXopcExtensions(
         });
     if (model.baseUrl === EXTENSION_PROVIDER_BASE_URL) {
       return extensionStreamFn(model, providerContext, options);
+    }
+    if (model.provider === 'xopc-cloud' && hasCloudCreditBudget()) {
+      return (async () => {
+        const headers = await cloudCreditBudgetHeaders();
+        const stream = await originalStreamFn(model, providerContext,
+          withPromptCachePayloadTransform(model, promptContext,
+            { ...options, headers: { ...options?.headers, ...headers } }, promptCachePolicy));
+        void stream.result().then(message => {
+          if (message.errorMessage) reportCloudCreditError(message.errorMessage);
+        }).catch(() => {});
+        return stream;
+      })();
     }
     return originalStreamFn(
       model,

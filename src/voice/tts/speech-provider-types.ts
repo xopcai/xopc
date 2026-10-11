@@ -112,6 +112,7 @@ export type SpeechStreamSessionRequest = Omit<SpeechSynthesisStreamRequest, 'tex
 
 /** Voice catalog entry returned by `listVoices`. */
 export interface SpeechVoiceOption {
+  displayNames?: Partial<Record<'zh-CN' | 'en', string>>;
   id: string;
   name?: string;
   category?: string;

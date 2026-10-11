@@ -101,6 +101,7 @@ struct AssistantView<Dock: View>: View {
             if let personalAgent, let conversation {
                 PersonalAgentProfileView(configuration: configuration, record: personalAgent,
                                          conversation: conversation, onSaved: onPersonalAgentUpdated)
+                    .presentationDetents([.fraction(0.65)])
             }
         }
         .task(id: configuration) {
@@ -739,15 +740,11 @@ struct PersonalAgentProfileView: View {
     let onSaved: (PersonalAgentRecord) -> Void
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.locale) private var locale
     @State private var record: PersonalAgentRecord
     @State private var name: String
     @State private var appearance: String
-    @State private var addressAs: String
-    @State private var warmth: String
-    @State private var supportMode: String
     @State private var detailLevel: String
-    @State private var proactivity: String
-    @State private var humor: String
     @State private var selectedVoice: String
     @State private var voiceProvider: String?
     @State private var voiceModel: String?
@@ -756,6 +753,7 @@ struct PersonalAgentProfileView: View {
     @State private var avatarPreview: UIImage?
     @State private var uploadingAvatar = false
     @State private var loadingVoices = true
+    @State private var loadingProfile = true
     @State private var saving = false
     @State private var error: String?
 
@@ -769,13 +767,8 @@ struct PersonalAgentProfileView: View {
         _name = State(initialValue: record.displayName)
         _appearance = State(initialValue: record.appearance)
         let preferences = record.preferences ?? [:]
-        _addressAs = State(initialValue: record.userCallName ?? preferences["addressAs"] ?? "")
-        _warmth = State(initialValue: preferences["warmth"] ?? "balanced")
-        _supportMode = State(initialValue: preferences["supportMode"] ?? "untangle")
         _detailLevel = State(initialValue: preferences["detailLevel"] ?? "balanced")
-        _proactivity = State(initialValue: preferences["proactivity"] ?? "decisions")
-        _humor = State(initialValue: preferences["humor"] ?? "none")
-        _selectedVoice = State(initialValue: record.voicePreference?.voice ?? "")
+        _selectedVoice = State(initialValue: record.voicePreference?.voice == "default" ? "" : record.voicePreference?.voice ?? "")
     }
 
     var body: some View {
@@ -785,70 +778,24 @@ struct PersonalAgentProfileView: View {
             Form {
                 Section("助手") {
                     PhotosPicker(selection: $avatarItem, matching: .images) {
-                        HStack {
+                        Group {
                             if let preview {
                                 Image(uiImage: preview).resizable().scaledToFill().frame(width: 64, height: 64).clipShape(Circle())
                             } else {
                                 PersonalAgentAvatar(configuration: configuration, agent: currentRecord, size: 64, active: true)
                             }
-                            Text("上传头像")
-                        }
-                    }.disabled(uploadingAvatar || saving)
+                        }.frame(maxWidth: .infinity)
+                    }.accessibilityLabel("上传头像")
+                        .accessibilityIdentifier("personal-setting-avatar")
+                        .disabled(uploadingAvatar || saving || loadingProfile)
                     TextField("名称", text: $name)
                         .textInputAutocapitalization(.words)
-                    Picker("形象", selection: $appearance) {
-                        Text("Loopi").tag("loopi")
-                        Text("好奇").tag("loopi-curious")
-                        Text("关怀").tag("loopi-care")
-                        if appearance == "custom" {
-                            Text("自定义").tag("custom")
-                        }
-                    }
-                    TextField("怎么称呼你", text: $addressAs)
                 }
                 Section("对话风格") {
-                    NavigationLink("对话模型与思考强度") {
-                        AssistantOptionsView(
-                            configuration: configuration,
-                            conversation: conversation,
-                            onSave: { _ in
-                                Task {
-                                    do {
-                                        if let updated = try await GatewayClient(configuration: configuration).fetchPersonalAgent() {
-                                            record = updated
-                                            onSaved(updated)
-                                        }
-                                    } catch {
-                                        self.error = error.localizedDescription
-                                    }
-                                }
-                            }
-                        )
-                    }
-                    Picker("语气", selection: $warmth) {
-                        Text("克制").tag("reserved")
-                        Text("平衡").tag("balanced")
-                        Text("温柔").tag("gentle")
-                    }
-                    Picker("支持方式", selection: $supportMode) {
-                        Text("倾听").tag("listen")
-                        Text("梳理").tag("untangle")
-                        Text("建议").tag("solutions")
-                    }
                     Picker("回答长度", selection: $detailLevel) {
                         Text("简短").tag("brief")
                         Text("平衡").tag("balanced")
                         Text("详细").tag("detailed")
-                    }
-                    Picker("主动程度", selection: $proactivity) {
-                        Text("由我决定").tag("decisions")
-                        Text("重要时提醒").tag("important")
-                        Text("开放建议").tag("open")
-                    }
-                    Picker("幽默程度", selection: $humor) {
-                        Text("无").tag("none")
-                        Text("偶尔").tag("occasional")
-                        Text("活泼").tag("playful")
                     }
                 }
                 Section("通话声音") {
@@ -860,44 +807,37 @@ struct PersonalAgentProfileView: View {
                     } else {
                         Picker("音色", selection: $selectedVoice) {
                             Text("默认声音").tag("")
-                            ForEach(voiceOptions) { option in
-                                Text(option.name).tag(option.id)
+                            ForEach(voiceOptions.filter { $0.id != "default" }) { option in
+                                Text(option.displayNames?[locale.language.languageCode?.identifier == "zh" ? "zh-CN" : "en"] ?? option.name)
+                                    .tag(option.id)
                             }
-                            if let current = record.voicePreference, !voiceOptions.contains(where: { $0.id == current.voice }) {
+                            if let current = record.voicePreference, current.voice != "default", !voiceOptions.contains(where: { $0.id == current.voice }) {
                                 Text(current.voice).tag(current.voice)
                             }
                         }
                         .accessibilityIdentifier("personal-agent-voice-choice")
                     }
+                    Button(locale.language.languageCode?.identifier == "zh" ? "刷新音色" : "Refresh voices") {
+                        Task { await loadVoices() }
+                    }.disabled(loadingVoices)
                 }
-                PersonalProactivitySection(configuration: configuration)
                 Section {
-                    NavigationLink("会话选项") {
-                        AssistantOptionsView(configuration: configuration, conversation: conversation, onSave: { _ in })
-                    }
+                    Text(locale.language.languageCode?.identifier == "zh"
+                         ? "更多设置请前往 PC 或 Web 端。" : "For more settings, use the PC or Web app.")
+                        .font(.caption).foregroundStyle(.secondary)
                 }
                 if let error {
                     Text(error).foregroundStyle(.red)
-                    Button("重新加载设置") { Task { await reloadProfile() } }
                 }
             }
-            .disabled(saving)
+            .disabled(saving || loadingProfile)
+            .redacted(reason: loadingProfile ? .placeholder : [])
             .onChange(of: avatarItem) {
                 Task { await uploadAvatar() }
             }
-            .task {
-                do {
-                    if let options = try await GatewayClient(configuration: configuration).personalVoiceOptions() {
-                        voiceProvider = options.provider
-                        voiceModel = options.model
-                        voiceOptions = options.voices
-                    }
-                } catch {
-                    self.error = error.localizedDescription
-                }
-                loadingVoices = false
-            }
-            .navigationTitle("配置我的助手")
+            .task { await reloadProfile(); await loadVoices() }
+            .navigationTitle((locale.language.languageCode?.identifier == "zh" ? "配置 " : "Configure ")
+                + (record.displayName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "ADA" : record.displayName))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -905,16 +845,36 @@ struct PersonalAgentProfileView: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("保存") { Task { await save() } }
-                        .disabled(saving || uploadingAvatar || name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        .disabled(saving || uploadingAvatar || loadingProfile || name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
             }
         }
     }
 
+    private func loadVoices() async {
+        loadingVoices = true
+        defer { loadingVoices = false }
+        do {
+            if let options = try await GatewayClient(configuration: configuration).personalVoiceOptions() {
+                voiceProvider = options.provider
+                voiceModel = options.model
+                voiceOptions = options.voices
+            }
+        } catch { self.error = error.localizedDescription }
+    }
+
     private func reloadProfile() async {
+        loadingProfile = true
+        defer { loadingProfile = false }
         do {
             if let updated = try await GatewayClient(configuration: configuration).fetchPersonalAgent() {
-                record = updated; onSaved(updated); error = nil
+                record = updated
+                name = updated.displayName
+                appearance = updated.appearance
+                detailLevel = updated.preferences?["detailLevel"] ?? "balanced"
+                selectedVoice = updated.voicePreference?.voice == "default" ? "" : updated.voicePreference?.voice ?? ""
+                onSaved(updated)
+                error = nil
             }
         } catch { self.error = error.localizedDescription }
     }
@@ -937,13 +897,10 @@ struct PersonalAgentProfileView: View {
         saving = true
         defer { saving = false }
         var preferences = record.preferences ?? [:]
-        preferences["addressAs"] = String(addressAs.prefix(60))
-        preferences["warmth"] = warmth
-        preferences["supportMode"] = supportMode
         preferences["detailLevel"] = detailLevel
-        preferences["proactivity"] = proactivity
-        preferences["humor"] = humor
-        let voicePreference: PersonalVoicePreference? = if selectedVoice == record.voicePreference?.voice {
+        let voicePreference: PersonalVoicePreference? = if selectedVoice == record.voicePreference?.voice
+            || (selectedVoice.isEmpty && record.voicePreference?.voice == "default")
+        {
             record.voicePreference
         } else if let voiceProvider, let voiceModel {
             selectedVoice.isEmpty ? nil : PersonalVoicePreference(
@@ -1062,66 +1019,6 @@ private extension AssistantView {
 private enum PendingConversationStart {
     case agent(String)
     case scoped(ProjectRecord?, String?, String)
-}
-
-private struct PersonalProactivitySection: View {
-    let configuration: GatewayConfiguration
-    @State private var settings: PersonalProactivitySettings?
-    @State private var loading = true
-    @State private var busy = false
-    @State private var saved = false
-    @State private var error: String?
-
-    var body: some View {
-        Section("主动联系") {
-            if loading {
-                Text("主动联系设置").redacted(reason: .placeholder)
-            } else if settings != nil {
-                Picker("主动方式", selection: binding(\.mode, fallback: "balanced")) {
-                    Text("关闭主动联系").tag("off")
-                    Text("仅明确跟进").tag("follow_up")
-                    Text("适度主动").tag("balanced")
-                }
-                Picker("静默开始", selection: binding(\.quietStart, fallback: 22)) {
-                    ForEach(0 ..< 24, id: \.self) { hour in Text(String(format: "%02d:00", hour)).tag(hour) }
-                }
-                Picker("静默结束", selection: binding(\.quietEnd, fallback: 8)) {
-                    ForEach(0 ..< 24, id: \.self) { hour in Text(String(format: "%02d:00", hour)).tag(hour) }
-                }
-                Picker("时区", selection: binding(\.timezone, fallback: "Asia/Shanghai")) {
-                    ForEach(Array(Set(TimeZone.knownTimeZoneIdentifiers + [settings?.timezone ?? "UTC", "UTC"])).sorted(), id: \.self) { zone in
-                        Text(zone.replacingOccurrences(of: "_", with: " ")).tag(zone)
-                    }
-                }
-                Text("有值得交流的进展时，在聊天里留下消息。明确请求的结果会照常交付。")
-                    .font(.caption).foregroundStyle(.secondary)
-                Button(saved ? "已保存" : "保存主动联系设置") { Task { await save() } }.disabled(busy)
-            }
-            if let error {
-                Text(error).foregroundStyle(.red)
-                Button("重新加载设置") { Task { await load() } }
-            }
-        }.disabled(busy).task { await load() }
-    }
-
-    private func binding<Value>(_ path: WritableKeyPath<PersonalProactivitySettings, Value>, fallback: Value) -> Binding<Value> {
-        Binding(get: { settings?[keyPath: path] ?? fallback }, set: { settings?[keyPath: path] = $0; saved = false })
-    }
-
-    private func load() async {
-        loading = true
-        defer { loading = false }
-        do { settings = try await GatewayClient(configuration: configuration).fetchPersonalProactivity(); error = nil }
-        catch { self.error = error.localizedDescription }
-    }
-
-    private func save() async {
-        guard let settings, !busy else { return }
-        busy = true
-        defer { busy = false }
-        do { self.settings = try await GatewayClient(configuration: configuration).updatePersonalProactivity(settings); error = nil; saved = true }
-        catch { self.error = error.localizedDescription }
-    }
 }
 
 private struct ChatMessageSearchView: View {

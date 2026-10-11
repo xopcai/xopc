@@ -1,6 +1,7 @@
 import { Gauge, Puzzle, ShieldCheck, Sparkles } from 'lucide-react';
 import { useCallback, useState } from 'react';
 import useSWR from 'swr';
+import { useSearchParams } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
 import { AutosaveStatus } from '@/components/ui/autosave-status';
@@ -39,7 +40,14 @@ function AgentDefaultsEditor({
   builtinTools: BuiltinToolSummary[];
   zh: boolean;
 }) {
-  const [activePanel, setActivePanel] = useState<DefaultsPanel>('models');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedPanel = searchParams.get('panel');
+  const activePanel: DefaultsPanel = requestedPanel === 'skills' || requestedPanel === 'tools' || requestedPanel === 'runtime' ? requestedPanel : 'models';
+  const setActivePanel = (panel: DefaultsPanel) => {
+    const next = new URLSearchParams(searchParams);
+    next.set('panel', panel);
+    setSearchParams(next, { replace: true });
+  };
   const [draft, setDraft] = useState<AgentDefaults>(() => structuredClone(initial));
   const [saved, setSaved] = useState<AgentDefaults>(() => structuredClone(initial));
   const dirty = JSON.stringify(draft) !== JSON.stringify(saved);

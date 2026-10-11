@@ -200,7 +200,7 @@ internal fun PersonalScreen(state: PersonalUiState, insets: PaddingValues, conne
     Spacer(Modifier.height(bottomChromeHeight + 24.dp))
   }
   if (agentEditorOpen) PersonalAgentProfileSheet(state, { agentEditorOpen = false }, onLoadAgentVoices,
-    onUpdateAgentProfile, onLoadProactivity, onSaveProactivity, onUploadAvatar)
+    onUpdateAgentProfile, onUploadAvatar)
   if (editorOpen) {
     val currentSaving by rememberUpdatedState(state.savingGoal)
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true,

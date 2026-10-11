@@ -103,12 +103,8 @@ if (starters.length) {
 click(node(nodes, 'chat-open-drawer')); nodes = await tree('drawer'); node(nodes, 'chat-drawer');
 assert(!nodes.some(item => item.id === 'main-tab-dock')); await screen('drawer');
 click(node(nodes, 'chat-drawer-collapse')); nodes = await tree('closed-drawer'); node(nodes, 'main-tab-dock'); passed.push('drawer opens/closes and hides dock');
-const attention = nodes.find(item => item.id === 'chat-attention-open');
-if (attention) {
-  click(attention); nodes = await tree('attention'); node(nodes, 'chat-attention-sheet'); await screen('attention');
-  command('shell', 'uitest', 'uiInput', 'keyEvent', 'Back'); nodes = await tree('closed-attention');
-  node(nodes, 'main-tab-dock'); passed.push('attention sheet opens and dismisses without executing actions');
-} else skipped.push('attention sheet: no unseen attention fixture on paired Gateway');
+assert(!nodes.some(item => item.id === 'chat-attention-open' || item.id === 'chat-attention-sheet'));
+passed.push('global pending items stay in Progress, with no chat attention banner or sheet');
 click(node(nodes, 'chat-model-picker')); nodes = await tree('models'); await screen('models');
 assert(nodes.some(item => item.text.startsWith('✓ ')), 'Current model indicator is missing');
 command('shell', 'uitest', 'uiInput', 'keyEvent', 'Back'); nodes = await tree('closed-models');

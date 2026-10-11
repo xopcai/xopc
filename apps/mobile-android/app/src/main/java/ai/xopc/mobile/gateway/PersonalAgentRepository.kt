@@ -8,7 +8,7 @@ data class PersonalAgentRecord(val agentId: String, val conversationId: String,
   val voicePreference: PersonalVoicePreference? = null, val userCallName: String? = null)
 
 data class PersonalVoicePreference(val provider: String, val model: String, val voice: String)
-data class PersonalVoiceOption(val id: String, val name: String)
+data class PersonalVoiceOption(val id: String, val name: String, val displayNames: Map<String, String> = emptyMap())
 data class PersonalVoiceChoices(val provider: String, val model: String,
   val voices: List<PersonalVoiceOption>)
 
@@ -71,7 +71,9 @@ class PersonalAgentRepository(private val gateway: GatewaySession) {
     return PersonalVoiceChoices(provider, model, (0 until voices.length()).mapNotNull { index ->
       voices.optJSONObject(index)?.let { voice ->
         val id = voice.optString("id")
-        if (id.isBlank()) null else PersonalVoiceOption(id, voice.optString("name").ifBlank { id })
+        if (id.isBlank()) null else PersonalVoiceOption(id, voice.optString("name").ifBlank { id },
+          voice.optJSONObject("displayNames")?.let { names -> names.keys().asSequence()
+            .mapNotNull { key -> names.optString(key).takeIf { it.isNotBlank() }?.let { key to it } }.toMap() }.orEmpty())
       }
     })
   }

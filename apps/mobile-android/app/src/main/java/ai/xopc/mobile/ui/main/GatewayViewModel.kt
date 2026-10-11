@@ -613,7 +613,8 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
     viewModelScope.launch {
       try {
         val route = mutableState.value.personal.agentVoiceChoices
-        val voice = if (route == null || voiceId == null || voiceId == agent.voicePreference?.voice) agent.voicePreference
+        val voice = if (route == null || voiceId == null || voiceId == agent.voicePreference?.voice ||
+            (voiceId.isEmpty() && agent.voicePreference?.voice == "default")) agent.voicePreference
           else if (voiceId.isEmpty()) null
           else PersonalVoicePreference(route.provider, route.model, voiceId)
         val updated = runInterruptible(Dispatchers.IO) {

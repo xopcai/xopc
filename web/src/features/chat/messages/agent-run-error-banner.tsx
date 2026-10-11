@@ -42,6 +42,8 @@ function resolveErrorCopy(payload: AgentRunErrorPayload, m: ReturnType<typeof me
       return { title: m.agentRunErrorTimeoutTitle, body: m.agentRunErrorTimeoutBody };
     case 'billing':
       return { title: m.agentRunErrorBillingTitle, body: m.agentRunErrorBillingBody };
+    case 'credit_budget_exhausted':
+      return { title: m.creditBudgetExhaustedTitle, body: m.creditBudgetExhaustedBody, cta: m.creditBudgetSettingsCta, deepLink: '/settings/agent-defaults?panel=runtime' };
     case 'model_quota_exhausted':
       return { title: m.xopcQuotaExhaustedTitle, body: m.xopcQuotaExhaustedBody };
     case 'platform_token_limit_exceeded':
@@ -75,6 +77,7 @@ function ErrorIcon({ code }: { code: string }) {
     case 'timeout':
       return <Clock className={className} strokeWidth={1.75} />;
     case 'billing':
+    case 'credit_budget_exhausted':
     case 'model_quota_exhausted':
     case 'platform_token_limit_exceeded':
       return <Wallet className={className} strokeWidth={1.75} />;

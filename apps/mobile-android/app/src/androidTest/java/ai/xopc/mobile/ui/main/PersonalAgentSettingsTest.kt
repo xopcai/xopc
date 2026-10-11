@@ -2,6 +2,8 @@ package ai.xopc.mobile.ui.main
 
 import ai.xopc.mobile.R
 import ai.xopc.mobile.gateway.GatewayProfile
+import ai.xopc.mobile.gateway.PersonalVoiceOption
+import ai.xopc.mobile.gateway.PersonalVoiceChoices
 import ai.xopc.mobile.gateway.PersonalAgentRecord
 import ai.xopc.mobile.gateway.PersonalProactivitySettings
 import ai.xopc.mobile.theme.XopcTheme
@@ -11,8 +13,8 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onNodeWithTag
-import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performClick
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Rule
@@ -45,6 +47,7 @@ class PersonalAgentSettingsTest {
     compose.onNodeWithTag("chat-header-search").assertIsDisplayed()
     compose.onNodeWithTag("assistant-options").performClick()
     compose.onNodeWithTag("personal-agent-profile-sheet").assertIsDisplayed()
+    compose.onNodeWithText(compose.activity.getString(R.string.personal_agent_address)).assertDoesNotExist()
     compose.onNodeWithText(compose.activity.getString(R.string.personal_agent_humor)).assertDoesNotExist()
     compose.onNodeWithText(compose.activity.getString(R.string.chat_personal_timezone)).assertDoesNotExist()
     compose.onNodeWithText(compose.activity.getString(R.string.chat_personal_model_thinking)).assertDoesNotExist()
@@ -53,7 +56,7 @@ class PersonalAgentSettingsTest {
     compose.waitForIdle()
     compose.runOnIdle {
       assertEquals("Ada", savedName)
-      assertEquals("Joyce", savedPreferences["addressAs"])
+      assertNull(savedPreferences["addressAs"])
       assertEquals("gentle", savedPreferences["warmth"])
       assertEquals("Keep context", savedPreferences["guidance"])
       assertEquals("playful", savedPreferences["humor"])
@@ -63,42 +66,35 @@ class PersonalAgentSettingsTest {
     compose.onNodeWithTag("personal-agent-profile-sheet").assertDoesNotExist()
   }
 
-  @Test fun unifiedSavePreservesAdvancedOutreachSettingsAndRetriesFailure() {
+  @Test fun profileSettingsShowCustomNameAndPreserveAdvancedPreferences() {
+    val preferences = mapOf("proactivity" to "open", "warmth" to "reserved", "guidance" to "Keep context")
     val agent = PersonalAgentRecord("personal", "11111111-2222-3333-4444-555555555555",
-      "ready", "Ada", "loopi", null, revision = 7)
-    val outreach = PersonalProactivitySettings(3, "balanced", "Asia/Shanghai", 23, 7, 4, 20)
-    val state = mutableStateOf(PersonalUiState(gatewayId = "gateway", agent = agent))
-    var savedOutreach: PersonalProactivitySettings? = null
-    var profileWrites = 0
-    var outreachWrites = 0
+      "ready", "My ADA", "loopi", null, revision = 7, preferences = preferences)
+    val state = mutableStateOf(PersonalUiState(gatewayId = "gateway", agent = agent,
+      agentVoiceChoices = PersonalVoiceChoices("xopc-cloud", "tts", listOf(
+        PersonalVoiceOption("default", "Default voice"), PersonalVoiceOption("voice-warm", "Warm voice")))))
+    var savedPreferences = emptyMap<String, String>()
     var dismissed = false
+    var savedVoice: String? = null
     compose.setContent {
       XopcTheme {
-        PersonalAgentProfileSheet(state.value, { dismissed = true }, {}, { _, _, _, _ ->
-          profileWrites++
+        PersonalAgentProfileSheet(state.value, { dismissed = true }, {}, { _, _, updated, voice ->
+          savedVoice = voice
+          savedPreferences = updated
           state.value = state.value.copy(agentProfileSavedRevision = 1)
-        }, { outreach }, { settings ->
-          outreachWrites++
-          if (outreachWrites == 1) error("Temporary failure")
-          savedOutreach = settings
-          settings.copy(revision = 4)
         }, {})
       }
     }
-    compose.onNodeWithText(compose.activity.getString(R.string.chat_personal_outreach_off))
-      .performScrollTo().performClick()
-    compose.onNodeWithTag("personal-agent-profile-save").assertIsDisplayed().performClick()
-    compose.waitForIdle()
-    compose.onNodeWithText(compose.activity.getString(R.string.personal_agent_outreach_save_error)).assertIsDisplayed()
-    compose.runOnIdle {
-      assertEquals(0, profileWrites)
-      assertEquals(false, dismissed)
-    }
+    compose.onNodeWithText(compose.activity.getString(R.string.personal_agent_settings_title, "My ADA")).assertIsDisplayed()
+    compose.onNodeWithTag("personal-outreach-options").assertDoesNotExist()
+    compose.onNodeWithText(compose.activity.getString(R.string.personal_agent_voice) + " · " +
+      compose.activity.getString(R.string.personal_agent_default_voice)).performScrollTo().performClick()
+    compose.onNodeWithText("Warm voice").performClick()
     compose.onNodeWithTag("personal-agent-profile-save").performClick()
     compose.waitForIdle()
     compose.runOnIdle {
-      assertEquals(outreach.copy(mode = "off"), savedOutreach)
-      assertEquals(1, profileWrites)
+      assertEquals("voice-warm", savedVoice)
+      preferences.forEach { (key, value) -> assertEquals(value, savedPreferences[key]) }
       assertEquals(true, dismissed)
     }
   }

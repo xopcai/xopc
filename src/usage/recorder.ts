@@ -9,6 +9,7 @@ import { createLogger } from '../utils/logger.js';
 import { classifyCostSource, dollarsToMicrousd, pricingSnapshot } from './cost.js';
 import { resolveAiUsageScenario } from './scenario-registry.js';
 import type { AiUsageContext, AiUsageFinish, AiUsageModel } from './types.js';
+import { withUsageReceiptContext, reconcileCloudUsageReceipt } from './cloud-receipts.js';
 
 const log = createLogger('AiUsage');
 
@@ -69,7 +70,7 @@ export function startAiUsageCall(model: AiUsageModel, context: AiUsageContext, i
   let completed = false;
   return {
     id,
-    run: observation.run,
+    run: fn => observation.run(() => withUsageReceiptContext(id, fn)),
     finish(result) {
       if (completed) return;
       completed = true;
@@ -89,6 +90,7 @@ export function startAiUsageCall(model: AiUsageModel, context: AiUsageContext, i
             ? 0
             : costSource === 'unknown' ? undefined : dollarsToMicrousd(result.usage?.cost?.total),
         });
+        if (model.provider === 'xopc-cloud') void reconcileCloudUsageReceipt(id);
       } catch (err) {
         log.error({ err, usageEventId: id, operation }, 'Failed to finish AI usage record');
       }

@@ -1,23 +1,25 @@
 {
   "usage": {
     "title": "Usage & cost",
-    "subtitle": "See when AI was used, why it ran, and the known or estimated API cost.",
+    "subtitle": "Calls recorded on this device, with Cloud Credit charges separate from external provider estimates.",
+    "cloudBillingHint": "Billing follows each call. A BYOK chat can still spend Credits on Cloud image or audio tools. View Cloud details for the full account bill.",
+    "cloudCreditsLabel": "See Cloud Credit details",
     "periodLabel": "Time range",
     "last7Days": "Last 7 days",
     "last30Days": "Last 30 days",
     "last90Days": "Last 90 days",
     "summaryLabel": "Usage summary",
-    "knownCost": "Known / estimated API cost",
+    "knownCost": "BYOK / external estimate (USD)",
     "calls": "Model calls",
     "callUnit": "calls",
     "tokens": "Tokens",
     "unknownCosts": "Unknown cost",
-    "someCostsUnknown": "The total includes known estimates only. Some calls use subscriptions or models without pricing data.",
-    "allCostsUnknown": "No monetary estimate is available for these calls. Token and call counts are still shown.",
+    "someCostsUnknown": "This USD amount includes available external estimates only. Subscription or unpriced calls may have no estimate. Cloud Credits are excluded.",
+    "allCostsUnknown": "No estimate is available for these external calls. They are not treated as zero cost.",
     "byScenario": "By scenario",
     "byModel": "By model",
     "recentCalls": "Recent calls",
-    "recentCallsHint": "Each row is one physical request to a model provider.",
+    "recentCallsHint": "Each row is a call attempt. Cloud charges follow the platform receipt.",
     "costUnknown": "Cost unknown",
     "tokensUnknown": "Tokens unknown",
     "empty": "No AI calls in this period.",
@@ -43,7 +45,13 @@
       "discussion_analysis": "Discussion analysis",
       "other": "Other"
     },
-    "status": { "running": "Running", "succeeded": "Completed", "failed": "Failed", "aborted": "Stopped", "unknown": "Outcome unknown" },
+    "status": {
+      "running": "Running",
+      "succeeded": "Completed",
+      "failed": "Failed",
+      "aborted": "Stopped",
+      "unknown": "Outcome unknown"
+    },
     "reasons": {
       "agentAnswer": "Answer a conversation",
       "continueAfterTool": "Continue after a tool result",
@@ -66,7 +74,23 @@
       "discussionAnalysis": "Analyze a discussion",
       "textAssist": "Improve text in an editor",
       "userModelInterpretation": "Update user understanding",
-      "other": "Other AI work"
-    }
+      "other": "Other AI work",
+      "imageGeneration": "Generating images",
+      "audioTranscription": "Transcribing audio files",
+      "audioSpeech": "Synthesizing speech"
+    },
+    "cloudCharged": "Confirmed Cloud spend",
+    "cloudSource": "XOPC Cloud",
+    "externalSource": "External provider",
+    "localSource": "Local model",
+    "noCloudCalls": "No Cloud calls",
+    "noExternalCalls": "No external calls",
+    "cloudUnconfirmed": "Cloud charge unconfirmed",
+    "cloudPending": "Settlement pending",
+    "cloudReleased": "Reservation released · 0 Credits",
+    "cloudPendingReserved": "Pending · {{credits}} Credits reserved",
+    "localNoCharge": "Local run, no Cloud Credit charge",
+    "cloudCoverage": "Confirmed amounts include receipts linked on this device; {{pending}} calls pending, {{unknown}} charges unconfirmed.",
+    "cloudReserved": "Currently reserved: {{credits}} Credits."
   }
 }

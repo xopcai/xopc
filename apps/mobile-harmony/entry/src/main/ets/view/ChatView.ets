@@ -19,10 +19,7 @@ import { appSettings } from '../service/settings';
 import { pickChatAttachment } from '../service/chatAttachmentPicker';
 import { XopcChatOptions } from './ChatOptions';
 import { XopcChatOptionsViewModel } from '../viewmodel/chatOptionsViewModel';
-import { XopcMobileRoute, XopcHomeItem, XopcHomeAction } from '../model/home';
-import { mobileRoute } from '../common/homeProtocol';
-import { XopcChatAttentionViewModel } from '../viewmodel/chatAttentionViewModel';
-import { XopcChatAttentionRow } from './ChatAttention';
+import { XopcMobileRoute } from '../model/home';
 import { XopcChatWelcome } from './ChatWelcome';
 import { layoutState, XopcLayoutState } from '../service/layoutState';
 import { XopcChatContext } from './ChatContext';
@@ -80,7 +77,6 @@ export struct XopcChatView {
   @Param personalAgent: XopcPersonalAgentRecord | null = null;
   @Event onPersonalAgentSaved: (record: XopcPersonalAgentRecord) => void = (_record: XopcPersonalAgentRecord): void => {};
   @Local personalSettingsOpen: boolean = false;
-  @Local personalSettingsNextMode: string = '';
   @Local searchOpen: boolean = false;
   @Local searchQuery: string = '';
   @Local searchCategory: string = 'messages';
@@ -92,9 +88,7 @@ export struct XopcChatView {
     return this.personalAgent?.state === 'ready' && this.chat.selectedId === this.personalAgent.conversationId;
   }
   @BuilderParam bottomDock: () => void = this.emptyDock;
-  @Param attentionItems: XopcHomeItem[] = [];
   @Event onConversationChange: (id: string) => void = (_id: string): void => {};
-  @Event onAttentionRefresh: () => void = (): void => {};
   @Event onNavigate: (route: XopcMobileRoute) => void = (_route: XopcMobileRoute): void => {};
   @Local chat: XopcChatViewModel = new XopcChatViewModel();
   @Local disclosure: XopcChatDisclosure = new XopcChatDisclosure();
@@ -143,7 +137,6 @@ export struct XopcChatView {
     if (this.sheetMode === 'actions') return 448;
     if (this.sheetMode === 'thinking') return Math.min(620, Math.max(280, 136 + (this.options.selectedModel()?.thinking?.options.length || 1) * 60));
     if (this.sheetMode === 'queue') return Math.min(620, Math.max(240, 156 + this.options.queued.length * 92));
-    if (this.sheetMode === 'attention') return Math.min(560, Math.max(300, 188 + Math.min(this.attentionItems.length, 3) * 96));
     return 620;
   }
   @Local voice: XopcVoiceCapture = voiceCapture;
@@ -207,8 +200,6 @@ export struct XopcChatView {
   private messageViewportHeight: number = 0;
   private replyRowHeights: Map<string, number> = new Map<string, number>();
   @Local savingNote: boolean = false;
-  @Local attention: XopcChatAttentionViewModel = new XopcChatAttentionViewModel();
-  @Computed get unseenAttention(): XopcHomeItem[] { return this.attention.unseen(this.attentionItems); }
   @Local restoringDraft: boolean = false;
   @Local palette: XopcChatPaletteViewModel = new XopcChatPaletteViewModel();
   @Local layout: XopcLayoutState = layoutState;
@@ -756,7 +747,7 @@ export struct XopcChatView {
 
   aboutToAppear(): void {
     this.visible = this.activePage;
-    if (this.visible) { this.bindBack(); this.attention.activate(); }
+    if (this.visible) { this.bindBack(); }
     this.appliedRequestRevision = this.requestRevision;
     this.chat.taskId = this.taskId;
     this.chat.start(this.requestedId, true);
@@ -824,8 +815,8 @@ export struct XopcChatView {
     this.visible = this.activePage;
     if (!this.activePage) this.clearSendFlight();
     if (!this.activePage) { clearTimeout(this.scrollTimer); this.layoutScrollAnimating = false; }
-    if (!this.activePage) { clearTimeout(this.composerFocusTimer); this.focusComposerOnMount = false; this.attention.dispose(); this.saveDraft(); this.palette.close(); this.voiceHeld = false; this.voiceDestination = 'send'; this.voice.cancel(); this.reader.leaveForeground(); this.setPanel(false); this.sheetOpen = false; this.options.pause(); this.prompt.pause(); this.connectionWait.pause(); this.chat.deactivate(); }
-    else { this.attention.activate(); this.bindBack(); this.chat.activate(); this.onHistoryReady(); this.onMessageChange(); this.options.resume(); this.prompt.resume(); if (this.layout.foreground) this.connectionWait.onReturn(); }
+    if (!this.activePage) { clearTimeout(this.composerFocusTimer); this.focusComposerOnMount = false; this.saveDraft(); this.palette.close(); this.voiceHeld = false; this.voiceDestination = 'send'; this.voice.cancel(); this.reader.leaveForeground(); this.setPanel(false); this.sheetOpen = false; this.options.pause(); this.prompt.pause(); this.connectionWait.pause(); this.chat.deactivate(); }
+    else { this.bindBack(); this.chat.activate(); this.onHistoryReady(); this.onMessageChange(); this.options.resume(); this.prompt.resume(); if (this.layout.foreground) this.connectionWait.onReturn(); }
   }
   @Monitor('requestRevision', 'chat.sending')
   onTargetChange(): void {
@@ -858,21 +849,7 @@ export struct XopcChatView {
     this.setPanel(true);
     this.chooseAction(this.requestedAction);
   }
-  aboutToDisappear(): void { this.clearSendFlight(); this.closeExecutionDetail(); this.attention.dispose(); this.visible = false; this.disposed = true; clearTimeout(this.composerFocusTimer); clearTimeout(this.intakeTimer); clearTimeout(this.scrollTimer); clearTimeout(this.draftTimer); this.saveDraft(); this.draftGeneration++; this.palette.dispose(); this.setPanel(false); this.prompt.dispose(); this.connectionWait.dispose(); this.context.dispose(); this.options.dispose(); this.chat.dispose(); this.voiceHeld = false; this.voiceDestination = 'send'; this.voice.cancel(); this.reader.leaveForeground(); this.attachments = []; }
-
-  private async attentionAction(action: XopcHomeAction): Promise<void> {
-    if (action.type === 'open') {
-      const route: XopcMobileRoute | undefined = mobileRoute(action.href ?? '');
-      if (route) { this.sheetOpen = false; this.onNavigate(route); }
-      else this.attention.error = this.getUIContext().getHostContext()?.resourceManager.getStringSync($r('app.string.unsupported_route').id) ?? '';
-      return;
-    }
-    if (this.attention.pending) return;
-    if (await this.attention.act(action)) {
-      this.getUIContext().getPromptAction().showToast({ message: action.type === 'retry_run' ? $r('app.string.chat_attention_retried') : $r('app.string.chat_attention_completed') });
-    }
-    this.onAttentionRefresh();
-  }
+  aboutToDisappear(): void { this.clearSendFlight(); this.closeExecutionDetail(); this.visible = false; this.disposed = true; clearTimeout(this.composerFocusTimer); clearTimeout(this.intakeTimer); clearTimeout(this.scrollTimer); clearTimeout(this.draftTimer); this.saveDraft(); this.draftGeneration++; this.palette.dispose(); this.setPanel(false); this.prompt.dispose(); this.connectionWait.dispose(); this.context.dispose(); this.options.dispose(); this.chat.dispose(); this.voiceHeld = false; this.voiceDestination = 'send'; this.voice.cancel(); this.reader.leaveForeground(); this.attachments = []; }
 
   private async newConversation(agentId: string = this.options.agentId, projectId: string | null = this.chat.projectId || null, executionMode?: string): Promise<void> {
     if (this.chat.loading || this.chat.sending || this.restoringDraft) return;
@@ -1417,20 +1394,6 @@ export struct XopcChatView {
     Column() {
     if (this.connectionWait.snapshot?.wait) { XopcChatConnectionWait({ model: this.connectionWait }) }
     if (this.prompt.prompt) { XopcChatPrompt({ model: this.prompt }) }
-    else if (this.unseenAttention.length) {
-      Row({ space: 8 }) {
-        Button({ type: ButtonType.Normal }) {
-          Column({ space: 4 }) {
-            Text(this.unseenAttention[0].title).fontSize(14).fontColor(this.colors.foreground).maxLines(1)
-            Text(this.unseenAttention[0].summary).fontSize(12).fontColor(this.colors.secondary).maxLines(1)
-          }.alignItems(HorizontalAlign.Start)
-        }.id('chat-attention-open').layoutWeight(1).backgroundColor(Color.Transparent).padding(8)
-          .onClick((): void => { this.openSheet('attention'); })
-        Text(this.attentionItems.length.toString()).fontColor(this.colors.accent)
-        Button('×').height(44).width(44).padding(0).backgroundColor(Color.Transparent).fontColor(this.colors.secondary)
-          .accessibilityText($r('app.string.chat_close')).onClick((): void => { this.attention.dismiss(this.attentionItems); })
-      }.width('92%').borderRadius(12).backgroundColor(this.colors.accentSoft).margin({ bottom: 8 })
-    }
     if (this.options.queued.length || this.options.queueError) {
       Button({ type: ButtonType.Normal }) {
         Row({ space: 10 }) {
@@ -1767,10 +1730,8 @@ export struct XopcChatView {
       }
       this.conversation()
       Column().width('100%').height(0)
-        .bindSheet($$this.personalSettingsOpen, this.personalSettingsSheet, { height: '90%', dragBar: false,
-          keyboardAvoidMode: SheetKeyboardAvoidMode.RESIZE_ONLY, showClose: false, backgroundColor: this.colors.panel, onDisappear: (): void => {
-            if (this.personalSettingsNextMode) { const mode = this.personalSettingsNextMode; this.personalSettingsNextMode = ''; this.openSheet(mode); }
-          } })
+        .bindSheet($$this.personalSettingsOpen, this.personalSettingsSheet, { height: '65%', dragBar: false,
+          keyboardAvoidMode: SheetKeyboardAvoidMode.RESIZE_ONLY, showClose: false, backgroundColor: this.colors.panel })
       Column().id('chat-image-editor-sheet-host').width('100%').height(0)
         .bindSheet($$this.imageEditorOpen, this.imageEditorSheet, { height: '75%', dragBar: false,
           backgroundColor: this.colors.panel, onDisappear: (): void => { this.imageEditorError = ''; } })
@@ -1939,10 +1900,7 @@ export struct XopcChatView {
   personalSettingsSheet() {
     XopcPersonalAgentSettings({ record: this.personalAgent,
       onSaved: (record: XopcPersonalAgentRecord): void => { this.onPersonalAgentSaved(record); },
-      onClose: (): void => { this.personalSettingsOpen = false; },
-      onModel: (): void => { this.personalSettingsNextMode = 'model'; this.personalSettingsOpen = false; },
-      onThinking: (): void => { this.personalSettingsNextMode = 'thinking'; this.personalSettingsOpen = false; },
-      onActions: (): void => { this.personalSettingsNextMode = 'actions'; this.personalSettingsOpen = false; } })
+      onClose: (): void => { this.personalSettingsOpen = false; } })
   }
 
   private closeMessageSearch(): void {
@@ -2044,26 +2002,7 @@ export struct XopcChatView {
 
   @Builder
   optionsSheet() {
-    if (this.sheetMode === 'attention') {
-      Column({ space: 12 }) {
-        Row() {
-          Text($r('app.string.needs_you')).fontSize(20).fontWeight(FontWeight.Medium).fontColor(this.colors.foreground).layoutWeight(1)
-          Button($r('app.string.chat_close')).height(44).backgroundColor(Color.Transparent).fontColor(this.colors.secondary)
-            .onClick((): void => { this.sheetOpen = false; })
-        }.width('100%')
-        Scroll() {
-          Column({ space: 12 }) {
-            if (!this.attentionItems.length) { Text($r('app.string.nothing_needed')).fontColor(this.colors.secondary) }
-            ForEach(this.attention.ordered(this.attentionItems).slice(0, 3), (item: XopcHomeItem) => {
-              XopcChatAttentionRow({ item, pending: this.attention.pending, onAction: (action: XopcHomeAction): void => { this.attentionAction(action); } })
-            }, (item: XopcHomeItem): string => item.id + ':' + JSON.stringify(item))
-            if (this.attention.error) { Text(userErrorMessage(this.attention.error, 'save')).fontColor(this.colors.danger).width('100%') }
-            Button($r('app.string.chat_attention_all')).height(48).width('100%').backgroundColor(Color.Transparent).fontColor(this.colors.accent)
-              .onClick((): void => { this.sheetOpen = false; this.onNavigate({ page: 'progress', itemId: '' }); })
-          }.width('100%')
-        }.width('100%').layoutWeight(1)
-      }.id('chat-attention-sheet').width('100%').height('100%').padding(20)
-    } else if (['context', 'project', 'environment', 'directory', 'references'].includes(this.sheetMode)) {
+    if (['context', 'project', 'environment', 'directory', 'references'].includes(this.sheetMode)) {
       XopcChatContext({ model: this.context, initialMode: this.sheetMode, initialReferenceKind: this.referenceKind, refs: this.refs,
         onMode: (mode: string): void => { this.sheetMode = mode; },
         onScope: (projectId: string | null, mode?: string): void => { this.newConversation(this.options.agentId, projectId, mode); },

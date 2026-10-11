@@ -7,6 +7,9 @@ type Scenario = {
 };
 
 const SCENARIOS: Readonly<Record<string, Scenario>> = {
+  'images.generate': { category: 'other', reasonKey: 'usage.reason.imageGeneration', trigger: 'agent' },
+  'audio.transcribe': { category: 'other', reasonKey: 'usage.reason.audioTranscription', trigger: 'user' },
+  'audio.speech': { category: 'other', reasonKey: 'usage.reason.audioSpeech', trigger: 'agent' },
   'agent.answer': { category: 'chat', reasonKey: 'usage.reason.agentAnswer', trigger: 'user' },
   'agent.continue_after_tool': { category: 'tool_loop', reasonKey: 'usage.reason.continueAfterTool', trigger: 'agent' },
   'agent.background_review': { category: 'delegation', reasonKey: 'usage.reason.backgroundReview', trigger: 'agent' },

@@ -31,16 +31,15 @@ describe('chat bottom region composition', () => {
     expect(chat).toContain("Text('↓').fontSize(20).fontColor(this.colors.secondary)");
     expect(jump).toContain('.height(36).width(36)');
     expect(jump).toContain('.responseRegion({ x: -4, y: -4, width: 44, height: 44 })');
-    expect(jump).toContain('this.messagesScroller.scrollEdge(Edge.Bottom)');
+    expect(jump).toContain('this.resetMessagePosition(); this.updateReplySpace(); this.onMessageChange();');
   });
 
-  it('shows the jump button only while scrolling back toward the latest message', () => {
+  it('shows the jump button whenever reading away from the latest message', () => {
     expect(chat).toContain('@Local showJumpBottom: boolean = false;');
     expect(chat).toContain('if (this.atBottom) { this.showJumpBottom = false; this.updateReplySpace(); }');
-    expect(chat).toContain('else if (offset > 0) this.showJumpBottom = true;');
-    expect(chat).toContain('else if (offset < 0) this.showJumpBottom = false;');
+    expect(chat).toContain('else this.showJumpBottom = true;');
     expect(chat).toContain('if (!this.atBottom && this.showJumpBottom)');
-    expect(chat).toContain('this.atBottom = true; this.showJumpBottom = false; this.updateReplySpace();');
+    expect(chat).toContain('this.resetMessagePosition(); this.updateReplySpace(); this.onMessageChange();');
   });
 
   it('replaces the jump arrow with the shared animated mascot while AI is responding', () => {

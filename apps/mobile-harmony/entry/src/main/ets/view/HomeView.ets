@@ -627,7 +627,7 @@ export struct XopcHomeView {
       Column() {
         XopcChatView({ requestedId: this.creationChatId, requestRevision: this.creationChatRevision,
           intakeRevision: this.intake.chatRevision, intakeText: this.creationChatDraft,
-          activePage: this.creationSheetOpen, embedded: true, attentionItems: [],
+          activePage: this.creationSheetOpen, embedded: true,
           onNavigate: (route: XopcMobileRoute): void => { this.creationSheetOpen = false; this.navigate(route); } })
       }.layoutWeight(1).width('100%')
     }.width('100%').height('100%').backgroundColor(this.colors.surface)
@@ -656,7 +656,7 @@ export struct XopcHomeView {
           requestedAction: this.requestedChatAction, actionRevision: this.chatActionRevision,
           intakeRevision: this.intake.chatRevision, intakeText: this.requestedChatDraft,
           bottomDock: this.chatDock,
-          activePage: this.tab === 0 && !this.detailVisible, attentionItems: this.attention.needsUser, onAttentionRefresh: (): void => { this.attention.refresh(); },
+          activePage: this.tab === 0 && !this.detailVisible,
           onNavigate: (route: XopcMobileRoute): void => { this.navigate(route); },
           onConversationChange: (id: string): void => {
             this.activeChatId = id;
