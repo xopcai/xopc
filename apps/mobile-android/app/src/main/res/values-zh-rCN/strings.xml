@@ -783,4 +783,5 @@
     <string name="chat_search_links">链接</string>
     <string name="chat_search_images">图片</string>
     <string name="chat_search_empty">没有找到相关内容</string>
+    <string name="personal_agent_opening_greeting">连接时打招呼</string>
 </resources>

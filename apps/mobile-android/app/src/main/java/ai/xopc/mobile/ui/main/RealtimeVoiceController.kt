@@ -58,7 +58,7 @@ private sealed interface PendingVoiceReply {
 
 /** One scoped voice call. Socket callbacks only update Compose state through the main scope. */
 internal class RealtimeVoiceController(private val context: Context, private val scope: CoroutineScope,
-  private val create: suspend (String, String) -> VoiceCallConnection,
+  private val create: suspend (String, String, String, Boolean) -> VoiceCallConnection,
   private val cancel: suspend (VoiceCallConnection) -> Unit,
   private val respond: suspend (String, Int, String, String) -> Unit,
   private val pendingApproval: suspend (String) -> VoiceApproval?,
@@ -129,8 +129,10 @@ internal class RealtimeVoiceController(private val context: Context, private val
         scope.launch { if (phase == "connected") fail("CAPTURE_INTERRUPTED", generation) }
     }.build()
 
+  private var logicalCallId = UUID.randomUUID().toString()
+
   suspend fun start(conversationId: String, selectedMode: String, fresh: Boolean = true) {
-    if (fresh) reconnectAttempt = 0
+    if (fresh) { reconnectAttempt = 0; logicalCallId = UUID.randomUUID().toString() }
     val restoreMute = !fresh && requestedMute
     val restoreSpeaker = !fresh && speaker
     stop()
@@ -146,7 +148,7 @@ internal class RealtimeVoiceController(private val context: Context, private val
     try {
       require(ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
         PackageManager.PERMISSION_GRANTED) { "MICROPHONE_PERMISSION_REQUIRED" }
-      val session = create(conversationId, selectedMode)
+      val session = create(conversationId, selectedMode, logicalCallId, !fresh)
       if (current != generation) { cancel(session); return }
       connection = session
       val started = AtomicBoolean(false)
@@ -163,6 +165,7 @@ internal class RealtimeVoiceController(private val context: Context, private val
       startAudio(current)
       if (restoreSpeaker) changeSpeaker(true)
       send("input.mute", JSONObject().put("muted", restoreMute))
+      if (session.greetingResponseId != null) send("session.output_ready", JSONObject().put("connectionEpoch", session.connectionEpoch))
       phase = "connected"
       connectedAt = SystemClock.elapsedRealtime()
       lastPongAt = connectedAt
@@ -327,7 +330,7 @@ internal class RealtimeVoiceController(private val context: Context, private val
         .getInt("sampleRate") == 24_000) { "UNSUPPORTED_FORMAT" }
       "response.done" -> if (incomingId == responseId) {
         responseDone = true
-        if (!payload.optBoolean("audio", true) && assistantText.isNotBlank())
+        if (!payload.optBoolean("audio", true) && assistantText.isNotBlank() && incomingId != connection?.greetingResponseId)
           error = "NO_RESPONSE_AUDIO"
         if (!payload.optBoolean("audio", true) || receivedBytes == 0L) finishResponse()
         else require(playbackQueue.trySend(incomingId to ByteArray(0)).isSuccess) {

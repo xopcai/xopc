@@ -5,7 +5,7 @@ import org.json.JSONObject
 data class PersonalAgentRecord(val agentId: String, val conversationId: String,
   val state: String, val displayName: String, val appearance: String, val errorMessage: String?,
   val revision: Int = 0, val preferences: Map<String, String> = emptyMap(),
-  val voicePreference: PersonalVoicePreference? = null, val userCallName: String? = null)
+  val voicePreference: PersonalVoicePreference? = null, val userCallName: String? = null, val openingGreetingEnabled: Boolean = true, val supportsOpeningGreeting: Boolean = false)
 
 data class PersonalVoicePreference(val provider: String, val model: String, val voice: String)
 data class PersonalVoiceOption(val id: String, val name: String, val displayNames: Map<String, String> = emptyMap())
@@ -45,9 +45,10 @@ class PersonalAgentRepository(private val gateway: GatewaySession) {
   }
 
   fun updateProfile(record: PersonalAgentRecord, name: String, appearance: String,
-    preferences: Map<String, String>, voice: PersonalVoicePreference? = record.voicePreference): PersonalAgentRecord {
+    preferences: Map<String, String>, voice: PersonalVoicePreference? = record.voicePreference, openingGreetingEnabled: Boolean = record.openingGreetingEnabled): PersonalAgentRecord {
     require(record.revision > 0 && name.isNotBlank() && name.length <= 60) { "INVALID_PERSONAL_PROFILE" }
     val body = JSONObject().put("revision", record.revision).put("displayName", name)
+      .apply { if (record.supportsOpeningGreeting) put("voiceCallPreferences", JSONObject().put("openingGreetingEnabled", openingGreetingEnabled)) }
       .put("appearance", appearance).put("preferences", JSONObject(preferences))
       .put("voicePreference", voice?.let {
         JSONObject().put("provider", it.provider).put("model", it.model).put("voice", it.voice)
@@ -123,7 +124,8 @@ class PersonalAgentRepository(private val gateway: GatewaySession) {
         payload.optString("displayName").ifBlank { "Ada" },
         payload.optString("appearance").ifBlank { "loopi" },
         payload.optString("errorMessage").takeIf { !payload.isNull("errorMessage") && it.isNotBlank() },
-        payload.optInt("revision"), preferences, voice, payload.optString("userCallName").takeIf { !payload.isNull("userCallName") && it.isNotBlank() })
+        payload.optInt("revision"), preferences, voice, payload.optString("userCallName").takeIf { !payload.isNull("userCallName") && it.isNotBlank() },
+        payload.optJSONObject("voiceCallPreferences")?.optBoolean("openingGreetingEnabled", true) ?: true, payload.optJSONObject("voiceCallPreferences") != null)
     }
   }
 }

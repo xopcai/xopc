@@ -3,12 +3,14 @@ import { util } from '@kit.ArkTS';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { systemDateTime } from '@kit.BasicServicesKit';
 import { XopcVoiceTiming } from '../common/voiceTiming';
+import { appSettings } from './settings';
 import { gatewaySession } from './gatewaySession';
 import { XopcChatRepository } from '../repository/chatRepository';
 import { voiceCapture } from './voiceCapture';
 import { chatReadAloud } from './chatReadAloud';
 import { voiceCallAudio } from './voiceCallAudio';
 import { XopcVoiceCallTransport, XopcVoiceSendResult } from './voiceCallTransport';
+import { xopcVoiceUuid } from '../common/voiceProtocol';
 import { xopcVoiceShouldReconnect } from '../common/voiceRecovery';
 import {
   XopcVoiceApproval, XopcVoiceApprovalsPayload, XopcVoiceAudioFrame, XopcVoiceCallTarget, XopcVoiceClarification,
@@ -54,6 +56,7 @@ export class XopcVoiceCall {
   @Trace clarification?: XopcVoiceClarification;
   @Trace approval?: XopcVoiceApproval;
   private target?: XopcVoiceCallTarget;
+  private logicalCallId: string = '';
   private session?: XopcVoiceSession;
   private supportedTimingMetrics: string[] = [];
   private transport?: XopcVoiceCallTransport;
@@ -85,6 +88,7 @@ export class XopcVoiceCall {
     this.phase = 'connecting'; this.expanded = true; this.muted = false; this.speaker = false;
     this.startedAt = Date.now(); this.error = ''; this.userText = ''; this.assistantText = '';
     this.reconnectAttempt = 0;
+    this.logicalCallId = xopcVoiceUuid();
     await voiceCapture.cancel(); await chatReadAloud.disableContinuous();
     await this.open(false);
   }
@@ -101,7 +105,10 @@ export class XopcVoiceCall {
       const availability = this.mode === 'assistant' ? status.capabilities.assistant : status.capabilities.natural;
       if (!availability.available) throw new Error(availability.reasonCode ?? 'PROVIDER_UNAVAILABLE');
       const request: XopcVoiceSessionRequest = { purpose: 'conversation', conversationId: target.conversationId,
+        language: appSettings.effectiveLanguage().startsWith('zh') ? 'zh' : 'en',
         mode: this.mode, supportedProtocolVersions: [3], mediaPreferences: ['websocket-pcm'] };
+      if (status.openingGreeting && this.mode === 'assistant') request.openingGreeting = {
+        logicalCallId: this.logicalCallId, initiation: recovering ? 'recovery' : 'user', supportsOutputReady: true };
       const preflight = JSON.parse(await gatewaySession.request('/api/voice/realtime/preflight', 'POST', JSON.stringify(request))) as XopcVoicePreflight;
       this.supportedTimingMetrics = preflight.timingMetrics ?? [];
       const session = (JSON.parse(await gatewaySession.request('/api/voice/realtime/sessions', 'POST',
@@ -133,6 +140,7 @@ export class XopcVoiceCall {
       this.limitTimer = setTimeout((): void => { if (generation === this.generation) this.pause('TIME_LIMIT'); }, session.limits.maxSessionMs);
       if (this.mode === 'assistant') { this.loadApproval(); this.approvalTimer = setInterval((): void => { this.loadApproval(); }, 3000); }
       if (this.speaker) await voiceCallAudio.setSpeaker(true);
+      if (session.openingGreeting?.accepted) transport.send('session.output_ready', { connectionEpoch: session.connectionEpoch });
     } catch (error) {
       if (generation !== this.generation) return;
       const reason = (error as Error).message || 'SERVICE_UNAVAILABLE';
@@ -259,7 +267,7 @@ export class XopcVoiceCall {
       voiceCallAudio.flush(); this.finishResponse('cancelled');
     } else if (event.type === 'response.done' && payload.responseId === this.responseId) {
       this.responseDone = true;
-      if (!payload.audio && this.assistantText) this.error = 'NO_RESPONSE_AUDIO';
+      if (!payload.audio && this.assistantText && this.responseId !== this.session?.openingGreeting?.greetingResponseId) this.error = 'NO_RESPONSE_AUDIO';
       if (!payload.audio || this.playedMs >= this.receivedMs) this.finishResponse();
       else voiceCallAudio.finish(this.responseId);
     } else if (event.type === 'session.error' && payload.recoverable) this.error = payload.code ?? 'SERVICE_UNAVAILABLE';
