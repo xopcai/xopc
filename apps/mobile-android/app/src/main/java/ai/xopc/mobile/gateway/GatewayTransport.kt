@@ -49,6 +49,7 @@ class GatewayTransport : GatewayHttp {
       connection.setFixedLengthStreamingMode(prefix.size + bytes.size + suffix.size)
       connection.setRequestProperty("Content-Type", "multipart/form-data; boundary=$boundary")
       connection.setRequestProperty("Authorization", "Bearer $bearer")
+      DeviceRequestProof.apply(connection, bearer, listOf(prefix, bytes, suffix))
       connection.outputStream.use { it.write(prefix); it.write(bytes); it.write(suffix) }
       val status = connection.responseCode
       if (status !in 200..299) throw GatewayHttpException(status)
@@ -83,7 +84,10 @@ class GatewayTransport : GatewayHttp {
       if (body.isNotEmpty() || method == "POST" || method == "PATCH" || method == "PUT") {
         connection.doOutput = true
         connection.setRequestProperty("Content-Type", "application/json; charset=utf-8")
+        DeviceRequestProof.apply(connection, bearer, listOf(body.toByteArray(Charsets.UTF_8)))
         connection.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
+      } else {
+        DeviceRequestProof.apply(connection, bearer)
       }
       val status = connection.responseCode
       if (status !in 200..299) {
@@ -109,6 +113,7 @@ class GatewayTransport : GatewayHttp {
       connection.connectTimeout = 8_000
       connection.readTimeout = 30_000
       if (bearer.isNotEmpty()) connection.setRequestProperty("Authorization", "Bearer $bearer")
+      DeviceRequestProof.apply(connection, bearer)
       val status = connection.responseCode
       if (status !in 200..299) throw GatewayHttpException(status)
       return connection.inputStream.use(::readMediaBounded)
@@ -130,6 +135,7 @@ class GatewayTransport : GatewayHttp {
       connection.setRequestProperty("Content-Type", "application/json; charset=utf-8")
       connection.setRequestProperty("Authorization", "Bearer $bearer")
       connection.doOutput = true
+      DeviceRequestProof.apply(connection, bearer, listOf(body.toByteArray(Charsets.UTF_8)))
       connection.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
       val status = connection.responseCode
       if (status !in 200..299) throw GatewayHttpException(status)
@@ -162,6 +168,7 @@ class GatewayTransport : GatewayHttp {
       connection.setRequestProperty("Content-Type", "multipart/form-data; boundary=$boundary")
       connection.setRequestProperty("Authorization", "Bearer $bearer")
       connection.setRequestProperty("Idempotency-Key", mutationId)
+      DeviceRequestProof.apply(connection, bearer, listOf(prefix, bytes, suffix))
       connection.outputStream.use { output ->
         output.write(prefix); output.write(bytes); output.write(suffix)
       }

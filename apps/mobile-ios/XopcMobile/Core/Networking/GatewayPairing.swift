@@ -132,12 +132,25 @@ enum GatewayPairingProof {
     }
 }
 
+enum GatewayRequestProof {
+    static func digest(_ data: Data) -> String { SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined() }
+
+    static func message(gatewayID: String, credential: String, method: String, target: String,
+        bodyHash: String, headers: [String], timestamp: Int, nonce: String) -> String {
+        (["xopc-request-v1", gatewayID, digest(Data(credential.utf8)), method, target, bodyHash]
+            + headers + [String(timestamp), nonce]).joined(separator: "\n")
+    }
+}
+
 @MainActor
 // swiftlint:disable:next type_body_length
 final class GatewayPairingService {
     static let shared = GatewayPairingService()
 
     private let keychainService = "ai.xopc.xopc.device-pairing"
+    private var proofOffsets: [String: Int] = [:]
+    private var proofTokens: [String: String] = [:]
+    private var proofOrigins: [String: String] = [:]
     private var key: P256.Signing.PrivateKey?
     private var refreshTasks: [String: Task<GatewayPairedConnection?, Error>] = [:]
 
@@ -327,6 +340,47 @@ final class GatewayPairingService {
         return connection
     }
 
+    func signedRequest(_ original: URLRequest) throws -> URLRequest {
+        guard let authorization = original.value(forHTTPHeaderField: "Authorization"),
+              authorization.hasPrefix("Bearer xopc_at_") else { return original }
+        let token = String(authorization.dropFirst(7))
+        guard let gatewayID = proofTokens[token], let url = original.url,
+              url.scheme == "https", let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+        else { throw GatewayPairingError.missingCredentials }
+        var originComponents = components
+        originComponents.path = ""; originComponents.query = nil; originComponents.fragment = nil
+        let origin = (originComponents.url?.absoluteString ?? "").trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        guard proofOrigins[origin] == gatewayID else { throw GatewayPairingError.identityMismatch }
+        let target = components.percentEncodedPath + (components.percentEncodedQuery.map { "?" + $0 } ?? "")
+        let headers = ["Content-Type", "Idempotency-Key", "X-Xopc-Expected-Session-Key", "x-endpoint-id", "x-endpoint-upload-token"]
+            .map { original.value(forHTTPHeaderField: $0) ?? "" }
+        var request = original
+        request.setValue(try requestProof(gatewayID: gatewayID, credential: token, method: original.httpMethod ?? "GET",
+            target: target, body: original.httpBody ?? Data(), headers: headers), forHTTPHeaderField: "X-Xopc-Proof")
+        return request
+    }
+
+    func connectionProof(url: URL, ticket: String) throws -> String? {
+        guard var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else { throw GatewayPairingError.invalidResponse }
+        let path = components.percentEncodedPath + (components.percentEncodedQuery.map { "?" + $0 } ?? "")
+        components.scheme = "https"; components.path = ""; components.query = nil
+        let origin = (components.url?.absoluteString ?? "").trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        guard let gatewayID = proofOrigins[origin] else { return nil }
+        return try requestProof(gatewayID: gatewayID, credential: ticket, method: "CONNECT", target: path,
+            body: Data(), headers: Array(repeating: "", count: 5))
+    }
+
+    private func requestProof(gatewayID: String, credential: String, method: String, target: String,
+        body: Data, headers: [String]) throws -> String {
+        let timestamp = Int(Date().timeIntervalSince1970 * 1000) + (proofOffsets[gatewayID] ?? 0)
+        let nonce = random(24)
+        let bodyHash = GatewayRequestProof.digest(body)
+        let message = GatewayRequestProof.message(gatewayID: gatewayID, credential: credential, method: method,
+            target: target, bodyHash: bodyHash, headers: headers, timestamp: timestamp, nonce: nonce)
+        let signature = try deviceKey().signature(for: Data(message.utf8)).rawRepresentation.base64URLEncodedString()
+        return "\(timestamp).\(nonce).\(bodyHash).\(signature)"
+    }
+
     private func probe(_ invitation: GatewayPairingInvitation) async throws -> URL {
         for origin in invitation.origins {
             do {
@@ -381,10 +435,10 @@ final class GatewayPairingService {
         let requestID = requestID ?? UUID().uuidString.lowercased()
         let refreshNonce = random(24)
         let timestamp = Int(Date().timeIntervalSince1970 * 1000)
-        let proof = "xopc-device-refresh-v2\n\(credentialID)\n\(timestamp)\n\(refreshNonce)\n\(requestID)\n\(nextToken)"
-        let body: [String: Any] = try [
+        let proof = "xopc-device-refresh-v2\n\(credentialID)\n\(timestamp)\n\(refreshNonce)\n\(requestID)\n\(nextToken)\nrequest-proof:1"
+        var body: [String: Any] = try [
             "refreshToken": refreshToken, "nextRefreshToken": nextToken,
-            "requestId": requestID, "timestamp": timestamp, "nonce": refreshNonce,
+            "requestId": requestID, "timestamp": timestamp, "nonce": refreshNonce, "requestProofVersion": 1,
             "signature": deviceKey().signature(for: Data(proof.utf8)).rawRepresentation.base64URLEncodedString()
         ]
         var lastError: Error = GatewayPairingError.noVerifiedRoute
@@ -395,19 +449,29 @@ final class GatewayPairingService {
                 let challenge = try await post(["nonce": nonce], to: origin, path: "/api/gateway-identity/challenge")
                 let route: RouteProof = try verify(challenge, publicKey: publicKey)
                 guard route.purpose == "gateway-route-v1", route.gatewayId == gatewayID,
-                      route.nonce == nonce, Double(route.expiresAt) > Date().timeIntervalSince1970 * 1000
+                      route.nonce == nonce, route.expiresAt > (route.serverTime ?? Int64(Date().timeIntervalSince1970 * 1000)),
+                      route.expiresAt <= (route.serverTime ?? Int64(Date().timeIntervalSince1970 * 1000)) + 60000
                 else { throw GatewayPairingError.identityMismatch }
+                let serverTime = route.serverTime ?? Int64(Date().timeIntervalSince1970 * 1000)
+                proofOffsets[gatewayID] = Int(serverTime) - Int(Date().timeIntervalSince1970 * 1000)
+                let adjustedTimestamp = Int(Date().timeIntervalSince1970 * 1000) + (proofOffsets[gatewayID] ?? 0)
+                body["timestamp"] = adjustedTimestamp
+                let adjustedProof = "xopc-device-refresh-v2\n\(credentialID)\n\(adjustedTimestamp)\n\(refreshNonce)\n\(requestID)\n\(nextToken)\nrequest-proof:1"
+                body["signature"] = try deviceKey().signature(for: Data(adjustedProof.utf8)).rawRepresentation.base64URLEncodedString()
                 let envelope = try await post(body, to: origin, path: "/api/device-auth/refresh")
                 let result: RefreshProof = try verify(envelope, publicKey: publicKey)
                 guard result.purpose == "device-refresh-v3", result.gatewayId == gatewayID,
                       result.nonce == refreshNonce, result.requestId == requestID,
                       result.tokens.refreshToken == nextToken,
-                      result.tokens.accessTokenExpiresAt > timestamp
+                      result.tokens.accessTokenExpiresAt > adjustedTimestamp, result.requestProofVersion == 1
                 else { throw GatewayPairingError.identityMismatch }
+                proofTokens[result.tokens.accessToken] = gatewayID
+                for route in routes { proofOrigins[route.absoluteString.trimmingCharacters(in: CharacterSet(charactersIn: "/"))] = gatewayID }
+                if proofTokens.count > 128 { proofTokens = [result.tokens.accessToken: gatewayID] }
                 return GatewayPairedConnection(
                     name: name, gatewayID: gatewayID, baseURL: origin,
                     accessToken: result.tokens.accessToken,
-                    accessTokenExpiresAt: Date(timeIntervalSince1970: Double(result.tokens.accessTokenExpiresAt) / 1000),
+                    accessTokenExpiresAt: Date(timeIntervalSince1970: Double(result.tokens.accessTokenExpiresAt - Int64(proofOffsets[gatewayID] ?? 0)) / 1000),
                     refreshToken: nextToken, gatewayPublicKey: publicKey, routes: routes
                 )
             } catch GatewayPairingError.identityMismatch {
@@ -592,6 +656,7 @@ private struct RouteProof: Decodable {
     let purpose: String
     let gatewayId: String
     let nonce: String
+    let serverTime: Int64?
     let expiresAt: Int64
 }
 
@@ -626,6 +691,7 @@ private struct RefreshProof: Decodable {
     let gatewayId: String
     let nonce: String
     let requestId: String
+    let requestProofVersion: Int?
     let tokens: RefreshTokens
 }
 

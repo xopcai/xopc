@@ -3,6 +3,8 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest
 import { initializeTestAgentCatalog } from '../../agent-catalog/test-support.js';
 import { createHonoApp } from '../../gateway/hono/app.js';
 import { closeXopcDatabase } from '../../storage/sqlite/index.js';
+import { TunnelBrokerUrlSchema } from '../../config/schema.js';
+import { TunnelBrokerClient } from '../broker-client.js';
 import { CURRENT_TUNNEL_CONSENT_VERSION } from '../consent.js';
 import { getTunnelService } from '../tunnel-service.js';
 
@@ -42,6 +44,14 @@ describe('PATCH /api/config tunnel key', () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+  });
+
+  it('rejects insecure or credential-bearing broker URLs at configuration and runtime boundaries', () => {
+    for (const url of ['http://frp.example/api', 'https://user:secret@frp.example/api']) {
+      expect(TunnelBrokerUrlSchema.safeParse(url).success).toBe(false);
+      expect(() => new TunnelBrokerClient(url)).toThrow('Tunnel broker requires HTTPS');
+    }
+    expect(TunnelBrokerUrlSchema.safeParse('https://frp.example/api').success).toBe(true);
   });
 
   it('stops the runtime and disables startup flags before clearing the key', async () => {

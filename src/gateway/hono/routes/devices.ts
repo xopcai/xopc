@@ -13,6 +13,7 @@ import {
 } from '@xopcai/gateway-contract';
 
 import {
+  DeviceRefreshRateLimitError,
   listDevices,
   revokeDevice,
   rotateDeviceRefreshToken,
@@ -29,6 +30,7 @@ import {
 import { resolveSecureDeviceRoutes } from '../../device-routes.js';
 import { getGatewayPrincipal } from '../../security/gateway-principal.js';
 import { buckets } from '../../rate-limit/index.js';
+import { publicDeviceRateLimit } from '../middleware/public-device-rate-limit.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 import {
   pairingClientKey,
@@ -44,6 +46,7 @@ const refreshRequestSchema = z.strictObject({
   requestId: z.string().uuid(),
   nextRefreshToken: z.string().min(80).max(256),
   signature: z.string().min(1).max(256),
+  requestProofVersion: z.literal(1).optional(),
 });
 
 const pairingProbeSchema = z.strictObject({
@@ -55,7 +58,7 @@ const pairingSetupSchema = z.strictObject({
 });
 
 export function registerDeviceAuthPublicRoutes(app: Hono, options?: PairingPublicRouteOptions): void {
-  app.post('/api/gateway-identity/challenge', bodyLimit({ maxSize: 512 }), async (c) => {
+  app.post('/api/gateway-identity/challenge', publicDeviceRateLimit('challenge', options), bodyLimit({ maxSize: 512 }), async (c) => {
     const budget = buckets.identityChallenge().consume('gateway');
     if (!budget.allowed) {
       c.header('Retry-After', String(Math.ceil(budget.retryAfterMs / 1000)));
@@ -65,12 +68,12 @@ export function registerDeviceAuthPublicRoutes(app: Hono, options?: PairingPubli
     if (!parsed.success) return c.json({ error: 'Invalid identity challenge' }, 400);
     const identity = getOrCreateGatewayIdentity();
     const signedPayload = Buffer.from(JSON.stringify({ purpose: 'gateway-route-v1', gatewayId: identity.id,
-      nonce: parsed.data.nonce, expiresAt: Date.now() + 30_000 })).toString('base64url');
+      nonce: parsed.data.nonce, serverTime: Date.now(), requestProofVersion: 1, expiresAt: Date.now() + 30_000 })).toString('base64url');
     c.header('Cache-Control', 'no-store');
     return c.json({ signedPayload, signature: signGatewayPayload(signedPayload) });
   });
   registerPairingApprovalPublicRoutes(app, options);
-  app.post('/api/device-auth/refresh', async (c) => {
+  app.post('/api/device-auth/refresh', publicDeviceRateLimit('refresh', options), bodyLimit({ maxSize: 4096 }), async (c) => {
     const parsed = refreshRequestSchema.safeParse(await c.req.json().catch(() => null));
     if (!parsed.success) {
       return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Invalid refresh request' } }, 400);
@@ -79,20 +82,24 @@ export function registerDeviceAuthPublicRoutes(app: Hono, options?: PairingPubli
       const tokens = rotateDeviceRefreshToken(parsed.data);
       const signedPayload = Buffer.from(JSON.stringify({ purpose: 'device-refresh-v3',
         gatewayId: getOrCreateGatewayIdentity().id, requestId: parsed.data.requestId, nonce: parsed.data.nonce,
-        expiresAt: Date.now() + 30_000, tokens })).toString('base64url');
+        expiresAt: Date.now() + 30_000, requestProofVersion: parsed.data.requestProofVersion ?? 0, tokens })).toString('base64url');
       return c.json({ ok: true, signedPayload, signature: signGatewayPayload(signedPayload) });
     } catch (error) {
+      if (error instanceof DeviceRefreshRateLimitError) {
+        c.header('Retry-After', String(Math.max(1, Math.ceil(error.retryAfterMs / 1000))));
+        return c.json({ ok: false, error: { code: 'RATE_LIMITED', message: 'Too many requests' } }, 429);
+      }
       return c.json({
         ok: false,
         error: {
           code: 'REFRESH_DENIED',
-          message: error instanceof Error ? error.message : 'Refresh denied',
+          message: 'Refresh denied',
         },
       }, 401);
     }
   });
 
-  app.post('/api/device-pairing/probe', bodyLimit({ maxSize: 512 }), async (c) => {
+  app.post('/api/device-pairing/probe', publicDeviceRateLimit('pairing', options), bodyLimit({ maxSize: 512 }), async (c) => {
     const clientKey = pairingClientKey(c, options);
     const blocked = buckets.pairingExchange().check(clientKey);
     if (blocked.blocked) {

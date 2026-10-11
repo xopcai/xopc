@@ -30,7 +30,7 @@ function response(origin: string, path: string, _method: string, raw: string) {
     purpose: 'gateway-route-v1', gatewayId: id, nonce: body.nonce, expiresAt: Date.now() + 30000,
   }) });
   if (path === '/api/device-auth/refresh') return JSON.stringify({ signedPayload: JSON.stringify({
-    purpose: 'device-refresh-v3', gatewayId: id, nonce: body.nonce, requestId: body.requestId, expiresAt: Date.now() + 30000,
+    purpose: 'device-refresh-v3', requestProofVersion: 1, gatewayId: id, nonce: body.nonce, requestId: body.requestId, expiresAt: Date.now() + 30000,
     tokens: { accessToken: `token-${id}`, accessTokenExpiresAt: Date.now() + 120000,
       refreshToken: body.nextRefreshToken, refreshTokenExpiresAt: Date.now() + 3600000 },
   }) });
