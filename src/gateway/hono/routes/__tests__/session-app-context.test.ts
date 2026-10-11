@@ -4,11 +4,17 @@ import { describe, expect, it, vi } from 'vitest';
 import { submitSessionInput, replaceLatestSessionTurn } from '../session-input-handler.js';
 import { setGatewayPrincipal } from '../../../security/gateway-principal.js';
 import { CapabilityError } from '../../../../capabilities/runtime/dispatcher.js';
+import { useTestDatabase } from '../../../../storage/sqlite/__tests__/test-database.js';
+
+useTestDatabase();
 
 function fixture() {
   const source = { kind: 'app_context', text: 'Frozen body', sourceId: 'tab:1', version: 'hash', title: 'Application context' };
   const service = {
-    endpointTools: { registry: { verifyTurnClaim: () => true } },
+    endpointTools: { registry: { verifyTurnClaim: () => true, get: () => ({
+      endpointId: 'tab', principalId: 'authenticated-owner', displayName: 'Browser tab',
+      platform: 'chrome', kind: 'browser', connectionId: 'connection',
+    }) } },
     prepareSessionAppContext: vi.fn(async () => source),
     submitSessionInput: vi.fn(async () => ({ ok: true, state: {} })),
     replaceLatestSessionTurn: vi.fn(),
@@ -33,7 +39,9 @@ describe('application context input adapter', () => {
     const { service, principal, snapshot, source, send } = fixture();
     expect((await send()).status).toBe(202);
     expect(service.prepareSessionAppContext).toHaveBeenCalledWith(snapshot, principal, 'conversation', 'intent');
-    expect(service.submitSessionInput).toHaveBeenCalledWith(expect.objectContaining({ sourceContexts: [source] }));
+    expect(service.submitSessionInput).toHaveBeenCalledWith(expect.objectContaining({
+      sourceContexts: expect.arrayContaining([source, expect.objectContaining({ kind: 'device_context', sourceId: 'tab' })]),
+    }));
   });
 
   it.each([
