@@ -2667,44 +2667,8 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
     }.testTag("assistant-content-area")) {
   Column(modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 16.dp),
     verticalArrangement = Arrangement.spacedBy(12.dp)) {
-    Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp), horizontalArrangement = Arrangement.SpaceBetween,
-      verticalAlignment = Alignment.CenterVertically) {
-      val personalAgent = connection.personal.agent?.takeIf { it.state == "ready" &&
-        it.conversationId == connection.selectedConversationId }
-      Box(Modifier.weight(1f)) {
-      Row(Modifier.height(48.dp).clip(CircleShape)
-        .background(MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.85f))
-        .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), CircleShape)
-        .clickable { if (personalAgent != null) personalSettingsOpen = true else agentPickerOpen = true }
-        .padding(start = 6.dp, end = 14.dp), verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        if (personalAgent != null) PersonalAgentAvatar(connection.personal.agentAvatar,
-          personalAgent.appearance, 36.dp, active = true)
-        else AgentAvatar(connection.agentAvatars[connection.selectedAgentId],
-          connection.agents.firstOrNull { it.id == connection.selectedAgentId }?.avatar.orEmpty(),
-          connection.selectedAgentId, 36.dp, true, Modifier.testTag("chat-agent-avatar"))
-        Text(personalAgent?.displayName ?: selected?.takeUnless { it.isLocalDraft }?.title
-          ?: stringResource(R.string.assistant_new_conversation),
-          style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Medium,
-          maxLines = 1, overflow = TextOverflow.Ellipsis)
-      }
-      }
-      Spacer(Modifier.width(12.dp))
-      Row(Modifier.height(48.dp).clip(CircleShape)
-        .background(MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.85f))
-        .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), CircleShape)
-        .padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-        IconButton(onClick = { messageSearchOpen = true }, modifier = Modifier.testTag("chat-header-search")) {
-          Icon(painterResource(R.drawable.action_search), contentDescription = stringResource(R.string.chat_personal_search), modifier = Modifier.size(22.dp))
-        }
-        IconButton(onClick = { if (personalAgent != null) personalSettingsOpen = true else optionsOpen = true },
-          modifier = Modifier.semantics { contentDescription = optionsLabel }.testTag("assistant-options")) {
-          Icon(painterResource(R.drawable.settings_gear), contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(22.dp))
-        }
-      }
-    }
     if (connection.selectedConversationId == null) {
+      Spacer(Modifier.height(60.dp))
       Text(stringResource(R.string.assistant_choose_conversation), style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant)
       if (connection.conversationsLoading) BrandLoadingPanel()
@@ -2712,7 +2676,7 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
         ConversationCard(conversation, onClick = { onSelectConversation(conversation.id) })
       }
     } else {
-      if (statusIssue != null) Row(modifier = Modifier.fillMaxWidth(),
+      if (statusIssue != null) Row(modifier = Modifier.fillMaxWidth().padding(top = 60.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(stringResource(statusIssue), modifier = Modifier.weight(1f),
           style = MaterialTheme.typography.bodySmall,
@@ -2722,6 +2686,7 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
         }
       }
       if (reader.state.phase != "idle") Row(modifier = Modifier.fillMaxWidth()
+        .padding(top = if (statusIssue == null) 60.dp else 0.dp)
         .background(MaterialTheme.colorScheme.surfaceContainer, RoundedCornerShape(16.dp))
         .padding(horizontal = 8.dp).testTag("assistant-read-aloud-controls"),
         verticalAlignment = Alignment.CenterVertically) {
@@ -2741,7 +2706,7 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
         }
       }
       if (connection.historyLoading && connection.messages.isEmpty()) {
-        Box(modifier = Modifier.weight(1f)) { AssistantHistorySkeleton() }
+        Box(modifier = Modifier.weight(1f).padding(top = 72.dp)) { AssistantHistorySkeleton() }
       } else if (!connection.historyLoading && connection.messages.isEmpty() &&
         connection.historyBefore == null && connection.activeRunId == null &&
         connection.liveText.isBlank() && connection.optimisticText.isBlank()) {
@@ -2758,7 +2723,8 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
       } else LazyColumn(modifier = Modifier.weight(1f).testTag("assistant-message-list")
         .onSizeChanged { messageViewportHeight = it.height },
         state = messageListState,
-        contentPadding = PaddingValues(bottom = bottomChromeHeight + replySpaceHeight + if (showConnectionWait) 104.dp else 12.dp),
+        contentPadding = PaddingValues(top = 72.dp,
+          bottom = bottomChromeHeight + replySpaceHeight + if (showConnectionWait) 104.dp else 12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)) {
         if (connection.historyBefore != null) item(key = "assistant-older") {
           Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
@@ -2844,6 +2810,44 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
       }
     }
   }
+    Row(modifier = Modifier.align(Alignment.TopCenter).fillMaxWidth()
+      .padding(horizontal = 20.dp, vertical = 16.dp).testTag("chat-floating-header"), horizontalArrangement = Arrangement.SpaceBetween,
+      verticalAlignment = Alignment.CenterVertically) {
+      val personalAgent = connection.personal.agent?.takeIf { it.state == "ready" &&
+        it.conversationId == connection.selectedConversationId }
+      Box(Modifier.weight(1f)) {
+      Row(Modifier.height(48.dp).clip(CircleShape)
+        .background(MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.85f))
+        .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), CircleShape)
+        .clickable { if (personalAgent != null) personalSettingsOpen = true else agentPickerOpen = true }
+        .padding(start = 6.dp, end = 14.dp), verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        if (personalAgent != null) PersonalAgentAvatar(connection.personal.agentAvatar,
+          personalAgent.appearance, 36.dp, active = true)
+        else AgentAvatar(connection.agentAvatars[connection.selectedAgentId],
+          connection.agents.firstOrNull { it.id == connection.selectedAgentId }?.avatar.orEmpty(),
+          connection.selectedAgentId, 36.dp, true, Modifier.testTag("chat-agent-avatar"))
+        Text(personalAgent?.displayName ?: selected?.takeUnless { it.isLocalDraft }?.title
+          ?: stringResource(R.string.assistant_new_conversation),
+          style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Medium,
+          maxLines = 1, overflow = TextOverflow.Ellipsis)
+      }
+      }
+      Spacer(Modifier.width(12.dp))
+      Row(Modifier.height(48.dp).clip(CircleShape)
+        .background(MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.85f))
+        .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), CircleShape)
+        .padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        IconButton(onClick = { messageSearchOpen = true }, modifier = Modifier.testTag("chat-header-search")) {
+          Icon(painterResource(R.drawable.action_search), contentDescription = stringResource(R.string.chat_personal_search), modifier = Modifier.size(22.dp))
+        }
+        IconButton(onClick = { if (personalAgent != null) personalSettingsOpen = true else optionsOpen = true },
+          modifier = Modifier.semantics { contentDescription = optionsLabel }.testTag("assistant-options")) {
+          Icon(painterResource(R.drawable.settings_gear), contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(22.dp))
+        }
+      }
+    }
   if (showConnectionWait) Box(modifier = Modifier.align(Alignment.BottomCenter)
     .padding(start = 16.dp, end = 16.dp, bottom = bottomChromeHeight + 8.dp)) {
     ConnectionWaitCard(connection.connectionWait, onRefreshConnectionWait)
