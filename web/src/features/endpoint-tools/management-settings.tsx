@@ -4,6 +4,7 @@ import { useSearchParams } from 'react-router-dom';
 import useSWR from 'swr';
 import { useDebounce } from 'use-debounce';
 
+import { DeviceAuthorizationPanel } from './device-authorization-panel';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { PageTabs } from '@/components/ui/page-tabs';
@@ -22,6 +23,7 @@ import {
   fetchManagedDevices,
   managedDevicesKey,
   revokeManagedDevices,
+  renameManagedDevice,
   type InvocationFilters,
   type ManagedDevice,
 } from './management-api';
@@ -210,6 +212,7 @@ export function EndpointToolsManagementSettings() {
         title={copy.devicesTitle}
         hint={copy.devicesHint}
       >
+        <DeviceAuthorizationPanel devices={deviceRows} zh={language === 'zh'} />
         <div className="mb-4 grid gap-2 sm:grid-cols-[minmax(0,1fr)_11rem_11rem]">
           <label className="relative block">
             <span className="sr-only">{copy.searchDevices}</span>
@@ -493,6 +496,11 @@ export function EndpointToolsManagementSettings() {
       <DeviceDetailDrawer
         device={selectedDevice}
         busy={revoking}
+        onRename={async (device, nickname) => {
+          await renameManagedDevice(device.id, nickname, device.settingsRevision ?? 0);
+          const refreshed = await devices.mutate();
+          setSelectedDevice(refreshed?.find(row => row.id === device.id) ?? null);
+        }}
         onClose={() => setSelectedDevice(null)}
         onRevoke={(device) => {
           setSelectedDevice(null);

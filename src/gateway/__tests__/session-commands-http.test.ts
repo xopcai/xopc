@@ -1,3 +1,6 @@
+import { EndpointRegistry } from '../../endpoint-tools/registry.js';
+import { createEndpointPrincipal } from '../../storage/sqlite/endpoint-principal-repository.js';
+import { getSessionInputById } from '../../storage/sqlite/session-input-repository.js';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { once } from 'node:events';
 import { tmpdir } from 'node:os';
@@ -28,6 +31,12 @@ it('receives strict first inputs through a listening authenticated Gateway, repl
   resetXopcDatabaseSingletonForTest(); openXopcDatabase({ path: join(dir, 'xopc.db') });
   seedTestAgentCatalog();
   const token = 'session-command-test-token';
+  const registry = new EndpointRegistry();
+  createEndpointPrincipal({ id: 'phone', kind: 'mobile', platform: 'ios', displayName: 'Phone', publicKey: 'fixture' });
+  const hello = { principalId: 'phone', endpointId: 'ios:phone', connectionInstanceId: randomUUID(), displayName: 'Phone',
+    kind: 'mobile' as const, platform: 'ios', appVersion: '1', availability: 'foreground' as const, nonce: 'nonce',
+    signedAt: Date.now(), signature: 'fixture-signature', tools: [] };
+  let registration = registry.register(hello, 'connection-1', { readyState: 1, send: () => {}, close: () => {} });
   let finish!: (value: { status: string; summary: string }) => void;
   const execute = vi.fn((_input: unknown) => new Promise<{ status: string; summary: string }>(resolve => { finish = resolve; }));
   const interrupt = vi.fn(async () => { finish({ status: 'aborted', summary: '' }); });
@@ -42,6 +51,7 @@ it('receives strict first inputs through a listening authenticated Gateway, repl
     getResolvedAuth: () => ({ mode: 'token', token }), getAuthToken: () => token,
     isGatewayReady: () => true, getExtensionLoader: () => null,
     projects: { get: () => null },
+    endpointTools: { registry },
     sessions: { getSession: async (id: string) => getSessionMetadata(id), getAgentConfig: async () => ({ model: 'test/model', thinkingLevel: 'off', fixedModel: true }) },
     getSessionInputState,
     emit: vi.fn(),
@@ -68,7 +78,8 @@ it('receives strict first inputs through a listening authenticated Gateway, repl
     expect(getSessionMetadata(id)).toBeNull();
     const command = { kind: 'start', clientMessageId: randomUUID(),
       creation: { agentId: 'main', projectId: null, execution: null, model: 'test/model', thinkingLevel: 'off', temporary: false },
-      input: { content: 'hello' }, origin: { type: 'system', source: 'cli' } };
+      input: { content: 'hello', endpointContext: { version: 1, capturedAt: Date.now(), timezone: 'Asia/Shanghai', locale: 'zh-CN' } },
+      origin: { type: 'endpoint', endpointId: hello.endpointId, token: registration.turnToken } };
     const post = (body: object) => fetch(base + path, { method: 'POST', headers, body: JSON.stringify(body) });
     expect((await fetch(base + path, { method: 'POST', body: JSON.stringify(command) })).status).toBe(401);
     expect((await post({ content: 'old flat request', clientMessageId: 'old', delivery: 'next' })).status).toBe(400);
@@ -77,9 +88,20 @@ it('receives strict first inputs through a listening authenticated Gateway, repl
     expect(accepted.status, await accepted.clone().text()).toBe(202);
     const first = await accepted.json();
     expect(first.payload.receipt.conversationId).toBe(id);
+    const frozen = getSessionInputById(id, first.payload.receipt.inputId)!;
+    expect(frozen.contextSnapshots).toEqual([expect.objectContaining({ kind: 'device_context', sourceId: hello.endpointId, title: 'Phone' })]);
+    expect(JSON.stringify(frozen)).not.toContain(registration.turnToken);
+    registration = registry.register(hello, 'connection-2', { readyState: 1, send: () => {}, close: () => {} });
+    command.origin.token = registration.turnToken;
     const replay = await (await post(command)).json();
     expect(replay.payload.receipt).toEqual(first.payload.receipt);
     expect(getSessionInputState(id).inputs).toHaveLength(1);
+    expect((await post({ ...command, input: { ...command.input, endpointContext: { ...command.input.endpointContext, timezone: 'UTC' } } })).status).toBe(409);
+    const rename = await fetch(`${base}/api/endpoint-tools/devices/phone`, { method: 'PATCH', headers, body: JSON.stringify({ nickname: 'My phone', expectedRevision: 0 }) });
+    expect(rename.status, await rename.clone().text()).toBe(200);
+    expect((await rename.json()).payload).toMatchObject({ nickname: 'My phone', revision: 1 });
+    expect((await fetch(`${base}/api/endpoint-tools/devices/phone`, { method: 'PATCH', headers, body: JSON.stringify({ nickname: 'Stale', expectedRevision: 0 }) })).status).toBe(409);
+    expect(frozen.contextSnapshots![0]!.title).toBe('Phone');
     expect((await post({ ...command, input: { content: 'changed' } })).status).toBe(409);
     const receiptPath = `${base}/api/sessions/${id}/input-receipts/${command.clientMessageId}`;
     expect((await fetch(receiptPath, { headers })).status).toBe(200);

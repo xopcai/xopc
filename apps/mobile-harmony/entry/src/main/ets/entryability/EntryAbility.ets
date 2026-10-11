@@ -1,3 +1,4 @@
+import { attachDeviceLocation, cancelAllDeviceLocations } from '../service/deviceLocation';
 import { Configuration, UIAbility, Want } from '@kit.AbilityKit';
 import { KeyboardAvoidMode, window } from '@kit.ArkUI';
 import { BusinessError } from '@kit.BasicServicesKit';
@@ -20,6 +21,7 @@ export default class EntryAbility extends UIAbility {
     if (data.type === window.AvoidAreaType.TYPE_KEYBOARD) layoutState.keyboardVisible = data.area.bottomRect.height > 0;
   };
   onWindowStageDestroy(): void {
+    cancelAllDeviceLocations();
     try { this.mainWindow?.off('avoidAreaChange', this.onAvoidArea); }
     catch (_error) { hilog.warn(0x0000, 'XopcApp', 'Window listener cleanup failed'); }
     this.mainWindow = undefined; layoutState.keyboardVisible = false;
@@ -39,7 +41,7 @@ export default class EntryAbility extends UIAbility {
   onNewWant(want: Want): void { this.receiveWant(want); }
   onConfigurationUpdate(configuration: Configuration): void { appSettings.syncSystemColorMode(configuration.colorMode); }
   onForeground(): void { layoutState.foreground = true; gatewaySession.setForeground(true); voiceCall.onForeground(); if (gatewaySession.currentProfile()) realtimeClient.start(); pushNotifications.restore(); }
-  onBackground(): void { layoutState.foreground = false; gatewaySession.setForeground(false); voiceCall.onBackground(); realtimeClient.stop(); voiceCapture.cancel(); chatReadAloud.leaveForeground(); }
+  onBackground(): void { cancelAllDeviceLocations(); layoutState.foreground = false; gatewaySession.setForeground(false); voiceCall.onBackground(); realtimeClient.stop(); voiceCapture.cancel(); chatReadAloud.leaveForeground(); }
   onDestroy(): void { voiceCall.end(); realtimeClient.reset(); voiceCapture.cancel(); chatReadAloud.disableContinuous(); }
   onWindowStageCreate(stage: window.WindowStage): void {
     this.restoreAndLoad(stage);
@@ -54,6 +56,7 @@ export default class EntryAbility extends UIAbility {
       } else {
         try {
           this.mainWindow = stage.getMainWindowSync();
+          attachDeviceLocation(this.context, this.mainWindow.getUIContext());
           this.mainWindow.getUIContext().setKeyboardAvoidMode(KeyboardAvoidMode.RESIZE);
           this.mainWindow.on('avoidAreaChange', this.onAvoidArea);
           layoutState.keyboardVisible = this.mainWindow.getWindowAvoidArea(window.AvoidAreaType.TYPE_KEYBOARD).bottomRect.height > 0;
