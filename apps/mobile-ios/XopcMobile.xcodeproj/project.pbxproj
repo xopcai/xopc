@@ -61,6 +61,7 @@
 		5C03D1F5634810BE2BA63B97 /* ProjectTaskMutation.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA672E8236C1ED26A94B8172 /* ProjectTaskMutation.swift */; };
 		5D920CCBB7A84AD1D36DE686 /* ProgressView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 626D1ED3CB8A067D90888730 /* ProgressView.swift */; };
 		5E005B0434317F225D0CEBAC /* AppRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6D2D2DBE5DD9C6438D67AF3 /* AppRootView.swift */; };
+		61EEEEA68BAE3CB5173F6797 /* DevicePersonalTools.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1EAEFED15390F1A3B6F2393 /* DevicePersonalTools.swift */; };
 		6415A0281058ADAD947A5832 /* AutomationsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC7C95F8FE1594E14E57A0EA /* AutomationsView.swift */; };
 		6492E4AEA1D57330CC2E0637 /* ChatReplySpaceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE1E180D6A87162B7D149C38 /* ChatReplySpaceTests.swift */; };
 		699CC30DBBE7B4F2147710D9 /* GatewayModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 365D817669F3BB7FB0BBC518 /* GatewayModels.swift */; };
@@ -263,6 +264,7 @@
 		CE238ED507FD6D2A48AC3CD7 /* ChatReplySpace.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatReplySpace.swift; sourceTree = "<group>"; };
 		D04AB488F9AD240DC800C567 /* AutomationRunDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutomationRunDetailView.swift; sourceTree = "<group>"; };
 		D13D27FE4A5FEC485141F446 /* ChatImageSource.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatImageSource.swift; sourceTree = "<group>"; };
+		D1EAEFED15390F1A3B6F2393 /* DevicePersonalTools.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DevicePersonalTools.swift; sourceTree = "<group>"; };
 		D28D3A761AB72069F8013A72 /* MarkdownNoteInput.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownNoteInput.swift; sourceTree = "<group>"; };
 		DA016590211F6147655749F4 /* AssistantTimeline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AssistantTimeline.swift; sourceTree = "<group>"; };
 		DCA210A3BCBAEC585301213F /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/Localizable.strings; sourceTree = "<group>"; };
@@ -369,6 +371,7 @@
 				8FDDA0C2E058A5B28288921F /* ChatImageLoader.swift */,
 				7A268D1282EB841BE5D3ABED /* DeviceEndpointHost.swift */,
 				FEC9ED44CEA56D122EC800D6 /* DeviceLocation.swift */,
+				D1EAEFED15390F1A3B6F2393 /* DevicePersonalTools.swift */,
 				2F84248ED419B36DD8608455 /* DeviceToolCatalog.swift */,
 				6C6E75BB052D95075AC66B64 /* GatewayClient.swift */,
 				7636CD1ED5D767EF95BA7686 /* GatewayClient+ComposerPalette.swift */,
@@ -703,6 +706,7 @@
 				0E04EDC4039351DFB9527F3F /* ConversationsView.swift in Sources */,
 				70E6F5D91CA3E55C8E0CF4C6 /* DeviceEndpointHost.swift in Sources */,
 				4E79CCA307BC1196D6FDA402 /* DeviceLocation.swift in Sources */,
+				61EEEEA68BAE3CB5173F6797 /* DevicePersonalTools.swift in Sources */,
 				2A855B7F7DB0CD1387C96F8C /* DeviceToolCatalog.swift in Sources */,
 				F07D4312BD631E0055643F1E /* ExecutionDetailModels.swift in Sources */,
 				F9065B5A8ED7BC4C38261110 /* FileTransferPolicy.swift in Sources */,
@@ -846,6 +850,7 @@
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				INFOPLIST_KEY_NSAppTransportSecurity_NSAllowsLocalNetworking = YES;
+				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "仅在你允许本次查询时读取指定时间内的日历事件，供助手分析。";
 				INFOPLIST_KEY_NSCameraUsageDescription = "用于拍摄并发送给助手的图片。";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "仅在你允许本次查询时使用位置，查询天气或附近地点。";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "用于实时语音、语音助手、语音消息和语音笔记。";
@@ -1003,6 +1008,7 @@
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				INFOPLIST_KEY_NSAppTransportSecurity_NSAllowsLocalNetworking = YES;
+				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "仅在你允许本次查询时读取指定时间内的日历事件，供助手分析。";
 				INFOPLIST_KEY_NSCameraUsageDescription = "用于拍摄并发送给助手的图片。";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "仅在你允许本次查询时使用位置，查询天气或附近地点。";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "用于实时语音、语音助手、语音消息和语音笔记。";

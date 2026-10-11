@@ -1,9 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { requireXopcDatabase } from '../../../storage/sqlite/connection.js';
 
-import { ENDPOINT_TEXT_OUTPUT_SCHEMA } from '@xopcai/endpoint-tools-protocol';
+import { randomUUID } from 'node:crypto';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import sharp from 'sharp';
 
-import type { EndpointToolRuntime } from '../../../endpoint-tools/index.js';
+import { personalDescriptor, ENDPOINT_TEXT_OUTPUT_SCHEMA } from '@xopcai/endpoint-tools-protocol';
+
+import { EndpointToolRuntime } from '../../../endpoint-tools/index.js';
 import { EndpointToolProvider } from '../endpoint-provider.js';
 
 const descriptor = {
@@ -136,4 +142,28 @@ describe('EndpointToolProvider', () => {
       arguments: { text: 'hello' },
     }));
   });
+  it.each(['text/plain', 'image/jpeg'])('delivers selected %s content to the model, instead of filename-only metadata', async mimeType => {
+    const root = mkdtempSync(join(tmpdir(), 'xopc-personal-provider-'));
+    const native = new EndpointToolRuntime({ uploadRoot: root, audit: { started: vi.fn(), finished: vi.fn() } });
+    try {
+      const descriptor = personalDescriptor('mobile.file.pick');
+      native.registry.register({ principalId: 'phone-owner', endpointId: 'phone', connectionInstanceId: randomUUID(),
+        displayName: 'Phone', kind: 'mobile', platform: 'android', appVersion: '1', availability: 'foreground', nonce: randomUUID(), signedAt: Date.now(),
+        signature: 'fixture-signature', tools: [descriptor] }, 'connection', { readyState: 1, send: () => {}, close: () => {} });
+      const grant = native.uploads.createGrant('fixture', 'phone', Date.now(), 'personal', 'phone-owner');
+      const bytes = mimeType === 'text/plain' ? Buffer.from('Selected document body')
+        : await sharp({ create: { width: 4, height: 4, channels: 3, background: 'blue' } }).jpeg().toBuffer();
+      const uploaded = await native.uploads.uploadValidated({ invocationId: 'fixture', endpointId: 'phone', token: grant.token,
+        name: mimeType === 'text/plain' ? 'fixture.txt' : 'fixture.jpg', mimeType, bytes });
+      const { fileId, name, size, sha256 } = uploaded;
+      vi.spyOn(native.invocations, 'invoke').mockResolvedValue({ content: [{ type: 'file', fileId, name, mimeType, size, sha256 }] });
+      const provider = new EndpointToolProvider({ runtime: native, getCurrentContext: () => ({ channel: 'webchat', chatId: 'chat',
+        conversationId: '6d9217fe-77c7-411d-8cc9-92aabe81a2d0', origin: { type: 'endpoint', endpointId: 'phone' } }) });
+      const result = await provider.execute('endpoint:phone:mobile.file.pick', {}, undefined, { toolCallId: 'read-selected' });
+      if (mimeType === 'text/plain') expect(JSON.stringify(result.content)).toContain('Selected document body');
+      else expect(result.content).toContainEqual(expect.objectContaining({ type: 'image', mimeType: 'image/jpeg', data: expect.any(String) }));
+      expect(result.details).toMatchObject({ endpointSensitivity: 'personal', endpointFiles: [{ fileId }] });
+    } finally { native.close(); rmSync(root, { recursive: true, force: true }); }
+  });
+
 });

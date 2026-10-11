@@ -14,9 +14,10 @@ export const ENDPOINT_UPLOAD_MAX_BYTES = ENDPOINT_MAX_FILE_BYTES;
 const DEFAULT_MAX_FILES = 8;
 
 interface UploadGrantRecord {
-  profile: 'durable' | 'computer-frame';
+  profile: 'durable' | 'computer-frame' | 'personal';
   invocationId: string;
   endpointId: string;
+  principalId?: string;
   token: string;
   expiresAt: number;
   maxBytes: number;
@@ -27,6 +28,8 @@ interface UploadGrantRecord {
 export interface EndpointUploadedFile {
   fileId: string;
   invocationId: string;
+  endpointId: string;
+  principalId?: string;
   name: string;
   mimeType: string;
   size: number;
@@ -61,16 +64,17 @@ export class EndpointUploadService {
     this.pruneTimer.unref();
   }
 
-  createGrant(invocationId: string, endpointId: string, now = Date.now(), profile: 'durable' | 'computer-frame' = 'durable'): EndpointUploadGrant {
+  createGrant(invocationId: string, endpointId: string, now = Date.now(), profile: 'durable' | 'computer-frame' | 'personal' = 'durable', principalId?: string): EndpointUploadGrant {
     const token = crypto.randomUUID();
     const grant: UploadGrantRecord = {
       profile,
+      principalId,
       invocationId,
       endpointId,
       token,
       expiresAt: now + GRANT_TTL_MS,
-      maxBytes: profile === 'computer-frame' ? COMPUTER_FRAME_MAX_BYTES : ENDPOINT_UPLOAD_MAX_BYTES,
-      maxFiles: profile === 'computer-frame' ? 1 : DEFAULT_MAX_FILES,
+      maxBytes: profile === 'computer-frame' ? COMPUTER_FRAME_MAX_BYTES : profile === 'personal' ? 10 * 1024 * 1024 : ENDPOINT_UPLOAD_MAX_BYTES,
+      maxFiles: profile === 'durable' ? DEFAULT_MAX_FILES : 1,
       uploadedFileIds: [],
     };
     this.grants.set(invocationId, grant);
@@ -117,7 +121,7 @@ export class EndpointUploadService {
     const fileId = crypto.randomUUID();
     const path = join(this.rootDir, fileId);
     const sha256 = crypto.createHash('sha256').update(params.bytes).digest('hex');
-    if (grant.profile === 'durable') writeFileSync(path, params.bytes, { flag: 'wx', mode: 0o600 });
+    if (grant.profile !== 'computer-frame') writeFileSync(path, params.bytes, { flag: 'wx', mode: 0o600 });
     else {
       this.pruneFrames(now);
       const frames = [...this.frames.values()];
@@ -130,6 +134,8 @@ export class EndpointUploadService {
     const file: EndpointUploadedFile = {
       fileId,
       invocationId: params.invocationId,
+      endpointId: params.endpointId,
+      principalId: grant.principalId,
       name: params.name,
       mimeType: params.mimeType,
       size: params.bytes.byteLength,
@@ -210,6 +216,19 @@ export class EndpointUploadService {
       } finally { this.validatingFrames.delete(params.invocationId); }
       // Revalidate after async decode; cancellation may have revoked the grant.
       return this.upload({ ...params, validatedFrame: true });
+    }
+    if (grant.profile === 'personal' && params.mimeType.startsWith('image/')) {
+      try {
+        // Re-encoding removes EXIF (including GPS), embedded thumbnails and ancillary metadata.
+        const image = sharp(params.bytes, { limitInputPixels: 40000000, failOn: 'warning' });
+        const metadata = await image.metadata();
+        if ((metadata.pages ?? 1) !== 1) throw new Error('Animated images are unsupported');
+        const bytes = await image.rotate().resize({ width: 2048, height: 2048, fit: 'inside', withoutEnlargement: true }).jpeg({ quality: 85 }).toBuffer();
+        return this.upload({ ...params, bytes, name: params.name.replace(/\.[^.]*$/, '').slice(0, 251) + '.jpg', mimeType: 'image/jpeg' });
+      } catch (error) {
+        if (error instanceof EndpointUploadError) throw error;
+        throw new EndpointUploadError('Selected image could not be decoded');
+      }
     }
     return this.upload(params);
   }

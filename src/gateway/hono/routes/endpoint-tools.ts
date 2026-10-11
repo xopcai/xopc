@@ -256,6 +256,11 @@ export function registerEndpointToolRoutes(
     if (declaredLength > ENDPOINT_UPLOAD_MAX_BYTES) {
       return c.json({ ok: false, error: { code: 'RESULT_TOO_LARGE', message: 'Uploaded file is too large' } }, 413);
     }
+    const actor = getGatewayPrincipal(c);
+    const endpoint = deps.service.endpointTools.registry.get(endpointId);
+    if (actor.kind !== 'owner' && !(actor.kind === 'device' && actor.deviceId === endpoint?.principalId)) {
+      return c.json({ ok: false, error: { code: 'FORBIDDEN', message: 'Upload belongs to another device' } }, 403);
+    }
     let bytes: Uint8Array | undefined;
     try {
       const limits = deps.service.endpointTools.uploads.getGrantLimits(invocationId, endpointId, token);
@@ -294,6 +299,10 @@ export function registerEndpointToolRoutes(
 
   authenticated.get('/api/endpoint-tools/files/:fileId', (c) => {
     const file = deps.service.endpointTools.uploads.getFile(c.req.param('fileId'));
+    const actor = getGatewayPrincipal(c);
+    if (file && actor.kind !== 'owner' && !(actor.kind === 'device' && actor.deviceId === file.principalId)) {
+      return c.json({ ok: false, error: { code: 'FORBIDDEN', message: 'Endpoint file is not accessible' } }, 403);
+    }
     const bytes = file && deps.service.endpointTools.uploads.readFile(file.fileId);
     if (!file || !bytes) {
       return c.json({ ok: false, error: { code: 'NOT_FOUND', message: 'Endpoint file not found' } }, 404);
