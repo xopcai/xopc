@@ -28,7 +28,8 @@ beforeAll(async () => {
   const app = createHonoApp({ service: {
     currentConfig: ConfigSchema.parse({ gateway: { auth: { mode: 'token', token } } }),
     getResolvedAuth: () => ({ mode: 'token', token }), getAuthToken: () => token,
-    isGatewayReady: () => true, getExtensionLoader: () => null, endpointTools: { uploads },
+    isGatewayReady: () => true, getExtensionLoader: () => null,
+    endpointTools: { uploads, registry: { get: (id: string) => id === endpointId ? { principalId: endpointId } : undefined } },
   } as unknown as GatewayService });
   server = serve({ fetch: app.fetch, hostname: '127.0.0.1', port: 0 });
   if (!server.listening) await once(server, 'listening');
@@ -44,7 +45,7 @@ afterAll(async () => {
 });
 function grant() {
   const invocationId = randomUUID();
-  return { invocationId, ...uploads.createGrant(invocationId, endpointId, Date.now(), 'computer-frame') };
+  return { invocationId, ...uploads.createGrant(invocationId, endpointId, Date.now(), 'computer-frame', endpointId) };
 }
 async function post(g: ReturnType<typeof grant>, bytes: BodyInit, extra: Record<string, string> = {}) {
   return fetch(base + g.path + '?name=observation.png', { method: 'POST', headers: {
