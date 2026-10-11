@@ -1,3 +1,4 @@
+import { attachDevicePersonalTools, cancelAllDevicePersonalTools, hasActivePersonalPicker } from '../service/devicePersonalTools';
 import { attachDeviceLocation, cancelAllDeviceLocations } from '../service/deviceLocation';
 import { Configuration, UIAbility, Want } from '@kit.AbilityKit';
 import { KeyboardAvoidMode, window } from '@kit.ArkUI';
@@ -22,7 +23,7 @@ export default class EntryAbility extends UIAbility {
     if (data.type === window.AvoidAreaType.TYPE_SYSTEM) layoutState.systemTopInsetPx = data.area.topRect.height;
   };
   onWindowStageDestroy(): void {
-    cancelAllDeviceLocations();
+    cancelAllDeviceLocations(); cancelAllDevicePersonalTools();
     try { this.mainWindow?.off('avoidAreaChange', this.onAvoidArea); }
     catch (_error) { hilog.warn(0x0000, 'XopcApp', 'Window listener cleanup failed'); }
     this.mainWindow = undefined; layoutState.keyboardVisible = false; layoutState.systemTopInsetPx = 0;
@@ -42,7 +43,7 @@ export default class EntryAbility extends UIAbility {
   onNewWant(want: Want): void { this.receiveWant(want); }
   onConfigurationUpdate(configuration: Configuration): void { appSettings.syncSystemColorMode(configuration.colorMode); }
   onForeground(): void { layoutState.foreground = true; gatewaySession.setForeground(true); voiceCall.onForeground(); if (gatewaySession.currentProfile()) realtimeClient.start(); pushNotifications.restore(); }
-  onBackground(): void { cancelAllDeviceLocations(); layoutState.foreground = false; gatewaySession.setForeground(false); voiceCall.onBackground(); realtimeClient.stop(); voiceCapture.cancel(); chatReadAloud.leaveForeground(); }
+  onBackground(): void { cancelAllDeviceLocations(); if (!hasActivePersonalPicker()) cancelAllDevicePersonalTools(); layoutState.foreground = false; gatewaySession.setForeground(false); voiceCall.onBackground(); if (!hasActivePersonalPicker()) realtimeClient.stop(); voiceCapture.cancel(); chatReadAloud.leaveForeground(); }
   onDestroy(): void { voiceCall.end(); realtimeClient.reset(); voiceCapture.cancel(); chatReadAloud.disableContinuous(); }
   onWindowStageCreate(stage: window.WindowStage): void {
     this.restoreAndLoad(stage);
@@ -58,6 +59,7 @@ export default class EntryAbility extends UIAbility {
         try {
           this.mainWindow = stage.getMainWindowSync();
           attachDeviceLocation(this.context, this.mainWindow.getUIContext());
+          attachDevicePersonalTools(this.context, this.mainWindow.getUIContext());
           this.mainWindow.getUIContext().setKeyboardAvoidMode(KeyboardAvoidMode.RESIZE);
           this.mainWindow.on('avoidAreaChange', this.onAvoidArea);
           layoutState.systemTopInsetPx = this.mainWindow.getWindowAvoidArea(window.AvoidAreaType.TYPE_SYSTEM).topRect.height;

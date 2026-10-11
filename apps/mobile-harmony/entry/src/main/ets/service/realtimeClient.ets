@@ -1,3 +1,4 @@
+import { cancelDevicePersonalTool, cancelAllDevicePersonalTools } from './devicePersonalTools';
 import { cancelDeviceLocation, cancelAllDeviceLocations } from './deviceLocation';
 import { i18n } from '@kit.LocalizationKit';
 import { XopcEndpointContext } from '../model/sessionCommand';
@@ -20,7 +21,7 @@ interface XopcDeviceEndpointMessage { type: string; payload: Object; }
 interface XopcDeviceCancellation { invocationId: string; }
 interface XopcDeviceEndpointFrame { protocolVersion: number; messageId: string; type: string; sentAt: number; payload: Object; }
 class XopcEmptyPayload {}
-interface XopcDeviceCompatibility { turnDeviceContextV1?: boolean; deviceStateToolsV1?: boolean; deviceLocationTasksV1?: boolean; }
+interface XopcDeviceCompatibility { turnDeviceContextV1?: boolean; deviceStateToolsV1?: boolean; deviceLocationTasksV1?: boolean; mobilePersonalToolsV1?: boolean; }
 
 export class XopcRealtimeClient {
   private crypto: XopcDeviceCrypto = new XopcDeviceCrypto('endpoint-key');
@@ -83,7 +84,7 @@ export class XopcRealtimeClient {
   }
 
   private release(): void {
-    cancelAllDeviceLocations();
+    cancelAllDeviceLocations(); cancelAllDevicePersonalTools();
     this.ready = false; this.claim = undefined;
     clearInterval(this.heartbeatTimer); this.heartbeatTimer = -1;
     const old = this.socket; this.socket = undefined;
@@ -138,7 +139,7 @@ export class XopcRealtimeClient {
       const endpoint: XopcEndpointHello = {
         principalId: profile.deviceId, endpointId: clientId, connectionInstanceId: this.crypto.uuid(),
         displayName: registration.displayName, kind: 'mobile', platform: 'harmonyos', appVersion: xopcAppVersion(),
-        availability: 'foreground', nonce: this.crypto.uuid(), signedAt: Date.now(), signature: '', tools: compatibility.payload?.deviceStateToolsV1 === true ? deviceToolCatalog(compatibility.payload?.deviceLocationTasksV1 === true) : []
+        availability: 'foreground', nonce: this.crypto.uuid(), signedAt: Date.now(), signature: '', tools: compatibility.payload?.deviceStateToolsV1 === true ? deviceToolCatalog(compatibility.payload?.deviceLocationTasksV1 === true, compatibility.payload?.mobilePersonalToolsV1 === true) : []
       };
       phase = 'sign';
       endpoint.signature = await this.crypto.sign(endpointProof(endpoint));
@@ -223,7 +224,7 @@ export class XopcRealtimeClient {
     } else if (frame.kind === 'endpoint.message') {
       const inner = frame.payload as XopcDeviceEndpointMessage;
       if (inner.type === 'tool.invoke') invokeDeviceTool(inner.payload, (kind: string, body: Object): void => { this.send(kind, body); });
-      else if (inner.type === 'tool.cancel') cancelDeviceLocation((inner.payload as XopcDeviceCancellation).invocationId);
+      else if (inner.type === 'tool.cancel') { cancelDeviceLocation((inner.payload as XopcDeviceCancellation).invocationId); cancelDevicePersonalTool((inner.payload as XopcDeviceCancellation).invocationId); }
     } else if (frame.kind === 'realtime.event') {
       const event = frame.payload as XopcEvent;
       if (typeof event.topic !== 'string' || typeof event.event !== 'string') throw new Error('INVALID_EVENT');

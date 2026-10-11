@@ -9,6 +9,8 @@ import {
   BROWSER_RECORDING_ENDPOINT_DESCRIPTOR,
 } from '@xopcai/browser-control-contract';
 import {
+  personalDescriptor,
+  PERSONAL_TOOL_NAMES,
   BRIDGE_LIST_OUTPUT_SCHEMA,
   BRIDGE_READ_OUTPUT_SCHEMA,
   BRIDGE_READ_INPUT_SCHEMA,
@@ -91,6 +93,10 @@ const POLICY_BY_TOOL: Readonly<Record<string, TrustedToolContract>> = {
     ['file-read'],
     ['personal.foreground-read'],
   ),
+  ...Object.fromEntries(PERSONAL_TOOL_NAMES.map(name => {
+    const descriptor = personalDescriptor(name);
+    return [name, contract(descriptor.policyId, descriptor.outputSchema, descriptor.resultKinds, descriptor.requiredPermissions, ['mobile.file.pick', 'mobile.contacts.pick'].includes(name) ? ['personal.foreground-read'] : [], ['mobile.file.pick', 'mobile.contacts.pick'].includes(name) ? undefined : descriptor.inputSchema)];
+  })),
   'mobile.file.share': contract(
     'user.foreground-mediated-write',
     ENDPOINT_TEXT_OUTPUT_SCHEMA,

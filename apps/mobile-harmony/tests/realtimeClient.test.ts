@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({ create: vi.fn(), request: vi.fn() }));
 vi.mock('@kit.NetworkKit', () => ({ webSocket: { createWebSocket: mocks.create } }));
 vi.mock('../entry/src/main/ets/service/deviceLocation.ets', () => ({ invokeDeviceLocation: vi.fn(), cancelDeviceLocation: vi.fn(), cancelAllDeviceLocations: vi.fn() }));
+vi.mock('../entry/src/main/ets/service/devicePersonalTools.ets', () => ({ invokeDevicePersonalTool: vi.fn(), cancelDevicePersonalTool: vi.fn(), cancelAllDevicePersonalTools: vi.fn() }));
 vi.mock('@kit.BasicServicesKit', () => ({ batteryInfo: { batterySOC: 0, isBatteryPresent: true, chargingStatus: 0, BatteryChargeState: { NONE: 0, ENABLE: 1, FULL: 2 } } }));
 vi.mock('@kit.LocalizationKit', () => ({ i18n: {} }));
 vi.mock('@kit.PerformanceAnalysisKit', () => ({ hilog: { warn: vi.fn(), info: vi.fn() } }));

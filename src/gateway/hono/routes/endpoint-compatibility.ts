@@ -20,6 +20,7 @@ export function registerEndpointCompatibilityRoutes(authenticated: Hono): void {
       deviceStateToolsV1: true,
       hardwareBridgeV1: true,
       deviceLocationTasksV1: true,
+      mobilePersonalToolsV1: true,
       ...(principal.kind === 'device' ? { deviceId: principal.deviceId } : {}),
       endpointProtocolVersion: ENDPOINT_PROTOCOL_VERSION,
       computerControl: COMPUTER_DESCRIPTOR,

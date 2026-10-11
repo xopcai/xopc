@@ -10,14 +10,15 @@ import java.util.TimeZone
 import org.json.JSONArray
 import org.json.JSONObject
 
-internal class DeviceTools(private val context: Context) {
-  fun catalog(location: Boolean = false): JSONArray = JSONArray(if (location) DeviceToolCatalog.json else DeviceToolCatalog.stateJson)
+internal class DeviceTools(private val context: Context, private val gateway: GatewaySession) {
+  fun catalog(location: Boolean = false, personal: Boolean = false): JSONArray = JSONArray(if (personal) DeviceToolCatalog.personalJson else if (location) DeviceToolCatalog.json else DeviceToolCatalog.stateJson)
 
   fun invoke(request: JSONObject, send: (String, JSONObject) -> Unit) {
     val id = request.getString("invocationId")
     fun fail(code: String) { send("tool.error", JSONObject().put("invocationId", id)
       .put("code", code).put("message", "Device reading unavailable: $code")) }
     if (request.optString("toolName") == "mobile.device.get_location") { DeviceLocation.invoke(request, send); return }
+    if (request.optString("toolName").startsWith("mobile.calendar.") || request.optString("toolName") in listOf("mobile.file.pick", "mobile.media.pick", "mobile.camera.capture", "mobile.contacts.pick")) { DevicePersonalTools.invoke(request, gateway, send); return }
     val index = when (request.optString("toolName")) {
       "mobile.device.get_state" -> 0
       "mobile.device.get_power" -> 1

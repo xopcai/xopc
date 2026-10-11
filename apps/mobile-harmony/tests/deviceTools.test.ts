@@ -6,6 +6,7 @@ import { deviceStateDescriptor, canonicalJson } from '../../../packages/endpoint
 const battery = vi.hoisted(() => ({ batterySOC: 0, isBatteryPresent: true, chargingStatus: 2,
   BatteryChargeState: { NONE: 0, ENABLE: 1, DISABLE: 2, FULL: 3 } }));
 vi.mock('../entry/src/main/ets/service/deviceLocation.ets', () => ({ invokeDeviceLocation: vi.fn(), cancelDeviceLocation: vi.fn(), cancelAllDeviceLocations: vi.fn() }));
+vi.mock('../entry/src/main/ets/service/devicePersonalTools.ets', () => ({ invokeDevicePersonalTool: vi.fn() }));
 vi.mock('@kit.BasicServicesKit', () => ({ batteryInfo: battery, deviceInfo: { displayVersion: '6.0' } }));
 vi.mock('@kit.LocalizationKit', () => ({ i18n: { System: { getSystemLocale: () => 'zh-CN' }, getTimeZone: () => ({ getID: () => 'Asia/Shanghai' }) } }));
 

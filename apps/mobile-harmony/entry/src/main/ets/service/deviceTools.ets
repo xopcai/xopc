@@ -1,7 +1,8 @@
 import { batteryInfo, deviceInfo } from '@kit.BasicServicesKit';
 import { i18n } from '@kit.LocalizationKit';
+import { invokeDevicePersonalTool } from './devicePersonalTools';
 import { invokeDeviceLocation } from './deviceLocation';
-import { DEVICE_STATE_TOOL_CATALOG_JSON, DEVICE_TOOL_CATALOG_JSON, DEVICE_TOOL_REVISIONS } from '../common/deviceToolCatalog';
+import { DEVICE_PERSONAL_TOOL_CATALOG_JSON, DEVICE_STATE_TOOL_CATALOG_JSON, DEVICE_TOOL_CATALOG_JSON, DEVICE_TOOL_REVISIONS } from '../common/deviceToolCatalog';
 
 interface DeviceInvocation {
   invocationId: string; toolName: string; arguments: Object; descriptorRevision: string;
@@ -14,7 +15,7 @@ interface DeviceResult { invocationId: string; content: Reading[]; }
 interface DeviceError { invocationId: string; code: string; message: string; }
 interface DeviceReceived { invocationId: string; }
 
-export function deviceToolCatalog(location: boolean = false): Object[] { return JSON.parse(location ? DEVICE_TOOL_CATALOG_JSON : DEVICE_STATE_TOOL_CATALOG_JSON) as Object[]; }
+export function deviceToolCatalog(location: boolean = false, personal: boolean = false): Object[] { return JSON.parse(personal ? DEVICE_PERSONAL_TOOL_CATALOG_JSON : location ? DEVICE_TOOL_CATALOG_JSON : DEVICE_STATE_TOOL_CATALOG_JSON) as Object[]; }
 
 export function invokeDeviceTool(payload: Object, send: (kind: string, body: Object) => void): void {
   const request = payload as DeviceInvocation;
@@ -23,6 +24,7 @@ export function invokeDeviceTool(payload: Object, send: (kind: string, body: Obj
     send('tool.error', error);
   };
   if (request.toolName === 'mobile.device.get_location') { invokeDeviceLocation(payload, send); return; }
+  if (request.toolName.startsWith('mobile.calendar.') || ['mobile.file.pick', 'mobile.media.pick', 'mobile.camera.capture', 'mobile.contacts.pick'].includes(request.toolName)) { invokeDevicePersonalTool(payload, send); return; }
   const index = request.toolName === 'mobile.device.get_state' ? 0 : request.toolName === 'mobile.device.get_power' ? 1 : -1;
   if (index < 0) { fail('TOOL_NOT_FOUND'); return; }
   if (request.descriptorRevision !== DEVICE_TOOL_REVISIONS[index]) { fail('TOOL_REVISION_MISMATCH'); return; }

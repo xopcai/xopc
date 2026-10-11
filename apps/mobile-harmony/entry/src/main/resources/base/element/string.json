@@ -1192,6 +1192,7 @@
     { "name": "discussion_actions", "value": "Action items" },
     { "name": "discussion_transcript", "value": "Transcript" },
     { "name": "discussion_transcript_pending", "value": "Awaiting transcription" },
-    { "name": "discussion_no_speech", "value": "No recognizable speech was found in this recording." }
+    { "name": "discussion_no_speech", "value": "No recognizable speech was found in this recording." },
+    { "name": "calendar_reason", "value": "仅在允许本次查询时读取 xopc 可访问的日历事件。" }
   ]
 }
