@@ -39,7 +39,7 @@ function collect(root, extension, mode) {
         if (manifest.app.minAPIVersion !== 60100023 || manifest.app.targetAPIVersion !== 260000026) {
           throw new Error('Built HAP does not declare the expected API 23 minimum / API 26 target.');
         }
-        if (manifest.app.bundleName !== 'ai.xopc.mobile' || manifest.app.apiReleaseType !== 'Release') {
+        if (manifest.app.bundleName !== 'ai.xopc.xopc' || manifest.app.apiReleaseType !== 'Release') {
           throw new Error('Unexpected application identity or prerelease SDK requirement.');
         }
       }

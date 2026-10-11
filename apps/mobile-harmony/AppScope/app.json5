@@ -1,6 +1,6 @@
 {
   "app": {
-    "bundleName": "ai.xopc.mobile",
+    "bundleName": "ai.xopc.xopc",
     "vendor": "xopcai",
     "versionCode": 1,
     "versionName": "0.1.0",

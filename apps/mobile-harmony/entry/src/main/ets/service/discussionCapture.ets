@@ -262,7 +262,7 @@ export class XopcDiscussionCapture {
       await session.setAVPlaybackState({ state: avSession.PlaybackState.PLAYBACK_STATE_PLAY, speed: 1,
         position: { elapsedTime: 0, updateTime: Date.now() } });
       await session.activate();
-      const agent = await wantAgent.getWantAgent({ wants: [{ bundleName: 'ai.xopc.mobile', abilityName: 'EntryAbility' }],
+      const agent = await wantAgent.getWantAgent({ wants: [{ bundleName: 'ai.xopc.xopc', abilityName: 'EntryAbility' }],
         actionType: wantAgent.OperationType.START_ABILITY, requestCode: 3,
         actionFlags: [wantAgent.WantAgentFlags.UPDATE_PRESENT_FLAG] });
       await backgroundTaskManager.startBackgroundRunning(context, ['audioRecording'], agent);
