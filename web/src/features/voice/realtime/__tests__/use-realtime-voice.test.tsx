@@ -112,6 +112,7 @@ describe('useRealtimeVoice', () => {
           inputFormat: { sampleRate: 16_000 },
           limits: { maxSessionMs: 600_000 },
         },
+        outputReady: vi.fn(),
         sendAudio,
         setInputMuted,
         reportMetric: vi.fn(),

@@ -745,6 +745,7 @@ struct PersonalAgentProfileView: View {
     @State private var name: String
     @State private var appearance: String
     @State private var detailLevel: String
+    @State private var greetingEnabled: Bool
     @State private var selectedVoice: String
     @State private var voiceProvider: String?
     @State private var voiceModel: String?
@@ -768,6 +769,7 @@ struct PersonalAgentProfileView: View {
         _appearance = State(initialValue: record.appearance)
         let preferences = record.preferences ?? [:]
         _detailLevel = State(initialValue: preferences["detailLevel"] ?? "balanced")
+        _greetingEnabled = State(initialValue: record.voiceCallPreferences?.openingGreetingEnabled ?? true)
         _selectedVoice = State(initialValue: record.voicePreference?.voice == "default" ? "" : record.voicePreference?.voice ?? "")
     }
 
@@ -816,6 +818,10 @@ struct PersonalAgentProfileView: View {
                             }
                         }
                         .accessibilityIdentifier("personal-agent-voice-choice")
+                    }
+                    if record.voiceCallPreferences != nil {
+                        Toggle(locale.language.languageCode?.identifier == "zh" ? "连接时打招呼" : "Greet me when connected",
+                               isOn: $greetingEnabled)
                     }
                     Button(locale.language.languageCode?.identifier == "zh" ? "刷新音色" : "Refresh voices") {
                         Task { await loadVoices() }
@@ -872,6 +878,7 @@ struct PersonalAgentProfileView: View {
                 name = updated.displayName
                 appearance = updated.appearance
                 detailLevel = updated.preferences?["detailLevel"] ?? "balanced"
+                greetingEnabled = updated.voiceCallPreferences?.openingGreetingEnabled ?? true
                 selectedVoice = updated.voicePreference?.voice == "default" ? "" : updated.voicePreference?.voice ?? ""
                 onSaved(updated)
                 error = nil
@@ -915,7 +922,8 @@ struct PersonalAgentProfileView: View {
                 displayName: String(name.trimmingCharacters(in: .whitespacesAndNewlines).prefix(60)),
                 appearance: appearance,
                 preferences: preferences,
-                voicePreference: voicePreference
+                voicePreference: voicePreference,
+                openingGreetingEnabled: greetingEnabled
             )
             record = updated
             onSaved(updated)
