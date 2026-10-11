@@ -39,7 +39,6 @@ export type AgentDefaults = {
   workflows: { default?: string; allowed?: string[] };
   runtime: {
     codemode?: { enabled: boolean; timeoutMs?: number; maxConcurrentCalls?: number; maxCalls?: number; maxOutputTokens?: number };
-    toolDiscovery?: { enabled: boolean; mcpServer?: string };
     maxTurns?: number;
     timeoutMs?: number;
     maxToolFailuresPerTurn?: number;

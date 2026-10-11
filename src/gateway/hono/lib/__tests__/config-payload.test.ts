@@ -169,24 +169,23 @@ describe('buildSafeMcpConfigForWeb', () => {
     expect(buildSafeMcpConfigForWeb({} as never)).toEqual({ servers: {} });
   });
 
-  it('includes sessionIdleTtlMs and normalized servers', () => {
+  it('includes native server configuration', () => {
     const safe = buildSafeMcpConfigForWeb({
       mcp: {
-        sessionIdleTtlMs: 600_000,
         servers: {
           tb: {
             url: 'https://example.com/mcp',
-            transport: 'streamable-http',
+            type: 'http',
             headers: { Authorization: 'Bearer secret' },
           },
         },
       },
     } as never);
 
-    expect(safe.sessionIdleTtlMs).toBe(600_000);
+    expect(safe).not.toHaveProperty('sessionIdleTtlMs');
     expect(safe.servers.tb).toMatchObject({
       url: 'https://example.com/mcp',
-      transport: 'streamable-http',
+      type: 'http',
       headers: { Authorization: 'Bearer secret' },
     });
   });

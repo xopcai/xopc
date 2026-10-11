@@ -25,7 +25,7 @@ export interface WireAttachment {
 export interface ComposerContextRef {
   /** Stable identity for an explicit inline occurrence; absent for detached context. */
   refId?: string;
-  kind: 'note' | 'file' | 'session' | 'browser_tab' | 'mcp_resource';
+  kind: 'note' | 'file' | 'session' | 'browser_tab';
   sourceId: string;
   expectedVersion: string;
   title: string;

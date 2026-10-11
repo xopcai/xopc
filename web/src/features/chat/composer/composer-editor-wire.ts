@@ -40,7 +40,7 @@ function isSlashCommandPill(el: HTMLElement): boolean {
 
 export interface ComposerContextRefPresentation {
   title: string;
-  kind: 'note' | 'file' | 'session' | 'browser_tab' | 'mcp_resource';
+  kind: 'note' | 'file' | 'session' | 'browser_tab';
   fileKind?: 'file' | 'directory';
 }
 

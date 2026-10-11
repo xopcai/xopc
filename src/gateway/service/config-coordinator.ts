@@ -34,7 +34,7 @@ import { ConfigHotReloader } from '../../config/reload.js';
 import { loadConfig, saveConfig as writeConfigToDisk } from '../../config/index.js';
 import { sanitizeTunnelConfig } from '../../tunnel/tunnel-config.js';
 import { getModelRegistry } from '../../providers/index.js';
-import { disposeAllSessionMcpRuntimes } from '../../agent/mcp/bundle-mcp-tools.js';
+import { evictAllEmbeddedSessionRunners } from '../../agent/embedded/session-runner.js';
 import { reloadImageGenerationProviders } from '../../agent/image/generation/provider-registry.js';
 import { computeExtensionActivationPatch } from '../../extensions/bundled-extension-activation.js';
 import { createLogger } from '../../utils/logger.js';
@@ -293,9 +293,7 @@ export class GatewayConfigCoordinator {
   private handleMcpReload(newConfig: Config): void {
     log.debug('Reloading MCP config...');
     this.opts.setConfig(newConfig);
-    void disposeAllSessionMcpRuntimes().catch((err) => {
-      log.warn({ err }, 'MCP runtime dispose on config reload failed');
-    });
+    evictAllEmbeddedSessionRunners('mcp_config_reload');
     this.opts.emit('config.reload', { section: 'mcp' });
     log.debug('MCP config reloaded');
   }

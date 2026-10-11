@@ -14,7 +14,7 @@ import { useLocaleStore } from '@/stores/locale-store';
 
 const DEBOUNCE_MS = 150;
 const PROVIDER_ORDER: readonly AtMentionItemKind[] = [
-  'file', 'note', 'session', 'browser_tab', 'skill', 'agent', 'mcp_server', 'mcp_resource',
+  'file', 'note', 'session', 'browser_tab', 'skill', 'agent',
 ];
 
 export interface AtRange {
@@ -41,8 +41,6 @@ function emptyProviderState(loading: boolean): ProviderState {
     skill: { ...state },
     agent: { ...state },
     browser_tab: { ...state },
-    mcp_server: { ...state },
-    mcp_resource: { ...state },
   };
 }
 
@@ -67,7 +65,6 @@ function isBrowseModeQuery(query: string): boolean {
   const normalized = query.trim();
   return normalized.length > 0
     && normalized.endsWith('/')
-    && !normalized.startsWith('mcp:')
     && !/^https?:\/\//i.test(normalized);
 }
 
@@ -163,32 +160,6 @@ export function useAtMentionPicker(
       selectedContextKeys: new Set(selectedContextKeysKey ? selectedContextKeysKey.split('\0') : []),
       recentPaths: new Set(getRecentAtPaths(conversationId)),
     };
-
-    if (/^mcp:[^/]+\//u.test(debouncedQuery)) {
-      const loadingState = emptyProviderState(false);
-      loadingState.mcp_resource = { items: [], loading: true, error: null };
-      setProviderState(loadingState);
-      const provider = atMentionProviders.find((candidate) => candidate.kind === 'mcp_resource')!;
-      void provider.search(debouncedQuery, context)
-        .then((items) => {
-          if (requestGeneration.current !== generation) return;
-          setProviderState((current) => ({
-            ...current,
-            mcp_resource: { items, loading: false, error: null },
-          }));
-        })
-        .catch((error: unknown) => {
-          if (requestGeneration.current !== generation) return;
-          setProviderState((current) => ({
-            ...current,
-            mcp_resource: {
-              items: [], loading: false,
-              error: error instanceof Error ? error.message : String(error),
-            },
-          }));
-        });
-      return;
-    }
 
     if (isBrowseModeQuery(debouncedQuery)) {
       const loadingState = emptyProviderState(false);

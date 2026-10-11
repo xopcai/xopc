@@ -55,10 +55,6 @@ import {
   type AgentCapabilityCatalogEntry,
   type AgentCapabilitySessionState,
 } from './capabilities/index.js';
-import {
-  disposeAllSessionMcpRuntimes,
-  retireSessionMcpRuntimeForConversationId,
-} from './mcp/bundle-mcp-tools.js';
 import { getEmbeddedExecutionRunId } from './embedded/execution-context.js';
 import { evictAllEmbeddedSessionRunners, evictEmbeddedSessionRunner } from './embedded/session-runner.js';
 import { abortEmbeddedRun } from './embedded/runs.js';
@@ -99,8 +95,6 @@ import { evaluateToolGate } from './context/execution-context.js';
 import { WorkspaceRuntimeRegistry, type WorkspaceRuntime } from './workspace-runtime/registry.js';
 import { BackgroundReviewCoordinator } from './background-review/coordinator.js';
 import { maybeRequestChannelExecApproval } from '../channels/exec-approval-runtime.js';
-import { mcpToolPolicyId } from './mcp/bundle-mcp-policy.js';
-import { parseExternalToolRef } from './external-tools/refs.js';
 import { SkillFilesystemWatcher } from './skills/filesystem-watcher.js';
 import { resolveWorkspaceSkillsDir, resolveWorkspaceSkillsLockPath } from './skills/workspace-skills-dir.js';
 import { ProjectTrustStore, hasTrustRequiringProjectResources } from '../project-trust/trust-store.js';
@@ -446,8 +440,8 @@ export class AgentManager implements AgentInstanceGateway {
     for (const instance of this.agents.values()) {
       const before = instance.effectiveProfile.config;
       const after = resolveEffectiveAgentProfileForSession(instance.conversationId).config;
-      if (JSON.stringify([before.runtime.codemode, before.runtime.toolDiscovery, before.tools, before.toolAllowlist])
-        !== JSON.stringify([after.runtime.codemode, after.runtime.toolDiscovery, after.tools, after.toolAllowlist])) {
+      if (JSON.stringify([before.runtime.codemode, before.tools, before.toolAllowlist])
+        !== JSON.stringify([after.runtime.codemode, after.tools, after.toolAllowlist])) {
         void abortEmbeddedRun(instance.conversationId);
         evictEmbeddedSessionRunner(instance.conversationId, 'agent_tool_configuration_changed');
       }
@@ -1273,7 +1267,6 @@ export class AgentManager implements AgentInstanceGateway {
     if (instance) {
       this.backgroundReview.forgetSession(conversationId);
       void this.toolsFactory.closeBrowserPageForSession(conversationId);
-      void retireSessionMcpRuntimeForConversationId({ conversationId, reason: 'agent-evict' });
       instance.agent.abort();
       evictEmbeddedSessionRunner(conversationId, 'agent_removed');
       this.agents.delete(conversationId);
@@ -1358,7 +1351,6 @@ export class AgentManager implements AgentInstanceGateway {
     if (this.skillsUpdatedTimer) clearTimeout(this.skillsUpdatedTimer);
     this.skillFilesystemWatcher.dispose();
     void this.toolsFactory.shutdownBrowser();
-    void disposeAllSessionMcpRuntimes().catch(() => {});
     evictAllEmbeddedSessionRunners('agent_manager_dispose');
     this.backgroundReview.clear();
     this.userUnderstandingMaintenance.clear();
@@ -1643,14 +1635,8 @@ export class AgentManager implements AgentInstanceGateway {
     const toolRef = typeof (args as { toolRef?: unknown })?.toolRef === 'string'
       ? (args as { toolRef: string }).toolRef
       : '';
-    const parsed = parseExternalToolRef(toolRef, 'mcp');
-    if (!parsed) {
-      const externalPolicy = profile.config.tools[toolRef];
-      return externalPolicy ? { id: toolRef, ...externalPolicy } : gatewayPolicy ? { id: toolName, ...gatewayPolicy } : undefined;
-    }
-    const id = mcpToolPolicyId(parsed.namespace, parsed.toolName);
-    const policy = profile.config.tools[id];
-    return policy ? { id, ...policy } : gatewayPolicy ? { id: toolName, ...gatewayPolicy } : undefined;
+    const externalPolicy = profile.config.tools[toolRef];
+    return externalPolicy ? { id: toolRef, ...externalPolicy } : gatewayPolicy ? { id: toolName, ...gatewayPolicy } : undefined;
   }
 
   private async requestToolConfirmation(conversationId: string, toolName: string, detail: string): Promise<boolean> {

@@ -32,7 +32,6 @@ export function ConnectionActionBar({ conversationId }: { conversationId: string
   const { wait, isLoading, busy, error, act } = useConnectionWait(conversationId);
   const [open, setOpen] = useState(false);
   const [replacement, setReplacement] = useState<{ needKey: string; candidateRef: string; label: string }>();
-  const [callbackUrls, setCallbackUrls] = useState<Record<string, string>>({});
   const [installDraft, setInstallDraft] = useState<InstallDraft>();
   const [installNeedKey, setInstallNeedKey] = useState<string>();
   const [preparingInstall, setPreparingInstall] = useState(false);
@@ -127,17 +126,7 @@ export function ConnectionActionBar({ conversationId }: { conversationId: string
               </div> : null}
               {need.reason && <p className="text-xs text-fg-muted">{need.reason}</p>}
               {need.phase === 'authorizing' && <div className="flex items-center justify-between text-xs text-fg-muted"><span>{t.authorizing}</span><button type="button" disabled={busy} className="text-accent" onClick={() => void act('connect', need.key)}>{t.reconnect}</button></div>}
-              {need.phase === 'authorizing' && need.target.type === 'plugin-mcp' ? <div className="space-y-2 border-t border-edge pt-2">
-                <p className="text-xs text-fg-muted">{t.callbackHint}</p>
-                <input type="password" autoComplete="off" value={callbackUrls[need.key] ?? ''} placeholder={t.callbackPlaceholder}
-                  className="w-full rounded-lg border border-edge bg-surface-inset px-3 py-2 text-sm text-fg"
-                  onChange={event => setCallbackUrls(current => ({ ...current, [need.key]: event.target.value }))} />
-                <button type="button" className={secondary} disabled={busy || !(callbackUrls[need.key]?.trim())} onClick={() => {
-                  const callbackUrl = callbackUrls[need.key].trim();
-                  setCallbackUrls(current => ({ ...current, [need.key]: '' }));
-                  void act('submit_callback', need.key, undefined, undefined, callbackUrl);
-                }}>{t.callbackSubmit}</button>
-              </div> : null}
+
             </div>)}
             <a href="#/capabilities/connectors" className="text-sm text-accent" onClick={() => setOpen(false)}>{t.all}</a>
           </div>
@@ -155,7 +144,7 @@ export function ConnectionActionBar({ conversationId }: { conversationId: string
       onClose={() => { setInstallDraft(undefined); setInstallNeedKey(undefined); }}
       onInstalled={async instance => {
         if (!installNeedKey) return;
-        const completed = await act('install_complete', installNeedKey, undefined, undefined, undefined, instance.instanceId);
+        const completed = await act('install_complete', installNeedKey, undefined, undefined, instance.instanceId);
         if (completed) { setInstallDraft(undefined); setInstallNeedKey(undefined); }
       }}
       t={messages(language).connectorsSettings}

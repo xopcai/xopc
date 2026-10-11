@@ -1,4 +1,4 @@
-import { Loader2, Settings2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 
@@ -15,7 +15,6 @@ import { connectorIsInstalled, CONNECTOR_SKELETON_KEYS } from '@/features/connec
 import { ConnectorCardSkeleton } from '@/features/connectors/components/connector-card-skeletons';
 import { InstalledConnectorRowSkeleton } from '@/features/connectors/components/installed-connector-row-skeleton';
 import { ConnectorDetailDialog } from '@/features/connectors/components/connector-detail-dialog';
-import { ConnectorRuntimeSettingsDialog } from '@/features/connectors/components/connector-runtime-settings-dialog';
 import { ConnectorsPageHeaderEnd } from '@/features/connectors/components/connectors-page-header-end';
 import { CustomMcpServerRow } from '@/features/connectors/components/custom-mcp-server-row';
 import { useExtensions } from '@/features/extensions/extension-provider';
@@ -181,9 +180,6 @@ export function ConnectorsPage({ embedded = false, onHeaderActionChange }: { emb
   const [detailInstanceSnapshot, setDetailInstanceSnapshot] = useState<ConnectorInstance | null>(null);
   const [highlightedInstanceId, setHighlightedInstanceId] = useState<string | null>(null);
   const [customDialog, setCustomDialog] = useState<CustomDialogState>(null);
-  const [runtimeSettingsOpen, setRuntimeSettingsOpen] = useState(false);
-  const [sessionIdleTtlMinutes, setSessionIdleTtlMinutes] = useState<number | undefined>(undefined);
-  const [ttlSaving, setTtlSaving] = useState(false);
 
   const { data: configData, mutate: mutateConfig } = useGatewayConfigSwr(hasToken);
   const config = configData?.payload?.config;
@@ -195,7 +191,6 @@ export function ConnectorsPage({ embedded = false, onHeaderActionChange }: { emb
   const installedCount = state.instances.length + customServers.length + pluginExtensions.reduce((n, extension) => n + (extension.components?.mcp.length ?? 0), 0);
 
   useEffect(() => {
-    if (mcpSettings) setSessionIdleTtlMinutes(mcpSettings.sessionIdleTtlMinutes);
   }, [mcpSettings]);
 
   const load = useCallback(async () => {
@@ -401,7 +396,7 @@ export function ConnectorsPage({ embedded = false, onHeaderActionChange }: { emb
     if (!mcpSettings || config === undefined) return;
     const nextServers = customServers.filter((server) => server.clientKey !== row.clientKey);
     await patchMcpSettings(
-      { sessionIdleTtlMinutes: mcpSettings.sessionIdleTtlMinutes, servers: nextServers },
+      { servers: nextServers },
       extractManagedMcpServers(config),
     );
     await mutateConfig();
@@ -412,20 +407,6 @@ export function ConnectorsPage({ embedded = false, onHeaderActionChange }: { emb
     setCustomDialog({ mode: 'add', row: buildNewCustomServerRow(customServers, managedServerIds) });
   }, [customServers, managedServerIds]);
 
-  const saveTtl = useCallback(async () => {
-    if (!mcpSettings || config === undefined || ttlSaving) return;
-    setTtlSaving(true);
-    try {
-      await patchMcpSettings(
-        { sessionIdleTtlMinutes, servers: customServers },
-        extractManagedMcpServers(config),
-      );
-      await mutateConfig();
-      setRuntimeSettingsOpen(false);
-    } finally {
-      setTtlSaving(false);
-    }
-  }, [config, customServers, mcp.saved, mcpSettings, mutateConfig, sessionIdleTtlMinutes, ttlSaving]);
 
   const setPageHeader = usePageHeaderStore((state) => state.setPageHeader);
   const clearPageHeader = usePageHeaderStore((state) => state.clearPageHeader);
@@ -682,10 +663,7 @@ export function ConnectorsPage({ embedded = false, onHeaderActionChange }: { emb
                           <Button type="button" variant="secondary" className="h-8 text-xs" onClick={openAddCustomServer}>
                             {cs.addCustomServerAdvanced}
                           </Button>
-                          <Button type="button" variant="ghost" className="h-8 text-xs" onClick={() => setRuntimeSettingsOpen(true)}>
-                            <Settings2 className="size-3.5" />
-                            {cs.runtimeSettings}
-                          </Button>
+
                         </div>
                         <div className="divide-y divide-edge-subtle">
                           {visibleCustomServers.map((row) => (
@@ -857,7 +835,6 @@ export function ConnectorsPage({ embedded = false, onHeaderActionChange }: { emb
             mode={customDialog.mode}
             initialRow={customDialog.row}
             existingCustomServers={customServers}
-            sessionIdleTtlMinutes={sessionIdleTtlMinutes}
             config={config}
             managedServerIds={managedServerIds}
             t={mcp}
@@ -871,16 +848,7 @@ export function ConnectorsPage({ embedded = false, onHeaderActionChange }: { emb
           />
         ) : null}
 
-        <ConnectorRuntimeSettingsDialog
-          open={runtimeSettingsOpen}
-          sessionIdleTtlMinutes={sessionIdleTtlMinutes}
-          saving={ttlSaving}
-          onChange={setSessionIdleTtlMinutes}
-          onSave={saveTtl}
-          onClose={() => setRuntimeSettingsOpen(false)}
-          t={cs}
-          mcp={mcp}
-        />
+
       </div>
     </div>
   );

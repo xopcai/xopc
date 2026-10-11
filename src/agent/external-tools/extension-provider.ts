@@ -3,6 +3,7 @@ import type { AgentTool } from '@earendil-works/pi-agent-core';
 import type { ExtensionHookRunner } from '../../extensions/index.js';
 import type { ExtensionRegistry } from '../../extensions/types/index.js';
 import { executeToolWithProtection, type ToolExecutorConfig } from '../tools/executor.js';
+import { getXopcToolMetadata } from '../embedded/tool-metadata.js';
 import { externalToolRef, parseExternalToolRef } from './refs.js';
 import type {
   ExternalToolDescriptor,
@@ -50,6 +51,8 @@ export class ExtensionToolProvider implements ExternalToolProvider {
     if (!resolved) return undefined;
     const { extensionId, tool } = resolved;
     const summary = toolSummary(tool);
+    const metadata = getXopcToolMetadata(tool);
+    if (metadata?.exposure === 'hidden') return undefined;
     return {
       toolRef,
       source: this.source,
@@ -58,6 +61,9 @@ export class ExtensionToolProvider implements ExternalToolProvider {
       summary,
       description: summary,
       inputSchema: tool.parameters as Record<string, unknown>,
+      outputSchema: metadata?.outputSchema as Record<string, unknown> | undefined,
+      annotations: metadata?.annotations,
+      exposure: metadata?.exposure,
     };
   }
 
@@ -78,6 +84,7 @@ export class ExtensionToolProvider implements ExternalToolProvider {
       if (!hook.allowed) throw new Error(hook.reason ?? 'Extension tool call blocked by policy hook.');
       executionArgs = hook.params ?? args;
     }
+    context.validateArguments?.(executionArgs);
     return executeToolWithProtection(
       resolved.tool,
       context.toolCallId,
