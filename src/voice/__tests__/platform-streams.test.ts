@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { WebSocketServer } from 'ws';
 import { once } from 'node:events';
 import type { StreamingSttEvent } from '../../media-understanding/types.js';
-import { openPlatformStt, openPlatformTts } from '../platform-streams.js';
+import { openPlatformStt, openPlatformTts, PlatformVoiceError } from '../platform-streams.js';
 
 const servers: WebSocketServer[] = [];
 afterEach(async () => { for (const server of servers.splice(0)) { for (const socket of server.clients) socket.terminate(); await new Promise<void>(resolve => server.close(() => resolve())); } });
@@ -11,6 +11,31 @@ async function server() {
   return { server, url: `ws://127.0.0.1:${(server.address() as {port:number}).port}` };
 }
 describe('platform voice protocol', () => {
+  it.each([
+    [402, JSON.stringify({ error: { code: 'realtime_quota_user_credits', message: 'Realtime audio quota exhausted' } }), 'realtime_quota_user_credits', 'Cloud balance'],
+    [402, JSON.stringify({ error: { code: 'realtime_quota_workspace_budget', message: 'Realtime audio quota exhausted' } }), 'realtime_quota_workspace_budget', 'workspace budget is exhausted'],
+    [402, '<html>Payment Required</html>', undefined, 'Cloud balance'],
+    [402, 'x'.repeat(20_000), undefined, 'Cloud balance'],
+    [401, 'Unauthorized', undefined, 'Sign in again'],
+    [429, 'Too Many Requests', undefined, 'Try again later'],
+  ])('preserves rejected STT handshake status %s and reports an actionable failure', async (status, body, code, hint) => {
+    const s = new WebSocketServer({ port: 0, verifyClient: (_info, callback) => callback(false, status, body) });
+    servers.push(s);
+    await once(s, 'listening');
+    const events: StreamingSttEvent[] = [];
+    const error = await openPlatformStt({
+      model: 'test', baseUrl: `ws://127.0.0.1:${(s.address() as { port: number }).port}`, apiKey: 'test',
+      inputFormat: { encoding: 'pcm_s16le', sampleRate: 16000, channels: 1 },
+      turnDetection: { mode: 'server_vad', silenceDurationMs: 700 }, timeoutMs: 1000,
+      signal: new AbortController().signal, onEvent: event => events.push(event),
+    }).catch(error => error);
+    expect(error).toBeInstanceOf(PlatformVoiceError);
+    expect(error).toMatchObject({ status, code });
+    expect(error.clientMessage).toContain(hint);
+    expect(events).toEqual([{ type: 'error', error }]);
+    if (code) expect(error.message).toContain(code);
+  });
+
   it('replaces partial transcripts by item and waits for finalization', async () => {
     const {server:s, url} = await server();
     const events: StreamingSttEvent[] = [];
