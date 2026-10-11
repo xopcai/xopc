@@ -17,6 +17,8 @@ import {
   markStaleAiUsageEventsUnknown,
   pruneAiUsageEvents,
   summarizeAiUsage,
+  setAiUsageCloudRequest,
+  setAiUsageCloudReceipt,
 } from '../ai-usage-repository.js';
 
 describe('AI usage repository', () => {
@@ -115,5 +117,52 @@ describe('AI usage repository', () => {
     expect(getAiUsageEvent('old')).toBeUndefined();
     expect(getAiUsageEvent('active')).toMatchObject({ status: 'running' });
     expect(getAiUsageEvent('recent')).toMatchObject({ status: 'succeeded' });
+  });
+
+  it('separates mixed Cloud, external and local calls without reinterpreting old dollar estimates', () => {
+    for (const [id, provider, costSource, estimate] of [
+      ['external', 'openai', 'model_catalog', 20000],
+      ['cloud', 'xopc-cloud', 'model_catalog', 9000000],
+      ['pending', 'xopc-cloud', 'unknown', undefined],
+      ['legacy', 'xopc-cloud', 'model_catalog', 8000000],
+      ['local', 'ollama', 'local', 0],
+    ] as const) {
+      insertAiUsageEvent({ id, traceId: 'mixed-task', category: 'chat', operation: 'agent.answer', trigger: 'user',
+        reasonKey: 'usage.reason.agentAnswer', provider, model: 'same-model', status: 'running', startedAt: 100, costSource });
+      finishAiUsageEvent(id, { status: 'succeeded', finishedAt: 150, estimatedCostMicrousd: estimate });
+    }
+    const receipt = { requestId: 'request-1', model: 'same-model', state: 'settled', reservedCreditMicro: '50000',
+      chargedCreditMicro: '23500', releasedCreditMicro: '26500', ratedCreditMicro: '23500', absorbedCreditMicro: '0',
+      priceSnapshot: null, createdAt: 100, settledAt: 150 };
+    setAiUsageCloudRequest('cloud', 'request-1');
+    setAiUsageCloudReceipt('cloud', receipt);
+    setAiUsageCloudRequest('pending', 'request-2');
+    setAiUsageCloudReceipt('pending', { ...receipt, requestId: 'request-2', state: 'reserved', chargedCreditMicro: null, settledAt: null });
+    const summary = summarizeAiUsage({ from: 0, to: 1000 });
+    expect(summary.totals).toMatchObject({ calls: 5, knownCostUsd: '0.02', unknownCostCalls: 0, billing: {
+      external: { calls: 1, estimatedCostUsd: '0.02', unknownCostCalls: 0 }, localCalls: 1,
+      cloud: { calls: 3, settledCalls: 1, pendingCalls: 1, unavailableCalls: 1, chargedCreditMicro: '23500', reservedCreditMicro: '50000' },
+    } });
+    const events = listAiUsageEvents({ from: 0, to: 1000 }).items;
+    expect(events.find(event => event.id === 'legacy')).toMatchObject({ estimatedCostUsd: undefined, billing: { source: 'xopc_cloud', chargedCreditMicro: null } });
+    expect(events.find(event => event.id === 'pending')).toMatchObject({ billing: { state: 'pending', chargedCreditMicro: null } });
+    expect(summary.byModel.find(item => item.provider === 'xopc-cloud')?.totals.knownCostUsd).toBe('0');
+    // One platform request cannot be assigned to two observers and charged twice locally.
+    expect(() => setAiUsageCloudRequest('legacy', 'request-1')).toThrow();
+  });
+
+  it('accepts an authoritative released reservation, but not a mismatched receipt', () => {
+    insertAiUsageEvent({ id: 'release', traceId: 'trace', category: 'chat', operation: 'agent.answer', trigger: 'user',
+      reasonKey: 'usage.reason.agentAnswer', provider: 'xopc-cloud', model: 'cloud', status: 'running', startedAt: 100, costSource: 'unknown' });
+    setAiUsageCloudRequest('release', 'r-release');
+    const receipt = { requestId: 'wrong-request', model: 'cloud', state: 'released', reservedCreditMicro: '50000',
+      chargedCreditMicro: null, releasedCreditMicro: '50000', ratedCreditMicro: null, absorbedCreditMicro: null,
+      priceSnapshot: null, createdAt: 100, settledAt: 150 };
+    setAiUsageCloudReceipt('release', receipt);
+    expect(listAiUsageEvents({ from: 0, to: 1000 }).items[0].billing).toMatchObject({ state: 'unavailable', chargedCreditMicro: null });
+    setAiUsageCloudReceipt('release', { ...receipt, requestId: 'r-release' });
+    expect(summarizeAiUsage({ from: 0, to: 1000 }).totals.billing.cloud).toMatchObject({ chargedCreditMicro: '0', reservedCreditMicro: '0' });
+    setAiUsageCloudReceipt('release', { ...receipt, requestId: 'r-release', state: 'pending' });
+    expect(listAiUsageEvents({ from: 0, to: 1000 }).items[0].billing).toMatchObject({ state: 'released', chargedCreditMicro: '0' });
   });
 });

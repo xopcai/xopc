@@ -1,3 +1,6 @@
+import { captureCloudUsageResponse } from '../../../usage/cloud-receipts.js';
+import { trackCloudCapabilityUsage } from '../../../usage/cloud-capability.js';
+import { cloudCreditBudgetHeaders, reportCloudCreditError, rejectUnbudgetedCloudTransport } from '../../../providers/xopc-cloud-credit-budget.js';
 import { getModelCatalogStore } from '../../../providers/model-catalog-store.js';
 import { compareCatalogModels } from '../../../providers/model-catalog-ranking.js';
 import { getProviderAuthService } from '../../../providers/provider-auth-service.js';
@@ -36,16 +39,21 @@ export const xopcCloudTranscriptionProvider: MediaUnderstandingProvider = {
     }));
     if (request.language) form.append('language', request.language);
     if (request.prompt) form.append('prompt', request.prompt);
-    const response = await fetch(`${baseUrl}/audio/transcriptions`, {
-      method: 'POST', headers: { authorization: `Bearer ${accessToken}` }, body: form,
-      signal: request.signal ?? AbortSignal.timeout(request.timeoutMs), redirect: 'error',
+    return trackCloudCapabilityUsage(model, 'audio.transcribe', async () => {
+      const response = await fetch(`${baseUrl}/audio/transcriptions`, {
+        method: 'POST', headers: { authorization: `Bearer ${accessToken}`, ...await cloudCreditBudgetHeaders() }, body: form,
+        signal: request.signal ?? AbortSignal.timeout(request.timeoutMs), redirect: 'error',
+      });
+      captureCloudUsageResponse(response);
+      const body = await response.json().catch(() => null) as { text?: unknown; error?: { message?: unknown; code?: unknown } } | null;
+      if (!response.ok) {
+        const message = `${body?.error?.code ?? ''}: ${typeof body?.error?.message === 'string' ? body.error.message : `XOPC Cloud STT failed (${response.status})`}`;
+        reportCloudCreditError(message);
+        throw new Error(message);
+      }
+      if (typeof body?.text !== 'string') throw new Error('XOPC Cloud STT returned an invalid response');
+      return { text: body.text, model, ...(request.language ? { language: request.language } : {}) };
     });
-    const body = await response.json().catch(() => null) as { text?: unknown; error?: { message?: unknown } } | null;
-    if (!response.ok) {
-      throw new Error(typeof body?.error?.message === 'string' ? body.error.message : `XOPC Cloud STT failed (${response.status})`);
-    }
-    if (typeof body?.text !== 'string') throw new Error('XOPC Cloud STT returned an invalid response');
-    return { text: body.text, model, ...(request.language ? { language: request.language } : {}) };
   },
   streamingAudio: {
     inputSampleRates: [16_000],
@@ -54,6 +62,7 @@ export const xopcCloudTranscriptionProvider: MediaUnderstandingProvider = {
     get models() { return platformVoiceModels('transcription.stream').map(model => model.id); },
   },
   openAudioStream: async (request) => {
+    rejectUnbudgetedCloudTransport();
     const catalogModel = requirePlatformVoiceModel(request.model, 'transcription.stream');
     const accessToken = await getProviderAuthService().resolveApiKey('xopc-cloud', request.signal);
     if (!accessToken) throw new Error('XOPC Cloud authorization is unavailable');
