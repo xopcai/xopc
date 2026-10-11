@@ -1,6 +1,6 @@
 {
   "name": "@xopcai/xopc",
-  "version": "0.0.369",
+  "version": "0.0.370",
   "description": "Local-first personal AI with Ada, task delegation, files, projects, workflows, and automations. Use cloud or local models.",
   "packageManager": "pnpm@11.9.0",
   "type": "module",
