@@ -4,10 +4,6 @@ import { Button } from '@/components/ui/button';
 import { resolveWorkspaceFileReference } from '@/features/workspace/workspace-api';
 import { useWorkspacePreviewStore } from '@/stores/workspace-preview-store';
 
-export function codemodeOutputPath(text: string): string | undefined {
-  return /^Full Codemode output: (\.xopc\/codemode-output\/[a-f0-9-]{36}\.txt)(?:\r?\n|$)/.exec(text)?.[1];
-}
-
 export function CodemodeOutputLink({ path, conversationId, label }: { path: string; conversationId?: string | null; label: string }) {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string>();
