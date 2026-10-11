@@ -57,11 +57,12 @@ import ai.xopc.mobile.R
 @Composable
 internal fun PersonalAgentProfileSheet(state: PersonalUiState, onDismiss: () -> Unit,
   onLoadAgentVoices: () -> Unit,
-  onUpdateAgentProfile: (String, String, Map<String, String>, String?) -> Unit,
+  onUpdateAgentProfile: (String, String, Map<String, String>, String?, Boolean) -> Unit,
   onUploadAvatar: suspend (ByteArray) -> Unit) {
   var agentName by rememberSaveable(state.gatewayId) { mutableStateOf("") }
   var agentAppearance by rememberSaveable(state.gatewayId) { mutableStateOf("loopi") }
   var agentDetail by rememberSaveable(state.gatewayId) { mutableStateOf("balanced") }
+  var greetingEnabled by rememberSaveable(state.gatewayId) { mutableStateOf(true) }
   var agentVoice by rememberSaveable(state.gatewayId) { mutableStateOf("") }
   var uploading by remember(state.gatewayId) { mutableStateOf(false) }
   val busy = uploading || state.agentProfileSaving
@@ -71,6 +72,7 @@ internal fun PersonalAgentProfileSheet(state: PersonalUiState, onDismiss: () -> 
   val agentSaveRevision = remember(state.gatewayId, state.agent?.agentId) { state.agentProfileSavedRevision }
   LaunchedEffect(state.gatewayId, state.agent?.agentId, state.agent?.revision) {
     val agent = state.agent ?: return@LaunchedEffect
+    greetingEnabled = agent.openingGreetingEnabled
     agentName = agent.displayName
     agentAppearance = agent.appearance
     agentDetail = agent.preferences["detailLevel"] ?: "balanced"
@@ -119,6 +121,11 @@ internal fun PersonalAgentProfileSheet(state: PersonalUiState, onDismiss: () -> 
             }
           }
         }
+        if (state.agent?.supportsOpeningGreeting == true) Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+          Text(stringResource(R.string.personal_agent_opening_greeting), Modifier.weight(1f))
+          androidx.compose.material3.Switch(checked = greetingEnabled,
+            onCheckedChange = { greetingEnabled = it }, enabled = !busy && !state.agentLoading)
+        }
         TextButton(onClick = onLoadAgentVoices, enabled = !busy) {
           Text(stringResource(R.string.personal_agent_refresh_voices))
         }
@@ -136,7 +143,7 @@ internal fun PersonalAgentProfileSheet(state: PersonalUiState, onDismiss: () -> 
             put("detailLevel", agentDetail)
           }
           onUpdateAgentProfile(agentName.trim(), agentAppearance, preferences,
-            agentVoice.takeIf { state.agentVoiceChoices?.voices?.isNotEmpty() == true })
+            agentVoice.takeIf { state.agentVoiceChoices?.voices?.isNotEmpty() == true }, greetingEnabled)
         }, enabled = !busy && !state.agentLoading && state.agent != null && agentName.isNotBlank(),
           modifier = Modifier.fillMaxWidth().testTag("personal-agent-profile-save")) {
           Text(stringResource(if (state.agentProfileSaving) R.string.personal_agent_saving else R.string.personal_agent_save))

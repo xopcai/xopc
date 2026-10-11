@@ -5,6 +5,7 @@ struct VoicePayload<Value: Decodable & Sendable>: Decodable, Sendable {
 }
 
 struct RealtimeVoiceStatus: Decodable, Sendable {
+    let openingGreeting: Bool?
     let enabled: Bool
     let defaultMode: String
     let capabilities: Capabilities
@@ -38,6 +39,14 @@ struct RealtimeVoiceSessionRequest: Encodable, Sendable {
     let purpose = "conversation"
     let conversationId: String
     let mode: RealtimeVoiceMode
+    var language: String? = nil
+    var openingGreeting: OpeningGreetingRequest? = nil
+
+    struct OpeningGreetingRequest: Encodable, Sendable {
+        let logicalCallId: String
+        let initiation: String
+        let supportsOutputReady = true
+    }
     let supportedProtocolVersions = [3]
     let mediaPreferences = ["websocket-pcm"]
 }
@@ -50,6 +59,11 @@ extension RealtimeVoiceMode: Encodable {
 }
 
 struct RealtimeVoiceSession: Decodable, Sendable {
+    var openingGreeting: OpeningGreeting? = nil
+    struct OpeningGreeting: Decodable, Sendable {
+        let accepted: Bool
+        let greetingResponseId: String?
+    }
     let sessionId: String
     let ticket: String
     let websocketPath: String
@@ -123,6 +137,7 @@ struct RealtimeVoiceEvent: Decodable, Sendable {
 }
 
 struct RealtimeVoiceControlPayload: Encodable, Sendable {
+    var connectionEpoch: UInt32?
     var sessionId: String?
     var ticket: String?
     var muted: Bool?
