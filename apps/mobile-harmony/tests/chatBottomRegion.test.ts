@@ -14,6 +14,14 @@ const mobileComponents = readFileSync(new URL('../entry/src/main/ets/view/Mobile
 const actionPanel = readFileSync(new URL('../entry/src/main/ets/view/ChatActionPanel.ets', import.meta.url), 'utf8');
 
 describe('chat bottom region composition', () => {
+  it('opens task conversations with the full chat header while retaining task navigation', () => {
+    const taskDestination = home.slice(home.indexOf("} else if (page === 'task-conversation')"),
+      home.indexOf("} else if (page === 'tasks'"));
+    expect(taskDestination).toContain("requestedId: (param as XopcMobileRoute).prompt ?? ''");
+    expect(taskDestination).toContain('taskId: (param as XopcMobileRoute).itemId, activePage: true, embedded: false');
+    expect(taskDestination).toContain('this.pathStack.pop(); return true;');
+    expect(taskDestination).not.toContain('task_open_conversation');
+  });
   it('animates session refresh only for an explicit pull gesture', () => {
     expect(sessions).toContain('Refresh({ refreshing: this.sessions.refreshing })');
     expect(sessions).not.toContain('refreshing: this.sessions.loading');
