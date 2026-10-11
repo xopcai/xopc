@@ -243,7 +243,11 @@ actor RealtimeVoiceTransport {
 
     private func transmit(_ frame: Data, epoch: Int) async {
         guard streamEpoch == epoch else { return }
-        defer { if streamEpoch == epoch { pendingBytes = max(0, pendingBytes - frame.count) } }
+        defer {
+            if streamEpoch == epoch {
+                pendingBytes = max(0, pendingBytes - frame.count)
+            }
+        }
         guard let socket, !closed else { return }
         do {
             try await socket.send(.data(frame))
@@ -253,7 +257,6 @@ actor RealtimeVoiceTransport {
             close()
         }
     }
-
 }
 
 extension RealtimeVoiceTransport {

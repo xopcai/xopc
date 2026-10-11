@@ -823,7 +823,7 @@ struct PersonalAgentProfileView: View {
                 }
                 Section {
                     Text(locale.language.languageCode?.identifier == "zh"
-                         ? "更多设置请前往 PC 或 Web 端。" : "For more settings, use the PC or Web app.")
+                        ? "更多设置请前往 PC 或 Web 端。" : "For more settings, use the PC or Web app.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 if let error {
