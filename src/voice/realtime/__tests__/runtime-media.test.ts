@@ -10,6 +10,8 @@ import { ConfigSchema } from '../../../config/schema.js';
 import { alibabaTranscriptionProvider } from '../../stt/providers/alibaba-transcription.js';
 import { VoiceRealtimeRuntime } from '../runtime.js';
 
+vi.mock('../../../gateway/security/device-request-proof.js', () => ({ verifyDeviceConnectionProof: () => true }));
+
 describe('VoiceRealtimeRuntime media frames', () => {
   let runtime: VoiceRealtimeRuntime;
   let server: Server;

@@ -10,6 +10,8 @@ import { notifyUserContextChange, onUserContextChange } from '../../../user-cont
 import { VoiceRealtimeRuntime } from '../runtime.js';
 import type { VoiceConversationContext } from '../conversation-context.js';
 
+vi.mock('../../../gateway/security/device-request-proof.js', () => ({ verifyDeviceConnectionProof: () => true }));
+
 const engine = vi.hoisted(() => ({ start: vi.fn(async () => {}), close: vi.fn(async () => {}), appendAudio: vi.fn(), setInputMuted: vi.fn(), cancel: vi.fn(), acknowledge: vi.fn(), commit: vi.fn() }));
 const create = vi.hoisted(() => vi.fn());
 vi.mock('../omniEngine.js', () => ({ createOmniVoiceEngine: (options: unknown) => { create(options); return engine; } }));
