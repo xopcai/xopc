@@ -1,10 +1,12 @@
+import { DEVICE_TOOL_CATALOG_JSON, DEVICE_STATE_TOOL_CATALOG_JSON } from './deviceToolCatalog';
 import type { XopcEndpointHello, XopcSubscription } from '../model/realtime';
 
 export const XOPC_REALTIME_PROTOCOL_VERSION: number = 2;
 
-// This order is the Gateway's recursive canonical JSON order. Tools are deliberately disabled until implemented.
+// Descriptors are generated in the Gateway canonical order.
 export function endpointProof(hello: XopcEndpointHello): string {
-  if (hello.tools.length !== 0) throw new Error('UNSUPPORTED_ENDPOINT_TOOLS');
+  const catalog = hello.tools.length === 0 ? '[]' : hello.tools.length === 2 ? DEVICE_STATE_TOOL_CATALOG_JSON : DEVICE_TOOL_CATALOG_JSON;
+  if (JSON.stringify(hello.tools) !== catalog) throw new Error('UNSUPPORTED_ENDPOINT_TOOLS');
   return '{"appVersion":' + JSON.stringify(hello.appVersion)
     + ',"availability":' + JSON.stringify(hello.availability)
     + ',"connectionInstanceId":' + JSON.stringify(hello.connectionInstanceId)
@@ -14,7 +16,7 @@ export function endpointProof(hello: XopcEndpointHello): string {
     + ',"nonce":' + JSON.stringify(hello.nonce)
     + ',"platform":' + JSON.stringify(hello.platform)
     + ',"principalId":' + JSON.stringify(hello.principalId)
-    + ',"signedAt":' + JSON.stringify(hello.signedAt) + ',"tools":[]}';
+    + ',"signedAt":' + JSON.stringify(hello.signedAt) + ',"tools":' + catalog + '}';
 }
 
 export class XopcCursors {

@@ -25,7 +25,8 @@ describe('session input commands', () => {
     expect(sessionCommandIdentity({ ...append, interrupt: false })).not.toBe(sessionCommandIdentity(append));
   });
   it('preserves identity across reconnect but detects content and selection changes', () => {
-    expect(sessionCommandIdentity({ ...start, origin: { ...start.origin, endpointId: 'reconnected', token: 'new' } })).toBe(sessionCommandIdentity(start));
+    expect(sessionCommandIdentity({ ...start, origin: { ...start.origin, token: 'new' } })).toBe(sessionCommandIdentity(start));
+    expect(sessionCommandIdentity({ ...start, origin: { ...start.origin, endpointId: 'another' } })).not.toBe(sessionCommandIdentity(start));
     expect(sessionCommandIdentity({ ...start, input: { content: 'different' } })).not.toBe(sessionCommandIdentity(start));
     expect(sessionCommandIdentity({ ...start, creation: { ...start.creation, model: 'test/other' } })).not.toBe(sessionCommandIdentity(start));
   });

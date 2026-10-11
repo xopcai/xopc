@@ -3,6 +3,7 @@ import type {
   EndpointToolExecutionResult,
 } from './index.js';
 import {
+  deviceStateDescriptor,
   ENDPOINT_FILE_OUTPUT_SCHEMA,
   ENDPOINT_MAX_FILE_BYTES,
   ENDPOINT_TEXT_OUTPUT_SCHEMA,
@@ -33,6 +34,7 @@ function decodeBase64(value: string): Uint8Array {
 }
 
 export interface DesktopToolApis {
+  device?: { readState(): Promise<{ platform: string; systemVersion: string; locale: string; timezone: string }> };
   file: {
     pickEndpointFile(): Promise<{ name: string; mimeType: string; size: number; dataBase64: string } | null>;
     saveEndpointText(input: { suggestedName: string; content: string }): Promise<{ saved: false } | { saved: true; name: string }>;
@@ -43,6 +45,12 @@ export interface DesktopToolApis {
 }
 
 export function createDesktopEndpointToolDefinitions(desktopApi: () => DesktopToolApis): readonly EndpointToolDefinition[] { return [
+  { descriptor: deviceStateDescriptor('desktop', 'state'), async execute(args) {
+    if (Object.keys(args).length) throw new TypeError('Expected no arguments');
+    const device = desktopApi().device;
+    if (!device) throw new Error('Device environment is unavailable');
+    return { content: [{ type: 'json', value: { ...(await device.readState()), capturedAt: Date.now() } }] };
+  } },
   {
     descriptor: {
       name: 'desktop.file.pick',

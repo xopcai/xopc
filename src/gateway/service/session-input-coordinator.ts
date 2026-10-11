@@ -3,7 +3,8 @@ import { isDeepStrictEqual } from 'node:util';
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
 import type { TurnOrigin } from '@xopcai/endpoint-tools-protocol';
 
-import type { SessionInput } from '../../storage/sqlite/session-input-repository.js';
+import { injectSourceContextsIntoUserMessage } from '../../agent/source-context/injector.js';
+import { findSessionInputByRunId, type SessionInput } from '../../storage/sqlite/session-input-repository.js';
 import { consumeConnectionResume, publishConnectionWait, invalidateConnectionResumeIntent, cancelConnectionObjective } from '../../storage/sqlite/connection-wait-repository.js';
 import {
   consumeClarificationResume,
@@ -42,7 +43,21 @@ const MAX_PENDING_INPUTS = 10;
 function sameAppContext(input: SubmitSessionInput, existing: SessionInput): boolean {
   const identity = (sources?: AgentSourceContext[]) => sources?.filter(source => source.kind === 'app_context')
     .map(source => ({ snapshot: source.appContext, principal: source.appContextGrant?.principal.principalId })) ?? [];
-  return isDeepStrictEqual(identity(input.sourceContexts), identity(existing.contextSnapshots));
+  return isDeepStrictEqual(input.origin, existing.origin)
+    && isDeepStrictEqual(identity(input.sourceContexts), identity(existing.contextSnapshots));
+}
+
+function canSteerContexts(state: SessionInputState, origin: TurnOrigin, contexts?: AgentSourceContext[]): boolean {
+  if (!contexts?.length) return true;
+  const active = state.activeInputId ? getSessionInputById(state.conversationId, state.activeInputId) : undefined;
+  return Boolean(active && isDeepStrictEqual(active.origin, origin)
+    && contexts.every(context => context.kind === 'device_context'));
+}
+
+function steeringText(content: string, contexts?: AgentSourceContext[]): string {
+  if (!contexts?.length) return content;
+  const message = injectSourceContextsIntoUserMessage({ role: 'user', content, timestamp: Date.now() } as AgentMessage, contexts);
+  return (message as { content: Array<{ text: string }> }).content[0]!.text;
 }
 
 function contextRefsMatchFrozenSnapshot(
@@ -149,11 +164,11 @@ export class SessionInputCoordinator {
         return;
       }
       if (row.requestedDelivery !== 'steer'
-        || !state.activeRunId || row.attachments?.length || row.contextSnapshots?.length
+        || !state.activeRunId || row.attachments?.length || !canSteerContexts(state, row.origin, row.contextSnapshots)
         || (state.preparation && state.preparation.state !== 'ready')) return;
       setSessionInputStatus(row.id, 'injecting', { effectiveDelivery: 'steer', targetRunId: state.activeRunId });
       try {
-        if (!await this.deps.steer(row.conversationId, row.content)) {
+        if (!await this.deps.steer(row.conversationId, steeringText(row.content, row.contextSnapshots))) {
           setSessionInputStatus(row.id, 'queued', { effectiveDelivery: 'next', targetRunId: null });
         }
       } catch (error) {
@@ -246,6 +261,7 @@ export class SessionInputCoordinator {
 
       const existing = findSessionInput(conversationId, clientMessageId);
       if (existing) {
+        input.origin = existing.origin;
         if (!sameAppContext(input, existing)) return { ok: false, code: 'CONTEXT_UNAVAILABLE' };
         return { ok: true, effectiveDelivery: 'next', state: this.snapshot(conversationId) };
       }
@@ -253,6 +269,12 @@ export class SessionInputCoordinator {
       const target = validateLatestSessionTurnTarget(conversationId, targetTurnId);
       if (target.ok === false) return target;
 
+      const original = findSessionInputByRunId(conversationId, targetTurnId);
+      if (original) {
+        input.origin = original.origin;
+        input.sourceContexts = [...(input.sourceContexts ?? []).filter(source => source.kind !== 'device_context'),
+          ...(original.contextSnapshots ?? []).filter(source => source.kind === 'device_context')];
+      }
       const attachments = await this.deps.prepareAttachments(conversationId, input.attachments);
       let sourceContexts: AgentSourceContext[] | undefined;
       try {
@@ -331,7 +353,7 @@ export class SessionInputCoordinator {
     const canSteer = !priority && input.delivery === 'steer'
       && runtime.activeRunId !== undefined
       && !attachments?.length
-      && !sourceContexts?.length;
+      && canSteerContexts(runtime, input.origin, sourceContexts);
     const effectiveDelivery: SessionInputDelivery = canSteer ? 'steer' : 'next';
     const row = insertSessionInput({
       expectedTranscriptId: input.expectedTranscriptId,
@@ -358,7 +380,7 @@ export class SessionInputCoordinator {
       return { ok: true, effectiveDelivery: 'next', state: this.publish(conversationId) };
     }
     if (canSteer) {
-      const accepted = await this.deps.steer(conversationId, content);
+      const accepted = await this.deps.steer(conversationId, steeringText(content, sourceContexts));
       if (!accepted) {
         setSessionInputStatus(row.id, 'queued', { effectiveDelivery: 'next', targetRunId: null });
         void this.drain(conversationId);
@@ -448,7 +470,7 @@ export class SessionInputCoordinator {
         try {
           const resolved = await this.deps.prepareContexts(conversationId, body.contextRefs) ?? [];
           const captured = existing?.contextSnapshots?.filter(
-            source => source.kind === 'app_context' || source.kind === 'browser_page',
+            source => source.kind === 'app_context' || source.kind === 'browser_page' || source.kind === 'device_context',
           ) ?? [];
           sourceContexts = fitSourceContextsToBudget([...captured, ...resolved]);
         } catch (err) {

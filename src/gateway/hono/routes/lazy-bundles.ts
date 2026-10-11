@@ -57,6 +57,22 @@ export const AUTHENTICATED_LAZY_ROUTE_BUNDLES: readonly AuthenticatedLazyRouteBu
     },
   },
   {
+    id: 'device-authorizations',
+    match: path => /^\/api\/endpoint-tools\/target-authorizations(?:\/[^/]+)?$/.test(path),
+    load: async () => {
+      const { registerDeviceAuthorizationRoutes } = await import('./device-authorizations.js');
+      return { register: registerDeviceAuthorizationRoutes };
+    },
+  },
+  {
+    id: 'device-settings',
+    match: path => /^\/api\/endpoint-tools\/devices\/[^/]+$/.test(path) && path !== '/api/endpoint-tools/devices/revoke',
+    load: async () => {
+      const { registerDeviceSettingsRoutes } = await import('./endpoint-tools.js');
+      return { register: registerDeviceSettingsRoutes };
+    },
+  },
+  {
     id: 'endpoint-compatibility',
     match: (path) => path === '/api/endpoint-tools/compatibility',
     load: async () => {

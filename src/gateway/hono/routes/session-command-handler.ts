@@ -2,6 +2,7 @@ import type { Context } from 'hono';
 import { conversationIdSchema, sessionInputCommandSchema, sessionMaterializeCommandSchema, parseUserTurnDocument, userTurnDocumentRefIds } from '@xopcai/gateway-contract';
 import { endpointTurnClaimSchema } from '@xopcai/endpoint-tools-protocol';
 
+import { deviceTurnSourceContext, endpointClaimBelongsToPrincipal } from '../../../endpoint-tools/turn-context.js';
 import { browserPageContextToAgentContext } from '../../../agent/source-context/browser-page.js';
 import { validateWebchatAttachments, validateWebchatContent } from '../../chat-limits.js';
 import { getGatewayPrincipal } from '../../security/gateway-principal.js';
@@ -35,6 +36,9 @@ export async function handleSessionCommand(c: Context, deps: AuthenticatedRouteD
     if (origin && (!origin.success || !deps.service.endpointTools.registry.verifyTurnClaim(origin.data.endpointId, origin.data.token))) {
       return c.json({ ok: false, error: { code: 'INVALID_ENDPOINT', message: 'Endpoint connection is not active' } }, 401);
     }
+    if (origin?.success && !endpointClaimBelongsToPrincipal(deps.service.endpointTools.registry, origin.data.endpointId, principal)) {
+      return c.json({ ok: false, error: { code: 'FORBIDDEN', message: 'Endpoint does not belong to the authenticated device' } }, 403);
+    }
     if (!origin && principal.kind !== 'owner') return c.json({ ok: false, error: { code: 'FORBIDDEN', message: 'CLI input requires owner authentication' } }, 403);
     if (command.input.browserContexts?.length && (!origin?.success || deps.service.endpointTools.registry.get(origin.data.endpointId)?.kind !== 'browser')) {
       return c.json({ ok: false, error: { code: 'FORBIDDEN', message: 'Browser context requires a browser endpoint' } }, 403);
@@ -57,7 +61,9 @@ export async function handleSessionCommand(c: Context, deps: AuthenticatedRouteD
   try {
     const payload = await receiveSessionCommand(deps.service, id.data, principal.principalId, command, async () => {
       if (!('input' in command)) return [];
-      const contexts = (command.input.browserContexts ?? []).map(browserPageContextToAgentContext);
+      const endpoint = command.origin.type === 'endpoint' ? deps.service.endpointTools.registry.get(command.origin.endpointId) : undefined;
+      const contexts = endpoint ? [deviceTurnSourceContext(endpoint, command.input.endpointContext)] : [];
+      contexts.push(...(command.input.browserContexts ?? []).map(browserPageContextToAgentContext));
       if (command.input.appContext) contexts.push(await deps.service.prepareSessionAppContext(command.input.appContext, principal, id.data, command.clientMessageId));
       return contexts;
     });

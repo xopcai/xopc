@@ -31,6 +31,8 @@
     "access": "public"
   },
   "scripts": {
+    "generate:device-tools": "tsx scripts/devices/generate-mobile-tools.mts",
+    "check:device-tools": "tsx scripts/devices/generate-mobile-tools.mts --check",
     "assets:brand": "node scripts/generate-brand-assets.mjs",
     "assets:brand:check": "node scripts/generate-brand-assets.mjs --check",
     "build:node": "node scripts/tsdown-build.mjs",

@@ -32,6 +32,7 @@
 		23F0CAF9E03C1A0DB6E38E09 /* AppLocalization.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0262BCB6E3F7B79845B4FBB1 /* AppLocalization.swift */; };
 		25A6441888C887642D0CAE38 /* GatewayClient+Workflows.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6FDD6132B9280A0096D4018A /* GatewayClient+Workflows.swift */; };
 		2632753B8167A5E5D4DA6125 /* FileTransferViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32742BE06CC1325A893917D1 /* FileTransferViews.swift */; };
+		2A855B7F7DB0CD1387C96F8C /* DeviceToolCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F84248ED419B36DD8608455 /* DeviceToolCatalog.swift */; };
 		2CFC93707DB58FC6F2A706B4 /* ChatReadAloud.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4DCA230B1EC5EF582311498C /* ChatReadAloud.swift */; };
 		32FA57C62239FDD4B0942546 /* WorkflowRunsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 49D3FFDC5EC9808562E37CD0 /* WorkflowRunsView.swift */; };
 		33C2311208481B3D941883C1 /* AssistantActivityView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1FC117EC86A36C635A1735DC /* AssistantActivityView.swift */; };
@@ -44,6 +45,7 @@
 		49A8FAF15003050B34221780 /* GatewayClient+TaskEditing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3485BBEEAD9F312B96496FCD /* GatewayClient+TaskEditing.swift */; };
 		4B3E964A3F57C79C6706660F /* ReferencePickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 042BA7E2BDA922C2BFBC0686 /* ReferencePickerView.swift */; };
 		4B88EB8E65EB0FF890C5F660 /* AssistantTimeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA016590211F6147655749F4 /* AssistantTimeline.swift */; };
+		4E79CCA307BC1196D6FDA402 /* DeviceLocation.swift in Sources */ = {isa = PBXBuildFile; fileRef = FEC9ED44CEA56D122EC800D6 /* DeviceLocation.swift */; };
 		4EFBB47302B3D45026E5B952 /* ConversationsState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 92CDFF585F39B886EE771ED4 /* ConversationsState.swift */; };
 		4F1680CFE8CC050AF36AE5BE /* RealtimeVoiceProtocolTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 062EFF606B0879023CD7CAFB /* RealtimeVoiceProtocolTests.swift */; };
 		50E083DE84A577E1A4201E91 /* AssistantState.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8D33D5255A8BCFF3E0B3116 /* AssistantState.swift */; };
@@ -65,6 +67,7 @@
 		6AB7335B00A8B68423B65D37 /* NoteDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82A4C345FC38C417144E0473 /* NoteDetailView.swift */; };
 		7075EF115AFDDAC151413954 /* ProductModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = A335E20823371133F7733755 /* ProductModels.swift */; };
 		70A51C553D3BD1A9B6328751 /* ProgressRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2450CD82796FD3FEBDC2B244 /* ProgressRow.swift */; };
+		70E6F5D91CA3E55C8E0CF4C6 /* DeviceEndpointHost.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A268D1282EB841BE5D3ABED /* DeviceEndpointHost.swift */; };
 		77A02540F071B9AFD5C26DE9 /* FileTransferIntegrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A611D3A4CE2F811623AE065E /* FileTransferIntegrationTests.swift */; };
 		799E5FFE50B7D1EF549A4F21 /* AssistantView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B5399156DB80FDFA0CC9CDF /* AssistantView.swift */; };
 		7BF5B89A25FC0E33F680B136 /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = 71C0ADACAAFD4164DA744926 /* Localizable.strings */; };
@@ -175,6 +178,7 @@
 		2CA8346AD8995A5CB9631366 /* ChatReadAloudTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatReadAloudTests.swift; sourceTree = "<group>"; };
 		2E483924E1299ADE5E857534 /* LaunchScreen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = LaunchScreen.storyboard; sourceTree = "<group>"; };
 		2F40686B6F16566758ACD236 /* RealtimeVoiceTransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RealtimeVoiceTransport.swift; sourceTree = "<group>"; };
+		2F84248ED419B36DD8608455 /* DeviceToolCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceToolCatalog.swift; sourceTree = "<group>"; };
 		3003466FB074E17B87C16573 /* ComposerPaletteModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerPaletteModels.swift; sourceTree = "<group>"; };
 		31C5D70365C99DEF35E7660F /* ClarificationModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClarificationModels.swift; sourceTree = "<group>"; };
 		32742BE06CC1325A893917D1 /* FileTransferViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileTransferViews.swift; sourceTree = "<group>"; };
@@ -215,6 +219,7 @@
 		74B5BF8D4118453BB4A02656 /* TaskEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskEditorView.swift; sourceTree = "<group>"; };
 		7636CD1ED5D767EF95BA7686 /* GatewayClient+ComposerPalette.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "GatewayClient+ComposerPalette.swift"; sourceTree = "<group>"; };
 		794BD953FB93FEDE80CB2A00 /* MarkdownBlocksTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownBlocksTests.swift; sourceTree = "<group>"; };
+		7A268D1282EB841BE5D3ABED /* DeviceEndpointHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceEndpointHost.swift; sourceTree = "<group>"; };
 		7F2CD24074A4CECF834AE1E5 /* RealtimeVoiceProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RealtimeVoiceProtocol.swift; sourceTree = "<group>"; };
 		8058FC1BB447A33ED9A10F4A /* ConversationsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationsView.swift; sourceTree = "<group>"; };
 		82A4C345FC38C417144E0473 /* NoteDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoteDetailView.swift; sourceTree = "<group>"; };
@@ -275,6 +280,7 @@
 		F4C2A4FD49586D61A1532166 /* ConversationContextView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationContextView.swift; sourceTree = "<group>"; };
 		F829805607352507D86D54CC /* TaskDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskDetailView.swift; sourceTree = "<group>"; };
 		F870C2254E2430F6C2D9D077 /* MessageModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageModels.swift; sourceTree = "<group>"; };
+		FEC9ED44CEA56D122EC800D6 /* DeviceLocation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceLocation.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -361,6 +367,9 @@
 			isa = PBXGroup;
 			children = (
 				8FDDA0C2E058A5B28288921F /* ChatImageLoader.swift */,
+				7A268D1282EB841BE5D3ABED /* DeviceEndpointHost.swift */,
+				FEC9ED44CEA56D122EC800D6 /* DeviceLocation.swift */,
+				2F84248ED419B36DD8608455 /* DeviceToolCatalog.swift */,
 				6C6E75BB052D95075AC66B64 /* GatewayClient.swift */,
 				7636CD1ED5D767EF95BA7686 /* GatewayClient+ComposerPalette.swift */,
 				5A21ADCB00C6EC5E7859AE32 /* GatewayClient+Conversation.swift */,
@@ -692,6 +701,9 @@
 				C584DE6838646B27073D38C2 /* ConversationContextView.swift in Sources */,
 				4EFBB47302B3D45026E5B952 /* ConversationsState.swift in Sources */,
 				0E04EDC4039351DFB9527F3F /* ConversationsView.swift in Sources */,
+				70E6F5D91CA3E55C8E0CF4C6 /* DeviceEndpointHost.swift in Sources */,
+				4E79CCA307BC1196D6FDA402 /* DeviceLocation.swift in Sources */,
+				2A855B7F7DB0CD1387C96F8C /* DeviceToolCatalog.swift in Sources */,
 				F07D4312BD631E0055643F1E /* ExecutionDetailModels.swift in Sources */,
 				F9065B5A8ED7BC4C38261110 /* FileTransferPolicy.swift in Sources */,
 				2632753B8167A5E5D4DA6125 /* FileTransferViews.swift in Sources */,
@@ -835,6 +847,7 @@
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				INFOPLIST_KEY_NSAppTransportSecurity_NSAllowsLocalNetworking = YES;
 				INFOPLIST_KEY_NSCameraUsageDescription = "用于拍摄并发送给助手的图片。";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "仅在你允许本次查询时使用位置，查询天气或附近地点。";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "用于实时语音、语音助手、语音消息和语音笔记。";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UIBackgroundModes = audio;
@@ -991,6 +1004,7 @@
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				INFOPLIST_KEY_NSAppTransportSecurity_NSAllowsLocalNetworking = YES;
 				INFOPLIST_KEY_NSCameraUsageDescription = "用于拍摄并发送给助手的图片。";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "仅在你允许本次查询时使用位置，查询天气或附近地点。";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "用于实时语音、语音助手、语音消息和语音笔记。";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UIBackgroundModes = audio;

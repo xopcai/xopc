@@ -16,6 +16,7 @@ import {
 } from '@xopcai/endpoint-tools-protocol';
 import type { RealtimeEndpointBinding } from '@xopcai/realtime-client';
 
+import { publishTurnEnvironmentSupport } from './turn-environment';
 import {
   attachGatewayRealtimeEndpoint,
   sendGatewayEndpointMessage,
@@ -60,6 +61,7 @@ async function confirmEndpointTool(request: EndpointToolApprovalRequest): Promis
     return await requestEndpointConfirmation({
       invocationId: request.invocationId,
       title: request.descriptor.title,
+      toolName: request.descriptor.name,
       args: request.arguments,
       deadlineAt: request.deadlineAt,
     });
@@ -75,6 +77,8 @@ export class EndpointToolHost {
   private stopped = false;
   private registrationBlocked = false;
   private endpointId?: string;
+  private supportsDeviceState = false;
+  private supportsLocationTasks = false;
   private turnToken?: string;
   private readonly registry: EndpointToolRegistry;
   private readonly controller: EndpointToolHostController;
@@ -100,6 +104,7 @@ export class EndpointToolHost {
 
   stop(): void {
     this.stopped = true;
+    publishTurnEnvironmentSupport(false);
     document.removeEventListener('visibilitychange', this.onVisibilityChange);
     window.removeEventListener('gateway-authenticated', this.onTokenSaved);
     window.clearTimeout(this.reconnectTimer);
@@ -134,6 +139,11 @@ export class EndpointToolHost {
     if (this.stopped || this.registrationBlocked) return;
     window.clearTimeout(this.reconnectTimer);
     try {
+      const compatibility = await apiFetch(apiUrl('/api/endpoint-tools/compatibility'));
+      const compatibilityBody = await compatibility.json().catch(() => null);
+      publishTurnEnvironmentSupport(compatibility.ok && compatibilityBody?.payload?.turnDeviceContextV1 === true);
+      this.supportsLocationTasks = compatibility.ok && compatibilityBody?.payload?.deviceLocationTasksV1 === true;
+      this.supportsDeviceState = compatibility.ok && compatibilityBody?.payload?.deviceStateToolsV1 === true;
       const identity = await getOrCreateEndpointIdentity(this.config.kind);
       if (this.stopped) return;
       const registration = await apiFetch(apiUrl('/api/endpoint-tools/principals'), {
@@ -223,7 +233,7 @@ export class EndpointToolHost {
       nonce: crypto.randomUUID(),
       signedAt: Date.now(),
       signature: 'pending',
-      tools: this.registry.descriptors(),
+      tools: this.registry.descriptors().filter(tool => tool.name.endsWith('.device.get_location') ? this.supportsLocationTasks : this.supportsDeviceState || !tool.name.includes('.device.get_')),
     };
     const signature = await signEndpointPayload(identity.privateKey, endpointHelloSigningPayload(unsigned));
     return { ...unsigned, signature };

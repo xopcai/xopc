@@ -242,9 +242,11 @@ export class XopcChatRepository {
     const pending = await localSessionStore.readCommand(id, scope);
     gatewaySession.assertConnection(connection);
     if (pending) {
+      input.endpointContext = pending.input.endpointContext;
       if (pending.clientMessageId !== clientMessageId || JSON.stringify(pending.input) !== JSON.stringify(input)) throw new Error('INPUT_PENDING');
       body = pending;
     } else if (draft) {
+      input.endpointContext = draft.command?.input.endpointContext ?? realtimeClient.environment();
       if (draft.materialization) throw new Error('SESSION_PREPARING');
       if (draft.command && (draft.command.clientMessageId !== clientMessageId || JSON.stringify(draft.command.input) !== JSON.stringify(input))) throw new Error('FIRST_INPUT_PENDING');
       body = draft.command ?? { kind: 'start', clientMessageId, creation: draft.creation, input };
@@ -252,6 +254,7 @@ export class XopcChatRepository {
       draft.command = body;
       await localSessionStore.save(draft, scope);
     } else {
+      input.endpointContext = realtimeClient.environment();
       const config = await this.config(id);
       if (!transcriptId) transcriptId = (await this.history(id)).session.transcriptId;
       if (!transcriptId || config.configVersion === undefined) throw new Error('SESSION_IDENTITY_UNAVAILABLE');

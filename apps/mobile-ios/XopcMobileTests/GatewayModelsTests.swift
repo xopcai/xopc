@@ -385,7 +385,7 @@ struct GatewayModelsTests {
             configVersion: 2,
             delivery: MessageDelivery.steer.rawValue,
             input: MessageInputCommand(content: "Adjust the answer", attachments: nil, contextRefs: nil),
-            origin: MessageOriginCommand(type: "system", source: "cli")
+            origin: DeviceEndpointOrigin(endpointId: "ios:test", token: "claim")
         )
 
         let data = try JSONEncoder().encode(command)
@@ -401,8 +401,7 @@ struct GatewayModelsTests {
             contextRefs: [ContextReferenceCommand(
                 kind: "note",
                 sourceId: "note-1",
-                expectedVersion: "42",
-                title: "Release plan"
+                expectedVersion: "42"
             )]
         )
 

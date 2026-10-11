@@ -3,8 +3,11 @@ import { ENDPOINT_PROTOCOL_VERSION } from '@xopcai/endpoint-tools-protocol';
 import { REALTIME_CAPABILITIES, REALTIME_PROTOCOL_VERSION } from '@xopcai/realtime-protocol';
 import type { Hono } from 'hono';
 
+import { getGatewayPrincipal } from '../../security/gateway-principal.js';
+
 export function registerEndpointCompatibilityRoutes(authenticated: Hono): void {
   authenticated.get('/api/endpoint-tools/compatibility', (c) => {
+    const principal = getGatewayPrincipal(c);
     c.header('Cache-Control', 'no-store');
     return c.json({ ok: true, payload: {
       realtimeProtocolVersion: REALTIME_PROTOCOL_VERSION,
@@ -13,6 +16,11 @@ export function registerEndpointCompatibilityRoutes(authenticated: Hono): void {
         maxVersion: REALTIME_PROTOCOL_VERSION,
         capabilities: REALTIME_CAPABILITIES,
       },
+      turnDeviceContextV1: true,
+      deviceStateToolsV1: true,
+      hardwareBridgeV1: true,
+      deviceLocationTasksV1: true,
+      ...(principal.kind === 'device' ? { deviceId: principal.deviceId } : {}),
       endpointProtocolVersion: ENDPOINT_PROTOCOL_VERSION,
       computerControl: COMPUTER_DESCRIPTOR,
       computerFrameUploadMaxBytes: COMPUTER_FRAME_MAX_BYTES,

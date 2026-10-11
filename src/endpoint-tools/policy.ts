@@ -9,6 +9,14 @@ import {
   BROWSER_RECORDING_ENDPOINT_DESCRIPTOR,
 } from '@xopcai/browser-control-contract';
 import {
+  BRIDGE_LIST_OUTPUT_SCHEMA,
+  BRIDGE_READ_OUTPUT_SCHEMA,
+  BRIDGE_READ_INPUT_SCHEMA,
+  LOCATION_INPUT_SCHEMA,
+  LOCATION_OUTPUT_SCHEMA,
+  DEVICE_EMPTY_INPUT_SCHEMA,
+  DEVICE_POWER_OUTPUT_SCHEMA,
+  DEVICE_STATE_OUTPUT_SCHEMA,
   ENDPOINT_CONTACT_LIST_OUTPUT_SCHEMA,
   ENDPOINT_CONTACT_OUTPUT_SCHEMA,
   ENDPOINT_FILE_OUTPUT_SCHEMA,
@@ -47,6 +55,14 @@ function contract(
 }
 
 const POLICY_BY_TOOL: Readonly<Record<string, TrustedToolContract>> = {
+  ...Object.fromEntries(['mobile', 'desktop', 'web', 'browser'].flatMap(kind => [
+    [`${kind}.device.get_state`, contract('public.background-read', DEVICE_STATE_OUTPUT_SCHEMA, ['json'], [], [], DEVICE_EMPTY_INPUT_SCHEMA)],
+    [`${kind}.device.get_power`, contract('public.background-read', DEVICE_POWER_OUTPUT_SCHEMA, ['json'], [], [], DEVICE_EMPTY_INPUT_SCHEMA)],
+  ])),
+  ...Object.fromEntries(['mobile', 'desktop', 'web'].map(kind =>
+    [`${kind}.device.get_location`, contract('personal.foreground-read', LOCATION_OUTPUT_SCHEMA, ['json'], ['location-read-once'], [], LOCATION_INPUT_SCHEMA)])),
+  'desktop.bridge.list_resources': contract('public.background-read', BRIDGE_LIST_OUTPUT_SCHEMA, ['json'], [], [], DEVICE_EMPTY_INPUT_SCHEMA),
+  'desktop.bridge.read_sensor': contract('public.background-read', BRIDGE_READ_OUTPUT_SCHEMA, ['json'], [], [], BRIDGE_READ_INPUT_SCHEMA),
   'desktop.computer.control': contract('computer.session-scoped', COMPUTER_OUTPUT_SCHEMA, ['json', 'file'], ['computer-control'], [], COMPUTER_INPUT_SCHEMA),
   'web.file.pick': contract('personal.foreground-read', ENDPOINT_FILE_OUTPUT_SCHEMA, ['file'], ['file-read']),
   'web.file.download': contract('user.foreground-write', ENDPOINT_TEXT_OUTPUT_SCHEMA, ['text'], ['file-download']),

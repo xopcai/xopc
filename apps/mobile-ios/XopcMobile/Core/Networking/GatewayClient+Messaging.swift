@@ -51,6 +51,7 @@ extension GatewayClient {
         delivery: MessageDelivery,
         conversation: ConversationSelection
     ) async throws -> Data {
+        _ = try await DeviceEndpointPool.shared.origin(for: self)
         let clientMessageID = UUID().uuidString.lowercased()
         if conversation.isDraft {
             return try await startMessageBody(
@@ -74,8 +75,8 @@ extension GatewayClient {
             expectedTranscriptId: transcriptID,
             configVersion: configVersion,
             delivery: delivery.rawValue,
-            input: inputCommand(text: text, attachments: attachments, references: references),
-            origin: .init(type: "system", source: "cli")
+            input: await inputCommand(text: text, attachments: attachments, references: references),
+            origin: try await DeviceEndpointPool.shared.origin(for: self)
         ))
     }
 
@@ -103,8 +104,8 @@ extension GatewayClient {
                 model: model,
                 thinkingLevel: thinking
             ),
-            input: inputCommand(text: text, attachments: attachments, references: references),
-            origin: .init(type: "system", source: "cli")
+            input: await inputCommand(text: text, attachments: attachments, references: references),
+            origin: try await DeviceEndpointPool.shared.origin(for: self)
         ))
     }
 
@@ -112,8 +113,8 @@ extension GatewayClient {
         text: String,
         attachments: [MessageAttachment],
         references: [ContextReference]
-    ) -> MessageInputCommand {
-        MessageInputCommand(
+    ) async -> MessageInputCommand {
+        var input = MessageInputCommand(
             content: text,
             attachments: attachments.isEmpty ? nil : attachments.map {
                 MessageAttachmentCommand(
@@ -128,10 +129,11 @@ extension GatewayClient {
                 ContextReferenceCommand(
                     kind: $0.kind.rawValue,
                     sourceId: $0.sourceId,
-                    expectedVersion: $0.expectedVersion,
-                    title: $0.title
+                    expectedVersion: $0.expectedVersion
                 )
             }
         )
+        input.endpointContext = await DeviceEndpointPool.shared.environment(for: self)
+        return input
     }
 }

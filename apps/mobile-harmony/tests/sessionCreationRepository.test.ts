@@ -8,7 +8,7 @@ const mock = vi.hoisted(() => ({
 vi.mock('../entry/src/main/ets/service/gatewaySession.ets', () => ({ gatewaySession: {
   request: mock.request, currentProfile: () => undefined, connectionRevision: () => 0, assertConnection: mock.assertConnection,
 } }));
-vi.mock('../entry/src/main/ets/service/realtimeClient.ets', () => ({ realtimeClient: { turnClaim: mock.turnClaim } }));
+vi.mock('../entry/src/main/ets/service/realtimeClient.ets', () => ({ realtimeClient: { environment: () => undefined, turnClaim: mock.turnClaim } }));
 vi.mock('../entry/src/main/ets/service/deviceCrypto.ets', () => ({ XopcDeviceCrypto: class { uuid() { return mock.uuid(); } } }));
 vi.mock('../entry/src/main/ets/service/secureStore.ets', () => ({ XopcSecureStore: class {} }));
 vi.mock('../entry/src/main/ets/service/chatHistoryCache.ets', () => ({ chatHistoryCache: { revision: () => 0 } }));

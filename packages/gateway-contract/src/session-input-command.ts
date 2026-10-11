@@ -24,8 +24,21 @@ const attachmentSchema = z.strictObject({
   durationSeconds: z.number().nonnegative().optional(),
 });
 
+export const endpointContextSchema = z.strictObject({
+  version: z.literal(1),
+  capturedAt: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+  timezone: z.string().min(1).max(80).refine(value => {
+    try { new Intl.DateTimeFormat('en', { timeZone: value }); return true; } catch { return false; }
+  }, 'Invalid timezone'),
+  locale: z.string().min(1).max(80).refine(value => {
+    try { return Intl.getCanonicalLocales(value).length === 1; } catch { return false; }
+  }, 'Invalid locale'),
+});
+export type EndpointContext = z.infer<typeof endpointContextSchema>;
+
 export const sessionInputContentSchema = z.strictObject({
   content: z.string(),
+  endpointContext: endpointContextSchema.optional(),
   attachments: z.array(attachmentSchema).optional(),
   contextRefs: z.array(z.strictObject({
     kind: z.enum(['note', 'task', 'file', 'session', 'browser_tab', 'user_assertion']),
@@ -80,8 +93,9 @@ export function canonicalSessionCommand(value: unknown): string {
 
 export function sessionCommandIdentity(command: SessionInputCommand | SessionMaterializeCommand): string {
   if ('origin' in command) {
-    const { origin: _origin, ...identity } = command;
-    return canonicalSessionCommand(identity);
+    const origin = command.origin.type === 'endpoint'
+      ? { type: 'endpoint', endpointId: command.origin.endpointId } : command.origin;
+    return canonicalSessionCommand({ ...command, origin });
   }
   return canonicalSessionCommand(command);
 }
