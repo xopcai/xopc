@@ -51,6 +51,7 @@ function runtime(bound = false) {
       get: vi.fn(() => bound ? { conversationId: 'session-1', endpointId, boundAt: 1 } : undefined),
       resolve: vi.fn(() => bound ? endpoint : undefined),
     },
+    grants: { find: vi.fn(() => undefined), candidates: vi.fn(() => []) },
     invocations: { invoke },
   } as unknown as EndpointToolRuntime;
 }
