@@ -21,6 +21,7 @@ export interface ResolvedStreamingStt {
 }
 
 export interface VoiceTicketClaim {
+  openingGreeting?: { responseId: string; text: string };
   sessionId: string;
   connectionEpoch: number;
   principalId: string;

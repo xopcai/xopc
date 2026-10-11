@@ -1,4 +1,7 @@
+export interface XopcPersonalVoiceCallPreferences { openingGreetingEnabled: boolean; }
+
 export interface XopcPersonalAgentRecord {
+  voiceCallPreferences?: XopcPersonalVoiceCallPreferences;
   agentId: string;
   conversationId: string;
   state: 'provisioning' | 'ready' | 'error';
@@ -38,6 +41,7 @@ export interface XopcPersonalVoiceRoute { tts?: XopcPersonalVoicePreference; }
 export interface XopcPersonalVoicesResponse { ok: boolean; payload: XopcPersonalVoices; error?: string; }
 export interface XopcPersonalVoices { voices: XopcPersonalVoiceOption[]; }
 export interface XopcPersonalProfilePatch {
+  voiceCallPreferences?: XopcPersonalVoiceCallPreferences;
   revision: number; displayName: string; appearance: string; preferences: XopcPersonalPreferences;
   voicePreference?: XopcPersonalVoicePreference | null;
 }

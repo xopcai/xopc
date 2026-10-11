@@ -9,12 +9,17 @@ struct PersonalAgentRecord: Decodable, Equatable, Sendable {
     let revision: Int?
     let userCallName: String?
     let preferences: [String: String]?
+    var voiceCallPreferences: PersonalVoiceCallPreferences? = nil
     let voicePreference: PersonalVoicePreference?
     let errorMessage: String?
 
     var isReady: Bool {
         state == "ready"
     }
+}
+
+struct PersonalVoiceCallPreferences: Codable, Equatable, Sendable {
+    let openingGreetingEnabled: Bool
 }
 
 struct PersonalVoicePreference: Codable, Equatable, Sendable {
@@ -30,12 +35,15 @@ private struct PersonalProfileUpdate: Encodable {
     let preferences: [String: String]
     let voicePreference: PersonalVoicePreference?
 
+    let voiceCallPreferences: PersonalVoiceCallPreferences?
+
     enum CodingKeys: String, CodingKey {
-        case revision, displayName, appearance, preferences, voicePreference
+        case revision, displayName, appearance, preferences, voicePreference, voiceCallPreferences
     }
 
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encodeIfPresent(voiceCallPreferences, forKey: .voiceCallPreferences)
         try container.encode(revision, forKey: .revision)
         try container.encode(displayName, forKey: .displayName)
         try container.encode(appearance, forKey: .appearance)
@@ -90,7 +98,8 @@ extension GatewayClient {
         displayName: String,
         appearance: String,
         preferences: [String: String],
-        voicePreference: PersonalVoicePreference?
+        voicePreference: PersonalVoicePreference?,
+        openingGreetingEnabled: Bool? = nil
     ) async throws -> PersonalAgentRecord {
         guard let revision = record.revision else { throw GatewayClientError.invalidResponse }
         let body = try JSONEncoder().encode(PersonalProfileUpdate(
@@ -98,7 +107,8 @@ extension GatewayClient {
             displayName: displayName,
             appearance: appearance,
             preferences: preferences,
-            voicePreference: voicePreference
+            voicePreference: voicePreference,
+            voiceCallPreferences: (record.voiceCallPreferences == nil ? nil : openingGreetingEnabled).map { PersonalVoiceCallPreferences(openingGreetingEnabled: $0) }
         ))
         let response: GatewayEnvelope<PersonalAgentRecord> = try await request(
             path: "/api/personal-agent/profile", method: "PATCH", body: body

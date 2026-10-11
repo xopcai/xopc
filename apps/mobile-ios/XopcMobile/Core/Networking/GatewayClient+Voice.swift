@@ -116,8 +116,11 @@ extension GatewayClient {
         return result.timingMetrics ?? []
     }
 
-    func createRealtimeVoiceSession(conversationID: String, mode: RealtimeVoiceMode) async throws -> RealtimeVoiceSession {
-        let body = try encoder.encode(RealtimeVoiceSessionRequest(conversationId: conversationID, mode: mode))
+    func createRealtimeVoiceSession(conversationID: String, mode: RealtimeVoiceMode,
+                                    openingGreeting: RealtimeVoiceSessionRequest.OpeningGreetingRequest? = nil) async throws -> RealtimeVoiceSession {
+        let language = Locale.current.language.languageCode?.identifier == "zh" ? "zh" : "en"
+        let body = try encoder.encode(RealtimeVoiceSessionRequest(conversationId: conversationID, mode: mode,
+                                                               language: language, openingGreeting: openingGreeting))
         let result: VoicePayload<RealtimeVoiceSession> = try await request(
             path: "/api/voice/realtime/sessions", method: "POST", body: body
         )

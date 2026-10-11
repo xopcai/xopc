@@ -170,8 +170,9 @@ export async function patchPersonalProfile(
   preferences: PersonalPreferences,
   appearance: PersonalAppearance,
   voicePreference?: { provider: string; model: string; voice: string } | null,
+  voiceCallPreferences?: { openingGreetingEnabled: boolean },
 ): Promise<PersonalAgentRecord | null> {
-  const updated = await updatePersonalProfileRecord(ownerId, revision, displayName, preferences, appearance, voicePreference);
+  const updated = await updatePersonalProfileRecord(ownerId, revision, displayName, preferences, appearance, voicePreference, voiceCallPreferences);
   if (!updated) return null;
   service.refreshAgentCatalog();
   service.agentService.evictSessionAgent(updated.conversationId);
@@ -185,6 +186,7 @@ export async function updatePersonalProfileRecord(
   preferences: PersonalPreferences,
   appearance: PersonalAppearance,
   voicePreference?: { provider: string; model: string; voice: string } | null,
+  voiceCallPreferences?: { openingGreetingEnabled: boolean },
 ): Promise<PersonalAgentRecord | null> {
   const repository = new AgentCatalogRepository();
   const current = repository.get(personalAgentId(ownerId));
@@ -195,6 +197,7 @@ export async function updatePersonalProfileRecord(
     emoji: appearanceEmoji(appearance),
     avatar: appearanceAvatar(appearance),
     ...(voicePreference !== undefined ? { voicePreference: voicePreference ?? undefined } : {}),
+    ...(voiceCallPreferences ? { voiceCallPreferences } : {}),
     responsePreferences: preferences,
     instructions: personalInstructions(preferences),
   };

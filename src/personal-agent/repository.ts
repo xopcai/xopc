@@ -19,6 +19,7 @@ export interface PersonalAgentRecord {
   userCallName: string | null;
   appearance: PersonalAppearance;
   voicePreference: { provider: string; model: string; voice: string } | null;
+  voiceCallPreferences: { openingGreetingEnabled: boolean };
   preferences: Record<string, unknown>;
   revision: number;
   errorMessage: string | null;
@@ -67,6 +68,7 @@ function toRecord(ownerId: string, agent: StoredAgent, session: PersonalSession 
     userCallName: getUserProfileSnapshot().callName ?? null,
     appearance: appearanceFrom(agent),
     voicePreference: agent.profile?.voicePreference ?? null,
+    voiceCallPreferences: agent.profile?.voiceCallPreferences ?? { openingGreetingEnabled: true },
     preferences: agent.profile?.responsePreferences ?? DEFAULT_PERSONAL_PREFERENCES,
     revision: agent.revision,
     errorMessage: agent.provisioningError ?? null,

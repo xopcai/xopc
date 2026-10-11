@@ -28,6 +28,7 @@ export struct XopcPersonalAgentSettings {
   @Local assistantName: string = '';
   @Local appearance: string = 'loopi';
   @Local detailLevel: string = 'balanced';
+  @Local greetingEnabled: boolean = true;
   @Local voiceId: string = '';
   @Local uploading: boolean = false;
   @Local avatarPreview: string = '';
@@ -41,6 +42,7 @@ export struct XopcPersonalAgentSettings {
     const current = this.model.record;
     if (!current) return;
     this.assistantName = current.displayName; this.appearance = current.appearance;
+    this.greetingEnabled = current.voiceCallPreferences?.openingGreetingEnabled ?? true;
     this.detailLevel = current.preferences?.detailLevel ?? 'balanced';
     this.voiceId = current.voicePreference?.voice === 'default' ? '' : current.voicePreference?.voice ?? '';
   }
@@ -49,7 +51,7 @@ export struct XopcPersonalAgentSettings {
     const prefs: XopcPersonalPreferences = { addressAs: current?.addressAs, detailLevel: this.detailLevel,
       warmth: current?.warmth, supportMode: current?.supportMode, proactivity: current?.proactivity,
       humor: current?.humor, guidance: current?.guidance };
-    const updated = await this.model.saveProfile(this.assistantName, this.appearance, prefs, this.voiceId);
+    const updated = await this.model.saveProfile(this.assistantName, this.appearance, prefs, this.voiceId, this.greetingEnabled);
     if (updated) { this.onSaved(updated); this.onClose(); }
   }
   private async uploadAvatar(): Promise<void> {
@@ -129,6 +131,13 @@ export struct XopcPersonalAgentSettings {
               options: [{ value: this.label('简短', 'Brief') }, { value: this.label('适中', 'Balanced') }, { value: this.label('详细', 'Detailed') }], selectedIndex: ['brief', 'balanced', 'detailed'].indexOf(this.detailLevel),
               controlId: 'personal-setting-detail', available: true,
               onSelect: (index: number): void => { this.detailLevel = ['brief', 'balanced', 'detailed'][index]; } })
+            if (this.model.record?.voiceCallPreferences) {
+              Row() {
+                Text(this.label('连接时打招呼', 'Greet me when connected')).fontSize(14).fontColor(this.colors.foreground).layoutWeight(1)
+                Toggle({ type: ToggleType.Switch, isOn: this.greetingEnabled })
+                  .onChange((enabled: boolean): void => { this.greetingEnabled = enabled; })
+              }.width('100%')
+            }
             this.settingChoice({ heading: this.label('通话声音', 'Call voice'), options: this.voiceOptions(),
               selectedIndex: this.availableVoices().findIndex((voice: XopcPersonalVoiceOption): boolean => voice.id === this.voiceId) + 1,
               controlId: 'personal-setting-voice', available: !!this.model.voiceRoute,

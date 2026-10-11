@@ -17,6 +17,16 @@ describe('voice realtime protocol', () => {
     mediaPreferences: ['websocket-pcm'] as const,
   };
 
+  it('validates optional greeting negotiation and output readiness without changing legacy requests', () => {
+    const legacy = { purpose: 'conversation', mode: 'assistant', conversationId: 'chat', ...negotiation };
+    expect(createVoiceSessionRequestSchema.parse(legacy).openingGreeting).toBeUndefined();
+    const greeting = { logicalCallId: crypto.randomUUID(), initiation: 'recovery', supportsOutputReady: true };
+    expect(createVoiceSessionRequestSchema.parse({ ...legacy, openingGreeting: greeting }).openingGreeting).toEqual(greeting);
+    expect(createVoiceSessionRequestSchema.safeParse({ ...legacy, openingGreeting: { ...greeting, logicalCallId: 'bad' } }).success).toBe(false);
+    expect(parseVoiceClientMessage({ protocolVersion: 3, messageId: crypto.randomUUID(), sentAt: 1,
+      type: 'session.output_ready', payload: { connectionEpoch: 7 } }).type).toBe('session.output_ready');
+  });
+
   it('accepts conversation modes and rejects them for dictation', () => {
     expect(createVoiceSessionRequestSchema.safeParse({ purpose: 'conversation', conversationId: 'test', ...negotiation }).success).toBe(true);
     for (const mode of ['assistant', 'natural']) {

@@ -36,6 +36,7 @@ import { mergeTtsConfigFromAppConfig } from '../tts/merge-config.js';
 import { resolveSpeechProviderChain, type ResolvedSpeechProvider } from '../tts/factory.js';
 import type { TTSConfig } from '../tts/types.js';
 import { ALIBABA_REALTIME_TTS_MODEL } from '../tts/providers/alibaba-speech.js';
+import { claimOpeningGreeting, finishOpeningGreeting, openingGreetingText, type OpeningGreetingIdentity, type OpeningGreetingResult } from './opening-greeting.js';
 import { createAgentVoiceEngine } from './agentEngine.js';
 import { voiceConversationInstructions, type VoiceConversationContext } from './conversation-context.js';
 import type { VoiceEngine, VoiceEventSink } from './engine.js';
@@ -293,6 +294,11 @@ export class VoiceRealtimeRuntime {
   ): Promise<CreateVoiceSessionResponse> {
     const { request: resolvedRequest, config, omni, conversationSessionId, stt, tts, inputMode } = await this.prepareSession(request, now);
     request = resolvedRequest;
+    const personal = request.conversationId ? getPersonalAgentByConversation(request.conversationId) : null;
+    const openingGreeting = request.openingGreeting && request.openingGreeting.initiation === 'user'
+      && request.purpose === 'conversation' && request.mode === 'assistant' && personal?.state === 'ready'
+      && personal.voiceCallPreferences.openingGreetingEnabled
+      ? { responseId: `greeting_${crypto.randomUUID()}`, text: openingGreetingText(personal.userCallName, request.language ?? 'zh') } : undefined;
     const sessionId = crypto.randomUUID();
     const ticket = crypto.randomBytes(32).toString('base64url');
     const connectionEpoch = crypto.randomInt(1, 0x1_0000_0000);
@@ -301,6 +307,7 @@ export class VoiceRealtimeRuntime {
       : config.voice.realtime.maxDictationMs;
     const claim: VoiceTicketClaim = {
       conversationSessionId,
+      openingGreeting,
       sessionId,
       connectionEpoch,
       principalId,
@@ -322,6 +329,8 @@ export class VoiceRealtimeRuntime {
       this.conversationReservations.set(request.conversationId, sessionId);
     }
     return {
+      ...(request.openingGreeting ? { openingGreeting: { accepted: Boolean(openingGreeting),
+        ...(openingGreeting ? { greetingResponseId: openingGreeting.responseId } : {}) } } : {}),
       sessionId,
       ticket,
       ticketExpiresAt: new Date(claim.expiresAt).toISOString(),
@@ -463,6 +472,13 @@ export class VoiceRealtimeRuntime {
     let context: VoiceConversationContext | undefined;
     let unsubscribeMemory: (() => void) | undefined;
     let unsubscribeSession: (() => void) | undefined;
+    let openingTimer: ReturnType<typeof setTimeout> | undefined;
+    let outputReady = false;
+    let pendingGreeting: OpeningGreetingIdentity | undefined;
+    const finishGreeting = (identity: OpeningGreetingIdentity, result: OpeningGreetingResult, reason?: string) => {
+      try { finishOpeningGreeting(identity, result, reason); }
+      catch (err) { log.warn({ err, ...identity, phase: 'opening_greeting_audit' }, 'Opening greeting audit failed'); }
+    };
     let inputMutationTail: Promise<void> = Promise.resolve();
 
     const send: VoiceEventSink = (type, payload) => {
@@ -491,6 +507,8 @@ export class VoiceRealtimeRuntime {
       if (shutdownCompletion) return shutdownCompletion;
       if (closed) return Promise.resolve();
       closed = true;
+      clearTimeout(openingTimer);
+      if (pendingGreeting) { finishGreeting(pendingGreeting, 'skipped', 'session_closed'); pendingGreeting = undefined; }
       shutdownCompletion = (async () => {
         unsubscribeMemory?.(); unsubscribeSession?.();
         clearTimeout(startTimer);
@@ -689,6 +707,33 @@ export class VoiceRealtimeRuntime {
       }
       if (message.type === 'session.ping') {
         send('session.pong', {});
+      } else if (message.type === 'session.output_ready') {
+        if (!ready || !claim.request.openingGreeting || message.payload.connectionEpoch !== claim.connectionEpoch) {
+          socket.close(4400, 'Invalid output readiness'); return;
+        }
+        if (outputReady) return;
+        outputReady = true;
+        const greeting = claim.openingGreeting;
+        if (!greeting || !engine?.offerOpeningGreeting) return;
+        const identity = { principalId: claim.principalId, conversationId: claim.request.conversationId!,
+          logicalCallId: claim.request.openingGreeting.logicalCallId, responseId: greeting.responseId };
+        try {
+          if (!claimOpeningGreeting(identity)) return;
+        } catch (err) { log.warn({ err, sessionId: claim.sessionId }, 'Opening greeting claim failed'); return; }
+        const deadlineAt = Date.now() + 2_000;
+        pendingGreeting = identity;
+        openingTimer = setTimeout(() => {
+          openingTimer = undefined;
+          pendingGreeting = undefined;
+          if (closed) { finishGreeting(identity, 'skipped', 'session_closed'); return; }
+          void engine!.offerOpeningGreeting!({ ...greeting, deadlineAt }).then(result => {
+            finishGreeting(identity, result);
+            log.info({ ...identity, sessionId: claim?.sessionId, phase: 'opening_greeting', result }, 'Opening greeting finished');
+          }).catch(err => {
+            finishGreeting(identity, 'failed');
+            log.warn({ err, ...identity, phase: 'opening_greeting' }, 'Opening greeting failed');
+          });
+        }, 300);
       } else if (message.type === 'session.stop') {
         void shutdown(message.payload.reason, true);
       } else if (message.type === 'session.metric') {

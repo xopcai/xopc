@@ -46,6 +46,7 @@ const availabilitySchema = z.strictObject({
 
 export const realtimeVoiceStatusSchema = z.object({
   enabled: z.boolean(),
+  openingGreeting: z.boolean().optional(),
   defaultMode: voiceModeSchema,
   omni: voiceProviderRouteSchema.nullable(),
   stt: voiceProviderRouteSchema.nullable(),
@@ -66,6 +67,11 @@ export const createVoiceSessionRequestSchema = z.strictObject({
   mode: voiceModeSchema.optional(),
   conversationId: z.string().min(1).max(512).optional(),
   language: voiceLanguageSchema.optional(),
+  openingGreeting: z.strictObject({
+    logicalCallId: idSchema,
+    initiation: z.enum(['user', 'recovery']),
+    supportsOutputReady: z.literal(true),
+  }).optional(),
   supportedProtocolVersions: z.tuple([z.literal(VOICE_REALTIME_PROTOCOL_VERSION)]),
   mediaPreferences: z.tuple([z.literal('websocket-pcm')]),
 }).superRefine((value, context) => {
@@ -78,6 +84,7 @@ export const createVoiceSessionRequestSchema = z.strictObject({
 });
 
 export const createVoiceSessionResponseSchema = z.strictObject({
+  openingGreeting: z.strictObject({ accepted: z.boolean(), greetingResponseId: z.string().max(160).optional() }).optional(),
   sessionId: idSchema,
   ticket: z.string().min(32).max(512),
   ticketExpiresAt: z.iso.datetime(),
@@ -119,6 +126,7 @@ export const voiceClientMessageSchema = z.discriminatedUnion('type', [
     metric: z.enum(VOICE_TIMING_METRICS),
     durationMs: z.number().finite().min(0).max(600_000),
   })),
+  clientEnvelope('session.output_ready', z.strictObject({ connectionEpoch: z.number().int().positive() })),
   clientEnvelope('input.mute', z.strictObject({ muted: z.boolean() })),
   clientEnvelope('input.commit', z.strictObject({})),
   clientEnvelope('response.stop_playback', z.strictObject({ responseId: z.string().min(1).max(160) })),

@@ -3,6 +3,21 @@ import Testing
 @testable import XopcMobile
 
 struct RealtimeVoiceProtocolTests {
+    @Test func encodesOpeningReadinessAndRecoveryIdentity() throws {
+        let greeting = RealtimeVoiceSessionRequest.OpeningGreetingRequest(
+            logicalCallId: "c3895c61-d123-4597-9d35-72f01ba723e7", initiation: "recovery"
+        )
+        let request = RealtimeVoiceSessionRequest(conversationId: "personal", mode: .assistant,
+                                                 language: "zh", openingGreeting: greeting)
+        let object = try #require(JSONSerialization.jsonObject(with: JSONEncoder().encode(request)) as? [String: Any])
+        let opening = try #require(object["openingGreeting"] as? [String: Any])
+        #expect(opening["initiation"] as? String == "recovery")
+        #expect(opening["supportsOutputReady"] as? Bool == true)
+        let control = RealtimeVoiceControlMessage(type: "session.output_ready", payload: .init(connectionEpoch: 7))
+        let encoded = try #require(JSONSerialization.jsonObject(with: JSONEncoder().encode(control)) as? [String: Any])
+        #expect((encoded["payload"] as? [String: Any])?["connectionEpoch"] as? Int == 7)
+    }
+
     @Test func firstAudioTimingSeparatesReceiptAndPlaybackSubmission() {
         var timing = RealtimeVoiceFirstAudioTiming()
         timing.speechStopped(100)

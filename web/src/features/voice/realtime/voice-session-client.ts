@@ -21,6 +21,9 @@ interface VoiceSessionClientOptions {
   purpose: 'dictation' | 'conversation';
   mode?: VoiceMode;
   conversationId?: string;
+  language?: 'zh' | 'en';
+  logicalCallId?: string;
+  recovery?: boolean;
   onEvent: (event: VoiceServerEvent) => void;
   onAudio?: (audio: ArrayBuffer, responseId: string) => void;
   onClose?: (reason: string) => void;
@@ -70,6 +73,8 @@ export class VoiceSessionClient {
 
   static async connect(options: VoiceSessionClientOptions): Promise<VoiceSessionClient> {
     options.signal?.throwIfAborted();
+    const status = options.purpose === 'conversation' && options.mode === 'assistant'
+      ? await fetchJson<{ payload: { openingGreeting?: boolean } }>(apiUrl('/api/voice/realtime/status'), { signal: options.signal }) : null;
     const response = await fetchJson<{ ok: true; payload: CreateVoiceSessionResponse }>(
       apiUrl('/api/voice/realtime/sessions'),
       {
@@ -77,6 +82,10 @@ export class VoiceSessionClient {
         signal: options.signal,
         body: JSON.stringify({
           purpose: options.purpose,
+          ...(options.language ? { language: options.language } : {}),
+          ...(status?.payload.openingGreeting && options.logicalCallId ? { openingGreeting: {
+            logicalCallId: options.logicalCallId, initiation: options.recovery ? 'recovery' : 'user', supportsOutputReady: true,
+          } } : {}),
           ...(options.mode ? { mode: options.mode } : {}),
           ...(options.conversationId ? { conversationId: options.conversationId } : {}),
           supportedProtocolVersions: [VOICE_REALTIME_PROTOCOL_VERSION],
@@ -147,6 +156,10 @@ export class VoiceSessionClient {
       };
     });
     return client;
+  }
+
+  outputReady(): void {
+    if (this.session.openingGreeting?.accepted) this.sendControl('session.output_ready', { connectionEpoch: this.session.connectionEpoch });
   }
 
   sendAudio(audio: ArrayBuffer): void {

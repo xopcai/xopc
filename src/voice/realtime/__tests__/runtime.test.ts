@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import * as personalRepository from '../../../personal-agent/repository.js';
 import { ConfigSchema } from '../../../config/schema.js';
 import { VoiceRealtimeRuntime } from '../runtime.js';
 
@@ -30,7 +31,7 @@ describe('VoiceRealtimeRuntime session creation', () => {
   let runtime: VoiceRealtimeRuntime | undefined;
   const negotiation = { supportedProtocolVersions: [3] as [3], mediaPreferences: ['websocket-pcm'] as ['websocket-pcm'] };
 
-  afterEach(() => runtime?.close());
+  afterEach(() => { runtime?.close(); vi.restoreAllMocks(); });
 
   function createRuntime(options?: { exists?: boolean; busy?: boolean }) {
     runtime = new VoiceRealtimeRuntime({
@@ -43,6 +44,14 @@ describe('VoiceRealtimeRuntime session creation', () => {
     });
     return runtime;
   }
+
+  it.each([null, { state: 'ready', userCallName: '小明', voiceCallPreferences: { openingGreetingEnabled: false } }])
+    ('declines opening for ordinary conversations and disabled preferences', async personal => {
+      vi.spyOn(personalRepository, 'getPersonalAgentByConversation').mockReturnValue(personal as never);
+      const result = await createRuntime().createSession({ purpose: 'conversation', mode: 'assistant', conversationId: 'chat',
+        ...negotiation, openingGreeting: { logicalCallId: crypto.randomUUID(), initiation: 'user', supportsOutputReady: true } }, 'owner');
+      expect(result.openingGreeting).toEqual({ accepted: false });
+    });
 
   it('creates a dictation session with only a streaming STT route', async () => {
     const result = await createRuntime().createSession({ purpose: 'dictation', ...negotiation }, 'user-1');

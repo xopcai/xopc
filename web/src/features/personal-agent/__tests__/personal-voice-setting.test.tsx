@@ -34,6 +34,17 @@ async function choose(label: string) {
 }
 
 describe('Personal AI call voice selector', () => {
+  it('shows the greeting switch only when the Gateway advertises support', async () => {
+    const onGreetingChange = vi.fn(async () => true);
+    mocks.status.mockResolvedValue({ enabled: true, openingGreeting: true, tts: { provider: 'dashscope', model: 'qwen' } });
+    await act(async () => root.render(<MemoryRouter><PersonalVoiceSetting record={{ voicePreference: { provider: 'dashscope', model: 'qwen', voice: 'mia' } } as PersonalAgent} zh={false}
+      onSelectVoice={select} onGreetingChange={onGreetingChange} /></MemoryRouter>));
+    const toggle = container.querySelector<HTMLInputElement>('input[type="checkbox"]');
+    expect(toggle?.checked).toBe(true);
+    await act(async () => toggle?.click());
+    expect(onGreetingChange).toHaveBeenCalledWith(false);
+  });
+
   it('shows the selected voice compactly and saves a dropdown selection', async () => {
     await render();
     expect(container.querySelector('[aria-label="Choose call voice"]')?.textContent).toContain('Mia');

@@ -50,6 +50,8 @@ describe('personal Agent identity', () => {
       getAuthToken: () => token,
       isGatewayReady: () => true,
       getExtensionLoader: () => null,
+      refreshAgentCatalog: vi.fn(),
+      agentService: { evictSessionAgent: vi.fn() },
     } as unknown as GatewayService });
     const server = serve({ fetch: app.fetch, hostname: '127.0.0.1', port: 0 });
     try {
@@ -126,14 +128,25 @@ describe('personal Agent identity', () => {
       expect(codeCandidates.map(candidate => candidate.id)).not.toContain('researcher');
       expect(await updatePersonalProfileRecord('local-owner', 999, '阿沐', {}, 'spark')).toBeNull();
       const updated = await updatePersonalProfileRecord('local-owner', first.revision, '阿沐',
-        { warmth: 'gentle', guidance: 'When I am anxious, offer one concrete step before asking questions.' }, 'cloud');
+        { warmth: 'gentle', guidance: 'When I am anxious, offer one concrete step before asking questions.' }, 'cloud', undefined, { openingGreetingEnabled: false });
       expect(updated?.revision).toBe(first.revision + 1);
+      expect(updated?.voiceCallPreferences.openingGreetingEnabled).toBe(false);
+      const preserved = await updatePersonalProfileRecord('local-owner', updated!.revision, '阿沐',
+        { warmth: 'gentle', guidance: 'When I am anxious, offer one concrete step before asking questions.' }, 'cloud');
+      expect(preserved?.voiceCallPreferences.openingGreetingEnabled).toBe(false);
       expect(getPersonalAgent('local-owner')?.displayName).toBe('阿沐');
       expect(repository.get(agentId)?.profile?.responsePreferences).toMatchObject({ warmth: 'gentle',
         guidance: 'When I am anxious, offer one concrete step before asking questions.' });
       expect(repository.get(agentId)?.profile?.instructions).toContain('offer one concrete step before asking questions');
       expect(getSqliteDatabase().prepare("SELECT name FROM sqlite_master WHERE name = 'personal_agents'").get()).toBeUndefined();
 
+      const beforeProfile = getPersonalAgent('local-owner')!;
+      const profileResponse = await fetch(`${url}/profile`, { method: 'PATCH', headers,
+        body: JSON.stringify({ revision: beforeProfile.revision, displayName: beforeProfile.displayName,
+          appearance: beforeProfile.appearance, preferences: beforeProfile.preferences,
+          voiceCallPreferences: { openingGreetingEnabled: true } }) });
+      expect(profileResponse.status).toBe(200);
+      expect(await profileResponse.json()).toMatchObject({ payload: { voiceCallPreferences: { openingGreetingEnabled: true } } });
       expect((await fetch(url)).status).toBe(401);
       const response = await fetch(url, { headers: { authorization: `Bearer ${token}` } });
       expect(response.status).toBe(200);

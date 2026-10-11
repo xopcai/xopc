@@ -1,3 +1,4 @@
+import type { OpeningGreetingResult } from './opening-greeting.js';
 import type { VoiceServerEvent } from '@xopcai/realtime-protocol/voice';
 
 export type VoiceEventSink = <T extends VoiceServerEvent['type']>(
@@ -7,6 +8,7 @@ export type VoiceEventSink = <T extends VoiceServerEvent['type']>(
 
 export interface VoiceEngine {
   start(): Promise<void>;
+  offerOpeningGreeting?(input: { responseId: string; text: string; deadlineAt: number }): Promise<OpeningGreetingResult>;
   appendAudio(bytes: Uint8Array): void;
   setInputMuted(muted: boolean): void | Promise<void>;
   commit(): Promise<void>;

@@ -46,6 +46,7 @@ describe('Agent voice interruption cleanup', () => {
       } as never,
       runtime: {
         onConversationInput,
+        sessionBusy: () => false,
         agentBroker: {
           delegate,
           cancel: async () => true,
@@ -57,6 +58,60 @@ describe('Agent voice interruption cleanup', () => {
     await engine.start();
     return { send, sendAudio, release, delegate, onClose, onConversationInput, emit, currentEmit: () => emit, final: (id: string) => emit({ type: 'transcript_final', utteranceId: id, revision: 1, text: id }) };
   }
+
+  it('speaks a short opening directly and completes only after playback ACK', async () => {
+    const test = await setup(async function* () { throw new Error('Greeting must not run Agent'); });
+    mocks.speak.mockImplementation(async () => ({ outputFormat: 'pcm', release: test.release,
+      audioStream: new ReadableStream({ start(controller) { controller.enqueue(new Uint8Array(960)); controller.close(); } }) }));
+    const greeting = engine.offerOpeningGreeting!({ responseId: 'greeting', text: '嗨，小明，我在。', deadlineAt: Date.now() + 2000 });
+    await vi.waitFor(() => expect(test.sendAudio).toHaveBeenCalledOnce());
+    expect(test.delegate).not.toHaveBeenCalled();
+    expect(test.send).not.toHaveBeenCalledWith('task.created', expect.anything());
+    expect(mocks.speak).toHaveBeenCalledWith('嗨，小明，我在。', expect.anything(), expect.anything());
+    engine.acknowledge('greeting', 20);
+    expect(await greeting).toBe('completed');
+    expect(test.release).toHaveBeenCalledOnce();
+  });
+
+  it('skips opening after speech even if the input later becomes idle', async () => {
+    const test = await setup(async function* () {});
+    test.emit({ type: 'speech_started', utteranceId: 'first' });
+    test.emit({ type: 'speech_stopped', utteranceId: 'first' });
+    expect(await engine.offerOpeningGreeting!({ responseId: 'greeting', text: 'Hi', deadlineAt: Date.now() + 2000 })).toBe('skipped');
+    expect(mocks.speak).not.toHaveBeenCalled();
+  });
+
+  it('cancels opening preparation when the user starts speaking', async () => {
+    const test = await setup(async function* () {});
+    mocks.speak.mockImplementation((_text, _config, { signal }) => new Promise((_resolve, reject) => {
+      signal.addEventListener('abort', () => reject(new Error('aborted')), { once: true });
+    }));
+    const greeting = engine.offerOpeningGreeting!({ responseId: 'greeting', text: 'Hi', deadlineAt: Date.now() + 2000 });
+    await vi.waitFor(() => expect(mocks.speak).toHaveBeenCalledOnce());
+    test.emit({ type: 'speech_started', utteranceId: 'first' });
+    expect(await greeting).toBe('interrupted');
+    expect(test.sendAudio).not.toHaveBeenCalled();
+  });
+
+  it('expires an opening without failing the call', async () => {
+    const test = await setup(async function* () {});
+    mocks.speak.mockImplementation((_text, _config, { signal }) => new Promise((_resolve, reject) => {
+      signal.addEventListener('abort', () => reject(new Error('aborted')), { once: true });
+    }));
+    const greeting = engine.offerOpeningGreeting!({ responseId: 'greeting', text: 'Hi', deadlineAt: Date.now() + 80 });
+    expect(await greeting).toBe('expired');
+    expect(test.onClose).not.toHaveBeenCalled();
+    expect(test.send).not.toHaveBeenCalledWith('session.error', expect.anything());
+  });
+
+  it('silently handles greeting TTS failure and accepts a subsequent turn', async () => {
+    const test = await setup(async function* () { yield { type: 'assistant_delta', payload: { delta: 'Reply' } }; });
+    mocks.speak.mockRejectedValueOnce(new Error('TTS unavailable'));
+    expect(await engine.offerOpeningGreeting!({ responseId: 'greeting', text: 'Hi', deadlineAt: Date.now() + 2000 })).toBe('failed');
+    expect(test.send).not.toHaveBeenCalledWith('session.error', expect.anything());
+    expect(await engine.offerTaskUpdate!({ clientMessageId: 'next', content: 'Question' })).toBe(true);
+    expect(test.delegate).toHaveBeenCalledOnce();
+  });
 
   it('prepares TTS before the first Agent delta and releases it for a text-only reply', async () => {
     let resolveAgent!: () => void;

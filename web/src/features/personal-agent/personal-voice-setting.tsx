@@ -11,11 +11,13 @@ import type { PersonalAgent } from './personal-page';
 
 type Voice = { id: string; name: string; description?: string; style?: string };
 
-export function PersonalVoiceSetting({ record, zh, onSelectVoice }: {
+export function PersonalVoiceSetting({ record, zh, onSelectVoice, onGreetingChange }: {
   record: PersonalAgent;
   zh: boolean;
+  onGreetingChange?: (enabled: boolean) => Promise<boolean>;
   onSelectVoice: (voicePreference: PersonalAgent['voicePreference']) => Promise<boolean>;
 }) {
+  const [greetingSupported, setGreetingSupported] = useState(false);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState('');
   const [route, setRoute] = useState<{ provider: string; model: string } | null>(null);
@@ -32,7 +34,9 @@ export function PersonalVoiceSetting({ record, zh, onSelectVoice }: {
     void (async () => {
       try {
         const status = await fetchRealtimeVoiceStatus();
-        if (cancelled || !status.enabled || !status.tts) return;
+        if (cancelled) return;
+        setGreetingSupported(status.openingGreeting === true);
+        if (!status.enabled || !status.tts) return;
         const nextRoute = { provider: status.tts.provider, model: status.tts.model };
         setRoute(nextRoute);
         const items = await fetchTtsVoices(nextRoute.provider, nextRoute.model, 'realtime');
@@ -127,6 +131,12 @@ export function PersonalVoiceSetting({ record, zh, onSelectVoice }: {
         </div>
         <p className="text-xs leading-relaxed text-fg-muted">{selectedVoice?.description || selectedVoice?.style || (selected ? (zh ? '选择后自动保存，用于之后的语音通话。' : 'Saved automatically for future voice calls.') : (zh ? '跟随语音服务的默认音色。' : 'Uses the voice service’s default voice.'))}</p>
       </div> : <p className="mt-3 text-sm text-fg-muted">{zh ? '当前没有可用音色。' : 'No voice is ready.'} <Link to="/settings/capabilities/voice?returnTo=%2Fpersonal" className="text-accent underline">{zh ? '设置语音服务' : 'Set up voice'}</Link></p>}
+    {onGreetingChange && greetingSupported && <label className="mt-4 flex items-center justify-between gap-3 text-sm text-fg">
+      {zh ? '连接时打招呼' : 'Greet me when connected'}
+      <input type="checkbox" checked={record.voiceCallPreferences?.openingGreetingEnabled ?? true} disabled={busy}
+        onChange={event => { const enabled = event.target.checked; setBusy(true);
+          void onGreetingChange(enabled).catch(cause => setError(String(cause))).finally(() => setBusy(false)); }} />
+    </label>}
     {error && <p role="alert" className="mt-3 text-xs text-danger">{error}</p>}
   </section>;
 }

@@ -21,6 +21,7 @@ Active proposed designs:
 - [Realtime voice product requirements](./realtime-voice-prd.md)
 - [Realtime voice technical design](./realtime-voice-technical-design.md)
 - [Realtime voice WebSocket protocol](./realtime-voice-websocket-protocol.md)
+- [Personal AI voice opening greeting](./personal-ai-voice-opening-greeting.md): connection greeting, client readiness, interruption and reconnect deduplication.
 
 ## Maintained reference areas
 

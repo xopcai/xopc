@@ -9,6 +9,17 @@ import { VoiceSessionClient } from '../voice-session-client';
 describe('voice client timing negotiation', () => {
   afterEach(() => vi.unstubAllGlobals());
 
+  it.each([false, true])('sends output readiness only when greeting was accepted: %s', accepted => {
+    vi.stubGlobal('WebSocket', { OPEN: 1 });
+    const send = vi.fn();
+    const client = Object.assign(Object.create(VoiceSessionClient.prototype), {
+      socket: { readyState: 1, send }, session: { connectionEpoch: 7, openingGreeting: { accepted } },
+    }) as VoiceSessionClient;
+    client.outputReady();
+    expect(send).toHaveBeenCalledTimes(accepted ? 1 : 0);
+    if (accepted) expect(JSON.parse(send.mock.calls[0][0])).toMatchObject({ type: 'session.output_ready', payload: { connectionEpoch: 7 } });
+  });
+
   it.each([false, true])('keeps legacy gateways safe while reporting advertised metrics: %s', supported => {
     vi.stubGlobal('WebSocket', { OPEN: 1 });
     const send = vi.fn();

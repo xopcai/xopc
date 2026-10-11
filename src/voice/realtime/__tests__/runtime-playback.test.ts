@@ -1,3 +1,6 @@
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { once } from 'node:events';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo, Socket } from 'node:net';
@@ -6,6 +9,9 @@ import { VOICE_REALTIME_PROTOCOL_VERSION, decodeVoiceAudioFrame, createVoiceSess
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { WebSocket } from 'ws';
 
+import * as personalRepository from '../../../personal-agent/repository.js';
+import { closeXopcDatabase, requireXopcDatabase } from '../../../storage/sqlite/connection.js';
+import { getSqliteDatabase } from '../../../storage/sqlite/transaction.js';
 import { ConfigSchema } from '../../../config/schema.js';
 import type { StreamingSttEvent } from '../../../media-understanding/types.js';
 import { alibabaTranscriptionProvider } from '../../stt/providers/alibaba-transcription.js';
@@ -34,6 +40,8 @@ describe('VoiceRealtimeRuntime playback over WebSocket', () => {
   let events: VoiceServerEvent[];
   let frames: number[];
   let responseId: string;
+  let fixtureDirectory: string | undefined;
+  let previousStateDirectory: string | undefined;
   let abortStt: ReturnType<typeof vi.fn>;
 
   afterEach(async () => {
@@ -41,13 +49,28 @@ describe('VoiceRealtimeRuntime playback over WebSocket', () => {
     runtime?.close();
     if (server) await new Promise<void>((resolve) => server.close(() => resolve()));
     vi.restoreAllMocks();
+    if (fixtureDirectory) {
+      closeXopcDatabase();
+      if (previousStateDirectory === undefined) delete process.env.XOPC_STATE_DIR;
+      else process.env.XOPC_STATE_DIR = previousStateDirectory;
+      rmSync(fixtureDirectory, { recursive: true, force: true }); fixtureDirectory = undefined;
+    }
   });
 
   function send(type: VoiceClientMessage['type'], payload: VoiceClientMessage['payload']) {
     socket.send(JSON.stringify({ protocolVersion: VOICE_REALTIME_PROTOCOL_VERSION, messageId: crypto.randomUUID(), sentAt: Date.now(), type, payload }));
   }
 
-  async function start(bargeIn = true, recordInterruption = async () => {}, initialUserTurn = true) {
+  async function start(bargeIn = true, recordInterruption = async () => {}, initialUserTurn = true, greeting?: { logicalCallId: string; initiation: 'user' | 'recovery' }) {
+    if (greeting) {
+      previousStateDirectory = process.env.XOPC_STATE_DIR;
+      fixtureDirectory = mkdtempSync(join(tmpdir(), 'xopc-runtime-opening-'));
+      process.env.XOPC_STATE_DIR = fixtureDirectory;
+      requireXopcDatabase();
+      vi.spyOn(personalRepository, 'getPersonalAgentByConversation').mockReturnValue({
+        state: 'ready', userCallName: '小明', voiceCallPreferences: { openingGreetingEnabled: true },
+      } as never);
+    }
     abortStt = vi.fn();
     events = [];
     frames = [];
@@ -80,6 +103,7 @@ describe('VoiceRealtimeRuntime playback over WebSocket', () => {
     await once(server, 'listening');
     const session = createVoiceSessionResponseSchema.parse(await runtime.createSession({
       purpose: 'conversation', mode: 'assistant', conversationId: 'agent:main:webchat:default:direct:voice',
+      ...(greeting ? { openingGreeting: { ...greeting, supportsOutputReady: true as const } } : {}),
       supportedProtocolVersions: [3], mediaPreferences: ['websocket-pcm'],
     }, 'user-1'));
     expect(session.bargeIn).toBe(bargeIn);
@@ -99,6 +123,44 @@ describe('VoiceRealtimeRuntime playback over WebSocket', () => {
     responseId = created.payload.responseId;
     return { delegate, session };
   }
+
+  it('waits for output readiness and ignores repeated readiness after a named greeting', async () => {
+    const { delegate, session } = await start(true, async () => {}, false,
+      { logicalCallId: crypto.randomUUID(), initiation: 'user' });
+    expect(session.openingGreeting?.accepted).toBe(true);
+    expect(events.some(event => event.type === 'response.created')).toBe(false);
+    send('session.output_ready', { connectionEpoch: session.connectionEpoch });
+    send('session.output_ready', { connectionEpoch: session.connectionEpoch });
+    await vi.waitFor(() => expect(frames.length).toBeGreaterThan(0));
+    expect(events).toContainEqual(expect.objectContaining({ type: 'response.text.delta', payload: {
+      responseId: session.openingGreeting!.greetingResponseId, delta: '嗨，小明，我在。',
+    } }));
+    expect(delegate).not.toHaveBeenCalled();
+    send('response.stop_playback', { responseId: session.openingGreeting!.greetingResponseId! });
+    await vi.waitFor(() => expect(events.some(event => event.type === 'response.cancelled')).toBe(true));
+    expect(events.filter(event => event.type === 'response.created')).toHaveLength(1);
+    expect(getSqliteDatabase().prepare('SELECT COUNT(*) AS count FROM voice_opening_greetings').get()?.count).toBe(1);
+  });
+
+  it('does not greet a recovering call even when it has not played an opening', async () => {
+    const { session, delegate } = await start(true, async () => {}, false,
+      { logicalCallId: crypto.randomUUID(), initiation: 'recovery' });
+    expect(session.openingGreeting).toEqual({ accepted: false });
+    send('session.output_ready', { connectionEpoch: session.connectionEpoch });
+    send('session.ping', {});
+    await vi.waitFor(() => expect(events.some(event => event.type === 'session.pong')).toBe(true));
+    expect(events.some(event => event.type === 'response.created')).toBe(false);
+    expect(delegate).not.toHaveBeenCalled();
+  });
+
+  it('skips an opening when speech starts before the output handshake', async () => {
+    const { session } = await start(true, async () => {}, false,
+      { logicalCallId: crypto.randomUUID(), initiation: 'user' });
+    onSttEvent({ type: 'speech_started', utteranceId: 'early' });
+    send('session.output_ready', { connectionEpoch: session.connectionEpoch });
+    await vi.waitFor(() => expect(getSqliteDatabase().prepare('SELECT state FROM voice_opening_greetings').get()?.state).toBe('skipped'));
+    expect(events.some(event => event.type === 'response.created')).toBe(false);
+  });
 
   it('delivers a background Task update through the live assistant call', async () => {
     const { delegate } = await start(true, async () => {}, false);

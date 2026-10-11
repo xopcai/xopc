@@ -9,6 +9,7 @@ import { PlaybackEchoCandidates } from './playback-echo.js';
 import { PcmFrameBuffer } from './pcmFrameBuffer.js';
 import { SpeakableSegmenter } from './speakable-segmenter.js';
 import type { VoiceTicketClaim, VoiceRealtimeRuntimeOptions } from './runtime.types.js';
+import type { OpeningGreetingResult } from './opening-greeting.js';
 import type { VoiceEngine, VoiceEventSink } from './engine.js';
 
 const log = createLogger('Voice:Agent');
@@ -27,6 +28,8 @@ interface SpeechJob {
 }
 
 interface ActiveVoiceResponse {
+  opening?: { result: OpeningGreetingResult; deadlineAt: number };
+  openingTimer?: ReturnType<typeof setTimeout>;
   id: string;
   playback: AudioPlaybackWindow;
   abortController: AbortController;
@@ -34,6 +37,7 @@ interface ActiveVoiceResponse {
   text: string;
   audibleText: string;
   audioStarted: boolean;
+  firstFrameSent: boolean;
   speechQueue: SpeechJob[];
   speechWorker?: Promise<void>;
   speechError?: Error;
@@ -89,6 +93,7 @@ export function createAgentVoiceEngine(options: {
   let turnReceivedAtMs: number | undefined;
   let taskUpdateQueued = false;
   let lastUserSpeechAt = 0;
+  let openingInputSeen = false;
   const turn = new TurnCoordinator(claim.silenceDurationMs, (text, decision, turnId) => {
     if (closed || muted) return;
     const receivedAtMs = turnReceivedAtMs ?? Date.now();
@@ -119,10 +124,12 @@ export function createAgentVoiceEngine(options: {
     }
     activeResponse = undefined;
     clearTimeout(response.firstPhraseTimer);
+    clearTimeout(response.openingTimer);
+    if (response.opening && response.opening.result !== 'expired') response.opening.result = 'interrupted';
     response.abortController.abort(reason);
     send('response.cancelled', { responseId: response.id, reason });
     const conversationId = claim.request.conversationId;
-    if (conversationId && reason !== 'session_closed') {
+    if (conversationId && !response.opening && reason !== 'session_closed') {
       interruptionWrites = interruptionWrites.then(() => options.runtime.recordInterruption({
         conversationId,
         responseId: response.id,
@@ -222,6 +229,11 @@ export function createAgentVoiceEngine(options: {
         for (const frame of response.pcm.push(item.value)) {
           await response.playback.reserve(frame.byteLength, response.abortController.signal);
           if (activeResponse !== response || closed) return;
+          if (response.opening && options.runtime.sessionBusy(claim.request.conversationId!)) {
+            cancelActiveResponse('barge_in'); return;
+          }
+          response.firstFrameSent = true;
+          clearTimeout(response.openingTimer);
           options.sendAudio(response.id, frame);
         }
       }
@@ -312,11 +324,12 @@ export function createAgentVoiceEngine(options: {
     else startSpeechWorker(response);
   }
 
-  async function runAssistantTurn(text: string, turnId: string, updateClientMessageId?: string, receivedAtMs = Date.now(), committedAtMs = receivedAtMs): Promise<boolean> {
+  async function runAssistantTurn(text: string, turnId: string, updateClientMessageId?: string, receivedAtMs = Date.now(), committedAtMs = receivedAtMs, opening?: { responseId: string; deadlineAt: number; result: OpeningGreetingResult }): Promise<boolean> {
     if (!claim.tts || !claim.request.conversationId || !text.trim() || closed) return false;
     cancelActiveResponse('barge_in');
     const response: ActiveVoiceResponse = {
-      id: `resp_${crypto.randomUUID()}`,
+      id: opening?.responseId ?? `resp_${crypto.randomUUID()}`,
+      ...(opening ? { opening } : {}),
       playback: new AudioPlaybackWindow(),
       abortController: new AbortController(),
       segmenter: new SpeakableSegmenter(
@@ -327,6 +340,7 @@ export function createAgentVoiceEngine(options: {
       text: '',
       audibleText: '',
       audioStarted: false,
+      firstFrameSent: false,
       speechQueue: [],
       queuedSpeechCharacters: 0,
       startedAt: Date.now(),
@@ -340,12 +354,18 @@ export function createAgentVoiceEngine(options: {
     const taskUpdateExposed = () => Boolean(updateClientMessageId && response.text.trim());
     activeResponse = response;
     send('response.created', { responseId: response.id });
+    if (opening) response.openingTimer = setTimeout(() => {
+      if (activeResponse === response) {
+        opening.result = 'expired';
+        cancelActiveResponse('client_cancelled');
+      }
+    }, Math.max(0, opening.deadlineAt - Date.now()));
     try {
-      const opening = prepareSpeechStreamSession(claim.tts.config, {
+      const speechOpening = prepareSpeechStreamSession(claim.tts.config, {
         appConfig: claim.config, signal: response.abortController.signal, allowFallback: false,
       });
-      if (opening) {
-        response.preparedSpeech = opening.then(session => {
+      if (speechOpening) {
+        response.preparedSpeech = speechOpening.then(session => {
           log.info({ sessionId: claim.sessionId, responseId: response.id, conversationId: claim.request.conversationId,
             phase: 'response_tts_ready', setupMs: Date.now() - response.startedAt }, 'Realtime voice TTS prepared');
           return { session };
@@ -353,78 +373,85 @@ export function createAgentVoiceEngine(options: {
       }
       await interruptionWrites;
       if (response.abortController.signal.aborted || closed) return taskUpdateExposed();
-      if (!claim.conversationSessionId) throw new Error('Conversation identity is unavailable');
-      const task = await options.runtime.agentBroker.delegate({ text, turnId, conversationId: claim.request.conversationId,
-        expectedTranscriptId: claim.conversationSessionId, signal: response.abortController.signal,
-        clientMessageId: updateClientMessageId ?? `voice:${claim.conversationSessionId}:${claim.sessionId}:${inputGeneration}:${turnId}`,
-        ...(updateClientMessageId ? { origin: { type: 'system' as const, source: 'task_update' } } : {}) });
-      response.taskId = task.taskId;
-      send('task.created', { responseId: response.id, taskId: task.taskId });
-      for await (const event of task.events) {
-        if (activeResponse !== response || response.abortController.signal.aborted) return taskUpdateExposed();
-        if (event.type === 'assistant_delta'
-          || (event.type === 'tool_end' && event.payload?.toolName !== 'clarify')) {
-          response.awaitingClarification = false;
-        }
-        if (event.type === 'assistant_delta' && typeof event.payload?.delta === 'string') {
-          if (response.text.length + event.payload.delta.length > 32_000) throw new Error('Voice response text limit reached');
-          if (!response.firstTextSeen && event.payload.delta.trim()) {
-            response.firstTextSeen = true;
-            response.firstTextAtMs = Date.now();
-            log.info({
-              sessionId: claim.sessionId,
+      if (opening) {
+        response.text = text;
+        response.firstTextAtMs = Date.now();
+        send('response.text.delta', { responseId: response.id, delta: text });
+        queuePhrases(response, [text]);
+      } else {
+        if (!claim.conversationSessionId) throw new Error('Conversation identity is unavailable');
+        const task = await options.runtime.agentBroker.delegate({ text, turnId, conversationId: claim.request.conversationId,
+          expectedTranscriptId: claim.conversationSessionId, signal: response.abortController.signal,
+          clientMessageId: updateClientMessageId ?? `voice:${claim.conversationSessionId}:${claim.sessionId}:${inputGeneration}:${turnId}`,
+          ...(updateClientMessageId ? { origin: { type: 'system' as const, source: 'task_update' } } : {}) });
+        response.taskId = task.taskId;
+        send('task.created', { responseId: response.id, taskId: task.taskId });
+        for await (const event of task.events) {
+          if (activeResponse !== response || response.abortController.signal.aborted) return taskUpdateExposed();
+          if (event.type === 'assistant_delta'
+            || (event.type === 'tool_end' && event.payload?.toolName !== 'clarify')) {
+            response.awaitingClarification = false;
+          }
+          if (event.type === 'assistant_delta' && typeof event.payload?.delta === 'string') {
+            if (response.text.length + event.payload.delta.length > 32_000) throw new Error('Voice response text limit reached');
+            if (!response.firstTextSeen && event.payload.delta.trim()) {
+              response.firstTextSeen = true;
+              response.firstTextAtMs = Date.now();
+              log.info({
+                sessionId: claim.sessionId,
+                responseId: response.id,
+                conversationId: claim.request.conversationId,
+                phase: 'first_response_text',
+                latencyMs: Date.now() - response.startedAt,
+                inputToTextMs: Date.now() - response.inputReceivedAtMs,
+                turnDecisionMs: Math.max(0, response.turnCommittedAtMs - response.inputReceivedAtMs),
+                queueMs: Math.max(0, response.startedAt - response.turnCommittedAtMs),
+              }, 'Realtime voice first response text ready');
+            }
+            response.text += event.payload.delta;
+            send('response.text.delta', { responseId: response.id, delta: event.payload.delta });
+            queuePhrases(response, response.segmenter.push(event.payload.delta));
+            if (response.firstPhraseAtMs === undefined && response.firstPhraseTimer === undefined) {
+              response.firstPhraseTimer = setTimeout(() => {
+                response.firstPhraseTimer = undefined;
+                if (activeResponse === response && !response.abortController.signal.aborted) {
+                  queuePhrases(response, response.segmenter.flushFirstPhrase());
+                }
+              }, FIRST_PHRASE_WAIT_MS);
+            }
+          }
+          if (event.type === 'tool_start') {
+            // Agents commonly announce a tool without punctuation. Do not hold that
+            // useful acknowledgement until the tool finishes or the whole turn ends.
+            queuePhrases(response, response.segmenter.flush());
+          }
+          if ((event.type === 'tool_start' || event.type === 'tool_end') && typeof event.payload?.toolCallId === 'string' && typeof event.payload?.toolName === 'string') {
+            send('task.activity', { taskId: task.taskId, toolCallId: event.payload.toolCallId.slice(0, 160), toolName: event.payload.toolName.slice(0, 256), status: event.type === 'tool_start' ? 'running' : event.payload.status === 'error' ? 'failed' : 'completed' });
+          }
+          if (event.type === 'run_end' || event.type === 'stream_end') {
+            const status = event.payload?.status;
+            if (!response.taskDone) {
+              response.taskDone = true;
+              send('task.done', { taskId: task.taskId, status: status === 'cancelled' ? 'cancelled' : status === 'suspended' ? 'suspended' : status === 'error' ? 'failed' : 'completed' });
+            }
+          }
+          if (event.type === 'clarify_request' && typeof event.payload?.requestId === 'string' && typeof event.payload?.question === 'string') {
+            response.awaitingClarification = true;
+            send('response.clarification', {
               responseId: response.id,
-              conversationId: claim.request.conversationId,
-              phase: 'first_response_text',
-              latencyMs: Date.now() - response.startedAt,
-              inputToTextMs: Date.now() - response.inputReceivedAtMs,
-              turnDecisionMs: Math.max(0, response.turnCommittedAtMs - response.inputReceivedAtMs),
-              queueMs: Math.max(0, response.startedAt - response.turnCommittedAtMs),
-            }, 'Realtime voice first response text ready');
+              requestId: event.payload.requestId.slice(0, 160),
+              kind: event.payload.kind === 'approval' ? 'approval' : 'input',
+              question: event.payload.question.slice(0, 8_000),
+              ...(Array.isArray(event.payload.choices) ? { choices: event.payload.choices.filter((choice): choice is string => typeof choice === 'string').slice(0, 20).map((choice) => choice.slice(0, 1_000)) } : {}),
+              ...(typeof event.payload.suggestedAnswer === 'string' ? { suggestedAnswer: event.payload.suggestedAnswer.slice(0, 1_000) } : {}),
+              version: typeof event.payload.version === 'number' ? event.payload.version : 1,
+              createdAt: typeof event.payload.createdAt === 'number' ? event.payload.createdAt : Date.now(),
+              ...(typeof event.payload.expiresAt === 'number' ? { expiresAt: event.payload.expiresAt } : {}),
+            });
           }
-          response.text += event.payload.delta;
-          send('response.text.delta', { responseId: response.id, delta: event.payload.delta });
-          queuePhrases(response, response.segmenter.push(event.payload.delta));
-          if (response.firstPhraseAtMs === undefined && response.firstPhraseTimer === undefined) {
-            response.firstPhraseTimer = setTimeout(() => {
-              response.firstPhraseTimer = undefined;
-              if (activeResponse === response && !response.abortController.signal.aborted) {
-                queuePhrases(response, response.segmenter.flushFirstPhrase());
-              }
-            }, FIRST_PHRASE_WAIT_MS);
+          if (event.type === 'error') {
+            throw new Error(typeof event.payload?.message === 'string' ? event.payload.message : 'Agent response failed');
           }
-        }
-        if (event.type === 'tool_start') {
-          // Agents commonly announce a tool without punctuation. Do not hold that
-          // useful acknowledgement until the tool finishes or the whole turn ends.
-          queuePhrases(response, response.segmenter.flush());
-        }
-        if ((event.type === 'tool_start' || event.type === 'tool_end') && typeof event.payload?.toolCallId === 'string' && typeof event.payload?.toolName === 'string') {
-          send('task.activity', { taskId: task.taskId, toolCallId: event.payload.toolCallId.slice(0, 160), toolName: event.payload.toolName.slice(0, 256), status: event.type === 'tool_start' ? 'running' : event.payload.status === 'error' ? 'failed' : 'completed' });
-        }
-        if (event.type === 'run_end' || event.type === 'stream_end') {
-          const status = event.payload?.status;
-          if (!response.taskDone) {
-            response.taskDone = true;
-            send('task.done', { taskId: task.taskId, status: status === 'cancelled' ? 'cancelled' : status === 'suspended' ? 'suspended' : status === 'error' ? 'failed' : 'completed' });
-          }
-        }
-        if (event.type === 'clarify_request' && typeof event.payload?.requestId === 'string' && typeof event.payload?.question === 'string') {
-          response.awaitingClarification = true;
-          send('response.clarification', {
-            responseId: response.id,
-            requestId: event.payload.requestId.slice(0, 160),
-            kind: event.payload.kind === 'approval' ? 'approval' : 'input',
-            question: event.payload.question.slice(0, 8_000),
-            ...(Array.isArray(event.payload.choices) ? { choices: event.payload.choices.filter((choice): choice is string => typeof choice === 'string').slice(0, 20).map((choice) => choice.slice(0, 1_000)) } : {}),
-            ...(typeof event.payload.suggestedAnswer === 'string' ? { suggestedAnswer: event.payload.suggestedAnswer.slice(0, 1_000) } : {}),
-            version: typeof event.payload.version === 'number' ? event.payload.version : 1,
-            createdAt: typeof event.payload.createdAt === 'number' ? event.payload.createdAt : Date.now(),
-            ...(typeof event.payload.expiresAt === 'number' ? { expiresAt: event.payload.expiresAt } : {}),
-          });
-        }
-        if (event.type === 'error') {
-          throw new Error(typeof event.payload?.message === 'string' ? event.payload.message : 'Agent response failed');
         }
       }
       if (activeResponse !== response || response.abortController.signal.aborted || closed) return taskUpdateExposed();
@@ -436,6 +463,11 @@ export function createAgentVoiceEngine(options: {
       if (finalFrame) {
         await response.playback.reserve(finalFrame.byteLength, response.abortController.signal);
         if (activeResponse !== response || closed) return taskUpdateExposed();
+        if (response.opening && options.runtime.sessionBusy(claim.request.conversationId!)) {
+          cancelActiveResponse('barge_in'); return false;
+        }
+        response.firstFrameSent = true;
+        clearTimeout(response.openingTimer);
         options.sendAudio(response.id, finalFrame);
       }
       await response.playback.drain(response.abortController.signal);
@@ -453,6 +485,7 @@ export function createAgentVoiceEngine(options: {
         finishReason: response.audioStarted ? 'completed' : 'text_only',
         audio: response.audioStarted,
       });
+      if (opening) opening.result = response.audioStarted ? 'completed' : 'failed';
       activeResponse = undefined;
       return !updateClientMessageId || taskUpdateExposed();
     } catch (error) {
@@ -460,7 +493,7 @@ export function createAgentVoiceEngine(options: {
       log.warn({ err: error, sessionId: claim.sessionId, responseId: response.id,
         ...(updateClientMessageId ? { clientMessageId: updateClientMessageId } : {}) },
       updateClientMessageId ? 'Proactive voice task update deferred' : 'Realtime voice response failed');
-      if (!updateClientMessageId) {
+      if (!updateClientMessageId && !opening) {
         send('session.error', { code: 'RESPONSE_FAILED', message: 'Voice response failed', recoverable: true });
       }
       if (response.taskId && !response.taskDone) {
@@ -477,6 +510,7 @@ export function createAgentVoiceEngine(options: {
       if (activeResponse === response) activeResponse = undefined;
       return taskUpdateExposed();
     } finally {
+      clearTimeout(response.openingTimer);
       clearTimeout(response.firstPhraseTimer);
       await waitForSpeech(response);
       response.abortController.abort('response_finished');
@@ -526,6 +560,8 @@ export function createAgentVoiceEngine(options: {
     }
     if (muted || finalizedUtterances.has(event.utteranceId)) return;
     if (event.type === 'speech_started') {
+      openingInputSeen = true;
+      if (activeResponse?.opening && !activeResponse.firstFrameSent) cancelActiveResponse('barge_in');
       lastUserSpeechAt = Date.now();
       echoCandidates.remember(event.utteranceId, activeResponse?.audioStarted ? activeResponse.audibleText
         : recentPlayback && recentPlayback.expiresAt >= Date.now() ? recentPlayback.text : undefined);
@@ -554,6 +590,7 @@ export function createAgentVoiceEngine(options: {
     if (event.type === 'transcript_final') {
       lastUserSpeechAt = Date.now();
       const text = event.text.trim();
+      if (text) openingInputSeen = true;
       if (!text) {
         if (claim.request.purpose === 'conversation') bufferFinal(event.utteranceId, '');
         return;
@@ -590,7 +627,7 @@ export function createAgentVoiceEngine(options: {
         if (activeResponse?.awaitingClarification) { turn.reset(); return; }
         // Partial ASR and VAD can be caused by the current playback. Only a
         // finalized, non-echo utterance may cancel the response.
-        if (claim.config.voice?.realtime?.bargeIn) cancelActiveResponse('barge_in');
+        if (activeResponse?.opening || claim.config.voice?.realtime?.bargeIn) cancelActiveResponse('barge_in');
         bufferFinal(event.utteranceId, text);
       }
     }
@@ -635,6 +672,18 @@ export function createAgentVoiceEngine(options: {
 
   return {
     isConversationIdle,
+    async offerOpeningGreeting(input) {
+      if (openingInputSeen || !canOfferTaskUpdateInput() || options.runtime.sessionBusy(claim.request.conversationId!)) return 'skipped';
+      const opening = { ...input, result: 'failed' as OpeningGreetingResult };
+      const attempt = conversationTail.then(async () => {
+        if (Date.now() >= input.deadlineAt) return 'expired' as const;
+        if (openingInputSeen || !canOfferTaskUpdateInput() || options.runtime.sessionBusy(claim.request.conversationId!)) return 'skipped' as const;
+        await runAssistantTurn(input.text, input.responseId, undefined, input.deadlineAt - 2000, Date.now(), opening);
+        return opening.result;
+      });
+      conversationTail = attempt.then(() => {}, () => {});
+      return attempt;
+    },
     canOfferTaskUpdate() {
       return !taskUpdateQueued && canOfferTaskUpdateInput();
     },

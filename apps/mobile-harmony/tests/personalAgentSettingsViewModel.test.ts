@@ -11,6 +11,7 @@ import { XopcPersonalAgentSettingsViewModel } from '../entry/src/main/ets/viewmo
 
 const record = { agentId: 'personal', conversationId: 'fixed', state: 'ready' as const, displayName: 'Ada',
   appearance: 'loopi', errorMessage: null, revision: 7, preferences: { warmth: 'gentle', guidance: 'Keep context' },
+  voiceCallPreferences: { openingGreetingEnabled: true },
   voicePreference: { provider: 'old', model: 'old-tts', voice: 'existing' } };
 const outreach = { revision: 3, mode: 'balanced', timezone: 'Asia/Shanghai', quietStart: 22, quietEnd: 8,
   dailyMessages: 4, dailyModelCalls: 20 };
@@ -35,6 +36,16 @@ describe('Personal AI settings on HarmonyOS', () => {
     const patch = JSON.parse(mocks.request.mock.calls.at(-1)![2]);
     expect(patch).toMatchObject({ revision: 7, voicePreference: record.voicePreference, preferences: record.preferences });
     expect(model.record?.revision).toBe(8);
+  });
+
+  it('persists the opening preference separately from response style', async () => {
+    const model = new XopcPersonalAgentSettingsViewModel(); await model.load(record);
+    mocks.request.mockResolvedValueOnce(JSON.stringify({ ok: true, payload: { ...record,
+      voiceCallPreferences: { openingGreetingEnabled: false } } }));
+    await model.saveProfile('Ada', 'loopi', record.preferences, 'existing', false);
+    const patch = JSON.parse(mocks.request.mock.calls.at(-1)![2]);
+    expect(patch.voiceCallPreferences).toEqual({ openingGreetingEnabled: false });
+    expect(patch.preferences).toEqual(record.preferences);
   });
 
   it('does not load or write advanced outreach settings while editing a profile', async () => {

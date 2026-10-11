@@ -783,4 +783,5 @@
     <string name="chat_search_links">Links</string>
     <string name="chat_search_images">Images</string>
     <string name="chat_search_empty">No results</string>
+    <string name="personal_agent_opening_greeting">Greet me when connected</string>
 </resources>

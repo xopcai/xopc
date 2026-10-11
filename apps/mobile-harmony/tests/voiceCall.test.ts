@@ -4,9 +4,10 @@ const mocks = vi.hoisted(() => {
   Object.assign(globalThis, { ObservedV2: (value: unknown) => value, Trace: () => undefined });
   return { connect: vi.fn(async () => {}), start: vi.fn(async () => {}), request: vi.fn(), send: vi.fn(), enqueue: vi.fn(), finish: vi.fn(), flush: vi.fn(async () => {}), stop: vi.fn(async () => {}), duck: vi.fn(), setMuted: vi.fn(), now: 1000 };
 });
+vi.mock('../entry/src/main/ets/service/settings.ets', () => ({ appSettings: { effectiveLanguage: () => 'zh' } }));
 vi.mock('@kit.AbilityKit', () => ({}));
 vi.mock('@kit.BasicServicesKit', () => ({ systemDateTime: { TimeType: { STARTUP: 1 }, getUptime: () => mocks.now } }));
-vi.mock('@kit.ArkTS', () => ({ util: {} }));
+vi.mock('@kit.ArkTS', () => ({ util: { generateRandomUUID: () => crypto.randomUUID() } }));
 vi.mock('@kit.PerformanceAnalysisKit', () => ({ hilog: { info: vi.fn(), warn: vi.fn() } }));
 vi.mock('../entry/src/main/ets/service/gatewaySession.ets', () => ({ gatewaySession: { request: mocks.request, transferAuth: async () => ({ origin: "https://gateway.example" }) } }));
 vi.mock('../entry/src/main/ets/repository/chatRepository.ets', () => ({ XopcChatRepository: class { async materialize() {} } }));
@@ -204,6 +205,34 @@ describe('Harmony voice connection recovery', () => {
       return JSON.stringify({ ok: true });
     });
     call = new XopcVoiceCall();
+  });
+
+  it('negotiates named opening readiness and preserves call identity during manual recovery', async () => {
+    const bodies: any[] = [];
+    mocks.request.mockImplementation(async (path: string, _method: string, body: string) => {
+      if (path.endsWith('/status')) return JSON.stringify({ payload: { enabled: true, openingGreeting: true,
+        capabilities: { assistant: { available: true } } } });
+      if (path.endsWith('/preflight')) return JSON.stringify({ ok: true });
+      if (path.endsWith('/sessions')) {
+        const request = JSON.parse(body); bodies.push(request);
+        return JSON.stringify({ payload: { sessionId: `session-${++issued}`, ticket: 'ticket', connectionEpoch: issued,
+          limits: { maxSessionMs: 600000 }, openingGreeting: { accepted: request.openingGreeting.initiation === 'user', greetingResponseId: 'greeting' } } });
+      }
+      return JSON.stringify({ ok: true });
+    });
+    try {
+      await call.start({} as never, { conversationId: 'personal', mode: 'assistant', name: 'AI', background: false });
+      expect(mocks.send).toHaveBeenCalledWith('session.output_ready', { connectionEpoch: 1 });
+      (call as any).onEvent(event('response.created', 'greeting'));
+      (call as any).onEvent(event('response.text.delta', 'greeting', { delta: 'Hi' }));
+      (call as any).onEvent(event('response.done', 'greeting', { audio: false }));
+      expect(call.error).not.toBe('NO_RESPONSE_AUDIO');
+      await call.pause('background'); await call.resume();
+      expect(bodies.map(body => body.openingGreeting.initiation)).toEqual(['user', 'recovery']);
+      expect(bodies[1].openingGreeting.logicalCallId).toBe(bodies[0].openingGreeting.logicalCallId);
+      expect(mocks.send.mock.calls.filter(([type]) => type === 'session.output_ready')).toHaveLength(1);
+      await call.end();
+    } finally { vi.useRealTimers(); }
   });
 
   it('creates a fresh session and uses the proxy after a first connection timeout', async () => {

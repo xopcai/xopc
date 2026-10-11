@@ -24,6 +24,7 @@ export interface TtsTestInput {
 }
 
 export interface RealtimeVoiceStatus {
+  openingGreeting?: boolean;
   enabled: boolean;
   defaultMode: 'assistant' | 'natural';
   omni: { provider: string; model: string; managed: boolean } | null;

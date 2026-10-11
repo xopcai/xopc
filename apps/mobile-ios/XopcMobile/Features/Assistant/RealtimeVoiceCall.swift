@@ -60,12 +60,15 @@ final class RealtimeVoiceCall {
     private var congested = false
     private var releaseInProgress = false
 
+    private var logicalCallID = UUID().uuidString
+
     func start(conversationID: String, mode: RealtimeVoiceMode, name: String, gateway: GatewayClient) async {
         guard phase == .idle else { expanded = true; return }
         self.conversationID = conversationID
         self.mode = mode
         self.name = name
         self.gateway = gateway
+        logicalCallID = UUID().uuidString
         startedAt = Date()
         expanded = true
         muted = false
@@ -167,7 +170,9 @@ final class RealtimeVoiceCall {
             let metrics = try await gateway.preflightRealtimeVoice(conversationID: conversationID, mode: mode)
             guard generation == current else { return }
             supportedTimingMetrics = Set(metrics)
-            let session = try await gateway.createRealtimeVoiceSession(conversationID: conversationID, mode: mode)
+            let greeting: RealtimeVoiceSessionRequest.OpeningGreetingRequest? = status.openingGreeting == true && mode == .assistant
+                ? .init(logicalCallId: logicalCallID, initiation: recovering ? "recovery" : "user") : nil
+            let session = try await gateway.createRealtimeVoiceSession(conversationID: conversationID, mode: mode, openingGreeting: greeting)
             guard generation == current else {
                 try? await gateway.cancelRealtimeVoiceSession(session)
                 return
@@ -393,6 +398,9 @@ private extension RealtimeVoiceCall {
             errorCode = nil
             networkQuality = "good"
             try? await transport.send("input.mute", payload: .init(muted: muted))
+            if let session, session.openingGreeting?.accepted == true {
+                try? await transport.send("session.output_ready", payload: .init(connectionEpoch: session.connectionEpoch))
+            }
             if let maximum = session?.limits.maxSessionMs, maximum > 0 {
                 let current = generation
                 limitTask = Task {
@@ -473,7 +481,7 @@ private extension RealtimeVoiceCall {
             finishResponse()
         case "response.done" where payload.responseId == responseID:
             responseDone = true
-            if payload.audio == false, !assistantText.isEmpty {
+            if payload.audio == false, !assistantText.isEmpty, responseID != session?.openingGreeting?.greetingResponseId {
                 errorCode = "NO_RESPONSE_AUDIO"
             }
             if playedMilliseconds >= receivedMilliseconds {
