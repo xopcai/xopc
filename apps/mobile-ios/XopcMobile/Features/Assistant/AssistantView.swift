@@ -84,8 +84,8 @@ struct AssistantView<Dock: View>: View {
         }
         .fullScreenCover(isPresented: $showingMessageSearch) {
             ChatMessageSearchView(messages: state.messages, configuration: configuration,
-                conversationID: conversation?.id, assistantState: state, readAloud: readAloud,
-                canReadAloud: realtimeVoiceCall.phase == .idle)
+                                  conversationID: conversation?.id, assistantState: state, readAloud: readAloud,
+                                  canReadAloud: realtimeVoiceCall.phase == .idle)
         }
         .sheet(isPresented: $showingPersonalProfile) {
             if let personalAgent, let conversation {
@@ -692,8 +692,8 @@ struct AssistantView<Dock: View>: View {
                     } label: {
                         HStack(spacing: 8) {
                             ConfiguredAgentAvatar(configuration: configuration,
-                                agent: state.agents.first(where: { $0.id == conversation?.agentId }) ?? state.selectedAgent,
-                                size: 36, active: isActive)
+                                                  agent: state.agents.first(where: { $0.id == conversation?.agentId }) ?? state.selectedAgent,
+                                                  size: 36, active: isActive)
                             Text(verbatim: conversationNavigationTitle).font(.system(size: 16, weight: .medium)).lineLimit(1)
                         }.padding(.horizontal, 12).frame(height: 48)
                             .background(.ultraThinMaterial, in: Capsule())
@@ -1114,7 +1114,6 @@ private struct PersonalProactivitySection: View {
     }
 }
 
-
 private struct ChatMessageSearchView: View {
     let messages: [TimelineMessage]
     let configuration: GatewayConfiguration
@@ -1138,12 +1137,12 @@ private struct ChatMessageSearchView: View {
     private func content(_ message: TimelineMessage) -> String {
         switch category {
         case "files": return message.attachments.filter { !$0.isImage }.map { $0.name ?? "File" }.joined(separator: "\n")
-        case "images": return message.attachments.filter { $0.isImage }.map { $0.name ?? "Image" }.joined(separator: "\n")
+        case "images": return message.attachments.filter(\.isImage).map { $0.name ?? "Image" }.joined(separator: "\n")
         case "links":
             guard let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue) else { return "" }
             return detector.matches(in: message.text, range: NSRange(message.text.startIndex..., in: message.text))
                 .compactMap { $0.url?.absoluteString }.filter { $0.hasPrefix("http") }.joined(separator: "\n") + "\n"
-                + message.resultLinks.map { $0.url.absoluteString }.joined(separator: "\n")
+                + message.resultLinks.map(\.url.absoluteString).joined(separator: "\n")
         default: return message.text
         }
     }
@@ -1168,7 +1167,7 @@ private struct ChatMessageSearchView: View {
                             .padding(16).background(Color(uiColor: .secondarySystemGroupedBackground), in: .rect(cornerRadius: 16))
                     }.buttonStyle(.plain).accessibilityIdentifier("chat-search-result-\(message.id)")
                 }
-                if !query.isEmpty && results.isEmpty {
+                if !query.isEmpty, results.isEmpty {
                     Text(locale.language.languageCode?.identifier == "zh" ? "没有找到相关内容" : "No results")
                         .foregroundStyle(.secondary)
                 }
@@ -1209,8 +1208,8 @@ private struct ChatMessageSearchView: View {
             NavigationStack {
                 ScrollView {
                     MessageBubble(message: message, configuration: configuration, conversationID: conversationID,
-                        assistantState: assistantState, readAloud: readAloud, canReadAloud: canReadAloud,
-                        previewEligible: false, onReuseUserText: { _ in }).padding()
+                                  assistantState: assistantState, readAloud: readAloud, canReadAloud: canReadAloud,
+                                  previewEligible: false, onReuseUserText: { _ in }).padding()
                 }.toolbar {
                     ToolbarItem(placement: .confirmationAction) { Button("完成") { selectedMessage = nil } }
                 }
