@@ -1933,6 +1933,26 @@ final class MobileLayoutParityUITests: XCTestCase {
         XCTAssertTrue(app.buttons["home-tab-assistant"].waitForExistence(timeout: 10))
     }
 
+    func testTaskConversationKeepsHeaderSettingsAccessible() {
+        tab("progress")
+        let task = app.buttons["查看任务"]
+        XCTAssertTrue(task.waitForExistence(timeout: 10))
+        task.tap()
+        let tasks = app.cells.containing(.staticText, identifier: "任务顶部栏检查").firstMatch
+        XCTAssertTrue(tasks.waitForExistence(timeout: 10))
+        tasks.tap()
+        let openChat = app.buttons["进入任务对话"]
+        XCTAssertTrue(openChat.waitForExistence(timeout: 10))
+        openChat.tap()
+        XCTAssertTrue(app.buttons["搜索消息"].waitForExistence(timeout: 10))
+        let settings = app.buttons["会话选项"]
+        XCTAssertTrue(settings.isHittable)
+        settings.tap()
+        XCTAssertTrue(app.navigationBars["会话选项"].waitForExistence(timeout: 5))
+        app.buttons["关闭"].tap()
+        XCTAssertTrue(app.buttons["搜索消息"].waitForExistence(timeout: 5))
+    }
+
     func testMessageSearchBottomControlsAndClose() {
         tab("conversations")
         let personal = app.buttons["conversations-personal-agent-entry"]
