@@ -1,12 +1,58 @@
 {
-  "status": "draft-not-submitted",
-  "bundleName": "ai.xopc.mobile",
-  "appId": "6917616647856901107",
-  "agcTestVersionId": "2041502911694922112",
+  "status": "draft-saved-required-information-pending",
+  "bundleName": "ai.xopc.xopc",
+  "appId": "6917618744771171142",
+  "agcTestVersionId": "2058659503649384768",
   "name": "xopc",
   "description": "xopc 是你的个人 AI 助手移动客户端。连接你管理的 xopc 网关，与助手交流想法、继续会话、交办任务，并查看和管理笔记、项目、自动化与文件。支持文字与附件输入、语音输入和语音笔记，帮助你在手机上记录信息、跟进工作和查看成果。联网功能需要可访问的 xopc 网关；助手、转写和通知能力取决于网关配置及设备授权。本版本用于受邀测试。",
   "testNotes": "鸿蒙原生首轮测试版本，最低支持 HarmonyOS 6.1（API 23）。请使用测试网关和非敏感的样例数据，重点验证配对、文字会话、工作区与文件操作。语音和通知受权限、签名及网关配置影响，仍待真机验证。此版本尚未完成实体设备验收，请勿用于重要数据或生产工作。",
   "reviewNotes": "本应用需要连接独立 xopc 网关。审核演示环境、访问方式和录屏需另行准备并实测，不能使用个人生产网关或泄露其访问凭据。",
   "privacyPolicy": "privacy-policy.draft.md",
-  "icon": "app-icon-1024.png"
+  "agcPrivacyAgreementId": "2058664212267329472",
+  "agcPrivacyAgreementStatus": "completed",
+  "agcTestPrivacyPolicyAssociated": true,
+  "agcPrivacyAgreementUrl": "https://agreement-drcn.hispace.dbankcloud.cn/index.html?lang=zh&agreementId=2058664212267329472",
+  "reviewGatewayRegion": "China",
+  "reviewGatewayProviders": ["Alibaba Cloud models", "Alibaba Cloud search", "Alibaba Cloud speech"],
+  "icon": "app-icon-1024.png",
+  "legacyAgc": {
+    "bundleName": "ai.xopc.mobile",
+    "appId": "6917616647856901107",
+    "agcTestVersionId": "2041502911694922112",
+    "distributionDeletedByUserOn": "2026-10-11"
+  },
+  "agcReleaseVersionId": "2058644808964037312",
+  "releaseProfileName": "xopc-apptest-xopc-20261011",
+  "signedReleasePackage": ".test/release-20261011/xopc-0.1.0-ai.xopc.xopc-release-signed.app",
+  "signedReleaseSha256": "846827a6ca711e9d896389d871248d3f3831a65bb12a1f108e095929ccd6ac77",
+  "previousUploadResult": {
+    "code": 991,
+    "status": "failed",
+    "evidence": "User-provided AGC screenshot dated 2026-10-11 09:44:34"
+  },
+  "agcPackageValidation": {
+    "status": "passed",
+    "uploadedAt": "2026-10-11 09:47:07",
+    "fileName": "xopc-0.1.0-ai.xopc.xopc-release-signed.app",
+    "bundleName": "ai.xopc.xopc",
+    "versionName": "0.1.0",
+    "versionCode": 1,
+    "usage": "test-and-release",
+    "deviceTypes": [
+      "phone",
+      "tablet"
+    ],
+    "selfCheck": "running"
+  },
+  "agcTestVersionDescription": "xopc 0.1.0 新包名受邀测试",
+  "agcTestPackageSelected": true,
+  "agcTestCopySaved": true,
+  "agcTestPackageEncryption": "encrypted",
+  "remainingRequiredInformation": [
+    "test dates",
+    "owner phone verification and contact information",
+    "test users",
+    "review gateway access",
+    "device acceptance"
+  ]
 }

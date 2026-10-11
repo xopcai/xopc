@@ -77,7 +77,7 @@ export default function richChatTest(): void {
     it('updatesStreamingMarkdownWithAStableBlockIdentity', 0, async (): Promise<void> => {
       const delegator = abilityDelegatorRegistry.getAbilityDelegator();
       const driver = Driver.create();
-      await delegator.startAbility({ bundleName: 'ai.xopc.mobile', abilityName: 'EntryAbility' });
+      await delegator.startAbility({ bundleName: 'ai.xopc.xopc', abilityName: 'EntryAbility' });
       await driver.waitForComponent(ON.id('connect-title'), 10000);
       const ui = (await window.getLastWindow((await delegator.getCurrentTopAbility()).context)).getUIContext();
       const row: XopcChatRow = { id: 'stable-paragraph', role: 'assistant', text: 'A streamed paragraph', blocks: [{ id: 'same-block', kind: 'text', text: 'A streamed paragraph', presentation: 'answer' }] };
@@ -92,7 +92,7 @@ export default function richChatTest(): void {
     it('preservesExpandedStepsAndToolDetailsAcrossSnapshotReplacement', 0, async (): Promise<void> => {
       const delegator = abilityDelegatorRegistry.getAbilityDelegator();
       const driver = Driver.create();
-      await delegator.startAbility({ bundleName: 'ai.xopc.mobile', abilityName: 'EntryAbility' });
+      await delegator.startAbility({ bundleName: 'ai.xopc.xopc', abilityName: 'EntryAbility' });
       await driver.waitForComponent(ON.id('connect-title'), 10000);
       const ui = (await window.getLastWindow((await delegator.getCurrentTopAbility()).context)).getUIContext();
       const content = new ComponentContent(ui, wrapBuilder(fixtureBuilder), { row: executionRow() } as FixtureArgs);

@@ -49,7 +49,7 @@ process.on('uncaughtException', error => {
   writeFileSync(join(output, 'result.json'), JSON.stringify({ at: new Date().toISOString(), status: 'failed', target, passed, skipped, error: error.message }, null, 2));
   console.error(error); process.exit(1);
 });
-command('shell', 'aa', 'start', '-a', 'EntryAbility', '-b', 'ai.xopc.mobile');
+command('shell', 'aa', 'start', '-a', 'EntryAbility', '-b', 'ai.xopc.xopc');
 await delay(1200);
 let nodes = await until('root', nodes => nodes.some(item => item.id === 'chat-message-list' || item.id === 'chat-welcome'));
 node(nodes, 'main-tab-dock');
@@ -125,8 +125,8 @@ assert(!nodes.some(item => item.id === 'main-tab-dock'), 'Dock overlaps keyboard
 command('shell', 'uitest', 'uiInput', 'text', '/'); await delay(800); nodes = await tree('palette');
 node(nodes, 'chat-command-palette'); assert.equal(node(nodes, 'chat-composer').text, '/'); await screen('palette');
 command('shell', 'uitest', 'uiInput', 'keyEvent', 'Back'); nodes = await tree('draft-keyboard-closed');
-command('shell', 'aa', 'force-stop', 'ai.xopc.mobile');
-command('shell', 'aa', 'start', '-a', 'EntryAbility', '-b', 'ai.xopc.mobile');
+command('shell', 'aa', 'force-stop', 'ai.xopc.xopc');
+command('shell', 'aa', 'start', '-a', 'EntryAbility', '-b', 'ai.xopc.xopc');
 await delay(1500); nodes = await tree('draft-after-restart');
 assert.equal(node(nodes, 'chat-composer').text, '/'); passed.push('encrypted draft survives cold restart');
 click(node(nodes, 'chat-open-drawer')); nodes = await tree('history');

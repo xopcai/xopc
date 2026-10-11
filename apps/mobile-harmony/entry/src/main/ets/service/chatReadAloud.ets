@@ -59,7 +59,7 @@ export class XopcChatReadAloud {
       await session.activate();
       if (generation !== this.generation) return;
       const agent = await wantAgent.getWantAgent({
-        wants: [{ bundleName: 'ai.xopc.mobile', abilityName: 'EntryAbility' }],
+        wants: [{ bundleName: 'ai.xopc.xopc', abilityName: 'EntryAbility' }],
         actionType: wantAgent.OperationType.START_ABILITY,
         requestCode: 0,
         actionFlags: [wantAgent.WantAgentFlags.UPDATE_PRESENT_FLAG]
