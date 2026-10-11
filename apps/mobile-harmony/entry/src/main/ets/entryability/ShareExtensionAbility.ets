@@ -42,7 +42,7 @@ export default class XopcShareExtensionAbility extends ShareExtensionAbility {
       const intake: XopcIncomingShare | undefined = incomingShare(title, values, attachments);
       if (intake) {
         await this.context.startAbility({
-          bundleName: 'ai.xopc.mobile', abilityName: 'EntryAbility', uri: SHARE_INTAKE_URI,
+          bundleName: 'ai.xopc.xopc', abilityName: 'EntryAbility', uri: SHARE_INTAKE_URI,
           parameters: { xopcSharePayload: encodeShareHandoff(title, values, attachments) }
         });
       }

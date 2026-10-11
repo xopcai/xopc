@@ -36,7 +36,7 @@ process.on('uncaughtException', error => {
   writeFileSync(join(output, 'result.json'), JSON.stringify({ status: 'failed', passed, error: error.message }));
   console.error(error); process.exit(1);
 });
-run('shell', 'aa', 'start', '-a', 'EntryAbility', '-b', 'ai.xopc.mobile');
+run('shell', 'aa', 'start', '-a', 'EntryAbility', '-b', 'ai.xopc.xopc');
 let nodes = await tree('root');
 get(nodes, 'pairing-scan');
 assert(!nodes.some(n => n.id === 'pairing-link'), 'Manual input should not clutter the landing page');
