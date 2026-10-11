@@ -17,6 +17,8 @@ import type { StreamingSttEvent } from '../../../media-understanding/types.js';
 import { alibabaTranscriptionProvider } from '../../stt/providers/alibaba-transcription.js';
 import { VoiceRealtimeRuntime } from '../runtime.js';
 
+vi.mock('../../../gateway/security/device-request-proof.js', () => ({ verifyDeviceConnectionProof: () => true }));
+
 vi.mock('../../tts/speak-core.js', () => ({
   prepareSpeechStreamSession: vi.fn(),
   speakStream: vi.fn(async () => ({
