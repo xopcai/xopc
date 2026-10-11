@@ -10,7 +10,6 @@ import { buildBrowserTabAgentContext } from '../browser-tab.js';
 import { buildFileAgentContext } from '../file-context.js';
 import { buildUserAssertionAgentContext } from '../user-assertion-context.js';
 import { reconcileAssertion } from '../../../user-model/index.js';
-import { decodeMcpResourceId, encodeMcpResourceId } from '../../mcp/mcp-resource-id.js';
 import { isSessionSourceBinding, parseTurnContextRefs } from '../types.js';
 import type { FileSpaceService } from '../../../files/file-service.js';
 
@@ -53,15 +52,14 @@ describe('task references', () => {
       { kind: 'file', sourceId: ' f ', expectedVersion: '3' },
       { kind: 'session', sourceId: ' s ', expectedVersion: '4' },
       { kind: 'browser_tab', sourceId: ' b ', expectedVersion: '5' },
-      { kind: 'mcp_resource', sourceId: ' m ', expectedVersion: '6' },
       { kind: 'user_assertion', sourceId: ' a ', expectedVersion: '7' },
     ])).toEqual([
       { kind: 'file', sourceId: 'f', expectedVersion: '3' },
       { kind: 'session', sourceId: 's', expectedVersion: '4' },
       { kind: 'browser_tab', sourceId: 'b', expectedVersion: '5' },
-      { kind: 'mcp_resource', sourceId: 'm', expectedVersion: '6' },
       { kind: 'user_assertion', sourceId: 'a', expectedVersion: '7' },
     ]);
+    expect(parseTurnContextRefs([{ kind: 'mcp_resource', sourceId: 'docs' }])).toBeNull();
     expect(isSessionSourceBinding({ kind: 'task', sourceId: 't', version: '2', attachedAt: 1 })).toBe(false);
   });
 
@@ -95,10 +93,7 @@ describe('task references', () => {
     expect(buildSessionAgentContext(metadata, [], 'stale')).toBeNull();
   });
 
-  it('preserves opaque MCP identities and rejects stale browser documents', () => {
-    const resource = { serverId: 'docs', uri: 'file:///launch plan.md' };
-    expect(decodeMcpResourceId(encodeMcpResourceId(resource))).toEqual(resource);
-    expect(decodeMcpResourceId('invalid')).toBeNull();
+  it('rejects stale browser documents', () => {
 
     const observation = {
       sessionId: 'browser-session', tabId: '7', revision: 1, documentId: 'doc-1',

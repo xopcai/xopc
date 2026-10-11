@@ -1,14 +1,7 @@
 import { CliConnectorDialog } from './cli-connector-dialog';
 import * as Dialog from '@radix-ui/react-dialog';
-import {
-  Content as TooltipContent,
-  Portal as TooltipPortal,
-  Provider as TooltipProvider,
-  Root as TooltipRoot,
-  Trigger as TooltipTrigger,
-} from '@radix-ui/react-tooltip';
-import { Database, FileText, KeyRound, Loader2, PlugZap, Save, ShieldCheck, Trash2, Wrench, X } from 'lucide-react';
-import { useCallback, useMemo, useState } from 'react';
+import { Database, Loader2, Save, Trash2, X } from 'lucide-react';
+import { useCallback, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
@@ -20,31 +13,21 @@ import { interaction } from '@/lib/interaction';
 import {
   removeConnector,
   syncConnectorSource,
-  testConnector,
   updateConnectorConfig,
   type ConnectorDefinition,
-  type ConnectorHealthResult,
-  type ConnectorHealthStatus,
   type ConnectorInstance,
 } from '../connectors-api';
-import { McpToolsListDialog } from '../mcp/mcp-tools-list-dialog';
 import { connectorDescription } from '../utils/connector-copy';
 import { formatConnectorMessage } from '../utils/connector-i18n';
 import { ComposioConnectorPanel } from './composio-connector-panel';
 import { ConnectorLogo } from './connector-logo';
 
-type ConnectorDetailTab = 'health' | 'tools' | 'resources' | 'prompts' | 'permissions' | 'config';
 
 const inputClass = cn(
   'w-full rounded-lg border border-edge bg-surface-panel px-3 py-2 text-sm text-fg',
   'placeholder:text-fg-subtle',
   settingsInputFocusClass,
 );
-
-function healthStatusLabel(status: ConnectorHealthStatus | undefined, t: ConnectorsSettingsMessages): string {
-  if (!status) return t.healthNotTested;
-  return t.healthStatusLabels[status] ?? status;
-}
 
 function initialConfigDraft(definition: ConnectorDefinition | undefined, instance: ConnectorInstance): Record<string, string> {
   const draft: Record<string, string> = {};
@@ -63,67 +46,12 @@ function parseConfigValue(type: string, raw: string): unknown {
   return trimmed || undefined;
 }
 
-function CapabilityListItem({
-  title,
-  description,
-  meta,
-}: {
-  title: string;
-  description?: string;
-  meta?: string;
-}) {
-  const descriptionNode = description ? (
-    <TooltipProvider delayDuration={300} skipDelayDuration={100}>
-      <TooltipRoot>
-        <TooltipTrigger asChild>
-          <p
-            tabIndex={0}
-            title={description}
-            className={cn(
-              'mt-1 line-clamp-3 cursor-help text-xs leading-5 text-fg-muted',
-              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
-            )}
-          >
-            {description}
-          </p>
-        </TooltipTrigger>
-        <TooltipPortal>
-          <TooltipContent
-            side="top"
-            align="start"
-            sideOffset={6}
-            collisionPadding={12}
-            className="!z-[10000] max-h-[min(16rem,45vh)] max-w-[min(32rem,calc(100vw-2rem))] overflow-y-auto rounded-md border border-edge bg-surface-panel px-2.5 py-2 text-left text-xs leading-5 text-fg shadow-popover"
-          >
-            <span className="whitespace-pre-wrap break-words">{description}</span>
-          </TooltipContent>
-        </TooltipPortal>
-      </TooltipRoot>
-    </TooltipProvider>
-  ) : null;
-
-  return (
-    <div className="rounded-lg border border-edge bg-surface-panel px-3 py-2.5">
-      <div className="flex min-w-0 items-start justify-between gap-3">
-        <p className="min-w-0 break-all font-mono text-xs font-medium leading-5 text-fg">{title}</p>
-        {meta ? (
-          <span className="shrink-0 rounded-md bg-surface-hover px-1.5 py-0.5 text-[11px] leading-4 text-fg-subtle">
-            {meta}
-          </span>
-        ) : null}
-      </div>
-      {descriptionNode}
-    </div>
-  );
-}
-
 function StandardInstalledConnectorDetailDialog({
   instance,
   definition,
   onClose,
   onChanged,
   t,
-  mcp,
 }: {
   instance: ConnectorInstance;
   definition?: ConnectorDefinition;
@@ -132,15 +60,11 @@ function StandardInstalledConnectorDetailDialog({
   t: ConnectorsSettingsMessages;
   mcp: McpSettingsMessages;
 }) {
-  const [testing, setTesting] = useState(false);
   const [removing, setRemoving] = useState(false);
   const [removeConfirmOpen, setRemoveConfirmOpen] = useState(false);
   const [savingConfig, setSavingConfig] = useState(false);
   const [syncingSource, setSyncingSource] = useState(false);
   const [sourceSyncCount, setSourceSyncCount] = useState<number | null>(null);
-  const [health, setHealth] = useState<ConnectorHealthResult | null>(null);
-  const [detailTab, setDetailTab] = useState<ConnectorDetailTab>('health');
-  const [toolsDialogOpen, setToolsDialogOpen] = useState(false);
   const [configDraft, setConfigDraft] = useState(() => initialConfigDraft(definition, instance));
   const [error, setError] = useState<string | null>(null);
 
@@ -148,36 +72,10 @@ function StandardInstalledConnectorDetailDialog({
   const supportsConfigEdit = (instance.materialized.type === 'mcp' || instance.materialized.type === 'memorySource')
     && editableConfigFields.length > 0
     && (definition?.setup.secrets ?? []).length === 0;
-  const lastToolCount = health ? health.toolCount : instance.usage.lastToolCount;
   const isMcp = instance.materialized.type === 'mcp';
   const isComposio = instance.materialized.type === 'composio';
   const isMemorySource = instance.materialized.type === 'memorySource';
   const description = definition ? connectorDescription(definition, t) : null;
-  const tabItems = useMemo(() => {
-    const items = [
-      ['health', ShieldCheck, t.detailHealth],
-      ['tools', Wrench, `${t.detailTools} ${health ? health.toolCount : instance.usage.lastToolCount ?? ''}`],
-      ['resources', Database, `${t.detailResources} ${health ? health.resourceCount : instance.usage.lastResourceCount ?? ''}`],
-      ['prompts', FileText, `${t.detailPrompts} ${health ? health.promptCount : instance.usage.lastPromptCount ?? ''}`],
-      ['permissions', KeyRound, t.detailPermissions],
-    ] as const;
-    return supportsConfigEdit ? [...items, ['config', Database, t.connectorConfigLabel] as const] : items;
-  }, [health, instance.usage.lastPromptCount, instance.usage.lastResourceCount, instance.usage.lastToolCount, supportsConfigEdit, t]);
-
-  const runTest = useCallback(async () => {
-    setTesting(true);
-    setError(null);
-    try {
-      const result = await testConnector(instance.instanceId);
-      setHealth(result);
-      if (result.toolCount > 0) setDetailTab('tools');
-      void onChanged();
-    } catch (testError) {
-      setError(testError instanceof Error ? testError.message : String(testError));
-    } finally {
-      setTesting(false);
-    }
-  }, [instance.instanceId, onChanged]);
 
   const remove = useCallback(async () => {
     setRemoving(true);
@@ -204,7 +102,6 @@ function StandardInstalledConnectorDetailDialog({
       }
       await updateConnectorConfig(instance.instanceId, { config });
       await onChanged();
-      setDetailTab('health');
     } catch (configError) {
       setError(configError instanceof Error ? configError.message : String(configError));
     } finally {
@@ -265,141 +162,19 @@ function StandardInstalledConnectorDetailDialog({
           <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
             {error ? <p className="mb-4 rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-600">{error}</p> : null}
 
-            {isMcp ? <>
-            <div className="flex flex-wrap gap-2">
-              {tabItems.map(([id, Icon, label]) => (
-                <button
-                  key={id}
-                  type="button"
-                  className={cn(
-                    'inline-flex h-8 items-center gap-1.5 rounded-md border px-2.5 text-xs',
-                    detailTab === id
-                      ? 'border-accent bg-accent-soft text-accent-fg'
-                      : 'border-edge bg-surface-base text-fg-muted hover:text-fg',
-                  )}
-                  onClick={() => setDetailTab(id)}
-                >
-                  <Icon className="size-3.5" aria-hidden />
-                  {label}
-                </button>
-              ))}
-            </div>
-
-            <div className="mt-4 rounded-xl border border-edge bg-surface-base p-3 text-sm">
-              {detailTab === 'health' ? (
-                <div className="space-y-1 text-fg-muted">
-                  <p>
-                    {t.statusLabel}{' '}
-                    <span className={health?.ok ? 'font-medium text-emerald-700 dark:text-emerald-300' : 'font-medium text-fg'}>
-                      {healthStatusLabel(health?.status ?? instance.usage.lastHealthStatus, t)}
-                    </span>
-                  </p>
-                  <p>
-                    {t.lastCheckLabel}{' '}
-                    {instance.usage.lastHealthCheckAt ? new Date(instance.usage.lastHealthCheckAt).toLocaleString() : t.never}
-                  </p>
-                  {health?.action ? <p>{health.action}</p> : null}
-                </div>
-              ) : null}
-              {detailTab === 'tools' ? (
-                health?.tools.length ? (
-                  <div className="grid gap-3">
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="text-xs text-fg-muted">
-                        {formatConnectorMessage(t.toolsAvailable, { count: String(health.tools.length) })}
-                      </p>
-                      <Button type="button" variant="ghost" className="h-7 text-xs" onClick={() => setToolsDialogOpen(true)}>
-                        {mcp.viewAllTools}
-                      </Button>
-                    </div>
-                    <div className="grid gap-2">
-                      {health.tools.slice(0, 8).map((tool) => (
-                        <CapabilityListItem
-                          key={tool.name}
-                          title={tool.shortName ?? tool.name}
-                          description={tool.description}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                ) : (
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <p className="text-fg-muted">
-                      {lastToolCount
-                        ? formatConnectorMessage(t.toolsLastCheckSummary, { count: String(lastToolCount) })
-                        : t.toolsRunTestHint}
-                    </p>
-                    <Button type="button" variant="secondary" disabled={testing} onClick={() => void runTest()}>
-                      {testing ? <Loader2 className="size-4 animate-spin" /> : <PlugZap className="size-4" />}
-                      {t.test}
-                    </Button>
-                  </div>
-                )
-              ) : null}
-              {detailTab === 'resources' ? (
-                health?.resources.length ? (
-                  <div className="grid gap-2">
-                    {health.resources.slice(0, 8).map((resource) => (
-                      <CapabilityListItem
-                        key={resource.uri}
-                        title={resource.title ?? resource.name}
-                        description={resource.uri}
-                        meta={resource.mimeType}
-                      />
-                    ))}
-                  </div>
-                ) : <p className="text-fg-muted">{t.resourcesRunTestHint}</p>
-              ) : null}
-              {detailTab === 'prompts' ? (
-                health?.prompts.length ? (
-                  <div className="grid gap-2">
-                    {health.prompts.slice(0, 8).map((prompt) => (
-                      <CapabilityListItem
-                        key={prompt.name}
-                        title={prompt.title ?? prompt.name}
-                        description={prompt.description}
-                        meta={
-                          prompt.argumentCount
-                            ? formatConnectorMessage(t.promptArgumentCount, { count: String(prompt.argumentCount) })
-                            : undefined
-                        }
-                      />
-                    ))}
-                  </div>
-                ) : <p className="text-fg-muted">{t.promptsRunTestHint}</p>
-              ) : null}
-              {detailTab === 'permissions' ? (
-                <div className="space-y-1 text-fg-muted">
-                  <p>{formatConnectorMessage(t.secretsConfigured, { count: String(Object.values(instance.secretStatus).filter(Boolean).length) })}</p>
-                  <p>
-                    {instance.materialized.type === 'mcp'
-                      ? formatConnectorMessage(t.runtimeServerLabel, {
-                          runtime: instance.materialized.type.toUpperCase(),
-                          serverId: instance.materialized.serverId,
-                        })
-                      : formatConnectorMessage(t.runtimeLabel, { runtime: instance.materialized.type.toUpperCase() })}
-                  </p>
-                  <p>{instance.materialized.type === 'mcp' ? t.mcpPolicyHint : t.connectorPolicyHint}</p>
-                </div>
-              ) : null}
-              {detailTab === 'config' && supportsConfigEdit ? (
-                <div className="grid gap-3">
-                  {editableConfigFields.map((field) => (
-                    <label key={field.key} className="flex flex-col gap-1.5">
-                      <span className="text-sm font-medium text-fg">{field.label}</span>
-                      {field.description ? <span className="text-xs text-fg-subtle">{field.description}</span> : null}
-                      <input
-                        className={inputClass}
-                        value={configDraft[field.key] ?? ''}
-                        placeholder={field.placeholder}
-                        onChange={(event) => setConfigDraft((prev) => ({ ...prev, [field.key]: event.currentTarget.value }))}
-                      />
-                    </label>
-                  ))}
-                </div>
-              ) : null}
-            </div>
-            </> : null}
+            {isMcp ? (
+              <div className="space-y-3 rounded-xl border border-edge bg-surface-base p-3 text-sm">
+                <p className="text-fg-muted">{t.connectorConfigLabel} · xopc mcp list / login / logout</p>
+                {supportsConfigEdit ? editableConfigFields.map(field => (
+                  <label key={field.key} className="flex flex-col gap-1.5">
+                    <span className="font-medium text-fg">{field.label}</span>
+                    {field.description ? <span className="text-xs text-fg-subtle">{field.description}</span> : null}
+                    <input className={inputClass} value={configDraft[field.key] ?? ''} placeholder={field.placeholder}
+                      onChange={event => setConfigDraft(previous => ({ ...previous, [field.key]: event.currentTarget.value }))} />
+                  </label>
+                )) : null}
+              </div>
+            ) : null}
 
             {isComposio ? (
               <ComposioConnectorPanel instance={instance} t={t} onChanged={onChanged} />
@@ -464,37 +239,16 @@ function StandardInstalledConnectorDetailDialog({
 
           <div className="flex shrink-0 flex-wrap justify-end gap-2 border-t border-edge-subtle px-6 py-4">
             <Button variant="secondary" onClick={onClose}>{t.modalClose}</Button>
-            {((isMcp && detailTab === 'config') || isMemorySource) && supportsConfigEdit ? (
+            {(isMcp || isMemorySource) && supportsConfigEdit ? (
               <Button variant="primary" disabled={savingConfig} onClick={() => void saveConfig()}>
                 {savingConfig ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
                 {t.modalSave}
-              </Button>
-            ) : null}
-            {isMcp ? (
-              <Button variant="secondary" disabled={testing} onClick={() => void runTest()}>
-                {testing ? <Loader2 className="size-4 animate-spin" /> : <PlugZap className="size-4" />}
-                {t.test}
               </Button>
             ) : null}
           </div>
         </Dialog.Content>
       </Dialog.Portal>
 
-      {instance.materialized.type === 'mcp' ? (
-        <McpToolsListDialog
-          open={toolsDialogOpen}
-          onOpenChange={setToolsDialogOpen}
-          serverId={instance.materialized.serverId}
-          title={formatConnectorMessage(t.installedToolsDialogTitle, { name: instance.displayName })}
-          subtitle={t.installedToolsDialogSubtitle}
-          searchPlaceholder={mcp.toolsDialogSearchPlaceholder}
-          searchEmptyLabel={mcp.toolsDialogSearchEmpty}
-          emptyLabel={t.toolsRunTestHint}
-          closeLabel={mcp.toolsDialogClose}
-          tools={health?.tools ?? []}
-          stripPrefix={`${instance.materialized.serverId}__`}
-        />
-      ) : null}
       <ConfirmDialog
         open={removeConfirmOpen}
         title={formatConnectorMessage(t.removeConfirmTitle, { name: instance.displayName })}

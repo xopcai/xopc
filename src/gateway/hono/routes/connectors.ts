@@ -6,7 +6,6 @@ import { resolveDefaultAgentId } from '../../../agent/agent-scope.js';
 import { updateConnectorAccount } from '../../../storage/sqlite/connector-account-repository.js';
 import { getAuthorizationAttempt } from '../../../connectors/authorization-attempts.js';
 import { resumeApprovedConnectorAction } from '../../../connectors/approval-resume.js';
-import { getMcpOAuthManager } from '../../../agent/mcp/oauth/mcp-oauth-manager.js';
 import { ConfigPersistenceError, persistConfigMutation } from '../../../config/config-mutation.js';
 import type { Config } from '../../../config/schema.js';
 import { AgentCatalogRepository } from '../../../agent-catalog/repository.js';
@@ -34,7 +33,7 @@ import { ComposioSessionsAdapter, resolveComposioApiKey } from '../../../connect
 import { activateComposioBackend, addComposioBackend, ensureComposioBackend, getComposioBackend, listComposioBackends, removeComposioBackend } from '../../../connectors/composio-backends.js';
 import { inspectManagedComposioStatus } from '../../../connectors/composio-managed-client.js';
 import { appendComposioTriggerEvent, listComposioTriggerEvents } from '../../../connectors/composio-triggers.js';
-import { previewConnectorDefinition, testConnectorInstance } from '../../../connectors/health.js';
+import { testConnectorInstance } from '../../../connectors/health.js';
 import { installConnector, installConnectorDefinition, uninstallConnector, updateConnectorConfig } from '../../../connectors/install.js';
 import { getConnectorInstance, getInstalledConnectorDefinition, listConnectorInstances } from '../../../connectors/instances.js';
 import { setConnectorEnabled } from '../../../connectors/lifecycle.js';
@@ -99,27 +98,7 @@ export function registerConnectorRoutes(authenticated: Hono, deps: Authenticated
         const connected = listConnectorAccounts({ principalId: 'local-owner', connectorId: instance.connectorId }).some(account => account.enabled && account.currentConnectionId && listConnectorConnections({ principalId: 'local-owner', connectorId: instance.connectorId }).some(connection => connection.id === account.currentConnectionId && connection.status === 'active' && connection.provider === 'cli' && connection.metadata.runtimeInstanceId === instance.instanceId));
         return { ...instance, status: connected ? 'connected' as const : 'installed' as const, authStatus: connected ? 'connected' as const : 'missing' as const, connectionStatus: connected ? 'connected' as const : 'disconnected' as const };
       }
-      if (!instance.enabled || instance.materialized.type !== 'mcp') return instance;
-      const server = config.mcp?.servers?.[instance.materialized.serverId];
-      if (!server) return instance;
-      const oauth = await getMcpOAuthManager().status(instance.materialized.serverId, server);
-      if (!oauth.configured) return instance;
-      if (oauth.status === 'connected') {
-        return { ...instance, authStatus: 'connected' as const, connectionStatus: 'connected' as const };
-      }
-      if (oauth.status === 'authorizing') {
-        return { ...instance, status: 'connecting' as const, authStatus: 'unknown' as const, connectionStatus: 'connecting' as const };
-      }
-      if (oauth.status === 'error') {
-        return {
-          ...instance,
-          status: 'failed' as const,
-          authStatus: 'unauthorized' as const,
-          connectionStatus: 'error' as const,
-          lastError: oauth.session?.error ?? instance.lastError,
-        };
-      }
-      return { ...instance, status: 'unauthorized' as const, authStatus: 'missing' as const, connectionStatus: 'disconnected' as const };
+      return instance;
     }));
     const connections = listConnectorConnections({ principalId: 'local-owner' });
     return c.json({
@@ -480,23 +459,6 @@ export function registerConnectorRoutes(authenticated: Hono, deps: Authenticated
     return c.json({ ok: true, payload: { connector, instances } });
   });
 
-  authenticated.post('/api/connectors/preview', strictRateLimitMiddleware, async (c) => {
-    const body = await c.req.json().catch(() => ({}));
-    const definition = body && typeof body === 'object' && !Array.isArray(body) && body.definition && typeof body.definition === 'object' && !Array.isArray(body.definition)
-      ? body.definition as ConnectorDefinition
-      : undefined;
-    if (!definition) {
-      return c.json({ ok: false, error: 'Missing connector definition.' }, 400);
-    }
-    const input: ConnectorInstallInput = body && typeof body === 'object' && !Array.isArray(body) ? body : {};
-    try {
-      const preview = await previewConnectorDefinition(service.currentConfig as Config, definition, input);
-      return c.json({ ok: true, payload: { preview } });
-    } catch (error) {
-      return c.json({ ok: false, error: errorMessage(error) }, 400);
-    }
-  });
-
   authenticated.get('/api/connectors/composio/:toolkit/health', async (c) => {
     const health = await inspectComposioConnectorHealth(c.req.param('toolkit'));
     return c.json({ ok: health.status !== 'degraded', payload: { health } });
@@ -685,11 +647,11 @@ export function registerConnectorRoutes(authenticated: Hono, deps: Authenticated
     if (!instance) {
       return c.json({ ok: false, error: `Connector instance not found: ${instanceId}` }, 404);
     }
-    if (instance.materialized.type !== 'mcp' && instance.materialized.type !== 'cli') {
-      return c.json({ ok: false, error: `Connector type "${instance.materialized.type}" does not support MCP health checks.` }, 400);
+    if (instance.materialized.type !== 'cli') {
+      return c.json({ ok: false, error: `Connector type "${instance.materialized.type}" does not support CLI health checks. Use xopc mcp list for MCP diagnostics.` }, 400);
     }
     try {
-      const result = await testConnectorInstance(config, instance.materialized.type === 'mcp' ? instance.materialized.serverId : instance.instanceId);
+      const result = await testConnectorInstance(config, instance.instanceId);
       await persistConfigMutation({
         config,
         mutate: () => recordConnectorHealthUsage(config, instance.instanceId, result),
@@ -766,13 +728,6 @@ export function registerConnectorRoutes(authenticated: Hono, deps: Authenticated
     const instanceId = c.req.param('id');
     const config = service.currentConfig as Config;
     try {
-      const definition = getInstalledConnectorDefinition(config, instanceId);
-      const installed = getConnectorInstance(config, instanceId);
-      const serverId = installed?.materialized.type === 'mcp' ? installed.materialized.serverId : undefined;
-      const rawServer = serverId ? config.mcp?.servers?.[serverId] : undefined;
-      if (definition?.auth.mode === 'oauth' && definition.runtime.type === 'mcp' && rawServer) {
-        await getMcpOAuthManager().disconnect(serverId!, rawServer);
-      }
       const instance = await persistConfigMutation({
         config,
         mutate: () => uninstallConnector(config, instanceId),

@@ -123,7 +123,7 @@ export const CHINA_CONNECTORS: readonly ConnectorDefinition[] = [
       serverId: 'tencent_meeting',
       serverTemplate: {
         url: 'https://mcp.meeting.tencent.com/mcp',
-        transport: 'streamable-http',
+        type: 'http',
         headers: { 'X-Tencent-Meeting-Token': '{{secrets.token}}' },
       },
     },
@@ -153,7 +153,7 @@ export const CHINA_CONNECTORS: readonly ConnectorDefinition[] = [
     runtime: {
       type: 'mcp', serverId: 'tencent_docs',
       serverTemplate: {
-        url: 'https://docs.qq.com/openapi/mcp', transport: 'streamable-http',
+        url: 'https://docs.qq.com/openapi/mcp', type: 'http',
         headers: { Authorization: '{{secrets.token}}' },
       },
     },
@@ -230,7 +230,7 @@ export const CHINA_CONNECTORS: readonly ConnectorDefinition[] = [
     runtime: {
       type: 'mcp', serverId: 'bailian_web_search',
       serverTemplate: {
-        url: 'https://dashscope.aliyuncs.com/api/v1/mcps/WebSearch/mcp', transport: 'streamable-http',
+        url: 'https://dashscope.aliyuncs.com/api/v1/mcps/WebSearch/mcp', type: 'http',
         headers: { Authorization: 'Bearer {{secrets.apiKey}}' },
       },
     },
@@ -255,7 +255,7 @@ export const CHINA_CONNECTORS: readonly ConnectorDefinition[] = [
     runtime: {
       type: 'mcp', serverId: 'dida365',
       serverTemplate: {
-        url: 'https://mcp.dida365.com', transport: 'streamable-http',
+        url: 'https://mcp.dida365.com', type: 'http',
         headers: { Authorization: 'Bearer {{secrets.token}}' },
       },
     },
@@ -280,7 +280,7 @@ export const CHINA_CONNECTORS: readonly ConnectorDefinition[] = [
     runtime: {
       type: 'mcp', serverId: 'flomo',
       serverTemplate: {
-        url: 'https://flomoapp.com/mcp', transport: 'streamable-http',
+        url: 'https://flomoapp.com/mcp', type: 'http',
         headers: { Authorization: 'Bearer {{secrets.token}}' },
       },
     },

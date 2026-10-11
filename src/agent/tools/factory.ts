@@ -392,7 +392,8 @@ export class AgentToolsFactory {
       }
       return this.deps.getCurrentContext();
     };
-    const currentAccess = () => resolveUserContextSessionAccess(this.deps.getConfig?.(), currentConversationId());
+    const currentAccess = () => resolveUserContextSessionAccess(this.deps.getConfig?.(),
+      getEmbeddedExecutionSession() ?? currentConversationId());
     const knowledgeWritePolicy = () => this.deps.getConfig?.()?.userContext.knowledgeMemory.writePolicy ?? 'deny';
     const currentProjectId = () => {
       const key = currentConversationId();

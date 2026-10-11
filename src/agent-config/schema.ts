@@ -113,10 +113,6 @@ export const WorkflowPolicySchema = z.object({
 }).strict();
 
 export const RuntimePolicySchema = z.object({
-  toolDiscovery: z.object({
-    enabled: z.boolean().default(false),
-    mcpServer: z.string().trim().min(1).optional(),
-  }).strict().optional(),
   codemode: z.object({
     enabled: z.boolean().default(false),
     timeoutMs: z.number().int().min(1).max(60_000).default(60_000),

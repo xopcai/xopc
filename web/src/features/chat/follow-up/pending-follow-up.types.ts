@@ -46,7 +46,7 @@ export function projectPendingFollowUps(inputs: readonly unknown[]): PendingFoll
           const ref = value as Record<string, unknown>;
           if (
             (ref.kind !== 'note' && ref.kind !== 'file' && ref.kind !== 'session'
-              && ref.kind !== 'browser_tab' && ref.kind !== 'mcp_resource')
+              && ref.kind !== 'browser_tab')
             || typeof ref.sourceId !== 'string'
             || typeof ref.version !== 'string'
             || typeof ref.title !== 'string'

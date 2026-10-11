@@ -25,7 +25,8 @@ import { resolvePromptCachePolicy } from '../../providers/prompt-cache-plan.js';
 import { AgentRunSupervisor } from '../orchestration/agent-run-supervisor.js';
 import { projectTurnOutcome } from '../../session/turn-outcome-projector.js';
 import { appendDynamicPromptSection } from '../prompt/cache-boundary.js';
-import { materializeDeferredMcpTools } from './mcp-discovery.js';
+import { prepareNativeMcpConfig } from '../mcp/native-mcp.js';
+import { materializeNativeExternalTools } from './external-tool-discovery.js';
 
 const log = createLogger('EmbeddedTurnForSession');
 
@@ -196,11 +197,8 @@ async function runEmbeddedTurnForSessionInner(params: RunEmbeddedForSessionParam
     }
     const thinkingLevel = (params.thinkingOverride as ThinkingLevel | undefined) ?? agent.state.thinkingLevel;
     const workspaceDir = agentManager.getResolvedWorkspaceForSession(conversationId);
-    const toolDiscovery = config ? resolveEffectiveAgentProfileForSession(conversationId).config.runtime.toolDiscovery : undefined;
-    if (toolDiscovery?.enabled && toolDiscovery.mcpServer) {
-      tools.push(...await materializeDeferredMcpTools({ conversationId, workspaceDir, config,
-        server: toolDiscovery.mcpServer, tools }));
-    }
+    tools.push(...await materializeNativeExternalTools({ conversationId, tools }));
+    const mcp = config ? await prepareNativeMcpConfig(config, workspaceDir) : undefined;
     const promptCachePolicy = resolvePromptCachePolicy(
       config
         ? resolveEffectiveAgentProfileForSession(conversationId).config.runtime.promptCache
@@ -308,7 +306,7 @@ async function runEmbeddedTurnForSessionInner(params: RunEmbeddedForSessionParam
             systemPrompt,
             thinkingLevel,
             codemode: config ? resolveEffectiveAgentProfileForSession(conversationId).config.runtime.codemode : undefined,
-            toolDiscovery,
+            mcp,
             promptCachePolicy,
             compactionPolicy: resolveCompactionPolicy(config),
             workspaceDir,

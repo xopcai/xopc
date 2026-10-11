@@ -49,7 +49,7 @@ describe('lazy route bundles', () => {
     expect(findAuthenticatedLazyRouteBundle('/api/home-other')).toBeUndefined();
   });
   it('maps Agent Plugin lifecycle before the native extension bundle', () => {
-    expect(findAuthenticatedLazyRouteBundle('/api/mcp/servers/plugin%2Fdemo%2Fmain/oauth/callback')?.id).toBe('mcp');
+    expect(findAuthenticatedLazyRouteBundle('/api/mcp/servers/plugin_demo/oauth/callback')).toBeUndefined();
     expect(findAuthenticatedLazyRouteBundle('/api/extensions/agent-plugins/demo/rollback')?.id).toBe('agent-plugins');
     for (const path of ['/api/extensions/inspect', '/api/extensions/install', '/api/extensions/agent-plugins/demo', '/api/extensions/agent-plugins/demo/activation', '/api/extensions/agent-plugins/demo/update', '/api/extensions/agent-plugins/demo/mcp/main/auth']) {
       expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('agent-plugins');
@@ -249,8 +249,9 @@ describe('lazy route bundles', () => {
   });
 
   it('routes MCP resources through the MCP bundle without capturing nearby paths', () => {
-    expect(findAuthenticatedLazyRouteBundle('/api/mcp/resources')?.id).toBe('mcp');
-    expect(findAuthenticatedLazyRouteBundle('/api/mcp/servers/docs')?.id).toBe('mcp');
+    expect(findAuthenticatedLazyRouteBundle('/api/mcp/resources')).toBeUndefined();
+    expect(findAuthenticatedLazyRouteBundle('/api/mcp/servers/docs')).toBeUndefined();
+    expect(findAuthenticatedLazyRouteBundle('/api/mcp/servers')?.id).toBe('mcp');
     expect(findAuthenticatedLazyRouteBundle('/api/mcpish/resources')).toBeUndefined();
   });
 

@@ -25,3 +25,13 @@ it('requires a local read contract, rechecks it on execution and never trusts re
   await expect(call(approved.revision)).rejects.toThrow('unavailable');
   expect(execute).toHaveBeenCalledTimes(1);
 });
+
+it('preserves provider connection recovery candidates through the policy adapter', async () => {
+  const candidates = vi.fn(async () => [{ candidateRef: 'app', source: 'mcp' as const, label: 'App', summary: 'App connection',
+    capabilities: ['search'], reason: 'reauthorize' as const }]);
+  const provider: ExternalToolProvider = { source: 'mcp', search: async () => [], describe: async () => undefined,
+    execute: vi.fn(), connectionCandidates: candidates };
+  const wrapped = withExternalReadPolicy(provider, () => undefined);
+  await expect(wrapped.connectionCandidates?.('app')).resolves.toMatchObject([{ candidateRef: 'app' }]);
+  expect(candidates).toHaveBeenCalledWith('app');
+});

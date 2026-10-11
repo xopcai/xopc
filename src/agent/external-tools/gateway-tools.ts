@@ -15,12 +15,13 @@ import { personalRequestForExecution } from '../../personal-agent/request-reposi
 import { parseExternalToolRef } from './refs.js';
 import { listConnectorInstances } from '../../connectors/instances.js';
 import { connectionCandidates, resolveConnectionCandidate } from '../../connectors/connection-candidates.js';
-import { parsePluginMcpCandidateRef, resolvePluginMcpConnectionCandidate } from '../../extensions/agent-plugins/connection.js';
 import { connectorPrincipalForSession } from '../../connectors/principal.js';
 import { connectionBindings, getActiveConnectionWait, requireSessionConnection, publishConnectionWait, reviseCurrentConnectionObjective } from '../../storage/sqlite/connection-wait-repository.js';
 import type { ExternalToolTurnContext } from './types.js';
 import { ExternalToolService } from './service.js';
 import { EXTERNAL_TOOL_SOURCES, type ExternalToolProvider } from './types.js';
+import { bindExternalToolRegistry } from './tool-registry.js';
+import { setXopcToolMetadata } from '../embedded/tool-metadata.js';
 
 export const EXTERNAL_TOOL_NAMES = {
   search: 'xopc_tool_search',
@@ -67,17 +68,27 @@ export function createExternalToolGatewayTools(
   getContext?: () => ExternalToolTurnContext | null,
   getConfig?: () => Config | undefined,
   getExecutionConversationId?: () => string | undefined,
+  nativeSources: readonly import('./types.js').ExternalToolSource[] = [],
+  executorConfig?: Partial<import('../tools/executor.js').ToolExecutorConfig>,
 ): AgentTool[] {
   const service = new ExternalToolService(providers);
+  const legacySources = EXTERNAL_TOOL_SOURCES.filter(source => !nativeSources.includes(source));
+  const assertLegacyRef = (ref: string) => {
+    if (nativeSources.some(source => ref.startsWith(`${source}:`))) throw new Error('Use tool_search to load this native tool, then call it directly.');
+  };
   const searchTool: AgentTool<typeof ToolSearchSchema, Record<string, unknown>> = {
     name: EXTERNAL_TOOL_NAMES.search,
     label: '🔎 External Tool Search',
-    description: `Search external tools from these sources: ${EXTERNAL_TOOL_SOURCES.join(', ')}. CLI connectors include Feishu/Lark, WeCom and WPS 365. Omit sources unless intentionally restricting the search; do not guess a source list. Use concise English capability keywords, e.g. "wecom doc.search". Returns executable tools, connection candidates, or reviewed Store install candidates. Call xopc_tool_describe before executing a tool. When no executable tool exists but a connection or install candidate is returned, use xopc_require_connection instead of falling back to browser automation. If a source-filtered search finds no relevant tools, retry without sources before concluding a capability is unavailable.`,
+    description: `Search external tools from these sources: ${legacySources.join(', ')}.${nativeSources.length ? ` Use tool_search for native ${nativeSources.join(', ')} tools.` : ''} CLI connectors include Feishu/Lark, WeCom and WPS 365. Omit sources unless intentionally restricting the search; do not guess a source list. Use concise English capability keywords, e.g. "wecom doc.search". Returns executable tools, connection candidates, or reviewed Store install candidates. Call xopc_tool_describe before executing a tool. When no executable tool exists but a connection or install candidate is returned, use xopc_require_connection instead of falling back to browser automation. If a source-filtered search finds no relevant tools, retry without sources before concluding a capability is unavailable.`,
     parameters: ToolSearchSchema,
     async execute(_toolCallId, params) {
       const selectedSources = new Set<string>(params.sources ?? []);
       const excludedSources = selectedSources.size ? EXTERNAL_TOOL_SOURCES.filter(source => !selectedSources.has(source)) : [];
-      const result = await service.search(params);
+      if (params.sources?.length && params.sources.every(source => nativeSources.includes(source))) {
+        return textResult({ tools: [], instruction: 'Use tool_search for native tools.' });
+      }
+      const result = await service.search({ ...params, sources: (params.sources?.length ? params.sources : legacySources)
+        .filter(source => !nativeSources.includes(source)) });
       const candidates = [...result.connectionCandidates, ...connectionCandidates(params.query)]
         .filter((candidate, index, all) => all.findIndex(item => item.candidateRef === candidate.candidateRef) === index);
       let installCandidates: Awaited<ReturnType<typeof searchStoreConnectorInstallCandidates>> = [];
@@ -108,6 +119,7 @@ export function createExternalToolGatewayTools(
     description: 'Load exact contracts for up to three external tools returned by xopc_tool_search.',
     parameters: ToolDescribeSchema,
     async execute(_toolCallId, params) {
+      params.toolRefs.forEach(assertLegacyRef);
       const result = await service.describe(params.toolRefs);
       return textResult({ ...result, ...(result.notFound.length ? { instruction: 'These exact tool contracts are unavailable. Do not execute them, invent revisions, or reconnect the account. Use a different available tool or explain the capability failure.' } : {}) });
     },
@@ -159,6 +171,12 @@ export function createExternalToolGatewayTools(
       };
     },
   };
+  const nativeExecute = executeTool.execute.bind(executeTool);
+  executeTool.execute = async (id, params, signal, update) => {
+    assertLegacyRef(params.toolRef);
+    return nativeExecute(id, params, signal, update);
+  };
+  bindExternalToolRegistry(executeTool, { service, nativeSources, execute: nativeExecute, executorConfig });
   const requireSchema = Type.Object({
     requirements: Type.Array(Type.Object({
       candidateRef: Type.String(),
@@ -185,7 +203,6 @@ export function createExternalToolGatewayTools(
       if (!principal.isLocalOwner) throw new Error('Connection recovery is available in the owner chat.');
       const selected = connectionBindings(context.conversationId);
       if (params.requirements.every(item => {
-        const pluginTarget = parsePluginMcpCandidateRef(item.candidateRef);
         return selected.some(need => {
           if (need.target.type === 'connector') {
             return need.target.connectorId === item.candidateRef
@@ -193,10 +210,6 @@ export function createExternalToolGatewayTools(
               && (!item.accountSelector || item.accountSelector === need.accountSelector)
               && listConnectorConnections({ principalId: principal.principalId, connectorId: need.target.connectorId })
                 .some(connection => connection.id === need.connectionId && connection.status === 'active');
-          }
-          if (need.target.type === 'plugin-mcp') {
-            return Boolean(pluginTarget && need.target.pluginId === pluginTarget.pluginId
-              && need.target.serverName === pluginTarget.serverName && need.connectionId === need.target.serverId);
           }
           const storeTarget = parseStoreConnectorCandidateRef(item.candidateRef);
           return Boolean(storeTarget && need.target.packageName === storeTarget.packageName
@@ -230,7 +243,7 @@ export function createExternalToolGatewayTools(
             },
             label: plan.definition.displayName,
             capabilities: plan.definition.capabilities,
-          } : resolvePluginMcpConnectionCandidate(item.candidateRef) ?? resolveConnectionCandidate(item.candidateRef);
+          } : resolveConnectionCandidate(item.candidateRef);
           if (item.accountId && need.target.type !== 'connector') throw new Error('This install candidate does not support account selection.');
           if (item.accountId && need.target.type === 'connector'
             && !listConnectorConnections({ principalId: principal.principalId, connectorId: need.target.connectorId }).some(connection => connection.accountId === item.accountId)) throw new Error('Unknown account for this app.');
@@ -257,5 +270,7 @@ export function createExternalToolGatewayTools(
       return textResult({ status: params.action === 'update' ? 'updated' : 'cancelled' });
     },
   };
-  return [searchTool, describeTool, executeTool, requireTool, reviseTool];
+  return [searchTool, describeTool, executeTool,
+    setXopcToolMetadata(requireTool, { exposure: 'model-only' }),
+    setXopcToolMetadata(reviseTool, { exposure: 'model-only' })];
 }

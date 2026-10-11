@@ -65,7 +65,6 @@ export function buildSafeMcpConfigForWeb(config: Config) {
     return { servers: {} as Record<string, Record<string, unknown>> };
   }
   return {
-    ...(mcp.sessionIdleTtlMs !== undefined ? { sessionIdleTtlMs: mcp.sessionIdleTtlMs } : {}),
     servers: normalizeConfiguredMcpServers(mcp.servers),
   };
 }

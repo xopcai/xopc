@@ -51,7 +51,7 @@ function contextRefsMatchFrozenSnapshot(
 ): boolean {
   const editable = frozen?.filter(ref => ref.kind === 'note' || ref.kind === 'task'
     || ref.kind === 'file' || ref.kind === 'session' || ref.kind === 'browser_tab'
-    || ref.kind === 'mcp_resource' || ref.kind === 'user_assertion') ?? [];
+    || ref.kind === 'user_assertion') ?? [];
   if (requested.length !== editable.length) return false;
   return requested.every((ref, index) => {
     const snapshot = editable[index];

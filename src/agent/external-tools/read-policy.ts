@@ -7,12 +7,15 @@ export function withExternalReadPolicy(provider: ExternalToolProvider,
   return {
     source: provider.source,
     search: query => provider.search(query),
+    ...(provider.connectionCandidates ? { connectionCandidates: provider.connectionCandidates.bind(provider) } : {}),
     describe: async ref => {
       const descriptor = await provider.describe(ref);
       if (!descriptor) return undefined;
       const policy = getPolicy(ref);
       if (policy?.mode === 'deny') return undefined;
-      return { ...descriptor, batchRead: policy?.readOnly ?? descriptor.batchRead };
+      return { ...descriptor, batchRead: provider.source === 'endpoint'
+        ? descriptor.batchRead === true && policy?.readOnly !== false
+        : policy?.readOnly ?? descriptor.batchRead };
     },
     execute: (ref, args, approval, context) => provider.execute(ref, args, approval, context),
   };
