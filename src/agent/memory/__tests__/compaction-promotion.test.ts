@@ -141,10 +141,11 @@ describe('compaction ledger promotion', () => {
       writePolicy: 'allow',
     });
     expect(result.durableRecordIds).toEqual([]);
-    expect(getKnowledgeItem(interactive.durableRecordIds[0]!)?.status).toBe('active');
+    expect(interactive.durableRecordIds).toEqual([]);
+    expect(getKnowledgeItem(interactive.episodicRecordIds[0]!)?.verification).toBe('tentative');
   });
 
-  it('activates trusted durable knowledge automatically and performs no writes when denied', () => {
+  it('keeps assistant-only summaries tentative and performs no writes when denied', () => {
     seedConversationFixtures();
     const input = {
       conversationId: "6d9217fe-77c7-411d-8cc9-92aabe81a2d0",
@@ -161,7 +162,8 @@ describe('compaction ledger promotion', () => {
       transcriptId: 'session-auto',
       writePolicy: 'allow',
     });
-    expect(getKnowledgeItem(automatic.durableRecordIds[0]!)?.status).toBe('active');
+    expect(automatic.durableRecordIds).toEqual([]);
+    expect(getKnowledgeItem(automatic.episodicRecordIds[0]!)?.status).toBe('candidate');
 
     const denied = promoteCompactionLedger({
       ...input,

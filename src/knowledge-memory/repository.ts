@@ -1,9 +1,11 @@
 import { randomUUID } from 'node:crypto';
 
 import type { DatabaseSync } from 'node:sqlite';
+import { inferMemorySensitivity } from '../agent/memory/sensitivity.js';
 
 import { memoryFingerprint, isMemorySuppressed, suppressMemory, restoreMemory, clearMemoryAudit } from '../user-context/memory-suppression.js';
-import { buildFts5SearchQuery } from '../storage/sqlite/fts.js';
+import { memorySearchQuery } from './search-text.js';
+import { canUseKnowledge, knowledgeContentSources } from './usage-policy.js';
 import { getSqliteDatabase, runSqliteWriteTransaction } from '../storage/sqlite/transaction.js';
 import { USER_MODEL_PRINCIPAL_ID, validateScope, type UserModelScope } from '../user-model/domain.js';
 import type {
@@ -21,6 +23,9 @@ import type {
 } from './domain.js';
 
 type KnowledgeRow = {
+  claim_mode: KnowledgeItem['claimMode'];
+  verification: KnowledgeItem['verification'];
+  sensitivity: KnowledgeItem['sensitivity'];
   knowledge_id: string;
   principal_id: string;
   kind: KnowledgeKind;
@@ -47,6 +52,10 @@ type KnowledgeRow = {
 };
 
 export interface WriteKnowledgeInput {
+  claimMode?: KnowledgeItem['claimMode'];
+  verification?: KnowledgeItem['verification'];
+  sensitivity?: KnowledgeItem['sensitivity'];
+  evidence?: Array<{ id: string; contentHash?: string; consentReceiptId?: string }>;
   principalId?: string;
   kind: KnowledgeKind;
   scope: UserModelScope;
@@ -81,6 +90,9 @@ export class KnowledgeReviewConflictError extends Error {
 function fromRow(row: KnowledgeRow): KnowledgeItem {
   return {
     id: row.knowledge_id,
+    claimMode: row.claim_mode,
+    verification: row.verification,
+    sensitivity: row.sensitivity,
     principalId: row.principal_id,
     kind: row.kind,
     scope: { type: row.scope_type, ...(row.scope_id ? { id: row.scope_id } : {}) },
@@ -143,7 +155,8 @@ export function writeKnowledgeItem(input: WriteKnowledgeInput): { item: Knowledg
   }
   const principalId = input.principalId ?? USER_MODEL_PRINCIPAL_ID;
   const now = input.now ?? Date.now();
-  const admittedStatus = input.status ?? (input.originClass === 'owner' || (input.originClass !== 'untrusted'
+  const supportedExternal = input.originClass === 'untrusted' && input.verification === 'supported' && Boolean(input.evidence?.length) && input.confidence >= 0.7;
+  const admittedStatus = input.status ?? (supportedExternal || input.originClass === 'owner' || (input.originClass !== 'untrusted'
     && input.confidence >= 0.7 && !input.derivedFromRecalledContext) ? 'active' : 'candidate');
   return runSqliteWriteTransaction((db) => {
     const keys = knowledgeFingerprints(input);
@@ -159,6 +172,8 @@ export function writeKnowledgeItem(input: WriteKnowledgeInput): { item: Knowledg
         ...existingStatuses) as KnowledgeRow | undefined;
     if (existing && (!input.replaceExisting || (existing.origin_class === 'owner' && input.originClass !== 'owner'))) return { item: fromRow(existing), created: false };
     if (existing) {
+      db.prepare('INSERT INTO knowledge_revisions(revision_id, knowledge_id, content, source_json, created_at) VALUES (?, ?, ?, ?, ?)')
+        .run(randomUUID(), existing.knowledge_id, existing.content, existing.source_json, now);
       const nextStatus = admittedStatus;
       db.prepare(`UPDATE knowledge_items SET kind = ?, content = ?, record_class = ?, status = ?, confidence = ?,
         importance = ?, valid_from = ?, valid_to = ?, expires_at = ?, review_at = ?,
@@ -169,9 +184,6 @@ export function writeKnowledgeItem(input: WriteKnowledgeInput): { item: Knowledg
           input.expiresAt ?? null, input.reviewAt ?? null, input.originClass, input.sourceAgentId ?? null,
           input.sourceConversationId ?? null, input.sourceTurnId ?? null, input.derivedFromRecalledContext ? 1 : 0,
           JSON.stringify(input.source ?? {}), now, existing.knowledge_id);
-      db.prepare('DELETE FROM knowledge_items_fts WHERE knowledge_id = ?').run(existing.knowledge_id);
-      db.prepare('INSERT INTO knowledge_items_fts(content, knowledge_id) VALUES (?, ?)')
-        .run(input.content.trim(), existing.knowledge_id);
       if (existing.status !== nextStatus) insertStatusEvent(db, {
         knowledgeId: existing.knowledge_id,
         fromStatus: existing.status,
@@ -180,6 +192,7 @@ export function writeKnowledgeItem(input: WriteKnowledgeInput): { item: Knowledg
         reason: 'Knowledge replaced from its source.',
         now,
       });
+      writeEvidence(db, existing.knowledge_id, input);
       return {
         item: fromRow(db.prepare('SELECT * FROM knowledge_items WHERE knowledge_id = ?')
           .get(existing.knowledge_id) as KnowledgeRow),
@@ -202,8 +215,6 @@ export function writeKnowledgeItem(input: WriteKnowledgeInput): { item: Knowledg
         input.expiresAt ?? null, input.reviewAt ?? null, input.originClass,
         input.sourceAgentId ?? null, input.sourceConversationId ?? null, input.sourceTurnId ?? null,
         input.derivedFromRecalledContext ? 1 : 0, JSON.stringify(input.source ?? {}), now, now);
-    db.prepare('INSERT INTO knowledge_items_fts(content, knowledge_id) VALUES (?, ?)')
-      .run(input.content.trim(), id);
     insertStatusEvent(db, {
       knowledgeId: id,
       fromStatus: null,
@@ -212,6 +223,7 @@ export function writeKnowledgeItem(input: WriteKnowledgeInput): { item: Knowledg
       reason: 'Knowledge admitted.',
       now,
     });
+    writeEvidence(db, id, input);
     return {
       item: fromRow(db.prepare('SELECT * FROM knowledge_items WHERE knowledge_id = ?').get(id) as KnowledgeRow),
       created: true,
@@ -278,10 +290,14 @@ export function transitionKnowledgeStatus(input: {
     db.prepare(`UPDATE knowledge_items SET status = ?, content = COALESCE(?, content),
       origin_class = CASE WHEN ? THEN 'owner' ELSE origin_class END, updated_at = ?
       WHERE knowledge_id = ?`).run(input.status, content ?? null, input.actor === 'user' && input.status === 'active' ? 1 : 0, now, input.id);
+    if (input.actor === 'user' && input.status === 'active') {
+      db.prepare("UPDATE knowledge_items SET claim_mode = 'explicit', verification = 'supported' WHERE knowledge_id = ?").run(input.id);
+    }
     if (content !== undefined) {
-      db.prepare('DELETE FROM knowledge_items_fts WHERE knowledge_id = ?').run(input.id);
-      db.prepare('INSERT INTO knowledge_items_fts(content, knowledge_id) VALUES (?, ?)')
-        .run(content, input.id);
+      db.prepare('INSERT INTO knowledge_revisions(revision_id, knowledge_id, content, source_json, created_at) VALUES (?, ?, ?, ?, ?)')
+        .run(randomUUID(), input.id, current.content, current.source_json, now);
+      db.prepare('DELETE FROM knowledge_evidence_links WHERE knowledge_id = ?').run(input.id);
+      db.prepare("UPDATE knowledge_items SET claim_mode = 'explicit', verification = 'supported', source_json = '{}' WHERE knowledge_id = ?").run(input.id);
     }
     if (input.actor === 'user' && (input.status === 'rejected' || input.status === 'archived')) {
       suppressMemory(db, knowledgeFingerprints(fromRow(current)), now);
@@ -387,17 +403,6 @@ function visibilityClause(
   return { sql: `(${parts.length ? parts.join(' OR ') : '0'})`, values };
 }
 
-function contentSourceClause(policy?: KnowledgeReadPolicy): string {
-  if (!policy) return '1';
-  const allowed = new Set(policy.contentSources);
-  const importedSource = "COALESCE(json_extract(k.source_json, '$.kind'), '') = 'product_import'";
-  const parts: string[] = [];
-  if (allowed.has('memory')) parts.push("k.record_class = 'memory'");
-  if (allowed.has('local_import')) parts.push(`(k.record_class = 'source_index' AND ${importedSource})`);
-  if (allowed.has('connector')) parts.push(`(k.record_class = 'source_index' AND NOT (${importedSource}))`);
-  return `(${parts.length ? parts.join(' OR ') : '0'})`;
-}
-
 export function searchKnowledgeItems(input: {
   query: string;
   context: KnowledgeVisibilityContext;
@@ -412,24 +417,41 @@ export function searchKnowledgeItems(input: {
   const asOf = input.asOf ?? Date.now();
   const limit = Math.max(1, Math.min(100, input.limit ?? 12));
   const visible = visibilityClause(input.context, input.policy);
-  const contentSource = contentSourceClause(input.policy);
-  const fts = buildFts5SearchQuery(input.query);
+  const fts = memorySearchQuery(input.query);
   if (!fts) return [];
-  const rows = getSqliteDatabase().prepare(`SELECT k.*, bm25(knowledge_items_fts) AS rank
-    FROM knowledge_items_fts JOIN knowledge_items k ON k.knowledge_id = knowledge_items_fts.knowledge_id
-    WHERE knowledge_items_fts MATCH ? AND k.principal_id = ? AND k.status = 'active'
+  const rows = getSqliteDatabase().prepare(`SELECT k.*, bm25(knowledge_search_fts) AS rank
+    FROM knowledge_search_fts JOIN knowledge_items k ON k.knowledge_id = knowledge_search_fts.knowledge_id
+    WHERE knowledge_search_fts MATCH ? AND k.principal_id = ? AND k.status = 'active'
       AND (k.valid_from IS NULL OR k.valid_from <= ?)
       AND (k.valid_to IS NULL OR k.valid_to >= ?)
       AND (k.expires_at IS NULL OR k.expires_at >= ?)
       AND (k.review_at IS NULL OR k.review_at > ?)
       ${input.recordClass ? 'AND k.record_class = ?' : ''}
       ${input.trustedOnly ? "AND k.origin_class != 'untrusted'" : ''}
-      AND ${contentSource}
       AND ${visible.sql}
     ORDER BY rank ASC, k.importance DESC, k.updated_at DESC LIMIT ?`)
     .all(fts, principalId, asOf, asOf, asOf, asOf,
-      ...(input.recordClass ? [input.recordClass] : []), ...visible.values, limit) as KnowledgeRow[];
-  return rows.map(fromRow);
+      ...(input.recordClass ? [input.recordClass] : []), ...visible.values, Math.min(1000, limit * 10)) as KnowledgeRow[];
+  const selected = rows.map(fromRow).filter(item => canUseKnowledge(item, input.context, input.policy, asOf));
+  const chunks = getSqliteDatabase().prepare(`SELECT k.*, c.text AS chunk_text
+    FROM knowledge_chunks_fts f JOIN knowledge_source_chunks c ON c.chunk_id = f.chunk_id
+    JOIN knowledge_source_items s ON s.item_id = c.source_item_id AND s.content_hash = c.source_version
+    JOIN knowledge_items k ON json_extract(k.source_json, '$.sourceItemId') = s.item_id
+    WHERE knowledge_chunks_fts MATCH ? AND s.deleted_at IS NULL AND k.principal_id = ?
+      AND c.consent_receipt_id = json_extract(k.source_json, '$.consentReceiptId')
+      ${input.recordClass ? 'AND k.record_class = ?' : ''} AND ${visible.sql}
+    ORDER BY bm25(knowledge_chunks_fts) LIMIT ?`).all(fts, principalId,
+      ...(input.recordClass ? [input.recordClass] : []), ...visible.values, Math.min(1000, limit * 10)) as Array<KnowledgeRow & { chunk_text: string }>;
+  const seen = new Set(selected.map(item => item.id));
+  for (const row of chunks) {
+    const item = fromRow(row);
+    if (!seen.has(item.id) && (!input.trustedOnly || item.originClass !== 'untrusted')
+      && canUseKnowledge(item, input.context, input.policy, asOf)) {
+      selected.push({ ...item, retrievalSnippet: row.chunk_text });
+      seen.add(item.id);
+    }
+  }
+  return selected.slice(0, limit);
 }
 
 export function classifyKnowledgeContentSource(item: KnowledgeItem): KnowledgeContentSource {
@@ -442,7 +464,7 @@ export function knowledgeItemAllowed(
   policy: KnowledgeReadPolicy,
 ): boolean {
   return policy.scopes.includes(item.scope.type)
-    && policy.contentSources.includes(classifyKnowledgeContentSource(item));
+    && knowledgeContentSources(item).every(source => policy.contentSources.includes(source));
 }
 
 function knowledgeFingerprints(input: Pick<WriteKnowledgeInput, 'principalId' | 'scope' | 'canonicalKey' | 'content'>): string[] {
@@ -466,7 +488,9 @@ export function deleteKnowledgeItem(id: string, now = Date.now()): boolean {
       const item = fromRow(row);
       suppressMemory(db, knowledgeFingerprints(item), now);
       clearMemoryAudit(db, 'knowledge', item.id);
-      db.prepare('DELETE FROM knowledge_items_fts WHERE knowledge_id = ?').run(item.id);
+      if (item.recordClass === 'source_index' && typeof item.source.sourceItemId === 'string') {
+        db.prepare('DELETE FROM knowledge_source_chunks WHERE source_item_id = ?').run(item.source.sourceItemId);
+      }
       db.prepare('DELETE FROM knowledge_items WHERE knowledge_id = ?').run(item.id);
     }
     return rows.length > 0;
@@ -479,4 +503,16 @@ export function isKnowledgeCurrent(item: KnowledgeItem, asOf = Date.now()): bool
     && (item.validTo === undefined || item.validTo >= asOf)
     && (item.expiresAt === undefined || item.expiresAt >= asOf)
     && (item.reviewAt === undefined || item.reviewAt > asOf);
+}
+
+function writeEvidence(db: DatabaseSync, id: string, input: WriteKnowledgeInput): void {
+  db.prepare('UPDATE knowledge_items SET claim_mode = ?, verification = ?, sensitivity = ? WHERE knowledge_id = ?')
+    .run(input.claimMode ?? (input.originClass === 'owner' ? 'explicit' : input.originClass === 'untrusted' ? 'reported' : 'observed'),
+      input.verification ?? (input.originClass === 'untrusted' && (input.recordClass ?? 'memory') === 'memory' ? 'tentative' : 'supported'),
+      input.sensitivity ?? inferMemorySensitivity(input.content), id);
+  db.prepare('DELETE FROM knowledge_evidence_links WHERE knowledge_id = ?').run(id);
+  for (const evidence of input.evidence ?? []) {
+    db.prepare('INSERT INTO knowledge_evidence_links(knowledge_id, evidence_id, content_hash, consent_receipt_id) VALUES (?, ?, ?, ?)')
+      .run(id, evidence.id, evidence.contentHash ?? null, evidence.consentReceiptId ?? null);
+  }
 }

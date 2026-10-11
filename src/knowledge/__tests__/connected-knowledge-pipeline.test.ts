@@ -12,6 +12,7 @@ import {
   resetXopcDatabaseSingletonForTest,
   upsertKnowledgeSourceItems,
 } from '../../storage/sqlite/index.js';
+import { getSqliteDatabase } from '../../storage/sqlite/transaction.js';
 import { ConnectedKnowledgePipeline } from '../connected-knowledge-pipeline.js';
 
 describe('ConnectedKnowledgePipeline', () => {
@@ -73,7 +74,7 @@ describe('ConnectedKnowledgePipeline', () => {
     expect(getKnowledgeItem(knowledgeId)?.status).toBe('archived');
   });
 
-  it('prunes expired bounded source rows and archives derived knowledge', async () => {
+  it('purges expired raw source indexes and revisions without suppressing future ingestion', async () => {
     const sourceInstanceId = 'composio:gmail:retention';
     upsertKnowledgeSourceItems([{
       sourceInstanceId, collectionScope: 'messages', externalId: 'old-message', itemType: 'gmail:message',
@@ -82,9 +83,19 @@ describe('ConnectedKnowledgePipeline', () => {
       synthesisPipeline: 'connected_knowledge',
     }]);
     const processed = await pipeline.processPending(sourceInstanceId);
+    const db = getSqliteDatabase();
+    db.prepare(`INSERT INTO knowledge_revisions(revision_id, knowledge_id, content, source_json, created_at)
+      VALUES ('retention-revision', ?, 'Old raw revision.', '{}', ?)`).run(processed.recordIds[0]!, Date.now());
+    db.prepare(`UPDATE context_evidence SET redacted_excerpt = 'Old raw quote.'
+      WHERE source_instance_id = ?`).run(sourceInstanceId);
     const result = pipeline.pruneBoundedRetention(sourceInstanceId, Date.parse('2026-07-01T00:00:00.000Z'));
     expect(result).toEqual({ rawDeleted: 1, derivedDeleted: 1 });
     expect(listKnowledgeSourceItems({ sourceInstanceId })).toEqual([]);
-    expect(getKnowledgeItem(processed.recordIds[0]!)?.status).toBe('archived');
+    expect(getKnowledgeItem(processed.recordIds[0]!)).toBeUndefined();
+    expect(getSqliteDatabase().prepare('SELECT 1 FROM knowledge_revisions WHERE knowledge_id = ?')
+      .get(processed.recordIds[0]!)).toBeUndefined();
+    expect(db.prepare(`SELECT 1 FROM context_evidence
+      WHERE source_instance_id = ? AND redacted_excerpt IS NOT NULL`).get(sourceInstanceId)).toBeUndefined();
+    expect(db.prepare('SELECT 1 FROM memory_suppressions').get()).toBeUndefined();
   });
 });
