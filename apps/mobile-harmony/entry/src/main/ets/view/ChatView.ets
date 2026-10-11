@@ -1817,8 +1817,8 @@ export struct XopcChatView {
         .opacity(this.sendFlightOpacity).hitTestBehavior(HitTestMode.None)
     }
     if (this.searchOpen) { this.messageSearchSheet() }
-    }.width('100%').height('100%')
-      .expandSafeArea([SafeAreaType.SYSTEM], this.embedded || this.layout.systemTopInsetPx <= 0 ? [] : [SafeAreaEdge.TOP])
+    }.width('100%').height(LayoutPolicy.matchParent)
+      .ignoreLayoutSafeArea([LayoutSafeAreaType.SYSTEM], this.embedded || this.layout.systemTopInsetPx <= 0 ? [] : [LayoutSafeAreaEdge.TOP])
       .onAreaChange((_previous: Area, current: Area): void => { this.sendFlightRoot = this.sendFlightRect(current); })
       .bindSheet($$this.executionOpen, this.executionDetailSheet, { height: '92%', dragBar: false,
         showClose: false, backgroundColor: this.colors.panel, onDisappear: (): void => { this.closeExecutionDetail(); } })
