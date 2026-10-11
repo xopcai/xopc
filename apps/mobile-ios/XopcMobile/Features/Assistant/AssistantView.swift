@@ -78,7 +78,10 @@ struct AssistantView<Dock: View>: View {
         .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { messageViewportHeight = $0 }
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar { toolbarContent }
+        .toolbar(.hidden, for: .navigationBar)
+        .overlay(alignment: .top) {
+            floatingHeader.padding(.horizontal, 20).padding(.top, 8)
+        }
         .fullScreenCover(isPresented: $showingMessageSearch) {
             ChatMessageSearchView(messages: state.messages, configuration: configuration,
                 conversationID: conversation?.id, assistantState: state, readAloud: readAloud,
@@ -286,6 +289,7 @@ struct AssistantView<Dock: View>: View {
                     .frame(maxWidth: .infinity)
                     .frame(minHeight: max(0, viewport.size.height - bottomDockHeight - 24))
                 }
+                .contentMargins(.top, 72, for: .scrollContent)
                 .contentMargins(.bottom, bottomDockHeight + 24, for: .scrollContent)
             }
         } else {
@@ -362,6 +366,7 @@ struct AssistantView<Dock: View>: View {
                     .frame(maxWidth: .infinity)
                 }
                 .defaultScrollAnchor(.bottom)
+                .contentMargins(.top, 72, for: .scrollContent)
                 .contentMargins(.bottom, bottomDockHeight + 24 + replySpace.remaining, for: .scrollContent)
                 .coordinateSpace(name: "chat-scroll")
                 .onChange(of: state.messages.last) {
@@ -666,36 +671,36 @@ struct AssistantView<Dock: View>: View {
         }
     }
 
-    @ToolbarContentBuilder
-    private var toolbarContent: some ToolbarContent {
-        ToolbarItem(placement: .topBarLeading) {
-            if isPersonalConversation {
-                Button { showingPersonalProfile = true } label: {
-                    HStack(spacing: 8) {
-                        PersonalAgentAvatar(configuration: configuration, agent: personalAgent, size: 36, active: isActive)
-                        Text(verbatim: currentAgentName).font(.system(size: 16, weight: .medium)).lineLimit(1).fixedSize(horizontal: true, vertical: false)
-                    }
-                    .padding(.leading, 6).padding(.trailing, 14).frame(height: 48)
-                    .background(.ultraThinMaterial, in: Capsule())
-                    .overlay(Capsule().stroke(Color.primary.opacity(0.08)))
-                }.buttonStyle(.plain).accessibilityLabel("配置助手").fixedSize(horizontal: true, vertical: false)
-            } else {
-                Menu {
-                    ForEach(state.agents) { agent in
-                        Button { requestConversation(agent.id) } label: { Text(verbatim: agent.displayName) }
-                    }
-                } label: {
-                    HStack(spacing: 8) {
-                        ConfiguredAgentAvatar(configuration: configuration,
-                            agent: state.agents.first(where: { $0.id == conversation?.agentId }) ?? state.selectedAgent,
-                            size: 36, active: isActive)
-                        Text(verbatim: conversationNavigationTitle).font(.system(size: 16, weight: .medium)).lineLimit(1)
-                    }.padding(.horizontal, 12).frame(height: 48)
+    private var floatingHeader: some View {
+        HStack(spacing: 12) {
+            Group {
+                if isPersonalConversation {
+                    Button { showingPersonalProfile = true } label: {
+                        HStack(spacing: 8) {
+                            PersonalAgentAvatar(configuration: configuration, agent: personalAgent, size: 36, active: isActive)
+                            Text(verbatim: currentAgentName).font(.system(size: 16, weight: .medium)).lineLimit(1).fixedSize(horizontal: true, vertical: false)
+                        }
+                        .padding(.leading, 6).padding(.trailing, 14).frame(height: 48)
                         .background(.ultraThinMaterial, in: Capsule())
+                        .overlay(Capsule().stroke(Color.primary.opacity(0.08)))
+                    }.buttonStyle(.plain).accessibilityLabel("配置助手").fixedSize(horizontal: true, vertical: false)
+                } else {
+                    Menu {
+                        ForEach(state.agents) { agent in
+                            Button { requestConversation(agent.id) } label: { Text(verbatim: agent.displayName) }
+                        }
+                    } label: {
+                        HStack(spacing: 8) {
+                            ConfiguredAgentAvatar(configuration: configuration,
+                                agent: state.agents.first(where: { $0.id == conversation?.agentId }) ?? state.selectedAgent,
+                                size: 36, active: isActive)
+                            Text(verbatim: conversationNavigationTitle).font(.system(size: 16, weight: .medium)).lineLimit(1)
+                        }.padding(.horizontal, 12).frame(height: 48)
+                            .background(.ultraThinMaterial, in: Capsule())
+                    }
                 }
             }
-        }
-        ToolbarItem(placement: .topBarTrailing) {
+            Spacer(minLength: 0)
             HStack(spacing: 0) {
                 Button {
                     showingMessageSearch = true
@@ -714,6 +719,7 @@ struct AssistantView<Dock: View>: View {
                 .background(.ultraThinMaterial, in: Capsule())
                 .overlay(Capsule().stroke(Color.primary.opacity(0.08)))
         }
+        .accessibilityIdentifier("chat-floating-header")
     }
 }
 
