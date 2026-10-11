@@ -48,6 +48,7 @@ struct AssistantView<Dock: View>: View {
     @State private var pendingStart: PendingConversationStart?
     @State private var bottomDockHeight: CGFloat = 0
     @State private var messageViewportHeight: CGFloat = 0
+    @State private var chatTopInset: CGFloat = 0
     @State private var replySpace = ChatReplySpace()
     @State private var replyRowHeights: [String: CGFloat] = [:]
     @State private var replyUserText: String?
@@ -60,6 +61,7 @@ struct AssistantView<Dock: View>: View {
             content
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .clipped()
+                .ignoresSafeArea(.container, edges: .top)
                 .overlay(alignment: .bottom) {
                     Color(uiColor: .systemGroupedBackground)
                         .frame(height: 24)
@@ -76,6 +78,7 @@ struct AssistantView<Dock: View>: View {
         }
         .background(Color(uiColor: .systemGroupedBackground).ignoresSafeArea())
         .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { messageViewportHeight = $0 }
+        .onGeometryChange(for: CGFloat.self) { $0.safeAreaInsets.top } action: { chatTopInset = $0 }
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.hidden, for: .navigationBar)
@@ -289,7 +292,7 @@ struct AssistantView<Dock: View>: View {
                     .frame(maxWidth: .infinity)
                     .frame(minHeight: max(0, viewport.size.height - bottomDockHeight - 24))
                 }
-                .contentMargins(.top, 72, for: .scrollContent)
+                .contentMargins(.top, chatTopInset + 72, for: .scrollContent)
                 .contentMargins(.bottom, bottomDockHeight + 24, for: .scrollContent)
             }
         } else {
@@ -366,7 +369,7 @@ struct AssistantView<Dock: View>: View {
                     .frame(maxWidth: .infinity)
                 }
                 .defaultScrollAnchor(.bottom)
-                .contentMargins(.top, 72, for: .scrollContent)
+                .contentMargins(.top, chatTopInset + 72, for: .scrollContent)
                 .contentMargins(.bottom, bottomDockHeight + 24 + replySpace.remaining, for: .scrollContent)
                 .coordinateSpace(name: "chat-scroll")
                 .onChange(of: state.messages.last) {
@@ -681,7 +684,7 @@ struct AssistantView<Dock: View>: View {
                             Text(verbatim: currentAgentName).font(.system(size: 16, weight: .medium)).lineLimit(1).fixedSize(horizontal: true, vertical: false)
                         }
                         .padding(.leading, 6).padding(.trailing, 14).frame(height: 48)
-                        .background(.ultraThinMaterial, in: Capsule())
+                        .background(Color(uiColor: .secondarySystemGroupedBackground), in: Capsule())
                         .overlay(Capsule().stroke(Color.primary.opacity(0.08)))
                     }.buttonStyle(.plain).accessibilityLabel("配置助手").fixedSize(horizontal: true, vertical: false)
                 } else {
@@ -696,7 +699,7 @@ struct AssistantView<Dock: View>: View {
                                                   size: 36, active: isActive)
                             Text(verbatim: conversationNavigationTitle).font(.system(size: 16, weight: .medium)).lineLimit(1)
                         }.padding(.horizontal, 12).frame(height: 48)
-                            .background(.ultraThinMaterial, in: Capsule())
+                            .background(Color(uiColor: .secondarySystemGroupedBackground), in: Capsule())
                     }
                 }
             }
@@ -716,7 +719,7 @@ struct AssistantView<Dock: View>: View {
                     .accessibilityLabel(isPersonalConversation ? "配置助手" : "会话选项")
                     .accessibilityIdentifier("assistant-options")
             }.buttonStyle(.plain).padding(.horizontal, 4).frame(height: 48)
-                .background(.ultraThinMaterial, in: Capsule())
+                .background(Color(uiColor: .secondarySystemGroupedBackground), in: Capsule())
                 .overlay(Capsule().stroke(Color.primary.opacity(0.08)))
         }
         .accessibilityIdentifier("chat-floating-header")
