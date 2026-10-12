@@ -35,7 +35,6 @@ import { createLogger } from '../../utils/logger.js';
 import { getProjectWorkspacePathForSession } from '../../projects/workspace.js';
 import { resolveEffectiveAgentConfigForSession } from '../../config/agent-profile.js';
 import { isPersonalConversation } from '../../personal-agent/repository.js';
-import { savePersonalModelConfig } from '../../personal-agent/model-config.js';
 
 const log = createLogger('SessionConfigService');
 
@@ -114,13 +113,11 @@ export class SessionConfigService {
         }
         const thinkingLevel = requested ?? chooseModelThinking(capabilities, existing?.thinkingLevel);
         const modelRef = `${model.provider}/${model.id}`;
-        const updated = personal
-          ? savePersonalModelConfig(conversationId, modelRef, thinkingLevel)
-          : await this.opts.sessionConfigStore.update(conversationId, {
-            modelOverride: modelRef,
-            thinkingLevel,
-            fixedModel: partial.fixedModel ?? existing?.fixedModel ?? false,
-          });
+        const updated = await this.opts.sessionConfigStore.update(conversationId, {
+          modelOverride: modelRef,
+          thinkingLevel,
+          fixedModel: partial.fixedModel ?? existing?.fixedModel ?? false,
+        });
         this.opts.modelManager.restoreSessionModel(conversationId, modelRef, updated.fixedModel === true);
         try {
           if (this.opts.agentManager.getAgent(conversationId)) {

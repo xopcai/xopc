@@ -218,7 +218,7 @@ describe('personal Agent identity', () => {
     expect(direct).toContain('For current news or other live facts');
   });
 
-  it('defaults thinking off and keeps Personal AI model settings synchronized with its Agent', async () => {
+  it('keeps personal model and thinking preferences in its conversation without restricting ordinary Ada chats', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'xopc-personal-create-'));
     const previousStateDir = process.env.XOPC_STATE_DIR;
     process.env.XOPC_STATE_DIR = dir;
@@ -246,7 +246,7 @@ describe('personal Agent identity', () => {
         expect(new AgentCatalogRepository().get(first.agentId)?.profile?.instructions).toContain(rule);
       }
       expect(new AgentCatalogRepository().get(first.agentId)?.skills).toEqual({ mode: 'replace', include: [] });
-      expect(new AgentCatalogRepository().get(first.agentId)?.runtime?.thinkingLevel).toBe('off');
+      expect(new AgentCatalogRepository().get(first.agentId)?.runtime?.thinkingLevel).toBeUndefined();
       expect(new AgentCatalogRepository().get(first.agentId)?.models?.chat).toMatchObject({ primary: 'test/fast', fallbacks: [] });
       expect(getSessionMetadata(first.conversationId)?.agentId).toBe(first.agentId);
       expect(getSessionMetadata(first.conversationId)?.hiddenFromSessionList).toBe(true);
@@ -277,6 +277,8 @@ describe('personal Agent identity', () => {
       await new AgentCatalogService().update(first.agentId, {
         models: { chat: { primary: 'test/slow', fallbacks: [] } },
       });
+      expect(await sessionConfigStore.get(first.conversationId)).toEqual(original);
+      expect(await configService.patch(first.conversationId, { model: 'test/slow' })).toEqual({ ok: true });
       const synchronized = await sessionConfigStore.get(first.conversationId);
       expect(synchronized).toMatchObject({ modelOverride: 'test/slow', thinkingLevel: 'off', fixedModel: true });
       expect(await configService.patch(first.conversationId, {
@@ -288,10 +290,10 @@ describe('personal Agent identity', () => {
       expect(await configService.patch(first.conversationId, { thinkingLevel: 'high', configVersion: synchronized!.updatedAt }))
         .toEqual({ ok: true });
       expect(getPersonalAgent('local-owner')?.state).toBe('ready');
-      expect(repository.get(first.agentId)?.runtime?.thinkingLevel).toBe('high');
+      expect(repository.get(first.agentId)?.runtime?.thinkingLevel).toBeUndefined();
       expect(await configService.patch(first.conversationId, { model: 'test/fast', thinkingLevel: 'off' }))
         .toEqual({ ok: true });
-      expect(repository.get(first.agentId)?.models?.chat?.primary).toBe('test/fast');
+      expect(repository.get(first.agentId)?.models?.chat?.primary).toBe('test/slow');
       expect(await sessionConfigStore.get(first.conversationId)).toMatchObject({ modelOverride: 'test/fast', thinkingLevel: 'off' });
       expect(await configService.initializeModelSelection(first.conversationId, 'test/slow', 'high'))
         .toEqual({ ok: true });
@@ -302,7 +304,16 @@ describe('personal Agent identity', () => {
       expect(restore).toHaveBeenLastCalledWith(first.conversationId, 'test/slow', true);
       expect(runtime.setThinkingLevel).toHaveBeenLastCalledWith(first.conversationId, 'high');
       expect(await createOrResumePersonalAgent(gateway, 'local-owner', undefined, models)).toMatchObject({ state: 'ready' });
-      expect(repository.get(first.agentId)?.runtime?.thinkingLevel).toBe('high');
+      expect(repository.get(first.agentId)?.runtime?.thinkingLevel).toBeUndefined();
+      const ordinary = createConversation({ agentId: first.agentId, sourceChannel: 'webchat' }, dir);
+      expect(isPersonalConversation(ordinary.key)).toBe(false);
+      expect(await configService.patch(ordinary.key, { model: 'test/slow', thinkingLevel: 'high', fixedModel: true }))
+        .toEqual({ ok: true });
+      expect(await configService.patch(first.conversationId, { thinkingLevel: 'off' })).toEqual({ ok: true });
+      expect(await sessionConfigStore.get(ordinary.key)).toMatchObject({ thinkingLevel: 'high' });
+      expect(await createOrResumePersonalAgent(gateway, 'local-owner', undefined, models)).toMatchObject({ state: 'ready' });
+      expect(await sessionConfigStore.get(first.conversationId)).toMatchObject({ modelOverride: 'test/slow', thinkingLevel: 'off' });
+      expect(repository.get(first.agentId)?.runtime?.thinkingLevel).toBeUndefined();
       const readConfig = async () => {
         const config = (await sessionConfigStore.get(first.conversationId))!;
         return { model: config.modelOverride, thinkingLevel: config.thinkingLevel,
@@ -334,7 +345,7 @@ describe('personal Agent identity', () => {
         expect(response.status).toBe(200);
         expect(await response.json()).toMatchObject({ ok: true, payload: { model: 'test/fast', thinkingLevel: 'off' } });
         expect(await (await fetch(url, { headers })).json()).toMatchObject({ payload: { model: 'test/fast', thinkingLevel: 'off' } });
-        expect(repository.get(first.agentId)?.models?.chat?.primary).toBe('test/fast');
+        expect(repository.get(first.agentId)?.models?.chat?.primary).toBe('test/slow');
         busy = true;
         expect((await fetch(url, { method: 'PATCH', headers,
           body: JSON.stringify({ thinkingLevel: 'high' }) })).status).toBe(409);

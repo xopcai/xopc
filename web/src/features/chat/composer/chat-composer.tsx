@@ -868,7 +868,8 @@ export const ChatComposer = memo(function ChatComposer({
           onAbort={onAbort}
           onInterrupt={actions.interruptDraft}
         /> : <ComposerToolbar
-          disabled={disabled || sendDisabled}
+          disabled={disabled}
+          sendDisabled={sendDisabled}
           sending={sending}
           streaming={streaming}
           runBusy={runBusyState}

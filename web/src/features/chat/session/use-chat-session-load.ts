@@ -289,6 +289,7 @@ export function useChatSessionLoad(deps: {
     if (!conversationId) throw new Error('No active session');
     const current = store().sessions[conversationId];
     if (current?.modelConfigSaving) throw new Error('Model configuration is being saved');
+    if (current?.model === modelId && level !== undefined && current.thinkingLevel === level) return;
     store().patchSessionMeta(conversationId, { modelConfigSaving: true });
     try {
       store().setShellError(null);
@@ -306,7 +307,7 @@ export function useChatSessionLoad(deps: {
           });
       patchSessionAgentConfigView(conversationId, cfg);
       rememberAgentModel(sessionAgentId, { modelRef: cfg.model, thinkingLevel: cfg.thinkingLevel });
-      void refreshModelThinkingSupport(cfg.model);
+      if (cfg.model !== current?.model) void refreshModelThinkingSupport(cfg.model);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to update model configuration';
       store().setShellError(message);

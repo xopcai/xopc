@@ -42,6 +42,14 @@ describe('useChatSessionStore', () => {
     });
   });
 
+  it('does not notify subscribers when model metadata is unchanged', () => {
+    const store = useChatSessionStore.getState();
+    store.initSessionSnapshot(conversationId, { ...idleSlice, model: 'test/one', thinkingLevel: 'high' });
+    const before = useChatSessionStore.getState();
+    store.patchSessionMeta(conversationId, { model: 'test/one', thinkingLevel: 'high' });
+    expect(useChatSessionStore.getState()).toBe(before);
+  });
+
   it('initSessionSnapshot and getSessionSnapshot round-trip clones', () => {
     useChatSessionStore.getState().initSessionSnapshot(conversationId, {
       ...idleSlice,

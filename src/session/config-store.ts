@@ -9,7 +9,6 @@ import {
 } from '../storage/sqlite/index.js';
 import { createLogger } from '../utils/logger.js';
 import type { SessionAgentConfig } from './config-types.js';
-import { syncPersonalModelConfig } from '../personal-agent/model-config.js';
 
 export type { SessionAgentConfig } from './config-types.js';
 
@@ -33,7 +32,7 @@ export class SessionConfigStore {
 
   async get(conversationId: string): Promise<SessionAgentConfig | null> {
     this.requireDatabase();
-    return syncPersonalModelConfig(conversationId);
+    return getSqliteSessionConfig(conversationId);
   }
 
   async set(conversationId: string, config: SessionAgentConfig): Promise<void> {

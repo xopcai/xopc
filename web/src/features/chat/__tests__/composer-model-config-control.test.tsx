@@ -18,6 +18,7 @@ const { models } = vi.hoisted(() => ({ models: [
 ] }));
 vi.mock('swr', () => ({ default: () => ({ data: models, isLoading: false, mutate: vi.fn() }) }));
 
+import { ComposerToolbar } from '../composer/composer-toolbar';
 import { ComposerModelConfigControl } from '../model/composer-model-config-control';
 import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
@@ -51,7 +52,7 @@ describe('composer model configuration', () => {
     expect(container.querySelector('button')?.textContent).toContain('Standard');
     await act(async () => useLocaleStore.setState({ language: 'zh' }));
     expect(container.querySelector('button')?.textContent).toContain('标准');
-    await click(button('标准xopc-cloud'));
+    await click(document.querySelector('button[title="xopc-cloud/auto"]') as HTMLButtonElement);
     expect(button('标准xopc-cloud').getAttribute('aria-pressed')).toBe('true');
     await click(button('标准xopc-cloud'));
     expect(change).toHaveBeenCalledWith('xopc-cloud/auto', 'off');
@@ -63,19 +64,23 @@ describe('composer model configuration', () => {
     expect(trigger.textContent).toBe('gpt-6-luna· Low');
     expect(trigger.title).toBe('gpt-6-luna');
     expect(trigger.getAttribute('aria-label')).not.toContain('openai');
-    await click(button('openai/gpt-6-lunaxopc-cloud'));
+    await click(button('gpt-6-luna'));
     expect(button('openai/gpt-6-lunaxopc-cloud').getAttribute('aria-pressed')).toBe('true');
   });
 
   it('shows concrete identity and only supported thinking levels in one popover', async () => {
     await render();
     expect(container.textContent).toContain('Model One');
-    expect(button('High').getAttribute('aria-pressed')).toBe('true');
-    expect(button('Low')).toBeTruthy();
-    expect(button('Medium')).toBeUndefined();
+    const slider = document.querySelector('input[type=range]') as HTMLInputElement;
+    expect(slider.value).toBe('1');
+    expect(slider.max).toBe('1');
+    expect(slider.getAttribute('aria-valuetext')).toBe('High');
+    expect(document.body.textContent).not.toContain('Thinking effort');
+    expect(document.body.textContent).not.toContain('Manage models');
+    expect(document.body.textContent).not.toContain('test');
     expect(document.body.textContent).not.toContain('Default');
-    expect(document.querySelector('[role="group"]')?.parentElement?.className).toContain('mb-2');
-    await click([...document.querySelectorAll('button')].find((item) => item.textContent === 'Model Onetest')!);
+    expect(document.querySelector('input[type=range]')).toBeTruthy();
+    await click([...document.querySelectorAll('button')].find((item) => item.textContent === 'Model One')!);
     expect(document.querySelectorAll('[role="dialog"]')).toHaveLength(1);
     expect(document.body.textContent).toContain('Model Two');
   });
@@ -83,17 +88,84 @@ describe('composer model configuration', () => {
   it('keeps the previous selection and surfaces a failed save', async () => {
     const change = vi.fn(async () => { throw new Error('Configuration changed elsewhere'); });
     await render({ onThinkingChange: change });
-    await click(button('Low'));
+    const slider = document.querySelector('input[type=range]') as HTMLInputElement;
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(slider, '0');
+      slider.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    expect(change).not.toHaveBeenCalled();
+    await act(async () => { slider.dispatchEvent(new Event('pointerup', { bubbles: true })); });
     expect(change).toHaveBeenCalledWith('low');
-    expect(button('High').getAttribute('aria-pressed')).toBe('true');
+    expect(slider.value).toBe('1');
+    expect(slider.getAttribute('aria-valuetext')).toBe('High');
     expect(document.querySelector('[role="alert"]')?.textContent).toBe('Configuration changed elsewhere');
+  });
+
+  it('commits keyboard selection and disables the slider while configuration is locked', async () => {
+    const change = vi.fn();
+    await render({ onThinkingChange: change });
+    const slider = document.querySelector('input[type=range]') as HTMLInputElement;
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(slider, '0');
+      slider.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await act(async () => { slider.dispatchEvent(new KeyboardEvent('keyup', { key: 'Home', bubbles: true })); });
+    expect(change).toHaveBeenCalledWith('low');
+    await render({ thinkingDisabled: true });
+    await click(container.querySelector('button')!);
+    expect((document.querySelector('input[type=range]') as HTMLInputElement).disabled).toBe(true);
+  });
+
+  it('offers the model default reset without adding a save confirmation row', async () => {
+    const change = vi.fn();
+    await render({ thinkingLevel: 'high', onThinkingChange: change });
+    await click(document.querySelector('button[aria-label="Reset thinking effort"]') as HTMLButtonElement);
+    expect(change).toHaveBeenCalledWith('low');
+    expect(document.body.textContent).not.toContain('Configuration updated');
+  });
+
+  it('retains the dragged selection during saving and commits only once on pointer release and blur', async () => {
+    let finish!: () => void;
+    const change = vi.fn(() => new Promise<void>(resolve => { finish = resolve; }));
+    await render({ onThinkingChange: change });
+    const slider = document.querySelector('input[type=range]') as HTMLInputElement;
+    await act(async () => {
+      slider.focus();
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(slider, '0');
+      slider.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await act(async () => {
+      slider.dispatchEvent(new Event('pointerup', { bubbles: true }));
+      slider.blur();
+    });
+    expect(change).toHaveBeenCalledOnce();
+    expect(slider.value).toBe('0');
+    expect(slider.getAttribute('aria-valuetext')).toBe('Low');
+    expect(slider.disabled).toBe(true);
+    await act(async () => { finish(); });
+  });
+
+  it('blocks sending without disabling attachments or voice while a model choice is saving', async () => {
+    const props = {
+      disabled: false, sendDisabled: true, sending: false, streaming: false, runBusy: false,
+      chat: messages('en').chat, hasDraft: true, showSteeringInterrupt: false, attachmentCount: 0,
+      maxAttachments: 10, onPickFiles: vi.fn(), thinkingLevel: 'high', onThinkingChange: vi.fn(),
+      voiceActive: false, onStartVoiceInput: vi.fn(), voiceConversationEnabled: true,
+      onStartVoiceConversation: vi.fn(), onSend: vi.fn(), onAbort: vi.fn(),
+      sessionModel: 'test/one', showModelSelector: true, onModelChange: vi.fn(), modelDisabled: true,
+    };
+    await act(async () => root.render(<MemoryRouter><ComposerToolbar {...props} /></MemoryRouter>));
+    const buttons = [...container.querySelectorAll('button')];
+    expect(buttons[0].disabled).toBe(false);
+    expect(buttons.find(item => item.getAttribute('aria-label') === messages('en').chat.sendMessage)?.disabled).toBe(true);
+    expect(buttons.find(item => item.getAttribute('aria-label') === messages('en').chat.voiceConversation)?.disabled).toBe(false);
   });
 
   it('keeps an unavailable model visible and permits choosing a replacement', async () => {
     await render({ sessionModel: 'removed/original' });
     expect(container.textContent).toContain('original');
     expect(container.textContent).toContain('Unavailable');
-    expect(document.querySelector('[role="group"]')).toBeNull();
+    expect(document.querySelector('input[type=range]')).toBeNull();
   });
 
   it('shows always-on reasoning as fixed instead of unsupported', async () => {
@@ -101,7 +173,7 @@ describe('composer model configuration', () => {
     expect(container.querySelector('button')?.textContent).toBe('Model Three· Always on');
     expect(document.body.textContent).toContain('Always on');
     expect(document.body.textContent).not.toContain('Not supported by this model');
-    expect(document.querySelector('[role="group"]')).toBeNull();
+    expect(document.querySelector('input[type=range]')).toBeNull();
     const popover = document.querySelector('[role="dialog"]');
     expect(popover?.className).toContain('max-h-[min(21rem,calc(100dvh-3rem))]');
     expect(popover?.className).not.toContain(' h-[min(21rem,calc(100dvh-3rem))]');
