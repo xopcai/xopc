@@ -7,7 +7,7 @@ import { parseExternalToolRef } from '../external-tools/refs.js';
 import { getExternalToolRegistry } from '../external-tools/tool-registry.js';
 import { wrapToolsWithProtection } from '../tools/executor.js';
 import { getEmbeddedExecutionRunId, runWithEmbeddedExecutionSession } from './execution-context.js';
-import { setXopcToolMetadata } from './tool-metadata.js';
+import { setXopcToolMetadata, type ToolInvalidationReason } from './tool-metadata.js';
 
 /** Project the current host directory into pi; pi owns search and declaration loading. */
 export async function materializeNativeExternalTools(params: {
@@ -41,7 +41,7 @@ export async function materializeNativeExternalTools(params: {
         description: descriptor.source === 'endpoint' ? 'Tools of the current authorized device' : descriptor.namespace },
         outputSchema: descriptor.outputSchema as TSchema | undefined, annotations: descriptor.annotations,
         external: { toolRef: descriptor.toolRef, revision: descriptor.revision, readOnly: descriptor.batchRead === true },
-        ...(registry.subscribeInvalidation ? { subscribeInvalidation: (listener: () => void) =>
+        ...(registry.subscribeInvalidation ? { subscribeInvalidation: (listener: (reason?: ToolInvalidationReason) => void) =>
           registry.subscribeInvalidation!(params.conversationId, descriptor.toolRef, listener) } : {}),
       });
     }), { ...registry.executorConfig, resolveTimeoutMs: name =>

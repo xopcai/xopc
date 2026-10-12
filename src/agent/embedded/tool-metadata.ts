@@ -2,9 +2,11 @@ import type { AgentTool, BeforeToolCallContext } from '@earendil-works/pi-agent-
 import { createHash } from 'node:crypto';
 import type { ToolDefinition } from '@earendil-works/pi-coding-agent';
 
+export type ToolInvalidationReason = 'connection' | 'authorization';
+
 export type XopcToolMetadata = Pick<ToolDefinition, 'exposure' | 'namespace' | 'annotations' | 'outputSchema'> & {
   external?: { toolRef: string; revision: string; readOnly: boolean };
-  subscribeInvalidation?: (listener: () => void) => () => void;
+  subscribeInvalidation?: (listener: (reason?: ToolInvalidationReason) => void) => () => void;
 };
 const metadataKey = Symbol('xopc.sdkToolMetadata');
 

@@ -489,9 +489,6 @@ export function useRealtimeVoice(options: UseRealtimeVoiceOptions): UseRealtimeV
       slowConnectionTimerRef.current = null;
       clientRef.current = client;
       maxSessionMsRef.current = client.session.limits.maxSessionMs;
-      // Output is ready independently of microphone capture. Let the opening
-      // play as soon as the authenticated connection and player are ready.
-      client.outputReady();
       stage = 'recorder';
       updatePhase('starting');
       let encoder: PcmStreamEncoder | undefined;
@@ -520,10 +517,17 @@ export function useRealtimeVoice(options: UseRealtimeVoiceOptions): UseRealtimeV
         stream.getTracks().forEach((track) => track.stop());
         return;
       }
-      encoder = new PcmStreamEncoder(capture.sampleRate, client.session.inputFormat.sampleRate);
-      for (const samples of pendingSamples) client.sendAudio(encoder.push(samples));
-      encoderRef.current = encoder;
       captureRef.current = capture;
+      // Starting microphone capture can interrupt output or switch the audio
+      // route. Reconfirm playback before allowing the server to send a greeting.
+      if (purpose === 'conversation') {
+        await wait(playerRef.current!.start(), 10_000);
+        if (!isCurrent()) return;
+      }
+      client.outputReady();
+      encoder = new PcmStreamEncoder(capture.sampleRate, client.session.inputFormat.sampleRate);
+      encoderRef.current = encoder;
+      for (const samples of pendingSamples) client.sendAudio(encoder.push(samples));
       recordStartPerfRef.current = performance.now();
       setElapsedSec(0);
       updatePhase('recording');

@@ -16,6 +16,7 @@ import { ConfigSchema } from '../../../config/schema.js';
 import type { StreamingSttEvent } from '../../../media-understanding/types.js';
 import { alibabaTranscriptionProvider } from '../../stt/providers/alibaba-transcription.js';
 import { VoiceRealtimeRuntime } from '../runtime.js';
+import { speakStream } from '../../tts/speak-core.js';
 
 vi.mock('../../../gateway/security/device-request-proof.js', () => ({ verifyDeviceConnectionProof: () => true }));
 
@@ -63,7 +64,7 @@ describe('VoiceRealtimeRuntime playback over WebSocket', () => {
     socket.send(JSON.stringify({ protocolVersion: VOICE_REALTIME_PROTOCOL_VERSION, messageId: crypto.randomUUID(), sentAt: Date.now(), type, payload }));
   }
 
-  async function start(bargeIn = true, recordInterruption = async () => {}, initialUserTurn = true, greeting?: { logicalCallId: string; initiation: 'user' | 'recovery' }) {
+  async function start(bargeIn = true, recordInterruption = async () => {}, initialUserTurn = true, greeting?: { logicalCallId: string; initiation: 'user' | 'recovery' }, waitReady = true) {
     if (greeting) {
       previousStateDirectory = process.env.XOPC_STATE_DIR;
       fixtureDirectory = mkdtempSync(join(tmpdir(), 'xopc-runtime-opening-'));
@@ -116,7 +117,7 @@ describe('VoiceRealtimeRuntime playback over WebSocket', () => {
     });
     await once(socket, 'open');
     send('session.start', { sessionId: session.sessionId, ticket: session.ticket });
-    await vi.waitFor(() => expect(events.some((event) => event.type === 'session.ready')).toBe(true));
+    if (waitReady) await vi.waitFor(() => expect(events.some((event) => event.type === 'session.ready')).toBe(true));
     if (!initialUserTurn) return { delegate, session };
     onSttEvent({ type: 'transcript_final', utteranceId: 'u1', revision: 1, text: 'Hi' });
     await vi.waitFor(() => expect(frames.reduce((sum, bytes) => sum + bytes, 0)).toBe(96_000));
@@ -125,6 +126,34 @@ describe('VoiceRealtimeRuntime playback over WebSocket', () => {
     responseId = created.payload.responseId;
     return { delegate, session };
   }
+
+  it('prepares a cold greeting before connection readiness and plays immediately after output readiness', async () => {
+    let releaseSynthesis!: () => void;
+    const synthesisGate = new Promise<void>(resolve => { releaseSynthesis = resolve; });
+    let synthesisStarted = false;
+    const synthesize = vi.mocked(speakStream).getMockImplementation()!;
+    vi.mocked(speakStream).mockImplementationOnce(async (...args) => {
+      synthesisStarted = true;
+      await synthesisGate;
+      return synthesize(...args);
+    });
+    const { session } = await start(true, async () => {}, false,
+      { logicalCallId: crypto.randomUUID(), initiation: 'user' }, false);
+    await vi.waitFor(() => expect(synthesisStarted).toBe(true));
+    await new Promise(resolve => setTimeout(resolve, 2_100));
+    expect(events.some(event => event.type === 'session.ready')).toBe(false);
+    expect(frames).toHaveLength(0);
+    expect(events.some(event => event.type === 'response.cancelled')).toBe(false);
+    releaseSynthesis();
+    await vi.waitFor(() => expect(events.some(event => event.type === 'session.ready')).toBe(true));
+    send('session.output_ready', { connectionEpoch: session.connectionEpoch });
+    await vi.waitFor(() => expect(frames.reduce((sum, bytes) => sum + bytes, 0)).toBe(96_000));
+    const responseId = session.openingGreeting!.greetingResponseId!;
+    send('response.audio.played', { responseId, playedDurationMs: 2_000 });
+    await vi.waitFor(() => expect(frames.reduce((sum, bytes) => sum + bytes, 0)).toBe(192_000));
+    send('response.audio.played', { responseId, playedDurationMs: 4_000 });
+    await vi.waitFor(() => expect(events.some(event => event.type === 'response.done')).toBe(true));
+  });
 
   it('waits for output readiness and ignores repeated readiness after a named greeting', async () => {
     const { delegate, session } = await start(true, async () => {}, false,

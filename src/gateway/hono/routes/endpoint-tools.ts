@@ -118,6 +118,7 @@ export function registerEndpointToolRoutes(
       const principal = getEndpointPrincipal(id);
       const accessRevoked = Boolean(access && access.revokedAt === undefined && revokeDevice(id));
       const principalRevoked = Boolean(principal && principal.revokedAt === undefined && revokeEndpointPrincipal(id));
+      if (accessRevoked || principalRevoked) deps.service.endpointTools.registry.revokePrincipal(id);
       if (accessRevoked) {
         deps.service.realtime.disconnectPrincipal(id);
         deps.service.voiceRealtime.disconnectPrincipal(id);

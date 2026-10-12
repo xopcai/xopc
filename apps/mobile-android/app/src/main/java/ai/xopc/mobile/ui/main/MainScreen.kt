@@ -3126,7 +3126,7 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
             }, "assistant-thinking", iconRes = R.drawable.action_waveform, compact = true, flat = true) {
             optionsOpen = false; thinkingPickerOpen = true
           }
-          if (connection.queuedInputs.isNotEmpty() || connection.queueError) ContextRow(stringResource(R.string.assistant_queue), "", "assistant-queue",
+          if (connection.queuedInputs.isNotEmpty()) ContextRow(stringResource(R.string.assistant_queue), "", "assistant-queue",
             iconRes = R.drawable.action_new_chat, compact = true, flat = true) {
             optionsOpen = false; queueOpen = true; onLoadQueuedInputs()
           }

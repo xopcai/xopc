@@ -96,6 +96,8 @@ export function createAgentVoiceEngine(options: {
   const deliveredReplies = new Set<string>();
   let lastUserSpeechAt = 0;
   let openingInputSeen = false;
+  let preparedGreeting: { responseId: string; audio: SpeechOpening } | undefined;
+  const greetingAbort = new AbortController();
   const turn = new TurnCoordinator(claim.silenceDurationMs, (text, decision, turnId) => {
     if (closed || muted) return;
     const receivedAtMs = turnReceivedAtMs ?? Date.now();
@@ -147,6 +149,11 @@ export function createAgentVoiceEngine(options: {
 
   function openSpeech(response: ActiveVoiceResponse, job: SpeechJob): SpeechOpening {
     if (job.opening) return job.opening;
+    if (response.opening && preparedGreeting?.responseId === response.id) {
+      job.opening = preparedGreeting.audio;
+      preparedGreeting = undefined;
+      return job.opening;
+    }
     if (response.firstSynthesisAtMs === undefined) {
       response.firstSynthesisAtMs = Date.now();
       log.info({ sessionId: claim.sessionId, responseId: response.id, conversationId: claim.request.conversationId,
@@ -363,7 +370,7 @@ export function createAgentVoiceEngine(options: {
       }
     }, Math.max(0, opening.deadlineAt - Date.now()));
     try {
-      const speechOpening = prepareSpeechStreamSession(claim.tts.config, {
+      const speechOpening = opening && preparedGreeting?.responseId === response.id ? undefined : prepareSpeechStreamSession(claim.tts.config, {
         appConfig: claim.config, signal: response.abortController.signal, allowFallback: false,
       });
       if (speechOpening) {
@@ -689,13 +696,37 @@ export function createAgentVoiceEngine(options: {
       conversationTail = attempt.then(() => {}, () => {});
       return attempt.finally(() => { taskUpdateQueued = false; });
     },
+    async prepareOpeningGreeting(input) {
+      if (!claim.tts || closed || preparedGreeting) return;
+      const audio: SpeechOpening = (async () => {
+        const result = await speakStream(input.text, claim.tts!.config, {
+          appConfig: claim.config, parseDirectives: false, allowFallback: false,
+          signal: AbortSignal.any([options.signal, greetingAbort.signal, AbortSignal.timeout(10_000)]),
+        });
+        try {
+          if (result.outputFormat !== 'pcm') throw new Error('Opening greeting requires PCM audio');
+          const chunks: Uint8Array[] = [];
+          let bytes = 0;
+          for await (const chunk of result.audioStream) {
+            bytes += chunk.byteLength;
+            if (bytes > 480_000) throw new Error('Opening greeting audio exceeds ten seconds');
+            chunks.push(Uint8Array.from(chunk));
+          }
+          return { result: { ...result, release: async () => {}, audioStream: new ReadableStream<Uint8Array>({
+            start(controller) { for (const chunk of chunks) controller.enqueue(chunk); controller.close(); },
+          }) } };
+        } finally { await result.release(); }
+      })().catch((error: unknown) => ({ error }));
+      preparedGreeting = { responseId: input.responseId, audio };
+      await audio;
+    },
     async offerOpeningGreeting(input) {
       if (openingInputSeen || !canOfferTaskUpdateInput() || options.runtime.sessionBusy(claim.request.conversationId!)) return 'skipped';
       const opening = { ...input, result: 'failed' as OpeningGreetingResult };
       const attempt = conversationTail.then(async () => {
         if (Date.now() >= input.deadlineAt) return 'expired' as const;
         if (openingInputSeen || !canOfferTaskUpdateInput() || options.runtime.sessionBusy(claim.request.conversationId!)) return 'skipped' as const;
-        await runAssistantTurn(input.text, input.responseId, undefined, input.deadlineAt - 2000, Date.now(), opening);
+        await runAssistantTurn(input.text, input.responseId, undefined, Date.now(), Date.now(), opening);
         return opening.result;
       });
       conversationTail = attempt.then(() => {}, () => {});
@@ -769,6 +800,8 @@ export function createAgentVoiceEngine(options: {
     close() {
       if (closing) return closing;
       closed = true;
+      greetingAbort.abort('session_closed');
+      preparedGreeting = undefined;
       turn.reset();
       echoCandidates.clear();
       cancelActiveResponse('session_closed');

@@ -620,7 +620,10 @@ export class VoiceRealtimeRuntime {
         }) : createAgentVoiceEngine({
           claim: consumed, runtime: this.options, signal: abortController.signal, send, sendAudio, onClose: shutdown,
         });
-        await engine.start();
+        await Promise.all([
+          engine.start(),
+          consumed.openingGreeting ? engine.prepareOpeningGreeting?.(consumed.openingGreeting) : undefined,
+        ]);
         if (closed) return;
         const active = this.activeSessions.get(consumed.sessionId);
         if (active?.socket === socket) active.engine = engine;
@@ -733,7 +736,9 @@ export class VoiceRealtimeRuntime {
         try {
           if (!claimOpeningGreeting(identity)) return;
         } catch (err) { log.warn({ err, sessionId: claim.sessionId }, 'Opening greeting claim failed'); return; }
-        const deadlineAt = Date.now() + 2_000;
+        // Cold cloud synthesis can take longer than two seconds. Keep a bounded
+        // startup window without cancelling the greeting before its first audio.
+        const deadlineAt = Date.now() + 10_000;
         pendingGreeting = identity;
         openingTimer = setTimeout(() => {
           openingTimer = undefined;
@@ -746,7 +751,7 @@ export class VoiceRealtimeRuntime {
             finishGreeting(identity, 'failed');
             log.warn({ err, ...identity, phase: 'opening_greeting' }, 'Opening greeting failed');
           });
-        }, 300);
+        }, 0);
       } else if (message.type === 'session.stop') {
         void shutdown(message.payload.reason, true);
       } else if (message.type === 'session.metric') {

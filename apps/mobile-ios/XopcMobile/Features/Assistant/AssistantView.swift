@@ -988,7 +988,7 @@ private extension AssistantView {
 
     @ViewBuilder
     var queueCard: some View {
-        if !state.pendingInputs.isEmpty || state.queueError != nil, let conversation {
+        if !state.pendingInputs.isEmpty, let conversation {
             QueuedInputsCard(
                 inputs: state.pendingInputs,
                 errorMessage: state.queueError,

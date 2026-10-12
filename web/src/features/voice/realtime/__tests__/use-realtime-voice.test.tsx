@@ -268,7 +268,7 @@ describe('useRealtimeVoice', () => {
       purpose: 'conversation',
       conversationId: 'agent:main:webchat:default:direct:voice',
     }));
-    expect(mocks.playerStart).toHaveBeenCalledOnce();
+    expect(mocks.playerStart).toHaveBeenCalledTimes(2);
     expect(mocks.playerStartRingback).toHaveBeenCalledOnce();
     expect(mocks.playerStopRingback).toHaveBeenCalled();
     act(() => onEvent({ type: 'response.created', payload: { responseId: 'r1' } }));
@@ -318,12 +318,16 @@ describe('useRealtimeVoice', () => {
     expect(voice.phase).toBe('idle');
   });
 
-  it('plays an opening after connection without waiting for capture or a user turn', async () => {
+  it('waits for capture and resumed output before playing an opening without a user turn', async () => {
     let releaseCapture!: () => void;
     const captureGate = new Promise<void>((resolve) => { releaseCapture = resolve; });
     const capture = mocks.startCapture.getMockImplementation()!;
     mocks.startCapture.mockImplementationOnce(async (...args) => { await captureGate; return capture(...args); });
     const outputReady = vi.fn();
+    let releaseOutput!: () => void;
+    const outputGate = new Promise<void>((resolve) => { releaseOutput = resolve; });
+    mocks.playerStart.mockImplementationOnce(async () => undefined)
+      .mockImplementationOnce(async () => { await outputGate; });
     const connect = mocks.connect.getMockImplementation()!;
     mocks.connect.mockImplementationOnce(async (options) => ({ ...await connect(options), outputReady }));
     render();
@@ -333,18 +337,47 @@ describe('useRealtimeVoice', () => {
       await Promise.resolve();
     });
     await vi.waitFor(() => expect(mocks.startCapture).toHaveBeenCalledOnce());
-    expect(outputReady).toHaveBeenCalledOnce();
+    expect(outputReady).not.toHaveBeenCalled();
     expect(voice.phase).toBe('starting');
     expect(sendAudio).not.toHaveBeenCalled();
+    expect(commit).not.toHaveBeenCalled();
+    await act(async () => { releaseCapture(); await Promise.resolve(); });
+    await vi.waitFor(() => expect(mocks.playerStart).toHaveBeenCalledTimes(2));
+    expect(outputReady).not.toHaveBeenCalled();
+    expect(sendAudio).not.toHaveBeenCalled();
+    await act(async () => { releaseOutput(); await pending; });
+    expect(voice.phase).toBe('recording');
+    expect(outputReady).toHaveBeenCalledOnce();
     expect(commit).not.toHaveBeenCalled();
     act(() => {
       onEvent({ type: 'response.created', payload: { responseId: 'opening' } });
       onAudio(new ArrayBuffer(960), 'opening');
     });
     expect(mocks.playerEnqueue).toHaveBeenCalledOnce();
-    await act(async () => { releaseCapture(); await pending; });
-    expect(voice.phase).toBe('recording');
-    expect(outputReady).toHaveBeenCalledOnce();
+  });
+
+  it('does not start an opening when cancelled while output is resuming', async () => {
+    let releaseOutput!: () => void;
+    const outputGate = new Promise<void>((resolve) => { releaseOutput = resolve; });
+    mocks.playerStart.mockImplementationOnce(async () => undefined)
+      .mockImplementationOnce(async () => { await outputGate; });
+    const outputReady = vi.fn();
+    const connect = mocks.connect.getMockImplementation()!;
+    mocks.connect.mockImplementationOnce(async (options) => ({ ...await connect(options), outputReady }));
+    render();
+    let pending!: Promise<void>;
+    await act(async () => {
+      pending = voice.startVoiceConversation('personal-call', 'assistant');
+      await Promise.resolve();
+    });
+    await vi.waitFor(() => expect(mocks.playerStart).toHaveBeenCalledTimes(2));
+    act(() => voice.cancelVoiceInput());
+    await act(async () => { releaseOutput(); await pending; });
+    expect(outputReady).not.toHaveBeenCalled();
+    expect(sendAudio).not.toHaveBeenCalled();
+    expect(cancelCapture).toHaveBeenCalledOnce();
+    expect(mocks.playerClose).toHaveBeenCalledOnce();
+    expect(voice.phase).toBe('idle');
   });
 
   it('selects Omni explicitly and ignores cancelled-response audio and text', async () => {

@@ -1394,7 +1394,7 @@ export struct XopcChatView {
     Column() {
     if (this.connectionWait.snapshot?.wait) { XopcChatConnectionWait({ model: this.connectionWait }) }
     if (this.prompt.prompt) { XopcChatPrompt({ model: this.prompt }) }
-    if (this.options.queued.length || this.options.queueError) {
+    if (this.options.queued.length > 0) {
       Button({ type: ButtonType.Normal }) {
         Row({ space: 10 }) {
           Text($r('app.string.chat_queue')).fontSize(13).fontWeight(FontWeight.Medium)

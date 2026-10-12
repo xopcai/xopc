@@ -67,11 +67,27 @@ function snapshot(connection: EndpointConnection): EndpointConnectionSnapshot {
 
 export class EndpointRegistry {
   private readonly connectionByEndpointId = new Map<string, EndpointConnection>();
-  private readonly changeListeners = new Set<(endpointId: string) => void>();
+  private readonly changeListeners = new Set<(endpointId: string, reason?: 'connection' | 'authorization') => void>();
 
-  onChange(listener: (endpointId: string) => void): () => void {
+  onChange(listener: (endpointId: string, reason?: 'connection' | 'authorization') => void): () => void {
     this.changeListeners.add(listener);
     return () => { this.changeListeners.delete(listener); };
+  }
+
+  private readonly principalRevocationListeners = new Map<string, Set<() => void>>();
+
+  onPrincipalRevoked(principalId: string, listener: () => void): () => void {
+    const listeners = this.principalRevocationListeners.get(principalId) ?? new Set<() => void>();
+    listeners.add(listener);
+    this.principalRevocationListeners.set(principalId, listeners);
+    return () => {
+      listeners.delete(listener);
+      if (!listeners.size) this.principalRevocationListeners.delete(principalId);
+    };
+  }
+
+  revokePrincipal(principalId: string): void {
+    for (const listener of [...(this.principalRevocationListeners.get(principalId) ?? [])]) listener();
   }
 
   constructor(private readonly policy = new EndpointToolPolicy()) {}
@@ -182,6 +198,8 @@ export class EndpointRegistry {
   disconnect(endpointId: string, code = 4003, reason = 'Endpoint disconnected'): boolean {
     const connection = this.connectionByEndpointId.get(endpointId);
     if (!connection) return false;
+    // Explicit revocation must interrupt consumers before the socket closes.
+    for (const listener of this.changeListeners) listener(endpointId, 'authorization');
     connection.transport.close(code, reason);
     return true;
   }

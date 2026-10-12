@@ -2,6 +2,7 @@ import type { AgentTool } from '@earendil-works/pi-agent-core';
 
 import type { ExternalToolService } from './service.js';
 import type { ExternalToolSource } from './types.js';
+import type { ToolInvalidationReason } from '../embedded/tool-metadata.js';
 import type { ToolExecutorConfig } from '../tools/executor.js';
 
 export interface ExternalToolRegistry {
@@ -9,7 +10,7 @@ export interface ExternalToolRegistry {
   nativeSources: readonly ExternalToolSource[];
   execute: AgentTool['execute'];
   executorConfig?: Partial<ToolExecutorConfig>;
-  subscribeInvalidation?: (conversationId: string, toolRef: string, listener: () => void) => () => void;
+  subscribeInvalidation?: (conversationId: string, toolRef: string, listener: (reason?: ToolInvalidationReason) => void) => () => void;
 }
 
 const registryKey = Symbol('xopc.externalToolRegistry');

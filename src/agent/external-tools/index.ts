@@ -85,9 +85,12 @@ export function createDefaultExternalToolGatewayTools(deps: DefaultExternalToolG
     registry.subscribeInvalidation = (conversationId, ref, listener) => {
       const parsed = parseExternalToolRef(ref, 'endpoint');
       if (!parsed) return () => {};
-      const releaseEndpoint = endpoints.registry.onChange(id => { if (id === parsed?.namespace) listener(); });
-      const releaseBinding = endpoints.bindings.onChange(id => { if (id === conversationId) listener(); });
-      return () => { releaseEndpoint(); releaseBinding(); };
+      const releaseEndpoint = endpoints.registry.onChange((id, reason) => { if (id === parsed?.namespace) listener(reason ?? 'connection'); });
+      const principalId = endpoints.registry.get(parsed.namespace)?.principalId;
+      const releasePrincipal = principalId
+        ? endpoints.registry.onPrincipalRevoked(principalId, () => listener('authorization')) : () => {};
+      const releaseBinding = endpoints.bindings.onChange(id => { if (id === conversationId) listener('authorization'); });
+      return () => { releaseEndpoint(); releaseBinding(); releasePrincipal(); };
     };
   }
   return tools;
