@@ -1,3 +1,4 @@
+import { useShowAdvancedSettings } from '@/stores/settings-mode-store';
 import { ArrowRight, Smartphone } from 'lucide-react';
 import { useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -83,6 +84,7 @@ export function RemoteAccessHub() {
   const hasToken = Boolean(useGatewayStore((s) => s.conversationId));
   const [searchParams, setSearchParams] = useSearchParams();
 
+  const showAdvanced = useShowAdvancedSettings();
   const activeTab = parseRemoteAccessTab(searchParams.get('tab'));
   const pairingIntent = searchParams.get('intent') === 'mobile-pairing';
   const pairingReadiness = useSWR(
@@ -107,7 +109,7 @@ export function RemoteAccessHub() {
   );
 
   const intro = tabIntro(ra, activeTab);
-  const tabItems: PageTabItem<RemoteAccessTabId>[] = REMOTE_ACCESS_TABS.map((tab) => ({
+  const tabItems: PageTabItem<RemoteAccessTabId>[] = REMOTE_ACCESS_TABS.filter((tab) => showAdvanced || (tab !== "ssh" && tab !== "reverse-proxy") || tab === activeTab).map((tab) => ({
     id: tab,
     label: tabLabel(ra, tab),
   }));

@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import { SettingsAdvancedSection } from '@/features/settings/settings-advanced-section';
 import { NumberInput } from '@/components/ui/number-input';
 import { Button } from '@/components/ui/button';
 import { DirectoryPickerPathField } from '@/features/fs/directory-picker-path-field';
@@ -360,23 +361,25 @@ export function AgentEditor({
                 else delete models.chat;
                 setDraft({ ...draft, models: Object.keys(models).length > 0 ? models : undefined });
               }} />
-              <div>
-                <h4 className="mb-3 text-xs font-semibold uppercase tracking-wide text-fg-subtle">{zh ? '固定意图' : 'Fixed intents'}</h4>
-                <div className="space-y-3">
-                  {INTENTS.map((intent) => (
-                    <ModelRouteEditor
-                      key={intent}
-                      label={intentLabels[intent]}
-                      inherited={agent.effective.models.intents[intent] ?? agent.effective.models.chat}
-                      value={draft.models?.intents?.[intent]}
-                      zh={zh}
-                      allowChatFallback
-                      modelKind={intent === 'vision' ? 'vision' : 'text'}
-                      onChange={(route) => setIntent(intent, route)}
-                    />
-                  ))}
+              <SettingsAdvancedSection title={zh ? "任务模型路由" : "Task model routing"} summary={zh ? "当前任务路由继续生效；未覆盖的任务继承全局设置。" : "Task routes remain active; unspecified routes inherit global defaults."}>
+                <div>
+                  <h4 className="mb-3 text-xs font-semibold uppercase tracking-wide text-fg-subtle">{zh ? '固定意图' : 'Fixed intents'}</h4>
+                  <div className="space-y-3">
+                    {INTENTS.map((intent) => (
+                      <ModelRouteEditor
+                        key={intent}
+                        label={intentLabels[intent]}
+                        inherited={agent.effective.models.intents[intent] ?? agent.effective.models.chat}
+                        value={draft.models?.intents?.[intent]}
+                        zh={zh}
+                        allowChatFallback
+                        modelKind={intent === 'vision' ? 'vision' : 'text'}
+                        onChange={(route) => setIntent(intent, route)}
+                      />
+                    ))}
+                  </div>
                 </div>
-              </div>
+              </SettingsAdvancedSection>
               <div>
                 <h4 className="mb-3 text-xs font-semibold uppercase tracking-wide text-fg-subtle">{zh ? '图片能力' : 'Image capabilities'}</h4>
                 <div className="space-y-3">
@@ -414,10 +417,14 @@ export function AgentEditor({
                     }}
                   />
                   {draft.models?.imageGeneration ? (
-                    <div className="grid gap-4 rounded-2xl border border-edge bg-surface-base p-4 sm:grid-cols-2">
-                      <label className="text-xs font-medium text-fg-muted">{zh ? '生成超时（毫秒）' : 'Generation timeout (ms)'}<NumberInput allowEmpty type="number" min={1} className={`${inputClass} mt-1.5`} value={draft.models.imageGeneration.timeoutMs ?? ''} onChange={(event) => setDraft({ ...draft, models: { ...draft.models, imageGeneration: { ...draft.models!.imageGeneration!, timeoutMs: optionalPositiveInt(event.target.value) } } })} /></label>
-                      <div className="text-xs font-medium text-fg-muted"><span>{zh ? '提供商自动回退' : 'Automatic provider fallback'}</span><div className="mt-1.5 flex rounded-xl bg-surface-hover p-1">{([true, false] as const).map((enabled) => <button key={String(enabled)} type="button" onClick={() => setDraft({ ...draft, models: { ...draft.models, imageGeneration: { ...draft.models!.imageGeneration!, autoProviderFallback: enabled } } })} className={cn('flex-1 rounded-lg px-3 py-2 text-xs font-medium', draft.models?.imageGeneration?.autoProviderFallback === enabled ? 'bg-surface-panel text-fg shadow-surface' : 'text-fg-muted')}>{enabled ? (zh ? '开启' : 'On') : (zh ? '关闭' : 'Off')}</button>)}</div></div>
-                    </div>
+                    <SettingsAdvancedSection title={zh ? "图片执行策略" : "Image execution policy"} summary={zh ? "当前超时和回退策略继续生效。" : "Current timeout and fallback settings remain active."}>
+
+                      <div className="grid gap-4 rounded-2xl border border-edge bg-surface-base p-4 sm:grid-cols-2">
+                        <label className="text-xs font-medium text-fg-muted">{zh ? '生成超时（毫秒）' : 'Generation timeout (ms)'}<NumberInput allowEmpty type="number" min={1} className={`${inputClass} mt-1.5`} value={draft.models.imageGeneration.timeoutMs ?? ''} onChange={(event) => setDraft({ ...draft, models: { ...draft.models, imageGeneration: { ...draft.models!.imageGeneration!, timeoutMs: optionalPositiveInt(event.target.value) } } })} /></label>
+                        <div className="text-xs font-medium text-fg-muted"><span>{zh ? '提供商自动回退' : 'Automatic provider fallback'}</span><div className="mt-1.5 flex rounded-xl bg-surface-hover p-1">{([true, false] as const).map((enabled) => <button key={String(enabled)} type="button" onClick={() => setDraft({ ...draft, models: { ...draft.models, imageGeneration: { ...draft.models!.imageGeneration!, autoProviderFallback: enabled } } })} className={cn('flex-1 rounded-lg px-3 py-2 text-xs font-medium', draft.models?.imageGeneration?.autoProviderFallback === enabled ? 'bg-surface-panel text-fg shadow-surface' : 'text-fg-muted')}>{enabled ? (zh ? '开启' : 'On') : (zh ? '关闭' : 'Off')}</button>)}</div></div>
+                      </div>
+
+                    </SettingsAdvancedSection>
                   ) : null}
                 </div>
               </div>
@@ -460,24 +467,30 @@ export function AgentEditor({
           {panel === 'runtime' ? (
             <div className="space-y-6">
               <SectionTitle title={zh ? '运行限制' : 'Runtime limits'} description={zh ? '留空即继承全局限制。' : 'Leave blank to inherit global limits. Use overrides only to tighten or relax a specialist agent.'} action={draft.runtime || draft.workflows ? <Button variant="ghost" onClick={() => setDraft({ ...draft, runtime: undefined, workflows: undefined })}><RotateCcw className="size-4" />{zh ? '全部继承' : 'Inherit all'}</Button> : undefined} />
-              <div className="grid gap-4 sm:grid-cols-2">
-                {([
-                  ['maxTurns', zh ? '单次最大轮数' : 'Maximum turns'],
-                  ['timeoutMs', zh ? '单轮超时（毫秒）' : 'Turn timeout (ms)'],
-                  ['maxToolFailuresPerTurn', zh ? '最大工具失败次数' : 'Maximum tool failures'],
-                ] as const).map(([key, label]) => <label key={key} className="text-xs font-medium text-fg-muted"><span className="flex items-center gap-2">{label}{draft.runtime?.[key] === undefined ? <InheritedBadge>{zh ? '继承' : 'Inherited'}</InheritedBadge> : null}</span><NumberInput allowEmpty type="number" min={1} className={`${inputClass} mt-1.5`} value={draft.runtime?.[key] ?? ''} placeholder={String(agent.effective.runtime[key] ?? '')} onChange={(event) => { const runtime = cleanObject({ ...(draft.runtime ?? {}), [key]: optionalPositiveInt(event.target.value) }); setDraft({ ...draft, runtime }); }} /></label>)}
-              </div>
+              <SettingsAdvancedSection title={zh ? "执行限制" : "Execution limits"} summary={zh ? "保留当前运行限制；未覆盖的字段继承全局设置。" : "Current limits remain active; unspecified limits inherit globally."}>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {([
+                    ['maxTurns', zh ? '单次最大轮数' : 'Maximum turns'],
+                    ['timeoutMs', zh ? '单轮超时（毫秒）' : 'Turn timeout (ms)'],
+                    ['maxToolFailuresPerTurn', zh ? '最大工具失败次数' : 'Maximum tool failures'],
+                  ] as const).map(([key, label]) => <label key={key} className="text-xs font-medium text-fg-muted"><span className="flex items-center gap-2">{label}{draft.runtime?.[key] === undefined ? <InheritedBadge>{zh ? '继承' : 'Inherited'}</InheritedBadge> : null}</span><NumberInput allowEmpty type="number" min={1} className={`${inputClass} mt-1.5`} value={draft.runtime?.[key] ?? ''} placeholder={String(agent.effective.runtime[key] ?? '')} onChange={(event) => { const runtime = cleanObject({ ...(draft.runtime ?? {}), [key]: optionalPositiveInt(event.target.value) }); setDraft({ ...draft, runtime }); }} /></label>)}
+                </div>
+              </SettingsAdvancedSection>
               <section className="rounded-2xl border border-edge bg-surface-base p-4">
                 <h4 className="text-sm font-semibold text-fg">{zh ? '工作流' : 'Workflows'}</h4>
                 <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                  <label className="text-xs font-medium text-fg-muted">{zh ? '默认工作流' : 'Default workflow'}<input className={`${inputClass} mt-1.5`} value={draft.workflows?.default ?? ''} placeholder={agent.effective.workflows.default} onChange={(event) => { const workflows = cleanObject({ ...(draft.workflows ?? {}), default: event.target.value || undefined }); setDraft({ ...draft, workflows }); }} /></label>
+                  <SettingsAdvancedSection title={zh ? "默认工作流" : "Default workflow"} summary={draft.workflows?.default ?? agent.effective.workflows.default ?? (zh ? "未自动绑定工作流" : "No workflow bound automatically")} >
+                    <label className="text-xs font-medium text-fg-muted">{zh ? '默认工作流' : 'Default workflow'}<input className={`${inputClass} mt-1.5`} value={draft.workflows?.default ?? ''} placeholder={agent.effective.workflows.default} onChange={(event) => { const workflows = cleanObject({ ...(draft.workflows ?? {}), default: event.target.value || undefined }); setDraft({ ...draft, workflows }); }} /></label>
+                  </SettingsAdvancedSection>
                   <label className="text-xs font-medium text-fg-muted">{zh ? '允许的工作流' : 'Allowed workflows'}<input className={`${inputClass} mt-1.5`} value={draft.workflows?.allowed?.join(', ') ?? ''} placeholder={agent.effective.workflows.allowed?.join(', ')} onChange={(event) => { const allowed = splitList(event.target.value); const workflows = cleanObject({ ...(draft.workflows ?? {}), allowed: allowed.length > 0 ? allowed : undefined }); setDraft({ ...draft, workflows }); }} /></label>
                 </div>
               </section>
-              <section className="rounded-2xl border border-edge bg-surface-base p-4">
-                <div className="flex items-center justify-between gap-3"><div><h4 className="text-sm font-semibold text-fg">{zh ? '提示词缓存' : 'Prompt cache'}</h4><p className="mt-1 text-xs text-fg-muted">{draft.runtime?.promptCache ? (zh ? '使用单独设置' : 'Using agent override') : (zh ? '继承全局' : 'Inherited globally')}</p></div>{draft.runtime?.promptCache ? <Button variant="ghost" onClick={() => { const runtime = cleanObject({ ...(draft.runtime ?? {}), promptCache: undefined }); setDraft({ ...draft, runtime }); }}><RotateCcw className="size-4" />{zh ? '继承' : 'Inherit'}</Button> : null}</div>
-                {draft.runtime?.promptCache ? <div className="mt-4 grid gap-4 sm:grid-cols-2"><div className="text-xs font-medium text-fg-muted"><span>{zh ? '模式' : 'Mode'}</span><div className="mt-1.5 flex rounded-xl bg-surface-hover p-1">{(['auto', 'off'] as const).map((mode) => <button key={mode} type="button" onClick={() => setDraft({ ...draft, runtime: { ...draft.runtime, promptCache: { ...draft.runtime!.promptCache!, mode } } })} className={cn('flex-1 rounded-lg px-3 py-2 text-xs font-medium', draft.runtime?.promptCache?.mode === mode ? 'bg-surface-panel text-fg shadow-surface' : 'text-fg-muted')}>{mode === 'auto' ? messages.editorCacheModeAuto : messages.editorCacheModeOff}</button>)}</div></div><div className="text-xs font-medium text-fg-muted"><span>{zh ? '缓存周期' : 'Lifetime'}</span><div className="mt-1.5 flex rounded-xl bg-surface-hover p-1">{(['short', 'long'] as const).map((lifetime) => <button key={lifetime} type="button" onClick={() => setDraft({ ...draft, runtime: { ...draft.runtime, promptCache: { ...draft.runtime!.promptCache!, lifetime } } })} className={cn('flex-1 rounded-lg px-3 py-2 text-xs font-medium', draft.runtime?.promptCache?.lifetime === lifetime ? 'bg-surface-panel text-fg shadow-surface' : 'text-fg-muted')}>{lifetime === 'short' ? messages.editorCacheLifetimeShort : messages.editorCacheLifetimeLong}</button>)}</div></div></div> : <Button className="mt-4" onClick={() => setDraft({ ...draft, runtime: { ...draft.runtime, promptCache: { ...(agent.effective.runtime.promptCache ?? { mode: 'auto', lifetime: 'short' }) } } })}>{zh ? '自定义缓存策略' : 'Customize cache policy'}</Button>}
-              </section>
+              <SettingsAdvancedSection title={zh ? "提示词缓存" : "Prompt cache"} summary={draft.runtime?.promptCache?.mode ?? (zh ? "继承全局" : "Inherited globally")}>
+                <section className="rounded-2xl border border-edge bg-surface-base p-4">
+                  <div className="flex items-center justify-between gap-3"><div><h4 className="text-sm font-semibold text-fg">{zh ? '提示词缓存' : 'Prompt cache'}</h4><p className="mt-1 text-xs text-fg-muted">{draft.runtime?.promptCache ? (zh ? '使用单独设置' : 'Using agent override') : (zh ? '继承全局' : 'Inherited globally')}</p></div>{draft.runtime?.promptCache ? <Button variant="ghost" onClick={() => { const runtime = cleanObject({ ...(draft.runtime ?? {}), promptCache: undefined }); setDraft({ ...draft, runtime }); }}><RotateCcw className="size-4" />{zh ? '继承' : 'Inherit'}</Button> : null}</div>
+                  {draft.runtime?.promptCache ? <div className="mt-4 grid gap-4 sm:grid-cols-2"><div className="text-xs font-medium text-fg-muted"><span>{zh ? '模式' : 'Mode'}</span><div className="mt-1.5 flex rounded-xl bg-surface-hover p-1">{(['auto', 'off'] as const).map((mode) => <button key={mode} type="button" onClick={() => setDraft({ ...draft, runtime: { ...draft.runtime, promptCache: { ...draft.runtime!.promptCache!, mode } } })} className={cn('flex-1 rounded-lg px-3 py-2 text-xs font-medium', draft.runtime?.promptCache?.mode === mode ? 'bg-surface-panel text-fg shadow-surface' : 'text-fg-muted')}>{mode === 'auto' ? messages.editorCacheModeAuto : messages.editorCacheModeOff}</button>)}</div></div><div className="text-xs font-medium text-fg-muted"><span>{zh ? '缓存周期' : 'Lifetime'}</span><div className="mt-1.5 flex rounded-xl bg-surface-hover p-1">{(['short', 'long'] as const).map((lifetime) => <button key={lifetime} type="button" onClick={() => setDraft({ ...draft, runtime: { ...draft.runtime, promptCache: { ...draft.runtime!.promptCache!, lifetime } } })} className={cn('flex-1 rounded-lg px-3 py-2 text-xs font-medium', draft.runtime?.promptCache?.lifetime === lifetime ? 'bg-surface-panel text-fg shadow-surface' : 'text-fg-muted')}>{lifetime === 'short' ? messages.editorCacheLifetimeShort : messages.editorCacheLifetimeLong}</button>)}</div></div></div> : <Button className="mt-4" onClick={() => setDraft({ ...draft, runtime: { ...draft.runtime, promptCache: { ...(agent.effective.runtime.promptCache ?? { mode: 'auto', lifetime: 'short' }) } } })}>{zh ? '自定义缓存策略' : 'Customize cache policy'}</Button>}
+                </section>
+              </SettingsAdvancedSection>
             </div>
           ) : null}
 

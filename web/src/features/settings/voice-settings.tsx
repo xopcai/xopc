@@ -3,6 +3,7 @@ import { Loader2, Mic, Play, Square, Volume2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState, type ReactNode } from 'react';
 import useSWR from 'swr';
 
+import { SettingsAdvancedSection } from '@/features/settings/settings-advanced-section';
 import { NumberInput } from '@/components/ui/number-input';
 import { Button } from '@/components/ui/button';
 import { AutosaveStatus } from '@/components/ui/autosave-status';
@@ -502,7 +503,7 @@ export function VoiceSettingsPanel() {
         {form.voice.realtime.enabled && form.voice.realtime.omni?.provider === 'alibaba' ? <OmniVoiceSettings value={form.voice.realtime.omni} onChange={(omni) => updateRealtime({ omni })} /> : null}
         <details className="rounded-xl bg-surface-base/55 px-4 py-3"><summary className="cursor-pointer text-sm font-medium text-fg">{v.experience.technical}</summary>
           <SttSection v={v} apiKeyLabels={apiKeyLabels} stt={stt} models={models} sttProviders={sttProviders} updateStt={updateStt} updateSttFallback={updateSttFallback} />
-          <p className="text-xs text-fg-muted">{v.notes.envVars}</p>
+          <SettingsAdvancedSection title={v.experience.technical} summary={v.notes.envVars}><p className="text-xs text-fg-muted">{v.notes.envVars}</p></SettingsAdvancedSection>
         </details>
       </> : null}
     </div>
@@ -647,20 +648,22 @@ function SttSection({
               />
             </div>
 
-            <div className="flex items-center justify-between gap-2 rounded-xl bg-surface-hover/50 px-3 py-2.5 dark:bg-surface-hover/35">
-              <div>
-                <div className="text-sm font-medium text-fg">{v.stt.fallback}</div>
-                <p className="text-xs text-fg-muted">{v.stt.fallbackDesc}</p>
+            <SettingsAdvancedSection title={v.stt.fallback} summary={v.stt.fallbackDesc}>
+              <div className="flex items-center justify-between gap-2 rounded-xl bg-surface-hover/50 px-3 py-2.5 dark:bg-surface-hover/35">
+                <div>
+                  <div className="text-sm font-medium text-fg">{v.stt.fallback}</div>
+                  <p className="text-xs text-fg-muted">{v.stt.fallbackDesc}</p>
+                </div>
+                <input
+                  type="checkbox"
+                  className="ui-checkbox"
+                  checked={stt.fallback?.enabled ?? false}
+                  onChange={(e) => updateSttFallback({ enabled: e.target.checked })}
+                />
               </div>
-              <input
-                type="checkbox"
-                className="ui-checkbox"
-                checked={stt.fallback?.enabled ?? false}
-                onChange={(e) => updateSttFallback({ enabled: e.target.checked })}
-              />
-            </div>
 
 
+            </SettingsAdvancedSection>
           </>
         ) : null}
       </div>
@@ -883,7 +886,7 @@ function TtsSection({
               open={!providerReady}
             >
               <summary className="cursor-pointer text-sm font-medium text-fg marker:text-fg-muted">
-                {v.tts.advanced.title}
+                {v.experience.service}
                 <span className="ml-2 text-xs font-normal text-fg-muted">{v.tts.advanced.description}</span>
               </summary>
               <div className="mt-3">
@@ -991,7 +994,8 @@ function VoiceProviderConfigFields({
   resetVoiceOnModelChange?: boolean;
 }) {
   const language = useLocaleStore((state) => state.language);
-  return fields.map((field) => {
+  const showAdvanced = useShowAdvancedSettings();
+  return fields.filter((field) => showAdvanced || field.required || !["timeoutMs", "maxTextLength"].includes(field.key)).map((field) => {
     if (field.key === 'apiKey') {
       return (
         <div key={field.key} className={cn('flex flex-col gap-1.5', credentialFieldWidthClass)}>
