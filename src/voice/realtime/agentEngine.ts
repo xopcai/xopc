@@ -93,6 +93,7 @@ export function createAgentVoiceEngine(options: {
   let pendingTurn: { turnId: string; text: string; cancelled: boolean; receivedAtMs: number; committedAtMs: number } | undefined;
   let turnReceivedAtMs: number | undefined;
   let taskUpdateQueued = false;
+  const deliveredReplies = new Set<string>();
   let lastUserSpeechAt = 0;
   let openingInputSeen = false;
   const turn = new TurnCoordinator(claim.silenceDurationMs, (text, decision, turnId) => {
@@ -325,7 +326,7 @@ export function createAgentVoiceEngine(options: {
     else startSpeechWorker(response);
   }
 
-  async function runAssistantTurn(text: string, turnId: string, updateClientMessageId?: string, receivedAtMs = Date.now(), committedAtMs = receivedAtMs, opening?: { responseId: string; deadlineAt: number; result: OpeningGreetingResult }): Promise<boolean> {
+  async function runAssistantTurn(text: string, turnId: string, updateClientMessageId?: string, receivedAtMs = Date.now(), committedAtMs = receivedAtMs, opening?: { responseId: string; deadlineAt: number; result: OpeningGreetingResult }, directReply = false): Promise<boolean> {
     if (!claim.tts || !claim.request.conversationId || !text.trim() || closed) return false;
     cancelActiveResponse('barge_in');
     const response: ActiveVoiceResponse = {
@@ -352,7 +353,7 @@ export function createAgentVoiceEngine(options: {
       taskDone: false,
       pcm: new PcmFrameBuffer(),
     };
-    const taskUpdateExposed = () => Boolean(updateClientMessageId && response.text.trim());
+    const taskUpdateExposed = () => directReply ? response.firstFrameSent : Boolean(updateClientMessageId && response.text.trim());
     activeResponse = response;
     send('response.created', { responseId: response.id });
     if (opening) response.openingTimer = setTimeout(() => {
@@ -374,11 +375,11 @@ export function createAgentVoiceEngine(options: {
       }
       await interruptionWrites;
       if (response.abortController.signal.aborted || closed) return taskUpdateExposed();
-      if (opening) {
+      if (opening || directReply) {
         response.text = text;
         response.firstTextAtMs = Date.now();
         send('response.text.delta', { responseId: response.id, delta: text });
-        queuePhrases(response, [text]);
+        queuePhrases(response, directReply ? response.segmenter.push(text) : [text]);
       } else {
         if (!claim.conversationSessionId) throw new Error('Conversation identity is unavailable');
         const task = await options.runtime.agentBroker.delegate({ text, turnId, conversationId: claim.request.conversationId,
@@ -488,7 +489,7 @@ export function createAgentVoiceEngine(options: {
       });
       if (opening) opening.result = response.audioStarted ? 'completed' : 'failed';
       activeResponse = undefined;
-      return !updateClientMessageId || taskUpdateExposed();
+      return directReply ? response.firstFrameSent : !updateClientMessageId || taskUpdateExposed();
     } catch (error) {
       if (response.abortController.signal.aborted || closed) return taskUpdateExposed();
       log.warn({ err: error, sessionId: claim.sessionId, responseId: response.id,
@@ -674,6 +675,20 @@ export function createAgentVoiceEngine(options: {
 
   return {
     isConversationIdle,
+    offerReply(input) {
+      if (deliveredReplies.has(input.deliveryId)) return Promise.resolve(true);
+      if (taskUpdateQueued || !canOfferTaskUpdateInput() || !input.text.trim() || input.text.length > 32_000
+        || deliveredReplies.size >= 256) return Promise.resolve(false);
+      taskUpdateQueued = true;
+      const attempt = conversationTail.then(async () => {
+        if (!canOfferTaskUpdateInput() || options.runtime.sessionBusy(claim.request.conversationId!)) return false;
+        const delivered = await runAssistantTurn(input.text, input.deliveryId, undefined, Date.now(), Date.now(), undefined, true);
+        if (delivered) deliveredReplies.add(input.deliveryId);
+        return delivered;
+      });
+      conversationTail = attempt.then(() => {}, () => {});
+      return attempt.finally(() => { taskUpdateQueued = false; });
+    },
     async offerOpeningGreeting(input) {
       if (openingInputSeen || !canOfferTaskUpdateInput() || options.runtime.sessionBusy(claim.request.conversationId!)) return 'skipped';
       const opening = { ...input, result: 'failed' as OpeningGreetingResult };

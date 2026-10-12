@@ -468,7 +468,9 @@ export const AUTHENTICATED_LAZY_ROUTE_BUNDLES: readonly AuthenticatedLazyRouteBu
   },
   {
     id: 'mcp',
-    match: (path) => path === '/api/mcp/servers' || /^\/api\/mcp\/servers\/[^/]+\/tools$/.test(path),
+    match: (path) => path === '/api/mcp/servers'
+      || /^\/api\/mcp\/servers\/[^/]+\/(tools|probe|auth)$/.test(path)
+      || /^\/api\/mcp\/auth\/[^/]+(?:\/redirect)?$/.test(path),
     load: async () => {
       const { registerMcpRoutes } = await import('./mcp.js');
       return { register: registerMcpRoutes };

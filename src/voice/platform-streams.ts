@@ -72,7 +72,10 @@ function connect(url: string, token: string, signal: AbortSignal, onEvent: (even
     response.once('aborted', reject);
   });
   socket.on('error', fail);
-  socket.on('close', () => fail(new Error('Platform voice disconnected before completion')));
+  socket.on('close', (code, reason) => fail(new PlatformVoiceError(
+    `Platform voice disconnected before completion (close ${code}${reason.length ? `: ${reason.toString('utf8').slice(0, 256)}` : ''})`,
+    undefined, 'provider_disconnected',
+  )));
   return { socket, close, fail,
     pause: () => { if (!ended && socket.readyState === WebSocket.OPEN) socket.pause(); },
     resume: () => { if (!ended && socket.readyState === WebSocket.OPEN) socket.resume(); },

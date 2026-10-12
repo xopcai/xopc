@@ -3,6 +3,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
+import { PACKAGE_VERSION } from '../package-version.js';
 import { readPackageName, readPackageVersion } from './package-json.js';
 import { runGlobalPackageUpdateSteps, type PackageUpdateStepResult } from './package-update-steps.js';
 import { createDefaultCommandRunner, runCommandWithTimeout } from './run-command.js';
@@ -22,6 +23,7 @@ import {
 } from './update-global.js';
 import {
   maybeRestartGatewayAfterUpdate,
+  prepareGatewayRestart,
   type InProcessRestartTrigger,
   type UpdateRestartResult,
 } from './update-restart.js';
@@ -42,6 +44,7 @@ export type UpdateStepResult = {
 
 export type UpdatePostUpdateResult = {
   extensions?: ExtensionPostUpdateResult;
+  extensionsError?: string;
   restart?: UpdateRestartResult;
 };
 
@@ -628,40 +631,68 @@ export async function runGatewayUpdateWithPostSteps(
   opts: UpdateRunnerOptions = {},
 ): Promise<UpdateRunResult> {
   const channel = opts.channel ?? DEFAULT_PACKAGE_CHANNEL;
+  let preparedService: Awaited<ReturnType<typeof prepareGatewayRestart>>;
+  try {
+    preparedService = await prepareGatewayRestart(opts.shouldRestart);
+  } catch (err) {
+    return {
+      status: 'error',
+      mode: 'unknown',
+      reason: 'restart-preparation-failed',
+      steps: [],
+      durationMs: 0,
+      postUpdate: {
+        restart: {
+          ok: false,
+          mode: 'failed',
+          message: err instanceof Error ? err.message : String(err),
+        },
+      },
+    };
+  }
   const result = await runGatewayUpdate(opts);
 
-  if (result.status !== 'ok') {
+  // A previous install may have succeeded while its gateway restart failed.
+  const needsRuntimeRestart = result.status === 'skipped' && result.reason === 'up-to-date' &&
+    Boolean(opts.triggerInProcessRestart) && Boolean(result.after?.version) &&
+    result.after.version !== PACKAGE_VERSION;
+  if (result.status !== 'ok' && !needsRuntimeRestart) {
     return result;
   }
 
   const postUpdate: UpdatePostUpdateResult = {};
 
-  if (!opts.skipExtensionSync) {
-    const extensions = await runPostUpdateExtensionSync({
-      channel,
-      timeoutMs: opts.timeoutMs,
-    });
-    postUpdate.extensions = extensions;
-    if (extensions.status === 'error') {
-      return {
-        ...result,
-        status: 'error',
-        reason: 'post-update-extensions',
-        postUpdate,
-      };
+  if (!opts.skipExtensionSync && !needsRuntimeRestart) {
+    try {
+      postUpdate.extensions = await runPostUpdateExtensionSync({
+        channel,
+        timeoutMs: opts.timeoutMs,
+      });
+    } catch (err) {
+      postUpdate.extensionsError = err instanceof Error ? err.message : String(err);
     }
   }
 
-  const restart = await maybeRestartGatewayAfterUpdate({
-    shouldRestart: opts.shouldRestart,
-    expectedVersion: result.after?.version ?? undefined,
-    updatedPackageRoot:
-      result.mode === 'npm' || result.mode === 'pnpm' ? result.root : undefined,
-    triggerInProcessRestart: opts.triggerInProcessRestart,
-  });
-  postUpdate.restart = restart;
+  try {
+    postUpdate.restart = await maybeRestartGatewayAfterUpdate({
+      shouldRestart: opts.shouldRestart,
+      expectedVersion: result.after?.version ?? undefined,
+      updatedPackageRoot:
+        result.mode === 'npm' || result.mode === 'pnpm' ? result.root : undefined,
+      triggerInProcessRestart: opts.triggerInProcessRestart,
+      preparedService,
+    });
+  } catch (err) {
+    postUpdate.restart = {
+      ok: false,
+      mode: 'failed',
+      message: err instanceof Error ? err.message : String(err),
+    };
+  }
 
-  return { ...result, postUpdate };
+  const reason = !postUpdate.restart.ok ? 'post-update-restart' :
+    postUpdate.extensions?.status === 'error' || postUpdate.extensionsError ? 'post-update-extensions' : undefined;
+  return { ...result, status: reason ? 'error' : 'ok', reason, postUpdate };
 }
 
 export function formatUpdateApiResult(result: UpdateRunResult, channel: UpdateChannel): Record<string, unknown> {
@@ -690,8 +721,11 @@ export function formatUpdateApiResult(result: UpdateRunResult, channel: UpdateCh
     status: 'error',
     reason: result.reason ?? 'update-failed',
     mode: result.mode,
-    message: failed?.stderrTail ?? failed?.stdoutTail ?? result.reason,
+    message: result.postUpdate?.restart?.ok === false ? result.postUpdate.restart.message :
+      result.postUpdate?.extensionsError ?? failed?.stderrTail ?? failed?.stdoutTail ?? result.reason,
     stderrTail: failed?.stderrTail ?? undefined,
+    installedVersion: result.after?.version ?? undefined,
+    postUpdate: result.postUpdate ?? undefined,
   };
 }
 
