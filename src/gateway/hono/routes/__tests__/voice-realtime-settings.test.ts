@@ -3,6 +3,7 @@ import { realtimeVoiceStatusSchema } from '@xopcai/realtime-protocol/voice';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ConfigSchema } from '../../../../config/schema.js';
+import { PlatformVoiceError } from '../../../../voice/platform-streams.js';
 
 const { speakStream } = vi.hoisted(() => ({ speakStream: vi.fn() }));
 vi.mock('../../../../voice/tts/speak-core.js', async (original) => ({
@@ -26,6 +27,15 @@ function app(withOutput = true) {
 }
 
 describe('realtime voice setup endpoints', () => {
+  it('returns an actionable cloud preview failure without exposing upstream details', async () => {
+    speakStream.mockRejectedValue(new PlatformVoiceError('Private upstream detail', 400, 'unsupported_voice'));
+    const response = await app().request('/api/voice/realtime/preview', { method: 'POST' });
+    expect(response.status).toBe(502);
+    const body = await response.json();
+    expect(body.error.code).toBe('unsupported_voice');
+    expect(body.error.message).toContain('Refresh the voice catalog');
+    expect(JSON.stringify(body)).not.toContain('Private upstream detail');
+  });
   beforeEach(() => vi.clearAllMocks());
 
   it('reports actual routes without credentials or a verified claim', async () => {

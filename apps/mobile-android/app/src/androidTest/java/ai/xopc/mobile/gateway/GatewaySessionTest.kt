@@ -569,7 +569,7 @@ class GatewaySessionTest {
         assertEquals("Changed task", progress.updateTask(task, " Changed task ", "Edited body", "").title)
         assertEquals(listOf("/api/tasks/task-2"), fake.progressEditPaths)
         assertThrows(IllegalArgumentException::class.java) { progress.command(task, "reopen", "invalid") }
-        assertEquals("closed", progress.command(task, "close", "fixed-test-command-key").phase)
+        assertEquals("closed", progress.command(task.copy(criteria = listOf(TaskCriterion("Works", "passed", true))), "close", "fixed-test-command-key").phase)
         val startTask = progress.task("task-start")
         assertThrows(IllegalArgumentException::class.java) {
           progress.command(startTask, "start", "invalid", " ")

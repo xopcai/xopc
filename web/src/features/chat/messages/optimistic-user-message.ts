@@ -8,10 +8,11 @@ export function setOptimisticUserMessageDelivery(
 ): Message[] {
   return messages.map((message) => {
     if (message.clientSubmissionId !== clientSubmissionId) return message;
+    // A canonical user event may arrive before the HTTP acknowledgement.
+    if (!message.deliveryStatus) return message;
     if (status === 'failed') return { ...message, deliveryStatus: 'failed' };
-    const accepted = { ...message };
-    delete accepted.clientSubmissionId;
-    delete accepted.deliveryStatus;
+    // Keep its identity until the transcript confirms the accepted input.
+    const accepted = { ...message, deliveryStatus: 'accepted' as const };
     delete accepted.pendingAppContext;
     return accepted;
   });

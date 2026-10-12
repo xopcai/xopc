@@ -784,4 +784,28 @@
     <string name="chat_search_images">图片</string>
     <string name="chat_search_empty">没有找到相关内容</string>
     <string name="personal_agent_opening_greeting">连接时打招呼</string>
+
+    <string name="progress_adjust_status">调整状态</string>
+    <string name="progress_phase_help">调整阶段不会自动启动 Agent。</string>
+    <string name="progress_phase_blocked">任务正在执行或等待条件满足，请先处理当前执行或等待事项。</string>
+    <string name="progress_cancel_task">取消任务</string>
+    <string name="progress_cancel_task_help">结束此任务，不标记为完成。之后可以重新打开。</string>
+    <string name="progress_complete_execution">请先处理当前执行或等待事项，再完成任务。</string>
+    <string name="progress_complete_criteria">请先在桌面端补充验收标准并完成验收，再标记完成。</string>
+    <string name="progress_complete_acceptance">所有验收标准通过后才能完成，请在桌面端核对验收。</string>
+    <string name="progress_task_chat_short">任务对话</string>
+    <string name="progress_choose_agent">选择 Agent</string>
+    <string name="progress_priority_label">优先级</string>
+    <string name="progress_no_project">不关联项目</string>
+    <string name="progress_no_due_date">设置截止日期</string>
+    <string name="progress_clear_due_date">移除截止日期</string>
+    <string name="progress_due_date_value">截止日期：%1$s</string>
+    <string name="progress_execution_state">执行状态：%1$s</string>
+    <string name="progress_latest_result">最新结果</string>
+
+    <string name="progress_execution_idle">未在执行</string>
+    <string name="progress_execution_waiting">等待中</string>
+    <string name="progress_execution_verifying">验证中</string>
+    <string name="progress_execution_blocked">受阻</string>
+    <string name="progress_agents_unavailable">暂无可用 Agent，请刷新或检查 Gateway 配置。</string>
 </resources>

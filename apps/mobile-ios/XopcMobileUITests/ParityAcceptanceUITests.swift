@@ -1159,7 +1159,7 @@ final class ParityAcceptanceUITests: XCTestCase {
     }
 
     private func checkTaskConversation() {
-        let taskConversation = app.buttons["进入任务对话"]
+        let taskConversation = app.buttons["task-edit-chat"]
         if taskConversation.waitForExistence(timeout: 8) {
             taskConversation.tap()
             capture("18-task-conversation")
@@ -1933,6 +1933,25 @@ final class MobileLayoutParityUITests: XCTestCase {
         XCTAssertTrue(app.buttons["home-tab-assistant"].waitForExistence(timeout: 10))
     }
 
+    func testProgressTaskReviewOpensDetailsAndShowsCompletionRestrictions() {
+        tab("progress")
+        let review = app.buttons["查看结果并验收"]
+        XCTAssertTrue(review.waitForExistence(timeout: 10))
+        review.tap()
+        XCTAssertTrue(app.navigationBars["任务详情"].waitForExistence(timeout: 10))
+        XCTAssertFalse(app.buttons["确认"].exists)
+        let status = app.buttons["task-adjust-status"]
+        XCTAssertTrue(status.isHittable)
+        status.tap()
+        XCTAssertTrue(app.navigationBars["调整状态"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["task-phase-active"].isEnabled)
+        let complete = app.buttons["task-complete"]
+        XCTAssertTrue(complete.exists)
+        XCTAssertFalse(complete.isEnabled)
+        XCTAssertTrue(app.staticTexts["请先在桌面端补充验收标准并完成验收，再标记完成。"].exists)
+        XCTAssertTrue(app.buttons["task-cancel"].exists)
+    }
+
     func testTaskConversationKeepsHeaderSettingsAccessible() {
         tab("progress")
         let task = app.buttons["查看任务"]
@@ -1941,7 +1960,7 @@ final class MobileLayoutParityUITests: XCTestCase {
         let tasks = app.cells.containing(.staticText, identifier: "任务顶部栏检查").firstMatch
         XCTAssertTrue(tasks.waitForExistence(timeout: 10))
         tasks.tap()
-        let openChat = app.buttons["进入任务对话"]
+        let openChat = app.buttons["task-edit-chat"]
         XCTAssertTrue(openChat.waitForExistence(timeout: 10))
         openChat.tap()
         XCTAssertTrue(app.buttons["搜索消息"].waitForExistence(timeout: 10))

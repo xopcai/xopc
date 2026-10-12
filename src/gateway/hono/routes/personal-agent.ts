@@ -177,7 +177,7 @@ export function registerPersonalAgentRoutes(authenticated: Hono, deps: Authentic
         const { resolveStreamingTts } = await import('../../../voice/realtime/runtime.js');
         const route = resolveStreamingTts(deps.service.currentConfig);
         if (!route?.provider.plugin.listVoices || route.route.provider !== selected.provider || route.route.model !== selected.model) return c.json({ ok: false, error: 'Selected voice is unavailable' }, 400);
-        const voices = await route.provider.plugin.listVoices({ cfg: deps.service.currentConfig, providerConfig: route.provider.providerConfig });
+        const voices = await route.provider.plugin.listVoices({ cfg: deps.service.currentConfig, providerConfig: route.provider.providerConfig, mode: 'speech.stream' });
         if (!voices.some(voice => voice.id === selected.voice)) return c.json({ ok: false, error: 'Selected voice is unavailable' }, 400);
       }
       const record = await createOrResumePersonalAgent(deps.service, ownerId, parsed.data.model, listPersonalModels,
@@ -200,7 +200,7 @@ export function registerPersonalAgentRoutes(authenticated: Hono, deps: Authentic
       const { resolveStreamingTts } = await import('../../../voice/realtime/runtime.js');
       const route = resolveStreamingTts(deps.service.currentConfig);
       if (!route?.provider.plugin.listVoices || route.route.provider !== voicePreference.provider || route.route.model !== voicePreference.model) return c.json({ ok: false, error: 'Selected voice is unavailable' }, 400);
-      const voices = await route.provider.plugin.listVoices({ cfg: deps.service.currentConfig, providerConfig: route.provider.providerConfig });
+      const voices = await route.provider.plugin.listVoices({ cfg: deps.service.currentConfig, providerConfig: route.provider.providerConfig, mode: 'speech.stream' });
       if (!voices.some(voice => voice.id === voicePreference.voice)) return c.json({ ok: false, error: 'Selected voice is unavailable' }, 400);
     }
     const updated = await patchPersonalProfile(deps.service, ownerId, revision, displayName, preferences, appearance, voicePreference, voiceCallPreferences);

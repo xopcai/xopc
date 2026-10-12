@@ -129,7 +129,7 @@
   "voiceSettings": {
     "setup": {
       "subtitle": "用声音输入，与助手自然对话。",
-      "service": "语音服务",
+      "service": "服务接入",
       "enable": "启用实时语音",
       "dictation": "实时听写",
       "conversation": "语音陪聊",
@@ -142,8 +142,8 @@
       "hosted": "XOPC 托管",
       "hostedHint": "使用账户服务，无需填写密钥",
       "ownKey": "自己的 API Key",
-      "ownKeyHint": "连接阿里云 Qwen 语音服务",
-      "customProvider": "当前输入服务：{provider}。可在高级设置中调整，或选择上方服务开启实时语音。",
+      "ownKeyHint": "配置阿里云、OpenAI 等语音服务",
+      "customProvider": "当前输入服务：{provider}。可在下方调整服务商和模型；实时语音需要服务商支持流式音频。",
       "keyConfigured": "阿里云密钥已配置",
       "changeKey": "更换密钥",
       "keyHint": "听写和陪聊共用此密钥；也可通过 DASHSCOPE_API_KEY 配置。",
@@ -250,11 +250,11 @@
       "description": "转写服务商、模型、API Key 与备用策略。"
     },
     "stt": {
-      "title": "语音输入（STT）",
+      "title": "语音识别服务",
       "description": "将语音消息转写成文字，让助手能够阅读。",
       "enable": "启用语音输入",
       "enableDesc": "开启后，可将语音消息转写给智能体使用。",
-      "provider": "STT 服务商",
+      "provider": "服务商",
       "alibaba": "阿里云 DashScope",
       "openai": "OpenAI",
       "apiKey": "API Key",
@@ -269,7 +269,7 @@
       "refinementLight": "轻度整理"
     },
     "tts": {
-      "title": "助手语音回复（TTS）",
+      "title": "消息朗读服务",
       "description": "在需要时把助手回复合成为音频。",
       "enable": "启用语音回复",
       "enableDesc": "开启后，助手回复会按下方规则朗读。",
@@ -326,10 +326,16 @@
       "envVars": "环境变量：DASHSCOPE_API_KEY、OPENAI_API_KEY（未在表单填写时）。"
     },
     "experience": {
-      "listening": "说话与聆听",
+      "tabsLabel": "语音设置分类",
+      "devicesHint": "选择麦克风，检查语音输入和播放是否正常。",
+      "serviceHint": "先选择接入方式，再配置服务商、密钥和模型。",
+      "listeningHint": "调整通话方式、音色和回应节奏。",
+      "providerOptions": "服务商高级选项",
+      "readoutService": "独立消息朗读服务",
+      "listening": "通话体验",
       "input": "输入与显示",
-      "devices": "音频设备",
-      "service": "语音服务",
+      "devices": "设备与测试",
+      "service": "服务接入",
       "diagnostics": "排查问题",
       "defaultMode": "默认通话方案",
       "assistant": "当前助手",
@@ -351,7 +357,7 @@
       "standard": "标准",
       "relaxed": "从容",
       "pace": "回应节奏",
-      "technical": "独立模型与服务覆盖",
+      "technical": "高级配置",
       "inputProcessing": "听写处理",
       "providerCheck": "检查连接配置",
       "configurationOnly": "配置检查不代表已完成真实通话测试。",

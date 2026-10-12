@@ -784,4 +784,28 @@
     <string name="chat_search_images">Images</string>
     <string name="chat_search_empty">No results</string>
     <string name="personal_agent_opening_greeting">Greet me when connected</string>
+
+    <string name="progress_adjust_status">Change status</string>
+    <string name="progress_phase_help">Changing phase does not start an Agent run.</string>
+    <string name="progress_phase_blocked">A run or wait is active. Handle it before changing phase.</string>
+    <string name="progress_cancel_task">Cancel task</string>
+    <string name="progress_cancel_task_help">End this task without marking it complete. You can reopen it later.</string>
+    <string name="progress_complete_execution">Finish the current run or resolve waits before completing.</string>
+    <string name="progress_complete_criteria">Add acceptance criteria and review them on the desktop before completing.</string>
+    <string name="progress_complete_acceptance">All acceptance criteria must pass. Review them on the desktop before completing.</string>
+    <string name="progress_task_chat_short">Chat</string>
+    <string name="progress_choose_agent">Choose an Agent</string>
+    <string name="progress_priority_label">Priority</string>
+    <string name="progress_no_project">No project</string>
+    <string name="progress_no_due_date">Set due date</string>
+    <string name="progress_clear_due_date">Remove due date</string>
+    <string name="progress_due_date_value">Due: %1$s</string>
+    <string name="progress_execution_state">Execution: %1$s</string>
+    <string name="progress_latest_result">Latest result</string>
+
+    <string name="progress_execution_idle">Idle</string>
+    <string name="progress_execution_waiting">Waiting</string>
+    <string name="progress_execution_verifying">Verifying</string>
+    <string name="progress_execution_blocked">Blocked</string>
+    <string name="progress_agents_unavailable">No Agents available. Refresh or check the Gateway configuration.</string>
 </resources>
