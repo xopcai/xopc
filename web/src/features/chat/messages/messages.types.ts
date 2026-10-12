@@ -135,7 +135,7 @@ export interface Message {
     kind: 'progress' | 'question' | 'result' | 'failure';
   };
   /** Client-only delivery state for an optimistic user message. */
-  deliveryStatus?: 'sending' | 'failed';
+  deliveryStatus?: 'sending' | 'accepted' | 'failed';
   /** Client-only status shown before the first assistant stream event. */
   pendingResponseStatus?: 'sending' | 'waiting';
   /** Client-only identity used to update one optimistic submission in place. */

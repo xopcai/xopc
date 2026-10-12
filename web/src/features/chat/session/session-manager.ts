@@ -122,7 +122,7 @@ type SessionLoadResult = {
   nextBeforeCursor?: string;
 };
 
-const _sessionLoadInflight = new Map<string, Promise<SessionLoadResult>>();
+const _sessionLoadInflight = new Map<string, { pending: Promise<SessionLoadResult>; messagesAtRequest?: Message[] }>();
 const INITIAL_HISTORY_PAGE_LIMIT = 50;
 const INITIAL_HISTORY_MAX_RAW_ROWS = 500;
 
@@ -295,12 +295,14 @@ export class SessionManager {
     offset = 0,
     beforeCursor?: string | null,
     taskId?: string,
+    messagesAtRequest?: Message[],
   ): Promise<SessionLoadResult> {
     if (!taskId) await this.reconcileDraft(conversationId);
     if (!taskId && await readLocalSessionDraft(conversationId)) return { messages: [], hasMore: false };
     const dedupeKey = `${taskId ?? conversationId}\0${offset}\0${beforeCursor ?? ''}`;
     const existing = _sessionLoadInflight.get(dedupeKey);
-    if (existing) return existing;
+    // A completion refresh must not share a request begun against an older local transcript.
+    if (existing && existing.messagesAtRequest === messagesAtRequest) return existing.pending;
 
     const pending = (async () => {
       const loadPage = async (pageOffset: number, pageBeforeCursor?: string | null) => {
@@ -358,10 +360,10 @@ export class SessionManager {
         nextBeforeCursor,
       };
     })().finally(() => {
-      _sessionLoadInflight.delete(dedupeKey);
+      if (_sessionLoadInflight.get(dedupeKey)?.pending === pending) _sessionLoadInflight.delete(dedupeKey);
     });
 
-    _sessionLoadInflight.set(dedupeKey, pending);
+    _sessionLoadInflight.set(dedupeKey, { pending, messagesAtRequest });
     return pending;
   }
 

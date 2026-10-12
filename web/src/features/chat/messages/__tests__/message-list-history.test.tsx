@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Message } from '@/features/chat/messages/messages.types';
 import { useChatSessionStore } from '@/features/chat/session/chat-session-store';
 import { selectDisplayMessages } from '@/features/chat/session/chat-session-view';
+import { setOptimisticUserMessageDelivery } from '@/features/chat/messages/optimistic-user-message';
 
 vi.mock('@/features/chat/messages/message-bubble', () => ({
   MessageBubble: ({ message }: { message: Message }) => {
@@ -28,6 +29,7 @@ const store = () => useChatSessionStore.getState();
 function Harness() {
   const session = useChatSessionStore((s) => s.sessions[conversationId]);
   return <MessageList
+    personal
     messages={selectDisplayMessages({ ...session, viewConversationId: conversationId, conversationId })}
     streaming={session.streaming}
     progress={null}
@@ -92,6 +94,26 @@ describe('MessageList history identity', () => {
     act(() => store().finalizeStreamingTurn(conversationId, store().sessions[conversationId].streamingMsg!));
     expect(bubble(40)).toBe(live);
     expect(live.textContent).toBe('expanded');
+  });
+
+  it('retains Personal AI user bubbles across send acceptance, realtime echo and tail refresh', () => {
+    store().setCommittedSnapshot(conversationId, { messages: [message(10)], hasMore: false });
+    store().updateSessionMessages(conversationId, rows => [...rows, {
+      ...message(20), clientSubmissionId: 'send-1', deliveryStatus: 'sending',
+    }]);
+    store().setSessionFlags(conversationId, { sending: true });
+    act(() => root.render(<Harness />));
+    const old = bubble(10);
+    const sent = bubble(20);
+    act(() => sent.click());
+    act(() => store().updateSessionMessages(conversationId, rows => setOptimisticUserMessageDelivery(rows, 'send-1', 'accepted')));
+    act(() => store().appendUserMessageIfMissing(conversationId, { ...message(20), timestamp: 21, turnId: 'run-1' }));
+    expect(bubble(21)).toBe(sent);
+    act(() => store().clearStreamingState(conversationId));
+    act(() => store().mergeCommittedFromServer(conversationId, [{ ...message(20), timestamp: 22, turnId: 'run-1' }], true));
+    expect(bubble(22)).toBe(sent);
+    expect(bubble(10)).toBe(old);
+    expect(sent.textContent).toBe('expanded');
   });
 
   it('preserves the visible assistant when a history page joins its earlier fragment', () => {

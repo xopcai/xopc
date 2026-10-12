@@ -1,5 +1,5 @@
 import { requirePlatformVoiceModel } from '../platform-catalog.js';
-import type { VoiceProviderRoute } from '@xopcai/realtime-protocol/voice';
+import { voiceSupportsMode, type VoiceProviderRoute } from '@xopcai/realtime-protocol/voice';
 
 import type { Config } from '../../config/schema.js';
 import { getProviderAuthService } from '../../providers/provider-auth-service.js';
@@ -23,7 +23,7 @@ export async function resolveOmniRoute(config: Config): Promise<OmniRoute> {
     const model = requirePlatformVoiceModel(slice.model, 'conversation');
     maxSessionSeconds = model.voice.limits.maxSessionSeconds;
     serviceVersion = model.voice.serviceVersion;
-    if (!model.voice.voices.some(voice => voice.id === slice.voice)) throw new Error('Selected voice is unavailable');
+    if (!model.voice.voices.some(voice => voice.id === slice.voice && voiceSupportsMode(voice, 'conversation'))) throw new Error('Selected voice is unavailable');
   }
   const managed = slice.provider === 'xopc-cloud';
   const url = new URL(managed

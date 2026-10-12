@@ -192,7 +192,7 @@ struct ProgressHubView: View {
 
     @ViewBuilder
     private func actionControl(_ action: HomeAction) -> some View {
-        if action.type == "open", let route = action.href.flatMap({ HomeOpenRoute(href: $0) }) {
+        if let route = action.route {
             switch route {
             case let .chat(id):
                 Button(action.label) { onOpenConversation(id, "会话", "main") }

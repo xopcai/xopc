@@ -25,7 +25,11 @@ final class AssistantState {
     var queueError: String?
     var isUpdatingQueue = false
     private var loadedConversationID: String?
+    private var loadedTranscriptID: String?
     private var contextGeneration = 0
+    private var runObservation: Task<Void, Never>?
+    private var runGeneration = 0
+    private var isForeground = true
 
     func load(using gateway: any GatewayServing) async {
         isLoading = true
@@ -48,18 +52,23 @@ final class AssistantState {
     }
 
     func loadConversation(_ conversation: ConversationSelection?, using gateway: any GatewayServing) async {
+        isForeground = true
         if let conversation,
            !conversation.isDraft,
            conversation.id == loadedConversationID,
-           isSending,
+           conversation.transcriptId == loadedTranscriptID,
            !messages.isEmpty
         {
+            await resumeConversation(conversation, using: gateway)
             await loadContext(for: conversation, using: gateway)
             await refreshClarification(for: conversation, using: gateway)
             await refreshInputState(for: conversation, using: gateway)
             return
         }
+        cancelRunObservation()
+        runID = nil
         loadedConversationID = conversation?.id
+        loadedTranscriptID = conversation?.transcriptId
         contextGeneration += 1
         messages = []
         executionActivity = []
@@ -76,10 +85,12 @@ final class AssistantState {
         defer { isLoadingHistory = false }
         do {
             let history = try await gateway.fetchHistory(conversationID: conversation.id)
-            guard !Task.isCancelled else { return }
+            guard !Task.isCancelled, loadedConversationID == conversation.id else { return }
             messages = Self.timeline(from: history.session.messages)
             let run = try await gateway.fetchActiveRun(conversationID: conversation.id)
+            guard !Task.isCancelled, loadedConversationID == conversation.id else { return }
             runID = run.active ? run.runId : nil
+            if runID != nil { startFollowing(conversation, using: gateway) }
             await loadContext(for: conversation, using: gateway)
             await refreshClarification(for: conversation, using: gateway)
             await refreshInputState(for: conversation, using: gateway)
@@ -126,6 +137,8 @@ final class AssistantState {
                 delivery: delivery,
                 to: conversation
             )
+            guard loadedConversationID == conversation.id else { return nil }
+            loadedTranscriptID = result.receipt.transcriptId
             if let index = messages.firstIndex(where: { $0.id == optimisticID }) {
                 messages[index].isPending = false
             }
@@ -147,40 +160,121 @@ final class AssistantState {
         }
     }
 
-    private static func payloadSummary(attachments: [MessageAttachment], references: [ContextReference]) -> String {
-        var parts: [String] = []
-        if !attachments.isEmpty {
-            parts.append(AppLocalization.resolve("\(attachments.count) 个附件"))
-        }
-        if !references.isEmpty {
-            parts.append(AppLocalization.resolve("\(references.count) 个引用"))
-        }
-        return AppLocalization.resolve("已发送 ") + parts.joined(separator: AppLocalization.resolve("、"))
+    func pauseConversation() {
+        isForeground = false
+        cancelRunObservation()
     }
 
-    private func followRun(
-        of conversation: ConversationSelection,
-        using gateway: any GatewayServing
-    ) async {
-        if runID == nil {
-            runID = await findActiveRun(in: conversation, using: gateway)
-        }
-        guard let activeRunID = runID else {
-            await reload(conversation, using: gateway)
-            return
-        }
+    private func cancelRunObservation() {
+        runGeneration += 1
+        runObservation?.cancel()
+        runObservation = nil
+    }
+
+    func resumeConversation(_ conversation: ConversationSelection, using gateway: any GatewayServing) async {
+        guard loadedConversationID == conversation.id, !conversation.isDraft else { return }
+        // Sending an input owns its initial subscription until its receipt arrives.
+        guard !isSending || runID != nil else { return }
+        isForeground = true
+        cancelRunObservation()
+        let generation = runGeneration
         do {
-            for try await event in gateway.streamRun(runID: activeRunID) {
-                apply(event, runID: activeRunID)
-                if event.name == "clarify_request" {
-                    await refreshClarification(for: conversation, using: gateway)
+            let run = try await gateway.fetchActiveRun(conversationID: conversation.id)
+            guard loadedConversationID == conversation.id, generation == runGeneration, !Task.isCancelled else { return }
+            runID = run.active ? run.runId : nil
+            await refreshHistory(conversation, using: gateway, retainLive: run.active)
+            guard loadedConversationID == conversation.id, generation == runGeneration, !Task.isCancelled else { return }
+            if runID != nil { startFollowing(conversation, using: gateway) }
+            else { activityLabel = nil }
+        } catch is CancellationError { return }
+        catch {
+            guard loadedConversationID == conversation.id, generation == runGeneration else { return }
+            errorMessage = error.localizedDescription
+            // A transient REST failure must not disable the existing run's reconnect loop.
+            if runID != nil { startFollowing(conversation, using: gateway) }
+        }
+    }
+
+    @discardableResult
+    private func startFollowing(_ conversation: ConversationSelection, using gateway: any GatewayServing) -> Task<Void, Never> {
+        cancelRunObservation()
+        let generation = runGeneration
+        let observation = Task<Void, Never> { [weak self] in
+            guard let self else { return }
+            await self.observeRun(conversation, using: gateway, generation: generation)
+        }
+        runObservation = observation
+        return observation
+    }
+
+    private func followRun(of conversation: ConversationSelection, using gateway: any GatewayServing) async {
+        if runID == nil {
+            let activeRunID = await findActiveRun(in: conversation, using: gateway)
+            guard loadedConversationID == conversation.id, !Task.isCancelled else { return }
+            runID = activeRunID
+        }
+        guard loadedConversationID == conversation.id, !Task.isCancelled, isForeground else { return }
+        guard runID != nil else { await reload(conversation, using: gateway); return }
+        await startFollowing(conversation, using: gateway).value
+    }
+
+    private func observeRun(_ conversation: ConversationSelection, using gateway: any GatewayServing, generation: Int) async {
+        while isObserving(conversation, generation: generation) {
+            guard let activeRunID = runID else { return }
+            do {
+                if try await consumeRun(activeRunID, in: conversation, using: gateway, generation: generation) { return }
+            } catch is CancellationError { return }
+            catch { /* Reconcile and reconnect the active run after transport loss. */ }
+            do {
+                let run = try await gateway.fetchActiveRun(conversationID: conversation.id)
+                guard isObserving(conversation, generation: generation) else { return }
+                runID = run.active ? run.runId : nil
+                await refreshHistory(conversation, using: gateway, retainLive: run.active)
+                if !run.active { activityLabel = nil; return }
+                try await Task.sleep(for: .seconds(1))
+            } catch is CancellationError { return }
+            catch { await waitAfterFailure(error, in: conversation, generation: generation) }
+        }
+    }
+
+    private func waitAfterFailure(_ error: Error, in conversation: ConversationSelection, generation: Int) async {
+        guard isObserving(conversation, generation: generation) else { return }
+        errorMessage = error.localizedDescription
+        try? await Task.sleep(for: .seconds(2))
+    }
+
+    private func isObserving(_ conversation: ConversationSelection, generation: Int) -> Bool {
+        !Task.isCancelled && loadedConversationID == conversation.id && generation == runGeneration
+    }
+
+    private func consumeRun(_ activeRunID: String, in conversation: ConversationSelection,
+                            using gateway: any GatewayServing, generation: Int) async throws -> Bool {
+        for try await event in gateway.streamRun(runID: activeRunID) {
+            guard isObserving(conversation, generation: generation) else { return true }
+            apply(event, runID: activeRunID)
+            if event.name == "clarify_request" { await refreshClarification(for: conversation, using: gateway) }
+            if event.isTerminal { await reload(conversation, using: gateway); return true }
+        }
+        return false
+    }
+
+    private func refreshHistory(_ conversation: ConversationSelection, using gateway: any GatewayServing, retainLive: Bool) async {
+        let generation = runGeneration
+        do {
+            let history = try await gateway.fetchHistory(conversationID: conversation.id)
+            guard isObserving(conversation, generation: generation) else { return }
+            let saved = Self.timeline(from: history.session.messages)
+            let live = retainLive ? messages.filter { message in
+                message.isPending && !saved.contains { durable in
+                    durable.id == message.id || message.id == "live:\(message.turnId ?? ""):\(durable.id)"
                 }
-            }
-            await reload(conversation, using: gateway)
-        } catch is CancellationError {
-            return
-        } catch {
-            await waitForCompletion(of: conversation, using: gateway)
+            } : []
+            messages = saved + live
+            errorMessage = nil
+        } catch is CancellationError { return }
+        catch {
+            guard loadedConversationID == conversation.id, generation == runGeneration else { return }
+            errorMessage = error.localizedDescription
         }
     }
 
@@ -210,9 +304,12 @@ final class AssistantState {
         }
         updateActivity(with: event)
         guard event.name == "assistant_delta", let delta = event.delta, !delta.isEmpty else { return }
-        let liveID = "live:\(runID)"
+        let segmentID = event.messageId ?? runID
+        if messages.contains(where: { !$0.isPending && $0.id == segmentID }) { return }
+        let liveID = "live:\(runID):\(segmentID)"
         if let index = messages.firstIndex(where: { $0.id == liveID }) {
             if let offset = event.offset, offset != messages[index].text.utf16.count {
+                // Replayed prefixes are already visible. Missing prefixes are recovered from history.
                 return
             }
             messages[index].text += delta
@@ -222,57 +319,26 @@ final class AssistantState {
         }
     }
 
-    private func reload(
-        _ conversation: ConversationSelection,
-        using gateway: any GatewayServing
-    ) async {
-        do {
-            let history = try await gateway.fetchHistory(conversationID: conversation.id)
-            messages = Self.timeline(from: history.session.messages)
-            runID = nil
-            activityLabel = nil
-            await refreshClarification(for: conversation, using: gateway)
-            await refreshInputState(for: conversation, using: gateway)
-        } catch is CancellationError {
-            return
-        } catch {
-            errorMessage = error.localizedDescription
-        }
+    private func reload(_ conversation: ConversationSelection, using gateway: any GatewayServing) async {
+        let generation = runGeneration
+        await refreshHistory(conversation, using: gateway, retainLive: false)
+        guard isObserving(conversation, generation: generation) else { return }
+        runID = nil
+        activityLabel = nil
+        await refreshClarification(for: conversation, using: gateway)
+        await refreshInputState(for: conversation, using: gateway)
     }
 
     func stop(using gateway: any GatewayServing) async {
         guard let runID else { return }
         do {
             try await gateway.abort(runID: runID)
+            pauseConversation()
             self.runID = nil
             isSending = false
         } catch {
             errorMessage = error.localizedDescription
         }
-    }
-
-    private func waitForCompletion(
-        of conversation: ConversationSelection,
-        using gateway: any GatewayServing
-    ) async {
-        for _ in 0 ..< 600 {
-            guard !Task.isCancelled else { return }
-            do {
-                try await Task.sleep(for: .milliseconds(500))
-                let run = try await gateway.fetchActiveRun(conversationID: conversation.id)
-                runID = run.active ? run.runId : nil
-                if !run.active {
-                    await reload(conversation, using: gateway)
-                    return
-                }
-            } catch is CancellationError {
-                return
-            } catch {
-                errorMessage = error.localizedDescription
-                return
-            }
-        }
-        errorMessage = AppLocalization.resolve("助手执行时间过长，请稍后刷新")
     }
 }
 
@@ -337,14 +403,6 @@ extension AssistantState {
             guard loadedConversationID == conversation.id, contextGeneration == generation else { return }
             contextError = error.localizedDescription
         }
-    }
-
-    var selectedAgent: AgentSummary? {
-        agents.first { $0.id == selectedAgentID }
-    }
-
-    var isRunActive: Bool {
-        isSending || runID != nil
     }
 
     func select(_ agent: AgentSummary) {

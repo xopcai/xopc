@@ -7,9 +7,9 @@ export function configureRealtimeService(form: VoiceSettingsState, provider: 'al
     voice: { ...form.voice, realtime: {
       ...form.voice.realtime,
       enabled: true,
+      stt: provider === 'xopc-cloud' ? form.voice.realtime.stt : undefined,
       tts: form.voice.realtime.tts?.provider === provider ? form.voice.realtime.tts : { provider, ...(provider === 'alibaba' ? { voice: 'Cherry' } : {}) },
       omni: form.voice.realtime.omni?.provider === provider ? form.voice.realtime.omni : provider === 'xopc-cloud' ? undefined : { provider, model: 'qwen3-omni-flash-realtime', voice: form.voice.realtime.omni?.voice ?? 'Cherry', instructions: form.voice.realtime.omni?.instructions ?? 'Keep replies conversational and concise.' },
     } },
   };
 }
-

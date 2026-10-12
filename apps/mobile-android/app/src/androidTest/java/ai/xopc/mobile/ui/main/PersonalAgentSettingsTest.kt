@@ -37,7 +37,7 @@ class PersonalAgentSettingsTest {
       XopcTheme {
         MainContent(selectedTab = HomeTab.Assistant, onSelectTab = {}, connection = state.value,
           onLoadPersonalProactivity = { outreach }, onSavePersonalProactivity = { it },
-          onUpdatePersonalAgentProfile = { name, _, preferences, _ ->
+          onUpdatePersonalAgentProfile = { name, _, preferences, _, _ ->
             savedName = name; savedPreferences = preferences
             state.value = state.value.copy(personal = state.value.personal.copy(
               agent = agent.copy(revision = 8), agentProfileSavedRevision = 1))
@@ -78,7 +78,7 @@ class PersonalAgentSettingsTest {
     var savedVoice: String? = null
     compose.setContent {
       XopcTheme {
-        PersonalAgentProfileSheet(state.value, { dismissed = true }, {}, { _, _, updated, voice ->
+        PersonalAgentProfileSheet(state.value, { dismissed = true }, {}, { _, _, updated, voice, _ ->
           savedVoice = voice
           savedPreferences = updated
           state.value = state.value.copy(agentProfileSavedRevision = 1)

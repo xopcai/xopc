@@ -1,5 +1,7 @@
 package ai.xopc.mobile.ui.main
 
+import ai.xopc.mobile.gateway.ProgressTaskEdit
+
 import ai.xopc.mobile.R
 import ai.xopc.mobile.gateway.ProgressItem
 import ai.xopc.mobile.gateway.ProgressHomeAction
@@ -83,7 +85,7 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
   onOpenProject: (String) -> Unit,
   onCreateTask: (String, String, String) -> Unit,
   onOpenTaskChat: (String) -> Unit,
-  onSaveTask: (String, Int, String, String, String) -> Unit,
+  onSaveTask: (String, Int, ProgressTaskEdit) -> Unit,
   onOpenChat: (String) -> Unit,
   onOpenNote: (String) -> Unit = {},
   onCreateProjectChat: (String) -> Unit = {},
@@ -127,6 +129,10 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
   var editTitle by rememberSaveable(state.gatewayId, selectedTaskId) { mutableStateOf("") }
   var editBody by rememberSaveable(state.gatewayId, selectedTaskId) { mutableStateOf("") }
   var editProject by rememberSaveable(state.gatewayId, selectedTaskId) { mutableStateOf("") }
+  var editPriority by rememberSaveable(state.gatewayId, selectedTaskId) { mutableStateOf("normal") }
+  var editDueAt by rememberSaveable(state.gatewayId, selectedTaskId) { mutableStateOf<Long?>(null) }
+  var editOriginalPriority by rememberSaveable(state.gatewayId, selectedTaskId) { mutableStateOf("normal") }
+  var editOriginalDueAt by rememberSaveable(state.gatewayId, selectedTaskId) { mutableStateOf<Long?>(null) }
   var editVersion by rememberSaveable(state.gatewayId, selectedTaskId) { mutableStateOf(0) }
   var editOriginalTitle by rememberSaveable(state.gatewayId, selectedTaskId) { mutableStateOf("") }
   var editOriginalBody by rememberSaveable(state.gatewayId, selectedTaskId) { mutableStateOf("") }
@@ -161,7 +167,7 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
   var discardCreateOpen by rememberSaveable(state.gatewayId) { mutableStateOf(false) }
   var requestedTaskId by remember(state.gatewayId) { mutableStateOf<String?>(null) }
   val editDirty = editTitle != editOriginalTitle || editBody != editOriginalBody ||
-    editProject != editOriginalProject
+    editProject != editOriginalProject || editPriority != editOriginalPriority || editDueAt != editOriginalDueAt
   val automationEditDirty = automationEditName != automationOriginalName ||
     automationEditInstruction != automationOriginalInstruction || automationEditCron != automationOriginalCron
   fun goBack() {
@@ -271,6 +277,12 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
     if (page != "workflows") Row(modifier = Modifier.fillMaxWidth()
       .padding(bottom = if (page == "overview") 12.dp else 0.dp).testTag("progress-header"),
       horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+      if (page != "overview") androidx.compose.material3.IconButton(onClick = { goBack() },
+        enabled = !state.commandBusy && !state.editBusy,
+        modifier = Modifier.testTag("progress-back")) {
+        androidx.compose.material3.Icon(androidx.compose.ui.res.painterResource(R.drawable.action_chevron_left),
+          contentDescription = stringResource(R.string.progress_back))
+      }
       Text(when (page) {
         "tasks" -> stringResource(R.string.progress_tasks)
         "detail" -> stringResource(R.string.progress_task_detail)
@@ -337,22 +349,31 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
           onRetrySessions = { selectedProjectId?.let(onOpenProject) })
       }
       "edit" -> ProgressTaskEditor(editTitle, { editTitle = it }, editBody, { editBody = it },
-        editProject, { editProject = it }, editDirty, state.editBusy, state.editError) {
-        selectedTaskId?.let { id -> onSaveTask(id, editVersion, editTitle, editBody, editProject) }
+        editProject, { editProject = it }, editPriority, { editPriority = it }, editDueAt, { editDueAt = it },
+        state.projects, state.projectsLoading, state.projectsError, onLoadProjects,
+        editDirty, state.editBusy, state.editError) {
+        selectedTaskId?.let { id -> onSaveTask(id, editVersion,
+          ProgressTaskEdit(editTitle, editBody, editProject, editPriority, editDueAt)) }
       }
       "detail" -> when {
-        state.detailTaskId != selectedTaskId || state.detailLoading -> BrandLoadingPanel(
+        state.detailTaskId != selectedTaskId || state.detailLoading && selectedTask == null -> BrandLoadingPanel(
           modifier = Modifier.testTag("progress-detail-loading"))
-        state.detailError -> OutlinedButton(onClick = { selectedTaskId?.let(onOpenTask) },
+        state.detailError && selectedTask == null -> OutlinedButton(onClick = { selectedTaskId?.let(onOpenTask) },
           modifier = Modifier.testTag("progress-detail-retry")) {
           Text(stringResource(R.string.progress_task_missing))
         }
-        selectedTask != null -> ProgressTaskDetail(selectedTask, state.commandBusy,
-          state.commandError, state.taskChatBusy, state.taskChatError,
-          onTaskCommand, onStartTask, onOpenTaskChat) {
+        selectedTask != null -> ProgressTaskDetail(selectedTask, state.commandBusy || state.detailLoading,
+          state.commandError || state.detailError, state.taskChatBusy, state.taskChatError,
+          onTaskCommand, onStartTask, onOpenTaskChat, state.agents, state.agentsLoading, state.agentsError,
+          { selectedTaskId?.let(onOpenTask) }) {
           editTitle = selectedTask.title
           editBody = selectedTask.body
           editProject = selectedTask.projectId ?: ""
+          editPriority = selectedTask.priority ?: "normal"
+          editDueAt = selectedTask.dueAt
+          editOriginalPriority = editPriority
+          editOriginalDueAt = editDueAt
+          onLoadProjects()
           editVersion = selectedTask.version
           editOriginalTitle = selectedTask.title
           editOriginalBody = selectedTask.body
@@ -420,7 +441,10 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
         { page = "projects"; onLoadProjects() },
         { page = "automations"; onLoadAutomations() },
         ::openAutomation, ::openTask,
-        { pendingHomeAction = it }, bottomChromeHeight)
+        { action ->
+          val taskId = action.reviewTaskId
+          if (taskId != null) openTask(taskId) else pendingHomeAction = action
+        }, bottomChromeHeight)
     }
   }
   if (discardAutomationOpen) AlertDialog(onDismissRequest = { discardAutomationOpen = false },
@@ -793,21 +817,42 @@ private fun ProgressTaskList(state: ProgressUiState, filter: String, onFilterCha
   }
 }
 
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 private fun ProgressTaskDetail(task: ProgressTask, busy: Boolean, commandError: Boolean,
   taskChatBusy: Boolean, taskChatError: Boolean,
   onCommand: (String) -> Unit, onStart: (String) -> Unit,
-  onOpenTaskChat: (String) -> Unit, onEdit: () -> Unit) {
-  var confirmClose by rememberSaveable(task.id) { mutableStateOf(false) }
+  onOpenTaskChat: (String) -> Unit, agents: List<ai.xopc.mobile.gateway.ConversationAgent>,
+  agentsLoading: Boolean, agentsError: Boolean,
+  onRefresh: () -> Unit, onEdit: () -> Unit) {
+  var confirmAction by rememberSaveable(task.id) { mutableStateOf<String?>(null) }
+  var statusOpen by rememberSaveable(task.id) { mutableStateOf(false) }
   var agentId by rememberSaveable(task.id) { mutableStateOf("") }
   var confirmStart by rememberSaveable(task.id) { mutableStateOf(false) }
-  Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).testTag("progress-task-detail"),
+  Column(Modifier.fillMaxSize().testTag("progress-task-detail")) {
+  if (commandError || taskChatError) {
+    Text(stringResource(if (commandError) R.string.progress_command_error else R.string.progress_task_chat_error),
+      color = MaterialTheme.colorScheme.error, modifier = Modifier.testTag(if (commandError) "progress-command-error" else "progress-task-chat-error"))
+    OutlinedButton(onClick = onRefresh, enabled = !busy) { Text(stringResource(R.string.progress_refresh)) }
+  }
+  Column(modifier = Modifier.weight(1f).verticalScroll(rememberScrollState()),
     verticalArrangement = Arrangement.spacedBy(12.dp)) {
     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)) {
       Column(modifier = Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text(task.title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-        Text(progressPhaseLabel(task.phase), color = MaterialTheme.colorScheme.onSurfaceVariant)
+        TextButton(onClick = { statusOpen = true }, enabled = !busy) {
+          Text(if (task.phase == "closed" && task.resolution == "cancelled") taskResolutionLabel("cancelled") else progressPhaseLabel(task.phase))
+        }
         task.projectId?.let { Text(stringResource(R.string.progress_task_project, it)) }
+      }
+    }
+    if (task.latestResult.isNotBlank()) {
+      ProgressSectionTitle(R.string.progress_latest_result)
+      Card {
+        Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+          MarkdownContent(task.latestResult)
+          task.remainingWork.forEach { Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        }
       }
     }
     ProgressSectionTitle(R.string.progress_description)
@@ -858,57 +903,98 @@ private fun ProgressTaskDetail(task: ProgressTask, busy: Boolean, commandError: 
     ProgressSectionTitle(R.string.progress_details)
     Card {
       Column(modifier = Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text(stringResource(R.string.progress_execution_state, taskExecutionLabel(task.operationalState)))
         task.priority?.let { Text(stringResource(R.string.progress_task_priority, taskPriorityLabel(it))) }
+        task.dueAt?.let { Text(stringResource(R.string.progress_due_date_value,
+          DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(Date(it)))) }
         Text(stringResource(R.string.progress_task_updated,
           DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(Date(task.updatedAt))))
         task.resolution?.let { Text(stringResource(R.string.progress_task_resolution, taskResolutionLabel(it))) }
       }
     }
-    if (task.version > 0) OutlinedButton(onClick = onEdit, enabled = !busy,
-      modifier = Modifier.fillMaxWidth().testTag("progress-task-edit")) {
-      Text(stringResource(R.string.progress_edit_task))
+  }
+  Row(Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    OutlinedButton(onClick = { statusOpen = true }, enabled = !busy,
+      modifier = Modifier.weight(1f).testTag("progress-task-status")) {
+      Text(stringResource(R.string.progress_adjust_status))
     }
+    OutlinedButton(onClick = onEdit, enabled = !busy && task.version > 0,
+      modifier = Modifier.weight(1f).testTag("progress-task-edit")) { Text(stringResource(R.string.progress_edit_task)) }
     Button(onClick = { onOpenTaskChat(task.id) }, enabled = !taskChatBusy && !busy,
-      modifier = Modifier.fillMaxWidth().testTag("progress-task-chat")) {
-      Text(stringResource(R.string.progress_task_chat))
-    }
-    if (taskChatError) Text(stringResource(R.string.progress_task_chat_error),
-      color = MaterialTheme.colorScheme.error, modifier = Modifier.testTag("progress-task-chat-error"))
-    if (commandError) Text(stringResource(R.string.progress_command_error),
-      color = MaterialTheme.colorScheme.error, modifier = Modifier.testTag("progress-command-error"))
-    if (busy) BrandLoadingIndicator(modifier = Modifier.fillMaxWidth().testTag("progress-command-busy"))
-    if ("start" in task.allowedCommands) OutlinedTextField(value = agentId,
-      onValueChange = { agentId = it }, modifier = Modifier.fillMaxWidth().testTag("progress-start-agent"),
-      label = { Text(stringResource(R.string.progress_agent_id)) }, singleLine = true, enabled = !busy)
-    task.allowedCommands.filter { it in setOf("mark_ready", "request_review", "close", "reopen", "start") }
-      .forEach { action ->
-        Button(onClick = { when (action) {
-          "close" -> confirmClose = true
-          "start" -> confirmStart = true
-          else -> onCommand(action)
-        } }, enabled = !busy && (action != "start" || agentId.trim().isNotEmpty() && agentId.trim().length <= 128),
-          modifier = Modifier.fillMaxWidth().testTag("progress-command-$action")) {
-          Text(stringResource(when (action) {
-            "mark_ready" -> R.string.progress_command_mark_ready
-            "request_review" -> R.string.progress_command_request_review
-            "close" -> R.string.progress_command_close
-            "reopen" -> R.string.progress_command_reopen
-            else -> R.string.progress_command_start
-          }))
+      modifier = Modifier.weight(1f).testTag("progress-task-chat")) { Text(stringResource(R.string.progress_task_chat_short)) }
+  }
+  }
+  if (statusOpen) androidx.compose.material3.ModalBottomSheet(onDismissRequest = { if (!busy) statusOpen = false },
+    sheetState = androidx.compose.material3.rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
+    Column(Modifier.fillMaxWidth().heightIn(max = 560.dp).verticalScroll(rememberScrollState()).padding(20.dp),
+      verticalArrangement = Arrangement.spacedBy(12.dp)) {
+      Text(stringResource(R.string.progress_adjust_status), style = MaterialTheme.typography.titleLarge)
+      Text(stringResource(R.string.progress_phase_help), color = MaterialTheme.colorScheme.onSurfaceVariant)
+      if (commandError) {
+        Text(stringResource(R.string.progress_command_error), color = MaterialTheme.colorScheme.error)
+        OutlinedButton(onClick = onRefresh, enabled = !busy) { Text(stringResource(R.string.progress_refresh)) }
+      }
+      listOf("backlog", "ready", "active", "review").forEach { phase ->
+        OutlinedButton(onClick = { task.phaseAction(phase)?.let(onCommand) },
+          enabled = !busy && task.phaseAction(phase) != null,
+          modifier = Modifier.fillMaxWidth().testTag("progress-phase-$phase")) { Text(progressPhaseLabel(phase)) }
+      }
+      if (task.phase != "closed" && "move" !in task.allowedCommands) Text(stringResource(R.string.progress_phase_blocked),
+        color = MaterialTheme.colorScheme.onSurfaceVariant)
+      if ("start" in task.allowedCommands) {
+        if (agentsLoading) BrandLoadingIndicator()
+        if (agentsError || !agentsLoading && agents.isEmpty()) {
+          Text(stringResource(R.string.progress_agents_unavailable), color = MaterialTheme.colorScheme.onSurfaceVariant)
+          OutlinedButton(onClick = onRefresh, enabled = !busy && !agentsLoading) { Text(stringResource(R.string.progress_refresh)) }
+        }
+        TaskChoiceField(stringResource(R.string.progress_agent_id),
+          agents.firstOrNull { it.id == agentId }?.name ?: stringResource(R.string.progress_choose_agent),
+          agents.map { it.id to it.name }, !busy && !agentsLoading, "progress-start-agent") { agentId = it }
+      }
+      task.allowedCommands.filter { it in setOf("mark_ready", "request_review", "close", "reopen", "start") }
+        .forEach { action ->
+          Button(onClick = { when (action) {
+            "close" -> confirmAction = "close"
+            "start" -> confirmStart = true
+            else -> onCommand(action)
+          } }, enabled = !busy && (action != "start" || agents.any { it.id == agentId }) &&
+            (action != "close" || task.completionBlock == null),
+            modifier = Modifier.fillMaxWidth().testTag("progress-command-$action")) {
+            Text(stringResource(when (action) {
+              "mark_ready" -> R.string.progress_command_mark_ready
+              "request_review" -> R.string.progress_command_request_review
+              "close" -> R.string.progress_command_close
+              "reopen" -> R.string.progress_command_reopen
+              else -> R.string.progress_command_start
+            }))
+          }
+        }
+      if ("close" in task.allowedCommands) {
+        task.completionBlock?.let { reason ->
+          Text(stringResource(when (reason) {
+            "execution" -> R.string.progress_complete_execution
+            "criteria" -> R.string.progress_complete_criteria
+            else -> R.string.progress_complete_acceptance
+          }), color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        TextButton(onClick = { confirmAction = "cancel_task" }, enabled = !busy,
+          modifier = Modifier.fillMaxWidth().testTag("progress-command-cancel")) {
+          Text(stringResource(R.string.progress_cancel_task), color = MaterialTheme.colorScheme.error)
         }
       }
+    }
   }
-  if (confirmClose) AlertDialog(onDismissRequest = { confirmClose = false },
-    title = { Text(stringResource(R.string.progress_command_close)) },
-    text = { Text(stringResource(R.string.progress_command_confirm)) },
-    confirmButton = {
-      TextButton(onClick = { confirmClose = false; onCommand("close") },
-        modifier = Modifier.testTag("progress-command-confirm")) {
-        Text(stringResource(R.string.progress_confirm))
-      }
-    }, dismissButton = {
-      TextButton(onClick = { confirmClose = false }) { Text(stringResource(R.string.progress_cancel)) }
-    })
+  confirmAction?.let { action ->
+    AlertDialog(onDismissRequest = { confirmAction = null },
+      title = { Text(stringResource(if (action == "cancel_task") R.string.progress_cancel_task else R.string.progress_command_close)) },
+      text = { Text(stringResource(if (action == "cancel_task") R.string.progress_cancel_task_help else R.string.progress_command_confirm)) },
+      confirmButton = {
+        TextButton(onClick = { confirmAction = null; onCommand(action) },
+          modifier = Modifier.testTag("progress-command-confirm")) { Text(stringResource(R.string.progress_confirm)) }
+      }, dismissButton = {
+        TextButton(onClick = { confirmAction = null }) { Text(stringResource(R.string.progress_cancel)) }
+      })
+  }
   if (confirmStart && "start" in task.allowedCommands && !busy) AlertDialog(
     onDismissRequest = { confirmStart = false },
     title = { Text(stringResource(R.string.progress_command_start)) },
@@ -930,6 +1016,8 @@ private fun ProgressTaskDetail(task: ProgressTask, busy: Boolean, commandError: 
 private fun ProgressTaskEditor(title: String, onTitleChange: (String) -> Unit,
   body: String, onBodyChange: (String) -> Unit,
   projectId: String, onProjectChange: (String) -> Unit,
+  priority: String, onPriorityChange: (String) -> Unit, dueAt: Long?, onDueAtChange: (Long?) -> Unit,
+  projects: List<ProgressProject>, projectsLoading: Boolean, projectsError: Boolean, onLoadProjects: () -> Unit,
   dirty: Boolean, busy: Boolean, error: Boolean, onSave: () -> Unit) {
   val valid = title.trim().isNotEmpty() && title.trim().length <= 500 && body.length <= 50_000 &&
     projectId.trim().length <= 512
@@ -943,10 +1031,31 @@ private fun ProgressTaskEditor(title: String, onTitleChange: (String) -> Unit,
       modifier = Modifier.fillMaxWidth().testTag("progress-edit-body"),
       label = { Text(stringResource(R.string.progress_description)) }, minLines = 6,
       enabled = !busy)
-    OutlinedTextField(value = projectId, onValueChange = onProjectChange,
-      modifier = Modifier.fillMaxWidth().testTag("progress-edit-project"),
-      label = { Text(stringResource(R.string.progress_task_project_label)) }, singleLine = true,
-      enabled = !busy)
+    TaskChoiceField(stringResource(R.string.progress_task_project_label),
+      projects.firstOrNull { it.id == projectId }?.name ?: projectId.ifBlank { stringResource(R.string.progress_no_project) },
+      listOf("" to stringResource(R.string.progress_no_project)) + projects.map { it.id to it.name },
+      !busy, "progress-edit-project", onProjectChange)
+    if (projectsLoading) BrandLoadingIndicator()
+    if (projectsError) OutlinedButton(onClick = onLoadProjects, enabled = !busy) { Text(stringResource(R.string.progress_refresh)) }
+    TaskChoiceField(stringResource(R.string.progress_priority_label), taskPriorityLabel(priority),
+      listOf("low", "normal", "high", "critical").map { it to taskPriorityLabel(it) }, !busy,
+      "progress-edit-priority", onPriorityChange)
+    val context = androidx.compose.ui.platform.LocalContext.current
+    OutlinedButton(onClick = {
+      val date = java.util.Calendar.getInstance().apply { timeInMillis = dueAt ?: System.currentTimeMillis() }
+      android.app.DatePickerDialog(context, { _, year, month, day ->
+        val chosen = java.util.Calendar.getInstance().apply {
+          set(year, month, day, 23, 59, 59); set(java.util.Calendar.MILLISECOND, 999)
+        }
+        onDueAtChange(chosen.timeInMillis)
+      }, date.get(java.util.Calendar.YEAR), date.get(java.util.Calendar.MONTH), date.get(java.util.Calendar.DAY_OF_MONTH)).show()
+    }, enabled = !busy, modifier = Modifier.fillMaxWidth().testTag("progress-edit-due-date")) {
+      Text(dueAt?.let { DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(Date(it)) }
+        ?: stringResource(R.string.progress_no_due_date))
+    }
+    if (dueAt != null) TextButton(onClick = { onDueAtChange(null) }, enabled = !busy) {
+      Text(stringResource(R.string.progress_clear_due_date))
+    }
     if (error) Text(stringResource(R.string.progress_edit_error), color = MaterialTheme.colorScheme.error,
       modifier = Modifier.testTag("progress-edit-error"))
     Button(onClick = onSave, enabled = valid && dirty && !busy,
@@ -986,3 +1095,36 @@ private fun ProgressSectionTitle(label: Int) {
   Text(stringResource(label), style = MaterialTheme.typography.titleSmall,
     fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 8.dp))
 }
+
+
+@Composable
+private fun TaskChoiceField(label: String, selected: String, options: List<Pair<String, String>>,
+  enabled: Boolean, tag: String, onChoose: (String) -> Unit) {
+  var expanded by remember { mutableStateOf(false) }
+  Column {
+    Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    Box {
+      OutlinedButton(onClick = { expanded = true }, enabled = enabled,
+        modifier = Modifier.fillMaxWidth().testTag(tag)) { Text(selected) }
+      androidx.compose.material3.DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+        options.forEach { (id, name) ->
+          androidx.compose.material3.DropdownMenuItem(text = { Text(name) },
+            onClick = { expanded = false; onChoose(id) })
+        }
+      }
+    }
+  }
+}
+
+
+@Composable
+private fun taskExecutionLabel(state: String): String = stringResource(when (state) {
+  "queued" -> R.string.workflow_status_queued
+  "running" -> R.string.workflow_status_running
+  "failed" -> R.string.workflow_status_failed
+  "cancelled" -> R.string.workflow_status_cancelled
+  "waiting" -> R.string.progress_execution_waiting
+  "verifying" -> R.string.progress_execution_verifying
+  "blocked" -> R.string.progress_execution_blocked
+  else -> R.string.progress_execution_idle
+})

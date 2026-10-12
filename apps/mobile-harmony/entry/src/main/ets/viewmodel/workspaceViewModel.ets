@@ -14,6 +14,8 @@ export class XopcWorkspaceViewModel {
   @Trace body: string = '';
   @Trace cron: string = '';
   @Trace projectId: string = '';
+  @Trace priority: string = 'normal';
+  @Trace dueAt?: number;
   @Trace openingId: string = '';
   private section: XopcSection = 'tasks';
   private repository: XopcWorkspaceRepository = new XopcWorkspaceRepository();
@@ -56,6 +58,7 @@ export class XopcWorkspaceViewModel {
   }
   private copyFields(item: XopcWorkspaceItem): void {
     this.title = item.title; this.body = item.body; this.cron = item.cron ?? ''; this.projectId = item.projectId ?? '';
+    this.priority = item.priority || 'normal'; this.dueAt = item.dueAt;
     this.mutationId = ''; this.mutationSignature = '';
   }
   create(projectId: string = ''): void {
@@ -64,6 +67,22 @@ export class XopcWorkspaceViewModel {
     this.selected = item; this.editing = true; this.copyFields(item); this.projectId = projectId; this.error = ''; this.runs = [];
   }
   back(): void { if (!this.busy) { this.selected = undefined; this.editing = false; this.openingId = ''; this.error = ''; this.list(''); } }
+  cancelEdit(): void {
+    if (!this.selected || this.busy) return;
+    this.copyFields(this.selected); this.editing = false; this.error = '';
+  }
+  async refreshDetail(): Promise<void> {
+    const selected = this.selected;
+    if (!selected?.id || this.busy || this.editing) return;
+    const generation = this.generation; this.busy = true; this.error = '';
+    try {
+      const item = await this.repository.detail(this.section, selected.id);
+      const runs = this.section === 'automations' ? await this.repository.runs(selected.id) : [];
+      if (generation !== this.generation) return;
+      this.selected = item; this.runs = runs; this.copyFields(item);
+    } catch (error) { if (generation === this.generation) this.error = (error as Error).message; }
+    finally { if (generation === this.generation) this.busy = false; }
+  }
   private idempotency(signature: string): string {
     if (signature !== this.mutationSignature || !this.mutationId) {
       this.mutationSignature = signature; this.mutationId = this.repository.uuid();
@@ -75,12 +94,12 @@ export class XopcWorkspaceViewModel {
     if (!selected || this.busy || !this.title.trim()) return;
     this.busy = true; this.error = '';
     const item: XopcWorkspaceItem = { id: selected.id, title: this.title, body: this.body, status: selected.status,
-      version: selected.version, projectId: this.projectId.trim() || undefined, cron: this.cron,
+      version: selected.version, projectId: this.projectId.trim() || undefined, priority: this.priority, dueAt: this.dueAt, cron: this.cron,
       editable: selected.editable, actions: selected.actions, automation: selected.automation };
     try {
       await this.repository.save(this.section, item, this.idempotency(JSON.stringify(item)));
       this.busy = false;
-      if (selected.id) await this.open(selected.id); else this.back();
+      if (selected.id) { this.editing = false; await this.refreshDetail(); } else this.back();
     } catch (error) { this.error = (error as Error).message; }
     finally { this.busy = false; }
   }
@@ -92,7 +111,7 @@ export class XopcWorkspaceViewModel {
       await this.repository.action(this.section, selected, action, agentId,
         this.idempotency(selected.id + ':' + selected.version + ':' + action + ':' + agentId));
       this.busy = false;
-      if (action === 'delete') this.back(); else await this.open(selected.id);
+      if (action === 'delete') this.back(); else await this.refreshDetail();
     } catch (error) { this.error = (error as Error).message; }
     finally { this.busy = false; }
   }

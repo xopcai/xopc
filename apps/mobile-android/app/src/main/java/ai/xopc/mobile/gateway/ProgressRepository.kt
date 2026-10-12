@@ -5,7 +5,12 @@ import java.net.URLEncoder
 
 data class ProgressAction(val label: String, val href: String)
 data class ProgressHomeAction(val type: String, val label: String, val approvalId: String? = null,
-  val decision: String? = null, val subjectKind: String? = null, val runId: String? = null)
+  val decision: String? = null, val subjectKind: String? = null, val runId: String? = null,
+  val taskId: String? = null) {
+  val reviewTaskId: String? get() = taskId?.takeIf {
+    type == "task_review" && it.matches(Regex("[A-Za-z0-9_-]{1,128}"))
+  }
+}
 data class ProgressItem(val id: String, val title: String, val summary: String,
   val statusLabel: String?, val recommendation: String?, val openAction: ProgressAction?,
   val reviewDetail: String? = null, val primaryAction: ProgressHomeAction? = null,
@@ -15,7 +20,23 @@ data class ProgressTask(val id: String, val title: String, val body: String, val
   val resolution: String?, val updatedAt: Long, val closedAt: Long?, val projectId: String?,
   val priority: String? = null, val version: Int = 0,
   val allowedCommands: List<String> = emptyList(),
-  val objective: String = "", val criteria: List<TaskCriterion> = emptyList())
+  val objective: String = "", val criteria: List<TaskCriterion> = emptyList(),
+  val dueAt: Long? = null, val operationalState: String = "idle", val hasActiveExecution: Boolean = false,
+  val activeWaitCount: Int = 0, val latestResult: String = "", val remainingWork: List<String> = emptyList()) {
+  fun phaseAction(target: String): String? {
+    if (target == phase || target !in setOf("backlog", "ready", "active", "review")) return null
+    val action = if (phase == "closed") "reopen" else "move"
+    return "$action:$target".takeIf { action in allowedCommands }
+  }
+  val completionBlock: String? get() = when {
+    hasActiveExecution || activeWaitCount > 0 -> "execution"
+    criteria.isEmpty() -> "criteria"
+    criteria.any { it.status != "passed" } -> "acceptance"
+    else -> null
+  }
+}
+data class ProgressTaskEdit(val title: String, val body: String, val projectId: String,
+  val priority: String, val dueAt: Long?)
 data class TaskCriterion(val text: String, val status: String, val humanReviewed: Boolean)
 data class ProgressTaskPage(val items: List<ProgressTask>, val total: Int)
 data class ProgressProject(val id: String, val name: String, val description: String, val status: String,
@@ -99,32 +120,41 @@ class ProgressRepository(private val gateway: GatewaySession) {
   }
 
   fun command(task: ProgressTask, action: String, idempotencyKey: String, agentId: String = ""): ProgressTask {
+    val kind = if (action == "cancel_task") "close" else action.substringBefore(':')
     require(task.id.matches(Regex("[A-Za-z0-9_-]{1,128}")) && task.version > 0 &&
-      action in task.allowedCommands && action in setOf("mark_ready", "request_review", "close", "reopen", "start")) {
+      kind in task.allowedCommands && kind in setOf("move", "mark_ready", "request_review", "close", "reopen", "start")) {
       "INVALID_TASK_COMMAND"
     }
     val selectedAgent = agentId.trim()
-    require(action != "start" || selectedAgent.isNotEmpty() && selectedAgent.length <= 128) {
-      "INVALID_TASK_AGENT"
+    require(kind != "start" || selectedAgent.isNotEmpty() && selectedAgent.length <= 128) { "INVALID_TASK_AGENT" }
+    val command = JSONObject().put("type", kind)
+    if (kind == "close") {
+      require(action == "cancel_task" || task.completionBlock == null) { "TASK_ACCEPTANCE_REQUIRED" }
+      command.put("resolution", if (action == "cancel_task") "cancelled" else "done")
     }
-    val command = JSONObject().put("type", action)
-    if (action == "close") command.put("resolution", "done")
-    if (action == "reopen") command.put("phase", "backlog")
-    if (action == "start") command.put("executor", JSONObject().put("kind", "agent").put("agentId", selectedAgent))
+    if (kind == "move" || kind == "reopen") {
+      val target = action.substringAfter(':', if (kind == "reopen") "backlog" else "")
+      require(task.phaseAction(target) != null) { "INVALID_TASK_PHASE" }
+      command.put("phase", target)
+    }
+    if (kind == "start") command.put("executor", JSONObject().put("kind", "agent").put("agentId", selectedAgent))
     val body = JSONObject().put("idempotencyKey", idempotencyKey)
       .put("expectedVersion", task.version).put("command", command)
     return parseTaskDetail(task.id, gateway.request("/api/tasks/${task.id}/commands", "POST", body.toString()),
       minimumVersion = task.version + 1)
   }
 
-  fun updateTask(task: ProgressTask, title: String, body: String, projectId: String): ProgressTask {
+  fun updateTask(task: ProgressTask, title: String, body: String, projectId: String,
+    priority: String = task.priority ?: "normal", dueAt: Long? = task.dueAt): ProgressTask {
     require(task.id.matches(Regex("[A-Za-z0-9_-]{1,128}")) && task.version > 0) { "INVALID_TASK_ID" }
     val cleanTitle = title.trim()
     val cleanProject = projectId.trim()
     require(cleanTitle.isNotEmpty() && cleanTitle.length <= 500 && body.length <= 50_000 &&
-      cleanProject.length <= 512) { "INVALID_TASK_EDIT" }
+      cleanProject.length <= 512 && priority in setOf("low", "normal", "high", "critical") &&
+      (dueAt == null || dueAt >= 0)) { "INVALID_TASK_EDIT" }
     val patch = JSONObject().put("expectedVersion", task.version).put("title", cleanTitle)
       .put("body", body).put("projectId", if (cleanProject.isBlank()) JSONObject.NULL else cleanProject)
+      .put("priority", priority).put("dueAt", dueAt ?: JSONObject.NULL)
     return parseTaskUpdate(task.id, task.version, gateway.request("/api/tasks/${task.id}", "PATCH", patch.toString()))
   }
 
@@ -194,8 +224,10 @@ class ProgressRepository(private val gateway: GatewaySession) {
           row.optString("approvalId").takeIf(String::isNotBlank),
           row.optString("decision").takeIf(String::isNotBlank),
           row.optString("subjectKind").takeIf(String::isNotBlank),
-          row.optString("runId").takeIf(String::isNotBlank))
+          row.optString("runId").takeIf(String::isNotBlank),
+          row.optString("taskId").takeIf(String::isNotBlank))
         return when (type) {
+          "task_review" -> action.takeIf { it.reviewTaskId != null && it.label.isNotBlank() }
           "connector_decision" -> action.takeIf { it.approvalId?.matches(Regex("[A-Za-z0-9_-]{1,200}")) == true &&
             it.decision in setOf("approve", "deny") && it.label.isNotBlank() }
           "retry_run", "acknowledge_run" -> action.takeIf {
@@ -258,7 +290,21 @@ class ProgressRepository(private val gateway: GatewaySession) {
       require(base.id == expectedId && base.version >= minimumVersion) { "MISMATCHED_PROGRESS_TASK" }
       val commands = root.getJSONArray("allowedCommands")
       require(commands.length() <= 30) { "INVALID_PROGRESS_TASK" }
-      return base.copy(allowedCommands = (0 until commands.length()).map { commands.getString(it) },
+      val runs = root.optJSONArray("runs")
+      val hasActiveRun = (0 until (runs?.length() ?: 0)).map { runs!!.getJSONObject(it) }.any {
+        it.isNull("parentRunId") && it.optString("status") in setOf("queued", "running", "waiting", "verifying")
+      }
+      val waits = root.optJSONArray("waits")
+      val receipts = root.optJSONArray("receipts")
+      val latest = (0 until (receipts?.length() ?: 0)).map { receipts!!.getJSONObject(it) }
+        .maxByOrNull { it.optLong("finalizedAt") }
+      val remaining = latest?.optJSONArray("remainingWork")
+      return base.copy(operationalState = root.optString("operationalState", "idle"),
+        hasActiveExecution = hasActiveRun,
+        activeWaitCount = (0 until (waits?.length() ?: 0)).count { waits!!.getJSONObject(it).optString("status") == "active" },
+        latestResult = latest?.optString("summary").orEmpty(),
+        remainingWork = (0 until (remaining?.length() ?: 0)).map { remaining!!.getString(it) },
+        allowedCommands = (0 until commands.length()).map { commands.getString(it) },
         objective = root.getJSONObject("task").optJSONObject("contract")?.optString("objective").orEmpty(),
         criteria = parseTaskCriteria(root))
     }
@@ -323,11 +369,12 @@ class ProgressRepository(private val gateway: GatewaySession) {
       val phase = task.getString("phase")
       require(id.isNotBlank() && title.isNotBlank() &&
         phase in setOf("backlog", "ready", "active", "review", "closed")) { "INVALID_PROGRESS_TASK" }
-      return ProgressTask(id, title.take(160), task.optString("body").take(4000), phase,
+      return ProgressTask(id, title, task.optString("body"), phase,
         task.optString("resolution").takeIf(String::isNotBlank), task.getLong("updatedAt"),
         if (task.has("closedAt")) task.getLong("closedAt") else null,
         task.optString("projectId").takeIf(String::isNotBlank),
-        task.optString("priority").takeIf(String::isNotBlank), task.getInt("version"))
+        task.optString("priority").takeIf(String::isNotBlank), task.getInt("version"),
+        dueAt = if (!task.isNull("dueAt")) task.getLong("dueAt") else null)
     }
   }
 }
