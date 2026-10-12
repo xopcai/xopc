@@ -9,7 +9,7 @@ struct PersonalAgentRecord: Decodable, Equatable, Sendable {
     let revision: Int?
     let userCallName: String?
     let preferences: [String: String]?
-    var voiceCallPreferences: PersonalVoiceCallPreferences? = nil
+    var voiceCallPreferences: PersonalVoiceCallPreferences?
     let voicePreference: PersonalVoicePreference?
     let errorMessage: String?
 

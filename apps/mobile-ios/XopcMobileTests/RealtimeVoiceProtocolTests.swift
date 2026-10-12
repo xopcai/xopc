@@ -8,7 +8,7 @@ struct RealtimeVoiceProtocolTests {
             logicalCallId: "c3895c61-d123-4597-9d35-72f01ba723e7", initiation: "recovery"
         )
         let request = RealtimeVoiceSessionRequest(conversationId: "personal", mode: .assistant,
-                                                 language: "zh", openingGreeting: greeting)
+                                                  language: "zh", openingGreeting: greeting)
         let object = try #require(JSONSerialization.jsonObject(with: JSONEncoder().encode(request)) as? [String: Any])
         let opening = try #require(object["openingGreeting"] as? [String: Any])
         #expect(opening["initiation"] as? String == "recovery")

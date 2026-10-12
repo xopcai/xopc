@@ -39,14 +39,15 @@ struct RealtimeVoiceSessionRequest: Encodable, Sendable {
     let purpose = "conversation"
     let conversationId: String
     let mode: RealtimeVoiceMode
-    var language: String? = nil
-    var openingGreeting: OpeningGreetingRequest? = nil
+    var language: String?
+    var openingGreeting: OpeningGreetingRequest?
 
     struct OpeningGreetingRequest: Encodable, Sendable {
         let logicalCallId: String
         let initiation: String
         let supportsOutputReady = true
     }
+
     let supportedProtocolVersions = [3]
     let mediaPreferences = ["websocket-pcm"]
 }
@@ -59,11 +60,12 @@ extension RealtimeVoiceMode: Encodable {
 }
 
 struct RealtimeVoiceSession: Decodable, Sendable {
-    var openingGreeting: OpeningGreeting? = nil
+    var openingGreeting: OpeningGreeting?
     struct OpeningGreeting: Decodable, Sendable {
         let accepted: Bool
         let greetingResponseId: String?
     }
+
     let sessionId: String
     let ticket: String
     let websocketPath: String
