@@ -126,21 +126,31 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 0.35rem;
-  padding: 0.25rem 0.45rem;
+  width: 1.75rem;
+  height: 1.75rem;
+  padding: 0;
   margin: 0;
   border: none;
   border-radius: var(--radius-md);
-  background: var(--color-surface-active);
+  background: transparent;
   color: var(--color-fg-muted);
   font-size: 0.75rem;
   font-weight: 500;
   line-height: 1.25;
   cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
   transition:
+    opacity 0.15s ease,
     color 0.15s ease,
     background-color 0.15s ease,
     transform 0.12s ease;
+}
+
+.markdown-code-block:hover .markdown-code-copy-btn,
+.markdown-code-block:focus-within .markdown-code-copy-btn {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .markdown-code-copy-btn:hover {
@@ -165,11 +175,9 @@
 }
 
 .markdown-code-copy-btn svg {
+  width: 1rem;
+  height: 1rem;
   pointer-events: none;
-}
-
-.markdown-code-copy-label {
-  white-space: nowrap;
 }
 
 .markdown-body .markdown-code-block > pre {
@@ -210,7 +218,7 @@ html.dark .markdown-body .markdown-code-block > pre {
 
 html.dark .markdown-code-copy-btn {
   color: var(--color-fg-subtle);
-  background: #06080b;
+  background: transparent;
 }
 
 html.dark .markdown-code-copy-btn:hover {
@@ -491,6 +499,7 @@ html.dark .markdown-code-copy-btn:hover {
   background: color-mix(in srgb, var(--color-surface-panel) 92%, transparent);
   box-shadow: var(--shadow-popover);
   opacity: 0;
+  pointer-events: none;
   transform: translateY(-0.25rem);
   transition: opacity 150ms ease, transform 150ms ease;
   backdrop-filter: blur(8px);
@@ -499,6 +508,7 @@ html.dark .markdown-code-copy-btn:hover {
 .markdown-mermaid-interactive:hover .markdown-mermaid-actions,
 .markdown-mermaid-interactive:focus-within .markdown-mermaid-actions {
   opacity: 1;
+  pointer-events: auto;
   transform: translateY(0);
 }
 
@@ -539,9 +549,19 @@ html.dark .markdown-code-copy-btn:hover {
   opacity: 0.5;
 }
 
+.markdown-mermaid-action-button {
+  width: 1.75rem;
+  height: 1.75rem;
+}
+
 @media (hover: none) {
+  .markdown-code-copy-btn {
+    opacity: 1;
+    pointer-events: auto;
+  }
   .markdown-mermaid-actions {
     opacity: 1;
+    pointer-events: auto;
     transform: translateY(0);
   }
 }
@@ -696,4 +716,23 @@ html.dark .markdown-body .hljs-deletion {
   padding: 0;
   overflow: visible;
   background: transparent;
+}
+
+.markdown-math { min-width: 0; max-width: 100%; color: inherit; }
+.markdown-math-display { position: relative; padding: 2rem 0 .75rem; }
+.markdown-math-display .katex-display { min-width: 0; max-width: 100%; overflow-x: auto; margin: .25rem 0; }
+.markdown-math-source { white-space: pre-wrap; overflow-wrap: anywhere; font-family: var(--font-mono, monospace); }
+.markdown-math-actions { position: absolute; top: 0; right: 0; display: flex; gap: .25rem; opacity: 0; pointer-events: none; transition: opacity 150ms ease; }
+.markdown-math-display:hover > .markdown-math-actions,
+.markdown-math-display:focus-within > .markdown-math-actions { opacity: 1; pointer-events: auto; }
+.markdown-math-actions button { display: inline-flex; align-items: center; justify-content: center; width: 1.75rem; height: 1.75rem; border-radius: .25rem; color: var(--color-fg-muted); cursor: pointer; }
+.markdown-math-actions button svg { pointer-events: none; }
+.markdown-math-actions button:hover { background: var(--color-surface-hover); }
+.markdown-math-actions button:focus-visible { outline: 2px solid var(--color-accent); }
+@media (hover: none) {
+  .markdown-math-actions { opacity: 1; pointer-events: auto; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .markdown-math-actions, .markdown-code-copy-btn, .markdown-mermaid-actions { transition: none; }
+  .markdown-mermaid-actions { transform: none; }
 }

@@ -88,7 +88,9 @@
     "unist-util-visit-parents": "6.0.2",
     "use-debounce": "^10.1.1",
     "xlsx": "file:./vendor/xlsx-0.20.3.tgz",
-    "zustand": "^5.0.12"
+    "zustand": "^5.0.12",
+    "@xopcai/markdown-math": "workspace:*",
+    "katex": "0.19.0"
   },
   "devDependencies": {
     "@babel/core": "^7.29.0",

@@ -6,6 +6,13 @@ import {
 } from '../lazy-bundles.js';
 
 describe('lazy route bundles', () => {
+  it('maps next turn suggestions without capturing adjacent session endpoints', () => {
+    for (const path of ['/api/sessions/id/next-turn-suggestion', '/api/sessions/id/next-turn-suggestion-feedback']) {
+      expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('next-turn-suggestions');
+    }
+    expect(findAuthenticatedLazyRouteBundle('/api/sessions/id/next-turn-suggestion-other')).toBeUndefined();
+    expect(findAuthenticatedLazyRouteBundle('/api/sessions/id/inputs')?.id).not.toBe('next-turn-suggestions');
+  });
   it('maps single-call device authorization routes without capturing adjacent devices', () => {
     for (const path of ['/api/endpoint-tools/target-authorizations', '/api/endpoint-tools/target-authorizations/grant']) expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('device-authorizations');
     expect(findAuthenticatedLazyRouteBundle('/api/endpoint-tools/target-authorizations-extra')).toBeUndefined();

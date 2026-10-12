@@ -12,6 +12,7 @@ export * from './conversation-identity.js';
 export * from './session-input-reliability.js';
 export * from './session-input-command.js';
 export * from './welcome-suggestions.js';
+export * from './next-turn-suggestions.js';
 export * from './home.js';
 export * from './tool-activity.js';
 export * from './automations.js';
@@ -46,3 +47,4 @@ export * from './task-result-delivery.js';
 export { isSessionCommandRejected } from './session-command-rejection.js';
 
 export * from './personal-proactivity.js';
+export * from './specialists.js';

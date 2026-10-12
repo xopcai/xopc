@@ -2,7 +2,7 @@
   "name": "@xopcai/browser-ext",
   "version": "0.0.1",
   "private": true,
-  "description": "Chrome Extension bridge for xopc browser automation — connects to xopc via WebSocket, executes commands in real Chrome via CDP.",
+  "description": "Chrome Extension bridge for xopc browser automation \u2014 connects to xopc via WebSocket, executes commands in real Chrome via CDP.",
   "type": "module",
   "scripts": {
     "icons": "node scripts/render-icons.mjs",
@@ -22,7 +22,9 @@
     "@xopcai/realtime-protocol": "workspace:*",
     "markdown-it": "^14.2.0",
     "react": "^19.2.5",
-    "react-dom": "^19.2.5"
+    "react-dom": "^19.2.5",
+    "@xopcai/markdown-math": "workspace:*",
+    "katex": "0.19.0"
   },
   "devDependencies": {
     "@types/chrome": "^0.0.287",

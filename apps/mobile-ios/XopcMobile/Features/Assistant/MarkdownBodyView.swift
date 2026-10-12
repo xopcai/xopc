@@ -9,10 +9,12 @@ struct MarkdownBodyView: View {
     @State private var projectedParts: [MarkdownPart] = []
 
     var body: some View {
+        let displayedParts = markdown == nil || projectedParts.isEmpty ? parts : projectedParts
+        let mathEnabled = displayedParts.reduce(0) { $0 + MathMarkdownSyntax.candidateCount($1.block) } <= 256
         VStack(alignment: .leading, spacing: 10) {
-            ForEach(markdown == nil || projectedParts.isEmpty ? parts : projectedParts) { part in
+            ForEach(displayedParts) { part in
                 MarkdownPartView(block: part.block, configuration: configuration, conversationID: conversationID,
-                                 streaming: streaming && part.id == projectedParts.last?.id)
+                                 streaming: streaming && part.id == projectedParts.last?.id, mathEnabled: mathEnabled)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -36,6 +38,7 @@ private struct MarkdownPartView: View {
     let configuration: GatewayConfiguration
     let conversationID: String?
     let streaming: Bool
+    let mathEnabled: Bool
     @State private var expanded = false
 
     var body: some View {
@@ -43,7 +46,7 @@ private struct MarkdownPartView: View {
         case let .paragraph(text):
             inline(text).mobileTextStyle(.body)
         case let .heading(level, text):
-            inline(text)
+            inline(text, fontSize: headingStyle(level).size)
                 .mobileTextStyle(headingStyle(level))
                 .padding(.top, level <= 2 ? 8 : 3)
                 .accessibilityAddTraits(.isHeader)
@@ -67,6 +70,8 @@ private struct MarkdownPartView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
             .fixedSize(horizontal: false, vertical: true)
+        case let .math(source):
+            MathMarkdownView(markdown: source, streaming: streaming, display: true, enabled: mathEnabled)
         case let .code(text):
             VStack(alignment: .leading, spacing: 4) {
                 HStack {
@@ -95,7 +100,7 @@ private struct MarkdownPartView: View {
                         ForEach(Array((expanded ? rows : Array(rows.prefix(40))).enumerated()), id: \.element.id) { rowIndex, row in
                             HStack(alignment: .top, spacing: 0) {
                                 ForEach(Array(row.cells.enumerated()), id: \.element.id) { columnIndex, cell in
-                                    StreamingMarkdownText(source: cell.text, streaming: false)
+                                    inline(cell.text)
                                         .fontWeight(row.isHeader ? .semibold : .regular)
                                         .multilineTextAlignment(textAlignment(columnIndex < alignments.count ? alignments[columnIndex] : .leading))
                                         .frame(width: 168, alignment: frameAlignment(columnIndex < alignments.count ? alignments[columnIndex] : .leading))
@@ -119,8 +124,13 @@ private struct MarkdownPartView: View {
         }
     }
 
-    private func inline(_ text: String) -> some View {
-        StreamingMarkdownText(source: text, streaming: streaming)
+    @ViewBuilder
+    private func inline(_ text: String, fontSize: Double = 16) -> some View {
+        if MathMarkdownSyntax.mayContainMath(text) {
+            MathMarkdownView(markdown: text, streaming: streaming, fontSize: fontSize, enabled: mathEnabled)
+        } else {
+            StreamingMarkdownText(source: text, streaming: streaming)
+        }
     }
 
     private func codePreview(_ source: String) -> String {

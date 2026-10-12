@@ -1,3 +1,4 @@
+import { SpecialistProfileEditor } from './specialist-profile-editor';
 import {
   AlertTriangle,
   Bot,
@@ -167,6 +168,8 @@ export function AgentEditor({
     try {
       await profileEditorRef.current?.save();
       const next = await updateGatewayAgent(agent.id, {
+        expectedRevision: agent.revision,
+        specialistProfile: draft.specialistProfile ?? null,
         workspace: draft.workspace ?? null,
         profile: draft.profile,
         models: draft.models ?? null,
@@ -321,6 +324,8 @@ export function AgentEditor({
                   <label className="text-xs font-medium text-fg-muted">{zh ? '头像地址' : 'Avatar URL or path'}<input className={`${inputClass} mt-1.5`} value={draft.profile?.avatar ?? ''} onChange={(event) => updateIdentity('avatar', event.target.value)} placeholder={zh ? 'URL 或本地路径' : 'URL or local path'} /></label>
                 </div>
               </section>
+              <SpecialistProfileEditor profile={draft.specialistProfile} zh={zh}
+                onChange={(specialistProfile) => setDraft(current => ({ ...current, specialistProfile }))} />
               <AgentProfileEditor
                 ref={profileEditorRef}
                 agentId={agent.id}

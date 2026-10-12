@@ -22,6 +22,7 @@ import { useLocaleStore } from '@/stores/locale-store';
 import { noteAttachmentRef, uploadNoteMedia } from '@/features/notes/notes-api';
 
 import { AudioNode } from './extensions/audio-node';
+import { InlineMath, BlockMath } from './extensions/math-node';
 import { DiagramCodeBlock } from './extensions/diagram-code-block';
 import { focusAfterBlockInsert } from './extensions/block-insert-focus';
 import { ExtraKeyboardShortcuts } from './extensions/keyboard-shortcuts';
@@ -115,6 +116,7 @@ export function BlockEditor({
         ...NOTE_LINK_OPTIONS,
         HTMLAttributes: { class: 'block-editor-link' },
       }),
+      InlineMath, BlockMath,
       Markdown.configure(NOTE_MARKDOWN_OPTIONS),
       AudioNode,
       ExtraKeyboardShortcuts,

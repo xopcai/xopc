@@ -845,6 +845,7 @@ export class AgentManager implements AgentInstanceGateway {
     unresolvedProfile: EffectiveAgentProfile,
     workspaceDir: string,
     registeredToolNames?: string[],
+    conversationId?: string,
   ): AgentSkillAvailabilityPayload {
     const rt = this.workspaceRuntimes.getOrCreate(workspaceDir, unresolvedProfile.agentId);
     const profile = this.materializeSkillAllowlist(unresolvedProfile, rt);
@@ -856,6 +857,7 @@ export class AgentManager implements AgentInstanceGateway {
     const workspaceLock = loadSkillsLock(resolveWorkspaceSkillsLockPath(workspaceDir));
     const allow = profile.skillsAllowlist === undefined ? undefined : new Set(profile.skillsAllowlist.map((s) => s.toLowerCase()));
     const tools = registeredToolNames ?? this.toolsFactory.createAllTools({
+      conversationId,
       workspace: workspaceDir,
       profileMarkdownRoot: resolveAgentProfileDir(profile.agentId),
       agentId: profile.agentId,
@@ -927,7 +929,7 @@ export class AgentManager implements AgentInstanceGateway {
 
   getAgentSkillAvailability(agentId: string): AgentSkillAvailabilityPayload {
     const profile = resolveEffectiveAgentProfile(agentId);
-    return this.buildAgentSkillAvailability(profile, profile.resolvedWorkspacePath);
+    return this.buildAgentSkillAvailability(profile, profile.resolvedWorkspacePath, undefined, '');
   }
 
   getWorkflowSkillInstructions(agentId: string, names: readonly string[]): string | undefined {
@@ -960,6 +962,7 @@ export class AgentManager implements AgentInstanceGateway {
       profile,
       this.getResolvedWorkspaceForSession(conversationId),
       this.agents.get(conversationId)?.registeredToolNames,
+      conversationId,
     );
   }
 

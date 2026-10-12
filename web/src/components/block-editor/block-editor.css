@@ -189,3 +189,8 @@
 .block-editor-content .ProseMirror-gapcursor::after {
   border-top-color: var(--color-fg);
 }
+.block-editor-math { max-width: 100%; min-width: 0; }
+.block-editor-math [role="button"] { cursor: text; }
+.block-editor-math-edit { display: flex; flex-wrap: wrap; gap: .5rem; }
+.block-editor-math-edit textarea { width: 100%; min-height: 5rem; font-family: var(--font-mono, monospace); border: 1px solid var(--color-edge); border-radius: .5rem; padding: .5rem; }
+.block-editor-math-edit button { padding: .25rem .5rem; border: 1px solid var(--color-edge); border-radius: .25rem; }

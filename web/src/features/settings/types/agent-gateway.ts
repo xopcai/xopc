@@ -1,3 +1,5 @@
+import type { SpecialistProfile } from '@xopcai/gateway-contract';
+
 export type ModelRoute = { primary: string; fallbacks: string[] };
 export type ModelIntent = 'fast' | 'reasoning' | 'coding' | 'review' | 'vision' | 'understanding';
 export type AgentModelsDefaults = {
@@ -51,6 +53,7 @@ export type AgentOverride = {
   enabled: boolean;
   workspace?: string;
   profile?: AgentProfile;
+  specialistProfile?: SpecialistProfile;
   models?: AgentModelsOverride;
   skills?: SkillOverride;
   tools?: Record<string, ToolPolicy>;
@@ -69,6 +72,7 @@ export type EffectiveAgentConfig = Omit<AgentOverride, 'models' | 'skills' | 'to
 };
 export type GatewayAgentRow = {
   id: string;
+  revision?: number;
   name: string;
   description?: string;
   language?: string;
