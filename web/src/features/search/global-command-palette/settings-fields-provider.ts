@@ -14,6 +14,7 @@ import { AGENTS_APP_LIST_PATH } from '@/features/settings/agents/agents-app-path
 import { CHANNELS_HUB_PATH } from '@/features/settings/channels/channels-routes';
 import type { StoredLanguage } from '@/lib/storage';
 import type { NavigateFunction } from 'react-router-dom';
+import { useSettingsModeStore } from '@/stores/settings-mode-store';
 
 interface FieldSeed {
   id: string;
@@ -21,6 +22,7 @@ interface FieldSeed {
   subtitle: string;
   path: string;
   keywords: string[];
+  advanced?: boolean;
 }
 
 function buildFieldSeeds(language: StoredLanguage): FieldSeed[] {
@@ -29,24 +31,26 @@ function buildFieldSeeds(language: StoredLanguage): FieldSeed[] {
   return [
     // --- Gateway ---
     {
+      advanced: true,
       id: 'field:gateway:port',
       title: isZh ? '网关端口' : 'Gateway Port',
       subtitle: isZh ? '设置 HTTP 网关监听端口' : 'HTTP gateway listen port',
-      path: '/settings/gateway',
+      path: '/settings/gateway?tab=network',
       keywords: ['port', 'listen', 'http', 'server', '端口'],
     },
     {
+      advanced: true,
       id: 'field:gateway:host',
       title: isZh ? '网关绑定地址' : 'Gateway Host',
       subtitle: isZh ? '设置绑定的网络接口' : 'Network interface to bind',
-      path: '/settings/gateway',
+      path: '/settings/gateway?tab=network',
       keywords: ['host', 'bind', 'interface', 'localhost', '地址'],
     },
     {
       id: 'field:gateway:auth',
       title: isZh ? '网关认证令牌' : 'Gateway Auth Token',
       subtitle: isZh ? '访问网关所需的 Bearer token' : 'Bearer token for gateway access',
-      path: '/settings/gateway',
+      path: '/settings/gateway?tab=access',
       keywords: ['auth', 'token', 'bearer', 'password', 'security', '认证', '令牌'],
     },
 
@@ -55,28 +59,29 @@ function buildFieldSeeds(language: StoredLanguage): FieldSeed[] {
       id: 'field:agent-defaults:models',
       title: isZh ? 'Agent 全局模型' : 'Global agent models',
       subtitle: isZh ? '设置所有 Agent 继承的模型与回退' : 'Set inherited models and fallbacks',
-      path: '/settings/agent-defaults',
+      path: '/settings/agent-defaults?panel=models',
       keywords: ['agent defaults', 'model intents', 'fallbacks', 'llm', '全局默认', '模型意图'],
     },
     {
       id: 'field:agent-defaults:skills',
       title: isZh ? 'Agent 全局技能' : 'Global agent skills',
       subtitle: isZh ? '设置所有 Agent 默认可用或排除的技能' : 'Set skills enabled or excluded for every agent',
-      path: '/settings/agent-defaults',
+      path: '/settings/agent-defaults?panel=skills',
       keywords: ['agent defaults', 'skills', 'inherit', '全局默认', '技能', '继承'],
     },
     {
       id: 'field:agent-defaults:tools',
       title: isZh ? 'Agent 全局工具权限' : 'Global agent tool permissions',
       subtitle: isZh ? '设置所有 Agent 继承的 allow、ask 或 deny 策略' : 'Set inherited allow, ask, or deny policies',
-      path: '/settings/agent-defaults',
+      path: '/settings/agent-defaults?panel=tools',
       keywords: ['agent defaults', 'tools', 'permissions', 'allow', 'ask', 'deny', '工具权限'],
     },
     {
+      advanced: true,
       id: 'field:agent-defaults:runtime',
       title: isZh ? 'Agent 全局运行限制' : 'Global agent runtime limits',
       subtitle: isZh ? '设置继承的轮次、超时和默认工作流' : 'Set inherited turn, timeout, and workflow limits',
-      path: '/settings/agent-defaults',
+      path: '/settings/agent-defaults?panel=runtime',
       keywords: ['agent defaults', 'runtime', 'turns', 'timeout', 'workflow', '运行限制'],
     },
 
@@ -126,6 +131,7 @@ function buildFieldSeeds(language: StoredLanguage): FieldSeed[] {
       keywords: ['headless', 'window', 'visible', '无头'],
     },
     {
+      advanced: true,
       id: 'field:agent:browser-private-urls',
       title: isZh ? '允许内网 URL' : 'Allow private URLs',
       subtitle: isZh ? '浏览器导航安全限制' : 'Browser navigation security policy',
@@ -220,10 +226,11 @@ export function buildSettingsFieldHits(
     kind: 'setting' as const,
     id: seed.id,
     title: seed.title,
-    subtitle: seed.subtitle,
+    subtitle: seed.advanced ? `${language === "zh" ? "高级设置" : "Advanced settings"} · ${seed.subtitle}` : seed.subtitle,
     groupLabel,
     keywords: seed.keywords,
     run: () => {
+      if (seed.advanced) useSettingsModeStore.getState().setMode("advanced");
       closePalette();
       navigate(seed.path);
     },

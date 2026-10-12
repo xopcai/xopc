@@ -9,7 +9,6 @@ export type GatewaySettingsTabId =
 
 /** Gateway settings tabs hidden in simple mode. */
 export const SIMPLE_MODE_HIDDEN_GATEWAY_TABS = new Set<GatewaySettingsTabId>([
-  'updates',
   'security',
   'advanced',
 ]);

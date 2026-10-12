@@ -1,11 +1,12 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import { ArrowLeft, Menu, X } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react';
-import { Link, NavLink, Navigate, Outlet, useLocation } from 'react-router-dom';
+import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
 
 import { APP_CHROME_DRAG_CLASS, APP_CHROME_NO_DRAG_CLASS } from '@/components/shell/app-chrome';
 import { getShellChromeRuntime, resolveShellChromeLayout } from '@/components/shell/chrome-layout';
 import { SettingsModeToggle } from '@/components/shell/settings-mode-toggle';
+import { SettingsAdvancedSection } from '@/features/settings/settings-advanced-section';
 import { TabIcon } from '@/components/shell/tab-icons';
 import { messages, tabLabel } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
@@ -344,12 +345,19 @@ export const SettingsPageLayout = memo(function SettingsPageLayout() {
       {/* Right: surface-panel — elevated vs left rail */}
       <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain bg-surface-panel scrollbar-gutter-both">
         {settingsPathBlocked ? (
-          <Navigate to="/settings/overview" replace />
-        ) : (
-          <div key={location.pathname} className="settings-content-enter min-h-full">
-            <Outlet />
+          <div className="p-5">
+            <SettingsAdvancedSection
+              title={language === 'zh' ? '高级设置' : 'Advanced settings'}
+              summary={language === 'zh' ? '此页面用于自定义运行环境或诊断服务。显示高级设置后可继续访问当前页面。' : 'This page contains environment or service diagnostics. Show advanced settings to continue to this destination.'}
+            >
+              {null}
+            </SettingsAdvancedSection>
+            <Link to="/settings/overview" className="mt-4 inline-block text-sm text-accent-fg hover:underline">{language === 'zh' ? '返回设置总览' : 'Back to settings overview'}</Link>
           </div>
-        )}
+        ) : null}
+        <div key={location.pathname} hidden={settingsPathBlocked} className="settings-content-enter min-h-full">
+          <Outlet />
+        </div>
       </div>
     </div>
   );

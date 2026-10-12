@@ -5,6 +5,7 @@ import { afterEach, expect, it, vi } from 'vitest';
 
 import { WebSearchSettingsPanel } from '../web-search-settings';
 import { messages } from '@/i18n/messages';
+import { useSettingsModeStore } from '@/stores/settings-mode-store';
 
 vi.mock('@/features/gateway/gateway-config-swr', () => {
   const data = { payload: { config: { tools: { web: { search: { providers: [
@@ -19,7 +20,7 @@ vi.mock('@/lib/use-autosave', () => ({ useAutosave: () => ({ status: 'idle', onB
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 let root: ReturnType<typeof createRoot>;
 let container: HTMLDivElement;
-afterEach(async () => { await act(async () => root.unmount()); container.remove(); });
+afterEach(async () => { await act(async () => root.unmount()); container.remove(); useSettingsModeStore.setState({ mode: 'simple' }); });
 
 it('keeps URL and API key focus while editing duplicate search provider rows', async () => {
   container = document.createElement('div');
@@ -47,6 +48,7 @@ it('keeps URL and API key focus while editing duplicate search provider rows', a
 
 
 it('allows clearing the result count completely before entering a replacement', async () => {
+  useSettingsModeStore.setState({ mode: 'advanced' });
   container = document.createElement('div');
   document.body.append(container);
   root = createRoot(container);

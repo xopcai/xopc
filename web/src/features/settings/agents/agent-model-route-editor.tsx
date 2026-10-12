@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import useSWR from 'swr';
 
+import { SettingsAdvancedSection } from '@/features/settings/settings-advanced-section';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { CONFIGURED_MODELS_SWR_KEY, fetchConfiguredModelsCached, type ConfiguredModel } from '@/features/chat/api/registry-api';
@@ -83,15 +84,17 @@ export function ModelRouteEditor({
               onChange={(primary) => onChange({ ...value, primary })}
             />}
           </div>
-          <FallbackModels
-            primary={value.primary}
-            value={value.fallbacks}
-            models={candidates}
-            loading={query.isLoading}
-            error={query.error}
-            zh={zh}
-            onChange={(fallbacks) => onChange({ ...value, fallbacks })}
-          />
+          <SettingsAdvancedSection title={zh ? "备用模型" : "Fallback models"} summary={zh ? `已配置 ${value.fallbacks.length} 个备用模型` : `${value.fallbacks.length} fallback models configured`}>
+            <FallbackModels
+              primary={value.primary}
+              value={value.fallbacks}
+              models={candidates}
+              loading={query.isLoading}
+              error={query.error}
+              zh={zh}
+              onChange={(fallbacks) => onChange({ ...value, fallbacks })}
+            />
+          </SettingsAdvancedSection>
         </div>
       ) : null}
     </div>
