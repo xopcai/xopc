@@ -60,6 +60,7 @@ export function VirtualMessageRows({ rows, scrollRef, renderRow, footerRef }: {
 
   if (!parent) return null;
   return <Virtuoso ref={handle} customScrollParent={parent} data={rows}
+    skipAnimationFrameInResizeObserver
     firstItemIndex={position.first} initialTopMostItemIndex={{ index: rows.length - 1, align: 'end' }}
     defaultItemHeight={160} increaseViewportBy={retainRows ? 100_000_000 : { top: 800, bottom: 800 }}
     computeItemKey={(_index, row) => row.key}

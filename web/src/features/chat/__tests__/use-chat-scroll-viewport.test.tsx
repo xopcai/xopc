@@ -66,12 +66,13 @@ describe('useChatScrollViewport', () => {
     vi.unstubAllGlobals();
   });
 
-  function Harness({ messages = chatMessages, conversationId = 'session-1' }: { messages?: Message[]; conversationId?: string }) {
+  function Harness({ messages = chatMessages, conversationId = 'session-1', streaming = false }: { messages?: Message[]; conversationId?: string; streaming?: boolean }) {
     viewport = useChatScrollViewport({
       hasToken: true,
       showSessionLoading: false,
       conversationId,
       chatMessages: messages,
+      streaming,
       hasMore: false,
       loadingMore: false,
       loadMoreMessages: () => {},
@@ -140,6 +141,83 @@ describe('useChatScrollViewport', () => {
     act(() => root.render(<Harness messages={[...chatMessages, { role: 'user', renderKey: 'history-send', content: [] }]} />));
     expect(el.querySelector<HTMLDivElement>('[data-chat-reply-space]')?.style.height).toBe('0px');
     expect(el.scrollTop).toBe(100);
+  });
+
+  it('absorbs a small reply contraction after its initial space has been consumed', () => {
+    act(() => root.render(<Harness />));
+    const el = container.firstElementChild as HTMLDivElement;
+    const spacer = el.querySelector<HTMLDivElement>('[data-chat-reply-space]')!;
+    let replyHeight = 0;
+    let top = 400;
+    Object.defineProperties(el, {
+      clientHeight: { value: 600 },
+      scrollHeight: { get: () => 1000 + replyHeight + (parseFloat(spacer.style.height) || 0) },
+      scrollTop: { get: () => top, set: (value: number) => { top = Math.min(value, el.scrollHeight - 600); } },
+    });
+    spacer.getBoundingClientRect = () => ({ top: 1000 + replyHeight } as DOMRect);
+    const original = HTMLElement.prototype.getBoundingClientRect;
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      return this.dataset.messageRenderKey === 'sent-user' ? { bottom: 1000 } as DOMRect : original.call(this);
+    });
+    act(() => viewport?.reserveReplySpace('sent-user'));
+    act(() => root.render(<Harness messages={[...chatMessages, { role: 'user', renderKey: 'sent-user', content: [] }]} />));
+    replyHeight = 100;
+    act(() => observers.get(el.firstElementChild!)?.());
+    expect(spacer.style.height).toBe('0px');
+    const before = top;
+    replyHeight = 80;
+    top = Math.min(top, el.scrollHeight - el.clientHeight);
+    act(() => observers.get(el.firstElementChild!)?.());
+    expect(spacer.style.height).toBe('20px');
+    expect(top).toBe(before);
+    act(() => observers.get(el.firstElementChild!)?.());
+    expect(top).toBe(before);
+    replyHeight = 0;
+    act(() => observers.get(el.firstElementChild!)?.());
+    expect(spacer.style.height).toBe('60px');
+    top = 100;
+    act(() => viewport?.onScroll());
+    replyHeight = 200;
+    act(() => observers.get(el.firstElementChild!)?.());
+    expect(spacer.style.height).toBe('60px');
+    expect(top).toBe(100);
+    vi.restoreAllMocks();
+  });
+
+  it('follows same-row terminal growth before the queued resize notification', () => {
+    act(() => root.render(<Harness />));
+    const el = container.firstElementChild as HTMLDivElement;
+    let height = 1000;
+    let top = 600;
+    Object.defineProperties(el, {
+      clientHeight: { value: 400 },
+      scrollHeight: { get: () => height },
+      scrollTop: { get: () => top, set: (value: number) => { top = Math.min(value, height - 400); } },
+    });
+    act(() => viewport?.scrollToBottom(false));
+    height = 1027;
+    act(() => root.render(<Harness messages={chatMessages.map(message => ({ ...message, content: [{ type: 'text', text: 'Final burst' }] }))} />));
+    expect(top).toBe(627);
+    act(() => observers.get(el.firstElementChild!)?.());
+    expect(top).toBe(627);
+  });
+
+  it('remeasures completion when the message shell array stays stable', () => {
+    act(() => root.render(<Harness streaming />));
+    const el = container.firstElementChild as HTMLDivElement;
+    let height = 1000;
+    let top = 600;
+    Object.defineProperties(el, {
+      clientHeight: { value: 400 },
+      scrollHeight: { get: () => height },
+      scrollTop: { get: () => top, set: (value: number) => { top = Math.min(value, height - 400); } },
+    });
+    act(() => viewport?.scrollToBottom(false));
+    height = 1027;
+    act(() => root.render(<Harness streaming={false} />));
+    expect(top).toBe(627);
+    act(() => observers.get(el.firstElementChild!)?.());
+    expect(top).toBe(627);
   });
 
 

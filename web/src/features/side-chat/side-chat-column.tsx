@@ -419,6 +419,7 @@ export function SideChatConversation({
     showSessionLoading: false,
     conversationId: sideChatId,
     chatMessages: messages,
+    streaming: running,
     hasMore: false,
     loadingMore: false,
     loadMoreMessages: loadNoOlderSideChatMessages,
