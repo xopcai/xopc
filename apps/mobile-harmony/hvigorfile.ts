@@ -1,6 +1,9 @@
+import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { hvigor } from '@ohos/hvigor';
 import { appTasks, OhosAppContext, OhosPluginId } from '@ohos/hvigor-ohos-plugin';
+
+execFileSync('pnpm', ['--filter', '@xopcai/markdown-math', 'build:mobile', 'harmony'], { cwd: '../..', stdio: 'inherit' });
 
 // Keep local debug signing material out of tracked build profiles and command arguments.
 hvigor.getRootNode().afterNodeEvaluate((node) => {

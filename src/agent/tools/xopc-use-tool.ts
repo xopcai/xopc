@@ -119,6 +119,7 @@ export interface XopcUseToolDeps {
   getLocalAppService?: () => LocalAppService | undefined;
   getChatPreviewService?: () => ChatPreviewService | undefined;
   dispatchTaskEvents?: () => void;
+  createTask?: TaskApplicationService['create'];
   dispatchTaskRuns?: () => void;
   onAgentCatalogMutate?: () => void;
 }
@@ -1272,6 +1273,7 @@ async function handleChatPreview(
 
 export function createXopcUseTool(deps: XopcUseToolDeps): AgentTool<typeof XopcUseToolSchema, XopcUseDetails> {
   const capabilities = createProductDispatcher(deps.getNotesService, {
+    createTask: deps.createTask,
     getConfig: deps.getConfig, getProjects: deps.getProjectService,
     getWorkDiscovery: deps.getWorkDiscovery,
     getLocalApps: deps.getLocalAppService,

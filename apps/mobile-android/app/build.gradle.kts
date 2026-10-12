@@ -117,3 +117,14 @@ dependencies {
   implementation(libs.androidx.navigation3.runtime)
   implementation(libs.androidx.lifecycle.viewmodel.navigation3)
 }
+
+val generateMathAssets by tasks.registering(Exec::class) {
+  workingDir(rootProject.projectDir.resolve("../.."))
+  commandLine("pnpm", "--filter", "@xopcai/markdown-math", "build:mobile", "android")
+  inputs.dir(rootProject.projectDir.resolve("../../packages/markdown-math/src"))
+  inputs.dir(rootProject.projectDir.resolve("../../packages/markdown-math/mobile"))
+  inputs.file(rootProject.projectDir.resolve("../../packages/markdown-math/scripts/build-mobile.mjs"))
+  inputs.file(rootProject.projectDir.resolve("../../pnpm-lock.yaml"))
+  outputs.dir(projectDir.resolve("src/main/assets/math"))
+}
+tasks.named("preBuild").configure { dependsOn(generateMathAssets) }

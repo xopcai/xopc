@@ -56,6 +56,7 @@ export function createRevealPlugin(ledger: RevealLedger, animate: boolean, initi
     const now = performance.now();
     visitParents(tree, 'text', (node: Text, ancestors) => {
       if (ancestors.some(n => n.type === 'element' && (['pre', 'svg', 'math', 'annotation'].includes(n.tagName)
+        || (n.properties.dataXopcMath !== undefined || n.properties['data-xopc-math'] !== undefined)
         || n.properties['data-xopc-segment'] !== undefined))) return;
       const start = cursor;
       cursor += node.value.length;

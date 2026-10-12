@@ -4,6 +4,7 @@ import { isProviderConfiguredSync, resolveModel } from '../providers/index.js';
 
 const DISCOVERY_TOOLS = [
   'web_search', 'web_fetch', 'browser_use', 'read_file', 'write_file', 'exec_command',
+  'apply_patch', 'list_dir', 'grep', 'find', 'publish_artifacts', 'skill_view',
   'image', 'image_generate', 'read_media', 'automation', 'workflow', 'xopc_use',
   'xopc_tool_search', 'xopc_tool_describe', 'xopc_tool_execute', 'computer_use', 'send_message', 'text_to_speech',
 ] as const;

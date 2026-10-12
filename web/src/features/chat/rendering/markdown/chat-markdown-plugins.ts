@@ -77,7 +77,7 @@ export function remarkChatContent({ breaks = false }: { breaks?: boolean } = {})
 export function rehypeChatFileMentions() {
   return (tree: Root) => {
     visitParents(tree, 'text', (node: Text, ancestors) => {
-      if (ancestors.some(n => n.type === 'element' && ['a', 'pre', 'code', 'kbd', 'samp'].includes(n.tagName))) return;
+      if (ancestors.some(n => n.type === 'element' && (['a', 'pre', 'code', 'kbd', 'samp', 'math', 'annotation'].includes(n.tagName) || (n.properties.dataXopcMath !== undefined || n.properties['data-xopc-math'] !== undefined)))) return;
       const matches = collectFileMentionMatches(node.value);
       if (!matches.length) return;
       const parent = ancestors.at(-1);

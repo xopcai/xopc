@@ -5,6 +5,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import useSWR from 'swr';
 
 import { Button } from '@/components/ui/button';
+import '@/components/ui/content-block-actions.css';
 import { Skeleton } from '@/components/ui/skeleton';
 import { dispatchFillChatComposer } from '@/features/chat/composer/fill-composer-dispatch';
 import { useInlinePreviewLease } from '@/features/chat/product-delivery/inline-preview-scheduler';
@@ -122,7 +123,7 @@ export function InlineLocalApp({
 
   if (!lease.active) {
     return (
-      <section ref={lease.containerRef} className="mt-3 overflow-hidden rounded-2xl border border-edge bg-surface-panel" data-inline-local-app={reference.id}>
+      <section ref={lease.containerRef} className="content-block-action-scope mt-3 overflow-hidden rounded-2xl border border-edge bg-surface-panel" data-inline-local-app={reference.id}>
         <header className="flex min-w-0 flex-wrap items-center gap-3 border-b border-edge-subtle px-4 py-3">
           <div className="min-w-0 flex-1">
             <h3 className="truncate text-sm font-semibold text-fg" title={reference.title}>{reference.title}</h3>
@@ -132,9 +133,9 @@ export function InlineLocalApp({
                 : (language === 'zh' ? '预览尚未加载' : 'Preview not loaded')}
             </p>
           </div>
-          <Button variant="ghost" className="min-h-9 px-2.5 text-xs" onClick={open}>
-            <ExternalLink className="size-4" />
-            {language === 'zh' ? '查看预览' : 'Preview'}
+          <Button variant="ghost" className="content-block-action" onClick={open}
+            title={language === 'zh' ? '查看预览' : 'Preview'} aria-label={language === 'zh' ? '查看预览' : 'Preview'}>
+            <ExternalLink className="size-4" aria-hidden />
           </Button>
         </header>
         <div className="grid place-items-center bg-surface-base" style={{ height }}>
@@ -212,7 +213,7 @@ export function InlineLocalApp({
   };
 
   return (
-    <section ref={lease.containerRef} className="mt-3 overflow-hidden rounded-2xl border border-edge bg-surface-panel" data-inline-local-app={reference.id}>
+    <section ref={lease.containerRef} className="content-block-action-scope mt-3 overflow-hidden rounded-2xl border border-edge bg-surface-panel" data-inline-local-app={reference.id}>
       <header className="flex min-w-0 flex-wrap items-center gap-3 border-b border-edge-subtle px-4 py-3">
         <div className="min-w-0 flex-1">
           <h3 className="truncate text-sm font-semibold text-fg" title={reference.title}>{reference.title}</h3>
@@ -220,13 +221,13 @@ export function InlineLocalApp({
             {statusLabel}
           </p>
         </div>
-        <Button variant="ghost" className="min-h-9 px-2.5 text-xs" onClick={retry} aria-label={language === 'zh' ? '重新加载预览' : 'Reload preview'}>
-          <RefreshCw className="size-4" />
-          {language === 'zh' ? '重试' : 'Retry'}
+        <Button variant="ghost" className="content-block-action" onClick={retry} data-action-visible={hasFailure}
+          title={language === 'zh' ? '重新加载预览' : 'Reload preview'} aria-label={language === 'zh' ? '重新加载预览' : 'Reload preview'}>
+          <RefreshCw className="size-4" aria-hidden />
         </Button>
-        <Button variant="ghost" className="min-h-9 px-2.5 text-xs" onClick={open}>
-          <ExternalLink className="size-4" />
-          {language === 'zh' ? '查看预览' : 'Preview'}
+        <Button variant="ghost" className="content-block-action" onClick={open}
+          title={language === 'zh' ? '查看预览' : 'Preview'} aria-label={language === 'zh' ? '查看预览' : 'Preview'}>
+          <ExternalLink className="size-4" aria-hidden />
         </Button>
       </header>
       <div className="relative bg-surface-base" style={{ height }}>

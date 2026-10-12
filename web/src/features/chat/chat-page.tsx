@@ -1344,6 +1344,8 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
               <ReadAloudDock />
               <ChatComposer
                 personal={personal}
+                nextTurnSuggestionsEnabled={!agentSetup && !skillDiscovery && !taskId && !workflowRunView
+                  && msgSlice.items.length > 0 && !showConversationLoading && !clarify.clarifyPrompt}
                 onPersonalSendDispatched={personal ? onPersonalSendDispatched : undefined}
                 placeholder={personal
                   ? stream.streaming || stream.sending
