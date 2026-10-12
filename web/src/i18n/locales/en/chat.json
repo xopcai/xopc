@@ -123,6 +123,7 @@
     "modelThinkingUnknown": "Thinking controls are not available for this model",
     "modelThinkingFixed": "Always on",
     "modelThinkingOn": "On",
+    "modelThinkingReset": "Reset thinking effort",
     "modelThinkingLabel": "Thinking effort",
     "modelConfigLabel": "Model",
     "modelPlaceholder": "Select a model…",
