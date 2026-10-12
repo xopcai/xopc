@@ -7,8 +7,8 @@ import type { McpSettingsMessages } from '@/i18n/messages';
 
 import { fetchMcpTools, type McpToolInfo } from './mcp-config-api';
 
-export function McpToolsDialog({ serverId, t, onClose }: {
-  serverId: string; t: McpSettingsMessages; onClose: () => void;
+export function McpToolsDialog({ serverId, t, onClose, onConfigure }: {
+  serverId: string; t: McpSettingsMessages; onClose: () => void; onConfigure?: () => void;
 }) {
   const [tools, setTools] = useState<McpToolInfo[]>([]);
   const [loading, setLoading] = useState(true);
@@ -43,7 +43,8 @@ export function McpToolsDialog({ serverId, t, onClose }: {
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto p-5" aria-busy={loading} aria-label={t.toolsTitle.replace('{{count}}', String(tools.length))}>
         {loading ? <div role="status" aria-label={t.toolsLoading} className="space-y-3">{[0, 1, 2].map(index => <Skeleton key={index} className="h-24 w-full" />)}</div>
-          : error ? <div role="alert" className="space-y-3"><p className="whitespace-pre-wrap break-words text-sm text-danger">{error}</p><p className="text-sm text-fg-muted">{t.toolsAuthHint.replace('{{serverId}}', serverId)}</p></div>
+          : error ? <div role="alert" className="space-y-3"><p className="whitespace-pre-wrap break-words text-sm text-danger">{error}</p><p className="text-sm text-fg-muted">{t.toolsAuthHint.replace('{{serverId}}', serverId)}</p>
+            {onConfigure ? <Button variant="secondary" onClick={onConfigure}>{t.setupConfigure}</Button> : null}</div>
           : visible.length ? <div className="space-y-3">{visible.map(tool => <article key={tool.name} className="rounded-lg border border-edge p-4">
             <h3 className="break-all font-mono text-sm font-semibold text-fg">{tool.name}</h3>
             {tool.exposure ? <p className="mt-1 text-xs text-fg-muted">{tool.exposure}</p> : null}

@@ -117,7 +117,7 @@ describe('background task result delivery', () => {
       expect(prompt).not.toContain('UNTRUSTED_LONG_WORKER_INSTRUCTIONS');
       return parsePersonalReplyDraft(JSON.stringify({ text: 'The sunset finding is ready.', sourceIds: ['result'], limitationIds: ['status'] }), packet);
     });
-    await new PersonalReplyComposer(compose).drain(() => { throw new Error('Disconnected'); });
+    await new PersonalReplyComposer(compose).drain(async () => { throw new Error('Disconnected'); });
     expect(loadTranscriptRowsForSession(main.key)).toHaveLength(1);
     expect(readFileSync(join(profileDir, 'SOUL.md'), 'utf-8')).toBe(soul);
     closeXopcDatabase(); resetXopcDatabaseSingletonForTest();
@@ -154,6 +154,35 @@ describe('background task result delivery', () => {
     await new PersonalReplyComposer(compose).drain(vi.fn(), () => true);
     expect(compose).toHaveBeenCalledTimes(1);
     expect(loadTranscriptRowsForSession(main.key)).toHaveLength(2);
+  });
+
+  it('holds the notification lease until asynchronous voice delivery completes', async () => {
+    const { main, coordinator, runId } = task();
+    markPersonal(main.key);
+    coordinator.captureOutcome(await image(runId));
+    coordinator.finalize({ status: 'succeeded', summary: 'Ready', assistantText: 'Report' });
+    await new TaskResultDeliveryService().drain(vi.fn());
+    let complete!: () => void;
+    const notify = vi.fn(() => new Promise<void>(resolve => { complete = resolve; }));
+    const composer = new PersonalReplyComposer(async () => 'Ready');
+    vi.useFakeTimers();
+    const delivery = composer.drain(notify);
+    try {
+      await vi.advanceTimersByTimeAsync(0);
+      expect(notify).toHaveBeenCalledOnce();
+      expect(getSqliteDatabase().prepare('SELECT reply_notified_at FROM task_result_deliveries').get()?.reply_notified_at).toBeNull();
+      await vi.advanceTimersByTimeAsync(25_000);
+      await composer.drain(notify);
+      expect(notify).toHaveBeenCalledOnce();
+      complete();
+      await delivery;
+      expect(getSqliteDatabase().prepare('SELECT reply_notified_at FROM task_result_deliveries').get()?.reply_notified_at).toBeTypeOf('number');
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      complete?.();
+      await delivery;
+      vi.useRealTimers();
+    }
   });
 
   it('discards an old-context draft after new user input and composes again after the foreground turn', async () => {

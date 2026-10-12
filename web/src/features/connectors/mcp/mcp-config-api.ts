@@ -51,7 +51,24 @@ export function extractManagedMcpServers(cfg: unknown): Record<string, Record<st
 function parseArgsText(text: string): string[] | undefined {
   const trimmed = text.trim();
   if (!trimmed) return undefined;
-  return trimmed.split(/\s+/).filter(Boolean);
+  if (trimmed.startsWith('[')) {
+    const args = JSON.parse(trimmed);
+    if (!Array.isArray(args) || args.some(value => typeof value !== 'string')) throw new Error('Command arguments must be a JSON array of strings.');
+    return args;
+  }
+  const args: string[] = [];
+  let value = '', quote = '', started = false;
+  for (let i = 0; i < trimmed.length; i++) {
+    const char = trimmed[i];
+    if (char === '\\' && trimmed[i + 1] && quote !== "'") { value += trimmed[++i]; started = true; }
+    else if (quote) { if (char === quote) quote = ''; else value += char; }
+    else if (char === '"' || char === "'") { quote = char; started = true; }
+    else if (/\s/.test(char)) { if (started) { args.push(value); value = ''; started = false; } }
+    else { value += char; started = true; }
+  }
+  if (quote) throw new Error('Command arguments contain an unclosed quote.');
+  if (started) args.push(value);
+  return args;
 }
 
 function parseJsonObject(text: string): Record<string, unknown> | undefined {
@@ -87,13 +104,49 @@ function rowToServerConfig(row: McpServerRow): Record<string, unknown> {
 function serverConfigToRow(id: string, raw: Record<string, unknown>): McpServerRow {
   const oauth = raw.oauth as Record<string, unknown> | undefined;
   return { clientKey: id, id, transport: typeof raw.url === 'string' ? 'streamable-http' : 'stdio',
-    command: typeof raw.command === 'string' ? raw.command : '', argsText: Array.isArray(raw.args) ? raw.args.join(' ') : '',
+    command: typeof raw.command === 'string' ? raw.command : '', argsText: Array.isArray(raw.args) ? JSON.stringify(raw.args) : '',
     envJson: raw.env ? JSON.stringify(raw.env, null, 2) : '', cwd: typeof raw.cwd === 'string' ? raw.cwd : '',
     url: typeof raw.url === 'string' ? raw.url : '', headers: recordToHeaders(raw.headers as Record<string, unknown> | undefined),
     oauthClientId: typeof oauth?.clientId === 'string' ? oauth.clientId : '',
     timeout: typeof raw.timeout === 'number' ? raw.timeout : undefined,
     exposure: (raw.exposure as McpServerRow['exposure']) ?? 'codemode', extra: raw,
   };
+}
+
+export function suggestMcpServerId(row: McpServerRow, occupied: ReadonlySet<string>): string {
+  let name = 'mcp';
+  try { name = row.transport === 'streamable-http' ? new URL(row.url).hostname : row.command.split(/[\\/]/).pop() || name; } catch { /* The URL is validated when connecting. */ }
+  const base = name.replace(/[^a-zA-Z0-9_-]+/g, '_').replace(/^_+|_+$/g, '') || 'mcp';
+  const used = new Set([...occupied].map(id => id.replace(/-/g, '_')));
+  let id = base;
+  for (let index = 2; used.has(id.replace(/-/g, '_')); index++) id = `${base}_${index}`;
+  return id;
+}
+
+export function normalizeMcpAddress(value: string): string {
+  const input = value.trim();
+  const url = new URL(/^[a-z][a-z\d+.-]*:/i.test(input) && !/^[^/]+:\d+(?:[/?#]|$)/.test(input)
+    ? input : `${/^(localhost|127\.0\.0\.1)(:|\/|$)/i.test(input) ? 'http' : 'https'}://${input}`);
+  if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) throw new Error('Use an HTTP or HTTPS MCP address without embedded credentials.');
+  return url.href;
+}
+
+export function parseMcpConfigImport(text: string): McpServerRow[] {
+  const input = JSON.parse(text);
+  if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error('Expected a JSON object.');
+  const configs = input.mcpServers ?? input.mcp?.servers ?? input.servers;
+  const entries: Array<[string, unknown]> = configs ? Object.entries(configs) : [['', input]];
+  if (!entries.length) throw new Error('No MCP servers found.');
+  return entries.map(([id, value]) => {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid MCP server configuration.');
+    const raw = value as Record<string, unknown>;
+    if (typeof raw.url !== 'string' && typeof raw.command !== 'string') throw new Error('The configuration needs an MCP URL or command.');
+    if (raw.args !== undefined && (!Array.isArray(raw.args) || raw.args.some(arg => typeof arg !== 'string'))) throw new Error('Command arguments must be strings.');
+    const row = serverConfigToRow(id, raw);
+    row.clientKey = crypto.randomUUID();
+    if (row.url) row.url = normalizeMcpAddress(row.url);
+    return row;
+  });
 }
 export function emptyMcpServerRow(id = ''): McpServerRow {
   return { clientKey: crypto.randomUUID(), id, transport: 'streamable-http', command: '', argsText: '', envJson: '', cwd: '',
@@ -128,4 +181,27 @@ export async function fetchMcpTools(serverId: string, signal: AbortSignal): Prom
     { method: 'POST', signal: AbortSignal.any([signal, AbortSignal.timeout(95_000)]) },
   );
   return result.payload.tools;
+}
+
+export type McpConnectionProbe = { state: 'connected' | 'oauth_required' | 'token_required' | 'error'; toolCount?: number; error?: string };
+export type McpAuthorization = { id: string; serverId: string; state: 'starting' | 'authorizing' | 'connected' | 'error' | 'cancelled';
+  authorizationUrl?: string; acceptsRedirect?: boolean; toolCount?: number; error?: string };
+export async function probeMcpServer(serverId: string, signal: AbortSignal): Promise<McpConnectionProbe> {
+  const result = await fetchJson<{ payload: McpConnectionProbe }>(apiUrl(`/api/mcp/servers/${encodeURIComponent(serverId)}/probe`),
+    { method: 'POST', signal: AbortSignal.any([signal, AbortSignal.timeout(95_000)]) });
+  return result.payload;
+}
+export async function startMcpSignIn(serverId: string): Promise<McpAuthorization> {
+  const result = await fetchJson<{ payload: McpAuthorization }>(apiUrl(`/api/mcp/servers/${encodeURIComponent(serverId)}/auth`), { method: 'POST' });
+  return result.payload;
+}
+export async function readMcpSignIn(id: string, signal: AbortSignal): Promise<McpAuthorization> {
+  const result = await fetchJson<{ payload: McpAuthorization }>(apiUrl(`/api/mcp/auth/${encodeURIComponent(id)}`), { signal });
+  return result.payload;
+}
+export async function cancelMcpSignIn(id: string): Promise<void> {
+  await fetchJson(apiUrl(`/api/mcp/auth/${encodeURIComponent(id)}`), { method: 'DELETE' });
+}
+export async function submitMcpSignInRedirect(id: string, url: string): Promise<void> {
+  await fetchJson(apiUrl(`/api/mcp/auth/${encodeURIComponent(id)}/redirect`), { method: 'POST', body: JSON.stringify({ url }) });
 }

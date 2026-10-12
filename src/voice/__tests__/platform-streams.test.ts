@@ -11,6 +11,15 @@ async function server() {
   return { server, url: `ws://127.0.0.1:${(server.address() as {port:number}).port}` };
 }
 describe('platform voice protocol', () => {
+  it('preserves the provider close code and reason when synthesis closes before ready', async () => {
+    const { server: s, url } = await server();
+    s.on('connection', socket => socket.on('message', () => socket.close(1011, 'Provider session closed')));
+    await expect(openPlatformTts({ baseUrl: url, apiKey: 'test', voice: 'default', text: 'Hello',
+      signal: new AbortController().signal, timeoutMs: 1000 })).rejects.toMatchObject({
+      code: 'provider_disconnected',
+      message: 'Platform voice disconnected before completion (close 1011: Provider session closed)',
+    });
+  });
   it('keeps funded duration exhaustion distinct from an account quota rejection', () => {
     const error = new PlatformVoiceError('Duration reached', undefined, 'realtime_quota_session_limit');
     expect(error.clientMessage).toBe('The funded transcription duration has been reached. Start a new voice session to continue.');

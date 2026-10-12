@@ -392,6 +392,12 @@ export class VoiceRealtimeRuntime {
     return session?.engine?.canOfferTaskUpdate?.() === true;
   }
 
+  async offerReply(input: { conversationId: string; deliveryId: string; text: string }): Promise<boolean> {
+    const sessionId = this.conversationReservations.get(input.conversationId);
+    const session = sessionId ? this.activeSessions.get(sessionId) : undefined;
+    return session?.engine?.offerReply?.(input) ?? false;
+  }
+
   async offerTaskUpdate(input: { conversationId: string; clientMessageId: string; content: string }): Promise<boolean> {
     const sessionId = this.conversationReservations.get(input.conversationId);
     const session = sessionId ? this.activeSessions.get(sessionId) : undefined;

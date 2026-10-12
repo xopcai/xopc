@@ -73,6 +73,39 @@ describe('Agent voice interruption cleanup', () => {
     expect(test.release).toHaveBeenCalledOnce();
   });
 
+  it('speaks an already persisted personal reply without running Agent and deduplicates delivery', async () => {
+    const test = await setup(async function* () { throw new Error('Persisted reply must not run Agent'); });
+    mocks.speak.mockImplementation(async () => ({ outputFormat: 'pcm', release: test.release,
+      audioStream: new ReadableStream({ start(controller) { controller.enqueue(new Uint8Array(960)); controller.close(); } }) }));
+    const reply = { deliveryId: 'reply:task-1', text: '任务完成，结果已经整理好了。' };
+    const delivery = engine.offerReply!(reply);
+    await vi.waitFor(() => expect(test.sendAudio).toHaveBeenCalledOnce());
+    const responseId = test.sendAudio.mock.calls[0][0];
+    expect(test.delegate).not.toHaveBeenCalled();
+    expect(await engine.offerReply!({ deliveryId: 'reply:task-2', text: 'Another result' })).toBe(false);
+    engine.acknowledge(responseId, 20);
+    expect(await delivery).toBe(true);
+    expect(await engine.offerReply!(reply)).toBe(true);
+    expect(test.sendAudio).toHaveBeenCalledOnce();
+    expect(test.send).toHaveBeenCalledWith('response.done', expect.objectContaining({ audio: true }));
+  });
+
+  it('allows retry after personal reply synthesis fails before audio and keeps the call available', async () => {
+    const test = await setup(async function* () {});
+    const reply = { deliveryId: 'reply:task-1', text: '任务已经完成。' };
+    mocks.speak.mockRejectedValueOnce(new Error('Provider disconnected'));
+    expect(await engine.offerReply!(reply)).toBe(false);
+    expect(test.onClose).not.toHaveBeenCalled();
+    expect(test.send).toHaveBeenCalledWith('session.error', expect.objectContaining({ recoverable: true }));
+    mocks.speak.mockImplementation(async () => ({ outputFormat: 'pcm', release: test.release,
+      audioStream: new ReadableStream({ start(controller) { controller.enqueue(new Uint8Array(960)); controller.close(); } }) }));
+    const delivery = engine.offerReply!(reply);
+    await vi.waitFor(() => expect(test.sendAudio).toHaveBeenCalledOnce());
+    engine.acknowledge(test.sendAudio.mock.calls[0][0], 20);
+    expect(await delivery).toBe(true);
+    expect(test.delegate).not.toHaveBeenCalled();
+  });
+
   it('skips opening after speech even if the input later becomes idle', async () => {
     const test = await setup(async function* () {});
     test.emit({ type: 'speech_started', utteranceId: 'first' });

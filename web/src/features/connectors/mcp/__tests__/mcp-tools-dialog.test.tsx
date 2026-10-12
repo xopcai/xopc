@@ -48,7 +48,7 @@ it('shows connection errors and allows retry', async () => {
   vi.mocked(fetchMcpTools).mockRejectedValueOnce(new Error('needs sign-in'));
   await render();
   expect(document.querySelector('[role="alert"]')?.textContent).toContain('needs sign-in');
-  expect(document.body.textContent).toContain('xopc mcp login docs');
+  expect(document.body.textContent).toContain(t.toolsAuthHint.replace('{{serverId}}', 'docs'));
   vi.mocked(fetchMcpTools).mockResolvedValueOnce(tools);
   await act(async () => button(t.refreshTools).click());
   expect(document.querySelector('[role="alert"]')).toBeNull();

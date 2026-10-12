@@ -17,8 +17,27 @@ export type McpCatalogTool = {
   exposure?: string;
 };
 
+export class McpAuthenticationRequiredError extends Error {}
+
+export type McpLoginInteraction = {
+  signal: AbortSignal;
+  onAuthorizationUrl: (url: string) => void;
+  requestRedirectUrl: (signal?: AbortSignal) => Promise<string | undefined>;
+};
+
 /** A short-lived native session discovers tools without making a model request. */
 export async function discoverMcpTools(config: Config, workspaceDir: string, serverId: string): Promise<McpCatalogTool[]> {
+  return runNativeMcpSession(config, workspaceDir, serverId);
+}
+
+/** Native pi owns PKCE, registration, callbacks, token storage and refresh. */
+export async function signInNativeMcp(config: Config, workspaceDir: string, serverId: string,
+  interaction: McpLoginInteraction): Promise<McpCatalogTool[]> {
+  return runNativeMcpSession(config, workspaceDir, serverId, interaction);
+}
+
+async function runNativeMcpSession(config: Config, workspaceDir: string, serverId: string,
+  interaction?: McpLoginInteraction): Promise<McpCatalogTool[]> {
   const loaded = await prepareNativeMcpConfig(config, workspaceDir);
   const entry = loaded.servers.find(server => server.name === serverId);
   if (!entry) throw new Error(`MCP server "${serverId}" is not configured or has invalid configuration.`);
@@ -30,6 +49,7 @@ export async function discoverMcpTools(config: Config, workspaceDir: string, ser
     extensionFactories: [createToolSearchExtension(), createMcpExtension({
       loadConfig: () => ({ servers: [entry], errors: [], autoEnableCodemode: false }),
       logPath: join(agentDir, 'mcp.log'),
+      openUrl: url => interaction?.onAuthorizationUrl(url),
     })],
   });
   await loader.reload();
@@ -41,12 +61,22 @@ export async function discoverMcpTools(config: Config, workspaceDir: string, ser
   const { session } = await createAgentSession({ cwd: workspaceDir, agentDir, resourceLoader: loader,
     settingsManager, modelRuntime, sessionManager: SessionManager.inMemory(), noTools: 'builtin' });
   let failure: string | undefined;
+  let signedIn = false;
+  let shutdown: Promise<unknown> | undefined;
+  const close = () => shutdown ??= session.extensionRunner?.emit({ type: 'session_shutdown', reason: 'quit' }) ?? Promise.resolve();
+  const abort = () => { void close(); };
   try {
     const runner = session.extensionRunner;
     if (!runner) throw new Error('Native MCP extension is unavailable.');
     await session.bindExtensions({ uiContext: { ...runner.getUIContext(), notify(message) {
       if (message.startsWith('MCP servers need attention:') || message.startsWith('MCP failed to load:')) failure = message;
+      if (message.startsWith('Signed in to MCP server')) signedIn = true;
+      if (message.startsWith('Sign-in ') || message.startsWith('Signed in, but')) failure = message;
+    }, input(_title, _placeholder, options) {
+      return interaction?.requestRedirectUrl(options?.signal) ?? Promise.resolve(undefined);
     } } });
+    interaction?.signal.addEventListener('abort', abort, { once: true });
+    if (interaction?.signal.aborted) throw new Error('MCP sign-in cancelled.');
     // The native command waits for connection and catalog discovery; it never prompts a model.
     let timer: ReturnType<typeof setTimeout> | undefined;
     try {
@@ -56,14 +86,24 @@ export async function discoverMcpTools(config: Config, workspaceDir: string, ser
     } finally {
       clearTimeout(timer);
     }
-    if (failure) throw new Error(failure);
+    if (interaction) {
+      // Startup reports a pending authorization; the login command handles it.
+      failure = undefined;
+      await session.prompt(`/mcp login ${serverId}`);
+      if (interaction.signal.aborted) throw new Error('MCP sign-in cancelled.');
+      if (failure || !signedIn) throw new Error(failure ?? 'MCP sign-in did not complete.');
+    } else if (failure) {
+      if (/needs sign-in|needs-auth/.test(failure)) throw new McpAuthenticationRequiredError(failure);
+      throw new Error(failure);
+    }
     const namespace = `mcp__${serverId.replace(/-/g, '_')}`;
     return session.getAllTools().filter(tool => tool.namespace?.name === namespace).map(tool => ({
       name: tool.name, description: tool.description, inputSchema: tool.parameters, exposure: tool.exposure,
     })).sort((a, b) => a.name.localeCompare(b.name));
   } finally {
     try {
-      await session.extensionRunner?.emit({ type: 'session_shutdown', reason: 'quit' });
+      interaction?.signal.removeEventListener('abort', abort);
+      await close();
     } finally {
       session.dispose();
     }
