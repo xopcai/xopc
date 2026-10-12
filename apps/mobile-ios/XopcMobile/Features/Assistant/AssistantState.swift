@@ -90,7 +90,9 @@ final class AssistantState {
             let run = try await gateway.fetchActiveRun(conversationID: conversation.id)
             guard !Task.isCancelled, loadedConversationID == conversation.id else { return }
             runID = run.active ? run.runId : nil
-            if runID != nil { startFollowing(conversation, using: gateway) }
+            if runID != nil {
+                startFollowing(conversation, using: gateway)
+            }
             await loadContext(for: conversation, using: gateway)
             await refreshClarification(for: conversation, using: gateway)
             await refreshInputState(for: conversation, using: gateway)
@@ -184,14 +186,19 @@ final class AssistantState {
             runID = run.active ? run.runId : nil
             await refreshHistory(conversation, using: gateway, retainLive: run.active)
             guard loadedConversationID == conversation.id, generation == runGeneration, !Task.isCancelled else { return }
-            if runID != nil { startFollowing(conversation, using: gateway) }
-            else { activityLabel = nil }
+            if runID != nil {
+                startFollowing(conversation, using: gateway)
+            } else {
+                activityLabel = nil
+            }
         } catch is CancellationError { return }
         catch {
             guard loadedConversationID == conversation.id, generation == runGeneration else { return }
             errorMessage = error.localizedDescription
             // A transient REST failure must not disable the existing run's reconnect loop.
-            if runID != nil { startFollowing(conversation, using: gateway) }
+            if runID != nil {
+                startFollowing(conversation, using: gateway)
+            }
         }
     }
 
@@ -201,7 +208,7 @@ final class AssistantState {
         let generation = runGeneration
         let observation = Task<Void, Never> { [weak self] in
             guard let self else { return }
-            await self.observeRun(conversation, using: gateway, generation: generation)
+            await observeRun(conversation, using: gateway, generation: generation)
         }
         runObservation = observation
         return observation
@@ -222,7 +229,9 @@ final class AssistantState {
         while isObserving(conversation, generation: generation) {
             guard let activeRunID = runID else { return }
             do {
-                if try await consumeRun(activeRunID, in: conversation, using: gateway, generation: generation) { return }
+                if try await consumeRun(activeRunID, in: conversation, using: gateway, generation: generation) {
+                    return
+                }
             } catch is CancellationError { return }
             catch { /* Reconcile and reconnect the active run after transport loss. */ }
             do {
@@ -230,7 +239,9 @@ final class AssistantState {
                 guard isObserving(conversation, generation: generation) else { return }
                 runID = run.active ? run.runId : nil
                 await refreshHistory(conversation, using: gateway, retainLive: run.active)
-                if !run.active { activityLabel = nil; return }
+                if !run.active {
+                    activityLabel = nil; return
+                }
                 try await Task.sleep(for: .seconds(1))
             } catch is CancellationError { return }
             catch { await waitAfterFailure(error, in: conversation, generation: generation) }
@@ -248,12 +259,17 @@ final class AssistantState {
     }
 
     private func consumeRun(_ activeRunID: String, in conversation: ConversationSelection,
-                            using gateway: any GatewayServing, generation: Int) async throws -> Bool {
+                            using gateway: any GatewayServing, generation: Int) async throws -> Bool
+    {
         for try await event in gateway.streamRun(runID: activeRunID) {
             guard isObserving(conversation, generation: generation) else { return true }
             apply(event, runID: activeRunID)
-            if event.name == "clarify_request" { await refreshClarification(for: conversation, using: gateway) }
-            if event.isTerminal { await reload(conversation, using: gateway); return true }
+            if event.name == "clarify_request" {
+                await refreshClarification(for: conversation, using: gateway)
+            }
+            if event.isTerminal {
+                await reload(conversation, using: gateway); return true
+            }
         }
         return false
     }
@@ -305,7 +321,9 @@ final class AssistantState {
         updateActivity(with: event)
         guard event.name == "assistant_delta", let delta = event.delta, !delta.isEmpty else { return }
         let segmentID = event.messageId ?? runID
-        if messages.contains(where: { !$0.isPending && $0.id == segmentID }) { return }
+        if messages.contains(where: { !$0.isPending && $0.id == segmentID }) {
+            return
+        }
         let liveID = "live:\(runID):\(segmentID)"
         if let index = messages.firstIndex(where: { $0.id == liveID }) {
             if let offset = event.offset, offset != messages[index].text.utf16.count {
