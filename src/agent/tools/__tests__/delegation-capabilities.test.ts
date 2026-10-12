@@ -10,7 +10,9 @@ vi.mock('../../../execution-environments/local-worktree-manager.js', () => ({ Lo
 vi.mock('../../../execution-environments/git.js', () => ({ runGit: async () => '' }));
 vi.mock('../../child-agent-factory.js', () => ({ createDelegateChildHandle: (options: any) => {
   child.options = options;
-  return { abort() {}, run: async () => ({ summary: 'Research complete', status: 'success', toolIterations: 1 }) };
+  return { abort() {}, run: async () => ({ summary: 'Research complete', status: 'success', toolIterations: 1,
+    stopReason: 'completed', budget: { tier: options.budgetTier ?? 'standard', usage: { toolCalls: 1 }, limits: {} },
+    handoff: { requested: false, completed: false, summary: 'Research complete' } }) };
 } }));
 
 import { createDelegateTool } from '../delegate-tool.js';

@@ -149,7 +149,7 @@ export function buildToolingSection(params: {
   const orchestrationLines: string[] = [];
   if (hasDelegate) {
     orchestrationLines.push(
-      '- Sub-agent delegation → use `delegate_task(goal, context?, mode?, capabilities?, toolset?)`. Default research inherits available read capabilities; pass necessary context explicitly. Use implement for isolated worktree changes. Check rejectedTools and partial results before relying on the answer.',
+      '- Sub-agent delegation → use `delegate_task(goal, context?, mode?, capabilities?, toolset?, budgetTier?, maxIterations?)`. Choose light for narrow lookups, standard for bounded research, and deep for broader investigations. Supply relevant facts and a clear stopping condition; search before reading targeted chunks. Default research inherits available read capabilities. Use implement for isolated worktree changes. Inspect stopReason, budget usage, handoff and rejectedTools; resume incomplete work from the handoff rather than repeating the investigation.',
     );
   }
   if (hasWorkflow) {
