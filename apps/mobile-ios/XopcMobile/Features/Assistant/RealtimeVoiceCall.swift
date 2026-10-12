@@ -391,38 +391,7 @@ private extension RealtimeVoiceCall {
     func handleSession(_ type: String, payload: RealtimeVoiceEvent.Payload) async {
         switch type {
         case "session.ready":
-            do { try audio.ensurePlaybackReady() }
-            catch {
-                await pause(reason: (error as? RealtimeVoiceAudioError)?.code ?? "AUDIO_UNAVAILABLE")
-                return
-            }
-            connectTimeoutTask?.cancel()
-            connectTimeoutTask = nil
-            phase = .connected
-            connectedAt = Date()
-            errorCode = nil
-            networkQuality = "good"
-            if let session, session.openingGreeting?.accepted == true {
-                try? await transport.send("session.output_ready", payload: .init(connectionEpoch: session.connectionEpoch))
-            }
-            try? await transport.send("input.mute", payload: .init(muted: muted))
-            if let maximum = session?.limits.maxSessionMs, maximum > 0 {
-                let current = generation
-                limitTask = Task {
-                    try? await Task.sleep(for: .milliseconds(maximum))
-                    guard !Task.isCancelled, generation == current else { return }
-                    await pause(reason: "TIME_LIMIT")
-                }
-            }
-            if mode == .assistant {
-                let current = generation
-                approvalTask = Task {
-                    while !Task.isCancelled, generation == current, phase == .connected {
-                        await loadApproval()
-                        try? await Task.sleep(for: .seconds(3))
-                    }
-                }
-            }
+            await handleSessionReady()
         case "session.error":
             let reason = payload.code ?? "SERVICE_UNAVAILABLE"
             if payload.recoverable == true {
@@ -434,6 +403,41 @@ private extension RealtimeVoiceCall {
             let reason = errorCode ?? payload.reason ?? "NETWORK"
             await pause(reason: reason, reconnect: VoiceRecoveryPolicy.shouldReconnect(reason))
         default: break
+        }
+    }
+
+    func handleSessionReady() async {
+        do { try audio.ensurePlaybackReady() }
+        catch {
+            await pause(reason: (error as? RealtimeVoiceAudioError)?.code ?? "AUDIO_UNAVAILABLE")
+            return
+        }
+        connectTimeoutTask?.cancel()
+        connectTimeoutTask = nil
+        phase = .connected
+        connectedAt = Date()
+        errorCode = nil
+        networkQuality = "good"
+        if let session, session.openingGreeting?.accepted == true {
+            try? await transport.send("session.output_ready", payload: .init(connectionEpoch: session.connectionEpoch))
+        }
+        try? await transport.send("input.mute", payload: .init(muted: muted))
+        if let maximum = session?.limits.maxSessionMs, maximum > 0 {
+            let current = generation
+            limitTask = Task {
+                try? await Task.sleep(for: .milliseconds(maximum))
+                guard !Task.isCancelled, generation == current else { return }
+                await pause(reason: "TIME_LIMIT")
+            }
+        }
+        if mode == .assistant {
+            let current = generation
+            approvalTask = Task {
+                while !Task.isCancelled, generation == current, phase == .connected {
+                    await loadApproval()
+                    try? await Task.sleep(for: .seconds(3))
+                }
+            }
         }
     }
 
