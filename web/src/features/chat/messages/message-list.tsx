@@ -5,7 +5,6 @@ import { MessageBubble } from '@/features/chat/messages/message-bubble';
 import { TaskTriggerCard } from '@/features/chat/messages/task-trigger-card';
 import { InlinePreviewSchedulerProvider } from '@/features/chat/product-delivery/inline-preview-scheduler';
 import type { Message, ProgressState, ReasoningLevel } from '@/features/chat/messages/messages.types';
-import { isLastUserMessageInThread } from '@/features/chat/messages/user-message-plain-text';
 import { messageRowKey } from '@/features/chat/messages/thinking-blocks';
 import {
   formatChatTimeSeparator,
@@ -114,6 +113,7 @@ export const MessageList = memo(function MessageList({
   }
 
   const now = Date.now();
+  const lastUserIndex = list.findLastIndex((message) => message.role === 'user');
 
   return (
     <InlinePreviewSchedulerProvider>
@@ -123,7 +123,7 @@ export const MessageList = memo(function MessageList({
           && msg.content.every((block) => block.type === 'text' && block.text.trim() === 'NO_REPLY')) return null;
         const isLast = index === list.length - 1;
         const isStreamRow = Boolean((streaming || sending || msg.pendingResponseStatus) && isLast && msg.role === 'assistant');
-        const isLastUserRow = isLastUserMessageInThread(list, index);
+        const isLastUserRow = index === lastUserIndex;
         const precedingTask = list[index - 1];
         const followUpTrigger = msg.role === 'assistant'
           && precedingTask?.role === 'task'

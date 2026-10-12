@@ -12,6 +12,7 @@ import {
 import { useCallback, useMemo, useReducer, useRef, type ReactNode } from 'react';
 import useSWR from 'swr';
 
+import { NumberInput } from '@/components/ui/number-input';
 import { uiPatchReducer } from '@/lib/settings-form-draft';
 import { useSearchParams } from 'react-router-dom';
 
@@ -539,7 +540,7 @@ export function GatewaySettingsPanel() {
             <label className="mb-1 block text-sm font-medium text-fg" htmlFor="gateway-listen-port">
               {g.listenPort}
             </label>
-            <input
+            <NumberInput
               id="gateway-listen-port"
               type="number"
               min={1}
@@ -709,7 +710,7 @@ export function GatewaySettingsPanel() {
               <label className="mb-1 block text-sm font-medium text-fg" htmlFor="update-auto-stable-delay">
                 {g.updateAutoStableDelayHours}
               </label>
-              <input
+              <NumberInput
                 id="update-auto-stable-delay"
                 type="number"
                 min={0}
@@ -730,7 +731,7 @@ export function GatewaySettingsPanel() {
               <label className="mb-1 block text-sm font-medium text-fg" htmlFor="update-auto-stable-jitter">
                 {g.updateAutoStableJitterHours}
               </label>
-              <input
+              <NumberInput
                 id="update-auto-stable-jitter"
                 type="number"
                 min={0}
@@ -751,7 +752,7 @@ export function GatewaySettingsPanel() {
               <label className="mb-1 block text-sm font-medium text-fg" htmlFor="update-auto-beta-interval">
                 {g.updateAutoBetaCheckIntervalHours}
               </label>
-              <input
+              <NumberInput
                 id="update-auto-beta-interval"
                 type="number"
                 min={0.25}
@@ -1222,7 +1223,7 @@ function AuthRateLimitFields({
           <label className="mb-1 block text-xs font-medium text-fg-muted" htmlFor="gateway-rate-max">
             {g.rateLimitMaxAttempts}
           </label>
-          <input
+          <NumberInput
             id="gateway-rate-max"
             type="number"
             min={1}
@@ -1239,7 +1240,7 @@ function AuthRateLimitFields({
           <label className="mb-1 block text-xs font-medium text-fg-muted" htmlFor="gateway-rate-window">
             {g.rateLimitWindowMinutes}
           </label>
-          <input
+          <NumberInput
             id="gateway-rate-window"
             type="number"
             min={1}
@@ -1256,7 +1257,7 @@ function AuthRateLimitFields({
           <label className="mb-1 block text-xs font-medium text-fg-muted" htmlFor="gateway-rate-block">
             {g.rateLimitBlockMinutes}
           </label>
-          <input
+          <NumberInput
             id="gateway-rate-block"
             type="number"
             min={1}

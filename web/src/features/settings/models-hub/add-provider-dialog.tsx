@@ -831,9 +831,13 @@ type CustomProviderFormState = {
   baseUrl: string;
   api: ApiType;
   apiKey: string;
-  modelIds: string[];
+  modelSlots: { clientKey: string; value: string }[];
   error: string | null;
 };
+
+function createModelSlot(value: string) {
+  return { clientKey: crypto.randomUUID(), value };
+}
 
 function customFormFromPreset(presetKey = 'custom'): CustomProviderFormState {
   if (presetKey !== 'custom' && PROVIDER_PRESETS[presetKey]) {
@@ -844,7 +848,7 @@ function customFormFromPreset(presetKey = 'custom'): CustomProviderFormState {
       baseUrl: p.baseUrl ?? '',
       api: (p.api as ApiType) ?? 'openai-completions',
       apiKey: p.apiKey ?? '',
-      modelIds: p.models?.map((model) => model.id) ?? [''],
+      modelSlots: (p.models?.map((model) => model.id) ?? ['']).map(createModelSlot),
       error: null,
     };
   }
@@ -854,7 +858,7 @@ function customFormFromPreset(presetKey = 'custom'): CustomProviderFormState {
     baseUrl: '',
     api: 'openai-completions',
     apiKey: '',
-    modelIds: [''],
+    modelSlots: [createModelSlot('')],
     error: null,
   };
 }
@@ -888,16 +892,16 @@ function customFormReducer(state: CustomProviderFormState, action: CustomFormAct
     case 'setApiKey':
       return { ...state, apiKey: action.value };
     case 'addModelSlot':
-      return { ...state, modelIds: [...state.modelIds, ''] };
+      return { ...state, modelSlots: [...state.modelSlots, createModelSlot('')] };
     case 'updateModelId':
       return {
         ...state,
-        modelIds: state.modelIds.map((m, i) => (i === action.index ? action.value : m)),
+        modelSlots: state.modelSlots.map((slot, i) => (i === action.index ? { ...slot, value: action.value } : slot)),
       };
     case 'setModelIds':
-      return { ...state, modelIds: action.values.length > 0 ? action.values : [''] };
+      return { ...state, modelSlots: (action.values.length > 0 ? action.values : ['']).map(createModelSlot) };
     case 'removeModelSlot':
-      return { ...state, modelIds: state.modelIds.filter((_, i) => i !== action.index) };
+      return { ...state, modelSlots: state.modelSlots.filter((_, i) => i !== action.index) };
     case 'setError':
       return { ...state, error: action.value };
   }
@@ -925,7 +929,8 @@ function ConfigureCustomStep({
   const [discovering, setDiscovering] = useState(false);
   const secretLabels = secretInputLabelsFromChannels(messages(language).providersSettings);
 
-  const { preset, providerId, baseUrl, api, apiKey, modelIds, error } = form;
+  const { preset, providerId, baseUrl, api, apiKey, modelSlots, error } = form;
+  const modelIds = modelSlots.map((slot) => slot.value);
 
   const handleSave = async () => {
     const trimmedId = providerId.trim();
@@ -1132,7 +1137,7 @@ function ConfigureCustomStep({
             </Button>
           </div>
           {modelIds.map((modelId, index) => (
-            <div key={modelId || `model-slot-${index}`} className="flex items-center gap-2">
+            <div key={modelSlots[index].clientKey} className="flex items-center gap-2">
               <input
                 type="text"
                 autoComplete="off"

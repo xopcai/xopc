@@ -32,6 +32,7 @@ import {
   extractActiveTurnConversationPlan,
 } from '@/features/chat/messages/conversation-plan';
 import { MessageList } from '@/features/chat/messages/message-list';
+import { chatScrollBehavior, chatTimelineAnchorIndex } from '@/features/chat/scroll/chat-scroll-geometry';
 import { usePersonalSendTransition } from '@/features/chat/messages/use-personal-send-transition';
 import type { Message } from '@/features/chat/messages/messages.types';
 import {
@@ -392,7 +393,7 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
       const rootRect = root.getBoundingClientRect();
       const targetRect = target.getBoundingClientRect();
       const scrollTop = root.scrollTop + targetRect.top - rootRect.top - 16;
-      root.scrollTo({ top: Math.max(0, scrollTop), behavior: 'smooth' });
+      root.scrollTo({ top: Math.max(0, scrollTop), behavior: chatScrollBehavior() });
       return true;
     },
     [scrollRef],
@@ -401,34 +402,12 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
   const updateActiveMessageIndex = useCallback(() => {
     const root = scrollRef.current;
     if (!root) return;
-    const rows = Array.from(root.querySelectorAll<HTMLElement>('[data-chat-message-index]'));
-    if (rows.length === 0) {
-      setActiveMessageIndex(0);
-      return;
-    }
-
-    const rootRect = root.getBoundingClientRect();
-    const anchorY = rootRect.top + Math.min(180, rootRect.height * 0.35);
-    let best = rows[0];
-    for (const row of rows) {
-      const rect = row.getBoundingClientRect();
-      if (rect.top <= anchorY) {
-        best = row;
-        continue;
-      }
-      break;
-    }
-    const raw = best.dataset.chatMessageIndex;
-    const next = raw ? Number.parseInt(raw, 10) : 0;
-    if (Number.isFinite(next)) {
-      setActiveMessageIndex((prev) => (prev === next ? prev : next));
-    }
+    const next = chatTimelineAnchorIndex(root);
+    setActiveMessageIndex((prev) => (prev === next ? prev : next));
   }, [scrollRef]);
 
   const scheduleTimelineActiveUpdate = useCallback(() => {
-    if (timelineRafRef.current != null) {
-      cancelAnimationFrame(timelineRafRef.current);
-    }
+    if (timelineRafRef.current != null) return;
     timelineRafRef.current = requestAnimationFrame(() => {
       timelineRafRef.current = null;
       updateActiveMessageIndex();

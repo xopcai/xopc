@@ -165,6 +165,7 @@ export function useChatSessionStreaming(deps: {
       if (!shouldApplyStreamUpdate(chatId)) return;
 
       const responseAtLookup = store().sessions[chatId]?.streamingMsg;
+      const inputAtLookup = store().sessions[chatId]?.messages.findLast(message => message.role === 'user')?.clientSubmissionId;
       const runId = await resolveResumeRunId(chatId);
       if (!runId) {
         const currentResponse = store().sessions[chatId]?.streamingMsg;
@@ -179,18 +180,27 @@ export function useChatSessionStreaming(deps: {
         clearChatRunPresence(chatId);
         return;
       }
-      if (chatRunManager.isTrackingRun(chatId, runId)) return;
+      const resumeSuperseded = () => {
+        const currentResponse = store().sessions[chatId]?.streamingMsg;
+        const currentInput = store().sessions[chatId]?.messages.findLast(message => message.role === 'user')?.clientSubmissionId;
+        return Boolean(currentInput && currentInput !== inputAtLookup)
+          || Boolean(currentResponse?.turnId && currentResponse.turnId !== runId)
+          || Boolean(currentResponse?.pendingResponseStatus && currentResponse !== responseAtLookup);
+      };
+      if (resumeSuperseded() || chatRunManager.isTrackingRun(chatId, runId)) return;
 
       let seedMessages = loadedMessages ?? getSessionMessages(chatId);
       let seedHasMore = getChatSessionSnapshot(chatId)?.hasMore ?? false;
       try {
         const fresh = await sessionMgrRef.current.loadSession(chatId, 0, undefined, taskId);
+        if (resumeSuperseded() || chatRunManager.isTrackingRun(chatId, runId)) return;
         store().mergeCommittedFromServer(chatId, fresh.messages, fresh.hasMore);
         seedMessages = fresh.messages;
         seedHasMore = fresh.hasMore;
       } catch {
         /* use cached seed */
       }
+      if (resumeSuperseded() || chatRunManager.isTrackingRun(chatId, runId)) return;
 
       chatRunManager.setUserAborted(chatId, false);
       chatRunManager.setResumeRunId(chatId, runId);

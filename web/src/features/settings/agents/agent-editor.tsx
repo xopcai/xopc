@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import { NumberInput } from '@/components/ui/number-input';
 import { Button } from '@/components/ui/button';
 import { DirectoryPickerPathField } from '@/features/fs/directory-picker-path-field';
 import {
@@ -414,7 +415,7 @@ export function AgentEditor({
                   />
                   {draft.models?.imageGeneration ? (
                     <div className="grid gap-4 rounded-2xl border border-edge bg-surface-base p-4 sm:grid-cols-2">
-                      <label className="text-xs font-medium text-fg-muted">{zh ? '生成超时（毫秒）' : 'Generation timeout (ms)'}<input type="number" min={1} className={`${inputClass} mt-1.5`} value={draft.models.imageGeneration.timeoutMs ?? ''} onChange={(event) => setDraft({ ...draft, models: { ...draft.models, imageGeneration: { ...draft.models!.imageGeneration!, timeoutMs: optionalPositiveInt(event.target.value) } } })} /></label>
+                      <label className="text-xs font-medium text-fg-muted">{zh ? '生成超时（毫秒）' : 'Generation timeout (ms)'}<NumberInput allowEmpty type="number" min={1} className={`${inputClass} mt-1.5`} value={draft.models.imageGeneration.timeoutMs ?? ''} onChange={(event) => setDraft({ ...draft, models: { ...draft.models, imageGeneration: { ...draft.models!.imageGeneration!, timeoutMs: optionalPositiveInt(event.target.value) } } })} /></label>
                       <div className="text-xs font-medium text-fg-muted"><span>{zh ? '提供商自动回退' : 'Automatic provider fallback'}</span><div className="mt-1.5 flex rounded-xl bg-surface-hover p-1">{([true, false] as const).map((enabled) => <button key={String(enabled)} type="button" onClick={() => setDraft({ ...draft, models: { ...draft.models, imageGeneration: { ...draft.models!.imageGeneration!, autoProviderFallback: enabled } } })} className={cn('flex-1 rounded-lg px-3 py-2 text-xs font-medium', draft.models?.imageGeneration?.autoProviderFallback === enabled ? 'bg-surface-panel text-fg shadow-surface' : 'text-fg-muted')}>{enabled ? (zh ? '开启' : 'On') : (zh ? '关闭' : 'Off')}</button>)}</div></div>
                     </div>
                   ) : null}
@@ -464,7 +465,7 @@ export function AgentEditor({
                   ['maxTurns', zh ? '单次最大轮数' : 'Maximum turns'],
                   ['timeoutMs', zh ? '单轮超时（毫秒）' : 'Turn timeout (ms)'],
                   ['maxToolFailuresPerTurn', zh ? '最大工具失败次数' : 'Maximum tool failures'],
-                ] as const).map(([key, label]) => <label key={key} className="text-xs font-medium text-fg-muted"><span className="flex items-center gap-2">{label}{draft.runtime?.[key] === undefined ? <InheritedBadge>{zh ? '继承' : 'Inherited'}</InheritedBadge> : null}</span><input type="number" min={1} className={`${inputClass} mt-1.5`} value={draft.runtime?.[key] ?? ''} placeholder={String(agent.effective.runtime[key] ?? '')} onChange={(event) => { const runtime = cleanObject({ ...(draft.runtime ?? {}), [key]: optionalPositiveInt(event.target.value) }); setDraft({ ...draft, runtime }); }} /></label>)}
+                ] as const).map(([key, label]) => <label key={key} className="text-xs font-medium text-fg-muted"><span className="flex items-center gap-2">{label}{draft.runtime?.[key] === undefined ? <InheritedBadge>{zh ? '继承' : 'Inherited'}</InheritedBadge> : null}</span><NumberInput allowEmpty type="number" min={1} className={`${inputClass} mt-1.5`} value={draft.runtime?.[key] ?? ''} placeholder={String(agent.effective.runtime[key] ?? '')} onChange={(event) => { const runtime = cleanObject({ ...(draft.runtime ?? {}), [key]: optionalPositiveInt(event.target.value) }); setDraft({ ...draft, runtime }); }} /></label>)}
               </div>
               <section className="rounded-2xl border border-edge bg-surface-base p-4">
                 <h4 className="text-sm font-semibold text-fg">{zh ? '工作流' : 'Workflows'}</h4>

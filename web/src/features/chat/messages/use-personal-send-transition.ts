@@ -17,58 +17,46 @@ function animateSend(source: Point, bubble: HTMLElement, viewport: HTMLElement):
   if (!visibleWithin(source, { left: 0, top: 0, right: window.innerWidth, bottom: window.innerHeight })
     || !visibleWithin(target, viewportRect)) return () => {};
 
-  const ghost = bubble.cloneNode(true) as HTMLElement;
-  if (typeof ghost.animate !== 'function') return () => {};
+  if (typeof bubble.animate !== 'function') return () => {};
   const article = bubble.closest<HTMLElement>('article');
   if (article) article.style.animation = 'none';
+  // Animate the real bubble with bounded motion; never replace visible content
+  // with a detached clone while transcript reconciliation can replace its row.
   const settledTarget = bubble.getBoundingClientRect();
-  ghost.setAttribute('aria-hidden', 'true');
-  ghost.setAttribute('data-personal-send-ghost', '');
-  ghost.inert = true;
-  ghost.querySelectorAll('[id]').forEach((element) => element.removeAttribute('id'));
-  Object.assign(ghost.style, {
-    position: 'fixed',
-    left: `${settledTarget.left}px`,
-    top: `${settledTarget.top}px`,
-    width: `${settledTarget.width}px`,
-    maxWidth: 'none',
-    margin: '0',
-    zIndex: '100',
-    pointerEvents: 'none',
-    willChange: 'transform, opacity',
-  });
-  const previousVisibility = bubble.style.visibility;
-  bubble.style.visibility = 'hidden';
-  document.body.appendChild(ghost);
-
-  const dx = source.left - settledTarget.left;
-  const dy = source.top - settledTarget.top;
+  const dx = Math.max(-8, Math.min(8, source.left - settledTarget.left));
+  const dy = Math.max(-8, Math.min(8, source.top - settledTarget.top));
   let animation: Animation;
   try {
-    animation = ghost.animate([
-      { transform: `translate3d(${dx}px, ${dy}px, 0) scale(0.96)`, opacity: 0.55 },
-      { transform: 'translate3d(0, 0, 0) scale(1)', opacity: 1 },
-    ], { duration: 260, easing: 'cubic-bezier(0.22, 1, 0.36, 1)', fill: 'both' });
+    animation = bubble.animate([
+      { transform: `translate3d(${dx}px, ${dy}px, 0)` },
+      { transform: 'translate3d(0, 0, 0)' },
+    ], { duration: 180, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' });
   } catch {
-    bubble.style.visibility = previousVisibility;
-    ghost.remove();
     return () => {};
   }
 
   let finished = false;
+  let restoreTimer: number | undefined;
   const finish = () => {
     if (finished) return;
     finished = true;
-    bubble.style.visibility = previousVisibility;
-    ghost.remove();
+    if (restoreTimer !== undefined) window.clearTimeout(restoreTimer);
+    viewport.removeEventListener('scroll', onScroll);
     viewport.removeEventListener('wheel', finish);
     viewport.removeEventListener('touchstart', finish);
     window.removeEventListener('resize', finish);
     animation.cancel();
   };
+  const onScroll = () => {
+    const current = bubble.getBoundingClientRect();
+    if (Math.abs(current.top - settledTarget.top) > 1 || Math.abs(current.left - settledTarget.left) > 1) finish();
+  };
+  viewport.addEventListener('scroll', onScroll, { passive: true });
   viewport.addEventListener('wheel', finish, { passive: true });
   viewport.addEventListener('touchstart', finish, { passive: true });
   window.addEventListener('resize', finish);
+  // Settle interrupted animations promptly, including background tabs.
+  restoreTimer = window.setTimeout(finish, 350);
   void animation.finished.then(finish, finish);
   return finish;
 }

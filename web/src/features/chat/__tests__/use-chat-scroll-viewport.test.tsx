@@ -179,6 +179,36 @@ describe('useChatScrollViewport', () => {
     expect(scrollTop).toBe(400);
   });
 
+  it('keeps following when a layout scroll event arrives before the resize frame', () => {
+    act(() => root.render(<Harness />));
+    const el = container.firstElementChild as HTMLDivElement;
+    let height = 1000;
+    let top = 600;
+    Object.defineProperties(el, {
+      clientHeight: { get: () => 400 },
+      scrollHeight: { get: () => height },
+      scrollTop: {
+        get: () => top,
+        set: (value: number) => { top = Math.max(0, Math.min(value, height - 400)); },
+      },
+    });
+    act(() => observers.get(el.firstElementChild!)?.());
+    // Streaming grows an existing row while a previous layout scroll is still queued.
+    height = 1200;
+    act(() => el.dispatchEvent(new Event('scroll', { bubbles: true })));
+    act(() => observers.get(el.firstElementChild!)?.());
+    expect(top).toBe(800);
+    expect(viewport?.atBottom).toBe(true);
+
+    // Explicit reading intent takes priority even if it coincides with growth.
+    height = 1400;
+    act(() => el.dispatchEvent(new WheelEvent('wheel', { deltaY: -100 })));
+    top = 500;
+    act(() => el.dispatchEvent(new Event('scroll', { bubbles: true })));
+    act(() => observers.get(el.firstElementChild!)?.());
+    expect(top).toBe(500);
+  });
+
   it('does not issue another bottom scroll when the completed reply shrinks', () => {
     act(() => root.render(<Harness />));
     const el = container.firstElementChild as HTMLDivElement;

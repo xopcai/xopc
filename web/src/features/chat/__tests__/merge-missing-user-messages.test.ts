@@ -47,4 +47,11 @@ describe('mergeMissingUserMessagesFromServer', () => {
       'run-2',
     )).toBe(local);
   });
+  it('does not truncate a newer local send when an older run snapshot arrives', () => {
+    const oldUser = { ...u1, turnId: 'old-run' };
+    const pendingUser: Message = { ...u2, clientSubmissionId: 'new-input' };
+    const local = [oldUser, a1, pendingUser];
+    expect(mergeMissingUserMessagesFromServer(local, [oldUser, a1], 'old-run')).toBe(local);
+  });
+
 });

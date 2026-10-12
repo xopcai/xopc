@@ -1,9 +1,20 @@
+const timeFormatters = new Map<string, Intl.DateTimeFormat>();
+
+function chatTimeFormatter(language?: 'en' | 'zh', kind: 'time' | 'date' | 'year' = 'time'): Intl.DateTimeFormat {
+  const key = `${language ?? 'default'}:${kind}`;
+  let formatter = timeFormatters.get(key);
+  if (!formatter) {
+    formatter = new Intl.DateTimeFormat(language === 'zh' ? 'zh-CN' : language, kind === 'time'
+      ? { hour: '2-digit', minute: '2-digit' }
+      : { month: 'short', day: 'numeric', year: kind === 'year' ? 'numeric' : undefined });
+    timeFormatters.set(key, formatter);
+  }
+  return formatter;
+}
+
 export function formatChatMessageTime(ts?: number): string {
   if (!ts) return '';
-  return new Date(ts).toLocaleTimeString([], {
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+  return chatTimeFormatter().format(ts);
 }
 
 const CHAT_TIME_SEPARATOR_GAP_MS = 30 * 60 * 1000;
@@ -40,14 +51,7 @@ export function formatChatTimeSeparator(
     ? language === 'zh' ? '今天' : 'Today'
     : isSameLocalDay(date, yesterday)
       ? language === 'zh' ? '昨天' : 'Yesterday'
-      : new Intl.DateTimeFormat(language === 'zh' ? 'zh-CN' : 'en', {
-          month: 'short',
-          day: 'numeric',
-          year: date.getFullYear() === now.getFullYear() ? undefined : 'numeric',
-        }).format(date);
-  const time = new Intl.DateTimeFormat(language === 'zh' ? 'zh-CN' : 'en', {
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(date);
+      : chatTimeFormatter(language, date.getFullYear() === now.getFullYear() ? 'date' : 'year').format(date);
+  const time = chatTimeFormatter(language).format(date);
   return `${day} ${time}`;
 }

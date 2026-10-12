@@ -3,6 +3,7 @@ import { Loader2, Mic, Play, Square, Volume2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState, type ReactNode } from 'react';
 import useSWR from 'swr';
 
+import { NumberInput } from '@/components/ui/number-input';
 import { Button } from '@/components/ui/button';
 import { AutosaveStatus } from '@/components/ui/autosave-status';
 import { SecretInput } from '@/components/ui/secret-input';
@@ -1178,11 +1179,26 @@ function SchemaConfigField({
           placeholder={field.placeholder}
           labels={DEFAULT_SECRET_INPUT_LABELS}
         />
+      ) : field.type === 'number' ? (
+        <NumberInput
+          id={id}
+          className={inputClassName()}
+          autoComplete={field.secret ? 'new-password' : 'off'}
+          spellCheck={false}
+          value={fieldValue}
+          required={field.required}
+          allowEmpty={!field.required}
+          placeholder={field.placeholder}
+          min={field.min}
+          max={field.max}
+          step={field.step}
+          onChange={(event) => onChange(parseSchemaFieldValue(field, event.target.value))}
+        />
       ) : (
         <input
           id={id}
           className={inputClassName()}
-          type={field.type === 'number' ? 'number' : 'text'}
+          type="text"
           autoComplete={field.secret ? 'new-password' : 'off'}
           spellCheck={false}
           value={fieldValue}

@@ -104,10 +104,38 @@ it('keeps the add-provider dialog open and offers only the models added in that 
   await fill(document.querySelector<HTMLInputElement>('#custom-provider-id')!, 'custom');
   await fill(document.querySelector<HTMLInputElement>('#custom-base-url')!, 'https://example.com');
   const modelInput = Array.from(document.querySelectorAll<HTMLInputElement>('input')).find(input => input.placeholder === labels.modelIdPlaceholder)!;
-  await fill(modelInput, 'chat');
+  modelInput.focus();
+  for (const value of ['c', 'ch', 'cha', 'chat']) {
+    await fill(modelInput, value);
+    expect(document.activeElement).toBe(modelInput);
+    expect(modelInput.isConnected).toBe(true);
+  }
   await click(labels.save);
   expect(mocks.save).toHaveBeenCalledOnce();
   expect(document.querySelector('[role="dialog"]')).toBe(dialog);
   expect(document.querySelector('[data-testid="success"]')?.textContent).toBe('chat');
   expect(onSaved).toHaveBeenCalledWith('custom');
+});
+
+it('keeps duplicate model ID rows mounted when editing and removing an earlier slot', async () => {
+  const labels = messages('en').capabilitiesSettings.addProviderDialog;
+  await act(async () => root.render(<MemoryRouter><AddProviderDialog open onOpenChange={vi.fn()}
+    builtinRows={[]} customConfig={{ providers: {} }} labels={labels} language="en" onSaved={onSaved}
+  /></MemoryRouter>));
+  const customButton = Array.from(document.querySelectorAll('button')).find(button => button.textContent?.includes(labels.addCustom))!;
+  await act(async () => customButton.click());
+  await click(labels.addModel);
+  const inputs = Array.from(document.querySelectorAll<HTMLInputElement>('input')).filter(input => input.placeholder === labels.modelIdPlaceholder);
+  for (const input of inputs) {
+    input.focus();
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, 'same-model');
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    expect(document.activeElement).toBe(input);
+  }
+  await act(async () => inputs[0].parentElement!.querySelector('button')!.click());
+  expect(inputs[0].isConnected).toBe(false);
+  expect(inputs[1].isConnected).toBe(true);
+  expect(inputs[1].value).toBe('same-model');
 });

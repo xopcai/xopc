@@ -26,6 +26,9 @@ export function mergeMissingUserMessagesFromServer(
       (message) => isUser(message) && message.turnId === activeTurnId,
     );
     if (activeUserIndex >= 0) {
+      const localActiveIndex = local.findLastIndex(message => isUser(message) && message.turnId === activeTurnId);
+      // A delayed snapshot for an earlier run cannot remove a later local turn.
+      if (localActiveIndex >= 0 && local.slice(localActiveIndex + 1).some(isUser)) return local;
       const canonicalPrefix = server.slice(0, activeUserIndex + 1);
       if (!hasSameTurnBoundaries(local, canonicalPrefix)) {
         return mergeConsecutiveAssistantMessages(canonicalPrefix);
