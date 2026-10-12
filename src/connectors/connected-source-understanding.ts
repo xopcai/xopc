@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 
+import { consentFilteredText } from '../user-context/sources/consent-fields.js';
 import type { Config } from '../config/schema.js';
 import { writeKnowledgeItem } from '../knowledge-memory/index.js';
 import type { KnowledgeSourceItem } from '../knowledge/types.js';
@@ -56,29 +57,6 @@ function timestamp(value: string | undefined): number | undefined {
   if (!value) return undefined;
   const parsed = Date.parse(value);
   return Number.isFinite(parsed) ? parsed : undefined;
-}
-
-const CONSENT_FIELD_KEYS: Record<string, Set<string>> = {
-  title: new Set(['title', 'subject', 'name', 'fullName', 'repository']),
-  content: new Set(['content', 'body', 'text', 'snippet', 'description', 'summary']),
-  participants: new Set(['from', 'to', 'cc', 'bcc', 'sender', 'author', 'organizer', 'attendees', 'participants', 'assignee', 'owners']),
-  status: new Set(['status', 'state', 'labels']),
-  timestamps: new Set(['createdAt', 'updatedAt', 'modifiedAt', 'start', 'end', 'created_at', 'updated_at', 'modified_at']),
-  owner_activity: new Set(['user', 'username', 'owner']),
-};
-
-function consentFilteredText(textValue: string | undefined, allowedFields: Set<string>): string | undefined {
-  if (!textValue) return undefined;
-  try {
-    const parsed = JSON.parse(textValue) as unknown;
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return undefined;
-    const allowedKeys = new Set([...allowedFields].flatMap((field) => [...(CONSENT_FIELD_KEYS[field] ?? [])]));
-    const filtered = Object.fromEntries(Object.entries(parsed as Record<string, unknown>)
-      .filter(([key]) => allowedKeys.has(key)));
-    return Object.keys(filtered).length ? JSON.stringify(filtered) : undefined;
-  } catch {
-    return allowedFields.has('content') ? textValue.slice(0, 24_000) : undefined;
-  }
 }
 
 function itemsAllowedByConsent(
@@ -191,6 +169,7 @@ export async function deriveConnectedSourceUnderstanding(input: {
   sourceRunId: string;
   processingPolicy: 'local_only' | 'remote_allowed';
   analyze?: typeof analyzeUnderstandingSources;
+  batchOrdinal?: number;
   assertAuthorized?: () => void;
 }): Promise<{
   created: number;
@@ -198,7 +177,19 @@ export async function deriveConnectedSourceUnderstanding(input: {
   status: 'completed' | 'partial' | 'failed';
   error?: string;
 }> {
-  const sourceItems = [...new Set(input.sourceItemIds)].slice(0, MAX_CONNECTED_ITEMS)
+  const uniqueIds = [...new Set(input.sourceItemIds)];
+  if (uniqueIds.length > MAX_CONNECTED_ITEMS) {
+    let created = 0, knowledgeCount = 0;
+    let status: 'completed' | 'partial' | 'failed' = 'completed';
+    for (let offset = 0; offset < uniqueIds.length; offset += MAX_CONNECTED_ITEMS) {
+      const batch = await deriveConnectedSourceUnderstanding({ ...input,
+        sourceItemIds: uniqueIds.slice(offset, offset + MAX_CONNECTED_ITEMS), batchOrdinal: offset / MAX_CONNECTED_ITEMS });
+      created += batch.created; knowledgeCount += batch.knowledgeCount;
+      if (batch.status !== 'completed') status = 'partial';
+    }
+    return { created, knowledgeCount, status };
+  }
+  const sourceItems = uniqueIds
     .flatMap((itemId) => getKnowledgeSourceItem(itemId) ?? [])
     .filter((item) => item.sourceInstanceId === input.sourceInstanceId
       && item.metadata.agentId === input.agentId && !item.deletedAt);
@@ -226,7 +217,7 @@ export async function deriveConnectedSourceUnderstanding(input: {
     : 'local_only' as const;
   const extraction = claimRegisteredExtraction({
     extractorId: 'connector-semantic',
-    sourceRef: `understanding-source-run:${input.sourceRunId}`,
+    sourceRef: `understanding-source-run:${input.sourceRunId}${input.batchOrdinal === undefined ? '' : `:batch:${input.batchOrdinal}`}`,
     contentForHash: sourceItems.map((item) => `${item.id}:${item.contentHash}`).join('\n'),
     processingPolicy: effectiveProcessingPolicy,
     destination: 'remote_model',
@@ -253,9 +244,11 @@ export async function deriveConnectedSourceUnderstanding(input: {
       let assertionId: string | undefined;
       let candidateCreated = false;
       for (const [index, evidenceItem] of evidenceItems.entries()) {
+        const sourceItem = sourceItems.find(item => `knowledge-source://${item.id}` === evidenceItem.evidenceRef);
         const evidence = createContextEvidence({
           sourceType: 'connector',
           sourceInstanceId: input.sourceInstanceId,
+          sourceItemId: sourceItem?.id, contentHash: sourceItem?.contentHash,
           sourceRef: evidenceItem.evidenceRef,
           redactedExcerpt: evidenceItem.title.slice(0, 600),
           trustLevel: 'owner',
@@ -321,8 +314,10 @@ export async function deriveConnectedSourceUnderstanding(input: {
         const validityDays = thread.horizon === 'current' ? 30 : thread.horizon === 'ongoing' ? 90 : 365;
         let goalCreated = false;
         for (const evidenceItem of goalEvidence) {
+          const sourceItem = sourceItems.find(item => `knowledge-source://${item.id}` === evidenceItem.evidenceRef);
           const evidence = createContextEvidence({
             sourceType: 'connector', sourceInstanceId: input.sourceInstanceId,
+            sourceItemId: sourceItem?.id, contentHash: sourceItem?.contentHash,
             sourceRef: evidenceItem.evidenceRef, redactedExcerpt: evidenceItem.title.slice(0, 600),
             trustLevel: 'owner', observedAt: evidenceItem.occurredAt ?? evidenceItem.modifiedAt ?? observedAt,
           });
@@ -349,8 +344,24 @@ export async function deriveConnectedSourceUnderstanding(input: {
         }
         if (goalCreated) created += 1;
       }
+      const evidence = evidenceRefs.flatMap((ref) => {
+        const evidenceItem = byRef.get(ref);
+        const sourceItem = sourceItems.find(item => `knowledge-source://${item.id}` === ref);
+        if (!evidenceItem || !sourceItem || !consentReceipt) return [];
+        const record = createContextEvidence({
+          sourceType: 'connector', sourceInstanceId: input.sourceInstanceId,
+          sourceRef: ref, sourceItemId: sourceItem.id, sourceRunId: input.sourceRunId,
+          contentHash: sourceItem.contentHash, processingPolicy: effectiveProcessingPolicy,
+          redactedExcerpt: evidenceItem.title.slice(0, 600), trustLevel: 'untrusted',
+          observedAt: evidenceItem.occurredAt ?? evidenceItem.modifiedAt ?? Date.now(),
+        });
+        return [{ id: record.id, contentHash: sourceItem.contentHash, consentReceiptId: consentReceipt.id }];
+      });
       const result = writeKnowledgeItem({
         kind: 'work_thread',
+        claimMode: 'reported', verification: evidence.length === evidenceRefs.length ? 'supported' : 'tentative',
+        evidence,
+        reviewAt: Date.now() + (thread.horizon === 'current' ? 14 : 90) * 86_400_000,
         scope: { type: 'global' },
         content: `${thread.title}: ${thread.summary}`,
         canonicalKey: candidateKey,
@@ -358,7 +369,7 @@ export async function deriveConnectedSourceUnderstanding(input: {
         importance: thread.horizon === 'current' ? 0.75 : 0.5,
         originClass: 'untrusted',
         sourceAgentId: input.agentId,
-        source: { sourceRunId: input.sourceRunId, evidenceRefs },
+        source: { sourceRunId: input.sourceRunId, sourceInstanceId: input.sourceInstanceId, consentReceiptId: consentReceipt?.id, evidenceRefs },
         replaceExisting: true,
       });
       if (result.created) knowledgeCount += 1;

@@ -1,3 +1,5 @@
+import { replaceKnowledgeChunks } from '../../knowledge/chunks.js';
+
 import { randomUUID } from 'node:crypto';
 
 import type {
@@ -333,6 +335,7 @@ export function upsertKnowledgeSourceItems(
       );
       const row = db.prepare(`SELECT * FROM knowledge_source_items WHERE item_id = ?`).get(id) as KnowledgeSourceItemRow;
       items.push(sourceItemFromRow(row));
+      replaceKnowledgeChunks(db, { ...sourceItemFromRow(row), normalizedText: undefined });
       changedItemIds.push(id);
       const changeKind = input.deletedAt ? 'deleted' : existing ? 'modified' : 'added';
       db.prepare(

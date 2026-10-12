@@ -267,7 +267,7 @@ function reconcileEvidence(
 function activateKnowledge(db: DatabaseSync, runId: string, principalId: string, now: number, limit: number, metrics: MemoryMaintenanceMetrics): void {
   const rows = db.prepare(`SELECT knowledge_id FROM knowledge_items
     WHERE principal_id = ? AND record_class = 'memory' AND status = 'candidate'
-      AND origin_class IN ('owner', 'agent', 'system') AND confidence >= 0.7
+      AND origin_class IN ('owner', 'agent', 'system') AND confidence >= 0.7 AND verification = 'supported'
       AND derived_from_recalled_context = 0
       AND (valid_from IS NULL OR valid_from <= ?) AND (valid_to IS NULL OR valid_to >= ?)
       AND (expires_at IS NULL OR expires_at >= ?) AND (review_at IS NULL OR review_at > ?)
@@ -295,7 +295,7 @@ function repairIndexes(
     LEFT JOIN user_assertions_fts f ON f.assertion_id = a.assertion_id
     WHERE f.assertion_id IS NULL`).get() as { count: number };
   const knowledgeMissing = db.prepare(`SELECT COUNT(*) AS count FROM knowledge_items k
-    LEFT JOIN knowledge_items_fts f ON f.knowledge_id = k.knowledge_id
+    LEFT JOIN knowledge_search_fts f ON f.knowledge_id = k.knowledge_id
     WHERE f.knowledge_id IS NULL`).get() as { count: number };
   if (assertionMissing.count) {
     db.prepare(`INSERT INTO user_assertions_fts(statement, assertion_id, slot_id)
@@ -303,9 +303,9 @@ function repairIndexes(
       LEFT JOIN user_assertions_fts f ON f.assertion_id = a.assertion_id WHERE f.assertion_id IS NULL`).run();
   }
   if (knowledgeMissing.count) {
-    db.prepare(`INSERT INTO knowledge_items_fts(content, knowledge_id)
-      SELECT k.content, k.knowledge_id FROM knowledge_items k
-      LEFT JOIN knowledge_items_fts f ON f.knowledge_id = k.knowledge_id WHERE f.knowledge_id IS NULL`).run();
+    db.prepare(`INSERT INTO knowledge_search_fts(search_text, knowledge_id)
+      SELECT xopc_memory_search_text(k.content), k.knowledge_id FROM knowledge_items k
+      LEFT JOIN knowledge_search_fts f ON f.knowledge_id = k.knowledge_id WHERE f.knowledge_id IS NULL`).run();
   }
   metrics.repairedIndexes = assertionMissing.count + knowledgeMissing.count;
   if (metrics.repairedIndexes) {

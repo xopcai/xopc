@@ -124,9 +124,7 @@ describe('knowledge repository', () => {
 
     expect(listKnowledgeItems({ recordClass: 'memory' }).map((item) => item.canonicalKey))
       .toEqual(['decision:release']);
-    expect(searchKnowledgeItems({ query: 'Build failed', context })[0]).toMatchObject({
-      canonicalKey: 'source-item:gmail:message-1', recordClass: 'source_index',
-    });
+    expect(searchKnowledgeItems({ query: 'Build failed', context })).toEqual([]);
     expect(searchKnowledgeItems({ query: 'Build failed', context, trustedOnly: true })).toEqual([]);
   });
 

@@ -435,7 +435,7 @@ export const AUTHENTICATED_LAZY_ROUTE_BUNDLES: readonly AuthenticatedLazyRouteBu
   {
     id: 'user-model',
     match: (path) => startsWithAny(path, [
-      '/api/user-model', '/api/knowledge-memory', '/api/memory-maintenance', '/api/turns',
+      '/api/user-model', '/api/knowledge-memory', '/api/memory-maintenance', '/api/memory-learning', '/api/turns',
     ]),
     load: async () => {
       const { registerUserModelRoutes } = await import('./user-model.js');

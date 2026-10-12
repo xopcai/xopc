@@ -1,3 +1,4 @@
+import { registerMemoryLearningRoutes } from './memory-learning.js';
 import { userInfo } from 'node:os';
 
 import type {
@@ -219,6 +220,7 @@ function decodeMobileCursor(value: string | undefined): [number, string] | undef
 }
 
 export function registerUserModelRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
+  registerMemoryLearningRoutes(authenticated, deps);
   const write = deps.strictRateLimitMiddleware;
   const userContextConfig = () => deps.service.currentConfig.userContext;
   const memorySettings = () => {
