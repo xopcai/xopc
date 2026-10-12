@@ -125,6 +125,8 @@ export interface MessageContextRef {
 export interface Message {
   role: 'user' | 'assistant' | 'task';
   content: MessageContent[];
+  /** Server-assigned mode for public Personal AI text, including live pending segments. */
+  textSurface?: 'conversation';
   /** Visible provenance for a background Task update; never model input. */
   taskTrigger?: {
     entryId: string;

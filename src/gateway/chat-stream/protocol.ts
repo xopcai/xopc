@@ -30,13 +30,14 @@ export interface ChatStreamEnvelope<TType extends string, TPayload> {
 
 export type RunStartEvent = ChatStreamEnvelope<'run_start', {
   channel: string; startsNewBubble?: boolean; taskTrigger?: TaskUpdateTrigger;
+  textSurface?: 'conversation';
 }>;
 export type UserMessageEvent = ChatStreamEnvelope<'user_message', { message: unknown }>;
 export type UserTranscriptEvent = ChatStreamEnvelope<'user_transcript', { text: string; media?: unknown }>;
-export type AssistantMessageStartEvent = ChatStreamEnvelope<'assistant_message_start', { messageId: string }>;
+export type AssistantMessageStartEvent = ChatStreamEnvelope<'assistant_message_start', { messageId: string; textSurface?: 'conversation' }>;
 export type AssistantDeltaEvent = ChatStreamEnvelope<
   'assistant_delta',
-  { messageId: string; delta: string; /** UTF-16 offset before this delta. */ offset?: number }
+  { messageId: string; delta: string; textSurface?: 'conversation'; /** UTF-16 offset before this delta. */ offset?: number }
 >;
 export type ThinkingDeltaEvent = ChatStreamEnvelope<'thinking_delta', { messageId: string; delta: string }>;
 export type ThinkingEndEvent = ChatStreamEnvelope<'thinking_end', { messageId: string }>;

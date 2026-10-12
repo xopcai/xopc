@@ -15,6 +15,8 @@ export interface ChatStreamMapperOptions {
   channel: string;
   startsNewBubble?: boolean;
   taskTrigger?: TaskUpdateTrigger;
+  /** Public text is visible immediately, independently of tool-call classification. */
+  textSurface?: 'conversation';
 }
 
 type ToolResultEnvelope = { content?: unknown[]; details?: unknown; text?: string };
@@ -479,7 +481,9 @@ export class ChatStreamMapper {
       runId: this.opts.runId,
       conversationId: this.opts.conversationId,
       timestamp: Date.now(),
-      payload,
+      payload: this.opts.textSurface && (type === 'run_start' || type === 'assistant_message_start' || type === 'assistant_delta')
+        ? { ...payload, textSurface: this.opts.textSurface }
+        : payload,
     } as Extract<ChatStreamEvent, { type: T }>;
   }
 

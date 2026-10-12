@@ -48,16 +48,18 @@ describe('Personal AI message styling', () => {
     expect(resolveFile).toHaveBeenCalledWith('report.html', expect.objectContaining({ taskRunId: 'producing-run' }));
   });
 
-  it('tightens only the Personal AI user bubble corner', () => {
+  it('uses consistent rounded corners for Personal AI and regular user bubbles', () => {
     const message: Message = { role: 'user', content: [{ type: 'text', text: 'Hello' }] };
     render(message, true, false);
-    expect(container.querySelector('.chat-user-message')?.classList.contains('rounded-tr-sm')).toBe(true);
+    expect(container.querySelector('.chat-user-message')?.classList.contains('rounded-2xl')).toBe(true);
+    expect(container.querySelector('.chat-user-message')?.classList.contains('rounded-tr-sm')).toBe(false);
 
     render(message, false, false);
+    expect(container.querySelector('.chat-user-message')?.classList.contains('rounded-2xl')).toBe(true);
     expect(container.querySelector('.chat-user-message')?.classList.contains('rounded-tr-sm')).toBe(false);
   });
 
-  it('shows the waiting outline until an assistant answer starts', () => {
+  it('shows the waiting bubble until an assistant answer starts', () => {
     render({ role: 'assistant', content: [], pendingResponseStatus: 'waiting' }, true, true);
     expect(container.querySelector('[role="status"].xopc-personal-thinking')).not.toBeNull();
 
@@ -66,5 +68,29 @@ describe('Personal AI message styling', () => {
 
     render({ role: 'assistant', content: [] }, false, true);
     expect(container.querySelector('.xopc-personal-thinking')).toBeNull();
+  });
+
+  it('shows a live first sentence and retains it after tool-call classification and history reload', () => {
+    const opening: Message = { role: 'assistant', content: [{ type: 'text', text: '我先核对论文里的数值。', segmentId: 'first', presentation: 'pending' }] };
+    render(opening, true, true);
+    expect(container.querySelector('.assistant-markdown-content')?.textContent).toContain('我先核对论文里的数值。');
+    expect(container.querySelector('.xopc-personal-thinking')).toBeNull();
+    render({ ...opening, content: [{ type: 'text', text: '我先核对论文里的数值。', segmentId: 'first', presentation: 'narration' },
+      { type: 'text', text: '这项结果检验的是轨道衰减。', presentation: 'answer' }] }, true, false);
+    expect(container.textContent).toContain('我先核对论文里的数值。');
+    expect(container.textContent).toContain('这项结果检验的是轨道衰减。');
+    render(opening, false, true);
+    expect(container.querySelector('.assistant-markdown-content')).toBeNull();
+  });
+
+  it('does not reveal a fragmented silent-reply marker in the Personal conversation', () => {
+    for (const text of ['N', 'NO_', 'NO_REPLY']) {
+      render({ role: 'assistant', content: [{ type: 'text', text, presentation: 'pending' }] }, true, true);
+      expect(container.querySelector('.assistant-markdown-content')).toBeNull();
+    }
+    render({ role: 'assistant', content: [{ type: 'text', text: 'No problem.', presentation: 'pending' }] }, true, true);
+    expect(container.querySelector('.assistant-markdown-content')?.textContent?.trim()).toBe('No problem.');
+    render({ role: 'assistant', content: [{ type: 'text', text: 'NO_REPLY', presentation: 'answer' }] }, true, false);
+    expect(container.querySelector('.assistant-markdown-content')).toBeNull();
   });
 });

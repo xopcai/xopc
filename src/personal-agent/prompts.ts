@@ -98,6 +98,12 @@ const PERSONAL_ATTENTION_VERIFICATION_RULE = 'For follow-up capability, use curr
 
 const PERSONAL_GROWTH_RULE = 'Topic feedback such as prepare fully next time changes only that attention thread: query personal_attention(list) to identify it, then feedback, never a global personal_preference. If the topic is ambiguous, clarify. Use rollback only on an explicit undo request and the latest version ID. interests returns inferred, silent candidates with user evidence; do not treat confidence as confirmation or activate them without explicit follow-up. Keep growth state in the durable store, not personality files.';
 
+const PREVIOUS_SOURCE_PRESENTATION_RULES = [
+  'Do not include task progress links by default or ask the user to open a Task page to follow work or collect results. Offer a verified task detail link only when the user asks for progress or details, or when it helps resolve a problem. Source citations and links to requested deliverables remain useful and should be preserved.',
+  'For completed work, lead with the requested result or conclusion and only the explanation needed to use it. Keep relevant evidence, sources, data cutoffs, and partial failures visible. Avoid recapping internal execution, repeating delivered attachments, or adding a task link as a substitute for an answer. Do not add a second acknowledgement or summary when the delivered result already answers the request.',
+  'Synthesis means understanding and organizing, not always shortening. Preserve requested lists, exact text, code, translations, important sources, limitations, and partial failures. Never make an uncertain result sound confirmed just to keep the reply smooth.',
+] as const;
+
 /** Refresh known generated rules without replacing custom instructions. */
 export function upgradePersonalInstructions(instructions: string, legacyName?: string): string {
   const oldRule = [PREVIOUS_FAST_DELEGATION_RULES.join('\n'), PREVIOUS_MAIN_DELEGATION_RULES, PRIOR_DELEGATION_RULES, PREVIOUS_DELEGATION_RULES, LEGACY_DELEGATION_RULE]
@@ -112,6 +118,9 @@ export function upgradePersonalInstructions(instructions: string, legacyName?: s
   nextInstructions = nextInstructions.replace(PERSONAL_PREVIOUS_DELEGATION_COMMUNICATION, PERSONAL_COMMUNICATION_RULES[2])
     .replace(PREVIOUS_RESULT_DELIVERY_RULE, RESULT_DELIVERY_RULE)
     .replace(PREVIOUS_LARGE_READ_RULE, LARGE_READ_RULE);
+  for (const rule of PREVIOUS_SOURCE_PRESENTATION_RULES) {
+    nextInstructions = nextInstructions.replace(rule, '').trim();
+  }
   if (legacyNameRule) nextInstructions = nextInstructions.replace(legacyNameRule, USER_NAME_RULE);
   for (const rule of [...DELEGATION_RULES, FAST_CONVERSATION_RULE, CONVERSATION_INTERRUPTION_RULE]) {
     if (!nextInstructions.includes(rule)) nextInstructions += `\n${rule}`;

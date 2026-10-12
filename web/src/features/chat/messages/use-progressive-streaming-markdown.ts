@@ -19,6 +19,7 @@ export function useProgressiveStreamingMarkdown(
   metricsKey: string,
   animateInitialContent = false,
   onComplete?: () => void,
+  immediateFirstCommit = false,
 ): string {
   // The first render is a snapshot, not a delta. This matters when opening a
   // session that already has an active (or just-completed) response: replaying
@@ -66,6 +67,13 @@ export function useProgressiveStreamingMarkdown(
       }
       return;
     }
+    if (immediateFirstCommit && visibleContentRef.current.length === 0) {
+      visibleContentRef.current = content;
+      lastCommitAtRef.current = performance.now();
+      recordStreamingCommit(metricsKey, content.length);
+      setVisibleContent(content);
+      return;
+    }
     if (!content.startsWith(visibleContent)) {
       visibleContentRef.current = content;
       setVisibleContent(content);
@@ -98,7 +106,7 @@ export function useProgressiveStreamingMarkdown(
       recordStreamingCommit(metricsKey, nextContent.length);
       setVisibleContent(nextContent);
     }, waitMs);
-  }, [content, metricsKey, onComplete, streaming, visibleContent]);
+  }, [content, metricsKey, onComplete, streaming, visibleContent, immediateFirstCommit]);
 
   useEffect(
     () => () => {

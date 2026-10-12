@@ -127,6 +127,10 @@ export function createAgentStreamMessagingCallbacks(opts: {
   };
 
   return {
+    onTextSurface: (textSurface) => {
+      beforeAssistantDelta();
+      store().mutateSessionStreaming(chatId, (message) => { message.textSurface = textSurface; });
+    },
     onReplayGap: reloadSessionSnapshot,
     onUserMessage: (message) => {
       if (!shouldApplyStreamUpdate(chatId)) return;

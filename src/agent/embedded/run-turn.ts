@@ -349,6 +349,13 @@ export async function runXopcEmbeddedTurn(params: RunXopcEmbeddedTurnParams): Pr
 }
 
 async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Promise<RunXopcEmbeddedTurnResult> {
+  const preparationStartedAt = performance.now();
+  let firstModelRequestAt: number | undefined;
+  let currentModelRequestAt: number | undefined;
+  let modelRequestNumber = 0;
+  let firstModelTextSeen = false;
+  let latencyModelRef: string | undefined;
+  let latencyReasoning: string | undefined;
   const {
     conversationId,
     runId,
@@ -611,6 +618,17 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
         },
         'Sending messages to AI',
       );
+      currentModelRequestAt = performance.now();
+      modelRequestNumber += 1;
+      latencyModelRef = `${streamModel.provider}/${streamModel.id}`;
+      latencyReasoning = options?.reasoning;
+      if (firstModelRequestAt === undefined) {
+        firstModelRequestAt = currentModelRequestAt;
+        log.info({ conversationId, runId, modelRef: latencyModelRef, thinking: latencyReasoning ?? 'off',
+          phase: 'first_model_request', preparationMs: firstModelRequestAt - preparationStartedAt,
+          messageCount: effectiveContext.messages.length, systemPromptLength: effectiveSystemPrompt.length,
+          toolCount: effectiveTools.length }, 'Embedded first model request ready');
+      }
       return trackAiUsageStream(streamModel, {
         operation: continuesAfterTool(effectiveContext.messages) ? 'agent.continue_after_tool' : 'agent.answer',
         conversationId,
@@ -693,6 +711,14 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
     };
 
     unsubscribe = subscribeEmbeddedSessionEvents(session, (event) => {
+      if (!firstModelTextSeen && firstModelRequestAt !== undefined && currentModelRequestAt !== undefined && event.type === 'message_update'
+        && event.assistantMessageEvent?.type === 'text_delta' && event.assistantMessageEvent.delta.trim()) {
+        firstModelTextSeen = true;
+        log.info({ conversationId, runId, modelRef: latencyModelRef, thinking: latencyReasoning ?? 'off',
+          phase: 'first_model_text', modelFirstTextMs: performance.now() - currentModelRequestAt,
+          firstRequestToTextMs: performance.now() - firstModelRequestAt, modelRequestNumber },
+        'Embedded first response text ready');
+      }
       if (event.type === 'message_end' && event.message.role === 'assistant') {
         recordPromptCacheTouch(conversationId, resolvedModel, event.message.usage);
       }

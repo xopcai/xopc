@@ -36,6 +36,7 @@ import { readLocalSessionDraft, saveLocalSessionDraft, readSessionTranscript, re
 import { useGatewayStore } from '@/stores/gateway-store';
 import { patchSessionAgentConfigView } from '../session/patch-session-agent-config-view';
 import type { SessionAgentConfig } from '../session/session-manager';
+import { beginResponseLatency, bindResponseLatency, discardPendingResponseLatency, recordResponseText, finishResponseLatency } from './response-latency';
 
 async function retryDelay(ms: number, signal: AbortSignal): Promise<void> {
   if (signal.aborted) throw new DOMException('Aborted', 'AbortError');
@@ -242,6 +243,7 @@ export type TaskPlanState = {
 };
 
 export type MessagingCallbacks = {
+  onTextSurface?: (textSurface: 'conversation') => void;
   /** The server durably accepted this input, before its run finishes. */
   onInputAccepted?: () => void;
   onStreamStart: (turnId: string, startsNewBubble?: boolean, taskTrigger?: Message['taskTrigger']) => void;
@@ -394,6 +396,8 @@ export class MessageSender {
     this._abort = controller;
     this._chatId = chatId;
 
+    const latencyStartedAt = beginResponseLatency(chatId);
+
     try {
       const capped =
         attachments && attachments.length > MAX_CHAT_ATTACHMENTS
@@ -533,11 +537,13 @@ export class MessageSender {
       }
       this._abort = undefined;
     } finally {
+      discardPendingResponseLatency(chatId, latencyStartedAt);
       if (this._abort === controller) this._abort = undefined;
     }
   }
 
   abort(): void {
+    if (this._trackedRunId) finishResponseLatency(this._trackedRunId, 'cancelled');
     this._notifyServerAbort();
     this._abort?.abort();
     this._streamCleanup?.();
@@ -571,6 +577,7 @@ export class MessageSender {
   }
 
   async resume(runId: string, chatId: string, callbacks?: MessagingCallbacks): Promise<boolean> {
+    bindResponseLatency(chatId, runId);
     this._trackedRunId = undefined;
     this._abort = new AbortController();
     this._chatId = chatId;
@@ -678,8 +685,12 @@ export class MessageSender {
       ? parsed.payload
       : {}) as Record<string, unknown>;
 
+    if ((event === 'run_start' || event === 'assistant_message_start' || event === 'assistant_delta')
+      && payload.textSurface === 'conversation') cb?.onTextSurface?.('conversation');
+
     switch (event) {
       case 'run_start':
+        if (typeof parsed.runId === 'string' && this._chatId) bindResponseLatency(this._chatId, parsed.runId);
         if (typeof parsed.runId === 'string' && this._chatId) {
           this._trackedRunId = parsed.runId;
           setPendingAgentRun(this._chatId, parsed.runId);
@@ -713,6 +724,7 @@ export class MessageSender {
         break;
       case 'assistant_delta':
         if (typeof payload.delta === 'string' && payload.delta) {
+          if (typeof parsed.runId === 'string' && payload.delta.trim()) recordResponseText(parsed.runId);
           cb?.onToken(
             payload.delta,
             typeof payload.messageId === 'string' ? payload.messageId : undefined,
@@ -906,6 +918,7 @@ export class MessageSender {
           && typeof parsed.conversationId === 'string'
           && (payload.status === 'success' || payload.status === 'error' || payload.status === 'cancelled' || payload.status === 'suspended')
         ) {
+          finishResponseLatency(parsed.runId, payload.status);
           cb?.onResult({
             runId: parsed.runId,
             conversationId: parsed.conversationId,
@@ -915,6 +928,7 @@ export class MessageSender {
         }
         break;
       case 'error':
+        if (typeof parsed.runId === 'string') finishResponseLatency(parsed.runId, 'error');
         cb?.onError(String(payload.message || JSON.stringify(buildSendFailedErrorPayload())));
         break;
     }

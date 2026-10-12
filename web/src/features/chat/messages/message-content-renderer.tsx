@@ -4,6 +4,7 @@ import {
   useCallback,
   useEffect,
   useId,
+  useLayoutEffect,
   useMemo,
   useState,
   type ReactNode,
@@ -40,6 +41,7 @@ import {
   startStreamingRenderMetrics,
 } from '@/components/markdown/streaming-render-metrics';
 import { useProgressiveStreamingMarkdown } from '@/features/chat/messages/use-progressive-streaming-markdown';
+import { recordResponseVisible } from '@/features/chat/messages/response-latency';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import { copyTextToClipboard } from '@/lib/copy-to-clipboard';
@@ -264,6 +266,8 @@ function ChatMarkdownView({
   streaming = false,
   animateInitialContent = false,
   onProgressiveRenderComplete,
+  responseRunId,
+  immediateFirstCommit = false,
 }: {
   content: string;
   taskRunId?: string;
@@ -273,6 +277,8 @@ function ChatMarkdownView({
   streaming?: boolean;
   animateInitialContent?: boolean;
   onProgressiveRenderComplete?: () => void;
+  responseRunId?: string;
+  immediateFirstCommit?: boolean;
 }) {
   // Reveal incoming deltas at an adaptive cadence without replaying the
   // current snapshot when this view first mounts.
@@ -284,6 +290,7 @@ function ChatMarkdownView({
     metricsKey,
     animateInitialContent,
     onProgressiveRenderComplete,
+    immediateFirstCommit,
   );
   const [hasStreamed, setHasStreamed] = useState(streaming || animateInitialContent);
   useEffect(() => {
@@ -296,6 +303,12 @@ function ChatMarkdownView({
     () => buildStreamingMarkdownRenderBlocks(blockSource),
     [blockSource],
   );
+  useLayoutEffect(() => {
+    if (!responseRunId || !streamingContent.trim()) return;
+    // The callback runs at the browser's next paint opportunity after the DOM commit.
+    const frame = window.requestAnimationFrame(() => recordResponseVisible(responseRunId, prepareStreamingMarkdown(streamingContent)));
+    return () => window.cancelAnimationFrame(frame);
+  }, [responseRunId, streamingContent, streaming]);
   useEffect(() => {
     if (!progressivelyRevealing) return;
     startStreamingRenderMetrics(metricsKey);
@@ -457,6 +470,8 @@ function renderTextOrImageBlock(
   userTurnDocument?: UserTurnDocument,
   contextRefs?: MessageContextRef[],
   taskRunId?: string,
+  responseRunId?: string,
+  immediateFirstCommit?: boolean,
 ) {
   if (block.type === 'text') {
     if (isUser) {
@@ -494,6 +509,8 @@ function renderTextOrImageBlock(
           streaming={isAssistantMessageStreaming}
           animateInitialContent={animateInitialContent}
           onProgressiveRenderComplete={onProgressiveRenderComplete}
+          responseRunId={responseRunId}
+          immediateFirstCommit={immediateFirstCommit}
         />
       </div>
     );
@@ -552,6 +569,8 @@ export function ChunkedContent({
   onProgressiveRenderComplete,
   userTurnDocument,
   contextRefs,
+  responseRunId,
+  immediateFirstCommit = false,
 }: {
   content: MessageContent[];
   taskRunId?: string;
@@ -566,6 +585,8 @@ export function ChunkedContent({
   onProgressiveRenderComplete?: () => void;
   userTurnDocument?: UserTurnDocument;
   contextRefs?: MessageContextRef[];
+  responseRunId?: string;
+  immediateFirstCommit?: boolean;
 }) {
   const renderContent = isUser ? content : mergeConsecutiveTextBlocks(content);
   const pendingTextIndex = renderContent.findLastIndex(
@@ -610,6 +631,8 @@ export function ChunkedContent({
         isUser && i === 0 ? userTurnDocument : undefined,
         isUser && i === 0 ? contextRefs : undefined,
         taskRunId,
+        responseRunId,
+        immediateFirstCommit,
       );
       if (el) nodes.push(el);
       i++;
