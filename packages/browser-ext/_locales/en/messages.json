@@ -253,6 +253,7 @@
   "voicePermissionOpen": { "message": "Authorize microphone" },
   "voicePermissionGranted": { "message": "Microphone authorized. Close this tab and return to chat." },
   "voicePermissionFailed": { "message": "Microphone access was denied. Allow microphone access in browser and system settings, then retry." },
+  "recordingHide": { "message": "Hide recording panel" },
   "recordingTitle": { "message": "Browser recording" },
   "recordingStart": { "message": "Start recording" },
   "recordingActive": { "message": "Recording" },
