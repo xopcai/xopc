@@ -22,6 +22,7 @@ import {
 } from '../../storage/sqlite/clarification-wait-repository.js';
 import type { ClarifyRequestPayload, ClarifyRequestResult } from '../../agent/tools/clarify-tool.js';
 import { runGatewayAgent } from './run-gateway-agent.js';
+import { NextTurnSuggestionService } from '../next-turn-suggestions/service.js';
 import { describeActiveExecution, type ActiveExecution, type ActiveExecutionKind } from './active-execution.js';
 import type { UserTurnAttachment, UserTurnInput } from '../user-turn-input.js';
 import type { AgentSourceContext, TurnContextRef } from '../../agent/source-context/types.js';
@@ -79,10 +80,16 @@ export class GatewayAgentRunner {
   private readonly externalStreamBySession = new Map<string, (event: ClarificationStreamEvent) => void>();
   private readonly externalClarificationResponses = new Map<string, () => boolean>();
   readonly inputs: SessionInputCoordinator;
+  readonly nextTurnSuggestions: NextTurnSuggestionService;
   private readonly unsubscribeConnectionWait: () => void;
 
   constructor(opts: GatewayAgentRunnerOptions) {
     this.opts = opts;
+    this.nextTurnSuggestions = new NextTurnSuggestionService({
+      getConfig: opts.getConfig,
+      isAcceptingInput: conversationId => this.inputs.isAcceptingInput(conversationId),
+      emit: conversationId => opts.publishRealtime('sessions', 'session.next-turn-suggestion.changed', { conversationId }),
+    });
     this.unsubscribeConnectionWait = onConnectionWaitChanged(conversationId => {
       const revision = this.inputs.snapshot(conversationId).revision;
       opts.emit('session.connection-wait.changed', { conversationId, revision });
@@ -118,7 +125,10 @@ export class GatewayAgentRunner {
         }
         return result;
       },
-      onInputReceived: conversationId => opts.getAgentService().sessionStore.idleCompaction.interrupt(conversationId),
+      onInputReceived: conversationId => {
+        opts.getAgentService().sessionStore.idleCompaction.interrupt(conversationId);
+        this.nextTurnSuggestions.changed(conversationId);
+      },
       prepareAttachments: async (conversationId, attachments) => {
         const media = await opts.getAgentService().prepareInboundAttachments(conversationId, attachments);
         if (!media?.length) return undefined;
@@ -158,6 +168,7 @@ export class GatewayAgentRunner {
       emit: (type, payload) => {
         opts.emit(type, payload);
         if (type === 'session.input-interrupt') opts.publishRealtime('sessions', type, payload);
+        if (type === 'session.input-state') this.nextTurnSuggestions.changed((payload as { conversationId: string }).conversationId);
       },
     });
   }
@@ -198,6 +209,7 @@ export class GatewayAgentRunner {
   }
 
   disposeClarifications(): void {
+    this.nextTurnSuggestions.dispose();
     this.ephemeralClarifications.dispose();
     this.unsubscribeConnectionWait();
   }

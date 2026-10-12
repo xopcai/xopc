@@ -1,8 +1,10 @@
+import { remarkXopcMath, mathRanges } from '@xopcai/markdown-math/remark';
+import { rehypeXopcMath } from '@xopcai/markdown-math/rehype';
 import { cjk } from '@streamdown/cjk';
 import type { Element } from 'hast';
 import { createContext, createElement, memo, useCallback, useContext, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ComponentProps, type ComponentPropsWithoutRef, type JSX } from 'react';
 import rehypeSanitize, { defaultSchema } from 'rehype-sanitize';
-import { Block, Streamdown, defaultRemarkPlugins, defaultUrlTransform, parseMarkdownIntoBlocks, useIsCodeFenceIncomplete, type BlockProps, type Components } from 'streamdown';
+import { Block, Streamdown, defaultRemarkPlugins, defaultUrlTransform, useIsCodeFenceIncomplete, type BlockProps, type Components } from 'streamdown';
 
 import type { MarkdownViewProps } from '@/components/markdown/markdown-view';
 import { parseWorkspaceFileLinkTarget, type WorkspaceFileLinkTarget } from '@/components/markdown/internal-links';
@@ -12,15 +14,18 @@ import { resolveAppLink } from '@/lib/app-link';
 import { useAppLinkOpener } from '@/lib/use-app-link-opener';
 import { useLocaleStore } from '@/stores/locale-store';
 import '@/components/markdown/markdown.css';
+import 'katex/dist/katex.min.css';
 
 import { PartErrorBoundary } from '../part-error-boundary';
+import { createChatBlockParser, parseChatMarkdownBlocks } from './chat-math-blocks';
+import { MathElement } from '@/components/markdown/math-element';
 import { ChatCodeBlock } from './chat-code-block';
 import { rehypeChatFileMentions, rehypeChatFragments, rehypeChatLinks, remarkChatContent } from './chat-markdown-plugins';
 import { createRevealPlugin, RevealBudgetContext, RevealLedgerContext, RevealSpan, type RevealLedger } from './chat-text-reveal';
 
 type Environment = {
   openLink: (href: string) => void; linkError: string | null;
-  streaming: boolean; initialBlocks: number; metricsKey?: string;
+  streaming: boolean; initialBlocks: number; mathRemaining: number[]; metricsKey?: string;
   copy: boolean; renderMermaid: boolean; mermaidActions: boolean;
   openFile?: (target: WorkspaceFileLinkTarget) => void;
   loadImage?: (target: WorkspaceFileLinkTarget) => Promise<Blob>;
@@ -112,6 +117,13 @@ function ChatTable({ node, children, style, ...props }: ComponentProps<'table'> 
   </div>;
 }
 
+function MathSpan(props: ComponentProps<'span'> & { node?: Element }) {
+  return (props.node?.properties.dataXopcMath ?? props.node?.properties['data-xopc-math']) ? <MathElement {...props} /> : <RevealSpan {...props} />;
+}
+function MathDiv(props: ComponentProps<'div'> & { node?: Element }) {
+  return (props.node?.properties.dataXopcMath ?? props.node?.properties['data-xopc-math']) ? <MathElement {...props} display /> : <div {...Object.fromEntries(Object.entries(props).filter(([key]) => key !== 'node'))} />;
+}
+
 const passthrough = <T extends keyof JSX.IntrinsicElements>(tag: T) => {
   return function MarkdownElement({ node: _node, ...props }: ComponentPropsWithoutRef<T> & { node?: Element }) {
     const alignment = (tag === 'th' || tag === 'td') && typeof _node?.properties.align === 'string'
@@ -120,7 +132,7 @@ const passthrough = <T extends keyof JSX.IntrinsicElements>(tag: T) => {
   };
 };
 const components: Components = {
-  a: ChatLink, img: ChatImage, pre: ChatPre, span: RevealSpan,
+  a: ChatLink, img: ChatImage, pre: ChatPre, span: MathSpan, div: MathDiv,
   p: passthrough('p'), h1: passthrough('h1'), h2: passthrough('h2'), h3: passthrough('h3'), h4: passthrough('h4'),
   h5: passthrough('h5'), h6: passthrough('h6'), ul: passthrough('ul'), ol: passthrough('ol'), li: passthrough('li'),
   strong: passthrough('strong'), em: passthrough('em'), blockquote: passthrough('blockquote'),
@@ -128,14 +140,12 @@ const components: Components = {
   tr: passthrough('tr'), th: passthrough('th'), td: passthrough('td'), hr: passthrough('hr'),
 };
 const schema = { ...defaultSchema, attributes: { ...defaultSchema.attributes,
-  code: [...(defaultSchema.attributes?.code ?? []), ['className', /^language-/]],
+  code: [...(defaultSchema.attributes?.code ?? []), ['className', /^language-/, 'math-inline', 'math-display'], 'data-xopc-math-source'],
 } };
 const baseRehype = [rehypeChatLinks, [rehypeSanitize, schema]] as NonNullable<BlockProps['rehypePlugins']>;
-const plugins = { cjk };
+
 const wholeDocument = (markdown: string) => /^\s{0,3}\[[^\]]+\]:|\[[^\]]+\]\[[^\]]*\]|\[\^/m.test(markdown);
-function chatBlocks(markdown: string): string[] {
-  return wholeDocument(markdown) ? [markdown] : parseMarkdownIntoBlocks(markdown);
-}
+
 
 const ChatBlock = memo(function ChatBlock(props: BlockProps) {
   const blockId = useId();
@@ -152,7 +162,10 @@ const ChatBlock = memo(function ChatBlock(props: BlockProps) {
   const replacing = mounted.current && !props.content.startsWith(previousPrefix);
   const animate = environment.streaming && !wholeDocument(props.content) && !replacing;
   const revealPlugin = useMemo(() => createRevealPlugin(ledger, animate, initial, budget, blockId), [ledger, animate, initial, settledRevision, budget, blockId]);
-  const rehypePlugins = useMemo(() => [...(props.rehypePlugins ?? []), revealPlugin], [props.rehypePlugins, revealPlugin]);
+  const remaining = environment.mathRemaining[props.index] ?? 256;
+  const rehypePlugins = useMemo(() => [...(props.rehypePlugins ?? []).map(plugin => Array.isArray(plugin) && plugin[0] === rehypeXopcMath
+    ? [rehypeXopcMath, { streaming: environment.streaming, maxCount: remaining }] : plugin), revealPlugin] as NonNullable<BlockProps['rehypePlugins']>,
+  [props.rehypePlugins, revealPlugin, environment.streaming, remaining]);
   const startedAt = performance.now();
 
   useLayoutEffect(() => {
@@ -177,7 +190,7 @@ const ChatBlock = memo(function ChatBlock(props: BlockProps) {
 
   return <div ref={host} className="markdown-stream-block">
     <PartErrorBoundary content={props.content}>
-      <RevealLedgerContext.Provider value={ledger}><Block {...props} rehypePlugins={rehypePlugins} /></RevealLedgerContext.Provider>
+      <RevealLedgerContext.Provider value={ledger}><Block {...props} shouldParseIncompleteMarkdown={props.shouldParseIncompleteMarkdown && mathRanges(props.content).length === 0} rehypePlugins={rehypePlugins} /></RevealLedgerContext.Provider>
     </PartErrorBoundary>
   </div>;
 });
@@ -215,10 +228,16 @@ export const ChatMarkdownRenderer = memo(function ChatMarkdownRenderer({
   }, [content]);
   const [budget] = useState(() => new Set<Animation>());
   const [mode] = useState<'streaming' | 'static'>(() => streaming || !content ? 'streaming' : 'static');
-  const [initialBlocks] = useState(() => mode === 'streaming' ? chatBlocks(content).length : 0);
-  const environment = useMemo<Environment>(() => ({ openLink, linkError, streaming, initialBlocks, metricsKey: streamingMetricsKey,
+  const [chatBlocks] = useState(createChatBlockParser);
+  const [initialBlocks] = useState(() => mode === 'streaming' ? parseChatMarkdownBlocks(content).length : 0);
+  const plugins = useMemo(() => ({ cjk, math: { name: 'katex' as const, type: 'math' as const, remarkPlugin: remarkXopcMath, rehypePlugin: [rehypeXopcMath, { streaming }] as NonNullable<BlockProps['rehypePlugins']>[number] } }), [streaming]);
+  const mathRemaining = useMemo(() => {
+    let used = 0;
+    return chatBlocks(content).map(block => { const remaining = Math.max(0, 256 - used); used += mathRanges(block).length; return remaining; });
+  }, [content, chatBlocks]);
+  const environment = useMemo<Environment>(() => ({ openLink, linkError, streaming, initialBlocks, mathRemaining, metricsKey: streamingMetricsKey,
     copy: codeCopy, renderMermaid, mermaidActions, openFile: onWorkspaceFileOpen, loadImage: onWorkspaceImageLoad,
-  }), [openLink, linkError, streaming, initialBlocks, streamingMetricsKey, codeCopy, renderMermaid, mermaidActions, onWorkspaceFileOpen, onWorkspaceImageLoad]);
+  }), [openLink, linkError, streaming, initialBlocks, mathRemaining, streamingMetricsKey, codeCopy, renderMermaid, mermaidActions, onWorkspaceFileOpen, onWorkspaceImageLoad]);
   const remarkPlugins = useMemo(() => [...Object.values(defaultRemarkPlugins), [remarkChatContent, { breaks }]] as NonNullable<BlockProps['remarkPlugins']>, [breaks]);
   const rehypePlugins = useMemo(() => [...baseRehype,
     ...(onWorkspaceFileOpen ? [rehypeChatFileMentions] : []),

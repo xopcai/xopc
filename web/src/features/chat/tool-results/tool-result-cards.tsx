@@ -111,7 +111,7 @@ export const ReadFileCard = memo(function ReadFileCard({
   }, [body]);
 
   return (
-    <div className="space-y-1.5">
+    <div className="content-block-action-scope space-y-1.5">
       <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1">
         {path ? <ToolCardPath title={path}>{path}</ToolCardPath> : null}
         {totalLineCount > 0 ? (
@@ -169,7 +169,7 @@ export const EditFileCard = memo(function EditFileCard({
   const diff = useMemo(() => extractEditDiff(parsed), [parsed]);
 
   return (
-    <div className="space-y-1.5">
+    <div className="content-block-action-scope space-y-1.5">
       <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1">
         {path ? <ToolCardPath title={path}>{path}</ToolCardPath> : null}
         {diff ? (
@@ -214,7 +214,7 @@ export const WriteFileCard = memo(function WriteFileCard({
   const sizeBytes = typeof details.size === 'number' ? details.size : null;
 
   return (
-    <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1">
+    <div className="content-block-action-scope flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1">
       {path ? <ToolCardPath title={path}>{path}</ToolCardPath> : null}
       {sizeBytes != null ? (
         <ToolCardBadge>{interpolate(labels.sizeBadge, { size: formatBytes(sizeBytes) })}</ToolCardBadge>
@@ -261,7 +261,7 @@ export const CommandCard = memo(function CommandCard({
   const { preview } = useMemo(() => commandOutputPreview(output), [output]);
 
   return (
-    <div className="space-y-1.5">
+    <div className="content-block-action-scope space-y-1.5">
       <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1">
         {command ? (
           <ToolCardPath title={command}>

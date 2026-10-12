@@ -92,3 +92,8 @@ diagnosis/
 
 # Local HarmonyOS screen and interaction reference for native mobile parity
 /docs/mobile-reference/
+
+# Generated local KaTeX resources (mobile:math:assets)
+/apps/mobile-ios/XopcMobile/Resources/Math/
+/apps/mobile-android/app/src/main/assets/math/
+/apps/mobile-harmony/entry/src/main/resources/rawfile/math/

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { RuntimePolicySchema, type AgentDefaults, type AgentEntry } from '../schema.js';
+import { AgentDefaultsSchema, RuntimePolicySchema, type AgentDefaults, type AgentEntry } from '../schema.js';
 import { resolveEffectiveAgentConfig } from '../resolver.js';
 
 const defaults: AgentDefaults = {
@@ -25,6 +25,22 @@ function agent(patch: Partial<AgentEntry> = {}): AgentEntry {
 }
 
 describe('resolveEffectiveAgentConfig', () => {
+  it('exposes all skills when no skill policy is configured', () => {
+    const global = AgentDefaultsSchema.parse({ models: defaults.models });
+    expect(resolveEffectiveAgentConfig({ defaults: global, agent: agent() }).config.skills)
+      .toEqual({ mode: 'all-enabled', exclude: [] });
+  });
+
+  it('preserves explicit restrictions over the unrestricted default', () => {
+    const global = AgentDefaultsSchema.parse({ models: defaults.models });
+    expect(resolveEffectiveAgentConfig({
+      defaults: global, agent: agent({ skills: { mode: 'replace', include: [] } }),
+    }).config.skills).toEqual({ mode: 'selected', include: [] });
+    expect(resolveEffectiveAgentConfig({
+      defaults: global, agent: agent({ skills: { mode: 'merge', add: [], remove: ['project-review'] } }),
+    }).config.skills).toEqual({ mode: 'all-enabled', exclude: ['project-review'] });
+  });
+
   it('inherits Codemode limits and lets an agent turn the pilot off atomically', () => {
     const runtime = RuntimePolicySchema.parse({ codemode: { enabled: true, maxCalls: 8 } });
     const global = { ...defaults, runtime };

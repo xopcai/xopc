@@ -151,6 +151,7 @@ export function resolveEffectiveAgentConfig(params: {
   const workspace = agent.workspace ?? params.defaultWorkspace?.(agent.id) ?? `~/.xopc/workspace/${agent.id}`;
   sources.workspace = agent.workspace ? 'agent' : 'system';
   if (agent.profile) markObjectSources(agent.profile, 'agent', 'profile', sources);
+  if (agent.specialistProfile) markObjectSources(agent.specialistProfile, 'agent', 'specialistProfile', sources);
   if (agent.toolAllowlist) sources.toolAllowlist = 'agent';
 
   return {
@@ -159,6 +160,7 @@ export function resolveEffectiveAgentConfig(params: {
       enabled: agent.enabled,
       workspace,
       ...(agent.profile ? { profile: structuredClone(agent.profile) } : {}),
+      ...(agent.specialistProfile ? { specialistProfile: structuredClone(agent.specialistProfile) } : {}),
       models,
       skills,
       tools,

@@ -15,6 +15,7 @@
 import { memo, useCallback, useEffect, useMemo, useState, type MouseEvent } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Copy, Check, GitBranch, Save } from 'lucide-react';
+import '@/components/ui/content-block-actions.css';
 
 import type { ToolUseContent } from '@/features/chat/messages/messages.types';
 import { chatProductHref } from '@/features/chat/product-preview/product-preview-route';
@@ -246,7 +247,7 @@ export const WorkflowCard = memo(function WorkflowCard({
             type="button"
             onClick={handleCopy}
             className={cn(
-              'inline-flex size-7 items-center justify-center rounded-md text-fg-muted',
+              'content-block-action text-fg-muted',
               'hover:bg-surface-hover hover:text-fg',
               interaction.transition,
               interaction.focusRingPanel,
@@ -261,7 +262,7 @@ export const WorkflowCard = memo(function WorkflowCard({
               type="button"
               onClick={openWorkflowCopyEditor}
               className={cn(
-                'inline-flex size-7 items-center justify-center rounded-md text-fg-muted',
+                'content-block-action text-fg-muted',
                 'hover:bg-surface-hover hover:text-fg',
                 interaction.transition,
                 interaction.focusRingPanel,
@@ -277,7 +278,7 @@ export const WorkflowCard = memo(function WorkflowCard({
               type="button"
               onClick={openInWorkflows}
               className={cn(
-                'inline-flex size-7 items-center justify-center rounded-md text-fg-muted',
+                'content-block-action text-fg-muted',
                 'hover:bg-surface-hover hover:text-fg',
                 interaction.transition,
                 interaction.focusRingPanel,
@@ -298,7 +299,7 @@ export const WorkflowCard = memo(function WorkflowCard({
     <div
       onClick={handleCardClick}
       className={cn(
-        'min-w-0 rounded-xl border border-edge bg-surface-panel shadow-surface',
+        'content-block-action-scope min-w-0 rounded-xl border border-edge bg-surface-panel shadow-surface',
         snapshot?.runId && 'cursor-pointer hover:bg-surface-hover/35',
         className,
       )}

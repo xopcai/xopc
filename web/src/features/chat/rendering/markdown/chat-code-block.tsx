@@ -71,27 +71,27 @@ export const ChatCodeBlock = memo(function ChatCodeBlock({ code, language, incom
     {isDiagram ? <>
       <div ref={svgRef} dangerouslySetInnerHTML={{ __html: visibleMarkup! }} />
       {actions && <div className="markdown-mermaid-actions">
-        <button type="button" className="markdown-mermaid-action-button" aria-label={m.mermaidPreview} onClick={() => {
+        <button type="button" className="markdown-mermaid-action-button" title={m.mermaidPreview} aria-label={m.mermaidPreview} onClick={() => {
           const value = snapshot(); if (value) setPreview({ snapshot: value, baseName: 'diagram' });
-        }}><Maximize2 className="size-4" /></button>
-        <button type="button" className="markdown-mermaid-action-button" aria-label={m.mermaidDownloadPng} onClick={() => {
+        }}><Maximize2 className="size-4" aria-hidden /></button>
+        <button type="button" className="markdown-mermaid-action-button" title={m.mermaidDownloadPng} aria-label={m.mermaidDownloadPng} onClick={() => {
           const value = snapshot(); if (value) void downloadMermaidPng(value, 'diagram.png').catch(() => { if (mounted.current) setError(true); });
-        }}><Download className="size-4" /></button>
+        }}><Download className="size-4" aria-hidden /></button>
       </div>}
     </> : <>
       <div className="markdown-code-block-header">
         <span className="markdown-code-block-lang">{language || 'text'}</span>
-        {diagram && <button type="button" className="markdown-code-copy-btn" aria-label={m.mermaidPreview} onClick={() => {
+        {diagram && <button type="button" className="markdown-code-copy-btn" title={m.mermaidPreview} aria-label={m.mermaidPreview} onClick={() => {
           lease.activate(); setRetryRevision(n => n + 1);
         }}><Maximize2 /></button>}
-        {copy && <button type="button" className="markdown-code-copy-btn" aria-label={copied ? m.messageCopied : m.codeBlockCopy} onClick={() => {
+        {copy && <button type="button" className="markdown-code-copy-btn" title={copied ? m.messageCopied : m.codeBlockCopy} aria-label={copied ? m.messageCopied : m.codeBlockCopy} onClick={() => {
           void copyTextToClipboard(code).then(ok => {
             if (!ok || !mounted.current || currentCode.current !== code) return;
             setCopied(true);
             if (copyTimer.current) clearTimeout(copyTimer.current);
             copyTimer.current = setTimeout(() => setCopied(false), 2000);
           });
-        }}>{copied ? <Check /> : <Copy />}<span>{copied ? m.messageCopied : m.codeBlockCopy}</span></button>}
+        }}>{copied ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}</button>}
       </div>
       <pre><code className={`hljs${language ? ` language-${language}` : ''}`}>
         {visibleMarkup && !diagram ? <span dangerouslySetInnerHTML={{ __html: visibleMarkup }} /> : code}

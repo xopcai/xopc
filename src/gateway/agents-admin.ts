@@ -29,6 +29,7 @@ const EDITABLE_PROFILE_MARKDOWN_NAMES = new Set<string>([...AGENT_PROFILE_MARKDO
 
 export type GatewayAgentRow = {
   id: string;
+  revision?: number;
   name?: string;
   description?: string;
   language?: string;
@@ -86,6 +87,7 @@ export async function listGatewayAgents(
       ...(identity?.avatar ? { avatar: identity.avatar } : {}),
       workspace: profile.resolvedWorkspacePath,
       profileDir: resolveAgentProfileDir(id),
+      revision: new AgentCatalogRepository().get(entry.id)?.revision,
       override: structuredClone(entry),
       effective: structuredClone(profile.config),
       sources: { ...profile.sources },
@@ -126,6 +128,7 @@ export type CreateAgentBody = {
   id?: string;
   workspace?: string;
   profile: NonNullable<AgentEntry['profile']>;
+  specialistProfile?: AgentEntry['specialistProfile'];
 };
 
 export type AgentAdminHttpStatus = 400 | 404 | 409;
@@ -153,6 +156,7 @@ export async function createGatewayAgent(
       enabled: true,
       ...(workspace ? { workspace } : {}),
       profile: structuredClone(body.profile),
+      ...(body.specialistProfile ? { specialistProfile: body.specialistProfile } : {}),
     });
     return { ok: true, data: { agentId, workspace: resolveAgentWorkspaceDir(agentId) } };
   } catch (error) {
@@ -161,6 +165,8 @@ export async function createGatewayAgent(
 }
 
 export type UpdateAgentBody = {
+  expectedRevision?: number;
+  specialistProfile?: AgentEntry['specialistProfile'] | null;
   workspace?: string | null;
   profile?: AgentEntry['profile'] | null;
   models?: AgentModelsOverride | null;
@@ -183,6 +189,7 @@ export async function updateGatewayAgent(
   const patch: Partial<Omit<AgentEntry, 'id'>> = {};
   if (body.workspace !== undefined) patch.workspace = body.workspace?.trim() ? resolveUserPath(body.workspace) : undefined;
   if (body.profile !== undefined) patch.profile = body.profile ?? undefined;
+  if (body.specialistProfile !== undefined) patch.specialistProfile = body.specialistProfile ?? undefined;
   if (body.models !== undefined) patch.models = body.models ?? undefined;
   if (body.skills !== undefined) patch.skills = body.skills ?? undefined;
   if (body.tools !== undefined) patch.tools = body.tools ?? undefined;
@@ -191,7 +198,7 @@ export async function updateGatewayAgent(
   if (body.runtime !== undefined) patch.runtime = body.runtime ?? undefined;
   try {
     const service = new AgentCatalogService();
-    await service.update(agentId, patch);
+    await service.update(agentId, patch, body.expectedRevision);
     if (body.setDefault === true) service.setDefault(agentId);
     return { ok: true, data: undefined };
   } catch (error) {

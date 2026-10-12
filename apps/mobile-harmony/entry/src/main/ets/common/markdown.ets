@@ -1,3 +1,4 @@
+import { mathDisplayBlock } from './mathMarkdown';
 import { internalMessageLink } from './messageLink';
 
 export interface XopcMarkdownCell { id: string; text: string; align: string; }
@@ -33,7 +34,7 @@ function tableCells(line: string): string[] {
 export function markdownBlocks(source: string): XopcMarkdownBlock[] {
   const lines = source.replace(/\r\n?/g, '\n').split('\n');
   const blocks: XopcMarkdownBlock[] = [];
-  let paragraph: string[] = []; let code: string[] = []; let fence = ''; let language = '';
+  let paragraph: string[] = []; let code: string[] = []; let fence = ''; let language = ''; let mathRaw = '';
   const push = (kind: string, text: string, level: number = 0): XopcMarkdownBlock => {
     const block: XopcMarkdownBlock = { id: blocks.length.toString(), kind, text, level }; blocks.push(block); return block;
   };
@@ -41,12 +42,15 @@ export function markdownBlocks(source: string): XopcMarkdownBlock[] {
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]; const marker = line.match(/^\s{0,3}(`{3,}|~{3,})(.*)$/);
     if (fence) {
+      if (language === 'math') mathRaw += '\n' + line;
       if (marker && marker[1][0] === fence[0] && marker[1].length >= fence.length && !marker[2].trim()) {
-        push('code', code.join('\n')).language = language; code = []; fence = '';
+        push(language === 'math' ? 'math' : 'code', language === 'math' ? mathRaw : code.join('\n')).language = language; code = []; fence = ''; mathRaw = '';
       } else code.push(line);
       continue;
     }
-    if (marker) { flush(); fence = marker[1]; language = marker[2].trim().split(/\s/)[0]; continue; }
+    const math = mathDisplayBlock(lines, i);
+    if (math) { flush(); push('math', math.text); i = math.end; continue; }
+    if (marker) { flush(); fence = marker[1]; language = marker[2].trim().split(/\s/)[0]; mathRaw = language === 'math' ? line : ''; continue; }
     if (!line.trim()) { flush(); continue; }
     const separators = tableCells(lines[i + 1] ?? '');
     const headers = tableCells(line);
@@ -87,7 +91,7 @@ export function markdownBlocks(source: string): XopcMarkdownBlock[] {
     if (quote) { flush(); push('quote', quote[1]); continue; }
     paragraph.push(line);
   }
-  flush(); if (fence) push('code', code.join('\n')).language = language;
+  flush(); if (fence) push(language === 'math' ? 'math' : 'code', language === 'math' ? mathRaw : code.join('\n')).language = language;
   return blocks;
 }
 

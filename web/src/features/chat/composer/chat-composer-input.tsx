@@ -35,6 +35,7 @@ export interface ComposerKbdContext {
   editorRef: MutableRefObject<HTMLDivElement | null>;
   tryInputHistoryArrow?: (dir: 'up' | 'down') => boolean;
   acceptEmptySuggestion?: () => boolean;
+  dismissEmptySuggestion?: () => void;
 }
 
 export const ChatComposerInput = memo(function ChatComposerInput({
@@ -96,7 +97,15 @@ export const ChatComposerInput = memo(function ChatComposerInput({
       data-placeholder={placeholder}
       onInput={(e) => {
         const el = e.currentTarget;
-        const wire = isComposingRef.current ? serializeEditorToWire(el) : normalizeOrphanComposerDom(el);
+        let wire = isComposingRef.current ? serializeEditorToWire(el) : normalizeOrphanComposerDom(el);
+        // Deleting the last character leaves a browser caret BR, not a draft newline.
+        const inputType = e.nativeEvent.inputType;
+        if (!isComposingRef.current && inputType?.startsWith('delete') && wire === '\n'
+          && el.children.length === 1 && el.firstElementChild?.tagName === 'BR'
+          && Array.from(el.childNodes).every(node => node === el.firstElementChild || (node.nodeType === Node.TEXT_NODE && !node.textContent))) {
+          el.replaceChildren();
+          wire = '';
+        }
         syncComposerPlaceholderClass(el, wire);
         onWireInput(wire, getWireCaretOffset(el));
         adjustHeight();
@@ -154,7 +163,9 @@ export const ChatComposerInput = memo(function ChatComposerInput({
           !e.ctrlKey &&
           !e.altKey &&
           !k.isComposing &&
-          !k.valueRef.current.trim() &&
+          !isComposingRef.current && !e.nativeEvent.isComposing &&
+          !disabled && !hidden && !k.runBusy && !k.pendingFollowUpsCount && !k.editingFollowUpId &&
+          !k.attachmentsLen && !k.contextRefsLen && k.valueRef.current.length === 0 &&
           k.acceptEmptySuggestion?.()
         ) {
           e.preventDefault();
@@ -179,6 +190,9 @@ export const ChatComposerInput = memo(function ChatComposerInput({
         }
 
         // 6. Newline.
+        if (e.key === 'Escape' && !k.isComposing && !isComposingRef.current && k.valueRef.current.length === 0) {
+          k.dismissEmptySuggestion?.();
+        }
         if (e.key === 'Enter' && e.shiftKey && !k.isComposing) {
           e.preventDefault();
           document.execCommand('insertText', false, '\n');

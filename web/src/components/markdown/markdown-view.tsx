@@ -24,6 +24,8 @@ import {
   type MermaidPreviewState,
 } from './mermaid-preview-dialog';
 import './markdown.css';
+import 'katex/dist/katex.min.css';
+import { mountMathNodes } from './mount-math';
 
 /** Lucide-style 14px icons for DOM-injected code-copy control (keeps bundle self-contained here). */
 const ICON_COPY_SVG =
@@ -54,16 +56,12 @@ function languageLabelFromPre(pre: HTMLPreElement): string {
   return 'plaintext';
 }
 
-function buildCopyButtonContent(mode: 'idle' | 'copied', labels: { copy: string; copied: string }): DocumentFragment {
+function buildCopyButtonContent(mode: 'idle' | 'copied'): DocumentFragment {
   const frag = document.createDocumentFragment();
   const iconWrap = document.createElement('span');
   iconWrap.className = 'markdown-code-copy-inner';
   iconWrap.innerHTML = mode === 'idle' ? ICON_COPY_SVG : ICON_CHECK_SVG;
-  const label = document.createElement('span');
-  label.className = 'markdown-code-copy-label';
-  label.textContent = mode === 'idle' ? labels.copy : labels.copied;
   frag.appendChild(iconWrap);
-  frag.appendChild(label);
   return frag;
 }
 
@@ -104,7 +102,7 @@ function mountMarkdownCodeBlocks(root: HTMLElement, labels: { copy: string; copi
     btn.dataset.mdCodeCopy = '';
     btn.title = labels.copy;
     btn.setAttribute('aria-label', labels.copy);
-    btn.replaceChildren(buildCopyButtonContent('idle', labels));
+    btn.replaceChildren(buildCopyButtonContent('idle'));
 
     const onClick = (e: MouseEvent) => {
       e.preventDefault();
@@ -112,12 +110,12 @@ function mountMarkdownCodeBlocks(root: HTMLElement, labels: { copy: string; copi
       const raw = getCodeTextFromPre(pre);
       void copyTextToClipboard(raw).then((ok) => {
         if (!ok || !btn.isConnected) return;
-        btn.replaceChildren(buildCopyButtonContent('copied', labels));
+        btn.replaceChildren(buildCopyButtonContent('copied'));
         btn.title = labels.copied;
         btn.setAttribute('aria-label', labels.copied);
         window.setTimeout(() => {
           if (!btn.isConnected) return;
-          btn.replaceChildren(buildCopyButtonContent('idle', labels));
+          btn.replaceChildren(buildCopyButtonContent('idle'));
           btn.title = labels.copy;
           btn.setAttribute('aria-label', labels.copy);
         }, 2000);
@@ -292,6 +290,7 @@ export interface MarkdownViewProps {
   mermaidActions?: boolean;
   /** Development-only stream identifier for parse timing metrics. */
   streamingMetricsKey?: string;
+  streaming?: boolean;
 }
 
 function MarkdownViewImpl({
@@ -305,12 +304,14 @@ function MarkdownViewImpl({
   renderMermaid = true,
   mermaidActions = false,
   streamingMetricsKey,
+  streaming = false,
 }: MarkdownViewProps) {
   const openAppLink = useAppLinkOpener();
   const language = useLocaleStore((s) => s.language);
   const labels = useMemo(() => {
     const m = messages(language).chat;
     return {
+      ...m,
       copy: m.codeBlockCopy,
       copied: m.messageCopied,
       links: m.contentLinks,
@@ -346,8 +347,8 @@ function MarkdownViewImpl({
     if (streamingMetricsKey) {
       recordStreamingParse(streamingMetricsKey, performance.now() - startedAt);
     }
-    return sanitized;
-  }, [content, breaks, onWorkspaceFileOpen, onWorkspaceImageLoad, streamingMetricsKey]);
+    return sanitized + (sanitized.includes('data-xopc-math-source') ? `<!--math-context:${streaming}:${language}-->` : '');
+  }, [content, breaks, onWorkspaceFileOpen, onWorkspaceImageLoad, streamingMetricsKey, streaming, language]);
 
   const hostRef = useRef<HTMLDivElement>(null);
   const [mermaidPreview, setMermaidPreview] = useState<MermaidPreviewState | null>(null);
@@ -389,6 +390,7 @@ function MarkdownViewImpl({
     if (!el) return;
 
     unwrapMarkdownCodeBlocks(el);
+    mountMathNodes(el, streaming, labels);
     if (onWorkspaceFileOpen) {
       linkWorkspaceFileMentions(el);
     }
@@ -396,7 +398,7 @@ function MarkdownViewImpl({
     if (!codeCopy || !safeHtml) return;
 
     return mountMarkdownCodeBlocks(el, labels);
-  }, [codeCopy, safeHtml, labels, onWorkspaceFileOpen]);
+  }, [codeCopy, safeHtml, labels, onWorkspaceFileOpen, streaming]);
 
   useLayoutEffect(() => {
     const el = hostRef.current;

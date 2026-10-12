@@ -8,6 +8,8 @@ on:
       - "apps/mobile-ios/**"
       - "scripts/apps/mobile-native/**"
       - "package.json"
+      - "packages/markdown-math/**"
+      - "pnpm-lock.yaml"
       - ".github/workflows/mobile-ios-ci.yml"
   pull_request:
     branches: [main, master]
@@ -15,6 +17,8 @@ on:
       - "apps/mobile-ios/**"
       - "scripts/apps/mobile-native/**"
       - "package.json"
+      - "packages/markdown-math/**"
+      - "pnpm-lock.yaml"
       - ".github/workflows/mobile-ios-ci.yml"
 
 permissions:
@@ -38,9 +42,13 @@ jobs:
       - name: Check Swift code
         working-directory: apps/mobile-ios
         run: swiftlint lint --strict --config .swiftlint.yml
-      - name: Generate Xcode project
-        working-directory: apps/mobile-ios
-        run: xcodegen generate
+      - uses: pnpm/action-setup@v5
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Generate local math resources and Xcode project
+        run: pnpm install --frozen-lockfile && pnpm run mobile:ios:generate
       - name: Verify generated project is committed
         run: git diff --exit-code -- apps/mobile-ios/XopcMobile.xcodeproj/project.pbxproj
       - name: Run unit tests

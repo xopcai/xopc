@@ -35,13 +35,13 @@ describe('starter conductor Agent', () => {
     expect(catalog.getSettings().defaultAgentId).toBe('main');
     expect(catalog.get('conductor')).toMatchObject({
       enabled: true, provisioningState: 'ready', profile: { name: 'Conductor' },
-      skills: { mode: 'replace', include: [] },
       toolAllowlist: [
         'xopc_use', 'tool_manual', 'session_recall',
         'knowledge_search', 'knowledge_get', 'user_context_search', 'user_context_get',
         'find', 'grep', 'read_file',
       ],
     });
+    expect(catalog.list().every((entry) => entry.skills === undefined)).toBe(true);
     expect(catalog.get('conductor')?.profile?.instructions).toContain('user-facing coordination Agent');
     expect(catalog.get('conductor')?.profile?.instructions).not.toContain('report only to main');
     expect(readFileSync(join(resolveAgentProfileDir('conductor'), 'SOUL.md'), 'utf8'))
@@ -58,7 +58,6 @@ describe('starter conductor Agent', () => {
     ensureStarterAgentsInitialized();
     expect(catalog.get('conductor')?.profile).toEqual({ name: '我的指挥家', instructions: '我的规则' });
     expect(catalog.get('conductor')).toMatchObject({
-      skills: { mode: 'replace', include: [] },
       toolAllowlist: [
         'xopc_use', 'tool_manual', 'session_recall',
         'knowledge_search', 'knowledge_get', 'user_context_search', 'user_context_get',
@@ -66,5 +65,12 @@ describe('starter conductor Agent', () => {
       ],
     });
     expect(readFileSync(soulPath, 'utf8')).toBe('自定义档案');
+  });
+
+  it('preserves manually configured skill restrictions', () => {
+    const catalog = new AgentCatalogRepository();
+    catalog.create({ id: 'conductor', skills: { mode: 'replace', include: ['project-review'] } }, { ready: true });
+    ensureStarterAgentsInitialized();
+    expect(catalog.get('conductor')?.skills).toEqual({ mode: 'replace', include: ['project-review'] });
   });
 });

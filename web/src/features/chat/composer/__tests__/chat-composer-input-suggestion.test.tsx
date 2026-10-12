@@ -27,6 +27,7 @@ describe('ChatComposerInput contextual suggestion', () => {
 
   it('accepts the suggestion with Tab only while the editor is empty', () => {
     const acceptEmptySuggestion = vi.fn(() => true);
+    const onWireInput = vi.fn();
     const valueRef = { current: '' };
     const editorRef = { current: null } as MutableRefObject<HTMLDivElement | null>;
     const kbdRef = {
@@ -54,7 +55,7 @@ describe('ChatComposerInput contextual suggestion', () => {
           disabled={false}
           placeholder="理解当前目录 · 按 Tab 填入建议"
           ariaLabel="输入消息"
-          onWireInput={() => {}}
+          onWireInput={onWireInput}
           adjustHeight={() => {}}
           processFiles={async () => {}}
           processPastedText={async () => {}}
@@ -70,7 +71,36 @@ describe('ChatComposerInput contextual suggestion', () => {
     act(() => editor?.dispatchEvent(firstTab));
     expect(firstTab.defaultPrevented).toBe(true);
     expect(acceptEmptySuggestion).toHaveBeenCalledTimes(1);
+
+    valueRef.current = '';
+    for (const change of [
+      { attachmentsLen: 1 }, { contextRefsLen: 1 }, { isComposing: true },
+      { runBusy: true }, { pendingFollowUpsCount: 1 }, { editingFollowUpId: 'queued-input' },
+    ]) {
+      const previous = { ...kbdRef.current };
+      Object.assign(kbdRef.current, change);
+      act(() => editor?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true })));
+      expect(acceptEmptySuggestion).toHaveBeenCalledTimes(1);
+      kbdRef.current = previous;
+    }
+    valueRef.current = ' ';
+    act(() => editor?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true })));
+    expect(acceptEmptySuggestion).toHaveBeenCalledTimes(1);
+    valueRef.current = '';
+    act(() => editor?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, isComposing: true })));
+    expect(acceptEmptySuggestion).toHaveBeenCalledTimes(1);
     expect(editor?.getAttribute('aria-label')).toBe('输入消息');
+
+    if (editor) {
+      editor.innerHTML = '<br>';
+      act(() => editor.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertLineBreak' })));
+      expect(onWireInput.mock.calls.at(-1)?.[0]).toBe('\n');
+      editor.innerHTML = '<br>';
+      editor.prepend(document.createTextNode(''));
+      act(() => editor.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'deleteContentBackward' })));
+      expect(onWireInput.mock.calls.at(-1)?.[0]).toBe('');
+      expect(editor.childNodes).toHaveLength(0);
+    }
 
     valueRef.current = '已经输入内容';
     const secondTab = new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true });

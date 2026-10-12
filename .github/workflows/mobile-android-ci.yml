@@ -8,6 +8,8 @@ on:
       - "apps/mobile-android/**"
       - "scripts/apps/mobile-native/**"
       - "package.json"
+      - "packages/markdown-math/**"
+      - "pnpm-lock.yaml"
       - ".github/workflows/mobile-android-ci.yml"
   pull_request:
     branches: [main, master]
@@ -15,6 +17,8 @@ on:
       - "apps/mobile-android/**"
       - "scripts/apps/mobile-native/**"
       - "package.json"
+      - "packages/markdown-math/**"
+      - "pnpm-lock.yaml"
       - ".github/workflows/mobile-android-ci.yml"
 
 permissions:
@@ -30,6 +34,12 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v5
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
       - uses: actions/setup-java@v5
         with:
           distribution: temurin

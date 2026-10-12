@@ -14,6 +14,7 @@ describe('AgentCatalogRepository', () => {
     repository.ensureInitialized();
 
     expect(repository.getSettings().defaultAgentId).toBe('main');
+    expect(repository.getSettings().defaults.skills).toEqual({ mode: 'all-enabled', exclude: [] });
     expect(repository.list()).toMatchObject([
       { id: 'main', enabled: true, provisioningState: 'pending', revision: 1 },
     ]);

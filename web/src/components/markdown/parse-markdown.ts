@@ -1,3 +1,5 @@
+import { markedMath } from '@xopcai/markdown-math/marked';
+import { readMathFenceAt, mathPlaceholder } from '@xopcai/markdown-math/syntax';
 import { Marked, type MarkedOptions, type Tokens } from 'marked';
 import { markedHighlight } from 'marked-highlight';
 import hljs from 'highlight.js/lib/core';
@@ -28,10 +30,12 @@ hljs.registerAliases(['sh', 'shell', 'zsh'], { languageName: 'bash' });
 
 const markdownParser = new Marked(
   appLinksExtension,
+  markedMath,
   markedHighlight({
     emptyLangClass: 'hljs',
     langPrefix: 'hljs language-',
     highlight(code, lang) {
+      if (lang?.trim() === 'math') return code;
       const safeLang = (lang ?? '').trim() || 'plaintext';
       const language = hljs.getLanguage(safeLang) ? safeLang : 'plaintext';
       return hljs.highlight(code, { language }).value;
@@ -39,6 +43,11 @@ const markdownParser = new Marked(
   }),
   {
     renderer: {
+      code(token) {
+        if (token.lang?.trim() !== 'math') return false;
+        const source = readMathFenceAt(token.raw);
+        return source ? mathPlaceholder(source) : false;
+      },
       html({ text }) {
         return escapeHtml(text);
       },

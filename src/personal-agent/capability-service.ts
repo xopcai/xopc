@@ -1,9 +1,8 @@
 import { AgentCatalogRepository } from '../agent-catalog/repository.js';
-import { resolveEffectiveAgentConfig } from '../agent-config/index.js';
+import { assessSpecialist, type SpecialistAssessment } from '../agent-matching/service.js';
 import { canAccessConnectorAccount, currentAccountConnections } from '../connectors/account-access.js';
 import { connectionCandidates, resolveConnectionCandidate } from '../connectors/connection-candidates.js';
 import { connectorPrincipalForSession } from '../connectors/principal.js';
-import { getAvailablePersonalAgentTools, personalAgentModelAvailability } from '../agent/tools/personal-task-tool.js';
 import { getConnectorInstallation, listConnectorConnections } from '../storage/sqlite/connector-repository.js';
 import { isPersonalConversation } from './repository.js';
 
@@ -13,6 +12,7 @@ export interface PersonalCapability {
   capabilities: string[];
   status: 'ready' | 'needs_connection' | 'needs_reauthorization' | 'needs_account_selection' | 'blocked' | 'unavailable';
   executorAgentIds: string[];
+  executorProfiles?: Array<Pick<SpecialistAssessment, 'id' | 'name' | 'description' | 'specialistProfile' | 'profileSource'>>;
   accounts: { accountId: string; label: string; executorAgentIds: string[] }[];
   reason?: string;
 }
@@ -25,14 +25,21 @@ export function personalCapabilities(conversationId: string, query: string, acco
   return connectionCandidates(query).map(candidate => {
     resolveConnectionCandidate(candidate.candidateRef);
     const installation = getConnectorInstallation(`${candidate.candidateRef}-${principal.principalId}`);
+    const executorProfiles: NonNullable<PersonalCapability['executorProfiles']> = [];
     const executors = catalog.agents.filter(agent => agent.enabled !== false
       && agent.id !== principal.agentId && !agent.id.startsWith('personal-')
       && repository.get(agent.id)?.provisioningState === 'ready').filter(agent => {
-      const config = resolveEffectiveAgentConfig({ defaults: catalog.defaults, agent }).config;
-      const tools = getAvailablePersonalAgentTools(config, {});
-      return ['xopc_tool_search', 'xopc_tool_describe', 'xopc_tool_execute'].every(tool => tools.includes(tool))
-        && personalAgentModelAvailability(config).available
+      const assessment = assessSpecialist(agent.id, { version: 1, summary: 'Connected app discovery',
+        requiredTools: ['xopc_tool_search', 'xopc_tool_describe', 'xopc_tool_execute'] }, {
+        ownAgentId: principal.agentId ?? '',
+        // These three gateways are host-owned registrations; account access is checked below.
+        getAgentToolAvailability: (_id, tool) => ({ condition: `tool:${tool}`, state: 'verified', reasonCode: 'external_gateway_registered' }),
+      });
+      const eligible = assessment.eligibility === 'eligible'
         && (!installation?.allowedAgentIds.length || installation.allowedAgentIds.includes(agent.id));
+      if (eligible) executorProfiles.push({ id: assessment.id, name: assessment.name, description: assessment.description,
+        specialistProfile: assessment.specialistProfile, profileSource: assessment.profileSource });
+      return eligible;
     });
     const connections = listConnectorConnections({ principalId: principal.principalId, connectorId: candidate.candidateRef });
     const relevantConnections = accountId ? connections.filter(connection => connection.accountId === accountId) : connections;
@@ -51,7 +58,7 @@ export function personalCapabilities(conversationId: string, query: string, acco
         : relevantConnections.some(connection => connection.status === 'active' && !isExpired(connection)) ? 'blocked'
           : relevantConnections.some(connection => ['expired', 'revoked'].includes(connection.status) || isExpired(connection)) ? 'needs_reauthorization' : 'needs_connection';
     return { connectorId: candidate.candidateRef, label: candidate.label, capabilities: candidate.capabilities, status,
-      executorAgentIds: executors.map(agent => agent.id), accounts,
+      executorAgentIds: executors.map(agent => agent.id), executorProfiles, accounts,
       ...(status === 'unavailable' ? { reason: 'No available specialist Agent has the external search, describe and execute tools' }
         : status === 'blocked' ? { reason: 'Connector or account policy does not allow this request' } : {}) };
   });

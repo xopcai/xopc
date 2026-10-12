@@ -81,9 +81,12 @@ import kotlinx.coroutines.withContext
 
 private val markdownParser = Parser.builder().extensions(listOf(
   TablesExtension.create(), StrikethroughExtension.create()))
+  .customBlockParserFactory(MathBlockParser.Factory())
   .includeSourceSpans(IncludeSourceSpans.BLOCKS_AND_INLINES).build()
 
+private val LocalMarkdownSource = androidx.compose.runtime.compositionLocalOf { "" }
 private val LocalStreamingMarkdown = androidx.compose.runtime.compositionLocalOf { false }
+private val LocalMathEnabled = androidx.compose.runtime.compositionLocalOf { true }
 
 internal data class MarkdownRenderBlock(val id: String, val node: Node, val fingerprint: String)
 
@@ -99,6 +102,7 @@ internal fun projectMarkdown(source: String, previous: List<MarkdownRenderBlock>
 private fun StringBuilder.appendMarkdownFingerprint(node: Node) {
   append(node.javaClass.name).append(':')
   append(when (node) {
+    is MathSourceBlock -> node.source
     is MarkdownTextNode -> node.literal
     is Code -> node.literal
     is FencedCodeBlock -> node.info + ":" + node.literal
@@ -126,6 +130,7 @@ internal fun MarkdownContent(markdown: String, modifier: Modifier = Modifier,
     value = withContext(Dispatchers.Default) { projectMarkdown(markdown, previous) }
   }
   val linkColor = MaterialTheme.colorScheme.primary
+  val mathEnabled = remember(markdown) { MathMarkdownSyntax.candidateCount(markdown) <= 256 }
   if (maxLines != null) {
     val preview = remember(document, linkColor, onOpenLink) {
       buildAnnotatedString { document.forEach { appendPreview(it.node, linkColor, onOpenLink) } }
@@ -140,7 +145,7 @@ internal fun MarkdownContent(markdown: String, modifier: Modifier = Modifier,
       verticalArrangement = Arrangement.spacedBy(8.dp)) {
       document.forEach { block ->
         key(block.id) {
-          androidx.compose.runtime.CompositionLocalProvider(LocalStreamingMarkdown provides
+          androidx.compose.runtime.CompositionLocalProvider(LocalMarkdownSource provides markdown, LocalMathEnabled provides mathEnabled, LocalStreamingMarkdown provides
             (streaming && block.id == document.lastOrNull()?.id && block.node !is TableBlock)) {
             MarkdownBlock(block.node, linkColor, onOpenLink, onCopyCode)
           }
@@ -154,6 +159,7 @@ internal fun MarkdownContent(markdown: String, modifier: Modifier = Modifier,
 private fun MarkdownBlock(node: Node, linkColor: Color,
   onOpenLink: ((String) -> Unit)?, onCopyCode: ((String) -> Unit)?) {
   when (node) {
+    is MathSourceBlock -> MathMarkdownView(node.source, LocalStreamingMarkdown.current, display = true, enabled = LocalMathEnabled.current, onCopy = onCopyCode)
     is Paragraph -> MarkdownInlineText(node, linkColor, onOpenLink,
       modifier = Modifier.fillMaxWidth().testTag("markdown-paragraph"))
     is Heading -> MarkdownInlineText(node, linkColor, onOpenLink,
@@ -164,7 +170,11 @@ private fun MarkdownBlock(node: Node, linkColor: Color,
         3 -> MaterialTheme.typography.bodyLarge.copy(fontSize = 18.sp, lineHeight = 26.sp)
         else -> MaterialTheme.typography.bodyLarge.copy(lineHeight = 24.sp)
       }, bold = true)
-    is FencedCodeBlock -> MarkdownCodeBlock(node.literal, node.info, onCopyCode)
+    is FencedCodeBlock -> if (node.info.trim() == "math") {
+      val raw = LocalMarkdownSource.current
+      val text = node.sourceSpans.map { raw.substring(it.inputIndex, (it.inputIndex + it.length).coerceAtMost(raw.length)) }.joinToString("\n")
+      MathMarkdownView(text, LocalStreamingMarkdown.current, display = true, enabled = LocalMathEnabled.current, onCopy = onCopyCode)
+    } else MarkdownCodeBlock(node.literal, node.info, onCopyCode)
     is IndentedCodeBlock -> MarkdownCodeBlock(node.literal, "", onCopyCode)
     is BulletList, is OrderedList -> MarkdownList(node, linkColor, onOpenLink, onCopyCode)
     is BlockQuote -> Column(modifier = Modifier.fillMaxWidth()
@@ -188,6 +198,13 @@ private fun MarkdownInlineText(node: Node, linkColor: Color,
   onOpenLink: ((String) -> Unit)?, modifier: Modifier = Modifier,
   style: androidx.compose.ui.text.TextStyle = MaterialTheme.typography.bodyLarge.copy(lineHeight = 24.sp),
   bold: Boolean = false, prefix: String = "") {
+  val rawSource = LocalMarkdownSource.current
+  val original = node.sourceSpans.map { rawSource.substring(it.inputIndex.coerceAtMost(rawSource.length), (it.inputIndex + it.length).coerceAtMost(rawSource.length)) }.joinToString("\n")
+  if (MathMarkdownSyntax.mayContain(original)) {
+    MathMarkdownView(prefix + original, LocalStreamingMarkdown.current, modifier, fontSize = style.fontSize.value,
+      enabled = LocalMathEnabled.current, onOpenLink = onOpenLink)
+    return
+  }
   val content = remember(node, linkColor, onOpenLink, prefix) {
     buildAnnotatedString {
       append(prefix)

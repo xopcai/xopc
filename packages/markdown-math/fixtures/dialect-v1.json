@@ -1,0 +1,47 @@
+[
+  {
+    "id": "reward",
+    "markdown": "\\[\\mathcal{R}_{syn}(s_T;g)\\triangleq\\mathbb{I}\\big[V_g(s_T)=\\mathrm{True}\\big]\\]",
+    "mathCount": 1
+  },
+  {
+    "id": "inline",
+    "markdown": "行内 \\(\\frac{a_i}{b_i}\\) 与 $x^2$",
+    "mathCount": 2
+  },
+  {
+    "id": "money",
+    "markdown": "价格 $5，运费 $10，$100$",
+    "mathCount": 0
+  },
+  {
+    "id": "code",
+    "markdown": "`$x$`\n\n```ts\n\\[x\\]\n```",
+    "mathCount": 0
+  },
+  {
+    "id": "aligned",
+    "markdown": "\\[\n\\begin{aligned}\na &= b \\\\\n\nc &= d\n\\end{aligned}\n\\]",
+    "mathCount": 1
+  },
+  {
+    "id": "containers",
+    "markdown": "> \\[\n> x^2\n> \\]\n\n- \\(a_i\\)",
+    "mathCount": 2
+  },
+  {
+    "id": "table",
+    "markdown": "| x |\n| --- |\n| $a_i$ |",
+    "mathCount": 1
+  },
+  {
+    "id": "alt",
+    "markdown": "![$x$](https://example.com/image.png)",
+    "mathCount": 0
+  },
+  {
+    "id": "fence",
+    "markdown": "```math\nx^2\n```",
+    "mathCount": 1
+  }
+]

@@ -19,6 +19,7 @@ import {
 
 import { cn } from '@/lib/cn';
 import { copyTextToClipboard } from '@/lib/copy-to-clipboard';
+import '@/components/ui/content-block-actions.css';
 import { interaction } from '@/lib/interaction';
 
 import type { WorkflowAgentSnapshot, WorkflowFailureKind, WorkflowSnapshot } from './workflow.types';
@@ -166,7 +167,7 @@ export const WorkflowErrorCard = memo(function WorkflowErrorCard({
 
       {isOpen ? (
         <div className="space-y-3 px-3 py-2.5">
-          <section className="min-w-0 rounded-lg bg-surface-hover/35 px-2.5 py-2">
+          <section className="content-block-action-scope min-w-0 rounded-lg bg-surface-hover/35 px-2.5 py-2">
             <div className="mb-1 flex min-w-0 items-center justify-between gap-2">
               <button
                 type="button"
@@ -186,7 +187,7 @@ export const WorkflowErrorCard = memo(function WorkflowErrorCard({
                 type="button"
                 onClick={handleCopyReason}
                 className={cn(
-                  'inline-flex h-6 shrink-0 items-center gap-1 rounded-md px-1.5 text-xs text-fg-muted',
+                  'content-block-action text-fg-muted',
                   'hover:bg-surface-hover hover:text-fg',
                   interaction.transition,
                   interaction.focusRingPanel,
@@ -194,8 +195,7 @@ export const WorkflowErrorCard = memo(function WorkflowErrorCard({
                 aria-label={copiedReason ? labels.copyReasonDone : labels.copyReason}
                 title={copiedReason ? labels.copyReasonDone : labels.copyReason}
               >
-                {copiedReason ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
-                <span>{copiedReason ? labels.copyReasonDone : labels.copyReason}</span>
+                {copiedReason ? <Check className="size-3.5" aria-hidden /> : <Copy className="size-3.5" aria-hidden />}
               </button>
             </div>
             {reasonExpanded ? (

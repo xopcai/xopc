@@ -6,6 +6,7 @@ import useSWR from 'swr';
 
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import '@/components/ui/content-block-actions.css';
 import { dispatchFillChatComposer } from '@/features/chat/composer/fill-composer-dispatch';
 import {
   getChatPreviewFixGuidance,
@@ -111,7 +112,7 @@ export function InlineChatPreview({
     }
   };
 
-  const shell = 'mt-3 overflow-hidden rounded-2xl border border-edge bg-surface-panel';
+  const shell = 'content-block-action-scope mt-3 overflow-hidden rounded-2xl border border-edge bg-surface-panel';
   if (!lease.active) {
     return (
       <section ref={lease.containerRef} className={shell} data-inline-chat-preview={reference.id}>
@@ -168,11 +169,15 @@ export function InlineChatPreview({
           <h3 className="truncate text-sm font-semibold text-fg">{reference.title}</h3>
           <p className={cn('mt-0.5 text-xs', failed ? 'text-danger' : 'text-fg-muted')} aria-live="polite">{status}</p>
         </div>
-        <Button variant="ghost" className="min-h-11 px-3 text-xs" onClick={retry} aria-label={language === 'zh' ? '重新加载预览' : 'Reload preview'}>
-          <RefreshCw className="size-4" />{language === 'zh' ? '重试' : 'Retry'}
+        <Button variant="ghost" className="content-block-action" onClick={retry}
+          data-action-visible={failed} title={language === 'zh' ? '重新加载预览' : 'Reload preview'}
+          aria-label={language === 'zh' ? '重新加载预览' : 'Reload preview'}>
+          <RefreshCw className="size-4" aria-hidden />
         </Button>
-        <Button variant="secondary" className="min-h-11 px-3 text-xs" disabled={action !== null} onClick={() => void saveAsApp()}>
-          <Save className="size-4" />{action === 'promote' ? (language === 'zh' ? '保存中…' : 'Saving…') : (language === 'zh' ? '保存为应用' : 'Save as app')}
+        <Button variant="ghost" className="content-block-action" disabled={action !== null} onClick={() => void saveAsApp()}
+          aria-busy={action === 'promote'} title={action === 'promote' ? (language === 'zh' ? '保存中…' : 'Saving…') : (language === 'zh' ? '保存为应用' : 'Save as app')}
+          aria-label={action === 'promote' ? (language === 'zh' ? '保存中…' : 'Saving…') : (language === 'zh' ? '保存为应用' : 'Save as app')}>
+          <Save className={cn('size-4', action === 'promote' && 'motion-safe:animate-pulse')} aria-hidden />
         </Button>
       </header>
       <div className="relative bg-surface-base" style={{ minHeight: height }}>

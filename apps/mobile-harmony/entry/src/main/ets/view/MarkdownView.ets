@@ -1,3 +1,5 @@
+import { XopcMathMarkdownView } from './MathMarkdownView';
+import { mayContainMath, mathCandidateCount } from '../common/mathMarkdown';
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { common } from '@kit.AbilityKit';
 import { i18n } from '@kit.LocalizationKit';
@@ -23,6 +25,7 @@ struct XopcMarkdownInline {
   @Param compactReading: boolean = false;
   @Param lineLimit: number = Infinity;
   @Param streaming: boolean = false;
+  @Param allowMath: boolean = true;
   @Event onOpenLink: (href: string) => void = (_href: string): void => {};
   @Event onPreviewTap: () => void = (): void => {};
   @Event onReading: () => void = (): void => {};
@@ -92,42 +95,49 @@ struct XopcMarkdownInline {
     } catch (_) { this.getUIContext().getPromptAction().showToast({ message: $r('app.string.chat_link_failed') }); }
   }
   build() {
-    Text() {
-      ForEach(this.projection.spans, (span: XopcMarkdownRenderSpan) => {
-        Span(span.leadingText)
-          .fontWeight(this.spanWeight(span.kind))
-          .fontStyle(span.kind === 'italic' ? FontStyle.Italic : FontStyle.Normal)
-          .fontFamily(span.kind === 'code' ? 'monospace' : 'sans-serif')
-          .fontColor(span.href ? this.colors.accent : this.muted ? this.colors.secondary : this.colors.foreground)
-          .decoration({ type: span.href ? TextDecorationType.Underline : span.kind === 'strike' ? TextDecorationType.LineThrough : TextDecorationType.None })
-          .onClick((): void => {
-            if (span.href) this.openTarget(span.href);
-            else this.onPreviewTap();
+    Column() {
+      if (mayContainMath(this.content) && (!Number.isFinite(this.lineLimit) || this.lineLimit <= 0)) {
+        XopcMathMarkdownView({ content: this.content, streaming: this.streaming, fontSize: this.textSize, mathRenderingAllowed: this.allowMath,
+          onOpenLink: (href: string): void => { this.openTarget(href); } })
+      } else {
+        Text() {
+          ForEach(this.projection.spans, (span: XopcMarkdownRenderSpan) => {
+            Span(span.leadingText)
+              .fontWeight(this.spanWeight(span.kind))
+              .fontStyle(span.kind === 'italic' ? FontStyle.Italic : FontStyle.Normal)
+              .fontFamily(span.kind === 'code' ? 'monospace' : 'sans-serif')
+              .fontColor(span.href ? this.colors.accent : this.muted ? this.colors.secondary : this.colors.foreground)
+              .decoration({ type: span.href ? TextDecorationType.Underline : span.kind === 'strike' ? TextDecorationType.LineThrough : TextDecorationType.None })
+              .onClick((): void => {
+                if (span.href) this.openTarget(span.href);
+                else this.onPreviewTap();
+              })
+            if (span.addedText) {
+              Span(span.addedText)
+                .fontWeight(this.spanWeight(span.kind))
+                .fontStyle(span.kind === 'italic' ? FontStyle.Italic : FontStyle.Normal)
+                .fontFamily(span.kind === 'code' ? 'monospace' : 'sans-serif')
+                .fontColor(span.fresh ? this.colors.secondary : span.href ? this.colors.accent : this.muted ? this.colors.secondary : this.colors.foreground)
+                .decoration({ type: span.href ? TextDecorationType.Underline : span.kind === 'strike' ? TextDecorationType.LineThrough : TextDecorationType.None })
+                .onClick((): void => { if (span.href) this.openTarget(span.href); else this.onPreviewTap(); })
+            }
+          }, (span: XopcMarkdownRenderSpan): string => span.id)
+        }.fontSize(this.textSize)
+          .lineHeight(this.textLineHeight)
+          .maxLines(this.lineLimit).textOverflow({ overflow: TextOverflow.Ellipsis })
+          .copyOption(CopyOptions.InApp).width('100%')
+          .onTextSelectionChange((start: number, end: number): void => {
+            this.selecting = start >= 0 && end > start;
+            if (this.selecting) {
+              this.onReading();
+              clearTimeout(this.fadeTimer);
+              this.projection.spans.forEach((span: XopcMarkdownRenderSpan): void => { span.fresh = false; });
+            }
           })
-        if (span.addedText) {
-          Span(span.addedText)
-            .fontWeight(this.spanWeight(span.kind))
-            .fontStyle(span.kind === 'italic' ? FontStyle.Italic : FontStyle.Normal)
-            .fontFamily(span.kind === 'code' ? 'monospace' : 'sans-serif')
-            .fontColor(span.fresh ? this.colors.secondary : span.href ? this.colors.accent : this.muted ? this.colors.secondary : this.colors.foreground)
-            .decoration({ type: span.href ? TextDecorationType.Underline : span.kind === 'strike' ? TextDecorationType.LineThrough : TextDecorationType.None })
-            .onClick((): void => { if (span.href) this.openTarget(span.href); else this.onPreviewTap(); })
-        }
-      }, (span: XopcMarkdownRenderSpan): string => span.id)
-    }.fontSize(this.textSize)
-      .lineHeight(this.textLineHeight)
-      .maxLines(this.lineLimit).textOverflow({ overflow: TextOverflow.Ellipsis })
-      .copyOption(CopyOptions.InApp).width('100%')
-      .onTextSelectionChange((start: number, end: number): void => {
-        this.selecting = start >= 0 && end > start;
-        if (this.selecting) {
-          this.onReading();
-          clearTimeout(this.fadeTimer);
-          this.projection.spans.forEach((span: XopcMarkdownRenderSpan): void => { span.fresh = false; });
-        }
-      })
-      .textAlign(this.alignment === 'right' ? TextAlign.End : this.alignment === 'center' ? TextAlign.Center : TextAlign.Start)
-      .onClick((): void => { this.onPreviewTap(); })
+          .textAlign(this.alignment === 'right' ? TextAlign.End : this.alignment === 'center' ? TextAlign.Center : TextAlign.Start)
+          .onClick((): void => { this.onPreviewTap(); })
+      }
+    }.width('100%')
   }
 }
 
@@ -163,6 +173,7 @@ export struct XopcMarkdownView {
     const blocks = this.projection.blocks;
     return this.previewLineLimit > 0 ? markdownPreviewBlocks(blocks, this.previewLineLimit) : blocks;
   }
+  @Computed get mathAllowed(): boolean { return mathCandidateCount(this.content) <= 256; }
   private blockGap(index: number): number {
     return this.compactReading ? markdownBlockGap(this.blocks[index], this.blocks[index - 1]) : index > 0 ? 12 : 0;
   }
@@ -192,8 +203,12 @@ export struct XopcMarkdownView {
     Column() {
       Repeat<XopcMarkdownBlock>(this.blocks).each((item: RepeatItem<XopcMarkdownBlock>) => {
         Column() {
-        if (this.previewLineLimit > 0) {
-          XopcMarkdownInline({ content: item.item.text, headingLevel: item.item.kind === 'heading' ? item.item.level : 0,
+        if (item.item.kind === 'math' && this.previewLineLimit <= 0) {
+          XopcMathMarkdownView({ content: item.item.text, streaming: this.streaming, mathRenderingAllowed: this.mathAllowed,
+            onOpenLink: (href: string): void => { this.openInternalLink(href); } })
+          Button('复制公式源码').onClick((): void => { this.copyCode(item.item.text); })
+        } else if (this.previewLineLimit > 0) {
+          XopcMarkdownInline({ allowMath: this.mathAllowed, content: item.item.text, headingLevel: item.item.kind === 'heading' ? item.item.level : 0,
             muted: item.item.kind === 'quote', compactReading: this.compactReading, lineLimit: this.blockLines(item.index),
             onOpenLink: (href: string): void => { this.openInternalLink(href); },
             onPreviewTap: (): void => { this.onPreviewTap(); } })
@@ -228,7 +243,7 @@ export struct XopcMarkdownView {
               Repeat<XopcMarkdownTableRow>(this.tableRows(item.item)).each((row: RepeatItem<XopcMarkdownTableRow>) => {
                 Row() {
                   Repeat<XopcMarkdownCell>(row.item.cells).each((cell: RepeatItem<XopcMarkdownCell>) => {
-                    XopcMarkdownInline({ content: cell.item.text, strong: row.item.header, alignment: cell.item.align,
+                    XopcMarkdownInline({ allowMath: this.mathAllowed, content: cell.item.text, strong: row.item.header, alignment: cell.item.align,
                       compactReading: this.compactReading,
                       onReading: this.onReading,
                       onOpenLink: (href: string): void => { this.openInternalLink(href); } })
@@ -249,13 +264,13 @@ export struct XopcMarkdownView {
           Row() {
             Text(this.listMarker(item.item)).fontSize(16).lineHeight(this.compactReading ? 23 : 25)
               .fontColor(this.colors.foreground)
-            XopcMarkdownInline({ content: item.item.text.slice(this.listMarker(item.item).length),
+            XopcMarkdownInline({ allowMath: this.mathAllowed, content: item.item.text.slice(this.listMarker(item.item).length),
               compactReading: this.compactReading,
               streaming: this.streaming && item.index === this.blocks.length - 1,
               onReading: this.onReading,
               onOpenLink: (href: string): void => { this.openInternalLink(href); } }).layoutWeight(1)
           }.width('100%').alignItems(VerticalAlign.Top).padding({ left: Math.min(item.item.level, 6) * 12 })
-        } else { XopcMarkdownInline({ content: item.item.text, headingLevel: item.item.kind === 'heading' ? item.item.level : 0, muted: item.item.kind === 'quote',
+        } else { XopcMarkdownInline({ allowMath: this.mathAllowed, content: item.item.text, headingLevel: item.item.kind === 'heading' ? item.item.level : 0, muted: item.item.kind === 'quote',
           compactReading: this.compactReading,
           streaming: this.streaming && item.index === this.blocks.length - 1,
           onReading: this.onReading,

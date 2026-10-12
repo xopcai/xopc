@@ -43,16 +43,19 @@ function parseCreateAgentBody(raw: unknown): CreateAgentBody | { error: string }
     return { error: 'each agent must be an object' };
   }
   const body = raw as Record<string, unknown>;
-  const allowedKeys = new Set(['id', 'workspace', 'profile']);
+  const allowedKeys = new Set(['id', 'workspace', 'profile', 'specialistProfile']);
   const unknownKey = Object.keys(body).find((key) => !allowedKeys.has(key));
   if (unknownKey) return { error: `unknown create-agent field "${unknownKey}"` };
   const workspace = typeof body.workspace === 'string' ? body.workspace : undefined;
   const profile = AgentProfileSchema.safeParse(body.profile);
   if (!profile.success) return { error: `profile ${profile.error.issues[0]?.message ?? 'is required'}` };
+  const specialist = AgentEntrySchema.shape.specialistProfile.safeParse(body.specialistProfile);
+  if (!specialist.success) return { error: `specialistProfile ${specialist.error.issues[0]?.message ?? 'is invalid'}` };
   const id = typeof body.id === 'string' ? body.id : undefined;
   return {
     workspace,
     profile: profile.data,
+    ...(specialist.data ? { specialistProfile: specialist.data } : {}),
     ...(id !== undefined ? { id } : {}),
   };
 }
@@ -129,6 +132,8 @@ export function registerAgentsRoutes(authenticated: Hono, deps: AuthenticatedRou
     }
     const allowedPatchKeys = new Set([
       'workspace',
+      'specialistProfile',
+      'expectedRevision',
       'profile',
       'models',
       'skills',
@@ -142,6 +147,12 @@ export function registerAgentsRoutes(authenticated: Hono, deps: AuthenticatedRou
     if (unknownPatchKey) {
       return c.json({ ok: false, error: { message: `unknown agent field "${unknownPatchKey}"` } }, 400);
     }
+    if (body.expectedRevision !== undefined && (!Number.isInteger(body.expectedRevision) || Number(body.expectedRevision) < 1))
+      return c.json({ ok: false, error: { message: 'expectedRevision must be a positive integer' } }, 400);
+    const specialistPatch = body.specialistProfile === null ? null
+      : Object.hasOwn(body, 'specialistProfile') ? AgentEntrySchema.shape.specialistProfile.safeParse(body.specialistProfile) : undefined;
+    if (specialistPatch && !specialistPatch.success)
+      return c.json({ ok: false, error: { message: `specialistProfile ${specialistPatch.error.issues[0]?.message ?? 'is invalid'}` } }, 400);
     const skillsPatch = body.skills === null ? null : Object.hasOwn(body, 'skills') ? SkillOverrideSchema.safeParse(body.skills) : undefined;
     if (skillsPatch && skillsPatch !== null && !skillsPatch.success) {
       return c.json({ ok: false, error: { message: `skills ${skillsPatch.error.issues[0]?.message ?? 'is invalid'}` } }, 400);
@@ -208,6 +219,8 @@ export function registerAgentsRoutes(authenticated: Hono, deps: AuthenticatedRou
     }
 
     const prep = await updateGatewayAgent(id, {
+      expectedRevision: body.expectedRevision as number | undefined,
+      ...(specialistPatch !== undefined ? { specialistProfile: specialistPatch === null ? null : specialistPatch.data } : {}),
       ...(workspacePatch !== undefined ? { workspace: workspacePatch } : {}),
       ...(profilePatch !== undefined ? { profile: profilePatch === null ? null : profilePatch.data } : {}),
       ...(modelsPatch !== undefined ? { models: modelsPatch } : {}),

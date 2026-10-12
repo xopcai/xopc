@@ -77,7 +77,7 @@ run_release_step "native iOS formatting" \
 run_release_step "native iOS lint" \
   bash -c 'cd apps/mobile-ios && swiftlint lint --strict --config .swiftlint.yml'
 run_release_step "generate native iOS project" \
-  bash -c 'cd apps/mobile-ios && xcodegen generate'
+  pnpm run mobile:ios:generate
 run_release_step "verify generated native iOS project is committed" \
   git diff --exit-code -- apps/mobile-ios/XopcMobile.xcodeproj/project.pbxproj
 run_release_step "native iOS unit tests" \
@@ -90,7 +90,7 @@ if [[ "$RELEASE_VERSION" != "$NEXT_VERSION" ]]; then
   exit 1
 fi
 run_release_step "regenerate native iOS project for ${RELEASE_VERSION}" \
-  bash -c 'cd apps/mobile-ios && xcodegen generate'
+  pnpm run mobile:ios:generate
 
 git add \
   apps/mobile-android/app/build.gradle.kts \

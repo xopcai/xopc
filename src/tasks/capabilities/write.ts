@@ -19,6 +19,7 @@ export const TaskMutationOutputSchema = z.discriminatedUnion('ok', [
 ]);
 
 export interface TaskWriteCapabilityDeps {
+  createTask?: TaskApplicationService['create'];
   getConfig?: () => Config | undefined;
   getProjects?: () => ProjectService | undefined;
   wake?: (runs: boolean) => void;
@@ -51,8 +52,8 @@ export function registerTaskWriteCapabilities(dispatcher: CapabilityDispatcher, 
         ? resolveTaskLocale({ title: input.title, contract: input.contract })
         : language === 'zh-CN' ? 'zh' : 'en');
       // Preserve the domain's established idempotency identity across upgrades.
-      return new TaskApplicationService().create({ ...input, locale, originConversationId, delegateAgentId: agentId, activation,
-      idempotencyKey: context.idempotencyKey }, context.actor);
+      const request = { ...input, locale, originConversationId, delegateAgentId: agentId, activation, idempotencyKey: context.idempotencyKey };
+      return deps.createTask ? deps.createTask(request, context.actor) : new TaskApplicationService().create(request, context.actor);
     },
     afterCommit(result) { if (result.ok) deps.wake?.(Boolean(result.runId)); },
   }));

@@ -1,3 +1,5 @@
+import { markdownItMath } from '@xopcai/markdown-math/markdownIt';
+import 'katex/dist/katex.min.css';
 import { useMemo } from 'react';
 import MarkdownIt from 'markdown-it';
 
@@ -10,6 +12,8 @@ const markdown = new MarkdownIt({
   typographer: false,
 });
 
+markdownItMath(markdown);
+
 const defaultLinkOpen = markdown.renderer.rules.link_open
   ?? ((tokens, index, options, _environment, renderer) => renderer.renderToken(tokens, index, options));
 
@@ -19,12 +23,12 @@ markdown.renderer.rules.link_open = (tokens, index, options, environment, render
   return defaultLinkOpen(tokens, index, options, environment, renderer);
 };
 
-export function renderSafeMarkdown(source: string): string {
-  return markdown.render(source);
+export function renderSafeMarkdown(source: string, streaming = false): string {
+  return markdown.render(source, { streaming });
 }
 
 export function MarkdownContent({ children, streaming = false }: { children: string; streaming?: boolean }) {
-  const html = useMemo(() => renderSafeMarkdown(children), [children]);
+  const html = useMemo(() => renderSafeMarkdown(children, streaming), [children, streaming]);
   return (
     <div className={`markdown-content${streaming ? ' is-streaming' : ''}`}>
       <div dangerouslySetInnerHTML={{ __html: html }} />

@@ -1,3 +1,4 @@
+import { SpecialistProfileSchema } from '@xopcai/gateway-contract';
 import { z } from 'zod';
 
 export const DEFAULT_AGENT_MODEL_REF = 'xopc-cloud/auto';
@@ -9,8 +10,8 @@ export const DEFAULT_CORE_SKILLS = [
 ] as const;
 
 export const DEFAULT_SKILL_POLICY = {
-  mode: 'selected' as const,
-  include: [...DEFAULT_CORE_SKILLS],
+  mode: 'all-enabled' as const,
+  exclude: [],
 };
 
 export const AgentIdSchema = z.string().regex(/^[a-z][a-z0-9_-]{0,63}$/);
@@ -176,6 +177,7 @@ export const AgentEntrySchema = z.object({
   enabled: z.boolean().default(true),
   workspace: z.string().trim().min(1).optional(),
   profile: AgentProfileSchema.optional(),
+  specialistProfile: SpecialistProfileSchema.optional(),
   models: AgentModelsOverrideSchema.optional(),
   skills: SkillOverrideSchema.optional(),
   tools: ToolPoliciesSchema.optional(),
@@ -189,6 +191,7 @@ export const EffectiveAgentConfigSchema = z.object({
   enabled: z.boolean(),
   workspace: z.string().min(1),
   profile: AgentProfileSchema.optional(),
+  specialistProfile: SpecialistProfileSchema.optional(),
   models: AgentModelsDefaultsSchema,
   skills: SkillDefaultsSchema,
   tools: ToolPoliciesSchema,

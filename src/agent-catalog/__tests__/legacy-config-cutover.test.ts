@@ -43,10 +43,22 @@ describe('legacy Agent config cutover', () => {
     expect(raw).toEqual({ gateway: { port: 18790 } });
     expect(new AgentCatalogRepository().snapshot()).toMatchObject({
       defaultAgentId: 'coder',
+      defaults: { skills: { mode: 'all-enabled', exclude: [] } },
       agents: [expect.objectContaining({ id: 'coder' }), expect.objectContaining({ id: 'main' })],
       bindings: [expect.objectContaining({ id: 'telegram-coder', agentId: 'coder' })],
       surfaceDefaults: { tui: 'coder' },
     });
+  });
+
+  it('preserves an explicit skill selection during migration', () => {
+    const { configPath } = fixture();
+    const raw = JSON.parse(readFileSync(configPath, 'utf8'));
+    raw.agents.defaults.skills = { mode: 'selected', include: ['project-review'] };
+    writeFileSync(configPath, JSON.stringify(raw));
+
+    cutoverLegacyAgentConfig({ configPath });
+    expect(new AgentCatalogRepository().getSettings().defaults.skills)
+      .toEqual({ mode: 'selected', include: ['project-review'] });
   });
 
   it('recovers after the database commit without duplicating data', () => {

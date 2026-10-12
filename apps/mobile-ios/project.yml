@@ -18,6 +18,10 @@ targets:
     platform: iOS
     sources:
       - path: XopcMobile
+        excludes: [Resources/Math]
+      - path: XopcMobile/Resources/Math
+        type: folder
+        buildPhase: resources
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: ai.xopc.xopc

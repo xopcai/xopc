@@ -1,0 +1,8 @@
+html, body { margin: 0; padding: 0; background: transparent; font-family: system-ui, sans-serif; line-height: 1.5; }
+#content { width: 100%; min-width: 0; overflow: hidden; }
+#content > :first-child { margin-top: 0; }
+#content > :last-child { margin-bottom: 0; }
+.markdown-math-display, pre { max-width: 100%; overflow-x: auto; }
+.markdown-math-source { white-space: pre-wrap; overflow-wrap: anywhere; }
+.katex-display { margin: .5em 0; }
+table { border-collapse: collapse; } th, td { padding: .4em; border: 1px solid currentColor; }

@@ -34,6 +34,7 @@ import { createHonoApp } from '../../gateway/hono/app.js';
 import { ConfigSchema } from '../../config/schema.js';
 import type { GatewayService } from '../../gateway/service.js';
 import { personalAgentId, personalConversationId } from '../repository.js';
+import { AgentSelectionRepository } from '../../agent-matching/selection-repository.js';
 import { personalCapabilities } from '../capability-service.js';
 import { submitPersonalRequest, resolvePersonalRequestConnection, cancelPersonalRequest, requirePersonalWorkerConnection } from '../request-service.js';
 import { getPersonalRequest, listPersonalRequests } from '../request-repository.js';
@@ -97,6 +98,10 @@ describe('Personal connected-app requests', () => {
     expect(task?.body).toContain('call personal_request_result');
     expect(submit().taskId).toBe(request.taskId);
     expect(listPersonalRequests(conversationId)).toHaveLength(1);
+    const choices = new AgentSelectionRepository().list(conversationId, { requestId: request.requestId });
+    expect(choices).toHaveLength(2);
+    expect(choices.every(choice => choice.taskId === request.taskId)).toBe(true);
+    expect(choices.find(choice => choice.taskRunId)?.assessment.checks).toContainEqual(expect.objectContaining({ condition: 'connector', state: 'verified' }));
     expect(() => submitPersonalRequest({ conversationId, connectorId: 'composio-gmail', agentId: 'mail-worker', objective: 'different', idempotencyKey: 'request-1' })).toThrow('Idempotency');
   });
 
@@ -113,6 +118,7 @@ describe('Personal connected-app requests', () => {
   it('keeps authorization in the main chat and resumes without another main-model input', () => {
     const request = submit();
     expect(request.state).toBe('waiting_connection');
+    expect(new AgentSelectionRepository().list(conversationId, { requestId: request.requestId })[0]?.status).toBe('pending_connection');
     expect(request.taskId).toBeUndefined();
     const account = connection();
     const wait = getActiveConnectionWait(conversationId)!;
@@ -122,6 +128,9 @@ describe('Personal connected-app requests', () => {
     const resumed = getPersonalRequest(request.requestId)!;
     expect(resumed).toMatchObject({ state: 'queued', accountId: account.accountId });
     expect(resumed.taskId).toBeTruthy();
+    const choices = new AgentSelectionRepository().list(conversationId, { requestId: request.requestId });
+    expect(choices).toHaveLength(2);
+    expect(new Set(choices.map(choice => choice.decisionGroupId)).size).toBe(1);
     expect(getSqliteDatabase().prepare("SELECT COUNT(*) AS count FROM session_inputs WHERE kind = 'connection_resume'").get()).toMatchObject({ count: 0 });
     expect(() => queueConnectionResolution(ready, 'continued', resolvePersonalRequestConnection)).toThrow('WAIT_CHANGED');
   });

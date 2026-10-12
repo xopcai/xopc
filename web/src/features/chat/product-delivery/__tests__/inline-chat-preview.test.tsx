@@ -86,7 +86,7 @@ describe('InlineChatPreview', () => {
     expect(container.textContent).toContain('Running');
 
     await act(async () => {
-      [...container.querySelectorAll('button')].find(button => button.textContent?.includes('Save as app'))?.click();
+      container.querySelector<HTMLButtonElement>('button[aria-label="Save as app"]')?.click();
       await Promise.resolve();
     });
     expect(mocks.promote).toHaveBeenCalledWith(expect.any(String), 'a'.repeat(64));

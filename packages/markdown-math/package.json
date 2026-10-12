@@ -1,0 +1,53 @@
+{
+  "name": "@xopcai/markdown-math",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "sideEffects": [
+    "**/*.css"
+  ],
+  "exports": {
+    "./types": "./src/types.ts",
+    "./syntax": "./src/syntax.ts",
+    "./policy": "./src/policy.ts",
+    "./render": "./src/render.ts",
+    "./remark": "./src/remark.ts",
+    "./rehype": "./src/rehype.ts",
+    "./marked": "./src/marked.ts",
+    "./markdownIt": "./src/markdownIt.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build:mobile": "node scripts/build-mobile.mjs"
+  },
+  "dependencies": {
+    "katex": "0.19.0",
+    "hast-util-from-html": "^2.0.3",
+    "micromark-util-types": "^2.0.2",
+    "mdast-util-from-markdown": "^2.0.2",
+    "unist-util-visit-parents": "6.0.2",
+    "unified": "11.0.5",
+    "markdown-it": "14.2.0"
+  },
+  "devDependencies": {
+    "typescript": "^6.0.3",
+    "@types/katex": "^0.16.8",
+    "@types/markdown-it": "^14.1.2",
+    "@types/hast": "3.0.4",
+    "@types/mdast": "4.0.4",
+    "marked": "18.0.4",
+    "esbuild": "0.28.1"
+  },
+  "peerDependencies": {
+    "marked": ">=18",
+    "markdown-it": ">=14"
+  },
+  "peerDependenciesMeta": {
+    "marked": {
+      "optional": true
+    },
+    "markdown-it": {
+      "optional": true
+    }
+  }
+}

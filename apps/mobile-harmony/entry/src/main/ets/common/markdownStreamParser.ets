@@ -1,3 +1,4 @@
+import { mathDisplayClosed } from './mathMarkdown';
 import { markdownBlocks, XopcMarkdownBlock } from './markdown';
 
 /** This parser's supported dialect has no document-wide reference definitions. */
@@ -6,11 +7,12 @@ export class XopcMarkdownStreamParser {
   private scanned: number = 0;
   private sealed: number = 0;
   private fence: string = '';
+  private math: string = '';
   private prefix: XopcMarkdownBlock[] = [];
 
   parse(source: string): XopcMarkdownBlock[] {
     if (!source.startsWith(this.source) || source.includes('\r')) {
-      this.source = ''; this.scanned = 0; this.sealed = 0; this.fence = ''; this.prefix = [];
+      this.source = ''; this.scanned = 0; this.sealed = 0; this.fence = ''; this.math = ''; this.prefix = [];
       if (source.includes('\r')) return markdownBlocks(source);
     }
     let boundary = this.sealed;
@@ -18,10 +20,16 @@ export class XopcMarkdownStreamParser {
     while (end >= 0) {
       const line = source.slice(this.scanned, end);
       const marker = line.match(/^\s{0,3}(`{3,}|~{3,})(.*)$/);
-      if (this.fence) {
+      if (this.math) {
+        this.math += '\n' + line;
+        if (mathDisplayClosed(this.math)) this.math = '';
+      } else if (this.fence) {
         if (marker && marker[1][0] === this.fence[0] && marker[1].length >= this.fence.length && !marker[2].trim()) this.fence = '';
       } else if (marker) this.fence = marker[1];
-      if (!this.fence && !line.trim()) boundary = end + 1;
+      else if (line.trim().startsWith('\\[') || line.trim().startsWith('$$')) {
+        if (!mathDisplayClosed(line.trim())) this.math = line.trim();
+      }
+      if (!this.fence && !this.math && !line.trim()) boundary = end + 1;
       this.scanned = end + 1;
       end = source.indexOf('\n', this.scanned);
     }

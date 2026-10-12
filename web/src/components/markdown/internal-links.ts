@@ -218,7 +218,7 @@ export function collectFileMentionMatches(text: string): FileMentionMatch[] {
 function shouldSkipTextNode(node: Text): boolean {
   const parent = node.parentElement;
   if (!parent) return true;
-  return Boolean(parent.closest('a, code, pre, kbd, samp, textarea, script, style, [data-xopc-inline-file]'));
+  return Boolean(parent.closest('a, code, pre, kbd, samp, textarea, script, style, [data-xopc-math], [data-xopc-inline-file]'));
 }
 
 export function linkWorkspaceFileMentions(root: HTMLElement): void {
