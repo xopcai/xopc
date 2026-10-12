@@ -31,15 +31,34 @@ import { createDevice, issueDeviceTokenPair } from '../../storage/sqlite/device-
 import { DEFAULT_MOBILE_SCOPES } from '../../gateway/security/gateway-scopes.js';
 import { getPersonalAgent, isPersonalConversation, personalAgentId, personalConversationId } from '../repository.js';
 import { createOrResumePersonalAgent, ensurePersonalConversationVisibility, personalInstructions, refreshPersonalDelegationGuidance, updatePersonalProfileRecord } from '../service.js';
-import { upgradePersonalInstructions } from '../prompts.js';
-import { PERSONAL_RELIABILITY_RULES } from '../communication.js';
-import { PERSONAL_REPLY_STYLE_RULES, PERSONAL_REPLY_EXAMPLES } from '../reply-style.js';
+import { upgradePersonalInstructions, PREVIOUS_PERSONAL_INTERRUPTION_RULE } from '../prompts.js';
+import { PERSONAL_RELIABILITY_RULES, PERSONAL_PREVIOUS_RESULT_COMMUNICATION } from '../communication.js';
+import { PERSONAL_REPLY_STYLE_RULES, PERSONAL_REPLY_EXAMPLES, PREVIOUS_PERSONAL_REPLY_STYLE_RULES, PREVIOUS_PERSONAL_REPLY_EXAMPLES } from '../reply-style.js';
 import {
   PERSONAL_PERSONA_GUIDANCE, PREVIOUS_PERSONAL_PERSONA_GUIDANCE,
   PREVIOUS_PERSONAL_EMOTIONAL_STYLE_RULE, PREVIOUS_PERSONAL_IDENTITY_CONTINUITY_RULE,
 } from '../persona.js';
 
 describe('personal Agent identity', () => {
+  it('replaces all known report-first blocks while preserving explicit user preferences', () => {
+    const custom = 'My preference: 对正式报告请先给结论，闲聊不要用固定开场。';
+    const quoted = `Example I am discussing: ${PREVIOUS_PERSONAL_REPLY_STYLE_RULES[0]}`;
+    const saved = [custom, quoted, ...PREVIOUS_PERSONAL_REPLY_STYLE_RULES, PREVIOUS_PERSONAL_REPLY_EXAMPLES,
+      PERSONAL_PREVIOUS_RESULT_COMMUNICATION, PREVIOUS_PERSONAL_INTERRUPTION_RULE,
+      'Keep replies short and lead with the answer.', ...PREVIOUS_PERSONAL_REPLY_STYLE_RULES].join('\n');
+    const upgraded = upgradePersonalInstructions(saved);
+    expect(upgraded).toContain(custom);
+    expect(upgraded).toContain(quoted);
+    for (const rule of PREVIOUS_PERSONAL_REPLY_STYLE_RULES) {
+      expect(upgraded.split('\n').filter(line => line === rule)).toHaveLength(0);
+    }
+    expect(upgraded).not.toContain(PREVIOUS_PERSONAL_REPLY_EXAMPLES);
+    expect(upgraded).not.toContain(PERSONAL_PREVIOUS_RESULT_COMMUNICATION);
+    expect(upgraded).not.toContain(PREVIOUS_PERSONAL_INTERRUPTION_RULE);
+    expect(upgraded).not.toContain('Keep replies short and lead with the answer.');
+    expect(upgraded).toContain('Keep replies short and respond to the current request in a natural sentence.');
+    expect(upgradePersonalInstructions(upgraded)).toBe(upgraded);
+  });
   it('replaces saved source presentation rules while preserving custom instructions', () => {
     const previousRules = [
       'Do not include task progress links by default or ask the user to open a Task page to follow work or collect results. Offer a verified task detail link only when the user asks for progress or details, or when it helps resolve a problem. Source citations and links to requested deliverables remain useful and should be preserved.',
@@ -400,6 +419,10 @@ describe('personal Agent identity', () => {
       repository.create({ id: agentId, toolAllowlist: ['personal_task', 'clarify', 'user_context_get', 'knowledge_search'], profile: { name: 'Personal AI', responsePreferences: { addressAs: 'Legacy name', humor: 'none', warmth: 'reserved' }, instructions: [
         'Answer simple requests directly. For complex work, use personal_task agents to find a suitable specialist, then create a Task and remain available to talk. Never claim a task was created before the tool confirms it.',
         'Keep my custom instruction.',
+        ...PREVIOUS_PERSONAL_REPLY_STYLE_RULES,
+        PREVIOUS_PERSONAL_REPLY_EXAMPLES,
+        PERSONAL_PREVIOUS_RESULT_COMMUNICATION,
+        PREVIOUS_PERSONAL_INTERRUPTION_RULE,
         PREVIOUS_PERSONAL_PERSONA_GUIDANCE,
         PREVIOUS_PERSONAL_EMOTIONAL_STYLE_RULE,
         PREVIOUS_PERSONAL_IDENTITY_CONTINUITY_RULE,
@@ -438,6 +461,10 @@ describe('personal Agent identity', () => {
         expect(refreshed.profile?.instructions?.split('\n').filter(line => line === rule)).toHaveLength(1);
       }
       expect(refreshed.profile?.instructions).toContain(PERSONAL_REPLY_EXAMPLES);
+      for (const oldRule of PREVIOUS_PERSONAL_REPLY_STYLE_RULES) expect(refreshed.profile?.instructions).not.toContain(oldRule);
+      expect(refreshed.profile?.instructions).not.toContain(PREVIOUS_PERSONAL_REPLY_EXAMPLES);
+      expect(refreshed.profile?.instructions).not.toContain(PERSONAL_PREVIOUS_RESULT_COMMUNICATION);
+      expect(refreshed.profile?.instructions).not.toContain(PREVIOUS_PERSONAL_INTERRUPTION_RULE);
       await refreshPersonalDelegationGuidance(gateway, 'local-owner');
       expect(repository.get(agentId)?.revision).toBe(refreshed.revision);
       expect(readFileSync(join(profileDir, 'SOUL.md'), 'utf-8')).toBe(customSoul);

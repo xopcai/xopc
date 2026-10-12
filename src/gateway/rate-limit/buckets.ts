@@ -123,13 +123,14 @@ class BucketRegistry {
     return this.identityChallengeLimiter ??= new RateLimiter({ maxRequests: 300, windowMs: 60_000 });
   }
 
-  /** Authenticated admin / mutation endpoints — 150 req / 60 s per client IP. */
+  /** Authenticated admin / mutation endpoints — 600 req / 60 s per client IP. */
   strictApi(): RateLimiter {
     if (!this.strictApiLimiter) {
       // The web console shares this bucket across many independent settings and
       // user-context actions. Keep a runaway-client brake without penalizing a
-      // normal burst of authenticated UI mutations.
-      this.strictApiLimiter = new RateLimiter({ maxRequests: 150, windowMs: 60_000 });
+      // normal burst of authenticated UI mutations from multiple devices
+      // sharing one client IP.
+      this.strictApiLimiter = new RateLimiter({ maxRequests: 600, windowMs: 60_000 });
     }
     return this.strictApiLimiter;
   }
