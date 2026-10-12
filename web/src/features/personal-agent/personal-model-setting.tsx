@@ -23,7 +23,7 @@ export function PersonalModelSetting({ conversationId, zh, onSaved }: {
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, [conversationId]);
-  const busy = Boolean(session?.sending || session?.streaming || session?.modelConfigSaving);
+  const busy = Boolean(session?.modelConfigSaving);
   async function save(model: string, thinkingLevel?: string) {
     useChatSessionStore.getState().patchSessionMeta(conversationId, { modelConfigSaving: true });
     try {

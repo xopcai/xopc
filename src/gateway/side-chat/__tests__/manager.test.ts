@@ -200,6 +200,20 @@ describe('EphemeralSideChatManager', () => {
     await manager.disposeAll();
   });
 
+  it('updates next-turn config while preserving the active run configuration', async () => {
+    const manager = createManager();
+    const chat = await manager.create({ parentConversationId: metadata().key, clientInstanceId: 'owner' });
+    manager.setStatus(chat.id, 'owner', 'running', 'run-1');
+    const activeConfig = manager.get(chat.id, 'owner').config;
+    const next = manager.updateConfig(chat.id, 'owner', { modelRef: 'openai/changed', thinkingLevel: 'low' });
+    expect(next).toMatchObject({ status: 'running', runId: 'run-1', config: { modelRef: 'openai/changed', thinkingLevel: 'low' } });
+    expect(activeConfig).toEqual(chat.config);
+    expect(activeConfig).not.toEqual(next.config);
+    manager.setStatus(chat.id, 'owner', 'idle');
+    expect(manager.get(chat.id, 'owner').config).toEqual(next.config);
+    await manager.disposeAll();
+  });
+
   it('keeps long runs alive, then starts a full idle window when the run finishes', async () => {
     let now = 0;
     const manager = createManager({ now: () => now });

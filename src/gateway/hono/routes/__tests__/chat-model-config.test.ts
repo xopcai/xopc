@@ -9,7 +9,7 @@ import { useTestDatabase } from '../../../../storage/sqlite/__tests__/test-datab
 
 useTestDatabase();
 
-function fixture() {
+function fixture(active = false) {
   let config = { model: 'test/one', thinkingLevel: 'high', configVersion: 1, fixedModel: true };
   let pending = false;
   const service = {
@@ -19,7 +19,7 @@ function fixture() {
     }) } },
     sessions: {
       getAgentConfig: vi.fn(async () => config),
-      getActiveRun: () => ({ active: false }),
+      getActiveRun: () => ({ active }),
       patchAgentConfig: vi.fn(async (_key: string, body: typeof config) => {
         if (body.configVersion !== config.configVersion) return { ok: false, code: 'CONFIG_CHANGED', error: 'Changed' };
         config = { ...config, ...body, configVersion: config.configVersion + 1 };
@@ -49,12 +49,19 @@ describe('chat model configuration and input acceptance', () => {
     expect(service.submitSessionInput).not.toHaveBeenCalled();
   });
 
-  it('accepts the displayed configuration and prevents changes while its input is pending', async () => {
+  it('accepts configuration changes while an input is pending', async () => {
     const { send, patch, service } = fixture();
     expect((await send()).status).toBe(202);
     expect(service.submitSessionInput).toHaveBeenCalledWith(expect.objectContaining({ thinking: 'high' }));
-    expect((await patch()).status).toBe(409);
-    expect(service.sessions.patchAgentConfig).not.toHaveBeenCalled();
+    expect((await patch()).status).toBe(200);
+    expect(service.sessions.patchAgentConfig).toHaveBeenCalled();
+  });
+
+  it('accepts model and thinking changes during an active reply for the next input', async () => {
+    const { patch, send, service } = fixture(true);
+    expect((await patch()).status).toBe(200);
+    expect((await send(2)).status).toBe(202);
+    expect(service.submitSessionInput).toHaveBeenCalledWith(expect.objectContaining({ thinking: 'low' }));
   });
 
   it('serializes competing writes so exactly one succeeds', async () => {

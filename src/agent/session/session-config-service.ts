@@ -18,7 +18,6 @@ import { chooseModelThinking, type ModelThinkingValue } from '@xopcai/gateway-co
 import { getModelThinking } from '../../providers/model-thinking.js';
 
 import { mkdir } from 'node:fs/promises';
-import type { ThinkingLevel } from '@earendil-works/pi-agent-core';
 
 import type { Config } from '../../config/schema.js';
 import { ResponseLanguageSchema } from '../../i18n/response-language.js';
@@ -119,15 +118,7 @@ export class SessionConfigService {
           fixedModel: partial.fixedModel ?? existing?.fixedModel ?? false,
         });
         this.opts.modelManager.restoreSessionModel(conversationId, modelRef, updated.fixedModel === true);
-        try {
-          if (this.opts.agentManager.getAgent(conversationId)) {
-            this.opts.agentManager.setModelForSession(conversationId, modelRef);
-            this.opts.agentManager.setThinkingLevel(conversationId, thinkingLevel as ThinkingLevel);
-          }
-        } catch (err) {
-          this.opts.agentManager.removeAgent(conversationId);
-          log.warn({ err, conversationId, modelRef }, 'Saved model configuration; runtime will reload before the next turn');
-        }
+        // The next turn hydrates these settings. Never mutate an active agent here.
       }
     }
 

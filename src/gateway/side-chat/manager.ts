@@ -222,7 +222,7 @@ export class EphemeralSideChatManager {
 
   updateConfig(id: string, clientInstanceId: string, patch: Partial<SideChatConfig>): SideChatView {
     const entry = this.requireEntry(id, clientInstanceId);
-    if (entry.status !== 'idle') throw new SideChatError('Cannot change config while a run is active', 'CONFLICT');
+    if (entry.status === 'promoting') throw new SideChatError('Cannot change config during promotion', 'CONFLICT');
     const modelRef = patch.modelRef === undefined ? entry.config.modelRef : normalizeOptionalString(patch.modelRef);
     if (!modelRef) throw new SideChatError('modelRef cannot be empty', 'INVALID_REQUEST');
     entry.config = {

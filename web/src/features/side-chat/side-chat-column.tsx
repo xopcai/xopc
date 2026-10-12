@@ -960,10 +960,10 @@ export function SideChatConversation({
                 <ComposerModelConfigControl
                   chat={m.chat}
                   sessionModel={view.config.modelRef}
-                  modelDisabled={running || connectionLost}
+                  modelDisabled={connectionLost}
                   onModelChange={(modelRef, thinkingLevel) => saveModelConfig({ modelRef, thinkingLevel })}
                   thinkingLevel={view.config.thinkingLevel}
-                  thinkingDisabled={running || connectionLost}
+                  thinkingDisabled={connectionLost}
                   onThinkingChange={(thinkingLevel) => saveModelConfig({ thinkingLevel })}
                 />
               ) : null}

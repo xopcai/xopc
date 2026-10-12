@@ -12,10 +12,6 @@ export async function patchChatModelConfig(
   return withModelConfigLock(conversationId, async () => {
     const changesModel = body.model !== undefined || body.thinkingLevel !== undefined;
     if (changesModel) {
-      const state = service.getSessionInputState(conversationId);
-      if (service.sessions.getActiveRun(conversationId).active || state.activeRunId || state.inputs.length > 0) {
-        return c.json({ ok: false, error: 'Wait for the current reply and pending inputs to finish', code: 'SESSION_BUSY' }, 409);
-      }
       if (body.thinkingLevel !== undefined && typeof body.thinkingLevel !== 'string') {
         return c.json({ ok: false, error: 'Invalid thinking level' }, 400);
       }

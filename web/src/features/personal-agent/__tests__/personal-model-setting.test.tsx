@@ -41,6 +41,8 @@ describe('Personal AI model settings', () => {
     });
     expect(onSaved).toHaveBeenCalledOnce();
     act(() => useChatSessionStore.getState().setSessionFlags('personal', { streaming: true }));
-    expect(container.querySelector('button')!.disabled).toBe(true);
+    expect(container.querySelector('button')!.disabled).toBe(false);
+    await act(async () => container.querySelector('button')!.click());
+    expect(mocks.patch).toHaveBeenLastCalledWith('personal', { model: 'test/new', thinkingLevel: 'off', configVersion: 8 });
   });
 });
