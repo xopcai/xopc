@@ -2,6 +2,7 @@ import * as Dialog from '@radix-ui/react-dialog';
 import { X } from 'lucide-react';
 import { useState } from 'react';
 
+import { NumberInput } from '@/components/ui/number-input';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/cn';
 import { ghostIconButton } from '@/lib/interaction';
@@ -179,7 +180,7 @@ function ModelEditForm({
             <div className="grid gap-3 sm:grid-cols-2">
               <div>
                 <label className="mb-1 block text-xs font-medium text-fg-muted">{m.contextWindow}</label>
-                <input
+                <NumberInput
                   type="number"
                   min={1}
                   className={cn(inputClassName(), errors.has('contextWindow') && 'border-red-500')}
@@ -192,7 +193,7 @@ function ModelEditForm({
               </div>
               <div>
                 <label className="mb-1 block text-xs font-medium text-fg-muted">{m.maxOutputTokens}</label>
-                <input
+                <NumberInput
                   type="number"
                   min={1}
                   className={cn(inputClassName(), errors.has('maxTokens') && 'border-red-500')}
@@ -209,7 +210,7 @@ function ModelEditForm({
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="mb-1 block text-xs text-fg-muted">{m.costInput}</label>
-                  <input
+                  <NumberInput
                     type="number"
                     step="any"
                     min={0}
@@ -228,7 +229,7 @@ function ModelEditForm({
                 </div>
                 <div>
                   <label className="mb-1 block text-xs text-fg-muted">{m.costOutput}</label>
-                  <input
+                  <NumberInput
                     type="number"
                     step="any"
                     min={0}

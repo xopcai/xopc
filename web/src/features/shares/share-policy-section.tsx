@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 
+import { NumberInput } from '@/components/ui/number-input';
 import { Button } from '@/components/ui/button';
 import { useGatewayConfigSwr } from '@/features/gateway/gateway-config-swr';
 import {
@@ -365,7 +366,7 @@ function NumberField({
       <label className="mb-1 block text-sm font-medium text-fg" htmlFor={id}>
         {label}
       </label>
-      <input
+      <NumberInput
         id={id}
         type="number"
         min={min}

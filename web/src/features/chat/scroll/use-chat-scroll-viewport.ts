@@ -8,6 +8,7 @@ import {
 } from 'react';
 
 import {
+  chatScrollBehavior,
   isNearChatBottom,
   scrollChatToEnd,
 } from '@/features/chat/scroll/chat-scroll-geometry';
@@ -133,11 +134,13 @@ export function useChatScrollViewport({
       }
 
       if (opts?.smooth) {
-        el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+        el.scrollTo({ top: el.scrollHeight, behavior: chatScrollBehavior() });
         return;
       }
 
       scrollChatToEnd(el);
+      measuredScrollHeightRef.current = el.scrollHeight;
+      measuredClientHeightRef.current = el.clientHeight;
       setAtBottom(isNearChatBottom(el));
     },
     [setFollowing],
@@ -209,6 +212,16 @@ export function useChatScrollViewport({
     if (!el) return;
 
     const near = isNearChatBottom(el);
+    const layoutChanged = measuredClientHeightRef.current > 0
+      && (el.scrollHeight !== measuredScrollHeightRef.current
+        || el.clientHeight !== measuredClientHeightRef.current);
+    // A queued layout scroll can arrive before ResizeObserver's frame. It must
+    // not revoke following while newly rendered content is still being measured.
+    if (!near && followingRef.current && layoutChanged) {
+      setAtBottom(false);
+      scheduleResize();
+      return;
+    }
     setFollowing(near);
     setAtBottom(near);
     if (near) updateReplySpace();
@@ -216,7 +229,7 @@ export function useChatScrollViewport({
     if (el.scrollTop < 100 && !near && hasMore && !loadingMore) {
       void loadMoreMessages();
     }
-  }, [setFollowing, hasMore, loadingMore, loadMoreMessages, updateReplySpace]);
+  }, [setFollowing, hasMore, loadingMore, loadMoreMessages, updateReplySpace, scheduleResize]);
 
   const scrollToBottom = useCallback(
     (smooth = true) => {

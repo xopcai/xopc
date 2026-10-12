@@ -1,5 +1,6 @@
 import { useCallback, useMemo } from 'react';
 
+import { NumberInput } from '@/components/ui/number-input';
 import { SecretInput } from '@/components/ui/secret-input';
 import { cn } from '@/lib/cn';
 import { DEFAULT_SECRET_INPUT_LABELS } from '@/lib/secret-input-labels';
@@ -161,7 +162,7 @@ function NumberField({
   return (
     <div className="flex flex-col gap-1.5">
       {desc ? <label className="text-xs text-fg-muted">{desc}</label> : null}
-      <input
+      <NumberInput
         type="number"
         className="ui-input h-9 rounded-md border border-edge bg-surface-base px-2.5 text-sm text-fg"
         value={Number.isFinite(value) ? value : 0}
