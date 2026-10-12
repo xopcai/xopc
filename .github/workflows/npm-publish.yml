@@ -70,6 +70,8 @@ jobs:
           mkdir -p release-package
           pnpm pack --out release-package/xopc.tgz
           echo "sha256=$(sha256sum release-package/xopc.tgz | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+      - name: Test a clean npm install and gateway startup
+        run: pnpm run release:smoke-package release-package/xopc.tgz
       - uses: actions/upload-artifact@v7
         with:
           name: npm-package-${{ github.sha }}

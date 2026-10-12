@@ -2,6 +2,7 @@ import { parseUserTurnDocument, userTurnDocumentRefIds } from '@xopcai/gateway-c
 import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState, type Dispatch, type SetStateAction, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
+import { useSideChatStore } from '@/stores/side-chat-store';
 import { useMediaQuery } from '@/lib/use-media-query';
 import { ConnectionActionBar } from '../connections/connection-action-bar';
 import { MAX_CHAT_ATTACHMENTS } from '@/features/chat/attachments/attachment-utils';
@@ -214,6 +215,15 @@ export const ChatComposer = memo(function ChatComposer({
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const lastLoadedEditFollowUpIdRef = useRef<string | null>(null);
   const busyRef = useRef(false);
+  const [queueingEnabled, setQueueingEnabled] = useState(() => {
+    try { return localStorage.getItem('xopc:follow-up-queueing') !== 'off'; } catch { return true; }
+  });
+  const toggleQueueing = useCallback(() => {
+    setQueueingEnabled((enabled) => !enabled);
+  }, []);
+  useEffect(() => {
+    try { localStorage.setItem('xopc:follow-up-queueing', queueingEnabled ? 'on' : 'off'); } catch { /* ignore */ }
+  }, [queueingEnabled]);
   const [reviewOpen, setReviewOpen] = useState(false);
   const [workspaceTrustPrompt, setWorkspaceTrustPrompt] = useState<WorkspaceTrustState | null>(null);
   const [workspaceTrustDismissedFor, setWorkspaceTrustDismissedFor] = useState<string | null>(null);
@@ -561,6 +571,16 @@ export const ChatComposer = memo(function ChatComposer({
     onUserTextCommitted,
   });
 
+  const submitFollowUp = useCallback((interrupt = !queueingEnabled) => actions.flushSteeringDraft(interrupt),
+    [actions.flushSteeringDraft, queueingEnabled]);
+
+  const openFollowUpInSideChat = useCallback((item: PendingFollowUp, preview: string) => {
+    if (!conversationId || conversationId === 'new') return;
+    useSideChatStore.getState().requestCreate(conversationId, [{
+      id: item.id, type: 'text', text: preview, label: m.chat.followUpQueueHeading,
+    }]);
+  }, [conversationId, m.chat.followUpQueueHeading]);
+
   useLayoutEffect(() => {
     if (!editingFollowUpId) {
       if (lastLoadedEditFollowUpIdRef.current) {
@@ -612,7 +632,7 @@ export const ChatComposer = memo(function ChatComposer({
     send: actions.send,
     runBusy,
     pendingFollowUpsCount: pendingFollowUps.length,
-    flushSteeringDraft: actions.flushSteeringDraft,
+    flushSteeringDraft: submitFollowUp,
     interruptDraft: actions.interruptDraft,
     editingFollowUpId,
     onCancelEditFollowUp,
@@ -719,7 +739,20 @@ export const ChatComposer = memo(function ChatComposer({
             onReorder={onPendingFollowUpReorder}
             onSteer={onPendingFollowUpSteer}
             steeringBusyId={steeringFollowUpId}
+            queueingEnabled={queueingEnabled}
+            onToggleQueueing={toggleQueueing}
+            onOpenSideChat={conversationId && conversationId !== 'new' ? openFollowUpInSideChat : undefined}
           />
+        </div>
+      ) : null}
+
+      {editingFollowUpId ? (
+        <div className="flex items-center justify-between gap-3 px-4 py-2 text-xs text-fg-muted">
+          <span>{m.chat.inputPlaceholderSteeringEdit}</span>
+          <button type="button" onClick={onCancelEditFollowUp}
+            className="shrink-0 rounded px-1 text-accent-fg hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
+            {m.chat.userMessageEditCancel}
+          </button>
         </div>
       ) : null}
 
@@ -842,7 +875,7 @@ export const ChatComposer = memo(function ChatComposer({
               placeholder ?? contextualPlaceholder ?? (runBusyState
                 ? editingFollowUpId
                   ? m.chat.inputPlaceholderSteeringEdit
-                  : m.chat.inputPlaceholderSteering
+                  : queueingEnabled ? m.chat.inputPlaceholderSteering : m.chat.inputPlaceholderImmediate
                 : m.chat.inputPlaceholder)
             }
             onWireInput={onComposerWireInput}
@@ -863,7 +896,9 @@ export const ChatComposer = memo(function ChatComposer({
           chat={m.chat}
           onStartVoiceInput={voice.startVoiceInput}
           onSend={actions.send}
-          onQueue={onAddPendingFollowUp ? actions.flushSteeringDraft : undefined}
+          onQueue={onAddPendingFollowUp ? submitFollowUp : undefined}
+          queueingEnabled={queueingEnabled}
+          onToggleQueueing={toggleQueueing}
           onDefer={onAddPendingFollowUp ? () => actions.flushSteeringDraft(false) : undefined}
           onAbort={onAbort}
           onInterrupt={actions.interruptDraft}
@@ -894,7 +929,9 @@ export const ChatComposer = memo(function ChatComposer({
               .finally(() => { preparingCallRef.current = false; });
           }}
           onSend={actions.send}
-          onQueue={onAddPendingFollowUp ? actions.flushSteeringDraft : undefined}
+          onQueue={onAddPendingFollowUp ? submitFollowUp : undefined}
+          queueingEnabled={queueingEnabled}
+          onToggleQueueing={toggleQueueing}
           onAbort={onAbort}
           onInterrupt={actions.interruptDraft}
           sessionModel={sessionModel}
