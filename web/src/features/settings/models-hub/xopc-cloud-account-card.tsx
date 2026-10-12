@@ -27,6 +27,11 @@ export interface XopcCloudAccountMessages {
   tokenUsage: string;
 }
 
+function formatCredits(micro: string): string {
+  const roundedMicro = ((BigInt(micro) + 500n) / 1000n) * 1000n;
+  return creditDecimal(String(roundedMicro));
+}
+
 async function fetchAccountSummary(): Promise<CloudAccountSummary> {
   const response = await fetchJson<{ ok: true; payload: CloudAccountSummary }>(
     apiUrl('/api/models/xopc-cloud/account-summary'),
@@ -69,7 +74,7 @@ export function XopcCloudAccountCard({ labels }: { labels: XopcCloudAccountMessa
 
   const number = new Intl.NumberFormat(locale);
   const usageSummary = labels.usageSummary
-    .replace('{{credits}}', creditDecimal(data.usage.chargedCreditMicro))
+    .replace('{{credits}}', formatCredits(data.usage.chargedCreditMicro))
     .replace('{{requests}}', number.format(data.usage.requests));
 
   return (
@@ -102,19 +107,19 @@ export function XopcCloudAccountCard({ labels }: { labels: XopcCloudAccountMessa
         <div>
           <p className="text-xs font-medium text-fg-subtle">{labels.availableCredits}</p>
           <p className="mt-1 text-2xl font-semibold tracking-tight text-fg">
-            {creditDecimal(data.balance.availableCreditMicro)}
+            {formatCredits(data.balance.availableCreditMicro)}
             <span className="ml-2 text-sm font-medium text-fg-muted">Credits</span>
           </p>
           {data.balance.availableCreditMicro === '0' ? (
             <p className="mt-1 text-sm font-medium text-danger">{labels.zeroBalance}</p>
           ) : null}
           <div className="mt-2 space-y-1 text-xs text-fg-muted">
-            <div>{labels.purchased}: {creditDecimal(data.balance.purchasedCreditMicro)} Credits</div>
-            <div>{labels.granted}: {creditDecimal(data.balance.grantedCreditMicro)} Credits</div>
-            <div>{labels.reserved}: {creditDecimal(String(BigInt(data.balance.usageReservedCreditMicro) + BigInt(data.balance.refundReservedCreditMicro)))} Credits</div>
+            <div>{labels.purchased}: {formatCredits(data.balance.purchasedCreditMicro)} Credits</div>
+            <div>{labels.granted}: {formatCredits(data.balance.grantedCreditMicro)} Credits</div>
+            <div>{labels.reserved}: {formatCredits(String(BigInt(data.balance.usageReservedCreditMicro) + BigInt(data.balance.refundReservedCreditMicro)))} Credits</div>
           </div>
           {data.balance.expiring[0] ? <p className="mt-2 text-xs text-amber-600 dark:text-amber-400">
-            {labels.expiring.replace('{{credits}}', creditDecimal(data.balance.expiring[0].creditMicro))
+            {labels.expiring.replace('{{credits}}', formatCredits(data.balance.expiring[0].creditMicro))
               .replace('{{date}}', new Date(data.balance.expiring[0].expiresAt).toLocaleDateString(locale))}
           </p> : null}
         </div>

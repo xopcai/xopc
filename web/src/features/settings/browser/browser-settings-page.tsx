@@ -2,9 +2,9 @@ import { Eye, Gauge, LockKeyhole, MousePointerClick } from 'lucide-react';
 import { useEffect, useRef, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
+import { SettingsAdvancedSection } from '@/features/settings/settings-advanced-section';
 import { NumberInput } from '@/components/ui/number-input';
 import { PopoverSelect } from '@/components/ui/popover-select';
-import { SettingsAdvancedGate } from '@/features/settings/settings-advanced-gate';
 import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
 
@@ -63,7 +63,9 @@ export function AgentBrowserSettingsPage() {
 
           {form.driverKind === 'playwright' ? <div className="space-y-4 rounded-lg bg-surface-inset p-4">
             <Toggle label={zh ? '无头模式' : 'Headless mode'} description={zh ? '后台运行，不显示浏览器窗口。关闭后可观察智能体的操作过程。' : 'Run in the background without a visible window. Turn off to watch the agent work.'} checked={form.headless} onChange={(headless) => vm.update({ headless })} />
-            <TextField label={zh ? 'Chromium 可执行文件（可选）' : 'Chromium executable (optional)'} description={zh ? '留空时使用由 xopc 安装的 Chromium。' : 'Leave empty to use Chromium installed by xopc.'} value={form.executablePath} onChange={(executablePath) => vm.update({ executablePath })} />
+            <SettingsAdvancedSection title={zh ? "自定义 Chromium" : "Custom Chromium"} summary={form.executablePath || (zh ? "使用 xopc 安装的 Chromium" : "Use Chromium installed by xopc")}>
+              <TextField label={zh ? 'Chromium 可执行文件（可选）' : 'Chromium executable (optional)'} description={zh ? '留空时使用由 xopc 安装的 Chromium。' : 'Leave empty to use Chromium installed by xopc.'} value={form.executablePath} onChange={(executablePath) => vm.update({ executablePath })} />
+            </SettingsAdvancedSection>
           </div> : null}
           {form.driverKind === 'cdp' ? <div className="rounded-lg bg-surface-inset p-4"><TextField label="CDP endpoint" description={zh ? '例如 http://127.0.0.1:9222。Chrome 需要开启 remote debugging。' : 'For example http://127.0.0.1:9222. Chrome must be started with remote debugging enabled.'} value={form.cdpEndpoint} onChange={(cdpEndpoint) => vm.update({ cdpEndpoint })} /></div> : null}
           {form.driverKind === 'remote' ? <div className="space-y-4 rounded-lg bg-surface-inset p-4">
@@ -73,7 +75,7 @@ export function AgentBrowserSettingsPage() {
           </div> : null}
         </Section>
 
-        <SettingsAdvancedGate>
+        <SettingsAdvancedSection title={zh ? "页面理解与执行限制" : "Observation and execution limits"} summary={zh ? "当前截图、页面大小和超时策略继续生效。" : "Current screenshot, page size and timeout policies remain active."}>
           <>
             <Section title={zh ? '页面理解' : 'Page understanding'} icon={<Eye className="size-4" />}>
               <Toggle label={zh ? '需要时附加截图' : 'Attach screenshots when needed'} checked={form.visualFallback} onChange={(visualFallback) => vm.update({ visualFallback })} />
@@ -83,13 +85,14 @@ export function AgentBrowserSettingsPage() {
             <Section title={zh ? '执行限制' : 'Execution limits'} icon={<Gauge className="size-4" />}>
               <div className="grid gap-4 sm:grid-cols-3"><NumberField label={zh ? '操作超时（毫秒）' : 'Action timeout (ms)'} min={1_000} max={120_000} step={1_000} value={form.actionTimeoutMs} onChange={(actionTimeoutMs) => vm.update({ actionTimeoutMs })} /><NumberField label={zh ? '会话超时（毫秒）' : 'Session timeout (ms)'} min={60_000} max={3_600_000} step={60_000} value={form.sessionTimeoutMs} onChange={(sessionTimeoutMs) => vm.update({ sessionTimeoutMs })} /><NumberField label={zh ? '批量步骤上限' : 'Sequence step limit'} min={1} max={10} value={form.maxSequenceLength} onChange={(maxSequenceLength) => vm.update({ maxSequenceLength })} /></div>
             </Section>
-
-            <Section title={zh ? '访问策略' : 'Access policies'} icon={<LockKeyhole className="size-4" />}>
-              <TextField label={zh ? '允许访问的私网主机' : 'Allowed private hosts'} description={zh ? '每行一个主机名或 IP，不支持通配符。' : 'One hostname or IP per line. Wildcards are not supported.'} multiline value={form.allowedPrivateHosts} onChange={(allowedPrivateHosts) => vm.update({ allowedPrivateHosts })} />
-              <div className="grid gap-4 sm:grid-cols-3"><Policy zh={zh} label={zh ? '跨域导航' : 'Cross-domain navigation'} value={form.crossDomainNavigation} onChange={(crossDomainNavigation) => vm.update({ crossDomainNavigation })} /><Policy zh={zh} label={zh ? '高影响动作' : 'Consequential actions'} value={form.consequentialActions} onChange={(consequentialActions) => vm.update({ consequentialActions })} /><Policy zh={zh} label={zh ? '文件上传' : 'File uploads'} value={form.uploads} onChange={(uploads) => vm.update({ uploads })} /></div>
-            </Section>
           </>
-        </SettingsAdvancedGate>
+        </SettingsAdvancedSection>
+        <Section title={zh ? '访问策略' : 'Access policies'} icon={<LockKeyhole className="size-4" />}>
+          <SettingsAdvancedSection title={zh ? "私网访问例外" : "Private network exceptions"} summary={form.allowedPrivateHosts || (zh ? "未设置私网例外" : "No private network exceptions")}>
+            <TextField label={zh ? '允许访问的私网主机' : 'Allowed private hosts'} description={zh ? '每行一个主机名或 IP，不支持通配符。' : 'One hostname or IP per line. Wildcards are not supported.'} multiline value={form.allowedPrivateHosts} onChange={(allowedPrivateHosts) => vm.update({ allowedPrivateHosts })} />
+          </SettingsAdvancedSection>
+          <div className="grid gap-4 sm:grid-cols-3"><Policy zh={zh} label={zh ? '跨域导航' : 'Cross-domain navigation'} value={form.crossDomainNavigation} onChange={(crossDomainNavigation) => vm.update({ crossDomainNavigation })} /><Policy zh={zh} label={zh ? '高影响动作' : 'Consequential actions'} value={form.consequentialActions} onChange={(consequentialActions) => vm.update({ consequentialActions })} /><Policy zh={zh} label={zh ? '文件上传' : 'File uploads'} value={form.uploads} onChange={(uploads) => vm.update({ uploads })} /></div>
+        </Section>
       </> : null}
     </AgentDefaultsRouteLayout>
   );

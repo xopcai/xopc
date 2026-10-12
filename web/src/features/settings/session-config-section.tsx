@@ -1,6 +1,7 @@
 import { Database } from 'lucide-react';
 import { useCallback, useMemo, useReducer, useRef } from 'react';
 
+import { SettingsAdvancedSection } from '@/features/settings/settings-advanced-section';
 import { NumberInput } from '@/components/ui/number-input';
 import { AutosaveStatus } from '@/components/ui/autosave-status';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -91,16 +92,18 @@ export function SessionConfigSection({ hasToken }: { hasToken: boolean }) {
     <SettingsFormSection onBlurCapture={autosave.onBlurCapture}>
       <SettingsFormSectionHeader icon={Database} title={t.title} subtitle={t.hint} trailing={<AutosaveStatus status={autosave.status} error={autosave.error} />} />
       <div className="grid gap-4 sm:grid-cols-2">
-        <div className="sm:col-span-2">
-          <label className="mb-1 block text-sm font-medium text-fg">{t.dmScope}</label>
-          <Select className={inputClassName()} value={form.dmScope} onChange={(e) => update({ dmScope: e.target.value as SessionDmScope })}>
-            <SelectOption value="main">{t.dmScopeMain}</SelectOption>
-            <SelectOption value="per-peer">{t.dmScopePerPeer}</SelectOption>
-            <SelectOption value="per-channel-peer">{t.dmScopePerChannelPeer}</SelectOption>
-            <SelectOption value="per-account-channel-peer">{t.dmScopePerAccountChannelPeer}</SelectOption>
-          </Select>
-          <p className="mt-1 text-xs text-fg-subtle">{t.dmScopeHint}</p>
-        </div>
+        <SettingsAdvancedSection title={t.dmScope} summary={form.dmScope}>
+          <div className="sm:col-span-2">
+            <label className="mb-1 block text-sm font-medium text-fg">{t.dmScope}</label>
+            <Select className={inputClassName()} value={form.dmScope} onChange={(e) => update({ dmScope: e.target.value as SessionDmScope })}>
+              <SelectOption value="main">{t.dmScopeMain}</SelectOption>
+              <SelectOption value="per-peer">{t.dmScopePerPeer}</SelectOption>
+              <SelectOption value="per-channel-peer">{t.dmScopePerChannelPeer}</SelectOption>
+              <SelectOption value="per-account-channel-peer">{t.dmScopePerAccountChannelPeer}</SelectOption>
+            </Select>
+            <p className="mt-1 text-xs text-fg-subtle">{t.dmScopeHint}</p>
+          </div>
+        </SettingsAdvancedSection>
         <div>
           <label className="mb-1 block text-sm font-medium text-fg">{t.pruneAfterDays}</label>
           <NumberInput allowEmpty
@@ -115,20 +118,22 @@ export function SessionConfigSection({ hasToken }: { hasToken: boolean }) {
             }}
           />
         </div>
-        <div>
-          <label className="mb-1 block text-sm font-medium text-fg">{t.maxEntries}</label>
-          <NumberInput allowEmpty
-            type="number"
-            min={1}
-            className={inputClassName()}
-            value={form.maxEntries ?? ''}
-            placeholder={t.unsetPlaceholder}
-            onChange={(e) => {
-              const raw = e.target.value.trim();
-              update({ maxEntries: raw === '' ? null : Math.max(1, Math.floor(Number(raw) || 1)) });
-            }}
-          />
-        </div>
+        <SettingsAdvancedSection title={t.maxEntries} summary={form.maxEntries ?? t.unsetPlaceholder}>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-fg">{t.maxEntries}</label>
+            <NumberInput allowEmpty
+              type="number"
+              min={1}
+              className={inputClassName()}
+              value={form.maxEntries ?? ''}
+              placeholder={t.unsetPlaceholder}
+              onChange={(e) => {
+                const raw = e.target.value.trim();
+                update({ maxEntries: raw === '' ? null : Math.max(1, Math.floor(Number(raw) || 1)) });
+              }}
+            />
+          </div>
+        </SettingsAdvancedSection>
       </div>
     </SettingsFormSection>
   );

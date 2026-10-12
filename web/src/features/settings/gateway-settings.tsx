@@ -12,6 +12,7 @@ import {
 import { useCallback, useMemo, useReducer, useRef, type ReactNode } from 'react';
 import useSWR from 'swr';
 
+import { SettingsAdvancedSection } from '@/features/settings/settings-advanced-section';
 import { NumberInput } from '@/components/ui/number-input';
 import { uiPatchReducer } from '@/lib/settings-form-draft';
 import { useSearchParams } from 'react-router-dom';
@@ -158,6 +159,7 @@ const initialGatewayUi: GatewayUi = {
 };
 
 export function GatewaySettingsPanel() {
+  const baseUrl = useGatewayStore((state) => state.baseUrl);
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
   const g = m.gatewaySettings;
@@ -496,77 +498,89 @@ export function GatewaySettingsPanel() {
         onCancel={() => dispatchUi({ type: 'patch', patch: { restartConfirmOpen: false } })}
       />
 
+      <GatewaySecurityAuditCard enabled={hasToken} refreshToken={auditRefreshToken} />
       <GatewaySettingsTabNav g={g} activeTab={activeTab} visibleTabs={visibleTabs} onChange={setActiveTab} />
 
       <GatewayTabPanel g={g} id="network" activeTab={activeTab}>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div>
-            <label className="mb-1 block text-sm font-medium text-fg" htmlFor="gateway-bind-mode">
-              {g.bindMode}
-            </label>
-            <Select
-              id="gateway-bind-mode"
-              className={inputClassName()}
-              value={form.bind}
-              onChange={(event) => updateBind(event.target.value as GatewaySettingsState['bind'])}
-            >
-              <SelectOption value="loopback">{g.bindLoopback}</SelectOption>
-              {showAdvanced ? (
-                <>
-                  <SelectOption value="lan">{g.bindLan}</SelectOption>
-                  <SelectOption value="auto">{g.bindAuto}</SelectOption>
-                  <SelectOption value="custom">{g.bindCustom}</SelectOption>
-                  <SelectOption value="tailnet">{g.bindTailnet}</SelectOption>
-                </>
-              ) : null}
-            </Select>
+        <section className="space-y-3 rounded-xl bg-surface-hover/20 p-4">
+          <h2 className="text-sm font-semibold text-fg">{language === 'zh' ? '当前服务连接' : 'Current service connection'}</h2>
+          <p className="break-all text-sm text-fg-muted">{baseUrl}</p>
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" variant="secondary" onClick={() => void mutate()}>{g.retry}</Button>
+            <Button type="button" variant="secondary" onClick={() => openTokenDialog()}>{g.updateToken}</Button>
+            <Button type="button" variant="secondary" onClick={() => dispatchUi({ type: 'patch', patch: { restartConfirmOpen: true } })}>{g.restartGatewayButton}</Button>
           </div>
-          {form.bind === 'custom' ? (
+        </section>
+        <SettingsAdvancedSection title={language === "zh" ? "服务监听配置" : "Service listener configuration"} summary={`${form.bind} · ${form.port}`}>
+          <div className="grid gap-3 sm:grid-cols-2">
             <div>
-              <label className="mb-1 block text-sm font-medium text-fg" htmlFor="gateway-custom-bind-host">
-                {g.customBindHost}
+              <label className="mb-1 block text-sm font-medium text-fg" htmlFor="gateway-bind-mode">
+                {g.bindMode}
               </label>
-              <input
-                id="gateway-custom-bind-host"
+              <Select
+                id="gateway-bind-mode"
+                className={inputClassName()}
+                value={form.bind}
+                onChange={(event) => updateBind(event.target.value as GatewaySettingsState['bind'])}
+              >
+                <SelectOption value="loopback">{g.bindLoopback}</SelectOption>
+                {showAdvanced ? (
+                  <>
+                    <SelectOption value="lan">{g.bindLan}</SelectOption>
+                    <SelectOption value="auto">{g.bindAuto}</SelectOption>
+                    <SelectOption value="custom">{g.bindCustom}</SelectOption>
+                    <SelectOption value="tailnet">{g.bindTailnet}</SelectOption>
+                  </>
+                ) : null}
+              </Select>
+            </div>
+            {form.bind === 'custom' ? (
+              <div>
+                <label className="mb-1 block text-sm font-medium text-fg" htmlFor="gateway-custom-bind-host">
+                  {g.customBindHost}
+                </label>
+                <input
+                  id="gateway-custom-bind-host"
+                  className={cn(inputClassName(), 'font-mono text-xs')}
+                  value={form.customBindHost}
+                  onChange={(event) => updateCustomBindHost(event.target.value)}
+                  placeholder={g.customBindHostPlaceholder}
+                  autoComplete="off"
+                />
+              </div>
+            ) : null}
+            <div>
+              <label className="mb-1 block text-sm font-medium text-fg" htmlFor="gateway-listen-port">
+                {g.listenPort}
+              </label>
+              <NumberInput
+                id="gateway-listen-port"
+                type="number"
+                min={1}
+                max={65535}
                 className={cn(inputClassName(), 'font-mono text-xs')}
-                value={form.customBindHost}
-                onChange={(event) => updateCustomBindHost(event.target.value)}
-                placeholder={g.customBindHostPlaceholder}
-                autoComplete="off"
+                value={form.port}
+                onChange={(event) => {
+                  const nextPort = Number(event.target.value);
+                  updatePort(
+                    Number.isFinite(nextPort)
+                      ? Math.max(1, Math.min(65535, Math.floor(nextPort)))
+                      : form.port,
+                  );
+                }}
               />
             </div>
-          ) : null}
-          <div>
-            <label className="mb-1 block text-sm font-medium text-fg" htmlFor="gateway-listen-port">
-              {g.listenPort}
-            </label>
-            <NumberInput
-              id="gateway-listen-port"
-              type="number"
-              min={1}
-              max={65535}
-              className={cn(inputClassName(), 'font-mono text-xs')}
-              value={form.port}
-              onChange={(event) => {
-                const nextPort = Number(event.target.value);
-                updatePort(
-                  Number.isFinite(nextPort)
-                    ? Math.max(1, Math.min(65535, Math.floor(nextPort)))
-                    : form.port,
-                );
-              }}
-            />
           </div>
-        </div>
 
-        <SettingsAdvancedGate>
-          <CorsOriginsField
-            g={g}
-            origins={form.corsOrigins}
-            candidates={corsCandidates.data ?? []}
-            onChange={updateCorsOrigins}
-          />
-        </SettingsAdvancedGate>
+          <SettingsAdvancedGate>
+            <CorsOriginsField
+              g={g}
+              origins={form.corsOrigins}
+              candidates={corsCandidates.data ?? []}
+              onChange={updateCorsOrigins}
+            />
+          </SettingsAdvancedGate>
+        </SettingsAdvancedSection>
       </GatewayTabPanel>
 
       <GatewayTabPanel g={g} id="access" activeTab={activeTab}>
@@ -588,7 +602,7 @@ export function GatewaySettingsPanel() {
           >
             <SelectOption value="token">{g.authModeToken}</SelectOption>
             <SelectOption value="password">{g.authModePassword}</SelectOption>
-            {showAdvanced ? (
+            {showAdvanced || form.auth.mode === "trusted-proxy" || form.auth.mode === "none" ? (
               <>
                 <SelectOption value="trusted-proxy">{g.authModeTrustedProxy}</SelectOption>
                 <SelectOption value="none">{g.authModeNoneLabel}</SelectOption>
@@ -661,8 +675,8 @@ export function GatewaySettingsPanel() {
             className={inputClassName()}
           >
             <SelectOption value="stable">{g.channelStable}</SelectOption>
-            <SelectOption value="beta">{g.channelBeta}</SelectOption>
-            <SelectOption value="dev">{g.channelDev}</SelectOption>
+            {showAdvanced || form.updateChannel === "beta" ? <SelectOption value="beta">{g.channelBeta}</SelectOption> : null}
+            {showAdvanced || form.updateChannel === "dev" ? <SelectOption value="dev">{g.channelDev}</SelectOption> : null}
           </Select>
         </div>
 
@@ -776,7 +790,7 @@ export function GatewaySettingsPanel() {
       </GatewayTabPanel>
 
       <GatewayTabPanel g={g} id="security" activeTab={activeTab}>
-        <GatewaySecurityAuditCard enabled={hasToken} refreshToken={auditRefreshToken} />
+
         <GatewaySecurityFields
           g={g}
           form={form}

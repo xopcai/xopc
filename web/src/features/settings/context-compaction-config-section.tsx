@@ -2,6 +2,7 @@ import { Minimize2, Plus, X } from 'lucide-react';
 import { useCallback, useMemo, useReducer, useRef, useState } from 'react';
 import useSWR from 'swr';
 
+import { SettingsAdvancedSection } from '@/features/settings/settings-advanced-section';
 import { NumberInput } from '@/components/ui/number-input';
 import { Button } from '@/components/ui/button';
 import { AutosaveStatus } from '@/components/ui/autosave-status';
@@ -370,130 +371,132 @@ export function ContextCompactionConfigSection({ hasToken }: { hasToken: boolean
           </div>
         </div>
 
-        <div className="rounded-xl bg-surface-base/45 p-4">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div>
-              <div className="text-sm font-medium text-fg">{t.budgetPreview}</div>
-              <p className="mt-0.5 text-xs text-fg-subtle">{t.budgetPreviewHint}</p>
+        <SettingsAdvancedSection title={t.advancedTitle} summary={activePreset === "custom" ? t.presetCustom : t.presetHint}>
+          <div className="rounded-xl bg-surface-base/45 p-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <div className="text-sm font-medium text-fg">{t.budgetPreview}</div>
+                <p className="mt-0.5 text-xs text-fg-subtle">{t.budgetPreviewHint}</p>
+              </div>
+              <span className="rounded-full bg-surface-panel px-2.5 py-1 font-mono text-xs text-fg-muted">
+                {t.previewModel128k}
+              </span>
             </div>
-            <span className="rounded-full bg-surface-panel px-2.5 py-1 font-mono text-xs text-fg-muted">
-              {t.previewModel128k}
-            </span>
+            <div className="mt-4 space-y-3">
+              <div>
+                <div className="mb-1 flex justify-between gap-3 text-xs text-fg-muted">
+                  <span>{t.compactionTrigger}</span>
+                  <span className="font-mono text-fg">{formatTokens(thresholdTokens)}</span>
+                </div>
+                <div className="h-2 overflow-hidden rounded-full bg-surface-active">
+                  <div className="h-full rounded-full bg-accent" style={{ width: `${thresholdWidth}%` }} />
+                </div>
+              </div>
+              <div>
+                <div className="mb-1 flex justify-between gap-3 text-xs text-fg-muted">
+                  <span>{t.hardInputLimit}</span>
+                  <span className="font-mono text-fg">{formatTokens(hardLimitTokens)}</span>
+                </div>
+                <div className="h-2 overflow-hidden rounded-full bg-surface-active">
+                  <div className="h-full rounded-full bg-fg-subtle" style={{ width: `${hardLimitWidth}%` }} />
+                </div>
+              </div>
+            </div>
+            <p className="mt-3 text-xs text-fg-subtle">{t.budgetFormula}</p>
           </div>
-          <div className="mt-4 space-y-3">
-            <div>
-              <div className="mb-1 flex justify-between gap-3 text-xs text-fg-muted">
-                <span>{t.compactionTrigger}</span>
-                <span className="font-mono text-fg">{formatTokens(thresholdTokens)}</span>
-              </div>
-              <div className="h-2 overflow-hidden rounded-full bg-surface-active">
-                <div className="h-full rounded-full bg-accent" style={{ width: `${thresholdWidth}%` }} />
-              </div>
-            </div>
-            <div>
-              <div className="mb-1 flex justify-between gap-3 text-xs text-fg-muted">
-                <span>{t.hardInputLimit}</span>
-                <span className="font-mono text-fg">{formatTokens(hardLimitTokens)}</span>
-              </div>
-              <div className="h-2 overflow-hidden rounded-full bg-surface-active">
-                <div className="h-full rounded-full bg-fg-subtle" style={{ width: `${hardLimitWidth}%` }} />
-              </div>
-            </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <NumberField
+              id="compaction-trigger-threshold"
+              label={t.triggerThreshold}
+              hint={t.triggerThresholdHint}
+              value={Number((form.triggerThreshold * 100).toFixed(2))}
+              min={10}
+              max={98}
+              step={0.1}
+              onChange={(value) => update({ triggerThreshold: value / 100 })}
+            />
+            <NumberField
+              id="compaction-reserve-tokens"
+              label={t.reserveTokens}
+              hint={t.reserveTokensHint.replace('{{tokens}}', formatTokens(form.reserveTokens))}
+              value={form.reserveTokens}
+              min={1_024}
+              step={1_024}
+              onChange={(reserveTokens) => update({ reserveTokens: Math.floor(reserveTokens) })}
+            />
+            <NumberField
+              id="compaction-recent-turns"
+              label={t.recentTurnsPreserve}
+              hint={t.recentTurnsPreserveHint}
+              value={form.recentTurnsPreserve}
+              min={1}
+              max={12}
+              onChange={(recentTurnsPreserve) => update({ recentTurnsPreserve: Math.floor(recentTurnsPreserve) })}
+            />
+            <NumberField
+              id="compaction-keep-recent-tokens"
+              label={t.keepRecentTokens}
+              hint={t.keepRecentTokensHint.replace('{{tokens}}', formatTokens(form.keepRecentTokens))}
+              value={form.keepRecentTokens}
+              min={1_000}
+              step={1_000}
+              onChange={(keepRecentTokens) => update({ keepRecentTokens: Math.floor(keepRecentTokens) })}
+            />
           </div>
-          <p className="mt-3 text-xs text-fg-subtle">{t.budgetFormula}</p>
-        </div>
 
-        <div className="grid gap-4 sm:grid-cols-2">
-          <NumberField
-            id="compaction-trigger-threshold"
-            label={t.triggerThreshold}
-            hint={t.triggerThresholdHint}
-            value={Number((form.triggerThreshold * 100).toFixed(2))}
-            min={10}
-            max={98}
-            step={0.1}
-            onChange={(value) => update({ triggerThreshold: value / 100 })}
-          />
-          <NumberField
-            id="compaction-reserve-tokens"
-            label={t.reserveTokens}
-            hint={t.reserveTokensHint.replace('{{tokens}}', formatTokens(form.reserveTokens))}
-            value={form.reserveTokens}
-            min={1_024}
-            step={1_024}
-            onChange={(reserveTokens) => update({ reserveTokens: Math.floor(reserveTokens) })}
-          />
-          <NumberField
-            id="compaction-recent-turns"
-            label={t.recentTurnsPreserve}
-            hint={t.recentTurnsPreserveHint}
-            value={form.recentTurnsPreserve}
-            min={1}
-            max={12}
-            onChange={(recentTurnsPreserve) => update({ recentTurnsPreserve: Math.floor(recentTurnsPreserve) })}
-          />
-          <NumberField
-            id="compaction-keep-recent-tokens"
-            label={t.keepRecentTokens}
-            hint={t.keepRecentTokensHint.replace('{{tokens}}', formatTokens(form.keepRecentTokens))}
-            value={form.keepRecentTokens}
-            min={1_000}
-            step={1_000}
-            onChange={(keepRecentTokens) => update({ keepRecentTokens: Math.floor(keepRecentTokens) })}
-          />
-        </div>
+          {retentionWarning ? (
+            <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-950 dark:bg-amber-950/40 dark:text-amber-100">
+              {t.retentionWarning}
+            </p>
+          ) : null}
 
-        {retentionWarning ? (
-          <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-950 dark:bg-amber-950/40 dark:text-amber-100">
-            {t.retentionWarning}
-          </p>
-        ) : null}
-
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div>
-            <label className="mb-1 block text-sm font-medium text-fg">{t.summaryModel}</label>
-            <div className="flex min-w-0 gap-2">
-              <ModelSelector
-                value={form.model ?? ''}
-                disabled={!form.enabled}
-                placeholder={t.summaryModelInherited}
-                searchPlaceholder={t.summaryModelSearch}
-                noMatches={t.summaryModelNoMatches}
-                models={configuredModels}
-                modelsLoading={modelsLoading}
-                className="min-w-0 flex-1 justify-between"
-                contentAlign="start"
-                showProviderSettingsFooter
-                onChange={(model) => update({ model })}
-              />
-              {form.model ? (
-                <Button type="button" variant="secondary" onClick={() => update({ model: undefined })}>
-                  {t.summaryModelUseSession}
-                </Button>
-              ) : null}
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-sm font-medium text-fg">{t.summaryModel}</label>
+              <div className="flex min-w-0 gap-2">
+                <ModelSelector
+                  value={form.model ?? ''}
+                  disabled={!form.enabled}
+                  placeholder={t.summaryModelInherited}
+                  searchPlaceholder={t.summaryModelSearch}
+                  noMatches={t.summaryModelNoMatches}
+                  models={configuredModels}
+                  modelsLoading={modelsLoading}
+                  className="min-w-0 flex-1 justify-between"
+                  contentAlign="start"
+                  showProviderSettingsFooter
+                  onChange={(model) => update({ model })}
+                />
+                {form.model ? (
+                  <Button type="button" variant="secondary" onClick={() => update({ model: undefined })}>
+                    {t.summaryModelUseSession}
+                  </Button>
+                ) : null}
+              </div>
+              <p className="mt-1 text-xs text-fg-subtle">{t.summaryModelHint}</p>
             </div>
-            <p className="mt-1 text-xs text-fg-subtle">{t.summaryModelHint}</p>
+            <CheckSetting
+              label={t.qualityGuard}
+              hint={t.qualityGuardHint}
+              checked={form.qualityGuard}
+              onChange={(qualityGuard) => update({ qualityGuard })}
+            />
+            <CheckSetting
+              label={t.gapAudit}
+              hint={t.gapAuditHint}
+              checked={form.gapAudit}
+              onChange={(gapAudit) => update({ gapAudit })}
+            />
           </div>
-          <CheckSetting
-            label={t.qualityGuard}
-            hint={t.qualityGuardHint}
-            checked={form.qualityGuard}
-            onChange={(qualityGuard) => update({ qualityGuard })}
-          />
-          <CheckSetting
-            label={t.gapAudit}
-            hint={t.gapAuditHint}
-            checked={form.gapAudit}
-            onChange={(gapAudit) => update({ gapAudit })}
-          />
-        </div>
 
-        {!form.qualityGuard ? (
-          <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-950 dark:bg-amber-950/40 dark:text-amber-100">
-            {t.qualityGuardWarning}
-          </p>
-        ) : null}
+          {!form.qualityGuard ? (
+            <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-950 dark:bg-amber-950/40 dark:text-amber-100">
+              {t.qualityGuardWarning}
+            </p>
+          ) : null}
 
+        </SettingsAdvancedSection>
         <SettingsAdvancedGate>
           <div className="space-y-5 rounded-xl bg-surface-base/45 p-4">
             <div>

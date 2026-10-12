@@ -1,6 +1,7 @@
 import { ChevronRight, Globe, Network, Server, Shield, Terminal } from 'lucide-react';
 import useSWR from 'swr';
 
+import { SettingsAdvancedSection } from '@/features/settings/settings-advanced-section';
 import { RemoteAccessDocsLink } from '@/features/remote-access/remote-access-docs-link';
 import { fetchExposureStatus } from '@/features/remote-access/remote-access-api';
 import { messages } from '@/i18n/messages';
@@ -109,18 +110,20 @@ export function RemoteAccessGuideTab({ onOpenTab }: { onOpenTab: (tab: RemoteAcc
             description={g.publicCardDesc}
             onOpen={() => onOpenTab('public')}
           />
-          <MethodCard
-            icon={Shield}
-            title={g.reverseProxyCardTitle}
-            description={g.reverseProxyCardDesc}
-            onOpen={() => onOpenTab('reverse-proxy')}
-          />
-          <MethodCard
-            icon={Terminal}
-            title={g.sshCardTitle}
-            description={g.sshCardDesc}
-            onOpen={() => onOpenTab('ssh')}
-          />
+          <SettingsAdvancedSection title={ra.advanced.proxyTitle} summary={ra.advanced.proxyBody}>
+            <MethodCard
+              icon={Shield}
+              title={g.reverseProxyCardTitle}
+              description={g.reverseProxyCardDesc}
+              onOpen={() => onOpenTab('reverse-proxy')}
+            />
+            <MethodCard
+              icon={Terminal}
+              title={g.sshCardTitle}
+              description={g.sshCardDesc}
+              onOpen={() => onOpenTab('ssh')}
+            />
+          </SettingsAdvancedSection>
           <MethodCard
             icon={Server}
             title={g.lanCardTitle}

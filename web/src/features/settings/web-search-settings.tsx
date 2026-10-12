@@ -1,6 +1,7 @@
 import { Cloud, Plus, Plug, ShieldCheck, SlidersHorizontal, Trash2 } from 'lucide-react';
 import { useCallback, useMemo, useReducer, useRef, type ReactNode } from 'react';
 
+import { SettingsAdvancedSection } from '@/features/settings/settings-advanced-section';
 import { NumberInput } from '@/components/ui/number-input';
 import { Button } from '@/components/ui/button';
 import { AutosaveStatus } from '@/components/ui/autosave-status';
@@ -14,7 +15,6 @@ import {
   type SearchProviderRow,
   type WebSearchSettingsState,
 } from '@/features/settings/web-search-config-api';
-import { SettingsAdvancedGate } from '@/features/settings/settings-advanced-gate';
 import { SettingsFormSection, SettingsFormSectionHeader } from '@/features/settings/settings-form-section';
 import { SettingsPanelSkeleton } from '@/features/settings/settings-loading-skeleton';
 import { selectFieldMaxWidthClass, selectTriggerClass, settingsInputFocusClass } from '@/lib/form-field-width';
@@ -235,20 +235,22 @@ export function WebSearchSettingsPanel() {
               <SelectOption value="global">{w.regionGlobal}</SelectOption>
             </Select>
           </Field>
-          <Field label={w.maxResultsLabel} description={w.maxResultsDesc}>
-            <NumberInput
-              type="number"
-              min={1}
-              max={50}
-              className={inputClassName()}
-              value={form.maxResults}
-              onChange={(e) => update({ maxResults: Math.max(1, Math.min(50, Number(e.target.value) || 5)) })}
-            />
-          </Field>
+          <SettingsAdvancedSection title={w.maxResultsLabel} summary={form.maxResults}>
+            <Field label={w.maxResultsLabel} description={w.maxResultsDesc}>
+              <NumberInput
+                type="number"
+                min={1}
+                max={50}
+                className={inputClassName()}
+                value={form.maxResults}
+                onChange={(e) => update({ maxResults: Math.max(1, Math.min(50, Number(e.target.value) || 5)) })}
+              />
+            </Field>
+          </SettingsAdvancedSection>
         </div>
       </SettingsFormSection>
 
-      <SettingsAdvancedGate>
+      <details className="rounded-xl bg-surface-hover/20 p-4"><summary className="cursor-pointer text-sm font-medium text-fg">{w.sectionBlocklist} · {form.blocklistEnabled ? form.blocklistDomains.length : 0}</summary>
         <SettingsFormSection>
           <SettingsFormSectionHeader
             icon={ShieldCheck}
@@ -286,7 +288,7 @@ export function WebSearchSettingsPanel() {
             ) : null}
           </div>
         </SettingsFormSection>
-      </SettingsAdvancedGate>
+      </details>
 
     </div>
   );

@@ -1,6 +1,7 @@
 import { Search, SlidersHorizontal } from 'lucide-react';
 import { useMemo, useState } from 'react';
 
+import { SettingsAdvancedSection } from '@/features/settings/settings-advanced-section';
 import { NumberInput } from '@/components/ui/number-input';
 import { Button } from '@/components/ui/button';
 import type {
@@ -9,6 +10,7 @@ import type {
   ToolPolicy,
 } from '@/features/settings/types/agent-gateway';
 import { cn } from '@/lib/cn';
+import { useShowAdvancedSettings } from '@/stores/settings-mode-store';
 import { isComputerUseAvailable } from '@/lib/electron-env';
 
 type ToolFilter = 'all' | ToolPolicy['mode'];
@@ -29,6 +31,7 @@ export function AgentDefaultsToolsPanel({
   builtinTools: BuiltinToolSummary[];
   zh: boolean;
 }) {
+  const showAdvanced = useShowAdvancedSettings();
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<ToolFilter>('all');
   const [expandedTool, setExpandedTool] = useState<string>();
@@ -82,6 +85,7 @@ export function AgentDefaultsToolsPanel({
         <label className="relative block w-full sm:w-72"><span className="sr-only">{zh ? '搜索工具' : 'Search tools'}</span><Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-fg-subtle" /><input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder={zh ? '搜索工具' : 'Search tools'} className="w-full rounded-lg border border-edge bg-surface-panel py-2 pl-9 pr-3 text-sm text-fg outline-none focus:border-accent" /></label>
       </div>
 
+      <SettingsAdvancedSection title={zh ? "工具调用限制" : "Tool call limits"} summary={zh ? "每个工具的调用次数和超时限制继续生效；授权可在下方直接修改。" : "Call and timeout limits remain active; edit permissions below."}>{null}</SettingsAdvancedSection>
       <div className="mt-4 flex max-h-[38rem] flex-col gap-1 overflow-y-auto rounded-xl bg-surface-base/45 p-1 [&>*]:rounded-lg [&>*]:bg-surface-panel/55">
         {visibleTools.map((id) => {
           const policy = draft.tools[id] ?? { mode: 'allow' as const };
@@ -102,10 +106,10 @@ export function AgentDefaultsToolsPanel({
                   <div className="flex rounded-lg bg-surface-base p-1">
                     {(['allow', 'ask', 'deny'] as const).map((mode) => <button key={mode} type="button" onClick={() => updateTool(id, { mode })} className={cn('rounded-md px-2.5 py-1 text-xs font-medium capitalize', policy.mode === mode ? 'bg-accent text-on-accent' : 'text-fg-muted hover:text-fg')}>{mode === 'allow' ? (zh ? '允许' : 'Allow') : mode === 'ask' ? (zh ? '询问' : 'Ask') : (zh ? '禁用' : 'Deny')}</button>)}
                   </div>
-                  <Button variant="ghost" className="px-2 py-1" aria-label={zh ? `${id} 调用限制` : `${id} call limits`} onClick={() => setExpandedTool(expanded ? undefined : id)}><SlidersHorizontal className="size-4" /></Button>
+                  {showAdvanced ? <Button variant="ghost" className="px-2 py-1" aria-label={zh ? `${id} 调用限制` : `${id} call limits`} onClick={() => setExpandedTool(expanded ? undefined : id)}><SlidersHorizontal className="size-4" /></Button> : null}
                 </div>
               </div>
-              {expanded ? (
+              {expanded && showAdvanced ? (
                 <div className="mt-3 grid gap-3 rounded-lg bg-surface-base p-3 sm:grid-cols-2">
                   <label className="block text-xs font-medium text-fg-muted">{zh ? '每轮最多调用次数' : 'Maximum calls per turn'}<NumberInput allowEmpty type="number" min={1} value={policy.maxCallsPerTurn ?? ''} placeholder={zh ? '不限制' : 'Unlimited'} onChange={(event) => updateTool(id, { maxCallsPerTurn: positiveInt(event.target.value) })} className="mt-2 w-full rounded-lg border border-edge bg-surface-panel px-3 py-2 text-sm text-fg outline-none focus:border-accent" /></label>
                   <label className="block text-xs font-medium text-fg-muted">{zh ? '单次超时（毫秒）' : 'Call timeout (ms)'}<NumberInput allowEmpty type="number" min={1} value={policy.timeoutMs ?? ''} placeholder={zh ? '使用系统默认值' : 'Use system default'} onChange={(event) => updateTool(id, { timeoutMs: positiveInt(event.target.value) })} className="mt-2 w-full rounded-lg border border-edge bg-surface-panel px-3 py-2 text-sm text-fg outline-none focus:border-accent" /></label>
