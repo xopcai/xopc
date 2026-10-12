@@ -192,6 +192,25 @@ describe('VoiceRealtimeRuntime playback over WebSocket', () => {
     await vi.waitFor(() => expect(events.filter((event) => event.type === 'session.pong')).toHaveLength(pongs + 1));
   }
 
+  it('streams a persisted personal reply over the live call without another Agent run', async () => {
+    const { delegate } = await start(true, async () => {}, false);
+    const reply = { conversationId: 'agent:main:webchat:default:direct:voice', deliveryId: 'reply:result-1', text: 'Your result is ready.' };
+    const delivery = runtime.offerReply(reply);
+    await vi.waitFor(() => expect(frames.reduce((sum, bytes) => sum + bytes, 0)).toBe(96_000));
+    const created = events.find(event => event.type === 'response.created');
+    if (created?.type !== 'response.created') throw new Error('Personal reply was not created');
+    const id = created.payload.responseId;
+    expect(delegate).not.toHaveBeenCalled();
+    send('response.audio.played', { responseId: id, playedDurationMs: 2_000 });
+    await vi.waitFor(() => expect(frames.reduce((sum, bytes) => sum + bytes, 0)).toBe(192_000));
+    send('response.audio.played', { responseId: id, playedDurationMs: 4_000 });
+    expect(await delivery).toBe(true);
+    await roundTrip();
+    expect(await runtime.offerReply(reply)).toBe(true);
+    expect(events.filter(event => event.type === 'response.created')).toHaveLength(1);
+    expect(events).toContainEqual(expect.objectContaining({ type: 'response.text.delta', payload: { responseId: id, delta: reply.text } }));
+  });
+
   it('bounds fast output and resumes without loss as playback is acknowledged', async () => {
     await start();
     await roundTrip();

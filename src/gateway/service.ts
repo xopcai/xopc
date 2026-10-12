@@ -941,7 +941,14 @@ export class GatewayService {
     };
     await new TaskResultDeliveryService().drain(notify);
     // Reply leases bound concurrency without delaying the next artifact dispatch.
-    void new PersonalReplyComposer().drain(notify, conversationId => !this.agentRunner.hasActiveRun(conversationId)
+    void new PersonalReplyComposer().drain(async (conversationId, deliveryId) => {
+      const reply = personalReplyNotification(conversationId, deliveryId);
+      notify(conversationId, deliveryId);
+      if (reply && typeof reply.text === 'string' && reply.text.trim() && this.voiceRealtime.hasConversation(conversationId)) {
+        const delivered = await this.voiceRealtime.offerReply({ conversationId, deliveryId, text: reply.text });
+        if (!delivered) throw new Error('Personal voice reply deferred');
+      }
+    }, conversationId => !this.agentRunner.hasActiveRun(conversationId)
       && !this.agentRunner.inputs.isAcceptingInput(conversationId)
       && (!this.voiceRealtime.hasConversation(conversationId) || this.voiceRealtime.canPublishReply(conversationId))).catch(err => {
       log.error({ err, phase: 'task_result_reply' }, 'Task result reply delivery failed');

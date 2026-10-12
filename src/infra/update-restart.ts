@@ -24,6 +24,7 @@ export type UpdateRestartResult = {
   ok: boolean;
   mode: 'in-process' | 'daemon' | 'unmanaged' | 'skipped' | 'disabled' | 'failed';
   message?: string;
+  warning?: string;
 };
 
 export type InProcessRestartTrigger = () => { ok: boolean; mode?: string; message?: string };
@@ -32,6 +33,14 @@ export function isRunningInsideGatewayService(
   env: Record<string, string | undefined> = process.env,
 ): boolean {
   return env.XOPC_SERVICE_MARKER?.trim() === '1';
+}
+
+/** Load platform modules before the installer replaces files used by this process. */
+export async function prepareGatewayRestart(shouldRestart?: boolean): Promise<GatewayService | undefined> {
+  if (shouldRestart === false || !isRestartEnabled(loadConfig(resolveConfigPath()))) {
+    return undefined;
+  }
+  return resolveGatewayService();
 }
 
 function resolveGatewayPort(configPath?: string): number {
@@ -67,30 +76,36 @@ async function resolveRestartPort(service: GatewayService): Promise<number> {
 }
 
 async function waitForGatewayHealth(port: number, expectedVersion?: string): Promise<boolean> {
+  const config = loadConfig(resolveConfigPath());
+  const credential = process.env.XOPC_GATEWAY_TOKEN || process.env.XOPC_GATEWAY_PASSWORD ||
+    config.gateway?.auth?.token || config.gateway?.auth?.password;
   for (let attempt = 0; attempt < DEFAULT_HEALTH_ATTEMPTS; attempt += 1) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 1500);
     try {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 1500);
       const response = await fetch(`http://127.0.0.1:${port}/api/health`, {
         method: 'GET',
         signal: controller.signal,
       });
-      clearTimeout(timeout);
-      if (!response.ok) {
-        await new Promise((r) => setTimeout(r, DEFAULT_HEALTH_DELAY_MS));
-        continue;
-      }
+      if (!response.ok) throw new Error('Gateway health unavailable');
+      const health = await response.json() as { ready?: boolean; status?: string };
+      if (health.ready !== true || health.status !== 'ok') throw new Error('Gateway is still starting');
       if (expectedVersion) {
-        const body = (await response.json()) as { version?: string };
-        if (body.version && body.version !== expectedVersion) {
-          await new Promise((r) => setTimeout(r, DEFAULT_HEALTH_DELAY_MS));
-          continue;
-        }
+        const status = await fetch(`http://127.0.0.1:${port}/api/status`, {
+          headers: credential ? { Authorization: `Bearer ${credential}` } : undefined,
+          signal: controller.signal,
+        });
+        if (!status.ok) throw new Error('Gateway version unavailable');
+        const body = await status.json() as { version?: string };
+        if (body.version !== expectedVersion) throw new Error('Gateway version mismatch');
       }
       return true;
     } catch {
-      await new Promise((r) => setTimeout(r, DEFAULT_HEALTH_DELAY_MS));
+      // Retry until the replacement process is ready and reports the installed version.
+    } finally {
+      clearTimeout(timeout);
     }
+    await new Promise((r) => setTimeout(r, DEFAULT_HEALTH_DELAY_MS));
   }
   return false;
 }
@@ -155,9 +170,9 @@ async function restartDaemonGateway(
     if (!healthy) {
       log.warn({ port, expectedVersion }, 'Gateway restart completed but health check timed out');
       return {
-        ok: true,
-        mode: 'daemon',
-        message: 'Gateway service restarted; health check timed out (gateway may still be starting).',
+        ok: false,
+        mode: 'failed',
+        message: 'Gateway service restarted, but readiness and installed version could not be verified.',
       };
     }
     return {
@@ -178,6 +193,7 @@ export async function maybeRestartGatewayAfterUpdate(params: {
   updatedPackageRoot?: string;
   configPath?: string;
   triggerInProcessRestart?: InProcessRestartTrigger;
+  preparedService?: GatewayService;
 }): Promise<UpdateRestartResult> {
   if (params.shouldRestart === false) {
     return { ok: true, mode: 'skipped', message: 'Restart skipped (--no-restart).' };
@@ -193,10 +209,11 @@ export async function maybeRestartGatewayAfterUpdate(params: {
     };
   }
 
-  if (isRunningInsideGatewayService() && params.triggerInProcessRestart) {
-    if (params.updatedPackageRoot && params.expectedVersion) {
+  if (params.triggerInProcessRestart) {
+    let warning: string | undefined;
+    if (isRunningInsideGatewayService() && params.updatedPackageRoot && params.expectedVersion) {
       try {
-        const service = await resolveGatewayService();
+        const service = params.preparedService ?? await resolveGatewayService();
         const loaded = await service.isLoaded({ env: process.env });
         if (loaded) {
           await refreshGatewayServiceAfterUpdate({
@@ -211,11 +228,7 @@ export async function maybeRestartGatewayAfterUpdate(params: {
           { err, expectedVersion: params.expectedVersion },
           `Gateway service refresh failed after update: ${message}`,
         );
-        return {
-          ok: false,
-          mode: 'failed',
-          message: `Installed ${params.expectedVersion}, but failed to refresh the gateway service: ${message}`,
-        };
+        warning = `Installed ${params.expectedVersion}, but failed to refresh the gateway service: ${message}`;
       }
     }
 
@@ -232,10 +245,11 @@ export async function maybeRestartGatewayAfterUpdate(params: {
       ok: true,
       mode: 'in-process',
       message: result.message ?? 'Gateway restart scheduled.',
+      warning,
     };
   }
 
-  const service = await resolveGatewayService();
+  const service = params.preparedService ?? await resolveGatewayService();
   const port = await resolveRestartPort(service);
   return restartDaemonGateway(service, port, params.expectedVersion);
 }

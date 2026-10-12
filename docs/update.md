@@ -55,4 +55,8 @@ Then test one model call and each important channel or extension. Review release
 4. Check extension compatibility.
 5. Avoid deleting the state directory; it contains your local data.
 
+Package installation and Gateway activation are separate steps. The updater loads service-management modules before replacing package files and still schedules a process restart if extension synchronization or service-definition refresh fails. A failed restart is reported as an error with the installed version and restart details, rather than a successful update.
+
+If the package is already current but the running Gateway is older, retrying the update from the console schedules the missing restart without reinstalling. CLI daemon updates verify readiness and the running version through authenticated `/api/status`; an unverified version or timeout is reported as a restart failure. An in-process update reports a scheduled restart; verify the running version after reconnecting. `--no-restart` and `commands.restart=false` still require a manual restart.
+
 See [Release channels](./releases.md) for stability choices and [Back up and restore xopc](./backup.md) for recovery steps. If a new version migrated the database, restore its matching pre-update backup before running an older binary.

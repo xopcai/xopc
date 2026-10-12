@@ -156,7 +156,7 @@ async function completeReply(packet: PersonalReplyPacket, signal: AbortSignal): 
 export class PersonalReplyComposer {
   constructor(private readonly compose = completeReply, private readonly timeoutMs = TIMEOUT_MS) {}
 
-  async drain(notify: (conversationId: string, deliveryId: string) => void, isAvailable: (conversationId: string) => boolean = () => true): Promise<void> {
+  async drain(notify: (conversationId: string, deliveryId: string) => void | Promise<void>, isAvailable: (conversationId: string) => boolean = () => true): Promise<void> {
     const db = getSqliteDatabase();
     // At most two independent model calls across concurrent drain invocations.
     const deliveries = runSqliteWriteTransaction(() => {
@@ -260,7 +260,13 @@ export class PersonalReplyComposer {
           if (!persisted) return;
         }
         emitSessionTranscriptUpdate({ conversationId: packet.delivery.conversationId });
-        notify(packet.delivery.conversationId, `reply:${packet.delivery.deliveryId}`);
+        // Voice delivery can outlive composition; keep its outbox lease while awaiting playback.
+        const notificationLease = setInterval(() => {
+          db.prepare('UPDATE task_result_deliveries SET reply_lease_until = ? WHERE delivery_id = ? AND reply_lease_token = ?')
+            .run(Date.now() + this.timeoutMs + 5000, row.delivery_id, row.lease_token);
+        }, 5000);
+        try { await notify(packet.delivery.conversationId, `reply:${packet.delivery.deliveryId}`); }
+        finally { clearInterval(notificationLease); }
         db.prepare('UPDATE task_result_deliveries SET reply_notified_at = ?, reply_lease_until = 0 WHERE delivery_id = ?').run(Date.now(), row.delivery_id);
         if (packet.requestId) db.prepare('UPDATE personal_requests SET notified_at = ? WHERE request_id = ?').run(Date.now(), packet.requestId);
       } catch (err) {
