@@ -7,6 +7,7 @@ import path from 'node:path';
 import { applyPathPrepend } from './path-prepend.js';
 import { resolveExecPathBinPrepend } from './path-env.js';
 import { readPackageVersion } from './package-json.js';
+import { verifyInstalledGatewayRuntime } from './package-runtime-check.js';
 import { createDefaultCommandRunner, type CommandRunner } from './run-command.js';
 
 export const XOPC_PACKAGE_NAME = '@xopcai/xopc';
@@ -224,6 +225,8 @@ export function resolveExpectedInstalledVersionFromSpec(spec: string): string | 
 export async function collectInstalledGlobalPackageErrors(params: {
   packageRoot: string;
   expectedVersion?: string | null;
+  runCommand?: CommandRunner;
+  env?: NodeJS.ProcessEnv;
 }): Promise<string[]> {
   const errors: string[] = [];
   const installedVersion = await readPackageVersion(params.packageRoot);
@@ -234,6 +237,9 @@ export async function collectInstalledGlobalPackageErrors(params: {
   }
   if (!installedVersion) {
     errors.push('missing package.json version');
+  }
+  if (errors.length === 0) {
+    errors.push(...await verifyInstalledGatewayRuntime(params));
   }
   return errors;
 }
