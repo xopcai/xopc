@@ -258,7 +258,7 @@ struct AssistantRecoveryTests {
         state.pauseConversation()
         gateway.activeRun = ActiveRun(active: false, runId: nil)
         gateway.historyMessages = [WireMessage(id: "answer", messageId: nil, turnId: "run", role: "assistant",
-            content: .text("Complete"), rawContent: nil, toolCalls: nil, attachments: nil, media: nil, metadata: nil)]
+                                               content: .text("Complete"), rawContent: nil, toolCalls: nil, attachments: nil, media: nil, metadata: nil)]
         await state.resumeConversation(conversation, using: gateway)
         #expect(state.runID == nil)
         #expect(state.messages.map(\.text) == ["Complete"])
@@ -324,24 +324,27 @@ struct AssistantRecoveryTests {
 
     private func recoveryDelta(_ text: String, offset: Int) -> RunStreamEvent {
         RunStreamEvent(name: "assistant_delta", sequence: offset + 1, messageId: "answer", delta: text,
-            offset: offset, status: nil, errorMessage: nil, toolName: nil, stage: nil)
+                       offset: offset, status: nil, errorMessage: nil, toolName: nil, stage: nil)
     }
 
     private func waitForReply(_ text: String, in state: AssistantState) async throws {
         for _ in 0 ..< 250 {
-            if state.messages.last?.text == text { return }
+            if state.messages.last?.text == text {
+                return
+            }
             try await Task.sleep(for: .milliseconds(10))
         }
         #expect(state.messages.last?.text == text)
     }
-
 }
 
 private final class RunReplayStreams: @unchecked Sendable {
     private let lock = NSLock()
     private var streams: [AsyncThrowingStream<RunStreamEvent, Error>]
 
-    init(_ streams: [AsyncThrowingStream<RunStreamEvent, Error>]) { self.streams = streams }
+    init(_ streams: [AsyncThrowingStream<RunStreamEvent, Error>]) {
+        self.streams = streams
+    }
 
     func next() -> AsyncThrowingStream<RunStreamEvent, Error> {
         lock.withLock { streams.isEmpty ? AsyncThrowingStream { $0.finish() } : streams.removeFirst() }
