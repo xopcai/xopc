@@ -27,6 +27,8 @@ import type { LocalAppService } from '../../../local-apps/index.js';
 import { ChatPreviewService } from '../../../chat-previews/index.js';
 import { createXopcUseTool } from '../xopc-use-tool.js';
 import { createProductDispatcher } from '../../../capabilities/runtime/product.js';
+import { updateSessionConfig } from '../../../storage/sqlite/index.js';
+import { applyUserProfilePatch } from '../../../user-model/profile.js';
 import { AgentCatalogRepository } from '../../../agent-catalog/repository.js';
 
 const CONVERSATION_ID = "d2727fdb-ecad-4efa-86e1-46af39a71a2c";
@@ -637,6 +639,19 @@ describe('xopc_use tool', () => {
 
     expect(result.dryRun).toBe(true);
     expect(projects.list({ search: 'Dry Run Project' }).items).toHaveLength(0);
+  });
+
+  it.each(['session', 'profile', 'explicit'] as const)('preserves the %s language when creating a task from English context', async (source) => {
+    seedConversationFixtures();
+    if (source === 'session') updateSessionConfig(CONVERSATION_ID, { responseLanguage: 'zh-CN' });
+    if (source === 'profile') applyUserProfilePatch({ locale: 'zh-CN' });
+    if (source === 'explicit') updateSessionConfig(CONVERSATION_ID, { responseLanguage: 'en' });
+    const tool = createXopcUseTool({ getCurrentAgentId: () => 'main', getCurrentConversationId: () => CONVERSATION_ID });
+    const created = parseToolJson(await tool.execute(`locale-${source}`, {
+      mode: 'task', command: 'create', args: { objective: 'Review the English project specification', ...(source === 'explicit' ? { locale: 'zh' } : {}) },
+    }));
+    expect(created.task.locale).toBe('zh');
+    expect(created.task.contract.acceptanceCriteria[0]).toBe('已交付：Review the English project specification');
   });
 
   it('captures a task by default and returns a task delivery reference', async () => {

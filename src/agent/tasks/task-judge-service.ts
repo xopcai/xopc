@@ -17,6 +17,9 @@ import { TaskApplicationService } from '../../tasks/task-application-service.js'
 import { TaskConversationRepository } from '../../tasks/task-conversation-repository.js';
 import { TaskRepository } from '../../tasks/task-repository.js';
 import { TaskRunRepository } from '../../tasks/task-run-repository.js';
+import { resolveResponseLanguageForSession } from '../prompt/response-language.js';
+import { buildResponseLanguageSection } from '../prompt/sections/response-language.js';
+import { resolveTaskLocale } from '../../tasks/task-language.js';
 import { readWorkspaceRevision } from '../coding/workspace-revision.js';
 import type { TranscriptStoredRow } from '../../session/session-context-for-llm.js';
 import type { ModelManager } from '../models/index.js';
@@ -47,7 +50,7 @@ function compactHistory(messages: AgentMessage[]): string {
   return text.length <= MAX_HISTORY_CHARS ? text : text.slice(-MAX_HISTORY_CHARS);
 }
 
-export function parseTaskJudgeDecision(raw: string, criteriaCount: number): TaskJudgeDecision {
+export function parseTaskJudgeDecision(raw: string, criteriaCount: number, locale: 'en' | 'zh' = 'en'): TaskJudgeDecision {
   const text = stripCodeFences(raw);
   const start = text.indexOf('{');
   const end = text.lastIndexOf('}');
@@ -82,7 +85,7 @@ export function parseTaskJudgeDecision(raw: string, criteriaCount: number): Task
     : undefined;
   const recommendation = typeof decision.recommendation === 'string' && decision.recommendation.trim()
     ? decision.recommendation.trim()
-    : nextAction ?? 'Continue gathering verifiable evidence.';
+    : nextAction ?? (locale === 'zh' ? '继续收集可验证的证据。' : 'Continue gathering verifiable evidence.');
   const confidence = typeof decision.confidence === 'number' && Number.isFinite(decision.confidence)
     ? Math.max(0, Math.min(1, decision.confidence))
     : 0.5;
@@ -92,7 +95,7 @@ export function parseTaskJudgeDecision(raw: string, criteriaCount: number): Task
     ...(nextAction ? { nextAction } : {}),
     judgment: {
       recommendation,
-      reasons: reasons.length > 0 ? reasons : ['No verified completion evidence was found.'],
+      reasons: reasons.length > 0 ? reasons : [locale === 'zh' ? '尚未找到已验证的完成证据。' : 'No verified completion evidence was found.'],
       rejectedAlternatives,
       ...(typeof decision.uncertainty === 'string' && decision.uncertainty.trim()
         ? { uncertainty: decision.uncertainty.trim() }
@@ -105,12 +108,13 @@ export function parseTaskJudgeDecision(raw: string, criteriaCount: number): Task
 export async function requestTaskJudgeDecision(
   complete: (attempt: number) => Promise<string>,
   criteriaCount: number,
+  locale: 'en' | 'zh' = 'en',
 ): Promise<TaskJudgeDecision> {
   let parseError: unknown;
   for (let attempt = 0; attempt < 2; attempt += 1) {
     const raw = await complete(attempt);
     try {
-      return parseTaskJudgeDecision(raw, criteriaCount);
+      return parseTaskJudgeDecision(raw, criteriaCount, locale);
     } catch (error) {
       parseError = error;
     }
@@ -186,8 +190,12 @@ export class TaskJudgeService {
     const history = compactHistory(await this.options.sessionStore.loadMessages(payload.conversationId));
     const proof = codingCompletionEvidence(await this.options.sessionStore.loadTranscriptRows(payload.conversationId));
     const criteria = task.contract.acceptanceCriteria;
+    const responseLanguage = resolveResponseLanguageForSession(this.options.getConfig(), payload.conversationId);
+    const locale = responseLanguage === 'auto' ? resolveTaskLocale(task) : responseLanguage === 'zh-CN' ? 'zh' : 'en';
     const prompt = [
       'You are an independent task verifier. Be strict and evidence-driven.',
+      buildResponseLanguageSection(locale === 'zh' ? 'zh-CN' : 'en'),
+      'The recommendation, nextAction, reasons, rejectedAlternatives and uncertainty are displayed directly to the user. Apply the response language to every prose value. Keep JSON keys, criterion indexes, identifiers and proper nouns unchanged.',
       'Mark a criterion complete only when observed tool results or user-provided facts prove it. An assistant completion claim is not verification evidence.',
       `Runtime coding evidence: ${JSON.stringify(proof)}`,
       'needsUser is true only when a specific decision, permission, credential, or missing fact must come from the user.',
@@ -217,15 +225,15 @@ export class TaskJudgeService {
         const modelError = getAssistantMessageErrorReason(response);
         if (modelError) throw new Error(modelError);
         return extractAssistantText(response.content);
-      }, criteria.length);
+      }, criteria.length, locale);
       if (!proof.allowed || (proof.workspace && (!proof.revision || await readWorkspaceRevision(proof.workspace) !== proof.revision))) {
         decision.completedCriteria = [];
-        decision.judgment.reasons.unshift('Current workspace verification is missing, failed or stale.');
+        decision.judgment.reasons.unshift(locale === 'zh' ? '当前工作区验证缺失、失败或已过期。' : 'Current workspace verification is missing, failed or stale.');
       }
       const now = Date.now();
       const evidence: TaskEvidence[] = decision.completedCriteria.map((index) => ({
         kind: 'state',
-        title: `Independently verified: ${criteria[index]}`,
+        title: locale === 'zh' ? `已独立验证：${criteria[index]}` : `Independently verified: ${criteria[index]}`,
         summary: decision.judgment.reasons[0]!,
         verifies: [criteria[index]!],
         provenance: 'judge',
@@ -254,7 +262,7 @@ export class TaskJudgeService {
         expectedRunVersion: run.version,
         receipt: {
           status: 'succeeded',
-          summary: payload.assistantPlainText || 'Agent run completed',
+          summary: payload.assistantPlainText || (locale === 'zh' ? '助手执行完成' : 'Agent run completed'),
           changes: [], evidence,
           verification: { status: passed ? 'passed' : 'unverified', checks },
           remainingWork: checks.filter((check) => check.status !== 'passed').map((check) => check.criterion),

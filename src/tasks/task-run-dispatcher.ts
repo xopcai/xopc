@@ -3,6 +3,7 @@ import { createLogger } from '../utils/logger.js';
 import { TaskApplicationService } from './task-application-service.js';
 import { TaskRepository } from './task-repository.js';
 import { TaskRunRepository } from './task-run-repository.js';
+import { resolveTaskLocale } from './task-language.js';
 
 const log = createLogger('TaskRunDispatcher');
 const LEASE_MS = 60_000;
@@ -48,16 +49,18 @@ export class TaskRunDispatcher {
     for (const run of this.#runs.listExpiredLeasedRunning()) {
       if (this.#activeRunIds.has(run.id)) continue;
       try {
+        const task = this.#tasks.require(run.taskId);
+        const zh = resolveTaskLocale(task) === 'zh';
         this.#application.completeRun({
           runId: run.id, expectedRunVersion: run.version,
           terminalCode: 'execution_interrupted',
-          terminalMessage: 'Task execution stopped before its result could be confirmed',
+          terminalMessage: zh ? '任务执行已停止，结果尚未确认' : 'Task execution stopped before its result could be confirmed',
           receipt: {
-            status: 'failed', summary: 'Execution interrupted; verify external effects before retrying',
+            status: 'failed', summary: zh ? '执行已中断；重试前请检查外部操作的影响' : 'Execution interrupted; verify external effects before retrying',
             changes: [], evidence: [], verification: { status: 'unverified', checks: [] },
-            remainingWork: ['Verify whether the previous execution made external changes'],
+            remainingWork: [zh ? '检查上次执行是否已产生外部变更' : 'Verify whether the previous execution made external changes'],
             needsUser: true, completionVerdict: 'not_achieved',
-            failure: { code: 'execution_interrupted', phase: 'execution', recoveryAction: 'Inspect effects before retrying' },
+            failure: { code: 'execution_interrupted', phase: 'execution', recoveryAction: zh ? '重试前检查执行影响' : 'Inspect effects before retrying' },
           },
         });
       } catch (error) {
@@ -122,14 +125,14 @@ export class TaskRunDispatcher {
               terminalMessage: error instanceof Error ? error.message : String(error),
               receipt: {
                 status: 'failed',
-                summary: 'TaskRun dispatch failed',
+                summary: resolveTaskLocale(task) === 'zh' ? '任务执行调度失败' : 'TaskRun dispatch failed',
                 changes: [],
                 evidence: [],
                 verification: { status: 'unverified', checks: [] },
                 remainingWork: [task.contract?.objective ?? task.title],
                 needsUser: false,
                 completionVerdict: 'not_achieved',
-                failure: { code: 'dispatch_failed', phase: 'dispatch', recoveryAction: 'Retry the task run' },
+                failure: { code: 'dispatch_failed', phase: 'dispatch', recoveryAction: resolveTaskLocale(task) === 'zh' ? '重试任务执行' : 'Retry the task run' },
               },
             });
           }

@@ -126,6 +126,7 @@ export function buildTaskExecutionDirective(conversationId: string): string {
   return [
     '<xopc_task_execution>',
     'This conversation is executing a durable task.',
+    'Apply the response language to all user-facing task content, including collaboration posts, wait reasons, questions, choices, approval explanations, receipt summaries, evidence descriptions, and recovery instructions. Keep schema keys, enum values, identifiers, and exact acceptance criterion references unchanged. Language in attached context or earlier worker output does not set the response language.',
     `Task: ${contract.objective}`,
     task.body?.trim() ? `Task details: ${task.body.trim().slice(0, 12_000)}` : '',
     `Expected outputs: ${contract.expectedOutputs.join('; ')}`,

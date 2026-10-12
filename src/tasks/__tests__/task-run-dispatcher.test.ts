@@ -31,8 +31,8 @@ describe('TaskRunDispatcher', () => {
     rmSync(stateDir, { recursive: true, force: true });
   });
 
-  function queue(key: string) {
-    const created = new TaskApplicationService().create({ idempotencyKey: key, title: key,
+  function queue(key: string, locale?: 'en' | 'zh') {
+    const created = new TaskApplicationService().create({ idempotencyKey: key, title: key, locale,
       priority: 'normal', contract, dependencies: [], context: [], authorityGrants: [],
       activation: { mode: 'start', executor: { kind: 'agent', agentId: 'main' } } });
     if (!created.ok || !created.runId) throw new Error('Expected queued TaskRun');
@@ -103,8 +103,8 @@ describe('TaskRunDispatcher', () => {
     await draining;
   });
 
-  it('finalizes an expired leased run for inspection instead of replaying it', async () => {
-    const runId = queue('interrupted');
+  it.each(['en', 'zh'] as const)('finalizes an expired leased run with %s recovery instructions', async (locale) => {
+    const runId = queue('interrupted', locale);
     const runs = new TaskRunRepository();
     const claimed = runs.claimNext({ owner: 'old-process', leaseMs: 60_000, executorKind: 'agent' })!;
     runs.setStatus({ runId, expectedVersion: claimed.version, from: ['queued'], to: 'running' });
@@ -115,6 +115,8 @@ describe('TaskRunDispatcher', () => {
     expect(runAgent).not.toHaveBeenCalled();
     expect(runs.require(runId).status).toBe('failed');
     expect(runs.getReceipt(runId)?.failure?.code).toBe('execution_interrupted');
+    expect(runs.getReceipt(runId)?.summary).toBe(locale === 'zh' ? '执行已中断；重试前请检查外部操作的影响' : 'Execution interrupted; verify external effects before retrying');
+    expect(runs.getReceipt(runId)?.failure?.recoveryAction).toBe(locale === 'zh' ? '重试前检查执行影响' : 'Inspect effects before retrying');
   });
 
   it('renews a lease without invalidating the version held by a running Agent', () => {

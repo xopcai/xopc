@@ -10,6 +10,10 @@ import {
   openXopcDatabase,
   resetXopcDatabaseSingletonForTest,
 } from '../../storage/sqlite/index.js';
+import { resolveResponseLanguageForSession } from '../../agent/prompt/response-language.js';
+import { applyUserProfilePatch } from '../../user-model/profile.js';
+import { ConfigSchema } from '../../config/schema.js';
+import { updateSessionConfig } from '../../storage/sqlite/index.js';
 import { buildTaskExecutionDirective } from '../task-context-assembler.js';
 import { TaskContextRepository } from '../task-context-repository.js';
 import { TaskConversationRepository } from '../task-conversation-repository.js';
@@ -61,6 +65,28 @@ describe('task context assembler', () => {
     );
     expect(directive).toContain('Attached task context:');
     expect(directive).toContain('[input] file: /workspace/spec.md (Product specification)');
+  });
+
+  it.each(['zh', 'en'] as const)('uses the %s task locale for generated user-facing content', (locale) => {
+    const task = new TaskRepository().create({ idempotencyKey: `language-${locale}`, title: 'English source material', objective: 'Review the attached English specification', locale });
+    const conversationId = 'd3f214c2-1bba-4c27-a127-09d3955b724e';
+    ensureSessionRecord(conversationId, stateDir, { agentId: 'main' });
+    new TaskConversationRepository().activateExecutionSession({ taskId: task.id, conversationId, agentId: 'main' });
+    expect(resolveResponseLanguageForSession(undefined, conversationId)).toBe(locale === 'zh' ? 'zh-CN' : 'en');
+    expect(buildTaskExecutionDirective(conversationId)).toContain('wait reasons, questions, choices');
+    expect(resolveResponseLanguageForSession(ConfigSchema.parse({ userContext: { preferences: { responseLanguage: 'en' } } }), conversationId)).toBe('en');
+    updateSessionConfig(conversationId, { responseLanguage: 'zh-CN' });
+    expect(resolveResponseLanguageForSession(undefined, conversationId)).toBe('zh-CN');
+  });
+
+  it('uses the saved user locale for legacy tasks without a locale and leaves regular chats on auto', () => {
+    applyUserProfilePatch({ locale: 'zh-CN' });
+    const task = new TaskRepository().create({ idempotencyKey: 'legacy-language', title: 'English source material', objective: 'Review the attached English specification' });
+    const conversationId = 'd3f214c2-1bba-4c27-a127-09d3955b724e';
+    ensureSessionRecord(conversationId, stateDir, { agentId: 'main' });
+    expect(resolveResponseLanguageForSession(undefined, conversationId)).toBe('auto');
+    new TaskConversationRepository().activateExecutionSession({ taskId: task.id, conversationId, agentId: 'main' });
+    expect(resolveResponseLanguageForSession(undefined, conversationId)).toBe('zh-CN');
   });
 
   it('does not treat a session context source as the task execution conversation', () => {

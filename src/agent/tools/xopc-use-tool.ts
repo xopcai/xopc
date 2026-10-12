@@ -39,6 +39,8 @@ import {
   type ProductReference,
 } from '@xopcai/gateway-contract';
 
+import { resolveResponseLanguageForSession } from '../prompt/response-language.js';
+import { resolveTaskLocale } from '../../tasks/task-language.js';
 import { runWithActivityContext } from '../../activity/index.js';
 import type { AutomationService } from '../../automations/index.js';
 import { AutomationCreateCapabilityInputSchema, AutomationUpdatePatchSchema } from '../../automations/capabilities/write.js';
@@ -982,7 +984,10 @@ async function handleTask(
       ? []
       : stringArray(args.dependsOnTaskIds);
     if (!dependsOnTaskIds) return { ok: false, error: 'Invalid dependsOnTaskIds' };
-    const baseContract = defineTaskContract(objective);
+    const responseLanguage = resolveResponseLanguageForSession(deps.getConfig?.(), deps.getCurrentConversationId?.());
+    const taskLocale = locale ?? (responseLanguage === 'auto'
+      ? resolveTaskLocale({ title: objective }) : responseLanguage === 'zh-CN' ? 'zh' : 'en');
+    const baseContract = defineTaskContract(objective, taskLocale);
     const contractFields = [
       'expectedOutputs',
       'acceptanceCriteria',
@@ -1030,7 +1035,7 @@ async function handleTask(
       ...(projectId ? { projectId } : {}),
       delegateAgentId: agentId,
       ...(originConversationId ? { originConversationId } : {}),
-      ...(locale ? { locale } : {}),
+      locale: taskLocale,
       contract: {
         ...contract,
         acceptancePolicy: 'verified_auto' as const,

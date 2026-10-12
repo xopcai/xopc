@@ -20,6 +20,13 @@ describe('parseTaskJudgeDecision', () => {
     });
   });
 
+  it('localizes missing judgment prose while keeping criterion indexes unchanged', async () => {
+    const decision = await requestTaskJudgeDecision(async () => '{"completedCriteria":[0],"needsUser":false}', 1, 'zh');
+    expect(decision.completedCriteria).toEqual([0]);
+    expect(decision.judgment.recommendation).toBe('继续收集可验证的证据。');
+    expect(decision.judgment.reasons).toEqual(['尚未找到已验证的完成证据。']);
+  });
+
   it('rejects responses without a JSON object', () => {
     expect(() => parseTaskJudgeDecision('completed', 1)).toThrow('invalid JSON');
     expect(() => parseTaskJudgeDecision('{"needsUser":false}', 1)).toThrow('incomplete decision');

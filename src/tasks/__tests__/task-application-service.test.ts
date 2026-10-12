@@ -57,10 +57,10 @@ describe('TaskApplicationService', () => {
     rmSync(stateDir, { recursive: true, force: true });
   });
 
-  function createRunningTask(key: string) {
+  function createRunningTask(key: string, locale?: 'en' | 'zh') {
     const service = new TaskApplicationService();
     const created = service.create({
-      idempotencyKey: key, title: key, priority: 'normal', contract,
+      idempotencyKey: key, title: key, locale, priority: 'normal', contract,
       dependencies: [], context: [], authorityGrants: [],
       activation: { mode: 'start', executor: { kind: 'agent', agentId: 'main' } },
     });
@@ -189,6 +189,21 @@ describe('TaskApplicationService', () => {
     coordinator!.finalize({ status: 'succeeded', summary: 'Message processed', assistantText: '' });
     expect(runs.require(run.id).status).toBe('failed');
     expect(runs.getReceipt(run.id)).toMatchObject({ failure: { code: 'empty_agent_run' } });
+  });
+
+  it('localizes system evidence and completion summaries for Chinese tasks', () => {
+    const { task, run, runs } = createRunningTask('chinese-evidence', 'zh');
+    const coordinator = TaskRunCoordinator.start({ runId: run.id,
+      context: { taskId: task.id, conversationId: createConversation({ agentId: 'main' }).key, agentId: 'main', triggerKind: 'user' },
+      fallbackObjective: contract.objective,
+    })!;
+    coordinator.capturePatch(2, 1);
+    coordinator.capturePlan([{ title: 'Review API', status: 'completed' }]);
+    coordinator.finalize({ status: 'succeeded', summary: 'Message processed', assistantText: '已完成。' });
+    expect(runs.getReceipt(run.id)).toMatchObject({ summary: '消息已处理', evidence: expect.arrayContaining([
+      expect.objectContaining({ title: '已应用变更', summary: '新增 2 处，删除 1 处' }),
+      expect.objectContaining({ title: '计划项已完成：Review API', summary: '助手已完成此计划项。' }),
+    ]) });
   });
 
   it('grants only the reviewed capability and resumes the blocked task', () => {

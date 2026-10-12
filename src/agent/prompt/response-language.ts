@@ -7,6 +7,9 @@ import {
   getSessionConfig,
   isXopcDatabaseOpen,
 } from '../../storage/sqlite/index.js';
+import { TaskConversationRepository } from '../../tasks/task-conversation-repository.js';
+import { TaskRepository } from '../../tasks/task-repository.js';
+import { resolveTaskLocale } from '../../tasks/task-language.js';
 
 export function resolveResponseLanguageForSession(
   config: Config | undefined,
@@ -17,5 +20,9 @@ export function resolveResponseLanguageForSession(
     conversationId && isXopcDatabaseOpen()
       ? getSessionConfig(conversationId)?.responseLanguage
       : undefined;
-  return resolveResponseLanguage(userPreference, sessionPreference);
+  const language = resolveResponseLanguage(userPreference, sessionPreference);
+  if (language !== 'auto' || !conversationId || !isXopcDatabaseOpen()) return language;
+  const taskId = new TaskConversationRepository().resolveActiveExecutionSession(conversationId)?.taskId;
+  const task = taskId ? new TaskRepository().get(taskId) : undefined;
+  return task ? (resolveTaskLocale(task) === 'zh' ? 'zh-CN' : 'en') : language;
 }

@@ -165,6 +165,7 @@ html.dark {
   html {
     height: 100%;
     overflow: hidden;
+    overscroll-behavior: none;
     font-family: var(--font-sans);
     background-color: var(--color-surface-base);
     color: var(--color-fg);
@@ -191,6 +192,7 @@ html.dark {
     height: 100%;
     min-height: 100%;
     overflow: hidden;
+    background-color: var(--color-surface-base);
     /* Slightly smaller UI body than 16px root — matches dense workstation + SF conventions */
     font-size: 0.9375rem;
     line-height: 1.47059;
@@ -1592,6 +1594,7 @@ html.dark[data-color-scheme="porcelain"] {
 }
 
 .task-detail-scroll {
+  scrollbar-gutter: stable;
   scrollbar-width: thin;
   scrollbar-color: color-mix(in srgb, var(--color-edge-strong) 38%, transparent)
     transparent;
@@ -2061,8 +2064,17 @@ html.dark .chat-messages::-webkit-scrollbar-thumb:hover {
   }
 }
 
+/* Contain wheel/touch scrolling in dialogs, including responsive and nested
+ * scroll regions. `none` also suppresses boundary bounce over the page canvas. */
+[role="dialog"]:where([class*="overflow-auto"], [class*="overflow-y-auto"]),
+[role="dialog"] :where([class*="overflow-auto"], [class*="overflow-y-auto"]) {
+  overscroll-behavior: none;
+}
+
+/* Opening animations should release their opacity/transform after settling,
+ * rather than retain an animation stacking context while content scrolls. */
 .xopc-dialog-overlay[data-state="open"] {
-  animation: xopc-dialog-overlay-in 0.2s ease-out both;
+  animation: xopc-dialog-overlay-in 0.2s ease-out backwards;
 }
 .xopc-dialog-overlay[data-state="closed"] {
   animation: xopc-dialog-overlay-out 0.15s ease-in both;
@@ -2081,21 +2093,21 @@ html.dark .chat-messages::-webkit-scrollbar-thumb:hover {
 }
 
 .xopc-dialog-content[data-state="open"] {
-  animation: xopc-dialog-content-in 0.25s cubic-bezier(0.32, 0.72, 0, 1) both;
+  animation: xopc-dialog-content-in 0.25s cubic-bezier(0.32, 0.72, 0, 1) backwards;
 }
 .xopc-dialog-content[data-state="closed"] {
   animation: xopc-dialog-content-out 0.2s ease-in both;
 }
 
 .xopc-dialog-content-fullscreen[data-state="open"] {
-  animation: xopc-dialog-fullscreen-in 0.25s cubic-bezier(0.32, 0.72, 0, 1) both;
+  animation: xopc-dialog-fullscreen-in 0.25s cubic-bezier(0.32, 0.72, 0, 1) backwards;
 }
 .xopc-dialog-content-fullscreen[data-state="closed"] {
   animation: xopc-dialog-fullscreen-out 0.2s ease-in both;
 }
 
 .xopc-dialog-content-pane[data-state="open"] {
-  animation: xopc-dialog-pane-in 0.25s cubic-bezier(0.32, 0.72, 0, 1) both;
+  animation: xopc-dialog-pane-in 0.25s cubic-bezier(0.32, 0.72, 0, 1) backwards;
 }
 .xopc-dialog-content-pane[data-state="closed"] {
   animation: xopc-dialog-pane-out 0.2s ease-in both;
@@ -2137,7 +2149,7 @@ html.dark .chat-messages::-webkit-scrollbar-thumb:hover {
 }
 
 .xopc-drawer-right[data-state="open"] {
-  animation: xopc-drawer-right-in 0.38s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: xopc-drawer-right-in 0.38s cubic-bezier(0.22, 1, 0.36, 1) backwards;
 }
 .xopc-drawer-right[data-state="closed"] {
   animation: xopc-drawer-right-out 0.24s cubic-bezier(0.4, 0, 1, 1) both;

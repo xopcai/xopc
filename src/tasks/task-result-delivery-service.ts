@@ -15,6 +15,7 @@ import { TaskRepository } from './task-repository.js';
 import { TaskConversationRepository } from './task-conversation-repository.js';
 import { TaskRunRepository } from './task-run-repository.js';
 import { TaskResultDeliveryRepository } from './task-result-delivery-repository.js';
+import { resolveTaskLocale } from './task-language.js';
 
 const log = createLogger('TaskResultDelivery');
 
@@ -73,8 +74,7 @@ export class TaskResultDeliveryService {
             const outcome = { ...delivery.outcome, deliverables,
               status: deliverables.length > 0 && available === 0 ? 'failed' as const : available < deliverables.length
                 ? 'partial' as const : delivery.outcome.status };
-            const locale = db.prepare('SELECT locale FROM tasks WHERE task_id = ?').get(delivery.taskId) as { locale: string | null };
-            const zh = locale.locale?.startsWith('zh') === true;
+            const zh = resolveTaskLocale(new TaskRepository().require(delivery.taskId)) === 'zh';
             const statusText = zh
               ? `${delivery.taskTitle}：${available === deliverables.length ? '成果已生成' : available > 0 ? '部分成果已生成' : '成果暂不可用'}。`
               : `${delivery.taskTitle}: ${available === deliverables.length ? 'Results ready' : available > 0 ? 'Partial results ready' : 'Results unavailable'}.`;

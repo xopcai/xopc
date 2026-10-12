@@ -9,6 +9,8 @@ import { resolveProjectAgentId } from '../../projects/project-agent.js';
 import { TaskRunRepository } from '../task-run-repository.js';
 import { TaskSignalService } from '../task-signal-service.js';
 import { TaskRepository } from '../task-repository.js';
+import { resolveResponseLanguageForSession } from '../../agent/prompt/response-language.js';
+import { resolveTaskLocale } from '../task-language.js';
 
 const modelSchema = TaskDetailResponseSchema.pick({ task: true, operationalState: true, attention: true, allowedCommands: true });
 export const TaskMutationOutputSchema = z.discriminatedUnion('ok', [
@@ -43,9 +45,13 @@ export function registerTaskWriteCapabilities(dispatcher: CapabilityDispatcher, 
       if (context.surface === 'agent' && input.originConversationId && input.originConversationId !== context.conversationId) {
         throw new CapabilityError('FORBIDDEN', 'Task origin must be the active conversation');
       }
+      const originConversationId = context.surface === 'agent' ? context.conversationId : input.originConversationId;
+      const language = resolveResponseLanguageForSession(config, originConversationId);
+      const locale = input.locale ?? (language === 'auto'
+        ? resolveTaskLocale({ title: input.title, contract: input.contract })
+        : language === 'zh-CN' ? 'zh' : 'en');
       // Preserve the domain's established idempotency identity across upgrades.
-      return new TaskApplicationService().create({ ...input, originConversationId: context.surface === 'agent'
-        ? context.conversationId : input.originConversationId, delegateAgentId: agentId, activation,
+      return new TaskApplicationService().create({ ...input, locale, originConversationId, delegateAgentId: agentId, activation,
       idempotencyKey: context.idempotencyKey }, context.actor);
     },
     afterCommit(result) { if (result.ok) deps.wake?.(Boolean(result.runId)); },

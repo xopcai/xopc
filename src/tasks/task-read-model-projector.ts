@@ -8,6 +8,7 @@ import { getSqliteDatabase } from '../storage/sqlite/transaction.js';
 
 import { TaskRepository, type TaskAggregate } from './task-repository.js';
 import { TaskRunRepository } from './task-run-repository.js';
+import { resolveTaskLocale } from './task-language.js';
 
 export interface TaskReadModel {
   task: TaskAggregate;
@@ -53,12 +54,12 @@ export class TaskReadModelProjector {
       const receipt = this.#runs.getReceipt(latestRun.id);
       attention.push({
         kind: receipt?.verification.status === 'failed' ? 'verification_failed' : 'run_failed',
-        summary: latestRun.terminalMessage ?? receipt?.summary ?? 'The latest run failed',
+        summary: latestRun.terminalMessage ?? receipt?.summary ?? (resolveTaskLocale(task) === 'zh' ? '最近一次执行失败' : 'The latest run failed'),
         sourceId: latestRun.id,
       });
     }
     if (task.dueAt !== undefined && task.phase !== 'closed' && task.dueAt < now) {
-      attention.push({ kind: 'overdue', summary: 'Task is overdue' });
+      attention.push({ kind: 'overdue', summary: resolveTaskLocale(task) === 'zh' ? '任务已逾期' : 'Task is overdue' });
     }
 
     const operationalState = this.operationalState({

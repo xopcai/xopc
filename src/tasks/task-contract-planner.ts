@@ -16,6 +16,7 @@ const log = createLogger('TaskContractPlanner');
 
 export interface TaskContractPlanningInput {
   objective: string;
+  locale?: 'en' | 'zh';
   taskContext?: string;
   projectContext?: string;
   userContext?: string;
@@ -78,7 +79,7 @@ export function parseTaskContractResponse(raw: string): TaskContractDefinition |
 
 export class ModelTaskContractPlanner implements TaskContractPlanner {
   async plan(input: TaskContractPlanningInput): Promise<TaskContractDefinition> {
-    const fallback = defineTaskContract(input.objective);
+    const fallback = defineTaskContract(input.objective, input.locale);
     try {
       const model = resolveModel(getAgentDefaultModelRef());
       const prompt = [
@@ -87,6 +88,8 @@ export class ModelTaskContractPlanner implements TaskContractPlanner {
         'Acceptance criteria must describe externally checkable finished states, not activities.',
         'List assumptions explicitly. Put only irreversible, external, financial, privacy, or permission decisions in approvalRequired.',
         'Return one JSON object only with keys: objective, expectedOutputs, acceptanceCriteria, constraints, approvalRequired, assumptions, risks.',
+        input.locale ? `Write all user-facing JSON values in ${input.locale === 'zh' ? 'Simplified Chinese' : 'English'}. Preserve schema keys, identifiers, paths, and proper nouns.`
+          : 'Write all user-facing JSON values in the language of the user request, regardless of the language of project or attached context. Preserve schema keys and identifiers.',
         '',
         `User request:\n${input.objective.trim()}`,
         input.taskContext ? `\nUser-provided task context:\n${input.taskContext.slice(0, 16_000)}` : '',
