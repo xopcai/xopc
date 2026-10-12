@@ -151,6 +151,8 @@ export function McpServerFormFields({ row, t, onUpdate, idConflictMessage, varia
               removeHeaderAria={t.removeHeader}
               pasteLabel={t.pasteHeaders}
               pasteFailed={t.pasteHeadersFailed}
+              pasteFailedTitle={t.pasteHeadersFailedTitle}
+              dismissLabel={t.pasteHeadersDismiss}
               keyPlaceholder={t.headerKeyPlaceholder}
               valuePlaceholder={t.headerValuePlaceholder}
               headers={row.headers}

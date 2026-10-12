@@ -1,6 +1,8 @@
 import { ClipboardPaste, Trash2 } from 'lucide-react';
+import { useState } from 'react';
 
 import { Button } from '@/components/ui/button';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { createMcpHeaderEntry, parseHeadersPaste, type McpHeaderEntry } from '@/features/connectors/mcp/mcp-headers-utils';
 import { readTextFromClipboard } from '@/lib/copy-to-clipboard';
 import { settingsInputFocusClass } from '@/lib/form-field-width';
@@ -14,6 +16,8 @@ type Props = {
   removeHeaderAria: string;
   pasteLabel: string;
   pasteFailed: string;
+  pasteFailedTitle: string;
+  dismissLabel: string;
   keyPlaceholder: string;
   valuePlaceholder: string;
   headers: McpHeaderEntry[];
@@ -35,11 +39,14 @@ export function McpHeadersEditor({
   removeHeaderAria,
   pasteLabel,
   pasteFailed,
+  pasteFailedTitle,
+  dismissLabel,
   keyPlaceholder,
   valuePlaceholder,
   headers,
   onChange,
 }: Props) {
+  const [pasteErrorOpen, setPasteErrorOpen] = useState(false);
   const updateRow = (index: number, patch: Partial<McpHeaderEntry>) => {
     onChange(headers.map((row, i) => (i === index ? { ...row, ...patch } : row)));
   };
@@ -57,17 +64,17 @@ export function McpHeadersEditor({
     try {
       const text = await readTextFromClipboard();
       if (!text) {
-        window.alert(pasteFailed);
+        setPasteErrorOpen(true);
         return;
       }
       const parsed = parseHeadersPaste(text);
       if (!parsed?.length) {
-        window.alert(pasteFailed);
+        setPasteErrorOpen(true);
         return;
       }
       onChange(parsed);
     } catch {
-      window.alert(pasteFailed);
+      setPasteErrorOpen(true);
     }
   };
 
@@ -112,6 +119,15 @@ export function McpHeadersEditor({
           </div>
         ))}
       </div>
+
+      <ConfirmDialog
+        open={pasteErrorOpen}
+        title={pasteFailedTitle}
+        description={pasteFailed}
+        confirmLabel={dismissLabel}
+        onConfirm={() => setPasteErrorOpen(false)}
+        onCancel={() => setPasteErrorOpen(false)}
+      />
 
       <button
         type="button"
