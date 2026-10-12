@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import useSWR from 'swr';
 
+import { SettingsAdvancedSection } from '@/features/settings/settings-advanced-section';
 import { NumberInput } from '@/components/ui/number-input';
 import { Button } from '@/components/ui/button';
 import {
@@ -90,17 +91,19 @@ export function AgentDefaultsModelsPanel({
             onChange={(primary) => setDraft({ ...draft, models: { ...draft.models, chat: { ...draft.models.chat, primary } } })}
           />
         </div>
-        <div className="mt-6 rounded-xl bg-surface-base/45 p-4">
-          <FallbackModels
-            primary={draft.models.chat.primary}
-            value={draft.models.chat.fallbacks}
-            models={models}
-            loading={modelsQuery.isLoading}
-            error={modelsQuery.error}
-            zh={zh}
-            onChange={(fallbacks) => setDraft({ ...draft, models: { ...draft.models, chat: { ...draft.models.chat, fallbacks } } })}
-          />
-        </div>
+        <SettingsAdvancedSection title={zh ? "模型回退" : "Model fallbacks"} summary={zh ? `已配置 ${draft.models.chat.fallbacks.length} 个备用模型；主模型选择仍在上方。` : `${draft.models.chat.fallbacks.length} fallback models configured.`}>
+          <div className="mt-6 rounded-xl bg-surface-base/45 p-4">
+            <FallbackModels
+              primary={draft.models.chat.primary}
+              value={draft.models.chat.fallbacks}
+              models={models}
+              loading={modelsQuery.isLoading}
+              error={modelsQuery.error}
+              zh={zh}
+              onChange={(fallbacks) => setDraft({ ...draft, models: { ...draft.models, chat: { ...draft.models.chat, fallbacks } } })}
+            />
+          </div>
+        </SettingsAdvancedSection>
       </section>
 
       <section className="rounded-xl bg-surface-hover/20 p-5">
@@ -158,42 +161,48 @@ export function AgentDefaultsModelsPanel({
           </div>
         </div>
         {draft.models.imageGeneration ? (
-          <div className="mt-5 grid gap-4 rounded-xl bg-surface-base/45 p-4 sm:grid-cols-2">
-            <label className="block text-xs font-medium text-fg-muted">{zh ? '生成超时（毫秒）' : 'Generation timeout (ms)'}<NumberInput allowEmpty type="number" min={1} className={`${inputClass} mt-2`} value={draft.models.imageGeneration.timeoutMs ?? ''} onChange={(event) => setDraft({ ...draft, models: { ...draft.models, imageGeneration: { ...draft.models.imageGeneration!, timeoutMs: event.target.value ? Number(event.target.value) : undefined } } })} /></label>
-            <div className="text-xs font-medium text-fg-muted"><span>{zh ? '服务商自动回退' : 'Automatic provider fallback'}</span><div className="mt-1.5 flex rounded-lg bg-surface-panel p-1">{([true, false] as const).map((enabled) => <Button key={String(enabled)} variant={draft.models.imageGeneration?.autoProviderFallback === enabled ? 'secondary' : 'ghost'} className="flex-1 py-1.5 text-xs" onClick={() => setDraft({ ...draft, models: { ...draft.models, imageGeneration: { ...draft.models.imageGeneration!, autoProviderFallback: enabled } } })}>{enabled ? (zh ? '开启' : 'On') : (zh ? '关闭' : 'Off')}</Button>)}</div></div>
-          </div>
+          <SettingsAdvancedSection title={zh ? "图片执行策略" : "Image execution policy"} summary={zh ? "当前超时与回退策略继续生效。" : "The current timeout and fallback policy remains active."}>
+
+            <div className="mt-5 grid gap-4 rounded-xl bg-surface-base/45 p-4 sm:grid-cols-2">
+              <label className="block text-xs font-medium text-fg-muted">{zh ? '生成超时（毫秒）' : 'Generation timeout (ms)'}<NumberInput allowEmpty type="number" min={1} className={`${inputClass} mt-2`} value={draft.models.imageGeneration.timeoutMs ?? ''} onChange={(event) => setDraft({ ...draft, models: { ...draft.models, imageGeneration: { ...draft.models.imageGeneration!, timeoutMs: event.target.value ? Number(event.target.value) : undefined } } })} /></label>
+              <div className="text-xs font-medium text-fg-muted"><span>{zh ? '服务商自动回退' : 'Automatic provider fallback'}</span><div className="mt-1.5 flex rounded-lg bg-surface-panel p-1">{([true, false] as const).map((enabled) => <Button key={String(enabled)} variant={draft.models.imageGeneration?.autoProviderFallback === enabled ? 'secondary' : 'ghost'} className="flex-1 py-1.5 text-xs" onClick={() => setDraft({ ...draft, models: { ...draft.models, imageGeneration: { ...draft.models.imageGeneration!, autoProviderFallback: enabled } } })}>{enabled ? (zh ? '开启' : 'On') : (zh ? '关闭' : 'Off')}</Button>)}</div></div>
+            </div>
+
+          </SettingsAdvancedSection>
         ) : null}
       </section>
 
       <AgentDefaultsVoiceSummary zh={zh} />
 
-      <section className="rounded-xl bg-surface-hover/20 p-5">
-        <h2 className="text-base font-semibold text-fg">{zh ? '按任务选择模型' : 'Route by task'}</h2>
-        <p className="mt-1 text-sm text-fg-muted">{zh ? '仅在确实需要不同模型时设置；否则保持“使用默认对话模型”。' : 'Set a route only when a task genuinely needs another model; otherwise keep the default.'}</p>
-        <div className="mt-5 grid gap-3 lg:grid-cols-2">
-          {INTENTS.map((intent) => (
-            <div key={intent} className="rounded-xl bg-surface-base/55 p-4">
-              <div className="mb-3">
-                <h3 className="text-sm font-medium text-fg">{copy[intent][0]}</h3>
-                <p className="mt-0.5 text-xs text-fg-muted">{copy[intent][1]}</p>
+      <SettingsAdvancedSection title={zh ? "任务模型路由" : "Task model routing"} summary={zh ? `已配置 ${Object.keys(draft.models.intents).length} 类任务路由；其他任务使用默认模型。` : `${Object.keys(draft.models.intents).length} task routes configured; other tasks use the default model.`}>
+        <section className="rounded-xl bg-surface-hover/20 p-5">
+          <h2 className="text-base font-semibold text-fg">{zh ? '按任务选择模型' : 'Route by task'}</h2>
+          <p className="mt-1 text-sm text-fg-muted">{zh ? '仅在确实需要不同模型时设置；否则保持“使用默认对话模型”。' : 'Set a route only when a task genuinely needs another model; otherwise keep the default.'}</p>
+          <div className="mt-5 grid gap-3 lg:grid-cols-2">
+            {INTENTS.map((intent) => (
+              <div key={intent} className="rounded-xl bg-surface-base/55 p-4">
+                <div className="mb-3">
+                  <h3 className="text-sm font-medium text-fg">{copy[intent][0]}</h3>
+                  <p className="mt-0.5 text-xs text-fg-muted">{copy[intent][1]}</p>
+                </div>
+                <ModelSelector
+                  value={draft.models.intents[intent]?.primary ?? ''}
+                  placeholder={zh ? '使用默认对话模型' : 'Use default conversation model'}
+                  searchPlaceholder={zh ? '搜索模型或服务商' : 'Search models or providers'}
+                  noMatches={zh ? '没有匹配的模型' : 'No matching models'}
+                  allowEmpty
+                  emptyLabel={zh ? '使用默认对话模型' : 'Use default conversation model'}
+                  showProviderInTrigger={false}
+                  contentAlign="start"
+                  className="w-full"
+                  ariaLabel={zh ? `${copy[intent][0]}模型` : `${copy[intent][0]} model`}
+                  onChange={(model) => setIntent(intent, model)}
+                />
               </div>
-              <ModelSelector
-                value={draft.models.intents[intent]?.primary ?? ''}
-                placeholder={zh ? '使用默认对话模型' : 'Use default conversation model'}
-                searchPlaceholder={zh ? '搜索模型或服务商' : 'Search models or providers'}
-                noMatches={zh ? '没有匹配的模型' : 'No matching models'}
-                allowEmpty
-                emptyLabel={zh ? '使用默认对话模型' : 'Use default conversation model'}
-                showProviderInTrigger={false}
-                contentAlign="start"
-                className="w-full"
-                ariaLabel={zh ? `${copy[intent][0]}模型` : `${copy[intent][0]} model`}
-                onChange={(model) => setIntent(intent, model)}
-              />
-            </div>
-          ))}
-        </div>
-      </section>
+            ))}
+          </div>
+        </section>
+      </SettingsAdvancedSection>
     </div>
   );
 }

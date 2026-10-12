@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { creditDecimal, parseCreditDecimal } from '@xopcai/gateway-contract';
 import useSWR from 'swr';
 
+import { SettingsAdvancedSection } from '@/features/settings/settings-advanced-section';
 import { NumberInput } from '@/components/ui/number-input';
 import { Button } from '@/components/ui/button';
 import { PopoverSelect } from '@/components/ui/popover-select';
@@ -70,44 +71,49 @@ export function AgentDefaultsRuntimePanel({
 
   return (
     <div className="space-y-5">
-      <section className="rounded-xl bg-surface-hover/20 p-5">
-        <label className="flex cursor-pointer items-start gap-3">
-          <input type="checkbox" checked={draft.runtime.codemode?.enabled ?? false}
-            onChange={event => setDraft({ ...draft, runtime: { ...draft.runtime,
-              codemode: { ...draft.runtime.codemode, enabled: event.target.checked } } })}
-            className="mt-1 size-4 accent-[var(--color-accent)]" />
-          <span><span className="block text-base font-semibold text-fg">{zh ? 'Codemode 读取试点' : 'Codemode read pilot'}</span>
-            <span className="mt-1 block text-sm text-fg-muted">{zh ? '允许智能体用脚本组合已授权的读取工具。默认关闭，保留普通工具调用。' : 'Let agents combine authorized reads in scripts. Off by default; ordinary tool calls stay available.'}</span>
-          </span>
-        </label>
-      </section>
-      <section className="rounded-xl bg-surface-hover/20 p-5">
-        <h2 className="text-base font-semibold text-fg">{zh ? '执行限制' : 'Execution limits'}</h2>
-        <p className="mt-1 text-sm text-fg-muted">{zh ? '为所有智能体设置安全上限；留空时使用系统默认值。' : 'Set safe upper bounds for every agent. Empty fields use system defaults.'}</p>
-        <div className="mt-5 grid gap-4 md:grid-cols-3">
-          <CreditRunLimit draft={draft} setDraft={setDraft} zh={zh} />
-          <label className="block text-xs font-medium text-fg-muted">{zh ? '每次运行最多轮数' : 'Maximum turns per run'}<NumberInput allowEmpty type="number" min={1} value={draft.runtime.maxTurns ?? ''} placeholder={zh ? '系统默认' : 'System default'} onChange={(event) => setDraft({ ...draft, runtime: { ...draft.runtime, maxTurns: positiveInt(event.target.value) } })} className={`${inputClass} mt-2`} /></label>
-          <label className="block text-xs font-medium text-fg-muted">{zh ? '单轮超时（毫秒）' : 'Turn timeout (ms)'}<NumberInput allowEmpty type="number" min={1} value={draft.runtime.timeoutMs ?? ''} placeholder={zh ? '系统默认' : 'System default'} onChange={(event) => setDraft({ ...draft, runtime: { ...draft.runtime, timeoutMs: positiveInt(event.target.value) } })} className={`${inputClass} mt-2`} /></label>
-          <label className="block text-xs font-medium text-fg-muted">{zh ? '每轮最多工具失败次数' : 'Maximum tool failures per turn'}<NumberInput allowEmpty type="number" min={1} value={draft.runtime.maxToolFailuresPerTurn ?? ''} placeholder={zh ? '系统默认' : 'System default'} onChange={(event) => setDraft({ ...draft, runtime: { ...draft.runtime, maxToolFailuresPerTurn: positiveInt(event.target.value) } })} className={`${inputClass} mt-2`} /></label>
-        </div>
-      </section>
+      <section className="rounded-xl bg-surface-hover/20 p-5"><h2 className="mb-4 text-base font-semibold text-fg">{zh ? "费用控制" : "Spending control"}</h2><CreditRunLimit draft={draft} setDraft={setDraft} zh={zh} /></section>
+      <SettingsAdvancedSection title={zh ? "执行与缓存策略" : "Execution and cache policy"} summary={zh ? `轮数：${draft.runtime.maxTurns ?? "默认"} · 超时：${draft.runtime.timeoutMs ?? "默认"} · 缓存：${draft.runtime.promptCache?.mode ?? "默认"} · Codemode：${draft.runtime.codemode?.enabled ? "开启" : "关闭"}` : `Turns: ${draft.runtime.maxTurns ?? "default"} · Timeout: ${draft.runtime.timeoutMs ?? "default"} · Cache: ${draft.runtime.promptCache?.mode ?? "default"} · Codemode: ${draft.runtime.codemode?.enabled ? "on" : "off"}`}>
+        <section className="rounded-xl bg-surface-hover/20 p-5">
+          <label className="flex cursor-pointer items-start gap-3">
+            <input type="checkbox" checked={draft.runtime.codemode?.enabled ?? false}
+              onChange={event => setDraft({ ...draft, runtime: { ...draft.runtime,
+                codemode: { ...draft.runtime.codemode, enabled: event.target.checked } } })}
+              className="mt-1 size-4 accent-[var(--color-accent)]" />
+            <span><span className="block text-base font-semibold text-fg">{zh ? 'Codemode 读取试点' : 'Codemode read pilot'}</span>
+              <span className="mt-1 block text-sm text-fg-muted">{zh ? '允许智能体用脚本组合已授权的读取工具。默认关闭，保留普通工具调用。' : 'Let agents combine authorized reads in scripts. Off by default; ordinary tool calls stay available.'}</span>
+            </span>
+          </label>
+        </section>
+        <section className="rounded-xl bg-surface-hover/20 p-5">
+          <h2 className="text-base font-semibold text-fg">{zh ? '执行限制' : 'Execution limits'}</h2>
+          <p className="mt-1 text-sm text-fg-muted">{zh ? '为所有智能体设置安全上限；留空时使用系统默认值。' : 'Set safe upper bounds for every agent. Empty fields use system defaults.'}</p>
+          <div className="mt-5 grid gap-4 md:grid-cols-3">
 
-      <section className="rounded-xl bg-surface-hover/20 p-5">
-        <h2 className="text-base font-semibold text-fg">{zh ? '提示词缓存' : 'Prompt cache'}</h2>
-        <p className="mt-1 text-sm text-fg-muted">{zh ? '复用稳定的上下文以降低响应延迟和模型费用。' : 'Reuse stable context to reduce latency and model cost.'}</p>
-        <div className="mt-5 grid gap-4 sm:grid-cols-2">
-          <div className="text-xs font-medium text-fg-muted"><span>{zh ? '缓存模式' : 'Cache mode'}</span><div className="mt-1.5 flex rounded-lg bg-surface-panel p-1">{(['auto', 'off'] as const).map((mode) => <Button key={mode} variant={draft.runtime.promptCache?.mode === mode ? 'secondary' : 'ghost'} className="flex-1 py-1.5 text-xs" onClick={() => setDraft({ ...draft, runtime: { ...draft.runtime, promptCache: { mode, lifetime: draft.runtime.promptCache?.lifetime ?? 'short' } } })}>{mode === 'auto' ? (zh ? '自动' : 'Automatic') : (zh ? '关闭' : 'Off')}</Button>)}</div></div>
-          {draft.runtime.promptCache?.mode === 'auto' ? <div className="text-xs font-medium text-fg-muted"><span>{zh ? '缓存周期' : 'Cache lifetime'}</span><div className="mt-1.5 flex rounded-lg bg-surface-panel p-1">{(['short', 'long'] as const).map((lifetime) => <Button key={lifetime} variant={draft.runtime.promptCache?.lifetime === lifetime ? 'secondary' : 'ghost'} className="flex-1 py-1.5 text-xs" onClick={() => setDraft({ ...draft, runtime: { ...draft.runtime, promptCache: { mode: 'auto', lifetime } } })}>{lifetime === 'short' ? (zh ? '短期' : 'Short') : (zh ? '长期' : 'Long')}</Button>)}</div></div> : null}
-        </div>
-      </section>
+            <label className="block text-xs font-medium text-fg-muted">{zh ? '每次运行最多轮数' : 'Maximum turns per run'}<NumberInput allowEmpty type="number" min={1} value={draft.runtime.maxTurns ?? ''} placeholder={zh ? '系统默认' : 'System default'} onChange={(event) => setDraft({ ...draft, runtime: { ...draft.runtime, maxTurns: positiveInt(event.target.value) } })} className={`${inputClass} mt-2`} /></label>
+            <label className="block text-xs font-medium text-fg-muted">{zh ? '单轮超时（毫秒）' : 'Turn timeout (ms)'}<NumberInput allowEmpty type="number" min={1} value={draft.runtime.timeoutMs ?? ''} placeholder={zh ? '系统默认' : 'System default'} onChange={(event) => setDraft({ ...draft, runtime: { ...draft.runtime, timeoutMs: positiveInt(event.target.value) } })} className={`${inputClass} mt-2`} /></label>
+            <label className="block text-xs font-medium text-fg-muted">{zh ? '每轮最多工具失败次数' : 'Maximum tool failures per turn'}<NumberInput allowEmpty type="number" min={1} value={draft.runtime.maxToolFailuresPerTurn ?? ''} placeholder={zh ? '系统默认' : 'System default'} onChange={(event) => setDraft({ ...draft, runtime: { ...draft.runtime, maxToolFailuresPerTurn: positiveInt(event.target.value) } })} className={`${inputClass} mt-2`} /></label>
+          </div>
+        </section>
 
+        <section className="rounded-xl bg-surface-hover/20 p-5">
+          <h2 className="text-base font-semibold text-fg">{zh ? '提示词缓存' : 'Prompt cache'}</h2>
+          <p className="mt-1 text-sm text-fg-muted">{zh ? '复用稳定的上下文以降低响应延迟和模型费用。' : 'Reuse stable context to reduce latency and model cost.'}</p>
+          <div className="mt-5 grid gap-4 sm:grid-cols-2">
+            <div className="text-xs font-medium text-fg-muted"><span>{zh ? '缓存模式' : 'Cache mode'}</span><div className="mt-1.5 flex rounded-lg bg-surface-panel p-1">{(['auto', 'off'] as const).map((mode) => <Button key={mode} variant={draft.runtime.promptCache?.mode === mode ? 'secondary' : 'ghost'} className="flex-1 py-1.5 text-xs" onClick={() => setDraft({ ...draft, runtime: { ...draft.runtime, promptCache: { mode, lifetime: draft.runtime.promptCache?.lifetime ?? 'short' } } })}>{mode === 'auto' ? (zh ? '自动' : 'Automatic') : (zh ? '关闭' : 'Off')}</Button>)}</div></div>
+            {draft.runtime.promptCache?.mode === 'auto' ? <div className="text-xs font-medium text-fg-muted"><span>{zh ? '缓存周期' : 'Cache lifetime'}</span><div className="mt-1.5 flex rounded-lg bg-surface-panel p-1">{(['short', 'long'] as const).map((lifetime) => <Button key={lifetime} variant={draft.runtime.promptCache?.lifetime === lifetime ? 'secondary' : 'ghost'} className="flex-1 py-1.5 text-xs" onClick={() => setDraft({ ...draft, runtime: { ...draft.runtime, promptCache: { mode: 'auto', lifetime } } })}>{lifetime === 'short' ? (zh ? '短期' : 'Short') : (zh ? '长期' : 'Long')}</Button>)}</div></div> : null}
+          </div>
+        </section>
+
+      </SettingsAdvancedSection>
       <section className="rounded-xl bg-surface-hover/20 p-5">
         <h2 className="text-base font-semibold text-fg">{zh ? '工作流' : 'Workflows'}</h2>
         <p className="mt-1 text-sm text-fg-muted">{zh ? '设置默认工作流，并决定智能体可以调用哪些工作流。' : 'Set a default workflow and control which workflows agents may invoke.'}</p>
-        <div className="mt-5 max-w-xl">
-          <label className="block text-xs font-medium text-fg-muted">{zh ? '默认工作流' : 'Default workflow'}</label>
-          <PopoverSelect value={draft.workflows.default ?? ''} options={workflowOptions} placeholder={workflowsQuery.isLoading ? (zh ? '正在加载…' : 'Loading…') : (zh ? '不设置默认工作流' : 'No default workflow')} emptyLabel={zh ? '不设置默认工作流' : 'No default workflow'} disabled={workflowsQuery.isLoading} ariaLabel={zh ? '默认工作流' : 'Default workflow'} onChange={(value) => setDraft({ ...draft, workflows: { ...draft.workflows, default: value || undefined } })} triggerClassName="mt-2" />
-        </div>
+        <SettingsAdvancedSection title={zh ? "默认工作流" : "Default workflow"} summary={draft.workflows.default || (zh ? "未自动绑定工作流" : "No workflow bound automatically")}>
+          <div className="mt-5 max-w-xl">
+            <label className="block text-xs font-medium text-fg-muted">{zh ? '默认工作流' : 'Default workflow'}</label>
+            <PopoverSelect value={draft.workflows.default ?? ''} options={workflowOptions} placeholder={workflowsQuery.isLoading ? (zh ? '正在加载…' : 'Loading…') : (zh ? '不设置默认工作流' : 'No default workflow')} emptyLabel={zh ? '不设置默认工作流' : 'No default workflow'} disabled={workflowsQuery.isLoading} ariaLabel={zh ? '默认工作流' : 'Default workflow'} onChange={(value) => setDraft({ ...draft, workflows: { ...draft.workflows, default: value || undefined } })} triggerClassName="mt-2" />
+          </div>
+        </SettingsAdvancedSection>
         {workflowsQuery.error ? <p className="mt-3 text-sm text-red-600">{workflowsQuery.error instanceof Error ? workflowsQuery.error.message : String(workflowsQuery.error)}</p> : null}
 
         <div className="mt-6 rounded-xl bg-surface-base/45 p-4">

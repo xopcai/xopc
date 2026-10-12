@@ -74,7 +74,8 @@ export const ELECTRON_SYSTEM_NAV_GROUP: SettingsShellNavGroup = {
  *   - `connection`: user-facing ways to reach and share this xopc instance.
  *   - `system`: local service, runtimes, sessions, and diagnostics.
  *
- * Electron-only system rows are merged into the system group by the layout.
+ * Runtime management and diagnostics are advanced destinations; ordinary setup
+ * retains dependency repair. Electron-only rows are merged by the layout.
  */
 export const SETTINGS_SHELL_NAV_GROUPS: readonly SettingsShellNavGroup[] = [
   { id: 'general', tabs: ['settingsOverview', 'settingsAppearance', 'settingsKeyboardShortcuts'] },

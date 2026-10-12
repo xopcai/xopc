@@ -22,15 +22,17 @@ describe('Cloud Credit account', () => {
     act(() => root.render(<XopcCloudAccountCard labels={messages('zh').capabilitiesSettings.xopcCloudAccount} />));
     return element;
   }
-  it('renders microcredits as exact Credits and separates reservations from charged usage', () => {
+  it('rounds Credits to at most one decimal and separates reservations from charged usage', () => {
     state.data = { schemaVersion: 2, creditUnit: { unit: 'credit', microPerCredit: '10000', version: 'credit-v1' },
       balance: { availableCreditMicro: '84320', purchasedCreditMicro: '84000', grantedCreditMicro: '320', usageReservedCreditMicro: '10000', refundReservedCreditMicro: '10000', expiring: [], updatedAt: '2026-10-11T00:00:00.000Z' },
       usage: { chargedCreditMicro: '1842', requests: 38, totalTokens: 126480 },
       links: { purchase: 'https://console.xopc.ai/models/credits/purchase', details: 'https://console.xopc.ai/models/billing' } };
     const element = render();
-    expect(element.textContent).toContain('8.432');
-    expect(element.textContent).toContain('0.1842 Credits');
+    expect(element.textContent).toContain('8.4Credits');
+    expect(element.textContent).toContain('0.2 Credits');
     expect(element.textContent).toContain('预留中: 2 Credits');
+    expect(element.textContent).toContain('购买余额: 8.4 Credits');
+    expect(element.textContent).toContain('赠送余额: 0 Credits');
     expect(element.querySelector('details')?.hasAttribute('open')).toBe(false);
     expect(element.textContent).not.toContain('84320');
   });

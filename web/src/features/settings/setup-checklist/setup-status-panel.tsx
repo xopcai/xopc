@@ -18,6 +18,7 @@ import {
   SettingsFormSectionHeader,
 } from '@/features/settings/settings-form-section';
 import { SettingsAdvancedGate } from '@/features/settings/settings-advanced-gate';
+import { RuntimeReadiness } from '@/features/settings/runtime-tools/runtime-readiness';
 import { SettingsPageSkeleton } from '@/features/settings/settings-loading-skeleton';
 import { SettingsPageFrame, SettingsPageHeader } from '@/features/settings/settings-page-layout';
 import { messages } from '@/i18n/messages';
@@ -338,6 +339,7 @@ export function SetupStatusPanel() {
             )}
           </SettingsFormSection>
 
+          <RuntimeReadiness />
           <SettingsAdvancedGate>
             <SettingsFormSection>
               <SettingsFormSectionHeader icon={Stethoscope} title={s.diagnosticsTitle} />

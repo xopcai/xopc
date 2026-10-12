@@ -3,6 +3,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'reac
 import { useNavigate } from 'react-router-dom';
 import useSWR from 'swr';
 
+import { SettingsAdvancedSection } from '@/features/settings/settings-advanced-section';
 import { Button } from '@/components/ui/button';
 import type { CapabilityHeaderActionChange } from '@/features/capabilities/capability-header-actions';
 import { PopoverSelect, type PopoverSelectOption } from '@/components/ui/popover-select';
@@ -129,6 +130,11 @@ function getBasicConfigPaths(entry: ChannelCatalogEntry | undefined): string[] {
   const issuePaths = channelSetupStatus(entry).issues
     .map((issue) => issue.fieldPath)
     .filter((path): path is string => Boolean(path));
+  const accessFields = new Set(['dmPolicy', 'groupPolicy', 'allowFrom', 'groupAllowFrom']);
+  const accessPaths = [
+    ...Object.keys(hints).filter((path) => !path.includes('*') && accessFields.has(path.split('.').at(-1) ?? '')),
+    ...Object.keys(isRecord(entry.configSchema?.properties) ? entry.configSchema.properties : {}).filter((path) => accessFields.has(path)),
+  ];
   const basic = Object.entries(hints)
     .filter(([, hint]) => {
       if (!isRecord(hint)) return false;
@@ -138,7 +144,7 @@ function getBasicConfigPaths(entry: ChannelCatalogEntry | undefined): string[] {
     })
     .map(([path]) => path)
     .filter((path) => !SCHEMA_FIELD_PATHS_MANAGED_OUTSIDE_FORM.includes(path));
-  return Array.from(new Set([...basic, ...schemaRequired, ...issuePaths]))
+  return Array.from(new Set([...basic, ...accessPaths, ...schemaRequired, ...issuePaths]))
     .filter((path) => !SCHEMA_FIELD_PATHS_MANAGED_OUTSIDE_FORM.includes(path));
 }
 
@@ -1003,21 +1009,23 @@ export function ChannelsSettingsPanel({
             </details>
 
             {showSchemaConfig && hasSchemaFields(advancedConfigSchema) ? (
-              <details className="group rounded-xl bg-surface-panel/80 shadow-surface">
-                <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-3 text-sm font-medium text-fg marker:hidden [&::-webkit-details-marker]:hidden">
-                  <Settings2 className="size-4 text-fg-muted" />
-                  {ch.advancedConfiguration}
-                </summary>
-                <div className="bg-surface-base/50 p-4">
-                  <SchemaForm
-                    schema={advancedConfigSchema}
-                    values={effectiveConfig}
-                    onChange={(next) => setDraft(next)}
-                    disabled={saving}
-                    labels={schemaLabels}
-                  />
-                </div>
-              </details>
+              <SettingsAdvancedSection title={ch.advancedConfiguration} summary={ch.messageHandlingHint}>
+                <details className="group rounded-xl bg-surface-panel/80 shadow-surface">
+                  <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-3 text-sm font-medium text-fg marker:hidden [&::-webkit-details-marker]:hidden">
+                    <Settings2 className="size-4 text-fg-muted" />
+                    {ch.advancedConfiguration}
+                  </summary>
+                  <div className="bg-surface-base/50 p-4">
+                    <SchemaForm
+                      schema={advancedConfigSchema}
+                      values={effectiveConfig}
+                      onChange={(next) => setDraft(next)}
+                      disabled={saving}
+                      labels={schemaLabels}
+                    />
+                  </div>
+                </details>
+              </SettingsAdvancedSection>
             ) : null}
 
             {error ? <p className="text-sm text-red-600 dark:text-red-400">{error}</p> : null}

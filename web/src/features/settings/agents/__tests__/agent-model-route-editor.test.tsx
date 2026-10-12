@@ -5,6 +5,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
 import type { ModelRoute } from '@/features/settings/types/agent-gateway';
+import { useSettingsModeStore } from '@/stores/settings-mode-store';
 
 const fixture = vi.hoisted(() => ({
   loading: false,
@@ -36,12 +37,28 @@ const option = (id: string) => document.querySelector<HTMLButtonElement>(`button
 const button = (text: string) => [...document.querySelectorAll('button')].find((node) => node.textContent === text)!;
 
 beforeEach(() => {
+  useSettingsModeStore.setState({ mode: 'advanced' });
   fixture.loading = false;
   container = document.createElement('div');
   document.body.append(container);
   root = createRoot(container);
 });
 afterEach(() => { act(() => root.unmount()); container.remove(); });
+
+it('changes the primary in simple mode without losing hidden fallbacks', async () => {
+  useSettingsModeStore.setState({ mode: 'simple' });
+  await render({ primary: 'test/one', fallbacks: ['removed/fallback', 'test/two'] });
+  expect(named('添加回退模型')).toBeNull();
+  await click(named('对话主模型'));
+  await click(option('test/vision'));
+  expect(current).toEqual({ primary: 'test/vision', fallbacks: ['removed/fallback', 'test/two'] });
+  await click(button('Show advanced settings'));
+  expect(named('添加回退模型')).not.toBeNull();
+  expect(current?.fallbacks).toEqual(['removed/fallback', 'test/two']);
+  await act(async () => useSettingsModeStore.getState().setMode('simple'));
+  expect(named('添加回退模型')).toBeNull();
+  expect(current?.fallbacks).toEqual(['removed/fallback', 'test/two']);
+});
 
 async function render(value: ModelRoute | null | undefined, modelKind: 'text' | 'vision' | 'image' = 'text') {
   function Harness() {

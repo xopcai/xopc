@@ -4,10 +4,14 @@ import type { SettingsMode } from '@/stores/settings-mode-store';
 /** Settings rail tabs hidden when `mode === 'simple'`. */
 export const SIMPLE_MODE_HIDDEN_SETTINGS_TABS = new Set<Tab>([
   'logs',
+  'tracing',
+  'settingsRuntimes',
 ]);
 
 const SIMPLE_MODE_HIDDEN_SETTINGS_PATH_PREFIXES = [
   '/settings/logs',
+  '/settings/tracing',
+  '/settings/runtimes',
   '/settings/extensions/debug',
   '/settings/ext/',
 ] as const;
@@ -24,6 +28,6 @@ export function isSettingsPathVisibleInMode(pathname: string, mode: SettingsMode
     return true;
   }
   return !SIMPLE_MODE_HIDDEN_SETTINGS_PATH_PREFIXES.some(
-    (prefix) => pathname === prefix || pathname.startsWith(prefix),
+    (prefix) => pathname === prefix || pathname.startsWith(prefix.endsWith('/') ? prefix : `${prefix}/`),
   );
 }
