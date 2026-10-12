@@ -1,3 +1,6 @@
+import { MemoryLearningService } from '../memory-learning/service.js';
+import { enqueueConversationLearning } from '../memory-learning/repository.js';
+import { runPersistentLearningJob } from './background-review/run-background-review.js';
 import { traceTools } from '../observability/runtime.js';
 import type { SceneAccess } from '../scenes/httpServices.js';
 /**
@@ -93,7 +96,6 @@ import { ExecutionContextCoordinator, type ExecutionContextPlan } from './contex
 import { resolveUserContextSessionAccess } from '../user-context/access-policy.js';
 import { evaluateToolGate } from './context/execution-context.js';
 import { WorkspaceRuntimeRegistry, type WorkspaceRuntime } from './workspace-runtime/registry.js';
-import { BackgroundReviewCoordinator } from './background-review/coordinator.js';
 import { maybeRequestChannelExecApproval } from '../channels/exec-approval-runtime.js';
 import { SkillFilesystemWatcher } from './skills/filesystem-watcher.js';
 import { resolveWorkspaceSkillsDir, resolveWorkspaceSkillsLockPath } from './skills/workspace-skills-dir.js';
@@ -300,8 +302,7 @@ export class AgentManager implements AgentInstanceGateway {
   private credentialResolver: CredentialResolver;
   private workspaceRuntimes: WorkspaceRuntimeRegistry;
   private executionContext: ExecutionContextCoordinator;
-  private backgroundReview: BackgroundReviewCoordinator;
-  private userUnderstandingMaintenance = new Map<string, Promise<void>>();
+  private memoryLearning: MemoryLearningService;
   private skillFilesystemWatcher: SkillFilesystemWatcher;
   private skillDiskRefreshInProgress = false;
   private skillDiskRefreshPending = false;
@@ -347,9 +348,11 @@ export class AgentManager implements AgentInstanceGateway {
         maxResults: input.maxResults,
       }),
     });
-    this.backgroundReview = new BackgroundReviewCoordinator({
-      getConfig: () => this.mergedConfig(),
+    this.memoryLearning = new MemoryLearningService({ getConfig: () => this.mergedConfig(),
+      workspaceForSession: id => this.getResolvedWorkspaceForSession(id),
+      execute: job => runPersistentLearningJob(job, () => this.mergedConfig()),
     });
+    this.memoryLearning.start();
     this.toolsFactory = new AgentToolsFactory(this.buildToolsFactoryDeps());
 
     this.defaultModel = config.model || getDefaultModelSync(config.config);
@@ -568,54 +571,18 @@ export class AgentManager implements AgentInstanceGateway {
     return this.executionContext.prepare(userMessage, conversationId, turnId);
   }
 
-  /**
-   * Call once per user turn before the main embedded agent turn.
-   * Delegates to {@link BackgroundReviewCoordinator}.
-   */
+  /** Recover previously committed learning intent before an interactive turn starts. */
   beginBackgroundReviewUserTurn(conversationId: string): void {
-    const inst = this.agents.get(conversationId);
-    if (!inst || !this.isUserContextEnabledForSession(conversationId)) return;
-    this.backgroundReview.beginUserTurn(conversationId);
+    const cfg = this.mergedConfig();
+    if (cfg) enqueueConversationLearning(cfg, conversationId, this.getResolvedWorkspaceForSession(conversationId));
   }
 
   /** After a successful main turn, may run a quiet follow-up for context review and skills. */
   scheduleBackgroundReviewAfterUserTurn(conversationId: string): void {
-    const inst = this.agents.get(conversationId);
-    if (!inst || !this.isUserContextEnabledForSession(conversationId)) return;
-    let task: (() => Promise<void>) | undefined;
-    try {
-      task = this.backgroundReview.createReviewTaskAfterUserTurn({
-        conversationId,
-        agent: inst.agent,
-        lastAssistantText: this.getLastAssistantContent(conversationId),
-        workspaceId: this.getResolvedWorkspaceForSession(conversationId),
-      });
-    } catch (err) {
-      log.warn({ err, conversationId }, 'Background user-understanding review could not be scheduled');
-      return;
-    }
-    if (task) this.enqueueUserUnderstandingMaintenance(conversationId, 'review', task);
-  }
-
-  private enqueueUserUnderstandingMaintenance(
-    conversationId: string,
-    phase: 'review',
-    task: () => Promise<unknown>,
-  ): void {
-    const previous = this.userUnderstandingMaintenance.get(conversationId) ?? Promise.resolve();
-    let current: Promise<void>;
-    current = previous
-      .catch(() => {})
-      .then(async () => { await task(); })
-      .catch((err) => {
-        log.warn({ err, conversationId, phase }, 'User-understanding maintenance failed');
-      })
-      .finally(() => {
-        if (this.userUnderstandingMaintenance.get(conversationId) === current) {
-          this.userUnderstandingMaintenance.delete(conversationId);
-        }
-      });
-    this.userUnderstandingMaintenance.set(conversationId, current);
+    const cfg = this.mergedConfig();
+    if (!cfg) return;
+    enqueueConversationLearning(cfg, conversationId, this.getResolvedWorkspaceForSession(conversationId));
+    void this.memoryLearning.runNow();
   }
 
   /**
@@ -1265,7 +1232,6 @@ export class AgentManager implements AgentInstanceGateway {
   removeAgent(conversationId: string): boolean {
     const instance = this.agents.get(conversationId);
     if (instance) {
-      this.backgroundReview.forgetSession(conversationId);
       void this.toolsFactory.closeBrowserPageForSession(conversationId);
       instance.agent.abort();
       evictEmbeddedSessionRunner(conversationId, 'agent_removed');
@@ -1352,8 +1318,7 @@ export class AgentManager implements AgentInstanceGateway {
     this.skillFilesystemWatcher.dispose();
     void this.toolsFactory.shutdownBrowser();
     evictAllEmbeddedSessionRunners('agent_manager_dispose');
-    this.backgroundReview.clear();
-    this.userUnderstandingMaintenance.clear();
+    this.memoryLearning.stop();
     for (const instance of this.agents.values()) {
       instance.agent.abort();
     }

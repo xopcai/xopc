@@ -1,3 +1,5 @@
+import { memorySearchText } from '../../../knowledge-memory/search-text.js';
+
 import { writeFileSync } from 'node:fs';
 
 import type { DatabaseSync } from 'node:sqlite';
@@ -23,7 +25,7 @@ const log = createLogger('Sqlite:Migrations');
 export const XOPC_DB_BASELINE_SCHEMA_VERSION = 165;
 
 /** Latest schema version this release supports (increment when adding migrations). */
-export const XOPC_DB_SCHEMA_VERSION = 244;
+export const XOPC_DB_SCHEMA_VERSION = 245;
 
 function writeMigrationReport(backupPath: string, report: Record<string, unknown>): void {
   const reportPath = `${backupPath}.report.json`;
@@ -91,6 +93,7 @@ export function applyPendingMigrations(
   options: ApplyMigrationsOptions = {},
 ): number {
   // Required by transactional resource triggers on every connection, including already-current databases.
+  db.function('xopc_memory_search_text', { deterministic: true }, (value) => memorySearchText(String(value ?? '')));
   db.function('xopc_operation_id', () => currentOperationId() ?? null);
   const targetVersion = options.targetVersion ?? XOPC_DB_SCHEMA_VERSION;
   let currentVersion = readSchemaVersion(db);

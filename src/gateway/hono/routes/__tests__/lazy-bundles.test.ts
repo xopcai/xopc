@@ -133,10 +133,15 @@ describe('lazy route bundles', () => {
       '/api/user-model/assertions/id/scope',
       '/api/knowledge-memory/id',
       '/api/knowledge-memory/id/review',
+      '/api/knowledge-memory/id/evidence',
+      '/api/memory-learning/status',
+      '/api/memory-learning/jobs/id',
+      '/api/memory-learning/rebuild',
+      '/api/memory-learning/owner-identities',
     ]) {
       expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('user-model');
     }
-    for (const path of ['/api/user-model-other', '/api/knowledge-memory-other']) {
+    for (const path of ['/api/user-model-other', '/api/knowledge-memory-other', '/api/memory-learning-other']) {
       expect(findAuthenticatedLazyRouteBundle(path)).toBeUndefined();
     }
   });

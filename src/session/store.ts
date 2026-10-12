@@ -870,6 +870,7 @@ export class SessionStore {
           handover: result.handover,
           audit: result.audit,
           sourceEntries: expectedSnapshot.entries,
+          readPolicy: access.knowledgePolicy,
           writePolicy: access.knowledge
             && access.knowledgePolicy.scopes.includes('session')
             && access.knowledgePolicy.contentSources.includes('memory')

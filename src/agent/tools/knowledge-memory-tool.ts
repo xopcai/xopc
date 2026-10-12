@@ -1,10 +1,10 @@
 import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
 import { Type } from '@sinclair/typebox';
+import { inferMemorySensitivity } from '../memory/sensitivity.js';
 
 import {
   getKnowledgeItem,
-  isKnowledgeCurrent,
-  knowledgeItemAllowed,
+  canUseKnowledge,
   searchKnowledgeItems,
   writeKnowledgeItem,
   type KnowledgeReadPolicy,
@@ -71,14 +71,6 @@ export function createKnowledgeSearchTool(options: KnowledgeToolOptions): AgentT
   } as AgentTool;
 }
 
-function visibleItem(options: KnowledgeToolOptions, item: NonNullable<ReturnType<typeof getKnowledgeItem>>): boolean {
-  return item.scope.type === 'global'
-    || (item.scope.type === 'agent' && item.scope.id === options.agentId)
-    || (item.scope.type === 'workspace' && item.scope.id === options.workspaceId)
-    || (item.scope.type === 'project' && item.scope.id === options.getProjectId?.())
-    || (item.scope.type === 'session' && item.scope.id === options.getSessionId());
-}
-
 export function createKnowledgeGetTool(options: KnowledgeToolOptions): AgentTool {
   return {
     name: 'knowledge_get',
@@ -92,7 +84,7 @@ export function createKnowledgeGetTool(options: KnowledgeToolOptions): AgentTool
       }
       const id = (raw as { id: string }).id;
       const item = getKnowledgeItem(id);
-      return item && isKnowledgeCurrent(item) && visibleItem(options, item) && knowledgeItemAllowed(item, options.getReadPolicy())
+      return item && canUseKnowledge(item, visibility(options), options.getReadPolicy())
         ? { content: [{ type: 'text', text: JSON.stringify(item, null, 2) }], details: { item, complete: true } }
         : { content: [{ type: 'text', text: `Knowledge item not found: ${id}` }], details: { id, error: 'knowledge_not_found' } };
     },
@@ -117,6 +109,10 @@ export function createKnowledgeWriteTool(options: KnowledgeToolOptions): AgentTo
         kind: Parameters<typeof writeKnowledgeItem>[0]['kind']; content: string;
         canonicalKey: string; scope: 'workspace' | 'project' | 'session'; importance?: number;
       };
+      if (['secret', 'regulated'].includes(inferMemorySensitivity(input.content))) {
+        return { content: [{ type: 'text', text: 'Sensitive credentials or regulated information cannot be stored as work knowledge.' }],
+          details: { error: 'sensitive_knowledge_denied' } };
+      }
       if (!options.getReadPolicy().scopes.includes(input.scope)
         || !options.getReadPolicy().contentSources.includes('memory')) {
         return {
@@ -137,7 +133,9 @@ export function createKnowledgeWriteTool(options: KnowledgeToolOptions): AgentTo
             : { type: 'session', id: sessionId! },
         content: input.content,
         canonicalKey: input.canonicalKey,
-        status: 'active',
+        status: 'candidate',
+        verification: 'tentative',
+        claimMode: 'inferred',
         confidence: 0.7,
         importance: input.importance ?? 0.5,
         originClass: 'agent',

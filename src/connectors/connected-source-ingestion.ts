@@ -1,5 +1,9 @@
 import { createHash } from 'node:crypto';
+import { realpath } from 'node:fs/promises';
+import { resolve } from 'node:path';
 
+import { upsertUnderstandingSourceGrant, listUnderstandingSourceGrants } from '../user-context/sources/repository.js';
+import { grantUnderstandingConsent, getActiveUnderstandingConsent } from '../user-context/sources/consent-repository.js';
 import type { Config } from '../config/schema.js';
 import { getWorkspacePath } from '../config/workspace-path-helpers.js';
 import { createLogger } from '../utils/logger.js';
@@ -170,9 +174,8 @@ function resultToSourceItems(input: {
     const actorAttributed = entity.metadata.actorAttributed === true
       || hasOwnerAttribution(input.toolkit, people, ownerIdentities);
     const serialized = JSON.stringify(sanitizeConnectedSourceValue(entity.value), null, 2);
-    const contentChars = typeof entity.value.content === 'string' ? 24_000 : 8_000;
-    const normalizedText = serialized.length > contentChars ? `${serialized.slice(0, contentChars)}\n…` : serialized;
-    const contentHash = createHash('sha256').update(serialized).digest('hex');
+    const normalizedText = serialized;
+    const contentHash = createHash('sha256').update(`connected-source-v2:${serialized}`).digest('hex');
     return {
       sourceInstanceId: input.sourceInstanceId,
       collectionScope: input.collectionScope,
@@ -414,9 +417,27 @@ export async function ingestLocalFolderSource(input: {
   }
   const instance = getConnectorInstance(input.config, definition.id);
   if (!instance?.enabled) throw new Error('Local folder connector is not installed and enabled.');
-  const rootPath = typeof instance.config?.rootPath === 'string' ? instance.config.rootPath.trim() : '';
-  if (!rootPath) throw new Error('Local folder connector requires a rootPath.');
+  const configuredRoot = typeof instance.config?.rootPath === 'string' ? instance.config.rootPath.trim() : '';
+  if (!configuredRoot) throw new Error('Local folder connector requires a rootPath.');
+  const rootPath = await realpath(resolve(configuredRoot));
   const sourceInstanceId = `local-folder:${definition.id}`;
+  const priorGrant = listUnderstandingSourceGrants({ includeRevoked: true }).find(grant => grant.sourceKey === sourceInstanceId);
+  if (priorGrant && (priorGrant.status === 'revoked' || !getActiveUnderstandingConsent(priorGrant.id))) {
+    throw new Error('Local folder source authorization was revoked. Restore it before syncing.');
+  }
+  if (priorGrant && (priorGrant.config.rootPath !== rootPath
+    || (getActiveUnderstandingConsent(priorGrant.id)?.allowedAgentIds
+      && !getActiveUnderstandingConsent(priorGrant.id)!.allowedAgentIds!.includes(input.agentId)))) {
+    throw new Error('Local folder root or Agent differs from the existing authorization. Update source authorization before syncing.');
+  }
+  const grant = upsertUnderstandingSourceGrant({ sourceKey: sourceInstanceId,
+    adapterId: `connector:${definition.id}`, category: 'files', platform: 'all', displayName: definition.displayName,
+    accessMode: 'continuous', retentionPolicy: 'bounded_raw', processingPolicy: 'local_only',
+    config: { sourceInstanceId, rootPath } });
+  if (!getActiveUnderstandingConsent(grant.id)) grantUnderstandingConsent({ grantId: grant.id,
+    purposes: ['work_assistance'], allowedDomains: ['goals'], deniedDomains: [],
+    allowedFields: ['title', 'content', 'timestamps'], accessMode: 'continuous', lookbackDays: 0,
+    rawRetentionDays: 365, processingPolicy: 'local_only', allowedAgentIds: [input.agentId], disclosureVersion: 'local-folder-1' });
   const adapter = new LocalFolderKnowledgeSourceAdapter(rootPath);
   const syncRun = await new KnowledgeIngestionService(new Map([[adapter.kind, adapter]])).sync({
     adapterKind: adapter.kind,

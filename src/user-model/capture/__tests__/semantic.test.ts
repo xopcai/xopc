@@ -43,6 +43,12 @@ function response(overrides: Record<string, unknown> = {}): string {
 }
 
 describe('user model semantic capture', () => {
+  it('classifies each grounded assertion independently in a mixed work transcript', () => {
+    const input = JSON.parse(response({ intent: 'user_assertion' }));
+    input.intent = 'task';
+    expect(parseUserModelInterpretation(JSON.stringify(input), evidence)?.assertions).toHaveLength(1);
+    expect(parseUserModelInterpretation(JSON.stringify(input), [{ ...evidence[0]!, role: 'toolResult' }])?.assertions).toHaveLength(0);
+  });
   it('grounds evidence and keeps importance separate from confidence', () => {
     const parsed = parseUserModelInterpretation(response(), evidence);
     expect(parsed?.assertions[0]).toMatchObject({

@@ -1,3 +1,6 @@
+import { resolveUserContextSessionAccess } from '../../user-context/access-policy.js';
+import { resolveKnowledgeReadPolicy } from '../../user-context/config.js';
+import { canUseKnowledge } from '../../knowledge-memory/index.js';
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
 
 import { buildExecutionContext } from '../../agent/context/execution-context.js';
@@ -49,7 +52,7 @@ export function buildVoiceMemoryContext(input: {
   const started = performance.now();
   try {
     const config = input.getConfig();
-    if (!voiceMemoryEnabled(config, input.conversationId) || input.maxChars < 128) return;
+    if (!resolveUserContextSessionAccess(config, input.conversationId).userModel || !voiceMemoryEnabled(config, input.conversationId) || input.maxChars < 128) return;
     const session = getSessionMetadata(input.conversationId);
     const context = buildExecutionContext({
       query: voiceMemoryQuery(input.history),
@@ -59,6 +62,8 @@ export function buildVoiceMemoryContext(input: {
       conversationId: input.conversationId,
       maxAssertions: 6,
       maxKnowledge: 3,
+      includeKnowledge: resolveUserContextSessionAccess(config, input.conversationId).knowledge,
+      knowledgePolicy: resolveKnowledgeReadPolicy(config.userContext.knowledgeMemory),
     });
     const block = JSON.stringify({
       backgroundMemory: {
@@ -82,7 +87,9 @@ export function buildVoiceMemoryContext(input: {
         || JSON.stringify(input.getConfig().userContext) !== configVersion) return false;
       return references.every((reference) => reference.kind === 'assertion'
         ? getUserAssertion(reference.id)?.recordedAt === reference.updatedAt
-        : getKnowledgeItem(reference.id)?.updatedAt === reference.updatedAt);
+        : (() => { const item = getKnowledgeItem(reference.id); return Boolean(item && item.updatedAt === reference.updatedAt
+          && canUseKnowledge(item, { agentId: session?.routing?.agentId ?? 'main', workspaceId: input.workspaceId,
+            projectId: input.projectId, conversationId: input.conversationId }, resolveKnowledgeReadPolicy(input.getConfig().userContext.knowledgeMemory))); })());
     };
     log.debug({ conversationId: input.conversationId, selectedCount: references.length,
       contextChars: block.length, durationMs: performance.now() - started }, 'Native voice memory selected');

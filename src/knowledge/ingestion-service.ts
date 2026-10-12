@@ -144,7 +144,9 @@ export class KnowledgeIngestionService {
           throw new Error('Knowledge source returned an invalid pagination cursor.');
         }
         if (page === MAX_PULL_PAGES - 1) {
-          throw new Error(`Knowledge source exceeded the ${MAX_PULL_PAGES}-page safety limit.`);
+          warnings.push(`Knowledge source paused after ${MAX_PULL_PAGES} pages; resume from the saved cursor.`);
+          snapshotComplete = false;
+          break;
         }
         pullCursor = pulled.nextCursor;
       }

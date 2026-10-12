@@ -1,3 +1,5 @@
+import { isOwnerIdentity } from './identity-bindings.js';
+
 import type { Config } from '../config/schema.js';
 import type { KnowledgeReadPolicy } from '../knowledge-memory/index.js';
 import { resolveKnowledgeReadPolicy } from './config.js';
@@ -28,7 +30,7 @@ export function resolveUserContextSessionAccess(
   }
   const session = getConversationRouting(conversationId);
   const mode = getSessionConfig(conversationId)?.userContextMode ?? 'enabled';
-  const enabled = Boolean(config.userContext.enabled && session?.peerKind === 'direct' && mode === 'enabled');
+  const enabled = Boolean(config.userContext.enabled && session?.peerKind === 'direct' && isOwnerIdentity(session) && mode === 'enabled');
   return {
     enabled,
     userModel: enabled && config.userContext.userModel.enabled,

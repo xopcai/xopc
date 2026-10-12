@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 
 import { renderWorkflowText } from '../../agent/workflow/snapshot.js';
 import type { GatewayWorkflowHost } from '../../gateway/gateway-workflow-host.types.js';
@@ -6,6 +6,9 @@ import { TaskWorkflowCoordinator } from '../../tasks/task-workflow-coordinator.j
 import type { SessionStore } from '../../session/store.js';
 import { SessionStatus } from '../../session/types.js';
 import { writeKnowledgeItem } from '../../knowledge-memory/index.js';
+import { createContextEvidence } from '../../storage/sqlite/context-evidence-repository.js';
+import { resolveUserContextSessionAccess } from '../../user-context/access-policy.js';
+import { inferMemorySensitivity } from '../../agent/memory/sensitivity.js';
 import type { WorkflowRunView } from '../domain/index.js';
 import { isTerminalWorkflowRunStatus } from '../domain/index.js';
 
@@ -129,7 +132,7 @@ export class WorkflowSessionBridge {
         status: view.run.status,
       });
     }
-    this.recordProjectWorkflowMemory(conversationId, view);
+    this.recordProjectWorkflowMemory(view);
     new TaskWorkflowCoordinator().handleTerminalRun(view);
   }
 
@@ -201,10 +204,16 @@ export class WorkflowSessionBridge {
     });
   }
 
-  private recordProjectWorkflowMemory(conversationId: string, view: WorkflowRunView): void {
+  private recordProjectWorkflowMemory(view: WorkflowRunView): void {
     const projectId = view.run.metadata?.projectId?.trim();
     const agentId = view.run.metadata?.agentId?.trim();
     if (!projectId || !agentId) return;
+    const ownerConversationId = readParentConversationId(view);
+    if (!ownerConversationId) return;
+    const config = this.gateway.currentConfig;
+    const access = resolveUserContextSessionAccess(config, ownerConversationId);
+    if (!access.knowledge || config.userContext.knowledgeMemory.writePolicy !== 'allow'
+      || !access.knowledgePolicy.scopes.includes('project') || !access.knowledgePolicy.contentSources.includes('memory')) return;
 
     const summary = view.run.result?.summary.trim();
     const resultText = summary || renderWorkflowText(
@@ -212,21 +221,28 @@ export class WorkflowSessionBridge {
       view.run.status === 'succeeded',
       { showResultPreviews: true },
     );
+    const content = [
+      `Workflow ${view.run.definitionId} reports status ${view.run.status}.`,
+      view.run.goal ? `Goal: ${view.run.goal}` : undefined,
+      compactMemoryLine(resultText),
+    ].filter((line): line is string => Boolean(line)).join('\n');
+    const sensitivity = inferMemorySensitivity(content);
+    if (sensitivity === 'secret' || sensitivity === 'regulated') return;
+    const hash = createHash('sha256').update(content).digest('hex');
+    const evidence = createContextEvidence({ sourceType: 'runtime', sourceRef: `workflow-run:${view.run.id}`,
+      conversationId: ownerConversationId, contentHash: hash, trustLevel: 'trusted', observedAt: Date.now() });
     writeKnowledgeItem({
       kind: 'task_lesson',
       scope: { type: 'project', id: projectId },
       sourceAgentId: agentId,
-      sourceConversationId: conversationId,
-      content: [
-        `Workflow ${view.run.definitionId} finished with status ${view.run.status}.`,
-        view.run.goal ? `Goal: ${view.run.goal}` : undefined,
-        compactMemoryLine(resultText),
-      ].filter((line): line is string => Boolean(line)).join('\n'),
+      sourceConversationId: ownerConversationId,
+      content,
+      evidence: [{ id: evidence.id, contentHash: hash }], claimMode: 'reported', verification: 'supported', sensitivity,
       canonicalKey: `workflow-run:${view.run.id}`,
       source: { provider: 'workflow-run' },
       confidence: view.run.status === 'succeeded' ? 0.7 : 0.82,
       importance: 0.65,
-      status: view.run.status === 'succeeded' ? 'active' : 'needs_review',
+      status: 'active',
       originClass: 'agent',
       replaceExisting: true,
     });

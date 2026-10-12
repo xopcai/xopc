@@ -43,16 +43,19 @@ export interface ExecutionContextCoordinatorOptions {
 }
 
 export class ExecutionContextCoordinator {
+  private readonly queriesBySession = new Map<string, string[]>();
   private readonly currentBySession = new Map<string, ExecutionContext>();
 
   constructor(private readonly options: ExecutionContextCoordinatorOptions) {}
 
   forgetSession(conversationId: string): void {
     this.currentBySession.delete(conversationId);
+    this.queriesBySession.delete(conversationId);
   }
 
   clear(): void {
     this.currentBySession.clear();
+    this.queriesBySession.clear();
   }
 
   getCurrent(conversationId: string): ExecutionContext | undefined {
@@ -73,11 +76,14 @@ export class ExecutionContextCoordinator {
     const config = this.options.getConfig();
     const access = this.options.getAccessForSession(conversationId);
     if (!config || !config.userContext.contextPlanning.enabled
-      || (!access.userModel && !access.knowledge)) return empty();
+      || (!access.userModel && !access.knowledge)) { this.forgetSession(conversationId); return empty(); }
 
     await this.options.ensureMemoryReady(conversationId);
 
-    const task = assembleTaskContext(conversationId, extractAgentUserPlainText(userMessage));
+    const query = extractAgentUserPlainText(userMessage);
+    const recent = this.queriesBySession.get(conversationId) ?? [];
+    const task = assembleTaskContext(conversationId, query.length < 60 ? [...recent, query].join('\n') : query);
+    this.queriesBySession.set(conversationId, [...recent, query.slice(0, 1000)].slice(-2));
     const agentId = extractProfileAgentId(conversationId);
     const workspaceId = this.options.getWorkspaceIdForSession(conversationId);
     const projectId = this.options.getProjectIdForSession(conversationId);

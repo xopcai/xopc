@@ -10,6 +10,7 @@ import type { UnderstandingKind } from '../domain.js';
 export type ExtractorId =
   | 'turn-semantics'
   | 'transcript-synthesis'
+  | 'source-work-synthesis'
   | 'connector-semantic';
 
 export type ExtractorDefinition = {
@@ -29,6 +30,11 @@ const UNDERSTANDING_KINDS: UnderstandingKind[] = [
 ];
 
 const DEFINITIONS: Record<ExtractorId, ExtractorDefinition> = {
+  'source-work-synthesis': {
+    id: 'source-work-synthesis', version: '1', inputKinds: ['file', 'connector'], requiredProcessingPolicy: 'local_only',
+    authorityCeiling: 'external_untrusted', candidateKinds: ['project_context', 'task_lesson'],
+    maxAutomaticStatus: 'active', timeoutMs: 30_000,
+  },
   'turn-semantics': {
     id: 'turn-semantics', version: '1', inputKinds: ['conversation'], requiredProcessingPolicy: 'local_only',
     authorityCeiling: 'user_explicit', candidateKinds: UNDERSTANDING_KINDS, maxAutomaticStatus: 'active', timeoutMs: 30_000,

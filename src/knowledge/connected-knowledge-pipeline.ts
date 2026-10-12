@@ -1,5 +1,11 @@
 import { randomUUID } from 'node:crypto';
 
+import { consentFilteredText } from '../user-context/sources/consent-fields.js';
+import { replaceKnowledgeChunks } from './chunks.js';
+import { createContextEvidence } from '../storage/sqlite/context-evidence-repository.js';
+import { getSqliteDatabase, runSqliteWriteTransaction } from '../storage/sqlite/transaction.js';
+import { clearMemoryAudit } from '../user-context/memory-suppression.js';
+import { getActiveUnderstandingConsent } from '../user-context/sources/consent-repository.js';
 import {
   listKnowledgeItems,
   transitionKnowledgeStatus,
@@ -8,7 +14,6 @@ import {
 import {
   claimKnowledgeSourceItems,
   completeKnowledgeSourceItemSynthesis,
-  listKnowledgeSourceItems,
   pruneBoundedKnowledgeSourceItems,
 } from '../storage/sqlite/index.js';
 import { createLogger } from '../utils/logger.js';
@@ -76,7 +81,7 @@ export class ConnectedKnowledgePipeline {
     };
     for (const item of claimed) {
       try {
-        const content = boundedText(item);
+        let content = boundedText(item);
         const existing = listKnowledgeItems({ recordClass: 'source_index', limit: 2_000 })
           .find((entry) => entry.canonicalKey === `source-item:${item.sourceInstanceId}:${item.externalId}`);
         if (item.deletedAt) {
@@ -95,7 +100,29 @@ export class ConnectedKnowledgePipeline {
           result.ignored += 1;
           continue;
         }
+        const grant = getSqliteDatabase().prepare(`SELECT grant_id FROM understanding_source_grants
+          WHERE status = 'active' AND json_extract(config_json, '$.sourceInstanceId') = ? LIMIT 1`)
+          .get(item.sourceInstanceId) as { grant_id: string } | undefined;
+        const consent = grant ? getActiveUnderstandingConsent(grant.grant_id) : undefined;
+        const filtered = consent ? item.itemType === 'local_file'
+          ? consent.allowedFields.includes('content') ? item.normalizedText : undefined
+          : consentFilteredText(item.normalizedText, new Set(consent.allowedFields)) : undefined;
+        if (consent) content = (filtered ?? '').slice(0, MAX_ITEM_CHARS);
+        replaceKnowledgeChunks(getSqliteDatabase(), { ...item, normalizedText: filtered, consentReceiptId: consent?.id });
+        if (!content.trim()) {
+          completeKnowledgeSourceItemSynthesis({ itemId: item.id, workerId: this.workerId, status: 'ignored' });
+          result.ignored += 1;
+          continue;
+        }
+        const evidence = createContextEvidence({
+          sourceType: 'connector',
+          sourceInstanceId: item.sourceInstanceId, sourceItemId: item.id,
+          sourceRef: `knowledge-source://${item.id}`, contentHash: item.contentHash,
+          trustLevel: 'untrusted', observedAt: Date.parse(item.sourceUpdatedAt ?? item.updatedAt),
+        });
         const written = writeKnowledgeItem({
+          verification: 'supported', claimMode: 'reported', sensitivity: item.sensitivity,
+          evidence: [{ id: evidence.id, contentHash: item.contentHash, consentReceiptId: consent?.id }],
           kind: 'workspace_fact',
           scope: { type: 'workspace', id: ownerWorkspaceId(item, this.options.workspaceId) },
           content,
@@ -112,6 +139,7 @@ export class ConnectedKnowledgePipeline {
             sourceInstanceId: item.sourceInstanceId,
             sourceItemId: item.id,
             payloadRef: item.payloadRef,
+            consentReceiptId: consent?.id,
           },
           replaceExisting: true,
         });
@@ -132,28 +160,22 @@ export class ConnectedKnowledgePipeline {
   }
 
   pruneBoundedRetention(sourceInstanceId: string, olderThanMs: number): ConnectedKnowledgePruneResult {
-    const expired: KnowledgeSourceItem[] = [];
-    for (let offset = 0; ; offset += 500) {
-      const page = listKnowledgeSourceItems({
-        sourceInstanceId, retentionClass: 'bounded', retentionBeforeMs: olderThanMs,
-        includeDeleted: true, limit: 500, offset,
-      });
-      expired.push(...page);
-      if (page.length < 500) break;
-    }
-    let derivedDeleted = 0;
-    const expiredIds = new Set(expired.map((item) => item.id));
-    for (const item of listKnowledgeItems({ recordClass: 'source_index', limit: 2_000 })) {
-      if (typeof item.source.sourceItemId === 'string' && expiredIds.has(item.source.sourceItemId)) {
-        if (transitionKnowledgeStatus({
-          id: item.id,
-          status: 'archived',
-          actor: 'maintenance',
-          reason: 'Connected source retention window expired.',
-        })) derivedDeleted += 1;
+    return runSqliteWriteTransaction((db) => {
+      const expiredSourceQuery = `SELECT item_id FROM knowledge_source_items
+        WHERE source_instance_id = ? AND retention_class = 'bounded'
+          AND COALESCE(source_updated_at, occurred_at, updated_at) < ?`;
+      const indexes = db.prepare(`SELECT knowledge_id FROM knowledge_items
+        WHERE record_class = 'source_index'
+          AND json_extract(source_json, '$.sourceItemId') IN (${expiredSourceQuery})`)
+        .all(sourceInstanceId, olderThanMs) as Array<{ knowledge_id: string }>;
+      for (const item of indexes) {
+        clearMemoryAudit(db, 'knowledge', item.knowledge_id);
+        db.prepare('DELETE FROM knowledge_items WHERE knowledge_id = ?').run(item.knowledge_id);
       }
-    }
-    const rawDeleted = pruneBoundedKnowledgeSourceItems(sourceInstanceId, olderThanMs);
-    return { rawDeleted, derivedDeleted };
+      db.prepare(`UPDATE context_evidence SET redacted_excerpt = NULL
+        WHERE source_item_id IN (${expiredSourceQuery})`).run(sourceInstanceId, olderThanMs);
+      const rawDeleted = pruneBoundedKnowledgeSourceItems(sourceInstanceId, olderThanMs);
+      return { rawDeleted, derivedDeleted: indexes.length };
+    });
   }
 }

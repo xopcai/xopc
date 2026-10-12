@@ -24,6 +24,10 @@ export interface KnowledgeReadPolicy {
 }
 
 export interface KnowledgeItem {
+  retrievalSnippet?: string;
+  claimMode?: 'explicit' | 'observed' | 'inferred' | 'reported';
+  verification?: 'supported' | 'tentative' | 'conflicted';
+  sensitivity?: 'normal' | 'personal' | 'secret' | 'regulated';
   id: string;
   principalId: string;
   kind: KnowledgeKind;

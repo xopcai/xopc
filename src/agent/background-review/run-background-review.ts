@@ -1,11 +1,17 @@
 import { Agent, type AgentMessage, type ThinkingLevel } from '@earendil-works/pi-agent-core';
 import type { Api, Model } from '@earendil-works/pi-ai';
 
+import { stripRuntimeContextFromUserMessage } from '../../session/user-message-display.js';
+import { applyWorkCandidates } from '../../memory-learning/work-capture.js';
+import { failLearningJob, finishLearningJob, learningPolicyHash, type LearningJob } from '../../memory-learning/repository.js';
+import { getSqliteDatabase } from '../../storage/sqlite/transaction.js';
+import { resolveUserContextSessionAccess } from '../../user-context/access-policy.js';
 import { resolveProviderApiKeySync } from '../../auth/sync-provider-auth.js';
 import { extractProfileAgentId } from '../../config/agent-profile.js';
-import { resolveModelIntentRef } from '../../config/agent-model-intents.js';
+import { resolveModelIntentRef, resolveModelSelector } from '../../config/agent-model-intents.js';
 import type { Config } from '../../config/schema.js';
 import { getApiKeySync, resolveModel } from '../../providers/index.js';
+import { isLoopbackModel } from '../../providers/local-model.js';
 import {
   finishContextExtractionRun,
   getSessionMetadata,
@@ -103,13 +109,7 @@ function lastAssistantText(agent: Agent): string {
 }
 
 function isLocalModel(model: Model<Api>): boolean {
-  if (['ollama', 'lmstudio'].includes(model.provider)) return true;
-  try {
-    const hostname = new URL(model.baseUrl).hostname;
-    return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1';
-  } catch {
-    return false;
-  }
+  return isLoopbackModel(model.baseUrl);
 }
 
 function resolveInterpreterRuntime(params: Pick<RunUserModelReviewParams, 'conversationId' | 'mainAgent' | 'getConfig'>): {
@@ -151,6 +151,7 @@ async function interpret(params: {
   mode: 'turn' | 'transcript';
   availableAssertions: AvailableUserAssertion[];
   timeoutMs: number;
+  workspaceId?: string;
   model: Model<Api>;
 }): Promise<UserModelInterpretation | null> {
   const providerStreamFn = createExtensionAwareStreamFn();
@@ -181,6 +182,8 @@ async function interpret(params: {
           availableAssertions: params.availableAssertions,
           evidenceTimestamp: new Date(params.evidence.at(-1)?.createdAt ?? Date.now()).toISOString(),
           timezone,
+          scopeContext: { conversationId: params.conversationId, agentId: extractProfileAgentId(params.conversationId),
+            workspaceId: params.workspaceId ?? '', projectId: getSessionMetadata(params.conversationId)?.projectId },
         }),
         timestamp: Date.now(),
       });
@@ -227,7 +230,7 @@ async function executeReview(params: {
   const interpretation = await interpret({ ...params, model: runtime.model });
   if (!interpretation) {
     finishContextExtractionRun({ runId: extraction.run.id, status: 'failed', errorCode: 'model_or_schema_failed' });
-    return emptyUserModelCaptureResult();
+    throw new Error('User model extraction failed');
   }
   try {
     const config = params.getConfig();
@@ -258,6 +261,7 @@ async function executeReview(params: {
       status: 'completed',
       outputs: result.outputs.map((output) => ({
         candidateKey: output.candidateKey,
+        ...(output.assertionId ? { objectType: 'assertion' as const, objectId: output.assertionId } : {}),
         outcome: output.outcome === 'deduplicated' ? 'deduplicated' as const
           : output.outcome === 'rejected' ? 'rejected' as const : 'created' as const,
       })),
@@ -305,4 +309,93 @@ function listAvailableAssertions(): AvailableUserAssertion[] {
       scope: slot.scope,
     }] : [];
   });
+}
+
+/** Persisted job runner; independent of an interactive Agent instance surviving eviction. */
+export async function runPersistentLearningJob(job: LearningJob, getConfig: () => Config | undefined): Promise<void> {
+  const config = getConfig();
+  if (!config || !resolveUserContextSessionAccess(config, job.conversation_id).enabled
+    || learningPolicyHash(config) !== job.policy_hash) {
+    failLearningJob(job, 'policy_changed', true); return;
+  }
+  const db = getSqliteDatabase();
+  const cursor = db.prepare('SELECT processed_seq FROM memory_learning_cursors WHERE conversation_id = ? AND transcript_id = ?')
+    .get(job.conversation_id, job.transcript_id) as { processed_seq: number };
+  const startSeq = job.start_seq ?? cursor.processed_seq;
+  const rows = db.prepare(`SELECT entry_id, role, payload_json, created_at, seq FROM transcript_entries
+    WHERE transcript_id = ? AND seq > ? AND seq <= ? ORDER BY seq`).all(job.transcript_id, startSeq, job.through_seq) as Array<{ entry_id: string; role: string; payload_json: string; created_at: number; seq: number }>;
+  const maxChars = config.userContext.knowledgeMemory.learning?.maxBatchChars ?? 30_000;
+  const evidence: EvidenceMessage[] = [];
+  let chars = 0;
+  let through = startSeq;
+  for (const row of rows) {
+    if (evidence.length >= config.userContext.userModel.extraction.maxHistoryMessages) break;
+    const message = JSON.parse(row.payload_json) as AgentMessage;
+    const text = row.role === 'user' ? stripRuntimeContextFromUserMessage(messageText(message)) : messageText(message);
+    if (chars + text.length > maxChars && evidence.length) break;
+    through = row.seq;
+    if (!['user', 'assistant', 'toolResult'].includes(row.role)) continue;
+    if (Array.isArray((message as unknown as { metadata?: { sourceContexts?: unknown[] } }).metadata?.sourceContexts)
+      && (message as unknown as { metadata: { sourceContexts: unknown[] } }).metadata.sourceContexts.length > 0) continue;
+    if (row.role === 'toolResult' && /(?:memory|user_context|knowledge|session|history|recall)/i.test(
+      (message as unknown as { toolName?: string }).toolName ?? '')) continue;
+    // Oversized or recalled material cannot become fresh supporting evidence.
+    if (text.length > maxChars || /<xopc_user_context>|<xopc_task_execution>|<user-context>/.test(text)) continue;
+    chars += text.length;
+    evidence.push({ ref: row.entry_id, role: row.role as CaptureEvidence['role'], text, createdAt: row.created_at,
+      message: { role: 'user', content: `[source_role:${row.role}]\n${text}`, timestamp: row.created_at } });
+  }
+  if (!evidence.length) { finishLearningJob(job, () => {}, through); return; }
+  const agentId = extractProfileAgentId(job.conversation_id);
+  const model = resolveModel(resolveModelSelector(config, agentId, 'understanding'));
+  const mainAgent = new Agent({ initialState: { model }, streamFn: createExtensionAwareStreamFn() });
+  const runtime = resolveInterpreterRuntime({ conversationId: job.conversation_id, mainAgent, getConfig });
+  if (!runtime) { failLearningJob(job, 'processing_policy', true); return; }
+  const extraction = claimRegisteredExtraction({ extractorId: 'transcript-synthesis',
+    sourceRef: `learning:${job.job_id}:${startSeq}:${through}:${job.lease_token}`,
+    contentForHash: evidence.map(entry => `${entry.ref}:${entry.text}`).join('\n'),
+    processingPolicy: runtime.processingPolicy, destination: runtime.destination });
+  if (!extraction.shouldExecute) throw new Error('Learning extraction is already claimed');
+  const interpretation = await interpret({ conversationId: job.conversation_id, mainAgent, getConfig,
+    evidence, mode: 'transcript', availableAssertions: listAvailableAssertions(),
+    timeoutMs: config.userContext.userModel.extraction.maxDurationMs, workspaceId: job.workspace_id, model: runtime.model });
+  if (!interpretation) {
+    finishContextExtractionRun({ runId: extraction.run.id, status: 'failed', errorCode: 'model_or_schema_failed' });
+    throw new Error('Memory extraction returned invalid output');
+  }
+  const current = getConfig();
+  if (!current || learningPolicyHash(current) !== job.policy_hash
+    || !resolveUserContextSessionAccess(current, job.conversation_id).enabled) {
+    finishContextExtractionRun({ runId: extraction.run.id, status: 'skipped', errorCode: 'policy_changed' });
+    failLearningJob(job, 'policy_changed', true); return;
+  }
+  let committed = false;
+  try {
+    committed = finishLearningJob(job, () => {
+      const access = resolveUserContextSessionAccess(current, job.conversation_id);
+      const projectId = getSessionMetadata(job.conversation_id)?.projectId;
+      const result = access.userModel ? executeUserModelInterpretation({ interpretation, evidence,
+        extractionRunId: extraction.run.id, extractorId: 'transcript-synthesis',
+        scopeContext: { conversationId: job.conversation_id, agentId, workspaceId: job.workspace_id, projectId },
+        policy: { write: current.userContext.userModel.writePolicy,
+          sensitiveWrite: current.userContext.userModel.sensitiveWritePolicy, processing: runtime.processingPolicy },
+      }) : emptyUserModelCaptureResult();
+      const work = access.knowledge && current.userContext.knowledgeMemory.writePolicy === 'allow'
+        && access.knowledgePolicy.contentSources.includes('memory') ? applyWorkCandidates({
+          candidates: (interpretation.knowledge ?? []).filter(candidate => access.knowledgePolicy.scopes.includes(candidate.scope)),
+          evidence, conversationId: job.conversation_id, agentId, workspaceId: job.workspace_id, projectId,
+          processingPolicy: runtime.processingPolicy, runId: extraction.run.id,
+        }) : [];
+      finishContextExtractionRun({ runId: extraction.run.id, status: 'completed', outputs: [
+        ...result.outputs.map(output => ({ candidateKey: output.candidateKey,
+          ...(output.assertionId ? { objectType: 'assertion' as const, objectId: output.assertionId } : {}),
+          outcome: output.outcome === 'rejected' ? 'rejected' as const
+            : output.outcome === 'deduplicated' ? 'deduplicated' as const : 'created' as const })), ...work,
+      ] });
+    }, through);
+  } catch (err) {
+    finishContextExtractionRun({ runId: extraction.run.id, status: 'failed', errorCode: 'apply_failed' });
+    throw err;
+  }
+  if (!committed) finishContextExtractionRun({ runId: extraction.run.id, status: 'skipped', errorCode: 'lease_lost' });
 }

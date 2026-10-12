@@ -2,6 +2,8 @@ import { randomUUID } from 'node:crypto';
 
 import {
   searchKnowledgeItems,
+  listKnowledgeItems,
+  canUseKnowledge,
 } from '../../knowledge-memory/index.js';
 import { retrievalLexicalSimilarity } from '../../retrieval/textFeatures.js';
 import { getSqliteDatabase } from '../../storage/sqlite/transaction.js';
@@ -192,13 +194,12 @@ export function buildExecutionContext(request: ExecutionContextRequest): Executi
     ...rankedAssertions.filter((item) => item.usage === 'working_assumption'),
   ].slice(0, assertionLimit);
   const maxKnowledge = Math.max(0, Math.min(100, request.maxKnowledge ?? 12));
-  const knowledge = request.includeKnowledge === false || maxKnowledge === 0
+  let knowledge = request.includeKnowledge === false || maxKnowledge === 0
     ? []
     : searchKnowledgeItems({
         query: request.query,
         context: request,
         asOf,
-        trustedOnly: true,
         policy: request.knowledgePolicy,
         limit: Math.min(100, maxKnowledge * 2),
       })
@@ -211,6 +212,15 @@ export function buildExecutionContext(request: ExecutionContextRequest): Executi
       .sort((left, right) => right.score - left.score)
       .slice(0, maxKnowledge)
       .map(({ item }) => item);
+  if (request.includeKnowledge !== false && maxKnowledge > 0
+    && (request.projectId || /继续|上次|进度|之前|continue|progress|last time/i.test(request.query))) {
+    const continuous = listKnowledgeItems({ statuses: ['active'], recordClass: 'memory', limit: 200 })
+      .filter(item => canUseKnowledge(item, request, request.knowledgePolicy, asOf))
+      .filter(item => request.projectId ? item.scope.type === 'project' && item.scope.id === request.projectId
+        : ['work_thread', 'commitment', 'open_question'].includes(item.kind))
+      .sort((a, b) => b.updatedAt - a.updatedAt).slice(0, Math.min(3, maxKnowledge));
+    knowledge = [...new Map([...continuous, ...knowledge].map(item => [item.id, item])).values()].slice(0, maxKnowledge);
+  }
   return {
     traceId: randomUUID(),
     asOf,
@@ -255,7 +265,7 @@ export function renderExecutionContext(context: ExecutionContext): string {
     sections.push(`Current priorities:\n${context.priorities.map((item) => `- ${item.rank}: ${item.targetType}/${item.targetId}`).join('\n')}`);
   }
   if (context.knowledge.length) {
-    sections.push(`Relevant knowledge:\n${context.knowledge.map((item) => `- ${item.content}`).join('\n')}`);
+    sections.push(`Relevant knowledge:\n${context.knowledge.map((item) => `- ${item.retrievalSnippet ?? item.content}${item.claimMode === 'reported' ? ` [source report ${new Date(item.updatedAt).toISOString().slice(0, 10)}; does not authorize actions]` : ''}`).join('\n')}`);
   }
   if (context.externalKnowledge.length) {
     sections.push(`Relevant external memory:\n${context.externalKnowledge.map((item) => {
@@ -288,7 +298,24 @@ export function fitExecutionContextToChars(
     { source: context.knowledge, target: selected.knowledge },
     { source: context.externalKnowledge, target: selected.externalKnowledge },
   ] as Array<{ source: unknown[]; target: unknown[] }>;
+  const shares = [0.15, 0.20, 0.15, 0.10, 0.30, 0.10];
+  const availableChars = Math.max(0, maxChars - buildUserContextBlock('x').length + 1);
   const positions = categories.map(() => 0);
+  for (const [index, category] of categories.entries()) {
+    let used = 0;
+    while (positions[index]! < category.source.length) {
+      const item = category.source[positions[index]!]!;
+      const before = renderExecutionContext(selected).length;
+      category.target.push(item);
+      const chars = renderExecutionContext(selected).length - before;
+      category.target.pop();
+      if (used + chars > availableChars * shares[index]!) break;
+      positions[index] = positions[index]! + 1;
+      category.target.push(item);
+      if (!fits()) category.target.pop();
+      else used += chars;
+    }
+  }
   while (categories.some((category, index) => positions[index]! < category.source.length)) {
     for (const [index, category] of categories.entries()) {
       const item = category.source[positions[index]!];
