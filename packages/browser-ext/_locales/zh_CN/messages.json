@@ -253,6 +253,7 @@
   "voicePermissionOpen": { "message": "授权麦克风" },
   "voicePermissionGranted": { "message": "麦克风已授权。请关闭此标签页并返回聊天。" },
   "voicePermissionFailed": { "message": "麦克风访问被拒绝。请在浏览器及系统设置中允许麦克风访问，然后重试。" },
+  "recordingHide": { "message": "收起录制面板" },
   "recordingTitle": { "message": "浏览器录制" },
   "recordingStart": { "message": "开始录制" },
   "recordingActive": { "message": "正在录制" },
