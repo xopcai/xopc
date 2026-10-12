@@ -5,6 +5,7 @@ import { canonicalizeCacheValue, digestCacheText } from './prompt-cache-fingerpr
 import {
   resolvePromptCachePolicy,
   resolvePromptCacheProviderMode,
+  supportsExplicitOpenAICache,
   type PromptCachePlan,
   type PromptCachePolicy,
 } from './prompt-cache-plan.js';
@@ -257,7 +258,11 @@ export function transformPromptCachePayload(
   if (model.api === 'bedrock-converse-stream') {
     return addBedrockHistoryBreakpoint(splitBedrockSystem(payload));
   }
-  if (plan.providerMode === 'explicit' && plan.cacheKey) {
+  if (plan.providerMode === 'explicit' && plan.cacheKey
+    && supportsExplicitOpenAICache(model)
+    && asRecord(payload)?.prompt_cache_options != null) {
+    // pi resolves authentication after xopc's stream wrapper. Respect the cache
+    // field it omits for subscription credentials and unsupported models.
     return applyOpenAIExplicitCache(payload, context, plan.cacheKey);
   }
   const record = asRecord(payload);
@@ -280,12 +285,6 @@ export function withPromptCachePayloadTransform(
   policyInput?: PromptCachePolicy,
 ): SimpleStreamOptions {
   const plan = buildPromptCachePlan(model, context, policyInput, options?.reasoning);
-  // Match pi's subscription credential detection and preserve its cache-field restrictions.
-  if (plan.providerMode === 'explicit' && model.provider === 'openai'
-    && model.baseUrl === 'https://api.openai.com/v1'
-    && options?.apiKey !== undefined && !options.apiKey.startsWith('sk-')) {
-    plan.providerMode = 'implicit';
-  }
   const upstream = options?.onPayload;
   const cacheRetention = model.api === 'anthropic-messages' || model.api === 'bedrock-converse-stream'
     ? plan.providerMode === 'none' ? 'none' : plan.policy.lifetime

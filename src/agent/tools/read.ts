@@ -124,7 +124,13 @@ async function executeReadFile(
       }
     }
 
-    return { content: [{ type: 'text', text: outputText }], details: { path: normalized, offset, totalLines: lines.length, truncated: truncation.truncated, ...(options?.maxReadBytes && truncation.truncated ? { requiresSpecialist: true, reason: 'large_file' } : {}) } };
+    const bounded = Boolean(options?.maxReadBytes && outputText.length > maxOutputBytes);
+    if (bounded) {
+      const notice = '\n[File excerpt only; delegate full analysis to a specialist.]';
+      outputText = outputText.slice(0, Math.max(0, maxOutputBytes - notice.length)) + notice;
+    }
+    const truncated = truncation.truncated || bounded;
+    return { content: [{ type: 'text', text: outputText }], details: { path: normalized, offset, totalLines: lines.length, truncated, ...(options?.maxReadBytes && truncated ? { requiresSpecialist: true, reason: 'large_file' } : {}) } };
   } catch (error) {
     signal?.throwIfAborted();
     return { content: [{ type: 'text', text: `Error: ${error instanceof Error ? error.message : String(error)}` }], details: { status: 'failed' } };

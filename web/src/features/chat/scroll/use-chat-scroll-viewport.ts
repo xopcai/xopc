@@ -23,6 +23,14 @@ function wheelDeltaImpliesTowardOlderMessages(e: WheelEvent): boolean {
   return e.deltaY < 0;
 }
 
+function sameMessageRow(a: Message | undefined, b: Message | undefined): boolean {
+  if (!a || !b || a.role !== b.role) return false;
+  if (a === b) return true;
+  if (a.renderKey && b.renderKey) return a.renderKey === b.renderKey;
+  if (a.clientSubmissionId && b.clientSubmissionId) return a.clientSubmissionId === b.clientSubmissionId;
+  return a.timestamp != null && a.timestamp === b.timestamp && a.turnId === b.turnId;
+}
+
 export interface UseChatScrollViewportArgs {
   hasToken: boolean;
   showSessionLoading: boolean;
@@ -291,7 +299,10 @@ export function useChatScrollViewport({
     const first = chatMessages[0];
     const len = chatMessages.length;
     const newHeight = el.scrollHeight;
-    const prepended = len > prev.len && prev.len > 0 && first !== undefined && first !== prev.first;
+    const added = len - prev.len;
+    const prepended = added > 0 && prev.len > 0
+      && !sameMessageRow(first, prev.first)
+      && sameMessageRow(chatMessages[added], prev.first);
 
     if (prepended && prev.scrollHeight > 0) {
       el.scrollTop += newHeight - prev.scrollHeight;

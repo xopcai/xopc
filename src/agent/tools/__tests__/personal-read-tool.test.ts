@@ -9,6 +9,26 @@ function setup(authorizeCapability?: () => boolean) {
 }
 
 describe('personal_read', () => {
+  it('shrinks JSON fields and list rows within the total budget while preserving IDs and cursors', async () => {
+    const note = { id: 'note-1', title: '"\\\n'.repeat(6000), markdown: '"\\\n'.repeat(6000), description: 'x'.repeat(12000),
+      kind: 'thought', status: 'inbox', createdAt: 1, updatedAt: 2 };
+    const rows = Array.from({ length: 10 }, (_, i) => ({ ...note, id: `note-${i + 1}` }));
+    const tool = createPersonalReadTool({ getNotesService: () => ({ getNote: async () => note,
+      listNotes: async () => ({ items: rows, total: 30 }) }) as never });
+    const get = await tool.execute('get', { kind: 'note', command: 'get', id: 'note-1' });
+    const getText = (get.content[0] as { text: string }).text;
+    expect(getText.length).toBeLessThanOrEqual(8000);
+    expect(JSON.parse(getText)).toMatchObject({ id: 'note-1', requiresSpecialist: true, item: { id: 'note-1' } });
+    const list = await tool.execute('list', { kind: 'note', command: 'list', offset: 5, limit: 10 });
+    const listText = (list.content[0] as { text: string }).text;
+    expect(listText.length).toBeLessThanOrEqual(8000);
+    const payload = JSON.parse(listText);
+    expect(payload.items.length).toBeGreaterThan(0);
+    expect(payload.items.length).toBeLessThan(10);
+    expect(payload.nextOffset).toBe(5 + payload.items.length);
+    expect(payload.items.at(-1).id).toBe(`note-${payload.items.length}`);
+  });
+
   it('reads local note excerpts and passes bounded pagination to the service', async () => {
     const { tool, notes } = setup();
     const get = await tool.execute('get', { kind: 'note', command: 'get', id: 'note-1' });

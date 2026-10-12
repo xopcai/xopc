@@ -29,6 +29,7 @@ import { deferredToolContract, getXopcToolMetadata } from './tool-metadata.js';
 import { createXopcToolSearchExtension, TOOL_DISCOVERY_STATE } from './tool-search-extension.js';
 import { getNativePiAgentDir } from '../mcp/native-mcp.js';
 import { abortEmbeddedRun } from './runs.js';
+import { filterExecutionTools, resolveExecutionToolPolicy, type ExecutionToolPolicy } from './execution-tool-policy.js';
 
 const toolContract = (tool: AgentTool) => JSON.stringify([tool.name, tool.parameters, tool.description,
   isCodemodeCoreRead(tool), getXopcToolMetadata(tool)]);
@@ -48,6 +49,7 @@ export type EmbeddedRunnerFingerprintInput = {
   credentialRevision: string;
   codemode?: CodemodePolicy;
   mcp?: LoadedMcpConfig;
+  executionToolPolicy?: ExecutionToolPolicy;
 };
 
 function providerCredentialRevision(providerId: string): string {
@@ -68,6 +70,7 @@ export function buildEmbeddedRunnerFingerprint(input: EmbeddedRunnerFingerprintI
     input.credentialRevision,
     JSON.stringify(input.codemode ?? null),
     JSON.stringify(input.mcp ?? null),
+    JSON.stringify(input.executionToolPolicy ?? null),
   ].join('\0')).digest('base64url');
 }
 
@@ -95,6 +98,7 @@ export type AcquireEmbeddedSessionRunnerParams = {
   transcriptRuntime: EmbeddedTranscriptRuntime;
   codemode?: CodemodePolicy;
   mcp?: LoadedMcpConfig;
+  executionToolPolicy?: ExecutionToolPolicy;
 };
 
 export type AcquiredEmbeddedSessionRunner = {
@@ -192,6 +196,11 @@ export class EmbeddedSessionRunnerPool {
   async acquire(params: AcquireEmbeddedSessionRunnerParams): Promise<AcquiredEmbeddedSessionRunner> {
     this.stats.acquires += 1;
 
+    const executionToolPolicy = params.executionToolPolicy ?? resolveExecutionToolPolicy(params.runtimeId);
+    params = { ...params, executionToolPolicy, tools: filterExecutionTools(executionToolPolicy, params.tools),
+      mcp: executionToolPolicy.nativeMcp ? params.mcp : undefined,
+      codemode: executionToolPolicy.codemode ? params.codemode : undefined };
+
     const fingerprint = buildEmbeddedRunnerFingerprint({
       transcriptId: params.transcriptId,
       workspaceDir: params.workspaceDir,
@@ -203,6 +212,7 @@ export class EmbeddedSessionRunnerPool {
       credentialRevision: providerCredentialRevision(params.model.provider),
       codemode: params.codemode,
       mcp: params.mcp,
+      executionToolPolicy,
     });
 
     const reuseEnabled = this.isEnabledFn();
@@ -218,7 +228,8 @@ export class EmbeddedSessionRunnerPool {
       reused = true;
       this.stats.reuses += 1;
       entry.session.agent.streamFunction = entry.baseStreamFn;
-      log.debug({ runtimeId: params.runtimeId }, 'Reusing pooled embedded session runner');
+      log.debug({ runtimeId: params.runtimeId, surface: executionToolPolicy.surface,
+        policyRevision: executionToolPolicy.revision }, 'Reusing pooled embedded session runner');
     } else {
       if (existing) {
         this.disposePooledRunner(params.runtimeId, existing, 'fingerprint_mismatch');
@@ -226,7 +237,8 @@ export class EmbeddedSessionRunnerPool {
       entry = await this.createPooledRunner(params);
       this.pool.set(params.runtimeId, entry);
       this.stats.creates += 1;
-      log.debug({ runtimeId: params.runtimeId }, 'Created embedded session runner');
+      log.debug({ runtimeId: params.runtimeId, surface: executionToolPolicy.surface,
+        policyRevision: executionToolPolicy.revision }, 'Created embedded session runner');
     }
 
     return {
@@ -305,17 +317,20 @@ export class EmbeddedSessionRunnerPool {
     const discoveryState = piSm.getBranch().findLast(entry => entry.type === 'custom' && entry.customType === TOOL_DISCOVERY_STATE);
     const saved = discoveryState?.type === 'custom' ? discoveryState.data as { loaded?: { name: string; contract: string }[] } : undefined;
     const restored = new Map((saved?.loaded ?? []).map(tool => [tool.name, tool.contract]));
-    toolNames.push(...tools.filter(tool => getXopcToolMetadata(tool)?.exposure === 'deferred'
+    toolNames.push(...tools.filter(tool => params.executionToolPolicy?.discovery !== false
+      && getXopcToolMetadata(tool)?.exposure === 'deferred'
       && restored.get(tool.name) === deferredToolContract(tool)).map(tool => tool.name));
     let boundSession: AgentSession | undefined;
     const mcp = params.mcp;
     const hasMcp = Boolean(mcp?.servers.length);
     const usesMcpCodemode = mcp?.servers.some(server => server.config.enabled !== false
       && [server.config.exposure ?? 'codemode', ...Object.values(server.config.toolExposure ?? {})].includes('codemode'));
-    const codemode = params.codemode?.enabled ? params.codemode : usesMcpCodemode
+    const codemode = params.executionToolPolicy?.codemode === false ? undefined
+      : params.codemode?.enabled ? params.codemode : usesMcpCodemode
       ? { enabled: true, timeoutMs: 60_000, maxConcurrentCalls: 4, maxCalls: 32, maxOutputTokens: 4000 } : undefined;
     if (codemode) toolNames.push('codemode');
-    const discovery = hasMcp || tools.some(tool => getXopcToolMetadata(tool)?.exposure === 'deferred');
+    const discovery = params.executionToolPolicy?.discovery !== false
+      && (hasMcp || tools.some(tool => getXopcToolMetadata(tool)?.exposure === 'deferred'));
     if (discovery) toolNames.push('tool_search');
 
     const modelRuntime = await createEmbeddedModelRuntime(model.provider);
@@ -344,6 +359,7 @@ export class EmbeddedSessionRunnerPool {
       modelRuntime,
       resourceLoader,
       noTools: 'builtin',
+      ...(params.executionToolPolicy?.surface !== 'agent' ? { tools: toolNames } : {}),
       customTools: toolDefs,
 
     });
@@ -365,6 +381,7 @@ export class EmbeddedSessionRunnerPool {
       credentialRevision: providerCredentialRevision(model.provider),
       codemode: params.codemode,
       mcp: params.mcp,
+      executionToolPolicy: params.executionToolPolicy,
     });
 
     return {
