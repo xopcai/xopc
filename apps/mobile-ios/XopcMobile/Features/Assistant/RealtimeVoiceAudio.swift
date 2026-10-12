@@ -99,6 +99,13 @@ final class RealtimeVoiceAudio {
         isMuted = muted
     }
 
+    func ensurePlaybackReady() throws {
+        guard let engine, let player else { throw RealtimeVoiceAudioError.notStarted }
+        if !engine.isRunning { try engine.start() }
+        if !player.isPlaying { player.play() }
+        guard engine.isRunning, player.isPlaying else { throw RealtimeVoiceAudioError.notStarted }
+    }
+
     func setSpeaker(_ speaker: Bool) throws {
         try AVAudioSession.sharedInstance().overrideOutputAudioPort(speaker ? .speaker : .none)
         onRoute?(Self.routeName())

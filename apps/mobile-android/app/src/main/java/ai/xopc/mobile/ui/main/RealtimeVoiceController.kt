@@ -152,6 +152,10 @@ internal class RealtimeVoiceController(private val context: Context, private val
       val session = create(conversationId, selectedMode, logicalCallId, !fresh)
       if (current != generation) { cancel(session); return }
       connection = session
+      // Prepare the audio route while the server synthesizes the opening.
+      captureMuted = true
+      startAudio(current)
+      if (restoreSpeaker) changeSpeaker(true)
       val started = AtomicBoolean(false)
       val path = if (!fresh && reconnectAttempt % 2 == 1) VOICE_PROXY_WS_PATH else session.websocketPath
       try { connect(session, path, current, started) }
@@ -163,13 +167,13 @@ internal class RealtimeVoiceController(private val context: Context, private val
         connect(session, VOICE_PROXY_WS_PATH, current, started)
       }
       if (current != generation) return
-      startAudio(current)
-      if (restoreSpeaker) changeSpeaker(true)
-      send("input.mute", JSONObject().put("muted", restoreMute))
-      if (session.greetingResponseId != null) send("session.output_ready", JSONObject().put("connectionEpoch", session.connectionEpoch))
+      require(recorder?.recordingState == AudioRecord.RECORDSTATE_RECORDING &&
+        player?.playState == AudioTrack.PLAYSTATE_PLAYING) { "AUDIO_UNAVAILABLE" }
       phase = "connected"
       connectedAt = SystemClock.elapsedRealtime()
       lastPongAt = connectedAt
+      if (session.greetingResponseId != null) send("session.output_ready", JSONObject().put("connectionEpoch", session.connectionEpoch))
+      updateMute()
       heartbeatJob = scope.launch {
         val started = SystemClock.elapsedRealtime()
         while (isActive && current == generation) {

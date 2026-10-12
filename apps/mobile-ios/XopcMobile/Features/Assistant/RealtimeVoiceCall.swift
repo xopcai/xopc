@@ -391,16 +391,21 @@ private extension RealtimeVoiceCall {
     func handleSession(_ type: String, payload: RealtimeVoiceEvent.Payload) async {
         switch type {
         case "session.ready":
+            do { try audio.ensurePlaybackReady() }
+            catch {
+                await pause(reason: (error as? RealtimeVoiceAudioError)?.code ?? "AUDIO_UNAVAILABLE")
+                return
+            }
             connectTimeoutTask?.cancel()
             connectTimeoutTask = nil
             phase = .connected
             connectedAt = Date()
             errorCode = nil
             networkQuality = "good"
-            try? await transport.send("input.mute", payload: .init(muted: muted))
             if let session, session.openingGreeting?.accepted == true {
                 try? await transport.send("session.output_ready", payload: .init(connectionEpoch: session.connectionEpoch))
             }
+            try? await transport.send("input.mute", payload: .init(muted: muted))
             if let maximum = session?.limits.maxSessionMs, maximum > 0 {
                 let current = generation
                 limitTask = Task {

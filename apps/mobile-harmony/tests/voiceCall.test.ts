@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => {
   Object.assign(globalThis, { ObservedV2: (value: unknown) => value, Trace: () => undefined });
-  return { connect: vi.fn(async () => {}), start: vi.fn(async () => {}), request: vi.fn(), send: vi.fn(), enqueue: vi.fn(), finish: vi.fn(), flush: vi.fn(async () => {}), stop: vi.fn(async () => {}), duck: vi.fn(), setMuted: vi.fn(), now: 1000 };
+  return { connect: vi.fn(async () => {}), start: vi.fn(async () => {}), ensurePlaybackReady: vi.fn(async () => {}), request: vi.fn(), send: vi.fn(), enqueue: vi.fn(), finish: vi.fn(), flush: vi.fn(async () => {}), stop: vi.fn(async () => {}), duck: vi.fn(), setMuted: vi.fn(), now: 1000 };
 });
 vi.mock('../entry/src/main/ets/service/settings.ets', () => ({ appSettings: { effectiveLanguage: () => 'zh' } }));
 vi.mock('@kit.AbilityKit', () => ({}));
@@ -193,6 +193,7 @@ describe('Harmony voice connection recovery', () => {
   beforeEach(() => {
     vi.clearAllMocks(); vi.useFakeTimers(); issued = 0;
     mocks.connect.mockReset().mockResolvedValue(undefined);
+    mocks.ensurePlaybackReady.mockReset().mockResolvedValue(undefined);
     mocks.stop.mockReset().mockResolvedValue(undefined);
     mocks.request.mockImplementation(async (path: string) => {
       if (path.endsWith('/status')) return JSON.stringify({ payload: { enabled: true, capabilities: {
@@ -221,8 +222,15 @@ describe('Harmony voice connection recovery', () => {
       return JSON.stringify({ ok: true });
     });
     try {
-      await call.start({} as never, { conversationId: 'personal', mode: 'assistant', name: 'AI', background: false });
+      let releasePlayback!: () => void;
+      mocks.ensurePlaybackReady.mockImplementationOnce(() => new Promise<void>(resolve => { releasePlayback = resolve; }));
+      const starting = call.start({} as never, { conversationId: 'personal', mode: 'assistant', name: 'AI', background: false });
+      await vi.waitFor(() => expect(mocks.ensurePlaybackReady).toHaveBeenCalledOnce());
+      expect(call.phase).toBe('connecting');
+      expect(mocks.send).not.toHaveBeenCalledWith('session.output_ready', expect.anything());
+      releasePlayback(); await starting;
       expect(mocks.send).toHaveBeenCalledWith('session.output_ready', { connectionEpoch: 1 });
+      expect(mocks.send.mock.calls[0][0]).toBe('session.output_ready');
       (call as any).onEvent(event('response.created', 'greeting'));
       (call as any).onEvent(event('response.text.delta', 'greeting', { delta: 'Hi' }));
       (call as any).onEvent(event('response.done', 'greeting', { audio: false }));

@@ -127,6 +127,15 @@ export class XopcVoiceCallAudio {
 
   setMuted(value: boolean): void { this.muted = value; }
 
+  async ensurePlaybackReady(): Promise<void> {
+    const renderer = this.renderer;
+    if (!renderer || !this.capturer || !this.capturing) throw new Error('AUDIO_UNAVAILABLE');
+    if (renderer.state !== audio.AudioState.STATE_RUNNING) await renderer.start();
+    if (renderer !== this.renderer || !this.capturing || renderer.state !== audio.AudioState.STATE_RUNNING) {
+      throw new Error('AUDIO_UNAVAILABLE');
+    }
+  }
+
   duck(value: boolean): void {
     const renderer = this.renderer;
     if (!renderer || this.ducked === value) return;

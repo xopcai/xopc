@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('@kit.AbilityKit', () => ({ abilityAccessCtrl: {}, common: {}, wantAgent: {} }));
 vi.mock('@kit.BasicServicesKit', () => ({ systemDateTime: { TimeType: { STARTUP: 1 }, getUptime: () => 1000 } }));
-vi.mock('@kit.AudioKit', () => ({ audio: {} }));
+vi.mock('@kit.AudioKit', () => ({ audio: { AudioState: { STATE_RUNNING: 2 } } }));
 vi.mock('@kit.AVSessionKit', () => ({ avSession: {} }));
 vi.mock('@kit.BackgroundTasksKit', () => ({ backgroundTaskManager: {} }));
 vi.mock('@kit.PerformanceAnalysisKit', () => ({ hilog: { warn: vi.fn() } }));
@@ -10,6 +10,23 @@ vi.mock('@kit.PerformanceAnalysisKit', () => ({ hilog: { warn: vi.fn() } }));
 import { XopcVoiceCallAudio } from '../entry/src/main/ets/service/voiceCallAudio.ets';
 
 describe('Harmony voice playback acknowledgement', () => {
+  it('resumes output after route setup before declaring playback ready', async () => {
+    const call = new XopcVoiceCallAudio();
+    const renderer = { state: 3, start: vi.fn(async () => { renderer.state = 2; }) };
+    Object.assign(call, { renderer, capturer: {}, capturing: true });
+    await call.ensurePlaybackReady();
+    expect(renderer.start).toHaveBeenCalledOnce();
+    await call.ensurePlaybackReady();
+    expect(renderer.start).toHaveBeenCalledOnce();
+  });
+
+  it('does not declare missing or stopped audio ready', async () => {
+    const call = new XopcVoiceCallAudio();
+    await expect(call.ensurePlaybackReady()).rejects.toThrow('AUDIO_UNAVAILABLE');
+    const renderer = { state: 3, start: vi.fn(async () => {}) };
+    Object.assign(call, { renderer, capturer: {}, capturing: true });
+    await expect(call.ensurePlaybackReady()).rejects.toThrow('AUDIO_UNAVAILABLE');
+  });
   it('reads exactly one 20 ms uplink frame even when the hardware buffer is larger', async () => {
     const call = new XopcVoiceCallAudio();
     const read = vi.fn(async () => new ArrayBuffer(640));
