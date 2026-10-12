@@ -8,7 +8,6 @@ import {
 } from '@xopcai/gateway-contract';
 
 import { trackInputAcceptance } from '../messages/input-acceptance';
-import { buildSendFailedErrorPayload } from '@/features/chat/messages/agent-run-error-parser';
 import { setOptimisticUserMessageDelivery } from '@/features/chat/messages/optimistic-user-message';
 import {
   createAgentStreamMessagingCallbacks,
@@ -486,7 +485,7 @@ export function useChatSessionStreaming(deps: {
             store().clearStreamingState(chatId);
             clearChatRunPresence(chatId);
             if (shouldApplyStreamUpdate(chatId)) {
-              setShellError(appContext && err instanceof Error ? err.message : JSON.stringify(buildSendFailedErrorPayload()));
+              setShellError(err instanceof Error ? err.message : String(err));
             }
             if (replaceTurnId) void loadSessionById(chatId, 0);
           } else {
