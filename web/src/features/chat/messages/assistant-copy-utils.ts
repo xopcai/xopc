@@ -9,11 +9,11 @@ import { marked } from 'marked';
 import type { MessageContent } from '@/features/chat/messages/messages.types';
 
 /** Markdown source for clipboard: final answer text plus image placeholders. */
-export function getAssistantCopyMarkdown(content: MessageContent[]): string {
+export function getAssistantCopyMarkdown(content: MessageContent[], conversationalText = false): string {
   const parts: string[] = [];
   for (const b of content) {
     if (b.type === 'text') {
-      if (b.presentation === 'pending' || b.presentation === 'narration') continue;
+      if (!conversationalText && (b.presentation === 'pending' || b.presentation === 'narration')) continue;
       parts.push(b.text);
     } else if (b.type === 'image') {
       parts.push('[image]');
@@ -30,11 +30,11 @@ function markdownToPlainText(md: string): string {
 }
 
 /** Plain text for clipboard: rendered final answer text plus image placeholders. */
-export function getAssistantCopyPlainText(content: MessageContent[]): string {
+export function getAssistantCopyPlainText(content: MessageContent[], conversationalText = false): string {
   const parts: string[] = [];
   for (const b of content) {
     if (b.type === 'text') {
-      if (b.presentation === 'pending' || b.presentation === 'narration') continue;
+      if (!conversationalText && (b.presentation === 'pending' || b.presentation === 'narration')) continue;
       parts.push(markdownToPlainText(b.text));
     } else if (b.type === 'image') {
       parts.push('[image]');

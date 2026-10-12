@@ -8,6 +8,15 @@ function mapper() {
 }
 
 describe('ChatStreamMapper', () => {
+  it('announces conversation text before completion and repeats it on replayable deltas', () => {
+    const m = new ChatStreamMapper({ runId: 'personal-run', conversationId: 'personal', channel: 'webchat', textSurface: 'conversation' });
+    expect(m.start()[0]).toMatchObject({ payload: { textSurface: 'conversation' } });
+    const message = { role: 'assistant', content: [] };
+    expect(m.map({ type: 'message_start', message })[0]).toMatchObject({ type: 'assistant_message_start', payload: { textSurface: 'conversation' } });
+    expect(m.map({ type: 'message_update', message, assistantMessageEvent: { type: 'text_delta', delta: '先看结论。' } })[0])
+      .toMatchObject({ type: 'assistant_delta', payload: { delta: '先看结论。', textSurface: 'conversation', offset: 0 } });
+    expect(mapper().start()[0].payload).not.toHaveProperty('textSurface');
+  });
   it('keeps nested call identity and authoritative duration through realtime mapping', () => {
     const m = mapper();
     const start = m.map({ type: 'tool_execution_start', toolCallId: 'script/1', parentToolCallId: 'script', toolName: 'read_file', args: {} });

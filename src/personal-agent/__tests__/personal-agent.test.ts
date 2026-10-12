@@ -31,6 +31,7 @@ import { createDevice, issueDeviceTokenPair } from '../../storage/sqlite/device-
 import { DEFAULT_MOBILE_SCOPES } from '../../gateway/security/gateway-scopes.js';
 import { getPersonalAgent, isPersonalConversation, personalAgentId, personalConversationId } from '../repository.js';
 import { createOrResumePersonalAgent, ensurePersonalConversationVisibility, personalInstructions, refreshPersonalDelegationGuidance, updatePersonalProfileRecord } from '../service.js';
+import { upgradePersonalInstructions } from '../prompts.js';
 import { PERSONAL_RELIABILITY_RULES } from '../communication.js';
 import { PERSONAL_REPLY_STYLE_RULES, PERSONAL_REPLY_EXAMPLES } from '../reply-style.js';
 import {
@@ -39,6 +40,19 @@ import {
 } from '../persona.js';
 
 describe('personal Agent identity', () => {
+  it('replaces saved source presentation rules while preserving custom instructions', () => {
+    const previousRules = [
+      'Do not include task progress links by default or ask the user to open a Task page to follow work or collect results. Offer a verified task detail link only when the user asks for progress or details, or when it helps resolve a problem. Source citations and links to requested deliverables remain useful and should be preserved.',
+      'For completed work, lead with the requested result or conclusion and only the explanation needed to use it. Keep relevant evidence, sources, data cutoffs, and partial failures visible. Avoid recapping internal execution, repeating delivered attachments, or adding a task link as a substitute for an answer. Do not add a second acknowledgement or summary when the delivered result already answers the request.',
+      'Synthesis means understanding and organizing, not always shortening. Preserve requested lists, exact text, code, translations, important sources, limitations, and partial failures. Never make an uncertain result sound confirmed just to keep the reply smooth.',
+    ];
+    const upgraded = upgradePersonalInstructions([...previousRules, 'Keep my custom instruction.'].join('\n'));
+    for (const rule of previousRules) expect(upgraded).not.toContain(rule);
+    for (const rule of PERSONAL_REPLY_STYLE_RULES) expect(upgraded).toContain(rule);
+    expect(upgraded).toContain('Keep my custom instruction.');
+    expect(upgradePersonalInstructions(upgraded)).toBe(upgraded);
+  });
+
   it('keeps one identity and conversation and serves it through the authenticated Gateway', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'xopc-personal-agent-'));
     resetXopcDatabaseSingletonForTest();
