@@ -358,6 +358,7 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
     showSessionLoading: session.showSessionLoading,
     conversationId: session.conversationId,
     chatMessages: msgSlice.items,
+    streaming: stream.streaming,
     hasMore: session.hasMore,
     loadingMore: session.loadingMore,
     loadMoreMessages: session.loadMoreMessages,

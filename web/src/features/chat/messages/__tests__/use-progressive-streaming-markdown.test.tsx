@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { act, StrictMode } from 'react';
+import { act, StrictMode, useLayoutEffect } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -91,6 +91,39 @@ describe('useProgressiveStreamingMarkdown', () => {
     act(() => root.render(<Harness content="abcdefghijklmnopqr" streaming />));
     act(() => root.render(<Harness content="abcdefghijklmnopqr" streaming={false} />));
     expect(container.textContent).toBe('abcdefghijklmnopqr');
+  });
+
+  it('commits the complete terminal text before layout effects observe the completed shell', () => {
+    const commits: Array<{ streaming: boolean; text: string }> = [];
+    const onComplete = vi.fn();
+    function Probe({ content, streaming }: { content: string; streaming: boolean }) {
+      const text = useProgressiveStreamingMarkdown(content, streaming, 'terminal-commit', false, onComplete);
+      useLayoutEffect(() => { commits.push({ streaming, text }); }, [streaming, text]);
+      return <div>{text}</div>;
+    }
+    act(() => root.render(<Probe content="Short" streaming />));
+    act(() => root.render(<Probe content="Short answer with a final burst." streaming />));
+    expect(container.textContent).toBe('Short');
+    act(() => root.render(<Probe content="Short answer with a final burst." streaming={false} />));
+    expect(commits.filter(commit => !commit.streaming).every(commit => commit.text === 'Short answer with a final burst.')).toBe(true);
+    expect(onComplete).toHaveBeenCalledTimes(1);
+    act(() => vi.runAllTimers());
+    expect(container.textContent).toBe('Short answer with a final burst.');
+    expect(onComplete).toHaveBeenCalledTimes(1);
+  });
+
+  it('commits the first conversational delta without an empty intermediate layout', () => {
+    const commits: string[] = [];
+    function Probe({ content }: { content: string }) {
+      const text = useProgressiveStreamingMarkdown(content, true, 'first-commit', false, undefined, true);
+      useLayoutEffect(() => { commits.push(text); });
+      return <div>{text}</div>;
+    }
+    act(() => root.render(<Probe content="" />));
+    commits.length = 0;
+    act(() => root.render(<Probe content="先看结论。" />));
+    expect(commits.length).toBeGreaterThan(0);
+    expect(commits.every(text => text === '先看结论。')).toBe(true);
   });
 
   it('renders non-streamed history immediately', () => {
