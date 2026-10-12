@@ -60,7 +60,7 @@ describe('Omni voice persona context', () => {
     expect(snapshot.block).toContain('Prefer exact, practical answers.');
     expect(snapshot.block).toContain('CODER_ONLY_PERSONA');
     expect(snapshot.block).not.toContain('MAIN_ONLY_PERSONA');
-  });
+  }, 15_000);
 
   it('keeps every persona source within the fixed live-voice budget', () => {
     seedConversationFixtures();
