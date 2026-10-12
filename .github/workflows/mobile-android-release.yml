@@ -46,14 +46,23 @@ jobs:
           done
           printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/xopc-production.jks"
 
-      - name: Test and build signed native APK and AAB
+      - name: Test native Android app
         working-directory: apps/mobile-android
         env:
           ORG_GRADLE_PROJECT_XOPC_UPLOAD_STORE_FILE: ${{ runner.temp }}/xopc-production.jks
           ORG_GRADLE_PROJECT_XOPC_UPLOAD_STORE_PASSWORD: ${{ secrets.ANDROID_PRODUCTION_KEYSTORE_PASSWORD }}
           ORG_GRADLE_PROJECT_XOPC_UPLOAD_KEY_ALIAS: ${{ secrets.ANDROID_PRODUCTION_KEY_ALIAS }}
           ORG_GRADLE_PROJECT_XOPC_UPLOAD_KEY_PASSWORD: ${{ secrets.ANDROID_PRODUCTION_KEY_PASSWORD }}
-        run: ./gradlew :app:testDebugUnitTest :app:assembleRelease :app:bundleRelease
+        run: ./gradlew :app:testDebugUnitTest
+
+      - name: Build signed native APK and AAB
+        working-directory: apps/mobile-android
+        env:
+          ORG_GRADLE_PROJECT_XOPC_UPLOAD_STORE_FILE: ${{ runner.temp }}/xopc-production.jks
+          ORG_GRADLE_PROJECT_XOPC_UPLOAD_STORE_PASSWORD: ${{ secrets.ANDROID_PRODUCTION_KEYSTORE_PASSWORD }}
+          ORG_GRADLE_PROJECT_XOPC_UPLOAD_KEY_ALIAS: ${{ secrets.ANDROID_PRODUCTION_KEY_ALIAS }}
+          ORG_GRADLE_PROJECT_XOPC_UPLOAD_KEY_PASSWORD: ${{ secrets.ANDROID_PRODUCTION_KEY_PASSWORD }}
+        run: ./gradlew :app:assembleRelease :app:bundleRelease
 
       - name: Verify package and existing Production signing certificate
         shell: bash
