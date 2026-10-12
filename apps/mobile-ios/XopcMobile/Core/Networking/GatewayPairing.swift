@@ -133,10 +133,15 @@ enum GatewayPairingProof {
 }
 
 enum GatewayRequestProof {
-    static func digest(_ data: Data) -> String { SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined() }
+    static func digest(_ data: Data) -> String {
+        SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+    }
 
+    // The signed wire format has independent fields in a fixed order.
+    // swiftlint:disable:next function_parameter_count
     static func message(gatewayID: String, credential: String, method: String, target: String,
-        bodyHash: String, headers: [String], timestamp: Int, nonce: String) -> String {
+                        bodyHash: String, headers: [String], timestamp: Int, nonce: String) -> String
+    {
         (["xopc-request-v1", gatewayID, digest(Data(credential.utf8)), method, target, bodyHash]
             + headers + [String(timestamp), nonce]).joined(separator: "\n")
     }
@@ -355,8 +360,8 @@ final class GatewayPairingService {
         let headers = ["Content-Type", "Idempotency-Key", "X-Xopc-Expected-Session-Key", "x-endpoint-id", "x-endpoint-upload-token"]
             .map { original.value(forHTTPHeaderField: $0) ?? "" }
         var request = original
-        request.setValue(try requestProof(gatewayID: gatewayID, credential: token, method: original.httpMethod ?? "GET",
-            target: target, body: original.httpBody ?? Data(), headers: headers), forHTTPHeaderField: "X-Xopc-Proof")
+        try request.setValue(requestProof(gatewayID: gatewayID, credential: token, method: original.httpMethod ?? "GET",
+                                          target: target, body: original.httpBody ?? Data(), headers: headers), forHTTPHeaderField: "X-Xopc-Proof")
         return request
     }
 
@@ -367,16 +372,19 @@ final class GatewayPairingService {
         let origin = (components.url?.absoluteString ?? "").trimmingCharacters(in: CharacterSet(charactersIn: "/"))
         guard let gatewayID = proofOrigins[origin] else { return nil }
         return try requestProof(gatewayID: gatewayID, credential: ticket, method: "CONNECT", target: path,
-            body: Data(), headers: Array(repeating: "", count: 5))
+                                body: Data(), headers: Array(repeating: "", count: 5))
     }
 
+    // Keep request signing fields explicit at the authentication boundary.
+    // swiftlint:disable:next function_parameter_count
     private func requestProof(gatewayID: String, credential: String, method: String, target: String,
-        body: Data, headers: [String]) throws -> String {
+                              body: Data, headers: [String]) throws -> String
+    {
         let timestamp = Int(Date().timeIntervalSince1970 * 1000) + (proofOffsets[gatewayID] ?? 0)
         let nonce = random(24)
         let bodyHash = GatewayRequestProof.digest(body)
         let message = GatewayRequestProof.message(gatewayID: gatewayID, credential: credential, method: method,
-            target: target, bodyHash: bodyHash, headers: headers, timestamp: timestamp, nonce: nonce)
+                                                  target: target, bodyHash: bodyHash, headers: headers, timestamp: timestamp, nonce: nonce)
         let signature = try deviceKey().signature(for: Data(message.utf8)).rawRepresentation.base64URLEncodedString()
         return "\(timestamp).\(nonce).\(bodyHash).\(signature)"
     }
@@ -425,6 +433,8 @@ final class GatewayPairingService {
         return result
     }
 
+    // Keep the signed refresh challenge and response validation together.
+    // swiftlint:disable:next function_body_length
     private func refresh(
         gatewayID: String, name: String, routes: [URL], publicKey: String, refreshToken: String,
         nextToken: String? = nil, requestID: String? = nil
@@ -466,8 +476,12 @@ final class GatewayPairingService {
                       result.tokens.accessTokenExpiresAt > adjustedTimestamp, result.requestProofVersion == 1
                 else { throw GatewayPairingError.identityMismatch }
                 proofTokens[result.tokens.accessToken] = gatewayID
-                for route in routes { proofOrigins[route.absoluteString.trimmingCharacters(in: CharacterSet(charactersIn: "/"))] = gatewayID }
-                if proofTokens.count > 128 { proofTokens = [result.tokens.accessToken: gatewayID] }
+                for route in routes {
+                    proofOrigins[route.absoluteString.trimmingCharacters(in: CharacterSet(charactersIn: "/"))] = gatewayID
+                }
+                if proofTokens.count > 128 {
+                    proofTokens = [result.tokens.accessToken: gatewayID]
+                }
                 return GatewayPairedConnection(
                     name: name, gatewayID: gatewayID, baseURL: origin,
                     accessToken: result.tokens.accessToken,
