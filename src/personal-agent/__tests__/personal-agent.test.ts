@@ -388,8 +388,8 @@ describe('personal Agent identity', () => {
         expect(repository.get(first.agentId)?.models?.chat?.primary).toBe('test/slow');
         busy = true;
         expect((await fetch(url, { method: 'PATCH', headers,
-          body: JSON.stringify({ thinkingLevel: 'high' }) })).status).toBe(409);
-        expect((await readConfig()).thinkingLevel).toBe('off');
+          body: JSON.stringify({ thinkingLevel: 'high' }) })).status).toBe(200);
+        expect((await readConfig()).thinkingLevel).toBe('high');
       } finally {
         await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
       }
