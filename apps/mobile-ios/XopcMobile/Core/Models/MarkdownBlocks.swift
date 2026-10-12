@@ -65,10 +65,9 @@ enum MarkdownBlock: Equatable, Sendable {
             let line = lines[index]
             index += 1
             let trimmed = line.trimmingCharacters(in: .whitespaces)
-            if !inCode, let math = MathMarkdownSyntax.displayBlock(lines, at: index - 1) {
-                finishParagraph(); blocks.append(.math(math.source)); index = math.next; continue
-            }
-            if !inCode, let math = MathMarkdownSyntax.fenceBlock(lines, at: index - 1) {
+            if !inCode, let math = MathMarkdownSyntax.displayBlock(lines, at: index - 1)
+                ?? MathMarkdownSyntax.fenceBlock(lines, at: index - 1)
+            {
                 finishParagraph(); blocks.append(.math(math.source)); index = math.next; continue
             }
             if trimmed.hasPrefix("```") {
@@ -88,15 +87,10 @@ enum MarkdownBlock: Equatable, Sendable {
                 finishParagraph()
                 continue
             }
-            if let table = parseTable(lines: lines, headerIndex: index - 1) {
+            if let structured = structuredBlocks(lines: lines, index: index, trimmed: trimmed) {
                 finishParagraph()
-                blocks.append(table.block)
-                index = table.nextIndex
-                continue
-            }
-            if let images = imageBlocks(from: trimmed) {
-                finishParagraph()
-                blocks.append(contentsOf: images)
+                blocks.append(contentsOf: structured.blocks)
+                index = structured.nextIndex
                 continue
             }
             let indentation = line.prefix { $0 == " " }.count
@@ -113,6 +107,18 @@ enum MarkdownBlock: Equatable, Sendable {
             blocks.append(.code(code.joined(separator: "\n")))
         }
         return blocks
+    }
+
+    private static func structuredBlocks(lines: [String], index: Int, trimmed: String)
+        -> (blocks: [MarkdownBlock], nextIndex: Int)?
+    {
+        if let table = parseTable(lines: lines, headerIndex: index - 1) {
+            return ([table.block], table.nextIndex)
+        }
+        if let images = imageBlocks(from: trimmed) {
+            return (images, index)
+        }
+        return nil
     }
 
     private static func standaloneBlock(from line: String, level: Int) -> MarkdownBlock? {
