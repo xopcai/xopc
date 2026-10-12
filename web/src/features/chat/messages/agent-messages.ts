@@ -75,7 +75,7 @@ function thinkingBlockComparableText(b: MessageContent): string {
  * - adjacent thinking blocks with identical text: drop duplicate (streaming + persist overlap).
  */
 function mergeAssistantContentFragments(left: MessageContent[], right: MessageContent[]): MessageContent[] {
-  const out: MessageContent[] = left.map((b) => ({ ...b }));
+  const out: MessageContent[] = [...left];
   const toolIndexById = new Map<string, number>();
   for (let i = 0; i < out.length; i++) {
     const b = out[i];
@@ -87,7 +87,7 @@ function mergeAssistantContentFragments(left: MessageContent[], right: MessageCo
   for (const b of right) {
     if (b.type === 'tool_use' && toolIndexById.has(b.id)) {
       const idx = toolIndexById.get(b.id)!;
-      out[idx] = { ...b };
+      out[idx] = b;
       continue;
     }
     if (b.type === 'thinking' && out.length > 0) {
@@ -99,7 +99,7 @@ function mergeAssistantContentFragments(left: MessageContent[], right: MessageCo
     if (b.type === 'tool_use') {
       toolIndexById.set(b.id, out.length);
     }
-    out.push({ ...b });
+    out.push(b);
   }
   return out;
 }
@@ -117,15 +117,16 @@ export function mergeConsecutiveAssistantMessages(messages: Message[]): Message[
       out.push(m);
       continue;
     }
-    const prev = out[out.length - 1];
+    const previous = out[out.length - 1];
     // A visible assistant reply can span multiple backend runs (for example,
     // connection/clarification resumes). The user row, not runId, is the
     // conversation bubble boundary.
-    if (prev?.role === 'assistant'
-      && !prev.taskResultDelivery && !m.taskResultDelivery
-      && !prev.personalProvenance && !m.personalProvenance
-      && !(m.startsNewBubble && prev.turnId !== m.turnId)) {
-      prev.content = mergeAssistantContentFragments(prev.content, m.content);
+    if (previous?.role === 'assistant'
+      && !previous.taskResultDelivery && !m.taskResultDelivery
+      && !previous.personalProvenance && !m.personalProvenance
+      && !(m.startsNewBubble && previous.turnId !== m.turnId)) {
+      const prev = { ...previous, content: mergeAssistantContentFragments(previous.content, m.content) };
+      out[out.length - 1] = prev;
       if (m.timestamp != null) prev.timestamp = m.timestamp;
       if (m.completedAt != null) prev.completedAt = m.completedAt;
       if (m.renderKey) prev.renderKey = m.renderKey;
@@ -137,10 +138,7 @@ export function mergeConsecutiveAssistantMessages(messages: Message[]): Message[
         prev.attachments = dedupeAttachments([...(prev.attachments ?? []), ...m.attachments]);
       }
     } else {
-      out.push({
-        ...m,
-        content: [...m.content],
-      });
+      out.push(m);
     }
   }
   return out;

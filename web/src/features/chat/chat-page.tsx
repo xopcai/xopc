@@ -1,3 +1,4 @@
+import { chatVirtualScroll, pauseChatTailFollowing } from '@/features/chat/scroll/chat-virtual-scroll';
 import * as Dialog from '@radix-ui/react-dialog';
 import { serializeUserTurnDocument } from '@xopcai/gateway-contract';
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
@@ -388,7 +389,12 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
       const target = root.querySelector<HTMLElement>(
         `[data-chat-message-index="${localMessageIndex}"]`,
       );
-      if (!target) return false;
+      if (!target) {
+        const revealed = chatVirtualScroll(root)?.reveal(localMessageIndex) ?? false;
+        if (revealed) setActiveMessageIndex(localMessageIndex);
+        return revealed;
+      }
+      pauseChatTailFollowing(root);
       setActiveMessageIndex(localMessageIndex);
       const rootRect = root.getBoundingClientRect();
       const targetRect = target.getBoundingClientRect();
@@ -1181,6 +1187,8 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
                     />
                   ) : null}
                   <MessageList
+                    key={chatConversationId}
+                    scrollRef={scrollRef}
                     messages={msgSlice.items}
                     personal={personal}
                     authToken={token ?? undefined}
