@@ -13,6 +13,8 @@ import { selectDisplayMessages } from '@/features/chat/session/chat-session-view
 import { useChatSessionShell } from '@/features/chat/rendering/use-chat-render-state';
 import '@/styles/globals.css';
 
+import { runChatCompletionFixture, type ChatCompletionOptions, type ChatCompletionReport } from './completion-fixture';
+
 const root = createRoot(document.getElementById('root')!);
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 const nextFrame = () => new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
@@ -25,6 +27,7 @@ const fixtures = {
 
 declare global {
   interface Window {
+    runChatCompletionFixture: (options: ChatCompletionOptions) => Promise<ChatCompletionReport>;
     runChatRenderingFixture: (name: keyof typeof fixtures) => Promise<{
       commitMs: number[]; durationMs: number; nodes: number; longTasks: number[]; textLength: number;
     }>;
@@ -33,6 +36,7 @@ declare global {
 }
 
 const registerContent = () => {};
+window.runChatCompletionFixture = options => runChatCompletionFixture(root, options);
 function StoredHistory() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const slice = useChatSessionShell('render-fixture');
