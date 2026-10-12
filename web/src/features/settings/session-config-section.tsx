@@ -1,6 +1,7 @@
 import { Database } from 'lucide-react';
 import { useCallback, useMemo, useReducer, useRef } from 'react';
 
+import { NumberInput } from '@/components/ui/number-input';
 import { AutosaveStatus } from '@/components/ui/autosave-status';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useGatewayConfigSwr } from '@/features/gateway/gateway-config-swr';
@@ -102,7 +103,7 @@ export function SessionConfigSection({ hasToken }: { hasToken: boolean }) {
         </div>
         <div>
           <label className="mb-1 block text-sm font-medium text-fg">{t.pruneAfterDays}</label>
-          <input
+          <NumberInput allowEmpty
             type="number"
             min={0}
             className={inputClassName()}
@@ -116,7 +117,7 @@ export function SessionConfigSection({ hasToken }: { hasToken: boolean }) {
         </div>
         <div>
           <label className="mb-1 block text-sm font-medium text-fg">{t.maxEntries}</label>
-          <input
+          <NumberInput allowEmpty
             type="number"
             min={1}
             className={inputClassName()}

@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 
+import { NumberInput } from '@/components/ui/number-input';
 import { McpHeadersEditor } from '@/features/connectors/mcp/mcp-headers-editor';
 import {
   type McpServerRow, type McpTransportKind,
@@ -165,7 +166,7 @@ export function McpServerFormFields({ row, t, onUpdate, idConflictMessage, varia
         </Select>
       </Field>
       {showAdvanced ? <Field label={t.requestTimeoutLabel}>
-        <input type="number" min={1} className={inputClassName()} value={row.timeout ?? ''} placeholder="60"
+        <NumberInput allowEmpty type="number" min={1} className={inputClassName()} value={row.timeout ?? ''} placeholder="60"
           onChange={e => onUpdate({ timeout: e.target.value ? Number(e.target.value) : undefined })} />
       </Field> : null}
 

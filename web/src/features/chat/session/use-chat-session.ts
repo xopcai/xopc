@@ -12,6 +12,7 @@ import {
   shouldApplyStreamUpdateToView,
   shouldRestoreLiveCacheToView,
 } from '@/features/chat/session/chat-session-view';
+import { useFrameChatSession } from '@/features/chat/session/use-frame-chat-session';
 import { chatRunManager } from '@/features/chat/session/chat-run-manager';
 import {
   getChatSessionSnapshot,
@@ -81,9 +82,7 @@ export function useChatSession(options?: { fixedConversationId?: string; taskId?
   const shellError = useChatSessionStore((s) => s.shellError);
   /** URL is visible-session truth; do not read the store via lagging `focusedConversationId`. */
   const visibleConversationId = viewConversationId;
-  const sessionSlice = useChatSessionStore((s) =>
-    visibleConversationId ? s.sessions[visibleConversationId] : undefined,
-  );
+  const sessionSlice = useFrameChatSession(visibleConversationId);
 
   const streamLive = visibleConversationId ? isSessionSliceLive(sessionSlice) : false;
   const streaming = streamLive ? (sessionSlice?.streaming ?? false) : false;

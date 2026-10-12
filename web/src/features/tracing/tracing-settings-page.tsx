@@ -2,6 +2,7 @@ import * as Dialog from '@radix-ui/react-dialog';
 import { useMemo, useState } from 'react';
 import useSWR from 'swr';
 
+import { NumberInput } from '@/components/ui/number-input';
 import { AutosaveStatus } from '@/components/ui/autosave-status';
 import { Button } from '@/components/ui/button';
 import { PopoverSelect } from '@/components/ui/popover-select';
@@ -129,15 +130,15 @@ export function TracingSettingsPage() {
         {configAutosave.error && <Button variant="ghost" onClick={configAutosave.retry}>{t('Retry autosave', '重试自动保存')}</Button>}
         <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={cfg.enabled} onChange={e => edit(c => { c.enabled = e.target.checked; })} />{t('Record traces', '记录运行追踪')}</label>
         <div className="grid gap-4 sm:grid-cols-3">
-          <label className="space-y-1 text-sm">{t('Retention (days)', '保留天数')}<input className={inputClass} type="number" min={1} max={90} value={cfg.local.retentionDays} onChange={e => edit(c => { c.local.retentionDays = Number(e.target.value); })} /></label>
-          <label className="space-y-1 text-sm">{t('Storage budget (MiB)', '存储上限（MiB）')}<input className={inputClass} type="number" min={16} max={4096} value={cfg.local.maxStoreMiB} onChange={e => edit(c => { c.local.maxStoreMiB = Number(e.target.value); })} /></label>
+          <label className="space-y-1 text-sm">{t('Retention (days)', '保留天数')}<NumberInput className={inputClass} type="number" min={1} max={90} value={cfg.local.retentionDays} onChange={e => edit(c => { c.local.retentionDays = Number(e.target.value); })} /></label>
+          <label className="space-y-1 text-sm">{t('Storage budget (MiB)', '存储上限（MiB）')}<NumberInput className={inputClass} type="number" min={16} max={4096} value={cfg.local.maxStoreMiB} onChange={e => edit(c => { c.local.maxStoreMiB = Number(e.target.value); })} /></label>
           <label className="space-y-1 text-sm">{t('Capture', '采集内容')}<PopoverSelect placeholder={t('Choose', '请选择')} allowEmpty={false} value={cfg.capture} onChange={v => edit(c => { c.capture = v as TracingConfig['capture']; })} options={[{ value: 'metadata', label: t('Metadata only', '仅元数据') }, { value: 'redacted', label: t('Redacted previews', '脱敏摘要') }, { value: 'detailed', label: t('Detailed · 30 minutes', '详细记录 · 30 分钟') }]} /></label>
         </div>
         <p className="text-sm text-fg-muted">{t('Previews may contain personal content. Secrets and media are filtered; large values are truncated.', '摘要可能包含个人内容。过滤凭证和媒体，超长内容会截断。')}</p>
         {cfg.detailedUntil && <p className="text-sm text-fg-muted">{t('Detailed capture expires: ', '详细采集截止：')}{new Date(cfg.detailedUntil).toLocaleString()}</p>}
         <details><summary className="cursor-pointer text-sm">{t('Advanced limits', '高级限制')}</summary><div className="mt-3 grid gap-3 sm:grid-cols-2">{([
           ['maxTraces', t('Trace count', 'Trace 条数')], ['maxSpans', t('Span count', 'Span 条数')], ['maxTraceKiB', t('Per trace (KiB)', '单 Trace 上限（KiB）')], ['maxWriteMiBPerMinute', t('Write budget (MiB/minute)', '写入额度（MiB/分钟）')],
-        ] as const).map(([key, label]) => <label key={key} className="space-y-1 text-sm">{label}<input type="number" min={1} className={inputClass} value={cfg.local[key]} onChange={e => edit(c => { c.local[key] = Number(e.target.value); })} /></label>)}</div></details>
+        ] as const).map(([key, label]) => <label key={key} className="space-y-1 text-sm">{label}<NumberInput type="number" min={1} className={inputClass} value={cfg.local[key]} onChange={e => edit(c => { c.local[key] = Number(e.target.value); })} /></label>)}</div></details>
         {!status.data ? <Skeleton className="h-10" /> : <p className="text-sm text-fg-muted">{t('Disk / payload', '磁盘 / 数据')}：{size(status.data.local.physicalBytes)} / {size(status.data.local.bytes)} · {status.data.local.traces ?? 0} traces · {status.data.local.spans ?? 0} spans · {t('Dropped', '丢弃')} {Number(status.data.local.dropped ?? 0) + Number(status.data.local.queueDropped ?? 0)}{(status.data.local.paused || status.data.local.unavailable) && ` · ${t('Recording paused', '存储暂停')}`}</p>}
         {(status.error || status.data?.local.lastError) && <p role="alert" className="text-sm">{status.data?.local.lastError || String(status.error.message)}</p>}
         <div className="flex gap-2"><Button disabled={busy || saving} onClick={() => void action(async () => { await traceRequest('traces/prune', 'POST'); })}>{t('Clean expired', '清理过期记录')}</Button><Button disabled={busy} onClick={() => setConfirmClear(true)}>{t('Clear local traces', '清空本地追踪')}</Button></div>

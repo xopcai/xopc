@@ -535,7 +535,8 @@ export const useChatSessionStore = create<ChatSessionStoreState & ChatSessionSto
       if (!key) return;
       set((state) => {
         const current = state.sessions[key];
-        if (!current) return state;
+        if (!current || ((partial.sending === undefined || partial.sending === current.sending)
+          && (partial.streaming === undefined || partial.streaming === current.streaming))) return state;
         return {
           sessions: {
             ...state.sessions,
@@ -606,7 +607,7 @@ export const useChatSessionStore = create<ChatSessionStoreState & ChatSessionSto
       set((state) => {
         const current = state.sessions[key];
         if (!current) return state;
-        const shell = ensureAssistantMessage(current.streamingMsg, timestamp);
+        const shell = cloneMessageForRender(ensureAssistantMessage(current.streamingMsg, timestamp));
         shell.renderKey ??= `assistant-stream:${key}:${timestamp}`;
         shell.progressiveRender = true;
         delete shell.pendingResponseStatus;
@@ -616,7 +617,7 @@ export const useChatSessionStore = create<ChatSessionStoreState & ChatSessionSto
             ...state.sessions,
             [key]: {
               ...current,
-              streamingMsg: cloneMessageForRender(shell),
+              streamingMsg: shell,
               streaming: true,
             },
           },

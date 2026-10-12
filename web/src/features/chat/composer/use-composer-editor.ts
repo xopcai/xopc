@@ -90,20 +90,46 @@ export function useComposerEditor(options: UseComposerEditorOptions): UseCompose
   cursorRef.current = cursor;
   onValueChangeRef.current = onValueChange;
 
-  const adjustHeight = useCallback(() => {
+  const heightFrameRef = useRef<number | null>(null);
+  const resizeEditorNow = useCallback(() => {
     const el = editorRef.current;
     if (!el) return;
     el.style.height = 'auto';
     el.style.height = `${Math.min(el.scrollHeight, TEXTAREA_MAX_HEIGHT_PX)}px`;
   }, []);
+  const adjustHeight = useCallback(() => {
+    if (heightFrameRef.current !== null) return;
+    heightFrameRef.current = requestAnimationFrame(() => {
+      heightFrameRef.current = null;
+      resizeEditorNow();
+    });
+  }, [resizeEditorNow]);
+
+  useEffect(() => () => {
+    if (heightFrameRef.current !== null) cancelAnimationFrame(heightFrameRef.current);
+    heightFrameRef.current = null;
+  }, []);
+
+  useLayoutEffect(() => {
+    const el = editorRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    let width = el.clientWidth;
+    const observer = new ResizeObserver(() => {
+      if (width === el.clientWidth) return;
+      width = el.clientWidth;
+      adjustHeight();
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [adjustHeight]);
 
   useLayoutEffect(() => {
     const el = editorRef.current;
     if (!el || isComposing) return;
     updateComposerSkillLabels(el, resolveSkillLabel);
     if (resolveContextRef) updateComposerContextRefLabels(el, resolveContextRef);
-    adjustHeight();
-  }, [resolveSkillLabel, resolveContextRef, isComposing, adjustHeight]);
+    resizeEditorNow();
+  }, [resolveSkillLabel, resolveContextRef, isComposing, resizeEditorNow]);
 
   useLayoutEffect(() => {
     if (initializedEditorRef.current) return;
@@ -113,8 +139,8 @@ export function useComposerEditor(options: UseComposerEditorOptions): UseCompose
     if (resolveContextRef) updateComposerContextRefLabels(el, resolveContextRef);
     applyWireToEditor(el, initialValue, initialValue.length, capabilities);
     syncComposerPlaceholderClass(el, initialValue);
-    adjustHeight();
-  }, [adjustHeight, initialValue, resolveContextRef, capabilities]);
+    resizeEditorNow();
+  }, [resizeEditorNow, initialValue, resolveContextRef, capabilities]);
 
   useLayoutEffect(() => {
     const el = editorRef.current;

@@ -1,7 +1,7 @@
 import { ClipboardPaste, Trash2 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
-import { parseHeadersPaste, type McpHeaderEntry } from '@/features/connectors/mcp/mcp-headers-utils';
+import { createMcpHeaderEntry, parseHeadersPaste, type McpHeaderEntry } from '@/features/connectors/mcp/mcp-headers-utils';
 import { readTextFromClipboard } from '@/lib/copy-to-clipboard';
 import { settingsInputFocusClass } from '@/lib/form-field-width';
 import { cn } from '@/lib/cn';
@@ -19,15 +19,6 @@ type Props = {
   headers: McpHeaderEntry[];
   onChange: (headers: McpHeaderEntry[]) => void;
 };
-
-function headerRowKey(row: McpHeaderEntry, index: number, all: McpHeaderEntry[]): string {
-  const key = row.key.trim();
-  if (key) return `key:${key}`;
-  const value = row.value.trim();
-  if (value) return `value:${value}`;
-  const emptySlot = all.slice(0, index).filter((r) => !r.key.trim() && !r.value.trim()).length;
-  return `empty:${emptySlot}`;
-}
 
 function inputClassName(): string {
   return cn(
@@ -54,12 +45,12 @@ export function McpHeadersEditor({
   };
 
   const addRow = () => {
-    onChange([...headers, { key: '', value: '' }]);
+    onChange([...headers, createMcpHeaderEntry()]);
   };
 
   const removeRow = (index: number) => {
     const next = headers.filter((_, i) => i !== index);
-    onChange(next.length > 0 ? next : [{ key: '', value: '' }]);
+    onChange(next.length > 0 ? next : [createMcpHeaderEntry()]);
   };
 
   const pasteFromClipboard = async () => {
@@ -95,7 +86,7 @@ export function McpHeadersEditor({
 
       <div className="flex flex-col gap-2">
         {headers.map((row, index) => (
-          <div key={headerRowKey(row, index, headers)} className="flex items-center gap-2">
+          <div key={row.clientKey} className="flex items-center gap-2">
             <input
               className={cn(inputClassName(), 'min-w-0 flex-1 font-mono text-xs')}
               value={row.key}

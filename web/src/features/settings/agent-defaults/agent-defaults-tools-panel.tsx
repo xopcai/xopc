@@ -1,6 +1,7 @@
 import { Search, SlidersHorizontal } from 'lucide-react';
 import { useMemo, useState } from 'react';
 
+import { NumberInput } from '@/components/ui/number-input';
 import { Button } from '@/components/ui/button';
 import type {
   AgentDefaults,
@@ -106,8 +107,8 @@ export function AgentDefaultsToolsPanel({
               </div>
               {expanded ? (
                 <div className="mt-3 grid gap-3 rounded-lg bg-surface-base p-3 sm:grid-cols-2">
-                  <label className="block text-xs font-medium text-fg-muted">{zh ? '每轮最多调用次数' : 'Maximum calls per turn'}<input type="number" min={1} value={policy.maxCallsPerTurn ?? ''} placeholder={zh ? '不限制' : 'Unlimited'} onChange={(event) => updateTool(id, { maxCallsPerTurn: positiveInt(event.target.value) })} className="mt-2 w-full rounded-lg border border-edge bg-surface-panel px-3 py-2 text-sm text-fg outline-none focus:border-accent" /></label>
-                  <label className="block text-xs font-medium text-fg-muted">{zh ? '单次超时（毫秒）' : 'Call timeout (ms)'}<input type="number" min={1} value={policy.timeoutMs ?? ''} placeholder={zh ? '使用系统默认值' : 'Use system default'} onChange={(event) => updateTool(id, { timeoutMs: positiveInt(event.target.value) })} className="mt-2 w-full rounded-lg border border-edge bg-surface-panel px-3 py-2 text-sm text-fg outline-none focus:border-accent" /></label>
+                  <label className="block text-xs font-medium text-fg-muted">{zh ? '每轮最多调用次数' : 'Maximum calls per turn'}<NumberInput allowEmpty type="number" min={1} value={policy.maxCallsPerTurn ?? ''} placeholder={zh ? '不限制' : 'Unlimited'} onChange={(event) => updateTool(id, { maxCallsPerTurn: positiveInt(event.target.value) })} className="mt-2 w-full rounded-lg border border-edge bg-surface-panel px-3 py-2 text-sm text-fg outline-none focus:border-accent" /></label>
+                  <label className="block text-xs font-medium text-fg-muted">{zh ? '单次超时（毫秒）' : 'Call timeout (ms)'}<NumberInput allowEmpty type="number" min={1} value={policy.timeoutMs ?? ''} placeholder={zh ? '使用系统默认值' : 'Use system default'} onChange={(event) => updateTool(id, { timeoutMs: positiveInt(event.target.value) })} className="mt-2 w-full rounded-lg border border-edge bg-surface-panel px-3 py-2 text-sm text-fg outline-none focus:border-accent" /></label>
                 </div>
               ) : null}
             </div>
