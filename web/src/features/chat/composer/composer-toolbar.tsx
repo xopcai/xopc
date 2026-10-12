@@ -10,6 +10,7 @@ import type { MessageBundle } from '@/i18n/messages';
 
 export interface ComposerToolbarProps {
   disabled: boolean;
+  sendDisabled?: boolean;
   sending: boolean;
   streaming: boolean;
   runBusy: boolean;
@@ -174,6 +175,7 @@ export function ComposerToolbarRow({ className, ...props }: HTMLAttributes<HTMLD
 
 export const ComposerToolbar = memo(function ComposerToolbar({
   disabled,
+  sendDisabled = false,
   sending,
   streaming,
   runBusy,
@@ -250,7 +252,7 @@ export const ComposerToolbar = memo(function ComposerToolbar({
             </>
           ) : null}
           <ComposerRunControl
-            disabled={disabled}
+            disabled={disabled || sendDisabled}
             voiceActive={voiceActive}
             runBusy={runBusy}
             hasDraft={hasDraft}
