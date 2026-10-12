@@ -1,6 +1,9 @@
-import { ChevronDown, ChevronUp, FileIcon, GripVertical, NotebookPen, Sparkles, X } from 'lucide-react';
-import { memo, useCallback } from 'react';
+import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
+import { CornerDownRight, ChevronDown, ChevronUp, Ellipsis, FileIcon, GripVertical, ListEnd, MessageCirclePlus, NotebookPen, Pencil, Trash2 } from 'lucide-react';
+import { memo, useRef } from 'react';
 import { parseUserTurnDocument, renderUserTurnDocument, userTurnDocumentRefIds } from '@xopcai/gateway-contract';
+
+import { useFollowUpRowDrag } from './use-follow-up-row-drag';
 
 import { MAX_PENDING_FOLLOW_UPS, type PendingFollowUp } from '@/features/chat/follow-up/pending-follow-up.types';
 import { messages } from '@/i18n/messages';
@@ -18,6 +21,9 @@ export const ChatPendingFollowUpStack = memo(function ChatPendingFollowUpStack({
   onReorder,
   onSteer,
   steeringBusyId,
+  queueingEnabled = true,
+  onToggleQueueing,
+  onOpenSideChat,
 }: {
   items: PendingFollowUp[];
   disabled?: boolean;
@@ -28,49 +34,41 @@ export const ChatPendingFollowUpStack = memo(function ChatPendingFollowUpStack({
   onReorder: (fromIndex: number, toIndex: number) => void;
   onSteer: (id: string) => void;
   steeringBusyId?: string | null;
+  queueingEnabled?: boolean;
+  onToggleQueueing?: () => void;
+  onOpenSideChat?: (item: PendingFollowUp, preview: string) => void;
 }) {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
 
-  const DT_PREFIX = 'xopc-followup:';
-
-  const onDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-  }, []);
-
-  const onDropRow = useCallback(
-    (targetIndex: number) => (e: React.DragEvent) => {
-      e.preventDefault();
-      const raw = e.dataTransfer.getData('text/plain');
-      if (!raw.startsWith(DT_PREFIX)) return;
-      const from = Number.parseInt(raw.slice(DT_PREFIX.length), 10);
-      if (Number.isNaN(from) || from === targetIndex) return;
-      onReorder(from, targetIndex);
-    },
-    [onReorder],
-  );
+  const keepComposerFocus = useRef(false);
+  const queuedItems = items.filter((row) => row.status === 'queued');
+  const busy = Boolean(disabled || steeringBusyId);
+  const drag = useFollowUpRowDrag({ items, disabled: busy, onReorder });
+  const actionClass = cn('inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-lg px-2 text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg disabled:pointer-events-none disabled:opacity-35', interaction.focusRingPanel);
+  const menuItemClass = 'flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm text-fg outline-none focus:bg-surface-hover data-[disabled]:pointer-events-none data-[disabled]:opacity-35';
 
   if (items.length === 0) return null;
 
   return (
     <div
-      className="space-y-0.5 px-2 py-1.5"
+      ref={drag.listRef}
+      className="space-y-1 px-2 py-2"
+      onClickCapture={drag.onClickCapture}
       role="list"
       aria-label={m.chat.followUpQueueAria}
     >
-      <div className="flex items-center justify-between gap-2 px-1 pb-0.5">
-        <span className="text-[0.65rem] font-medium uppercase tracking-wide text-fg-muted">
+      <div className="flex items-center justify-between gap-2 px-2 pb-1">
+        <span className="text-xs font-medium text-fg-muted">
           {m.chat.followUpQueueHeading}
         </span>
         <span className="tabular-nums text-[0.65rem] text-fg-muted">
           {items.length}/{MAX_PENDING_FOLLOW_UPS}
         </span>
       </div>
-      {items.map((item, index) => {
+      {items.map((item) => {
         const mutable = item.status === 'queued';
         const removable = mutable || item.status === 'interrupted';
-        const queuedItems = items.filter((row) => row.status === 'queued');
         const queuedIndex = queuedItems.findIndex((row) => row.id === item.id);
         const canSteer = removable && !item.attachments?.length && !item.contextRefs?.length && item.text.trim().length > 0;
         const isSteering = steeringBusyId === item.id;
@@ -91,24 +89,25 @@ export const ChatPendingFollowUpStack = memo(function ChatPendingFollowUpStack({
           <div
             key={item.id}
             role="listitem"
-            onDragOver={onDragOver}
-            onDrop={disabled || !mutable ? undefined : onDropRow(index)}
+            data-follow-up-id={item.id}
+            data-follow-up-sortable={!busy && mutable}
+            onPointerDown={(event) => drag.onPointerDown(event, item)}
+            onDragStart={(event) => event.preventDefault()}
+            style={{ transform: drag.view?.shifts[item.id] ? `translateY(${drag.view.shifts[item.id]}px)` : undefined }}
             className={cn(
-              'flex h-7 items-center gap-1 rounded border px-1',
+              'relative flex min-h-10 items-center gap-1 rounded-lg px-1.5 py-1 motion-safe:transition-transform motion-safe:duration-150',
+              !busy && mutable && 'cursor-grab',
+              drag.view?.id === item.id && 'bg-surface-inset ring-1 ring-inset ring-edge-strong [&>*]:invisible',
               editingFollowUpId === item.id
-                ? 'border-accent/50 bg-accent-soft/20 dark:border-accent/50 dark:bg-accent-soft/10'
-                : 'border-edge-subtle/80 bg-surface-hover/25 dark:border-edge-subtle/90 dark:bg-surface-hover/15',
+                ? 'bg-accent-soft ring-1 ring-inset ring-accent/30'
+                : 'hover:bg-surface-hover/50',
             )}
           >
             <div
-              draggable={!disabled && mutable}
-              onDragStart={(e) => {
-                e.dataTransfer.setData('text/plain', `${DT_PREFIX}${index}`);
-                e.dataTransfer.effectAllowed = 'move';
-              }}
+              data-follow-up-drag-handle
               className={cn(
-                'flex shrink-0 cursor-grab items-center active:cursor-grabbing',
-                (disabled || !mutable) && 'cursor-not-allowed opacity-40',
+                'flex shrink-0 touch-none cursor-grab items-center active:cursor-grabbing',
+                (busy || !mutable) && 'cursor-not-allowed opacity-40',
               )}
               title={m.chat.followUpQueueDrag}
             >
@@ -116,12 +115,12 @@ export const ChatPendingFollowUpStack = memo(function ChatPendingFollowUpStack({
             </div>
             <button
               type="button"
-              disabled={disabled || !mutable}
+              data-follow-up-drag-surface
+              disabled={busy || !mutable}
               title={m.chat.followUpQueueClickToEdit}
               aria-label={m.chat.followUpQueueClickToEdit}
               className={cn(
-                'h-6 min-w-0 flex-1 truncate rounded px-1.5 text-left text-[0.75rem] leading-none text-fg hover:bg-surface-panel/60 dark:hover:bg-surface-panel/40',
-                interaction.press,
+                'min-h-8 min-w-0 flex-1 cursor-grab rounded-md px-1.5 text-left text-sm text-fg',
                 interaction.focusRingPanel,
                 'disabled:pointer-events-none disabled:opacity-50',
               )}
@@ -133,7 +132,7 @@ export const ChatPendingFollowUpStack = memo(function ChatPendingFollowUpStack({
                   <span className="truncate">{preview}</span>
                 </span>
               ) : (
-                <span className="block truncate">{preview}</span>
+                <span className="line-clamp-2 break-words [overflow-wrap:anywhere]">{preview}</span>
               )}
             </button>
             {detachedRefs?.length ? (
@@ -150,83 +149,69 @@ export const ChatPendingFollowUpStack = memo(function ChatPendingFollowUpStack({
                 {statusText}
               </span>
             ) : null}
-            <div className="flex shrink-0 items-center gap-px">
-              <button
-                type="button"
-                disabled={disabled || !mutable || queuedIndex === 0}
-                className={cn(
-                  'inline-flex size-6 items-center justify-center rounded text-fg-muted hover:bg-surface-hover hover:text-fg',
-                  interaction.press,
-                  interaction.focusRingPanel,
-                  'disabled:pointer-events-none disabled:opacity-25',
-                )}
-                title={m.chat.followUpQueueMoveUp}
-                aria-label={m.chat.followUpQueueMoveUp}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onMove(item.id, 'up');
-                }}
-              >
-                <ChevronUp className="size-3.5" aria-hidden />
+            <div className="flex shrink-0 items-center gap-0.5">
+              <button type="button" className={actionClass} disabled={busy || !canSteer}
+                title={m.chat.followUpQueueSteerHint} aria-label={m.chat.followUpQueueSteerNow}
+                aria-busy={isSteering} onClick={() => onSteer(item.id)}>
+                <CornerDownRight className={cn('size-4', isSteering && 'motion-safe:animate-pulse')} aria-hidden />
+                <span className="hidden text-xs sm:inline">{m.chat.followUpQueueSteerNow}</span>
               </button>
-              <button
-                type="button"
-                disabled={disabled || !mutable || queuedIndex >= queuedItems.length - 1}
-                className={cn(
-                  'inline-flex size-6 items-center justify-center rounded text-fg-muted hover:bg-surface-hover hover:text-fg',
-                  interaction.press,
-                  interaction.focusRingPanel,
-                  'disabled:pointer-events-none disabled:opacity-25',
-                )}
-                title={m.chat.followUpQueueMoveDown}
-                aria-label={m.chat.followUpQueueMoveDown}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onMove(item.id, 'down');
-                }}
-              >
-                <ChevronDown className="size-3.5" aria-hidden />
+              <button type="button" className={cn(actionClass, 'px-1.5 hover:text-danger')}
+                disabled={busy || !removable} title={m.chat.followUpQueueRemove}
+                aria-label={m.chat.followUpQueueRemove} onClick={() => onRemove(item.id)}>
+                <Trash2 className="size-4" aria-hidden />
               </button>
-              <button
-                type="button"
-                disabled={disabled || !canSteer || isSteering}
-                className={cn(
-                  'inline-flex size-6 items-center justify-center rounded text-accent-fg hover:bg-accent-soft/80',
-                  interaction.press,
-                  interaction.focusRingPanel,
-                  'disabled:pointer-events-none disabled:opacity-35',
-                )}
-                title={m.chat.followUpQueueSteerNow}
-                aria-label={m.chat.followUpQueueSteerNow}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onSteer(item.id);
-                }}
-              >
-                <Sparkles className={cn('size-3.5', isSteering && 'animate-pulse')} aria-hidden />
-              </button>
-              <button
-                type="button"
-                disabled={disabled || !removable}
-                className={cn(
-                  'inline-flex size-6 items-center justify-center rounded text-fg-muted hover:bg-red-500/15 hover:text-red-600 dark:hover:text-red-400',
-                  interaction.press,
-                  interaction.focusRingPanel,
-                )}
-                title={m.chat.followUpQueueRemove}
-                aria-label={m.chat.followUpQueueRemove}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onRemove(item.id);
-                }}
-              >
-                <X className="size-3.5" aria-hidden />
-              </button>
+              <DropdownMenu.Root modal={false}>
+                <DropdownMenu.Trigger asChild>
+                  <button type="button" className={cn(actionClass, 'px-1.5')} disabled={busy}
+                    title={m.chat.followUpQueueMore} aria-label={m.chat.followUpQueueMore}>
+                    <Ellipsis className="size-4" aria-hidden />
+                  </button>
+                </DropdownMenu.Trigger>
+                <DropdownMenu.Portal>
+                  <DropdownMenu.Content side="top" align="end" sideOffset={6}
+                    onCloseAutoFocus={(event) => {
+                      if (keepComposerFocus.current) event.preventDefault();
+                      keepComposerFocus.current = false;
+                    }}
+                    className="z-50 min-w-52 max-w-[calc(100vw-2rem)] rounded-xl border border-edge bg-surface-overlay p-1 shadow-popover">
+                    <DropdownMenu.Item className={menuItemClass} disabled={!mutable}
+                      onSelect={() => {
+                        keepComposerFocus.current = true;
+                        onEditInComposer(item.id);
+                      }}>
+                      <Pencil className="size-4" aria-hidden />{m.chat.followUpQueueClickToEdit}
+                    </DropdownMenu.Item>
+                    {onOpenSideChat ? <DropdownMenu.Item className={menuItemClass} disabled={!canSteer}
+                      onSelect={() => onOpenSideChat(item, preview)}>
+                      <MessageCirclePlus className="size-4" aria-hidden />{m.chat.followUpQueueOpenSideChat}
+                    </DropdownMenu.Item> : null}
+                    {queuedItems.length > 1 ? <>
+                      <DropdownMenu.Separator className="my-1 h-px bg-edge-subtle" />
+                      <DropdownMenu.Item className={menuItemClass} disabled={!mutable || queuedIndex === 0}
+                        onSelect={() => onMove(item.id, 'up')}>
+                        <ChevronUp className="size-4" aria-hidden />{m.chat.followUpQueueMoveUp}
+                      </DropdownMenu.Item>
+                      <DropdownMenu.Item className={menuItemClass} disabled={!mutable || queuedIndex >= queuedItems.length - 1}
+                        onSelect={() => onMove(item.id, 'down')}>
+                        <ChevronDown className="size-4" aria-hidden />{m.chat.followUpQueueMoveDown}
+                      </DropdownMenu.Item>
+                    </> : null}
+                    {onToggleQueueing ? <>
+                      <DropdownMenu.Separator className="my-1 h-px bg-edge-subtle" />
+                      <DropdownMenu.Item className={menuItemClass} onSelect={onToggleQueueing}>
+                        <ListEnd className="size-4" aria-hidden />
+                        {queueingEnabled ? m.chat.followUpQueueTurnOff : m.chat.followUpQueueTurnOn}
+                      </DropdownMenu.Item>
+                    </> : null}
+                  </DropdownMenu.Content>
+                </DropdownMenu.Portal>
+              </DropdownMenu.Root>
             </div>
           </div>
         );
       })}
-      {items.some((i) => i.attachments?.length) ? (
+      {items.some((i) => i.attachments?.length || i.contextRefs?.length) ? (
         <p className="px-1 pt-0.5 text-[0.65rem] leading-tight text-fg-muted">
           {m.chat.followUpQueueAttachmentsNote}
         </p>
