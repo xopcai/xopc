@@ -1,3 +1,5 @@
+import { getSessionMetadata } from '../../storage/sqlite/index.js';
+
 import { LocalAppStore } from '../../local-apps/store.js';
 import {
   getProjectForSession,
@@ -6,7 +8,7 @@ import {
 import type { Project } from '../../projects/types.js';
 import { ProjectStore } from '../../projects/project-store.js';
 import {
-  knowledgeItemAllowed,
+  canUseKnowledge,
   listKnowledgeItems,
   searchKnowledgeItems,
   type KnowledgeReadPolicy,
@@ -94,15 +96,13 @@ export function buildActiveProjectContextForPrompt(
               projectId: project.id,
               conversationId: conversationId,
             },
-            trustedOnly: true,
             policy: options.knowledgePolicy,
             limit: MAX_RELEVANT_KNOWLEDGE,
           })
         : [],
       recent: listKnowledgeItems({ statuses: ['active'], scope: { type: 'project', id: project.id }, limit: 500 })
-        .filter((item) => item.originClass !== 'untrusted')
-        .filter((item) => !options.knowledgePolicy
-          || knowledgeItemAllowed(item, options.knowledgePolicy))
+        .filter(item => canUseKnowledge(item, { agentId: getSessionMetadata(conversationId)?.agentId ?? 'main', workspaceId: project.workspaceRoot ?? '',
+          projectId: project.id, conversationId }, options.knowledgePolicy))
         .slice(0, MAX_RECENT_KNOWLEDGE),
     }),
     localApp: localApp ? {

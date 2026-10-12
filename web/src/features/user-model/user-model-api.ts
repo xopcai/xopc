@@ -95,6 +95,8 @@ export type KnowledgeItem = {
   reviewAt?: number;
   originClass?: 'owner' | 'agent' | 'system' | 'untrusted';
   sourceAgentId?: string;
+  claimMode?: 'explicit' | 'observed' | 'inferred' | 'reported';
+  verification?: 'supported' | 'tentative' | 'conflicted';
   createdAt?: number;
   updatedAt?: number;
 };

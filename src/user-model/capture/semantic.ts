@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { WorkCandidateSchema, type WorkCandidate } from '../../memory-learning/work-capture.js';
+
 import type { AssertionCandidate, AssertionAuthority } from '../domain.js';
 
 export const USER_MODEL_CAPTURE_INTENTS = [
@@ -10,7 +12,7 @@ export type UserModelCaptureIntent = typeof USER_MODEL_CAPTURE_INTENTS[number];
 
 export interface CaptureEvidence {
   ref: string;
-  role: 'user' | 'assistant';
+  role: 'user' | 'assistant' | 'toolResult';
   text: string;
   createdAt: number;
 }
@@ -44,6 +46,7 @@ export interface ParsedCollaborationRuleCandidate {
 }
 
 export interface UserModelInterpretation {
+  knowledge?: WorkCandidate[];
   intent: UserModelCaptureIntent;
   assertions: ParsedAssertionOperation[];
   goals?: ParsedGoalCandidate[];
@@ -61,6 +64,7 @@ const ScopeSchema = z.object({
 });
 
 const AssertionOperationSchema = z.object({
+  intent: z.enum(USER_MODEL_CAPTURE_INTENTS).optional(),
   action: z.enum(['create', 'merge', 'replace']),
   targetAssertionId: z.string().min(1).optional(),
   subject: z.object({
@@ -105,6 +109,7 @@ const AssertionOperationSchema = z.object({
 });
 
 const GroundingSchema = z.object({
+  intent: z.enum(USER_MODEL_CAPTURE_INTENTS).optional(),
   evidence: z.array(z.object({ ref: z.string().min(1), quote: z.string().min(1) }).strict()).min(1).max(8),
   selfContained: z.boolean(),
   unresolvedReferences: z.array(z.string()).max(8),
@@ -127,6 +132,7 @@ const CollaborationRuleSchema = z.object({
 }).merge(GroundingSchema).strict();
 
 const InterpretationSchema = z.object({
+  knowledge: z.array(WorkCandidateSchema).max(8).default([]),
   intent: z.enum(USER_MODEL_CAPTURE_INTENTS),
   assertions: z.array(AssertionOperationSchema).max(8),
   goals: z.array(GoalSchema).max(4).default([]),
@@ -184,8 +190,9 @@ export function parseUserModelInterpretation(
   const assertionIntents = new Set<UserModelCaptureIntent>(['remember', 'correct', 'confirm', 'user_assertion']);
   const allowed = new Set(allowedTargetIds);
   const assertions: ParsedAssertionOperation[] = [];
-  if (assertionIntents.has(parsed.intent)) {
+  {
     for (const item of parsed.assertions) {
+      if (!assertionIntents.has(item.intent ?? parsed.intent)) continue;
       const evidenceRefs = groundedEvidenceRefs(item, evidenceByRef);
       if (!evidenceRefs) continue;
       if (item.action !== 'create' && (!item.targetAssertionId || !allowed.has(item.targetAssertionId))) continue;
@@ -201,7 +208,7 @@ export function parseUserModelInterpretation(
         value: item.value,
         normalizedValue: item.normalizedValue,
         statement: item.statement,
-        authority: effectiveAuthority(parsed.intent, item.authority),
+        authority: effectiveAuthority(item.intent ?? parsed.intent, item.authority),
         confidence: item.confidence,
         ...(item.declaredImportance === undefined ? {} : { declaredImportance: item.declaredImportance }),
         inferredImportance: item.inferredImportance,
@@ -225,7 +232,8 @@ export function parseUserModelInterpretation(
     }
   }
   const structuredIntents = new Set<UserModelCaptureIntent>(['remember', 'confirm', 'correct', 'user_assertion']);
-  const goals = structuredIntents.has(parsed.intent) ? parsed.goals.flatMap((item) => {
+  const goals = parsed.goals.flatMap((item) => {
+    if (!structuredIntents.has(item.intent ?? parsed.intent)) return [];
     const evidenceRefs = groundedEvidenceRefs(item, evidenceByRef);
     if (!evidenceRefs) return [];
     return [{
@@ -236,9 +244,9 @@ export function parseUserModelInterpretation(
       ...(item.targetAt === undefined ? {} : { targetAt: parseTime(item.targetAt) }),
       evidenceRefs,
     }];
-  }) : [];
-  const collaborationRules = structuredIntents.has(parsed.intent)
-    ? parsed.collaborationRules.flatMap((item) => {
+  });
+  const collaborationRules = parsed.collaborationRules.flatMap((item) => {
+        if (!structuredIntents.has(item.intent ?? parsed.intent)) return [];
         const evidenceRefs = groundedEvidenceRefs(item, evidenceByRef);
         if (!evidenceRefs || item.scope.type === 'agent') return [];
         return [{
@@ -249,9 +257,9 @@ export function parseUserModelInterpretation(
           statement: item.statement,
           evidenceRefs,
         }];
-      })
-    : [];
+      });
   return {
+    knowledge: parsed.knowledge,
     intent: parsed.intent,
     assertions,
     goals,

@@ -13,6 +13,7 @@ export class PlatformVoiceError extends Error {
   }
 
   get clientMessage(): string {
+    if (this.code === 'realtime_quota_session_limit') return 'The funded transcription duration has been reached. Start a new voice session to continue.';
     if (this.code === 'realtime_quota_workspace_budget') return 'XOPC Cloud voice workspace budget is exhausted. Increase the workspace budget or choose another voice provider.';
     if (this.status === 402 || this.code === 'realtime_quota_user_credits') return 'XOPC Cloud voice has insufficient Credit or quota. Check your Cloud balance and workspace budget, or choose another voice provider.';
     if (this.status === 401 || this.status === 403) return 'XOPC Cloud voice authorization failed. Sign in again and check your access to this voice model.';
