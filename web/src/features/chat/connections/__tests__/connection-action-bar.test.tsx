@@ -33,6 +33,7 @@ describe('single connection action area', () => {
   beforeEach(() => {
     Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
     vi.clearAllMocks();
+    mocked.state.isLoading = false;
     mocked.state.wait = {
       id: 'wait', conversationId: 'one', transcriptId: 'instance', principalId: 'local-owner', agentId: 'main', objectiveId: 'objective', objectiveRevision: 1, objectiveUpdatedAt: 1,
       originInputId: 'input', originRunId: 'run', summary: 'Summarize unread email from last week', status: 'open', phase: 'needs_connection', version: 1, createdAt: 1, updatedAt: 1,
@@ -41,6 +42,43 @@ describe('single connection action area', () => {
     container = document.createElement('div'); document.body.append(container); root = createRoot(container);
   });
   afterEach(async () => { await act(async () => root.unmount()); container.remove(); });
+  it('keeps the composer area empty while a first visit checks for connection needs', async () => {
+    mocked.state.wait = null;
+    mocked.state.isLoading = true;
+    await render();
+    expect(container.childElementCount).toBe(0);
+
+    mocked.state.isLoading = false;
+    await render();
+    expect(container.childElementCount).toBe(0);
+
+    // An uncached session switch must not briefly insert a placeholder either.
+    mocked.state.isLoading = true;
+    await act(async () => root.render(<ConnectionActionBar key="two" conversationId="two" />));
+    expect(container.childElementCount).toBe(0);
+  });
+  it('shows a connection need when it arrives after the initial check', async () => {
+    const wait = mocked.state.wait;
+    mocked.state.wait = null;
+    mocked.state.isLoading = true;
+    await render();
+    expect(container.childElementCount).toBe(0);
+
+    mocked.state.wait = wait;
+    mocked.state.isLoading = false;
+    await render();
+    expect(container.querySelector('section')?.textContent).toContain('Connect Gmail');
+    await click('Connect Gmail');
+    expect(mocked.state.act).toHaveBeenCalledExactlyOnceWith('connect', 'gmail');
+  });
+  it('retains a known connection action while loading instead of replacing it with a placeholder', async () => {
+    await render();
+    const section = container.querySelector('section');
+    mocked.state.isLoading = true;
+    await render();
+    expect(container.querySelector('section')).toBe(section);
+    expect(container.textContent).toContain('Connect Gmail');
+  });
   it('keeps a single current action through repeated updates and clears it when resolved', async () => {
     for (let version = 1; version < 11; version++) { mocked.state.wait!.version = version; await render(); }
     expect(document.querySelectorAll('section[aria-label="Waiting for connection"]')).toHaveLength(1);

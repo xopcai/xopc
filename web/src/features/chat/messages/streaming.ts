@@ -1,6 +1,7 @@
 import { resolveToolActivity, type AgentStreamToolExecutionMetadata, type ToolActivity } from '@xopcai/gateway-contract';
 
 import type { Message, MessageContent, ReviewContent, ToolUseContent } from '@/features/chat/messages/messages.types';
+import { inheritPartIdentity } from '@/features/chat/rendering/part-identity';
 
 /** Pi / wire format may use `thinking` on blocks; UI streaming uses `text`. */
 function thinkingBlockVisibleText(b: MessageContent): string {
@@ -63,7 +64,11 @@ export function ensureAssistantMessage(msg: Message | null | undefined, timestam
 export function cloneMessageForRender(msg: Message): Message {
   return {
     ...msg,
-    content: msg.content.map((b) => ({ ...b })),
+    content: msg.content.map((b) => {
+      const next = { ...b };
+      inheritPartIdentity(b, next);
+      return next;
+    }),
     attachments: msg.attachments ? msg.attachments.map((a) => ({ ...a })) : undefined,
     contextRefs: msg.contextRefs ? msg.contextRefs.map((ref) => ({ ...ref })) : undefined,
     userTurnDocument: msg.userTurnDocument

@@ -1,6 +1,6 @@
 import { memo } from 'react';
 
-import { MarkdownView } from '@/components/markdown/markdown-view';
+import { MarkdownView } from '@/features/chat/markdown/markdown-view';
 import type { WorkflowResultEnvelope, WorkflowResultSection } from '@/features/workflows/workflow-api';
 import { cn } from '@/lib/cn';
 

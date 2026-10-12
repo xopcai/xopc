@@ -1,3 +1,4 @@
+import { chatVirtualScroll } from './chat-virtual-scroll';
 import {
   useCallback,
   useEffect,
@@ -13,6 +14,7 @@ import {
   scrollChatToEnd,
 } from '@/features/chat/scroll/chat-scroll-geometry';
 import type { Message } from '@/features/chat/messages/messages.types';
+import { readChatScrollAnchor, restoreChatScrollAnchor, type ChatScrollAnchor } from './chat-scroll-anchor';
 
 /** WebKit/Chromium: wheel deltas flipped relative to device default (e.g. some mice on macOS). */
 function wheelDeltaImpliesTowardOlderMessages(e: WheelEvent): boolean {
@@ -59,7 +61,7 @@ export interface UseChatScrollViewportResult {
  * - **Not following**: user scrolled up — never programmatic scroll until they return.
  * - **Force to end**: session open/switch, scroll-to-bottom button.
  *
- * Virtual list scroll hacks are intentionally avoided — `MessageList` is a plain column.
+ * The virtual history adapter shares this controller and owns prepend measurements.
  */
 export function useChatScrollViewport({
   hasToken,
@@ -80,6 +82,7 @@ export function useChatScrollViewport({
   const replyBudgetRef = useRef(0);
   const replyRemainingRef = useRef(0);
   const resizeObserverRef = useRef<ResizeObserver | null>(null);
+  const readingAnchorRef = useRef<ChatScrollAnchor | null>(null);
   const resizeFrameRef = useRef<number | null>(null);
   const measuredScrollHeightRef = useRef(0);
   const measuredClientHeightRef = useRef(0);
@@ -97,6 +100,7 @@ export function useChatScrollViewport({
 
   const setFollowing = useCallback((next: boolean) => {
     followingRef.current = next;
+    if (next) readingAnchorRef.current = null;
   }, []);
 
   const reserveReplySpace = useCallback((messageRenderKey: string) => {
@@ -141,6 +145,13 @@ export function useChatScrollViewport({
         setFollowing(true);
       }
 
+      const virtual = chatVirtualScroll(el);
+      if (virtual) {
+        virtual.end(Boolean(opts?.smooth));
+        measuredScrollHeightRef.current = el.scrollHeight;
+        measuredClientHeightRef.current = el.clientHeight;
+        return;
+      }
       if (opts?.smooth) {
         el.scrollTo({ top: el.scrollHeight, behavior: chatScrollBehavior() });
         return;
@@ -166,6 +177,7 @@ export function useChatScrollViewport({
   const onResize = useCallback(() => {
     const el = scrollRef.current;
     if (!el) return;
+    if (!followingRef.current && !chatVirtualScroll(el)) restoreChatScrollAnchor(el, readingAnchorRef.current);
     updateReplySpace();
     const grew = el.scrollHeight > measuredScrollHeightRef.current;
     const viewportShrank = el.clientHeight < measuredClientHeightRef.current;
@@ -231,6 +243,7 @@ export function useChatScrollViewport({
       return;
     }
     setFollowing(near);
+    if (!near) readingAnchorRef.current = readChatScrollAnchor(el);
     setAtBottom(near);
     if (near) updateReplySpace();
 
@@ -304,7 +317,7 @@ export function useChatScrollViewport({
       && !sameMessageRow(first, prev.first)
       && sameMessageRow(chatMessages[added], prev.first);
 
-    if (prepended && prev.scrollHeight > 0) {
+    if (prepended && !chatVirtualScroll(el) && prev.scrollHeight > 0 && !restoreChatScrollAnchor(el, readingAnchorRef.current)) {
       el.scrollTop += newHeight - prev.scrollHeight;
     }
 
@@ -349,16 +362,35 @@ export function useChatScrollViewport({
       }
     };
 
+    const pauseForSelection = () => {
+      const selection = window.getSelection();
+      if (!selection || selection.isCollapsed || !root.contains(selection.anchorNode)) return;
+      stopFollowing();
+      readingAnchorRef.current = readChatScrollAnchor(root);
+    };
+    const pauseForDisclosure = (event: MouseEvent) => {
+      const element = event.target instanceof Element ? event.target : null;
+      if (!element?.closest('button[aria-expanded="false"]:not([aria-haspopup]), summary')) return;
+      stopFollowing();
+      readingAnchorRef.current = readChatScrollAnchor(root);
+    };
+
+    root.addEventListener('chat-scroll-reading', stopFollowing);
     root.addEventListener('wheel', onWheel, { passive: true });
     root.addEventListener('pointerdown', onPointerDown);
     root.addEventListener('touchstart', onTouchStart, { passive: true });
     root.addEventListener('touchmove', onTouchMove, { passive: true });
+    root.addEventListener('click', pauseForDisclosure, true);
+    document.addEventListener('selectionchange', pauseForSelection);
     return () => {
       viewportObserver.disconnect();
+      root.removeEventListener('chat-scroll-reading', stopFollowing);
       root.removeEventListener('wheel', onWheel);
       root.removeEventListener('pointerdown', onPointerDown);
       root.removeEventListener('touchstart', onTouchStart);
       root.removeEventListener('touchmove', onTouchMove);
+      root.removeEventListener('click', pauseForDisclosure, true);
+      document.removeEventListener('selectionchange', pauseForSelection);
     };
   }, [hasToken, showSessionLoading, stopFollowing, scheduleResize]);
 

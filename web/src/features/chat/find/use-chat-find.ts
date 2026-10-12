@@ -155,8 +155,18 @@ export function useChatFind({
       clearChatFindHighlights();
       return;
     }
-    const next = collectChatFindMatches(root, deferredQuery);
-    setDomMatches((current) => sameDomMatches(current, next) ? current : next);
+    const collect = () => {
+      const next = collectChatFindMatches(root, deferredQuery);
+      setDomMatches(current => sameDomMatches(current, next) ? current : next);
+    };
+    collect();
+    let frame: number | null = null;
+    const observer = new MutationObserver(() => {
+      if (frame !== null) return;
+      frame = requestAnimationFrame(() => { frame = null; collect(); });
+    });
+    observer.observe(root, { childList: true, subtree: true, characterData: true });
+    return () => { observer.disconnect(); if (frame !== null) cancelAnimationFrame(frame); };
   }, [deferredQuery, messages, open, viewportRef]);
 
   useEffect(() => {

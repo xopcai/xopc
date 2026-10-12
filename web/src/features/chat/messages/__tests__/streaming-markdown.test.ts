@@ -3,115 +3,12 @@ import { describe, expect, it } from 'vitest';
 import { parseMarkdown } from '@/components/markdown/parse-markdown';
 import {
   mergeConsecutiveTextBlocks,
-  prepareStreamingMarkdown,
 } from '@/features/chat/messages/streaming-markdown';
 import type { MessageContent } from '@/features/chat/messages/messages.types';
 
 function parsesTable(markdown: string): boolean {
   return parseMarkdown(markdown).includes('<table>');
 }
-
-describe('prepareStreamingMarkdown', () => {
-  it('adds a temporary separator when a streaming table only has a header row', () => {
-    const raw = 'Here is the table:\n\n| Name | Age |';
-    const repaired = prepareStreamingMarkdown(raw);
-
-    expect(parsesTable(raw)).toBe(false);
-    expect(parsesTable(repaired)).toBe(true);
-    expect(repaired).toContain('| --- | --- |');
-  });
-
-  it('repairs an incomplete separator row using the header column count', () => {
-    const raw = '| Name | Age |\n| ---';
-    const repaired = prepareStreamingMarkdown(raw);
-
-    expect(parsesTable(raw)).toBe(false);
-    expect(parsesTable(repaired)).toBe(true);
-    expect(repaired).toBe('| Name | Age |\n| --- | --- |');
-  });
-
-  it('keeps a streaming table renderable when the separator row has only started', () => {
-    const raw = 'Here is the table:\n\n| Name | Age |\n|';
-    const repaired = prepareStreamingMarkdown(raw);
-
-    expect(parsesTable(raw)).toBe(false);
-    expect(parsesTable(repaired)).toBe(true);
-    expect(repaired).toBe('Here is the table:\n\n| Name | Age |\n| --- | --- |');
-  });
-
-  it('does not insert a blank line while waiting for an indented separator row', () => {
-    const raw = 'Here is the table:\n\n| Name | Age |\n ';
-    const repaired = prepareStreamingMarkdown(raw);
-
-    expect(parsesTable(raw)).toBe(false);
-    expect(parsesTable(repaired)).toBe(true);
-    expect(repaired).toBe('Here is the table:\n\n| Name | Age |\n| --- | --- |');
-  });
-
-  it('keeps common table prefixes renderable after the table first appears', () => {
-    const raw = 'Here is the table:\n\n| Name | Age |\n | --- | --- |\n | Ada | 36 |';
-    let seenTable = false;
-
-    for (let i = 1; i <= raw.length; i++) {
-      const prefix = raw.slice(0, i);
-      const isTable = parsesTable(prepareStreamingMarkdown(prefix));
-      if (isTable) seenTable = true;
-      if (seenTable) expect(isTable, `prefix ${i}: ${JSON.stringify(prefix)}`).toBe(true);
-    }
-  });
-
-  it('preserves container prefixes for streaming tables inside lists and blockquotes', () => {
-    const samples = [
-      '- item\n  | Name | Age |\n  | --- | --- |\n  | Ada | 36 |',
-      '> | Name | Age |\n> | --- | --- |\n> | Ada | 36 |',
-    ];
-
-    for (const raw of samples) {
-      let seenTable = false;
-      for (let i = 1; i <= raw.length; i++) {
-        const prefix = raw.slice(0, i);
-        const isTable = parsesTable(prepareStreamingMarkdown(prefix));
-        if (isTable) seenTable = true;
-        if (seenTable) expect(isTable, `prefix ${i}: ${JSON.stringify(prefix)}`).toBe(true);
-      }
-    }
-  });
-
-  it('completes a partial final row without mutating non-table text', () => {
-    const raw = '| Name | Age |\n| --- | --- |\n| Ada | 36';
-    const repaired = prepareStreamingMarkdown(raw);
-
-    expect(parsesTable(repaired)).toBe(true);
-    expect(repaired).toBe('| Name | Age |\n| --- | --- |\n| Ada | 36 |');
-  });
-
-  it('leaves ordinary pipe text alone', () => {
-    const raw = 'Use foo | bar in this shell command.';
-    expect(prepareStreamingMarkdown(raw)).toBe(raw);
-  });
-
-  it('does not repair table-like text inside an unclosed code fence', () => {
-    const raw = '```md\n| Name | Age |';
-    expect(prepareStreamingMarkdown(raw)).toBe(raw);
-  });
-
-  it('holds an unfinished inline code span until its closing delimiter arrives', () => {
-    const partial = '共享类型定义在：\n\n`libs/ts/agent-channels/src/v';
-    const complete = '共享类型定义在：\n\n`libs/ts/agent-channels/src/view-models/qa-card.ts`';
-
-    expect(prepareStreamingMarkdown(partial)).toBe('共享类型定义在：\n\n');
-    expect(parseMarkdown(prepareStreamingMarkdown(partial))).not.toContain('`libs');
-    expect(prepareStreamingMarkdown(complete)).toBe(complete);
-    expect(parseMarkdown(prepareStreamingMarkdown(complete))).toContain(
-      '<code>libs/ts/agent-channels/src/view-models/qa-card.ts</code>',
-    );
-  });
-
-  it('keeps unfinished fenced code visible while streaming', () => {
-    const raw = '```ts\nconst value = `partial';
-    expect(prepareStreamingMarkdown(raw)).toBe(raw);
-  });
-});
 
 describe('mergeConsecutiveTextBlocks', () => {
   it('merges adjacent text blocks so GFM tables can span UI chunks', () => {

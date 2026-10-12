@@ -1,7 +1,6 @@
 import type { Message } from './messages.types';
 
-/** Build-time rollback keeps the legacy work-log presentation without changing transcripts. */
+/** The personal surface renders narration inline without changing transcripts. */
 export function usesConversationText(message: Message, personal = false): boolean {
-  return import.meta.env.VITE_PERSONAL_PROGRESSIVE_RESPONSE !== 'false'
-    && (personal || message.textSurface === 'conversation');
+  return personal || message.textSurface === 'conversation';
 }

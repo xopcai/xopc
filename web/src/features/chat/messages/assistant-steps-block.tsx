@@ -18,6 +18,8 @@ import type {
   AssistantWorkLogItem,
 } from '@/features/chat/messages/assistant-turn-view-model';
 import { MarkdownView } from '@/features/chat/markdown/markdown-view';
+import { knownPartRenderKey } from '@/features/chat/rendering/part-identity';
+import { useChatContentPart } from '@/features/chat/rendering/use-chat-render-state';
 import { formatParamsJson, getKeyDetailLine } from '@/features/chat/messages/tool-input-preview';
 import {
   getToolExecutionTitle,
@@ -495,7 +497,7 @@ function toolFailureSummary(
 }
 
 function StepRow({
-  block,
+  block: snapshotBlock,
   toolLabels,
   stepLabels,
   cardLabels,
@@ -532,6 +534,8 @@ function StepRow({
   conversationId?: string | null;
   workflowOptions: AssistantActivityWorkflowOptions;
 }) {
+  const currentPart = useChatContentPart(conversationId, knownPartRenderKey(snapshotBlock));
+  const block = currentPart?.type === snapshotBlock.type ? currentPart : snapshotBlock;
   const showRawToolData = useDevViewStore((s) => s.showRawToolData);
   const outputLanguage = useLocaleStore(state => state.language);
   const toolResultText = useMemo(() => {
@@ -560,7 +564,7 @@ function StepRow({
     if (!text) return null;
     return (
       <div className="min-w-0 text-sm leading-relaxed text-fg-muted">
-        <MarkdownView content={text} compact />
+        <MarkdownView content={text} compact streaming={block.presentation === 'pending'} />
       </div>
     );
   }

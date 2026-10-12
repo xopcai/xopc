@@ -5,7 +5,7 @@ import {
   useEffect,
   useId,
   useLayoutEffect,
-  useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react';
@@ -13,6 +13,8 @@ import { AlertCircle, Copy, ExternalLink, File, FolderOpen, Loader2, Settings, X
 import type { UserTurnDocument } from '@xopcai/gateway-contract';
 
 import { MarkdownView } from '@/features/chat/markdown/markdown-view';
+import { knownPartRenderKey } from '@/features/chat/rendering/part-identity';
+import { useChatTextRun } from '@/features/chat/rendering/use-chat-render-state';
 import type { WorkspaceFileLinkTarget } from '@/components/markdown/internal-links';
 import type {
   ImageContent,
@@ -30,14 +32,9 @@ import {
   resolveFileReferenceAction,
   type WorkspaceFileReference,
 } from '@/features/workspace/workspace-api';
-import {
-  mergeConsecutiveTextBlocks,
-  prepareStreamingMarkdown,
-} from '@/features/chat/messages/streaming-markdown';
-import { buildStreamingMarkdownRenderBlocks } from '@/components/markdown/parse-markdown';
+import { mergeConsecutiveTextBlocks, textRunSourceIds } from '@/features/chat/messages/streaming-markdown';
 import {
   finishStreamingRenderMetrics,
-  recordStreamingShape,
   startStreamingRenderMetrics,
 } from '@/components/markdown/streaming-render-metrics';
 import { useProgressiveStreamingMarkdown } from '@/features/chat/messages/use-progressive-streaming-markdown';
@@ -100,7 +97,7 @@ function ReviewBlock({ review }: { review: ReviewContent }) {
       {review.analysisMarkdown ? (
         <div className="mt-3 rounded-md border border-edge-subtle bg-surface px-2.5 py-2">
           <div className="mb-1 text-xs font-medium text-fg-secondary">{t.assistant}</div>
-          <MarkdownView content={review.analysisMarkdown} compact />
+          <MarkdownView content={review.analysisMarkdown} compact streaming={isRunning} />
         </div>
       ) : null}
       {review.status === 'error' && review.errorMessage ? (
@@ -257,9 +254,11 @@ const fileActionButtonClass = cn(
   interaction.press,
 );
 
-function ChatMarkdownView({
+export function ChatMarkdownView({
   taskRunId,
-  content,
+  content: snapshotContent,
+  sourceConversationId,
+  sourcePartIds = [],
   compact,
   conversationId,
   projectId,
@@ -270,6 +269,8 @@ function ChatMarkdownView({
   immediateFirstCommit = false,
 }: {
   content: string;
+  sourceConversationId?: string | null;
+  sourcePartIds?: string[];
   taskRunId?: string;
   compact?: boolean;
   conversationId?: string | null;
@@ -280,6 +281,8 @@ function ChatMarkdownView({
   responseRunId?: string;
   immediateFirstCommit?: boolean;
 }) {
+  const liveText = useChatTextRun(sourceConversationId, sourcePartIds);
+  const content = liveText ?? snapshotContent;
   // Reveal incoming deltas at an adaptive cadence without replaying the
   // current snapshot when this view first mounts.
   const generatedMetricsKey = useId();
@@ -292,41 +295,23 @@ function ChatMarkdownView({
     onProgressiveRenderComplete,
     immediateFirstCommit,
   );
-  const [hasStreamed, setHasStreamed] = useState(streaming || animateInitialContent);
-  useEffect(() => {
-    if (streaming) setHasStreamed(true);
-  }, [streaming]);
-  const progressivelyRevealing = streaming || streamingContent !== content;
-  const preserveStreamingLayout = streaming || hasStreamed;
-  const blockSource = streamingContent;
-  const streamingBlocks = useMemo(
-    () => buildStreamingMarkdownRenderBlocks(blockSource),
-    [blockSource],
-  );
   useLayoutEffect(() => {
     if (!responseRunId || !streamingContent.trim()) return;
     // The callback runs at the browser's next paint opportunity after the DOM commit.
-    const frame = window.requestAnimationFrame(() => recordResponseVisible(responseRunId, prepareStreamingMarkdown(streamingContent)));
+    const frame = window.requestAnimationFrame(() => recordResponseVisible(responseRunId, streamingContent));
     return () => window.cancelAnimationFrame(frame);
   }, [responseRunId, streamingContent, streaming]);
   useEffect(() => {
-    if (!progressivelyRevealing) return;
+    if (!streaming) return;
     startStreamingRenderMetrics(metricsKey);
     return () => finishStreamingRenderMetrics(metricsKey);
-  }, [metricsKey, progressivelyRevealing]);
-  useEffect(() => {
-    if (!preserveStreamingLayout) return;
-    const tail = streamingBlocks.at(-1);
-    recordStreamingShape(
-      metricsKey,
-      Math.max(0, streamingBlocks.length - 1),
-      tail?.content.length ?? 0,
-    );
-  }, [metricsKey, preserveStreamingLayout, streamingBlocks]);
+  }, [metricsKey, streaming]);
   const setPreview = useWorkspacePreviewStore((s) => s.setPath);
   const language = useLocaleStore((s) => s.language);
   const fileReferenceMessages = messages(language).chat.fileReference;
   const [resolution, setResolution] = useState<MarkdownFileResolution | null>(null);
+  const fileGeneration = useRef(0);
+  useEffect(() => () => { fileGeneration.current++; }, [conversationId, projectId, taskRunId]);
 
   const loadFileImage = useCallback(async (target: WorkspaceFileLinkTarget) => {
     try {
@@ -343,6 +328,7 @@ function ChatMarkdownView({
 
   const openFile = useCallback(
     (target: WorkspaceFileLinkTarget) => {
+      const generation = ++fileGeneration.current;
       if (target.kind === 'workspace-relative') {
         setResolution({ status: 'loading', target });
         void (async () => {
@@ -351,6 +337,7 @@ function ChatMarkdownView({
             conversationId: conversationId?.trim() || undefined,
             taskRunId,
           });
+          if (generation !== fileGeneration.current) return;
           if (scoped?.capabilities.includes('preview') && (scoped.absolutePath || scoped.workspaceRelativePath)) {
             setPreview(scoped.absolutePath || scoped.workspaceRelativePath!, target.line, projectId, conversationId);
             setResolution(null);
@@ -361,6 +348,7 @@ function ChatMarkdownView({
           const fallback = !taskRunId && !projectId && conversationId
             ? await resolveWorkspaceFileReference(target.path)
             : null;
+          if (generation !== fileGeneration.current) return;
           if (fallback?.capabilities.includes('preview') && (fallback.absolutePath || fallback.workspaceRelativePath)) {
             setPreview(fallback.absolutePath || fallback.workspaceRelativePath!, target.line);
             setResolution(null);
@@ -369,10 +357,13 @@ function ChatMarkdownView({
           setResolution(scoped
             ? { status: 'ready', target, ref: scoped }
             : { status: 'error', target, message: fileReferenceMessages.resolveFailedDescription });
-        })().catch((err) => setResolution({
+        })().catch((err) => {
+          if (generation !== fileGeneration.current) return;
+          setResolution({
           status: 'error', target,
           message: err instanceof Error ? err.message : String(err),
-        }));
+          });
+        });
         return;
       }
 
@@ -383,6 +374,7 @@ function ChatMarkdownView({
         taskRunId,
       })
         .then((ref) => {
+          if (generation !== fileGeneration.current) return;
           if (!ref) {
             setResolution({
               status: 'error',
@@ -399,6 +391,7 @@ function ChatMarkdownView({
           setResolution({ status: 'ready', target, ref });
         })
         .catch((err) => {
+          if (generation !== fileGeneration.current) return;
           setResolution({
             status: 'error',
             target,
@@ -409,45 +402,24 @@ function ChatMarkdownView({
     [fileReferenceMessages.resolveFailedDescription, projectId, conversationId, taskRunId, setPreview],
   );
 
+  const providerPayload = parseProviderSetupRequired(content);
   return (
     <>
-      {preserveStreamingLayout ? (
-        <div className="markdown-stream-blocks">
-          {streamingBlocks.map((block) => (
-            <MarkdownView
-              key={block.key}
-              content={
-                progressivelyRevealing && block.isTail
-                  ? prepareStreamingMarkdown(block.content)
-                  : block.content
-              }
-              compact={compact}
-              className={cn(
-                'markdown-stream-block',
-                block.isTail && 'markdown-stream-tail',
-              )}
-              onWorkspaceFileOpen={openFile}
-              onWorkspaceImageLoad={loadFileImage}
-              renderMermaid={!progressivelyRevealing || !block.isTail}
-              mermaidActions
-              streamingMetricsKey={metricsKey}
-            />
-          ))}
-        </div>
-      ) : (
-        <MarkdownView
-          content={content}
-          compact={compact}
-          onWorkspaceFileOpen={openFile}
-          onWorkspaceImageLoad={loadFileImage}
-          mermaidActions
-        />
-      )}
+      {providerPayload ? <ProviderSetupRequiredCard payload={providerPayload} /> : <MarkdownView
+        content={streamingContent}
+        streaming={streaming}
+        compact={compact}
+        onWorkspaceFileOpen={openFile}
+        onWorkspaceImageLoad={loadFileImage}
+        renderMermaid
+        mermaidActions
+        streamingMetricsKey={metricsKey}
+      />}
       {resolution ? (
         <ChatMarkdownFileActionCard
           resolution={resolution}
           conversationId={conversationId}
-          onClose={() => setResolution(null)}
+          onClose={() => { fileGeneration.current++; setResolution(null); }}
         />
       ) : null}
     </>
@@ -488,20 +460,12 @@ function renderTextOrImageBlock(
       );
     }
 
-    // Intercept upstream "No API key found" messages rendered as assistant text
-    const providerPayload = parseProviderSetupRequired(block.text ?? '');
-    if (providerPayload) {
-      return (
-        <div key={key} className="min-w-0">
-          <ProviderSetupRequiredCard payload={providerPayload} />
-        </div>
-      );
-    }
-
     return (
       <div key={key} className="assistant-markdown-content markdown-content min-w-0">
         <ChatMarkdownView
           content={block.text}
+          sourcePartIds={textRunSourceIds(block)}
+          sourceConversationId={conversationId}
           taskRunId={taskRunId}
           compact
           conversationId={workspaceConversationId ?? conversationId}
@@ -617,7 +581,7 @@ export function ChunkedContent({
       const imgIdx = b.type === 'image' ? imageOrdinal++ : 0;
       const el = renderTextOrImageBlock(
         b,
-        `block-${i}`,
+        knownPartRenderKey(b) ?? `block-${i}`,
         isUser,
         i === streamingTextIndex,
         imagePreviewLabel,

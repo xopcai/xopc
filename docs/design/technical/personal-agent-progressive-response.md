@@ -12,7 +12,7 @@
 - 自然首句与短段落规则复用于主会话及后台 reply composer，并通过已有指令升级流程应用到现有 Personal Agent。
 - EmbeddedRun 日志新增 `first_model_request` / `first_model_text`；后台 composer 日志新增改写、排队和持久化耗时。Gateway 首批文本耗时采用单调时钟。
 - 前端保留最多 40 条不含原文的单调时钟测量。在开发模式控制台调用 `window.__xopcResponseLatencyMetrics()`，查看首批文字、首个正文绘制机会、完整首句和渲染延迟。首句使用保守标点启发式，仅作测量，不切分内容；已恢复历史不作为新请求计时。`first_useful_ms` 仍需人工回放标注。
-- 设置构建变量 `VITE_PERSONAL_PROGRESSIVE_RESPONSE=false` 可回退到原先过程区展示，不改变存储 transcript。
+- 2026-10-13：聊天渲染升级后移除旧构建回退开关，公开 conversation 文本统一即时展示；详见 [Web Chat 渲染方案](../web-chat-message-rendering-technical-design.md)。
 
 已实现的是第一阶段展示与表达，以及阶段零的测量能力。未进行真实模型的 p50/p95 基准，因此本文件的秒级目标不是已验证性能。后台结果继续在完整 JSON 校验后投递，第二阶段的 NDJSON、段落持久化及迁移尚未实施；应先根据新增日志确定后台改写占比，再按下文方案推进。移动端与语音实时切句属于第三阶段。
 

@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { buildAssistantTurnViewModel } from '@/features/chat/messages/assistant-turn-view-model';
 import type { Message, ReasoningLevel } from '@/features/chat/messages/messages.types';
@@ -21,13 +21,6 @@ describe('buildAssistantTurnViewModel', () => {
       .toEqual([history.content[1]]);
   });
 
-  it('can roll back conversation text presentation without changing stored content', () => {
-    vi.stubEnv('VITE_PERSONAL_PROGRESSIVE_RESPONSE', 'false');
-    try {
-      const message: Message = { role: 'assistant', textSurface: 'conversation', content: [{ type: 'text', text: 'Checking.', presentation: 'pending' }] };
-      expect(buildAssistantTurnViewModel({ message, personal: true, isStreaming: true, reasoningLevel: 'off' }).answer.started).toBe(false);
-    } finally { vi.unstubAllEnvs(); }
-  });
   it('holds a status row before the first event and yields its place to an immediate answer', () => {
     const empty = buildAssistantTurnViewModel({ message: { role: 'assistant', content: [] }, isStreaming: true, reasoningLevel: 'stream' });
     expect(empty.workLog.active).toBe(true);

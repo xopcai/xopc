@@ -30,6 +30,7 @@ export function useProgressiveStreamingMarkdown(
   const visibleContentRef = useRef(visibleContent);
   const timerRef = useRef<number | null>(null);
   const lastCommitAtRef = useRef<number | null>(null);
+  const backlogSinceRef = useRef<number | null>(null);
   const hasStreamedRef = useRef(streaming || animateInitialContent);
   const completedRef = useRef(false);
 
@@ -57,6 +58,7 @@ export function useProgressiveStreamingMarkdown(
       return;
     }
     if (visibleContent === content) {
+      backlogSinceRef.current = null;
       if (!streaming) {
         hasStreamedRef.current = false;
         lastCommitAtRef.current = null;
@@ -75,6 +77,9 @@ export function useProgressiveStreamingMarkdown(
       return;
     }
     if (!content.startsWith(visibleContent)) {
+      if (timerRef.current !== null) window.clearTimeout(timerRef.current);
+      timerRef.current = null;
+      backlogSinceRef.current = null;
       visibleContentRef.current = content;
       setVisibleContent(content);
       return;
@@ -87,6 +92,7 @@ export function useProgressiveStreamingMarkdown(
       latestParseMs: getLatestStreamingParseMs(metricsKey),
     });
     const now = performance.now();
+    backlogSinceRef.current ??= now;
     const lastCommitAt = lastCommitAtRef.current;
     const waitMs = streamingMarkdownCommitDelayMs({
       intervalMs,
@@ -96,9 +102,11 @@ export function useProgressiveStreamingMarkdown(
     timerRef.current = window.setTimeout(() => {
       timerRef.current = null;
       const pendingContent = pendingContentRef.current;
-      const nextLength = nextStreamingMarkdownCommitLength({
+      const overdue = performance.now() - (backlogSinceRef.current ?? performance.now()) >= 250;
+      const nextLength = overdue || document.visibilityState === 'hidden' ? pendingContent.length : nextStreamingMarkdownCommitLength({
         visibleLength: visibleContentRef.current.length,
         pendingContent,
+        elapsedMs: intervalMs,
       });
       const nextContent = pendingContent.slice(0, nextLength);
       visibleContentRef.current = nextContent;

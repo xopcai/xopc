@@ -1,7 +1,7 @@
-import { memo, type ReactNode, type RefObject } from 'react';
+import { memo, useRef, useState, type ReactNode, type RefObject } from 'react';
 
 import { ChatWelcomeSpotlight } from '@/features/chat/chat-welcome-spotlight';
-import { MessageBubble } from '@/features/chat/messages/message-bubble';
+import { ConnectedMessageBubble } from '@/features/chat/rendering/connected-message-bubble';
 import { TaskTriggerCard } from '@/features/chat/messages/task-trigger-card';
 import { InlinePreviewSchedulerProvider } from '@/features/chat/product-delivery/inline-preview-scheduler';
 import type { Message, ProgressState, ReasoningLevel } from '@/features/chat/messages/messages.types';
@@ -17,6 +17,8 @@ import type {
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import { useLocaleStore } from '@/stores/locale-store';
+
+import { VirtualMessageRows, type MessageRowDescriptor } from './virtual-message-rows';
 
 const ignoreWelcomePrompt = (_selection: WelcomeSuggestionSelection): void => {};
 
@@ -51,6 +53,7 @@ export const MessageList = memo(function MessageList({
   hideAssistantActions = false,
   trailingContent,
   replySpaceRef,
+  scrollRef,
 }: {
   messages: Message[];
   personal?: boolean;
@@ -63,7 +66,8 @@ export const MessageList = memo(function MessageList({
   sending?: boolean;
   progress: ProgressState | null;
   reasoningLevel: ReasoningLevel;
-  /** Plain column root — observed by scroll viewport for tail-follow (Cursor-style, non-virtual). */
+  scrollRef?: RefObject<HTMLDivElement | null>;
+  /** Measured transcript root in the shared scroll viewport. */
   registerListContentRef: (el: HTMLDivElement | null) => void;
   onPickWelcomePrompt?: (selection: WelcomeSuggestionSelection) => void;
   welcomeSpotlight?: WelcomeSpotlightModel;
@@ -91,6 +95,9 @@ export const MessageList = memo(function MessageList({
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
 
+  const [virtualized] = useState(Boolean(scrollRef && list.length >= 300));
+  const footerRef = useRef<HTMLDivElement>(null);
+
   const showWelcome = list.length === 0 && !streaming && !sending;
 
   if (showWelcome) {
@@ -115,93 +122,102 @@ export const MessageList = memo(function MessageList({
   const now = Date.now();
   const lastUserIndex = list.findLastIndex((message) => message.role === 'user');
 
+  const rows: MessageRowDescriptor[] = list.flatMap((msg, index) => {
+    if (msg.role === 'assistant' && msg.content?.length
+      && msg.content.every(block => block.type === 'text' && block.text.trim() === 'NO_REPLY')) return [];
+    if (msg.role === 'task' && msg.taskTrigger && msg.turnId
+      && list[index + 1]?.role === 'assistant' && list[index + 1]?.turnId === msg.turnId) return [];
+    return [{ key: messageRowKey(msg, index), index, aliases: msg.role === 'assistant'
+      && list[index - 1]?.role === 'task' && msg.turnId === list[index - 1]?.turnId ? [index - 1] : [] }];
+  });
+  const renderRow = (index: number) => {
+    const msg = list[index];
+    const isLast = index === list.length - 1;
+    const isStreamRow = Boolean((streaming || sending || msg.pendingResponseStatus) && isLast && msg.role === 'assistant');
+    const isLastUserRow = index === lastUserIndex;
+    const precedingTask = list[index - 1];
+    const followUpTrigger = msg.role === 'assistant'
+      && precedingTask?.role === 'task'
+      && Boolean(msg.turnId)
+      && precedingTask.turnId === msg.turnId
+      ? precedingTask.taskTrigger : undefined;
+    const key = messageRowKey(msg, index);
+    const rowTimestamp = followUpTrigger ? precedingTask?.timestamp ?? msg.timestamp : msg.timestamp;
+    const showTimeSeparator = shouldShowChatTimeSeparator(
+      rowTimestamp,
+      followUpTrigger ? list[index - 2]?.timestamp : precedingTask?.timestamp,
+    );
+    return (
+      <div
+        key={key}
+        id={`chat-message-${index}`}
+        className={cn('scroll-mt-4', index > 0
+          && (list[index - 1]?.role === 'user' || list[index - 1]?.role === 'task')
+          && !followUpTrigger && !showTimeSeparator && '-mt-5')}
+        data-chat-message-index={index}
+        data-chat-message-row
+        data-client-submission-id={msg.clientSubmissionId}
+        data-message-render-key={msg.renderKey}
+      >
+        {followUpTrigger ? <span id={`chat-message-${index - 1}`} className="block h-0 scroll-mt-4" aria-hidden /> : null}
+        {showTimeSeparator && rowTimestamp ? (
+          <div className="mb-8 flex justify-center" data-chat-time-separator>
+            <time
+              suppressHydrationWarning
+              className="rounded-md px-2 py-1 text-xs tabular-nums text-fg-disabled"
+              dateTime={new Date(rowTimestamp).toISOString()}
+            >
+              {formatChatTimeSeparator(rowTimestamp, now, language)}
+            </time>
+          </div>
+        ) : null}
+        {msg.role === 'task' && msg.taskTrigger ? <TaskTriggerCard trigger={msg.taskTrigger} /> : <ConnectedMessageBubble
+          message={msg}
+          personal={personal}
+          followUpTrigger={followUpTrigger}
+          authToken={authToken}
+          conversationId={conversationId}
+          workspaceConversationId={workspaceConversationId}
+          projectId={projectId}
+          isStreaming={isStreamRow}
+          progress={isStreamRow ? progress : null}
+          reasoningLevel={reasoningLevel}
+          messageIndex={index}
+          onDeleteRound={onDeleteRound}
+          onRetryUserMessageRound={onRetryUserMessageRound}
+          userMessageCanRetry={Boolean(onRetryUserMessageRound) && isLastUserRow}
+          // Streaming is only relevant to the active user round. Passing this
+          // session-wide flag to every historical row defeats MessageBubble's memo.
+          deleteRoundDisabled={Boolean(deleteRoundDisabled && isLastUserRow)}
+          onSaveAssistantAsNote={onSaveAssistantAsNote}
+          onSaveAssistantToSourceNote={onSaveAssistantToSourceNote}
+          onExtractAssistantTask={onExtractAssistantTask}
+          onForkAssistantTurn={onForkAssistantTurn}
+          // The bubble hides live actions and reserves their eventual height.
+          suppressAssistantActions={hideAssistantActions}
+          onEditUserMessage={onEditUserMessage}
+          userMessageCanEdit={
+            (!editLatestUserOnly || isLastUserRow)
+            && (!editRequiresTurnId || Boolean(msg.turnId))
+            && msg.deliveryStatus !== 'sending'
+          }
+          responseFeedbackEnabled={responseFeedbackEnabled}
+          showAssistantWorkLog={showAssistantWorkLog}
+        />}
+      </div>
+    );
+  };
   return (
     <InlinePreviewSchedulerProvider>
-      <div ref={registerListContentRef} className="flex w-full min-w-0 flex-col gap-8 pb-8">
-        {list.map((msg, index) => {
-        if (msg.role === 'assistant' && msg.content?.length
-          && msg.content.every((block) => block.type === 'text' && block.text.trim() === 'NO_REPLY')) return null;
-        const isLast = index === list.length - 1;
-        const isStreamRow = Boolean((streaming || sending || msg.pendingResponseStatus) && isLast && msg.role === 'assistant');
-        const isLastUserRow = index === lastUserIndex;
-        const precedingTask = list[index - 1];
-        const followUpTrigger = msg.role === 'assistant'
-          && precedingTask?.role === 'task'
-          && Boolean(msg.turnId)
-          && precedingTask.turnId === msg.turnId
-          ? precedingTask.taskTrigger : undefined;
-        if (msg.role === 'task' && msg.taskTrigger
-          && list[index + 1]?.role === 'assistant'
-          && Boolean(msg.turnId)
-          && list[index + 1]?.turnId === msg.turnId) return null;
-        const key = messageRowKey(msg, index);
-        const rowTimestamp = followUpTrigger ? precedingTask?.timestamp ?? msg.timestamp : msg.timestamp;
-        const showTimeSeparator = shouldShowChatTimeSeparator(
-          rowTimestamp,
-          followUpTrigger ? list[index - 2]?.timestamp : precedingTask?.timestamp,
-        );
-        return (
-          <div
-            key={key}
-            id={`chat-message-${index}`}
-            className={cn('scroll-mt-4', index > 0
-              && (list[index - 1]?.role === 'user' || list[index - 1]?.role === 'task')
-              && !followUpTrigger && !showTimeSeparator && '-mt-5')}
-            data-chat-message-index={index}
-            data-chat-message-row
-            data-client-submission-id={msg.clientSubmissionId}
-            data-message-render-key={msg.renderKey}
-          >
-            {followUpTrigger ? <span id={`chat-message-${index - 1}`} className="block h-0 scroll-mt-4" aria-hidden /> : null}
-            {showTimeSeparator && rowTimestamp ? (
-              <div className="mb-8 flex justify-center" data-chat-time-separator>
-                <time
-                  suppressHydrationWarning
-                  className="rounded-md px-2 py-1 text-xs tabular-nums text-fg-disabled"
-                  dateTime={new Date(rowTimestamp).toISOString()}
-                >
-                  {formatChatTimeSeparator(rowTimestamp, now, language)}
-                </time>
-              </div>
-            ) : null}
-            {msg.role === 'task' && msg.taskTrigger ? <TaskTriggerCard trigger={msg.taskTrigger} /> : <MessageBubble
-              message={msg}
-              personal={personal}
-              followUpTrigger={followUpTrigger}
-              authToken={authToken}
-              conversationId={conversationId}
-              workspaceConversationId={workspaceConversationId}
-              projectId={projectId}
-              isStreaming={isStreamRow}
-              progress={isStreamRow ? progress : null}
-              reasoningLevel={reasoningLevel}
-              messageIndex={index}
-              onDeleteRound={onDeleteRound}
-              onRetryUserMessageRound={onRetryUserMessageRound}
-              userMessageCanRetry={Boolean(onRetryUserMessageRound) && isLastUserRow}
-              // Streaming is only relevant to the active user round. Passing this
-              // session-wide flag to every historical row defeats MessageBubble's memo.
-              deleteRoundDisabled={Boolean(deleteRoundDisabled && isLastUserRow)}
-              onSaveAssistantAsNote={onSaveAssistantAsNote}
-              onSaveAssistantToSourceNote={onSaveAssistantToSourceNote}
-              onExtractAssistantTask={onExtractAssistantTask}
-              onForkAssistantTurn={onForkAssistantTurn}
-              // The bubble hides live actions and reserves their eventual height.
-              suppressAssistantActions={hideAssistantActions}
-              onEditUserMessage={onEditUserMessage}
-              userMessageCanEdit={
-                (!editLatestUserOnly || isLastUserRow)
-                && (!editRequiresTurnId || Boolean(msg.turnId))
-                && msg.deliveryStatus !== 'sending'
-              }
-              responseFeedbackEnabled={responseFeedbackEnabled}
-              showAssistantWorkLog={showAssistantWorkLog}
-            />}
-          </div>
-        );
-        })}
-        {trailingContent}
-        {replySpaceRef && <div ref={replySpaceRef} className="-mt-8 shrink-0" aria-hidden data-chat-reply-space />}
+      <div ref={registerListContentRef} className={cn('w-full min-w-0 pb-8', !virtualized && 'flex flex-col gap-8')}
+        data-chat-virtualized={virtualized || undefined}>
+        {virtualized && scrollRef ? <VirtualMessageRows rows={rows} scrollRef={scrollRef}
+          renderRow={renderRow} footerRef={footerRef} /> : rows.map(row => renderRow(row.index))}
+        <div ref={footerRef} className={cn(virtualized ? 'pt-8' : 'contents')}>
+          {trailingContent}
+          {replySpaceRef && <div ref={replySpaceRef} className={cn(!virtualized && '-mt-8', 'shrink-0')}
+            aria-hidden data-chat-reply-space />}
+        </div>
       </div>
     </InlinePreviewSchedulerProvider>
   );

@@ -82,7 +82,7 @@
   border: 1px solid var(--color-edge);
 }
 
-/* Fenced blocks: toolbar + body (injected by MarkdownView) */
+/* Shared fenced blocks: toolbar and code body. */
 .markdown-code-block {
   margin: 0 0 1em;
   border: 1px solid var(--color-edge);
@@ -387,13 +387,58 @@ html.dark .markdown-code-copy-btn:hover {
 }
 
 /* Only the final rendered block is the end of the complete Markdown document. */
-.markdown-body.markdown-compact:not(.markdown-stream-block) > :last-child,
-.markdown-body.markdown-compact.markdown-stream-tail > :last-child {
+.markdown-body.markdown-compact:not(.markdown-stream-block) > :last-child {
   margin-bottom: 0;
 }
 
-.markdown-stream-tail:empty {
-  display: none;
+
+.xopc-chat-markdown > .markdown-stream-block:last-child > :last-child {
+  margin-bottom: 0;
+}
+
+.xopc-chat-markdown > .markdown-stream-block {
+  margin-block: 0;
+}
+
+.xopc-chat-markdown > .markdown-stream-block:first-child > :first-child {
+  margin-top: 0;
+}
+
+.xopc-chat-markdown > .markdown-stream-block:last-child > :has(+ [data-xopc-watermark]) {
+  margin-bottom: 0;
+}
+
+.xopc-chat-markdown > .markdown-stream-block:last-child {
+  margin-bottom: 0;
+}
+
+.xopc-chat-markdown .markdown-code-block > pre {
+  max-height: 28rem;
+  overflow: auto;
+}
+
+.xopc-chat-markdown .markdown-table-scroll {
+  max-width: 100%;
+  margin-bottom: 1em;
+  overflow: auto;
+  border-radius: var(--radius-lg);
+}
+
+.markdown-body.xopc-chat-markdown .markdown-table-scroll > table {
+  display: table;
+  margin-bottom: 0;
+  table-layout: fixed;
+}
+
+.xopc-chat-markdown th,
+.xopc-chat-markdown td[data-markdown-align="right"] {
+  white-space: nowrap;
+  word-break: normal;
+  overflow-wrap: normal;
+}
+
+.xopc-chat-markdown .markdown-mermaid svg {
+  max-width: 100%;
 }
 
 .markdown-body.markdown-compact pre {
@@ -629,4 +674,26 @@ html.dark .markdown-body .hljs-addition {
 html.dark .markdown-body .hljs-deletion {
   color: #ffdcd7;
   background-color: #67060c;
+}
+
+
+/* Tailwind resets list markers; chat Markdown restores their semantic hierarchy. */
+.xopc-chat-markdown ul { list-style-type: disc; }
+.xopc-chat-markdown ol { list-style-type: decimal; }
+.xopc-chat-markdown ul ul { list-style-type: circle; }
+.xopc-chat-markdown ul ul ul { list-style-type: square; }
+.xopc-chat-markdown li > ul,
+.xopc-chat-markdown li > ol {
+  margin-top: 0.35em;
+  margin-bottom: 0;
+}
+.xopc-chat-markdown li.task-list-item { list-style-type: none; }
+.xopc-chat-markdown li.task-list-item > input[type="checkbox"] { margin-right: 0.4em; }
+
+/* The pre owns padding and scrolling in both themes; avoid a second highlight.js scrollport. */
+.markdown-body.xopc-chat-markdown .markdown-code-block > pre > code.hljs {
+  display: block;
+  padding: 0;
+  overflow: visible;
+  background: transparent;
 }

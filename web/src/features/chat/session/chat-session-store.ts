@@ -1,4 +1,7 @@
 import { create } from 'zustand';
+import { produce } from 'immer';
+
+import { inheritPartIdentity, partRenderKey } from '@/features/chat/rendering/part-identity';
 
 import type {
   Message,
@@ -20,7 +23,7 @@ import {
 import { isUiUserMessage } from '@/features/chat/messages/user-round-index';
 import { defaultSessionMeta } from '@/features/chat/session/chat-session-defaults';
 import { chatRunManager } from '@/features/chat/session/chat-run-manager';
-import { cloneMessageForRender, ensureAssistantMessage } from '@/features/chat/messages/streaming';
+import { cloneMessageForRender } from '@/features/chat/messages/streaming';
 
 /** Per-session chat UI and agent config. @see docs/web/chat-session-semantics.md */
 export type SessionHistoryStatus = 'unknown' | 'loading' | 'ready';
@@ -230,6 +233,16 @@ function reconcileMessages(current: Message[], incoming: Message[]): Message[] {
       )
     ) {
       nextMessage.renderKey = existing.renderKey;
+      nextMessage.content.forEach((part, partIndex) => {
+        const prior = existing.content[partIndex];
+        if (!prior || prior.type !== part.type) return;
+        if (part.type === 'text' && prior.type === 'text'
+          && prior.segmentId && part.segmentId && prior.segmentId !== part.segmentId) return;
+        if (part.type === 'tool_use' && prior.type === 'tool_use'
+          && (prior.toolCallId ?? prior.id) !== (part.toolCallId ?? part.id)) return;
+        inheritPartIdentity(prior, part);
+        if (JSON.stringify(prior) === JSON.stringify(part)) nextMessage.content[partIndex] = prior;
+      });
     }
     return nextMessage;
   });
@@ -456,7 +469,7 @@ export const useChatSessionStore = create<ChatSessionStoreState & ChatSessionSto
         return {
           sessions: {
             ...state.sessions,
-            [key]: { ...current, messages: cloneMessages(updater(current.messages)) },
+            [key]: { ...current, messages: reconcileMessages(current.messages, updater(current.messages)) },
           },
         };
       });
@@ -636,11 +649,19 @@ export const useChatSessionStore = create<ChatSessionStoreState & ChatSessionSto
       set((state) => {
         const current = state.sessions[key];
         if (!current) return state;
-        const shell = cloneMessageForRender(ensureAssistantMessage(current.streamingMsg, timestamp));
-        shell.renderKey ??= `assistant-stream:${key}:${timestamp}`;
-        shell.progressiveRender = true;
-        delete shell.pendingResponseStatus;
-        mutator(shell);
+        const base = current.streamingMsg ?? { role: 'assistant' as const, content: [], timestamp };
+        const shell = produce(base, draft => {
+          draft.renderKey ??= `assistant-stream:${key}:${timestamp}`;
+          draft.progressiveRender = true;
+          delete draft.pendingResponseStatus;
+          mutator(draft);
+        });
+        if (shell === current.streamingMsg && current.streaming) return state;
+        shell.content.forEach((part, index) => {
+          const previous = base.content[index];
+          if (previous?.type === part.type) inheritPartIdentity(previous, part);
+          else partRenderKey(part);
+        });
         return {
           sessions: {
             ...state.sessions,
@@ -662,8 +683,8 @@ export const useChatSessionStore = create<ChatSessionStoreState & ChatSessionSto
         if (!current) return state;
 
         if (current.streamingMsg?.role === 'assistant') {
-          const streamingMsg = cloneMessageForRender(current.streamingMsg);
-          streamingMsg.attachments = appendAttachmentDeduped(streamingMsg.attachments, attachment);
+          const streamingMsg = { ...current.streamingMsg,
+            attachments: appendAttachmentDeduped(current.streamingMsg.attachments, attachment) };
           return {
             sessions: {
               ...state.sessions,
@@ -672,7 +693,7 @@ export const useChatSessionStore = create<ChatSessionStoreState & ChatSessionSto
           };
         }
 
-        const messages = cloneMessages(current.messages);
+        const messages = [...current.messages];
         for (let i = messages.length - 1; i >= 0; i--) {
           const msg = messages[i];
           if (msg?.role !== 'assistant') continue;
@@ -845,7 +866,7 @@ export const useChatSessionStore = create<ChatSessionStoreState & ChatSessionSto
             ...state.sessions,
             [key]: {
               ...current,
-              messages: cloneMessages(merged),
+              messages: reconcileMessages(current.messages, merged),
               hasMore,
             },
           },

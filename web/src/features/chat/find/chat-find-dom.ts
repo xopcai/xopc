@@ -1,3 +1,5 @@
+import { pauseChatTailFollowing } from '@/features/chat/scroll/chat-virtual-scroll';
+
 export type ChatFindDomMatch = {
   messageIndex: number;
   occurrence: number;
@@ -153,6 +155,7 @@ export function scrollChatFindMatchIntoView(
   const top = bounds.top + topInset;
   const bottom = bounds.bottom - 24;
   if (target.top >= top && target.bottom <= bottom) return;
+  pauseChatTailFollowing(viewport);
   viewport.scrollTo({
     top: Math.max(0, viewport.scrollTop + target.top - top),
     behavior: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',

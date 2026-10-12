@@ -1,3 +1,5 @@
+import { graphemeCommitBoundary } from '@/features/chat/rendering/markdown/text-segments';
+
 export type StreamingMarkdownTailKind =
   | 'plain'
   | 'long_text'
@@ -29,7 +31,7 @@ const BASE_INTERVAL_MS: Record<StreamingMarkdownTailKind, number> = {
 };
 
 const FIRST_COMMIT_INTERVAL_MS = 48;
-const TARGET_COMMIT_COUNT = 16;
+const TARGET_CATCHUP_MS = 120;
 const MIN_COMMIT_SIZE = 6;
 const MAX_COMMIT_SIZE = 512;
 
@@ -61,23 +63,16 @@ export function streamingMarkdownCommitDelayMs({
 export function nextStreamingMarkdownCommitLength({
   visibleLength,
   pendingContent,
+  elapsedMs = 32,
 }: {
   visibleLength: number;
   pendingContent: string;
+  elapsedMs?: number;
 }): number {
   if (visibleLength >= pendingContent.length) return pendingContent.length;
   const commitSize = Math.min(
     MAX_COMMIT_SIZE,
-    Math.max(MIN_COMMIT_SIZE, Math.ceil(pendingContent.length / TARGET_COMMIT_COUNT)),
+    Math.max(MIN_COMMIT_SIZE, Math.ceil((pendingContent.length - visibleLength) * elapsedMs / TARGET_CATCHUP_MS)),
   );
-  let nextLength = Math.min(pendingContent.length, visibleLength + commitSize);
-  const previousCodeUnit = pendingContent.charCodeAt(nextLength - 1);
-  const nextCodeUnit = pendingContent.charCodeAt(nextLength);
-  if (
-    previousCodeUnit >= 0xd800 && previousCodeUnit <= 0xdbff
-    && nextCodeUnit >= 0xdc00 && nextCodeUnit <= 0xdfff
-  ) {
-    nextLength += 1;
-  }
-  return nextLength;
+  return graphemeCommitBoundary(pendingContent, Math.min(pendingContent.length, visibleLength + commitSize));
 }

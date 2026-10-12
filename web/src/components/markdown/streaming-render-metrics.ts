@@ -7,13 +7,11 @@ export type StreamingRenderMetricsSnapshot = {
   averageParseMs: number;
   latestParseMs: number;
   longestParseMs: number;
+  parseP95Ms: number;
   stableBlockCount: number;
   tailLength: number;
   latestContentLength: number;
   terminalBacklogChars: number;
-  layoutShiftScore: number;
-  longTaskCount: number;
-  longestTaskMs: number;
   active: boolean;
 };
 
@@ -27,13 +25,11 @@ type MutableStreamingRenderMetrics = {
   totalParseMs: number;
   latestParseMs: number;
   longestParseMs: number;
+  parseSamples: number[];
   stableBlockCount: number;
   tailLength: number;
   latestContentLength: number;
   terminalBacklogChars: number;
-  layoutShiftScore: number;
-  longTaskCount: number;
-  longestTaskMs: number;
   active: boolean;
 };
 
@@ -65,25 +61,21 @@ function metricFor(key: string): MutableStreamingRenderMetrics | null {
     totalParseMs: 0,
     latestParseMs: 0,
     longestParseMs: 0,
+    parseSamples: [],
     stableBlockCount: 0,
     tailLength: 0,
     latestContentLength: 0,
     terminalBacklogChars: 0,
-    layoutShiftScore: 0,
-    longTaskCount: 0,
-    longestTaskMs: 0,
     active: false,
   };
   metrics.set(key, created);
   return created;
 }
 
-function updateActiveMetrics(update: (metric: MutableStreamingRenderMetrics) => void): void {
-  for (const key of activeKeys) {
-    const metric = metrics.get(key);
-    if (metric) update(metric);
-  }
-}
+export type PageRenderMetricsSnapshot = { layoutShiftScore: number; longTaskCount: number; longestTaskMs: number };
+const pageMetrics: PageRenderMetricsSnapshot = { layoutShiftScore: 0, longTaskCount: 0, longestTaskMs: 0 };
+
+export function getPageRenderMetrics(): PageRenderMetricsSnapshot { return { ...pageMetrics }; }
 
 function startPerformanceObservers(): void {
   if (
@@ -102,9 +94,7 @@ function startPerformanceObservers(): void {
           hadRecentInput?: boolean;
         };
         if (shift.hadRecentInput || !Number.isFinite(shift.value)) continue;
-        updateActiveMetrics((metric) => {
-          metric.layoutShiftScore += shift.value ?? 0;
-        });
+        if (activeKeys.size) pageMetrics.layoutShiftScore += shift.value ?? 0;
       }
     }).observe({ type: 'layout-shift' });
   } catch {
@@ -113,10 +103,10 @@ function startPerformanceObservers(): void {
   try {
     new PerformanceObserver((list) => {
       for (const entry of list.getEntries()) {
-        updateActiveMetrics((metric) => {
-          metric.longTaskCount += 1;
-          metric.longestTaskMs = Math.max(metric.longestTaskMs, entry.duration);
-        });
+        if (activeKeys.size) {
+          pageMetrics.longTaskCount += 1;
+          pageMetrics.longestTaskMs = Math.max(pageMetrics.longestTaskMs, entry.duration);
+        }
       }
     }).observe({ type: 'longtask' });
   } catch {
@@ -169,6 +159,8 @@ export function recordStreamingParse(key: string, durationMs: number): void {
   metric.totalParseMs += durationMs;
   metric.latestParseMs = durationMs;
   metric.longestParseMs = Math.max(metric.longestParseMs, durationMs);
+  metric.parseSamples.push(durationMs);
+  if (metric.parseSamples.length > 200) metric.parseSamples.shift();
 }
 
 export function recordStreamingShape(
@@ -197,13 +189,11 @@ function snapshot(metric: MutableStreamingRenderMetrics): StreamingRenderMetrics
     averageParseMs: metric.parseCount > 0 ? metric.totalParseMs / metric.parseCount : 0,
     latestParseMs: metric.latestParseMs,
     longestParseMs: metric.longestParseMs,
+    parseP95Ms: [...metric.parseSamples].sort((a, b) => a - b)[Math.max(0, Math.ceil(metric.parseSamples.length * .95) - 1)] ?? 0,
     stableBlockCount: metric.stableBlockCount,
     tailLength: metric.tailLength,
     latestContentLength: metric.latestContentLength,
     terminalBacklogChars: metric.terminalBacklogChars,
-    layoutShiftScore: metric.layoutShiftScore,
-    longTaskCount: metric.longTaskCount,
-    longestTaskMs: metric.longestTaskMs,
     active: metric.active,
   };
 }
@@ -219,14 +209,17 @@ export function getLatestStreamingParseMs(key: string): number {
 export function resetStreamingRenderMetrics(): void {
   metrics.clear();
   activeKeys.clear();
+  Object.assign(pageMetrics, { layoutShiftScore: 0, longTaskCount: 0, longestTaskMs: 0 });
 }
 
 declare global {
   interface Window {
     __xopcStreamingRenderMetrics?: () => StreamingRenderMetricsSnapshot[];
+    __xopcPageRenderMetrics?: () => PageRenderMetricsSnapshot;
   }
 }
 
 if (import.meta.env.DEV && typeof window !== 'undefined') {
   window.__xopcStreamingRenderMetrics = getStreamingRenderMetrics;
+  window.__xopcPageRenderMetrics = getPageRenderMetrics;
 }

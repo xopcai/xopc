@@ -352,7 +352,7 @@ describe('streaming assistant Markdown rendering', () => {
     act(() => vi.advanceTimersByTime(32));
     act(() => vi.advanceTimersByTime(32));
     act(() => vi.advanceTimersByTime(32));
-    const previousTail = container.querySelector('.markdown-stream-tail');
+    const previousTail = container.querySelector('.markdown-stream-block:last-child');
     expect(previousTail).not.toBeNull();
 
     render(
@@ -377,14 +377,14 @@ describe('streaming assistant Markdown rendering', () => {
     act(() => vi.advanceTimersByTime(32));
     act(() => vi.advanceTimersByTime(32));
     act(() => vi.advanceTimersByTime(32));
-    const blockTree = container.querySelector('.markdown-stream-blocks');
+    const blockTree = container.querySelector('.xopc-chat-markdown');
     const firstBlock = container.querySelector('.markdown-stream-block');
     expect(blockTree).not.toBeNull();
     expect(firstBlock).not.toBeNull();
 
     render(content, false);
 
-    expect(container.querySelector('.markdown-stream-blocks')).toBe(blockTree);
+    expect(container.querySelector('.xopc-chat-markdown')).toBe(blockTree);
     expect(container.querySelector('.markdown-stream-block')).toBe(firstBlock);
   });
 
