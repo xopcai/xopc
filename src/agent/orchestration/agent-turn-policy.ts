@@ -15,6 +15,10 @@ export interface AgentTurnPolicy {
   ): Promise<BeforeToolCallResult | undefined>;
   afterToolCall(context: AfterToolCallContext): Promise<undefined>;
   shouldStopAfterTurn(context: AgentTurnContext): boolean;
+  /** One bounded continuation requested by a policy, e.g. a budget handoff. */
+  takeContinuationMessage?(): string | undefined;
+  /** Recheck limits at dispatch, including requests made by recovery paths. */
+  beforeModelRequest?(signal?: AbortSignal): string | undefined;
 }
 
 export interface AgentTurnPolicyOptions {
