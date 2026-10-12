@@ -47,6 +47,41 @@ describe('SQLite migrations', () => {
     rmSync(migrationsDir, { recursive: true, force: true });
   });
 
+  it('moves historical personal thinking settings into the dedicated session', () => {
+    const db = openEmptyDb();
+    try {
+      installBaseline(db);
+      applyPendingMigrations(db, { targetVersion: 245 });
+      db.exec('PRAGMA foreign_keys = OFF');
+      const insertAgent = db.prepare(`INSERT INTO agents (id, enabled, overrides_json, provisioning_state, revision, created_at, updated_at)
+        VALUES (?, 1, ?, 'ready', 1, 1, 1)`);
+      insertAgent.run('ada', JSON.stringify({ runtime: { thinkingLevel: 'high', timeoutMs: 1000 }, models: { chat: { primary: 'test/fast' } } }));
+      insertAgent.run('coder', JSON.stringify({ runtime: { thinkingLevel: 'high' } }));
+      db.exec(`INSERT INTO agent_catalog_settings VALUES (1, 'coder', '{}', 1, 1, 1)`);
+      const insertSession = db.prepare(`INSERT INTO sessions (conversation_id, agent_id, active_transcript_id, created_at, updated_at, last_accessed_at, custom_data_json)
+        VALUES (?, ?, ?, 1, 1, 1, ?)`);
+      insertSession.run('personal', 'ada', 'personal-transcript', '{"personalAgent":true}');
+      insertSession.run('personal-missing', 'ada', 'missing-transcript', '{"personalAgent":true}');
+      insertSession.run('ordinary-ada', 'ada', 'ordinary-transcript', '{}');
+      insertSession.run('ordinary-coder', 'coder', 'coder-transcript', '{}');
+      db.exec(`INSERT INTO session_config (conversation_id, thinking_level, model_override, updated_at)
+        VALUES ('personal', 'off', 'test/other', 10), ('ordinary-ada', 'medium', 'test/fast', 10)`);
+      applyPendingMigrations(db);
+      expect(db.prepare(`SELECT thinking_level, model_override, updated_at FROM session_config WHERE conversation_id = 'personal'`).get())
+        .toEqual({ thinking_level: 'off', model_override: 'test/other', updated_at: 10 });
+      expect(db.prepare(`SELECT thinking_level FROM session_config WHERE conversation_id = 'personal-missing'`).get())
+        .toEqual({ thinking_level: 'high' });
+      expect(db.prepare(`SELECT thinking_level FROM session_config WHERE conversation_id = 'ordinary-ada'`).get())
+        .toEqual({ thinking_level: 'medium' });
+      const overrides = JSON.parse((db.prepare(`SELECT overrides_json FROM agents WHERE id = 'ada'`).get() as { overrides_json: string }).overrides_json);
+      expect(overrides.runtime).toEqual({ timeoutMs: 1000 });
+      expect(overrides.models.chat.primary).toBe('test/fast');
+      expect(db.prepare(`SELECT json_extract(overrides_json, '$.runtime.thinkingLevel') AS thinking FROM agents WHERE id = 'coder'`).get())
+        .toEqual({ thinking: 'high' });
+      expect(db.prepare(`SELECT revision FROM agent_catalog_settings`).get()).toEqual({ revision: 2 });
+    } finally { db.close(); }
+  });
+
   it('adds reply state directly to the existing outbox while preserving artifact deliveries', () => {
     const db = openEmptyDb();
     try {

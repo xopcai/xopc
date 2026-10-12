@@ -137,11 +137,10 @@ async function provisionPersonalAgent(
       },
       toolAllowlist: [...PERSONAL_MAIN_TOOL_IDS],
       skills: { mode: 'replace', include: [] },
-      runtime: { thinkingLevel: 'off' },
       models: { chat: { primary: chosen.id, fallbacks: [] } },
     });
-  } else if (existing.provisioningState !== 'ready' || existing.models?.chat?.primary !== chosen.id || existing.runtime?.thinkingLevel !== 'off') {
-    await catalog.update(agentId, { models: { chat: { primary: chosen.id, fallbacks: [] } }, runtime: { ...existing.runtime, thinkingLevel: 'off' } });
+  } else if (existing.provisioningState !== 'ready') {
+    await catalog.update(agentId, {});
   }
   const record = getPersonalAgent(ownerId);
   if (!record) throw new Error('Personal Agent provisioning did not complete');

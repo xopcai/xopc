@@ -356,6 +356,7 @@ export const useChatSessionStore = create<ChatSessionStoreState & ChatSessionSto
       if (!key) return;
       set((state) => {
         const current = state.sessions[key];
+        if (current && Object.entries(partial).every(([field, value]) => current[field as keyof ChatSessionSlice] === value)) return state;
         const base = current ?? createEmptySessionSlice('unknown');
         return {
           sessions: {

@@ -34,7 +34,7 @@ export async function receiveSessionCommand(service: GatewayService, conversatio
     if (personal && 'creation' in command && command.creation.agentId !== personal.agentId) {
       throw new SessionCommandError('BAD_REQUEST', 'Personal AI identity is fixed');
     }
-    const configuredThinking = ('creation' in command
+    const configuredThinking = personal ? undefined : ('creation' in command
       ? resolveEffectiveAgentConfigForAgent(command.creation.agentId)
       : resolveEffectiveAgentConfigForSession(conversationId)).config.runtime.thinkingLevel;
     if (configuredThinking && 'creation' in command && command.creation.thinkingLevel !== configuredThinking) {
