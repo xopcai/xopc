@@ -6,6 +6,7 @@ import { registerNoteReadCapabilities } from '../../notes/capabilities/read.js';
 import { registerProjectReadCapabilities } from '../../projects/capabilities/read.js';
 import { registerAutomationReadCapabilities } from '../../automations/capabilities/read.js';
 import type { XopcUseToolDeps } from './xopc-use-tool.js';
+import { LOCAL_READ_MAX_CHARS } from './local-read-budget.js';
 
 const schema = Type.Object({
   kind: Type.Union([Type.Literal('note'), Type.Literal('project'), Type.Literal('automation')]),
@@ -88,13 +89,37 @@ export function createPersonalReadTool(deps: XopcUseToolDeps): AgentTool {
           total: result.total ?? rows.length, nextOffset: selected.length === limit ? offset + selected.length : undefined, excerpts: true };
       }
       const serialized = JSON.stringify(payload);
-      const requiresSpecialist = input.command === 'get' && (serialized.length > 12000
+      const requiresSpecialist = input.command === 'get' && (serialized.length > LOCAL_READ_MAX_CHARS
         || Boolean((payload.item as Record<string, unknown>)?.truncatedFields));
       if (requiresSpecialist) payload = { ...payload, requiresSpecialist: true, reason: 'large_object', id: input.id,
         guidance: 'Briefly tell the user the material is large, then delegate full reading and processing using this object kind and ID.' };
-      const output = JSON.stringify(payload);
-      return { content: [{ type: 'text', text: output.length <= 12000 ? output
-        : JSON.stringify({ kind: input.kind, excerpt: output.slice(0, 10000), truncated: true, requiresSpecialist: true, id: input.id }) }], details: { localOnly: true, requiresSpecialist: requiresSpecialist || output.length > 12000 } };
+      let output = JSON.stringify(payload);
+      let complete = true;
+      while (output.length > LOCAL_READ_MAX_CHARS) {
+        if (input.command === 'list') {
+          const items = payload.items as Record<string, unknown>[];
+          if (!items.length) break;
+          items.pop();
+          payload.nextOffset = offset + items.length;
+          payload.truncated = true;
+        } else {
+          const item = payload.item as Record<string, unknown>;
+          const largest = Object.keys(item).filter(key => typeof item[key] === 'string' && (item[key] as string).length > 200)
+            .sort((a, b) => (item[b] as string).length - (item[a] as string).length)[0];
+          if (!largest) break;
+          item[largest] = (item[largest] as string).slice(0, Math.floor((item[largest] as string).length / 2));
+          item.truncatedFields = [...new Set([...(item.truncatedFields as string[] ?? []), largest])];
+          payload.truncated = true;
+        }
+        output = JSON.stringify(payload);
+      }
+      if (output.length > LOCAL_READ_MAX_CHARS) {
+        complete = false;
+        output = JSON.stringify({ kind: input.kind, id: input.id, search: input.search,
+          requiresSpecialist: true, complete: false, reason: 'large_object' });
+      }
+      return { content: [{ type: 'text', text: output }],
+        details: { localOnly: true, requiresSpecialist: requiresSpecialist || !complete } };
     },
   } as AgentTool;
 }

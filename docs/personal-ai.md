@@ -29,6 +29,10 @@ Try: `Turn our plan into a one-page Markdown file. Include the goal, three next 
 
 Open **Activity** to inspect delegated tasks. Continue discussing another topic, then review the delivered file and ask for changes. See [Task delegation and delivery](./task-delegation.md).
 
+Ada can read short local text, recall earlier conversation details, and inspect notes, projects and automation state. Large documents and specialist work are delegated. For supported connected apps, Ada checks the connection and account before submitting a read-only request; results return to the originating chat after execution.
+
+The personal conversation uses a fixed set of local and coordination tools. MCP tools, Codemode and dynamic external discovery run through specialist Agents with their own configuration. Configuring MCP does not give the personal conversation direct access to those tools. A separate ordinary conversation with the same Agent follows its configured tool permissions.
+
 ## If something is missing
 
 | Problem | Next step |

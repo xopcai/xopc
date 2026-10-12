@@ -24,6 +24,7 @@ import { ConnectionRecoveryService } from '../../connectors/connection-recovery-
 import type { ComposioSessionsAdapter } from '../../connectors/composio-sessions.js';
 import { TaskMainUpdateDelivery } from '../../tasks/task-main-update-delivery.js';
 import { createPersonalRequestResultTool } from '../../agent/tools/personal-request-result-tool.js';
+import { resolveExecutionToolPolicy } from '../../agent/embedded/execution-tool-policy.js';
 import { createExternalToolGatewayTools } from '../../agent/external-tools/gateway-tools.js';
 import type { ExternalToolProvider } from '../../agent/external-tools/types.js';
 import { loadTranscriptRowsForSession } from '../../storage/sqlite/transcript-repository.js';
@@ -313,10 +314,12 @@ describe('Personal connected-app requests', () => {
 
   it('cancels worker access after deleting the main conversation', async () => {
     const { request, worker: chat } = worker();
+    expect(resolveExecutionToolPolicy(chat.key).surface).toBe('personal_request_worker');
     const runId = new TaskRunRepository().getActiveRoot(request.taskId!)!.id;
     patchSessionMetadata(chat.key, { customData: { personalReadRequestId: request.requestId } });
     deleteSessionRecord(conversationId);
     expect(getPersonalRequest(request.requestId)).toBeUndefined();
+    expect(resolveExecutionToolPolicy(chat.key)).toMatchObject({ surface: 'personal_request_worker', nativeMcp: false, codemode: false });
     expect(new TaskRunRepository().get(runId)?.status).toBe('cancelled');
     const execute = vi.fn();
     const tools = createExternalToolGatewayTools([{ source: 'composio', search: async () => [], describe: async () => undefined, execute }],

@@ -8,6 +8,7 @@ import { completeWithResolvedCredentials } from '../../providers/model-call.js';
 import type { SessionStore } from '../../session/store.js';
 import { createLogger } from '../../utils/logger.js';
 import { readAgentMessageContent } from '../memory/agent-message-access.js';
+import { LOCAL_READ_MAX_CHARS } from './local-read-budget.js';
 
 const log = createLogger('Agent:SessionSearch');
 
@@ -157,7 +158,9 @@ export function createSessionSearchTool(deps: SessionSearchToolDeps): AgentTool 
     description: deps.localOnly
       ? 'Search other chats locally and return short matching transcript excerpts. Omit query to list recent chats. No model or network calls.'
       : 'Search other chat sessions by keywords and get short summaries, or omit `query` to list recent sessions (no LLM cost). Uses the same session store as the gateway. Narrow with roleFilter if needed.',
-    parameters: SessionSearchSchema,
+    parameters: deps.localOnly ? Type.Object({ ...SessionSearchSchema.properties,
+      query: Type.Optional(Type.String({ maxLength: 500, description: 'Keywords for other chats; omit to list recent chats.' })),
+    }) : SessionSearchSchema,
     supportsParallel: true,
     idempotent: true,
 
@@ -173,9 +176,13 @@ export function createSessionSearchTool(deps: SessionSearchToolDeps): AgentTool 
         };
       }
       const p = params as SessionSearchParams;
-      const store = deps.getSessionStore();
       const limit = Math.min(deps.localOnly ? 5 : 15, Math.max(1, p.limit ?? (deps.localOnly ? 3 : 5)));
       const query = p.query?.trim() ?? '';
+      if (deps.localOnly && query.length > 500) {
+        return { content: [{ type: 'text', text: 'Use at most 500 characters of search keywords.' }],
+          details: { error: 'invalid_query' } };
+      }
+      const store = deps.getSessionStore();
 
       try {
         if (!query) {
@@ -236,7 +243,19 @@ export function createSessionSearchTool(deps: SessionSearchToolDeps): AgentTool 
                   truncated: start > 0 || match.content.length > start + 800 };
               }),
           }));
-          return { content: [{ type: 'text', text: JSON.stringify({ success: true, mode: 'keyword', query, results }) }],
+          const payload = { success: true, mode: 'keyword', query, results, truncated: false };
+          while (JSON.stringify(payload).length > LOCAL_READ_MAX_CHARS && results.length) {
+            payload.truncated = true;
+            if (results.length > 1) results.pop();
+            else {
+              const excerpts = results[0].excerpts;
+              const longest = excerpts.toSorted((a, b) => b.content.length - a.content.length)[0];
+              if (!longest || longest.content.length <= 100) break;
+              longest.content = longest.content.slice(0, Math.floor(longest.content.length / 2));
+              longest.truncated = true;
+            }
+          }
+          return { content: [{ type: 'text', text: JSON.stringify(payload) }],
             details: { localOnly: true, count: results.length } };
         }
 

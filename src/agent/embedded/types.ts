@@ -56,6 +56,8 @@ export type EmbeddedStreamEvent =
 
 export type RunXopcEmbeddedTurnParams = {
   conversationId: string;
+  /** Host-owned parent identity for ephemeral runs that inherit its tools. */
+  toolPolicyConversationId?: string;
   runId: string;
   userMessage: AgentMessage;
   model: Model<Api>;

@@ -29,7 +29,7 @@ describe('read_media', () => {
     const tool = createReadMediaTool({ textOnly: true, maxChars: 8000 });
     const text = await tool.execute('text', { uri: 'media://inbound/file' });
     expect(text.details).toMatchObject({ truncated: true });
-    expect((text.content[0] as { text: string }).text.length).toBeLessThan(8200);
+    expect((text.content[0] as { text: string }).text.length).toBeLessThanOrEqual(8000);
     vi.mocked(mimeTypeFromMediaPath).mockReturnValue('application/pdf');
     const binary = await tool.execute('binary', { uri: 'media://inbound/file' });
     expect(binary.details).toMatchObject({ requiresSpecialist: true });

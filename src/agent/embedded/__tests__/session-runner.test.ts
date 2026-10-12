@@ -43,6 +43,11 @@ describe('EmbeddedSessionRunner fingerprint', () => {
     expect(enabled).not.toBe(a);
     expect(buildEmbeddedRunnerFingerprint({ ...base, codemode: { ...codemode, enabled: false } })).not.toBe(enabled);
     expect(buildEmbeddedRunnerFingerprint({ ...base, codemode: { ...codemode, maxCalls: 2 } })).not.toBe(enabled);
+    const executionToolPolicy = { surface: 'personal_main' as const, nativeMcp: false,
+      externalMaterialization: false, discovery: false, codemode: false, revision: 'v1' };
+    const restricted = buildEmbeddedRunnerFingerprint({ ...base, executionToolPolicy });
+    expect(restricted).not.toBe(a);
+    expect(buildEmbeddedRunnerFingerprint({ ...base, executionToolPolicy: { ...executionToolPolicy, revision: 'v2' } })).not.toBe(restricted);
   });
 
   it('is stable for identical inputs regardless of tool order', () => {

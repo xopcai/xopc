@@ -31,10 +31,12 @@ export function isOfficialOpenAIModel(model: Model<Api>): boolean {
   return model.provider === 'openai' || model.baseUrl?.includes('api.openai.com') === true;
 }
 
-function supportsExplicitOpenAICache(model: Model<Api>): boolean {
+export function supportsExplicitOpenAICache(model: Model<Api>): boolean {
   return model.api === 'openai-responses'
     && isOfficialOpenAIModel(model)
-    && /^gpt-5\.6(?:-|$)/.test(model.id);
+    && model.compat !== undefined
+    && 'supportsExplicitPromptCacheMode' in model.compat
+    && model.compat.supportsExplicitPromptCacheMode === true;
 }
 
 export function resolvePromptCacheProviderMode(

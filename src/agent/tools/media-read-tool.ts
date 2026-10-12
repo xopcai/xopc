@@ -72,7 +72,8 @@ export function createReadMediaTool(options?: { textOnly?: boolean; maxChars?: n
           const fullText = buffer.toString('utf8');
           const maxChars = options?.maxChars ?? fullText.length;
           const truncated = fullText.length > maxChars;
-          const text = fullText.slice(0, maxChars) + (truncated ? '\n[Attachment truncated; delegate full analysis to a specialist.]' : '');
+          const notice = truncated ? '\n[Attachment truncated; delegate full analysis to a specialist.]' : '';
+          const text = fullText.slice(0, Math.max(0, maxChars - notice.length)) + notice;
           return {
             content: [{ type: 'text', text }],
             details: { ...metadata, kind: 'text', truncated, ...(truncated && options?.textOnly ? { requiresSpecialist: true, reason: 'large_attachment' } : {}) },

@@ -7,6 +7,29 @@ function textOf(result: any): string {
 }
 
 describe('session_recall', () => {
+  it('bounds escaped Personal output and paginates from delivered chronological rows without gaps', async () => {
+    const rows = Array.from({ length: 6 }, (_, index) => ({ entryId: `entry-${index + 1}`,
+      seq: index + 1, role: 'user', createdAt: Date.now(), content: `ORBIT ${'"\\\n'.repeat(10000)}` }));
+    const recallSession = vi.fn((_key, _query, options) => rows.filter(row => row.seq < (options.beforeSeq ?? Infinity))
+      .toSorted((a, b) => b.seq - a.seq).slice(0, options.limit));
+    const tool = createSessionRecallTool({ getSessionStore: () => ({ recallSession } as any),
+      getCurrentConversationId: () => 'current', maxOutputChars: 8000 });
+    const seqs: number[] = [];
+    let beforeSeq: number | undefined;
+    for (let page = 0; page < 6; page++) {
+      const result = await tool.execute(`page-${page}`, { query: 'ORBIT', limit: 20, maxCharsPerResult: 20000, beforeSeq });
+      expect(textOf(result).length).toBeLessThanOrEqual(8000);
+      const payload = JSON.parse(textOf(result));
+      expect(payload).toMatchObject({ excerpts: true, truncated: true });
+      expect(payload.results[0].content).toContain('ORBIT');
+      seqs.push(...payload.results.map((row: { seq: number }) => row.seq));
+      beforeSeq = payload.nextBeforeSeq;
+      if (!beforeSeq) break;
+    }
+    expect(seqs).toEqual([6, 5, 4, 3, 2, 1]);
+    expect(recallSession.mock.calls[0][2]).toMatchObject({ orderBySeq: true });
+  });
+
   it('is scoped to the current session and returns raw transcript coordinates', async () => {
     const recallSession = vi.fn().mockReturnValue([{
       entryId: 'entry-7',

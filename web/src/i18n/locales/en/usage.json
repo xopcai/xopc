@@ -18,8 +18,8 @@
     "allCostsUnknown": "No estimate is available for these external calls. They are not treated as zero cost.",
     "byScenario": "By scenario",
     "byModel": "By model",
-    "recentCalls": "Recent calls",
-    "recentCallsHint": "Each row is a call attempt. Cloud charges follow the platform receipt.",
+    "recentCalls": "Call history",
+    "recentCallsHint": "Newest first. Each row is a call attempt; Cloud charges follow platform receipts.",
     "costUnknown": "Cost unknown",
     "tokensUnknown": "Tokens unknown",
     "empty": "No AI calls in this period.",
@@ -91,6 +91,20 @@
     "cloudPendingReserved": "Pending · {{credits}} Credits reserved",
     "localNoCharge": "Local run, no Cloud Credit charge",
     "cloudCoverage": "Confirmed amounts include receipts linked on this device; {{pending}} calls pending, {{unknown}} charges unconfirmed.",
-    "cloudReserved": "Currently reserved: {{credits}} Credits."
+    "cloudReserved": "Currently reserved: {{credits}} Credits.",
+    "distribution": "Usage distribution",
+    "distributionHint": "Call counts across the entire selected period.",
+    "groupPage": "Page {{page}} of {{pages}} · {{count}} groups",
+    "previousDistribution": "Previous distribution page",
+    "nextDistribution": "Next distribution page",
+    "pageSize": "Page size",
+    "rowsPerPage": "{{count}} per page",
+    "eventPage": "Page {{page}} · {{count}} calls on this page",
+    "pagination": "Call history pagination",
+    "firstPage": "First page",
+    "previousPage": "Previous",
+    "nextPage": "Next",
+    "billingDetails": "Billing details & Cloud account",
+    "refresh": "Refresh usage"
   }
 }
