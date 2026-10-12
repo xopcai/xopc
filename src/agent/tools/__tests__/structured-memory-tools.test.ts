@@ -142,7 +142,7 @@ describe('structured memory tools', () => {
     expect((await tool.execute('deny', input)).details).toEqual({ error: 'knowledge_write_denied' });
     policy = 'allow';
     expect((await tool.execute('allow', { ...input, canonicalKey: 'decision:active' })).details)
-      .toMatchObject({ item: { status: 'active' }, writePolicy: 'allow' });
+      .toMatchObject({ item: { status: 'candidate', verification: 'tentative' }, writePolicy: 'allow' });
     scopes = ['session'];
     expect((await tool.execute('source', { ...input, canonicalKey: 'decision:blocked' })).details)
       .toEqual({ error: 'knowledge_scope_disabled', scope: 'workspace' });

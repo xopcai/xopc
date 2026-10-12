@@ -11,6 +11,10 @@ async function server() {
   return { server, url: `ws://127.0.0.1:${(server.address() as {port:number}).port}` };
 }
 describe('platform voice protocol', () => {
+  it('keeps funded duration exhaustion distinct from an account quota rejection', () => {
+    const error = new PlatformVoiceError('Duration reached', undefined, 'realtime_quota_session_limit');
+    expect(error.clientMessage).toBe('The funded transcription duration has been reached. Start a new voice session to continue.');
+  });
   it.each([
     [402, JSON.stringify({ error: { code: 'realtime_quota_user_credits', message: 'Realtime audio quota exhausted' } }), 'realtime_quota_user_credits', 'Cloud balance'],
     [402, JSON.stringify({ error: { code: 'realtime_quota_workspace_budget', message: 'Realtime audio quota exhausted' } }), 'realtime_quota_workspace_budget', 'workspace budget is exhausted'],

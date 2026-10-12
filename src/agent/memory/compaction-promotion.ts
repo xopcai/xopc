@@ -15,7 +15,10 @@ import {
   writeKnowledgeItem,
   type KnowledgeKind,
   type KnowledgeOriginClass,
+  type KnowledgeReadPolicy,
 } from '../../knowledge-memory/index.js';
+import { createContextEvidence } from '../../storage/sqlite/context-evidence-repository.js';
+import { inferMemorySensitivity } from './sensitivity.js';
 import { resolveMemorySessionKind } from './turn-provenance.js';
 
 const DURABLE_KINDS = new Set<HandoverItemKind>([
@@ -51,6 +54,7 @@ export interface PromoteCompactionLedgerInput {
   audit: CompactionAudit;
   sourceEntries: readonly TranscriptSourceEntry[];
   writePolicy: 'deny' | 'allow';
+  readPolicy?: KnowledgeReadPolicy;
 }
 
 export interface PromoteCompactionLedgerResult {
@@ -180,6 +184,8 @@ export function promoteCompactionLedger(
   const sessionKind = resolveMemorySessionKind(input.conversationId);
 
   for (const item of input.handover.items) {
+    const sensitivity = inferMemorySensitivity(item.text);
+    if (sensitivity === 'secret' || sensitivity === 'regulated') continue;
     const classified = classifyItemProvenance(item, sourceById, entriesByTurn, entriesByRound);
     const originClass: KnowledgeOriginClass = sessionKind === 'automation'
       || sessionKind === 'workflow'
@@ -189,14 +195,26 @@ export function promoteCompactionLedger(
         ? 'untrusted'
         : classified.originClass;
     const active = item.status === 'active';
+    const supportingSources = item.sources.flatMap(ref => sourceById.get(ref.entryId) ?? []);
+    const independentlySupported = supportingSources.some(entry => rowRole(entry) === 'user')
+      || supportingSources.some(entry => entriesByRound.get(entry.entryId)?.some(peer => rowRole(peer) === 'user'));
+    const supported = originClass === 'agent' && independentlySupported && !classified.derivedFromRecalledContext;
+    const evidence = supportingSources.map(entry => {
+      const hash = createHash('sha256').update(JSON.stringify(entry.row)).digest('hex');
+      const record = createContextEvidence({ sourceType: 'conversation',
+        sourceRef: `compaction:${input.transcriptId}:entry:${entry.entryId}`, conversationId: input.conversationId,
+        messageId: entry.entryId, contentHash: hash, trustLevel: 'trusted', observedAt: entry.createdAt });
+      return { id: record.id, contentHash: hash };
+    });
     const episode = writeKnowledgeItem({
       kind: KNOWLEDGE_KIND_BY_HANDOVER_KIND[item.kind],
       scope: { type: 'session', id: input.conversationId },
       content: item.text,
       canonicalKey: `compaction:${input.transcriptId}:${item.id}`,
       confidence: input.audit.status === 'passed' ? 0.82 : 0.65,
+      evidence, sensitivity, claimMode: 'observed', verification: supported ? 'supported' : 'tentative',
       status: active
-        ? (originClass !== 'untrusted' && !classified.derivedFromRecalledContext ? 'active' : 'candidate')
+        ? (supported ? 'active' : 'candidate')
         : 'archived',
       importance: importanceFor(item),
       originClass,
@@ -218,6 +236,8 @@ export function promoteCompactionLedger(
       && input.audit.status === 'passed'
       && sessionKind === 'interactive'
       && originClass === 'agent'
+      && supported
+      && (!input.readPolicy || input.readPolicy.scopes.includes(input.projectId ? 'project' : 'workspace'))
       && !classified.derivedFromRecalledContext
       && DURABLE_KINDS.has(item.kind);
     if (!promotable) {
@@ -245,6 +265,7 @@ export function promoteCompactionLedger(
       content: item.text,
       canonicalKey: `durable:${item.kind}:${stableId('fact', item.text)}`,
       confidence: 0.82,
+      evidence, sensitivity, claimMode: 'observed', verification: 'supported',
       status: 'active',
       importance: importanceFor(item),
       originClass: 'agent',

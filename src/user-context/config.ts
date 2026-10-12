@@ -144,6 +144,11 @@ export const KnowledgeMemoryConfigSchema = z
   .object({
     enabled: z.boolean().default(true),
     writePolicy: z.enum(['deny', 'allow']).default('allow'),
+    learning: z.object({
+      idleFlushMs: z.number().int().min(1_000).max(600_000).default(60_000),
+      maxBatchChars: z.number().int().min(4_000).max(120_000).default(30_000),
+      maxDailyBatches: z.number().int().min(1).max(10_000).default(100),
+    }).strict().optional(),
     readScopes: z.array(z.enum(['global', 'agent', 'workspace', 'project', 'session']))
       .default(['global', 'agent', 'workspace', 'project', 'session']),
     contentSources: z.array(z.enum(['memory', 'local_import', 'connector']))

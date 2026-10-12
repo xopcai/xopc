@@ -30,15 +30,15 @@ describe('LocalFolderKnowledgeSourceAdapter', () => {
       sourceInstanceId: 'local-folder:local-files',
       externalId: 'notes/plan.md',
       itemType: 'local_file',
-      authorRole: 'user',
-      sensitivity: 'personal',
-      retentionClass: 'durable',
+      authorRole: 'unknown',
+      sensitivity: 'normal',
+      retentionClass: 'bounded',
     });
     expect(result.items[0]?.normalizedText).toContain('Ship the knowledge source');
     expect(result.snapshotExternalIds).toEqual(['notes/plan.md']);
   });
 
-  it('uses the cursor for incremental reads', async () => {
+  it('rechecks content even when an incremental cursor is newer than mtime', async () => {
     const root = mkdtempSync(join(tmpdir(), 'xopc-local-source-'));
     roots.push(root);
     writeFileSync(join(root, 'old.md'), 'already synced');
@@ -50,6 +50,22 @@ describe('LocalFolderKnowledgeSourceAdapter', () => {
       signal: new AbortController().signal,
     });
 
-    expect(result.items).toEqual([]);
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0]?.normalizedText).toBe('already synced');
+  });
+
+  it('continues through large directories instead of repeatedly reading the first page', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'xopc-local-source-'));
+    roots.push(root);
+    for (const name of ['a.md', 'b.md', 'c.md']) writeFileSync(join(root, name), name);
+    const adapter = new LocalFolderKnowledgeSourceAdapter(root, 2);
+    const input = { instanceId: 'local-folder:local-files', collectionScope: 'files', signal: new AbortController().signal };
+    const first = await adapter.pull(input);
+    expect(first.items.map(item => item.externalId)).toEqual(['a.md', 'b.md']);
+    expect(first.hasMore).toBe(true);
+    const second = await adapter.pull({ ...input, cursor: first.nextCursor });
+    expect(second.items.map(item => item.externalId)).toEqual(['c.md']);
+    expect(second.hasMore).toBe(false);
+    expect(second.snapshotExternalIds).toEqual(['a.md', 'b.md', 'c.md']);
   });
 });

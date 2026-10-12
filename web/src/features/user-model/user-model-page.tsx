@@ -42,6 +42,8 @@ import { useLocaleStore } from '@/stores/locale-store';
 import { usePageHeaderStore } from '@/stores/page-header-store';
 import { UnderstandingStatusButton } from '@/features/work-discovery/understanding-status-button';
 
+import { LearningStatus } from './learning-status';
+import { KnowledgeEvidence } from './knowledge-evidence';
 import { MemoryActions } from './memory-actions';
 import { UnderstandingRow } from './understanding-row';
 import {
@@ -730,7 +732,7 @@ function KnowledgeRow({
 }) {
   const t = copy[language];
   const date = formatDate(item.updatedAt ?? item.createdAt, language);
-  const canExpand = item.content.length > 96 || item.content.includes('\n');
+  const canExpand = item.content.length > 96 || item.content.includes('\n') || Boolean(item.claimMode);
   return (
     <article className="group border-t border-edge-subtle px-5 py-4 first:border-t-0 sm:px-6">
       {editing ? (
@@ -754,8 +756,11 @@ function KnowledgeRow({
           <p className={`whitespace-pre-wrap break-words text-base leading-7 text-fg ${expanded ? '' : 'line-clamp-2'}`}>{item.content}</p>
           <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-fg-subtle">
             <span>{scopeLabel(item.scope, language)}</span>
+            {item.claimMode === 'reported' ? <span>{language === 'zh' ? '来源报告' : 'Source report'}</span> : null}
+            {item.verification === 'tentative' ? <span>{language === 'zh' ? '证据待补充' : 'Evidence pending'}</span> : null}
             {date ? <span>{date}</span> : null}
           </div>
+          {expanded ? <KnowledgeEvidence id={item.id} language={language} /> : null}
         </div>
         <div className="flex shrink-0 items-center gap-1">
           {canExpand ? (
@@ -1099,6 +1104,7 @@ export function UserModelPage() {
 
   return (
     <div className="mx-auto w-full max-w-6xl space-y-6 px-4 pb-4 pt-3 sm:space-y-8 sm:px-6 sm:pb-7 lg:px-8 lg:pb-10 lg:pt-4">
+      <LearningStatus language={language} />
       <PageTabs<PrimaryView>
         items={[
           { id: 'overview', label: t.overview, icon: Sparkles },
