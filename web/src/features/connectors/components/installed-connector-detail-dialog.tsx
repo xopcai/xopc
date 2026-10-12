@@ -1,6 +1,6 @@
 import { CliConnectorDialog } from './cli-connector-dialog';
 import * as Dialog from '@radix-ui/react-dialog';
-import { Database, Loader2, Save, Trash2, X } from 'lucide-react';
+import { Database, Loader2, RefreshCw, Save, Trash2, X } from 'lucide-react';
 import { useCallback, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -13,9 +13,11 @@ import { interaction } from '@/lib/interaction';
 import {
   removeConnector,
   syncConnectorSource,
+  testConnector,
   updateConnectorConfig,
   type ConnectorDefinition,
   type ConnectorInstance,
+  type ConnectorHealthResult,
 } from '../connectors-api';
 import { connectorDescription } from '../utils/connector-copy';
 import { formatConnectorMessage } from '../utils/connector-i18n';
@@ -67,6 +69,8 @@ function StandardInstalledConnectorDetailDialog({
   const [sourceSyncCount, setSourceSyncCount] = useState<number | null>(null);
   const [configDraft, setConfigDraft] = useState(() => initialConfigDraft(definition, instance));
   const [error, setError] = useState<string | null>(null);
+  const [testing, setTesting] = useState(false);
+  const [health, setHealth] = useState<ConnectorHealthResult | null>(null);
 
   const editableConfigFields = definition?.setup.config ?? [];
   const supportsConfigEdit = (instance.materialized.type === 'mcp' || instance.materialized.type === 'memorySource')
@@ -76,6 +80,21 @@ function StandardInstalledConnectorDetailDialog({
   const isComposio = instance.materialized.type === 'composio';
   const isMemorySource = instance.materialized.type === 'memorySource';
   const description = definition ? connectorDescription(definition, t) : null;
+
+  const testConnection = useCallback(async () => {
+    setTesting(true);
+    setError(null);
+    try {
+      const result = await testConnector(instance.instanceId);
+      setHealth(result);
+      if (!result.ok) setError(result.error ?? result.action ?? t.healthStatusLabels[result.status]);
+      await onChanged();
+    } catch (testError) {
+      setError(testError instanceof Error ? testError.message : String(testError));
+    } finally {
+      setTesting(false);
+    }
+  }, [instance.instanceId, onChanged, t.healthStatusLabels]);
 
   const remove = useCallback(async () => {
     setRemoving(true);
@@ -164,7 +183,19 @@ function StandardInstalledConnectorDetailDialog({
 
             {isMcp ? (
               <div className="space-y-3 rounded-xl border border-edge bg-surface-base p-3 text-sm">
-                <p className="text-fg-muted">{t.connectorConfigLabel} · xopc mcp list / login / logout</p>
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <p className="text-fg-muted" role="status">{health?.ok
+                    ? formatConnectorMessage(t.toolsAvailable, { count: String(health.toolCount) })
+                    : health
+                      ? t.healthStatusLabels[health.status]
+                      : instance.usage.lastHealthStatus
+                      ? t.healthStatusLabels[instance.usage.lastHealthStatus]
+                      : t.healthNotTested}</p>
+                  <Button variant="secondary" aria-busy={testing} disabled={testing || !instance.enabled} onClick={() => void testConnection()}>
+                    {testing ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <RefreshCw className="size-4" aria-hidden />}
+                    {t.test}
+                  </Button>
+                </div>
                 {supportsConfigEdit ? editableConfigFields.map(field => (
                   <label key={field.key} className="flex flex-col gap-1.5">
                     <span className="font-medium text-fg">{field.label}</span>
