@@ -39,8 +39,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 @Composable
 internal fun WorkflowScreen(gatewayId: String, onBack: () -> Unit,
   list: suspend () -> List<WorkflowRun>, detail: suspend (String) -> WorkflowDetail,
-  cancel: suspend (String) -> Unit, onCreateWithChat: () -> Unit) {
-  var selectedId by rememberSaveable(gatewayId) { mutableStateOf<String?>(null) }
+  cancel: suspend (String) -> Unit, onCreateWithChat: () -> Unit, initialRunId: String? = null) {
+  var selectedId by rememberSaveable(gatewayId, initialRunId) { mutableStateOf(initialRunId) }
   var runs by remember(gatewayId) { mutableStateOf<List<WorkflowRun>>(emptyList()) }
   var selected by remember(gatewayId) { mutableStateOf<WorkflowDetail?>(null) }
   var loading by remember(gatewayId) { mutableStateOf(true) }

@@ -22,25 +22,19 @@ data class TurnClaim(val endpointId: String, val token: String, val supportsDevi
 }
 
 data class RunStreamEvent(val runId: String, val conversationId: String, val type: String,
-  val messageId: String?, val delta: String?, val offset: Int?) {
+  val messageId: String?, val delta: String?, val offset: Int?, val presentation: String? = null) {
   companion object {
-    fun appendDelta(current: String, delta: String, offset: Int?): String? {
-      if (offset != null && (offset < 0 || offset > current.length)) return null
-      val overlap = offset?.let { (current.length - it).coerceAtMost(delta.length) } ?: 0
-      if (overlap > 0 && current.substring(offset!!, offset + overlap) != delta.take(overlap)) return null
-      return (current + delta.drop(overlap)).takeIf { it.length <= 32_000 }
-    }
-
     fun parse(topic: String, event: String, data: JSONObject): RunStreamEvent? {
       val runId = topic.removePrefix("run:")
       if (!topic.startsWith("run:") || data.optString("runId") != runId) return null
       val conversationId = data.optString("conversationId").takeIf(String::isNotBlank) ?: return null
-      if (event !in setOf("assistant_delta", "run_end", "error")) return null
+      if (event !in setOf("assistant_delta", "assistant_message_end", "run_end", "error")) return null
       val payload = data.optJSONObject("payload") ?: return null
       return RunStreamEvent(runId, conversationId, event,
         (payload.opt("messageId") as? String)?.takeIf(String::isNotBlank),
         (payload.opt("delta") as? String)?.takeIf(String::isNotEmpty),
-        (payload.opt("offset") as? Number)?.toInt()?.takeIf { it >= 0 })
+        (payload.opt("offset") as? Number)?.toInt()?.takeIf { it >= 0 },
+        payload.optString("presentation").takeIf(String::isNotBlank))
     }
   }
 }
@@ -69,6 +63,7 @@ internal class RealtimeClient(
   private fun subscribe(socket: WebSocket?, topic: String, afterSeq: Long?) {
     if (socket == null) return
     val item = JSONObject().put("topic", topic)
+    if (topic.startsWith("run:")) item.put("view", "compact")
     if (afterSeq != null) item.put("afterSeq", afterSeq)
     socket.send(frame("realtime.subscribe", JSONObject().put("subscriptions", JSONArray().put(item))))
   }

@@ -21,9 +21,15 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.produceState
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.LinkAnnotation
@@ -37,6 +43,9 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withLink
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.style.TextIndent
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
@@ -66,20 +75,60 @@ import org.commonmark.node.StrongEmphasis
 import org.commonmark.node.Text as MarkdownTextNode
 import org.commonmark.node.ThematicBreak
 import org.commonmark.parser.Parser
+import org.commonmark.parser.IncludeSourceSpans
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 private val markdownParser = Parser.builder().extensions(listOf(
-  TablesExtension.create(), StrikethroughExtension.create())).build()
+  TablesExtension.create(), StrikethroughExtension.create()))
+  .includeSourceSpans(IncludeSourceSpans.BLOCKS_AND_INLINES).build()
+
+private val LocalStreamingMarkdown = androidx.compose.runtime.compositionLocalOf { false }
+
+internal data class MarkdownRenderBlock(val id: String, val node: Node, val fingerprint: String)
+
+internal fun projectMarkdown(source: String, previous: List<MarkdownRenderBlock> = emptyList()): List<MarkdownRenderBlock> {
+  val retained = previous.associateBy { it.id }
+  return markdownParser.parse(source).children().mapIndexed { index, node ->
+    val id = node.sourceSpans.firstOrNull()?.inputIndex?.let { "source:$it" } ?: "unpositioned:$index"
+    val fingerprint = buildString { appendMarkdownFingerprint(node) }
+    retained[id]?.takeIf { it.fingerprint == fingerprint } ?: MarkdownRenderBlock(id, node, fingerprint)
+  }
+}
+
+private fun StringBuilder.appendMarkdownFingerprint(node: Node) {
+  append(node.javaClass.name).append(':')
+  append(when (node) {
+    is MarkdownTextNode -> node.literal
+    is Code -> node.literal
+    is FencedCodeBlock -> node.info + ":" + node.literal
+    is IndentedCodeBlock -> node.literal
+    is HtmlBlock -> node.literal
+    is HtmlInline -> node.literal
+    is Heading -> node.level
+    is OrderedList -> node.markerStartNumber
+    is Link -> node.destination + ":" + node.title
+    is Image -> node.destination + ":" + node.title
+    is TableCell -> "${node.isHeader}:${node.alignment}"
+    else -> ""
+  }).append('\u0000')
+  node.children().forEach { appendMarkdownFingerprint(it) }
+  append('\u0001')
+}
 
 /** Shared native Markdown renderer for messages, previews, and document content. */
 @Composable
 internal fun MarkdownContent(markdown: String, modifier: Modifier = Modifier,
   maxLines: Int? = null, onOpenLink: ((String) -> Unit)? = null,
-  onCopyCode: ((String) -> Unit)? = null) {
-  val document = remember(markdown) { markdownParser.parse(markdown) }
+  onCopyCode: ((String) -> Unit)? = null, streaming: Boolean = false) {
+  val document by produceState<List<MarkdownRenderBlock>>(emptyList(), markdown) {
+    val previous = value
+    value = withContext(Dispatchers.Default) { projectMarkdown(markdown, previous) }
+  }
   val linkColor = MaterialTheme.colorScheme.primary
   if (maxLines != null) {
     val preview = remember(document, linkColor, onOpenLink) {
-      buildAnnotatedString { appendPreview(document, linkColor, onOpenLink) }
+      buildAnnotatedString { document.forEach { appendPreview(it.node, linkColor, onOpenLink) } }
     }
     SelectionContainer {
       Text(preview, modifier = modifier,
@@ -89,8 +138,13 @@ internal fun MarkdownContent(markdown: String, modifier: Modifier = Modifier,
   } else {
     Column(modifier = modifier.testTag("markdown-content"),
       verticalArrangement = Arrangement.spacedBy(8.dp)) {
-      document.children().forEach { block ->
-        MarkdownBlock(block, linkColor, onOpenLink, onCopyCode)
+      document.forEach { block ->
+        key(block.id) {
+          androidx.compose.runtime.CompositionLocalProvider(LocalStreamingMarkdown provides
+            (streaming && block.id == document.lastOrNull()?.id && block.node !is TableBlock)) {
+            MarkdownBlock(block.node, linkColor, onOpenLink, onCopyCode)
+          }
+        }
       }
     }
   }
@@ -140,15 +194,26 @@ private fun MarkdownInlineText(node: Node, linkColor: Color,
       node.children().forEach { appendInline(it, linkColor, onOpenLink) }
     }
   }
+  val readingStyle = if (prefix.isNotEmpty()) {
+    val measurer = rememberTextMeasurer()
+    val density = LocalDensity.current
+    val markerWidth = remember(prefix, style, density) {
+      with(density) { measurer.measure(AnnotatedString(prefix), style).size.width.toSp() }
+    }
+    style.copy(textIndent = TextIndent(firstLine = 0.sp, restLine = markerWidth))
+  } else style
   SelectionContainer {
-    Text(content, modifier = modifier, style = style,
-      fontWeight = if (bold) FontWeight.SemiBold else null)
+    StreamingMarkdownText(content, LocalStreamingMarkdown.current, modifier, readingStyle,
+      if (bold) FontWeight.SemiBold else null)
   }
 }
 
 @Composable
 private fun MarkdownCodeBlock(code: String, info: String, onCopyCode: ((String) -> Unit)?) {
   val language = info.substringBefore(' ').trim()
+  var expanded by remember { mutableStateOf(false) }
+  val raw = code.trimEnd('\n', '\r')
+  val preview = remember(raw) { markdownCodePreview(raw) }
   Card(modifier = Modifier.fillMaxWidth().testTag("markdown-code-block"),
     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHighest)) {
     Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -161,9 +226,12 @@ private fun MarkdownCodeBlock(code: String, info: String, onCopyCode: ((String) 
         }
       }
       SelectionContainer {
-        Text(code.trimEnd('\n', '\r'), modifier = Modifier.horizontalScroll(rememberScrollState())
+        Text(if (expanded) raw else preview, modifier = Modifier.horizontalScroll(rememberScrollState())
           .testTag("markdown-code-text"), fontFamily = FontFamily.Monospace,
           style = MaterialTheme.typography.bodySmall, softWrap = false)
+      }
+      if (preview.length < raw.length) TextButton(onClick = { expanded = !expanded }) {
+        Text(stringResource(if (expanded) R.string.message_collapse_content else R.string.assistant_view_more))
       }
     }
   }
@@ -173,7 +241,7 @@ private fun MarkdownCodeBlock(code: String, info: String, onCopyCode: ((String) 
 private fun MarkdownList(node: Node, linkColor: Color,
   onOpenLink: ((String) -> Unit)?, onCopyCode: ((String) -> Unit)?, depth: Int = 0) {
   val start = (node as? OrderedList)?.markerStartNumber ?: 1
-  // Inline markers keep wrapped lines readable without accumulating marker gutters.
+  // Only nesting adds a gutter; continuation lines align after the native marker width.
   val indentation = (depth.coerceAtMost(3) * 12).dp
   Column(verticalArrangement = Arrangement.spacedBy(4.dp),
     modifier = Modifier.fillMaxWidth().testTag("markdown-list")) {
@@ -200,24 +268,47 @@ private fun MarkdownList(node: Node, linkColor: Color,
 @Composable
 private fun MarkdownTable(node: TableBlock, linkColor: Color,
   onOpenLink: ((String) -> Unit)?) {
+  var expanded by remember { mutableStateOf(false) }
+  val rows = remember(node) { node.children().flatMap { it.children() } }
+  Column {
   Column(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())
     .testTag("markdown-table")) {
-    node.children().flatMap { it.children() }.forEach { row ->
+    (if (expanded) rows else rows.take(40)).forEach { row ->
       Row {
         row.children().filterIsInstance<TableCell>().forEach { cell ->
           val content = remember(cell, linkColor, onOpenLink) {
             buildAnnotatedString { cell.children().forEach { appendInline(it, linkColor, onOpenLink) } }
           }
           SelectionContainer {
-            Text(content, modifier = Modifier.widthIn(min = 96.dp, max = 240.dp)
+            Text(content, modifier = Modifier.widthIn(min = 168.dp, max = 168.dp)
               .border(1.dp, MaterialTheme.colorScheme.outlineVariant)
               .padding(8.dp), style = MaterialTheme.typography.bodySmall,
+              textAlign = when (cell.alignment) {
+                TableCell.Alignment.CENTER -> TextAlign.Center
+                TableCell.Alignment.RIGHT -> TextAlign.End
+                else -> TextAlign.Start
+              },
               fontWeight = if (cell.isHeader) FontWeight.SemiBold else null)
           }
         }
       }
     }
   }
+  if (rows.size > 40) TextButton(onClick = { expanded = !expanded }) {
+    Text(stringResource(if (expanded) R.string.message_collapse_content else R.string.assistant_view_more))
+  }
+  }
+}
+
+internal fun markdownCodePreview(source: String, lines: Int = 40): String {
+  var cursor = 0
+  repeat(lines) { index ->
+    val end = source.indexOf('\n', cursor)
+    if (end < 0) return source
+    if (index == lines - 1) return source.substring(0, end)
+    cursor = end + 1
+  }
+  return source
 }
 
 private fun AnnotatedString.Builder.appendInline(node: Node, linkColor: Color,
@@ -272,9 +363,7 @@ private fun AnnotatedString.Builder.appendPreview(node: Node, linkColor: Color,
     append('\n')
 }
 
-private fun safeMarkdownLink(url: String): Boolean =
-  url.startsWith("https://") || url.startsWith("http://") || url.startsWith("xopc://") ||
-    url.startsWith("/") || url.startsWith("#/")
+private fun safeMarkdownLink(url: String): Boolean = externalMessageLink(url) || messageLinkTarget(url) != null
 
 private fun Node.children(): List<Node> = buildList {
   var child = firstChild

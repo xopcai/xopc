@@ -210,6 +210,7 @@
     { "name": "chat_saved_note", "value": "已保存到笔记" },
     { "name": "chat_config_failed", "value": "无法加载会话选项" },
     { "name": "chat_close", "value": "关闭" },
+    { "name": "chat_collapse_content", "value": "收起" },
     { "name": "chat_view_more", "value": "查看更多" },
     { "name": "chat_message_detail", "value": "消息详情" },
     { "name": "chat_user_message", "value": "用户消息" },

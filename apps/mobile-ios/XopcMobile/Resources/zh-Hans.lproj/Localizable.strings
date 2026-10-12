@@ -160,3 +160,6 @@
 "project_status_completed" = "已完成";
 "project_status_cancelled" = "已取消";
 "project_status_archived" = "已归档";
+
+"收起" = "收起";
+"无法打开链接" = "无法打开链接";
