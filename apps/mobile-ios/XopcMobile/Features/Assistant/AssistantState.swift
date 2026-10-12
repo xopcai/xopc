@@ -175,9 +175,9 @@ final class AssistantState {
 
     func resumeConversation(_ conversation: ConversationSelection, using gateway: any GatewayServing) async {
         guard loadedConversationID == conversation.id, !conversation.isDraft else { return }
+        isForeground = true
         // Sending an input owns its initial subscription until its receipt arrives.
         guard !isSending || runID != nil else { return }
-        isForeground = true
         cancelRunObservation()
         let generation = runGeneration
         do {

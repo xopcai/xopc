@@ -106,6 +106,9 @@ export async function openPlatformStt(request: StreamingSttOpenRequest): Promise
       if (!ready || typeof event.item_id !== 'string' || typeof event.text !== 'string') throw new Error('Invalid platform transcript');
       let sentence = sentences.get(event.item_id);
       if (sentence?.final) return;
+      // Cloud ASR can emit empty hypotheses for silence during startup. They
+      // must not become speech_started and interrupt the opening greeting.
+      if (!sentence && !event.text.trim()) return;
       if (!sentence) {
         if (sentences.size >= 10000) throw new Error('Transcript limit exceeded');
         sentence = { revision: 0, final: false }; sentences.set(event.item_id, sentence);

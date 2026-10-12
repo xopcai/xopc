@@ -63,6 +63,9 @@ describe('platform voice protocol', () => {
     const events: StreamingSttEvent[] = [];
     s.on('connection', socket => socket.on('message', (raw, binary) => {
       if (binary) {
+        socket.send(JSON.stringify({type:'transcript.partial', item_id:'silence', text:''}));
+        socket.send(JSON.stringify({type:'transcript.final', item_id:'silence', text:'   '}));
+        socket.send(JSON.stringify({type:'transcript.partial', item_id:'one', text:''}));
         socket.send(JSON.stringify({type:'transcript.partial', item_id:'one', text:'你好'}));
         socket.send(JSON.stringify({type:'transcript.partial', item_id:'one', text:'你好世界'})); return;
       }
@@ -75,6 +78,7 @@ describe('platform voice protocol', () => {
     }));
     const session = await openPlatformStt({model:'new-vendor-asr', baseUrl:url, apiKey:'test', inputFormat:{encoding:'pcm_s16le',sampleRate:16000,channels:1}, turnDetection:{mode:'server_vad',silenceDurationMs:700}, timeoutMs:1000, signal:new AbortController().signal, onEvent:event => events.push(event)});
     session.appendAudio(new Uint8Array(640)); await session.commit();
+    expect(events.filter(event => event.type === 'speech_started')).toEqual([{type:'speech_started',utteranceId:'one'}]);
     expect(events.filter(event => event.type === 'transcript_delta').map(event => event.text)).toEqual(['你好', '你好世界']);
     expect(events.filter(event => event.type === 'transcript_final')).toEqual([{type:'transcript_final',utteranceId:'one',revision:3,text:'你好世界。'}]);
     expect(events.at(-1)).toEqual({type:'usage',inputAudioMs:20});
