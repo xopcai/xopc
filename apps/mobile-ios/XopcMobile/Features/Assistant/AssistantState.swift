@@ -299,7 +299,9 @@ final class AssistantState {
             var saved = await projectHistory(history)
             guard isObserving(conversation, generation: generation) else { return }
             if retainLive {
-                for index in saved.indices where streamBuffer.containsLive(saved[index].id) { saved[index].isPending = true }
+                for index in saved.indices where streamBuffer.containsLive(saved[index].id) {
+                    saved[index].isPending = true
+                }
             }
             let savedIDs = Set(saved.map(\.id))
             let live = messages.filter { message in
@@ -321,7 +323,9 @@ final class AssistantState {
     }
 
     func apply(_ event: RunStreamEvent, runID: String) {
-        if event.name != "assistant_delta" { flushStream() }
+        if event.name != "assistant_delta" {
+            flushStream()
+        }
         if event.isTerminal {
             streamGap = false
             messages = streamBuffer.finish(messages)
@@ -342,9 +346,12 @@ final class AssistantState {
         }
         guard event.name == "assistant_delta" else { return }
         let result = streamBuffer.append(event, runID: runID, visible: messages)
-        if result == "gap" { streamGap = true }
-        if result == "first" { flushStream() }
-        else if result == "accepted", streamCommit == nil {
+        if result == "gap" {
+            streamGap = true
+        }
+        if result == "first" {
+            flushStream()
+        } else if result == "accepted", streamCommit == nil {
             streamCommit = Task { [weak self] in
                 do { try await Task.sleep(for: .milliseconds(32)) } catch { return }
                 self?.flushStream()
