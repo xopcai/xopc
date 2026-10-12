@@ -134,13 +134,15 @@ export class XopcVoiceCall {
       this.transport = transport;
       await transport.connect(auth.origin, session, recovering && this.reconnectAttempt % 2 === 1);
       if (generation !== this.generation) return;
+      if (this.speaker) await voiceCallAudio.setSpeaker(true);
+      await voiceCallAudio.ensurePlaybackReady();
+      if (generation !== this.generation) return;
       this.phase = 'connected'; this.connectedAt = Date.now();
+      if (session.openingGreeting?.accepted) transport.send('session.output_ready', { connectionEpoch: session.connectionEpoch });
       this.appliedMuted = undefined; this.syncInput();
       clearTimeout(this.limitTimer);
       this.limitTimer = setTimeout((): void => { if (generation === this.generation) this.pause('TIME_LIMIT'); }, session.limits.maxSessionMs);
       if (this.mode === 'assistant') { this.loadApproval(); this.approvalTimer = setInterval((): void => { this.loadApproval(); }, 3000); }
-      if (this.speaker) await voiceCallAudio.setSpeaker(true);
-      if (session.openingGreeting?.accepted) transport.send('session.output_ready', { connectionEpoch: session.connectionEpoch });
     } catch (error) {
       if (generation !== this.generation) return;
       const reason = (error as Error).message || 'SERVICE_UNAVAILABLE';
