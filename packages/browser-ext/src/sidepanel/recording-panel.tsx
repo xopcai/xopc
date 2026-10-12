@@ -3,7 +3,7 @@ import type { BrowserRecording } from '@xopcai/browser-control-contract';
 
 import { t } from '../i18n';
 import { gatewayFetch } from './auth';
-import { CheckIcon, GlobeIcon, PageIcon, StopIcon } from './icons';
+import { CheckIcon, CloseIcon, GlobeIcon, PageIcon, StopIcon } from './icons';
 
 type SavedAutomation = { id: string; revision: number; verified: boolean; definition: { name: string; inputs: Record<string, { type: string; default?: string | number | boolean; description?: string }> } };
 type Run = { id: string; status: string; error?: string; result?: unknown; businessOutcome?: string };
@@ -14,7 +14,13 @@ export function recordingErrorMessage(cause: unknown): string {
   return message;
 }
 
-export function RecordingPanel() {
+interface RecordingPanelProps {
+  open?: boolean;
+  onClose?: () => void;
+  onRequiredChange?: (required: boolean) => void;
+}
+
+export function RecordingPanel({ open = false, onClose, onRequiredChange }: RecordingPanelProps) {
   const [session, setSession] = useState<Omit<BrowserRecording, 'events'>>();
   const [pages, setPages] = useState<chrome.tabs.Tab[]>([]);
   const [selectedTab, setSelectedTab] = useState<number>();
@@ -24,6 +30,15 @@ export function RecordingPanel() {
   const [automation, setAutomation] = useState<SavedAutomation>();
   const [inputs, setInputs] = useState<Record<string, string | number | boolean>>({});
   const [run, setRun] = useState<Run>();
+  const active = !!session && ['recording', 'paused'].includes(session.state);
+  const saved = !!session?.automationId;
+  const syncing = session?.state === 'stopped' && !saved;
+  const required = active || syncing || busy || !!run && ['queued', 'running'].includes(run.status);
+  const visible = open || required;
+  useEffect(() => {
+    onRequiredChange?.(required);
+    return () => onRequiredChange?.(false);
+  }, [required, onRequiredChange]);
   const api = async (path: string, init?: RequestInit) => {
     const response = await gatewayFetch(path, init);
     const data = await response.json();
@@ -37,6 +52,8 @@ export function RecordingPanel() {
   };
   useEffect(() => {
     let disposed = false;
+    if (!visible) return;
+    setPagesLoading(true);
     const refresh = async (followActive = false) => {
       try {
         const tabs = (await chrome.tabs.query({ currentWindow: true })).filter((tab) => tab.id !== undefined && /^https?:\/\//.test(tab.url ?? ''));
@@ -59,7 +76,7 @@ export function RecordingPanel() {
       chrome.tabs.onActivated.removeListener(activated); chrome.tabs.onUpdated.removeListener(changed);
       chrome.tabs.onRemoved.removeListener(changed); chrome.tabs.onCreated.removeListener(changed);
     };
-  }, []);
+  }, [visible]);
   useEffect(() => {
     let disposed = false;
     const refresh = () => void command('status').then((sessions: Omit<BrowserRecording, 'events'>[]) => {
@@ -70,6 +87,7 @@ export function RecordingPanel() {
     return () => { disposed = true; window.clearInterval(timer); };
   }, []);
   useEffect(() => {
+    if (!visible) return;
     if (!session?.automationId) { setAutomation(undefined); return; }
     let disposed = false;
     void api(`/api/browser/automations/${encodeURIComponent(session.automationId)}`).then((data) => {
@@ -79,7 +97,7 @@ export function RecordingPanel() {
       setInputs(Object.fromEntries(Object.entries(saved.definition.inputs).map(([key, spec]) => [key, spec.default ?? ''])));
     }).catch((cause) => { if (!disposed) setError(recordingErrorMessage(cause)); });
     return () => { disposed = true; };
-  }, [session?.automationId]);
+  }, [session?.automationId, visible]);
   useEffect(() => {
     if (!run || !['queued', 'running'].includes(run.status)) return;
     let disposed = false;
@@ -108,20 +126,19 @@ export function RecordingPanel() {
       setSession(await command(operation, operation === 'start' ? selectedTab : undefined));
     } catch (cause) { setError(recordingErrorMessage(cause)); } finally { setBusy(false); }
   };
-  const active = !!session && ['recording', 'paused'].includes(session.state);
-  const saved = !!session?.automationId;
-  const syncing = session?.state === 'stopped' && !saved;
   const page = pages.find((tab) => tab.id === (active || syncing ? session!.tabId : selectedTab));
   const status = active ? session!.state === 'paused' ? 'recordingPaused' : 'recordingActive'
     : saved ? 'recordingSavedShort' : session?.state === 'stopped' ? 'recordingSaving' : session?.state === 'interrupted' ? 'recordingInterrupted' : 'recordingReady';
   const runStatus = run?.businessOutcome === 'unknown' ? t('recordingUnknown')
     : run?.status === 'succeeded' ? t('recordingCompleted') : run?.status === 'cancelled' ? t('recordingStopped')
     : run?.status === 'failed' ? recordingErrorMessage(run.error || t('recordingRequestFailed')) : t('recordingRunning');
-  return <section className="recording-panel" data-state={active ? session!.state : syncing ? 'syncing' : saved ? 'saved' : 'ready'} aria-label={t('recordingTitle')} aria-busy={busy}>
+  if (!visible) return null;
+  return <section id="browser-recording-panel" className="recording-panel" data-state={active ? session!.state : syncing ? 'syncing' : saved ? 'saved' : 'ready'} aria-label={t('recordingTitle')} aria-busy={busy}>
     <header className="recording-heading">
       <span className="recording-icon">{saved ? <CheckIcon /> : <PageIcon />}</span>
       <div className="recording-heading-text"><strong>{saved && automation ? automation.definition.name : t('recordingTitle')}</strong><p>{active ? t('recordingActiveHelp') : saved ? t('recordingSaved') : t('recordingDescription')}</p></div>
       {(active || saved || session?.state === 'stopped' || session?.state === 'interrupted' || selectedTab !== undefined) && <span className={`recording-status ${active && session!.state === 'recording' ? 'is-recording' : saved ? 'is-saved' : ''}`} role="status"><i />{t(status)}</span>}
+      {!required && onClose && <button className="header-icon-button" onClick={onClose} aria-label={t('recordingHide')} title={t('recordingHide')}><CloseIcon /></button>}
     </header>
     {!active && !syncing && (!saved || selectedTab === undefined) && (pagesLoading ? <div className="recording-skeleton" /> : pages.length ? <label className="recording-target-label">{t('recordingTarget')}
       <select className="recording-page-select" value={selectedTab ?? ''} disabled={busy} onChange={(event) => { setSelectedTab(Number(event.target.value)); setError(''); }}>

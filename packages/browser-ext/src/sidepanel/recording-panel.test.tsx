@@ -27,10 +27,55 @@ beforeEach(() => {
   container = document.createElement('div'); document.body.append(container); root = createRoot(container);
 });
 afterEach(async () => { await act(async () => root.unmount()); container.remove(); vi.unstubAllGlobals(); });
-async function render() { await act(async () => root.render(<RecordingPanel />)); }
+async function render(open = true) { await act(async () => root.render(<RecordingPanel open={open} />)); }
 function button(label: string) { return Array.from(container.querySelectorAll('button')).find((item) => item.textContent === label)!; }
 
 describe('recording panel', () => {
+  it('stays hidden while idle and only queries pages when opened', async () => {
+    await render(false);
+    expect(container.querySelector('.recording-panel')).toBeNull();
+    expect(mocks.query).not.toHaveBeenCalled();
+    await render(true);
+    expect(container.querySelector('.recording-panel')).not.toBeNull();
+    expect(mocks.query).toHaveBeenCalledOnce();
+    await render(false);
+    expect(container.querySelector('.recording-panel')).toBeNull();
+  });
+  it.each(['recording', 'paused', 'stopped'])('automatically shows a %s recording', async (state) => {
+    mocks.sendMessage.mockResolvedValue({ ok: true, value: [{ ...sessions, state }] });
+    await render(false);
+    expect(container.querySelector('.recording-panel')).not.toBeNull();
+  });
+  it.each(['saved', 'interrupted'])('does not reopen for a historical %s recording', async (state) => {
+    mocks.sendMessage.mockResolvedValue({ ok: true, value: [{ ...sessions, state: state === 'saved' ? 'stopped' : state, ...(state === 'saved' ? { automationId: 'saved-automation' } : {}) }] });
+    await render(false);
+    expect(container.querySelector('.recording-panel')).toBeNull();
+    expect(mocks.gatewayFetch).not.toHaveBeenCalled();
+  });
+  it('detects a recording started after the panel was hidden', async () => {
+    vi.useFakeTimers();
+    try {
+      await render(false);
+      mocks.sendMessage.mockResolvedValue({ ok: true, value: [sessions] });
+      await act(async () => vi.advanceTimersByTimeAsync(1500));
+      expect(button('Finish and save')).toBeDefined();
+    } finally { vi.useRealTimers(); }
+  });
+  it('allows closing idle panels and keeps recording controls visible while active', async () => {
+    const onClose = vi.fn();
+    const onRequiredChange = vi.fn();
+    await act(async () => root.render(<RecordingPanel open onClose={onClose} onRequiredChange={onRequiredChange} />));
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Hide recording panel"]')!.click());
+    expect(onClose).toHaveBeenCalledOnce();
+    mocks.sendMessage.mockResolvedValue({ ok: true, value: sessions });
+    mocks.query.mockResolvedValue([{ id: 2, active: true, title: 'Orders', url: 'https://example.com' }]);
+    await render(false);
+    await render(true);
+    await act(async () => button('Start recording').click());
+    await render(false);
+    expect(container.querySelector('.recording-panel')).not.toBeNull();
+    expect(button('Finish and save')).toBeDefined();
+  });
   it('shows guidance and disables recording for internal browser pages', async () => {
     await render();
     expect(container.textContent).toContain('Open the website you want to record');

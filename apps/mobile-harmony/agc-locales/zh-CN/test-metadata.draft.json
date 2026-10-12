@@ -19,7 +19,11 @@
   "agcTestPrivacyPolicyAssociated": true,
   "agcPrivacyAgreementUrl": "https://agreement-drcn.hispace.dbankcloud.cn/index.html?lang=zh&agreementId=2058664212267329472",
   "reviewGatewayRegion": "China",
-  "reviewGatewayProviders": ["Alibaba Cloud models", "Alibaba Cloud search", "Alibaba Cloud speech"],
+  "reviewGatewayProviders": [
+    "Alibaba Cloud models",
+    "Alibaba Cloud search",
+    "Alibaba Cloud speech"
+  ],
   "icon": "app-icon-1024.png",
   "legacyAgc": {
     "bundleName": "ai.xopc.mobile",
@@ -60,5 +64,31 @@
     "test users",
     "review gateway access",
     "device acceptance"
-  ]
+  ],
+  "latestTestBuild": {
+    "versionName": "0.1.1",
+    "versionCode": 2,
+    "agcTestVersionId": "2059455123364571456",
+    "signedPackage": ".test/release-20261012/xopc-0.1.1-ai.xopc.xopc-release-signed.app",
+    "sha256": "ed54467301a27864cddad2516d84868ea1ee4db78705db35b04e2d1f38fafb1c",
+    "hostTestsPassed": 715,
+    "signatureVerified": true,
+    "agcLegality": "passed",
+    "agcUsage": "test-only",
+    "agcSelfCheck": "running",
+    "agcSubmission": "pre-review",
+    "privacyAgreementId": "2059458153472387008",
+    "privacyAgreementStatus": "completed",
+    "testStart": "2026-10-12",
+    "testEnd": "2026-10-31",
+    "testGroup": "test",
+    "privacyPolicyAssociated": true,
+    "privacyAgreementUrl": "https://agreement-drcn.hispace.dbankcloud.cn/index.html?lang=zh&agreementId=2059458153472387008",
+    "testInviteUrl": "https://appgallery.huawei.com/link/invite-test-wap?taskId=b2f2184089a05674bb1f71fb96971ca5",
+    "newUserGrantPermissions": [
+      "ohos.permission.READ_CALENDAR",
+      "ohos.permission.LOCATION",
+      "ohos.permission.APPROXIMATELY_LOCATION"
+    ]
+  }
 }
