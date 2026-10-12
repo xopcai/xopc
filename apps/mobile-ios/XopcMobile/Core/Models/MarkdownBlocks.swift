@@ -9,7 +9,9 @@ enum MarkdownTableAlignment: Equatable, Sendable {
 struct MarkdownTableCell: Equatable, Identifiable, Sendable {
     let id: UUID
     let text: String
-    init(id: UUID = UUID(), text: String) { self.id = id; self.text = text }
+    init(id: UUID = UUID(), text: String) {
+        self.id = id; self.text = text
+    }
 }
 
 struct MarkdownTableRow: Equatable, Identifiable, Sendable {
@@ -56,7 +58,9 @@ enum MarkdownBlock: Equatable, Sendable {
 
         var index = 0
         while index < lines.count {
-            if Task.isCancelled { return [] }
+            if Task.isCancelled {
+                return []
+            }
             let line = lines[index]
             index += 1
             let trimmed = line.trimmingCharacters(in: .whitespaces)
@@ -246,7 +250,9 @@ struct MarkdownPart: Equatable, Identifiable, Sendable {
     let id: UUID
     let block: MarkdownBlock
 
-    init(_ block: MarkdownBlock) { self.init(block, id: UUID()) }
+    init(_ block: MarkdownBlock) {
+        self.init(block, id: UUID())
+    }
 
     init(_ block: MarkdownBlock, id: UUID) {
         self.id = id
