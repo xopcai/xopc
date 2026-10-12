@@ -29,8 +29,8 @@ struct TaskDetailView: View {
                                     .fixedSize(horizontal: false, vertical: true)
                                 Button { showingStatus = true } label: {
                                     Label(LocalizedStringKey(detail.task.phase == "closed" && detail.task.resolution == "done" ? "已完成"
-                                        : detail.task.resolution == "cancelled" ? "cancelled" : detail.task.phase),
-                                          systemImage: "chevron.down")
+                                              : detail.task.resolution == "cancelled" ? "cancelled" : detail.task.phase),
+                                    systemImage: "chevron.down")
                                         .frame(minHeight: 44)
                                 }.disabled(isWorking)
                                 if let projectID = detail.task.projectId {
@@ -181,7 +181,9 @@ struct TaskDetailView: View {
             TaskEditorView(configuration: configuration, task: task)
         }
         .sheet(isPresented: $showingStatus, onDismiss: { Task { await load() } }) {
-            if let detail { TaskStatusView(configuration: configuration, detail: detail) }
+            if let detail {
+                TaskStatusView(configuration: configuration, detail: detail)
+            }
         }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
@@ -227,7 +229,6 @@ private extension TaskDetailView {
         case .pending: "待核对"
         }
     }
-
 }
 
 private struct TaskCriterionDisplay: Identifiable {
@@ -258,7 +259,9 @@ private struct TaskStatusView: View {
     @State private var isWorking = false
     @State private var confirmsCancel = false
 
-    private var allowed: [String] { detail.allowedCommands ?? [] }
+    private var allowed: [String] {
+        detail.allowedCommands ?? []
+    }
 
     var body: some View {
         NavigationStack {
@@ -273,20 +276,22 @@ private struct TaskStatusView: View {
                             HStack {
                                 Text(LocalizedStringKey(phase))
                                 Spacer()
-                                if phase == detail.task.phase { Image(systemName: "checkmark") }
+                                if phase == detail.task.phase {
+                                    Image(systemName: "checkmark")
+                                }
                             }.frame(minHeight: 44)
                         }
                         .disabled(isWorking || detail.phaseCommand(for: phase) == nil)
                         .accessibilityIdentifier("task-phase-\(phase)")
                     }
-                    if detail.task.phase != "closed" && !allowed.contains("move") {
+                    if detail.task.phase != "closed", !allowed.contains("move") {
                         Text("任务正在执行或等待条件满足，请先处理当前执行或等待事项。")
                             .foregroundStyle(.secondary)
                     }
                 } header: { Text("阶段") } footer: {
                     Text("调整阶段不会自动启动 Agent。")
                 }
-                if allowed.contains("mark_ready") && !allowed.contains("move") {
+                if allowed.contains("mark_ready"), !allowed.contains("move") {
                     Section {
                         Button("设为可开始") { Task { await apply("mark_ready") } }
                     }
@@ -328,12 +333,20 @@ private struct TaskStatusView: View {
                     Button("关闭") { dismiss() }.disabled(isWorking)
                 }
             }
-            .task { if allowed.contains("start") { await loadAgents() } }
+            .task {
+                if allowed.contains("start") {
+                    await loadAgents()
+                }
+            }
             .confirmationDialog("取消任务？", isPresented: $confirmsCancel, titleVisibility: .visible) {
                 Button("取消任务", role: .destructive) { Task { await apply("close", resolution: "cancelled") } }
                 Button("保留任务", role: .cancel) {}
             } message: { Text("结束此任务，不标记为完成。之后可以重新打开。") }
-            .alert("操作失败", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {
+            .alert("操作失败", isPresented: Binding(get: { error != nil }, set: {
+                if !$0 {
+                    error = nil
+                }
+            })) {
                 Button("关闭并刷新") { dismiss() }
                 Button("好", role: .cancel) { error = nil }
             } message: { Text(error ?? "未知错误") }
@@ -361,9 +374,12 @@ private struct TaskStatusView: View {
     }
 
     @MainActor private func apply(_ command: String, phase: String? = nil,
-                                  resolution: String = "done", agentID: String? = nil) async {
+                                  resolution: String = "done", agentID: String? = nil) async
+    {
         guard !isWorking, allowed.contains(command) else { return }
-        if command == "close" && resolution == "done" && TaskAcceptanceStatus.completionBlock(in: detail) != nil { return }
+        if command == "close", resolution == "done", TaskAcceptanceStatus.completionBlock(in: detail) != nil {
+            return
+        }
         isWorking = true
         defer { isWorking = false }
         do {
