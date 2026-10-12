@@ -1,8 +1,8 @@
 import type { z } from 'zod';
 
 import type { ResponsePreferencesSchema } from '../agent-config/index.js';
-import { PERSONAL_COMMUNICATION_RULES, PERSONAL_RELIABILITY_RULES, PERSONAL_PREVIOUS_DELEGATION_COMMUNICATION } from './communication.js';
-import { PERSONAL_REPLY_EXAMPLES, PERSONAL_REPLY_STYLE_RULES } from './reply-style.js';
+import { PERSONAL_COMMUNICATION_RULES, PERSONAL_RELIABILITY_RULES, PERSONAL_PREVIOUS_DELEGATION_COMMUNICATION, PERSONAL_PREVIOUS_RESULT_COMMUNICATION } from './communication.js';
+import { PERSONAL_REPLY_EXAMPLES, PERSONAL_REPLY_STYLE_RULES, PREVIOUS_PERSONAL_REPLY_EXAMPLES, PREVIOUS_PERSONAL_REPLY_STYLE_RULES } from './reply-style.js';
 import {
   PERSONAL_PERSONA_GUIDANCE, PREVIOUS_PERSONAL_PERSONA_GUIDANCE,
   PERSONAL_EMOTIONAL_STYLE_RULE, PREVIOUS_PERSONAL_EMOTIONAL_STYLE_RULE,
@@ -48,7 +48,10 @@ const TOOL_BOUNDARY_RULE = 'Your main chat has narrow local and coordination too
 const PREVIOUS_LARGE_READ_RULE = 'When an attachment is marked large, or a local read returns requiresSpecialist, do not read repeated chunks in the main chat or treat an excerpt as the complete source. Briefly tell the user that the material is large and a specialist will read and process it. Then discover a suitable Agent with personal_task and create the Task within the existing request, without asking permission again. Include the original URI, absolute path or object kind and ID, the full user objective, and a requirement to inspect the complete material. Never claim delegation succeeded before the tool confirms it. Ordinary paginated lists and history excerpts are sufficient for narrow questions; delegate when complete or bulk processing is needed.';
 const LARGE_READ_RULE = 'When an attachment is marked large, or a local read returns requiresSpecialist, do not read repeated chunks in the main chat or treat an excerpt as the complete source. Briefly tell the user that the material is large and a specialist will read and process it. Then choose from the injected specialist snapshot (discover only if needed) and create the Task with personal_task within the existing request, without asking permission again. Include the original URI, absolute path or object kind and ID, the full user objective, and a requirement to inspect the complete material. Never claim delegation succeeded before the tool confirms it. Ordinary paginated lists and history excerpts are sufficient for narrow questions; delegate when complete or bulk processing is needed.';
 
-const CONVERSATION_INTERRUPTION_RULE = 'A new user message takes priority over your current reply. Treat it as a clarification, a change of topic, or a cancellation according to its meaning; interruption alone does not cancel delegated Tasks. Use the preserved conversation and tool outcomes. An interrupted tool may already have had effects: verify its actual state before repeating a consequential operation. Follow the latest request when explaining a previously requested result.';
+export const PREVIOUS_PERSONAL_INTERRUPTION_RULE = 'A new user message takes priority over your current reply. Treat it as a clarification, a change of topic, or a cancellation according to its meaning; interruption alone does not cancel delegated Tasks. Use the preserved conversation and tool outcomes. An interrupted tool may already have had effects: verify its actual state before repeating a consequential operation. Follow the latest request when explaining a previously requested result.';
+const CONVERSATION_INTERRUPTION_RULE = 'A new user message takes priority over your current reply. Interpret it in the ongoing exchange: it may be an acknowledgement, continuation, clarification, topic change, or explicit request to stop. An acknowledgement or interruption alone does not cancel delegated Tasks or require a new clarification. Use the preserved conversation and tool outcomes. An interrupted tool may already have had effects: verify its actual state before repeating a consequential operation. Follow the latest request when explaining a previously requested result.';
+const PREVIOUS_BRIEF_REPLY_RULE = 'Keep replies short and lead with the answer.';
+const BRIEF_REPLY_RULE = 'Keep replies short and respond to the current request in a natural sentence.';
 
 const FAST_CONVERSATION_RULE = 'Keep ordinary conversation flowing. For missing information, ask one short question directly in your reply and finish the turn; accept the next typed or spoken answer normally. Never use clarify or a blocking form for ordinary questions. Formal authorization for consequential actions still uses the host approval flow. Before tool discovery or delegation for lengthy work, immediately say one brief sentence describing your intent, then call the tools. Do not claim work has started or succeeded until confirmed. After successful delegation, finish without repeating an acknowledgement already given; report any failure or required action.';
 
@@ -85,7 +88,7 @@ export function personalInstructions(preferences: PersonalPreferences): string {
   if (preferences.warmth) rules.push({ reserved: 'Tone: calm and direct; skip emotional preambles.', balanced: 'Tone: friendly and natural.', gentle: 'Tone: softly supportive without being sentimental.' }[preferences.warmth]);
   if (preferences.humor) rules.push({ none: 'Do not add jokes.', occasional: 'Use an occasional light touch when the moment fits.', playful: 'Be lightly playful in easy moments.' }[preferences.humor]);
   if (preferences.supportMode) rules.push({ listen: 'When the user is struggling, listen and reflect briefly before proposing fixes.', untangle: 'When the user is struggling, help name the core problem and make it manageable.', solutions: 'When the user is struggling, offer a concrete next step promptly.' }[preferences.supportMode]);
-  if (preferences.detailLevel) rules.push({ brief: 'Keep replies short and lead with the answer.', balanced: 'Give the answer and only the context needed to act.', detailed: 'Explain reasoning and tradeoffs when useful.' }[preferences.detailLevel]);
+  if (preferences.detailLevel) rules.push({ brief: BRIEF_REPLY_RULE, balanced: 'Give the answer and only the context needed to act.', detailed: 'Explain reasoning and tradeoffs when useful.' }[preferences.detailLevel]);
   if (preferences.proactivity) rules.push({ decisions: 'Only proactively surface decisions and outcomes.', important: 'Proactively surface important milestones as well as outcomes.', open: 'You may offer useful suggestions without flooding the user.' }[preferences.proactivity]);
   return rules.join('\n');
 }
@@ -104,6 +107,14 @@ const PREVIOUS_SOURCE_PRESENTATION_RULES = [
   'Synthesis means understanding and organizing, not always shortening. Preserve requested lists, exact text, code, translations, important sources, limitations, and partial failures. Never make an uncertain result sound confirmed just to keep the reply smooth.',
 ] as const;
 
+/** Remove only whole known generated blocks, preserving surrounding user instructions. */
+function removeGeneratedBlock(instructions: string, block: string): string {
+  let padded = `\n${instructions}\n`;
+  const match = `\n${block}\n`;
+  while (padded.includes(match)) padded = padded.replace(match, '\n');
+  return padded.slice(1, -1);
+}
+
 /** Refresh known generated rules without replacing custom instructions. */
 export function upgradePersonalInstructions(instructions: string, legacyName?: string): string {
   const oldRule = [PREVIOUS_FAST_DELEGATION_RULES.join('\n'), PREVIOUS_MAIN_DELEGATION_RULES, PRIOR_DELEGATION_RULES, PREVIOUS_DELEGATION_RULES, LEGACY_DELEGATION_RULE]
@@ -121,6 +132,11 @@ export function upgradePersonalInstructions(instructions: string, legacyName?: s
   for (const rule of PREVIOUS_SOURCE_PRESENTATION_RULES) {
     nextInstructions = nextInstructions.replace(rule, '').trim();
   }
+  for (const block of [...PREVIOUS_PERSONAL_REPLY_STYLE_RULES, PREVIOUS_PERSONAL_REPLY_EXAMPLES, PERSONAL_PREVIOUS_RESULT_COMMUNICATION, PREVIOUS_PERSONAL_INTERRUPTION_RULE]) {
+    nextInstructions = removeGeneratedBlock(nextInstructions, block);
+  }
+  const withoutOldBriefRule = removeGeneratedBlock(nextInstructions, PREVIOUS_BRIEF_REPLY_RULE);
+  if (withoutOldBriefRule !== nextInstructions) nextInstructions = `${withoutOldBriefRule}\n${BRIEF_REPLY_RULE}`;
   if (legacyNameRule) nextInstructions = nextInstructions.replace(legacyNameRule, USER_NAME_RULE);
   for (const rule of [...DELEGATION_RULES, FAST_CONVERSATION_RULE, CONVERSATION_INTERRUPTION_RULE]) {
     if (!nextInstructions.includes(rule)) nextInstructions += `\n${rule}`;

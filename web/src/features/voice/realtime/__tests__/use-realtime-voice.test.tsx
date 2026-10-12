@@ -318,6 +318,35 @@ describe('useRealtimeVoice', () => {
     expect(voice.phase).toBe('idle');
   });
 
+  it('plays an opening after connection without waiting for capture or a user turn', async () => {
+    let releaseCapture!: () => void;
+    const captureGate = new Promise<void>((resolve) => { releaseCapture = resolve; });
+    const capture = mocks.startCapture.getMockImplementation()!;
+    mocks.startCapture.mockImplementationOnce(async (...args) => { await captureGate; return capture(...args); });
+    const outputReady = vi.fn();
+    const connect = mocks.connect.getMockImplementation()!;
+    mocks.connect.mockImplementationOnce(async (options) => ({ ...await connect(options), outputReady }));
+    render();
+    let pending!: Promise<void>;
+    await act(async () => {
+      pending = voice.startVoiceConversation('personal-call', 'assistant');
+      await Promise.resolve();
+    });
+    await vi.waitFor(() => expect(mocks.startCapture).toHaveBeenCalledOnce());
+    expect(outputReady).toHaveBeenCalledOnce();
+    expect(voice.phase).toBe('starting');
+    expect(sendAudio).not.toHaveBeenCalled();
+    expect(commit).not.toHaveBeenCalled();
+    act(() => {
+      onEvent({ type: 'response.created', payload: { responseId: 'opening' } });
+      onAudio(new ArrayBuffer(960), 'opening');
+    });
+    expect(mocks.playerEnqueue).toHaveBeenCalledOnce();
+    await act(async () => { releaseCapture(); await pending; });
+    expect(voice.phase).toBe('recording');
+    expect(outputReady).toHaveBeenCalledOnce();
+  });
+
   it('selects Omni explicitly and ignores cancelled-response audio and text', async () => {
     render();
     await act(async () => voice.startVoiceConversation('agent:main:webchat:default:direct:voice', 'natural'));

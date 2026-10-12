@@ -489,6 +489,9 @@ export function useRealtimeVoice(options: UseRealtimeVoiceOptions): UseRealtimeV
       slowConnectionTimerRef.current = null;
       clientRef.current = client;
       maxSessionMsRef.current = client.session.limits.maxSessionMs;
+      // Output is ready independently of microphone capture. Let the opening
+      // play as soon as the authenticated connection and player are ready.
+      client.outputReady();
       stage = 'recorder';
       updatePhase('starting');
       let encoder: PcmStreamEncoder | undefined;
@@ -526,7 +529,6 @@ export function useRealtimeVoice(options: UseRealtimeVoiceOptions): UseRealtimeV
       updatePhase('recording');
       setCallConnectionStage(null);
       startTimer();
-      client.outputReady();
     } catch (error) {
       if (!isCurrent()) return;
       const failureKind = classifyVoiceCaptureFailure(stage, error);
