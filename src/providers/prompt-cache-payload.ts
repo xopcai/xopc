@@ -185,7 +185,7 @@ function addOpenAIHistoryBreakpoint(items: unknown): unknown {
       next[index] = { ...item, output: addBreakpointToContent(item.output) };
       return next;
     }
-    if (!('content' in item)) continue;
+    if (item.role === 'system' || item.role === 'developer' || !('content' in item)) continue;
     if (index === next.length - 1 && item.role === 'user') continue;
     const content = addBreakpointToContent(item.content);
     if (content === item.content) continue;
@@ -205,28 +205,30 @@ function applyOpenAIExplicitCache(
   const split = splitPromptCacheBoundary(context.systemPrompt ?? '');
   const stablePrompt = split?.stablePrefix ?? stripPromptCacheBoundary(context.systemPrompt ?? '');
   const dynamicPrompt = split?.dynamicSuffix ?? '';
-  const stableContent = [{
-    type: 'input_text',
-    text: stablePrompt,
-    prompt_cache_breakpoint: { mode: 'explicit' },
-  }];
-  const dynamicContent = [{ type: 'input_text', text: dynamicPrompt }];
-
   if (Array.isArray(record.input)) {
-    const expectedInstructions = stripPromptCacheBoundary(context.systemPrompt ?? '');
-    const canReplaceInstructions = record.instructions === undefined
-      || record.instructions === expectedInstructions;
+    const input = [...record.input];
+    const initialMessage = asRecord(input[0]);
+    const content = initialMessage?.content;
+    const initialText = typeof content === 'string'
+      ? content
+      : Array.isArray(content) && content.length === 1 && asRecord(content[0])?.type === 'input_text'
+        ? asRecord(content[0])?.text
+        : undefined;
+    if ((initialMessage?.role === 'system' || initialMessage?.role === 'developer')
+      && initialText === stripPromptCacheBoundary(context.systemPrompt ?? '')
+      && stablePrompt) {
+      // Responses instructions is a string; cache breakpoints belong in input content blocks.
+      input[0] = {
+        ...initialMessage,
+        content: [
+          { type: 'input_text', text: stablePrompt, prompt_cache_breakpoint: { mode: 'explicit' } },
+          ...(dynamicPrompt ? [{ type: 'input_text', text: dynamicPrompt }] : []),
+        ],
+      };
+    }
     return {
       ...record,
-      ...(canReplaceInstructions
-        ? {
-            instructions: [
-              { type: 'message', role: 'system', content: stableContent },
-              ...(dynamicPrompt ? [{ type: 'message', role: 'system', content: dynamicContent }] : []),
-            ],
-          }
-        : {}),
-      input: addOpenAIHistoryBreakpoint(record.input),
+      input: addOpenAIHistoryBreakpoint(input),
       prompt_cache_key: cacheKey,
       prompt_cache_options: { mode: 'explicit', ttl: '30m' },
     };
@@ -278,6 +280,12 @@ export function withPromptCachePayloadTransform(
   policyInput?: PromptCachePolicy,
 ): SimpleStreamOptions {
   const plan = buildPromptCachePlan(model, context, policyInput, options?.reasoning);
+  // Match pi's subscription credential detection and preserve its cache-field restrictions.
+  if (plan.providerMode === 'explicit' && model.provider === 'openai'
+    && model.baseUrl === 'https://api.openai.com/v1'
+    && options?.apiKey !== undefined && !options.apiKey.startsWith('sk-')) {
+    plan.providerMode = 'implicit';
+  }
   const upstream = options?.onPayload;
   const cacheRetention = model.api === 'anthropic-messages' || model.api === 'bedrock-converse-stream'
     ? plan.providerMode === 'none' ? 'none' : plan.policy.lifetime
