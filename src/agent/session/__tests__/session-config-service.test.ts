@@ -184,13 +184,15 @@ describe('SessionConfigService project workspace', () => {
     expect((await sessionConfigStore.get(CONVERSATION_ID))!.updatedAt).toBeGreaterThan(saved!.updatedAt!);
   });
 
-  it('keeps persisted configuration authoritative if runtime synchronization fails', async () => {
+  it('saves next-turn configuration without changing or evicting the current agent', async () => {
     seedConversationFixtures();
     const { service, sessionConfigStore, runtime } = modelFixture();
     runtime.setModelForSession.mockImplementation(() => { throw new Error('Runtime unavailable'); });
     expect(await service.patch(CONVERSATION_ID, { model: 'test/first', thinkingLevel: 'high', fixedModel: true })).toEqual({ ok: true });
     expect(await sessionConfigStore.get(CONVERSATION_ID)).toMatchObject({ modelOverride: 'test/first', thinkingLevel: 'high' });
-    expect(runtime.removeAgent).toHaveBeenCalledWith(CONVERSATION_ID);
+    expect(runtime.setModelForSession).not.toHaveBeenCalled();
+    expect(runtime.setThinkingLevel).not.toHaveBeenCalled();
+    expect(runtime.removeAgent).not.toHaveBeenCalled();
   });
 
   it('restores unavailable models visibly and normalizes stale effort preferences for new chats', async () => {
