@@ -20,6 +20,9 @@ import {
   resetXopcDatabaseSingletonForTest,
 } from '../../../storage/sqlite/index.js';
 import { runGatewayAgent, type RunGatewayAgentDeps } from '../run-gateway-agent.js';
+import { getSqliteDatabase } from '../../../storage/sqlite/transaction.js';
+import { personalAgentId } from '../../../personal-agent/repository.js';
+import { AgentCatalogRepository } from '../../../agent-catalog/repository.js';
 
 describe('runGatewayAgent', () => {
   let stateDir: string;
@@ -158,8 +161,16 @@ describe('runGatewayAgent', () => {
     }]);
   });
 
-  it('emits one global terminal event with safe session metadata', async () => {
+  it.each([false, true])('emits one global terminal event with safe session metadata (personal=%s)', async (personal) => {
     const conversationId = "1f0d2f37-a857-4724-82d9-3eee13a09dff";
+    if (personal) {
+      const agentId = personalAgentId('local-owner');
+      const catalog = new AgentCatalogRepository();
+      catalog.ensureInitialized();
+      catalog.create({ id: agentId, profile: { name: 'Personal' } }, { ready: true });
+      getSqliteDatabase().prepare("UPDATE sessions SET custom_data_json = ?, agent_id = ? WHERE conversation_id = ?")
+        .run(JSON.stringify({ personalAgent: true }), agentId, conversationId);
+    }
     let deliverAudio!: (audio: { type: 'tts_audio'; uri: string; name: string; mimeType: string }) => void;
     const emitted: Array<{ type: string; payload: unknown }> = [];
     const realtimeEvents: Array<{ topic: string; event: string; data: unknown }> = [];
@@ -234,6 +245,10 @@ describe('runGatewayAgent', () => {
     expect(firstTextLogs[0]![0]).toMatchObject({ conversationId, runId: 'run-terminal', phase: 'first_response_text' });
     expect(firstTextLogs[0]![0].inputToTextMs).toBeGreaterThanOrEqual(1000);
     expect(firstTextLogs[0]![0].queueMs).toBeGreaterThanOrEqual(1000);
+    for (const event of realtimeEvents.filter(item => ['run_start', 'assistant_message_start', 'assistant_delta'].includes(item.event))) {
+      const payload = (event.data as { payload: { textSurface?: string } }).payload;
+      expect(payload.textSurface).toBe(personal ? 'conversation' : undefined);
+    }
 
     expect(emitted.filter((event) => event.type === 'agent.run.ended')).toEqual([{
       type: 'agent.run.ended',

@@ -1,9 +1,33 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { buildAssistantTurnViewModel } from '@/features/chat/messages/assistant-turn-view-model';
 import type { Message, ReasoningLevel } from '@/features/chat/messages/messages.types';
 
 describe('buildAssistantTurnViewModel', () => {
+  it.each(['off', 'on', 'stream'] as const)('shows public Personal text immediately with %s reasoning detail', (reasoningLevel) => {
+    const message: Message = { role: 'assistant', textSurface: 'conversation', content: [
+      { type: 'thinking', text: 'private thought', streaming: true },
+      { type: 'text', text: '我先核对数值。', presentation: 'pending' },
+      { type: 'tool_use', id: 'check', name: 'personal_task', status: 'running' },
+    ] };
+    const live = buildAssistantTurnViewModel({ message, isStreaming: true, reasoningLevel });
+    expect(live.answerContent).toEqual([message.content[1]]);
+    expect(live.answer.started).toBe(true);
+    expect(live.lifecycle.state).toBe('using_tool');
+    expect(live.workLog.items.some((block) => block.type === 'text')).toBe(false);
+    const history = { ...message, textSurface: undefined, content: message.content.map((block) =>
+      block.type === 'text' ? { ...block, presentation: 'narration' as const } : block) };
+    expect(buildAssistantTurnViewModel({ message: history, personal: true, isStreaming: false, reasoningLevel }).answerContent)
+      .toEqual([history.content[1]]);
+  });
+
+  it('can roll back conversation text presentation without changing stored content', () => {
+    vi.stubEnv('VITE_PERSONAL_PROGRESSIVE_RESPONSE', 'false');
+    try {
+      const message: Message = { role: 'assistant', textSurface: 'conversation', content: [{ type: 'text', text: 'Checking.', presentation: 'pending' }] };
+      expect(buildAssistantTurnViewModel({ message, personal: true, isStreaming: true, reasoningLevel: 'off' }).answer.started).toBe(false);
+    } finally { vi.unstubAllEnvs(); }
+  });
   it('holds a status row before the first event and yields its place to an immediate answer', () => {
     const empty = buildAssistantTurnViewModel({ message: { role: 'assistant', content: [] }, isStreaming: true, reasoningLevel: 'stream' });
     expect(empty.workLog.active).toBe(true);

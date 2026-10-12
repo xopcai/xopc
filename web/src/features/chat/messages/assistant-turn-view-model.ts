@@ -24,6 +24,7 @@ import {
 import { extractProductDelivery } from '@/features/chat/product-delivery/product-delivery';
 import { isProductDeliveryVisibleResult } from '@/features/chat/product-delivery/product-delivery-model';
 import type { ProductDeliveryEnvelope } from '@xopcai/gateway-contract';
+import { usesConversationText } from './personal-text-surface';
 
 export type AssistantTurnLifecycleState =
   | 'starting'
@@ -75,16 +76,20 @@ export function buildAssistantTurnViewModel({
   message,
   isStreaming,
   reasoningLevel,
+  personal = false,
 }: {
   message: Message;
   isStreaming: boolean;
   reasoningLevel: ReasoningLevel;
+  personal?: boolean;
 }): AssistantTurnViewModel {
+  // The Personal page also supplies this mode for historical messages.
+  const conversationalText = usesConversationText(message, personal);
   const answerContent = (message.content ?? []).filter((block) => (
     block.type === 'review'
     || (block.type === 'text'
-      && block.presentation !== 'pending'
-      && block.presentation !== 'narration')
+      && (conversationalText || (block.presentation !== 'pending'
+        && block.presentation !== 'narration')))
   ));
   const allActivityBlocks = filterVisibleSteps(collectTurnActivityBlocks(message.content ?? []));
   const workLogItems = (message.content ?? []).filter(
@@ -93,11 +98,14 @@ export function buildAssistantTurnViewModel({
       if (reasoningLevel === 'off') return false;
       if (block.type === 'thinking') return Boolean(block.text?.trim()) || Boolean(block.streaming);
       return block.type === 'text'
+        && !conversationalText
         && (block.presentation === 'pending' || block.presentation === 'narration')
         && Boolean(block.text?.trim());
     },
   );
-  const answerStarted = hasAssistantAnswerText(answerContent);
+  const answerStarted = conversationalText
+    ? answerContent.some((block) => block.type === 'text' && Boolean(block.text?.trim()))
+    : hasAssistantAnswerText(answerContent);
   const toolBlocks = allActivityBlocks.filter(
     (block): block is ToolUseContent => block.type === 'tool_use',
   );
