@@ -390,9 +390,7 @@ extension AssistantState {
             guard loadedConversationID == conversation.id, !Task.isCancelled else { return }
             let projected = await projectHistory(history)
             guard loadedConversationID == conversation.id, !Task.isCancelled else { return }
-            let results = projected.filter {
-                $0.turnId?.hasPrefix("task-result:") == true
-            }
+            let results = projected.filter { $0.turnId?.hasPrefix("task-result:") == true }
             let known = Set(messages.compactMap(\.turnId))
             messages.append(contentsOf: results.filter { !known.contains($0.turnId ?? "") })
         } catch { /* Background refresh must not erase the live reply. */ }
