@@ -5,7 +5,7 @@ struct ChatRenderingTests {
     @MainActor @Test func continuousPacketsCommitBeforeTheStreamBecomesQuiet() async throws {
         let state = AssistantState()
         state.apply(delta("字", offset: 0), runID: "r")
-        for offset in 1..<10 {
+        for offset in 1 ..< 10 {
             state.apply(delta("字", offset: offset), runID: "r")
             try await Task.sleep(for: .milliseconds(8))
         }
@@ -23,6 +23,7 @@ struct ChatRenderingTests {
         #expect(state.messages.isEmpty)
         #expect(state.executionActivity.last?.title == "Reading files")
     }
+
     @MainActor @Test func buffersReceivedOffsetsAndFlushesAtTermination() {
         let state = AssistantState()
         state.apply(delta("你😀", offset: 0), runID: "r")

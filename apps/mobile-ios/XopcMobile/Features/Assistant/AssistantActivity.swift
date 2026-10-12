@@ -2,7 +2,8 @@ import Foundation
 
 extension AssistantState {
     static func activity(_ event: RunStreamEvent, label: String?, items: [ExecutionActivityItem])
-    -> (label: String?, items: [ExecutionActivityItem]) {
+        -> (label: String?, items: [ExecutionActivityItem])
+    {
         var label = label
         var items = items
         func append(id: String, title: String) {

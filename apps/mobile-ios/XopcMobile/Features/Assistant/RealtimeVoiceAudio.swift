@@ -101,8 +101,12 @@ final class RealtimeVoiceAudio {
 
     func ensurePlaybackReady() throws {
         guard let engine, let player else { throw RealtimeVoiceAudioError.notStarted }
-        if !engine.isRunning { try engine.start() }
-        if !player.isPlaying { player.play() }
+        if !engine.isRunning {
+            try engine.start()
+        }
+        if !player.isPlaying {
+            player.play()
+        }
         guard engine.isRunning, player.isPlaying else { throw RealtimeVoiceAudioError.notStarted }
     }
 

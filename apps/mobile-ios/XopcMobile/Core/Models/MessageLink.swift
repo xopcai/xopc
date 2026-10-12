@@ -21,9 +21,13 @@ enum ChatMessageLink: Equatable, Identifiable {
         let query = Dictionary((components.queryItems ?? []).map { ($0.name, $0.value ?? "") },
                                uniquingKeysWith: { _, latest in latest })
         if source.hasPrefix("xopc-file:"), let id = String(source.dropFirst(10)).removingPercentEncoding,
-           validID(id) { return .managedFile(id: id) }
+           validID(id)
+        {
+            return .managedFile(id: id)
+        }
         if (components.scheme == "xopc" && components.host == "workspace" && components.path == "/file") ||
-            (components.scheme == nil && source.hasPrefix("/") && !source.hasPrefix("//") && components.path == "/xopc/workspace/file") {
+            (components.scheme == nil && source.hasPrefix("/") && !source.hasPrefix("//") && components.path == "/xopc/workspace/file")
+        {
             guard let path = query["path"], !path.isEmpty, validPath(path) else { return nil }
             return .workspaceFile(path: path)
         }
@@ -43,7 +47,8 @@ enum ChatMessageLink: Equatable, Identifiable {
             return .route(page: "automations", itemID: id)
         }
         if path.hasPrefix("/workflows/runs/"),
-           let id = String(path.dropFirst("/workflows/runs/".count)).removingPercentEncoding, validID(id) {
+           let id = String(path.dropFirst("/workflows/runs/".count)).removingPercentEncoding, validID(id)
+        {
             return .route(page: "workflows", itemID: id)
         }
         let pieces = path.split(separator: "/", omittingEmptySubsequences: false)
@@ -60,7 +65,10 @@ enum ChatMessageLink: Equatable, Identifiable {
         return true
     }
 
-    private static func validID(_ id: String) -> Bool { !id.isEmpty && !id.contains("/") && validPath(id) }
+    private static func validID(_ id: String) -> Bool {
+        !id.isEmpty && !id.contains("/") && validPath(id)
+    }
+
     private static func validPath(_ path: String) -> Bool {
         !path.contains("\\") && path.rangeOfCharacter(from: .controlCharacters) == nil && !path.split(separator: "/").contains("..")
     }

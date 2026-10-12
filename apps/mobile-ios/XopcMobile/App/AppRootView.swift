@@ -73,7 +73,9 @@ struct AppRootView: View {
             ChatMessageLinkDestination(link: link, appState: appState, router: messageLinks)
         }
         .alert("无法打开链接", isPresented: Binding(get: { messageLinks.errorMessage != nil }, set: {
-            if !$0 { messageLinks.errorMessage = nil }
+            if !$0 {
+                messageLinks.errorMessage = nil
+            }
         })) {
             Button("关闭", role: .cancel) { messageLinks.errorMessage = nil }
         } message: { Text(messageLinks.errorMessage ?? "") }

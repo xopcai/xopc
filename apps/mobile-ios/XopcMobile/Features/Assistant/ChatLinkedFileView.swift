@@ -9,11 +9,13 @@ struct ChatLinkedFileView: View {
 
     var body: some View {
         Group {
-            if let file { FilePreviewView(configuration: configuration, file: file) }
-            else if let error { Label(error, systemImage: "exclamationmark.triangle").foregroundStyle(.secondary).padding() }
-            else {
+            if let file {
+                FilePreviewView(configuration: configuration, file: file)
+            } else if let error {
+                Label(error, systemImage: "exclamationmark.triangle").foregroundStyle(.secondary).padding()
+            } else {
                 VStack(spacing: 12) {
-                    ForEach(0..<4) { _ in RoundedRectangle(cornerRadius: 8).fill(.quaternary).frame(height: 40) }
+                    ForEach(0 ..< 4) { _ in RoundedRectangle(cornerRadius: 8).fill(.quaternary).frame(height: 40) }
                 }.padding()
             }
         }
@@ -28,7 +30,7 @@ struct ChatLinkedFileView: View {
             case let .route(_, id): uri = "xopc-file:\(id)"; path = nil
             }
             let attachment = HistoryAttachment(mediaID: uri, type: "file", name: path ?? "文件", mimeType: nil,
-                size: nil, uri: uri, duration: nil, workspaceRelativePath: path, extractedText: nil)
+                                               size: nil, uri: uri, duration: nil, workspaceRelativePath: path, extractedText: nil)
             do {
                 let resolved = try await ChatAttachmentLoader(configuration: configuration)
                     .resolveManagedFile(attachment, conversationID: conversationID)

@@ -25,18 +25,34 @@ struct StreamingMarkdownText: View {
                 guard !Task.isCancelled else { return }
                 let added = count - renderedCount
                 let fade = bounded && streaming && !reduceMotion && scenePhase == .active && !rendered.isEmpty &&
-                    next.hasPrefix(rendered) && (1...256).contains(added)
+                    next.hasPrefix(rendered) && (1 ... 256).contains(added)
                 if fade {
                     let split = parsed.characters.index(parsed.startIndex, offsetBy: renderedCount)
                     prefix = AttributedString(parsed[..<split]); suffix = AttributedString(parsed[split...])
-                } else { prefix = parsed; suffix = AttributedString() }
+                } else {
+                    prefix = parsed; suffix = AttributedString()
+                }
                 rendered = next
                 renderedCount = count
                 tailAlpha = fade ? 0.45 : 1
-                if fade { withAnimation(.easeOut(duration: 0.18)) { tailAlpha = 1 } }
+                if fade {
+                    withAnimation(.easeOut(duration: 0.18)) { tailAlpha = 1 }
+                }
             }
-            .onChange(of: streaming) { if !streaming { tailAlpha = 1 } }
-            .onChange(of: reduceMotion) { if reduceMotion { tailAlpha = 1 } }
-            .onChange(of: scenePhase) { if scenePhase != .active { tailAlpha = 1 } }
+            .onChange(of: streaming) {
+                if !streaming {
+                    tailAlpha = 1
+                }
+            }
+            .onChange(of: reduceMotion) {
+                if reduceMotion {
+                    tailAlpha = 1
+                }
+            }
+            .onChange(of: scenePhase) {
+                if scenePhase != .active {
+                    tailAlpha = 1
+                }
+            }
     }
 }

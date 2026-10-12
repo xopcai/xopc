@@ -18,7 +18,9 @@ struct AssistantRecoveryTests {
         let sender = Task { await state.send("Hello", to: conversation, using: gateway) }
         defer { state.pauseConversation(); sender.cancel(); stream.continuation.finish() }
         for _ in 0 ..< 100 {
-            if await receipt.sendCount == 1 { break }
+            if await receipt.sendCount == 1 {
+                break
+            }
             try await Task.sleep(for: .milliseconds(10))
         }
         #expect(state.isSending)

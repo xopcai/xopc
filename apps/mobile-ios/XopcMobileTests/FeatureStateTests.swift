@@ -370,5 +370,7 @@ actor PendingReceiptGate {
         continuation = nil
     }
 
-    func recordAbort() { abortCount += 1 }
+    func recordAbort() {
+        abortCount += 1
+    }
 }

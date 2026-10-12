@@ -69,46 +69,50 @@ private struct MarkdownPartView: View {
             .fixedSize(horizontal: false, vertical: true)
         case let .code(text):
             VStack(alignment: .leading, spacing: 4) {
-            HStack {
-                Spacer()
-                Button("复制代码") { UIPasteboard.general.string = text }
-            }
-            ScrollView(.horizontal) {
-                Text(expanded ? text : codePreview(text))
-                    .font(.system(.footnote, design: .monospaced))
-                    .textSelection(.enabled)
-                    .padding(12)
-            }
-            .background(Color.secondary.opacity(0.09), in: .rect(cornerRadius: 10))
-            .accessibilityElement(children: .combine)
-            .accessibilityIdentifier("markdown-code")
-            if codePreview(text) != text { Button(expanded ? "收起" : "查看更多") { expanded.toggle() }.frame(minHeight: 44) }
+                HStack {
+                    Spacer()
+                    Button("复制代码") { UIPasteboard.general.string = text }
+                }
+                ScrollView(.horizontal) {
+                    Text(expanded ? text : codePreview(text))
+                        .font(.system(.footnote, design: .monospaced))
+                        .textSelection(.enabled)
+                        .padding(12)
+                }
+                .background(Color.secondary.opacity(0.09), in: .rect(cornerRadius: 10))
+                .accessibilityElement(children: .combine)
+                .accessibilityIdentifier("markdown-code")
+                if codePreview(text) != text {
+                    Button(expanded ? "收起" : "查看更多") { expanded.toggle() }.frame(minHeight: 44)
+                }
             }
         case let .image(alt, source):
             MarkdownImageView(alt: alt, source: source, configuration: configuration, conversationID: conversationID)
         case let .table(rows, alignments):
             VStack(alignment: .leading, spacing: 4) {
-            ScrollView(.horizontal) {
-                VStack(alignment: .leading, spacing: 4) {
-                    ForEach(Array((expanded ? rows : Array(rows.prefix(40))).enumerated()), id: \.element.id) { rowIndex, row in
-                        HStack(alignment: .top, spacing: 0) {
-                            ForEach(Array(row.cells.enumerated()), id: \.element.id) { columnIndex, cell in
-                                StreamingMarkdownText(source: cell.text, streaming: false)
-                                    .fontWeight(row.isHeader ? .semibold : .regular)
-                                    .multilineTextAlignment(textAlignment(columnIndex < alignments.count ? alignments[columnIndex] : .leading))
-                                    .frame(width: 168, alignment: frameAlignment(columnIndex < alignments.count ? alignments[columnIndex] : .leading))
-                                    .padding(10)
+                ScrollView(.horizontal) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        ForEach(Array((expanded ? rows : Array(rows.prefix(40))).enumerated()), id: \.element.id) { rowIndex, row in
+                            HStack(alignment: .top, spacing: 0) {
+                                ForEach(Array(row.cells.enumerated()), id: \.element.id) { columnIndex, cell in
+                                    StreamingMarkdownText(source: cell.text, streaming: false)
+                                        .fontWeight(row.isHeader ? .semibold : .regular)
+                                        .multilineTextAlignment(textAlignment(columnIndex < alignments.count ? alignments[columnIndex] : .leading))
+                                        .frame(width: 168, alignment: frameAlignment(columnIndex < alignments.count ? alignments[columnIndex] : .leading))
+                                        .padding(10)
+                                }
                             }
+                            .background(row.isHeader ? Color.secondary.opacity(0.12) : Color.secondary.opacity(0.06))
+                            .clipShape(.rect(cornerRadius: 6))
+                            .accessibilityElement(children: .combine)
+                            .accessibilityIdentifier("markdown-table-row-\(rowIndex)")
                         }
-                        .background(row.isHeader ? Color.secondary.opacity(0.12) : Color.secondary.opacity(0.06))
-                        .clipShape(.rect(cornerRadius: 6))
-                        .accessibilityElement(children: .combine)
-                        .accessibilityIdentifier("markdown-table-row-\(rowIndex)")
                     }
                 }
-            }
-            .accessibilityIdentifier("markdown-table")
-            if rows.count > 40 { Button(expanded ? "收起" : "查看更多") { expanded.toggle() }.frame(minHeight: 44) }
+                .accessibilityIdentifier("markdown-table")
+                if rows.count > 40 {
+                    Button(expanded ? "收起" : "查看更多") { expanded.toggle() }.frame(minHeight: 44)
+                }
             }
         case .divider:
             Divider().padding(.vertical, 4)
@@ -118,11 +122,14 @@ private struct MarkdownPartView: View {
     private func inline(_ text: String) -> some View {
         StreamingMarkdownText(source: text, streaming: streaming)
     }
+
     private func codePreview(_ source: String) -> String {
         var cursor = source.startIndex
-        for line in 0..<40 {
+        for line in 0 ..< 40 {
             guard let end = source[cursor...].firstIndex(of: "\n") else { return source }
-            if line == 39 { return String(source[..<end]) }
+            if line == 39 {
+                return String(source[..<end])
+            }
             cursor = source.index(after: end)
         }
         return source

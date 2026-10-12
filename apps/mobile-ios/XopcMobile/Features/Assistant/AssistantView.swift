@@ -370,7 +370,9 @@ struct AssistantView<Dock: View>: View {
                             )
                             .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
                                 recordReplyRowHeight(message.id, height: height)
-                                if message.id == state.messages.last?.id { scheduleBottomScroll(scroller) }
+                                if message.id == state.messages.last?.id {
+                                    scheduleBottomScroll(scroller)
+                                }
                             }
                         }
                         if state.isRunActive {
