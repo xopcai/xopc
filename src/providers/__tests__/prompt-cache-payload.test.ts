@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Api, Model } from '@earendil-works/pi-ai';
+import { streamSimple } from '@earendil-works/pi-ai/compat';
 
 import { PROMPT_CACHE_BOUNDARY } from '../../agent/prompt/cache-boundary.js';
 import {
@@ -141,13 +142,13 @@ describe('prompt cache payload adaptation', () => {
     expect(transformed.cacheRetention).toBe('none');
   });
 
-  it('uses explicit OpenAI breakpoints for GPT-5.6 Responses', async () => {
+  it('places explicit OpenAI breakpoints in input without duplicating system instructions', async () => {
     const openai = { ...model('openai-responses'), id: 'gpt-5.6' } as Model<Api>;
     const context = { systemPrompt: prompt, tools: [] };
     const options = withPromptCachePayloadTransform(openai, context, undefined);
     const payload = await options.onPayload?.({
-      instructions: 'stable\ndynamic',
       input: [
+        { role: 'developer', content: 'stable\ndynamic' },
         { type: 'message', role: 'user', content: [{ type: 'input_text', text: 'old' }] },
         { type: 'message', role: 'assistant', content: [{ type: 'input_text', text: 'answer' }] },
         { type: 'message', role: 'user', content: [{ type: 'input_text', text: 'current' }] },
@@ -155,9 +156,14 @@ describe('prompt cache payload adaptation', () => {
     }, openai) as Record<string, any>;
 
     expect(payload.prompt_cache_options).toEqual({ mode: 'explicit', ttl: '30m' });
-    expect(payload.instructions[0].content[0].prompt_cache_breakpoint).toEqual({ mode: 'explicit' });
-    expect(payload.input[1].content[0].prompt_cache_breakpoint).toEqual({ mode: 'explicit' });
-    expect(payload.input[2].content[0].prompt_cache_breakpoint).toBeUndefined();
+    expect(payload.instructions).toBeUndefined();
+    expect(payload.input).toHaveLength(4);
+    expect(payload.input[0]).toEqual({ role: 'developer', content: [
+      { type: 'input_text', text: 'stable', prompt_cache_breakpoint: { mode: 'explicit' } },
+      { type: 'input_text', text: 'dynamic' },
+    ] });
+    expect(payload.input[2].content[0].prompt_cache_breakpoint).toEqual({ mode: 'explicit' });
+    expect(payload.input[3].content[0].prompt_cache_breakpoint).toBeUndefined();
   });
 
   it('does not overwrite an upstream OpenAI instruction transform', async () => {
@@ -167,6 +173,78 @@ describe('prompt cache payload adaptation', () => {
     });
     const payload = await options.onPayload?.({ input: [] }, openai) as Record<string, any>;
     expect(payload.instructions).toBe('upstream identity');
+  });
+
+  it('keeps string instructions unchanged for instructions-based payloads', async () => {
+    const openai = { ...model('openai-responses'), id: 'gpt-5.6-sol' } as Model<Api>;
+    const options = withPromptCachePayloadTransform(openai, { systemPrompt: prompt }, undefined);
+    const payload = await options.onPayload?.({ instructions: 'stable\ndynamic', input: [] }, openai);
+    expect(payload).toMatchObject({ instructions: 'stable\ndynamic', input: [] });
+  });
+
+  it('does not cache dynamic system content as a history breakpoint on the first turn', async () => {
+    const openai = { ...model('openai-responses'), id: 'gpt-5.6-sol' } as Model<Api>;
+    const options = withPromptCachePayloadTransform(openai, { systemPrompt: prompt }, undefined);
+    const payload = await options.onPayload?.({ input: [
+      { role: 'system', content: [{ type: 'input_text', text: 'stable\ndynamic' }] },
+      { role: 'user', content: [{ type: 'input_text', text: 'current' }] },
+    ] }, openai) as Record<string, any>;
+    expect(payload.input[0].content[0].prompt_cache_breakpoint).toEqual({ mode: 'explicit' });
+    expect(payload.input[0].content[1]).toEqual({ type: 'input_text', text: 'dynamic' });
+    expect(payload.input[1].content[0].prompt_cache_breakpoint).toBeUndefined();
+  });
+
+  it('preserves upstream input instruction changes', async () => {
+    const openai = { ...model('openai-responses'), id: 'gpt-5.6-sol' } as Model<Api>;
+    const options = withPromptCachePayloadTransform(openai, { systemPrompt: prompt }, undefined);
+    const payload = await options.onPayload?.({ input: [
+      { role: 'developer', content: 'upstream identity' },
+      { role: 'user', content: 'current' },
+    ] }, openai) as Record<string, any>;
+    expect(payload.input[0]).toEqual({ role: 'developer', content: 'upstream identity' });
+  });
+
+  it('preserves pi subscription cache restrictions for ChatGPT OAuth', async () => {
+    const openai = { ...model('openai-responses'), id: 'gpt-5.6-sol', baseUrl: 'https://api.openai.com/v1' } as Model<Api>;
+    const options = withPromptCachePayloadTransform(openai, { systemPrompt: prompt }, { apiKey: 'oauth-token' });
+    const input = [{ role: 'developer', content: 'stable\ndynamic' }, { role: 'user', content: 'current' }];
+    const payload = await options.onPayload?.({ input }, openai);
+    expect(payload).toEqual({ input, prompt_cache_key: buildPromptCacheKey(openai, { systemPrompt: prompt }) });
+  });
+
+  it.each(['sk-test', 'oauth-token'])('sends a valid Responses request through pi with %s credentials', async (apiKey) => {
+    const openai = {
+      ...model('openai-responses'), id: 'gpt-5.6-sol', name: 'GPT-5.6 Sol',
+      baseUrl: 'https://api.openai.com/v1', reasoning: true, input: ['text'],
+      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 128000, maxTokens: 16384,
+    } as Model<Api>;
+    let requestBody: Record<string, any> | undefined;
+    const fetchImpl = vi.fn(async (_url: unknown, init?: RequestInit) => {
+      requestBody = JSON.parse(String(init?.body));
+      if (requestBody?.instructions !== undefined && typeof requestBody.instructions !== 'string') {
+        return new Response(JSON.stringify({ error: { message: 'instructions must be a string' } }), { status: 400 });
+      }
+      const event = { type: 'response.completed', response: { id: 'response-test', status: 'completed', output: [],
+        usage: { input_tokens: 10, output_tokens: 0, total_tokens: 10 } } };
+      return new Response(`data: ${JSON.stringify(event)}\n\n`, { headers: { 'content-type': 'text/event-stream' } });
+    });
+    const context = { systemPrompt: prompt, messages: [{ role: 'user' as const, content: 'hello', timestamp: 0 }] };
+    const stream = streamSimple(openai, preparePromptCacheContext(openai, context),
+      withPromptCachePayloadTransform(openai, context, { apiKey, fetch: fetchImpl, maxRetries: 0 }));
+    const result = await stream.result();
+    expect(result.errorMessage).toBeUndefined();
+    expect(fetchImpl).toHaveBeenCalledOnce();
+    expect(requestBody?.instructions).toBeUndefined();
+    expect(requestBody?.input).toHaveLength(2);
+    if (apiKey === 'oauth-token') {
+      expect(requestBody?.prompt_cache_options).toBeUndefined();
+      expect(requestBody?.input[0].content).toBe('stable\ndynamic');
+    } else {
+      expect(requestBody?.input[0].content).toEqual([
+        { type: 'input_text', text: 'stable', prompt_cache_breakpoint: { mode: 'explicit' } },
+        { type: 'input_text', text: 'dynamic' },
+      ]);
+    }
   });
 
   it('adds an Anthropic history breakpoint before the current user message', () => {
