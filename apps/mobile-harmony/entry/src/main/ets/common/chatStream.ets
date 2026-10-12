@@ -9,8 +9,11 @@ export function reduceChatStream(previous: XopcChatRow | undefined, event: strin
     progress: previous.progress, sourceIds: previous.sourceIds, deliveries: previous.deliveries,
     activity: previous.activity, activityUpdatedAtMs: previous.activityUpdatedAtMs,
     executionActivity: previous.executionActivity,
-    activityTools: previous.activityTools?.map((item: XopcLiveActivityTool): XopcLiveActivityTool => ({ id: item.id, kind: item.kind, status: item.status })),
-    media: previous.media?.slice(), blocks: previous.blocks?.map((block: XopcChatBlock): XopcChatBlock => ({
+    activityTools: event === 'tool_start' || event === 'tool_end'
+      ? previous.activityTools?.map((item: XopcLiveActivityTool): XopcLiveActivityTool => ({ id: item.id, kind: item.kind, status: item.status })) : previous.activityTools,
+    media: event === 'tts_audio' ? previous.media?.slice() : previous.media,
+    blocks: previous.blocks?.map((block: XopcChatBlock): XopcChatBlock =>
+      event === 'assistant_delta' && block.segmentId !== (payload.messageId || runId) ? block : ({
       id: block.id, kind: block.kind, text: block.text, segmentId: block.segmentId, presentation: block.presentation,
       review: block.review })) }
     : { id: 'live:' + runId, role: 'assistant', turnId: runId, text: '', blocks: [], live: true, executionActivity: true };

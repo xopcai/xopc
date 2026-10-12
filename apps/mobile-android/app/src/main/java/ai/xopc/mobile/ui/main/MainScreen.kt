@@ -109,6 +109,7 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.gestures.scrollBy
+import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
@@ -191,6 +192,7 @@ import java.time.YearMonth
 import java.util.Locale
 import java.time.format.DateTimeFormatter
 import kotlin.math.roundToInt
+import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
@@ -1164,6 +1166,7 @@ internal fun MainContent(
   }
   var personalPage by rememberSaveable(connection.profile?.gatewayId) { mutableStateOf("home") }
   var progressAtRoot by rememberSaveable(connection.profile?.gatewayId) { mutableStateOf(true) }
+  var linkedWorkflowRunId by remember(connection.profile?.gatewayId) { mutableStateOf<String?>(null) }
   var notesAtRoot by rememberSaveable(connection.profile?.gatewayId) { mutableStateOf(true) }
   var personalReturnPage by rememberSaveable(connection.profile?.gatewayId) { mutableStateOf("home") }
   var personalStartSection by rememberSaveable(connection.profile?.gatewayId) { mutableStateOf("overview") }
@@ -1558,6 +1561,7 @@ internal fun MainContent(
               "task" -> { onOpenProgressTask(target.id); onSelectTab(HomeTab.Progress) }
               "project" -> { onOpenProgressProject(target.id); onSelectTab(HomeTab.Progress) }
               "automation" -> { onOpenAutomation(target.id); onSelectTab(HomeTab.Progress) }
+              "workflow_run" -> { linkedWorkflowRunId = target.id; onSelectTab(HomeTab.Progress) }
               "session" -> { onSelectConversation(target.id); onSelectTab(HomeTab.Assistant) }
               "user_assertion" -> {
                 personalReturnPage = "home"; personalDetailId = target.id; personalPage = "detail"
@@ -1624,7 +1628,8 @@ internal fun MainContent(
           onCreateProjectConversation(projectId)
           onSelectTab(HomeTab.Assistant)
         }
-      }, chatBusy = connection.creatingConversation, bottomChromeHeight = bottomChromeHeight)
+      }, chatBusy = connection.creatingConversation, bottomChromeHeight = bottomChromeHeight,
+        requestedWorkflowRunId = linkedWorkflowRunId, onWorkflowLinkHandled = { linkedWorkflowRunId = null })
       HomeTab.Notes -> if (connection.profile == null) PairingScreen(
         stringResource(R.string.tab_notes), connection, onPair, onCancelPairing, onScanPairing,
         pairingScanning, pairingScanError, insets)
@@ -2537,6 +2542,13 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
     sendFlightVisible = connection.optimisticText.isNotBlank()
   }
   val optionsLabel = stringResource(R.string.assistant_options)
+  val displayMessages = remember(connection.messages, connection.liveMessages) {
+    chatPresentationMessages(connection.messages, connection.liveMessages)
+  }
+  val latestConnection by rememberUpdatedState(connection)
+  val latestDisplayMessages by rememberUpdatedState(displayMessages)
+  val selectedMessageConversationId = connection.selectedConversationId
+  val externalLinkFailure = stringResource(R.string.message_open_link_failed)
   var messageActionsId by remember(connection.selectedConversationId) { mutableStateOf<String?>(null) }
   var messageDetailId by remember(connection.selectedConversationId) { mutableStateOf<String?>(null) }
   val messageDetailScroll = remember(connection.selectedConversationId, messageDetailId) { ScrollState(0) }
@@ -2544,20 +2556,29 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
   var externalUrl by remember(connection.selectedConversationId) { mutableStateOf<String?>(null) }
   val openLink: (String) -> Unit = { link ->
     val target = messageLinkTarget(link)
-    if (target != null) onOpenMessageTarget(target)
-    else if (link.startsWith("https://")) externalUrl = link
+    if (target != null && target.kind in setOf("file", "workspace_file")) {
+      selectedMessageConversationId?.let { conversationId ->
+        val file = ConversationMedia(target.id, target.title, "file", "application/octet-stream", 0,
+          if (target.kind == "file") "xopc-file:${target.id}" else "",
+          workspaceRelativePath = target.id.takeIf { target.kind == "workspace_file" })
+        previewRequest = MessagePreviewRequest(conversationId, file)
+      }
+    } else if (target != null) onOpenMessageTarget(target)
+    else if (externalMessageLink(link)) externalUrl = link
   }
   val showConnectionWait = connection.connectionWait.gatewayId == connection.profile?.gatewayId &&
     connection.connectionWait.conversationId == connection.selectedConversationId &&
     connection.connectionWait.snapshot?.wait?.phase?.let { it != "ready" } == true
   val messageListState = remember(connection.selectedConversationId) { LazyListState() }
   val messageScrollScope = rememberCoroutineScope()
+  val messageDragged by messageListState.interactionSource.collectIsDraggedAsState()
   var positionedAtLatest by remember(connection.selectedConversationId) { mutableStateOf(false) }
   var followBottom by remember(connection.selectedConversationId) { mutableStateOf(true) }
   var replySpace by remember(connection.selectedConversationId) { mutableStateOf(ChatReplySpace()) }
   var messageViewportHeight by remember(connection.selectedConversationId) { mutableIntStateOf(0) }
   var replyAnchorId by remember(connection.selectedConversationId) { mutableStateOf<String?>(null) }
   var awaitingReplyAnchor by remember(connection.selectedConversationId) { mutableStateOf(false) }
+  LaunchedEffect(messageDragged) { if (messageDragged) { followBottom = false } }
   var previousReplyUserId by remember(connection.selectedConversationId) { mutableStateOf<String?>(null) }
   val replyRowHeights = remember(connection.selectedConversationId) {
     androidx.compose.runtime.mutableStateMapOf<String, Int>()
@@ -2577,22 +2598,20 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
     }
     observedSendSequence = connection.chatSendSequence
   }
-  LaunchedEffect(connection.messages.lastOrNull { it.role == "user" }?.id, awaitingReplyAnchor) {
-    val latestUser = connection.messages.lastOrNull { it.role == "user" }
+  LaunchedEffect(displayMessages.lastOrNull { it.role == "user" }?.id, awaitingReplyAnchor) {
+    val latestUser = displayMessages.lastOrNull { it.role == "user" }
     if (awaitingReplyAnchor && latestUser != null && latestUser.id != previousReplyUserId) {
       replyAnchorId = latestUser.id
       awaitingReplyAnchor = false
     }
   }
-  LaunchedEffect(replyAnchorId, connection.messages, connection.liveText, connection.activeRunId,
+  LaunchedEffect(replyAnchorId, displayMessages, connection.liveText, connection.activeRunId,
     replyRowHeights.toMap(), messageViewportHeight, bottomChromePx, followBottom) {
     if (!connection.historyLoadingOlder) {
-      val anchor = connection.messages.indexOfFirst { it.id == replyAnchorId }
-      val replyRows = if (anchor >= 0) connection.messages.drop(anchor + 1) else emptyList()
-      val replyHeight = replyRows.sumOf { replyRowHeights[it.id] ?: 0 }.toFloat() +
-        replyRows.size * replyGapPx +
-        (if (connection.liveText.isNotBlank() && connection.activeRunId != null)
-          (replyRowHeights["live-output"] ?: 0) + replyGapPx else 0f)
+      val anchor = displayMessages.indexOfFirst { it.id == replyAnchorId }
+      val replyRows = if (anchor >= 0) displayMessages.drop(anchor + 1) else emptyList()
+      val replyHeight = replyRows.sumOf { replyRowHeights[it.renderId] ?: 0 }.toFloat() +
+        replyRows.size * replyGapPx
       replySpace = replySpace.consume(replyHeight / density.density,
         (messageViewportHeight - bottomChromePx - replyGapPx) / density.density, followBottom)
     }
@@ -2601,6 +2620,7 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
   var olderAnchor by remember(connection.selectedConversationId) { mutableStateOf<Pair<String, Int>?>(null) }
   suspend fun scrollMessagesToBottom() {
     withFrameNanos { }
+    if (messageDragged || olderAnchor != null || (positionedAtLatest && !followBottom)) return
     val lastIndex = messageListState.layoutInfo.totalItemsCount - 1
     if (lastIndex < 0) return
     programmaticMessageScroll = true
@@ -2611,8 +2631,7 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
       val last = layout.visibleItemsInfo.firstOrNull { it.index == lastIndex }
       if (last != null) messageListState.scrollBy(
         (last.size + layout.viewportEndOffset - layout.viewportStartOffset).toFloat())
-      positionedAtLatest = true
-      followBottom = true
+      if (!messageDragged) { positionedAtLatest = true; followBottom = true }
     } finally {
       programmaticMessageScroll = false
     }
@@ -2621,22 +2640,36 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
     snapshotFlow { messageListState.isScrollInProgress to messageListState.canScrollForward }
       .collect { (scrolling, canScrollForward) ->
         if (scrolling && positionedAtLatest && !programmaticMessageScroll &&
-          !connection.historyLoadingOlder) followBottom = !canScrollForward
+          !connection.historyLoadingOlder && olderAnchor == null) followBottom = !canScrollForward
       }
   }
-  LaunchedEffect(connection.selectedConversationId, connection.historyLoading,
-    connection.messages.lastOrNull()?.id, connection.liveText, connection.activeRunId,
-    connection.optimisticText, replySpace.remaining, messageViewportHeight, bottomChromeHeight) {
-    if (!connection.historyLoading && !connection.historyLoadingOlder &&
-      (connection.messages.isNotEmpty() || connection.liveText.isNotBlank() || connection.optimisticText.isNotBlank()) &&
-      (!positionedAtLatest || followBottom)) scrollMessagesToBottom()
+  LaunchedEffect(connection.selectedConversationId, messageListState) {
+    snapshotFlow {
+      val latest = latestConnection
+      listOf(latest.messages.lastOrNull()?.id, latest.liveText.length, latest.activeRunId,
+        latest.historyLoading, latest.historyLoadingOlder, latest.optimisticText,
+        replyRowHeights[latestDisplayMessages.lastOrNull()?.renderId],
+        replySpace.remaining, messageViewportHeight, bottomChromeHeight)
+    }.conflate().collect {
+      val latest = latestConnection
+      if (!latest.historyLoading && !latest.historyLoadingOlder &&
+        (latest.messages.isNotEmpty() || latest.liveMessages.isNotEmpty() || latest.optimisticText.isNotBlank()) &&
+        (!positionedAtLatest || followBottom)) scrollMessagesToBottom()
+    }
   }
-  LaunchedEffect(connection.messages.firstOrNull()?.id, connection.historyLoadingOlder) {
+  LaunchedEffect(displayMessages.firstOrNull()?.id, connection.historyLoadingOlder) {
     val anchor = olderAnchor
     if (!connection.historyLoadingOlder && anchor != null) {
-      val index = connection.messages.indexOfFirst { it.id == anchor.first }
-      if (index >= 0) messageListState.scrollToItem(index + if (connection.historyBefore != null) 1 else 0,
-        anchor.second)
+      val index = displayMessages.indexOfFirst { it.renderId == anchor.first }
+      if (index >= 0) {
+        programmaticMessageScroll = true
+        try {
+          withFrameNanos { }
+          val headerCount = (if (connection.historyBefore != null) 1 else 0) +
+            (if (connection.activeRunId != null && connection.liveNarration != null && connection.liveMessages.isEmpty()) 1 else 0)
+          messageListState.scrollToItem(index + headerCount, anchor.second)
+        } finally { programmaticMessageScroll = false }
+      }
       olderAnchor = null
     }
   }
@@ -2708,9 +2741,9 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
           Text(stringResource(R.string.assistant_stop))
         }
       }
-      if (connection.historyLoading && connection.messages.isEmpty()) {
+      if (connection.historyLoading && displayMessages.isEmpty()) {
         Box(modifier = Modifier.weight(1f).padding(top = chatTopInset + 88.dp)) { AssistantHistorySkeleton() }
-      } else if (!connection.historyLoading && connection.messages.isEmpty() &&
+      } else if (!connection.historyLoading && displayMessages.isEmpty() &&
         connection.historyBefore == null && connection.activeRunId == null &&
         connection.liveText.isBlank() && connection.optimisticText.isBlank()) {
         BoxWithConstraints(modifier = Modifier.weight(1f).fillMaxWidth()
@@ -2734,9 +2767,10 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
             if (connection.historyLoadingOlder) BrandLoadingIndicator(extent = 20.dp)
             else TextButton(onClick = {
               val visible = messageListState.layoutInfo.visibleItemsInfo.firstOrNull { item ->
-                connection.messages.any { it.id == item.key }
+                displayMessages.any { it.renderId == item.key }
               }
-              olderAnchor = (visible?.key as? String)?.let { it to (-visible.offset).coerceAtLeast(0) }
+              followBottom = false
+              olderAnchor = (visible?.key as? String)?.let { it to -visible.offset }
               onLoadOlderHistory()
             }, modifier = Modifier.testTag("assistant-load-older")) {
               Text(stringResource(if (connection.historyOlderError) R.string.assistant_older_retry
@@ -2744,19 +2778,25 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
             }
           }
         }
-        val latestMessageId = connection.messages.lastOrNull {
+        if (connection.activeRunId != null && connection.liveNarration != null && connection.liveMessages.isEmpty()) item(key = "live-progress") {
+          Text(connection.liveNarration, style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        }
+        val latestMessageId = displayMessages.lastOrNull {
           it.role == "user" || it.role == "assistant"
         }?.id
-        items(connection.messages, key = { it.id }) { message ->
-          Box(Modifier.onSizeChanged { replyRowHeights[message.id] = it.height }) {
-          ChatMessageCard(message, onMore = { messageActionsId = message.id },
+        items(displayMessages, key = { it.renderId }) { message ->
+          Box(Modifier.then(if (connection.liveMessages.any { it.id in message.sourceIds })
+            Modifier.testTag("assistant-live-output") else Modifier)
+            .onSizeChanged { replyRowHeights[message.renderId] = it.height }) {
+          ChatMessageCard(message, onReading = { followBottom = false }, streaming = followBottom && !messageListState.isScrollInProgress && connection.activeRunId != null && connection.liveMessages.any { it.id in message.sourceIds }, showMore = connection.messages.any { it.id == message.id }, onMore = { messageActionsId = message.id },
             onOpenTarget = onOpenMessageTarget,
             onOpenPreview = { media, gallery ->
               previewRequest = MessagePreviewRequest(connection.selectedConversationId, media, gallery)
             }, onOpenLink = openLink, onCopy = onCopyMessageText,
-            previewEligible = message.id != latestMessageId,
+            previewEligible = message.id != latestMessageId && connection.messages.any { it.id == message.id },
             onViewMore = { messageDetailId = message.id },
-            onSaveNote = if (message.role == "assistant" && message.text.isNotBlank())
+            onSaveNote = if (message.role == "assistant" && message.text.isNotBlank() && connection.messages.any { it.id == message.id })
               ({ onSaveMessageAsNote(message.id) }) else null,
             savingNote = connection.savingMessageNoteId != null,
             readAloudPhase = if (reader.state.sourceId == message.id) reader.state.phase else "idle",
@@ -2769,7 +2809,7 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
               (message.turnId != null || message.hasNonTextContent)) {
               { onOpenExecution(message.id) }
             } else null,
-            loadMedia = { media -> onLoadMessageMedia(connection.selectedConversationId, media) })
+            loadMedia = { media -> onLoadMessageMedia(selectedMessageConversationId, media) })
           }
         }
         if (connection.optimisticText.isNotBlank()) item(key = "send-flight") {
@@ -2783,16 +2823,7 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
             }
           }
         }
-        if (connection.liveText.isNotBlank() && connection.activeRunId != null) item(key = "live-output") {
-          Card(modifier = Modifier.fillMaxWidth().testTag("assistant-live-output")
-            .onSizeChanged { replyRowHeights["live-output"] = it.height },
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            shape = RoundedCornerShape(18.dp)) {
-            MarkdownContent(connection.liveText, modifier = Modifier.fillMaxWidth()
-              .padding(horizontal = 12.dp, vertical = 14.dp),
-              onOpenLink = openLink, onCopyCode = onCopyMessageText)
-          }
-        }
+
       }
       connection.pendingInput?.let { pending ->
         Card(modifier = Modifier.fillMaxWidth().testTag("assistant-pending")) {
@@ -3256,7 +3287,9 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
       text = { Text(url, maxLines = 4, overflow = TextOverflow.Ellipsis) },
       confirmButton = { TextButton(onClick = {
         externalUrl = null
-        runCatching { uriHandler.openUri(url) }
+        runCatching { uriHandler.openUri(url) }.onFailure {
+          android.widget.Toast.makeText(context, externalLinkFailure, android.widget.Toast.LENGTH_SHORT).show()
+        }
       }) { Text(stringResource(R.string.message_open_external)) } },
       dismissButton = { TextButton(onClick = { externalUrl = null }) {
         Text(stringResource(R.string.progress_cancel))

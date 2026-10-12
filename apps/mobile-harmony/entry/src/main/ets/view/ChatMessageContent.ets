@@ -12,6 +12,8 @@ import { chatMessageNeedsPreview, chatMessagePreviewLines, chatMessagePreviewTex
 
 @ComponentV2
 export struct XopcChatMessageContent {
+  @Param animateStreaming: boolean = false;
+  @Event onReading: () => void = (): void => {};
   @Local colors: XopcThemeColors = appThemeColors;
   @Param row: XopcChatRow = { id: '', role: 'assistant', text: '' };
   @Param conversationId: string = '';
@@ -114,6 +116,8 @@ export struct XopcChatMessageContent {
           Repeat<XopcChatBlock>(this.body).each((item: RepeatItem<XopcChatBlock>) => {
             if (item.item.kind === 'text' && item.item.text) {
               XopcMarkdownView({ content: item.item.text, conversationId: this.conversationId, compactReading: true,
+                streaming: this.animateStreaming,
+                onReading: this.onReading,
                 onNavigate: this.onNavigate })
             } else if (item.item.review) {
               Column({ space: 10 }) {
@@ -138,6 +142,8 @@ export struct XopcChatMessageContent {
             }
           }).key((block: XopcChatBlock): string => block.id)
           if (!this.body.length && !this.row.blocks && this.row.text) { XopcMarkdownView({ content: this.row.text,
+            streaming: this.animateStreaming,
+            onReading: this.onReading,
             conversationId: this.conversationId, compactReading: true, onNavigate: this.onNavigate }) }
         } else if (this.row.role === 'user') {
           if (this.row.text) {

@@ -398,6 +398,7 @@ struct RunStreamEvent: Equatable, Sendable {
     let errorMessage: String?
     let toolName: String?
     let stage: String?
+    var presentation: String?
 
     var isTerminal: Bool {
         name == "run_end" || name == "error"
