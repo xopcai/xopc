@@ -3,7 +3,6 @@ import * as Dialog from '@radix-ui/react-dialog';
 import type { ConnectionNeedView } from '@xopcai/gateway-contract';
 import { Check, ChevronRight, Link2, Loader2, X } from 'lucide-react';
 import { PopoverSelect } from '@/components/ui/popover-select';
-import { Skeleton } from '@/components/ui/skeleton';
 import { InstallConnectorDialog } from '@/features/connectors/components/install-connector-dialog';
 import { buildInitialDraft, type InstallDraft } from '@/features/connectors/components/install-connector-draft';
 import { fetchStoreConnectorInstallPlan } from '@/features/connectors/connectors-api';
@@ -29,7 +28,7 @@ const secondary = 'rounded-lg border border-edge px-3 py-1.5 text-sm text-fg hov
 const primary = 'rounded-lg bg-accent px-3 py-1.5 text-sm text-on-accent disabled:opacity-50';
 
 export function ConnectionActionBar({ conversationId }: { conversationId: string }) {
-  const { wait, isLoading, busy, error, act } = useConnectionWait(conversationId);
+  const { wait, busy, error, act } = useConnectionWait(conversationId);
   const [open, setOpen] = useState(false);
   const [replacement, setReplacement] = useState<{ needKey: string; candidateRef: string; label: string }>();
   const [installDraft, setInstallDraft] = useState<InstallDraft>();
@@ -38,7 +37,7 @@ export function ConnectionActionBar({ conversationId }: { conversationId: string
   const [installError, setInstallError] = useState<string>();
   const language = useLocaleStore(state => state.language);
   const t = copy[language];
-  if (isLoading) return <Skeleton className="mb-2 h-10 w-full rounded-xl" />;
+  // This optional bar must not reserve space until a connection need is known.
   if (!wait) return null;
   const first = wait.needs[0];
   const single = wait.needs.length === 1;
