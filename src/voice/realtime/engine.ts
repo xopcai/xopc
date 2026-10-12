@@ -18,5 +18,6 @@ export interface VoiceEngine {
   isConversationIdle?(): boolean;
   canOfferTaskUpdate?(): boolean;
   offerTaskUpdate?(input: { clientMessageId: string; content: string }): Promise<boolean>;
+  offerReply?(input: { deliveryId: string; text: string }): Promise<boolean>;
   close(): void | Promise<void>;
 }

@@ -339,6 +339,15 @@ describe('lazy route bundles', () => {
     expect(findAuthenticatedLazyRouteBundle('/api/mcp/servers-extra')).toBeUndefined();
   });
 
+  it('routes MCP connection probes and authorization attempts', () => {
+    for (const path of ['/api/mcp/servers/docs/probe', '/api/mcp/servers/docs/auth', '/api/mcp/auth/attempt', '/api/mcp/auth/attempt/redirect']) {
+      expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('mcp');
+    }
+    for (const path of ['/api/mcp/auth', '/api/mcp/auth/attempt/extra', '/api/mcp/servers/docs/auth/extra', '/api/mcp/authentication/attempt']) {
+      expect(findAuthenticatedLazyRouteBundle(path)).toBeUndefined();
+    }
+  });
+
   it('has unique bundle ids', () => {
     const ids = AUTHENTICATED_LAZY_ROUTE_BUNDLES.map((bundle) => bundle.id);
     expect(new Set(ids).size).toBe(ids.length);

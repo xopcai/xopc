@@ -24,14 +24,14 @@ function Field({
   children: ReactNode;
 }) {
   return (
-    <div className="flex flex-col gap-1.5">
+    <label className="flex flex-col gap-1.5">
       <div className="text-sm font-medium text-fg">
         {label}
         {required ? <span className="ml-0.5 text-danger">*</span> : null}
       </div>
       {children}
       {description ? <p className="text-xs leading-relaxed text-fg-subtle">{description}</p> : null}
-    </div>
+    </label>
   );
 }
 
@@ -49,15 +49,16 @@ type Props = {
   onUpdate: (patch: Partial<McpServerRow>) => void;
   idConflictMessage?: string;
   variant?: 'all' | 'basic' | 'advanced';
+  showTransport?: boolean;
 };
 
-export function McpServerFormFields({ row, t, onUpdate, idConflictMessage, variant = 'all' }: Props) {
+export function McpServerFormFields({ row, t, onUpdate, idConflictMessage, variant = 'all', showTransport = true }: Props) {
   const showBasic = variant === 'all' || variant === 'basic';
   const showAdvanced = variant === 'all' || variant === 'advanced';
 
   return (
     <div className="grid gap-4 md:grid-cols-2">
-      {showBasic ? (
+      {showBasic && showTransport ? (
         <>
           <Field label={t.transportLabel} required>
             <Select
@@ -73,7 +74,10 @@ export function McpServerFormFields({ row, t, onUpdate, idConflictMessage, varia
             </Select>
           </Field>
 
-          <Field label={t.serverIdLabel} required>
+        </>
+      ) : null}
+      {showAdvanced ? (
+          <Field label={t.serverIdLabel}>
             <input
               className={inputClassName()}
               value={row.id}
@@ -84,7 +88,6 @@ export function McpServerFormFields({ row, t, onUpdate, idConflictMessage, varia
               <p className="text-xs text-red-600 dark:text-red-300">{idConflictMessage}</p>
             ) : null}
           </Field>
-        </>
       ) : null}
 
       {row.transport === 'stdio' ? (
@@ -100,15 +103,11 @@ export function McpServerFormFields({ row, t, onUpdate, idConflictMessage, varia
               </Field>
             </div>
           ) : null}
+          {showBasic ? <Field label={t.argsLabel} description={t.argsHint}>
+            <input className={inputClassName()} value={row.argsText} onChange={e => onUpdate({ argsText: e.target.value })} />
+          </Field> : null}
           {showAdvanced ? (
             <>
-              <Field label={t.argsLabel} description={t.argsHint}>
-                <input
-                  className={inputClassName()}
-                  value={row.argsText}
-                  onChange={(e) => onUpdate({ argsText: e.target.value })}
-                />
-              </Field>
               <Field label={t.cwdLabel}>
                 <input
                   className={inputClassName()}
@@ -140,7 +139,7 @@ export function McpServerFormFields({ row, t, onUpdate, idConflictMessage, varia
               </Field>
             </div>
           ) : null}
-          {showBasic ? <Field label={t.oauthClientIdLabel} description={t.oauthClientIdHint}>
+          {showAdvanced ? <Field label={t.oauthClientIdLabel} description={t.oauthClientIdHint}>
             <input className={inputClassName()} value={row.oauthClientId} onChange={e => onUpdate({ oauthClientId: e.target.value })} />
           </Field> : null}
           {showAdvanced ? (
@@ -162,11 +161,11 @@ export function McpServerFormFields({ row, t, onUpdate, idConflictMessage, varia
         </>
       )}
 
-      <Field label="Exposure">
+      {showAdvanced ? <Field label={t.exposureLabel}>
         <Select className={inputClassName()} value={row.exposure} onChange={e => onUpdate({ exposure: e.target.value as McpServerRow['exposure'] })}>
-          {(['codemode', 'deferred', 'direct', 'hidden'] as const).map(value => <SelectOption key={value} value={value}>{value}</SelectOption>)}
+          {(['codemode', 'deferred', 'direct', 'hidden'] as const).map(value => <SelectOption key={value} value={value}>{t.exposureLabels[value]}</SelectOption>)}
         </Select>
-      </Field>
+      </Field> : null}
       {showAdvanced ? <Field label={t.requestTimeoutLabel}>
         <NumberInput allowEmpty type="number" min={1} className={inputClassName()} value={row.timeout ?? ''} placeholder="60"
           onChange={e => onUpdate({ timeout: e.target.value ? Number(e.target.value) : undefined })} />
