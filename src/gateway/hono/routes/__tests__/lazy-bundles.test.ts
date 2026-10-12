@@ -333,6 +333,12 @@ describe('lazy route bundles', () => {
     expect(findAuthenticatedLazyRouteBundle('/api/capabilities/readiness')?.id).toBe('models');
   });
 
+  it('routes MCP tool discovery without matching unrelated paths', () => {
+    expect(findAuthenticatedLazyRouteBundle('/api/mcp/servers/docs/tools')?.id).toBe('mcp');
+    expect(findAuthenticatedLazyRouteBundle('/api/mcp/servers/docs/tools/execute')).toBeUndefined();
+    expect(findAuthenticatedLazyRouteBundle('/api/mcp/servers-extra')).toBeUndefined();
+  });
+
   it('has unique bundle ids', () => {
     const ids = AUTHENTICATED_LAZY_ROUTE_BUNDLES.map((bundle) => bundle.id);
     expect(new Set(ids).size).toBe(ids.length);

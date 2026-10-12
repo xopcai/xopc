@@ -640,15 +640,15 @@ export function registerConnectorRoutes(authenticated: Hono, deps: Authenticated
     }
   });
 
-  authenticated.post('/api/connectors/:id/test', async (c) => {
+  authenticated.post('/api/connectors/:id/test', strictRateLimitMiddleware, async (c) => {
     const instanceId = c.req.param('id');
     const config = service.currentConfig as Config;
     const instance = getConnectorInstance(config, instanceId);
     if (!instance) {
       return c.json({ ok: false, error: `Connector instance not found: ${instanceId}` }, 404);
     }
-    if (instance.materialized.type !== 'cli') {
-      return c.json({ ok: false, error: `Connector type "${instance.materialized.type}" does not support CLI health checks. Use xopc mcp list for MCP diagnostics.` }, 400);
+    if (instance.materialized.type !== 'cli' && instance.materialized.type !== 'mcp') {
+      return c.json({ ok: false, error: `Connector type "${instance.materialized.type}" does not support health checks.` }, 400);
     }
     try {
       const result = await testConnectorInstance(config, instance.instanceId);

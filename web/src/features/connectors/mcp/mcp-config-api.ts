@@ -96,7 +96,7 @@ function serverConfigToRow(id: string, raw: Record<string, unknown>): McpServerR
   };
 }
 export function emptyMcpServerRow(id = ''): McpServerRow {
-  return { clientKey: crypto.randomUUID(), id, transport: 'stdio', command: '', argsText: '', envJson: '', cwd: '',
+  return { clientKey: crypto.randomUUID(), id, transport: 'streamable-http', command: '', argsText: '', envJson: '', cwd: '',
     url: '', headers: [], oauthClientId: '', timeout: undefined, exposure: 'codemode', extra: {} };
 }
 export function normalizeMcpSettingsFromConfig(cfg: unknown): McpSettingsState {
@@ -119,4 +119,13 @@ export async function patchMcpSettings(state: McpSettingsState, managedServers: 
 
 export function mcpServerCardKey(row: McpServerRow, _index: number): string {
   return row.clientKey;
+}
+
+export type McpToolInfo = { name: string; description: string; inputSchema: unknown; exposure?: string };
+export async function fetchMcpTools(serverId: string, signal: AbortSignal): Promise<McpToolInfo[]> {
+  const result = await fetchJson<{ ok: boolean; payload: { tools: McpToolInfo[] } }>(
+    apiUrl(`/api/mcp/servers/${encodeURIComponent(serverId)}/tools`),
+    { method: 'POST', signal: AbortSignal.any([signal, AbortSignal.timeout(95_000)]) },
+  );
+  return result.payload.tools;
 }

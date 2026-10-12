@@ -193,7 +193,7 @@ function StandardInstallConnectorDialog({
         await onInstalled(instance);
         return;
       }
-      if (instance.materialized.type === 'cli') {
+      if (instance.materialized.type === 'cli' || instance.materialized.type === 'mcp') {
         try {
           health = await testConnector(instance.instanceId);
         } catch {

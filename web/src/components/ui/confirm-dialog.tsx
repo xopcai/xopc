@@ -10,7 +10,7 @@ export type ConfirmDialogProps = {
   title: string;
   description: string;
   confirmLabel: string;
-  cancelLabel: string;
+  cancelLabel?: string;
   /** Red/destructive styling for the confirm action (e.g. remove/delete). */
   destructive?: boolean;
   overlayClassName?: string;
@@ -79,9 +79,11 @@ export function ConfirmDialog({
             </label>
           ) : null}
           <div className="mt-6 flex flex-wrap justify-end gap-2">
-            <Button type="button" variant="secondary" onClick={onCancel}>
-              {cancelLabel}
-            </Button>
+            {cancelLabel ? (
+              <Button type="button" variant="secondary" onClick={onCancel}>
+                {cancelLabel}
+              </Button>
+            ) : null}
             <Button
               type="button"
               variant="secondary"

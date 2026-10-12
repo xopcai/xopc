@@ -59,6 +59,8 @@ text(result.structuredContent);
 
 xopc 的本地 Device、Extension、Memory 工具也使用 pi 工具注册和发现。设备绑定、用户确认与设备调用审计仍属于 xopc 业务层。CLI、Composio 的业务连接流程保留。
 
+能力中心 → 连接器 → 自定义集成中，已保存的 MCP 服务可点击「查看工具」探测工具，支持刷新、按名称或描述搜索，以及展开参数 schema。探测使用短生命周期的 pi 原生会话，不发起模型请求；连接失败或需要授权时会显示诊断信息。
+
 ## OAuth 与诊断
 
 在运行 Gateway 的主机上执行：
@@ -91,7 +93,7 @@ Web、移动端 OAuth 弹窗、远程回调粘贴和自动恢复原任务的 MCP
 - `transport`、`workingDirectory`、`connectionTimeoutMs`、`requestTimeoutMs`、`auth.type=oauth`、`sessionIdleTtlMs`。
 - `runtime.toolDiscovery` 试点开关；MCP 始终使用原生发现，按服务 exposure 控制。
 - `mcp:<server>:<tool>` 策略别名，以及 MCP 经 `xopc_tool_*` 网关调用的路径。使用原生工具名。
-- 独立 Gateway MCP 能力探测、MCP Prompts 管理和 MCP 专属只读认证/严格结果 schema 校验。
+- 旧版独立 Gateway MCP 运行时及能力探测、MCP Prompts 管理和 MCP 专属只读认证/严格结果 schema 校验。
 - 旧 OAuth 凭据格式。原文件不会被自动删除，需要在 pi 中重新登录。
 
 旧 `/sse` 端点不会自动转换为 `/mcp`，必须使用服务实际提供的 Streamable HTTP 地址。原生 MCP 工具会随会话重新注册，冷启动后 deferred 工具需要重新搜索。旧聊天记录的资源附件仍可显示，但不能作为新输入重新发送。
