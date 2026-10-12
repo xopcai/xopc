@@ -73,7 +73,7 @@ export class VoiceSessionClient {
 
   static async connect(options: VoiceSessionClientOptions): Promise<VoiceSessionClient> {
     options.signal?.throwIfAborted();
-    const status = options.purpose === 'conversation' && options.mode === 'assistant'
+    const status = options.purpose === 'conversation' && options.mode !== 'natural'
       ? await fetchJson<{ payload: { openingGreeting?: boolean } }>(apiUrl('/api/voice/realtime/status'), { signal: options.signal }) : null;
     const response = await fetchJson<{ ok: true; payload: CreateVoiceSessionResponse }>(
       apiUrl('/api/voice/realtime/sessions'),

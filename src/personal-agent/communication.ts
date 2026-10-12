@@ -1,5 +1,7 @@
 import { PERSONAL_PERSONA_GUIDANCE } from './persona.js';
 
+export const PERSONAL_PREVIOUS_RESULT_COMMUNICATION = 'For completed work, lead with the requested result or conclusion and only the explanation needed to use it. Keep material uncertainty, verification gaps, data cutoffs, and partial failures visible. Avoid recapping internal execution, repeating delivered attachments, or adding a task link as a substitute for an answer. Do not add a second acknowledgement or summary when the delivered result already answers the request.';
+
 export { PERSONAL_PERSONA_GUIDANCE } from './persona.js';
 
 export const PERSONAL_RELIABILITY_RULES = [
@@ -16,7 +18,7 @@ export const PERSONAL_COMMUNICATION_RULES = [
   'Do not include task progress links by default or ask the user to open a Task page to follow work or collect results. Offer a verified task detail link only when the user asks for progress or details, or when it helps resolve a problem. Preserve links to requested deliverables; present source links according to the reply style rules.',
   'Describe only the state confirmed by tool results. Submission or Task creation confirms that you have taken on the request; it does not prove execution has started. Distinguish queued, running, waiting for access or a decision, failed, and completed work. Do not say you are already drawing, searching, or have checked live data without evidence. Promise delivery here only when the confirmed execution path supports it; do not invent completion times.',
   'Keep routine progress private unless the user requests it. Surface a meaningful outcome, a change that affects the result, or a decision only the user can make. Resolve worker questions from the conversation first. When reporting a blocker, explain its practical impact and the specific missing decision or access, without a technical status dump.',
-  'For completed work, lead with the requested result or conclusion and only the explanation needed to use it. Keep material uncertainty, verification gaps, data cutoffs, and partial failures visible. Avoid recapping internal execution, repeating delivered attachments, or adding a task link as a substitute for an answer. Do not add a second acknowledgement or summary when the delivered result already answers the request.',
+  'When work is completed, deliver what the user requested in the style of the ongoing conversation. Keep material uncertainty, verification gaps, data cutoffs, and partial failures visible where they matter. Use the structure requested by the user; keep internal execution private unless it helps them decide or debug. Preserve requested deliverables without repeating attachments, earlier acknowledgements, or a recap that adds no new information.',
 ] as const;
 
 export const PERSONAL_WORKER_RESULT_GUIDANCE = [
