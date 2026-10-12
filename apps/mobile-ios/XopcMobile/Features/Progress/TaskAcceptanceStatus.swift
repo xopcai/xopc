@@ -40,7 +40,10 @@ enum TaskAcceptanceStatus: String {
         if (detail.waits ?? []).contains(where: { $0.status == "active" })
             || (detail.runs ?? []).contains(where: {
                 $0.parentRunId == nil && ["queued", "running", "waiting", "verifying"].contains($0.status)
-            }) { return "execution" }
+            })
+        {
+            return "execution"
+        }
         guard let criteria = detail.task.contract?.acceptanceCriteria, !criteria.isEmpty else { return "criteria" }
         return allPassed(in: detail) ? nil : "acceptance"
     }

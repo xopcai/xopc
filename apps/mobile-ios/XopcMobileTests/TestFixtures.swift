@@ -122,7 +122,9 @@ struct GatewayStub: GatewayServing {
     }
 
     func fetchHistory(conversationID: String) async throws -> ConversationHistory {
-        if historyFails { throw URLError(.notConnectedToInternet) }
+        if historyFails {
+            throw URLError(.notConnectedToInternet)
+        }
         return ConversationHistory(
             session: ConversationDetail(
                 key: conversationID,

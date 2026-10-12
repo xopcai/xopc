@@ -47,7 +47,7 @@ struct TaskEditorView: View {
                 Section("项目") {
                     Picker("项目", selection: $projectID) {
                         Text("不关联项目").tag("")
-                        if !projectID.isEmpty && !projects.contains(where: { $0.id == projectID }) {
+                        if !projectID.isEmpty, !projects.contains(where: { $0.id == projectID }) {
                             Text(projectID).tag(projectID)
                         }
                         ForEach(projects) { Text($0.name).tag($0.id) }
@@ -77,7 +77,13 @@ struct TaskEditorView: View {
             .navigationTitle("编辑任务")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("取消") { if isDirty { confirmsDiscard = true } else { dismiss() } }.disabled(isSaving) }
+                ToolbarItem(placement: .cancellationAction) { Button("取消") {
+                    if isDirty {
+                        confirmsDiscard = true
+                    } else {
+                        dismiss()
+                    }
+                }.disabled(isSaving) }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("保存") { Task { await save() } }
                         .disabled(isSaving || title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)

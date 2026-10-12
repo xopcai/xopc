@@ -33,6 +33,7 @@ struct TaskAcceptanceStatusTests {
         )
         #expect(TaskAcceptanceStatus.resolve("A", index: 0, detail: staleRun) == .pending)
     }
+
     @Test func completionRequiresCurrentAcceptanceAndNoActiveRootRunOrWait() throws {
         let raw = #"""
         {"ok":true,"task":{"id":"t","version":3,"title":"Task","phase":"review",
@@ -53,14 +54,13 @@ struct TaskAcceptanceStatusTests {
         let stale = try decode(raw.replacingOccurrences(of: #""contractVersion":2"#, with: #""contractVersion":1"#))
         #expect(TaskAcceptanceStatus.completionBlock(in: stale) == "acceptance")
         let run = try decode(raw.replacingOccurrences(of: #""runs":[]"#,
-          with: #""runs":[{"id":"r","status":"running","attempt":1}]"#))
+                                                      with: #""runs":[{"id":"r","status":"running","attempt":1}]"#))
         #expect(TaskAcceptanceStatus.completionBlock(in: run) == "execution")
         let wait = try decode(raw.replacingOccurrences(of: #""waits":[]"#,
-          with: #""waits":[{"id":"w","status":"active"}]"#))
+                                                       with: #""waits":[{"id":"w","status":"active"}]"#))
         #expect(TaskAcceptanceStatus.completionBlock(in: wait) == "execution")
         let closed = try decode(raw.replacingOccurrences(of: #""phase":"review""#, with: #""phase":"closed""#)
-          .replacingOccurrences(of: #"["move","close"]"#, with: #"["reopen"]"#))
+            .replacingOccurrences(of: #"["move","close"]"#, with: #"["reopen"]"#))
         #expect(closed.phaseCommand(for: "ready") == "reopen")
     }
-
 }

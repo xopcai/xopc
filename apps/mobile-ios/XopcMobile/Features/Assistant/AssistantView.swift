@@ -128,10 +128,14 @@ struct AssistantView<Dock: View>: View {
             await state.observeTaskResults(in: conversation, using: GatewayClient(configuration: configuration))
         }
         .onChange(of: scenePhase) {
-            if scenePhase != .active { state.pauseConversation() }
+            if scenePhase != .active {
+                state.pauseConversation()
+            }
         }
         .onChange(of: isActive) {
-            if !isActive { state.pauseConversation() }
+            if !isActive {
+                state.pauseConversation()
+            }
         }
         .onChange(of: conversation?.id) {
             readAloud.stop()

@@ -217,11 +217,12 @@ extension GatewayClient {
     }
 
     func commandTask(_ task: TaskRecord, command: String, phase: String? = nil,
-                     resolution: String = "done", agentID: String? = nil) async throws {
-        let mutation = TaskCommandMutation(
+                     resolution: String = "done", agentID: String? = nil) async throws
+    {
+        let mutation = try TaskCommandMutation(
             idempotencyKey: UUID().uuidString.lowercased(), expectedVersion: task.version,
-            command: try .make(type: command, phase: phase, resolution: resolution,
-                               agentID: agentID ?? task.delegateAgentId)
+            command: .make(type: command, phase: phase, resolution: resolution,
+                           agentID: agentID ?? task.delegateAgentId)
         )
         let body = try encoder.encode(mutation)
         let result: TaskCommandAcknowledgement = try await request(
@@ -720,7 +721,9 @@ struct TaskCommandMutation: Encodable {
                 }
             }
             let selectedAgent = agentID?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            if type == "start", selectedAgent.isEmpty { throw GatewayClientError.invalidResponse }
+            if type == "start", selectedAgent.isEmpty {
+                throw GatewayClientError.invalidResponse
+            }
             if type == "close", !["done", "cancelled", "duplicate", "wont_do"].contains(resolution) {
                 throw GatewayClientError.invalidResponse
             }

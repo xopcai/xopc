@@ -30,6 +30,7 @@ struct ProjectCreationTests {
         #expect(body["body"] as? String == "新说明")
         #expect(body["priority"] as? String == "high")
     }
+
     @Test func taskEditsExplicitlyClearProjectAndDateAndRetainScheduledMetadata() throws {
         let cleared = TaskUpdateMutation(expectedVersion: 7, title: "Title", body: "Body", priority: "critical",
                                          projectId: nil, dueAt: nil)
@@ -62,5 +63,4 @@ struct ProjectCreationTests {
             try TaskCommandMutation.Command.make(type: "start", phase: nil, resolution: "done", agentID: " ")
         }
     }
-
 }
