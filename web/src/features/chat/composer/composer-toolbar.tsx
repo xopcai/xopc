@@ -176,8 +176,6 @@ export function ComposerToolbarRow({ className, ...props }: HTMLAttributes<HTMLD
 export const ComposerToolbar = memo(function ComposerToolbar({
   disabled,
   sendDisabled = false,
-  sending,
-  streaming,
   runBusy,
   chat: m,
   hasDraft,
@@ -220,7 +218,7 @@ export const ComposerToolbar = memo(function ComposerToolbar({
             modelDisabled={modelDisabled}
             onModelChange={onModelChange}
             thinkingLevel={thinkingLevel}
-            thinkingDisabled={disabled || sending || streaming}
+            thinkingDisabled={disabled || modelDisabled}
             onThinkingChange={onThinkingChange}
           />
         ) : null}

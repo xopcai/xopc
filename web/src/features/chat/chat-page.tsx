@@ -1398,7 +1398,7 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
                 showModelSelector={!personal}
                 onModelChange={session.onSessionModelChange}
                 modelDisabled={
-                  (isSessionTransitioning && !session.projectPreparation) || projectComposer.busy || stream.streaming || stream.sending || session.modelConfigSaving
+                  (isSessionTransitioning && !session.projectPreparation) || projectComposer.busy || session.modelConfigSaving
                 }
                 onChatAgentChange={
                   !personal && !agentSetup && !taskId && agents.showChatAgentSelector ? agents.onChatAgentChange : undefined
