@@ -72,7 +72,10 @@ export async function dispatchHomeAction(action: XopcHomeAction, handlers: XopcH
   }
   // Validate before confirmation so unsupported actions cannot produce an inert dialog.
   homeCommand(action);
-  if (await handlers.confirm(action)) await handlers.mutate(action);
+  return handlers.confirm(action).then((confirmed: boolean): Promise<void> => {
+    if (confirmed) return handlers.mutate(action);
+    return Promise.resolve();
+  });
 }
 
 export function recentClosed(items: XopcTaskResult[]): XopcTask[] {
