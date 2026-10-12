@@ -96,6 +96,87 @@ async function runScript(params: RunXopcEmbeddedTurnParams, code: string, name =
   return { result: result as unknown as Record<string, unknown>, events, calls };
 }
 
+it.each(['connection', 'authorization', 'connection_then_authorization'] as const)('handles %s invalidation during an assistant response', async reason => {
+  const { params } = await fixture();
+  let invalidate!: (reason?: 'connection' | 'authorization') => void;
+  const releaseInvalidation = vi.fn();
+  params.tools.push(setXopcToolMetadata({ name: 'device__info', label: 'Device', description: 'Read device',
+    parameters: Type.Object({}), execute: async () => ({ content: [], details: {} }) }, {
+    exposure: 'deferred', namespace: { name: 'device' },
+    subscribeInvalidation: listener => { invalidate = listener; return releaseInvalidation; },
+  }));
+  let complete!: () => void;
+  const message = { role: 'assistant', api: model.api, provider: model.provider, model: model.id,
+    content: [{ type: 'text', text: 'Complete response' }], stopReason: 'stop', timestamp: Date.now(),
+    usage: { input: 10, output: 10, cacheRead: 0, cacheWrite: 0, totalTokens: 20, cost: { ...model.cost, total: 0 } },
+  } as AssistantMessage;
+  scripted.stream.mockImplementation(() => {
+    const stream = createAssistantMessageEventStream();
+    stream.push({ type: 'start', partial: { ...message, content: [] } });
+    complete = () => stream.push({ type: 'done', reason: 'stop', message });
+    return stream;
+  });
+  const before = getEmbeddedSessionRunnerStats().evictions;
+  const running = runXopcEmbeddedTurn(params);
+  await vi.waitFor(() => expect(complete).toBeTypeOf('function'));
+  invalidate(reason === 'connection_then_authorization' ? 'connection' : reason);
+  if (reason === 'connection_then_authorization') invalidate('authorization');
+  const midTurnEvictions = getEmbeddedSessionRunnerStats().evictions;
+  complete();
+  const result = await running;
+  if (reason === 'connection') expect(midTurnEvictions).toBe(before);
+  expect(result.ok).toBe(reason === 'connection');
+  expect(getEmbeddedSessionRunnerStats().evictions).toBe(before + 1);
+  expect(releaseInvalidation).toHaveBeenCalledOnce();
+}, 15_000);
+
+it.each(['android', 'ios', 'harmonyos'])('preserves a %s turn across device disconnect and reconnect', async platform => {
+  requireXopcDatabase();
+  const { params, cwd } = await fixture();
+  const registry = new EndpointRegistry();
+  const bindings = new EndpointBindingService(registry);
+  const invocations = new EndpointInvocationService(registry);
+  const endpointId = `${platform}:device`;
+  const hello: EndpointHelloPayload = {
+    principalId: 'owner', endpointId, connectionInstanceId: crypto.randomUUID(), displayName: platform,
+    kind: 'mobile', platform, appVersion: '1', availability: 'foreground', nonce: 'fixture',
+    signedAt: Date.now(), signature: 'fixture-signature', tools: [{
+      name: 'mobile.device.get_info', title: 'Device information', description: 'Read device information',
+      inputSchema: { type: 'object', properties: {}, additionalProperties: false }, outputSchema: ENDPOINT_TEXT_OUTPUT_SCHEMA,
+      policyId: 'public.background-read', sensitivity: 'public', effect: 'read', confirmation: 'never',
+      requiresForeground: false, requiredPermissions: [], timeoutMs: 1000, maxConcurrency: 1,
+      supportsCancellation: true, idempotent: true, resultKinds: ['text'],
+    }],
+  };
+  const transport = { readyState: 1, close: vi.fn(), send: vi.fn() };
+  registry.register(hello, 'first', transport);
+  const endpointTools = { registry, bindings, grants: { find: () => undefined, candidates: () => [] }, invocations } as unknown as EndpointToolRuntime;
+  const gateway = createDefaultExternalToolGatewayTools({ workspace: cwd, getConfig: () => undefined,
+    getCurrentContext: () => ({ conversationId: params.conversationId, channel: 'webchat', chatId: 'chat',
+      origin: { type: 'endpoint', endpointId } }), endpointTools, canAccessMemory: () => false });
+  const native = await materializeNativeExternalTools({ conversationId: params.conversationId, tools: gateway });
+  expect(native).toHaveLength(1);
+  params.tools.push(...native);
+  let complete!: () => void;
+  const message = { role: 'assistant', api: model.api, provider: model.provider, model: model.id,
+    content: [{ type: 'text', text: 'Complete response' }], stopReason: 'stop', timestamp: Date.now(),
+    usage: { input: 10, output: 10, cacheRead: 0, cacheWrite: 0, totalTokens: 20, cost: { ...model.cost, total: 0 } },
+  } as AssistantMessage;
+  scripted.stream.mockImplementation(() => {
+    const stream = createAssistantMessageEventStream();
+    stream.push({ type: 'start', partial: { ...message, content: [] } });
+    complete = () => stream.push({ type: 'done', reason: 'stop', message });
+    return stream;
+  });
+  const running = runXopcEmbeddedTurn(params);
+  await vi.waitFor(() => expect(complete).toBeTypeOf('function'));
+  registry.remove(endpointId, 'first');
+  registry.register({ ...hello, connectionInstanceId: crypto.randomUUID() }, 'second', transport);
+  complete();
+  expect(await running).toMatchObject({ ok: true });
+  expect(transport.send).not.toHaveBeenCalled();
+}, 15_000);
+
 it('inherits Personal boundaries in an ephemeral run and blocks guessed tools before execution', async () => {
   const { params } = await fixture();
   params.toolPolicyConversationId = createConversation({ agentId: personalAgentId('local-owner'),
@@ -297,7 +378,18 @@ it('discovers and calls real device services through pi, keeps confirmation and 
   const reboundEvictions = getEmbeddedSessionRunnerStats().evictions;
   bindings.bind(params.conversationId, 'phone');
   expect(getEmbeddedSessionRunnerStats().evictions).toBe(reboundEvictions + 1);
+  const invalidations = vi.fn();
+  const release = getXopcToolMetadata(replacement[0])!.subscribeInvalidation!(invalidations);
+  registry.disconnect('phone', 4003, 'Device revoked');
+  expect(invalidations).toHaveBeenLastCalledWith('authorization');
   registry.remove('phone', 'connection-2');
+  expect(invalidations).toHaveBeenLastCalledWith('connection');
+  registry.revokePrincipal('owner');
+  expect(invalidations).toHaveBeenLastCalledWith('authorization');
+  release();
+  invalidations.mockClear();
+  registry.revokePrincipal('owner');
+  expect(invalidations).not.toHaveBeenCalled();
   expect(await materializeNativeExternalTools({ conversationId: params.conversationId, tools: gateway })).toEqual([]);
 }, 20_000);
 

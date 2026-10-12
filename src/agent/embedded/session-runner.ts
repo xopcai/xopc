@@ -84,6 +84,8 @@ type PooledRunner = {
   lastUsedAt: number;
   idleTimer: ReturnType<typeof setTimeout> | null;
   releaseInvalidations: Array<() => void>;
+  activeLeases: number;
+  invalidated: boolean;
 };
 
 export type AcquireEmbeddedSessionRunnerParams = {
@@ -221,7 +223,7 @@ export class EmbeddedSessionRunnerPool {
     let entry: PooledRunner;
     let reused = false;
 
-    if (reuseEnabled && existing && existing.fingerprint === fingerprint) {
+    if (reuseEnabled && existing && !existing.invalidated && existing.fingerprint === fingerprint) {
       this.clearIdleTimer(existing);
       entry = existing;
       entry.lastUsedAt = Date.now();
@@ -241,11 +243,21 @@ export class EmbeddedSessionRunnerPool {
         policyRevision: executionToolPolicy.revision }, 'Created embedded session runner');
     }
 
+    entry.activeLeases++;
+    let released = false;
     return {
       session: entry.session,
       piSm: entry.piSm,
       reused,
       release: () => {
+        if (released || this.pool.get(params.runtimeId) !== entry) return;
+        released = true;
+        entry.activeLeases--;
+        if (entry.activeLeases > 0) return;
+        if (entry.invalidated) {
+          this.disposePooledRunner(params.runtimeId, entry, 'external_tool_connection_changed');
+          return;
+        }
         if (!this.isEnabledFn()) {
           this.disposePooledRunner(params.runtimeId, entry, 'runner_disabled');
           return;
@@ -393,11 +405,21 @@ export class EmbeddedSessionRunnerPool {
       baseStreamFn,
       lastUsedAt: Date.now(),
       idleTimer: null,
+      activeLeases: 0,
+      invalidated: false,
       releaseInvalidations: tools.flatMap(tool => {
         const subscribe = getXopcToolMetadata(tool)?.subscribeInvalidation;
         if (!subscribe) return [];
-        return [subscribe(() => {
-          if (this.pool.get(runtimeId)?.session !== session) return;
+        return [subscribe(reason => {
+          const current = this.pool.get(runtimeId);
+          if (current?.session !== session) return;
+          // Calls still validate live device authorization and contract revisions.
+          // A transport change must not cancel an unrelated assistant response.
+          if (reason === 'connection' && current.activeLeases > 0) {
+            current.invalidated = true;
+            log.info({ runtimeId }, 'Device connection changed; runner will refresh after the active turn');
+            return;
+          }
           void abortEmbeddedRun(runtimeId);
           this.evict(runtimeId, 'external_tool_catalog_changed');
         })];
