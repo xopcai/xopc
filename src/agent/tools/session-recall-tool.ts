@@ -27,6 +27,7 @@ interface SessionRecallParams {
 export interface SessionRecallToolDeps {
   getSessionStore: () => SessionStore;
   getCurrentConversationId: () => string | undefined;
+  maxOutputChars?: number;
 }
 
 function excerpt(content: string, query: string, maxChars: number): string {
@@ -63,26 +64,46 @@ export function createSessionRecallTool(deps: SessionRecallToolDeps): AgentTool 
       const matches = deps.getSessionStore().recallSession(conversationId, query, {
         limit,
         ...(input.beforeSeq ? { beforeSeq: input.beforeSeq } : {}),
+        ...(deps.maxOutputChars ? { orderBySeq: true } : {}),
       });
+      if (deps.maxOutputChars) matches.sort((a, b) => b.seq - a.seq);
       const results = matches.map((match) => ({
         seq: match.seq,
         entryId: match.entryId,
         role: match.role,
         createdAt: new Date(match.createdAt).toISOString(),
         content: excerpt(match.content, query, maxChars),
+        ...(deps.maxOutputChars ? { truncated: match.content.length > maxChars } : {}),
       }));
-      const nextBeforeSeq = results.length === limit
-        ? Math.min(...results.map((result) => result.seq))
-        : undefined;
-      const payload = {
-        success: true,
-        query,
-        results,
-        count: results.length,
-        ...(nextBeforeSeq ? { nextBeforeSeq } : {}),
+      const payloadFor = () => {
+        const nextBeforeSeq = results.length && (results.length < matches.length || matches.length === limit)
+          ? Math.min(...results.map(result => result.seq)) : undefined;
+        return { success: true, query, results, count: results.length,
+          ...(deps.maxOutputChars ? { excerpts: true, truncated: results.length < matches.length || results.some(result => result.truncated) } : {}),
+          ...(nextBeforeSeq ? { nextBeforeSeq } : {}) };
       };
+      let payload = payloadFor();
+      let text = JSON.stringify(payload, null, 2);
+      if (deps.maxOutputChars) {
+        while (text.length > deps.maxOutputChars && results.length) {
+          if (results.length > 1) results.pop();
+          else if (results[0].content.length > 100) {
+            const match = matches[0];
+            results[0].content = excerpt(match.content, query, Math.floor(results[0].content.length / 2));
+            results[0].truncated = true;
+          } else break;
+          payload = payloadFor();
+          text = JSON.stringify(payload, null, 2);
+        }
+        if (text.length > deps.maxOutputChars) {
+          return { content: [{ type: 'text', text: JSON.stringify({ query: query.slice(0, 500), conversationId,
+            requiresSpecialist: true, complete: false, reason: 'large_transcript',
+            guidance: 'Delegate a complete read using the conversation ID and query.' }) }],
+            details: { requiresSpecialist: true, complete: false } };
+        }
+      }
       return {
-        content: [{ type: 'text', text: JSON.stringify(payload, null, 2) }],
+        content: [{ type: 'text', text }],
         details: payload,
       };
     },

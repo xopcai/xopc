@@ -43,6 +43,7 @@ import { tryApplySessionTranscriptHygiene } from '../transcript/transcript-hygie
 import { restoreCurrentTurnImages } from './current-turn-images.js';
 import { acquireEmbeddedSessionRunner, evictEmbeddedSessionRunner } from './session-runner.js';
 import { externalPolicyContext } from './tool-metadata.js';
+import { allowsExecutionTool, filterExecutionTools, resolveExecutionToolPolicy } from './execution-tool-policy.js';
 import { createSqliteTranscriptRuntime } from './transcript-runtime.js';
 import { wrapStreamFnForXopcExtensions } from './xopc-stream-bridge.js';
 import { projectContextForModel } from '../memory/context-budget.js';
@@ -361,7 +362,9 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
     onEvent,
   } = params;
 
-  const tools = traceTools(rawTools);
+  const toolPolicyConversationId = params.toolPolicyConversationId ?? conversationId;
+  const executionToolPolicy = resolveExecutionToolPolicy(toolPolicyConversationId);
+  const tools = traceTools(filterExecutionTools(executionToolPolicy, rawTools));
   const timeoutMs = params.timeoutMs || resolveAgentTurnTimeoutMs();
   const resolvedModel = requireEmbeddedModel(model, params.modelRef);
   const configuredThinking = isXopcDatabaseOpen() && getSessionMetadata(conversationId)
@@ -404,6 +407,7 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
       model: resolvedModel,
       modelRef: params.modelRef,
       tools,
+      executionToolPolicy,
       codemode: params.codemode,
       mcp: params.mcp,
       systemPrompt: [systemPrompt, rootInstructions].filter(Boolean).join('\n\n'),
@@ -630,6 +634,15 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
     let sentVisibleMessage = false;
     params.turnPolicy?.reset();
     session.agent.beforeToolCall = async (context, signal) => {
+      if (!allowsExecutionTool(executionToolPolicy, context.toolCall.name)) {
+        return { block: true, reason: 'Tool is outside this execution scope.' };
+      }
+      if (executionToolPolicy.surface !== 'agent'
+        && resolveExecutionToolPolicy(toolPolicyConversationId).surface !== executionToolPolicy.surface) {
+        policyStopped = true;
+        quarantineRunner = true;
+        return { block: true, terminate: true, reason: 'Execution identity changed. Start a new turn with the current tool policy.' };
+      }
       const resume = getClarificationResumeInput(conversationId, runId);
       const wait = resume?.payload?.waitId ? getClarification(resume.payload.waitId) : undefined;
       if (wait?.approvalKey?.startsWith('computer:') && wait.answer !== '已在桌面端处理，继续') {

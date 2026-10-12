@@ -251,7 +251,7 @@ export function loadCompactionSourceSnapshot(conversationId: string): Compaction
 export function searchSessionTranscript(
   conversationId: string,
   query: string,
-  options: { limit?: number; beforeSeq?: number } = {},
+  options: { limit?: number; beforeSeq?: number; orderBySeq?: boolean } = {},
 ): SessionTranscriptRecallMatch[] {
   const transcriptId = getCurrentTranscriptId(conversationId);
   const normalized = query.trim();
@@ -269,7 +269,7 @@ export function searchSessionTranscript(
          AND f.transcript_id = ?
          AND e.entry_kind <> 'compaction'
          AND e.seq < ?
-       ORDER BY bm25(transcript_fts), e.seq DESC
+       ORDER BY ${options.orderBySeq ? 'e.seq DESC' : 'bm25(transcript_fts), e.seq DESC'}
        LIMIT ?`,
     )
     .all(escapeFts5Query(normalized), transcriptId, beforeSeq, limit);
@@ -287,7 +287,7 @@ export function searchSessionTranscript(
     )
     .all(transcriptId, beforeSeq, `%${escapedLike}%`, limit);
   const seen = new Set<string>();
-  return [...ftsRows, ...literalRows]
+  const matches = [...ftsRows, ...literalRows]
     .flatMap((row) => {
       const result = row as {
         entry_id: string;
@@ -305,8 +305,9 @@ export function searchSessionTranscript(
         createdAt: result.created_at,
         content: result.content,
       }];
-    })
-    .slice(0, limit);
+    });
+  if (options.orderBySeq) matches.sort((a, b) => b.seq - a.seq);
+  return matches.slice(0, limit);
 }
 
 export function loadTranscriptRowsForSession(conversationId: string): TranscriptStoredRow[] {

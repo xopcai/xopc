@@ -30,6 +30,9 @@ export function mergeMissingUserMessagesFromServer(
       // A delayed snapshot for an earlier run cannot remove a later local turn.
       if (localActiveIndex >= 0 && local.slice(localActiveIndex + 1).some(isUser)) return local;
       const canonicalPrefix = server.slice(0, activeUserIndex + 1);
+      // A paged or delayed snapshot may lack rows already rendered before this
+      // user turn. Live synchronization must not shrink the committed prefix.
+      if (localActiveIndex >= 0 && canonicalPrefix.length < localActiveIndex + 1) return local;
       if (!hasSameTurnBoundaries(local, canonicalPrefix)) {
         return mergeConsecutiveAssistantMessages(canonicalPrefix);
       }

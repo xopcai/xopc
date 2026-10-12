@@ -72,6 +72,23 @@ describe('session_search summary model', () => {
     expect(completeWithResolvedCredentials).not.toHaveBeenCalled();
   });
 
+  it('bounds the total serialized local result even when transcript text requires escaping', async () => {
+    const store = { ...createStore(), list: vi.fn(async () => ({
+      items: Array.from({ length: 5 }, (_, i) => ({ key: `chat-${i}`, name: '"\\\n'.repeat(300) })), total: 5,
+    })), recallSession: vi.fn(() => Array.from({ length: 2 }, (_, i) => ({ seq: i + 1,
+      role: 'user', content: 'Friday ' + '"\\\n'.repeat(1000) }))) };
+    const tool = createSessionSearchTool({ getSessionStore: () => store as never,
+      getPrimaryModel: () => model('test', 'fast'), localOnly: true });
+    const result = await tool.execute('local', { query: 'Friday', limit: 5 });
+    const text = (result.content[0] as { text: string }).text;
+    expect(text.length).toBeLessThanOrEqual(8000);
+    const payload = JSON.parse(text);
+    expect(payload).toMatchObject({ truncated: true });
+    expect(payload.results[0].excerpts[0].content).toContain('Friday');
+    expect(store.load).not.toHaveBeenCalled();
+    expect(completeWithResolvedCredentials).not.toHaveBeenCalled();
+  });
+
   it('uses the current effective session model for every execution', async () => {
     let currentModel = model('deepseek', 'deepseek-v4-flash');
     const getPrimaryModel = () => currentModel;
@@ -123,5 +140,14 @@ describe('session_search summary model', () => {
 
     expect(store.list).not.toHaveBeenCalled();
     expect(result.details).toEqual({ error: 'cross_session_history_disabled' });
+  });
+
+  it('rejects oversized local search keywords before reading the store', async () => {
+    const getSessionStore = vi.fn();
+    const tool = createSessionSearchTool({ getSessionStore, getPrimaryModel: () => model('test', 'fast'), localOnly: true });
+    const result = await tool.execute('local', { query: 'x'.repeat(9000) });
+    expect(result.details).toMatchObject({ error: 'invalid_query' });
+    expect(getSessionStore).not.toHaveBeenCalled();
+    expect((result.content[0] as { text: string }).text.length).toBeLessThan(100);
   });
 });

@@ -42,6 +42,8 @@ import type { EndpointToolRuntime } from '../../../endpoint-tools/runtime.js';
 import { ENDPOINT_PROTOCOL_VERSION, ENDPOINT_TEXT_OUTPUT_SCHEMA, type EndpointHelloPayload, type ServerEndpointMessage } from '@xopcai/endpoint-tools-protocol';
 import { requireXopcDatabase } from '../../../storage/sqlite/connection.js';
 import { getEmbeddedSessionRunnerStats } from '../session-runner.js';
+import { createConversation } from '../../../storage/sqlite/conversation-repository.js';
+import { personalAgentId } from '../../../personal-agent/repository.js';
 
 const model = { id: 'gpt-6-sol', name: 'Test', provider: 'openai', api: 'openai-completions' as const,
   baseUrl: 'https://example.invalid', reasoning: false, input: ['text' as const], contextWindow: 128000,
@@ -93,6 +95,20 @@ async function runScript(params: RunXopcEmbeddedTurnParams, code: string, name =
   expect(turn).toMatchObject({ ok: true });
   return { result: result as unknown as Record<string, unknown>, events, calls };
 }
+
+it('inherits Personal boundaries in an ephemeral run and blocks guessed tools before execution', async () => {
+  const { params } = await fixture();
+  params.toolPolicyConversationId = createConversation({ agentId: personalAgentId('local-owner'),
+    customData: { personalAgent: true } }).key;
+  const execute = vi.fn(async () => ({ content: [{ type: 'text' as const, text: 'unsafe' }], details: {} }));
+  params.tools.push({ name: 'exec_command', label: 'Shell', description: 'Shell', parameters: Type.Object({}), execute });
+  for (const name of ['codemode', 'tool_search', 'exec_command']) {
+    const { calls, result } = await runScript({ ...params, runId: crypto.randomUUID() }, '', name, {});
+    expect(JSON.stringify(calls)).not.toContain(name);
+    expect(result).toMatchObject({ isError: true });
+  }
+  expect(execute).not.toHaveBeenCalled();
+}, 15000);
 
 it('runs real QuickJS reads through xopc hooks, retains nested records and restores store on rebuild', async () => {
   const { params, runtime } = await fixture();

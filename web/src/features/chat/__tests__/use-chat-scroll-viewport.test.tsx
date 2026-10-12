@@ -295,6 +295,27 @@ describe('useChatScrollViewport', () => {
     expect(viewport?.atBottom).toBe(false);
   });
 
+  it('does not treat cloned history plus a new send as a history prepend', () => {
+    act(() => root.render(<Harness />));
+    const el = container.firstElementChild as HTMLDivElement;
+    let height = 1600;
+    let top = 300;
+    Object.defineProperties(el, {
+      clientHeight: { get: () => 600 },
+      scrollHeight: { get: () => height },
+      scrollTop: { get: () => top, set: (value: number) => { top = value; } },
+    });
+    act(() => el.dispatchEvent(new Event('scroll')));
+    act(() => root.render(<Harness messages={structuredClone(chatMessages)} />));
+    height += 200;
+    act(() => root.render(<Harness messages={[
+      ...structuredClone(chatMessages),
+      { role: 'user', timestamp: 2, content: [{ type: 'text', text: 'New question' }] },
+    ]} />));
+    expect(top).toBe(300);
+    expect(viewport?.atBottom).toBe(false);
+  });
+
   it('shows the button only after moving beyond the bottom threshold', () => {
     act(() => root.render(<Harness />));
     const el = container.firstElementChild as HTMLDivElement;

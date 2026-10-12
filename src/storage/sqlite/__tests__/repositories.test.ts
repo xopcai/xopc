@@ -604,6 +604,17 @@ describe('sqlite repositories', () => {
     expect(toolArgument[0]?.content).toContain('deployctl');
   });
 
+  it('paginates chronological transcript search without skipping lower-ranked recent matches', () => {
+    ensureSessionRecord(CONVERSATION_ID, CWD, { agentId: 'main' });
+    appendTranscriptEntry(CONVERSATION_ID, userMessage('ORBIT'));
+    appendTranscriptEntry(CONVERSATION_ID, userMessage(`ORBIT ${'context '.repeat(80)}`));
+    appendTranscriptEntry(CONVERSATION_ID, userMessage(`ORBIT ${'context '.repeat(160)}`));
+    const first = searchSessionTranscript(CONVERSATION_ID, 'ORBIT', { limit: 1, orderBySeq: true });
+    expect(first.map(row => row.seq)).toEqual([3]);
+    const next = searchSessionTranscript(CONVERSATION_ID, 'ORBIT', { limit: 2, beforeSeq: first[0].seq, orderBySeq: true });
+    expect(next.map(row => row.seq)).toEqual([2, 1]);
+  });
+
   it('computes global session stats', () => {
     ensureSessionRecord(CONVERSATION_ID, CWD, { agentId: "main" });
     ensureSessionRecord("192c8bfa-679c-4ae0-80c7-e8f3a125cdb1", CWD, { agentId: "main" });

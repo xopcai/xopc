@@ -781,6 +781,7 @@ export class AgentService {
     return runWithEmbeddedExecutionSession(params.executionConversationId, () =>
       runXopcEmbeddedTurn({
         conversationId: params.executionConversationId,
+        toolPolicyConversationId: params.parentConversationId,
         verifyChanges: resolveAgentIdFromConversationId(params.parentConversationId) === 'coder',
         runId: params.runId,
         userMessage,

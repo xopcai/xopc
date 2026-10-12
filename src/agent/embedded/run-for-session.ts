@@ -27,6 +27,7 @@ import { projectTurnOutcome } from '../../session/turn-outcome-projector.js';
 import { appendDynamicPromptSection } from '../prompt/cache-boundary.js';
 import { prepareNativeMcpConfig } from '../mcp/native-mcp.js';
 import { materializeNativeExternalTools } from './external-tool-discovery.js';
+import { filterExecutionTools, resolveExecutionToolPolicy } from './execution-tool-policy.js';
 
 const log = createLogger('EmbeddedTurnForSession');
 
@@ -165,7 +166,8 @@ async function runEmbeddedTurnForSessionInner(params: RunEmbeddedForSessionParam
       await mm.applyModelForSession(agent, conversationId);
     }
     agentManager.setModelForSession(conversationId, modelRef);
-    const tools = [...agent.state.tools];
+    const executionToolPolicy = resolveExecutionToolPolicy(conversationId);
+    const tools = filterExecutionTools(executionToolPolicy, agent.state.tools);
     const turnPolicy = agentManager.createAgentTurnPolicy(conversationId);
     const baseSystemPrompt = [agent.state.systemPrompt ?? '', params.presentation === 'voice' ? voicePresentationPrompt : '']
       .filter(Boolean).join('\n\n');
@@ -197,8 +199,10 @@ async function runEmbeddedTurnForSessionInner(params: RunEmbeddedForSessionParam
     }
     const thinkingLevel = (params.thinkingOverride as ThinkingLevel | undefined) ?? agent.state.thinkingLevel;
     const workspaceDir = agentManager.getResolvedWorkspaceForSession(conversationId);
-    tools.push(...await materializeNativeExternalTools({ conversationId, tools }));
-    const mcp = config ? await prepareNativeMcpConfig(config, workspaceDir) : undefined;
+    if (executionToolPolicy.externalMaterialization) {
+      tools.push(...await materializeNativeExternalTools({ conversationId, tools }));
+    }
+    const mcp = config && executionToolPolicy.nativeMcp ? await prepareNativeMcpConfig(config, workspaceDir) : undefined;
     const promptCachePolicy = resolvePromptCachePolicy(
       config
         ? resolveEffectiveAgentProfileForSession(conversationId).config.runtime.promptCache
@@ -305,7 +309,8 @@ async function runEmbeddedTurnForSessionInner(params: RunEmbeddedForSessionParam
             tools,
             systemPrompt,
             thinkingLevel,
-            codemode: config ? resolveEffectiveAgentProfileForSession(conversationId).config.runtime.codemode : undefined,
+            codemode: config && executionToolPolicy.codemode
+              ? resolveEffectiveAgentProfileForSession(conversationId).config.runtime.codemode : undefined,
             mcp,
             promptCachePolicy,
             compactionPolicy: resolveCompactionPolicy(config),

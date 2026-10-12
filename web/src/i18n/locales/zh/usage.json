@@ -18,8 +18,8 @@
     "allCostsUnknown": "这些外部供应商调用没有可用金额估算；不会作为零费用处理。",
     "byScenario": "按场景",
     "byModel": "按模型",
-    "recentCalls": "最近调用",
-    "recentCallsHint": "每一行代表一次调用尝试；Cloud 扣费状态以平台凭证为准。",
+    "recentCalls": "调用明细",
+    "recentCallsHint": "按时间从新到旧排列；每行代表一次调用尝试，Cloud 扣费以平台凭证为准。",
     "costUnknown": "费用未知",
     "tokensUnknown": "Token 未知",
     "empty": "该时间范围内没有 AI 调用。",
@@ -91,6 +91,20 @@
     "cloudPendingReserved": "结算中 · 已预留 {{credits}} Credits",
     "localNoCharge": "本地运行，不扣 Cloud Credits",
     "cloudCoverage": "已确认金额仅包含本设备已关联的扣费凭证；{{pending}} 次结算中，{{unknown}} 次费用未确认。",
-    "cloudReserved": "当前预留 {{credits}} Credits。"
+    "cloudReserved": "当前预留 {{credits}} Credits。",
+    "distribution": "用量分布",
+    "distributionHint": "按调用次数查看完整时间范围内的使用分布。",
+    "groupPage": "第 {{page}} / {{pages}} 页 · 共 {{count}} 项",
+    "previousDistribution": "上一页用量分布",
+    "nextDistribution": "下一页用量分布",
+    "pageSize": "每页条数",
+    "rowsPerPage": "每页 {{count}} 条",
+    "eventPage": "第 {{page}} 页 · 本页 {{count}} 条",
+    "pagination": "调用明细分页",
+    "firstPage": "返回首页",
+    "previousPage": "上一页",
+    "nextPage": "下一页",
+    "billingDetails": "计费说明与 Cloud 账户",
+    "refresh": "刷新用量"
   }
 }

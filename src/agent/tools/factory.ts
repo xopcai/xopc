@@ -1,5 +1,7 @@
 import { createPersonalAttentionTool } from './personal-attention-tool.js';
 import { markCodemodeCoreRead } from './codemode-permissions.js';
+import { LOCAL_READ_MAX_CHARS } from './local-read-budget.js';
+import { filterExecutionTools, PERSONAL_REQUEST_TOOL_IDS, resolveExecutionToolPolicy } from '../embedded/execution-tool-policy.js';
 import type { SceneAccess } from '../../scenes/httpServices.js';
 import { resolveEffectiveAgentConfigForAgent } from '../../config/agent-profile.js';
 /**
@@ -352,7 +354,11 @@ export class AgentToolsFactory {
     const getSkillMgr = options?.getSkillManager;
     const disabled = options?.disabledTools;
     let allowed = options?.toolAllowlist ? new Set(options.toolAllowlist) : undefined;
-    const personalToolsConfigured = Boolean(allowed?.has('personal_task') || allowed?.has('personal_preference'));
+    const currentConversationId = () => options?.conversationId ?? this.deps.getCurrentContext?.()?.conversationId;
+    const executionConversationId = currentConversationId();
+    const executionToolPolicy = executionConversationId ? resolveExecutionToolPolicy(executionConversationId) : undefined;
+    const personalToolsConfigured = executionToolPolicy?.surface === 'personal_main'
+      || Boolean(allowed?.has('personal_task') || allowed?.has('personal_preference'));
 
     const primary = getPrimary?.();
     const modelHasVision = primary?.input?.includes('image') ?? false;
@@ -371,8 +377,6 @@ export class AgentToolsFactory {
     });
     const agentId = options?.agentId;
     const resolvedAgentId = agentId ?? (cfg ? resolveDefaultAgentId() : 'main');
-    const currentConversationId = () => options?.conversationId ?? this.deps.getCurrentContext?.()?.conversationId;
-    const executionConversationId = currentConversationId();
     const personalExecution = executionConversationId ? personalRequestForExecution(executionConversationId) : undefined;
     const personalExecutionMarker = executionConversationId && isXopcDatabaseOpen()
       ? getSessionMetadata(executionConversationId)?.customData?.personalReadRequestId : undefined;
@@ -381,7 +385,7 @@ export class AgentToolsFactory {
       patchSessionMetadata(executionConversationId, { customData: { ...metadata?.customData, personalReadRequestId: personalExecution.requestId } });
     }
     if (personalExecution || personalExecutionMarker) {
-      allowed = new Set(['xopc_tool_search', 'xopc_tool_describe', 'xopc_tool_execute']
+      allowed = new Set(PERSONAL_REQUEST_TOOL_IDS.slice(0, 3)
         .filter(name => !allowed || allowed.has(name)));
       allowed.add('personal_request_result');
       allowed.add('personal_request_connection');
@@ -421,7 +425,7 @@ export class AgentToolsFactory {
 
     const readTool = createReadFileTool(workspace, {
       profileMarkdownRoot: options?.profileMarkdownRoot,
-      ...(personalToolsConfigured ? { defaultMaxLines: 150, maxOutputBytes: 8000, maxReadBytes: 12000 } : {}),
+      ...(personalToolsConfigured ? { defaultMaxLines: 150, maxOutputBytes: LOCAL_READ_MAX_CHARS, maxReadBytes: 12000 } : {}),
     });
     const writeTool = createWriteFileTool(workspace, {
       profileMarkdownRoot: options?.profileMarkdownRoot,
@@ -549,7 +553,7 @@ export class AgentToolsFactory {
         : []),
       createSendMediaTool(workspace, bus, deliveryContext),
       createPublishArtifactsTool(workspace),
-      createReadMediaTool(personalToolsConfigured ? { textOnly: true, maxChars: 8000, maxReadBytes: 12000 } : undefined),
+      createReadMediaTool(personalToolsConfigured ? { textOnly: true, maxChars: LOCAL_READ_MAX_CHARS, maxReadBytes: 12000 } : undefined),
       ...(isShareToolAvailable(cfg)
         ? [
             createCreateShareTool({
@@ -635,7 +639,8 @@ export class AgentToolsFactory {
         ? [
             createSessionRecallTool({
               getSessionStore: this.deps.getSessionStore,
-              getCurrentConversationId: () => this.deps.getCurrentContext()?.conversationId,
+              getCurrentConversationId: currentConversationId,
+              ...(personalToolsConfigured ? { maxOutputChars: LOCAL_READ_MAX_CHARS } : {}),
             }),
           ]
         : []),
@@ -792,10 +797,11 @@ export class AgentToolsFactory {
         allowHostGit: () => getCommandIsolation()?.mode !== 'docker',
       }));
     }
-    return filterToolsByDisabledSet(core.map(markCodemodeCoreRead), disabled)
+    const selected = filterToolsByDisabledSet(core.map(markCodemodeCoreRead), disabled)
       .filter(tool => (!allowed || allowed.has(tool.name)) && !(personalToolsConfigured && tool.name === 'clarify'))
       .map(tool => personalToolsConfigured && PERSONAL_TOOL_DESCRIPTIONS[tool.name]
         ? { ...tool, description: PERSONAL_TOOL_DESCRIPTIONS[tool.name] } : tool);
+    return executionToolPolicy ? filterExecutionTools(executionToolPolicy, selected) : selected;
   }
 
   createCapabilityTools(

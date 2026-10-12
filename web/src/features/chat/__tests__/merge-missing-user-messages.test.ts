@@ -54,4 +54,16 @@ describe('mergeMissingUserMessagesFromServer', () => {
     expect(mergeMissingUserMessagesFromServer(local, [oldUser, a1], 'old-run')).toBe(local);
   });
 
+  it('keeps displayed replies when a live snapshot omits the preceding assistant', () => {
+    const activeUser = { ...u2, turnId: 'run-2' };
+    const local = [u1, a1, activeUser];
+    expect(mergeMissingUserMessagesFromServer(local, [u1, activeUser], 'run-2')).toBe(local);
+  });
+
+  it('keeps loaded history when the live snapshot contains only the latest page', () => {
+    const activeUser = { ...u2, turnId: 'run-2' };
+    const local = [u1, a1, activeUser];
+    expect(mergeMissingUserMessagesFromServer(local, [activeUser], 'run-2')).toBe(local);
+  });
+
 });

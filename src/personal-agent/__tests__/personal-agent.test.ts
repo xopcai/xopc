@@ -107,8 +107,15 @@ describe('personal Agent identity', () => {
         .map(tool => tool.name);
       expect(tools).toContain('personal_task');
       expect(tools).toContain('personal_preference');
-      expect(tools).toContain('xopc_use');
-      expect(tools).toContain('exec_command');
+      expect(tools).not.toContain('xopc_use');
+      expect(tools).not.toContain('exec_command');
+      const ordinary = createConversation({ agentId: first.agentId }, dir).key;
+      const ordinaryTools = new AgentToolsFactory({ workspace: dir, bus: {} as MessageBus,
+        getCurrentContext: () => null, dispatchTaskRuns: () => {} })
+        .createCoreTools({ agentId: first.agentId, conversationId: ordinary,
+          toolAllowlist: ['xopc_use', 'exec_command', 'personal_task', 'personal_preference'] }).map(tool => tool.name);
+      expect(ordinaryTools).toContain('xopc_use');
+      expect(ordinaryTools).toContain('exec_command');
       repository.create({ id: 'researcher', profile: { name: 'Research Assistant' },
         toolAllowlist: ['web_search'], tools: { web_fetch: { mode: 'deny' } } }, { ready: true });
       repository.create({ id: 'coder', profile: { name: 'Coding Expert' }, toolAllowlist: ['exec_command'] }, { ready: true });
@@ -398,6 +405,7 @@ describe('personal Agent identity', () => {
       expect(refreshed.profile?.instructions).toContain('do not read repeated chunks');
       expect(refreshed.profile?.instructions).toContain('For current news or other live facts');
       expect(refreshed.profile?.instructions).toContain('Keep my custom instruction.');
+      expect(refreshed.profile?.instructions).toContain('MCP, Codemode and dynamic tool discovery belong to specialist execution');
       expect(refreshed.profile?.instructions).not.toContain('Legacy name');
       expect(refreshed.profile?.instructions).toContain('shared user profile');
       expect(refreshed.profile?.instructions).toContain('Do not include task progress links by default');
