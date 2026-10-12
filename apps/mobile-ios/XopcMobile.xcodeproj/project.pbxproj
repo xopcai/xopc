@@ -113,6 +113,7 @@
 		C584DE6838646B27073D38C2 /* ConversationContextView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4C2A4FD49586D61A1532166 /* ConversationContextView.swift */; };
 		C9947C87AE5057F15DC51FB7 /* AssistantOptionsState.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0255B2AC32A3E02B25D4469 /* AssistantOptionsState.swift */; };
 		D1AC366C652CBF7C398A77F7 /* RealtimeVoiceCall.swift in Sources */ = {isa = PBXBuildFile; fileRef = 011E551E82084F5A029CEABC /* RealtimeVoiceCall.swift */; };
+		D32024AC92F728079D7A4EF3 /* AssistantState+RunLookup.swift in Sources */ = {isa = PBXBuildFile; fileRef = 70704AB00AC699933B3594B2 /* AssistantState+RunLookup.swift */; };
 		D3ABAF2AEEAE08456E44B863 /* FeatureStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 390E698F139D6E95B996C88A /* FeatureStateTests.swift */; };
 		D8A742CC9B90AC33A3B16D87 /* AppLocalizationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8D791DF361327CBB69D5A7D /* AppLocalizationTests.swift */; };
 		DA875680CA67E6FAF3CBC499 /* MobileTypography.swift in Sources */ = {isa = PBXBuildFile; fileRef = 295CD90FB2DA31FAFC85BFFE /* MobileTypography.swift */; };
@@ -219,6 +220,7 @@
 		6C6E75BB052D95075AC66B64 /* GatewayClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GatewayClient.swift; sourceTree = "<group>"; };
 		6D825661BEBDD6B5A541C267 /* ProjectCreationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectCreationTests.swift; sourceTree = "<group>"; };
 		6FDD6132B9280A0096D4018A /* GatewayClient+Workflows.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "GatewayClient+Workflows.swift"; sourceTree = "<group>"; };
+		70704AB00AC699933B3594B2 /* AssistantState+RunLookup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AssistantState+RunLookup.swift"; sourceTree = "<group>"; };
 		74B5BF8D4118453BB4A02656 /* TaskEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskEditorView.swift; sourceTree = "<group>"; };
 		7636CD1ED5D767EF95BA7686 /* GatewayClient+ComposerPalette.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "GatewayClient+ComposerPalette.swift"; sourceTree = "<group>"; };
 		794BD953FB93FEDE80CB2A00 /* MarkdownBlocksTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownBlocksTests.swift; sourceTree = "<group>"; };
@@ -299,6 +301,7 @@
 				25DA3228471D55EE4704F260 /* AssistantOptionsView.swift */,
 				558536AF0FCE145886FA6752 /* AssistantQueueState.swift */,
 				E8D33D5255A8BCFF3E0B3116 /* AssistantState.swift */,
+				70704AB00AC699933B3594B2 /* AssistantState+RunLookup.swift */,
 				DA016590211F6147655749F4 /* AssistantTimeline.swift */,
 				3B5399156DB80FDFA0CC9CDF /* AssistantView.swift */,
 				E9C4B5F30CF6DFD4AA19B2AC /* AssistantView+Sending.swift */,
@@ -684,6 +687,7 @@
 				C9947C87AE5057F15DC51FB7 /* AssistantOptionsState.swift in Sources */,
 				14DF591B12C7D14CF991550D /* AssistantOptionsView.swift in Sources */,
 				FC66CBF9FC68FF2FF67F7746 /* AssistantQueueState.swift in Sources */,
+				D32024AC92F728079D7A4EF3 /* AssistantState+RunLookup.swift in Sources */,
 				50E083DE84A577E1A4201E91 /* AssistantState.swift in Sources */,
 				4B88EB8E65EB0FF890C5F660 /* AssistantTimeline.swift in Sources */,
 				81BAC3CFA81816058F703D55 /* AssistantView+Sending.swift in Sources */,
