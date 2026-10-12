@@ -113,6 +113,10 @@ describe('background task result delivery', () => {
       expect(prompt).toContain('Draw sunset');
       expect(prompt).toContain(PERSONAL_PERSONA_GUIDANCE);
       expect(prompt).toContain('Answer the question directly by default without appending a source list.');
+      expect(prompt).toContain('Begin with a natural sentence suited to the exchange');
+      expect(prompt).toContain('User: 这些新闻什么时候的？');
+      expect(prompt).toContain('User: K.');
+      expect(prompt).not.toContain('lead with the answer or the most relevant judgment');
       expect(prompt).toContain('CUSTOM_PERSONAL_SOUL');
       expect(prompt).not.toContain('OTHER_AGENT_SOUL');
       expect(prompt).not.toContain('UNTRUSTED_LONG_WORKER_INSTRUCTIONS');

@@ -9,7 +9,7 @@ describe('Strict API rate limit', () => {
     buckets.resetAllForTests();
   });
 
-  it('allows 150 authenticated UI mutations per minute for one client', async () => {
+  it('allows 600 authenticated UI mutations per minute for one client', async () => {
     const app = new Hono();
     app.use(
       '/write',
@@ -17,7 +17,7 @@ describe('Strict API rate limit', () => {
     );
     app.post('/write', (c) => c.json({ ok: true }));
 
-    for (let request = 0; request < 150; request += 1) {
+    for (let request = 0; request < 600; request += 1) {
       const response = await app.request('/write', { method: 'POST' });
       expect(response.status).toBe(200);
     }
