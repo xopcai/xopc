@@ -19,7 +19,7 @@ function setup() {
   vi.useFakeTimers();
   return Object.assign(new Handler(), {
     visible: true, atBottom: true, initialScrollPending: false, loadingOlder: false,
-    chat: { selectedId: 'one', loading: false, cachedHistory: false }, scrollTimer: -1,
+    renderKeys: { update() {} }, chat: { selectedId: 'one', loading: false, cachedHistory: false }, scrollTimer: -1,
     olderGeneration: 0, initialScrollAttempts: 0,
     layoutScrollAnimating: false, layout: { reduceMotion: false }, presentationRows: [{ id: 'last' }],
     messagesScroller: { scrollEdge: vi.fn(), scrollToIndex: vi.fn(), isAtEnd: vi.fn(() => false), currentOffset: () => ({ yOffset: 2000 }) },

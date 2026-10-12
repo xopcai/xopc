@@ -25,6 +25,29 @@ const page = (id: string, text: string, before = '') => ({
   pagination: { hasMore: !!before, nextBeforeCursor: before },
 });
 describe('chat history isolation', () => {
+  it('commits continuous deltas on a fixed deadline and flushes before terminal history reconciliation', async () => {
+    vi.useFakeTimers();
+    const chat = new XopcChatViewModel();
+    chat.selectedId = 'one'; chat.runId = 'run'; chat.loading = true; chat.activate(); chat.loading = false;
+    mocks.history.mockRejectedValue(new Error('offline'));
+    let received = 0;
+    const delta = () => {
+      realtimeClient.onEvent({ topic: 'run:run', seq: received + 1, event: 'assistant_delta',
+        data: { conversationId: 'one', runId: 'run', payload: { messageId: 'm', delta: '字', offset: received++ } } });
+    };
+    try {
+      delta(); expect(chat.streaming).toBe('字');
+      const first = chat.liveRow;
+      delta(); expect(chat.liveRow).toBe(first);
+      for (let index = 0; index < 4; index++) { vi.advanceTimersByTime(8); delta(); }
+      expect(chat.streaming.length).toBeGreaterThan(1);
+      expect(chat.streaming.length).toBeLessThan(received);
+      realtimeClient.onEvent({ topic: 'run:run', seq: 99, event: 'run_end', data: { conversationId: 'one', runId: 'run', payload: {} } });
+      expect(chat.liveRow?.text.length).toBe(received);
+      await Promise.resolve();
+      expect(chat.liveRow?.text.length).toBe(received);
+    } finally { chat.dispose(); vi.useRealTimers(); }
+  });
   it('prefetches only one older page silently and consumes it without another request', async () => {
     const chat = new XopcChatViewModel(); chat.connection = 'connected';
     mocks.history.mockResolvedValueOnce(page('one', 'latest', 'cursor'));
@@ -577,7 +600,7 @@ describe('chat history isolation', () => {
     await vi.waitFor(() => expect(mocks.activeRun).toHaveBeenCalled());
     expect(chat.liveRow?.text).toBe('Hello');
     delta(1, 'Hello', 0); delta(2, ' world', 5);
-    expect(chat.liveRow?.text).toBe('Hello world'); expect(chat.streaming).toBe('Hello world'); chat.dispose();
+    await vi.waitFor(() => expect(chat.liveRow?.text).toBe('Hello world')); expect(chat.streaming).toBe('Hello world'); chat.dispose();
   });
   it('recovers a run completed in the background even without a connected event', async () => {
     const chat = new XopcChatViewModel(); chat.activate(); chat.selectedId = 'one'; chat.runId = 'run';
@@ -595,7 +618,7 @@ describe('chat history isolation', () => {
     delta('Hello', 0); mocks.history.mockRejectedValue(new Error('OFFLINE'));
     mocks.activeRun.mockResolvedValue({ active: true, runId: 'run' });
     chat.pause(); chat.resume(); await vi.waitFor(() => expect(chat.error).toBe('OFFLINE'));
-    delta(' again', 5); expect(chat.liveRow?.text).toBe('Hello again'); chat.dispose();
+    delta(' again', 5); await vi.waitFor(() => expect(chat.liveRow?.text).toBe('Hello again')); chat.dispose();
   });
   it('does not resurrect a run that ends during foreground reconciliation', async () => {
     const chat = new XopcChatViewModel(); chat.activate(); chat.selectedId = 'one'; chat.runId = 'run';

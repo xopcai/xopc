@@ -30,6 +30,9 @@ final class AssistantState {
     private var runObservation: Task<Void, Never>?
     private var runGeneration = 0
     private var isForeground = true
+    @ObservationIgnored private let streamBuffer = ChatStreamBuffer()
+    @ObservationIgnored private var streamCommit: Task<Void, Never>?
+    @ObservationIgnored private var streamGap = false
 
     func load(using gateway: any GatewayServing) async {
         isLoading = true
@@ -51,6 +54,25 @@ final class AssistantState {
         }
     }
 
+    private func prepareConversation(_ conversation: ConversationSelection?) {
+        runID = nil
+        loadedConversationID = conversation?.id
+        loadedTranscriptID = conversation?.transcriptId
+        contextGeneration += 1
+        messages = []
+        streamBuffer.reset()
+        streamGap = false
+        executionActivity = []
+        activityLabel = nil
+        errorMessage = nil
+        contextSummary = nil
+        contextError = nil
+        clarification = nil
+        clarificationError = nil
+        pendingInputs = []
+        queueError = nil
+    }
+
     func loadConversation(_ conversation: ConversationSelection?, using gateway: any GatewayServing) async {
         isForeground = true
         if let conversation,
@@ -66,27 +88,16 @@ final class AssistantState {
             return
         }
         cancelRunObservation()
-        runID = nil
-        loadedConversationID = conversation?.id
-        loadedTranscriptID = conversation?.transcriptId
-        contextGeneration += 1
-        messages = []
-        executionActivity = []
-        activityLabel = nil
-        errorMessage = nil
-        contextSummary = nil
-        contextError = nil
-        clarification = nil
-        clarificationError = nil
-        pendingInputs = []
-        queueError = nil
+        prepareConversation(conversation)
         guard let conversation, !conversation.isDraft else { return }
         isLoadingHistory = true
         defer { isLoadingHistory = false }
         do {
             let history = try await gateway.fetchHistory(conversationID: conversation.id)
             guard !Task.isCancelled, loadedConversationID == conversation.id else { return }
-            messages = Self.timeline(from: history.session.messages)
+            let projected = await projectHistory(history)
+            guard !Task.isCancelled, loadedConversationID == conversation.id else { return }
+            messages = projected
             let run = try await gateway.fetchActiveRun(conversationID: conversation.id)
             guard !Task.isCancelled, loadedConversationID == conversation.id else { return }
             runID = run.active ? run.runId : nil
@@ -168,6 +179,7 @@ final class AssistantState {
     }
 
     private func cancelRunObservation() {
+        flushStream()
         runGeneration += 1
         runObservation?.cancel()
         runObservation = nil
@@ -264,6 +276,10 @@ final class AssistantState {
         for try await event in gateway.streamRun(runID: activeRunID) {
             guard isObserving(conversation, generation: generation) else { return true }
             apply(event, runID: activeRunID)
+            if streamGap {
+                streamGap = false
+                throw GatewayClientError.server("实时事件中断，正在恢复历史记录")
+            }
             if event.name == "clarify_request" {
                 await refreshClarification(for: conversation, using: gateway)
             }
@@ -279,12 +295,17 @@ final class AssistantState {
         do {
             let history = try await gateway.fetchHistory(conversationID: conversation.id)
             guard isObserving(conversation, generation: generation) else { return }
-            let saved = Self.timeline(from: history.session.messages)
-            let live = retainLive ? messages.filter { message in
-                message.isPending && !saved.contains { durable in
-                    durable.id == message.id || message.id == "live:\(message.turnId ?? ""):\(durable.id)"
-                }
-            } : []
+            flushStream()
+            var saved = await projectHistory(history)
+            guard isObserving(conversation, generation: generation) else { return }
+            if retainLive {
+                for index in saved.indices where streamBuffer.containsLive(saved[index].id) { saved[index].isPending = true }
+            }
+            let savedIDs = Set(saved.map(\.id))
+            let live = messages.filter { message in
+                (streamBuffer.containsLive(message.id) || (retainLive && message.isPending)) && !savedIDs.contains(message.id)
+            }
+            streamBuffer.confirm(Set(saved.filter { !$0.isPending }.map(\.id)))
             messages = saved + live
             errorMessage = nil
         } catch is CancellationError { return }
@@ -294,27 +315,40 @@ final class AssistantState {
         }
     }
 
+    func flushStream() {
+        streamCommit?.cancel(); streamCommit = nil
+        messages = streamBuffer.drain(messages)
+    }
+
     func apply(_ event: RunStreamEvent, runID: String) {
+        if event.name != "assistant_delta" { flushStream() }
+        if event.isTerminal {
+            streamGap = false
+            messages = streamBuffer.finish(messages)
+            self.runID = nil
+        }
         if event.name == "error" {
             errorMessage = event.errorMessage ?? AppLocalization.resolve("助手执行失败")
             return
         }
         updateActivity(with: event)
-        guard event.name == "assistant_delta", let delta = event.delta, !delta.isEmpty else { return }
-        let segmentID = event.messageId ?? runID
-        if messages.contains(where: { !$0.isPending && $0.id == segmentID }) {
-            return
-        }
-        let liveID = "live:\(runID):\(segmentID)"
-        if let index = messages.firstIndex(where: { $0.id == liveID }) {
-            if let offset = event.offset, offset != messages[index].text.utf16.count {
-                // Replayed prefixes are already visible. Missing prefixes are recovered from history.
-                return
+        if event.name == "assistant_message_end", event.presentation == "narration" {
+            let id = event.messageId ?? runID
+            if let narration = messages.first(where: { $0.id == id }) {
+                appendActivity(id: "narration:\(id)", title: String(narration.text.prefix(160)), status: "done")
             }
-            messages[index].text += delta
-        } else {
-            guard event.offset == nil || event.offset == 0 else { return }
-            messages.append(.init(id: liveID, role: "assistant", text: delta, isPending: true, turnId: runID))
+            streamBuffer.closeNarration(id)
+            messages.removeAll { $0.id == id }
+        }
+        guard event.name == "assistant_delta" else { return }
+        let result = streamBuffer.append(event, runID: runID, visible: messages)
+        if result == "gap" { streamGap = true }
+        if result == "first" { flushStream() }
+        else if result == "accepted", streamCommit == nil {
+            streamCommit = Task { [weak self] in
+                do { try await Task.sleep(for: .milliseconds(32)) } catch { return }
+                self?.flushStream()
+            }
         }
     }
 
@@ -329,6 +363,7 @@ final class AssistantState {
     }
 
     func stop(using gateway: any GatewayServing) async {
+        flushStream()
         guard let runID else { return }
         do {
             try await gateway.abort(runID: runID)
@@ -342,28 +377,13 @@ final class AssistantState {
 }
 
 extension AssistantState {
-    func observeTaskResults(in conversation: ConversationSelection, using gateway: any GatewayServing) async {
-        var delay = 1
-        while !Task.isCancelled {
-            do {
-                await refreshTaskResults(in: conversation, using: gateway)
-                for try await _ in gateway.streamTaskResults(conversationID: conversation.id) {
-                    delay = 1
-                    await refreshTaskResults(in: conversation, using: gateway)
-                }
-            } catch is CancellationError { return }
-            catch { /* Recover durable history on reconnect. */ }
-            do { try await Task.sleep(for: .seconds(delay)) }
-            catch { return }
-            delay = min(delay * 2, 30)
-        }
-    }
-
-    private func refreshTaskResults(in conversation: ConversationSelection, using gateway: any GatewayServing) async {
+    func refreshTaskResults(in conversation: ConversationSelection, using gateway: any GatewayServing) async {
         do {
             let history = try await gateway.fetchHistory(conversationID: conversation.id)
             guard loadedConversationID == conversation.id, !Task.isCancelled else { return }
-            let results = Self.timeline(from: history.session.messages).filter {
+            let projected = await projectHistory(history)
+            guard loadedConversationID == conversation.id, !Task.isCancelled else { return }
+            let results = projected.filter {
                 $0.turnId?.hasPrefix("task-result:") == true
             }
             let known = Set(messages.compactMap(\.turnId))
@@ -463,31 +483,9 @@ extension AssistantState {
 
 private extension AssistantState {
     func updateActivity(with event: RunStreamEvent) {
-        switch event.name {
-        case "thinking_delta":
-            activityLabel = AppLocalization.resolve("正在思考")
-            appendActivity(id: "thinking", title: AppLocalization.resolve("分析问题"), status: "running")
-        case "tool_start":
-            let title = event.toolName.map { AppLocalization.resolve("正在使用 \($0)") }
-                ?? AppLocalization.resolve("正在使用工具")
-            activityLabel = title
-            appendActivity(id: "event:\(event.sequence)", title: title, status: "running")
-        case "tool_end":
-            if let index = executionActivity.lastIndex(where: { $0.status == "running" }) {
-                executionActivity[index].status = event.status == "error" ? "error" : "done"
-            }
-            activityLabel = event.status == "error"
-                ? AppLocalization.resolve("工具执行失败")
-                : AppLocalization.resolve("继续处理")
-        case "progress":
-            activityLabel = event.stage ?? event.errorMessage ?? AppLocalization.resolve("正在处理")
-        case "assistant_delta":
-            activityLabel = AppLocalization.resolve("正在回答")
-        case "run_end":
-            activityLabel = nil
-        default:
-            break
-        }
+        let updated = Self.activity(event, label: activityLabel, items: executionActivity)
+        activityLabel = updated.label
+        executionActivity = updated.items
     }
 
     func appendActivity(id: String, title: String, status: String) {

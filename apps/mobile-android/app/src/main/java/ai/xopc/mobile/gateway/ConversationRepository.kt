@@ -59,7 +59,8 @@ data class ConversationOutcome(val status: String, val summary: String?,
 data class ConversationMessage(val id: String, val role: String, val text: String, val turnId: String? = null,
   val hasNonTextContent: Boolean = false, val media: List<ConversationMedia> = emptyList(),
   val references: List<ConversationReference> = emptyList(),
-  val targets: List<ConversationTarget> = emptyList(), val outcome: ConversationOutcome? = null)
+  val targets: List<ConversationTarget> = emptyList(), val outcome: ConversationOutcome? = null,
+  val sourceIds: Set<String> = setOf(id), val renderId: String = id)
 data class ConversationHistory(val conversationId: String, val transcriptId: String?, val messages: List<ConversationMessage>,
   val agentId: String? = null, val nextBeforeCursor: String? = null)
 data class ExecutionStep(val id: String, val kind: String, val category: String, val text: String,
@@ -443,6 +444,14 @@ class ConversationRepository(private val gateway: GatewaySession, context: Conte
       }
     }
     val path = when {
+      uri.isBlank() && !media.workspaceRelativePath.isNullOrBlank() -> {
+        val relative = requireNotNull(media.workspaceRelativePath)
+        require(relative.none { it.code < 0x20 || it == '\\' } && relative.split('/').none { it == ".." }) { "INVALID_MEDIA" }
+        val space = JSONObject(gateway.request("/api/files/contexts/session/$conversationId")).getJSONObject("space").getString("id")
+        val body = JSONObject().put("spaceId", space).put("path", relative).toString()
+        val resource = JSONObject(gateway.request("/api/files/resolve", "POST", body)).getJSONObject("resource").getString("id")
+        "/api/files/${encode(resource)}/content"
+      }
       uri.startsWith("xopc-file:") -> {
         val id = Uri.decode(uri.removePrefix("xopc-file:")).trim()
         require(id.isNotBlank()) { "INVALID_MEDIA" }
@@ -1220,6 +1229,8 @@ class ConversationRepository(private val gateway: GatewaySession, context: Conte
         } else {
           grouped[grouped.lastIndex] = previous.copy(
             id = message.id,
+            sourceIds = previous.sourceIds + message.sourceIds,
+            renderId = message.id,
             text = listOf(previous.text, message.text).filter(String::isNotBlank).joinToString("\n"),
             turnId = message.turnId ?: previous.turnId,
             hasNonTextContent = previous.hasNonTextContent || message.hasNonTextContent,

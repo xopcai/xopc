@@ -73,6 +73,7 @@ import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performTextClearance
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.click
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.swipeLeft
 import androidx.compose.ui.test.swipeDown
@@ -265,25 +266,25 @@ class MainScreenTest {
       ConversationMessage("message-$index", "assistant", "Reply $index")
     }
     val state = mutableStateOf(ConnectionUiState(profile = profile, selectedConversationId = id,
-      messages = messages, activeRunId = "run-1", liveText = "Starting"))
+      messages = messages, activeRunId = "run-1", liveMessages = listOf(ConversationMessage("live:run-1", "assistant", "Starting", "run-1"))))
     composeTestRule.setContent {
       XopcTheme {
         MainContent(selectedTab = HomeTab.Assistant, onSelectTab = {}, connection = state.value)
       }
     }
     val stream = (0 until 24).joinToString("\n\n") { "Paragraph $it" } + "\n\nTail marker"
-    composeTestRule.runOnIdle { state.value = state.value.copy(liveText = stream) }
+    composeTestRule.runOnIdle { state.value = state.value.copy(liveMessages = listOf(ConversationMessage("live:run-1", "assistant", stream, "run-1"))) }
     composeTestRule.onNodeWithText("Tail marker").assertIsDisplayed()
 
     composeTestRule.onNodeWithTag("assistant-message-list").performScrollToIndex(1)
     composeTestRule.onNodeWithTag("assistant-message-list").performTouchInput { swipeDown() }
     composeTestRule.onNodeWithText("Reply 0").assertIsDisplayed()
-    composeTestRule.runOnIdle { state.value = state.value.copy(liveText = stream + "\n\nMore output") }
+    composeTestRule.runOnIdle { state.value = state.value.copy(liveMessages = listOf(ConversationMessage("live:run-1", "assistant", stream + "\n\nMore output", "run-1"))) }
     composeTestRule.onNodeWithText("Reply 0").assertIsDisplayed()
     composeTestRule.onNodeWithTag("assistant-jump-bottom").assertIsDisplayed()
     composeTestRule.onNodeWithTag("assistant-jump-working", useUnmergedTree = true).assertExists()
     composeTestRule.onNodeWithTag("assistant-jump-arrow", useUnmergedTree = true).assertDoesNotExist()
-    composeTestRule.runOnIdle { state.value = state.value.copy(activeRunId = null, liveText = "") }
+    composeTestRule.runOnIdle { state.value = state.value.copy(activeRunId = null, liveMessages = emptyList()) }
     composeTestRule.onNodeWithTag("assistant-jump-arrow", useUnmergedTree = true).assertExists()
     composeTestRule.onNodeWithTag("assistant-jump-working", useUnmergedTree = true).assertDoesNotExist()
   }
@@ -502,8 +503,45 @@ class MainScreenTest {
           onOpenProgressTask = { openedTask = it })
       }
     }
-    composeTestRule.onNodeWithText("task").performClick()
+    // The Text fills the bubble; tap its link glyphs rather than the empty center.
+    composeTestRule.onNodeWithText("task").performTouchInput { click(Offset(10f, center.y)) }
     assertEquals("task-1", openedTask)
+  }
+
+  @Test fun assistantHttpLinkRequestsExternalConfirmation() {
+    composeTestRule.setContent {
+      XopcTheme {
+        MainContent(selectedTab = HomeTab.Assistant, onSelectTab = {},
+          connection = ConnectionUiState(profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), ""),
+            selectedConversationId = "11111111-2222-3333-4444-555555555555",
+            messages = listOf(ConversationMessage("link", "assistant", "[docs](http://example.com/page)"))))
+      }
+    }
+    composeTestRule.onNodeWithText("docs").performTouchInput { click(Offset(10f, center.y)) }
+    composeTestRule.onNodeWithText("http://example.com/page").assertIsDisplayed()
+    composeTestRule.onNodeWithText(composeTestRule.activity.getString(R.string.progress_cancel)).performClick()
+    composeTestRule.onNodeWithText("http://example.com/page").assertDoesNotExist()
+  }
+
+  @Test fun assistantWorkflowRunLinkOpensTheNativeRunDetail() {
+    val tab = mutableStateOf(HomeTab.Assistant)
+    var requested = ""
+    composeTestRule.setContent {
+      XopcTheme {
+        MainContent(selectedTab = tab.value, onSelectTab = { tab.value = it },
+          connection = ConnectionUiState(profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), ""),
+            selectedConversationId = "11111111-2222-3333-4444-555555555555",
+            messages = listOf(ConversationMessage("workflow-link", "assistant", "[workflow](/workflows/runs/run-1)"))),
+          onWorkflowDetail = { id ->
+            requested = id
+            ai.xopc.mobile.gateway.WorkflowDetail(ai.xopc.mobile.gateway.WorkflowRun(id, "Linked run", "completed"),
+              emptyList(), emptyList(), false)
+          })
+      }
+    }
+    composeTestRule.onNodeWithText("workflow").performTouchInput { click(Offset(10f, center.y)) }
+    composeTestRule.waitUntil(5_000) { requested == "run-1" }
+    composeTestRule.onNodeWithTag("workflow-screen").assertIsDisplayed()
   }
 
   private fun saveAcceptanceScreenshot(name: String, tag: String? = null) {
@@ -3122,7 +3160,7 @@ class MainScreenTest {
     composeTestRule.setContent {
       MainContent(selectedTab = HomeTab.Assistant, onSelectTab = {},
         connection = ConnectionUiState(profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), ""),
-          selectedConversationId = id, activeRunId = "run-1", liveText = "Partial answer"))
+          selectedConversationId = id, activeRunId = "run-1", liveMessages = listOf(ConversationMessage("live:run-1", "assistant", "Partial answer", "run-1"))))
     }
     composeTestRule.onNodeWithText("Partial answer").assertExists()
     composeTestRule.onNodeWithText(composeTestRule.activity.getString(R.string.assistant_live_output)).assertExists()

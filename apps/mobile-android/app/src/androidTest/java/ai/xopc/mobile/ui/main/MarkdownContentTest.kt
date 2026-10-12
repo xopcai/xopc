@@ -23,6 +23,15 @@ import org.junit.Test
 class MarkdownContentTest {
   @get:Rule val composeTestRule = createAndroidComposeRule<ComponentActivity>()
 
+  @Test fun foldedCodeCopiesTheCompleteSource() {
+    val source = (0 until 100).joinToString("\n") { "line $it" }
+    var copied = ""
+    composeTestRule.setContent { MarkdownContent("```text\n$source\n```", onCopyCode = { copied = it }) }
+    composeTestRule.onNodeWithTag("markdown-code-text").assertTextEquals(markdownCodePreview(source))
+    composeTestRule.onNodeWithText(composeTestRule.activity.getString(R.string.assistant_copy_code)).performClick()
+    assertEquals(source, copied)
+  }
+
   @Test fun rendersMarkdownBlocksAndCopiesCodeWithoutShowingSyntax() {
     var copied = ""
     composeTestRule.setContent {

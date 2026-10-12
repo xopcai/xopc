@@ -56,6 +56,7 @@ struct AssistantView<Dock: View>: View {
     @State private var activityHeight: CGFloat = 0
     @State private var followingBottom = true
     @State private var userScrollingMessages = false
+    @State private var bottomScrollTask: Task<Void, Never>?
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -322,6 +323,16 @@ struct AssistantView<Dock: View>: View {
         }
     }
 
+    private func scheduleBottomScroll(_ scroller: ScrollViewProxy) {
+        guard followingBottom, !userScrollingMessages, bottomScrollTask == nil else { return }
+        bottomScrollTask = Task {
+            do { try await Task.sleep(for: .milliseconds(16)) } catch { return }
+            bottomScrollTask = nil
+            guard followingBottom, !userScrollingMessages else { return }
+            scroller.scrollTo("chat-bottom", anchor: .bottom)
+        }
+    }
+
     private var messageTimeline: some View {
         GeometryReader { viewport in
             ScrollViewReader { scroller in
@@ -350,10 +361,16 @@ struct AssistantView<Dock: View>: View {
                                 readAloud: readAloud,
                                 canReadAloud: realtimeVoiceCall.phase == .idle,
                                 previewEligible: message.id != state.messages.last?.id,
-                                onReuseUserText: { draft = $0 }
+                                onReuseUserText: { draft = $0 },
+                                animateStreaming: followingBottom && !userScrollingMessages,
+                                onReading: {
+                                    followingBottom = false
+                                    bottomScrollTask?.cancel(); bottomScrollTask = nil
+                                }
                             )
                             .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
                                 recordReplyRowHeight(message.id, height: height)
+                                if message.id == state.messages.last?.id { scheduleBottomScroll(scroller) }
                             }
                         }
                         if state.isRunActive {
@@ -394,32 +411,35 @@ struct AssistantView<Dock: View>: View {
                 .contentMargins(.top, chatTopInset + 72, for: .scrollContent)
                 .contentMargins(.bottom, bottomDockHeight + 24 + replySpace.remaining, for: .scrollContent)
                 .coordinateSpace(name: "chat-scroll")
+                .onDisappear { bottomScrollTask?.cancel(); bottomScrollTask = nil }
+                .onChange(of: conversation?.id) { bottomScrollTask?.cancel(); bottomScrollTask = nil }
                 .onChange(of: state.messages.last) {
                     updateReplySpace()
                     if followingBottom {
-                        scroller.scrollTo("chat-bottom", anchor: .bottom)
+                        scheduleBottomScroll(scroller)
                     }
                 }
                 .onChange(of: replySpace.remaining) {
                     if followingBottom {
-                        scroller.scrollTo("chat-bottom", anchor: .bottom)
+                        scheduleBottomScroll(scroller)
                     }
                 }
                 .onChange(of: bottomDockHeight) {
                     updateReplySpace()
                     if followingBottom {
-                        scroller.scrollTo("chat-bottom", anchor: .bottom)
+                        scheduleBottomScroll(scroller)
                     }
                 }
                 .onChange(of: viewport.size.height) {
                     updateReplySpace()
                     if followingBottom {
-                        scroller.scrollTo("chat-bottom", anchor: .bottom)
+                        scheduleBottomScroll(scroller)
                     }
                 }
                 .modifier(ChatScrollInteraction(onStart: {
                     userScrollingMessages = true
                     followingBottom = false
+                    bottomScrollTask?.cancel(); bottomScrollTask = nil
                 }, onEnd: {
                     followingBottom = isAtBottom
                     userScrollingMessages = false

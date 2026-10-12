@@ -7,18 +7,24 @@ enum MarkdownTableAlignment: Equatable, Sendable {
 }
 
 struct MarkdownTableCell: Equatable, Identifiable, Sendable {
-    let id = UUID()
+    let id: UUID
     let text: String
+    init(id: UUID = UUID(), text: String) { self.id = id; self.text = text }
 }
 
 struct MarkdownTableRow: Equatable, Identifiable, Sendable {
-    let id = UUID()
+    let id: UUID
     let cells: [MarkdownTableCell]
     let isHeader: Bool
 
     init(cells: [String], isHeader: Bool) {
+        id = UUID()
         self.cells = cells.map { MarkdownTableCell(text: $0) }
         self.isHeader = isHeader
+    }
+
+    init(id: UUID, cells: [MarkdownTableCell], isHeader: Bool) {
+        self.id = id; self.cells = cells; self.isHeader = isHeader
     }
 }
 
@@ -50,6 +56,7 @@ enum MarkdownBlock: Equatable, Sendable {
 
         var index = 0
         while index < lines.count {
+            if Task.isCancelled { return [] }
             let line = lines[index]
             index += 1
             let trimmed = line.trimmingCharacters(in: .whitespaces)
@@ -239,8 +246,33 @@ struct MarkdownPart: Equatable, Identifiable, Sendable {
     let id: UUID
     let block: MarkdownBlock
 
-    init(_ block: MarkdownBlock) {
-        id = UUID()
+    init(_ block: MarkdownBlock) { self.init(block, id: UUID()) }
+
+    init(_ block: MarkdownBlock, id: UUID) {
+        self.id = id
         self.block = block
+    }
+
+    static func project(_ blocks: [MarkdownBlock], previous: [MarkdownPart]) -> [MarkdownPart] {
+        blocks.enumerated().map { index, block in
+            guard index < previous.count else { return MarkdownPart(block) }
+            let retained = previous[index]
+            let normalized = reconcileTable(block, previous: retained.block)
+            return normalized == retained.block ? retained : MarkdownPart(normalized, id: retained.id)
+        }
+    }
+
+    private static func reconcileTable(_ block: MarkdownBlock, previous: MarkdownBlock) -> MarkdownBlock {
+        guard case let .table(rows, alignments) = block,
+              case let .table(oldRows, _) = previous else { return block }
+        let normalized = rows.enumerated().map { index, row in
+            guard index < oldRows.count else { return row }
+            let old = oldRows[index]
+            let cells = row.cells.enumerated().map { column, cell in
+                MarkdownTableCell(id: column < old.cells.count ? old.cells[column].id : cell.id, text: cell.text)
+            }
+            return MarkdownTableRow(id: old.id, cells: cells, isHeader: row.isHeader)
+        }
+        return .table(rows: normalized, alignments: alignments)
     }
 }

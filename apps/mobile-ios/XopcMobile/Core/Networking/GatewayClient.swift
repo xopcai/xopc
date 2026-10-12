@@ -214,6 +214,7 @@ struct GatewayClient: GatewayServing, Sendable {
         try await request(
             path: "/api/sessions/\(conversationID)/history",
             queryItems: [
+                URLQueryItem(name: "view", value: "compact"),
                 URLQueryItem(name: "limit", value: "50")
             ]
         )

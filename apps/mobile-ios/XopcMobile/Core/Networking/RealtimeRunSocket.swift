@@ -83,7 +83,8 @@ actor RealtimeRunSocket {
             status: data?.payload?.status,
             errorMessage: data?.payload?.message,
             toolName: data?.payload?.toolName,
-            stage: data?.payload?.stage
+            stage: data?.payload?.stage,
+            presentation: data?.payload?.presentation
         )
     }
 
@@ -216,4 +217,5 @@ private struct RealtimeRunPayload: Decodable {
     let message: String?
     let toolName: String?
     let stage: String?
+    let presentation: String?
 }

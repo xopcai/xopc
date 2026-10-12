@@ -195,6 +195,7 @@
     <string name="assistant_context_more_sources">More sources are available.</string>
     <string name="assistant_context_partial">Some context details are unavailable.</string>
     <string name="assistant_message_more">More</string>
+    <string name="message_collapse_content">Collapse</string>
     <string name="assistant_view_more">View more</string>
     <string name="assistant_message_detail">Message details</string>
     <string name="message_result_failed">Response failed</string>
@@ -681,6 +682,7 @@
     <string name="message_preview_unsupported">A native preview is not available for this file type yet.</string>
     <string name="message_open_with_app">Open with another app</string>
     <string name="message_open_with_app_error">No compatible app could open this attachment.</string>
+    <string name="message_open_link_failed">This link could not be opened.</string>
     <string name="message_open_external_title">Open external link?</string>
     <string name="message_open_external">Open</string>
     <string name="personal_agent_refresh_voices">Refresh voices</string>

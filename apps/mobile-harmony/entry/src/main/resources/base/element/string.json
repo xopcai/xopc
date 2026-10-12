@@ -211,6 +211,7 @@
     { "name": "chat_saved_note", "value": "Saved to notes" },
     { "name": "chat_config_failed", "value": "Could not load conversation options" },
     { "name": "chat_close", "value": "Close" },
+    { "name": "chat_collapse_content", "value": "Collapse" },
     { "name": "chat_view_more", "value": "View more" },
     { "name": "chat_message_detail", "value": "Message details" },
     { "name": "chat_user_message", "value": "User message" },

@@ -48,8 +48,17 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @Composable
-private fun rememberLoopiMotionAllowed(): Boolean {
+internal fun rememberMotionAllowed(): Boolean {
   val context = LocalContext.current
+  val lifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle
+  var resumed by remember(lifecycle) { mutableStateOf(lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)) }
+  DisposableEffect(lifecycle) {
+    val observer = androidx.lifecycle.LifecycleEventObserver { _, _ ->
+      resumed = lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)
+    }
+    lifecycle.addObserver(observer)
+    onDispose { lifecycle.removeObserver(observer) }
+  }
   var allowed by remember(context) { mutableStateOf(ValueAnimator.areAnimatorsEnabled()) }
   DisposableEffect(context) {
     val observer = object : ContentObserver(Handler(Looper.getMainLooper())) {
@@ -61,14 +70,14 @@ private fun rememberLoopiMotionAllowed(): Boolean {
       Settings.Global.getUriFor(Settings.Global.ANIMATOR_DURATION_SCALE), false, observer)
     onDispose { context.contentResolver.unregisterContentObserver(observer) }
   }
-  return allowed
+  return allowed && resumed
 }
 
 /** The ring keeps its idle motion while greetings animate only the face. */
 @Composable
 internal fun LoopiIcon(extent: Dp, active: Boolean, compact: Boolean = false,
   interactive: Boolean = false, working: Boolean = false, modifier: Modifier = Modifier) {
-  val motionAllowed = rememberLoopiMotionAllowed()
+  val motionAllowed = rememberMotionAllowed()
   val motionActive = active && motionAllowed
   var greeting by remember { mutableStateOf(false) }
   val scope = rememberCoroutineScope()

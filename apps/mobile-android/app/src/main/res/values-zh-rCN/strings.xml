@@ -195,6 +195,7 @@
     <string name="assistant_context_more_sources">还有更多来源。</string>
     <string name="assistant_context_partial">部分上下文信息不可用。</string>
     <string name="assistant_message_more">更多</string>
+    <string name="message_collapse_content">收起</string>
     <string name="assistant_view_more">查看更多</string>
     <string name="assistant_message_detail">消息详情</string>
     <string name="message_result_failed">回复失败</string>
@@ -681,6 +682,7 @@
     <string name="message_preview_unsupported">此文件类型暂不支持原生预览。</string>
     <string name="message_open_with_app">使用其他应用打开</string>
     <string name="message_open_with_app_error">没有可打开此附件的兼容应用。</string>
+    <string name="message_open_link_failed">链接无法打开。</string>
     <string name="message_open_external_title">打开外部链接？</string>
     <string name="message_open_external">打开</string>
     <string name="personal_agent_refresh_voices">刷新音色</string>

@@ -11,6 +11,8 @@ struct MessageBubble: View {
     let canReadAloud: Bool
     let previewEligible: Bool
     let onReuseUserText: (String) -> Void
+    var animateStreaming = false
+    var onReading: () -> Void = {}
     @Environment(\.locale) private var locale
     @ScaledMetric(relativeTo: .body) private var previewHeight: CGFloat = 160
     @State private var isActionsPresented = false
@@ -63,7 +65,7 @@ struct MessageBubble: View {
                 }
             }
         }
-        .opacity(message.isPending ? 0.65 : 1)
+        .simultaneousGesture(LongPressGesture(minimumDuration: 0.3).onEnded { _ in onReading() })
         .accessibilityElement(children: .contain)
         .sheet(isPresented: $isDetailPresented) {
             MessageDetailView(
@@ -126,7 +128,7 @@ struct MessageBubble: View {
             .frame(width: 44, height: 44)
             .contentShape(.rect)
             .accessibilityIdentifier("chat-save-note-\(message.id)")
-            if !message.attachments.contains(where: \.isAudio), !ChatSpeechText.chunks(from: message.text).isEmpty {
+            if !message.isPending, !message.attachments.contains(where: \.isAudio), !ChatSpeechText.chunks(from: message.text).isEmpty {
                 Button {
                     readAloud.toggle(id: message.id, text: message.text, locale: locale, gateway: GatewayClient(configuration: configuration))
                 } label: {
@@ -195,12 +197,11 @@ struct MessageBubble: View {
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("chat-message-preview-\(message.id)")
                 .accessibilityHint("打开完整消息")
-            } else if message.role == "assistant", !message.markdownParts.isEmpty {
-                MarkdownBodyView(parts: message.markdownParts, configuration: configuration, conversationID: conversationID)
+            } else if message.role == "assistant" {
+                MarkdownBodyView(parts: message.markdownParts, configuration: configuration,
+                                 conversationID: conversationID, markdown: message.text, streaming: message.isPending && animateStreaming)
             } else if message.role == "user" {
                 Text(verbatim: message.text).accessibilityIdentifier("chat-user-text-\(message.id)")
-            } else {
-                Text(verbatim: message.text).textSelection(.enabled)
             }
         }
     }

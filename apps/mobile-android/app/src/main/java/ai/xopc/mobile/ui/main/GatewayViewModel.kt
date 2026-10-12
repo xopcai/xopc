@@ -334,8 +334,8 @@ data class ConnectionUiState(
   val stoppingRun: Boolean = false,
   val stopError: Boolean = false,
   val runError: Boolean = false,
-  val liveText: String = "",
-  val liveMessageId: String? = null,
+  val liveMessages: List<ConversationMessage> = emptyList(),
+  val liveNarration: String? = null,
   val models: List<ConversationModel> = emptyList(),
   val selectedModelId: String = "",
   val thinkingLevel: String = "off",
@@ -365,7 +365,9 @@ data class ConnectionUiState(
   val notes: NotesUiState = NotesUiState(),
   val shares: ShareCenterUiState = ShareCenterUiState(),
   val personal: PersonalUiState = PersonalUiState(),
-)
+) {
+  val liveText: String = liveMessages.joinToString("\n\n") { it.text }
+}
 
 data class ConnectionWaitUiState(val gatewayId: String? = null, val conversationId: String? = null,
   val snapshot: ConnectionWaitSnapshot? = null, val loading: Boolean = false, val error: Boolean = false)
@@ -416,6 +418,9 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
   private val noteDraftStore = NoteDraftStore(application)
   private val realtime = RealtimeClient(session, ai.xopc.mobile.gateway.DeviceTools(application, session))
   private val mutableState = MutableStateFlow(ConnectionUiState())
+  private val streamBuffer = ChatStreamBuffer()
+  private val closedNarrations = hashSetOf<String>()
+  private var streamCommitJob: Job? = null
   val state = mutableState.asStateFlow()
   private var listRevision = 0
   private var listSearch = ""
@@ -2510,7 +2515,7 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
           } else if (topic.startsWith("run:")) {
             val current = mutableState.value
             if (topic == "run:${current.activeRunId}") {
-              mutableState.update { it.copy(liveText = "", liveMessageId = null) }
+              flushStream()
               current.selectedConversationId?.let { id ->
                 refreshSelectedHistory(id)
                 refreshRunState(id)
@@ -2525,26 +2530,57 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
     }
   }
 
+  private fun discardStream() {
+    streamCommitJob?.cancel(); streamCommitJob = null
+    streamBuffer.clear()
+    closedNarrations.clear()
+  }
+
+  private fun flushStream() {
+    streamCommitJob?.cancel(); streamCommitJob = null
+    val current = mutableState.value
+    val committed = streamBuffer.drain(current.liveMessages)
+    mutableState.update { state ->
+      state.copy(liveMessages = committed
+        .filterNot { live -> state.messages.any { live.id in it.sourceIds } || live.id in closedNarrations })
+    }
+  }
+
   private fun handleRunEvent(event: RunStreamEvent) {
     val current = mutableState.value
     if (event.runId != current.activeRunId || event.conversationId != current.selectedConversationId) return
+    if (event.type != "assistant_delta") flushStream()
     when (event.type) {
       "assistant_delta" -> {
         val delta = event.delta ?: return
-        if (event.messageId != null && current.messages.any { it.id == event.messageId }) return
-        val previous = if (current.liveMessageId == event.messageId) current.liveText else ""
-        val next = RunStreamEvent.appendDelta(previous, delta, event.offset)
-        if (next == null) {
+        val id = event.messageId ?: "live:${event.runId}"
+        if (id in closedNarrations || current.messages.any { id in it.sourceIds }) return
+        if (!streamBuffer.append(id, event.runId, current.liveMessages, delta, event.offset)) {
+          flushStream()
+          realtime.watchRun(null)
+          realtime.watchRun(event.runId)
           refreshSelectedHistory(current.selectedConversationId)
           return
         }
-        mutableState.update { it.copy(liveText = next, liveMessageId = event.messageId) }
+        if (current.liveMessages.isEmpty()) flushStream()
+        else if (streamCommitJob == null) streamCommitJob = viewModelScope.launch {
+          delay(32)
+          streamCommitJob = null
+          flushStream()
+        }
       }
       "run_end" -> {
         realtime.watchRun(null)
-        mutableState.update { it.copy(activeRunId = null, liveText = "", liveMessageId = null) }
+        mutableState.update { it.copy(activeRunId = null, liveNarration = null) }
         refreshSelectedHistory(current.selectedConversationId)
         refreshRunState(current.selectedConversationId)
+      }
+      "assistant_message_end" -> if (event.presentation == "narration") {
+        val id = event.messageId ?: "live:${event.runId}"
+        closedNarrations += id
+        mutableState.update { state -> state.copy(
+          liveNarration = state.liveMessages.firstOrNull { it.id == id }?.text?.replace(Regex("\\s+"), " ")?.trim()?.take(160),
+          liveMessages = state.liveMessages.filterNot { it.id == id }) }
       }
       "error" -> mutableState.update { it.copy(runError = true) }
     }
@@ -2566,6 +2602,7 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
 
   /** Persist visible local input before any connection identity is changed. */
   private suspend fun quiesceGateway() {
+    discardStream()
     draftWriteJob?.cancelAndJoin()
     refWriteJob?.cancelAndJoin()
     quickDraftWriteJob?.cancelAndJoin()
@@ -2953,6 +2990,7 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
   }
 
   private fun selectConversationScoped(id: String, taskId: String?) {
+    discardStream()
     if (mutableState.value.profile == null || mutableState.value.discardingDraftId == id ||
       mutableState.value.pendingDeleteId == id) return
     historyJob?.cancel()
@@ -2981,7 +3019,7 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
       historyOlderError = false,
       executionMessageId = null, executionDetail = null, executionLoading = false, executionError = false,
       draftModelLoading = false, draftModelReady = false, chatError = false, activeRunId = null,
-      stoppingRun = false, stopError = false, runError = false, liveText = "", liveMessageId = null,
+      stoppingRun = false, stopError = false, runError = false, liveMessages = emptyList(), liveNarration = null,
       pendingInput = null, sendError = false, sendErrorDetail = null, sendRejected = false,
       optimisticText = "", optimisticPreviousUserId = null,
       referencePicker = ReferencePickerUiState(),
@@ -3539,24 +3577,31 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
         val (history, pending) = runInterruptible(Dispatchers.IO) {
           (if (conversations.draft(id) != null) null else conversations.history(id)) to conversations.pendingInput(id)
         }
+        if (revision == historyRevision) flushStream()
         if (revision == historyRevision) mutableState.update { state ->
           val overlap = history?.messages?.firstNotNullOfOrNull { latest ->
             state.messages.indexOfFirst { it.id == latest.id }.takeIf { it >= 0 }
           }
           val retainOlder = history != null && history.transcriptId != null &&
             history.transcriptId == state.historyTranscriptId && overlap != null
-          val nextMessages = when {
+          val rawMessages = when {
               history == null -> state.messages
               retainOlder -> state.messages.take(overlap) + history.messages
               else -> history.messages
             }
+          val nextMessages = rawMessages.map { message ->
+            val retained = state.messages.firstOrNull { old -> old.sourceIds.any { it in message.sourceIds } }
+              ?: state.liveMessages.firstOrNull { it.id in message.sourceIds }
+            if (retained == null) message else message.copy(renderId = retained.renderId).let {
+              if (it == retained) retained else it
+            }
+          }
           val latestUser = nextMessages.lastOrNull { it.role == "user" }
           val optimisticConfirmed = state.optimisticText.isNotBlank() && latestUser != null &&
             latestUser.id != state.optimisticPreviousUserId && latestUser.text == state.optimisticText
-          val liveConfirmed = state.liveMessageId != null && nextMessages.any { it.id == state.liveMessageId }
+          val retainedLive = state.liveMessages.filterNot { live -> nextMessages.any { live.id in it.sourceIds } }
           state.copy(messages = nextMessages, pendingInput = pending,
-            liveText = if (liveConfirmed) "" else state.liveText,
-            liveMessageId = if (liveConfirmed) null else state.liveMessageId,
+            liveMessages = retainedLive,
             optimisticText = if (optimisticConfirmed) "" else state.optimisticText,
             optimisticPreviousUserId = if (optimisticConfirmed) null else state.optimisticPreviousUserId,
             historyTranscriptId = history?.transcriptId ?: state.historyTranscriptId,
@@ -3585,8 +3630,7 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
           mutableState.update {
             it.copy(activeRunId = runId, stoppingRun = false, stopError = false,
               runError = if (runId != it.activeRunId) false else it.runError,
-              liveText = if (runId == it.activeRunId) it.liveText else "",
-              liveMessageId = if (runId == it.activeRunId) it.liveMessageId else null)
+              liveMessages = if (runId == null || runId == it.activeRunId) it.liveMessages else emptyList())
           }
           realtime.watchRun(runId)
           if (runId != previousRunId) refreshSelectedHistory(id)
@@ -4103,7 +4147,7 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
           realtime.watchRun(null)
           mutableState.update { it.copy(selectedConversationId = null, messages = emptyList(), draftText = "",
             historyLoading = false, draftModelLoading = false, draftModelReady = true,
-            activeRunId = null, liveText = "", liveMessageId = null, pendingInput = null,
+            activeRunId = null, liveMessages = emptyList(), liveNarration = null, pendingInput = null,
             models = emptyList(), selectedModelId = "", agents = emptyList(), agentAvatars = emptyMap(), selectedAgentId = "",
             context = null, contextLoading = false, taskWelcome = null, projectWelcome = null) }
         }
@@ -4242,7 +4286,7 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
             realtime.watchRun(null)
             mutableState.update { it.copy(selectedConversationId = null, messages = emptyList(),
               draftText = "", draftRefs = emptyList(), draftAttachments = emptyList(),
-              activeRunId = null, liveText = "", pendingInput = null) }
+              activeRunId = null, liveMessages = emptyList(), liveNarration = null, pendingInput = null) }
           }
           mutableState.update { state -> state.copy(
             conversations = state.conversations.filterNot { it.id in completed && action == "delete" }
@@ -4296,7 +4340,7 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
           realtime.watchRun(null)
           mutableState.update { it.copy(selectedConversationId = null, messages = emptyList(), draftText = "",
             executionMessageId = null, executionDetail = null, executionLoading = false, executionError = false,
-            historyLoading = false, activeRunId = null, liveText = "", liveMessageId = null,
+            historyLoading = false, activeRunId = null, liveMessages = emptyList(), liveNarration = null,
             pendingInput = null, models = emptyList(), selectedModelId = "", agents = emptyList(), agentAvatars = emptyMap(),
             selectedAgentId = "", context = null, contextLoading = false,
             taskWelcome = null, projectWelcome = null) }
@@ -4399,6 +4443,7 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
           else conversations.send(id, content, realtime.turnClaim(), refs, attachments)
         }
         if (mutableState.value.selectedConversationId == id) {
+          discardStream()
           val clearDraft = !preserveDraft && mutableState.value.draftText == content
           if (clearDraft) runInterruptible(Dispatchers.IO) { conversations.saveComposerDraft(id, "") }
           mutableState.update { it.copy(sending = false, draftText = if (clearDraft) "" else it.draftText,
@@ -4406,7 +4451,7 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
               refs.map { ref -> ref.copy(title = "") }) emptyList() else it.draftRefs,
             draftAttachments = it.draftAttachments.filterNot { item -> attachments.any { sent -> sent.id == item.id } },
             pendingInput = null, activeRunId = runId.takeIf(String::isNotBlank),
-            runError = false, liveText = "", liveMessageId = null) }
+            runError = false, liveMessages = emptyList(), liveNarration = null) }
           realtime.watchRun(runId.takeIf(String::isNotBlank))
         } else mutableState.update { it.copy(sending = false) }
         refreshSelectedHistory(id)
@@ -4432,6 +4477,7 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
   }
 
   fun stopRun() {
+    flushStream()
     val id = mutableState.value.selectedConversationId ?: return
     val runId = mutableState.value.activeRunId ?: return
     if (mutableState.value.stoppingRun) return

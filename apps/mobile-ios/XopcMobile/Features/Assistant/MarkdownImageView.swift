@@ -15,9 +15,16 @@ struct MarkdownImageView: View {
     @State private var isLoading = true
     @State private var failed = false
     @State private var showsPreview = false
+    @MainActor private static let thumbnails: NSCache<ThumbnailCacheKey, UIImage> = {
+        let cache = NSCache<ThumbnailCacheKey, UIImage>()
+        cache.totalCostLimit = 16 * 1024 * 1024
+        cache.countLimit = 64
+        return cache
+    }()
 
     private var requestIdentity: RequestIdentity {
-        RequestIdentity(source: source, configuration: configuration, conversationID: conversationID)
+        RequestIdentity(source: source, configuration: configuration, conversationID: conversationID,
+                        maxPixel: Int((compact ? 108 : 360) * displayScale))
     }
 
     var body: some View {
@@ -86,16 +93,21 @@ struct MarkdownImageView: View {
             failed = true
             return
         }
+        let cacheKey = ThumbnailCacheKey(requestIdentity)
+        if let cached = Self.thumbnails.object(forKey: cacheKey) { image = cached; return }
         do {
             let data = try await ChatImageLoader(configuration: configuration).load(reference)
             try Task.checkCancellation()
-            let maxPixel = Int(1600 * displayScale)
+            let maxPixel = requestIdentity.maxPixel
             guard let thumbnail = await Self.makeThumbnail(data, maxPixel: maxPixel) else {
                 failed = true
                 return
             }
             try Task.checkCancellation()
             image = UIImage(cgImage: thumbnail)
+            if let image {
+                Self.thumbnails.setObject(image, forKey: cacheKey, cost: thumbnail.bytesPerRow * thumbnail.height)
+            }
         } catch is CancellationError {
         } catch {
             failed = true
@@ -121,4 +133,12 @@ private struct RequestIdentity: Hashable {
     let source: String
     let configuration: GatewayConfiguration
     let conversationID: String?
+    let maxPixel: Int
+}
+
+private final class ThumbnailCacheKey: NSObject {
+    let identity: RequestIdentity
+    init(_ identity: RequestIdentity) { self.identity = identity }
+    override var hash: Int { identity.hashValue }
+    override func isEqual(_ object: Any?) -> Bool { (object as? ThumbnailCacheKey)?.identity == identity }
 }

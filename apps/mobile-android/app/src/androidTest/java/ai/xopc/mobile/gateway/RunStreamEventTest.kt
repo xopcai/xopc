@@ -6,6 +6,12 @@ import org.junit.Assert.assertNull
 import org.junit.Test
 
 class RunStreamEventTest {
+  @Test fun preservesCompactNarrationClassification() {
+    val data = JSONObject("""{"runId":"run-1","conversationId":"conversation-1","payload":{"messageId":"m","presentation":"narration"}}""")
+    val event = RunStreamEvent.parse("run:run-1", "assistant_message_end", data)
+    assertEquals("m", event?.messageId)
+    assertEquals("narration", event?.presentation)
+  }
   @Test fun acceptsOnlyMatchingRunAndConversationEvents() {
     val data = JSONObject("""{"runId":"run-1","conversationId":"conversation-1","payload":{"messageId":"msg-1","delta":"Hello","offset":0}}""")
     val event = RunStreamEvent.parse("run:run-1", "assistant_delta", data)
@@ -14,19 +20,6 @@ class RunStreamEventTest {
     assertEquals(0, event?.offset)
     assertNull(RunStreamEvent.parse("run:run-2", "assistant_delta", data))
     assertNull(RunStreamEvent.parse("run:run-1", "unknown", data))
-  }
-
-  @Test fun offsetKeepsReplayIdempotentAndRejectsMissingPrefix() {
-    assertEquals("Hello world", RunStreamEvent.appendDelta("Hello ", "world", 6))
-    assertEquals("Hello world", RunStreamEvent.appendDelta("Hello world", "world", 6))
-    assertNull(RunStreamEvent.appendDelta("", "world", 6))
-    assertNull(RunStreamEvent.appendDelta("Hello", "changed", 1))
-  }
-  @Test fun foregroundReplayCanExtendAPartiallyReceivedDelta() {
-    assertEquals("Hello world", RunStreamEvent.appendDelta("Hello wor", "world", 6))
-    assertEquals("Hello world", RunStreamEvent.appendDelta("Hello world", "Hello", 0))
-    assertNull(RunStreamEvent.appendDelta("Hello", "world", -1))
-    assertNull(RunStreamEvent.appendDelta("Hello", "world", 10))
   }
 
 }

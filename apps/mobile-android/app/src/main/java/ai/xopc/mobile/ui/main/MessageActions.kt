@@ -52,6 +52,18 @@ internal fun messageLinkTarget(raw: String): ConversationTarget? {
   val value = raw.trim()
   if (value.any { it.code < 0x20 } || '\\' in value || value.length > 4_096) return null
   val path = when {
+    value.startsWith("xopc://workspace/file?") || value.startsWith("/xopc/workspace/file?") -> runCatching {
+      val query = URI(value).rawQuery.orEmpty().split('&').associate { part ->
+        val pieces = part.split('=', limit = 2)
+        URLDecoder.decode(pieces[0], "UTF-8") to URLDecoder.decode(pieces.getOrElse(1) { "" }, "UTF-8")
+      }
+      val relative = query["path"].orEmpty()
+      if (relative.isBlank() || relative.any { it.code < 0x20 } || '\\' in relative || relative.split('/').any { it == ".." }) return null
+      return ConversationTarget("workspace_file", relative, relative.substringAfterLast('/'), capabilities = listOf("open"))
+    }.getOrNull() ?: return null
+    value.startsWith("xopc-file:") -> return value.removePrefix("xopc-file:").takeIf(String::isNotBlank)?.let {
+      ConversationTarget("file", it, it, capabilities = listOf("open"))
+    }
     value.startsWith("xopc://open?") -> runCatching {
       val query = URI(value).rawQuery.orEmpty().split('&').associate { part ->
         val pieces = part.split('=', limit = 2)
@@ -77,13 +89,16 @@ internal fun messageLinkTarget(raw: String): ConversationTarget? {
     "projects" -> decoded(1)?.let { ConversationTarget("project", it, it, capabilities = listOf("open")) }
     "notes" -> decoded(1)?.let { ConversationTarget("note", it, it, capabilities = listOf("open")) }
     "chat" -> decoded(1)?.let { ConversationTarget("session", it, it, capabilities = listOf("open")) }
+    "sessions" -> decoded(1)?.let { ConversationTarget("session", it, it, capabilities = listOf("open")) }
+    "files" -> decoded(1)?.let { ConversationTarget("file", it, it, capabilities = listOf("open")) }
     "workflows" -> if (segments.getOrNull(1) == "runs") decoded(2)?.let {
       ConversationTarget("workflow_run", it, it, capabilities = listOf("open"))
     } else decoded(1)?.let { ConversationTarget("workflow_definition", it, it, capabilities = listOf("open")) }
-    "automations" -> URI(value.removePrefix("#")).rawQuery?.split('&')?.firstNotNullOfOrNull { part ->
+    "automations" -> decoded(1)?.let { ConversationTarget("automation", it, it, capabilities = listOf("open")) }
+      ?: runCatching { URI(value.removePrefix("#")).rawQuery?.split('&')?.firstNotNullOfOrNull { part ->
       part.split('=', limit = 2).takeIf { it.firstOrNull() == "automation" }?.getOrNull(1)
         ?.let { URLDecoder.decode(it, "UTF-8") }
-    }?.takeIf(String::isNotBlank)?.let { ConversationTarget("automation", it, it, capabilities = listOf("open")) }
+    }?.takeIf(String::isNotBlank)?.let { ConversationTarget("automation", it, it, capabilities = listOf("open")) } }.getOrNull()
     "settings" -> segments.drop(1).joinToString("/").takeIf(String::isNotBlank)?.let {
       ConversationTarget("settings", it, it, capabilities = listOf("open"))
     }
@@ -91,3 +106,9 @@ internal fun messageLinkTarget(raw: String): ConversationTarget? {
   }
   return target
 }
+
+internal fun externalMessageLink(raw: String): Boolean = runCatching {
+  val uri = URI(raw)
+  uri.scheme?.lowercase() in setOf("http", "https") && !uri.host.isNullOrBlank() && uri.userInfo == null &&
+    raw.none { it.code < 0x20 || it == '\\' }
+}.getOrDefault(false)

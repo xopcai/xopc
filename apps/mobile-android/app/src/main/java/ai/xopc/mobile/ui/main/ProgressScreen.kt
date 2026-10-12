@@ -104,9 +104,18 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
   onAutomationRunAction: (String, String) -> Unit = { _, _ -> },
   onTopLevelChange: (Boolean) -> Unit = {},
   chatBusy: Boolean = false,
-  bottomChromeHeight: Dp = 0.dp) {
+  bottomChromeHeight: Dp = 0.dp,
+  requestedWorkflowRunId: String? = null, onWorkflowLinkHandled: () -> Unit = {}) {
   var pendingHomeAction by remember(state.gatewayId) { mutableStateOf<ProgressHomeAction?>(null) }
   var page by rememberSaveable(state.gatewayId) { mutableStateOf("overview") }
+  var linkedWorkflowRunId by rememberSaveable(state.gatewayId) { mutableStateOf<String?>(null) }
+  LaunchedEffect(requestedWorkflowRunId) {
+    if (requestedWorkflowRunId != null) {
+      linkedWorkflowRunId = requestedWorkflowRunId
+      page = "workflows"
+      onWorkflowLinkHandled()
+    }
+  }
   LaunchedEffect(page) { onTopLevelChange(page == "overview") }
   var selectedTaskId by rememberSaveable(state.gatewayId) { mutableStateOf<String?>(null) }
   var detailReturnPage by rememberSaveable(state.gatewayId) { mutableStateOf("overview") }
@@ -393,9 +402,9 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
         automationCreateStartedId = state.automations.createdId
         page = "automation-create"
       }
-      "workflows" -> WorkflowScreen(state.gatewayId.orEmpty(), onBack = { page = "overview" },
+      "workflows" -> WorkflowScreen(state.gatewayId.orEmpty(), onBack = { page = "overview"; linkedWorkflowRunId = null },
         list = onWorkflowRuns, detail = onWorkflowDetail, cancel = onCancelWorkflow,
-        onCreateWithChat = onCreateWorkflowChat)
+        onCreateWithChat = onCreateWorkflowChat, initialRunId = linkedWorkflowRunId)
       "automation-create" -> AutomationCreateContent(automationName,
         { automationName = it; automationCreateKey = UUID.randomUUID().toString() },
         automationInstruction,

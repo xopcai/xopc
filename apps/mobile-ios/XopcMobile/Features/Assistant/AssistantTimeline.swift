@@ -1,6 +1,13 @@
 import Foundation
 
 extension AssistantState {
+    func projectHistory(_ history: ConversationHistory) async -> [TimelineMessage] {
+        let previous = messages
+        return await Task.detached(priority: .userInitiated) {
+            Self.timeline(from: history.session.messages, previous: previous)
+        }.value
+    }
+
     var selectedAgent: AgentSummary? {
         agents.first { $0.id == selectedAgentID }
     }
@@ -9,8 +16,9 @@ extension AssistantState {
         isSending || runID != nil
     }
 
-    static func timeline(from messages: [WireMessage]) -> [TimelineMessage] {
-        messages.enumerated().compactMap { index, message in
+    nonisolated static func timeline(from messages: [WireMessage], previous: [TimelineMessage] = []) -> [TimelineMessage] {
+        let retained = Dictionary(previous.map { ($0.id, $0) }, uniquingKeysWith: { _, latest in latest })
+        return messages.enumerated().compactMap { index, message in
             let text = message.content.text.trimmingCharacters(in: .whitespacesAndNewlines)
             var seenMedia = Set<String>()
             let attachments = ((message.media ?? []) + (message.attachments ?? [])
@@ -32,13 +40,17 @@ extension AssistantState {
             else {
                 return nil
             }
+            let id = message.id ?? message.messageId ?? "\(message.role)-\(index)"
+            let old = retained[id]
+            let parts = message.role == "assistant" ? (old?.text == text && old?.markdownParts.isEmpty == false ? old?.markdownParts ?? [] :
+                MarkdownPart.project(MarkdownBlock.parse(text), previous: old?.markdownParts ?? [])) : []
             return TimelineMessage(
-                id: message.id ?? message.messageId ?? "\(message.role)-\(index)",
+                id: id,
                 role: message.role,
                 text: text,
                 isPending: false,
                 turnId: message.turnId,
-                markdownParts: message.role == "assistant" ? MarkdownBlock.parse(text).map(MarkdownPart.init) : [],
+                markdownParts: parts,
                 details: details,
                 attachments: attachments,
                 references: references,
