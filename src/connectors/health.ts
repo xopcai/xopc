@@ -2,6 +2,7 @@ import { currentAccountConnections } from './account-access.js';
 import { listConnectorConnections } from '../storage/sqlite/connector-repository.js';
 import { verifyCliConnection, describeCliAction } from './cli/runtime.js';
 import type { Config } from '../config/schema.js';
+import { getWorkspacePath } from '../config/workspace-path-helpers.js';
 import { getConnectorInstance } from './instances.js';
 import type { ConnectorHealthResult, ConnectorHealthStatus } from './types.js';
 
@@ -13,7 +14,7 @@ function classifyConnectorHealthError(error: unknown): ConnectorHealthStatus {
   if (/ECONN|ENOTFOUND|network|fetch failed/i.test(message)) {
     return 'network_failed';
   }
-  if (/401|unauthorized|forbidden|permission denied/i.test(message)) {
+  if (/401|unauthorized|forbidden|permission denied|needs sign-in|needs-auth/i.test(message)) {
     return 'unauthorized';
   }
   if (/missing|required|credential|api key|token/i.test(message)) {
@@ -78,5 +79,18 @@ export async function testConnectorInstance(config: Config, serverId: string): P
     } catch (error) { return { ...base, ok: false, status: classifyConnectorHealthError(error), error: error instanceof Error ? error.message : String(error) }; }
   }
 
-  throw new Error('MCP diagnostics are provided by xopc mcp list.');
+  if (instance.materialized.type === 'mcp') {
+    const base = { serverId, toolCount: 0, resourceCount: 0, promptCount: 0, tools: [], resources: [], prompts: [] };
+    try {
+      const { discoverMcpTools } = await import('../agent/mcp/tool-catalog.js');
+      const tools = await discoverMcpTools(config, getWorkspacePath(config) || process.cwd(), serverId);
+      return { ...base, ok: true, status: 'ok', toolCount: tools.length,
+        tools: tools.map(tool => ({ name: tool.name, description: tool.description })) };
+    } catch (error) {
+      return { ...base, ok: false, status: classifyConnectorHealthError(error),
+        error: error instanceof Error ? error.message : String(error) };
+    }
+  }
+
+  throw new Error(`Connector type "${instance.materialized.type}" does not support health checks.`);
 }
