@@ -2,7 +2,7 @@ import type { Message } from '@/features/chat/messages/messages.types';
 
 const SILENT_REPLY_MARKER = 'NO_REPLY';
 
-export function assistantVisibleMessage(message: Message): Message {
+export function assistantVisibleMessage(message: Message, options?: { hideSilentReply?: boolean; streaming?: boolean }): Message {
   if (message.role !== 'assistant' || !message.content?.length) return message;
 
   const firstTextIndex = message.content.findIndex((block) => block.type === 'text');
@@ -11,6 +11,10 @@ export function assistantVisibleMessage(message: Message): Message {
   if (block.type !== 'text') return message;
 
   const text = block.text.trimStart();
+  if (options?.hideSilentReply && (text === SILENT_REPLY_MARKER
+    || (options.streaming && text.length > 0 && SILENT_REPLY_MARKER.startsWith(text)))) {
+    return { ...message, content: message.content.filter((_, index) => index !== firstTextIndex) };
+  }
   if (!text.startsWith(SILENT_REPLY_MARKER)) return message;
   if (text.length === SILENT_REPLY_MARKER.length) {
     const laterReply = message.content.slice(firstTextIndex + 1).some(

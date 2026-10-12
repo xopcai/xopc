@@ -42,6 +42,7 @@ import { buildAssistantTurnViewModel } from '@/features/chat/messages/assistant-
 import { useChatSessionStore } from '@/features/chat/session/chat-session-store';
 import { AssistantTurnTasks } from '@/features/chat/messages/assistant-turn-tasks';
 import { assistantVisibleMessage } from '@/features/chat/messages/assistant-visible-message';
+import { usesConversationText } from '@/features/chat/messages/personal-text-surface';
 import { TaskTriggerCard } from '@/features/chat/messages/task-trigger-card';
 import { MessageContextAttachments } from '@/features/chat/messages/message-context-attachments';
 import {
@@ -144,7 +145,9 @@ export const MessageBubble = memo(function MessageBubble({
   responseFeedbackEnabled?: boolean;
   showAssistantWorkLog?: boolean;
 }) {
-  const message = useMemo(() => assistantVisibleMessage(rawMessage), [rawMessage]);
+  const message = useMemo(() => assistantVisibleMessage(rawMessage, {
+    hideSilentReply: usesConversationText(rawMessage, personal), streaming: isStreaming,
+  }), [rawMessage, personal, isStreaming]);
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
   const navigate = useNavigate();
@@ -280,9 +283,9 @@ export const MessageBubble = memo(function MessageBubble({
   const assistantTurnView = useMemo(
     () =>
       isAssistant
-        ? buildAssistantTurnViewModel({ message, isStreaming, reasoningLevel })
+        ? buildAssistantTurnViewModel({ message, isStreaming, reasoningLevel, personal })
         : null,
-    [isAssistant, isStreaming, message, reasoningLevel],
+    [isAssistant, isStreaming, message, reasoningLevel, personal],
   );
   /** Images use AttachmentRenderer rather than rendering inline in the text column. */
   const displayForFlow = useMemo(
@@ -327,12 +330,12 @@ export const MessageBubble = memo(function MessageBubble({
   const reserveAssistantActions = isAssistant && isStreaming && !readonly && !suppressAssistantActions
     && assistantAnswerStarted;
   const copyMarkdown = useMemo(
-    () => (assistantActionsVisible ? getAssistantCopyMarkdown(message.content ?? []) : ''),
-    [assistantActionsVisible, message.content],
+    () => (assistantActionsVisible ? getAssistantCopyMarkdown(message.content ?? [], usesConversationText(message, personal)) : ''),
+    [assistantActionsVisible, message, personal],
   );
   const copyPlainText = useMemo(
-    () => (assistantActionsVisible && copyMarkdown ? getAssistantCopyPlainText(message.content ?? []) : ''),
-    [assistantActionsVisible, copyMarkdown, message.content],
+    () => (assistantActionsVisible && copyMarkdown ? getAssistantCopyPlainText(message.content ?? [], usesConversationText(message, personal)) : ''),
+    [assistantActionsVisible, copyMarkdown, message, personal],
   );
   const speakableText = useMemo(
     () => (assistantActionsVisible && copyMarkdown ? buildSpeakableText(copyMarkdown) : ''),
@@ -623,17 +626,12 @@ export const MessageBubble = memo(function MessageBubble({
                 : 'text-base leading-[1.6875]',
             isUser &&
               'w-fit max-w-full rounded-2xl bg-surface-hover/80 px-4 py-3 text-left dark:bg-surface-hover/50',
-            isUser && personal && 'rounded-tr-sm',
             showPersonalThinkingBubble && 'bg-transparent p-0',
           )}
         >
           <div className="flex min-w-0 flex-col gap-2">
             {showPersonalThinkingBubble ? (
               <div className="xopc-personal-thinking" role="status" aria-label={m.chat.thinkingLabel}>
-                <svg className="xopc-personal-thinking-outline" viewBox="0 0 84 54" fill="none" aria-hidden="true">
-                  <path d="M12 1H48C67 1 83 17 83 36V42C83 48 78 53 72 53H12C6 53 1 48 1 42V12C1 6 6 1 12 1Z" />
-                  <path className="xopc-personal-thinking-trace" pathLength="268" d="M12 1H48C67 1 83 17 83 36V42C83 48 78 53 72 53H12C6 53 1 48 1 42V12C1 6 6 1 12 1Z" />
-                </svg>
                 <span className="xopc-personal-thinking-dots" aria-hidden="true"><i /><i /><i /></span>
               </div>
             ) : null}
@@ -664,6 +662,8 @@ export const MessageBubble = memo(function MessageBubble({
                     onProgressiveRenderComplete={completeProgressiveRender}
                     userTurnDocument={message.userTurnDocument}
                     contextRefs={message.contextRefs}
+                    responseRunId={isAssistant ? message.turnId : undefined}
+                    immediateFirstCommit={usesConversationText(message, personal)}
                   />
                 </div>
                 {isUser && userMessageCanExpand ? (

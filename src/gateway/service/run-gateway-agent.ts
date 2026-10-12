@@ -41,6 +41,7 @@ import type { UserTurnAttachment } from '../user-turn-input.js';
 import type { AgentSourceContext } from '../../agent/source-context/types.js';
 import { describeActiveExecution, type ActiveExecution } from './active-execution.js';
 import { listTaskUpdateTriggers } from '../../storage/sqlite/session-input-repository.js';
+import { isPersonalConversation } from '../../personal-agent/repository.js';
 const log = createLogger('Gateway:Service');
 
 export type RunGatewayAgentYield = ChatStreamEvent;
@@ -72,6 +73,7 @@ export async function *runGatewayAgent(
   runOptions?: { inputReceivedAtMs?: number; signal?: AbortSignal; runId?: string; taskRunId?: string; sourceContexts?: AgentSourceContext[]; presentation?: 'voice' },
 ): AsyncGenerator<RunGatewayAgentYield, { status: string; summary: string }, unknown> {
   const runStartedAtMs = Date.now();
+  const runStartedMonotonic = performance.now();
   const inputReceivedAtMs = runOptions?.inputReceivedAtMs ?? runStartedAtMs;
   let firstTextSeen = false;
   const cappedAttachments =
@@ -147,6 +149,7 @@ export async function *runGatewayAgent(
     });
   }
   const mapper = new ChatStreamMapper({ runId, conversationId: streamConversationId, channel,
+    ...(isPersonalConversation(streamConversationId) ? { textSurface: 'conversation' as const } : {}),
     startsNewBubble: origin.type === 'system' && origin.source === 'task_update',
     ...(origin.type === 'system' && origin.source === 'task_update' && webchatConversationId
       ? { taskTrigger: listTaskUpdateTriggers(webchatConversationId).get(runId) } : {}) });
@@ -173,9 +176,10 @@ export async function *runGatewayAgent(
     for (const event of events) {
       if (!firstTextSeen && event.type === 'assistant_delta' && event.payload.delta.trim()) {
         firstTextSeen = true;
+        const latencyMs = performance.now() - runStartedMonotonic;
+        const queueMs = Math.max(0, runStartedAtMs - inputReceivedAtMs);
         log.info({ conversationId: streamConversationId, runId, channel, phase: 'first_response_text',
-          latencyMs: Date.now() - runStartedAtMs, inputToTextMs: Date.now() - inputReceivedAtMs,
-          queueMs: Math.max(0, runStartedAtMs - inputReceivedAtMs) }, 'Gateway first response text ready');
+          latencyMs, inputToTextMs: queueMs + latencyMs, queueMs }, 'Gateway first response text ready');
       }
       if (taskRun) captureTaskEvent(event);
       if (channel === 'webchat') {

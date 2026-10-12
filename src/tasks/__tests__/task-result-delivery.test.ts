@@ -90,7 +90,7 @@ describe('background task result delivery', () => {
       .run(agentId, conversationId);
   }
 
-  it('composes personal text once, preserves sources, and recovers push failure without regenerating', async () => {
+  it('composes personal text once, retains report sources internally, and recovers push failure without regenerating', async () => {
     const { main, coordinator, runId } = task();
     markPersonal(main.key);
     const profileDir = join(stateDir, 'agents', personalAgentId('local-owner'), 'profile');
@@ -112,6 +112,7 @@ describe('background task result delivery', () => {
       expect(prompt).toContain('gentle');
       expect(prompt).toContain('Draw sunset');
       expect(prompt).toContain(PERSONAL_PERSONA_GUIDANCE);
+      expect(prompt).toContain('Answer the question directly by default without appending a source list.');
       expect(prompt).toContain('CUSTOM_PERSONAL_SOUL');
       expect(prompt).not.toContain('OTHER_AGENT_SOUL');
       expect(prompt).not.toContain('UNTRUSTED_LONG_WORKER_INSTRUCTIONS');
@@ -131,7 +132,9 @@ describe('background task result delivery', () => {
     const detail = await new SessionStore(stateDir).getMessagePage(main.key, { includeContextRows: true });
     expect(detail?.session.messages).toHaveLength(1);
     expect(JSON.stringify(detail)).toContain('The sunset finding is ready.');
-    expect(JSON.stringify(detail)).toContain('https://example.test/source');
+    expect(JSON.stringify(detail)).not.toContain('https://example.test/source');
+    const stored = getSqliteDatabase().prepare('SELECT reply_payload_json FROM task_result_deliveries').get() as { reply_payload_json: string };
+    expect(JSON.parse(stored.reply_payload_json).report).toContain('https://example.test/source');
   });
 
   it('waits for foreground work and voice availability while artifacts still arrive', async () => {
@@ -352,11 +355,18 @@ describe('background task result delivery', () => {
     expect(page?.session.messages[0]?.content).toBe('正文在下面。\n\nExact original prose.');
   });
 
-  it('accepts omitted acknowledgement fields while preserving source links', () => {
-    const packet = { report: 'https://example.test/source' } as PersonalReplyPacket;
-    expect(parsePersonalReplyDraft(JSON.stringify({ text: 'Done' }), packet)).toBe('Done\n\n[Source](<https://example.test/source>)');
+  it('accepts omitted acknowledgement fields without appending report URLs', () => {
+    const packet = { report: Array.from({ length: 12 }, (_, index) => `https://example.test/source-${index}`).join('\n') } as PersonalReplyPacket;
+    expect(parsePersonalReplyDraft(JSON.stringify({ text: 'Done' }), packet)).toBe('Done');
     expect(() => parsePersonalReplyDraft(JSON.stringify({ text: 'https://invented.test' }), packet)).toThrow('invented');
     expect(() => parsePersonalReplyDraft(JSON.stringify({ text: 'Done', limitationIds: [] }), packet)).toThrow('contract');
+  });
+
+  it('preserves selected source and deliverable links without adding unused sources', () => {
+    const packet = { report: '[Paper](https://example.test/paper) https://example.test/unused',
+      preservedText: '[Download](https://example.test/download)' } as PersonalReplyPacket;
+    const text = 'Finding remains uncertain. [Paper](https://example.test/paper) [Download](https://example.test/download)';
+    expect(parsePersonalReplyDraft(JSON.stringify({ text }), packet)).toBe(text);
   });
 
   it('rejects fabricated links and drafts that omit the result contract', () => {

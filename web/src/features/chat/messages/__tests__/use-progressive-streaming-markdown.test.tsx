@@ -11,11 +11,13 @@ function Harness({
   streaming,
   animateInitialContent = false,
   onComplete,
+  immediateFirstCommit = false,
 }: {
   content: string;
   streaming: boolean;
   animateInitialContent?: boolean;
   onComplete?: () => void;
+  immediateFirstCommit?: boolean;
 }) {
   const visible = useProgressiveStreamingMarkdown(
     content,
@@ -23,6 +25,7 @@ function Harness({
     'test-stream',
     animateInitialContent,
     onComplete,
+    immediateFirstCommit,
   );
   return <div>{visible}</div>;
 }
@@ -53,6 +56,17 @@ describe('useProgressiveStreamingMarkdown', () => {
     expect(container.textContent).toBe('abcdef');
     act(() => vi.advanceTimersByTime(48));
     expect(container.textContent).toBe('abcdefghijkl');
+  });
+  it('does not wait for a timer before revealing the first Personal delta', () => {
+    act(() => root.render(<Harness content="" streaming immediateFirstCommit />));
+    act(() => root.render(<Harness content="先看结论。" streaming immediateFirstCommit />));
+    expect(container.textContent).toBe('先看结论。');
+    act(() => root.render(<Harness content="先看结论。\n\n这是后续说明。" streaming immediateFirstCommit />));
+    expect(container.textContent).toBe('先看结论。');
+    act(() => vi.advanceTimersByTime(48));
+    expect(container.textContent).toContain('这是');
+    act(() => root.render(<Harness content="先看结论。\n\n这是后续说明。" streaming={false} immediateFirstCommit />));
+    expect(container.textContent).toContain('这是后续说明。');
   });
 
   it('continues scheduling commits when StrictMode replays mount effects', () => {
