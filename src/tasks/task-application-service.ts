@@ -23,6 +23,7 @@ import { TaskCollaborationRepository } from './task-collaboration-repository.js'
 import { TaskConversationRepository } from './task-conversation-repository.js';
 import { TaskCriterionReviewRepository } from './task-criterion-review-repository.js';
 import { TaskResultDeliveryRepository } from './task-result-delivery-repository.js';
+import { resolveTaskLocale } from './task-language.js';
 
 export type TaskApplicationResult =
   | { ok: true; model: TaskReadModel; runId?: string }
@@ -295,7 +296,7 @@ export class TaskApplicationService {
               }
               if (response.decision === 'deny') {
                 if (!this.#runs.listActiveWaits(task.id).some(item => item.kind === 'paused')) {
-                  this.#runs.createWait({ taskId: task.id, kind: 'paused', reason: 'Approval declined by user', condition: { approvalWaitId: wait.id } });
+                  this.#runs.createWait({ taskId: task.id, kind: 'paused', reason: resolveTaskLocale(task) === 'zh' ? '用户已拒绝授权' : 'Approval declined by user', condition: { approvalWaitId: wait.id } });
                 }
                 const active = this.#runs.getActiveRoot(task.id);
                 if (active && ['queued', 'running', 'verifying'].includes(active.status)) {
@@ -441,7 +442,9 @@ export class TaskApplicationService {
       new TaskCollaborationRepository().append({
         taskId: run.taskId, taskRunId: run.id, authorKind: 'system', authorId: 'task-run',
         kind: input.receipt.status === 'succeeded' ? 'result' : 'failure',
-        body: input.receipt.summary || (input.receipt.status === 'succeeded' ? 'TaskRun completed' : 'TaskRun failed'),
+        body: input.receipt.summary || (resolveTaskLocale(task) === 'zh'
+          ? input.receipt.status === 'succeeded' ? '任务执行完成' : '任务执行失败'
+          : input.receipt.status === 'succeeded' ? 'TaskRun completed' : 'TaskRun failed'),
         idempotencyKey: `task-run-receipt:${run.id}`,
       });
       if (input.receipt.status === 'succeeded' || input.receipt.status === 'failed') {
@@ -539,7 +542,7 @@ export class TaskApplicationService {
         this.#runs.createWait({
           taskId,
           kind: 'dependency',
-          reason: `Waiting for ${dependency.title}`,
+          reason: resolveTaskLocale(task) === 'zh' ? `等待：${dependency.title}` : `Waiting for ${dependency.title}`,
           condition: { dependsOnTaskId: dependency.id, executor },
         });
       }
@@ -553,7 +556,7 @@ export class TaskApplicationService {
         this.#runs.createWait({
           taskId,
           kind: 'approval',
-          reason: `Approval required: ${capability}`,
+          reason: resolveTaskLocale(task) === 'zh' ? `需要授权：${capability}` : `Approval required: ${capability}`,
           condition: { capability, executor },
         });
       }

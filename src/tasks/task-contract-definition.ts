@@ -8,10 +8,10 @@ export interface TaskContractDefinition {
   risks: string[];
 }
 
-export function defineTaskContract(objectiveInput: string): TaskContractDefinition {
+export function defineTaskContract(objectiveInput: string, locale?: 'en' | 'zh'): TaskContractDefinition {
   const objective = objectiveInput.trim();
   if (!objective) throw new Error('Objective is required');
-  const chinese = /[\u3400-\u9fff]/u.test(objective);
+  const chinese = locale ? locale === 'zh' : /[\u3400-\u9fff]/u.test(objective);
   return {
     objective,
     expectedOutputs: [objective],

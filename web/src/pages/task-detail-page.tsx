@@ -1034,7 +1034,7 @@ export function TaskDetailModal({ taskId, backgroundPath, onClose }: {
           type="button"
           tabIndex={-1}
           data-task-modal-backdrop
-          className="fixed inset-0 z-[80] bg-black/45 backdrop-blur-[1px]"
+          className="fixed inset-0 z-[80] bg-black/45"
           aria-label={language === 'zh' ? '关闭任务详情' : 'Close task details'}
           onClick={() => {
             setPreviewPath(null);
