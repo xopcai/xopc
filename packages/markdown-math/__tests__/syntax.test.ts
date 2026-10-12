@@ -30,6 +30,11 @@ describe('xopc-math-v1', () => {
   it.each(['$100$', '$5 and $10', '$ x$', '$x $', '$x$2', String.raw`\\(x\)`, '$$x$$'])('preserves ambiguous or escaped %s', raw => {
     expect(readInlineMathAt(raw)).toBeUndefined();
   });
+  it('leaves escaped xopc links to the Markdown link parser', () => {
+    const raw = String.raw`[打开]\(xopc://open?kind=session&key=test\)`;
+    expect(readInlineMathAt(raw, raw.indexOf('\\('))).toBeUndefined();
+    expect(mathRanges(raw)).toEqual([]);
+  });
   it('ignores closing delimiters in TeX comments and retains blank lines', () => {
     const raw = '\\[\n% \\]\na=b\n\nc=d\n\\]';
     expect(readDisplayMathAt(raw)?.state).toBe('complete');
