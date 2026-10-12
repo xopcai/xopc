@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   CHAT_SCROLL_NEAR_BOTTOM_PX,
   chatScrollDistanceFromBottom,
+  chatTimelineAnchorIndex,
   isNearChatBottom,
   scrollChatToEnd,
 } from '@/features/chat/scroll/chat-scroll-geometry';
@@ -33,5 +34,23 @@ describe('chat-scroll-geometry', () => {
     const el = mockScrollEl({ scrollTop: 0, scrollHeight: 1200, clientHeight: 600 });
     scrollChatToEnd(el);
     expect(el.scrollTop).toBe(1200);
+  });
+});
+
+describe('timeline reading anchor', () => {
+  it('finds the correct row in long history with bounded layout reads', () => {
+    let reads = 0;
+    const rows = Array.from({ length: 1024 }, (_, index) => ({
+      dataset: { chatMessageIndex: String(index + 10) },
+      getBoundingClientRect: () => { reads++; return { top: index * 100 - 80000 }; },
+    }));
+    const root = {
+      querySelectorAll: () => rows,
+      getBoundingClientRect: () => ({ top: 0, height: 600 }),
+    } as unknown as HTMLElement;
+    expect(chatTimelineAnchorIndex(root)).toBe(811);
+    expect(reads).toBeLessThanOrEqual(11);
+    root.querySelectorAll = (() => []) as unknown as HTMLElement['querySelectorAll'];
+    expect(chatTimelineAnchorIndex(root)).toBe(0);
   });
 });

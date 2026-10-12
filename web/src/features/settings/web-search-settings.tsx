@@ -1,6 +1,7 @@
 import { Cloud, Plus, Plug, ShieldCheck, SlidersHorizontal, Trash2 } from 'lucide-react';
 import { useCallback, useMemo, useReducer, useRef, type ReactNode } from 'react';
 
+import { NumberInput } from '@/components/ui/number-input';
 import { Button } from '@/components/ui/button';
 import { AutosaveStatus } from '@/components/ui/autosave-status';
 import { SecretInput, type SecretInputLabels } from '@/components/ui/secret-input';
@@ -60,7 +61,7 @@ function selectClassName(): string {
 const PROVIDER_TYPES: SearchProviderRow['type'][] = ['brave', 'tavily', 'bing', 'searxng'];
 
 function emptyProviderRow(): SearchProviderRow {
-  return { type: 'brave', apiKey: '', url: '', disabled: false };
+  return { clientKey: crypto.randomUUID(), type: 'brave', apiKey: '', url: '', disabled: false };
 }
 
 const webSearchFormReducer = createFormDraftReducer<WebSearchSettingsState>();
@@ -189,7 +190,7 @@ export function WebSearchSettingsPanel() {
           <div className="text-xs font-medium text-fg-muted">{w.providersTitle}</div>
           {form.providers.map((row, index) => (
             <ProviderRowEditor
-              key={`${row.type}:${row.url}:${row.apiKey}:${row.disabled}`}
+              key={row.clientKey ?? index}
               row={row}
               providerIndex={index}
               labels={w}
@@ -235,7 +236,7 @@ export function WebSearchSettingsPanel() {
             </Select>
           </Field>
           <Field label={w.maxResultsLabel} description={w.maxResultsDesc}>
-            <input
+            <NumberInput
               type="number"
               min={1}
               max={50}

@@ -3,6 +3,7 @@ import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 
 export type SearchProviderRow = {
+  clientKey?: string;
   type: 'brave' | 'tavily' | 'bing' | 'searxng';
   apiKey: string;
   url: string;
@@ -52,12 +53,13 @@ export function normalizeWebSearchSettingsFromConfig(cfg: unknown): WebSearchSet
 
   const rawProviders = s.providers;
   const rows: SearchProviderRow[] = Array.isArray(rawProviders)
-    ? rawProviders.map((p) => {
+    ? rawProviders.map((p, index) => {
         const o = p && typeof p === 'object' ? (p as Record<string, unknown>) : {};
         const type = o.type;
         const t =
           type === 'brave' || type === 'tavily' || type === 'bing' || type === 'searxng' ? type : 'brave';
         return {
+          clientKey: `search-provider-${index}`,
           type: t,
           apiKey: typeof o.apiKey === 'string' ? o.apiKey : '',
           url: typeof o.url === 'string' ? o.url : '',

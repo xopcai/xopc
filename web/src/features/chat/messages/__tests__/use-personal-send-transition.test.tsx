@@ -61,14 +61,15 @@ describe('Personal AI send transition', () => {
     delete (HTMLElement.prototype as unknown as { animate?: typeof Element.prototype.animate }).animate;
   });
 
-  it('hands off a plain optimistic message and restores its real bubble', async () => {
+  it('keeps the real optimistic bubble visible throughout the send animation', async () => {
     await act(async () => root.render(<Harness messages={[]} />));
     act(() => dispatch({ clientSubmissionId: 'send-1' }, source, draft));
     await act(async () => root.render(<Harness messages={[message]} />));
 
     const bubble = container.querySelector<HTMLElement>('.chat-user-message');
-    expect(bubble?.style.visibility).toBe('hidden');
-    expect(document.querySelector('[data-personal-send-ghost]')).not.toBeNull();
+    expect(bubble?.style.visibility).toBe('');
+    expect(document.querySelector('[data-personal-send-ghost]')).toBeNull();
+    expect(HTMLElement.prototype.animate).toHaveBeenCalledTimes(1);
     await act(async () => finishAnimation());
     expect(bubble?.style.visibility).toBe('');
     expect(document.querySelector('[data-personal-send-ghost]')).toBeNull();
@@ -84,17 +85,43 @@ describe('Personal AI send transition', () => {
     expect(container.querySelector<HTMLElement>('.chat-user-message')?.style.visibility).toBe('');
   });
 
-  it('keeps the flight visible through automatic list scrolling', async () => {
+  it('keeps the real bubble visible through automatic list scrolling', async () => {
     await act(async () => root.render(<Harness messages={[]} />));
     act(() => dispatch({ clientSubmissionId: 'send-1' }, source, draft));
     await act(async () => root.render(<Harness messages={[message]} />));
 
     act(() => container.querySelector('[data-viewport]')?.dispatchEvent(new Event('scroll')));
-    expect(container.querySelector<HTMLElement>('.chat-user-message')?.style.visibility).toBe('hidden');
-    expect(document.querySelector('[data-personal-send-ghost]')).not.toBeNull();
+    expect(container.querySelector<HTMLElement>('.chat-user-message')?.style.visibility).toBe('');
+    expect(document.querySelector('[data-personal-send-ghost]')).toBeNull();
+    expect(HTMLElement.prototype.animate).toHaveBeenCalledTimes(1);
     await act(async () => finishAnimation());
     expect(container.querySelector<HTMLElement>('.chat-user-message')?.style.visibility).toBe('');
     expect(document.querySelector('[data-personal-send-ghost]')).toBeNull();
+  });
+
+  it('reveals the real bubble as soon as streaming growth moves its target', async () => {
+    await act(async () => root.render(<Harness messages={[]} />));
+    act(() => dispatch({ clientSubmissionId: 'send-1' }, source, draft));
+    await act(async () => root.render(<Harness messages={[message]} />));
+    const bubble = container.querySelector<HTMLElement>('.chat-user-message')!;
+    bubble.getBoundingClientRect = () => ({ left: 300, top: 200, right: 420, bottom: 250 }) as DOMRect;
+    act(() => container.querySelector('[data-viewport]')?.dispatchEvent(new Event('scroll')));
+    expect(bubble.style.visibility).toBe('');
+    expect(document.querySelector('[data-personal-send-ghost]')).toBeNull();
+  });
+
+  it('keeps content visible even when the browser never resolves the animation', async () => {
+    vi.useFakeTimers();
+    try {
+      await act(async () => root.render(<Harness messages={[]} />));
+      act(() => dispatch({ clientSubmissionId: 'send-1' }, source, draft));
+      await act(async () => root.render(<Harness messages={[message]} />));
+      act(() => vi.advanceTimersByTime(350));
+      expect(container.querySelector<HTMLElement>('.chat-user-message')?.style.visibility).toBe('');
+      expect(document.querySelector('[data-personal-send-ghost]')).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('animates multiline messages instead of silently skipping them', async () => {
@@ -102,7 +129,8 @@ describe('Personal AI send transition', () => {
     act(() => dispatch({ clientSubmissionId: 'send-1' }, source, { ...draft, text: 'First line\nSecond line' }));
     await act(async () => root.render(<Harness messages={[message]} />));
 
-    expect(document.querySelector('[data-personal-send-ghost]')).not.toBeNull();
+    expect(document.querySelector('[data-personal-send-ghost]')).toBeNull();
+    expect(HTMLElement.prototype.animate).toHaveBeenCalledTimes(1);
   });
 
   it('ends the flight when the user starts scrolling manually', async () => {
