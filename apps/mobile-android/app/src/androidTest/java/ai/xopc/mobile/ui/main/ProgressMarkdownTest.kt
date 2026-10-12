@@ -31,7 +31,7 @@ class ProgressMarkdownTest {
     composeTestRule.setContent {
       ProgressScreen(state.value, PaddingValues(), {}, {}, {}, { id ->
         state.value = state.value.copy(detailTaskId = id, detailTask = task)
-      }, {}, {}, {}, {}, {}, {}, {}, { _, _, _ -> }, {}, { _, _, _, _, _ -> }, {})
+      }, {}, {}, {}, {}, {}, {}, {}, { _, _, _ -> }, {}, { _, _, _ -> }, {})
     }
     composeTestRule.onNodeWithTag("progress-all-work").performClick()
     composeTestRule.onNodeWithTag("progress-task-task-1").performClick()
@@ -54,7 +54,7 @@ class ProgressMarkdownTest {
         XopcTheme {
           ProgressScreen(state.value, PaddingValues(), {}, {}, {}, { id ->
             state.value = state.value.copy(detailTaskId = id, detailTask = task)
-          }, {}, {}, {}, {}, {}, {}, {}, { _, _, _ -> }, {}, { _, _, _, _, _ -> }, {})
+          }, {}, {}, {}, {}, {}, {}, {}, { _, _, _ -> }, {}, { _, _, _ -> }, {})
         }
       }
     }

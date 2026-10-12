@@ -20,6 +20,19 @@ describe('voice service setup', () => {
     expect(next.voice.realtime.tts).toEqual({ provider: 'xopc-cloud' });
     expect(next.tts).toBe(form.tts);
   });
+
+  it('clears the hosted streaming input selection when switching to an own key', () => {
+    const form = normalizeVoiceSettings({ voice: { realtime: {
+      enabled: true,
+      stt: { provider: 'xopc-cloud', model: 'hosted-asr' },
+      tts: { provider: 'xopc-cloud', model: 'hosted-tts' },
+    } } });
+    const next = configureRealtimeService(form, 'alibaba');
+    expect(next.stt.provider).toBe('alibaba');
+    expect(next.voice.realtime.stt).toBeUndefined();
+    expect(next.voice.realtime.tts).toEqual({ provider: 'alibaba', voice: 'Cherry' });
+    expect(form.voice.realtime.stt?.model).toBe('hosted-asr');
+  });
   it('retains explicit settings when re-enabling the same service', () => {
     const form = configureRealtimeService(normalizeVoiceSettings({}), 'alibaba');
     form.voice.realtime.tts!.voice = 'Serena';

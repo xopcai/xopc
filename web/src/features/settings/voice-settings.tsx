@@ -2,8 +2,8 @@ import { PlatformVoiceSettings } from './platform-voice-settings';
 import { Loader2, Mic, Play, Square, Volume2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState, type ReactNode } from 'react';
 import useSWR from 'swr';
+import { useSearchParams } from 'react-router-dom';
 
-import { SettingsAdvancedSection } from '@/features/settings/settings-advanced-section';
 import { NumberInput } from '@/components/ui/number-input';
 import { Button } from '@/components/ui/button';
 import { AutosaveStatus } from '@/components/ui/autosave-status';
@@ -37,7 +37,6 @@ import { messages, type VoiceSettingsMessages } from '@/i18n/messages';
 import { useAutosave } from '@/lib/use-autosave';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
-import { useShowAdvancedSettings } from '@/stores/settings-mode-store';
 import { Select, SelectOption } from '@/components/ui/popover-select';
 import { VoiceDeviceSettings } from './voice-device-settings';
 import { useVoicePreferencesStore } from '@/stores/voice-preferences-store';
@@ -76,6 +75,8 @@ function makeAudioUrl(base64: string, mimeType: string): string {
 
 function sttProviderLabel(id: string, v: VoiceSettingsMessages): string {
   switch (id) {
+    case 'xopc-cloud':
+      return v.setup.hosted;
     case 'openai':
       return v.stt.openai;
     case 'alibaba':
@@ -89,6 +90,8 @@ function sttProviderLabel(id: string, v: VoiceSettingsMessages): string {
 
 function ttsProviderLabel(id: string, v: VoiceSettingsMessages): string {
   switch (id) {
+    case 'xopc-cloud':
+      return v.setup.hosted;
     case 'openai':
       return v.tts.providerOpenai;
     case 'alibaba':
@@ -99,19 +102,6 @@ function ttsProviderLabel(id: string, v: VoiceSettingsMessages): string {
       return 'MiniMax';
     default:
       return id;
-  }
-}
-
-function ttsTriggerLabel(trigger: VoiceSettingsState['tts']['trigger'], v: VoiceSettingsMessages): string {
-  switch (trigger) {
-    case 'off':
-      return v.tts.triggerOff;
-    case 'always':
-      return v.tts.triggerAlways;
-    case 'inbound':
-      return v.tts.triggerInbound;
-    case 'tagged':
-      return v.tts.triggerTagged;
   }
 }
 
@@ -201,23 +191,24 @@ export function VoiceSettingsPanel() {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
   const v = m.voiceSettings;
-  const [group, setGroup] = useState<'listening' | 'input' | 'devices' | 'service' | 'diagnostics'>('listening');
-  const showAdvanced = useShowAdvancedSettings();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedGroup = searchParams.get('voiceTab');
+  const group = requestedGroup === 'service' || requestedGroup === 'devices' ? requestedGroup : 'listening';
+  const setGroup = (value: 'listening' | 'service' | 'devices') => setSearchParams((current) => {
+    const next = new URLSearchParams(current);
+    next.set('voiceTab', value);
+    return next;
+  });
   const captions = useVoicePreferencesStore((state) => state.captions);
   const setCaptions = useVoicePreferencesStore((state) => state.setCaptions);
   const token = useGatewayStore((st) => st.conversationId);
   const hasToken = Boolean(token);
 
-  useEffect(() => {
-    if (!showAdvanced && group === 'diagnostics') {
-      setGroup('listening');
-    }
-  }, [group, showAdvanced]);
-
   const [formDraft, dispatchForm] = useReducer(voiceFormReducer, { form: null, baseline: null });
   const form = formDraft.form;
   const baseline = formDraft.baseline;
   const [models, setModels] = useState<VoiceModelsPayload | null>(null);
+  const [readoutOpen, setReadoutOpen] = useState(false);
   const dirtyRef = useRef(false);
   const formRef = useRef(form);
   formRef.current = form;
@@ -325,7 +316,13 @@ export function VoiceSettingsPanel() {
     dirtyRef.current = true;
     dispatchForm({
       type: 'update',
-      updater: (f) => (f ? { ...f, stt: { ...f.stt, ...patch } } : null),
+      updater: (f) => (f ? {
+        ...f,
+        stt: { ...f.stt, ...patch },
+        ...(patch.provider && patch.provider !== 'xopc-cloud' ? {
+          voice: { ...f.voice, realtime: { ...f.voice.realtime, stt: undefined } },
+        } : {}),
+      } : null),
     });
   }, []);
 
@@ -469,10 +466,11 @@ export function VoiceSettingsPanel() {
       </div>
       {autosave.error ? <p className="text-sm text-red-600 dark:text-red-400">{autosave.error}</p> : null}
 
-      <nav aria-label={v.setup.advanced} className="flex flex-wrap gap-2">
-        {(['listening', 'input', 'devices', 'service', ...(showAdvanced ? ['diagnostics'] as const : [])] as const).map((id) => <Button key={id} variant={group === id ? 'secondary' : 'ghost'} aria-pressed={group === id} onClick={() => setGroup(id)}>{v.experience[id]}</Button>)}
+      <nav aria-label={v.experience.tabsLabel} className="flex flex-wrap gap-2">
+        {(['listening', 'service', 'devices'] as const).map((id) => <Button key={id} variant={group === id ? 'secondary' : 'ghost'} aria-pressed={group === id} onClick={() => setGroup(id)}>{v.experience[id]}</Button>)}
       </nav>
-      {group === 'listening' || group === 'service' || group === 'diagnostics' ? <VoiceSetup section={group} v={v} form={form} pending={dirty || autosave.status === 'saving' || Boolean(autosave.error)} apiKeyLabels={apiKeyLabels} sttProviders={sttProviders} onChange={updateForm} /> : null}
+      <p className="text-sm text-fg-muted">{v.experience[`${group}Hint`]}</p>
+      {group !== 'devices' ? <VoiceSetup section={group} v={v} form={form} pending={dirty || autosave.status === 'saving' || Boolean(autosave.error)} onChange={updateForm} /> : null}
       {group === 'listening' ? <>
         <VoiceLanguageSection v={v} voice={form.voice} updateLanguageMode={updateVoiceLanguageMode} />
         <section className="rounded-xl bg-surface-hover/20 px-4 py-5 sm:px-5">
@@ -484,30 +482,59 @@ export function VoiceSettingsPanel() {
             </Select>
           </div>
         </section>
-      </> : null}
-      {group === 'input' ? <>
+
         <label className="flex items-center justify-between text-sm">{v.experience.captions}<input type="checkbox" role="switch" aria-checked={captions} className="ui-checkbox" checked={captions} onChange={(e) => setCaptions(e.target.checked)} /></label>
-        <label className="space-y-2 text-sm"><span>{v.stt.refinement}</span><p className="text-xs text-fg-muted">{v.stt.refinementDesc}</p>
+        <details className="rounded-xl bg-surface-hover/20 p-4"><summary className="cursor-pointer text-sm font-medium text-fg">{v.experience.inputProcessing} · {refinement.mode === 'off' ? v.stt.refinementOff : refinement.mode === 'punctuation' ? v.stt.refinementPunctuation : refinement.mode === 'light' ? v.stt.refinementLight : v.setup.advanced}</summary>
+        <label className="mt-4 block space-y-2 text-sm"><span>{v.stt.refinement}</span><p className="text-xs text-fg-muted">{v.stt.refinementDesc}</p>
           <Select className={selectClassName()} value={refinement.mode} onChange={(e) => updateVoiceRefinement({ mode: e.target.value as typeof refinement.mode })}>
             <SelectOption value="off">{v.stt.refinementOff}</SelectOption><SelectOption value="punctuation">{v.stt.refinementPunctuation}</SelectOption><SelectOption value="light">{v.stt.refinementLight}</SelectOption>
             {refinement.mode === 'custom' ? <SelectOption value="custom">{v.setup.advanced}</SelectOption> : null}
           </Select>
-        </label>
-        <details className="rounded-xl bg-surface-base/55 px-4 py-3"><summary className="cursor-pointer text-sm font-medium text-fg">{v.setup.readout} · {tts.enabled ? ttsTriggerLabel(tts.trigger, v) : v.overview.off}</summary>
-          <p className="mt-3 text-xs text-fg-muted">{v.setup.readoutHint}</p><TtsSection v={v} apiKeyLabels={apiKeyLabels} tts={tts} models={models} ttsProviders={ttsProviders} updateTts={updateTts} />
-        </details>
+        </label></details>
+        <VoiceReadoutPreference v={v} tts={tts} updateTts={updateTts} />
       </> : null}
-      {group === 'devices' ? <VoiceDeviceSettings v={v} /> : null}
+      {group === 'devices' ? <>
+        <VoiceDeviceSettings v={v} />
+        <VoiceSetup section="diagnostics" v={v} form={form} pending={dirty || autosave.status === 'saving' || Boolean(autosave.error)} onChange={updateForm} />
+      </> : null}
       {group === 'service' ? <>
-        <PlatformVoiceSettings disabled={dirty || autosave.status === 'saving'} />
-        {form.voice.realtime.enabled && form.voice.realtime.omni?.provider === 'alibaba' ? <OmniVoiceSettings value={form.voice.realtime.omni} onChange={(omni) => updateRealtime({ omni })} /> : null}
-        <details className="rounded-xl bg-surface-base/55 px-4 py-3"><summary className="cursor-pointer text-sm font-medium text-fg">{v.experience.technical}</summary>
+        {stt.provider === 'xopc-cloud' ? <PlatformVoiceSettings engine={form.voice.realtime.defaultEngine} disabled={dirty || autosave.status === 'saving'} /> : <>
           <SttSection v={v} apiKeyLabels={apiKeyLabels} stt={stt} models={models} sttProviders={sttProviders} updateStt={updateStt} updateSttFallback={updateSttFallback} />
-          <SettingsAdvancedSection title={v.experience.technical} summary={v.notes.envVars}><p className="text-xs text-fg-muted">{v.notes.envVars}</p></SettingsAdvancedSection>
+        </>}
+        {form.voice.realtime.enabled && form.voice.realtime.omni?.provider === 'alibaba' ? <OmniVoiceSettings value={form.voice.realtime.omni} onChange={(omni) => updateRealtime({ omni })} /> : null}
+        <details open={readoutOpen} className="rounded-xl bg-surface-hover/20 p-4" data-voice-section="readout-service">
+          <summary onClick={(event) => { event.preventDefault(); setReadoutOpen(!readoutOpen); }} className="cursor-pointer text-sm font-medium text-fg">{v.experience.readoutService}<span className="ml-2 font-normal text-fg-muted">{ttsProviderLabel(tts.provider, v)}</span></summary>
+          {readoutOpen ? <>
+            <p className="mt-3 text-xs text-fg-muted">{v.setup.readoutHint}</p>
+            <TtsSection v={v} apiKeyLabels={apiKeyLabels} tts={tts} models={models} ttsProviders={ttsProviders} updateTts={updateTts} />
+          </> : null}
         </details>
+        {stt.provider === 'xopc-cloud' ? <details className="rounded-xl bg-surface-hover/20 p-4" data-voice-section="advanced">
+          <summary className="cursor-pointer text-sm font-medium text-fg">{v.experience.technical}</summary>
+          <SttSection v={v} apiKeyLabels={apiKeyLabels} stt={stt} models={models} sttProviders={sttProviders} updateStt={updateStt} updateSttFallback={updateSttFallback} />
+          <p className="mt-3 text-xs text-fg-muted">{v.notes.envVars}</p>
+        </details> : null}
       </> : null}
     </div>
   );
+}
+
+function VoiceReadoutPreference({ v, tts, updateTts }: {
+  v: VoiceSettingsMessages;
+  tts: VoiceSettingsState['tts'];
+  updateTts: (patch: Partial<VoiceSettingsState['tts']>) => void;
+}) {
+  return <section className="space-y-2 rounded-xl bg-surface-hover/20 p-4 sm:p-5">
+    <label className="block space-y-2 text-sm"><span className="font-medium">{v.setup.readout}</span>
+      <Select aria-label={v.setup.readout} className={selectClassName()} value={tts.enabled ? tts.trigger : 'off'} onChange={(event) => updateTts({ enabled: event.target.value !== 'off', trigger: event.target.value as typeof tts.trigger })}>
+        <SelectOption value="off">{v.tts.triggerOff}</SelectOption>
+        <SelectOption value="inbound">{v.tts.triggerInbound}</SelectOption>
+        <SelectOption value="always">{v.tts.triggerAlways}</SelectOption>
+        <SelectOption value="tagged">{v.tts.triggerTagged}</SelectOption>
+      </Select>
+    </label>
+    <p className="text-xs text-fg-muted">{v.setup.readoutHint}</p>
+  </section>;
 }
 
 function VoiceLanguageSection({
@@ -603,26 +630,20 @@ function SttSection({
   return (
     <section className="rounded-xl bg-surface-hover/20 px-4 py-5 sm:px-5">
       <div className="mb-4">
-        <div className="flex items-center gap-2 text-sm font-semibold text-fg">
-          <Mic className="size-4 text-accent" strokeWidth={1.75} />
-          {v.stt.title}
+        <div className="flex items-center justify-between gap-3">
+          <h3 className="flex items-center gap-2 text-sm font-semibold text-fg"><Mic aria-hidden="true" className="size-4 text-accent" strokeWidth={1.75} />{v.stt.title}</h3>
+          <label className="flex min-h-10 items-center gap-2 text-xs text-fg-muted"><span>{v.stt.enable}</span><input type="checkbox" role="switch" aria-checked={stt.enabled} className="ui-checkbox" checked={stt.enabled} onChange={(event) => updateStt({ enabled: event.target.checked })} /></label>
         </div>
         <p className="mt-1 text-xs text-fg-muted">{v.stt.description}</p>
       </div>
       <div className="space-y-4">
-        <VoiceToggle
-          checked={stt.enabled}
-          title={v.stt.enable}
-          description={v.stt.enableDesc}
-          onChange={(enabled) => updateStt({ enabled })}
-        />
-
         {stt.enabled ? (
           <>
             <div className="grid gap-3 sm:grid-cols-2">
               <div className={cn('flex flex-col gap-1.5', credentialFieldWidthClass)}>
                 <FieldLabel>{v.stt.provider}</FieldLabel>
                 <Select
+                  aria-label={v.stt.provider}
                   className={selectClassName()}
                   value={stt.provider}
                   onChange={(event) => updateStt({ provider: event.target.value })}
@@ -647,8 +668,9 @@ function SttSection({
                 onPatch={updateProviderSlice}
               />
             </div>
+            {stt.provider === 'alibaba' ? <p className="text-xs text-fg-muted">{v.setup.keyHint}</p> : null}
 
-            <SettingsAdvancedSection title={v.stt.fallback} summary={v.stt.fallbackDesc}>
+            <details className="rounded-lg border border-edge p-3"><summary className="cursor-pointer text-sm font-medium text-fg">{v.stt.fallback}</summary>
               <div className="flex items-center justify-between gap-2 rounded-xl bg-surface-hover/50 px-3 py-2.5 dark:bg-surface-hover/35">
                 <div>
                   <div className="text-sm font-medium text-fg">{v.stt.fallback}</div>
@@ -663,7 +685,7 @@ function SttSection({
               </div>
 
 
-            </SettingsAdvancedSection>
+            </details>
           </>
         ) : null}
       </div>
@@ -749,8 +771,6 @@ function TtsSection({
     (field) => (field.key !== 'speed' || activeModel?.tts?.speed !== false)
       && (field.key !== 'instructions' || activeModel?.tts?.instructions !== false),
   );
-  const providerNeedsKey = Boolean(activeProvider?.diagnostics.requiresApiKey);
-  const providerReady = Boolean(activeProvider?.configured) || !providerNeedsKey;
 
   const updateProviderSlice = useCallback(
     (patch: Record<string, unknown>) => {
@@ -831,34 +851,12 @@ function TtsSection({
         <p className="mt-1 text-xs text-fg-muted">{v.tts.description}</p>
       </div>
       <div className="space-y-4">
-        <VoiceToggle
-          checked={tts.enabled}
-          title={v.tts.enable}
-          description={v.tts.enableDesc}
-          onChange={(enabled) => updateTts({ enabled })}
-        />
-
-        {tts.enabled ? (
-          <>
+        <>
             <div className="grid gap-3 sm:grid-cols-2">
-              <div className={cn('flex flex-col gap-1.5', credentialFieldWidthClass)}>
-                <FieldLabel>{v.tts.trigger}</FieldLabel>
-                <Select
-                  className={selectClassName()}
-                  value={tts.trigger}
-                  onChange={(e) => updateTts({ trigger: e.target.value as VoiceSettingsState['tts']['trigger'] })}
-                >
-                  <SelectOption value="off">{v.tts.triggerOff}</SelectOption>
-                  <SelectOption value="inbound">{v.tts.triggerInbound}</SelectOption>
-                  <SelectOption value="tagged">{v.tts.triggerTagged}</SelectOption>
-                  <SelectOption value="always">{v.tts.triggerAlways}</SelectOption>
-                </Select>
-                <p className="text-xs text-fg-subtle">{v.tts.triggerHelp}</p>
-              </div>
-
               <div className={cn('flex flex-col gap-1.5', credentialFieldWidthClass)}>
                 <FieldLabel>{v.tts.provider}</FieldLabel>
                 <Select
+                  aria-label={v.tts.provider}
                   className={selectClassName()}
                   value={tts.provider}
                   onChange={(e) => handleProviderSelect(e.target.value)}
@@ -881,16 +879,7 @@ function TtsSection({
               </div>
             </div>
 
-            <details
-              className="rounded-xl bg-surface-panel/80 p-3 shadow-surface"
-              open={!providerReady}
-            >
-              <summary className="cursor-pointer text-sm font-medium text-fg marker:text-fg-muted">
-                {v.experience.service}
-                <span className="ml-2 text-xs font-normal text-fg-muted">{v.tts.advanced.description}</span>
-              </summary>
-              <div className="mt-3">
-                <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid gap-3 sm:grid-cols-2">
                   <VoiceProviderConfigFields
                     kind="tts"
                     providerId={tts.provider}
@@ -904,14 +893,12 @@ function TtsSection({
                     onPatch={updateProviderSlice}
                     resetVoiceOnModelChange
                   />
-                </div>
-              </div>
-            </details>
+            </div>
 
-            <div className="rounded-xl bg-surface-panel/80 p-3 shadow-surface">
+            <details className="rounded-xl bg-surface-panel/80 p-3"><summary className="cursor-pointer text-sm font-medium text-fg">{v.tts.test.title}</summary>
+              <div className="mt-3">
               <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                 <div>
-                  <div className="text-sm font-medium text-fg">{v.tts.test.title}</div>
                   <p className="mt-1 text-xs text-fg-muted">{v.tts.test.description}</p>
                 </div>
                 <div className="flex shrink-0 gap-2">
@@ -960,9 +947,9 @@ function TtsSection({
                   <span className="text-red-600 dark:text-red-400">{testState.message}</span>
                 ) : null}
               </div>
-            </div>
-          </>
-        ) : null}
+              </div>
+            </details>
+        </>
       </div>
     </section>
   );
@@ -994,12 +981,14 @@ function VoiceProviderConfigFields({
   resetVoiceOnModelChange?: boolean;
 }) {
   const language = useLocaleStore((state) => state.language);
-  const showAdvanced = useShowAdvancedSettings();
-  return fields.filter((field) => showAdvanced || field.required || !["timeoutMs", "maxTextLength"].includes(field.key)).map((field) => {
+  const v = messages(language).voiceSettings;
+  const isEssential = (field: VoiceConfigFieldMetadata) => field.required || ['apiKey', 'model', 'voice'].includes(field.key);
+  const advancedFields = fields.filter((field) => !isEssential(field));
+  const renderFields = (values: VoiceConfigFieldMetadata[]) => values.map((field) => {
     if (field.key === 'apiKey') {
       return (
         <div key={field.key} className={cn('flex flex-col gap-1.5', credentialFieldWidthClass)}>
-          <FieldLabel>{field.label}</FieldLabel>
+          <FieldLabel htmlFor={`voice-${kind}-${providerId}-api-key`}>{v.stt.apiKey}</FieldLabel>
           <VoiceApiKeyField
             kind={kind}
             providerId={providerId}
@@ -1016,8 +1005,9 @@ function VoiceProviderConfigFields({
     if (field.key === 'model' && models.length > 0) {
       return (
         <div key={field.key} className={cn('flex flex-col gap-1.5', credentialFieldWidthClass)}>
-          <FieldLabel>{field.label}</FieldLabel>
+          <FieldLabel htmlFor={`voice-${kind}-${providerId}-model`}>{v.stt.model}</FieldLabel>
           <Select
+            id={`voice-${kind}-${providerId}-model`}
             className={selectClassName()}
             value={currentModel ?? ''}
             onChange={(event) => onPatch({
@@ -1035,8 +1025,9 @@ function VoiceProviderConfigFields({
     if (field.key === 'voice' && voices.length > 0) {
       return (
         <div key={field.key} className={cn('flex flex-col gap-1.5', credentialFieldWidthClass)}>
-          <FieldLabel>{field.label}</FieldLabel>
+          <FieldLabel htmlFor={`voice-${kind}-${providerId}-voice`}>{v.tts.voice}</FieldLabel>
           <Select
+            id={`voice-${kind}-${providerId}-voice`}
             className={selectClassName()}
             value={currentVoice ?? ''}
             onChange={(event) => onPatch({ voice: event.target.value })}
@@ -1057,6 +1048,7 @@ function VoiceProviderConfigFields({
     return (
       <SchemaConfigField
         key={field.key}
+        fieldId={`voice-${kind}-${providerId}-${field.key}`}
         field={field}
         value={readSchemaFieldValue(providerSlice, field)}
         onChange={(next) => onPatch({ [field.key]: next })}
@@ -1064,69 +1056,29 @@ function VoiceProviderConfigFields({
       />
     );
   });
-}
-
-function VoiceToggle({
-  checked,
-  title,
-  description,
-  onChange,
-}: {
-  checked: boolean;
-  title: string;
-  description: string;
-  onChange: (checked: boolean) => void;
-}) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      onClick={() => onChange(!checked)}
-      className={cn(
-        'group flex w-full items-center justify-between gap-4 rounded-lg bg-surface-base/55 px-3 py-3 text-left transition-colors',
-        settingsInputFocusClass,
-        checked
-          ? 'bg-surface-panel text-fg'
-          : 'bg-surface-panel/80 text-fg hover:bg-surface-hover',
-      )}
-    >
-      <span className="min-w-0">
-        <span className="flex flex-wrap items-center gap-2 text-sm font-semibold text-fg">
-          {title}
-        </span>
-        <span className="mt-1 block text-xs leading-relaxed text-fg-muted">{description}</span>
-      </span>
-      <span
-        className={cn(
-          'relative inline-flex h-6 w-11 shrink-0 items-center rounded-full border transition-colors',
-          checked ? 'border-accent bg-accent' : 'border-edge bg-surface-hover group-hover:border-accent/40',
-        )}
-        aria-hidden
-      >
-        <span
-          className={cn(
-            'size-5 rounded-full bg-white shadow-surface transition-transform',
-            checked ? 'translate-x-5' : 'translate-x-0.5',
-          )}
-        />
-      </span>
-    </button>
-  );
+  return <>
+    {renderFields(fields.filter(isEssential))}
+    {advancedFields.length ? <details className="rounded-lg border border-edge p-3 sm:col-span-2">
+      <summary className="cursor-pointer text-sm font-medium text-fg">{v.experience.providerOptions}</summary>
+      <div className="mt-3 grid gap-3 sm:grid-cols-2">{renderFields(advancedFields)}</div>
+    </details> : null}
+  </>;
 }
 
 function SchemaConfigField({
+  fieldId,
   field,
   value,
   onChange,
   className,
 }: {
+  fieldId?: string;
   field: VoiceConfigFieldMetadata;
   value: string | number | boolean;
   onChange: (next: unknown) => void;
   className?: string;
 }) {
-  const id = `voice-schema-field-${field.key}`;
+  const id = fieldId ?? `voice-schema-field-${field.key}`;
   const description = field.description;
 
   if (field.type === 'boolean') {
@@ -1150,7 +1102,7 @@ function SchemaConfigField({
 
   return (
     <div className={cn('flex flex-col gap-1.5', className)}>
-      <FieldLabel>{field.label}</FieldLabel>
+      <FieldLabel htmlFor={id}>{field.label}</FieldLabel>
       {field.type === 'select' ? (
         <Select
           id={id}
@@ -1219,6 +1171,8 @@ function SchemaConfigField({
   );
 }
 
-function FieldLabel({ children }: { children: ReactNode }) {
-  return <div className="text-sm font-medium text-fg">{children}</div>;
+function FieldLabel({ children, htmlFor }: { children: ReactNode; htmlFor?: string }) {
+  return htmlFor
+    ? <label htmlFor={htmlFor} className="text-sm font-medium text-fg">{children}</label>
+    : <div className="text-sm font-medium text-fg">{children}</div>;
 }

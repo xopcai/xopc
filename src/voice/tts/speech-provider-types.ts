@@ -125,6 +125,7 @@ export interface SpeechVoiceOption {
 }
 
 export interface SpeechListVoicesRequest {
+  mode?: 'speech' | 'speech.stream';
   cfg?: Config;
   providerConfig?: SpeechProviderConfig;
   apiKey?: string;

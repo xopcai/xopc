@@ -13,6 +13,8 @@ export class PlatformVoiceError extends Error {
   }
 
   get clientMessage(): string {
+    if (this.code === 'unsupported_voice') return 'The selected voice is unavailable. Refresh the voice catalog or choose another voice.';
+    if (this.status === 409) return 'The voice model publication changed. Refresh the voice catalog and try again.';
     if (this.code === 'realtime_quota_session_limit') return 'The funded transcription duration has been reached. Start a new voice session to continue.';
     if (this.code === 'realtime_quota_workspace_budget') return 'XOPC Cloud voice workspace budget is exhausted. Increase the workspace budget or choose another voice provider.';
     if (this.status === 402 || this.code === 'realtime_quota_user_credits') return 'XOPC Cloud voice has insufficient Credit or quota. Check your Cloud balance and workspace budget, or choose another voice provider.';
@@ -74,7 +76,7 @@ function connect(url: string, token: string, signal: AbortSignal, onEvent: (even
   socket.on('error', fail);
   socket.on('close', (code, reason) => fail(new PlatformVoiceError(
     `Platform voice disconnected before completion (close ${code}${reason.length ? `: ${reason.toString('utf8').slice(0, 256)}` : ''})`,
-    undefined, 'provider_disconnected',
+    undefined, code === 4400 && reason.toString('utf8') === 'Unsupported voice' ? 'unsupported_voice' : 'provider_disconnected',
   )));
   return { socket, close, fail,
     pause: () => { if (!ended && socket.readyState === WebSocket.OPEN) socket.pause(); },

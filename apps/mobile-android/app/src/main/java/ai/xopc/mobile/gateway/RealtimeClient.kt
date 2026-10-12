@@ -25,11 +25,10 @@ data class RunStreamEvent(val runId: String, val conversationId: String, val typ
   val messageId: String?, val delta: String?, val offset: Int?) {
   companion object {
     fun appendDelta(current: String, delta: String, offset: Int?): String? {
-      if (offset != null && offset != current.length) {
-        if (offset < current.length && current.substring(offset).startsWith(delta)) return current
-        return null
-      }
-      return (current + delta).takeIf { it.length <= 32_000 }
+      if (offset != null && (offset < 0 || offset > current.length)) return null
+      val overlap = offset?.let { (current.length - it).coerceAtMost(delta.length) } ?: 0
+      if (overlap > 0 && current.substring(offset!!, offset + overlap) != delta.take(overlap)) return null
+      return (current + delta.drop(overlap)).takeIf { it.length <= 32_000 }
     }
 
     fun parse(topic: String, event: String, data: JSONObject): RunStreamEvent? {

@@ -42,7 +42,7 @@ class ProgressOverviewTest {
         XopcTheme {
           Surface(color = MaterialTheme.colorScheme.background) {
             ProgressScreen(ProgressUiState(needsUser = pending), PaddingValues(top = 24.dp),
-              {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, { _, _, _ -> }, {}, { _, _, _, _, _ -> }, {},
+              {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, { _, _, _ -> }, {}, { _, _, _ -> }, {},
               bottomChromeHeight = 140.dp)
           }
         }

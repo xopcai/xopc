@@ -243,14 +243,23 @@ struct ProductStateTests {
         #expect(HomeOpenRoute(href: "/workflows?runId=run-1") == nil)
     }
 
+    @Test func reviewActionsNavigateToTheirTaskWithoutBecomingCommands() throws {
+        let data = Data(#"{"type":"task_review","label":"查看结果并验收","taskId":"task-1"}"#.utf8)
+        let action = try JSONDecoder().decode(HomeAction.self, from: data)
+        #expect(action.route == .task("task-1"))
+        #expect(action.command == nil)
+        let missing = try JSONDecoder().decode(HomeAction.self, from: Data(#"{"type":"task_review","label":"Review"}"#.utf8))
+        #expect(missing.route == nil)
+    }
+
     @Test func homeActionAcceptsOnlySupportedCommands() {
         let approval = HomeAction(
             type: "connector_decision", label: "允许", href: nil,
-            approvalId: "approval-1", decision: "approve", subjectKind: nil, runId: nil
+            approvalId: "approval-1", decision: "approve", subjectKind: nil, runId: nil, taskId: nil
         )
         let invalid = HomeAction(
             type: "connector_decision", label: "允许", href: nil,
-            approvalId: "approval-1", decision: "unknown", subjectKind: nil, runId: nil
+            approvalId: "approval-1", decision: "unknown", subjectKind: nil, runId: nil, taskId: nil
         )
 
         #expect(approval.command?.kind == "connector_approval")

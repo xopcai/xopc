@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import useSWR from 'swr';
-import { voiceSettingsCatalogSchema, type VoiceSelection } from '@xopcai/realtime-protocol/voice';
+import { voiceSettingsCatalogSchema, voiceSupportsMode, type VoiceSelection } from '@xopcai/realtime-protocol/voice';
 import { Select, SelectOption } from '@/components/ui/popover-select';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -10,7 +10,7 @@ import { modelDisplayName } from '@/lib/model-display-name';
 import { useLocaleStore } from '@/stores/locale-store';
 import { revalidateGatewayConfig } from '@/features/gateway/gateway-config-swr';
 
-export function PlatformVoiceSettings({ disabled = false }: { disabled?: boolean }) {
+export function PlatformVoiceSettings({ disabled = false, engine = 'agent' }: { disabled?: boolean; engine?: 'agent' | 'omni' }) {
   const language = useLocaleStore(state => state.language);
   const zh = language === 'zh';
   const [busy, setBusy] = useState(false);
@@ -34,24 +34,35 @@ export function PlatformVoiceSettings({ disabled = false }: { disabled?: boolean
     } catch (error) { setError(error instanceof Error ? error.message : String(error)); await mutate(); }
     finally { setBusy(false); }
   };
-  return <section className="space-y-4 rounded-xl bg-surface-hover/20 p-4">
-    <div className="flex items-center justify-between gap-3"><h3 className="font-medium">{zh ? 'XOPC 托管语音模型' : 'XOPC managed voice models'}</h3><Button variant="secondary" disabled={busy || disabled || !data} onClick={() => void request()}>{zh ? '刷新目录' : 'Refresh catalog'}</Button></div>
-    <p className="text-sm text-fg-muted">{zh ? '各设备共用此 Gateway 的模型设置，修改在下次调用生效。仅显示支持对应场景的已发布模型。' : 'Devices share this gateway’s selections. Changes apply to the next call. Only published models supporting each mode are shown.'}</p>
-    {error || loadError ? <p role="alert" className="text-sm text-red-600">{error || String(loadError)}</p> : null}
-    {!data ? <Skeleton className="h-48 w-full" /> : (Object.keys(labels) as VoiceSelection['mode'][]).map(mode => {
-      const selected = data.selections.find(item => item.mode === mode);
-      const models = data.models.filter(model => model.voice.modes.includes(mode));
+  const renderMode = (mode: VoiceSelection['mode']) => {
+      const selected = data!.selections.find(item => item.mode === mode);
+      const models = data!.models.filter(model => model.voice.modes.includes(mode));
       const model = models.find(item => item.id === selected?.model);
+      const voices = model?.voice.voices.filter(voice => voiceSupportsMode(voice, mode)) ?? [];
+      const selectedVoice = selected?.voice ?? voices.find(voice => voice.id === model?.voice.defaultVoice)?.id ?? voices[0]?.id ?? '';
       return <div key={mode} className="grid gap-3 sm:grid-cols-2">
         <label className="space-y-1 text-sm"><span>{labels[mode]}</span><Select className="w-full" value={selected?.model ?? ''} disabled={busy || disabled || !models.length} onChange={event => void request({ mode, model: event.target.value })}>
           <SelectOption value="" disabled>{zh ? '选择模型' : 'Choose model'}</SelectOption>
           {selected && !model ? <SelectOption value={selected.model} disabled>{selected.model} · {zh ? '不可用' : 'Unavailable'}</SelectOption> : null}
           {models.map(model => <SelectOption key={model.id} value={model.id}>{modelDisplayName(model, language)}</SelectOption>)}
         </Select>{!models.length ? <span className="text-xs text-fg-muted">{zh ? '暂无可用模型' : 'No available model'}</span> : null}</label>
-        {model && model.voice.voices.length > 0 ? <label className="space-y-1 text-sm"><span>{zh ? '音色' : 'Voice'}</span><Select className="w-full" value={selected?.voice ?? ''} disabled={busy || disabled} onChange={event => void request({ mode, model: model.id, voice: event.target.value })}>
-          {model.voice.voices.map(voice => <SelectOption key={voice.id} value={voice.id}>{modelDisplayName(voice, language)}{voice.gender ? ` · ${zh ? voice.gender === 'female' ? '女声' : '男声' : voice.gender}` : ''}{voice.style ? ` · ${voice.style}` : ''}</SelectOption>)}
-        </Select>{model.voice.voices.find(voice => voice.id === (selected?.voice ?? model.voice.defaultVoice))?.description ? <span className="block text-xs text-fg-muted">{model.voice.voices.find(voice => voice.id === (selected?.voice ?? model.voice.defaultVoice))?.description}</span> : null}</label> : null}
+        {model && voices.length > 0 ? <label className="space-y-1 text-sm"><span>{zh ? '音色' : 'Voice'}</span><Select className="w-full" value={selectedVoice} disabled={busy || disabled} onChange={event => void request({ mode, model: model.id, voice: event.target.value })}>
+          {selected?.voice && !voices.some(voice => voice.id === selected.voice) ? <SelectOption value={selected.voice} disabled>{selected.voice} · {zh ? '当前场景不可用' : 'Unavailable for this mode'}</SelectOption> : null}
+          {voices.map(voice => <SelectOption key={voice.id} value={voice.id}>{modelDisplayName(voice, language)}{voice.gender ? ` · ${zh ? voice.gender === 'female' ? '女声' : '男声' : voice.gender}` : ''}{voice.style ? ` · ${voice.style}` : ''}</SelectOption>)}
+        </Select>{voices.find(voice => voice.id === selectedVoice)?.description ? <span className="block text-xs text-fg-muted">{voices.find(voice => voice.id === selectedVoice)?.description}</span> : null}</label> : null}
       </div>;
-    })}
+  };
+  const callModes: VoiceSelection['mode'][] = engine === 'omni' ? ['conversation'] : ['transcription.stream', 'speech.stream'];
+  return <section className="space-y-4 rounded-xl bg-surface-hover/20 p-4">
+    <div className="flex items-center justify-between gap-3"><h3 className="font-medium">{zh ? 'XOPC 托管语音模型' : 'XOPC managed voice models'}</h3><Button variant="secondary" disabled={busy || disabled || !data} onClick={() => void request()}>{zh ? '刷新目录' : 'Refresh catalog'}</Button></div>
+    <p className="text-xs text-fg-muted">{zh ? '修改在下次调用生效。各设备共用此 Gateway 的配置。' : 'Changes apply to the next call and are shared across devices.'}</p>
+    {error || loadError ? <p role="alert" className="text-sm text-red-600">{error || String(loadError)}</p> : null}
+    {!data ? <Skeleton className="h-48 w-full" /> : <>
+      {callModes.map(renderMode)}
+      <details className="rounded-lg border border-edge p-3">
+        <summary className="cursor-pointer text-sm font-medium text-fg">{zh ? '其他语音场景' : 'Other voice features'}</summary>
+        <div className="mt-4 space-y-4">{(Object.keys(labels) as VoiceSelection['mode'][]).filter(mode => !callModes.includes(mode)).map(renderMode)}</div>
+      </details>
+    </>}
   </section>;
 }

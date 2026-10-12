@@ -4,7 +4,7 @@ import { XopcPageHeader, XopcHubRow, XopcSectionLabel, XopcListSkeleton } from '
 import { XopcProgressViewModel } from '../viewmodel/homeViewModel';
 import { XopcHomeAction, XopcHomeItem, XopcMobileRoute } from '../model/home';
 import { XopcTask } from '../model/workspace';
-import { mobileRoute } from '../common/homeProtocol';
+import { dispatchHomeAction } from '../common/homeProtocol';
 
 @ComponentV2
 export struct XopcProgressView {
@@ -13,6 +13,7 @@ export struct XopcProgressView {
   @Param bottomInset: number = 0;
   @Local model: XopcProgressViewModel = new XopcProgressViewModel();
   @Local pulling: boolean = false;
+  @Local actionInFlight: boolean = false;
   @Computed get runningItems(): XopcHomeItem[] {
     return this.model.background.filter((item: XopcHomeItem): boolean => item.kind !== 'scheduled');
   }
@@ -51,20 +52,23 @@ export struct XopcProgressView {
     return value;
   }
   private async runAction(action: XopcHomeAction): Promise<void> {
-    if (action.type === 'open') {
-      const route: XopcMobileRoute | undefined = mobileRoute(action.href ?? '');
-      if (route) this.onNavigate(route);
-      else this.model.actionError = this.getUIContext().getHostContext()?.resourceManager.getStringSync($r('app.string.unsupported_route').id) ?? '';
-      return;
-    }
+    if (this.model.pending || this.actionInFlight) return;
+    this.actionInFlight = true; this.model.actionError = '';
     try {
-      const result = await this.getUIContext().getPromptAction().showDialog({
-        title: action.label, message: $r('app.string.confirm_action_help'),
-        buttons: [{ text: $r('app.string.cancel'), color: this.colors.secondary },
-          { text: $r('app.string.confirm'), color: this.colors.accent }]
+      await dispatchHomeAction(action, {
+        navigate: (route: XopcMobileRoute): void => { this.onNavigate(route); },
+        confirm: async (command: XopcHomeAction): Promise<boolean> => {
+          const result = await this.getUIContext().getPromptAction().showDialog({
+            title: command.label, message: $r('app.string.confirm_action_help'),
+            buttons: [{ text: $r('app.string.cancel'), color: this.colors.secondary },
+              { text: $r('app.string.confirm'), color: this.colors.accent }]
+          });
+          return result.index === 1;
+        },
+        mutate: async (command: XopcHomeAction): Promise<void> => { await this.model.act(command); }
       });
-      if (result.index === 1) await this.model.act(action);
     } catch (error) { this.model.actionError = (error as Error).message; }
+    finally { this.actionInFlight = false; }
   }
   @Builder
   attention(item: XopcHomeItem) {
@@ -99,12 +103,12 @@ export struct XopcProgressView {
         Row({ space: 8 }) {
           if (item.primaryAction && item.primaryAction.type !== 'open') {
             Button(item.primaryAction.label).layoutWeight(1).constraintSize({ minHeight: 44 })
-              .backgroundColor(this.colors.accentSoft).fontColor(this.colors.accent).enabled(!this.model.pending)
+              .backgroundColor(this.colors.accentSoft).fontColor(this.colors.accent).enabled(!this.model.pending && !this.actionInFlight)
               .onClick((): void => { if (item.primaryAction) this.runAction(item.primaryAction); })
           }
           ForEach(item.secondaryActions, (action: XopcHomeAction) => {
             Button(action.label).constraintSize({ minHeight: 44 }).backgroundColor(Color.Transparent)
-              .fontColor(this.colors.secondary).enabled(!this.model.pending)
+              .fontColor(this.colors.secondary).enabled(!this.model.pending && !this.actionInFlight)
               .onClick((): void => { this.runAction(action); })
           }, (action: XopcHomeAction): string => action.type + ':' + action.label)
         }.width('100%')
@@ -128,6 +132,11 @@ export struct XopcProgressView {
     Column() {
       XopcPageHeader({ heading: $r('app.string.progress'), actionLabel: $r('app.string.all_work'), actionIcon: $r('sys.symbol.checkmark_circle'),
         onAction: (): void => { this.openPage('tasks'); } })
+      if (this.model.actionError) {
+        Text(this.model.actionError === 'UNSUPPORTED_ROUTE' ? $r('app.string.unsupported_route')
+          : userErrorMessage(this.model.actionError, 'save')).fontColor(this.colors.danger).fontSize(14).lineHeight(20)
+          .width('100%').padding({ left: 20, right: 20, bottom: 12 })
+      }
       Refresh({ refreshing: this.pulling }) {
         List({ scroller: this.contentScroller }) {
           ListItem() {
@@ -223,11 +232,6 @@ export struct XopcProgressView {
                       onOpen: (): void => { this.openPage('tasks', task.id); } })
                   }
                 }, (task: XopcTask): string => task.id + ':' + (task.updatedAt ?? 0))
-              }
-            }
-            if (this.model.actionError) {
-              ListItem() {
-                Text(userErrorMessage(this.model.actionError, 'save')).fontColor(this.colors.danger).width('100%').padding(12)
               }
             }
             ListItem() { XopcSectionLabel({ heading: $r('app.string.frequent_tools') }) }

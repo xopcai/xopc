@@ -24,8 +24,8 @@ beforeEach(() => {
 });
 afterEach(() => { act(() => root.unmount()); container.remove(); vi.clearAllMocks(); });
 
-async function render() {
-  await act(async () => root.render(<MemoryRouter><PersonalVoiceSetting record={{ voicePreference: { provider: 'dashscope', model: 'qwen', voice: 'mia' } } as PersonalAgent} zh={false} onSelectVoice={select} /></MemoryRouter>));
+async function render(zh = false) {
+  await act(async () => root.render(<MemoryRouter><PersonalVoiceSetting record={{ voicePreference: { provider: 'dashscope', model: 'qwen', voice: 'mia' } } as PersonalAgent} zh={zh} onSelectVoice={select} /></MemoryRouter>));
 }
 
 async function choose(label: string) {
@@ -34,6 +34,17 @@ async function choose(label: string) {
 }
 
 describe('Personal AI call voice selector', () => {
+  it('shows a localized unsupported-voice hint and keeps the saved selection after preview failure', async () => {
+    mocks.preview.mockRejectedValueOnce(Object.assign(new Error('Selected voice unavailable'), {
+      body: { error: { code: 'unsupported_voice' } },
+    }));
+    await render(true);
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="试听Mia"]')?.click());
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain('请刷新语音目录');
+    expect(container.querySelector('[aria-label="选择通话音色"]')?.textContent).toContain('Mia');
+    expect(mocks.close).toHaveBeenCalled();
+    expect(select).not.toHaveBeenCalled();
+  });
   it('shows the greeting switch only when the Gateway advertises support', async () => {
     const onGreetingChange = vi.fn(async () => true);
     mocks.status.mockResolvedValue({ enabled: true, openingGreeting: true, tts: { provider: 'dashscope', model: 'qwen' } });

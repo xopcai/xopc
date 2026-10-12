@@ -25,6 +25,8 @@ import { cloneMessageForRender, ensureAssistantMessage } from '@/features/chat/m
 /** Per-session chat UI and agent config. @see docs/web/chat-session-semantics.md */
 export type SessionHistoryStatus = 'unknown' | 'loading' | 'ready';
 
+export type SessionSnapshotRequest = { messages: Message[] | undefined };
+
 export function shouldShowHistoryLoading(status: SessionHistoryStatus | undefined): boolean {
   return status !== 'ready';
 }
@@ -179,24 +181,42 @@ function messagesEqualForRender(left: Message, right: Message): boolean {
 
 function preserveLocalUserDisplayPayload(existing: Message, incoming: Message): Message {
   if (existing.turnId && incoming.turnId && existing.turnId !== incoming.turnId) return incoming;
-  if (!userMessagesEquivalent(existing, incoming)) return incoming;
+  if (!userMessagesEquivalent(existing, incoming) && !shouldReplaceOptimisticUserRow(existing, incoming)) return incoming;
   const attachments = incoming.attachments?.length ? incoming.attachments : existing.attachments;
   const contextRefs = incoming.contextRefs?.length ? incoming.contextRefs : existing.contextRefs;
   const userTurnDocument = incoming.userTurnDocument ?? existing.userTurnDocument;
-  if (attachments === incoming.attachments && contextRefs === incoming.contextRefs
-    && userTurnDocument === incoming.userTurnDocument) return incoming;
-  return { ...incoming, attachments, contextRefs, userTurnDocument };
+  return { ...incoming, attachments, contextRefs, userTurnDocument,
+    renderKey: existing.renderKey, clientSubmissionId: existing.clientSubmissionId };
+}
+
+function samePersistedRow(existing: Message, incoming: Message): boolean {
+  if (existing.role !== incoming.role) return false;
+  if (existing.turnId && incoming.turnId) {
+    return existing.turnId === incoming.turnId && existing.startsNewBubble === incoming.startsNewBubble;
+  }
+  return existing.timestamp !== undefined && existing.timestamp === incoming.timestamp;
 }
 
 /** Keep row identities stable when a background history refresh returns unchanged data. */
 function reconcileMessages(current: Message[], incoming: Message[]): Message[] {
   let changed = current.length !== incoming.length;
+  let cursor = 0;
   const next = incoming.map((incomingMessage, index) => {
-    const existing = current[index];
+    const matchIndex = current.findIndex((message, i) => i >= cursor && samePersistedRow(message, incomingMessage));
+    const atIndex = index >= cursor ? current[index] : undefined;
+    const equivalentAtIndex = atIndex && (
+      shouldReplaceOptimisticUserRow(atIndex, incomingMessage)
+      || ((!atIndex.turnId || !incomingMessage.turnId || atIndex.turnId === incomingMessage.turnId)
+        && assistantTurnVisuallyEquivalent(atIndex, incomingMessage))
+    );
+    const existingIndex = matchIndex >= 0 ? matchIndex : equivalentAtIndex ? index : -1;
+    const existing = current[existingIndex];
+    if (existing) cursor = existingIndex + 1;
     const message = existing && isUiUserMessage(existing.role) && isUiUserMessage(incomingMessage.role)
       ? preserveLocalUserDisplayPayload(existing, incomingMessage)
       : incomingMessage;
     if (existing && messagesEqualForRender(existing, message)) {
+      if (existingIndex !== index) changed = true;
       return existing;
     }
     changed = true;
@@ -205,7 +225,7 @@ function reconcileMessages(current: Message[], incoming: Message[]): Message[] {
       existing?.renderKey
       && existing.role === message.role
       && (
-        (!message.renderKey && existing.timestamp === message.timestamp && existing.turnId === message.turnId)
+        samePersistedRow(existing, message)
         || (message.role === 'assistant' && assistantTurnVisuallyEquivalent(existing, message))
       )
     ) {
@@ -216,16 +236,16 @@ function reconcileMessages(current: Message[], incoming: Message[]): Message[] {
   return changed ? next : current;
 }
 
-function preserveFailedOptimisticMessages(current: Message[], incoming: Message[]): Message[] {
-  const failed = current.filter((message) => message.deliveryStatus === 'failed');
-  if (failed.length === 0) return incoming;
+function preserveOptimisticMessages(current: Message[], incoming: Message[]): Message[] {
+  const pending = current.filter((message) => isUiUserMessage(message.role) && message.deliveryStatus);
+  if (pending.length === 0) return incoming;
   const knownLocalUserCount = current.filter(
-    (message) => isUiUserMessage(message.role) && message.deliveryStatus !== 'failed',
+    (message) => isUiUserMessage(message.role) && !message.deliveryStatus,
   ).length;
   const unmatchedServerUsers = incoming
     .filter((message) => isUiUserMessage(message.role))
     .slice(knownLocalUserCount);
-  const missing = failed.filter((message) => {
+  const missing = pending.filter((message) => {
     const matchIndex = unmatchedServerUsers.findIndex(
       (serverMessage) => shouldReplaceOptimisticUserRow(message, serverMessage),
     );
@@ -234,6 +254,17 @@ function preserveFailedOptimisticMessages(current: Message[], incoming: Message[
     return false;
   });
   return missing.length > 0 ? [...incoming, ...missing] : incoming;
+}
+
+export function findHistoryPageStart(current: Message[], incoming: Message[]): number {
+  const first = incoming[0];
+  return first ? current.findIndex(message => samePersistedRow(message, first)) : -1;
+}
+
+/** A tail-page refresh must not evict older pages already displayed in this session. */
+function retainLoadedHistory(current: Message[], incoming: Message[], hasMore: boolean): Message[] {
+  const start = hasMore ? findHistoryPageStart(current, incoming) : -1;
+  return start > 0 ? [...current.slice(0, start), ...incoming] : incoming;
 }
 
 function appendFinalAssistantMessage(current: Message[], message: Message): Message[] {
@@ -406,10 +437,7 @@ export const useChatSessionStore = create<ChatSessionStoreState & ChatSessionSto
             },
           };
         }
-        const messages = reconcileMessages(
-          current.messages,
-          preserveFailedOptimisticMessages(current.messages, data.messages),
-        );
+        const messages = reconcileMessages(current.messages, data.messages);
         return {
           sessions: {
             ...state.sessions,
@@ -707,15 +735,7 @@ export const useChatSessionStore = create<ChatSessionStoreState & ChatSessionSto
         }
         const last = current.messages[current.messages.length - 1];
         if (last && shouldReplaceOptimisticUserRow(last, message)) {
-          const replacement = {
-            ...message,
-            ...(!message.contextRefs?.length && last.contextRefs?.length
-              ? { contextRefs: last.contextRefs }
-              : {}),
-            ...(!message.userTurnDocument && last.userTurnDocument
-              ? { userTurnDocument: last.userTurnDocument }
-              : {}),
-          };
+          const replacement = preserveLocalUserDisplayPayload(last, message);
           return {
             sessions: {
               ...state.sessions,
@@ -765,23 +785,26 @@ export const useChatSessionStore = create<ChatSessionStoreState & ChatSessionSto
             },
           };
         }
+        const retained = retainLoadedHistory(current.messages, serverMessages, nextHasMore);
+        const mergedHasMore = retained !== serverMessages ? current.hasMore : nextHasMore;
         if (!isSessionSliceLive(current)) {
-          const messages = preserveFailedOptimisticMessages(current.messages, serverMessages);
+          const messages = reconcileMessages(current.messages, preserveOptimisticMessages(current.messages, retained));
           return {
             sessions: {
               ...state.sessions,
-              [key]: { ...meta, historyStatus: 'ready', messages: cloneMessages(messages), hasMore: nextHasMore, ...IDLE_STREAM },
+              [key]: { ...current, ...meta, historyStatus: 'ready', messages,
+                hasMore: mergedHasMore, ...IDLE_STREAM },
             },
           };
         }
         const merged = mergeMissingUserMessagesFromServer(
           current.messages,
-          serverMessages,
+          retained,
           current.streamingMsg?.turnId,
         );
         if (
           merged === current.messages &&
-          nextHasMore === current.hasMore &&
+          mergedHasMore === current.hasMore &&
           current.historyStatus === 'ready'
         ) {
           return state;
@@ -792,8 +815,8 @@ export const useChatSessionStore = create<ChatSessionStoreState & ChatSessionSto
             [key]: {
               ...current,
               historyStatus: 'ready',
-              messages: cloneMessages(merged),
-              hasMore: nextHasMore,
+              messages: reconcileMessages(current.messages, merged),
+              hasMore: mergedHasMore,
             },
           },
         };

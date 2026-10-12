@@ -3,10 +3,11 @@ import { XopcDeviceCrypto } from '../service/deviceCrypto';
 import {
   XopcSection, XopcWorkspaceItem, XopcWorkspacePage, XopcTaskList, XopcProjectList,
   XopcAutomationList, XopcTaskResult, XopcProjectResult, XopcAutomationResult,
-  XopcTaskPatch, XopcProjectWrite, XopcTaskCommandBody, XopcTaskCommand,
+  XopcProjectWrite, XopcTaskCommandBody,
   XopcAutomationRuns, XopcAutomationRun, XopcMobileTaskDetailResult
 } from '../model/workspace';
 import { taskItem, taskDetailItem, projectItem, automationItem, newTask, scheduledAutomation } from '../common/workspaceProtocol';
+import { taskCommand, taskPatch } from '../common/taskManagement';
 
 export class XopcWorkspaceRepository {
   uuid(): string { return new XopcDeviceCrypto().uuid(); }
@@ -43,8 +44,9 @@ export class XopcWorkspaceRepository {
     const path = '/api/' + section + (create ? '' : '/' + encodeURIComponent(item.id));
     let body: string;
     if (section === 'tasks') {
-      const patch: XopcTaskPatch = { expectedVersion: item.version, title: item.title.trim(), body: item.body, projectId: item.projectId };
-      body = JSON.stringify(create ? newTask(item.title, item.body, idempotencyKey, item.projectId) : patch);
+      const captured = newTask(item.title, item.body, idempotencyKey, item.projectId);
+      captured.priority = item.priority || 'normal'; captured.dueAt = item.dueAt;
+      body = JSON.stringify(create ? captured : taskPatch(item));
     } else if (section === 'projects') {
       const patch: XopcProjectWrite = { name: item.title.trim(), description: item.body }; body = JSON.stringify(patch);
     } else if (section === 'automations') {
@@ -57,11 +59,7 @@ export class XopcWorkspaceRepository {
   async action(section: XopcSection, item: XopcWorkspaceItem, action: string, agentId: string, idempotencyKey: string): Promise<void> {
     const path = '/api/' + section + '/' + encodeURIComponent(item.id);
     if (section === 'tasks') {
-      if (!['mark_ready', 'start', 'request_review', 'close', 'reopen'].includes(action)) throw new Error('INVALID_ACTION');
-      const command: XopcTaskCommand = { type: action };
-      if (action === 'start') { if (!agentId.trim()) throw new Error('AGENT_REQUIRED'); command.executor = { kind: 'agent', agentId: agentId.trim() }; }
-      if (action === 'close') command.resolution = 'done';
-      if (action === 'reopen') command.phase = 'backlog';
+      const command = taskCommand(item, action, agentId);
       const body: XopcTaskCommandBody = { idempotencyKey, expectedVersion: item.version, command };
       await gatewaySession.request(path + '/commands', 'POST', JSON.stringify(body));
     } else if (section === 'projects') {

@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import type { VoiceSelection, VoiceSettingsCatalog } from '@xopcai/realtime-protocol/voice';
+import { voiceSupportsMode, type VoiceSelection, type VoiceSettingsCatalog } from '@xopcai/realtime-protocol/voice';
 import { ConfigSchema, type Config } from '../config/schema.js';
 import { getModelCatalogStore } from '../providers/model-catalog-store.js';
 import { requirePlatformVoiceModel } from './platform-catalog.js';
@@ -25,8 +25,9 @@ export function voiceSettingsCatalog(config: Config): VoiceSettingsCatalog {
 export function selectPlatformVoice(config: Config, selection: VoiceSelection): Config {
   const model = requirePlatformVoiceModel(selection.model, selection.mode);
   const output = selection.mode === 'speech' || selection.mode === 'speech.stream' || selection.mode === 'conversation';
-  const voice = selection.voice ?? model.voice.defaultVoice ?? model.voice.voices[0]?.id;
-  if (output && (!voice || !model.voice.voices.some(item => item.id === voice))) throw new Error('Choose an available model voice');
+  const voices = model.voice.voices.filter(item => voiceSupportsMode(item, selection.mode));
+  const voice = selection.voice ?? voices.find(item => item.id === model.voice.defaultVoice)?.id ?? voices[0]?.id;
+  if (output && (!voice || !voices.some(item => item.id === voice))) throw new Error('Choose an available model voice');
   const next = structuredClone(config);
   const selected = { provider: 'xopc-cloud' as const, model: selection.model, ...(output ? {voice} : {}) };
   if (selection.mode === 'transcription') {

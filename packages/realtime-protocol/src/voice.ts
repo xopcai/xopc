@@ -1,4 +1,4 @@
-export { voiceManifestSchema, voiceModeCapabilitySchema, type VoiceManifest, type VoiceModeCapability } from './voice-catalog.js';
+export { voiceManifestSchema, voiceModeCapabilitySchema, voiceSupportsMode, type VoiceManifest, type VoiceModeCapability } from './voice-catalog.js';
 import { z } from 'zod';
 export { encodeVoiceAudioFrame, decodeVoiceAudioFrame, encodeVoiceUplinkAudioFrame, decodeVoiceUplinkAudioFrame,
   type VoiceAudioFrame, type VoiceUplinkAudioFrame } from './voice-audio.js';

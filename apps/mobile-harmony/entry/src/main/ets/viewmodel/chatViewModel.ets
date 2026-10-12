@@ -4,7 +4,7 @@ import { XopcChatRow, XopcSessionItem, XopcStreamEvent, XopcChatAttachment, Xopc
 import { dedupeChatHistory, chatHistoryOverlap } from '../common/chatHistory';
 import { XopcEvent } from '../model/realtime';
 import { historyRows } from '../common/chatProtocol';
-import { mergeAssistantRows, chatAttachments } from '../common/chatRichContent';
+import { mergeAssistantRows, chatAttachments, refreshChatRow } from '../common/chatRichContent';
 import { reduceChatStream } from '../common/chatStream';
 import { reduceChatSnapshotActivity } from '../common/chatLiveActivity';
 import { XopcInputAttachment } from '../model/sessionCommand';
@@ -84,7 +84,9 @@ export class XopcChatViewModel {
       if (state === 'connected' && this.selectedId && !this.loading) this.recover();
     };
     realtimeClient.onEvent = (event: XopcEvent): void => { this.event(event); };
-    realtimeClient.onGap = (_topic: string): void => { if (!this.loading) this.recover(); };
+    realtimeClient.onGap = (topic: string): void => {
+      if (!this.loading) this.recover(false, topic === 'run:' + this.runId);
+    };
     try { realtimeClient.turnClaim(); this.connection = 'connected'; } catch (_) {}
     realtimeClient.start();
     realtimeClient.subscribe('gateway'); realtimeClient.subscribe('sessions');
@@ -102,6 +104,16 @@ export class XopcChatViewModel {
   }
 
   reconnect(): void { realtimeClient.start(); }
+
+  resume(): void {
+    if (this.disposed) return;
+    const owned = XopcChatViewModel.owner === this;
+    this.activate();
+    realtimeClient.start();
+    if (owned && this.selectedId && !this.loading) this.recover();
+  }
+
+  pause(): void { clearTimeout(this.refreshTimer); this.refreshTimer = -1; }
 
   private async restoreMain(): Promise<void> {
     this.loading = true;
@@ -152,7 +164,7 @@ export class XopcChatViewModel {
     this.selection++; this.historyRequest++; this.olderPending = false;
     this.selectedId = id; this.rows = []; this.runId = ''; this.runStartedAtMs = 0; this.streaming = ''; this.thinking = ''; this.tool = '';
     this.liveRow = undefined; this.liveActivityRow = undefined; this.historyMessages = []; this.rows = this.pendingRows();
-    this.completedActivityRunId = '';
+    this.completedActivityRunId = ''; this.snapshotMode = false;
     this.executionInputIds.clear(); this.executionAssistantIds.clear();
     this.cachedHistory = false; this.hasNetworkHistory = false;
     this.transcriptId = undefined; this.title = ''; this.agentId = ''; this.projectId = ''; this.status = ''; this.hasOlder = false;
@@ -216,17 +228,31 @@ export class XopcChatViewModel {
     this.executionInputIds.clear(); this.executionAssistantIds.clear();
   }
 
-  private async recover(propagateMissing: boolean = false): Promise<void> {
+  private async recover(propagateMissing: boolean = false, gap: boolean = false): Promise<void> {
     const id = this.selectedId; const selection = this.selection;
     if (!id) return;
     const request = ++this.recoveryRequest;
-    this.snapshotMode = true;
+    if (gap) this.snapshotMode = true;
+    const previousRun = this.runId;
     try {
       await this.loadHistory(false, (): void => {}, propagateMissing);
       if (request !== this.recoveryRequest || selection !== this.selection || this.disposed) return;
       const run = await this.repository.activeRun(id);
       if (request !== this.recoveryRequest || selection !== this.selection || this.disposed) return;
-      this.trackRun(run.active ? run.runId ?? '' : '');
+      // A terminal event received during recovery must not resurrect its run.
+      if (this.runId !== previousRun) return;
+      if (!run.active && previousRun) {
+        this.completedActivityRunId = previousRun;
+        this.snapshotMode = true;
+        this.trackRun('');
+        await this.loadHistory(false);
+      } else {
+        if (run.active && run.runId !== previousRun) {
+          this.liveRow = undefined; this.streaming = ''; this.thinking = ''; this.tool = '';
+          this.snapshotMode = gap;
+        }
+        this.trackRun(run.active ? run.runId ?? '' : '');
+      }
     } catch (error) {
       if (request === this.recoveryRequest && selection === this.selection && !this.disposed) this.error = (error as Error).message;
       if (propagateMissing && (error as XopcChatHttpFailure).status === 404) throw error as Error;
@@ -319,8 +345,16 @@ export class XopcChatViewModel {
       }
       confirmed.forEach((row: XopcChatRow): void => { if (row.role === 'user') this.outbox.delete(row.id); });
       this.rows = this.mergePendingRows(confirmed);
-      if (!older && this.snapshotMode && !this.completedActivityRunId) {
+      if (!older && this.snapshotMode && !this.completedActivityRunId && !this.runId) {
         this.liveRow = undefined; this.streaming = ''; this.thinking = ''; this.tool = '';
+      }
+      if (!older && this.liveRow?.blocks && this.runId && !this.snapshotMode) {
+        const savedIds = new Set<string>();
+        confirmed.forEach((row: XopcChatRow): void => {
+          (row.sourceIds || [row.id]).forEach((id: string): void => { savedIds.add(id); });
+        });
+        this.liveRow.blocks = this.liveRow.blocks.filter((block): boolean => !block.segmentId || !savedIds.has(block.segmentId));
+        this.liveRow = refreshChatRow(this.liveRow); this.streaming = this.liveRow.text;
       }
       this.title = result.session.name ?? '';
       // A local draft can be reconciled between the initial identity read and this history read.
@@ -514,6 +548,12 @@ export class XopcChatViewModel {
         this.refreshTimer = -1; this.loadHistory(false);
       }, 750);
     } else {
+      if (payload.messageId && this.rows.some((row: XopcChatRow): boolean =>
+        (row.sourceIds || [row.id]).includes(payload.messageId || ''))) return;
+      if (event.event === 'assistant_delta' && payload.offset !== undefined) {
+        const length = this.liveRow?.blocks?.find((block): boolean => block.segmentId === (payload.messageId || this.runId))?.text.length || 0;
+        if (payload.offset > length) { this.recover(false, true); return; }
+      }
       this.liveRow = reduceChatStream(this.liveRow, event.event, payload, this.runId);
       this.streaming = this.liveRow.text; this.thinking = this.liveRow.thinking || '';
       this.tool = this.liveRow.toolCalls?.find((call): boolean => call.status === 'running')?.name || '';

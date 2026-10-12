@@ -1,5 +1,7 @@
 package ai.xopc.mobile.ui.main
 
+import ai.xopc.mobile.gateway.ProgressTaskEdit
+
 import android.Manifest
 import android.app.Activity
 import android.content.ClipData
@@ -457,7 +459,7 @@ fun MainScreen(
   onOpenProgressProject: (String) -> Unit = {},
   onCreateProgressTask: (String, String, String) -> Unit = { _, _, _ -> },
   onOpenTaskChat: (String) -> Unit = {},
-  onSaveProgressTask: (String, Int, String, String, String) -> Unit = { _, _, _, _, _ -> },
+  onSaveProgressTask: (String, Int, ProgressTaskEdit) -> Unit = { _, _, _ -> },
   onProgressTaskSearchChange: (String) -> Unit = {},
   onSubmitProgressTaskSearch: () -> Unit = {},
   onOpenExecution: (String) -> Unit = {},
@@ -554,6 +556,7 @@ fun MainScreen(
   onLanguageChange: (String) -> Unit = {},
 ) {
   val context = LocalContext.current
+  val copyLabel = stringResource(R.string.assistant_copy)
   val activity = context as? Activity
   val latestPair by rememberUpdatedState(onPair)
   var pairingScannerOpen by remember { mutableStateOf(false) }
@@ -782,7 +785,7 @@ fun MainScreen(
     onSendVoiceRecording = onSendVoiceRecording,
     onCopyMessageText = { value ->
       (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager)
-        .setPrimaryClip(ClipData.newPlainText(context.getString(R.string.assistant_copy), value))
+        .setPrimaryClip(ClipData.newPlainText(copyLabel, value))
       Toast.makeText(context, R.string.assistant_copied, Toast.LENGTH_SHORT).show()
     },
     onLoadNotes = onLoadNotes, onNoteFileSpaces = onNoteFileSpaces,
@@ -959,7 +962,7 @@ internal fun MainContent(
   onOpenProgressProject: (String) -> Unit = {},
   onCreateProgressTask: (String, String, String) -> Unit = { _, _, _ -> },
   onOpenTaskChat: (String) -> Unit = {},
-  onSaveProgressTask: (String, Int, String, String, String) -> Unit = { _, _, _, _, _ -> },
+  onSaveProgressTask: (String, Int, ProgressTaskEdit) -> Unit = { _, _, _ -> },
   onProgressTaskSearchChange: (String) -> Unit = {},
   onSubmitProgressTaskSearch: () -> Unit = {},
   onOpenExecution: (String) -> Unit = {},
@@ -1056,6 +1059,8 @@ internal fun MainContent(
   onLanguageChange: (String) -> Unit = {},
   modifier: Modifier = Modifier,
 ) {
+  val inputVoicePermissionDeniedText = stringResource(R.string.voice_permission_denied)
+  val voiceRecordError = stringResource(R.string.voice_record_error)
   val voiceContext = LocalContext.current
   val lifecycleOwner = LocalLifecycleOwner.current
   val voiceScope = rememberCoroutineScope()
@@ -1101,7 +1106,7 @@ internal fun MainContent(
   }
   val inputVoicePermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
     if (granted) inputVoiceMode = true
-    else inputVoiceError = voiceContext.getString(R.string.voice_permission_denied)
+    else inputVoiceError = inputVoicePermissionDeniedText
   }
   val voiceFocusManager = LocalFocusManager.current
   DisposableEffect(lifecycleOwner, voiceCall, voiceMemo, inputVoice) {
@@ -1316,7 +1321,7 @@ internal fun MainContent(
         inputVoiceError = ""
       } catch (failure: Exception) {
         if (failure is CancellationException) throw failure
-        inputVoiceError = failure.message ?: voiceContext.getString(R.string.voice_record_error)
+        inputVoiceError = failure.message ?: voiceRecordError
       } finally { inputVoiceBusy = false }
     }
   }
@@ -1342,7 +1347,7 @@ internal fun MainContent(
     }
     inputVoice.stopRecording()
     if (inputVoice.phase != "ready") {
-      inputVoiceError = inputVoice.error.ifBlank { voiceContext.getString(R.string.voice_record_error) }
+      inputVoiceError = inputVoice.error.ifBlank { voiceRecordError }
       inputVoice.cancel()
       return
     }
@@ -2030,7 +2035,7 @@ private fun QuickComposer(connection: ConnectionUiState, tab: HomeTab,
   onPreviewFile: suspend (ChatAttachment) -> ByteArray?, composerFocus: FocusRequester,
   voiceMode: Boolean, voiceBusy: Boolean, voicePhase: String, voiceError: String,
   onVoiceToggle: () -> Unit, voicePad: @Composable (Modifier) -> Unit) {
-  val context = LocalContext.current
+  val actionsDescription = stringResource(if (actionsOpen) R.string.composer_close_actions else R.string.composer_add_actions)
   val focusManager = LocalFocusManager.current
   val keyboardController = LocalSoftwareKeyboardController.current
   val hasPayload = connection.quickDraftText.isNotBlank() || connection.quickAttachments.isNotEmpty()
@@ -2084,11 +2089,7 @@ private fun QuickComposer(connection: ConnectionUiState, tab: HomeTab,
         onActionsOpenChange(!actionsOpen)
       }, enabled = !voiceBusy && !connection.quickSending,
         modifier = Modifier.size(48.dp).semantics {
-          contentDescription = if (actionsOpen) {
-            context.getString(R.string.composer_close_actions)
-          } else {
-            context.getString(R.string.composer_add_actions)
-          }
+          contentDescription = actionsDescription
         }.testTag("quick-actions-toggle")) {
         Text(if (actionsOpen) "×" else "+", style = MaterialTheme.typography.headlineMedium,
           color = MaterialTheme.colorScheme.primary)
@@ -2398,15 +2399,11 @@ private fun AssistantComposerButtons(connection: ConnectionUiState, actionsOpen:
   val hasPayload = connection.draftText.isNotBlank() || connection.draftRefs.isNotEmpty() ||
     connection.draftAttachments.isNotEmpty()
   if (connection.activeRunId == null || !hasPayload) {
-    val context = LocalContext.current
+    val actionsDescription = stringResource(if (actionsOpen) R.string.composer_close_actions else R.string.composer_add_actions)
     IconButton(onClick = onToggleActions,
       enabled = !voiceBusy && !connection.sending && connection.pendingDeleteId != connection.selectedConversationId,
       modifier = Modifier.size(48.dp).semantics {
-        contentDescription = if (actionsOpen) {
-          context.getString(R.string.composer_close_actions)
-        } else {
-          context.getString(R.string.composer_add_actions)
-        }
+        contentDescription = actionsDescription
       }.testTag("assistant-actions-toggle")) {
       Text(if (actionsOpen) "×" else "+", style = MaterialTheme.typography.headlineMedium,
         color = MaterialTheme.colorScheme.primary)

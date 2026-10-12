@@ -18,12 +18,18 @@ export const voiceManifestSchema = z.strictObject({
     id: z.string().min(1), name: z.string(), displayNames: voiceDisplayNamesSchema.optional(), languages: z.array(z.string()),
     gender: z.enum(['female', 'male']).optional(),
     style: z.string().optional(), description: z.string().optional(),
+    modes: z.array(voiceModeCapabilitySchema).optional(),
   })),
   defaultVoice: z.string().min(1).optional(),
   limits: z.strictObject({ maxFrameBytes: z.number().int().positive().max(65536), maxSessionSeconds: z.number().int().positive() }),
 });
 export type VoiceManifest = z.infer<typeof voiceManifestSchema>;
 export type VoiceModeCapability = z.infer<typeof voiceModeCapabilitySchema>;
+
+/** Older catalogs apply each voice to every mode published by its model. */
+export function voiceSupportsMode(voice: { modes?: VoiceModeCapability[] }, mode: VoiceModeCapability): boolean {
+  return voice.modes === undefined || voice.modes.includes(mode);
+}
 
 export const voiceSelectionSchema = z.strictObject({
   mode: voiceModeCapabilitySchema,

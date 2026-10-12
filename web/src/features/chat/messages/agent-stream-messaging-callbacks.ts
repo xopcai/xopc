@@ -7,6 +7,7 @@ import { chatRunManager } from '@/features/chat/session/chat-run-manager';
 import {
   getChatSessionSnapshot,
   useChatSessionStore,
+  type SessionSnapshotRequest,
 } from '@/features/chat/session/chat-session-store';
 import type { SessionManager } from '@/features/chat/session/session-manager';
 import { patchSessionAgentConfigView } from '@/features/chat/session/patch-session-agent-config-view';
@@ -62,6 +63,7 @@ export function createAgentStreamMessagingCallbacks(opts: {
   applyLoadedSessionSnapshot: (
     chatId: string,
     data: { messages: Message[]; hasMore: boolean; name?: string },
+    request?: SessionSnapshotRequest,
   ) => void;
   finalizeMessage: (conversationId?: string, terminalStatus?: AgentStreamRunStatus) => void;
   fq: AgentStreamFqCallbacks;
@@ -83,10 +85,13 @@ export function createAgentStreamMessagingCallbacks(opts: {
 
   const store = () => useChatSessionStore.getState();
 
-  const reloadSessionSnapshot = () => sessionMgrRef.current
-      .loadSession(chatId, 0)
-      .then((data) => applyLoadedSessionSnapshot(chatId, data))
+  const reloadSessionSnapshot = () => {
+    const request = { messages: store().sessions[chatId]?.messages };
+    return sessionMgrRef.current
+      .loadSession(chatId, 0, undefined, undefined, request.messages)
+      .then((data) => applyLoadedSessionSnapshot(chatId, data, request))
       .catch(() => {});
+  };
 
   // Reviewer tokens can arrive much faster than a user can read them. Batch
   // them so the review card reads like a normal response instead of repainting

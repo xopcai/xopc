@@ -4,6 +4,28 @@ import { describe, expect, it, vi } from 'vitest';
 import { XopcCloudModelError, XopcCloudModelSource } from '../xopc-cloud-model-source.js';
 
 describe('XopcCloudModelSource', () => {
+  it('preserves unified speech and realtime manifests with mode-scoped voices', async () => {
+    const speech = { ...voiceFixture(['speech', 'speech.stream']), serviceVersion: 5, voices: [
+      { id: 'default', name: 'Default voice', languages: ['zh'], modes: ['speech', 'speech.stream'] },
+      { id: 'http-only', name: 'HTTP voice', languages: ['zh'], modes: ['speech'] },
+    ] };
+    const realtime = { ...voiceFixture(['conversation']), serviceVersion: 5, voices: [
+      { id: 'default', name: 'Default voice', languages: ['zh'], modes: ['conversation'] },
+    ] };
+    const source = new XopcCloudModelSource({
+      credentials: { resolveApiKey: async () => 'token' },
+      fetchImpl: async () => Response.json({ data: [
+        { id: 'stt', xopc: { kind: 'stt', voice: voiceFixture(['transcription', 'transcription.stream']) } },
+        { id: 'tts', xopc: { kind: 'tts', voice: speech } },
+        { id: 'realtime', xopc: { kind: 'omni', voice: realtime } },
+      ] }),
+    });
+    await expect(source.fetch()).resolves.toMatchObject({ status: 'fetched', models: [
+      { id: 'stt', voice: { modes: ['transcription', 'transcription.stream'] } },
+      { id: 'tts', voice: speech },
+      { id: 'realtime', voice: realtime },
+    ] });
+  });
   it('preserves GUI capabilities without recommending a GUI actor for vision', async () => {
     const source = new XopcCloudModelSource({ routerUrl: 'https://router.test/v1', credentials: { resolveApiKey: async () => 'fixture' },
       fetchImpl: async () => Response.json({ xopc: { defaults: { vision: 'computer' } }, data: [{ id: 'computer', xopc: {

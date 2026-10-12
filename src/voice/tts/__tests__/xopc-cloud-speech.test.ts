@@ -4,7 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Config } from '../../../config/schema.js';
 import { getModelCatalogStore, resetModelCatalogStore } from '../../../providers/model-catalog-store.js';
 
-const { resolveApiKey } = vi.hoisted(() => ({ resolveApiKey: vi.fn() }));
+const { resolveApiKey, openPlatformTts } = vi.hoisted(() => ({ resolveApiKey: vi.fn(), openPlatformTts: vi.fn() }));
+vi.mock('../../platform-streams.js', () => ({ openPlatformTts }));
 
 vi.mock('../../../providers/provider-auth-service.js', () => ({
   getProviderAuthService: () => ({ resolveApiKey }),
@@ -35,6 +36,36 @@ function seedCatalog(): void {
 }
 
 describe('xopcCloudSpeechProvider', () => {
+  it('sends the public voice ID in the handshake so the cloud can select its routing target', async () => {
+    const source = getModelCatalogStore().getSource('xopc-cloud')!;
+    source.models[0].voice!.modes = ['speech', 'speech.stream'];
+    source.models[0].voice!.serviceVersion = 5;
+    getModelCatalogStore().saveSource('xopc-cloud', source);
+    const providerConfig = xopcCloudSpeechProvider.resolveConfig({ cfg: {} as Config,
+      rawConfig: { 'xopc-cloud': { model: 'cloud-tts', voice: 'voice-ff846aef41c0346b' } }, timeoutMs: 30_000 });
+    openPlatformTts.mockResolvedValue({ audioStream: new ReadableStream(), outputFormat: 'pcm' });
+    await xopcCloudSpeechProvider.synthesizeStream!({ text: 'Hello', cfg: {} as Config, providerConfig,
+      target: 'audio-file', timeoutMs: 30_000, signal: new AbortController().signal });
+    const request = openPlatformTts.mock.calls.at(-1)![0];
+    const url = new URL(request.baseUrl);
+    expect(url.protocol).toBe('wss:');
+    expect(url.searchParams.get('model')).toBe('cloud-tts');
+    expect(url.searchParams.get('service_version')).toBe('5');
+    expect(url.searchParams.get('voice')).toBe('voice-ff846aef41c0346b');
+    expect(request.voice).toBe(url.searchParams.get('voice'));
+  });
+  it('lists only voices supporting the requested speech mode while retaining legacy voices', async () => {
+    const source = getModelCatalogStore().getSource('xopc-cloud')!;
+    source.models[0].voice!.voices.push(
+      { id: 'http-only', name: 'HTTP voice', languages: ['zh'], modes: ['speech'] },
+      { id: 'stream-only', name: 'Streaming voice', languages: ['zh'], modes: ['speech.stream'] },
+    );
+    getModelCatalogStore().saveSource('xopc-cloud', source);
+    const providerConfig = xopcCloudSpeechProvider.resolveConfig({ cfg: {} as Config,
+      rawConfig: { 'xopc-cloud': { model: 'cloud-tts' } }, timeoutMs: 30_000 });
+    expect((await xopcCloudSpeechProvider.listVoices!({ providerConfig })).map(voice => voice.id)).toEqual(['voice-a', 'http-only']);
+    expect((await xopcCloudSpeechProvider.listVoices!({ providerConfig, mode: 'speech.stream' })).map(voice => voice.id)).toEqual(['voice-a', 'stream-only']);
+  });
   beforeEach(() => {
     seedCatalog();
     resolveApiKey.mockReset();

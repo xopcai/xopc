@@ -103,8 +103,12 @@ internal object DeviceLocation {
   private suspend fun sample(manager: LocationManager, provider: String, owner: ComponentActivity): Location = suspendCancellableCoroutine { continuation ->
     if (Build.VERSION.SDK_INT >= 30) {
       val cancellation = CancellationSignal(); continuation.invokeOnCancellation { cancellation.cancel() }
-      manager.getCurrentLocation(provider, cancellation, owner.mainExecutor) { location ->
-        if (continuation.isActive) { if (location != null) continuation.resume(location) else continuation.resumeWithException(LocationFailure("PROTOCOL_ERROR")) }
+      try {
+        manager.getCurrentLocation(provider, cancellation, owner.mainExecutor) { location ->
+          if (continuation.isActive) { if (location != null) continuation.resume(location) else continuation.resumeWithException(LocationFailure("PROTOCOL_ERROR")) }
+        }
+      } catch (error: SecurityException) {
+        if (continuation.isActive) continuation.resumeWithException(error)
       }
     } else {
       val listener = object : LocationListener {
@@ -114,7 +118,11 @@ internal object DeviceLocation {
         @Deprecated("Legacy provider callback") override fun onStatusChanged(provider: String?, status: Int, extras: android.os.Bundle?) {}
       }
       continuation.invokeOnCancellation { manager.removeUpdates(listener) }
-      @Suppress("DEPRECATION") manager.requestSingleUpdate(provider, listener, Looper.getMainLooper())
+      try {
+        @Suppress("DEPRECATION") manager.requestSingleUpdate(provider, listener, Looper.getMainLooper())
+      } catch (error: SecurityException) {
+        if (continuation.isActive) continuation.resumeWithException(error)
+      }
     }
   }
   private class LocationFailure(val code: String) : Exception(code)

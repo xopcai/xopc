@@ -81,6 +81,10 @@ internal fun ProgressOverview(state: ProgressUiState, onRefresh: () -> Unit,
           }
         }
       }
+      if (state.homeActionError) item(key = "action-error", contentType = "error") {
+        Text(stringResource(R.string.progress_home_action_error), color = MaterialTheme.colorScheme.error,
+          modifier = Modifier.testTag("progress-home-action-error"))
+      }
       if (initialLoading) item(key = "loading", contentType = "loading") {
         Column(Modifier.fillMaxWidth().testTag("progress-loading").padding(vertical = 12.dp),
           verticalArrangement = Arrangement.spacedBy(18.dp)) {
@@ -137,10 +141,6 @@ internal fun ProgressOverview(state: ProgressUiState, onRefresh: () -> Unit,
               R.drawable.tab_progress, "progress-closed-${task.id}") { onOpenTask(task.id) }
           }
         }
-      }
-      if (state.homeActionError) item(key = "action-error", contentType = "error") {
-        Text(stringResource(R.string.progress_home_action_error), color = MaterialTheme.colorScheme.error,
-          modifier = Modifier.testTag("progress-home-action-error"))
       }
       item(key = "tools-heading", contentType = "heading") { ProgressOverviewSection(R.string.progress_frequent_tools) }
       item(key = "task-project-shortcuts", contentType = "shortcuts") {

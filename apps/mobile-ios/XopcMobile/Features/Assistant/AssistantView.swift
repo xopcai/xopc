@@ -21,6 +21,7 @@ struct AssistantView<Dock: View>: View {
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.locale) private var locale
+    @Environment(\.scenePhase) private var scenePhase
 
     @State var state = AssistantState()
     @State var draft = ""
@@ -114,15 +115,23 @@ struct AssistantView<Dock: View>: View {
             configuration: configuration,
             conversationID: conversation?.id,
             transcriptID: conversation?.transcriptId,
-            isDraft: conversation?.isDraft
+            isDraft: conversation?.isDraft,
+            isForeground: scenePhase == .active && isActive
         )) {
+            guard scenePhase == .active, isActive else { state.pauseConversation(); return }
             await state.loadConversation(conversation, using: GatewayClient(configuration: configuration))
         }
         .task(id: TaskResultObservationKey(configuration: configuration, conversationID: conversation?.id,
-                                           isActive: isActive))
+                                           isActive: isActive && scenePhase == .active))
         {
-            guard isActive, let conversation, !conversation.isDraft else { return }
+            guard scenePhase == .active, isActive, let conversation, !conversation.isDraft else { return }
             await state.observeTaskResults(in: conversation, using: GatewayClient(configuration: configuration))
+        }
+        .onChange(of: scenePhase) {
+            if scenePhase != .active { state.pauseConversation() }
+        }
+        .onChange(of: isActive) {
+            if !isActive { state.pauseConversation() }
         }
         .onChange(of: conversation?.id) {
             readAloud.stop()
@@ -148,6 +157,7 @@ struct AssistantView<Dock: View>: View {
         }
         .onAppear(perform: handleQuickChatHandoff)
         .onDisappear {
+            state.pauseConversation()
             readAloud.stop()
             assistantAudio.stop()
             onInputFocusChanged(false)
@@ -955,6 +965,7 @@ private struct ConversationLoadKey: Equatable {
     let conversationID: String?
     let transcriptID: String?
     let isDraft: Bool?
+    let isForeground: Bool
 }
 
 private struct TaskResultObservationKey: Equatable {

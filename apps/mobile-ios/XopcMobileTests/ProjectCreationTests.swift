@@ -30,4 +30,37 @@ struct ProjectCreationTests {
         #expect(body["body"] as? String == "新说明")
         #expect(body["priority"] as? String == "high")
     }
+    @Test func taskEditsExplicitlyClearProjectAndDateAndRetainScheduledMetadata() throws {
+        let cleared = TaskUpdateMutation(expectedVersion: 7, title: "Title", body: "Body", priority: "critical",
+                                         projectId: nil, dueAt: nil)
+        let body = try #require(JSONSerialization.jsonObject(with: JSONEncoder().encode(cleared)) as? [String: Any])
+        #expect(body["projectId"] is NSNull)
+        #expect(body["dueAt"] is NSNull)
+        let kept = TaskUpdateMutation(expectedVersion: 8, title: "Title", body: "Body", priority: "low",
+                                      projectId: "project", dueAt: 12345)
+        let scheduled = try #require(JSONSerialization.jsonObject(with: JSONEncoder().encode(kept)) as? [String: Any])
+        #expect(scheduled["dueAt"] as? Int64 == 12345)
+        #expect(scheduled["projectId"] as? String == "project")
+    }
+
+    @Test func lifecycleCommandsKeepPhaseChangesSeparateFromExecutionAndCancellation() throws {
+        let move = try TaskCommandMutation.Command.make(type: "move", phase: "active", resolution: "done", agentID: nil)
+        let body = try #require(JSONSerialization.jsonObject(with: JSONEncoder().encode(move)) as? [String: Any])
+        #expect(body["type"] as? String == "move")
+        #expect(body["phase"] as? String == "active")
+        #expect(body["executor"] == nil)
+        let cancel = try TaskCommandMutation.Command.make(type: "close", phase: nil, resolution: "cancelled", agentID: nil)
+        #expect(cancel.resolution == "cancelled")
+        let reopen = try TaskCommandMutation.Command.make(type: "reopen", phase: "review", resolution: "done", agentID: nil)
+        #expect(reopen.phase == "review")
+        let start = try TaskCommandMutation.Command.make(type: "start", phase: nil, resolution: "done", agentID: " research ")
+        #expect(start.executor?.agentId == "research")
+        #expect(throws: GatewayClientError.self) {
+            try TaskCommandMutation.Command.make(type: "move", phase: "closed", resolution: "done", agentID: nil)
+        }
+        #expect(throws: GatewayClientError.self) {
+            try TaskCommandMutation.Command.make(type: "start", phase: nil, resolution: "done", agentID: " ")
+        }
+    }
+
 }

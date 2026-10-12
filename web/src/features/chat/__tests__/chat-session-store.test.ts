@@ -2,6 +2,7 @@ import { describe, expect, it, beforeEach } from 'vitest';
 
 import type { Message } from '@/features/chat/messages/messages.types';
 import { messageRowKey } from '@/features/chat/messages/thinking-blocks';
+import { setOptimisticUserMessageDelivery } from '@/features/chat/messages/optimistic-user-message';
 import { defaultSessionMeta } from '@/features/chat/session/chat-session-defaults';
 import {
   getChatSessionSnapshot,
@@ -351,6 +352,61 @@ describe('useChatSessionStore', () => {
     const afterMessages = useChatSessionStore.getState().sessions[conversationId].messages;
     expect(afterMessages).toBe(beforeMessages);
     expect(afterMessages[0]).toBe(beforeMessages[0]);
+  });
+
+  it('keeps the user DOM identity through acknowledgement and history hydration', () => {
+    const store = useChatSessionStore.getState();
+    store.initSessionSnapshot(conversationId, {
+      ...idleSlice, sending: true,
+      messages: [{ ...userMsg, clientSubmissionId: 'submission', deliveryStatus: 'sending' }],
+    });
+    const renderKey = getChatSessionSnapshot(conversationId)?.messages[0].renderKey;
+    store.appendUserMessageIfMissing(conversationId, { ...userMsg, timestamp: 2, turnId: 'run' });
+    expect(getChatSessionSnapshot(conversationId)?.messages[0]).toMatchObject({ renderKey, clientSubmissionId: 'submission' });
+    store.clearStreamingState(conversationId);
+    store.mergeCommittedFromServer(conversationId, [{ ...userMsg, timestamp: 3, turnId: 'run' }], false);
+    expect(getChatSessionSnapshot(conversationId)?.messages[0]).toMatchObject({ renderKey, clientSubmissionId: 'submission' });
+  });
+
+  it('keeps expanded history when a background refresh returns only the latest page', () => {
+    const store = useChatSessionStore.getState();
+    const tail: Message = { role: 'user', turnId: 'tail', content: [{ type: 'text', text: 'latest' }], timestamp: 3 };
+    store.initSessionSnapshot(conversationId, { ...idleSlice, messages: [userMsg, tail], hasMore: false });
+    const before = useChatSessionStore.getState().sessions[conversationId].messages;
+    store.mergeCommittedFromServer(conversationId, [tail], true);
+    expect(getChatSessionSnapshot(conversationId)?.messages).toHaveLength(2);
+    expect(useChatSessionStore.getState().sessions[conversationId].messages[0]).toBe(before[0]);
+    expect(useChatSessionStore.getState().sessions[conversationId].messages[1]).toBe(before[1]);
+    expect(getChatSessionSnapshot(conversationId)?.hasMore).toBe(false);
+  });
+
+  it('keeps accepted input visible until its canonical row arrives after a cancelled run', () => {
+    const store = useChatSessionStore.getState();
+    const [accepted] = setOptimisticUserMessageDelivery([
+      { ...userMsg, timestamp: 10, turnId: 'new-run', deliveryStatus: 'sending', clientSubmissionId: 'new-input' },
+    ], 'new-input', 'accepted');
+    store.initSessionSnapshot(conversationId, { ...idleSlice, messages: [userMsg, accepted] });
+    store.mergeCommittedFromServer(conversationId, [userMsg], false);
+    expect(getChatSessionSnapshot(conversationId)?.messages).toHaveLength(2);
+    store.mergeCommittedFromServer(conversationId, [userMsg, { ...userMsg, timestamp: 11, turnId: 'new-run' }], false);
+    expect(getChatSessionSnapshot(conversationId)?.messages).toHaveLength(2);
+    expect(getChatSessionSnapshot(conversationId)?.messages[1].deliveryStatus).toBeUndefined();
+  });
+
+  it('does not replace an earlier canonical user turn when identical text is sent again', () => {
+    const store = useChatSessionStore.getState();
+    store.initSessionSnapshot(conversationId, { ...idleSlice, messages: [{ ...userMsg, turnId: 'old-run' }], sending: true });
+    store.appendUserMessageIfMissing(conversationId, { ...userMsg, turnId: 'new-run', timestamp: 2 });
+    expect(getChatSessionSnapshot(conversationId)?.messages.map(message => message.turnId)).toEqual(['old-run', 'new-run']);
+  });
+
+  it('allows an explicit reset to clear pending input and expanded history', () => {
+    const store = useChatSessionStore.getState();
+    store.initSessionSnapshot(conversationId, {
+      ...idleSlice, messages: [userMsg, { ...userMsg, timestamp: 2, deliveryStatus: 'accepted', clientSubmissionId: 'input' }],
+    });
+    store.setCommittedSnapshot(conversationId, { messages: [], hasMore: false });
+    expect(getChatSessionSnapshot(conversationId)?.messages).toEqual([]);
   });
 
   it('finalizeStreamingTurn clears streaming state and updates messages', () => {

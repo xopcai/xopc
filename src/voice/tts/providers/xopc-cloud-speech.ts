@@ -2,6 +2,7 @@ import { captureCloudUsageResponse } from '../../../usage/cloud-receipts.js';
 import { trackCloudCapabilityUsage } from '../../../usage/cloud-capability.js';
 import { cloudCreditBudgetHeaders, reportCloudCreditError, rejectUnbudgetedCloudTransport } from '../../../providers/xopc-cloud-credit-budget.js';
 import { getModelCatalogStore } from '../../../providers/model-catalog-store.js';
+import { voiceSupportsMode } from '@xopcai/realtime-protocol/voice';
 import { compareCatalogModels } from '../../../providers/model-catalog-ranking.js';
 import { getProviderAuthService } from '../../../providers/provider-auth-service.js';
 import { resolveXopcModelRouterUrl } from '../../../providers/xopc-cloud-config.js';
@@ -64,10 +65,12 @@ export const xopcCloudSpeechProvider: SpeechProviderPlugin = {
     const config = readConfig(providerConfig);
     return Boolean(config.model && config.voice && availableModels().some((model) => model.id === config.model));
   },
-  listVoices: async ({ providerConfig }) => {
+  listVoices: async ({ providerConfig, mode = 'speech' }) => {
     const config = readConfig(providerConfig ?? {});
     if (!config.model) return [];
-    return availableModels().find(model => model.id === config.model)?.voice?.voices.map(({id, name, displayNames}) => ({id, name, ...(displayNames ? { displayNames } : {})})) ?? [];
+    return availableModels().find(model => model.id === config.model)?.voice?.voices
+      .filter(voice => voiceSupportsMode(voice, mode))
+      .map(({id, name, displayNames}) => ({id, name, ...(displayNames ? { displayNames } : {})})) ?? [];
   },
   synthesize: async (request): Promise<SpeechSynthesisResult> => {
     const config = readConfig(request.providerConfig);
@@ -124,6 +127,7 @@ export const xopcCloudSpeechProvider: SpeechProviderPlugin = {
     relayUrl.protocol = relayUrl.protocol === 'https:' ? 'wss:' : 'ws:';
     relayUrl.searchParams.set('model', model);
     relayUrl.searchParams.set('service_version', String(catalogModel.voice.serviceVersion));
+    relayUrl.searchParams.set('voice', voice);
     const instructions = typeof request.providerOverrides?.instructions === 'string'
       ? request.providerOverrides.instructions.trim()
       : config.instructions;

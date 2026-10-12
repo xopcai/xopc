@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { apiFetch } from '@/lib/fetch';
 import { apiFetchWithStartupRetry } from '@/lib/gateway-startup-retry';
+import type { Message } from '@/features/chat/messages/messages.types';
 import {
   SessionManager,
 } from '@/features/chat/session/session-manager';
@@ -108,6 +109,28 @@ describe('SessionManager.resetSession', () => {
 describe('SessionManager.loadSession', () => {
   beforeEach(() => {
     mockedApiFetchWithStartupRetry.mockReset();
+  });
+
+  it('starts a fresh request after local completion and keeps the newer request deduplicated', async () => {
+    const key = 'f674f219-ec7c-4f1d-ae4e-955a20b6a8ab';
+    const before: Message[] = [{ role: 'user', content: [], timestamp: 1 }];
+    const after: Message[] = [...before, { role: 'assistant', content: [{ type: 'text', text: 'done' }], timestamp: 2 }];
+    const resolvers: Array<(response: Response) => void> = [];
+    mockedApiFetchWithStartupRetry.mockImplementation(() => new Promise(resolve => resolvers.push(resolve)));
+    const manager = new SessionManager();
+    const oldLoad = manager.loadSession(key, 0, undefined, undefined, before);
+    await vi.waitFor(() => expect(resolvers).toHaveLength(1));
+    const newLoad = manager.loadSession(key, 0, undefined, undefined, after);
+    await vi.waitFor(() => expect(resolvers).toHaveLength(2));
+    resolvers[0](jsonResponse({ session: { key, messages: before }, pagination: { total: 1, limit: 50, offset: 0, hasMore: false } }));
+    await oldLoad;
+    const sameNewLoad = manager.loadSession(key, 0, undefined, undefined, after);
+    await vi.waitFor(() => expect(drafts.read).toHaveBeenCalled());
+    resolvers[1](jsonResponse({ session: { key, messages: after }, pagination: { total: 2, limit: 50, offset: 0, hasMore: false } }));
+    const [fresh, shared] = await Promise.all([newLoad, sameNewLoad]);
+    expect(fresh).toBe(shared);
+    expect(fresh.messages).toHaveLength(2);
+    expect(mockedApiFetchWithStartupRetry).toHaveBeenCalledTimes(2);
   });
 
   it('extends the initial raw history page when the visible tail starts with an assistant fragment', async () => {

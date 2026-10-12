@@ -9,6 +9,21 @@ const voice = voiceManifestSchema.parse({ protocolVersion:1, serviceVersion:3, m
 beforeEach(() => getModelCatalogStore().saveSource('xopc-cloud', {providerId:'xopc-cloud',baseUrl:'https://example.test/v1',api:'openai-completions',etag:'v3',recommendedModel:null,lastSuccessAt:1,models:[{id:'future-provider-model',name:'Future provider',displayNames:{'zh-CN':'XOPC 云端实时语音',en:'XOPC Cloud Realtime'},availability:'available',kind:'omni',input:['audio'],output:['audio','text'],operations:['audio.conversation'],contextWindow:128000,maxOutputTokens:null,reasoning:false,voice}]}));
 afterEach(resetModelCatalogStore);
 describe('shared platform voice settings', () => {
+  it('rejects a voice that belongs to the model but does not support the selected mode', () => {
+    const source = getModelCatalogStore().getSource('xopc-cloud')!;
+    source.models[0].voice!.voices = [
+      { id: 'http-only', name: 'HTTP voice', languages: ['zh'], modes: ['speech'] },
+      { id: 'stream-only', name: 'Streaming voice', languages: ['zh'], modes: ['speech.stream'] },
+    ];
+    source.models[0].voice!.defaultVoice = 'http-only';
+    getModelCatalogStore().saveSource('xopc-cloud', source);
+    expect(() => selectPlatformVoice(ConfigSchema.parse({}), {
+      mode: 'speech.stream', model: 'future-provider-model', voice: 'http-only',
+    })).toThrow('available');
+    const next = selectPlatformVoice(ConfigSchema.parse({}), { mode: 'speech.stream', model: 'future-provider-model' });
+    expect(next.voice.realtime.tts?.voice).toBe('stream-only');
+    expect(selectPlatformVoice(next, { mode: 'speech', model: 'future-provider-model' }).messages?.tts?.providers?.['xopc-cloud']?.voice).toBe('http-only');
+  });
   it('configures every mode from a newly discovered model without vendor switches', () => {
     let config = ConfigSchema.parse({});
     for (const mode of voice.modes) config = selectPlatformVoice(config, {mode,model:'future-provider-model'});

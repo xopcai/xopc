@@ -22,4 +22,11 @@ class RunStreamEventTest {
     assertNull(RunStreamEvent.appendDelta("", "world", 6))
     assertNull(RunStreamEvent.appendDelta("Hello", "changed", 1))
   }
+  @Test fun foregroundReplayCanExtendAPartiallyReceivedDelta() {
+    assertEquals("Hello world", RunStreamEvent.appendDelta("Hello wor", "world", 6))
+    assertEquals("Hello world", RunStreamEvent.appendDelta("Hello world", "Hello", 0))
+    assertNull(RunStreamEvent.appendDelta("Hello", "world", -1))
+    assertNull(RunStreamEvent.appendDelta("Hello", "world", 10))
+  }
+
 }

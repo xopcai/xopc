@@ -32,6 +32,7 @@ import { resolveTtsProviderConfigSlice } from '../../../voice/tts/config-slice.j
 import { resolveStreamingStt, resolveStreamingTts, VoiceSessionCreationError } from '../../../voice/realtime/runtime.js';
 import { resolveOmniRoute } from '../../../voice/realtime/omniRoute.js';
 import { speakStream } from '../../../voice/tts/speak-core.js';
+import { PlatformVoiceError } from '../../../voice/platform-streams.js';
 import { createGatewayRouteLogger } from '../lib/route-logger.js';
 import { getGatewayPrincipal } from '../../security/gateway-principal.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
@@ -247,7 +248,7 @@ export function registerVoiceRoutes(authenticated: Hono, deps: AuthenticatedRout
     const selectedVoice = typeof body.voice === 'string' ? body.voice.trim() : '';
     if (selectedVoice) {
       if (selectedVoice.length > 200 || !route.provider.plugin.listVoices) return c.json({ ok: false, error: { message: 'Voice is unavailable' } }, 400);
-      const voices = await route.provider.plugin.listVoices({ cfg: config, providerConfig: route.provider.providerConfig });
+      const voices = await route.provider.plugin.listVoices({ cfg: config, providerConfig: route.provider.providerConfig, mode: 'speech.stream' });
       if (!voices.some(voice => voice.id === selectedVoice)) return c.json({ ok: false, error: { message: 'Voice is unavailable' } }, 400);
     }
     const previewConfig = selectedVoice ? { ...route.config, providers: {
@@ -278,8 +279,11 @@ export function registerVoiceRoutes(authenticated: Hono, deps: AuthenticatedRout
       if (size === 0 || size % 2 !== 0) throw new Error('Realtime preview returned invalid audio');
       return c.json({ ok: true, payload: { audio: Buffer.concat(chunks).toString('base64'), sampleRate: 24_000 } });
     } catch (error) {
-      log.warn({ err: error, provider: route.route.provider }, 'Realtime voice preview failed');
-      return c.json({ ok: false, error: { message: 'Voice preview failed. Check the provider credentials and try again.' } }, 502);
+      log.warn({ err: error, provider: route.route.provider, modelId: route.route.model, voice: selectedVoice || route.provider.providerConfig.voice }, 'Realtime voice preview failed');
+      return c.json({ ok: false, error: {
+        code: error instanceof PlatformVoiceError ? error.code ?? 'CLOUD_VOICE_UNAVAILABLE' : 'VOICE_PREVIEW_FAILED',
+        message: error instanceof PlatformVoiceError ? error.clientMessage : 'Voice preview failed. Try again or check the voice service settings.',
+      } }, 502);
     } finally {
       controller.abort();
       await reader?.cancel().catch(() => undefined);
@@ -382,6 +386,7 @@ export function registerVoiceRoutes(authenticated: Hono, deps: AuthenticatedRout
       const voices = await resolved.plugin.listVoices({
         cfg: config,
         providerConfig: resolved.providerConfig,
+        mode: c.req.query('purpose') === 'realtime' ? 'speech.stream' : 'speech',
       });
       return c.json({ ok: true, payload: { voices } });
     } catch (error) {

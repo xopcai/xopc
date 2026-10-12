@@ -57,6 +57,7 @@ internal object DevicePersonalTools {
   fun permissionResult() { permission?.complete(Unit); permission = null }
   fun cancel(id: String) { scope.launch { if (id == invocationId) job?.cancel() } }
   fun cancelAll() { scope.launch { job?.cancel() } }
+  fun hasActiveInvocation(): Boolean = job?.isActive == true
 
   fun invoke(request: JSONObject, gateway: GatewaySession, send: (String, JSONObject) -> Unit) {
     scope.launch { start(request, gateway, send) }

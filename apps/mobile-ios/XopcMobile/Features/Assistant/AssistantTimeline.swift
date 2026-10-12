@@ -1,6 +1,14 @@
 import Foundation
 
 extension AssistantState {
+    var selectedAgent: AgentSummary? {
+        agents.first { $0.id == selectedAgentID }
+    }
+
+    var isRunActive: Bool {
+        isSending || runID != nil
+    }
+
     static func timeline(from messages: [WireMessage]) -> [TimelineMessage] {
         messages.enumerated().compactMap { index, message in
             let text = message.content.text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -38,5 +46,16 @@ extension AssistantState {
                 unavailableOutputs: message.metadata?.turnOutcome?.deliverables.filter { $0.availability != "available" }.map(\.title) ?? []
             )
         }
+    }
+
+    static func payloadSummary(attachments: [MessageAttachment], references: [ContextReference]) -> String {
+        var parts: [String] = []
+        if !attachments.isEmpty {
+            parts.append(AppLocalization.resolve("\(attachments.count) 个附件"))
+        }
+        if !references.isEmpty {
+            parts.append(AppLocalization.resolve("\(references.count) 个引用"))
+        }
+        return AppLocalization.resolve("已发送 ") + parts.joined(separator: AppLocalization.resolve("、"))
     }
 }

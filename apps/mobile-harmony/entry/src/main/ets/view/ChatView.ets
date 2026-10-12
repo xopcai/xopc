@@ -807,8 +807,8 @@ export struct XopcChatView {
   onConnectionWaitRun(): void { if (this.visible && !this.chat.loading) void this.connectionWait.refresh(); }
   @Monitor('layout.foreground')
   onConnectionWaitForeground(): void {
-    if (this.layout.foreground && this.activePage) this.connectionWait.onReturn();
-    else this.connectionWait.pause();
+    if (this.layout.foreground && this.activePage) { this.chat.resume(); this.connectionWait.onReturn(); }
+    else { this.chat.pause(); this.connectionWait.pause(); }
   }
   @Monitor('activePage')
   onActivityChange(): void {

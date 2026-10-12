@@ -566,4 +566,46 @@ describe('chat history isolation', () => {
     await vi.waitFor(() => expect(chat.error).toBe('OFFLINE'));
     expect(chat.liveRow?.text).toBe('Partial answer'); expect(chat.runId).toBe('run'); chat.dispose();
   });
+  it('resumes the same live reply after a successful reconnect instead of dropping future deltas', async () => {
+    const chat = new XopcChatViewModel(); chat.activate(); chat.selectedId = 'one'; chat.runId = 'run';
+    const delta = (seq: number, text: string, offset: number) => realtimeClient.onEvent({ topic: 'run:run', seq,
+      event: 'assistant_delta', data: { conversationId: 'one', runId: 'run', payload: { messageId: 'answer', delta: text, offset } } });
+    delta(1, 'Hello', 0);
+    mocks.history.mockResolvedValue({ session: { key: 'one', messages: [{ id: 'user', role: 'user', content: 'question' }] }, pagination: { hasMore: false } });
+    mocks.activeRun.mockResolvedValue({ active: true, runId: 'run' });
+    realtimeClient.onState('connected');
+    await vi.waitFor(() => expect(mocks.activeRun).toHaveBeenCalled());
+    expect(chat.liveRow?.text).toBe('Hello');
+    delta(1, 'Hello', 0); delta(2, ' world', 5);
+    expect(chat.liveRow?.text).toBe('Hello world'); expect(chat.streaming).toBe('Hello world'); chat.dispose();
+  });
+  it('recovers a run completed in the background even without a connected event', async () => {
+    const chat = new XopcChatViewModel(); chat.activate(); chat.selectedId = 'one'; chat.runId = 'run';
+    realtimeClient.onEvent({ topic: 'run:run', seq: 1, event: 'assistant_delta',
+      data: { conversationId: 'one', runId: 'run', payload: { delta: 'Partial' } } });
+    chat.pause(); mocks.history.mockResolvedValue(page('one', 'Complete')); mocks.activeRun.mockResolvedValue({ active: false });
+    chat.resume(); await vi.waitFor(() => expect(chat.runId).toBe(''));
+    await vi.waitFor(() => expect(chat.liveRow).toBeUndefined());
+    expect(chat.rows[0].text).toBe('Complete'); chat.dispose();
+  });
+  it('continues streaming after reconnect history fails', async () => {
+    const chat = new XopcChatViewModel(); chat.activate(); chat.selectedId = 'one'; chat.runId = 'run';
+    const delta = (text: string, offset: number) => realtimeClient.onEvent({ topic: 'run:run', seq: 1,
+      event: 'assistant_delta', data: { conversationId: 'one', runId: 'run', payload: { messageId: 'answer', delta: text, offset } } });
+    delta('Hello', 0); mocks.history.mockRejectedValue(new Error('OFFLINE'));
+    mocks.activeRun.mockResolvedValue({ active: true, runId: 'run' });
+    chat.pause(); chat.resume(); await vi.waitFor(() => expect(chat.error).toBe('OFFLINE'));
+    delta(' again', 5); expect(chat.liveRow?.text).toBe('Hello again'); chat.dispose();
+  });
+  it('does not resurrect a run that ends during foreground reconciliation', async () => {
+    const chat = new XopcChatViewModel(); chat.activate(); chat.selectedId = 'one'; chat.runId = 'run';
+    let finish!: (value: object) => void;
+    mocks.history.mockResolvedValue(page('one', 'Done'));
+    mocks.activeRun.mockImplementation(() => new Promise(resolve => { finish = resolve; }));
+    chat.resume(); await vi.waitFor(() => expect(mocks.activeRun).toHaveBeenCalled());
+    realtimeClient.onEvent({ topic: 'run:run', seq: 2, event: 'run_end', data: { conversationId: 'one', runId: 'run', payload: {} } });
+    finish({ active: true, runId: 'run' }); await Promise.resolve(); await Promise.resolve();
+    expect(chat.runId).toBe(''); chat.dispose();
+  });
+
 });

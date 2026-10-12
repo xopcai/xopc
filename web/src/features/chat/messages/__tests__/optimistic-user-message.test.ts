@@ -29,11 +29,15 @@ describe('optimistic user message delivery', () => {
     expect(next[1]).toMatchObject({ clientSubmissionId: 'second', deliveryStatus: 'sending' });
   });
 
-  it('removes client-only delivery fields after server acceptance', () => {
+  it('retains accepted input identity until the canonical transcript row arrives', () => {
     const [accepted] = setOptimisticUserMessageDelivery([optimistic('first')], 'first', 'accepted');
 
-    expect(accepted).not.toHaveProperty('clientSubmissionId');
-    expect(accepted).not.toHaveProperty('deliveryStatus');
+    expect(accepted).toMatchObject({ clientSubmissionId: 'first', deliveryStatus: 'accepted' });
     expect(accepted).not.toHaveProperty('pendingAppContext');
+  });
+
+  it('does not mark a canonical row as failed when an older send callback finishes', () => {
+    const canonical = { ...optimistic('first'), deliveryStatus: undefined, turnId: 'run-1' };
+    expect(setOptimisticUserMessageDelivery([canonical], 'first', 'failed')[0]).toBe(canonical);
   });
 });

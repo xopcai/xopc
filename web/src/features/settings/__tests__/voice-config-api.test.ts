@@ -10,6 +10,7 @@ vi.mock('@/features/gateway/gateway-config-swr', () => ({ revalidateGatewayConfi
 vi.mock('@/lib/url', () => ({ apiUrl: (path: string) => path }));
 
 import { normalizeVoiceSettings, patchVoiceSettings } from '../voice-config-api';
+import { configureRealtimeService } from '../voice-service-setup';
 
 describe('voice-config-api', () => {
   beforeEach(() => {
@@ -40,6 +41,25 @@ describe('voice-config-api', () => {
     await patchVoiceSettings(state);
     expect(JSON.parse(String(fetchJson.mock.calls[0]?.[1].body)).voice.realtime.omni).toEqual(omni);
     expect(JSON.parse(String(fetchJson.mock.calls[0]?.[1].body)).voice.realtime.tts).toEqual(tts);
+  });
+
+  it('saves an own-key switch without a stale hosted streaming selection', async () => {
+    fetchJson.mockResolvedValue({ ok: true });
+    const previous = normalizeVoiceSettings({
+      stt: { enabled: true, provider: 'xopc-cloud', providers: {
+        alibaba: { apiKey: '••••••', model: 'qwen-audio-3.0-asr-flash' },
+      } },
+      tts: { enabled: true, provider: 'edge', trigger: 'inbound' },
+      voice: { realtime: { enabled: true, stt: { provider: 'xopc-cloud', model: 'hosted-asr' } } },
+    });
+    await patchVoiceSettings(configureRealtimeService(previous, 'alibaba'));
+    const payload = JSON.parse(String(fetchJson.mock.calls[0]?.[1].body));
+    expect(payload.stt.provider).toBe('alibaba');
+    expect(payload.stt.providers.alibaba).toEqual(previous.stt.providers!.alibaba);
+    expect(payload.voice.realtime).not.toHaveProperty('stt');
+    expect(payload.voice.realtime.tts.provider).toBe('alibaba');
+    expect(payload.tts.provider).toBe('edge');
+    expect(payload.tts.trigger).toBe('inbound');
   });
 
   it('round-trips explicit refinement in the safe config patch', async () => {

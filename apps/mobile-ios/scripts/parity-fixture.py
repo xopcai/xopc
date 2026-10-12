@@ -62,9 +62,9 @@ class Handler(BaseHTTPRequestHandler):
   elif path.endswith('/run'): data=envelope({'active':child in path,'runId':'fixture-live' if child in path else None})
   elif path.endswith('/execution-detail'): data={'detail':{'turnId':query.get('turnId',['turn-1'])[0],'steps':[]}}
   elif path=='/api/home':
-   data={'needsUser':[{'id':'attention','kind':'task','title':'需要验收','summary':'执行已完成，等待确认。','statusLabel':'待验收','recommendation':'查看结果后验收。','openAction':{'type':'open','label':'查看任务','href':'/tasks'}}], 'background':[{'id':'running','kind':'task','title':'进行中的工作','summary':'正在处理。'},{'id':'scheduled','kind':'scheduled','title':'明日计划','summary':'明天上午执行。'}],'backgroundCount':2}
+   data={'needsUser':[{'id':'attention','kind':'task','title':'需要验收','summary':'执行已完成，等待确认。','statusLabel':'待验收','recommendation':'查看结果后验收。','openAction':{'type':'open','label':'查看任务','href':'/tasks'},'primaryAction':{'type':'task_review','label':'查看结果并验收','taskId':'task-header'}}], 'background':[{'id':'running','kind':'task','title':'进行中的工作','summary':'正在处理。'},{'id':'scheduled','kind':'scheduled','title':'明日计划','summary':'明天上午执行。'}],'backgroundCount':2}
   elif path=='/api/tasks': data={'ok':True,'items':[{'task':task,'operationalState':'idle'}],'total':1,'hasMore':False}
-  elif path=='/api/tasks/task-header': data={'ok':True,'task':task,'operationalState':'idle','allowedCommands':[]}
+  elif path=='/api/tasks/task-header': data={'ok':True,'task':task,'operationalState':'idle','allowedCommands':['move','close'],'runs':[],'waits':[],'criterionReviews':[]}
   elif path=='/api/tasks/task-header/conversation': data={'ok':True,'conversationId':child}
   elif path=='/api/automations/metrics': data={'nextRun':{'automationId':'auto','name':'不应重复显示的计划','runAtMs':now+100000}}
   elif path=='/api/notes': data={'items':[{'id':'note-1','title':'布局检查笔记','kind':'note','status':'active','createdAt':now,'updatedAt':now,'snippet':'用于模拟器验证。'}],'total':1,'hasMore':False}

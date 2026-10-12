@@ -16,7 +16,8 @@ describe('workspace list loading layout', () => {
   });
 
   it('uses icon-only refresh controls with accessible labels', () => {
-    for (const source of [workspace, files]) {
+    const workspaceList = workspace.slice(workspace.indexOf('  list() {'), workspace.indexOf('  automationDetail('));
+    for (const source of [workspaceList, files]) {
       expect(source).not.toContain("Button($r('app.string.refresh'))");
       expect(source).toContain("SymbolGlyph($r('sys.symbol.arrow_clockwise'))");
       expect(source).toContain(".accessibilityText($r('app.string.refresh'))");

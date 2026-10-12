@@ -87,6 +87,21 @@ describe('useChatSessionStreaming run lookup', () => {
     expect(getChatSessionSnapshot(conversationId)?.streamingMsg?.pendingResponseStatus).toBe('waiting');
   });
 
+  it('keeps HTTP-accepted user input across cancellation before its transcript echo', async () => {
+    useChatSessionStore.getState().seedSessionIfEmpty(conversationId, [], false, false);
+    const sender = { send: vi.fn(async (...args: unknown[]) => {
+      const callbacks = args[4] as { onInputAccepted: () => void };
+      callbacks.onInputAccepted();
+      throw new DOMException('Interrupted', 'AbortError');
+    }) };
+    vi.spyOn(chatRunManager, 'senderFor').mockReturnValue(sender as unknown as ReturnType<typeof chatRunManager.senderFor>);
+    await act(async () => streaming.sendMessage('keep this input'));
+    const accepted = getChatSessionSnapshot(conversationId)?.messages[0];
+    expect(accepted).toMatchObject({ deliveryStatus: 'accepted', content: [{ type: 'text', text: 'keep this input' }] });
+    useChatSessionStore.getState().mergeCommittedFromServer(conversationId, [], false);
+    expect(getChatSessionSnapshot(conversationId)?.messages[0]?.renderKey).toBe(accepted?.renderKey);
+  });
+
   it('ignores a stale missing-run result after the first stream event arrives', async () => {
     useChatSessionStore.getState().initSessionSnapshot(conversationId, {
       ...defaultSessionMeta(), historyStatus: 'ready', hasMore: false,

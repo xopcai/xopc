@@ -80,7 +80,12 @@ export function PersonalVoiceSetting({ record, zh, onSelectVoice, onGreetingChan
         void nextPlayer.close();
       });
     } catch (cause) {
-      if (!next.signal.aborted) setError(cause instanceof Error ? cause.message : String(cause));
+      if (!next.signal.aborted) {
+        const code = (cause as { body?: { error?: { code?: string } } } | null)?.body?.error?.code;
+        setError(zh && code === 'unsupported_voice'
+          ? '当前音色暂不可用，请刷新语音目录或选择其他音色。'
+          : cause instanceof Error ? cause.message : String(cause));
+      }
       if (controller.current === next) stopPreview();
     }
   };

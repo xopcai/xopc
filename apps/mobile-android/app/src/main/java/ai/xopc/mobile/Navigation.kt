@@ -16,6 +16,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 
 @Composable
 fun MainNavigation(appearanceMode: String, onAppearanceModeChange: (String) -> Unit,
@@ -32,6 +34,7 @@ fun MainNavigation(appearanceMode: String, onAppearanceModeChange: (String) -> U
           val gateway: GatewayViewModel = viewModel()
           val connection by gateway.state.collectAsStateWithLifecycle()
           LaunchedEffect(gateway) { gateway.restore() }
+          GatewayForegroundRecovery(onForeground = gateway::onForeground, onBackground = gateway::onBackground)
           MainScreen(connection = connection, onPair = gateway::pair,
             onCancelPairing = gateway::cancelPairing,
             appearanceMode = appearanceMode, onAppearanceModeChange = onAppearanceModeChange,
@@ -186,4 +189,10 @@ fun MainNavigation(appearanceMode: String, onAppearanceModeChange: (String) -> U
         }
       },
   )
+}
+
+@Composable
+internal fun GatewayForegroundRecovery(onForeground: () -> Unit, onBackground: () -> Unit) {
+  LifecycleEventEffect(Lifecycle.Event.ON_STOP) { onBackground() }
+  LifecycleEventEffect(Lifecycle.Event.ON_START) { onForeground() }
 }

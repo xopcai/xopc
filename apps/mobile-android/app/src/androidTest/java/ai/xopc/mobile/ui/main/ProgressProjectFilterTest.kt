@@ -33,7 +33,7 @@ class ProgressProjectFilterTest {
           opened = id
           state.value = state.value.copy(projectId = id, project = projects.first { it.id == id })
         }, { _, _, _ -> }, {},
-        { _, _, _, _, _ -> }, {})
+        { _, _, _ -> }, {})
     }
     composeTestRule.onNodeWithTag("progress-projects").performClick()
     composeTestRule.onNodeWithTag("progress-project-filter-all").assertIsSelected()
@@ -73,7 +73,7 @@ class ProgressProjectFilterTest {
       ProgressScreen(state.value, PaddingValues(),
         {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, { id ->
           state.value = state.value.copy(projectId = id, project = project)
-        }, { _, _, _ -> }, {}, { _, _, _, _, _ -> },
+        }, { _, _, _ -> }, {}, { _, _, _ -> },
         onOpenChat = { openedChat = it })
     }
     composeTestRule.onNodeWithTag("progress-projects").performClick()
@@ -93,7 +93,7 @@ class ProgressProjectFilterTest {
       ProgressScreen(state.value, PaddingValues(),
         {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, { id ->
           state.value = state.value.copy(projectId = id, project = project)
-        }, { _, _, _ -> }, {}, { _, _, _, _, _ -> }, {},
+        }, { _, _, _ -> }, {}, { _, _, _ -> }, {},
         onCreateProjectChat = { createdFor = it })
     }
     composeTestRule.onNodeWithTag("progress-projects").performClick()
@@ -112,7 +112,7 @@ class ProgressProjectFilterTest {
       ProgressScreen(state.value, PaddingValues(),
         {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, { id ->
           state.value = state.value.copy(projectId = id, project = project)
-        }, { _, _, _ -> }, {}, { _, _, _, _, _ -> }, {},
+        }, { _, _, _ -> }, {}, { _, _, _ -> }, {},
         onCreateProjectChat = { requests++ }, chatBusy = busy.value)
     }
     composeTestRule.onNodeWithTag("progress-projects").performClick()
