@@ -11,6 +11,15 @@ async function server() {
   return { server, url: `ws://127.0.0.1:${(server.address() as {port:number}).port}` };
 }
 describe('platform voice protocol', () => {
+  it('identifies an unsupported voice without reporting a credential failure', async () => {
+    const { server: s, url } = await server();
+    s.on('connection', socket => socket.on('message', () => socket.close(4400, 'Unsupported voice')));
+    const error = await openPlatformTts({ baseUrl: url, apiKey: 'test', voice: 'public-voice', text: 'Hello',
+      signal: new AbortController().signal, timeoutMs: 1000 }).catch(error => error);
+    expect(error).toBeInstanceOf(PlatformVoiceError);
+    expect(error.code).toBe('unsupported_voice');
+    expect(error.clientMessage).toContain('Refresh the voice catalog');
+  });
   it('preserves the provider close code and reason when synthesis closes before ready', async () => {
     const { server: s, url } = await server();
     s.on('connection', socket => socket.on('message', () => socket.close(1011, 'Provider session closed')));

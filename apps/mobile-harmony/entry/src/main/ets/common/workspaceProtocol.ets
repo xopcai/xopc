@@ -7,13 +7,14 @@ export function taskItem(result: XopcTaskResult): XopcWorkspaceItem {
   const task = result.task;
   if (!task?.id || typeof task.title !== 'string' || !Number.isInteger(task.version)) throw new Error('INVALID_TASK');
   return { id: task.id, title: task.title, body: task.body ?? '', status: task.phase, version: task.version,
-    projectId: task.projectId, priority: task.priority, updatedAt: task.updatedAt,
+    projectId: task.projectId, priority: task.priority, dueAt: task.dueAt, resolution: task.resolution, updatedAt: task.updatedAt,
     editable: true, actions: result.allowedCommands ?? [] };
 }
 export function taskDetailItem(result: XopcMobileTaskDetailResult): XopcWorkspaceItem {
   const item = taskItem(result);
   item.taskDetail = {
     contract: result.task.contract, latestContractVersion: result.task.latestContractVersion ?? 0,
+    operationalState: result.operationalState, waits: result.waits ?? [],
     attention: result.attention ?? [], criterionReviews: result.criterionReviews ?? [],
     receipts: result.receipts ?? [], context: result.context ?? [], sessions: result.sessions ?? [],
     dependencies: result.dependencies ?? [], dependents: result.dependents ?? [], runs: result.runs ?? [],

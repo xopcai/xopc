@@ -36,6 +36,15 @@ enum TaskAcceptanceStatus: String {
         return .pending
     }
 
+    static func completionBlock(in detail: TaskDetailEnvelope) -> String? {
+        if (detail.waits ?? []).contains(where: { $0.status == "active" })
+            || (detail.runs ?? []).contains(where: {
+                $0.parentRunId == nil && ["queued", "running", "waiting", "verifying"].contains($0.status)
+            }) { return "execution" }
+        guard let criteria = detail.task.contract?.acceptanceCriteria, !criteria.isEmpty else { return "criteria" }
+        return allPassed(in: detail) ? nil : "acceptance"
+    }
+
     static func allPassed(in detail: TaskDetailEnvelope) -> Bool {
         guard let criteria = detail.task.contract?.acceptanceCriteria, !criteria.isEmpty else { return false }
         return passedCount(in: detail) == criteria.count
@@ -46,5 +55,13 @@ enum TaskAcceptanceStatus: String {
         return criteria.enumerated().filter { index, criterion in
             resolve(criterion, index: index, detail: detail) == .passed
         }.count
+    }
+}
+
+extension TaskDetailEnvelope {
+    func phaseCommand(for phase: String) -> String? {
+        guard phase != task.phase, ["backlog", "ready", "active", "review"].contains(phase) else { return nil }
+        let command = task.phase == "closed" ? "reopen" : "move"
+        return allowedCommands?.contains(command) == true ? command : nil
     }
 }

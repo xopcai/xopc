@@ -910,3 +910,25 @@
 "保存主动联系设置" = "Save proactive settings";
 "重新加载设置" = "Reload settings";
 "有值得交流的进展时，在聊天里留下消息。明确请求的结果会照常交付。" = "Useful developments appear in this chat. Requested results are delivered as usual.";
+
+"调整状态" = "Change status";
+"任务对话" = "Task chat";
+"完成任务" = "Complete task";
+"截止日期" = "Due date";
+"设置截止日期" = "Set due date";
+"Agent" = "Agent";
+"选择 Agent" = "Choose an Agent";
+"执行任务" = "Run task";
+"取消任务？" = "Cancel task?";
+"保留任务" = "Keep task";
+"关闭并刷新" = "Close and refresh";
+"调整阶段不会自动启动 Agent。" = "Changing phase does not start an Agent run.";
+"任务正在执行或等待条件满足，请先处理当前执行或等待事项。" = "A run or wait is active. Handle it before changing phase.";
+"选择 Agent 后开始执行，将创建一次任务运行。" = "Choose an Agent to begin execution. This will create a task run.";
+"结束此任务，不标记为完成。之后可以重新打开。" = "End this task without marking it complete. You can reopen it later.";
+"请先处理当前执行或等待事项，再完成任务。" = "Finish the current run or resolve waits before completing.";
+"请先在桌面端补充验收标准并完成验收，再标记完成。" = "Add acceptance criteria and review them on the desktop before completing.";
+"所有验收标准通过后才能完成，请在桌面端核对验收。" = "All acceptance criteria must pass. Review them on the desktop before completing.";
+
+"放弃修改？" = "Discard changes?";
+"放弃修改" = "Discard changes";

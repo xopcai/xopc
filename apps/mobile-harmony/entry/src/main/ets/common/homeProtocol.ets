@@ -52,6 +52,29 @@ export function homeCommand(action: XopcHomeAction): XopcHomeCommand {
   throw new Error('INVALID_HOME_ACTION');
 }
 
+export interface XopcHomeActionHandlers {
+  navigate: (route: XopcMobileRoute) => void;
+  confirm: (action: XopcHomeAction) => Promise<boolean>;
+  mutate: (action: XopcHomeAction) => Promise<void>;
+}
+
+export async function dispatchHomeAction(action: XopcHomeAction, handlers: XopcHomeActionHandlers): Promise<void> {
+  if (action.type === 'task_review') {
+    if (typeof action.taskId !== 'string' || !action.taskId.trim()) throw new Error('INVALID_HOME_ACTION');
+    handlers.navigate({ page: 'tasks', itemId: action.taskId });
+    return;
+  }
+  if (action.type === 'open') {
+    const route = mobileRoute(action.href ?? '');
+    if (!route) throw new Error('UNSUPPORTED_ROUTE');
+    handlers.navigate(route);
+    return;
+  }
+  // Validate before confirmation so unsupported actions cannot produce an inert dialog.
+  homeCommand(action);
+  if (await handlers.confirm(action)) await handlers.mutate(action);
+}
+
 export function recentClosed(items: XopcTaskResult[]): XopcTask[] {
   return items.map((item: XopcTaskResult): XopcTask => item.task)
     .filter((task: XopcTask): boolean => task.phase === 'closed')

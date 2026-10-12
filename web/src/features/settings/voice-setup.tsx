@@ -1,4 +1,4 @@
-import { voiceSettingsCatalogSchema } from '@xopcai/realtime-protocol/voice';
+import { voiceSettingsCatalogSchema, voiceSupportsMode } from '@xopcai/realtime-protocol/voice';
 import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 import { modelDisplayName } from '@/lib/model-display-name';
@@ -13,25 +13,21 @@ import type { VoiceSettingsMessages } from '@/i18n/messages';
 import { selectTriggerClass } from '@/lib/form-field-width';
 import { useLocaleStore } from '@/stores/locale-store';
 
-import { VoiceApiKeyField, type VoiceApiKeyFieldLabels } from './voice-api-key-field';
 import { fetchRealtimeVoiceStatus, fetchTtsVoices } from './voice-config-api';
 import { VoiceDiagnostics } from './voice-diagnostics';
 import { configureRealtimeService } from './voice-service-setup';
-import type { VoiceSettingsState, SttProviderListEntry } from './voice-settings.types';
+import type { VoiceSettingsState } from './voice-settings.types';
 
 
-export function VoiceSetup({ section, v, form, pending, apiKeyLabels, sttProviders, onChange }: {
+export function VoiceSetup({ section, v, form, pending, onChange }: {
   section: 'service' | 'listening' | 'diagnostics';
   v: VoiceSettingsMessages;
   form: VoiceSettingsState;
   pending: boolean;
-  apiKeyLabels: VoiceApiKeyFieldLabels;
-  sttProviders: SttProviderListEntry[];
   onChange: (form: VoiceSettingsState) => void;
 }) {
   const language = useLocaleStore((state) => state.language);
   const s = v.setup;
-  const [editingKey, setEditingKey] = useState(false);
   const signature = JSON.stringify(form);
   const [verified, setVerified] = useState({ signature, input: false, output: false });
   if (verified.signature !== signature) setVerified({ signature, input: false, output: false });
@@ -52,12 +48,10 @@ export function VoiceSetup({ section, v, form, pending, apiKeyLabels, sttProvide
   );
   const realtimeVoices = voices;
   const omniAlibabaVoices = voices.filter((voice) => ['Cherry', 'Ethan', 'Serena', 'Chelsie'].includes(voice.id));
-  const key = typeof form.stt.providers?.alibaba?.apiKey === 'string' ? form.stt.providers.alibaba.apiKey : '';
-  const keyConfigured = Boolean(key) || sttProviders.some((entry) => entry.id === 'alibaba' && entry.configured);
   const native = realtime.defaultEngine === 'omni';
   const currentVoice = native ? realtime.omni?.voice ?? '' : selection?.voice ?? status?.tts?.voice ?? '';
   const voiceOptions = native ? realtime.omni?.provider === 'xopc-cloud'
-    ? catalog?.models.find(model => model.id === realtime.omni?.model)?.voice.voices ?? []
+    ? catalog?.models.find(model => model.id === realtime.omni?.model)?.voice.voices.filter(voice => voiceSupportsMode(voice, 'conversation')) ?? []
     : omniAlibabaVoices.length ? omniAlibabaVoices : ['Cherry', 'Ethan', 'Serena', 'Chelsie'].map((id) => ({ id, name: id })) : realtimeVoices;
   const canListen = Boolean(status?.enabled && status.stt);
   const canSpeak = Boolean(status?.enabled && status.tts);
@@ -70,41 +64,32 @@ export function VoiceSetup({ section, v, form, pending, apiKeyLabels, sttProvide
   return (
     <section className="space-y-5 rounded-xl bg-surface-hover/20 p-4 sm:p-5" aria-label={s.service}>
       {section === 'service' ? <>
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-surface-base/45 p-3">
-        <label className="flex items-center gap-2 text-xs text-fg-muted"><input type="checkbox" role="switch" aria-checked={realtime.enabled} className="size-4 accent-accent" checked={realtime.enabled} onChange={(e) => { if (e.target.checked) configure(provider === 'alibaba' ? 'alibaba' : 'xopc-cloud'); else updateRealtime({ enabled: false }); }} />{s.enable}</label>
-      </div>
       {error ? <p role="alert" className="text-xs text-red-600 dark:text-red-400">{s.statusError}</p> : null}
       <fieldset className="space-y-3">
         <legend className="text-sm font-medium text-fg">{s.service}</legend>
         <div className="grid gap-3 sm:grid-cols-2">
           {(['xopc-cloud', 'alibaba'] as const).map((id) => <label key={id} className="flex cursor-pointer items-start gap-3 rounded-lg bg-surface-base/55 px-3 py-3 text-sm text-fg has-checked:bg-accent-soft">
-            <input type="radio" name="realtime-service" value={id} checked={provider === id} onChange={() => configure(id)} className="mt-1 accent-accent" />
+            <input type="radio" name="realtime-service" value={id} checked={id === 'xopc-cloud' ? provider === id : provider !== 'xopc-cloud'} onChange={() => configure(id)} className="mt-1 accent-accent" />
             <span><span className="block font-medium">{id === 'xopc-cloud' ? s.hosted : s.ownKey}</span><span className="mt-1 block text-xs text-fg-muted">{id === 'xopc-cloud' ? s.hostedHint : s.ownKeyHint}</span></span>
           </label>)}
         </div>
       </fieldset>
       {provider !== 'alibaba' && provider !== 'xopc-cloud' ? <p className="text-xs text-fg-muted">{s.customProvider.replace('{provider}', provider)}</p> : null}
-      {provider === 'alibaba' ? <div className="space-y-2 text-xs">
-        {keyConfigured && !editingKey ? <div className="flex items-center justify-between gap-2"><span className="text-fg-muted">{s.keyConfigured}</span><Button type="button" variant="ghost" onClick={() => setEditingKey(true)}>{s.changeKey}</Button></div> : <>
-          <label htmlFor="realtime-api-key" className="font-medium text-fg">{v.stt.apiKey}</label>
-          <VoiceApiKeyField kind="stt" providerId="alibaba" fieldId="realtime-api-key" value={key} labels={{ ...apiKeyLabels, maskedHelp: '' }} onChange={(apiKey) => onChange({ ...form, stt: { ...form.stt, providers: { ...form.stt.providers, alibaba: { ...form.stt.providers?.alibaba, apiKey } } } })} />
-          <p className="text-fg-muted">{s.keyHint}</p>
-        </>}
-      </div> : null}
       {provider === 'xopc-cloud' ? <p className="text-xs text-fg-muted">{s.hostedAccountHint} <Link className="text-accent hover:underline" to="/settings/capabilities/models">{s.manageAccount}</Link></p> : null}
       {!selection && !pending && !status?.tts && (provider === 'alibaba' || provider === 'xopc-cloud') ? <div className="rounded-lg bg-surface-base p-3 text-xs">
         <p className="font-medium text-fg">{s.finishSetup}</p>
         <p className="mt-1 text-fg-muted">{form.tts.provider === 'edge' ? s.edgeHint : s.outputHint}</p>
         <Button className="mt-2" type="button" variant="secondary" onClick={() => configure(provider)}>{s.configureConversation}</Button>
       </div> : null}
+      </> : null}
+      {section === 'listening' ? <>
+      <label className="flex items-center justify-between gap-3 text-sm font-medium text-fg"><span>{s.enable}</span><input type="checkbox" role="switch" aria-checked={realtime.enabled} className="ui-checkbox" checked={realtime.enabled} onChange={(e) => updateRealtime({ enabled: e.target.checked })} /></label>
       <label className="block space-y-2 text-sm"><span>{v.experience.defaultMode}</span>
         <Select value={realtime.defaultEngine} className={selectTriggerClass} onChange={(e) => updateRealtime({ defaultEngine: e.target.value as 'agent' | 'omni' })}>
           <SelectOption value="agent">{v.experience.assistant}</SelectOption><SelectOption value="omni">{v.experience.natural}</SelectOption>
         </Select>
       </label>
       <p className="text-xs text-fg-muted">{realtime.defaultEngine === 'agent' ? v.experience.assistantHint : v.experience.naturalHint} {v.experience.nextCall}</p>
-      </> : null}
-      {section === 'listening' ? <>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <label htmlFor="realtime-voice" className="text-sm font-medium text-fg">{s.voice}</label>
         <Select id="realtime-voice" className={`${selectTriggerClass} w-full sm:w-56`} value={currentVoice} disabled={native ? !realtime.omni : !selection && !status?.tts} onChange={(e) => {

@@ -10,6 +10,9 @@ import { isViewingSession, resolveViewConversationId } from '@/features/chat/ses
 import {
   shouldShowHistoryLoading,
   useChatSessionStore,
+  isSessionSliceLive,
+  type SessionSnapshotRequest,
+  findHistoryPageStart,
 } from '@/features/chat/session/chat-session-store';
 import { buildSessionNotFoundErrorPayload } from '@/features/chat/messages/agent-run-error-parser';
 import { openNewChatHandoff } from '@/features/chat/session/new-chat-handoff';
@@ -140,24 +143,21 @@ export function useChatSessionLoad(deps: {
   );
 
   const applyLoadedSessionSnapshot = useCallback(
-    (chatId: string, data: { messages: Message[]; hasMore: boolean; name?: string; nextBeforeCursor?: string }) => {
-      const snap = store().getSessionSnapshot(chatId);
-      if (snap && (snap.streaming || snap.sending || snap.streamingMsg)) {
-        store().mergeCommittedFromServer(chatId, data.messages, data.hasMore);
-        if (data.name !== undefined) {
-          store().patchSessionMeta(chatId, { name: data.name || null });
-        }
-      } else {
-        store().setCommittedSnapshot(chatId, {
-          messages: data.messages,
-          hasMore: data.hasMore,
-          name: data.name,
-        });
+    (chatId: string, data: { messages: Message[]; hasMore: boolean; name?: string; nextBeforeCursor?: string }, request?: SessionSnapshotRequest) => {
+      const snap = store().sessions[chatId];
+      // A request begun during a run may finish after its final message was committed.
+      // Applying that older snapshot would briefly remove the completed turn.
+      if (request && snap?.messages !== request.messages && !isSessionSliceLive(snap)) return false;
+      const retainedPrefix = data.hasMore && findHistoryPageStart(snap?.messages ?? [], data.messages) > 0;
+      store().mergeCommittedFromServer(chatId, data.messages, data.hasMore);
+      if (data.name !== undefined) {
+        store().patchSessionMeta(chatId, { name: data.name || null });
       }
       if (!isStillViewingSession(chatId)) {
-        return;
+        return true;
       }
-      historyBeforeCursorRef.current = data.nextBeforeCursor ?? null;
+      if (!retainedPrefix) historyBeforeCursorRef.current = data.nextBeforeCursor ?? null;
+      return true;
     },
     [isStillViewingSession],
   );
@@ -178,18 +178,20 @@ export function useChatSessionLoad(deps: {
           store().setSessionHistoryStatus(k, 'loading');
         }
         try {
+          const request = { messages: store().sessions[k]?.messages };
           const {
             messages: loaded,
             hasMore: more,
             name,
             nextBeforeCursor,
-          } = await sessionMgrRef.current.loadSession(k, o, cursor, taskId);
+          } = await sessionMgrRef.current.loadSession(k, o, cursor, taskId, request.messages);
           if (initialLoad) {
-            store().setCommittedSnapshot(k, { messages: loaded, hasMore: more, name: name ?? null });
+            if (!applyLoadedSessionSnapshot(k, { messages: loaded, hasMore: more, name, nextBeforeCursor }, request)) {
+              return store().sessions[k]?.messages;
+            }
             if (!isStillViewingSession(k)) {
               return loaded;
             }
-            historyBeforeCursorRef.current = nextBeforeCursor ?? null;
             const cfg = await sessionMgrRef.current.loadSessionAgentConfig(k);
             if (!isStillViewingSession(k)) return loaded;
             patchSessionAgentConfigView(k, cfg);
@@ -271,6 +273,7 @@ export function useChatSessionLoad(deps: {
       resolveAgentIdForPost,
       sessionMgrRef,
       taskId,
+      applyLoadedSessionSnapshot,
     ],
   );
 

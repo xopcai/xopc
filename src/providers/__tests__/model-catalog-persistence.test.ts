@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import { ModelCatalogPersistence } from '../model-catalog-persistence.js';
 import type { CatalogSource } from '../model-catalog-store.js';
+import { voiceFixture } from '../../voice/__tests__/voice-fixture.js';
 
 const tempDirs: string[] = [];
 
@@ -45,6 +46,15 @@ afterEach(() => {
 });
 
 describe('ModelCatalogPersistence', () => {
+  it('retains per-voice modes across a catalog cache round trip', async () => {
+    const { persistence } = createPersistence();
+    const catalog = fixture();
+    const voice = voiceFixture(['speech', 'speech.stream']);
+    voice.voices[0].modes = ['speech'];
+    catalog.models.push({ ...catalog.models[0], id: 'tts', kind: 'tts', voice });
+    await persistence.save(catalog);
+    expect(persistence.loadSync()?.models[1].voice?.voices[0].modes).toEqual(['speech']);
+  });
   it('round-trips a validated snapshot with private permissions', async () => {
     const { persistence, path } = createPersistence();
     await persistence.save(fixture());

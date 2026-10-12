@@ -177,6 +177,55 @@ describe('useChatSessionLoad', () => {
     container.remove();
   });
 
+  it('does not roll back a completed turn when a refresh started during streaming returns late', async () => {
+    const container = document.createElement('div');
+    const root = createRoot(container);
+    const store = useChatSessionStore.getState();
+    const user: Message = { role: 'user', turnId: 'run-1', content: [{ type: 'text', text: 'hello' }], timestamp: 1 };
+    store.setCommittedSnapshot(conversationId, { messages: [user], hasMore: false });
+    store.mutateSessionStreaming(conversationId, message => {
+      message.turnId = 'run-1';
+      message.content.push({ type: 'text', text: 'complete reply' });
+    });
+    let resolveLoad!: (data: { messages: Message[]; hasMore: boolean }) => void;
+    const sessionManager = {
+      loadSession: vi.fn(() => new Promise(resolve => { resolveLoad = resolve; })),
+      loadSessionAgentConfig: vi.fn(),
+    } as unknown as SessionManager;
+    let load!: ReturnType<typeof useChatSessionLoad>;
+    function Harness() {
+      load = useChatSessionLoad({
+        sessionMgrRef: { current: sessionManager },
+        routeConversationIdRef: { current: conversationId },
+        sendingRef: { current: false }, streamingRef: { current: false },
+        loadingSessionRef: { current: false }, messagesLenRef: { current: 1 },
+        thinkingSupportGenRef: { current: 0 }, navigateToSession: vi.fn(),
+        resolveAgentIdForPost: () => 'main', detachForNewConversation: vi.fn(),
+        conversationId, sessionAgentId: 'main', currentProjectId: null, hasMore: false,
+      });
+      return null;
+    }
+    try {
+      act(() => root.render(<Harness />));
+      const request = load.loadSessionById(conversationId);
+      await vi.waitFor(() => expect(sessionManager.loadSession).toHaveBeenCalledOnce());
+      const reply = useChatSessionStore.getState().sessions[conversationId].streamingMsg!;
+      store.finalizeStreamingTurn(conversationId, reply);
+      const committed = useChatSessionStore.getState().sessions[conversationId].messages;
+      resolveLoad({ messages: [user], hasMore: false });
+      await request;
+      expect(useChatSessionStore.getState().sessions[conversationId].messages).toBe(committed);
+      expect(sessionManager.loadSessionAgentConfig).not.toHaveBeenCalled();
+      // Replay-gap reloads use the same fence, including a response arriving after reset.
+      const beforeReset = { messages: committed };
+      store.setCommittedSnapshot(conversationId, { messages: [], hasMore: false });
+      load.applyLoadedSessionSnapshot(conversationId, { messages: committed, hasMore: false }, beforeReset);
+      expect(useChatSessionStore.getState().sessions[conversationId].messages).toEqual([]);
+    } finally {
+      act(() => root.unmount());
+    }
+  });
+
   it('reports a missing routed session explicitly', async () => {
     const container = document.createElement('div');
     document.body.append(container);
@@ -224,6 +273,45 @@ describe('useChatSessionLoad', () => {
 
     act(() => root.unmount());
     container.remove();
+  });
+
+  it('keeps the oldest loaded pagination cursor when refreshing the tail', async () => {
+    const root = createRoot(document.createElement('div'));
+    const row = (timestamp: number): Message => ({ role: 'user', timestamp, turnId: `turn-${timestamp}`, content: [] });
+    const sessionManager = {
+      loadSession: vi.fn()
+        .mockResolvedValueOnce({ messages: [row(30)], hasMore: true, nextBeforeCursor: 'tail-cursor' })
+        .mockResolvedValueOnce({ messages: [row(20)], hasMore: true, nextBeforeCursor: 'older-cursor' })
+        .mockResolvedValueOnce({ messages: [row(30), row(40)], hasMore: true, nextBeforeCursor: 'new-tail-cursor' })
+        .mockResolvedValueOnce({ messages: [row(10)], hasMore: false }),
+      loadSessionAgentConfig: vi.fn(async () => ({
+        model: '', thinkingLevel: 'off', reasoningLevel: 'stream', effectiveWorkspacePath: '',
+        workspaceSource: 'agent_workspace', userContextMode: 'enabled',
+        activityDetail: { default: 'stream', override: null, effective: 'stream', source: 'default' },
+      })),
+    } as unknown as SessionManager;
+    let load!: ReturnType<typeof useChatSessionLoad>;
+    function Harness() {
+      load = useChatSessionLoad({
+        sessionMgrRef: { current: sessionManager }, routeConversationIdRef: { current: conversationId },
+        sendingRef: { current: false }, streamingRef: { current: false }, loadingSessionRef: { current: false },
+        messagesLenRef: { current: 3 }, thinkingSupportGenRef: { current: 0 }, navigateToSession: vi.fn(),
+        resolveAgentIdForPost: () => 'main', detachForNewConversation: vi.fn(),
+        conversationId, sessionAgentId: 'main', currentProjectId: null, hasMore: true,
+      });
+      return null;
+    }
+    try {
+      act(() => root.render(<Harness />));
+      await load.loadSessionById(conversationId);
+      await load.loadSessionById(conversationId, 1, 'tail-cursor');
+      await load.loadSessionById(conversationId);
+      await load.loadMoreMessages();
+      expect(sessionManager.loadSession).toHaveBeenLastCalledWith(conversationId, 3, 'older-cursor', undefined, expect.any(Array));
+      expect(useChatSessionStore.getState().sessions[conversationId].messages.map(message => message.timestamp)).toEqual([10, 20, 30, 40]);
+    } finally {
+      act(() => root.unmount());
+    }
   });
 
   it('applies a workspace override and refreshes the effective workspace', async () => {

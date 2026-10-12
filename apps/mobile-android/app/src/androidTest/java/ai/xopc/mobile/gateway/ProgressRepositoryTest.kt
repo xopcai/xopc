@@ -135,4 +135,28 @@ class ProgressRepositoryTest {
       ProgressRepository.parseProjectSessions(raw.replace("\"messageCount\":4", "\"messageCount\":-1"))
     }
   }
+  @Test fun taskReviewActionsPreserveTheTargetAndTaskDetailsKeepEditableContent() {
+    val home = ProgressRepository.parseHome("""{"needsUser":[{"id":"review","title":"Review","summary":"",
+      "primaryAction":{"type":"task_review","label":"Review result","taskId":"task-1"}}],"background":[]}""")
+    assertEquals("task-1", home.needsUser.single().primaryAction?.reviewTaskId)
+    val title = "T".repeat(300)
+    val body = "Body ".repeat(1000)
+    val raw = org.json.JSONObject().put("ok", true).put("task", org.json.JSONObject()
+      .put("id", "task-1").put("title", title).put("body", body).put("phase", "review")
+      .put("version", 3).put("updatedAt", 4).put("dueAt", 12345))
+      .put("allowedCommands", org.json.JSONArray(listOf("move", "close")))
+      .put("operationalState", "waiting")
+      .put("waits", org.json.JSONArray("""[{"id":"wait","status":"active"}]"""))
+      .put("runs", org.json.JSONArray("""[{"id":"run","status":"running"}]"""))
+      .put("receipts", org.json.JSONArray("""[{"runId":"run","summary":"Result","finalizedAt":9,"remainingWork":["Gap"]}]"""))
+    val task = ProgressRepository.parseTaskDetail("task-1", raw.toString())
+    assertEquals(title, task.title)
+    assertEquals(body, task.body)
+    assertEquals(12345L, task.dueAt)
+    assertEquals("waiting", task.operationalState)
+    assertEquals("Result", task.latestResult)
+    assertEquals(listOf("Gap"), task.remainingWork)
+    assertEquals("execution", task.completionBlock)
+  }
+
 }

@@ -27,6 +27,7 @@ import {
   getChatSessionSnapshot,
   getSessionMessages,
   useChatSessionStore,
+  type SessionSnapshotRequest,
 } from '@/features/chat/session/chat-session-store';
 import {
   clearChatRunPresence,
@@ -85,6 +86,7 @@ export function useChatSessionStreaming(deps: {
   applyLoadedSessionSnapshot: (
     chatId: string,
     data: { messages: Message[]; hasMore: boolean; name?: string },
+    request?: SessionSnapshotRequest,
   ) => void;
   loadSessionById: (key: string, offset?: number) => Promise<Message[] | undefined>;
   resetCurrentSession: () => Promise<void>;
@@ -191,7 +193,7 @@ export function useChatSessionStreaming(deps: {
       let seedMessages = loadedMessages ?? getSessionMessages(chatId);
       let seedHasMore = getChatSessionSnapshot(chatId)?.hasMore ?? false;
       try {
-        const fresh = await sessionMgrRef.current.loadSession(chatId, 0, undefined, taskId);
+        const fresh = await sessionMgrRef.current.loadSession(chatId, 0, undefined, taskId, store().sessions[chatId]?.messages);
         if (resumeSuperseded() || chatRunManager.isTrackingRun(chatId, runId)) return;
         store().mergeCommittedFromServer(chatId, fresh.messages, fresh.hasMore);
         seedMessages = fresh.messages;

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { HomeActionSchema } from '../../../packages/gateway-contract/src/home';
 
 const mocks = vi.hoisted(() => {
   Object.assign(globalThis, { ObservedV2: (value: unknown) => value, Trace: () => undefined });
@@ -6,7 +7,7 @@ const mocks = vi.hoisted(() => {
 });
 vi.mock('../entry/src/main/ets/service/gatewaySession.ets', () => ({ gatewaySession: { request: mocks.request } }));
 vi.mock('../entry/src/main/ets/service/settings.ets', () => ({ appSettings: { effectiveLanguage: () => 'en-US' } }));
-import { homeCommand, mobileRoute, parseHome, recentClosed } from '../entry/src/main/ets/common/homeProtocol.ets';
+import { dispatchHomeAction, homeCommand, mobileRoute, parseHome, recentClosed } from '../entry/src/main/ets/common/homeProtocol.ets';
 import { XopcProgressViewModel } from '../entry/src/main/ets/viewmodel/homeViewModel.ets';
 
 describe('mobile home protocol', () => {
@@ -68,5 +69,60 @@ describe('home loading isolation', () => {
     const model = new XopcProgressViewModel(); await model.act({ type: 'open', label: 'Open' });
     expect(mocks.request).not.toHaveBeenCalled(); expect(model.actionError).toBe('INVALID_HOME_ACTION');
     expect(model.pending).toBe(false);
+  });
+});
+
+describe('progress action dispatch', () => {
+  beforeEach(() => vi.resetAllMocks());
+
+  it('opens the task returned by the review action without confirmation or a mutation request', async () => {
+    const action = HomeActionSchema.parse({ type: 'task_review', label: '查看结果并验收', taskId: 'task-review-1' });
+    const home = parseHome(JSON.stringify({ needsUser: [{ id: 'decision', kind: 'decision', title: 'Review', summary: '',
+      primaryAction: action, openAction: { type: 'open', label: 'Open chat', href: '/chat/different-id' } }], background: [] }));
+    const model = new XopcProgressViewModel();
+    const navigate = vi.fn(); const confirm = vi.fn();
+    await dispatchHomeAction(home.needsUser[0].primaryAction!, {
+      navigate, confirm, mutate: (command) => model.act(command),
+    });
+    expect(navigate).toHaveBeenCalledExactlyOnceWith({ page: 'tasks', itemId: 'task-review-1' });
+    expect(confirm).not.toHaveBeenCalled(); expect(mocks.request).not.toHaveBeenCalled();
+    expect(model.actionError).toBe(''); expect(model.pending).toBe(false);
+  });
+
+  it('rejects missing task identities and unsupported actions before showing a confirmation', async () => {
+    const handlers = { navigate: vi.fn(), confirm: vi.fn(), mutate: vi.fn() };
+    for (const action of [{ type: 'task_review', label: 'Review' }, { type: 'task_review', label: 'Review', taskId: ' ' },
+      { type: 'unknown_action', label: 'Unknown' }]) {
+      await expect(dispatchHomeAction(action, handlers)).rejects.toThrow('INVALID_HOME_ACTION');
+    }
+    expect(handlers.navigate).not.toHaveBeenCalled(); expect(handlers.confirm).not.toHaveBeenCalled();
+    expect(handlers.mutate).not.toHaveBeenCalled();
+  });
+
+  it('navigates ordinary links and rejects external destinations before confirmation', async () => {
+    const handlers = { navigate: vi.fn(), confirm: vi.fn(), mutate: vi.fn() };
+    await dispatchHomeAction({ type: 'open', label: 'Details', href: '/tasks/task%201' }, handlers);
+    expect(handlers.navigate).toHaveBeenCalledExactlyOnceWith({ page: 'tasks', itemId: 'task 1' });
+    await expect(dispatchHomeAction({ type: 'open', label: 'External', href: 'https://example.com' }, handlers))
+      .rejects.toThrow('UNSUPPORTED_ROUTE');
+    expect(handlers.confirm).not.toHaveBeenCalled(); expect(handlers.mutate).not.toHaveBeenCalled();
+  });
+
+  it('keeps write actions behind confirmation and stops when the user cancels', async () => {
+    const action = { type: 'connector_decision', label: 'Approve', approvalId: 'approval', decision: 'approve' };
+    const handlers = { navigate: vi.fn(), confirm: vi.fn().mockResolvedValueOnce(false).mockResolvedValueOnce(true),
+      mutate: vi.fn() };
+    await dispatchHomeAction(action, handlers);
+    expect(handlers.mutate).not.toHaveBeenCalled();
+    await dispatchHomeAction(action, handlers);
+    expect(handlers.mutate).toHaveBeenCalledExactlyOnceWith(action);
+    expect(handlers.navigate).not.toHaveBeenCalled();
+  });
+
+  it('propagates dispatch failures for visible feedback', async () => {
+    const handlers = { navigate: vi.fn(), confirm: vi.fn().mockResolvedValue(true),
+      mutate: vi.fn().mockRejectedValue(new Error('HTTP_403')) };
+    await expect(dispatchHomeAction({ type: 'retry_run', label: 'Retry', subjectKind: 'workflow_run', runId: 'run' }, handlers))
+      .rejects.toThrow('HTTP_403');
   });
 });

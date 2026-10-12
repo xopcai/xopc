@@ -1,5 +1,7 @@
 package ai.xopc.mobile.ui.main
 
+import ai.xopc.mobile.gateway.ProgressTaskEdit
+
 import ai.xopc.mobile.theme.LanguagePreference
 import ai.xopc.mobile.R
 import ai.xopc.mobile.gateway.GatewayProfile
@@ -124,6 +126,9 @@ data class ProgressUiState(
   val editSavedRevision: Int = 0,
   val creatingTaskChat: Boolean = false,
   val createTaskChatError: Boolean = false,
+  val agents: List<ConversationAgent> = emptyList(),
+  val agentsLoading: Boolean = false,
+  val agentsError: Boolean = false,
   val projects: List<ProgressProject> = emptyList(),
   val projectsLoading: Boolean = false,
   val projectsError: Boolean = false,
@@ -474,6 +479,8 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
   private var createTaskSignature = ""
   private var createTaskKey = ""
   private var realtimeJob: Job? = null
+  private var foregroundRecoveryJob: Job? = null
+  private var returnedFromBackground = false
   private var pairingJob: Job? = null
   private var cancelPairingJob: Job? = null
   private var gatewayProbeGeneration = 0
@@ -2168,19 +2175,40 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
     val revision = ++progressDetailRevision
     mutableState.update { state ->
       val current = state.progress.takeIf { it.gatewayId == gatewayId } ?: ProgressUiState(gatewayId = gatewayId)
-      state.copy(progress = current.copy(detailTaskId = id, detailTask = null,
+      state.copy(progress = current.copy(detailTaskId = id, detailTask = current.detailTask.takeIf { current.detailTaskId == id },
         detailLoading = true, detailError = false, commandError = false, editError = false))
     }
     progressDetailJob = viewModelScope.launch {
       try {
         val task = runInterruptible(Dispatchers.IO) { progressRepository.task(id) }
-        if (revision == progressDetailRevision && mutableState.value.profile?.gatewayId == gatewayId) mutableState.update {
-          it.copy(progress = it.progress.copy(detailTask = task, detailLoading = false))
+        if (revision == progressDetailRevision && mutableState.value.profile?.gatewayId == gatewayId) {
+          mutableState.update { it.copy(progress = it.progress.copy(detailTask = task, detailLoading = false)) }
+          if ("start" in task.allowedCommands) loadProgressAgents()
         }
       } catch (error: CancellationException) { throw error }
       catch (_: Exception) {
         if (revision == progressDetailRevision && mutableState.value.profile?.gatewayId == gatewayId) mutableState.update {
           it.copy(progress = it.progress.copy(detailLoading = false, detailError = true))
+        }
+      }
+    }
+  }
+
+  private fun loadProgressAgents() {
+    val current = mutableState.value
+    val gatewayId = current.profile?.gatewayId ?: return
+    if (current.progress.gatewayId != gatewayId || current.progress.agentsLoading) return
+    mutableState.update { it.copy(progress = it.progress.copy(agentsLoading = true, agentsError = false)) }
+    viewModelScope.launch {
+      try {
+        val catalog = runInterruptible(Dispatchers.IO) { conversations.agents() }
+        if (mutableState.value.profile?.gatewayId == gatewayId) mutableState.update {
+          it.copy(progress = it.progress.copy(agents = catalog.agents, agentsLoading = false))
+        }
+      } catch (error: CancellationException) { throw error }
+      catch (_: Exception) {
+        if (mutableState.value.profile?.gatewayId == gatewayId) mutableState.update {
+          it.copy(progress = it.progress.copy(agentsLoading = false, agentsError = true))
         }
       }
     }
@@ -2378,7 +2406,8 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
     val gatewayId = current.profile?.gatewayId ?: return
     val task = current.progress.detailTask ?: return
     if (current.progress.gatewayId != gatewayId || current.progress.detailTaskId != task.id ||
-      current.progress.commandBusy || action !in task.allowedCommands ||
+      current.progress.commandBusy ||
+      (if (action == "cancel_task") "close" else action.substringBefore(':')) !in task.allowedCommands ||
       (action == "start" && agentId.trim().isEmpty())) return
     val revision = ++progressCommandRevision
     val key = UUID.randomUUID().toString()
@@ -2408,7 +2437,7 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
     }
   }
 
-  fun saveProgressTask(id: String, expectedVersion: Int, title: String, body: String, projectId: String) {
+  fun saveProgressTask(id: String, expectedVersion: Int, edit: ProgressTaskEdit) {
     val current = mutableState.value
     val gatewayId = current.profile?.gatewayId ?: return
     val task = current.progress.detailTask
@@ -2421,7 +2450,7 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
     mutableState.update { it.copy(progress = it.progress.copy(editBusy = true, editError = false)) }
     progressEditJob = viewModelScope.launch {
       try {
-        val updated = runInterruptible(Dispatchers.IO) { progressRepository.updateTask(task, title, body, projectId) }
+        val updated = runInterruptible(Dispatchers.IO) { progressRepository.updateTask(task, edit.title, edit.body, edit.projectId, edit.priority, edit.dueAt) }
         if (mutableState.value.profile?.gatewayId == gatewayId) mutableState.update { state ->
           val progress = state.progress
           state.copy(progress = progress.copy(editBusy = false, editSavedRevision = progress.editSavedRevision + 1,
@@ -2440,11 +2469,37 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
     }
   }
 
+  fun onBackground() { returnedFromBackground = true }
+
+  fun onForeground() {
+    if (!returnedFromBackground) return
+    returnedFromBackground = false
+    if (mutableState.value.profile == null || foregroundRecoveryJob?.isActive == true) return
+    foregroundRecoveryJob = viewModelScope.launch {
+      // Retain the run cursor and visible reply while replacing a suspended socket.
+      if (!ai.xopc.mobile.gateway.DevicePersonalTools.hasActiveInvocation()) {
+        realtimeJob?.cancelAndJoin()
+        realtimeJob = null
+      }
+      connectRealtime()
+      mutableState.value.selectedConversationId?.let { id ->
+        refreshSelectedHistory(id)
+        refreshRunState(id)
+      }
+    }
+  }
+
   private fun connectRealtime() {
     if (realtimeJob?.isActive == true) return
     realtimeJob = viewModelScope.launch {
       realtime.run(
-        onState = { status -> mutableState.update { it.copy(realtimeStatus = status) } },
+        onState = { status ->
+          mutableState.update { it.copy(realtimeStatus = status) }
+          if (status == "connected") mutableState.value.selectedConversationId?.let { id ->
+            refreshSelectedHistory(id)
+            refreshRunState(id)
+          }
+        },
         onInvalidation = { topic ->
           if (topic == "sessions") {
             if (searchJob?.isActive != true) loadConversations()
@@ -2476,10 +2531,10 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
     when (event.type) {
       "assistant_delta" -> {
         val delta = event.delta ?: return
+        if (event.messageId != null && current.messages.any { it.id == event.messageId }) return
         val previous = if (current.liveMessageId == event.messageId) current.liveText else ""
         val next = RunStreamEvent.appendDelta(previous, delta, event.offset)
         if (next == null) {
-          mutableState.update { it.copy(liveText = "", liveMessageId = null) }
           refreshSelectedHistory(current.selectedConversationId)
           return
         }
@@ -2536,6 +2591,8 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
       noteSnapshotJob, personalJob, personalListJob, personalDetailJob)
     readers.forEach { it?.cancel() }
     readers.forEach { it?.join() }
+    foregroundRecoveryJob?.cancelAndJoin()
+    foregroundRecoveryJob = null
     realtimeJob?.cancelAndJoin()
     realtimeJob = null
     realtime.watchRun(null)
@@ -3496,7 +3553,10 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
           val latestUser = nextMessages.lastOrNull { it.role == "user" }
           val optimisticConfirmed = state.optimisticText.isNotBlank() && latestUser != null &&
             latestUser.id != state.optimisticPreviousUserId && latestUser.text == state.optimisticText
+          val liveConfirmed = state.liveMessageId != null && nextMessages.any { it.id == state.liveMessageId }
           state.copy(messages = nextMessages, pendingInput = pending,
+            liveText = if (liveConfirmed) "" else state.liveText,
+            liveMessageId = if (liveConfirmed) null else state.liveMessageId,
             optimisticText = if (optimisticConfirmed) "" else state.optimisticText,
             optimisticPreviousUserId = if (optimisticConfirmed) null else state.optimisticPreviousUserId,
             historyTranscriptId = history?.transcriptId ?: state.historyTranscriptId,
@@ -3519,8 +3579,9 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
     runStateJob?.cancel()
     runStateJob = viewModelScope.launch {
       try {
+        val previousRunId = mutableState.value.activeRunId
         val runId = runInterruptible(Dispatchers.IO) { conversations.activeRun(id) }
-        if (mutableState.value.selectedConversationId == id) {
+        if (mutableState.value.selectedConversationId == id && mutableState.value.activeRunId == previousRunId) {
           mutableState.update {
             it.copy(activeRunId = runId, stoppingRun = false, stopError = false,
               runError = if (runId != it.activeRunId) false else it.runError,
@@ -3528,6 +3589,7 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
               liveMessageId = if (runId == it.activeRunId) it.liveMessageId else null)
           }
           realtime.watchRun(runId)
+          if (runId != previousRunId) refreshSelectedHistory(id)
         }
       } catch (error: CancellationException) {
         throw error

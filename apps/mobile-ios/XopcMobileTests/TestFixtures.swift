@@ -51,6 +51,10 @@ struct GatewayStub: GatewayServing {
     var conversationPages: [ConversationPage]?
     var clarification: ClarificationRequest?
     var activeRun: ActiveRun
+    var historyMessages: [WireMessage] = []
+    var historyFails = false
+    var runStream: AsyncThrowingStream<RunStreamEvent, Error>?
+    var runStreamFactory: (@Sendable () -> AsyncThrowingStream<RunStreamEvent, Error>)?
     var sendInputState: InputState
 
     init(
@@ -118,12 +122,13 @@ struct GatewayStub: GatewayServing {
     }
 
     func fetchHistory(conversationID: String) async throws -> ConversationHistory {
-        ConversationHistory(
+        if historyFails { throw URLError(.notConnectedToInternet) }
+        return ConversationHistory(
             session: ConversationDetail(
                 key: conversationID,
                 transcriptId: "transcript",
                 agentId: "main",
-                messages: []
+                messages: historyMessages
             ),
             pagination: HistoryPagination(hasMore: false, nextBeforeCursor: nil)
         )
@@ -188,7 +193,7 @@ struct GatewayStub: GatewayServing {
     func abort(runID _: String) async throws {}
 
     func streamRun(runID _: String) -> AsyncThrowingStream<RunStreamEvent, Error> {
-        AsyncThrowingStream { $0.finish() }
+        runStreamFactory?() ?? runStream ?? AsyncThrowingStream { $0.finish() }
     }
 
     func renameConversation(id _: String, name _: String) async throws {}

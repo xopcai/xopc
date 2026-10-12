@@ -169,9 +169,17 @@ struct HomeAction: Decodable, Identifiable, Sendable {
     let decision: String?
     let subjectKind: String?
     let runId: String?
+    let taskId: String?
+
+    var route: HomeOpenRoute? {
+        if type == "task_review", let taskId, !taskId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return .task(taskId)
+        }
+        return type == "open" ? href.flatMap(HomeOpenRoute.init(href:)) : nil
+    }
 
     var id: String {
-        [type, label, href ?? "", approvalId ?? "", decision ?? "", subjectKind ?? "", runId ?? ""]
+        [type, label, href ?? "", approvalId ?? "", decision ?? "", subjectKind ?? "", runId ?? "", taskId ?? ""]
             .joined(separator: "|")
     }
 
@@ -219,6 +227,7 @@ struct TaskRecord: Decodable, Identifiable, Hashable, Sendable {
     let phase: String
     let resolution: String?
     let priority: String?
+    let dueAt: Int64?
     let projectId: String?
     let delegateAgentId: String?
     let createdAt: Int64
@@ -246,6 +255,12 @@ struct TaskDetailEnvelope: Decodable, Sendable {
     let conversation: TaskConversation?
     let attention: [TaskAttention]?
     let criterionReviews: [TaskCriterionReview]?
+    let waits: [TaskWait]?
+}
+
+struct TaskWait: Decodable, Sendable {
+    let id: String
+    let status: String
 }
 
 struct TaskAttention: Decodable, Sendable {
@@ -268,6 +283,7 @@ struct TaskRun: Decodable, Identifiable, Sendable {
     let startedAt: Int64?
     let completedAt: Int64?
     let contractVersion: Int?
+    let parentRunId: String?
 }
 
 struct TaskReceipt: Decodable, Identifiable, Sendable {
