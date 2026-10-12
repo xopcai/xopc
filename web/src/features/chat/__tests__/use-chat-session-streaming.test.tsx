@@ -4,6 +4,7 @@ import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { chatRunManager } from '@/features/chat/session/chat-run-manager';
 import { defaultSessionMeta } from '@/features/chat/session/chat-session-defaults';
 import { getChatSessionSnapshot, useChatSessionStore } from '@/features/chat/session/chat-session-store';
 import { resolveResumeRunId } from '@/features/chat/session/resolve-resume-run-id';
@@ -40,7 +41,7 @@ describe('useChatSessionStreaming run lookup', () => {
         sessionMgrRef: { current: sessionManager },
         sendMessageRef: { current: async () => {} },
         shouldApplyStreamUpdate: () => true,
-        fq: {} as ChatFollowUpClarifyApi,
+        fq: { dismissClarify: vi.fn(), makeOnClarifyRequest: vi.fn(() => vi.fn()) } as unknown as ChatFollowUpClarifyApi,
         applyLoadedSessionSnapshot: () => {},
         loadSessionById: async () => [],
         resetCurrentSession: async () => {},
@@ -54,7 +55,23 @@ describe('useChatSessionStreaming run lookup', () => {
   afterEach(() => {
     act(() => root.unmount());
     container.remove();
+    vi.restoreAllMocks();
     vi.resetAllMocks();
+  });
+
+  it('shows a rejected thinking configuration instead of a generic network error', async () => {
+    useChatSessionStore.getState().initSessionSnapshot(conversationId, {
+      ...defaultSessionMeta(), historyStatus: 'ready', hasMore: false,
+      messages: [], streamingMsg: null, progress: null, taskPlan: null, sending: false, streaming: false,
+    });
+    const sender = { send: vi.fn().mockRejectedValue(new Error('This agent uses thinking off')) };
+    vi.spyOn(chatRunManager, 'senderFor').mockReturnValue(sender as unknown as ReturnType<typeof chatRunManager.senderFor>);
+
+    await act(async () => { await streaming.sendMessage('hello'); });
+
+    expect(sender.send).toHaveBeenCalledOnce();
+    expect(useChatSessionStore.getState().shellError).toBe('This agent uses thinking off');
+    expect(getChatSessionSnapshot(conversationId)?.messages.at(-1)?.deliveryStatus).toBe('failed');
   });
 
   it('keeps an accepted input placeholder while the gateway has not assigned a run', async () => {
