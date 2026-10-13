@@ -584,6 +584,9 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
       effectiveSystemPrompt = getCurrentSystemPrompt(effectiveContext.messages);
       effectiveTools = getCurrentTools(effectiveContext.messages);
 
+      const modelRequestStop = params.turnPolicy?.beforeModelRequest?.(options?.signal ?? runAbortSignal);
+      if (modelRequestStop) return createContextErrorStream(streamModel, modelRequestStop);
+
       const promptCacheSnapshot = buildPromptCacheSnapshot({
         model: streamModel,
         systemPrompt: effectiveSystemPrompt,
@@ -706,6 +709,11 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
       }
       policyStopped ||= params.turnPolicy?.shouldStopAfterTurn(context) ?? false;
       if (policyStopped || connectionStopped || clarificationStopped) return { action: 'end' };
+      const continuation = params.turnPolicy?.takeContinuationMessage?.();
+      if (continuation) {
+        session.agent.steer({ role: 'user', content: continuation, timestamp: Date.now() });
+        return { action: 'continue' };
+      }
       if (baseDecision && baseDecision.action === 'continue') return { action: 'continue' };
       return undefined;
     };
