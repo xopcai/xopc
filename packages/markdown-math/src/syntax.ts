@@ -26,6 +26,7 @@ export function readInlineMathAt(source: string, offset = 0): MathSource | undef
   if (!paren && (source[offset] !== '$' || source[offset + 1] === '$' || source[offset - 1] === '$')) return;
   const width = paren ? 2 : 1;
   const start = offset + width;
+  if (paren && /^xopc:\/\//i.test(source.slice(start))) return;
   if (!paren && (!source[start] || /\s/.test(source[start]))) return;
   const close = closingOffset(source, start, paren ? '\\)' : '$', true);
   if (close === -1) {
