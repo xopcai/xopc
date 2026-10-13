@@ -1,4 +1,4 @@
-import DOMPurify from 'dompurify';
+import { sanitizeMarkdownHtml, sanitizeMermaidHtml } from './markdown-sanitize';
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 import { decorateAppLinks } from '@/lib/app-link';
@@ -17,6 +17,7 @@ import {
 } from './internal-links';
 import { createMermaidSnapshot, downloadMermaidPng } from './mermaid-export';
 import { renderMermaidSvg } from './mermaid-render';
+import { isMermaidSource } from './mermaid-source';
 import {
   MermaidPreviewDialog,
   type MermaidPreviewLabels,
@@ -36,49 +37,6 @@ const ICON_DOWNLOAD_SVG =
 
 const ICON_MAXIMIZE_SVG =
   '<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" x2="14" y1="3" y2="10"/><line x1="3" x2="10" y1="21" y2="14"/></svg>';
-
-const FORBIDDEN_MARKDOWN_TAGS = [
-  'base',
-  'button',
-  'embed',
-  'form',
-  'iframe',
-  'input',
-  'link',
-  'meta',
-  'object',
-  'option',
-  'select',
-  'style',
-  'template',
-  'textarea',
-];
-
-const FORBIDDEN_MARKDOWN_ATTRIBUTES = [
-  'action',
-  'formaction',
-  'id',
-  'name',
-  'srcdoc',
-  'style',
-];
-
-function sanitizeMarkdownHtml(html: string): string {
-  return DOMPurify.sanitize(html, {
-    USE_PROFILES: { html: true },
-    FORBID_TAGS: FORBIDDEN_MARKDOWN_TAGS,
-    FORBID_ATTR: FORBIDDEN_MARKDOWN_ATTRIBUTES,
-  });
-}
-
-function sanitizeMermaidHtml(html: string): string {
-  const withoutRemoteImports = html.replace(/@import\s+url\([^)]*\)\s*;?/gi, '');
-  return DOMPurify.sanitize(withoutRemoteImports, {
-    USE_PROFILES: { html: true, svg: true, svgFilters: true },
-    FORBID_TAGS: ['foreignObject', 'script'],
-    FORBID_ATTR: ['href', 'xlink:href'],
-  });
-}
 
 function getCodeTextFromPre(pre: HTMLPreElement): string {
   return pre.querySelector('code')?.textContent ?? pre.textContent ?? '';
@@ -188,14 +146,11 @@ function mountMarkdownCodeBlocks(root: HTMLElement, labels: { copy: string; copi
   };
 }
 
-const MERMAID_SOURCE_HEADER_RE = /^(?:(?:flowchart|graph)\s+(?:TD|TB|LR|BT|RL)\b|stateDiagram(?:-v2)?\b|sequenceDiagram\b|classDiagram\b|erDiagram\b|xychart(?:-beta)?\b)/i;
-
 function isMermaidCodeBlock(code: HTMLElement): boolean {
   if (code.classList.contains('language-mermaid')) return true;
   if (Array.from(code.classList).some((className) => className.startsWith('language-'))) return false;
 
-  const firstLine = (code.textContent ?? '').trimStart().split(/[\r\n;]/, 1)[0]?.trim() ?? '';
-  return MERMAID_SOURCE_HEADER_RE.test(firstLine);
+  return isMermaidSource(code.textContent ?? '');
 }
 
 function findMermaidCodeBlocks(root: HTMLElement): HTMLElement[] {

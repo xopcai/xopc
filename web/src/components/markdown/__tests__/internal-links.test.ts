@@ -108,4 +108,11 @@ describe('markdown internal links', () => {
     expect(root.querySelector('a[href="docs/existing.md"]')?.textContent).toBe('docs/existing.md');
   });
 
+  it('matches the entire JSX/TSX extension before validating a mention boundary', () => {
+    expect(findWorkspaceRelativeFileMentions('src/app.tsx:12 ui/view.jsx#L3')).toEqual([
+      {path: 'src/app.tsx', line: 12, kind: 'workspace-relative'},
+      {path: 'ui/view.jsx', line: 3, kind: 'workspace-relative'},
+    ]);
+  });
+
 });

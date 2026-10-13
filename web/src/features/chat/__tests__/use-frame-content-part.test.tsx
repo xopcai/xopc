@@ -5,7 +5,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { defaultSessionMeta } from '../session/chat-session-defaults';
 import { useChatSessionStore } from '../session/chat-session-store';
-import { useFrameChatSession } from '../session/use-frame-chat-session';
+import { useChatContentPart } from '../rendering/use-chat-render-state';
+import { knownPartRenderKey } from '../rendering/part-identity';
 import { appendTextDelta } from '../messages/streaming';
 
 const store = () => useChatSessionStore.getState();
@@ -28,9 +29,10 @@ describe('frame-coalesced chat presentation', () => {
     callbacks.forEach((callback) => callback(0));
   });
   function Harness({ id = 'first' }: { id?: string }) {
-    const session = useFrameChatSession(id);
+    const session = store().sessions[id];
+    const raw = session?.streamingMsg?.content[0] ?? session?.messages.at(-1)?.content[0];
+    const block = useChatContentPart(id, raw ? knownPartRenderKey(raw) : undefined);
     renders++;
-    const block = session?.streamingMsg?.content[0] ?? session?.messages.at(-1)?.content[0];
     return <div>{block?.type === 'text' ? block.text : ''}</div>;
   }
   beforeEach(() => {

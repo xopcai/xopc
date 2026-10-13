@@ -1,5 +1,5 @@
 const KNOWN_FILE_EXT =
-  'png|jpe?g|gif|webp|bmp|svg|pdf|docx?|xlsx?|pptx?|csv|tsv|txt|md|json|html?|css|mjs?|cjs|js|ts|tsx|jsx|yaml|yml|toml|xml|zip|mp3|wav|ogg|m4a|mp4|mov|webm';
+  'png|jpe?g|gif|webp|bmp|svg|pdf|docx?|xlsx?|pptx?|csv|tsv|txt|md|json|html?|css|mjs?|cjs|jsx|js|tsx|ts|yaml|yml|toml|xml|zip|mp3|wav|ogg|m4a|mp4|mov|webm';
 
 const FILE_NAME_CHARS = String.raw`[\p{L}\p{N}_.()（）【】-]`;
 
@@ -174,14 +174,14 @@ function normalizeAbsoluteFilePath(raw: string): WorkspaceFileLinkTarget | null 
   };
 }
 
-type FileMentionMatch = {
+export type FileMentionMatch = {
   raw: string;
   start: number;
   end: number;
   target: WorkspaceFileLinkTarget;
 };
 
-function collectFileMentionMatches(text: string): FileMentionMatch[] {
+export function collectFileMentionMatches(text: string): FileMentionMatch[] {
   const candidates: FileMentionMatch[] = [];
   const patterns = [UNIX_ABSOLUTE_FILE_RE, WIN_ABSOLUTE_FILE_RE, WORKSPACE_RELATIVE_FILE_RE, BARE_FILE_RE];
 

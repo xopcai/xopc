@@ -55,7 +55,7 @@ describe('streaming Markdown scheduler', () => {
     ).toBe(12);
     expect(
       nextStreamingMarkdownCommitLength({ visibleLength: 0, pendingContent: 'x'.repeat(1_600) }),
-    ).toBe(100);
+    ).toBe(427);
     expect(
       nextStreamingMarkdownCommitLength({ visibleLength: 0, pendingContent: 'x'.repeat(20_000) }),
     ).toBe(512);

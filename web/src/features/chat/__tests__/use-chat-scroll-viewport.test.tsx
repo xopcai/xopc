@@ -418,4 +418,20 @@ describe('useChatScrollViewport', () => {
     expect(viewport?.atBottom).toBe(false);
   });
 
+  it('pauses tail following before a virtual search jump changes measured height', () => {
+    act(() => root.render(<Harness />));
+    const el = container.firstElementChild as HTMLDivElement;
+    let height = 1000;
+    Object.defineProperties(el, { clientHeight: { value: 400 }, scrollHeight: { get: () => height } });
+    el.scrollTop = 600;
+    act(() => viewport?.scrollToBottom(false));
+    act(() => el.dispatchEvent(new Event('chat-scroll-reading')));
+    height = 1200;
+    el.scrollTop = 120;
+    act(() => el.dispatchEvent(new Event('scroll', { bubbles: true })));
+    act(() => resizeCallback?.([], resizeObserver!));
+    expect(el.scrollTop).toBe(120);
+    expect(viewport?.atBottom).toBe(false);
+  });
+
 });
