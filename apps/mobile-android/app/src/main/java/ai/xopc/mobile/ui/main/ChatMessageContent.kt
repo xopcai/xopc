@@ -45,6 +45,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -88,12 +91,21 @@ internal fun ChatMessageCard(message: ConversationMessage, onMore: () -> Unit,
   savingNote: Boolean = false,
   onReadAloud: (() -> Unit)? = null,
   readAloudPhase: String = "idle",
-  loadMedia: (suspend (ConversationMedia) -> ByteArray)? = null) {
+  loadMedia: (suspend (ConversationMedia) -> ByteArray)? = null, streaming: Boolean = false,
+  onReading: () -> Unit = {}) {
+  val pauseFollowing by rememberUpdatedState(onReading)
   val isUser = message.role == "user"
   val showPreview = previewEligible && messageNeedsPreview(message.role, message.text)
   val voiceOnly = isUser && message.text.isBlank() && message.references.isEmpty() &&
     message.media.size == 1 && mediaPreviewKind(message.media.first()) == "audio"
-  BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+  BoxWithConstraints(modifier = Modifier.fillMaxWidth().pointerInput(Unit) {
+    awaitPointerEventScope {
+      while (true) {
+        val event = awaitPointerEvent(PointerEventPass.Initial)
+        if (event.changes.any { it.pressed && !it.previousPressed }) pauseFollowing()
+      }
+    }
+  }) {
     val maxBubbleWidth = if (isUser) maxWidth * 0.9f else maxWidth
     val contentCount = message.media.size + message.references.size + message.targets.size +
       message.outcome?.artifacts.orEmpty().size
@@ -106,7 +118,7 @@ internal fun ChatMessageCard(message: ConversationMessage, onMore: () -> Unit,
       contentCount == 1 -> 220.dp
       else -> 44.dp
     } else 64.dp
-    val longestLine = message.text.lineSequence().maxOfOrNull { line ->
+    val longestLine = if (wideAssistant) 0.0 else message.text.lineSequence().maxOfOrNull { line ->
       line.sumOf { if (it.code > 255) 16.0 else 8.8 }
     } ?: 0.0
     val estimatedWidth = (longestLine + 30).dp.coerceIn(minimumWidth, 360.dp)
@@ -150,7 +162,7 @@ internal fun ChatMessageCard(message: ConversationMessage, onMore: () -> Unit,
         } else if (showPreview) MessageTextPreview(message.id, message.text,
           messagePreviewLineLimit(message.role), onViewMore)
         else MarkdownContent(message.text, modifier = Modifier.fillMaxWidth(),
-          onOpenLink = onOpenLink, onCopyCode = onCopy)
+          onOpenLink = onOpenLink, onCopyCode = onCopy, streaming = streaming)
       }
       if (isUser) MessageReferences(message.references, onOpenTarget)
       if (message.media.isNotEmpty()) MessageMedia(message.id, message.media, isUser,
@@ -315,7 +327,11 @@ private fun MessageImageThumbnail(item: ConversationMedia, size: Int,
     else runCatching { load(item) }
   }
   val payload = result?.getOrNull()
-  val bitmap = remember(payload) { payload?.let { BitmapFactory.decodeByteArray(it, 0, it.size) } }
+  val bitmapState = produceState<android.graphics.Bitmap?>(null, payload, size) {
+    value = null
+    value = payload?.let { bytes -> withContext(Dispatchers.Default) { decodeChatThumbnail(bytes, size * 3) } }
+  }
+  val bitmap = bitmapState.value
   Card(onClick = onOpen, modifier = Modifier.size(size.dp).testTag("message-image-${item.id}"),
     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)) {
     if (bitmap != null) androidx.compose.foundation.Image(bitmap.asImageBitmap(), item.name,
@@ -415,10 +431,15 @@ internal fun MessageMediaPreview(request: MessagePreviewRequest,
       FilePreviewContent(activeMedia.name, activeMedia.mimeType, payload,
         modifier = Modifier.fillMaxWidth().heightIn(max = 480.dp))
     } else if (mediaPreviewKind(activeMedia) == "image") {
-      val bitmap = BitmapFactory.decodeByteArray(payload, 0, payload.size)
+      val bitmapState = produceState<Result<android.graphics.Bitmap>?>(null, payload) {
+        value = null
+        value = withContext(Dispatchers.Default) { runCatching { requireNotNull(decodeChatThumbnail(payload, 1600)) } }
+      }
+      val bitmap = bitmapState.value?.getOrNull()
       if (bitmap != null) androidx.compose.foundation.Image(bitmap.asImageBitmap(), activeMedia.name,
         modifier = Modifier.fillMaxWidth().heightIn(max = 480.dp).clip(RoundedCornerShape(12.dp))
           .testTag("message-media-preview-image"), contentScale = ContentScale.Fit)
+      else if (bitmapState.value == null) BrandLoadingPanel(modifier = Modifier.testTag("message-image-decoding"))
       else Text(stringResource(R.string.message_preview_unavailable))
       if (gallery.size > 1) Row(modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
@@ -572,4 +593,13 @@ private fun mediaExtension(name: String): String = name.substringAfterLast('.', 
 private fun formatDuration(milliseconds: Int): String {
   val seconds = (milliseconds.coerceAtLeast(0) / 1000)
   return "%d:%02d".format(seconds / 60, seconds % 60)
+}
+
+internal fun decodeChatThumbnail(bytes: ByteArray, maxPixel: Int): android.graphics.Bitmap? {
+  val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+  BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+  if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
+  var sample = 1
+  while (maxOf(bounds.outWidth, bounds.outHeight) / sample > maxPixel.coerceAtLeast(1) * 2) sample *= 2
+  return BitmapFactory.decodeByteArray(bytes, 0, bytes.size, BitmapFactory.Options().apply { inSampleSize = sample })
 }

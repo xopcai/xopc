@@ -1,11 +1,12 @@
 import { XopcChatRepository } from '../repository/chatRepository';
 import { realtimeClient } from '../service/realtimeClient';
-import { XopcChatRow, XopcSessionItem, XopcStreamEvent, XopcChatAttachment, XopcContextRef, XopcQueueState, XopcHistoryMedia, XopcMessage, XopcHistory } from '../model/chat';
+import { XopcChatRow, XopcSessionItem, XopcStreamEvent, XopcChatAttachment, XopcContextRef, XopcQueueState, XopcHistoryMedia, XopcMessage, XopcHistory, XopcStreamPayload } from '../model/chat';
 import { dedupeChatHistory, chatHistoryOverlap } from '../common/chatHistory';
 import { XopcEvent } from '../model/realtime';
 import { historyRows } from '../common/chatProtocol';
 import { mergeAssistantRows, chatAttachments, refreshChatRow } from '../common/chatRichContent';
 import { reduceChatStream } from '../common/chatStream';
+import { XopcChatStreamBuffer } from '../common/chatStreamBuffer';
 import { reduceChatSnapshotActivity } from '../common/chatLiveActivity';
 import { XopcInputAttachment } from '../model/sessionCommand';
 
@@ -60,6 +61,8 @@ export class XopcChatViewModel {
   private search: string = '';
   private snapshotMode: boolean = false;
   private refreshTimer: number = -1;
+  private streamTimer: number = -1;
+  private streamBuffer: XopcChatStreamBuffer = new XopcChatStreamBuffer();
   private main: boolean = false;
   private disposed: boolean = false;
   private listRequest: number = 0;
@@ -94,6 +97,7 @@ export class XopcChatViewModel {
   }
 
   deactivate(): void {
+    this.flushStream();
     clearTimeout(this.refreshTimer); this.refreshTimer = -1;
     if (XopcChatViewModel.owner !== this) return;
     if (this.runId) realtimeClient.unsubscribe('run:' + this.runId);
@@ -113,7 +117,7 @@ export class XopcChatViewModel {
     if (owned && this.selectedId && !this.loading) this.recover();
   }
 
-  pause(): void { clearTimeout(this.refreshTimer); this.refreshTimer = -1; }
+  pause(): void { this.flushStream(); clearTimeout(this.refreshTimer); this.refreshTimer = -1; }
 
   private async restoreMain(): Promise<void> {
     this.loading = true;
@@ -158,6 +162,7 @@ export class XopcChatViewModel {
   }
 
   async open(id: string): Promise<void> {
+    this.flushStream();
     if (this.sending || this.disposed || !id) return;
     this.prefetchKey = ''; this.prefetchedHistory = undefined;
     if (this.runId && XopcChatViewModel.owner === this) realtimeClient.unsubscribe('run:' + this.runId);
@@ -229,6 +234,7 @@ export class XopcChatViewModel {
   }
 
   private async recover(propagateMissing: boolean = false, gap: boolean = false): Promise<void> {
+    this.flushStream();
     const id = this.selectedId; const selection = this.selection;
     if (!id) return;
     const request = ++this.recoveryRequest;
@@ -292,6 +298,7 @@ export class XopcChatViewModel {
       if (selection !== this.selection || request !== this.historyRequest) return;
       const result = prepared || await this.repository.history(this.selectedId, before, older ? this.transcriptId ?? '' : '');
       if (selection !== this.selection || request !== this.historyRequest) return;
+      this.flushStream();
       // Validate before touching retained pages or their cursor.
       historyRows(result, before || 'latest');
       if (result.session.key !== this.selectedId) throw new Error('INVALID_HISTORY_SESSION');
@@ -375,6 +382,10 @@ export class XopcChatViewModel {
   }
 
   private trackRun(id: string): void {
+    if (this.runId !== id) {
+      if (!id) this.flushStream();
+      else { clearTimeout(this.streamTimer); this.streamTimer = -1; this.streamBuffer.drain(); }
+    }
     if (this.runId && this.runId !== id && XopcChatViewModel.owner === this) realtimeClient.unsubscribe('run:' + this.runId);
     if (this.runId !== id) { this.runStartedAtMs = id ? Date.now() : 0; this.liveActivityRow = undefined; }
     this.runId = id;
@@ -510,6 +521,16 @@ export class XopcChatViewModel {
     finally { this.sending = false; }
   }
 
+  private flushStream(): void {
+    clearTimeout(this.streamTimer); this.streamTimer = -1;
+    const batch = this.streamBuffer.drain();
+    if (!this.runId || this.disposed || !batch.length) return;
+    let row = this.liveRow;
+    batch.forEach((payload: XopcStreamPayload): void => { row = reduceChatStream(row, 'assistant_delta', payload, this.runId); });
+    this.liveRow = row;
+    this.streaming = row?.text || ''; this.thinking = row?.thinking || '';
+  }
+
   private event(event: XopcEvent): void {
     if (event.topic === 'gateway' || event.topic === 'sessions') {
       const state = event.data as XopcStreamEvent;
@@ -528,6 +549,7 @@ export class XopcChatViewModel {
     const data = event.data as XopcStreamEvent;
     if (data.conversationId !== this.selectedId || !data.payload) return;
     const payload = data.payload;
+    if (event.event !== 'assistant_delta') this.flushStream();
     if (event.event === 'user_message') {
       if (this.liveRow?.text) this.recover();
       return;
@@ -550,9 +572,16 @@ export class XopcChatViewModel {
     } else {
       if (payload.messageId && this.rows.some((row: XopcChatRow): boolean =>
         (row.sourceIds || [row.id]).includes(payload.messageId || ''))) return;
-      if (event.event === 'assistant_delta' && payload.offset !== undefined) {
-        const length = this.liveRow?.blocks?.find((block): boolean => block.segmentId === (payload.messageId || this.runId))?.text.length || 0;
-        if (payload.offset > length) { this.recover(false, true); return; }
+      if (event.event === 'assistant_delta') {
+        const segment = payload.messageId || this.runId;
+        const displayed = this.liveRow?.blocks?.find((block): boolean => block.segmentId === segment)?.text || '';
+        const result = this.streamBuffer.append(segment, displayed, payload);
+        if (result === 'gap') this.recover(false, true);
+        else if (result === 'accepted' && !this.liveRow?.text) this.flushStream();
+        else if (result === 'accepted' && this.streamTimer === -1) {
+          this.streamTimer = setTimeout((): void => { this.flushStream(); }, 32);
+        }
+        return;
       }
       this.liveRow = reduceChatStream(this.liveRow, event.event, payload, this.runId);
       this.streaming = this.liveRow.text; this.thinking = this.liveRow.thinking || '';

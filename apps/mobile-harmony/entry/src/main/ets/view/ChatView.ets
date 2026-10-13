@@ -1,3 +1,4 @@
+import { XopcChatRenderKeys } from '../common/chatRenderKeys';
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { userErrorMessage } from '../common/userError';
 import { quickChatIntake, XopcQuickChatIntake } from '../service/quickChatIntake';
@@ -222,6 +223,7 @@ export struct XopcChatView {
   private composerFocusAttempts: number = 0;
   private composerFocusTimer: number = -1;
   private appliedActionRevision: number = 0;
+  private renderKeys: XopcChatRenderKeys = new XopcChatRenderKeys();
   private messagesScroller: Scroller = new Scroller();
   private scrollTimer: number = -1;
   private layoutScrollAnimating: boolean = false;
@@ -346,11 +348,13 @@ export struct XopcChatView {
 
   @Monitor('chat.rows', 'chat.liveRow', 'chat.liveActivityRow', 'chat.streaming', 'chat.thinking', 'chat.tool', 'chat.loading')
   onMessageChange(): void {
+    this.renderKeys.update(this.chat.selectedId, this.chat.rows, this.chat.liveRow);
     this.updateReplySpace();
     if (this.layoutScrollAnimating || !this.visible || (!this.atBottom && !this.initialScrollPending) || this.loadingOlder || (this.chat.loading && !this.chat.cachedHistory)) return;
-    clearTimeout(this.scrollTimer);
+    if (this.scrollTimer !== -1) return;
     const conversationId = this.chat.selectedId;
     this.scrollTimer = setTimeout((): void => {
+      this.scrollTimer = -1;
       if (this.visible && conversationId === this.chat.selectedId && (this.atBottom || this.initialScrollPending) && !this.loadingOlder) {
         if (this.initialScrollPending) {
           // Virtual rows above the viewport need an explicit index before edge alignment is reliable.
@@ -364,7 +368,7 @@ export struct XopcChatView {
     }, 50);
   }
   private resetMessagePosition(): void {
-    clearTimeout(this.scrollTimer); this.layoutScrollAnimating = false; this.messageScrollFromUser = false;
+    clearTimeout(this.scrollTimer); this.scrollTimer = -1; this.layoutScrollAnimating = false; this.messageScrollFromUser = false;
     this.initialScrollPending = true; this.initialScrollAttempts = 0;
     this.atBottom = true; this.showJumpBottom = false;
     // A pending prepend may still update rows, but must not restore an obsolete reading anchor.
@@ -375,9 +379,10 @@ export struct XopcChatView {
     this.updateReplySpace();
     if (!this.visible || !this.atBottom || this.loadingOlder || this.chat.loading) return;
     if (this.initialScrollPending || this.layout.reduceMotion) { this.onMessageChange(); return; }
-    clearTimeout(this.scrollTimer);
+    clearTimeout(this.scrollTimer); this.scrollTimer = -1;
     this.layoutScrollAnimating = true;
     this.scrollTimer = setTimeout((): void => {
+      this.scrollTimer = -1;
       if (!this.visible || !this.atBottom || this.loadingOlder) { this.layoutScrollAnimating = false; return; }
       const last = this.presentationRows.length + (this.chat.hasOlder ? 1 : 0);
       if (last < 0 || this.messagesScroller.isAtEnd()) { this.layoutScrollAnimating = false; return; }
@@ -420,7 +425,7 @@ export struct XopcChatView {
   }
   private onMessageScroll(offset: number, state: ScrollState): void {
     if (this.messageScrollFromUser && offset < 0) {
-      clearTimeout(this.scrollTimer); this.initialScrollPending = false;
+      clearTimeout(this.scrollTimer); this.scrollTimer = -1; this.initialScrollPending = false;
     }
     if (!this.messageScrollFromUser || this.layoutScrollAnimating
       || this.loadingOlder || (this.chat.loading && !this.chat.cachedHistory) || state === ScrollState.Idle) return;
@@ -814,7 +819,7 @@ export struct XopcChatView {
   onActivityChange(): void {
     this.visible = this.activePage;
     if (!this.activePage) this.clearSendFlight();
-    if (!this.activePage) { clearTimeout(this.scrollTimer); this.layoutScrollAnimating = false; }
+    if (!this.activePage) { clearTimeout(this.scrollTimer); this.scrollTimer = -1; this.layoutScrollAnimating = false; }
     if (!this.activePage) { clearTimeout(this.composerFocusTimer); this.focusComposerOnMount = false; this.saveDraft(); this.palette.close(); this.voiceHeld = false; this.voiceDestination = 'send'; this.voice.cancel(); this.reader.leaveForeground(); this.setPanel(false); this.sheetOpen = false; this.options.pause(); this.prompt.pause(); this.connectionWait.pause(); this.chat.deactivate(); }
     else { this.bindBack(); this.chat.activate(); this.onHistoryReady(); this.onMessageChange(); this.options.resume(); this.prompt.resume(); if (this.layout.foreground) this.connectionWait.onReturn(); }
   }
@@ -849,7 +854,7 @@ export struct XopcChatView {
     this.setPanel(true);
     this.chooseAction(this.requestedAction);
   }
-  aboutToDisappear(): void { this.clearSendFlight(); this.closeExecutionDetail(); this.visible = false; this.disposed = true; clearTimeout(this.composerFocusTimer); clearTimeout(this.intakeTimer); clearTimeout(this.scrollTimer); clearTimeout(this.draftTimer); this.saveDraft(); this.draftGeneration++; this.palette.dispose(); this.setPanel(false); this.prompt.dispose(); this.connectionWait.dispose(); this.context.dispose(); this.options.dispose(); this.chat.dispose(); this.voiceHeld = false; this.voiceDestination = 'send'; this.voice.cancel(); this.reader.leaveForeground(); this.attachments = []; }
+  aboutToDisappear(): void { this.clearSendFlight(); this.closeExecutionDetail(); this.visible = false; this.disposed = true; clearTimeout(this.composerFocusTimer); clearTimeout(this.intakeTimer); clearTimeout(this.scrollTimer); this.scrollTimer = -1; clearTimeout(this.draftTimer); this.saveDraft(); this.draftGeneration++; this.palette.dispose(); this.setPanel(false); this.prompt.dispose(); this.connectionWait.dispose(); this.context.dispose(); this.options.dispose(); this.chat.dispose(); this.voiceHeld = false; this.voiceDestination = 'send'; this.voice.cancel(); this.reader.leaveForeground(); this.attachments = []; }
 
   private async newConversation(agentId: string = this.options.agentId, projectId: string | null = this.chat.projectId || null, executionMode?: string): Promise<void> {
     if (this.chat.loading || this.chat.sending || this.restoringDraft) return;
@@ -1300,7 +1305,7 @@ export struct XopcChatView {
                     .onClick((): void => { this.retryMessage(item.item.id); })
                 }
                 Column() {
-                  XopcChatMessageContent({ row: item.item, conversationId: this.chat.selectedId, disclosure: this.disclosure,
+                  XopcChatMessageContent({ row: item.item, onReading: (): void => { this.atBottom = false; this.initialScrollPending = false; clearTimeout(this.scrollTimer); this.scrollTimer = -1; }, animateStreaming: item.item.live === true && this.atBottom && this.activePage && this.layout.foreground && !this.layout.reduceMotion, conversationId: this.chat.selectedId, disclosure: this.disclosure,
                     previewEligible: item.item.id !== this.latestMessageId,
                     onShowMore: (row: XopcChatRow): void => { this.openMessageDetail(row); },
                     reasoning: this.context.config?.reasoningLevel || 'on', onNavigate: this.onNavigate,
@@ -1320,7 +1325,7 @@ export struct XopcChatView {
           } else if (item.item.role === 'assistant') {
             Column({ space: 2 }) {
               Column() {
-                XopcChatMessageContent({ row: item.item, conversationId: this.chat.selectedId, disclosure: this.disclosure,
+                XopcChatMessageContent({ row: item.item, onReading: (): void => { this.atBottom = false; this.initialScrollPending = false; clearTimeout(this.scrollTimer); this.scrollTimer = -1; }, animateStreaming: item.item.live === true && this.atBottom && this.activePage && this.layout.foreground && !this.layout.reduceMotion, conversationId: this.chat.selectedId, disclosure: this.disclosure,
                   previewEligible: item.item.id !== this.latestMessageId,
                   onShowMore: (row: XopcChatRow): void => { this.openMessageDetail(row); },
                   onShowExecution: (row: XopcChatRow): void => { this.openExecutionDetail(row); },
@@ -1338,7 +1343,7 @@ export struct XopcChatView {
             }.width('100%').alignItems(HorizontalAlign.Start)
           } else {
             Column({ space: 2 }) {
-              XopcChatMessageContent({ row: item.item, conversationId: this.chat.selectedId, disclosure: this.disclosure,
+              XopcChatMessageContent({ row: item.item, onReading: (): void => { this.atBottom = false; this.initialScrollPending = false; clearTimeout(this.scrollTimer); this.scrollTimer = -1; }, animateStreaming: item.item.live === true && this.atBottom && this.activePage && this.layout.foreground && !this.layout.reduceMotion, conversationId: this.chat.selectedId, disclosure: this.disclosure,
                 reasoning: this.context.config?.reasoningLevel || 'on', onNavigate: this.onNavigate,
                 onFillDraft: (text: string): void => { this.fillProductDraft(text); } })
             }.width('100%').alignItems(HorizontalAlign.Start)
@@ -1346,7 +1351,7 @@ export struct XopcChatView {
         }.onAreaChange((_previous: Area, current: Area): void => {
           this.recordReplyRowHeight(item.item.id, Number(current.height));
         })
-      }).key((row: XopcChatRow): string => this.chat.selectedId + ':' + row.id).virtualScroll({ totalCount: this.presentationRows.length })
+      }).key((row: XopcChatRow): string => this.renderKeys.key(row)).virtualScroll({ totalCount: this.presentationRows.length })
       ListItem() {
         Column().id('chat-reply-clearance').width('100%')
           .height(this.bottomRegionHeight + 48 + this.replySpaceHeight - 20)
@@ -1367,7 +1372,7 @@ export struct XopcChatView {
       .onTouch((event: TouchEvent): void => {
         if (event.type === TouchType.Down) {
           if (this.sendFlightRowId) this.clearSendFlight();
-          this.layoutScrollAnimating = false; clearTimeout(this.scrollTimer); this.dismissComposer();
+          this.layoutScrollAnimating = false; clearTimeout(this.scrollTimer); this.scrollTimer = -1; this.dismissComposer();
         } else if (event.type === TouchType.Up && this.initialScrollPending) this.onMessageChange();
       })
     if (!this.atBottom && this.showJumpBottom) {
