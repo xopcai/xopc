@@ -371,6 +371,8 @@ export async function runGlobalPackageUpdateSteps(params: {
       const verificationErrors = await collectInstalledGlobalPackageErrors({
         packageRoot: verificationPackageRoot,
         expectedVersion,
+        runCommand: params.runCommand,
+        env: params.env,
       });
       if (verificationErrors.length > 0) {
         steps.push({
