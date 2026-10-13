@@ -37,8 +37,10 @@ const PREVIOUS_FAST_DELEGATION_RULES = [
   'For current news or other live facts, delegate to an Agent with web_search and require dated sources. Choose specialists by role and available tools. Provide a short title and complete brief. Never claim creation or completion before tool confirmation.',
 ] as const;
 
+const PREVIOUS_SNAPSHOT_DELEGATION_RULE = 'Own the request through delivery. Answer directly when able; for missing capabilities or complex processing, choose an available specialist from the injected local snapshot and call personal_task(command="create") directly. Discover with command="agents" only when the snapshot is missing, incomplete, unsuitable, or creation fails. Your own limitation is not a system limitation.';
+
 const DELEGATION_RULES = [
-  'Own the request through delivery. Answer directly when able; for missing capabilities or complex processing, choose an available specialist from the injected local snapshot and call personal_task(command="create") directly. Discover with command="agents" only when the snapshot is missing, incomplete, unsuitable, or creation fails. Your own limitation is not a system limitation.',
+  'Own the request through delivery. Answer directly when able; for missing capabilities or complex processing, choose an available specialist from the injected local snapshot and call personal_task(command="create") directly. Include structured requirements and a short selectionReason when creating a Task. Specialist profiles declare expertise, while eligibility checks verify execution conditions. When matching explicitly, pass its matchId and unchanged requirements to create so the displayed candidates are recorded. Discover with command="match" and requirements only when the snapshot is missing, incomplete, unsuitable, or creation fails. Preserve the idempotencyKey when retrying an uncertain creation; use a new key and previousSelectionId when deliberately trying another Agent. Your own limitation is not a system limitation.',
   ...PREVIOUS_FAST_DELEGATION_RULES.slice(1),
 ] as const;
 
@@ -58,7 +60,11 @@ const FAST_CONVERSATION_RULE = 'Keep ordinary conversation flowing. For missing 
 const USER_NAME_RULE = "Use the user's preferred name from their shared user profile when a name fits naturally.";
 const EXPLICIT_DELEGATION_RULE = 'When the user names a specialist Agent, preserve that choice and verify its availability before creating the Task; explain any blocker instead of silently substituting another Agent. When the user explicitly requests a Skill, call personal_task(command="agents", requiredSkills=[canonicalName]) to verify specialist access, then pass the same requiredSkills to create with the full objective and original materials. If verification is unavailable or no Agent can use it, explain the specific blocker. Never claim a Skill was used merely because the Task was created.';
 
-const CONNECTED_APP_RULE = 'For read-only connected-app requests such as Gmail, first call personal_capability with the app or capability. Then use personal_request(command="submit") with the exact connectorId and specialist agentId returned, the full objective, and any absolute time range. This keeps connection and account selection in the main chat and automatically starts the worker after authorization. Return promptly after the tool confirms submission. Never claim mail was read before verified results arrive. If no executor is available, explain that specific blocker. Use personal_request to inspect or cancel these requests; cancellation requires the user’s instruction.';
+const CONNECTED_APP_RULE = 'For read-only connected-app requests such as Gmail, first call personal_capability with the app or capability. Choose by executorProfiles within the permitted executorAgentIds, then use personal_request(command="submit") with a short selectionReason and the exact connectorId and specialist agentId returned, the full objective, and any absolute time range. This keeps connection and account selection in the main chat and automatically starts the worker after authorization. Return promptly after the tool confirms submission. Never claim mail was read before verified results arrive. If no executor is available, explain that specific blocker. Use personal_request to inspect or cancel these requests; cancellation requires the user’s instruction.';
+const PREVIOUS_CONNECTED_APP_RULE = CONNECTED_APP_RULE.replace(
+  'Choose by executorProfiles within the permitted executorAgentIds, then use personal_request(command="submit") with a short selectionReason and the exact connectorId and specialist agentId returned,',
+  'Then use personal_request(command="submit") with the exact connectorId and specialist agentId returned,',
+);
 const PREVIOUS_RESULT_DELIVERY_RULE = 'For image generation, find a specialist with image_generate. For user-facing files, require the specialist to publish completed files with publish_artifacts (image_generate already publishes its images). Put expected deliverables, input artifact references, and acceptance requirements in the Task brief. Once creation is confirmed, give one short acknowledgement and finish your turn; do not poll or wait for the worker. Published results are delivered automatically to this chat. Never recreate an artifact just to deliver it, and do not repeat its attachments in a later summary. For edits, include the selected previous artifact URI and requested changes in the new brief.';
 const RESULT_DELIVERY_RULE = 'For image generation, find a specialist with image_generate. For user-facing files, require the specialist to publish completed files with publish_artifacts (image_generate already publishes its images). Put expected deliverables, input artifact references, and acceptance requirements in the Task brief. Once creation is confirmed, finish your turn without repeating the earlier acknowledgement; do not poll or wait for the worker. Published results are delivered automatically to this chat. Never recreate an artifact just to deliver it, and do not repeat its attachments in a later summary. For edits, include the selected previous artifact URI and requested changes in the new brief.';
 
@@ -117,7 +123,7 @@ function removeGeneratedBlock(instructions: string, block: string): string {
 
 /** Refresh known generated rules without replacing custom instructions. */
 export function upgradePersonalInstructions(instructions: string, legacyName?: string): string {
-  const oldRule = [PREVIOUS_FAST_DELEGATION_RULES.join('\n'), PREVIOUS_MAIN_DELEGATION_RULES, PRIOR_DELEGATION_RULES, PREVIOUS_DELEGATION_RULES, LEGACY_DELEGATION_RULE]
+  const oldRule = [[PREVIOUS_SNAPSHOT_DELEGATION_RULE, ...PREVIOUS_FAST_DELEGATION_RULES.slice(1)].join('\n'), PREVIOUS_FAST_DELEGATION_RULES.join('\n'), PREVIOUS_MAIN_DELEGATION_RULES, PRIOR_DELEGATION_RULES, PREVIOUS_DELEGATION_RULES, LEGACY_DELEGATION_RULE]
     .find((rule) => instructions.includes(rule));
   const legacyNameRule = legacyName === undefined ? undefined
     : `Address the user as ${JSON.stringify(legacyName)} when a name fits naturally.`;
@@ -128,6 +134,7 @@ export function upgradePersonalInstructions(instructions: string, legacyName?: s
     .replace(PREVIOUS_PERSONAL_IDENTITY_CONTINUITY_RULE, PERSONAL_IDENTITY_CONTINUITY_RULE);
   nextInstructions = nextInstructions.replace(PERSONAL_PREVIOUS_DELEGATION_COMMUNICATION, PERSONAL_COMMUNICATION_RULES[2])
     .replace(PREVIOUS_RESULT_DELIVERY_RULE, RESULT_DELIVERY_RULE)
+    .replace(PREVIOUS_CONNECTED_APP_RULE, CONNECTED_APP_RULE)
     .replace(PREVIOUS_LARGE_READ_RULE, LARGE_READ_RULE);
   for (const rule of PREVIOUS_SOURCE_PRESENTATION_RULES) {
     nextInstructions = nextInstructions.replace(rule, '').trim();

@@ -52,6 +52,7 @@ import { commitAcceptedSend } from '@/features/chat/composer/commit-accepted-sen
 import { useComposerAttachments } from '@/features/chat/composer/use-composer-attachments';
 import { usePersistedComposer } from './use-persisted-composer';
 import { useComposerEditor } from '@/features/chat/composer/use-composer-editor';
+import { useNextTurnSuggestion } from '@/features/chat/composer/use-next-turn-suggestion';
 import { useComposerPickers } from '@/features/chat/composer/use-composer-pickers';
 import { appendTranscriptToDraft } from '@/features/chat/composer/append-transcript-to-draft';
 import { ComposerVoiceInputBar } from '@/features/chat/composer/composer-voice-input-bar';
@@ -100,6 +101,7 @@ function composerAttachmentFromWire(attachment: WireAttachment): Attachment {
 export const ChatComposer = memo(function ChatComposer({
   personal = false,
   placeholder,
+  nextTurnSuggestionsEnabled = false,
   disabled,
   sendDisabled = false,
   sending,
@@ -147,6 +149,7 @@ export const ChatComposer = memo(function ChatComposer({
 }: {
   personal?: boolean;
   placeholder?: string;
+  nextTurnSuggestionsEnabled?: boolean;
   disabled: boolean;
   sendDisabled?: boolean;
   sending: boolean;
@@ -209,7 +212,16 @@ export const ChatComposer = memo(function ChatComposer({
   useEffect(() => {
     void fetchCommandsCached();
   }, []);
-  const onSend: ComposerSendHandler = (...args) => sendDisabled ? false : submit(...args);
+  const onSend: ComposerSendHandler = (...args) => {
+    if (sendDisabled) return false;
+    const result = submit(...args);
+    if (result instanceof Promise) return result.then(accepted => {
+      if (accepted !== false) nextTurn.submitted(args[0]);
+      return accepted;
+    });
+    if (result !== false) nextTurn.submitted(args[0]);
+    return result;
+  };
   const shouldSyncSelectionRef = useRef(false);
   const commandPalettePanelRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -538,6 +550,21 @@ export const ChatComposer = memo(function ChatComposer({
     lastLoadedEditFollowUpIdRef.current = null;
   }, []);
 
+  const suggestionEligible = nextTurnSuggestionsEnabled && !disabled && !sendDisabled && !runBusy
+    && !editingFollowUpId && !editingUserTurnId && !voice.voiceActive && !editor.isComposing
+    && editor.value.length === 0 && att.attachments.length === 0 && contextRefs.length === 0 && pendingFollowUps.length === 0;
+  const nextTurn = useNextTurnSuggestion({ conversationId, agentId: currentAgentId, modelKey: sessionModel, locale: language, enabled: suggestionEligible });
+  const acceptNextTurnSuggestion = () => {
+    if (!suggestionEligible || editor.valueRef.current.length > 0 || contextRefsRef.current.length > 0) return false;
+    const text = nextTurn.accept();
+    if (!text) return false;
+    editor.resetEditor({ nextText: text, focus: true });
+    return true;
+  };
+  useEffect(() => {
+    if (suggestionEligible && nextTurn.suggestion && !pickers.palette.open) nextTurn.shown();
+  }, [suggestionEligible, nextTurn.suggestion, nextTurn.shown, pickers.palette.open]);
+
   const actions = useComposerActions({
     personal,
     chat: m.chat,
@@ -644,12 +671,14 @@ export const ChatComposer = memo(function ChatComposer({
     editorRef: editor.editorRef,
     tryInputHistoryArrow,
     acceptEmptySuggestion:
-      !runBusy && welcomeSuggestion && onAcceptWelcomeSuggestion
+      nextTurn.suggestion && suggestionEligible ? acceptNextTurnSuggestion :
+      !runBusy && !disabled && !sendDisabled && !editingUserTurnId && !voice.voiceActive && welcomeSuggestion && onAcceptWelcomeSuggestion
         ? () => {
             onAcceptWelcomeSuggestion(welcomeSuggestion);
             return true;
           }
         : undefined,
+    dismissEmptySuggestion: nextTurn.suggestion ? nextTurn.dismiss : undefined,
   };
 
   const runBusyState = runBusy;
@@ -872,7 +901,9 @@ export const ChatComposer = memo(function ChatComposer({
             compact={personal}
             ariaLabel={placeholder ?? m.chat.inputPlaceholder}
             placeholder={
-              placeholder ?? contextualPlaceholder ?? (runBusyState
+              (suggestionEligible && nextTurn.suggestion
+                ? `${nextTurn.suggestion.prompt}${hasFinePointer ? ` · ${m.chat.welcomeSpotlight.acceptSuggestionHint}` : ''}` : null)
+              ?? placeholder ?? contextualPlaceholder ?? (runBusyState
                 ? editingFollowUpId
                   ? m.chat.inputPlaceholderSteeringEdit
                   : queueingEnabled ? m.chat.inputPlaceholderSteering : m.chat.inputPlaceholderImmediate

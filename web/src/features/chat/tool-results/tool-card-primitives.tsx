@@ -4,6 +4,7 @@ import { Check, Copy } from 'lucide-react';
 import { copyTextToClipboard } from '@/lib/copy-to-clipboard';
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
+import '@/components/ui/content-block-actions.css';
 
 const CARD_LABEL_CLASS =
   'inline-flex max-w-full min-w-0 items-center gap-1 rounded-md bg-accent-soft/40 px-1.5 py-0.5 text-[11px] font-medium text-fg-muted [overflow-wrap:anywhere] dark:bg-accent-soft/25';
@@ -68,25 +69,15 @@ export const ToolCardCopyButton = memo(function ToolCardCopyButton({
         }
       }}
       className={cn(
-        'inline-flex shrink-0 items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] text-fg-muted',
+        'content-block-action text-fg-muted',
         'hover:bg-surface-hover hover:text-fg',
         interaction.transition,
         interaction.focusRingPanel,
       )}
-      aria-label={label}
-      title={label}
+      aria-label={copied ? copiedLabel : label}
+      title={copied ? copiedLabel : label}
     >
-      {copied ? (
-        <>
-          <Check className="size-3" aria-hidden />
-          <span>{copiedLabel}</span>
-        </>
-      ) : (
-        <>
-          <Copy className="size-3" aria-hidden />
-          <span className="hidden sm:inline">{label}</span>
-        </>
-      )}
+      {copied ? <Check className="size-3.5" aria-hidden /> : <Copy className="size-3.5" aria-hidden />}
     </button>
   );
 });

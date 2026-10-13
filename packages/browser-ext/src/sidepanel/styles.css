@@ -413,3 +413,5 @@ svg { display: block; }
 .recording-error { margin: 10px 0 0; padding: 8px; border-radius: 7px; background: var(--danger-soft); color: var(--danger); font-size: 11px; line-height: 17px; overflow-wrap: anywhere; }
 .recording-result { max-height: 100px; overflow: auto; margin: 8px 0 0; padding: 8px; border-radius: 7px; background: var(--surface-base); font-size: 11px; line-height: 17px; white-space: pre-wrap; overflow-wrap: anywhere; }
 .recording-skeleton { height: 32px; margin-top: 10px; border-radius: 7px; background: var(--surface-hover); }
+.markdown-math-display { max-width: 100%; min-width: 0; overflow-x: auto; padding: .5rem 0; }
+.markdown-math-source { white-space: pre-wrap; overflow-wrap: anywhere; }

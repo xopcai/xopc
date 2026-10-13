@@ -215,9 +215,11 @@ export class SessionInputCoordinator {
   }
 
   async withSubmission<T>(conversationId: string, operation: () => Promise<T>): Promise<T> {
-    this.deps.onInputReceived?.(conversationId);
     this.pendingSubmissions.set(conversationId, (this.pendingSubmissions.get(conversationId) ?? 0) + 1);
-    try { return await operation(); } finally {
+    try {
+      this.deps.onInputReceived?.(conversationId);
+      return await operation();
+    } finally {
       const remaining = (this.pendingSubmissions.get(conversationId) ?? 1) - 1;
       if (remaining) this.pendingSubmissions.set(conversationId, remaining);
       else this.pendingSubmissions.delete(conversationId);

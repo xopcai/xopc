@@ -37,6 +37,7 @@ enum MarkdownBlock: Equatable, Sendable {
     case numbered(number: String, level: Int, text: String)
     case quote(String)
     case code(String)
+    case math(String)
     case image(alt: String, source: String)
     case table(rows: [MarkdownTableRow], alignments: [MarkdownTableAlignment])
     case divider
@@ -64,6 +65,12 @@ enum MarkdownBlock: Equatable, Sendable {
             let line = lines[index]
             index += 1
             let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if !inCode, let math = MathMarkdownSyntax.displayBlock(lines, at: index - 1) {
+                finishParagraph(); blocks.append(.math(math.source)); index = math.next; continue
+            }
+            if !inCode, let math = MathMarkdownSyntax.fenceBlock(lines, at: index - 1) {
+                finishParagraph(); blocks.append(.math(math.source)); index = math.next; continue
+            }
             if trimmed.hasPrefix("```") {
                 finishParagraph()
                 if inCode {

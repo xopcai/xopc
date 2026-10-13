@@ -8,7 +8,6 @@ import {
   getAgentDefaultImageModelConfig,
   getAgentDefaultModelRef,
 } from '../schema.js';
-import { DEFAULT_CORE_SKILLS } from '../../agent-config/schema.js';
 
 describe('default model config', () => {
   beforeEach(() => initializeTestAgentCatalog());
@@ -18,7 +17,7 @@ describe('default model config', () => {
     const catalog = initializeTestAgentCatalog().getSettings();
 
     expect(catalog.defaults.models.chat).toEqual({ primary: DEFAULT_MODEL_REF, fallbacks: [] });
-    expect(catalog.defaults.skills).toEqual({ mode: 'selected', include: [...DEFAULT_CORE_SKILLS] });
+    expect(catalog.defaults.skills).toEqual({ mode: 'all-enabled', exclude: [] });
     expect(getAgentDefaultModelRef()).toBe(DEFAULT_MODEL_REF);
   });
 
