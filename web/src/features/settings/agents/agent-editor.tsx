@@ -19,7 +19,7 @@ import {
   type AgentProfileEditorHandle,
 } from '@/features/settings/agents/agent-profile-editor';
 import { ModelRouteEditor } from '@/features/settings/agents/agent-model-route-editor';
-import { updateGatewayAgent } from '@/features/settings/agents-admin-api';
+import { updateGatewayAgent, uploadGatewayAgentAvatar } from '@/features/settings/agents-admin-api';
 import { CREATURE_PRESETS } from '@/features/settings/agents/agent-profile-markdown';
 import type {
   AgentModelsOverride,
@@ -32,6 +32,9 @@ import type {
 } from '@/features/settings/types/agent-gateway';
 import { messages as getMessages, type AgentsSettingsMessages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
+
+import { AgentAvatarField, type PendingAgentAvatar } from './agent-avatar-field';
+import { bumpAgentAvatarCacheRevision } from './agent-avatar-cache';
 
 type AgentPanel = 'overview' | 'profile' | 'models' | 'capabilities' | 'runtime' | 'danger';
 
@@ -107,9 +110,11 @@ export function AgentEditor({
   const [profileVisited, setProfileVisited] = useState(false);
   const [profileFilesDirty, setProfileFilesDirty] = useState(false);
   const profileEditorRef = useRef<AgentProfileEditorHandle>(null);
+  const [pendingAvatar, setPendingAvatar] = useState<PendingAgentAvatar | null>(null);
+  const [avatarReading, setAvatarReading] = useState(false);
 
   const configDirty = JSON.stringify(draft) !== JSON.stringify(agent.override);
-  const dirty = configDirty || profileFilesDirty;
+  const dirty = configDirty || profileFilesDirty || pendingAvatar !== null;
   const invalidModelOverride = [
     draft.models?.chat,
     ...Object.values(draft.models?.intents ?? {}),
@@ -167,6 +172,10 @@ export function AgentEditor({
     setError(null);
     try {
       await profileEditorRef.current?.save();
+      if (pendingAvatar) {
+        await uploadGatewayAgentAvatar(agent.id, pendingAvatar);
+        bumpAgentAvatarCacheRevision(agent.id);
+      }
       const next = await updateGatewayAgent(agent.id, {
         expectedRevision: agent.revision,
         specialistProfile: draft.specialistProfile ?? null,
@@ -182,6 +191,7 @@ export function AgentEditor({
       const saved = next.agents.find((candidate) => candidate.id === agent.id);
       if (saved) setDraft(structuredClone(saved.override));
       setProfileFilesDirty(false);
+      setPendingAvatar(null);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
     } finally {
@@ -314,14 +324,18 @@ export function AgentEditor({
                   <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-accent-soft text-accent"><Sparkles className="size-4" aria-hidden /></span>
                   <div><h4 className="text-sm font-semibold text-fg">{zh ? '智能体身份' : 'Agent identity'}</h4><p className="mt-1 text-xs leading-5 text-fg-muted">{zh ? '身份资料保存在智能体配置中，供界面、对话和语音共同使用。' : 'Identity is saved in the Agent profile and shared by the UI, chat, and voice.'}</p></div>
                 </div>
+                <div className="mt-5 border-b border-edge pb-4">
+                  <AgentAvatarField agentId={agent.id} avatar={draft.profile?.avatar} zh={zh} disabled={saving}
+                    pending={pendingAvatar} onPendingChange={setPendingAvatar} onReadingChange={setAvatarReading}
+                    onChange={avatar => updateIdentity('avatar', avatar)} />
+                </div>
                 <div className="mt-5 grid gap-4 sm:grid-cols-2">
                   <label className="text-xs font-medium text-fg-muted">{zh ? '名称' : 'Name'}<input className={`${inputClass} mt-1.5`} value={profileName} onChange={(event) => updateIdentity('name', event.target.value)} placeholder={zh ? '例如：小助' : 'e.g. Nova'} /></label>
-                  <label className="text-xs font-medium text-fg-muted">{zh ? '一句话介绍' : 'Description'}<input className={`${inputClass} mt-1.5`} value={draft.profile?.description ?? ''} onChange={(event) => updateIdentity('description', event.target.value)} placeholder={zh ? '擅长什么、如何帮助你' : 'What this agent is great at'} /></label>
+                  <label className="text-xs font-medium text-fg-muted">{zh ? '签名表情（可选）' : 'Signature emoji (optional)'}<input className={`${inputClass} mt-1.5`} value={draft.profile?.emoji ?? ''} onChange={(event) => updateIdentity('emoji', event.target.value)} placeholder="✨" /><span className="mt-1.5 block text-xs font-normal">{zh ? '用于表达个性，与头像分开设置。' : 'A personal touch, separate from the avatar.'}</span></label>
+                  <label className="text-xs font-medium text-fg-muted sm:col-span-2">{zh ? '介绍' : 'Description'}<textarea rows={3} className={`${inputClass} mt-1.5 min-h-24 resize-y leading-6`} value={draft.profile?.description ?? ''} onChange={(event) => updateIdentity('description', event.target.value)} placeholder={zh ? '例如：帮你整理想法、查找资料，把复杂任务拆成可以执行的步骤。' : 'e.g. Helps organize ideas, research topics, and turn complex tasks into actionable steps.'} /><span className="mt-1.5 block text-xs font-normal">{zh ? '简要说明这个智能体的定位，以及它如何帮助你。详细行为要求在下方角色配置中设置。' : 'Describe the agent’s purpose and how it helps. Set detailed behavior in the profile documents below.'}</span></label>
                   <label className="text-xs font-medium text-fg-muted">{zh ? '类型' : 'Type'}<input className={`${inputClass} mt-1.5`} list={`agent-creatures-${agent.id}`} value={draft.profile?.creature ?? ''} onChange={(event) => updateIdentity('creature', event.target.value)} placeholder={zh ? 'AI 助手、研究伙伴…' : 'AI assistant, research partner…'} /><datalist id={`agent-creatures-${agent.id}`}>{CREATURE_PRESETS.map((item) => <option key={item.value} value={item.value}>{zh ? item.labelZh : item.labelEn}</option>)}</datalist></label>
                   <label className="text-xs font-medium text-fg-muted">{zh ? '表达风格' : 'Style'}<input className={`${inputClass} mt-1.5`} value={draft.profile?.style ?? ''} onChange={(event) => updateIdentity('style', event.target.value)} placeholder={zh ? '例如：直接、温和' : 'e.g. direct and warm'} /></label>
                   <label className="text-xs font-medium text-fg-muted">{zh ? '主要语言' : 'Primary language'}<input className={`${inputClass} mt-1.5`} value={draft.profile?.language ?? ''} onChange={(event) => updateIdentity('language', event.target.value)} placeholder={zh ? '例如：简体中文' : 'e.g. English'} /></label>
-                  <label className="text-xs font-medium text-fg-muted">{zh ? '签名表情' : 'Signature emoji'}<input className={`${inputClass} mt-1.5`} value={draft.profile?.emoji ?? ''} onChange={(event) => updateIdentity('emoji', event.target.value)} placeholder="✨" /></label>
-                  <label className="text-xs font-medium text-fg-muted">{zh ? '头像地址' : 'Avatar URL or path'}<input className={`${inputClass} mt-1.5`} value={draft.profile?.avatar ?? ''} onChange={(event) => updateIdentity('avatar', event.target.value)} placeholder={zh ? 'URL 或本地路径' : 'URL or local path'} /></label>
                 </div>
               </section>
               <SpecialistProfileEditor profile={draft.specialistProfile} zh={zh}
@@ -510,7 +524,7 @@ export function AgentEditor({
 
         <footer className="flex shrink-0 items-center justify-between gap-3 border-t border-edge bg-surface-panel px-5 py-3">
           <p className="text-xs text-fg-muted">{invalidModelOverride ? (zh ? '请补全自定义模型' : 'Complete the custom model reference') : dirty ? (zh ? '有未保存的更改' : 'Unsaved changes') : (zh ? '所有更改已保存' : 'All changes saved')}</p>
-          <div className="flex gap-2"><Button onClick={onClose}>{zh ? '关闭' : 'Close'}</Button><Button variant="primary" disabled={saving || !dirty || invalidModelOverride || (draft.profile !== undefined && !draft.profile.name.trim())} onClick={() => void save()}>{saving ? (zh ? '保存中…' : 'Saving…') : (zh ? '保存更改' : 'Save changes')}</Button></div>
+          <div className="flex gap-2"><Button onClick={onClose}>{zh ? '关闭' : 'Close'}</Button><Button variant="primary" disabled={saving || avatarReading || !dirty || invalidModelOverride || (draft.profile !== undefined && !draft.profile.name.trim())} onClick={() => void save()}>{saving ? (zh ? '保存中…' : 'Saving…') : (zh ? '保存更改' : 'Save changes')}</Button></div>
         </footer>
       </div>
     </div>

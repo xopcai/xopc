@@ -83,6 +83,13 @@ export async function updateGatewayAgent(
   return response.payload;
 }
 
+export async function uploadGatewayAgentAvatar(agentId: string, image: { base64: string; mimeType: string }): Promise<void> {
+  await fetchJson(apiUrl(`/api/agents/${encodeURIComponent(agentId)}/avatar`), {
+    method: 'PUT',
+    body: JSON.stringify({ base64: image.base64, mimeType: image.mimeType }),
+  });
+}
+
 export async function deleteGatewayAgent(agentId: string, purge = false): Promise<GatewayAgentsPayload> {
   const response = await fetchJson<{ payload?: { agents: GatewayAgentsPayload } }>(
     apiUrl(`/api/agents/${encodeURIComponent(agentId)}${purge ? '?purge=1' : ''}`),
