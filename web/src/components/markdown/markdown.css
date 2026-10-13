@@ -720,7 +720,9 @@ html.dark .markdown-body .hljs-deletion {
 
 .markdown-math { min-width: 0; max-width: 100%; color: inherit; }
 .markdown-math-display { position: relative; padding: 2rem 0 .75rem; }
-.markdown-math-display .katex-display { min-width: 0; max-width: 100%; overflow-x: auto; margin: .25rem 0; }
+/* Hide formula scrollbars without clipping glyphs or disabling overflow navigation. */
+.markdown-math-display .katex-display { min-width: 0; max-width: 100%; overflow-x: auto; scrollbar-width: none; padding-block: .5em; margin: .25rem 0; }
+.markdown-math-display .katex-display::-webkit-scrollbar { display: none; }
 .markdown-math-source { white-space: pre-wrap; overflow-wrap: anywhere; font-family: var(--font-mono, monospace); }
 .markdown-math-actions { position: absolute; top: 0; right: 0; display: flex; gap: .25rem; opacity: 0; pointer-events: none; transition: opacity 150ms ease; }
 .markdown-math-display:hover > .markdown-math-actions,
