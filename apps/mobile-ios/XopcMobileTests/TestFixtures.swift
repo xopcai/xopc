@@ -195,7 +195,9 @@ struct GatewayStub: GatewayServing {
         activeRun
     }
 
-    func abort(runID _: String) async throws { await abortObserver?() }
+    func abort(runID _: String) async throws {
+        await abortObserver?()
+    }
 
     func streamRun(runID _: String) -> AsyncThrowingStream<RunStreamEvent, Error> {
         runStreamFactory?() ?? runStream ?? AsyncThrowingStream { $0.finish() }

@@ -94,7 +94,9 @@ struct MarkdownImageView: View {
             return
         }
         let cacheKey = ThumbnailCacheKey(requestIdentity)
-        if let cached = Self.thumbnails.object(forKey: cacheKey) { image = cached; return }
+        if let cached = Self.thumbnails.object(forKey: cacheKey) {
+            image = cached; return
+        }
         do {
             let data = try await ChatImageLoader(configuration: configuration).load(reference)
             try Task.checkCancellation()
@@ -138,7 +140,15 @@ private struct RequestIdentity: Hashable {
 
 private final class ThumbnailCacheKey: NSObject {
     let identity: RequestIdentity
-    init(_ identity: RequestIdentity) { self.identity = identity }
-    override var hash: Int { identity.hashValue }
-    override func isEqual(_ object: Any?) -> Bool { (object as? ThumbnailCacheKey)?.identity == identity }
+    init(_ identity: RequestIdentity) {
+        self.identity = identity
+    }
+
+    override var hash: Int {
+        identity.hashValue
+    }
+
+    override func isEqual(_ object: Any?) -> Bool {
+        (object as? ThumbnailCacheKey)?.identity == identity
+    }
 }

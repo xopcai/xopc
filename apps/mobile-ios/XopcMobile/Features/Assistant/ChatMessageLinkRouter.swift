@@ -50,11 +50,11 @@ struct ChatMessageLinkDestination: View {
             case "notes": NoteDetailView(configuration: appState.gatewayConfiguration, noteID: id, onOpenConversation: openConversation)
             case "tasks": TaskDetailView(configuration: appState.gatewayConfiguration, taskID: id, onOpenConversation: openConversation)
             case "projects": ProjectDetailView(configuration: appState.gatewayConfiguration, projectID: id,
-                onOpenConversation: openConversation, onStartProjectConversation: { project in
-                    router.destination = nil; appState.startProjectConversation(project)
-                })
+                                               onOpenConversation: openConversation, onStartProjectConversation: { project in
+                                                   router.destination = nil; appState.startProjectConversation(project)
+                                               })
             case "automations": AutomationDetailView(configuration: appState.gatewayConfiguration, automationID: id,
-                                                    onOpenConversation: openConversation)
+                                                     onOpenConversation: openConversation)
             case "workflows": WorkflowRunDetailView(configuration: appState.gatewayConfiguration, runID: id)
             default: ChatLinkedFileView(link: link, configuration: appState.gatewayConfiguration, conversationID: appState.selectedConversation?.id)
             }
