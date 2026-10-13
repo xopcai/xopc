@@ -215,7 +215,8 @@ export const MessageList = memo(function MessageList({
           renderRow={renderRow} footerRef={footerRef} /> : rows.map(row => renderRow(row.index))}
         <div ref={footerRef} className={cn(virtualized ? 'pt-8' : 'contents')}>
           {trailingContent}
-          {replySpaceRef && <div ref={replySpaceRef} className={cn(!virtualized && '-mt-8', 'shrink-0')}
+          {/* Reduced-motion duration overrides must not animate the spacer's height. */}
+          {replySpaceRef && <div ref={replySpaceRef} className={cn(!virtualized && '-mt-8', 'shrink-0 transition-none')}
             aria-hidden data-chat-reply-space />}
         </div>
       </div>

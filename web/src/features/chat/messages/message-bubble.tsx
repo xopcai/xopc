@@ -642,7 +642,7 @@ export const MessageBubble = memo(function MessageBubble({
                   ref={isUser ? userMessageContentRef : undefined}
                   data-chat-find-text
                   className={cn(
-                    'min-w-0',
+                    'relative min-w-0',
                     isUser && 'flex flex-col gap-2',
                     isUser && !userMessageExpanded && 'overflow-hidden',
                   )}
@@ -665,6 +665,10 @@ export const MessageBubble = memo(function MessageBubble({
                     responseRunId={isAssistant ? message.turnId : undefined}
                     immediateFirstCommit={usesConversationText(message, personal)}
                   />
+                  {showStreamingCursor ? (
+                    <span aria-hidden data-chat-streaming-cursor
+                      className="pointer-events-none absolute start-0 top-full mt-1 h-3 w-0.5 animate-pulse bg-accent motion-reduce:animate-none" />
+                  ) : null}
                 </div>
                 {isUser && userMessageCanExpand ? (
                   <button
@@ -681,12 +685,7 @@ export const MessageBubble = memo(function MessageBubble({
                     <span>{userMessageExpanded ? m.chat.userMessageCollapse : m.chat.userMessageExpand}</span>
                   </button>
                 ) : null}
-                {showStreamingCursor ? (
-                  <span className="inline-block h-3 w-0.5 animate-pulse bg-accent align-middle" />
-                ) : null}
               </>
-            ) : showStreamingCursor ? (
-              <span className="inline-block h-3 w-0.5 animate-pulse bg-accent" />
             ) : null}
 
             {followUpTrigger ? assistantStepsBlock : null}

@@ -38,6 +38,7 @@ export interface UseChatScrollViewportArgs {
   showSessionLoading: boolean;
   conversationId: string | null;
   chatMessages: Message[];
+  streaming: boolean;
   hasMore: boolean;
   loadingMore: boolean;
   loadMoreMessages: () => void | Promise<void>;
@@ -68,6 +69,7 @@ export function useChatScrollViewport({
   showSessionLoading,
   conversationId,
   chatMessages,
+  streaming,
   hasMore,
   loadingMore,
   loadMoreMessages,
@@ -80,7 +82,7 @@ export function useChatScrollViewport({
   const replyAnchorElementRef = useRef<HTMLElement | null>(null);
   const pendingReplyAnchorRef = useRef<string | null>(null);
   const replyBudgetRef = useRef(0);
-  const replyRemainingRef = useRef(0);
+  const replyExtentRef = useRef(0);
   const resizeObserverRef = useRef<ResizeObserver | null>(null);
   const readingAnchorRef = useRef<ChatScrollAnchor | null>(null);
   const resizeFrameRef = useRef<number | null>(null);
@@ -91,6 +93,7 @@ export function useChatScrollViewport({
 
   const prevLoadingRef = useRef(true);
   const prevMessageCountRef = useRef(0);
+  const wasStreamingRef = useRef(streaming);
 
   const listScrollMetricsRef = useRef<{
     first: Message | undefined;
@@ -111,28 +114,31 @@ export function useChatScrollViewport({
   const updateReplySpace = useCallback(() => {
     const el = scrollRef.current;
     const spacer = replySpaceRef.current;
-    if (!el || !spacer || !followingRef.current) return;
-    if (!pendingReplyAnchorRef.current && replyRemainingRef.current <= 0) return;
+    if (!el || !spacer || !followingRef.current) return false;
+    if (!pendingReplyAnchorRef.current && !replyAnchorRef.current) return false;
     const key = pendingReplyAnchorRef.current ?? replyAnchorRef.current;
-    if (!key) return;
+    if (!key) return false;
     const row = !pendingReplyAnchorRef.current && replyAnchorElementRef.current?.isConnected
       ? replyAnchorElementRef.current
       : Array.from(el.querySelectorAll<HTMLElement>('[data-chat-message-row]'))
         .find((element) => element.dataset.messageRenderKey === key || element.dataset.clientSubmissionId === key);
-    if (!row) return;
+    if (!row) return false;
     if (pendingReplyAnchorRef.current) {
       replyAnchorRef.current = key;
       replyAnchorElementRef.current = row;
       pendingReplyAnchorRef.current = null;
       replyBudgetRef.current = Math.min(64, Math.max(0, el.clientHeight) * 0.1);
-      replyRemainingRef.current = replyBudgetRef.current;
+      replyExtentRef.current = replyBudgetRef.current;
     }
     const replyHeight = Math.max(0, spacer.getBoundingClientRect().top - row.getBoundingClientRect().bottom);
-    // Keep the unused space after short answers; completion must not collapse the viewport.
-    const remaining = Math.max(0, Math.min(replyRemainingRef.current,
-      Math.min(replyBudgetRef.current, Math.min(64, Math.max(0, el.clientHeight) * 0.1)) - replyHeight));
-    replyRemainingRef.current = remaining;
-    if (spacer.style.height !== `${remaining}px`) spacer.style.height = `${remaining}px`;
+    // Absorb small contractions, including transient status UI, within the original budget.
+    const extent = Math.max(replyExtentRef.current, replyHeight);
+    const budget = Math.min(replyBudgetRef.current, Math.min(64, Math.max(0, el.clientHeight) * 0.1));
+    const remaining = Math.max(0, Math.min(budget, extent - replyHeight));
+    replyExtentRef.current = replyHeight + remaining;
+    if (spacer.style.height === `${remaining}px`) return false;
+    spacer.style.height = `${remaining}px`;
+    return true;
   }, []);
 
   const scrollToEnd = useCallback(
@@ -178,26 +184,31 @@ export function useChatScrollViewport({
     const el = scrollRef.current;
     if (!el) return;
     if (!followingRef.current && !chatVirtualScroll(el)) restoreChatScrollAnchor(el, readingAnchorRef.current);
-    updateReplySpace();
+    const replySpaceChanged = updateReplySpace();
     const grew = el.scrollHeight > measuredScrollHeightRef.current;
     const viewportShrank = el.clientHeight < measuredClientHeightRef.current;
     measuredScrollHeightRef.current = el.scrollHeight;
     measuredClientHeightRef.current = el.clientHeight;
-    // Shrinking completed content is already clamped by the browser. Reasserting
-    // the tail here produces an extra visible scroll at turn completion.
-    if (grew || viewportShrank) scrollToEnd();
+    // An unbuffered shrink is already clamped by the browser; only reassert the
+    // tail when growth, viewport shrink, or adjusted reply space needs it.
+    if (grew || viewportShrank || replySpaceChanged) scrollToEnd();
     // Resizing the composer or keyboard must not re-enable following for history readers.
     setAtBottom(isNearChatBottom(el));
   }, [scrollToEnd, updateReplySpace]);
 
   const scheduleResize = useCallback(() => {
+    const el = scrollRef.current;
+    // Virtual rows publish their measured extent before paint; follow it in that same cycle.
+    if (el && chatVirtualScroll(el) && followingRef.current && el.scrollHeight > measuredScrollHeightRef.current) {
+      scrollToEnd();
+    }
     if (resizeFrameRef.current !== null) return;
     // Updating an observed column's spacer inside ResizeObserver causes a feedback warning.
     resizeFrameRef.current = requestAnimationFrame(() => {
       resizeFrameRef.current = null;
       onResize();
     });
-  }, [onResize]);
+  }, [onResize, scrollToEnd]);
 
   const registerListContentRef = useCallback(
     (el: HTMLDivElement | null) => {
@@ -279,7 +290,7 @@ export function useChatScrollViewport({
     measuredClientHeightRef.current = 0;
     replyAnchorRef.current = null;
     replyAnchorElementRef.current = null;
-    replyRemainingRef.current = 0;
+    replyExtentRef.current = 0;
     if (!Array.from(scrollRef.current?.querySelectorAll<HTMLElement>('[data-chat-message-row]') ?? [])
       .some((element) => element.dataset.messageRenderKey === pendingReplyAnchorRef.current
         || element.dataset.clientSubmissionId === pendingReplyAnchorRef.current)) {
@@ -293,16 +304,20 @@ export function useChatScrollViewport({
   useLayoutEffect(() => {
     if (showSessionLoading) return;
 
-    updateReplySpace();
+    // Text part subscriptions can keep the message shell array stable at completion.
+    const streamCompleted = wasStreamingRef.current && !streaming;
+    wasStreamingRef.current = streaming;
+    const replySpaceChanged = updateReplySpace();
 
     const count = chatMessages.length;
     const prevCount = prevMessageCountRef.current;
     prevMessageCountRef.current = count;
 
-    if (count > prevCount && followingRef.current) {
+    const contentGrew = (scrollRef.current?.scrollHeight ?? 0) > measuredScrollHeightRef.current;
+    if (followingRef.current && (count > prevCount || contentGrew || replySpaceChanged || streamCompleted)) {
       scrollToEnd();
     }
-  }, [chatMessages, showSessionLoading, scrollToEnd, updateReplySpace]);
+  }, [chatMessages, streaming, showSessionLoading, scrollToEnd, updateReplySpace]);
 
   useLayoutEffect(() => {
     const el = scrollRef.current;

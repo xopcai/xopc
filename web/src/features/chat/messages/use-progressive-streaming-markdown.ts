@@ -126,5 +126,6 @@ export function useProgressiveStreamingMarkdown(
     [],
   );
 
-  return visibleContent;
+  // Commit the final text with the completed shell; effects only settle scheduler state.
+  return !streaming || (immediateFirstCommit && !visibleContent) ? content : visibleContent;
 }
