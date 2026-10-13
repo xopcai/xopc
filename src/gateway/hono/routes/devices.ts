@@ -201,6 +201,7 @@ export function registerDeviceRoutes(authenticated: Hono, deps: AuthenticatedRou
     }
     const revoked = revokeDevice(principal.deviceId);
     if (revoked) {
+      deps.service.endpointTools.registry.revokePrincipal(principal.deviceId);
       deps.service.realtime.disconnectPrincipal(principal.deviceId);
       deps.service.voiceRealtime.disconnectPrincipal(principal.deviceId);
     }

@@ -55,6 +55,8 @@ struct GatewayStub: GatewayServing {
     var historyFails = false
     var runStream: AsyncThrowingStream<RunStreamEvent, Error>?
     var runStreamFactory: (@Sendable () -> AsyncThrowingStream<RunStreamEvent, Error>)?
+    var sendDelay: (@Sendable () async -> Void)?
+    var abortObserver: (@Sendable () async -> Void)?
     var sendInputState: InputState
 
     init(
@@ -177,7 +179,8 @@ struct GatewayStub: GatewayServing {
         delivery _: MessageDelivery,
         to conversation: ConversationSelection
     ) async throws -> SessionCommandResult {
-        SessionCommandResult(
+        await sendDelay?()
+        return SessionCommandResult(
             receipt: InputReceipt(
                 conversationId: conversation.id,
                 clientMessageId: "client-message",
@@ -192,7 +195,7 @@ struct GatewayStub: GatewayServing {
         activeRun
     }
 
-    func abort(runID _: String) async throws {}
+    func abort(runID _: String) async throws { await abortObserver?() }
 
     func streamRun(runID _: String) -> AsyncThrowingStream<RunStreamEvent, Error> {
         runStreamFactory?() ?? runStream ?? AsyncThrowingStream { $0.finish() }

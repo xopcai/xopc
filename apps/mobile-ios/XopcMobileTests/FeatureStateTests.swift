@@ -224,6 +224,35 @@ struct FeatureStateTests {
 
 @MainActor
 struct AssistantRecoveryTests {
+    @Test func assistantResumesWhenReceiptArrivesAfterForeground() async throws {
+        let state = AssistantState()
+        let conversation = ConversationSelection.draft(agentId: "main").materialized(transcriptId: "transcript")
+        await state.loadConversation(conversation, using: GatewayStub())
+        let stream = AsyncThrowingStream<RunStreamEvent, Error>.makeStream()
+        let receipt = PendingReceiptGate()
+        var gateway = GatewayStub(activeRun: ActiveRun(active: true, runId: "run"),
+                                  sendInputState: InputState(activeRunId: "run"))
+        gateway.runStream = stream.stream
+        gateway.sendDelay = { await receipt.wait() }
+        gateway.abortObserver = { await receipt.recordAbort() }
+        let sender = Task { await state.send("Hello", to: conversation, using: gateway) }
+        defer { state.pauseConversation(); sender.cancel(); stream.continuation.finish() }
+        for _ in 0 ..< 100 {
+            if await receipt.sendCount == 1 { break }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        #expect(state.isSending)
+        #expect(state.runID == nil)
+        state.pauseConversation()
+        await state.resumeConversation(conversation, using: gateway)
+        await receipt.release()
+        stream.continuation.yield(recoveryDelta("Resumed", offset: 0))
+        try await waitForReply("Resumed", in: state)
+        #expect(state.runID == "run")
+        #expect(await receipt.sendCount == 1)
+        #expect(await receipt.abortCount == 0)
+    }
+
     @Test func assistantResumesOutputWithoutErasingOrDuplicatingItsPrefix() async throws {
         let state = AssistantState()
         let conversation = ConversationSelection.draft(agentId: "main").materialized(transcriptId: "transcript")
@@ -482,4 +511,22 @@ private struct StreamingGatewayStub: GatewayServing {
     func renameConversation(id _: String, name _: String) async throws {}
     func mutateConversation(id _: String, action _: ConversationMutation) async throws {}
     func deleteConversation(id _: String) async throws {}
+}
+
+private actor PendingReceiptGate {
+    private var continuation: CheckedContinuation<Void, Never>?
+    private(set) var sendCount = 0
+    private(set) var abortCount = 0
+
+    func wait() async {
+        sendCount += 1
+        await withCheckedContinuation { continuation = $0 }
+    }
+
+    func release() {
+        continuation?.resume()
+        continuation = nil
+    }
+
+    func recordAbort() { abortCount += 1 }
 }

@@ -59,7 +59,7 @@ struct AssistantSessionActionsView: View {
                     } label: {
                         optionRow("思考档位", value: thinkingLabel(options.thinkingLevel), symbol: "slider.horizontal.3")
                     }.disabled(options.isLoading)
-                    if !state.pendingInputs.isEmpty || state.queueError != nil {
+                    if !state.pendingInputs.isEmpty {
                         NavigationLink {
                             ScrollView {
                                 QueuedInputsCard(inputs: state.pendingInputs, errorMessage: state.queueError,
