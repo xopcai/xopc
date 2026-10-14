@@ -49,7 +49,7 @@ export function buildProjectContextSection(params: {
   lines.push('The following project context files have been loaded:');
   if (hasSoulFile) {
     lines.push(
-      'If SOUL.md is present, embody its persona and tone. Avoid stiff, generic replies; follow its guidance unless higher-priority instructions override it.',
+      'If SOUL.md is present, use it for personality details that supplement the current Agent profile. The current Agent profile and Response Language settings govern identity, role, style, and language when these files conflict with them.',
     );
   }
   lines.push('');

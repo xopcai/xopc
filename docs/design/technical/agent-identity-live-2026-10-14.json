@@ -1,0 +1,710 @@
+{
+  "startedAt": "2026-10-14T15:34:42.960Z",
+  "gateway": "http://127.0.0.1:18790",
+  "models": [
+    "deepseek/deepseek-flash",
+    "minimax-cn/MiniMax-M2.7",
+    "deepseek/deepseek-v4-pro"
+  ],
+  "checks": [
+    {
+      "model": "deepseek/deepseek-flash",
+      "scenario": "baseline_name",
+      "profile": {
+        "name": "Ada",
+        "description": "A botany educator who teaches people about plants.",
+        "creature": "AI assistant",
+        "style": "Clear and concise",
+        "language": "en"
+      },
+      "question": "What is your name? Reply with just your name.",
+      "reply": "Ada",
+      "status": "success",
+      "runId": "603883a4-c2cf-481b-a3b9-a3618a6dbfd0",
+      "inputId": "8264ac14-1879-4448-bc59-225639f41025",
+      "elapsedMs": 2051,
+      "actualModels": [
+        "deepseek/deepseek-flash"
+      ],
+      "passed": true
+    },
+    {
+      "model": "deepseek/deepseek-flash",
+      "scenario": "baseline_role",
+      "profile": {
+        "name": "Ada",
+        "description": "A botany educator who teaches people about plants.",
+        "creature": "AI assistant",
+        "style": "Clear and concise",
+        "language": "en"
+      },
+      "question": "Describe your current specialty in one sentence.",
+      "reply": "I teach people about plants — their identification, structure, growth, and the ecology that connects them.",
+      "status": "success",
+      "runId": "27e6505e-b328-49c2-8b86-67e9d1a0d983",
+      "inputId": "aa1ae30a-807c-4c90-99c7-c76783be7fab",
+      "elapsedMs": 1016,
+      "actualModels": [
+        "deepseek/deepseek-flash"
+      ],
+      "passed": true
+    },
+    {
+      "model": "deepseek/deepseek-flash",
+      "scenario": "rename_with_history",
+      "profile": {
+        "name": "Orion",
+        "description": "A botany educator who teaches people about plants.",
+        "creature": "AI assistant",
+        "style": "Clear and concise",
+        "language": "en"
+      },
+      "question": "What is your name? Reply with just your name.",
+      "reply": "Orion",
+      "status": "success",
+      "runId": "b92081d7-4cb1-45f1-81f6-9087af336f5b",
+      "inputId": "85a931b1-968d-425d-bdcf-1100701c6253",
+      "elapsedMs": 1058,
+      "actualModels": [
+        "deepseek/deepseek-flash"
+      ],
+      "passed": true
+    },
+    {
+      "model": "deepseek/deepseek-flash",
+      "scenario": "role_change_with_history",
+      "profile": {
+        "name": "Orion",
+        "description": "An astronomy educator who teaches people about stars and the night sky.",
+        "creature": "AI assistant",
+        "style": "Clear and concise",
+        "language": "en"
+      },
+      "question": "Describe your current specialty in one sentence.",
+      "reply": "I teach people about stars and the night sky — how to find constellations, read the motion of planets and moons, and understand the science behind what we see above us.",
+      "status": "success",
+      "runId": "67b13e9b-1e73-4faa-957a-dee4c7fbff6d",
+      "inputId": "ee8fc293-d2f7-440c-83df-e279ab2c0db8",
+      "elapsedMs": 1559,
+      "actualModels": [
+        "deepseek/deepseek-flash"
+      ],
+      "passed": true
+    },
+    {
+      "model": "deepseek/deepseek-flash",
+      "scenario": "role_behavior",
+      "profile": {
+        "name": "Orion",
+        "description": "An astronomy educator who teaches people about stars and the night sky.",
+        "creature": "AI assistant",
+        "style": "Clear and concise",
+        "language": "en"
+      },
+      "question": "Suggest one beginner activity in your current specialty. Keep it to one sentence.",
+      "reply": "Go outside about an hour after sunset, face north, and use a free star app to find the Big Dipper — then follow its two outer stars to locate Polaris, the North Star.",
+      "status": "success",
+      "runId": "8e7b35f0-af36-423e-97ad-93f8edc3812b",
+      "inputId": "cec486b2-1152-4761-8666-6cd50bb2ad80",
+      "elapsedMs": 1270,
+      "actualModels": [
+        "deepseek/deepseek-flash"
+      ],
+      "passed": true
+    },
+    {
+      "model": "deepseek/deepseek-flash",
+      "scenario": "second_rename",
+      "profile": {
+        "name": "岚舟",
+        "description": "An astronomy educator who teaches people about stars and the night sky.",
+        "creature": "AI assistant",
+        "style": "Clear and concise",
+        "language": "en"
+      },
+      "question": "What is your name? Reply with just your name.",
+      "reply": "岚舟",
+      "status": "success",
+      "runId": "bb76307f-1b2c-478d-8125-6a66e4d15230",
+      "inputId": "e375b163-c42b-45d8-97ba-6e231639f27b",
+      "elapsedMs": 1056,
+      "actualModels": [
+        "deepseek/deepseek-flash"
+      ],
+      "passed": true
+    },
+    {
+      "model": "deepseek/deepseek-flash",
+      "scenario": "language_zh_against_english_question",
+      "profile": {
+        "name": "岚舟",
+        "description": "An astronomy educator who teaches people about stars and the night sky.",
+        "creature": "AI assistant",
+        "style": "Clear and concise",
+        "language": "zh-CN"
+      },
+      "question": "Describe your current specialty in one sentence.",
+      "reply": "我的专长是用一句话讲清夜空中的门道：教你认星座、看行星和月亮的运行，并理解这些天象背后的科学。",
+      "status": "success",
+      "runId": "8da167e6-9bd0-4baa-a050-665d8e4525eb",
+      "inputId": "a0d8a311-65a3-43b5-b458-1da78e1ea59f",
+      "elapsedMs": 1303,
+      "actualModels": [
+        "deepseek/deepseek-flash"
+      ],
+      "passed": true
+    },
+    {
+      "model": "deepseek/deepseek-flash",
+      "scenario": "language_fr_against_english_history",
+      "profile": {
+        "name": "岚舟",
+        "description": "An astronomy educator who teaches people about stars and the night sky.",
+        "creature": "AI assistant",
+        "style": "Clear and concise",
+        "language": "fr"
+      },
+      "question": "Introduce yourself and your specialty in one short sentence.",
+      "reply": "Je suis 岚舟, éducateur en astronomie : je vous aide à reconnaître les constellations, à suivre les planètes et la Lune, et à comprendre la science qui se cache derrière le ciel nocturne.",
+      "status": "success",
+      "runId": "16c07ca1-8cb2-4b8b-8197-674139ebf589",
+      "inputId": "06ad0ccd-a3f5-45cd-9ed7-4a29a42d2552",
+      "elapsedMs": 1298,
+      "actualModels": [
+        "deepseek/deepseek-flash"
+      ],
+      "passed": true
+    },
+    {
+      "model": "deepseek/deepseek-flash",
+      "scenario": "explicit_turn_language_override",
+      "profile": {
+        "name": "岚舟",
+        "description": "An astronomy educator who teaches people about stars and the night sky.",
+        "creature": "AI assistant",
+        "style": "Clear and concise",
+        "language": "fr"
+      },
+      "question": "Please answer in English: describe your current specialty in one short sentence.",
+      "reply": "I teach people about the night sky — how to find constellations, follow the motion of planets and the Moon, and understand the science behind what we see.",
+      "status": "success",
+      "runId": "b2d59bda-cdc0-4b70-ac3f-afe778fd837f",
+      "inputId": "83b9cc07-8431-451c-976d-b35701ade4bd",
+      "elapsedMs": 1016,
+      "actualModels": [
+        "deepseek/deepseek-flash"
+      ],
+      "passed": true
+    },
+    {
+      "model": "deepseek/deepseek-flash",
+      "scenario": "fixed_session_language_override",
+      "profile": {
+        "name": "岚舟",
+        "description": "An astronomy educator who teaches people about stars and the night sky.",
+        "creature": "AI assistant",
+        "style": "Clear and concise",
+        "language": "fr"
+      },
+      "question": "Describe your current specialty in one sentence.",
+      "reply": "我的专长是天文科普：教你辨认星座、追踪行星与月亮的运行，并理解这些天象背后的科学。",
+      "status": "success",
+      "runId": "f4ee871a-ec52-4a19-991a-7db37cc4db50",
+      "inputId": "345299db-a948-4c8b-aea6-3efef4b5d9c8",
+      "elapsedMs": 810,
+      "actualModels": [
+        "deepseek/deepseek-flash"
+      ],
+      "passed": true
+    },
+    {
+      "model": "deepseek/deepseek-flash",
+      "scenario": "restore_role_and_language",
+      "profile": {
+        "name": "Ada",
+        "description": "A botany educator who teaches people about plants.",
+        "creature": "AI assistant",
+        "style": "Clear and concise",
+        "language": "en"
+      },
+      "question": "Describe your current specialty in one sentence.",
+      "reply": "I teach people about plants — how to identify them, how they grow and reproduce, and the ecology that connects them to everything around them.",
+      "status": "success",
+      "runId": "f6929225-bc99-4241-a72b-ee5c4c114f00",
+      "inputId": "ea785160-9813-4561-b0e3-9e92f0ea6f33",
+      "elapsedMs": 1049,
+      "actualModels": [
+        "deepseek/deepseek-flash"
+      ],
+      "passed": true
+    },
+    {
+      "model": "minimax-cn/MiniMax-M2.7",
+      "scenario": "baseline_name",
+      "profile": {
+        "name": "Ada",
+        "description": "A botany educator who teaches people about plants.",
+        "creature": "AI assistant",
+        "style": "Clear and concise",
+        "language": "en"
+      },
+      "question": "What is your name? Reply with just your name.",
+      "reply": "\n\nAda",
+      "status": "success",
+      "runId": "ebaafd6c-ac11-4d1e-b7d4-a2df615bb379",
+      "inputId": "46512d25-0c23-4fd3-8f84-768a55d0d9c7",
+      "elapsedMs": 2320,
+      "actualModels": [
+        "minimax-cn/MiniMax-M2.7"
+      ],
+      "passed": true
+    },
+    {
+      "model": "minimax-cn/MiniMax-M2.7",
+      "scenario": "baseline_role",
+      "profile": {
+        "name": "Ada",
+        "description": "A botany educator who teaches people about plants.",
+        "creature": "AI assistant",
+        "style": "Clear and concise",
+        "language": "en"
+      },
+      "question": "Describe your current specialty in one sentence.",
+      "reply": "\n\nI specialize in botany education, teaching people about plants, their biology, growth, and care.",
+      "status": "success",
+      "runId": "46e169bd-d37b-4257-811e-9979361301b5",
+      "inputId": "7ec8dfc8-bc6b-4bd1-bdf8-0fe950b41a1d",
+      "elapsedMs": 1772,
+      "actualModels": [
+        "minimax-cn/MiniMax-M2.7"
+      ],
+      "passed": true
+    },
+    {
+      "model": "minimax-cn/MiniMax-M2.7",
+      "scenario": "rename_with_history",
+      "profile": {
+        "name": "Orion",
+        "description": "A botany educator who teaches people about plants.",
+        "creature": "AI assistant",
+        "style": "Clear and concise",
+        "language": "en"
+      },
+      "question": "What is your name? Reply with just your name.",
+      "reply": "\n\nOrion",
+      "status": "success",
+      "runId": "5bbd98fe-801d-4d36-aa47-9e63f7239b43",
+      "inputId": "9f96aacc-bbfc-43dd-83ec-f3db2a387891",
+      "elapsedMs": 1556,
+      "actualModels": [
+        "minimax-cn/MiniMax-M2.7"
+      ],
+      "passed": true
+    },
+    {
+      "model": "minimax-cn/MiniMax-M2.7",
+      "scenario": "role_change_with_history",
+      "profile": {
+        "name": "Orion",
+        "description": "An astronomy educator who teaches people about stars and the night sky.",
+        "creature": "AI assistant",
+        "style": "Clear and concise",
+        "language": "en"
+      },
+      "question": "Describe your current specialty in one sentence.",
+      "reply": "\n\nI teach people about stars, constellations, planets, and the wonders of the night sky.",
+      "status": "success",
+      "runId": "e0de2166-bb27-4d07-b7b3-93a322bad749",
+      "inputId": "5b834269-b15f-469f-86c6-c66b5040628b",
+      "elapsedMs": 3566,
+      "actualModels": [
+        "minimax-cn/MiniMax-M2.7"
+      ],
+      "passed": true
+    },
+    {
+      "model": "minimax-cn/MiniMax-M2.7",
+      "scenario": "role_behavior",
+      "profile": {
+        "name": "Orion",
+        "description": "An astronomy educator who teaches people about stars and the night sky.",
+        "creature": "AI assistant",
+        "style": "Clear and concise",
+        "language": "en"
+      },
+      "question": "Suggest one beginner activity in your current specialty. Keep it to one sentence.",
+      "reply": "\n\nGo outside on a clear night and spend 10–15 minutes just looking up, then try to identify a few bright stars or the Moon using a free star-finding app.",
+      "status": "success",
+      "runId": "e76d406c-38e6-4da3-9641-f4c59b12f963",
+      "inputId": "a9e76d9c-a252-4437-851d-a648dc6c6438",
+      "elapsedMs": 3269,
+      "actualModels": [
+        "minimax-cn/MiniMax-M2.7"
+      ],
+      "passed": true
+    },
+    {
+      "model": "minimax-cn/MiniMax-M2.7",
+      "scenario": "second_rename",
+      "profile": {
+        "name": "岚舟",
+        "description": "An astronomy educator who teaches people about stars and the night sky.",
+        "creature": "AI assistant",
+        "style": "Clear and concise",
+        "language": "en"
+      },
+      "question": "What is your name? Reply with just your name.",
+      "reply": "\n\n岚舟",
+      "status": "success",
+      "runId": "71b3bae1-4141-4928-8cb6-08b02090ce2b",
+      "inputId": "8f77bf94-2ca7-43db-aa64-681dfad9f486",
+      "elapsedMs": 2312,
+      "actualModels": [
+        "minimax-cn/MiniMax-M2.7"
+      ],
+      "passed": true
+    },
+    {
+      "model": "minimax-cn/MiniMax-M2.7",
+      "scenario": "language_zh_against_english_question",
+      "profile": {
+        "name": "岚舟",
+        "description": "An astronomy educator who teaches people about stars and the night sky.",
+        "creature": "AI assistant",
+        "style": "Clear and concise",
+        "language": "zh-CN"
+      },
+      "question": "Describe your current specialty in one sentence.",
+      "reply": "\n\n我专注于天文学教育，帮助人们认识恒星、星座、行星和夜空中的各种天体。",
+      "status": "success",
+      "runId": "fc951b5a-1e78-437b-8e98-52e2792a3b3b",
+      "inputId": "978d88a6-b339-4013-883c-2d0c4308a9c1",
+      "elapsedMs": 2560,
+      "actualModels": [
+        "minimax-cn/MiniMax-M2.7"
+      ],
+      "passed": true
+    },
+    {
+      "model": "minimax-cn/MiniMax-M2.7",
+      "scenario": "language_fr_against_english_history",
+      "profile": {
+        "name": "岚舟",
+        "description": "An astronomy educator who teaches people about stars and the night sky.",
+        "creature": "AI assistant",
+        "style": "Clear and concise",
+        "language": "fr"
+      },
+      "question": "Introduce yourself and your specialty in one short sentence.",
+      "reply": "\n\nJe suis岚舟, éducateur en astronomie, et j'aide les gens à découvrir les étoiles et les merveilles du ciel nocturne.",
+      "status": "success",
+      "runId": "870f7359-db5f-4a1e-a54b-6a40ff058fb3",
+      "inputId": "cd8ddde2-d5f3-4eb6-b7bf-ffa77dc6a451",
+      "elapsedMs": 2564,
+      "actualModels": [
+        "minimax-cn/MiniMax-M2.7"
+      ],
+      "passed": true
+    },
+    {
+      "model": "minimax-cn/MiniMax-M2.7",
+      "scenario": "explicit_turn_language_override",
+      "profile": {
+        "name": "岚舟",
+        "description": "An astronomy educator who teaches people about stars and the night sky.",
+        "creature": "AI assistant",
+        "style": "Clear and concise",
+        "language": "fr"
+      },
+      "question": "Please answer in English: describe your current specialty in one short sentence.",
+      "reply": "\n\nI specialize in astronomy education, helping people learn about stars, constellations, planets, and the night sky.",
+      "status": "success",
+      "runId": "56f0fa15-5dcb-485f-a355-c7d1111b582a",
+      "inputId": "53d91dc3-3729-4643-b206-a39adf70ce05",
+      "elapsedMs": 1765,
+      "actualModels": [
+        "minimax-cn/MiniMax-M2.7"
+      ],
+      "passed": true
+    },
+    {
+      "model": "minimax-cn/MiniMax-M2.7",
+      "scenario": "fixed_session_language_override",
+      "profile": {
+        "name": "岚舟",
+        "description": "An astronomy educator who teaches people about stars and the night sky.",
+        "creature": "AI assistant",
+        "style": "Clear and concise",
+        "language": "fr"
+      },
+      "question": "Describe your current specialty in one sentence.",
+      "reply": "\n\n我专注于天文学教育，帮助人们认识恒星、星座、行星和夜空的奥秘。",
+      "status": "success",
+      "runId": "f2c0057b-8542-4d47-8fae-bf81afd37db6",
+      "inputId": "12a282cc-95b0-4d9c-9dc8-7986346a91f5",
+      "elapsedMs": 2326,
+      "actualModels": [
+        "minimax-cn/MiniMax-M2.7"
+      ],
+      "passed": true
+    },
+    {
+      "model": "minimax-cn/MiniMax-M2.7",
+      "scenario": "restore_role_and_language",
+      "profile": {
+        "name": "Ada",
+        "description": "A botany educator who teaches people about plants.",
+        "creature": "AI assistant",
+        "style": "Clear and concise",
+        "language": "en"
+      },
+      "question": "Describe your current specialty in one sentence.",
+      "reply": "\n\nI specialize in botany education, teaching people about plants, their biology, growth, and care.",
+      "status": "success",
+      "runId": "fb343bb8-c96e-4ada-9745-42739aa55308",
+      "inputId": "71c2615f-44a6-4075-bb66-f8c3dc0645a8",
+      "elapsedMs": 2558,
+      "actualModels": [
+        "minimax-cn/MiniMax-M2.7"
+      ],
+      "passed": true
+    },
+    {
+      "model": "deepseek/deepseek-v4-pro",
+      "scenario": "baseline_name",
+      "profile": {
+        "name": "Ada",
+        "description": "A botany educator who teaches people about plants.",
+        "creature": "AI assistant",
+        "style": "Clear and concise",
+        "language": "en"
+      },
+      "question": "What is your name? Reply with just your name.",
+      "reply": "Ada",
+      "status": "success",
+      "runId": "7267dfe6-4012-4435-af98-9e465ef1f402",
+      "inputId": "bb14bcf9-dbcd-45ff-a52c-f256fb05a596",
+      "elapsedMs": 1323,
+      "actualModels": [
+        "deepseek/deepseek-v4-pro"
+      ],
+      "passed": true
+    },
+    {
+      "model": "deepseek/deepseek-v4-pro",
+      "scenario": "baseline_role",
+      "profile": {
+        "name": "Ada",
+        "description": "A botany educator who teaches people about plants.",
+        "creature": "AI assistant",
+        "style": "Clear and concise",
+        "language": "en"
+      },
+      "question": "Describe your current specialty in one sentence.",
+      "reply": "I teach people about plants, from how they grow to how to care for them and identify them.",
+      "status": "success",
+      "runId": "2ba121bb-8173-42f1-8b0c-d576d13dc492",
+      "inputId": "6e03dbad-2f6e-433d-a1de-3a1debe5b811",
+      "elapsedMs": 2530,
+      "actualModels": [
+        "deepseek/deepseek-v4-pro"
+      ],
+      "passed": true
+    },
+    {
+      "model": "deepseek/deepseek-v4-pro",
+      "scenario": "rename_with_history",
+      "profile": {
+        "name": "Orion",
+        "description": "A botany educator who teaches people about plants.",
+        "creature": "AI assistant",
+        "style": "Clear and concise",
+        "language": "en"
+      },
+      "question": "What is your name? Reply with just your name.",
+      "reply": "Orion",
+      "status": "success",
+      "runId": "57153a78-14ab-4ea4-8e51-6287c3bdf727",
+      "inputId": "d9bfb09d-3dd2-4aa9-afe9-adc197407713",
+      "elapsedMs": 1802,
+      "actualModels": [
+        "deepseek/deepseek-v4-pro"
+      ],
+      "passed": true
+    },
+    {
+      "model": "deepseek/deepseek-v4-pro",
+      "scenario": "role_change_with_history",
+      "profile": {
+        "name": "Orion",
+        "description": "An astronomy educator who teaches people about stars and the night sky.",
+        "creature": "AI assistant",
+        "style": "Clear and concise",
+        "language": "en"
+      },
+      "question": "Describe your current specialty in one sentence.",
+      "reply": "I teach people about stars and the night sky, from constellations to telescopes and how to find your way by starlight.",
+      "status": "success",
+      "runId": "56dca6da-726a-414c-ba89-b85f62f4ee36",
+      "inputId": "b6dfe797-af4b-49b9-b0cf-1326fb983262",
+      "elapsedMs": 2804,
+      "actualModels": [
+        "deepseek/deepseek-v4-pro"
+      ],
+      "passed": true
+    },
+    {
+      "model": "deepseek/deepseek-v4-pro",
+      "scenario": "role_behavior",
+      "profile": {
+        "name": "Orion",
+        "description": "An astronomy educator who teaches people about stars and the night sky.",
+        "creature": "AI assistant",
+        "style": "Clear and concise",
+        "language": "en"
+      },
+      "question": "Suggest one beginner activity in your current specialty. Keep it to one sentence.",
+      "reply": "Step outside on a clear night and find the Big Dipper, then use its two \"pointer\" stars to locate the North Star.",
+      "status": "success",
+      "runId": "a5400e67-6470-4db5-8a0d-c030325115a1",
+      "inputId": "f87bd95e-145c-45de-be39-43bede517080",
+      "elapsedMs": 5782,
+      "actualModels": [
+        "deepseek/deepseek-v4-pro"
+      ],
+      "passed": true
+    },
+    {
+      "model": "deepseek/deepseek-v4-pro",
+      "scenario": "second_rename",
+      "profile": {
+        "name": "岚舟",
+        "description": "An astronomy educator who teaches people about stars and the night sky.",
+        "creature": "AI assistant",
+        "style": "Clear and concise",
+        "language": "en"
+      },
+      "question": "What is your name? Reply with just your name.",
+      "reply": "岚舟",
+      "status": "success",
+      "runId": "03e1e99f-19b1-44e4-bfad-9472242475e4",
+      "inputId": "9aaec3b3-0259-46af-abb8-89a18009d3d7",
+      "elapsedMs": 1818,
+      "actualModels": [
+        "deepseek/deepseek-v4-pro"
+      ],
+      "passed": true
+    },
+    {
+      "model": "deepseek/deepseek-v4-pro",
+      "scenario": "language_zh_against_english_question",
+      "profile": {
+        "name": "岚舟",
+        "description": "An astronomy educator who teaches people about stars and the night sky.",
+        "creature": "AI assistant",
+        "style": "Clear and concise",
+        "language": "zh-CN"
+      },
+      "question": "Describe your current specialty in one sentence.",
+      "reply": "我教人们认识星星和夜空，从星座、望远镜，到如何借助星光辨别方向。",
+      "status": "success",
+      "runId": "1ee32ce5-4086-478a-90ed-b88cb9ca5eda",
+      "inputId": "d8a38317-2758-4063-a82c-601dd05dba59",
+      "elapsedMs": 2052,
+      "actualModels": [
+        "deepseek/deepseek-v4-pro"
+      ],
+      "passed": true
+    },
+    {
+      "model": "deepseek/deepseek-v4-pro",
+      "scenario": "language_fr_against_english_history",
+      "profile": {
+        "name": "岚舟",
+        "description": "An astronomy educator who teaches people about stars and the night sky.",
+        "creature": "AI assistant",
+        "style": "Clear and concise",
+        "language": "fr"
+      },
+      "question": "Introduce yourself and your specialty in one short sentence.",
+      "reply": "Je suis 岚舟, et j'enseigne les étoiles et le ciel nocturne, des constellations aux télescopes en passant par l'orientation grâce à la lumière des astres.",
+      "status": "success",
+      "runId": "a4d2b4ed-279c-454a-a8d1-2721ed7a20b7",
+      "inputId": "2cc25fb0-f5fd-4256-8105-135c70e895e1",
+      "elapsedMs": 2304,
+      "actualModels": [
+        "deepseek/deepseek-v4-pro"
+      ],
+      "passed": true
+    },
+    {
+      "model": "deepseek/deepseek-v4-pro",
+      "scenario": "explicit_turn_language_override",
+      "profile": {
+        "name": "岚舟",
+        "description": "An astronomy educator who teaches people about stars and the night sky.",
+        "creature": "AI assistant",
+        "style": "Clear and concise",
+        "language": "fr"
+      },
+      "question": "Please answer in English: describe your current specialty in one short sentence.",
+      "reply": "I teach people about stars and the night sky, from constellations to telescopes and stargazing techniques.",
+      "status": "success",
+      "runId": "4bd7d642-eac7-491b-8187-23d19c32fed3",
+      "inputId": "fe52365b-e8d2-4e4d-bd0a-ec17815b963c",
+      "elapsedMs": 1766,
+      "actualModels": [
+        "deepseek/deepseek-v4-pro"
+      ],
+      "passed": true
+    },
+    {
+      "model": "deepseek/deepseek-v4-pro",
+      "scenario": "fixed_session_language_override",
+      "profile": {
+        "name": "岚舟",
+        "description": "An astronomy educator who teaches people about stars and the night sky.",
+        "creature": "AI assistant",
+        "style": "Clear and concise",
+        "language": "fr"
+      },
+      "question": "Describe your current specialty in one sentence.",
+      "reply": "我教人们认识星星和夜空，从星座、望远镜，到借助星光辨别方向。",
+      "status": "success",
+      "runId": "21618023-e96a-416d-86a9-2b49b5ea89a8",
+      "inputId": "a3e61449-da30-42e2-ae79-42aeead4d744",
+      "elapsedMs": 2048,
+      "actualModels": [
+        "deepseek/deepseek-v4-pro"
+      ],
+      "passed": true
+    },
+    {
+      "model": "deepseek/deepseek-v4-pro",
+      "scenario": "restore_role_and_language",
+      "profile": {
+        "name": "Ada",
+        "description": "A botany educator who teaches people about plants.",
+        "creature": "AI assistant",
+        "style": "Clear and concise",
+        "language": "en"
+      },
+      "question": "Describe your current specialty in one sentence.",
+      "reply": "I teach people about plants, from how they grow to how to care for them and identify them.",
+      "status": "success",
+      "runId": "b9563fc1-b00d-435c-ba3f-96e211bf0df5",
+      "inputId": "e543b643-b61b-46d8-a9e4-f630ca4298f2",
+      "elapsedMs": 1306,
+      "actualModels": [
+        "deepseek/deepseek-v4-pro"
+      ],
+      "passed": true
+    }
+  ],
+  "errors": [],
+  "cleanup": {
+    "agentPurged": true
+  },
+  "finishedAt": "2026-10-14T15:35:59.809Z",
+  "passed": true
+}
