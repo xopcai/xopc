@@ -1,4 +1,5 @@
 import type {
+  TaskAllocation,
   TaskAttentionItem,
   TaskDependencySummary,
   TaskOperationalState,
@@ -6,12 +7,14 @@ import type {
 
 import { getSqliteDatabase } from '../storage/sqlite/transaction.js';
 
+import { TaskAllocationRepository } from './task-allocation-repository.js';
 import { TaskRepository, type TaskAggregate } from './task-repository.js';
 import { TaskRunRepository } from './task-run-repository.js';
 import { resolveTaskLocale } from './task-language.js';
 
 export interface TaskReadModel {
   task: TaskAggregate;
+  allocation?: TaskAllocation;
   operationalState: TaskOperationalState;
   attention: TaskAttentionItem[];
   allowedCommands: string[];
@@ -39,7 +42,12 @@ export class TaskReadModelProjector {
        LIMIT 1`,
     ).get(task.id));
 
+    const allocation = new TaskAllocationRepository().summary(task.id);
+    if (allocation && task.phase === 'closed' && allocation.status !== 'assigned') allocation.status = 'cancelled';
     const attention: TaskAttentionItem[] = [];
+    if (allocation && ['blocked', 'failed'].includes(allocation.status)) attention.push({
+      kind: allocation.status === 'failed' ? 'allocation_failed' : 'allocation_blocked',
+      summary: allocation.selectionReason ?? allocation.reasonCode ?? 'Allocation needs attention', sourceId: allocation.id });
     for (const wait of waits) {
       const kind = wait.kind === 'approval'
         ? 'approval_required'
@@ -62,18 +70,28 @@ export class TaskReadModelProjector {
       attention.push({ kind: 'overdue', summary: resolveTaskLocale(task) === 'zh' ? '任务已逾期' : 'Task is overdue' });
     }
 
-    const operationalState = this.operationalState({
+    const executionState = this.operationalState({
       task,
       activeRun,
       latestRun,
       waits,
       hasIncompleteDependency,
     });
+    const allocating = allocation && ['pending', 'selecting'].includes(allocation.status);
+    const allowedCommands = this.allowedCommands(task, activeRun?.status, waits.length > 0, paused)
+      .filter(command => !(allocation && allocation.status !== 'assigned' && command === 'start'));
+    if (allocation && ['blocked', 'failed'].includes(allocation.status) && task.phase !== 'closed' && !paused) {
+      allowedCommands.push('retry_allocation');
+    }
+    const operationalState = task.phase !== 'closed' && !paused && !activeRun && waits.length === 0 && allocation
+      ? allocating ? 'allocating' : allocation.status === 'blocked' ? 'blocked' : allocation.status === 'failed' ? 'failed' : executionState
+      : executionState;
     return {
       task,
+      allocation,
       operationalState,
       attention: task.phase === 'closed' || paused ? [] : attention,
-      allowedCommands: this.allowedCommands(task, activeRun?.status, waits.length > 0, paused),
+      allowedCommands,
     };
   }
 

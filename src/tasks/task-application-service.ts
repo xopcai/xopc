@@ -17,6 +17,7 @@ import { TaskContextRepository } from './task-context-repository.js';
 import { enqueueTaskAttentionRequiredEvent, enqueueTaskChangedEvent } from './task-change-events.js';
 import { TaskDependencyService } from './task-dependency-service.js';
 import { TaskReadModelProjector, type TaskReadModel } from './task-read-model-projector.js';
+import { TaskAllocationRepository } from './task-allocation-repository.js';
 import { TaskRepository } from './task-repository.js';
 import { TaskRunRepository } from './task-run-repository.js';
 import { TaskCollaborationRepository } from './task-collaboration-repository.js';
@@ -54,6 +55,7 @@ function commandChangedFields(command: TaskCommand): TaskChangedField[] {
     case 'close':
     case 'reopen':
       return ['phase', 'resolution', 'attention'];
+    case 'retry_allocation':
     case 'start':
       return ['phase', 'runs', 'attention'];
     case 'add_wait':
@@ -154,6 +156,11 @@ export class TaskApplicationService {
         actor,
       });
 
+      if (input.activation.mode === 'allocate') {
+        if (!input.originConversationId || input.delegateAgentId) throw new Error('Allocation requires an origin and no preselected executor');
+        new TaskAllocationRepository().create(current.id, input.originConversationId, current.version, input.activation.requirements);
+        return { ok: true, model: this.#projector.project(current) };
+      }
       if (input.activation.mode === 'capture') {
         return { ok: true, model: this.#projector.project(current) };
       }
@@ -223,6 +230,21 @@ export class TaskApplicationService {
             ? this.lifecycle(task.id, task.version, 'ready')
             : { ok: false, reason: 'invalid_transition', model };
           break;
+        case 'retry_allocation': {
+          const allocation = new TaskAllocationRepository().get(task.id);
+          if (!allocation || !['blocked', 'failed'].includes(allocation.status) || task.phase === 'closed'
+            || this.#runs.getActiveRoot(task.id) || this.#runs.listActiveWaits(task.id).length) {
+            result = { ok: false, reason: 'invalid_transition', model };
+            break;
+          }
+          const updated = this.#tasks.update(task.id, { expectedVersion: task.version });
+          if (!updated) { result = { ok: false, reason: 'conflict', model }; break; }
+          db.prepare("UPDATE task_allocations SET status = 'pending', attempts = 0, reason_code = NULL, task_version = ?, next_attempt_at = ?, updated_at = ? WHERE task_id = ?")
+            .run(updated.version, Date.now(), Date.now(), task.id);
+          new TaskAllocationRepository().publish(task.id, `任务「${task.title}」正在重新分配执行者。`);
+          result = { ok: true, model: this.#projector.project(updated) };
+          break;
+        }
         case 'start':
           result = this.start(task.id, task.version, input.command.executor, {
             idempotencyKey: input.idempotencyKey,
@@ -524,6 +546,10 @@ export class TaskApplicationService {
       return task
         ? { ok: false, reason: 'conflict', model: this.#projector.project(task) }
         : { ok: false, reason: 'not_found' };
+    }
+    const allocation = new TaskAllocationRepository().get(taskId);
+    if (allocation && allocation.status !== 'assigned' && !(options.actor.kind === 'system' && options.actor.id === 'task-router')) {
+      return { ok: false, reason: 'blocked', model: this.#projector.project(task) };
     }
     if (task.phase === 'closed' || this.#runs.getActiveRoot(taskId)) {
       return { ok: false, reason: 'invalid_transition', model: this.#projector.project(task) };

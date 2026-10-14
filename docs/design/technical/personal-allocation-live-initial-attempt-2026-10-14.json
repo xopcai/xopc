@@ -1,0 +1,36 @@
+{
+  "success": false,
+  "scope": "Discarded initial run: timing-column mismatch in verifier; model also populated requestedAgentId without user naming an Agent.",
+  "task": [
+    {
+      "task_id": "54182c7e-7876-4b89-aef1-471371740492",
+      "title": "月度销售额与环比分析（LIVE-ALLOCATION-65a9b84d）",
+      "phase": "active",
+      "delegate_agent_id": "data-analyst"
+    }
+  ],
+  "allocation": [
+    {
+      "requirements_json": "{\"version\":1,\"summary\":\"分析销售CSV的月度销售额与环比，产出CSV汇总、中文报告和可复现脚本并实跑核验\",\"domain\":\"data\",\"taskType\":\"data_analysis\",\"inputKinds\":[\"csv\"],\"outputKinds\":[\"code\",\"csv\",\"markdown\"],\"requiredTools\":[],\"requiredSkills\":[],\"requestedAgentId\":\"data-analyst\"}",
+      "status": "assigned",
+      "selected_agent_id": "data-analyst",
+      "selection_reason": "用户明确指定的执行者已通过检查。"
+    }
+  ],
+  "usage": [
+    {
+      "operation": "agent.answer",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 10520
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 5682
+    }
+  ]
+}
