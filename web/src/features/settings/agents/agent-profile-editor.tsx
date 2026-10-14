@@ -3,7 +3,6 @@ import {
   BriefcaseBusiness,
   Code2,
   Eye,
-  FileCog,
   Heart,
   Pencil,
 } from 'lucide-react';
@@ -14,7 +13,6 @@ import {
   useCallback,
   useEffect,
   useImperativeHandle,
-  useMemo,
   useState,
 } from 'react';
 
@@ -39,23 +37,15 @@ const loadMarkdownEditor = () => import('@/components/markdown/markdown-editor')
 const BlockEditor = lazy(() => loadBlockEditor().then((module) => ({ default: module.BlockEditor })));
 const MarkdownEditor = lazy(() => loadMarkdownEditor().then((module) => ({ default: module.MarkdownEditor })));
 
-const PROFILE_FILES = ['SOUL.md', 'TOOLS.md', 'AGENTS.md'] as const;
-type ProfileFileName = typeof PROFILE_FILES[number];
+type ProfileFileName = 'SOUL.md' | 'TOOLS.md' | 'AGENTS.md';
 type EditorMode = 'direct' | 'source' | 'preview';
-type ProfileDrafts = Record<ProfileFileName, string>;
-
-const EMPTY_DRAFTS: ProfileDrafts = {
-  'SOUL.md': '',
-  'TOOLS.md': '',
-  'AGENTS.md': '',
-};
-
 export type AgentProfileEditorHandle = {
   save: () => Promise<void>;
 };
 
 type Props = {
   agentId: string;
+  file: ProfileFileName;
   zh: boolean;
   onDirtyChange: (dirty: boolean) => void;
 };
@@ -73,17 +63,20 @@ function EditorFallback() {
 
 export const AgentProfileEditor = forwardRef<AgentProfileEditorHandle, Props>(function AgentProfileEditor({
   agentId,
+  file: activeFile,
   zh,
   onDirtyChange,
 }, ref) {
   const isDark = useThemeStore((state) => state.resolved === 'dark');
-  const [drafts, setDrafts] = useState<ProfileDrafts>(EMPTY_DRAFTS);
-  const [baseline, setBaseline] = useState<ProfileDrafts>(EMPTY_DRAFTS);
+  const [draft, setDraft] = useState('');
+  const [baseline, setBaseline] = useState('');
   const [loading, setLoading] = useState(true);
   const [loadFailed, setLoadFailed] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [activeFile, setActiveFile] = useState<ProfileFileName>('SOUL.md');
+  const [savedOnce, setSavedOnce] = useState(false);
+  const [templateOpen, setTemplateOpen] = useState(false);
+  const [templateUndo, setTemplateUndo] = useState<string | null>(null);
   const [mode, setMode] = useState<EditorMode>('direct');
 
   useEffect(() => {
@@ -91,20 +84,18 @@ export const AgentProfileEditor = forwardRef<AgentProfileEditorHandle, Props>(fu
     setLoading(true);
     setLoadFailed(false);
     setError(null);
-    setDrafts({ ...EMPTY_DRAFTS });
-    setBaseline({ ...EMPTY_DRAFTS });
+    setDraft('');
+    setBaseline('');
+    setSavedOnce(false);
+    setTemplateUndo(null);
     void (async () => {
       try {
         const listing = await fetchAgentProfileFiles(agentId);
         const existing = new Set(listing.files.filter((file) => !file.missing).map((file) => file.name));
-        const entries = await Promise.all(PROFILE_FILES.map(async (file) => (
-          [file, existing.has(file) ? await fetchAgentProfileFileContent(agentId, file) : ''] as const
-        )));
+        const content = existing.has(activeFile) ? await fetchAgentProfileFileContent(agentId, activeFile) : '';
         if (cancelled) return;
-        const next = { ...EMPTY_DRAFTS };
-        for (const [file, content] of entries) next[file] = content;
-        setDrafts(next);
-        setBaseline(next);
+        setDraft(content);
+        setBaseline(content);
       } catch (cause) {
         if (cancelled) return;
         setLoadFailed(true);
@@ -114,29 +105,27 @@ export const AgentProfileEditor = forwardRef<AgentProfileEditorHandle, Props>(fu
       }
     })();
     return () => { cancelled = true; };
-  }, [agentId]);
+  }, [agentId, activeFile]);
 
-  const dirty = useMemo(
-    () => PROFILE_FILES.some((file) => drafts[file] !== baseline[file]),
-    [baseline, drafts],
-  );
+  const dirty = draft !== baseline;
   useEffect(() => onDirtyChange(dirty), [dirty, onDirtyChange]);
 
   const save = useCallback(async () => {
-    const changed = PROFILE_FILES.filter((file) => drafts[file] !== baseline[file]);
-    if (changed.length === 0) return;
+    if (!dirty) return;
     setSaving(true);
     setError(null);
     try {
-      await Promise.all(changed.map((file) => saveAgentProfileFileContent(agentId, file, drafts[file])));
-      setBaseline({ ...drafts });
+      await saveAgentProfileFileContent(agentId, activeFile, draft);
+      setBaseline(draft);
+      setSavedOnce(true);
+      setTemplateUndo(null);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
       throw cause;
     } finally {
       setSaving(false);
     }
-  }, [agentId, baseline, drafts]);
+  }, [agentId, activeFile, dirty, draft]);
   useImperativeHandle(ref, () => ({ save }), [save]);
 
   const fileInfo: Record<ProfileFileName, { label: string; description: string }> = {
@@ -145,7 +134,7 @@ export const AgentProfileEditor = forwardRef<AgentProfileEditorHandle, Props>(fu
       description: zh ? '定义语气、价值观、行为原则与安全边界。' : 'Tone, values, behavior principles, and safety boundaries.',
     },
     'TOOLS.md': {
-      label: zh ? '工具说明' : 'Tool guidance',
+      label: zh ? '工具使用约定' : 'Tool guidance',
       description: zh ? '补充工具偏好和使用约定，不负责授予权限。' : 'Tool preferences and conventions; this does not grant access.',
     },
     'AGENTS.md': {
@@ -155,26 +144,14 @@ export const AgentProfileEditor = forwardRef<AgentProfileEditorHandle, Props>(fu
   };
 
   const templateIcons = [BriefcaseBusiness, Heart, Code2, Pencil];
-  const visualContent = splitProfileMarkdownFrontMatter(drafts[activeFile]).body;
+  const visualContent = splitProfileMarkdownFrontMatter(draft).body;
 
   return (
     <div className="space-y-5">
       <section className="overflow-hidden rounded-2xl border border-edge bg-surface-base">
-        <div className="border-b border-edge px-4 py-4 sm:px-5">
-          <div className="flex items-start gap-3">
-            <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-surface-hover text-fg-muted"><FileCog className="size-4" aria-hidden /></span>
-            <div className="min-w-0"><h4 className="text-sm font-semibold text-fg">{zh ? '角色配置' : 'Profile documents'}</h4><p className="mt-1 text-xs leading-5 text-fg-muted">{zh ? '三类角色文件均可编辑。默认使用所见即所得编辑器，熟悉 Markdown 时再切换源码。' : 'All three profile documents are editable. The visual editor is the default; switch to Markdown source only when needed.'}</p></div>
-          </div>
-          <div className="mt-4 flex gap-1 overflow-x-auto" role="tablist" aria-label={zh ? '角色配置文件' : 'Profile documents'}>
-            {PROFILE_FILES.map((file) => (
-              <button key={file} type="button" role="tab" aria-selected={activeFile === file} onClick={() => { setActiveFile(file); setMode('direct'); }} className={cn('min-h-10 shrink-0 rounded-lg px-3 py-2 font-mono text-xs font-medium transition-colors', activeFile === file ? 'bg-accent-soft text-accent-fg' : 'text-fg-muted hover:bg-surface-hover hover:text-fg')}>{file}</button>
-            ))}
-          </div>
-        </div>
-
         <div className="p-4 sm:p-5">
           <div className="flex flex-wrap items-start justify-between gap-3">
-            <div><p className="text-sm font-medium text-fg">{fileInfo[activeFile].label}</p><p className="mt-1 text-xs leading-5 text-fg-muted">{fileInfo[activeFile].description}</p></div>
+            <div><h4 className="text-sm font-semibold text-fg">{fileInfo[activeFile].label}</h4><p className="mt-1 text-xs leading-5 text-fg-muted">{fileInfo[activeFile].description}</p></div>
             <div className="flex rounded-lg bg-surface-hover p-1" role="group" aria-label={zh ? '编辑模式' : 'Editor mode'}>
               {([
                 ['direct', Pencil, zh ? '直接编辑' : 'Visual'],
@@ -186,27 +163,31 @@ export const AgentProfileEditor = forwardRef<AgentProfileEditorHandle, Props>(fu
 
           {activeFile === 'SOUL.md' && !loading ? (
             <div className="mt-4">
-              <p className="mb-2 text-xs font-medium text-fg-muted">{zh ? '从模板开始' : 'Start from a template'}</p>
+              <button type="button" disabled={loadFailed} aria-expanded={templateOpen} onClick={() => setTemplateOpen(!templateOpen)} className="text-xs font-medium text-accent hover:underline">{zh ? '使用模板' : 'Use a template'}</button>
+              {templateUndo !== null ? <button type="button" className="ml-3 text-xs text-accent hover:underline" onClick={() => { setDraft(templateUndo); setTemplateUndo(null); }}>{zh ? '撤销模板替换' : 'Undo template replacement'}</button> : null}
+              {templateOpen ? <>
+              <p className="my-2 text-xs text-fg-muted">{zh ? '模板会替换当前个性正文，保存前可以撤销。' : 'A template replaces the personality text. You can undo before saving.'}</p>
               <div className="grid gap-2 sm:grid-cols-4">
                 {SOUL_TEMPLATES.map((template, index) => {
                   const Icon = templateIcons[index] ?? Bot;
-                  return <button key={template.id} type="button" onClick={() => { if (template.content) setDrafts((current) => ({ ...current, 'SOUL.md': replaceProfileMarkdownBody(current['SOUL.md'], template.content) })); setMode('direct'); }} className="flex min-h-11 items-center gap-2 rounded-xl border border-edge px-3 py-2 text-left text-xs font-medium text-fg-muted transition-colors hover:border-accent/40 hover:bg-surface-hover hover:text-fg"><Icon className="size-4 shrink-0 text-accent" aria-hidden />{zh ? template.labelZh : template.labelEn}</button>;
+                  return <button key={template.id} type="button" onClick={() => { if (template.content) { setTemplateUndo(draft); setDraft(current => replaceProfileMarkdownBody(current, template.content)); } setMode('direct'); }} className="flex min-h-11 items-center gap-2 rounded-xl border border-edge px-3 py-2 text-left text-xs font-medium text-fg-muted transition-colors hover:border-accent/40 hover:bg-surface-hover hover:text-fg"><Icon className="size-4 shrink-0 text-accent" aria-hidden />{zh ? template.labelZh : template.labelEn}</button>;
                 })}
               </div>
+              </> : null}
             </div>
           ) : null}
 
           {error ? <p className="mt-4 rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-600" role="alert">{error}</p> : null}
-          <div className="mt-4 h-[min(40vh,22rem)] min-h-64 overflow-hidden rounded-xl border border-edge bg-surface-panel" role="tabpanel">
+          <div className="mt-4 h-[min(40vh,22rem)] min-h-64 overflow-hidden rounded-xl border border-edge bg-surface-panel">
             {loading ? <EditorFallback /> : loadFailed ? <div className="flex h-full items-center justify-center p-6 text-center text-sm text-fg-muted">{zh ? '无法加载角色配置，未对文件进行任何更改。' : 'Profile documents could not be loaded. No files were changed.'}</div> : mode === 'direct' ? (
-              <Suspense fallback={<EditorFallback />}><BlockEditor key={`${agentId}-${activeFile}-direct`} initialContent={visualContent} onChange={(content) => setDrafts((current) => ({ ...current, [activeFile]: replaceProfileMarkdownBody(current[activeFile], content) }))} placeholder={zh ? '直接输入内容，或输入 / 使用快捷命令…' : 'Start writing, or type / for commands…'} /></Suspense>
+              <Suspense fallback={<EditorFallback />}><BlockEditor key={`${agentId}-${activeFile}-direct`} initialContent={visualContent} onChange={(content) => setDraft(current => replaceProfileMarkdownBody(current, content))} placeholder={zh ? '直接输入内容，或输入 / 使用快捷命令…' : 'Start writing, or type / for commands…'} /></Suspense>
             ) : mode === 'source' ? (
-              <Suspense fallback={<EditorFallback />}><MarkdownEditor key={`${agentId}-${activeFile}-source`} initialContent={drafts[activeFile]} onChange={(content) => setDrafts((current) => ({ ...current, [activeFile]: content }))} isDark={isDark} lineWrap className="min-h-0 flex-1" /></Suspense>
+              <Suspense fallback={<EditorFallback />}><MarkdownEditor key={`${agentId}-${activeFile}-source`} initialContent={draft} onChange={(content) => setDraft(content)} isDark={isDark} lineWrap className="min-h-0 flex-1" /></Suspense>
             ) : (
               <div className="h-full overflow-y-auto p-5">{visualContent.trim() ? <MarkdownView content={visualContent} /> : <p className="text-sm italic text-fg-muted">{zh ? '暂无内容。' : 'No content yet.'}</p>}</div>
             )}
           </div>
-          <div className="mt-2 flex justify-end text-xs text-fg-muted" aria-live="polite">{saving ? (zh ? '正在保存角色配置…' : 'Saving profile documents…') : dirty ? (zh ? '角色配置有未保存的更改' : 'Profile documents have unsaved changes') : (zh ? '角色配置已保存' : 'Profile documents saved')}</div>
+          <div className="mt-2 flex justify-end text-xs text-fg-muted" aria-live="polite">{saving ? (zh ? '正在保存角色配置…' : 'Saving profile documents…') : dirty ? (zh ? '角色配置有未保存的更改' : 'Profile documents have unsaved changes') : savedOnce ? (zh ? '文档更改已保存' : 'Document changes saved') : (zh ? '未修改' : 'No changes')}</div>
         </div>
       </section>
     </div>
