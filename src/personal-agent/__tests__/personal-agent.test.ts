@@ -249,12 +249,14 @@ describe('personal Agent identity', () => {
     expect(direct).toContain('personal_task(command="submit")');
     expect(direct).toContain('requiredSkills=[canonicalName]');
     expect(direct).toContain('preserve that choice');
-    expect(direct).toContain('Do not pre-read input files, discover or choose Agents before submission');
+    expect(direct).toContain('The background Task Router selects and starts the executor');
+    expect(direct).not.toContain('call delegate_task');
+    expect(direct).toContain('Do not invent extra analyses');
     expect(direct).toContain('Answer directly when your capabilities suffice');
     expect(direct).toContain('ask one short question directly in your reply');
     expect(direct).toContain('Never use clarify');
     expect(direct).toContain('Before tool discovery or delegation');
-    expect(direct).toContain('If the chosen Agent or tool cannot complete the Task');
+    expect(direct).toContain('Reuse the existing Task');
     expect(direct).toContain('For current news or other live facts');
   });
 
@@ -488,7 +490,7 @@ describe('personal Agent identity', () => {
         profile: { ...refreshed.profile!, instructions: previousGuidance },
       }, repaired.revision);
       await refreshPersonalDelegationGuidance(gateway, 'local-owner');
-      expect(repository.get(agentId)?.profile?.instructions).toContain('If the chosen Agent or tool cannot complete the Task');
+      expect(repository.get(agentId)?.profile?.instructions).toContain('Reuse the existing Task');
       expect(repository.get(agentId)?.profile?.instructions).toContain('Keep my custom instruction.');
       const prior = repository.get(agentId)!;
       const priorInstructions = prior.profile!.instructions!.split('\n').filter((_, index) => index !== 2).join('\n');
@@ -496,7 +498,7 @@ describe('personal Agent identity', () => {
         profile: { ...prior.profile!, instructions: priorInstructions },
       }, prior.revision);
       await refreshPersonalDelegationGuidance(gateway, 'local-owner');
-      expect(repository.get(agentId)?.profile?.instructions).toContain('A worker question is yours to resolve first');
+      expect(repository.get(agentId)?.profile?.instructions).toContain('For current news or other live facts');
       expect(repository.get(agentId)?.profile?.instructions).toContain('Keep my custom instruction.');
     } finally {
       closeXopcDatabase();

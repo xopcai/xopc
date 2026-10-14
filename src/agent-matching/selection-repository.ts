@@ -63,13 +63,13 @@ export class AgentSelectionRepository {
     return row && decode(row);
   }
 
-  list(conversationId: string, filter: { taskId?: string; requestId?: string; offset?: number } = {}): SelectionRecord[] {
+  list(conversationId: string, filter: { taskId?: string; requestId?: string; offset?: number; limit?: number } = {}): SelectionRecord[] {
     const clauses = ['conversation_id = ?'];
     const args: Array<string | number> = [conversationId];
     if (filter.taskId) { clauses.push('task_id = ?'); args.push(filter.taskId); }
     if (filter.requestId) { clauses.push('personal_request_id = ?'); args.push(filter.requestId); }
     return (getSqliteDatabase().prepare(`SELECT * FROM agent_selection_records WHERE ${clauses.join(' AND ')}
-      ORDER BY created_at DESC, id DESC LIMIT 20 OFFSET ?`).all(...args, Math.max(0, filter.offset ?? 0)) as Row[]).map(decode);
+      ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?`).all(...args, Math.min(100, Math.max(1, filter.limit ?? 20)), Math.max(0, filter.offset ?? 0)) as Row[]).map(decode);
   }
 
   create(input: {

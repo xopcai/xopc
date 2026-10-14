@@ -79,7 +79,7 @@ const DEFAULT_PATTERNS: ErrorPattern[] = [
   {
     name: 'timeout',
     description: 'Command execution timed out',
-    regex: /timeout|timed out|execution time exceeded/i,
+    regex: /\btimeout(?:error|exception)?\b|timed out|execution time exceeded|\betimedout\b/i,
     suggestion: 'Command took too long. Consider optimizing the command, breaking into smaller tasks, or increasing timeout.',
     autoRetry: true,
     maxRetries: 1,
