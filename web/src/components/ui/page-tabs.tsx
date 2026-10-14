@@ -23,6 +23,7 @@ export function PageTabs<T extends string>({
   ariaLabel,
   tabIdPrefix,
   panelIdPrefix,
+  orientation = 'horizontal',
   className,
   buttonClassName,
   selectedClassName = 'bg-surface-active text-fg',
@@ -36,6 +37,7 @@ export function PageTabs<T extends string>({
   ariaLabel: string;
   tabIdPrefix?: string;
   panelIdPrefix?: string;
+  orientation?: 'horizontal' | 'vertical';
   className?: string;
   buttonClassName?: string;
   selectedClassName?: string;
@@ -56,6 +58,7 @@ export function PageTabs<T extends string>({
       aria-label={ariaLabel}
       className={cn('-mx-1 flex gap-1 overflow-x-auto overscroll-x-contain px-1 pb-1', className)}
       role="tablist"
+      aria-orientation={orientation}
       onDragLeave={(event) => {
         if (!onReorder) return;
         const relatedTarget = event.relatedTarget;
@@ -63,12 +66,14 @@ export function PageTabs<T extends string>({
         setDropTarget(null);
       }}
       onKeyDown={(event) => {
-        if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+        const previousKey = orientation === 'vertical' ? 'ArrowUp' : 'ArrowLeft';
+        const nextKey = orientation === 'vertical' ? 'ArrowDown' : 'ArrowRight';
+        if (![previousKey, nextKey, 'Home', 'End'].includes(event.key)) return;
         if (!items.length) return;
         event.preventDefault();
         const currentIndex = items.findIndex((item) => item.id === activeTab);
         const nextIndex = event.key === 'Home' ? 0 : event.key === 'End' ? items.length - 1
-          : (Math.max(0, currentIndex) + (event.key === 'ArrowRight' ? 1 : -1) + items.length) % items.length;
+          : (Math.max(0, currentIndex) + (event.key === nextKey ? 1 : -1) + items.length) % items.length;
         onChange(items[nextIndex].id);
         const next = event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]')[nextIndex];
         next?.focus();
