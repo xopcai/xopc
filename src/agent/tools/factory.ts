@@ -813,7 +813,7 @@ export class AgentToolsFactory {
     }
     const selected = filterToolsByDisabledSet(core.map(markCodemodeCoreRead), disabled)
       .filter(tool => (!allowed || allowed.has(tool.name)) && !(personalToolsConfigured && tool.name === 'clarify'))
-      .map(tool => personalToolsConfigured && PERSONAL_TOOL_DESCRIPTIONS[tool.name]
+      .map(tool => personalToolsConfigured && !tool.name.startsWith('personal_') && PERSONAL_TOOL_DESCRIPTIONS[tool.name]
         ? { ...tool, description: PERSONAL_TOOL_DESCRIPTIONS[tool.name] } : tool);
     return executionToolPolicy ? filterExecutionTools(executionToolPolicy, selected) : selected;
   }
