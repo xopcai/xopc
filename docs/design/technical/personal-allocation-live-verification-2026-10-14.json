@@ -1,0 +1,77 @@
+{
+  "success": false,
+  "failure": "Allocation blocked: no_eligible_candidate",
+  "marker": "LIVE-ALLOCATION-2da94cea",
+  "task": {
+    "task_id": "6f6a9bda-e95d-4ea1-9e29-a6c429cc3455",
+    "title": "分析 sales.csv 月度销售额及环比",
+    "phase": "ready",
+    "delegate_agent_id": null
+  },
+  "models": {
+    "personal": "deepseek/deepseek-flash",
+    "global": "xopc-cloud/openai-codex/gpt-5.5"
+  },
+  "timeline": [
+    {
+      "stage": "requestSent",
+      "timestamp": "2026-10-14T00:33:37.209Z",
+      "elapsedMs": 0
+    },
+    {
+      "stage": "requestAccepted",
+      "timestamp": "2026-10-14T00:33:37.223Z",
+      "elapsedMs": 14
+    },
+    {
+      "stage": "submitToolStarted",
+      "timestamp": "2026-10-14T00:33:46.012Z",
+      "elapsedMs": 8803
+    },
+    {
+      "stage": "taskPersisted",
+      "timestamp": "2026-10-14T00:33:46.019Z",
+      "elapsedMs": 8810
+    },
+    {
+      "stage": "submitToolReturned",
+      "timestamp": "2026-10-14T00:33:46.782Z",
+      "elapsedMs": 9573
+    }
+  ],
+  "rawTimings": {
+    "gatewayStartupMs": 899.7620419999985,
+    "requestSent": 1791938017209,
+    "requestAccepted": 1791938017223,
+    "submitToolStarted": 1791938026012,
+    "submitHostMs": 1.552332999999635,
+    "taskPersisted": 1791938026019,
+    "submitToolMs": 769.5111669999969,
+    "submitToolReturned": 1791938026782
+  },
+  "usage": [
+    {
+      "operation": "agent.answer",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "started_at": 1791938017606,
+      "finished_at": 1791938025982,
+      "duration_ms": 8376,
+      "input_tokens": 11466,
+      "output_tokens": 1034,
+      "reasoning_tokens": 0,
+      "error_summary": null
+    }
+  ],
+  "inputs": [
+    {
+      "client_message_id": "LIVE-ALLOCATION-2da94cea-task",
+      "status": "running",
+      "created_at_ms": 1791938017218,
+      "updated_at_ms": 1791938017421,
+      "error": null
+    }
+  ],
+  "isolatedStateDirectory": "/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-personal-allocation-live-993mBO"
+}

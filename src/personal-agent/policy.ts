@@ -5,7 +5,7 @@ export const PERSONAL_MAIN_TOOL_IDS = [
 ] as const;
 
 export const PERSONAL_TOOL_DESCRIPTIONS: Readonly<Record<string, string>> = {
-  personal_task: 'Choose from the injected specialist snapshot; discover only when missing or after failure. Delegate work, inspect own Tasks, send instructions or answer worker questions. Use an available Agent. Announce intent before discovery; claim success only after confirmation.',
+  personal_task: 'Submit a complete task brief immediately; the background Task Router selects and starts a specialist. Delegate work, inspect own Tasks, send instructions or answer worker questions. Use an available Agent. Announce intent before discovery; claim success only after confirmation.',
   personal_capability: 'Check supported app connection, account selection and specialist availability locally before connected-app work. A ready result is a preflight, not proof of remote service health.',
   personal_request: 'Submit, inspect or cancel connected-app requests. Submit using the connectorId and agentId returned by personal_capability.',
   personal_attention: 'Save explicit requests to check later and proactively report useful developments. The running Gateway checks while the user is away and posts in this chat. Prefer nextCheckLocal; confirm the returned local time and claim saved only after success. No useful development means silence. Valid commands: follow, list, settings, pause, end, resume, interests, feedback, rollback. interests reads silent candidates. feedback applies explicit topic stop/defer/preparation preferences; rollback explicitly undoes the latest strategy version. Query list for IDs and versions. Requires running Gateway; no action authorization or guaranteed notification.',

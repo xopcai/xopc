@@ -624,6 +624,10 @@ export class AgentService {
     return this.agentManager.getSkillCatalogSnapshot();
   }
 
+  getAgentToolAvailability(agentId: string, name: string) {
+    return this.agentManager.getAgentToolAvailability(agentId, name);
+  }
+
   getAgentSkillAvailability(agentId: string): AgentSkillAvailabilityPayload {
     return this.agentManager.getAgentSkillAvailability(agentId);
   }

@@ -85,8 +85,9 @@ export function registerTaskRoutes(authenticated: Hono, deps: AuthenticatedRoute
         ok: true,
         task: created.model.task,
         operationalState: created.model.operationalState,
+        allocation: created.model.allocation,
         ...(created.runId ? { run: runs.get(created.runId) } : {}),
-      }, created.runId ? 202 : 201);
+      }, created.runId || created.model.allocation ? 202 : 201);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       return c.json({ ok: false, error: message }, message === 'Project not found' ? 404 : 409);

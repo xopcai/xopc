@@ -15,6 +15,7 @@ const OPERATIONAL_RANK: Record<ProjectTaskCard['operationalState'], number> = {
   verifying: 3,
   running: 4,
   queued: 5,
+  allocating: 5,
   cancelled: 6,
   idle: 7,
 };

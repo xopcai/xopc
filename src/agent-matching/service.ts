@@ -49,7 +49,7 @@ export function assessSpecialist(agentId: string, input: SpecialistTaskRequireme
   const add = (condition: string, state: AvailabilityCheck['state'], reasonCode: string, detail?: string) =>
     checks.push({ condition, state, reasonCode, ...(detail ? { detail } : {}) });
   const identityValid = agent && agent.enabled !== false && agent.provisioningState === 'ready'
-    && agent.id !== context.ownAgentId && !agent.id.startsWith('personal-');
+    && agent.purpose !== 'task_dispatcher' && agent.id !== context.ownAgentId && !agent.id.startsWith('personal-');
   add('identity', identityValid ? 'verified' : 'blocked', identityValid ? 'agent_ready' : 'agent_unavailable');
   if (requirements.requestedAgentId && requirements.requestedAgentId !== agentId) add('requestedAgent', 'blocked', 'requested_agent_mismatch');
   const entry = agent ? (({ revision: _revision, provisioningState: _state, provisioningError: _error,
@@ -125,7 +125,7 @@ export function matchSpecialists(input: SpecialistTaskRequirements, context: Mat
     if (!Number.isSafeInteger(offset)) throw new Error('Invalid matching cursor');
   }
   const ids = requirements.requestedAgentId ? [requirements.requestedAgentId] : repository.list()
-    .filter(agent => agent.id !== context.ownAgentId && !agent.id.startsWith('personal-')).map(agent => agent.id);
+    .filter(agent => agent.purpose !== 'task_dispatcher' && agent.id !== context.ownAgentId && !agent.id.startsWith('personal-')).map(agent => agent.id);
   const order = { eligible: 0, needs_verification: 1, blocked: 2 };
   const candidates = ids.map(id => assessSpecialist(id, requirements, context)).sort((a, b) =>
     order[a.eligibility] - order[b.eligibility]

@@ -927,6 +927,10 @@ export class AgentManager implements AgentInstanceGateway {
     };
   }
 
+  getAgentToolAvailability(agentId: string, name: string) {
+    return this.toolsFactory.getAgentToolAvailability(agentId, name);
+  }
+
   getAgentSkillAvailability(agentId: string): AgentSkillAvailabilityPayload {
     const profile = resolveEffectiveAgentProfile(agentId);
     return this.buildAgentSkillAvailability(profile, profile.resolvedWorkspacePath, undefined, '');

@@ -31,7 +31,7 @@ export function useTaskDetail(taskId: string) {
       revalidateOnFocus: true,
       revalidateOnReconnect: true,
       refreshInterval: (latest) => latest && [
-        'queued', 'running', 'waiting', 'verifying',
+        'allocating', 'queued', 'running', 'waiting', 'verifying',
       ].includes(latest.operationalState)
         ? 5_000
         : 0,
@@ -48,7 +48,7 @@ export function useTaskDetail(taskId: string) {
 
   useEffect(() => {
     const detail = swr.data;
-    if (!detail || detail.conversation.activeConversationId) return;
+    if (!detail || detail.conversation.activeConversationId || detail.allocation && detail.allocation.status !== 'assigned') return;
     const marker = `${taskId}:${detail.task.version}`;
     if (ensureMarkerRef.current === marker) return;
     ensureMarkerRef.current = marker;

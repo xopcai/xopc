@@ -66,6 +66,7 @@
         "running": "运行中"
       },
       "taskStates": {
+        "allocating": "正在分配执行者",
         "queued": "即将开始",
         "running": "正在进行",
         "verifying": "正在核对结果",

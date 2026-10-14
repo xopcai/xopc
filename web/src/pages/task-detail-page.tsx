@@ -193,7 +193,7 @@ function readTaskChatPanelPercent(): number {
   }
 }
 
-type DetailStatusKey = 'captured' | 'ready' | 'queued' | 'running' | 'verifying' | 'waiting' | 'blocked' | 'failed' | 'cancelled' | 'needsUser' | 'review' | 'completed' | 'ended' | 'paused';
+type DetailStatusKey = 'allocating' | 'captured' | 'ready' | 'queued' | 'running' | 'verifying' | 'waiting' | 'blocked' | 'failed' | 'cancelled' | 'needsUser' | 'review' | 'completed' | 'ended' | 'paused';
 type TaskEditConflict = 'title' | 'description' | null;
 type TaskPendingOperation = 'command' | 'phase' | 'priority' | 'dueAt' | 'delegateAgentId' | 'dependencies' | 'acceptance' | 'delete' | 'title';
 

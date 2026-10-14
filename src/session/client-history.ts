@@ -516,7 +516,7 @@ function customRowToClientHistory(row: TranscriptStoredRow): ClientHistoryMessag
 
   const customType = optionalString(r.customType)?.trim();
   if (!customType) return null;
-  if (customType === 'personal_request_status') {
+  if (customType === 'personal_request_status' || customType === 'task_allocation_status') {
     const content = typeof r.content === 'string' ? r.content : '';
     return { role: 'assistant', kind: 'message', startsNewBubble: true,
       content, rawContent: [{ type: 'text', text: content }],

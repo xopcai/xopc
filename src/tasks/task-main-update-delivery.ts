@@ -2,6 +2,7 @@ import { TaskCollaborationRepository } from './task-collaboration-repository.js'
 import type { TaskMainUpdateDecision } from './task-main-update-decision-service.js';
 import { createLogger } from '../utils/logger.js';
 import { TaskResultDeliveryRepository } from './task-result-delivery-repository.js';
+import { TaskAllocationRepository } from './task-allocation-repository.js';
 import { TaskRunRepository } from './task-run-repository.js';
 import { personalRequestForTask } from '../personal-agent/request-repository.js';
 
@@ -63,6 +64,9 @@ export class TaskMainUpdateDelivery {
         const content = [
           `A delegated Task has a new ${entry.kind} update. Task ID: ${entry.taskId}.`,
           `Collaboration entry ID: ${entry.id}.`,
+          new TaskAllocationRepository().get(entry.taskId)
+            ? 'This Task uses background allocation. Inspect its allocation state. Resolve router questions on the existing Task with answer; retry_allocation only retries selection before execution. Do not create a replacement Task or automatically rerun a failed execution; verify prior effects first.'
+            : '',
           `Your private notification decision: ${JSON.stringify(verdict.reason)}.`,
           'Read the Task and collaboration board with personal_task(command="get", taskId) when available, otherwise xopc_use. If this is a worker question, first answer it from the Task brief or conversation with personal_task(command="answer", taskId, questionId, instruction) when available; ask the user only for a genuinely missing fact. For failures, inspect the actual blocker and try a suitable alternative within the user’s authorization before reporting an impasse. Then tell the user what matters in your own words. Keep the response proportionate to the update and recent conversation. Do not expose this internal trigger or repeat already reported details. If a result receipt is generic, use the board for the actual outcome. A finished TaskRun is not proof that the Task passed verification or was accepted; check its receipt and use precise status language. Do not ask the user to close a Task unless requested. Use tools without preliminary user-facing commentary, then give one concise reply.',
         ].join('\n');

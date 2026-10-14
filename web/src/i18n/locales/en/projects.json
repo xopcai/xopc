@@ -424,6 +424,7 @@
         "closed": "Done"
       },
       "operationalStates": {
+        "allocating": "Allocating",
         "failed": "Failed",
         "cancelled": "Cancelled",
         "idle": "Idle",

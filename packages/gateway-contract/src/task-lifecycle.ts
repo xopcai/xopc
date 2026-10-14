@@ -3,6 +3,7 @@ import { z } from 'zod';
 export const TaskPhaseSchema = z.enum(['backlog', 'ready', 'active', 'review', 'closed']);
 export const TaskResolutionSchema = z.enum(['done', 'cancelled', 'duplicate', 'wont_do']);
 export const TaskOperationalStateSchema = z.enum([
+  'allocating',
   'idle',
   'queued',
   'running',
@@ -40,6 +41,8 @@ export const TaskWaitSchema = z.object({
 });
 
 export const TaskAttentionKindSchema = z.enum([
+  'allocation_blocked',
+  'allocation_failed',
   'input_required',
   'approval_required',
   'dependency_blocked',

@@ -99,6 +99,7 @@ import {
 } from '../tasks/index.js';
 import { DomainOutboxDispatcher } from '../infra/domain-outbox-dispatcher.js';
 import { TaskConversationRepository } from '../tasks/task-conversation-repository.js';
+import { TaskAllocationDispatcher } from '../tasks/task-allocation-service.js';
 import { TaskRunDispatcher } from '../tasks/task-run-dispatcher.js';
 import { onTaskResultQueued } from '../tasks/task-result-delivery-repository.js';
 import { TaskResultDeliveryService } from '../tasks/task-result-delivery-service.js';
@@ -317,6 +318,7 @@ export class GatewayService {
   private startupTrace: GatewayStartupTrace | null = null;
   private workflowSessionBridge: WorkflowSessionBridge | null = null;
   private workflowRunServiceInstance: WorkflowRunService | null = null;
+  private taskAllocationDispatcher: TaskAllocationDispatcher | null = null;
   private taskRunDispatcher: TaskRunDispatcher | null = null;
   private taskRunDispatchTimer: ReturnType<typeof setInterval> | null = null;
   private managedComposioEventPoller?: ManagedComposioEventPoller;
@@ -959,6 +961,16 @@ export class GatewayService {
 
   dispatchTaskRuns(): void {
     if (this.stopping) return;
+    this.taskAllocationDispatcher ??= new TaskAllocationDispatcher({
+      context: conversationId => ({
+        ownAgentId: getSessionMetadata(conversationId)?.agentId ?? '',
+        getConfig: () => this.config,
+        getAgentSkillAvailability: agentId => this.agentService.getAgentSkillAvailability(agentId),
+        getAgentToolAvailability: (agentId, name) => this.agentService.getAgentToolAvailability(agentId, name),
+      }),
+      wake: () => this.dispatchTaskRuns(),
+    });
+    this.taskAllocationDispatcher.dispatch();
     this.taskResultDispatch();
     this.taskRunDispatch();
     this.taskMainUpdateDispatch();
@@ -1291,6 +1303,7 @@ export class GatewayService {
   private async startRuntime(): Promise<void> {
     if (this.running) return;
     this.stopping = false;
+    this.taskAllocationDispatcher = null;
     this.taskRunDispatcher = null;
 
     this.stopRealtimeLogBridge = subscribeToLogs((entry) => {
@@ -1721,6 +1734,7 @@ export class GatewayService {
     await flushTracing();
     if (!this.running) return;
     this.stopping = true;
+    this.taskAllocationDispatcher?.stop();
     this.taskRunDispatcher?.stop();
     if (this.taskRunDispatchTimer) {
       clearInterval(this.taskRunDispatchTimer);

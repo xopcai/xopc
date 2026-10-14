@@ -84,6 +84,7 @@ export function taskCopy(language: 'en' | 'zh') {
       },
     },
     detailStatuses: {
+      allocating: '正在分配执行者',
       captured: '尚未安排',
       ready: '等待开始',
       queued: '已进入队列',
@@ -100,6 +101,7 @@ export function taskCopy(language: 'en' | 'zh') {
       paused: '已暂停',
     },
     detailStatusDescriptions: {
+      allocating: '任务已提交，正在后台选择合适的执行者。',
       captured: '任务已记录，但尚未进入执行队列。安排后，xopc 会开始推进。',
       ready: '任务已经准备好，可以交给 xopc 开始执行。',
       queued: '任务已进入执行队列，xopc 将在资源可用时开始。',
@@ -287,6 +289,7 @@ export function taskCopy(language: 'en' | 'zh') {
       },
     },
     detailStatuses: {
+      allocating: 'Assigning an executor',
       captured: 'Not scheduled',
       ready: 'Ready to start',
       queued: 'Queued',
@@ -303,6 +306,7 @@ export function taskCopy(language: 'en' | 'zh') {
       paused: 'Paused',
     },
     detailStatusDescriptions: {
+      allocating: 'The task is submitted and a suitable executor is being selected in the background.',
       captured: 'This task is captured but has not entered the work queue. Schedule it when you are ready.',
       ready: 'This task is ready for xopc to start.',
       queued: 'This task is queued and will start when resources are available.',

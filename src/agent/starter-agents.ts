@@ -13,6 +13,7 @@ export const STARTER_AGENTS_INITIALIZED_VERSION = 1;
 
 type StarterAgent = {
   id: string;
+  purpose?: AgentEntry['purpose'];
   tools?: AgentEntry['tools'];
   toolAllowlist?: AgentEntry['toolAllowlist'];
   skills?: AgentEntry['skills'];
@@ -26,6 +27,12 @@ function denyTools(names: string[]): AgentEntry['tools'] {
 }
 
 export const STARTER_AGENTS: readonly StarterAgent[] = [
+  {
+    id: 'task-router', purpose: 'task_dispatcher', toolAllowlist: [],
+    profile: { name: 'Task Router', description: 'Selects one suitable specialist for a delegated task.',
+      instructions: 'Compare the task brief with candidate expertise, examples, limitations and verified execution conditions. Select only a displayed eligible candidate. Preserve requested Agents, Skills and task boundaries. Return the requested structured decision.' },
+    profileFiles: {},
+  },
   {
     id: 'main',
     specialistProfile: {
@@ -220,6 +227,7 @@ export function ensureStarterAgentsInitialized(): { changed: boolean } {
     repository.create({
       id: starter.id,
       enabled: true,
+      ...(starter.purpose ? { purpose: starter.purpose } : {}),
       ...(starter.specialistProfile ? { specialistProfile: starter.specialistProfile } : {}),
       ...(starter.profile ? { profile: starter.profile } : {}),
       ...(starter.tools ? { tools: starter.tools } : {}),

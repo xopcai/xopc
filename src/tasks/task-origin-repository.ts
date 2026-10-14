@@ -1,4 +1,4 @@
-import type { TaskOperationalState } from '@xopcai/gateway-contract';
+import type { TaskAllocation, TaskOperationalState } from '@xopcai/gateway-contract';
 
 import { getSqliteDatabase } from '../storage/sqlite/transaction.js';
 import { TaskReadModelProjector } from './task-read-model-projector.js';
@@ -9,6 +9,7 @@ export interface DelegatedTaskSummary {
   phase: string;
   operationalState: TaskOperationalState;
   runStatus?: string;
+  allocation?: TaskAllocation;
   updatedAt: number;
 }
 
@@ -34,8 +35,10 @@ export class TaskOriginRepository {
         updatedAt DESC, task.task_id DESC LIMIT ? OFFSET ?`).all(conversationId,
       Math.max(1, Math.min(100, Math.floor(limit))), Math.max(0, Math.floor(options.offset ?? 0))) as unknown as Array<Omit<DelegatedTaskSummary, 'operationalState' | 'runStatus'> & { runStatus: string | null }>;
     const projector = new TaskReadModelProjector();
-    return { total, items: rows.map(({ runStatus, ...row }) => ({ ...row,
-      operationalState: projector.get(row.id)?.operationalState ?? 'idle',
-      ...(runStatus ? { runStatus } : {}) })) };
+    return { total, items: rows.map(({ runStatus, ...row }) => {
+      const model = projector.get(row.id);
+      return { ...row, allocation: model?.allocation, operationalState: model?.operationalState ?? 'idle',
+        ...(runStatus ? { runStatus } : {}) };
+    }) };
   }
 }

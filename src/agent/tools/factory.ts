@@ -216,6 +216,18 @@ export interface CreateCoreToolsOptions {
 }
 
 export class AgentToolsFactory {
+  getAgentToolAvailability(candidateId: string, name: string) {
+    const candidate = resolveEffectiveAgentConfigForAgent(candidateId).config;
+    const denied = new Set(Object.entries(candidate.tools).filter(([, policy]) => policy.mode === 'deny').map(([tool]) => tool));
+    const tools = this.createAllTools({ agentId: candidateId, workspace: candidate.workspace,
+      conversationId: '', disabledTools: denied, toolAllowlist: candidate.toolAllowlist });
+    const registered = tools.some(tool => tool.name === name);
+    const activatable = this.getLazyCapabilityToolNames().includes(name);
+    return { condition: `tool:${name}`, state: registered || activatable ? 'verified' as const : 'blocked' as const,
+      reasonCode: registered ? 'tool_registered' : activatable ? 'tool_activatable' : 'tool_not_registered',
+      detail: candidate.tools[name]?.mode === 'ask' ? 'Runtime approval is still required' : 'Registration checked; execution environment is checked by the tool' };
+  }
+
   private browserRuntime: BrowserRuntime | null = null;
   /** Cached readiness probe keyed by the active driver configuration. */
   private browserReadinessCache: {
@@ -437,17 +449,7 @@ export class AgentToolsFactory {
     const find = createFindTool(workspace);
 
     const productToolDeps = {
-      getAgentToolAvailability: this.deps.getAgentToolAvailability ?? ((candidateId: string, name: string) => {
-        const candidate = resolveEffectiveAgentConfigForAgent(candidateId).config;
-        const denied = new Set(Object.entries(candidate.tools).filter(([, policy]) => policy.mode === 'deny').map(([tool]) => tool));
-        const tools = this.createAllTools({ agentId: candidateId, workspace: candidate.workspace,
-          conversationId: '', disabledTools: denied, toolAllowlist: candidate.toolAllowlist });
-        const registered = tools.some(tool => tool.name === name);
-        const activatable = this.getLazyCapabilityToolNames().includes(name);
-        return { condition: `tool:${name}`, state: registered || activatable ? 'verified' as const : 'blocked' as const,
-          reasonCode: registered ? 'tool_registered' : activatable ? 'tool_activatable' : 'tool_not_registered',
-          detail: candidate.tools[name]?.mode === 'ask' ? 'Runtime approval is still required' : 'Registration checked; execution environment is checked by the tool' };
-      }),
+      getAgentToolAvailability: this.deps.getAgentToolAvailability ?? ((candidateId: string, name: string) => this.getAgentToolAvailability(candidateId, name)),
       getAgentSkillAvailability: this.deps.getAgentSkillAvailability,
       getWorkspace: () => this.deps.workspace,
       getConfig: () => this.deps.getConfig?.(),

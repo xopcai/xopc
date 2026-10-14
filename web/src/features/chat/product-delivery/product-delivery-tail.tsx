@@ -91,6 +91,7 @@ function taskDeliveryMeta(
   }
   if (state.attention?.length) return labels.blocked;
   const states: Record<string, string> = {
+    allocating: labels.allocating,
     queued: labels.queued,
     running: labels.running,
     verifying: labels.verifying,

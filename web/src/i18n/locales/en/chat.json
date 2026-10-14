@@ -66,6 +66,7 @@
         "running": "Running"
       },
       "taskStates": {
+        "allocating": "Assigning an executor",
         "queued": "Starting soon",
         "running": "In progress",
         "verifying": "Checking the result",

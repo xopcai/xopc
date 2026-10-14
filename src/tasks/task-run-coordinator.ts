@@ -1,6 +1,8 @@
 import type { TaskEvidence, TaskRunReceipt, TurnOutcome } from '@xopcai/gateway-contract';
 
 import type { ExecutionContext } from './execution-context.js';
+import { TaskAllocationRepository } from './task-allocation-repository.js';
+import { runSqliteWriteTransaction } from '../storage/sqlite/transaction.js';
 import { TaskApplicationService } from './task-application-service.js';
 import { TaskContextRepository } from './task-context-repository.js';
 import { TaskCollaborationRepository } from './task-collaboration-repository.js';
@@ -55,7 +57,8 @@ export class TaskRunCoordinator {
         tasks.setLifecycle({ taskId: task.id, expectedVersion: task.version, phase: 'active' });
       }
     }
-    if (run.status === 'queued') {
+    const startingQueuedRun = run.status === 'queued';
+    if (startingQueuedRun) {
       const context = new TaskContextRepository();
       const snapshot = context.captureSnapshot({
         ownerKind: 'task_run',
@@ -72,6 +75,11 @@ export class TaskRunCoordinator {
         policySnapshot: { executorKind: 'agent' },
         conversationId: input.context.conversationId,
       }) ?? run;
+    }
+    if (startingQueuedRun && run.status === 'running' && new TaskAllocationRepository().get(task.id)) {
+      runSqliteWriteTransaction(() => new TaskAllocationRepository().publish(task.id,
+        resolveTaskLocale(task) === 'zh' ? `任务「${task.title}」由 ${input.context.agentId} 开始执行。`
+          : `Task “${task.title}” started by ${input.context.agentId}.`));
     }
     return run.status === 'running' ? new TaskRunCoordinator(run.id) : undefined;
   }

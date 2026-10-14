@@ -26,7 +26,7 @@ export function personalCapabilities(conversationId: string, query: string, acco
     resolveConnectionCandidate(candidate.candidateRef);
     const installation = getConnectorInstallation(`${candidate.candidateRef}-${principal.principalId}`);
     const executorProfiles: NonNullable<PersonalCapability['executorProfiles']> = [];
-    const executors = catalog.agents.filter(agent => agent.enabled !== false
+    const executors = catalog.agents.filter(agent => agent.purpose !== 'task_dispatcher' && agent.enabled !== false
       && agent.id !== principal.agentId && !agent.id.startsWith('personal-')
       && repository.get(agent.id)?.provisioningState === 'ready').filter(agent => {
       const assessment = assessSpecialist(agent.id, { version: 1, summary: 'Connected app discovery',
