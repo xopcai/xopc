@@ -18,6 +18,21 @@ import { TaskRepository } from './task-repository.js';
 
 const ACTIVE_RUN_STATUSES: TaskRunStatus[] = ['queued', 'running', 'waiting', 'verifying'];
 
+// Cancellation identities survive process loss; never infer them from the Task's current Run.
+const CANCELLED_ACTIVE_RUNS = `SELECT run.run_id FROM task_runs run
+  WHERE ((run.status = 'cancelled' AND EXISTS (SELECT 1 FROM task_waits remaining
+    WHERE remaining.task_run_id = run.run_id AND remaining.status = 'active'))
+    OR (run.status IN ('queued','running','waiting','verifying') AND (
+    EXISTS (SELECT 1 FROM session_connection_waits wait WHERE wait.status = 'closed'
+      AND json_extract(wait.data_json, '$.resolution') = 'cancelled' AND (
+        json_extract(wait.data_json, '$.taskRunId') = run.run_id
+        OR EXISTS (SELECT 1 FROM session_inputs origin WHERE origin.id = json_extract(wait.data_json, '$.originInputId')
+          AND origin.task_run_id = run.run_id)
+        OR EXISTS (SELECT 1 FROM task_waits task_wait WHERE task_wait.task_run_id = run.run_id
+          AND json_extract(task_wait.condition_json, '$.connectionWaitId') = wait.id)))
+    OR EXISTS (SELECT 1 FROM command_deduplication command WHERE command.command_type = 'task.close'
+      AND command.subject_id = run.task_id AND json_extract(command.result_json, '$.cancellationRunId') = run.run_id))))`;
+
 type TaskRunRow = {
   run_id: string;
   task_id: string;
@@ -373,11 +388,39 @@ export class TaskRunRepository {
     return rows.map(fromRow);
   }
 
+  /** Finish cancellations persisted before an earlier process could observe execution exit. */
+  reconcileCancelledRuns(): number {
+    return runSqliteWriteTransaction(db => {
+      const rows = db.prepare(CANCELLED_ACTIVE_RUNS).all() as Array<{ run_id: string }>;
+      let completed = 0;
+      for (const row of rows) {
+        const run = this.get(row.run_id);
+        if (!run) continue;
+        const cleared = this.resolveCancelledRunWaits(run.id, { kind: 'system' });
+        if (run.status === 'cancelled') {
+          if (cleared) completed++;
+          continue;
+        }
+        if (run && this.finalize({ runId: run.id, expectedVersion: run.version, actor: { kind: 'system' },
+          terminalCode: 'cancelled_by_user', receipt: { status: 'cancelled', summary: 'Task cancelled',
+            changes: [], evidence: [], verification: { status: 'unverified', checks: [] }, remainingWork: [],
+            needsUser: false, completionVerdict: 'not_achieved' } })) {
+          const task = new TaskRepository().require(run.taskId);
+          enqueueTaskChangedEvent(db, { taskId: task.id, projectId: task.projectId, version: task.version,
+            changedFields: ['runs', 'receipts'], actor: { kind: 'system' }, source: 'runtime' });
+          completed++;
+        }
+      }
+      return completed;
+    });
+  }
+
   /** Resume the same TaskRun and conversation within its original deadline and attempt budget. */
-  scheduleContinuation(input: { runId: string; expectedVersion: number; message: string; reason: string; now?: number }): boolean {
+  scheduleContinuation(input: { runId: string; expectedVersion: number; message: string; reason: string; repairFingerprint?: string; now?: number }): boolean {
     const now = input.now ?? Date.now();
     return runSqliteWriteTransaction(db => {
       const run = this.get(input.runId);
+      if (db.prepare(`${CANCELLED_ACTIVE_RUNS} AND run.run_id = ?`).get(input.runId)) return false;
       if (!run || run.version !== input.expectedVersion || !['running', 'verifying'].includes(run.status)
         || run.parentRunId || !run.conversationId || (run.timeoutAt !== undefined && run.timeoutAt <= now)
         || this.listActiveWaits(run.taskId).length > 0) return false;
@@ -389,7 +432,9 @@ export class TaskRunRepository {
       const attempts = Number(run.policySnapshot.continuationAttempts ?? 0);
       const maxAttempts = Math.max(1, Math.min(3, Number(run.retryPolicy.maxAttempts ?? 1)));
       if (!Number.isFinite(attempts) || !Number.isFinite(maxAttempts) || attempts >= maxAttempts - 1) return false;
+      if (input.repairFingerprint && run.policySnapshot.repairFingerprint === input.repairFingerprint) return false;
       const policy = { ...run.policySnapshot, continuationAttempts: attempts + 1,
+        ...(input.repairFingerprint ? { repairFingerprint: input.repairFingerprint } : {}),
         continuation: { message: input.message, reason: input.reason,
           transcriptId: (db.prepare('SELECT active_transcript_id FROM sessions WHERE conversation_id = ?')
             .get(run.conversationId) as { active_transcript_id: string } | undefined)?.active_transcript_id } };
@@ -593,6 +638,24 @@ export class TaskRunRepository {
       `SELECT * FROM task_waits WHERE task_id = ? AND status = 'active'
        ORDER BY created_at ASC`,
     ).all(taskId) as TaskWaitRow[]).map(waitFromRow);
+  }
+
+  /** A Run's cancellation owns all its waits, never those of another Run on the same Task. */
+  resolveCancelledRunWaits(runId: string, actor: ActorRef): number {
+    return runSqliteWriteTransaction(db => {
+      const run = this.get(runId);
+      if (!run) return 0;
+      let resolved = 0;
+      for (const wait of this.listActiveWaits(run.taskId)) {
+        if (wait.taskRunId === run.id && this.resolveWait({ waitId: wait.id, actor, resolution: { cancelled: true } })) resolved++;
+      }
+      if (resolved) {
+        const task = new TaskRepository().require(run.taskId);
+        enqueueTaskChangedEvent(db, { taskId: task.id, projectId: task.projectId, version: task.version,
+          changedFields: ['runs'], actor });
+      }
+      return resolved;
+    });
   }
 
   resolveWait(input: {

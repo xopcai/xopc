@@ -73,6 +73,8 @@ export type RunXopcEmbeddedTurnParams = {
   sessionStore?: SessionStore;
   transcriptRuntime?: EmbeddedTranscriptRuntime;
   timeoutMs: number;
+  /** One bounded deadline extension for an already-dispatched budget handoff. */
+  timeoutExtensionMs?: () => number;
   turnPolicy?: AgentTurnPolicy;
   abortSignal?: AbortSignal;
   onEvent?: (event: EmbeddedStreamEvent) => void;
@@ -81,11 +83,13 @@ export type RunXopcEmbeddedTurnParams = {
   /** Continue from the persisted trailing user row instead of appending it again. */
   resumeLastUserMessage?: boolean;
   recoveryMessage?: string;
+  recoveryReason?: string;
   verifyChanges?: boolean;
   requireVisibleReply?: boolean;
 };
 
 export type RunXopcEmbeddedTurnResult = {
+  terminationReason?: import('../orchestration/run-termination.js').AgentTerminationReason;
   ok: boolean;
   stopReason?: 'connection_required' | 'clarification_required' | 'policy_limit' | 'response_truncated';
   /** False for harness failures that must not trigger another model attempt. */

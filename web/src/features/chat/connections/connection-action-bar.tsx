@@ -15,6 +15,7 @@ const copy = {
   zh: { waiting: '等待连接', install: '安装', installing: '正在准备安装', connect: '连接', reconnect: '重新连接', details: '查看详情', skip: '跳过连接', cancel: '取消这个目标',
     ready: '已连接', check: '我已完成授权', authorizing: '等待完成授权', queued: '已连接，等待继续', queuedSkipped: '等待使用现有信息继续',
     checkingConnection: '正在检查连接', checkingTools: '已连接，正在验证工具', queueHint: '目标已保存，正在等待当前执行结束。',
+    interruptedInputHint: '有条补充消息在重启时中断。请重新发送要求，或移除上方中断的消息后继续。',
     checkFailed: '连接检查暂时失败，目标已保存', interrupted: '恢复检查曾中断，目标已保存', lastChecked: '最近检查',
     scope: '确认后继续', scopeHint: '这个目标已等待了一段时间。请确认仍要按下方原始要求继续；如需修改时间范围，请先在聊天中说明。未读等条件将以实际执行时为准。',
     account: '选择账号', all: '查看全部连接', close: '关闭', intro: '完成连接后，将自动恢复当前目标。你也可以继续发送消息。',
@@ -23,6 +24,7 @@ const copy = {
   en: { waiting: 'Waiting for connection', install: 'Install', installing: 'Preparing installation', connect: 'Connect', reconnect: 'Reconnect', details: 'Details', skip: 'Skip connection', cancel: 'Cancel this objective',
     ready: 'Connected', check: 'Check authorization', authorizing: 'Waiting for authorization', queued: 'Connected, waiting to continue', queuedSkipped: 'Waiting to continue with available information',
     checkingConnection: 'Checking connection', checkingTools: 'Connected, checking tools', queueHint: 'Your objective is saved. Waiting for the current execution to finish.',
+    interruptedInputHint: 'A message was interrupted during restart. Resend the requirement or remove the interrupted message above before continuing.',
     checkFailed: 'Connection check failed; objective saved', interrupted: 'Recovery check interrupted; objective saved', lastChecked: 'Last checked',
     scope: 'Confirm and continue', scopeHint: 'This objective has been waiting for a while. Confirm the original request below, or send a message to change the time range first. Conditions such as unread status are evaluated at execution time.',
     account: 'Choose an account', all: 'View all connections', close: 'Close', intro: 'The current objective resumes automatically after connecting. You can keep sending messages.',
@@ -109,7 +111,7 @@ export function ConnectionActionBar({ conversationId }: { conversationId: string
       {!queued && !checking && <button type="button" className="text-xs text-fg-muted hover:text-fg" disabled={busy} onClick={() => void act('skip')}>{t.skip}</button>}
       <button type="button" className="min-h-11 px-2 text-xs text-fg-muted hover:text-fg" onClick={() => void act('cancel')}>{t.cancel}</button>
     </div>
-    {wait.queueBlocked && <p className="mt-2 text-xs text-fg-muted">{t.queueHint}</p>}
+    {wait.queueBlocked && <p className="mt-2 text-xs text-fg-muted">{wait.blockedInputId ? t.interruptedInputHint : t.queueHint}</p>}
     {wait.lastCheckedAt && <p className="mt-2 text-xs text-fg-muted">{t.lastChecked}: {new Date(wait.lastCheckedAt).toLocaleTimeString(language === 'zh' ? 'zh-CN' : 'en-US')}</p>}
     {accountNeed && !queued && <p className="mt-2 line-clamp-2 break-words text-sm text-fg-muted">{wait.summary}</p>}
     {accountNeed && !queued && <ConnectionAccountPrompt key={`${wait.id}:${wait.objectiveRevision}:${accountNeed.key}`}

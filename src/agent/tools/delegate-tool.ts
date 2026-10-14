@@ -1,3 +1,5 @@
+import { resolve } from 'node:path';
+
 import { Type, type Static } from '@sinclair/typebox';
 import type { AgentTool } from '@earendil-works/pi-agent-core';
 
@@ -10,6 +12,9 @@ import { runGit } from '../../execution-environments/git.js';
 import { DELEGATION_CAPABILITIES, DELEGATION_TOOL_CAPABILITIES, resolveDelegationTools, protectDelegatedTool, type DelegationMode } from './delegation-policy.js';
 import type { AgentTurnPolicy } from '../orchestration/agent-turn-policy.js';
 import { getDelegationScope } from '../orchestration/delegation-scope.js';
+import { resolveAgentAbortReason } from '../orchestration/run-termination.js';
+import { researchResumeContext, type ResearchCheckpointUpdate, type ResearchEvidence } from '../orchestration/research-checkpoint.js';
+import { claimResearchCheckpoint, createResearchCheckpoint, finishResearchCheckpoint, getResearchCheckpoint, recordResearchEvidence, recordResearchSearch, saveResearchCheckpoint } from '../../storage/sqlite/research-checkpoint-repository.js';
 import { DELEGATION_BUDGETS, type DelegationBudgetTier } from '../orchestration/delegation-budget.js';
 
 export const DEFAULT_DELEGATE_TOOLS = resolveDelegationTools(Object.keys(DELEGATION_TOOL_CAPABILITIES), 'research').granted;
@@ -29,6 +34,7 @@ export const DELEGATE_BLOCKED_TOOLS = new Set([
   EXTERNAL_TOOL_NAMES.requireConnection,
   EXTERNAL_TOOL_NAMES.updateConnectionObjective,
   'managed_job',
+  'research_checkpoint',
 ]);
 
 export interface DelegateToolDeps {
@@ -49,7 +55,10 @@ export interface DelegateToolDeps {
 }
 
 const DelegateTaskSchema = Type.Object({
-  goal: Type.String({ minLength: 1 }), context: Type.Optional(Type.String()),
+  goal: Type.String({ minLength: 1, maxLength: 8000 }),
+  resumeId: Type.Optional(Type.String({ format: 'uuid', description: 'Resume a saved research checkpoint owned by this conversation and workspace; preserve the original goal.' })),
+  maxAttempts: Type.Optional(Type.Integer({ minimum: 1, maximum: 3, description: 'Research attempts in this call, including bounded automatic continuation after budget exhaustion. Default 2; cancellation, permissions and provider failures are not automatically retried.' })),
+  context: Type.Optional(Type.String()),
   mode: Type.Optional(Type.Union(['inspect', 'read', 'research', 'review', 'implement', 'custom'].map(mode => Type.Literal(mode)))),
   capabilities: Type.Optional(Type.Array(Type.Union(DELEGATION_CAPABILITIES.map(capability => Type.Literal(capability))), { description: 'Optional capability subset. custom requires explicit capabilities; browser is always opt-in. Writes and commands require implement.' })),
   toolset: Type.Optional(Type.Array(Type.String())),
@@ -66,19 +75,17 @@ export function delegateToolNames(mode: DelegationMode, requested?: string[]): s
 export function createDelegateTool(deps: DelegateToolDeps): AgentTool {
   return {
     name: 'delegate_task', label: 'Delegate task', parameters: DelegateTaskSchema,
-    description: 'Delegate a bounded task with a fresh context; supply relevant facts and constraints in context. Default research inherits the parent\'s local, web, knowledge, skill and approved external read tools. read/inspect/review are local read-only. toolset and capabilities only narrow parent access; custom requires explicit capabilities. Browser interaction is opt-in. implement requires a project and clean Git workspace and returns changes in a separate worktree for review. No nested delegation, external writes, installation or background jobs. budgetTier selects light, standard (default), or deep; token budgets sum all model requests, not context size. Reports stop reason, budget usage, partial handoff and rejected tools.',
-    supportsParallel: false, idempotent: false,
+    description: 'Delegate a bounded task with a fresh context; supply relevant facts and constraints in context. Default research inherits the parent\'s local, web, knowledge, skill and approved external read tools. read/inspect/review are local read-only. toolset and capabilities only narrow parent access; custom requires explicit capabilities. Browser interaction is opt-in. implement requires a project and clean Git workspace and returns changes in a separate worktree for review. No nested delegation, external writes, installation or background jobs. budgetTier selects light, standard (default), or deep; token budgets sum all model requests, not context size. Research saves structured findings and source evidence durably for the current conversation. Use resumeId to continue unfinished work; maxAttempts bounds automatic budget continuation (default 2). Reports stop reason, budget usage, partial handoff and rejected tools.',
+    supportsParallel: false, idempotent: false, timeoutMs: DELEGATION_BUDGETS.deep.timeoutMs * 3 + 30_000,
     async execute(_id: string, input: Static<typeof DelegateTaskSchema>, signal?: AbortSignal) {
       signal?.throwIfAborted();
       const mode = (input.mode ?? 'research') as DelegationMode;
+      if (input.resumeId && mode !== 'research') throw new Error('resumeId is only supported for research');
       const scope = getDelegationScope();
       const parentTools = scope?.tools ?? deps.getParentTools();
       const access = resolveDelegationTools(parentTools.map(tool => tool.name), mode, input.toolset, input.capabilities);
       const tools = access.granted;
-      if (!tools.length) return { content: [{ type: 'text', text: JSON.stringify({ error: 'No permitted tools in the requested delegation', ...access }) }],
-        details: { status: 'failed', stopReason: 'parent_policy', mode, grantedTools: tools, rejectedTools: access.rejected } };
       const parentConversationId = deps.getCurrentContext?.()?.conversationId;
-      const model = deps.getSubagentModel();
       let workspace = deps.workspace, environmentId: string | undefined;
       if (mode === 'implement') {
         if (!parentConversationId) throw new Error('Implementation delegation requires a project session');
@@ -89,50 +96,107 @@ export function createDelegateTool(deps: DelegateToolDeps): AgentTool {
       }
       const revision = mode === 'review' ? await readWorkspaceRevision(workspace) : undefined;
       const authorizeToolCall = scope?.authorizeToolCall ?? deps.createParentPolicy?.().beforeToolCall;
-      const child = createDelegateChildHandle({
-        workspace, goal: mode === 'review'
-          ? `Independently review the actual changes. Inspect review_workspace and relevant source/tests. Report actionable defects with file and line evidence, severity and a concrete failure example. If there are no findings, state the checks and remaining uncertainty. Do not treat the parent's completion claim as evidence.\n\n${input.goal}` : input.goal,
-        context: input.context, requesterConversationId: parentConversationId, allowedToolNames: tools,
-        budgetTier: input.budgetTier as DelegationBudgetTier | undefined,
-        maxIterations: input.maxIterations ?? DELEGATION_BUDGETS[(input.budgetTier ?? 'standard') as DelegationBudgetTier].maxToolCalls, model, bus: deps.bus,
-        getConfig: deps.getConfig, toolExecutorConfig: deps.toolExecutorConfig,
-        authorizeToolCall,
-        buildChildTools: opts => {
-          const local = mode === 'implement' ? new Map(deps.buildChildTools(opts).map(tool => [tool.name, tool])) : undefined;
-          const rebound = new Set(['read_file', 'grep', 'find', 'list_dir', 'review_workspace', 'write_file', 'apply_patch', 'exec_command', 'language_diagnostics']);
-          return parentTools.flatMap(tool => {
-            const candidate = local && rebound.has(tool.name) ? local.get(tool.name) : tool;
-            return candidate ? [protectDelegatedTool(candidate)] : [];
+      let research = mode === 'research' && parentConversationId && (tools.length > 0 || input.resumeId)
+        ? input.resumeId
+          ? getResearchCheckpoint(input.resumeId, parentConversationId, resolve(workspace))
+          : createResearchCheckpoint(parentConversationId, resolve(workspace), input.goal)
+        : undefined;
+      if (input.resumeId && !research) throw new Error('Research checkpoint not found in this conversation and workspace');
+      if (research && research.goal !== input.goal) throw new Error('Resuming research must preserve the original goal');
+      if (research?.status === 'completed') return { content: [{ type: 'text', text: research.summary + '\n' + JSON.stringify(research.checkpoint) }],
+        details: { status: 'success', stopReason: 'completed', resumeId: research.id, checkpoint: research.checkpoint } };
+      if (!tools.length) return { content: [{ type: 'text', text: JSON.stringify({ error: 'No permitted tools in the requested delegation', ...access }) }],
+        details: { status: 'failed', stopReason: 'parent_policy', mode, grantedTools: tools, rejectedTools: access.rejected,
+          ...(research ? { resumeId: research.id, checkpoint: research.checkpoint } : {}) } };
+      const model = deps.getSubagentModel();
+      const attemptLimit = research ? Math.min(3, Math.max(1, input.maxAttempts ?? 2)) : 1;
+      let attempt = 0;
+      const attemptBudgets: Array<import('../child-agent-factory.js').DelegateChildRunResult['budget']> = [];
+      let result: Awaited<ReturnType<ReturnType<typeof createDelegateChildHandle>['run']>>;
+      do {
+        signal?.throwIfAborted();
+        attempt++;
+        if (research) research = claimResearchCheckpoint(research, DELEGATION_BUDGETS[input.budgetTier ?? 'standard'].timeoutMs + 10_000);
+        const claimedResearch = research;
+        const checkpointSink = claimedResearch ? {
+          read: () => getResearchCheckpoint(claimedResearch.id, claimedResearch.conversationId, claimedResearch.workspace)!.checkpoint,
+          save: (update: ResearchCheckpointUpdate) => saveResearchCheckpoint(claimedResearch, update),
+          recordEvidence: (evidence: ResearchEvidence) => recordResearchEvidence(claimedResearch, evidence),
+          recordSearch: (entry: import('./search/cache.js').SearchCacheEntry) => recordResearchSearch(claimedResearch, entry),
+        } : undefined;
+        let child: ReturnType<typeof createDelegateChildHandle> | undefined;
+        const abort = () => child?.abort(resolveAgentAbortReason(signal?.reason));
+        try {
+          child = createDelegateChildHandle({
+            workspace, goal: mode === 'review'
+              ? `Independently review the actual changes. Inspect review_workspace and relevant source/tests. Report actionable defects with file and line evidence, severity and a concrete failure example. If there are no findings, state the checks and remaining uncertainty. Do not treat the parent's completion claim as evidence.\n\n${input.goal}` : input.goal,
+            context: [input.context, research ? researchResumeContext(research.checkpoint) : undefined].filter(Boolean).join('\n\n') || undefined,
+            researchCheckpoint: checkpointSink, requesterConversationId: parentConversationId, allowedToolNames: tools,
+            budgetTier: input.budgetTier as DelegationBudgetTier | undefined,
+            maxIterations: input.maxIterations ?? DELEGATION_BUDGETS[(input.budgetTier ?? 'standard') as DelegationBudgetTier].maxToolCalls, model, bus: deps.bus,
+            getConfig: deps.getConfig, toolExecutorConfig: deps.toolExecutorConfig,
+            authorizeToolCall,
+            buildChildTools: opts => {
+              const local = mode === 'implement' ? new Map(deps.buildChildTools(opts).map(tool => [tool.name, tool])) : undefined;
+              const rebound = new Set(['data_batch', 'read_file', 'grep', 'find', 'list_dir', 'review_workspace', 'write_file', 'apply_patch', 'exec_command', 'language_diagnostics']);
+              return parentTools.flatMap(tool => {
+                const candidate = local && rebound.has(tool.name) ? local.get(tool.name) : tool;
+                return candidate ? [protectDelegatedTool(candidate)] : [];
+              });
+            },
+            verifyChanges: mode === 'implement',
           });
-        },
-        verifyChanges: mode === 'implement',
-      });
-      const abort = () => child.abort();
-      signal?.addEventListener('abort', abort, { once: true });
-      if (signal?.aborted) abort();
-      try {
-        const result = await child.run();
-        const currentRevision = mode === 'review' ? await readWorkspaceRevision(workspace) : undefined;
-        const stale = mode === 'review' && (!revision || revision !== currentRevision);
-        const patch = mode === 'implement' ? await runGit(workspace, ['diff', '--no-ext-diff', '--no-textconv', '--binary', 'HEAD']).catch(() => '') : undefined;
-        return { content: [{ type: 'text', text: [result.summary,
-          `Budget (${result.budget.tier}): ${JSON.stringify({ stopReason: result.stopReason, usage: result.budget.usage, limits: result.budget.limits, handoffRequested: result.handoff.requested })}`,
-          stale ? 'Workspace changed or could not be fingerprinted; review findings require revalidation.' : '',
-          access.rejected.length ? `Rejected tools: ${JSON.stringify(access.rejected)}` : '',
-          environmentId ? `Changes retained in ${workspace} (environment ${environmentId}). Review and integrate from this workspace, then verify the parent workspace again.` : '',
-          patch ? `Patch preview:\n${patch.slice(0, 30_000)}` : '',
-        ].filter(Boolean).join('\n\n') }], details: {
-          status: stale && result.status === 'success' ? 'partial' : result.status, mode, summary: result.summary,
-          grantedTools: tools, rejectedTools: access.rejected,
-          iterations: result.toolIterations, revision: currentRevision, reviewedRevision: revision,
-          stopReason: result.stopReason, budget: result.budget, handoff: result.handoff,
-          ...(result.verification ? { childVerification: result.verification } : {}),
-          ...(environmentId ? { environmentId, workspace, patchTruncated: (patch?.length ?? 0) > 30_000 } : {}),
-        } };
-      } catch (error) {
-        return { content: [{ type: 'text', text: `Delegation failed: ${String(error)}${environmentId ? `; work retained in ${workspace} (${environmentId})` : ''}` }], details: { status: signal?.aborted ? 'cancelled' : 'failed', stopReason: signal?.aborted ? 'cancelled' : 'runtime_error', mode,
-          grantedTools: tools, rejectedTools: access.rejected, ...(environmentId ? { environmentId, workspace } : {}) } };
-      } finally { signal?.removeEventListener('abort', abort); }
+
+          signal?.addEventListener('abort', abort, { once: true });
+          if (signal?.aborted) abort();
+          result = await child.run();
+          attemptBudgets.push(result.budget);
+          if (research && checkpointSink) {
+            const checkpoint = checkpointSink.read();
+            if (result.status === 'success' && (!checkpoint.findings.length || checkpoint.nextSteps.length || checkpoint.findings.some(finding => finding.status === 'unverified'))) {
+              result = { ...result, status: 'partial', stopReason: 'verification',
+                summary: result.summary + '\nResearch checkpoint still has unfinished work; do not claim completion.' };
+            }
+            finishResearchCheckpoint(research, result.status === 'success' ? 'completed' : result.status,
+              result.stopReason, result.summary);
+            research = getResearchCheckpoint(research.id, research.conversationId, research.workspace)!;
+          }
+        } catch (error) {
+          const stopReason = signal?.aborted ? resolveAgentAbortReason(signal.reason) : 'runtime_error';
+          const status = stopReason === 'deadline_exceeded' ? 'partial' : signal?.aborted ? 'cancelled' : 'failed';
+          if (research) {
+            const current = getResearchCheckpoint(research.id, research.conversationId, research.workspace);
+            if (current?.leaseToken === research.leaseToken) finishResearchCheckpoint(research, status, stopReason, String(error));
+            research = getResearchCheckpoint(research.id, research.conversationId, research.workspace) ?? research;
+          }
+          return { content: [{ type: 'text', text: `Delegation failed: ${String(error)}${environmentId ? `; work retained in ${workspace} (${environmentId})` : ''}` }], details: {
+            status, stopReason, mode,
+            grantedTools: tools, rejectedTools: access.rejected,
+            ...(research ? { resumeId: research.id, checkpoint: research.checkpoint } : {}),
+            ...(environmentId ? { environmentId, workspace } : {}) } };
+        } finally { signal?.removeEventListener('abort', abort); }
+      } while (research && attempt < attemptLimit && !signal?.aborted && result.status === 'partial'
+        && ['tool_calls', 'total_tokens', 'model_turns', 'timeout', 'deadline_exceeded'].includes(result.stopReason)
+        && research.checkpoint.nextSteps.length > 0);
+      const currentRevision = mode === 'review' ? await readWorkspaceRevision(workspace) : undefined;
+      const stale = mode === 'review' && (!revision || revision !== currentRevision);
+      const patch = mode === 'implement' ? await runGit(workspace, ['diff', '--no-ext-diff', '--no-textconv', '--binary', 'HEAD']).catch(() => '') : undefined;
+      return { content: [{ type: 'text', text: [result.summary,
+        research ? `Research checkpoint ${research.id}: ${JSON.stringify(research.checkpoint)}. Resume unfinished work with resumeId and the same goal.` : '',
+        `Budget (${result.budget.tier}): ${JSON.stringify({ stopReason: result.stopReason, usage: result.budget.usage, limits: result.budget.limits, handoffRequested: result.handoff.requested })}`,
+        stale ? 'Workspace changed or could not be fingerprinted; review findings require revalidation.' : '',
+        access.rejected.length ? `Rejected tools: ${JSON.stringify(access.rejected)}` : '',
+        environmentId ? `Changes retained in ${workspace} (environment ${environmentId}). Review and integrate from this workspace, then verify the parent workspace again.` : '',
+        patch ? `Patch preview:\n${patch.slice(0, 30_000)}` : '',
+      ].filter(Boolean).join('\n\n') }], details: {
+        status: stale && result.status === 'success' ? 'partial' : result.status, mode, summary: result.summary,
+        grantedTools: tools, rejectedTools: access.rejected,
+        iterations: attemptBudgets.reduce((total, budget) => total + (budget.usage.toolCalls ?? 0), 0), revision: currentRevision, reviewedRevision: revision,
+        stopReason: result.stopReason, budget: result.budget, handoff: result.handoff,
+        ...(research ? { resumeId: research.id, checkpoint: research.checkpoint, attempts: attempt, totalAttempts: research.attempts, attemptBudgets } : {}),
+        ...(result.verification ? { childVerification: result.verification } : {}),
+        ...(environmentId ? { environmentId, workspace, patchTruncated: (patch?.length ?? 0) > 30_000 } : {}),
+      } };
     },
   } as AgentTool;
 }

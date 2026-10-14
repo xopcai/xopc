@@ -29,6 +29,7 @@ describe('delegation budgets', () => {
     expect(budget.policy.takeContinuationMessage?.()).toBeUndefined();
     expect(await budget.policy.beforeToolCall(call)).toMatchObject({ block: true });
     expect(budget.snapshot().usage.toolCalls).toBe(4);
+    expect(budget.policy.beforeModelRequest?.()).toBeUndefined();
     expect(budget.policy.shouldStopAfterTurn({ toolResults: [] } as any)).toBe(true);
     expect(budget.snapshot()).toMatchObject({ stopReason: 'tool_calls', handoffRequested: true });
   });
@@ -106,4 +107,28 @@ describe('delegation budgets', () => {
     credit.stop('credit_budget', 'credit_budget_exhausted');
     expect(credit.policy.beforeModelRequest?.()).toBe('credit_budget_exhausted');
   });
+});
+
+it('queues a handoff at tool admission before a long read can start, without stopping the summary', async () => {
+  let time = 0;
+  const budget = createDelegationBudgetPolicy(resolveDelegationBudget('light'), {}, () => time);
+  time = 96_000;
+  expect(budget.researchRemainingMs()).toBe(0);
+  expect(budget.remainingMs()).toBe(24_000);
+  expect(await budget.policy.beforeToolCall(call)).toMatchObject({ block: true });
+  expect(budget.policy.shouldStopAfterTurn(turn)).toBe(false);
+  expect(budget.policy.takeContinuationMessage?.()).toContain('handoff');
+  expect(budget.policy.beforeModelRequest?.()).toBeUndefined();
+  expect(budget.policy.shouldStopAfterTurn({ toolResults: [] } as any)).toBe(true);
+});
+
+it('allows a final checkpoint before handoff dispatch but no tools during the summary', async () => {
+  let time = 0;
+  const budget = createDelegationBudgetPolicy(resolveDelegationBudget('light'), {}, () => time);
+  time = 96_000;
+  const checkpoint = { ...call, toolCall: { ...call.toolCall, name: 'research_checkpoint' } };
+  expect(await budget.policy.beforeToolCall(checkpoint)).toBeUndefined();
+  expect(budget.snapshot().usage.toolCalls).toBe(0);
+  budget.policy.beforeModelRequest?.();
+  expect(await budget.policy.beforeToolCall(checkpoint)).toMatchObject({ block: true });
 });

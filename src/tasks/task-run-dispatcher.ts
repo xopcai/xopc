@@ -42,6 +42,7 @@ export class TaskRunDispatcher {
 
   async drain(): Promise<void> {
     if (this.#stopped) return;
+    this.#runs.reconcileCancelledRuns();
     this.reconcileExpiredRuns();
     const count = Math.max(1, Math.min(8, this.deps.maxConcurrency ?? 3));
     await Promise.all(Array.from({ length: count }, (_, slot) => this.drainSlot(`${this.deps.workerId}:${slot}`)));

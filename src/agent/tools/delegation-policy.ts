@@ -6,7 +6,7 @@ export type DelegationMode = 'inspect' | 'read' | 'research' | 'review' | 'imple
 
 /** Host-owned classifications. New tools fail closed until classified. */
 export const DELEGATION_TOOL_CAPABILITIES: Readonly<Record<string, DelegationCapability>> = {
-  read_file: 'local_read', grep: 'local_read', find: 'local_read', list_dir: 'local_read', review_workspace: 'local_read',
+  data_batch: 'local_read', read_file: 'local_read', grep: 'local_read', find: 'local_read', list_dir: 'local_read', review_workspace: 'local_read',
   personal_read: 'local_read', read_media: 'local_read', image: 'local_read', tool_manual: 'local_read',
   web_search: 'web_read', web_fetch: 'web_read', web_extract: 'web_read',
   knowledge_read: 'knowledge_read', user_context_read: 'knowledge_read',
@@ -17,6 +17,8 @@ export const DELEGATION_TOOL_CAPABILITIES: Readonly<Record<string, DelegationCap
   write_file: 'local_write', apply_patch: 'local_write', exec_command: 'command', language_diagnostics: 'command',
   browser_use: 'browser',
 };
+
+const BATCH_SOURCES = new Set(['read_file', 'grep', 'exec_command', 'knowledge_search', 'knowledge_get', 'web_search', 'web_fetch', 'xopc_tool_execute']);
 
 const RESEARCH: DelegationCapability[] = ['local_read', 'web_read', 'knowledge_read', 'skills_read', 'external_read'];
 
@@ -36,9 +38,12 @@ export function resolveDelegationTools(parentNames: readonly string[], mode: Del
   const rejected: Array<{ tool: string; reason: string }> = [];
   for (const tool of new Set((requested ?? parentNames).map(name => name.trim()).filter(Boolean))) {
     const capability = DELEGATION_TOOL_CAPABILITIES[tool];
+    const capabilityAllowed = tool === 'data_batch'
+      ? parentNames.some(name => BATCH_SOURCES.has(name) && allowed.has(DELEGATION_TOOL_CAPABILITIES[name]!))
+      : capability !== undefined && allowed.has(capability);
     const reason = !parent.has(tool) ? 'Unavailable to the parent agent'
       : !capability ? 'Tool has no delegable capability'
-        : !allowed.has(capability) ? `Capability ${capability} is outside this delegation` : undefined;
+        : !capabilityAllowed ? `Capability ${capability} is outside this delegation` : undefined;
     if (reason) { if (requested) rejected.push({ tool, reason }); }
     else granted.push(tool);
   }

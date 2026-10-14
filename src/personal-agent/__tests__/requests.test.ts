@@ -15,11 +15,12 @@ import { createConversation } from '../../storage/sqlite/conversation-repository
 import { getSqliteDatabase } from '../../storage/sqlite/transaction.js';
 import { deleteSessionRecord, getSessionMetadata, patchSessionMetadata, resetSessionRecord } from '../../storage/sqlite/session-repository.js';
 import { claimNextSessionInput, insertSessionInput, finishSessionInputRun } from '../../storage/sqlite/session-input-repository.js';
-import { getActiveConnectionWait, getConnectionWait, queueConnectionResolution, updateConnectionWait } from '../../storage/sqlite/connection-wait-repository.js';
+import { cancelConnectionObjective, requireSessionConnection, getActiveConnectionWait, getConnectionWait, queueConnectionResolution, updateConnectionWait } from '../../storage/sqlite/connection-wait-repository.js';
 import { upsertConnectorConnection, upsertConnectorInstallation, upsertConnectorActionMetadata } from '../../storage/sqlite/connector-repository.js';
 import { TaskConversationRepository } from '../../tasks/task-conversation-repository.js';
 import { TaskRunRepository } from '../../tasks/task-run-repository.js';
 import { TaskRepository } from '../../tasks/task-repository.js';
+import { TaskApplicationService } from '../../tasks/task-application-service.js';
 import { TaskRunCoordinator } from '../../tasks/task-run-coordinator.js';
 import { cancelPersonalTask } from '../task-cancel.js';
 import { TaskAllocationDispatcher } from '../../tasks/task-allocation-service.js';
@@ -53,6 +54,10 @@ import { getPersonalRequest, listPersonalRequests } from '../request-repository.
 import { drainPersonalRequestContinuations, drainPersonalRequestResults } from '../request-delivery.js';
 import { TaskResultDeliveryService } from '../../tasks/task-result-delivery-service.js';
 import { PersonalReplyComposer } from '../reply-composer.js';
+import { acquireEmbeddedRunLease } from '../../agent/embedded/runs.js';
+import { SessionInputCoordinator } from '../../gateway/service/session-input-coordinator.js';
+import { createPersonalTaskTool } from '../../agent/tools/personal-task-tool.js';
+import { GatewayAgentRunner } from '../../gateway/service/agent-runner.js';
 
 describe('Personal connected-app requests', () => {
   let directory: string;
@@ -214,6 +219,30 @@ describe('Personal connected-app requests', () => {
     expect(getPersonalRequest(request.requestId)?.state).toBe('cancelled');
   });
 
+  it('keeps a Task cancellation key bound to its original Run after reopening and restarting', async () => {
+    connection();
+    const request = submit();
+    const runs = new TaskRunRepository();
+    const original = runs.getActiveRoot(request.taskId!)!;
+    runs.createWait({ taskId: request.taskId!, taskRunId: original.id, kind: 'user_input', reason: 'Need an answer', condition: { type: 'connection', connectionWaitId: 'old-task-wait' } });
+    await cancelPersonalTask(request.taskId!, conversationId, 'task-cancel-original');
+    expect(runs.listActiveWaits(request.taskId!)).toHaveLength(0);
+    await cancelPersonalTask(request.taskId!, conversationId, 'task-cancel-closed-retry');
+    const tasks = new TaskApplicationService();
+    expect(tasks.execute({ taskId: request.taskId!, expectedVersion: new TaskRepository().require(request.taskId!).version,
+      actor: { kind: 'user' }, idempotencyKey: 'task-reopen', command: { type: 'reopen', phase: 'active' } }).ok).toBe(true);
+    expect(tasks.execute({ taskId: request.taskId!, expectedVersion: new TaskRepository().require(request.taskId!).version,
+      actor: { kind: 'user' }, idempotencyKey: 'task-restart', command: { type: 'start', executor: { kind: 'agent', agentId: 'mail-worker' } } }).ok).toBe(true);
+    const next = new TaskRunRepository().getActiveRoot(request.taskId!)!;
+    const before = new TaskRepository().require(request.taskId!);
+    closeXopcDatabase();
+    openXopcDatabase({ path: join(directory, 'xopc.db') });
+    await cancelPersonalTask(request.taskId!, conversationId, 'task-cancel-original');
+    await cancelPersonalTask(request.taskId!, conversationId, 'task-cancel-closed-retry');
+    expect(new TaskRunRepository().getActiveRoot(request.taskId!)).toEqual(next);
+    expect(new TaskRepository().require(request.taskId!)).toEqual(before);
+  });
+
   it('cancels an unallocated connected request so the router cannot launch it', async () => {
     connection();
     const request = submitPersonalRequest({ conversationId, connectorId: 'composio-gmail', objective: '查一下重要邮件', idempotencyKey: 'cancel-auto' });
@@ -366,6 +395,172 @@ describe('Personal connected-app requests', () => {
     return { account, request, worker, coordinator };
   }
 
+  it.each(['late', 'reject'] as const)('keeps a pre-lease Task cancellation and processes the next main-chat message when SDK acknowledgement is %s', async outcome => {
+    const { request, worker: chat } = worker();
+    const root = new TaskRunRepository().getActiveRoot(request.taskId!)!;
+    let releaseStartup!: () => void;
+    const startup = new Promise<void>(resolve => { releaseStartup = resolve; });
+    let releaseAck!: () => void;
+    const ack = new Promise<void>(resolve => { releaseAck = resolve; });
+    let entered = false;
+    let lease: ReturnType<typeof acquireEmbeddedRunLease> | undefined;
+    const model = vi.fn();
+    const sdkStop = vi.fn(async () => { await ack; if (outcome === 'reject') throw new Error('SDK stop failed'); });
+    const runner = new GatewayAgentRunner({ getConfig: () => ({}),
+      getAgentService: () => ({ resolveUserTimezoneForSession: () => 'UTC', prepareInboundAttachments: async () => [],
+        sessionStore: { idleCompaction: { interrupt: () => {} } }, beginInboundTurn: () => {}, endInboundTurn: () => {},
+        turnDispatcher: { processDirectStreaming: async function* (_message: string, conversation: string, _origin: unknown,
+          _attachments: unknown, _thinking: unknown, options: { runId: string; signal: AbortSignal }) {
+          entered = true; await startup;
+          expect(options.signal.aborted).toBe(true);
+          lease = acquireEmbeddedRunLease({ conversationId: conversation, transcriptId: getSessionMetadata(conversation)!.transcriptId!, runId: options.runId });
+          try {
+            await lease.attach({} as never, sdkStop);
+            if (!options.signal.aborted && !lease.signal.aborted) model();
+          } finally { lease.release(); }
+        } },
+        getLastAssistantPlainText: () => '', takeTaskReviewStreamHint: () => undefined,
+        outboundCoordinator: { emitSessionTurnComplete: async () => {} } }),
+      sessionIndex: { getSessionMetadata: async (key: string) => getSessionMetadata(key), updateSessionMetadata: async () => {},
+        appendTranscriptCustomEntry: async () => {}, appendTranscriptContextEntry: async () => {} },
+      emit: () => {}, publishRealtime: () => {}, completeRealtimeTopic: () => {}, bus: { publishInbound: async () => {} },
+    } as never);
+    insertSessionInput({ id: 'prelease-worker', conversationId: chat.key, clientMessageId: 'prelease-worker', taskRunId: root.id,
+      content: 'Read mail', requestedDelivery: 'next', effectiveDelivery: 'next', status: 'queued', origin: { type: 'system', source: 'workflow' } });
+    const draining = runner.inputs.drain(chat.key);
+    finishSessionInputRun(conversationId, 'main-run', 'completed');
+    const taskTool = createPersonalTaskTool({ getCurrentConversationId: () => conversationId, getCurrentAgentId: () => agentId });
+    const execute = vi.fn(async (input: { content: string }) => {
+      if (input.content === 'cancel task') await taskTool.execute('prelease-cancel', { command: 'cancel', taskId: request.taskId! });
+      return { status: 'ok', summary: '' };
+    });
+    const main = new SessionInputCoordinator({ sessionExists: async () => true, execute,
+      prepareAttachments: async () => undefined, prepareContexts: async () => undefined, steer: async () => false, emit: () => {} });
+    const send = (content: string) => main.submit({ conversationId, clientMessageId: content, content, delivery: 'next', origin: { type: 'channel', channel: 'webchat' } });
+    try {
+      await vi.waitFor(() => expect(entered).toBe(true));
+      await send('cancel task'); await main.waitForCompletion(conversationId, 'cancel task');
+      expect(new TaskRunRepository().get(root.id)?.status).toBe('cancelled');
+      releaseStartup();
+      await vi.waitFor(() => expect(sdkStop).toHaveBeenCalledOnce());
+      expect(lease!.signal.aborted).toBe(true);
+      await send('next question'); await main.waitForCompletion(conversationId, 'next question');
+      expect(execute).toHaveBeenCalledTimes(2);
+      expect(model).not.toHaveBeenCalled();
+      releaseAck(); await draining;
+      runner.recoverSessionInputs(); await runner.inputs.drain(chat.key);
+      expect(model).not.toHaveBeenCalled();
+    } finally { releaseStartup(); releaseAck(); await draining; lease?.release(); runner.disposeClarifications(); }
+  });
+
+  it('clears every wait of a cancelled connection Run so the Task can be reopened and started', () => {
+    const { account, request, worker: chat } = worker();
+    const runs = new TaskRunRepository();
+    const root = runs.getActiveRoot(request.taskId!)!;
+    upsertConnectorConnection({ ...account, status: 'expired' });
+    const waiting = requirePersonalWorkerConnection(chat.key);
+    const wait = getConnectionWait(waiting.connectionWaitId!)!;
+    runs.createWait({ taskId: request.taskId!, taskRunId: root.id, kind: 'user_input',
+      reason: 'Another requirement', condition: { type: 'connection', connectionWaitId: 'another-old-requirement' } });
+    cancelConnectionObjective(conversationId, wait.id, wait.objectiveRevision);
+    cancelPersonalRequest(getPersonalRequest(request.requestId)!);
+    expect(runs.get(root.id)?.status).toBe('cancelled');
+    expect(runs.listActiveWaits(request.taskId!)).toHaveLength(0);
+    closeXopcDatabase(); openXopcDatabase({ path: join(directory, 'xopc.db') });
+    expect(runs.reconcileCancelledRuns()).toBe(0);
+    const tasks = new TaskApplicationService();
+    expect(tasks.execute({ taskId: request.taskId!, expectedVersion: new TaskRepository().require(request.taskId!).version,
+      actor: { kind: 'user' }, idempotencyKey: 'reopen-after-all-waits', command: { type: 'reopen', phase: 'active' } }).ok).toBe(true);
+    expect(tasks.execute({ taskId: request.taskId!, expectedVersion: new TaskRepository().require(request.taskId!).version,
+      actor: { kind: 'user' }, idempotencyKey: 'start-after-all-waits', command: { type: 'start', executor: { kind: 'agent', agentId: 'mail-worker' } } }).ok).toBe(true);
+  });
+
+  it.each(['late', 'reject'] as const)('finishes ordinary Task cancellation and the next message before SDK acknowledgement is %s', async outcome => {
+    const { request, worker: chat } = worker();
+    const root = new TaskRunRepository().getActiveRoot(request.taskId!)!;
+    insertSessionInput({ id: 'task-stop-input', conversationId: chat.key, clientMessageId: 'task-stop-input', taskRunId: root.id,
+      content: 'Read mail', requestedDelivery: 'next', effectiveDelivery: 'next', status: 'queued', origin: { type: 'system', source: 'workflow' } });
+    claimNextSessionInput(chat.key, 'task-stop-execution');
+    const lease = acquireEmbeddedRunLease({ conversationId: chat.key, transcriptId: getSessionMetadata(chat.key)!.transcriptId!, runId: 'task-stop-execution' });
+    let release!: () => void;
+    const acknowledgement = new Promise<void>(resolve => { release = resolve; });
+    const stop = vi.fn(async () => { await acknowledgement; if (outcome === 'reject') throw new Error('SDK stop failed'); });
+    await lease.attach({} as never, stop);
+    finishSessionInputRun(conversationId, 'main-run', 'completed');
+    const tool = createPersonalTaskTool({ getCurrentConversationId: () => conversationId, getCurrentAgentId: () => agentId });
+    const execute = vi.fn(async (input: { content: string }) => {
+      if (input.content === 'cancel task') {
+        const result = await tool.execute('task-stop-cancel', { command: 'cancel', taskId: request.taskId! });
+        expect(JSON.parse(result.content[0].text)).toMatchObject({ status: 'cancelled', executionStopConfirmed: false });
+      }
+      return { status: 'ok', summary: '' };
+    });
+    const inputs = new SessionInputCoordinator({ sessionExists: async () => true, execute,
+      prepareAttachments: async () => undefined, prepareContexts: async () => undefined, steer: async () => false, emit: () => {} });
+    const send = (content: string) => inputs.submit({ conversationId, clientMessageId: content, content, delivery: 'next', origin: { type: 'channel', channel: 'webchat' } });
+    try {
+      await send('cancel task');
+      await inputs.waitForCompletion(conversationId, 'cancel task');
+      expect(new TaskRunRepository().get(root.id)?.status).toBe('cancelled');
+      expect(lease.signal.aborted).toBe(true);
+      expect(stop).toHaveBeenCalledOnce();
+      await tool.execute('task-stop-cancel', { command: 'cancel', taskId: request.taskId! });
+      expect(stop).toHaveBeenCalledOnce();
+      lease.release(); finishSessionInputRun(chat.key, 'task-stop-execution', 'cancelled');
+      await send('next question');
+      await inputs.waitForCompletion(conversationId, 'next question');
+      expect(execute).toHaveBeenCalledTimes(2);
+      release(); await acknowledgement;
+      await inputs.drain(conversationId);
+      expect(execute).toHaveBeenCalledTimes(2);
+      expect(new TaskRunRepository().get(root.id)?.status).toBe('cancelled');
+    } finally { release(); lease.release(); }
+  });
+
+  it.each(['tool', 'service', 'task'] as const)('does not wait for a late worker stop or cancel its replacement through %s', async path => {
+    const { request, worker: chat } = worker();
+    const oldRun = new TaskRunRepository().getActiveRoot(request.taskId!)!;
+    insertSessionInput({ id: 'old-worker-input', conversationId: chat.key, clientMessageId: 'old-worker-input', taskRunId: oldRun.id,
+      content: 'Read mail', requestedDelivery: 'next', effectiveDelivery: 'next', status: 'queued', origin: { type: 'system', source: 'workflow' } });
+    claimNextSessionInput(chat.key, 'old-worker-execution');
+    const old = acquireEmbeddedRunLease({ conversationId: chat.key, transcriptId: getSessionMetadata(chat.key)!.transcriptId!, runId: 'old-worker-execution' });
+    let releaseAck!: () => void;
+    const ack = new Promise<void>(resolve => { releaseAck = resolve; });
+    const stop = vi.fn(async () => { await ack; });
+    await old.attach({} as never, stop);
+    const tool = createPersonalRequestTools({ getCurrentConversationId: () => conversationId }).find(tool => tool.name === 'personal_request')!;
+    const taskTool = createPersonalTaskTool({ getCurrentConversationId: () => conversationId, getCurrentAgentId: () => agentId });
+    const repeatCancellation = () => path === 'task'
+      ? taskTool.execute('old-worker-cancel', { command: 'cancel', taskId: request.taskId! })
+      : tool.execute('old-worker-cancel', { command: 'cancel', requestId: request.requestId });
+    let next: ReturnType<typeof acquireEmbeddedRunLease> | undefined;
+    try {
+      if (path !== 'service') await repeatCancellation();
+      else cancelPersonalRequest(request);
+      expect(old.signal.aborted).toBe(true);
+      expect(stop).toHaveBeenCalledOnce();
+      await repeatCancellation();
+      expect(stop).toHaveBeenCalledOnce();
+      old.release();
+      finishSessionInputRun(chat.key, 'old-worker-execution', 'cancelled');
+      const tasks = new TaskApplicationService();
+      expect(tasks.execute({ taskId: request.taskId!, expectedVersion: new TaskRepository().require(request.taskId!).version,
+        actor: { kind: 'user' }, idempotencyKey: 'late-stop-reopen', command: { type: 'reopen', phase: 'active' } }).ok).toBe(true);
+      expect(tasks.execute({ taskId: request.taskId!, expectedVersion: new TaskRepository().require(request.taskId!).version,
+        actor: { kind: 'user' }, idempotencyKey: 'late-stop-start', command: { type: 'start', executor: { kind: 'agent', agentId: 'mail-worker' } } }).ok).toBe(true);
+      const newRun = new TaskRunRepository().getActiveRoot(request.taskId!)!;
+      insertSessionInput({ id: 'new-worker-input', conversationId: chat.key, clientMessageId: 'new-worker-input', taskRunId: newRun.id,
+        content: 'New work', requestedDelivery: 'next', effectiveDelivery: 'next', status: 'queued', origin: { type: 'system', source: 'workflow' } });
+      claimNextSessionInput(chat.key, 'new-worker-execution');
+      next = acquireEmbeddedRunLease({ conversationId: chat.key, transcriptId: getSessionMetadata(chat.key)!.transcriptId!, runId: 'new-worker-execution' });
+      releaseAck();
+      await ack;
+      await repeatCancellation();
+      expect(next.signal.aborted).toBe(false);
+      expect(new TaskRunRepository().getActiveRoot(request.taskId!)).toEqual(newRun);
+    } finally { releaseAck(); old.release(); next?.release(); }
+  });
+
   it('delivers structured mail while the main run is active, without duplicate results', async () => {
     const { request, worker: chat, coordinator } = worker();
     await createPersonalRequestResultTool(() => chat.key).execute('publish', { summary: '有一封需要回复的邮件',
@@ -454,6 +649,70 @@ describe('Personal connected-app requests', () => {
     expect(runs.getActiveRoot(request.taskId!)?.id).toBe(runId);
     expect(runs.listActiveWaits(request.taskId!)).toHaveLength(0);
     expect(getPersonalRequest(request.requestId)?.state).toBe('queued');
+  });
+
+  it('closes the waiting Personal Task and allocation when its connection objective is cancelled', () => {
+    const { account, request, worker: chat } = worker();
+    upsertConnectorConnection({ ...account, status: 'expired' });
+    const waiting = requirePersonalWorkerConnection(chat.key);
+    const wait = getConnectionWait(waiting.connectionWaitId!)!;
+    cancelConnectionObjective(conversationId, wait.id, wait.objectiveRevision);
+    cancelConnectionObjective(conversationId, wait.id, wait.objectiveRevision);
+    // The durable cancellation control retries the existing domain cancellation after fencing recovery.
+    cancelPersonalRequest(getPersonalRequest(request.requestId)!);
+    cancelPersonalRequest(getPersonalRequest(request.requestId)!);
+    expect(getPersonalRequest(request.requestId)?.state).toBe('cancelled');
+    expect(new TaskRepository().require(request.taskId!)).toMatchObject({ phase: 'closed', resolution: 'cancelled' });
+    expect(new TaskRunRepository().getActiveRoot(request.taskId!)).toBeUndefined();
+    expect(getConnectionWait(wait.id)?.resolution).toBe('cancelled');
+  });
+
+  it('retries old cancellation cleanup without cancelling a different new connection objective', () => {
+    const { account, request, worker: chat } = worker();
+    upsertConnectorConnection({ ...account, status: 'expired' });
+    const waiting = requirePersonalWorkerConnection(chat.key);
+    const oldWait = getConnectionWait(waiting.connectionWaitId!)!;
+    cancelConnectionObjective(conversationId, oldWait.id, oldWait.objectiveRevision);
+    const next = requireSessionConnection({ conversationId, principalId: 'local-owner', agentId,
+      summary: 'A different new goal', needs: [{ key: 'new-gmail-goal', label: 'Gmail',
+        target: { type: 'connector', connectorId: 'composio-gmail' }, capabilities: ['tools'] }] });
+    expect(next.waitId).not.toBe(oldWait.id);
+    cancelPersonalRequest(getPersonalRequest(request.requestId)!);
+    cancelPersonalRequest(getPersonalRequest(request.requestId)!);
+    expect(getConnectionWait(next.waitId!)?.status).toBe('open');
+    expect(new TaskRepository().require(request.taskId!)).toMatchObject({ phase: 'closed', resolution: 'cancelled' });
+  });
+
+  it.each(['current', 'legacy'] as const)('fences stale and persisted %s cleanup retries after a cancelled Task is reopened with a new Run', async format => {
+    const { account, request, worker: chat } = worker();
+    upsertConnectorConnection({ ...account, status: 'expired' });
+    const waiting = requirePersonalWorkerConnection(chat.key);
+    const wait = getConnectionWait(waiting.connectionWaitId!)!;
+    cancelConnectionObjective(conversationId, wait.id, wait.objectiveRevision);
+    const stale = getPersonalRequest(request.requestId)!;
+    cancelPersonalRequest(stale);
+    expect(getPersonalRequest(request.requestId)?.parameters.cancellationCleanupCompleted).toBe(true);
+    if (format === 'legacy') getSqliteDatabase().prepare(`UPDATE personal_requests
+      SET parameters_json = json_remove(parameters_json, '$.taskRunId', '$.cancellationCleanupCompleted') WHERE request_id = ?`).run(request.requestId);
+    const tasks = new TaskApplicationService();
+    const reopen = tasks.execute({ taskId: request.taskId!, expectedVersion: new TaskRepository().require(request.taskId!).version,
+      actor: { kind: 'user' }, idempotencyKey: 'reopen-after-cancel', command: { type: 'reopen', phase: 'active' } });
+    expect(reopen.ok).toBe(true);
+    const start = tasks.execute({ taskId: request.taskId!, expectedVersion: new TaskRepository().require(request.taskId!).version,
+      actor: { kind: 'user' }, idempotencyKey: 'new-run-after-cancel', command: { type: 'start', executor: { kind: 'agent', agentId: 'mail-worker' } } });
+    expect(start.ok).toBe(true);
+    const next = new TaskRunRepository().getActiveRoot(request.taskId!)!;
+    const before = new TaskRepository().require(request.taskId!);
+    cancelPersonalRequest(stale);
+    closeXopcDatabase();
+    openXopcDatabase({ path: join(directory, 'xopc.db') });
+    cancelPersonalRequest(getPersonalRequest(request.requestId)!);
+    expect(new TaskRunRepository().getActiveRoot(request.taskId!)).toEqual(next);
+    const replay = createPersonalRequestTools({ getCurrentConversationId: () => conversationId }).find(tool => tool.name === 'personal_request')!;
+    await replay.execute('late-old-cancel', { command: 'cancel', requestId: request.requestId });
+    await replay.execute('late-old-cancel', { command: 'cancel', requestId: request.requestId });
+    expect(new TaskRunRepository().getActiveRoot(request.taskId!)).toEqual(next);
+    expect(new TaskRepository().require(request.taskId!)).toEqual(before);
   });
 
   it('cancels worker access after deleting the main conversation', async () => {

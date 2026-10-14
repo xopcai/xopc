@@ -1,3 +1,4 @@
+import { searchHttpError } from '../errors.js';
 import type { SearchProvider, SearchResult } from '../types.js';
 
 export class TavilyProvider implements SearchProvider {
@@ -27,7 +28,7 @@ export class TavilyProvider implements SearchProvider {
       signal,
     });
     if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${await response.text()}`);
+      throw searchHttpError(response);
     }
     const data = (await response.json()) as {
       results?: Array<{ title?: string; url?: string; content?: string }>;

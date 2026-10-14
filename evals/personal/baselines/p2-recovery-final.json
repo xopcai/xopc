@@ -1,0 +1,394 @@
+{
+  "schemaVersion": 1,
+  "suite": "personal-delivery-p2",
+  "suiteVersion": 2,
+  "mode": "deterministic",
+  "label": "candidate",
+  "createdAt": "2026-10-14T15:52:51.890Z",
+  "manifest": {
+    "commit": "0adc969be774f68a3eb43bcef384e183fb866498",
+    "nodeVersion": "v24.16.0",
+    "workingTreeDirty": true,
+    "hashes": {
+      "src/tasks/__tests__/personal-delivery-benchmark.test.ts": "996dcbad1a042722e48d1247ebdbe75f69f7f42aa4080fd28da19db6570a0004",
+      "src/tasks/__tests__/task-research-result.test.ts": "86f18c75a3076f547942d4f648431078e79b9100c3e9dc6caad4ee045fc9df7c",
+      "src/tasks/__tests__/task-research-repair.test.ts": "352f828fcb97af1ba8c8462725784482d33599149635c2fcc2ba19a677c764b0",
+      "src/tasks/__tests__/task-research-review-format.test.ts": "f3fbb8cb17d5235ba90793e4cc2c29ce5cf8215b80ae8dbe4e251ed8d8cc7799",
+      "src/tasks/__tests__/task-model-call.test.ts": "8251904f46cab82c587b6569ab98d9ee8952fd4edc836fdb164fc6c87ba70fce",
+      "src/agent/tools/__tests__/web-fetch-content.test.ts": "571cb2d7007da8f64336e90e3191c66dd7a0b4a129f058aa62e2129b2a431dd8",
+      "pnpm-lock.yaml": "c9ba3f707270e8af6a7c6bdd3e4ed79aa16a3440c3d1df8602732bb6a8c5a0e5",
+      "src/agent/tools/personal-task-tool.ts": "d460c66eac83d1f6a365eaf885f3237f17b78a486a54e5a374fcd66cdfbf19d0",
+      "src/tasks/task-result-delivery-repository.ts": "9433eb70b4825c7d2f07af71f7255c4782c2a880c047b749b58f15a32938c4a1",
+      "src/tasks/task-result-delivery-service.ts": "13b509b2c0eb7b6a84b915d08b70046ada859d294c006a986acb616746ace039",
+      "src/personal-agent/reply-composer.ts": "14b8b8ae514f5293cbcdf1a83f42f113928193bf529ced091f0fa30d3bf7e4d8",
+      "src/personal-agent/reply-style.ts": "e8b056e05a702df8243cd313c5df44f14e1dcf5a52cde5864328cd93b7bead16",
+      "src/personal-agent/prompts.ts": "7a9efc655cb430995614b82563e5fa38252084e424bb6919479e171ecc84f43b",
+      "src/personal-agent/repository.ts": "c1b1dce53125a3f4ba627455a0f1b1a086baa5c2f53a663b87db4cf52d6a0555",
+      "src/agent/prompt/sections/messaging-runtime.ts": "e419ae94e56a47f78bf2e45af23f0539f98de2aa948c30e8d6009986774d9fe3",
+      "src/personal-agent/result-file-links.ts": "998b7c7d8b3015d905e7d961e17cd64b95428a91ffbf98c82d1d07b8ba6ab838",
+      "src/tasks/task-research-result.ts": "6262363a4d206a4a1ce62715588e795b9748c108c537f509d7c821febd085dd8",
+      "src/tasks/task-run-coordinator.ts": "6a13a66e9008bc06050fe53767555fcffaef14a0ced0f3c0d7f27c6674a978ba",
+      "src/tasks/task-allocation-service.ts": "d947720c3346a469bb3cb7eda8769e79dab5cbc56806783d377ded6e62938e75",
+      "src/tasks/task-contract-planner.ts": "b77eedbc3f40dbcbde532b959c79393206a1dc28cb8653fb8c5a9bfd7df660c9",
+      "src/agent/tools/task-result-tool.ts": "9115414ed3c1c993becd41ac6cbd1f95e6a67147794eef12e4437702d39f16b1",
+      "src/agent/tools/factory.ts": "0f7fe15b205760caf7719e921a838626fe6c958738e1f3d16d5d2fd31fa2f68b",
+      "packages/gateway-contract/src/task-research-result.ts": "0a546d8e9f9e8072fe1da330dd033a226621547e8bbe25f490caacfaec336dc6",
+      "packages/gateway-contract/src/turn-outcome.ts": "4a7c923b8a67f31b5db85aea5a1ff2aa6904f7799c764a4b7d549450d0d5cc05",
+      "src/tasks/task-research-repair.ts": "87849f6533b6155a37f599812d12beda6014dd5e15760dc040af1f25831e644d",
+      "src/tasks/task-model-call.ts": "91189157b448316fee10fe3bbb224b274af6dcec46fe9b2162363b13482922f2",
+      "src/session/store.ts": "70d6624c0e8a88157e2c3eb4f5f432b8f8a3726f974385583b3e7fb069eea7ec",
+      "src/config/schema.ts": "e0995eceae482b60824598bc9d2808447ca203eefa08b44a85d27673fe9a2336",
+      "src/tasks/task-run-repository.ts": "afa861eb7b570a5ee9f78601a0e15cf823b42f88fada8b1b0b3d9b5459be3d6c",
+      "src/agent/tasks/task-judge-service.ts": "d24a645efe6d52a75ac67cd97e92c889b6de1f344af4d4e83e8184f8171488f9",
+      "src/tasks/task-continuation.ts": "f0181c063b7a1b1a0d666e6abbd7c58cac0c664a593c71512ce1eaba5ad10c00",
+      "src/agent/orchestration/turn-recovery.ts": "540c0132d756aee6405d98a34c540630d5e3ae8402fe996ef55f78178ab27b8a",
+      "src/agent/embedded/run-for-session.ts": "73185e3dda3759fa777cf98c9bb3d3408920da5157db377407876e5e8b6c1d5b",
+      "src/agent/embedded/run-turn.ts": "05eb555422574ea709471662b8e651d6c03feee0a88de21194d0f86ea83dafbf",
+      "src/agent/embedded/types.ts": "b9a61fbe8af6af29489007c35731375adbc8e33a9e9e9d816b0c38e52aa126b8",
+      "src/agent/tools/web.ts": "e5d3637821f01957c2e1879e5c05c18e04da380b59a5aa8679a4efc511c0e92e"
+    },
+    "sourceChangedDuringRun": false,
+    "models": "No model calls; scripted component/reviewer fixtures. H03 checks policy, not naturalness."
+  },
+  "total": 48,
+  "passed": 48,
+  "durationMs": 7655,
+  "cases": [
+    {
+      "id": "uses the configured backup after a returned 502 and preserves the caller deadline",
+      "name": "uses the configured backup after a returned 502 and preserves the caller deadline",
+      "status": "passed",
+      "durationMs": 1.6607079999999996,
+      "failures": []
+    },
+    {
+      "id": "does not switch models for authentication, quota or cancelled requests",
+      "name": "does not switch models for authentication, quota or cancelled requests",
+      "status": "passed",
+      "durationMs": 0.8428339999999821,
+      "failures": []
+    },
+    {
+      "id": "stops after the configured bounded chain fails",
+      "name": "stops after the configured bounded chain fails",
+      "status": "passed",
+      "durationMs": 0.19062500000001137,
+      "failures": []
+    },
+    {
+      "id": "expands concrete criteria after planner 502 instead of silently retaining the generic contract",
+      "name": "expands concrete criteria after planner 502 instead of silently retaining the generic contract",
+      "status": "passed",
+      "durationMs": 0.35137500000001864,
+      "failures": []
+    },
+    {
+      "id": "A01-same-run",
+      "name": "A01-same-run: repairs unsupported conclusions before any delivery and succeeds after fresh review",
+      "status": "passed",
+      "durationMs": 727.71625,
+      "failures": []
+    },
+    {
+      "id": "A02-no-progress",
+      "name": "A02-no-progress: identical gaps stop after one automatic continuation with honest partial status",
+      "status": "passed",
+      "durationMs": 19.874041000000034,
+      "failures": []
+    },
+    {
+      "id": "A03-budget",
+      "name": "A03-budget: changes cannot create unlimited paid repair rounds",
+      "status": "passed",
+      "durationMs": 23.036499999999933,
+      "failures": []
+    },
+    {
+      "id": "A04-file-loss",
+      "name": "A04-file-loss: missing published bytes trigger republication before completion",
+      "status": "passed",
+      "durationMs": 15.593624999999975,
+      "failures": []
+    },
+    {
+      "id": "A18-502-file-loss",
+      "name": "A18-502-file-loss: a confirmed evidence-validation failure does not prevent same-run recovery and republication",
+      "status": "passed",
+      "durationMs": 16.368749999999864,
+      "failures": []
+    },
+    {
+      "id": "A19-502-unsafe",
+      "name": "A19-502-unsafe: a failed external operation still prevents automatic replay",
+      "status": "passed",
+      "durationMs": 21.22583399999985,
+      "failures": []
+    },
+    {
+      "id": "A05-direction",
+      "name": "A05-direction: a later user instruction invalidates the old review and requires adoption evidence",
+      "status": "passed",
+      "durationMs": 21.317207999999937,
+      "failures": []
+    },
+    {
+      "id": "A06-direction-proof",
+      "name": "A06-direction-proof: a self-declared instruction pass without supported claims stays unverified",
+      "status": "passed",
+      "durationMs": 16.06399999999985,
+      "failures": []
+    },
+    {
+      "id": "A07-authority",
+      "name": "A07-authority: paused tasks and expired deadlines cannot automatically resume",
+      "status": "passed",
+      "durationMs": 21.31595799999991,
+      "failures": []
+    },
+    {
+      "id": "A08-conflict",
+      "name": "A08-conflict: repair asks for original sources or disclosed uncertainty, never invented agreement",
+      "status": "passed",
+      "durationMs": 9.364458000000013,
+      "failures": []
+    },
+    {
+      "id": "A09-finalizer",
+      "name": "A09-finalizer: the legacy judge cannot complete a research run before evidence repair",
+      "status": "passed",
+      "durationMs": 16.007708000000093,
+      "failures": []
+    },
+    {
+      "id": "A10-fetch-url",
+      "name": "A10-fetch-url: a public fetch URL can come from persisted host metadata, never an invented replacement",
+      "status": "passed",
+      "durationMs": 8.914040999999997,
+      "failures": []
+    },
+    {
+      "id": "A11-missing-review",
+      "name": "A11-missing-review: an explicitly required result cannot bypass repair by omitting the evidence tool",
+      "status": "passed",
+      "durationMs": 17.45199999999977,
+      "failures": []
+    },
+    {
+      "id": "A12-fetch-failure",
+      "name": "A12-fetch-failure: failed fetch text is never eligible evidence even when the tool omitted isError",
+      "status": "passed",
+      "durationMs": 13.971000000000004,
+      "failures": []
+    },
+    {
+      "id": "A13-safe-recovery",
+      "name": "A13-safe-recovery: confirmed read failures allow acceptance repair while unknown effects remain blocked",
+      "status": "passed",
+      "durationMs": 8.419417000000067,
+      "failures": []
+    },
+    {
+      "id": "A14-counts",
+      "name": "A14-counts: rejects the observed mistaken nine/eight acceptance summary for a ten/nine result",
+      "status": "passed",
+      "durationMs": 14.632207999999991,
+      "failures": []
+    },
+    {
+      "id": "A15-amendment",
+      "name": "A15-amendment: targeted repair preserves prior evidence and explicitly retires obsolete claims",
+      "status": "passed",
+      "durationMs": 11.956249999999727,
+      "failures": []
+    },
+    {
+      "id": "A16-circular-plan",
+      "name": "A16-circular-plan: model planning cannot require its own pending review as acceptance proof",
+      "status": "passed",
+      "durationMs": 8.377875000000131,
+      "failures": []
+    },
+    {
+      "id": "A17-retention",
+      "name": "A17-retention: an omitted mode on a later publication retains earlier primary evidence",
+      "status": "passed",
+      "durationMs": 14.706458000000111,
+      "failures": []
+    },
+    {
+      "id": "R01-source",
+      "name": "R01-source: binds actual tool provenance and a stable source snapshot",
+      "status": "passed",
+      "durationMs": 707.1878750000001,
+      "failures": []
+    },
+    {
+      "id": "R02-fabricated-quote",
+      "name": "R02-fabricated-quote: rejects excerpts not present in actual reads",
+      "status": "passed",
+      "durationMs": 9.51483300000018,
+      "failures": []
+    },
+    {
+      "id": "R03-fabricated-url",
+      "name": "R03-fabricated-url: rejects an invented URL even with a genuine quote",
+      "status": "passed",
+      "durationMs": 9.376999999999953,
+      "failures": []
+    },
+    {
+      "id": "R04-missing-criterion",
+      "name": "R04-missing-criterion: omitted and unexpanded criteria remain unverified",
+      "status": "passed",
+      "durationMs": 20.116833000000042,
+      "failures": []
+    },
+    {
+      "id": "R05-unsupported",
+      "name": "R05-unsupported: self-declared passes cannot bypass unsupported claims",
+      "status": "passed",
+      "durationMs": 15.362750000000005,
+      "failures": []
+    },
+    {
+      "id": "R06-unknown-reference",
+      "name": "R06-unknown-reference: rejects reviewer references to invented claims",
+      "status": "passed",
+      "durationMs": 8.053249999999935,
+      "failures": []
+    },
+    {
+      "id": "R07-durable",
+      "name": "R07-durable: research survives later outcomes and produces per-criterion receipts",
+      "status": "passed",
+      "durationMs": 17.05899999999997,
+      "failures": []
+    },
+    {
+      "id": "R08-review-outage",
+      "name": "R08-review-outage: keeps sources but never certifies checks after review failure",
+      "status": "passed",
+      "durationMs": 14.561332999999877,
+      "failures": []
+    },
+    {
+      "id": "R09-stale-direction",
+      "name": "R09-stale-direction: rejects a review completed before later user direction",
+      "status": "passed",
+      "durationMs": 17.566375000000107,
+      "failures": []
+    },
+    {
+      "id": "R10-no-research",
+      "name": "R10-no-research: lists every acceptance item as unverified without a submitted result",
+      "status": "passed",
+      "durationMs": 18.188957999999957,
+      "failures": []
+    },
+    {
+      "id": "S03-prose",
+      "name": "S03-prose: valid concise prose and legacy JSON share the same validation",
+      "status": "passed",
+      "durationMs": 10.159333999999944,
+      "failures": []
+    },
+    {
+      "id": "S04-acceptance",
+      "name": "S04-acceptance: rejects an acceptance upgrade with missing evidence",
+      "status": "passed",
+      "durationMs": 9.120083000000022,
+      "failures": []
+    },
+    {
+      "id": "J01-prose",
+      "name": "J01-prose: retries a non-JSON audit once without worker re-execution",
+      "status": "passed",
+      "durationMs": 2.7563329999999837,
+      "failures": []
+    },
+    {
+      "id": "J02-invented-index",
+      "name": "J02-invented-index: rejects extra criterion indices before requesting a corrected structure",
+      "status": "passed",
+      "durationMs": 0.32408400000002757,
+      "failures": []
+    },
+    {
+      "id": "J03-bounded",
+      "name": "J03-bounded: two invalid structures fail rather than fabricate verification or retry forever",
+      "status": "passed",
+      "durationMs": 0.5548330000000306,
+      "failures": []
+    },
+    {
+      "id": "W01-introduction",
+      "name": "W01-introduction: preserves short main definitions preceding long reference sections",
+      "status": "passed",
+      "durationMs": 101.59154199999989,
+      "failures": []
+    },
+    {
+      "id": "W02-provenance",
+      "name": "W02-provenance: extraction never adds invented definitions or duplicates retained source paragraphs",
+      "status": "passed",
+      "durationMs": 2.0403749999998126,
+      "failures": []
+    },
+    {
+      "id": "D04-defaults",
+      "name": "D04-defaults: omitted fields retain an inspectable contract on submit",
+      "status": "passed",
+      "durationMs": 579.4068750000001,
+      "failures": []
+    },
+    {
+      "id": "D04-explicit",
+      "name": "D04-explicit: explicit acceptance criteria survive submission",
+      "status": "passed",
+      "durationMs": 32.058334000000286,
+      "failures": []
+    },
+    {
+      "id": "B01-partial",
+      "name": "B01-partial: partial research stays partial after delivery and composition",
+      "status": "passed",
+      "durationMs": 21.41150000000016,
+      "failures": []
+    },
+    {
+      "id": "B01-failed",
+      "name": "B01-failed: a failed outcome cannot become success from run completion",
+      "status": "passed",
+      "durationMs": 15.091166000000158,
+      "failures": []
+    },
+    {
+      "id": "S02-reference",
+      "name": "S02-reference: rejects an invented host download link",
+      "status": "passed",
+      "durationMs": 10.215582999999697,
+      "failures": []
+    },
+    {
+      "id": "S02-fallback",
+      "name": "S02-fallback: worker paths do not reappear in fallback or claim full delivery",
+      "status": "passed",
+      "durationMs": 17.000625000000127,
+      "failures": []
+    },
+    {
+      "id": "F02-download",
+      "name": "F02-download: a published report is readable only through its authenticated original chat",
+      "status": "passed",
+      "durationMs": 92.35562500000015,
+      "failures": []
+    },
+    {
+      "id": "H03-policy",
+      "name": "H03-policy: concise default and artifact fallback preserve explicit detail requests",
+      "status": "passed",
+      "durationMs": 22.915165999999772,
+      "failures": []
+    }
+  ]
+}

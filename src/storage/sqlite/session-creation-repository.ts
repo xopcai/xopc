@@ -7,7 +7,7 @@ import { createConversation } from './conversation-repository.js';
 import { setSessionConfig } from './config-repository.js';
 import { getSessionMetadata } from './session-repository.js';
 import { insertSessionInput } from './session-input-repository.js';
-import { invalidateConnectionResumeIntent } from './connection-wait-repository.js';
+import { cancelConnectionObjective } from './connection-wait-repository.js';
 import { supersedeActiveClarification } from './clarification-wait-repository.js';
 import { getSqliteDatabase, runSqliteWriteTransaction } from './transaction.js';
 
@@ -110,7 +110,10 @@ export function acceptSessionCommand(input: {
     const inputId = input.preparedInput ? randomUUID() : null;
     if (input.preparedInput && inputId) insertSessionInput({ ...input.preparedInput, conversationId, id: inputId, clientMessageId, expectedTranscriptId: transcriptId });
     if (inputId) {
-      invalidateConnectionResumeIntent(conversationId);
+      const control = input.preparedInput?.payload;
+      if (control?.connectionAction === 'cancel') {
+        cancelConnectionObjective(conversationId, control.waitId, control.objectiveRevision);
+      }
       supersedeActiveClarification(conversationId);
     }
     const receipt = { conversationId, clientMessageId, principalId, requestHash, inputId, transcriptId, acceptedAt: Date.now() };

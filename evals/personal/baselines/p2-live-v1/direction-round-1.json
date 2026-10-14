@@ -1,0 +1,23 @@
+{
+  "success": false,
+  "interrupted": true,
+  "failure": "Development batch interrupted for implementation changes before a final delivery report.",
+  "scenario": "direction",
+  "marker": "LIVE-ALLOCATION-73b03810",
+  "task": {
+    "id": "d4606b8b-b478-4fce-bc9f-0d79a8b79c77",
+    "title": "分析 sales.csv 月度销售额与环比并产出三份文件"
+  },
+  "run": {
+    "run_id": "195be280-27d5-44bb-9955-b8a65c153473",
+    "status": "running",
+    "started_at": 1791981233005
+  },
+  "isolatedStateDirectory": "/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-personal-allocation-live-jZtDZM",
+  "benchmark": {
+    "suite": "personal-delivery-live-repair",
+    "version": 1,
+    "mode": "interrupted-development-trial",
+    "limitation": "No final adapter report or startup fingerprints were saved; excluded from frozen-version comparisons."
+  }
+}

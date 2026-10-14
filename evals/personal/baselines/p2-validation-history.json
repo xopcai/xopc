@@ -1,0 +1,291 @@
+{
+  "schemaVersion": 1,
+  "suite": "personal-delivery-p2-validation-history",
+  "finalBatch": "p2-live-v8-mixed",
+  "finalSourceUnchanged": true,
+  "finalPassed": 2,
+  "finalTotal": 2,
+  "totalHistoricalAttempts": 27,
+  "note": "Historical revisions and adapter versions are retained separately, never pooled into a reliability rate. Final mixed trials each exercise live web, conflicting sources, deleted publication, revised main-chat requirements, real calculations and authenticated downloads.",
+  "batches": [
+    {
+      "batch": "p2-live-v1",
+      "suiteVersion": 1,
+      "total": 4,
+      "passed": 0,
+      "sourceVersions": 3,
+      "interrupted": true,
+      "trials": [
+        {
+          "round": 1,
+          "scenario": "web",
+          "success": false,
+          "failure": "Specialist execution failed",
+          "sourceDrift": true,
+          "reportPath": "/Users/micjoyce/develop/github/xopc/evals/personal/baselines/p2-live-v1/web-round-1.json"
+        },
+        {
+          "round": 1,
+          "scenario": "conflict",
+          "success": false,
+          "sourceDrift": true,
+          "reportPath": "/Users/micjoyce/develop/github/xopc/evals/personal/baselines/p2-live-v1/conflict-round-1.json"
+        },
+        {
+          "round": 1,
+          "scenario": "file",
+          "success": false,
+          "sourceDrift": true,
+          "reportPath": "/Users/micjoyce/develop/github/xopc/evals/personal/baselines/p2-live-v1/file-round-1.json"
+        },
+        {
+          "round": 1,
+          "scenario": "direction",
+          "success": false,
+          "failure": "Development batch interrupted before final report.",
+          "reportPath": "evals/personal/baselines/p2-live-v1/direction-round-1.json"
+        }
+      ]
+    },
+    {
+      "batch": "p2-live-v2",
+      "suiteVersion": 1,
+      "total": 2,
+      "passed": 0,
+      "sourceVersions": 1,
+      "interrupted": false,
+      "trials": [
+        {
+          "round": 1,
+          "scenario": "web",
+          "success": false,
+          "failure": "Real web fetch evidence must be retained, not fixture knowledge",
+          "sourceDrift": false,
+          "reportPath": "/Users/micjoyce/develop/github/xopc/evals/personal/baselines/p2-live-v2/web-round-1.json"
+        },
+        {
+          "round": 1,
+          "scenario": "conflict",
+          "success": false,
+          "failure": "Real web fetch evidence must be retained, not fixture knowledge",
+          "sourceDrift": false,
+          "reportPath": "/Users/micjoyce/develop/github/xopc/evals/personal/baselines/p2-live-v2/conflict-round-1.json"
+        }
+      ]
+    },
+    {
+      "batch": "p2-live-v3",
+      "suiteVersion": 1,
+      "total": 8,
+      "passed": 7,
+      "sourceVersions": 1,
+      "interrupted": false,
+      "trials": [
+        {
+          "round": 1,
+          "scenario": "web",
+          "success": true,
+          "sourceDrift": false,
+          "reportPath": "/Users/micjoyce/develop/github/xopc/evals/personal/baselines/p2-live-v3/web-round-1.json"
+        },
+        {
+          "round": 1,
+          "scenario": "conflict",
+          "success": true,
+          "sourceDrift": false,
+          "reportPath": "/Users/micjoyce/develop/github/xopc/evals/personal/baselines/p2-live-v3/conflict-round-1.json"
+        },
+        {
+          "round": 1,
+          "scenario": "file",
+          "success": false,
+          "failure": "File-loss injection must happen",
+          "sourceDrift": false,
+          "reportPath": "/Users/micjoyce/develop/github/xopc/evals/personal/baselines/p2-live-v3/file-round-1.json"
+        },
+        {
+          "round": 1,
+          "scenario": "direction",
+          "success": true,
+          "sourceDrift": false,
+          "reportPath": "/Users/micjoyce/develop/github/xopc/evals/personal/baselines/p2-live-v3/direction-round-1.json"
+        },
+        {
+          "round": 2,
+          "scenario": "web",
+          "success": true,
+          "sourceDrift": false,
+          "reportPath": "/Users/micjoyce/develop/github/xopc/evals/personal/baselines/p2-live-v3/web-round-2.json"
+        },
+        {
+          "round": 2,
+          "scenario": "conflict",
+          "success": true,
+          "sourceDrift": false,
+          "reportPath": "/Users/micjoyce/develop/github/xopc/evals/personal/baselines/p2-live-v3/conflict-round-2.json"
+        },
+        {
+          "round": 2,
+          "scenario": "file",
+          "success": true,
+          "sourceDrift": false,
+          "reportPath": "/Users/micjoyce/develop/github/xopc/evals/personal/baselines/p2-live-v3/file-round-2.json"
+        },
+        {
+          "round": 2,
+          "scenario": "direction",
+          "success": true,
+          "sourceDrift": false,
+          "reportPath": "/Users/micjoyce/develop/github/xopc/evals/personal/baselines/p2-live-v3/direction-round-2.json"
+        }
+      ]
+    },
+    {
+      "batch": "p2-live-v4-file",
+      "suiteVersion": 2,
+      "total": 2,
+      "passed": 1,
+      "sourceVersions": 1,
+      "interrupted": false,
+      "trials": [
+        {
+          "round": 1,
+          "scenario": "file",
+          "success": false,
+          "failure": "Substantive criteria must pass; non-observable network absence remains unverified",
+          "sourceDrift": false,
+          "reportPath": "/Users/micjoyce/develop/github/xopc/evals/personal/baselines/p2-live-v4-file/file-round-1.json"
+        },
+        {
+          "round": 2,
+          "scenario": "file",
+          "success": true,
+          "sourceDrift": false,
+          "reportPath": "/Users/micjoyce/develop/github/xopc/evals/personal/baselines/p2-live-v4-file/file-round-2.json"
+        }
+      ]
+    },
+    {
+      "batch": "p2-live-v5-file",
+      "suiteVersion": 3,
+      "total": 2,
+      "passed": 1,
+      "sourceVersions": 1,
+      "interrupted": false,
+      "trials": [
+        {
+          "round": 1,
+          "scenario": "file",
+          "success": false,
+          "failure": "Substantive criteria must pass; non-observable network absence remains unverified",
+          "sourceDrift": false,
+          "reportPath": "/Users/micjoyce/develop/github/xopc/evals/personal/baselines/p2-live-v5-file/file-round-1.json"
+        },
+        {
+          "round": 2,
+          "scenario": "file",
+          "success": true,
+          "sourceDrift": false,
+          "reportPath": "/Users/micjoyce/develop/github/xopc/evals/personal/baselines/p2-live-v5-file/file-round-2.json"
+        }
+      ]
+    },
+    {
+      "batch": "p2-live-v6-mixed",
+      "suiteVersion": 4,
+      "total": 2,
+      "passed": 0,
+      "sourceVersions": 2,
+      "interrupted": false,
+      "trials": [
+        {
+          "round": 1,
+          "scenario": "mixed",
+          "success": false,
+          "failure": "Missing file must cause automatic repair on the same run",
+          "sourceDrift": true,
+          "reportPath": "/Users/micjoyce/develop/github/xopc/evals/personal/baselines/p2-live-v6-mixed/mixed-round-1.json"
+        },
+        {
+          "round": 2,
+          "scenario": "mixed",
+          "success": false,
+          "sourceDrift": true,
+          "reportPath": "/Users/micjoyce/develop/github/xopc/evals/personal/baselines/p2-live-v6-mixed/mixed-round-2.json"
+        }
+      ]
+    },
+    {
+      "batch": "p2-live-v7-mixed",
+      "suiteVersion": 5,
+      "total": 2,
+      "passed": 0,
+      "sourceVersions": 1,
+      "interrupted": false,
+      "trials": [
+        {
+          "round": 1,
+          "scenario": "mixed",
+          "success": false,
+          "failure": "Main submission and concurrent ping must not pre-read inputs or call other tools",
+          "sourceDrift": false,
+          "reportPath": "/Users/micjoyce/develop/github/xopc/evals/personal/baselines/p2-live-v7-mixed/mixed-round-1.json"
+        },
+        {
+          "round": 2,
+          "scenario": "mixed",
+          "success": false,
+          "failure": "Real web fetch evidence must be retained, not fixture knowledge",
+          "sourceDrift": false,
+          "reportPath": "/Users/micjoyce/develop/github/xopc/evals/personal/baselines/p2-live-v7-mixed/mixed-round-2.json"
+        }
+      ]
+    },
+    {
+      "batch": "p2-live-v8-mixed",
+      "suiteVersion": 6,
+      "total": 2,
+      "passed": 2,
+      "sourceVersions": 1,
+      "interrupted": false,
+      "trials": [
+        {
+          "round": 1,
+          "scenario": "mixed",
+          "success": true,
+          "sourceDrift": false,
+          "reportPath": "/Users/micjoyce/develop/github/xopc/evals/personal/baselines/p2-live-v8-mixed/mixed-round-1.json"
+        },
+        {
+          "round": 2,
+          "scenario": "mixed",
+          "success": true,
+          "sourceDrift": false,
+          "reportPath": "/Users/micjoyce/develop/github/xopc/evals/personal/baselines/p2-live-v8-mixed/mixed-round-2.json"
+        }
+      ]
+    }
+  ],
+  "additionalTrialRecords": [
+    {
+      "reportPath": "evals/personal/baselines/p2-development-mixed-2.json",
+      "success": false,
+      "failure": "File-loss injection must happen",
+      "sourceDrift": true,
+      "classification": "standalone-development"
+    },
+    {
+      "reportPath": "evals/personal/baselines/p2-development-mixed.json",
+      "success": false,
+      "failure": "Substantive criteria must pass; non-observable network absence remains unverified",
+      "sourceDrift": false,
+      "classification": "standalone-development"
+    },
+    {
+      "reportPath": "evals/personal/baselines/p2-live-v2/file-round-1.json",
+      "success": true,
+      "sourceDrift": true,
+      "classification": "completed-after-development-batch-stop"
+    }
+  ]
+}

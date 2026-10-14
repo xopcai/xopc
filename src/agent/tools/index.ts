@@ -72,6 +72,7 @@ export { createMessageTool } from './communication.js';
 
 export { createSendMediaTool } from './send-media.js';
 export { createPublishArtifactsTool } from './publish-artifacts.js';
+export { createTaskResultTool } from './task-result-tool.js';
 export { createReadMediaTool } from './media-read-tool.js';
 
 export {

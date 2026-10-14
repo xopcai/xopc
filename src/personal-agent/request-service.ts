@@ -25,6 +25,11 @@ import { getConnectorAccount } from '../storage/sqlite/connector-account-reposit
 import { getConnectorConnection, getConnectorInstallation, listConnectorConnections } from '../storage/sqlite/connector-repository.js';
 import { canAccessConnectorAccount } from '../connectors/account-access.js';
 import { getUserProfileSnapshot } from '../user-model/profile.js';
+import { abortEmbeddedRun } from '../agent/embedded/runs.js';
+import { createLogger } from '../utils/logger.js';
+
+const log = createLogger('PersonalRequest');
+const pendingStops = new Set<string>();
 
 function requestAssessment(request: Pick<PersonalRequest, 'objective' | 'connectorId' | 'executorAgentId' | 'conversationId'>,
   accountId?: string) {
@@ -184,7 +189,8 @@ function startPersonalRequest(request: PersonalRequest, accountId: string): Pers
   // Authorization may finish after the original input. Keep the original destination identity.
   getSqliteDatabase().prepare('UPDATE task_origin_links SET origin_transcript_id = ?, request_input_id = ? WHERE task_id = ?')
     .run(request.transcriptId, request.inputId, taskId);
-  return updatePersonalRequest(request, { state: result.ok ? 'queued' : 'failed', accountId, taskId });
+  return updatePersonalRequest(request, { state: result.ok ? 'queued' : 'failed', accountId, taskId,
+    parameters: { ...request.parameters, taskRunId: result.ok ? result.runId : undefined } });
 }
 
 /** Called inside the connection-resolution transaction; ordinary waits return undefined. */
@@ -254,7 +260,8 @@ export function requirePersonalWorkerConnection(conversationId: string): Persona
       authorKind: 'system', authorId: 'personal-request', kind: 'progress',
       body: /[\u3400-\u9fff]/u.test(request.objective) ? '选定账户需要在主对话原连接界面重新授权。文字回答或补充指令不能解除此授权等待。' : 'Selected app account needs reconnection in the existing main connection UI. This authorization wait cannot be resolved by a text answer or instruction.',
       idempotencyKey: `personal-connection-wait:${result.waitId}` });
-    return updatePersonalRequest(request, { state: 'waiting_connection', connectionWaitId: result.waitId });
+    return updatePersonalRequest(request, { state: 'waiting_connection', connectionWaitId: result.waitId,
+      parameters: { ...request.parameters, taskRunId: run.id } });
   });
 }
 
@@ -265,15 +272,52 @@ export function personalRequestSnapshot(request: PersonalRequest): PersonalReque
     : run?.status === 'cancelled' ? 'cancelled' : run?.status === 'running' ? 'running' : request.state;
   return { ...request, state };
 }
-function cancelPersonalRequestTask(request: PersonalRequest): void {
+function personalRequestRunId(request: PersonalRequest): string | undefined {
+  if (request.parameters.taskRunId) return request.parameters.taskRunId;
+  // Existing requests predate the explicit binding; resolved waits and selections
+  // still identify their original execution after the Task has been reopened.
+  if (request.connectionWaitId) {
+    const wait = getSqliteDatabase().prepare(`SELECT task_run_id FROM task_waits
+      WHERE task_id = ? AND json_extract(condition_json, '$.connectionWaitId') = ? LIMIT 1`)
+      .get(request.taskId ?? null, request.connectionWaitId) as { task_run_id: string | null } | undefined;
+    if (wait?.task_run_id) return wait.task_run_id;
+  }
+  const selected = new AgentSelectionRepository().find(request.conversationId, `personal-request-start:${request.requestId}`)?.taskRunId;
+  if (selected) return selected;
+  const first = request.taskId ? getSqliteDatabase().prepare(`SELECT run_id FROM task_runs
+    WHERE task_id = ? AND parent_run_id IS NULL ORDER BY queued_at, rowid LIMIT 1`)
+    .get(request.taskId) as { run_id: string } | undefined : undefined;
+  return first?.run_id;
+}
+
+/** Dispatch only the request's bound execution; SDK acknowledgement must not block input. */
+export function stopPersonalRequestExecution(request: PersonalRequest): { executionStopConfirmed: boolean } {
+  if (request.state !== 'cancelled') return { executionStopConfirmed: false };
+  const runId = personalRequestRunId(request);
+  const run = runId ? new TaskRunRepository().get(runId) : undefined;
+  if (!run || (!run.conversationId && !run.startedAt)) return { executionStopConfirmed: true };
+  if (run.conversationId) {
+    const state = getSessionInputState(run.conversationId);
+    const input = state.activeInputId ? getSessionInputById(run.conversationId, state.activeInputId) : undefined;
+    if (state.activeRunId && input?.taskRunId === run.id && !pendingStops.has(state.activeRunId)) {
+      const executionId = state.activeRunId;
+      pendingStops.add(executionId);
+      void abortEmbeddedRun(run.conversationId, 'user_cancelled', executionId).catch(err => {
+        log.warn({ err, requestId: request.requestId, runId, executionId }, 'Request cancelled; execution stop was not confirmed');
+      }).finally(() => { pendingStops.delete(executionId); });
+    }
+  }
+  return { executionStopConfirmed: false };
+}
+
+function cancelPersonalRequestTask(request: PersonalRequest, runId = personalRequestRunId(request)): void {
   if (!request.taskId) return;
   const runs = new TaskRunRepository();
-  const run = runs.getActiveRoot(request.taskId);
+  const run = runId ? runs.get(runId) : undefined;
   if (!run) return;
-  for (const wait of runs.listActiveWaits(request.taskId)) {
-    if (wait.condition.connectionWaitId === request.connectionWaitId) runs.resolveWait({ waitId: wait.id,
-      actor: { kind: 'user' }, resolution: { cancelled: true } });
-  }
+  if (!['queued', 'running', 'waiting', 'verifying', 'cancelled'].includes(run.status)) return;
+  runs.resolveCancelledRunWaits(run.id, { kind: 'user' });
+  if (run.status === 'cancelled') return;
   const result = new TaskApplicationService().completeRun({ runId: run.id, expectedRunVersion: run.version,
     actor: { kind: 'user' }, terminalCode: 'cancelled_by_user', suppressAttention: true,
     receipt: { status: 'cancelled', summary: 'Personal request cancelled', changes: [], evidence: [],
@@ -282,18 +326,28 @@ function cancelPersonalRequestTask(request: PersonalRequest): void {
   if (!result.ok) throw new Error('Task changed while cancelling');
 }
 export function cancelPersonalRequest(request: PersonalRequest): PersonalRequest {
-  const snapshot = personalRequestSnapshot(request);
-  if (request.state === 'cancelled' || ['completed', 'failed'].includes(snapshot.state)) return snapshot;
-  return runSqliteWriteTransaction(() => {
-    if (request.connectionWaitId) cancelConnectionObjective(request.conversationId);
-    cancelPersonalRequestTask(request);
-    if (request.taskId) {
+  const cancelled = runSqliteWriteTransaction(() => {
+    // A delayed control may carry a snapshot from before cleanup or a later Task reopening.
+    request = getPersonalRequest(request.requestId)!;
+    if (request.parameters.cancellationCleanupCompleted) return request;
+    const snapshot = personalRequestSnapshot(request);
+    if (['completed', 'failed'].includes(snapshot.state)) return snapshot;
+    const active = request.taskId ? new TaskRunRepository().getActiveRoot(request.taskId) : undefined;
+    const runId = personalRequestRunId(request);
+    const replacementRun = active && runId && active.id !== runId;
+    if (request.connectionWaitId) cancelConnectionObjective(request.conversationId, request.connectionWaitId);
+    cancelPersonalRequestTask(request, runId);
+    if (request.taskId && !replacementRun) {
       const task = new TaskRepository().require(request.taskId);
       if (task.phase !== 'closed') new TaskApplicationService().execute({ taskId: task.id, expectedVersion: task.version,
         idempotencyKey: `personal-request-cancel:${request.requestId}`, actor: { kind: 'user' }, command: { type: 'close', resolution: 'cancelled' } });
       getSqliteDatabase().prepare("UPDATE task_allocations SET status = 'cancelled', lease_token = NULL WHERE task_id = ?").run(request.taskId);
     }
-    return updatePersonalRequest(getPersonalRequest(request.requestId)!, { state: 'cancelled' });
+    const current = getPersonalRequest(request.requestId)!;
+    return updatePersonalRequest(current, { state: 'cancelled',
+      parameters: { ...current.parameters, taskRunId: runId, cancellationCleanupCompleted: true } });
   });
+  stopPersonalRequestExecution(cancelled);
+  return cancelled;
 }
 export function publishPersonalRequest(request: PersonalRequest): void { publishConnectionWait(request.conversationId); }

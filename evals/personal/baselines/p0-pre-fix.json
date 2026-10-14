@@ -1,0 +1,100 @@
+{
+  "schemaVersion": 1,
+  "suite": "personal-delivery-p0",
+  "suiteVersion": 1,
+  "mode": "deterministic",
+  "label": "pre-p0",
+  "createdAt": "2026-10-14T10:16:48.323Z",
+  "manifest": {
+    "commit": "cb13eb3109ba22d0e5670b0774af2b8371221ff7",
+    "nodeVersion": "v24.16.0",
+    "workingTreeDirty": true,
+    "hashes": {
+      "src/tasks/__tests__/personal-delivery-benchmark.test.ts": "996dcbad1a042722e48d1247ebdbe75f69f7f42aa4080fd28da19db6570a0004",
+      "pnpm-lock.yaml": "c9ba3f707270e8af6a7c6bdd3e4ed79aa16a3440c3d1df8602732bb6a8c5a0e5",
+      "src/agent/tools/personal-task-tool.ts": "cca8d6e1dd0109435fd3c6765539768813a6479b3a9c2d562f08111a92103d37",
+      "src/tasks/task-result-delivery-repository.ts": "af38300474741cefa8631b072eb6b4dc2bb8d26366b880e2a47a55c2312863dc",
+      "src/tasks/task-result-delivery-service.ts": "7a0fff566e0b24e3cc40253a941ac0a52304b06bb5f51dbce22c51a9d087a3c7",
+      "src/personal-agent/reply-composer.ts": "f3758343d30f2e8346d1dbe1b5fc2ea1764abd9e17fbf996a5773c75523ee81d",
+      "src/personal-agent/reply-style.ts": "c8df1f11d58fed888964d34ab889f92954f94691b39c6cbafb8f6be20d6bbc57",
+      "src/personal-agent/prompts.ts": "e7aa0391becd01c31f7699fa24ab2e18113be205ac81e13cac410ad9c42bec1d",
+      "src/personal-agent/repository.ts": "4d8048345ead097c6ab36ad9830fedcfc65350a8691cdd93def132cc15ebeb98",
+      "src/agent/prompt/sections/messaging-runtime.ts": "956264f616faa56942603f4366d2d1d43b241254685bd89aa66eeb965cc1da31",
+      "src/personal-agent/result-file-links.ts": null
+    },
+    "models": "No model calls; scripted component fixtures. H03 checks policy, not naturalness."
+  },
+  "total": 8,
+  "passed": 2,
+  "durationMs": 5983,
+  "cases": [
+    {
+      "id": "D04-defaults",
+      "name": "D04-defaults: omitted fields retain an inspectable contract on submit",
+      "status": "failed",
+      "durationMs": 720.5598749999999,
+      "failures": [
+        "AssertionError: expected [] to deeply equal [ '比较方案' ]\n    at /private<source-root>/src/tasks/__tests__/personal-delivery-benchmark.test.ts:90:49\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at file:///Users/micjoyce/develop/github/xopc/.pnpm/@vitest+runner@4.1.5/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20"
+      ]
+    },
+    {
+      "id": "D04-explicit",
+      "name": "D04-explicit: explicit acceptance criteria survive submission",
+      "status": "passed",
+      "durationMs": 33.98041700000067,
+      "failures": []
+    },
+    {
+      "id": "B01-partial",
+      "name": "B01-partial: partial research stays partial after delivery and composition",
+      "status": "failed",
+      "durationMs": 23.319417000000612,
+      "failures": [
+        "AssertionError: expected 'succeeded' to be 'partial' // Object.is equality\n    at /private<source-root>/src/tasks/__tests__/personal-delivery-benchmark.test.ts:109:43\n    at file:///Users/micjoyce/develop/github/xopc/.pnpm/@vitest+runner@4.1.5/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11\n    at file:///Users/micjoyce/develop/github/xopc/.pnpm/@vitest+runner@4.1.5/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:26\n    at file:///Users/micjoyce/develop/github/xopc/.pnpm/@vitest+runner@4.1.5/node_modules/@vitest/runner/dist/chunk-artifact.js:2326:20\n    at new Promise (<anonymous>)\n    at runWithCancel (file:///Users/micjoyce/develop/github/xopc/.pnpm/@vitest+runner@4.1.5/node_modules/@vitest/runner/dist/chunk-artifact.js:2323:10)\n    at file:///Users/micjoyce/develop/github/xopc/.pnpm/@vitest+runner@4.1.5/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20\n    at new Promise (<anonymous>)\n    at runWithTimeout (file:///Users/micjoyce/develop/github/xopc/.pnpm/@vitest+runner@4.1.5/node_modules/@vitest/runner/dist/chunk-artifact.js:2272:10)\n    at file:///Users/micjoyce/develop/github/xopc/.pnpm/@vitest+runner@4.1.5/node_modules/@vitest/runner/dist/chunk-artifact.js:2955:64"
+      ]
+    },
+    {
+      "id": "B01-failed",
+      "name": "B01-failed: a failed outcome cannot become success from run completion",
+      "status": "failed",
+      "durationMs": 18.42950000000019,
+      "failures": [
+        "AssertionError: expected 'succeeded' to be 'failed' // Object.is equality\n    at /private<source-root>/src/tasks/__tests__/personal-delivery-benchmark.test.ts:121:43\n    at file:///Users/micjoyce/develop/github/xopc/.pnpm/@vitest+runner@4.1.5/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11\n    at file:///Users/micjoyce/develop/github/xopc/.pnpm/@vitest+runner@4.1.5/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:26\n    at file:///Users/micjoyce/develop/github/xopc/.pnpm/@vitest+runner@4.1.5/node_modules/@vitest/runner/dist/chunk-artifact.js:2326:20\n    at new Promise (<anonymous>)\n    at runWithCancel (file:///Users/micjoyce/develop/github/xopc/.pnpm/@vitest+runner@4.1.5/node_modules/@vitest/runner/dist/chunk-artifact.js:2323:10)\n    at file:///Users/micjoyce/develop/github/xopc/.pnpm/@vitest+runner@4.1.5/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20\n    at new Promise (<anonymous>)\n    at runWithTimeout (file:///Users/micjoyce/develop/github/xopc/.pnpm/@vitest+runner@4.1.5/node_modules/@vitest/runner/dist/chunk-artifact.js:2272:10)\n    at file:///Users/micjoyce/develop/github/xopc/.pnpm/@vitest+runner@4.1.5/node_modules/@vitest/runner/dist/chunk-artifact.js:2955:64"
+      ]
+    },
+    {
+      "id": "S02-reference",
+      "name": "S02-reference: rejects an invented host download link",
+      "status": "failed",
+      "durationMs": 17.20849999999973,
+      "failures": [
+        "AssertionError: expected [Function] to throw an error\n    at Proxy.<anonymous> (file:///Users/micjoyce/develop/github/xopc/.pnpm/@vitest+expect@4.1.5/node_modules/@vitest/expect/dist/index.js:1552:16)\n    at Proxy.<anonymous> (file:///Users/micjoyce/develop/github/xopc/.pnpm/@vitest+expect@4.1.5/node_modules/@vitest/expect/dist/index.js:1156:15)\n    at Proxy.methodWrapper (file:///Users/micjoyce/develop/github/xopc/.pnpm/chai@6.2.2/node_modules/chai/index.js:1700:25)\n    at /private<source-root>/src/tasks/__tests__/personal-delivery-benchmark.test.ts:127:8\n    at file:///Users/micjoyce/develop/github/xopc/.pnpm/@vitest+runner@4.1.5/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11\n    at file:///Users/micjoyce/develop/github/xopc/.pnpm/@vitest+runner@4.1.5/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:26\n    at file:///Users/micjoyce/develop/github/xopc/.pnpm/@vitest+runner@4.1.5/node_modules/@vitest/runner/dist/chunk-artifact.js:2326:20\n    at new Promise (<anonymous>)\n    at runWithCancel (file:///Users/micjoyce/develop/github/xopc/.pnpm/@vitest+runner@4.1.5/node_modules/@vitest/runner/dist/chunk-artifact.js:2323:10)\n    at file:///Users/micjoyce/develop/github/xopc/.pnpm/@vitest+runner@4.1.5/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20"
+      ]
+    },
+    {
+      "id": "S02-fallback",
+      "name": "S02-fallback: worker paths do not reappear in fallback or claim full delivery",
+      "status": "failed",
+      "durationMs": 20.924833000000035,
+      "failures": [
+        "AssertionError: expected '部分报价仍未核实。\\n\\nMEDIA:/Users/worker/repo…' not to contain 'MEDIA:'\n    at /private<source-root>/src/tasks/__tests__/personal-delivery-benchmark.test.ts:140:22\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at file:///Users/micjoyce/develop/github/xopc/.pnpm/@vitest+runner@4.1.5/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20"
+      ]
+    },
+    {
+      "id": "F02-download",
+      "name": "F02-download: a published report is readable only through its authenticated original chat",
+      "status": "passed",
+      "durationMs": 130.48558400000002,
+      "failures": []
+    },
+    {
+      "id": "H03-policy",
+      "name": "H03-policy: concise default and artifact fallback preserve explicit detail requests",
+      "status": "failed",
+      "durationMs": 14.566625000000386,
+      "failures": [
+        "AssertionError: expected 'You are the user’s personal AI: capab…' to contain 'Be concise by default'\n    at /private<source-root>/src/tasks/__tests__/personal-delivery-benchmark.test.ts:182:26\n    at file:///Users/micjoyce/develop/github/xopc/.pnpm/@vitest+runner@4.1.5/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11\n    at file:///Users/micjoyce/develop/github/xopc/.pnpm/@vitest+runner@4.1.5/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:26\n    at file:///Users/micjoyce/develop/github/xopc/.pnpm/@vitest+runner@4.1.5/node_modules/@vitest/runner/dist/chunk-artifact.js:2326:20\n    at new Promise (<anonymous>)\n    at runWithCancel (file:///Users/micjoyce/develop/github/xopc/.pnpm/@vitest+runner@4.1.5/node_modules/@vitest/runner/dist/chunk-artifact.js:2323:10)\n    at file:///Users/micjoyce/develop/github/xopc/.pnpm/@vitest+runner@4.1.5/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20\n    at new Promise (<anonymous>)\n    at runWithTimeout (file:///Users/micjoyce/develop/github/xopc/.pnpm/@vitest+runner@4.1.5/node_modules/@vitest/runner/dist/chunk-artifact.js:2272:10)\n    at file:///Users/micjoyce/develop/github/xopc/.pnpm/@vitest+runner@4.1.5/node_modules/@vitest/runner/dist/chunk-artifact.js:2955:64"
+      ]
+    }
+  ]
+}

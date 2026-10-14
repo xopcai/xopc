@@ -9,9 +9,11 @@ import { TaskCollaborationRepository } from './task-collaboration-repository.js'
 import { TaskRepository } from './task-repository.js';
 import { TaskRunRepository } from './task-run-repository.js';
 import { TaskResultDeliveryRepository } from './task-result-delivery-repository.js';
+import { currentTaskResearchResult, taskInstructionSequence } from './task-research-result.js';
+import { buildResearchRepair, inspectTaskPublications } from './task-research-repair.js';
 import { resolveTaskLocale } from './task-language.js';
 import { loadTranscriptRowsForSession } from '../storage/sqlite/index.js';
-import { canResumeAfterModelFailure } from '../agent/orchestration/turn-recovery.js';
+import { ACCEPTANCE_REPAIR_READ_TOOLS, canResumeAfterModelFailure } from '../agent/orchestration/turn-recovery.js';
 import { isTransientProviderErrorMessage } from '../providers/model-response.js';
 
 export class TaskRunCoordinator {
@@ -126,10 +128,6 @@ export class TaskRunCoordinator {
     if (!run || !['running', 'waiting', 'verifying'].includes(run.status)) return;
     if (run.status === 'waiting' && run.policySnapshot.continuation) return;
     if (run.status === 'waiting' && this.#runs.listActiveWaits(run.taskId).length > 0) return;
-    if (input.status === 'failed' && isTransientProviderErrorMessage(input.summary) && run.conversationId
-      && canResumeAfterModelFailure(loadTranscriptRowsForSession(run.conversationId))
-      && this.#runs.scheduleContinuation({ runId: run.id, expectedVersion: run.version, reason: 'model_failure',
-        message: 'The previous model request failed. Continue the same task using the recorded completed tool results. Do not replay completed operations; finish only the remaining work.' })) return;
     const hasAssistantResult = Boolean(input.assistantText?.trim() && input.assistantText.trim() !== 'NO_REPLY');
     const hasBoardResult = new TaskCollaborationRepository().recent(run.taskId, undefined, 20)
       .some((entry) => entry.taskRunId === run.id && entry.kind === 'result');
@@ -138,11 +136,42 @@ export class TaskRunCoordinator {
     const task = new TaskRepository().require(run.taskId);
     const zh = resolveTaskLocale(task) === 'zh';
     const status = emptySuccess ? 'failed' : input.status;
+    const recoveryOptions = { allowFailedReadTools: ACCEPTANCE_REPAIR_READ_TOOLS };
     const unconfirmedEffects = status === 'failed' && Boolean(run.conversationId
-      && !canResumeAfterModelFailure(loadTranscriptRowsForSession(run.conversationId)));
+      && !canResumeAfterModelFailure(loadTranscriptRowsForSession(run.conversationId), recoveryOptions));
     const systemSummaries: Record<string, string> = { 'Message processed': '消息已处理', Interrupted: '执行已中断', 'Agent run ended unexpectedly': '助手执行意外结束' };
     const summary = emptySuccess ? (zh ? '助手执行未返回结果或证据' : 'Agent run returned no result or evidence')
       : zh ? systemSummaries[input.summary] ?? input.summary : input.summary;
+    const research = currentTaskResearchResult(run.id);
+    const currentResearch = research && research.contractVersion === task.latestContractVersion
+      && research.instructionSequence === taskInstructionSequence(task.id) ? research : undefined;
+    const publications = inspectTaskPublications(run.id, currentResearch);
+    const repair = buildResearchRepair({ research: currentResearch, stale: Boolean(research && !currentResearch),
+      instructionSequence: taskInstructionSequence(task.id), publications, criteria: task.contract?.acceptanceCriteria ?? [],
+      requiresReview: Boolean(task.body?.includes('publish_task_result')) });
+    const repairBlocked = Boolean(repair && run.conversationId && !canResumeAfterModelFailure(loadTranscriptRowsForSession(run.conversationId),
+      { allowFailedReadTools: ACCEPTANCE_REPAIR_READ_TOOLS }));
+    if (status === 'failed' && isTransientProviderErrorMessage(input.summary) && !unconfirmedEffects
+      && this.#runs.scheduleContinuation({ runId: run.id, expectedVersion: run.version, reason: 'model_failure',
+        message: ['The previous model request failed transiently. Continue this same task from recorded completed operations; do not replay external effects.',
+          ...(repair ? [repair.message] : ['Finish only the remaining work.'])].join('\n') })) return;
+    if (status === 'succeeded' && repair && !repairBlocked && this.#runs.scheduleContinuation({ runId: run.id,
+      expectedVersion: run.version, reason: 'acceptance_repair', repairFingerprint: repair.fingerprint, message: repair.message })) return;
+    const researchEvidence: TaskEvidence[] = currentResearch?.claims.map(claim => ({ kind: 'source',
+      title: `Research claim: ${claim.id}`, summary: claim.statement,
+      uri: currentResearch.sources.find(source => claim.sourceIds.includes(source.id))?.url,
+      provenance: 'judge', strength: claim.support === 'supported' ? 'verified' : 'observed', observedAt: Date.now(),
+      verifies: currentResearch.checks.filter(check => check.status === 'passed' && check.claimIds.includes(claim.id)).map(check => check.criterion),
+    })) ?? [];
+    const checks = currentResearch?.checks.map(check => ({ criterion: check.criterion, status: check.status,
+      evidenceTitles: check.claimIds.map(id => `Research claim: ${id}`), note: check.note,
+      method: currentResearch.review === 'model_reviewed' ? 'model_reviewed' as const : 'unverified' as const }))
+      ?? (task.contract?.acceptanceCriteria ?? []).map(criterion => ({ criterion, status: 'unverified' as const, evidenceTitles: [],
+        method: 'unverified' as const, note: zh ? '未提交有证据关联的核验结果。' : 'No evidence-linked verification result was submitted.' }));
+    const instructionChecks = (currentResearch?.instructionChecks ?? []).map(check => ({ criterion: check.instruction,
+      status: check.status, evidenceTitles: check.claimIds.map(id => `Research claim: ${id}`), note: check.note, method: 'model_reviewed' as const }));
+    const achieved = status === 'succeeded' && checks.length > 0 && checks.length === task.contract?.acceptanceCriteria.length
+      && checks.every(check => check.status === 'passed') && !repair && currentResearch!.claims.every(claim => claim.support === 'supported');
     this.#application.completeRun({
       runId: run.id,
       expectedRunVersion: run.version,
@@ -151,12 +180,16 @@ export class TaskRunCoordinator {
         status,
         summary,
         changes: this.#evidence.filter((item) => item.kind === 'state'),
-        evidence: this.#evidence,
-        verification: { status: 'unverified', checks: [] },
-        remainingWork: emptySuccess ? [task.contract?.objective ?? (zh ? '完成任务' : 'Complete the task')]
-          : status === 'succeeded' ? task.contract?.acceptanceCriteria ?? [] : [],
-        needsUser: unconfirmedEffects,
-        completionVerdict: status === 'succeeded' ? 'partial' : 'not_achieved',
+        evidence: [...this.#evidence, ...researchEvidence],
+        verification: { status: achieved ? 'passed' : [...checks, ...instructionChecks].some(check => check.status === 'failed') ? 'failed' : 'unverified', checks: [...checks, ...instructionChecks] },
+        remainingWork: repair ? repair.gaps : emptySuccess ? [task.contract?.objective ?? (zh ? '完成任务' : 'Complete the task')]
+          : achieved ? [] : status === 'succeeded' ? currentResearch
+            ? [...currentResearch.checks.filter(check => check.status !== 'passed').map(check => check.criterion),
+              ...currentResearch.claims.filter(claim => claim.support !== 'supported').map(claim => claim.note ?? claim.statement)]
+            : task.contract?.acceptanceCriteria ?? [] : [],
+        needsUser: unconfirmedEffects || repairBlocked,
+        ...(repairBlocked ? { nextAction: zh ? '先确认上次未确认操作的实际影响，再继续补查。' : 'Confirm the effects of the unconfirmed operation before repair.' } : {}),
+        completionVerdict: achieved ? 'achieved' : status === 'succeeded' ? 'partial' : 'not_achieved',
         ...(status === 'failed' ? { failure: { code: unconfirmedEffects ? 'tool_outcome_unconfirmed' : emptySuccess ? 'empty_agent_run' : 'agent_run_failed', phase: 'execution',
           recoveryAction: unconfirmedEffects ? (zh ? '检查上次操作的实际影响后再恢复任务' : 'Confirm the previous operation effects before resuming')
             : zh ? '使用其他可用助手或模型重试任务' : 'Retry the task run with another available Agent or model' } } : {}),

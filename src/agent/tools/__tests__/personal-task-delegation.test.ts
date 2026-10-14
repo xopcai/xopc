@@ -36,6 +36,8 @@ describe('Personal AI durable delegation', () => {
     expect(tasks[0]).toMatchObject({ delegateAgentId: 'researcher', phase: 'active' });
     expect(tasks[0]!.body).toContain('/workspace/reports/full.pdf');
     expect(tasks[0]!.body).toContain('## Required Skills\n\n- research');
+    expect(tasks[0]!.contract!.expectedOutputs).toEqual(['Compare these reports']);
+    expect(tasks[0]!.contract!.acceptanceCriteria).toHaveLength(2);
     expect(new TaskOriginRepository().owns(tasks[0]!.id, conversation.key)).toBe(true);
     expect(new TaskOriginRepository().list(conversation.key).items[0]).toMatchObject({ operationalState: 'queued' });
     expect(dispatchTaskRuns).toHaveBeenCalledOnce();

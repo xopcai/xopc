@@ -2,12 +2,18 @@ import crypto from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
 import type { TurnOrigin } from '@xopcai/endpoint-tools-protocol';
+import type { ConnectionWait } from '@xopcai/gateway-contract';
 
 import { injectSourceContextsIntoUserMessage } from '../../agent/source-context/injector.js';
 import { findSessionInputByRunId, type SessionInput } from '../../storage/sqlite/session-input-repository.js';
-import { consumeConnectionResume, publishConnectionWait, invalidateConnectionResumeIntent, cancelConnectionObjective, reconcileConnectionWaits } from '../../storage/sqlite/connection-wait-repository.js';
+import { consumeConnectionResume, publishConnectionWait, getActiveConnectionWait, getConnectionWait, hasPendingConnectionMessages, interruptedConnectionMessage, cancelConnectionObjective, reconcileConnectionWaits } from '../../storage/sqlite/connection-wait-repository.js';
+import { getSqliteDatabase, runSqliteWriteTransaction } from '../../storage/sqlite/transaction.js';
+import { appendTranscriptEntry } from '../../storage/sqlite/transcript-repository.js';
+import { emitSessionTranscriptUpdate } from '../../session/transcript-events.js';
+import { readCurrentTranscriptId } from '../../storage/sqlite/session-instance-repository.js';
 import {
   consumeClarificationResume,
+  getActiveClarification,
   supersedeActiveClarification,
 } from '../../storage/sqlite/clarification-wait-repository.js';
 import { SessionInstanceChangedError } from '../../storage/sqlite/session-input-repository.js';
@@ -36,9 +42,30 @@ import {
 import { deleteMediaUrisNoLongerReferenced } from '../../media/session-references.js';
 import { createLogger } from '../../utils/logger.js';
 import { fitSourceContextsToBudget } from '../../agent/source-context/budget.js';
+import { TaskApplicationService } from '../../tasks/task-application-service.js';
+import { TaskRunRepository } from '../../tasks/task-run-repository.js';
 
 const log = createLogger('SessionInputCoordinator');
 const MAX_PENDING_INPUTS = 10;
+
+function connectionControl(input: SubmitSessionInput, wait: ConnectionWait): 'continue' | 'cancel' | undefined {
+  if (input.attachments?.length || input.contextRefs?.length || input.sourceContexts?.some(source => source.kind !== 'device_context')
+    || (input.origin.type === 'system' && input.origin.source !== 'cli')) return undefined;
+  const text = input.content.trim().toLowerCase().replace(/[。.!！?？]+$/u, '').trim();
+  if (/^(?:继续|继续看下|继续看看|继续这个目标|继续原目标|continue|resume)$/u.test(text)) {
+    if (text !== '继续原目标' && (hasPendingConnectionMessages(wait) || getActiveClarification(wait.conversationId))) return undefined;
+    return 'continue';
+  }
+  if (/^(?:取消这个目标|取消原目标|取消当前目标|cancel this objective|cancel the original objective)$/u.test(text)) return 'cancel';
+  return undefined;
+}
+
+function connectionInputPayload(wait: ConnectionWait | undefined, control: 'continue' | 'cancel' | undefined): SessionInput['payload'] {
+  if (!wait) return undefined;
+  if (control) return { waitId: wait.id, objectiveRevision: wait.objectiveRevision, connectionAction: control };
+  if (wait.status !== 'closed') return { waitId: wait.id, objectiveRevision: wait.objectiveRevision, connectionBarrier: true };
+  return undefined;
+}
 
 function sameAppContext(input: SubmitSessionInput, existing: SessionInput): boolean {
   const identity = (sources?: AgentSourceContext[]) => sources?.filter(source => source.kind === 'app_context')
@@ -101,13 +128,16 @@ export class SessionInputCoordinator {
   private readonly resumeAfter = new Map<string, number>();
   private readonly draining = new Set<string>();
   private readonly submissionTails = new Map<string, Promise<void>>();
+  private readonly pendingConnectionStops = new Set<string>();
 
   constructor(private readonly deps: {
     prioritizeInput?: (input: SubmitSessionInput) => boolean;
-    interrupt?: (conversationId: string, runId: string) => Promise<void>;
+    interrupt?: (conversationId: string, runId: string, reason?: 'connection_cancel') => Promise<void>;
     coalesceWindowMs?: number;
     onInputReceived?: (conversationId: string) => void;
     beforeExecute?: (input: SessionInput) => Promise<boolean>;
+    continueConnection?: (wait: ConnectionWait, idempotencyKey: string) => Promise<void>;
+    cancelConnection?: (wait: ConnectionWait) => void;
     sessionExists: (conversationId: string) => Promise<boolean>;
     execute: (input: {
       inputReceivedAtMs?: number;
@@ -140,15 +170,26 @@ export class SessionInputCoordinator {
     return getSessionInputState(conversationId);
   }
 
+  private connectionTarget(conversationId: string, runtime = this.snapshot(conversationId)): ConnectionWait | undefined {
+    const active = runtime.activeInputId ? getSessionInputById(conversationId, runtime.activeInputId) : undefined;
+    return getActiveConnectionWait(conversationId)
+      ?? (active?.kind === 'connection_resume' && active.payload ? getConnectionWait(active.payload.waitId) : undefined);
+  }
+
   async prepareInput(input: SubmitSessionInput) {
     const attachments = await this.deps.prepareAttachments(input.conversationId, input.attachments);
     const resolved = await this.deps.prepareContexts(input.conversationId, input.contextRefs) ?? [];
     const contexts = fitSourceContextsToBudget([...resolved, ...(input.sourceContexts ?? [])]);
+    const wait = this.connectionTarget(input.conversationId);
+    const control = wait?.principalId === 'local-owner' ? connectionControl(input, wait) : undefined;
+    const payload = connectionInputPayload(wait, control);
     return {
       status: 'queued' as const, requestedDelivery: input.delivery, effectiveDelivery: 'next' as const,
       content: input.content.trim(), attachments, contextRefs: contexts.map(summarizeSourceContext),
-      interruptRequested: input.interrupt !== false && this.deps.prioritizeInput?.(input) === true,
+      interruptRequested: !wait
+        && input.interrupt !== false && this.deps.prioritizeInput?.(input) === true,
       contextSnapshots: contexts, thinking: input.thinking, origin: input.origin,
+      ...(payload ? { payload } : {}),
     };
   }
 
@@ -159,6 +200,11 @@ export class SessionInputCoordinator {
       const row = getSessionInputById(conversationId, inputId);
       const state = this.snapshot(input.conversationId);
       if (!row || row.status !== 'queued') return;
+      if (row.payload?.connectionAction === 'cancel') this.completeConnectionCancellation(row);
+      if (row.payload?.connectionAction || this.connectionTarget(row.conversationId, state)) {
+        this.requestConnectionStop(row);
+        return;
+      }
       if (row.interruptRequested) {
         this.prioritizeAcceptedInput(row, state);
         return;
@@ -223,6 +269,7 @@ export class SessionInputCoordinator {
       const remaining = (this.pendingSubmissions.get(conversationId) ?? 1) - 1;
       if (remaining) this.pendingSubmissions.set(conversationId, remaining);
       else this.pendingSubmissions.delete(conversationId);
+      void this.drain(conversationId);
     }
   }
 
@@ -351,31 +398,39 @@ export class SessionInputCoordinator {
       return { ok: false, code: 'CONTEXT_UNAVAILABLE' };
     }
     const runtime = this.snapshot(conversationId);
-    const priority = input.interrupt !== false && this.deps.prioritizeInput?.(input) === true;
-    const canSteer = !priority && input.delivery === 'steer'
+    const wait = this.connectionTarget(conversationId, runtime);
+    const control = wait?.principalId === 'local-owner' ? connectionControl(input, wait) : undefined;
+    const payload = connectionInputPayload(wait, control);
+    const priority = !wait && input.interrupt !== false && this.deps.prioritizeInput?.(input) === true;
+    const canSteer = !wait && !priority && input.delivery === 'steer'
       && runtime.activeRunId !== undefined
       && !attachments?.length
       && canSteerContexts(runtime, input.origin, sourceContexts);
     const effectiveDelivery: SessionInputDelivery = canSteer ? 'steer' : 'next';
-    const row = insertSessionInput({
-      expectedTranscriptId: input.expectedTranscriptId,
-      id: crypto.randomUUID(),
-      conversationId,
-      clientMessageId,
-      requestedDelivery: input.delivery,
-      interruptRequested: priority,
-      effectiveDelivery,
-      status: canSteer ? 'injecting' : 'queued',
-      content,
-      attachments,
-      contextRefs: sourceContexts?.map(summarizeSourceContext),
-      contextSnapshots: sourceContexts,
-      thinking: input.thinking,
-      origin: input.origin,
-      targetRunId: canSteer ? runtime.activeRunId : undefined,
+    const row = runSqliteWriteTransaction(() => {
+      const row = insertSessionInput({
+        expectedTranscriptId: input.expectedTranscriptId ?? (payload ? wait?.transcriptId : undefined),
+        id: crypto.randomUUID(),
+        conversationId,
+        clientMessageId,
+        requestedDelivery: input.delivery,
+        interruptRequested: priority,
+        effectiveDelivery,
+        status: canSteer ? 'injecting' : 'queued',
+        content,
+        attachments,
+        contextRefs: sourceContexts?.map(summarizeSourceContext),
+        contextSnapshots: sourceContexts,
+        thinking: input.thinking,
+        origin: input.origin,
+        targetRunId: canSteer ? runtime.activeRunId : undefined,
+        ...(payload ? { payload } : {}),
+      });
+      if (control === 'cancel') cancelConnectionObjective(conversationId, wait?.id, wait?.objectiveRevision);
+      return row;
     });
-
-    invalidateConnectionResumeIntent(conversationId);
+    if (control === 'cancel') this.completeConnectionCancellation(row);
+    this.requestConnectionStop(row);
     supersedeActiveClarification(conversationId);
     if (priority) {
       this.prioritizeAcceptedInput(row, runtime);
@@ -400,6 +455,8 @@ export class SessionInputCoordinator {
     this.draining.add(conversationId);
     try {
       while (true) {
+        // Attachment/context validation is asynchronous; do not consume a recovery ahead of it.
+        if (this.isAcceptingInput(conversationId)) return;
         const delay = (this.resumeAfter.get(conversationId) ?? 0) - Date.now();
         if (delay > 0) {
           await new Promise(resolve => setTimeout(resolve, delay));
@@ -411,9 +468,16 @@ export class SessionInputCoordinator {
         if (!input) return;
         let allowed: boolean;
         try {
-          allowed = (!this.deps.beforeExecute || await this.deps.beforeExecute(input))
-            && consumeConnectionResume(input)
-            && consumeClarificationResume(input);
+          allowed = !this.deps.beforeExecute || await this.deps.beforeExecute(input);
+          const wait = input.kind === 'connection_resume' && input.payload ? getConnectionWait(input.payload.waitId) : undefined;
+          if (allowed && wait?.status === 'queued' && wait.queuedInputId === input.id
+            && (this.isAcceptingInput(conversationId) || hasPendingConnectionMessages(wait, true))) {
+            finishSessionInputRun(conversationId, runId, 'interrupted');
+            setSessionInputStatus(input.id, 'queued');
+            this.publish(conversationId);
+            continue;
+          }
+          allowed = allowed && consumeConnectionResume(input) && consumeClarificationResume(input);
         } catch (err) {
           log.warn({ err, conversationId, runId, inputId: input.id }, 'Session input preflight failed');
           finishSessionInputRun(conversationId, runId, 'failed', 'Input preflight failed');
@@ -430,7 +494,7 @@ export class SessionInputCoordinator {
         this.publish(conversationId);
         let result: { status: string; summary: string };
         try {
-          result = await this.deps.execute({
+          result = input.payload?.connectionAction ? await this.executeConnectionControl(input) : await this.deps.execute({
             inputReceivedAtMs: input.createdAtMs,
             runId,
             taskRunId: input.taskRunId,
@@ -446,7 +510,19 @@ export class SessionInputCoordinator {
           result = { status: 'error', summary: message };
           log.warn({ err: error, conversationId, runId, inputId: input.id }, 'Session input execution failed');
         }
-        const terminal = result.status === 'suspended' ? 'suspended' : result.status === 'ok'
+        const cancelledWait = input.kind === 'connection_resume' && input.payload ? getConnectionWait(input.payload.waitId) : undefined;
+        const cancelled = cancelledWait?.resolution === 'cancelled' && cancelledWait.objectiveRevision === input.payload?.objectiveRevision;
+        if (cancelled && input.taskRunId) {
+          const runs = new TaskRunRepository();
+          const run = runs.get(input.taskRunId);
+          if (run && ['queued', 'running', 'waiting', 'verifying'].includes(run.status)) {
+            new TaskApplicationService().completeRun({ runId: run.id, expectedRunVersion: run.version,
+              actor: { kind: 'user' }, terminalCode: 'cancelled_by_user', suppressAttention: true,
+              receipt: { status: 'cancelled', summary: 'Connection objective cancelled', changes: [], evidence: [],
+                verification: { status: 'unverified', checks: [] }, remainingWork: [], needsUser: false, completionVerdict: 'not_achieved' } });
+          }
+        }
+        const terminal = cancelled ? 'cancelled' : result.status === 'suspended' ? 'suspended' : result.status === 'ok'
           ? 'completed'
           : result.status === 'aborted'
             ? 'cancelled'
@@ -457,6 +533,75 @@ export class SessionInputCoordinator {
     } finally {
       this.draining.delete(conversationId);
     }
+  }
+
+  private requestConnectionStop(input: SessionInput): void {
+    const target = input.payload;
+    if (target?.connectionAction !== 'cancel' || !this.deps.interrupt) return;
+    const wait = getConnectionWait(target.waitId);
+    if (!wait || wait.resolution !== 'cancelled' || wait.objectiveRevision !== target.objectiveRevision
+      || wait.transcriptId !== input.expectedTranscriptId) return;
+    const runtime = this.snapshot(input.conversationId);
+    const active = runtime.activeInputId ? getSessionInputById(input.conversationId, runtime.activeInputId) : undefined;
+    if (!runtime.activeRunId || active?.kind !== 'connection_resume' || !active.payload) return;
+    const sameVersion = active.payload.waitId === target.waitId && active.payload.objectiveRevision === target.objectiveRevision;
+    const parent = getConnectionWait(active.payload.waitId);
+    const sameExecution = wait.originInputId === active.id && parent?.objectiveId === wait.objectiveId;
+    if ((!sameVersion && !sameExecution) || this.pendingConnectionStops.has(runtime.activeRunId)) return;
+    const runId = runtime.activeRunId;
+    this.pendingConnectionStops.add(runId);
+    this.deps.emit('session.input-interrupt', { conversationId: input.conversationId, runId, inputId: input.id });
+    // Acceptance must not wait for an SDK/tool to acknowledge cancellation.
+    void this.deps.interrupt(input.conversationId, runId, 'connection_cancel').catch(err => {
+      log.warn({ err, conversationId: input.conversationId, runId }, 'Connection cancellation saved; execution stop was not confirmed');
+    }).finally(() => { this.pendingConnectionStops.delete(runId); });
+  }
+
+  private completeConnectionCancellation(input: SessionInput): void {
+    const wait = input.payload ? getConnectionWait(input.payload.waitId) : undefined;
+    if (wait?.objectiveRevision !== input.payload?.objectiveRevision || wait?.resolution !== 'cancelled') return;
+    try { this.deps.cancelConnection?.(wait); }
+    catch (err) {
+      log.warn({ err, conversationId: input.conversationId, waitId: wait.id }, 'Connection cancellation saved; domain cleanup will retry with its control');
+    }
+  }
+
+  private async executeConnectionControl(input: SessionInput): Promise<{ status: string; summary: string }> {
+    const target = input.payload;
+    if (!target?.connectionAction) throw new Error('Connection control is required');
+    let wait = getConnectionWait(target.waitId);
+    if (target.connectionAction === 'cancel' && wait?.objectiveRevision === target.objectiveRevision) {
+      this.deps.cancelConnection?.(wait);
+    }
+    if (target.connectionAction === 'continue' && wait?.objectiveRevision === target.objectiveRevision) {
+      try { await this.deps.continueConnection?.(wait, `connection-control:${input.id}`); }
+      catch (err) {
+        log.warn({ err, conversationId: input.conversationId, waitId: target.waitId }, 'Connection control preserved for current status feedback');
+      }
+    }
+    wait = getConnectionWait(target.waitId);
+    const zh = /[\u3400-\u9fff]/u.test(input.content);
+    const changed = !wait || wait.objectiveRevision !== target.objectiveRevision;
+    const summary = changed ? (zh ? '原目标已发生变化，请查看当前目标状态。' : 'The original objective changed. Check the current objective status.')
+      : target.connectionAction === 'cancel' ? (zh ? '已取消原目标。' : 'The original objective was cancelled.')
+        : interruptedConnectionMessage(wait) ? (zh ? '原目标已保留。请重新发送重启时中断的补充要求，或移除中断的消息后继续。' : 'The original objective is saved. Resend the interrupted message or remove it before continuing.')
+        : wait.resolution === 'cancelled' ? (zh ? '原目标已取消。' : 'The original objective was cancelled.')
+          : wait.status === 'closed' ? (zh ? '原目标已交给执行流程，无需重复继续。' : 'The original objective has already been handed to execution. No additional continuation is needed.')
+          : wait.status === 'queued' ? (zh ? '原目标已准备好，正在等待执行，无需重复继续。' : 'The original objective is queued. No additional continuation is needed.')
+            : wait.intent ? (zh ? '原目标已保留，完成连接和能力检查后会自动继续。' : 'The original objective is saved and will continue automatically after connection and capability checks.')
+              : (zh ? '原目标已保留，请查看连接操作区完成所需操作。' : 'The original objective is saved. Complete the required action in the connection panel.');
+    const persisted = runSqliteWriteTransaction(() => {
+      const runtime = this.snapshot(input.conversationId);
+      if (runtime.activeInputId !== input.id || runtime.activeRunId !== input.runId
+        || readCurrentTranscriptId(getSqliteDatabase(), input.conversationId) !== input.expectedTranscriptId) return false;
+      appendTranscriptEntry(input.conversationId, { role: 'user', content: input.content, timestamp: input.createdAtMs });
+      appendTranscriptEntry(input.conversationId, { role: 'custom', customType: 'connection_control_status', content: summary,
+        details: { inputId: input.id, waitId: target.waitId, objectiveRevision: target.objectiveRevision }, display: true, timestamp: Date.now() });
+      finishSessionInputRun(input.conversationId, input.runId!, 'completed');
+      return true;
+    });
+    if (persisted) emitSessionTranscriptUpdate({ conversationId: input.conversationId });
+    return { status: persisted ? 'ok' : 'aborted', summary: persisted ? summary : '' };
   }
 
   async update(conversationId: string, id: string, body: {
@@ -495,6 +640,10 @@ export class SessionInputCoordinator {
 
   remove(conversationId: string, id: string, version: number): { ok: boolean; state: SessionInputState } {
     const ok = cancelQueuedSessionInput(conversationId, id, version);
+    if (ok) {
+      publishConnectionWait(conversationId);
+      void this.drain(conversationId);
+    }
     return { ok, state: ok ? this.publish(conversationId) : this.snapshot(conversationId) };
   }
 
@@ -512,6 +661,7 @@ export class SessionInputCoordinator {
 
   recover(): void {
     const interrupted = recoverSessionInputState();
+    new TaskRunRepository().reconcileCancelledRuns();
     for (const conversationId of new Set([...interrupted, ...reconcileConnectionWaits(true)])) {
       this.publish(conversationId);
       void this.drain(conversationId);
