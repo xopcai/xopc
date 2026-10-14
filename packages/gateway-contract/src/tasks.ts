@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { SpecialistTaskRequirementsSchema } from './specialists.js';
 
 import {
   TaskAttentionItemSchema,
@@ -16,6 +17,14 @@ export {
   TaskResolutionSchema,
   TaskWaitSchema,
 } from './task-lifecycle.js';
+
+export const TaskAllocationSchema = z.object({
+  id: z.string(), taskId: z.string(),
+  status: z.enum(['pending', 'selecting', 'assigned', 'blocked', 'failed', 'cancelled']),
+  selectedAgentId: z.string().optional(), selectionReason: z.string().optional(),
+  reasonCode: z.string().optional(), attempts: z.number(), updatedAt: z.number(),
+});
+export type TaskAllocation = z.infer<typeof TaskAllocationSchema>;
 
 export const TaskPrioritySchema = z.enum(['low', 'normal', 'high', 'critical']);
 export const TaskChangedFieldSchema = z.enum([
@@ -155,6 +164,7 @@ export const TaskDependencySummarySchema = z.object({
   title: z.string(),
   phase: TaskPhaseSchema,
   resolution: TaskResolutionSchema.optional(),
+  allocation: TaskAllocationSchema.optional(),
   operationalState: TaskOperationalStateSchema,
 });
 
@@ -271,6 +281,7 @@ export const TaskCreateRequestSchema = z.object({
     expiresAt: z.number().int().nonnegative().optional(),
   })).default([]),
   activation: z.discriminatedUnion('mode', [
+    z.object({ mode: z.literal('allocate'), requirements: SpecialistTaskRequirementsSchema }).strict(),
     z.object({ mode: z.literal('capture'), phase: z.enum(['backlog', 'ready']).default('backlog') }),
     z.object({
       mode: z.literal('start'),
@@ -303,6 +314,7 @@ const TaskWaitInputSchema = z.object({
 });
 
 export const TaskCommandSchema = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('retry_allocation') }),
   z.object({ type: z.literal('move'), phase: z.enum(['backlog', 'ready', 'active', 'review']) }),
   z.object({ type: z.literal('mark_ready') }),
   z.object({
@@ -338,7 +350,8 @@ export const TaskListResponseSchema = z.object({
   ok: z.literal(true),
   items: z.array(z.object({
     task: TaskSchema,
-    operationalState: TaskOperationalStateSchema,
+    allocation: TaskAllocationSchema.optional(),
+  operationalState: TaskOperationalStateSchema,
     attention: z.array(TaskAttentionItemSchema),
   })),
 });
@@ -346,6 +359,7 @@ export const TaskListResponseSchema = z.object({
 export const TaskCreateResponseSchema = z.object({
   ok: z.literal(true),
   task: TaskSchema,
+  allocation: TaskAllocationSchema.optional(),
   operationalState: TaskOperationalStateSchema,
   run: TaskRunSchema.optional(),
 });
@@ -392,6 +406,7 @@ export const TaskHandoffResponseSchema = z.object({
 export const TaskDetailResponseSchema = z.object({
   ok: z.literal(true),
   task: TaskSchema,
+  allocation: TaskAllocationSchema.optional(),
   operationalState: TaskOperationalStateSchema,
   attention: z.array(TaskAttentionItemSchema),
   waits: z.array(TaskWaitSchema),

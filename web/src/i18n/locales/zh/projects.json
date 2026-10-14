@@ -424,6 +424,7 @@
         "closed": "已完成"
       },
       "operationalStates": {
+        "allocating": "正在分配",
         "failed": "执行失败",
         "cancelled": "执行已取消",
         "idle": "空闲",

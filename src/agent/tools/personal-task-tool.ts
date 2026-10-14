@@ -8,21 +8,25 @@ import { normalizeSpecialistRequirements, type SpecialistTaskRequirements } from
 import { assertSpecialistEligible, createSelectedTask } from '../../agent-matching/delegation-service.js';
 import { AgentSelectionRepository, selectionRequestHash } from '../../agent-matching/selection-repository.js';
 import { getSessionMetadata } from '../../storage/sqlite/index.js';
+import { getSessionInputState } from '../../storage/sqlite/session-input-repository.js';
 export { getAvailablePersonalAgentTools, personalAgentModelAvailability } from '../../personal-agent/specialist-capabilities.js';
 import { isPersonalConversation } from '../../personal-agent/repository.js';
 import { PERSONAL_WORKER_RESULT_GUIDANCE } from '../../personal-agent/communication.js';
 import { getPersonalRequest } from '../../personal-agent/request-repository.js';
+import { TaskApplicationService } from '../../tasks/task-application-service.js';
+import { TaskAllocationRepository } from '../../tasks/task-allocation-repository.js';
+import { TaskRepository } from '../../tasks/task-repository.js';
 import { TaskOriginRepository } from '../../tasks/task-origin-repository.js';
 import { createXopcUseTool, type XopcUseToolDeps } from './xopc-use-tool.js';
 
 const PersonalTaskSchema = Type.Object({
-  command: Type.Union([Type.Literal('agents'), Type.Literal('match'), Type.Literal('selection'), Type.Literal('create'), Type.Literal('list'), Type.Literal('get'), Type.Literal('instruct'), Type.Literal('answer')]),
+  command: Type.Union([Type.Literal('retry_allocation'), Type.Literal('submit'), Type.Literal('agents'), Type.Literal('match'), Type.Literal('selection'), Type.Literal('create'), Type.Literal('list'), Type.Literal('get'), Type.Literal('instruct'), Type.Literal('answer')]),
   requirements: Type.Optional(Type.Object({
     version: Type.Optional(Type.Literal(1)), summary: Type.String({ maxLength: 300 }),
     domain: Type.Optional(Type.String()), taskType: Type.Optional(Type.String()),
     inputKinds: Type.Optional(Type.Array(Type.String())), outputKinds: Type.Optional(Type.Array(Type.String())),
     requiredTools: Type.Optional(Type.Array(Type.String())), requiredSkills: Type.Optional(Type.Array(Type.String())),
-    requestedAgentId: Type.Optional(Type.String()),
+    requestedAgentId: Type.Optional(Type.String({ description: 'Only an executor explicitly named by the human user. Omit this field when the background router should choose; never infer it from the specialist directory.' })),
   })),
   selectionReason: Type.Optional(Type.String({ maxLength: 500 })),
   selectionSource: Type.Optional(Type.Union([Type.Literal('snapshot'), Type.Literal('match'), Type.Literal('explicit')])),
@@ -78,7 +82,7 @@ export function createPersonalTaskTool(deps: PersonalTaskToolDeps): AgentTool<ty
   return {
     name: 'personal_task',
     label: 'Personal Task',
-    description: 'Use match with structured requirements to compare specialist profiles and eligibility evidence. Profiles declare expertise; they never grant access. When the snapshot suffices, create directly with requirements, selectionReason and selectionSource. selection reads a Task’s allocation history. Preserve idempotencyKey on uncertain retries; link alternatives with previousSelectionId. Find specialist Agents by role, availableTools, and model.available; delegate work, inspect Tasks, send instructions, or answer worker questions. Choose an Agent whose model.available is true. Before saying you cannot do a request, inspect another Agent. If a candidate fails, retry alternatives within the user’s authorization only when the user has not required a particular Agent or Skill. For explicitly requested Skills, use requiredSkills in agents and create; creation validates availability and includes them in the worker brief. agents can filter by requiredTools or requiredSkills; if none match, inspect unfiltered Agents. Return to the user quickly after creation.',
+    description: 'For ordinary delegation use submit with a complete brief; it immediately persists a Task and the background Task Router selects and starts one specialist. Submit before reading input files or discovering Agents. Omit requestedAgentId unless the human user explicitly named the executor; never choose one yourself for submit. selection reads a Task’s allocation history. Preserve idempotencyKey on uncertain retries. get/list inspect existing Tasks; instruct/answer send the missing context to the existing Task. retry_allocation retries selection before execution. agents/match/create remain available for explicitly requested specialist discovery or legacy direct delegation; their results do not authorize execution retries or changing a user-selected Agent. Profiles declare expertise, while eligibility checks verify execution conditions. Explicitly requested Skills must be preserved in requiredSkills. Never claim execution or completion before the corresponding tool result confirms that state.',
     parameters: PersonalTaskSchema,
     mutatesWorkspace: true,
     mutationScope: 'external',
@@ -137,7 +141,22 @@ export function createPersonalTaskTool(deps: PersonalTaskToolDeps): AgentTool<ty
       let pendingSelection: Parameters<AgentSelectionRepository['create']>[0] | undefined;
       let command: string = input.command;
       let args: Record<string, unknown> = {};
-      if (command === 'create') {
+      if (command === 'submit') {
+        const objective = input.objective?.trim();
+        if (!objective || !input.description?.trim()) throw new Error('objective and a complete description are required');
+        if (input.agentId) throw new Error('Use requirements.requestedAgentId for an explicitly requested executor');
+        const brief = buildPersonalTaskBrief({ title: input.title, objective, description: input.description });
+        const inputId = getSessionInputState(conversationId).activeInputId;
+        const submissionKey = input.idempotencyKey?.trim() || selectionRequestHash({
+          sourceInput: inputId ?? toolCallId, brief, requirements,
+          expectedOutputs: input.expectedOutputs, acceptanceCriteria: input.acceptanceCriteria, constraints: input.constraints,
+        });
+        command = 'create';
+        args = { ...brief, createMode: 'allocate', requirements, includeConversationContext: false,
+          expectedOutputs: input.expectedOutputs ?? [], acceptanceCriteria: input.acceptanceCriteria ?? [],
+          constraints: input.constraints ?? [], idempotencyKey: `personal-submit:${conversationId}:${selectionRequestHash(submissionKey)}` };
+        if (requirements.requiredSkills?.length) args.body = `${brief.body}\n\nRequired Skills: ${requirements.requiredSkills.join(', ')}. Read and follow these Skills before execution.`;
+      } else if (command === 'create') {
         const objective = input.objective?.trim();
         const agentId = input.agentId?.trim();
         if (!objective || !agentId) throw new Error('objective and specialist agentId are required');
@@ -200,7 +219,10 @@ export function createPersonalTaskTool(deps: PersonalTaskToolDeps): AgentTool<ty
         if (!new TaskOriginRepository().owns(taskId, conversationId)) {
           throw new Error('Task does not belong to this personal conversation');
         }
-        if (command === 'instruct' || command === 'answer') {
+        if (command === 'retry_allocation') {
+          command = 'command';
+          args = { taskId, type: 'retry_allocation', expectedVersion: new TaskRepository().require(taskId).version };
+        } else if (command === 'instruct' || command === 'answer') {
           const body = input.instruction?.trim();
           if (!body) throw new Error('instruction is required');
           if (command === 'answer' && !input.questionId?.trim()) throw new Error('questionId is required');
@@ -213,6 +235,14 @@ export function createPersonalTaskTool(deps: PersonalTaskToolDeps): AgentTool<ty
       }
       try {
         const result = await selectedProductTool.execute(toolCallId, { mode: 'task', command, args }, signal, undefined as never);
+        if ((input.command === 'answer' || input.command === 'instruct') && input.taskId && result.details.result && (result.details.result as { ok?: boolean }).ok !== false) {
+          const allocation = new TaskAllocationRepository().get(input.taskId);
+          if (allocation && ['blocked', 'failed'].includes(allocation.status)) {
+            new TaskApplicationService().execute({ taskId: input.taskId, expectedVersion: new TaskRepository().require(input.taskId).version,
+              idempotencyKey: `allocation-answer:${toolCallId}`, command: { type: 'retry_allocation' }, actor: { kind: 'agent', id: ownAgentId } });
+            deps.dispatchTaskRuns?.();
+          }
+        }
         return { content: result.content, details: {} };
       } catch (error) {
         // A committed selection is authoritative even if post-commit dispatch failed.

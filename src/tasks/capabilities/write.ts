@@ -12,7 +12,7 @@ import { TaskRepository } from '../task-repository.js';
 import { resolveResponseLanguageForSession } from '../../agent/prompt/response-language.js';
 import { resolveTaskLocale } from '../task-language.js';
 
-const modelSchema = TaskDetailResponseSchema.pick({ task: true, operationalState: true, attention: true, allowedCommands: true });
+const modelSchema = TaskDetailResponseSchema.pick({ task: true, operationalState: true, attention: true, allowedCommands: true, allocation: true });
 export const TaskMutationOutputSchema = z.discriminatedUnion('ok', [
   z.object({ ok: z.literal(true), model: modelSchema, runId: z.string().optional() }),
   z.object({ ok: z.literal(false), reason: z.enum(['not_found', 'conflict', 'invalid_transition', 'blocked']), model: modelSchema.optional() }),
@@ -32,7 +32,7 @@ export function registerTaskWriteCapabilities(dispatcher: CapabilityDispatcher, 
     effect: 'local-write', surfaces: ['http', 'agent'], scopes: ['tasks.write'],
     input: TaskCreateRequestSchema.omit({ idempotencyKey: true }), output: TaskMutationOutputSchema,
     execute(input, context) {
-      if (input.activation.mode === 'start' && !deps.wake) throw new CapabilityError('UNAVAILABLE', 'Task execution service is unavailable');
+      if (input.activation.mode !== 'capture' && !deps.wake) throw new CapabilityError('UNAVAILABLE', 'Task execution service is unavailable');
       const config = deps.getConfig?.();
       const projects = deps.getProjects?.();
       const requestedAgentId = input.delegateAgentId
@@ -52,10 +52,10 @@ export function registerTaskWriteCapabilities(dispatcher: CapabilityDispatcher, 
         ? resolveTaskLocale({ title: input.title, contract: input.contract })
         : language === 'zh-CN' ? 'zh' : 'en');
       // Preserve the domain's established idempotency identity across upgrades.
-      const request = { ...input, locale, originConversationId, delegateAgentId: agentId, activation, idempotencyKey: context.idempotencyKey };
+      const request = { ...input, locale, originConversationId, delegateAgentId: input.activation.mode === 'allocate' ? undefined : agentId, activation, idempotencyKey: context.idempotencyKey };
       return deps.createTask ? deps.createTask(request, context.actor) : new TaskApplicationService().create(request, context.actor);
     },
-    afterCommit(result) { if (result.ok) deps.wake?.(Boolean(result.runId)); },
+    afterCommit(result) { if (result.ok) deps.wake?.(Boolean(result.runId || result.model.allocation)); },
   }));
   dispatcher.register(defineAtomicCapability({
     id: 'xopc.tasks.command', majorVersion: 1, description: 'Apply a versioned task lifecycle command with a durable receipt.',
@@ -82,7 +82,7 @@ export function registerTaskWriteCapabilities(dispatcher: CapabilityDispatcher, 
           await deps.abortConversation?.(activeRun.conversationId);
         }
       }
-      deps.wake?.(Boolean(result.runId) || command.type === 'resolve_wait' || command.type === 'close');
+      deps.wake?.(Boolean(result.runId || result.model.allocation) || command.type === 'resolve_wait' || command.type === 'close');
     },
   }));
 }

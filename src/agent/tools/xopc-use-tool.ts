@@ -4,6 +4,8 @@ import { createProductDispatcher } from '../../capabilities/runtime/product.js';
 import { localAppCapabilities } from '../../local-apps/capabilities/runtime.js';
 import { CapabilityCallSchema } from '@xopcai/gateway-contract';
 import { CapabilityError, type CapabilityContext, type CapabilityDispatcher } from '../../capabilities/runtime/dispatcher.js';
+import { normalizeSpecialistRequirements } from '../../agent-matching/schema.js';
+import { TaskReadModelProjector } from '../../tasks/task-read-model-projector.js';
 import { TaskMutationOutputSchema } from '../../tasks/capabilities/write.js';
 import { TaskDeleteOutputSchema } from '../../tasks/capabilities/management.js';
 import { Type } from '@sinclair/typebox';
@@ -136,10 +138,10 @@ const NOTE_KINDS = new Set<NoteKind>(['thought', 'todo', 'voice', 'media', 'book
 const NOTE_STATUSES = new Set<NoteStatus>(['inbox', 'processed', 'archived', 'trashed']);
 const TASK_PRIORITIES = new Set<TaskPriority>(['low', 'normal', 'high', 'critical']);
 const TASK_COMMANDS = new Set<TaskCommand['type']>([
-  'mark_ready', 'start', 'request_review', 'close', 'reopen',
+  'retry_allocation', 'mark_ready', 'start', 'request_review', 'close', 'reopen',
   'add_wait', 'resolve_wait', 'revise_contract',
 ]);
-const TASK_CREATE_MODES = new Set(['capture', 'start'] as const);
+const TASK_CREATE_MODES = new Set(['capture', 'start', 'allocate'] as const);
 
 function okText(details: XopcUseDetails): AgentToolResult<XopcUseDetails> {
   const text = JSON.stringify(details.result ?? {}, null, 2);
@@ -960,7 +962,7 @@ async function handleTask(
       ? 'capture'
       : enumValue(args.createMode, TASK_CREATE_MODES);
     if (!createMode) return { ok: false, error: 'Invalid createMode' };
-    if (createMode === 'start' && !deps.dispatchTaskRuns) {
+    if (createMode !== 'capture' && !deps.dispatchTaskRuns) {
       return { ok: false, error: 'Task execution service is unavailable' };
     }
     const projectId = currentProjectId(args, deps);
@@ -1034,7 +1036,7 @@ async function handleTask(
       priority: priority ?? 'normal' as const,
       ...(dueAt === undefined ? {} : { dueAt }),
       ...(projectId ? { projectId } : {}),
-      delegateAgentId: agentId,
+      ...(createMode !== 'allocate' ? { delegateAgentId: agentId } : {}),
       ...(originConversationId ? { originConversationId } : {}),
       locale: taskLocale,
       contract: {
@@ -1052,7 +1054,9 @@ async function handleTask(
         metadata: {},
       }] : [],
       authorityGrants: [],
-      activation: createMode === 'capture'
+      activation: createMode === 'allocate'
+        ? { mode: 'allocate' as const, requirements: normalizeSpecialistRequirements(args.requirements) }
+        : createMode === 'capture'
         ? { mode: 'capture' as const, phase: 'backlog' as const }
         : { mode: 'start' as const, executor: { kind: 'agent' as const, agentId } },
     };
@@ -1069,8 +1073,9 @@ async function handleTask(
     const created = TaskMutationOutputSchema.parse(await capabilities.call('xopc.tasks.create', capabilityInput, capabilityContext,
       { ...capabilities.describe('xopc.tasks.create', capabilityContext), idempotencyKey }));
     if (created.ok === false) return { ok: false, error: created.reason, ...created };
-    return { ok: true, task: created.model.task, operationalState: created.model.operationalState,
-      createMode, ...(created.runId ? { runId: created.runId } : {}) };
+    const currentModel = createMode === 'allocate' ? new TaskReadModelProjector().get(created.model.task.id) ?? created.model : created.model;
+    return { ok: true, task: currentModel.task, operationalState: currentModel.operationalState,
+      createMode, allocation: currentModel.allocation, ...(created.runId ? { runId: created.runId } : {}) };
   }
 
   if (command === 'update_dependencies') {

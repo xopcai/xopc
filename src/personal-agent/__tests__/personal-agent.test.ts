@@ -246,11 +246,11 @@ describe('personal Agent identity', () => {
     expect(gentle).toContain('listen and reflect');
     expect(direct).toContain('concrete next step');
     expect(direct).not.toContain('Joyce');
-    expect(direct).toContain('personal_task(command="create")');
+    expect(direct).toContain('personal_task(command="submit")');
     expect(direct).toContain('requiredSkills=[canonicalName]');
     expect(direct).toContain('preserve that choice');
-    expect(direct).toContain('snapshot is missing');
-    expect(direct).toContain('Answer directly when able');
+    expect(direct).toContain('Do not pre-read input files, discover or choose Agents before submission');
+    expect(direct).toContain('Answer directly when your capabilities suffice');
     expect(direct).toContain('ask one short question directly in your reply');
     expect(direct).toContain('Never use clarify');
     expect(direct).toContain('Before tool discovery or delegation');
