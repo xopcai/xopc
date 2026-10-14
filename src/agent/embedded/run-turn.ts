@@ -35,9 +35,11 @@ import {
 } from '../orchestration/llm-turn-retry.js';
 import {
   isAgentTurnUnsettledError,
+  isAgentTurnTimeoutError,
   runAgentTurnWithTimeout,
   resolveAgentTurnTimeoutMs,
 } from '../orchestration/run-agent-turn-with-timeout.js';
+import { resolveAgentAbortReason } from '../orchestration/run-termination.js';
 import { detectToolLoops, type RecentToolCall } from '../orchestration/loop-guard.js';
 import { tryApplySessionTranscriptHygiene } from '../transcript/transcript-hygiene.js';
 import { restoreCurrentTurnImages } from './current-turn-images.js';
@@ -71,7 +73,7 @@ import { getSessionMetadata } from '../../storage/sqlite/session-repository.js';
 import { resolveEffectiveAgentConfigForSession } from '../../config/agent-profile.js';
 import { getModelThinking } from '../../providers/model-thinking.js';
 import { NO_REPLY } from '../messaging/no-reply.js';
-import { canResumeAfterModelFailure, completedRecoveryToolResult } from '../orchestration/turn-recovery.js';
+import { ACCEPTANCE_REPAIR_READ_TOOLS, canResumeAfterModelFailure, completedRecoveryToolResult } from '../orchestration/turn-recovery.js';
 import { withCloudCreditBudget, reportCloudCreditError, isCloudCreditBudgetExhausted, cloudCreditBudgetStopMessage } from '../../providers/xopc-cloud-credit-budget.js';
 
 const log = createLogger('EmbeddedRun');
@@ -439,7 +441,7 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
       : runLease.signal;
     if (runAbortSignal.aborted) {
       await session.abort();
-      return { ok: false, errorMessage: 'aborted' };
+      return { ok: false, terminationReason: resolveAgentAbortReason(runAbortSignal.reason), errorMessage: 'aborted' };
     }
     session.agent.state.messages = stripTrailingErrorAssistantMessages(await transcriptRuntime.loadMessages());
     runner.piSm.setActiveTurnId?.(runId);
@@ -704,7 +706,9 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
         || metadata?.external?.readOnly === true || metadata?.annotations?.readOnlyHint === true
         || (context.toolCall.name === 'task_collaboration' && (context.args as { command?: string }).command === 'get')
         || (context.toolCall.name === 'managed_job' && ['wait', 'status', 'list'].includes(String((context.args as { action?: string }).action)));
-      if (recoveringModel && !readOnly) {
+      const repairPublication = ['acceptance_repair', 'model_failure'].includes(params.recoveryReason ?? '')
+        && ['publish_artifacts', 'publish_task_result'].includes(context.toolCall.name);
+      if (recoveringModel && !readOnly && !repairPublication) {
         const recorded = completedRecoveryToolResult(recoveryMessages, context.toolCall.name, context.args);
         if (recorded) return { block: true, reason: recorded };
       }
@@ -775,12 +779,18 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
     runAbortSignal.addEventListener('abort', abortListener, { once: true });
 
     try {
+      // Startup awaits may finish after cancellation, before the listener was registered.
+      if (runAbortSignal.aborted) {
+        return { ok: false, terminationReason: resolveAgentAbortReason(runAbortSignal.reason), errorMessage: 'aborted' };
+      }
       await runAgentTurnWithTimeout(
         session.agent,
         () => withDelegationScope({ tools,
           authorizeToolCall: params.turnPolicy ? (context, signal) => runWithEmbeddedExecutionSession(conversationId,
             () => params.turnPolicy!.beforeToolCall(context, signal), runId) : undefined,
         }, async () => {
+          // The timeout wrapper defers this callback to a microtask.
+          if (runAbortSignal.aborted) return;
           const connectionResume = getConnectionResumeInput(conversationId, runId);
           const clarificationResume = getClarificationResumeInput(conversationId, runId);
           if (connectionResume) {
@@ -788,7 +798,8 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
           } else if (clarificationResume) {
             await session.sendCustomMessage({ customType: 'clarification_resume', content: clarificationResume.content, display: false }, { triggerTurn: true });
           } else if (params.recoveryMessage && !params.resumeLastUserMessage) {
-            if (!canResumeAfterModelFailure(session.agent.state.messages)) throw new Error('Cannot resume because a tool outcome is unconfirmed');
+            if (!canResumeAfterModelFailure(session.agent.state.messages, ['acceptance_repair', 'model_failure'].includes(params.recoveryReason ?? '')
+              ? { allowFailedReadTools: ACCEPTANCE_REPAIR_READ_TOOLS } : undefined)) throw new Error('Cannot resume because a tool outcome is unconfirmed');
             await session.sendCustomMessage({ customType: 'task_continuation', content: params.recoveryMessage, display: false }, { triggerTurn: true });
           } else if (params.resumeLastUserMessage) {
             await session.agent.continue();
@@ -856,6 +867,7 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
           }
         }),
         timeoutMs,
+        { timeoutExtensionMs: params.timeoutExtensionMs },
       );
 
       if (connectionStopped) runner.piSm.appendCustomEntry('connection_required', { runId, conversationId });
@@ -863,10 +875,10 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
       runner.piSm.appendCustomEntry('coding_verification', { runId, workspace: workspaceDir, required: params.verifyChanges ?? false, ...await verification.summary() });
 
       if (runAbortSignal.aborted) {
-        return { ok: false, retryable: false, errorMessage: 'aborted' };
+        return { ok: false, retryable: false, terminationReason: resolveAgentAbortReason(runAbortSignal.reason), errorMessage: 'aborted' };
       }
       if (isAssistantTurnAborted(session.agent)) {
-        return { ok: false, retryable: false, errorMessage: 'aborted', lastAssistantText: lastAssistantPlainText(session) };
+        return { ok: false, retryable: false, terminationReason: 'provider_error', errorMessage: 'aborted', lastAssistantText: lastAssistantPlainText(session) };
       }
       if ((policyStopped && !policyCompleted) || lengthRecoveryExhausted || lastAssistantMessage(session.agent.state.messages)?.stopReason === 'length') {
         return { ok: false, retryable: false, errorMessage: policyStopReason ?? 'Assistant response was truncated before completion',
@@ -876,7 +888,9 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
       if (isAssistantTurnFailed(session.agent)) {
         return {
           ok: false,
-          retryable: canResumeAfterModelFailure(session.agent.state.messages),
+          retryable: canResumeAfterModelFailure(session.agent.state.messages,
+            { allowFailedReadTools: ACCEPTANCE_REPAIR_READ_TOOLS }),
+          terminationReason: 'provider_error',
           errorMessage: getAssistantTurnErrorMessage(session.agent) ?? 'Assistant turn failed',
           lastAssistantText: lastAssistantPlainText(session),
         };
@@ -920,7 +934,8 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
     const em = err instanceof Error ? err.message : String(err);
     log.error({ err, conversationId, runId }, `Embedded run failed: ${em}`);
     onEvent?.({ type: 'error', content: em, runId });
-    return { ok: false, errorMessage: em };
+    return { ok: false, terminationReason: isAgentTurnTimeoutError(err) ? 'deadline_exceeded'
+      : params.abortSignal?.aborted ? resolveAgentAbortReason(params.abortSignal.reason) : 'runtime_error', errorMessage: em };
   } finally {
     restorePrepareNextTurn?.();
     restorePrepareRequest?.();

@@ -109,7 +109,7 @@ it.each(['tokens', 'cancel'] as const)('does not start a summary after a hard st
     const result = await tool.execute('delegate', { goal: 'Inspect files' }, controller.signal);
     expect(rounds).toBe(1);
     expect(read).toHaveBeenCalledTimes(stop === 'tokens' ? 0 : 1);
-    expect(result.details).toMatchObject({ stopReason: stop === 'tokens' ? 'total_tokens' : 'cancelled',
+    expect(result.details).toMatchObject({ stopReason: stop === 'tokens' ? 'total_tokens' : 'parent_cancelled',
       handoff: { requested: false, completed: false } });
   } finally { await rm(root, { recursive: true, force: true }); }
 }, 20000);

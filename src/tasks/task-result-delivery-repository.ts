@@ -8,6 +8,9 @@ import { TaskRunRepository } from './task-run-repository.js';
 import { TaskCollaborationRepository } from './task-collaboration-repository.js';
 import { createLogger } from '../utils/logger.js';
 import { personalRequestForTask } from '../personal-agent/request-repository.js';
+import { hasPersonalResultFileLinks, sanitizePersonalResultFileLinks } from '../personal-agent/result-file-links.js';
+import { TaskRepository } from './task-repository.js';
+import { taskInstructionSequence } from './task-research-result.js';
 
 const log = createLogger('TaskResultDelivery');
 
@@ -61,18 +64,33 @@ export class TaskResultDeliveryRepository {
     const outcomes = rows.map(row => TurnOutcomeSchema.parse(JSON.parse(row.outcome_json)));
     const latest = outcomes.at(-1);
     if (!latest) return false;
+    const research = [...outcomes].reverse().find(outcome => outcome.research)?.research;
+    const task = new TaskRepository().require(run.taskId);
+    const validResearch = research && research.contractVersion === task.latestContractVersion
+      && research.instructionSequence === taskInstructionSequence(task.id) ? research : undefined;
+    const researchGap = Boolean(research && (!validResearch || !validResearch.checks.length
+      || validResearch.checks.length !== task.contract?.acceptanceCriteria.length
+      || validResearch.checks.some(check => check.status !== 'passed')
+      || validResearch.instructionChecks?.some(check => check.status !== 'passed')
+      || validResearch.claims.some(claim => claim.support !== 'supported')));
     const artifacts = new Map<string, TurnOutcome['deliverables'][number]>();
     for (const outcome of outcomes) for (const item of outcome.deliverables) {
       artifacts.set(item.sourceFileId ?? item.artifactId, item);
     }
     const deliverables = [...artifacts.values()].slice(-50);
-    const text = resultText?.trim() && resultText.trim() !== 'NO_REPLY' ? resultText.trim() : undefined;
+    const rawText = resultText?.trim() && resultText.trim() !== 'NO_REPLY' ? resultText.trim() : undefined;
+    const unpublishedFile = Boolean(rawText && hasPersonalResultFileLinks(rawText)
+      && !deliverables.some(item => item.availability === 'available'));
+    const text = rawText ? sanitizePersonalResultFileLinks(rawText)
+      || (unpublishedFile ? 'The file has not been published for download.' : undefined) : undefined;
     if (!deliverables.length && (!text || status !== 'succeeded')) return false;
     // Connected-app requests have their own structured text delivery.
     if (!deliverables.length && personalRequestForTask(run.taskId)) return false;
-    const outcome: TurnOutcome = { ...latest, deliverables, evidence: [], changeSet: undefined,
+    const outcome: TurnOutcome = { ...latest, research: validResearch, deliverables, evidence: [], changeSet: undefined,
       summary,
-      status: status === 'failed' || deliverables.some(item => item.availability !== 'available') ? 'partial' : 'succeeded' };
+      status: latest.status === 'failed' ? 'failed'
+        : status === 'failed' || latest.status === 'partial' || unpublishedFile || researchGap || deliverables.some(item => item.availability !== 'available')
+          ? 'partial' : 'succeeded' };
     const now = Date.now();
     const delivery = TaskResultDeliverySchema.parse({ version: 1, deliveryId: randomUUID(),
       taskId: run.taskId, taskRunId: runId, taskTitle: origin.title,

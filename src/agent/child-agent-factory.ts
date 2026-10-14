@@ -16,6 +16,12 @@ import { createDelegationBudgetPolicy, resolveDelegationBudget, type DelegationB
 import type { RunVerification } from './coding/run-verification.js';
 import { buildSubagentSystemPrompt } from './prompt/subagent-context.js';
 import { resolveResponseLanguageForSession } from './prompt/response-language.js';
+import { withDataToolPermissions } from './tools/dataBatch.js';
+import { withSearchCache } from './tools/search/cache.js';
+import { createResearchCheckpointTool } from './tools/research-checkpoint-tool.js';
+import type { ResearchCheckpointSink } from './orchestration/research-checkpoint.js';
+import { resolveAgentAbortReason, type AgentAbortReason } from './orchestration/run-termination.js';
+import { executeWithTimeout } from './lifecycle/timeout-wrapper.js';
 import type { ToolExecutorConfig } from './tools/executor.js';
 
 const log = createLogger('DelegateChild');
@@ -73,6 +79,7 @@ export interface DelegateChildHandleOptions {
   conversationId?: string;
   timeoutMs?: number;
   verifyChanges?: boolean;
+  researchCheckpoint?: ResearchCheckpointSink;
 }
 
 export interface DelegateChildRunResult {
@@ -88,7 +95,7 @@ export interface DelegateChildRunResult {
 
 export interface DelegateChildHandle {
   run(): Promise<DelegateChildRunResult>;
-  abort(): void;
+  abort(reason?: AgentAbortReason): void;
 }
 
 /** Leaf workers use the same execution, transcript and verification harness as foreground turns. */
@@ -98,20 +105,46 @@ export function createDelegateChildHandle(options: DelegateChildHandleOptions): 
   const runtime = options.transcriptRuntime ?? new InMemoryTranscriptRuntime({ runtimeId: conversationId, cwd: options.workspace });
   let started = false;
   return {
-    abort: () => controller.abort(new Error('Sub-agent cancelled')),
+    abort: (reason = 'parent_cancelled') => { controller.abort(Object.assign(new Error(reason), { code: reason })); },
     async run() {
       if (started) throw new Error('A child handle can only run once');
       started = true;
       controller.signal.throwIfAborted();
       const allow = new Set(options.allowedToolNames);
-      const tools = options.buildChildTools({ workspace: options.workspace, bus: options.bus,
+      let tools = options.buildChildTools({ workspace: options.workspace, bus: options.bus,
         model: options.model, agentId: options.agentId, getConfig: options.getConfig,
         toolExecutorConfig: options.toolExecutorConfig,
         browserConversationId: options.requesterConversationId ?? options.conversationId,
-      }).filter(tool => allow.has(tool.name));
+      }).filter(tool => allow.has(tool.name)).map(tool => tool.name === 'data_batch' ? {
+        ...tool, execute: (id, args, signal, onUpdate) => withDataToolPermissions(allow, () => tool.execute(id, args, signal, onUpdate)),
+      } : tool);
       const budget = createDelegationBudgetPolicy(resolveDelegationBudget(options.budgetTier, options.maxIterations, options.timeoutMs), {
-        isComplete: options.isComplete, authorizeToolCall: options.authorizeToolCall,
+        isComplete: options.isComplete, authorizeToolCall: async (context, signal) =>
+          options.researchCheckpoint && context.toolCall.name === 'research_checkpoint' ? undefined : options.authorizeToolCall?.(context, signal),
       });
+      if (options.researchCheckpoint) {
+        const checkpointTool = createResearchCheckpointTool(options.researchCheckpoint);
+        tools = [...tools.filter(tool => tool.name !== checkpointTool.name), checkpointTool];
+        allow.add(checkpointTool.name);
+        // Long reads cannot consume the time reserved for the handoff.
+        tools = tools.map(tool => tool.name === checkpointTool.name ? tool : {
+          ...tool,
+          execute: async (id, args, signal, onUpdate) => {
+            const remainingMs = budget.researchRemainingMs();
+            if (!remainingMs) throw new Error('Research phase deadline exceeded; save findings and hand off');
+            const toolController = new AbortController();
+            const forwardAbort = () => toolController.abort(signal?.reason);
+            if (signal?.aborted) forwardAbort();
+            else signal?.addEventListener('abort', forwardAbort, { once: true });
+            try {
+              return await executeWithTimeout(() => tool.execute(id, args, toolController.signal, onUpdate), {
+                toolName: tool.name, timeoutMs: remainingMs, signal,
+                onTimeout: error => { toolController.abort(error); budget.requestHandoff('deadline_exceeded'); },
+              });
+            } finally { signal?.removeEventListener('abort', forwardAbort); }
+          },
+        });
+      }
       const limit = budget.snapshot().limits.maxToolCalls;
       let handoffCompleted = false;
       const expanded = createAgentTurnPolicy({
@@ -130,7 +163,7 @@ export function createDelegateChildHandle(options: DelegateChildHandleOptions): 
         beforeModelRequest: (signal?: AbortSignal) => {
           const creditStop = cloudCreditBudgetStopMessage();
           if (creditStop) budget.stop('credit_budget', creditStop);
-          if (controller.signal.aborted) budget.stop('cancelled', 'Sub-agent cancelled');
+          if (controller.signal.aborted) budget.stop(resolveAgentAbortReason(controller.signal.reason), 'Sub-agent cancelled');
           return budget.policy.beforeModelRequest?.(signal);
         },
         shouldStopAfterTurn: (context: Parameters<typeof budget.policy.shouldStopAfterTurn>[0]) => {
@@ -140,16 +173,18 @@ export function createDelegateChildHandle(options: DelegateChildHandleOptions): 
         },
       };
       try {
-        const result = await runXopcEmbeddedTurn({
+        const params: Parameters<typeof runXopcEmbeddedTurn>[0] = {
           conversationId, runId: randomUUID(), workspaceDir: options.workspace,
           userMessage: { role: 'user', content: options.goal, timestamp: Date.now() },
           model: options.model, modelRef: `${options.model.provider}/${options.model.id}`,
           tools, transcriptRuntime: runtime, turnPolicy: policy, abortSignal: controller.signal,
-          timeoutMs: budget.snapshot().limits.timeoutMs, thinkingLevel: 'medium',
+          timeoutMs: options.researchCheckpoint ? Math.max(1, budget.researchRemainingMs()) : budget.snapshot().limits.timeoutMs, thinkingLevel: 'medium',
           verifyChanges: options.verifyChanges,
+          timeoutExtensionMs: options.researchCheckpoint ? () => budget.snapshot().handoffRequestStarted ? budget.remainingMs() : 0 : undefined,
           systemPrompt: buildSubagentSystemPrompt({ goal: options.goal, context: options.context,
             workspace: options.workspace, toolNames: tools.map(tool => tool.name),
             responseLanguage: resolveResponseLanguageForSession(options.getConfig(), options.requesterConversationId) })
+            + (options.researchCheckpoint ? '\n\nUse research_checkpoint after each verified source, before further searching. Address every requested field, including not_disclosed; keep nextSteps current. A final answer alone does not save findings.' : '')
             + `\n\nDelegation budget: ${JSON.stringify(budget.snapshot().limits)}. Tokens are cumulative across requests. Search before reading targeted chunks; continue truncated reads from their returned next position. If asked for a budget handoff, stop tools and summarize evidence, incomplete work and precise next steps.`,
           onEvent: event => {
             const progress = options.progressHooks;
@@ -162,6 +197,11 @@ export function createDelegateChildHandle(options: DelegateChildHandleOptions): 
             }
             if (event.type === 'tool_execution_start') progress?.onProgress({ type: 'tool_start', toolCallId: event.toolCallId, toolName: event.toolName, args: event.args as Record<string, unknown> });
             if (event.type === 'tool_execution_end') {
+              if (options.researchCheckpoint && event.toolName !== 'research_checkpoint') {
+                const excerpt = event.result.content.filter(item => item.type === 'text').map(item => item.text).join('\n');
+                options.researchCheckpoint.recordEvidence({ toolCallId: event.toolCallId, runId: event.runId ?? params.runId, toolName: event.toolName,
+                  isError: event.isError, excerpt, recordedAt: Date.now() });
+              }
               progress?.onProgress({ type: 'tool_end', toolCallId: event.toolCallId, toolName: event.toolName, isError: event.isError });
               progress?.onProgress({ type: 'iteration', count: budget.snapshot().usage.toolCalls, max: limit });
             }
@@ -170,17 +210,35 @@ export function createDelegateChildHandle(options: DelegateChildHandleOptions): 
               if (delta?.type === 'text_delta' || delta?.type === 'thinking_delta') progress.onProgress({ type: delta.type, delta: delta.delta });
             }
           },
-        });
+        };
+        const runResearchTurn = (turn: Parameters<typeof runXopcEmbeddedTurn>[0]) => options.researchCheckpoint?.recordSearch
+          ? withSearchCache({
+            get: key => options.researchCheckpoint!.read().searches?.find(entry => entry.key === key),
+            set: entry => options.researchCheckpoint!.recordSearch!(entry),
+          }, () => runXopcEmbeddedTurn(turn)) : runXopcEmbeddedTurn(turn);
+        let result = await runResearchTurn(params);
+        const phaseTimedOut = result.terminationReason === 'deadline_exceeded' || /timed out|deadline expired/i.test(result.errorMessage ?? '');
+        // A settled research deadline leaves one fresh, tool-free summary attempt.
+        if (options.researchCheckpoint && phaseTimedOut && !/did not settle/i.test(result.errorMessage ?? '')
+          && !controller.signal.aborted && budget.remainingMs() > 0 && !budget.snapshot().handoffRequestStarted) {
+          budget.requestHandoff('deadline_exceeded');
+          result = await runResearchTurn({ ...params, runId: randomUUID(),
+            tools: [], timeoutMs: Math.max(1, budget.remainingMs()), timeoutExtensionMs: undefined,
+            userMessage: { role: 'user', timestamp: Date.now(), content:
+              'Research time expired. Do not perform more research. Summarize saved findings, source evidence and precise unfinished steps. Do not claim completion.\n'
+              + JSON.stringify(options.researchCheckpoint.read()) },
+          });
+        }
         const verification = runtime.openSessionManager(options.workspace).getBranch().findLast(entry => entry.type === 'custom' && entry.customType === 'coding_verification');
         const proof = verification?.type === 'custom' ? verification.data as Awaited<ReturnType<RunVerification['summary']>> : undefined;
         const unverified = options.verifyChanges && proof?.changed && (!proof.evidence.some(item => item.kind === 'check' && item.status === 'passed') || proof.evidence.some(item => item.status !== 'passed'));
         const snapshot = budget.snapshot();
-        const stopReason: DelegationStopReason = controller.signal.aborted ? 'cancelled'
+        const stopReason: DelegationStopReason = controller.signal.aborted ? resolveAgentAbortReason(controller.signal.reason)
           : isCloudCreditBudgetExhausted(result.errorMessage ?? '') ? 'credit_budget'
-          : /timed out|did not settle/i.test(result.errorMessage ?? '') ? 'timeout'
-          : snapshot.stopReason ?? (!result.ok ? 'runtime_error' : unverified ? 'verification' : 'completed');
+          : /timed out|did not settle|deadline expired/i.test(result.errorMessage ?? '') ? 'deadline_exceeded'
+          : (snapshot.stopReason === 'timeout' ? 'deadline_exceeded' : snapshot.stopReason) ?? (!result.ok ? result.terminationReason ?? 'runtime_error' : unverified ? 'verification' : 'completed');
         const budgetHandoff = result.stopReason === 'policy_limit'
-          && ['tool_calls', 'total_tokens', 'model_turns', 'tool_failures'].includes(stopReason)
+          && ['tool_calls', 'total_tokens', 'model_turns', 'tool_failures', 'timeout', 'deadline_exceeded'].includes(stopReason)
           && (!snapshot.handoffRequested || handoffCompleted);
         const messages = await runtime.loadMessages();
         const evidence = stopReason !== 'completed' && !handoffCompleted
@@ -197,7 +255,9 @@ export function createDelegateChildHandle(options: DelegateChildHandleOptions): 
           limits: snapshot.limits, handoffRequested: snapshot.handoffRequested, handoffCompleted }, `Delegation stopped: ${stopReason}`);
         return { summary, stopReason, budget: { ...snapshot, stopReason }, handoff: { requested: snapshot.handoffRequested, completed: handoffCompleted, summary },
           toolIterations: snapshot.usage.toolCalls, messages,
-          status: controller.signal.aborted ? 'cancelled' as const : !result.ok && !budgetHandoff ? 'failed' as const : stopReason !== 'completed' ? 'partial' as const : 'success' as const,
+          status: ['user_cancelled', 'parent_cancelled'].includes(stopReason) ? 'cancelled' as const
+            : options.researchCheckpoint && stopReason === 'deadline_exceeded' && !/did not settle/i.test(result.errorMessage ?? '') ? 'partial' as const
+            : !result.ok && !budgetHandoff ? 'failed' as const : stopReason !== 'completed' ? 'partial' as const : 'success' as const,
           ...(verification?.type === 'custom' ? { verification: verification.data as Awaited<ReturnType<RunVerification['summary']>> } : {}),
         };
       } finally { evictEmbeddedSessionRunner(runtime.runtimeId, 'leaf_worker_complete'); }

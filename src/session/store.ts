@@ -85,7 +85,7 @@ import { compactHistory } from './compact-history.js';
 import { backfillStructuredTurnOutcomes } from './turn-outcome-projector.js';
 import { computeTranscriptUserRoundDeleteRange } from './user-round-delete.js';
 import { findSessionMessages, type SessionFindResult } from './session-find.js';
-import { canResumeAfterModelFailure } from '../agent/orchestration/turn-recovery.js';
+import { ACCEPTANCE_REPAIR_READ_TOOLS, canResumeAfterModelFailure } from '../agent/orchestration/turn-recovery.js';
 import { archiveFailedModelAttempts } from '../storage/sqlite/transcript-repository.js';
 
 const log = createLogger('SessionStore');
@@ -479,6 +479,7 @@ export class SessionStore {
   async prepareModelFallback(
     key: string,
     rowsBeforeAttempt: readonly TranscriptStoredRow[],
+    options?: { resumeTaskContinuation?: boolean },
   ): Promise<ModelFallbackPreparation> {
     return this.runStoreMutation(async () => {
       requireXopcDatabase();
@@ -498,16 +499,28 @@ export class SessionStore {
 
       const appendedRows = preparedRows.slice(rowsBeforeAttempt.length);
       const tail = preparedRows.findLast(row => 'role' in row && ['user', 'assistant', 'toolResult'].includes(String(row.role)));
+      const onlyRecoveryMetadata = appendedRows.every(row => 'type' in row && row.type === 'custom'
+        && ['coding_run_started', 'coding_verification', 'codemode-store', 'xopc-tool-discovery-state'].includes(String((row as XopcTranscriptCustomStateEntry).customType)));
+      if (removedError && options?.resumeTaskContinuation && onlyRecoveryMetadata
+        && canResumeAfterModelFailure(preparedRows, { allowFailedReadTools: ACCEPTANCE_REPAIR_READ_TOOLS })) {
+        archiveFailedModelAttempts(key, rowsBeforeAttempt.length);
+        // Re-send the host's continuation, not the original user request or a completed assistant turn.
+        return 'prompt';
+      }
       const canResume = (appendedRows.some(row => isTranscriptMessageRole(row, 'user'))
         && appendedRows.filter(row => isTranscriptMessageRole(row, 'user')).length === 1
         && (isTranscriptMessageRole(tail, 'user') || isTranscriptMessageRole(tail, 'toolResult'))
-        && canResumeAfterModelFailure(preparedRows)) || (
+        && canResumeAfterModelFailure(preparedRows, { allowFailedReadTools: ACCEPTANCE_REPAIR_READ_TOOLS })) || (
         appendedRows.length === 1
         && isTranscriptMessageRole(appendedRows[0], 'user')
       ) || (
         removedError
         && appendedRows.length === 0
         && isTranscriptMessageRole(preparedRows.at(-1), 'user')
+      ) || (
+        removedError && onlyRecoveryMetadata
+        && (isTranscriptMessageRole(tail, 'user') || isTranscriptMessageRole(tail, 'toolResult'))
+        && canResumeAfterModelFailure(preparedRows, { allowFailedReadTools: ACCEPTANCE_REPAIR_READ_TOOLS })
       );
 
       if (canResume) {

@@ -27,6 +27,8 @@ import { describeActiveExecution, type ActiveExecution, type ActiveExecutionKind
 import type { UserTurnAttachment, UserTurnInput } from '../user-turn-input.js';
 import type { AgentSourceContext, TurnContextRef } from '../../agent/source-context/types.js';
 import { fitSourceContextsToBudget } from '../../agent/source-context/budget.js';
+import { AgentRunCancelledError } from '../../agent/orchestration/run-termination.js';
+import { reserveEmbeddedRunCancellation } from '../../agent/embedded/runs.js';
 import { createLogger } from '../../utils/logger.js';
 import { listActiveSessionInputExecutions, listActiveSessionInputRuns } from '../../storage/sqlite/index.js';
 import { runSqliteWriteTransaction } from '../../storage/sqlite/transaction.js';
@@ -49,6 +51,8 @@ const log = createLogger('Gateway:AgentRunner');
 
 export interface GatewayAgentRunnerOptions {
   validateConnectionResume?: (input: import('../../storage/sqlite/session-input-repository.js').SessionInput) => Promise<boolean>;
+  continueConnection?: (wait: import('@xopcai/gateway-contract').ConnectionWait, idempotencyKey: string) => Promise<void>;
+  cancelConnection?: (wait: import('@xopcai/gateway-contract').ConnectionWait) => void;
   bus: MessageBus;
   sessionIndex: SessionIndex;
   /** Resolved lazily — the runner is constructed before AgentService exists. */
@@ -97,10 +101,12 @@ export class GatewayAgentRunner {
     });
     this.inputs = new SessionInputCoordinator({
       beforeExecute: opts.validateConnectionResume,
+      continueConnection: opts.continueConnection,
+      cancelConnection: opts.cancelConnection,
       prioritizeInput: input => (input.origin.type !== 'system' || input.origin.source === 'cli') && isPersonalConversation(input.conversationId),
-      interrupt: async (conversationId, runId) => {
+      interrupt: async (conversationId, runId, reason) => {
         const execution = this.activeExecutionBySession.get(conversationId);
-        if (execution && execution.kind !== 'chat') return;
+        if (reason !== 'connection_cancel' && execution && execution.kind !== 'chat') return;
         await this.abortAgentRun(runId);
       },
       sessionExists: async (conversationId) => Boolean(await opts.sessionIndex.getSessionMetadata(conversationId)),
@@ -260,38 +266,47 @@ export class GatewayAgentRunner {
     unknown
   > {
     const trackedRunId = runOptions?.runId;
+    const cancellation = channel === 'webchat' && trackedRunId
+      ? reserveEmbeddedRunCancellation({ conversationId: chatId, runId: trackedRunId }) : undefined;
     if (trackedRunId) {
+      // Publish cancellation control before the generator's first asynchronous setup.
+      if (channel === 'webchat' && !this.runAbortControllers.has(trackedRunId)) {
+        this.runAbortControllers.set(trackedRunId, new AbortController());
+      }
       let resolve = () => {};
       this.runCompletions.set(trackedRunId, new Promise<void>((done) => { resolve = done; }));
       this.resolveRunCompletions.set(trackedRunId, resolve);
     }
-    const iter = runGatewayAgent(
-      {
-        config: this.opts.getConfig(),
-        agentService: this.opts.getAgentService(),
-        bus: this.opts.bus,
-        runAbortControllers: this.runAbortControllers,
-        activeWebchatRunBySession: this.activeWebchatRunBySession,
-        activeExecutionBySession: this.activeExecutionBySession,
-        sessionIndex: this.opts.sessionIndex,
-        emit: this.opts.emit,
-        publishRealtime: this.opts.publishRealtime,
-        completeRealtimeTopic: this.opts.completeRealtimeTopic,
-      },
-      message,
-      channel,
-      chatId,
-      origin,
-      attachments,
-      thinking,
-      runOptions,
-    );
-
     try {
+      const iter = runGatewayAgent(
+        {
+          config: this.opts.getConfig(),
+          agentService: this.opts.getAgentService(),
+          bus: this.opts.bus,
+          runAbortControllers: this.runAbortControllers,
+          activeWebchatRunBySession: this.activeWebchatRunBySession,
+          activeExecutionBySession: this.activeExecutionBySession,
+          sessionIndex: this.opts.sessionIndex,
+          emit: this.opts.emit,
+          publishRealtime: this.opts.publishRealtime,
+          completeRealtimeTopic: this.opts.completeRealtimeTopic,
+        },
+        message,
+        channel,
+        chatId,
+        origin,
+        attachments,
+        thinking,
+        cancellation ? { ...runOptions, signal: runOptions?.signal
+          ? AbortSignal.any([runOptions.signal, cancellation.signal]) : cancellation.signal } : runOptions,
+      );
+
       // Delegate return/throw so interrupted consumers also run the inner cleanup.
       return yield* iter as unknown as ReturnType<GatewayAgentRunner['runAgent']>;
     } finally {
+      cancellation?.release();
       if (trackedRunId) {
+        this.runAbortControllers.delete(trackedRunId);
         this.resolveRunCompletions.get(trackedRunId)?.();
         this.resolveRunCompletions.delete(trackedRunId);
         this.runCompletions.delete(trackedRunId);
@@ -358,9 +373,9 @@ export class GatewayAgentRunner {
         })
         .catch(() => {});
     }
-    c.abort();
+    c.abort(new AgentRunCancelledError());
     const { abortEmbeddedRun } = await import('../../agent/embedded/runs.js');
-    await Promise.all(keysToMark.map((conversationId) => abortEmbeddedRun(conversationId).catch(() => false)));
+    await Promise.all(keysToMark.map((conversationId) => abortEmbeddedRun(conversationId, 'user_cancelled', runId).catch(() => false)));
     await completion;
     return { aborted: true, idle: true };
   }

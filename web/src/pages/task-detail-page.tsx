@@ -815,6 +815,10 @@ function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted }: {
                 <TaskExpandableContent content={criterion.text} contentKey={`${taskId}:criterion:${index}`} language={language} markdown={false} previewHeight={60} />
                 {criterion.evidence.length > 0 ? <div className="mt-1 flex flex-wrap gap-x-2 text-xs leading-5 text-fg-muted"><span>{language === 'zh' ? '依据：' : 'Evidence:'}</span>{criterion.evidence.map((item) => item.uri && /^https?:\/\//.test(item.uri) ? <a key={item.title} className="text-accent hover:underline" href={item.uri} target="_blank" rel="noreferrer">{item.title}</a> : <span key={item.title}>{item.title}</span>)}</div> : null}
                 {criterion.review ? <p className="mt-1 text-xs text-fg-muted">{language === 'zh' ? '人工判定' : 'Reviewed by user'} · {formatMediumDateTime(criterion.review.reviewedAt, language)}</p> : null}
+                {criterion.method === 'model_reviewed' ? <p className="mt-1 text-xs text-fg-muted">{language === 'zh'
+                  ? `模型审阅：${criterion.verificationStatus === 'passed' ? '通过' : criterion.verificationStatus === 'failed' ? '未通过' : '未核验'}`
+                  : `Model review: ${criterion.verificationStatus === 'passed' ? 'passed' : criterion.verificationStatus === 'failed' ? 'failed' : 'unverified'}`}</p> : null}
+                {criterion.note ? <TaskExpandableContent content={criterion.note} contentKey={`${taskId}:criterion-note:${index}`} language={language} markdown={false} previewHeight={60} className="mt-1 text-xs text-fg-muted" /> : null}
               </div>
               {detail.task.phase !== 'closed' && detail.task.contract?.acceptancePolicy !== 'verified_auto' ? <DropdownMenu.Root>
                 <DropdownMenu.Trigger asChild><Button type="button" variant="ghost" className="h-7 shrink-0 px-2 text-xs" disabled={pendingOperations.has('acceptance')}>{language === 'zh' ? '判定' : 'Review'}</Button></DropdownMenu.Trigger>

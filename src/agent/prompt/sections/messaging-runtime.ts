@@ -50,7 +50,7 @@ export function buildOutputDirectivesSection(isMinimal: boolean): string {
   return [
     '## Assistant Output Directives',
     'Use these when you need delivery metadata in an assistant message:',
-    '- `MEDIA:<path-or-url>` on its own line requests attachment delivery. Supported clients strip MEDIA lines and render attachments inline; channels still decide actual delivery behavior.',
+    '- Deliver files through the available artifact or messaging tools and their confirmed structured references. Text such as `MEDIA:<path-or-url>` does not publish a file; do not emit MEDIA directives or host paths as a substitute for a delivered attachment.',
     '- `[[audio_as_voice]]` marks attached audio as a voice-note style delivery hint when supported.',
     '- To request a native reply/quote on supported surfaces, include one reply tag in your reply:',
     '- Reply tags must be the very first token in the message (no leading text/newlines): [[reply_to_current]] your reply.',

@@ -79,6 +79,7 @@ export type ConnectionWaitView = Omit<ConnectionWait, 'needs' | 'intent' | 'chec
   phase: 'needs_connection' | 'ready' | 'review_scope' | 'queued';
   recoveryStage?: 'checking_connection' | 'checking_tools' | 'queued';
   queueBlocked?: boolean;
+  blockedInputId?: string;
 };
 
 export type ConnectionWaitSnapshot = { transcriptId: string; revision: number; wait: ConnectionWaitView | null };

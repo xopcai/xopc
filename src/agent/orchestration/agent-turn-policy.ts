@@ -35,6 +35,9 @@ export interface AgentTurnPolicyOptions {
   ) => Promise<BeforeToolCallResult | undefined>;
 }
 
+// Context provenance is host-owned; tool arguments cannot bypass operation expansion.
+const expandedBatchContexts = new WeakSet<BeforeToolCallContext>();
+
 /** One user-visible run policy. A fresh instance is created for every embedded run. */
 export function createAgentTurnPolicy(options: AgentTurnPolicyOptions): AgentTurnPolicy {
   const toolCalls = new Map<string, number>();
@@ -49,8 +52,11 @@ export function createAgentTurnPolicy(options: AgentTurnPolicyOptions): AgentTur
     },
 
     async beforeToolCall(context, signal) {
-      const contexts = context.toolCall.name === 'data_batch'
-        ? [context, ...dataOperationCalls(context.args).map((call, index) => ({
+      const wrapper = { ...context };
+      const expand = context.toolCall.name === 'data_batch' && !expandedBatchContexts.has(context);
+      if (expand) expandedBatchContexts.add(wrapper);
+      const contexts = expand
+        ? [wrapper, ...dataOperationCalls(context.args).map((call, index) => ({
             ...context, args: call.args,
             toolCall: {
               ...context.toolCall,

@@ -23,6 +23,14 @@ import { runGatewayAgent, type RunGatewayAgentDeps } from '../run-gateway-agent.
 import { getSqliteDatabase } from '../../../storage/sqlite/transaction.js';
 import { personalAgentId } from '../../../personal-agent/repository.js';
 import { AgentCatalogRepository } from '../../../agent-catalog/repository.js';
+import { GatewayAgentRunner } from '../agent-runner.js';
+import { TaskCreateRequestSchema } from '@xopcai/gateway-contract';
+import { TaskApplicationService } from '../../../tasks/task-application-service.js';
+import { defineTaskContract } from '../../../tasks/task-contract-definition.js';
+import { TaskRunRepository } from '../../../tasks/task-run-repository.js';
+import { insertSessionInput, claimNextSessionInput, finishSessionInputRun, getSessionInputState } from '../../../storage/sqlite/session-input-repository.js';
+import { requireSessionConnection, getConnectionWait, updateConnectionWait, queueConnectionResolution } from '../../../storage/sqlite/connection-wait-repository.js';
+import { resolveConnectionCandidate } from '../../../connectors/connection-candidates.js';
 
 describe('runGatewayAgent', () => {
   let stateDir: string;
@@ -40,6 +48,56 @@ describe('runGatewayAgent', () => {
     closeXopcDatabase();
     resetXopcDatabaseSingletonForTest();
     rmSync(stateDir, { recursive: true, force: true });
+  });
+
+  it('honors Task cancellation during metadata startup and runs the next message only once', async () => {
+    const conversationId = 'd3dcfc3b-3238-4056-8feb-c95014705996';
+    const task = new TaskApplicationService().create(TaskCreateRequestSchema.parse({ idempotencyKey: 'startup-task',
+      title: 'Read Slack', body: 'Read Slack', originConversationId: conversationId,
+      contract: { ...defineTaskContract('Read Slack'), acceptancePolicy: 'manual', outputDestinations: [] },
+      activation: { mode: 'start', executor: { kind: 'agent', agentId: 'main' } } }));
+    if (!task.ok || !task.runId) throw new Error('Task fixture must start');
+    insertSessionInput({ id: 'startup-origin', conversationId, clientMessageId: 'startup-origin', taskRunId: task.runId,
+      content: 'Read Slack', requestedDelivery: 'next', effectiveDelivery: 'next', status: 'queued', origin: { type: 'channel', channel: 'webchat' } });
+    claimNextSessionInput(conversationId, 'startup-origin-run');
+    const required = requireSessionConnection({ conversationId, principalId: 'local-owner', agentId: 'main',
+      summary: 'Read Slack', needs: [resolveConnectionCandidate('composio-slack')] });
+    finishSessionInputRun(conversationId, 'startup-origin-run', 'suspended');
+    const wait = getConnectionWait(required.waitId!)!;
+    queueConnectionResolution(updateConnectionWait({ ...wait, intent: { objectiveRevision: wait.objectiveRevision,
+      validUntil: Date.now() + 60_000 } }, wait.version), 'continued');
+    let releaseMetadata!: () => void;
+    const metadataGate = new Promise<void>(resolve => { releaseMetadata = resolve; });
+    let calls = 0;
+    const process = vi.fn(async function* () {});
+    const runner = new GatewayAgentRunner({ getConfig: () => ({}),
+      getAgentService: () => ({ resolveUserTimezoneForSession: () => 'UTC', prepareInboundAttachments: async () => [],
+        sessionStore: { idleCompaction: { interrupt: () => {} } }, beginInboundTurn: () => {}, endInboundTurn: () => {},
+        turnDispatcher: { processDirectStreaming: process }, getLastAssistantPlainText: () => '', takeTaskReviewStreamHint: () => undefined,
+        outboundCoordinator: { emitSessionTurnComplete: async () => {} } }),
+      sessionIndex: { getSessionMetadata: async () => { if (++calls === 1) await metadataGate; return { transcriptId: wait.transcriptId }; },
+        updateSessionMetadata: async () => {}, appendTranscriptContextEntry: async () => {}, appendTranscriptCustomEntry: async () => {} },
+      emit: () => {}, publishRealtime: () => {}, completeRealtimeTopic: () => {}, bus: { publishInbound: async () => {} },
+    } as never);
+    const draining = runner.inputs.drain(conversationId);
+    try {
+      await vi.waitFor(() => expect(calls).toBe(1));
+      const send = (content: string) => runner.submitSessionInput({ conversationId, clientMessageId: content, content,
+        delivery: 'next', origin: { type: 'channel', channel: 'webchat' } });
+      await send('取消这个目标');
+      await send('Another question');
+      expect(process).not.toHaveBeenCalled();
+      releaseMetadata();
+      await draining;
+      await runner.inputs.waitForCompletion(conversationId, 'Another question');
+      expect(process).toHaveBeenCalledOnce();
+      expect(getConnectionWait(wait.id)?.resolution).toBe('cancelled');
+      expect(new TaskRunRepository().get(task.runId)?.status).toBe('cancelled');
+      runner.recoverSessionInputs();
+      await runner.inputs.drain(conversationId);
+      expect(process).toHaveBeenCalledOnce();
+      expect(getSessionInputState(conversationId).activeRunId).toBeUndefined();
+    } finally { releaseMetadata(); await draining; runner.disposeClarifications(); }
   });
 
   it('coalesces thinking bursts before realtime publication', async () => {
