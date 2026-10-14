@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { confirmSessionCommand, type LocalSessionDraft } from '@/features/chat/session/local-session-drafts';
 
 import { apiFetch } from '@/lib/fetch';
 import { apiFetchWithStartupRetry } from '@/lib/gateway-startup-retry';
@@ -248,5 +249,52 @@ describe('SessionManager.loadTimeline', () => {
     await expect(
       new SessionManager().loadTimeline('88f62be8-0a58-546b-a62c-4146c54d81fd'),
     ).rejects.toThrow('Invalid session timeline response');
+  });
+});
+
+describe('SessionManager materialization confirmation', () => {
+  let draft: LocalSessionDraft | undefined;
+  const conversationId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  beforeEach(() => {
+    mockedApiFetch.mockReset();
+    vi.mocked(confirmSessionCommand).mockReset();
+    draft = { conversationId, createdAt: new Date().toISOString(), creation: {
+      agentId: 'main', model: 'test/model', thinkingLevel: 'off', temporary: false, projectId: null, execution: null,
+    } };
+    drafts.read.mockImplementation(async () => draft);
+    drafts.save.mockImplementation(async value => { draft = value; });
+    vi.mocked(confirmSessionCommand).mockImplementation(async () => { draft = undefined; });
+  });
+  afterEach(() => {
+    drafts.read.mockReset();
+    drafts.save.mockReset();
+    vi.mocked(confirmSessionCommand).mockReset();
+    vi.restoreAllMocks();
+  });
+
+  it.each(['preparing', 'preparation_failed'])('confirms persisted creation even while resources are %s', async lifecycle => {
+    const manager = new SessionManager();
+    vi.spyOn(manager, 'loadSessionAgentConfig').mockResolvedValue({} as never);
+    mockedApiFetch.mockImplementation(async (_url, init) => {
+      const command = JSON.parse(String(init?.body));
+      return jsonResponse({ payload: { receipt: { conversationId, clientMessageId: command.commandId, transcriptId: 'transcript', lifecycle } } }, 202);
+    });
+    await expect(manager.materialize(conversationId, 'session_resources')).rejects.toThrow('Conversation environment is not ready yet');
+    expect(confirmSessionCommand).toHaveBeenCalledWith(conversationId, 'transcript');
+    expect(draft).toBeUndefined();
+  });
+
+  it('does not clear a subsequent pending input when a materialization response arrives late', async () => {
+    const manager = new SessionManager();
+    vi.spyOn(manager, 'loadSessionAgentConfig').mockResolvedValue({} as never);
+    let respond!: (response: Response) => void;
+    mockedApiFetch.mockImplementation(() => new Promise(resolve => { respond = resolve; }));
+    const pending = manager.materialize(conversationId, 'session_resources');
+    await vi.waitFor(() => expect(mockedApiFetch).toHaveBeenCalledOnce());
+    const commandId = draft!.materialization!.commandId;
+    draft = undefined;
+    respond(jsonResponse({ payload: { receipt: { conversationId, clientMessageId: commandId, transcriptId: 'transcript', lifecycle: 'ready' } } }, 202));
+    await pending;
+    expect(confirmSessionCommand).not.toHaveBeenCalled();
   });
 });
