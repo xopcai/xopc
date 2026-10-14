@@ -457,6 +457,28 @@ export function replaceTranscriptRows(
   });
 }
 
+/** Keep entry identities and failed-attempt evidence while excluding failed responses from model replay. */
+export function archiveFailedModelAttempts(conversationId: string, afterIndex: number): void {
+  runSqliteWriteTransaction(db => {
+    const transcriptId = readCurrentTranscriptId(db, conversationId);
+    if (!transcriptId) throw new Error(`Session not found: ${conversationId}`);
+    const rows = db.prepare(`SELECT entry_id, payload_json FROM transcript_entries
+      WHERE transcript_id = ? ORDER BY seq`).all(transcriptId) as Array<{ entry_id: string; payload_json: string }>;
+    for (const row of rows.slice(afterIndex)) {
+      const message = JSON.parse(row.payload_json) as { role?: string; stopReason?: string; timestamp?: number };
+      if (message.role !== 'assistant' || message.stopReason !== 'error') continue;
+      const archived = { type: 'custom', customType: 'model_attempt_error', data: message,
+        timestamp: new Date(message.timestamp ?? Date.now()).toISOString() };
+      db.prepare(`UPDATE transcript_entries SET role = NULL, entry_kind = 'custom', payload_json = ?
+        WHERE transcript_id = ? AND entry_id = ?`).run(JSON.stringify(archived), transcriptId, row.entry_id);
+      db.prepare('DELETE FROM transcript_fts WHERE transcript_id = ? AND entry_id = ?').run(transcriptId, row.entry_id);
+    }
+    const messages = buildSessionContextForLlm(loadTranscriptRowsForSession(conversationId));
+    db.prepare('UPDATE sessions SET message_count = ?, estimated_tokens = ? WHERE conversation_id = ?')
+      .run(messages.length, estimateTokensFromMessages(messages), conversationId);
+  });
+}
+
 export function paginateTranscriptMessages(
   conversationId: string,
   options: {

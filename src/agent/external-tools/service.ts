@@ -175,6 +175,7 @@ export class ExternalToolService {
     arguments?: Record<string, unknown>;
     approvalId?: string;
     readOnly?: boolean;
+    personalReadOnly?: boolean;
     context: ExternalToolExecutionContext;
   }) {
     const provider = this.providerForRef(params.toolRef);
@@ -182,12 +183,13 @@ export class ExternalToolService {
     const descriptor = await provider.describe(params.toolRef);
     if (!descriptor) throw new Error(`External tool is unavailable: ${params.toolRef}`);
     const current = versionDescriptor(descriptor);
+    if (params.personalReadOnly && current.readOnly !== true && current.batchRead !== true) throw new Error('This external operation has no host-curated read-only contract');
     if (params.readOnly && current.batchRead !== true) throw new Error('This external operation is not approved for batch reads');
     if (current.revision !== params.revision) {
       throw new Error(`Tool contract changed. Describe ${params.toolRef} again before executing it.`);
     }
     const args = params.arguments ?? {};
-    if (params.readOnly && (provider.source === 'composio' || provider.source === 'cli') && (typeof args.xopcAccountId !== 'string' || !args.xopcAccountId)) {
+    if ((params.readOnly || params.personalReadOnly) && (provider.source === 'composio' || provider.source === 'cli') && (typeof args.xopcAccountId !== 'string' || !args.xopcAccountId)) {
       throw new Error('Batch connector reads require an explicit xopcAccountId');
     }
     let validate: ReturnType<typeof this.ajv.compile>;
@@ -202,6 +204,7 @@ export class ExternalToolService {
       }
     };
     validateArguments(args);
+    params.context.authorize?.();
     return provider.execute(params.toolRef, args, params.approvalId, {
       ...params.context, contractRevision: current.contractRevision, validateArguments,
     });

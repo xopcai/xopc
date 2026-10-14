@@ -8,7 +8,7 @@ import { getSessionMetadata } from '../../storage/sqlite/session-repository.js';
 
 export const PERSONAL_REQUEST_TOOL_IDS = [
   'xopc_tool_search', 'xopc_tool_describe', 'xopc_tool_execute',
-  'personal_request_result', 'personal_request_connection',
+  'personal_request_result', 'personal_request_connection', 'task_collaboration',
 ] as const;
 
 export type ExecutionToolPolicy = Readonly<{
@@ -30,7 +30,7 @@ export function resolveExecutionToolPolicy(conversationId: string): ExecutionToo
   }
   const configured = surface === 'agent';
   return { surface, nativeMcp: configured, externalMaterialization: configured,
-    discovery: configured, codemode: configured, revision: 'personal-tool-boundaries-v1' };
+    discovery: configured, codemode: configured, revision: 'personal-tool-boundaries-v2' };
 }
 
 export function allowsExecutionTool(policy: ExecutionToolPolicy, name: string): boolean {

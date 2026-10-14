@@ -3,6 +3,15 @@ import { describe, expect, it, vi } from 'vitest';
 import { parseTaskJudgeDecision, requestTaskJudgeDecision, codingCompletionEvidence } from '../task-judge-service.js';
 
 describe('parseTaskJudgeDecision', () => {
+  it('retries a transient verifier request without retrying permanent authentication failures', async () => {
+    const transient = vi.fn().mockRejectedValueOnce(new Error('503 Service Unavailable'))
+      .mockResolvedValueOnce('{"completedCriteria":[0],"needsUser":false}');
+    expect((await requestTaskJudgeDecision(transient, 1)).completedCriteria).toEqual([0]);
+    expect(transient).toHaveBeenCalledTimes(2);
+    const permanent = vi.fn().mockRejectedValue(new Error('401 Invalid API key'));
+    await expect(requestTaskJudgeDecision(permanent, 1)).rejects.toThrow('401');
+    expect(permanent).toHaveBeenCalledOnce();
+  });
   it('keeps only unique in-range criterion indexes', () => {
     expect(parseTaskJudgeDecision(`\`\`\`json
       {"completedCriteria":[2,0,2,-1,3,1.5],"needsUser":true,"nextAction":"  Confirm scope  ","recommendation":"Approve the smaller scope","reasons":["Need a decision"],"rejectedAlternatives":[{"option":"Full scope","reason":"Too risky"}],"uncertainty":"Timing may change","confidence":0.82}

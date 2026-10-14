@@ -307,6 +307,7 @@ export class ComposioToolProvider implements ExternalToolProvider {
       summary,
       description: `${summary} Available accounts: ${JSON.stringify(accounts)}. Use xopcAccountId to select one; never guess when the user's intent is ambiguous.`,
       inputSchema: actionInputSchema(action),
+      readOnly: action.scope === 'read' && action.curated,
       batchRead: accounts.length > 0 && action.scope === 'read' && action.curated && BATCH_READ_ACTIONS.has(action.actionId),
     };
   }
@@ -401,6 +402,7 @@ export class ComposioToolProvider implements ExternalToolProvider {
       confirmed = true;
     }
     const authorizeCurrent = () => {
+      context.authorize?.();
       context.signal?.throwIfAborted();
       const current = this.availableInstallations();
       const installation = this.resolve(toolRef, current.installations)?.installation;

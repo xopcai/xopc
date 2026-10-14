@@ -92,6 +92,7 @@ export function createDelegationBudgetPolicy(budget: ReturnType<typeof resolveDe
       return false;
     },
     takeContinuationMessage() { const message = continuation; continuation = undefined; return message; },
+    stopReason: () => !stopReason && options.isComplete?.() ? 'completed' : 'limit',
   };
   return { policy, addTokens(tokens: number) { usage.totalTokens += Math.max(0, tokens); },
     stop(reason: DelegationStopReason, message?: string) { stopReason = reason; stopMessage = message; },

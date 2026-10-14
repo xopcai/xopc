@@ -28,6 +28,7 @@ import { appendDynamicPromptSection } from '../prompt/cache-boundary.js';
 import { prepareNativeMcpConfig } from '../mcp/native-mcp.js';
 import { materializeNativeExternalTools } from './external-tool-discovery.js';
 import { filterExecutionTools, resolveExecutionToolPolicy } from './execution-tool-policy.js';
+import { getTaskContinuation, getTaskExecutionDeadline } from '../../tasks/task-continuation.js';
 
 const log = createLogger('EmbeddedTurnForSession');
 
@@ -70,14 +71,19 @@ async function runEmbeddedTurnForSessionInner(params: RunEmbeddedForSessionParam
   let idleJob: Parameters<typeof idleScheduler.endTurn>[2];
   let turnCompleted = false;
   const runId = params.runId ?? crypto.randomUUID();
+  const taskContinuation = getTaskContinuation(conversationId, runId);
   const config = params.getConfig?.();
   if (config) setTraceIdentity({ agentId: resolveEffectiveAgentProfileForSession(conversationId).agentId });
   const supervisor = new AgentRunSupervisor({
     timeoutMs: resolveAgentTurnTimeoutMs(config, conversationId),
-    deadlineAtMs: params.deadlineAtMs,
+    deadlineAtMs: params.deadlineAtMs ?? getTaskExecutionDeadline(conversationId, runId),
     parentSignal: params.abortSignal,
   });
   const finish = async (result: RunXopcEmbeddedTurnResult): Promise<RunXopcEmbeddedTurnResult> => {
+    if (supervisor.signal.aborted && supervisor.signal.reason instanceof Error
+      && supervisor.signal.reason.message === 'Agent run deadline expired') {
+      result = { ...result, ok: false, retryable: false, errorMessage: supervisor.signal.reason.message };
+    }
     turnCompleted = result.ok && result.stopReason !== 'connection_required' && result.stopReason !== 'clarification_required';
     if (result.stopReason === 'connection_required' || result.stopReason === 'clarification_required') return result;
     try {
@@ -118,10 +124,10 @@ async function runEmbeddedTurnForSessionInner(params: RunEmbeddedForSessionParam
 
   try {
     await params.beforeTurn?.();
-    if (supervisor.signal.aborted) return { ok: false, errorMessage: 'aborted' };
+    if (supervisor.signal.aborted) return await finish({ ok: false, errorMessage: 'aborted' });
 
     await agentManager.ensureMemoryReadyForSession?.(conversationId);
-    if (supervisor.signal.aborted) return { ok: false, errorMessage: 'aborted' };
+    if (supervisor.signal.aborted) return await finish({ ok: false, errorMessage: 'aborted' });
 
     const agent = (agentManager as any).getOrCreateAgent(conversationId) as {
       state: {
@@ -219,7 +225,7 @@ async function runEmbeddedTurnForSessionInner(params: RunEmbeddedForSessionParam
         startupAction: params.startupAction,
         force: params.forceStartupContext,
       });
-      if (supervisor.signal.aborted) return { ok: false, errorMessage: 'aborted' };
+      if (supervisor.signal.aborted) return await finish({ ok: false, errorMessage: 'aborted' });
     }
 
     try {
@@ -238,10 +244,10 @@ async function runEmbeddedTurnForSessionInner(params: RunEmbeddedForSessionParam
         onEvent: params.onEvent,
       });
     } catch (err) {
-      if (supervisor.signal.aborted) return { ok: false, errorMessage: 'aborted' };
+      if (supervisor.signal.aborted) return await finish({ ok: false, errorMessage: 'aborted' });
       throw err;
     }
-    if (supervisor.signal.aborted) return { ok: false, errorMessage: 'aborted' };
+    if (supervisor.signal.aborted) return await finish({ ok: false, errorMessage: 'aborted' });
 
     log.info(
       {
@@ -319,9 +325,16 @@ async function runEmbeddedTurnForSessionInner(params: RunEmbeddedForSessionParam
             timeoutMs: attemptPlan.timeoutMs,
             turnPolicy,
             abortSignal: supervisor.signal,
-            onEvent: params.onEvent,
+            onEvent: event => {
+              if (event.type === 'error') {
+                log.warn({ conversationId, runId, modelRef: candidateModelRef, errorMessage: event.content }, 'Model attempt failed');
+                return;
+              }
+              params.onEvent?.(event);
+            },
             onAgentEvent: (event) => agentManager.emitRuntimeEvent(conversationId, event),
             resumeLastUserMessage,
+            recoveryMessage: taskContinuation?.message,
             requireVisibleReply: params.requireVisibleReply,
           }),
           runId,

@@ -179,6 +179,9 @@ export function createDelegateChildHandle(options: DelegateChildHandleOptions): 
           : isCloudCreditBudgetExhausted(result.errorMessage ?? '') ? 'credit_budget'
           : /timed out|did not settle/i.test(result.errorMessage ?? '') ? 'timeout'
           : snapshot.stopReason ?? (!result.ok ? 'runtime_error' : unverified ? 'verification' : 'completed');
+        const budgetHandoff = result.stopReason === 'policy_limit'
+          && ['tool_calls', 'total_tokens', 'model_turns', 'tool_failures'].includes(stopReason)
+          && (!snapshot.handoffRequested || handoffCompleted);
         const messages = await runtime.loadMessages();
         const evidence = stopReason !== 'completed' && !handoffCompleted
           ? messages.filter(message => message.role === 'toolResult').slice(-3).map(message => {
@@ -194,7 +197,7 @@ export function createDelegateChildHandle(options: DelegateChildHandleOptions): 
           limits: snapshot.limits, handoffRequested: snapshot.handoffRequested, handoffCompleted }, `Delegation stopped: ${stopReason}`);
         return { summary, stopReason, budget: { ...snapshot, stopReason }, handoff: { requested: snapshot.handoffRequested, completed: handoffCompleted, summary },
           toolIterations: snapshot.usage.toolCalls, messages,
-          status: controller.signal.aborted ? 'cancelled' as const : !result.ok ? 'failed' as const : stopReason !== 'completed' ? 'partial' as const : 'success' as const,
+          status: controller.signal.aborted ? 'cancelled' as const : !result.ok && !budgetHandoff ? 'failed' as const : stopReason !== 'completed' ? 'partial' as const : 'success' as const,
           ...(verification?.type === 'custom' ? { verification: verification.data as Awaited<ReturnType<RunVerification['summary']>> } : {}),
         };
       } finally { evictEmbeddedSessionRunner(runtime.runtimeId, 'leaf_worker_complete'); }

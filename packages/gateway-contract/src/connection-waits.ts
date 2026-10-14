@@ -57,6 +57,9 @@ export type ConnectionWait = {
   lastAction?: { key: string; action: string };
   reviewRequired?: boolean;
   queuedInputId?: string;
+  checking?: { phase: 'connection' | 'tools'; startedAt: number };
+  lastCheckedAt?: number;
+  recoveryError?: 'check_failed' | 'restart_interrupted';
   version: number;
   createdAt: number;
   updatedAt: number;
@@ -74,6 +77,8 @@ export type ConnectionWaitView = Omit<ConnectionWait, 'needs' | 'intent' | 'chec
   needs: ConnectionNeedView[];
   timeRange?: ConnectionCheckpoint['timeRange'];
   phase: 'needs_connection' | 'ready' | 'review_scope' | 'queued';
+  recoveryStage?: 'checking_connection' | 'checking_tools' | 'queued';
+  queueBlocked?: boolean;
 };
 
 export type ConnectionWaitSnapshot = { transcriptId: string; revision: number; wait: ConnectionWaitView | null };
