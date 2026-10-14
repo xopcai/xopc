@@ -870,7 +870,7 @@ async function handleTask(
   if (command === 'delegated_tasks') {
     const conversationId = deps.getCurrentConversationId?.();
     if (!conversationId) return { ok: false, error: 'Current conversation is required' };
-    return { ok: true, ...new TaskOriginRepository().list(conversationId, finiteNumber(args.limit) ?? 20) };
+    return { ok: true, ...new TaskOriginRepository().list(conversationId, finiteNumber(args.limit) ?? 20, { offset: finiteNumber(args.offset) ?? 0 }) };
   }
   if (command === 'collaboration' || command === 'collaboration_post') {
     const taskId = trimString(args.taskId) ?? trimString(args.id);

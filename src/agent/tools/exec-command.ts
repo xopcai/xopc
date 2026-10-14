@@ -16,7 +16,7 @@ import { formatSize, truncateTail } from './truncate.js';
 const DEFAULT_MAX_OUTPUT_CHARS = 50_000;
 
 const ExecCommandSchema = Type.Object({
-  cmd: Type.String({ description: 'Shell command to execute.' }),
+  cmd: Type.String({ description: 'Command for the default platform shell: /bin/sh on Unix and in Docker; cmd.exe on Windows hosts. Use portable syntax, or invoke an installed shell explicitly for shell-specific features.' }),
   cwd: Type.Optional(
     Type.String({
       description: 'Working directory. Relative paths are resolved under the agent workspace.',
@@ -99,6 +99,9 @@ function commandFailureHint(details: Pick<ExecCommandDetails, 'status' | 'exitCo
   if (details.status === 'timed_out') {
     return 'The command timed out. Re-run a narrower command, increase timeoutMs if the long run is expected, or inspect partial output before retrying.';
   }
+  if (details.exitCode !== 0 && /(?:\/bin\/sh|\bsh:).*syntax error|bad substitution/i.test(details.stderr)) {
+    return 'The default shell rejected the syntax. Use portable POSIX sh commands or invoke an installed bash explicitly for Bash-only features such as process substitution. Inspect stderr, fix the command, then rerun it.';
+  }
   if (details.exitCode !== 0 && details.stderr.trim()) {
     return 'The command failed. Inspect stderr first, fix the underlying issue, then re-run the narrowest relevant verification command.';
   }
@@ -150,6 +153,7 @@ export function createExecCommandTool(
     name: 'exec_command',
     description: [
       'Run shell commands for code inspection, builds, tests, type checks, and verification.',
+      'Unix and Docker use /bin/sh, not your interactive shell. Do not use Bash process substitution <(...) or other Bash-only syntax unless invoking an installed bash explicitly. Prefer separate portable commands or a script file. Windows hosts use cmd.exe.',
       'Use apply_patch for file edits; do not edit files by shell redirection unless explicitly necessary.',
       'Relative cwd values resolve under the current agent workspace.',
       'When the command creates final user-facing files, declare all final paths in outputs so they are persisted with this command.',

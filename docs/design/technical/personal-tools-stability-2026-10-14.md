@@ -1,0 +1,49 @@
+# Personal Agent 稳定性复测 — 2026-10-14
+
+使用当前真实模型进行了 7 轮端到端验证，并针对观察到的问题做了两轮优化。最终版本连续 3 轮满足验收条件。相关回归 32 个文件、292 项测试通过；类型检查、针对修改源码的 ESLint 和 diff 检查通过。
+
+Personal 使用 `deepseek/deepseek-flash`，Task Router 和执行者继承全局模型 `xopc-cloud/openai-codex/gpt-5.5`。每轮从真实配置启动独立临时 Gateway，通过认证 HTTP 提交到主对话；使用相同合成 CSV，不提前提供计算答案。共享正常凭据目录及刷新锁，未复制 OAuth 令牌。连接应用权限与取消由本地集成回归验证，没有访问真实邮箱。
+
+## 发现与修正
+
+1. 第一轮虽然完成任务，但 Personal 预读了 CSV。收紧本地读取的使用条件：普通 Specialist 工作直接提交输入引用，预读仅用于直接回答所需的本地事实，并迁移已保存的旧提示词。
+2. 执行者使用 Bash 进程替换导致默认 `/bin/sh` 语法失败。工具说明和参数现在明确默认 shell，并提供针对语法失败的修复提示。修正超时匹配，避免把普通指导文字中的 `timeouts` 或 `timeoutMs` 元数据误判为超时并建议自动重试。
+3. 无重试版本仍将简单任务扩写为 1,185–1,341 字符的描述并重复结构化字段。增加任务书规则：保留用户原始要求、输入引用、交付与核验，避免额外计划和需求，重复的可选字段默认省略。长或精确规格仍要求完整保留。
+
+## 最终三轮验收
+
+三轮均只创建一个 Task、启动一个执行者，Router 一次选中 `data-analyst`。主对话仅调用一次 `personal_task(submit)`，没有预读、发现执行者、轮询、工具错误或重试；执行者工具错误为零。每轮实际执行了 `reproduce.mjs` 并发布报告和脚本；直接读取成果 CSV 复核一月 150、二月 210，报告核验环比 40%。
+
+并发消息在执行者已经开始运行后发送，真实 READY 回复均在执行结束前返回。分配状态、正确的执行者身份、成果卡片和最终回复均通过主对话历史 API 确认。
+
+| 阶段 | 最小值 | 中位数 | 最大值 |
+| --- | ---: | ---: | ---: |
+| 完整提交工具 | 9.57 ms | 9.96 ms | 11.47 ms |
+| 用户请求到 Task 落库 | 4.08 s | 4.81 s | 5.28 s |
+| 提交后主对话确认 | 1.19 s | 1.22 s | 1.48 s |
+| 后台分配 | 1.87 s | 1.96 s | 2.91 s |
+| 执行队列 | 0.01 s | 0.01 s | 0.01 s |
+| 执行者运行（含核验） | 49.47 s | 49.72 s | 58.90 s |
+| 执行完成到结果回传 | 1.65 s | 1.93 s | 2.66 s |
+| 执行期间主对话回复 | 0.97 s | 1.02 s | 1.12 s |
+| 端到端总耗时 | 58.42 s | 59.60 s | 67.24 s |
+
+本次样本中，请求到 Task 落库的中位数从前一阶段 8.63 秒降低到 4.81 秒，减少 44.2%。最终描述长度为 417、501、452 字符。以上是相同合成任务的少量连续样本，不代表通用任务或高并发性能保证；执行耗时包含模型生成、工具与成果核验，结果回传包含 100ms 的观察间隔。
+
+验收预算：提交工具 ≤250ms、请求到 Task 落库 ≤20s、分配 ≤15s、提交后确认与执行期间主对话回复各 ≤5s。还检查零工具错误、一次提交和分配、单个 Task/执行者、真实脚本执行及成果数值。达到连续三轮稳定结果后停止重复测试。
+
+## 复现与证据
+
+```sh
+XOPC_ALLOCATION_LIVE=1 XOPC_ALLOCATION_REPORT=docs/design/technical/personal-tools-stability-next.json pnpm exec tsx scripts/personal-allocation-live-smoke.mts
+```
+
+[汇总 JSON](./personal-tools-stability-2026-10-14.json) 保存各轮度量、验收结果和源码 SHA256。原始报告保留完整时序、使用记录、输入状态与主对话历史。
+
+- [第 1 轮](./personal-tools-stability-2026-10-14-run-1.json)：initial-observation；主工具 ['read_file', 'personal_task']，执行者工具错误 1。
+- [第 2 轮](./personal-tools-stability-2026-10-14-run-2.json)：read-and-shell-refinement；主工具 ['personal_task']，执行者工具错误 0。
+- [第 3 轮](./personal-tools-stability-2026-10-14-run-3.json)：read-and-shell-refinement；主工具 ['personal_task']，执行者工具错误 0。
+- [第 4 轮](./personal-tools-stability-2026-10-14-run-4.json)：read-and-shell-refinement；主工具 ['personal_task']，执行者工具错误 0。
+- [第 5 轮](./personal-tools-stability-2026-10-14-run-5.json)：concise-brief-refinement；主工具 ['personal_task']，执行者工具错误 0。
+- [第 6 轮](./personal-tools-stability-2026-10-14-run-6.json)：concise-brief-refinement；主工具 ['personal_task']，执行者工具错误 0。
+- [第 7 轮](./personal-tools-stability-2026-10-14-run-7.json)：concise-brief-refinement；主工具 ['personal_task']，执行者工具错误 0。

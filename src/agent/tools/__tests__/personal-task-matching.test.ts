@@ -37,8 +37,9 @@ describe('Personal task matching and diagnostics', () => {
       matchId: matched.matchId, idempotencyKey: 'matched', selectionReason: 'Can read the supplied document' });
     const task = new TaskRepository().list()[0]!;
     const records = read(await personal.execute('choices', { command: 'selection', taskId: task.id }));
-    expect(records[0]).toMatchObject({ selectionSource: 'match', selectionReason: 'Can read the supplied document' });
-    expect(records[0].candidates.map((candidate: { id: string }) => candidate.id)).toEqual(matched.candidates.map((candidate: { id: string }) => candidate.id));
+    expect(records.items[0]).toMatchObject({ selectionSource: 'match', selectionReason: 'Can read the supplied document' });
+    expect(records.items[0]).not.toHaveProperty('candidates');
+    expect(new AgentSelectionRepository().list(conversationId)[0].candidates!.map(candidate => candidate.id)).toEqual(matched.candidates.map((candidate: { id: string }) => candidate.id));
     await expect(personal.execute('changed', { command: 'create', objective: 'Read', agentId: 'reader',
       requirements: { summary: 'Different' }, matchId: matched.matchId })).rejects.toThrow('preserve');
   });
@@ -60,6 +61,7 @@ describe('Personal task matching and diagnostics', () => {
     const factory = new AgentToolsFactory({ workspace: '/tmp', bus: {} as MessageBus, dispatchTaskRuns: vi.fn(),
       getCurrentContext: () => ({ channel: 'webchat', chatId: 'owner', conversationId, origin: { type: 'local' } }) as any });
     const personal = factory.createAllTools({ agentId: ownAgentId, conversationId }).find(item => item.name === 'personal_task')!;
+    expect(personal.description).toContain('explicitly named by the user');
     const result = read(await personal.execute('match', { command: 'match', requirements: { summary: 'Read file', requiredTools: ['read_file'] } }));
     expect(result.candidates.find((item: { id: string }) => item.id === 'reader').checks)
       .toContainEqual(expect.objectContaining({ condition: 'tool:read_file', state: 'verified', reasonCode: 'tool_registered' }));

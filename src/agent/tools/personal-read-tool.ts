@@ -16,7 +16,10 @@ const schema = Type.Object({
   projectId: Type.Optional(Type.String()),
   offset: Type.Optional(Type.Integer({ minimum: 0 })),
   limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 10 })),
-});
+}, { additionalProperties: false, anyOf: [
+  { properties: { command: { const: 'list' } } },
+  { properties: { command: { const: 'get' } }, required: ['id'] },
+] });
 
 const fields = ['id', 'name', 'title', 'status', 'kind', 'projectId', 'description', 'markdown',
   'objective', 'enabled', 'createdAt', 'updatedAt', 'createdAtMs', 'updatedAtMs', 'trigger', 'action', 'state'] as const;
@@ -35,10 +38,12 @@ function compact(value: unknown, textLimit: number): Record<string, unknown> {
     }
     else if (typeof entry === 'number' || typeof entry === 'boolean' || entry === null) result[key] = entry;
     else if (entry && typeof entry === 'object' && !Array.isArray(entry)) {
-      result[key] = Object.fromEntries(Object.entries(entry).slice(0, 12)
+      const nested = Object.entries(entry);
+      if (nested.length > 12 || nested.some(([, item]) => typeof item === 'string' && item.length > 200 || item !== null && typeof item === 'object')) truncatedFields.push(key);
+      result[key] = Object.fromEntries(nested.slice(0, 12)
         .filter(([, item]) => ['string', 'number', 'boolean'].includes(typeof item) || item === null)
         .map(([field, item]) => [field, typeof item === 'string' ? item.slice(0, 200) : item]));
-    }
+    } else if (Array.isArray(entry)) truncatedFields.push(key);
   }
   if (truncatedFields.length) result.truncatedFields = truncatedFields;
   return result;
@@ -86,7 +91,7 @@ export function createPersonalReadTool(deps: XopcUseToolDeps): AgentTool {
         const rows = (result.items ?? []) as unknown[];
         const selected = input.kind === 'automation' ? rows.slice(offset, offset + limit) : rows;
         payload = { kind: input.kind, items: selected.map(row => compact(row, 200)), offset,
-          total: result.total ?? rows.length, nextOffset: selected.length === limit ? offset + selected.length : undefined, excerpts: true };
+          total: result.total ?? rows.length, nextOffset: offset + selected.length < Number(result.total ?? rows.length) ? offset + selected.length : undefined, excerpts: true };
       }
       const serialized = JSON.stringify(payload);
       const requiresSpecialist = input.command === 'get' && (serialized.length > LOCAL_READ_MAX_CHARS

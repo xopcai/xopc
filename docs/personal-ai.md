@@ -35,6 +35,8 @@ The personal conversation uses a fixed set of local and coordination tools. MCP 
 
 For ordinary delegated work, Ada submits a complete Task brief and returns immediately after local persistence. The Gateway allocates one Specialist in the background. The independent `task-router` Agent inherits the global chat model unless separately configured; it compares candidate profiles but does not execute business tools. Assignment and execution status return to the originating conversation, and verified results use the existing Task result delivery flow. Explicitly requested Agents and Skills are preserved. Connected-app requests retain their account connection and authorization flow.
 
+The personal model sees submission and existing-task coordination commands. Specialist discovery, matching and direct executor creation are not advertised, and the specialist directory is not injected into its prompt. Describe needed capabilities in the brief; the background router resolves execution conditions. Explicitly named executors can be supplied by ID or unique display name, and explicitly requested Skills are preserved without foreground discovery.
+
 Allocation is durable across Gateway restarts. Before execution, allocation failures can be retried on the same Task with `personal_task(command="retry_allocation", taskId=...)`; answering a router question also resumes allocation. This does not rerun an execution that has already started. The initial router review budget is 24 eligible candidates; larger candidate sets report a clear blocker rather than silently omitting candidates.
 
 ## If something is missing
@@ -48,3 +50,7 @@ Allocation is durable across Gateway restarts. Before execution, allocation fail
 | It has the wrong background | Correct the user understanding and clarify the current conversation |
 
 Core state stays in your local xopc installation. Selected cloud providers process the context sent to them. See [Data and file locations](./workspace.md) and [Product philosophy](./product.md).
+
+### Personal tool coordination
+
+Ordinary Tasks support `personal_task(cancel)` from the main conversation. Cancellation closes the Task and stops further allocation; `executionStopConfirmed` must be interpreted separately from accepted cancellation. Connected-app Requests use `personal_request` without selecting an executor in the main model; the Task Router assigns one within the selected account permissions after authorization. Task, Request, Attention and selection queries return paginated, bounded excerpts. See [tool optimization and verification](./design/technical/personal-tools-optimization-2026-10-14.md).

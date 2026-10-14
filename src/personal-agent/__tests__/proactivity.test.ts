@@ -317,7 +317,8 @@ describe('Personal proactive participation', () => {
     const tool = createPersonalAttentionTool({ getConversationId: () => conversationId, getConfig: () => config });
     const read = async (command: 'list' | 'settings') => {
       const result = await tool.execute('query', { command });
-      return JSON.parse((result.content[0] as { text: string }).text);
+      const value = JSON.parse((result.content[0] as { text: string }).text);
+      return command === 'list' ? value.items : value;
     };
     expect(await read('list')).toEqual([]);
     const thread = follow('产品关注状态');

@@ -7,6 +7,8 @@ import { assessSpecialist, type MatchingContext, type SpecialistAssessment } fro
 import { AgentSelectionRepository, selectionRequestHash } from '../agent-matching/selection-repository.js';
 import { completeWithResolvedCredentials } from '../providers/model-call.js';
 import { extractAssistantText, getAssistantMessageErrorReason, stripCodeFences } from '../providers/model-response.js';
+import { personalCapabilities } from '../personal-agent/capability-service.js';
+import { personalRequestForTask, updatePersonalRequest } from '../personal-agent/request-repository.js';
 import { resolveModel } from '../providers/index.js';
 import { getSqliteDatabase, runSqliteWriteTransaction } from '../storage/sqlite/transaction.js';
 import { createLogger } from '../utils/logger.js';
@@ -121,11 +123,34 @@ export class TaskAllocationDispatcher {
     const requirements = normalizeSpecialistRequirements(JSON.parse(row.requirements_json));
     if ((task.body?.length ?? 0) > 12_000) requirements.requiredTools = [...new Set([...(requirements.requiredTools ?? []), 'xopc_use'])].sort();
     const context = this.deps.context(row.origin_conversation_id);
+    const permittedExecutors = () => {
+      const connector = requirements.connector;
+      if (!connector) return undefined;
+      const capability = personalCapabilities(row.origin_conversation_id, connector.connectorId, connector.accountId)
+        .find(item => item.connectorId === connector.connectorId);
+      return new Set(capability?.status === 'ready' ? capability.accounts
+        .filter(account => account.accountId === connector.accountId).flatMap(account => account.executorAgentIds) : []);
+    };
+    let permitted = permittedExecutors();
+    if (permitted && !permitted.size) {
+      this.finishFailure(row, zh ? '连接器或所选账户的授权已变化，没有可用的执行者。' : 'Connector or selected account authorization changed; no executor is permitted.', 'account_unavailable');
+      return;
+    }
+    if (requirements.connector) {
+      context.checkConnector = agentId => ({ condition: 'connector', state: permitted?.has(agentId) ? 'verified' : 'blocked',
+        reasonCode: permitted?.has(agentId) ? 'account_authorized' : 'account_unavailable' });
+    }
     const catalog = new AgentCatalogRepository();
+    if (requirements.requestedAgentId && !catalog.get(requirements.requestedAgentId)) {
+      const requested = requirements.requestedAgentId.toLowerCase();
+      const named = catalog.list().filter(agent => agent.id.toLowerCase() === requested
+        || agent.profile?.name.toLowerCase() === requested);
+      if (named.length === 1) requirements.requestedAgentId = named[0]!.id;
+    }
     const ids = requirements.requestedAgentId ? [requirements.requestedAgentId] : catalog.list({ readyOnly: true })
       .filter(agent => agent.enabled !== false && agent.purpose !== 'task_dispatcher'
         && agent.id !== context.ownAgentId && !agent.id.startsWith('personal-')).map(agent => agent.id);
-    const candidates = ids.map(id => assessSpecialist(id, requirements, context)).filter(candidate => candidate.eligibility === 'eligible');
+    const candidates = ids.filter(id => !permitted || permitted.has(id)).map(id => assessSpecialist(id, requirements, context)).filter(candidate => candidate.eligibility === 'eligible');
     if (!candidates.length) {
       this.finishFailure(row, zh ? '没有通过执行条件检查的 Specialist，请检查模型、工具和必需 Skill。' : 'No specialist passed the model, tool and required Skill checks.', 'no_eligible_candidate');
       return;
@@ -159,19 +184,23 @@ export class TaskAllocationDispatcher {
           .run(current.version, row.id);
         return;
       }
+      permitted = permittedExecutors();
       const freshIds = requirements.requestedAgentId ? [requirements.requestedAgentId] : catalog.list({ readyOnly: true })
         .filter(agent => agent.enabled !== false && agent.purpose !== 'task_dispatcher'
           && agent.id !== context.ownAgentId && !agent.id.startsWith('personal-')).map(agent => agent.id);
       // Compare the full eligible set if eligibility changes; a new candidate may be a better fit.
-      const freshCandidates = freshIds.map(id => assessSpecialist(id, requirements, context)).filter(candidate => candidate.eligibility === 'eligible');
+      const freshCandidates = freshIds.filter(id => !permitted || permitted.has(id)).map(id => assessSpecialist(id, requirements, context)).filter(candidate => candidate.eligibility === 'eligible');
       if (selectionRequestHash(freshCandidates.map(candidate => ({ id: candidate.id, revision: candidate.revision }))) !== snapshotHash) {
         db.prepare("UPDATE task_allocations SET status = 'pending', lease_token = NULL WHERE id = ?").run(row.id);
         return;
       }
       const assessment = freshCandidates.find(candidate => candidate.id === decision.agentId);
       if (!assessment) throw new Error('Selected specialist is no longer eligible');
+      const request = personalRequestForTask(task.id);
+      if (request?.state === 'cancelled') { this.cancel(row); return; }
       db.prepare('UPDATE tasks SET delegate_agent_id = ?, version = version + 1, updated_at = ? WHERE task_id = ? AND version = ?')
         .run(assessment.id, Date.now(), task.id, current.version);
+      if (request?.parameters.allocate) updatePersonalRequest(request, { executorAgentId: assessment.id });
       const assigned = tasks.require(task.id);
       const result = new TaskApplicationService().execute({ taskId: task.id, expectedVersion: assigned.version,
         idempotencyKey: `allocation:${row.id}:start`, actor: { kind: 'system', id: 'task-router' },
@@ -181,7 +210,7 @@ export class TaskAllocationDispatcher {
       const record = selections.create({ conversationId: row.origin_conversation_id, key: `allocation:${row.id}`,
         requestHash: selectionRequestHash({ taskId: task.id, requirements }), requirements, assessment,
         candidates: freshCandidates, source: requirements.requestedAgentId ? 'explicit' : 'match',
-        reason: decision.reason, reasonSource: deterministic ? 'system' : 'model', status: result.ok ? 'task_linked' : 'start_blocked' });
+        reason: decision.reason, reasonSource: deterministic ? 'system' : 'model', status: result.ok ? 'task_linked' : 'start_blocked', requestId: request?.requestId });
       selections.link(record.id, { taskId: task.id, runId: result.ok ? result.runId : undefined,
         status: result.ok ? 'task_linked' : 'start_blocked' });
       db.prepare(`UPDATE agent_selection_records SET transcript_id = (SELECT origin_transcript_id FROM task_origin_links WHERE task_id = ?),

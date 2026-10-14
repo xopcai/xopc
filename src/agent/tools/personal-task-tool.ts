@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto';
 
+import { appendProductDeliveryText } from '@xopcai/gateway-contract';
 import type { AgentTool } from '@earendil-works/pi-agent-core';
-import { Type } from '@sinclair/typebox';
+import { Type, type Static } from '@sinclair/typebox';
 
 import { assessSpecialist, matchSpecialists, type MatchingContext } from '../../agent-matching/service.js';
 import { normalizeSpecialistRequirements, type SpecialistTaskRequirements } from '../../agent-matching/schema.js';
@@ -15,18 +16,20 @@ import { PERSONAL_WORKER_RESULT_GUIDANCE } from '../../personal-agent/communicat
 import { getPersonalRequest } from '../../personal-agent/request-repository.js';
 import { TaskApplicationService } from '../../tasks/task-application-service.js';
 import { TaskAllocationRepository } from '../../tasks/task-allocation-repository.js';
+import { cancelPersonalTask } from '../../personal-agent/task-cancel.js';
+import { boundedPersonalResult } from './personal-result-budget.js';
 import { TaskRepository } from '../../tasks/task-repository.js';
 import { TaskOriginRepository } from '../../tasks/task-origin-repository.js';
 import { createXopcUseTool, type XopcUseToolDeps } from './xopc-use-tool.js';
 
 const PersonalTaskSchema = Type.Object({
-  command: Type.Union([Type.Literal('retry_allocation'), Type.Literal('submit'), Type.Literal('agents'), Type.Literal('match'), Type.Literal('selection'), Type.Literal('create'), Type.Literal('list'), Type.Literal('get'), Type.Literal('instruct'), Type.Literal('answer')]),
+  command: Type.Union([Type.Literal('retry_allocation'), Type.Literal('submit'), Type.Literal('agents'), Type.Literal('match'), Type.Literal('selection'), Type.Literal('create'), Type.Literal('list'), Type.Literal('get'), Type.Literal('instruct'), Type.Literal('answer'), Type.Literal('cancel')]),
   requirements: Type.Optional(Type.Object({
     version: Type.Optional(Type.Literal(1)), summary: Type.String({ maxLength: 300 }),
     domain: Type.Optional(Type.String()), taskType: Type.Optional(Type.String()),
     inputKinds: Type.Optional(Type.Array(Type.String())), outputKinds: Type.Optional(Type.Array(Type.String())),
     requiredTools: Type.Optional(Type.Array(Type.String())), requiredSkills: Type.Optional(Type.Array(Type.String())),
-    requestedAgentId: Type.Optional(Type.String({ description: 'Only an executor explicitly named by the human user. Omit this field when the background router should choose; never infer it from the specialist directory.' })),
+    requestedAgentId: Type.Optional(Type.String({ minLength: 1, description: 'Only an executor explicitly named by the human user. Omit this field when the background router should choose; never infer it from the specialist directory.' })),
   })),
   selectionReason: Type.Optional(Type.String({ maxLength: 500 })),
   selectionSource: Type.Optional(Type.Union([Type.Literal('snapshot'), Type.Literal('match'), Type.Literal('explicit')])),
@@ -35,9 +38,10 @@ const PersonalTaskSchema = Type.Object({
   requestId: Type.Optional(Type.String()),
   cursor: Type.Optional(Type.String()),
   offset: Type.Optional(Type.Integer({ minimum: 0 })),
+  limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 20 })),
   title: Type.Optional(Type.String({ description: 'Short task title, ideally under 60 characters. Do not put the full instructions here.' })),
-  objective: Type.Optional(Type.String({ description: 'One-sentence outcome for a new delegated Task.' })),
-  description: Type.Optional(Type.String({ description: 'Full task brief in Markdown: background, specific requests, source material, and delivery expectations.' })),
+  objective: Type.Optional(Type.String({ minLength: 1, description: 'One-sentence outcome for a new delegated Task.' })),
+  description: Type.Optional(Type.String({ minLength: 1, description: 'Complete Markdown brief preserving the user request, input references, and delivery expectations. Optional structured fields need not repeat it.' })),
   agentId: Type.Optional(Type.String({ description: 'Specialist Agent ID. Never use your own ID.' })),
   taskId: Type.Optional(Type.String()),
   instruction: Type.Optional(Type.String({ description: 'The user’s new direction for this delegated Task.' })),
@@ -45,10 +49,23 @@ const PersonalTaskSchema = Type.Object({
   expectedOutputs: Type.Optional(Type.Array(Type.String())),
   acceptanceCriteria: Type.Optional(Type.Array(Type.String())),
   constraints: Type.Optional(Type.Array(Type.String())),
-  requiredSkills: Type.Optional(Type.Array(Type.String({ minLength: 1, description: 'Canonical Skill names explicitly requested by the user. Verify through agents before creation.' }))),
+  requiredSkills: Type.Optional(Type.Array(Type.String({ minLength: 1, description: 'Only Skill names explicitly requested by the user. Forward them to the background router for validation; omit otherwise.' }))),
   requiredTools: Type.Optional(Type.Array(Type.String({ description: 'Tool names needed for this Task. Use names returned by agents; omit when matching by role or expertise.' }))),
   idempotencyKey: Type.Optional(Type.String()),
 });
+
+// Keep historical commands executable for internal replay callers, without advertising executor selection to the personal model.
+const PersonalTaskModelSchema = Type.Object({
+  ...Type.Omit(PersonalTaskSchema, ['agentId', 'selectionReason', 'selectionSource', 'previousSelectionId', 'matchId', 'cursor', 'requiredTools']).properties,
+  requirements: Type.Optional(Type.Omit(PersonalTaskSchema.properties.requirements, ['requiredTools', 'requiredSkills'], { additionalProperties: false })),
+  command: Type.Union((['submit', 'list', 'get', 'instruct', 'answer', 'retry_allocation', 'selection', 'cancel'] as const).map(command => Type.Literal(command))),
+}, { additionalProperties: false, anyOf: [
+  { properties: { command: { const: 'submit' } }, required: ['objective', 'description'] },
+  { properties: { command: { enum: ['list', 'selection'] } } },
+  { properties: { command: { enum: ['get', 'retry_allocation', 'cancel'] } }, required: ['taskId'] },
+  { properties: { command: { const: 'instruct' } }, required: ['taskId', 'instruction'] },
+  { properties: { command: { const: 'answer' } }, required: ['taskId', 'instruction', 'questionId'] },
+] });
 
 export interface PersonalTaskToolDeps extends XopcUseToolDeps {
   getAgentToolAvailability?: MatchingContext['getAgentToolAvailability'];
@@ -76,19 +93,20 @@ export function buildPersonalTaskBrief(input: { title?: string; objective: strin
 }
 
 /** A narrow Task surface for the fast personal conversation. */
-export function createPersonalTaskTool(deps: PersonalTaskToolDeps): AgentTool<typeof PersonalTaskSchema, Record<string, never>> {
+export function createPersonalTaskTool(deps: PersonalTaskToolDeps): AgentTool<typeof PersonalTaskModelSchema, Record<string, never>> {
   const productTool = createXopcUseTool(deps);
   const matches = new Map<string, { conversationId: string; requirements: SpecialistTaskRequirements; result: ReturnType<typeof matchSpecialists> }>();
   return {
     name: 'personal_task',
     label: 'Personal Task',
-    description: 'For ordinary delegation use submit with a complete brief; it immediately persists a Task and the background Task Router selects and starts one specialist. Submit before reading input files or discovering Agents. Omit requestedAgentId unless the human user explicitly named the executor; never choose one yourself for submit. selection reads a Task’s allocation history. Preserve idempotencyKey on uncertain retries. get/list inspect existing Tasks; instruct/answer send the missing context to the existing Task. retry_allocation retries selection before execution. agents/match/create remain available for explicitly requested specialist discovery or legacy direct delegation; their results do not authorize execution retries or changing a user-selected Agent. Profiles declare expertise, while eligibility checks verify execution conditions. Explicitly requested Skills must be preserved in requiredSkills. Never claim execution or completion before the corresponding tool result confirms that state.',
-    parameters: PersonalTaskSchema,
+    description: 'Submit objective and a concise complete description, then return after local persistence. Preserve the user request and source references without inventing an execution plan or extra requirements. Omit optional structured fields when they merely repeat the description. Describe required capabilities in the brief; the background Task Router selects one executor and checks its tools. Do not read input files, select Agents or invent tool names before submit. Set requirements.requestedAgentId only for an executor explicitly named by the user, using their ID or display name; preserve explicitly requested requiredSkills. get/list inspect existing Tasks with limit/offset; cancel stops a Task on explicit user instruction and reports execution stop confirmation; instruct/answer send context; retry_allocation retries selection before execution; selection explains assignment. Status and results return automatically. Preserve idempotencyKey on uncertain retries. Report only confirmed states.',
+    parameters: PersonalTaskModelSchema,
     mutatesWorkspace: true,
     mutationScope: 'external',
     requiresExclusiveWorkspaceLock: false,
     finalGuardRelevant: true,
-    async execute(toolCallId, input, signal) {
+    async execute(toolCallId, modelInput, signal) {
+      const input: Static<typeof PersonalTaskSchema> = modelInput;
       const conversationId = deps.getCurrentConversationId?.();
       const ownAgentId = deps.getCurrentAgentId?.();
       if (!conversationId || !ownAgentId || !isPersonalConversation(conversationId)) {
@@ -96,6 +114,7 @@ export function createPersonalTaskTool(deps: PersonalTaskToolDeps): AgentTool<ty
       }
       const requirements = normalizeSpecialistRequirements({
         ...input.requirements,
+        requestedAgentId: input.requirements?.requestedAgentId?.trim() || undefined,
         version: 1,
         summary: input.requirements?.summary ?? (input.objective?.trim() || 'Specialist discovery').slice(0, 300),
         requiredTools: [...(input.requirements?.requiredTools ?? []), ...(input.requiredTools ?? [])],
@@ -134,8 +153,13 @@ export function createPersonalTaskTool(deps: PersonalTaskToolDeps): AgentTool<ty
         const owns = input.taskId ? new TaskOriginRepository().owns(input.taskId, conversationId)
           : input.requestId ? getPersonalRequest(input.requestId)?.conversationId === conversationId : true;
         if (!owns) throw new Error('Task or Request does not belong to this personal conversation');
-        return { content: [{ type: 'text', text: JSON.stringify(new AgentSelectionRepository().list(conversationId,
-          { taskId: input.taskId, requestId: input.requestId, offset: input.offset })) }], details: {} };
+        const offset = input.offset ?? 0;
+        const limit = input.limit ?? 10;
+        const rows = new AgentSelectionRepository().list(conversationId, { taskId: input.taskId, requestId: input.requestId, offset, limit: limit + 1 });
+        const items = rows.slice(0, limit).map(({ candidates: _candidates, assessment, ...record }) =>
+          ({ ...record, executor: { id: assessment.id, name: assessment.name } }));
+        return { content: [{ type: 'text', text: JSON.stringify(boundedPersonalResult({ items, offset,
+          ...(rows.length > limit ? { nextOffset: offset + items.length } : {}) })) }], details: {} };
       }
       let selectedProductTool = productTool;
       let pendingSelection: Parameters<AgentSelectionRepository['create']>[0] | undefined;
@@ -212,12 +236,17 @@ export function createPersonalTaskTool(deps: PersonalTaskToolDeps): AgentTool<ty
         };
       } else if (command === 'list') {
         command = 'delegated_tasks';
-        args = { limit: 20 };
+        args = { limit: input.limit ?? 10, offset: input.offset ?? 0 };
       } else {
         const taskId = input.taskId?.trim();
         if (!taskId) throw new Error('taskId is required');
         if (!new TaskOriginRepository().owns(taskId, conversationId)) {
           throw new Error('Task does not belong to this personal conversation');
+        }
+        if (command === 'cancel') {
+          const result = await cancelPersonalTask(taskId, conversationId, input.idempotencyKey ?? toolCallId);
+          deps.dispatchTaskRuns?.();
+          return { content: [{ type: 'text', text: JSON.stringify(result) }], details: {} };
         }
         if (command === 'retry_allocation') {
           command = 'command';
@@ -243,6 +272,21 @@ export function createPersonalTaskTool(deps: PersonalTaskToolDeps): AgentTool<ty
             deps.dispatchTaskRuns?.();
           }
         }
+        const payload = result.details.result as Record<string, unknown> | undefined;
+        if (payload?.ok === true && input.command === 'submit') {
+          const task = payload.task as Record<string, unknown>;
+          const confirmation = { ok: true, task: { id: task.id, title: task.title, phase: task.phase, version: task.version },
+            operationalState: payload.operationalState, allocation: payload.allocation, runId: payload.runId };
+          return { content: [{ type: 'text', text: appendProductDeliveryText(JSON.stringify(confirmation, null, 2), result.details.delivery) }], details: {} };
+        }
+        if (payload && input.command === 'get') {
+          return { content: [{ type: 'text', text: JSON.stringify(boundedPersonalResult({ ok: payload.ok, task: payload.task,
+            allocation: new TaskAllocationRepository().summary(input.taskId!), operationalState: payload.operationalState,
+            attention: payload.attention, allowedCommands: payload.allowedCommands })) }], details: {} };
+        }
+        if (payload && input.command === 'list') {
+          return { content: [{ type: 'text', text: JSON.stringify(boundedPersonalResult({ ...payload, offset: input.offset ?? 0 })) }], details: {} };
+        }
         return { content: result.content, details: {} };
       } catch (error) {
         // A committed selection is authoritative even if post-commit dispatch failed.
@@ -254,5 +298,5 @@ export function createPersonalTaskTool(deps: PersonalTaskToolDeps): AgentTool<ty
         throw error;
       }
     },
-  } as AgentTool<typeof PersonalTaskSchema, Record<string, never>>;
+  } as AgentTool<typeof PersonalTaskModelSchema, Record<string, never>>;
 }

@@ -1,6 +1,7 @@
 import type { AgentTool } from '@earendil-works/pi-agent-core';
 import { Type } from '@sinclair/typebox';
 
+import { boundedPersonalResult } from './personal-result-budget.js';
 import type { Config } from '../../config/schema.js';
 import { getPersonalAgentByConversation } from '../../personal-agent/repository.js';
 import { applyThreadFeedback, getAttention, getProactivitySettings, listAttention, listInterestCandidates, patchAttention, patchProactivitySettings, rollbackStrategy, saveAttention, strategyState, userText } from '../../personal-agent/proactivity/repository.js';
@@ -11,6 +12,7 @@ import { parseLocalCheckTime } from '../../personal-agent/proactivity/follow-up-
 
 const schema = Type.Object({
   command: Type.Union([Type.Literal('list'), Type.Literal('follow'), Type.Literal('pause'), Type.Literal('end'), Type.Literal('resume'), Type.Literal('settings'), Type.Literal('interests'), Type.Literal('feedback'), Type.Literal('rollback')]),
+  offset: Type.Optional(Type.Integer({ minimum: 0 })), limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 20 })),
   id: Type.Optional(Type.String()), subject: Type.Optional(Type.String({ maxLength: 160 })),
   summary: Type.Optional(Type.String({ maxLength: 1600 })), nextCheckAt: Type.Optional(Type.Number()),
   nextCheckLocal: Type.Optional(Type.String({ description: 'Preferred check time: YYYY-MM-DDTHH:mm in the user configured timezone. Use this instead of calculating epoch milliseconds. For vague tomorrow afternoon, use 15:00.' })),
@@ -19,7 +21,13 @@ const schema = Type.Object({
   feedback: Type.Optional(Type.Union([Type.Literal('stop'), Type.Literal('defer'), Type.Literal('adjust')])),
   preparation: Type.Optional(Type.Union([Type.Literal('brief'), Type.Literal('thorough')])),
   versionId: Type.Optional(Type.String({ description: 'Latest strategy version ID returned by list; required for rollback.' })),
-});
+}, { additionalProperties: false, anyOf: [
+  { properties: { command: { enum: ['list', 'settings', 'interests'] } } },
+  { properties: { command: { const: 'follow' } }, required: ['subject'] },
+  { properties: { command: { enum: ['pause', 'end', 'resume'] } }, required: ['id'] },
+  { properties: { command: { const: 'feedback' } }, required: ['id', 'feedback'] },
+  { properties: { command: { const: 'rollback' } }, required: ['id', 'versionId'] },
+] });
 
 export function createPersonalAttentionTool(deps: {
   getConversationId: () => string | undefined; getConfig: () => Config | undefined;
@@ -35,13 +43,15 @@ export function createPersonalAttentionTool(deps: {
       if ((input.command === 'follow' || input.command === 'resume') && (!resolveUserContextSessionAccess(config, conversationId).userModel
         || config.userContext.userModel.writePolicy === 'deny')) throw new Error('Personal attention is unavailable');
       if (input.command === 'settings' && !input.mode) return { content: [{ type: 'text', text: JSON.stringify(getProactivitySettings(personal.ownerId)) }], details: {} };
-      if (input.command === 'interests') {
-        if (!resolveUserContextSessionAccess(config, conversationId).userModel) throw new Error('Interest access is unavailable');
-        return { content: [{ type: 'text', text: JSON.stringify(listInterestCandidates(conversationId)) }], details: {} };
+      if (input.command === 'interests' || input.command === 'list') {
+        if (input.command === 'interests' && !resolveUserContextSessionAccess(config, conversationId).userModel) throw new Error('Interest access is unavailable');
+        const rows = input.command === 'interests' ? listInterestCandidates(conversationId)
+          : listAttention(conversationId).map(thread => ({ id: thread.id, subject: thread.subject, status: thread.status,
+            nextCheckAt: thread.next_check_at, revision: thread.revision, strategy: strategyState(thread.id) }));
+        const offset = input.offset ?? 0;
+        return { content: [{ type: 'text', text: JSON.stringify(boundedPersonalResult({
+          items: rows.slice(offset, offset + (input.limit ?? 10)), total: rows.length, offset })) }], details: {} };
       }
-      if (input.command === 'list') return { content: [{ type: 'text', text: JSON.stringify(listAttention(conversationId).map(thread => ({
-        id: thread.id, subject: thread.subject, status: thread.status, nextCheckAt: thread.next_check_at, revision: thread.revision,
-        strategy: strategyState(thread.id) }))) }], details: {} };
       const db = getSqliteDatabase();
       const transcriptId = readCurrentTranscriptId(db, conversationId);
       const source = db.prepare("SELECT entry_id,payload_json FROM transcript_entries WHERE transcript_id = ? AND role = 'user' ORDER BY seq DESC LIMIT 1")

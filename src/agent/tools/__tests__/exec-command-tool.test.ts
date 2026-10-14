@@ -59,6 +59,17 @@ describe('exec_command tool', () => {
     }
   });
 
+  it.skipIf(process.platform === 'win32')('explains a shell syntax failure without silently changing the shell', async () => {
+    const workspace = await mkdtemp(join(tmpdir(), 'xopc-exec-shell-'));
+    try {
+      const tool = createExecCommandTool(workspace);
+      const result = await tool.execute('shell-syntax', { cmd: 'cat <(printf hello)', timeoutMs: 10_000 });
+      expect(result.details.exitCode).not.toBe(0);
+      expect(result.details.timedOut).toBe(false);
+      expect(result.details.failureHint).toContain('POSIX sh');
+    } finally { await rm(workspace, { recursive: true, force: true }); }
+  });
+
   it('uses the prepared runtime environment', async () => {
     const workspace = await mkdtemp(join(tmpdir(), 'xopc-exec-'));
     try {

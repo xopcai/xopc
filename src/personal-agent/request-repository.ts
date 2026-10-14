@@ -12,7 +12,7 @@ export interface PersonalRequest {
   connectorId: string;
   executorAgentId: string;
   accountId?: string;
-  parameters: { timeRange?: { from: string; to: string; timezone: string; expression: string } };
+  parameters: { allocate?: boolean; timeRange?: { from: string; to: string; timezone: string; expression: string } };
   state: PersonalRequestState;
   connectionWaitId?: string;
   taskId?: string;
@@ -62,16 +62,16 @@ export function personalRequestForExecution(conversationId: string): PersonalReq
     ORDER BY session.created_at DESC LIMIT 1`).get(conversationId) as Row | undefined;
   return row ? fromRow(row) : undefined;
 }
-export function listPersonalRequests(conversationId: string): PersonalRequest[] {
-  return (getSqliteDatabase().prepare('SELECT * FROM personal_requests WHERE conversation_id = ? ORDER BY created_at DESC LIMIT 50')
-    .all(conversationId) as Row[]).map(fromRow);
+export function listPersonalRequests(conversationId: string, limit = 50, offset = 0): PersonalRequest[] {
+  return (getSqliteDatabase().prepare('SELECT * FROM personal_requests WHERE conversation_id = ? ORDER BY created_at DESC, request_id DESC LIMIT ? OFFSET ?')
+    .all(conversationId, Math.max(1, Math.min(50, limit)), Math.max(0, offset)) as Row[]).map(fromRow);
 }
 export function updatePersonalRequest(request: PersonalRequest, patch: Partial<Pick<PersonalRequest,
-  'state' | 'connectionWaitId' | 'accountId' | 'taskId' | 'objective' | 'connectorId' | 'parameters'>>): PersonalRequest {
+  'executorAgentId' | 'state' | 'connectionWaitId' | 'accountId' | 'taskId' | 'objective' | 'connectorId' | 'parameters'>>): PersonalRequest {
   const next = { ...request, ...patch, version: request.version + 1, updatedAt: Date.now() };
-  const result = getSqliteDatabase().prepare(`UPDATE personal_requests SET state = ?, connection_wait_id = ?,
+  const result = getSqliteDatabase().prepare(`UPDATE personal_requests SET executor_agent_id = ?, state = ?, connection_wait_id = ?,
     account_id = ?, task_id = ?, objective = ?, connector_id = ?, parameters_json = ?, version = ?, updated_at = ?
-    WHERE request_id = ? AND version = ?`).run(next.state, next.connectionWaitId ?? null, next.accountId ?? null,
+    WHERE request_id = ? AND version = ?`).run(next.executorAgentId, next.state, next.connectionWaitId ?? null, next.accountId ?? null,
     next.taskId ?? null, next.objective, next.connectorId, JSON.stringify(next.parameters), next.version,
     next.updatedAt, request.requestId, request.version);
   if (!result.changes) throw new Error('PERSONAL_REQUEST_CHANGED');

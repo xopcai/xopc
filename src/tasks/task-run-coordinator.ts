@@ -77,9 +77,11 @@ export class TaskRunCoordinator {
       }) ?? run;
     }
     if (startingQueuedRun && run.status === 'running' && new TaskAllocationRepository().get(task.id)) {
+      const executorAgentId = typeof run.executorRef.agentId === 'string'
+        ? run.executorRef.agentId : task.delegateAgentId ?? input.context.agentId;
       runSqliteWriteTransaction(() => new TaskAllocationRepository().publish(task.id,
-        resolveTaskLocale(task) === 'zh' ? `任务「${task.title}」由 ${input.context.agentId} 开始执行。`
-          : `Task “${task.title}” started by ${input.context.agentId}.`));
+        resolveTaskLocale(task) === 'zh' ? `任务「${task.title}」由 ${executorAgentId ?? '执行者'} 开始执行。`
+          : `Task “${task.title}” started by ${executorAgentId ?? 'the assigned executor'}.`));
     }
     return run.status === 'running' ? new TaskRunCoordinator(run.id) : undefined;
   }

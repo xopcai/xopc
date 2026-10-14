@@ -207,7 +207,7 @@ export function buildToolingSection(params: {
       ? 'If a task is complex or long-running, delegate it. Completion is push-based: the sub-agent result returns when done.'
       : '',
     ...orchestrationLines,
-    'Do not poll delegate/workflow status in a tight loop; check on-demand or wait for completion.',
+    hasDelegate || hasWorkflow ? 'Do not poll delegate/workflow status in a tight loop; check on-demand or wait for completion.' : '',
   ]
     .filter(Boolean)
     .join('\n');
