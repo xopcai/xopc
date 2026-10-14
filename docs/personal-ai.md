@@ -33,6 +33,10 @@ Ada can read short local text, recall earlier conversation details, and inspect 
 
 The personal conversation uses a fixed set of local and coordination tools. MCP tools, Codemode and dynamic external discovery run through specialist Agents with their own configuration. Configuring MCP does not give the personal conversation direct access to those tools. A separate ordinary conversation with the same Agent follows its configured tool permissions.
 
+For ordinary delegated work, Ada submits a complete Task brief and returns immediately after local persistence. The Gateway allocates one Specialist in the background. The independent `task-router` Agent inherits the global chat model unless separately configured; it compares candidate profiles but does not execute business tools. Assignment and execution status return to the originating conversation, and verified results use the existing Task result delivery flow. Explicitly requested Agents and Skills are preserved. Connected-app requests retain their account connection and authorization flow.
+
+Allocation is durable across Gateway restarts. Before execution, allocation failures can be retried on the same Task with `personal_task(command="retry_allocation", taskId=...)`; answering a router question also resumes allocation. This does not rerun an execution that has already started. The initial router review budget is 24 eligible candidates; larger candidate sets report a clear blocker rather than silently omitting candidates.
+
 ## If something is missing
 
 | Problem | Next step |
