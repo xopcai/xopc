@@ -19,6 +19,7 @@ export interface AgentTurnPolicy {
   takeContinuationMessage?(): string | undefined;
   /** Recheck limits at dispatch, including requests made by recovery paths. */
   beforeModelRequest?(signal?: AbortSignal): string | undefined;
+  stopReason?(): 'completed' | 'limit';
 }
 
 export interface AgentTurnPolicyOptions {

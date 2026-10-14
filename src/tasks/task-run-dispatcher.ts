@@ -4,6 +4,8 @@ import { TaskApplicationService } from './task-application-service.js';
 import { TaskRepository } from './task-repository.js';
 import { TaskRunRepository } from './task-run-repository.js';
 import { resolveTaskLocale } from './task-language.js';
+import { loadTranscriptRowsForSession } from '../storage/sqlite/index.js';
+import { canResumeAfterModelFailure } from '../agent/orchestration/turn-recovery.js';
 
 const log = createLogger('TaskRunDispatcher');
 const LEASE_MS = 60_000;
@@ -49,6 +51,9 @@ export class TaskRunDispatcher {
     for (const run of this.#runs.listExpiredLeasedRunning()) {
       if (this.#activeRunIds.has(run.id)) continue;
       try {
+        if (run.conversationId && canResumeAfterModelFailure(loadTranscriptRowsForSession(run.conversationId))
+          && this.#runs.scheduleContinuation({ runId: run.id, expectedVersion: run.version, reason: 'process_restart',
+            message: 'Execution was interrupted by a process restart. Continue this same task from confirmed tool results. Do not repeat completed operations. If any external effect cannot be confirmed, ask for verification instead of replaying it.' })) continue;
         const task = this.#tasks.require(run.taskId);
         const zh = resolveTaskLocale(task) === 'zh';
         this.#application.completeRun({
@@ -117,6 +122,7 @@ export class TaskRunDispatcher {
           // Preserve the leased run for restart reconciliation after shutdown.
           if (this.#stopped) return;
           const current = this.#runs.get(run.id);
+          if (current?.status === 'waiting' && current.policySnapshot.continuation) continue;
           if (current && ['queued', 'running', 'waiting', 'verifying'].includes(current.status)) {
             this.#application.completeRun({
               runId: current.id,

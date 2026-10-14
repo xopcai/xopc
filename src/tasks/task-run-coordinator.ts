@@ -10,6 +10,9 @@ import { TaskRepository } from './task-repository.js';
 import { TaskRunRepository } from './task-run-repository.js';
 import { TaskResultDeliveryRepository } from './task-result-delivery-repository.js';
 import { resolveTaskLocale } from './task-language.js';
+import { loadTranscriptRowsForSession } from '../storage/sqlite/index.js';
+import { canResumeAfterModelFailure } from '../agent/orchestration/turn-recovery.js';
+import { isTransientProviderErrorMessage } from '../providers/model-response.js';
 
 export class TaskRunCoordinator {
   readonly #evidence: TaskEvidence[] = [];
@@ -28,6 +31,7 @@ export class TaskRunCoordinator {
     runId: string;
     context: ExecutionContext;
     fallbackObjective: string;
+    timeoutMs?: number;
   }): TaskRunCoordinator | undefined {
     if (!input.context.taskId) return undefined;
     const tasks = new TaskRepository();
@@ -52,6 +56,7 @@ export class TaskRunCoordinator {
         idempotencyKey: input.runId,
         contractVersion: task.latestContractVersion,
         conversationId: input.context.conversationId,
+        retryPolicy: { maxAttempts: 3 },
       });
       if (task.phase !== 'active') {
         tasks.setLifecycle({ taskId: task.id, expectedVersion: task.version, phase: 'active' });
@@ -74,6 +79,7 @@ export class TaskRunCoordinator {
         contextSnapshotId: snapshot.id,
         policySnapshot: { executorKind: 'agent' },
         conversationId: input.context.conversationId,
+        timeoutAt: Date.now() + (input.timeoutMs ?? 4 * 60 * 60 * 1000),
       }) ?? run;
     }
     if (startingQueuedRun && run.status === 'running' && new TaskAllocationRepository().get(task.id)) {
@@ -118,7 +124,12 @@ export class TaskRunCoordinator {
   finalize(input: { status: TaskRunReceipt['status']; summary: string; assistantText?: string }): void {
     const run = this.#runs.get(this.runId);
     if (!run || !['running', 'waiting', 'verifying'].includes(run.status)) return;
+    if (run.status === 'waiting' && run.policySnapshot.continuation) return;
     if (run.status === 'waiting' && this.#runs.listActiveWaits(run.taskId).length > 0) return;
+    if (input.status === 'failed' && isTransientProviderErrorMessage(input.summary) && run.conversationId
+      && canResumeAfterModelFailure(loadTranscriptRowsForSession(run.conversationId))
+      && this.#runs.scheduleContinuation({ runId: run.id, expectedVersion: run.version, reason: 'model_failure',
+        message: 'The previous model request failed. Continue the same task using the recorded completed tool results. Do not replay completed operations; finish only the remaining work.' })) return;
     const hasAssistantResult = Boolean(input.assistantText?.trim() && input.assistantText.trim() !== 'NO_REPLY');
     const hasBoardResult = new TaskCollaborationRepository().recent(run.taskId, undefined, 20)
       .some((entry) => entry.taskRunId === run.id && entry.kind === 'result');
@@ -127,6 +138,8 @@ export class TaskRunCoordinator {
     const task = new TaskRepository().require(run.taskId);
     const zh = resolveTaskLocale(task) === 'zh';
     const status = emptySuccess ? 'failed' : input.status;
+    const unconfirmedEffects = status === 'failed' && Boolean(run.conversationId
+      && !canResumeAfterModelFailure(loadTranscriptRowsForSession(run.conversationId)));
     const systemSummaries: Record<string, string> = { 'Message processed': '消息已处理', Interrupted: '执行已中断', 'Agent run ended unexpectedly': '助手执行意外结束' };
     const summary = emptySuccess ? (zh ? '助手执行未返回结果或证据' : 'Agent run returned no result or evidence')
       : zh ? systemSummaries[input.summary] ?? input.summary : input.summary;
@@ -140,10 +153,13 @@ export class TaskRunCoordinator {
         changes: this.#evidence.filter((item) => item.kind === 'state'),
         evidence: this.#evidence,
         verification: { status: 'unverified', checks: [] },
-        remainingWork: emptySuccess ? [task.contract?.objective ?? (zh ? '完成任务' : 'Complete the task')] : [],
-        needsUser: false,
+        remainingWork: emptySuccess ? [task.contract?.objective ?? (zh ? '完成任务' : 'Complete the task')]
+          : status === 'succeeded' ? task.contract?.acceptanceCriteria ?? [] : [],
+        needsUser: unconfirmedEffects,
         completionVerdict: status === 'succeeded' ? 'partial' : 'not_achieved',
-        ...(status === 'failed' ? { failure: { code: emptySuccess ? 'empty_agent_run' : 'agent_run_failed', phase: 'execution', recoveryAction: zh ? '使用其他可用助手或模型重试任务' : 'Retry the task run with another available Agent or model' } } : {}),
+        ...(status === 'failed' ? { failure: { code: unconfirmedEffects ? 'tool_outcome_unconfirmed' : emptySuccess ? 'empty_agent_run' : 'agent_run_failed', phase: 'execution',
+          recoveryAction: unconfirmedEffects ? (zh ? '检查上次操作的实际影响后再恢复任务' : 'Confirm the previous operation effects before resuming')
+            : zh ? '使用其他可用助手或模型重试任务' : 'Retry the task run with another available Agent or model' } } : {}),
       },
     });
   }

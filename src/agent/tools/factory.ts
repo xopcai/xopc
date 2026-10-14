@@ -81,6 +81,7 @@ import {
 import { createSessionSearchTool } from './session-search-tool.js';
 import { createPersonalReadTool } from './personal-read-tool.js';
 import { createPersonalTaskTool, type PersonalTaskToolDeps } from './personal-task-tool.js';
+import { createTaskCollaborationTool } from './task-collaboration-tool.js';
 import { createPersonalRequestTools } from './personal-request-tool.js';
 import { createPersonalRequestConnectionTool, createPersonalRequestResultTool } from './personal-request-result-tool.js';
 import { personalRequestForExecution } from '../../personal-agent/request-repository.js';
@@ -402,6 +403,7 @@ export class AgentToolsFactory {
         .filter(name => !allowed || allowed.has(name)));
       allowed.add('personal_request_result');
       allowed.add('personal_request_connection');
+      allowed.add('task_collaboration');
     }
     const deliveryContext = () => {
       if ((currentConversationId() && getSessionMetadata(currentConversationId()!)?.sessionType === 'heartbeat')) {
@@ -792,7 +794,8 @@ export class AgentToolsFactory {
           ]
         : []),
       ...optionalTools,
-      ...(personalExecution ? [createPersonalRequestResultTool(currentConversationId), createPersonalRequestConnectionTool(currentConversationId)] : []),
+      ...(personalExecution ? [createPersonalRequestResultTool(currentConversationId), createPersonalRequestConnectionTool(currentConversationId),
+        createTaskCollaborationTool({ ...productToolDeps, getCurrentConversationId: currentConversationId })] : []),
     ];
 
     if (['read_file', 'grep', 'exec_command', 'knowledge_search', 'knowledge_get', 'web_search', 'web_fetch', 'xopc_tool_execute'].some(name => !disabled?.has(name))) {

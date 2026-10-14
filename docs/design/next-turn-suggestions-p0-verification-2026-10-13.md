@@ -72,3 +72,18 @@ XOPC_LOG_LEVEL=fatal pnpm vitest run \
 ## 构建与静态检查
 
 `pnpm run typecheck`、Web production build、Node build，以及修改的聊天文件 ESLint 均通过。Web build 有现有的 chunk size / dynamic import 提示，没有构建失败。
+
+## 2026-10-14：删除后重复 Tab
+
+Tab 填入只采纳草稿，不再关闭建议。输入时保留缓存，仅隐藏展示；全部删除时立即恢复同一条建议，可再次 Tab，无需请求或重新生成。删除已采纳草稿会清除提交归因；成功发送或 Esc 隐藏后，本条建议保持隐藏。编辑期间继续监听输入 revision、reset 和过期，旧建议不会因删除草稿重新出现。
+
+相关回归测试共 24 项通过，涵盖实际 `ChatComposerInput` 的三次连续 Tab → 浏览器删除 → Tab、部分删除、清空后手写消息、拒绝提交后保留草稿、成功提交、主动隐藏、新输入与过期。验证重复采纳只请求一次，保持 placeholder＋Tab，无额外按钮。
+
+```sh
+XOPC_LOG_LEVEL=fatal pnpm vitest run \
+  web/src/features/chat/composer/__tests__/use-next-turn-suggestion.test.tsx \
+  web/src/features/chat/composer/__tests__/chat-composer-input-suggestion.test.tsx \
+  web/src/features/chat/composer/__tests__/use-composer-actions.test.tsx --project=web
+```
+
+本次 Web 构建（含 TypeScript 检查）和修改文件 ESLint 通过。

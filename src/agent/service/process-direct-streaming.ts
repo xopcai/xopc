@@ -42,6 +42,7 @@ import {
 import type { ReviewOutput } from '../../review/review-types.js';
 
 import { AsyncQueue, AsyncQueueOverflowError } from './async-queue.js';
+import { getTaskContinuation } from '../../tasks/task-continuation.js';
 import {
   hydratePerTurnState,
   runDirectAgentTurn,
@@ -275,7 +276,8 @@ export async function* runProcessDirectStreaming(
   deps.sessionStore?.idleCompaction?.interrupt(conversationId);
   const isConnectionResume = Boolean(input.runId && getConnectionResumeInput(conversationId, input.runId));
   const isClarificationResume = Boolean(input.runId && getClarificationResumeInput(conversationId, input.runId));
-  const isInternalResume = isConnectionResume || isClarificationResume;
+  const isInternalResume = isConnectionResume || isClarificationResume
+    || Boolean(input.runId && getTaskContinuation(conversationId, input.runId));
   const isTaskUpdate = input.origin.type === 'system' && input.origin.source === 'task_update';
   const { channel, chatId } = await deps.resolveSessionEndpoint(conversationId);
   const context = deps.initDirectStreamingSession(conversationId, channel, chatId, input.origin);
@@ -628,6 +630,8 @@ export async function* runProcessDirectStreaming(
       yield event;
     }
     await taskPromise;
+    if (streamOverflowed) yield { type: 'error', runId: input.runId,
+      content: formatStreamError('Agent stream stopped because its critical event buffer overflowed') };
 
     if (channel === 'webchat' && ranSlashCommand) {
       try {
