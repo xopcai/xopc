@@ -80,6 +80,7 @@ createConversation({ agentId: personal.agent_id, sourceChannel: 'webchat', name:
 setSessionConfig(personal.conversation_id, { modelOverride: selection.model_override, fixedModel: true,
   thinkingLevel: selection.thinking_level as 'off' }, directory);
 
+const toolCalls: Array<{ name: string; command?: string; durationMs: number; failed: boolean; error?: string }> = [];
 const timings: Record<string, number> = {};
 const timeline: Array<{ stage: string; timestamp: string; elapsedMs: number }> = [];
 let baseline = Date.now();
@@ -103,15 +104,24 @@ TaskApplicationService.prototype.create = function (...args) {
 const originalTools = AgentToolsFactory.prototype.createAllTools;
 AgentToolsFactory.prototype.createAllTools = function (...args) {
   const tools = originalTools.apply(this, args);
-  for (const tool of tools) if (tool.name === 'personal_task') {
+  const isMain = args[0]?.conversationId === personal.conversation_id || args[0]?.agentId === personal.agent_id;
+  for (const tool of tools) if (isMain || tool.name === 'personal_task') {
     const execute = tool.execute;
     tool.execute = async function (...callArgs) {
-      const isSubmit = (callArgs[1] as { command: string }).command === 'submit';
+      const command = (callArgs[1] as { command?: string }).command;
+      const isSubmit = tool.name === 'personal_task' && command === 'submit';
       const started = performance.now();
       if (isSubmit) mark('submitToolStarted');
-      const result = await execute.apply(this, callArgs);
-      if (isSubmit) { timings.submitToolMs = performance.now() - started; mark('submitToolReturned'); }
-      return result;
+      try {
+        const result = await execute.apply(this, callArgs);
+        toolCalls.push({ name: tool.name, command, durationMs: performance.now() - started, failed: false });
+        if (isSubmit) { timings.submitToolMs = performance.now() - started; mark('submitToolReturned'); }
+        return result;
+      } catch (error) {
+        toolCalls.push({ name: tool.name, command, durationMs: performance.now() - started, failed: true,
+          error: error instanceof Error ? error.message : String(error) });
+        throw error;
+      }
     };
   }
   return tools;
@@ -119,7 +129,12 @@ AgentToolsFactory.prototype.createAllTools = function (...args) {
 
 const fixture = join(directory, 'shared', 'sales.csv');
 mkdirSync(join(directory, 'shared'), { recursive: true });
-writeFileSync(fixture, 'date,amount\n2026-01-01,100\n2026-01-15,50\n2026-02-01,120\n2026-02-15,90\n');
+const fixtureContent = 'date,amount\n2026-01-01,100\n2026-01-15,50\n2026-02-01,120\n2026-02-15,90\n';
+writeFileSync(fixture, fixtureContent);
+// Stage identical synthetic input in each candidate workspace; do not change sandbox permissions.
+for (const agent of catalog.list({ readyOnly: true })) {
+  if (agent.workspace) writeFileSync(join(agent.workspace, 'sales.csv'), fixtureContent);
+}
 const marker = `LIVE-ALLOCATION-${randomUUID().slice(0, 8)}`;
 const service = new GatewayService({ configPath, enableHotReload: false, listenPort: 0 });
 let server: ReturnType<typeof serve> | undefined;
@@ -152,7 +167,7 @@ try {
   };
   baseline = Date.now();
   mark('requestSent');
-  await append(`${marker}-task`, `这是实际执行任务 ${marker}：请安排有数据分析能力的执行者分析 ${fixture} 的月度销售额及环比。在执行者工作区创建 monthly_summary.csv、report.md 和 reproduce.mjs，实际运行脚本核验并把报告作为成果返回。验收：一月总额150、二月210、环比40%；报告说明统计口径并提供可复现脚本。允许读取此临时CSV、在本次隔离工作区写文件和运行计算脚本。不要在主对话手算代替执行，也不要等后台结束才回复。`);
+  await append(`${marker}-task`, `这是实际执行任务 ${marker}：请安排有数据分析能力的执行者分析其工作区已经准备好的 sales.csv 的月度销售额及环比。在执行者工作区创建 monthly_summary.csv、report.md 和 reproduce.mjs，实际运行脚本核验并把报告作为成果返回。请独立计算各月总额和环比，报告说明统计口径并提供可复现脚本。允许读取此临时CSV、在本次隔离工作区写文件和运行计算脚本。不要在主对话手算代替执行，也不要等后台结束才回复。`);
   mark('requestAccepted');
   let pingSent = false;
   let lastState = '';
@@ -181,7 +196,7 @@ try {
       if (state !== lastState) { console.log(JSON.stringify({ taskState: state, elapsedMs: Date.now() - baseline })); lastState = state; }
       const initial = db.prepare('SELECT status,updated_at_ms AS completed_at_ms FROM session_inputs WHERE conversation_id = ? AND client_message_id = ?').get(personal.conversation_id, `${marker}-task`) as { status: string; completed_at_ms: number | null };
       if (initial.status === 'completed') mark('personalInitialCompleted', initial.completed_at_ms ?? Date.now());
-      if (!pingSent && initial.status === 'completed' && !run?.completed_at) {
+      if (!pingSent && initial.status === 'completed' && run?.status === 'running') {
         pingSent = true;
         mark('pingSent');
         await append(`${marker}-ping`, `现在只回复 ${marker}-READY，不要等待后台任务，不需要查询进度。`);
@@ -199,14 +214,18 @@ try {
       if (['blocked', 'failed'].includes(allocation.status)) throw new Error(`Allocation ${allocation.status}: ${allocation.reason_code}`);
       if (run?.status === 'failed') throw new Error('Specialist execution failed');
     }
+    if (!task && Date.now() - baseline > 30_000) throw new Error('No Task was persisted within 30 seconds');
     await new Promise(resolve => setTimeout(resolve, 100));
   }
   assert.ok(timings.personalResultDelivered, 'Timed out waiting for the result to return to the personal conversation');
   const allocation = db.prepare('SELECT selected_agent_id,selection_reason,attempts FROM task_allocations WHERE task_id = ?').get(taskId!) as { selected_agent_id: string; selection_reason: string; attempts: number };
   const history = await api(`/api/sessions/${personal.conversation_id}/history?view=compact`);
   assert.equal(allocation.selected_agent_id, 'data-analyst', 'The router should select the data Specialist for this synthetic task');
-  assert.ok(timings.pingCompleted && timings.pingCompleted < timings.runCompleted, 'The main conversation must answer the ping before execution finishes');
-  assert.ok(JSON.stringify(history).includes(`${marker}-READY`), 'The ping answer must appear in main history');
+  assert.ok(timings.pingSent >= timings.runStarted && timings.pingCompleted && timings.pingCompleted < timings.runCompleted, 'The main conversation must answer the ping before execution finishes');
+  const assistantMessages = history.session.messages.filter((message: { role: string }) => message.role === 'assistant');
+  assert.ok(assistantMessages.some((message: { content: string }) => message.content === `${marker}-READY`), 'The actual assistant ping answer must appear in main history');
+  assert.ok(assistantMessages.some((message: { content: string }) => /data-analyst.*(开始执行|started)|started.*data-analyst/.test(message.content)), 'Execution status must identify the assigned Agent');
+  assert.ok(!assistantMessages.some((message: { content: string }) => /undefined.*开始执行|started by undefined/.test(message.content)), 'Execution status must not lose the executor identity');
   const delivery = db.prepare('SELECT reply_text, payload_json FROM task_result_deliveries WHERE task_run_id IN (SELECT run_id FROM task_runs WHERE task_id = ?) ORDER BY delivered_at DESC LIMIT 1')
     .get(taskId!) as { reply_text: string | null; payload_json: string };
   assert.ok(delivery.reply_text?.trim(), 'A generated result reply must reach the main conversation');
@@ -217,6 +236,33 @@ try {
   assert.ok(existsSync(join(workspace, 'reproduce.mjs')), 'The reproducible script must exist');
   const routerCalls = db.prepare("SELECT COUNT(*) AS count FROM ai_usage_events WHERE operation = 'task.allocation' AND status = 'succeeded'").get() as { count: number };
   assert.ok(routerCalls.count > 0, 'The real Task Router model must choose the executor; deterministic or user-selected bypass does not qualify');
+  const mainToolResults = db.prepare(`SELECT e.payload_json FROM transcript_entries e JOIN transcripts t ON t.transcript_id = e.transcript_id
+    WHERE t.conversation_id = ? AND e.role = 'toolResult' ORDER BY e.seq`).all(personal.conversation_id)
+    .map(row => JSON.parse((row as { payload_json: string }).payload_json) as { toolName: string; isError?: boolean });
+  assert.deepEqual(mainToolResults.map(result => result.toolName), ['personal_task'], 'Main submission and concurrent ping must not pre-read inputs or call other tools');
+  assert.ok(!mainToolResults.some(result => result.isError), 'Main transcript must not contain tool argument or execution errors');
+  report.mainToolResults = mainToolResults.map(({ toolName, isError }) => ({ toolName, isError: Boolean(isError) }));
+  const workerToolErrors = (db.prepare(`SELECT COUNT(*) AS count FROM transcript_entries e JOIN transcripts t ON t.transcript_id = e.transcript_id
+    WHERE t.conversation_id != ? AND e.role = 'toolResult' AND json_extract(e.payload_json, '$.isError') = 1`).get(personal.conversation_id) as { count: number }).count;
+  report.workerToolErrors = workerToolErrors;
+  assert.equal(workerToolErrors, 0, 'Stable specialist execution must not recover from tool errors');
+  const scriptExecutions = db.prepare(`SELECT e.payload_json FROM transcript_entries e WHERE e.role = 'toolResult'
+    AND json_extract(e.payload_json, '$.toolName') = 'exec_command' AND json_extract(e.payload_json, '$.details.status') = 'success'`).all()
+    .map(row => JSON.parse((row as { payload_json: string }).payload_json) as { details?: { command?: string } })
+    .filter(result => /\bnode\s+(?:['"]?\.\/)?reproduce\.mjs/.test(result.details?.command ?? ''));
+  assert.ok(scriptExecutions.length > 0, 'The reproducible script must be executed successfully through the worker command tool');
+  report.successfulScriptExecutions = scriptExecutions.length;
+  assert.equal((db.prepare('SELECT COUNT(*) AS count FROM tasks').get() as { count: number }).count, 1, 'Submission must create exactly one Task');
+  assert.equal((db.prepare('SELECT COUNT(*) AS count FROM task_runs WHERE task_id = ?').get(taskId!) as { count: number }).count, 1, 'Allocation must queue exactly one executor');
+  assert.equal(allocation.attempts, 1, 'A stable allocation must not require retry');
+  assert.equal(toolCalls.filter(call => call.name === 'personal_task' && call.command === 'submit').length, 1, 'The main Agent must submit once without tool retries');
+  assert.ok(!toolCalls.some(call => call.failed), 'Main tools must not fail or require recovery');
+  assert.ok(!toolCalls.some(call => ['get', 'list', 'match', 'agents'].includes(call.command ?? '')), 'The main Agent must not poll or perform executor discovery');
+  assert.ok(timings.submitToolMs <= 250, 'Submit persistence exceeded the 250ms smoke budget');
+  assert.ok(timings.taskPersisted - timings.requestSent <= 20_000, 'Main Task briefing exceeded the 20s smoke budget');
+  assert.ok(timings.assigned - timings.taskPersisted <= 15_000, 'Allocation exceeded the 15s smoke budget');
+  assert.ok(timings.personalInitialCompleted - timings.submitToolReturned <= 5_000, 'Main submission acknowledgement exceeded the 5s smoke budget');
+  assert.ok(timings.pingCompleted - timings.pingSent <= 5_000, 'Main conversation response exceeded the 5s smoke budget');
   report = { ...report, allocation, history, resultReply: delivery.reply_text, reportContent: analysis,
     durationMs: { submitHost: timings.submitHostMs, submitTool: timings.submitToolMs,
       requestToSubmit: timings.taskPersisted - timings.requestSent,
@@ -233,12 +279,12 @@ try {
   process.exitCode = 1;
 } finally {
   const task = taskId ? db.prepare('SELECT task_id,title,phase,delegate_agent_id FROM tasks WHERE task_id = ?').get(taskId) : undefined;
-  const usage = db.prepare(`SELECT operation,provider,model,status,started_at,finished_at,duration_ms,input_tokens,output_tokens,reasoning_tokens,error_summary
+  const usage = db.prepare(`SELECT operation,provider,model,status,started_at,finished_at,duration_ms,input_tokens,output_tokens,cache_read_tokens,cache_write_tokens,reasoning_tokens,error_summary
     FROM ai_usage_events ORDER BY started_at`).all();
   const inputs = db.prepare('SELECT client_message_id,status,created_at_ms,updated_at_ms,error FROM session_inputs ORDER BY created_at_ms').all();
   report = { ...report, success: !failure, failure, marker, task,
     models: { personal: selection.model_override, global: JSON.parse(settings.defaults_json).models.chat.primary },
-    timeline, rawTimings: timings, usage, inputs, isolatedStateDirectory: directory };
+    timeline, rawTimings: timings, toolCalls, usage, inputs, isolatedStateDirectory: directory };
   mkdirSync(join(reportPath, '..'), { recursive: true });
   writeFileSync(reportPath, JSON.stringify(report, null, 2) + '\n');
   console.log(JSON.stringify({ reportPath, success: !failure }));
@@ -248,3 +294,5 @@ try {
   // The credential directory is shared; never delete it during isolated-state cleanup.
   rmSync(configPath, { force: true });
 }
+// Standalone smoke runners must not retain SDK/socket/worker handles after Gateway shutdown.
+process.exit(process.exitCode ?? 0);

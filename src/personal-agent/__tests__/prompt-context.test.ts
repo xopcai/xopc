@@ -28,19 +28,17 @@ beforeEach(() => {
 afterEach(() => { closeXopcDatabase(); resetXopcDatabaseSingletonForTest(); });
 
 describe('personal prompt snapshot', () => {
-  it('refreshes Agent changes without reloading the unchanged catalog', () => {
-    catalog.create({ id: 'researcher', toolAllowlist: ['web_search'], profile: { name: 'Researcher', description: 'Research current facts' } }, { ready: true });
+  it('does not scan or inject the specialist directory into the personal prompt', () => {
+    catalog.create({ id: 'researcher', toolAllowlist: ['web_search'], profile: { name: 'Researcher' } }, { ready: true });
     const list = vi.spyOn(AgentCatalogRepository.prototype, 'list');
     const builder = new PersonalPromptContext();
     const first = builder.build(config, conversationId)!;
-    expect(first).toContain('researcher');
-    expect(first).toContain('web_search');
-    expect(first.length).toBeLessThanOrEqual(2000);
+    expect(first).not.toContain('researcher');
+    expect(first).not.toContain('web_search');
+    expect(first).not.toContain('Specialists');
+    expect(first).toContain('Delegated tasks');
     expect(builder.build(config, conversationId)).toBe(first);
-    expect(list).toHaveBeenCalledTimes(1);
-    catalog.update('researcher', catalog.get('researcher')!.revision, { id: 'researcher', enabled: false });
-    expect(builder.build(config, conversationId)).not.toContain('researcher');
-    expect(list).toHaveBeenCalledTimes(2);
+    expect(list).not.toHaveBeenCalled();
     list.mockRestore();
   });
 

@@ -19,10 +19,14 @@ import { TaskConversationRepository } from '../../tasks/task-conversation-reposi
 import { TaskRunRepository } from '../../tasks/task-run-repository.js';
 import { TaskRepository } from '../../tasks/task-repository.js';
 import { TaskRunCoordinator } from '../../tasks/task-run-coordinator.js';
+import { cancelPersonalTask } from '../task-cancel.js';
+import { TaskAllocationDispatcher } from '../../tasks/task-allocation-service.js';
+import { TaskAllocationRepository } from '../../tasks/task-allocation-repository.js';
 import { TaskRunDispatcher } from '../../tasks/task-run-dispatcher.js';
 import { ConnectionRecoveryService } from '../../connectors/connection-recovery-service.js';
 import type { ComposioSessionsAdapter } from '../../connectors/composio-sessions.js';
 import { TaskMainUpdateDelivery } from '../../tasks/task-main-update-delivery.js';
+import { createPersonalRequestTools } from '../../agent/tools/personal-request-tool.js';
 import { createPersonalRequestResultTool } from '../../agent/tools/personal-request-result-tool.js';
 import { resolveExecutionToolPolicy } from '../../agent/embedded/execution-tool-policy.js';
 import { createExternalToolGatewayTools } from '../../agent/external-tools/gateway-tools.js';
@@ -105,6 +109,84 @@ describe('Personal connected-app requests', () => {
     expect(() => submitPersonalRequest({ conversationId, connectorId: 'composio-gmail', agentId: 'mail-worker', objective: 'different', idempotencyKey: 'request-1' })).toThrow('Idempotency');
   });
 
+  it('submits without foreground executor selection and assigns within account permissions', async () => {
+    connection();
+    const catalog = new AgentCatalogRepository();
+    catalog.create({ id: 'other-mail-worker', profile: { name: 'Other mail worker' },
+      toolAllowlist: ['xopc_tool_search', 'xopc_tool_describe', 'xopc_tool_execute'] }, { ready: true });
+    const accountId = personalCapabilities(conversationId, 'gmail')[0].accounts[0].accountId;
+    getSqliteDatabase().prepare('UPDATE connector_accounts SET allowed_agent_ids_json = ? WHERE id = ?')
+      .run(JSON.stringify([agentId, 'mail-worker']), accountId);
+    const request = submitPersonalRequest({ conversationId, connectorId: 'composio-gmail', objective: '查一下重要邮件', idempotencyKey: 'auto-request' });
+    expect(request.parameters.allocate).toBe(true);
+    expect(new TaskRunRepository().listByTask(request.taskId!)).toHaveLength(0);
+    const dispatch = new TaskAllocationDispatcher({ context: () => ({ ownAgentId: agentId,
+      getAgentToolAvailability: (_id, name) => ({ condition: `tool:${name}`, state: 'verified', reasonCode: 'registered' }) }),
+      wake: vi.fn(), decide: vi.fn(async ({ candidates }) => {
+        expect(candidates.map(candidate => candidate.id)).toEqual(['mail-worker']);
+        return { kind: 'select', agentId: 'mail-worker', reason: 'Authorized mail specialist' };
+      }) });
+    await dispatch.drain();
+    expect(getPersonalRequest(request.requestId)?.executorAgentId).toBe('mail-worker');
+    expect(new TaskRunRepository().listByTask(request.taskId!)).toHaveLength(1);
+    expect(new AgentSelectionRepository().list(conversationId, { requestId: request.requestId })).toHaveLength(1);
+  });
+
+  it('blocks background assignment if account authorization is revoked after submission', async () => {
+    const connected = connection();
+    const request = submitPersonalRequest({ conversationId, connectorId: 'composio-gmail', objective: '查一下重要邮件', idempotencyKey: 'revoked-auto' });
+    getSqliteDatabase().prepare('UPDATE connector_accounts SET enabled = 0 WHERE id = ?').run(connected.accountId);
+    await new TaskAllocationDispatcher({ context: () => ({ ownAgentId: agentId,
+      getAgentToolAvailability: (_id, name) => ({ condition: `tool:${name}`, state: 'verified', reasonCode: 'registered' }) }), wake: vi.fn() }).drain();
+    expect(new TaskAllocationRepository().summary(request.taskId!)?.status).toBe('blocked');
+    expect(new TaskRunRepository().listByTask(request.taskId!)).toHaveLength(0);
+  });
+
+  it('rechecks account permission after the router decision before starting any executor', async () => {
+    const connected = connection();
+    new AgentCatalogRepository().create({ id: 'second-mail-worker', profile: { name: 'Second mail worker' },
+      toolAllowlist: ['xopc_tool_search', 'xopc_tool_describe', 'xopc_tool_execute'] }, { ready: true });
+    const request = submitPersonalRequest({ conversationId, connectorId: 'composio-gmail', objective: '查看邮件', idempotencyKey: 'revoke-during-routing' });
+    const decide = vi.fn(async () => {
+      getSqliteDatabase().prepare('UPDATE connector_accounts SET enabled = 0 WHERE id = ?').run(connected.accountId);
+      return { kind: 'select' as const, agentId: 'mail-worker', reason: 'Mail expertise' };
+    });
+    await new TaskAllocationDispatcher({ context: () => ({ ownAgentId: agentId,
+      getAgentToolAvailability: (_id, name) => ({ condition: `tool:${name}`, state: 'verified', reasonCode: 'registered' }) }), decide, wake: vi.fn() }).drain();
+    expect(decide).toHaveBeenCalledOnce();
+    expect(new TaskRunRepository().listByTask(request.taskId!)).toHaveLength(0);
+    expect(new TaskAllocationRepository().summary(request.taskId!)?.status).toBe('blocked');
+  });
+
+  it('cancels and replays a connected request through the actual Personal tool', async () => {
+    connection();
+    const request = submit();
+    const tool = createPersonalRequestTools({ getCurrentConversationId: () => conversationId }).find(tool => tool.name === 'personal_request')!;
+    const result = await tool.execute('cancel-request-tool', { command: 'cancel', requestId: request.requestId });
+    expect(JSON.parse((result.content[0] as { text: string }).text)).toMatchObject({ state: 'cancelled', executionStopConfirmed: true });
+    expect(getPersonalRequest(request.requestId)?.state).toBe('cancelled');
+    const replay = await tool.execute('cancel-request-replay', { command: 'cancel', requestId: request.requestId });
+    expect(JSON.parse((replay.content[0] as { text: string }).text)).toMatchObject({ state: 'cancelled', executionStopConfirmed: true });
+  });
+
+  it('persists request cancellation after the task control plane has already cancelled its run', async () => {
+    connection();
+    const request = submit();
+    await cancelPersonalTask(request.taskId!, conversationId, 'cancel-connected-run');
+    expect(getPersonalRequest(request.requestId)?.state).toBe('queued');
+    cancelPersonalRequest(request);
+    expect(getPersonalRequest(request.requestId)?.state).toBe('cancelled');
+  });
+
+  it('cancels an unallocated connected request so the router cannot launch it', async () => {
+    connection();
+    const request = submitPersonalRequest({ conversationId, connectorId: 'composio-gmail', objective: '查一下重要邮件', idempotencyKey: 'cancel-auto' });
+    cancelPersonalRequest(request);
+    await new TaskAllocationDispatcher({ context: () => ({ ownAgentId: agentId }), wake: vi.fn() }).drain();
+    expect(new TaskRepository().require(request.taskId!).resolution).toBe('cancelled');
+    expect(new TaskRunRepository().listByTask(request.taskId!)).toHaveLength(0);
+  });
+
   it('freezes an explicit seven-day default against the original input time', () => {
     connection();
     const input = { conversationId, connectorId: 'composio-gmail', agentId: 'mail-worker', objective: '查看重要邮件', idempotencyKey: 'default-range' };
@@ -113,6 +195,23 @@ describe('Personal connected-app requests', () => {
     expect(range.expression).toContain('no time range specified');
     expect(Date.parse(range.to) - Date.parse(range.from)).toBe(7 * 24 * 60 * 60_000);
     expect(submitPersonalRequest(input).parameters.timeRange).toEqual(range);
+  });
+
+  it('preserves background routing when connection completes later', async () => {
+    const request = submitPersonalRequest({ conversationId, connectorId: 'composio-gmail', objective: '查看邮件', idempotencyKey: 'connect-auto' });
+    expect(request.state).toBe('waiting_connection');
+    const account = connection();
+    const wait = getActiveConnectionWait(conversationId)!;
+    const ready = updateConnectionWait({ ...wait, needs: wait.needs.map(need => ({ ...need, accountId: account.accountId, connectionId: account.id })) }, wait.version);
+    queueConnectionResolution(ready, 'continued', resolvePersonalRequestConnection);
+    const resumed = getPersonalRequest(request.requestId)!;
+    expect(resumed.parameters.allocate).toBe(true);
+    expect(new TaskAllocationRepository().summary(resumed.taskId!)?.status).toBe('pending');
+    expect(new TaskRunRepository().listByTask(resumed.taskId!)).toHaveLength(0);
+    await new TaskAllocationDispatcher({ context: () => ({ ownAgentId: agentId,
+      getAgentToolAvailability: (_id, name) => ({ condition: `tool:${name}`, state: 'verified', reasonCode: 'registered' }) }), wake: vi.fn() }).drain();
+    expect(getPersonalRequest(request.requestId)?.executorAgentId).toBe('mail-worker');
+    expect(new TaskRunRepository().listByTask(resumed.taskId!)).toHaveLength(1);
   });
 
   it('keeps authorization in the main chat and resumes without another main-model input', () => {
