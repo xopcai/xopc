@@ -19,11 +19,12 @@ import { TaskAllocationRepository } from '../../tasks/task-allocation-repository
 import { cancelPersonalTask } from '../../personal-agent/task-cancel.js';
 import { boundedPersonalResult } from './personal-result-budget.js';
 import { TaskRepository } from '../../tasks/task-repository.js';
+import { TaskCollaborationRepository } from '../../tasks/task-collaboration-repository.js';
 import { TaskOriginRepository } from '../../tasks/task-origin-repository.js';
 import { createXopcUseTool, type XopcUseToolDeps } from './xopc-use-tool.js';
 
 const PersonalTaskSchema = Type.Object({
-  command: Type.Union([Type.Literal('retry_allocation'), Type.Literal('submit'), Type.Literal('agents'), Type.Literal('match'), Type.Literal('selection'), Type.Literal('create'), Type.Literal('list'), Type.Literal('get'), Type.Literal('instruct'), Type.Literal('answer'), Type.Literal('cancel')]),
+  command: Type.Union([Type.Literal('retry_allocation'), Type.Literal('submit'), Type.Literal('agents'), Type.Literal('match'), Type.Literal('selection'), Type.Literal('create'), Type.Literal('list'), Type.Literal('get'), Type.Literal('collaboration'), Type.Literal('entry'), Type.Literal('instruct'), Type.Literal('answer'), Type.Literal('cancel')]),
   requirements: Type.Optional(Type.Object({
     version: Type.Optional(Type.Literal(1)), summary: Type.String({ maxLength: 300 }),
     domain: Type.Optional(Type.String()), taskType: Type.Optional(Type.String()),
@@ -45,6 +46,10 @@ const PersonalTaskSchema = Type.Object({
   agentId: Type.Optional(Type.String({ description: 'Specialist Agent ID. Never use your own ID.' })),
   taskId: Type.Optional(Type.String()),
   instruction: Type.Optional(Type.String({ description: 'The user’s new direction for this delegated Task.' })),
+  entryId: Type.Optional(Type.String({ description: 'Read one complete collaboration entry, including its question or instruction body.' })),
+  afterSequence: Type.Optional(Type.Integer({ minimum: 0 })),
+  bodyOffset: Type.Optional(Type.Integer({ minimum: 0, description: 'Character offset for an entry body; follow nextBodyOffset until absent.' })),
+  section: Type.Optional(Type.Union(['task', 'waits', 'runs', 'receipts', 'context', 'conversation', 'sessions', 'authorityGrants', 'dependencies', 'dependents', 'criterionReviews'].map(value => Type.Literal(value)))),
   questionId: Type.Optional(Type.String({ description: 'Collaboration question ID to answer.' })),
   expectedOutputs: Type.Optional(Type.Array(Type.String())),
   acceptanceCriteria: Type.Optional(Type.Array(Type.String())),
@@ -58,11 +63,12 @@ const PersonalTaskSchema = Type.Object({
 const PersonalTaskModelSchema = Type.Object({
   ...Type.Omit(PersonalTaskSchema, ['agentId', 'selectionReason', 'selectionSource', 'previousSelectionId', 'matchId', 'cursor', 'requiredTools']).properties,
   requirements: Type.Optional(Type.Omit(PersonalTaskSchema.properties.requirements, ['requiredTools', 'requiredSkills'], { additionalProperties: false })),
-  command: Type.Union((['submit', 'list', 'get', 'instruct', 'answer', 'retry_allocation', 'selection', 'cancel'] as const).map(command => Type.Literal(command))),
+  command: Type.Union((['submit', 'list', 'get', 'collaboration', 'entry', 'instruct', 'answer', 'retry_allocation', 'selection', 'cancel'] as const).map(command => Type.Literal(command))),
 }, { additionalProperties: false, anyOf: [
   { properties: { command: { const: 'submit' } }, required: ['objective', 'description'] },
   { properties: { command: { enum: ['list', 'selection'] } } },
-  { properties: { command: { enum: ['get', 'retry_allocation', 'cancel'] } }, required: ['taskId'] },
+  { properties: { command: { enum: ['get', 'collaboration', 'retry_allocation', 'cancel'] } }, required: ['taskId'] },
+  { properties: { command: { const: 'entry' } }, required: ['taskId', 'entryId'] },
   { properties: { command: { const: 'instruct' } }, required: ['taskId', 'instruction'] },
   { properties: { command: { const: 'answer' } }, required: ['taskId', 'instruction', 'questionId'] },
 ] });
@@ -99,7 +105,7 @@ export function createPersonalTaskTool(deps: PersonalTaskToolDeps): AgentTool<ty
   return {
     name: 'personal_task',
     label: 'Personal Task',
-    description: 'Submit objective and a concise complete description, then return after local persistence. Preserve the user request and source references without inventing an execution plan or extra requirements. Omit optional structured fields when they merely repeat the description. Describe required capabilities in the brief; the background Task Router selects one executor and checks its tools. Do not read input files, select Agents or invent tool names before submit. Set requirements.requestedAgentId only for an executor explicitly named by the user, using their ID or display name; preserve explicitly requested requiredSkills. get/list inspect existing Tasks with limit/offset; cancel stops a Task on explicit user instruction and reports execution stop confirmation; instruct/answer send context; retry_allocation retries selection before execution; selection explains assignment. Status and results return automatically. Preserve idempotencyKey on uncertain retries. Report only confirmed states.',
+    description: 'Submit objective and a concise complete description, then return after local persistence. Preserve the user request and source references without inventing an execution plan or extra requirements. Omit optional structured fields when they merely repeat the description. Describe required capabilities in the brief; the background Task Router selects one executor and checks its tools. Do not read input files, select Agents or invent tool names before submit. Set requirements.requestedAgentId only for an executor explicitly named by the user, using their ID or display name; preserve explicitly requested requiredSkills. get reads Task state, waits, runs, receipts and context; use section and limit/offset for complete paginated details. collaboration reads ordered message previews with afterSequence; entry reads exact message bodies using entryId and nextBodyOffset. Read full questions before answering. Delivery pending means saved, delivered means sent, confirmed means the executor acknowledged it; confirmation alone is not verified completion. get/list inspect existing Tasks with limit/offset; cancel stops a Task on explicit user instruction and reports execution stop confirmation; instruct/answer send context; retry_allocation retries selection before execution; selection explains assignment. Status and results return automatically. Preserve idempotencyKey on uncertain retries. Report only confirmed states.',
     parameters: PersonalTaskModelSchema,
     mutatesWorkspace: true,
     mutationScope: 'external',
@@ -243,6 +249,24 @@ export function createPersonalTaskTool(deps: PersonalTaskToolDeps): AgentTool<ty
         if (!new TaskOriginRepository().owns(taskId, conversationId)) {
           throw new Error('Task does not belong to this personal conversation');
         }
+        if (command === 'collaboration' || command === 'entry') {
+          const board = new TaskCollaborationRepository();
+          if (command === 'entry') {
+            const entry = input.entryId ? board.get(input.entryId) : undefined;
+            if (!entry || entry.taskId !== taskId) throw new Error('Entry does not belong to this Task');
+            const offset = input.bodyOffset ?? 0;
+            const body = entry.body.slice(offset, offset + 4000);
+            const payload = { ok: true, entry: { ...entry, body }, bodyOffset: offset, bodyLength: entry.body.length,
+              ...(offset + body.length < entry.body.length ? { nextBodyOffset: offset + body.length } : {}) };
+            return { content: [{ type: 'text', text: JSON.stringify(payload) }], details: {} };
+          }
+          const limit = input.limit ?? 10;
+          const entries = board.list(taskId, input.afterSequence ?? 0, limit + 1);
+          const items = entries.slice(0, limit).map(entry => ({ ...entry, body: entry.body.slice(0, 600),
+            bodyLength: entry.body.length, ...(entry.body.length > 600 ? { excerpt: true, readEntryId: entry.id } : {}) }));
+          return { content: [{ type: 'text', text: JSON.stringify({ ok: true, items,
+            ...(entries.length > limit ? { nextAfterSequence: items.at(-1)?.sequence } : {}) }) }], details: {} };
+        }
         if (command === 'cancel') {
           const result = await cancelPersonalTask(taskId, conversationId, input.idempotencyKey ?? toolCallId);
           deps.dispatchTaskRuns?.();
@@ -257,6 +281,7 @@ export function createPersonalTaskTool(deps: PersonalTaskToolDeps): AgentTool<ty
           if (command === 'answer' && !input.questionId?.trim()) throw new Error('questionId is required');
           command = 'collaboration_post';
           args = { taskId, kind: input.command === 'answer' ? 'answer' : 'instruction', body,
+            idempotencyKey: input.idempotencyKey?.trim() || `personal-collaboration:${selectionRequestHash({ inputId: getSessionInputState(conversationId).activeInputId ?? toolCallId, taskId, kind: input.command, body, questionId: input.questionId })}`,
             ...(input.command === 'answer' ? { causationId: input.questionId!.trim() } : {}) };
         } else {
           args = { taskId };
@@ -280,9 +305,25 @@ export function createPersonalTaskTool(deps: PersonalTaskToolDeps): AgentTool<ty
           return { content: [{ type: 'text', text: appendProductDeliveryText(JSON.stringify(confirmation, null, 2), result.details.delivery) }], details: {} };
         }
         if (payload && input.command === 'get') {
-          return { content: [{ type: 'text', text: JSON.stringify(boundedPersonalResult({ ok: payload.ok, task: payload.task,
-            allocation: new TaskAllocationRepository().summary(input.taskId!), operationalState: payload.operationalState,
-            attention: payload.attention, allowedCommands: payload.allowedCommands })) }], details: {} };
+          const offset = input.offset ?? 0;
+          const limit = input.limit ?? 10;
+          const read: Record<string, unknown> = input.section ? { ok: payload.ok, [input.section]: payload[input.section] } : { ...payload };
+          const pagination: Record<string, unknown> = {};
+          for (const key of ['waits', 'runs', 'receipts', 'context', 'sessions', 'authorityGrants', 'dependencies', 'dependents', 'criterionReviews']) {
+            const value = read[key];
+            if (!Array.isArray(value)) continue;
+            read[key] = value.slice(offset, offset + limit);
+            pagination[key] = { total: value.length, offset, ...(offset + limit < value.length ? { nextOffset: offset + limit } : {}) };
+          }
+          if (!input.section) {
+            const board = new TaskCollaborationRepository();
+            read.collaboration = board.recent(input.taskId!, undefined, 10).map(entry => ({ ...entry,
+              body: entry.body.slice(0, 600), bodyLength: entry.body.length,
+              ...(entry.body.length > 600 ? { excerpt: true, readEntryId: entry.id } : {}) }));
+            read.allocation = new TaskAllocationRepository().summary(input.taskId!);
+            read.guidance = 'Read entry for complete question/instruction bodies; collaboration with afterSequence pages the whole board. get(section, offset) pages state details. pending is saved, delivered is sent, confirmed is acknowledged; verification and Task acceptance are separate.';
+          }
+          return { content: [{ type: 'text', text: JSON.stringify({ ...read, pagination }) }], details: {} };
         }
         if (payload && input.command === 'list') {
           return { content: [{ type: 'text', text: JSON.stringify(boundedPersonalResult({ ...payload, offset: input.offset ?? 0 })) }], details: {} };

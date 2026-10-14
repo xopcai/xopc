@@ -59,6 +59,13 @@ export class TaskCollaborationRepository {
     return rows.reverse().map(fromRow);
   }
 
+  /** Durable changes and acknowledgements, independent of the recent-chat window. */
+  coordination(taskId: string): TaskCollaborationEntry[] {
+    return (getSqliteDatabase().prepare(`${ENTRY_SELECT}
+      WHERE entry.task_id = ? AND entry.kind IN ('question', 'answer', 'instruction', 'ack')
+      ORDER BY entry.sequence`).all(taskId) as unknown as EntryRow[]).map(fromRow);
+  }
+
   get(entryId: string): TaskCollaborationEntry | undefined {
     const row = getSqliteDatabase().prepare(`${ENTRY_SELECT} WHERE entry.entry_id = ?`)
       .get(entryId) as unknown as EntryRow | undefined;
@@ -119,7 +126,7 @@ export class TaskCollaborationRepository {
       }
       if ((input.authorKind === 'worker_agent' || input.authorKind === 'system')
         && (input.kind === 'progress' || input.kind === 'question'
-          || input.kind === 'result' || input.kind === 'failure')) {
+          || input.kind === 'result' || input.kind === 'failure' || input.kind === 'ack')) {
         db.prepare(`INSERT INTO task_main_update_deliveries (entry_id, conversation_id, status, updated_at)
           SELECT ?, conversation_id, 'pending', ? FROM task_origin_links WHERE task_id = ?`)
           .run(id, now, input.taskId);
@@ -203,6 +210,12 @@ export class TaskCollaborationRepository {
       SET status = 'delivered', conversation_id = ?, assignment_epoch = ?, attempts = attempts + 1,
         updated_at = ? WHERE entry_id = ? AND status = 'pending'`)
       .run(conversationId, assignmentEpoch, Date.now(), entryId);
+  }
+
+  canConfirm(entryId: string, conversationId: string, assignmentEpoch: number): boolean {
+    return Boolean(getSqliteDatabase().prepare(`SELECT 1 FROM task_collaboration_deliveries
+      WHERE entry_id = ? AND conversation_id = ? AND assignment_epoch = ? AND status IN ('delivered', 'confirmed')`)
+      .get(entryId, conversationId, assignmentEpoch));
   }
 
   markConfirmed(entryId: string): void {

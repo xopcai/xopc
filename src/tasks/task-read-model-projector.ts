@@ -51,7 +51,7 @@ export class TaskReadModelProjector {
     for (const wait of waits) {
       const kind = wait.kind === 'approval'
         ? 'approval_required'
-        : wait.kind === 'user_input'
+        : (wait.kind === 'user_input' || (wait.kind === 'external_event' && typeof wait.condition.collaborationEntryId === 'string'))
           ? 'input_required'
           : wait.kind === 'dependency'
             ? 'dependency_blocked'

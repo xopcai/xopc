@@ -12,6 +12,9 @@ import { initializeTestAgentCatalog } from '../../agent-catalog/test-support.js'
 import { resolveEffectiveAgentConfig } from '../../agent-config/index.js';
 import { personalAgentId } from '../../personal-agent/repository.js';
 import { TaskRunCoordinator } from '../task-run-coordinator.js';
+import { TaskCollaborationDelivery } from '../task-collaboration-delivery.js';
+import { buildTaskExecutionDirective } from '../task-context-assembler.js';
+import { createXopcUseTool } from '../../agent/tools/xopc-use-tool.js';
 import { createPersonalTaskTool } from '../../agent/tools/personal-task-tool.js';
 import { createConversation } from '../../storage/sqlite/conversation-repository.js';
 import { closeXopcDatabase, getSqliteDatabase } from '../../storage/sqlite/index.js';
@@ -32,7 +35,7 @@ import { createHonoApp } from '../../gateway/hono/app.js';
 import type { GatewayService } from '../../gateway/service.js';
 import { TaskCollaborationRepository } from '../task-collaboration-repository.js';
 import { upgradePersonalInstructions } from '../../personal-agent/prompts.js';
-import { PersonalReplyComposer } from '../../personal-agent/reply-composer.js';
+import { PersonalReplyComposer, buildPersonalReplyPrompt } from '../../personal-agent/reply-composer.js';
 
 vi.mock('../../personal-agent/specialist-capabilities.js', () => ({
   getAvailablePersonalAgentTools: () => ['read_file'], personalAgentModelAvailability: () => ({ available: true }),
@@ -79,7 +82,7 @@ describe('background task allocation', () => {
     const tool = createPersonalTaskTool({ getCurrentConversationId: () => conversationId,
       getCurrentAgentId: () => personalAgentId('local-owner'), dispatchTaskRuns: vi.fn() });
     expect(tool.parameters.properties.command.anyOf.map(command => command.const)).toEqual([
-      'submit', 'list', 'get', 'instruct', 'answer', 'retry_allocation', 'selection', 'cancel',
+      'submit', 'list', 'get', 'collaboration', 'entry', 'instruct', 'answer', 'retry_allocation', 'selection', 'cancel',
     ]);
     expect(tool.parameters.properties).not.toHaveProperty('agentId');
     expect(tool.parameters.properties).not.toHaveProperty('matchId');
@@ -103,6 +106,11 @@ describe('background task allocation', () => {
     expect(instructions).toContain('personal_task(command="submit")');
     expect(instructions).not.toContain('call personal_task(command="agents", requiredSkills=');
     expect(instructions).toContain('Custom personality.');
+    const legacy = 'Reuse the existing Task. Inspect get/list only when status is needed; updates and results arrive automatically. Use instruct for new direction and answer for a worker question, resolving it from the brief or conversation first. retry_allocation retries selection before execution; inspect previous effects before retrying an execution.';
+    const upgraded = upgradePersonalInstructions(`Custom personality.\n${legacy}`);
+    expect(upgraded).not.toContain(legacy);
+    expect(upgraded).toContain('Read full questions');
+    expect(upgradePersonalInstructions(upgraded)).toBe(upgraded);
   });
   it('submits from the personal tool without discovery or model calls and deduplicates retries', async () => {
     const probe = vi.fn();
@@ -304,6 +312,84 @@ describe('background task allocation', () => {
     }
   });
 
+  it('reads a complete long question, answers it, resumes and confirms changes on the same execution', async () => {
+    const task = submit();
+    await dispatcher().drain();
+    const run = new TaskRunRepository().getActiveRoot(task.id)!;
+    const worker = createConversation({ agentId: 'analyst' }, '/tmp');
+    new TaskConversationRepository().activateExecutionSession({ taskId: task.id, runId: run.id,
+      agentId: 'analyst', conversationId: worker.key });
+    TaskRunCoordinator.start({ runId: run.id, fallbackObjective: task.title, context: {
+      runId: run.id, conversationId: worker.key, taskId: task.id,
+      channel: 'webchat', origin: 'task', triggerKind: 'system' } });
+    const personal = createPersonalTaskTool({ getCurrentConversationId: () => conversationId,
+      getCurrentAgentId: () => personalAgentId('local-owner'), dispatchTaskRuns: vi.fn() });
+    const executor = createXopcUseTool({ getCurrentConversationId: () => worker.key,
+      getCurrentAgentId: () => 'analyst', dispatchTaskRuns: vi.fn() });
+    const fullQuestion = 'Important context. '.repeat(300) + 'Exact question at the end?';
+    await executor.execute('question', { mode: 'task', command: 'collaboration_post', args: {
+      taskId: task.id, kind: 'question', body: fullQuestion, idempotencyKey: 'long-question' } });
+    const board = new TaskCollaborationRepository();
+    const question = board.latest(task.id)!;
+    const read = JSON.parse((await personal.execute('get', { command: 'get', taskId: task.id })).content[0].text);
+    expect(read.attention).toContainEqual(expect.objectContaining({ kind: 'input_required' }));
+    expect(read.waits[0].condition.collaborationEntryId).toBe(question.id);
+    expect(read.waits[0].reason).toBe(fullQuestion);
+    expect(read.runs[0].id).toBe(run.id);
+    expect(read.conversation).toBeDefined();
+    const first = JSON.parse((await personal.execute('entry', { command: 'entry', taskId: task.id, entryId: question.id })).content[0].text);
+    const second = JSON.parse((await personal.execute('entry-next', { command: 'entry', taskId: task.id,
+      entryId: question.id, bodyOffset: first.nextBodyOffset })).content[0].text);
+    expect(first.entry.body + second.entry.body).toBe(fullQuestion);
+    const answerInput = { command: 'answer' as const, taskId: task.id, questionId: question.id,
+      instruction: 'Use the supplied currency CNY', idempotencyKey: 'answer-key' };
+    await personal.execute('answer', answerInput);
+    await personal.execute('answer-replay', answerInput);
+    expect(board.coordination(task.id).filter(entry => entry.kind === 'answer')).toHaveLength(1);
+    const answer = board.latest(task.id)!;
+    await new TaskCollaborationDelivery().drain(vi.fn(async () => true));
+    expect(new TaskRunRepository().listActiveWaits(task.id)).toEqual([]);
+    expect(board.get(answer.id)?.deliveryStatus).toBe('delivered');
+    const directive = buildTaskExecutionDirective(worker.key);
+    expect(directive).toContain(answer.id);
+    expect(directive).toContain(answer.body);
+    expect(directive).toContain('ack');
+    const ackArgs = { taskId: task.id, kind: 'ack', causationId: answer.id,
+      body: 'Use CNY in the result', idempotencyKey: 'ack-key' };
+    await executor.execute('ack', { mode: 'task', command: 'collaboration_post', args: ackArgs });
+    await executor.execute('ack-replay', { mode: 'task', command: 'collaboration_post', args: ackArgs });
+    expect(board.get(answer.id)?.deliveryStatus).toBe('confirmed');
+    expect(board.coordination(task.id).filter(entry => entry.kind === 'ack')).toHaveLength(1);
+    expect(board.pendingMainUpdates().some(item => item.entry.kind === 'ack')).toBe(true);
+    await personal.execute('instruct', { command: 'instruct', taskId: task.id,
+      instruction: 'Double all displayed amounts', idempotencyKey: 'new-direction' });
+    const instruction = board.latest(task.id)!;
+    const submitDelivery = vi.fn(async () => true);
+    await new TaskCollaborationDelivery().drain(submitDelivery);
+    expect(submitDelivery).toHaveBeenCalledWith(expect.objectContaining({ conversationId: worker.key, delivery: 'steer' }));
+    for (let index = 0; index < 25; index++) board.append({ taskId: task.id, kind: 'progress',
+      authorKind: 'worker_agent', authorId: 'analyst', body: `Step ${index}`, idempotencyKey: `progress-${index}` });
+    expect(buildTaskExecutionDirective(worker.key)).toContain(instruction.id);
+    expect(buildTaskExecutionDirective(worker.key)).toContain(instruction.body);
+    await executor.execute('ack-instruction', { mode: 'task', command: 'collaboration_post', args: {
+      taskId: task.id, kind: 'ack', causationId: instruction.id, body: 'Will double the amounts', idempotencyKey: 'instruction-ack' } });
+    expect(board.get(instruction.id)?.deliveryStatus).toBe('confirmed');
+    for (let index = 0; index < 15; index++) board.append({ taskId: task.id, kind: 'progress',
+      authorKind: 'worker_agent', authorId: 'analyst', body: `Later step ${index}`, idempotencyKey: `later-${index}` });
+    expect(buildTaskExecutionDirective(worker.key)).toContain(instruction.body);
+    expect(buildTaskExecutionDirective(worker.key)).toContain(answer.body);
+    const page = JSON.parse((await personal.execute('board-page', { command: 'collaboration', taskId: task.id, limit: 2 })).content[0].text);
+    const next = JSON.parse((await personal.execute('board-next', { command: 'collaboration', taskId: task.id,
+      limit: 2, afterSequence: page.nextAfterSequence })).content[0].text);
+    expect(next.items[0].sequence).toBeGreaterThan(page.items.at(-1).sequence);
+    const unrelated = new TaskRepository().create({ title: 'Other', objective: 'Other' });
+    await expect(personal.execute('cross-task', { command: 'entry', taskId: task.id,
+      entryId: board.append({ taskId: unrelated.id, authorKind: 'system', authorId: 'test', kind: 'question',
+        body: 'Private question', idempotencyKey: 'private' }).id })).rejects.toThrow(/does not belong/);
+    expect(new TaskRunRepository().listByTask(task.id)).toHaveLength(1);
+    expect(new TaskRunRepository().listByTask(task.id)[0].id).toBe(run.id);
+  });
+
   it('runs the assigned specialist and persists assignment and terminal result to the origin', async () => {
     const task = submit();
     await dispatcher().drain();
@@ -340,7 +426,17 @@ describe('background task allocation', () => {
     expect(JSON.stringify(transcript)).toContain('started by analyst');
     expect(JSON.stringify(transcript)).not.toContain('started by undefined');
     expect(getSqliteDatabase().prepare('SELECT reply_status FROM task_result_deliveries WHERE task_run_id = ?').get(run.id)).toMatchObject({ reply_status: 'pending' });
-    await new PersonalReplyComposer(async () => 'Monthly totals verified by analyst.').drain(vi.fn());
+    const board = new TaskCollaborationRepository();
+    const instruction = board.append({ taskId: task.id, authorKind: 'main_agent', authorId: personalAgentId('local-owner'),
+      kind: 'instruction', body: 'New direction persists beyond recent chat', idempotencyKey: 'final-direction', deliverToWorker: true });
+    await new PersonalReplyComposer(async packet => {
+      const context = JSON.parse(buildPersonalReplyPrompt(packet).split('\n\n').at(-1)!);
+      expect(context.collaboration).toContainEqual(expect.objectContaining({ id: instruction.id, body: instruction.body, deliveryStatus: 'pending' }));
+      expect(context.executionReceipt.verification.status).toBe('passed');
+      expect(context.executionReceipt.completionVerdict).toBe('achieved');
+      expect(context.taskState.phase).toBeDefined();
+      return 'Monthly totals verified by analyst.';
+    }).drain(vi.fn());
     const delivered = getSqliteDatabase().prepare(`SELECT e.payload_json FROM transcript_entries e
       JOIN transcripts t ON t.transcript_id = e.transcript_id WHERE t.conversation_id = ?`).all(conversationId);
     expect(JSON.stringify(delivered)).toContain('Monthly totals verified by analyst.');

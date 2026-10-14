@@ -56,7 +56,7 @@ export class TaskCollaborationDelivery {
         this.#entries.defer(entry.id);
         continue;
       }
-      const content = `Task collaboration message ${entry.id} (${entry.kind}) from ${entry.authorKind}:\n${JSON.stringify(entry.body)}\nAcknowledge receipt through xopc_use task collaboration_post with kind ack and causationId ${entry.id} when appropriate.`;
+      const content = `Task collaboration message ${entry.id} (${entry.kind}) from ${entry.authorKind}:\n${JSON.stringify(entry.body)}\nBefore continuing, acknowledge receipt and explain how the output will incorporate this direction through xopc_use task collaboration_post with kind ack and causationId ${entry.id}. Confirmation records receipt and intent, not verified completion.`;
       let accepted = false;
       try {
         accepted = await submit({ conversationId: active.conversationId, clientMessageId, content, delivery: 'steer' });

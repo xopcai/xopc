@@ -112,6 +112,31 @@ describe('TaskCollaborationRepository', () => {
     expect(await new TaskMainUpdateDelivery().drain({ isAvailable: () => true, decide, submitAndConfirm })).toBe(1);
     expect(decide).not.toHaveBeenCalled();
     expect(submitAndConfirm.mock.calls[0]?.[0].content).toContain(question.id);
+    expect(submitAndConfirm.mock.calls[0]?.[0].content).toContain(question.body);
+  });
+
+  it('returns executor confirmations to the owner without a separate notification decision call', async () => {
+    const owner = createConversation({ agentId: 'main' });
+    const created = new TaskApplicationService().create({ idempotencyKey: 'owner-ack',
+      title: 'Apply a change', priority: 'normal', originConversationId: owner.key,
+      contract: { objective: 'Apply a change', expectedOutputs: [], acceptanceCriteria: [], constraints: [],
+        approvalRequired: [], assumptions: [], risks: [], acceptancePolicy: 'manual', outputDestinations: [] },
+      dependencies: [], context: [], authorityGrants: [], activation: { mode: 'capture', phase: 'backlog' } });
+    if (!created.ok) throw new Error('Expected Task');
+    const board = new TaskCollaborationRepository();
+    const instruction = board.append({ taskId: created.model.task.id, authorKind: 'main_agent', authorId: 'main',
+      kind: 'instruction', body: 'Double all amounts', idempotencyKey: 'change', deliverToWorker: true });
+    board.markDelivered(instruction.id, 'worker-conversation', 1);
+    board.markConfirmed(instruction.id);
+    const ack = board.append({ taskId: created.model.task.id, authorKind: 'worker_agent', authorId: 'worker',
+      kind: 'ack', body: 'Will double all amounts in the output', causationId: instruction.id, idempotencyKey: 'confirmed' });
+    const decide = vi.fn();
+    const submitAndConfirm = vi.fn(async () => true);
+    expect(await new TaskMainUpdateDelivery().drain({ isAvailable: () => true, decide, submitAndConfirm })).toBe(1);
+    expect(decide).not.toHaveBeenCalled();
+    expect(submitAndConfirm).toHaveBeenCalledWith(expect.objectContaining({ conversationId: owner.key,
+      content: expect.stringContaining(ack.body) }));
+    expect(submitAndConfirm).toHaveBeenCalledWith(expect.objectContaining({ content: expect.stringContaining('Return NO_REPLY') }));
   });
 
   it('shows the newest board update to the worker after a long collaboration history', () => {
