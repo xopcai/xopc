@@ -35,6 +35,8 @@ export interface ExternalToolDescriptor extends ExternalToolSearchHit {
   exposure?: import('@earendil-works/pi-coding-agent').ToolExposure;
   /** Host-curated contract; never copied from remote readOnlyHint annotations. */
   batchRead?: boolean;
+  /** Host-curated read scope; separate from eligibility for batch execution. */
+  readOnly?: boolean;
 }
 
 export interface VersionedExternalToolDescriptor extends ExternalToolDescriptor {
@@ -46,6 +48,8 @@ export interface ExternalToolExecutionContext {
   signal?: AbortSignal;
   onUpdate?: AgentToolUpdateCallback<Record<string, unknown>>;
   contractRevision?: string;
+  /** Host authorization recheck immediately before remote dispatch. */
+  authorize?: () => void;
   validateArguments?: (args: Record<string, unknown>) => void;
 }
 

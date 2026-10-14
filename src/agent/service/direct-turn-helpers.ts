@@ -10,6 +10,7 @@ import crypto from 'node:crypto';
 
 import { getConnectionResumeInput } from '../../storage/sqlite/connection-wait-repository.js';
 import { getClarificationResumeInput } from '../../storage/sqlite/clarification-wait-repository.js';
+import { getTaskContinuation } from '../../tasks/task-continuation.js';
 
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
 import type { ImageContent } from '@earendil-works/pi-ai';
@@ -186,7 +187,7 @@ export async function runDirectAgentTurn(
   const turnId = input.runId ?? crypto.randomUUID();
   const isConnectionResume = Boolean(getConnectionResumeInput(input.conversationId, turnId));
   const isClarificationResume = Boolean(getClarificationResumeInput(input.conversationId, turnId));
-  const isResume = isConnectionResume || isClarificationResume;
+  const isResume = isConnectionResume || isClarificationResume || Boolean(getTaskContinuation(input.conversationId, turnId));
   const userContext = await deps.agentManager.prepareUserTurnContext(
     input.userMessage,
     input.conversationId,

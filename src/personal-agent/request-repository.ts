@@ -12,7 +12,7 @@ export interface PersonalRequest {
   connectorId: string;
   executorAgentId: string;
   accountId?: string;
-  parameters: { allocate?: boolean; timeRange?: { from: string; to: string; timezone: string; expression: string } };
+  parameters: { brief?: string; allocate?: boolean; timeRange?: { from: string; to: string; timezone: string; expression: string } };
   state: PersonalRequestState;
   connectionWaitId?: string;
   taskId?: string;

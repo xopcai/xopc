@@ -3,11 +3,11 @@ import { getCliAdapter } from './cli/adapterRegistry.js';
 import { randomUUID } from 'node:crypto';
 import type { Config } from '../config/schema.js';
 import { persistConfigMutation } from '../config/config-mutation.js';
-import { getSqliteDatabase } from '../storage/sqlite/transaction.js';
+import { getSqliteDatabase, runSqliteWriteTransaction } from '../storage/sqlite/transaction.js';
 import { readCurrentTranscriptId } from '../storage/sqlite/session-repository.js';
 import type { SessionInput } from '../storage/sqlite/session-input-repository.js';
 import { getSessionInputState } from '../storage/sqlite/session-input-repository.js';
-import { cancelConnectionObjective, getActiveConnectionWait, getConnectionWait, publishConnectionWait, queueConnectionResolution, updateConnectionWait, listConnectionWaitsToCheck } from '../storage/sqlite/connection-wait-repository.js';
+import { cancelConnectionObjective, getActiveConnectionWait, getConnectionWait, publishConnectionWait, queueConnectionResolution, updateConnectionWait, listConnectionWaitsToCheck, reconcileConnectionWaits } from '../storage/sqlite/connection-wait-repository.js';
 import { getConnectorConnection, getConnectorInstallation, listConnectorConnections, upsertConnectorInstallation } from '../storage/sqlite/connector-repository.js';
 import { capabilityActions, isToolInputSchema, missingConnectionCapabilities } from './connection-capabilities.js';
 import { resolveConnectionCandidate } from './connection-candidates.js';
@@ -32,6 +32,7 @@ const INTENT_TTL = 30 * 60_000;
 const ATTEMPT_TTL = 10 * 60_000;
 export type ConnectionAction = {
   waitId: string; expectedTranscriptId: string; expectedVersion: number; idempotencyKey: string;
+  expectedObjectiveRevision?: number;
   action: 'install_complete' | 'connect' | 'check' | 'skip' | 'cancel' | 'select_account' | 'confirm_scope' | 'replace_source';
   needKey?: string; accountId?: string; candidateRef?: string; instanceId?: string;
 };
@@ -43,6 +44,7 @@ function isConnectorNeed(need: ConnectionNeed): need is ConnectionNeed & { targe
 /** Authorization lives at click time. Chat history contains only immutable explanations. */
 export class ConnectionRecoveryService {
   private readonly busy = new Set<string>();
+  private readonly checks = new Map<string, AbortController>();
   private timer?: ReturnType<typeof setInterval>;
   private deliveryTimer?: ReturnType<typeof setInterval>;
   private polling = false;
@@ -60,6 +62,7 @@ export class ConnectionRecoveryService {
   stop(): void {
     clearInterval(this.timer); this.timer = undefined;
     clearInterval(this.deliveryTimer); this.deliveryTimer = undefined;
+    for (const controller of this.checks.values()) controller.abort(new Error('Connection check stopped'));
   }
   async poll(): Promise<void> {
     if (this.polling) return;
@@ -67,6 +70,7 @@ export class ConnectionRecoveryService {
     try {
       drainPersonalRequestContinuations(this.deps.onPersonalRequestDelivered);
       drainPersonalRequestResults(this.deps.onPersonalRequestDelivered);
+      for (const conversationId of reconcileConnectionWaits()) this.deps.drain(conversationId);
       for (const wait of listConnectionWaitsToCheck()) {
         if (this.busy.has(wait.conversationId)) continue;
         await this.act(wait.conversationId, { waitId: wait.id, expectedTranscriptId: wait.transcriptId,
@@ -81,8 +85,35 @@ export class ConnectionRecoveryService {
     drain: (conversationId: string) => void;
     onPersonalRequestDelivered?: (conversationId: string, requestId: string) => void;
     adapter?: ComposioSessionsAdapter;
+    checkTimeoutMs?: number;
   }) {}
   private get adapter() { return this.deps.adapter ?? new ComposioSessionsAdapter(); }
+
+  private markChecking(wait: ConnectionWait, phase: 'connection' | 'tools'): ConnectionWait {
+    const next = updateConnectionWait({ ...wait, checking: { phase, startedAt: Date.now() }, recoveryError: undefined }, wait.version);
+    publishConnectionWait(wait.conversationId);
+    return next;
+  }
+
+  /** Readiness checks never execute the objective; late results cannot advance a newer wait. */
+  private async boundedCheck<T>(waitId: string, operation: () => Promise<T>): Promise<T> {
+    const controller = new AbortController();
+    this.checks.set(waitId, controller);
+    const timeout = setTimeout(() => controller.abort(new Error('Connection check timed out. The objective is preserved.')), this.deps.checkTimeoutMs ?? 30_000);
+    timeout.unref();
+    let onAbort: () => void = () => {};
+    try {
+      return await Promise.race([operation(), new Promise<never>((_resolve, reject) => {
+        onAbort = () => reject(controller.signal.reason);
+        controller.signal.addEventListener('abort', onAbort, { once: true });
+        if (controller.signal.aborted) onAbort();
+      })]);
+    } finally {
+      clearTimeout(timeout);
+      controller.signal.removeEventListener('abort', onAbort);
+      if (this.checks.get(waitId) === controller) this.checks.delete(waitId);
+    }
+  }
 
   snapshot(conversationId: string): ConnectionWaitSnapshot {
     if (!connectorPrincipalForSession(conversationId).isLocalOwner) throw new Error('This connection belongs to another principal.');
@@ -161,7 +192,9 @@ export class ConnectionRecoveryService {
         ? ['composio-gmail', 'composio-outlook'].filter(candidate => candidate !== id).map(candidate => ({ candidateRef: candidate, label: getConnectorDefinition(candidate)?.displayName ?? candidate })) : [];
       return { ...need, authorizationMode, alternatives, accountId: selected?.accountId ?? need.accountId, connectionId: selected?.id ?? need.connectionId, phase,
         accounts: active.map(connection => ({ id: connection.accountId!,
-          label: [getConnectorAccount(connection.accountId!)?.label, connection.identity.email ?? connection.identity.name ?? connection.accountId].filter(Boolean).join(' · ') })),
+          label: [...new Set([getConnectorAccount(connection.accountId!)?.label, connection.identity.workspace,
+            connection.identity.email ?? connection.identity.username ?? connection.identity.displayName ?? connection.identity.name ?? connection.accountId]
+            .filter(Boolean))].join(' · ') })),
         ...(need.capabilityError && selected ? { reason: need.capabilityError } : {}),
         ...(blocked ? { reason: scopeBlocked ? 'This action needs broader permissions. Review connector permissions in settings.' : 'This app is disabled or unavailable to the current agent. Review connector settings.' } : {}),
       };
@@ -170,7 +203,14 @@ export class ConnectionRecoveryService {
     // A delayed objective is reviewed in its original context, including relative time expressions.
     const review = wait.reviewRequired || (Date.now() - wait.createdAt > INTENT_TTL && !wait.scopeConfirmedAt);
     const { intent: _intent, checkpoint: _checkpoint, ...visible } = wait;
-    return { ...visible, needs, timeRange: wait.checkpoint.timeRange, phase: wait.status === 'queued' ? 'queued' : ready ? review ? 'review_scope' : 'ready' : 'needs_connection' };
+    const runtime = getSessionInputState(wait.conversationId);
+    return { ...visible, needs, timeRange: wait.checkpoint.timeRange,
+      phase: wait.status === 'queued' ? 'queued' : wait.checking || wait.recoveryError ? 'needs_connection'
+        : ready ? review ? 'review_scope' : 'ready' : 'needs_connection',
+      recoveryStage: wait.checking ? wait.checking.phase === 'connection' ? 'checking_connection' : 'checking_tools'
+        : wait.status === 'queued' ? 'queued' : undefined,
+      queueBlocked: wait.status === 'queued' && Boolean(runtime.activeInputId && runtime.activeInputId !== wait.queuedInputId),
+    };
   }
 
   private async ensureInstallation(wait: ConnectionWait, connectorId: string): Promise<void> {
@@ -252,26 +292,42 @@ export class ConnectionRecoveryService {
 
   async preflight(input: SessionInput): Promise<boolean> {
     if (input.kind !== 'connection_resume') return true;
-    const wait = input.payload ? getConnectionWait(input.payload.waitId) : undefined;
+    let wait = input.payload ? getConnectionWait(input.payload.waitId) : undefined;
     if (!wait || wait.status !== 'queued' || wait.queuedInputId !== input.id
+      || wait.objectiveRevision !== input.payload?.objectiveRevision
       || wait.transcriptId !== readCurrentTranscriptId(getSqliteDatabase(), input.conversationId)) return false;
     if (wait.resolution === 'skipped') return true;
+    let checkFailed = false;
+    let reviewRequired = false;
     try {
-      const fresh = await this.syncConnections(wait);
+      wait = this.markChecking(wait, 'connection');
+      const fresh = await this.boundedCheck(wait.id, () => this.syncConnections(wait!));
+      if (getConnectionWait(wait.id)?.version !== wait.version) return false;
+      wait = this.markChecking(wait, 'tools');
       const verified = new Set(fresh.filter(item => item.status === 'active').map(item => item.id));
       wait.needs = wait.needs.map(need => ({ ...need, unavailable: !fresh.some(item => item.id === need.connectionId && item.status === 'active') }));
-      wait.needs = await this.checkCapabilities(wait, verified);
+      wait.needs = await this.boundedCheck(wait.id, () => this.checkCapabilities(wait!, verified));
       const checkedNeeds = this.view(wait, verified).needs;
       const ready = checkedNeeds.every(need => need.phase === 'ready');
       const latest = getConnectionWait(wait.id);
       if (latest?.version !== wait.version) return false;
-      if (ready && wait.intent && wait.intent.validUntil > Date.now() && wait.intent.objectiveRevision === wait.objectiveRevision) return true;
-    } catch {
+      if (ready && wait.intent && wait.intent.validUntil > Date.now() && wait.intent.objectiveRevision === wait.objectiveRevision) {
+        updateConnectionWait({ ...wait, checking: undefined, lastCheckedAt: Date.now() }, wait.version);
+        return true;
+      }
+      reviewRequired = ready;
+    } catch (err) {
+      checkFailed = true;
+      if (getConnectionWait(wait.id)?.version === wait.version) {
+        log.warn({ err, conversationId: input.conversationId, waitId: wait.id, phase: 'resume_preflight' }, 'Connection recovery check failed; objective preserved');
+      }
       // A failed readiness check preserves the objective for an explicit retry.
     }
     const latest = getConnectionWait(wait.id);
     if (latest?.version === wait.version) {
-      updateConnectionWait({ ...wait, status: 'open', intent: undefined, queuedInputId: undefined, objectiveRevision: wait.objectiveRevision + 1 }, wait.version);
+      updateConnectionWait({ ...wait, status: 'open', intent: undefined, queuedInputId: undefined,
+        checking: undefined, lastCheckedAt: Date.now(), recoveryError: checkFailed ? 'check_failed' : undefined,
+        reviewRequired: reviewRequired || wait.reviewRequired, objectiveRevision: wait.objectiveRevision + 1 }, wait.version);
       publishConnectionWait(input.conversationId);
     }
     return false;
@@ -286,13 +342,20 @@ export class ConnectionRecoveryService {
       let wait = getConnectionWait(action.waitId);
       if (!wait || wait.conversationId !== conversationId || wait.principalId !== 'local-owner'
         || wait.transcriptId !== action.expectedTranscriptId || snapshot.transcriptId !== action.expectedTranscriptId) throw new Error('SESSION_CHANGED');
-      if (wait.lastAction?.key === action.idempotencyKey && wait.lastAction.action === action.action) return { snapshot };
-      if (wait.status !== 'open' || wait.version !== action.expectedVersion) throw new Error('WAIT_CHANGED');
+      if ((wait.status !== 'open' || !wait.checking) && wait.lastAction?.key === action.idempotencyKey && wait.lastAction.action === action.action) return { snapshot };
+      const matchesTarget = action.action === 'cancel' && action.expectedObjectiveRevision !== undefined
+        ? wait.objectiveRevision === action.expectedObjectiveRevision : wait.version === action.expectedVersion;
+      if ((wait.status !== 'open' && !(action.action === 'cancel' && wait.status === 'queued')) || !matchesTarget) throw new Error('WAIT_CHANGED');
       wait = { ...wait, lastAction: { key: action.idempotencyKey, action: action.action } };
       if (action.action === 'cancel') {
-        const request = personalRequestForWait(wait.id);
-        if (request) cancelPersonalRequest(request);
-        else cancelConnectionObjective(conversationId);
+        const cancelled = wait;
+        runSqliteWriteTransaction(() => {
+          updateConnectionWait(cancelled, cancelled.version);
+          const request = personalRequestForWait(cancelled.id);
+          if (request) cancelPersonalRequest(request);
+          else cancelConnectionObjective(conversationId);
+        });
+        this.checks.get(wait.id)?.abort(new Error('Connection objective cancelled'));
       } else if (action.action === 'replace_source') {
         const need = wait.needs.find(need => need.key === action.needKey);
         if (!need || !this.view(wait).needs.find(item => item.key === need.key)?.alternatives?.some(item => item.candidateRef === action.candidateRef)) throw new Error('Unsupported replacement.');
@@ -323,7 +386,8 @@ export class ConnectionRecoveryService {
         }
         wait = updateConnectionWait({ ...wait, needs: wait.needs.map(item => item.key === need.key
           ? { ...item, connectionId: instance.instanceId, unavailable: false, capabilityError: undefined }
-          : item), intent: { objectiveRevision: wait.objectiveRevision, validUntil: Date.now() + INTENT_TTL } }, wait.version);
+          : item), checking: undefined, recoveryError: undefined,
+          intent: { objectiveRevision: wait.objectiveRevision, validUntil: Date.now() + INTENT_TTL } }, wait.version);
         const view = this.view(wait);
         if (view.phase === 'ready') {
           queueConnectionResolution({ ...wait, needs: view.needs.map(({ phase: _phase, accounts: _accounts, reason: _reason, alternatives: _alternatives, ...item }) => item) }, 'continued', resolvePersonalRequestConnection);
@@ -366,14 +430,26 @@ export class ConnectionRecoveryService {
         log.info({ conversationId, waitId: wait.id, objectiveRevision: wait.objectiveRevision, phase: 'authorization_started' }, 'Connection authorization started');
         return { snapshot: this.snapshot(conversationId), authorizationUrl: auth.connectUrl };
       } else {
+        if (action.action === 'select_account') {
+          const need = this.view(wait).needs.find(item => item.key === action.needKey);
+          const connection = need?.target.type === 'connector'
+            ? currentAccountConnections(listConnectorConnections({ principalId: wait.principalId, connectorId: need.target.connectorId }))
+              .find(item => item.accountId === action.accountId) : undefined;
+          if (!connection || !need?.accounts.some(item => item.id === connection.accountId)) throw new Error('Account is unavailable.');
+          wait = { ...wait, needs: wait.needs.map(item => item.key === need.key
+            ? { ...item, accountId: connection.accountId, connectionId: connection.id, attempt: undefined } : item),
+            intent: { objectiveRevision: wait.objectiveRevision, validUntil: Date.now() + INTENT_TTL } };
+        }
         // Remote errors remain errors. A failed network check is not a revoked authorization.
-        const fresh = await this.syncConnections(wait);
+        wait = this.markChecking(wait, 'connection');
+        const fresh = await this.boundedCheck(wait.id, () => this.syncConnections(wait!));
         const verified = new Set(fresh.filter(item => item.status === 'active').map(item => item.id));
         const latest = getConnectionWait(wait.id);
         if (!latest || latest.version !== wait.version || latest.status !== 'open') throw new Error('WAIT_CHANGED');
+        const currentNeeds = this.view(wait).needs;
         let needs: ConnectionWait['needs'] = wait.needs.map(need => {
           if (need.target.type === 'store-connector') {
-            const selected = this.view({ ...wait, needs }).needs.find(item => item.key === need.key);
+            const selected = currentNeeds.find(item => item.key === need.key);
             return selected?.phase === 'ready'
               ? { ...need, connectionId: selected.connectionId, unavailable: false, capabilityError: undefined }
               : need;
@@ -398,12 +474,15 @@ export class ConnectionRecoveryService {
             await this.ensureInstallation(wait, selected.target.connectorId);
           }
         }
-        needs = await this.checkCapabilities({ ...wait, needs }, verified);
+        wait = this.markChecking({ ...wait, needs }, 'tools');
+        needs = await this.boundedCheck(wait.id, () => this.checkCapabilities({ ...wait!, needs }, verified));
         if (getConnectionWait(wait.id)?.version !== wait.version) throw new Error('WAIT_CHANGED');
-        const readyWithoutReview = this.view({ ...wait, needs }, verified).phase === 'ready';
+        const readinessPhase = this.view({ ...wait, needs, checking: undefined, recoveryError: undefined }, verified).phase;
+        const readyWithoutReview = readinessPhase === 'ready';
         wait = updateConnectionWait({ ...wait, needs,
+          checking: undefined, lastCheckedAt: Date.now(), recoveryError: undefined,
           ...(action.action === 'confirm_scope' ? { scopeConfirmedAt: Date.now(), reviewRequired: false } : {}),
-          ...(needs.some(need => need.capabilityError) ? { intent: undefined }
+          ...(needs.some(need => need.capabilityError) || (readinessPhase === 'review_scope' && action.action !== 'confirm_scope') ? { intent: undefined }
             : readyWithoutReview || action.action === 'confirm_scope'
               ? { intent: { objectiveRevision: wait.objectiveRevision, validUntil: Date.now() + INTENT_TTL } }
               : {}),
@@ -421,8 +500,13 @@ export class ConnectionRecoveryService {
       return { snapshot: this.snapshot(conversationId) };
     } catch (error) {
       const wait = getActiveConnectionWait(conversationId);
-      if (action.action === 'connect' && wait?.status === 'open' && wait.lastAction?.key === action.idempotencyKey) {
-        updateConnectionWait({ ...wait, intent: undefined, needs: wait.needs.map(need => need.key === action.needKey ? { ...need, attempt: undefined } : need) }, wait.version);
+      if (ownsLock && wait?.status === 'open' && wait.lastAction?.key === action.idempotencyKey) {
+        if (wait.checking) log.warn({ err: error, conversationId, waitId: wait.id, phase: wait.checking.phase }, 'Connection check failed; objective preserved');
+        updateConnectionWait({ ...wait, lastAction: undefined,
+          ...(wait.checking ? { checking: undefined, lastCheckedAt: Date.now(), recoveryError: 'check_failed' as const, intent: undefined } : {}),
+          ...(action.action === 'connect' ? { intent: undefined,
+            needs: wait.needs.map(need => need.key === action.needKey ? { ...need, attempt: undefined } : need) } : {}),
+        }, wait.version);
         publishConnectionWait(conversationId);
       }
       throw error;

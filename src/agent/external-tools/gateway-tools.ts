@@ -11,6 +11,7 @@ import { getConnectorConnection, getConnectorInstallation, listConnectorActionMe
 import { getConnectorAccount } from '../../storage/sqlite/connector-account-repository.js';
 import { getSessionMetadata } from '../../storage/sqlite/session-repository.js';
 import { isXopcDatabaseOpen } from '../../storage/sqlite/connection.js';
+import { assertPersonalRequestAccountAccess } from '../../personal-agent/request-access.js';
 import { personalRequestForExecution } from '../../personal-agent/request-repository.js';
 import { parseExternalToolRef } from './refs.js';
 import { listConnectorInstances } from '../../connectors/instances.js';
@@ -146,6 +147,7 @@ export function createExternalToolGatewayTools(
         if (connectorId !== request.connectorId) throw new Error('Use only the selected Personal request connector');
         if (composio && !listConnectorActionMetadata(connectorId).some(action => action.actionId === composio.toolName
           && action.scope === 'read' && action.curated)) throw new Error('Personal requests permit only curated read operations');
+        assertPersonalRequestAccountAccess(request);
         const account = getConnectorAccount(request.accountId);
         const connection = account?.currentConnectionId ? getConnectorConnection(account.currentConnectionId) : undefined;
         if (!connection || connection.status !== 'active' || (connection.expiresAt && Date.parse(connection.expiresAt) <= Date.now())) {
@@ -158,8 +160,8 @@ export function createExternalToolGatewayTools(
       }
       const result = await service.execute({
         ...params,
-        ...(request ? { readOnly: true } : {}),
-        context: { toolCallId, signal, onUpdate },
+        ...(request ? { readOnly: undefined, personalReadOnly: true } : {}),
+        context: { toolCallId, signal, onUpdate, ...(request ? { authorize: () => assertPersonalRequestAccountAccess(request) } : {}) },
       });
       return {
         ...result,

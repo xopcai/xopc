@@ -5,7 +5,7 @@ import type { TurnOrigin } from '@xopcai/endpoint-tools-protocol';
 
 import { injectSourceContextsIntoUserMessage } from '../../agent/source-context/injector.js';
 import { findSessionInputByRunId, type SessionInput } from '../../storage/sqlite/session-input-repository.js';
-import { consumeConnectionResume, publishConnectionWait, invalidateConnectionResumeIntent, cancelConnectionObjective } from '../../storage/sqlite/connection-wait-repository.js';
+import { consumeConnectionResume, publishConnectionWait, invalidateConnectionResumeIntent, cancelConnectionObjective, reconcileConnectionWaits } from '../../storage/sqlite/connection-wait-repository.js';
 import {
   consumeClarificationResume,
   supersedeActiveClarification,
@@ -417,6 +417,7 @@ export class SessionInputCoordinator {
         } catch (err) {
           log.warn({ err, conversationId, runId, inputId: input.id }, 'Session input preflight failed');
           finishSessionInputRun(conversationId, runId, 'failed', 'Input preflight failed');
+          if (input.kind === 'connection_resume') reconcileConnectionWaits();
           this.publish(conversationId);
           continue;
         }
@@ -510,7 +511,8 @@ export class SessionInputCoordinator {
   }
 
   recover(): void {
-    for (const conversationId of recoverSessionInputState()) {
+    const interrupted = recoverSessionInputState();
+    for (const conversationId of new Set([...interrupted, ...reconcileConnectionWaits(true)])) {
       this.publish(conversationId);
       void this.drain(conversationId);
     }

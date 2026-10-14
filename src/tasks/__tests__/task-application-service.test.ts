@@ -79,6 +79,16 @@ describe('TaskApplicationService', () => {
     needsUser: false, completionVerdict: 'achieved' as const,
   };
 
+  it('finalizes a long result without truncating its receipt or rolling back completion', () => {
+    const { service, run, runs } = createRunningTask('long-result');
+    const summary = `# Report\n${'Evidence '.repeat(1200)}\nFinal conclusion`;
+    const result = service.completeRun({ runId: run.id, expectedRunVersion: run.version, receipt: { ...receipt, summary } });
+    expect(result.ok).toBe(true);
+    expect(runs.getReceipt(run.id)?.summary).toBe(summary);
+    expect(runs.require(run.id).status).toBe('succeeded');
+    expect(new TaskCollaborationRepository().recent(run.taskId)[0].body.length).toBeLessThanOrEqual(8000);
+  });
+
   it('requires current criterion reviews before manually completing a task', () => {
     const service = new TaskApplicationService();
     const created = service.create({

@@ -66,7 +66,7 @@ export class CliToolProvider implements ExternalToolProvider {
     const action = await describeCliAction(item.config, item.instance.instanceId, connection, parsed.toolName);
     if (evaluateConnectorExecutionPolicy({ installation: item.policy, action: { scope: action.scope, curated: true }, agentId: item.agentId, accountId: connection.accountId, confirmed: true }).decision !== 'allowed') return undefined;
     return { toolRef, source: this.source, namespace: item.instance.connectorId, title: action.id, summary: action.description, description: action.description,
-      batchRead: action.scope === 'read', inputSchema: { ...action.inputSchema, properties: { ...(action.inputSchema.properties as Record<string, unknown>),
+      readOnly: action.scope === 'read', batchRead: action.scope === 'read', inputSchema: { ...action.inputSchema, properties: { ...(action.inputSchema.properties as Record<string, unknown>),
         xopcAccountId: { type: 'string', description: 'Stable account ID; required when multiple accounts are available.' },
         xopcExportResult: { type: 'boolean', description: 'Save the successful result as a JSON artifact in this account context.' } } } };
   }

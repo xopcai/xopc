@@ -156,7 +156,7 @@ export function queueConnectionResolution(wait: ConnectionWait, resolution: 'con
       contextRefs: origin.contextRefs, contextSnapshots: origin.contextSnapshots,
       kind: 'connection_resume', taskRunId: wait.taskRunId, payload: { waitId: wait.id, objectiveRevision: wait.objectiveRevision, resolution },
     });
-    return updateConnectionWait({ ...wait, status: 'queued', resolution, queuedInputId: input.id }, wait.version);
+    return updateConnectionWait({ ...wait, status: 'queued', resolution, queuedInputId: input.id, checking: undefined, recoveryError: undefined }, wait.version);
   });
 }
 
@@ -180,7 +180,7 @@ export function consumeConnectionResume(input: SessionInput): boolean {
       }
       runs.setStatus({ runId: run.id, expectedVersion: run.version, from: ['waiting'], to: 'running', actor: { kind: 'system' } });
     }
-    updateConnectionWait({ ...wait, status: 'closed' }, wait.version);
+    updateConnectionWait({ ...wait, status: 'closed', checking: undefined }, wait.version);
     return true;
   });
 }
@@ -260,6 +260,7 @@ export function invalidateConnectionResumeIntent(conversationId: string): void {
   runSqliteWriteTransaction(() => {
     if (wait.queuedInputId) setSessionInputStatus(wait.queuedInputId, 'cancelled');
     updateConnectionWait({ ...wait, status: 'open', intent: undefined, queuedInputId: undefined,
+      checking: undefined, recoveryError: undefined,
       objectiveRevision: wait.objectiveRevision + 1, scopeConfirmedAt: undefined, reviewRequired: true,
     }, wait.version);
   });
@@ -275,6 +276,7 @@ export function reviseCurrentConnectionObjective(conversationId: string, summary
     updateConnectionWait({ ...wait, summary, objectiveUpdatedAt: Date.now(),
       checkpoint: { ...wait.checkpoint, pendingSteps: [summary], timeRange: undefined },
       status: 'open', resolution: undefined,
+      checking: undefined, recoveryError: undefined,
       intent: undefined, queuedInputId: undefined, scopeConfirmedAt: undefined, reviewRequired: true,
       objectiveRevision: wait.objectiveRevision + 1,
     }, wait.version);
@@ -302,7 +304,7 @@ export function cancelConnectionObjective(conversationId: string): void {
         } });
       }
     }
-    updateConnectionWait({ ...wait, status: 'closed', resolution: 'cancelled', intent: undefined }, wait.version);
+    updateConnectionWait({ ...wait, status: 'closed', resolution: 'cancelled', intent: undefined, checking: undefined }, wait.version);
     if (personalRequest && personalRequest.state !== 'cancelled') updatePersonalRequest(personalRequest, { state: 'cancelled' });
   });
   publishConnectionWait(conversationId);
@@ -323,4 +325,47 @@ export function listConnectionWaitsToCheck(): ConnectionWait[] {
     WHERE wait.status = 'open'`).all() as Array<{ data_json: string }>;
   return rows.map(row => JSON.parse(row.data_json) as ConnectionWait)
     .filter(wait => wait.principalId === 'local-owner' && wait.intent && wait.intent.validUntil > Date.now());
+}
+
+/** A queued wait has not crossed consumeConnectionResume's execution boundary. */
+export function reconcileConnectionWaits(afterRestart = false): string[] {
+  if (!isXopcDatabaseOpen()) return [];
+  return runSqliteWriteTransaction(db => {
+    const rows = db.prepare(`SELECT wait.data_json FROM session_connection_waits wait
+      JOIN sessions session ON session.active_transcript_id = wait.transcript_id
+      WHERE wait.status IN ('open', 'queued')`).all() as Array<{ data_json: string }>;
+    const wake = new Set<string>();
+    for (const row of rows) {
+      const wait = JSON.parse(row.data_json) as ConnectionWait;
+      if (wait.status === 'open') {
+        if (afterRestart && wait.checking) {
+          updateConnectionWait({ ...wait, checking: undefined, lastAction: undefined, recoveryError: 'restart_interrupted' }, wait.version);
+          log.info({ conversationId: wait.conversationId, waitId: wait.id, phase: 'restart_reconcile' }, 'Interrupted connection check preserved for recovery');
+          publishConnectionWait(wait.conversationId);
+        }
+        continue;
+      }
+      const input = wait.queuedInputId ? getSessionInputById(wait.conversationId, wait.queuedInputId) : undefined;
+      const matches = input?.kind === 'connection_resume' && input.payload?.waitId === wait.id
+        && input.payload.objectiveRevision === wait.objectiveRevision && input.expectedTranscriptId === wait.transcriptId;
+      if (matches && input.status === 'running') continue;
+      if (matches && (input.status === 'queued' || input.status === 'interrupted')) {
+        if (input.status === 'interrupted') {
+          setSessionInputStatus(input.id, 'queued');
+          updateConnectionWait({ ...wait, checking: undefined, recoveryError: 'restart_interrupted' }, wait.version);
+          log.info({ conversationId: wait.conversationId, waitId: wait.id, inputId: input.id, phase: 'restart_reconcile' }, 'Unconsumed connection continuation requeued');
+          publishConnectionWait(wait.conversationId);
+        }
+        wake.add(wait.conversationId);
+        continue;
+      }
+      updateConnectionWait({ ...wait, status: 'open', queuedInputId: undefined, intent: undefined,
+        checking: undefined, recoveryError: 'restart_interrupted', resolution: undefined,
+        objectiveRevision: wait.objectiveRevision + 1 }, wait.version);
+      log.warn({ conversationId: wait.conversationId, waitId: wait.id, inputId: wait.queuedInputId,
+        inputStatus: input?.status, phase: 'resume_reconcile' }, 'Unavailable connection continuation preserved for retry');
+      publishConnectionWait(wait.conversationId);
+    }
+    return [...wake];
+  });
 }

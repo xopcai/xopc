@@ -1,3 +1,5 @@
+import Ajv from 'ajv';
+
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -25,10 +27,16 @@ import { TaskAllocationRepository } from '../../tasks/task-allocation-repository
 import { TaskRunDispatcher } from '../../tasks/task-run-dispatcher.js';
 import { ConnectionRecoveryService } from '../../connectors/connection-recovery-service.js';
 import type { ComposioSessionsAdapter } from '../../connectors/composio-sessions.js';
+import { TaskCollaborationRepository } from '../../tasks/task-collaboration-repository.js';
+import { TaskCollaborationDelivery } from '../../tasks/task-collaboration-delivery.js';
+import { buildTaskExecutionDirective } from '../../tasks/task-context-assembler.js';
+import { createTaskCollaborationTool } from '../../agent/tools/task-collaboration-tool.js';
 import { TaskMainUpdateDelivery } from '../../tasks/task-main-update-delivery.js';
 import { createPersonalRequestTools } from '../../agent/tools/personal-request-tool.js';
 import { createPersonalRequestResultTool } from '../../agent/tools/personal-request-result-tool.js';
 import { resolveExecutionToolPolicy } from '../../agent/embedded/execution-tool-policy.js';
+import { ComposioToolProvider } from '../../agent/external-tools/composio-provider.js';
+import { assertPersonalRequestAccountAccess } from '../request-access.js';
 import { createExternalToolGatewayTools } from '../../agent/external-tools/gateway-tools.js';
 import type { ExternalToolProvider } from '../../agent/external-tools/types.js';
 import { loadTranscriptRowsForSession } from '../../storage/sqlite/transcript-repository.js';
@@ -88,6 +96,34 @@ describe('Personal connected-app requests', () => {
   const submit = (accountId?: string) => submitPersonalRequest({ conversationId, connectorId: 'composio-gmail', agentId: 'mail-worker',
     objective: '查一下最近的重要邮件，给出需要回复的事项', accountId, idempotencyKey: 'request-1',
     timeRange: { from: '2026-10-01T00:00:00+08:00', to: '2026-10-08T00:00:00+08:00', timezone: 'Asia/Shanghai', expression: '最近一周' } });
+
+  it('requires a complete brief in model submissions and returns a compact acknowledgement', async () => {
+    connection();
+    const tool = createPersonalRequestTools({ getCurrentConversationId: () => conversationId }).find(tool => tool.name === 'personal_request')!;
+    const validate = new Ajv({ strict: false }).compile(tool.parameters);
+    expect(validate({ command: 'submit', connectorId: 'composio-gmail', objective: 'Summarize mail' })).toBe(false);
+    const description = 'Preserve this complete staged requirement. '.repeat(80) + 'FINAL_REQUIREMENT';
+    const input = { command: 'submit', connectorId: 'composio-gmail', objective: 'Summarize mail', description };
+    expect(validate(input)).toBe(true);
+    const first = JSON.parse((await tool.execute('submit', input)).content[0].text);
+    await tool.execute('uncertain-retry', input);
+    expect(first).not.toHaveProperty('requiresSpecialist');
+    expect(first).not.toHaveProperty('truncated');
+    expect(first.parameters).not.toHaveProperty('brief');
+    expect(listPersonalRequests(conversationId)).toHaveLength(1);
+    expect(new TaskRepository().require(first.taskId).body).toContain('FINAL_REQUIREMENT');
+  });
+
+  it('preserves the complete staged brief separately from its short objective', () => {
+    connection();
+    const description = 'First ask for the label and stop; after the answer confirm it and apply later instructions.';
+    const request = submitPersonalRequest({ conversationId, connectorId: 'composio-gmail', objective: 'Summarize mail',
+      description, agentId: 'mail-worker', idempotencyKey: 'complete-brief' });
+    expect(request.parameters.brief).toBe(description);
+    expect(new TaskRepository().require(request.taskId!).body).toContain(description);
+    expect(() => submitPersonalRequest({ conversationId, connectorId: 'composio-gmail', objective: 'Summarize mail',
+      description: 'Changed brief', agentId: 'mail-worker', idempotencyKey: 'complete-brief' })).toThrow('Idempotency');
+  });
 
   it('preflights locally and starts one task for an already connected account', () => {
     expect(personalCapabilities(conversationId, 'gmail')[0].status).toBe('needs_connection');
@@ -449,6 +485,223 @@ describe('Personal connected-app requests', () => {
     await expect(tool.execute('write', { toolRef: 'composio:composio-gmail-local-owner:GMAIL_SEND_EMAIL', revision: 'x', arguments: { xopcAccountId: account.accountId } }, undefined, undefined)).rejects.toThrow('curated read');
     cancelPersonalRequest(request);
     await expect(tool.execute('cancelled', { toolRef: 'composio:composio-gmail-local-owner:GMAIL_FETCH_EMAILS', revision: 'x', arguments: { xopcAccountId: account.accountId } }, undefined, undefined)).rejects.toThrow('no longer active');
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it('uses one board for connected questions, answers, instructions and confirmations without granting account access', async () => {
+    const { request, worker: chat, account } = worker();
+    const runs = new TaskRunRepository();
+    const runId = runs.getActiveRoot(request.taskId!)!.id;
+    const executor = createTaskCollaborationTool({ getCurrentConversationId: () => chat.key,
+      getCurrentAgentId: () => 'mail-worker', dispatchTaskRuns: vi.fn() });
+    const personal = createPersonalRequestTools({ getCurrentConversationId: () => conversationId,
+      getCurrentAgentId: () => agentId, dispatchTaskRuns: vi.fn() }).find(tool => tool.name === 'personal_request')!;
+    expect(resolveExecutionToolPolicy(chat.key).surface).toBe('personal_request_worker');
+    expect(buildTaskExecutionDirective(chat.key)).toContain('task_collaboration command post');
+    await executor.execute('ask', { command: 'post', kind: 'question', body: 'Which label?', idempotencyKey: 'question' });
+    const board = new TaskCollaborationRepository();
+    const question = board.latest(request.taskId!)!;
+    const mainUpdate = vi.fn(async () => true);
+    const decide = vi.fn();
+    await new TaskMainUpdateDelivery().drain({ isAvailable: () => true, decide, submitAndConfirm: mainUpdate });
+    expect(mainUpdate).toHaveBeenCalledWith(expect.objectContaining({ content: expect.stringContaining(request.requestId) }));
+    expect(decide).not.toHaveBeenCalled();
+    const snapshot = JSON.parse((await personal.execute('read', { command: 'get', requestId: request.requestId })).content[0].text);
+    expect(snapshot.coordination.waits[0].condition.collaborationEntryId).toBe(question.id);
+    const answer = { command: 'answer', requestId: request.requestId, questionId: question.id,
+      instruction: 'Work report', idempotencyKey: 'owner-answer' };
+    await personal.execute('answer', answer); await personal.execute('answer-replay', answer);
+    expect(board.coordination(request.taskId!).filter(entry => entry.kind === 'answer')).toHaveLength(1);
+    const answerEntry = board.latest(request.taskId!)!;
+    await new TaskCollaborationDelivery().drain(vi.fn(async () => true));
+    expect(runs.listActiveWaits(request.taskId!)).toHaveLength(0);
+    expect(runs.getActiveRoot(request.taskId!)?.id).toBe(runId);
+    await executor.execute('ack-answer', { command: 'post', kind: 'ack', causationId: answerEntry.id, body: 'Use Work report', idempotencyKey: 'ack-answer' });
+    await personal.execute('instruct', { command: 'instruct', requestId: request.requestId,
+      instruction: 'Only show urgent messages. Do not change accounts.', idempotencyKey: 'owner-change' });
+    const instruction = board.latest(request.taskId!)!;
+    const submitDelivery = vi.fn(async () => true);
+    await new TaskCollaborationDelivery().drain(submitDelivery);
+    expect(submitDelivery).toHaveBeenCalledWith(expect.objectContaining({ content: expect.stringContaining('task_collaboration command post') }));
+    await executor.execute('ack-change', { command: 'post', kind: 'ack', causationId: instruction.id, body: 'Will filter urgent mail', idempotencyKey: 'ack-change' });
+    expect(board.get(instruction.id)?.deliveryStatus).toBe('confirmed');
+    expect(getPersonalRequest(request.requestId)?.accountId).toBe(account.accountId);
+    expect(runs.listByTask(request.taskId!)).toHaveLength(1);
+    const unrelated = new TaskRepository().create({ title: 'Unrelated', objective: 'Private' });
+    const otherEntry = board.append({ taskId: unrelated.id, authorKind: 'system', authorId: 'test', kind: 'question', body: 'Private', idempotencyKey: 'other' });
+    await expect(executor.execute('cross-task', { command: 'get', entryId: otherEntry.id })).rejects.toThrow('does not belong');
+  });
+
+  it('keeps account authorization waits unresolved by ordinary answers and instructions', async () => {
+    const { request, worker: chat, account } = worker();
+    const executor = createTaskCollaborationTool({ getCurrentConversationId: () => chat.key, getCurrentAgentId: () => 'mail-worker' });
+    await executor.execute('ask', { command: 'post', kind: 'question', body: 'Which label?', idempotencyKey: 'label' });
+    const board = new TaskCollaborationRepository();
+    const question = board.latest(request.taskId!)!;
+    upsertConnectorConnection({ ...account, status: 'expired' });
+    const waiting = requirePersonalWorkerConnection(chat.key);
+    const personal = createPersonalRequestTools({ getCurrentConversationId: () => conversationId, getCurrentAgentId: () => agentId }).find(tool => tool.name === 'personal_request')!;
+    await personal.execute('answer', { command: 'answer', requestId: request.requestId, questionId: question.id,
+      instruction: 'Work label; this text does not reconnect', idempotencyKey: 'label-answer' });
+    await personal.execute('instruct', { command: 'instruct', requestId: request.requestId,
+      instruction: 'Only urgent items', idempotencyKey: 'urgent-instruction' });
+    await new TaskCollaborationDelivery().drain(vi.fn(async () => true));
+    const runs = new TaskRunRepository();
+    expect(runs.listActiveWaits(request.taskId!)).toMatchObject([{ condition: { connectionWaitId: waiting.connectionWaitId } }]);
+    expect(getConnectionWait(waiting.connectionWaitId!)?.status).toBe('open');
+    expect(board.coordination(request.taskId!).find(entry => entry.kind === 'instruction')?.deliveryStatus).toBe('pending');
+    expect(board.list(request.taskId!).some(entry => entry.kind === 'progress' && entry.body.includes('连接界面'))).toBe(true);
+  });
+
+  it('saves a supplemental brief while awaiting initial authorization without creating another Request', async () => {
+    const request = submit();
+    const personal = createPersonalRequestTools({ getCurrentConversationId: () => conversationId }).find(tool => tool.name === 'personal_request')!;
+    const input = { command: 'instruct', requestId: request.requestId, instruction: 'Only urgent items', idempotencyKey: 'before-auth' };
+    await personal.execute('change', input); await personal.execute('change-replay', input);
+    expect(listPersonalRequests(conversationId)).toHaveLength(1);
+    expect(getPersonalRequest(request.requestId)?.objective.match(/Only urgent items/g)).toHaveLength(1);
+    const account = connection();
+    const wait = getConnectionWait(request.connectionWaitId!)!;
+    queueConnectionResolution({ ...wait, needs: wait.needs.map(need => ({ ...need, accountId: account.accountId })) }, 'continued', resolvePersonalRequestConnection);
+    const resumed = getPersonalRequest(request.requestId)!;
+    expect(new TaskRepository().require(resumed.taskId!).body).toContain('Only urgent items');
+    expect(resumed.parameters.timeRange).toEqual(request.parameters.timeRange);
+    expect(new TaskRepository().list()).toHaveLength(1);
+  });
+
+  it('preserves an explicitly revised absolute query range for final coverage checks', async () => {
+    const { request, worker: chat } = worker();
+    const personal = createPersonalRequestTools({ getCurrentConversationId: () => conversationId, getCurrentAgentId: () => agentId }).find(tool => tool.name === 'personal_request')!;
+    const range = { from: '2026-10-07T00:00:00+08:00', to: '2026-10-08T00:00:00+08:00', timezone: 'Asia/Shanghai', expression: 'Only October 7' };
+    await expect(personal.execute('bad-range', { command: 'instruct', requestId: request.requestId, instruction: 'Change range',
+      timeRange: { ...range, from: range.to } })).rejects.toThrow('valid absolute time range');
+    expect(new TaskCollaborationRepository().coordination(request.taskId!)).toHaveLength(0);
+    await personal.execute('range', { command: 'instruct', requestId: request.requestId, instruction: 'Only October 7', timeRange: range });
+    expect(getPersonalRequest(request.requestId)?.parameters.timeRange).toEqual(range);
+    expect(new TaskCollaborationRepository().latest(request.taskId!)?.body).toContain(range.from);
+    await createPersonalRequestResultTool(() => chat.key).execute('latest-result', { summary: 'New range covered', items: [],
+      coverage: { from: range.from, to: range.to, scannedCount: 0, partial: false } });
+    expect(getPersonalRequest(request.requestId)?.result?.coverage?.partial).toBe(false);
+  });
+
+  it('does not deliver saved structured items published before the latest requirement', async () => {
+    const { request, worker: chat, coordinator } = worker();
+    await createPersonalRequestResultTool(() => chat.key).execute('old-result', { summary: 'Old report', items: [{ messageId: 'stale-item',
+      subject: 'Old subject', sender: 'Sender', receivedAt: '2026-10-07T09:00:00Z', importanceReason: 'Old filter' }],
+      coverage: { from: '2026-10-01T00:00:00+08:00', to: '2026-10-08T00:00:00+08:00', scannedCount: 1, partial: false } });
+    const board = new TaskCollaborationRepository();
+    board.append({ taskId: request.taskId!, authorKind: 'main_agent', authorId: agentId, kind: 'instruction', body: 'Change the report filter', idempotencyKey: 'late-change' });
+    coordinator.finalize({ status: 'succeeded', summary: 'Finished', assistantText: 'Result' });
+    finishSessionInputRun(conversationId, 'main-run', 'completed');
+    drainPersonalRequestResults();
+    const compose = vi.fn(async () => 'New requirements remain unverified');
+    await new PersonalReplyComposer(compose).drain(vi.fn());
+    expect(compose).toHaveBeenCalledWith(expect.objectContaining({
+      report: expect.stringContaining('Supplemental requirements arrived'),
+      delivery: expect.objectContaining({ outcome: expect.objectContaining({ status: 'partial' }) }) }), expect.any(AbortSignal));
+    expect(compose.mock.calls[0]?.[0]).not.toHaveProperty('preservedText');
+    expect(JSON.stringify(loadTranscriptRowsForSession(conversationId))).not.toContain('Old subject');
+  });
+
+  it('adopts a republished result after the new instruction and confirms it once', async () => {
+    const { request, worker: chat, coordinator } = worker();
+    const publish = createPersonalRequestResultTool(() => chat.key);
+    const coverage = { from: '2026-10-01T00:00:00+08:00', to: '2026-10-08T00:00:00+08:00', scannedCount: 2, partial: false };
+    await publish.execute('initial', { summary: 'Old report', items: [], coverage });
+    const personal = createPersonalRequestTools({ getCurrentConversationId: () => conversationId, getCurrentAgentId: () => agentId }).find(tool => tool.name === 'personal_request')!;
+    await personal.execute('new-requirement', { command: 'instruct', requestId: request.requestId,
+      instruction: 'Use new title and only urgent mail', idempotencyKey: 'latest-brief' });
+    const board = new TaskCollaborationRepository();
+    const instruction = board.latest(request.taskId!)!;
+    await new TaskCollaborationDelivery().drain(vi.fn(async () => true));
+    await createTaskCollaborationTool({ getCurrentConversationId: () => chat.key, getCurrentAgentId: () => 'mail-worker' })
+      .execute('confirm', { command: 'post', kind: 'ack', causationId: instruction.id, body: 'Will use the new title and filter', idempotencyKey: 'confirmed' });
+    const result = { summary: 'New report: urgent only', coverage, items: [{ messageId: 'urgent', subject: 'Urgent deadline',
+      sender: 'Boss', receivedAt: '2026-10-07T09:00:00Z', importanceReason: 'Urgent' }] };
+    await publish.execute('current', result); await publish.execute('current-replay', result);
+    expect(board.list(request.taskId!).filter(entry => entry.kind === 'result' && entry.authorKind === 'worker_agent')).toHaveLength(2);
+    coordinator.finalize({ status: 'succeeded', summary: result.summary, assistantText: result.summary });
+    finishSessionInputRun(conversationId, 'main-run', 'completed');
+    drainPersonalRequestResults();
+    const compose = vi.fn(async () => result.summary);
+    await new PersonalReplyComposer(compose).drain(vi.fn());
+    expect(compose).toHaveBeenCalledWith(expect.objectContaining({ report: result.summary,
+      preservedText: expect.stringContaining('Urgent deadline'), delivery: expect.objectContaining({ outcome: expect.objectContaining({ status: 'succeeded' }) }) }), expect.any(AbortSignal));
+    expect(JSON.stringify(loadTranscriptRowsForSession(conversationId))).toContain('Urgent deadline');
+  });
+
+  it('permits curated mail reads without broadening the separate batch-read allowlist', async () => {
+    const { account, worker: chat } = worker();
+    const ref = 'composio:composio-gmail-local-owner:GMAIL_FETCH_EMAILS';
+    upsertConnectorActionMetadata({ connectorId: 'composio-gmail', actionId: 'GMAIL_FETCH_EMAILS', scope: 'read', curated: true, cachedAt: new Date().toISOString() });
+    const execute = vi.fn(async () => ({ content: [{ type: 'text' as const, text: 'Read verified' }], details: {} }));
+    const provider: ExternalToolProvider = { source: 'composio', search: async () => [], execute,
+      describe: async () => ({ toolRef: ref, source: 'composio', namespace: 'gmail', title: 'Read', summary: 'Read', description: 'Read',
+        readOnly: true, batchRead: false, inputSchema: { type: 'object', properties: { xopcAccountId: { type: 'string' } }, required: ['xopcAccountId'] } }) };
+    const tools = createExternalToolGatewayTools([provider], () => ({ conversationId: chat.key, channel: 'webchat', chatId: chat.key, origin: { type: 'system', source: 'internal' } }));
+    const contract = await tools.find(tool => tool.name === 'xopc_tool_describe')!.execute('describe', { toolRefs: [ref] });
+    const revision = JSON.parse((contract.content[0] as { text: string }).text).tools[0].revision;
+    await tools.find(tool => tool.name === 'xopc_tool_execute')!.execute('read', { toolRef: ref, revision, readOnly: true, arguments: { xopcAccountId: account.accountId } });
+    expect(execute).toHaveBeenCalledOnce();
+  });
+
+  it('rechecks Personal owner access at the Composio SDK effect boundary', async () => {
+    const { request, account, worker: chat } = worker();
+    upsertConnectorActionMetadata({ connectorId: 'composio-gmail', toolkit: 'gmail', actionId: 'GMAIL_FETCH_EMAILS', scope: 'read', curated: true,
+      inputSchema: { type: 'object', properties: { query: { type: 'string' } } }, cachedAt: new Date().toISOString() });
+    const effect = vi.fn();
+    const adapter = {
+      syncConnections: async () => [account],
+      executeWithPolicy: async (input: { beforeExecute?: () => void }) => {
+        getSqliteDatabase().prepare('UPDATE connector_accounts SET allowed_agent_ids_json = ? WHERE id = ?').run(JSON.stringify(['mail-worker']), account.accountId);
+        input.beforeExecute?.(); effect();
+        return { decision: 'allowed', result: { items: [] } };
+      },
+    } as unknown as ComposioSessionsAdapter;
+    const config = ConfigSchema.parse({ connectors: { instances: { 'composio-gmail': {
+      xopcConnector: { managed: true, connectorId: 'composio-gmail', enabled: true }, runtime: { type: 'composio', role: 'toolkit', toolkit: 'gmail' },
+    } } } });
+    const provider = new ComposioToolProvider({ getConfig: () => config, agentId: 'mail-worker', adapter,
+      getCurrentContext: () => ({ conversationId: chat.key, channel: 'webchat', chatId: chat.key }) });
+    await expect(provider.execute('composio:composio-gmail-local-owner:GMAIL_FETCH_EMAILS', { xopcAccountId: account.accountId, query: 'urgent' }, undefined,
+      { toolCallId: 'dispatch', authorize: () => assertPersonalRequestAccountAccess(request) })).rejects.toThrow('authorization no longer permits');
+    expect(effect).not.toHaveBeenCalled();
+  });
+
+  it('rechecks authorization after asynchronous schema discovery and before app dispatch', async () => {
+    const { account, worker: chat } = worker();
+    const ref = 'composio:composio-gmail-local-owner:GMAIL_FETCH_EMAILS';
+    upsertConnectorActionMetadata({ connectorId: 'composio-gmail', actionId: 'GMAIL_FETCH_EMAILS', scope: 'read', curated: true, cachedAt: new Date().toISOString() });
+    let revoke = false;
+    const execute = vi.fn();
+    const provider: ExternalToolProvider = { source: 'composio', search: async () => [], execute,
+      describe: async () => {
+        if (revoke) getSqliteDatabase().prepare('UPDATE connector_accounts SET allowed_agent_ids_json = ? WHERE id = ?')
+          .run(JSON.stringify(['mail-worker']), account.accountId);
+        return { toolRef: ref, source: 'composio', namespace: 'gmail', title: 'Read', summary: 'Read', description: 'Read', batchRead: true,
+          inputSchema: { type: 'object', properties: { xopcAccountId: { type: 'string' } }, required: ['xopcAccountId'] } };
+      } };
+    const tools = createExternalToolGatewayTools([provider], () => ({ conversationId: chat.key, channel: 'webchat', chatId: chat.key, origin: { type: 'system', source: 'internal' } }));
+    const contract = await tools.find(tool => tool.name === 'xopc_tool_describe')!.execute('describe', { toolRefs: [ref] });
+    const revision = JSON.parse((contract.content[0] as { text: string }).text).tools[0].revision;
+    revoke = true;
+    await expect(tools.find(tool => tool.name === 'xopc_tool_execute')!.execute('revoked-after-describe', { toolRef: ref, revision,
+      arguments: { xopcAccountId: account.accountId } })).rejects.toThrow('authorization no longer permits');
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it.each(['owner', 'executor', 'account', 'installation'] as const)('blocks remote execution after %s authorization is revoked', async which => {
+    const { account, worker: chat } = worker();
+    upsertConnectorActionMetadata({ connectorId: 'composio-gmail', actionId: 'GMAIL_FETCH_EMAILS', scope: 'read', curated: true, cachedAt: new Date().toISOString() });
+    const execute = vi.fn();
+    const tools = createExternalToolGatewayTools([{ source: 'composio', search: async () => [], describe: async () => undefined, execute }],
+      () => ({ conversationId: chat.key, channel: 'webchat', chatId: chat.key, origin: { type: 'system', source: 'internal' } }));
+    if (which === 'installation') upsertConnectorInstallation({ ...installation(), enabled: false });
+    else if (which === 'account') getSqliteDatabase().prepare('UPDATE connector_accounts SET enabled = 0 WHERE id = ?').run(account.accountId);
+    else getSqliteDatabase().prepare('UPDATE connector_accounts SET allowed_agent_ids_json = ? WHERE id = ?')
+      .run(JSON.stringify(which === 'owner' ? ['mail-worker'] : [agentId]), account.accountId);
+    await expect(tools.find(tool => tool.name === 'xopc_tool_execute')!.execute('blocked', {
+      toolRef: 'composio:composio-gmail-local-owner:GMAIL_FETCH_EMAILS', revision: 'fixture', arguments: { xopcAccountId: account.accountId } })).rejects.toThrow('authorization no longer permits');
     expect(execute).not.toHaveBeenCalled();
   });
 

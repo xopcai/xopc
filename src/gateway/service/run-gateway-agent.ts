@@ -42,6 +42,7 @@ import type { AgentSourceContext } from '../../agent/source-context/types.js';
 import { describeActiveExecution, type ActiveExecution } from './active-execution.js';
 import { listTaskUpdateTriggers } from '../../storage/sqlite/session-input-repository.js';
 import { isPersonalConversation } from '../../personal-agent/repository.js';
+import { resolveAgentTurnTimeoutMs } from '../../agent/orchestration/run-agent-turn-with-timeout.js';
 const log = createLogger('Gateway:Service');
 
 export type RunGatewayAgentYield = ChatStreamEvent;
@@ -146,6 +147,7 @@ export async function *runGatewayAgent(
       runId: runOptions?.taskRunId ?? runId,
       context: executionContext,
       fallbackObjective: message,
+      timeoutMs: executionContext.taskId ? resolveAgentTurnTimeoutMs(deps.config, webchatConversationId) : undefined,
     });
   }
   const mapper = new ChatStreamMapper({ runId, conversationId: streamConversationId, channel,
@@ -245,6 +247,10 @@ export async function *runGatewayAgent(
 
         const mappedEvents = (async function* (): AsyncGenerator<ChatStreamEvent> {
           for await (const event of eventStream) {
+            if (event.type === 'error') streamError ??= String(event.content ?? event.message ?? 'Agent run failed');
+            if (event.type === 'turn_outcome' && parseTurnOutcome(event.outcome)?.status === 'failed') {
+              streamError = parseTurnOutcome(event.outcome)?.summary ?? streamError ?? 'Agent run failed';
+            }
             if (event.type === 'turn_outcome' && parseTurnOutcome(event.outcome)?.summary === 'aborted') embeddedAborted = true;
             yield* mapper.map(event);
           }
@@ -257,22 +263,22 @@ export async function *runGatewayAgent(
         const clarificationSuspended = isClarificationSuspended(conversationId, runId);
         const suspended = connectionSuspended || clarificationSuspended;
         const cancelled = mergedSignal.aborted || embeddedAborted;
-        const endStatus = cancelled ? 'cancelled' : suspended ? 'suspended' : 'success';
+        const endStatus = cancelled ? 'cancelled' : suspended ? 'suspended' : streamError ? 'error' : 'success';
         const endSummary = cancelled
           ? 'Interrupted'
           : connectionSuspended
             ? 'Waiting for connection'
             : clarificationSuspended
               ? 'Waiting for user input'
-              : 'Message processed successfully';
-        taskRunStatus = cancelled ? 'cancelled' : 'succeeded';
+              : streamError ?? 'Message processed successfully';
+        taskRunStatus = cancelled ? 'cancelled' : streamError ? 'failed' : 'succeeded';
         terminalStatus = endStatus;
         taskRunSummary = endSummary;
         yield* emitAndYield(mapper.end(endStatus, endSummary));
         completeRealtimeTopic(`run:${runId}`);
         runTopicCompleted = true;
         return {
-          status: cancelled ? 'aborted' : suspended ? 'suspended' : 'ok',
+          status: cancelled ? 'aborted' : suspended ? 'suspended' : streamError ? 'error' : 'ok',
           summary: endSummary,
         };
       } catch (error) {

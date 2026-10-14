@@ -85,6 +85,8 @@ import { compactHistory } from './compact-history.js';
 import { backfillStructuredTurnOutcomes } from './turn-outcome-projector.js';
 import { computeTranscriptUserRoundDeleteRange } from './user-round-delete.js';
 import { findSessionMessages, type SessionFindResult } from './session-find.js';
+import { canResumeAfterModelFailure } from '../agent/orchestration/turn-recovery.js';
+import { archiveFailedModelAttempts } from '../storage/sqlite/transcript-repository.js';
 
 const log = createLogger('SessionStore');
 
@@ -485,15 +487,21 @@ export class SessionStore {
         return 'unsafe';
       }
 
-      let preparedRows = currentRows;
+      let preparedRows = [...currentRows];
       let removedError = false;
-      if (isErrorAssistantRow(preparedRows.at(-1))) {
-        preparedRows = preparedRows.slice(0, -1);
-        removedError = true;
+      for (let index = preparedRows.length - 1; index >= rowsBeforeAttempt.length; index--) {
+        if (isErrorAssistantRow(preparedRows[index])) {
+          preparedRows.splice(index, 1);
+          removedError = true;
+        }
       }
 
       const appendedRows = preparedRows.slice(rowsBeforeAttempt.length);
-      const canResume = (
+      const tail = preparedRows.findLast(row => 'role' in row && ['user', 'assistant', 'toolResult'].includes(String(row.role)));
+      const canResume = (appendedRows.some(row => isTranscriptMessageRole(row, 'user'))
+        && appendedRows.filter(row => isTranscriptMessageRole(row, 'user')).length === 1
+        && (isTranscriptMessageRole(tail, 'user') || isTranscriptMessageRole(tail, 'toolResult'))
+        && canResumeAfterModelFailure(preparedRows)) || (
         appendedRows.length === 1
         && isTranscriptMessageRole(appendedRows[0], 'user')
       ) || (
@@ -503,10 +511,14 @@ export class SessionStore {
       );
 
       if (canResume) {
-        if (removedError) replaceTranscriptRows(key, preparedRows);
+        if (removedError) archiveFailedModelAttempts(key, rowsBeforeAttempt.length);
         return 'resume';
       }
       if (!removedError && appendedRows.length === 0) {
+        return 'prompt';
+      }
+      if (!removedError && appendedRows.every(row => 'type' in row && row.type === 'custom'
+        && ['coding_run_started', 'coding_verification', 'codemode-store', 'xopc-tool-discovery-state'].includes(String((row as XopcTranscriptCustomStateEntry).customType)))) {
         return 'prompt';
       }
       return 'unsafe';

@@ -6,7 +6,8 @@ import type { ConnectionWaitView } from '@xopcai/gateway-contract';
 import { ConnectionActionBar } from '../connection-action-bar';
 
 const mocked = vi.hoisted(() => ({
-  state: { wait: null as ConnectionWaitView | null, isLoading: false, busy: false, error: undefined, act: vi.fn() },
+  state: { wait: null as ConnectionWaitView | null, isLoading: false, busy: false, error: undefined as string | undefined,
+    cancellationError: undefined as string | undefined, act: vi.fn(), dismissError: vi.fn() },
   fetchPlan: vi.fn(),
 }));
 vi.mock('../use-connection-wait', () => ({ useConnectionWait: () => mocked.state }));
@@ -34,6 +35,9 @@ describe('single connection action area', () => {
     Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
     vi.clearAllMocks();
     mocked.state.isLoading = false;
+    mocked.state.busy = false;
+    mocked.state.error = undefined;
+    mocked.state.cancellationError = undefined;
     mocked.state.wait = {
       id: 'wait', conversationId: 'one', transcriptId: 'instance', principalId: 'local-owner', agentId: 'main', objectiveId: 'objective', objectiveRevision: 1, objectiveUpdatedAt: 1,
       originInputId: 'input', originRunId: 'run', summary: 'Summarize unread email from last week', status: 'open', phase: 'needs_connection', version: 1, createdAt: 1, updatedAt: 1,
@@ -42,6 +46,77 @@ describe('single connection action area', () => {
     container = document.createElement('div'); document.body.append(container); root = createRoot(container);
   });
   afterEach(async () => { await act(async () => root.unmount()); container.remove(); });
+  it('keeps cancellation failure visible when execution has already removed the waiting bar', async () => {
+    mocked.state.wait = null;
+    mocked.state.cancellationError = 'Cancellation was not confirmed';
+    await render();
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain('Cancellation was not confirmed');
+    await click('Close');
+    expect(mocked.state.dismissError).toHaveBeenCalledOnce();
+  });
+  it('explains queued recovery and leaves cancellation available', async () => {
+    Object.assign(mocked.state.wait!, { phase: 'queued', status: 'queued', recoveryStage: 'queued', queueBlocked: true });
+    await render();
+    expect(container.textContent).toContain('Connected, waiting to continue');
+    expect(container.textContent).toContain('Waiting for the current execution to finish');
+    expect(container.textContent).not.toContain('Waiting for connection');
+    await click('Cancel this objective');
+    expect(mocked.state.act).toHaveBeenCalledExactlyOnceWith('cancel');
+  });
+  it('shows verification feedback without blocking cancellation during an in-flight action', async () => {
+    mocked.state.wait!.recoveryStage = 'checking_tools';
+    mocked.state.busy = true;
+    await render();
+    expect(container.textContent).toContain('Connected, checking tools');
+    await click('Cancel this objective');
+    expect(mocked.state.act).toHaveBeenCalledExactlyOnceWith('cancel');
+  });
+  it('offers a check retry after a recovery interruption', async () => {
+    mocked.state.wait!.recoveryError = 'restart_interrupted';
+    await render();
+    expect(container.textContent).toContain('objective saved');
+    await click('Retry check');
+    expect(mocked.state.act).toHaveBeenCalledExactlyOnceWith('check');
+  });
+  it('asks for one account explicitly and submits its ID only after confirmation', async () => {
+    mocked.state.wait!.needs[0] = { ...mocked.state.wait!.needs[0], phase: 'choose_account', accounts: [
+      { id: 'work', label: 'Work · mic@company.test' }, { id: 'personal', label: 'Personal · mic@example.test' },
+    ] };
+    await render();
+    const choices = [...container.querySelectorAll<HTMLInputElement>('input[type="radio"]')];
+    expect(choices).toHaveLength(2);
+    expect(choices.every(choice => !choice.checked)).toBe(true);
+    const confirm = [...container.querySelectorAll('button')].find(button => button.textContent === 'Use selected account and continue')!;
+    expect(confirm.disabled).toBe(true);
+    await act(async () => choices[0].click());
+    expect(mocked.state.act).not.toHaveBeenCalled();
+    await click('Use selected account and continue');
+    expect(mocked.state.act).toHaveBeenCalledExactlyOnceWith('select_account', 'gmail', 'work');
+    expect(container.textContent).toContain('this objective only');
+    expect(container.textContent).not.toContain('Let the agent decide');
+  });
+  it('never submits a removed candidate and clears the choice for a revised objective', async () => {
+    mocked.state.wait!.needs[0] = { ...mocked.state.wait!.needs[0], phase: 'choose_account', accounts: [
+      { id: 'work', label: 'Work' }, { id: 'personal', label: 'Personal' },
+    ] };
+    await render();
+    await act(async () => container.querySelector<HTMLInputElement>('input[value="work"]')!.click());
+    mocked.state.wait!.needs[0].accounts = [{ id: 'personal', label: 'Personal' }];
+    await render();
+    await click('Use selected account and continue');
+    expect(mocked.state.act).not.toHaveBeenCalled();
+    mocked.state.wait!.objectiveRevision += 1;
+    await render();
+    expect(container.querySelector<HTMLInputElement>('input[type="radio"]')!.checked).toBe(false);
+  });
+  it('opens another connection from the account question without answering it', async () => {
+    mocked.state.wait!.needs[0] = { ...mocked.state.wait!.needs[0], phase: 'choose_account', accounts: [
+      { id: 'work', label: 'Work' }, { id: 'personal', label: 'Personal' },
+    ] };
+    await render();
+    await click('Connect another account');
+    expect(mocked.state.act).toHaveBeenCalledExactlyOnceWith('connect', 'gmail');
+  });
   it('keeps the composer area empty while a first visit checks for connection needs', async () => {
     mocked.state.wait = null;
     mocked.state.isLoading = true;

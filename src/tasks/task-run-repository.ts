@@ -179,7 +179,7 @@ export interface TaskRunCreateInput {
 export class TaskRunRepository {
   nextAgentInputClientMessageId(runId: string): string {
     const finished = getSqliteDatabase().prepare(`SELECT COUNT(*) AS count FROM session_inputs
-      WHERE task_run_id = ? AND status IN ('completed', 'suspended')`).get(runId) as { count: number };
+      WHERE task_run_id = ? AND status IN ('completed', 'suspended', 'failed', 'interrupted', 'cancelled')`).get(runId) as { count: number };
     return finished.count === 0 ? `task:${runId}` : `task:${runId}:resume:${finished.count}`;
   }
 
@@ -371,6 +371,35 @@ export class TaskRunRepository {
         AND lease_expires_at IS NOT NULL AND lease_expires_at <= ?
       ORDER BY lease_expires_at LIMIT ?`).all(now, Math.max(1, Math.min(200, Math.floor(limit)))) as TaskRunRow[];
     return rows.map(fromRow);
+  }
+
+  /** Resume the same TaskRun and conversation within its original deadline and attempt budget. */
+  scheduleContinuation(input: { runId: string; expectedVersion: number; message: string; reason: string; now?: number }): boolean {
+    const now = input.now ?? Date.now();
+    return runSqliteWriteTransaction(db => {
+      const run = this.get(input.runId);
+      if (!run || run.version !== input.expectedVersion || !['running', 'verifying'].includes(run.status)
+        || run.parentRunId || !run.conversationId || (run.timeoutAt !== undefined && run.timeoutAt <= now)
+        || this.listActiveWaits(run.taskId).length > 0) return false;
+      const execution = db.prepare('SELECT active_conversation_id FROM task_conversation_state WHERE task_id = ?')
+        .get(run.taskId) as { active_conversation_id: string | null } | undefined;
+      if (execution?.active_conversation_id && execution.active_conversation_id !== run.conversationId) return false;
+      const task = new TaskRepository().require(run.taskId);
+      if (task.phase !== 'active' || run.contractVersion !== task.latestContractVersion) return false;
+      const attempts = Number(run.policySnapshot.continuationAttempts ?? 0);
+      const maxAttempts = Math.max(1, Math.min(3, Number(run.retryPolicy.maxAttempts ?? 1)));
+      if (!Number.isFinite(attempts) || !Number.isFinite(maxAttempts) || attempts >= maxAttempts - 1) return false;
+      const policy = { ...run.policySnapshot, continuationAttempts: attempts + 1,
+        continuation: { message: input.message, reason: input.reason,
+          transcriptId: (db.prepare('SELECT active_transcript_id FROM sessions WHERE conversation_id = ?')
+            .get(run.conversationId) as { active_transcript_id: string } | undefined)?.active_transcript_id } };
+      const changed = db.prepare(`UPDATE task_runs SET status = 'waiting', policy_snapshot_json = ?,
+        lease_owner = NULL, lease_expires_at = NULL, version = version + 1 WHERE run_id = ? AND version = ?`)
+        .run(JSON.stringify(policy), run.id, run.version);
+      if (!changed.changes) return false;
+      this.appendEvent(db, run.id, 'task_run.continuation_scheduled', { reason: input.reason, attempt: attempts + 2 }, { kind: 'system' }, now);
+      return true;
+    });
   }
 
   finalize(input: {

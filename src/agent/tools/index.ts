@@ -157,3 +157,5 @@ export {
 } from './edit-diff.js';
 
 export { createPersonalReadTool } from './personal-read-tool.js';
+
+export { createTaskCollaborationTool } from './task-collaboration-tool.js';

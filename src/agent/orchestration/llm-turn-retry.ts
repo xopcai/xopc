@@ -9,6 +9,7 @@ import type { Agent, AgentMessage } from '@earendil-works/pi-agent-core';
 
 import { isTransientProviderErrorMessage } from '../../providers/model-response.js';
 import { isContextOverflowError } from './context-overflow.js';
+import { canResumeAfterModelFailure } from './turn-recovery.js';
 
 export function isTransientLlmErrorMessage(message: string): boolean {
   return isTransientProviderErrorMessage(message);
@@ -89,6 +90,9 @@ export interface RetryTransientTurnOptions {
   baseDelayMs?: number;
   signal?: AbortSignal;
   conversationId: string;
+  onRetry?: () => void;
+  shouldRetry?: () => boolean;
+  budget?: { continues: number };
   log: {
     warn: (obj: Record<string, unknown>, msg: string) => void;
   };
@@ -120,10 +124,10 @@ export async function maybeRetryTurnAfterTransientLlmFailure(
   options: RetryTransientTurnOptions,
 ): Promise<void> {
   const maxContinues = options.maxContinues ?? 2;
-  const baseDelayMs = Math.max(0, options.baseDelayMs ?? 300);
-  let continues = 0;
+  const baseDelayMs = Math.max(0, options.baseDelayMs ?? 1_000);
+  const budget = options.budget ?? { continues: 0 };
 
-  while (continues < maxContinues) {
+  while (budget.continues < maxContinues && options.shouldRetry?.() !== false) {
     const last = getLastAssistantMessage(agent.state.messages);
     if (!last) {
       return;
@@ -141,9 +145,17 @@ export async function maybeRetryTurnAfterTransientLlmFailure(
       );
       return;
     }
+    if (!canResumeAfterModelFailure(agent.state.messages)) {
+      options.log.warn({ conversationId: options.conversationId }, 'Model recovery stopped because a tool outcome is unconfirmed');
+      return;
+    }
 
-    continues += 1;
-    const retryDelayMs = baseDelayMs * (2 ** (continues - 1));
+    const continues = ++budget.continues;
+    const rateLimited = /429|rate.limit|too many requests/i.test(errMsg);
+    const serverDelay = /retry[- ]after\s*[:=]?\s*(\d+(?:\.\d+)?)\s*(ms|s|seconds)?/i.exec(errMsg);
+    const requestedDelay = serverDelay ? Number(serverDelay[1]) * (serverDelay[2] === 'ms' ? 1 : 1000) : 0;
+    const retryDelayMs = Math.min(60_000, Math.max(requestedDelay,
+      (rateLimited && options.baseDelayMs === undefined ? 5_000 : baseDelayMs) * (2 ** (continues - 1))));
     options.log.warn(
       {
         conversationId: options.conversationId,
@@ -157,6 +169,8 @@ export async function maybeRetryTurnAfterTransientLlmFailure(
     );
 
     await waitForRetryDelay(retryDelayMs, options.signal);
+    options.signal?.throwIfAborted();
+    options.onRetry?.();
     const trimmed = stripTrailingErrorAssistantMessages(agent.state.messages);
     agent.state.messages = trimmed;
     await agent.continue();

@@ -167,7 +167,38 @@ describe('SessionStore', () => {
   });
 
   describe('message persistence (SQLite)', () => {
-    it('removes a failed assistant row and resumes the persisted user row for model fallback', async () => {
+    it('resumes a failed model request after completed tools and retains checkpoints and failed-attempt evidence', async () => {
+      const key = crypto.randomUUID();
+      await store.saveMessages(key, [], { metadata: { agentId: 'main' } });
+      const before = await store.loadTranscriptRows(key);
+      await store.appendTranscriptMessage(key, { role: 'user', content: 'Finish the task', timestamp: 1 });
+      await store.appendTranscriptCustomEntry(key, { customType: 'coding_run_started', data: { required: true } });
+      await store.appendTranscriptMessage(key, { role: 'assistant', content: [{ type: 'toolCall', id: 'effect', name: 'send_message', arguments: { text: 'once' } }], stopReason: 'toolUse', timestamp: 2 } as any);
+      await store.appendTranscriptMessage(key, { role: 'toolResult', toolCallId: 'effect', toolName: 'send_message', content: [{ type: 'text', text: 'confirmed' }], timestamp: 3 } as any);
+      await store.appendTranscriptMessage(key, { role: 'assistant', content: [], stopReason: 'error', errorMessage: '503 Service Unavailable', timestamp: 4 } as any);
+      await store.appendTranscriptCustomEntry(key, { customType: 'coding_verification', data: { required: true } });
+      await expect(store.prepareModelFallback(key, before)).resolves.toBe('resume');
+      const rows = await store.loadTranscriptRows(key);
+      expect(rows.some(row => 'role' in row && row.role === 'toolResult')).toBe(true);
+      expect(rows.filter(row => 'role' in row && row.role === 'user')).toHaveLength(1);
+      expect(rows.filter(row => 'type' in row && row.type === 'custom').map(row => (row as any).customType))
+        .toEqual(['coding_run_started', 'model_attempt_error', 'coding_verification']);
+    });
+
+    it.each(['missing', 'failed', 'cancelled', 'new_user'])('refuses unsafe recovery when the previous outcome is %s', async reason => {
+      const key = crypto.randomUUID();
+      await store.saveMessages(key, [], { metadata: { agentId: 'main' } });
+      const before = await store.loadTranscriptRows(key);
+      await store.appendTranscriptMessage(key, { role: 'user', content: 'Send once', timestamp: 1 });
+      await store.appendTranscriptMessage(key, { role: 'assistant', content: [{ type: 'toolCall', id: 'effect', name: 'send_message', arguments: {} }], stopReason: 'toolUse', timestamp: 2 } as any);
+      if (reason !== 'missing') await store.appendTranscriptMessage(key, { role: 'toolResult', toolCallId: 'effect', toolName: 'send_message', content: [], isError: reason === 'failed', timestamp: 3 } as any);
+      if (reason === 'cancelled') await store.appendTranscriptMessage(key, { role: 'assistant', content: [], stopReason: 'aborted', timestamp: 4 } as any);
+      if (reason === 'new_user') await store.appendTranscriptMessage(key, { role: 'user', content: 'Changed request', timestamp: 4 });
+      await store.appendTranscriptMessage(key, { role: 'assistant', content: [], stopReason: 'error', errorMessage: '503', timestamp: 5 } as any);
+      await expect(store.prepareModelFallback(key, before)).resolves.toBe('unsafe');
+    });
+
+    it('archives a failed assistant row and resumes the persisted user row for model fallback', async () => {
       const key = "d6ac9492-a795-4128-899a-9dc8224e0143";
       await store.saveMessages(key, [
         { role: 'user', content: 'previous question', timestamp: 1 },
@@ -192,7 +223,8 @@ describe('SessionStore', () => {
         'user',
       ]);
       expect(rows.filter((row) => (row as { role?: string }).role === 'user')).toHaveLength(2);
-      expect(JSON.stringify(rows)).not.toContain('OAuth auth derivation failed');
+      expect(JSON.stringify(rows)).toContain('OAuth auth derivation failed');
+      expect(JSON.stringify(await store.loadMessages(key))).not.toContain('OAuth auth derivation failed');
     });
 
     it('includes active transcript cwd in listed metadata', async () => {

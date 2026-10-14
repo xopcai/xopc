@@ -4,9 +4,10 @@ import type { AuthenticatedRouteDeps } from './deps.js';
 
 const actionSchema = z.object({
   waitId: z.string().min(1), expectedTranscriptId: z.string().min(1), expectedVersion: z.number().int().positive(),
+  expectedObjectiveRevision: z.number().int().positive().optional(),
   idempotencyKey: z.string().min(1).max(200),
   action: z.enum(['install_complete', 'connect', 'check', 'skip', 'cancel', 'select_account', 'confirm_scope', 'replace_source']),
-  candidateRef: z.string().optional(), needKey: z.string().optional(), accountId: z.string().optional(),
+  candidateRef: z.string().optional(), needKey: z.string().optional(), accountId: z.string().optional(), instanceId: z.string().optional(),
 }).strict();
 
 export function registerConnectionWaitRoutes(app: Hono, { service, strictRateLimitMiddleware }: AuthenticatedRouteDeps): void {

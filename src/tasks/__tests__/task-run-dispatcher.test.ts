@@ -5,11 +5,12 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { seedTestDatabase } from '../../../test/sqlite-fixture.js';
-import { closeXopcDatabase, openXopcDatabase, resetXopcDatabaseSingletonForTest } from '../../storage/sqlite/index.js';
+import { closeXopcDatabase, openXopcDatabase, resetXopcDatabaseSingletonForTest, ensureSessionRecord, appendTranscriptEntry } from '../../storage/sqlite/index.js';
 import { getSqliteDatabase } from '../../storage/sqlite/transaction.js';
 import { TaskApplicationService } from '../task-application-service.js';
 import { TaskRunDispatcher } from '../task-run-dispatcher.js';
 import { TaskRunRepository } from '../task-run-repository.js';
+import { TaskContextRepository } from '../task-context-repository.js';
 
 const contract = { objective: 'Do work', expectedOutputs: [], acceptanceCriteria: [], constraints: [],
   approvalRequired: [], assumptions: [], risks: [], acceptancePolicy: 'verified_auto' as const,
@@ -135,5 +136,46 @@ describe('TaskRunDispatcher', () => {
     });
     expect(completed.ok).toBe(true);
     expect(runs.require(runId).status).toBe('succeeded');
+  });
+
+  it.each(['confirmed', 'missing', 'failed', 'cancelled'] as const)('recovers only confirmed operation outcomes after a process restart (%s)', async outcome => {
+    const runId = queue('restart-safety');const runs = new TaskRunRepository();const conversationId = crypto.randomUUID();
+    ensureSessionRecord(conversationId, stateDir, { agentId: 'main' });
+    const claimed = runs.claimNext({ owner: 'dead-worker', leaseMs: 60_000 })!;
+    const snapshot = new TaskContextRepository().captureSnapshot({ ownerKind: 'task_run', ownerId: runId, query: 'resume' });
+    runs.start({ runId, expectedVersion: claimed.version, conversationId, contextSnapshotId: snapshot.id,
+      policySnapshot: {}, timeoutAt: Date.now() + 60_000 });
+    appendTranscriptEntry(conversationId, { role: 'user', content: 'Send once', timestamp: 1 });
+    appendTranscriptEntry(conversationId, { role: 'assistant', content: [{ type: 'toolCall', id: 'effect', name: 'send_message', arguments: {} }], stopReason: 'toolUse', timestamp: 2 } as any);
+    if (outcome !== 'missing') appendTranscriptEntry(conversationId, { role: 'toolResult', toolName: 'send_message', toolCallId: 'effect', content: [], isError: outcome === 'failed', timestamp: 3 } as any);
+    if (outcome === 'cancelled') appendTranscriptEntry(conversationId, { role: 'assistant', content: [], stopReason: 'aborted', timestamp: 4 } as any);
+    getSqliteDatabase().prepare('UPDATE task_runs SET lease_expires_at = ? WHERE run_id = ?').run(Date.now() - 1, runId);
+    const runAgent = vi.fn(async () => {});
+    const dispatcher = new TaskRunDispatcher({ workerId: 'new-worker', maxConcurrency: 1, ensureSession: async () => conversationId, runAgent });
+    await dispatcher.drain();dispatcher.stop();
+    if (outcome === 'confirmed') {
+      expect(runAgent).toHaveBeenCalledOnce();
+      expect(runs.require(runId)).toMatchObject({ status: 'running', policySnapshot: { continuationAttempts: 1 } });
+    } else {
+      expect(runAgent).not.toHaveBeenCalled();expect(runs.require(runId).status).toBe('failed');
+      expect(runs.getReceipt(runId)?.needsUser).toBe(true);
+    }
+  });
+
+  it('bounds continuation attempts and preserves the original deadline', () => {
+    const runId = queue('continuation-budget');const runs = new TaskRunRepository();const conversationId = crypto.randomUUID();
+    ensureSessionRecord(conversationId, stateDir, { agentId: 'main' });
+    const queued = runs.require(runId);const snapshot = new TaskContextRepository().captureSnapshot({ ownerKind: 'task_run', ownerId: runId, query: 'resume' });
+    const deadline = Date.now() + 60_000;
+    runs.start({ runId, expectedVersion: queued.version, conversationId, contextSnapshotId: snapshot.id, policySnapshot: {}, timeoutAt: deadline });
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const current = runs.require(runId);
+      expect(runs.scheduleContinuation({ runId, expectedVersion: current.version, reason: 'acceptance_incomplete', message: 'Finish remaining criteria' })).toBe(attempt < 2);
+      expect(runs.require(runId).timeoutAt).toBe(deadline);
+      if (attempt < 2) { const waiting = runs.require(runId);runs.setStatus({ runId, expectedVersion: waiting.version, from: ['waiting'], to: 'running' }); }
+    }
+    expect(runs.listByTask(queued.taskId)).toHaveLength(1);
+    const current = runs.require(runId);
+    expect(runs.scheduleContinuation({ runId, expectedVersion: current.version, reason: 'model_failure', message: 'resume', now: deadline + 1 })).toBe(false);
   });
 });

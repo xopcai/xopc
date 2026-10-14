@@ -1,7 +1,10 @@
 import type { AgentTool } from '@earendil-works/pi-agent-core';
 import { Type } from '@sinclair/typebox';
 
-import { getSqliteDatabase } from '../../storage/sqlite/transaction.js';
+import { selectionRequestHash } from '../../agent-matching/selection-repository.js';
+import { assertPersonalRequestAccountAccess } from '../../personal-agent/request-access.js';
+import { TaskCollaborationRepository } from '../../tasks/task-collaboration-repository.js';
+import { getSqliteDatabase, runSqliteWriteTransaction } from '../../storage/sqlite/transaction.js';
 import { personalRequestForExecution } from '../../personal-agent/request-repository.js';
 import { PersonalRequestResultSchema } from '../../personal-agent/request-result.js';
 import { TaskRunRepository } from '../../tasks/task-run-repository.js';
@@ -27,9 +30,18 @@ export function createPersonalRequestResultTool(conversationId: () => string | u
         && (Date.parse(result.coverage.from) > Date.parse(request.parameters.timeRange.from)
           || Date.parse(result.coverage.to) < Date.parse(request.parameters.timeRange.to))) result.coverage.partial = true;
       const run = request.taskId ? new TaskRunRepository().getActiveRoot(request.taskId) : undefined;
-      if (!run || run.conversationId !== id) throw new Error('Task execution changed');
-      getSqliteDatabase().prepare('UPDATE personal_requests SET result_json = ?, result_run_id = ?, updated_at = ? WHERE request_id = ?')
-        .run(JSON.stringify(result), run.id, Date.now(), request.requestId);
+      if (!run || run.conversationId !== id || !['running', 'verifying'].includes(run.status)) throw new Error('Task execution changed');
+      assertPersonalRequestAccountAccess(request);
+      runSqliteWriteTransaction(() => {
+        const board = new TaskCollaborationRepository();
+        const direction = board.coordination(run.taskId).filter(entry => ['main_agent', 'user'].includes(entry.authorKind)
+          && ['answer', 'instruction'].includes(entry.kind)).at(-1)?.sequence ?? 0;
+        board.append({ taskId: run.taskId, taskRunId: run.id, authorKind: 'worker_agent', authorId: request.executorAgentId,
+          kind: 'result', body: result.summary,
+          idempotencyKey: `personal-request-result:${request.requestId}:${run.id}:${direction}:${selectionRequestHash(result)}` });
+        getSqliteDatabase().prepare('UPDATE personal_requests SET result_json = ?, result_run_id = ?, updated_at = ? WHERE request_id = ?')
+          .run(JSON.stringify(result), run.id, Date.now(), request.requestId);
+      });
       return { content: [{ type: 'text', text: 'Result saved for delivery to the originating chat after this Task completes.' }], details: {} };
     } };
 }
