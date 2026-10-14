@@ -35,7 +35,7 @@ import {
 import { readLocalSessionDraft, saveLocalSessionDraft, readSessionTranscript, readPendingSessionCommand, savePendingSessionCommand, clearPendingSessionCommand, confirmSessionCommand } from '../session/local-session-drafts';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { patchSessionAgentConfigView } from '../session/patch-session-agent-config-view';
-import type { SessionAgentConfig } from '../session/session-manager';
+import { SessionManager, type SessionAgentConfig } from '../session/session-manager';
 import { beginResponseLatency, bindResponseLatency, discardPendingResponseLatency, recordResponseText, finishResponseLatency } from './response-latency';
 
 async function retryDelay(ms: number, signal: AbortSignal): Promise<void> {
@@ -408,7 +408,7 @@ export class MessageSender {
       const scope = useGatewayStore.getState().conversationId;
       const assertScope = () => { if (scope !== useGatewayStore.getState().conversationId) throw new Error('Active Gateway changed'); };
       if (selection?.modelConfigSaving) throw new Error('Wait for model configuration to finish saving');
-      const configVersion = selection?.configVersion;
+      let configVersion = selection?.configVersion;
       const origin = await waitForEndpointTurnClaim(controller.signal);
       const fingerprint = `${sessionInputFingerprint({ content, attachments: capped, thinking: thinkingLevel, contextRefs, appContext: capturedContext })}:${configVersion ?? ''}${replaceTurnId ? `:replace:${replaceTurnId}` : ''}`;
       let clientMessageId = claimSubmissionId(chatId, fingerprint);
@@ -419,9 +419,27 @@ export class MessageSender {
         body = { clientMessageId, configVersion, delivery: 'next', ...input, thinking: thinkingLevel, origin };
       } else {
         assertScope();
-        const pending = await readPendingSessionCommand(chatId);
-        const draft = await readLocalSessionDraft(chatId);
+        let draft = await readLocalSessionDraft(chatId);
         assertScope();
+        if (draft?.materialization) {
+          const manager = new SessionManager();
+          await manager.confirmPendingMaterialization(chatId, controller.signal);
+          const agentConfig = await manager.loadSessionAgentConfig(chatId);
+          controller.signal.throwIfAborted();
+          assertScope();
+          patchSessionAgentConfigView(chatId, agentConfig);
+          configVersion = agentConfig.configVersion;
+          draft = await readLocalSessionDraft(chatId);
+        }
+        const pending = await readPendingSessionCommand(chatId);
+        assertScope();
+        if (!draft && !pending && configVersion === undefined) {
+          const agentConfig = await new SessionManager().loadSessionAgentConfig(chatId);
+          controller.signal.throwIfAborted();
+          assertScope();
+          patchSessionAgentConfigView(chatId, agentConfig);
+          configVersion = agentConfig.configVersion;
+        }
         if (pending) {
           input.endpointContext = pending.input.endpointContext;
           if (canonicalSessionCommand(pending.input) !== canonicalSessionCommand(input)) throw new Error('The previous input is awaiting confirmation');
@@ -429,7 +447,6 @@ export class MessageSender {
           body = sessionInputCommandSchema.parse({ ...pending, origin });
         } else if (draft) {
           input.endpointContext = draft.submission?.input.endpointContext ?? await captureTurnEnvironment();
-          if (draft.materialization) throw new Error('Conversation materialization is awaiting confirmation');
           const proposed = { kind: 'start' as const, clientMessageId, creation: draft.creation, input };
           if (draft.submission && canonicalSessionCommand(draft.submission.input) !== canonicalSessionCommand(input)) {
             throw new Error('The first input is awaiting confirmation. Retry it before sending different content.');
