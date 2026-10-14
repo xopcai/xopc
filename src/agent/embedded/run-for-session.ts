@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import { connectionObjectiveContext } from '../context/connection-objective-context.js';
 import { traceRun, startObservation, traceOperation, setTraceIdentity } from '../../observability/runtime.js';
 import { voicePresentationPrompt } from '../prompt/voice-presentation.js';
 import type { AgentMessage, ThinkingLevel } from '@earendil-works/pi-agent-core';
@@ -82,7 +83,7 @@ async function runEmbeddedTurnForSessionInner(params: RunEmbeddedForSessionParam
   const finish = async (result: RunXopcEmbeddedTurnResult): Promise<RunXopcEmbeddedTurnResult> => {
     if (supervisor.signal.aborted && supervisor.signal.reason instanceof Error
       && supervisor.signal.reason.message === 'Agent run deadline expired') {
-      result = { ...result, ok: false, retryable: false, errorMessage: supervisor.signal.reason.message };
+      result = { ...result, ok: false, retryable: false, terminationReason: 'deadline_exceeded', errorMessage: supervisor.signal.reason.message };
     }
     turnCompleted = result.ok && result.stopReason !== 'connection_required' && result.stopReason !== 'clarification_required';
     if (result.stopReason === 'connection_required' || result.stopReason === 'clarification_required') return result;
@@ -177,7 +178,8 @@ async function runEmbeddedTurnForSessionInner(params: RunEmbeddedForSessionParam
     const turnPolicy = agentManager.createAgentTurnPolicy(conversationId);
     const baseSystemPrompt = [agent.state.systemPrompt ?? '', params.presentation === 'voice' ? voicePresentationPrompt : '']
       .filter(Boolean).join('\n\n');
-    const systemPrompt = appendDynamicPromptSection(baseSystemPrompt, params.dynamicSystemContext ?? '');
+    const systemPrompt = appendDynamicPromptSection(baseSystemPrompt,
+      [params.dynamicSystemContext, connectionObjectiveContext(conversationId)].filter(Boolean).join('\n\n'));
     const idlePolicy = resolveCompactionPolicy(config);
     if (personal && idlePolicy.enabled && idlePolicy.personalIdle.enabled) {
       idleJob = async (signal, isCurrent) => {
@@ -335,6 +337,7 @@ async function runEmbeddedTurnForSessionInner(params: RunEmbeddedForSessionParam
             onAgentEvent: (event) => agentManager.emitRuntimeEvent(conversationId, event),
             resumeLastUserMessage,
             recoveryMessage: taskContinuation?.message,
+            recoveryReason: taskContinuation?.reason,
             requireVisibleReply: params.requireVisibleReply,
           }),
           runId,
@@ -390,7 +393,8 @@ async function runEmbeddedTurnForSessionInner(params: RunEmbeddedForSessionParam
       }
 
       if (hasNextCandidate && rowsBeforeAttempt) {
-        const preparation = await sessionStore.prepareModelFallback(conversationId, rowsBeforeAttempt);
+        const preparation = await sessionStore.prepareModelFallback(conversationId, rowsBeforeAttempt,
+          { resumeTaskContinuation: Boolean(taskContinuation?.message) });
         if (preparation === 'unsafe') {
           log.warn(
             { conversationId, runId, modelRef: candidateModelRef, attempt: i + 1 },

@@ -70,3 +70,16 @@ describe('agent turn policy', () => {
     expect(policy.shouldStopAfterTurn(stopContext(1))).toBe(true);
   });
 });
+
+it('counts each underlying batch query once across a child-to-parent authorization chain', async () => {
+  const calls = vi.fn(async () => undefined);
+  const parent = createAgentTurnPolicy({ resolveToolLimit: name => name === 'web_search' ? { id: name, maxCalls: 2 } : undefined,
+    authorizeToolCall: calls });
+  const child = createAgentTurnPolicy({ authorizeToolCall: parent.beforeToolCall });
+  const context = { ...beforeContext('data_batch'), args: { operations: [
+    { id: 'a', kind: 'web_search', query: 'Vendor A' }, { id: 'b', kind: 'web_search', query: 'Vendor B' },
+  ] } };
+  expect(await child.beforeToolCall(context)).toBeUndefined();
+  expect(calls.mock.calls.map(([context]) => context.toolCall.name)).toEqual(['data_batch', 'web_search', 'web_search']);
+  expect(await child.beforeToolCall(beforeContext('web_search'))).toMatchObject({ block: true, terminate: true });
+});

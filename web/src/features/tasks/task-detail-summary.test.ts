@@ -32,4 +32,13 @@ describe('summarizeTaskCriteria', () => {
     task.task.contract!.acceptancePolicy = 'manual';
     expect(summarizeTaskCriteria(task)[0]).toMatchObject({ status: 'unverified', runId: 'current' });
   });
+
+  it('keeps the latest unverified reason instead of borrowing an older pass', () => {
+    const task = detail();
+    task.receipts.push({ runId: 'latest', finalizedAt: 300, verification: { status: 'unverified', checks: [{
+      criterion: 'Tests pass', status: 'unverified', evidenceTitles: [], method: 'model_reviewed', note: 'Missing source evidence' }] },
+      evidence: [] } as unknown as TaskDetail['receipts'][number]);
+    task.runs.push({ id: 'latest', contractVersion: 2 } as unknown as TaskDetail['runs'][number]);
+    expect(summarizeTaskCriteria(task)[0]).toMatchObject({ status: 'unverified', runId: 'latest', note: 'Missing source evidence', method: 'model_reviewed' });
+  });
 });

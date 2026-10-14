@@ -1,3 +1,4 @@
+import { searchHttpError } from '../errors.js';
 import { getModelCatalogStore, type ModelCatalogStore } from '../../../../providers/model-catalog-store.js';
 import { getProviderAuthService, type ProviderAuthService } from '../../../../providers/provider-auth-service.js';
 import type { SearchProvider, SearchResult } from '../types.js';
@@ -21,6 +22,11 @@ export class XopcCloudSearchProvider implements SearchProvider {
     this.credentials = options.credentials ?? getProviderAuthService();
   }
 
+  cacheIdentity(): string {
+    const source = this.catalogStore.getSource('xopc-cloud');
+    return JSON.stringify([source?.baseUrl, source?.search]);
+  }
+
   isAvailable(): boolean {
     return Boolean(this.catalogStore.getSource('xopc-cloud')?.search);
   }
@@ -32,7 +38,7 @@ export class XopcCloudSearchProvider implements SearchProvider {
       ? AbortSignal.any([signal, AbortSignal.timeout(30_000)])
       : AbortSignal.timeout(30_000);
     const accessToken = await this.credentials.resolveApiKey('xopc-cloud', requestSignal);
-    if (!accessToken) throw new Error('XOPC Cloud is not connected');
+    if (!accessToken) throw searchHttpError(new Response(null, { status: 401 }), 'XOPC Cloud is not connected');
     const endpoint = `${source.baseUrl.replace(/\/+$/, '')}/${source.search.endpoint.replace(/^\/+/, '')}`;
     const response = await this.fetchImpl(endpoint, {
       method: 'POST',
@@ -53,7 +59,7 @@ export class XopcCloudSearchProvider implements SearchProvider {
       error?: { message?: unknown };
     } | null;
     if (!response.ok) {
-      throw new Error(
+      throw searchHttpError(response,
         typeof body?.error?.message === 'string'
           ? body.error.message
           : `XOPC Cloud search failed (${response.status})`,

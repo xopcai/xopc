@@ -8,9 +8,8 @@ import { getSessionMetadata } from '../../storage/sqlite/session-repository.js';
 import { readCurrentTranscriptId } from '../../storage/sqlite/session-instance-repository.js';
 import { getActiveConnectionWait, reviseCurrentConnectionObjective, updateConnectionWait } from '../../storage/sqlite/connection-wait-repository.js';
 import { updatePersonalRequest, getPersonalRequest, listPersonalRequests } from '../../personal-agent/request-repository.js';
-import { assertPersonalRequestTimeRange, cancelPersonalRequest, personalRequestSnapshot, publishPersonalRequest, submitPersonalRequest } from '../../personal-agent/request-service.js';
+import { assertPersonalRequestTimeRange, cancelPersonalRequest, personalRequestSnapshot, publishPersonalRequest, submitPersonalRequest, stopPersonalRequestExecution } from '../../personal-agent/request-service.js';
 import { getSqliteDatabase, runSqliteWriteTransaction } from '../../storage/sqlite/transaction.js';
-import { cancelPersonalTask } from '../../personal-agent/task-cancel.js';
 import { TaskAllocationRepository } from '../../tasks/task-allocation-repository.js';
 import { boundedPersonalResult } from './personal-result-budget.js';
 import { isPersonalConversation } from '../../personal-agent/repository.js';
@@ -67,14 +66,14 @@ export function createPersonalRequestTools(deps: XopcUseToolDeps): AgentTool[] {
   };
   const requestTool: AgentTool<typeof RequestSchema> = {
     name: 'personal_request', label: 'Connected app request', parameters: RequestSchema,
-    description: 'Submit a read-only connected-app request with a short objective and complete description using the exact connectorId from personal_capability. The background Task Router chooses an executor after account authorization. Preserves the objective, displays connection or account selection in this main chat, and starts a specialist Task automatically once connected. Return quickly after submission. Never claim data was read until the Task result arrives. Resolve absolute query dates and include timeRange. If mail has no user-specified range, the host returns an explicit last-7-days default; mention that range in your confirmation. get includes complete Task coordination state; collaboration/entry read the same board and full questions. answer forwards the exact questionId; instruct forwards new requirements to the existing Task. Answers and instructions cannot change the connector/account, grant access or allow writes; reconnection stays in the existing connection UI. Saved, delivered, executor-confirmed and verified are distinct states. Use get/list for status without polling; preserve idempotencyKey on uncertain retries; cancel only when the user requests it.',
+    description: 'Submit a read-only connected-app request with a short objective and complete description using the exact connectorId from personal_capability. The background Task Router chooses an executor after account authorization. Preserves the objective, displays connection or account selection in this main chat, and starts a specialist Task automatically once connected. Return quickly after submission. Never claim data was read until the Task result arrives. Resolve absolute query dates and include timeRange. If mail has no user-specified range, the host returns an explicit last-7-days default; state that range and proceed without asking for confirmation. get includes complete Task coordination state; collaboration/entry read the same board and full questions. answer forwards the exact questionId; instruct forwards new requirements to the existing Task. Answers and instructions cannot change the connector/account, grant access or allow writes; reconnection stays in the existing connection UI. Saved, delivered, executor-confirmed and verified are distinct states. Use get/list for status without polling; preserve idempotencyKey on uncertain retries; cancel only when the user requests it.',
     async execute(toolCallId, input) {
       const conversationId = conversation();
       if (input.command === 'list') {
         const offset = input.offset ?? 0;
         const items = listPersonalRequests(conversationId, input.limit ?? 10, offset).map(request => {
           const { result: _result, parameters, ...summary } = snapshot(request);
-          const { brief: _brief, ...queryParameters } = parameters;
+          const { brief: _brief, taskRunId: _taskRunId, cancellationCleanupCompleted: _cleanup, ...queryParameters } = parameters;
           return { ...summary, parameters: queryParameters };
         });
         const total = (getSqliteDatabase().prepare('SELECT count(*) AS count FROM personal_requests WHERE conversation_id = ?').get(conversationId) as { count: number }).count;
@@ -87,18 +86,16 @@ export function createPersonalRequestTools(deps: XopcUseToolDeps): AgentTool[] {
           idempotencyKey: input.idempotencyKey ?? `personal-request-submit:${selectionRequestHash({ inputId: getSessionInputState(conversationId).activeInputId ?? toolCallId, objective: input.objective.trim(), description: input.description?.trim(), connectorId: input.connectorId, accountId: input.accountId, timeRange: input.timeRange })}` });
         publishPersonalRequest(request);
         deps.dispatchTaskRuns?.();
-        return result(compactSnapshot(request));
+        return result({ ...compactSnapshot(request), guidance: request.state === 'waiting_connection'
+          ? 'The objective is saved. The host presents the required connection or account selection and continues automatically afterward. Stop this turn; do not ask the user to confirm the read or reply continue.'
+          : 'The request was accepted. No further user confirmation is needed. Report the returned state accurately, do not submit a duplicate, and wait for delivery without polling.' });
       }
       const request = input.requestId ? getPersonalRequest(input.requestId) : undefined;
       if (!request || request.conversationId !== conversationId) throw new Error('Request does not belong to this conversation');
       if (input.command === 'cancel') {
         if (['completed', 'failed'].includes(personalRequestSnapshot(request).state)) return result(compactSnapshot(request));
-        if (request.state === 'cancelled') {
-          const stop = request.taskId ? await cancelPersonalTask(request.taskId, conversationId, input.idempotencyKey ?? toolCallId) : { executionStopConfirmed: true };
-          return result({ ...compactSnapshot(request), executionStopConfirmed: stop.executionStopConfirmed });
-        }
-        const stop = request.taskId ? await cancelPersonalTask(request.taskId, conversationId, input.idempotencyKey ?? toolCallId) : { executionStopConfirmed: true };
         const cancelled = cancelPersonalRequest(request);
+        const stop = stopPersonalRequestExecution(cancelled);
         publishPersonalRequest(cancelled);
         return result({ ...compactSnapshot(cancelled), executionStopConfirmed: stop.executionStopConfirmed });
       }

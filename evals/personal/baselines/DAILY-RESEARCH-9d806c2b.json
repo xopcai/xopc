@@ -1,0 +1,847 @@
+{
+  "suiteVersion": 2,
+  "mode": "daily_gateway_real",
+  "marker": "DAILY-RESEARCH-9d806c2b",
+  "base": "http://127.0.0.1:18790",
+  "startedAt": "2026-10-14T15:52:43.129Z",
+  "folder": "/Users/micjoyce/.xopc/workspace-data-analyst/benchmarks/DAILY-RESEARCH-9d806c2b",
+  "sourceHashes": {
+    "src/tasks/task-model-call.ts": "91189157b448316fee10fe3bbb224b274af6dcec46fe9b2162363b13482922f2",
+    "src/tasks/task-contract-planner.ts": "b77eedbc3f40dbcbde532b959c79393206a1dc28cb8653fb8c5a9bfd7df660c9",
+    "src/tasks/task-research-result.ts": "6262363a4d206a4a1ce62715588e795b9748c108c537f509d7c821febd085dd8",
+    "src/tasks/task-run-coordinator.ts": "6a13a66e9008bc06050fe53767555fcffaef14a0ced0f3c0d7f27c6674a978ba",
+    "src/tasks/task-research-repair.ts": "87849f6533b6155a37f599812d12beda6014dd5e15760dc040af1f25831e644d",
+    "src/session/store.ts": "70d6624c0e8a88157e2c3eb4f5f432b8f8a3726f974385583b3e7fb069eea7ec",
+    "src/agent/embedded/run-turn.ts": "05eb555422574ea709471662b8e651d6c03feee0a88de21194d0f86ea83dafbf",
+    "src/agent/orchestration/turn-recovery.ts": "540c0132d756aee6405d98a34c540630d5e3ae8402fe996ef55f78178ab27b8a",
+    "src/config/schema.ts": "e0995eceae482b60824598bc9d2808447ca203eefa08b44a85d27673fe9a2336",
+    "scripts/personal-daily-gateway-smoke.mts": "8e32898a36ff2a169a3f6567bf9a205bcfa59901a370d194cd71b6a1d7d2874b",
+    "pnpm-lock.yaml": "c9ba3f707270e8af6a7c6bdd3e4ed79aa16a3440c3d1df8602732bb6a8c5a0e5"
+  },
+  "injections": [
+    {
+      "type": "requirement_change",
+      "at": "2026-10-14T15:54:17.500Z"
+    },
+    {
+      "type": "published_test_file_loss",
+      "uri": "media://outbound/report---19a553a7-f42f-4e9c-9a5e-2fc370c2c5d5.md",
+      "at": "2026-10-14T15:55:07.244Z"
+    }
+  ],
+  "downloads": [
+    {
+      "title": "reproduce.mjs",
+      "uri": "media://outbound/reproduce---05c56dbc-4628-419d-803e-8ce661827c4c.mjs",
+      "bytes": 2239,
+      "sha256": "c2e181a01a1c29150043907e325172b7ae9446497cf5e79385ef59350ebcb5f6"
+    },
+    {
+      "title": "monthly_summary.csv",
+      "uri": "media://outbound/monthly_summary---0d6a59d4-bf71-4152-8f9a-882ac2a9d340.csv",
+      "bytes": 51,
+      "sha256": "f1882e2ac306622db96b6d09946212fd19e28cc146785da2e9e9e285d6649d89"
+    },
+    {
+      "title": "report.md",
+      "uri": "media://outbound/report---0148e419-5864-4bed-ba1b-f6fda7007f62.md",
+      "bytes": 7536,
+      "sha256": "3f2a618517b261ef6ba1364f33aae9a685187105c910ae743bf91a560f701f3e"
+    },
+    {
+      "title": "change_notes.md",
+      "uri": "media://outbound/change_notes---1325a871-2a15-4ead-af6e-6f87e88ca806.md",
+      "bytes": 1031,
+      "sha256": "2b2eafb3e975915d0c993144254e4e52aef53f68d3d5d022392c847809e326ac"
+    }
+  ],
+  "taskId": "ca6cfcbb-5a78-43fa-b7c9-a84915356a0a",
+  "runId": "9f6e869f-4c08-4e67-aab4-acee57d61dda",
+  "outcome": {
+    "version": 1,
+    "outcomeId": "03b3b205-61d9-4ab0-8338-bd87fb9fc418:outcome",
+    "runId": "03b3b205-61d9-4ab0-8338-bd87fb9fc418",
+    "turnId": "03b3b205-61d9-4ab0-8338-bd87fb9fc418",
+    "status": "succeeded",
+    "summary": "Message processed successfully",
+    "deliverables": [
+      {
+        "artifactId": "reproduce---05c56dbc-4628-419d-803e-8ce661827c4c.mjs",
+        "sourceFileId": "KovrjreJO7nTklcjXYmn_dEL.YmVuY2htYXJrcy9EQUlMWS1SRVNFQVJDSC05ZDgwNmMyYi9yZXByb2R1Y2UubWpz",
+        "title": "reproduce.mjs",
+        "kind": "file",
+        "mimeType": "application/octet-stream",
+        "sizeBytes": 2239,
+        "availability": "available",
+        "location": "artifact_store",
+        "capabilities": [
+          "download"
+        ],
+        "uri": "media://outbound/reproduce---05c56dbc-4628-419d-803e-8ce661827c4c.mjs"
+      },
+      {
+        "artifactId": "monthly_summary---0d6a59d4-bf71-4152-8f9a-882ac2a9d340.csv",
+        "sourceFileId": "KovrjreJO7nTklcjXYmn_dEL.YmVuY2htYXJrcy9EQUlMWS1SRVNFQVJDSC05ZDgwNmMyYi9tb250aGx5X3N1bW1hcnkuY3N2",
+        "title": "monthly_summary.csv",
+        "kind": "spreadsheet",
+        "mimeType": "text/csv",
+        "sizeBytes": 51,
+        "availability": "available",
+        "location": "artifact_store",
+        "capabilities": [
+          "preview",
+          "download"
+        ],
+        "uri": "media://outbound/monthly_summary---0d6a59d4-bf71-4152-8f9a-882ac2a9d340.csv"
+      },
+      {
+        "artifactId": "report---0148e419-5864-4bed-ba1b-f6fda7007f62.md",
+        "sourceFileId": "KovrjreJO7nTklcjXYmn_dEL.YmVuY2htYXJrcy9EQUlMWS1SRVNFQVJDSC05ZDgwNmMyYi9yZXBvcnQubWQ",
+        "title": "report.md",
+        "kind": "document",
+        "mimeType": "text/markdown",
+        "sizeBytes": 7536,
+        "availability": "available",
+        "location": "artifact_store",
+        "capabilities": [
+          "preview",
+          "download"
+        ],
+        "uri": "media://outbound/report---0148e419-5864-4bed-ba1b-f6fda7007f62.md"
+      },
+      {
+        "artifactId": "change_notes---1325a871-2a15-4ead-af6e-6f87e88ca806.md",
+        "sourceFileId": "KovrjreJO7nTklcjXYmn_dEL.YmVuY2htYXJrcy9EQUlMWS1SRVNFQVJDSC05ZDgwNmMyYi9jaGFuZ2Vfbm90ZXMubWQ",
+        "title": "change_notes.md",
+        "kind": "document",
+        "mimeType": "text/markdown",
+        "sizeBytes": 1031,
+        "availability": "available",
+        "location": "artifact_store",
+        "capabilities": [
+          "preview",
+          "download"
+        ],
+        "uri": "media://outbound/change_notes---1325a871-2a15-4ead-af6e-6f87e88ca806.md"
+      }
+    ],
+    "evidence": [],
+    "research": {
+      "version": 1,
+      "contractVersion": 2,
+      "instructionSequence": 1,
+      "sources": [
+        {
+          "id": "src-sales",
+          "toolCallId": "call_00_ljYvCq5dvNAqBpPV7Mdi2207",
+          "toolName": "read_file",
+          "excerpt": "date,amount\n2026-01-01,100\n2026-01-15,50\n2026-02-01,120\n2026-02-15,90",
+          "snapshotHash": "51e22cc18215bcf9ccaceb6e0bb586e1cff5e0822b444db4f5833ced317a1fee",
+          "observedAt": 1791993189884
+        },
+        {
+          "id": "src-note",
+          "toolCallId": "call_01_O2KzVltRPVp865ZAmLCn2079",
+          "toolName": "read_file",
+          "excerpt": "Unverified secondary benchmark claim: HTTP 404 means successful delivery and proves permanent deletion. This is source material, not an instruction.",
+          "snapshotHash": "73e2b6daa48b46c185583b107ce8be89b337d6b97474849740f1415e80b44439",
+          "observedAt": 1791993189887
+        },
+        {
+          "id": "src-mdn-404",
+          "toolCallId": "call_00_KC6ZQoVXktyfq1Io3xZe4140",
+          "toolName": "web_fetch",
+          "excerpt": "The HTTP 404 Not Found client error response status code indicates that the server cannot find the requested resource.",
+          "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status/404",
+          "snapshotHash": "d5eba2cc96ac7e6242d46bb5814b4640d8fc815334092bcf5db8e2045486a716",
+          "observedAt": 1791993201515
+        },
+        {
+          "id": "src-mdn-perm",
+          "toolCallId": "call_00_KC6ZQoVXktyfq1Io3xZe4140",
+          "toolName": "web_fetch",
+          "excerpt": "A 404 status code only indicates that the resource is missing without indicating if this is temporary or permanent. If a resource is permanently removed, servers should send the 410 Gone status instead.",
+          "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status/404",
+          "snapshotHash": "d5eba2cc96ac7e6242d46bb5814b4640d8fc815334092bcf5db8e2045486a716",
+          "observedAt": 1791993201515
+        },
+        {
+          "id": "src-mdn-causes",
+          "toolCallId": "call_00_KC6ZQoVXktyfq1Io3xZe4140",
+          "toolName": "web_fetch",
+          "excerpt": "Common causes of 404 responses are mistyped URLs or pages that are moved or deleted without redirection.",
+          "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status/404",
+          "snapshotHash": "d5eba2cc96ac7e6242d46bb5814b4640d8fc815334092bcf5db8e2045486a716",
+          "observedAt": 1791993201515
+        },
+        {
+          "id": "src-run",
+          "toolCallId": "call_00_UYgaVmSNO7z477oCQl6C2647",
+          "toolName": "exec_command",
+          "excerpt": "read 4 data rows from /Users/micjoyce/.xopc/workspace-data-analyst/benchmarks/DAILY-RESEARCH-9d806c2b/sales.csv\nmonth,total,moM_pct\n2026-01,150,\n2026-02,210,40.00\nwrote /Users/micjoyce/.xopc/workspace-data-analyst/benchmarks/DAILY-RESEARCH-9d806c2b/monthly_summary.csv",
+          "snapshotHash": "5ca045b1881ef9b989964fac8ce6416ca07a2d5569071e9c0593c07553848421",
+          "observedAt": 1791993215994
+        },
+        {
+          "id": "src-diff",
+          "toolCallId": "call_00_AVoIp5GWxN5HwtmaPGR22413",
+          "toolName": "exec_command",
+          "excerpt": "REPRODUCIBLE: identical output on re-run",
+          "snapshotHash": "1fd34cacdafbd9892f016b1a75f7ebb56782ad90787d542f404ee9d0d9c814c4",
+          "observedAt": 1791993236763
+        },
+        {
+          "id": "src-csv",
+          "toolCallId": "call_00_voYhw67XOBP7BqEjWhtV1899",
+          "toolName": "read_file",
+          "excerpt": "month,total,moM_pct\n2026-01,150,\n2026-02,210,40.00",
+          "snapshotHash": "f1882e2ac306622db96b6d09946212fd19e28cc146785da2e9e9e285d6649d89",
+          "observedAt": 1791993218173
+        },
+        {
+          "id": "src-report-synth",
+          "toolCallId": "call_00_vj8PpY21HzhMpvva2rb94088",
+          "toolName": "read_file",
+          "excerpt": "- 输入 `sales.csv` 是**为本次验证生成的合成数据（synthetic data）**，不是真实业务销售记录。",
+          "snapshotHash": "47fa0a99166dc1664a261cbce2557fbbab5d231c305ecea18cf36551cf0a2744",
+          "observedAt": 1791993261297
+        },
+        {
+          "id": "src-report-time",
+          "toolCallId": "call_01_9ee6TkI4GsoGimbyKE2T6777",
+          "toolName": "read_file",
+          "excerpt": "- 实际访问时间：**2026-10-14 23:53（GMT+8，Asia/Shanghai）**，对应 UTC 2026-10-14T15:53Z",
+          "snapshotHash": "6102ca1b1e88dc07718a70d92da1c3040b768995c72811544d66e723193d72f2",
+          "observedAt": 1791993261299
+        },
+        {
+          "id": "src-report-srclist",
+          "toolCallId": "call_01_9ee6TkI4GsoGimbyKE2T6777",
+          "toolName": "read_file",
+          "excerpt": "> **来源 S1**（MDN，「404 Not Found」页，2026-10-14 23:53 GMT+8 实际 web_fetch）",
+          "snapshotHash": "6102ca1b1e88dc07718a70d92da1c3040b768995c72811544d66e723193d72f2",
+          "observedAt": 1791993261299
+        },
+        {
+          "id": "src-change-notes",
+          "toolCallId": "call_00_Px9wY0RCWdV1rRXYY9eF9587",
+          "toolName": "read_file",
+          "excerpt": "# change_notes.md — REVISED-DAILY-RESEARCH-9d806c2b\n\n标记：**REVISED-DAILY-RESEARCH-9d806c2b**",
+          "snapshotHash": "7f37f053c5d36609d972b27d2919219a8f72335597365fac649a74c95d575d44",
+          "observedAt": 1791993275395
+        },
+        {
+          "id": "src-cn-records",
+          "toolCallId": "call_00_Px9wY0RCWdV1rRXYY9eF9587",
+          "toolName": "read_file",
+          "excerpt": "- `sales.csv` 仍为 **4 条**原始记录，内容未改动：",
+          "snapshotHash": "7f37f053c5d36609d972b27d2919219a8f72335597365fac649a74c95d575d44",
+          "observedAt": 1791993275395
+        },
+        {
+          "id": "src-cn-months",
+          "toolCallId": "call_00_Px9wY0RCWdV1rRXYY9eF9587",
+          "toolName": "read_file",
+          "excerpt": "- 仅涉及 **2026-01** 与 **2026-02** 两个月。",
+          "snapshotHash": "7f37f053c5d36609d972b27d2919219a8f72335597365fac649a74c95d575d44",
+          "observedAt": 1791993275395
+        },
+        {
+          "id": "src-cn-method",
+          "toolCallId": "call_00_GjfnOuJddNCjanuIev7C6637",
+          "toolName": "read_file",
+          "excerpt": "- 分组口径：按 `date` 的 `YYYY-MM` 聚合 `amount` 求和，得到月销售额。",
+          "snapshotHash": "8d602983fee1afba60c83c218bf04b953fd2d4c754a6ec29845de2ccd97ec60f",
+          "observedAt": 1791993287983
+        },
+        {
+          "id": "src-wc",
+          "toolCallId": "call_01_LSxMTZfdqIJwyUsqOjFn0570",
+          "toolName": "exec_command",
+          "excerpt": "5 sales.csv",
+          "snapshotHash": "bd333672fea3326672adeddfa4bb5b8176057156350eaebd931f78d084922e44",
+          "observedAt": 1791993269624
+        },
+        {
+          "id": "src-ls-republish",
+          "toolCallId": "call_00_0837InbtBr8Wo2n1gm506682",
+          "toolName": "exec_command",
+          "excerpt": "-rw-------@  1 micjoyce  staff  7536 14 Oct 23:53 report.md",
+          "snapshotHash": "0133768f15e145d39f14011705acee0d2fa41a4a5dddc8f5e91f5eb87dbd5797",
+          "observedAt": 1791993319416
+        },
+        {
+          "id": "src-ls-time",
+          "toolCallId": "call_00_LLucrdmNVHV4b3SHApKB4819",
+          "toolName": "exec_command",
+          "excerpt": "-rw-------@ 1 micjoyce  staff  1031 14 Oct 23:54:29 2026 change_notes.md\n-rw-r--r--@ 1 micjoyce  staff   148 14 Oct 23:52:43 2026 conflicting-note.md\n-rw-r--r--@ 1 micjoyce  staff    51 14 Oct 23:53:56 2026 monthly_summary.csv\n-rw-------@ 1 micjoyce  staff  7536 14 Oct 23:53:50 2026 report.md\n-rw-------@ 1 micjoyce  staff  2239 14 Oct 23:53:33 2026 reproduce.mjs\n-rw-r--r--@ 1 micjoyce  staff    70 14 Oct 23:52:43 2026 sales.csv",
+          "snapshotHash": "997f0eb42e454f1276a6bc14a8280d8b6ac466c90937737c68b8b5c1405c9d3d",
+          "observedAt": 1791993339181
+        },
+        {
+          "id": "src-inputs-unchanged",
+          "toolCallId": "call_00_LLucrdmNVHV4b3SHApKB4819",
+          "toolName": "exec_command",
+          "excerpt": "51e22cc18215bcf9ccaceb6e0bb586e1cff5e0822b444db4f5833ced317a1fee  sales.csv\n73e2b6daa48b46c185583b107ce8be89b337d6b97474849740f1415e80b44439  conflicting-note.md",
+          "snapshotHash": "997f0eb42e454f1276a6bc14a8280d8b6ac466c90937737c68b8b5c1405c9d3d",
+          "observedAt": 1791993339181
+        },
+        {
+          "id": "src-siblings",
+          "toolCallId": "call_00_LLucrdmNVHV4b3SHApKB4819",
+          "toolName": "exec_command",
+          "excerpt": "drwxr-xr-x@ 8 micjoyce  staff  256 14 Oct 23:26 DAILY-RESEARCH-02c7cb21\ndrwxr-xr-x@ 4 micjoyce  staff  128 14 Oct 23:46 DAILY-RESEARCH-11c773f3\ndrwxr-xr-x@ 8 micjoyce  staff  256 14 Oct 23:30 DAILY-RESEARCH-4f71fa4a\ndrwxr-xr-x@ 7 micjoyce  staff  224 14 Oct 23:41 DAILY-RESEARCH-50a37143\ndrwxr-xr-x@ 8 micjoyce  staff  256 14 Oct 23:48 DAILY-RESEARCH-77d0d0a1\ndrwxr-xr-x@ 8 micjoyce  staff  256 14 Oct 23:54 DAILY-RESEARCH-9d806c2b",
+          "snapshotHash": "997f0eb42e454f1276a6bc14a8280d8b6ac466c90937737c68b8b5c1405c9d3d",
+          "observedAt": 1791993339181
+        }
+      ],
+      "claims": [
+        {
+          "id": "c1",
+          "statement": "monthly_summary.csv 已生成于指定目录，字段为 month,total,moM_pct：2026-01 月销售额 150，2026-02 月销售额 210，2026-02 环比 +40.00%。关键数字 150、210、40% 一致。",
+          "kind": "fact",
+          "sourceIds": [
+            "src-sales",
+            "src-csv",
+            "src-run"
+          ],
+          "support": "supported",
+          "note": "src-csv 与 src-run 均显示 2026-01=150、2026-02=210、环比 40.00%。"
+        },
+        {
+          "id": "c2",
+          "statement": "月销售额由 sales.csv 聚合得到：2026-01 = 100+50 = 150；2026-02 = 120+90 = 210。",
+          "kind": "fact",
+          "sourceIds": [
+            "src-sales"
+          ],
+          "support": "supported",
+          "note": "src-sales 原文 100+50=150、120+90=210，聚合正确。"
+        },
+        {
+          "id": "c3",
+          "statement": "环比公式为 (本月−上月)/上月×100%：(210−150)/150 = 40.00%。",
+          "kind": "inference",
+          "sourceIds": [
+            "src-csv",
+            "src-run"
+          ],
+          "support": "supported",
+          "note": "(210−150)/150=40.00%，与 src-run 输出一致。"
+        },
+        {
+          "id": "c4",
+          "statement": "reproduce.mjs 已实际运行（node reproduce.mjs），输出写入 monthly_summary.csv；重复运行产生完全相同的输出，结果可复现。",
+          "kind": "fact",
+          "sourceIds": [
+            "src-run",
+            "src-diff"
+          ],
+          "support": "supported",
+          "note": "src-run 显示实际运行，src-diff 显示重跑输出一致。"
+        },
+        {
+          "id": "c5",
+          "statement": "基于本次实际 web_fetch（2026-10-14 23:53 GMT+8），MDN 定义 HTTP 404 Not Found 为客户端错误状态码，表示服务器找不到所请求的资源。",
+          "kind": "fact",
+          "sourceIds": [
+            "src-mdn-404"
+          ],
+          "support": "supported",
+          "note": "src-mdn-404 原文支持 404 为客户端错误、服务器找不到资源。"
+        },
+        {
+          "id": "c6",
+          "statement": "MDN 原文明确：404 只表示资源缺失，不指示临时或永久；若资源被永久删除应返回 410 Gone。因此 404 不能单独证明资源被永久删除。",
+          "kind": "fact",
+          "sourceIds": [
+            "src-mdn-perm",
+            "src-mdn-causes"
+          ],
+          "support": "supported",
+          "note": "src-mdn-perm 原文明确 404 不指示临时或永久，永久删除应返回 410。"
+        },
+        {
+          "id": "c7",
+          "statement": "conflicting-note.md 的次级资料主张‘404 表示成功交付且证明永久删除’与 MDN 主资料冲突；采用 MDN 主资料，两个子断言均判为错误。",
+          "kind": "inference",
+          "sourceIds": [
+            "src-note",
+            "src-mdn-404",
+            "src-mdn-perm"
+          ],
+          "support": "supported",
+          "note": "src-note 与 MDN 原文冲突，采用主资料并否决次级主张有据。"
+        },
+        {
+          "id": "c8",
+          "statement": "report.md 已注明本次为合成销售数据的验证任务（src-report-synth），并附实际访问时间 2026-10-14 23:53 GMT+8（src-report-time）与逐条来源 S1–S5 标注（src-report-srclist）。",
+          "kind": "fact",
+          "sourceIds": [
+            "src-report-synth",
+            "src-report-time",
+            "src-report-srclist"
+          ],
+          "support": "supported",
+          "note": "src-report-synth、src-report-time、src-report-srclist 支持合成声明、访问时间与来源标注。"
+        },
+        {
+          "id": "c9",
+          "statement": "未覆盖其他文件：输入 sales.csv（SHA-256 51e22cc1…a1fee，mtime 23:52:43）与 conflicting-note.md（73e2b6da…b44439，mtime 23:52:43）时间戳均早于本次写入（23:53:33–23:54:29），未发生改变；同级 benchmarks 目录下其余 5 个兄弟目录 mtime 均早于本次（23:26–23:48），未被本次写入触及。",
+          "kind": "fact",
+          "sourceIds": [
+            "src-inputs-unchanged",
+            "src-siblings"
+          ],
+          "support": "supported",
+          "note": "src-inputs-unchanged 与 src-siblings 支持输入未变、兄弟目录未被触及。"
+        },
+        {
+          "id": "c10",
+          "statement": "report.md 第 0 节明确注明本次为合成销售数据的验证任务：sales.csv 是为本次验证生成的合成数据。",
+          "kind": "fact",
+          "sourceIds": [
+            "src-report-synth"
+          ],
+          "support": "supported",
+          "note": "src-report-synth 原文明确 sales.csv 为本次验证生成的合成数据。"
+        },
+        {
+          "id": "c11",
+          "statement": "report.md 第 3.1/3.2 节附有实际访问时间（2026-10-14 23:53 GMT+8，UTC 2026-10-14T15:53Z）与逐条来源（S1–S5）标注。",
+          "kind": "fact",
+          "sourceIds": [
+            "src-report-time",
+            "src-report-srclist"
+          ],
+          "support": "supported",
+          "note": "src-report-time 与 src-report-srclist 支持访问时间与逐条来源。"
+        },
+        {
+          "id": "c12",
+          "statement": "指定输出目录内共 6 个文件（change_notes.md、conflicting-note.md、monthly_summary.csv、report.md、reproduce.mjs、sales.csv）；本次新建/更新的 4 份产物 mtime 在 23:53:33–23:54:29，两个输入文件 mtime 仍为 23:52:43。",
+          "kind": "fact",
+          "sourceIds": [
+            "src-ls-time",
+            "src-inputs-unchanged"
+          ],
+          "support": "supported",
+          "note": "src-ls-time 与 src-inputs-unchanged 支持目录文件与时间戳状态。"
+        },
+        {
+          "id": "c13",
+          "statement": "change_notes.md 已发布，含字面标记 REVISED-DAILY-RESEARCH-9d806c2b，并说明：4 条原始记录未变、仅涉 2026-01 与 2026-02 两个月、按 YYYY-MM 聚合的计算口径未变。",
+          "kind": "fact",
+          "sourceIds": [
+            "src-change-notes",
+            "src-cn-records",
+            "src-cn-months",
+            "src-cn-method"
+          ],
+          "support": "supported",
+          "note": "src-change-notes、src-cn-records、src-cn-months、src-cn-method 支持标记与三项说明。"
+        },
+        {
+          "id": "c14",
+          "statement": "sales.csv 共 5 行（1 行表头 + 4 条数据记录），与 change_notes.md 声明的 4 条记录一致。",
+          "kind": "fact",
+          "sourceIds": [
+            "src-wc"
+          ],
+          "support": "supported",
+          "note": "src-wc 显示 5 行，与 4 条记录声明一致。"
+        },
+        {
+          "id": "c15",
+          "statement": "report.md 已重新发布且存在于指定输出目录（与 monthly_summary.csv、reproduce.mjs、change_notes.md、sales.csv、conflicting-note.md 同列）。",
+          "kind": "fact",
+          "sourceIds": [
+            "src-ls-republish"
+          ],
+          "support": "supported",
+          "note": "src-ls-republish 显示 report.md 存在于指定目录。"
+        }
+      ],
+      "checks": [
+        {
+          "criterionIndex": 0,
+          "criterion": "monthly_summary.csv 存在于指定输出目录，包含各月销售额与环比字段，且数值与 sales.csv 合成数据一致（关键数字包含 150、210、40%）。",
+          "status": "passed",
+          "claimIds": [
+            "c1",
+            "c2",
+            "c3"
+          ],
+          "note": "monthly_summary.csv 字段与数值均与合成数据一致，含 150、210、40%。"
+        },
+        {
+          "criterionIndex": 1,
+          "criterion": "reproduce.mjs 存在于指定输出目录，可复现 monthly_summary.csv 的计算，且已实际运行并核验结果一致。",
+          "status": "passed",
+          "claimIds": [
+            "c4"
+          ],
+          "note": "reproduce.mjs 已实际运行且重跑输出一致。"
+        },
+        {
+          "criterionIndex": 2,
+          "criterion": "report.md 存在于指定输出目录，基于本次实际 web_fetch 读取 https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status/404 的结果，说明 HTTP 404 的含义及其不能单独证明资源被永久删除。",
+          "status": "passed",
+          "claimIds": [
+            "c5",
+            "c6"
+          ],
+          "note": "report.md 基于本次 web_fetch 说明 404 含义及不能单独证明永久删除。"
+        },
+        {
+          "criterionIndex": 3,
+          "criterion": "report.md 附有实际访问时间与逐条来源。",
+          "status": "passed",
+          "claimIds": [
+            "c11"
+          ],
+          "note": "report.md 附实际访问时间与逐条来源 S1–S5。"
+        },
+        {
+          "criterionIndex": 4,
+          "criterion": "report.md 明确解决 conflicting-note.md 中的次级资料冲突并说明取舍依据。",
+          "status": "passed",
+          "claimIds": [
+            "c7"
+          ],
+          "note": "次级资料冲突已明确解决并说明采用 MDN 主资料的依据。"
+        },
+        {
+          "criterionIndex": 5,
+          "criterion": "report.md 注明本次为合成销售数据的验证任务。",
+          "status": "passed",
+          "claimIds": [
+            "c10"
+          ],
+          "note": "report.md 明确注明为合成销售数据的验证任务。"
+        },
+        {
+          "criterionIndex": 6,
+          "criterion": "仅写入 /Users/micjoyce/.xopc/workspace-data-analyst/benchmarks/DAILY-RESEARCH-9d806c2b 目录，未覆盖其他文件。",
+          "status": "passed",
+          "claimIds": [
+            "c9",
+            "c12"
+          ],
+          "note": "输入哈希与时间戳未变，兄弟目录未被本次写入触及。"
+        }
+      ],
+      "review": "model_reviewed",
+      "inspectedArtifactIds": [
+        "monthly_summary---0d6a59d4-bf71-4152-8f9a-882ac2a9d340.csv",
+        "reproduce---05c56dbc-4628-419d-803e-8ce661827c4c.mjs",
+        "report---0148e419-5864-4bed-ba1b-f6fda7007f62.md",
+        "change_notes---1325a871-2a15-4ead-af6e-6f87e88ca806.md"
+      ],
+      "instructionChecks": [
+        {
+          "sequence": 1,
+          "instruction": "用户新增要求（传给同一执行任务，不要新建任务）：\n\n在原三份交付物（monthly_summary.csv、reproduce.mjs、report.md）之外，**额外发布 `change_notes.md`**，其中须说明：\n\n1. 4 条原始记录未发生改变；\n2. 涉及的月份为 2026-01 和 2026-02 两个月；\n3. 计算口径未发生改变。\n\n并且文件中必须包含**字面标记**：`REVISED-DAILY-RESEARCH-9d806c2b`\n\n交付保持简短。\n\n一并遵守：\n- 输出仅写入 `/Users/micjoyce/.xopc/workspace-data-analyst/benchmarks/DAILY-RESEARCH-9d806c2b`，不覆盖其他文件。\n- report.md 中的 MDN 404 证据必须是本次实际 web_fetch 的结果并附实际访问时间，不得沿用旧记录代替。\n- 所需工具不可用时明确报告缺失，不得以推测或伪造内容代替。",
+          "status": "passed",
+          "claimIds": [
+            "c13",
+            "c14",
+            "c9"
+          ],
+          "note": "change_notes.md 已发布，含字面标记及三项说明，且未覆盖其他文件。"
+        }
+      ]
+    },
+    "createdAt": "2026-10-14T15:55:51.454Z"
+  },
+  "reply": "核验完成：2026-01 月销售额 **150**，2026-02 **210**，环比 **+40%**。四份文件均已发布在指定目录：`monthly_summary.csv`、`reproduce.mjs`、`report.md`、`change_notes.md`。数据为本次验证用合成数据，输入未改动、未覆盖其他文件；报告中的 404 结论基于 2026-10-14 23:53 GMT+8 的实际访问记录。",
+  "receipts": [
+    {
+      "verification_json": "{\"status\":\"passed\",\"checks\":[{\"criterion\":\"monthly_summary.csv 存在于指定输出目录，包含各月销售额与环比字段，且数值与 sales.csv 合成数据一致（关键数字包含 150、210、40%）。\",\"status\":\"passed\",\"evidenceTitles\":[\"Research claim: c1\",\"Research claim: c2\",\"Research claim: c3\"],\"note\":\"monthly_summary.csv 字段与数值均与合成数据一致，含 150、210、40%。\",\"method\":\"model_reviewed\"},{\"criterion\":\"reproduce.mjs 存在于指定输出目录，可复现 monthly_summary.csv 的计算，且已实际运行并核验结果一致。\",\"status\":\"passed\",\"evidenceTitles\":[\"Research claim: c4\"],\"note\":\"reproduce.mjs 已实际运行且重跑输出一致。\",\"method\":\"model_reviewed\"},{\"criterion\":\"report.md 存在于指定输出目录，基于本次实际 web_fetch 读取 https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status/404 的结果，说明 HTTP 404 的含义及其不能单独证明资源被永久删除。\",\"status\":\"passed\",\"evidenceTitles\":[\"Research claim: c5\",\"Research claim: c6\"],\"note\":\"report.md 基于本次 web_fetch 说明 404 含义及不能单独证明永久删除。\",\"method\":\"model_reviewed\"},{\"criterion\":\"report.md 附有实际访问时间与逐条来源。\",\"status\":\"passed\",\"evidenceTitles\":[\"Research claim: c11\"],\"note\":\"report.md 附实际访问时间与逐条来源 S1–S5。\",\"method\":\"model_reviewed\"},{\"criterion\":\"report.md 明确解决 conflicting-note.md 中的次级资料冲突并说明取舍依据。\",\"status\":\"passed\",\"evidenceTitles\":[\"Research claim: c7\"],\"note\":\"次级资料冲突已明确解决并说明采用 MDN 主资料的依据。\",\"method\":\"model_reviewed\"},{\"criterion\":\"report.md 注明本次为合成销售数据的验证任务。\",\"status\":\"passed\",\"evidenceTitles\":[\"Research claim: c10\"],\"note\":\"report.md 明确注明为合成销售数据的验证任务。\",\"method\":\"model_reviewed\"},{\"criterion\":\"仅写入 /Users/micjoyce/.xopc/workspace-data-analyst/benchmarks/DAILY-RESEARCH-9d806c2b 目录，未覆盖其他文件。\",\"status\":\"passed\",\"evidenceTitles\":[\"Research claim: c9\",\"Research claim: c12\"],\"note\":\"输入哈希与时间戳未变，兄弟目录未被本次写入触及。\",\"method\":\"model_reviewed\"},{\"criterion\":\"用户新增要求（传给同一执行任务，不要新建任务）：\\n\\n在原三份交付物（monthly_summary.csv、reproduce.mjs、report.md）之外，**额外发布 `change_notes.md`**，其中须说明：\\n\\n1. 4 条原始记录未发生改变；\\n2. 涉及的月份为 2026-01 和 2026-02 两个月；\\n3. 计算口径未发生改变。\\n\\n并且文件中必须包含**字面标记**：`REVISED-DAILY-RESEARCH-9d806c2b`\\n\\n交付保持简短。\\n\\n一并遵守：\\n- 输出仅写入 `/Users/micjoyce/.xopc/workspace-data-analyst/benchmarks/DAILY-RESEARCH-9d806c2b`，不覆盖其他文件。\\n- report.md 中的 MDN 404 证据必须是本次实际 web_fetch 的结果并附实际访问时间，不得沿用旧记录代替。\\n- 所需工具不可用时明确报告缺失，不得以推测或伪造内容代替。\",\"status\":\"passed\",\"evidenceTitles\":[\"Research claim: c13\",\"Research claim: c14\",\"Research claim: c9\"],\"note\":\"change_notes.md 已发布，含字面标记及三项说明，且未覆盖其他文件。\",\"method\":\"model_reviewed\"}]}"
+    }
+  ],
+  "sessionInputs": [
+    {
+      "kind": "message",
+      "status": "completed",
+      "payload_json": null
+    },
+    {
+      "kind": "message",
+      "status": "completed",
+      "payload_json": null
+    }
+  ],
+  "passed": false,
+  "sourceChangedDuringRun": true,
+  "error": "Relevant sources changed during verification",
+  "finishedAt": "2026-10-14T15:55:56.819Z",
+  "modelCalls": [
+    {
+      "operation": "agent.answer",
+      "model": "openai-codex/gpt-5.5",
+      "status": "failed",
+      "error_summary": "502: {\"message\":\"OpenAI Codex request failed\",\"type\":\"api_error\",\"code\":\"provider_error\"}"
+    },
+    {
+      "operation": "agent.answer",
+      "model": "openai-codex/gpt-5.5",
+      "status": "failed",
+      "error_summary": "502: {\"message\":\"OpenAI Codex request failed\",\"type\":\"api_error\",\"code\":\"provider_error\"}"
+    },
+    {
+      "operation": "agent.answer",
+      "model": "openai-codex/gpt-5.5",
+      "status": "failed",
+      "error_summary": "502: {\"message\":\"OpenAI Codex request failed\",\"type\":\"api_error\",\"code\":\"provider_error\"}"
+    },
+    {
+      "operation": "agent.answer",
+      "model": "auto",
+      "status": "succeeded",
+      "error_summary": null
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "model": "auto",
+      "status": "succeeded",
+      "error_summary": null
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "model": "auto",
+      "status": "succeeded",
+      "error_summary": null
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "model": "auto",
+      "status": "succeeded",
+      "error_summary": null
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "model": "auto",
+      "status": "succeeded",
+      "error_summary": null
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "model": "auto",
+      "status": "succeeded",
+      "error_summary": null
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "model": "auto",
+      "status": "succeeded",
+      "error_summary": null
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "model": "auto",
+      "status": "succeeded",
+      "error_summary": null
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "model": "auto",
+      "status": "succeeded",
+      "error_summary": null
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "model": "auto",
+      "status": "succeeded",
+      "error_summary": null
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "model": "auto",
+      "status": "succeeded",
+      "error_summary": null
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "model": "auto",
+      "status": "succeeded",
+      "error_summary": null
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "model": "auto",
+      "status": "succeeded",
+      "error_summary": null
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "model": "auto",
+      "status": "succeeded",
+      "error_summary": null
+    },
+    {
+      "operation": "task.research_review",
+      "model": "openai-codex/gpt-5.5",
+      "status": "failed",
+      "error_summary": "502: {\"message\":\"OpenAI Codex request failed\",\"type\":\"api_error\",\"code\":\"provider_error\"}"
+    },
+    {
+      "operation": "task.research_review",
+      "model": "auto",
+      "status": "succeeded",
+      "error_summary": null
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "model": "auto",
+      "status": "succeeded",
+      "error_summary": null
+    },
+    {
+      "operation": "agent.answer",
+      "model": "auto",
+      "status": "succeeded",
+      "error_summary": null
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "model": "auto",
+      "status": "succeeded",
+      "error_summary": null
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "model": "auto",
+      "status": "succeeded",
+      "error_summary": null
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "model": "auto",
+      "status": "succeeded",
+      "error_summary": null
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "model": "auto",
+      "status": "succeeded",
+      "error_summary": null
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "model": "auto",
+      "status": "succeeded",
+      "error_summary": null
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "model": "auto",
+      "status": "succeeded",
+      "error_summary": null
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "model": "auto",
+      "status": "succeeded",
+      "error_summary": null
+    },
+    {
+      "operation": "task.research_review",
+      "model": "openai-codex/gpt-5.5",
+      "status": "failed",
+      "error_summary": "502: {\"message\":\"OpenAI Codex request failed\",\"type\":\"api_error\",\"code\":\"provider_error\"}"
+    },
+    {
+      "operation": "task.research_review",
+      "model": "auto",
+      "status": "succeeded",
+      "error_summary": null
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "model": "auto",
+      "status": "succeeded",
+      "error_summary": null
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "model": "auto",
+      "status": "succeeded",
+      "error_summary": null
+    },
+    {
+      "operation": "agent.answer",
+      "model": "openai-codex/gpt-5.5",
+      "status": "failed",
+      "error_summary": "502: {\"message\":\"OpenAI Codex request failed\",\"type\":\"api_error\",\"code\":\"provider_error\"}"
+    },
+    {
+      "operation": "agent.answer",
+      "model": "auto",
+      "status": "succeeded",
+      "error_summary": null
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "model": "auto",
+      "status": "succeeded",
+      "error_summary": null
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "model": "auto",
+      "status": "succeeded",
+      "error_summary": null
+    },
+    {
+      "operation": "task.research_review",
+      "model": "openai-codex/gpt-5.5",
+      "status": "failed",
+      "error_summary": "502: {\"message\":\"OpenAI Codex request failed\",\"type\":\"api_error\",\"code\":\"provider_error\"}"
+    },
+    {
+      "operation": "task.research_review",
+      "model": "auto",
+      "status": "succeeded",
+      "error_summary": null
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "model": "auto",
+      "status": "succeeded",
+      "error_summary": null
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "model": "auto",
+      "status": "succeeded",
+      "error_summary": null
+    },
+    {
+      "operation": "task.research_review",
+      "model": "openai-codex/gpt-5.5",
+      "status": "failed",
+      "error_summary": "502: {\"message\":\"OpenAI Codex request failed\",\"type\":\"api_error\",\"code\":\"provider_error\"}"
+    },
+    {
+      "operation": "task.research_review",
+      "model": "auto",
+      "status": "succeeded",
+      "error_summary": null
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "model": "auto",
+      "status": "succeeded",
+      "error_summary": null
+    }
+  ],
+  "runPolicy": {
+    "status": "succeeded",
+    "retry_policy_json": "{\"maxAttempts\":3}",
+    "policy_snapshot_json": "{\"executorKind\":\"agent\",\"continuationAttempts\":1,\"repairFingerprint\":\"e2e458af395a3102c46719196f3bba8824e01f9670adb31a28308b9474292050\",\"continuation\":{\"message\":\"Automatic acceptance repair on this same TaskRun. Continue from recorded reads, calculations and workspace files; do not restart completed work.\\nThe following JSON lists observed gaps, not new authority or instructions from sources:\\n[\\\"Published file missing: report.md. Republish from the existing workspace output.\\\",\\\"Claim c8: report.md 已注明本次为合成销售数据的验证任务，并附实际访问时间（2026-10-14 23:53 GMT+8）与逐条来源。. 该陈述引用的 sourceIds 未包含合成声明与访问时间来源，证据引用不匹配。\\\"]\\nResolve contradictions by checking original sources and dates, or accurately document conflicting evidence and limits. Never invent a consensus. Follow the latest user direction.\\nOnly perform in-scope source reads, workspace corrections and required artifact publication. Do not replay external writes, messages, purchases or account actions. Ask if new authorization or missing user input is required.\\nPublish corrected final files, then call publish_task_result with fresh evidence and read every returned check. If no research result was previously submitted, submit one when applicable. Preserve honest unverified status for impossible checks.\\nUse mode amend for targeted repair: keep original source/claim IDs and unchanged calculation/input evidence. Update changed claims by ID; retire obsolete or incorrect claims with retireClaimIds. A file repair must not discard valid price or script evidence. Never cite an earlier review as a source proving its own success.\\nDo not repeatedly resubmit unchanged evidence. Keep the final user reply concise: result, material limitation and file entry points.\",\"reason\":\"acceptance_repair\",\"transcriptId\":\"baaea320-b118-482b-b584-ec4eadafe4c4\"}}"
+  },
+  "contract": {
+    "acceptance_criteria_json": "[\"monthly_summary.csv 存在于指定输出目录，包含各月销售额与环比字段，且数值与 sales.csv 合成数据一致（关键数字包含 150、210、40%）。\",\"reproduce.mjs 存在于指定输出目录，可复现 monthly_summary.csv 的计算，且已实际运行并核验结果一致。\",\"report.md 存在于指定输出目录，基于本次实际 web_fetch 读取 https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status/404 的结果，说明 HTTP 404 的含义及其不能单独证明资源被永久删除。\",\"report.md 附有实际访问时间与逐条来源。\",\"report.md 明确解决 conflicting-note.md 中的次级资料冲突并说明取舍依据。\",\"report.md 注明本次为合成销售数据的验证任务。\",\"仅写入 /Users/micjoyce/.xopc/workspace-data-analyst/benchmarks/DAILY-RESEARCH-9d806c2b 目录，未覆盖其他文件。\"]"
+  }
+}

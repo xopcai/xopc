@@ -61,7 +61,7 @@ const PersonalTaskSchema = Type.Object({
 
 // Keep historical commands executable for internal replay callers, without advertising executor selection to the personal model.
 const PersonalTaskModelSchema = Type.Object({
-  ...Type.Omit(PersonalTaskSchema, ['agentId', 'selectionReason', 'selectionSource', 'previousSelectionId', 'matchId', 'cursor', 'requiredTools']).properties,
+  ...Type.Omit(PersonalTaskSchema, ['agentId', 'selectionReason', 'selectionSource', 'previousSelectionId', 'matchId', 'cursor', 'requiredTools', 'acceptanceCriteria']).properties,
   requirements: Type.Optional(Type.Omit(PersonalTaskSchema.properties.requirements, ['requiredTools', 'requiredSkills'], { additionalProperties: false })),
   command: Type.Union((['submit', 'list', 'get', 'collaboration', 'entry', 'instruct', 'answer', 'retry_allocation', 'selection', 'cancel'] as const).map(command => Type.Literal(command))),
 }, { additionalProperties: false, anyOf: [
@@ -183,8 +183,8 @@ export function createPersonalTaskTool(deps: PersonalTaskToolDeps): AgentTool<ty
         });
         command = 'create';
         args = { ...brief, createMode: 'allocate', requirements, includeConversationContext: false,
-          expectedOutputs: input.expectedOutputs ?? [], acceptanceCriteria: input.acceptanceCriteria ?? [],
-          constraints: input.constraints ?? [], idempotencyKey: `personal-submit:${conversationId}:${selectionRequestHash(submissionKey)}` };
+          expectedOutputs: input.expectedOutputs, acceptanceCriteria: input.acceptanceCriteria,
+          constraints: input.constraints, idempotencyKey: `personal-submit:${conversationId}:${selectionRequestHash(submissionKey)}` };
         if (requirements.requiredSkills?.length) args.body = `${brief.body}\n\nRequired Skills: ${requirements.requiredSkills.join(', ')}. Read and follow these Skills before execution.`;
       } else if (command === 'create') {
         const objective = input.objective?.trim();
@@ -235,9 +235,9 @@ export function createPersonalTaskTool(deps: PersonalTaskToolDeps): AgentTool<ty
             : undefined].filter(Boolean).join('\n\n'),
           agentId, createMode: 'start',
           includeConversationContext: false,
-          expectedOutputs: input.expectedOutputs ?? [],
-          acceptanceCriteria: input.acceptanceCriteria ?? [],
-          constraints: input.constraints ?? [],
+          expectedOutputs: input.expectedOutputs,
+          acceptanceCriteria: input.acceptanceCriteria,
+          constraints: input.constraints,
           idempotencyKey: key,
         };
       } else if (command === 'list') {

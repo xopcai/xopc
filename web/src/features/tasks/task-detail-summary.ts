@@ -8,6 +8,9 @@ export type CriterionSummary = {
   evidence: TaskDetail['receipts'][number]['evidence'];
   review?: TaskDetail['criterionReviews'][number];
   runId?: string;
+  verificationStatus?: 'passed' | 'failed' | 'unverified';
+  method?: 'tool_verified' | 'model_reviewed' | 'unverified';
+  note?: string;
 };
 
 export function summarizeTaskCriteria(detail: TaskDetail): CriterionSummary[] {
@@ -23,15 +26,13 @@ export function summarizeTaskCriteria(detail: TaskDetail): CriterionSummary[] {
     let automatic: CriterionSummary = { text, status: 'unverified', evidence: [] };
     for (const receipt of receipts) {
       const check = receipt.verification.checks.find((item) => item.criterion === text);
-      if (!check || check.status === 'unverified') continue;
+      if (!check) continue;
       const evidence = receipt.evidence.filter((item) => check.evidenceTitles.includes(item.title));
       const status = check.status === 'passed' && verifiedTaskCriteria(receipt).has(text)
         ? 'passed'
         : check.status === 'failed' ? 'failed' : 'unverified';
-      if (status !== 'unverified') {
-        automatic = { text, status, evidence, runId: receipt.runId };
-        break;
-      }
+      automatic = { text, status, evidence, runId: receipt.runId, verificationStatus: status, method: check.method, note: check.note };
+      break;
     }
     if (review && detail.task.contract?.acceptancePolicy !== 'verified_auto') {
       return { ...automatic, status: review.status, review };

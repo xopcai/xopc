@@ -71,6 +71,14 @@ describe('single connection action area', () => {
     await click('Cancel this objective');
     expect(mocked.state.act).toHaveBeenCalledExactlyOnceWith('cancel');
   });
+  it('explains an interrupted message barrier instead of claiming an execution is still running', async () => {
+    Object.assign(mocked.state.wait!, { phase: 'queued', status: 'queued', queueBlocked: true, blockedInputId: 'correction' });
+    await render();
+    expect(container.textContent).toContain('Resend the requirement or remove the interrupted message');
+    expect(container.textContent).not.toContain('Waiting for the current execution to finish');
+    await click('Cancel this objective');
+    expect(mocked.state.act).toHaveBeenCalledExactlyOnceWith('cancel');
+  });
   it('offers a check retry after a recovery interruption', async () => {
     mocked.state.wait!.recoveryError = 'restart_interrupted';
     await render();

@@ -338,6 +338,24 @@ describe('background task result delivery', () => {
     expect(page?.session.messages[0]?.content).toBe(`The code is ready.\n\n${code}`);
   });
 
+  it('uses a short reported conclusion with its uncertainty when artifact composition fails', async () => {
+    const { main, coordinator, runId } = task();
+    markPersonal(main.key);
+    const outcome = await image(runId);
+    outcome.status = 'partial';
+    coordinator.captureOutcome(outcome);
+    coordinator.finalize({ status: 'succeeded', summary: '报价待核实',
+      assistantText: '结论：方案 A 可能更省，报价尚未核实。\n\n# Details\n' + 'Detailed analysis.\n'.repeat(2000) });
+    await new TaskResultDeliveryService().drain(vi.fn());
+    await new PersonalReplyComposer(async () => { throw new Error('Fixed format failure'); }).drain(vi.fn());
+    const text = (await new SessionStore(stateDir).getMessagePage(main.key, { includeContextRows: true }))!.session.messages.at(-1)!.content;
+    expect(text).toContain('Only part of the request');
+    expect(text).toContain('可能更省，报价尚未核实');
+    expect(text).toContain('full result and limitations');
+    expect(text).not.toContain('Detailed analysis');
+    expect(text.length).toBeLessThan(200);
+  });
+
   it('uses the original user request to preserve exact prose even when the Task objective omits that requirement', async () => {
     const { main, coordinator, runId, taskId } = task();
     markPersonal(main.key);
@@ -389,7 +407,7 @@ describe('background task result delivery', () => {
     await new TaskResultDeliveryService().drain(vi.fn());
     const resolve = vi.spyOn(providers, 'resolveModel').mockReturnValue({ id: 'personal' } as ReturnType<typeof providers.resolveModel>);
     const complete = vi.spyOn(modelCalls, 'completeWithResolvedCredentials').mockResolvedValue({
-      role: 'assistant', content: [{ type: 'text', text: 'not JSON' }], stopReason: 'stop',
+      role: 'assistant', content: [{ type: 'text', text: '{"text":' }], stopReason: 'stop',
     } as Awaited<ReturnType<typeof modelCalls.completeWithResolvedCredentials>>);
     await new PersonalReplyComposer().drain(vi.fn());
     expect(resolve).toHaveBeenCalledWith('test/personal');

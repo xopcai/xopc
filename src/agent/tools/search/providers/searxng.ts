@@ -1,3 +1,4 @@
+import { searchHttpError } from '../errors.js';
 import type { SearchProvider, SearchResult } from '../types.js';
 
 export class SearXNGProvider implements SearchProvider {
@@ -19,7 +20,7 @@ export class SearXNGProvider implements SearchProvider {
     url.searchParams.set('categories', 'general');
     const response = await fetch(url, { signal });
     if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${await response.text()}`);
+      throw searchHttpError(response);
     }
     const data = (await response.json()) as {
       results?: Array<{ title?: string; url?: string; content?: string }>;

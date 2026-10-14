@@ -1320,6 +1320,10 @@ export function getAgentDefaultModelRef(): string | undefined {
   return getAgentDefaultModelsConfig()?.chat.primary;
 }
 
+export function getAgentDefaultChatModelConfig(): AgentModelConfig | undefined {
+  return getAgentDefaultModelsConfig()?.chat;
+}
+
 function getAgentDefaultModelsConfig(requestedAgentId?: string): ReturnType<typeof resolveEffectiveAgentConfig>['config']['models'] | undefined {
   const catalog = new AgentCatalogRepository().snapshot();
   const id = requestedAgentId?.trim() || catalog.defaultAgentId;

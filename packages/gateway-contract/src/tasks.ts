@@ -199,6 +199,8 @@ export const TaskRunReceiptSchema = z.object({
       criterion: z.string(),
       status: z.enum(['passed', 'failed', 'unverified']),
       evidenceTitles: z.array(z.string()),
+      note: z.string().optional(),
+      method: z.enum(['tool_verified', 'model_reviewed', 'unverified']).optional(),
     })),
   }),
   remainingWork: z.array(z.string()),

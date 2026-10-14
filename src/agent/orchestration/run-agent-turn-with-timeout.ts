@@ -5,6 +5,7 @@
 
 import type { Agent } from '@earendil-works/pi-agent-core';
 
+import { AgentRunDeadlineError } from './run-termination.js';
 import type { Config } from '../../config/schema.js';
 import { resolveEffectiveAgentConfigForSession } from '../../config/agent-profile.js';
 
@@ -18,7 +19,7 @@ export const MAX_AGENT_TURN_TIMEOUT_MS = 24 * 60 * 60 * 1000;
 export const DEFAULT_AGENT_TURN_TIMEOUT_MS = 4 * 60 * 60 * 1000;
 export const DEFAULT_AGENT_ABORT_GRACE_MS = 5_000;
 
-export class AgentTurnUnsettledError extends Error {
+export class AgentTurnUnsettledError extends AgentRunDeadlineError {
   constructor(readonly timeoutMs: number, readonly abortGraceMs: number) {
     super(`Agent turn timed out after ${timeoutMs / 1000}s and did not settle within ${abortGraceMs / 1000}s`);
     this.name = 'AgentTurnUnsettledError';
@@ -44,14 +45,23 @@ export async function runAgentTurnWithTimeout(
   agent: Agent,
   runTurn: () => Promise<void>,
   timeoutMs: number,
-  options: { abortGraceMs?: number } = {},
+  options: { abortGraceMs?: number; timeoutExtensionMs?: () => number } = {},
 ): Promise<void> {
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
   const timeoutPromise = new Promise<never>((_, reject) => {
-    timeoutId = setTimeout(
-      () => reject(new Error(`Agent turn timed out after ${timeoutMs / 1000}s`)),
-      timeoutMs,
-    );
+    let extended = false;
+    let effectiveTimeoutMs = timeoutMs;
+    const expire = () => {
+      const extensionMs = !extended ? options.timeoutExtensionMs?.() ?? 0 : 0;
+      if (Number.isFinite(extensionMs) && extensionMs > 0) {
+        extended = true;
+        effectiveTimeoutMs += extensionMs;
+        timeoutId = setTimeout(expire, extensionMs);
+        return;
+      }
+      reject(new AgentRunDeadlineError(`Agent turn timed out after ${effectiveTimeoutMs / 1000}s`));
+    };
+    timeoutId = setTimeout(expire, timeoutMs);
   });
   const runTurnPromise = Promise.resolve().then(runTurn);
 

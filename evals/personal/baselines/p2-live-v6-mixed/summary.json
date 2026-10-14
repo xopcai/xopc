@@ -1,0 +1,156 @@
+{
+  "schemaVersion": 1,
+  "suite": "personal-delivery-live-repair",
+  "suiteVersion": 4,
+  "adapter": "scripts/personal-repair-live-smoke-v2.mts",
+  "mode": "real-model-isolated-gateway",
+  "createdAt": "2026-10-14T13:30:33.945Z",
+  "requestedRounds": 2,
+  "requestedScenarios": [
+    "mixed"
+  ],
+  "total": 2,
+  "passed": 0,
+  "failed": 2,
+  "sourceVersions": 2,
+  "sameSourceAcrossTrials": false,
+  "groups": {
+    "mixed": {
+      "total": 2,
+      "passed": 0
+    }
+  },
+  "observations": {
+    "totalMedianMs": 222117,
+    "totalP95Ms": 222117,
+    "fallbackCount": 0,
+    "repairRoundCount": 1,
+    "conciseReplies": 2
+  },
+  "limitations": [
+    "Small sample: percentiles are descriptive, not SLA estimates.",
+    "Live MDN retrieval; other sales/prices are frozen synthetic fixtures.",
+    "Conflict/file faults are disclosed injections; no production files are deleted.",
+    "No failed round is discarded or automatically replaced.",
+    "Source hashes distinguish revisions; compare only unchanged versions.",
+    "Length is a style proxy, not a human naturalness score."
+  ],
+  "trials": [
+    {
+      "round": 1,
+      "scenario": "mixed",
+      "reportPath": "/Users/micjoyce/develop/github/xopc/evals/personal/baselines/p2-live-v6-mixed/mixed-round-1.json",
+      "exitCode": 1,
+      "success": false,
+      "failure": "Missing file must cause automatic repair on the same run",
+      "sourceChangedDuringRun": true,
+      "sourceHashes": {
+        "src/agent/tools/personal-task-tool.ts": "d460c66eac83d1f6a365eaf885f3237f17b78a486a54e5a374fcd66cdfbf19d0",
+        "src/personal-agent/prompts.ts": "7a9efc655cb430995614b82563e5fa38252084e424bb6919479e171ecc84f43b",
+        "src/personal-agent/reply-style.ts": "e8b056e05a702df8243cd313c5df44f14e1dcf5a52cde5864328cd93b7bead16",
+        "src/personal-agent/reply-composer.ts": "14b8b8ae514f5293cbcdf1a83f42f113928193bf529ced091f0fa30d3bf7e4d8",
+        "src/personal-agent/result-file-links.ts": "998b7c7d8b3015d905e7d961e17cd64b95428a91ffbf98c82d1d07b8ba6ab838",
+        "src/tasks/task-result-delivery-repository.ts": "9433eb70b4825c7d2f07af71f7255c4782c2a880c047b749b58f15a32938c4a1",
+        "src/tasks/task-result-delivery-service.ts": "13b509b2c0eb7b6a84b915d08b70046ada859d294c006a986acb616746ace039",
+        "src/tasks/task-allocation-service.ts": "732c1d85185c600003b8bee57e62ce3e94994f24941161dc63426446665f8367",
+        "src/tasks/task-research-result.ts": "a10927de99f3f1056beb32d8a2f8a618617d51b16ec2b160c943ffea011ca803",
+        "src/tasks/task-run-coordinator.ts": "aa69eb16b010250ec3b21b26605abe11b1c4d9c340c8f6da6b22c41ee2d8bf77",
+        "src/tasks/task-contract-planner.ts": "d70e92348b66a258d7c3069f98924c42171b28ee6376c7270e57ee89c13752f7",
+        "src/agent/tools/task-result-tool.ts": "61b4d7ac419869184d481fe646c6e6b465f7cf15055fa8c1c27ca469c5b8bd9a",
+        "src/agent/tools/factory.ts": "0f7fe15b205760caf7719e921a838626fe6c958738e1f3d16d5d2fd31fa2f68b",
+        "packages/gateway-contract/src/task-research-result.ts": "0a546d8e9f9e8072fe1da330dd033a226621547e8bbe25f490caacfaec336dc6",
+        "scripts/personal-repair-live-smoke-v2.mts": "3ba858e4834b02f77e577b0705767391e7dc127a4e5b473d6b81e29763d9a373",
+        "src/tasks/task-research-repair.ts": "87849f6533b6155a37f599812d12beda6014dd5e15760dc040af1f25831e644d",
+        "src/tasks/task-run-repository.ts": "e11cf7c8e2d61b9364fff5ed2463e31d66704874d583af8306cb76ac8784fdd0",
+        "src/agent/tasks/task-judge-service.ts": "d24a645efe6d52a75ac67cd97e92c889b6de1f344af4d4e83e8184f8171488f9",
+        "src/tasks/task-continuation.ts": "f0181c063b7a1b1a0d666e6abbd7c58cac0c664a593c71512ce1eaba5ad10c00",
+        "src/agent/orchestration/turn-recovery.ts": "540c0132d756aee6405d98a34c540630d5e3ae8402fe996ef55f78178ab27b8a",
+        "src/agent/embedded/run-for-session.ts": "7fadb30a7a03fd6871264b3337e46f6491337774e577a4975d9bbff0b112e0de",
+        "src/agent/embedded/run-turn.ts": "6ad88909f4b519ad4fe0b6c3186e326ec13fd7fe282265155f9686af5bb6afe3",
+        "src/agent/embedded/types.ts": "b9a61fbe8af6af29489007c35731375adbc8e33a9e9e9d816b0c38e52aa126b8",
+        "src/agent/tools/web.ts": "e5d3637821f01957c2e1879e5c05c18e04da380b59a5aa8679a4efc511c0e92e",
+        "pnpm-lock.yaml": "c9ba3f707270e8af6a7c6bdd3e4ed79aa16a3440c3d1df8602732bb6a8c5a0e5"
+      },
+      "models": {
+        "personal": "deepseek/deepseek-flash",
+        "global": "xopc-cloud/openai-codex/gpt-5.5"
+      },
+      "fallbackCount": 0,
+      "repairs": 0,
+      "replyCharacters": 284,
+      "injections": [
+        {
+          "kind": "user_requirement_changed_via_main_input",
+          "entryId": "222385b4-9ad7-4bdc-8641-eac2fc114bb2",
+          "at": 1791984302678
+        },
+        {
+          "kind": "published_file_deleted",
+          "artifactId": "report---a81eeea5-67d3-4f0b-ad4c-d69be75ef8b8.md",
+          "at": 1791984350259
+        }
+      ],
+      "downloads": 4,
+      "checks": 13,
+      "instructionChecks": 1
+    },
+    {
+      "round": 2,
+      "scenario": "mixed",
+      "reportPath": "/Users/micjoyce/develop/github/xopc/evals/personal/baselines/p2-live-v6-mixed/mixed-round-2.json",
+      "exitCode": 0,
+      "success": false,
+      "sourceChangedDuringRun": true,
+      "sourceHashes": {
+        "src/agent/tools/personal-task-tool.ts": "d460c66eac83d1f6a365eaf885f3237f17b78a486a54e5a374fcd66cdfbf19d0",
+        "src/personal-agent/prompts.ts": "7a9efc655cb430995614b82563e5fa38252084e424bb6919479e171ecc84f43b",
+        "src/personal-agent/reply-style.ts": "e8b056e05a702df8243cd313c5df44f14e1dcf5a52cde5864328cd93b7bead16",
+        "src/personal-agent/reply-composer.ts": "14b8b8ae514f5293cbcdf1a83f42f113928193bf529ced091f0fa30d3bf7e4d8",
+        "src/personal-agent/result-file-links.ts": "998b7c7d8b3015d905e7d961e17cd64b95428a91ffbf98c82d1d07b8ba6ab838",
+        "src/tasks/task-result-delivery-repository.ts": "9433eb70b4825c7d2f07af71f7255c4782c2a880c047b749b58f15a32938c4a1",
+        "src/tasks/task-result-delivery-service.ts": "13b509b2c0eb7b6a84b915d08b70046ada859d294c006a986acb616746ace039",
+        "src/tasks/task-allocation-service.ts": "732c1d85185c600003b8bee57e62ce3e94994f24941161dc63426446665f8367",
+        "src/tasks/task-research-result.ts": "1009c18b0de51516d870f116b765352eef90bde219f8b4404b160fc760d9edd2",
+        "src/tasks/task-run-coordinator.ts": "aa69eb16b010250ec3b21b26605abe11b1c4d9c340c8f6da6b22c41ee2d8bf77",
+        "src/tasks/task-contract-planner.ts": "d70e92348b66a258d7c3069f98924c42171b28ee6376c7270e57ee89c13752f7",
+        "src/agent/tools/task-result-tool.ts": "61b4d7ac419869184d481fe646c6e6b465f7cf15055fa8c1c27ca469c5b8bd9a",
+        "src/agent/tools/factory.ts": "0f7fe15b205760caf7719e921a838626fe6c958738e1f3d16d5d2fd31fa2f68b",
+        "packages/gateway-contract/src/task-research-result.ts": "0a546d8e9f9e8072fe1da330dd033a226621547e8bbe25f490caacfaec336dc6",
+        "scripts/personal-repair-live-smoke-v2.mts": "3ba858e4834b02f77e577b0705767391e7dc127a4e5b473d6b81e29763d9a373",
+        "src/tasks/task-research-repair.ts": "87849f6533b6155a37f599812d12beda6014dd5e15760dc040af1f25831e644d",
+        "src/tasks/task-run-repository.ts": "e11cf7c8e2d61b9364fff5ed2463e31d66704874d583af8306cb76ac8784fdd0",
+        "src/agent/tasks/task-judge-service.ts": "d24a645efe6d52a75ac67cd97e92c889b6de1f344af4d4e83e8184f8171488f9",
+        "src/tasks/task-continuation.ts": "f0181c063b7a1b1a0d666e6abbd7c58cac0c664a593c71512ce1eaba5ad10c00",
+        "src/agent/orchestration/turn-recovery.ts": "540c0132d756aee6405d98a34c540630d5e3ae8402fe996ef55f78178ab27b8a",
+        "src/agent/embedded/run-for-session.ts": "7fadb30a7a03fd6871264b3337e46f6491337774e577a4975d9bbff0b112e0de",
+        "src/agent/embedded/run-turn.ts": "6ad88909f4b519ad4fe0b6c3186e326ec13fd7fe282265155f9686af5bb6afe3",
+        "src/agent/embedded/types.ts": "b9a61fbe8af6af29489007c35731375adbc8e33a9e9e9d816b0c38e52aa126b8",
+        "src/agent/tools/web.ts": "e5d3637821f01957c2e1879e5c05c18e04da380b59a5aa8679a4efc511c0e92e",
+        "pnpm-lock.yaml": "c9ba3f707270e8af6a7c6bdd3e4ed79aa16a3440c3d1df8602732bb6a8c5a0e5"
+      },
+      "models": {
+        "personal": "deepseek/deepseek-flash",
+        "global": "xopc-cloud/openai-codex/gpt-5.5"
+      },
+      "totalMs": 222117,
+      "fallbackCount": 0,
+      "repairs": 1,
+      "replyCharacters": 276,
+      "injections": [
+        {
+          "kind": "user_requirement_changed_via_main_input",
+          "entryId": "50166020-0c34-4e8a-8fc2-1fe6ef705e8e",
+          "at": 1791984518232
+        },
+        {
+          "kind": "published_file_deleted",
+          "artifactId": "report---f115cad9-6e7b-468c-a476-7df670520a15.md",
+          "at": 1791984589439
+        }
+      ],
+      "downloads": 4,
+      "checks": 11,
+      "instructionChecks": 1
+    }
+  ]
+}

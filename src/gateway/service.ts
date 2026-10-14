@@ -554,6 +554,8 @@ export class GatewayService {
     this.chatPreviews = new ChatPreviewService({ localApps: this.localApps });
 
     this.agentRunner = new GatewayAgentRunner({
+      continueConnection: (wait, idempotencyKey) => this.connectionRecovery.continueObjective(wait, idempotencyKey),
+      cancelConnection: wait => this.connectionRecovery.cancelObjective(wait),
       validateConnectionResume: async input => {
         for (const source of input.contextSnapshots ?? []) {
           if (source.kind === 'app_context') {

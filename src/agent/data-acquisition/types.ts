@@ -16,6 +16,8 @@ export interface DataOperationResult {
   sourceExhausted: boolean;
   outputOmitted: boolean;
   reason?: string;
+  failureKind?: import('../tools/search/errors.js').SearchFailureKind;
+  cached?: boolean;
   next?: { path: string; startLine: number; maxLines: number };
   durationMs: number;
 }

@@ -76,8 +76,10 @@ export class TaskResultDeliveryService {
                 ? 'partial' as const : delivery.outcome.status };
             const zh = resolveTaskLocale(new TaskRepository().require(delivery.taskId)) === 'zh';
             const statusText = zh
-              ? `${delivery.taskTitle}：${available === deliverables.length ? '成果已生成' : available > 0 ? '部分成果已生成' : '成果暂不可用'}。`
-              : `${delivery.taskTitle}: ${available === deliverables.length ? 'Results ready' : available > 0 ? 'Partial results ready' : 'Results unavailable'}.`;
+              ? `${delivery.taskTitle}：${outcome.status === 'failed' ? '请求未完成' : outcome.status === 'partial' ? '部分内容已完成'
+                : deliverables.length ? '成果已生成' : '结果已返回'}。`
+              : `${delivery.taskTitle}: ${outcome.status === 'failed' ? 'Request incomplete' : outcome.status === 'partial' ? 'Partial results ready'
+                : deliverables.length ? 'Results ready' : 'Result returned'}.`;
             const personal = getPersonalAgentByConversation(delivery.conversationId);
             if (personal && !personalRequestForTask(delivery.taskId)) enqueuePersonalReply({ delivery: { ...delivery, outcome },
               report: delivery.text?.trim() || delivery.outcome.summary?.trim() || statusText,
