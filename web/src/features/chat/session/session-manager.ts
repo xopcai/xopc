@@ -19,7 +19,7 @@ import { apiFetch } from '@/lib/fetch';
 import { apiFetchWithStartupRetry } from '@/lib/gateway-startup-retry';
 import { apiUrl } from '@/lib/url';
 import { useGatewayStore } from '@/stores/gateway-store';
-import { readLocalSessionDraft, saveLocalSessionDraft, draftAgentConfig, rememberSessionTranscript, readPendingSessionCommand, confirmSessionCommand } from './local-session-drafts';
+import { readLocalSessionDraft, saveLocalSessionDraft, draftAgentConfig, rememberSessionTranscript, readPendingSessionCommand, confirmSessionCommand, type LocalSessionDraft } from './local-session-drafts';
 import { fetchConfiguredModelsCached } from '../api/registry-api';
 import { fetchGatewayAgentEffectiveConfig } from '@/features/settings/agents-admin-api';
 
@@ -448,8 +448,23 @@ export class SessionManager {
     const result = await response.json() as { payload: { receipt: { conversationId: string; clientMessageId: string; transcriptId: string; lifecycle: string }; session: { transcriptId: string } } };
     assertScope();
     if (result.payload.receipt.conversationId !== conversationId || result.payload.receipt.clientMessageId !== clientMessageId || !result.payload.session.transcriptId) throw new Error('Invalid input receipt');
-    if (draft?.materialization && result.payload.receipt.lifecycle !== 'ready') return;
+    if (draft?.materialization) {
+      const latest = await readLocalSessionDraft(conversationId);
+      assertScope();
+      if (latest?.materialization?.commandId !== clientMessageId) return;
+    }
     await confirmSessionCommand(conversationId, result.payload.session.transcriptId);
+  }
+
+  /** Recover creation before appending input; environment preparation can finish later. */
+  async confirmPendingMaterialization(conversationId: string, signal?: AbortSignal): Promise<void> {
+    const assertScope = captureScope();
+    await this.reconcileDraft(conversationId);
+    signal?.throwIfAborted();
+    assertScope();
+    const draft = await readLocalSessionDraft(conversationId);
+    assertScope();
+    if (draft?.materialization) await this.submitMaterialization(draft, signal);
   }
 
   async materialize(conversationId: string, purpose: 'voice' | 'session_resources'): Promise<void> {
@@ -465,15 +480,28 @@ export class SessionManager {
     draft.materialization ??= { commandId: crypto.randomUUID(), purpose };
     await saveLocalSessionDraft(draft);
     assertScope();
+    const lifecycle = await this.submitMaterialization(draft);
+    if (lifecycle !== 'ready') throw new Error('Conversation environment is not ready yet');
+  }
+
+  private async submitMaterialization(draft: LocalSessionDraft, signal?: AbortSignal): Promise<string> {
+    const assertScope = captureScope();
+    const conversationId = draft.conversationId;
+    if (!draft.materialization) throw new Error('Missing materialization command');
     const response = await apiFetch(apiUrl(`/api/sessions/${encodeURIComponent(conversationId)}/materialize`), {
-      method: 'POST', body: JSON.stringify({ ...draft.materialization, creation: draft.creation }),
+      method: 'POST', body: JSON.stringify({ ...draft.materialization, creation: draft.creation }), signal,
     });
     if (!response.ok) throw new Error(await readErrorMessage(response));
     const result = await response.json() as { payload: { receipt: { conversationId: string; clientMessageId: string; transcriptId: string; lifecycle: string } } };
+    signal?.throwIfAborted();
     assertScope();
     if (result.payload.receipt.conversationId !== conversationId || result.payload.receipt.clientMessageId !== draft.materialization.commandId) throw new Error('Invalid materialization receipt');
-    if (result.payload.receipt.lifecycle !== 'ready') throw new Error('Conversation environment is not ready yet');
-    await confirmSessionCommand(conversationId, result.payload.receipt.transcriptId);
+    const latest = await readLocalSessionDraft(conversationId);
+    assertScope();
+    if (latest?.materialization?.commandId === draft.materialization.commandId) {
+      await confirmSessionCommand(conversationId, result.payload.receipt.transcriptId);
+    }
+    return result.payload.receipt.lifecycle;
   }
 
   /** Lightweight name read after auto-title (matches `ui` SessionManager). */

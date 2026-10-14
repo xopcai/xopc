@@ -15,7 +15,7 @@ import {
 } from '@/features/endpoint-tools/turn-claim';
 import type { RealtimeEventPayload } from '@xopcai/realtime-protocol';
 import { contextRefWireToken, sessionInputCommandSchema, type AppContextEnvelope } from '@xopcai/gateway-contract';
-import { savePendingSessionCommand } from '@/features/chat/session/local-session-drafts';
+import { savePendingSessionCommand, readLocalSessionDraft, confirmSessionCommand, type LocalSessionDraft } from '@/features/chat/session/local-session-drafts';
 
 const realtimeState = vi.hoisted(() => ({
   listener: undefined as undefined | {
@@ -210,6 +210,61 @@ describe('MessageSender terminal state', () => {
       clear: () => storage.clear(),
     });
     publishEndpointTurnClaim('web-test', 'test-turn-token');
+  });
+
+  it.each(['ready', 'preparing', 'preparation_failed', 'not_received', 'already_confirmed'])('recovers %s materialization before the first input', async lifecycle => {
+    useChatSessionStore.setState({ sessions: { [conversationId]: { localDraft: true, model: 'test/model' } } } as never);
+    let draft: LocalSessionDraft | undefined = {
+      conversationId, createdAt: new Date().toISOString(),
+      creation: { agentId: 'main', model: 'test/model', thinkingLevel: 'off', temporary: false, projectId: null, execution: null },
+      materialization: { commandId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', purpose: 'session_resources' },
+    };
+    const original = structuredClone(draft);
+    if (lifecycle === 'already_confirmed') draft = undefined;
+    vi.mocked(readLocalSessionDraft).mockImplementation(async () => draft);
+    vi.mocked(confirmSessionCommand).mockImplementation(async () => { draft = undefined; });
+    const receipt = { conversationId, clientMessageId: original.materialization!.commandId,
+      transcriptId: 'transcript', lifecycle: lifecycle === 'not_received' ? 'preparing' : lifecycle };
+    vi.mocked(apiFetch).mockImplementation(async (url, init) => {
+      if (String(url).endsWith('/agent-config')) return new Response(JSON.stringify({ ok: true, payload: {
+        model: 'test/model', configVersion: 7, thinkingLevel: 'off', reasoningLevel: 'on',
+        effectiveWorkspacePath: '', workingDirectoryLocked: false, workspaceSource: 'agent_default_root', userContextMode: 'enabled',
+      } }));
+      if (String(url).includes('/input-receipts/')) {
+        return lifecycle === 'not_received' ? new Response(null, { status: 404 })
+          : new Response(JSON.stringify({ payload: { receipt, session: { transcriptId: 'transcript' } } }));
+      }
+      if (String(url).endsWith('/materialize')) {
+        expect(JSON.parse(String(init?.body))).toEqual({ ...original.materialization, creation: original.creation });
+        return new Response(JSON.stringify({ payload: { receipt } }), { status: 202 });
+      }
+      return acceptedInput(conversationId, JSON.parse(String(init?.body)).clientMessageId);
+    });
+    try {
+      await expect(new MessageSender().send('first message', conversationId)).resolves.toBeUndefined();
+      const requests = vi.mocked(apiFetch).mock.calls.filter(([url]) => String(url).endsWith('/inputs'));
+      expect(requests).toHaveLength(1);
+      const body = JSON.parse(String(requests[0][1]?.body));
+      expect(sessionInputCommandSchema.safeParse(body).success).toBe(true);
+      expect(body).toMatchObject({ kind: 'append', configVersion: 7, expectedTranscriptId: 'transcript', input: { content: 'first message' } });
+      expect(draft).toBeUndefined();
+    } finally {
+      vi.mocked(readLocalSessionDraft).mockImplementation(async () => undefined);
+      vi.mocked(confirmSessionCommand).mockReset();
+    }
+  });
+
+  it('keeps an unconfirmed materialization recoverable when receipt lookup fails', async () => {
+    const draft = { materialization: { commandId: 'pending', purpose: 'session_resources' } } as LocalSessionDraft;
+    vi.mocked(readLocalSessionDraft).mockResolvedValue(draft);
+    vi.mocked(apiFetch).mockResolvedValue(new Response(JSON.stringify({ error: { message: 'Gateway unavailable' } }), { status: 503 }));
+    try {
+      await expect(new MessageSender().send('first message', conversationId)).rejects.toThrow('Gateway unavailable');
+      expect(vi.mocked(apiFetch).mock.calls.every(([url]) => String(url).includes('/input-receipts/'))).toBe(true);
+      expect(confirmSessionCommand).not.toHaveBeenCalled();
+    } finally {
+      vi.mocked(readLocalSessionDraft).mockImplementation(async () => undefined);
+    }
   });
 
   it.each(['file', 'session'] as const)('sends @ %s references without composer display fields and preserves them on retry', async kind => {
