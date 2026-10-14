@@ -553,7 +553,8 @@ export const ChatComposer = memo(function ChatComposer({
   const suggestionEligible = nextTurnSuggestionsEnabled && !disabled && !sendDisabled && !runBusy
     && !editingFollowUpId && !editingUserTurnId && !voice.voiceActive && !editor.isComposing
     && editor.value.length === 0 && att.attachments.length === 0 && contextRefs.length === 0 && pendingFollowUps.length === 0;
-  const nextTurn = useNextTurnSuggestion({ conversationId, agentId: currentAgentId, modelKey: sessionModel, locale: language, enabled: suggestionEligible });
+  const nextTurn = useNextTurnSuggestion({ conversationId, agentId: currentAgentId, modelKey: sessionModel,
+    locale: language, enabled: nextTurnSuggestionsEnabled, draftText: editor.value, canShow: suggestionEligible });
   const acceptNextTurnSuggestion = () => {
     if (!suggestionEligible || editor.valueRef.current.length > 0 || contextRefsRef.current.length > 0) return false;
     const text = nextTurn.accept();

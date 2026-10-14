@@ -4,6 +4,7 @@ import { getSqliteDatabase, runSqliteWriteTransaction } from '../storage/sqlite/
 import { appendTranscriptEntry, loadLlmMessagesForSession } from '../storage/sqlite/transcript-repository.js';
 import { readCurrentTranscriptId } from '../storage/sqlite/session-instance-repository.js';
 import { emitSessionTranscriptUpdate } from '../session/transcript-events.js';
+import { TaskCollaborationRepository } from '../tasks/task-collaboration-repository.js';
 import { TaskRunRepository } from '../tasks/task-run-repository.js';
 import { TaskConversationRepository } from '../tasks/task-conversation-repository.js';
 import { createLogger } from '../utils/logger.js';
@@ -87,7 +88,14 @@ export function drainPersonalRequestResults(notify?: (conversationId: string, re
           return;
         }
         if (state?.activeConversationId !== run.conversationId) throw new Error('Task execution changed');
-        const parsed = stored.result_json && stored.result_run_id === run.id
+        const latestDirection = new TaskCollaborationRepository().coordination(request.taskId!)
+          .filter(entry => ['main_agent', 'user'].includes(entry.authorKind) && ['answer', 'instruction'].includes(entry.kind)).at(-1)?.sequence ?? 0;
+        const publication = db.prepare(`SELECT sequence FROM task_collaboration_entries
+          WHERE task_id = ? AND task_run_id = ? AND author_kind = 'worker_agent' AND kind = 'result'
+          AND idempotency_key LIKE ? ORDER BY sequence DESC LIMIT 1`)
+          .get(request.taskId!, run.id, `personal-request-result:${request.requestId}:${run.id}:%`) as { sequence: number } | undefined;
+        const outdated = latestDirection > (publication?.sequence ?? 0);
+        const parsed = !outdated && stored.result_json && stored.result_run_id === run.id
           ? PersonalRequestResultSchema.safeParse(JSON.parse(stored.result_json)) : undefined;
         const messages = run.conversationId ? loadLlmMessagesForSession(run.conversationId) : [];
         const assistant = messages.filter(message => message.role === 'assistant').at(-1);
@@ -96,6 +104,7 @@ export function drainPersonalRequestResults(notify?: (conversationId: string, re
         const content = parsed?.success ? renderPersonalRequestResult(parsed.data)
           : fallback && fallback !== 'NO_REPLY' ? fallback.slice(0, 16000) : receipt?.summary?.trim() || 'Request finished without a readable result.';
         const failed = run.status !== 'succeeded';
+        const adoptionWarning = outdated ? 'Supplemental requirements arrived after the saved connected-app result. Their completion is unverified; do not treat the older structured items as current.' : '';
         const display = failed ? `查询未完成。\n\n${content}` : content;
         const now = Date.now();
         const delivery = TaskResultDeliverySchema.parse({ version: 1, deliveryId: `personal-request:${request.requestId}`,
@@ -103,11 +112,11 @@ export function drainPersonalRequestResults(notify?: (conversationId: string, re
           conversationId: request.conversationId, originTranscriptId: request.transcriptId,
           requestInputId: request.inputId, assignmentEpoch: state?.assignmentEpoch ?? 0,
           outcome: { version: 1, outcomeId: `personal-request:${request.requestId}`, runId: run.id,
-            turnId: `personal-request:${request.requestId}`, status: failed ? 'failed' : parsed?.success && parsed.data.coverage?.partial ? 'partial' : 'succeeded',
+            turnId: `personal-request:${request.requestId}`, status: failed ? 'failed' : outdated || (parsed?.success && parsed.data.coverage?.partial) ? 'partial' : 'succeeded',
             summary: content.slice(0, 2000), deliverables: [], evidence: [], createdAt: new Date(now).toISOString() }, createdAt: now });
         const personal = getPersonalAgentByConversation(request.conversationId);
         if (personal) enqueuePersonalReply({ delivery, objective: request.objective, requestId: request.requestId,
-          report: parsed?.success ? parsed.data.summary : content,
+          report: parsed?.success ? parsed.data.summary : [adoptionWarning, content].filter(Boolean).join('\n\n'),
           ...(parsed?.success ? { preservedText: renderPersonalRequestResult({ ...parsed.data, summary: '' }).trim() } : {}) });
         const entry = personal ? undefined : appendTranscriptEntry(request.conversationId, { role: 'custom', customType: TASK_RESULT_DELIVERY_TYPE,
           content: display, details: delivery, display: true, timestamp: now });
@@ -116,7 +125,7 @@ export function drainPersonalRequestResults(notify?: (conversationId: string, re
         // The result/composition outbox owns the final reply instead of a second main Agent turn.
         db.prepare(`UPDATE task_main_update_deliveries SET status = 'delivered', decision = 'silent',
           decision_reason = 'Personal request result delivered', updated_at = ? WHERE entry_id IN
-          (SELECT entry_id FROM task_collaboration_entries WHERE task_run_id = ? AND kind IN ('result','failure','progress'))`)
+          (SELECT entry_id FROM task_collaboration_entries WHERE task_run_id = ? AND kind = 'result')`)
           .run(now, run.id);
       });
       const delivered = db.prepare('SELECT delivery_entry_id, notified_at FROM personal_requests WHERE request_id = ?')

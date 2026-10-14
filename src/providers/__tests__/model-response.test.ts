@@ -3,6 +3,15 @@ import { describe, expect, it } from 'vitest';
 import { extractAssistantText, isTransientProviderErrorMessage } from '../model-response.js';
 
 describe('extractAssistantText', () => {
+  it.each(['429 Too Many Requests', '408 Request Timeout', 'Stream ended without finish_reason',
+    'OpenAI Responses stream ended without a stop reason', 'Anthropic stream ended before message_stop',
+    'WebSocket idle timeout after 60000ms', 'terminated'])('allows request recovery for %s', error => {
+    expect(isTransientProviderErrorMessage(error)).toBe(true);
+  });
+
+  it.each(['429 insufficient_quota', 'usage_limit_reached', 'credit_budget_exhausted', '401 Invalid API key'])('does not retry terminal auth or budget failures: %s', error => {
+    expect(isTransientProviderErrorMessage(error)).toBe(false);
+  });
   it('supports legacy string content', () => {
     expect(extractAssistantText('  answer  ')).toBe('answer');
   });

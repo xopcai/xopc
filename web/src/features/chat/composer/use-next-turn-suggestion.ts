@@ -10,12 +10,15 @@ type SuggestionSelection = { suggestion: NextTurnSuggestion; impressionId: strin
 
 export function useNextTurnSuggestion(options: {
   conversationId: string | null; agentId?: string; modelKey?: string; locale: 'zh' | 'en'; enabled: boolean;
+  draftText: string;
+  canShow: boolean;
 }) {
-  const { conversationId, agentId, modelKey, locale, enabled } = options;
+  const { conversationId, agentId, modelKey, locale, enabled, draftText, canShow } = options;
   const gatewayIdentity = useGatewayStore(state => state.conversationId);
   const [selection, setSelection] = useState<SuggestionSelection | null>(null);
   const [dismissedId, setDismissedId] = useState<string | null>(null);
   const acceptedRef = useRef<SuggestionSelection | null>(null);
+  const previousDraftRef = useRef(draftText);
   const revisionRef = useRef(-1);
 
   const feedback = useCallback((value: SuggestionSelection, event: NextTurnSuggestionFeedback['event'], edited?: boolean) => {
@@ -24,6 +27,11 @@ export function useNextTurnSuggestion(options: {
       body: JSON.stringify({ suggestionId: value.suggestion.id, impressionId: value.impressionId, event, ...(edited === undefined ? {} : { edited }) }),
     }).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (previousDraftRef.current.length > 0 && draftText.length === 0) acceptedRef.current = null;
+    previousDraftRef.current = draftText;
+  }, [draftText]);
 
   useEffect(() => {
     acceptedRef.current = null;
@@ -93,13 +101,12 @@ export function useNextTurnSuggestion(options: {
     };
   }, [conversationId, agentId, modelKey, locale, gatewayIdentity, enabled]);
 
-  const visible = enabled && selection?.suggestion.id !== dismissedId
+  const visible = enabled && canShow && draftText.length === 0 && selection?.suggestion.id !== dismissedId
     && selection?.suggestion.conversationId === conversationId && selection.suggestion.expiresAt > Date.now() ? selection : null;
   const shown = useCallback(() => { if (visible) feedback(visible, 'shown'); }, [visible, feedback]);
   const accept = useCallback(() => {
     if (!visible) return null;
     acceptedRef.current = visible;
-    setDismissedId(visible.suggestion.id);
     feedback(visible, 'accepted');
     return visible.suggestion.prompt;
   }, [visible, feedback]);
@@ -109,6 +116,7 @@ export function useNextTurnSuggestion(options: {
   const submitted = useCallback((text: string) => {
     const value = acceptedRef.current;
     if (!value || value.suggestion.conversationId !== conversationId) return;
+    setDismissedId(value.suggestion.id);
     feedback(value, 'submitted', text.trim() !== value.suggestion.prompt);
     acceptedRef.current = null;
   }, [conversationId, feedback]);

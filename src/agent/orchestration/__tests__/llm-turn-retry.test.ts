@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
 import {
   classifyLlmFailure,
@@ -11,6 +11,19 @@ import {
 } from '../llm-turn-retry.js';
 
 describe('llm-turn-retry', () => {
+  afterEach(() => vi.useRealTimers());
+
+  it('cancels during backoff without issuing another model request', async () => {
+    vi.useFakeTimers();
+    const controller = new AbortController();
+    const agent = { state: { messages: [{ role: 'assistant', content: [], stopReason: 'error', errorMessage: '429 Too Many Requests' }] },
+      continue: vi.fn(), waitForIdle: vi.fn() } as unknown as import('@earendil-works/pi-agent-core').Agent;
+    const pending = maybeRetryTurnAfterTransientLlmFailure(agent, { conversationId: 'test', log: { warn: vi.fn() }, signal: controller.signal });
+    const rejected = expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+    await vi.advanceTimersByTimeAsync(500);
+    controller.abort(new DOMException('User cancelled', 'AbortError'));
+    await rejected;expect(agent.continue).not.toHaveBeenCalled();
+  });
   it('detects transient provider errors', () => {
     expect(isTransientLlmErrorMessage('TypeError: fetch failed')).toBe(true);
     expect(isTransientLlmErrorMessage('ECONNRESET')).toBe(true);

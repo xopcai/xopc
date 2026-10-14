@@ -464,7 +464,7 @@ export class TaskApplicationService {
       new TaskCollaborationRepository().append({
         taskId: run.taskId, taskRunId: run.id, authorKind: 'system', authorId: 'task-run',
         kind: input.receipt.status === 'succeeded' ? 'result' : 'failure',
-        body: input.receipt.summary || (resolveTaskLocale(task) === 'zh'
+        body: input.receipt.summary?.slice(0, 8000) || (resolveTaskLocale(task) === 'zh'
           ? input.receipt.status === 'succeeded' ? '任务执行完成' : '任务执行失败'
           : input.receipt.status === 'succeeded' ? 'TaskRun completed' : 'TaskRun failed'),
         idempotencyKey: `task-run-receipt:${run.id}`,

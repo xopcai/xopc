@@ -6,6 +6,7 @@ import { TaskConversationRepository } from './task-conversation-repository.js';
 import { TaskRepository, type TaskAggregate } from './task-repository.js';
 import { TaskRunRepository } from './task-run-repository.js';
 import { TaskCollaborationRepository } from './task-collaboration-repository.js';
+import { personalRequestForTask } from '../personal-agent/request-repository.js';
 import { TaskOriginRepository } from './task-origin-repository.js';
 
 export interface TaskContextAllocation {
@@ -122,6 +123,8 @@ export function buildTaskExecutionDirective(conversationId: string): string {
       const title = edge.title?.trim() ? ` (${edge.title.trim()})` : '';
       return `- [${edge.role}] ${edge.targetKind}: ${edge.targetId.slice(0, 4_000)}${title}`;
     });
+  const connected = personalRequestForTask(task.id);
+  const postTool = connected ? 'task_collaboration command post' : 'xopc_use task collaboration_post';
   const board = new TaskCollaborationRepository();
   const collaboration = [...new Map([...board.recent(task.id, undefined, 12), ...board.coordination(task.id).filter(entry => ['answer', 'instruction'].includes(entry.kind))]
     .map(entry => [entry.id, entry])).values()].sort((left, right) => left.sequence - right.sequence);
@@ -143,9 +146,11 @@ export function buildTaskExecutionDirective(conversationId: string): string {
     handoffPayload ? `Handoff snapshot: ${handoffPayload}` : '',
     collaboration.length ? `Recent task collaboration:\n${collaboration.map((entry) =>
       `- ${entry.sequence} id=${entry.id} ${entry.authorKind} ${entry.kind} delivery=${entry.deliveryStatus ?? 'none'}${entry.causationId ? ` replyTo=${entry.causationId}` : ''}: ${JSON.stringify(entry.body)}`).join('\n')}` : '',
-    'Before continuing, acknowledge each delivered answer or instruction with xopc_use task collaboration_post, kind ack, causationId equal to its entry ID. Explain your interpretation and how the final output will incorporate it. Acknowledgement records receipt and intent, not proof of completion. Apply the latest user direction on this same Task; report its actual adoption and any unmet requirements in the final result.',
-    'Report meaningful progress with xopc_use task collaboration_post. If blocked, post a question and stop this execution turn until answered.',
-    'For user-facing files, publish completed outputs with publish_artifacts before finishing. image_generate already publishes its images. Return structured artifact references rather than only local file paths. Published final outcomes are delivered automatically to the originating chat. Keep the final summary short and distinguish generated outputs from verified or accepted results.',
+    `Before continuing, acknowledge each delivered answer or instruction with ${postTool}, kind ack, causationId equal to its entry ID. Explain your interpretation and how the final output will incorporate it. Acknowledgement records receipt and intent, not proof of completion. Apply the latest user direction on this same Task; report its actual adoption and any unmet requirements in the final result.`,
+    `Report meaningful progress with ${postTool}. If blocked, post a question and stop this execution turn until answered.`,
+    connected && (task.body?.length ?? 0) > 12000 ? 'Task details above are an excerpt. Read the complete brief with task_collaboration(command="get", section="task") before execution.' : '',
+    connected ? `Connected request ${connected.requestId}: retain connector ${connected.connectorId} and account ${connected.accountId}. Text answers and instructions do not authorize account changes or writes. Use personal_request_connection for expired access; only the main connection UI can authorize recovery. Publish the latest adopted result with personal_request_result after all answers/instructions; do not use unavailable artifact tools.` : '',
+    connected ? 'Connected results and structured items return to the originating conversation automatically after this Task completes.' : 'For user-facing files, publish completed outputs with publish_artifacts before finishing. image_generate already publishes its images. Return structured artifact references rather than only local file paths. Published final outcomes are delivered automatically to the originating chat. Keep the final summary short and distinguish generated outputs from verified or accepted results.',
     'Take safe in-scope steps and produce inspectable evidence. Do not claim completion without verification.',
     '</xopc_task_execution>',
   ].filter(Boolean).join('\n');

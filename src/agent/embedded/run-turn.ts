@@ -42,7 +42,7 @@ import { detectToolLoops, type RecentToolCall } from '../orchestration/loop-guar
 import { tryApplySessionTranscriptHygiene } from '../transcript/transcript-hygiene.js';
 import { restoreCurrentTurnImages } from './current-turn-images.js';
 import { acquireEmbeddedSessionRunner, evictEmbeddedSessionRunner } from './session-runner.js';
-import { externalPolicyContext } from './tool-metadata.js';
+import { externalPolicyContext, getXopcToolMetadata } from './tool-metadata.js';
 import { allowsExecutionTool, filterExecutionTools, resolveExecutionToolPolicy } from './execution-tool-policy.js';
 import { createSqliteTranscriptRuntime } from './transcript-runtime.js';
 import { wrapStreamFnForXopcExtensions } from './xopc-stream-bridge.js';
@@ -71,10 +71,13 @@ import { getSessionMetadata } from '../../storage/sqlite/session-repository.js';
 import { resolveEffectiveAgentConfigForSession } from '../../config/agent-profile.js';
 import { getModelThinking } from '../../providers/model-thinking.js';
 import { NO_REPLY } from '../messaging/no-reply.js';
+import { canResumeAfterModelFailure, completedRecoveryToolResult } from '../orchestration/turn-recovery.js';
 import { withCloudCreditBudget, reportCloudCreditError, isCloudCreditBudgetExhausted, cloudCreditBudgetStopMessage } from '../../providers/xopc-cloud-credit-budget.js';
 
 const log = createLogger('EmbeddedRun');
 const LOG_PREVIEW_MAX_CHARS = 300;
+const RECOVERY_READ_TOOLS = new Set(['read_file', 'find', 'grep', 'list_dir', 'tool_manual', 'tool_search',
+  'review_workspace', 'language_diagnostics', 'session_status']);
 
 function truncateForLog(value: string, maxChars = LOG_PREVIEW_MAX_CHARS): string {
   return value.length > maxChars ? `${value.slice(0, maxChars)}…` : value;
@@ -295,6 +298,13 @@ async function maybeRecoverInterruptedContext(params: {
   const overflow = !!errorMessage && isContextOverflowError(errorMessage);
   const recoverableLength = !!assistant && isRecoverableLengthForModel(assistant, params.model);
   if (!overflow && !recoverableLength) return false;
+  const discardedCalls = new Set(recoverableLength && assistant ? discardedAttempt(assistant).toolCallIds : []);
+  const recoveryHistory = params.agent.state.messages.filter(message => !recoverableLength || (message !== assistant
+    && !(message.role === 'toolResult' && discardedCalls.has(message.toolCallId))));
+  if (!canResumeAfterModelFailure(recoveryHistory)) {
+    log.warn({ conversationId: params.conversationId }, 'Context recovery stopped because a tool outcome is unconfirmed');
+    return false;
+  }
   if (recoverableLength && (!params.policy.enabled || params.recoveryState.interruptedAttempts >= 1)) {
     log.warn({ conversationId: params.conversationId, attempts: params.recoveryState.interruptedAttempts },
       'Truncated response recovery is unavailable or already exhausted');
@@ -434,6 +444,7 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
     session.agent.state.messages = stripTrailingErrorAssistantMessages(await transcriptRuntime.loadMessages());
     runner.piSm.setActiveTurnId?.(runId);
     const recoveryState = { interruptedAttempts: 0 };
+    const requestRetryBudget = { continues: 0 };
     let useAuthoritativeProjection = false;
     const basePrepareNextTurn = session.agent.prepareNextTurnWithContext;
     const inTurnPrepareNextTurn: typeof session.agent.prepareNextTurnWithContext = async (turn, signal) => {
@@ -642,14 +653,20 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
     session.agent.streamFunction = loggingStreamFn;
     const verification = await RunVerification.open(workspaceDir);
     const checkpoints = runner.piSm.getBranch?.() ?? [];
+    const recoveryTurn = params.resumeLastUserMessage === true || Boolean(params.recoveryMessage);
     const lastStart = checkpoints.findLastIndex(entry => entry.type === 'custom' && entry.customType === 'coding_run_started');
     const lastSummary = checkpoints.findLastIndex(entry => entry.type === 'custom' && entry.customType === 'coding_verification');
-    const checkpoint = checkpoints[params.resumeLastUserMessage && lastSummary >= lastStart ? lastSummary : lastStart];
-    if (checkpoint?.type === 'custom' && (params.resumeLastUserMessage || lastStart > lastSummary)) {
-      verification.restore(checkpoint.data, params.resumeLastUserMessage === true && lastSummary >= lastStart);
+    const checkpoint = checkpoints[recoveryTurn && lastSummary >= lastStart ? lastSummary : lastStart];
+    if (checkpoint?.type === 'custom' && (recoveryTurn || lastStart > lastSummary)) {
+      verification.restore(checkpoint.data, recoveryTurn && lastSummary >= lastStart);
     }
     runner.piSm.appendCustomEntry('coding_run_started', { runId, workspace: workspaceDir, required: params.verifyChanges ?? false, ...await verification.summary() });
     let policyStopped = false;
+    let policyCompleted = false;
+    let recoveringModel = params.resumeLastUserMessage === true || Boolean(params.recoveryMessage);
+    let recoveryMessages = [...session.agent.state.messages];
+    let policyStopReason: string | undefined;
+    let lengthRecoveryExhausted = false;
     let connectionStopped = false;
     let clarificationStopped = false;
     let sentVisibleMessage = false;
@@ -661,6 +678,7 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
       if (executionToolPolicy.surface !== 'agent'
         && resolveExecutionToolPolicy(toolPolicyConversationId).surface !== executionToolPolicy.surface) {
         policyStopped = true;
+        policyStopReason = 'Execution identity changed during the run';
         quarantineRunner = true;
         return { block: true, terminate: true, reason: 'Execution identity changed. Start a new turn with the current tool policy.' };
       }
@@ -677,7 +695,18 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
       const decision = await params.turnPolicy?.beforeToolCall(externalPolicyContext(context, tools), signal);
       if (decision?.block) {
         policyStopped ||= decision.terminate === true;
+        if (decision.terminate) policyStopReason = decision.reason;
         return decision;
+      }
+      const tool = tools.find(candidate => candidate.name === context.toolCall.name);
+      const metadata = tool && getXopcToolMetadata(tool);
+      const readOnly = RECOVERY_READ_TOOLS.has(context.toolCall.name)
+        || metadata?.external?.readOnly === true || metadata?.annotations?.readOnlyHint === true
+        || (context.toolCall.name === 'task_collaboration' && (context.args as { command?: string }).command === 'get')
+        || (context.toolCall.name === 'managed_job' && ['wait', 'status', 'list'].includes(String((context.args as { action?: string }).action)));
+      if (recoveringModel && !readOnly) {
+        const recorded = completedRecoveryToolResult(recoveryMessages, context.toolCall.name, context.args);
+        if (recorded) return { block: true, reason: recorded };
       }
       if (context.toolCall.name !== 'read_file') {
         const scoped = await instructions.forTool(context.toolCall.name, context.args);
@@ -705,9 +734,12 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
       if (context.message && isRecoverableLengthForModel(context.message, resolvedModel)
         && recoveryState.interruptedAttempts >= 1) {
         log.warn({ conversationId, runId }, 'Stopping after the bounded truncated-response recovery attempt');
+        lengthRecoveryExhausted = true;
         return { action: 'end' };
       }
       policyStopped ||= params.turnPolicy?.shouldStopAfterTurn(context) ?? false;
+      policyCompleted ||= policyStopped && params.turnPolicy?.stopReason?.() === 'completed';
+      if (policyStopped) policyStopReason ??= 'Agent execution policy stopped before completion';
       if (policyStopped || connectionStopped || clarificationStopped) return { action: 'end' };
       const continuation = params.turnPolicy?.takeContinuationMessage?.();
       if (continuation) {
@@ -755,6 +787,9 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
             await session.sendCustomMessage({ customType: 'connection_resume', content: connectionResume.content, display: false }, { triggerTurn: true });
           } else if (clarificationResume) {
             await session.sendCustomMessage({ customType: 'clarification_resume', content: clarificationResume.content, display: false }, { triggerTurn: true });
+          } else if (params.recoveryMessage && !params.resumeLastUserMessage) {
+            if (!canResumeAfterModelFailure(session.agent.state.messages)) throw new Error('Cannot resume because a tool outcome is unconfirmed');
+            await session.sendCustomMessage({ customType: 'task_continuation', content: params.recoveryMessage, display: false }, { triggerTurn: true });
           } else if (params.resumeLastUserMessage) {
             await session.agent.continue();
           } else {
@@ -765,23 +800,37 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
           await session.agent.waitForIdle();
           clarificationStopped ||= isClarificationSuspended(conversationId, runId);
           if (connectionStopped || clarificationStopped) return;
-          await maybeRetryTurnAfterTransientLlmFailure(session.agent, {
-            conversationId,
-            log,
-            signal: runAbortSignal,
-          });
-          await maybeRecoverInterruptedContext({
-            agent: session.agent,
-            model: resolvedModel,
-            conversationId,
-            transcriptRuntime,
-            policy: compactionPolicy,
-            systemPrompt: [systemPrompt, rootInstructions].filter(Boolean).join('\n\n'),
-            abortSignal: runAbortSignal,
-            onEvent,
-            recoveryState,
-            onContextRecovered: () => { useAuthoritativeProjection = true; },
-          });
+          const recoverSettledTurn = async () => {
+            if (policyStopped || connectionStopped || clarificationStopped) return;
+            await maybeRetryTurnAfterTransientLlmFailure(session.agent, {
+              conversationId,
+              log,
+              signal: runAbortSignal,
+              budget: requestRetryBudget,
+              shouldRetry: () => !policyStopped && !connectionStopped && !clarificationStopped,
+              onRetry: () => { recoveringModel = true; recoveryMessages = [...session.agent.state.messages]; },
+            });
+            if (policyStopped || connectionStopped || clarificationStopped) return;
+            const recovered = await maybeRecoverInterruptedContext({
+              agent: session.agent,
+              model: resolvedModel,
+              conversationId,
+              transcriptRuntime,
+              policy: compactionPolicy,
+              systemPrompt: [systemPrompt, rootInstructions].filter(Boolean).join('\n\n'),
+              abortSignal: runAbortSignal,
+              onEvent,
+              recoveryState,
+              onContextRecovered: () => { useAuthoritativeProjection = true; recoveringModel = true; },
+            });
+            if (recovered) await maybeRetryTurnAfterTransientLlmFailure(session.agent, {
+              conversationId, log, signal: runAbortSignal,
+              budget: requestRetryBudget,
+              shouldRetry: () => !policyStopped && !connectionStopped && !clarificationStopped,
+              onRetry: () => { recoveringModel = true; recoveryMessages = [...session.agent.state.messages]; },
+            });
+          };
+          await recoverSettledTurn();
           if (params.requireVisibleReply && !sentVisibleMessage && !policyStopped
             && !runAbortSignal.aborted && !isAssistantTurnFailed(session.agent)
             && !isAssistantTurnAborted(session.agent)
@@ -792,6 +841,7 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
               display: false,
             }, { triggerTurn: true });
             await session.agent.waitForIdle();
+            await recoverSettledTurn();
           }
           // One bounded continuation closes accidental early completion without
           // forcing impossible checks or bypassing user cancellation and budgets.
@@ -802,6 +852,7 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
               customType: 'coding_verification', content: pending, display: false,
             }, { triggerTurn: true });
             await session.agent.waitForIdle();
+            await recoverSettledTurn();
           }
         }),
         timeoutMs,
@@ -815,11 +866,17 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
         return { ok: false, retryable: false, errorMessage: 'aborted' };
       }
       if (isAssistantTurnAborted(session.agent)) {
-        return { ok: true, lastAssistantText: lastAssistantPlainText(session) };
+        return { ok: false, retryable: false, errorMessage: 'aborted', lastAssistantText: lastAssistantPlainText(session) };
+      }
+      if ((policyStopped && !policyCompleted) || lengthRecoveryExhausted || lastAssistantMessage(session.agent.state.messages)?.stopReason === 'length') {
+        return { ok: false, retryable: false, errorMessage: policyStopReason ?? 'Assistant response was truncated before completion',
+          stopReason: policyStopped ? 'policy_limit' : 'response_truncated',
+          lastAssistantText: lastAssistantPlainText(session) };
       }
       if (isAssistantTurnFailed(session.agent)) {
         return {
           ok: false,
+          retryable: canResumeAfterModelFailure(session.agent.state.messages),
           errorMessage: getAssistantTurnErrorMessage(session.agent) ?? 'Assistant turn failed',
           lastAssistantText: lastAssistantPlainText(session),
         };

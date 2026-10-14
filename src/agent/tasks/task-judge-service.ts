@@ -9,6 +9,7 @@ import {
   extractAssistantText,
   getAssistantMessageErrorReason,
   stripCodeFences,
+  isTransientProviderErrorMessage,
 } from '../../providers/model-response.js';
 import { getApiKey, resolveModel } from '../../providers/index.js';
 import type { SessionStore } from '../../session/store.js';
@@ -24,6 +25,7 @@ import { resolveTaskLocale } from '../../tasks/task-language.js';
 import { readWorkspaceRevision } from '../coding/workspace-revision.js';
 import type { TranscriptStoredRow } from '../../session/session-context-for-llm.js';
 import type { ModelManager } from '../models/index.js';
+import { canResumeAfterModelFailure } from '../orchestration/turn-recovery.js';
 
 const log = createLogger('TaskJudge');
 const MAX_HISTORY_CHARS = 24_000;
@@ -113,10 +115,15 @@ export async function requestTaskJudgeDecision(
 ): Promise<TaskJudgeDecision> {
   let parseError: unknown;
   for (let attempt = 0; attempt < 2; attempt += 1) {
-    const raw = await complete(attempt);
     try {
+      const raw = await complete(attempt);
       return parseTaskJudgeDecision(raw, criteriaCount, locale);
     } catch (error) {
+      if (error instanceof Error && isTransientProviderErrorMessage(error.message)) {
+        if (attempt === 0) await new Promise(resolve => setTimeout(resolve, 1000));
+      } else if (!(error instanceof SyntaxError) && !(error instanceof Error && error.message.startsWith('Task judge returned'))) {
+        throw error;
+      }
       parseError = error;
     }
   }
@@ -189,7 +196,8 @@ export class TaskJudgeService {
     }
 
     const history = compactHistory(await this.options.sessionStore.loadMessages(payload.conversationId));
-    const proof = codingCompletionEvidence(await this.options.sessionStore.loadTranscriptRows(payload.conversationId));
+    const transcriptRows = await this.options.sessionStore.loadTranscriptRows(payload.conversationId);
+    const proof = codingCompletionEvidence(transcriptRows);
     const criteria = task.contract.acceptanceCriteria;
     const responseLanguage = resolveResponseLanguageForSession(this.options.getConfig(), payload.conversationId);
     const locale = responseLanguage === 'auto' ? resolveTaskLocale(task) : responseLanguage === 'zh-CN' ? 'zh' : 'en';
@@ -221,7 +229,8 @@ export class TaskJudgeService {
         const response = await completeWithResolvedCredentials(
           model,
           { messages: [retryRequest] },
-          { apiKey, maxTokens: attempt === 0 ? 1600 : 2200, temperature: 0 },
+          { apiKey, maxTokens: attempt === 0 ? 1600 : 2200, temperature: 0,
+            ...(run.timeoutAt ? { signal: AbortSignal.timeout(Math.max(1, run.timeoutAt - Date.now())) } : {}) },
           undefined,
           { operation: 'task.judge_result', conversationId: payload.conversationId, runId: run.id },
         );
@@ -260,6 +269,8 @@ export class TaskJudgeService {
         evidenceTitles: evidence.filter((item) => item.verifies?.includes(criterion)).map((item) => item.title),
       }));
       const passed = checks.every((check) => check.status === 'passed');
+      if (!passed && canResumeAfterModelFailure(transcriptRows) && this.#runs.scheduleContinuation({ runId: run.id, expectedVersion: run.version,
+        reason: 'acceptance_incomplete', message: `Continue the existing task from its recorded progress. Do not repeat completed operations.\nRemaining acceptance criteria:\n${checks.filter(check => check.status !== 'passed').map(check => check.criterion).join('\n')}\n${decision.nextAction ?? ''}` })) return;
       this.#application.completeRun({
         runId: run.id,
         expectedRunVersion: run.version,
@@ -277,6 +288,11 @@ export class TaskJudgeService {
       });
     } catch (error) {
       log.warn({ err: error, taskId, conversationId: payload.conversationId }, 'Task review failed');
+      const message = error instanceof Error ? error.message : String(error);
+      if (isTransientProviderErrorMessage(message) && canResumeAfterModelFailure(transcriptRows)) {
+        this.#runs.scheduleContinuation({ runId: run.id, expectedVersion: run.version, reason: 'acceptance_check_failed',
+          message: 'The independent acceptance check failed because of a temporary model error. Continue from the recorded results and verify the remaining acceptance criteria. Do not repeat completed operations.' });
+      }
     }
   }
 }

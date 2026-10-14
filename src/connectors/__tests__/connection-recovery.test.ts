@@ -1,6 +1,8 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { once } from 'node:events';
+import { serve } from '@hono/node-server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { seedTestDatabase } from '../../../test/sqlite-fixture.js';
@@ -12,8 +14,12 @@ import { ComposioToolProvider } from '../../agent/external-tools/composio-provid
 import { ConfigSchema, type Config } from '../../config/schema.js';
 import { closeXopcDatabase, openXopcDatabase, resetXopcDatabaseSingletonForTest } from '../../storage/sqlite/index.js';
 import { ensureSessionRecord, resetSessionRecord } from '../../storage/sqlite/session-repository.js';
-import { claimNextSessionInput, finishSessionInputRun, getSessionInputById, getSessionInputState, insertSessionInput, recoverSessionInputState } from '../../storage/sqlite/session-input-repository.js';
-import { cancelConnectionObjective, consumeConnectionResume, getActiveConnectionWait, getConnectionWait, invalidateConnectionResumeIntent, queueConnectionResolution, requireSessionConnection, updateConnectionWait } from '../../storage/sqlite/connection-wait-repository.js';
+import { claimNextSessionInput, finishSessionInputRun, getSessionInputById, getSessionInputState, insertSessionInput, recoverSessionInputState, setSessionInputStatus } from '../../storage/sqlite/session-input-repository.js';
+import { cancelConnectionObjective, consumeConnectionResume, getActiveConnectionWait, getConnectionWait, invalidateConnectionResumeIntent, queueConnectionResolution, requireSessionConnection, updateConnectionWait, reconcileConnectionWaits } from '../../storage/sqlite/connection-wait-repository.js';
+import { SessionInputCoordinator } from '../../gateway/service/session-input-coordinator.js';
+import { createHonoApp } from '../../gateway/hono/app.js';
+import type { GatewayService } from '../../gateway/service.js';
+import { buckets } from '../../gateway/rate-limit/index.js';
 import { decideConnectorApproval, listConnectorApprovals, getConnectorInstallation, listConnectorConnections, upsertConnectorActionMetadata, upsertConnectorConnection, upsertConnectorInstallation } from '../../storage/sqlite/connector-repository.js';
 import { updateConnectorAccount } from '../../storage/sqlite/connector-account-repository.js';
 import { resumeApprovedConnectorAction } from '../approval-resume.js';
@@ -223,6 +229,310 @@ describe('durable connection recovery', () => {
     return { action, waitId: wait.id, expectedTranscriptId: wait.transcriptId, expectedVersion: wait.version, idempotencyKey: crypto.randomUUID(), ...extra };
   }
 
+  async function withAuthenticatedGateway<T>(run: (base: string, headers: Record<string, string>) => Promise<T>): Promise<T> {
+    const auth = { mode: 'token' as const, token: 'connection-fixture-token' };
+    config.gateway.auth = auth;
+    buckets.resetAllForTests();
+    const service = { currentConfig: config, getResolvedAuth: () => auth, getEffectiveListenPort: () => 18790,
+      isGatewayReady: () => true, getHealth: () => ({ status: 'healthy' }), connectionRecovery: recovery } as unknown as GatewayService;
+    const server = serve({ fetch: createHonoApp({ service }).fetch, hostname: '127.0.0.1', port: 0 });
+    try {
+      if (!server.listening) await once(server, 'listening');
+      const address = server.address();
+      if (!address || typeof address === 'string') throw new Error('Expected HTTP address');
+      return await run(`http://127.0.0.1:${address.port}/api/sessions/${conversationId}/connection-wait`,
+        { Authorization: `Bearer ${auth.token}`, 'Content-Type': 'application/json' });
+    } finally {
+      await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
+    }
+  }
+
+  it('cancels a queued continuation and acknowledges a duplicate cancellation', async () => {
+    requireWait(); activeConnection();
+    await recovery.act(conversationId, action('check'));
+    const queued = getActiveConnectionWait(conversationId)!;
+    expect(recovery.snapshot(conversationId).wait).toMatchObject({ recoveryStage: 'queued', queueBlocked: true });
+    const cancel = action('cancel');
+    expect((await recovery.act(conversationId, cancel)).snapshot.wait).toBeNull();
+    expect(getSessionInputById(conversationId, queued.queuedInputId!)?.status).toBe('cancelled');
+    expect((await recovery.act(conversationId, cancel)).snapshot.wait).toBeNull();
+    expect(reconcileConnectionWaits()).toEqual([]);
+  });
+
+  it('exposes connection/tool verification and prevents a late check from reviving a cancelled objective', async () => {
+    const wait = requireWait(); activeConnection();
+    const cancel = action('cancel', { expectedObjectiveRevision: wait.objectiveRevision });
+    let finishTools!: (value: unknown) => void;
+    searchCapabilities.mockImplementationOnce(() => new Promise(resolve => { finishTools = resolve; }));
+    const checking = recovery.act(conversationId, action('check'));
+    const rejection = expect(checking).rejects.toThrow('cancelled');
+    expect(recovery.snapshot(conversationId).wait?.recoveryStage).toBe('checking_connection');
+    await vi.waitFor(() => expect(recovery.snapshot(conversationId).wait?.recoveryStage).toBe('checking_tools'));
+    await recovery.act(conversationId, cancel);
+    await rejection;
+    finishTools({ toolSchemas: { GMAIL_FETCH_EMAILS: { inputSchema: { type: 'object' } } } });
+    await Promise.resolve();
+    expect(getActiveConnectionWait(conversationId)).toBeUndefined();
+    expect(drain).not.toHaveBeenCalled();
+  });
+
+  it('lets cancellation stop queued preflight before any task execution', async () => {
+    requireWait(); activeConnection();
+    await recovery.act(conversationId, action('check'));
+    finishSessionInputRun(conversationId, 'run-original', 'suspended');
+    const input = claimNextSessionInput(conversationId, 'run-resume')!;
+    syncConnections.mockImplementationOnce(() => new Promise(() => {}));
+    const checking = recovery.preflight(input);
+    expect(recovery.snapshot(conversationId).wait?.recoveryStage).toBe('checking_connection');
+    await recovery.act(conversationId, action('cancel'));
+    expect(await checking).toBe(false);
+    expect(consumeConnectionResume(input)).toBe(false);
+    expect(getConnectionWait(input.payload!.waitId)?.resolution).toBe('cancelled');
+  });
+
+  it('bounds readiness checks without requesting another authorization', async () => {
+    requireWait(); activeConnection();
+    const bounded = new ConnectionRecoveryService({ getConfig: () => config, saveConfig: async () => ({ saved: true }), drain,
+      checkTimeoutMs: 5, adapter: { syncConnections: async () => new Promise(() => {}) } as unknown as ComposioSessionsAdapter });
+    await expect(bounded.act(conversationId, action('check'))).rejects.toThrow('timed out');
+    expect(bounded.snapshot(conversationId).wait).toMatchObject({ recoveryError: 'check_failed', lastCheckedAt: expect.any(Number) });
+    expect(getActiveConnectionWait(conversationId)?.checking).toBeUndefined();
+    expect(authorize).not.toHaveBeenCalled();
+    expect(drain).not.toHaveBeenCalled();
+  });
+
+  it('does not acknowledge a failed check as a completed idempotent command', async () => {
+    requireWait(); activeConnection();
+    const command = action('check');
+    syncConnections.mockRejectedValueOnce(new Error('Temporary network failure'));
+    await expect(recovery.act(conversationId, command)).rejects.toThrow('Temporary network failure');
+    expect(getActiveConnectionWait(conversationId)?.lastAction).toBeUndefined();
+    const retried = await recovery.act(conversationId, action('check', { idempotencyKey: command.idempotencyKey }));
+    expect(retried.snapshot.wait?.phase).toBe('queued');
+    expect(drain).toHaveBeenCalledOnce();
+  });
+
+  it('cancels the same objective despite multiple intervening phase updates', async () => {
+    const wait = requireWait();
+    const command = action('cancel', { expectedObjectiveRevision: wait.objectiveRevision });
+    const checking = updateConnectionWait({ ...wait, checking: { phase: 'connection', startedAt: Date.now() } }, wait.version);
+    updateConnectionWait({ ...checking, checking: { phase: 'tools', startedAt: Date.now() } }, checking.version);
+    expect((await recovery.act(conversationId, command)).snapshot.wait).toBeNull();
+    expect(getConnectionWait(wait.id)?.resolution).toBe('cancelled');
+  });
+
+  it('never cancels a revised objective using an earlier objective revision', async () => {
+    const wait = requireWait();
+    const command = action('cancel', { expectedObjectiveRevision: wait.objectiveRevision });
+    updateConnectionWait({ ...wait, summary: 'Changed request', objectiveRevision: wait.objectiveRevision + 1 }, wait.version);
+    await expect(recovery.act(conversationId, command)).rejects.toThrow('WAIT_CHANGED');
+    expect(getActiveConnectionWait(conversationId)?.summary).toBe('Changed request');
+  });
+
+  it('rechecks an interrupted command instead of acknowledging its unfinished receipt', async () => {
+    const wait = requireWait(); activeConnection();
+    const key = 'interrupted-command';
+    updateConnectionWait({ ...wait, lastAction: { key, action: 'check' }, checking: { phase: 'connection', startedAt: Date.now() } }, wait.version);
+    recoverSessionInputState(); reconcileConnectionWaits(true);
+    expect(getActiveConnectionWait(conversationId)?.lastAction).toBeUndefined();
+    const result = await recovery.act(conversationId, action('check', { idempotencyKey: key }));
+    expect(result.snapshot.wait?.phase).toBe('queued');
+    expect(syncConnections).toHaveBeenCalledOnce();
+    expect(drain).toHaveBeenCalledOnce();
+  });
+
+  it.each(['connection', 'tools'] as const)('preserves the selected account when the %s check times out', async stage => {
+    requireWait(); activeConnection(); const selected = activeConnection('connection-2');
+    const adapter = { syncConnections: stage === 'connection' ? async () => new Promise(() => {}) : syncConnections,
+      createSession: async () => ({ search: async () => new Promise(() => {}) }) } as unknown as ComposioSessionsAdapter;
+    const bounded = new ConnectionRecoveryService({ getConfig: () => config, saveConfig: async () => ({ saved: true }), drain,
+      checkTimeoutMs: 5, adapter });
+    await expect(bounded.act(conversationId, action('select_account', { needKey: need.key, accountId: selected.accountId }))).rejects.toThrow('timed out');
+    expect(getActiveConnectionWait(conversationId)?.needs[0].accountId).toBe(selected.accountId);
+    expect(getActiveConnectionWait(conversationId)?.lastAction).toBeUndefined();
+    expect(drain).not.toHaveBeenCalled();
+    expect((await recovery.act(conversationId, action('check'))).snapshot.wait).toMatchObject({ phase: 'queued',
+      needs: [expect.objectContaining({ accountId: selected.accountId })] });
+    expect(drain).toHaveBeenCalledOnce();
+  });
+
+  it('retains the account after a restart interrupts selection and rejects the old late result', async () => {
+    requireWait(); activeConnection(); const selected = activeConnection('connection-2');
+    let finishTools!: (value: unknown) => void;
+    searchCapabilities.mockImplementationOnce(() => new Promise(resolve => { finishTools = resolve; }));
+    const selecting = recovery.act(conversationId, action('select_account', { needKey: need.key, accountId: selected.accountId }));
+    const rejected = expect(selecting).rejects.toThrow('WAIT_CHANGED');
+    await vi.waitFor(() => expect(getActiveConnectionWait(conversationId)?.checking?.phase).toBe('tools'));
+    expect(getActiveConnectionWait(conversationId)?.needs[0].accountId).toBe(selected.accountId);
+    recoverSessionInputState(); reconcileConnectionWaits(true);
+    finishTools({ toolSchemas: { GMAIL_FETCH_EMAILS: { inputSchema: { type: 'object' } } } });
+    await rejected;
+    expect(drain).not.toHaveBeenCalled();
+    await recovery.poll();
+    expect(recovery.snapshot(conversationId).wait?.phase).toBe('queued');
+    expect(getActiveConnectionWait(conversationId)?.needs[0].accountId).toBe(selected.accountId);
+    expect(drain).toHaveBeenCalledOnce();
+  });
+
+  it('acknowledges a completed selection while its queued continuation is being checked', async () => {
+    requireWait(); activeConnection(); const selected = activeConnection('connection-2');
+    const command = action('select_account', { needKey: need.key, accountId: selected.accountId });
+    await recovery.act(conversationId, command);
+    finishSessionInputRun(conversationId, 'run-original', 'suspended');
+    const input = claimNextSessionInput(conversationId, 'preflight')!;
+    syncConnections.mockImplementationOnce(() => new Promise(() => {}));
+    const checking = recovery.preflight(input);
+    expect((await recovery.act(conversationId, command)).snapshot.wait?.phase).toBe('queued');
+    expect(drain).toHaveBeenCalledOnce();
+    await recovery.act(conversationId, action('cancel'));
+    expect(await checking).toBe(false);
+  });
+
+  it('stops background checks when a preserved account choice needs delayed scope review', async () => {
+    const wait = requireWait(); activeConnection(); const selected = activeConnection('connection-2');
+    updateConnectionWait({ ...wait, createdAt: Date.now() - 86_400_000 }, wait.version);
+    const response = await recovery.act(conversationId, action('select_account', { needKey: need.key, accountId: selected.accountId }));
+    expect(response.snapshot.wait?.phase).toBe('review_scope');
+    expect(getActiveConnectionWait(conversationId)?.intent).toBeUndefined();
+    const checked = syncConnections.mock.calls.length;
+    await recovery.poll();
+    expect(syncConnections).toHaveBeenCalledTimes(checked);
+    expect(drain).not.toHaveBeenCalled();
+    expect((await recovery.act(conversationId, action('confirm_scope'))).snapshot.wait?.phase).toBe('queued');
+    expect(drain).toHaveBeenCalledOnce();
+  });
+
+  it('recovers a claimed continuation after restart through the real coordinator exactly once', async () => {
+    requireWait(); activeConnection();
+    await recovery.act(conversationId, action('check'));
+    finishSessionInputRun(conversationId, 'run-original', 'suspended');
+    const input = claimNextSessionInput(conversationId, 'lost-preflight')!;
+    const execute = vi.fn(async () => ({ status: 'ok', summary: 'Done' }));
+    const coordinator = new SessionInputCoordinator({ sessionExists: async () => true, execute,
+      beforeExecute: input => recovery.preflight(input), emit: vi.fn(), prepareAttachments: async () => [],
+      prepareContexts: async () => [], steer: async () => false });
+    coordinator.recover();
+    await vi.waitFor(() => expect(getSessionInputById(conversationId, input.id)?.status).toBe('completed'));
+    expect(execute).toHaveBeenCalledOnce();
+    expect(getActiveConnectionWait(conversationId)).toBeUndefined();
+    coordinator.recover();
+    expect(execute).toHaveBeenCalledOnce();
+  });
+
+  it('repairs a broken queued input and gives retry a new continuation key', async () => {
+    requireWait(); activeConnection();
+    await recovery.act(conversationId, action('check'));
+    const queued = getActiveConnectionWait(conversationId)!;
+    setSessionInputStatus(queued.queuedInputId!, 'failed');
+    reconcileConnectionWaits();
+    expect(getActiveConnectionWait(conversationId)).toMatchObject({ status: 'open', recoveryError: 'restart_interrupted' });
+    await recovery.act(conversationId, action('check'));
+    const retried = getActiveConnectionWait(conversationId)!;
+    expect(retried.queuedInputId).not.toBe(queued.queuedInputId);
+    expect(getSessionInputById(conversationId, retried.queuedInputId!)?.status).toBe('queued');
+  });
+
+  it('never replays a continuation that crossed the execution boundary', async () => {
+    requireWait(); activeConnection();
+    await recovery.act(conversationId, action('check'));
+    finishSessionInputRun(conversationId, 'run-original', 'suspended');
+    const input = claimNextSessionInput(conversationId, 'executing')!;
+    expect(await recovery.preflight(input)).toBe(true);
+    expect(consumeConnectionResume(input)).toBe(true);
+    recoverSessionInputState();
+    expect(reconcileConnectionWaits(true)).toEqual([]);
+    expect(getSessionInputById(conversationId, input.id)?.status).toBe('interrupted');
+    expect(getActiveConnectionWait(conversationId)).toBeUndefined();
+  });
+
+  it('keeps an expired continuation visible for scope confirmation instead of hiding a ready wait', async () => {
+    requireWait(); activeConnection();
+    await recovery.act(conversationId, action('check'));
+    const queued = getActiveConnectionWait(conversationId)!;
+    updateConnectionWait({ ...queued, intent: { objectiveRevision: queued.objectiveRevision, validUntil: Date.now() - 1 } }, queued.version);
+    finishSessionInputRun(conversationId, 'run-original', 'suspended');
+    const input = claimNextSessionInput(conversationId, 'expired-intent')!;
+    expect(await recovery.preflight(input)).toBe(false);
+    expect(recovery.snapshot(conversationId).wait?.phase).toBe('review_scope');
+  });
+
+  it('clears stale open verification feedback on restart', () => {
+    const wait = requireWait();
+    updateConnectionWait({ ...wait, checking: { phase: 'tools', startedAt: Date.now() } }, wait.version);
+    recoverSessionInputState();
+    reconcileConnectionWaits(true);
+    expect(recovery.snapshot(conversationId).wait).toMatchObject({ recoveryError: 'restart_interrupted' });
+    expect(getActiveConnectionWait(conversationId)?.checking).toBeUndefined();
+  });
+
+  it('does not substitute the sole connected account for an explicitly requested account', () => {
+    const wait = requireWait(); activeConnection();
+    updateConnectionWait({ ...wait, needs: [{ ...need, accountId: 'work-account' }] }, wait.version);
+    expect(recovery.snapshot(conversationId).wait?.needs[0]).toMatchObject({ phase: 'connect', accountId: 'work-account', accounts: [] });
+  });
+
+  it('selects one account and cancels its queued continuation through authenticated Gateway HTTP', async () => {
+    requireWait(); activeConnection(); activeConnection('connection-2');
+    const auth = { mode: 'token' as const, token: 'connection-fixture-token' };
+    config.gateway.auth = auth;
+    buckets.resetAllForTests();
+    const service = { currentConfig: config, getResolvedAuth: () => auth, getEffectiveListenPort: () => 18790,
+      isGatewayReady: () => true, getHealth: () => ({ status: 'healthy' }), connectionRecovery: recovery } as unknown as GatewayService;
+    const app = createHonoApp({ service });
+    const server = serve({ fetch: app.fetch, hostname: '127.0.0.1', port: 0 });
+    try {
+      if (!server.listening) await once(server, 'listening');
+      const address = server.address();
+      if (!address || typeof address === 'string') throw new Error('Expected HTTP address');
+      const path = `http://127.0.0.1:${address.port}/api/sessions/${conversationId}/connection-wait`;
+      expect((await fetch(path)).status).toBe(401);
+      const headers = { Authorization: `Bearer ${auth.token}`, 'Content-Type': 'application/json' };
+      const snapshot = (await (await fetch(path, { headers })).json()).payload;
+      expect(snapshot.wait.needs[0].phase).toBe('choose_account');
+      const accountId = snapshot.wait.needs[0].accounts[1].id;
+      const select = action('select_account', { needKey: need.key, accountId });
+      const response = await fetch(`${path}/actions`, { method: 'POST', headers, body: JSON.stringify(select) });
+      expect(response.status).toBe(200);
+      expect((await response.json()).payload.snapshot.wait).toMatchObject({ phase: 'queued', needs: [expect.objectContaining({ accountId })] });
+      expect((await fetch(`${path}/actions`, { method: 'POST', headers, body: JSON.stringify(select) })).status).toBe(200);
+      expect(drain).toHaveBeenCalledOnce();
+      expect(getSqliteDatabase().prepare('SELECT COUNT(*) AS count FROM session_clarification_waits').get()).toMatchObject({ count: 0 });
+      const cancel = action('cancel', { expectedObjectiveRevision: getActiveConnectionWait(conversationId)!.objectiveRevision });
+      const queued = getActiveConnectionWait(conversationId)!;
+      const phase = updateConnectionWait({ ...queued, checking: { phase: 'connection', startedAt: Date.now() } }, queued.version);
+      updateConnectionWait({ ...phase, checking: { phase: 'tools', startedAt: Date.now() } }, phase.version);
+      expect((await fetch(`${path}/actions`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cancel) })).status).toBe(401);
+      expect(getActiveConnectionWait(conversationId)?.status).toBe('queued');
+      const cancelled = await fetch(`${path}/actions`, { method: 'POST', headers, body: JSON.stringify(cancel) });
+      expect(cancelled.status).toBe(200);
+      expect((await cancelled.json()).payload.snapshot.wait).toBeNull();
+    } finally {
+      await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
+    }
+  });
+
+  it('rejects a candidate whose account permission changed before selection', async () => {
+    requireWait(); activeConnection(); const other = activeConnection('connection-2');
+    expect(recovery.snapshot(conversationId).wait?.needs[0].accounts).toHaveLength(2);
+    updateConnectorAccount(other.accountId!, { allowedAgentIds: ['other-agent'] });
+    await expect(recovery.act(conversationId, action('select_account', { needKey: need.key, accountId: other.accountId }))).rejects.toThrow('Account is unavailable');
+    expect(drain).not.toHaveBeenCalled();
+    expect(getActiveConnectionWait(conversationId)?.needs[0].accountId).toBeUndefined();
+  });
+
+  it('shows Slack workspace and user identity in account choices', () => {
+    const slack = resolveConnectionCandidate('composio-slack');
+    requireSessionConnection({ conversationId, principalId: 'local-owner', agentId: 'main', summary: 'Read Slack', needs: [slack] });
+    for (const [id, workspace] of [['work', 'Acme'], ['community', 'Community']]) {
+      upsertConnectorConnection({ id, connectorId: 'composio-slack', provider: 'composio', principalId: 'local-owner',
+        providerConnectionId: id, identity: { workspace, workspaceId: id, userId: 'mic', username: '@mic' },
+        status: 'active', isDefault: false, metadata: {} });
+    }
+    expect(recovery.snapshot(conversationId).wait?.needs[0]).toMatchObject({ phase: 'choose_account', accounts: expect.arrayContaining([
+      expect.objectContaining({ label: 'Acme · @mic' }), expect.objectContaining({ label: 'Community · @mic' }),
+    ]) });
+  });
+
   it('does not advertise schema-less Slack tools and preserves usable contracts across searches', async () => {
     upsertConnectorInstallation({ id: 'composio-slack-local-owner', connectorId: 'composio-slack', principalId: 'local-owner',
       enabled: true, allowedAgentIds: [], maxScope: 'read', confirmationPolicy: 'writes', selectedAccountIds: null });
@@ -357,7 +667,7 @@ describe('durable connection recovery', () => {
     expect(first.summary).toContain('last week');
     expect(JSON.stringify(first)).not.toContain('https:');
   });
-  it('verifies an exact Store installation and immediately queues the preserved objective', async () => {
+  it.each([false, true])('verifies an exact Store installation and queues the objective (restarted: %s)', async restarted => {
     const definition: ConnectorDefinition = {
       id: 'store-demo',
       version: '1.2.3',
@@ -395,16 +705,27 @@ describe('durable connection recovery', () => {
     };
     requireSessionConnection({ conversationId, principalId: 'local-owner', agentId: 'main', summary: 'Use Store Demo', needs: [storeNeed] });
     expect(recovery.snapshot(conversationId).wait?.needs[0]).toMatchObject({ phase: 'install', authorizationMode: 'desktop' });
+    if (restarted) {
+      const wait = getActiveConnectionWait(conversationId)!;
+      updateConnectionWait({ ...wait, checking: { phase: 'connection', startedAt: Date.now() } }, wait.version);
+      recoverSessionInputState(); reconcileConnectionWaits(true);
+    }
 
     const instance = await installConnectorDefinition(config, definition, {});
-    const result = await recovery.act(conversationId, action('install_complete', {
+    const command = action('install_complete', {
       needKey: storeNeed.key,
       instanceId: instance.instanceId,
-    }));
+    });
+    const result = await withAuthenticatedGateway(async (base, headers) => {
+      const response = await fetch(`${base}/actions`, { method: 'POST', headers, body: JSON.stringify(command) });
+      expect(response.status).toBe(200);
+      return (await response.json()).payload;
+    });
 
     expect(result.snapshot.wait?.phase).toBe('queued');
     expect(result.snapshot.wait?.needs[0].connectionId).toBe(instance.instanceId);
     expect(drain).toHaveBeenCalledOnce();
+    expect(getActiveConnectionWait(conversationId)?.recoveryError).toBeUndefined();
   });
   it('preserves the wait through a gateway restart', () => {
     const wait = requireWait();

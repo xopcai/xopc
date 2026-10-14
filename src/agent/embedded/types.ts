@@ -80,13 +80,14 @@ export type RunXopcEmbeddedTurnParams = {
   images?: ImageContent[];
   /** Continue from the persisted trailing user row instead of appending it again. */
   resumeLastUserMessage?: boolean;
+  recoveryMessage?: string;
   verifyChanges?: boolean;
   requireVisibleReply?: boolean;
 };
 
 export type RunXopcEmbeddedTurnResult = {
   ok: boolean;
-  stopReason?: 'connection_required' | 'clarification_required';
+  stopReason?: 'connection_required' | 'clarification_required' | 'policy_limit' | 'response_truncated';
   /** False for harness failures that must not trigger another model attempt. */
   retryable?: boolean;
   errorMessage?: string;
