@@ -11,15 +11,15 @@ export function getTaskExecutionDeadline(conversationId: string, runId: string):
   return run?.status === 'running' && run.conversationId === conversationId ? run.timeoutAt : undefined;
 }
 
-export function getTaskContinuation(conversationId: string, runId: string): { message: string; deadlineAtMs?: number } | undefined {
+export function getTaskContinuation(conversationId: string, runId: string): { message: string; reason?: string; deadlineAtMs?: number } | undefined {
   if (!isXopcDatabaseOpen()) return undefined;
   const input = findSessionInputByRunId(conversationId, runId);
   if (!input?.taskRunId) return undefined;
   const run = new TaskRunRepository().get(input.taskRunId);
-  const continuation = run?.policySnapshot.continuation as { message?: unknown; transcriptId?: string } | undefined;
+  const continuation = run?.policySnapshot.continuation as { message?: unknown; reason?: string; transcriptId?: string } | undefined;
   if (run?.status !== 'running' || run.conversationId !== conversationId || typeof continuation?.message !== 'string') return undefined;
   if (continuation.transcriptId && getSessionMetadata(conversationId)?.transcriptId !== continuation.transcriptId) {
     throw new Error('Cannot resume task because its execution transcript changed');
   }
-  return { message: continuation.message, deadlineAtMs: run.timeoutAt };
+  return { message: continuation.message, reason: continuation.reason, deadlineAtMs: run.timeoutAt };
 }

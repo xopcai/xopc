@@ -10,6 +10,8 @@ import { dataScheduler } from './scheduler.js';
 import { DATA_OPERATION_TOOLS, nativeDataArgs, validateDataBatch, type DataBatchArgs, type DataOperation } from './schema.js';
 import { readGitData } from './git.js';
 import { executeWithTimeout } from '../lifecycle/timeout-wrapper.js';
+import type { WebSearchBatchTool } from '../tools/web.js';
+import { SearchError, classifySearchError } from '../tools/search/errors.js';
 import type { DataBatchResult, DataFragment, DataOperationResult } from './types.js';
 
 /** Each batch owns its read cache; permissions are checked before sharing any data. */
@@ -26,6 +28,8 @@ export async function acquireData(workspace: string, args: DataBatchArgs, allowe
   const files = new Map<string, Promise<{ lines: string[]; revision: string }>>();
   const result: DataBatchResult = { schemaVersion: 1, operations: [], fragments: [], sourceRequests: 0 };
   let readBytes = 0;
+  const searchOperations = args.operations.filter(op => op.kind === 'web_search');
+  let searchBatch: ReturnType<WebSearchBatchTool['executeSearchBatch']> | undefined;
   const runOperation = async (op: DataOperation) => {
     const started = Date.now();
     const output: DataOperationResult = { id: op.id, kind: op.kind, status: 'ok', fragmentIds: [], scope: '', sourceExhausted: false, outputOmitted: false, durationMs: 0 };
@@ -134,25 +138,54 @@ export async function acquireData(workspace: string, args: DataBatchArgs, allowe
         output.scope = JSON.stringify({ kind: op.kind, resource });
         const resourceKey = op.kind === 'external_read' ? `connector:${op.toolRef.split(':').slice(0, 2).join(':')}:${String(op.arguments.xopcAccountId ?? '')}`
           : op.kind.startsWith('web_') ? `web:${op.kind === 'web_fetch' ? new URL(op.url).hostname : 'search'}` : workspace;
-        const native = await executeWithTimeout(() => dataScheduler.run(resourceKey, operationSignal, async () => {
-          checkPermission();
-          result.sourceRequests++;
-          return tool.execute(op.id, nativeDataArgs(op), operationSignal);
-        }), { toolName: op.kind, signal: operationSignal, timeoutMs: 15_000 });
-        operationSignal.throwIfAborted();
+        const batchTool = tool as Partial<WebSearchBatchTool>;
+        const native = op.kind === 'web_search' && searchOperations.length > 1 && batchTool.executeSearchBatch
+          ? await (async () => {
+            if (!searchBatch) searchBatch = executeWithTimeout(() => dataScheduler.run('web:search', deadline, async () => {
+              const authorize = () => {
+                deadline.throwIfAborted();
+                if (!toolAllowed()) throw new SearchError({ kind: 'permission_denied', scope: 'request', message: 'Search access was revoked' });
+              };
+              authorize();
+              const batch = await batchTool.executeSearchBatch!(searchOperations, deadline, authorize);
+              result.sourceRequests += batch.sourceRequests;
+              return batch;
+            }), { toolName: 'web_search', signal: deadline, timeoutMs: 15_000 });
+            const batch = await searchBatch;
+            const item = batch.items.find(item => item.id === op.id);
+            if (!item) throw new Error('Search batch omitted its operation id');
+            return item.result;
+          })()
+          : await executeWithTimeout(() => dataScheduler.run(resourceKey, operationSignal, async () => {
+            checkPermission();
+            result.sourceRequests++;
+            const native = await tool.execute(op.id, nativeDataArgs(op), operationSignal);
+            const details = native.details as { sourceRequests?: number } | undefined;
+            if (op.kind === 'web_search' && typeof details?.sourceRequests === 'number') result.sourceRequests += details.sourceRequests - 1;
+            return native;
+          }), { toolName: op.kind, signal: operationSignal, timeoutMs: 15_000 });
+        (op.kind === 'web_search' && searchBatch ? deadline : operationSignal).throwIfAborted();
         const details = native.details as Record<string, unknown> | undefined;
-        if (details?.error || details?.status === 'failed') throw new Error(String(details.error ?? 'Data source failed'));
+        if (details?.error || details?.status === 'failed' || details?.status === 'cancelled') {
+          if (op.kind === 'web_search' && details?.failure) throw new SearchError(details.failure as import('../tools/search/errors.js').SearchFailureInfo);
+          throw new Error(String(details?.error ?? 'Data source failed'));
+        }
+        if (op.kind === 'web_search' && details?.cached === true) output.cached = true;
         const text = native.content.filter(block => block.type === 'text').map(block => block.text).join('\n');
         if (text.length > 32_000) { output.outputOmitted = true; }
         if (details?.truncated) { output.outputOmitted = true; }
         fragments.push({ id: '', operationIds: [op.id], source: { kind: op.kind, resource,
-          revision: op.kind === 'external_read' ? op.revision : undefined, capturedAt: new Date().toISOString() }, text: text.slice(0, 32_000) });
+          revision: op.kind === 'external_read' ? op.revision : undefined, capturedAt: op.kind === 'web_search' && typeof details?.capturedAt === 'number'
+            ? new Date(details.capturedAt).toISOString() : new Date().toISOString() }, text: text.slice(0, 32_000) });
         output.sourceExhausted = details?.complete === true;
       }
       checkPermission();
       if (output.outputOmitted) { output.status = 'partial'; output.reason ??= 'output_budget'; }
     } catch (error) {
-      output.status = deadline.aborted ? 'cancelled' : String(error).includes('Sandbox:') ? 'denied' : 'error';
+      const failure = op.kind === 'web_search' ? classifySearchError(error, signal) : undefined;
+      if (failure) output.failureKind = failure.kind;
+      output.status = signal?.aborted || (!failure && deadline.aborted) || failure?.kind === 'cancelled' ? 'cancelled'
+        : failure?.kind === 'permission_denied' || String(error).includes('Sandbox:') ? 'denied' : 'error';
       output.reason = (error instanceof Error ? error.message : String(error)).slice(0, 300);
       if (fragments.length && output.status === 'error') output.status = 'partial';
       if (output.status === 'denied' || output.status === 'cancelled') fragments.length = 0;

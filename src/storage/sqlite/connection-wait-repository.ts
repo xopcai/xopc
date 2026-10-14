@@ -91,7 +91,7 @@ export function requireSessionConnection(input: {
     const origin = originId ? getSessionInputById(input.conversationId, originId) : undefined;
     const originRunId = input.origin?.runId ?? runtime.activeRunId;
     if (!transcriptId || !origin || !originRunId || (origin.expectedTranscriptId && origin.expectedTranscriptId !== transcriptId)) throw new Error('Connection recovery requires a queued chat execution.');
-    const resumed = origin.payload ? getConnectionWait(origin.payload.waitId) : undefined;
+    const resumed = origin.kind === 'connection_resume' && origin.payload ? getConnectionWait(origin.payload.waitId) : undefined;
     if (resumed?.resolution === 'skipped') return { status: 'skipped' };
     const active = getActiveConnectionWait(input.conversationId);
     if (active) {
@@ -133,12 +133,27 @@ export function requireSessionConnection(input: {
   });
 }
 
+/** Pending messages may revise the goal; controls cannot become a competing model execution. */
+export function interruptedConnectionMessage(wait: ConnectionWait): SessionInput | undefined {
+  return getSessionInputState(wait.conversationId).inputs.find(input => input.status === 'interrupted'
+    && input.kind === 'message' && input.payload?.connectionBarrier
+    && input.payload.waitId === wait.id && input.payload.objectiveRevision === wait.objectiveRevision);
+}
+
+export function hasPendingConnectionMessages(wait: ConnectionWait, includeControls = false): boolean {
+  return Boolean(interruptedConnectionMessage(wait)) || getSessionInputState(wait.conversationId).inputs.some(input => input.id !== wait.originInputId
+    && input.kind === 'message' && (includeControls || !input.payload?.connectionAction)
+    && ['queued', 'running', 'injecting'].includes(input.status));
+}
+
 /** The input and the wait transition commit together, using the existing queue's unique key. */
 export function queueConnectionResolution(wait: ConnectionWait, resolution: 'continued' | 'skipped',
   resolvePersonal?: (wait: ConnectionWait, resolution: 'continued' | 'skipped') => unknown): ConnectionWait {
   return runSqliteWriteTransaction(() => {
     const current = getConnectionWait(wait.id);
     if (!current || current.version !== wait.version || current.status !== 'open') throw new Error('WAIT_CHANGED');
+    // Let accepted messages update/cancel the objective before either scheduling owner resumes it.
+    if (resolution === 'continued' && hasPendingConnectionMessages(wait)) return current;
     if (resolvePersonal?.(wait, resolution)) {
       return updateConnectionWait({ ...wait, status: 'closed', resolution, intent: undefined }, wait.version);
     }
@@ -163,8 +178,9 @@ export function queueConnectionResolution(wait: ConnectionWait, resolution: 'con
 export function consumeConnectionResume(input: SessionInput): boolean {
   if (input.kind !== 'connection_resume') return true;
   return runSqliteWriteTransaction(() => {
-    const wait = input.payload ? getConnectionWait(input.payload.waitId) : undefined;
+    const wait = input.kind === 'connection_resume' && input.payload ? getConnectionWait(input.payload.waitId) : undefined;
     if (!wait || wait.status !== 'queued' || wait.queuedInputId !== input.id || wait.objectiveRevision !== input.payload?.objectiveRevision) return false;
+    if (hasPendingConnectionMessages(wait, true)) return false;
     if (readCurrentTranscriptId(getSqliteDatabase(), input.conversationId) !== wait.transcriptId) return false;
     if (wait.taskRunId) {
       const runs = new TaskRunRepository();
@@ -211,7 +227,7 @@ export function connectionBindings(conversationId: string): ConnectionNeed[] {
   const state = getSessionInputState(conversationId);
   const input = state.activeInputId ? getSessionInputById(conversationId, state.activeInputId) : undefined;
   if (!input) return [];
-  const wait = input.payload ? getConnectionWait(input.payload.waitId) : undefined;
+  const wait = input.kind === 'connection_resume' && input.payload ? getConnectionWait(input.payload.waitId) : undefined;
   const stored = getSqliteDatabase().prepare(`SELECT connector_id, account_id FROM connector_objective_accounts
     WHERE conversation_id = ? AND transcript_id = ? AND objective_id = ?`).all(
     conversationId, readCurrentTranscriptId(getSqliteDatabase(), conversationId) ?? '', wait?.objectiveId ?? input.id,
@@ -233,7 +249,7 @@ export function connectorObjectiveScope(conversationId: string): string | undefi
   const input = state.activeInputId ? getSessionInputById(conversationId, state.activeInputId) : undefined;
   if (!input) return undefined;
   const active = getActiveConnectionWait(conversationId);
-  const wait = input.payload ? getConnectionWait(input.payload.waitId) : active?.originInputId === input.id ? active : undefined;
+  const wait = input.kind === 'connection_resume' && input.payload ? getConnectionWait(input.payload.waitId) : active?.originInputId === input.id ? active : undefined;
   return JSON.stringify([readCurrentTranscriptId(getSqliteDatabase(), conversationId), wait?.objectiveId ?? input.id, wait?.objectiveRevision ?? 0]);
 }
 
@@ -242,7 +258,7 @@ export function bindObjectiveAccount(conversationId: string, connectorId: string
   const state = getSessionInputState(conversationId);
   const input = state.activeInputId ? getSessionInputById(conversationId, state.activeInputId) : undefined;
   if (!input) return;
-  const wait = input.payload ? getConnectionWait(input.payload.waitId) : undefined;
+  const wait = input.kind === 'connection_resume' && input.payload ? getConnectionWait(input.payload.waitId) : undefined;
   db.prepare(`INSERT OR IGNORE INTO connector_objective_accounts
     (conversation_id, transcript_id, objective_id, connector_id, account_id) VALUES (?, ?, ?, ?, ?)`).run(
     conversationId, readCurrentTranscriptId(db, conversationId) ?? '', wait?.objectiveId ?? input.id, connectorId, accountId,
@@ -253,7 +269,7 @@ export function connectionBinding(conversationId: string, connectorId: string): 
   return matches.length === 1 ? matches[0].connectionId : undefined;
 }
 
-/** New input wins over an outstanding auto-resume intent, including an already queued resume. */
+/** Explicit objective changes invalidate an outstanding auto-resume intent. */
 export function invalidateConnectionResumeIntent(conversationId: string): void {
   const wait = getActiveConnectionWait(conversationId);
   if (!wait) return;
@@ -280,25 +296,38 @@ export function reviseCurrentConnectionObjective(conversationId: string, summary
       intent: undefined, queuedInputId: undefined, scopeConfirmedAt: undefined, reviewRequired: true,
       objectiveRevision: wait.objectiveRevision + 1,
     }, wait.version);
+    // Accepted, unhandled messages follow the objective they will process. Explicitly
+    // interrupted messages remain replaceable by a subsequent deliberate revision.
+    getSqliteDatabase().prepare(`UPDATE session_inputs SET payload_json = json_set(payload_json, '$.objectiveRevision', ?),
+      version = version + 1, updated_at_ms = ? WHERE conversation_id = ? AND kind = 'message'
+      AND status IN ('queued','running','injecting') AND json_extract(payload_json, '$.connectionBarrier') = 1
+      AND json_extract(payload_json, '$.waitId') = ?`).run(wait.objectiveRevision + 1, Date.now(), conversationId, wait.id);
   });
   publishConnectionWait(conversationId);
 }
 
-export function cancelConnectionObjective(conversationId: string): void {
-  const wait = getActiveConnectionWait(conversationId);
+export function cancelConnectionObjective(conversationId: string, expectedWaitId?: string, expectedObjectiveRevision?: number): void {
+  const runtime = getSessionInputState(conversationId);
+  const executing = runtime.activeInputId ? getSessionInputById(conversationId, runtime.activeInputId) : undefined;
+  const wait = getActiveConnectionWait(conversationId)
+    ?? (expectedWaitId && executing?.kind === 'connection_resume' && executing.payload?.waitId === expectedWaitId
+      ? getConnectionWait(expectedWaitId) : undefined);
   if (!wait) return;
+  if (expectedWaitId && wait.id !== expectedWaitId) return;
+  if (expectedObjectiveRevision !== undefined && wait.objectiveRevision !== expectedObjectiveRevision) return;
   runSqliteWriteTransaction(() => {
     if (wait.queuedInputId) setSessionInputStatus(wait.queuedInputId, 'cancelled');
     const personalRequest = personalRequestForWait(wait.id);
     const runs = new TaskRunRepository();
-    const taskRunId = wait.taskRunId ?? (personalRequest?.taskId ? runs.getActiveRoot(personalRequest.taskId)?.id : undefined);
+    const personalTaskWait = personalRequest?.taskId ? getSqliteDatabase().prepare(`SELECT task_run_id FROM task_waits
+      WHERE task_id = ? AND json_extract(condition_json, '$.connectionWaitId') = ? LIMIT 1`)
+      .get(personalRequest.taskId, wait.id) as { task_run_id: string | null } | undefined : undefined;
+    const taskRunId = wait.taskRunId ?? personalRequest?.parameters.taskRunId ?? personalTaskWait?.task_run_id;
     if (taskRunId) {
       const run = runs.get(taskRunId);
-      if (run?.status === 'waiting') {
-        for (const taskWait of runs.listActiveWaits(run.taskId)) {
-          if (taskWait.condition.connectionWaitId === wait.id) runs.resolveWait({ waitId: taskWait.id, actor: { kind: 'system' }, resolution: { cancelled: true } });
-        }
-        runs.finalize({ runId: run.id, expectedVersion: run.version, receipt: {
+      if (run && ['queued', 'running', 'waiting', 'verifying', 'cancelled'].includes(run.status)) {
+        runs.resolveCancelledRunWaits(run.id, { kind: 'system' });
+        if (run.status !== 'cancelled') runs.finalize({ runId: run.id, expectedVersion: run.version, receipt: {
           status: 'cancelled', summary: 'Connection objective cancelled', changes: [], evidence: [],
           verification: { status: 'unverified', checks: [] }, remainingWork: [], needsUser: false, completionVerdict: 'not_achieved',
         } });

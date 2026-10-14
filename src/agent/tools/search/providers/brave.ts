@@ -1,3 +1,4 @@
+import { searchHttpError } from '../errors.js';
 import type { SearchProvider, SearchResult } from '../types.js';
 
 export class BraveProvider implements SearchProvider {
@@ -22,7 +23,7 @@ export class BraveProvider implements SearchProvider {
       signal,
     });
     if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${await response.text()}`);
+      throw searchHttpError(response);
     }
     const data = (await response.json()) as { web?: { results?: Array<{ title?: string; url?: string; description?: string }> } };
     const raw = data.web?.results ?? [];

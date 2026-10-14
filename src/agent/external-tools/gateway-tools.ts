@@ -104,7 +104,10 @@ export function createExternalToolGatewayTools(
       }
       return textResult({ ...result, connectionCandidates: candidates, installCandidates,
         ...(result.tools.length === 0 && (candidates.length > 0 || installCandidates.length > 0) ? {
-          instruction: 'The requested app is available but is not connected. Explain that connection is required, then call xopc_require_connection with an exact candidateRef from this result. Do not fall back to browser automation unless the user explicitly asked for browser use or skips the connection.',
+          instruction: 'No executable tool matched this search. This alone does not prove the account is disconnected. Retry without restrictive sources and inspect the returned account state. If authorization or account selection is actually required, call xopc_require_connection with an exact candidateRef from this result; the host owns selection, authorization and automatic continuation. Do not ask the user whether to perform an already requested read, or to reply continue after authorization. Do not fall back to browser automation unless the user explicitly asked for browser use or skips the connection.',
+        } : {}),
+        ...(result.tools.length > 0 ? {
+          instruction: 'Describe the relevant tool contracts and execute the requested read using the available authorized account. The user request already authorizes these reads; do not ask for another confirmation. Respect the exact contracts and host permission checks. Hand off to the user only when a required authorization, ambiguous account choice or essential missing decision cannot be resolved from existing context.',
         } : {}),
         ...(installCatalogError ? { installCatalogError } : {}),
         ...(excludedSources.length ? { searchScope: {
@@ -194,7 +197,7 @@ export function createExternalToolGatewayTools(
   });
   const requireTool: AgentTool<typeof requireSchema, Record<string, unknown>> = {
     name: EXTERNAL_TOOL_NAMES.requireConnection, label: 'Connect app', parameters: requireSchema,
-    description: 'Request a connectionCandidates or installCandidates entry returned by xopc_tool_search. Explain the need once before calling. This pauses the current objective and displays one action area above the input. Never invent a candidate reference, return OAuth URLs, or repeat a skipped request. If another objective is waiting, ask the user to continue or cancel it first.',
+    description: 'Use only when a requested read cannot proceed because authorization, installation or account selection is required. Available authorized tools should be executed directly without asking the user to confirm the read. Request an exact connectionCandidates or installCandidates entry returned by xopc_tool_search. Explain the verified need once before calling. This saves and pauses the objective, displays one action area above the input, and lets the host resume automatically after the required user action. Stop this turn after connection_required; never ask the user to reply continue after authorization. Never invent a candidate reference, return OAuth URLs, or repeat a skipped request. If another objective is waiting, do not create a duplicate objective.',
     async execute(_id, params) {
       const context = getContext?.();
       if (!context) throw new Error('No active conversation.');
@@ -254,7 +257,11 @@ export function createExternalToolGatewayTools(
         })),
       });
       publishConnectionWait(context.conversationId);
-      return textResult(result);
+      return textResult({ ...result, ...(result.status === 'connection_required' ? {
+        instruction: 'The objective is saved and the host owns the connection or account-selection interaction. Stop this turn. After the required user action, the host will check readiness and continue automatically. Do not ask for another confirmation of this read or ask the user to reply continue.',
+      } : result.status === 'objective_conflict' ? {
+        instruction: 'An objective is already waiting. Do not create another request or claim the account is disconnected. Inspect the existing objective before asking for a genuinely missing decision.',
+      } : {}) });
     },
   };
   const reviseSchema = Type.Object({

@@ -1,0 +1,182 @@
+{
+  "schemaVersion": 1,
+  "suite": "personal-delivery-p1",
+  "suiteVersion": 1,
+  "mode": "deterministic",
+  "label": "candidate",
+  "createdAt": "2026-10-14T11:31:28.034Z",
+  "manifest": {
+    "commit": "cb13eb3109ba22d0e5670b0774af2b8371221ff7",
+    "nodeVersion": "v24.16.0",
+    "workingTreeDirty": true,
+    "hashes": {
+      "src/tasks/__tests__/personal-delivery-benchmark.test.ts": "996dcbad1a042722e48d1247ebdbe75f69f7f42aa4080fd28da19db6570a0004",
+      "src/tasks/__tests__/task-research-result.test.ts": "86f18c75a3076f547942d4f648431078e79b9100c3e9dc6caad4ee045fc9df7c",
+      "pnpm-lock.yaml": "c9ba3f707270e8af6a7c6bdd3e4ed79aa16a3440c3d1df8602732bb6a8c5a0e5",
+      "src/agent/tools/personal-task-tool.ts": "85fe2a8b000fbc7786c0b49dc03fefbff75938e04e79e25f2ec8a2785455955b",
+      "src/tasks/task-result-delivery-repository.ts": "6a67e710d70384a8109cfb09f7f817ba9e051100f6f350902f98051455be31d9",
+      "src/tasks/task-result-delivery-service.ts": "13b509b2c0eb7b6a84b915d08b70046ada859d294c006a986acb616746ace039",
+      "src/personal-agent/reply-composer.ts": "11e12dfa4ecc99ccb0c8bc1456529158cfbd2a59a5488ad88d82135e80fe27d6",
+      "src/personal-agent/reply-style.ts": "e8b056e05a702df8243cd313c5df44f14e1dcf5a52cde5864328cd93b7bead16",
+      "src/personal-agent/prompts.ts": "7a9efc655cb430995614b82563e5fa38252084e424bb6919479e171ecc84f43b",
+      "src/personal-agent/repository.ts": "c1b1dce53125a3f4ba627455a0f1b1a086baa5c2f53a663b87db4cf52d6a0555",
+      "src/agent/prompt/sections/messaging-runtime.ts": "e419ae94e56a47f78bf2e45af23f0539f98de2aa948c30e8d6009986774d9fe3",
+      "src/personal-agent/result-file-links.ts": "998b7c7d8b3015d905e7d961e17cd64b95428a91ffbf98c82d1d07b8ba6ab838",
+      "src/tasks/task-research-result.ts": "c2a9cd06003477c81e77b323f7885c6f3e2d0a6011daf56d3aead3ebd47fcd00",
+      "src/tasks/task-run-coordinator.ts": "40990f7d34a10996450d2f7c6bad3c91968102a4066d5c77c7929bf8024d7051",
+      "src/tasks/task-allocation-service.ts": "732c1d85185c600003b8bee57e62ce3e94994f24941161dc63426446665f8367",
+      "src/tasks/task-contract-planner.ts": "cf97b6efd7bf11b8b663ebdd813347178f7d730368c338167cb9152a90bec100",
+      "src/agent/tools/task-result-tool.ts": "5daa138578b933487ae139b9fc0ccd20b34be99c32dad4cc47b054eddff940c0",
+      "src/agent/tools/factory.ts": "0f7fe15b205760caf7719e921a838626fe6c958738e1f3d16d5d2fd31fa2f68b",
+      "packages/gateway-contract/src/task-research-result.ts": "b2dc4bb2f2e516b496a339cb94ee9fc812190ea3ad65a60752676e46f184d01e",
+      "packages/gateway-contract/src/turn-outcome.ts": "4a7c923b8a67f31b5db85aea5a1ff2aa6904f7799c764a4b7d549450d0d5cc05"
+    },
+    "sourceChangedDuringRun": false,
+    "models": "No model calls; scripted component/reviewer fixtures. H03 checks policy, not naturalness."
+  },
+  "total": 20,
+  "passed": 20,
+  "durationMs": 6611,
+  "cases": [
+    {
+      "id": "R01-source",
+      "name": "R01-source: binds actual tool provenance and a stable source snapshot",
+      "status": "passed",
+      "durationMs": 581.377708,
+      "failures": []
+    },
+    {
+      "id": "R02-fabricated-quote",
+      "name": "R02-fabricated-quote: rejects excerpts not present in actual reads",
+      "status": "passed",
+      "durationMs": 10.126624999999876,
+      "failures": []
+    },
+    {
+      "id": "R03-fabricated-url",
+      "name": "R03-fabricated-url: rejects an invented URL even with a genuine quote",
+      "status": "passed",
+      "durationMs": 9.66412500000024,
+      "failures": []
+    },
+    {
+      "id": "R04-missing-criterion",
+      "name": "R04-missing-criterion: omitted and unexpanded criteria remain unverified",
+      "status": "passed",
+      "durationMs": 17.45916699999998,
+      "failures": []
+    },
+    {
+      "id": "R05-unsupported",
+      "name": "R05-unsupported: self-declared passes cannot bypass unsupported claims",
+      "status": "passed",
+      "durationMs": 9.456375000000207,
+      "failures": []
+    },
+    {
+      "id": "R06-unknown-reference",
+      "name": "R06-unknown-reference: rejects reviewer references to invented claims",
+      "status": "passed",
+      "durationMs": 9.036375000000135,
+      "failures": []
+    },
+    {
+      "id": "R07-durable",
+      "name": "R07-durable: research survives later outcomes and produces per-criterion receipts",
+      "status": "passed",
+      "durationMs": 17.392499999999927,
+      "failures": []
+    },
+    {
+      "id": "R08-review-outage",
+      "name": "R08-review-outage: keeps sources but never certifies checks after review failure",
+      "status": "passed",
+      "durationMs": 12.94766699999991,
+      "failures": []
+    },
+    {
+      "id": "R09-stale-direction",
+      "name": "R09-stale-direction: rejects a review completed before later user direction",
+      "status": "passed",
+      "durationMs": 13.620499999999993,
+      "failures": []
+    },
+    {
+      "id": "R10-no-research",
+      "name": "R10-no-research: lists every acceptance item as unverified without a submitted result",
+      "status": "passed",
+      "durationMs": 13.964292000000114,
+      "failures": []
+    },
+    {
+      "id": "S03-prose",
+      "name": "S03-prose: valid concise prose and legacy JSON share the same validation",
+      "status": "passed",
+      "durationMs": 9.678917000000183,
+      "failures": []
+    },
+    {
+      "id": "S04-acceptance",
+      "name": "S04-acceptance: rejects an acceptance upgrade with missing evidence",
+      "status": "passed",
+      "durationMs": 9.142083000000184,
+      "failures": []
+    },
+    {
+      "id": "D04-defaults",
+      "name": "D04-defaults: omitted fields retain an inspectable contract on submit",
+      "status": "passed",
+      "durationMs": 725.3198750000001,
+      "failures": []
+    },
+    {
+      "id": "D04-explicit",
+      "name": "D04-explicit: explicit acceptance criteria survive submission",
+      "status": "passed",
+      "durationMs": 37.97158300000001,
+      "failures": []
+    },
+    {
+      "id": "B01-partial",
+      "name": "B01-partial: partial research stays partial after delivery and composition",
+      "status": "passed",
+      "durationMs": 26.74016699999993,
+      "failures": []
+    },
+    {
+      "id": "B01-failed",
+      "name": "B01-failed: a failed outcome cannot become success from run completion",
+      "status": "passed",
+      "durationMs": 17.43787499999962,
+      "failures": []
+    },
+    {
+      "id": "S02-reference",
+      "name": "S02-reference: rejects an invented host download link",
+      "status": "passed",
+      "durationMs": 10.739874999999756,
+      "failures": []
+    },
+    {
+      "id": "S02-fallback",
+      "name": "S02-fallback: worker paths do not reappear in fallback or claim full delivery",
+      "status": "passed",
+      "durationMs": 17.847915999999714,
+      "failures": []
+    },
+    {
+      "id": "F02-download",
+      "name": "F02-download: a published report is readable only through its authenticated original chat",
+      "status": "passed",
+      "durationMs": 100.88804200000004,
+      "failures": []
+    },
+    {
+      "id": "H03-policy",
+      "name": "H03-policy: concise default and artifact fallback preserve explicit detail requests",
+      "status": "passed",
+      "durationMs": 22.50262500000008,
+      "failures": []
+    }
+  ]
+}

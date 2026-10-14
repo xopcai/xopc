@@ -198,6 +198,34 @@ describe('SessionStore', () => {
       await expect(store.prepareModelFallback(key, before)).resolves.toBe('unsafe');
     });
 
+    it('resumes persisted completed tools when a continuation fails before adding another user message', async () => {
+      const key = crypto.randomUUID();
+      await store.saveMessages(key, [], { metadata: { agentId: 'main' } });
+      await store.appendTranscriptMessage(key, { role: 'user', content: 'Research', timestamp: 1 });
+      await store.appendTranscriptMessage(key, { role: 'assistant', content: [{ type: 'toolCall', id: 'read', name: 'read_file', arguments: {} }], stopReason: 'toolUse', timestamp: 2 } as any);
+      await store.appendTranscriptMessage(key, { role: 'toolResult', toolCallId: 'read', toolName: 'read_file', content: [{ type: 'text', text: 'recorded source' }], timestamp: 3 } as any);
+      const before = await store.loadTranscriptRows(key);
+      await store.appendTranscriptCustomEntry(key, { customType: 'coding_run_started', data: {} });
+      await store.appendTranscriptMessage(key, { role: 'assistant', content: [], stopReason: 'error', errorMessage: '502 provider_error', timestamp: 4 } as any);
+      await store.appendTranscriptCustomEntry(key, { customType: 'coding_verification', data: {} });
+      await expect(store.prepareModelFallback(key, before)).resolves.toBe('resume');
+      expect((await store.loadTranscriptRows(key)).filter(row => 'role' in row && row.role === 'user')).toHaveLength(1);
+      expect((await store.loadTranscriptRows(key)).some(row => 'role' in row && row.role === 'toolResult')).toBe(true);
+    });
+
+    it('re-sends a host Task continuation after 502 even when the previous worker turn already finished', async () => {
+      const key = crypto.randomUUID();
+      await store.saveMessages(key, [{ role: 'user', content: 'Research', timestamp: 1 },
+        { role: 'assistant', content: 'Files published', stopReason: 'stop', timestamp: 2 }] as any[], { metadata: { agentId: 'main' } });
+      const before = await store.loadTranscriptRows(key);
+      await store.appendTranscriptCustomEntry(key, { customType: 'coding_run_started', data: {} });
+      await store.appendTranscriptMessage(key, { role: 'assistant', content: [], stopReason: 'error', errorMessage: '502', timestamp: 3 } as any);
+      await store.appendTranscriptCustomEntry(key, { customType: 'coding_verification', data: {} });
+      await expect(store.prepareModelFallback(key, before)).resolves.toBe('unsafe');
+      await expect(store.prepareModelFallback(key, before, { resumeTaskContinuation: true })).resolves.toBe('prompt');
+      expect((await store.loadTranscriptRows(key)).filter(row => 'role' in row && row.role === 'user')).toHaveLength(1);
+    });
+
     it('archives a failed assistant row and resumes the persisted user row for model fallback', async () => {
       const key = "d6ac9492-a795-4128-899a-9dc8224e0143";
       await store.saveMessages(key, [

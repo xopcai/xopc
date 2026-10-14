@@ -346,3 +346,14 @@ export {
   getUserTrustPolicy,
   setUserTrustPolicy,
 } from './user-trust-repository.js';
+
+export {
+  createResearchCheckpoint,
+  getResearchCheckpoint,
+  claimResearchCheckpoint,
+  saveResearchCheckpoint,
+  recordResearchEvidence,
+  recordResearchSearch,
+  finishResearchCheckpoint,
+  type StoredResearchCheckpoint,
+} from './research-checkpoint-repository.js';

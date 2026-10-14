@@ -140,3 +140,104 @@ it('enforces a child tool budget inside one parallel batch without a second runt
     expect(result).toMatchObject({ status: 'partial', toolIterations: 2 });
   } finally { await rm(root, { recursive: true, force: true }); }
 }, 15_000);
+
+it('saves structured research in a real child session and carries it into a fresh continuation', async () => {
+  const { Type } = await import('@sinclair/typebox');
+  const { createDelegateChildHandle } = await import('../../child-agent-factory.js');
+  const { mergeResearchCheckpoint, researchResumeContext } = await import('../../orchestration/research-checkpoint.js');
+  const root = await mkdtemp(join(tmpdir(), 'research-harness-'));
+  let checkpoint: import('../../orchestration/research-checkpoint.js').ResearchCheckpoint = { findings: [], evidence: [], nextSteps: ['Check price'] };
+  const sink = { read: () => checkpoint,
+    save: (update: any) => checkpoint = mergeResearchCheckpoint(checkpoint, update),
+    recordEvidence: (evidence: any) => { checkpoint.evidence.push(evidence); },
+  };
+  const model = { id: 'gpt-4.1', name: 'Test', provider: 'openai', api: 'openai-completions', baseUrl: 'https://example.invalid', reasoning: false, input: ['text'], contextWindow: 128000, maxTokens: 4096, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 } } as const;
+  const responses: AssistantMessage['content'][] = [
+    [{ type: 'toolCall', id: 'source', name: 'web_fetch', arguments: {} }],
+    [{ type: 'toolCall', id: 'save', name: 'research_checkpoint', arguments: { findings: [{ id: 'price', subject: 'Vendor', field: 'price', status: 'not_disclosed', conclusion: 'Contact sales', sources: [{ url: 'https://example.com/pricing', title: 'Pricing' }] }], nextSteps: ['Check concurrency'] } }],
+    [{ type: 'text', text: 'Pricing is not disclosed; concurrency remains.' }],
+    [{ type: 'toolCall', id: 'save-next', name: 'research_checkpoint', arguments: { findings: [{ id: 'concurrency', subject: 'Vendor', field: 'concurrency', status: 'confirmed', conclusion: '10 sessions', sources: [{ url: 'https://example.com/limits', title: 'Limits' }] }], nextSteps: [] } }],
+    [{ type: 'text', text: 'Pricing requires sales; concurrency is 10 sessions.' }],
+  ];
+  scripted.stream.mockImplementation((_model, context) => {
+    const content = responses.shift();
+    if (!content) throw new Error('Unexpected extra research request');
+    if (content.some(block => block.type === 'toolCall' && block.id === 'save-next')) {
+      expect(JSON.stringify(context.messages.filter((message: any) => message.role === 'system'))).toContain('Contact sales');
+      expect(JSON.stringify(context.messages.filter((message: any) => message.role === 'system'))).toContain('Check concurrency');
+    }
+    const message = { role: 'assistant', api: 'openai-completions', provider: 'openai', model: 'gpt-4.1', content,
+      stopReason: content.some(block => block.type === 'toolCall') ? 'toolUse' : 'stop', timestamp: Date.now(),
+      usage: { input: 10, output: 10, cacheRead: 0, cacheWrite: 0, totalTokens: 20, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
+    } as AssistantMessage;
+    const stream = createAssistantMessageEventStream(); stream.push({ type: 'done', reason: message.stopReason as 'stop' | 'toolUse', message }); return stream;
+  });
+  const fetch = vi.fn(async () => ({ content: [{ type: 'text' as const, text: 'Official pricing: contact sales.' }], details: {} }));
+  const options = { workspace: root, goal: 'Check pricing and concurrency', model: model as any, bus: {} as any,
+    getConfig: () => undefined, allowedToolNames: ['web_fetch'], maxIterations: 10, researchCheckpoint: sink,
+    buildChildTools: () => [{ name: 'web_fetch', label: 'Fetch', description: 'Fetch official pricing', parameters: Type.Object({}), execute: fetch }],
+  };
+  try {
+    expect((await createDelegateChildHandle(options).run()).status).toBe('success');
+    expect(checkpoint.findings).toHaveLength(1);
+    expect(checkpoint.evidence[0]?.excerpt).toContain('contact sales');
+    const resumed = await createDelegateChildHandle({ ...options, context: researchResumeContext(checkpoint) }).run();
+    expect(resumed.status, resumed.summary).toBe('success');
+    expect(checkpoint.findings).toHaveLength(2);
+    expect(checkpoint.nextSteps).toEqual([]);
+    expect(fetch).toHaveBeenCalledOnce();
+    expect(responses).toHaveLength(0);
+  } finally { await rm(root, { recursive: true, force: true }); }
+}, 20_000);
+
+it('hands off saved research after aborting a real long model request at the research deadline', async () => {
+  const { Type } = await import('@sinclair/typebox');
+  const { createDelegateChildHandle } = await import('../../child-agent-factory.js');
+  const { mergeResearchCheckpoint } = await import('../../orchestration/research-checkpoint.js');
+  const root = await mkdtemp(join(tmpdir(), 'research-deadline-'));
+  let checkpoint: import('../../orchestration/research-checkpoint.js').ResearchCheckpoint = { findings: [], evidence: [], nextSteps: ['Check price'] };
+  let round = 0;
+  let longRequestAborted = false;
+  scripted.stream.mockImplementation((_model, _context, options) => {
+    const attempt = round++;
+    const content: AssistantMessage['content'] = attempt === 0
+      ? [{ type: 'toolCall', id: 'source', name: 'web_fetch', arguments: {} }]
+      : attempt === 1
+        ? [{ type: 'toolCall', id: 'checkpoint', name: 'research_checkpoint', arguments: { findings: [{ id: 'price', subject: 'Vendor', field: 'price', status: 'not_disclosed', conclusion: 'Contact sales', sources: [] }], nextSteps: ['Check concurrency'] } }]
+        : [{ type: 'text', text: 'Pricing requires sales; concurrency remains to be checked.' }];
+    const message = { role: 'assistant', api: 'openai-completions', provider: 'openai', model: 'gpt-4.1', content,
+      stopReason: attempt < 2 ? 'toolUse' : 'stop', timestamp: Date.now(),
+      usage: { input: 10, output: 10, cacheRead: 0, cacheWrite: 0, totalTokens: 20, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
+    } as AssistantMessage;
+    const stream = createAssistantMessageEventStream();
+    if (attempt === 2) {
+      const abort = () => {
+        longRequestAborted = true;
+        stream.push({ type: 'error', reason: 'aborted', error: { ...message, content: [], stopReason: 'aborted', errorMessage: 'Request was aborted' } });
+      };
+      if (options.signal.aborted) abort();
+      else options.signal.addEventListener('abort', abort, { once: true });
+    } else {
+      if (attempt > 3) throw new Error('Unexpected extra handoff attempt');
+      stream.push({ type: 'done', reason: message.stopReason as 'stop' | 'toolUse', message });
+    }
+    return stream;
+  });
+  try {
+    const result = await createDelegateChildHandle({ workspace: root, goal: 'Check pricing and concurrency', timeoutMs: 2000,
+      allowedToolNames: ['web_fetch'], maxIterations: 10, getConfig: () => undefined, bus: {} as any,
+      model: { id: 'gpt-4.1', name: 'Test', provider: 'openai', api: 'openai-completions', baseUrl: 'https://example.invalid', reasoning: false, input: ['text'], contextWindow: 128000, maxTokens: 4096, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 } },
+      researchCheckpoint: { read: () => checkpoint,
+        save: update => checkpoint = mergeResearchCheckpoint(checkpoint, update),
+        recordEvidence: evidence => { checkpoint.evidence.push(evidence); },
+      },
+      buildChildTools: () => [{ name: 'web_fetch', label: 'Fetch', description: 'Fetch', parameters: Type.Object({}),
+        execute: async () => ({ content: [{ type: 'text', text: 'Public price: contact sales' }], details: {} }) }],
+    }).run();
+    expect(result, result.summary).toMatchObject({ status: 'partial', stopReason: 'deadline_exceeded', handoff: { completed: true } });
+    expect(longRequestAborted).toBe(true);
+    expect(round).toBe(4);
+    expect(checkpoint.findings[0]?.conclusion).toBe('Contact sales');
+    expect(checkpoint.nextSteps).toEqual(['Check concurrency']);
+  } finally { await rm(root, { recursive: true, force: true }); }
+}, 15_000);

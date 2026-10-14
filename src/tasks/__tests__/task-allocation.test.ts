@@ -18,6 +18,7 @@ import { createXopcUseTool } from '../../agent/tools/xopc-use-tool.js';
 import { createPersonalTaskTool } from '../../agent/tools/personal-task-tool.js';
 import { createConversation } from '../../storage/sqlite/conversation-repository.js';
 import { closeXopcDatabase, getSqliteDatabase } from '../../storage/sqlite/index.js';
+import { claimNextSessionInput, insertSessionInput } from '../../storage/sqlite/session-input-repository.js';
 import { AgentSelectionRepository } from '../../agent-matching/selection-repository.js';
 import { matchSpecialists } from '../../agent-matching/service.js';
 import { TaskApplicationService } from '../task-application-service.js';
@@ -78,6 +79,19 @@ const decide = vi.fn(async () => ({ kind: 'select' as const, agentId: 'analyst',
 const dispatcher = () => new TaskAllocationDispatcher({ context, decide, wake: vi.fn() });
 
 describe('background task allocation', () => {
+  it('plans the default acceptance contract before queuing execution', async () => {
+    const task = submit('planned-contract');
+    const planner = { plan: vi.fn(async () => ({ ...defineTaskContract('Analyze sales'),
+      expectedOutputs: ['monthly.csv'], acceptanceCriteria: ['All source rows are aggregated', 'Growth is calculated with stated units'],
+      constraints: ['Write only within the supplied output directory'] })) };
+    await new TaskAllocationDispatcher({ context, decide, planner, wake: vi.fn() }).drain();
+    const updated = new TaskRepository().require(task.id);
+    expect(planner.plan).toHaveBeenCalledOnce();
+    expect(updated.contract!.acceptanceCriteria).toHaveLength(2);
+    expect(updated.contract!.acceptanceCriteria[0]).toBe('All source rows are aggregated');
+    expect(updated.contract!.constraints).toContain('Write only within the supplied output directory');
+    expect(new TaskRunRepository().getActiveRoot(task.id)!.contractVersion).toBe(updated.latestContractVersion);
+  });
   it('advertises submission and coordination without foreground executor-selection commands', () => {
     const tool = createPersonalTaskTool({ getCurrentConversationId: () => conversationId,
       getCurrentAgentId: () => personalAgentId('local-owner'), dispatchTaskRuns: vi.fn() });
@@ -158,6 +172,9 @@ describe('background task allocation', () => {
     const chat = createConversation({ agentId: 'analyst' }, '/tmp');
     new TaskConversationRepository().activateExecutionSession({ taskId: task.id, runId: run.id, agentId: 'analyst', conversationId: chat.key });
     getSqliteDatabase().prepare("UPDATE task_runs SET status = 'running', conversation_id = ? WHERE run_id = ?").run(chat.key, run.id);
+    insertSessionInput({ id: crypto.randomUUID(), conversationId: chat.key, clientMessageId: 'active-task-worker', taskRunId: run.id,
+      requestedDelivery: 'next', effectiveDelivery: 'next', status: 'queued', content: 'Execute the assigned task', origin: { type: 'system', source: 'workflow' } });
+    claimNextSessionInput(chat.key, 'embedded-worker');
     const lease = acquireEmbeddedRunLease({ conversationId: chat.key, transcriptId: 'test', runId: 'embedded-worker' });
     const abort = vi.fn(async () => {});
     await lease.attach({} as never, abort);

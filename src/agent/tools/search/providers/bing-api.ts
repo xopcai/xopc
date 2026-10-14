@@ -1,3 +1,4 @@
+import { searchHttpError } from '../errors.js';
 import type { SearchProvider, SearchResult } from '../types.js';
 
 /** Azure Bing Web Search API (global endpoint; works without a proxy from many regions). */
@@ -24,7 +25,7 @@ export class BingApiProvider implements SearchProvider {
       signal,
     });
     if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${await response.text()}`);
+      throw searchHttpError(response);
     }
     const data = (await response.json()) as {
       webPages?: { value?: Array<{ name?: string; url?: string; snippet?: string }> };

@@ -1,3 +1,4 @@
+import { searchHttpError } from '../errors.js';
 import {
   DEFAULT_HTML_SEARCH_TIMEOUT_MS,
   HTML_SEARCH_USER_AGENT,
@@ -34,7 +35,7 @@ export class DuckDuckGoHtmlProvider implements SearchProvider {
       body: body.toString(),
     });
     if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
+      throw searchHttpError(response);
     }
     const html = await response.text();
     return parseDdgHtml(html, count);

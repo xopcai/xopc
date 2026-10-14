@@ -1,0 +1,146 @@
+{
+  "schemaVersion": 1,
+  "suite": "personal-delivery-live-repair",
+  "suiteVersion": 2,
+  "adapter": "scripts/personal-repair-live-smoke-v2.mts",
+  "mode": "real-model-isolated-gateway",
+  "createdAt": "2026-10-14T13:00:14.264Z",
+  "requestedRounds": 2,
+  "requestedScenarios": [
+    "file"
+  ],
+  "total": 2,
+  "passed": 1,
+  "failed": 1,
+  "sourceVersions": 1,
+  "sameSourceAcrossTrials": true,
+  "groups": {
+    "file": {
+      "total": 2,
+      "passed": 1
+    }
+  },
+  "observations": {
+    "totalMedianMs": 158880,
+    "totalP95Ms": 158880,
+    "fallbackCount": 0,
+    "repairRoundCount": 3,
+    "conciseReplies": 2
+  },
+  "limitations": [
+    "Small sample: percentiles are descriptive, not SLA estimates.",
+    "Live MDN retrieval; other sales/prices are frozen synthetic fixtures.",
+    "Conflict/file faults are disclosed injections; no production files are deleted.",
+    "No failed round is discarded or automatically replaced.",
+    "Source hashes distinguish revisions; compare only unchanged versions.",
+    "Length is a style proxy, not a human naturalness score."
+  ],
+  "trials": [
+    {
+      "round": 1,
+      "scenario": "file",
+      "reportPath": "/Users/micjoyce/develop/github/xopc/evals/personal/baselines/p2-live-v4-file/file-round-1.json",
+      "exitCode": 1,
+      "success": false,
+      "failure": "Substantive criteria must pass; non-observable network absence remains unverified",
+      "sourceChangedDuringRun": false,
+      "sourceHashes": {
+        "src/agent/tools/personal-task-tool.ts": "85fe2a8b000fbc7786c0b49dc03fefbff75938e04e79e25f2ec8a2785455955b",
+        "src/personal-agent/prompts.ts": "7a9efc655cb430995614b82563e5fa38252084e424bb6919479e171ecc84f43b",
+        "src/personal-agent/reply-style.ts": "e8b056e05a702df8243cd313c5df44f14e1dcf5a52cde5864328cd93b7bead16",
+        "src/personal-agent/reply-composer.ts": "8f900b3300dc458cf14a43571d27ed424816af37065a5da7334aa21e3f2eabe9",
+        "src/personal-agent/result-file-links.ts": "998b7c7d8b3015d905e7d961e17cd64b95428a91ffbf98c82d1d07b8ba6ab838",
+        "src/tasks/task-result-delivery-repository.ts": "9433eb70b4825c7d2f07af71f7255c4782c2a880c047b749b58f15a32938c4a1",
+        "src/tasks/task-result-delivery-service.ts": "13b509b2c0eb7b6a84b915d08b70046ada859d294c006a986acb616746ace039",
+        "src/tasks/task-allocation-service.ts": "732c1d85185c600003b8bee57e62ce3e94994f24941161dc63426446665f8367",
+        "src/tasks/task-research-result.ts": "1d585b1795d7f9950920b481f1c8d276eac0ad19837730d97e6581eade6c52fe",
+        "src/tasks/task-run-coordinator.ts": "aa69eb16b010250ec3b21b26605abe11b1c4d9c340c8f6da6b22c41ee2d8bf77",
+        "src/tasks/task-contract-planner.ts": "32d214d1e0e2c05aaf0d0821028d043d831d2dda31f359216aec5029093e9826",
+        "src/agent/tools/task-result-tool.ts": "fd5fbfdc7b4f8e621be2373edeecd85682cc7096af7c153df5e34e865b27f8c2",
+        "src/agent/tools/factory.ts": "0f7fe15b205760caf7719e921a838626fe6c958738e1f3d16d5d2fd31fa2f68b",
+        "packages/gateway-contract/src/task-research-result.ts": "0a546d8e9f9e8072fe1da330dd033a226621547e8bbe25f490caacfaec336dc6",
+        "scripts/personal-repair-live-smoke-v2.mts": "fcab88c10688768be0d67b2c1fd7aa8cd05f34e631b3926d8faefabffeb00b2e",
+        "src/tasks/task-research-repair.ts": "5a6d933cca4cbe692c680cf1c015dd54d8eb3c7ff418452ee60dc23b96ad0a41",
+        "src/tasks/task-run-repository.ts": "e11cf7c8e2d61b9364fff5ed2463e31d66704874d583af8306cb76ac8784fdd0",
+        "src/agent/tasks/task-judge-service.ts": "d24a645efe6d52a75ac67cd97e92c889b6de1f344af4d4e83e8184f8171488f9",
+        "src/tasks/task-continuation.ts": "f0181c063b7a1b1a0d666e6abbd7c58cac0c664a593c71512ce1eaba5ad10c00",
+        "src/agent/orchestration/turn-recovery.ts": "540c0132d756aee6405d98a34c540630d5e3ae8402fe996ef55f78178ab27b8a",
+        "src/agent/embedded/run-for-session.ts": "7fadb30a7a03fd6871264b3337e46f6491337774e577a4975d9bbff0b112e0de",
+        "src/agent/embedded/run-turn.ts": "6ad88909f4b519ad4fe0b6c3186e326ec13fd7fe282265155f9686af5bb6afe3",
+        "src/agent/embedded/types.ts": "b9a61fbe8af6af29489007c35731375adbc8e33a9e9e9d816b0c38e52aa126b8",
+        "src/agent/tools/web.ts": "e5d3637821f01957c2e1879e5c05c18e04da380b59a5aa8679a4efc511c0e92e",
+        "pnpm-lock.yaml": "c9ba3f707270e8af6a7c6bdd3e4ed79aa16a3440c3d1df8602732bb6a8c5a0e5"
+      },
+      "models": {
+        "personal": "deepseek/deepseek-flash",
+        "global": "xopc-cloud/openai-codex/gpt-5.5"
+      },
+      "fallbackCount": 0,
+      "repairs": 2,
+      "replyCharacters": 320,
+      "injections": [
+        {
+          "kind": "published_file_deleted",
+          "artifactId": "report---75ede72e-fd62-43e5-a37f-69b2b92e946e.md",
+          "at": 1791982542120
+        }
+      ],
+      "downloads": 3,
+      "checks": 10,
+      "instructionChecks": 0
+    },
+    {
+      "round": 2,
+      "scenario": "file",
+      "reportPath": "/Users/micjoyce/develop/github/xopc/evals/personal/baselines/p2-live-v4-file/file-round-2.json",
+      "exitCode": 0,
+      "success": true,
+      "sourceChangedDuringRun": false,
+      "sourceHashes": {
+        "src/agent/tools/personal-task-tool.ts": "85fe2a8b000fbc7786c0b49dc03fefbff75938e04e79e25f2ec8a2785455955b",
+        "src/personal-agent/prompts.ts": "7a9efc655cb430995614b82563e5fa38252084e424bb6919479e171ecc84f43b",
+        "src/personal-agent/reply-style.ts": "e8b056e05a702df8243cd313c5df44f14e1dcf5a52cde5864328cd93b7bead16",
+        "src/personal-agent/reply-composer.ts": "8f900b3300dc458cf14a43571d27ed424816af37065a5da7334aa21e3f2eabe9",
+        "src/personal-agent/result-file-links.ts": "998b7c7d8b3015d905e7d961e17cd64b95428a91ffbf98c82d1d07b8ba6ab838",
+        "src/tasks/task-result-delivery-repository.ts": "9433eb70b4825c7d2f07af71f7255c4782c2a880c047b749b58f15a32938c4a1",
+        "src/tasks/task-result-delivery-service.ts": "13b509b2c0eb7b6a84b915d08b70046ada859d294c006a986acb616746ace039",
+        "src/tasks/task-allocation-service.ts": "732c1d85185c600003b8bee57e62ce3e94994f24941161dc63426446665f8367",
+        "src/tasks/task-research-result.ts": "1d585b1795d7f9950920b481f1c8d276eac0ad19837730d97e6581eade6c52fe",
+        "src/tasks/task-run-coordinator.ts": "aa69eb16b010250ec3b21b26605abe11b1c4d9c340c8f6da6b22c41ee2d8bf77",
+        "src/tasks/task-contract-planner.ts": "32d214d1e0e2c05aaf0d0821028d043d831d2dda31f359216aec5029093e9826",
+        "src/agent/tools/task-result-tool.ts": "fd5fbfdc7b4f8e621be2373edeecd85682cc7096af7c153df5e34e865b27f8c2",
+        "src/agent/tools/factory.ts": "0f7fe15b205760caf7719e921a838626fe6c958738e1f3d16d5d2fd31fa2f68b",
+        "packages/gateway-contract/src/task-research-result.ts": "0a546d8e9f9e8072fe1da330dd033a226621547e8bbe25f490caacfaec336dc6",
+        "scripts/personal-repair-live-smoke-v2.mts": "fcab88c10688768be0d67b2c1fd7aa8cd05f34e631b3926d8faefabffeb00b2e",
+        "src/tasks/task-research-repair.ts": "5a6d933cca4cbe692c680cf1c015dd54d8eb3c7ff418452ee60dc23b96ad0a41",
+        "src/tasks/task-run-repository.ts": "e11cf7c8e2d61b9364fff5ed2463e31d66704874d583af8306cb76ac8784fdd0",
+        "src/agent/tasks/task-judge-service.ts": "d24a645efe6d52a75ac67cd97e92c889b6de1f344af4d4e83e8184f8171488f9",
+        "src/tasks/task-continuation.ts": "f0181c063b7a1b1a0d666e6abbd7c58cac0c664a593c71512ce1eaba5ad10c00",
+        "src/agent/orchestration/turn-recovery.ts": "540c0132d756aee6405d98a34c540630d5e3ae8402fe996ef55f78178ab27b8a",
+        "src/agent/embedded/run-for-session.ts": "7fadb30a7a03fd6871264b3337e46f6491337774e577a4975d9bbff0b112e0de",
+        "src/agent/embedded/run-turn.ts": "6ad88909f4b519ad4fe0b6c3186e326ec13fd7fe282265155f9686af5bb6afe3",
+        "src/agent/embedded/types.ts": "b9a61fbe8af6af29489007c35731375adbc8e33a9e9e9d816b0c38e52aa126b8",
+        "src/agent/tools/web.ts": "e5d3637821f01957c2e1879e5c05c18e04da380b59a5aa8679a4efc511c0e92e",
+        "pnpm-lock.yaml": "c9ba3f707270e8af6a7c6bdd3e4ed79aa16a3440c3d1df8602732bb6a8c5a0e5"
+      },
+      "models": {
+        "personal": "deepseek/deepseek-flash",
+        "global": "xopc-cloud/openai-codex/gpt-5.5"
+      },
+      "totalMs": 158880,
+      "fallbackCount": 0,
+      "repairs": 1,
+      "replyCharacters": 322,
+      "injections": [
+        {
+          "kind": "published_file_deleted",
+          "artifactId": "report---c8127def-9c6f-4499-af73-1a21859d63ec.md",
+          "at": 1791982770917
+        }
+      ],
+      "downloads": 3,
+      "checks": 8,
+      "instructionChecks": 0
+    }
+  ]
+}

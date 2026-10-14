@@ -8,7 +8,7 @@ export const DELEGATION_BUDGETS = {
 
 export type DelegationBudgetTier = keyof typeof DELEGATION_BUDGETS;
 export type DelegationStopReason = 'completed' | 'tool_calls' | 'total_tokens' | 'model_turns'
-  | 'tool_failures' | 'timeout' | 'cancelled' | 'parent_policy' | 'credit_budget' | 'runtime_error' | 'verification';
+  | 'tool_failures' | 'timeout' | 'deadline_exceeded' | 'user_cancelled' | 'parent_cancelled' | 'provider_error' | 'cancelled' | 'parent_policy' | 'credit_budget' | 'runtime_error' | 'verification';
 
 export function resolveDelegationBudget(tier: DelegationBudgetTier = 'standard', maxIterations?: number, timeoutMs?: number) {
   const preset = DELEGATION_BUDGETS[tier];
@@ -18,6 +18,7 @@ export function resolveDelegationBudget(tier: DelegationBudgetTier = 'standard',
     maxModelTurns: Math.min(60, Math.max(1, Math.floor(maxIterations ?? preset.maxToolCalls))) + 1,
     maxToolFailures: 5,
     timeoutMs: Math.min(timeoutMs ?? preset.timeoutMs, preset.timeoutMs),
+    handoffReserveMs: Math.floor(Math.min(timeoutMs ?? preset.timeoutMs, preset.timeoutMs) * 0.2),
   } };
 }
 
@@ -41,6 +42,12 @@ export function createDelegationBudgetPolicy(budget: ReturnType<typeof resolveDe
     if (usage.modelTurns >= limits.maxModelTurns * ratio) return 'model_turns';
     if (usage.toolFailures >= limits.maxToolFailures * ratio) return 'tool_failures';
     return undefined;
+  };
+  const requestHandoff = (reason: DelegationStopReason) => {
+    if (handoffRequested) return;
+    handoffReason = reason;
+    handoffRequested = true;
+    continuation = handoff();
   };
   const handoff = () => `Delegation budget is approaching its ${handoffReason} limit. Do not call more tools. Return a concise handoff now: findings with file/line or source evidence, incomplete work, and precise next steps (including unread ranges). Do not claim the task is complete.`;
   const policy: AgentTurnPolicy = {
@@ -69,9 +76,10 @@ export function createDelegationBudgetPolicy(budget: ReturnType<typeof resolveDe
         stopReason = hard;
         return { block: true, terminate: true, reason: `Sub-agent budget exhausted: ${hard}.` };
       }
-      if (handoffRequested) return { block: true, reason: handoff() };
+      if (now() - startedAt >= limits.timeoutMs * 0.8) requestHandoff('timeout');
+      if (handoffRequested && (context.toolCall.name !== 'research_checkpoint' || handoffRequestStarted)) return { block: true, reason: handoff() };
       // The generic turn policy expands data_batch into its individual operations.
-      if (context.toolCall.name !== 'data_batch') usage.toolCalls++;
+      if (context.toolCall.name !== 'data_batch' && context.toolCall.name !== 'research_checkpoint') usage.toolCalls++;
       const decision = await options.authorizeToolCall?.(context, signal);
       if (decision?.block && decision.terminate) { stopReason = 'parent_policy'; stopMessage = decision.reason; }
       return decision;
@@ -82,20 +90,21 @@ export function createDelegationBudgetPolicy(budget: ReturnType<typeof resolveDe
       if (options.isComplete?.()) return true;
       const hard = reasonAt(1);
       if (hard || stopReason) { stopReason ??= hard; return true; }
-      if (handoffRequested) { stopReason = handoffReason; return true; }
+      if (handoffRequestStarted) { stopReason = handoffReason; return true; }
       const near = reasonAt(0.8);
       if (near && context.toolResults.length) {
-        handoffReason = near;
-        handoffRequested = true;
-        continuation = handoff();
+        requestHandoff(near);
       }
       return false;
     },
     takeContinuationMessage() { const message = continuation; continuation = undefined; return message; },
     stopReason: () => !stopReason && options.isComplete?.() ? 'completed' : 'limit',
   };
-  return { policy, addTokens(tokens: number) { usage.totalTokens += Math.max(0, tokens); },
+  return { policy, requestHandoff,
+    remainingMs: () => Math.max(0, limits.timeoutMs - (now() - startedAt)),
+    researchRemainingMs: () => Math.max(0, limits.timeoutMs - limits.handoffReserveMs - (now() - startedAt)),
+    addTokens(tokens: number) { usage.totalTokens += Math.max(0, tokens); },
     stop(reason: DelegationStopReason, message?: string) { stopReason = reason; stopMessage = message; },
     snapshot() { return { ...budget, usage: { ...usage, elapsedMs: now() - startedAt },
-      stopReason, stopMessage, handoffRequested, handoffReason }; } };
+      stopReason, stopMessage, handoffRequested, handoffRequestStarted, handoffReason }; } };
 }

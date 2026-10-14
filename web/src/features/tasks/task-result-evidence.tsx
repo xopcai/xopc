@@ -25,7 +25,9 @@ export function TaskResultEvidence({ evidence, projectId, conversationId, langua
         </TaskExpandableContent>
         {external && item.kind === 'artifact' && <ArtifactRecovery key={uri} uri={uri} zh={language === 'zh'} />}
         {item.summary ? <TaskExpandableContent content={item.summary} contentKey={`${conversationId ?? projectId}:evidence:${index}:${item.title}`} language={language} markdown={false} previewHeight={80} className="mt-1 text-xs leading-5 text-fg-muted" /> : null}
-        <p className="mt-1 text-xs text-fg-subtle">{item.strength === 'verified' ? (language === 'zh' ? '已验证' : 'Verified') : (language === 'zh' ? '已记录，待验证' : 'Observed, not verified')}</p>
+        <p className="mt-1 text-xs text-fg-subtle">{item.provenance === 'judge'
+          ? (item.strength === 'verified' ? (language === 'zh' ? '模型审阅通过' : 'Model reviewed') : (language === 'zh' ? '模型未确认，待核验' : 'Not confirmed by review'))
+          : item.strength === 'verified' ? (language === 'zh' ? '已验证' : 'Verified') : (language === 'zh' ? '已记录，待验证' : 'Observed, not verified')}</p>
       </div>;
     })}
   </div>;

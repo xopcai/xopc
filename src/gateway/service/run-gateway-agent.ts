@@ -21,6 +21,7 @@ import { recordExplicitRelationshipFollowUp } from '../../user-context/relations
 import { markdownNotificationPreview } from '../../notifications/plain-text.js';
 import { resolveExecutionContext } from '../../tasks/execution-context.js';
 import { TaskRunCoordinator } from '../../tasks/task-run-coordinator.js';
+import { TaskRunRepository } from '../../tasks/task-run-repository.js';
 import {
   updateInteractionStateFromMessage,
 } from '../../storage/sqlite/index.js';
@@ -122,7 +123,13 @@ export async function *runGatewayAgent(
     }
     webchatTranscriptId = meta?.transcriptId;
     webchatMetadata = meta;
-    runAbortControllers.set(runId, new AbortController());
+    if (!runAbortControllers.has(runId)) runAbortControllers.set(runId, new AbortController());
+    if (runAbortControllers.get(runId)!.signal.aborted || runOptions?.signal?.aborted
+      || (runOptions?.taskRunId && new TaskRunRepository().get(runOptions.taskRunId)?.status === 'cancelled')) {
+      runAbortControllers.delete(runId);
+      completeRealtimeTopic(`run:${runId}`);
+      return { status: 'aborted', summary: 'Interrupted before startup' };
+    }
   }
 
   const streamConversationId = webchatConversationId ?? chatId;
@@ -209,6 +216,9 @@ export async function *runGatewayAgent(
       const runAbort = runAbortControllers.get(runId);
       if (!runAbort) {
         throw new Error('run abort controller missing for webchat');
+      }
+      if (runOptions?.taskRunId && new TaskRunRepository().get(runOptions.taskRunId)?.status === 'cancelled') {
+        runAbort.abort();
       }
       const mergedSignal = runOptions?.signal
         ? AbortSignal.any([runOptions.signal, runAbort.signal])

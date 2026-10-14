@@ -11,8 +11,10 @@ export type SessionInputStatus =
   | 'completed' | 'cancelled' | 'failed' | 'interrupted' | 'suspended';
 
 export type SessionInputPayload =
-  | { waitId: string; objectiveRevision: number; resolution: 'continued' | 'skipped' }
-  | { waitId: string; objectiveRevision: number; resolution: 'answered' | 'agent_decide' | 'cancelled' };
+  | { waitId: string; objectiveRevision: number; resolution: 'continued' | 'skipped'; connectionAction?: never; connectionBarrier?: never }
+  | { waitId: string; objectiveRevision: number; resolution: 'answered' | 'agent_decide' | 'cancelled'; connectionAction?: never; connectionBarrier?: never }
+  | { waitId: string; objectiveRevision: number; connectionAction: 'continue' | 'cancel'; resolution?: never; connectionBarrier?: never }
+  | { waitId: string; objectiveRevision: number; connectionBarrier: true; connectionAction?: never; resolution?: never };
 
 export type SessionInput = {
   id: string;
@@ -275,10 +277,27 @@ export function claimNextSessionInput(conversationId: string, runId: string, exp
       .run(Date.now(), conversationId, readCurrentTranscriptId(db, conversationId)).changes;
     if (changed) bumpSessionInputRevision(db, conversationId);
     const row = db.prepare(`${SELECT_INPUTS} WHERE conversation_id = ? AND effective_delivery = 'next'
-      AND status = 'queued' ORDER BY interrupt_requested DESC, position, created_at_ms, id LIMIT 1`).get(conversationId) as InputRow | undefined;
+      AND status = 'queued' AND (kind != 'connection_resume' OR NOT EXISTS (
+        SELECT 1 FROM session_inputs barrier WHERE barrier.conversation_id = session_inputs.conversation_id
+        AND barrier.status = 'interrupted' AND barrier.kind = 'message'
+        AND json_extract(barrier.payload_json, '$.connectionBarrier') = 1
+        AND json_extract(barrier.payload_json, '$.waitId') = json_extract(session_inputs.payload_json, '$.waitId')
+        AND json_extract(barrier.payload_json, '$.objectiveRevision') = json_extract(session_inputs.payload_json, '$.objectiveRevision')
+      )) ORDER BY CASE WHEN kind = 'connection_resume' THEN 1 ELSE 0 END,
+      interrupt_requested DESC, position, created_at_ms, id LIMIT 1`).get(conversationId) as InputRow | undefined;
     if (!row) return undefined;
     if (expectedInputId && row.id !== expectedInputId) return undefined;
     const now = Date.now();
+    if (row.kind === 'message' && !JSON.parse(row.payload_json ?? '{}').connectionAction) {
+      // Rebind at delivery: preparation can precede another message's goal revision.
+      db.prepare(`UPDATE session_inputs SET payload_json = COALESCE((
+        SELECT json_object('waitId', wait.id, 'objectiveRevision', json_extract(wait.data_json, '$.objectiveRevision'), 'connectionBarrier', json('true'))
+        FROM session_connection_waits wait WHERE wait.conversation_id = session_inputs.conversation_id
+        AND wait.transcript_id = ? AND wait.status IN ('open','queued')
+        AND (session_inputs.payload_json IS NULL OR wait.id = json_extract(session_inputs.payload_json, '$.waitId'))
+        AND session_inputs.id != json_extract(wait.data_json, '$.originInputId') LIMIT 1
+      ), payload_json) WHERE id = ?`).run(readCurrentTranscriptId(db, conversationId), row.id);
+    }
     db.prepare(`UPDATE session_inputs SET status = 'running', run_id = ?, version = version + 1,
       updated_at_ms = ? WHERE id = ?`).run(runId, now, row.id);
     db.prepare(`UPDATE session_input_runtime SET active_run_id = ?, active_input_id = ?,
@@ -288,16 +307,19 @@ export function claimNextSessionInput(conversationId: string, runId: string, exp
     // Coalesce only contiguous, compatible conversational text. Original inputs remain durable.
     const hasMaterial = (value: InputRow) => Boolean((value.attachments_json && JSON.parse(value.attachments_json).length)
       || (value.context_snapshots_json && JSON.parse(value.context_snapshots_json).length));
-    if (row.interrupt_requested && !hasMaterial(row)) {
+    if (row.interrupt_requested && !claimed.payload?.connectionAction && !hasMaterial(row)) {
       const pending = db.prepare(`${SELECT_INPUTS} WHERE conversation_id = ? AND status = 'queued'
         ORDER BY interrupt_requested DESC, position, created_at_ms, id LIMIT 10`).all(conversationId) as InputRow[];
       for (const next of pending) {
-        if (!next.interrupt_requested || next.kind !== 'message' || hasMaterial(next)
+        if (!next.interrupt_requested || next.kind !== 'message' || JSON.parse(next.payload_json ?? '{}').connectionAction || hasMaterial(next)
           || next.thinking !== row.thinking || next.expected_transcript_id !== row.expected_transcript_id
           || next.origin_json !== row.origin_json || next.created_at_ms - row.created_at_ms > 500
           || claimed.content.length + next.content.length > 64_000) break;
+        const nextPayload = JSON.parse(next.payload_json ?? '{}') as SessionInputPayload | undefined;
+        if (claimed.payload?.connectionBarrier && nextPayload?.waitId && nextPayload.waitId !== claimed.payload.waitId) break;
         db.prepare(`UPDATE session_inputs SET status = 'injecting', effective_delivery = 'steer', target_run_id = ?,
-          version = version + 1, updated_at_ms = ? WHERE id = ?`).run(runId, now, next.id);
+          payload_json = ?, version = version + 1, updated_at_ms = ? WHERE id = ?`).run(runId,
+            claimed.payload?.connectionBarrier ? JSON.stringify(claimed.payload) : next.payload_json, now, next.id);
         claimed.content += `\n\n${next.content}`;
       }
     }
@@ -363,13 +385,16 @@ export function mutateQueuedSessionInput(input: {
       const stmt = db.prepare(`UPDATE session_inputs SET position = ?, version = version + 1, updated_at_ms = ? WHERE id = ?`);
       ordered.forEach((item, index) => stmt.run(index + 1, now, item.id));
     } else {
+      const clearControl = Boolean(row.payload_json && JSON.parse(row.payload_json).connectionAction
+        && (input.content !== undefined && input.content !== row.content
+          || input.attachments?.length || input.contextSnapshots?.length));
       db.prepare(`UPDATE session_inputs SET content = ?, attachments_json = ?, context_refs_json = ?,
-        context_snapshots_json = ?, thinking = ?, version = version + 1,
+        context_snapshots_json = ?, thinking = ?, payload_json = ?, version = version + 1,
         updated_at_ms = ? WHERE id = ?`).run(input.content ?? row.content,
           input.attachments ? JSON.stringify(input.attachments) : row.attachments_json,
           input.contextRefs ? JSON.stringify(input.contextRefs) : row.context_refs_json,
           input.contextSnapshots ? JSON.stringify(input.contextSnapshots) : row.context_snapshots_json,
-          input.thinking ?? row.thinking, now, input.id);
+          input.thinking ?? row.thinking, clearControl ? null : row.payload_json, now, input.id);
     }
     bumpSessionInputRevision(db, input.conversationId);
     return true;
@@ -392,8 +417,25 @@ export function recoverSessionInputState(): string[] {
     const keys = db.prepare(`SELECT DISTINCT conversation_id FROM session_inputs WHERE status IN ('queued','running','injecting')`)
       .all() as Array<{ conversation_id: string }>;
     const now = Date.now();
+    // Adopt legacy messages and refresh in-flight bindings saved by older gateways.
+    db.prepare(`UPDATE session_inputs SET payload_json = (
+      SELECT json_object('waitId', wait.id, 'objectiveRevision', json_extract(wait.data_json, '$.objectiveRevision'), 'connectionBarrier', json('true'))
+      FROM session_connection_waits wait JOIN sessions session ON session.active_transcript_id = wait.transcript_id
+      WHERE wait.conversation_id = session_inputs.conversation_id AND wait.status IN ('open','queued')
+      AND (session_inputs.payload_json IS NULL OR wait.id = json_extract(session_inputs.payload_json, '$.waitId'))
+      AND (session_inputs.expected_transcript_id IS NULL OR session_inputs.expected_transcript_id = wait.transcript_id)
+      AND session_inputs.id != json_extract(wait.data_json, '$.originInputId')
+      AND (json_extract(session_inputs.payload_json, '$.connectionBarrier') = 1
+        OR session_inputs.created_at_ms >= json_extract(wait.data_json, '$.createdAt')) LIMIT 1
+    ) WHERE kind = 'message' AND status IN ('running','injecting')
+      AND (payload_json IS NULL OR json_extract(payload_json, '$.connectionBarrier') = 1)`).run();
     db.prepare(`UPDATE session_inputs SET status = 'interrupted', error = 'Gateway restarted during delivery',
       version = version + 1, updated_at_ms = ? WHERE status IN ('running','injecting')`).run(now);
+    // Controls have no model execution or external write; replay their durable, versioned intent.
+    db.prepare(`UPDATE session_inputs SET status = 'queued', error = NULL, version = version + 1,
+      updated_at_ms = ? WHERE status = 'interrupted' AND kind = 'message'
+      AND error = 'Gateway restarted during delivery'
+      AND json_extract(payload_json, '$.connectionAction') IN ('continue','cancel')`).run(now);
     db.prepare(`UPDATE session_input_runtime SET active_run_id = NULL, active_input_id = NULL,
       revision = revision + 1, updated_at_ms = ?`).run(now);
     return keys.map((row) => row.conversation_id);

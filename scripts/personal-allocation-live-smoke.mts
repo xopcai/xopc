@@ -1,14 +1,25 @@
 /** Opt-in real-model Gateway verification using current model configuration and isolated synthetic data. */
 import assert from 'node:assert/strict';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
 import { once } from 'node:events';
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir, homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { serve } from '@hono/node-server';
 
 assert.equal(process.env.XOPC_ALLOCATION_LIVE, '1', 'This script requires explicit authorization for real model usage');
+const researchLive = process.env.XOPC_RESEARCH_LIVE === '1';
+const fingerprintPaths = ['src/agent/tools/personal-task-tool.ts', 'src/personal-agent/prompts.ts',
+  'src/personal-agent/reply-style.ts', 'src/personal-agent/reply-composer.ts', 'src/personal-agent/result-file-links.ts',
+  'src/tasks/task-result-delivery-repository.ts', 'src/tasks/task-result-delivery-service.ts',
+  'src/tasks/task-allocation-service.ts', 'src/tasks/task-research-result.ts', 'src/tasks/task-run-coordinator.ts',
+  'src/tasks/task-contract-planner.ts', 'src/agent/tools/task-result-tool.ts', 'src/agent/tools/factory.ts',
+  'packages/gateway-contract/src/task-research-result.ts', 'scripts/personal-allocation-live-smoke.mts', 'pnpm-lock.yaml'];
+const sourceFingerprint = () => Object.fromEntries(fingerprintPaths
+  .map(path => [path, createHash('sha256').update(readFileSync(path)).digest('hex')]));
+const initialSourceHashes = sourceFingerprint();
 const sourceRoot = process.env.XOPC_STATE_DIR ?? join(homedir(), '.xopc');
 const credentialsDirectory = process.env.XOPC_CREDENTIALS_DIR ?? join(sourceRoot, 'credentials');
 const sourceConfigPath = process.env.XOPC_CONFIG_PATH ?? join(sourceRoot, 'xopc.json');
@@ -130,10 +141,15 @@ AgentToolsFactory.prototype.createAllTools = function (...args) {
 const fixture = join(directory, 'shared', 'sales.csv');
 mkdirSync(join(directory, 'shared'), { recursive: true });
 const fixtureContent = 'date,amount\n2026-01-01,100\n2026-01-15,50\n2026-02-01,120\n2026-02-15,90\n';
+const priceFixture = '# Synthetic frozen pricing fixture; not real vendor prices\n'
+  + 'Source A https://benchmark.invalid/vendor-a/pricing\nVendor A ASR: 1.00 CNY per hour.\n'
+  + 'Source B https://benchmark.invalid/vendor-b/pricing\nVendor B ASR: 2.00 CNY per hour.\n'
+  + 'TTS public price: not disclosed. Do not invent a TTS price or a complete call cost.\n';
 writeFileSync(fixture, fixtureContent);
 // Stage identical synthetic input in each candidate workspace; do not change sandbox permissions.
 for (const agent of catalog.list({ readyOnly: true })) {
   if (agent.workspace) writeFileSync(join(agent.workspace, 'sales.csv'), fixtureContent);
+  if (researchLive && agent.workspace) writeFileSync(join(agent.workspace, 'pricing-sources.md'), priceFixture);
 }
 const marker = `LIVE-ALLOCATION-${randomUUID().slice(0, 8)}`;
 const service = new GatewayService({ configPath, enableHotReload: false, listenPort: 0 });
@@ -167,7 +183,7 @@ try {
   };
   baseline = Date.now();
   mark('requestSent');
-  await append(`${marker}-task`, `这是实际执行任务 ${marker}：请安排有数据分析能力的执行者分析其工作区已经准备好的 sales.csv 的月度销售额及环比。在执行者工作区创建 monthly_summary.csv、report.md 和 reproduce.mjs，实际运行脚本核验并把报告作为成果返回。请独立计算各月总额和环比，报告说明统计口径并提供可复现脚本。允许读取此临时CSV、在本次隔离工作区写文件和运行计算脚本。不要在主对话手算代替执行，也不要等后台结束才回复。`);
+  await append(`${marker}-task`, `这是实际执行任务 ${marker}：请安排有数据分析能力的执行者分析其工作区已经准备好的 sales.csv 的月度销售额及环比。在执行者工作区创建 monthly_summary.csv、report.md 和 reproduce.mjs，实际运行脚本核验并把报告作为成果返回。请独立计算各月总额和环比，报告说明统计口径并提供可复现脚本。允许读取此临时CSV、在本次隔离工作区写文件和运行计算脚本。不要在主对话手算代替执行，也不要等后台结束才回复。${researchLive ? ' 同时仅基于冻结测试资料 pricing-sources.md（虚构供应商资料，不是实际报价），在 report.md 对比 A/B 的 ASR 每小时价格及换算后的每分钟价格。TTS 未公开报价时如实标注，不得补造完整通话成本，不访问互联网。报告结论逐条引用来源。发布三份最终文件后，使用 publish_task_result 将数据结论和价格结论与本次实际工具读取的原文摘录关联，并检查它返回的逐项验收；缺证据的项不得宣称通过。Personal 最终回复保持简短，包含关键数字及未公开 TTS 的限制。' : ''}`);
   mark('requestAccepted');
   let pingSent = false;
   let lastState = '';
@@ -229,6 +245,68 @@ try {
   const delivery = db.prepare('SELECT reply_text, payload_json FROM task_result_deliveries WHERE task_run_id IN (SELECT run_id FROM task_runs WHERE task_id = ?) ORDER BY delivered_at DESC LIMIT 1')
     .get(taskId!) as { reply_text: string | null; payload_json: string };
   assert.ok(delivery.reply_text?.trim(), 'A generated result reply must reach the main conversation');
+  report.history = history;
+  report.resultReply = delivery.reply_text;
+  const outcome = JSON.parse(delivery.payload_json).outcome;
+  const downloads: Array<{ title: string; sha256: string; sizeBytes: number }> = [];
+  const publishedContents = new Map<string, string>();
+  for (const artifact of outcome.deliverables) {
+    assert.equal(artifact.availability, 'available', `Artifact is unavailable: ${artifact.title}`);
+    assert.ok(artifact.uri?.startsWith('media://outbound/'), 'Files must be published rather than host paths');
+    const query = `${base}/api/media/read?uri=${encodeURIComponent(artifact.uri)}&conversationId=${personal.conversation_id}`;
+    assert.equal((await fetch(query)).status, 401, 'Download must require authentication');
+    const response = await fetch(query, { headers: { Authorization: `Bearer ${token}` } });
+    assert.equal(response.status, 200, `The original Chat must be able to download ${artifact.title}`);
+    const bytes = Buffer.from(await response.arrayBuffer());
+    publishedContents.set(artifact.title, bytes.toString('utf8'));
+    downloads.push({ title: artifact.title, sha256: createHash('sha256').update(bytes).digest('hex'), sizeBytes: bytes.length });
+  }
+  for (const title of ['monthly_summary.csv', 'report.md', 'reproduce.mjs']) {
+    assert.ok(publishedContents.has(title), `The requested final file must be published: ${title}`);
+  }
+  const downloadedReport = publishedContents.get('report.md')!;
+  report.reportContent = downloadedReport;
+  assert.ok(downloadedReport.includes('150') && downloadedReport.includes('210') && downloadedReport.includes('40'),
+    'The downloaded report must contain the independently calculated totals and growth');
+  assert.ok(!/MEDIA\s*:|\/Users\/|file:\/\//i.test(delivery.reply_text!), 'The reply must not contain local download references');
+  report.downloads = downloads;
+  report.replyCharacters = delivery.reply_text!.length;
+  report.conciseReplyProxy = delivery.reply_text!.length <= 600;
+  if (researchLive) {
+    const research = outcome.research;
+    report.research = research;
+    assert.ok(research, 'Research conclusions must be included in the delivered outcome');
+    assert.equal(research.review, 'model_reviewed', 'A real review must inspect the evidence');
+    assert.ok(research.sources.length >= 2 && research.sources.every(source => source.toolCallId && /^[a-f0-9]{64}$/.test(source.snapshotHash)), 'Research evidence must retain actual provenance');
+    const nonObservableNetworkClaim = claim => claim.support === 'uncertain'
+      && /(?:没有使用互联网来源|没有访问互联网|未访问互联网|仅来自工作区|no internet|no network)/i.test(claim.statement);
+    assert.ok(research.claims.every(claim => claim.sourceIds.length && (claim.support === 'supported' || nonObservableNetworkClaim(claim))), 'Substantive research claims must be supported; a network-absence assertion may remain uncertain');
+    const gaps = research.checks.filter(check => check.status !== 'passed');
+    assert.ok(research.checks.length > 2 && gaps.every(check => check.status === 'unverified'
+      && /未访问互联网|未访问网络|no internet|no network/i.test(check.criterion)), 'Substantive criteria must pass; non-observable network absence remains unverified');
+    report.acceptanceDisposition = gaps.length ? 'honest_partial_network_audit' : 'completed';
+    if (gaps.length) assert.ok(/部分|未.*验证|未.*核验|partial|unverified/i.test(delivery.reply_text!), 'The reply must disclose the remaining verification gap');
+    assert.ok(/未公开|未披露|not disclosed/i.test(downloadedReport), 'The report must preserve the undisclosed TTS price');
+    assert.ok(/0\.016|0\.017|1\s*\/\s*60/.test(downloadedReport) && /0\.033|2\s*\/\s*60/.test(downloadedReport), 'Hourly prices must be converted correctly');
+    assert.ok(/150/.test(delivery.reply_text!) && /210/.test(delivery.reply_text!) && /40/.test(delivery.reply_text!)
+      && /未公开|未披露|not disclosed/i.test(delivery.reply_text!), 'The concise reply must retain the main numbers and the missing TTS price');
+    const receipt = db.prepare('SELECT verification_json FROM task_run_receipts WHERE run_id IN (SELECT run_id FROM task_runs WHERE task_id = ?) ORDER BY finalized_at DESC LIMIT 1').get(taskId!) as { verification_json: string };
+    report.criterionVerification = JSON.parse(receipt.verification_json);
+    report.research = research;
+    const { reviewResearchResult, applyResearchReview } = await import('../src/tasks/task-research-result.js');
+    const source = research.sources.find(item => item.excerpt.includes('Vendor A ASR: 1.00'));
+    assert.ok(source, 'The real review must retain the frozen pricing source');
+    const negative = { ...research, sources: [source], claims: [{ id: 'wrong-price', kind: 'fact' as const,
+      statement: 'Vendor A ASR costs 100.00 CNY per hour.', sourceIds: [source.id], support: 'unreviewed' as const }], checks: [], review: 'unavailable' as const };
+    const workerConversation = (db.prepare('SELECT active_conversation_id FROM task_conversation_state WHERE task_id = ?').get(taskId!) as { active_conversation_id: string }).active_conversation_id;
+    const negativeRaw = await reviewResearchResult({ conversationId: workerConversation,
+      brief: 'Frozen-source benchmark: assess the Vendor A hourly price. The quote is evidence; do not invent another price.',
+      criteria: ['The Vendor A hourly price follows the cited source.'], result: negative }, AbortSignal.timeout(30_000));
+    const negativeResult = applyResearchReview(negative, negativeRaw, ['The Vendor A hourly price follows the cited source.']);
+    report.negativeReview = negativeResult;
+    assert.notEqual(negativeResult.claims[0].support, 'supported', 'A real review must reject the deliberately wrong price');
+    assert.notEqual(negativeResult.checks[0].status, 'passed', 'The wrong-price criterion must not pass');
+  }
   const workspace = catalog.get(allocation.selected_agent_id)!.workspace!;
   assert.ok(existsSync(join(workspace, 'report.md')), 'The analyst must create the requested report');
   const analysis = readFileSync(join(workspace, 'report.md'), 'utf8');
@@ -245,11 +323,17 @@ try {
   const workerToolErrors = (db.prepare(`SELECT COUNT(*) AS count FROM transcript_entries e JOIN transcripts t ON t.transcript_id = e.transcript_id
     WHERE t.conversation_id != ? AND e.role = 'toolResult' AND json_extract(e.payload_json, '$.isError') = 1`).get(personal.conversation_id) as { count: number }).count;
   report.workerToolErrors = workerToolErrors;
-  assert.equal(workerToolErrors, 0, 'Stable specialist execution must not recover from tool errors');
+  if (!researchLive) assert.equal(workerToolErrors, 0, 'Stable specialist execution must not recover from tool errors');
+  const callCommands = new Map<string, string>();
+  for (const row of db.prepare("SELECT payload_json FROM transcript_entries WHERE role = 'assistant'").all()) {
+    for (const part of JSON.parse((row as { payload_json: string }).payload_json).content ?? []) {
+      if (part.type === 'toolCall' && part.name === 'exec_command') callCommands.set(part.id, part.arguments?.command ?? part.arguments?.cmd ?? '');
+    }
+  }
   const scriptExecutions = db.prepare(`SELECT e.payload_json FROM transcript_entries e WHERE e.role = 'toolResult'
     AND json_extract(e.payload_json, '$.toolName') = 'exec_command' AND json_extract(e.payload_json, '$.details.status') = 'success'`).all()
-    .map(row => JSON.parse((row as { payload_json: string }).payload_json) as { details?: { command?: string } })
-    .filter(result => /\bnode\s+(?:['"]?\.\/)?reproduce\.mjs/.test(result.details?.command ?? ''));
+    .map(row => JSON.parse((row as { payload_json: string }).payload_json) as { toolCallId: string; details?: { command?: string } })
+    .filter(result => /\bnode\s+(?:['"]?[^\s'"`]*[/\\])?reproduce\.mjs/.test(result.details?.command ?? callCommands.get(result.toolCallId) ?? ''));
   assert.ok(scriptExecutions.length > 0, 'The reproducible script must be executed successfully through the worker command tool');
   report.successfulScriptExecutions = scriptExecutions.length;
   assert.equal((db.prepare('SELECT COUNT(*) AS count FROM tasks').get() as { count: number }).count, 1, 'Submission must create exactly one Task');
@@ -260,7 +344,7 @@ try {
   assert.ok(!toolCalls.some(call => ['get', 'list', 'match', 'agents'].includes(call.command ?? '')), 'The main Agent must not poll or perform executor discovery');
   assert.ok(timings.submitToolMs <= 250, 'Submit persistence exceeded the 250ms smoke budget');
   assert.ok(timings.taskPersisted - timings.requestSent <= 20_000, 'Main Task briefing exceeded the 20s smoke budget');
-  assert.ok(timings.assigned - timings.taskPersisted <= 15_000, 'Allocation exceeded the 15s smoke budget');
+  assert.ok(timings.assigned - timings.taskPersisted <= (researchLive ? 45_000 : 15_000), 'Allocation exceeded the smoke budget');
   assert.ok(timings.personalInitialCompleted - timings.submitToolReturned <= 5_000, 'Main submission acknowledgement exceeded the 5s smoke budget');
   assert.ok(timings.pingCompleted - timings.pingSent <= 5_000, 'Main conversation response exceeded the 5s smoke budget');
   report = { ...report, allocation, history, resultReply: delivery.reply_text, reportContent: analysis,
@@ -282,7 +366,24 @@ try {
   const usage = db.prepare(`SELECT operation,provider,model,status,started_at,finished_at,duration_ms,input_tokens,output_tokens,cache_read_tokens,cache_write_tokens,reasoning_tokens,error_summary
     FROM ai_usage_events ORDER BY started_at`).all();
   const inputs = db.prepare('SELECT client_message_id,status,created_at_ms,updated_at_ms,error FROM session_inputs ORDER BY created_at_ms').all();
+  const contract = taskId ? db.prepare('SELECT acceptance_criteria_json FROM task_contracts WHERE task_id = ? ORDER BY version DESC LIMIT 1').get(taskId) as { acceptance_criteria_json: string } : undefined;
+  const logDirectory = join(directory, 'logs');
+  const fallbackEvents = existsSync(logDirectory) ? readdirSync(logDirectory).filter(name => /^app-.*\.log$/.test(name))
+    .flatMap(name => readFileSync(join(logDirectory, name), 'utf8').split('\n')).flatMap(line => {
+      try { const event = JSON.parse(line); return event.module === 'PersonalReplyComposer'
+        && event.msg === 'Reply composition failed; delivering the recorded result'
+        ? [{ reason: event.err?.message, conversationId: event.conversationId, taskRunId: event.taskRunId }] : []; }
+      catch { return []; }
+    }) : [];
   report = { ...report, success: !failure, failure, marker, task,
+    acceptanceCriteria: contract ? JSON.parse(contract.acceptance_criteria_json) : undefined,
+    compositionFallbackEvents: fallbackEvents,
+    benchmark: { suite: researchLive ? 'personal-delivery-live-research' : 'personal-delivery-live-sales', version: researchLive ? 2 : 1, mode: 'real-model-isolated-gateway',
+      sourceCommit: execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(),
+      nodeVersion: process.version, fixtureSha256: createHash('sha256').update(fixtureContent + (researchLive ? priceFixture : '')).digest('hex'),
+      sourceHashes: initialSourceHashes,
+      sourceChangedDuringRun: JSON.stringify(initialSourceHashes) !== JSON.stringify(sourceFingerprint()),
+      limitation: 'Single synthetic workflow; conciseReplyProxy is a length proxy, not a semantic or naturalness grade.' },
     models: { personal: selection.model_override, global: JSON.parse(settings.defaults_json).models.chat.primary },
     timeline, rawTimings: timings, toolCalls, usage, inputs, isolatedStateDirectory: directory };
   mkdirSync(join(reportPath, '..'), { recursive: true });

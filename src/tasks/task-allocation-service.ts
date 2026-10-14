@@ -18,6 +18,8 @@ import { TaskRepository } from './task-repository.js';
 import { TaskRunRepository } from './task-run-repository.js';
 import { TaskCollaborationRepository } from './task-collaboration-repository.js';
 import { resolveTaskLocale } from './task-language.js';
+import { defineTaskContract } from './task-contract-definition.js';
+import { ModelTaskContractPlanner, type TaskContractPlanner } from './task-contract-planner.js';
 
 const log = createLogger('TaskAllocation');
 const DecisionSchema = z.discriminatedUnion('kind', [
@@ -68,6 +70,7 @@ export class TaskAllocationDispatcher {
   constructor(private readonly deps: {
     context: (conversationId: string) => MatchingContext;
     decide?: (input: AllocationDecisionInput) => Promise<AllocationDecision>;
+    planner?: TaskContractPlanner;
     wake: () => void;
   }) {}
 
@@ -97,7 +100,7 @@ export class TaskAllocationDispatcher {
       const row = this.#allocations.claim();
       if (!row) return;
       const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(new Error('Task allocation timed out')), 20_000);
+      const timer = setTimeout(() => controller.abort(new Error('Task allocation timed out')), 40_000);
       this.#controllers.add(controller);
       try {
         await this.allocate(row, controller.signal);
@@ -112,7 +115,7 @@ export class TaskAllocationDispatcher {
 
   private async allocate(row: AllocationRow, signal: AbortSignal): Promise<void> {
     const tasks = new TaskRepository();
-    const task = tasks.require(row.task_id);
+    let task = tasks.require(row.task_id);
     const zh = resolveTaskLocale(task) === 'zh';
     if (task.version !== row.task_version) {
       runSqliteWriteTransaction(db => {
@@ -121,6 +124,31 @@ export class TaskAllocationDispatcher {
       return;
     }
     const requirements = normalizeSpecialistRequirements(JSON.parse(row.requirements_json));
+    const fallback = defineTaskContract(task.contract?.objective ?? task.title, task.locale);
+    if (task.contract && JSON.stringify(task.contract.acceptanceCriteria) === JSON.stringify(fallback.acceptanceCriteria)
+      && (this.deps.planner || !this.deps.decide) && !requirements.connector) {
+      // Expand the built-in fallback off the foreground path. Preserve all authority and explicit constraints.
+      const planned = await (this.deps.planner ?? new ModelTaskContractPlanner()).plan({
+        objective: task.contract.objective, taskContext: task.body, locale: task.locale, signal });
+      if (signal.aborted || this.#stopped) throw new Error('Task contract planning interrupted');
+      if (JSON.stringify(planned.acceptanceCriteria) !== JSON.stringify(fallback.acceptanceCriteria)) {
+        const updated = runSqliteWriteTransaction(db => {
+          if (!this.#allocations.owns(row) || tasks.require(task.id).version !== task.version) return undefined;
+          const result = new TaskApplicationService().execute({ taskId: task.id, expectedVersion: task.version,
+            idempotencyKey: `allocation:${row.id}:criteria`, actor: { kind: 'system', id: 'task-router' },
+            command: { type: 'revise_contract', contract: { ...task.contract!, acceptanceCriteria: planned.acceptanceCriteria,
+              constraints: [...new Set([...task.contract!.constraints, ...planned.constraints])],
+              expectedOutputs: JSON.stringify(task.contract!.expectedOutputs) === JSON.stringify(fallback.expectedOutputs)
+                ? planned.expectedOutputs : task.contract!.expectedOutputs } } });
+          if (!result.ok) return undefined;
+          db.prepare('UPDATE task_allocations SET task_version = ? WHERE id = ?').run(result.model.task.version, row.id);
+          return result.model.task;
+        });
+        if (!updated) return;
+        task = updated;
+        row.task_version = task.version;
+      }
+    }
     if ((task.body?.length ?? 0) > 12_000) requirements.requiredTools = [...new Set([...(requirements.requiredTools ?? []), 'xopc_use'])].sort();
     const context = this.deps.context(row.origin_conversation_id);
     const permittedExecutors = () => {

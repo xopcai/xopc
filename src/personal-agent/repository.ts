@@ -26,7 +26,7 @@ export interface PersonalAgentRecord {
 }
 
 export const DEFAULT_PERSONAL_PREFERENCES = {
-  warmth: 'balanced', humor: 'occasional', supportMode: 'untangle', detailLevel: 'balanced', proactivity: 'decisions',
+  warmth: 'balanced', humor: 'occasional', supportMode: 'untangle', detailLevel: 'brief', proactivity: 'decisions',
 } as const;
 
 export function personalAgentId(ownerId: string): string {

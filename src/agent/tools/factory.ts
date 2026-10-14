@@ -81,6 +81,7 @@ import {
 import { createSessionSearchTool } from './session-search-tool.js';
 import { createPersonalReadTool } from './personal-read-tool.js';
 import { createPersonalTaskTool, type PersonalTaskToolDeps } from './personal-task-tool.js';
+import { createTaskResultTool } from './task-result-tool.js';
 import { createTaskCollaborationTool } from './task-collaboration-tool.js';
 import { createPersonalRequestTools } from './personal-request-tool.js';
 import { createPersonalRequestConnectionTool, createPersonalRequestResultTool } from './personal-request-result-tool.js';
@@ -569,6 +570,7 @@ export class AgentToolsFactory {
         : []),
       createSendMediaTool(workspace, bus, deliveryContext),
       createPublishArtifactsTool(workspace),
+      createTaskResultTool(currentConversationId),
       createReadMediaTool(personalToolsConfigured ? { textOnly: true, maxChars: LOCAL_READ_MAX_CHARS, maxReadBytes: 12000 } : undefined),
       ...(isShareToolAvailable(cfg)
         ? [

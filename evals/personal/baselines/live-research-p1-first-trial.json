@@ -1,0 +1,650 @@
+{
+  "downloads": [
+    {
+      "title": "reproduce.mjs",
+      "sha256": "16da6dd1122ac723d51f25c3387b1d9d6d5b0113fd3f360ff181de8c388da6f5",
+      "sizeBytes": 5683
+    },
+    {
+      "title": "monthly_summary.csv",
+      "sha256": "5c89b4f2b333dd348d5f16af9523d7ff90a1f005012fcef938691afb235c83a1",
+      "sizeBytes": 70
+    },
+    {
+      "title": "report.md",
+      "sha256": "8517292a906b598d03c76a7bd0574c1b7e278ed7361e7aab3fbad590477599f3",
+      "sizeBytes": 2405
+    }
+  ],
+  "replyCharacters": 325,
+  "conciseReplyProxy": true,
+  "success": false,
+  "failure": "Claims must be supported by their sources",
+  "marker": "LIVE-ALLOCATION-e5a6a513",
+  "task": {
+    "task_id": "3294db87-9756-4336-a82e-a6e5fcd8d1fb",
+    "title": "分析 sales.csv 月度销售额与环比并产出报告",
+    "phase": "review",
+    "delegate_agent_id": "data-analyst"
+  },
+  "compositionFallbackEvents": [],
+  "benchmark": {
+    "suite": "personal-delivery-live-research",
+    "version": 1,
+    "mode": "real-model-isolated-gateway",
+    "sourceCommit": "cb13eb3109ba22d0e5670b0774af2b8371221ff7",
+    "nodeVersion": "v24.16.0",
+    "fixtureSha256": "c72c67b5f89299d7be1bda0cfd683edf96be4a694ca2d83a4a571da65d237b1e",
+    "sourceHashes": {
+      "src/agent/tools/personal-task-tool.ts": "85fe2a8b000fbc7786c0b49dc03fefbff75938e04e79e25f2ec8a2785455955b",
+      "src/personal-agent/prompts.ts": "7a9efc655cb430995614b82563e5fa38252084e424bb6919479e171ecc84f43b",
+      "src/personal-agent/reply-style.ts": "e8b056e05a702df8243cd313c5df44f14e1dcf5a52cde5864328cd93b7bead16",
+      "src/personal-agent/reply-composer.ts": "2a58a66c0695a84d76f4ec087aa12ae3d40ee0c37346f591f1df82b24d6df398",
+      "src/personal-agent/result-file-links.ts": "998b7c7d8b3015d905e7d961e17cd64b95428a91ffbf98c82d1d07b8ba6ab838",
+      "src/tasks/task-result-delivery-repository.ts": "6a67e710d70384a8109cfb09f7f817ba9e051100f6f350902f98051455be31d9",
+      "src/tasks/task-result-delivery-service.ts": "13b509b2c0eb7b6a84b915d08b70046ada859d294c006a986acb616746ace039",
+      "src/tasks/task-allocation-service.ts": "e3cfc00a9230fa531ae516d6f9cd3d00b11696ce33c98be926ad9b3afea50271",
+      "src/tasks/task-research-result.ts": "938a10277475c70a5e8dbf954547cbd785500a5d7affd82a4f1ac4fe0a81853e",
+      "src/tasks/task-run-coordinator.ts": "40990f7d34a10996450d2f7c6bad3c91968102a4066d5c77c7929bf8024d7051",
+      "src/tasks/task-contract-planner.ts": "55ba5d301c0699cde704e43ac9d51283a85c97600baf5e906b31deb1dfa9de67",
+      "src/agent/tools/task-result-tool.ts": "b452394786aa1262fc035b954296c4b1f7b010edcf2db49c3ce965b5a2d337ad",
+      "src/agent/tools/factory.ts": "0f7fe15b205760caf7719e921a838626fe6c958738e1f3d16d5d2fd31fa2f68b",
+      "packages/gateway-contract/src/task-research-result.ts": "b2dc4bb2f2e516b496a339cb94ee9fc812190ea3ad65a60752676e46f184d01e",
+      "scripts/personal-allocation-live-smoke.mts": "fce5fc306714a061b656c56a67c2021a59c455ff3f2971dcd8ab3d4e74463f3a",
+      "pnpm-lock.yaml": "c9ba3f707270e8af6a7c6bdd3e4ed79aa16a3440c3d1df8602732bb6a8c5a0e5"
+    },
+    "sourceChangedDuringRun": true,
+    "limitation": "Single synthetic workflow; conciseReplyProxy is a length proxy, not a semantic or naturalness grade."
+  },
+  "models": {
+    "personal": "deepseek/deepseek-flash",
+    "global": "xopc-cloud/openai-codex/gpt-5.5"
+  },
+  "timeline": [
+    {
+      "stage": "requestSent",
+      "timestamp": "2026-10-14T10:54:10.646Z",
+      "elapsedMs": 0
+    },
+    {
+      "stage": "requestAccepted",
+      "timestamp": "2026-10-14T10:54:10.662Z",
+      "elapsedMs": 16
+    },
+    {
+      "stage": "submitToolStarted",
+      "timestamp": "2026-10-14T10:54:17.675Z",
+      "elapsedMs": 7029
+    },
+    {
+      "stage": "taskPersisted",
+      "timestamp": "2026-10-14T10:54:17.684Z",
+      "elapsedMs": 7038
+    },
+    {
+      "stage": "submitToolReturned",
+      "timestamp": "2026-10-14T10:54:17.691Z",
+      "elapsedMs": 7045
+    },
+    {
+      "stage": "allocationObserved",
+      "timestamp": "2026-10-14T10:54:17.772Z",
+      "elapsedMs": 7126
+    },
+    {
+      "stage": "personalInitialCompleted",
+      "timestamp": "2026-10-14T10:54:19.150Z",
+      "elapsedMs": 8504
+    },
+    {
+      "stage": "assigned",
+      "timestamp": "2026-10-14T10:54:34.235Z",
+      "elapsedMs": 23589
+    },
+    {
+      "stage": "runQueued",
+      "timestamp": "2026-10-14T10:54:34.232Z",
+      "elapsedMs": 23586
+    },
+    {
+      "stage": "runStarted",
+      "timestamp": "2026-10-14T10:54:34.248Z",
+      "elapsedMs": 23602
+    },
+    {
+      "stage": "pingSent",
+      "timestamp": "2026-10-14T10:54:34.317Z",
+      "elapsedMs": 23671
+    },
+    {
+      "stage": "pingAccepted",
+      "timestamp": "2026-10-14T10:54:34.348Z",
+      "elapsedMs": 23702
+    },
+    {
+      "stage": "pingCompleted",
+      "timestamp": "2026-10-14T10:54:35.867Z",
+      "elapsedMs": 25221
+    },
+    {
+      "stage": "runCompleted",
+      "timestamp": "2026-10-14T10:57:15.470Z",
+      "elapsedMs": 184824
+    },
+    {
+      "stage": "resultPersisted",
+      "timestamp": "2026-10-14T10:57:15.496Z",
+      "elapsedMs": 184850
+    },
+    {
+      "stage": "personalResultDelivered",
+      "timestamp": "2026-10-14T10:57:17.046Z",
+      "elapsedMs": 186400
+    }
+  ],
+  "rawTimings": {
+    "gatewayStartupMs": 895.4601249999996,
+    "requestSent": 1791975250646,
+    "requestAccepted": 1791975250662,
+    "submitToolStarted": 1791975257675,
+    "submitHostMs": 1.8273330000010901,
+    "taskPersisted": 1791975257684,
+    "submitToolMs": 15.750124999998661,
+    "submitToolReturned": 1791975257691,
+    "allocationObserved": 1791975257772,
+    "personalInitialCompleted": 1791975259150,
+    "assigned": 1791975274235,
+    "runQueued": 1791975274232,
+    "runStarted": 1791975274248,
+    "pingSent": 1791975274317,
+    "pingAccepted": 1791975274348,
+    "pingCompleted": 1791975275867,
+    "runCompleted": 1791975435470,
+    "resultPersisted": 1791975435496,
+    "personalResultDelivered": 1791975437046
+  },
+  "toolCalls": [
+    {
+      "name": "personal_task",
+      "command": "submit",
+      "durationMs": 15.748458999998547,
+      "failed": false
+    }
+  ],
+  "usage": [
+    {
+      "operation": "agent.answer",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "started_at": 1791975251043,
+      "finished_at": 1791975257643,
+      "duration_ms": 6600,
+      "input_tokens": 7057,
+      "output_tokens": 887,
+      "cache_read_tokens": 6272,
+      "cache_write_tokens": 0,
+      "reasoning_tokens": 0,
+      "error_summary": null
+    },
+    {
+      "operation": "task.plan_contract",
+      "provider": "xopc-cloud",
+      "model": "openai-codex/gpt-5.5",
+      "status": "succeeded",
+      "started_at": 1791975257694,
+      "finished_at": 1791975271969,
+      "duration_ms": 14275,
+      "input_tokens": 1050,
+      "output_tokens": 1222,
+      "cache_read_tokens": 0,
+      "cache_write_tokens": 0,
+      "reasoning_tokens": 0,
+      "error_summary": null
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "started_at": 1791975257710,
+      "finished_at": 1791975259089,
+      "duration_ms": 1379,
+      "input_tokens": 549,
+      "output_tokens": 90,
+      "cache_read_tokens": 14208,
+      "cache_write_tokens": 0,
+      "reasoning_tokens": 0,
+      "error_summary": null
+    },
+    {
+      "operation": "task.allocation",
+      "provider": "xopc-cloud",
+      "model": "openai-codex/gpt-5.5",
+      "status": "succeeded",
+      "started_at": 1791975271986,
+      "finished_at": 1791975274221,
+      "duration_ms": 2235,
+      "input_tokens": 3882,
+      "output_tokens": 53,
+      "cache_read_tokens": 0,
+      "cache_write_tokens": 0,
+      "reasoning_tokens": 0,
+      "error_summary": null
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "xopc-cloud",
+      "model": "openai-codex/gpt-5.5",
+      "status": "succeeded",
+      "started_at": 1791975274402,
+      "finished_at": 1791975278778,
+      "duration_ms": 4376,
+      "input_tokens": 17123,
+      "output_tokens": 103,
+      "cache_read_tokens": 0,
+      "cache_write_tokens": 0,
+      "reasoning_tokens": 0,
+      "error_summary": null
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "started_at": 1791975274627,
+      "finished_at": 1791975275813,
+      "duration_ms": 1186,
+      "input_tokens": 7467,
+      "output_tokens": 15,
+      "cache_read_tokens": 7808,
+      "cache_write_tokens": 0,
+      "reasoning_tokens": 0,
+      "error_summary": null
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "openai-codex/gpt-5.5",
+      "status": "succeeded",
+      "started_at": 1791975278838,
+      "finished_at": 1791975282908,
+      "duration_ms": 4070,
+      "input_tokens": 3541,
+      "output_tokens": 237,
+      "cache_read_tokens": 0,
+      "cache_write_tokens": 0,
+      "reasoning_tokens": 0,
+      "error_summary": null
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "openai-codex/gpt-5.5",
+      "status": "succeeded",
+      "started_at": 1791975282961,
+      "finished_at": 1791975285920,
+      "duration_ms": 2959,
+      "input_tokens": 20198,
+      "output_tokens": 107,
+      "cache_read_tokens": 0,
+      "cache_write_tokens": 0,
+      "reasoning_tokens": 0,
+      "error_summary": null
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "openai-codex/gpt-5.5",
+      "status": "succeeded",
+      "started_at": 1791975285977,
+      "finished_at": 1791975289358,
+      "duration_ms": 3381,
+      "input_tokens": 25908,
+      "output_tokens": 159,
+      "cache_read_tokens": 0,
+      "cache_write_tokens": 0,
+      "reasoning_tokens": 0,
+      "error_summary": null
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "openai-codex/gpt-5.5",
+      "status": "succeeded",
+      "started_at": 1791975289386,
+      "finished_at": 1791975291722,
+      "duration_ms": 2336,
+      "input_tokens": 1034,
+      "output_tokens": 76,
+      "cache_read_tokens": 0,
+      "cache_write_tokens": 0,
+      "reasoning_tokens": 0,
+      "error_summary": null
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "openai-codex/gpt-5.5",
+      "status": "succeeded",
+      "started_at": 1791975291764,
+      "finished_at": 1791975294932,
+      "duration_ms": 3168,
+      "input_tokens": 20726,
+      "output_tokens": 123,
+      "cache_read_tokens": 0,
+      "cache_write_tokens": 0,
+      "reasoning_tokens": 0,
+      "error_summary": null
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "openai-codex/gpt-5.5",
+      "status": "succeeded",
+      "started_at": 1791975294958,
+      "finished_at": 1791975310621,
+      "duration_ms": 15663,
+      "input_tokens": 1482,
+      "output_tokens": 1832,
+      "cache_read_tokens": 0,
+      "cache_write_tokens": 0,
+      "reasoning_tokens": 0,
+      "error_summary": null
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "openai-codex/gpt-5.5",
+      "status": "succeeded",
+      "started_at": 1791975310693,
+      "finished_at": 1791975313896,
+      "duration_ms": 3203,
+      "input_tokens": 3557,
+      "output_tokens": 120,
+      "cache_read_tokens": 0,
+      "cache_write_tokens": 0,
+      "reasoning_tokens": 0,
+      "error_summary": null
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "openai-codex/gpt-5.5",
+      "status": "succeeded",
+      "started_at": 1791975313920,
+      "finished_at": 1791975316550,
+      "duration_ms": 2630,
+      "input_tokens": 2739,
+      "output_tokens": 94,
+      "cache_read_tokens": 0,
+      "cache_write_tokens": 0,
+      "reasoning_tokens": 0,
+      "error_summary": null
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "openai-codex/gpt-5.5",
+      "status": "succeeded",
+      "started_at": 1791975316691,
+      "finished_at": 1791975322002,
+      "duration_ms": 5311,
+      "input_tokens": 4851,
+      "output_tokens": 299,
+      "cache_read_tokens": 0,
+      "cache_write_tokens": 0,
+      "reasoning_tokens": 0,
+      "error_summary": null
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "openai-codex/gpt-5.5",
+      "status": "succeeded",
+      "started_at": 1791975322027,
+      "finished_at": 1791975326337,
+      "duration_ms": 4310,
+      "input_tokens": 4035,
+      "output_tokens": 226,
+      "cache_read_tokens": 0,
+      "cache_write_tokens": 0,
+      "reasoning_tokens": 0,
+      "error_summary": null
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "openai-codex/gpt-5.5",
+      "status": "succeeded",
+      "started_at": 1791975326398,
+      "finished_at": 1791975336114,
+      "duration_ms": 9716,
+      "input_tokens": 25064,
+      "output_tokens": 1096,
+      "cache_read_tokens": 0,
+      "cache_write_tokens": 0,
+      "reasoning_tokens": 0,
+      "error_summary": null
+    },
+    {
+      "operation": "task.research_review",
+      "provider": "xopc-cloud",
+      "model": "openai-codex/gpt-5.5",
+      "status": "succeeded",
+      "started_at": 1791975336155,
+      "finished_at": 1791975346871,
+      "duration_ms": 10716,
+      "input_tokens": 4825,
+      "output_tokens": 1185,
+      "cache_read_tokens": 0,
+      "cache_write_tokens": 0,
+      "reasoning_tokens": 0,
+      "error_summary": null
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "openai-codex/gpt-5.5",
+      "status": "succeeded",
+      "started_at": 1791975346911,
+      "finished_at": 1791975350788,
+      "duration_ms": 3877,
+      "input_tokens": 5617,
+      "output_tokens": 182,
+      "cache_read_tokens": 0,
+      "cache_write_tokens": 0,
+      "reasoning_tokens": 0,
+      "error_summary": null
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "openai-codex/gpt-5.5",
+      "status": "succeeded",
+      "started_at": 1791975350830,
+      "finished_at": 1791975362741,
+      "duration_ms": 11911,
+      "input_tokens": 8126,
+      "output_tokens": 1599,
+      "cache_read_tokens": 0,
+      "cache_write_tokens": 0,
+      "reasoning_tokens": 0,
+      "error_summary": null
+    },
+    {
+      "operation": "task.research_review",
+      "provider": "xopc-cloud",
+      "model": "openai-codex/gpt-5.5",
+      "status": "succeeded",
+      "started_at": 1791975362779,
+      "finished_at": 1791975377213,
+      "duration_ms": 14434,
+      "input_tokens": 5538,
+      "output_tokens": 1351,
+      "cache_read_tokens": 0,
+      "cache_write_tokens": 0,
+      "reasoning_tokens": 0,
+      "error_summary": null
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "openai-codex/gpt-5.5",
+      "status": "succeeded",
+      "started_at": 1791975377253,
+      "finished_at": 1791975381867,
+      "duration_ms": 4614,
+      "input_tokens": 10649,
+      "output_tokens": 153,
+      "cache_read_tokens": 0,
+      "cache_write_tokens": 0,
+      "reasoning_tokens": 0,
+      "error_summary": null
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "openai-codex/gpt-5.5",
+      "status": "succeeded",
+      "started_at": 1791975381923,
+      "finished_at": 1791975394997,
+      "duration_ms": 13074,
+      "input_tokens": 10705,
+      "output_tokens": 1701,
+      "cache_read_tokens": 0,
+      "cache_write_tokens": 0,
+      "reasoning_tokens": 0,
+      "error_summary": null
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "openai-codex/gpt-5.5",
+      "status": "succeeded",
+      "started_at": 1791975395052,
+      "finished_at": 1791975408213,
+      "duration_ms": 13161,
+      "input_tokens": 6305,
+      "output_tokens": 1624,
+      "cache_read_tokens": 0,
+      "cache_write_tokens": 0,
+      "reasoning_tokens": 0,
+      "error_summary": null
+    },
+    {
+      "operation": "task.research_review",
+      "provider": "xopc-cloud",
+      "model": "openai-codex/gpt-5.5",
+      "status": "succeeded",
+      "started_at": 1791975408239,
+      "finished_at": 1791975419024,
+      "duration_ms": 10785,
+      "input_tokens": 6505,
+      "output_tokens": 1125,
+      "cache_read_tokens": 0,
+      "cache_write_tokens": 0,
+      "reasoning_tokens": 0,
+      "error_summary": null
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "openai-codex/gpt-5.5",
+      "status": "succeeded",
+      "started_at": 1791975419056,
+      "finished_at": 1791975424659,
+      "duration_ms": 5603,
+      "input_tokens": 3679,
+      "output_tokens": 246,
+      "cache_read_tokens": 0,
+      "cache_write_tokens": 0,
+      "reasoning_tokens": 0,
+      "error_summary": null
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "openai-codex/gpt-5.5",
+      "status": "succeeded",
+      "started_at": 1791975424687,
+      "finished_at": 1791975430096,
+      "duration_ms": 5409,
+      "input_tokens": 12103,
+      "output_tokens": 342,
+      "cache_read_tokens": 0,
+      "cache_write_tokens": 0,
+      "reasoning_tokens": 0,
+      "error_summary": null
+    },
+    {
+      "operation": "session.generate_title",
+      "provider": "xopc-cloud",
+      "model": "openai-codex/gpt-5.5",
+      "status": "succeeded",
+      "started_at": 1791975430154,
+      "finished_at": 1791975431996,
+      "duration_ms": 1842,
+      "input_tokens": 979,
+      "output_tokens": 13,
+      "cache_read_tokens": 0,
+      "cache_write_tokens": 0,
+      "reasoning_tokens": 0,
+      "error_summary": null
+    },
+    {
+      "operation": "task.judge_result",
+      "provider": "xopc-cloud",
+      "model": "openai-codex/gpt-5.5",
+      "status": "succeeded",
+      "started_at": 1791975430156,
+      "finished_at": 1791975435467,
+      "duration_ms": 5311,
+      "input_tokens": 10237,
+      "output_tokens": 278,
+      "cache_read_tokens": 0,
+      "cache_write_tokens": 0,
+      "reasoning_tokens": 0,
+      "error_summary": null
+    },
+    {
+      "operation": "personal.reply_composition",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "started_at": 1791975435507,
+      "finished_at": 1791975437011,
+      "duration_ms": 1504,
+      "input_tokens": 11411,
+      "output_tokens": 177,
+      "cache_read_tokens": 0,
+      "cache_write_tokens": 0,
+      "reasoning_tokens": 0,
+      "error_summary": null
+    }
+  ],
+  "inputs": [
+    {
+      "client_message_id": "LIVE-ALLOCATION-e5a6a513-task",
+      "status": "completed",
+      "created_at_ms": 1791975250657,
+      "updated_at_ms": 1791975259150,
+      "error": null
+    },
+    {
+      "client_message_id": "task:14aed38b-d015-4fdc-b2fe-e3de2500534b",
+      "status": "completed",
+      "created_at_ms": 1791975274244,
+      "updated_at_ms": 1791975435493,
+      "error": null
+    },
+    {
+      "client_message_id": "LIVE-ALLOCATION-e5a6a513-ping",
+      "status": "completed",
+      "created_at_ms": 1791975274344,
+      "updated_at_ms": 1791975275867,
+      "error": null
+    }
+  ],
+  "isolatedStateDirectory": "/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-personal-allocation-live-3AohhR"
+}

@@ -1,0 +1,88 @@
+{
+  "schemaVersion": 1,
+  "suite": "personal-delivery-p0",
+  "suiteVersion": 1,
+  "mode": "deterministic",
+  "label": "candidate",
+  "createdAt": "2026-10-14T10:20:08.622Z",
+  "manifest": {
+    "commit": "cb13eb3109ba22d0e5670b0774af2b8371221ff7",
+    "nodeVersion": "v24.16.0",
+    "workingTreeDirty": true,
+    "hashes": {
+      "src/tasks/__tests__/personal-delivery-benchmark.test.ts": "996dcbad1a042722e48d1247ebdbe75f69f7f42aa4080fd28da19db6570a0004",
+      "pnpm-lock.yaml": "c9ba3f707270e8af6a7c6bdd3e4ed79aa16a3440c3d1df8602732bb6a8c5a0e5",
+      "src/agent/tools/personal-task-tool.ts": "85fe2a8b000fbc7786c0b49dc03fefbff75938e04e79e25f2ec8a2785455955b",
+      "src/tasks/task-result-delivery-repository.ts": "1c50781e4b0061838ac40b0f0bf02e2fbb442c0b4819822472a7635b75f765b0",
+      "src/tasks/task-result-delivery-service.ts": "13b509b2c0eb7b6a84b915d08b70046ada859d294c006a986acb616746ace039",
+      "src/personal-agent/reply-composer.ts": "4263460721e521af1732f3740f80bcf9211f86fd34ad8d10a234d2e72c123565",
+      "src/personal-agent/reply-style.ts": "e8b056e05a702df8243cd313c5df44f14e1dcf5a52cde5864328cd93b7bead16",
+      "src/personal-agent/prompts.ts": "7a9efc655cb430995614b82563e5fa38252084e424bb6919479e171ecc84f43b",
+      "src/personal-agent/repository.ts": "c1b1dce53125a3f4ba627455a0f1b1a086baa5c2f53a663b87db4cf52d6a0555",
+      "src/agent/prompt/sections/messaging-runtime.ts": "e419ae94e56a47f78bf2e45af23f0539f98de2aa948c30e8d6009986774d9fe3",
+      "src/personal-agent/result-file-links.ts": "998b7c7d8b3015d905e7d961e17cd64b95428a91ffbf98c82d1d07b8ba6ab838"
+    },
+    "models": "No model calls; scripted component fixtures. H03 checks policy, not naturalness."
+  },
+  "total": 8,
+  "passed": 8,
+  "durationMs": 4431,
+  "cases": [
+    {
+      "id": "D04-defaults",
+      "name": "D04-defaults: omitted fields retain an inspectable contract on submit",
+      "status": "passed",
+      "durationMs": 598.9392499999999,
+      "failures": []
+    },
+    {
+      "id": "D04-explicit",
+      "name": "D04-explicit: explicit acceptance criteria survive submission",
+      "status": "passed",
+      "durationMs": 34.01291600000013,
+      "failures": []
+    },
+    {
+      "id": "B01-partial",
+      "name": "B01-partial: partial research stays partial after delivery and composition",
+      "status": "passed",
+      "durationMs": 22.511833000000024,
+      "failures": []
+    },
+    {
+      "id": "B01-failed",
+      "name": "B01-failed: a failed outcome cannot become success from run completion",
+      "status": "passed",
+      "durationMs": 15.856832999999824,
+      "failures": []
+    },
+    {
+      "id": "S02-reference",
+      "name": "S02-reference: rejects an invented host download link",
+      "status": "passed",
+      "durationMs": 10.631542000000081,
+      "failures": []
+    },
+    {
+      "id": "S02-fallback",
+      "name": "S02-fallback: worker paths do not reappear in fallback or claim full delivery",
+      "status": "passed",
+      "durationMs": 16.983250000000226,
+      "failures": []
+    },
+    {
+      "id": "F02-download",
+      "name": "F02-download: a published report is readable only through its authenticated original chat",
+      "status": "passed",
+      "durationMs": 105.66625000000022,
+      "failures": []
+    },
+    {
+      "id": "H03-policy",
+      "name": "H03-policy: concise default and artifact fallback preserve explicit detail requests",
+      "status": "passed",
+      "durationMs": 23.83612499999981,
+      "failures": []
+    }
+  ]
+}

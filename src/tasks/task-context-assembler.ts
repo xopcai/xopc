@@ -136,6 +136,8 @@ export function buildTaskExecutionDirective(conversationId: string): string {
     task.body?.trim() ? `Task details: ${task.body.trim().slice(0, 12_000)}` : '',
     `Expected outputs: ${contract.expectedOutputs.join('; ')}`,
     `Remaining acceptance criteria: ${remainingCriteria.join('; ')}`,
+    `Acceptance criterion indices: ${JSON.stringify(contract.acceptanceCriteria.map((criterion, criterionIndex) => ({ criterionIndex, criterion })))}`,
+    'For research or evidence-based conclusions, use publish_task_result before finishing when that tool is available. Cite exact excerpts from successful reads in this TaskRun, link each claim to source ids, and distinguish facts, inferences and recommendations. Publish required files first. Read its per-criterion review; correct unsupported claims or explicitly disclose unmet/unverified criteria. Never replace missing evidence with a self-declared pass. A source quote match proves provenance, not factual truth. Keep the final reply concise; full evidence belongs in the result and report.',
     contract.constraints.length ? `Constraints: ${contract.constraints.join('; ')}` : '',
     contract.assumptions.length ? `Assumptions: ${contract.assumptions.join('; ')}` : '',
     contract.risks.length ? `Risks: ${contract.risks.join('; ')}` : '',

@@ -78,6 +78,7 @@ const EXPLICIT_DELEGATION_RULE = 'When the user names a specialist Agent, preser
 const PREVIOUS_FOREGROUND_CONNECTED_APP_RULE = 'For read-only connected-app requests such as Gmail, first call personal_capability with the app or capability. Choose by executorProfiles within the permitted executorAgentIds, then use personal_request(command="submit") with a short selectionReason and the exact connectorId and specialist agentId returned, the full objective, and any absolute time range. This keeps connection and account selection in the main chat and automatically starts the worker after authorization. Return promptly after the tool confirms submission. Never claim mail was read before verified results arrive. If no executor is available, explain that specific blocker. Use personal_request to inspect or cancel these requests; cancellation requires the user’s instruction.';
 const PREVIOUS_ROUTED_CONNECTED_APP_RULE = 'For read-only connected-app work, call personal_capability to identify the supported connector and account state, then personal_request(command="submit") with connectorId, the full objective and any absolute time range. Do not choose an executor: the background Task Router assigns one within the selected account permissions after authorization. Connection and account selection stay in this chat. Return after confirmed submission without polling. Never claim remote data was read before verified results arrive. Inspect or cancel only on user request.';
 const CONNECTED_APP_RULE = PREVIOUS_ROUTED_CONNECTED_APP_RULE + ' Preserve all exact requirements and staged instructions in the complete description, not just a short objective or a reference to an unspecified process. Coordinate this same Request with personal_request get/collaboration/entry/answer/instruct; its Task uses the ordinary collaboration board. Answer worker questions from existing context first, then forward the user’s missing answer to the exact questionId. Forward supplemental requirements without creating another Request or Task. Reconnection must use the existing account authorization UI: a text answer does not authorize account changes, wider access or writes.';
+const READ_AUTONOMY_RULE = 'A request to read or summarize connected-app data authorizes the necessary reads within existing account permissions. When tools and an unambiguous authorized account are available, execute or submit the request immediately; do not ask whether to proceed, read, or continue. Use an account explicitly named by the user or already bound to this objective; otherwise use the sole eligible account. Never guess between multiple eligible accounts. Resolve worker questions from the brief and conversation before handing them to the user. Hand off only for missing authorization, an unresolved account choice, an essential missing fact or decision, or a host-required approval. A search with no tool results is not proof that authorization is missing. Once the connection UI saves the objective, let the host continue automatically after the required action; do not tell the user to return and reply continue. Preserve the existing request rather than submitting duplicates. For a reasonable default read range, state the range and proceed unless the ambiguity materially changes the requested outcome.';
 const PREVIOUS_CONNECTED_APP_RULE = PREVIOUS_FOREGROUND_CONNECTED_APP_RULE.replace(
   'Choose by executorProfiles within the permitted executorAgentIds, then use personal_request(command="submit") with a short selectionReason and the exact connectorId and specialist agentId returned,',
   'Then use personal_request(command="submit") with the exact connectorId and specialist agentId returned,',
@@ -98,6 +99,7 @@ export function personalInstructions(preferences: PersonalPreferences): string {
     CONVERSATION_INTERRUPTION_RULE,
     LARGE_READ_RULE,
     CONNECTED_APP_RULE,
+    READ_AUTONOMY_RULE,
     EXPLICIT_DELEGATION_RULE,
     RESULT_DELIVERY_RULE,
     ...PERSONAL_COMMUNICATION_RULES,
@@ -172,7 +174,7 @@ export function upgradePersonalInstructions(instructions: string, legacyName?: s
   const withoutOldBriefRule = removeGeneratedBlock(nextInstructions, PREVIOUS_BRIEF_REPLY_RULE);
   if (withoutOldBriefRule !== nextInstructions) nextInstructions = `${withoutOldBriefRule}\n${BRIEF_REPLY_RULE}`;
   if (legacyNameRule) nextInstructions = nextInstructions.replace(legacyNameRule, USER_NAME_RULE);
-  for (const rule of [...DELEGATION_RULES, TASK_BRIEF_RULE, TASK_CONTROL_RULE, FAST_CONVERSATION_RULE, CONVERSATION_INTERRUPTION_RULE]) {
+  for (const rule of [...DELEGATION_RULES, TASK_BRIEF_RULE, TASK_CONTROL_RULE, FAST_CONVERSATION_RULE, CONVERSATION_INTERRUPTION_RULE, READ_AUTONOMY_RULE]) {
     if (!nextInstructions.includes(rule)) nextInstructions += `\n${rule}`;
   }
   if (!nextInstructions.includes(LARGE_READ_RULE)) nextInstructions += `\n${LARGE_READ_RULE}`;

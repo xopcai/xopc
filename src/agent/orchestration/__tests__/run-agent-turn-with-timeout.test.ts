@@ -74,3 +74,37 @@ describe('runAgentTurnWithTimeout', () => {
     }
   });
 });
+
+describe('handoff deadline extension', () => {
+  it('extends only once and still aborts at the final deadline', async () => {
+    vi.useFakeTimers();
+    try {
+      let settle!: () => void;
+      const turn = new Promise<void>(resolve => { settle = resolve; });
+      const agent = { abort: vi.fn(() => settle()), waitForIdle: vi.fn().mockResolvedValue(undefined) } as any;
+      const extension = vi.fn(() => 20);
+      const promise = runAgentTurnWithTimeout(agent, () => turn, 80, { timeoutExtensionMs: extension });
+      const rejected = expect(promise).rejects.toThrow('timed out after 0.1s');
+      await vi.advanceTimersByTimeAsync(80);
+      expect(agent.abort).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(20);
+      await rejected;
+      expect(extension).toHaveBeenCalledOnce();
+      expect(agent.abort).toHaveBeenCalledOnce();
+      expect(vi.getTimerCount()).toBe(0);
+    } finally { vi.useRealTimers(); }
+  });
+  it('clears the extended timer when the handoff finishes early', async () => {
+    vi.useFakeTimers();
+    try {
+      let settle!: () => void;
+      const turn = new Promise<void>(resolve => { settle = resolve; });
+      const agent = { abort: vi.fn(), waitForIdle: vi.fn() } as any;
+      const promise = runAgentTurnWithTimeout(agent, () => turn, 80, { timeoutExtensionMs: () => 20 });
+      await vi.advanceTimersByTimeAsync(80);
+      settle(); await promise;
+      expect(vi.getTimerCount()).toBe(0);
+      expect(agent.abort).not.toHaveBeenCalled();
+    } finally { vi.useRealTimers(); }
+  });
+});

@@ -7,7 +7,7 @@ import { getSqliteDatabase, runSqliteWriteTransaction } from '../storage/sqlite/
 import { readCurrentTranscriptId } from '../storage/sqlite/session-repository.js';
 import type { SessionInput } from '../storage/sqlite/session-input-repository.js';
 import { getSessionInputState } from '../storage/sqlite/session-input-repository.js';
-import { cancelConnectionObjective, getActiveConnectionWait, getConnectionWait, publishConnectionWait, queueConnectionResolution, updateConnectionWait, listConnectionWaitsToCheck, reconcileConnectionWaits } from '../storage/sqlite/connection-wait-repository.js';
+import { cancelConnectionObjective, getActiveConnectionWait, getConnectionWait, hasPendingConnectionMessages, interruptedConnectionMessage, publishConnectionWait, queueConnectionResolution, updateConnectionWait, listConnectionWaitsToCheck, reconcileConnectionWaits } from '../storage/sqlite/connection-wait-repository.js';
 import { getConnectorConnection, getConnectorInstallation, listConnectorConnections, upsertConnectorInstallation } from '../storage/sqlite/connector-repository.js';
 import { capabilityActions, isToolInputSchema, missingConnectionCapabilities } from './connection-capabilities.js';
 import { resolveConnectionCandidate } from './connection-candidates.js';
@@ -72,7 +72,7 @@ export class ConnectionRecoveryService {
       drainPersonalRequestResults(this.deps.onPersonalRequestDelivered);
       for (const conversationId of reconcileConnectionWaits()) this.deps.drain(conversationId);
       for (const wait of listConnectionWaitsToCheck()) {
-        if (this.busy.has(wait.conversationId)) continue;
+        if (this.busy.has(wait.conversationId) || interruptedConnectionMessage(wait)) continue;
         await this.act(wait.conversationId, { waitId: wait.id, expectedTranscriptId: wait.transcriptId,
           expectedVersion: wait.version, idempotencyKey: randomUUID(), action: 'check',
         }).catch(() => { /* Preserve the wait; network failures never imply authorization loss. */ });
@@ -88,6 +88,37 @@ export class ConnectionRecoveryService {
     checkTimeoutMs?: number;
   }) {}
   private get adapter() { return this.deps.adapter ?? new ComposioSessionsAdapter(); }
+
+  cancelObjective(target: ConnectionWait): void {
+    const wait = getConnectionWait(target.id);
+    if (!wait || wait.objectiveRevision !== target.objectiveRevision || wait.resolution !== 'cancelled') return;
+    this.checks.get(wait.id)?.abort(new Error('Connection objective cancelled'));
+    const request = personalRequestForWait(wait.id);
+    if (request) cancelPersonalRequest(request);
+  }
+
+  async continueObjective(target: ConnectionWait, idempotencyKey: string): Promise<void> {
+    const wait = getConnectionWait(target.id);
+    if (!wait || wait.status === 'closed' || wait.objectiveRevision !== target.objectiveRevision
+      || wait.transcriptId !== target.transcriptId) return;
+    if (wait.status === 'queued') {
+      if (!wait.intent || wait.intent.validUntil <= Date.now() || wait.reviewRequired) {
+        updateConnectionWait({ ...wait, reviewRequired: false, scopeConfirmedAt: Date.now(),
+          intent: { objectiveRevision: wait.objectiveRevision, validUntil: Date.now() + INTENT_TTL } }, wait.version);
+        publishConnectionWait(wait.conversationId);
+      }
+      return;
+    }
+    if (wait.checking) {
+      // Fence the old probe; polling will check the newly confirmed intent without overlapping runs.
+      updateConnectionWait({ ...wait, checking: undefined, reviewRequired: false, scopeConfirmedAt: Date.now(),
+        intent: { objectiveRevision: wait.objectiveRevision, validUntil: Date.now() + INTENT_TTL } }, wait.version);
+      publishConnectionWait(wait.conversationId);
+      return;
+    }
+    await this.act(wait.conversationId, { waitId: wait.id, expectedTranscriptId: wait.transcriptId,
+      expectedVersion: wait.version, idempotencyKey, action: 'confirm_scope' });
+  }
 
   private markChecking(wait: ConnectionWait, phase: 'connection' | 'tools'): ConnectionWait {
     const next = updateConnectionWait({ ...wait, checking: { phase, startedAt: Date.now() }, recoveryError: undefined }, wait.version);
@@ -204,12 +235,16 @@ export class ConnectionRecoveryService {
     const review = wait.reviewRequired || (Date.now() - wait.createdAt > INTENT_TTL && !wait.scopeConfirmedAt);
     const { intent: _intent, checkpoint: _checkpoint, ...visible } = wait;
     const runtime = getSessionInputState(wait.conversationId);
+    const blockedInput = interruptedConnectionMessage(wait);
+    const deferred = wait.status === 'open' && ready && !review && !wait.checking && !wait.recoveryError
+      && Boolean(wait.intent && wait.intent.validUntil > Date.now()) && hasPendingConnectionMessages(wait);
     return { ...visible, needs, timeRange: wait.checkpoint.timeRange,
-      phase: wait.status === 'queued' ? 'queued' : wait.checking || wait.recoveryError ? 'needs_connection'
+      phase: wait.status === 'queued' || deferred ? 'queued' : wait.checking || wait.recoveryError ? 'needs_connection'
         : ready ? review ? 'review_scope' : 'ready' : 'needs_connection',
       recoveryStage: wait.checking ? wait.checking.phase === 'connection' ? 'checking_connection' : 'checking_tools'
-        : wait.status === 'queued' ? 'queued' : undefined,
-      queueBlocked: wait.status === 'queued' && Boolean(runtime.activeInputId && runtime.activeInputId !== wait.queuedInputId),
+        : wait.status === 'queued' || deferred ? 'queued' : undefined,
+      queueBlocked: deferred || (wait.status === 'queued' && Boolean(runtime.activeInputId && runtime.activeInputId !== wait.queuedInputId)),
+      ...(blockedInput ? { blockedInputId: blockedInput.id, queueBlocked: true } : {}),
     };
   }
 
@@ -311,6 +346,10 @@ export class ConnectionRecoveryService {
       const ready = checkedNeeds.every(need => need.phase === 'ready');
       const latest = getConnectionWait(wait.id);
       if (latest?.version !== wait.version) return false;
+      if (hasPendingConnectionMessages(wait, true)) {
+        updateConnectionWait({ ...wait, checking: undefined, lastCheckedAt: Date.now() }, wait.version);
+        return true;
+      }
       if (ready && wait.intent && wait.intent.validUntil > Date.now() && wait.intent.objectiveRevision === wait.objectiveRevision) {
         updateConnectionWait({ ...wait, checking: undefined, lastCheckedAt: Date.now() }, wait.version);
         return true;

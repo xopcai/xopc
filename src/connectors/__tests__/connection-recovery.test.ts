@@ -818,13 +818,94 @@ describe('durable connection recovery', () => {
     await recovery.act(conversationId, action('confirm_scope'));
     expect(drain).toHaveBeenCalledOnce();
   });
-  it('cancels a queued continuation when newer user input arrives', async () => {
+  it('cancels a queued continuation when its objective is explicitly invalidated', async () => {
     const wait = requireWait(); activeConnection();
     const queued = queueConnectionResolution(wait, 'continued');
     invalidateConnectionResumeIntent(conversationId);
     expect(getSessionInputById(conversationId, queued.queuedInputId!)?.status).toBe('cancelled');
     expect(getActiveConnectionWait(conversationId)?.intent).toBeUndefined();
     expect(getActiveConnectionWait(conversationId)?.reviewRequired).toBe(true);
+  });
+
+  it('defers both scheduling owners while a new ordinary message is waiting without discarding intent', () => {
+    const original = requireWait();
+    const wait = updateConnectionWait({ ...original, intent: { objectiveRevision: original.objectiveRevision,
+      validUntil: Date.now() + 60_000 } }, original.version);
+    insertSessionInput({ id: 'new-message', conversationId, clientMessageId: 'new-message', requestedDelivery: 'next',
+      effectiveDelivery: 'next', status: 'queued', content: 'An unrelated question', origin });
+    const resolvePersonal = vi.fn(() => ({ requestId: 'personal' }));
+    expect(queueConnectionResolution(wait, 'continued', resolvePersonal)).toEqual(wait);
+    expect(resolvePersonal).not.toHaveBeenCalled();
+    expect(getConnectionWait(wait.id)?.intent).toEqual(wait.intent);
+    finishSessionInputRun(conversationId, 'run-original', 'suspended');
+    claimNextSessionInput(conversationId, 'new-message-run');
+    finishSessionInputRun(conversationId, 'new-message-run', 'completed');
+    expect(queueConnectionResolution(wait, 'continued', resolvePersonal).status).toBe('closed');
+    expect(resolvePersonal).toHaveBeenCalledOnce();
+  });
+
+  it('keeps a deferred ready goal visible and cancellable while another message is being handled', async () => {
+    const wait = requireWait(); activeConnection();
+    insertSessionInput({ id: 'unrelated', conversationId, clientMessageId: 'unrelated', requestedDelivery: 'next',
+      effectiveDelivery: 'next', status: 'queued', content: 'Other work', origin });
+    await recovery.act(conversationId, action('check'));
+    expect(getConnectionWait(wait.id)?.status).toBe('open');
+    expect(recovery.snapshot(conversationId).wait).toMatchObject({ phase: 'queued', queueBlocked: true });
+    await recovery.act(conversationId, action('cancel'));
+    expect(getConnectionWait(wait.id)?.resolution).toBe('cancelled');
+  });
+
+  it('shows an interrupted message barrier without repeatedly probing or scheduling until it is discarded', async () => {
+    const original = requireWait(); activeConnection();
+    const wait = updateConnectionWait({ ...original, intent: { objectiveRevision: original.objectiveRevision,
+      validUntil: Date.now() + 60_000 } }, original.version);
+    insertSessionInput({ id: 'blocked-correction', conversationId, clientMessageId: 'blocked-correction', requestedDelivery: 'next',
+      effectiveDelivery: 'next', status: 'queued', content: 'Only today', origin,
+      payload: { waitId: wait.id, objectiveRevision: wait.objectiveRevision, connectionBarrier: true } });
+    setSessionInputStatus('blocked-correction', 'interrupted');
+    await recovery.poll(); await recovery.poll();
+    expect(syncConnections).not.toHaveBeenCalled();
+    expect(drain).not.toHaveBeenCalled();
+    expect(recovery.snapshot(conversationId).wait).toMatchObject({ blockedInputId: 'blocked-correction', queueBlocked: true });
+    setSessionInputStatus('blocked-correction', 'cancelled');
+    await recovery.poll();
+    expect(getConnectionWait(wait.id)?.status).toBe('queued');
+    expect(drain).toHaveBeenCalledOnce();
+  });
+
+  it('does not expire the objective ahead of a pending continue control during preflight', async () => {
+    requireWait(); activeConnection();
+    await recovery.act(conversationId, action('check'));
+    const queued = getActiveConnectionWait(conversationId)!;
+    const expired = updateConnectionWait({ ...queued, intent: { objectiveRevision: queued.objectiveRevision,
+      validUntil: Date.now() - 1 } }, queued.version);
+    finishSessionInputRun(conversationId, 'run-original', 'suspended');
+    const input = claimNextSessionInput(conversationId, 'resume-run')!;
+    insertSessionInput({ id: 'continue-message', conversationId, clientMessageId: 'continue-message', requestedDelivery: 'next',
+      effectiveDelivery: 'next', status: 'queued', content: '继续', origin,
+      payload: { waitId: queued.id, objectiveRevision: queued.objectiveRevision, connectionAction: 'continue' } });
+    expect(await recovery.preflight(input)).toBe(true);
+    expect(getConnectionWait(queued.id)?.objectiveRevision).toBe(queued.objectiveRevision);
+    expect(consumeConnectionResume(input)).toBe(false);
+    await recovery.continueObjective(expired, 'continue-message');
+    expect(getConnectionWait(queued.id)?.intent!.validUntil).toBeGreaterThan(Date.now());
+    expect(getConnectionWait(queued.id)?.queuedInputId).toBe(queued.queuedInputId);
+  });
+
+  it('fences a probe when continuation confirms the same goal during checking, then queues once', async () => {
+    const wait = requireWait(); activeConnection();
+    let release!: (value: unknown[]) => void;
+    syncConnections.mockImplementationOnce(() => new Promise(resolve => { release = resolve; }));
+    const checking = recovery.act(conversationId, action('check'));
+    await vi.waitFor(() => expect(getConnectionWait(wait.id)?.checking?.phase).toBe('connection'));
+    await recovery.continueObjective(wait, 'continue-during-check');
+    release(listConnectorConnections({ principalId: 'local-owner' }));
+    await expect(checking).rejects.toThrow('WAIT_CHANGED');
+    expect(getConnectionWait(wait.id)?.objectiveRevision).toBe(wait.objectiveRevision);
+    expect(getConnectionWait(wait.id)?.intent).toBeDefined();
+    await recovery.poll();
+    expect(getConnectionWait(wait.id)?.status).toBe('queued');
+    expect(drain).toHaveBeenCalledOnce();
   });
   it('rejects an old action after reset even if the authorization completes', async () => {
     requireWait();

@@ -1,0 +1,38 @@
+{
+  "marker": "DAILY-RESEARCH-50a37143",
+  "base": "http://127.0.0.1:18790",
+  "startedAt": "2026-10-14T15:40:59.044Z",
+  "folder": "/Users/micjoyce/.xopc/workspace-data-analyst/benchmarks/DAILY-RESEARCH-50a37143",
+  "injections": [],
+  "downloads": [],
+  "taskId": "e567168d-4cb8-439c-b689-0b6a323d9c36",
+  "runId": "8671fb38-57b9-42e2-8608-d924d017ef30",
+  "passed": false,
+  "error": "Run failed: null",
+  "sessionInputs": [
+    {
+      "kind": "message",
+      "status": "interrupted",
+      "error": "Gateway restarted during delivery",
+      "payload_json": null
+    },
+    {
+      "kind": "message",
+      "status": "failed",
+      "error": "502: {\"message\":\"OpenAI Codex request failed\",\"type\":\"api_error\",\"code\":\"provider_error\"}",
+      "payload_json": null
+    },
+    {
+      "kind": "message",
+      "status": "failed",
+      "error": "502: {\"message\":\"OpenAI Codex request failed\",\"type\":\"api_error\",\"code\":\"provider_error\"}",
+      "payload_json": null
+    }
+  ],
+  "receipts": [
+    {
+      "verification_json": "{\"status\":\"unverified\",\"checks\":[{\"criterion\":\"monthly_summary.csv 给出各月销售额与环比，且数值与 reproduce.mjs 实际运行结果一致\",\"status\":\"unverified\",\"evidenceTitles\":[],\"method\":\"unverified\",\"note\":\"未提交有证据关联的核验结果。\"},{\"criterion\":\"reproduce.mjs 已实际运行，其输出可复现 monthly_summary.csv 中的月销售额与环比\",\"status\":\"unverified\",\"evidenceTitles\":[],\"method\":\"unverified\",\"note\":\"未提交有证据关联的核验结果。\"},{\"criterion\":\"report.md 基于本次实际 web_fetch 读取 https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status/404 的结果，说明 HTTP 404 的含义及其不能单独证明资源被永久删除\",\"status\":\"unverified\",\"evidenceTitles\":[],\"method\":\"unverified\",\"note\":\"未提交有证据关联的核验结果。\"},{\"criterion\":\"report.md 附有实际访问时间与逐条来源\",\"status\":\"unverified\",\"evidenceTitles\":[],\"method\":\"unverified\",\"note\":\"未提交有证据关联的核验结果。\"},{\"criterion\":\"report.md 明确解决 conflicting-note.md 中的次级资料冲突并说明取舍依据\",\"status\":\"unverified\",\"evidenceTitles\":[],\"method\":\"unverified\",\"note\":\"未提交有证据关联的核验结果。\"},{\"criterion\":\"report.md 注明本次为合成销售数据的验证任务\",\"status\":\"unverified\",\"evidenceTitles\":[],\"method\":\"unverified\",\"note\":\"未提交有证据关联的核验结果。\"},{\"criterion\":\"仅写入 /Users/micjoyce/.xopc/workspace-data-analyst/benchmarks/DAILY-RESEARCH-50a37143 目录，未覆盖其他文件\",\"status\":\"unverified\",\"evidenceTitles\":[],\"method\":\"unverified\",\"note\":\"未提交有证据关联的核验结果。\"}]}"
+    }
+  ],
+  "finishedAt": "2026-10-14T15:42:51.682Z"
+}

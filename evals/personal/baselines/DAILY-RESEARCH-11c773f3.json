@@ -1,0 +1,27 @@
+{
+  "suiteVersion": 2,
+  "mode": "daily_gateway_real",
+  "marker": "DAILY-RESEARCH-11c773f3",
+  "base": "http://127.0.0.1:18790",
+  "startedAt": "2026-10-14T15:46:23.176Z",
+  "folder": "/Users/micjoyce/.xopc/workspace-data-analyst/benchmarks/DAILY-RESEARCH-11c773f3",
+  "sourceHashes": {
+    "src/tasks/task-model-call.ts": "91189157b448316fee10fe3bbb224b274af6dcec46fe9b2162363b13482922f2",
+    "src/tasks/task-contract-planner.ts": "8acc49b0cf22ca9f421cbf1c02ac5829f8a50e30fc2687a568af455fadb3709d",
+    "src/tasks/task-research-result.ts": "5b2b0ab75182ffd1579ffacfb0b424bde36d4e821d82773d5b6b4674b659ad42",
+    "src/tasks/task-run-coordinator.ts": "6a13a66e9008bc06050fe53767555fcffaef14a0ced0f3c0d7f27c6674a978ba",
+    "src/tasks/task-research-repair.ts": "87849f6533b6155a37f599812d12beda6014dd5e15760dc040af1f25831e644d",
+    "src/session/store.ts": "5cde3d4c57f4701be184200f6576835195bcb7ad424b23c16b0eb9aad19855f7",
+    "src/agent/embedded/run-turn.ts": "05eb555422574ea709471662b8e651d6c03feee0a88de21194d0f86ea83dafbf",
+    "src/agent/orchestration/turn-recovery.ts": "540c0132d756aee6405d98a34c540630d5e3ae8402fe996ef55f78178ab27b8a",
+    "src/config/schema.ts": "e0995eceae482b60824598bc9d2808447ca203eefa08b44a85d27673fe9a2336",
+    "scripts/personal-daily-gateway-smoke.mts": "a923d7794ad059b92a5510aba6df15f6b208cd1a9bb824e061df25a8790b55fc",
+    "pnpm-lock.yaml": "c9ba3f707270e8af6a7c6bdd3e4ed79aa16a3440c3d1df8602732bb6a8c5a0e5"
+  },
+  "injections": [],
+  "downloads": [],
+  "passed": false,
+  "error": "fetch failed",
+  "sourceChangedDuringRun": false,
+  "finishedAt": "2026-10-14T15:46:23.187Z"
+}

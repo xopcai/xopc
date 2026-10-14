@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { TaskResearchResultSchema } from './task-research-result.js';
 
 export const TURN_OUTCOME_VERSION = 1 as const;
 
@@ -97,6 +98,7 @@ export const TurnOutcomeSchema = z.object({
   deliverables: z.array(TurnOutcomeDeliverableSchema),
   changeSet: TurnOutcomeChangeSetSchema.optional(),
   evidence: z.array(TurnOutcomeEvidenceSchema),
+  research: TaskResearchResultSchema.optional(),
   createdAt: z.string(),
 });
 

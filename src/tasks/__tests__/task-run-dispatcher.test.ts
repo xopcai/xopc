@@ -11,6 +11,7 @@ import { TaskApplicationService } from '../task-application-service.js';
 import { TaskRunDispatcher } from '../task-run-dispatcher.js';
 import { TaskRunRepository } from '../task-run-repository.js';
 import { TaskContextRepository } from '../task-context-repository.js';
+import { TaskRepository } from '../task-repository.js';
 
 const contract = { objective: 'Do work', expectedOutputs: [], acceptanceCriteria: [], constraints: [],
   approvalRequired: [], assumptions: [], risks: [], acceptancePolicy: 'verified_auto' as const,
@@ -39,6 +40,66 @@ describe('TaskRunDispatcher', () => {
     if (!created.ok || !created.runId) throw new Error('Expected queued TaskRun');
     return created.runId;
   }
+
+  it('clears orphan waits of an already cancelled Run after restart without changing a new Run or its waits', async () => {
+    const oldId = queue('cancelled-orphan-waits');
+    const runs = new TaskRunRepository();
+    const old = runs.require(oldId);
+    runs.finalize({ runId: old.id, expectedVersion: old.version, receipt: { status: 'cancelled', summary: 'Cancelled',
+      changes: [], evidence: [], verification: { status: 'unverified', checks: [] }, remainingWork: [], needsUser: false, completionVerdict: 'not_achieved' } });
+    const task = new TaskRepository().require(old.taskId);
+    expect(new TaskApplicationService().execute({ taskId: task.id, expectedVersion: task.version, actor: { kind: 'user' },
+      idempotencyKey: 'new-after-cancelled', command: { type: 'start', executor: { kind: 'agent', agentId: 'main' } } }).ok).toBe(true);
+    const next = runs.getActiveRoot(task.id)!;
+    // Model the residual rows written by a legacy process or a late wait writer.
+    const first = runs.createWait({ taskId: task.id, taskRunId: old.id, kind: 'user_input', reason: 'Old question', condition: { type: 'fixture' } });
+    const second = runs.createWait({ taskId: task.id, taskRunId: old.id, kind: 'user_input', reason: 'Old authorization', condition: { type: 'connection', connectionWaitId: 'old-orphan-connection' } });
+    const current = runs.createWait({ taskId: task.id, taskRunId: next.id, kind: 'user_input', reason: 'New question', condition: { type: 'fixture' } });
+    const oldReceipt = runs.getReceipt(old.id);
+    const oldVersion = runs.require(old.id).version;
+    closeXopcDatabase(); openXopcDatabase({ path: join(stateDir, 'xopc.db') });
+    expect(runs.reconcileCancelledRuns()).toBe(1);
+    expect(runs.getWait(first.id)?.status).toBe('resolved');
+    expect(runs.getWait(second.id)?.status).toBe('resolved');
+    expect(runs.getWait(current.id)?.status).toBe('active');
+    expect(runs.getReceipt(old.id)).toEqual(oldReceipt);
+    expect(runs.require(old.id).version).toBe(oldVersion);
+    expect(runs.getActiveRoot(task.id)).toEqual(next);
+    expect(runs.reconcileCancelledRuns()).toBe(0);
+    const runAgent = vi.fn(async (id: string) => {
+      const run = runs.require(id);
+      runs.finalize({ runId: run.id, expectedVersion: run.version, receipt: { status: 'succeeded', summary: 'New work',
+        changes: [], evidence: [], verification: { status: 'passed', checks: [] }, remainingWork: [], needsUser: false, completionVerdict: 'achieved' } });
+    });
+    runs.resolveWait({ waitId: current.id, actor: { kind: 'user' } });
+    const dispatcher = new TaskRunDispatcher({ workerId: 'restarted-worker', ensureSession: async () => 'new-conversation', runAgent });
+    await dispatcher.drain(); await dispatcher.drain(); dispatcher.stop();
+    expect(runAgent).toHaveBeenCalledOnce();
+    expect(runAgent).toHaveBeenCalledWith(next.id, 'new-conversation', expect.any(String));
+    expect(runs.require(old.id).status).toBe('cancelled');
+  });
+
+  it.each([false, true])('reconciles a legacy Task cancellation receipt before dispatch (leased=%s)', async leased => {
+    const runId = queue('legacy-cancel');
+    const runs = new TaskRunRepository();
+    const run = runs.require(runId);
+    const task = new TaskRepository().require(run.taskId);
+    const closed = new TaskApplicationService().execute({ taskId: run.taskId, expectedVersion: task.version,
+      actor: { kind: 'user' }, idempotencyKey: 'personal-cancel:legacy', command: { type: 'close', resolution: 'cancelled' } });
+    expect(closed.ok).toBe(true);
+    getSqliteDatabase().prepare(`UPDATE command_deduplication SET result_json = json_set(result_json, '$.cancellationRunId', ?)
+      WHERE idempotency_key = 'personal-cancel:legacy'`).run(runId);
+    getSqliteDatabase().prepare(`UPDATE task_runs SET status = 'running', lease_owner = ?, lease_expires_at = ?,
+      policy_snapshot_json = '{}' WHERE run_id = ?`).run(leased ? 'old-worker' : null, leased ? Date.now()-1000 : null, runId);
+    closeXopcDatabase(); openXopcDatabase({ path: join(stateDir, 'xopc.db') });
+    const runAgent = vi.fn(async () => {});
+    const dispatcher = new TaskRunDispatcher({ workerId: 'restarted-worker', ensureSession: vi.fn(), runAgent });
+    await dispatcher.drain(); await dispatcher.drain(); dispatcher.stop();
+    expect(runs.require(runId).status).toBe('cancelled');
+    expect(runs.getReceipt(runId)?.status).toBe('cancelled');
+    expect(runs.reconcileCancelledRuns()).toBe(0);
+    expect(runAgent).not.toHaveBeenCalled();
+  });
 
   it.each(['resolve', 'reject'] as const)('stops leases and database access when an active Agent later %ss', async (outcome) => {
     const runId = queue('shutdown');

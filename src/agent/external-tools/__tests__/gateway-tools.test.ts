@@ -3,9 +3,10 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { createExternalToolGatewayTools, EXTERNAL_TOOL_NAMES } from '../gateway-tools.js';
 import { EXTERNAL_TOOL_SOURCES, type ExternalToolProvider } from '../types.js';
+import { connectionCandidates } from '../../../connectors/connection-candidates.js';
 
 vi.mock('../../../connectors/connection-candidates.js', () => ({
-  connectionCandidates: () => [],
+  connectionCandidates: vi.fn(() => []),
   resolveConnectionCandidate: vi.fn(),
 }));
 
@@ -37,6 +38,8 @@ describe('external tool discovery gateway', () => {
     expect(found.tools).toHaveLength(1);
     if (!sources) expect(found.searchScope).toBeUndefined();
     expect(found.tools[0].toolRef).toBe(contract.toolRef);
+    expect(found.instruction).toContain('execute the requested read');
+    expect(found.instruction).toContain('do not ask for another confirmation');
     expect(tools.cli.search).toHaveBeenCalledWith('wecom doc.search');
     const described = payload(await tools.describe.execute('describe', { toolRefs: [found.tools[0].toolRef] }));
     expect(described.tools[0]).toMatchObject({ toolRef: contract.toolRef, inputSchema: contract.inputSchema });
@@ -94,5 +97,18 @@ describe('external tool discovery gateway', () => {
     expect(search.description).toContain('retry without sources');
     expect(search.description).toContain('xopc_require_connection');
     expect(search.parameters.properties.sources.description).toContain('Omit to search all sources');
+  });
+
+  it('does not treat a catalog match with no tools as proof of missing authorization', async () => {
+    vi.mocked(connectionCandidates).mockReturnValueOnce([{
+      candidateRef: 'composio-slack', label: 'Slack', capabilities: ['tools'],
+    }]);
+    const search = createExternalToolGatewayTools([]).find(tool => tool.name === EXTERNAL_TOOL_NAMES.search)!;
+    const found = payload(await search.execute('search', { query: 'Slack messages' }));
+    expect(found.tools).toEqual([]);
+    expect(found.connectionCandidates).toHaveLength(1);
+    expect(found.instruction).toContain('does not prove the account is disconnected');
+    expect(found.instruction).not.toContain('app is available but is not connected');
+    expect(found.instruction).toContain('automatic continuation');
   });
 });

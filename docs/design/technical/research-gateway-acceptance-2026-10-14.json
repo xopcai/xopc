@@ -1,0 +1,2717 @@
+{
+  "passed": true,
+  "startedAt": "2026-10-14T12:16:22.592Z",
+  "durationMs": 118021,
+  "fixture": "real isolated Gateway, authenticated REST/realtime, real SQLite, controlled model/search HTTP services",
+  "productionBudgetsUnchanged": true,
+  "checks": [
+    {
+      "name": "real_gateway_authentication"
+    },
+    {
+      "name": "batch-only",
+      "batchRequests": 1,
+      "individualRequests": 2
+    },
+    {
+      "name": "batch-partial",
+      "batchRequests": 1,
+      "individualRequests": 1
+    },
+    {
+      "name": "batch-rate",
+      "batchRequests": 1,
+      "individualRequests": 2
+    },
+    {
+      "name": "batch-denied",
+      "batchRequests": 1,
+      "individualRequests": 0
+    },
+    {
+      "name": "batch-timeout",
+      "batchRequests": 1,
+      "individualRequests": 2
+    },
+    {
+      "name": "individual_rate_limit_backoff"
+    },
+    {
+      "name": "individual_permission_denial"
+    },
+    {
+      "name": "research_timeout_checkpoint",
+      "stopReason": "deadline_exceeded",
+      "heldRequestMs": 95939
+    },
+    {
+      "name": "restart_resume_and_cache_reuse",
+      "attempts": 2,
+      "backendSearchRequests": 1
+    },
+    {
+      "name": "cache_task_isolation"
+    },
+    {
+      "name": "revoked_search_permission_blocks_resume"
+    },
+    {
+      "name": "no_html_permission_bypass"
+    },
+    {
+      "name": "realtime_delivery_and_sqlite_tool_results"
+    }
+  ],
+  "searchCalls": [
+    {
+      "path": "/batch",
+      "prefix": "batch-only",
+      "at": 1791980185032,
+      "queries": [
+        "batch-only:a",
+        "batch-only:b"
+      ]
+    },
+    {
+      "path": "/search",
+      "query": "batch-only:a",
+      "at": 1791980185035
+    },
+    {
+      "path": "/search",
+      "query": "batch-only:b",
+      "at": 1791980185038
+    },
+    {
+      "path": "/batch",
+      "prefix": "batch-partial",
+      "at": 1791980185586,
+      "queries": [
+        "batch-partial:a",
+        "batch-partial:b"
+      ]
+    },
+    {
+      "path": "/search",
+      "query": "batch-partial:b",
+      "at": 1791980185589
+    },
+    {
+      "path": "/batch",
+      "prefix": "batch-rate",
+      "at": 1791980186038,
+      "queries": [
+        "batch-rate:a",
+        "batch-rate:b"
+      ]
+    },
+    {
+      "path": "/search",
+      "query": "batch-rate:a",
+      "at": 1791980187045
+    },
+    {
+      "path": "/search",
+      "query": "batch-rate:b",
+      "at": 1791980187049
+    },
+    {
+      "path": "/batch",
+      "prefix": "batch-denied",
+      "at": 1791980187505,
+      "queries": [
+        "batch-denied:a",
+        "batch-denied:b"
+      ]
+    },
+    {
+      "path": "/batch",
+      "prefix": "batch-timeout",
+      "at": 1791980187957,
+      "queries": [
+        "batch-timeout:a",
+        "batch-timeout:b"
+      ]
+    },
+    {
+      "path": "/search",
+      "query": "batch-timeout:a",
+      "at": 1791980197969
+    },
+    {
+      "path": "/search",
+      "query": "batch-timeout:b",
+      "at": 1791980197973
+    },
+    {
+      "path": "/search",
+      "query": "rate-once",
+      "at": 1791980198526
+    },
+    {
+      "path": "/search",
+      "query": "rate-once",
+      "at": 1791980199529
+    },
+    {
+      "path": "/search",
+      "query": "permission-denied-single",
+      "at": 1791980199981
+    },
+    {
+      "path": "/search",
+      "query": "timeout-proof",
+      "at": 1791980200457
+    },
+    {
+      "path": "/search",
+      "query": "timeout-proof",
+      "at": 1791980299584
+    },
+    {
+      "path": "/search",
+      "query": "cache-revocation-proof",
+      "at": 1791980300025
+    }
+  ],
+  "modelCalls": [
+    {
+      "at": 1791980184921,
+      "isChild": false,
+      "prompt": "\"[2026-10-14 20:16 GMT+8] E2E_batch-only\"",
+      "toolResults": 0,
+      "declarations": [
+        "xopc_tool_search",
+        "xopc_tool_describe",
+        "xopc_tool_execute",
+        "apply_patch",
+        "automation",
+        "clarify",
+        "create_share",
+        "data_batch",
+        "delegate_task",
+        "exec_command",
+        "find",
+        "grep",
+        "knowledge_get",
+        "knowledge_search",
+        "knowledge_write",
+        "language_diagnostics",
+        "list_dir",
+        "managed_job",
+        "memory_maintenance",
+        "publish_artifacts",
+        "publish_task_result",
+        "read_file",
+        "read_media",
+        "review_workspace",
+        "send_media",
+        "send_message",
+        "session_recall",
+        "session_search",
+        "session_status",
+        "skill_install",
+        "skill_manage",
+        "skill_view",
+        "skills_list",
+        "skills_marketplace_search",
+        "text_to_speech",
+        "todo",
+        "tool_manual",
+        "update_plan",
+        "user_context_get",
+        "user_context_search",
+        "user_context_update",
+        "web_extract",
+        "web_fetch",
+        "web_search",
+        "workflow",
+        "workflow_manage",
+        "write_file",
+        "xopc_require_connection",
+        "xopc_update_connection_objective",
+        "xopc_use"
+      ],
+      "results": []
+    },
+    {
+      "at": 1791980185006,
+      "isChild": true,
+      "prompt": "[{\"type\":\"text\",\"text\":\"E2E_batch-only\"}]",
+      "toolResults": 0,
+      "declarations": [
+        "data_batch",
+        "web_search",
+        "research_checkpoint"
+      ],
+      "results": []
+    },
+    {
+      "at": 1791980185058,
+      "isChild": true,
+      "prompt": "[{\"type\":\"text\",\"text\":\"E2E_batch-only\"}]",
+      "toolResults": 1,
+      "declarations": [
+        "data_batch",
+        "web_search",
+        "research_checkpoint"
+      ],
+      "results": [
+        {
+          "schemaVersion": 1,
+          "operations": [
+            {
+              "id": "a",
+              "kind": "web_search",
+              "status": "ok",
+              "fragmentIds": [
+                "f1"
+              ],
+              "scope": "{\"kind\":\"web_search\",\"resource\":\"batch-only:a\"}",
+              "sourceExhausted": false,
+              "outputOmitted": false,
+              "durationMs": 12
+            },
+            {
+              "id": "b",
+              "kind": "web_search",
+              "status": "ok",
+              "fragmentIds": [
+                "f2"
+              ],
+              "scope": "{\"kind\":\"web_search\",\"resource\":\"batch-only:b\"}",
+              "sourceExhausted": false,
+              "outputOmitted": false,
+              "durationMs": 11
+            },
+            {
+              "id": "copy",
+              "kind": "web_search",
+              "status": "ok",
+              "fragmentIds": [
+                "f1"
+              ],
+              "scope": "{\"kind\":\"web_search\",\"resource\":\"batch-only:a\"}",
+              "sourceExhausted": false,
+              "outputOmitted": false,
+              "durationMs": 11
+            }
+          ],
+          "fragments": [
+            {
+              "id": "f1",
+              "operationIds": [
+                "a",
+                "copy"
+              ],
+              "source": {
+                "kind": "web_search",
+                "resource": "batch-only:a",
+                "capturedAt": "2026-10-14T12:16:25.036Z"
+              },
+              "text": "1. Synthetic official source batch-only:a\n   https://fixture.invalid/batch-only%3Aa\n   Synthetic source evidence; not actual vendor facts"
+            },
+            {
+              "id": "f2",
+              "operationIds": [
+                "b"
+              ],
+              "source": {
+                "kind": "web_search",
+                "resource": "batch-only:b",
+                "capturedAt": "2026-10-14T12:16:25.039Z"
+              },
+              "text": "1. Synthetic official source batch-only:b\n   https://fixture.invalid/batch-only%3Ab\n   Synthetic source evidence; not actual vendor facts"
+            }
+          ],
+          "sourceRequests": 3
+        }
+      ]
+    },
+    {
+      "at": 1791980185087,
+      "isChild": true,
+      "prompt": "[{\"type\":\"text\",\"text\":\"E2E_batch-only\"}]",
+      "toolResults": 2,
+      "declarations": [
+        "data_batch",
+        "web_search",
+        "research_checkpoint"
+      ],
+      "results": [
+        {
+          "schemaVersion": 1,
+          "operations": [
+            {
+              "id": "a",
+              "kind": "web_search",
+              "status": "ok",
+              "fragmentIds": [
+                "f1"
+              ],
+              "scope": "{\"kind\":\"web_search\",\"resource\":\"batch-only:a\"}",
+              "sourceExhausted": false,
+              "outputOmitted": false,
+              "durationMs": 12
+            },
+            {
+              "id": "b",
+              "kind": "web_search",
+              "status": "ok",
+              "fragmentIds": [
+                "f2"
+              ],
+              "scope": "{\"kind\":\"web_search\",\"resource\":\"batch-only:b\"}",
+              "sourceExhausted": false,
+              "outputOmitted": false,
+              "durationMs": 11
+            },
+            {
+              "id": "copy",
+              "kind": "web_search",
+              "status": "ok",
+              "fragmentIds": [
+                "f1"
+              ],
+              "scope": "{\"kind\":\"web_search\",\"resource\":\"batch-only:a\"}",
+              "sourceExhausted": false,
+              "outputOmitted": false,
+              "durationMs": 11
+            }
+          ],
+          "fragments": [
+            {
+              "id": "f1",
+              "operationIds": [
+                "a",
+                "copy"
+              ],
+              "source": {
+                "kind": "web_search",
+                "resource": "batch-only:a",
+                "capturedAt": "2026-10-14T12:16:25.036Z"
+              },
+              "text": "1. Synthetic official source batch-only:a\n   https://fixture.invalid/batch-only%3Aa\n   Synthetic source evidence; not actual vendor facts"
+            },
+            {
+              "id": "f2",
+              "operationIds": [
+                "b"
+              ],
+              "source": {
+                "kind": "web_search",
+                "resource": "batch-only:b",
+                "capturedAt": "2026-10-14T12:16:25.039Z"
+              },
+              "text": "1. Synthetic official source batch-only:b\n   https://fixture.invalid/batch-only%3Ab\n   Synthetic source evidence; not actual vendor facts"
+            }
+          ],
+          "sourceRequests": 3
+        },
+        {
+          "saved": true,
+          "findingCount": 1,
+          "nextSteps": []
+        }
+      ]
+    },
+    {
+      "at": 1791980185134,
+      "isChild": false,
+      "prompt": "\"[2026-10-14 20:16 GMT+8] E2E_batch-only\"",
+      "toolResults": 1,
+      "declarations": [
+        "xopc_tool_search",
+        "xopc_tool_describe",
+        "xopc_tool_execute",
+        "apply_patch",
+        "automation",
+        "clarify",
+        "create_share",
+        "data_batch",
+        "delegate_task",
+        "exec_command",
+        "find",
+        "grep",
+        "knowledge_get",
+        "knowledge_search",
+        "knowledge_write",
+        "language_diagnostics",
+        "list_dir",
+        "managed_job",
+        "memory_maintenance",
+        "publish_artifacts",
+        "publish_task_result",
+        "read_file",
+        "read_media",
+        "review_workspace",
+        "send_media",
+        "send_message",
+        "session_recall",
+        "session_search",
+        "session_status",
+        "skill_install",
+        "skill_manage",
+        "skill_view",
+        "skills_list",
+        "skills_marketplace_search",
+        "text_to_speech",
+        "todo",
+        "tool_manual",
+        "update_plan",
+        "user_context_get",
+        "user_context_search",
+        "user_context_update",
+        "web_extract",
+        "web_fetch",
+        "web_search",
+        "workflow",
+        "workflow_manage",
+        "write_file",
+        "xopc_require_connection",
+        "xopc_update_connection_objective",
+        "xopc_use"
+      ],
+      "results": [
+        {
+          "text": "E2E_BATCH_RESULT\n\nResearch checkpoint 16a798bd-f67c-4795-8c9d-134464ac3d04: {\"findings\":[{\"id\":\"batch-only\",\"subject\":\"Synthetic vendor\",\"field\":\"public evidence\",\"status\":\"confirmed\",\"conclusion\":\"Synthetic batch evidence\",\"sources\":[{\"url\":\"https://fixture.invalid/evidence\",\"title\":\"Controlled source\"}],\"checkedAt\":1791980185072}],\"evidence\":[{\"toolCallId\":\"call_2a1d5253-973f-4aa9-9a24-0b82f3adb10f\",\"runId\":\"dd684438-2c88-474d-9f06-c05b320e8c8b\",\"toolName\":\"data_batch\",\"isError\":false,\"excerpt\":\"{\\\"schemaVersion\\\":1,\\\"operations\\\":[{\\\"id\\\":\\\"a\\\",\\\"kind\\\":\\\"web_search\\\",\\\"status\\\":\\\"ok\\\",\\\"fragmentIds\\\":[\\\"f1\\\"],\\\"scope\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"web_search\\\\\\\",\\\\\\\"resource\\\\\\\":\\\\\\\"batch-only:a\\\\\\\"}\\\",\\\"sourceExhausted\\\":false,\\\"outputOmitted\\\":false,\\\"durationMs\\\":12},{\\\"id\\\":\\\"b\\\",\\\"kind\\\":\\\"web_search\\\",\\\"status\\\":\\\"ok\\\",\\\"fragmentIds\\\":[\\\"f2\\\"],\\\"scope\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"web_search\\\\\\\",\\\\\\\"resource\\\\\\\":\\\\\\\"batch-only:b\\\\\\\"}\\\",\\\"sourceExhausted\\\":false,\\\"outputOmitted\\\":false,\\\"durationMs\\\":11},{\\\"id\\\":\\\"copy\\\",\\\"kind\\\":\\\"web_search\\\",\\\"status\\\":\\\"ok\\\",\\\"fragmentIds\\\":[\\\"f1\\\"],\\\"scope\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"web_search\\\\\\\",\\\\\\\"resource\\\\\\\":\\\\\\\"batch-only:a\\\\\\\"}\\\",\\\"sourceExhausted\\\":false,\\\"outputOmitted\\\":false,\\\"durationMs\\\":11}],\\\"fragments\\\":[{\\\"id\\\":\\\"f1\\\",\\\"operationIds\\\":[\\\"a\\\",\\\"copy\\\"],\\\"source\\\":{\\\"kind\\\":\\\"web_search\\\",\\\"resource\\\":\\\"batch-only:a\\\",\\\"capturedAt\\\":\\\"2026-10-14T12:16:25.036Z\\\"},\\\"text\\\":\\\"1. Synthetic official source batch-only:a\\\\n   https://fixture.invalid/batch-only%3Aa\\\\n   Synthetic source evidence; not actual vendor facts\\\"},{\\\"id\\\":\\\"f2\\\",\\\"operationIds\\\":[\\\"b\\\"],\\\"source\\\":{\\\"kind\\\":\\\"web_search\\\",\\\"resource\\\":\\\"batch-only:b\\\",\\\"capturedAt\\\":\\\"2026-10-14T12:16:25.039Z\\\"},\\\"text\\\":\\\"1. Synthetic official source batch-only:b\\\\n   https://fixture.invalid/batch-only%3Ab\\\\n   Synthetic source evidence; not actual vendor facts\\\"}],\\\"sourceRequests\\\":3}\",\"recordedAt\":1791980185053}],\"nextSteps\":[],\"searches\":[{\"key\":\"6846b71044623ab3695a89e37ebf9d8fe1a0128312d838d4d9ff110daf3ecec0\",\"query\":\"batch-only:a\",\"count\":5,\"results\":[{\"title\":\"Synthetic official source batch-only:a\",\"url\":\"https://fixture.invalid/batch-only%3Aa\",\"description\":\"Synthetic source evidence; not actual vendor facts\",\"source\":\"searxng\"}],\"provider\":\"searxng\",\"capturedAt\":1791980185036},{\"key\":\"971a447060ffd56a4cd4d37678af43134243e6337ce19cdc7301bd246fa80cad\",\"query\":\"batch-only:b\",\"count\":5,\"results\":[{\"title\":\"Synthetic official source batch-only:b\",\"url\":\"https://fixture.invalid/batch-only%3Ab\",\"description\":\"Synthetic source evidence; not actual vendor facts\",\"source\":\"searxng\"}],\"provider\":\"searxng\",\"capturedAt\":1791980185039}]}. Resume unfinished work with resumeId and the same goal.\n\nBudget (light): {\"stopReason\":\"completed\",\"usage\":{\"toolCalls\":3,\"totalTokens\":0,\"modelTurns\":3,\"toolFailures\":0,\"elapsedMs\":162},\"limits\":{\"maxToolCalls\":15,\"maxTotalTokens\":50000,\"maxModelTurns\":16,\"maxToolFailures\":5,\"timeoutMs\":120000,\"handoffReserveMs\":24000},\"handoffRequested\":false}"
+        }
+      ]
+    },
+    {
+      "at": 1791980185494,
+      "isChild": false,
+      "prompt": "\"[2026-10-14 20:16 GMT+8] E2E_batch-partial\"",
+      "toolResults": 0,
+      "declarations": [
+        "xopc_tool_search",
+        "xopc_tool_describe",
+        "xopc_tool_execute",
+        "apply_patch",
+        "automation",
+        "clarify",
+        "create_share",
+        "data_batch",
+        "delegate_task",
+        "exec_command",
+        "find",
+        "grep",
+        "knowledge_get",
+        "knowledge_search",
+        "knowledge_write",
+        "language_diagnostics",
+        "list_dir",
+        "managed_job",
+        "memory_maintenance",
+        "publish_artifacts",
+        "publish_task_result",
+        "read_file",
+        "read_media",
+        "review_workspace",
+        "send_media",
+        "send_message",
+        "session_recall",
+        "session_search",
+        "session_status",
+        "skill_install",
+        "skill_manage",
+        "skill_view",
+        "skills_list",
+        "skills_marketplace_search",
+        "text_to_speech",
+        "todo",
+        "tool_manual",
+        "update_plan",
+        "user_context_get",
+        "user_context_search",
+        "user_context_update",
+        "web_extract",
+        "web_fetch",
+        "web_search",
+        "workflow",
+        "workflow_manage",
+        "write_file",
+        "xopc_require_connection",
+        "xopc_update_connection_objective",
+        "xopc_use"
+      ],
+      "results": []
+    },
+    {
+      "at": 1791980185564,
+      "isChild": true,
+      "prompt": "[{\"type\":\"text\",\"text\":\"E2E_batch-partial\"}]",
+      "toolResults": 0,
+      "declarations": [
+        "data_batch",
+        "web_search",
+        "research_checkpoint"
+      ],
+      "results": []
+    },
+    {
+      "at": 1791980185606,
+      "isChild": true,
+      "prompt": "[{\"type\":\"text\",\"text\":\"E2E_batch-partial\"}]",
+      "toolResults": 1,
+      "declarations": [
+        "data_batch",
+        "web_search",
+        "research_checkpoint"
+      ],
+      "results": [
+        {
+          "schemaVersion": 1,
+          "operations": [
+            {
+              "id": "a",
+              "kind": "web_search",
+              "status": "ok",
+              "fragmentIds": [
+                "f1"
+              ],
+              "scope": "{\"kind\":\"web_search\",\"resource\":\"batch-partial:a\"}",
+              "sourceExhausted": false,
+              "outputOmitted": false,
+              "durationMs": 7
+            },
+            {
+              "id": "b",
+              "kind": "web_search",
+              "status": "ok",
+              "fragmentIds": [
+                "f2"
+              ],
+              "scope": "{\"kind\":\"web_search\",\"resource\":\"batch-partial:b\"}",
+              "sourceExhausted": false,
+              "outputOmitted": false,
+              "durationMs": 7
+            },
+            {
+              "id": "copy",
+              "kind": "web_search",
+              "status": "ok",
+              "fragmentIds": [
+                "f1"
+              ],
+              "scope": "{\"kind\":\"web_search\",\"resource\":\"batch-partial:a\"}",
+              "sourceExhausted": false,
+              "outputOmitted": false,
+              "durationMs": 7
+            }
+          ],
+          "fragments": [
+            {
+              "id": "f1",
+              "operationIds": [
+                "a",
+                "copy"
+              ],
+              "source": {
+                "kind": "web_search",
+                "resource": "batch-partial:a",
+                "capturedAt": "2026-10-14T12:16:25.587Z"
+              },
+              "text": "1. Synthetic official source batch-partial:a\n   https://fixture.invalid/batch-partial%3Aa\n   Synthetic source evidence; not actual vendor facts"
+            },
+            {
+              "id": "f2",
+              "operationIds": [
+                "b"
+              ],
+              "source": {
+                "kind": "web_search",
+                "resource": "batch-partial:b",
+                "capturedAt": "2026-10-14T12:16:25.590Z"
+              },
+              "text": "1. Synthetic official source batch-partial:b\n   https://fixture.invalid/batch-partial%3Ab\n   Synthetic source evidence; not actual vendor facts"
+            }
+          ],
+          "sourceRequests": 2
+        }
+      ]
+    },
+    {
+      "at": 1791980185635,
+      "isChild": true,
+      "prompt": "[{\"type\":\"text\",\"text\":\"E2E_batch-partial\"}]",
+      "toolResults": 2,
+      "declarations": [
+        "data_batch",
+        "web_search",
+        "research_checkpoint"
+      ],
+      "results": [
+        {
+          "schemaVersion": 1,
+          "operations": [
+            {
+              "id": "a",
+              "kind": "web_search",
+              "status": "ok",
+              "fragmentIds": [
+                "f1"
+              ],
+              "scope": "{\"kind\":\"web_search\",\"resource\":\"batch-partial:a\"}",
+              "sourceExhausted": false,
+              "outputOmitted": false,
+              "durationMs": 7
+            },
+            {
+              "id": "b",
+              "kind": "web_search",
+              "status": "ok",
+              "fragmentIds": [
+                "f2"
+              ],
+              "scope": "{\"kind\":\"web_search\",\"resource\":\"batch-partial:b\"}",
+              "sourceExhausted": false,
+              "outputOmitted": false,
+              "durationMs": 7
+            },
+            {
+              "id": "copy",
+              "kind": "web_search",
+              "status": "ok",
+              "fragmentIds": [
+                "f1"
+              ],
+              "scope": "{\"kind\":\"web_search\",\"resource\":\"batch-partial:a\"}",
+              "sourceExhausted": false,
+              "outputOmitted": false,
+              "durationMs": 7
+            }
+          ],
+          "fragments": [
+            {
+              "id": "f1",
+              "operationIds": [
+                "a",
+                "copy"
+              ],
+              "source": {
+                "kind": "web_search",
+                "resource": "batch-partial:a",
+                "capturedAt": "2026-10-14T12:16:25.587Z"
+              },
+              "text": "1. Synthetic official source batch-partial:a\n   https://fixture.invalid/batch-partial%3Aa\n   Synthetic source evidence; not actual vendor facts"
+            },
+            {
+              "id": "f2",
+              "operationIds": [
+                "b"
+              ],
+              "source": {
+                "kind": "web_search",
+                "resource": "batch-partial:b",
+                "capturedAt": "2026-10-14T12:16:25.590Z"
+              },
+              "text": "1. Synthetic official source batch-partial:b\n   https://fixture.invalid/batch-partial%3Ab\n   Synthetic source evidence; not actual vendor facts"
+            }
+          ],
+          "sourceRequests": 2
+        },
+        {
+          "saved": true,
+          "findingCount": 1,
+          "nextSteps": []
+        }
+      ]
+    },
+    {
+      "at": 1791980185683,
+      "isChild": false,
+      "prompt": "\"[2026-10-14 20:16 GMT+8] E2E_batch-partial\"",
+      "toolResults": 1,
+      "declarations": [
+        "xopc_tool_search",
+        "xopc_tool_describe",
+        "xopc_tool_execute",
+        "apply_patch",
+        "automation",
+        "clarify",
+        "create_share",
+        "data_batch",
+        "delegate_task",
+        "exec_command",
+        "find",
+        "grep",
+        "knowledge_get",
+        "knowledge_search",
+        "knowledge_write",
+        "language_diagnostics",
+        "list_dir",
+        "managed_job",
+        "memory_maintenance",
+        "publish_artifacts",
+        "publish_task_result",
+        "read_file",
+        "read_media",
+        "review_workspace",
+        "send_media",
+        "send_message",
+        "session_recall",
+        "session_search",
+        "session_status",
+        "skill_install",
+        "skill_manage",
+        "skill_view",
+        "skills_list",
+        "skills_marketplace_search",
+        "text_to_speech",
+        "todo",
+        "tool_manual",
+        "update_plan",
+        "user_context_get",
+        "user_context_search",
+        "user_context_update",
+        "web_extract",
+        "web_fetch",
+        "web_search",
+        "workflow",
+        "workflow_manage",
+        "write_file",
+        "xopc_require_connection",
+        "xopc_update_connection_objective",
+        "xopc_use"
+      ],
+      "results": [
+        {
+          "text": "E2E_BATCH_RESULT\n\nResearch checkpoint 41d7fda7-bf65-40a2-b8b4-1060986be17c: {\"findings\":[{\"id\":\"batch-partial\",\"subject\":\"Synthetic vendor\",\"field\":\"public evidence\",\"status\":\"confirmed\",\"conclusion\":\"Synthetic batch evidence\",\"sources\":[{\"url\":\"https://fixture.invalid/evidence\",\"title\":\"Controlled source\"}],\"checkedAt\":1791980185619}],\"evidence\":[{\"toolCallId\":\"call_53e2725f-3321-4461-9bba-66b0d2a6842f\",\"runId\":\"c1bc362a-58ad-44c2-98f4-b454f7a978a8\",\"toolName\":\"data_batch\",\"isError\":false,\"excerpt\":\"{\\\"schemaVersion\\\":1,\\\"operations\\\":[{\\\"id\\\":\\\"a\\\",\\\"kind\\\":\\\"web_search\\\",\\\"status\\\":\\\"ok\\\",\\\"fragmentIds\\\":[\\\"f1\\\"],\\\"scope\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"web_search\\\\\\\",\\\\\\\"resource\\\\\\\":\\\\\\\"batch-partial:a\\\\\\\"}\\\",\\\"sourceExhausted\\\":false,\\\"outputOmitted\\\":false,\\\"durationMs\\\":7},{\\\"id\\\":\\\"b\\\",\\\"kind\\\":\\\"web_search\\\",\\\"status\\\":\\\"ok\\\",\\\"fragmentIds\\\":[\\\"f2\\\"],\\\"scope\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"web_search\\\\\\\",\\\\\\\"resource\\\\\\\":\\\\\\\"batch-partial:b\\\\\\\"}\\\",\\\"sourceExhausted\\\":false,\\\"outputOmitted\\\":false,\\\"durationMs\\\":7},{\\\"id\\\":\\\"copy\\\",\\\"kind\\\":\\\"web_search\\\",\\\"status\\\":\\\"ok\\\",\\\"fragmentIds\\\":[\\\"f1\\\"],\\\"scope\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"web_search\\\\\\\",\\\\\\\"resource\\\\\\\":\\\\\\\"batch-partial:a\\\\\\\"}\\\",\\\"sourceExhausted\\\":false,\\\"outputOmitted\\\":false,\\\"durationMs\\\":7}],\\\"fragments\\\":[{\\\"id\\\":\\\"f1\\\",\\\"operationIds\\\":[\\\"a\\\",\\\"copy\\\"],\\\"source\\\":{\\\"kind\\\":\\\"web_search\\\",\\\"resource\\\":\\\"batch-partial:a\\\",\\\"capturedAt\\\":\\\"2026-10-14T12:16:25.587Z\\\"},\\\"text\\\":\\\"1. Synthetic official source batch-partial:a\\\\n   https://fixture.invalid/batch-partial%3Aa\\\\n   Synthetic source evidence; not actual vendor facts\\\"},{\\\"id\\\":\\\"f2\\\",\\\"operationIds\\\":[\\\"b\\\"],\\\"source\\\":{\\\"kind\\\":\\\"web_search\\\",\\\"resource\\\":\\\"batch-partial:b\\\",\\\"capturedAt\\\":\\\"2026-10-14T12:16:25.590Z\\\"},\\\"text\\\":\\\"1. Synthetic official source batch-partial:b\\\\n   https://fixture.invalid/batch-partial%3Ab\\\\n   Synthetic source evidence; not actual vendor facts\\\"}],\\\"sourceRequests\\\":2}\",\"recordedAt\":1791980185603}],\"nextSteps\":[],\"searches\":[{\"key\":\"f68662935c7b03a973a20831c62dd97eeec1593618459c719f44b5f370c915e6\",\"query\":\"batch-partial:a\",\"count\":5,\"results\":[{\"title\":\"Synthetic official source batch-partial:a\",\"url\":\"https://fixture.invalid/batch-partial%3Aa\",\"description\":\"Synthetic source evidence; not actual vendor facts\"}],\"provider\":\"searxng\",\"capturedAt\":1791980185587},{\"key\":\"16b4a33426cc8ecb51a96c1bf2bfc5d06eadf240dbb85223768ac1c7729e7a9a\",\"query\":\"batch-partial:b\",\"count\":5,\"results\":[{\"title\":\"Synthetic official source batch-partial:b\",\"url\":\"https://fixture.invalid/batch-partial%3Ab\",\"description\":\"Synthetic source evidence; not actual vendor facts\",\"source\":\"searxng\"}],\"provider\":\"searxng\",\"capturedAt\":1791980185590}]}. Resume unfinished work with resumeId and the same goal.\n\nBudget (light): {\"stopReason\":\"completed\",\"usage\":{\"toolCalls\":3,\"totalTokens\":0,\"modelTurns\":3,\"toolFailures\":0,\"elapsedMs\":149},\"limits\":{\"maxToolCalls\":15,\"maxTotalTokens\":50000,\"maxModelTurns\":16,\"maxToolFailures\":5,\"timeoutMs\":120000,\"handoffReserveMs\":24000},\"handoffRequested\":false}"
+        }
+      ]
+    },
+    {
+      "at": 1791980185951,
+      "isChild": false,
+      "prompt": "\"[2026-10-14 20:16 GMT+8] E2E_batch-rate\"",
+      "toolResults": 0,
+      "declarations": [
+        "xopc_tool_search",
+        "xopc_tool_describe",
+        "xopc_tool_execute",
+        "apply_patch",
+        "automation",
+        "clarify",
+        "create_share",
+        "data_batch",
+        "delegate_task",
+        "exec_command",
+        "find",
+        "grep",
+        "knowledge_get",
+        "knowledge_search",
+        "knowledge_write",
+        "language_diagnostics",
+        "list_dir",
+        "managed_job",
+        "memory_maintenance",
+        "publish_artifacts",
+        "publish_task_result",
+        "read_file",
+        "read_media",
+        "review_workspace",
+        "send_media",
+        "send_message",
+        "session_recall",
+        "session_search",
+        "session_status",
+        "skill_install",
+        "skill_manage",
+        "skill_view",
+        "skills_list",
+        "skills_marketplace_search",
+        "text_to_speech",
+        "todo",
+        "tool_manual",
+        "update_plan",
+        "user_context_get",
+        "user_context_search",
+        "user_context_update",
+        "web_extract",
+        "web_fetch",
+        "web_search",
+        "workflow",
+        "workflow_manage",
+        "write_file",
+        "xopc_require_connection",
+        "xopc_update_connection_objective",
+        "xopc_use"
+      ],
+      "results": []
+    },
+    {
+      "at": 1791980186016,
+      "isChild": true,
+      "prompt": "[{\"type\":\"text\",\"text\":\"E2E_batch-rate\"}]",
+      "toolResults": 0,
+      "declarations": [
+        "data_batch",
+        "web_search",
+        "research_checkpoint"
+      ],
+      "results": []
+    },
+    {
+      "at": 1791980187067,
+      "isChild": true,
+      "prompt": "[{\"type\":\"text\",\"text\":\"E2E_batch-rate\"}]",
+      "toolResults": 1,
+      "declarations": [
+        "data_batch",
+        "web_search",
+        "research_checkpoint"
+      ],
+      "results": [
+        {
+          "schemaVersion": 1,
+          "operations": [
+            {
+              "id": "a",
+              "kind": "web_search",
+              "status": "ok",
+              "fragmentIds": [
+                "f1"
+              ],
+              "scope": "{\"kind\":\"web_search\",\"resource\":\"batch-rate:a\"}",
+              "sourceExhausted": false,
+              "outputOmitted": false,
+              "durationMs": 1015
+            },
+            {
+              "id": "b",
+              "kind": "web_search",
+              "status": "ok",
+              "fragmentIds": [
+                "f2"
+              ],
+              "scope": "{\"kind\":\"web_search\",\"resource\":\"batch-rate:b\"}",
+              "sourceExhausted": false,
+              "outputOmitted": false,
+              "durationMs": 1015
+            },
+            {
+              "id": "copy",
+              "kind": "web_search",
+              "status": "ok",
+              "fragmentIds": [
+                "f1"
+              ],
+              "scope": "{\"kind\":\"web_search\",\"resource\":\"batch-rate:a\"}",
+              "sourceExhausted": false,
+              "outputOmitted": false,
+              "durationMs": 1015
+            }
+          ],
+          "fragments": [
+            {
+              "id": "f1",
+              "operationIds": [
+                "a",
+                "copy"
+              ],
+              "source": {
+                "kind": "web_search",
+                "resource": "batch-rate:a",
+                "capturedAt": "2026-10-14T12:16:27.046Z"
+              },
+              "text": "1. Synthetic official source batch-rate:a\n   https://fixture.invalid/batch-rate%3Aa\n   Synthetic source evidence; not actual vendor facts"
+            },
+            {
+              "id": "f2",
+              "operationIds": [
+                "b"
+              ],
+              "source": {
+                "kind": "web_search",
+                "resource": "batch-rate:b",
+                "capturedAt": "2026-10-14T12:16:27.049Z"
+              },
+              "text": "1. Synthetic official source batch-rate:b\n   https://fixture.invalid/batch-rate%3Ab\n   Synthetic source evidence; not actual vendor facts"
+            }
+          ],
+          "sourceRequests": 3
+        }
+      ]
+    },
+    {
+      "at": 1791980187095,
+      "isChild": true,
+      "prompt": "[{\"type\":\"text\",\"text\":\"E2E_batch-rate\"}]",
+      "toolResults": 2,
+      "declarations": [
+        "data_batch",
+        "web_search",
+        "research_checkpoint"
+      ],
+      "results": [
+        {
+          "schemaVersion": 1,
+          "operations": [
+            {
+              "id": "a",
+              "kind": "web_search",
+              "status": "ok",
+              "fragmentIds": [
+                "f1"
+              ],
+              "scope": "{\"kind\":\"web_search\",\"resource\":\"batch-rate:a\"}",
+              "sourceExhausted": false,
+              "outputOmitted": false,
+              "durationMs": 1015
+            },
+            {
+              "id": "b",
+              "kind": "web_search",
+              "status": "ok",
+              "fragmentIds": [
+                "f2"
+              ],
+              "scope": "{\"kind\":\"web_search\",\"resource\":\"batch-rate:b\"}",
+              "sourceExhausted": false,
+              "outputOmitted": false,
+              "durationMs": 1015
+            },
+            {
+              "id": "copy",
+              "kind": "web_search",
+              "status": "ok",
+              "fragmentIds": [
+                "f1"
+              ],
+              "scope": "{\"kind\":\"web_search\",\"resource\":\"batch-rate:a\"}",
+              "sourceExhausted": false,
+              "outputOmitted": false,
+              "durationMs": 1015
+            }
+          ],
+          "fragments": [
+            {
+              "id": "f1",
+              "operationIds": [
+                "a",
+                "copy"
+              ],
+              "source": {
+                "kind": "web_search",
+                "resource": "batch-rate:a",
+                "capturedAt": "2026-10-14T12:16:27.046Z"
+              },
+              "text": "1. Synthetic official source batch-rate:a\n   https://fixture.invalid/batch-rate%3Aa\n   Synthetic source evidence; not actual vendor facts"
+            },
+            {
+              "id": "f2",
+              "operationIds": [
+                "b"
+              ],
+              "source": {
+                "kind": "web_search",
+                "resource": "batch-rate:b",
+                "capturedAt": "2026-10-14T12:16:27.049Z"
+              },
+              "text": "1. Synthetic official source batch-rate:b\n   https://fixture.invalid/batch-rate%3Ab\n   Synthetic source evidence; not actual vendor facts"
+            }
+          ],
+          "sourceRequests": 3
+        },
+        {
+          "saved": true,
+          "findingCount": 1,
+          "nextSteps": []
+        }
+      ]
+    },
+    {
+      "at": 1791980187139,
+      "isChild": false,
+      "prompt": "\"[2026-10-14 20:16 GMT+8] E2E_batch-rate\"",
+      "toolResults": 1,
+      "declarations": [
+        "xopc_tool_search",
+        "xopc_tool_describe",
+        "xopc_tool_execute",
+        "apply_patch",
+        "automation",
+        "clarify",
+        "create_share",
+        "data_batch",
+        "delegate_task",
+        "exec_command",
+        "find",
+        "grep",
+        "knowledge_get",
+        "knowledge_search",
+        "knowledge_write",
+        "language_diagnostics",
+        "list_dir",
+        "managed_job",
+        "memory_maintenance",
+        "publish_artifacts",
+        "publish_task_result",
+        "read_file",
+        "read_media",
+        "review_workspace",
+        "send_media",
+        "send_message",
+        "session_recall",
+        "session_search",
+        "session_status",
+        "skill_install",
+        "skill_manage",
+        "skill_view",
+        "skills_list",
+        "skills_marketplace_search",
+        "text_to_speech",
+        "todo",
+        "tool_manual",
+        "update_plan",
+        "user_context_get",
+        "user_context_search",
+        "user_context_update",
+        "web_extract",
+        "web_fetch",
+        "web_search",
+        "workflow",
+        "workflow_manage",
+        "write_file",
+        "xopc_require_connection",
+        "xopc_update_connection_objective",
+        "xopc_use"
+      ],
+      "results": [
+        {
+          "text": "E2E_BATCH_RESULT\n\nResearch checkpoint e0173a19-2243-4baa-820b-74ca404e41fa: {\"findings\":[{\"id\":\"batch-rate\",\"subject\":\"Synthetic vendor\",\"field\":\"public evidence\",\"status\":\"confirmed\",\"conclusion\":\"Synthetic batch evidence\",\"sources\":[{\"url\":\"https://fixture.invalid/evidence\",\"title\":\"Controlled source\"}],\"checkedAt\":1791980187080}],\"evidence\":[{\"toolCallId\":\"call_f5a5b77a-6de9-4e60-9f09-f3374d6f0354\",\"runId\":\"55acbb0d-4c4d-48f9-a15c-69915360d95d\",\"toolName\":\"data_batch\",\"isError\":false,\"excerpt\":\"{\\\"schemaVersion\\\":1,\\\"operations\\\":[{\\\"id\\\":\\\"a\\\",\\\"kind\\\":\\\"web_search\\\",\\\"status\\\":\\\"ok\\\",\\\"fragmentIds\\\":[\\\"f1\\\"],\\\"scope\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"web_search\\\\\\\",\\\\\\\"resource\\\\\\\":\\\\\\\"batch-rate:a\\\\\\\"}\\\",\\\"sourceExhausted\\\":false,\\\"outputOmitted\\\":false,\\\"durationMs\\\":1015},{\\\"id\\\":\\\"b\\\",\\\"kind\\\":\\\"web_search\\\",\\\"status\\\":\\\"ok\\\",\\\"fragmentIds\\\":[\\\"f2\\\"],\\\"scope\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"web_search\\\\\\\",\\\\\\\"resource\\\\\\\":\\\\\\\"batch-rate:b\\\\\\\"}\\\",\\\"sourceExhausted\\\":false,\\\"outputOmitted\\\":false,\\\"durationMs\\\":1015},{\\\"id\\\":\\\"copy\\\",\\\"kind\\\":\\\"web_search\\\",\\\"status\\\":\\\"ok\\\",\\\"fragmentIds\\\":[\\\"f1\\\"],\\\"scope\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"web_search\\\\\\\",\\\\\\\"resource\\\\\\\":\\\\\\\"batch-rate:a\\\\\\\"}\\\",\\\"sourceExhausted\\\":false,\\\"outputOmitted\\\":false,\\\"durationMs\\\":1015}],\\\"fragments\\\":[{\\\"id\\\":\\\"f1\\\",\\\"operationIds\\\":[\\\"a\\\",\\\"copy\\\"],\\\"source\\\":{\\\"kind\\\":\\\"web_search\\\",\\\"resource\\\":\\\"batch-rate:a\\\",\\\"capturedAt\\\":\\\"2026-10-14T12:16:27.046Z\\\"},\\\"text\\\":\\\"1. Synthetic official source batch-rate:a\\\\n   https://fixture.invalid/batch-rate%3Aa\\\\n   Synthetic source evidence; not actual vendor facts\\\"},{\\\"id\\\":\\\"f2\\\",\\\"operationIds\\\":[\\\"b\\\"],\\\"source\\\":{\\\"kind\\\":\\\"web_search\\\",\\\"resource\\\":\\\"batch-rate:b\\\",\\\"capturedAt\\\":\\\"2026-10-14T12:16:27.049Z\\\"},\\\"text\\\":\\\"1. Synthetic official source batch-rate:b\\\\n   https://fixture.invalid/batch-rate%3Ab\\\\n   Synthetic source evidence; not actual vendor facts\\\"}],\\\"sourceRequests\\\":3}\",\"recordedAt\":1791980187064}],\"nextSteps\":[],\"searches\":[{\"key\":\"b10f03868ea6e15f11c68e8af0e8fb1623c09e88dc174130d01e5fe6ae4d9345\",\"query\":\"batch-rate:a\",\"count\":5,\"results\":[{\"title\":\"Synthetic official source batch-rate:a\",\"url\":\"https://fixture.invalid/batch-rate%3Aa\",\"description\":\"Synthetic source evidence; not actual vendor facts\",\"source\":\"searxng\"}],\"provider\":\"searxng\",\"capturedAt\":1791980187046},{\"key\":\"84b229ab5245bcc87c3bac1bbb83a685e095c6b5ec1c0300444eb2ff7f6e8778\",\"query\":\"batch-rate:b\",\"count\":5,\"results\":[{\"title\":\"Synthetic official source batch-rate:b\",\"url\":\"https://fixture.invalid/batch-rate%3Ab\",\"description\":\"Synthetic source evidence; not actual vendor facts\",\"source\":\"searxng\"}],\"provider\":\"searxng\",\"capturedAt\":1791980187049}]}. Resume unfinished work with resumeId and the same goal.\n\nBudget (light): {\"stopReason\":\"completed\",\"usage\":{\"toolCalls\":3,\"totalTokens\":0,\"modelTurns\":3,\"toolFailures\":0,\"elapsedMs\":1151},\"limits\":{\"maxToolCalls\":15,\"maxTotalTokens\":50000,\"maxModelTurns\":16,\"maxToolFailures\":5,\"timeoutMs\":120000,\"handoffReserveMs\":24000},\"handoffRequested\":false}"
+        }
+      ]
+    },
+    {
+      "at": 1791980187416,
+      "isChild": false,
+      "prompt": "\"[2026-10-14 20:16 GMT+8] E2E_batch-denied\"",
+      "toolResults": 0,
+      "declarations": [
+        "xopc_tool_search",
+        "xopc_tool_describe",
+        "xopc_tool_execute",
+        "apply_patch",
+        "automation",
+        "clarify",
+        "create_share",
+        "data_batch",
+        "delegate_task",
+        "exec_command",
+        "find",
+        "grep",
+        "knowledge_get",
+        "knowledge_search",
+        "knowledge_write",
+        "language_diagnostics",
+        "list_dir",
+        "managed_job",
+        "memory_maintenance",
+        "publish_artifacts",
+        "publish_task_result",
+        "read_file",
+        "read_media",
+        "review_workspace",
+        "send_media",
+        "send_message",
+        "session_recall",
+        "session_search",
+        "session_status",
+        "skill_install",
+        "skill_manage",
+        "skill_view",
+        "skills_list",
+        "skills_marketplace_search",
+        "text_to_speech",
+        "todo",
+        "tool_manual",
+        "update_plan",
+        "user_context_get",
+        "user_context_search",
+        "user_context_update",
+        "web_extract",
+        "web_fetch",
+        "web_search",
+        "workflow",
+        "workflow_manage",
+        "write_file",
+        "xopc_require_connection",
+        "xopc_update_connection_objective",
+        "xopc_use"
+      ],
+      "results": []
+    },
+    {
+      "at": 1791980187483,
+      "isChild": true,
+      "prompt": "[{\"type\":\"text\",\"text\":\"E2E_batch-denied\"}]",
+      "toolResults": 0,
+      "declarations": [
+        "data_batch",
+        "web_search",
+        "research_checkpoint"
+      ],
+      "results": []
+    },
+    {
+      "at": 1791980187520,
+      "isChild": true,
+      "prompt": "[{\"type\":\"text\",\"text\":\"E2E_batch-denied\"}]",
+      "toolResults": 1,
+      "declarations": [
+        "data_batch",
+        "web_search",
+        "research_checkpoint"
+      ],
+      "results": [
+        {
+          "schemaVersion": 1,
+          "operations": [
+            {
+              "id": "a",
+              "kind": "web_search",
+              "status": "denied",
+              "fragmentIds": [],
+              "scope": "{\"kind\":\"web_search\",\"resource\":\"batch-denied:a\"}",
+              "sourceExhausted": false,
+              "outputOmitted": false,
+              "durationMs": 4,
+              "failureKind": "permission_denied",
+              "reason": "Search request failed (403)"
+            },
+            {
+              "id": "b",
+              "kind": "web_search",
+              "status": "denied",
+              "fragmentIds": [],
+              "scope": "{\"kind\":\"web_search\",\"resource\":\"batch-denied:b\"}",
+              "sourceExhausted": false,
+              "outputOmitted": false,
+              "durationMs": 4,
+              "failureKind": "permission_denied",
+              "reason": "Search request failed (403)"
+            },
+            {
+              "id": "copy",
+              "kind": "web_search",
+              "status": "denied",
+              "fragmentIds": [],
+              "scope": "{\"kind\":\"web_search\",\"resource\":\"batch-denied:a\"}",
+              "sourceExhausted": false,
+              "outputOmitted": false,
+              "durationMs": 3,
+              "failureKind": "permission_denied",
+              "reason": "Search request failed (403)"
+            }
+          ],
+          "fragments": [],
+          "sourceRequests": 1
+        }
+      ]
+    },
+    {
+      "at": 1791980187564,
+      "isChild": false,
+      "prompt": "\"[2026-10-14 20:16 GMT+8] E2E_batch-denied\"",
+      "toolResults": 1,
+      "declarations": [
+        "xopc_tool_search",
+        "xopc_tool_describe",
+        "xopc_tool_execute",
+        "apply_patch",
+        "automation",
+        "clarify",
+        "create_share",
+        "data_batch",
+        "delegate_task",
+        "exec_command",
+        "find",
+        "grep",
+        "knowledge_get",
+        "knowledge_search",
+        "knowledge_write",
+        "language_diagnostics",
+        "list_dir",
+        "managed_job",
+        "memory_maintenance",
+        "publish_artifacts",
+        "publish_task_result",
+        "read_file",
+        "read_media",
+        "review_workspace",
+        "send_media",
+        "send_message",
+        "session_recall",
+        "session_search",
+        "session_status",
+        "skill_install",
+        "skill_manage",
+        "skill_view",
+        "skills_list",
+        "skills_marketplace_search",
+        "text_to_speech",
+        "todo",
+        "tool_manual",
+        "update_plan",
+        "user_context_get",
+        "user_context_search",
+        "user_context_update",
+        "web_extract",
+        "web_fetch",
+        "web_search",
+        "workflow",
+        "workflow_manage",
+        "write_file",
+        "xopc_require_connection",
+        "xopc_update_connection_objective",
+        "xopc_use"
+      ],
+      "results": [
+        {
+          "text": "E2E_BATCH_RESULT\nResearch checkpoint still has unfinished work; do not claim completion.\n\nResearch checkpoint 5e042bf7-ca97-4428-9ff7-3f4175446d77: {\"findings\":[],\"evidence\":[{\"toolCallId\":\"call_6aa52597-6a72-426a-a194-268668bfc99f\",\"runId\":\"0ea912aa-ecdb-4f50-8961-8ec9c9358a4e\",\"toolName\":\"data_batch\",\"isError\":true,\"excerpt\":\"{\\\"schemaVersion\\\":1,\\\"operations\\\":[{\\\"id\\\":\\\"a\\\",\\\"kind\\\":\\\"web_search\\\",\\\"status\\\":\\\"denied\\\",\\\"fragmentIds\\\":[],\\\"scope\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"web_search\\\\\\\",\\\\\\\"resource\\\\\\\":\\\\\\\"batch-denied:a\\\\\\\"}\\\",\\\"sourceExhausted\\\":false,\\\"outputOmitted\\\":false,\\\"durationMs\\\":4,\\\"failureKind\\\":\\\"permission_denied\\\",\\\"reason\\\":\\\"Search request failed (403)\\\"},{\\\"id\\\":\\\"b\\\",\\\"kind\\\":\\\"web_search\\\",\\\"status\\\":\\\"denied\\\",\\\"fragmentIds\\\":[],\\\"scope\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"web_search\\\\\\\",\\\\\\\"resource\\\\\\\":\\\\\\\"batch-denied:b\\\\\\\"}\\\",\\\"sourceExhausted\\\":false,\\\"outputOmitted\\\":false,\\\"durationMs\\\":4,\\\"failureKind\\\":\\\"permission_denied\\\",\\\"reason\\\":\\\"Search request failed (403)\\\"},{\\\"id\\\":\\\"copy\\\",\\\"kind\\\":\\\"web_search\\\",\\\"status\\\":\\\"denied\\\",\\\"fragmentIds\\\":[],\\\"scope\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"web_search\\\\\\\",\\\\\\\"resource\\\\\\\":\\\\\\\"batch-denied:a\\\\\\\"}\\\",\\\"sourceExhausted\\\":false,\\\"outputOmitted\\\":false,\\\"durationMs\\\":3,\\\"failureKind\\\":\\\"permission_denied\\\",\\\"reason\\\":\\\"Search request failed (403)\\\"}],\\\"fragments\\\":[],\\\"sourceRequests\\\":1}\",\"recordedAt\":1791980187517}],\"nextSteps\":[\"E2E_batch-denied\"]}. Resume unfinished work with resumeId and the same goal.\n\nBudget (light): {\"stopReason\":\"verification\",\"usage\":{\"toolCalls\":3,\"totalTokens\":0,\"modelTurns\":2,\"toolFailures\":1,\"elapsedMs\":109},\"limits\":{\"maxToolCalls\":15,\"maxTotalTokens\":50000,\"maxModelTurns\":16,\"maxToolFailures\":5,\"timeoutMs\":120000,\"handoffReserveMs\":24000},\"handoffRequested\":false}"
+        }
+      ]
+    },
+    {
+      "at": 1791980187868,
+      "isChild": false,
+      "prompt": "\"[2026-10-14 20:16 GMT+8] E2E_batch-timeout\"",
+      "toolResults": 0,
+      "declarations": [
+        "xopc_tool_search",
+        "xopc_tool_describe",
+        "xopc_tool_execute",
+        "apply_patch",
+        "automation",
+        "clarify",
+        "create_share",
+        "data_batch",
+        "delegate_task",
+        "exec_command",
+        "find",
+        "grep",
+        "knowledge_get",
+        "knowledge_search",
+        "knowledge_write",
+        "language_diagnostics",
+        "list_dir",
+        "managed_job",
+        "memory_maintenance",
+        "publish_artifacts",
+        "publish_task_result",
+        "read_file",
+        "read_media",
+        "review_workspace",
+        "send_media",
+        "send_message",
+        "session_recall",
+        "session_search",
+        "session_status",
+        "skill_install",
+        "skill_manage",
+        "skill_view",
+        "skills_list",
+        "skills_marketplace_search",
+        "text_to_speech",
+        "todo",
+        "tool_manual",
+        "update_plan",
+        "user_context_get",
+        "user_context_search",
+        "user_context_update",
+        "web_extract",
+        "web_fetch",
+        "web_search",
+        "workflow",
+        "workflow_manage",
+        "write_file",
+        "xopc_require_connection",
+        "xopc_update_connection_objective",
+        "xopc_use"
+      ],
+      "results": []
+    },
+    {
+      "at": 1791980187935,
+      "isChild": true,
+      "prompt": "[{\"type\":\"text\",\"text\":\"E2E_batch-timeout\"}]",
+      "toolResults": 0,
+      "declarations": [
+        "data_batch",
+        "web_search",
+        "research_checkpoint"
+      ],
+      "results": []
+    },
+    {
+      "at": 1791980197993,
+      "isChild": true,
+      "prompt": "[{\"type\":\"text\",\"text\":\"E2E_batch-timeout\"}]",
+      "toolResults": 1,
+      "declarations": [
+        "data_batch",
+        "web_search",
+        "research_checkpoint"
+      ],
+      "results": [
+        {
+          "schemaVersion": 1,
+          "operations": [
+            {
+              "id": "a",
+              "kind": "web_search",
+              "status": "ok",
+              "fragmentIds": [
+                "f1"
+              ],
+              "scope": "{\"kind\":\"web_search\",\"resource\":\"batch-timeout:a\"}",
+              "sourceExhausted": false,
+              "outputOmitted": false,
+              "durationMs": 10022
+            },
+            {
+              "id": "b",
+              "kind": "web_search",
+              "status": "ok",
+              "fragmentIds": [
+                "f2"
+              ],
+              "scope": "{\"kind\":\"web_search\",\"resource\":\"batch-timeout:b\"}",
+              "sourceExhausted": false,
+              "outputOmitted": false,
+              "durationMs": 10021
+            },
+            {
+              "id": "copy",
+              "kind": "web_search",
+              "status": "ok",
+              "fragmentIds": [
+                "f1"
+              ],
+              "scope": "{\"kind\":\"web_search\",\"resource\":\"batch-timeout:a\"}",
+              "sourceExhausted": false,
+              "outputOmitted": false,
+              "durationMs": 10021
+            }
+          ],
+          "fragments": [
+            {
+              "id": "f1",
+              "operationIds": [
+                "a",
+                "copy"
+              ],
+              "source": {
+                "kind": "web_search",
+                "resource": "batch-timeout:a",
+                "capturedAt": "2026-10-14T12:16:37.970Z"
+              },
+              "text": "1. Synthetic official source batch-timeout:a\n   https://fixture.invalid/batch-timeout%3Aa\n   Synthetic source evidence; not actual vendor facts"
+            },
+            {
+              "id": "f2",
+              "operationIds": [
+                "b"
+              ],
+              "source": {
+                "kind": "web_search",
+                "resource": "batch-timeout:b",
+                "capturedAt": "2026-10-14T12:16:37.974Z"
+              },
+              "text": "1. Synthetic official source batch-timeout:b\n   https://fixture.invalid/batch-timeout%3Ab\n   Synthetic source evidence; not actual vendor facts"
+            }
+          ],
+          "sourceRequests": 3
+        }
+      ]
+    },
+    {
+      "at": 1791980198022,
+      "isChild": true,
+      "prompt": "[{\"type\":\"text\",\"text\":\"E2E_batch-timeout\"}]",
+      "toolResults": 2,
+      "declarations": [
+        "data_batch",
+        "web_search",
+        "research_checkpoint"
+      ],
+      "results": [
+        {
+          "schemaVersion": 1,
+          "operations": [
+            {
+              "id": "a",
+              "kind": "web_search",
+              "status": "ok",
+              "fragmentIds": [
+                "f1"
+              ],
+              "scope": "{\"kind\":\"web_search\",\"resource\":\"batch-timeout:a\"}",
+              "sourceExhausted": false,
+              "outputOmitted": false,
+              "durationMs": 10022
+            },
+            {
+              "id": "b",
+              "kind": "web_search",
+              "status": "ok",
+              "fragmentIds": [
+                "f2"
+              ],
+              "scope": "{\"kind\":\"web_search\",\"resource\":\"batch-timeout:b\"}",
+              "sourceExhausted": false,
+              "outputOmitted": false,
+              "durationMs": 10021
+            },
+            {
+              "id": "copy",
+              "kind": "web_search",
+              "status": "ok",
+              "fragmentIds": [
+                "f1"
+              ],
+              "scope": "{\"kind\":\"web_search\",\"resource\":\"batch-timeout:a\"}",
+              "sourceExhausted": false,
+              "outputOmitted": false,
+              "durationMs": 10021
+            }
+          ],
+          "fragments": [
+            {
+              "id": "f1",
+              "operationIds": [
+                "a",
+                "copy"
+              ],
+              "source": {
+                "kind": "web_search",
+                "resource": "batch-timeout:a",
+                "capturedAt": "2026-10-14T12:16:37.970Z"
+              },
+              "text": "1. Synthetic official source batch-timeout:a\n   https://fixture.invalid/batch-timeout%3Aa\n   Synthetic source evidence; not actual vendor facts"
+            },
+            {
+              "id": "f2",
+              "operationIds": [
+                "b"
+              ],
+              "source": {
+                "kind": "web_search",
+                "resource": "batch-timeout:b",
+                "capturedAt": "2026-10-14T12:16:37.974Z"
+              },
+              "text": "1. Synthetic official source batch-timeout:b\n   https://fixture.invalid/batch-timeout%3Ab\n   Synthetic source evidence; not actual vendor facts"
+            }
+          ],
+          "sourceRequests": 3
+        },
+        {
+          "saved": true,
+          "findingCount": 1,
+          "nextSteps": []
+        }
+      ]
+    },
+    {
+      "at": 1791980198069,
+      "isChild": false,
+      "prompt": "\"[2026-10-14 20:16 GMT+8] E2E_batch-timeout\"",
+      "toolResults": 1,
+      "declarations": [
+        "xopc_tool_search",
+        "xopc_tool_describe",
+        "xopc_tool_execute",
+        "apply_patch",
+        "automation",
+        "clarify",
+        "create_share",
+        "data_batch",
+        "delegate_task",
+        "exec_command",
+        "find",
+        "grep",
+        "knowledge_get",
+        "knowledge_search",
+        "knowledge_write",
+        "language_diagnostics",
+        "list_dir",
+        "managed_job",
+        "memory_maintenance",
+        "publish_artifacts",
+        "publish_task_result",
+        "read_file",
+        "read_media",
+        "review_workspace",
+        "send_media",
+        "send_message",
+        "session_recall",
+        "session_search",
+        "session_status",
+        "skill_install",
+        "skill_manage",
+        "skill_view",
+        "skills_list",
+        "skills_marketplace_search",
+        "text_to_speech",
+        "todo",
+        "tool_manual",
+        "update_plan",
+        "user_context_get",
+        "user_context_search",
+        "user_context_update",
+        "web_extract",
+        "web_fetch",
+        "web_search",
+        "workflow",
+        "workflow_manage",
+        "write_file",
+        "xopc_require_connection",
+        "xopc_update_connection_objective",
+        "xopc_use"
+      ],
+      "results": [
+        {
+          "text": "E2E_BATCH_RESULT\n\nResearch checkpoint ba9fc266-a08e-4289-b8b4-3cb0f2543912: {\"findings\":[{\"id\":\"batch-timeout\",\"subject\":\"Synthetic vendor\",\"field\":\"public evidence\",\"status\":\"confirmed\",\"conclusion\":\"Synthetic batch evidence\",\"sources\":[{\"url\":\"https://fixture.invalid/evidence\",\"title\":\"Controlled source\"}],\"checkedAt\":1791980198007}],\"evidence\":[{\"toolCallId\":\"call_dfdb006d-8018-40c3-9cd5-00773a78e79d\",\"runId\":\"2257b7b2-8675-42c3-923a-42e8b7cc66a7\",\"toolName\":\"data_batch\",\"isError\":false,\"excerpt\":\"{\\\"schemaVersion\\\":1,\\\"operations\\\":[{\\\"id\\\":\\\"a\\\",\\\"kind\\\":\\\"web_search\\\",\\\"status\\\":\\\"ok\\\",\\\"fragmentIds\\\":[\\\"f1\\\"],\\\"scope\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"web_search\\\\\\\",\\\\\\\"resource\\\\\\\":\\\\\\\"batch-timeout:a\\\\\\\"}\\\",\\\"sourceExhausted\\\":false,\\\"outputOmitted\\\":false,\\\"durationMs\\\":10022},{\\\"id\\\":\\\"b\\\",\\\"kind\\\":\\\"web_search\\\",\\\"status\\\":\\\"ok\\\",\\\"fragmentIds\\\":[\\\"f2\\\"],\\\"scope\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"web_search\\\\\\\",\\\\\\\"resource\\\\\\\":\\\\\\\"batch-timeout:b\\\\\\\"}\\\",\\\"sourceExhausted\\\":false,\\\"outputOmitted\\\":false,\\\"durationMs\\\":10021},{\\\"id\\\":\\\"copy\\\",\\\"kind\\\":\\\"web_search\\\",\\\"status\\\":\\\"ok\\\",\\\"fragmentIds\\\":[\\\"f1\\\"],\\\"scope\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"web_search\\\\\\\",\\\\\\\"resource\\\\\\\":\\\\\\\"batch-timeout:a\\\\\\\"}\\\",\\\"sourceExhausted\\\":false,\\\"outputOmitted\\\":false,\\\"durationMs\\\":10021}],\\\"fragments\\\":[{\\\"id\\\":\\\"f1\\\",\\\"operationIds\\\":[\\\"a\\\",\\\"copy\\\"],\\\"source\\\":{\\\"kind\\\":\\\"web_search\\\",\\\"resource\\\":\\\"batch-timeout:a\\\",\\\"capturedAt\\\":\\\"2026-10-14T12:16:37.970Z\\\"},\\\"text\\\":\\\"1. Synthetic official source batch-timeout:a\\\\n   https://fixture.invalid/batch-timeout%3Aa\\\\n   Synthetic source evidence; not actual vendor facts\\\"},{\\\"id\\\":\\\"f2\\\",\\\"operationIds\\\":[\\\"b\\\"],\\\"source\\\":{\\\"kind\\\":\\\"web_search\\\",\\\"resource\\\":\\\"batch-timeout:b\\\",\\\"capturedAt\\\":\\\"2026-10-14T12:16:37.974Z\\\"},\\\"text\\\":\\\"1. Synthetic official source batch-timeout:b\\\\n   https://fixture.invalid/batch-timeout%3Ab\\\\n   Synthetic source evidence; not actual vendor facts\\\"}],\\\"sourceRequests\\\":3}\",\"recordedAt\":1791980197989}],\"nextSteps\":[],\"searches\":[{\"key\":\"bc3bc964e28b69d4bcfd61e9e2ce338fa639dc9bb3259b625b66c8646dbfba91\",\"query\":\"batch-timeout:a\",\"count\":5,\"results\":[{\"title\":\"Synthetic official source batch-timeout:a\",\"url\":\"https://fixture.invalid/batch-timeout%3Aa\",\"description\":\"Synthetic source evidence; not actual vendor facts\",\"source\":\"searxng\"}],\"provider\":\"searxng\",\"capturedAt\":1791980197970},{\"key\":\"a759f34fc5d2e12da050708c9fa99103d89fbd1c3ea6050c20bb200749b96cc3\",\"query\":\"batch-timeout:b\",\"count\":5,\"results\":[{\"title\":\"Synthetic official source batch-timeout:b\",\"url\":\"https://fixture.invalid/batch-timeout%3Ab\",\"description\":\"Synthetic source evidence; not actual vendor facts\",\"source\":\"searxng\"}],\"provider\":\"searxng\",\"capturedAt\":1791980197974}]}. Resume unfinished work with resumeId and the same goal.\n\nBudget (light): {\"stopReason\":\"completed\",\"usage\":{\"toolCalls\":3,\"totalTokens\":0,\"modelTurns\":3,\"toolFailures\":0,\"elapsedMs\":10162},\"limits\":{\"maxToolCalls\":15,\"maxTotalTokens\":50000,\"maxModelTurns\":16,\"maxToolFailures\":5,\"timeoutMs\":120000,\"handoffReserveMs\":24000},\"handoffRequested\":false}"
+        }
+      ]
+    },
+    {
+      "at": 1791980198443,
+      "isChild": false,
+      "prompt": "\"[2026-10-14 20:16 GMT+8] E2E_INDIVIDUAL_RATE\"",
+      "toolResults": 0,
+      "declarations": [
+        "xopc_tool_search",
+        "xopc_tool_describe",
+        "xopc_tool_execute",
+        "apply_patch",
+        "automation",
+        "clarify",
+        "create_share",
+        "data_batch",
+        "delegate_task",
+        "exec_command",
+        "find",
+        "grep",
+        "knowledge_get",
+        "knowledge_search",
+        "knowledge_write",
+        "language_diagnostics",
+        "list_dir",
+        "managed_job",
+        "memory_maintenance",
+        "publish_artifacts",
+        "publish_task_result",
+        "read_file",
+        "read_media",
+        "review_workspace",
+        "send_media",
+        "send_message",
+        "session_recall",
+        "session_search",
+        "session_status",
+        "skill_install",
+        "skill_manage",
+        "skill_view",
+        "skills_list",
+        "skills_marketplace_search",
+        "text_to_speech",
+        "todo",
+        "tool_manual",
+        "update_plan",
+        "user_context_get",
+        "user_context_search",
+        "user_context_update",
+        "web_extract",
+        "web_fetch",
+        "web_search",
+        "workflow",
+        "workflow_manage",
+        "write_file",
+        "xopc_require_connection",
+        "xopc_update_connection_objective",
+        "xopc_use"
+      ],
+      "results": []
+    },
+    {
+      "at": 1791980198509,
+      "isChild": true,
+      "prompt": "[{\"type\":\"text\",\"text\":\"E2E_INDIVIDUAL_RATE\"}]",
+      "toolResults": 0,
+      "declarations": [
+        "web_search",
+        "research_checkpoint"
+      ],
+      "results": []
+    },
+    {
+      "at": 1791980199547,
+      "isChild": true,
+      "prompt": "[{\"type\":\"text\",\"text\":\"E2E_INDIVIDUAL_RATE\"}]",
+      "toolResults": 1,
+      "declarations": [
+        "web_search",
+        "research_checkpoint"
+      ],
+      "results": [
+        {
+          "text": "1. Synthetic official source rate-once\n   https://fixture.invalid/rate-once\n   Synthetic source evidence; not actual vendor facts"
+        }
+      ]
+    },
+    {
+      "at": 1791980199575,
+      "isChild": true,
+      "prompt": "[{\"type\":\"text\",\"text\":\"E2E_INDIVIDUAL_RATE\"}]",
+      "toolResults": 2,
+      "declarations": [
+        "web_search",
+        "research_checkpoint"
+      ],
+      "results": [
+        {
+          "text": "1. Synthetic official source rate-once\n   https://fixture.invalid/rate-once\n   Synthetic source evidence; not actual vendor facts"
+        },
+        {
+          "saved": true,
+          "findingCount": 1,
+          "nextSteps": []
+        }
+      ]
+    },
+    {
+      "at": 1791980199619,
+      "isChild": false,
+      "prompt": "\"[2026-10-14 20:16 GMT+8] E2E_INDIVIDUAL_RATE\"",
+      "toolResults": 1,
+      "declarations": [
+        "xopc_tool_search",
+        "xopc_tool_describe",
+        "xopc_tool_execute",
+        "apply_patch",
+        "automation",
+        "clarify",
+        "create_share",
+        "data_batch",
+        "delegate_task",
+        "exec_command",
+        "find",
+        "grep",
+        "knowledge_get",
+        "knowledge_search",
+        "knowledge_write",
+        "language_diagnostics",
+        "list_dir",
+        "managed_job",
+        "memory_maintenance",
+        "publish_artifacts",
+        "publish_task_result",
+        "read_file",
+        "read_media",
+        "review_workspace",
+        "send_media",
+        "send_message",
+        "session_recall",
+        "session_search",
+        "session_status",
+        "skill_install",
+        "skill_manage",
+        "skill_view",
+        "skills_list",
+        "skills_marketplace_search",
+        "text_to_speech",
+        "todo",
+        "tool_manual",
+        "update_plan",
+        "user_context_get",
+        "user_context_search",
+        "user_context_update",
+        "web_extract",
+        "web_fetch",
+        "web_search",
+        "workflow",
+        "workflow_manage",
+        "write_file",
+        "xopc_require_connection",
+        "xopc_update_connection_objective",
+        "xopc_use"
+      ],
+      "results": [
+        {
+          "text": "E2E_SEARCH_RESULT\n\nResearch checkpoint 407a4be9-7aad-4214-98ad-c9d80df20918: {\"findings\":[{\"id\":\"rate-once\",\"subject\":\"Synthetic vendor\",\"field\":\"public evidence\",\"status\":\"confirmed\",\"conclusion\":\"Synthetic verified evidence\",\"sources\":[{\"url\":\"https://fixture.invalid/evidence\",\"title\":\"Controlled source\"}],\"checkedAt\":1791980199561}],\"evidence\":[{\"toolCallId\":\"call_db702976-45e0-47b8-a311-6f05fc1137a4\",\"runId\":\"5e14cb1e-9e44-42ae-9289-244b7a6772b3\",\"toolName\":\"web_search\",\"isError\":false,\"excerpt\":\"1. Synthetic official source rate-once\\n   https://fixture.invalid/rate-once\\n   Synthetic source evidence; not actual vendor facts\",\"recordedAt\":1791980199545}],\"nextSteps\":[],\"searches\":[{\"key\":\"40c4e523a189267efe6e271c7ea1244e4a8a91ea80995b95a20b5817bea27839\",\"query\":\"rate-once\",\"count\":5,\"results\":[{\"title\":\"Synthetic official source rate-once\",\"url\":\"https://fixture.invalid/rate-once\",\"description\":\"Synthetic source evidence; not actual vendor facts\",\"source\":\"searxng\"}],\"provider\":\"searxng\",\"capturedAt\":1791980199530}]}. Resume unfinished work with resumeId and the same goal.\n\nBudget (light): {\"stopReason\":\"completed\",\"usage\":{\"toolCalls\":1,\"totalTokens\":0,\"modelTurns\":3,\"toolFailures\":0,\"elapsedMs\":1139},\"limits\":{\"maxToolCalls\":15,\"maxTotalTokens\":50000,\"maxModelTurns\":16,\"maxToolFailures\":5,\"timeoutMs\":120000,\"handoffReserveMs\":24000},\"handoffRequested\":false}"
+        }
+      ]
+    },
+    {
+      "at": 1791980199897,
+      "isChild": false,
+      "prompt": "\"[2026-10-14 20:16 GMT+8] E2E_INDIVIDUAL_DENIED\"",
+      "toolResults": 0,
+      "declarations": [
+        "xopc_tool_search",
+        "xopc_tool_describe",
+        "xopc_tool_execute",
+        "apply_patch",
+        "automation",
+        "clarify",
+        "create_share",
+        "data_batch",
+        "delegate_task",
+        "exec_command",
+        "find",
+        "grep",
+        "knowledge_get",
+        "knowledge_search",
+        "knowledge_write",
+        "language_diagnostics",
+        "list_dir",
+        "managed_job",
+        "memory_maintenance",
+        "publish_artifacts",
+        "publish_task_result",
+        "read_file",
+        "read_media",
+        "review_workspace",
+        "send_media",
+        "send_message",
+        "session_recall",
+        "session_search",
+        "session_status",
+        "skill_install",
+        "skill_manage",
+        "skill_view",
+        "skills_list",
+        "skills_marketplace_search",
+        "text_to_speech",
+        "todo",
+        "tool_manual",
+        "update_plan",
+        "user_context_get",
+        "user_context_search",
+        "user_context_update",
+        "web_extract",
+        "web_fetch",
+        "web_search",
+        "workflow",
+        "workflow_manage",
+        "write_file",
+        "xopc_require_connection",
+        "xopc_update_connection_objective",
+        "xopc_use"
+      ],
+      "results": []
+    },
+    {
+      "at": 1791980199965,
+      "isChild": true,
+      "prompt": "[{\"type\":\"text\",\"text\":\"E2E_INDIVIDUAL_DENIED\"}]",
+      "toolResults": 0,
+      "declarations": [
+        "web_search",
+        "research_checkpoint"
+      ],
+      "results": []
+    },
+    {
+      "at": 1791980199995,
+      "isChild": true,
+      "prompt": "[{\"type\":\"text\",\"text\":\"E2E_INDIVIDUAL_DENIED\"}]",
+      "toolResults": 1,
+      "declarations": [
+        "web_search",
+        "research_checkpoint"
+      ],
+      "results": [
+        {
+          "text": "Search error (permission_denied): Search request failed (403)"
+        }
+      ]
+    },
+    {
+      "at": 1791980200038,
+      "isChild": false,
+      "prompt": "\"[2026-10-14 20:16 GMT+8] E2E_INDIVIDUAL_DENIED\"",
+      "toolResults": 1,
+      "declarations": [
+        "xopc_tool_search",
+        "xopc_tool_describe",
+        "xopc_tool_execute",
+        "apply_patch",
+        "automation",
+        "clarify",
+        "create_share",
+        "data_batch",
+        "delegate_task",
+        "exec_command",
+        "find",
+        "grep",
+        "knowledge_get",
+        "knowledge_search",
+        "knowledge_write",
+        "language_diagnostics",
+        "list_dir",
+        "managed_job",
+        "memory_maintenance",
+        "publish_artifacts",
+        "publish_task_result",
+        "read_file",
+        "read_media",
+        "review_workspace",
+        "send_media",
+        "send_message",
+        "session_recall",
+        "session_search",
+        "session_status",
+        "skill_install",
+        "skill_manage",
+        "skill_view",
+        "skills_list",
+        "skills_marketplace_search",
+        "text_to_speech",
+        "todo",
+        "tool_manual",
+        "update_plan",
+        "user_context_get",
+        "user_context_search",
+        "user_context_update",
+        "web_extract",
+        "web_fetch",
+        "web_search",
+        "workflow",
+        "workflow_manage",
+        "write_file",
+        "xopc_require_connection",
+        "xopc_update_connection_objective",
+        "xopc_use"
+      ],
+      "results": [
+        {
+          "text": "E2E_SEARCH_RESULT\nResearch checkpoint still has unfinished work; do not claim completion.\n\nResearch checkpoint e5d5daf4-4687-49e2-8907-3a49d1b44c35: {\"findings\":[],\"evidence\":[{\"toolCallId\":\"call_19d93e65-860a-4963-8ca7-be458823247b\",\"runId\":\"969f2c7e-8e39-43bd-bdf5-a39e01d3c146\",\"toolName\":\"web_search\",\"isError\":true,\"excerpt\":\"Search error (permission_denied): Search request failed (403)\",\"recordedAt\":1791980199993}],\"nextSteps\":[\"E2E_INDIVIDUAL_DENIED\"]}. Resume unfinished work with resumeId and the same goal.\n\nBudget (light): {\"stopReason\":\"verification\",\"usage\":{\"toolCalls\":1,\"totalTokens\":0,\"modelTurns\":2,\"toolFailures\":1,\"elapsedMs\":102},\"limits\":{\"maxToolCalls\":15,\"maxTotalTokens\":50000,\"maxModelTurns\":16,\"maxToolFailures\":5,\"timeoutMs\":120000,\"handoffReserveMs\":24000},\"handoffRequested\":false}"
+        }
+      ]
+    },
+    {
+      "at": 1791980200359,
+      "isChild": false,
+      "prompt": "\"[2026-10-14 20:16 GMT+8] E2E_TIMEOUT_FIRST\"",
+      "toolResults": 0,
+      "declarations": [
+        "xopc_tool_search",
+        "xopc_tool_describe",
+        "xopc_tool_execute",
+        "apply_patch",
+        "automation",
+        "clarify",
+        "create_share",
+        "data_batch",
+        "delegate_task",
+        "exec_command",
+        "find",
+        "grep",
+        "knowledge_get",
+        "knowledge_search",
+        "knowledge_write",
+        "language_diagnostics",
+        "list_dir",
+        "managed_job",
+        "memory_maintenance",
+        "publish_artifacts",
+        "publish_task_result",
+        "read_file",
+        "read_media",
+        "review_workspace",
+        "send_media",
+        "send_message",
+        "session_recall",
+        "session_search",
+        "session_status",
+        "skill_install",
+        "skill_manage",
+        "skill_view",
+        "skills_list",
+        "skills_marketplace_search",
+        "text_to_speech",
+        "todo",
+        "tool_manual",
+        "update_plan",
+        "user_context_get",
+        "user_context_search",
+        "user_context_update",
+        "web_extract",
+        "web_fetch",
+        "web_search",
+        "workflow",
+        "workflow_manage",
+        "write_file",
+        "xopc_require_connection",
+        "xopc_update_connection_objective",
+        "xopc_use"
+      ],
+      "results": []
+    },
+    {
+      "at": 1791980200439,
+      "isChild": true,
+      "prompt": "[{\"type\":\"text\",\"text\":\"E2E_TIMEOUT_VENDOR\"}]",
+      "toolResults": 0,
+      "declarations": [
+        "web_search",
+        "research_checkpoint"
+      ],
+      "results": []
+    },
+    {
+      "at": 1791980200472,
+      "isChild": true,
+      "prompt": "[{\"type\":\"text\",\"text\":\"E2E_TIMEOUT_VENDOR\"}]",
+      "toolResults": 1,
+      "declarations": [
+        "web_search",
+        "research_checkpoint"
+      ],
+      "results": [
+        {
+          "text": "1. Synthetic official source timeout-proof\n   https://fixture.invalid/timeout-proof\n   E2E_VERIFIED_BEFORE_TIMEOUT"
+        }
+      ]
+    },
+    {
+      "at": 1791980200501,
+      "isChild": true,
+      "prompt": "[{\"type\":\"text\",\"text\":\"E2E_TIMEOUT_VENDOR\"}]",
+      "toolResults": 2,
+      "declarations": [
+        "web_search",
+        "research_checkpoint"
+      ],
+      "results": [
+        {
+          "text": "1. Synthetic official source timeout-proof\n   https://fixture.invalid/timeout-proof\n   E2E_VERIFIED_BEFORE_TIMEOUT"
+        },
+        {
+          "saved": true,
+          "findingCount": 1,
+          "nextSteps": [
+            "Finish the remaining item after timeout"
+          ]
+        }
+      ]
+    },
+    {
+      "at": 1791980296521,
+      "isChild": true,
+      "prompt": "[{\"type\":\"text\",\"text\":\"Research time expired. Do not perform more research. Summarize saved findings, source evidence and precise unfinished steps. Do not claim completion.\\n{\\\"fi",
+      "toolResults": 0,
+      "declarations": [],
+      "results": []
+    },
+    {
+      "at": 1791980296568,
+      "isChild": false,
+      "prompt": "\"[2026-10-14 20:16 GMT+8] E2E_TIMEOUT_FIRST\"",
+      "toolResults": 1,
+      "declarations": [
+        "xopc_tool_search",
+        "xopc_tool_describe",
+        "xopc_tool_execute",
+        "apply_patch",
+        "automation",
+        "clarify",
+        "create_share",
+        "data_batch",
+        "delegate_task",
+        "exec_command",
+        "find",
+        "grep",
+        "knowledge_get",
+        "knowledge_search",
+        "knowledge_write",
+        "language_diagnostics",
+        "list_dir",
+        "managed_job",
+        "memory_maintenance",
+        "publish_artifacts",
+        "publish_task_result",
+        "read_file",
+        "read_media",
+        "review_workspace",
+        "send_media",
+        "send_message",
+        "session_recall",
+        "session_search",
+        "session_status",
+        "skill_install",
+        "skill_manage",
+        "skill_view",
+        "skills_list",
+        "skills_marketplace_search",
+        "text_to_speech",
+        "todo",
+        "tool_manual",
+        "update_plan",
+        "user_context_get",
+        "user_context_search",
+        "user_context_update",
+        "web_extract",
+        "web_fetch",
+        "web_search",
+        "workflow",
+        "workflow_manage",
+        "write_file",
+        "xopc_require_connection",
+        "xopc_update_connection_objective",
+        "xopc_use"
+      ],
+      "results": [
+        {
+          "text": "E2E_HANDOFF: saved evidence remains; resume the unfinished item.\n\nAgent execution policy stopped before completion\n\nDelegation stopped: deadline_exceeded. Treat this as a partial handoff; validate completion before continuing.\n\nResearch checkpoint aef74d8b-517d-41c4-96b9-d99824dacd39: {\"findings\":[{\"id\":\"before-timeout\",\"subject\":\"Synthetic vendor\",\"field\":\"public evidence\",\"status\":\"confirmed\",\"conclusion\":\"E2E_VERIFIED_BEFORE_TIMEOUT\",\"sources\":[{\"url\":\"https://fixture.invalid/evidence\",\"title\":\"Controlled source\"}],\"checkedAt\":1791980200485}],\"evidence\":[{\"toolCallId\":\"call_19321d44-3cd7-4b87-b9cf-25793c242af6\",\"runId\":\"83d6f475-4036-494c-8213-71c40786ac60\",\"toolName\":\"web_search\",\"isError\":false,\"excerpt\":\"1. Synthetic official source timeout-proof\\n   https://fixture.invalid/timeout-proof\\n   E2E_VERIFIED_BEFORE_TIMEOUT\",\"recordedAt\":1791980200469}],\"nextSteps\":[\"Finish the remaining item after timeout\"],\"searches\":[{\"key\":\"7734dcb55eb9dd9e6d7305bb5013891449efddc0f5090f529265ed8df5d47f18\",\"query\":\"timeout-proof\",\"count\":5,\"results\":[{\"title\":\"Synthetic official source timeout-proof\",\"url\":\"https://fixture.invalid/timeout-proof\",\"description\":\"E2E_VERIFIED_BEFORE_TIMEOUT\",\"source\":\"searxng\"}],\"provider\":\"searxng\",\"capturedAt\":1791980200457}]}. Resume unfinished work with resumeId and the same goal.\n\nBudget (light): {\"stopReason\":\"deadline_exceeded\",\"usage\":{\"toolCalls\":1,\"totalTokens\":0,\"modelTurns\":4,\"toolFailures\":0,\"elapsedMs\":96163},\"limits\":{\"maxToolCalls\":15,\"maxTotalTokens\":50000,\"maxModelTurns\":16,\"maxToolFailures\":5,\"timeoutMs\":120000,\"handoffReserveMs\":24000},\"handoffRequested\":true}"
+        }
+      ]
+    },
+    {
+      "at": 1791980298916,
+      "isChild": false,
+      "prompt": "\"[2026-10-14 20:18 GMT+8] E2E_TIMEOUT_RESUME\"",
+      "toolResults": 0,
+      "declarations": [
+        "xopc_tool_search",
+        "xopc_tool_describe",
+        "xopc_tool_execute",
+        "apply_patch",
+        "automation",
+        "clarify",
+        "create_share",
+        "data_batch",
+        "delegate_task",
+        "exec_command",
+        "find",
+        "grep",
+        "knowledge_get",
+        "knowledge_search",
+        "knowledge_write",
+        "language_diagnostics",
+        "list_dir",
+        "managed_job",
+        "memory_maintenance",
+        "publish_artifacts",
+        "publish_task_result",
+        "read_file",
+        "read_media",
+        "review_workspace",
+        "send_media",
+        "send_message",
+        "session_recall",
+        "session_search",
+        "session_status",
+        "skill_install",
+        "skill_manage",
+        "skill_view",
+        "skills_list",
+        "skills_marketplace_search",
+        "text_to_speech",
+        "todo",
+        "tool_manual",
+        "update_plan",
+        "user_context_get",
+        "user_context_search",
+        "user_context_update",
+        "web_extract",
+        "web_fetch",
+        "web_search",
+        "workflow",
+        "workflow_manage",
+        "write_file",
+        "xopc_require_connection",
+        "xopc_update_connection_objective",
+        "xopc_use"
+      ],
+      "results": []
+    },
+    {
+      "at": 1791980298993,
+      "isChild": true,
+      "prompt": "[{\"type\":\"text\",\"text\":\"E2E_TIMEOUT_VENDOR\"}]",
+      "toolResults": 0,
+      "declarations": [
+        "web_search",
+        "research_checkpoint"
+      ],
+      "results": []
+    },
+    {
+      "at": 1791980299030,
+      "isChild": true,
+      "prompt": "[{\"type\":\"text\",\"text\":\"E2E_TIMEOUT_VENDOR\"}]",
+      "toolResults": 1,
+      "declarations": [
+        "web_search",
+        "research_checkpoint"
+      ],
+      "results": [
+        {
+          "text": "1. Synthetic official source timeout-proof\n   https://fixture.invalid/timeout-proof\n   E2E_VERIFIED_BEFORE_TIMEOUT"
+        }
+      ]
+    },
+    {
+      "at": 1791980299058,
+      "isChild": true,
+      "prompt": "[{\"type\":\"text\",\"text\":\"E2E_TIMEOUT_VENDOR\"}]",
+      "toolResults": 2,
+      "declarations": [
+        "web_search",
+        "research_checkpoint"
+      ],
+      "results": [
+        {
+          "text": "1. Synthetic official source timeout-proof\n   https://fixture.invalid/timeout-proof\n   E2E_VERIFIED_BEFORE_TIMEOUT"
+        },
+        {
+          "saved": true,
+          "findingCount": 1,
+          "nextSteps": []
+        }
+      ]
+    },
+    {
+      "at": 1791980299104,
+      "isChild": false,
+      "prompt": "\"[2026-10-14 20:18 GMT+8] E2E_TIMEOUT_RESUME\"",
+      "toolResults": 1,
+      "declarations": [
+        "xopc_tool_search",
+        "xopc_tool_describe",
+        "xopc_tool_execute",
+        "apply_patch",
+        "automation",
+        "clarify",
+        "create_share",
+        "data_batch",
+        "delegate_task",
+        "exec_command",
+        "find",
+        "grep",
+        "knowledge_get",
+        "knowledge_search",
+        "knowledge_write",
+        "language_diagnostics",
+        "list_dir",
+        "managed_job",
+        "memory_maintenance",
+        "publish_artifacts",
+        "publish_task_result",
+        "read_file",
+        "read_media",
+        "review_workspace",
+        "send_media",
+        "send_message",
+        "session_recall",
+        "session_search",
+        "session_status",
+        "skill_install",
+        "skill_manage",
+        "skill_view",
+        "skills_list",
+        "skills_marketplace_search",
+        "text_to_speech",
+        "todo",
+        "tool_manual",
+        "update_plan",
+        "user_context_get",
+        "user_context_search",
+        "user_context_update",
+        "web_extract",
+        "web_fetch",
+        "web_search",
+        "workflow",
+        "workflow_manage",
+        "write_file",
+        "xopc_require_connection",
+        "xopc_update_connection_objective",
+        "xopc_use"
+      ],
+      "results": [
+        {
+          "text": "E2E_RESUMED_COMPLETE\n\nResearch checkpoint aef74d8b-517d-41c4-96b9-d99824dacd39: {\"findings\":[{\"id\":\"before-timeout\",\"subject\":\"Synthetic vendor\",\"field\":\"public evidence\",\"status\":\"confirmed\",\"conclusion\":\"E2E_VERIFIED_BEFORE_TIMEOUT\",\"sources\":[{\"url\":\"https://fixture.invalid/evidence\",\"title\":\"Controlled source\"}],\"checkedAt\":1791980200485}],\"evidence\":[{\"toolCallId\":\"call_19321d44-3cd7-4b87-b9cf-25793c242af6\",\"runId\":\"83d6f475-4036-494c-8213-71c40786ac60\",\"toolName\":\"web_search\",\"isError\":false,\"excerpt\":\"1. Synthetic official source timeout-proof\\n   https://fixture.invalid/timeout-proof\\n   E2E_VERIFIED_BEFORE_TIMEOUT\",\"recordedAt\":1791980200469},{\"toolCallId\":\"call_de49f0fb-d37b-4f41-bc56-c18f1e850ba4\",\"runId\":\"ce6be7aa-90a0-4f76-b72a-add978724be5\",\"toolName\":\"web_search\",\"isError\":false,\"excerpt\":\"1. Synthetic official source timeout-proof\\n   https://fixture.invalid/timeout-proof\\n   E2E_VERIFIED_BEFORE_TIMEOUT\",\"recordedAt\":1791980299026}],\"nextSteps\":[],\"searches\":[{\"key\":\"7734dcb55eb9dd9e6d7305bb5013891449efddc0f5090f529265ed8df5d47f18\",\"query\":\"timeout-proof\",\"count\":5,\"results\":[{\"title\":\"Synthetic official source timeout-proof\",\"url\":\"https://fixture.invalid/timeout-proof\",\"description\":\"E2E_VERIFIED_BEFORE_TIMEOUT\",\"source\":\"searxng\"}],\"provider\":\"searxng\",\"capturedAt\":1791980200457}]}. Resume unfinished work with resumeId and the same goal.\n\nBudget (light): {\"stopReason\":\"completed\",\"usage\":{\"toolCalls\":1,\"totalTokens\":0,\"modelTurns\":3,\"toolFailures\":0,\"elapsedMs\":141},\"limits\":{\"maxToolCalls\":15,\"maxTotalTokens\":50000,\"maxModelTurns\":16,\"maxToolFailures\":5,\"timeoutMs\":120000,\"handoffReserveMs\":24000},\"handoffRequested\":false}"
+        }
+      ]
+    },
+    {
+      "at": 1791980299501,
+      "isChild": false,
+      "prompt": "\"[2026-10-14 20:18 GMT+8] E2E_ISOLATION\"",
+      "toolResults": 0,
+      "declarations": [
+        "xopc_tool_search",
+        "xopc_tool_describe",
+        "xopc_tool_execute",
+        "apply_patch",
+        "automation",
+        "clarify",
+        "create_share",
+        "data_batch",
+        "delegate_task",
+        "exec_command",
+        "find",
+        "grep",
+        "knowledge_get",
+        "knowledge_search",
+        "knowledge_write",
+        "language_diagnostics",
+        "list_dir",
+        "managed_job",
+        "memory_maintenance",
+        "publish_artifacts",
+        "publish_task_result",
+        "read_file",
+        "read_media",
+        "review_workspace",
+        "send_media",
+        "send_message",
+        "session_recall",
+        "session_search",
+        "session_status",
+        "skill_install",
+        "skill_manage",
+        "skill_view",
+        "skills_list",
+        "skills_marketplace_search",
+        "text_to_speech",
+        "todo",
+        "tool_manual",
+        "update_plan",
+        "user_context_get",
+        "user_context_search",
+        "user_context_update",
+        "web_extract",
+        "web_fetch",
+        "web_search",
+        "workflow",
+        "workflow_manage",
+        "write_file",
+        "xopc_require_connection",
+        "xopc_update_connection_objective",
+        "xopc_use"
+      ],
+      "results": []
+    },
+    {
+      "at": 1791980299566,
+      "isChild": true,
+      "prompt": "[{\"type\":\"text\",\"text\":\"E2E_CACHE_ISOLATION\"}]",
+      "toolResults": 0,
+      "declarations": [
+        "web_search",
+        "research_checkpoint"
+      ],
+      "results": []
+    },
+    {
+      "at": 1791980299599,
+      "isChild": true,
+      "prompt": "[{\"type\":\"text\",\"text\":\"E2E_CACHE_ISOLATION\"}]",
+      "toolResults": 1,
+      "declarations": [
+        "web_search",
+        "research_checkpoint"
+      ],
+      "results": [
+        {
+          "text": "1. Synthetic official source timeout-proof\n   https://fixture.invalid/timeout-proof\n   E2E_VERIFIED_BEFORE_TIMEOUT"
+        }
+      ]
+    },
+    {
+      "at": 1791980299626,
+      "isChild": true,
+      "prompt": "[{\"type\":\"text\",\"text\":\"E2E_CACHE_ISOLATION\"}]",
+      "toolResults": 2,
+      "declarations": [
+        "web_search",
+        "research_checkpoint"
+      ],
+      "results": [
+        {
+          "text": "1. Synthetic official source timeout-proof\n   https://fixture.invalid/timeout-proof\n   E2E_VERIFIED_BEFORE_TIMEOUT"
+        },
+        {
+          "saved": true,
+          "findingCount": 1,
+          "nextSteps": []
+        }
+      ]
+    },
+    {
+      "at": 1791980299671,
+      "isChild": false,
+      "prompt": "\"[2026-10-14 20:18 GMT+8] E2E_ISOLATION\"",
+      "toolResults": 1,
+      "declarations": [
+        "xopc_tool_search",
+        "xopc_tool_describe",
+        "xopc_tool_execute",
+        "apply_patch",
+        "automation",
+        "clarify",
+        "create_share",
+        "data_batch",
+        "delegate_task",
+        "exec_command",
+        "find",
+        "grep",
+        "knowledge_get",
+        "knowledge_search",
+        "knowledge_write",
+        "language_diagnostics",
+        "list_dir",
+        "managed_job",
+        "memory_maintenance",
+        "publish_artifacts",
+        "publish_task_result",
+        "read_file",
+        "read_media",
+        "review_workspace",
+        "send_media",
+        "send_message",
+        "session_recall",
+        "session_search",
+        "session_status",
+        "skill_install",
+        "skill_manage",
+        "skill_view",
+        "skills_list",
+        "skills_marketplace_search",
+        "text_to_speech",
+        "todo",
+        "tool_manual",
+        "update_plan",
+        "user_context_get",
+        "user_context_search",
+        "user_context_update",
+        "web_extract",
+        "web_fetch",
+        "web_search",
+        "workflow",
+        "workflow_manage",
+        "write_file",
+        "xopc_require_connection",
+        "xopc_update_connection_objective",
+        "xopc_use"
+      ],
+      "results": [
+        {
+          "text": "E2E_SEARCH_RESULT\n\nResearch checkpoint 395fc1ce-3e05-452e-beac-9b650607ad39: {\"findings\":[{\"id\":\"timeout-proof\",\"subject\":\"Synthetic vendor\",\"field\":\"public evidence\",\"status\":\"confirmed\",\"conclusion\":\"Synthetic verified evidence\",\"sources\":[{\"url\":\"https://fixture.invalid/evidence\",\"title\":\"Controlled source\"}],\"checkedAt\":1791980299612}],\"evidence\":[{\"toolCallId\":\"call_9b53c3c6-000a-478e-8b91-02a81f817ecd\",\"runId\":\"1e1c1592-f202-46e8-b78d-5f916dcc649e\",\"toolName\":\"web_search\",\"isError\":false,\"excerpt\":\"1. Synthetic official source timeout-proof\\n   https://fixture.invalid/timeout-proof\\n   E2E_VERIFIED_BEFORE_TIMEOUT\",\"recordedAt\":1791980299596}],\"nextSteps\":[],\"searches\":[{\"key\":\"7734dcb55eb9dd9e6d7305bb5013891449efddc0f5090f529265ed8df5d47f18\",\"query\":\"timeout-proof\",\"count\":5,\"results\":[{\"title\":\"Synthetic official source timeout-proof\",\"url\":\"https://fixture.invalid/timeout-proof\",\"description\":\"E2E_VERIFIED_BEFORE_TIMEOUT\",\"source\":\"searxng\"}],\"provider\":\"searxng\",\"capturedAt\":1791980299584}]}. Resume unfinished work with resumeId and the same goal.\n\nBudget (light): {\"stopReason\":\"completed\",\"usage\":{\"toolCalls\":1,\"totalTokens\":0,\"modelTurns\":3,\"toolFailures\":0,\"elapsedMs\":129},\"limits\":{\"maxToolCalls\":15,\"maxTotalTokens\":50000,\"maxModelTurns\":16,\"maxToolFailures\":5,\"timeoutMs\":120000,\"handoffReserveMs\":24000},\"handoffRequested\":false}"
+        }
+      ]
+    },
+    {
+      "at": 1791980299945,
+      "isChild": false,
+      "prompt": "\"[2026-10-14 20:18 GMT+8] E2E_REVOKE_FIRST\"",
+      "toolResults": 0,
+      "declarations": [
+        "xopc_tool_search",
+        "xopc_tool_describe",
+        "xopc_tool_execute",
+        "apply_patch",
+        "automation",
+        "clarify",
+        "create_share",
+        "data_batch",
+        "delegate_task",
+        "exec_command",
+        "find",
+        "grep",
+        "knowledge_get",
+        "knowledge_search",
+        "knowledge_write",
+        "language_diagnostics",
+        "list_dir",
+        "managed_job",
+        "memory_maintenance",
+        "publish_artifacts",
+        "publish_task_result",
+        "read_file",
+        "read_media",
+        "review_workspace",
+        "send_media",
+        "send_message",
+        "session_recall",
+        "session_search",
+        "session_status",
+        "skill_install",
+        "skill_manage",
+        "skill_view",
+        "skills_list",
+        "skills_marketplace_search",
+        "text_to_speech",
+        "todo",
+        "tool_manual",
+        "update_plan",
+        "user_context_get",
+        "user_context_search",
+        "user_context_update",
+        "web_extract",
+        "web_fetch",
+        "web_search",
+        "workflow",
+        "workflow_manage",
+        "write_file",
+        "xopc_require_connection",
+        "xopc_update_connection_objective",
+        "xopc_use"
+      ],
+      "results": []
+    },
+    {
+      "at": 1791980300010,
+      "isChild": true,
+      "prompt": "[{\"type\":\"text\",\"text\":\"E2E_CACHE_REVOKE\"}]",
+      "toolResults": 0,
+      "declarations": [
+        "web_search",
+        "research_checkpoint"
+      ],
+      "results": []
+    },
+    {
+      "at": 1791980300040,
+      "isChild": true,
+      "prompt": "[{\"type\":\"text\",\"text\":\"E2E_CACHE_REVOKE\"}]",
+      "toolResults": 1,
+      "declarations": [
+        "web_search",
+        "research_checkpoint"
+      ],
+      "results": [
+        {
+          "text": "1. Synthetic official source cache-revocation-proof\n   https://fixture.invalid/cache-revocation-proof\n   Synthetic source evidence; not actual vendor facts"
+        }
+      ]
+    },
+    {
+      "at": 1791980300068,
+      "isChild": true,
+      "prompt": "[{\"type\":\"text\",\"text\":\"E2E_CACHE_REVOKE\"}]",
+      "toolResults": 2,
+      "declarations": [
+        "web_search",
+        "research_checkpoint"
+      ],
+      "results": [
+        {
+          "text": "1. Synthetic official source cache-revocation-proof\n   https://fixture.invalid/cache-revocation-proof\n   Synthetic source evidence; not actual vendor facts"
+        },
+        {
+          "saved": true,
+          "findingCount": 1,
+          "nextSteps": [
+            "Finish later"
+          ]
+        }
+      ]
+    },
+    {
+      "at": 1791980300112,
+      "isChild": false,
+      "prompt": "\"[2026-10-14 20:18 GMT+8] E2E_REVOKE_FIRST\"",
+      "toolResults": 1,
+      "declarations": [
+        "xopc_tool_search",
+        "xopc_tool_describe",
+        "xopc_tool_execute",
+        "apply_patch",
+        "automation",
+        "clarify",
+        "create_share",
+        "data_batch",
+        "delegate_task",
+        "exec_command",
+        "find",
+        "grep",
+        "knowledge_get",
+        "knowledge_search",
+        "knowledge_write",
+        "language_diagnostics",
+        "list_dir",
+        "managed_job",
+        "memory_maintenance",
+        "publish_artifacts",
+        "publish_task_result",
+        "read_file",
+        "read_media",
+        "review_workspace",
+        "send_media",
+        "send_message",
+        "session_recall",
+        "session_search",
+        "session_status",
+        "skill_install",
+        "skill_manage",
+        "skill_view",
+        "skills_list",
+        "skills_marketplace_search",
+        "text_to_speech",
+        "todo",
+        "tool_manual",
+        "update_plan",
+        "user_context_get",
+        "user_context_search",
+        "user_context_update",
+        "web_extract",
+        "web_fetch",
+        "web_search",
+        "workflow",
+        "workflow_manage",
+        "write_file",
+        "xopc_require_connection",
+        "xopc_update_connection_objective",
+        "xopc_use"
+      ],
+      "results": [
+        {
+          "text": "E2E_SEARCH_RESULT\nResearch checkpoint still has unfinished work; do not claim completion.\n\nResearch checkpoint 90177974-bf22-4c28-8bd0-040e520c8aa1: {\"findings\":[{\"id\":\"cache-revocation-proof\",\"subject\":\"Synthetic vendor\",\"field\":\"public evidence\",\"status\":\"confirmed\",\"conclusion\":\"Synthetic verified evidence\",\"sources\":[{\"url\":\"https://fixture.invalid/evidence\",\"title\":\"Controlled source\"}],\"checkedAt\":1791980300054}],\"evidence\":[{\"toolCallId\":\"call_d1dc4aec-0262-4b18-92dc-42b782faae81\",\"runId\":\"df3db2c5-cab7-4df9-afb1-eab40903a37e\",\"toolName\":\"web_search\",\"isError\":false,\"excerpt\":\"1. Synthetic official source cache-revocation-proof\\n   https://fixture.invalid/cache-revocation-proof\\n   Synthetic source evidence; not actual vendor facts\",\"recordedAt\":1791980300038}],\"nextSteps\":[\"Finish later\"],\"searches\":[{\"key\":\"564ffbff3fd64c136ded01d7a8e45c043fbe7415b6f8f464fd3cec1b9885b7d9\",\"query\":\"cache-revocation-proof\",\"count\":5,\"results\":[{\"title\":\"Synthetic official source cache-revocation-proof\",\"url\":\"https://fixture.invalid/cache-revocation-proof\",\"description\":\"Synthetic source evidence; not actual vendor facts\",\"source\":\"searxng\"}],\"provider\":\"searxng\",\"capturedAt\":1791980300026}]}. Resume unfinished work with resumeId and the same goal.\n\nBudget (light): {\"stopReason\":\"verification\",\"usage\":{\"toolCalls\":1,\"totalTokens\":0,\"modelTurns\":3,\"toolFailures\":0,\"elapsedMs\":129},\"limits\":{\"maxToolCalls\":15,\"maxTotalTokens\":50000,\"maxModelTurns\":16,\"maxToolFailures\":5,\"timeoutMs\":120000,\"handoffReserveMs\":24000},\"handoffRequested\":false}"
+        }
+      ]
+    },
+    {
+      "at": 1791980300425,
+      "isChild": false,
+      "prompt": "\"[2026-10-14 20:18 GMT+8] E2E_REVOKE_RESUME\"",
+      "toolResults": 0,
+      "declarations": [
+        "xopc_tool_search",
+        "xopc_tool_describe",
+        "xopc_tool_execute",
+        "apply_patch",
+        "automation",
+        "clarify",
+        "create_share",
+        "data_batch",
+        "delegate_task",
+        "exec_command",
+        "find",
+        "grep",
+        "knowledge_get",
+        "knowledge_search",
+        "knowledge_write",
+        "language_diagnostics",
+        "list_dir",
+        "managed_job",
+        "memory_maintenance",
+        "publish_artifacts",
+        "publish_task_result",
+        "read_file",
+        "read_media",
+        "review_workspace",
+        "send_media",
+        "send_message",
+        "session_recall",
+        "session_search",
+        "session_status",
+        "skill_install",
+        "skill_manage",
+        "skill_view",
+        "skills_list",
+        "skills_marketplace_search",
+        "text_to_speech",
+        "todo",
+        "tool_manual",
+        "update_plan",
+        "user_context_get",
+        "user_context_search",
+        "user_context_update",
+        "web_extract",
+        "web_fetch",
+        "workflow",
+        "workflow_manage",
+        "write_file",
+        "xopc_require_connection",
+        "xopc_update_connection_objective",
+        "xopc_use"
+      ],
+      "results": []
+    },
+    {
+      "at": 1791980300462,
+      "isChild": false,
+      "prompt": "\"[2026-10-14 20:18 GMT+8] E2E_REVOKE_RESUME\"",
+      "toolResults": 1,
+      "declarations": [
+        "xopc_tool_search",
+        "xopc_tool_describe",
+        "xopc_tool_execute",
+        "apply_patch",
+        "automation",
+        "clarify",
+        "create_share",
+        "data_batch",
+        "delegate_task",
+        "exec_command",
+        "find",
+        "grep",
+        "knowledge_get",
+        "knowledge_search",
+        "knowledge_write",
+        "language_diagnostics",
+        "list_dir",
+        "managed_job",
+        "memory_maintenance",
+        "publish_artifacts",
+        "publish_task_result",
+        "read_file",
+        "read_media",
+        "review_workspace",
+        "send_media",
+        "send_message",
+        "session_recall",
+        "session_search",
+        "session_status",
+        "skill_install",
+        "skill_manage",
+        "skill_view",
+        "skills_list",
+        "skills_marketplace_search",
+        "text_to_speech",
+        "todo",
+        "tool_manual",
+        "update_plan",
+        "user_context_get",
+        "user_context_search",
+        "user_context_update",
+        "web_extract",
+        "web_fetch",
+        "workflow",
+        "workflow_manage",
+        "write_file",
+        "xopc_require_connection",
+        "xopc_update_connection_objective",
+        "xopc_use"
+      ],
+      "results": [
+        {
+          "error": "No permitted tools in the requested delegation",
+          "granted": [],
+          "rejected": [
+            {
+              "tool": "web_search",
+              "reason": "Unavailable to the parent agent"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "stateDirectory": "/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-research-gateway-QVAaQy",
+  "sourceHashes": {
+    "src/agent/tools/delegation-policy.ts": "e1dfd4169300a1fa7ffe3561449c512873a37402a0384aefed6434a3b966b65b",
+    "src/agent/orchestration/agent-turn-policy.ts": "8bf2a185fdd2f7b22328802e8f6562a963715153b7514257a4060a2c5a78ccf9",
+    "src/agent/child-agent-factory.ts": "f6d70483c11042d2dfbf579a9637c5ffead2095f01a36cf549a013b2afad11f7",
+    "src/agent/tools/delegate-tool.ts": "747fab1ff518a692bbc6f96a094bc80c7dcbd1950416a052df1762cb96f035ff",
+    "src/agent/tools/search/registry.ts": "f93dee0897b85774a06cd9f7920e47967264a9fb59ee557bf437d4fcc4d5920f",
+    "src/agent/data-acquisition/service.ts": "4e87c579c750f8ea1f656a867c83746708a58c82c5a26efd9bd54e7912c53a20"
+  }
+}

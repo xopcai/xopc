@@ -128,3 +128,10 @@ describe('delegated capabilities', () => {
     expect(await policy.beforeToolCall(call)).toMatchObject({ block: true, reason: expect.stringContaining('deny') });
   });
 });
+
+it('delegates the batch wrapper only with underlying capabilities and confines inherited batch reads', async () => {
+  const names = ['data_batch', 'read_file', 'web_search', 'xopc_tool_execute'];
+  expect(resolveDelegationTools(names, 'custom', ['data_batch', 'web_search'], ['web_read']).granted).toEqual(['data_batch', 'web_search']);
+  expect(resolveDelegationTools(['data_batch', 'web_search'], 'inspect').granted).toEqual([]);
+  expect(resolveDelegationTools(names, 'review').granted).toEqual(['data_batch', 'read_file']);
+});

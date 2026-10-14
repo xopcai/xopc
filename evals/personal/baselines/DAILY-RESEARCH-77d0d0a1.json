@@ -1,0 +1,732 @@
+{
+  "suiteVersion": 2,
+  "mode": "daily_gateway_real",
+  "marker": "DAILY-RESEARCH-77d0d0a1",
+  "base": "http://127.0.0.1:18790",
+  "startedAt": "2026-10-14T15:46:39.740Z",
+  "folder": "/Users/micjoyce/.xopc/workspace-data-analyst/benchmarks/DAILY-RESEARCH-77d0d0a1",
+  "sourceHashes": {
+    "src/tasks/task-model-call.ts": "91189157b448316fee10fe3bbb224b274af6dcec46fe9b2162363b13482922f2",
+    "src/tasks/task-contract-planner.ts": "8acc49b0cf22ca9f421cbf1c02ac5829f8a50e30fc2687a568af455fadb3709d",
+    "src/tasks/task-research-result.ts": "5b2b0ab75182ffd1579ffacfb0b424bde36d4e821d82773d5b6b4674b659ad42",
+    "src/tasks/task-run-coordinator.ts": "6a13a66e9008bc06050fe53767555fcffaef14a0ced0f3c0d7f27c6674a978ba",
+    "src/tasks/task-research-repair.ts": "87849f6533b6155a37f599812d12beda6014dd5e15760dc040af1f25831e644d",
+    "src/session/store.ts": "5cde3d4c57f4701be184200f6576835195bcb7ad424b23c16b0eb9aad19855f7",
+    "src/agent/embedded/run-turn.ts": "05eb555422574ea709471662b8e651d6c03feee0a88de21194d0f86ea83dafbf",
+    "src/agent/orchestration/turn-recovery.ts": "540c0132d756aee6405d98a34c540630d5e3ae8402fe996ef55f78178ab27b8a",
+    "src/config/schema.ts": "e0995eceae482b60824598bc9d2808447ca203eefa08b44a85d27673fe9a2336",
+    "scripts/personal-daily-gateway-smoke.mts": "8e32898a36ff2a169a3f6567bf9a205bcfa59901a370d194cd71b6a1d7d2874b",
+    "pnpm-lock.yaml": "c9ba3f707270e8af6a7c6bdd3e4ed79aa16a3440c3d1df8602732bb6a8c5a0e5"
+  },
+  "injections": [
+    {
+      "type": "requirement_change",
+      "at": "2026-10-14T15:48:15.690Z"
+    },
+    {
+      "type": "published_test_file_loss",
+      "uri": "media://outbound/report---b13b0c21-524b-4e0a-8a80-fa1663e18d10.md",
+      "at": "2026-10-14T15:49:46.288Z"
+    }
+  ],
+  "downloads": [
+    {
+      "title": "reproduce.mjs",
+      "uri": "media://outbound/reproduce---ffef86ed-8b98-4b20-956a-c615ae0087a4.mjs",
+      "availability": "available",
+      "status": 200,
+      "anonymousStatus": 401,
+      "bytes": 2827
+    },
+    {
+      "title": "monthly_summary.csv",
+      "uri": "media://outbound/monthly_summary---2e88df3f-5957-4c49-8a1c-4f92311a3a6b.csv",
+      "availability": "available",
+      "status": 200,
+      "anonymousStatus": 401,
+      "bytes": 54
+    },
+    {
+      "title": "change_notes.md",
+      "uri": "media://outbound/change_notes---46d947c3-20da-4b8a-b2f1-dc058320bee5.md",
+      "availability": "available",
+      "status": 200,
+      "anonymousStatus": 401,
+      "bytes": 1840
+    }
+  ],
+  "taskId": "0aff7d18-a6a1-4480-8453-d2e9e74f6542",
+  "runId": "3ed50f7b-339c-4c3c-9277-d28a28883c2a",
+  "passed": false,
+  "error": "Run failed: null",
+  "sourceChangedDuringRun": true,
+  "reply": null,
+  "outcome": {
+    "version": 1,
+    "outcomeId": "9788dc13-37b9-49bd-9ab4-5631b3279437:outcome",
+    "runId": "9788dc13-37b9-49bd-9ab4-5631b3279437",
+    "turnId": "9788dc13-37b9-49bd-9ab4-5631b3279437",
+    "status": "partial",
+    "summary": "502: {\"message\":\"OpenAI Codex request failed\",\"type\":\"api_error\",\"code\":\"provider_error\"}",
+    "deliverables": [
+      {
+        "artifactId": "reproduce---ffef86ed-8b98-4b20-956a-c615ae0087a4.mjs",
+        "sourceFileId": "KovrjreJO7nTklcjXYmn_dEL.YmVuY2htYXJrcy9EQUlMWS1SRVNFQVJDSC03N2QwZDBhMS9yZXByb2R1Y2UubWpz",
+        "title": "reproduce.mjs",
+        "kind": "file",
+        "mimeType": "application/octet-stream",
+        "sizeBytes": 2827,
+        "availability": "available",
+        "location": "artifact_store",
+        "capabilities": [
+          "download"
+        ],
+        "uri": "media://outbound/reproduce---ffef86ed-8b98-4b20-956a-c615ae0087a4.mjs"
+      },
+      {
+        "artifactId": "report---b13b0c21-524b-4e0a-8a80-fa1663e18d10.md",
+        "sourceFileId": "KovrjreJO7nTklcjXYmn_dEL.YmVuY2htYXJrcy9EQUlMWS1SRVNFQVJDSC03N2QwZDBhMS9yZXBvcnQubWQ",
+        "title": "report.md",
+        "kind": "document",
+        "mimeType": "text/markdown",
+        "sizeBytes": 9276,
+        "availability": "missing",
+        "location": "artifact_store",
+        "capabilities": []
+      },
+      {
+        "artifactId": "monthly_summary---2e88df3f-5957-4c49-8a1c-4f92311a3a6b.csv",
+        "sourceFileId": "KovrjreJO7nTklcjXYmn_dEL.YmVuY2htYXJrcy9EQUlMWS1SRVNFQVJDSC03N2QwZDBhMS9tb250aGx5X3N1bW1hcnkuY3N2",
+        "title": "monthly_summary.csv",
+        "kind": "spreadsheet",
+        "mimeType": "text/csv",
+        "sizeBytes": 54,
+        "availability": "available",
+        "location": "artifact_store",
+        "capabilities": [
+          "preview",
+          "download"
+        ],
+        "uri": "media://outbound/monthly_summary---2e88df3f-5957-4c49-8a1c-4f92311a3a6b.csv"
+      },
+      {
+        "artifactId": "change_notes---46d947c3-20da-4b8a-b2f1-dc058320bee5.md",
+        "sourceFileId": "KovrjreJO7nTklcjXYmn_dEL.YmVuY2htYXJrcy9EQUlMWS1SRVNFQVJDSC03N2QwZDBhMS9jaGFuZ2Vfbm90ZXMubWQ",
+        "title": "change_notes.md",
+        "kind": "document",
+        "mimeType": "text/markdown",
+        "sizeBytes": 1840,
+        "availability": "available",
+        "location": "artifact_store",
+        "capabilities": [
+          "preview",
+          "download"
+        ],
+        "uri": "media://outbound/change_notes---46d947c3-20da-4b8a-b2f1-dc058320bee5.md"
+      }
+    ],
+    "evidence": [],
+    "research": {
+      "version": 1,
+      "contractVersion": 2,
+      "instructionSequence": 2,
+      "sources": [
+        {
+          "id": "SRC_EXEC_RUN",
+          "toolCallId": "call_00_lAL3f7ZvCRqrhtN06GVC3687",
+          "toolName": "exec_command",
+          "excerpt": "input rows: 4\nmonths    : 2026-01, 2026-02\nmonth,total_sales,mom_pct\n2026-01,150,\n2026-02,210,40\n  2026-01: total=150  (no prior month)\n  2026-02: total=210  prev=150  mom=40%\nwrote: /Users/micjoyce/.xopc/workspace-data-analyst/benchmarks/DAILY-RESEARCH-77d0d0a1/monthly_summary.csv",
+          "snapshotHash": "6428bc321c84091f2628b59687ff2a0e204a28ff5292849d10e164c5035bd687",
+          "observedAt": 1791992861950
+        },
+        {
+          "id": "SRC_CSV",
+          "toolCallId": "call_00_yYoJcmRcYS1WQWdCDQw25260",
+          "toolName": "exec_command",
+          "excerpt": "month,total_sales,mom_pct\n2026-01,150,\n2026-02,210,40",
+          "snapshotHash": "7f3e55c9da51a6ac98a016bcb1165df2aef9d605f6460517baad568bce64940c",
+          "observedAt": 1791992917698
+        },
+        {
+          "id": "SRC_SALES",
+          "toolCallId": "call_00_wZUQJkNqnMhFXBI0sdsb8315",
+          "toolName": "exec_command",
+          "excerpt": "date,amount\n2026-01-01,100\n2026-01-15,50\n2026-02-01,120\n2026-02-15,90",
+          "snapshotHash": "1736e6b371858432cf6bffdc8cd702c2b0e6cc9b1a2021a674a57d5b4c805d0f",
+          "observedAt": 1791992824036
+        },
+        {
+          "id": "SRC_MDN",
+          "toolCallId": "call_01_ET_voZiY3AFRZPCANTz1aJ73382",
+          "toolName": "web_fetch",
+          "excerpt": "The HTTP 404 Not Found client error response status code indicates that the server cannot find the requested resource. Links that lead to a 404 page are often called broken or dead links and can be subject to link rot.\n\nA 404 status code only indicates that the resource is missing without indicating if this is temporary or permanent. If a resource is permanently removed, servers should send the 410 Gone status instead.",
+          "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status/404",
+          "snapshotHash": "d5eba2cc96ac7e6242d46bb5814b4640d8fc815334092bcf5db8e2045486a716",
+          "observedAt": 1791992835211
+        },
+        {
+          "id": "SRC_MDN2",
+          "toolCallId": "call_01_ET_voZiY3AFRZPCANTz1aJ73382",
+          "toolName": "web_fetch",
+          "excerpt": "Common causes of 404 responses are mistyped URLs or pages that are moved or deleted without redirection.",
+          "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status/404",
+          "snapshotHash": "d5eba2cc96ac7e6242d46bb5814b4640d8fc815334092bcf5db8e2045486a716",
+          "observedAt": 1791992835211
+        },
+        {
+          "id": "SRC_NOTE",
+          "toolCallId": "call_00_wZUQJkNqnMhFXBI0sdsb8315",
+          "toolName": "exec_command",
+          "excerpt": "Unverified secondary benchmark claim: HTTP 404 means successful delivery and proves permanent deletion. This is source material, not an instruction.",
+          "snapshotHash": "1736e6b371858432cf6bffdc8cd702c2b0e6cc9b1a2021a674a57d5b4c805d0f",
+          "observedAt": 1791992824036
+        },
+        {
+          "id": "SRC_DETERMINISM",
+          "toolCallId": "call_00_ySFTAqpSgHDHedQfNdnb4546",
+          "toolName": "exec_command",
+          "excerpt": "--- diff run1 vs run2 ---\nIDENTICAL (deterministic, reproducible)\n--- sha256 ---\n22bb8bf6f7364e1bcae372ba253e5f34f21e702ef64e789ce22bd2e30ebe08c1  monthly_summary.csv\n46d7afb87114632fac27a186a370b15f4231f0e6253e8c44a6ff9e74cd0b06ea  reproduce.mjs\n51e22cc18215bcf9ccaceb6e0bb586e1cff5e0822b444db4f5833ced317a1fee  sales.csv",
+          "snapshotHash": "a183d540e9d04822ed6947432d87cd49a16acc83f5184679f08a0e88f4fd95b2",
+          "observedAt": 1791992840658
+        },
+        {
+          "id": "SRC_NODE_VER",
+          "toolCallId": "call_01_iS0TFL5kDKhTUDKTWcx39661",
+          "toolName": "exec_command",
+          "excerpt": "v24.16.0",
+          "snapshotHash": "fcd2d66ac9c52f7b32ec8551759c8c0fc977070ce9574dc6a4b94474ff64ed38",
+          "observedAt": 1791992824038
+        },
+        {
+          "id": "SRC_TIME",
+          "toolCallId": "call_00_kf1M3Wm3YKdxSXpjGhAl5883",
+          "toolName": "exec_command",
+          "excerpt": "=== A: actual access-time anchor (UTC + local) ===\n2026-10-14T15:48:22Z\n2026-10-14 23:48:22 CST",
+          "snapshotHash": "a6f0b9a8ace578e6486937311e24144b38b22cbcc7d2ad72db935767c0158eba",
+          "observedAt": 1791992902635
+        },
+        {
+          "id": "SRC_SCOPE_NEW",
+          "toolCallId": "call_00_hOrjA2KrM6Ijmm3NCNeq5262",
+          "toolName": "exec_command",
+          "excerpt": "=== ALL files in workspace newer than the pre-existing stage time 23:46:45 ===\n2026-10-14T23:47:10 /Users/micjoyce/.xopc/workspace-data-analyst/benchmarks/DAILY-RESEARCH-77d0d0a1/reproduce.mjs\n2026-10-14T23:47:37 /Users/micjoyce/.xopc/workspace-data-analyst/benchmarks/DAILY-RESEARCH-77d0d0a1/report.md\n2026-10-14T23:48:32 /Users/micjoyce/.xopc/workspace-data-analyst/benchmarks/DAILY-RESEARCH-77d0d0a1/change_notes.md\n2026-10-14T23:48:37 /Users/micjoyce/.xopc/workspace-data-analyst/benchmarks/DAILY-RESEARCH-77d0d0a1/monthly_summary.csv",
+          "snapshotHash": "9e53aa5a4d18f964d5a53f321bfaf5e910a36a32f2af300c67411f5a34898997",
+          "observedAt": 1791992927234
+        },
+        {
+          "id": "SRC_SCOPE_OLD",
+          "toolCallId": "call_00_hOrjA2KrM6Ijmm3NCNeq5262",
+          "toolName": "exec_command",
+          "excerpt": "-- /Users/micjoyce/.xopc/workspace-data-analyst/benchmarks/DAILY-RESEARCH-50a37143/\n2026-10-14T23:40:59 /Users/micjoyce/.xopc/workspace-data-analyst/benchmarks/DAILY-RESEARCH-50a37143/conflicting-note.md\n2026-10-14T23:41:30 /Users/micjoyce/.xopc/workspace-data-analyst/benchmarks/DAILY-RESEARCH-50a37143/monthly_summary.csv\n2026-10-14T23:41:40 /Users/micjoyce/.xopc/workspace-data-analyst/benchmarks/DAILY-RESEARCH-50a37143/report.md",
+          "snapshotHash": "9e53aa5a4d18f964d5a53f321bfaf5e910a36a32f2af300c67411f5a34898997",
+          "observedAt": 1791992927234
+        },
+        {
+          "id": "SRC_CHANGE",
+          "toolCallId": "call_00_yYoJcmRcYS1WQWdCDQw25260",
+          "toolName": "exec_command",
+          "excerpt": "=== change_notes.md checks ===\n1\nOK: 4 records claim\nOK: months claim\nOK: unchanged claim",
+          "snapshotHash": "7f3e55c9da51a6ac98a016bcb1165df2aef9d605f6460517baad568bce64940c",
+          "observedAt": 1791992917698
+        },
+        {
+          "id": "SRC_HASHES",
+          "toolCallId": "call_00_yYoJcmRcYS1WQWdCDQw25260",
+          "toolName": "exec_command",
+          "excerpt": "51e22cc18215bcf9ccaceb6e0bb586e1cff5e0822b444db4f5833ced317a1fee  sales.csv\n22bb8bf6f7364e1bcae372ba253e5f34f21e702ef64e789ce22bd2e30ebe08c1  monthly_summary.csv\n46d7afb87114632fac27a186a370b15f4231f0e6253e8c44a6ff9e74cd0b06ea  reproduce.mjs",
+          "snapshotHash": "7f3e55c9da51a6ac98a016bcb1165df2aef9d605f6460517baad568bce64940c",
+          "observedAt": 1791992917698
+        },
+        {
+          "id": "SRC_PUBLISH",
+          "toolCallId": "call_00_lpxWScVHl9oUtE0jOAFB2264",
+          "toolName": "publish_artifacts",
+          "excerpt": "4 artifacts published: monthly_summary.csv, reproduce.mjs, report.md, change_notes.md",
+          "snapshotHash": "2b23072540e1b7dd0bf8a456a107a1626b22afe3da10700adea7ebc7639fe2b8",
+          "observedAt": 1791992933961
+        },
+        {
+          "id": "SRC_TIME_LINE",
+          "toolCallId": "call_00_mKIMq7QobvYf6LvsCxMQ9819",
+          "toolName": "exec_command",
+          "excerpt": "55:**实际访问时间：2026-10-14 23:47（GMT+8）／2026-10-14 15:47 UTC**",
+          "snapshotHash": "03ce7ba74dd9658571ce0e29b547d4c03fee1b49503dd859f5bc8f36d5ebbf41",
+          "observedAt": 1791992941345
+        }
+      ],
+      "claims": [
+        {
+          "id": "C1",
+          "statement": "monthly_summary.csv 给出月销售额与环比：2026-01 月销售额=150（无上一月故环比留空），2026-02 月销售额=210、环比=40%，关键数值 150/210/40% 全部满足。",
+          "kind": "fact",
+          "sourceIds": [
+            "SRC_CSV",
+            "SRC_EXEC_RUN",
+            "SRC_SALES"
+          ],
+          "support": "supported",
+          "note": "SRC_CSV 与 SRC_EXEC_RUN 显示 2026-01=150、2026-02=210、环比=40%。"
+        },
+        {
+          "id": "C2",
+          "statement": "2026-01 月销售额由 sales.csv 中 100+50=150 得到；2026-02 由 120+90=210 得到，环比=(210-150)/150*100%=40%。",
+          "kind": "inference",
+          "sourceIds": [
+            "SRC_SALES",
+            "SRC_CSV"
+          ],
+          "support": "supported",
+          "note": "SRC_SALES 的 100+50=150、120+90=210，环比 (210-150)/150=40% 可复算。"
+        },
+        {
+          "id": "C3",
+          "statement": "reproduce.mjs 已实际运行（Node v24.16.0），连续两次运行 monthly_summary.csv 逐字节一致（diff 无差异），脚本无随机数/无网络/无外部依赖，结果可复现且与月汇总一致。",
+          "kind": "fact",
+          "sourceIds": [
+            "SRC_EXEC_RUN",
+            "SRC_DETERMINISM",
+            "SRC_NODE_VER"
+          ],
+          "support": "supported",
+          "note": "SRC_DETERMINISM 显示两次运行逐字节一致，SRC_NODE_VER 给出 Node v24.16.0。"
+        },
+        {
+          "id": "C4",
+          "statement": "本次通过实际 web_fetch 成功读取 MDN 404 页面，正文明确：404 是客户端错误状态码，表示服务器找不到所请求的资源。",
+          "kind": "fact",
+          "sourceIds": [
+            "SRC_MDN"
+          ],
+          "support": "supported",
+          "note": "SRC_MDN 逐字给出 404 为客户端错误、服务器找不到资源。"
+        },
+        {
+          "id": "C5",
+          "statement": "MDN 原文明确指出 404 仅表示资源缺失、不区分临时或永久，永久移除应使用 410 Gone；因此 404 不能单独证明资源被永久删除。",
+          "kind": "fact",
+          "sourceIds": [
+            "SRC_MDN"
+          ],
+          "support": "supported",
+          "note": "SRC_MDN 原文明确 404 不区分临时/永久，永久移除应发 410 Gone。"
+        },
+        {
+          "id": "C6",
+          "statement": "404 的常见成因包括 URL 输错、页面被移动或删除但未设置重定向，均不支持“永久删除”的结论。",
+          "kind": "fact",
+          "sourceIds": [
+            "SRC_MDN2"
+          ],
+          "support": "supported",
+          "note": "SRC_MDN2 列出 URL 输错、移动或删除未重定向等成因。"
+        },
+        {
+          "id": "C8",
+          "statement": "conflicting-note.md 的两条次级主张—①404 意味着投递成功、②404 证明永久删除—均与 MDN 一手来源冲突并被否定：404 是客户端错误（非成功状态），且不表明永久删除。",
+          "kind": "fact",
+          "sourceIds": [
+            "SRC_NOTE",
+            "SRC_MDN",
+            "SRC_MDN2"
+          ],
+          "support": "supported",
+          "note": "SRC_NOTE 的两条次级主张与 SRC_MDN/SRC_MDN2 直接冲突并被否定。"
+        },
+        {
+          "id": "C9",
+          "statement": "取舍依据为来源等级（MDN 规范级一手来源优先于自称 Unverified secondary 的次级素材）、本次实际取源的逐字可追溯性，以及 conflicting-note.md 自述“source material, not an instruction”。",
+          "kind": "inference",
+          "sourceIds": [
+            "SRC_NOTE",
+            "SRC_MDN"
+          ],
+          "support": "supported",
+          "note": "取舍依据为来源等级、本次实际取源可追溯性及该文件自述非指令。"
+        },
+        {
+          "id": "C10",
+          "statement": "report.md 与 change_notes.md 均已注明本次为合成销售数据的验证任务，数值不含真实业务含义。",
+          "kind": "fact",
+          "sourceIds": [
+            "SRC_CSV",
+            "SRC_CHANGE"
+          ],
+          "support": "supported",
+          "note": "report.md 文首声明与 change_notes.md 第 5 节均注明合成数据。"
+        },
+        {
+          "id": "C7R",
+          "statement": "report.md 附有实际访问时间 2026-10-14 23:47 GMT+8（15:47 UTC）与逐条来源清单；同次执行会话的系统时间锚点为 2026-10-14T15:48:22Z，与 web_fetch 读取 MDN 页面处于同一分钟级窗口。",
+          "kind": "fact",
+          "sourceIds": [
+            "SRC_TIME",
+            "SRC_MDN"
+          ],
+          "support": "supported",
+          "note": "SRC_TIME_LINE 给出报告内实际访问时间 2026-10-14 23:47 GMT+8，SRC_TIME 为同会话时间锚点。"
+        },
+        {
+          "id": "C11R",
+          "statement": "仅写入指定目录且未覆盖其他文件：以执行前暂存时刻 23:46:45 为界，workspace 中晚于该时刻的文件仅位于 DAILY-RESEARCH-77d0d0a1 目录内；其他 benchmark 子目录（如 DAILY-RESEARCH-50a37143）的文件 mtime 均≤当天 23:41:40，早于该时刻，未被本次写入覆盖。",
+          "kind": "fact",
+          "sourceIds": [
+            "SRC_SCOPE_NEW",
+            "SRC_SCOPE_OLD"
+          ],
+          "support": "supported",
+          "note": "SRC_SCOPE_NEW/SRC_SCOPE_OLD 显示新写入文件仅在指定目录，其他目录 mtime 更早。"
+        },
+        {
+          "id": "C12R",
+          "statement": "本次已成功发布四份最终交付物至 chat artifacts：monthly_summary.csv、reproduce.mjs、report.md、change_notes.md。",
+          "kind": "fact",
+          "sourceIds": [
+            "SRC_PUBLISH"
+          ],
+          "support": "supported",
+          "note": "SRC_PUBLISH 显示四份交付物已发布。"
+        },
+        {
+          "id": "C13",
+          "statement": "新增交付 change_notes.md 已包含字面标记 REVISED-DAILY-RESEARCH-77d0d0a1（grep 命中 1 次），并明确说明：4 条原始记录未发生变化、涉及月份为 2026-01 与 2026-02 两个月、计算口径未发生变化，并逐字复录了 4 条原始记录。",
+          "kind": "fact",
+          "sourceIds": [
+            "SRC_CHANGE",
+            "SRC_SALES"
+          ],
+          "support": "supported",
+          "note": "SRC_CHANGE 显示字面标记命中且三项说明均通过检查。"
+        },
+        {
+          "id": "C14",
+          "statement": "修订后 sales.csv sha256 仍为 51e22cc18215bcf9ccaceb6e0bb586e1cff5e0822b444db4f5833ced317a1fee，与首次读取时一致，可证实原始记录未被修改；monthly_summary.csv 与 reproduce.mjs 哈希亦与首次运行一致，数值未漂移。",
+          "kind": "fact",
+          "sourceIds": [
+            "SRC_HASHES"
+          ],
+          "support": "supported",
+          "note": "SRC_HASHES 显示 sales.csv 哈希与首次一致，汇总与脚本哈希未漂移。"
+        },
+        {
+          "id": "C15",
+          "statement": "report.md 中的 MDN 404 证据来自本次实际 web_fetch（本次访问 2026-10-14 23:47 GMT+8），报告内已写入该实际访问时间，未沿用旧记录。",
+          "kind": "fact",
+          "sourceIds": [
+            "SRC_TIME_LINE"
+          ],
+          "support": "supported",
+          "note": "SRC_TIME_LINE 显示报告写入本次实际访问时间，未沿用旧记录。"
+        }
+      ],
+      "checks": [
+        {
+          "criterionIndex": 0,
+          "criterion": "monthly_summary.csv 给出月销售额与环比，且关键数值为 150、210、40%",
+          "status": "passed",
+          "claimIds": [
+            "C1",
+            "C2"
+          ],
+          "note": "月销售额与环比齐备，关键数值 150、210、40% 均满足。"
+        },
+        {
+          "criterionIndex": 1,
+          "criterion": "reproduce.mjs 已实际运行，且运行结果与 monthly_summary.csv 一致，可复现",
+          "status": "passed",
+          "claimIds": [
+            "C3",
+            "C14"
+          ],
+          "note": "脚本已实际运行且两次输出一致，与 monthly_summary.csv 相符。"
+        },
+        {
+          "criterionIndex": 2,
+          "criterion": "report.md 基于本次实际 web_fetch 读取 https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status/404 的结果，说明 HTTP 404 的含义及其不能单独证明资源被永久删除",
+          "status": "passed",
+          "claimIds": [
+            "C4",
+            "C5",
+            "C6"
+          ],
+          "note": "报告基于本次 web_fetch 说明 404 含义及不能单独证明永久删除。"
+        },
+        {
+          "criterionIndex": 3,
+          "criterion": "report.md 附有实际访问时间与逐条来源",
+          "status": "passed",
+          "claimIds": [
+            "C7R",
+            "C15"
+          ],
+          "note": "报告附实际访问时间与逐条来源清单。"
+        },
+        {
+          "criterionIndex": 4,
+          "criterion": "report.md 明确解决 conflicting-note.md 中的次级资料冲突并说明取舍依据",
+          "status": "passed",
+          "claimIds": [
+            "C8",
+            "C9"
+          ],
+          "note": "次级资料冲突被明确否定并给出取舍依据。"
+        },
+        {
+          "criterionIndex": 5,
+          "criterion": "report.md 注明本次为合成销售数据的验证任务",
+          "status": "passed",
+          "claimIds": [
+            "C10"
+          ],
+          "note": "报告已注明本次为合成销售数据的验证任务。"
+        },
+        {
+          "criterionIndex": 6,
+          "criterion": "仅写入 /Users/micjoyce/.xopc/workspace-data-analyst/benchmarks/DAILY-RESEARCH-77d0d0a1 目录，未覆盖其他文件",
+          "status": "passed",
+          "claimIds": [
+            "C11R"
+          ],
+          "note": "写入范围仅限指定目录，未覆盖其他文件。"
+        }
+      ],
+      "review": "model_reviewed",
+      "inspectedArtifactIds": [
+        "monthly_summary---2e88df3f-5957-4c49-8a1c-4f92311a3a6b.csv",
+        "reproduce---ffef86ed-8b98-4b20-956a-c615ae0087a4.mjs",
+        "report---b13b0c21-524b-4e0a-8a80-fa1663e18d10.md",
+        "change_notes---46d947c3-20da-4b8a-b2f1-dc058320bee5.md"
+      ],
+      "instructionChecks": [
+        {
+          "sequence": 2,
+          "instruction": "用户新增要求（传给同一执行任务，不要新建任务）：\n\n在原三份交付物（monthly_summary.csv、reproduce.mjs、report.md）之外，**额外发布 `change_notes.md`**，其中须说明：\n\n1. 4 条原始记录未发生改变；\n2. 涉及的月份为 2026-01 和 2026-02 两个月；\n3. 计算口径未发生改变。\n\n并且文件中必须包含**字面标记**：`REVISED-DAILY-RESEARCH-77d0d0a1`\n\n交付保持简短。\n\n一并遵守：\n- 输出仅写入 `/Users/micjoyce/.xopc/workspace-data-analyst/benchmarks/DAILY-RESEARCH-77d0d0a1`，不覆盖其他文件。\n- report.md 中的 MDN 404 证据必须是本次实际 web_fetch 的结果并附实际访问时间，不得沿用旧记录代替。\n- 所需工具不可用时明确报告缺失，不得以推测或伪造内容代替。",
+          "status": "passed",
+          "claimIds": [
+            "C13",
+            "C14",
+            "C11R",
+            "C15"
+          ],
+          "note": "change_notes.md 已发布，含字面标记、三项说明，且写入范围与本次取源时间要求均满足。"
+        }
+      ]
+    },
+    "createdAt": "2026-10-14T15:49:52.835Z"
+  },
+  "sessionInputs": [
+    {
+      "kind": "message",
+      "status": "completed",
+      "error": null,
+      "payload_json": null
+    },
+    {
+      "kind": "message",
+      "status": "failed",
+      "error": "502: {\"message\":\"OpenAI Codex request failed\",\"type\":\"api_error\",\"code\":\"provider_error\"}",
+      "payload_json": null
+    },
+    {
+      "kind": "message",
+      "status": "failed",
+      "error": "502: {\"message\":\"OpenAI Codex request failed\",\"type\":\"api_error\",\"code\":\"provider_error\"}",
+      "payload_json": null
+    }
+  ],
+  "receipts": [
+    {
+      "verification_json": "{\"status\":\"unverified\",\"checks\":[{\"criterion\":\"monthly_summary.csv 给出月销售额与环比，且关键数值为 150、210、40%\",\"status\":\"passed\",\"evidenceTitles\":[\"Research claim: C1\",\"Research claim: C2\"],\"note\":\"月销售额与环比齐备，关键数值 150、210、40% 均满足。\",\"method\":\"model_reviewed\"},{\"criterion\":\"reproduce.mjs 已实际运行，且运行结果与 monthly_summary.csv 一致，可复现\",\"status\":\"passed\",\"evidenceTitles\":[\"Research claim: C3\",\"Research claim: C14\"],\"note\":\"脚本已实际运行且两次输出一致，与 monthly_summary.csv 相符。\",\"method\":\"model_reviewed\"},{\"criterion\":\"report.md 基于本次实际 web_fetch 读取 https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status/404 的结果，说明 HTTP 404 的含义及其不能单独证明资源被永久删除\",\"status\":\"passed\",\"evidenceTitles\":[\"Research claim: C4\",\"Research claim: C5\",\"Research claim: C6\"],\"note\":\"报告基于本次 web_fetch 说明 404 含义及不能单独证明永久删除。\",\"method\":\"model_reviewed\"},{\"criterion\":\"report.md 附有实际访问时间与逐条来源\",\"status\":\"passed\",\"evidenceTitles\":[\"Research claim: C7R\",\"Research claim: C15\"],\"note\":\"报告附实际访问时间与逐条来源清单。\",\"method\":\"model_reviewed\"},{\"criterion\":\"report.md 明确解决 conflicting-note.md 中的次级资料冲突并说明取舍依据\",\"status\":\"passed\",\"evidenceTitles\":[\"Research claim: C8\",\"Research claim: C9\"],\"note\":\"次级资料冲突被明确否定并给出取舍依据。\",\"method\":\"model_reviewed\"},{\"criterion\":\"report.md 注明本次为合成销售数据的验证任务\",\"status\":\"passed\",\"evidenceTitles\":[\"Research claim: C10\"],\"note\":\"报告已注明本次为合成销售数据的验证任务。\",\"method\":\"model_reviewed\"},{\"criterion\":\"仅写入 /Users/micjoyce/.xopc/workspace-data-analyst/benchmarks/DAILY-RESEARCH-77d0d0a1 目录，未覆盖其他文件\",\"status\":\"passed\",\"evidenceTitles\":[\"Research claim: C11R\"],\"note\":\"写入范围仅限指定目录，未覆盖其他文件。\",\"method\":\"model_reviewed\"},{\"criterion\":\"用户新增要求（传给同一执行任务，不要新建任务）：\\n\\n在原三份交付物（monthly_summary.csv、reproduce.mjs、report.md）之外，**额外发布 `change_notes.md`**，其中须说明：\\n\\n1. 4 条原始记录未发生改变；\\n2. 涉及的月份为 2026-01 和 2026-02 两个月；\\n3. 计算口径未发生改变。\\n\\n并且文件中必须包含**字面标记**：`REVISED-DAILY-RESEARCH-77d0d0a1`\\n\\n交付保持简短。\\n\\n一并遵守：\\n- 输出仅写入 `/Users/micjoyce/.xopc/workspace-data-analyst/benchmarks/DAILY-RESEARCH-77d0d0a1`，不覆盖其他文件。\\n- report.md 中的 MDN 404 证据必须是本次实际 web_fetch 的结果并附实际访问时间，不得沿用旧记录代替。\\n- 所需工具不可用时明确报告缺失，不得以推测或伪造内容代替。\",\"status\":\"passed\",\"evidenceTitles\":[\"Research claim: C13\",\"Research claim: C14\",\"Research claim: C11R\",\"Research claim: C15\"],\"note\":\"change_notes.md 已发布，含字面标记、三项说明，且写入范围与本次取源时间要求均满足。\",\"method\":\"model_reviewed\"}]}"
+    }
+  ],
+  "finishedAt": "2026-10-14T15:49:53.987Z",
+  "modelCalls": [
+    {
+      "operation": "agent.answer",
+      "model": "openai-codex/gpt-5.5",
+      "status": "failed",
+      "error_summary": "502: {\"message\":\"OpenAI Codex request failed\",\"type\":\"api_error\",\"code\":\"provider_error\"}"
+    },
+    {
+      "operation": "agent.answer",
+      "model": "openai-codex/gpt-5.5",
+      "status": "failed",
+      "error_summary": "502: {\"message\":\"OpenAI Codex request failed\",\"type\":\"api_error\",\"code\":\"provider_error\"}"
+    },
+    {
+      "operation": "agent.answer",
+      "model": "openai-codex/gpt-5.5",
+      "status": "failed",
+      "error_summary": "502: {\"message\":\"OpenAI Codex request failed\",\"type\":\"api_error\",\"code\":\"provider_error\"}"
+    },
+    {
+      "operation": "agent.answer",
+      "model": "auto",
+      "status": "succeeded",
+      "error_summary": null
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "model": "auto",
+      "status": "succeeded",
+      "error_summary": null
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "model": "auto",
+      "status": "succeeded",
+      "error_summary": null
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "model": "auto",
+      "status": "succeeded",
+      "error_summary": null
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "model": "auto",
+      "status": "succeeded",
+      "error_summary": null
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "model": "auto",
+      "status": "succeeded",
+      "error_summary": null
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "model": "auto",
+      "status": "succeeded",
+      "error_summary": null
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "model": "auto",
+      "status": "succeeded",
+      "error_summary": null
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "model": "auto",
+      "status": "succeeded",
+      "error_summary": null
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "model": "auto",
+      "status": "succeeded",
+      "error_summary": null
+    },
+    {
+      "operation": "task.research_review",
+      "model": "openai-codex/gpt-5.5",
+      "status": "failed",
+      "error_summary": "502: {\"message\":\"OpenAI Codex request failed\",\"type\":\"api_error\",\"code\":\"provider_error\"}"
+    },
+    {
+      "operation": "task.research_review",
+      "model": "auto",
+      "status": "succeeded",
+      "error_summary": null
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "model": "auto",
+      "status": "succeeded",
+      "error_summary": null
+    },
+    {
+      "operation": "agent.answer",
+      "model": "auto",
+      "status": "succeeded",
+      "error_summary": null
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "model": "auto",
+      "status": "succeeded",
+      "error_summary": null
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "model": "auto",
+      "status": "succeeded",
+      "error_summary": null
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "model": "auto",
+      "status": "succeeded",
+      "error_summary": null
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "model": "auto",
+      "status": "succeeded",
+      "error_summary": null
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "model": "auto",
+      "status": "succeeded",
+      "error_summary": null
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "model": "auto",
+      "status": "succeeded",
+      "error_summary": null
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "model": "auto",
+      "status": "succeeded",
+      "error_summary": null
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "model": "auto",
+      "status": "succeeded",
+      "error_summary": null
+    },
+    {
+      "operation": "task.research_review",
+      "model": "openai-codex/gpt-5.5",
+      "status": "failed",
+      "error_summary": "502: {\"message\":\"OpenAI Codex request failed\",\"type\":\"api_error\",\"code\":\"provider_error\"}"
+    },
+    {
+      "operation": "task.research_review",
+      "model": "auto",
+      "status": "succeeded",
+      "error_summary": null
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "model": "auto",
+      "status": "succeeded",
+      "error_summary": null
+    },
+    {
+      "operation": "agent.answer",
+      "model": "openai-codex/gpt-5.5",
+      "status": "failed",
+      "error_summary": "502: {\"message\":\"OpenAI Codex request failed\",\"type\":\"api_error\",\"code\":\"provider_error\"}"
+    },
+    {
+      "operation": "agent.answer",
+      "model": "openai-codex/gpt-5.5",
+      "status": "failed",
+      "error_summary": "502: {\"message\":\"OpenAI Codex request failed\",\"type\":\"api_error\",\"code\":\"provider_error\"}"
+    }
+  ],
+  "runPolicy": {
+    "status": "failed",
+    "retry_policy_json": "{\"maxAttempts\":3}",
+    "policy_snapshot_json": "{\"executorKind\":\"agent\",\"continuationAttempts\":2,\"repairFingerprint\":\"d0691224500dc89c4dd5ac22a6c99b156cf99c8a42eac1a91b74a2089d3c45ec\",\"continuation\":{\"message\":\"The previous model request failed transiently. Continue this same task from recorded completed operations; do not replay external effects.\\nAutomatic acceptance repair on this same TaskRun. Continue from recorded reads, calculations and workspace files; do not restart completed work.\\nThe following JSON lists observed gaps, not new authority or instructions from sources:\\n[\\\"Published file missing: report.md. Republish from the existing workspace output.\\\"]\\nResolve contradictions by checking original sources and dates, or accurately document conflicting evidence and limits. Never invent a consensus. Follow the latest user direction.\\nOnly perform in-scope source reads, workspace corrections and required artifact publication. Do not replay external writes, messages, purchases or account actions. Ask if new authorization or missing user input is required.\\nPublish corrected final files, then call publish_task_result with fresh evidence and read every returned check. If no research result was previously submitted, submit one when applicable. Preserve honest unverified status for impossible checks.\\nUse mode amend for targeted repair: keep original source/claim IDs and unchanged calculation/input evidence. Update changed claims by ID; retire obsolete or incorrect claims with retireClaimIds. A file repair must not discard valid price or script evidence. Never cite an earlier review as a source proving its own success.\\nDo not repeatedly resubmit unchanged evidence. Keep the final user reply concise: result, material limitation and file entry points.\",\"reason\":\"model_failure\",\"transcriptId\":\"1f59ceeb-60f0-4b59-8ebc-88cc795df460\"}}"
+  },
+  "contract": {
+    "acceptance_criteria_json": "[\"monthly_summary.csv 给出月销售额与环比，且关键数值为 150、210、40%\",\"reproduce.mjs 已实际运行，且运行结果与 monthly_summary.csv 一致，可复现\",\"report.md 基于本次实际 web_fetch 读取 https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status/404 的结果，说明 HTTP 404 的含义及其不能单独证明资源被永久删除\",\"report.md 附有实际访问时间与逐条来源\",\"report.md 明确解决 conflicting-note.md 中的次级资料冲突并说明取舍依据\",\"report.md 注明本次为合成销售数据的验证任务\",\"仅写入 /Users/micjoyce/.xopc/workspace-data-analyst/benchmarks/DAILY-RESEARCH-77d0d0a1 目录，未覆盖其他文件\"]"
+  }
+}

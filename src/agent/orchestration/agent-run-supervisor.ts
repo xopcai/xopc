@@ -1,3 +1,5 @@
+import { AgentRunDeadlineError } from './run-termination.js';
+
 export type ModelAttemptPlan =
   | { ok: true; timeoutMs: number; remainingMs: number }
   | { ok: false; reason: string };
@@ -33,7 +35,7 @@ export class AgentRunSupervisor {
     else this.parentSignal?.addEventListener('abort', this.forwardParentAbort, { once: true });
 
     this.timeout = setTimeout(
-      () => this.controller.abort(new Error('Agent run deadline expired')),
+      () => this.controller.abort(new AgentRunDeadlineError()),
       Math.max(0, this.deadlineAtMs - Date.now()),
     );
   }

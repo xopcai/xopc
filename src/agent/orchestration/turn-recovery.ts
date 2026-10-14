@@ -1,7 +1,10 @@
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
 
+export const ACCEPTANCE_REPAIR_READ_TOOLS = new Set(['read_file', 'find', 'grep', 'list_dir', 'tool_manual', 'tool_search',
+  'review_workspace', 'language_diagnostics', 'session_status', 'web_fetch', 'web_extract', 'web_search', 'read_media', 'publish_task_result']);
+
 /** A model request can be resumed only after every issued tool has a confirmed result. */
-export function canResumeAfterModelFailure(rows: readonly unknown[]): boolean {
+export function canResumeAfterModelFailure(rows: readonly unknown[], options?: { allowFailedReadTools?: ReadonlySet<string> }): boolean {
   const messages = rows.filter((row): row is Record<string, unknown> => !!row && typeof row === 'object');
   const pending = new Set<string>();
   for (const message of messages.slice(Math.max(0, messages.findLastIndex(item => item.role === 'user')))) {
@@ -15,7 +18,7 @@ export function canResumeAfterModelFailure(rows: readonly unknown[]): boolean {
       // A synthesized or failed result cannot prove that an external effect did not occur.
       const recordedReplay = Array.isArray(message.content) && message.content.some(block => block?.type === 'text'
         && typeof block.text === 'string' && block.text.startsWith('This operation already completed before recovery.'));
-      if (message.isError && !recordedReplay) return false;
+      if (message.isError && !recordedReplay && !options?.allowFailedReadTools?.has(String(message.toolName))) return false;
       if (typeof message.toolCallId === 'string') pending.delete(message.toolCallId);
     }
   }

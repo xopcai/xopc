@@ -26,6 +26,7 @@ import { readWorkspaceRevision } from '../coding/workspace-revision.js';
 import type { TranscriptStoredRow } from '../../session/session-context-for-llm.js';
 import type { ModelManager } from '../models/index.js';
 import { canResumeAfterModelFailure } from '../orchestration/turn-recovery.js';
+import { currentTaskResearchResult } from '../../tasks/task-research-result.js';
 
 const log = createLogger('TaskJudge');
 const MAX_HISTORY_CHARS = 24_000;
@@ -177,6 +178,8 @@ export class TaskJudgeService {
     if (!task?.contract) return;
     const run = this.#runs.getActiveRoot(taskId);
     if (!run || run.status !== 'running' || run.conversationId !== payload.conversationId) return;
+    // The evidence-aware coordinator owns research repair and finalization. A legacy history judge must not bypass it.
+    if (currentTaskResearchResult(run.id) || task.body?.includes('publish_task_result')) return;
 
     let runtimeModel: string | undefined;
     try {

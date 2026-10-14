@@ -31,4 +31,11 @@ describe('parseTaskContractResponse', () => {
   it('rejects contracts without checkable criteria', () => {
     expect(parseTaskContractResponse('{"objective":"Ship","expectedOutputs":["Release"]}')).toBeUndefined();
   });
+  it('retains write prohibitions as constraints rather than unverifiable global-absence criteria', () => {
+    const contract = parseTaskContractResponse(JSON.stringify({ objective: 'Analyze CSV', expectedOutputs: ['report.md'],
+      acceptanceCriteria: ['report.md states monthly totals', '仅写入指定目录，未覆盖其他文件'],
+      constraints: ['Do not change credentials'] }))!;
+    expect(contract.acceptanceCriteria).toEqual(['report.md states monthly totals']);
+    expect(contract.constraints).toEqual(['Do not change credentials', '仅写入指定目录，未覆盖其他文件']);
+  });
 });
