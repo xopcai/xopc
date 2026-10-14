@@ -117,12 +117,12 @@ export function buildSystemPrompt(workspaceDir: string, options: SystemPromptOpt
   if (promptMode === 'none') {
     return joinSections([
       'You are a personal AI assistant running inside xopc.',
-      buildAgentIdentitySection(agentProfile),
       customInstructions?.trim()
         ? `<custom_instructions>\n${customInstructions.trim()}\n</custom_instructions>`
         : undefined,
-      buildResponseLanguageSection(responseLanguage),
       activeProjectContext,
+      buildAgentIdentitySection(agentProfile),
+      buildResponseLanguageSection(responseLanguage, agentProfile?.language),
     ]);
   }
 
@@ -140,11 +140,9 @@ export function buildSystemPrompt(workspaceDir: string, options: SystemPromptOpt
 
   const stableSections: string[] = [
     'You are a personal AI assistant running inside xopc.',
-    buildAgentIdentitySection(agentProfile) ?? '',
     ...(customInstructions?.trim()
       ? [`<custom_instructions>\n${customInstructions.trim()}\n</custom_instructions>`]
       : []),
-    buildResponseLanguageSection(responseLanguage),
     buildToolingSection({ toolNames, toolSummaries }),
     buildOverridablePromptSection({
       override: sectionOverrides.tool_call_style,
@@ -260,6 +258,8 @@ export function buildSystemPrompt(workspaceDir: string, options: SystemPromptOpt
 
   dynamicSections.push(
     buildRuntimeSection(runtime),
+    buildAgentIdentitySection(agentProfile) ?? '',
+    buildResponseLanguageSection(responseLanguage, agentProfile?.language),
   );
 
   const stablePrefix = joinSections(stableSections);

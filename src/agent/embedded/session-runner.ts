@@ -30,6 +30,7 @@ import { createXopcToolSearchExtension, TOOL_DISCOVERY_STATE } from './tool-sear
 import { getNativePiAgentDir } from '../mcp/native-mcp.js';
 import { abortEmbeddedRun } from './runs.js';
 import { filterExecutionTools, resolveExecutionToolPolicy, type ExecutionToolPolicy } from './execution-tool-policy.js';
+import { AGENT_PROFILE_CONTEXT_STATE, createAgentProfileContextExtension } from './agent-profile-context.js';
 
 const toolContract = (tool: AgentTool) => JSON.stringify([tool.name, tool.parameters, tool.description,
   isCodemodeCoreRead(tool), getXopcToolMetadata(tool)]);
@@ -317,7 +318,7 @@ export class EmbeddedSessionRunnerPool {
       {
         conversationId: params.transcriptRuntime.persistent ? runtimeId : undefined,
         persistCustomTypes: ['codemode-store', TOOL_DISCOVERY_STATE, 'coding_run_started', 'coding_verification',
-          'xopc.model-selection', 'connection_required', 'clarification_required'],
+          'xopc.model-selection', AGENT_PROFILE_CONTEXT_STATE, 'connection_required', 'clarification_required'],
         contextWindowTokens: model.contextWindow ?? 128_000,
         transformMessageForPersistence: params.transcriptRuntime.persistent
           ? (message) => transformUserMessageForPersistence(runtimeId, message)
@@ -359,6 +360,7 @@ export class EmbeddedSessionRunnerPool {
         ...(codemode ? [createXopcCodemodeExtension(codemode, tools, () => boundSession)] : []),
         ...(discovery ? [createXopcToolSearchExtension(tools)] : []),
         ...(mcp ? [createMcpExtension({ loadConfig: () => mcp, logPath: join(getNativePiAgentDir(), 'mcp.log') })] : []),
+        createAgentProfileContextExtension(runtimeId),
       ],
     });
     await resourceLoader.reload();
@@ -378,7 +380,7 @@ export class EmbeddedSessionRunnerPool {
     });
     boundSession = session;
     session.setActiveToolsByName(toolNames);
-    if (codemode || discovery || mcp) await session.bindExtensions({});
+    await session.bindExtensions({});
 
     const baseStreamFn = wrapStreamFnForXopcExtensions(session.agent.streamFunction);
     session.agent.streamFunction = baseStreamFn;
