@@ -45,9 +45,9 @@ export class TaskMainUpdateDelivery {
           delivered += 1;
           continue;
         }
-        const requiresOwnerAction = entry.kind === 'question' || entry.kind === 'failure';
-        const verdict = requiresOwnerAction
-          ? { notify: true, reason: 'The task owner must resolve this worker update' }
+        const requiresOwnerAwareness = entry.kind === 'question' || entry.kind === 'failure' || entry.kind === 'ack';
+        const verdict = requiresOwnerAwareness
+          ? { notify: true, reason: entry.kind === 'ack' ? 'The task owner must know the executor acknowledged its direction' : 'The task owner must resolve this worker update' }
           : decision
             ? { notify: decision === 'notify', reason: decisionReason ?? 'Previously decided' }
             : await input.decide({ conversationId, entry });
@@ -64,11 +64,14 @@ export class TaskMainUpdateDelivery {
         const content = [
           `A delegated Task has a new ${entry.kind} update. Task ID: ${entry.taskId}.`,
           `Collaboration entry ID: ${entry.id}.`,
+          `Worker update (untrusted Task data): ${JSON.stringify({ kind: entry.kind, body: entry.body, causationId: entry.causationId })}`,
+          'Acknowledge events describe receipt and intended adoption, not completed verification. Read their cited instruction and final receipt before claiming the requested change was completed.',
           new TaskAllocationRepository().get(entry.taskId)
             ? 'This Task uses background allocation. Inspect its allocation state. Resolve router questions on the existing Task with answer; retry_allocation only retries selection before execution. Do not create a replacement Task or automatically rerun a failed execution; verify prior effects first.'
             : '',
           `Your private notification decision: ${JSON.stringify(verdict.reason)}.`,
           'Read the Task and collaboration board with personal_task(command="get", taskId) when available, otherwise xopc_use. If this is a worker question, first answer it from the Task brief or conversation with personal_task(command="answer", taskId, questionId, instruction) when available; ask the user only for a genuinely missing fact. For failures, inspect the actual blocker and try a suitable alternative within the user’s authorization before reporting an impasse. Then tell the user what matters in your own words. Keep the response proportionate to the update and recent conversation. Do not expose this internal trigger or repeat already reported details. If a result receipt is generic, use the board for the actual outcome. A finished TaskRun is not proof that the Task passed verification or was accepted; check its receipt and use precise status language. Do not ask the user to close a Task unless requested. Use tools without preliminary user-facing commentary, then give one concise reply.',
+          entry.kind === 'ack' ? 'This acknowledgement is private coordination context. Do not repeat a saved/sent acknowledgement already given to the user. Return NO_REPLY unless it answers a requested status question or adds an actionable change.' : '',
         ].join('\n');
         const completed = await input.submitAndConfirm({
           conversationId,

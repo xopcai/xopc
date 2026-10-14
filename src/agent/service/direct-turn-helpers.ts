@@ -32,7 +32,6 @@ import { runEmbeddedTurnForSession } from '../embedded/run-for-session.js';
 import type { EmbeddedStreamEvent } from '../embedded/types.js';
 import { resolveImageHandlingStrategy } from '../image/vision-detection.js';
 import { buildDelegatedTaskDirective, buildTaskExecutionDirective } from '../../tasks/task-context-assembler.js';
-import { prependAgentContext } from '../context/prepend.js';
 
 export interface HydratePerTurnStateDeps {
   hydrateSessionWorkspaceFromStore: (conversationId: string) => Promise<void>;
@@ -198,11 +197,8 @@ export async function runDirectAgentTurn(
     input.userMessage,
     sourceContexts,
   );
-  const userMessageForModel = prependAgentContext(
-    sourceEnrichedMessage,
-    [buildTaskExecutionDirective(input.conversationId), buildDelegatedTaskDirective(input.conversationId)]
-      .filter(Boolean).join('\n'),
-  );
+  const taskContext = [buildTaskExecutionDirective(input.conversationId), buildDelegatedTaskDirective(input.conversationId)]
+    .filter(Boolean).join('\n');
   const modelRef = deps.modelManager.getModelForSession(input.conversationId);
   const llmTurn = await hydrateUserTurnForLlm({
     message: input.userMessage as TranscriptUserMessage,
@@ -217,8 +213,8 @@ export async function runDirectAgentTurn(
   const result = await runEmbeddedTurnForSession({
     conversationId: input.conversationId,
     runId: turnId,
-    userMessage: userMessageForModel,
-    dynamicSystemContext: userContext.dynamicSystemContext,
+    userMessage: sourceEnrichedMessage,
+    dynamicSystemContext: [userContext.dynamicSystemContext, taskContext].filter(Boolean).join('\n\n'),
     llmImages,
     presentation: input.presentation,
     requireVisibleReply: input.requireVisibleReply,

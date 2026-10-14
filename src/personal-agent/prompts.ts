@@ -47,9 +47,11 @@ const PREVIOUS_ROUTER_SUBMISSION_RULE = 'Own the request through delivery. Answe
 
 const PREVIOUS_COMPLETE_BRIEF_RULE = 'Answer directly when your capabilities suffice. Otherwise call personal_task(command="submit") with the objective, complete brief, material references, expected outputs, acceptance criteria and constraints. Submit before reading materials. The background Task Router selects and starts the executor; you do not select Agents or call delegate_task. Confirm submission after the tool succeeds, then finish the turn and remain available for conversation.';
 
+const PREVIOUS_TASK_COORDINATION_RULE = 'Reuse the existing Task. Inspect get/list only when status is needed; updates and results arrive automatically. Use instruct for new direction and answer for a worker question, resolving it from the brief or conversation first. retry_allocation retries selection before execution; inspect previous effects before retrying an execution.';
+
 const DELEGATION_RULES = [
   'Answer directly when your capabilities suffice. Otherwise call personal_task(command="submit") with an objective and a concise complete description that preserves the user request and source references. Submit before reading materials. The background Task Router selects and starts the executor. Confirm submission after the tool succeeds, then finish the turn and remain available for conversation.',
-  'Reuse the existing Task. Inspect get/list only when status is needed; updates and results arrive automatically. Use instruct for new direction and answer for a worker question, resolving it from the brief or conversation first. retry_allocation retries selection before execution; inspect previous effects before retrying an execution.',
+  'Reuse the existing Task. Inspect get/list only when status is needed; updates and results arrive automatically. Read full questions with get/entry (follow nextBodyOffset); use collaboration/afterSequence for older messages. Use instruct for new direction and answer with the exact questionId for a worker question, resolving it from the brief or conversation first. If you asked the user a worker question, deliver their next answer to that question on this same Task. Do not just acknowledge it in chat. Report saved, delivered and executor-confirmed separately; do not wait or poll for acknowledgement. The final result must reflect the latest direction and disclose anything unconfirmed or unmet. retry_allocation retries selection before execution; inspect previous effects before retrying an execution.',
   'For current news or other live facts, require dated sources in the brief. For recurring work, specify the required automation capability. Report actual allocation, execution and verification states; do not treat submission as execution or a successful run as accepted completion.',
 ] as const;
 
@@ -144,6 +146,7 @@ export function upgradePersonalInstructions(instructions: string, legacyName?: s
     .find((rule) => instructions.includes(rule));
   const legacyNameRule = legacyName === undefined ? undefined
     : `Address the user as ${JSON.stringify(legacyName)} when a name fits naturally.`;
+  instructions = removeGeneratedBlock(instructions, PREVIOUS_TASK_COORDINATION_RULE);
   instructions = instructions.replace(PREVIOUS_PERSONAL_ATTENTION_RULE, PERSONAL_ATTENTION_RULE);
   let nextInstructions = oldRule ? instructions.replace(oldRule, DELEGATION_RULES.join('\n')) : instructions;
   nextInstructions = nextInstructions.replace(PREVIOUS_PERSONAL_PERSONA_GUIDANCE, PERSONAL_PERSONA_GUIDANCE)
