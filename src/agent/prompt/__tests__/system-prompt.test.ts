@@ -7,6 +7,23 @@ import { buildSystemPrompt, splitBuiltSystemPrompt } from '../system-prompt.js';
 const BASE_TOOLS = ['read_file', 'write_file', 'exec_command', 'skills_list', 'skill_view'];
 
 describe('buildSystemPrompt section order', () => {
+  it('replaces the complete runtime profile without retaining old fields', () => {
+    const options = { runtime: { version: 'test' }, contextFiles: [{ path: 'profile/SOUL.md', content: 'Prior persona notes.' }] };
+    const before = splitBuiltSystemPrompt(buildSystemPrompt('/ws', { ...options,
+      agentProfile: { name: 'Mira', description: 'Botany educator', style: 'Formal', language: 'en' },
+    }))!;
+    const after = splitBuiltSystemPrompt(buildSystemPrompt('/ws', { ...options,
+      agentProfile: { name: 'Orion', description: 'Astronomy educator', style: 'Conversational', language: 'en' },
+    }))!;
+    expect(after.stablePrefix).toBe(before.stablePrefix);
+    expect(after.dynamicSuffix).toContain('You are "Orion".');
+    expect(after.dynamicSuffix).toContain('Your current role is "Astronomy educator".');
+    expect(after.dynamicSuffix).toContain('Your communication style: "Conversational".');
+    expect(after.dynamicSuffix).not.toContain('Mira');
+    expect(after.dynamicSuffix).not.toContain('Botany educator');
+    expect(after.dynamicSuffix).not.toContain('Formal');
+  });
+
   it('keeps changing personal snapshots below the cache boundary', () => {
     const first = splitBuiltSystemPrompt(buildSystemPrompt('/ws', { toolNames: ['personal_task'], activeProjectContext: 'Specialists: researcher' }))!;
     const next = splitBuiltSystemPrompt(buildSystemPrompt('/ws', { toolNames: ['personal_task'], activeProjectContext: 'Specialists: coder' }))!;
@@ -38,6 +55,25 @@ describe('buildSystemPrompt section order', () => {
 });
 
 describe('buildSystemPrompt prompt modes', () => {
+  it.each(['full', 'minimal', 'none'] as const)('keeps one authoritative current profile in %s mode', (promptMode) => {
+    const prompt = buildSystemPrompt('/ws', {
+      promptMode,
+      runtime: { version: 'test' },
+      agentProfile: { name: '阿沐', description: 'Astronomy educator', style: 'Patient', language: 'en' },
+      contextFiles: [{ path: 'profile/SOUL.md', content: 'Your name is Ada.' }],
+    });
+    expect(prompt).toContain('You are "阿沐".');
+    expect(prompt.match(/## Current Agent profile/g)).toHaveLength(1);
+    expect(prompt).toContain('Your current role is "Astronomy educator".');
+    expect(prompt).toContain('Your communication style: "Patient".');
+    expect(prompt).toContain('Your primary language: "en".');
+    expect(prompt).toContain('It replaces conflicting Agent settings in earlier conversation, summaries, memory, and profile Markdown');
+    if (promptMode !== 'none') {
+      expect(splitBuiltSystemPrompt(prompt)!.stablePrefix).not.toContain('You are "阿沐".');
+      expect(splitBuiltSystemPrompt(prompt)!.dynamicSuffix).toContain('You are "阿沐".');
+    }
+  });
+
   it('keeps the response-language contract in none mode', () => {
     const prompt = buildSystemPrompt('/ws', { promptMode: 'none' });
     expect(prompt).toContain('You are a personal AI assistant running inside xopc.');
@@ -135,6 +171,19 @@ describe('buildSystemPrompt prompt modes', () => {
 });
 
 describe('buildSystemPrompt response language', () => {
+  it.each(['full', 'minimal', 'none'] as const)('uses profile language in %s mode when response language is automatic', (promptMode) => {
+    const prompt = buildSystemPrompt('/ws', { promptMode, agentProfile: { name: 'Mira', language: 'fr' } });
+    expect(prompt).toContain('Write all user-facing prose in French.');
+    expect(prompt).not.toContain('Write user-facing prose in the language of the current user request.');
+    expect(prompt).toContain('A user may explicitly request a different response language for the current turn.');
+  });
+
+  it('keeps a fixed response-language preference above profile language', () => {
+    const prompt = buildSystemPrompt('/ws', { responseLanguage: 'zh-CN', agentProfile: { name: 'Mira', language: 'fr' } });
+    expect(prompt).toContain('Write all user-facing prose in Simplified Chinese.');
+    expect(prompt).not.toContain('Write all user-facing prose in French.');
+  });
+
   it('enforces Simplified Chinese without translating technical literals', () => {
     const prompt = buildSystemPrompt('/ws', { responseLanguage: 'zh-CN' });
     expect(prompt).toContain('Write all user-facing prose in Simplified Chinese.');
@@ -168,10 +217,11 @@ describe('buildSystemPrompt response language', () => {
         emoji: '✨', avatar: 'xopc:custom',
       },
     });
-    expect(prompt).toContain('## Agent identity\n\nName: 小助');
-    expect(prompt).toContain('Description: 研究伙伴');
-    expect(prompt).toContain('Style: 直接、温和');
-    expect(prompt).toContain('Primary language: zh-CN');
+    expect(prompt).toContain('## Current Agent profile');
+    expect(prompt).toContain('You are "小助".');
+    expect(prompt).toContain('Your current role is "研究伙伴".');
+    expect(prompt).toContain('Your communication style: "直接、温和".');
+    expect(prompt).toContain('Your primary language: "zh-CN".');
     expect(prompt).not.toContain('xopc:custom');
   });
 });
@@ -289,7 +339,7 @@ describe('buildSystemPrompt project context', () => {
       ],
     });
     expect(prompt).toContain('# Project Context');
-    expect(prompt).toContain('embody its persona');
+    expect(prompt).toContain('personality details that supplement the current Agent profile');
     expect(prompt).toContain('## profile/SOUL.md');
     expect(prompt).toContain('Be kind.');
   });
