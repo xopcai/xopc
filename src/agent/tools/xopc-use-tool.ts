@@ -905,7 +905,7 @@ async function handleTask(
     if (causationId && (kind === 'ack' || kind === 'answer')) {
       const cited = collaboration.get(causationId);
       if (cited?.taskId !== taskId || (kind === 'answer' && cited?.kind !== 'question')
-        || (kind === 'ack' && cited?.deliveryStatus !== 'delivered')) {
+        || (kind === 'ack' && (!active || !collaboration.canConfirm(causationId, conversationId, active.assignmentEpoch)))) {
         return { ok: false, error: 'causationId must reference a relevant Task message' };
       }
     }

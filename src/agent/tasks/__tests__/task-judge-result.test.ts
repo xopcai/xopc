@@ -10,6 +10,10 @@ vi.mock('../../../tasks/task-conversation-repository.js', () => ({ TaskConversat
 vi.mock('../../../tasks/task-repository.js', () => ({ TaskRepository: class {
   get() { return { title: 'Write a report', locale: 'zh', contract: { objective: 'Write a report', acceptanceCriteria: ['Complete report'] } }; }
 } }));
+vi.mock('../../../tasks/task-collaboration-repository.js', () => ({ TaskCollaborationRepository: class {
+  coordination() { return [{ kind: 'instruction', body: 'Double the amounts', deliveryStatus: 'confirmed' },
+    { kind: 'ack', body: 'Will double the amounts' }]; }
+} }));
 vi.mock('../../../tasks/task-run-repository.js', () => ({ TaskRunRepository: class {
   createWait = createWait;
   setStatus = setStatus;
@@ -35,6 +39,8 @@ describe('task judge result storage', () => {
     const prompt = complete.mock.calls.at(-1)![1].messages[0].content;
     expect(prompt).toContain('Write all user-facing prose in Simplified Chinese.');
     expect(prompt).toContain('recommendation, nextAction, reasons, rejectedAlternatives and uncertainty');
+    expect(prompt).toContain('Double the amounts');
+    expect(prompt).toContain('An acknowledgement proves receipt and interpretation only');
     expect(completeRun).toHaveBeenCalledWith(expect.objectContaining({
       receipt: expect.objectContaining({ summary: report }),
     }));
