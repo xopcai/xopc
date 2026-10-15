@@ -136,14 +136,14 @@ export struct XopcNotesTabView {
                   .fontColor(this.colors.accent).width('100%').textAlign(TextAlign.Start)
               }
               if (this.capture.error) {
-                Text($r('app.string.capture_transcript_delayed')).fontSize(13).fontColor(this.colors.secondary)
+                Text(this.capture.phase === 'error' ? $r('app.string.capture_interrupted') : $r('app.string.capture_transcript_delayed')).fontSize(13).fontColor(this.colors.secondary)
                   .width('100%').textAlign(TextAlign.Start)
               }
             }.width('100%').alignItems(HorizontalAlign.Start).padding({ left: 24, right: 24, top: 10, bottom: 24 })
           }.layoutWeight(1).width('100%').scrollBar(BarState.Off)
         } else {
           Column({ space: 8 }) {
-            Text(this.capture.phase === 'paused' ? $r('app.string.capture_paused') : $r('app.string.capture_listening'))
+            Text(this.capture.phase === 'error' ? $r('app.string.capture_interrupted') : this.capture.phase === 'paused' ? $r('app.string.capture_paused') : $r('app.string.capture_listening'))
               .fontSize(20).fontWeight(FontWeight.Medium).fontColor(this.colors.foreground)
               .width('100%').textAlign(TextAlign.Center)
             Text($r('app.string.capture_listening_hint')).fontSize(14).lineHeight(21).fontColor(this.colors.tertiary)
@@ -156,6 +156,26 @@ export struct XopcNotesTabView {
             .padding({ left: 32, right: 32, bottom: 42 })
         }
       }.layoutWeight(1).width('100%')
+      if (this.capture.recovered) {
+        Text($r('app.string.capture_recovered')).fontSize(13).fontColor(this.colors.secondary)
+          .width('100%').padding({ left: 20, right: 20, bottom: 8 })
+      }
+      if (this.capture.savedDurationMs > 0) {
+        Text($r('app.string.capture_local_saved', xopcFormatCaptureTime(this.capture.savedDurationMs)))
+          .fontSize(13).fontColor(this.colors.secondary).width('100%').padding({ left: 20, right: 20, bottom: 8 })
+      }
+      if (this.capture.phase === 'recording' && !this.capture.backgroundAvailable) {
+        Text($r('app.string.capture_foreground_only')).fontSize(13).fontColor(this.colors.danger)
+          .width('100%').padding({ left: 20, right: 20, bottom: 8 })
+      }
+      if (this.capture.error === 'CAPTURE_UPLOAD_PENDING') {
+        Text($r('app.string.capture_sync_pending')).fontSize(13).fontColor(this.colors.secondary)
+          .width('100%').padding({ left: 20, right: 20, bottom: 8 })
+      }
+      if (this.capture.error === 'CAPTURE_STORAGE_FAILED') {
+        Text($r('app.string.capture_storage_failed')).fontSize(13).fontColor(this.colors.danger)
+          .width('100%').padding({ left: 20, right: 20, bottom: 8 })
+      }
       if (this.capture.phase === 'recording' || this.capture.phase === 'paused') {
         Row() {
           this.captureControl($r('app.string.capture_marker'), $r('sys.symbol.bookmark'), (): void => { this.capture.mark(); })

@@ -46,7 +46,7 @@ function openDraftDatabase(): Promise<IDBDatabase> {
 export async function saveDiscussionDraft(draft: DiscussionDraft): Promise<void> {
   const db = await openDraftDatabase();
   try {
-    const transaction = db.transaction(DRAFTS, 'readwrite');
+    const transaction = db.transaction(DRAFTS, 'readwrite', { durability: 'strict' });
     transaction.objectStore(DRAFTS).put(draft);
     await transactionDone(transaction);
   } finally {
@@ -58,9 +58,16 @@ export async function saveDiscussionDraftChunk(chunk: DiscussionDraftChunk, draf
   const db = await openDraftDatabase();
   try {
     const transaction = db.transaction(draft ? [CHUNKS, DRAFTS] : [CHUNKS], 'readwrite', { durability: 'strict' });
-    transaction.objectStore(CHUNKS).put(chunk);
-    if (draft) transaction.objectStore(DRAFTS).put(draft);
-    await transactionDone(transaction);
+    const done = transactionDone(transaction);
+    try {
+      transaction.objectStore(CHUNKS).put(chunk);
+      if (draft) transaction.objectStore(DRAFTS).put(draft);
+      await done;
+    } catch (error) {
+      try { transaction.abort(); } catch { /* Already aborted by the storage engine. */ }
+      await done.catch(() => undefined);
+      throw error;
+    }
   } finally {
     db.close();
   }
@@ -152,4 +159,33 @@ export async function deleteDiscussionDraft(draftId: string): Promise<void> {
   } finally {
     db.close();
   }
+}
+
+/** Reload committed metadata and verify the audio prefix without loading its blobs. */
+export async function loadDiscussionDraftForRecovery(id: string): Promise<DiscussionDraft> {
+  const db = await openDraftDatabase();
+  try {
+    const transaction = db.transaction([DRAFTS, CHUNKS], 'readonly');
+    const done = transactionDone(transaction);
+    const draftRequest = transaction.objectStore(DRAFTS).get(id) as IDBRequest<DiscussionDraft | undefined>;
+    const keys = transaction.objectStore(CHUNKS).index('draftId').openKeyCursor(IDBKeyRange.only(id));
+    let count = 0;
+    let gap = false;
+    const checked = new Promise<void>((resolve, reject) => {
+      keys.onerror = () => reject(keys.error);
+      keys.onsuccess = () => {
+        const cursor = keys.result;
+        if (!cursor) { resolve(); return; }
+        const [, index] = cursor.primaryKey as [string, number];
+        if (index !== count) gap = true;
+        count += 1;
+        cursor.continue();
+      };
+    });
+    const [draft] = await Promise.all([requestResult(draftRequest), checked, done]);
+    if (!draft) throw new Error('The recording draft is missing');
+    if (gap || count !== draft.chunkCount) throw new Error('Local recording has missing chunks. Retained audio has not been deleted.');
+    if (!count) throw new Error('No audio was saved before the recording stopped');
+    return draft;
+  } finally { db.close(); }
 }

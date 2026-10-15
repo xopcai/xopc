@@ -70,12 +70,12 @@ export class XopcDiscussionNoteViewModel {
     }
   }
 
-  async retry(): Promise<void> {
+  async retry(fromAudio: boolean = false): Promise<void> {
     const id = this.detail?.discussion.id;
     if (!id || this.retrying) return;
     this.retrying = true;
     this.error = '';
-    try { await this.repository.retry(id); await this.refresh(); }
+    try { await this.repository.retry(id, fromAudio); await this.refresh(); }
     catch (error) { this.error = (error as Error).message; }
     finally { this.retrying = false; }
   }

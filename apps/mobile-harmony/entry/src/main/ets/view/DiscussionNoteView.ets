@@ -82,6 +82,18 @@ export struct XopcDiscussionNoteView {
           }.width('100%').padding(14).borderRadius(12).backgroundColor(this.colors.input)
             .alignItems(HorizontalAlign.Start)
         }
+        if (discussionStillProcessing(this.model.detail) && this.model.detail.organization?.organization) {
+          Text($r('app.string.discussion_regenerate_retained')).fontSize(12).fontColor(this.colors.secondary).width('100%')
+        }
+        if (this.model.detail.processing?.nextAttemptAt && discussionStillProcessing(this.model.detail)) {
+          Text($r('app.string.discussion_retry_scheduled')).fontSize(13).fontColor(this.colors.secondary).width('100%')
+        }
+        if (this.model.detail.discussion.audioAttachmentId && (this.model.detail.discussion.status === 'completed' || this.model.detail.discussion.status === 'needs_attention')) {
+          Button($r('app.string.discussion_regenerate_audio')).fontSize(14).fontColor(this.colors.accent)
+            .backgroundColor(Color.Transparent).height(36).enabled(!this.model.retrying)
+            .onClick((): void => { void this.model.retry(true); })
+          Text($r('app.string.discussion_regenerate_retained')).fontSize(12).fontColor(this.colors.secondary).width('100%')
+        }
         if (this.model.detail.organization?.organization) {
           Column({ space: 15 }) {
             Text($r('app.string.discussion_summary')).fontSize(17).fontWeight(FontWeight.Medium)

@@ -1,0 +1,34 @@
+{
+  "date": "2026-10-15T15:09:51.253Z",
+  "directory": "/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-recording-browser-SenZ1P",
+  "durationMs": 180000,
+  "syntheticMicrophone": true,
+  "passed": true,
+  "checks": [
+    {
+      "scenario": "offline capture, SIGKILL, browser restart, IndexedDB restore and audio decode",
+      "savedChunks": 36,
+      "savedDurationMs": 181435.80000007153,
+      "decodedDurationMs": 181380,
+      "bytes": 1469922,
+      "prefixHash": "3a7d1e795a2c540c7ea9e3690123538a75a548c492ddb69b23b87d3cb04487b2"
+    },
+    {
+      "scenario": "all microphone tracks stop; MediaRecorder closes and saves tail",
+      "chunks": 2,
+      "durationMs": 5055.399999976158
+    }
+  ],
+  "browser": "155.0.8059.40",
+  "gatewayIngestion": {
+    "passed": true,
+    "directory": "/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-recovered-ingestion-YfVPV1",
+    "chunks": 1,
+    "segments": 10,
+    "bytes": 1469922,
+    "sha256": "3a7d1e795a2c540c7ea9e3690123538a75a548c492ddb69b23b87d3cb04487b2",
+    "decodedDurationMs": 181380,
+    "attachmentId": "attachment_de1208f8fb95fb54bebc95bfebaf5ff8",
+    "discussionId": "7a3208cf-fc70-4c75-ad0e-def659df2b33"
+  }
+}

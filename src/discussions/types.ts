@@ -20,6 +20,8 @@ export type {
   ListDiscussionsQuery,
   DiscussionListResult,
   DiscussionMetrics,
+  DiscussionProcessingProgress,
+  DiscussionRetryMode,
 } from '@xopcai/gateway-contract';
 import type { DiscussionCapture, DiscussionTranscript, DiscussionOrganizationRecord } from '@xopcai/gateway-contract';
 
@@ -28,5 +30,6 @@ export interface DiscussionDetail {
   note: import('../notes/types.js').Note;
   transcript: DiscussionTranscript;
   organization?: DiscussionOrganizationRecord;
+  processing?: import('@xopcai/gateway-contract').DiscussionProcessingProgress;
   recordingJob?: import('@xopcai/gateway-contract').DiscussionRecordingJob;
 }
