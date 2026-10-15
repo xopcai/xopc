@@ -1127,7 +1127,7 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
             <div className={embedded && !personal ? 'px-3' : 'px-3 sm:px-5 xl:px-6'}>
               <div
                 data-chat-message-frame
-                className={cn('mx-auto w-full min-w-0', (!embedded || personal) && 'xl:max-w-[var(--max-width-chat-frame)]')}
+                className={cn('mx-auto w-full min-w-0', (!embedded || personal) && 'max-w-[var(--max-width-chat-frame)]')}
               >
               {isLoadingHistory ? (
                 <div className="flex min-h-[min(40vh,20rem)] w-full flex-col gap-10 py-8" aria-busy="true">
@@ -1286,7 +1286,7 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
                 data-chat-composer-frame
                 className={cn(
                   'relative mx-auto w-full min-w-0',
-                  (!embedded || personal) && 'xl:max-w-[var(--max-width-chat-frame)]',
+                  (!embedded || personal) && 'max-w-[var(--max-width-chat-frame)]',
                   compactWelcomeLayout ? 'py-2.5' : 'py-2 sm:py-4',
                 )}
               >

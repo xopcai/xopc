@@ -6,6 +6,7 @@ import { http } from '@kit.NetworkKit';
 import { fileIo as fs } from '@kit.CoreFileKit';
 import { util } from '@kit.ArkTS';
 import { gatewaySession } from './gatewaySession';
+import { signedHttpRequest } from './requestProof';
 import { chatSpeechChunks, chatSpeechLanguage } from '../common/speechText';
 
 interface XopcSpeechBody { text: string; language: string; }
@@ -84,7 +85,7 @@ export class XopcChatReadAloud {
     const body: XopcSpeechBody = { text: this.chunks[index], language: this.language };
     const headers: XopcSpeechHeaders = { Authorization: 'Bearer ' + auth.token, 'Content-Type': 'application/json' };
     try {
-      const response = await request.request(auth.origin + '/api/voice/speech', { method: http.RequestMethod.POST, header: headers,
+      const response = await signedHttpRequest(request, auth.origin + '/api/voice/speech', { method: http.RequestMethod.POST, header: headers,
         extraData: JSON.stringify(body), expectDataType: http.HttpDataType.ARRAY_BUFFER, maxRedirects: 0,
         maxLimit: 16 * 1024 * 1024, connectTimeout: 8000, readTimeout: 60000, usingCache: false });
       if (response.responseCode !== 200) throw new Error('SPEECH_HTTP_' + response.responseCode);
