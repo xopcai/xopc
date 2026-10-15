@@ -130,9 +130,13 @@ struct RealtimeVoiceEvent: Decodable, Sendable {
         let code: String?
         let recoverable: Bool?
         let requestId: String?
+        let kind: String?
+        let expiresAt: Int?
         let question: String?
-        let choices: [String]?
-        let suggestedAnswer: String?
+        let choiceDetails: [ClarificationChoice]?
+        let interactionMode: String?
+        let recommendedChoiceId: String?
+        let approval: ClarificationApproval?
         let version: Int?
         let format: RealtimeVoiceSession.AudioFormat?
     }

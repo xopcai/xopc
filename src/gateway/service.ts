@@ -1,3 +1,4 @@
+import type { ClarificationSubmission } from '@xopcai/gateway-contract';
 import { buildResultAgentContext } from '../agent/source-context/result-context.js';
 import { drainPersonalResultReads } from '../personal-agent/result-read-continuations.js';
 import { stopPersonalResultPreparations } from '../personal-agent/result-reader.js';
@@ -1150,7 +1151,7 @@ export class GatewayService {
     return this.agentRunner.getActiveRunId(conversationId);
   }
 
-  answerEphemeralClarification(requestId: string, answer: string): boolean {
+  answerEphemeralClarification(requestId: string, answer: ClarificationSubmission): boolean {
     return this.agentRunner.answerEphemeralClarification(requestId, answer);
   }
 
@@ -1414,6 +1415,8 @@ export class GatewayService {
     registerClarificationChannelRuntime({
       answerChoice: (requestId, choiceIndex, idempotencyKey) =>
         this.agentRunner.answerClarificationChoice(requestId, choiceIndex, idempotencyKey),
+      answerDecision: (requestId, decision, idempotencyKey) =>
+        this.agentRunner.answerClarificationDecision(requestId, decision, idempotencyKey),
       answerText: (conversationId, text, idempotencyKey) =>
         this.agentRunner.answerClarificationText(conversationId, text, idempotencyKey),
     });
@@ -1889,8 +1892,8 @@ export class GatewayService {
     return this.configCoordinator.afterFeishuCredentialsPersisted();
   }
 
-  saveConfig(config: Config): Promise<{ saved: boolean; error?: string }> {
-    return this.configCoordinator.saveConfig(config);
+  saveConfig(config: Config, expectedConfig?: Config): Promise<{ saved: boolean; error?: string; persisted?: boolean; conflict?: boolean }> {
+    return this.configCoordinator.saveConfig(config, expectedConfig);
   }
 
   async syncVoiceLanguage(language: ProductLanguage): Promise<{

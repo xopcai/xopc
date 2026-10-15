@@ -1,9 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 
 import {
+  AdaptiveStreamingMarkdownPacer,
   classifyStreamingMarkdownTail,
-  nextStreamingMarkdownCommitLength,
-  streamingMarkdownCommitDelayMs,
   streamingMarkdownCommitIntervalMs,
 } from '@/components/markdown/streaming-markdown-scheduler';
 import {
@@ -21,111 +20,95 @@ export function useProgressiveStreamingMarkdown(
   onComplete?: () => void,
   immediateFirstCommit = false,
 ): string {
-  // The first render is a snapshot, not a delta. This matters when opening a
-  // session that already has an active (or just-completed) response: replaying
-  // the accumulated text from an empty string makes history look live-streamed.
-  // Later additions still use the progressive scheduler below.
+  // Opening an existing response shows its snapshot immediately; only later additions are paced.
   const [visibleContent, setVisibleContent] = useState(() => content);
+  const [pacer] = useState(() => new AdaptiveStreamingMarkdownPacer(content.length));
   const pendingContentRef = useRef(content);
   const visibleContentRef = useRef(visibleContent);
   const timerRef = useRef<number | null>(null);
-  const lastCommitAtRef = useRef<number | null>(null);
-  const backlogSinceRef = useRef<number | null>(null);
+  const frameRef = useRef<number | null>(null);
+  const intervalRef = useRef(50);
   const hasStreamedRef = useRef(streaming || animateInitialContent);
   const completedRef = useRef(false);
 
   useEffect(() => {
+    const replacing = !content.startsWith(pendingContentRef.current);
     pendingContentRef.current = content;
+    const cancel = () => {
+      if (timerRef.current !== null) window.clearTimeout(timerRef.current);
+      if (frameRef.current !== null) window.cancelAnimationFrame(frameRef.current);
+      timerRef.current = null;
+      frameRef.current = null;
+    };
+    const showImmediately = () => {
+      cancel();
+      pacer.reset(content.length);
+      visibleContentRef.current = content;
+      setVisibleContent(content);
+    };
     if (streaming) {
       hasStreamedRef.current = true;
       completedRef.current = false;
       recordStreamingDelta(metricsKey, content.length);
     }
-    if (!hasStreamedRef.current) {
-      visibleContentRef.current = content;
-      setVisibleContent(content);
-      return;
-    }
-    if (!streaming && visibleContent !== content) {
-      recordStreamingTerminalFlush(metricsKey, content.length - visibleContent.length);
-      if (timerRef.current !== null) {
-        window.clearTimeout(timerRef.current);
-        timerRef.current = null;
+    if (!streaming) {
+      if (hasStreamedRef.current && visibleContentRef.current !== content) {
+        recordStreamingTerminalFlush(metricsKey, content.length - visibleContentRef.current.length);
       }
-      visibleContentRef.current = content;
-      lastCommitAtRef.current = null;
-      setVisibleContent(content);
-      return;
-    }
-    if (visibleContent === content) {
-      backlogSinceRef.current = null;
-      if (!streaming) {
+      showImmediately();
+      if (hasStreamedRef.current && !completedRef.current) {
+        completedRef.current = true;
         hasStreamedRef.current = false;
-        lastCommitAtRef.current = null;
-        if (!completedRef.current) {
-          completedRef.current = true;
-          onComplete?.();
-        }
+        onComplete?.();
       }
       return;
     }
-    if (immediateFirstCommit && visibleContentRef.current.length === 0) {
-      visibleContentRef.current = content;
-      lastCommitAtRef.current = performance.now();
-      recordStreamingCommit(metricsKey, content.length);
-      setVisibleContent(content);
+    if (replacing || !content.startsWith(visibleContentRef.current)
+      || (immediateFirstCommit && visibleContentRef.current.length === 0)
+      || document.visibilityState === 'hidden'
+      || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
+      if (content !== visibleContentRef.current) recordStreamingCommit(metricsKey, content.length);
+      showImmediately();
       return;
     }
-    if (!content.startsWith(visibleContent)) {
-      if (timerRef.current !== null) window.clearTimeout(timerRef.current);
-      timerRef.current = null;
-      backlogSinceRef.current = null;
-      visibleContentRef.current = content;
-      setVisibleContent(content);
-      return;
-    }
-    if (timerRef.current !== null) return;
-
-    const tail = content.slice(-8_192);
-    const intervalMs = streamingMarkdownCommitIntervalMs({
-      tailKind: classifyStreamingMarkdownTail(tail),
+    pacer.observe(content.length, performance.now());
+    intervalRef.current = streamingMarkdownCommitIntervalMs({
+      tailKind: classifyStreamingMarkdownTail(content.slice(-8_192)),
       latestParseMs: getLatestStreamingParseMs(metricsKey),
     });
-    const now = performance.now();
-    backlogSinceRef.current ??= now;
-    const lastCommitAt = lastCommitAtRef.current;
-    const waitMs = streamingMarkdownCommitDelayMs({
-      intervalMs,
-      elapsedMs: lastCommitAt === null ? 0 : now - lastCommitAt,
-      firstCommit: lastCommitAt === null,
-    });
-    timerRef.current = window.setTimeout(() => {
-      timerRef.current = null;
-      const pendingContent = pendingContentRef.current;
-      const overdue = performance.now() - (backlogSinceRef.current ?? performance.now()) >= 250;
-      const nextLength = overdue || document.visibilityState === 'hidden' ? pendingContent.length : nextStreamingMarkdownCommitLength({
-        visibleLength: visibleContentRef.current.length,
-        pendingContent,
-        elapsedMs: intervalMs,
-      });
-      const nextContent = pendingContent.slice(0, nextLength);
-      visibleContentRef.current = nextContent;
-      lastCommitAtRef.current = performance.now();
-      recordStreamingCommit(metricsKey, nextContent.length);
-      setVisibleContent(nextContent);
-    }, waitMs);
-  }, [content, metricsKey, onComplete, streaming, visibleContent, immediateFirstCommit]);
+    if (content === visibleContentRef.current || timerRef.current !== null || frameRef.current !== null) return;
 
-  useEffect(
-    () => () => {
-      if (timerRef.current !== null) {
-        window.clearTimeout(timerRef.current);
+    const schedule = () => {
+      timerRef.current = window.setTimeout(() => {
         timerRef.current = null;
-      }
-    },
-    [],
-  );
+        const commit = () => {
+          frameRef.current = null;
+          const pending = pendingContentRef.current;
+          const length = document.visibilityState === 'hidden' ? pending.length
+            : pacer.nextLength(visibleContentRef.current.length, pending, performance.now());
+          const next = pending.slice(0, length);
+          if (next !== visibleContentRef.current) {
+            visibleContentRef.current = next;
+            recordStreamingCommit(metricsKey, next.length);
+            setVisibleContent(next);
+          }
+          // Keep draining even when fractional progress has not produced a character yet.
+          if (next !== pending) schedule();
+        };
+        if (document.visibilityState === 'hidden') commit();
+        else frameRef.current = window.requestAnimationFrame(commit);
+      }, intervalRef.current);
+    };
+    schedule();
+  }, [content, metricsKey, onComplete, streaming, immediateFirstCommit, pacer]);
 
-  // Commit the final text with the completed shell; effects only settle scheduler state.
+  useEffect(() => () => {
+    if (timerRef.current !== null) window.clearTimeout(timerRef.current);
+    if (frameRef.current !== null) window.cancelAnimationFrame(frameRef.current);
+    timerRef.current = null;
+    frameRef.current = null;
+  }, []);
+
+  // First text and terminal text must be visible before layout effects see the message shell.
   return !streaming || (immediateFirstCommit && !visibleContent) ? content : visibleContent;
 }

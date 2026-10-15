@@ -14,12 +14,7 @@ private struct RealtimeVoiceAcknowledgement: Decodable {
     let timingMetrics: [String]?
 }
 
-private struct RealtimeVoiceClarificationResponse: Encodable {
-    let action: String
-    let answer: String?
-    let expectedVersion: Int
-    let idempotencyKey: String
-}
+
 
 private struct RealtimeVoiceApprovalDecision: Encodable {
     let id: String
@@ -137,11 +132,8 @@ extension GatewayClient {
         guard result.ok else { throw GatewayClientError.invalidResponse }
     }
 
-    func respondToRealtimeVoiceClarification(id: String, version: Int, action: String, answer: String?) async throws {
-        let body = try encoder.encode(RealtimeVoiceClarificationResponse(
-            action: action, answer: answer, expectedVersion: version,
-            idempotencyKey: UUID().uuidString.lowercased()
-        ))
+    func respondToRealtimeVoiceClarification(id: String, command: ClarificationResponseCommand) async throws {
+        let body = try encoder.encode(command)
         let result: RealtimeVoiceAcknowledgement = try await request(
             path: "/api/clarifications/\(id)/responses", method: "POST", body: body
         )

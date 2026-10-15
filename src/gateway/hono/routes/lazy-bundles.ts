@@ -476,7 +476,8 @@ export const AUTHENTICATED_LAZY_ROUTE_BUNDLES: readonly AuthenticatedLazyRouteBu
   },
   {
     id: 'mcp',
-    match: (path) => path === '/api/mcp/servers'
+    match: (path) => path === '/api/mcp/servers' || /^\/api\/mcp\/servers\/[^/]+$/.test(path) || path === '/api/mcp/drafts'
+      || /^\/api\/mcp\/drafts\/[^/]+(?:\/(?:probe|commit|tools|auth(?:\/redirect)?))?$/.test(path)
       || /^\/api\/mcp\/servers\/[^/]+\/(tools|probe|auth)$/.test(path)
       || /^\/api\/mcp\/auth\/[^/]+(?:\/redirect)?$/.test(path),
     load: async () => {

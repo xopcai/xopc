@@ -1,3 +1,4 @@
+import type { ClarificationPresentation } from '@xopcai/gateway-contract';
 import type { AgentStreamToolExecutionMetadata, ToolActivity, TurnOutcome } from '@xopcai/gateway-contract';
 import type { TaskUpdateTrigger } from '../../storage/sqlite/session-input-repository.js';
 
@@ -166,12 +167,11 @@ export type TtsAudioEvent = ChatStreamEnvelope<
 >;
 export type ClarifyRequestEvent = ChatStreamEnvelope<
   'clarify_request',
-  {
+  ClarificationPresentation & {
     requestId: string;
     kind: 'input' | 'approval';
     question: string;
-    choices?: string[];
-    suggestedAnswer?: string;
+
     version: number;
     createdAt: number;
     expiresAt?: number;

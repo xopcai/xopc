@@ -72,7 +72,8 @@ export class MemoryLearningService {
         try { await this.options.execute(job); }
         catch (err) {
           failLearningJob(job, 'extraction_failed');
-          log.warn({ err, jobId: job.job_id, conversationId: job.conversation_id, phase: 'extract' }, 'Memory learning failed; retry queued');
+          log.warn({ err, jobId: job.job_id, conversationId: job.conversation_id, phase: 'extract', attempts: job.attempts },
+            job.attempts >= 3 ? 'Memory learning failed; retry limit reached' : 'Memory learning failed; retry queued');
         } finally { clearInterval(renew); }
       }
     } catch (err) {

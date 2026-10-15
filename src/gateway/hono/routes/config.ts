@@ -1,5 +1,7 @@
 import type { Context, Hono } from 'hono';
 
+import { withGatewayConfigWriteLock } from '../lib/config-write-lock.js';
+
 import type { Config } from '../../../config/schema.js';
 import { getTunnelService } from '../../../tunnel/tunnel-service.js';
 import { enumerateLanGatewayCandidates } from '../../host.js';
@@ -40,14 +42,12 @@ export function registerConfigRoutes(authenticated: Hono, deps: AuthenticatedRou
     });
   });
 
-  // PATCH /api/config — section patchers run sequentially against the live
-  // config object (mutate-in-place is intentional: the route handler reads
-  // `service.currentConfig` and rewrites it through `saveConfig`). Each
-  // patcher only touches the keys it owns and returns `{ ok: false }` with a
-  // 400 body when validation fails; we surface the first failure verbatim.
-  authenticated.patch('/api/config', strictRateLimitMiddleware, async (c) => {
+  // Validate section patches on an isolated copy, then persist once. The shared
+  // HTTP write lock also covers MCP draft commits so read/merge/write stays ordered.
+  authenticated.patch('/api/config', strictRateLimitMiddleware, async (c) => withGatewayConfigWriteLock(service, async () => {
     const body = await c.req.json();
-    const config: Config = service.currentConfig as Config;
+    const expectedConfig = structuredClone(service.currentConfig);
+    const config: Config = structuredClone(expectedConfig) as Config;
     applyChannelsPatch(config, body);
 
     const gatewayResult = applyGatewayPatch(config, body);
@@ -79,13 +79,13 @@ export function registerConfigRoutes(authenticated: Hono, deps: AuthenticatedRou
       }
     }
 
-    const result = await service.saveConfig(config);
+    const result = await service.saveConfig(config, expectedConfig);
     if (!result.saved) {
-      return c.json({ ok: false, error: result.error }, 500);
+      return c.json({ ok: false, error: result.error }, result.conflict ? 409 : 500);
     }
     const safeConfig = await buildSafeWebConfigPayload(service, { locale: localeFromRequest(c) });
     return c.json({ ok: true, payload: { config: safeConfig } });
-  });
+  }));
 
   const revealGatewayAuthSecretHandler = async (c: Context) => {
     const field = await resolveRevealGatewayAuthField(c);

@@ -935,3 +935,20 @@
 
 "收起" = "Collapse";
 "无法打开链接" = "Unable to Open Link";
+
+"需要你的批准" = "Your approval is needed";
+"此审批已过期" = "This approval has expired";
+"剩余时间：%d:%@" = "Time left: %d:%@";
+"查看参数详情" = "View parameters";
+"授权仅适用于本次操作，且只能执行一次。" = "Authorization applies to this operation once.";
+"拒绝本次操作" = "Deny this operation";
+"批准本次操作" = "Approve this operation";
+"点击选项即可回答" = "Tap an option to answer immediately";
+"选择并补充" = "Select and add details";
+"推荐" = "Recommended";
+"清除选择" = "Clear selection";
+"自定义回答" = "Your answer";
+"补充说明（可选）" = "Additional information (optional)";
+"输入你的回答" = "Type your answer";
+"提交回答" = "Submit answer";
+"正在提交" = "Submitting";

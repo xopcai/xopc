@@ -38,6 +38,8 @@ describe('EmbeddedSessionRunner fingerprint', () => {
     expect(d).not.toBe(a);
     expect(e).not.toBe(a);
     expect(buildEmbeddedRunnerFingerprint({ ...base, toolContracts: ['read-v2', 'write-v1'] })).not.toBe(a);
+    const mcp = { servers: [], errors: [], credentialAliases: { docs: 'first' } };
+    expect(buildEmbeddedRunnerFingerprint({ ...base, mcp })).not.toBe(buildEmbeddedRunnerFingerprint({ ...base, mcp: { ...mcp, credentialAliases: { docs: 'second' } } }));
     const codemode = { enabled: true, timeoutMs: 60_000, maxConcurrentCalls: 4, maxCalls: 32, maxOutputTokens: 4000 };
     const enabled = buildEmbeddedRunnerFingerprint({ ...base, codemode });
     expect(enabled).not.toBe(a);

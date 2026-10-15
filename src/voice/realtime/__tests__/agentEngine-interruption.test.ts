@@ -606,12 +606,12 @@ describe('Agent voice interruption cleanup', () => {
     const test = await setup(async function* (text) {
       calls.push(text);
       yield { type: 'tool_start', payload: { toolCallId: 'tool-1', toolName: 'clarify' } };
-      yield { type: 'clarify_request', payload: { requestId: 'request-1', question: 'Choose a route', choices: ['A', 'B'] } };
+      yield { type: 'clarify_request', payload: { requestId: 'request-1', question: 'Choose a route', choiceDetails: [{ id: 'A', label: 'A' }, { id: 'B', label: 'B' }], interactionMode: 'compose', choiceDetails: [{ id: 'a', label: 'A', description: 'First route' }, { id: 'b', label: 'B' }], recommendedChoiceId: 'a' } };
       await waiting;
       yield { type: 'tool_end', payload: { toolCallId: 'tool-1', toolName: 'clarify', status: 'success' } };
     });
     test.final('first');
-    await vi.waitFor(() => expect(test.send).toHaveBeenCalledWith('response.clarification', expect.objectContaining({ requestId: 'request-1' })));
+    await vi.waitFor(() => expect(test.send).toHaveBeenCalledWith('response.clarification', expect.objectContaining({ requestId: 'request-1', interactionMode: 'compose', choiceDetails: [{ id: 'a', label: 'A', description: 'First route' }, { id: 'b', label: 'B' }], recommendedChoiceId: 'a' })));
     test.emit({ type: 'speech_started', utteranceId: 'ambient' });
     test.final('ambient');
     expect(test.send.mock.calls.some(([type]) => type === 'response.cancelled')).toBe(false);

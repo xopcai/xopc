@@ -17,7 +17,7 @@ describe('clarify tool', () => {
       resolveAskUser: () => ask,
     });
     const r = await tool.execute('3', { question: 'Color?' });
-    expect(ask).toHaveBeenCalledWith({ question: 'Color?', choices: undefined, suggestedAnswer: undefined });
+    expect(ask).toHaveBeenCalledWith({ question: 'Color?', interactionMode: undefined, choiceDetails: undefined, recommendedChoiceId: undefined });
     expect(r.details?.answer).toBe('blue');
   });
 
@@ -26,7 +26,7 @@ describe('clarify tool', () => {
     const tool = createClarifyTool({
       resolveAskUser: () => ask,
     });
-    const r = await tool.execute('4', { question: 'x', suggestedAnswer: 'fallback' });
+    const r = await tool.execute('4', { question: 'x', choiceDetails: [{ id: 'a', label: 'A' }, { id: 'b', label: 'B' }], recommendedChoiceId: 'a' });
     expect(r.details).toMatchObject({ answer: '', waitId: 'wait-1', status: 'waiting' });
   });
 });

@@ -3,7 +3,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import type { Config } from '../../config/schema.js';
 import { isManagedConnectorServer } from '../../connectors/materialize.js';
 import { prepareNativeMcpConfig } from './native-mcp.js';
-import { discoverMcpTools, McpAuthenticationRequiredError, signInNativeMcp } from './tool-catalog.js';
+import { discoverMcpTools, McpAuthenticationRequiredError, signInNativeMcp, type McpSessionOptions } from './tool-catalog.js';
 
 export type McpConnectionProbe = {
   state: 'connected' | 'oauth_required' | 'token_required' | 'error';
@@ -64,9 +64,9 @@ async function advertisesOAuth(config: Config, workspace: string, serverId: stri
     && typeof legacy.token_endpoint === 'string');
 }
 
-export async function probeMcpConnection(config: Config, workspace: string, serverId: string): Promise<McpConnectionProbe> {
+export async function probeMcpConnection(config: Config, workspace: string, serverId: string, options?: McpSessionOptions): Promise<McpConnectionProbe> {
   try {
-    const tools = await discoverMcpTools(config, workspace, serverId);
+    const tools = await discoverMcpTools(config, workspace, serverId, options);
     return { state: 'connected', toolCount: tools.length };
   } catch (error) {
     if (error instanceof McpAuthenticationRequiredError) {
@@ -90,6 +90,7 @@ export type McpAuthorization = {
   error?: string;
 };
 type Attempt = {
+  scope: string;
   owner: string;
   fingerprint: string;
   controller: AbortController;
@@ -118,16 +119,17 @@ function cancel(attempt: Attempt): void {
 }
 
 /** A UI bridge to native pi's login command; no host-owned OAuth client or token store. */
-export function startMcpAuthorization(config: Config, workspace: string, serverId: string, owner: string): McpAuthorization {
+export function startMcpAuthorization(config: Config, workspace: string, serverId: string, owner: string, options?: McpSessionOptions & { authorizationScope?: string }): McpAuthorization {
   const server = config.mcp?.servers?.[serverId];
   if (!server?.url || server.enabled === false || (isManagedConnectorServer(server) && server.xopcConnector.enabled === false)) throw new Error('An enabled HTTP MCP server is required.');
   httpUrl(server.url);
   if (server.auth || Object.keys(server.headers ?? {}).some(name => name.toLowerCase() === 'authorization')) {
     throw new Error('This server uses configured credentials. Remove Authorization before using OAuth.');
   }
-  for (const attempt of attempts.values()) if (attempt.owner === owner && attempt.result.serverId === serverId) cancel(attempt);
+  const scope = options?.authorizationScope ?? serverId;
+  for (const attempt of attempts.values()) if (attempt.owner === owner && attempt.scope === scope) cancel(attempt);
   if (attempts.size >= 100) throw new Error('Too many pending sign-ins. Try again later.');
-  const attempt: Attempt = { owner, fingerprint: fingerprint(config, serverId), controller: new AbortController(),
+  const attempt: Attempt = { owner, scope, fingerprint: fingerprint(config, serverId), controller: new AbortController(),
     result: { id: randomUUID(), serverId, state: 'starting' } };
   attempts.set(attempt.result.id, attempt);
   const expiry = setTimeout(() => cancel(attempt), 180_000);
@@ -152,7 +154,7 @@ export function startMcpAuthorization(config: Config, workspace: string, serverI
         attempt.dispose = () => signal?.removeEventListener('abort', stop);
       });
     },
-  }).then(tools => {
+  }, options).then(tools => {
     if (!attempt.controller.signal.aborted) {
       attempt.result.state = 'connected';
       attempt.result.toolCount = tools.length;

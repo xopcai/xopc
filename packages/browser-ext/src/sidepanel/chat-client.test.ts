@@ -384,44 +384,31 @@ describe('composer model and run state', () => {
 });
 
 
-describe('approval-free clarification handling', () => {
-  it('automatically resumes an approval and deduplicates repeated events', async () => {
+describe('structured clarification handling', () => {
+  it('displays approvals without automatically responding', async () => {
     const client = readyClient();
-    let complete!: (response: Response) => void;
-    gatewayFetch.mockReturnValue(new Promise<Response>(resolve => { complete = resolve; }));
     const event = { id: 'approval', kind: 'approval', status: 'open', conversationId: 'chat:one',
-      question: 'Continue?', version: 2 };
-    const first = internals(client).onRealtimeEvent('gateway', 1, 'clarification.updated', event);
+      question: 'Continue?', version: 2, approval: { operation: 'Deploy' } };
+    await internals(client).onRealtimeEvent('gateway', 1, 'clarification.updated', event);
     await internals(client).onRealtimeEvent('gateway', 2, 'clarification.updated', event);
-    expect(gatewayFetch).toHaveBeenCalledOnce();
-    expect(JSON.parse(gatewayFetch.mock.calls[0][1].body)).toMatchObject({
-      action: 'answer', answer: 'Approved. Continue with the requested operation.', expectedVersion: 2,
-      idempotencyKey: 'browser-approval:approval:2',
-    });
-    complete(response({ ok: true }));
-    await first;
-    expect(internals(client).snapshot.clarification).toBeUndefined();
+    expect(gatewayFetch).not.toHaveBeenCalled();
+    expect(internals(client).snapshot.clarification).toMatchObject({ kind: 'approval', approval: { operation: 'Deploy' } });
   });
-
-  it('retains questions and ignores approvals from another conversation', async () => {
+  it('keeps a stable key when retrying an explicit decision after a lost response', async () => {
     const client = readyClient();
     await internals(client).onRealtimeEvent('gateway', 1, 'clarification.updated', {
-      id: 'question', kind: 'input', status: 'open', conversationId: 'chat:one', question: 'Which account?', version: 1,
+      id: 'approval', kind: 'approval', status: 'open', conversationId: 'chat:one', question: 'Continue?', version: 1,
+      approval: { operation: 'Deploy' },
     });
-    expect(internals(client).snapshot.clarification).toMatchObject({ kind: 'input', question: 'Which account?' });
-    await internals(client).onRealtimeEvent('gateway', 2, 'clarification.updated', {
-      id: 'foreign', kind: 'approval', status: 'open', conversationId: 'chat:other', question: 'Continue?', version: 1,
-    });
-    expect(gatewayFetch).not.toHaveBeenCalled();
-  });
-
-  it('allows retry after a failed response without displaying an approval card', async () => {
-    const client = readyClient();
-    const event = { id: 'approval', kind: 'approval', status: 'open', conversationId: 'chat:one', question: 'Continue?', version: 1 };
-    gatewayFetch.mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce(response({ ok: true }));
-    await internals(client).onRealtimeEvent('gateway', 1, 'clarification.updated', event);
-    expect(internals(client).snapshot).toMatchObject({ error: 'offline', clarification: undefined });
-    await internals(client).onRealtimeEvent('gateway', 2, 'clarification.updated', event);
-    expect(gatewayFetch).toHaveBeenCalledTimes(2);
+    gatewayFetch.mockRejectedValueOnce(new Error('offline'));
+    await expect(client.respondToClarification('answer', { decision: 'approve' })).rejects.toThrow('offline');
+    expect(internals(client).snapshot.clarification?.kind).toBe('approval');
+    gatewayFetch.mockImplementation(async () => response({ ok: true, payload: { clarification: null } }));
+    await client.respondToClarification('answer', { decision: 'approve' });
+    const posts = gatewayFetch.mock.calls.filter(call => call[1]?.method === 'POST');
+    expect(posts).toHaveLength(2);
+    expect(JSON.parse(posts[0][1].body)).toEqual(JSON.parse(posts[1][1].body));
+    expect(JSON.parse(posts[0][1].body)).toMatchObject({ decision: 'approve', expectedVersion: 1 });
+    expect(JSON.parse(posts[0][1].body).answer).toBeUndefined();
   });
 });
