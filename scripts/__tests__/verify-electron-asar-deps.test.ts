@@ -1,9 +1,8 @@
-import { mkdirSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { afterEach, describe, expect, it } from 'vitest';
-
-const releaseDir = join(process.cwd(), 'dist/release');
 
 describe('verify-electron-asar-deps findDefaultAsar', () => {
   const created: string[] = [];
@@ -14,31 +13,27 @@ describe('verify-electron-asar-deps findDefaultAsar', () => {
     }
   });
 
-  function touchAsar(relativePath: string, mtimeMs: number) {
-    const parts = relativePath.split('/');
-    const topLevel = parts[0]!;
+  function touchAsar(releaseDir: string, relativePath: string, mtimeMs: number) {
     const asarPath = join(releaseDir, relativePath);
     mkdirSync(join(asarPath, '..'), { recursive: true });
     writeFileSync(asarPath, 'fake-asar');
     utimesSync(asarPath, mtimeMs / 1000, mtimeMs / 1000);
-    const topLevelDir = join(releaseDir, topLevel);
-    if (!created.includes(topLevelDir)) {
-      created.push(topLevelDir);
-    }
     return asarPath;
   }
 
   it('finds the newest app.asar under mac, win, and linux unpacked dirs', async () => {
-    touchAsar('mac/xopc.app/Contents/Resources/app.asar', Date.now() - 10_000);
-    touchAsar('win-unpacked/resources/app.asar', Date.now() - 5_000);
-    const newest = touchAsar('linux-unpacked/resources/app.asar', Date.now() + 1_000_000);
+    const releaseDir = mkdtempSync(join(tmpdir(), 'xopc-electron-asar-test-'));
+    created.push(releaseDir);
+    touchAsar(releaseDir, 'mac/xopc.app/Contents/Resources/app.asar', Date.now() - 10_000);
+    touchAsar(releaseDir, 'win-unpacked/resources/app.asar', Date.now() - 5_000);
+    const newest = touchAsar(releaseDir, 'linux-unpacked/resources/app.asar', Date.now() + 1_000_000);
 
     const mod = await import('../verify-electron-asar-deps.mjs');
-    expect(mod.findDefaultAsar()).toBe(newest);
+    expect(mod.findDefaultAsar(releaseDir)).toBe(newest);
   });
 
-  it('budgets for the packaged local voice and computer runtimes', async () => {
+  it('budgets for the packaged PDF and native runtimes', async () => {
     const mod = await import('../verify-electron-asar-deps.mjs');
-    expect(mod.DEFAULT_MAX_NODE_MODULES_BYTES).toBe(90 * 1024 * 1024);
+    expect(mod.DEFAULT_MAX_NODE_MODULES_BYTES).toBe(125 * 1024 * 1024);
   });
 });
