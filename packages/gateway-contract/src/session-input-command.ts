@@ -41,7 +41,7 @@ export const sessionInputContentSchema = z.strictObject({
   endpointContext: endpointContextSchema.optional(),
   attachments: z.array(attachmentSchema).optional(),
   contextRefs: z.array(z.strictObject({
-    kind: z.enum(['note', 'task', 'file', 'session', 'browser_tab', 'user_assertion']),
+    kind: z.enum(['note', 'task', 'file', 'session', 'browser_tab', 'user_assertion', 'result']),
     sourceId: z.string().trim().min(1), refId: z.string().regex(/^[A-Za-z0-9_-]{1,64}$/).optional(),
     expectedVersion: z.string().optional(),
   })).max(5).optional(),

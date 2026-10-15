@@ -3,7 +3,7 @@ import { normalizeSpecialistRequirements } from '@xopcai/gateway-contract';
 
 import { AgentCatalogRepository } from '../agent-catalog/repository.js';
 import { resolveEffectiveAgentConfig } from '../agent-config/index.js';
-import { assessSpecialist, type MatchingContext, type SpecialistAssessment } from '../agent-matching/service.js';
+import { type MatchingContext, type SpecialistAssessment } from '../agent-matching/service.js';
 import { AgentSelectionRepository, selectionRequestHash } from '../agent-matching/selection-repository.js';
 import { completeWithResolvedCredentials } from '../providers/model-call.js';
 import { extractAssistantText, getAssistantMessageErrorReason, stripCodeFences } from '../providers/model-response.js';
@@ -20,6 +20,10 @@ import { TaskCollaborationRepository } from './task-collaboration-repository.js'
 import { resolveTaskLocale } from './task-language.js';
 import { defineTaskContract } from './task-contract-definition.js';
 import { ModelTaskContractPlanner, type TaskContractPlanner } from './task-contract-planner.js';
+
+import { getTaskHandoff, resolveTaskHandoffReferences } from './task-handoff.js';
+import { supersededTaskInstructionIds } from './task-research-result.js';
+import { assessTaskExecutor, taskExecutionRequirements, captureExecutionRequirements, type ExecutionCapability } from './task-execution-capabilities.js';
 
 const log = createLogger('TaskAllocation');
 const DecisionSchema = z.discriminatedUnion('kind', [
@@ -49,6 +53,7 @@ export async function decideTaskAllocation(input: AllocationDecisionInput): Prom
     'Return only JSON: {"kind":"select","agentId":"displayed ID","reason":"short fit explanation"}, or {"kind":"no_candidate","reason":"reason"}, or {"kind":"needs_input","question":"necessary missing fact"}.',
     'Write the reason or question in the task locale.',
     `Task: ${JSON.stringify({ locale: input.task.locale, title: input.task.title, body: input.task.body, contract: input.task.contract })}`,
+    `Host-captured handoff: ${JSON.stringify((({ originalRequest, sources, completeness }) => ({ originalRequest, sources: sources.map(({ text: _text, ...source }) => source), completeness }))(getTaskHandoff(input.task.id) ?? { originalRequest: undefined, sources: [], completeness: undefined }))}`,
     `Task collaboration: ${JSON.stringify(new TaskCollaborationRepository().recent(input.task.id, undefined, 10))}`,
     `Candidates: ${JSON.stringify(input.candidates)}`,
   ].filter(Boolean).join('\n\n');
@@ -124,21 +129,42 @@ export class TaskAllocationDispatcher {
       return;
     }
     const requirements = normalizeSpecialistRequirements(JSON.parse(row.requirements_json));
+    let inferred: ExecutionCapability[] = [];
+    let handoff;
+    try { handoff = await resolveTaskHandoffReferences(task.id, this.deps.context(row.origin_conversation_id).getConfig?.()); }
+    catch (error) {
+      this.finishFailure(row, error instanceof Error ? error.message : String(error), 'source_reference_unavailable');
+      return;
+    }
+    const superseded = supersededTaskInstructionIds(task.id);
+    const activeDirections = new TaskCollaborationRepository().coordination(task.id).filter(entry => ['main_agent','user'].includes(entry.authorKind) && ['answer','instruction'].includes(entry.kind) && !superseded.has(entry.id));
+    const taskContext = [task.body, activeDirections.length ? `Applicable ordered owner directions: ${JSON.stringify(activeDirections.map(({ id, sequence, body }) => ({ id, sequence, body })))}` : '', handoff?.originalRequest ? `Host-captured original user request:\n${handoff.originalRequest}` : '',
+      handoff ? `Selected input manifest: ${JSON.stringify(handoff.sources.map(({ text: _text, ...source }) => source))}\nCompleteness: ${JSON.stringify(handoff.completeness)}` : ''].filter(Boolean).join('\n\n');
+    if (taskContext.length > 96000) {
+      this.finishFailure(row, zh ? '任务交接超过当前完整规划预算，请拆分任务或缩小引用范围。' : 'Handoff exceeds the complete planning budget; split the task or narrow its inputs.', 'handoff_budget_exceeded');
+      return;
+    }
     const fallback = defineTaskContract(task.contract?.objective ?? task.title, task.locale);
-    if (task.contract && JSON.stringify(task.contract.acceptanceCriteria) === JSON.stringify(fallback.acceptanceCriteria)
-      && (this.deps.planner || !this.deps.decide) && !requirements.connector) {
+    if (task.contract && (this.deps.planner || !this.deps.decide) && !requirements.connector) {
       // Expand the built-in fallback off the foreground path. Preserve all authority and explicit constraints.
       const planned = await (this.deps.planner ?? new ModelTaskContractPlanner()).plan({
-        objective: task.contract.objective, taskContext: task.body, locale: task.locale, signal });
+        objective: task.contract.objective, taskContext, locale: task.locale, signal });
+      if (planned.capabilityPlanning === 'unavailable') {
+        this.finishFailure(row, zh ? '后台未能完成任务能力清单，请重试分配；尚未启动执行。' : 'Background capability planning is unavailable; retry allocation. Execution has not started.', 'capability_planning_unavailable');
+        return;
+      }
+      inferred = planned.requiredCapabilities ?? [];
       if (signal.aborted || this.#stopped) throw new Error('Task contract planning interrupted');
-      if (JSON.stringify(planned.acceptanceCriteria) !== JSON.stringify(fallback.acceptanceCriteria)) {
+      if ((JSON.stringify(task.contract.acceptanceCriteria) === JSON.stringify(fallback.acceptanceCriteria)
+        || Boolean(getSqliteDatabase().prepare('SELECT 1 FROM task_work_revisions WHERE task_id = ? AND contract_version = ?').get(task.id, task.latestContractVersion)))
+        && JSON.stringify(planned.acceptanceCriteria) !== JSON.stringify(fallback.acceptanceCriteria)) {
         const updated = runSqliteWriteTransaction(db => {
           if (!this.#allocations.owns(row) || tasks.require(task.id).version !== task.version) return undefined;
           const result = new TaskApplicationService().execute({ taskId: task.id, expectedVersion: task.version,
             idempotencyKey: `allocation:${row.id}:criteria`, actor: { kind: 'system', id: 'task-router' },
             command: { type: 'revise_contract', contract: { ...task.contract!, acceptanceCriteria: planned.acceptanceCriteria,
               constraints: [...new Set([...task.contract!.constraints, ...planned.constraints])],
-              expectedOutputs: JSON.stringify(task.contract!.expectedOutputs) === JSON.stringify(fallback.expectedOutputs)
+              expectedOutputs: Boolean(db.prepare('SELECT 1 FROM task_work_revisions WHERE task_id = ? AND contract_version = ?').get(task.id, task.latestContractVersion)) || JSON.stringify(task.contract!.expectedOutputs) === JSON.stringify(fallback.expectedOutputs)
                 ? planned.expectedOutputs : task.contract!.expectedOutputs } } });
           if (!result.ok) return undefined;
           db.prepare('UPDATE task_allocations SET task_version = ? WHERE id = ?').run(result.model.task.version, row.id);
@@ -149,7 +175,8 @@ export class TaskAllocationDispatcher {
         row.task_version = task.version;
       }
     }
-    if ((task.body?.length ?? 0) > 12_000) requirements.requiredTools = [...new Set([...(requirements.requiredTools ?? []), 'xopc_use'])].sort();
+    if (handoff && !requirements.connector) requirements.requiredTools = [...new Set([...(requirements.requiredTools ?? []), 'task_collaboration'])];
+    const needs = taskExecutionRequirements(task, requirements, inferred);
     const context = this.deps.context(row.origin_conversation_id);
     const permittedExecutors = () => {
       const connector = requirements.connector;
@@ -175,12 +202,15 @@ export class TaskAllocationDispatcher {
         || agent.profile?.name.toLowerCase() === requested);
       if (named.length === 1) requirements.requestedAgentId = named[0]!.id;
     }
+    captureExecutionRequirements(task, requirements, needs);
     const ids = requirements.requestedAgentId ? [requirements.requestedAgentId] : catalog.list({ readyOnly: true })
       .filter(agent => agent.enabled !== false && agent.purpose !== 'task_dispatcher'
         && agent.id !== context.ownAgentId && !agent.id.startsWith('personal-')).map(agent => agent.id);
-    const candidates = ids.filter(id => !permitted || permitted.has(id)).map(id => assessSpecialist(id, requirements, context)).filter(candidate => candidate.eligibility === 'eligible');
+    const candidates = ids.filter(id => !permitted || permitted.has(id)).map(id => assessTaskExecutor(id, requirements, needs, context, task.id)).filter(candidate => candidate.eligibility === 'eligible');
     if (!candidates.length) {
-      this.finishFailure(row, zh ? '没有通过执行条件检查的 Specialist，请检查模型、工具和必需 Skill。' : 'No specialist passed the model, tool and required Skill checks.', 'no_eligible_candidate');
+      const failures = ids.map(id => assessTaskExecutor(id, requirements, needs, context, task.id)).map(candidate => ({ id: candidate.id, checks: candidate.checks.filter(check => ['blocked', 'unknown'].includes(check.state)) }));
+      log.warn({ taskId: task.id, failures }, 'No executor meets required operations');
+      this.finishFailure(row, (zh ? '没有执行者通过模型、工具、输入输出处理或必需 Skill 检查。' : 'No executor passed model, tool, input/output or required Skill checks. ') + JSON.stringify(failures), 'no_eligible_candidate');
       return;
     }
     // Do not silently omit equally suitable candidates from a router decision.
@@ -217,7 +247,7 @@ export class TaskAllocationDispatcher {
         .filter(agent => agent.enabled !== false && agent.purpose !== 'task_dispatcher'
           && agent.id !== context.ownAgentId && !agent.id.startsWith('personal-')).map(agent => agent.id);
       // Compare the full eligible set if eligibility changes; a new candidate may be a better fit.
-      const freshCandidates = freshIds.filter(id => !permitted || permitted.has(id)).map(id => assessSpecialist(id, requirements, context)).filter(candidate => candidate.eligibility === 'eligible');
+      const freshCandidates = freshIds.filter(id => !permitted || permitted.has(id)).map(id => assessTaskExecutor(id, requirements, needs, context, task.id)).filter(candidate => candidate.eligibility === 'eligible');
       if (selectionRequestHash(freshCandidates.map(candidate => ({ id: candidate.id, revision: candidate.revision }))) !== snapshotHash) {
         db.prepare("UPDATE task_allocations SET status = 'pending', lease_token = NULL WHERE id = ?").run(row.id);
         return;

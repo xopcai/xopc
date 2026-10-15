@@ -12,6 +12,7 @@ import { getConnectionResumeInput } from '../../storage/sqlite/connection-wait-r
 import { getClarificationResumeInput } from '../../storage/sqlite/clarification-wait-repository.js';
 import { getTaskContinuation } from '../../tasks/task-continuation.js';
 
+import type { TurnOrigin } from '@xopcai/endpoint-tools-protocol';
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
 import type { ImageContent } from '@earendil-works/pi-ai';
 import type { AgentSourceContext } from '../source-context/types.js';
@@ -84,11 +85,14 @@ export async function tryRunSlashCommand(
   },
   content: string,
   options?: {
+    origin?: TurnOrigin;
     skipResetCommands?: boolean;
     emitEvent?: (event: CommandStreamEvent) => void | Promise<void>;
     sourceContexts?: AgentSourceContext[];
   },
 ): Promise<SlashCommandTask> {
+  // Background task material is data, even when a line starts with an absolute path or a control command.
+  if (options?.origin?.type === 'system' && options.origin.source === 'workflow') return { matched: false, aggregatedText: '' };
   const personal = isPersonalConversation(ctx.conversationId);
   // Personal chat treats paths, inline slashes and unregistered slash text as ordinary input.
   const parsed = personal

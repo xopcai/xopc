@@ -10,6 +10,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { copySqliteAssets } from './sqlite-assets.mjs';
+import { buildPersonalResultWorker } from './build-personal-result-worker.mjs';
 
 import { ELECTRON_GATEWAY_EXTERNALS } from './electron-runtime-externals.mjs';
 
@@ -58,6 +59,9 @@ const gatewayBuild = await esbuild.build({
   sourcemap: false,
   metafile: true,
 });
+
+// The result parser must remain outside the gateway event loop in packaged builds too.
+await buildPersonalResultWorker(root, join(root, 'out/server/result-extraction.js'), minify);
 
 // Use pi's release worker, which is self-contained and supports data: URL startup.
 const piEntry = fileURLToPath(import.meta.resolve('@earendil-works/pi-coding-agent'));

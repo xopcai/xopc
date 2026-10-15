@@ -55,7 +55,7 @@ export function MessageContextAttachments({
         {visibleRefs.map((ref) => {
           const interactive = ref.kind === 'note';
           const Wrapper = interactive ? 'button' : 'div';
-          const kindLabel = ref.kind === 'file'
+          const kindLabel = ref.kind === 'result' ? fileLabel : ref.kind === 'file'
             ? ref.fileKind === 'directory' ? folderLabel : fileLabel
             : ref.kind === 'session'
               ? sessionLabel
@@ -78,7 +78,7 @@ export function MessageContextAttachments({
               <span className="inline-flex size-7 shrink-0 items-center justify-center rounded-md bg-accent-soft text-accent-fg">
                 {ref.kind === 'file' && ref.fileKind === 'directory' ? (
                   <Folder className="size-3.5" aria-hidden />
-                ) : ref.kind === 'file' ? (
+                ) : ref.kind === 'file' || ref.kind === 'result' ? (
                   <FileText className="size-3.5" aria-hidden />
                 ) : ref.kind === 'session' ? (
                   <MessagesSquare className="size-3.5" aria-hidden />

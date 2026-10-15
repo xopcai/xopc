@@ -1,0 +1,1074 @@
+{
+  "success": true,
+  "pingMs": 946,
+  "revisionPingMs": 1331,
+  "totalMs": 155875,
+  "submissionMs": [
+    {
+      "command": "submit",
+      "durationMs": 14.642958000000363
+    },
+    {
+      "command": "revise",
+      "durationMs": 7.2738340000069
+    }
+  ],
+  "materializedInputCopies": 4,
+  "taskCount": 1,
+  "rootRunCount": 2,
+  "initialResult": {
+    "resultId": "16e4f080-45f2-4497-9600-21b5a5783ff1",
+    "status": "succeeded",
+    "revision": 1,
+    "sha256": "68ffe01478d58401ccc85535017039e928b8ba8025dfed4bd7b707dc97c93585"
+  },
+  "revisedResult": {
+    "resultId": "ec445cf9-e54d-4e82-96cc-2a503fead02f",
+    "status": "succeeded",
+    "revision": 2,
+    "previousResultId": "16e4f080-45f2-4497-9600-21b5a5783ff1",
+    "sha256": "0334cd8859b88464f4873d36e841a51077043a66afbe45d0a41f6bf824491676",
+    "selectedArtifacts": [
+      "report.md",
+      "changelog.txt"
+    ],
+    "adoption": [
+      {
+        "entryId": "81b591b4-ad7e-484c-8fb6-be1283029d4a",
+        "sequence": 3,
+        "status": "applied",
+        "verification": "passed",
+        "claimIds": [
+          "c1-cedar-replaced",
+          "c2-otherwise-identical",
+          "c3-changelog",
+          "c4-only-two-files",
+          "c5-old-version-intact"
+        ],
+        "note": "仅替换核对码、仅交付两文件、保留旧版且未重跑脚本，均已满足。"
+      }
+    ]
+  },
+  "oldArtifactUnchanged": true,
+  "exactSingleReplacement": true,
+  "noDirectOriginalScriptRerunObserved": true,
+  "mainInputPreReads": 0,
+  "materializationErrors": 0,
+  "sourceValidationRetries": 1,
+  "workerToolErrors": [
+    {
+      "tool": "exec_command",
+      "error": [
+        {
+          "type": "text",
+          "text": "Sandbox blocked command: Injection: Newline-injected destructive command"
+        },
+        {
+          "type": "text",
+          "text": "Task source toolCallId: call_00_klRXUTwgJhmQSYg4Ciov7883"
+        },
+        {
+          "type": "text",
+          "text": "\nCommand: use non-interactive commands with clear timeouts"
+        }
+      ]
+    },
+    {
+      "tool": "publish_task_result",
+      "error": [
+        {
+          "type": "text",
+          "text": "{\"code\":\"source_quote_mismatch\",\"message\":\"Sources have no matching successful tool read.\",\"failures\":[{\"sourceId\":\"src-script-run\",\"observedToolCallId\":\"call_00_2jnHsQxu3SKdy8TtU8lN9540\",\"observedExcerpt\":\"Fixture files verified\",\"repair\":\"This is one actual contiguous excerpt from that read. Use a single observed excerpt; do not join it with separated passages. The claim still needs independent support review.\",\"reason\":\"excerpt_or_url_not_observed\",\"matchingToolCallIds\":[]}],\"recovery\":\"Fix all listed sources together. Prefer a supplied observedExcerpt as one contiguous quote. Never concatenate separated passages. Read task_collaboration(get, section=evidence) for real toolCallIds, then read one toolCallId and copy a short contiguous excerpt. Omit a URL absent from the observed read. Keep stable IDs; change invalid sources or retire unsupported claims. Your draft final reply and earlier reviews are not evidence. Do not retry unchanged input.\",\"availableReads\":[{\"toolCallId\":\"call_00_HIx7vANmHsYoPolUsIqq6735\",\"toolName\":\"task_collaboration\",\"chars\":703},{\"toolCallId\":\"call_01_ecUMIetsqzeP6XFTUtLI3467\",\"toolName\":\"task_collaboration\",\"chars\":704},{\"toolCallId\":\"call_02_brKkvFZIK1LARC8cpxH81413\",\"toolName\":\"task_collaboration\",\"chars\":692},{\"toolCallId\":\"call_00_83h4VT5A87U65MYlv1kb7716\",\"toolName\":\"read_file\",\"chars\":427},{\"toolCallId\":\"call_01_u2Y5yRJnhH8PpLIsvUZ53180\",\"toolName\":\"exec_command\",\"chars\":927},{\"toolCallId\":\"call_00_wdrQEvQQJGMM46eEl2IP8859\",\"toolName\":\"exec_command\",\"chars\":1091},{\"toolCallId\":\"call_00_2jnHsQxu3SKdy8TtU8lN9540\",\"toolName\":\"exec_command\",\"chars\":299},{\"toolCallId\":\"call_00_JUlqquStOlUADKbc32Kw9791\",\"toolName\":\"publish_artifacts\",\"chars\":628}]}"
+        }
+      ]
+    },
+    {
+      "tool": "exec_command",
+      "error": [
+        {
+          "type": "text",
+          "text": "Command exited with code 2\ninput_sha256=68ffe01478d58401ccc85535017039e928b8ba8025dfed4bd7b707dc97c93585\nreplaced_occurrences= 1\n--- diff (old vs new) ---\n/bin/sh: -c: line 21: syntax error near unexpected token `('\n\nNext action: The default shell rejected the syntax. Use portable POSIX sh commands or invoke an installed bash explicitly for Bash-only features such as process substitution. Inspect stderr, fix the command, then rerun it.\n\nLog: /var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-personal-handoff-live-8WwdG8/command-runs/30c1dd01a49d10c89edfeae958cfe584570fee9df18b9b8f88e32528fdd8e81b/ea7d2859-ad67-478c-a705-eee97d7463ce.log"
+        },
+        {
+          "type": "text",
+          "text": "Task source toolCallId: call_00_SGadYOQG5EoRPU9MPyEC0091"
+        }
+      ]
+    }
+  ],
+  "marker": "RESULT-a083aa3e",
+  "toolCalls": [
+    {
+      "name": "personal_task",
+      "input": {
+        "command": "submit",
+        "objective": "交付已准备好的文件包：复制 source-report.md 为 report.md，运行 node reproduce.mjs 检查，并只发布 report.md、monthly_summary.csv、reproduce.mjs 三个文件。",
+        "title": "交付 report.md 等三个文件",
+        "description": "用户请求（原样保留）：\n\n请安排执行者交付已准备好的文件包：把工作区 source-report.md 原样复制为 report.md，运行现有 node reproduce.mjs 检查它和 monthly_summary.csv，然后只发布 report.md、monthly_summary.csv、reproduce.mjs 三个文件。文件及检查脚本已准备好，不需要新增分析、研究或改写。允许在隔离工作区复制文件、运行这个检查脚本并发布指定三文件。最终回复只说明交付情况，不复述文件正文或附录核对码。不要让主对话等待执行。\n\n说明：\n- 输入已就绪：工作区中的 source-report.md、monthly_summary.csv、reproduce.mjs。\n- 复制必须原样（逐字节/逐行一致），不得改写、补充或新增分析、研究。\n- 运行现有 node reproduce.mjs 作为检查脚本，用于核查 report.md 与 monthly_summary.csv。\n- 仅发布这三个文件：report.md、monthly_summary.csv、reproduce.mjs。\n- 允许的操作范围为：在隔离工作区复制该文件、运行该检查脚本、发布指定三文件。\n- 最终回复只说明交付情况（哪些文件已发布、检查脚本结果），不复述文件正文或附录核对码。",
+        "sourceRefs": [
+          {
+            "kind": "file",
+            "sourceId": "source-report.md"
+          },
+          {
+            "kind": "file",
+            "sourceId": "monthly_summary.csv"
+          },
+          {
+            "kind": "file",
+            "sourceId": "reproduce.mjs"
+          }
+        ]
+      },
+      "durationMs": 14.642958000000363,
+      "output": [
+        {
+          "type": "text",
+          "text": "{\n  \"ok\": true,\n  \"task\": {\n    \"id\": \"ddffb3db-b7b7-4dc1-a44a-9da7ac1a432c\",\n    \"title\": \"交付 report.md 等三个文件\",\n    \"phase\": \"ready\",\n    \"version\": 1\n  },\n  \"operationalState\": \"allocating\",\n  \"allocation\": {\n    \"id\": \"38f4551f-5bff-44c8-ba1f-e9afa9c355f6\",\n    \"taskId\": \"ddffb3db-b7b7-4dc1-a44a-9da7ac1a432c\",\n    \"status\": \"pending\",\n    \"attempts\": 0,\n    \"updatedAt\": 1792046704277\n  }\n}\nOpen in xopc: [Open](xopc://open?kind=task&id=ddffb3db-b7b7-4dc1-a44a-9da7ac1a432c)\nxopc-product-delivery:%7B%22version%22%3A2%2C%22operation%22%3A%22created%22%2C%22primary%22%3A%7B%22kind%22%3A%22task%22%2C%22id%22%3A%22ddffb3db-b7b7-4dc1-a44a-9da7ac1a432c%22%2C%22title%22%3A%22%E4%BA%A4%E4%BB%98%20report.md%20%E7%AD%89%E4%B8%89%E4%B8%AA%E6%96%87%E4%BB%B6%22%2C%22status%22%3A%22ready%2Fallocating%22%2C%22revision%22%3A%221%22%2C%22capabilities%22%3A%5B%22open%22%2C%22edit%22%2C%22continue_in_chat%22%5D%7D%7D"
+        }
+      ]
+    },
+    {
+      "name": "personal_task",
+      "input": {
+        "command": "get",
+        "taskId": "ddffb3db-b7b7-4dc1-a44a-9da7ac1a432c",
+        "section": "revision"
+      },
+      "durationMs": 2.422792000012123,
+      "output": [
+        {
+          "type": "text",
+          "text": "{\"ok\":true,\"taskId\":\"ddffb3db-b7b7-4dc1-a44a-9da7ac1a432c\",\"phase\":\"closed\",\"expectedVersion\":5,\"revisionBaseline\":{\"resultId\":\"16e4f080-45f2-4497-9600-21b5a5783ff1\",\"baselineVersion\":\"fb94c5ae-d9a8-48ec-be9f-e52520e3c70c:1:7200a561-c7d8-4362-99e7-466e04a13b6f:outcome\",\"resultRevision\":1,\"expectedVersion\":5},\"allowedCommands\":[\"reopen\",\"revise\"],\"allocation\":{\"id\":\"38f4551f-5bff-44c8-ba1f-e9afa9c355f6\",\"taskId\":\"ddffb3db-b7b7-4dc1-a44a-9da7ac1a432c\",\"status\":\"assigned\",\"attempts\":1,\"updatedAt\":1792046711767,\"selectedAgentId\":\"coder\",\"selectionReason\":\"任务核心是在隔离工作区原样复制文件、运行 node reproduce.mjs 检查并发布指定三个文件，属于软件工程执行类工作；Coding Expert 具备 read_file、exec_command、publish_artifacts 等已验证能力，且不涉及新增分析或改写，符合任务边界。\"}}"
+        }
+      ]
+    },
+    {
+      "name": "personal_task",
+      "input": {
+        "command": "revise",
+        "taskId": "ddffb3db-b7b7-4dc1-a44a-9da7ac1a432c",
+        "instruction": "修订要求（替换此前三文件交付要求，最终只交付两个文件）：\n\n基于刚才发布的 report.md 修改，只把第三节中的核对码 CEDAR-c8e0bd14 改成 MAPLE-fe732459，report.md 其余内容逐字保留。最终仅交付新版 report.md 与 changelog.txt 两个文件。changelog.txt 内容只写一句：“核对码已由 CEDAR-c8e0bd14 更新为 MAPLE-fe732459，其他正文保持不变。”\n\n约束与验收：\n- 不要交付旧 csv 或脚本（monthly_summary.csv、reproduce.mjs 均不再交付）。\n- 不要重跑原脚本 reproduce.mjs。\n- 这是基于历史成果的文本修改，不重新研究、不新增分析。\n- 由后台执行者把已发布的旧 report.md 物化为只读输入，写入新输出，并校验除该核对码外其余内容未变。\n- 修改时必须保留旧成果可读，不覆盖或删除原已发布版本。",
+        "baselineResultId": "16e4f080-45f2-4497-9600-21b5a5783ff1",
+        "baselineVersion": "fb94c5ae-d9a8-48ec-be9f-e52520e3c70c:1:7200a561-c7d8-4362-99e7-466e04a13b6f:outcome",
+        "expectedVersion": 5
+      },
+      "durationMs": 7.2738340000069,
+      "output": [
+        {
+          "type": "text",
+          "text": "{\"ok\":true,\"saved\":true,\"taskId\":\"ddffb3db-b7b7-4dc1-a44a-9da7ac1a432c\",\"expectedVersion\":8,\"allocation\":{\"id\":\"ca336135-691c-43ad-9dc8-3138de054fd6\",\"taskId\":\"ddffb3db-b7b7-4dc1-a44a-9da7ac1a432c\",\"status\":\"pending\",\"attempts\":0,\"updatedAt\":1792046769911},\"state\":\"revision_saved_background_allocation_pending\"}"
+        }
+      ]
+    }
+  ],
+  "finalDeliveries": [
+    {
+      "version": 1,
+      "deliveryId": "16e4f080-45f2-4497-9600-21b5a5783ff1",
+      "taskId": "ddffb3db-b7b7-4dc1-a44a-9da7ac1a432c",
+      "taskRunId": "fb94c5ae-d9a8-48ec-be9f-e52520e3c70c",
+      "taskTitle": "交付 report.md 等三个文件",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "originTranscriptId": "1e30081b-a6f5-41dc-b284-a5027e70e49d",
+      "requestInputId": "17f1e9f9-708d-4947-b866-f33795bd93b7",
+      "assignmentEpoch": 1,
+      "resultRevision": 1,
+      "contractVersion": 2,
+      "instructionSequence": 0,
+      "adoption": [],
+      "outcome": {
+        "version": 1,
+        "outcomeId": "7200a561-c7d8-4362-99e7-466e04a13b6f:outcome",
+        "runId": "7200a561-c7d8-4362-99e7-466e04a13b6f",
+        "turnId": "7200a561-c7d8-4362-99e7-466e04a13b6f",
+        "status": "succeeded",
+        "summary": "Message processed successfully",
+        "deliverables": [
+          {
+            "artifactId": "report---0e829400-7900-4da7-b21a-ca81358bacfe.md",
+            "sourceFileId": "rdxexknBFOpDKvQLRt2qrtAC.b3V0LWRkZmZiM2RiL3JlcG9ydC5tZA",
+            "title": "report.md",
+            "kind": "document",
+            "mimeType": "text/markdown",
+            "sizeBytes": 42926,
+            "availability": "available",
+            "location": "artifact_store",
+            "capabilities": [
+              "preview",
+              "download"
+            ],
+            "uri": "media://outbound/report---0e829400-7900-4da7-b21a-ca81358bacfe.md",
+            "sha256": "68ffe01478d58401ccc85535017039e928b8ba8025dfed4bd7b707dc97c93585"
+          },
+          {
+            "artifactId": "monthly_summary---72ac0986-76dc-42c8-acd2-43bda939e13a.csv",
+            "sourceFileId": "rdxexknBFOpDKvQLRt2qrtAC.b3V0LWRkZmZiM2RiL21vbnRobHlfc3VtbWFyeS5jc3Y",
+            "title": "monthly_summary.csv",
+            "kind": "spreadsheet",
+            "mimeType": "text/csv",
+            "sizeBytes": 36,
+            "availability": "available",
+            "location": "artifact_store",
+            "capabilities": [
+              "preview",
+              "download"
+            ],
+            "uri": "media://outbound/monthly_summary---72ac0986-76dc-42c8-acd2-43bda939e13a.csv",
+            "sha256": "412359e374bd855ab032ea0db39ccde7540fa5105a0e1e4d0bb0dd5e023fd1df"
+          },
+          {
+            "artifactId": "reproduce---96a87d08-c80f-4946-8b91-6b932e1ad8db.mjs",
+            "sourceFileId": "rdxexknBFOpDKvQLRt2qrtAC.b3V0LWRkZmZiM2RiL3JlcHJvZHVjZS5tanM",
+            "title": "reproduce.mjs",
+            "kind": "file",
+            "mimeType": "application/octet-stream",
+            "sizeBytes": 370,
+            "availability": "available",
+            "location": "artifact_store",
+            "capabilities": [
+              "download"
+            ],
+            "uri": "media://outbound/reproduce---96a87d08-c80f-4946-8b91-6b932e1ad8db.mjs",
+            "sha256": "76481ffc6a73ecf8f4006e9f7abdf8cfcde663f2fecf3167c5beb13a669b84d7"
+          }
+        ],
+        "evidence": [],
+        "research": {
+          "version": 1,
+          "contractVersion": 2,
+          "instructionSequence": 0,
+          "sources": [
+            {
+              "id": "src-copy-check",
+              "toolCallId": "call_00_wdrQEvQQJGMM46eEl2IP8859",
+              "toolName": "exec_command",
+              "excerpt": "68ffe01478d58401ccc85535017039e928b8ba8025dfed4bd7b707dc97c93585  out-ddffb3db/source-report.md\n68ffe01478d58401ccc85535017039e928b8ba8025dfed4bd7b707dc97c93585  out-ddffb3db/report.md\n412359e374bd855ab032ea0db39ccde7540fa5105a0e1e4d0bb0dd5e023fd1df  out-ddffb3db/monthly_summary.csv\n76481ffc6a73ecf8f4006e9f7abdf8cfcde663f2fecf3167c5beb13a669b84d7  out-ddffb3db/reproduce.mjs\nBYTE_IDENTICAL",
+              "snapshotHash": "2b8c12c280602f89d0e46deaa00c5c757c14cb4c5c05ec4c2ef5436b4df8e375",
+              "observedAt": 1792046728822
+            },
+            {
+              "id": "src-script-run",
+              "toolCallId": "call_00_2jnHsQxu3SKdy8TtU8lN9540",
+              "toolName": "exec_command",
+              "excerpt": "Fixture files verified\nEXIT_CODE=0",
+              "snapshotHash": "7b5221926c5d1542710fd5bfedf59757df6f52a182d1275708a3409f28d4b4d6",
+              "observedAt": 1792046739176
+            },
+            {
+              "id": "src-receipts",
+              "toolCallId": "call_00_JUlqquStOlUADKbc32Kw9791",
+              "toolName": "publish_artifacts",
+              "excerpt": "3 artifacts published: report.md, monthly_summary.csv, reproduce.mjs",
+              "snapshotHash": "07e1dc028052d9b2931d94f83c7d442afaaa8d118c2c712b32e4019cc4110cb1",
+              "observedAt": 1792046742261
+            },
+            {
+              "id": "src-inputs",
+              "toolCallId": "call_00_83h4VT5A87U65MYlv1kb7716",
+              "toolName": "read_file",
+              "excerpt": "assert.equal(readFileSync('report.md', 'utf8'), readFileSync('source-report.md', 'utf8'));\nassert.equal(readFileSync('monthly_summary.csv', 'utf8'), \"month,total\\n2026-01,150\\n2026-02,210\\n\");",
+              "snapshotHash": "abbc0e51bd9bfcdfedfe19b6537d4fa7390cdf3b7a03e5adbc23acd61007333e",
+              "observedAt": 1792046721414
+            }
+          ],
+          "claims": [
+            {
+              "id": "c1",
+              "statement": "report.md 已发布，且其内容与工作区 source-report.md 逐字节一致：两者 sha256 均为 68ffe01478d58401ccc85535017039e928b8ba8025dfed4bd7b707dc97c93585，cmp 输出 BYTE_IDENTICAL。",
+              "kind": "fact",
+              "sourceIds": [
+                "src-copy-check",
+                "src-receipts"
+              ],
+              "support": "supported",
+              "note": "哈希与 cmp 输出证明 report.md 与 source-report.md 逐字节一致，且发布回执确认已发布。"
+            },
+            {
+              "id": "c2",
+              "statement": "monthly_summary.csv 已按原样发布，sha256 412359e374bd855ab032ea0db39ccde7540fa5105a0e1e4d0bb0dd5e023fd1df，与固定输入一致。",
+              "kind": "fact",
+              "sourceIds": [
+                "src-copy-check",
+                "src-receipts"
+              ],
+              "support": "supported",
+              "note": "哈希一致且已发布；已审阅的 CSV 内容与脚本断言值一致。"
+            },
+            {
+              "id": "c3",
+              "statement": "reproduce.mjs 已按原样发布，sha256 76481ffc6a73ecf8f4006e9f7abdf8cfcde663f2fecf3167c5beb13a669b84d7，与固定输入一致。",
+              "kind": "fact",
+              "sourceIds": [
+                "src-copy-check",
+                "src-receipts"
+              ],
+              "support": "supported",
+              "note": "哈希一致且已发布；已审阅的 reproduce.mjs 内容与输入一致。"
+            },
+            {
+              "id": "c4",
+              "statement": "已运行 node reproduce.mjs：退出码 0，输出 'Fixture files verified'。该脚本断言 report.md 与 source-report.md 内容相等，并断言 monthly_summary.csv 内容等于 \"month,total\\n2026-01,150\\n2026-02,210\\n\"；两项断言均通过。",
+              "kind": "fact",
+              "sourceIds": [
+                "src-script-run",
+                "src-inputs"
+              ],
+              "support": "supported",
+              "note": "退出码 0 与输出 'Fixture files verified' 证明脚本已运行且断言通过。"
+            },
+            {
+              "id": "c5",
+              "statement": "仅发布了 report.md、monthly_summary.csv、reproduce.mjs 三个文件，未复制、改写或新增任何分析或研究内容。",
+              "kind": "fact",
+              "sourceIds": [
+                "src-receipts"
+              ],
+              "support": "supported",
+              "note": "发布回执仅列出三个指定文件，无额外产物。"
+            }
+          ],
+          "checks": [
+            {
+              "criterionIndex": 0,
+              "criterion": "report.md 已发布，且其内容与工作区 source-report.md 逐字节一致。",
+              "status": "passed",
+              "claimIds": [
+                "c1"
+              ],
+              "note": "report.md 已发布且与 source-report.md 逐字节一致。"
+            },
+            {
+              "criterionIndex": 1,
+              "criterion": "monthly_summary.csv 已按原样发布，内容与工作区输入一致。",
+              "status": "passed",
+              "claimIds": [
+                "c2"
+              ],
+              "note": "monthly_summary.csv 已按原样发布，内容与输入一致。"
+            },
+            {
+              "criterionIndex": 2,
+              "criterion": "reproduce.mjs 已按原样发布，内容与工作区输入一致。",
+              "status": "passed",
+              "claimIds": [
+                "c3"
+              ],
+              "note": "reproduce.mjs 已按原样发布，内容与输入一致。"
+            },
+            {
+              "criterionIndex": 3,
+              "criterion": "已运行 node reproduce.mjs",
+              "status": "passed",
+              "claimIds": [
+                "c4"
+              ],
+              "note": "node reproduce.mjs 已运行，退出码 0 且断言通过。"
+            }
+          ],
+          "review": "model_reviewed",
+          "finalArtifactIds": [
+            "report---0e829400-7900-4da7-b21a-ca81358bacfe.md",
+            "monthly_summary---72ac0986-76dc-42c8-acd2-43bda939e13a.csv",
+            "reproduce---96a87d08-c80f-4946-8b91-6b932e1ad8db.mjs"
+          ],
+          "inspectedArtifactIds": [
+            "report---0e829400-7900-4da7-b21a-ca81358bacfe.md",
+            "monthly_summary---72ac0986-76dc-42c8-acd2-43bda939e13a.csv",
+            "reproduce---96a87d08-c80f-4946-8b91-6b932e1ad8db.mjs"
+          ],
+          "instructionChecks": []
+        },
+        "createdAt": "2026-10-15T06:46:01.029Z"
+      },
+      "text": "交付完成。\n\n已发布（仅这三个文件）：\n- [report.md](xopc://artifact?artifactId=report---0e829400-7900-4da7-b21a-ca81358bacfe.md)\n- [monthly_summary.csv](xopc://artifact?artifactId=monthly_summary---72ac0986-76dc-42c8-acd2-43bda939e13a.csv)\n- [reproduce.mjs](xopc://artifact?artifactId=reproduce---96a87d08-c80f-4946-8b91-6b932e1ad8db.mjs)\n\n检查脚本结果：在隔离工作区运行 `node reproduce.mjs`，退出码 0，输出 `Fixture files verified`。该脚本断言 report.md 与 source-report.md 内容相等、monthly_summary.csv 与输入内容一致，两项断言均通过。\n\n一致性核对：report.md 与 source-report.md 的 sha256 相同（`68ffe014…`），`cmp` 输出 BYTE_IDENTICAL；monthly_summary.csv（`412359e3…`）与 reproduce.mjs（`76481ffc…`）的 sha256 均与固定输入一致。复制为原样，未改写、未新增分析或研究。",
+      "createdAt": 1792046764442
+    },
+    {
+      "version": 1,
+      "deliveryId": "ec445cf9-e54d-4e82-96cc-2a503fead02f",
+      "taskId": "ddffb3db-b7b7-4dc1-a44a-9da7ac1a432c",
+      "taskRunId": "a6f4e48c-6825-48f6-97e4-dffdad0c3cbb",
+      "taskTitle": "交付 report.md 等三个文件",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "originTranscriptId": "1e30081b-a6f5-41dc-b284-a5027e70e49d",
+      "requestInputId": "c328a639-1266-43dc-ba76-4e6f328ec088",
+      "assignmentEpoch": 2,
+      "resultRevision": 2,
+      "previousResultId": "16e4f080-45f2-4497-9600-21b5a5783ff1",
+      "contractVersion": 4,
+      "instructionSequence": 3,
+      "adoption": [
+        {
+          "entryId": "81b591b4-ad7e-484c-8fb6-be1283029d4a",
+          "sequence": 3,
+          "status": "applied",
+          "verification": "passed",
+          "claimIds": [
+            "c1-cedar-replaced",
+            "c2-otherwise-identical",
+            "c3-changelog",
+            "c4-only-two-files",
+            "c5-old-version-intact"
+          ],
+          "note": "仅替换核对码、仅交付两文件、保留旧版且未重跑脚本，均已满足。"
+        }
+      ],
+      "outcome": {
+        "version": 1,
+        "outcomeId": "3bc1ec0c-5594-489b-b3e0-98dd1fb0ebc4:outcome",
+        "runId": "3bc1ec0c-5594-489b-b3e0-98dd1fb0ebc4",
+        "turnId": "3bc1ec0c-5594-489b-b3e0-98dd1fb0ebc4",
+        "status": "succeeded",
+        "summary": "Message processed successfully",
+        "deliverables": [
+          {
+            "artifactId": "report---ad164cf4-09af-47ad-955d-89061cfcd96b.md",
+            "sourceFileId": "rdxexknBFOpDKvQLRt2qrtAC.b3V0LWRkZmZiM2RiL3JldmlzaW9uLTIvcmVwb3J0Lm1k",
+            "title": "report.md",
+            "kind": "document",
+            "mimeType": "text/markdown",
+            "sizeBytes": 42926,
+            "availability": "available",
+            "location": "artifact_store",
+            "capabilities": [
+              "preview",
+              "download"
+            ],
+            "uri": "media://outbound/report---ad164cf4-09af-47ad-955d-89061cfcd96b.md",
+            "sha256": "0334cd8859b88464f4873d36e841a51077043a66afbe45d0a41f6bf824491676"
+          },
+          {
+            "artifactId": "changelog---8aac2349-d2cb-4009-ad31-702b2dd76f61.txt",
+            "sourceFileId": "rdxexknBFOpDKvQLRt2qrtAC.b3V0LWRkZmZiM2RiL3JldmlzaW9uLTIvY2hhbmdlbG9nLnR4dA",
+            "title": "changelog.txt",
+            "kind": "document",
+            "mimeType": "text/plain",
+            "sizeBytes": 86,
+            "availability": "available",
+            "location": "artifact_store",
+            "capabilities": [
+              "preview",
+              "download"
+            ],
+            "uri": "media://outbound/changelog---8aac2349-d2cb-4009-ad31-702b2dd76f61.txt",
+            "sha256": "a0859172ce52c58b4a37e2ef005809cf342f83dd8d544f5d90f7149b7e1454ac"
+          }
+        ],
+        "evidence": [],
+        "research": {
+          "version": 1,
+          "contractVersion": 4,
+          "instructionSequence": 3,
+          "sources": [
+            {
+              "id": "S1-materialize",
+              "toolCallId": "call_01_qwEJ2vk9MeqxlmvtBmQr0644",
+              "toolName": "task_collaboration",
+              "excerpt": "\"sha256\":\"68ffe01478d58401ccc85535017039e928b8ba8025dfed4bd7b707dc97c93585\",\"bytes\":42926,\"scope\":\"selected_input_copy_only\"}",
+              "snapshotHash": "9973284c11ef9f7b914c168c0ac9d7f5368c932d245ce18a8a7fcd8b8bbd7005",
+              "observedAt": 1792046784683
+            },
+            {
+              "id": "S2-input-grep",
+              "toolCallId": "call_01_IgMasORG799Trn6bUcFE2313",
+              "toolName": "exec_command",
+              "excerpt": "708   42926 .task-inputs/ddffb3db-b7b7-4dc1-a44a-9da7ac1a432c/results/801560c20a0b058866ce60cb/report.md\n1\n707:核对码：CEDAR-c8e0bd14",
+              "snapshotHash": "be11e4cfab8598ed42d0f6294da104a55ab969710b3be73c77d2a111600c7a6c",
+              "observedAt": 1792046787833
+            },
+            {
+              "id": "S3-diff",
+              "toolCallId": "call_00_OaSdz6zKGbqc8dF5eg0k7704",
+              "toolName": "exec_command",
+              "excerpt": "-核对码：CEDAR-c8e0bd14\n+核对码：MAPLE-fe732459\n 适用范围：仅适用于隔离验收样本，不适用于生产经营预测。",
+              "snapshotHash": "618aab6280fe3d034acfa8d72b129ec6fffa01d930535c3290efe848fc94c5d2",
+              "observedAt": 1792046800686
+            },
+            {
+              "id": "S3-counts",
+              "toolCallId": "call_00_OaSdz6zKGbqc8dF5eg0k7704",
+              "toolName": "exec_command",
+              "excerpt": "CEDAR_in_new=0\nMAPLE_in_new=1\n707:核对码：MAPLE-fe732459",
+              "snapshotHash": "618aab6280fe3d034acfa8d72b129ec6fffa01d930535c3290efe848fc94c5d2",
+              "observedAt": 1792046800686
+            },
+            {
+              "id": "S3-original-intact",
+              "toolCallId": "call_00_OaSdz6zKGbqc8dF5eg0k7704",
+              "toolName": "exec_command",
+              "excerpt": "68ffe01478d58401ccc85535017039e928b8ba8025dfed4bd7b707dc97c93585  out-ddffb3db/report.md\n68ffe01478d58401ccc85535017039e928b8ba8025dfed4bd7b707dc97c93585  out-ddffb3db/source-report.md",
+              "snapshotHash": "618aab6280fe3d034acfa8d72b129ec6fffa01d930535c3290efe848fc94c5d2",
+              "observedAt": 1792046800686
+            },
+            {
+              "id": "S3-changelog",
+              "toolCallId": "call_00_OaSdz6zKGbqc8dF5eg0k7704",
+              "toolName": "exec_command",
+              "excerpt": "核对码已由 CEDAR-c8e0bd14 更新为 MAPLE-fe732459，其他正文保持不变。\nchangelog_lines=       1",
+              "snapshotHash": "618aab6280fe3d034acfa8d72b129ec6fffa01d930535c3290efe848fc94c5d2",
+              "observedAt": 1792046800686
+            },
+            {
+              "id": "S4-publish-receipt",
+              "toolCallId": "call_00_e2DRhEwvML5ogVWI1wbX2278",
+              "toolName": "publish_artifacts",
+              "excerpt": "{\"publishedArtifacts\":[{\"artifactId\":\"report---ad164cf4-09af-47ad-955d-89061cfcd96b.md\",\"title\":\"report.md\",\"availability\":\"available\"},{\"artifactId\":\"changelog---8aac2349-d2cb-4009-ad31-702b2dd76f61.txt\",\"title\":\"changelog.txt\",\"availability\":\"available\"}]",
+              "snapshotHash": "5583cf776ec0a3f04f7fbdf4c98e33ed3d4206dbe8f911f0adfd4462b1b0442e",
+              "observedAt": 1792046803482
+            }
+          ],
+          "claims": [
+            {
+              "id": "c1-cedar-replaced",
+              "statement": "新版 report.md 第三节核对码已写为 MAPLE-fe732459（第 707 行），且新文件中 CEDAR-c8e0bd14 出现次数为 0。",
+              "kind": "fact",
+              "sourceIds": [
+                "S3-diff",
+                "S3-counts"
+              ],
+              "support": "supported",
+              "note": "diff 与计数显示新版第 707 行为 MAPLE-fe732459，CEDAR 出现 0 次。"
+            },
+            {
+              "id": "c2-otherwise-identical",
+              "statement": "旧版 report.md 与新版 report.md 的 diff 仅有一处变更（核对码行），其余内容逐字一致；两者均为 708 行、42926 字节。",
+              "kind": "fact",
+              "sourceIds": [
+                "S3-diff",
+                "S2-input-grep",
+                "S3-counts"
+              ],
+              "support": "supported",
+              "note": "diff 仅核对码一行变更，且新旧均为 708 行、42926 字节。"
+            },
+            {
+              "id": "c3-changelog",
+              "statement": "changelog.txt 内容仅为一行“核对码已由 CEDAR-c8e0bd14 更新为 MAPLE-fe732459，其他正文保持不变。”",
+              "kind": "fact",
+              "sourceIds": [
+                "S3-changelog"
+              ],
+              "support": "supported",
+              "note": "changelog.txt 已审阅内容，仅一行指定语句。"
+            },
+            {
+              "id": "c4-only-two-files",
+              "statement": "本次仅发布 report.md 与 changelog.txt 两个 artifact，未发布 monthly_summary.csv 或 reproduce.mjs。",
+              "kind": "fact",
+              "sourceIds": [
+                "S4-publish-receipt"
+              ],
+              "support": "supported",
+              "note": "发布回执仅含 report.md 与 changelog.txt 两个 artifact。"
+            },
+            {
+              "id": "c5-old-version-intact",
+              "statement": "旧已发布版本物化为只读输入（sha256 68ffe01478d58401ccc85535017039e928b8ba8025dfed4bd7b707dc97c93585），且已发布的旧 report.md 与 source-report.md 校验和仍为该值，未被覆盖或删除。",
+              "kind": "fact",
+              "sourceIds": [
+                "S1-materialize",
+                "S3-original-intact"
+              ],
+              "support": "supported",
+              "note": "旧版物化为只读输入，校验和与已发布旧 report.md、source-report.md 一致。"
+            },
+            {
+              "id": "c7-scope-of-work",
+              "statement": "本次工作仅为文本替换与逐行比对验证：输入旧版与输出新版仅差核对码一行，未增加或删除任何其他内容。",
+              "kind": "fact",
+              "sourceIds": [
+                "S3-diff",
+                "S2-input-grep"
+              ],
+              "support": "supported",
+              "note": "diff 与行数/字节一致表明仅替换核对码，未增删其他内容。"
+            }
+          ],
+          "checks": [
+            {
+              "criterionIndex": 0,
+              "criterion": "交付的 report.md 中第三节核对码为 MAPLE-fe732459，且不再出现 CEDAR-c8e0bd14。",
+              "status": "passed",
+              "claimIds": [
+                "c1-cedar-replaced"
+              ],
+              "note": "新版核对码为 MAPLE-fe732459，CEDAR 计数为 0。"
+            },
+            {
+              "criterionIndex": 1,
+              "criterion": "交付的 report.md 除该核对码外，其余内容与已发布旧 report.md 逐字一致。",
+              "status": "passed",
+              "claimIds": [
+                "c2-otherwise-identical",
+                "c7-scope-of-work"
+              ],
+              "note": "diff 仅核对码一行，行数与字节数一致。"
+            },
+            {
+              "criterionIndex": 2,
+              "criterion": "changelog.txt 内容仅为一句：“核对码已由 CEDAR-c8e0bd14 更新为 MAPLE-fe732459，其他正文保持不变。”",
+              "status": "passed",
+              "claimIds": [
+                "c3-changelog"
+              ],
+              "note": "changelog.txt 内容为指定单句。"
+            },
+            {
+              "criterionIndex": 3,
+              "criterion": "最终交付文件仅包含 report.md 与 changelog.txt 两个文件。",
+              "status": "passed",
+              "claimIds": [
+                "c4-only-two-files"
+              ],
+              "note": "最终仅发布 report.md 与 changelog.txt。"
+            },
+            {
+              "criterionIndex": 4,
+              "criterion": "旧已发布版本仍可读，未被覆盖或删除。",
+              "status": "passed",
+              "claimIds": [
+                "c5-old-version-intact"
+              ],
+              "note": "旧版校验和未变，仍可读。"
+            }
+          ],
+          "review": "model_reviewed",
+          "finalArtifactIds": [
+            "report---ad164cf4-09af-47ad-955d-89061cfcd96b.md",
+            "changelog---8aac2349-d2cb-4009-ad31-702b2dd76f61.txt"
+          ],
+          "inspectedArtifactIds": [
+            "report---ad164cf4-09af-47ad-955d-89061cfcd96b.md",
+            "changelog---8aac2349-d2cb-4009-ad31-702b2dd76f61.txt"
+          ],
+          "instructionChecks": [
+            {
+              "sequence": 3,
+              "instruction": "修订要求（替换此前三文件交付要求，最终只交付两个文件）：\n\n基于刚才发布的 report.md 修改，只把第三节中的核对码 CEDAR-c8e0bd14 改成 MAPLE-fe732459，report.md 其余内容逐字保留。最终仅交付新版 report.md 与 changelog.txt 两个文件。changelog.txt 内容只写一句：“核对码已由 CEDAR-c8e0bd14 更新为 MAPLE-fe732459，其他正文保持不变。”\n\n约束与验收：\n- 不要交付旧 csv 或脚本（monthly_summary.csv、reproduce.mjs 均不再交付）。\n- 不要重跑原脚本 reproduce.mjs。\n- 这是基于历史成果的文本修改，不重新研究、不新增分析。\n- 由后台执行者把已发布的旧 report.md 物化为只读输入，写入新输出，并校验除该核对码外其余内容未变。\n- 修改时必须保留旧成果可读，不覆盖或删除原已发布版本。",
+              "status": "passed",
+              "claimIds": [
+                "c1-cedar-replaced",
+                "c2-otherwise-identical",
+                "c3-changelog",
+                "c4-only-two-files",
+                "c5-old-version-intact"
+              ],
+              "note": "仅替换核对码、仅交付两文件、保留旧版且未重跑脚本，均已满足。"
+            }
+          ]
+        },
+        "createdAt": "2026-10-15T06:47:30.193Z"
+      },
+      "text": "已完成修订交付。\n\n**已发布文件（2 个）**\n- report.md — 基于刚发布的旧版 report.md（sha256 `68ffe014…93585`）的只读副本生成，仅将第三节核对码由 `CEDAR-c8e0bd14` 改为 `MAPLE-fe732459`\n- changelog.txt — 仅一行：“核对码已由 CEDAR-c8e0bd14 更新为 MAPLE-fe732459，其他正文保持不变。”\n\n**校验结果**\n- `diff -u` 旧版 vs 新版：仅 1 处变更，即核对码那一行；其余内容逐字一致\n- 新旧文件均为 708 行 / 42926 字节；新文件中 `CEDAR-c8e0bd14` 出现 0 次，`MAPLE-fe732459` 出现 1 次（第 707 行）\n- 旧已发布 report.md 与 source-report.md 校验和仍为 `68ffe014…93585`，可读，未被覆盖或删除\n\n**未做/未交付**：未重跑 `reproduce.mjs`；未交付 `monthly_summary.csv` 与 `reproduce.mjs`；未新增分析或改写正文。",
+      "createdAt": 1792046855063
+    }
+  ],
+  "finalRuns": [
+    {
+      "run_id": "fb94c5ae-d9a8-48ec-be9f-e52520e3c70c",
+      "parent_run_id": null,
+      "status": "succeeded",
+      "contract_version": 2,
+      "terminal_code": null,
+      "terminal_message": null
+    },
+    {
+      "run_id": "a6f4e48c-6825-48f6-97e4-dffdad0c3cbb",
+      "parent_run_id": null,
+      "status": "succeeded",
+      "contract_version": 4,
+      "terminal_code": null,
+      "terminal_message": null
+    }
+  ],
+  "usage": [
+    {
+      "operation": "agent.answer",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 3573
+    },
+    {
+      "operation": "task.plan_contract",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 2895
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 1053
+    },
+    {
+      "operation": "task.allocation",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 2206
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 2854
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 554
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 3342
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 2885
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 3762
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 3459
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 2217
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 3032
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 3724
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 5601
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 6430
+    },
+    {
+      "operation": "task.research_review",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 2809
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 3373
+    },
+    {
+      "operation": "personal.reply_composition",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 880
+    },
+    {
+      "operation": "session.generate_title",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 1069
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 1773
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 2297
+    },
+    {
+      "operation": "task.plan_contract",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 3028
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "aborted",
+      "duration_ms": 25
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 954
+    },
+    {
+      "operation": "task.allocation",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 2406
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 2978
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 3808
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 3002
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 1650
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 3188
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 5361
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 3942
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 2757
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 11063
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 5872
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 15396
+    },
+    {
+      "operation": "task.research_review",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 3814
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 6430
+    },
+    {
+      "operation": "task.research_review",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 3875
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 4822
+    },
+    {
+      "operation": "personal.reply_composition",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 966
+    },
+    {
+      "operation": "session.generate_title",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "running",
+      "duration_ms": null
+    }
+  ],
+  "isolatedStateDirectory": "/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-personal-handoff-live-8WwdG8",
+  "models": {
+    "personal": "deepseek/deepseek-flash",
+    "global": "xopc-cloud/auto"
+  },
+  "sourceCommit": "30959e330cfa0f00e2f1d11e825c8d7e18a6e3fa",
+  "sourceHashes": {
+    "src/personal-agent/result-reader.ts": "6cdc80e6592534d98a0f361d01ee26d1b1dabc895294ae22904e9370e610c2a5",
+    "src/personal-agent/result-extraction.ts": "6f9a77d0824990886eacbe3784edeafc48740489d4f06318b8c0ffa72ad56b83",
+    "src/personal-agent/result-read-continuations.ts": "99fd1f2424a8be701e105f3b682d695a9b8d42888d23389b3fee9ac8710e17fd",
+    "src/agent/tools/personal-result-tool.ts": "2b80b71b63f35ee01343d8b3a7c482a9024a401afe757fa946b7f0094dde0419",
+    "src/agent/source-context/result-context.ts": "328078e2601644d6f0fc0056cc12610b9d91e4a01fd2eade9c3a182d055d2ae0",
+    "src/personal-agent/prompts.ts": "7249f8a4a0e4337c48f6a430758333a652f4758f79651c70a82a40d070e00a26",
+    "src/personal-agent/policy.ts": "9ac77142744294dd7830a4324d012f04644ed1f9a25aae20e7d72abcdd2e4fb2",
+    "src/personal-agent/request-delivery.ts": "dea14498aa96fc0202fd7a8beb7f6f4538020f0b59b1df2dd2f21b6c407af06f",
+    "src/session/session-context-for-llm.ts": "d5a4516a6ffc3fe0f0f400269e317feded955108288a78477c3013150687e596",
+    "src/gateway/service.ts": "2803387e3d5dd34b1c624356bcf6d73d4e76c8a4eeb54a15588ac19078e561ba",
+    "src/storage/sqlite/migrations/251_personal_result_reads.sql": "3e24146d178e81edac970c2ceb208b2297c54b384475acacdeb215a007c82677",
+    "src/agent/tools/factory.ts": "1b9d5325fb3727fa947d4f88434fcd17f76ab6c743c8735ce8c8f32a53a52a87",
+    "web/src/features/chat/messages/message-bubble.tsx": "21fb5faa73247090f633230b0f55eb25c0212368dd5b2925ef7380a736a36d73",
+    "web/src/features/chat/composer/chat-composer.tsx": "f717d3d627930204f41e67a47af8a16a1cee2464809ffd8b79c26d05c63b73a7",
+    "web/src/features/chat/messages/message-context-attachments.tsx": "f1cbcf906a55b5e51b66c65076de9cf01c20f39f86ee507367857ef3d7b1f9a7",
+    "scripts/build-personal-result-worker.mjs": "9bd76e63fa3912e8d85f2c995f63fb65dfbeb541dcd7b9129f2658e9686ac9e3",
+    "scripts/build-electron-server.mjs": "82463aeb5e863165303c7beb16c2f21045c060b2d7387577d9f453ba25844ceb",
+    "scripts/tsdown-build.mjs": "17c7e6478af9064c7d99f3f0119f2bc2888c39bed23a04f8fb04508cb1456581",
+    "tsdown.config.ts": "8680815cb9301664acb4fd619441f7276bafb0a4c59f303a5e597d0d88847449",
+    "scripts/personal-task-revision-live-smoke.mts": "ec77562eb18cf840632261cf576caecd0de69574a328b11fef8d72366d3a7a6e",
+    "src/tasks/task-handoff.ts": "cb451dfb161f5c384a9d7c61b9532d18ecf39f89fbd451b02bbd48318cd534c9",
+    "src/tasks/task-execution-capabilities.ts": "4f093278bb67b4dcb90c6cd3227b32e065505cfcd3c3ba12d4167db87a27fc48",
+    "src/agent/service/direct-turn-helpers.ts": "c197a36f227e17ab8cb094ddd673de515698b055cf4e0156fa054ae1eb61b62a",
+    "src/agent/service/process-direct-streaming.ts": "7b1ba171a9b35e76c21d63a531833becdcc13de426f04c5bc3a3c5726e536eb5",
+    "src/agent/service/process-direct-one-shot.ts": "724f6daa0ce87f938760b66e3812250011ca7b879baed65758e282202fc0b0da",
+    "src/agent/tools/personal-task-tool.ts": "08fb6fc511c98f4b275bd0bf5f97441c738435c09b4601569e43ffd912415487",
+    "src/agent/tools/xopc-use-tool.ts": "69f53c9532a2b52cf99e41f7d980fb44eb3998dc3cf697927dde96c7e1a02682",
+    "src/tasks/task-application-service.ts": "7abe79c711eabc426e9d920148c14dfea3e8329a1c5af657fee0fabf518a5f43",
+    "src/tasks/task-context-assembler.ts": "4b40befe96927060e282273b8ef84e9974190bc963931e7d3126c4ff980f12a5",
+    "src/tasks/task-allocation-service.ts": "b8b8a6d1968d7cb929908e186b9b33d8057e0c94e8d03aec37943a92421483d2",
+    "src/tasks/task-research-result.ts": "96185a07436f3c2a741646c0d71b5adaf4fdc8486714dfd4706e413b1895383d",
+    "src/tasks/task-contract-planner.ts": "388a7acf4f0ac109f66da4851ec6cc114dc96a3b801644b12db65eef46fa4d8f",
+    "src/agent/tools/task-evidence.ts": "e164d0dac64bfa89881c07f48d89e91a6d532e3b0216737deefa4d4f7b1df699",
+    "src/agent/tools/task-collaboration-tool.ts": "5093564bf852689cf3809d8bd04e2278be129a44ac6ec4209d9626decaba9407",
+    "src/agent/tools/task-result-tool.ts": "9abec1262fe730b50154b06d3e1d48cee8bd597ea44c80a5cb459a48a09432ad",
+    "src/tasks/task-run-dispatcher.ts": "412749d01b40b290645a775f5fb43b04816e8eb050f8506d8da10c74efaf7e7d",
+    "src/tasks/task-run-coordinator.ts": "44a5d4b9bea2cad041050eac34a82d0132396ea2a4dceb0b64e7b91e9bd41196",
+    "src/tasks/task-read-model-projector.ts": "8d4c368c797b3321886e2c43430665ccb8c5a3e5b858c56248786f637f57fd41",
+    "src/tasks/task-conversation-repository.ts": "7ae142eb547a454baabed1d9dab5c1bf7cf170168e65ee7c3f72fba93707725f",
+    "src/media/session-references.ts": "12d6be13a23a0f7e5230ddc030084e12738a925c10122ab28c383bd89d9b3186",
+    "src/tasks/task-result-delivery-repository.ts": "5b2cbf1382ac44d817ca301ba6cecba7096f3ac0b8cf07f80e9410c0953ddf26",
+    "src/tasks/task-result-delivery-service.ts": "d45d27950dcf88035aae774620c08cf1d2c232c20cd1b779d246e62a50a5b8f2",
+    "src/personal-agent/reply-composer.ts": "f94c895237c2189f769545236ef1864e5c5a40f3c16f47d009be447fd2275fe7",
+    "src/personal-agent/communication.ts": "8ce5af43100ceff2cd892371f51f4ec6ace39a8a0d57caa3cd3ec4a85862860d",
+    "src/storage/sqlite/migrations/252_task_work_revisions.sql": "fe18e67f31ce61ef6c595debf2f12fa4948c3388346061d41d369d97044d6a1f",
+    "packages/gateway-contract/src/task-result-delivery.ts": "29c88ecdd8f91f62cba222c612f9bb29b08d302ac1c0e754363c57da2a69e5a8",
+    "packages/gateway-contract/src/task-research-result.ts": "c23ee2b7a6716e770b9bca76aaafb43a0b64852dcfddb4e56de24c699c985b1d",
+    "packages/gateway-contract/src/turn-outcome.ts": "06f06cdcbd314e65aacd10c95e667d0c3b922f20b8a9189d6474b5b382ae9005",
+    "src/tasks/task-research-repair.ts": "41ba88470a72570a33714f47dc380a8abd978f46d8abc082e4dc57d185e75cdb",
+    "pnpm-lock.yaml": "dafdd4572eecba69104ef37ce3348a09c4924ca4a5ddb523e146ccb985391898"
+  },
+  "sourceChangedDuringRun": false,
+  "limitations": "Real configured models and authenticated Gateway; isolated synthetic files. Registration and policy checks are not third-party network or binary parser readiness probes. Not production p95.",
+  "postRunAudit": {
+    "sourceChangesSinceRun": [],
+    "configurationFilesRemaining": [],
+    "workerFailureEvents": [
+      {
+        "tool": "exec_command",
+        "exitCode": null,
+        "status": "blocked",
+        "isError": true,
+        "preview": "[{'type': 'text', 'text': 'Sandbox blocked command: Injection: Newline-injected destructive command'}, {'type': 'text', 'text': 'Task source toolCallId: call_00_klRXUTwgJhmQSYg4Ciov7883'}, {'type': 'text', 'text': '\\nCommand: use non-interactive commands with clear timeouts'}]"
+      },
+      {
+        "tool": "publish_task_result",
+        "exitCode": null,
+        "status": null,
+        "isError": true,
+        "preview": "[{'type': 'text', 'text': '{\"code\":\"source_quote_mismatch\",\"message\":\"Sources have no matching successful tool read.\",\"failures\":[{\"sourceId\":\"src-script-run\",\"observedToolCallId\":\"call_00_2jnHsQxu3SKdy8TtU8lN9540\",\"observedExcerpt\":\"Fixture files verified\",\"repair\":\"This is one actual contiguous excerpt from that read"
+      },
+      {
+        "tool": "exec_command",
+        "exitCode": 2,
+        "status": "failed",
+        "isError": true,
+        "preview": "[{'type': 'text', 'text': \"Command exited with code 2\\ninput_sha256=68ffe01478d58401ccc85535017039e928b8ba8025dfed4bd7b707dc97c93585\\nreplaced_occurrences= 1\\n--- diff (old vs new) ---\\n/bin/sh: -c: line 21: syntax error near unexpected token `('\\n\\nNext action: The default shell rejected the syntax. Use portable POSIX"
+      }
+    ],
+    "taskWorkRevisionCount": 1,
+    "revisionInstructionDelivery": [
+      [
+        "confirmed"
+      ]
+    ]
+  }
+}

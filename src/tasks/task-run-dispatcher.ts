@@ -24,6 +24,7 @@ export class TaskRunDispatcher {
     workerId: string;
     maxConcurrency?: number;
     ensureSession: (taskId: string, runId: string, agentId?: string) => Promise<string>;
+    validateExecutor?: (taskId: string, agentId?: string) => void;
     runAgent: (runId: string, conversationId: string, message: string) => Promise<void>;
   }) {}
 
@@ -102,6 +103,7 @@ export class TaskRunDispatcher {
           const agentId = typeof run.executorRef.agentId === 'string' ? run.executorRef.agentId : undefined;
           const conversationId = await this.deps.ensureSession(task.id, run.id, agentId);
           if (this.#stopped) return;
+          this.deps.validateExecutor?.(task.id, agentId);
           this.#activeRunIds.add(run.id);
           const heartbeat = setInterval(() => {
             if (!this.#runs.heartbeat({ runId: run.id, owner: workerId, leaseMs: LEASE_MS })) {
@@ -161,7 +163,7 @@ export function buildTaskRunMessage(objective: string, trigger: Record<string, u
     ? `${objective}\n\n<task_brief>\n${brief.slice(0, 12_000)}\n</task_brief>`
     : objective;
   const completeBrief = taskId && brief && brief.length > 12_000
-    ? `${taskMessage}\n\nThe task brief above is an excerpt. Before execution read the complete Task with xopc_use({mode:"task",command:"get",args:{taskId:${JSON.stringify(taskId)}}}). Preserve all instructions and acceptance criteria.`
+    ? `${taskMessage}\n\nThe task brief above is an excerpt. Before execution read every page with task_collaboration({command:"get",section:"brief",offset:0}) and nextOffset. Preserve all instructions and acceptance criteria.`
     : taskMessage;
   const context = trigger.context;
   if (!context || typeof context !== 'object' || Array.isArray(context)) return completeBrief;

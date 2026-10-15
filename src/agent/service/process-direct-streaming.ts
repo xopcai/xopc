@@ -452,6 +452,7 @@ export async function* runProcessDirectStreaming(
         },
         authoredText,
         {
+          origin: input.origin,
           skipResetCommands: resetTriggeredAtInit,
           emitEvent: (event) => {
             pushVisible({ ...event, runId: input.runId });

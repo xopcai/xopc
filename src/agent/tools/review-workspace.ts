@@ -19,7 +19,15 @@ export function createReviewWorkspaceTool(workspace: string): AgentTool {
     async execute(_id, _args, signal) {
       let cwd = checkedFilePath(workspace, workspace, 'read');
       const git = async (args: string[]) => (await exec('git', ['-c', 'core.fsmonitor=false', ...args], { cwd, env: prepareSafeToolEnv(process.env), signal, timeout: 10_000, maxBuffer: 8 * 1024 * 1024 })).stdout;
-      cwd = checkedFilePath(workspace, await realpath((await git(['rev-parse', '--show-toplevel'])).trim()), 'read');
+      let root: string;
+      try { root = (await git(['rev-parse', '--show-toplevel'])).trim(); }
+      catch (error) {
+        if (signal?.aborted) throw error;
+        if ((error as { code?: number }).code !== 128 || !String((error as { stderr?: unknown }).stderr).includes('not a git repository')) throw error;
+        return { content: [{ type: 'text', text: 'Git workspace review is unavailable because this workspace is not a Git repository. No Git diff was reviewed. Do not retry this unchanged call or initialize Git solely for review. Inspect the declared output files and compare them with pinned baseline copies using portable diff or checksums; retain the Task acceptance checks.' }],
+          details: { status: 'unavailable', reason: 'not_git_repository', complete: false, command: 'review_workspace' } };
+      }
+      cwd = checkedFilePath(workspace, await realpath(root), 'read');
       const startRevision = await readWorkspaceRevision(cwd);
       const head = await git(['rev-parse', '--verify', 'HEAD']).catch(() => '');
       const changedNames = head

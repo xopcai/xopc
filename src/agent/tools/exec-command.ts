@@ -12,6 +12,7 @@ import { commandRegistry, commandTimeout, type CommandStatus } from '../commands
 import { evaluateExecPolicy } from '../sandbox/exec-policy.js';
 import { publishArtifactPaths } from './publish-artifacts.js';
 import { formatSize, truncateTail } from './truncate.js';
+import { runProcess } from '../../process/run-process.js';
 
 const DEFAULT_MAX_OUTPUT_CHARS = 50_000;
 
@@ -156,6 +157,7 @@ export function createExecCommandTool(
       'Unix and Docker use /bin/sh, not your interactive shell. Do not use Bash process substitution <(...) or other Bash-only syntax unless invoking an installed bash explicitly. Prefer separate portable commands or a script file. Windows hosts use cmd.exe.',
       'Use apply_patch for file edits; do not edit files by shell redirection unless explicitly necessary.',
       'Relative cwd values resolve under the current agent workspace.',
+      'Use a fresh output directory with mkdir -p. Avoid destructive cleanup such as rm -rf on variable paths; blocked cleanup should be removed, never disguised or moved to bypass policy. A syntax preflight on Unix host commands prevents partial writes from malformed shell syntax.',
       'When the command creates final user-facing files, declare all final paths in outputs so they are persisted with this command.',
     ].join(' '),
     parameters: ExecCommandSchema,
@@ -206,7 +208,7 @@ export function createExecCommandTool(
         allowedEnvVars: passthroughNames,
       });
       if (!policy.allowed) {
-        const text = `Sandbox blocked command: ${policy.reason}`;
+        const text = `Sandbox blocked command: ${policy.reason}\nNothing was executed. Remove destructive cleanup and use a fresh output directory with mkdir -p, or narrow the operation. Do not repeat unchanged or rephrase the blocked operation to bypass policy.`;
         return {
           content: [{ type: 'text', text }],
           details: {
@@ -230,13 +232,27 @@ export function createExecCommandTool(
 
       const timeoutMs = commandTimeout(params.timeoutMs, policy.timeoutMs);
       const maxOutputChars = clampMaxOutputChars(params.maxOutputChars);
+      const isolation = options?.getCommandIsolation?.();
+      if (process.platform !== 'win32' && isolation?.mode !== 'docker') {
+        const started = performance.now();
+        const syntax = await runProcess({ program: '/bin/sh', args: ['-n', '-c', command], cwd: policy.effectiveCwd,
+          env: policy.sanitizedEnv, timeoutMs: 5000, maxOutputBytes: 8000, signal, terminationPolicy: 'tree' });
+        if (syntax.exitCode !== 0) {
+          const details: ExecCommandDetails = { command, cwd: policy.effectiveCwd, status: syntax.timedOut ? 'timed_out' : 'failed',
+            exitCode: syntax.exitCode, durationMs: performance.now() - started, timedOut: syntax.timedOut,
+            truncated: false, outputBytes: Buffer.byteLength(syntax.stderr), totalOutputBytes: Buffer.byteLength(syntax.stderr),
+            captureTruncated: syntax.outputTruncated, stdout: '', stderr: syntax.stderr, aggregatedOutput: syntax.stderr,
+            failureHint: 'Shell syntax preflight failed; nothing was executed. Use portable POSIX sh syntax (for example diff file1 file2), or explicitly invoke an installed bash for Bash syntax. Fix the command; no side effects need replaying.' };
+          return { content: [{ type: 'text', text: formatOutputForModel(details, maxOutputChars).text }], details };
+        }
+      }
       const runtimeEnv = options?.prepareEnv
         ? await options.prepareEnv(policy.sanitizedEnv, policy.effectiveCwd)
         : policy.sanitizedEnv;
       const owner = options?.getConversationId?.() ?? workspaceCwd;
       const registry = commandRegistry();
       let commandResult = await registry.start({
-        workspace: workspaceCwd, isolation: options?.getCommandIsolation?.(),
+        workspace: workspaceCwd, isolation,
         owner, command, cwd: policy.effectiveCwd, env: { ...runtimeEnv, COLUMNS: '200' },
         timeoutMs, maxOutputChars, signal,
         snapshot: true,

@@ -68,7 +68,8 @@ export class TaskResultDeliveryRepository {
     const task = new TaskRepository().require(run.taskId);
     const validResearch = research && research.contractVersion === task.latestContractVersion
       && research.instructionSequence === taskInstructionSequence(task.id) ? research : undefined;
-    const researchGap = Boolean(research && (!validResearch || !validResearch.checks.length
+    const selectionRequired = !personalRequestForTask(task.id) && Boolean(task.body?.includes('finalArtifactIds'));
+    const researchGap = selectionRequired && !research || Boolean(research && (!validResearch || !validResearch.checks.length
       || validResearch.checks.length !== task.contract?.acceptanceCriteria.length
       || validResearch.checks.some(check => check.status !== 'passed')
       || validResearch.instructionChecks?.some(check => check.status !== 'passed')
@@ -77,7 +78,12 @@ export class TaskResultDeliveryRepository {
     for (const outcome of outcomes) for (const item of outcome.deliverables) {
       artifacts.set(item.sourceFileId ?? item.artifactId, item);
     }
-    const deliverables = [...artifacts.values()].slice(-50);
+    const allArtifacts = outcomes.flatMap(outcome => outcome.deliverables);
+    const deliverables = research?.finalArtifactIds !== undefined
+      ? research.finalArtifactIds.map(id => allArtifacts.findLast(item => item.artifactId === id)).filter((item): item is TurnOutcome['deliverables'][number] => Boolean(item))
+      : selectionRequired ? [] : [...artifacts.values()].slice(-50);
+    const selectedManifest = validResearch?.finalArtifactIds !== undefined;
+    const selectedMissing = selectedManifest && deliverables.length !== validResearch!.finalArtifactIds!.length;
     const rawText = resultText?.trim() && resultText.trim() !== 'NO_REPLY' ? resultText.trim() : undefined;
     const unpublishedFile = Boolean(rawText && hasPersonalResultFileLinks(rawText)
       && !deliverables.some(item => item.availability === 'available'));
@@ -88,15 +94,31 @@ export class TaskResultDeliveryRepository {
     if (!deliverables.length && personalRequestForTask(run.taskId)) return false;
     const outcome: TurnOutcome = { ...latest, research: validResearch, deliverables, evidence: [], changeSet: undefined,
       summary,
-      status: latest.status === 'failed' ? 'failed'
+      status: selectedManifest
+        ? status === 'failed' || researchGap || selectedMissing || unpublishedFile || deliverables.some(item => item.availability !== 'available') ? 'partial' : 'succeeded'
+        : latest.status === 'failed' ? 'failed'
         : status === 'failed' || latest.status === 'partial' || unpublishedFile || researchGap || deliverables.some(item => item.availability !== 'available')
           ? 'partial' : 'succeeded' };
     const now = Date.now();
+    const previous = db.prepare(`SELECT delivery_id, payload_json FROM task_result_deliveries WHERE task_run_id IN
+      (SELECT run_id FROM task_runs WHERE task_id = ?) ORDER BY created_at DESC, rowid DESC LIMIT 1`).get(task.id) as { delivery_id: string; payload_json: string } | undefined;
+    const superseded = new Set((db.prepare('SELECT supersedes_json FROM task_work_revisions WHERE task_id = ? AND contract_version <= ?')
+      .all(task.id, task.latestContractVersion) as { supersedes_json: string }[]).flatMap(row => JSON.parse(row.supersedes_json) as string[]));
+    const adoption = new TaskCollaborationRepository().coordination(task.id)
+      .filter(entry => ['main_agent', 'user'].includes(entry.authorKind) && ['answer', 'instruction'].includes(entry.kind))
+      .map(entry => {
+        const check = validResearch?.instructionChecks?.find(item => item.sequence === entry.sequence);
+        return { entryId: entry.id, sequence: entry.sequence,
+          status: superseded.has(entry.id) ? 'superseded' : check?.status === 'passed' ? 'applied' : check?.claimIds.some(id => validResearch?.claims.some(claim => claim.id === id && claim.support === 'supported')) ? 'partially_applied' : 'not_applied',
+          verification: check?.status ?? 'unverified', claimIds: check?.claimIds ?? [], note: check?.note ?? 'No verified adoption evidence for this revision.' };
+      });
     const delivery = TaskResultDeliverySchema.parse({ version: 1, deliveryId: randomUUID(),
       taskId: run.taskId, taskRunId: runId, taskTitle: origin.title,
       conversationId: origin.conversation_id, originTranscriptId: origin.origin_transcript_id,
       ...(origin.request_input_id ? { requestInputId: origin.request_input_id } : {}),
-      assignmentEpoch: state.assignmentEpoch, outcome, ...(text ? { text } : {}), createdAt: now });
+      assignmentEpoch: state.assignmentEpoch, contractVersion: task.latestContractVersion,
+      instructionSequence: taskInstructionSequence(task.id), resultRevision: previous ? (JSON.parse(previous.payload_json).resultRevision ?? 1) + 1 : 1,
+      ...(previous ? { previousResultId: previous.delivery_id } : {}), adoption, outcome, ...(text ? { text } : {}), createdAt: now });
     db.prepare(`INSERT INTO task_result_deliveries
       (delivery_id, task_run_id, conversation_id, payload_json, status, next_attempt_at, created_at)
       VALUES (?, ?, ?, ?, 'pending', ?, ?) ON CONFLICT(task_run_id, conversation_id) DO NOTHING`)

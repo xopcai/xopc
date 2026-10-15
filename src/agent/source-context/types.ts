@@ -16,7 +16,7 @@ export interface SessionSourceBinding {
 
 export interface TurnContextRef {
   refId?: string;
-  kind: 'note' | 'task' | 'file' | 'session' | 'browser_tab' | 'user_assertion';
+  kind: 'result' | 'note' | 'task' | 'file' | 'session' | 'browser_tab' | 'user_assertion';
   sourceId: string;
   expectedVersion?: string;
 }
@@ -37,7 +37,7 @@ export interface SourceContextRefSummary {
 
 export interface AgentSourceContext {
   refId?: string;
-  kind: SessionSourceBinding['kind'] | 'task' | 'file' | 'session' | 'browser_tab' | 'browser_page' | 'app_context' | 'user_assertion' | 'device_context';
+  kind: SessionSourceBinding['kind'] | 'result' | 'task' | 'file' | 'session' | 'browser_tab' | 'browser_page' | 'app_context' | 'user_assertion' | 'device_context';
   sourceId: string;
   version: string;
   title: string;
@@ -72,7 +72,7 @@ export function summarizeSourceContext(context: AgentSourceContext): SourceConte
 export function isTurnContextRef(value: unknown): value is TurnContextRef {
   if (!value || typeof value !== 'object') return false;
   const row = value as Record<string, unknown>;
-  return (row.kind === 'note' || row.kind === 'task' || row.kind === 'file' || row.kind === 'session'
+  return (row.kind === 'result' || row.kind === 'note' || row.kind === 'task' || row.kind === 'file' || row.kind === 'session'
     || row.kind === 'browser_tab' || row.kind === 'user_assertion')
     && typeof row.sourceId === 'string'
     && row.sourceId.trim().length > 0

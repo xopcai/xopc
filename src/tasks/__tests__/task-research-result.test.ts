@@ -16,6 +16,7 @@ import { TaskConversationRepository } from '../task-conversation-repository.js';
 import { TaskRunCoordinator } from '../task-run-coordinator.js';
 import { TaskRunRepository } from '../task-run-repository.js';
 import { TaskResultDeliveryRepository } from '../task-result-delivery-repository.js';
+import { createTaskCollaborationTool } from '../../agent/tools/task-collaboration-tool.js';
 import { TaskCollaborationRepository } from '../task-collaboration-repository.js';
 import { defineTaskContract } from '../task-contract-definition.js';
 import { applyResearchReview, bindResearchSources, currentTaskResearchResult, submitTaskResearchResult, type ResearchReviewer } from '../task-research-result.js';
@@ -65,8 +66,89 @@ describe('personal research benchmark v1', () => {
   it('R02-fabricated-quote: rejects excerpts not present in actual reads', () => {
     expect(() => bindResearchSources({ ...input, sources: [{ id: 'fake', excerpt: 'Price is 9.00 per hour.' }] }, tools)).toThrow(/no matching/);
   });
+  it('host ranges require the actual successful read and keep claim evidence exact', () => {
+    const body = '😀\nassert.equal(value, "month,total\\n2026-01,150\\n");';
+    const records = [{ toolCallId: 'read-script', toolName: 'read_file', body, observedAt: 1 }];
+    const source = { id: 'script', toolCallId: 'read-script', excerptRange: { start: 2, end: Array.from(body).length } };
+    expect(bindResearchSources({ ...input, sources: [source] }, records)[0].excerpt)
+      .toBe('assert.equal(value, "month,total\\n2026-01,150\\n");');
+    expect(() => bindResearchSources({ ...input, sources: [{ ...source, toolCallId: 'invented' }] }, records)).toThrow(/source_quote_mismatch/);
+    expect(() => bindResearchSources({ ...input, sources: [{ ...source, excerptRange: { start: 0, end: 9999 } }] }, records)).toThrow(/Evidence range/);
+  });
+  it('rejects the stage C command/output splice and recovers with one observed excerpt', () => {
+    const records = [{ toolCallId: 'script-call', toolName: 'exec_command',
+      body: 'Fixture files verified\nEXIT_CODE=0', observedAt: 1 }];
+    const source = { id: 'script', toolCallId: 'script-call',
+      excerpt: 'node reproduce.mjs; echo "EXIT_CODE=$?"\nFixture files verified\nEXIT_CODE=0' };
+    let failure;
+    try { bindResearchSources({ ...input, sources: [source] }, records); } catch (error) { failure = JSON.parse((error as Error).message); }
+    expect(failure.code).toBe('source_quote_mismatch');
+    expect(failure.failures[0].observedExcerpt).toBe('Fixture files verified');
+    expect(bindResearchSources({ ...input, sources: [{ ...source, excerpt: failure.failures[0].observedExcerpt }] }, records)[0].toolCallId).toBe('script-call');
+  });
   it('R03-fabricated-url: rejects an invented URL even with a genuine quote', () => {
     expect(() => bindResearchSources({ ...input, sources: [{ ...input.sources[0], url: 'https://invented.test' }] }, tools)).toThrow(/no matching/);
+  });
+  it('reports all observed source failures together with real IDs rather than prompting blind retries', () => {
+    const submission = { ...input, sources: [
+      { id: 'copy', toolCallId: 'exec_command:cp-cmp-sha256', excerpt: 'CMP_OK' },
+      { id: 'run', toolCallId: 'command-run-id', excerpt: 'Fixture files verified\nEXIT=0' },
+      { id: 'future-reply', excerpt: '已完成交付。已发布文件（恰好三个）' },
+    ] };
+    const records = [ { toolCallId: 'call_00_copy', toolName: 'exec_command', body: 'CMP_OK\nsha256 report.md', observedAt: 1 },
+      { toolCallId: 'call_00_verify', toolName: 'exec_command', body: 'Fixture files verified\nEXIT=0\nLog: /tmp/log', observedAt: 2 } ];
+    let failure;
+    try { bindResearchSources(submission, records); } catch (error) { failure = JSON.parse((error as Error).message); }
+    expect(failure.code).toBe('source_quote_mismatch');
+    expect(failure.failures).toEqual([
+      { sourceId: 'copy', reason: 'incorrect_tool_call_id', matchingToolCallIds: ['call_00_copy'] },
+      { sourceId: 'run', reason: 'incorrect_tool_call_id', matchingToolCallIds: ['call_00_verify'] },
+      { sourceId: 'future-reply', reason: 'excerpt_or_url_not_observed', matchingToolCallIds: [] },
+    ]);
+    expect(bindResearchSources({ ...input, sources: [{ id: 'run', excerpt: 'Fixture files verified\nEXIT=0', toolCallId: 'call_00_verify' }] }, records)[0].toolCallId).toBe('call_00_verify');
+  });
+  it('repairs a real non-contiguous publication excerpt by suggesting one observed sentence without accepting the splice', () => {
+    const body = 'report.md exists\nsource-report.md exists\nHASHES VERIFIED\nLog: /tmp/read.log\n\nArtifacts: 3 published.';
+    const records = [{ toolCallId: 'call_actual', toolName: 'exec_command', body, observedAt: 1 }];
+    const source = { id: 'publication', toolCallId: 'call_actual', excerpt: 'report.md exists\nArtifacts: 3 published.' };
+    let failure;
+    try { bindResearchSources({ ...input, sources: [source] }, records); } catch (error) { failure = JSON.parse((error as Error).message); }
+    expect(failure.failures[0]).toMatchObject({ sourceId: 'publication', observedToolCallId: 'call_actual', observedExcerpt: 'Artifacts: 3 published.' });
+    const repaired = bindResearchSources({ ...input, sources: [{ ...source, excerpt: failure.failures[0].observedExcerpt }] }, records);
+    expect(repaired[0].excerpt).toBe('Artifacts: 3 published.');
+    expect(repaired[0].snapshotHash).toMatch(/^[a-f0-9]{64}$/);
+  });
+  it('exposes exact persisted successful evidence without laundering acknowledgements, failed commands or reviews', async () => {
+    const { worker } = execution();
+    for (const [toolCallId, toolName, details, isError] of [
+      ['failed-command', 'exec_command', { exitCode: 1 }, false],
+      ['pending-command', 'exec_command', { status: 'running' }, false],
+      ['pending-job', 'managed_job', { status: 'running', exitCode: null }, false],
+      ['failed-job', 'managed_job', { status: 'failed', exitCode: 1 }, false],
+      ['cancelled-job', 'managed_job', { status: 'cancelled', exitCode: 0 }, false],
+      ['job-directory', 'managed_job', {}, false],
+      ['made-up-progress', 'task_collaboration', {}, false],
+      ['earlier-review', 'publish_task_result', {}, false],
+      ['failed-read', 'read_file', {}, true],
+    ] as const) appendTranscriptEntry(worker.key, { role: 'toolResult', toolCallId, toolName, details,
+      content: [{ type: 'text', text: 'Do not accept this as evidence' }], isError, timestamp: Date.now() });
+    const tool = createTaskCollaborationTool({ getCurrentConversationId: () => worker.key, getCurrentAgentId: () => 'worker' });
+    const listing = JSON.parse((await tool.execute('list', { command: 'get', section: 'evidence' })).content[0].text);
+    expect(listing.items.map(item => item.toolCallId)).toEqual(['read-1']);
+    const read = JSON.parse((await tool.execute('read', { command: 'get', section: 'evidence', toolCallId: 'read-1' })).content[0].text);
+    expect(read.text).toBe(tools[0].body);
+    await expect(tool.execute('foreign-read', { command: 'get', section: 'evidence', toolCallId: 'other-task-call' })).rejects.toThrow('not found');
+    const result = await submitTaskResearchResult(worker.key, 'result', { ...input, sources: [{ ...input.sources[0], toolCallId: read.toolCallId }] }, undefined, reviewer);
+    expect(result.sources[0].toolCallId).toBe('read-1');
+  });
+  it('binds a yielded command to its persisted successful managed-job completion without reexecution', async () => {
+    const { worker } = execution();
+    appendTranscriptEntry(worker.key, { role: 'toolResult', toolCallId: 'job-complete', toolName: 'managed_job',
+      details: { status: 'success', exitCode: 0, id: 'command-id' },
+      content: [{ type: 'text', text: 'Completed exact verification' }], isError: false, timestamp: Date.now() });
+    const tool = createTaskCollaborationTool({ getCurrentConversationId: () => worker.key, getCurrentAgentId: () => 'worker' });
+    const listing = JSON.parse((await tool.execute('list-jobs', { command: 'get', section: 'evidence' })).content[0].text);
+    expect(listing.items.map(item => item.toolCallId)).toContain('job-complete');
   });
   it('R04-missing-criterion: omitted and unexpanded criteria remain unverified', async () => {
     const result = applyResearchReview(seedResult(), { claims: [{ id: 'price', support: 'supported', note: 'Quote supports rate' }], checks: [] }, ['Use hourly units']);

@@ -80,7 +80,11 @@ import {
 } from './index.js';
 import { createSessionSearchTool } from './session-search-tool.js';
 import { createPersonalReadTool } from './personal-read-tool.js';
+import { createPersonalResultTool } from './personal-result-tool.js';
 import { createPersonalTaskTool, type PersonalTaskToolDeps } from './personal-task-tool.js';
+import { TaskConversationRepository } from '../../tasks/task-conversation-repository.js';
+import { withTaskEvidenceIdentity } from './task-evidence.js';
+import { withPersonalPerformance } from './personal-performance.js';
 import { createTaskResultTool } from './task-result-tool.js';
 import { createTaskCollaborationTool } from './task-collaboration-tool.js';
 import { createPersonalRequestTools } from './personal-request-tool.js';
@@ -571,6 +575,7 @@ export class AgentToolsFactory {
       createSendMediaTool(workspace, bus, deliveryContext),
       createPublishArtifactsTool(workspace),
       createTaskResultTool(currentConversationId),
+      createTaskCollaborationTool({ ...productToolDeps, getWorkspace: () => workspace, getCurrentConversationId: currentConversationId }),
       createReadMediaTool(personalToolsConfigured ? { textOnly: true, maxChars: LOCAL_READ_MAX_CHARS, maxReadBytes: 12000 } : undefined),
       ...(isShareToolAvailable(cfg)
         ? [
@@ -698,6 +703,7 @@ export class AgentToolsFactory {
             ...(personalToolsConfigured ? [
               createPersonalTaskTool(productToolDeps),
               createPersonalReadTool(productToolDeps),
+              createPersonalResultTool(currentConversationId),
               ...createPersonalRequestTools(productToolDeps),
               createPersonalAttentionTool({ getConversationId: () => this.deps.getCurrentContext()?.conversationId, getConfig: () => this.deps.getConfig?.() }),
               createPersonalPreferenceTool({
@@ -796,8 +802,7 @@ export class AgentToolsFactory {
           ]
         : []),
       ...optionalTools,
-      ...(personalExecution ? [createPersonalRequestResultTool(currentConversationId), createPersonalRequestConnectionTool(currentConversationId),
-        createTaskCollaborationTool({ ...productToolDeps, getCurrentConversationId: currentConversationId })] : []),
+      ...(personalExecution ? [createPersonalRequestResultTool(currentConversationId), createPersonalRequestConnectionTool(currentConversationId)] : []),
     ];
 
     if (['read_file', 'grep', 'exec_command', 'knowledge_search', 'knowledge_get', 'web_search', 'web_fetch', 'xopc_tool_execute'].some(name => !disabled?.has(name))) {
@@ -849,7 +854,12 @@ export class AgentToolsFactory {
     const coreTools = this.createCoreTools(coreOptions);
     const wrapped = wrapToolsWithProtection(coreTools, this.deps.toolExecutorConfig);
 
-    return sortToolsForPromptCache(wrapped);
+    const executionId = coreOptions?.conversationId ?? getEmbeddedExecutionSession() ?? this.deps.getCurrentContext()?.conversationId;
+    const taskExecution = executionId && isXopcDatabaseOpen() && new TaskConversationRepository().resolveActiveExecutionSession(executionId);
+    const observed = wrapped.map(tool => taskExecution || tool.name.startsWith('personal_')
+      ? withPersonalPerformance(tool, executionId, taskExecution ? taskExecution.taskId : undefined,
+        taskExecution ? taskExecution.runId : undefined, taskExecution ? taskExecution.assignmentEpoch : undefined) : tool);
+    return sortToolsForPromptCache(taskExecution ? observed.map(tool => withTaskEvidenceIdentity(tool)) : observed);
   }
 }
 

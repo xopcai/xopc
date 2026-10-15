@@ -97,7 +97,7 @@ export async function runProcessDirect(
       deps,
       { conversationId: input.conversationId, channel, chatId },
       turnBody,
-      { skipResetCommands: resetTriggeredAtInit },
+      { origin: input.origin, skipResetCommands: resetTriggeredAtInit },
     );
     if (slash.matched) {
       const trimmed = slash.aggregatedText.trim();

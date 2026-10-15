@@ -3,7 +3,7 @@ import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useStat
 import * as Popover from '@radix-ui/react-popover';
 import { AlertCircle, Check, ChevronDown, ChevronUp, CircleHelp, Copy, FileCode2, FilePlus2, FileText, GitFork, ListTodo, MoreHorizontal, Pencil, RefreshCw, ThumbsDown, ThumbsUp, Trash2 } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { renderUserTurnDocument } from '@xopcai/gateway-contract';
+import { renderUserTurnDocument, resultReferenceId, resultReferenceVersion } from '@xopcai/gateway-contract';
 
 import type {
   ImageContent,
@@ -689,6 +689,30 @@ export const MessageBubble = memo(function MessageBubble({
             ) : null}
 
             {followUpTrigger ? assistantStepsBlock : null}
+
+            {!isUser && message.taskResultDelivery && conversationId ? (
+              <div className="flex flex-wrap items-center gap-2" data-result-follow-up>
+                {message.taskResultDelivery.resultRevision ? (
+                  <span className="text-xs text-fg-muted" data-result-revision>
+                    {language === 'zh' ? '成果版本' : 'Result version'} {message.taskResultDelivery.resultRevision}
+                  </span>
+                ) : null}
+                {[{ sourceId: 'body', title: message.taskResultDelivery.taskTitle },
+                  ...message.taskResultDelivery.outcome.deliverables.filter(item => item.availability === 'available')
+                    .map(item => ({ sourceId: item.artifactId, title: item.title }))].map(source => (
+                  <button key={source.sourceId} type="button"
+                    className="max-w-64 truncate rounded-md border border-edge-subtle px-2 py-1 text-xs text-fg-muted hover:bg-surface-hover hover:text-fg"
+                    onClick={() => {
+                      const delivery = message.taskResultDelivery!;
+                      window.dispatchEvent(new CustomEvent('chat-result-reference', { detail: { conversationId,
+                        reference: { kind: 'result', sourceId: resultReferenceId(delivery.deliveryId.replace(/^reply:/, ''), source.sourceId),
+                          expectedVersion: resultReferenceVersion(delivery), title: source.title } } }));
+                    }}>
+                    {language === 'zh' ? '询问：' : 'Ask about: '}{source.title}
+                  </button>
+                ))}
+              </div>
+            ) : null}
 
             {assistantTurnView ? (
               <AssistantTurnTasks

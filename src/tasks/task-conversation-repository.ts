@@ -212,7 +212,8 @@ export class TaskConversationRepository {
         `SELECT * FROM task_sessions
          WHERE task_id = ? AND role = 'execution' AND status = 'active'`,
       ).get(input.taskId) as TaskSessionRow | undefined;
-      const sameSession = current?.conversation_id === input.conversationId;
+      const sameSession = current?.conversation_id === input.conversationId
+        && (!input.runId || current.run_id === input.runId);
       const assignmentEpoch = sameSession
         ? current.assignment_epoch
         : (existing?.assignment_epoch ?? 0) + 1;

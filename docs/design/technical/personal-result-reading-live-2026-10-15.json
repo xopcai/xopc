@@ -1,0 +1,585 @@
+{
+  "downloads": [
+    {
+      "title": "report.md",
+      "bytes": 42926,
+      "sha256": "58f876c7905a2c5f4ca00390d28b47313c661b9b362de3754e0066be77a48cda"
+    },
+    {
+      "title": "monthly_summary.csv",
+      "bytes": 36,
+      "sha256": "412359e374bd855ab032ea0db39ccde7540fa5105a0e1e4d0bb0dd5e023fd1df"
+    },
+    {
+      "title": "reproduce.mjs",
+      "bytes": 370,
+      "sha256": "76481ffc6a73ecf8f4006e9f7abdf8cfcde663f2fecf3167c5beb13a669b84d7"
+    }
+  ],
+  "outcomeStatus": "succeeded",
+  "artifacts": [
+    {
+      "title": "report.md",
+      "availability": "available"
+    },
+    {
+      "title": "monthly_summary.csv",
+      "availability": "available"
+    },
+    {
+      "title": "reproduce.mjs",
+      "availability": "available"
+    }
+  ],
+  "workerToolErrors": 1,
+  "pingMs": 3167,
+  "publishToReplyMs": 96809,
+  "totalMs": 119662,
+  "followups": [
+    {
+      "name": "tail",
+      "question": "刚才 report.md 第三节的核对码是什么？适用范围有什么限制？请根据原文件回答。",
+      "answer": "第三节的核对码是 **CEDAR-d2cd617e**。\n\n适用范围有限制：仅适用于隔离验收样本，不适用于生产经营预测。另外原文件在开头明确注明，这是冻结的合成验收材料，不代表实际业务。",
+      "durationMs": 14895.839790999991,
+      "calls": [
+        {
+          "name": "personal_result",
+          "input": {
+            "command": "get",
+            "resultId": "0e2f2e8a-aa19-497c-b739-1e27b88c8ec6"
+          },
+          "durationMs": 2.5394589999923483,
+          "output": [
+            {
+              "type": "text",
+              "text": "{\"resultId\":\"0e2f2e8a-aa19-497c-b739-1e27b88c8ec6\",\"taskId\":\"ac9212a2-c2a0-4b19-875b-4c2544d84556\",\"runId\":\"a73855ca-2431-45b9-9af2-8aa882e81f25\",\"sourceId\":\"body\",\"status\":\"succeeded\",\"body\":{\"sourceId\":\"body\",\"description\":\"Retained execution result, not the composed chat reply\"},\"sources\":[{\"sourceId\":\"report---4604c983-d074-4615-b854-60e0f5e9a1b3.md\",\"title\":\"report.md\",\"kind\":\"document\",\"availability\":\"available\",\"mimeType\":\"text/markdown\"},{\"sourceId\":\"monthly_summary---3995fdbc-6d48-402b-aeb5-073645c86a43.csv\",\"title\":\"monthly_summary.csv\",\"kind\":\"spreadsheet\",\"availability\":\"available\",\"mimeType\":\"text/csv\"},{\"sourceId\":\"reproduce---b3017d10-dd3b-4cb2-8376-945e460e0b20.mjs\",\"title\":\"reproduce.mjs\",\"kind\":\"file\",\"availability\":\"available\",\"mimeType\":\"application/octet-stream\"}],\"guidance\":\"Use read/search with sourceId=body or an exact artifact sourceId. Omitted chat text is available here when retained.\"}"
+            }
+          ]
+        },
+        {
+          "name": "personal_result",
+          "input": {
+            "command": "search",
+            "resultId": "0e2f2e8a-aa19-497c-b739-1e27b88c8ec6",
+            "sourceId": "report---4604c983-d074-4615-b854-60e0f5e9a1b3.md",
+            "query": "核对码"
+          },
+          "durationMs": 3.7521249999990687,
+          "output": [
+            {
+              "type": "text",
+              "text": "{\"resultId\":\"0e2f2e8a-aa19-497c-b739-1e27b88c8ec6\",\"taskId\":\"ac9212a2-c2a0-4b19-875b-4c2544d84556\",\"runId\":\"a73855ca-2431-45b9-9af2-8aa882e81f25\",\"sourceId\":\"report---4604c983-d074-4615-b854-60e0f5e9a1b3.md\",\"status\":\"preparing\",\"preparationId\":\"ef826dd7d108906de6248e855492204b54f428f2ac427944fda84fb26748987c\",\"complete\":false,\"continuationScheduled\":true,\"guidance\":\"This question will continue automatically here after preparation; finish this turn without polling or creating a Task.\"}"
+            }
+          ]
+        },
+        {
+          "name": "personal_result",
+          "input": {
+            "command": "search",
+            "query": "核对码",
+            "resultId": "0e2f2e8a-aa19-497c-b739-1e27b88c8ec6",
+            "sourceId": "report---4604c983-d074-4615-b854-60e0f5e9a1b3.md"
+          },
+          "durationMs": 2.498250000004191,
+          "output": [
+            {
+              "type": "text",
+              "text": "{\"resultId\":\"0e2f2e8a-aa19-497c-b739-1e27b88c8ec6\",\"taskId\":\"ac9212a2-c2a0-4b19-875b-4c2544d84556\",\"runId\":\"a73855ca-2431-45b9-9af2-8aa882e81f25\",\"sourceId\":\"report---4604c983-d074-4615-b854-60e0f5e9a1b3.md\",\"revision\":\"e3676e925bedb1c84eab0a85e7523ced52593bf62cb250311b4b7a7ef8c40f86\",\"status\":\"ready\",\"representation\":\"extracted_text\",\"limitations\":[],\"totalChars\":14794,\"query\":\"核对码\",\"items\":[{\"offset\":14627,\"text\":\"冻结的合成验收材料，不代表实际业务。\\n这是冻结的合成验收材料，不代表实际业务。\\n这是冻结的合成验收材料，不代表实际业务。\\n这是冻结的合成验收材料，不代表实际业务。\\n\\n# 第二节：方法\\n这是文件阅读验收，不执行预测。\\n\\n# 第三节：限定条件\\n核对码：CEDAR-d2cd617e\\n适用范围：仅适用于隔离验收样本，不适用于生产经营预测。\\n\",\"section\":\"1\"}],\"complete\":true}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "selected",
+      "question": "只针对我选中的成果，引用第三节标题和该节原文。",
+      "answer": "只引用你选中的成果（report.md）原文：\n\n第三节标题：\n```\n# 第三节：限定条件\n```\n\n该节原文：\n```\n核对码：CEDAR-d2cd617e\n适用范围：仅适用于隔离验收样本，不适用于生产经营预测。\n```",
+      "durationMs": 4473.836208000008,
+      "calls": [
+        {
+          "name": "personal_result",
+          "input": {
+            "command": "read",
+            "resultId": "0e2f2e8a-aa19-497c-b739-1e27b88c8ec6",
+            "sourceId": "report---4604c983-d074-4615-b854-60e0f5e9a1b3.md",
+            "offset": 14600,
+            "limit": 200
+          },
+          "durationMs": 2.2612499999959255,
+          "output": [
+            {
+              "type": "text",
+              "text": "{\"resultId\":\"0e2f2e8a-aa19-497c-b739-1e27b88c8ec6\",\"taskId\":\"ac9212a2-c2a0-4b19-875b-4c2544d84556\",\"runId\":\"a73855ca-2431-45b9-9af2-8aa882e81f25\",\"sourceId\":\"report---4604c983-d074-4615-b854-60e0f5e9a1b3.md\",\"revision\":\"e3676e925bedb1c84eab0a85e7523ced52593bf62cb250311b4b7a7ef8c40f86\",\"status\":\"ready\",\"representation\":\"extracted_text\",\"limitations\":[],\"totalChars\":14794,\"offset\":14600,\"text\":\"业务。\\n这是冻结的合成验收材料，不代表实际业务。\\n这是冻结的合成验收材料，不代表实际业务。\\n这是冻结的合成验收材料，不代表实际业务。\\n这是冻结的合成验收材料，不代表实际业务。\\n这是冻结的合成验收材料，不代表实际业务。\\n\\n# 第二节：方法\\n这是文件阅读验收，不执行预测。\\n\\n# 第三节：限定条件\\n核对码：CEDAR-d2cd617e\\n适用范围：仅适用于隔离验收样本，不适用于生产经营预测。\\n\",\"rangeComplete\":true,\"complete\":true}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "table",
+      "question": "把我选中的 CSV 原始表头和所有数据行原样列出来。",
+      "answer": "monthly_summary.csv 的全部内容（表头 + 数据行，原样）：\n\n```\nmonth,total\n2026-01,150\n2026-02,210\n```\n\n表头为 `month,total`，共两行数据：2026-01 为 150，2026-02 为 210。",
+      "durationMs": 3448.4320410000073,
+      "calls": [
+        {
+          "name": "personal_result",
+          "input": {
+            "command": "read",
+            "limit": 4000,
+            "offset": 0,
+            "resultId": "0e2f2e8a-aa19-497c-b739-1e27b88c8ec6",
+            "sourceId": "monthly_summary---3995fdbc-6d48-402b-aeb5-073645c86a43.csv"
+          },
+          "durationMs": 2.321916999993846,
+          "output": [
+            {
+              "type": "text",
+              "text": "{\"resultId\":\"0e2f2e8a-aa19-497c-b739-1e27b88c8ec6\",\"taskId\":\"ac9212a2-c2a0-4b19-875b-4c2544d84556\",\"runId\":\"a73855ca-2431-45b9-9af2-8aa882e81f25\",\"sourceId\":\"monthly_summary---3995fdbc-6d48-402b-aeb5-073645c86a43.csv\",\"revision\":\"8ef1030acab38913ba62e314a15d18ebf8b0d406e3928683f08f42568393a5ac\",\"status\":\"ready\",\"representation\":\"extracted_text\",\"limitations\":[],\"totalChars\":36,\"offset\":0,\"text\":\"month,total\\n2026-01,150\\n2026-02,210\\n\",\"rangeComplete\":true,\"complete\":true}"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "hotReadMs": [
+    0.3902079999970738,
+    0.39200000002165325,
+    0.3941659999836702,
+    0.3995419999992009,
+    0.3997500000114087,
+    0.4020829999935813,
+    0.4104159999988042,
+    0.4134170000033919,
+    0.4150000000081491,
+    0.41858399999910034,
+    0.42154199999640696,
+    0.42549999998300336,
+    0.42704199999570847,
+    0.4305000000167638,
+    0.4348339999851305,
+    0.43525000000954606,
+    0.44579199998406693,
+    0.4522090000100434,
+    0.45741699999780394,
+    0.4588330000115093,
+    0.45987500000046566,
+    0.4772499999962747,
+    0.47870800000964664,
+    0.4789170000003651,
+    0.4834159999736585,
+    0.503000000026077,
+    0.535249999986263,
+    0.5386669999861624,
+    0.6907910000008997,
+    0.8921669999836013
+  ],
+  "before": {
+    "tasks": 1,
+    "routers": 1
+  },
+  "readWaits": [
+    {
+      "status": "done"
+    }
+  ],
+  "browser": {
+    "success": true,
+    "sourceId": "result:0e2f2e8a-aa19-497c-b739-1e27b88c8ec6:report---4604c983-d074-4615-b854-60e0f5e9a1b3.md",
+    "screenshot": "/Users/micjoyce/develop/github/xopc/docs/design/technical/personal-result-reading-live-2026-10-15-web.png"
+  },
+  "success": true,
+  "marker": "RESULT-e9e886ae",
+  "toolCalls": [
+    {
+      "name": "personal_task",
+      "input": {
+        "command": "submit",
+        "title": "交付报告文件包并运行检查脚本",
+        "objective": "在隔离工作区把 source-report.md 原样复制为 report.md，运行现有 node reproduce.mjs 检查 report.md 与 monthly_summary.csv，并仅发布 report.md、monthly_summary.csv、reproduce.mjs 三个文件。",
+        "description": "## 任务\n\n已准备好的文件包需要交付执行。**不需要新增分析、研究或改写。**\n\n工作区文件：`source-report.md`、`monthly_summary.csv`、`reproduce.mjs`（检查脚本，已存在）。\n\n### 步骤\n1. 在隔离工作区中，把工作区内的 `source-report.md` **原样复制**为 `report.md`（内容不做任何修改、改写或补充）。\n2. 运行现有的检查脚本：`node reproduce.mjs`，用它检查 `report.md` 和 `monthly_summary.csv`。\n3. 发布**仅以下三个文件**：`report.md`、`monthly_summary.csv`、`reproduce.mjs`。不要发布其他文件，也不要额外生成文件。\n\n### 权限\n允许在隔离工作区复制文件、运行该检查脚本，并发布上述指定三个文件。\n\n### 交付要求\n最终回复只说明交付情况（哪些文件已发布、检查脚本运行结果是否通过），**不要复述文件正文，也不要列出附录核对码**。"
+      },
+      "durationMs": 15.669207999999344,
+      "output": [
+        {
+          "type": "text",
+          "text": "{\n  \"ok\": true,\n  \"task\": {\n    \"id\": \"ac9212a2-c2a0-4b19-875b-4c2544d84556\",\n    \"title\": \"交付报告文件包并运行检查脚本\",\n    \"phase\": \"ready\",\n    \"version\": 1\n  },\n  \"operationalState\": \"allocating\",\n  \"allocation\": {\n    \"id\": \"98d889f7-4049-42a9-9a8b-8f5268446e1b\",\n    \"taskId\": \"ac9212a2-c2a0-4b19-875b-4c2544d84556\",\n    \"status\": \"pending\",\n    \"attempts\": 0,\n    \"updatedAt\": 1792037996202\n  }\n}\nOpen in xopc: [Open](xopc://open?kind=task&id=ac9212a2-c2a0-4b19-875b-4c2544d84556)\nxopc-product-delivery:%7B%22version%22%3A2%2C%22operation%22%3A%22created%22%2C%22primary%22%3A%7B%22kind%22%3A%22task%22%2C%22id%22%3A%22ac9212a2-c2a0-4b19-875b-4c2544d84556%22%2C%22title%22%3A%22%E4%BA%A4%E4%BB%98%E6%8A%A5%E5%91%8A%E6%96%87%E4%BB%B6%E5%8C%85%E5%B9%B6%E8%BF%90%E8%A1%8C%E6%A3%80%E6%9F%A5%E8%84%9A%E6%9C%AC%22%2C%22status%22%3A%22ready%2Fallocating%22%2C%22revision%22%3A%221%22%2C%22capabilities%22%3A%5B%22open%22%2C%22edit%22%2C%22continue_in_chat%22%5D%7D%7D"
+        }
+      ]
+    },
+    {
+      "name": "personal_result",
+      "input": {
+        "command": "get",
+        "resultId": "0e2f2e8a-aa19-497c-b739-1e27b88c8ec6"
+      },
+      "durationMs": 2.5394589999923483,
+      "output": [
+        {
+          "type": "text",
+          "text": "{\"resultId\":\"0e2f2e8a-aa19-497c-b739-1e27b88c8ec6\",\"taskId\":\"ac9212a2-c2a0-4b19-875b-4c2544d84556\",\"runId\":\"a73855ca-2431-45b9-9af2-8aa882e81f25\",\"sourceId\":\"body\",\"status\":\"succeeded\",\"body\":{\"sourceId\":\"body\",\"description\":\"Retained execution result, not the composed chat reply\"},\"sources\":[{\"sourceId\":\"report---4604c983-d074-4615-b854-60e0f5e9a1b3.md\",\"title\":\"report.md\",\"kind\":\"document\",\"availability\":\"available\",\"mimeType\":\"text/markdown\"},{\"sourceId\":\"monthly_summary---3995fdbc-6d48-402b-aeb5-073645c86a43.csv\",\"title\":\"monthly_summary.csv\",\"kind\":\"spreadsheet\",\"availability\":\"available\",\"mimeType\":\"text/csv\"},{\"sourceId\":\"reproduce---b3017d10-dd3b-4cb2-8376-945e460e0b20.mjs\",\"title\":\"reproduce.mjs\",\"kind\":\"file\",\"availability\":\"available\",\"mimeType\":\"application/octet-stream\"}],\"guidance\":\"Use read/search with sourceId=body or an exact artifact sourceId. Omitted chat text is available here when retained.\"}"
+        }
+      ]
+    },
+    {
+      "name": "personal_result",
+      "input": {
+        "command": "search",
+        "resultId": "0e2f2e8a-aa19-497c-b739-1e27b88c8ec6",
+        "sourceId": "report---4604c983-d074-4615-b854-60e0f5e9a1b3.md",
+        "query": "核对码"
+      },
+      "durationMs": 3.7521249999990687,
+      "output": [
+        {
+          "type": "text",
+          "text": "{\"resultId\":\"0e2f2e8a-aa19-497c-b739-1e27b88c8ec6\",\"taskId\":\"ac9212a2-c2a0-4b19-875b-4c2544d84556\",\"runId\":\"a73855ca-2431-45b9-9af2-8aa882e81f25\",\"sourceId\":\"report---4604c983-d074-4615-b854-60e0f5e9a1b3.md\",\"status\":\"preparing\",\"preparationId\":\"ef826dd7d108906de6248e855492204b54f428f2ac427944fda84fb26748987c\",\"complete\":false,\"continuationScheduled\":true,\"guidance\":\"This question will continue automatically here after preparation; finish this turn without polling or creating a Task.\"}"
+        }
+      ]
+    },
+    {
+      "name": "personal_result",
+      "input": {
+        "command": "search",
+        "query": "核对码",
+        "resultId": "0e2f2e8a-aa19-497c-b739-1e27b88c8ec6",
+        "sourceId": "report---4604c983-d074-4615-b854-60e0f5e9a1b3.md"
+      },
+      "durationMs": 2.498250000004191,
+      "output": [
+        {
+          "type": "text",
+          "text": "{\"resultId\":\"0e2f2e8a-aa19-497c-b739-1e27b88c8ec6\",\"taskId\":\"ac9212a2-c2a0-4b19-875b-4c2544d84556\",\"runId\":\"a73855ca-2431-45b9-9af2-8aa882e81f25\",\"sourceId\":\"report---4604c983-d074-4615-b854-60e0f5e9a1b3.md\",\"revision\":\"e3676e925bedb1c84eab0a85e7523ced52593bf62cb250311b4b7a7ef8c40f86\",\"status\":\"ready\",\"representation\":\"extracted_text\",\"limitations\":[],\"totalChars\":14794,\"query\":\"核对码\",\"items\":[{\"offset\":14627,\"text\":\"冻结的合成验收材料，不代表实际业务。\\n这是冻结的合成验收材料，不代表实际业务。\\n这是冻结的合成验收材料，不代表实际业务。\\n这是冻结的合成验收材料，不代表实际业务。\\n\\n# 第二节：方法\\n这是文件阅读验收，不执行预测。\\n\\n# 第三节：限定条件\\n核对码：CEDAR-d2cd617e\\n适用范围：仅适用于隔离验收样本，不适用于生产经营预测。\\n\",\"section\":\"1\"}],\"complete\":true}"
+        }
+      ]
+    },
+    {
+      "name": "personal_result",
+      "input": {
+        "command": "read",
+        "resultId": "0e2f2e8a-aa19-497c-b739-1e27b88c8ec6",
+        "sourceId": "report---4604c983-d074-4615-b854-60e0f5e9a1b3.md",
+        "offset": 14600,
+        "limit": 200
+      },
+      "durationMs": 2.2612499999959255,
+      "output": [
+        {
+          "type": "text",
+          "text": "{\"resultId\":\"0e2f2e8a-aa19-497c-b739-1e27b88c8ec6\",\"taskId\":\"ac9212a2-c2a0-4b19-875b-4c2544d84556\",\"runId\":\"a73855ca-2431-45b9-9af2-8aa882e81f25\",\"sourceId\":\"report---4604c983-d074-4615-b854-60e0f5e9a1b3.md\",\"revision\":\"e3676e925bedb1c84eab0a85e7523ced52593bf62cb250311b4b7a7ef8c40f86\",\"status\":\"ready\",\"representation\":\"extracted_text\",\"limitations\":[],\"totalChars\":14794,\"offset\":14600,\"text\":\"业务。\\n这是冻结的合成验收材料，不代表实际业务。\\n这是冻结的合成验收材料，不代表实际业务。\\n这是冻结的合成验收材料，不代表实际业务。\\n这是冻结的合成验收材料，不代表实际业务。\\n这是冻结的合成验收材料，不代表实际业务。\\n\\n# 第二节：方法\\n这是文件阅读验收，不执行预测。\\n\\n# 第三节：限定条件\\n核对码：CEDAR-d2cd617e\\n适用范围：仅适用于隔离验收样本，不适用于生产经营预测。\\n\",\"rangeComplete\":true,\"complete\":true}"
+        }
+      ]
+    },
+    {
+      "name": "personal_result",
+      "input": {
+        "command": "read",
+        "limit": 4000,
+        "offset": 0,
+        "resultId": "0e2f2e8a-aa19-497c-b739-1e27b88c8ec6",
+        "sourceId": "monthly_summary---3995fdbc-6d48-402b-aeb5-073645c86a43.csv"
+      },
+      "durationMs": 2.321916999993846,
+      "output": [
+        {
+          "type": "text",
+          "text": "{\"resultId\":\"0e2f2e8a-aa19-497c-b739-1e27b88c8ec6\",\"taskId\":\"ac9212a2-c2a0-4b19-875b-4c2544d84556\",\"runId\":\"a73855ca-2431-45b9-9af2-8aa882e81f25\",\"sourceId\":\"monthly_summary---3995fdbc-6d48-402b-aeb5-073645c86a43.csv\",\"revision\":\"8ef1030acab38913ba62e314a15d18ebf8b0d406e3928683f08f42568393a5ac\",\"status\":\"ready\",\"representation\":\"extracted_text\",\"limitations\":[],\"totalChars\":36,\"offset\":0,\"text\":\"month,total\\n2026-01,150\\n2026-02,210\\n\",\"rangeComplete\":true,\"complete\":true}"
+        }
+      ]
+    },
+    {
+      "name": "personal_result",
+      "input": {
+        "command": "read",
+        "limit": 120,
+        "offset": 14690,
+        "resultId": "0e2f2e8a-aa19-497c-b739-1e27b88c8ec6",
+        "sourceId": "report---4604c983-d074-4615-b854-60e0f5e9a1b3.md"
+      },
+      "durationMs": 4.919750000000931,
+      "output": [
+        {
+          "type": "text",
+          "text": "{\"resultId\":\"0e2f2e8a-aa19-497c-b739-1e27b88c8ec6\",\"taskId\":\"ac9212a2-c2a0-4b19-875b-4c2544d84556\",\"runId\":\"a73855ca-2431-45b9-9af2-8aa882e81f25\",\"sourceId\":\"report---4604c983-d074-4615-b854-60e0f5e9a1b3.md\",\"revision\":\"e3676e925bedb1c84eab0a85e7523ced52593bf62cb250311b4b7a7ef8c40f86\",\"status\":\"ready\",\"representation\":\"extracted_text\",\"limitations\":[],\"totalChars\":14794,\"offset\":14690,\"text\":\"冻结的合成验收材料，不代表实际业务。\\n\\n# 第二节：方法\\n这是文件阅读验收，不执行预测。\\n\\n# 第三节：限定条件\\n核对码：CEDAR-d2cd617e\\n适用范围：仅适用于隔离验收样本，不适用于生产经营预测。\\n\",\"rangeComplete\":true,\"complete\":true}"
+        }
+      ]
+    }
+  ],
+  "usage": [
+    {
+      "operation": "agent.answer",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 6372
+    },
+    {
+      "operation": "task.plan_contract",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 5330
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 2858
+    },
+    {
+      "operation": "task.allocation",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 3658
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 4034
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 2794
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 3181
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 4204
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 3776
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 3833
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 4176
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 4752
+    },
+    {
+      "operation": "task.research_review",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 4190
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 3593
+    },
+    {
+      "operation": "session.generate_title",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 3081
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 4105
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 3510
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 4078
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 8511
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 4540
+    },
+    {
+      "operation": "task.research_review",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 4753
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 3669
+    },
+    {
+      "operation": "personal.reply_composition",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 2600
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 3418
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 3139
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 2848
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 1783
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 1462
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 1673
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 2314
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 1695
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 1278
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 1995
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 1832
+    },
+    {
+      "operation": "chat.next_turn_suggestion",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "running",
+      "duration_ms": null
+    }
+  ],
+  "isolatedStateDirectory": "/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-personal-result-live-fbeeTY",
+  "models": {
+    "personal": "deepseek/deepseek-flash",
+    "global": "xopc-cloud/auto"
+  },
+  "sourceCommit": "30959e330cfa0f00e2f1d11e825c8d7e18a6e3fa",
+  "sourceHashes": {
+    "src/personal-agent/result-reader.ts": "587356f8779ba0170da7e5a34c31bbb85cb63e373496ae8bda1a98a4731426be",
+    "src/personal-agent/result-extraction.ts": "ac96c5ec453b4e8b426822a9caad237777f09067336294cf9121c958c38c1028",
+    "src/personal-agent/result-read-continuations.ts": "99fd1f2424a8be701e105f3b682d695a9b8d42888d23389b3fee9ac8710e17fd",
+    "src/agent/tools/personal-result-tool.ts": "51dfd26f13d7056979a7e615df2a59846974ad5ae9498c4076d731364566cf66",
+    "src/agent/source-context/result-context.ts": "328078e2601644d6f0fc0056cc12610b9d91e4a01fd2eade9c3a182d055d2ae0",
+    "src/personal-agent/prompts.ts": "7249f8a4a0e4337c48f6a430758333a652f4758f79651c70a82a40d070e00a26",
+    "src/personal-agent/policy.ts": "9ac77142744294dd7830a4324d012f04644ed1f9a25aae20e7d72abcdd2e4fb2",
+    "src/personal-agent/request-delivery.ts": "dea14498aa96fc0202fd7a8beb7f6f4538020f0b59b1df2dd2f21b6c407af06f",
+    "src/session/session-context-for-llm.ts": "d5a4516a6ffc3fe0f0f400269e317feded955108288a78477c3013150687e596",
+    "src/gateway/service.ts": "5db49cf5df707997ae2cc5aa8a1ab235d915194944b8ef84279639e62ea9b514",
+    "src/storage/sqlite/migrations/251_personal_result_reads.sql": "3e24146d178e81edac970c2ceb208b2297c54b384475acacdeb215a007c82677",
+    "src/agent/tools/factory.ts": "8b9ff7f52f10d0c8107be30c6defe31bd9d0e6ebcf340de20a4328fb54404048",
+    "web/src/features/chat/messages/message-bubble.tsx": "8a241fa7352ca8c4cb1b06fedeb5b57a41dff9e6c6a1e7007efe338c0cee2204",
+    "web/src/features/chat/composer/chat-composer.tsx": "f717d3d627930204f41e67a47af8a16a1cee2464809ffd8b79c26d05c63b73a7",
+    "web/src/features/chat/messages/message-context-attachments.tsx": "f1cbcf906a55b5e51b66c65076de9cf01c20f39f86ee507367857ef3d7b1f9a7",
+    "scripts/build-personal-result-worker.mjs": "9bd76e63fa3912e8d85f2c995f63fb65dfbeb541dcd7b9129f2658e9686ac9e3",
+    "scripts/build-electron-server.mjs": "82463aeb5e863165303c7beb16c2f21045c060b2d7387577d9f453ba25844ceb",
+    "scripts/tsdown-build.mjs": "17c7e6478af9064c7d99f3f0119f2bc2888c39bed23a04f8fb04508cb1456581",
+    "tsdown.config.ts": "8680815cb9301664acb4fd619441f7276bafb0a4c59f303a5e597d0d88847449",
+    "scripts/personal-result-reading-live-smoke.mts": "d733d52d2d4cc0203c286b5a35e36c69187f53b3eafbbef3d824e41fd6392bf1",
+    "pnpm-lock.yaml": "dafdd4572eecba69104ef37ce3348a09c4924ca4a5ddb523e146ccb985391898"
+  },
+  "sourceChangedDuringRun": false,
+  "limitations": "Real models and authenticated Gateway; synthetic frozen file package. The verification script includes an explicit 8s delay to expose concurrent chat. This is not production p95 or native-device acceptance."
+}

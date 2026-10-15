@@ -1,0 +1,450 @@
+{
+  "success": false,
+  "failure": "The revised result must pass current acceptance\n+ actual - expected\n\n+ 'partial'\n- 'succeeded'\n",
+  "marker": "RESULT-d682c58d",
+  "toolCalls": [
+    {
+      "name": "personal_task",
+      "input": {
+        "command": "submit",
+        "title": "复制并校验后发布三文件交付包",
+        "objective": "将工作区 source-report.md 原样复制为 report.md，运行现有 node reproduce.mjs 校验 report.md 与 monthly_summary.csv，并只发布 report.md、monthly_summary.csv、reproduce.mjs 三个文件。",
+        "description": "用户要求交付已准备好的文件包，无需新增分析、研究或改写：\n\n1. 在隔离工作区把 `source-report.md` 原样复制为 `report.md`（内容不做任何修改）。\n2. 运行工作区中现有的检查脚本 `node reproduce.mjs`，用它检查 `report.md` 与 `monthly_summary.csv`。\n3. 只发布以下三个文件：`report.md`、`monthly_summary.csv`、`reproduce.mjs`。\n\n允许的操作：在隔离工作区复制文件、运行该检查脚本、发布上述指定三文件。不需要新增分析、研究或改写，也不要发布其他文件。\n\n最终回复只说明交付情况（哪些文件已交付、检查是否通过、若有未完成或未验证之处需如实说明），不要复述文件正文或附录核对码。",
+        "sourceRefs": [
+          {
+            "kind": "file",
+            "sourceId": "source-report.md"
+          },
+          {
+            "kind": "file",
+            "sourceId": "monthly_summary.csv"
+          },
+          {
+            "kind": "file",
+            "sourceId": "reproduce.mjs"
+          }
+        ]
+      },
+      "durationMs": 14.871916000000056,
+      "output": [
+        {
+          "type": "text",
+          "text": "{\n  \"ok\": true,\n  \"task\": {\n    \"id\": \"bd03441a-9e62-45a0-af0e-8938eebfdba3\",\n    \"title\": \"复制并校验后发布三文件交付包\",\n    \"phase\": \"ready\",\n    \"version\": 1\n  },\n  \"operationalState\": \"allocating\",\n  \"allocation\": {\n    \"id\": \"4ca6e93b-0207-441a-ab30-cf88010c47b0\",\n    \"taskId\": \"bd03441a-9e62-45a0-af0e-8938eebfdba3\",\n    \"status\": \"pending\",\n    \"attempts\": 0,\n    \"updatedAt\": 1792045949197\n  }\n}\nOpen in xopc: [Open](xopc://open?kind=task&id=bd03441a-9e62-45a0-af0e-8938eebfdba3)\nxopc-product-delivery:%7B%22version%22%3A2%2C%22operation%22%3A%22created%22%2C%22primary%22%3A%7B%22kind%22%3A%22task%22%2C%22id%22%3A%22bd03441a-9e62-45a0-af0e-8938eebfdba3%22%2C%22title%22%3A%22%E5%A4%8D%E5%88%B6%E5%B9%B6%E6%A0%A1%E9%AA%8C%E5%90%8E%E5%8F%91%E5%B8%83%E4%B8%89%E6%96%87%E4%BB%B6%E4%BA%A4%E4%BB%98%E5%8C%85%22%2C%22status%22%3A%22ready%2Fallocating%22%2C%22revision%22%3A%221%22%2C%22capabilities%22%3A%5B%22open%22%2C%22edit%22%2C%22continue_in_chat%22%5D%7D%7D"
+        }
+      ]
+    },
+    {
+      "name": "personal_task",
+      "input": {
+        "command": "get",
+        "taskId": "bd03441a-9e62-45a0-af0e-8938eebfdba3",
+        "section": "revision"
+      },
+      "durationMs": 2.0806660000089323,
+      "output": [
+        {
+          "type": "text",
+          "text": "{\"ok\":true,\"taskId\":\"bd03441a-9e62-45a0-af0e-8938eebfdba3\",\"phase\":\"closed\",\"expectedVersion\":5,\"revisionBaseline\":{\"resultId\":\"06b502b6-575a-4699-b049-92403e59595d\",\"baselineVersion\":\"fb86cf8f-608d-4b3a-8794-a47e826d6911:1:7096b21d-19f2-412b-9257-16087ebcec87:outcome\",\"resultRevision\":1,\"expectedVersion\":5},\"allowedCommands\":[\"reopen\",\"revise\"],\"allocation\":{\"id\":\"4ca6e93b-0207-441a-ab30-cf88010c47b0\",\"taskId\":\"bd03441a-9e62-45a0-af0e-8938eebfdba3\",\"status\":\"assigned\",\"attempts\":1,\"updatedAt\":1792045956338,\"selectedAgentId\":\"coder\",\"selectionReason\":\"该任务需要在隔离工作区复制文件、运行 node 校验脚本并发布指定产物，属于软件工程执行类工作；Coding Expert 具备 read_file、exec_command 与 publish_artifacts 能力，且不涉及新增分析或改写，最符合任务边界。\"}}"
+        }
+      ]
+    },
+    {
+      "name": "personal_task",
+      "input": {
+        "command": "revise",
+        "taskId": "bd03441a-9e62-45a0-af0e-8938eebfdba3",
+        "instruction": "基于刚才发布的 report.md 做一处文本替换修订，替换此前三文件交付要求：\n\n1. 以已发布的 report.md 为只读输入，仅将第三节中的核对码 `CEDAR-04bdcd37` 改为 `MAPLE-6ce8ce04`，report.md 其余内容逐字保留（不做任何其他修改）。\n2. 生成 changelog.txt，内容仅为一行：核对码已由 CEDAR-04bdcd37 更新为 MAPLE-6ce8ce04，其他正文保持不变。\n3. 最终只交付两个文件：新版 report.md 与 changelog.txt。不要交付旧 csv 或脚本，不要重跑原 reproduce.mjs 脚本（此前已通过，无需重跑）。\n4. 校验除这一个码之外 report.md 其余内容未变，并确认旧成果仍可读（保留旧版本可访问）。\n5. 这是基于历史成果的文本修改，不需要新增研究或分析；不得改动原始输入文件。\n\n主对话保存该修订后即返回，不需要等待执行完成。",
+        "baselineResultId": "06b502b6-575a-4699-b049-92403e59595d",
+        "baselineVersion": "fb86cf8f-608d-4b3a-8794-a47e826d6911:1:7096b21d-19f2-412b-9257-16087ebcec87:outcome",
+        "expectedVersion": 5,
+        "supersedesEntryIds": [
+          "9c41c589-2f2d-4d3e-95ed-93599f39d57a"
+        ]
+      },
+      "durationMs": 2.7105829999927664,
+      "output": "Error: Superseded entry must be an earlier user direction in this Task",
+      "failed": true
+    },
+    {
+      "name": "personal_task",
+      "input": {
+        "command": "revise",
+        "expectedVersion": 5,
+        "baselineResultId": "06b502b6-575a-4699-b049-92403e59595d",
+        "baselineVersion": "fb86cf8f-608d-4b3a-8794-a47e826d6911:1:7096b21d-19f2-412b-9257-16087ebcec87:outcome",
+        "instruction": "基于刚才发布的 report.md 做一处文本替换修订，替换此前三文件交付要求：\n\n1. 以已发布的 report.md 为只读输入，仅将第三节中的核对码 `CEDAR-04bdcd37` 改为 `MAPLE-6ce8ce04`，report.md 其余内容逐字保留（不做任何其他修改）。\n2. 生成 changelog.txt，内容仅为一行：核对码已由 CEDAR-04bdcd37 更新为 MAPLE-6ce8ce04，其他正文保持不变。\n3. 最终只交付两个文件：新版 report.md 与 changelog.txt。不要交付旧 csv 或脚本，不要重跑原 reproduce.mjs 脚本（此前已通过，无需重跑）。\n4. 校验除这一个码之外 report.md 其余内容未变，并确认旧成果仍可读（保留旧版本可访问）。\n5. 这是基于历史成果的文本修改，不需要新增研究或分析；不得改动原始输入文件。\n\n主对话保存该修订后即返回，不需要等待执行完成。",
+        "taskId": "bd03441a-9e62-45a0-af0e-8938eebfdba3"
+      },
+      "durationMs": 7.214042000006884,
+      "output": [
+        {
+          "type": "text",
+          "text": "{\"ok\":true,\"saved\":true,\"taskId\":\"bd03441a-9e62-45a0-af0e-8938eebfdba3\",\"expectedVersion\":8,\"allocation\":{\"id\":\"7c3282da-a038-4fa5-b796-dbd334cba206\",\"taskId\":\"bd03441a-9e62-45a0-af0e-8938eebfdba3\",\"status\":\"pending\",\"attempts\":0,\"updatedAt\":1792046011505},\"state\":\"revision_saved_background_allocation_pending\"}"
+        }
+      ]
+    }
+  ],
+  "usage": [
+    {
+      "operation": "agent.answer",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 3683
+    },
+    {
+      "operation": "task.plan_contract",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 2597
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 1080
+    },
+    {
+      "operation": "task.allocation",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 2039
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 2510
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 1240
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 3300
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 2956
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 3387
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 2938
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 3827
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 2676
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 2735
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 4443
+    },
+    {
+      "operation": "task.research_review",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 3027
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 2737
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 3145
+    },
+    {
+      "operation": "personal.reply_composition",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 1344
+    },
+    {
+      "operation": "session.generate_title",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 1115
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 1421
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 2699
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 2182
+    },
+    {
+      "operation": "task.plan_contract",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 2876
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 1002
+    },
+    {
+      "operation": "task.allocation",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 2312
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 2873
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 1989
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 2843
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 8774
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 4313
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 8748
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 4677
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 3633
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 2468
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 3382
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 5465
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 3553
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 17640
+    },
+    {
+      "operation": "task.research_review",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 3745
+    },
+    {
+      "operation": "task.research_review",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 4073
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 3632
+    },
+    {
+      "operation": "personal.reply_composition",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 1401
+    },
+    {
+      "operation": "session.generate_title",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 1190
+    }
+  ],
+  "isolatedStateDirectory": "/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-personal-handoff-live-BwIY7S",
+  "models": {
+    "personal": "deepseek/deepseek-flash",
+    "global": "xopc-cloud/auto"
+  },
+  "sourceCommit": "30959e330cfa0f00e2f1d11e825c8d7e18a6e3fa",
+  "sourceHashes": {
+    "src/personal-agent/result-reader.ts": "dff90209fab68cbdd3da4afbd8989dc16cf17d6af53573dbc77bee4053d841c4",
+    "src/personal-agent/result-extraction.ts": "6f9a77d0824990886eacbe3784edeafc48740489d4f06318b8c0ffa72ad56b83",
+    "src/personal-agent/result-read-continuations.ts": "99fd1f2424a8be701e105f3b682d695a9b8d42888d23389b3fee9ac8710e17fd",
+    "src/agent/tools/personal-result-tool.ts": "51dfd26f13d7056979a7e615df2a59846974ad5ae9498c4076d731364566cf66",
+    "src/agent/source-context/result-context.ts": "328078e2601644d6f0fc0056cc12610b9d91e4a01fd2eade9c3a182d055d2ae0",
+    "src/personal-agent/prompts.ts": "7249f8a4a0e4337c48f6a430758333a652f4758f79651c70a82a40d070e00a26",
+    "src/personal-agent/policy.ts": "9ac77142744294dd7830a4324d012f04644ed1f9a25aae20e7d72abcdd2e4fb2",
+    "src/personal-agent/request-delivery.ts": "dea14498aa96fc0202fd7a8beb7f6f4538020f0b59b1df2dd2f21b6c407af06f",
+    "src/session/session-context-for-llm.ts": "d5a4516a6ffc3fe0f0f400269e317feded955108288a78477c3013150687e596",
+    "src/gateway/service.ts": "2803387e3d5dd34b1c624356bcf6d73d4e76c8a4eeb54a15588ac19078e561ba",
+    "src/storage/sqlite/migrations/251_personal_result_reads.sql": "3e24146d178e81edac970c2ceb208b2297c54b384475acacdeb215a007c82677",
+    "src/agent/tools/factory.ts": "1b9d5325fb3727fa947d4f88434fcd17f76ab6c743c8735ce8c8f32a53a52a87",
+    "web/src/features/chat/messages/message-bubble.tsx": "21fb5faa73247090f633230b0f55eb25c0212368dd5b2925ef7380a736a36d73",
+    "web/src/features/chat/composer/chat-composer.tsx": "f717d3d627930204f41e67a47af8a16a1cee2464809ffd8b79c26d05c63b73a7",
+    "web/src/features/chat/messages/message-context-attachments.tsx": "f1cbcf906a55b5e51b66c65076de9cf01c20f39f86ee507367857ef3d7b1f9a7",
+    "scripts/build-personal-result-worker.mjs": "9bd76e63fa3912e8d85f2c995f63fb65dfbeb541dcd7b9129f2658e9686ac9e3",
+    "scripts/build-electron-server.mjs": "82463aeb5e863165303c7beb16c2f21045c060b2d7387577d9f453ba25844ceb",
+    "scripts/tsdown-build.mjs": "17c7e6478af9064c7d99f3f0119f2bc2888c39bed23a04f8fb04508cb1456581",
+    "tsdown.config.ts": "8680815cb9301664acb4fd619441f7276bafb0a4c59f303a5e597d0d88847449",
+    "scripts/personal-task-revision-live-smoke.mts": "7b7587fb786cdc7011e76ffad3e3cd6d8ab92e03e974c9c39e4c52e2201ff247",
+    "src/tasks/task-handoff.ts": "2096b8a944e78a28a787b026eadce155a34bc4c29e0205c4f82b7eb3b8f98021",
+    "src/tasks/task-execution-capabilities.ts": "4f093278bb67b4dcb90c6cd3227b32e065505cfcd3c3ba12d4167db87a27fc48",
+    "src/agent/service/direct-turn-helpers.ts": "c197a36f227e17ab8cb094ddd673de515698b055cf4e0156fa054ae1eb61b62a",
+    "src/agent/service/process-direct-streaming.ts": "7b1ba171a9b35e76c21d63a531833becdcc13de426f04c5bc3a3c5726e536eb5",
+    "src/agent/service/process-direct-one-shot.ts": "724f6daa0ce87f938760b66e3812250011ca7b879baed65758e282202fc0b0da",
+    "src/agent/tools/personal-task-tool.ts": "5b3f26e7899832e9a767c6451c28d82c12d3fc3318cff1833f3c018a276ee05d",
+    "src/agent/tools/xopc-use-tool.ts": "69f53c9532a2b52cf99e41f7d980fb44eb3998dc3cf697927dde96c7e1a02682",
+    "src/tasks/task-application-service.ts": "2efd1476365e706d5600f3098ba5ee4303ed82c19799bd5f063ea466ccc873d1",
+    "src/tasks/task-context-assembler.ts": "b00b001ed1a53ff8312cbf17f38db98d13fb3cb239a335c34a4609c8a0111a49",
+    "src/tasks/task-allocation-service.ts": "746c65aa12e597caa7eb3ebf7c6e7cd014ee8e505257541615265f73e6fce4d8",
+    "src/tasks/task-research-result.ts": "96185a07436f3c2a741646c0d71b5adaf4fdc8486714dfd4706e413b1895383d",
+    "src/tasks/task-contract-planner.ts": "388a7acf4f0ac109f66da4851ec6cc114dc96a3b801644b12db65eef46fa4d8f",
+    "src/agent/tools/task-evidence.ts": "e164d0dac64bfa89881c07f48d89e91a6d532e3b0216737deefa4d4f7b1df699",
+    "src/agent/tools/task-collaboration-tool.ts": "5093564bf852689cf3809d8bd04e2278be129a44ac6ec4209d9626decaba9407",
+    "src/agent/tools/task-result-tool.ts": "add49f61fb8761b704075597513c3ffd7858c04eb09fa5c9bf3429214a1c1523",
+    "src/tasks/task-run-dispatcher.ts": "412749d01b40b290645a775f5fb43b04816e8eb050f8506d8da10c74efaf7e7d",
+    "src/tasks/task-run-coordinator.ts": "44a5d4b9bea2cad041050eac34a82d0132396ea2a4dceb0b64e7b91e9bd41196",
+    "src/tasks/task-read-model-projector.ts": "8d4c368c797b3321886e2c43430665ccb8c5a3e5b858c56248786f637f57fd41",
+    "src/tasks/task-conversation-repository.ts": "7ae142eb547a454baabed1d9dab5c1bf7cf170168e65ee7c3f72fba93707725f",
+    "src/media/session-references.ts": "12d6be13a23a0f7e5230ddc030084e12738a925c10122ab28c383bd89d9b3186",
+    "src/tasks/task-result-delivery-repository.ts": "cd5ebd8e7bf6409156775775c6e5cd776ffa7be2f7619f116a3e0207396fce57",
+    "src/tasks/task-result-delivery-service.ts": "d45d27950dcf88035aae774620c08cf1d2c232c20cd1b779d246e62a50a5b8f2",
+    "src/personal-agent/reply-composer.ts": "f94c895237c2189f769545236ef1864e5c5a40f3c16f47d009be447fd2275fe7",
+    "src/personal-agent/communication.ts": "8ce5af43100ceff2cd892371f51f4ec6ace39a8a0d57caa3cd3ec4a85862860d",
+    "src/storage/sqlite/migrations/252_task_work_revisions.sql": "d17df9e3337c04c0ebec0ab15fb5c8a915595f0e343ddf80d1aec3ff96920153",
+    "packages/gateway-contract/src/task-result-delivery.ts": "29c88ecdd8f91f62cba222c612f9bb29b08d302ac1c0e754363c57da2a69e5a8",
+    "packages/gateway-contract/src/task-research-result.ts": "c23ee2b7a6716e770b9bca76aaafb43a0b64852dcfddb4e56de24c699c985b1d",
+    "packages/gateway-contract/src/turn-outcome.ts": "06f06cdcbd314e65aacd10c95e667d0c3b922f20b8a9189d6474b5b382ae9005",
+    "src/tasks/task-research-repair.ts": "f5dad7e54bf0a099e33315673a8e51933d8c271eefe83c6c4f71b52233987f8d",
+    "pnpm-lock.yaml": "dafdd4572eecba69104ef37ce3348a09c4924ca4a5ddb523e146ccb985391898"
+  },
+  "sourceChangedDuringRun": false,
+  "limitations": "Real configured models and authenticated Gateway; isolated synthetic files. Registration and policy checks are not third-party network or binary parser readiness probes. Not production p95."
+}

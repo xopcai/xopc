@@ -23,6 +23,7 @@ export const TaskResearchResultSchema = z.object({
   sources: z.array(TaskResearchSourceSchema).max(40), claims: z.array(TaskResearchClaimSchema).min(1).max(40),
   checks: z.array(TaskResearchCheckSchema).max(40),
   review: z.enum(['model_reviewed', 'unavailable']),
+  finalArtifactIds: z.array(z.string().min(1)).max(50).optional(),
   inspectedArtifactIds: z.array(z.string().min(1)).max(50).optional(),
   instructionChecks: z.array(z.object({ sequence: z.number().int().positive(), instruction: z.string().min(1),
     status: z.enum(['passed', 'failed', 'unverified']), claimIds: z.array(id).max(40), note: z.string().min(1).max(1000),

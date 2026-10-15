@@ -48,6 +48,7 @@ export const TurnOutcomeDeliverableSchema = z.object({
   title: z.string().min(1),
   kind: TurnOutcomeDeliverableKindSchema,
   mimeType: z.string().optional(),
+  sha256: z.string().regex(/^[a-f0-9]{64}$/).optional(),
   sizeBytes: z.number().nonnegative().optional(),
   availability: TurnOutcomeArtifactAvailabilitySchema,
   location: TurnOutcomeArtifactLocationSchema,

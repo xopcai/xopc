@@ -8,6 +8,12 @@ describe('validateApplyPatchEnvelope', () => {
       patch: '*** Begin Patch\n*** Update File: example.ts\n@@\n-old\n+new\n*** End Patch',
     })).toBeNull();
   });
+  it('accepts terminal Unix and Windows newlines without accepting trailing prose', () => {
+    for (const ending of ['\n', '\r\n', '\n\n']) {
+      expect(validateApplyPatchEnvelope({ patch: `*** Begin Patch\n*** Update File: report.md\n@@\n-old\n+new\n*** End Patch${ending}` })).toBeNull();
+    }
+    expect(validateApplyPatchEnvelope({ patch: '*** Begin Patch\n*** End Patch\ntrailing prose\n' })).toMatchObject({ issue: 'last_line' });
+  });
 
   it('rejects a missing begin marker with a targeted repair hint', () => {
     expect(validateApplyPatchEnvelope({

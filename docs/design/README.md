@@ -14,6 +14,8 @@ See [Documentation information architecture](./documentation-information-archite
 
 Active proposed designs:
 
+- [Personal AI work continuity](./personal-ai-work-continuity-plan.md): result reading, durable handoffs, follow-up revisions, and foreground latency targets.
+- [Personal result reading, stage A](./technical/personal-result-reading-stage-a-2026-10-15.md): implementation, access boundaries, cold-read continuation, and verification evidence.
 - [Scenes product north star and evolution plan](./scenes-product-north-star.md)
 - [Scenes technical design and direct cutover plan](./scenes-technical-design.md)
 - [Scenes implementation progress and review log](./scenes-implementation-progress.md)
@@ -33,3 +35,7 @@ Active proposed designs:
 - `prd/`, `reviews/`, `security/` and mobile parity documents in `technical/`: internal requirements and scoped acceptance evidence. Their dated results are not current product availability claims.
 
 Superseded `*-legacy.md` copies of public guides and the old documentation-quality plan have been removed. Git history retains those snapshots. Keep a design when it records a still-needed contract, decision, unfinished scope or acceptance boundary; delete a redundant implementation snapshot once its useful content is maintained elsewhere.
+
+- [Personal AI 阶段 B：任务交接与执行能力校验](./technical/personal-task-handoff-stage-b-2026-10-15.md)
+- [Personal AI 阶段 C：同任务修订、成果版本与最终交付](./technical/personal-task-revision-stage-c-2026-10-15.md)
+- [Personal AI 阶段 D：链路观测、性能预算与回归门禁](./technical/personal-performance-stage-d-2026-10-15.md)

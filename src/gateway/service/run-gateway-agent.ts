@@ -43,6 +43,8 @@ import type { AgentSourceContext } from '../../agent/source-context/types.js';
 import { describeActiveExecution, type ActiveExecution } from './active-execution.js';
 import { listTaskUpdateTriggers } from '../../storage/sqlite/session-input-repository.js';
 import { isPersonalConversation } from '../../personal-agent/repository.js';
+import { recordPersonalPerformance } from '../../personal-agent/performance.js';
+import { findSessionInputByRunId } from '../../storage/sqlite/session-input-repository.js';
 import { resolveAgentTurnTimeoutMs } from '../../agent/orchestration/run-agent-turn-with-timeout.js';
 const log = createLogger('Gateway:Service');
 
@@ -133,6 +135,8 @@ export async function *runGatewayAgent(
   }
 
   const streamConversationId = webchatConversationId ?? chatId;
+  const personalTurn = channel === 'webchat' && isPersonalConversation(streamConversationId);
+  const inputId = personalTurn ? findSessionInputByRunId(streamConversationId, runId)?.id : undefined;
   if (webchatConversationId) {
     if (!webchatMetadata) throw new Error('Session metadata is unavailable');
     const parsedSession = getConversationRouting(webchatConversationId);
@@ -189,6 +193,8 @@ export async function *runGatewayAgent(
         const queueMs = Math.max(0, runStartedAtMs - inputReceivedAtMs);
         log.info({ conversationId: streamConversationId, runId, channel, phase: 'first_response_text',
           latencyMs, inputToTextMs: queueMs + latencyMs, queueMs }, 'Gateway first response text ready');
+        if (personalTurn) recordPersonalPerformance({ phase: 'first_text', conversationId: streamConversationId,
+          inputId, runId, durationMs: queueMs + latencyMs, status: 'success' });
       }
       if (taskRun) captureTaskEvent(event);
       if (channel === 'webchat') {
@@ -431,6 +437,9 @@ export async function *runGatewayAgent(
     }
     throw error;
   } finally {
+    if (personalTurn) recordPersonalPerformance({ phase: 'turn_complete', conversationId: streamConversationId,
+      inputId, runId, durationMs: Math.max(0, runStartedAtMs - inputReceivedAtMs) + performance.now() - runStartedMonotonic,
+      status: terminalStatus === 'success' ? 'success' : terminalStatus === 'cancelled' ? 'cancelled' : 'error' });
     if (taskRun) {
       try {
         taskRun.finalize({

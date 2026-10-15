@@ -5,6 +5,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { copySqliteAssets } from './sqlite-assets.mjs';
+import { buildPersonalResultWorker } from './build-personal-result-worker.mjs';
 
 const logLevel = process.env.XOPC_BUILD_VERBOSE === '1' ? 'info' : 'warn';
 const extraArgs = process.argv.slice(2);
@@ -27,6 +28,8 @@ if (code !== 0) {
 // Bundled Markdown workspace templates (used by workspace-seed.ts at runtime)
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, '..');
+
+await buildPersonalResultWorker(root, join(root, 'dist/src/personal-agent/result-extraction.js'));
 
 copySqliteAssets(join(root, 'src/storage/sqlite'), join(root, 'dist/src/storage/sqlite'));
 

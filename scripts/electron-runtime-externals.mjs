@@ -10,6 +10,7 @@ export const ELECTRON_GATEWAY_EXTERNALS = [
   'silk-wasm',
   'playwright-core',
   'fsevents',
+  'pdfjs-dist',
 ];
 
 /** Real node_modules packages required by the packaged gateway/extensions. */
@@ -20,6 +21,7 @@ export const ELECTRON_PACKAGED_DEPENDENCIES = [
   'node-pty',
   '@trycua/cua-driver',
   'quickjs-wasi',
+  'pdfjs-dist',
 ];
 
 /** Security overrides required by the isolated Electron runtime install. */

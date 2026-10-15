@@ -13,7 +13,7 @@ const call = (signal?: AbortSignal) => completeTaskModelCall({ primary: 'primary
   { messages: [] }, { signal }, { operation: 'task.research_review' });
 
 describe('task background model recovery', () => {
-  beforeEach(() => complete.mockReset());
+  beforeEach(() => { complete.mockReset(); });
   it('uses the configured backup after a returned 502 and preserves the caller deadline', async () => {
     const signal = AbortSignal.timeout(1000);
     complete.mockResolvedValueOnce(outage).mockResolvedValueOnce(success());
@@ -36,11 +36,35 @@ describe('task background model recovery', () => {
     await expect(call()).rejects.toThrow('502');
     expect(complete).toHaveBeenCalledTimes(2);
   });
+  it('bounds rate-limit recovery to the configured chain and keeps its original deadline', async () => {
+    const signal = AbortSignal.timeout(1000);
+    complete.mockRejectedValue(new Error('429 rate limit exceeded'));
+    await expect(call(signal)).rejects.toThrow('429');
+    expect(complete).toHaveBeenCalledTimes(2);
+    expect(complete.mock.calls.every(args => args[2].signal === signal)).toBe(true);
+  });
   it('expands concrete criteria after planner 502 instead of silently retaining the generic contract', async () => {
     complete.mockResolvedValueOnce(outage).mockResolvedValueOnce(success(JSON.stringify({ objective: 'Research',
-      expectedOutputs: ['report.md'], acceptanceCriteria: ['report.md cites the actual fetched MDN source', 'CSV totals reconcile with input rows'] })));
+      requiredCapabilities: ['web_research', 'execute_code', 'publish_files'], expectedOutputs: ['report.md'], acceptanceCriteria: ['report.md cites the actual fetched MDN source', 'CSV totals reconcile with input rows'] })));
     const contract = await new ModelTaskContractPlanner().plan({ objective: 'Research', taskContext: 'Read MDN and reconcile CSV totals' });
     expect(contract.acceptanceCriteria).toEqual(['report.md cites the actual fetched MDN source', 'CSV totals reconcile with input rows']);
     expect(complete.mock.calls.map(args => args[0].id)).toEqual(['primary', 'backup']);
+  });  it('repairs nested planner arrays once within the original background deadline', async () => {
+    const signal = AbortSignal.timeout(1000);
+    complete.mockResolvedValueOnce(success(JSON.stringify({ objective: 'Deliver', expectedOutputs: [{ path: 'report.md' }],
+      acceptanceCriteria: [{ criterion: 'Report verified' }], requiredCapabilities: ['publish_files'] })))
+      .mockResolvedValueOnce(success(JSON.stringify({ objective: 'Deliver', expectedOutputs: ['report.md'],
+        acceptanceCriteria: ['Report verified'], requiredCapabilities: ['publish_files'] })));
+    const planned = await new ModelTaskContractPlanner().plan({ objective: 'Deliver', signal });
+    expect(planned.capabilityPlanning).toBe('complete');
+    expect(planned.requiredCapabilities).toEqual(['publish_files']);
+    expect(complete).toHaveBeenCalledTimes(2);
+    expect(complete.mock.calls.every(args => args[2].signal === signal)).toBe(true);
   });
+  it('marks operation planning unavailable after both malformed responses', async () => {
+    complete.mockResolvedValue(success('{"expectedOutputs":[{"path":"report.md"}]}'));
+    expect((await new ModelTaskContractPlanner().plan({ objective: 'Deliver' })).capabilityPlanning).toBe('unavailable');
+    expect(complete).toHaveBeenCalledTimes(2);
+  });
+
 });

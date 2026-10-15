@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises';
+import { access, mkdtemp, readFile, rm } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import { tmpdir } from 'node:os';
 
@@ -7,6 +7,31 @@ import { describe, expect, it } from 'vitest';
 import { createExecCommandTool } from '../exec-command.js';
 
 describe('exec_command tool', () => {
+  it.skipIf(process.platform === 'win32')('rejects malformed POSIX syntax before any earlier write and supports explicit bash', async () => {
+    const workspace = await mkdtemp(join(tmpdir(), 'xopc-exec-preflight-'));
+    try {
+      const tool = createExecCommandTool(workspace);
+      const failure = await tool.execute('preflight', { cmd: 'printf changed > report.txt\ndiff <(printf old) <(printf new)' });
+      expect(failure.details.status).toBe('failed');
+      expect(failure.details.failureHint).toContain('nothing was executed');
+      await expect(access(join(workspace, 'report.txt'))).rejects.toThrow();
+      const success = await tool.execute('explicit-bash', { cmd: "bash -c 'cat <(printf valid)'" });
+      expect(success.details.stdout).toBe('valid');
+      const portable = await tool.execute('portable-write', { cmd: 'printf changed > report.txt' });
+      expect(portable.details.status).toBe('success');
+      expect(await readFile(join(workspace, 'report.txt'), 'utf8')).toBe('changed');
+    } finally { await rm(workspace, { recursive: true, force: true }); }
+  });
+  it('retains destructive-command rejection with a non-destructive recovery', async () => {
+    const workspace = await mkdtemp(join(tmpdir(), 'xopc-exec-blocked-'));
+    try {
+      const result = await createExecCommandTool(workspace).execute('blocked-cleanup', { cmd: 'OUT=out\nrm -rf "$OUT"\nmkdir -p "$OUT"' });
+      expect(result.details.status).toBe('blocked');
+      expect(JSON.stringify(result.content)).toContain('fresh output directory');
+      expect(JSON.stringify(result.content)).toContain('Do not repeat unchanged');
+      await expect(access(join(workspace, 'out'))).rejects.toThrow();
+    } finally { await rm(workspace, { recursive: true, force: true }); }
+  });
   it('streams output deltas and returns structured command details', async () => {
     const workspace = await mkdtemp(join(tmpdir(), 'xopc-exec-'));
     try {

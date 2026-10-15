@@ -80,7 +80,7 @@ export function isMediaUriReferencedByLiveSession(uri: string): boolean {
        UNION ALL
        SELECT 1 AS referenced FROM task_result_deliveries d
        JOIN sessions s ON s.conversation_id = d.conversation_id
-       WHERE d.status IN ('pending', 'delivered') AND d.payload_json LIKE ? ESCAPE '\\'
+       WHERE d.status IN ('pending', 'delivered', 'stale') AND d.payload_json LIKE ? ESCAPE '\\'
        LIMIT 1`,
     )
     .get(`%${escaped}%`, `%${escaped}%`) as { referenced?: number } | undefined;

@@ -1,6 +1,7 @@
 import type { TaskEvidence, TaskRunReceipt, TurnOutcome } from '@xopcai/gateway-contract';
 
 import type { ExecutionContext } from './execution-context.js';
+import { personalRequestForTask } from '../personal-agent/request-repository.js';
 import { TaskAllocationRepository } from './task-allocation-repository.js';
 import { runSqliteWriteTransaction } from '../storage/sqlite/transaction.js';
 import { TaskApplicationService } from './task-application-service.js';
@@ -148,7 +149,7 @@ export class TaskRunCoordinator {
     const publications = inspectTaskPublications(run.id, currentResearch);
     const repair = buildResearchRepair({ research: currentResearch, stale: Boolean(research && !currentResearch),
       instructionSequence: taskInstructionSequence(task.id), publications, criteria: task.contract?.acceptanceCriteria ?? [],
-      requiresReview: Boolean(task.body?.includes('publish_task_result')) });
+      requiresReview: !personalRequestForTask(task.id) && Boolean(task.body?.includes('publish_task_result')) });
     const repairBlocked = Boolean(repair && run.conversationId && !canResumeAfterModelFailure(loadTranscriptRowsForSession(run.conversationId),
       { allowFailedReadTools: ACCEPTANCE_REPAIR_READ_TOOLS }));
     if (status === 'failed' && isTransientProviderErrorMessage(input.summary) && !unconfirmedEffects

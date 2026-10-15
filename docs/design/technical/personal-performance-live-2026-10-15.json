@@ -1,0 +1,4556 @@
+{
+  "success": true,
+  "pingMs": 928,
+  "revisionPingMs": 1779,
+  "totalMs": 219068,
+  "submissionMs": [
+    {
+      "command": "submit",
+      "durationMs": 13.341750000006869
+    },
+    {
+      "command": "revise",
+      "durationMs": 13.58704100002069
+    }
+  ],
+  "materializedInputCopies": 4,
+  "taskCount": 1,
+  "rootRunCount": 2,
+  "initialResult": {
+    "resultId": "321ceca4-7708-46f6-90dd-6a7dc10f7ed4",
+    "status": "succeeded",
+    "revision": 1,
+    "sha256": "44b354584bac93af4cafcc1652ce815d03efdca96a8a00f666b7dd9d0a1c2126"
+  },
+  "revisedResult": {
+    "resultId": "77e18726-af05-4c16-a45b-fe6d7aa92f39",
+    "status": "succeeded",
+    "revision": 2,
+    "previousResultId": "321ceca4-7708-46f6-90dd-6a7dc10f7ed4",
+    "sha256": "8a48bb9c6d8557e26c83c7a6e5483061348f41aa5a8e39f037e559918c984a24",
+    "selectedArtifacts": [
+      "report.md",
+      "changelog.txt"
+    ],
+    "adoption": [
+      {
+        "entryId": "8c6b3630-c1db-40f4-b51a-3704c79677c0",
+        "sequence": 2,
+        "status": "applied",
+        "verification": "passed",
+        "claimIds": [
+          "c1",
+          "c2",
+          "c3",
+          "c4",
+          "c5",
+          "c6",
+          "c8"
+        ],
+        "note": "已按修订要求物化只读输入、仅改核对码、生成 changelog、完成校验并只交付两个文件。"
+      }
+    ]
+  },
+  "oldArtifactUnchanged": true,
+  "exactSingleReplacement": true,
+  "noDirectOriginalScriptRerunObserved": true,
+  "mainInputPreReads": 0,
+  "mainInputReadMs": 0,
+  "mainInputReadChars": [],
+  "materializationErrors": 0,
+  "sourceValidationRetries": 0,
+  "workerToolErrors": [
+    {
+      "tool": "publish_task_result",
+      "error": [
+        {
+          "type": "text",
+          "text": "Evidence range must select 1..1000 observed Unicode characters within the successful read"
+        }
+      ]
+    }
+  ],
+  "marker": "RESULT-f068d73c",
+  "toolCalls": [
+    {
+      "name": "personal_task",
+      "input": {
+        "command": "submit",
+        "title": "交付文件包：report.md、monthly_summary.csv、reproduce.mjs",
+        "objective": "把工作区 source-report.md 原样复制为 report.md，运行现有 node reproduce.mjs 检查它和 monthly_summary.csv，然后只发布 report.md、monthly_summary.csv、reproduce.mjs 三个文件。",
+        "description": "执行者需在隔离工作区完成以下交付，不需要新增分析、研究或改写：\n\n1. 将工作区文件 source-report.md 原样复制为 report.md（内容不得修改、增删或重写）。\n2. 运行工作区现有脚本 node reproduce.mjs，检查 report.md 与 monthly_summary.csv；保留该检查的输出作为交付依据。\n3. 只发布以下三个文件：report.md、monthly_summary.csv、reproduce.mjs。不要发布其他文件。\n\n允许在隔离工作区复制文件、运行该检查脚本并发布上述指定三个文件。文件与检查脚本均已在工作区准备好，无需创建新脚本或新增需求。\n\n最终回复只说明交付情况，不要复述文件正文或附录核对码。",
+        "sourceRefs": [
+          {
+            "kind": "file",
+            "sourceId": "source-report.md"
+          },
+          {
+            "kind": "file",
+            "sourceId": "monthly_summary.csv"
+          },
+          {
+            "kind": "file",
+            "sourceId": "reproduce.mjs"
+          }
+        ]
+      },
+      "durationMs": 13.341750000006869,
+      "output": [
+        {
+          "type": "text",
+          "text": "{\n  \"ok\": true,\n  \"task\": {\n    \"id\": \"d8de0dde-5a2d-427f-88e4-88ea8b6a7c5c\",\n    \"title\": \"交付文件包：report.md、monthly_summary.csv、reproduce.mjs\",\n    \"phase\": \"ready\",\n    \"version\": 1\n  },\n  \"operationalState\": \"allocating\",\n  \"allocation\": {\n    \"id\": \"94b9279b-d6c2-44d5-aee9-c2f2b0a79605\",\n    \"taskId\": \"d8de0dde-5a2d-427f-88e4-88ea8b6a7c5c\",\n    \"status\": \"pending\",\n    \"attempts\": 0,\n    \"updatedAt\": 1792051805149\n  }\n}\nOpen in xopc: [Open](xopc://open?kind=task&id=d8de0dde-5a2d-427f-88e4-88ea8b6a7c5c)\nxopc-product-delivery:%7B%22version%22%3A2%2C%22operation%22%3A%22created%22%2C%22primary%22%3A%7B%22kind%22%3A%22task%22%2C%22id%22%3A%22d8de0dde-5a2d-427f-88e4-88ea8b6a7c5c%22%2C%22title%22%3A%22%E4%BA%A4%E4%BB%98%E6%96%87%E4%BB%B6%E5%8C%85%EF%BC%9Areport.md%E3%80%81monthly_summary.csv%E3%80%81reproduce.mjs%22%2C%22status%22%3A%22ready%2Fallocating%22%2C%22revision%22%3A%221%22%2C%22capabilities%22%3A%5B%22open%22%2C%22edit%22%2C%22continue_in_chat%22%5D%7D%7D"
+        }
+      ]
+    },
+    {
+      "name": "personal_task",
+      "input": {
+        "command": "get",
+        "taskId": "d8de0dde-5a2d-427f-88e4-88ea8b6a7c5c",
+        "section": "revision"
+      },
+      "durationMs": 4.010000000009313,
+      "output": [
+        {
+          "type": "text",
+          "text": "{\"ok\":true,\"taskId\":\"d8de0dde-5a2d-427f-88e4-88ea8b6a7c5c\",\"phase\":\"closed\",\"expectedVersion\":5,\"revisionBaseline\":{\"resultId\":\"321ceca4-7708-46f6-90dd-6a7dc10f7ed4\",\"baselineVersion\":\"d363b8a7-fc42-4ca1-bd32-bc59d9ce1588:1:0bd932da-7d94-417c-ac78-aae9b5bf1c0b:outcome\",\"resultRevision\":1,\"expectedVersion\":5},\"allowedCommands\":[\"reopen\",\"revise\"],\"allocation\":{\"id\":\"94b9279b-d6c2-44d5-aee9-c2f2b0a79605\",\"taskId\":\"d8de0dde-5a2d-427f-88e4-88ea8b6a7c5c\",\"status\":\"assigned\",\"attempts\":1,\"updatedAt\":1792051812803,\"selectedAgentId\":\"coder\",\"selectionReason\":\"任务核心是复制文件、运行现有 node 脚本并发布指定文件，属于软件工程执行类工作；Coding Expert 具备读取、执行命令和发布文件的已验证能力，且不涉及新增分析或改写，最贴合任务边界。\"}}"
+        }
+      ]
+    },
+    {
+      "name": "personal_task",
+      "input": {
+        "command": "revise",
+        "taskId": "d8de0dde-5a2d-427f-88e4-88ea8b6a7c5c",
+        "instruction": "本次修订替换此前“三文件交付”要求，基于刚才已发布的 report.md 做一次文本修改，不新建独立任务、不重新研究、不重跑原脚本。\n\n1. 以已发布的 report.md 为只读输入，物化该版本用于修改。\n2. 仅将 report.md 第三节中的核对码 CEDAR-4e8af6e6 改为 MAPLE-be291f9d；report.md 其余内容逐字保留，不得有任何其他改动。\n3. 生成 changelog.txt，内容仅为一行：核对码已由 CEDAR-4e8af6e6 更新为 MAPLE-be291f9d，其他正文保持不变。\n4. 校验：除该核对码外，新版 report.md 与已发布版本其余内容完全一致（例如逐行/逐字节差异仅限这一处）。\n5. 最终只交付两个文件：新版 report.md 与 changelog.txt。不要交付旧的 monthly_summary.csv 或 reproduce.mjs，不要重跑 reproduce.mjs。\n6. 修改过程中必须保留旧成果可读，不要覆盖或删除已发布的历史产物。\n\n最终回复只需说明交付与校验情况，不必复述正文。",
+        "baselineResultId": "321ceca4-7708-46f6-90dd-6a7dc10f7ed4",
+        "baselineVersion": "d363b8a7-fc42-4ca1-bd32-bc59d9ce1588:1:0bd932da-7d94-417c-ac78-aae9b5bf1c0b:outcome",
+        "expectedVersion": 5
+      },
+      "durationMs": 13.58704100002069,
+      "output": [
+        {
+          "type": "text",
+          "text": "{\"ok\":true,\"saved\":true,\"taskId\":\"d8de0dde-5a2d-427f-88e4-88ea8b6a7c5c\",\"expectedVersion\":8,\"allocation\":{\"id\":\"412a17a9-a18d-4241-a85f-c9316507e049\",\"taskId\":\"d8de0dde-5a2d-427f-88e4-88ea8b6a7c5c\",\"status\":\"pending\",\"attempts\":0,\"updatedAt\":1792051949763},\"state\":\"revision_saved_background_allocation_pending\"}"
+        }
+      ]
+    }
+  ],
+  "observations": [
+    {
+      "phase": "warmup",
+      "index": 0,
+      "inputId": "92c01302-52b5-4b6d-a94f-d3b83550a644",
+      "runId": "fe4a43c2-4e1f-4db6-a2d8-5c4dbd6b7a6e",
+      "firstTextMs": 2111.5950410000005,
+      "completeMs": 2212.527083000001,
+      "status": "completed",
+      "backgroundRunning": false,
+      "responseText": "收到"
+    },
+    {
+      "phase": "warmup",
+      "index": 1,
+      "inputId": "6cebc3a8-26b3-4914-a45b-5b5c5176b6c4",
+      "runId": "673548cd-20cd-462d-b526-d220e47109a3",
+      "firstTextMs": 1065.089833,
+      "completeMs": 1231.720792,
+      "status": "completed",
+      "backgroundRunning": false,
+      "responseText": "42"
+    },
+    {
+      "phase": "warmup",
+      "index": 2,
+      "inputId": "e8852868-6f47-41ee-909f-943a8e239861",
+      "runId": "98ee4af2-e36b-447c-9ca4-5a314d98f2bd",
+      "firstTextMs": 958.8641670000015,
+      "completeMs": 1125.4473750000016,
+      "status": "completed",
+      "backgroundRunning": false,
+      "responseText": "这项工作已经完成。"
+    },
+    {
+      "phase": "baseline",
+      "index": 0,
+      "inputId": "3797fde3-4f32-4de3-97bd-d3f86aa09f39",
+      "runId": "73eda318-8979-42dc-ba5f-3c10800c773c",
+      "firstTextMs": 951.1374169999999,
+      "completeMs": 1134.9107080000013,
+      "status": "completed",
+      "backgroundRunning": false,
+      "responseText": "收到"
+    },
+    {
+      "phase": "baseline",
+      "index": 1,
+      "inputId": "78653364-a252-4e76-babc-2f55b8dfc53b",
+      "runId": "7ba0a8aa-9ecf-4b09-b772-21fa7f5d5ca1",
+      "firstTextMs": 1052.5629590000026,
+      "completeMs": 1235.4542089999995,
+      "status": "completed",
+      "backgroundRunning": false,
+      "responseText": "42"
+    },
+    {
+      "phase": "baseline",
+      "index": 2,
+      "inputId": "690b1304-adfd-4ee0-b224-0de30662016f",
+      "runId": "e1383435-32a3-450c-86c4-448ad47098d4",
+      "firstTextMs": 980.63825,
+      "completeMs": 1138.0156659999993,
+      "status": "completed",
+      "backgroundRunning": false,
+      "responseText": "这项工作已经完成。"
+    },
+    {
+      "phase": "baseline",
+      "index": 3,
+      "inputId": "05b00a1a-a5e3-4a83-8315-73801fb4c682",
+      "runId": "979bc83e-da05-4431-996b-172f6aaedd1f",
+      "firstTextMs": 1476.3160410000019,
+      "completeMs": 1749.78125,
+      "status": "completed",
+      "backgroundRunning": false,
+      "responseText": "先把今天最紧急、且别人在等你的那件事做完。"
+    },
+    {
+      "phase": "baseline",
+      "index": 4,
+      "inputId": "c2b5aa0e-ba5d-4d2e-a64b-c8f860eff9ef",
+      "runId": "fdb86d57-c2da-4b3b-a8e3-d012eef46e6d",
+      "firstTextMs": 1044.2946249999986,
+      "completeMs": 1236.1489159999983,
+      "status": "completed",
+      "backgroundRunning": false,
+      "responseText": "收到"
+    },
+    {
+      "phase": "baseline",
+      "index": 5,
+      "inputId": "1e53fe75-4f23-4ce7-adb3-466d21d8a0d0",
+      "runId": "a50a7392-9ac6-41cd-be25-9ce054f58572",
+      "firstTextMs": 970.2296670000032,
+      "completeMs": 1132.3757500000029,
+      "status": "completed",
+      "backgroundRunning": false,
+      "responseText": "42"
+    },
+    {
+      "phase": "baseline",
+      "index": 6,
+      "inputId": "e03fe9ee-9646-40d4-a087-c307e1cb7eb1",
+      "runId": "fd81b80c-38bf-4b7e-b0f2-3c2fd49816f5",
+      "firstTextMs": 829.4946249999994,
+      "completeMs": 1031.7515420000018,
+      "status": "completed",
+      "backgroundRunning": false,
+      "responseText": "这项工作已经完成。"
+    },
+    {
+      "phase": "baseline",
+      "index": 7,
+      "inputId": "6f22a718-6250-4c72-b47a-f033bca9289a",
+      "runId": "7fbaec30-07c6-4aed-b9d2-4ef81e6cbe48",
+      "firstTextMs": 907.2947910000003,
+      "completeMs": 1133.2552499999983,
+      "status": "completed",
+      "backgroundRunning": false,
+      "responseText": "先把今天最紧急、且别人在等你的那件事做完。"
+    },
+    {
+      "phase": "baseline",
+      "index": 8,
+      "inputId": "595e8165-2b39-4317-9486-615976bf7e6b",
+      "runId": "62f62115-2d1f-4cac-a66e-4995b72300ec",
+      "firstTextMs": 1047.090750000003,
+      "completeMs": 1132.2581660000033,
+      "status": "completed",
+      "backgroundRunning": false,
+      "responseText": "收到"
+    },
+    {
+      "phase": "baseline",
+      "index": 9,
+      "inputId": "75a28030-ea38-4b14-a3ba-0c5659359ac3",
+      "runId": "4eff2939-397e-4328-bad8-d8ad1912ff0e",
+      "firstTextMs": 970.885792000001,
+      "completeMs": 1129.6974169999994,
+      "status": "completed",
+      "backgroundRunning": false,
+      "responseText": "42"
+    },
+    {
+      "phase": "baseline",
+      "index": 10,
+      "inputId": "a4b9cfef-95dc-4a13-aca9-5580faf5ad5e",
+      "runId": "3e60f33c-79df-42af-b5e6-11f2927a2eda",
+      "firstTextMs": 1014.417042000001,
+      "completeMs": 1229.830750000001,
+      "status": "completed",
+      "backgroundRunning": false,
+      "responseText": "这项工作已经完成。"
+    },
+    {
+      "phase": "baseline",
+      "index": 11,
+      "inputId": "7538ce49-4b42-4059-bc7f-955afbe0b35f",
+      "runId": "593cada2-cab9-43d6-aeea-e05ac0d44c8d",
+      "firstTextMs": 800.6627919999992,
+      "completeMs": 1132.3319999999985,
+      "status": "completed",
+      "backgroundRunning": false,
+      "responseText": "先挑那件最紧急、又有人在等你的事情开始，其余的往后排。"
+    },
+    {
+      "phase": "baseline",
+      "index": 12,
+      "inputId": "8b76f93a-5c10-49e6-99a6-67d46923690a",
+      "runId": "ab4ace69-7e0f-42dc-8e7e-0c731eac7286",
+      "firstTextMs": 921.315125000001,
+      "completeMs": 1038.9069170000002,
+      "status": "completed",
+      "backgroundRunning": false,
+      "responseText": "收到"
+    },
+    {
+      "phase": "baseline",
+      "index": 13,
+      "inputId": "51b1215a-6a66-496d-adfd-eab25b14fa3d",
+      "runId": "48698a53-7f3d-41dc-b1f1-335022b6db79",
+      "firstTextMs": 978.6040420000027,
+      "completeMs": 1233.068542000001,
+      "status": "completed",
+      "backgroundRunning": false,
+      "responseText": "42"
+    },
+    {
+      "phase": "baseline",
+      "index": 14,
+      "inputId": "c064addb-605b-4a31-95be-89b081b1b669",
+      "runId": "92bb5ef3-678f-49ee-a4a4-bd4117a0f3c2",
+      "firstTextMs": 781.1207090000025,
+      "completeMs": 1027.3563340000037,
+      "status": "completed",
+      "backgroundRunning": false,
+      "responseText": "这项工作已经收尾完成了。"
+    },
+    {
+      "phase": "baseline",
+      "index": 15,
+      "inputId": "5090f5d5-4eca-4090-8f1c-8b644acea0a5",
+      "runId": "8c5002fb-64ec-4dbc-b458-90cd2c9740ef",
+      "firstTextMs": 1033.3365840000042,
+      "completeMs": 1333.0636250000025,
+      "status": "completed",
+      "backgroundRunning": false,
+      "responseText": "先从最要紧、又卡着别人的那件事下手，其余的等它落地再说。"
+    },
+    {
+      "phase": "baseline",
+      "index": 16,
+      "inputId": "841282c6-d7b0-429c-a261-ecc47a3f9504",
+      "runId": "9f1eef61-cb75-425d-9cb7-0d8056f295e6",
+      "firstTextMs": 1028.3654590000006,
+      "completeMs": 1131.219459,
+      "status": "completed",
+      "backgroundRunning": false,
+      "responseText": "收到"
+    },
+    {
+      "phase": "baseline",
+      "index": 17,
+      "inputId": "779a6b2d-43db-4ba7-8463-73ec81135999",
+      "runId": "b688fdb1-ee69-4b44-9512-f32efde98c18",
+      "firstTextMs": 1031.5706659999996,
+      "completeMs": 1228.9794580000016,
+      "status": "completed",
+      "backgroundRunning": false,
+      "responseText": "42"
+    },
+    {
+      "phase": "baseline",
+      "index": 18,
+      "inputId": "72cab499-522c-4422-8b6f-dbb253459341",
+      "runId": "c8d5a920-ecf5-4fed-8cbe-b9989ca1df61",
+      "firstTextMs": 868.0175420000014,
+      "completeMs": 1039.9991670000018,
+      "status": "completed",
+      "backgroundRunning": false,
+      "responseText": "这项工作已经完成了。"
+    },
+    {
+      "phase": "baseline",
+      "index": 19,
+      "inputId": "f0572588-fb23-42e8-9f7c-37ae63ec5f3b",
+      "runId": "75a395cb-cb5a-40cc-8cb2-cc1ec3f1366b",
+      "firstTextMs": 809.4018750000032,
+      "completeMs": 1027.6162909999985,
+      "status": "completed",
+      "backgroundRunning": false,
+      "responseText": "先把最紧急、又有人在等你回音的那件事做完，剩下的按顺序来。"
+    },
+    {
+      "phase": "baseline",
+      "index": 20,
+      "inputId": "f8cc1fe4-2204-4178-afcd-530c9cc4850c",
+      "runId": "ca623ac9-fec4-4b0c-95d3-c7b9399e69eb",
+      "firstTextMs": 825.2765839999993,
+      "completeMs": 1031.2875419999982,
+      "status": "completed",
+      "backgroundRunning": false,
+      "responseText": "收到"
+    },
+    {
+      "phase": "baseline",
+      "index": 21,
+      "inputId": "6aaed067-7d54-4da2-998b-11b8d4c16e6e",
+      "runId": "514da92d-7cd5-44c2-b10f-3bf9acba5ada",
+      "firstTextMs": 666.7185409999947,
+      "completeMs": 825.5504579999979,
+      "status": "completed",
+      "backgroundRunning": false,
+      "responseText": "42"
+    },
+    {
+      "phase": "baseline",
+      "index": 22,
+      "inputId": "a1d08de2-72dd-4604-bcce-78e603a0dcd1",
+      "runId": "59d030e2-7878-4a2a-a628-eb506c4557b2",
+      "firstTextMs": 948.0241670000032,
+      "completeMs": 1127.6867920000004,
+      "status": "completed",
+      "backgroundRunning": false,
+      "responseText": "这项工作已经做完了。"
+    },
+    {
+      "phase": "baseline",
+      "index": 23,
+      "inputId": "8a5c751f-1440-4d47-af98-599cadd5093a",
+      "runId": "cde4c677-0295-489b-be64-d5f290444d4c",
+      "firstTextMs": 799.6569589999999,
+      "completeMs": 1129.6632499999978,
+      "status": "completed",
+      "backgroundRunning": false,
+      "responseText": "先做那件最紧急、又有人在等着你的，其余的等它落地后再排。"
+    },
+    {
+      "phase": "baseline",
+      "index": 24,
+      "inputId": "726978a7-800a-46c6-92d5-eac56c2ed97c",
+      "runId": "b6bd5fcf-0b02-4edb-ace1-b2c5c8cfd856",
+      "firstTextMs": 891.9552499999991,
+      "completeMs": 1037.1598749999976,
+      "status": "completed",
+      "backgroundRunning": false,
+      "responseText": "收到"
+    },
+    {
+      "phase": "baseline",
+      "index": 25,
+      "inputId": "b43c8ec5-0a62-44f4-8f04-ec1570ed2c7f",
+      "runId": "f9f67fab-ce4d-4708-8882-b54dd87ee574",
+      "firstTextMs": 1042.7462499999965,
+      "completeMs": 1231.048917,
+      "status": "completed",
+      "backgroundRunning": false,
+      "responseText": "42"
+    },
+    {
+      "phase": "baseline",
+      "index": 26,
+      "inputId": "f8b29884-11c9-4942-bd45-4ea069921f21",
+      "runId": "859e8820-5b18-48dc-ab24-1ed307c5010e",
+      "firstTextMs": 811.3450410000005,
+      "completeMs": 1027.2495409999974,
+      "status": "completed",
+      "backgroundRunning": false,
+      "responseText": "这项工作已顺利收尾。"
+    },
+    {
+      "phase": "baseline",
+      "index": 27,
+      "inputId": "297411e5-8f79-453c-9653-a66c334e72a9",
+      "runId": "2ad006a5-323f-429d-a685-15949c175cae",
+      "firstTextMs": 1028.1431659999944,
+      "completeMs": 1351.2647079999952,
+      "status": "completed",
+      "backgroundRunning": false,
+      "responseText": "先把最紧急、又有人等在后面的那件事做完，其余的再按轻重排。"
+    },
+    {
+      "phase": "baseline",
+      "index": 28,
+      "inputId": "2c37faba-06f9-4f2b-a552-dfcc9bd4b830",
+      "runId": "cbc80976-d9ea-4913-b110-fe0f004cf4ec",
+      "firstTextMs": 965.7987920000014,
+      "completeMs": 1127.7979170000035,
+      "status": "completed",
+      "backgroundRunning": false,
+      "responseText": "收到"
+    },
+    {
+      "phase": "baseline",
+      "index": 29,
+      "inputId": "a181f74c-1d6f-4f10-83a6-058954417e6b",
+      "runId": "64e310f4-9f6c-4b24-b8d5-67c09e84b3e6",
+      "firstTextMs": 1021.9356669999979,
+      "completeMs": 1232.2830419999955,
+      "status": "completed",
+      "backgroundRunning": false,
+      "responseText": "42"
+    },
+    {
+      "phase": "baseline",
+      "index": 30,
+      "inputId": "6a8a7a80-8c1c-43ff-87cd-d8f1c3c892e2",
+      "runId": "63455643-c678-497d-b2ba-93fa532beb54",
+      "firstTextMs": 1081.729707999999,
+      "completeMs": 1339.051916999997,
+      "status": "completed",
+      "backgroundRunning": false,
+      "responseText": "这项工作已经完成了。"
+    },
+    {
+      "phase": "baseline",
+      "index": 31,
+      "inputId": "0ca2d932-a43f-4ee7-9c0b-c7ec97e321e1",
+      "runId": "55b58c04-933f-4839-8411-74c1a3e17986",
+      "firstTextMs": 740.141082999995,
+      "completeMs": 824.8562079999974,
+      "status": "completed",
+      "backgroundRunning": false,
+      "responseText": "先挑那件最紧急、又有人在等着你回应的，把其余的往后放。"
+    },
+    {
+      "phase": "baseline",
+      "index": 32,
+      "inputId": "705780a3-86b6-44cc-bdf1-4a8b98420169",
+      "runId": "9394ab73-eacd-4d0f-8953-e0f5f9423c17",
+      "firstTextMs": 958.2027080000043,
+      "completeMs": 1133.147917000002,
+      "status": "completed",
+      "backgroundRunning": false,
+      "responseText": "收到"
+    },
+    {
+      "phase": "baseline",
+      "index": 33,
+      "inputId": "843afcd0-a7fd-4bd5-bb4a-9c4ad5ac0842",
+      "runId": "73b5f8ca-8a78-4d44-82dd-80a4343a1548",
+      "firstTextMs": 528.9447909999944,
+      "completeMs": 721.6849159999983,
+      "status": "completed",
+      "backgroundRunning": false,
+      "responseText": "42"
+    },
+    {
+      "phase": "baseline",
+      "index": 34,
+      "inputId": "92fa7beb-c373-4013-98bb-c6d9503afc68",
+      "runId": "0957f28a-25f6-405f-9875-323ee45aa20a",
+      "firstTextMs": 570.5332500000004,
+      "completeMs": 725.2844160000022,
+      "status": "completed",
+      "backgroundRunning": false,
+      "responseText": "这项工作已经完成了。"
+    },
+    {
+      "phase": "baseline",
+      "index": 35,
+      "inputId": "21a2c3b7-0ead-43c9-84d3-b1503f65efd0",
+      "runId": "3800fe3f-7398-4b47-8ad3-91648783ba4b",
+      "firstTextMs": 721.3307080000013,
+      "completeMs": 924.9528749999954,
+      "status": "completed",
+      "backgroundRunning": false,
+      "responseText": "先做那件最紧急、又有人在等着你的，其余的先放一放。"
+    },
+    {
+      "phase": "baseline",
+      "index": 36,
+      "inputId": "b74bc6b2-8339-466d-9d5a-a2b5ffcffbae",
+      "runId": "8a673251-2819-4e52-b153-341ab050ff53",
+      "firstTextMs": 988.0073330000014,
+      "completeMs": 1230.7370420000007,
+      "status": "completed",
+      "backgroundRunning": false,
+      "responseText": "收到"
+    },
+    {
+      "phase": "baseline",
+      "index": 37,
+      "inputId": "a9b165da-2205-4c98-a79b-b627dd0a31c5",
+      "runId": "14923849-f0f3-4f9e-8e14-fa12e5720999",
+      "firstTextMs": 1250.603707999995,
+      "completeMs": 1435.5423749999973,
+      "status": "completed",
+      "backgroundRunning": false,
+      "responseText": "42"
+    },
+    {
+      "phase": "baseline",
+      "index": 38,
+      "inputId": "68dde2f8-9076-4b55-8a88-3453d5137874",
+      "runId": "c771e088-8d90-4efa-9cc5-e25d50b6b7c5",
+      "firstTextMs": 1095.2642919999998,
+      "completeMs": 1230.9263749999955,
+      "status": "completed",
+      "backgroundRunning": false,
+      "responseText": "这项工作已经完成了。"
+    },
+    {
+      "phase": "baseline",
+      "index": 39,
+      "inputId": "393ed074-1137-4c47-952f-30e051046595",
+      "runId": "6cdb5625-9b44-40ea-a5fa-c7ae75ea277f",
+      "firstTextMs": 977.1630000000005,
+      "completeMs": 1336.5121670000008,
+      "status": "completed",
+      "backgroundRunning": false,
+      "responseText": "先挑那件最紧急、又有人在等着你的事情做，其余的等它落地再排。"
+    },
+    {
+      "phase": "background",
+      "index": 0,
+      "inputId": "da015e95-2604-411b-8ec0-dfc087abd849",
+      "runId": "48049ef7-1629-46de-b886-6d0c005bf3a2",
+      "firstTextMs": 897.3886250000069,
+      "completeMs": 950.5469169999997,
+      "status": "completed",
+      "backgroundRunning": true,
+      "responseText": "收到"
+    },
+    {
+      "phase": "background",
+      "index": 1,
+      "inputId": "0560ed9c-70e4-4e41-ba6d-d12378199b09",
+      "runId": "20372d63-180b-44e5-83f4-f3a4c3383c03",
+      "firstTextMs": 1042.3647089999868,
+      "completeMs": 1224.63954199999,
+      "status": "completed",
+      "backgroundRunning": true,
+      "responseText": "42"
+    },
+    {
+      "phase": "background",
+      "index": 2,
+      "inputId": "07c7c030-6f83-403e-93af-ee026b101641",
+      "runId": "32b27f5d-6bda-4d6d-a185-8ad282ce95fa",
+      "firstTextMs": 910.8559999999998,
+      "completeMs": 1122.8664590000117,
+      "status": "completed",
+      "backgroundRunning": true,
+      "responseText": "这项工作已经完成了。"
+    },
+    {
+      "phase": "background",
+      "index": 3,
+      "inputId": "2ef6a6f0-7a84-40e2-a6fc-e8b790409ec5",
+      "runId": "7db87268-9666-4d10-b641-cfbf97beb38d",
+      "firstTextMs": 1199.4405839999963,
+      "completeMs": 1446.0722499999974,
+      "status": "completed",
+      "backgroundRunning": true,
+      "responseText": "先把最紧急、又有人在等着你回应的那件事做完。"
+    },
+    {
+      "phase": "background",
+      "index": 4,
+      "inputId": "2ac286e4-b4a4-4223-8b4a-e7e184239f3e",
+      "runId": "eac2a2d7-f54e-4619-8d8a-d1b34e07339d",
+      "firstTextMs": 945.8475000000035,
+      "completeMs": 1133.9453750000102,
+      "status": "completed",
+      "backgroundRunning": true,
+      "responseText": "收到"
+    },
+    {
+      "phase": "background",
+      "index": 5,
+      "inputId": "b3a6c9a2-ef9b-4b94-b3c0-88bfc475c9d5",
+      "runId": "93cfd477-fdb4-476e-902e-6408c40835d9",
+      "firstTextMs": 1064.6797499999957,
+      "completeMs": 1230.5954589999892,
+      "status": "completed",
+      "backgroundRunning": true,
+      "responseText": "42"
+    },
+    {
+      "phase": "background",
+      "index": 6,
+      "inputId": "ed01d46d-510d-4635-bdaa-fa012a104700",
+      "runId": "a38384af-371f-4a21-9c96-e729f887fe9d",
+      "firstTextMs": 914.007792000004,
+      "completeMs": 1121.2691670000058,
+      "status": "completed",
+      "backgroundRunning": true,
+      "responseText": "这项工作已经完成了。"
+    },
+    {
+      "phase": "background",
+      "index": 7,
+      "inputId": "c1dad9e0-5d36-4824-bee2-9971921014e9",
+      "runId": "c6852b63-76de-4eda-b2fb-3a9007987d80",
+      "firstTextMs": 957.1048329999903,
+      "completeMs": 1231.0656670000026,
+      "status": "completed",
+      "backgroundRunning": true,
+      "responseText": "先挑那件最紧急、又有人在等着你的事情做。"
+    },
+    {
+      "phase": "background",
+      "index": 8,
+      "inputId": "c83f405c-56fa-4251-99b0-fed6100549ba",
+      "runId": "159fe190-4812-4ed4-a8b2-cd5c8cb46c24",
+      "firstTextMs": 829.7096659999952,
+      "completeMs": 1024.3837910000002,
+      "status": "completed",
+      "backgroundRunning": true,
+      "responseText": "收到"
+    },
+    {
+      "phase": "background",
+      "index": 9,
+      "inputId": "42aed289-d06e-41da-9751-3d778a6d7a5a",
+      "runId": "a75fff94-dff9-49d1-a207-b8369ac7e389",
+      "firstTextMs": 1003.6608330000017,
+      "completeMs": 1135.6822079999984,
+      "status": "completed",
+      "backgroundRunning": true,
+      "responseText": "42"
+    },
+    {
+      "phase": "background",
+      "index": 10,
+      "inputId": "00adce60-c942-4379-baaa-fd9e3b4a3168",
+      "runId": "509277be-0496-4621-876d-9ddef781640c",
+      "firstTextMs": 1084.2832909999997,
+      "completeMs": 1236.2505410000012,
+      "status": "completed",
+      "backgroundRunning": true,
+      "responseText": "这项工作已经完成了。"
+    },
+    {
+      "phase": "background",
+      "index": 11,
+      "inputId": "110cdace-220b-46f4-8cc7-c87a413dff59",
+      "runId": "d32ece93-f220-4b80-9164-48d6add3a04d",
+      "firstTextMs": 998.9159579999978,
+      "completeMs": 1230.1640409999964,
+      "status": "completed",
+      "backgroundRunning": true,
+      "responseText": "先把最紧急、又有人在等着你的那件事做完，其余的往后排。"
+    },
+    {
+      "phase": "background",
+      "index": 12,
+      "inputId": "66815047-89bc-4e23-ac42-7dc273b8fd6a",
+      "runId": "1b9ff81c-6f56-498d-a262-4f60f47e174d",
+      "firstTextMs": 1109.0435409999918,
+      "completeMs": 1224.5068749999919,
+      "status": "completed",
+      "backgroundRunning": true,
+      "responseText": "收到"
+    },
+    {
+      "phase": "background",
+      "index": 13,
+      "inputId": "1432c679-a830-4b07-a4c1-80789db42dfc",
+      "runId": "81ac39c6-aa09-42e0-b802-c9df383b47f2",
+      "firstTextMs": 1030.1853330000013,
+      "completeMs": 1232.0307500000054,
+      "status": "completed",
+      "backgroundRunning": true,
+      "responseText": "42"
+    },
+    {
+      "phase": "background",
+      "index": 14,
+      "inputId": "6494607b-3797-4d47-abef-813e685f5a53",
+      "runId": "cef23759-5b77-41a9-bccf-c8151a008d41",
+      "firstTextMs": 920.596749999997,
+      "completeMs": 1120.418709000005,
+      "status": "completed",
+      "backgroundRunning": true,
+      "responseText": "这项工作已经完成了。"
+    },
+    {
+      "phase": "background",
+      "index": 15,
+      "inputId": "7546f484-1558-4548-9ed7-eeeb31f76b07",
+      "runId": "a04f2c75-4508-44e1-bb37-e9506916f091",
+      "firstTextMs": 884.0849999999919,
+      "completeMs": 1135.2092919999996,
+      "status": "completed",
+      "backgroundRunning": true,
+      "responseText": "先把最紧急、又有人在等你回音的那件事做完，剩下的按轻重缓急再排。"
+    },
+    {
+      "phase": "background",
+      "index": 16,
+      "inputId": "3b457033-853c-4030-b48c-d3c982690fcb",
+      "runId": "ec2f2a7d-69ad-4407-bd49-06a59036f515",
+      "firstTextMs": 715.2916659999901,
+      "completeMs": 829.9782080000004,
+      "status": "completed",
+      "backgroundRunning": true,
+      "responseText": "收到"
+    },
+    {
+      "phase": "background",
+      "index": 17,
+      "inputId": "c951bb51-43b9-4548-b8f5-c7f5af1e917a",
+      "runId": "d00eec28-a3bf-45a5-8872-132b6a1977a4",
+      "firstTextMs": 1096.088917000001,
+      "completeMs": 1233.9428340000013,
+      "status": "completed",
+      "backgroundRunning": true,
+      "responseText": "42"
+    },
+    {
+      "phase": "background",
+      "index": 18,
+      "inputId": "01b11893-a434-4d9d-a71d-2affa652e1b6",
+      "runId": "981029ef-e93d-4220-84ed-08914c6b88f4",
+      "firstTextMs": 1001.2411670000001,
+      "completeMs": 1136.534999999989,
+      "status": "completed",
+      "backgroundRunning": true,
+      "responseText": "这项工作已经完成了。"
+    },
+    {
+      "phase": "background",
+      "index": 19,
+      "inputId": "d99e7baf-4b17-4559-b695-aba55a1d2781",
+      "runId": "6972b98e-9d6a-4cc4-b536-5acdb8620f62",
+      "firstTextMs": 872.4598339999939,
+      "completeMs": 1132.258999999991,
+      "status": "completed",
+      "backgroundRunning": true,
+      "responseText": "先把最紧急、又有人在等着你回应的那件事做完，其余的等它落地再排。"
+    },
+    {
+      "phase": "background",
+      "index": 20,
+      "inputId": "e3ecff7d-3040-44d7-8674-9795cbf3df97",
+      "runId": "4473a5f3-9bcc-4bcb-a6f4-de786c985c57",
+      "firstTextMs": 780.4668749999983,
+      "completeMs": 925.0423750000045,
+      "status": "completed",
+      "backgroundRunning": true,
+      "responseText": "收到"
+    },
+    {
+      "phase": "background",
+      "index": 21,
+      "inputId": "ab9a9f88-d0b6-4b8c-a9d6-c87251d82346",
+      "runId": "fa793bd1-bd7f-40db-911f-20ecd23ee7a8",
+      "firstTextMs": 1024.5934169999964,
+      "completeMs": 1229.2532079999946,
+      "status": "completed",
+      "backgroundRunning": true,
+      "responseText": "42"
+    },
+    {
+      "phase": "background",
+      "index": 22,
+      "inputId": "0a64106f-1a96-430f-aceb-7c94a6da4f82",
+      "runId": "8d2b3883-a358-4bc8-ad97-40469e2cc48a",
+      "firstTextMs": 976.7086249999993,
+      "completeMs": 1231.3527909999975,
+      "status": "completed",
+      "backgroundRunning": true,
+      "responseText": "这项工作已经完成了。"
+    },
+    {
+      "phase": "background",
+      "index": 23,
+      "inputId": "5b00cff7-3ade-4268-b3f4-c54c51a051cf",
+      "runId": "a8354b97-c993-4338-aeb1-f7e9a3cdea09",
+      "firstTextMs": 1026.9957500000019,
+      "completeMs": 1328.7778749999998,
+      "status": "completed",
+      "backgroundRunning": true,
+      "responseText": "先把最紧急、又有人在等着你的那件事做完，其余的按顺序来。"
+    },
+    {
+      "phase": "background",
+      "index": 24,
+      "inputId": "804118de-f980-47d6-ae09-50562560e382",
+      "runId": "1ab6de7f-b475-4509-b6c5-610459768be3",
+      "firstTextMs": 965.7978340000118,
+      "completeMs": 1126.7218340000109,
+      "status": "completed",
+      "backgroundRunning": true,
+      "responseText": "收到"
+    },
+    {
+      "phase": "background",
+      "index": 25,
+      "inputId": "30bb8f70-e2a4-40f9-a947-d60ac06bd8ac",
+      "runId": "400c1832-350a-42d9-97aa-52ed8b7efbe8",
+      "firstTextMs": 841.0937919999997,
+      "completeMs": 1028.6507500000007,
+      "status": "completed",
+      "backgroundRunning": true,
+      "responseText": "42"
+    },
+    {
+      "phase": "background",
+      "index": 26,
+      "inputId": "aaee23bf-6261-44d6-855e-e736f13a978e",
+      "runId": "1bd311ee-e7ea-4260-a8b1-cc6df0f237e6",
+      "firstTextMs": 865.4822080000013,
+      "completeMs": 1032.6237079999992,
+      "status": "completed",
+      "backgroundRunning": true,
+      "responseText": "这项工作已经完成了。"
+    },
+    {
+      "phase": "background",
+      "index": 27,
+      "inputId": "8773f3b8-b026-41d1-a9bb-55f7a360d360",
+      "runId": "f741f6b4-4b99-49ce-805d-71341434e225",
+      "firstTextMs": 820.4236249999958,
+      "completeMs": 1135.3940000000002,
+      "status": "completed",
+      "backgroundRunning": true,
+      "responseText": "先把最紧急、又有人在等着你的那件事做完，其余的等它落地后再排。"
+    },
+    {
+      "phase": "background",
+      "index": 28,
+      "inputId": "37b22b71-eca2-4fb1-a668-bfab2293b6ec",
+      "runId": "1fb97980-b87f-4f23-8a64-1ac82bc53db2",
+      "firstTextMs": 959.0312910000066,
+      "completeMs": 1127.210791000005,
+      "status": "completed",
+      "backgroundRunning": true,
+      "responseText": "收到"
+    },
+    {
+      "phase": "background",
+      "index": 29,
+      "inputId": "1490905c-2277-48f3-9795-24dc5be1c81f",
+      "runId": "91889ca8-2321-48cd-bd9b-987bf72e5c35",
+      "firstTextMs": 1032.6806669999933,
+      "completeMs": 1230.1034999999974,
+      "status": "completed",
+      "backgroundRunning": true,
+      "responseText": "42"
+    },
+    {
+      "phase": "background",
+      "index": 30,
+      "inputId": "0c0efc84-b716-4a04-9241-1f4c5f6a18ff",
+      "runId": "5f3149a9-61fa-47c2-8e84-e0dfbc52a358",
+      "firstTextMs": 855.0359999999928,
+      "completeMs": 1027.8149589999957,
+      "status": "completed",
+      "backgroundRunning": true,
+      "responseText": "这项工作已经完成了。"
+    },
+    {
+      "phase": "background",
+      "index": 31,
+      "inputId": "78d939ae-6bc2-41dd-82f8-a0b4338aa3c0",
+      "runId": "5ae2cbdf-b8f2-4660-85fe-ffeb2b3a326c",
+      "firstTextMs": 957.9379999999946,
+      "completeMs": 1336.063249999992,
+      "status": "completed",
+      "backgroundRunning": true,
+      "responseText": "先挑那件最紧急、又有人在等你回音的事做，其余的等它落地再排。"
+    },
+    {
+      "phase": "background",
+      "index": 32,
+      "inputId": "ba989167-44d8-4841-8195-068f4855c889",
+      "runId": "da1dbfff-b92c-4332-8b57-ba2be555635f",
+      "firstTextMs": 795.9857500000071,
+      "completeMs": 1134.201958000005,
+      "status": "completed",
+      "backgroundRunning": true,
+      "responseText": "收到"
+    },
+    {
+      "phase": "background",
+      "index": 33,
+      "inputId": "3c004561-7452-4402-b19d-2caa842d4833",
+      "runId": "dc2340d6-d16f-490b-8daa-ceb65f542ec9",
+      "firstTextMs": 870.9092079999973,
+      "completeMs": 1030.9207079999906,
+      "status": "completed",
+      "backgroundRunning": true,
+      "responseText": "42"
+    },
+    {
+      "phase": "background",
+      "index": 34,
+      "inputId": "fa0ee5a1-5c7f-4ae4-8b67-8ab639ed5551",
+      "runId": "6330082d-6926-4e3d-bbd5-d8b5e6a27874",
+      "firstTextMs": 921.8947919999919,
+      "completeMs": 1135.1055829999968,
+      "status": "completed",
+      "backgroundRunning": true,
+      "responseText": "这项工作已经完成了。"
+    },
+    {
+      "phase": "background",
+      "index": 35,
+      "inputId": "1f316048-5d40-4fac-abf8-25604ebdde45",
+      "runId": "0e8ae1ad-36dc-4136-9546-e4df5900a664",
+      "firstTextMs": 1003.4030420000054,
+      "completeMs": 1231.8802920000016,
+      "status": "completed",
+      "backgroundRunning": true,
+      "responseText": "先把最紧急、又有人在等着你回应的那件事做完，其余的往后排。"
+    },
+    {
+      "phase": "background",
+      "index": 36,
+      "inputId": "e748a59d-fbd9-46f1-b373-ff5e53f2f1a1",
+      "runId": "ccbb78e1-2976-4008-91fd-a6c0322177ad",
+      "firstTextMs": 920.6116669999901,
+      "completeMs": 1028.2455419999897,
+      "status": "completed",
+      "backgroundRunning": true,
+      "responseText": "收到"
+    },
+    {
+      "phase": "background",
+      "index": 37,
+      "inputId": "431c12c0-c0fd-44b8-94a3-6a225d979ca5",
+      "runId": "8347d579-7e81-42c3-9f0e-1fa2b33f0403",
+      "firstTextMs": 875.4210000000021,
+      "completeMs": 1025.3955419999984,
+      "status": "completed",
+      "backgroundRunning": true,
+      "responseText": "42"
+    },
+    {
+      "phase": "background",
+      "index": 38,
+      "inputId": "49d848b1-be5a-42a1-9482-6409ed460d39",
+      "runId": "44607a92-e958-4753-93f4-4dc0c39229df",
+      "firstTextMs": 838.7084999999934,
+      "completeMs": 1027.859375,
+      "status": "completed",
+      "backgroundRunning": true,
+      "responseText": "这项工作已经完成了。"
+    },
+    {
+      "phase": "background",
+      "index": 39,
+      "inputId": "150dde88-a7c9-4131-884d-ab4e1bc1c041",
+      "runId": "c7b21b66-c25f-4a82-9b87-72df63d1a493",
+      "firstTextMs": 1109.7038330000069,
+      "completeMs": 1323.6057500000024,
+      "status": "completed",
+      "backgroundRunning": true,
+      "responseText": "先把最紧急、又有人在等着你回应的事做完，其余的等它落地后再排。"
+    }
+  ],
+  "performanceReport": {
+    "firstText": {
+      "baseline": {
+        "count": 40,
+        "p50Ms": 965.7987920000014,
+        "p95Ms": 1095.2642919999998,
+        "p99Ms": 1476.3160410000019,
+        "maxMs": 1476.3160410000019
+      },
+      "loaded": {
+        "count": 40,
+        "p50Ms": 945.8475000000035,
+        "p95Ms": 1109.0435409999918,
+        "p99Ms": 1199.4405839999963,
+        "maxMs": 1199.4405839999963
+      },
+      "failures": 0,
+      "minimumSamples": 40,
+      "ratio": 1.0125807525184907,
+      "limit": 1.1,
+      "verdict": "passed"
+    },
+    "complete": {
+      "baseline": {
+        "count": 40,
+        "p50Ms": 1132.3319999999985,
+        "p95Ms": 1351.2647079999952,
+        "p99Ms": 1749.78125,
+        "maxMs": 1749.78125
+      },
+      "background": {
+        "count": 40,
+        "p50Ms": 1135.1055829999968,
+        "p95Ms": 1328.7778749999998,
+        "p99Ms": 1446.0722499999974,
+        "maxMs": 1446.0722499999974
+      }
+    },
+    "hotReads": {
+      "count": 50,
+      "p50Ms": 0.36699999996926636,
+      "p95Ms": 0.5427919999929145,
+      "p99Ms": 4.280917000025511,
+      "maxMs": 4.280917000025511
+    },
+    "backgroundOverlapSamples": 40
+  },
+  "performanceSamples": [
+    {
+      "phase": "first_text",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "92c01302-52b5-4b6d-a94f-d3b83550a644",
+      "runId": "fe4a43c2-4e1f-4db6-a2d8-5c4dbd6b7a6e",
+      "durationMs": 2104.547708,
+      "status": "success",
+      "timestamp": 1792051754377
+    },
+    {
+      "phase": "turn_complete",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "92c01302-52b5-4b6d-a94f-d3b83550a644",
+      "runId": "fe4a43c2-4e1f-4db6-a2d8-5c4dbd6b7a6e",
+      "durationMs": 2199.746583,
+      "status": "success",
+      "timestamp": 1792051754472
+    },
+    {
+      "phase": "first_text",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "6cebc3a8-26b3-4914-a45b-5b5c5176b6c4",
+      "runId": "673548cd-20cd-462d-b526-d220e47109a3",
+      "durationMs": 1060.4655409999996,
+      "status": "success",
+      "timestamp": 1792051755543
+    },
+    {
+      "phase": "turn_complete",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "6cebc3a8-26b3-4914-a45b-5b5c5176b6c4",
+      "runId": "673548cd-20cd-462d-b526-d220e47109a3",
+      "durationMs": 1190.3348749999986,
+      "status": "success",
+      "timestamp": 1792051755673
+    },
+    {
+      "phase": "first_text",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "e8852868-6f47-41ee-909f-943a8e239861",
+      "runId": "98ee4af2-e36b-447c-9ca4-5a314d98f2bd",
+      "durationMs": 954.8026250000003,
+      "status": "success",
+      "timestamp": 1792051756669
+    },
+    {
+      "phase": "turn_complete",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "e8852868-6f47-41ee-909f-943a8e239861",
+      "runId": "98ee4af2-e36b-447c-9ca4-5a314d98f2bd",
+      "durationMs": 1109.1853330000013,
+      "status": "success",
+      "timestamp": 1792051756823
+    },
+    {
+      "phase": "first_text",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "3797fde3-4f32-4de3-97bd-d3f86aa09f39",
+      "runId": "73eda318-8979-42dc-ba5f-3c10800c773c",
+      "durationMs": 947.686083999999,
+      "status": "success",
+      "timestamp": 1792051757787
+    },
+    {
+      "phase": "turn_complete",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "3797fde3-4f32-4de3-97bd-d3f86aa09f39",
+      "runId": "73eda318-8979-42dc-ba5f-3c10800c773c",
+      "durationMs": 1061.5865839999988,
+      "status": "success",
+      "timestamp": 1792051757900
+    },
+    {
+      "phase": "first_text",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "78653364-a252-4e76-babc-2f55b8dfc53b",
+      "runId": "7ba0a8aa-9ecf-4b09-b772-21fa7f5d5ca1",
+      "durationMs": 1049.0475420000002,
+      "status": "success",
+      "timestamp": 1792051759023
+    },
+    {
+      "phase": "turn_complete",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "78653364-a252-4e76-babc-2f55b8dfc53b",
+      "runId": "7ba0a8aa-9ecf-4b09-b772-21fa7f5d5ca1",
+      "durationMs": 1171.829916999999,
+      "status": "success",
+      "timestamp": 1792051759146
+    },
+    {
+      "phase": "first_text",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "690b1304-adfd-4ee0-b224-0de30662016f",
+      "runId": "e1383435-32a3-450c-86c4-448ad47098d4",
+      "durationMs": 976.1138749999991,
+      "status": "success",
+      "timestamp": 1792051760186
+    },
+    {
+      "phase": "turn_complete",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "690b1304-adfd-4ee0-b224-0de30662016f",
+      "runId": "e1383435-32a3-450c-86c4-448ad47098d4",
+      "durationMs": 1116.3732919999966,
+      "status": "success",
+      "timestamp": 1792051760326
+    },
+    {
+      "phase": "first_text",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "05b00a1a-a5e3-4a83-8315-73801fb4c682",
+      "runId": "979bc83e-da05-4431-996b-172f6aaedd1f",
+      "durationMs": 1471.1768340000017,
+      "status": "success",
+      "timestamp": 1792051761820
+    },
+    {
+      "phase": "turn_complete",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "05b00a1a-a5e3-4a83-8315-73801fb4c682",
+      "runId": "979bc83e-da05-4431-996b-172f6aaedd1f",
+      "durationMs": 1730.7527499999997,
+      "status": "success",
+      "timestamp": 1792051762080
+    },
+    {
+      "phase": "first_text",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "c2b5aa0e-ba5d-4d2e-a64b-c8f860eff9ef",
+      "runId": "fdb86d57-c2da-4b3b-a8e3-d012eef46e6d",
+      "durationMs": 1039.8602920000012,
+      "status": "success",
+      "timestamp": 1792051763138
+    },
+    {
+      "phase": "turn_complete",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "c2b5aa0e-ba5d-4d2e-a64b-c8f860eff9ef",
+      "runId": "fdb86d57-c2da-4b3b-a8e3-d012eef46e6d",
+      "durationMs": 1156.810207999999,
+      "status": "success",
+      "timestamp": 1792051763255
+    },
+    {
+      "phase": "first_text",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "1e53fe75-4f23-4ce7-adb3-466d21d8a0d0",
+      "runId": "a50a7392-9ac6-41cd-be25-9ce054f58572",
+      "durationMs": 963.8633329999975,
+      "status": "success",
+      "timestamp": 1792051764300
+    },
+    {
+      "phase": "turn_complete",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "1e53fe75-4f23-4ce7-adb3-466d21d8a0d0",
+      "runId": "a50a7392-9ac6-41cd-be25-9ce054f58572",
+      "durationMs": 1123.619040999998,
+      "status": "success",
+      "timestamp": 1792051764460
+    },
+    {
+      "phase": "first_text",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "e03fe9ee-9646-40d4-a087-c307e1cb7eb1",
+      "runId": "fd81b80c-38bf-4b7e-b0f2-3c2fd49816f5",
+      "durationMs": 825.4207920000008,
+      "status": "success",
+      "timestamp": 1792051765291
+    },
+    {
+      "phase": "turn_complete",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "e03fe9ee-9646-40d4-a087-c307e1cb7eb1",
+      "runId": "fd81b80c-38bf-4b7e-b0f2-3c2fd49816f5",
+      "durationMs": 949.518333,
+      "status": "success",
+      "timestamp": 1792051765415
+    },
+    {
+      "phase": "first_text",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "6f22a718-6250-4c72-b47a-f033bca9289a",
+      "runId": "7fbaec30-07c6-4aed-b9d2-4ef81e6cbe48",
+      "durationMs": 902.6031249999978,
+      "status": "success",
+      "timestamp": 1792051766401
+    },
+    {
+      "phase": "turn_complete",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "6f22a718-6250-4c72-b47a-f033bca9289a",
+      "runId": "7fbaec30-07c6-4aed-b9d2-4ef81e6cbe48",
+      "durationMs": 1061.2916669999977,
+      "status": "success",
+      "timestamp": 1792051766560
+    },
+    {
+      "phase": "first_text",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "595e8165-2b39-4317-9486-615976bf7e6b",
+      "runId": "62f62115-2d1f-4cac-a66e-4995b72300ec",
+      "durationMs": 1042.7249169999996,
+      "status": "success",
+      "timestamp": 1792051767674
+    },
+    {
+      "phase": "turn_complete",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "595e8165-2b39-4317-9486-615976bf7e6b",
+      "runId": "62f62115-2d1f-4cac-a66e-4995b72300ec",
+      "durationMs": 1098.4612089999973,
+      "status": "success",
+      "timestamp": 1792051767729
+    },
+    {
+      "phase": "first_text",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "75a28030-ea38-4b14-a3ba-0c5659359ac3",
+      "runId": "4eff2939-397e-4328-bad8-d8ad1912ff0e",
+      "durationMs": 965.9529169999987,
+      "status": "success",
+      "timestamp": 1792051768730
+    },
+    {
+      "phase": "turn_complete",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "75a28030-ea38-4b14-a3ba-0c5659359ac3",
+      "runId": "4eff2939-397e-4328-bad8-d8ad1912ff0e",
+      "durationMs": 1054.0699999999997,
+      "status": "success",
+      "timestamp": 1792051768818
+    },
+    {
+      "phase": "first_text",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "a4b9cfef-95dc-4a13-aca9-5580faf5ad5e",
+      "runId": "3e60f33c-79df-42af-b5e6-11f2927a2eda",
+      "durationMs": 1010.6117919999997,
+      "status": "success",
+      "timestamp": 1792051769904
+    },
+    {
+      "phase": "turn_complete",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "a4b9cfef-95dc-4a13-aca9-5580faf5ad5e",
+      "runId": "3e60f33c-79df-42af-b5e6-11f2927a2eda",
+      "durationMs": 1212.4280829999989,
+      "status": "success",
+      "timestamp": 1792051770105
+    },
+    {
+      "phase": "first_text",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "7538ce49-4b42-4059-bc7f-955afbe0b35f",
+      "runId": "593cada2-cab9-43d6-aeea-e05ac0d44c8d",
+      "durationMs": 797.427416999999,
+      "status": "success",
+      "timestamp": 1792051770919
+    },
+    {
+      "phase": "turn_complete",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "7538ce49-4b42-4059-bc7f-955afbe0b35f",
+      "runId": "593cada2-cab9-43d6-aeea-e05ac0d44c8d",
+      "durationMs": 1070.128334000001,
+      "status": "success",
+      "timestamp": 1792051771192
+    },
+    {
+      "phase": "first_text",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "8b76f93a-5c10-49e6-99a6-67d46923690a",
+      "runId": "ab4ace69-7e0f-42dc-8e7e-0c731eac7286",
+      "durationMs": 916.2554999999993,
+      "status": "success",
+      "timestamp": 1792051772173
+    },
+    {
+      "phase": "turn_complete",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "8b76f93a-5c10-49e6-99a6-67d46923690a",
+      "runId": "ab4ace69-7e0f-42dc-8e7e-0c731eac7286",
+      "durationMs": 1032.1050410000025,
+      "status": "success",
+      "timestamp": 1792051772288
+    },
+    {
+      "phase": "first_text",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "51b1215a-6a66-496d-adfd-eab25b14fa3d",
+      "runId": "48698a53-7f3d-41dc-b1f1-335022b6db79",
+      "durationMs": 974.4368329999998,
+      "status": "success",
+      "timestamp": 1792051773269
+    },
+    {
+      "phase": "turn_complete",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "51b1215a-6a66-496d-adfd-eab25b14fa3d",
+      "runId": "48698a53-7f3d-41dc-b1f1-335022b6db79",
+      "durationMs": 1147.2330000000002,
+      "status": "success",
+      "timestamp": 1792051773442
+    },
+    {
+      "phase": "first_text",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "c064addb-605b-4a31-95be-89b081b1b669",
+      "runId": "92bb5ef3-678f-49ee-a4a4-bd4117a0f3c2",
+      "durationMs": 776.8153330000023,
+      "status": "success",
+      "timestamp": 1792051774304
+    },
+    {
+      "phase": "turn_complete",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "c064addb-605b-4a31-95be-89b081b1b669",
+      "runId": "92bb5ef3-678f-49ee-a4a4-bd4117a0f3c2",
+      "durationMs": 947.7181669999954,
+      "status": "success",
+      "timestamp": 1792051774475
+    },
+    {
+      "phase": "first_text",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "5090f5d5-4eca-4090-8f1c-8b644acea0a5",
+      "runId": "8c5002fb-64ec-4dbc-b458-90cd2c9740ef",
+      "durationMs": 1028.869209000004,
+      "status": "success",
+      "timestamp": 1792051775584
+    },
+    {
+      "phase": "turn_complete",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "5090f5d5-4eca-4090-8f1c-8b644acea0a5",
+      "runId": "8c5002fb-64ec-4dbc-b458-90cd2c9740ef",
+      "durationMs": 1237.1000420000055,
+      "status": "success",
+      "timestamp": 1792051775792
+    },
+    {
+      "phase": "first_text",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "841282c6-d7b0-429c-a261-ecc47a3f9504",
+      "runId": "9f1eef61-cb75-425d-9cb7-0d8056f295e6",
+      "durationMs": 1023.4988329999978,
+      "status": "success",
+      "timestamp": 1792051776912
+    },
+    {
+      "phase": "turn_complete",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "841282c6-d7b0-429c-a261-ecc47a3f9504",
+      "runId": "9f1eef61-cb75-425d-9cb7-0d8056f295e6",
+      "durationMs": 1123.6705829999992,
+      "status": "success",
+      "timestamp": 1792051777012
+    },
+    {
+      "phase": "first_text",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "779a6b2d-43db-4ba7-8463-73ec81135999",
+      "runId": "b688fdb1-ee69-4b44-9512-f32efde98c18",
+      "durationMs": 1027.9546249999985,
+      "status": "success",
+      "timestamp": 1792051778046
+    },
+    {
+      "phase": "turn_complete",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "779a6b2d-43db-4ba7-8463-73ec81135999",
+      "runId": "b688fdb1-ee69-4b44-9512-f32efde98c18",
+      "durationMs": 1139.2502079999977,
+      "status": "success",
+      "timestamp": 1792051778157
+    },
+    {
+      "phase": "first_text",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "72cab499-522c-4422-8b6f-dbb253459341",
+      "runId": "c8d5a920-ecf5-4fed-8cbe-b9989ca1df61",
+      "durationMs": 863.3230840000033,
+      "status": "success",
+      "timestamp": 1792051779112
+    },
+    {
+      "phase": "turn_complete",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "72cab499-522c-4422-8b6f-dbb253459341",
+      "runId": "c8d5a920-ecf5-4fed-8cbe-b9989ca1df61",
+      "durationMs": 985.3953340000007,
+      "status": "success",
+      "timestamp": 1792051779234
+    },
+    {
+      "phase": "first_text",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "f0572588-fb23-42e8-9f7c-37ae63ec5f3b",
+      "runId": "75a395cb-cb5a-40cc-8cb2-cc1ec3f1366b",
+      "durationMs": 805.0585829999982,
+      "status": "success",
+      "timestamp": 1792051780093
+    },
+    {
+      "phase": "turn_complete",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "f0572588-fb23-42e8-9f7c-37ae63ec5f3b",
+      "runId": "75a395cb-cb5a-40cc-8cb2-cc1ec3f1366b",
+      "durationMs": 1008.5527500000026,
+      "status": "success",
+      "timestamp": 1792051780297
+    },
+    {
+      "phase": "first_text",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "f8cc1fe4-2204-4178-afcd-530c9cc4850c",
+      "runId": "ca623ac9-fec4-4b0c-95d3-c7b9399e69eb",
+      "durationMs": 822.1542090000003,
+      "status": "success",
+      "timestamp": 1792051781137
+    },
+    {
+      "phase": "turn_complete",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "f8cc1fe4-2204-4178-afcd-530c9cc4850c",
+      "runId": "ca623ac9-fec4-4b0c-95d3-c7b9399e69eb",
+      "durationMs": 974.9233749999985,
+      "status": "success",
+      "timestamp": 1792051781290
+    },
+    {
+      "phase": "first_text",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "6aaed067-7d54-4da2-998b-11b8d4c16e6e",
+      "runId": "514da92d-7cd5-44c2-b10f-3bf9acba5ada",
+      "durationMs": 662.2464580000014,
+      "status": "success",
+      "timestamp": 1792051782009
+    },
+    {
+      "phase": "turn_complete",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "6aaed067-7d54-4da2-998b-11b8d4c16e6e",
+      "runId": "514da92d-7cd5-44c2-b10f-3bf9acba5ada",
+      "durationMs": 783.8990000000049,
+      "status": "success",
+      "timestamp": 1792051782131
+    },
+    {
+      "phase": "first_text",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "a1d08de2-72dd-4604-bcce-78e603a0dcd1",
+      "runId": "59d030e2-7878-4a2a-a628-eb506c4557b2",
+      "durationMs": 944.4884579999998,
+      "status": "success",
+      "timestamp": 1792051783116
+    },
+    {
+      "phase": "turn_complete",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "a1d08de2-72dd-4604-bcce-78e603a0dcd1",
+      "runId": "59d030e2-7878-4a2a-a628-eb506c4557b2",
+      "durationMs": 1074.716207999998,
+      "status": "success",
+      "timestamp": 1792051783246
+    },
+    {
+      "phase": "first_text",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "8a5c751f-1440-4d47-af98-599cadd5093a",
+      "runId": "cde4c677-0295-489b-be64-d5f290444d4c",
+      "durationMs": 796.1565420000043,
+      "status": "success",
+      "timestamp": 1792051784096
+    },
+    {
+      "phase": "turn_complete",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "8a5c751f-1440-4d47-af98-599cadd5093a",
+      "runId": "cde4c677-0295-489b-be64-d5f290444d4c",
+      "durationMs": 1039.8425420000058,
+      "status": "success",
+      "timestamp": 1792051784340
+    },
+    {
+      "phase": "first_text",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "726978a7-800a-46c6-92d5-eac56c2ed97c",
+      "runId": "b6bd5fcf-0b02-4edb-ace1-b2c5c8cfd856",
+      "durationMs": 886.0572080000056,
+      "status": "success",
+      "timestamp": 1792051785318
+    },
+    {
+      "phase": "turn_complete",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "726978a7-800a-46c6-92d5-eac56c2ed97c",
+      "runId": "b6bd5fcf-0b02-4edb-ace1-b2c5c8cfd856",
+      "durationMs": 992.4951250000013,
+      "status": "success",
+      "timestamp": 1792051785424
+    },
+    {
+      "phase": "first_text",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "b43c8ec5-0a62-44f4-8f04-ec1570ed2c7f",
+      "runId": "f9f67fab-ce4d-4708-8882-b54dd87ee574",
+      "durationMs": 1039.319500000005,
+      "status": "success",
+      "timestamp": 1792051786506
+    },
+    {
+      "phase": "turn_complete",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "b43c8ec5-0a62-44f4-8f04-ec1570ed2c7f",
+      "runId": "f9f67fab-ce4d-4708-8882-b54dd87ee574",
+      "durationMs": 1189.7853749999995,
+      "status": "success",
+      "timestamp": 1792051786656
+    },
+    {
+      "phase": "first_text",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "f8b29884-11c9-4942-bd45-4ea069921f21",
+      "runId": "859e8820-5b18-48dc-ab24-1ed307c5010e",
+      "durationMs": 807.801707999999,
+      "status": "success",
+      "timestamp": 1792051787506
+    },
+    {
+      "phase": "turn_complete",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "f8b29884-11c9-4942-bd45-4ea069921f21",
+      "runId": "859e8820-5b18-48dc-ab24-1ed307c5010e",
+      "durationMs": 951.1453750000001,
+      "status": "success",
+      "timestamp": 1792051787649
+    },
+    {
+      "phase": "first_text",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "297411e5-8f79-453c-9653-a66c334e72a9",
+      "runId": "2ad006a5-323f-429d-a685-15949c175cae",
+      "durationMs": 1024.4385000000038,
+      "status": "success",
+      "timestamp": 1792051788749
+    },
+    {
+      "phase": "turn_complete",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "297411e5-8f79-453c-9653-a66c334e72a9",
+      "runId": "2ad006a5-323f-429d-a685-15949c175cae",
+      "durationMs": 1262.907207999997,
+      "status": "success",
+      "timestamp": 1792051788988
+    },
+    {
+      "phase": "first_text",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "2c37faba-06f9-4f2b-a552-dfcc9bd4b830",
+      "runId": "cbc80976-d9ea-4913-b110-fe0f004cf4ec",
+      "durationMs": 962.1244159999987,
+      "status": "success",
+      "timestamp": 1792051790038
+    },
+    {
+      "phase": "turn_complete",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "2c37faba-06f9-4f2b-a552-dfcc9bd4b830",
+      "runId": "cbc80976-d9ea-4913-b110-fe0f004cf4ec",
+      "durationMs": 1050.3461659999957,
+      "status": "success",
+      "timestamp": 1792051790126
+    },
+    {
+      "phase": "first_text",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "a181f74c-1d6f-4f10-83a6-058954417e6b",
+      "runId": "64e310f4-9f6c-4b24-b8d5-67c09e84b3e6",
+      "durationMs": 1017.4907079999975,
+      "status": "success",
+      "timestamp": 1792051791223
+    },
+    {
+      "phase": "turn_complete",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "a181f74c-1d6f-4f10-83a6-058954417e6b",
+      "runId": "64e310f4-9f6c-4b24-b8d5-67c09e84b3e6",
+      "durationMs": 1134.6237079999992,
+      "status": "success",
+      "timestamp": 1792051791340
+    },
+    {
+      "phase": "first_text",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "6a8a7a80-8c1c-43ff-87cd-d8f1c3c892e2",
+      "runId": "63455643-c678-497d-b2ba-93fa532beb54",
+      "durationMs": 1076.8037919999988,
+      "status": "success",
+      "timestamp": 1792051792514
+    },
+    {
+      "phase": "turn_complete",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "6a8a7a80-8c1c-43ff-87cd-d8f1c3c892e2",
+      "runId": "63455643-c678-497d-b2ba-93fa532beb54",
+      "durationMs": 1240.199916999998,
+      "status": "success",
+      "timestamp": 1792051792678
+    },
+    {
+      "phase": "first_text",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "0ca2d932-a43f-4ee7-9c0b-c7ec97e321e1",
+      "runId": "55b58c04-933f-4839-8411-74c1a3e17986",
+      "durationMs": 736.6750420000026,
+      "status": "success",
+      "timestamp": 1792051793512
+    },
+    {
+      "phase": "turn_complete",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "0ca2d932-a43f-4ee7-9c0b-c7ec97e321e1",
+      "runId": "55b58c04-933f-4839-8411-74c1a3e17986",
+      "durationMs": 816.5390830000033,
+      "status": "success",
+      "timestamp": 1792051793592
+    },
+    {
+      "phase": "first_text",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "705780a3-86b6-44cc-bdf1-4a8b98420169",
+      "runId": "9394ab73-eacd-4d0f-8953-e0f5f9423c17",
+      "durationMs": 954.807667000001,
+      "status": "success",
+      "timestamp": 1792051794555
+    },
+    {
+      "phase": "turn_complete",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "705780a3-86b6-44cc-bdf1-4a8b98420169",
+      "runId": "9394ab73-eacd-4d0f-8953-e0f5f9423c17",
+      "durationMs": 1075.9804999999978,
+      "status": "success",
+      "timestamp": 1792051794676
+    },
+    {
+      "phase": "first_text",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "843afcd0-a7fd-4bd5-bb4a-9c4ad5ac0842",
+      "runId": "73b5f8ca-8a78-4d44-82dd-80a4343a1548",
+      "durationMs": 526.054584000005,
+      "status": "success",
+      "timestamp": 1792051795259
+    },
+    {
+      "phase": "turn_complete",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "843afcd0-a7fd-4bd5-bb4a-9c4ad5ac0842",
+      "runId": "73b5f8ca-8a78-4d44-82dd-80a4343a1548",
+      "durationMs": 690.6610840000067,
+      "status": "success",
+      "timestamp": 1792051795423
+    },
+    {
+      "phase": "first_text",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "92fa7beb-c373-4013-98bb-c6d9503afc68",
+      "runId": "0957f28a-25f6-405f-9875-323ee45aa20a",
+      "durationMs": 566.5782089999993,
+      "status": "success",
+      "timestamp": 1792051796022
+    },
+    {
+      "phase": "turn_complete",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "92fa7beb-c373-4013-98bb-c6d9503afc68",
+      "runId": "0957f28a-25f6-405f-9875-323ee45aa20a",
+      "durationMs": 694.7702500000014,
+      "status": "success",
+      "timestamp": 1792051796150
+    },
+    {
+      "phase": "first_text",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "21a2c3b7-0ead-43c9-84d3-b1503f65efd0",
+      "runId": "3800fe3f-7398-4b47-8ad3-91648783ba4b",
+      "durationMs": 716.7042080000028,
+      "status": "success",
+      "timestamp": 1792051796898
+    },
+    {
+      "phase": "turn_complete",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "21a2c3b7-0ead-43c9-84d3-b1503f65efd0",
+      "runId": "3800fe3f-7398-4b47-8ad3-91648783ba4b",
+      "durationMs": 919.304167000002,
+      "status": "success",
+      "timestamp": 1792051797100
+    },
+    {
+      "phase": "first_text",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "b74bc6b2-8339-466d-9d5a-a2b5ffcffbae",
+      "runId": "8a673251-2819-4e52-b153-341ab050ff53",
+      "durationMs": 984.9360840000008,
+      "status": "success",
+      "timestamp": 1792051798090
+    },
+    {
+      "phase": "turn_complete",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "b74bc6b2-8339-466d-9d5a-a2b5ffcffbae",
+      "runId": "8a673251-2819-4e52-b153-341ab050ff53",
+      "durationMs": 1137.1721670000043,
+      "status": "success",
+      "timestamp": 1792051798242
+    },
+    {
+      "phase": "first_text",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "a9b165da-2205-4c98-a79b-b627dd0a31c5",
+      "runId": "14923849-f0f3-4f9e-8e14-fa12e5720999",
+      "durationMs": 1245.6895000000004,
+      "status": "success",
+      "timestamp": 1792051799583
+    },
+    {
+      "phase": "turn_complete",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "a9b165da-2205-4c98-a79b-b627dd0a31c5",
+      "runId": "14923849-f0f3-4f9e-8e14-fa12e5720999",
+      "durationMs": 1358.1207499999946,
+      "status": "success",
+      "timestamp": 1792051799695
+    },
+    {
+      "phase": "first_text",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "68dde2f8-9076-4b55-8a88-3453d5137874",
+      "runId": "c771e088-8d90-4efa-9cc5-e25d50b6b7c5",
+      "durationMs": 1091.4258330000011,
+      "status": "success",
+      "timestamp": 1792051800863
+    },
+    {
+      "phase": "turn_complete",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "68dde2f8-9076-4b55-8a88-3453d5137874",
+      "runId": "c771e088-8d90-4efa-9cc5-e25d50b6b7c5",
+      "durationMs": 1225.4621670000051,
+      "status": "success",
+      "timestamp": 1792051800997
+    },
+    {
+      "phase": "first_text",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "393ed074-1137-4c47-952f-30e051046595",
+      "runId": "6cdb5625-9b44-40ea-a5fa-c7ae75ea277f",
+      "durationMs": 973.6497079999972,
+      "status": "success",
+      "timestamp": 1792051801976
+    },
+    {
+      "phase": "turn_complete",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "393ed074-1137-4c47-952f-30e051046595",
+      "runId": "6cdb5625-9b44-40ea-a5fa-c7ae75ea277f",
+      "durationMs": 1247.6696660000016,
+      "status": "success",
+      "timestamp": 1792051802250
+    },
+    {
+      "phase": "first_text",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "c6b89588-600d-4959-bc69-40f86270c5d6",
+      "runId": "7be38cea-1730-4ddc-a27d-8ed1e0cac4f7",
+      "durationMs": 1210.5827079999945,
+      "status": "success",
+      "timestamp": 1792051803550
+    },
+    {
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "tool": "personal_task",
+      "toolCallId": "call_00_ELSKgQCyi9BpmbFUVwfs8806",
+      "command": "submit",
+      "phase": "tool",
+      "durationMs": 13.095625000001746,
+      "status": "success",
+      "timestamp": 1792051805155
+    },
+    {
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "tool": "personal_task",
+      "toolCallId": "call_00_ELSKgQCyi9BpmbFUVwfs8806",
+      "command": "submit",
+      "phase": "local_write",
+      "durationMs": 13.095625000001746,
+      "status": "success",
+      "timestamp": 1792051805155
+    },
+    {
+      "phase": "turn_complete",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "c6b89588-600d-4959-bc69-40f86270c5d6",
+      "runId": "7be38cea-1730-4ddc-a27d-8ed1e0cac4f7",
+      "durationMs": 3921.7872919999936,
+      "status": "success",
+      "timestamp": 1792051806261
+    },
+    {
+      "phase": "first_text",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "da015e95-2604-411b-8ec0-dfc087abd849",
+      "runId": "48049ef7-1629-46de-b886-6d0c005bf3a2",
+      "durationMs": 858.1847500000003,
+      "status": "success",
+      "timestamp": 1792051813940
+    },
+    {
+      "phase": "turn_complete",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "da015e95-2604-411b-8ec0-dfc087abd849",
+      "runId": "48049ef7-1629-46de-b886-6d0c005bf3a2",
+      "durationMs": 898.3156250000029,
+      "status": "success",
+      "timestamp": 1792051813980
+    },
+    {
+      "phase": "first_text",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "0560ed9c-70e4-4e41-ba6d-d12378199b09",
+      "runId": "20372d63-180b-44e5-83f4-f3a4c3383c03",
+      "durationMs": 1039.369040999998,
+      "status": "success",
+      "timestamp": 1792051815042
+    },
+    {
+      "phase": "turn_complete",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "0560ed9c-70e4-4e41-ba6d-d12378199b09",
+      "runId": "20372d63-180b-44e5-83f4-f3a4c3383c03",
+      "durationMs": 1212.7436250000028,
+      "status": "success",
+      "timestamp": 1792051815215
+    },
+    {
+      "conversationId": "01702a8b-d5d2-4e61-a366-d07c3c0889d2",
+      "taskId": "d8de0dde-5a2d-427f-88e4-88ea8b6a7c5c",
+      "runId": "d363b8a7-fc42-4ca1-bd32-bc59d9ce1588",
+      "assignmentEpoch": 1,
+      "tool": "task_collaboration",
+      "toolCallId": "call_00_u7RsuM3ZLHIqadFFEvMD9463",
+      "command": "get",
+      "phase": "tool",
+      "durationMs": 5.607415999998921,
+      "status": "success",
+      "timestamp": 1792051815911
+    },
+    {
+      "conversationId": "01702a8b-d5d2-4e61-a366-d07c3c0889d2",
+      "taskId": "d8de0dde-5a2d-427f-88e4-88ea8b6a7c5c",
+      "runId": "d363b8a7-fc42-4ca1-bd32-bc59d9ce1588",
+      "assignmentEpoch": 1,
+      "tool": "list_dir",
+      "toolCallId": "call_01_0XYfWa3i25Xd6hDjxIbR9162",
+      "phase": "tool",
+      "durationMs": 6.247124999994412,
+      "status": "success",
+      "timestamp": 1792051815911
+    },
+    {
+      "phase": "first_text",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "07c7c030-6f83-403e-93af-ee026b101641",
+      "runId": "32b27f5d-6bda-4d6d-a185-8ad282ce95fa",
+      "durationMs": 905.9644169999956,
+      "status": "success",
+      "timestamp": 1792051816135
+    },
+    {
+      "phase": "turn_complete",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "07c7c030-6f83-403e-93af-ee026b101641",
+      "runId": "32b27f5d-6bda-4d6d-a185-8ad282ce95fa",
+      "durationMs": 1045.9997500000027,
+      "status": "success",
+      "timestamp": 1792051816275
+    },
+    {
+      "phase": "first_text",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "2ef6a6f0-7a84-40e2-a6fc-e8b790409ec5",
+      "runId": "7db87268-9666-4d10-b641-cfbf97beb38d",
+      "durationMs": 1195.1875,
+      "status": "success",
+      "timestamp": 1792051817547
+    },
+    {
+      "phase": "turn_complete",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "2ef6a6f0-7a84-40e2-a6fc-e8b790409ec5",
+      "runId": "7db87268-9666-4d10-b641-cfbf97beb38d",
+      "durationMs": 1399.8147080000053,
+      "status": "success",
+      "timestamp": 1792051817751
+    },
+    {
+      "conversationId": "01702a8b-d5d2-4e61-a366-d07c3c0889d2",
+      "taskId": "d8de0dde-5a2d-427f-88e4-88ea8b6a7c5c",
+      "runId": "d363b8a7-fc42-4ca1-bd32-bc59d9ce1588",
+      "assignmentEpoch": 1,
+      "tool": "task_collaboration",
+      "toolCallId": "call_00_4NIVhrDHyBINL9tmVNt67430",
+      "command": "get",
+      "phase": "tool",
+      "durationMs": 2.6000000000058208,
+      "status": "success",
+      "timestamp": 1792051818397
+    },
+    {
+      "conversationId": "01702a8b-d5d2-4e61-a366-d07c3c0889d2",
+      "taskId": "d8de0dde-5a2d-427f-88e4-88ea8b6a7c5c",
+      "runId": "d363b8a7-fc42-4ca1-bd32-bc59d9ce1588",
+      "assignmentEpoch": 1,
+      "tool": "task_collaboration",
+      "toolCallId": "call_01_94fSkCMbPCwB3HDGAgIv5201",
+      "command": "get",
+      "phase": "tool",
+      "durationMs": 2.8945419999945443,
+      "status": "success",
+      "timestamp": 1792051818397
+    },
+    {
+      "phase": "first_text",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "2ac286e4-b4a4-4223-8b4a-e7e184239f3e",
+      "runId": "eac2a2d7-f54e-4619-8d8a-d1b34e07339d",
+      "durationMs": 941.6963749999995,
+      "status": "success",
+      "timestamp": 1792051818739
+    },
+    {
+      "phase": "turn_complete",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "2ac286e4-b4a4-4223-8b4a-e7e184239f3e",
+      "runId": "eac2a2d7-f54e-4619-8d8a-d1b34e07339d",
+      "durationMs": 1050.298834000001,
+      "status": "success",
+      "timestamp": 1792051818848
+    },
+    {
+      "phase": "first_text",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "b3a6c9a2-ef9b-4b94-b3c0-88bfc475c9d5",
+      "runId": "93cfd477-fdb4-476e-902e-6408c40835d9",
+      "durationMs": 1059.6686669999908,
+      "status": "success",
+      "timestamp": 1792051819992
+    },
+    {
+      "phase": "turn_complete",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "b3a6c9a2-ef9b-4b94-b3c0-88bfc475c9d5",
+      "runId": "93cfd477-fdb4-476e-902e-6408c40835d9",
+      "durationMs": 1216.4793749999953,
+      "status": "success",
+      "timestamp": 1792051820148
+    },
+    {
+      "phase": "first_text",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "ed01d46d-510d-4635-bdaa-fa012a104700",
+      "runId": "a38384af-371f-4a21-9c96-e729f887fe9d",
+      "durationMs": 909.4930840000015,
+      "status": "success",
+      "timestamp": 1792051821072
+    },
+    {
+      "phase": "turn_complete",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "ed01d46d-510d-4635-bdaa-fa012a104700",
+      "runId": "a38384af-371f-4a21-9c96-e729f887fe9d",
+      "durationMs": 1044.1652089999989,
+      "status": "success",
+      "timestamp": 1792051821206
+    },
+    {
+      "conversationId": "01702a8b-d5d2-4e61-a366-d07c3c0889d2",
+      "taskId": "d8de0dde-5a2d-427f-88e4-88ea8b6a7c5c",
+      "runId": "d363b8a7-fc42-4ca1-bd32-bc59d9ce1588",
+      "assignmentEpoch": 1,
+      "tool": "task_collaboration",
+      "toolCallId": "call_00_PiJUCzuzBfNb166vhd2u5478",
+      "command": "get",
+      "phase": "tool",
+      "durationMs": 5.40383299998939,
+      "status": "success",
+      "timestamp": 1792051821720
+    },
+    {
+      "conversationId": "01702a8b-d5d2-4e61-a366-d07c3c0889d2",
+      "taskId": "d8de0dde-5a2d-427f-88e4-88ea8b6a7c5c",
+      "runId": "d363b8a7-fc42-4ca1-bd32-bc59d9ce1588",
+      "assignmentEpoch": 1,
+      "tool": "task_collaboration",
+      "toolCallId": "call_01_8IWFMb2RBwNzbgBaBVWe4072",
+      "command": "get",
+      "phase": "tool",
+      "durationMs": 9.356125000005704,
+      "status": "success",
+      "timestamp": 1792051821724
+    },
+    {
+      "conversationId": "01702a8b-d5d2-4e61-a366-d07c3c0889d2",
+      "taskId": "d8de0dde-5a2d-427f-88e4-88ea8b6a7c5c",
+      "runId": "d363b8a7-fc42-4ca1-bd32-bc59d9ce1588",
+      "assignmentEpoch": 1,
+      "tool": "task_collaboration",
+      "toolCallId": "call_02_TvNZvEz0PpKIqMS8MLKh8527",
+      "command": "get",
+      "phase": "tool",
+      "durationMs": 12.229917000004207,
+      "status": "success",
+      "timestamp": 1792051821727
+    },
+    {
+      "phase": "first_text",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "c1dad9e0-5d36-4824-bee2-9971921014e9",
+      "runId": "c6852b63-76de-4eda-b2fb-3a9007987d80",
+      "durationMs": 951.989499999996,
+      "status": "success",
+      "timestamp": 1792051822236
+    },
+    {
+      "phase": "turn_complete",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "c1dad9e0-5d36-4824-bee2-9971921014e9",
+      "runId": "c6852b63-76de-4eda-b2fb-3a9007987d80",
+      "durationMs": 1175.7506660000072,
+      "status": "success",
+      "timestamp": 1792051822460
+    },
+    {
+      "phase": "first_text",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "c83f405c-56fa-4251-99b0-fed6100549ba",
+      "runId": "159fe190-4812-4ed4-a8b2-cd5c8cb46c24",
+      "durationMs": 825.9577499999868,
+      "status": "success",
+      "timestamp": 1792051823340
+    },
+    {
+      "phase": "turn_complete",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "c83f405c-56fa-4251-99b0-fed6100549ba",
+      "runId": "159fe190-4812-4ed4-a8b2-cd5c8cb46c24",
+      "durationMs": 935.6747909999976,
+      "status": "success",
+      "timestamp": 1792051823450
+    },
+    {
+      "conversationId": "01702a8b-d5d2-4e61-a366-d07c3c0889d2",
+      "taskId": "d8de0dde-5a2d-427f-88e4-88ea8b6a7c5c",
+      "runId": "d363b8a7-fc42-4ca1-bd32-bc59d9ce1588",
+      "assignmentEpoch": 1,
+      "tool": "read_file",
+      "toolCallId": "call_00_LrrD5Nx2exLkMY8QOXTr2205",
+      "phase": "tool",
+      "durationMs": 7.2086249999993015,
+      "status": "success",
+      "timestamp": 1792051824470
+    },
+    {
+      "conversationId": "01702a8b-d5d2-4e61-a366-d07c3c0889d2",
+      "taskId": "d8de0dde-5a2d-427f-88e4-88ea8b6a7c5c",
+      "runId": "d363b8a7-fc42-4ca1-bd32-bc59d9ce1588",
+      "assignmentEpoch": 1,
+      "tool": "read_file",
+      "toolCallId": "call_01_qi8oxSmsnBMfcfP1SM6h6641",
+      "phase": "tool",
+      "durationMs": 6.561624999987544,
+      "status": "success",
+      "timestamp": 1792051824471
+    },
+    {
+      "phase": "first_text",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "42aed289-d06e-41da-9751-3d778a6d7a5a",
+      "runId": "a75fff94-dff9-49d1-a207-b8369ac7e389",
+      "durationMs": 999.5184169999993,
+      "status": "success",
+      "timestamp": 1792051824538
+    },
+    {
+      "phase": "turn_complete",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "42aed289-d06e-41da-9751-3d778a6d7a5a",
+      "runId": "a75fff94-dff9-49d1-a207-b8369ac7e389",
+      "durationMs": 1121.0908329999947,
+      "status": "success",
+      "timestamp": 1792051824660
+    },
+    {
+      "phase": "first_text",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "00adce60-c942-4379-baaa-fd9e3b4a3168",
+      "runId": "509277be-0496-4621-876d-9ddef781640c",
+      "durationMs": 1081.2818750000006,
+      "status": "success",
+      "timestamp": 1792051825754
+    },
+    {
+      "phase": "turn_complete",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "00adce60-c942-4379-baaa-fd9e3b4a3168",
+      "runId": "509277be-0496-4621-876d-9ddef781640c",
+      "durationMs": 1232.1227919999947,
+      "status": "success",
+      "timestamp": 1792051825905
+    },
+    {
+      "phase": "first_text",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "110cdace-220b-46f4-8cc7-c87a413dff59",
+      "runId": "d32ece93-f220-4b80-9164-48d6add3a04d",
+      "durationMs": 994.8980420000007,
+      "status": "success",
+      "timestamp": 1792051826905
+    },
+    {
+      "phase": "turn_complete",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "110cdace-220b-46f4-8cc7-c87a413dff59",
+      "runId": "d32ece93-f220-4b80-9164-48d6add3a04d",
+      "durationMs": 1181.065917,
+      "status": "success",
+      "timestamp": 1792051827091
+    },
+    {
+      "conversationId": "01702a8b-d5d2-4e61-a366-d07c3c0889d2",
+      "taskId": "d8de0dde-5a2d-427f-88e4-88ea8b6a7c5c",
+      "runId": "d363b8a7-fc42-4ca1-bd32-bc59d9ce1588",
+      "assignmentEpoch": 1,
+      "tool": "exec_command",
+      "toolCallId": "call_00_jLoHXmkfl7O3ePS8irjc8765",
+      "phase": "tool",
+      "durationMs": 84.84912499999336,
+      "status": "success",
+      "timestamp": 1792051828193
+    },
+    {
+      "phase": "first_text",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "66815047-89bc-4e23-ac42-7dc273b8fd6a",
+      "runId": "1b9ff81c-6f56-498d-a262-4f60f47e174d",
+      "durationMs": 1105.9999580000003,
+      "status": "success",
+      "timestamp": 1792051828246
+    },
+    {
+      "phase": "turn_complete",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "66815047-89bc-4e23-ac42-7dc273b8fd6a",
+      "runId": "1b9ff81c-6f56-498d-a262-4f60f47e174d",
+      "durationMs": 1200.8013329999958,
+      "status": "success",
+      "timestamp": 1792051828341
+    },
+    {
+      "phase": "first_text",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "1432c679-a830-4b07-a4c1-80789db42dfc",
+      "runId": "81ac39c6-aa09-42e0-b802-c9df383b47f2",
+      "durationMs": 1026.0047090000007,
+      "status": "success",
+      "timestamp": 1792051829392
+    },
+    {
+      "phase": "turn_complete",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "1432c679-a830-4b07-a4c1-80789db42dfc",
+      "runId": "81ac39c6-aa09-42e0-b802-c9df383b47f2",
+      "durationMs": 1138.1157499999972,
+      "status": "success",
+      "timestamp": 1792051829504
+    },
+    {
+      "phase": "first_text",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "6494607b-3797-4d47-abef-813e685f5a53",
+      "runId": "cef23759-5b77-41a9-bccf-c8151a008d41",
+      "durationMs": 916.9520409999968,
+      "status": "success",
+      "timestamp": 1792051830514
+    },
+    {
+      "phase": "turn_complete",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "6494607b-3797-4d47-abef-813e685f5a53",
+      "runId": "cef23759-5b77-41a9-bccf-c8151a008d41",
+      "durationMs": 1033.6882079999923,
+      "status": "success",
+      "timestamp": 1792051830631
+    },
+    {
+      "phase": "first_text",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "7546f484-1558-4548-9ed7-eeeb31f76b07",
+      "runId": "a04f2c75-4508-44e1-bb37-e9506916f091",
+      "durationMs": 880.6955410000082,
+      "status": "success",
+      "timestamp": 1792051831598
+    },
+    {
+      "phase": "turn_complete",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "7546f484-1558-4548-9ed7-eeeb31f76b07",
+      "runId": "a04f2c75-4508-44e1-bb37-e9506916f091",
+      "durationMs": 1096.1591250000056,
+      "status": "success",
+      "timestamp": 1792051831813
+    },
+    {
+      "phase": "first_text",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "3b457033-853c-4030-b48c-d3c982690fcb",
+      "runId": "ec2f2a7d-69ad-4407-bd49-06a59036f515",
+      "durationMs": 711.3823330000014,
+      "status": "success",
+      "timestamp": 1792051832564
+    },
+    {
+      "phase": "turn_complete",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "3b457033-853c-4030-b48c-d3c982690fcb",
+      "runId": "ec2f2a7d-69ad-4407-bd49-06a59036f515",
+      "durationMs": 791.3018750000047,
+      "status": "success",
+      "timestamp": 1792051832644
+    },
+    {
+      "phase": "first_text",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "c951bb51-43b9-4548-b8f5-c7f5af1e917a",
+      "runId": "d00eec28-a3bf-45a5-8872-132b6a1977a4",
+      "durationMs": 1092.0796249999985,
+      "status": "success",
+      "timestamp": 1792051833775
+    },
+    {
+      "phase": "turn_complete",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "c951bb51-43b9-4548-b8f5-c7f5af1e917a",
+      "runId": "d00eec28-a3bf-45a5-8872-132b6a1977a4",
+      "durationMs": 1214.9001250000001,
+      "status": "success",
+      "timestamp": 1792051833898
+    },
+    {
+      "phase": "first_text",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "01b11893-a434-4d9d-a71d-2affa652e1b6",
+      "runId": "981029ef-e93d-4220-84ed-08914c6b88f4",
+      "durationMs": 997.126958000008,
+      "status": "success",
+      "timestamp": 1792051834914
+    },
+    {
+      "phase": "turn_complete",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "01b11893-a434-4d9d-a71d-2affa652e1b6",
+      "runId": "981029ef-e93d-4220-84ed-08914c6b88f4",
+      "durationMs": 1131.2765000000072,
+      "status": "success",
+      "timestamp": 1792051835048
+    },
+    {
+      "phase": "first_text",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "d99e7baf-4b17-4559-b695-aba55a1d2781",
+      "runId": "6972b98e-9d6a-4cc4-b536-5acdb8620f62",
+      "durationMs": 869.0077910000109,
+      "status": "success",
+      "timestamp": 1792051835922
+    },
+    {
+      "phase": "turn_complete",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "d99e7baf-4b17-4559-b695-aba55a1d2781",
+      "runId": "6972b98e-9d6a-4cc4-b536-5acdb8620f62",
+      "durationMs": 1096.3553329999995,
+      "status": "success",
+      "timestamp": 1792051836149
+    },
+    {
+      "phase": "first_text",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "e3ecff7d-3040-44d7-8674-9795cbf3df97",
+      "runId": "4473a5f3-9bcc-4bcb-a6f4-de786c985c57",
+      "durationMs": 777.226708000002,
+      "status": "success",
+      "timestamp": 1792051836962
+    },
+    {
+      "phase": "turn_complete",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "e3ecff7d-3040-44d7-8674-9795cbf3df97",
+      "runId": "4473a5f3-9bcc-4bcb-a6f4-de786c985c57",
+      "durationMs": 863.2325830000045,
+      "status": "success",
+      "timestamp": 1792051837048
+    },
+    {
+      "phase": "first_text",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "ab9a9f88-d0b6-4b8c-a9d6-c87251d82346",
+      "runId": "fa793bd1-bd7f-40db-911f-20ecd23ee7a8",
+      "durationMs": 1021.2329590000008,
+      "status": "success",
+      "timestamp": 1792051838131
+    },
+    {
+      "phase": "turn_complete",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "ab9a9f88-d0b6-4b8c-a9d6-c87251d82346",
+      "runId": "fa793bd1-bd7f-40db-911f-20ecd23ee7a8",
+      "durationMs": 1166.4545420000068,
+      "status": "success",
+      "timestamp": 1792051838277
+    },
+    {
+      "phase": "first_text",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "0a64106f-1a96-430f-aceb-7c94a6da4f82",
+      "runId": "8d2b3883-a358-4bc8-ad97-40469e2cc48a",
+      "durationMs": 972.9694170000002,
+      "status": "success",
+      "timestamp": 1792051839313
+    },
+    {
+      "phase": "turn_complete",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "0a64106f-1a96-430f-aceb-7c94a6da4f82",
+      "runId": "8d2b3883-a358-4bc8-ad97-40469e2cc48a",
+      "durationMs": 1142.978375000006,
+      "status": "success",
+      "timestamp": 1792051839483
+    },
+    {
+      "phase": "first_text",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "5b00cff7-3ade-4268-b3f4-c54c51a051cf",
+      "runId": "a8354b97-c993-4338-aeb1-f7e9a3cdea09",
+      "durationMs": 1023.5670829999872,
+      "status": "success",
+      "timestamp": 1792051840594
+    },
+    {
+      "phase": "turn_complete",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "5b00cff7-3ade-4268-b3f4-c54c51a051cf",
+      "runId": "a8354b97-c993-4338-aeb1-f7e9a3cdea09",
+      "durationMs": 1290.784541999994,
+      "status": "success",
+      "timestamp": 1792051840861
+    },
+    {
+      "phase": "first_text",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "804118de-f980-47d6-ae09-50562560e382",
+      "runId": "1ab6de7f-b475-4509-b6c5-610459768be3",
+      "durationMs": 962.3068750000093,
+      "status": "success",
+      "timestamp": 1792051841862
+    },
+    {
+      "phase": "turn_complete",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "804118de-f980-47d6-ae09-50562560e382",
+      "runId": "1ab6de7f-b475-4509-b6c5-610459768be3",
+      "durationMs": 1100.1893340000097,
+      "status": "success",
+      "timestamp": 1792051842000
+    },
+    {
+      "phase": "first_text",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "30bb8f70-e2a4-40f9-a947-d60ac06bd8ac",
+      "runId": "400c1832-350a-42d9-97aa-52ed8b7efbe8",
+      "durationMs": 837.6107909999992,
+      "status": "success",
+      "timestamp": 1792051842864
+    },
+    {
+      "phase": "turn_complete",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "30bb8f70-e2a4-40f9-a947-d60ac06bd8ac",
+      "runId": "400c1832-350a-42d9-97aa-52ed8b7efbe8",
+      "durationMs": 964.4392080000107,
+      "status": "success",
+      "timestamp": 1792051842991
+    },
+    {
+      "phase": "first_text",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "aaee23bf-6261-44d6-855e-e736f13a978e",
+      "runId": "1bd311ee-e7ea-4260-a8b1-cc6df0f237e6",
+      "durationMs": 861.0089589999989,
+      "status": "success",
+      "timestamp": 1792051843917
+    },
+    {
+      "phase": "turn_complete",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "aaee23bf-6261-44d6-855e-e736f13a978e",
+      "runId": "1bd311ee-e7ea-4260-a8b1-cc6df0f237e6",
+      "durationMs": 960.5091669999965,
+      "status": "success",
+      "timestamp": 1792051844017
+    },
+    {
+      "phase": "first_text",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "8773f3b8-b026-41d1-a9bb-55f7a360d360",
+      "runId": "f741f6b4-4b99-49ce-805d-71341434e225",
+      "durationMs": 816.8420000000042,
+      "status": "success",
+      "timestamp": 1792051844905
+    },
+    {
+      "phase": "turn_complete",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "8773f3b8-b026-41d1-a9bb-55f7a360d360",
+      "runId": "f741f6b4-4b99-49ce-805d-71341434e225",
+      "durationMs": 1045.4076670000068,
+      "status": "success",
+      "timestamp": 1792051845133
+    },
+    {
+      "phase": "first_text",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "37b22b71-eca2-4fb1-a668-bfab2293b6ec",
+      "runId": "1fb97980-b87f-4f23-8a64-1ac82bc53db2",
+      "durationMs": 955.1932499999966,
+      "status": "success",
+      "timestamp": 1792051846179
+    },
+    {
+      "phase": "turn_complete",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "37b22b71-eca2-4fb1-a668-bfab2293b6ec",
+      "runId": "1fb97980-b87f-4f23-8a64-1ac82bc53db2",
+      "durationMs": 1067.956124999997,
+      "status": "success",
+      "timestamp": 1792051846291
+    },
+    {
+      "phase": "first_text",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "1490905c-2277-48f3-9795-24dc5be1c81f",
+      "runId": "91889ca8-2321-48cd-bd9b-987bf72e5c35",
+      "durationMs": 1029.2562080000062,
+      "status": "success",
+      "timestamp": 1792051847380
+    },
+    {
+      "phase": "turn_complete",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "1490905c-2277-48f3-9795-24dc5be1c81f",
+      "runId": "91889ca8-2321-48cd-bd9b-987bf72e5c35",
+      "durationMs": 1160.5023329999967,
+      "status": "success",
+      "timestamp": 1792051847511
+    },
+    {
+      "phase": "first_text",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "0c0efc84-b716-4a04-9241-1f4c5f6a18ff",
+      "runId": "5f3149a9-61fa-47c2-8e84-e0dfbc52a358",
+      "durationMs": 850.7173340000008,
+      "status": "success",
+      "timestamp": 1792051848432
+    },
+    {
+      "phase": "turn_complete",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "0c0efc84-b716-4a04-9241-1f4c5f6a18ff",
+      "runId": "5f3149a9-61fa-47c2-8e84-e0dfbc52a358",
+      "durationMs": 954.8464590000076,
+      "status": "success",
+      "timestamp": 1792051848536
+    },
+    {
+      "phase": "first_text",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "78d939ae-6bc2-41dd-82f8-a0b4338aa3c0",
+      "runId": "5ae2cbdf-b8f2-4660-85fe-ffeb2b3a326c",
+      "durationMs": 954.5417080000043,
+      "status": "success",
+      "timestamp": 1792051849563
+    },
+    {
+      "phase": "turn_complete",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "78d939ae-6bc2-41dd-82f8-a0b4338aa3c0",
+      "runId": "5ae2cbdf-b8f2-4660-85fe-ffeb2b3a326c",
+      "durationMs": 1245.5161249999946,
+      "status": "success",
+      "timestamp": 1792051849854
+    },
+    {
+      "phase": "first_text",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "ba989167-44d8-4841-8195-068f4855c889",
+      "runId": "da1dbfff-b92c-4332-8b57-ba2be555635f",
+      "durationMs": 791.9547500000044,
+      "status": "success",
+      "timestamp": 1792051850737
+    },
+    {
+      "phase": "turn_complete",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "ba989167-44d8-4841-8195-068f4855c889",
+      "runId": "da1dbfff-b92c-4332-8b57-ba2be555635f",
+      "durationMs": 1080.2881659999985,
+      "status": "success",
+      "timestamp": 1792051851025
+    },
+    {
+      "phase": "first_text",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "3c004561-7452-4402-b19d-2caa842d4833",
+      "runId": "dc2340d6-d16f-490b-8daa-ceb65f542ec9",
+      "durationMs": 868.1776670000108,
+      "status": "success",
+      "timestamp": 1792051851946
+    },
+    {
+      "phase": "turn_complete",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "3c004561-7452-4402-b19d-2caa842d4833",
+      "runId": "dc2340d6-d16f-490b-8daa-ceb65f542ec9",
+      "durationMs": 979.2102920000034,
+      "status": "success",
+      "timestamp": 1792051852057
+    },
+    {
+      "phase": "first_text",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "fa0ee5a1-5c7f-4ae4-8b67-8ab639ed5551",
+      "runId": "6330082d-6926-4e3d-bbd5-d8b5e6a27874",
+      "durationMs": 918.5529999999999,
+      "status": "success",
+      "timestamp": 1792051853028
+    },
+    {
+      "phase": "turn_complete",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "fa0ee5a1-5c7f-4ae4-8b67-8ab639ed5551",
+      "runId": "6330082d-6926-4e3d-bbd5-d8b5e6a27874",
+      "durationMs": 1044.6549999999988,
+      "status": "success",
+      "timestamp": 1792051853154
+    },
+    {
+      "phase": "first_text",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "1f316048-5d40-4fac-abf8-25604ebdde45",
+      "runId": "0e8ae1ad-36dc-4136-9546-e4df5900a664",
+      "durationMs": 1000.0562919999938,
+      "status": "success",
+      "timestamp": 1792051854245
+    },
+    {
+      "phase": "turn_complete",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "1f316048-5d40-4fac-abf8-25604ebdde45",
+      "runId": "0e8ae1ad-36dc-4136-9546-e4df5900a664",
+      "durationMs": 1197.6980840000033,
+      "status": "success",
+      "timestamp": 1792051854442
+    },
+    {
+      "phase": "first_text",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "e748a59d-fbd9-46f1-b373-ff5e53f2f1a1",
+      "runId": "ccbb78e1-2976-4008-91fd-a6c0322177ad",
+      "durationMs": 917.4543750000012,
+      "status": "success",
+      "timestamp": 1792051855394
+    },
+    {
+      "phase": "turn_complete",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "e748a59d-fbd9-46f1-b373-ff5e53f2f1a1",
+      "runId": "ccbb78e1-2976-4008-91fd-a6c0322177ad",
+      "durationMs": 1021.3332910000026,
+      "status": "success",
+      "timestamp": 1792051855497
+    },
+    {
+      "phase": "first_text",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "431c12c0-c0fd-44b8-94a3-6a225d979ca5",
+      "runId": "8347d579-7e81-42c3-9f0e-1fa2b33f0403",
+      "durationMs": 872.776915999988,
+      "status": "success",
+      "timestamp": 1792051856377
+    },
+    {
+      "phase": "turn_complete",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "431c12c0-c0fd-44b8-94a3-6a225d979ca5",
+      "runId": "8347d579-7e81-42c3-9f0e-1fa2b33f0403",
+      "durationMs": 955.8849999999948,
+      "status": "success",
+      "timestamp": 1792051856460
+    },
+    {
+      "phase": "first_text",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "49d848b1-be5a-42a1-9482-6409ed460d39",
+      "runId": "44607a92-e958-4753-93f4-4dc0c39229df",
+      "durationMs": 835.346749999997,
+      "status": "success",
+      "timestamp": 1792051857365
+    },
+    {
+      "phase": "turn_complete",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "49d848b1-be5a-42a1-9482-6409ed460d39",
+      "runId": "44607a92-e958-4753-93f4-4dc0c39229df",
+      "durationMs": 955.5672090000007,
+      "status": "success",
+      "timestamp": 1792051857486
+    },
+    {
+      "phase": "first_text",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "150dde88-a7c9-4131-884d-ab4e1bc1c041",
+      "runId": "c7b21b66-c25f-4a82-9b87-72df63d1a493",
+      "durationMs": 1106.1630000000005,
+      "status": "success",
+      "timestamp": 1792051858664
+    },
+    {
+      "phase": "turn_complete",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "150dde88-a7c9-4131-884d-ab4e1bc1c041",
+      "runId": "c7b21b66-c25f-4a82-9b87-72df63d1a493",
+      "durationMs": 1318.1422079999902,
+      "status": "success",
+      "timestamp": 1792051858876
+    },
+    {
+      "phase": "first_text",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "b5a114ca-2af6-43e7-8100-bc87679de1e4",
+      "runId": "20043909-6812-4e67-81b8-3f66e012dddd",
+      "durationMs": 691.9438749999972,
+      "status": "success",
+      "timestamp": 1792051859573
+    },
+    {
+      "phase": "turn_complete",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "b5a114ca-2af6-43e7-8100-bc87679de1e4",
+      "runId": "20043909-6812-4e67-81b8-3f66e012dddd",
+      "durationMs": 831.078125,
+      "status": "success",
+      "timestamp": 1792051859712
+    },
+    {
+      "conversationId": "01702a8b-d5d2-4e61-a366-d07c3c0889d2",
+      "taskId": "d8de0dde-5a2d-427f-88e4-88ea8b6a7c5c",
+      "runId": "d363b8a7-fc42-4ca1-bd32-bc59d9ce1588",
+      "assignmentEpoch": 1,
+      "tool": "exec_command",
+      "toolCallId": "call_00_wjabsPyWCO5CKtiaGv443444",
+      "phase": "tool",
+      "durationMs": 90122.59275,
+      "status": "success",
+      "timestamp": 1792051921446
+    },
+    {
+      "conversationId": "01702a8b-d5d2-4e61-a366-d07c3c0889d2",
+      "taskId": "d8de0dde-5a2d-427f-88e4-88ea8b6a7c5c",
+      "runId": "d363b8a7-fc42-4ca1-bd32-bc59d9ce1588",
+      "assignmentEpoch": 1,
+      "tool": "publish_artifacts",
+      "toolCallId": "call_00_LW6ZBCwBlwwhDo3eBWle5973",
+      "phase": "tool",
+      "durationMs": 11.15104200001224,
+      "status": "success",
+      "timestamp": 1792051924908
+    },
+    {
+      "conversationId": "01702a8b-d5d2-4e61-a366-d07c3c0889d2",
+      "taskId": "d8de0dde-5a2d-427f-88e4-88ea8b6a7c5c",
+      "runId": "d363b8a7-fc42-4ca1-bd32-bc59d9ce1588",
+      "assignmentEpoch": 1,
+      "tool": "publish_task_result",
+      "toolCallId": "call_00_ACUdRH7Dc4srfroIU5O74671",
+      "phase": "tool",
+      "durationMs": 6.269832999998471,
+      "status": "error",
+      "errorCode": "tool_error",
+      "timestamp": 1792051931960
+    },
+    {
+      "conversationId": "01702a8b-d5d2-4e61-a366-d07c3c0889d2",
+      "taskId": "d8de0dde-5a2d-427f-88e4-88ea8b6a7c5c",
+      "runId": "d363b8a7-fc42-4ca1-bd32-bc59d9ce1588",
+      "assignmentEpoch": 1,
+      "tool": "publish_task_result",
+      "toolCallId": "call_00_HO85Z0oFKVOvMPlck2SA0370",
+      "phase": "tool",
+      "durationMs": 2706.5151249999763,
+      "status": "success",
+      "timestamp": 1792051939710
+    },
+    {
+      "phase": "result_to_chat",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "taskId": "d8de0dde-5a2d-427f-88e4-88ea8b6a7c5c",
+      "runId": "d363b8a7-fc42-4ca1-bd32-bc59d9ce1588",
+      "deliveryId": "321ceca4-7708-46f6-90dd-6a7dc10f7ed4",
+      "resultRevision": 1,
+      "contractVersion": 2,
+      "instructionSequence": 0,
+      "assignmentEpoch": 1,
+      "durationMs": 20,
+      "status": "success",
+      "timestamp": 1792051943731
+    },
+    {
+      "phase": "reply_persisted",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "taskId": "d8de0dde-5a2d-427f-88e4-88ea8b6a7c5c",
+      "runId": "d363b8a7-fc42-4ca1-bd32-bc59d9ce1588",
+      "deliveryId": "321ceca4-7708-46f6-90dd-6a7dc10f7ed4",
+      "resultRevision": 1,
+      "contractVersion": 2,
+      "instructionSequence": 0,
+      "durationMs": 1307,
+      "status": "success",
+      "timestamp": 1792051945016
+    },
+    {
+      "phase": "first_text",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "87367fa9-f707-47c4-ba49-91a29dac1761",
+      "runId": "d26da9c5-5127-4cf8-a67c-cd77c24f10bf",
+      "durationMs": 1251.0944170000148,
+      "status": "success",
+      "timestamp": 1792051946362
+    },
+    {
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "tool": "personal_task",
+      "toolCallId": "call_00_tKwE3SqGe73hhRavEr9T2815",
+      "command": "get",
+      "phase": "tool",
+      "durationMs": 3.75800000000163,
+      "status": "success",
+      "timestamp": 1792051946819
+    },
+    {
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "tool": "personal_task",
+      "toolCallId": "call_00_fvPmZdCigDSE5wbeMOqJ8594",
+      "command": "revise",
+      "phase": "tool",
+      "durationMs": 13.373916999989888,
+      "status": "success",
+      "timestamp": 1792051949770
+    },
+    {
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "tool": "personal_task",
+      "toolCallId": "call_00_fvPmZdCigDSE5wbeMOqJ8594",
+      "command": "revise",
+      "phase": "local_write",
+      "durationMs": 13.373916999989888,
+      "status": "success",
+      "timestamp": 1792051949770
+    },
+    {
+      "phase": "turn_complete",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "87367fa9-f707-47c4-ba49-91a29dac1761",
+      "runId": "d26da9c5-5127-4cf8-a67c-cd77c24f10bf",
+      "durationMs": 4741.5264170000155,
+      "status": "cancelled",
+      "timestamp": 1792051949852
+    },
+    {
+      "phase": "first_text",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "5eccd5f6-d881-485d-ba08-c7cacb900e03",
+      "runId": "bab0d5f1-8db8-4f2f-88bc-846538e55859",
+      "durationMs": 1467.284875000012,
+      "status": "success",
+      "timestamp": 1792051951255
+    },
+    {
+      "phase": "turn_complete",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "5eccd5f6-d881-485d-ba08-c7cacb900e03",
+      "runId": "bab0d5f1-8db8-4f2f-88bc-846538e55859",
+      "durationMs": 1717.2925410000025,
+      "status": "success",
+      "timestamp": 1792051951505
+    },
+    {
+      "conversationId": "a42ae82c-99cc-43b6-b8ca-e33601d4421e",
+      "taskId": "d8de0dde-5a2d-427f-88e4-88ea8b6a7c5c",
+      "runId": "c6055d94-95c9-49b8-8731-77fc5792be2f",
+      "assignmentEpoch": 2,
+      "tool": "task_collaboration",
+      "toolCallId": "call_00_ET_NsJByQlRtO6OlYEGazqa6768",
+      "command": "get",
+      "phase": "tool",
+      "durationMs": 3.1457500000251457,
+      "status": "success",
+      "timestamp": 1792051961667
+    },
+    {
+      "conversationId": "a42ae82c-99cc-43b6-b8ca-e33601d4421e",
+      "taskId": "d8de0dde-5a2d-427f-88e4-88ea8b6a7c5c",
+      "runId": "c6055d94-95c9-49b8-8731-77fc5792be2f",
+      "assignmentEpoch": 2,
+      "tool": "task_collaboration",
+      "toolCallId": "call_01_ET_Ow492b615loduOwUeJDW1176",
+      "command": "get",
+      "phase": "tool",
+      "durationMs": 3.550667000003159,
+      "status": "success",
+      "timestamp": 1792051961667
+    },
+    {
+      "conversationId": "a42ae82c-99cc-43b6-b8ca-e33601d4421e",
+      "taskId": "d8de0dde-5a2d-427f-88e4-88ea8b6a7c5c",
+      "runId": "c6055d94-95c9-49b8-8731-77fc5792be2f",
+      "assignmentEpoch": 2,
+      "tool": "task_collaboration",
+      "toolCallId": "call_00_ymygiTLRxB7FF1fv0FiB6463",
+      "command": "post",
+      "phase": "tool",
+      "durationMs": 80.62891700002365,
+      "status": "success",
+      "timestamp": 1792051964717
+    },
+    {
+      "conversationId": "a42ae82c-99cc-43b6-b8ca-e33601d4421e",
+      "taskId": "d8de0dde-5a2d-427f-88e4-88ea8b6a7c5c",
+      "runId": "c6055d94-95c9-49b8-8731-77fc5792be2f",
+      "assignmentEpoch": 2,
+      "tool": "task_collaboration",
+      "toolCallId": "call_01_63oQmcuFakNsUATDhlpO1240",
+      "command": "get",
+      "phase": "tool",
+      "durationMs": 123.32574999998906,
+      "status": "success",
+      "timestamp": 1792051964760
+    },
+    {
+      "phase": "first_text",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "a3744c57-7bc8-4c2d-b98e-4055d470b8f8",
+      "runId": "e9541f84-19b2-4fc2-9f59-c99363c05f45",
+      "durationMs": 1090.2013750000042,
+      "status": "success",
+      "timestamp": 1792051965799
+    },
+    {
+      "phase": "turn_complete",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "inputId": "a3744c57-7bc8-4c2d-b98e-4055d470b8f8",
+      "runId": "e9541f84-19b2-4fc2-9f59-c99363c05f45",
+      "durationMs": 1233.8832920000132,
+      "status": "success",
+      "timestamp": 1792051965943
+    },
+    {
+      "conversationId": "a42ae82c-99cc-43b6-b8ca-e33601d4421e",
+      "taskId": "d8de0dde-5a2d-427f-88e4-88ea8b6a7c5c",
+      "runId": "c6055d94-95c9-49b8-8731-77fc5792be2f",
+      "assignmentEpoch": 2,
+      "tool": "grep",
+      "toolCallId": "call_00_0pacXGpsLLKRe2iMhUDV8026",
+      "phase": "tool",
+      "durationMs": 25.26804200001061,
+      "status": "success",
+      "timestamp": 1792051968098
+    },
+    {
+      "conversationId": "a42ae82c-99cc-43b6-b8ca-e33601d4421e",
+      "taskId": "d8de0dde-5a2d-427f-88e4-88ea8b6a7c5c",
+      "runId": "c6055d94-95c9-49b8-8731-77fc5792be2f",
+      "assignmentEpoch": 2,
+      "tool": "exec_command",
+      "toolCallId": "call_01_XyNbW89cy0QFuYBrYr5n1982",
+      "phase": "tool",
+      "durationMs": 86.56708400000934,
+      "status": "success",
+      "timestamp": 1792051968161
+    },
+    {
+      "conversationId": "a42ae82c-99cc-43b6-b8ca-e33601d4421e",
+      "taskId": "d8de0dde-5a2d-427f-88e4-88ea8b6a7c5c",
+      "runId": "c6055d94-95c9-49b8-8731-77fc5792be2f",
+      "assignmentEpoch": 2,
+      "tool": "exec_command",
+      "toolCallId": "call_00_nqsZMrsRxfMkChmkfA0P9712",
+      "phase": "tool",
+      "durationMs": 102.3564170000027,
+      "status": "success",
+      "timestamp": 1792051974366
+    },
+    {
+      "conversationId": "a42ae82c-99cc-43b6-b8ca-e33601d4421e",
+      "taskId": "d8de0dde-5a2d-427f-88e4-88ea8b6a7c5c",
+      "runId": "c6055d94-95c9-49b8-8731-77fc5792be2f",
+      "assignmentEpoch": 2,
+      "tool": "exec_command",
+      "toolCallId": "call_00_kjVbUF9HwNOr3jHXsEWJ7849",
+      "phase": "tool",
+      "durationMs": 74.62424999999348,
+      "status": "success",
+      "timestamp": 1792051981577
+    },
+    {
+      "conversationId": "a42ae82c-99cc-43b6-b8ca-e33601d4421e",
+      "taskId": "d8de0dde-5a2d-427f-88e4-88ea8b6a7c5c",
+      "runId": "c6055d94-95c9-49b8-8731-77fc5792be2f",
+      "assignmentEpoch": 2,
+      "tool": "exec_command",
+      "toolCallId": "call_00_Dw5dc1G5zNNfqV8Er9Qa9340",
+      "phase": "tool",
+      "durationMs": 101.3835830000171,
+      "status": "success",
+      "timestamp": 1792051986465
+    },
+    {
+      "conversationId": "a42ae82c-99cc-43b6-b8ca-e33601d4421e",
+      "taskId": "d8de0dde-5a2d-427f-88e4-88ea8b6a7c5c",
+      "runId": "c6055d94-95c9-49b8-8731-77fc5792be2f",
+      "assignmentEpoch": 2,
+      "tool": "publish_artifacts",
+      "toolCallId": "call_00_DJcglkqL303dVO5zQigB3249",
+      "phase": "tool",
+      "durationMs": 5.146833000006154,
+      "status": "success",
+      "timestamp": 1792051989978
+    },
+    {
+      "conversationId": "a42ae82c-99cc-43b6-b8ca-e33601d4421e",
+      "taskId": "d8de0dde-5a2d-427f-88e4-88ea8b6a7c5c",
+      "runId": "c6055d94-95c9-49b8-8731-77fc5792be2f",
+      "assignmentEpoch": 2,
+      "tool": "publish_task_result",
+      "toolCallId": "call_00_ET_H8h15rMNR9CGqLzxr9eG4600",
+      "phase": "tool",
+      "durationMs": 4910.8293330000015,
+      "status": "success",
+      "timestamp": 1792052000990
+    },
+    {
+      "conversationId": "a42ae82c-99cc-43b6-b8ca-e33601d4421e",
+      "taskId": "d8de0dde-5a2d-427f-88e4-88ea8b6a7c5c",
+      "runId": "c6055d94-95c9-49b8-8731-77fc5792be2f",
+      "assignmentEpoch": 2,
+      "tool": "publish_task_result",
+      "toolCallId": "call_00_e97fhTe5xvtiH1CsPEza5178",
+      "phase": "tool",
+      "durationMs": 4215.584917000029,
+      "status": "success",
+      "timestamp": 1792052013187
+    },
+    {
+      "conversationId": "a42ae82c-99cc-43b6-b8ca-e33601d4421e",
+      "taskId": "d8de0dde-5a2d-427f-88e4-88ea8b6a7c5c",
+      "runId": "c6055d94-95c9-49b8-8731-77fc5792be2f",
+      "assignmentEpoch": 2,
+      "tool": "task_collaboration",
+      "toolCallId": "call_00_ET_4yBUMoQvBfirgFaM4Rx53753",
+      "command": "post",
+      "phase": "tool",
+      "durationMs": 42.133874999999534,
+      "status": "success",
+      "timestamp": 1792052016538
+    },
+    {
+      "phase": "result_to_chat",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "taskId": "d8de0dde-5a2d-427f-88e4-88ea8b6a7c5c",
+      "runId": "c6055d94-95c9-49b8-8731-77fc5792be2f",
+      "deliveryId": "77e18726-af05-4c16-a45b-fe6d7aa92f39",
+      "resultRevision": 2,
+      "contractVersion": 4,
+      "instructionSequence": 2,
+      "assignmentEpoch": 2,
+      "durationMs": 16,
+      "status": "success",
+      "timestamp": 1792052020105
+    },
+    {
+      "phase": "reply_persisted",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "taskId": "d8de0dde-5a2d-427f-88e4-88ea8b6a7c5c",
+      "runId": "c6055d94-95c9-49b8-8731-77fc5792be2f",
+      "deliveryId": "77e18726-af05-4c16-a45b-fe6d7aa92f39",
+      "resultRevision": 2,
+      "contractVersion": 4,
+      "instructionSequence": 2,
+      "durationMs": 1232,
+      "status": "success",
+      "timestamp": 1792052021320
+    }
+  ],
+  "finalDeliveries": [
+    {
+      "version": 1,
+      "deliveryId": "321ceca4-7708-46f6-90dd-6a7dc10f7ed4",
+      "taskId": "d8de0dde-5a2d-427f-88e4-88ea8b6a7c5c",
+      "taskRunId": "d363b8a7-fc42-4ca1-bd32-bc59d9ce1588",
+      "taskTitle": "交付文件包：report.md、monthly_summary.csv、reproduce.mjs",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "originTranscriptId": "e5c30196-f5a9-4965-b314-55f5fbbe7f7d",
+      "requestInputId": "c6b89588-600d-4959-bc69-40f86270c5d6",
+      "assignmentEpoch": 1,
+      "resultRevision": 1,
+      "contractVersion": 2,
+      "instructionSequence": 0,
+      "adoption": [],
+      "outcome": {
+        "version": 1,
+        "outcomeId": "0bd932da-7d94-417c-ac78-aae9b5bf1c0b:outcome",
+        "runId": "0bd932da-7d94-417c-ac78-aae9b5bf1c0b",
+        "turnId": "0bd932da-7d94-417c-ac78-aae9b5bf1c0b",
+        "status": "succeeded",
+        "summary": "Message processed successfully",
+        "deliverables": [
+          {
+            "artifactId": "report---aa700154-e154-4456-801a-1acf664b9227.md",
+            "sourceFileId": "nyn1yiUDSPEifTRpZFHCjn5S.cmVwb3J0Lm1k",
+            "title": "report.md",
+            "kind": "document",
+            "mimeType": "text/markdown",
+            "sizeBytes": 42926,
+            "availability": "available",
+            "location": "artifact_store",
+            "capabilities": [
+              "preview",
+              "download"
+            ],
+            "uri": "media://outbound/report---aa700154-e154-4456-801a-1acf664b9227.md",
+            "sha256": "44b354584bac93af4cafcc1652ce815d03efdca96a8a00f666b7dd9d0a1c2126"
+          },
+          {
+            "artifactId": "monthly_summary---b860d6fc-63fb-4f37-ac50-3ea7aa5754ae.csv",
+            "sourceFileId": "nyn1yiUDSPEifTRpZFHCjn5S.bW9udGhseV9zdW1tYXJ5LmNzdg",
+            "title": "monthly_summary.csv",
+            "kind": "spreadsheet",
+            "mimeType": "text/csv",
+            "sizeBytes": 36,
+            "availability": "available",
+            "location": "artifact_store",
+            "capabilities": [
+              "preview",
+              "download"
+            ],
+            "uri": "media://outbound/monthly_summary---b860d6fc-63fb-4f37-ac50-3ea7aa5754ae.csv",
+            "sha256": "412359e374bd855ab032ea0db39ccde7540fa5105a0e1e4d0bb0dd5e023fd1df"
+          },
+          {
+            "artifactId": "reproduce---f586fcf3-21dd-4945-8a60-6b0204988a28.mjs",
+            "sourceFileId": "nyn1yiUDSPEifTRpZFHCjn5S.cmVwcm9kdWNlLm1qcw",
+            "title": "reproduce.mjs",
+            "kind": "file",
+            "mimeType": "application/octet-stream",
+            "sizeBytes": 371,
+            "availability": "available",
+            "location": "artifact_store",
+            "capabilities": [
+              "download"
+            ],
+            "uri": "media://outbound/reproduce---f586fcf3-21dd-4945-8a60-6b0204988a28.mjs",
+            "sha256": "9e2c0acadde686f3a200ddf952b98265cdba0f8cfc80c88bf4e057b6232fc916"
+          }
+        ],
+        "evidence": [],
+        "research": {
+          "version": 1,
+          "contractVersion": 2,
+          "instructionSequence": 0,
+          "sources": [
+            {
+              "id": "copy-digests",
+              "toolCallId": "call_00_jLoHXmkfl7O3ePS8irjc8765",
+              "toolName": "exec_command",
+              "excerpt": "-r--r--r--@ 1 micjoyce  staff     36 Oct 15 16:10 monthly_summary.csv\n-r--r--r--@ 1 micjoyce  staff  42926 Oct 15 16:10 report.md\n-r--r--r--@ 1 micjoyce  staff    371 Oct 15 16:10 reproduce.mjs\n44b354584bac93af4cafcc1652ce815d03efdca96a8a00f666b7dd9d0a1c2126  report.md\n44b354584bac93af4cafcc1652ce815d03efdca96a8a00f666b7dd9d0a1c2126  .task-inputs/d8de0dde-5a2d-427f-88e4-88ea8b6a7c5c/source-report.md\n412359e374bd855ab032ea0db39ccde7540fa5105a0e1e4d0bb0dd5e023fd1df  monthly_summary.csv\n412359e374bd855ab032ea0db39ccde7540fa5105a0e1e4d0bb0dd5e023fd1df  .task-inputs/d8de0dde-5a2d-427f-88e4-88ea8b6a7c5c/monthly_summary.csv\n9e2c0acadde686f3a200ddf952b98265cdba0f8cfc80c88bf4e057b6232fc916  reproduce.mjs\n9e2c0acadde686f3a200ddf952b98265cdba0f8cfc80c88bf4e057b6232fc916  .task-inputs/d8de0dde-5a2d-427f-88e4-88ea8b6a7c5c/reproduce.mjs\n\nLog: /var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-personal-handoff-live-qZfYuL/command-runs/542604544bccc49d590550f846af37a43ef0a16a2cbd22e9970794f83bef6f7",
+              "snapshotHash": "4a949845561bfe19b620ea1820018809695aec4f8512c76d4ef71973c517c3bf",
+              "observedAt": 1792051828204
+            },
+            {
+              "id": "repro-run",
+              "toolCallId": "call_00_wjabsPyWCO5CKtiaGv443444",
+              "toolName": "exec_command",
+              "excerpt": "Fixture files verified\n\nLog: /var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-personal-handoff-live-qZfYuL/command-runs/542604544bccc49d590550f846af37a43ef0a16a2cbd22e9970794f83bef6f7f/a468e81c-a56f-40d2-938b-1aa7845d5b7b.log",
+              "snapshotHash": "adddfdfb1b03b848ed786ca6b48248a6e56f6770a4deb222ab0b091fc3aa3131",
+              "observedAt": 1792051921476
+            },
+            {
+              "id": "pub-receipt",
+              "toolCallId": "call_00_LW6ZBCwBlwwhDo3eBWle5973",
+              "toolName": "publish_artifacts",
+              "excerpt": "3 artifacts published: report.md, monthly_summary.csv, reproduce.mjs",
+              "snapshotHash": "906ca0365809f7bff305199fd7862d0c28e7357f45a00617836fd3a6c8ee13c2",
+              "observedAt": 1792051924927
+            },
+            {
+              "id": "src-materialized",
+              "toolCallId": "call_00_PiJUCzuzBfNb166vhd2u5478",
+              "toolName": "task_collaboration",
+              "excerpt": "{\"materialized\":true,\"sourceId\":\"V2Uul3sFyVr8ovONPJfNh_o4.c291cmNlLXJlcG9ydC5tZA\",\"version\":\"1792051750966028380:1792051750966028380:101239614:42926\",\"readOnlyPath\":\"/private/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-personal-handoff-live-qZfYuL/workspace-coder/.task-inputs/d8de0dde-5a2d-427f-88e4-88ea8b6a7c5c/source-report.md\",\"executionInputRoot\":\"/private/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-personal-handoff-live-qZfYuL/workspace-coder/.task-inputs/d8de0dde-5a2d-427f-88e4-88ea8b6a7c5c\",\"sha256\":\"44b354584bac93af4cafcc1652ce815d03efdca96a8a00f666b7dd9d0a1c2126\",\"bytes\":42926,\"scope\":\"selected_input_copy_only\"}",
+              "snapshotHash": "80550a973b466388bd25531c8301612bd3ee438b2518cb5ffa4cd3f52e785adb",
+              "observedAt": 1792051821740
+            }
+          ],
+          "claims": [
+            {
+              "id": "c1",
+              "statement": "report.md 由工作区 source-report.md 原样复制生成，两者 sha256 均为 44b354584bac93af4cafcc1652ce815d03efdca96a8a00f666b7dd9d0a1c2126，字节内容一致。",
+              "kind": "fact",
+              "sourceIds": [
+                "copy-digests",
+                "src-materialized"
+              ],
+              "support": "supported",
+              "note": "复制摘要显示 report.md 与 source-report.md 的 sha256 完全相同，且源文件物化记录给出同一哈希与字节数。"
+            },
+            {
+              "id": "c2",
+              "statement": "已运行 node reproduce.mjs，命令成功结束并输出 “Fixture files verified”，脚本内部对 report.md 与 source-report.md 的等值断言以及 monthly_summary.csv 内容的断言均通过。",
+              "kind": "fact",
+              "sourceIds": [
+                "repro-run"
+              ],
+              "support": "supported",
+              "note": "reproduce.mjs 运行输出 “Fixture files verified”，脚本内容含对 report.md 与 monthly_summary.csv 的断言。"
+            },
+            {
+              "id": "c3",
+              "statement": "monthly_summary.csv 与 reproduce.mjs 以工作区现有文件原样发布，未被修改：复制后 sha256 分别与源文件一致（412359e3... 与 9e2c0aca...）。",
+              "kind": "fact",
+              "sourceIds": [
+                "copy-digests",
+                "src-materialized"
+              ],
+              "support": "supported",
+              "note": "复制摘要显示 monthly_summary.csv 与 reproduce.mjs 的 sha256 分别与源文件一致。"
+            },
+            {
+              "id": "c4",
+              "statement": "发布内容仅包含 report.md、monthly_summary.csv、reproduce.mjs 三个文件，对应 artifactId 分别为 report---aa700154-e154-4456-801a-1acf664b9227.md、monthly_summary---b860d6fc-63fb-4f37-ac50-3ea7aa5754ae.csv、reproduce---f586fcf3-21dd-4945-8a60-6b0204988a28.mjs，均 available。",
+              "kind": "fact",
+              "sourceIds": [
+                "pub-receipt"
+              ],
+              "support": "supported",
+              "note": "发布回执显示仅发布三个文件，finalArtifactIds 也仅含这三个 artifact。"
+            }
+          ],
+          "checks": [
+            {
+              "criterionIndex": 0,
+              "criterion": "report.md 已生成，且其字节内容与工作区 source-report.md 完全一致。",
+              "status": "passed",
+              "claimIds": [
+                "c1"
+              ],
+              "note": "report.md 与 source-report.md 的 sha256 一致，字节内容相同。"
+            },
+            {
+              "criterionIndex": 1,
+              "criterion": "已运行 node reproduce.mjs，并保留该检查的输出作为交付依据。",
+              "status": "passed",
+              "claimIds": [
+                "c2"
+              ],
+              "note": "已运行 node reproduce.mjs 并保留输出 “Fixture files verified”。"
+            },
+            {
+              "criterionIndex": 2,
+              "criterion": "发布内容仅包含 report.md、monthly_summary.csv、reproduce.mjs 三个文件。",
+              "status": "passed",
+              "claimIds": [
+                "c4"
+              ],
+              "note": "发布回执与 finalArtifactIds 均仅含指定三个文件。"
+            },
+            {
+              "criterionIndex": 3,
+              "criterion": "monthly_summary.csv 与 reproduce.mjs 以工作区现有文件原样发布，未被修改。",
+              "status": "passed",
+              "claimIds": [
+                "c3"
+              ],
+              "note": "两个文件的 sha256 与工作区源文件一致，未被修改。"
+            }
+          ],
+          "review": "model_reviewed",
+          "finalArtifactIds": [
+            "report---aa700154-e154-4456-801a-1acf664b9227.md",
+            "monthly_summary---b860d6fc-63fb-4f37-ac50-3ea7aa5754ae.csv",
+            "reproduce---f586fcf3-21dd-4945-8a60-6b0204988a28.mjs"
+          ],
+          "inspectedArtifactIds": [
+            "report---aa700154-e154-4456-801a-1acf664b9227.md",
+            "monthly_summary---b860d6fc-63fb-4f37-ac50-3ea7aa5754ae.csv",
+            "reproduce---f586fcf3-21dd-4945-8a60-6b0204988a28.mjs"
+          ],
+          "instructionChecks": []
+        },
+        "createdAt": "2026-10-15T08:12:19.741Z"
+      },
+      "text": "交付完成。\n\n- **report.md**：由 `source-report.md` 原样复制，两者 SHA-256 一致（`44b35458…`），字节内容完全相同。\n- **node reproduce.mjs**：已运行并成功结束，输出 `Fixture files verified`（脚本内对 `report.md` 与 `monthly_summary.csv` 的断言均通过），输出已保留为交付依据。\n- **发布**：仅发布 `report.md`、`monthly_summary.csv`、`reproduce.mjs` 三个文件；后两者按工作区现有文件原样发布，未被修改（校验值与源文件一致）。\n\n无遗留问题。",
+      "createdAt": 1792051943709
+    },
+    {
+      "version": 1,
+      "deliveryId": "77e18726-af05-4c16-a45b-fe6d7aa92f39",
+      "taskId": "d8de0dde-5a2d-427f-88e4-88ea8b6a7c5c",
+      "taskRunId": "c6055d94-95c9-49b8-8731-77fc5792be2f",
+      "taskTitle": "交付文件包：report.md、monthly_summary.csv、reproduce.mjs",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "originTranscriptId": "e5c30196-f5a9-4965-b314-55f5fbbe7f7d",
+      "requestInputId": "87367fa9-f707-47c4-ba49-91a29dac1761",
+      "assignmentEpoch": 2,
+      "resultRevision": 2,
+      "previousResultId": "321ceca4-7708-46f6-90dd-6a7dc10f7ed4",
+      "contractVersion": 4,
+      "instructionSequence": 2,
+      "adoption": [
+        {
+          "entryId": "8c6b3630-c1db-40f4-b51a-3704c79677c0",
+          "sequence": 2,
+          "status": "applied",
+          "verification": "passed",
+          "claimIds": [
+            "c1",
+            "c2",
+            "c3",
+            "c4",
+            "c5",
+            "c6",
+            "c8"
+          ],
+          "note": "已按修订要求物化只读输入、仅改核对码、生成 changelog、完成校验并只交付两个文件。"
+        }
+      ],
+      "outcome": {
+        "version": 1,
+        "outcomeId": "6d1fb817-4115-410b-8abd-9f5a4b2b51f4:outcome",
+        "runId": "6d1fb817-4115-410b-8abd-9f5a4b2b51f4",
+        "turnId": "6d1fb817-4115-410b-8abd-9f5a4b2b51f4",
+        "status": "succeeded",
+        "summary": "Message processed successfully",
+        "deliverables": [
+          {
+            "artifactId": "report---b18b06c3-bfb5-484e-b29b-a27b7e22e8aa.md",
+            "sourceFileId": "nyn1yiUDSPEifTRpZFHCjn5S.cmV2aXNpb24tMi9yZXBvcnQubWQ",
+            "title": "report.md",
+            "kind": "document",
+            "mimeType": "text/markdown",
+            "sizeBytes": 42926,
+            "availability": "available",
+            "location": "artifact_store",
+            "capabilities": [
+              "preview",
+              "download"
+            ],
+            "uri": "media://outbound/report---b18b06c3-bfb5-484e-b29b-a27b7e22e8aa.md",
+            "sha256": "8a48bb9c6d8557e26c83c7a6e5483061348f41aa5a8e39f037e559918c984a24"
+          },
+          {
+            "artifactId": "changelog---cc8a7de9-7849-45e2-a3f0-299a5635b64e.txt",
+            "sourceFileId": "nyn1yiUDSPEifTRpZFHCjn5S.cmV2aXNpb24tMi9jaGFuZ2Vsb2cudHh0",
+            "title": "changelog.txt",
+            "kind": "document",
+            "mimeType": "text/plain",
+            "sizeBytes": 86,
+            "availability": "available",
+            "location": "artifact_store",
+            "capabilities": [
+              "preview",
+              "download"
+            ],
+            "uri": "media://outbound/changelog---cc8a7de9-7849-45e2-a3f0-299a5635b64e.txt",
+            "sha256": "41e80d8fa6dbc1086aa00aabd915254657e5301fb8b617e64c6b5fe0a4313ea9"
+          }
+        ],
+        "evidence": [],
+        "research": {
+          "version": 1,
+          "contractVersion": 4,
+          "instructionSequence": 2,
+          "sources": [
+            {
+              "id": "src-materialize",
+              "toolCallId": "call_01_63oQmcuFakNsUATDhlpO1240",
+              "toolName": "task_collaboration",
+              "excerpt": "{\"materialized\":true,\"sourceId\":\"result:321ceca4-7708-46f6-90dd-6a7dc10f7ed4:report---aa700154-e154-4456-801a-1acf664b9227.md\",\"version\":\"d363b8a7-fc42-4ca1-bd32-bc59d9ce1588:1:0bd932da-7d94-417c-ac78-aae9b5bf1c0b:outcome\",\"readOnlyPath\":\"/private/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-personal-handoff-live-qZfYuL/workspace-coder/.task-inputs/d8de0dde-5a2d-427f-88e4-88ea8b6a7c5c/results/c590c8b677eb832b6f336c71/report.md\",\"executionInputRoot\":\"/private/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-personal-handoff-live-qZfYuL/workspace-coder/.task-inputs/d8de0dde-5a2d-427f-88e4-88ea8b6a7c5c\",\"sha256\":\"44b354584bac93af4cafcc1652ce815d03efdca96a8a00f666b7dd9d0a1c2126\",\"bytes\":42926,\"scope\":\"selected_input_copy_only\"}",
+              "snapshotHash": "1aa5a015ebc97912f8f36309d89176ade75fbd71ead38dd2cbb3c931b649a528",
+              "observedAt": 1792051964782
+            },
+            {
+              "id": "src-hash",
+              "toolCallId": "call_00_nqsZMrsRxfMkChmkfA0P9712",
+              "toolName": "exec_command",
+              "excerpt": "44b354584bac93af4cafcc1652ce815d03efdca96a8a00f666b7dd9d0a1c2126  report.md\n44b354584bac93af4cafcc1652ce815d03efdca96a8a00f666b7dd9d0a1c2126  source-report.md\n44b354584bac93af4cafcc1652ce815d03efdca96a8a00f666b7dd9d0a1c2126  .task-inputs/d8de0dde-5a2d-427f-88e4-88ea8b6a7c5c/results/c590c8b677eb832b6f336c71/report.md\n这是冻结的合成验收材料，不代表实际业务。\n这是冻结的合成验收材料，不代表实际业务。\n\n# 第二节：方法\n这是文件阅读验收，不执行预测。\n\n# 第三节：限定条件\n核对码：CEDAR-4e8af6e6\n适用范围：仅适用于隔离验收样本，不适用于生产经营预测。\n1\n\nLog: /var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-personal-handoff-live-qZfYuL/command-runs/c2a939df8f43a32b5c79b8cdbaaf6bbc25776d564a73a1bc4c7c972e5399106e/ee9ddad8-432c-4b91-979c-fed7127630ea.log",
+              "snapshotHash": "2d6621bb25080aef7ee4b973204dc8aa55d224b91ac60f052b0f9bd019a20981",
+              "observedAt": 1792051974380
+            },
+            {
+              "id": "src-write-diff",
+              "toolCallId": "call_00_kjVbUF9HwNOr3jHXsEWJ7849",
+              "toolName": "exec_command",
+              "excerpt": "--- changelog ---\n核对码已由 CEDAR-4e8af6e6 更新为 MAPLE-be291f9d，其他正文保持不变。\n--- diff ---\n--- report.md\t2026-10-15 16:10:28\n+++ revision-2/report.md\t2026-10-15 16:13:01\n@@ -704,5 +704,5 @@\n 这是文件阅读验收，不执行预测。\n \n # 第三节：限定条件\n-核对码：CEDAR-4e8af6e6\n+核对码：MAPLE-be291f9d\n 适用范围：仅适用于隔离验收样本，不适用于生产经营预测。\ndiff exit=1\n\nLog: /var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-personal-handoff-live-qZfYuL/command-runs/c2a939df8f43a32b5c79b8cdbaaf6bbc25776d564a73a1bc4c7c972e5399106e/652a924a-92fc-4311-9ae1-7d416807e1ef.log",
+              "snapshotHash": "29d4cf4df7081a306d9816c102d40e312c492736148c75a973720977cbcbfbc6",
+              "observedAt": 1792051981589
+            },
+            {
+              "id": "src-verify",
+              "toolCallId": "call_00_Dw5dc1G5zNNfqV8Er9Qa9340",
+              "toolName": "exec_command",
+              "excerpt": "[reverse-normalized vs original] diff:\n(empty above = identical)\n[occurrence counts]\nnew CEDAR=0 new MAPLE=1\norig CEDAR=1 orig MAPLE=0\n[changed line count]\n2\n[byte deltas]\norig=42926 new=42926\n[changelog]\n       1\n核对码已由 CEDAR-4e8af6e6 更新为 MAPLE-be291f9d，其他正文保持不变。\n[history intact]\n-r--r--r--@ 1 micjoyce  staff     36 Oct 15 16:10 monthly_summary.csv\n-r--r--r--@ 1 micjoyce  staff  42926 Oct 15 16:10 report.md\n-r--r--r--@ 1 micjoyce  staff    371 Oct 15 16:10 reproduce.mjs\n-r--r--r--@ 1 micjoyce  staff  42926 Oct 15 16:10 source-report.md\n44b354584bac93af4cafcc1652ce815d03efdca96a8a00f666b7dd9d0a1c2126  report.md\n44b354584bac93af4cafcc1652ce815d03efdca96a8a00f666b7dd9d0a1c2126  source-report.md\n412359e374bd855ab032ea0db39ccde7540fa5105a0e1e4d0bb0dd5e023fd1df  monthly_summary.csv\n9e2c0acadde686f3a200ddf952b98265cdba0f8cfc80c88bf4e057b6232fc916  reproduce.mjs\n\nLog: /var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-personal-handoff-live-qZfYuL/command-runs/c2a939df8f43a32b5c79b8cdbaaf6bb",
+              "snapshotHash": "b9a20580464f03616c4e700306daad5ab88431d9d126bca3fe0dec8fb3bf07a6",
+              "observedAt": 1792051986477
+            },
+            {
+              "id": "src-publish",
+              "toolCallId": "call_00_DJcglkqL303dVO5zQigB3249",
+              "toolName": "publish_artifacts",
+              "excerpt": "2 artifacts published: report.md, changelog.txt",
+              "snapshotHash": "7b27aaf59087e4a5ad22a5ea0f473d89c773063e5d7687a83dde8be9e1822885",
+              "observedAt": 1792051989993
+            }
+          ],
+          "claims": [
+            {
+              "id": "c1",
+              "statement": "已发布 report.md 被物化为只读输入（sha256 44b35458…1c2126，42926 字节），并与工作区现有 report.md 逐字节一致，说明修订基于历史成果文本。",
+              "kind": "fact",
+              "sourceIds": [
+                "src-materialize",
+                "src-hash"
+              ],
+              "support": "supported",
+              "note": "物化回执与哈希比对显示只读输入与工作区 report.md 逐字节一致。"
+            },
+            {
+              "id": "c2",
+              "statement": "新版 report.md 第三节核对码行已由“核对码：CEDAR-4e8af6e6”改为“核对码：MAPLE-be291f9d”；新版中 CEDAR-4e8af6e6 出现次数为 0，MAPLE-be291f9d 为 1。",
+              "kind": "fact",
+              "sourceIds": [
+                "src-write-diff",
+                "src-verify"
+              ],
+              "support": "supported",
+              "note": "diff 与出现次数统计显示核对码已替换，CEDAR 计数为 0、MAPLE 为 1。"
+            },
+            {
+              "id": "c3",
+              "statement": "逐行校验：diff -u 仅显示一处上下文差异，即该核对码行；改动行计数为 2（一减一增），其余内容完全一致。",
+              "kind": "fact",
+              "sourceIds": [
+                "src-write-diff",
+                "src-verify"
+              ],
+              "support": "supported",
+              "note": "diff 仅一处上下文差异，改动行计数为 2。"
+            },
+            {
+              "id": "c4",
+              "statement": "逐字节校验：将新版 MAPLE-be291f9d 反向替换回 CEDAR-4e8af6e6 后与原已发布 report.md 比较，diff 为空（完全一致），可确认差异仅限该核对码。",
+              "kind": "fact",
+              "sourceIds": [
+                "src-verify"
+              ],
+              "support": "supported",
+              "note": "反向替换后 diff 为空，支持差异仅限该核对码。"
+            },
+            {
+              "id": "c5",
+              "statement": "changelog.txt 为单行文件（行数 1），内容为“核对码已由 CEDAR-4e8af6e6 更新为 MAPLE-be291f9d，其他正文保持不变。”。",
+              "kind": "fact",
+              "sourceIds": [
+                "src-write-diff",
+                "src-verify"
+              ],
+              "support": "supported",
+              "note": "changelog.txt 已审阅，内容为指定单行文本。"
+            },
+            {
+              "id": "c6",
+              "statement": "历史产物保持可读且未被覆盖：report.md、source-report.md（均为 44b35458…1c2126）、monthly_summary.csv、reproduce.mjs 权限均为只读保留。",
+              "kind": "fact",
+              "sourceIds": [
+                "src-verify"
+              ],
+              "support": "supported",
+              "note": "历史文件仍以只读权限存在，未被覆盖或删除。"
+            },
+            {
+              "id": "c8",
+              "statement": "最终交付物为 report.md（artifactId report---b18b06c3-bfb5-484e-b29b-a27b7e22e8aa.md）与 changelog.txt（artifactId changelog---cc8a7de9-7849-45e2-a3f0-299a5635b64e.txt），未包含 monthly_summary.csv 或 reproduce.mjs。",
+              "kind": "fact",
+              "sourceIds": [
+                "src-publish"
+              ],
+              "support": "supported",
+              "note": "发布回执与 finalArtifactIds 仅含 report.md 与 changelog.txt。"
+            }
+          ],
+          "checks": [
+            {
+              "criterionIndex": 0,
+              "criterion": "report.md 第三节中的核对码为 MAPLE-be291f9d，且不再包含 CEDAR-4e8af6e6",
+              "status": "passed",
+              "claimIds": [
+                "c2"
+              ],
+              "note": "新版第三节核对码为 MAPLE-be291f9d，CEDAR-4e8af6e6 已不再出现。"
+            },
+            {
+              "criterionIndex": 1,
+              "criterion": "新版 report.md 与已发布版本逐行/逐字节比较，差异仅限该核对码一处，其余内容完全一致",
+              "status": "passed",
+              "claimIds": [
+                "c3",
+                "c4"
+              ],
+              "note": "逐行与逐字节校验均显示差异仅限该核对码一处。"
+            },
+            {
+              "criterionIndex": 2,
+              "criterion": "changelog.txt 内容仅为一行：核对码已由 CEDAR-4e8af6e6 更新为 MAPLE-be291f9d，其他正文保持不变。",
+              "status": "passed",
+              "claimIds": [
+                "c5"
+              ],
+              "note": "changelog.txt 已审阅，内容为指定单行。"
+            },
+            {
+              "criterionIndex": 3,
+              "criterion": "最终交付文件仅为 report.md 与 changelog.txt，不包含 monthly_summary.csv 或 reproduce.mjs",
+              "status": "passed",
+              "claimIds": [
+                "c8"
+              ],
+              "note": "最终交付清单仅含 report.md 与 changelog.txt。"
+            },
+            {
+              "criterionIndex": 4,
+              "criterion": "已发布的历史产物保持可读，未被覆盖或删除",
+              "status": "passed",
+              "claimIds": [
+                "c6"
+              ],
+              "note": "历史产物保持只读可读，未被覆盖或删除。"
+            }
+          ],
+          "review": "model_reviewed",
+          "finalArtifactIds": [
+            "report---b18b06c3-bfb5-484e-b29b-a27b7e22e8aa.md",
+            "changelog---cc8a7de9-7849-45e2-a3f0-299a5635b64e.txt"
+          ],
+          "inspectedArtifactIds": [
+            "report---b18b06c3-bfb5-484e-b29b-a27b7e22e8aa.md",
+            "changelog---cc8a7de9-7849-45e2-a3f0-299a5635b64e.txt"
+          ],
+          "instructionChecks": [
+            {
+              "sequence": 2,
+              "instruction": "本次修订替换此前“三文件交付”要求，基于刚才已发布的 report.md 做一次文本修改，不新建独立任务、不重新研究、不重跑原脚本。\n\n1. 以已发布的 report.md 为只读输入，物化该版本用于修改。\n2. 仅将 report.md 第三节中的核对码 CEDAR-4e8af6e6 改为 MAPLE-be291f9d；report.md 其余内容逐字保留，不得有任何其他改动。\n3. 生成 changelog.txt，内容仅为一行：核对码已由 CEDAR-4e8af6e6 更新为 MAPLE-be291f9d，其他正文保持不变。\n4. 校验：除该核对码外，新版 report.md 与已发布版本其余内容完全一致（例如逐行/逐字节差异仅限这一处）。\n5. 最终只交付两个文件：新版 report.md 与 changelog.txt。不要交付旧的 monthly_summary.csv 或 reproduce.mjs，不要重跑 reproduce.mjs。\n6. 修改过程中必须保留旧成果可读，不要覆盖或删除已发布的历史产物。\n\n最终回复只需说明交付与校验情况，不必复述正文。",
+              "status": "passed",
+              "claimIds": [
+                "c1",
+                "c2",
+                "c3",
+                "c4",
+                "c5",
+                "c6",
+                "c8"
+              ],
+              "note": "已按修订要求物化只读输入、仅改核对码、生成 changelog、完成校验并只交付两个文件。"
+            }
+          ]
+        },
+        "createdAt": "2026-10-15T08:13:36.560Z"
+      },
+      "text": "修订已完成并交付，两个文件均通过校验。\n\n**交付**\n- 新版 report.md\n- changelog.txt\n\n**校验结果**\n1. 已发布 report.md 作为只读输入物化（sha256 `44b35458…1c2126`，42926 字节），与工作区现有 report.md 逐字节一致，确认基于历史成果修改。\n2. 第三节核对码已由 `CEDAR-4e8af6e6` 改为 `MAPLE-be291f9d`；新版全文该旧码出现 0 次。\n3. 逐行 `diff -u` 仅显示这一行差异（一减一增共 2 行）；将新码反向替换回旧码后与原版比较，diff 为空，字节数同为 42926，差异严格限于该一处。\n4. changelog.txt 为单行指定文本（行数 1）。\n5. 历史产物 `report.md`、`source-report.md`、`monthly_summary.csv`、`reproduce.mjs` 均以只读形式保留，未被覆盖或删除；本次未交付旧 CSV 与脚本，也未重跑脚本。",
+      "createdAt": 1792052020088
+    }
+  ],
+  "finalRuns": [
+    {
+      "run_id": "d363b8a7-fc42-4ca1-bd32-bc59d9ce1588",
+      "parent_run_id": null,
+      "status": "succeeded",
+      "contract_version": 2,
+      "terminal_code": null,
+      "terminal_message": null
+    },
+    {
+      "run_id": "c6055d94-95c9-49b8-8731-77fc5792be2f",
+      "parent_run_id": null,
+      "status": "succeeded",
+      "contract_version": 4,
+      "terminal_code": null,
+      "terminal_message": null
+    }
+  ],
+  "usage": [
+    {
+      "operation": "agent.answer",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 1752
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 861
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 805
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 743
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 854
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 802
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 1402
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 821
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 798
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 623
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 730
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 763
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 736
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 909
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 741
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 712
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 828
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 636
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 910
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 796
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 822
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 660
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 677
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 643
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 471
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 770
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 702
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 656
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 877
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 632
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 934
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 708
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 812
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 918
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 490
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 747
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 372
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 382
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 598
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 808
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 1045
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 907
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 911
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 2499
+    },
+    {
+      "operation": "task.plan_contract",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 3004
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 1042
+    },
+    {
+      "operation": "task.allocation",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 2195
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 2731
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 569
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 877
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 741
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 2418
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 1073
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 721
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 3254
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 898
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 722
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 848
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 2707
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 605
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 802
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 3606
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 918
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 850
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 882
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 3118
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 826
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 726
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 761
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 464
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 890
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 809
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 771
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 537
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 842
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 829
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 955
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 773
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 640
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 630
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 706
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 744
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 844
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 632
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 910
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 744
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 651
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 712
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 860
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 693
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 642
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 632
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 1001
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 502
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 3376
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 6977
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 4988
+    },
+    {
+      "operation": "task.research_review",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 2696
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 3910
+    },
+    {
+      "operation": "session.generate_title",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 1423
+    },
+    {
+      "operation": "personal.reply_composition",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 1262
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 1329
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 2885
+    },
+    {
+      "operation": "task.plan_contract",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 3263
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 1331
+    },
+    {
+      "operation": "task.allocation",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 2219
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 2762
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 2908
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 3263
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 1052
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 6061
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 7092
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 4741
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 3470
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 6058
+    },
+    {
+      "operation": "task.research_review",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 4901
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 7931
+    },
+    {
+      "operation": "task.research_review",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 4207
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 3255
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 3483
+    },
+    {
+      "operation": "personal.reply_composition",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 1203
+    },
+    {
+      "operation": "session.generate_title",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 1222
+    }
+  ],
+  "isolatedStateDirectory": "/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-personal-handoff-live-qZfYuL",
+  "models": {
+    "personal": "deepseek/deepseek-flash",
+    "global": "xopc-cloud/auto"
+  },
+  "sourceCommit": "30959e330cfa0f00e2f1d11e825c8d7e18a6e3fa",
+  "sourceHashes": {
+    "src/agent/embedded/xopc-tools-bridge.ts": "8af51e2f188ecd8aa29db1eda312b1a17c782763f60e1c679f0df16c398b6382",
+    "src/agent/tools/review-workspace.ts": "8b4f8f742f111650483969d293e431283592298cd83eec0a1e617735da19d35a",
+    "src/tasks/task-evidence-ranges.ts": "76c5e63cd9099d8b60b91b0cc20d041b313e74b811c2eccff76fb5b0b00ab84f",
+    "src/personal-agent/performance.ts": "bcee77a2cd69b79d209289c6710243acee3fd1bcef2024838166e16b28355e7c",
+    "src/agent/tools/personal-performance.ts": "fc891a3b0ed47d83f51ed723f01623fc7b8c50e423fdeeb4051e3b5d5e4c81e9",
+    "src/gateway/service/run-gateway-agent.ts": "5cf88f983176614247b9c97004b4a6281849be0abf11d92b1f1d13970093781b",
+    "src/agent/tools/exec-command.ts": "6e850d75d0f6b61a178c235934480c07ee2d90193a84cb11237e75c0787b6368",
+    "scripts/personal-performance-live-smoke.mts": "bdc1a83ad4efc5c2e097dc5e51b1927dd2b45604396358c5ac8c402db0ac37e3",
+    "src/personal-agent/result-reader.ts": "6cdc80e6592534d98a0f361d01ee26d1b1dabc895294ae22904e9370e610c2a5",
+    "src/personal-agent/result-extraction.ts": "6f9a77d0824990886eacbe3784edeafc48740489d4f06318b8c0ffa72ad56b83",
+    "src/personal-agent/result-read-continuations.ts": "99fd1f2424a8be701e105f3b682d695a9b8d42888d23389b3fee9ac8710e17fd",
+    "src/agent/tools/personal-result-tool.ts": "2b80b71b63f35ee01343d8b3a7c482a9024a401afe757fa946b7f0094dde0419",
+    "src/agent/source-context/result-context.ts": "328078e2601644d6f0fc0056cc12610b9d91e4a01fd2eade9c3a182d055d2ae0",
+    "src/personal-agent/prompts.ts": "3872765ab036dd60fc674b716fd9afbbbaee1c7e40556953d3608337687a8021",
+    "src/personal-agent/policy.ts": "9ac77142744294dd7830a4324d012f04644ed1f9a25aae20e7d72abcdd2e4fb2",
+    "src/personal-agent/request-delivery.ts": "dea14498aa96fc0202fd7a8beb7f6f4538020f0b59b1df2dd2f21b6c407af06f",
+    "src/session/session-context-for-llm.ts": "d5a4516a6ffc3fe0f0f400269e317feded955108288a78477c3013150687e596",
+    "src/gateway/service.ts": "2803387e3d5dd34b1c624356bcf6d73d4e76c8a4eeb54a15588ac19078e561ba",
+    "src/storage/sqlite/migrations/251_personal_result_reads.sql": "3e24146d178e81edac970c2ceb208b2297c54b384475acacdeb215a007c82677",
+    "src/agent/tools/factory.ts": "d2cb5dcd433b1f83dd674ad8d1140b4ade9e0d2585bfb324fd61fa6b84338ecc",
+    "web/src/features/chat/messages/message-bubble.tsx": "21fb5faa73247090f633230b0f55eb25c0212368dd5b2925ef7380a736a36d73",
+    "web/src/features/chat/composer/chat-composer.tsx": "f717d3d627930204f41e67a47af8a16a1cee2464809ffd8b79c26d05c63b73a7",
+    "web/src/features/chat/messages/message-context-attachments.tsx": "f1cbcf906a55b5e51b66c65076de9cf01c20f39f86ee507367857ef3d7b1f9a7",
+    "scripts/build-personal-result-worker.mjs": "9bd76e63fa3912e8d85f2c995f63fb65dfbeb541dcd7b9129f2658e9686ac9e3",
+    "scripts/build-electron-server.mjs": "82463aeb5e863165303c7beb16c2f21045c060b2d7387577d9f453ba25844ceb",
+    "scripts/tsdown-build.mjs": "17c7e6478af9064c7d99f3f0119f2bc2888c39bed23a04f8fb04508cb1456581",
+    "tsdown.config.ts": "8680815cb9301664acb4fd619441f7276bafb0a4c59f303a5e597d0d88847449",
+    "scripts/personal-task-revision-live-smoke.mts": "ec77562eb18cf840632261cf576caecd0de69574a328b11fef8d72366d3a7a6e",
+    "src/tasks/task-handoff.ts": "cb451dfb161f5c384a9d7c61b9532d18ecf39f89fbd451b02bbd48318cd534c9",
+    "src/tasks/task-execution-capabilities.ts": "4f093278bb67b4dcb90c6cd3227b32e065505cfcd3c3ba12d4167db87a27fc48",
+    "src/agent/service/direct-turn-helpers.ts": "c197a36f227e17ab8cb094ddd673de515698b055cf4e0156fa054ae1eb61b62a",
+    "src/agent/service/process-direct-streaming.ts": "7b1ba171a9b35e76c21d63a531833becdcc13de426f04c5bc3a3c5726e536eb5",
+    "src/agent/service/process-direct-one-shot.ts": "724f6daa0ce87f938760b66e3812250011ca7b879baed65758e282202fc0b0da",
+    "src/agent/tools/personal-task-tool.ts": "08fb6fc511c98f4b275bd0bf5f97441c738435c09b4601569e43ffd912415487",
+    "src/agent/tools/xopc-use-tool.ts": "69f53c9532a2b52cf99e41f7d980fb44eb3998dc3cf697927dde96c7e1a02682",
+    "src/tasks/task-application-service.ts": "7abe79c711eabc426e9d920148c14dfea3e8329a1c5af657fee0fabf518a5f43",
+    "src/tasks/task-context-assembler.ts": "4b40befe96927060e282273b8ef84e9974190bc963931e7d3126c4ff980f12a5",
+    "src/tasks/task-allocation-service.ts": "b8b8a6d1968d7cb929908e186b9b33d8057e0c94e8d03aec37943a92421483d2",
+    "src/tasks/task-research-result.ts": "9e97e2e7ebcc68e2f19de0e2db44572ad6974677b7756038307d69756397eb4c",
+    "src/tasks/task-contract-planner.ts": "388a7acf4f0ac109f66da4851ec6cc114dc96a3b801644b12db65eef46fa4d8f",
+    "src/agent/tools/task-evidence.ts": "472ebd3d02acc5dff9ba487969af830c132a5898af526a580356f5b6271d7ba0",
+    "src/agent/tools/task-collaboration-tool.ts": "5093564bf852689cf3809d8bd04e2278be129a44ac6ec4209d9626decaba9407",
+    "src/agent/tools/task-result-tool.ts": "d529174bf448391f9980ab334a9afb117c0013e611b3521e4207cf82082837d0",
+    "src/tasks/task-run-dispatcher.ts": "412749d01b40b290645a775f5fb43b04816e8eb050f8506d8da10c74efaf7e7d",
+    "src/tasks/task-run-coordinator.ts": "44a5d4b9bea2cad041050eac34a82d0132396ea2a4dceb0b64e7b91e9bd41196",
+    "src/tasks/task-read-model-projector.ts": "8d4c368c797b3321886e2c43430665ccb8c5a3e5b858c56248786f637f57fd41",
+    "src/tasks/task-conversation-repository.ts": "7ae142eb547a454baabed1d9dab5c1bf7cf170168e65ee7c3f72fba93707725f",
+    "src/media/session-references.ts": "12d6be13a23a0f7e5230ddc030084e12738a925c10122ab28c383bd89d9b3186",
+    "src/tasks/task-result-delivery-repository.ts": "5b2cbf1382ac44d817ca301ba6cecba7096f3ac0b8cf07f80e9410c0953ddf26",
+    "src/tasks/task-result-delivery-service.ts": "ec0ba70c13d54dad78b8a74a910f955ef9352151aa19e52e74836712ee0da8f6",
+    "src/personal-agent/reply-composer.ts": "30924e966c7bc5598fa97c8e606293c81b365ad1c9abe4cf06b40870af3a0a68",
+    "src/personal-agent/communication.ts": "8ce5af43100ceff2cd892371f51f4ec6ace39a8a0d57caa3cd3ec4a85862860d",
+    "src/storage/sqlite/migrations/252_task_work_revisions.sql": "fe18e67f31ce61ef6c595debf2f12fa4948c3388346061d41d369d97044d6a1f",
+    "packages/gateway-contract/src/task-result-delivery.ts": "29c88ecdd8f91f62cba222c612f9bb29b08d302ac1c0e754363c57da2a69e5a8",
+    "packages/gateway-contract/src/task-research-result.ts": "c23ee2b7a6716e770b9bca76aaafb43a0b64852dcfddb4e56de24c699c985b1d",
+    "packages/gateway-contract/src/turn-outcome.ts": "06f06cdcbd314e65aacd10c95e667d0c3b922f20b8a9189d6474b5b382ae9005",
+    "src/tasks/task-research-repair.ts": "41ba88470a72570a33714f47dc380a8abd978f46d8abc082e4dc57d185e75cdb",
+    "pnpm-lock.yaml": "dafdd4572eecba69104ef37ce3348a09c4924ca4a5ddb523e146ccb985391898"
+  },
+  "sourceChangedDuringRun": false,
+  "limitations": "Real configured models and authenticated Gateway; isolated synthetic files. Registration and policy checks are not third-party network or binary parser readiness probes. Isolated same-source idle vs background comparison, sequential arms with growing chat history; not a pre-change code or production p95 baseline. Warmup excluded, failures and all outliers retained. WebSocket first non-whitespace assistant text measures transport receipt, not semantic answer correctness."
+}

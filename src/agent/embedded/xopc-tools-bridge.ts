@@ -2,6 +2,7 @@ import type { AgentTool } from '@earendil-works/pi-agent-core';
 import type { ToolDefinition } from '@earendil-works/pi-coding-agent';
 import { withDataToolPermissions } from '../tools/dataBatch.js';
 import { getXopcToolMetadata } from './tool-metadata.js';
+import { recordPersonalPerformance } from '../../personal-agent/performance.js';
 
 const APPLY_PATCH_BEGIN_MARKER = '*** Begin Patch';
 const APPLY_PATCH_END_MARKER = '*** End Patch';
@@ -72,7 +73,7 @@ export function validateApplyPatchEnvelope(params: unknown): ApplyPatchEnvelopeE
     };
   }
 
-  const lines = patch.split(/\r?\n/);
+  const lines = patch.replace(/[\r\n]+$/, '').split(/\r?\n/);
   const firstLine = lines[0] ?? '';
   if (firstLine !== APPLY_PATCH_BEGIN_MARKER) {
     return {
@@ -146,6 +147,8 @@ export function xopcToolsToDefinitions(tools: AgentTool[]): ToolDefinition[] {
         if (tool.name === 'apply_patch') {
           const envelopeError = validateApplyPatchEnvelope(params);
           if (envelopeError) {
+            recordPersonalPerformance({ phase: 'tool', tool: tool.name, toolCallId, durationMs: 0,
+              status: 'error', errorCode: 'patch_envelope' });
             return invalidApplyPatchEnvelopeResult(envelopeError) as never;
           }
         }

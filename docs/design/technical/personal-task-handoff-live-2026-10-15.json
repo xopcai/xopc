@@ -1,0 +1,500 @@
+{
+  "success": true,
+  "pingMs": 1053,
+  "totalMs": 112211,
+  "submissionMs": [
+    15.973833000000013,
+    8.477790999997524
+  ],
+  "materializedInputCopies": 3,
+  "taskCount": 2,
+  "firstOutcome": "succeeded",
+  "selectedOutcome": "succeeded",
+  "handoff": {
+    "originalCaptured": true,
+    "selectedSourcePinned": true,
+    "noFullConversation": true
+  },
+  "executionNeeds": [
+    {
+      "capability": "read_input",
+      "source": "background_inference",
+      "reason": "Minimal operation inferred by the background contract planner; no authority granted"
+    },
+    {
+      "capability": "execute_code",
+      "source": "background_inference",
+      "reason": "Minimal operation inferred by the background contract planner; no authority granted"
+    },
+    {
+      "capability": "publish_files",
+      "source": "background_inference",
+      "reason": "Minimal operation inferred by the background contract planner; no authority granted"
+    }
+  ],
+  "selectedSourceReads": 7,
+  "sourceValidationRetries": 0,
+  "selectedOutput": {
+    "bytes": 109,
+    "sha256": "959463b79b463ef3bc2e457be472b0f52faee3c34c36474f5f2a690032ffbc7e",
+    "content": "核对码：CEDAR-db9157c2\n适用范围：仅适用于隔离验收样本，不适用于生产经营预测。\n"
+  },
+  "executorRevocationBlocked": true,
+  "mainInputPreReads": 0,
+  "historyReferenceWithoutUiSelection": true,
+  "workerToolErrors": [
+    {
+      "tool": "task_collaboration",
+      "error": [
+        {
+          "type": "text",
+          "text": "Only a selected workspace file can be materialized"
+        }
+      ]
+    },
+    {
+      "tool": "task_collaboration",
+      "error": [
+        {
+          "type": "text",
+          "text": "Only a selected workspace file can be materialized"
+        }
+      ]
+    }
+  ],
+  "marker": "RESULT-225b9db6",
+  "toolCalls": [
+    {
+      "name": "personal_task",
+      "input": {
+        "command": "submit",
+        "title": "复制 source-report.md 为 report.md 并校验后发布三文件",
+        "objective": "在隔离工作区把 source-report.md 原样复制为 report.md，运行 node reproduce.mjs 检查 report.md 与 monthly_summary.csv，然后只发布 report.md、monthly_summary.csv、reproduce.mjs。",
+        "description": "已准备好的文件包，请按以下要求交付，不需要新增分析、研究或改写：\n\n1. 把工作区中的 `source-report.md` 原样复制为 `report.md`（内容不做任何改写）。\n2. 运行现有的 `node reproduce.mjs`，检查它与 `monthly_summary.csv`（即该脚本对 report.md 和 monthly_summary.csv 的检查）。\n3. 只发布以下三个文件：`report.md`、`monthly_summary.csv`、`reproduce.mjs`。不要发布其他文件。\n\n权限：允许在隔离工作区复制文件、运行该检查脚本并发布指定的三个文件。\n\n最终回复只说明交付情况（发布了哪些文件、检查脚本运行结果），不要复述文件正文或附录核对码。",
+        "sourceRefs": [
+          {
+            "kind": "file",
+            "sourceId": "source-report.md"
+          },
+          {
+            "kind": "file",
+            "sourceId": "monthly_summary.csv"
+          },
+          {
+            "kind": "file",
+            "sourceId": "reproduce.mjs"
+          }
+        ],
+        "expectedOutputs": [
+          "report.md",
+          "monthly_summary.csv",
+          "reproduce.mjs"
+        ]
+      },
+      "durationMs": 15.973833000000013,
+      "output": [
+        {
+          "type": "text",
+          "text": "{\n  \"ok\": true,\n  \"task\": {\n    \"id\": \"27cb9f88-2bdf-44ca-99c9-c4f120cead74\",\n    \"title\": \"复制 source-report.md 为 report.md 并校验后发布三文件\",\n    \"phase\": \"ready\",\n    \"version\": 1\n  },\n  \"operationalState\": \"allocating\",\n  \"allocation\": {\n    \"id\": \"e0cf8062-ccf9-4d0b-b69a-166f277d74f0\",\n    \"taskId\": \"27cb9f88-2bdf-44ca-99c9-c4f120cead74\",\n    \"status\": \"pending\",\n    \"attempts\": 0,\n    \"updatedAt\": 1792041085795\n  }\n}\nOpen in xopc: [Open](xopc://open?kind=task&id=27cb9f88-2bdf-44ca-99c9-c4f120cead74)\nxopc-product-delivery:%7B%22version%22%3A2%2C%22operation%22%3A%22created%22%2C%22primary%22%3A%7B%22kind%22%3A%22task%22%2C%22id%22%3A%2227cb9f88-2bdf-44ca-99c9-c4f120cead74%22%2C%22title%22%3A%22%E5%A4%8D%E5%88%B6%20source-report.md%20%E4%B8%BA%20report.md%20%E5%B9%B6%E6%A0%A1%E9%AA%8C%E5%90%8E%E5%8F%91%E5%B8%83%E4%B8%89%E6%96%87%E4%BB%B6%22%2C%22status%22%3A%22ready%2Fallocating%22%2C%22revision%22%3A%221%22%2C%22capabilities%22%3A%5B%22open%22%2C%22edit%22%2C%22continue_in_chat%22%5D%7D%7D"
+        }
+      ]
+    },
+    {
+      "name": "personal_task",
+      "input": {
+        "command": "submit",
+        "title": "从 report.md 第三节摘录核对码与适用范围到摘录.txt",
+        "objective": "沿用已交付的 report.md 作为唯一输入，读取其第三节中的核对码和适用范围，将这两项原文写入摘录.txt 并发布该文件。",
+        "description": "这是一个独立的新任务，不要复用之前的任务，也不要重新生成报告。\n\n输入：仅使用上一次交付的 `report.md`（不要使用 source-report.md）。\n\n要求：\n1. 读取 `report.md` 第三节，取出其中的「核对码」和「适用范围」两项。\n2. 将这两项的内容以原文写入新文件 `摘录.txt`（不要改写、总结或翻译）。\n3. 发布 `摘录.txt` 这一个文件。\n\n约束：不需要新增分析、研究或改写；只发布 `摘录.txt`。\n\n最终回复只说明交付情况，不要在主对话复述摘录正文。",
+        "sourceRefs": [
+          {
+            "kind": "result",
+            "resultId": "4bad0fe2-df4f-4cf8-b377-deff9358d1e7",
+            "sourceId": "report.md"
+          }
+        ],
+        "expectedOutputs": [
+          "摘录.txt"
+        ]
+      },
+      "durationMs": 8.477790999997524,
+      "output": [
+        {
+          "type": "text",
+          "text": "{\n  \"ok\": true,\n  \"task\": {\n    \"id\": \"ac5f1baf-cba0-41ea-a0d2-8c070654f1cb\",\n    \"title\": \"从 report.md 第三节摘录核对码与适用范围到摘录.txt\",\n    \"phase\": \"ready\",\n    \"version\": 1\n  },\n  \"operationalState\": \"allocating\",\n  \"allocation\": {\n    \"id\": \"728e789b-7b10-41e2-a0e3-363d1a1ad131\",\n    \"taskId\": \"ac5f1baf-cba0-41ea-a0d2-8c070654f1cb\",\n    \"status\": \"pending\",\n    \"attempts\": 0,\n    \"updatedAt\": 1792041141161\n  }\n}\nOpen in xopc: [Open](xopc://open?kind=task&id=ac5f1baf-cba0-41ea-a0d2-8c070654f1cb)\nxopc-product-delivery:%7B%22version%22%3A2%2C%22operation%22%3A%22created%22%2C%22primary%22%3A%7B%22kind%22%3A%22task%22%2C%22id%22%3A%22ac5f1baf-cba0-41ea-a0d2-8c070654f1cb%22%2C%22title%22%3A%22%E4%BB%8E%20report.md%20%E7%AC%AC%E4%B8%89%E8%8A%82%E6%91%98%E5%BD%95%E6%A0%B8%E5%AF%B9%E7%A0%81%E4%B8%8E%E9%80%82%E7%94%A8%E8%8C%83%E5%9B%B4%E5%88%B0%E6%91%98%E5%BD%95.txt%22%2C%22status%22%3A%22ready%2Fallocating%22%2C%22revision%22%3A%221%22%2C%22capabilities%22%3A%5B%22open%22%2C%22edit%22%2C%22continue_in_chat%22%5D%7D%7D"
+        }
+      ]
+    }
+  ],
+  "usage": [
+    {
+      "operation": "agent.answer",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 3254
+    },
+    {
+      "operation": "task.plan_contract",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 1992
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 468
+    },
+    {
+      "operation": "task.allocation",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 1656
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 2122
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 609
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 2247
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 1796
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 2384
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 1811
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 3460
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 1821
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 2288
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 3103
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 5173
+    },
+    {
+      "operation": "task.research_review",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 2634
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 3551
+    },
+    {
+      "operation": "task.research_review",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 1993
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 2255
+    },
+    {
+      "operation": "personal.reply_composition",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 1134
+    },
+    {
+      "operation": "session.generate_title",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 779
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 1630
+    },
+    {
+      "operation": "task.plan_contract",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 1644
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 554
+    },
+    {
+      "operation": "task.allocation",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 1716
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 2096
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 1967
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 2088
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 3139
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 2019
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 2432
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 3670
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 2913
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 3499
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 2885
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 3424
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 2939
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 2199
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 3604
+    },
+    {
+      "operation": "task.research_review",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 1832
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 2377
+    },
+    {
+      "operation": "personal.reply_composition",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 749
+    },
+    {
+      "operation": "session.generate_title",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "running",
+      "duration_ms": null
+    }
+  ],
+  "isolatedStateDirectory": "/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-personal-handoff-live-SEfEal",
+  "models": {
+    "personal": "deepseek/deepseek-flash",
+    "global": "xopc-cloud/auto"
+  },
+  "sourceCommit": "30959e330cfa0f00e2f1d11e825c8d7e18a6e3fa",
+  "sourceHashes": {
+    "src/personal-agent/result-reader.ts": "5d4c555a8a5d9e7142aff4a43565b2156e2e85008080dbc885b7f84baff31fc9",
+    "src/personal-agent/result-extraction.ts": "ac96c5ec453b4e8b426822a9caad237777f09067336294cf9121c958c38c1028",
+    "src/personal-agent/result-read-continuations.ts": "99fd1f2424a8be701e105f3b682d695a9b8d42888d23389b3fee9ac8710e17fd",
+    "src/agent/tools/personal-result-tool.ts": "51dfd26f13d7056979a7e615df2a59846974ad5ae9498c4076d731364566cf66",
+    "src/agent/source-context/result-context.ts": "328078e2601644d6f0fc0056cc12610b9d91e4a01fd2eade9c3a182d055d2ae0",
+    "src/personal-agent/prompts.ts": "7249f8a4a0e4337c48f6a430758333a652f4758f79651c70a82a40d070e00a26",
+    "src/personal-agent/policy.ts": "9ac77142744294dd7830a4324d012f04644ed1f9a25aae20e7d72abcdd2e4fb2",
+    "src/personal-agent/request-delivery.ts": "dea14498aa96fc0202fd7a8beb7f6f4538020f0b59b1df2dd2f21b6c407af06f",
+    "src/session/session-context-for-llm.ts": "d5a4516a6ffc3fe0f0f400269e317feded955108288a78477c3013150687e596",
+    "src/gateway/service.ts": "c564e60f3a10bcd12db37926ad78bf97ef18bb644395ae6a6831dc9bc73be252",
+    "src/storage/sqlite/migrations/251_personal_result_reads.sql": "3e24146d178e81edac970c2ceb208b2297c54b384475acacdeb215a007c82677",
+    "src/agent/tools/factory.ts": "1b9d5325fb3727fa947d4f88434fcd17f76ab6c743c8735ce8c8f32a53a52a87",
+    "web/src/features/chat/messages/message-bubble.tsx": "8a241fa7352ca8c4cb1b06fedeb5b57a41dff9e6c6a1e7007efe338c0cee2204",
+    "web/src/features/chat/composer/chat-composer.tsx": "f717d3d627930204f41e67a47af8a16a1cee2464809ffd8b79c26d05c63b73a7",
+    "web/src/features/chat/messages/message-context-attachments.tsx": "f1cbcf906a55b5e51b66c65076de9cf01c20f39f86ee507367857ef3d7b1f9a7",
+    "scripts/build-personal-result-worker.mjs": "9bd76e63fa3912e8d85f2c995f63fb65dfbeb541dcd7b9129f2658e9686ac9e3",
+    "scripts/build-electron-server.mjs": "82463aeb5e863165303c7beb16c2f21045c060b2d7387577d9f453ba25844ceb",
+    "scripts/tsdown-build.mjs": "17c7e6478af9064c7d99f3f0119f2bc2888c39bed23a04f8fb04508cb1456581",
+    "tsdown.config.ts": "8680815cb9301664acb4fd619441f7276bafb0a4c59f303a5e597d0d88847449",
+    "scripts/personal-task-handoff-live-smoke.mts": "6891b4c5a416807383c7edfca0856fa57da9ea6d8d8735da17d9c01505bdd3ac",
+    "src/tasks/task-handoff.ts": "8705dbbe8145c4e741ca4d01500d503e5dabe5419138b75dfe9c3d90ca79e16b",
+    "src/tasks/task-execution-capabilities.ts": "4f093278bb67b4dcb90c6cd3227b32e065505cfcd3c3ba12d4167db87a27fc48",
+    "src/agent/service/direct-turn-helpers.ts": "c197a36f227e17ab8cb094ddd673de515698b055cf4e0156fa054ae1eb61b62a",
+    "src/agent/service/process-direct-streaming.ts": "7b1ba171a9b35e76c21d63a531833becdcc13de426f04c5bc3a3c5726e536eb5",
+    "src/agent/service/process-direct-one-shot.ts": "724f6daa0ce87f938760b66e3812250011ca7b879baed65758e282202fc0b0da",
+    "src/agent/tools/personal-task-tool.ts": "93298e3d2f05c88a8a8804445f110b6bd35c2c4cf589e7ced8b850c7936feb81",
+    "src/agent/tools/xopc-use-tool.ts": "69f53c9532a2b52cf99e41f7d980fb44eb3998dc3cf697927dde96c7e1a02682",
+    "src/tasks/task-application-service.ts": "61a7f3d1ec8d4849473279a1ce0de1d931fc10f52bddbc249053c9e275c2213c",
+    "src/tasks/task-context-assembler.ts": "678d43c89e2f9bbe2f99a865ac7f914c3f8692186c5e23fa03318ac2a7f3a112",
+    "src/tasks/task-allocation-service.ts": "3096ec6c53406d1b62ba3c33f46522e92c3ced3d356748a31ef519d932e7edea",
+    "src/tasks/task-research-result.ts": "b1fb8bad2c8bb6baff53f3417c55317ff389eac7df1baba8fd57c1adddfc33c6",
+    "src/tasks/task-contract-planner.ts": "388a7acf4f0ac109f66da4851ec6cc114dc96a3b801644b12db65eef46fa4d8f",
+    "src/agent/tools/task-evidence.ts": "f81c8564a095a1ad8ffc34ce28059879e0e45ee7b9497e6cbe83ea81d95b3148",
+    "src/agent/tools/task-collaboration-tool.ts": "5d6332de491c403967f8842644357691e0f0f27883dbbb62505adab0a2d2ba7a",
+    "src/agent/tools/task-result-tool.ts": "c169f95335ae71ec32cb9fc5718dcfe8d4e00a0462b55e30f9e78588de04963b",
+    "src/tasks/task-run-dispatcher.ts": "412749d01b40b290645a775f5fb43b04816e8eb050f8506d8da10c74efaf7e7d",
+    "pnpm-lock.yaml": "dafdd4572eecba69104ef37ce3348a09c4924ca4a5ddb523e146ccb985391898"
+  },
+  "sourceChangedDuringRun": false,
+  "limitations": "Real configured models and authenticated Gateway; isolated synthetic files. Registration and policy checks are not third-party network or binary parser readiness probes. Not production p95.",
+  "postRunPublishedByteVerification": {
+    "method": "Read stored published media bytes and compare with the original owner-workspace fixture after authenticated Gateway run",
+    "files": [
+      {
+        "title": "report.md",
+        "bytes": 42926,
+        "sha256": "3da10cff24937602e7d71074a094b3c8dc2cd42e073b7d528147302e27aae9cb"
+      },
+      {
+        "title": "monthly_summary.csv",
+        "bytes": 36,
+        "sha256": "412359e374bd855ab032ea0db39ccde7540fa5105a0e1e4d0bb0dd5e023fd1df"
+      },
+      {
+        "title": "reproduce.mjs",
+        "bytes": 370,
+        "sha256": "76481ffc6a73ecf8f4006e9f7abdf8cfcde663f2fecf3167c5beb13a669b84d7"
+      }
+    ],
+    "allByteIdentical": true
+  }
+}
