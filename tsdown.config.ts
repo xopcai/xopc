@@ -10,6 +10,7 @@ const sourcemap = process.env.XOPC_BUILD_SOURCEMAP === '1';
 export default defineConfig({
   entry: [
     './src/**/*.ts',
+    '!./src/personal-agent/result-extraction.ts',
     '!./src/**/*.test.ts',
     '!./src/**/__tests__/**/*.ts',
     './extensions/telegram/src/**/*.ts',

@@ -1,0 +1,952 @@
+{
+  "passed": false,
+  "checks": {
+    "functionalChain": false,
+    "unchangedRuntime": true,
+    "mainP95": true,
+    "fullBackgroundOverlap": true,
+    "hotReadP95": false,
+    "localWriteSmoke": false,
+    "fallbackBudget": false,
+    "noWorkerToolFailures": false,
+    "noMaterializationMisuse": false,
+    "preservedVersionedDelivery": false
+  },
+  "main": {
+    "baseline": {
+      "count": 40,
+      "p50Ms": 932.3189589999965,
+      "p95Ms": 1533.7172500000015,
+      "p99Ms": 2813.6833750000005,
+      "maxMs": 2813.6833750000005
+    },
+    "loaded": {
+      "count": 40,
+      "p50Ms": 956.4003749999974,
+      "p95Ms": 1259.497709000003,
+      "p99Ms": 1476.2775419999962,
+      "maxMs": 1476.2775419999962
+    },
+    "failures": 0,
+    "minimumSamples": 40,
+    "ratio": 0.8212059354486635,
+    "limit": 1.1,
+    "verdict": "passed"
+  },
+  "localWriteSmoke": {
+    "count": 0,
+    "p50Ms": null,
+    "p95Ms": null,
+    "p99Ms": null,
+    "maxMs": null
+  },
+  "busyFallback": {
+    "count": 0,
+    "p50Ms": null,
+    "p95Ms": null,
+    "p99Ms": null,
+    "maxMs": null
+  },
+  "workerFailures": [
+    {
+      "tool": "publish_task_result",
+      "toolCallId": "call_00_WBV7ZgZGxKb0GFXdrl5x3113",
+      "error": "{\"code\":\"source_quote_mismatch\",\"message\":\"Sources have no matching successful tool read.\",\"failures\":[{\"sourceId\":\"src-run\",\"observedToolCallId\":\"call_00_emSsCCyBBFEdR26IQtPj4796\",\"observedExcerpt\":\"Fixture files verified\",\"repair\":\"This is one actual contiguous excerpt from that read. Use a single observed excerpt; do not join it with separated passages. The claim still needs independent support review.\",\"reason\":\"excerpt_or_url_not_observed\",\"matchingToolCallIds\":[]}],\"recovery\":\"Fix all listed sources together. Prefer a supplied observedExcerpt as one contiguous quote. Never concatenate separated passages. Read task_collaboration(get, section=evidence) for real toolCallIds, then read one toolCallId and copy a short contiguous excerpt. Omit a URL absent from the observed read. Keep stable IDs; change invalid sources or retire unsupported claims. Your draft final reply and earlier reviews are not evidence. Do not retry unchanged input.\",\"availableReads\":[{\"toolCallId\":\"call_01_b8zpHUOpXH1nwf6q6SUw6497\",\"toolName\":\"task_collaboration\",\"chars\":703},{\"toolCallId\":\"call_00_VYC8GMXK29Sjd69jdcCE0104\",\"toolName\":\"task_collaboration\",\"chars\":704},{\"toolCallId\":\"call_01_RNHjsJZlLGVptnr778N91556\",\"toolName\":\"task_collaboration\",\"chars\":692},{\"toolCallId\":\"call_00_bn4LbkWRCBrc4wQmWluw9791\",\"toolName\":\"read_file\",\"chars\":429},{\"toolCallId\":\"call_01_EYj4sZvI6y5UShZ10emE2202\",\"toolName\":\"read_file\",\"chars\":93},{\"toolCallId\":\"call_00_4RNYY49n6EL2gUjwkcN47621\",\"toolName\":\"exec_command\",\"chars\":1150},{\"toolCallId\":\"call_00_lFNq9pt6xmtMdrbngZRX0681\",\"toolName\":\"exec_command\",\"chars\":879},{\"toolCallId\":\"call_00_emSsCCyBBFEdR26IQtPj4796\",\"toolName\":\"exec_command\",\"chars\":584},{\"toolCallId\":\"call_00_Wn3yTn8kaNp20wxbLZdz1197\",\"toolName\":\"publish_artifacts\",\"chars\":628}]}"
+    },
+    {
+      "tool": "publish_task_result",
+      "toolCallId": "call_00_Xqrpz6aCyw77PQWyW5613608",
+      "error": "{\"code\":\"source_quote_mismatch\",\"message\":\"Sources have no matching successful tool read.\",\"failures\":[{\"sourceId\":\"src-script\",\"observedToolCallId\":\"call_00_bn4LbkWRCBrc4wQmWluw9791\",\"observedExcerpt\":\"assert.equal(readFileSync('report.md', 'utf8'), readFileSync('source-report.md', 'utf8'));\",\"repair\":\"This is one actual contiguous excerpt from that read. Use a single observed excerpt; do not join it with separated passages. The claim still needs independent support review.\",\"reason\":\"excerpt_or_url_not_observed\",\"matchingToolCallIds\":[]}],\"recovery\":\"Fix all listed sources together. Prefer a supplied observedExcerpt as one contiguous quote. Never concatenate separated passages. Read task_collaboration(get, section=evidence) for real toolCallIds, then read one toolCallId and copy a short contiguous excerpt. Omit a URL absent from the observed read. Keep stable IDs; change invalid sources or retire unsupported claims. Your draft final reply and earlier reviews are not evidence. Do not retry unchanged input.\",\"availableReads\":[{\"toolCallId\":\"call_01_b8zpHUOpXH1nwf6q6SUw6497\",\"toolName\":\"task_collaboration\",\"chars\":703},{\"toolCallId\":\"call_00_VYC8GMXK29Sjd69jdcCE0104\",\"toolName\":\"task_collaboration\",\"chars\":704},{\"toolCallId\":\"call_01_RNHjsJZlLGVptnr778N91556\",\"toolName\":\"task_collaboration\",\"chars\":692},{\"toolCallId\":\"call_00_bn4LbkWRCBrc4wQmWluw9791\",\"toolName\":\"read_file\",\"chars\":429},{\"toolCallId\":\"call_01_EYj4sZvI6y5UShZ10emE2202\",\"toolName\":\"read_file\",\"chars\":93},{\"toolCallId\":\"call_00_4RNYY49n6EL2gUjwkcN47621\",\"toolName\":\"exec_command\",\"chars\":1150},{\"toolCallId\":\"call_00_lFNq9pt6xmtMdrbngZRX0681\",\"toolName\":\"exec_command\",\"chars\":879},{\"toolCallId\":\"call_00_emSsCCyBBFEdR26IQtPj4796\",\"toolName\":\"exec_command\",\"chars\":584},{\"toolCallId\":\"call_00_Wn3yTn8kaNp20wxbLZdz1197\",\"toolName\":\"publish_artifacts\",\"chars\":628}]}"
+    },
+    {
+      "tool": "exec_command",
+      "toolCallId": "call_00_G0QuRpbkmYbtcyA9x8sZ2809",
+      "status": "blocked",
+      "error": "Sandbox blocked command: Injection: Newline-injected destructive command\nNothing was executed. Remove destructive cleanup and use a fresh output directory with mkdir -p, or narrow the operation. Do not repeat unchanged or rephrase the blocked operation to bypass policy.\nTask source toolCallId: call_00_G0QuRpbkmYbtcyA9x8sZ2809"
+    },
+    {
+      "tool": "exec_command",
+      "toolCallId": "call_00_L7qjJINwabImxYvnAnuh6651",
+      "status": "failed",
+      "error": "Command exited with code 1\n--- dir listing ---\ntotal 96\ndrwxr-xr-x@ 4 micjoyce  staff    128 Oct 15 15:48 .\ndrwxr-xr-x@ 4 micjoyce  staff    128 Oct 15 15:48 ..\n-rw-------@ 1 micjoyce  staff     86 Oct 15 15:48 changelog.txt\n-rw-r--r--@ 1 micjoyce  staff  42926 Oct 15 15:48 report.md\n--- roundtrip reverse check ---\nROUNDTRIP_IDENTICAL=yes\n--- old input still readable ---\n   42926\n--- new file line count ---\n     708\n--- changelog content (cat -A) ---\ncat: illegal option -- A\nusage: cat [-belnstuv] [file ...]\n\nNext action: The command failed. Inspect stderr first, fix the underlying issue, then re-run the narrowest relevant verification command.\n\nLog: /var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-personal-handoff-live-tEeyaw/command-runs/1541a769b8bc4f2dcb25f58c26c164308527919de164b0ccd05653926c10241a/d4f4946c-0be1-4a6f-804b-51139d09f31d.log\nTask source toolCallId: call_00_L7qjJINwabImxYvnAnuh6651"
+    },
+    {
+      "tool": "publish_task_result",
+      "toolCallId": "call_00_AYeT0sVBCj2gRxUhbpQU3472",
+      "error": "{\"code\":\"source_quote_mismatch\",\"message\":\"Sources have no matching successful tool read.\",\"failures\":[{\"sourceId\":\"src-roundtrip-run\",\"reason\":\"excerpt_or_url_not_observed\",\"matchingToolCallIds\":[]},{\"sourceId\":\"src-changelog-run\",\"observedToolCallId\":\"call_00_3lSQfCo2NmV1NP6anXjo5239\",\"observedExcerpt\":\"核对码已由 CEDAR-a593773a 更新为 MAPLE-e4d1ddd3，其他正文保持不变。\",\"repair\":\"This is one actual contiguous excerpt from that read. Use a single observed excerpt; do not join it with separated passages. The claim still needs independent support review.\",\"reason\":\"excerpt_or_url_not_observed\",\"matchingToolCallIds\":[]}],\"recovery\":\"Fix all listed sources together. Prefer a supplied observedExcerpt as one contiguous quote. Never concatenate separated passages. Read task_collaboration(get, section=evidence) for real toolCallIds, then read one toolCallId and copy a short contiguous excerpt. Omit a URL absent from the observed read. Keep stable IDs; change invalid sources or retire unsupported claims. Your draft final reply and earlier reviews are not evidence. Do not retry unchanged input.\",\"availableReads\":[{\"toolCallId\":\"call_01_WgpeStbfumgiJfp5XgHG6581\",\"toolName\":\"task_collaboration\",\"chars\":804},{\"toolCallId\":\"call_00_hHNFWJlE332gu4t1to6Z2025\",\"toolName\":\"read_file\",\"chars\":10592},{\"toolCallId\":\"call_00_RmigukG4LhGt3kPfEYEC7058\",\"toolName\":\"read_file\",\"chars\":4363},{\"toolCallId\":\"call_00_ZVwCiXGmN0g5B1NPR3iJ0775\",\"toolName\":\"exec_command\",\"chars\":734},{\"toolCallId\":\"call_00_3lSQfCo2NmV1NP6anXjo5239\",\"toolName\":\"exec_command\",\"chars\":1004},{\"toolCallId\":\"call_00_OMzmMkKHgcSJiZN5b9OQ5669\",\"toolName\":\"publish_artifacts\",\"chars\":474}]}"
+    },
+    {
+      "tool": "publish_task_result",
+      "toolCallId": "call_00_mApG4ck51mYT2KknzscF6852",
+      "error": "[\n  {\n    \"code\": \"custom\",\n    \"path\": [],\n    \"message\": \"Retiring claims requires amend mode\"\n  }\n]"
+    }
+  ],
+  "trace": {
+    "inputs": [
+      {
+        "id": "41466d88-04cd-48d6-bd84-93b44da87c3b",
+        "run_id": "4b162d27-616e-456f-a524-fb02452845b7",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792050231127
+      },
+      {
+        "id": "21aa0235-3344-4aa0-9831-64b710ee007d",
+        "run_id": "e4e4ee50-5cae-4650-8bee-414d2ba80237",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792050233681
+      },
+      {
+        "id": "ef64d20c-f1dc-4609-a21a-28ccf5a243c5",
+        "run_id": "3f93fe32-1013-4a32-8f99-be7e9dabf773",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792050234915
+      },
+      {
+        "id": "a2dad81b-f957-44ad-85e6-7601d7a0bfdd",
+        "run_id": "87e30fea-7ae8-4af2-abcf-a9ca98160053",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792050236048
+      },
+      {
+        "id": "bf16540f-50c7-4e8b-9ede-ea6a3010088f",
+        "run_id": "19b53214-d189-403d-ac7b-46aee51895c5",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792050237189
+      },
+      {
+        "id": "377c75d3-83dd-489c-8b50-9a3bd9b51ea4",
+        "run_id": "55baacd1-d2a0-4030-a976-90a09db77aa2",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792050238421
+      },
+      {
+        "id": "414c1580-0ffb-4567-9ccd-c3ba0384d6d0",
+        "run_id": "44e3ec26-e82b-4ddd-a3c7-17fdc0e29240",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792050239451
+      },
+      {
+        "id": "fec1e820-6340-4ec4-9146-5377bc37bce8",
+        "run_id": "3e23042f-c6d3-411f-9e74-8aa133c81cac",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792050240790
+      },
+      {
+        "id": "de4f5a6c-5d8d-4c76-af24-1e577f4227c9",
+        "run_id": "f8a4a029-f1dd-4cba-9ffb-924286c82cc3",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792050241716
+      },
+      {
+        "id": "2f0af38c-ec97-4764-9ebb-9918f4623159",
+        "run_id": "6a8d5b42-3857-4b98-b709-5a12dabdaef6",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792050243459
+      },
+      {
+        "id": "45b0af3f-bb06-4975-83e1-bbeaad6ded50",
+        "run_id": "09077e4d-25b0-492f-842f-f151e1085c67",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792050244383
+      },
+      {
+        "id": "8c6c7270-0d32-4f10-aacf-059d2763f7e9",
+        "run_id": "bbc89904-b759-4c29-ab81-5ee7e35df30a",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792050245615
+      },
+      {
+        "id": "a84dde26-72bf-4281-9bd8-7b2caed781ef",
+        "run_id": "cf48f91e-7d4a-438d-98a2-46676452fefc",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792050246543
+      },
+      {
+        "id": "a51e4ad9-848e-43c1-ad8c-8d74b04189e9",
+        "run_id": "45bf267a-dd37-43ba-8b3b-331f4e447152",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792050247672
+      },
+      {
+        "id": "f21d08e1-0b0c-4997-a53e-482d94d0731b",
+        "run_id": "9db88f97-feeb-4604-a1de-d59399558811",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792050249004
+      },
+      {
+        "id": "d50ab656-493b-4772-a64c-7f3d58846cef",
+        "run_id": "4588dd02-86db-48f7-b92f-2b6013475a45",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792050250235
+      },
+      {
+        "id": "485ee059-7f32-4fdd-8bf3-8447df63bdec",
+        "run_id": "54fa5033-4e77-4af7-8d8c-8d45b66917e4",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792050251469
+      },
+      {
+        "id": "6b9c49c8-7f89-4ee3-b83e-280201b25738",
+        "run_id": "8b723f73-b1a3-4fa9-a6dd-ef0cc4c77ce2",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792050252706
+      },
+      {
+        "id": "2106bd79-495f-4b68-b1e6-ebd8ac96d74c",
+        "run_id": "327b9bc5-909d-42c0-a679-1c38473f3068",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792050253633
+      },
+      {
+        "id": "57e9fa18-1350-4d92-ac03-89cc336c4168",
+        "run_id": "e07e3641-668e-4cbc-9b41-b4f4a502b84c",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792050254765
+      },
+      {
+        "id": "91a58f2f-b2df-4695-98b7-08572bfa7da0",
+        "run_id": "641d18e4-9f92-49e1-bc6d-defdbf4bb0d4",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792050256000
+      },
+      {
+        "id": "f84bfe8f-7cc7-4b05-9f79-93ac9b4ba1cb",
+        "run_id": "e8dd3f2f-d387-4b59-a8b1-87cb5ed335ce",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792050257239
+      },
+      {
+        "id": "68b1d32a-47b8-4194-bac4-f8043ce5bb14",
+        "run_id": "f0b87a1f-4219-424d-944d-4e5d930d1ba7",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792050258376
+      },
+      {
+        "id": "5f4ef592-7663-4272-af64-6a763bf518e0",
+        "run_id": "c2bc1f5c-eb4e-46a6-8f3d-e59c2ee28bc9",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792050259507
+      },
+      {
+        "id": "ef56370d-9942-4a04-9f59-acd581abccb1",
+        "run_id": "9e1df102-317d-43a6-ad70-71e3fc5496fe",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792050260436
+      },
+      {
+        "id": "74104416-1dbd-451c-9087-e10bae126ce3",
+        "run_id": "a3d62991-908e-4a9c-ba16-3291e1931f32",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792050261263
+      },
+      {
+        "id": "fafda2e7-b6da-4c81-9b09-a87a467ddd9d",
+        "run_id": "9c8c585e-5aa4-4efc-9fef-b010725d2c0e",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792050262191
+      },
+      {
+        "id": "7ed0c75e-ed44-4b99-96ed-0ed427b515bb",
+        "run_id": "15dfba0d-c055-4381-bf73-210312bdefcf",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792050263230
+      },
+      {
+        "id": "b25debfd-11d7-4631-9814-58e9bda43af5",
+        "run_id": "95bba2b3-acfd-421d-b3c0-03adbedbd80d",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792050264158
+      },
+      {
+        "id": "d06837ec-07d1-4a89-91ab-033b6b2d70ce",
+        "run_id": "fda007cc-c801-4df2-a167-08e3615bb549",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792050267223
+      },
+      {
+        "id": "f580a8bd-b5e0-431f-b8c9-047b3ab0b6b9",
+        "run_id": "96b981f1-a574-4f5b-8182-e4d66a7e91a9",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792050268352
+      },
+      {
+        "id": "f7ba6cd9-85b3-41a9-84dd-a4c9f725290e",
+        "run_id": "2a4f128d-6d42-46ae-8294-36dfc2ef1cad",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792050270905
+      },
+      {
+        "id": "356510cd-f90a-424b-ab0b-81abc3380239",
+        "run_id": "7ae6172e-1fbe-4f45-b795-68f8e7729826",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792050271835
+      },
+      {
+        "id": "a2f5e994-efaa-4add-b861-85d50cb4dff1",
+        "run_id": "3d3816c1-e67f-4842-85f8-531dd8e4d2ed",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792050272760
+      },
+      {
+        "id": "8f09a468-8eaa-4754-b583-57c98300ddf9",
+        "run_id": "602a5104-5785-403f-9da4-76e493b94f43",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792050273785
+      },
+      {
+        "id": "bbb763af-c3f6-4b1a-9395-9f4312fdb237",
+        "run_id": "edb6440f-21f5-4217-94e8-21040fc49ba1",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792050274912
+      },
+      {
+        "id": "a5819f6a-44c1-46ed-b963-285d53661f10",
+        "run_id": "3791bda2-b993-4cda-9d94-d5bad6ec7550",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792050275940
+      },
+      {
+        "id": "348765a0-4606-4fb0-888c-f877c310c246",
+        "run_id": "4e080fc5-e5bf-4c88-a791-f5f3b689d575",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792050277071
+      },
+      {
+        "id": "e6d6aa53-3266-4627-9412-93f5dd8eeda2",
+        "run_id": "3bc3a07e-f704-4e9e-b410-1e69fe927c73",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792050278000
+      },
+      {
+        "id": "0afce18a-6b26-44a7-972f-bb13f8d2a54a",
+        "run_id": "fe44dd6a-11e9-4d98-9cb4-79dc8b93dcf8",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792050278931
+      },
+      {
+        "id": "2c9f3bac-7ad3-4ac7-971d-874ac4e3109e",
+        "run_id": "a4d561dc-4a41-4746-977f-1af44810b930",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792050279963
+      },
+      {
+        "id": "cb89701b-60fa-43fc-83b2-cc07b6fde25d",
+        "run_id": "f549f215-2f0a-4c07-9249-69b4869fba3b",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792050281198
+      },
+      {
+        "id": "86bfb180-f5be-433b-ac26-b18ddbb7e19a",
+        "run_id": "a86872e6-de25-4a77-b766-926131f8822c",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792050282234
+      },
+      {
+        "id": "10852379-37fa-4f8a-bed0-39dca5e5e6c1",
+        "run_id": "6e0deabe-1d8e-4a80-a41f-9d3f9dc42552",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792050283265
+      },
+      {
+        "id": "8872a800-c141-4a1c-b099-fa9e646406fc",
+        "run_id": "0f670154-584a-48f4-a8b3-a27e77992b84",
+        "task_run_id": "e67935da-5da0-469c-acbe-93e5571b2516",
+        "status": "completed",
+        "created_at_ms": 1792050293500
+      },
+      {
+        "id": "9a5b44d4-f8c4-4ac8-a5cf-aa91dfb9ec96",
+        "run_id": "62648818-472c-49e3-a9eb-d2becdc1078a",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792050293575
+      },
+      {
+        "id": "50b8f47e-3dce-4257-9bf9-ac8f697d17f7",
+        "run_id": "206b73e3-ca25-4880-bb6c-f98db6f94d88",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792050294597
+      },
+      {
+        "id": "284e1b37-b656-439a-a313-9c5409d62eb1",
+        "run_id": "d554c8f7-6501-46b2-8e8f-c772f66db2c8",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792050295824
+      },
+      {
+        "id": "0086a049-ea24-45ae-81cc-d2bdc3b79d4f",
+        "run_id": "63a15c5d-6c11-4dd2-94bd-145af79c8ab1",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792050296955
+      },
+      {
+        "id": "2cbaf819-89ca-4e42-a0cb-17abe15340cf",
+        "run_id": "6ceea829-458d-45e4-a302-b616eb8783b4",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792050297990
+      },
+      {
+        "id": "fa582355-a7d7-4d8a-8866-147cb9342fdd",
+        "run_id": "455dfc60-210f-41c5-b764-5ec104f94a9f",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792050298908
+      },
+      {
+        "id": "4abdf280-b65c-4477-9b60-b09a52ef1b40",
+        "run_id": "c73fec02-f3e5-4e64-af05-78f45fc7135b",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792050300138
+      },
+      {
+        "id": "23d23b0d-3c8b-4ad5-b707-1bdf1b96d9a9",
+        "run_id": "baaf33c1-29d6-411b-9c9c-290b1e13b67a",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792050301265
+      },
+      {
+        "id": "ece7aba2-bc72-4890-9d3a-571f0ca48e91",
+        "run_id": "483d4893-3939-4a6a-b0fd-4a76dc9e2da7",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792050302699
+      },
+      {
+        "id": "e9a2b738-44c4-410b-a32e-97630b3ab9ff",
+        "run_id": "20806673-118f-4bee-8475-56874ee4e482",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792050303924
+      },
+      {
+        "id": "60c353cc-79c2-4b3d-b22b-de2d6820809b",
+        "run_id": "44d8792c-405a-4daa-9174-ad29f509a13e",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792050305061
+      },
+      {
+        "id": "19be8d3f-72d7-4d12-b23c-5ead0079995f",
+        "run_id": "88f16557-074f-4235-9b02-cc3ac1b7e472",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792050306189
+      },
+      {
+        "id": "86b80f83-c535-41db-90e9-3718fc6bab25",
+        "run_id": "b7be2b2d-933e-483e-a769-1afbf7fede6e",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792050307620
+      },
+      {
+        "id": "ef9224fe-26cf-462a-b32a-b2c6329d6786",
+        "run_id": "2f649160-510f-48fc-88c5-0b3966a34bfb",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792050308848
+      },
+      {
+        "id": "196f0886-a403-40b2-a77e-cae7ba06a99c",
+        "run_id": "35f24325-8aeb-4837-ae7b-adbca77b1c90",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792050309972
+      },
+      {
+        "id": "fc157cf1-16a4-4ac1-82f9-006bb946055b",
+        "run_id": "c058e7c1-39dc-4dc7-8386-9fcbef175e49",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792050310998
+      },
+      {
+        "id": "de8be0df-8153-4fae-998e-f9236151e7c0",
+        "run_id": "7444cb34-26b1-466d-9bd7-69fd8efa3c5f",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792050312029
+      },
+      {
+        "id": "94447cc0-6b10-465b-a261-07124d6d02a8",
+        "run_id": "2b6acbf8-79f9-4fcf-87af-3f663ce85816",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792050313055
+      },
+      {
+        "id": "08edeb28-d8a5-465f-af97-23382066b3de",
+        "run_id": "7d01f96e-eb1e-450b-9444-c13a5839d01f",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792050314188
+      },
+      {
+        "id": "ef11d801-3ba1-47f0-9cfc-9a764d307eb4",
+        "run_id": "1f520cd9-7255-4759-8ea7-e70924eff70c",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792050315315
+      },
+      {
+        "id": "5d2342b8-a255-4da4-8db2-ffa7ba491e4a",
+        "run_id": "79aa00f1-c436-4fb2-bfdd-a4f0207bac63",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792050316345
+      },
+      {
+        "id": "c13bf832-fb97-427a-9a73-1bb6ea58b683",
+        "run_id": "d3791edd-d377-4ebb-9da6-950c8dd9e5a7",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792050317474
+      },
+      {
+        "id": "f94e7cb6-e948-4fbc-96e5-fe1e00f01c70",
+        "run_id": "b5ad9b4e-743c-4507-a4c5-e83d8c54fc49",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792050318506
+      },
+      {
+        "id": "d38820bf-4295-4ee2-89ef-3b82e7e4c71b",
+        "run_id": "b2ff7db6-325e-4aa1-9a29-bb4b463ceff6",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792050319530
+      },
+      {
+        "id": "8e2f231a-4af1-431c-8e11-8408102bef27",
+        "run_id": "55ceecd4-b703-437c-b66f-fddc129b37f8",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792050320756
+      },
+      {
+        "id": "9ae06d1b-5d15-4968-ac25-2e1e30968803",
+        "run_id": "c1ec960e-2a25-4bc7-a0ee-74300625de07",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792050321795
+      },
+      {
+        "id": "bfc9d894-c9d7-44a0-a52d-7d663e7e2e58",
+        "run_id": "763d67aa-73c2-492d-bf1f-edb9670f4e8a",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792050322725
+      },
+      {
+        "id": "7f89ea32-5b85-463e-a1a5-7d57dd599e4f",
+        "run_id": "2e393fe1-bb88-4517-ad9c-cc889bdbd006",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792050323962
+      },
+      {
+        "id": "06b9026d-4c9e-4009-8119-9e01fd4e6812",
+        "run_id": "6bfb9704-1c81-4da7-b312-3d95b58a7048",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792050324989
+      },
+      {
+        "id": "45a3fd23-bd67-4a83-9f14-5a6e7f0d21e0",
+        "run_id": "bf4dbef9-825d-4bab-a5dc-b1684e331e49",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792050326628
+      },
+      {
+        "id": "cf635802-c602-40ff-80c1-e4b0b938e0f3",
+        "run_id": "73198337-7042-406e-ad1a-e559e9cb257e",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792050327655
+      },
+      {
+        "id": "f405fa34-10f6-482d-a22a-2816a9103860",
+        "run_id": "b0694d51-04ce-444d-aaf7-531bf66a1c1f",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792050328889
+      },
+      {
+        "id": "f3d247fa-2136-4ba4-b2cd-41e9133c59a0",
+        "run_id": "9a329999-95a4-4bdf-8ce4-6fbed4145965",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792050330026
+      },
+      {
+        "id": "122a84a2-2f54-4d10-92aa-c095a93ede95",
+        "run_id": "8c03e803-494a-4553-8fbb-768c9d4fb9d0",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792050331255
+      },
+      {
+        "id": "85d2d80b-f3ab-4e02-ab34-23cedb3d300f",
+        "run_id": "d1908604-269c-4692-a805-4742792abded",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792050332385
+      },
+      {
+        "id": "65f34f15-579a-4ec2-9511-0173417a3d38",
+        "run_id": "032ffc4d-3572-4758-9e07-fb04a5530cec",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792050333516
+      },
+      {
+        "id": "6105fdf6-a090-4cc9-9281-24d701240c45",
+        "run_id": "bf196644-d253-4408-aac6-643659e8d97c",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792050334642
+      },
+      {
+        "id": "34ef7a65-471a-4353-971e-875ba8225941",
+        "run_id": "60efc61a-3187-45da-9fb2-0c8e9fa62e6e",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792050335772
+      },
+      {
+        "id": "9b0f09c9-6a66-4634-bbe8-8d9ab6db8ab0",
+        "run_id": "8ee88616-7ffe-4278-bce4-f82e9688b403",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792050336900
+      },
+      {
+        "id": "a078c3b4-b445-4b99-abc7-f3c692f1890f",
+        "run_id": "44521582-d23b-4b3d-8e81-c636d535d75e",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792050338024
+      },
+      {
+        "id": "19b0fb5d-ddfc-4b31-81d8-5d6d3c8697f0",
+        "run_id": "f2e09630-7e77-4e71-b83d-f46073d90f62",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792050339150
+      },
+      {
+        "id": "9cbc1469-6bea-4d19-8a68-749130b96df2",
+        "run_id": "300c44a1-2647-47fd-8faf-b520db723bf4",
+        "task_run_id": null,
+        "status": "cancelled",
+        "created_at_ms": 1792050468041
+      },
+      {
+        "id": "bc28b802-d901-4976-9329-c98aa554d3b2",
+        "run_id": "38d594db-1cbd-47ad-b634-f96ed4311f37",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792050472605
+      },
+      {
+        "id": "53bc33a7-bb08-4dae-82c1-00f3821a23c8",
+        "run_id": "06a583c6-2441-402b-b577-d717a51a50c0",
+        "task_run_id": "27101481-e897-48f5-aed4-7adcb78a133e",
+        "status": "completed",
+        "created_at_ms": 1792050480615
+      },
+      {
+        "id": "bfb4bb19-e7c1-49c3-902a-ecd05eec68fa",
+        "run_id": null,
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792050481679
+      },
+      {
+        "id": "ed4c7bf7-54a9-4f05-b903-8e0a49622f6a",
+        "run_id": "a1ffcf64-3034-497a-8891-c064332c9096",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792050488820
+      }
+    ],
+    "runs": [
+      {
+        "run_id": "e67935da-5da0-469c-acbe-93e5571b2516",
+        "task_id": "012a693f-a097-407b-b2b5-2c431caa95d0",
+        "parent_run_id": null,
+        "contract_version": 2,
+        "status": "succeeded",
+        "queued_at": 1792050293302,
+        "started_at": 1792050293501,
+        "completed_at": 1792050467204
+      },
+      {
+        "run_id": "27101481-e897-48f5-aed4-7adcb78a133e",
+        "task_id": "012a693f-a097-407b-b2b5-2c431caa95d0",
+        "parent_run_id": null,
+        "contract_version": 4,
+        "status": "succeeded",
+        "queued_at": 1792050480455,
+        "started_at": 1792050480619,
+        "completed_at": 1792050569940
+      }
+    ],
+    "revisions": [
+      {
+        "revision_id": "4e053053-29dd-4eee-a573-e190ed5d353f",
+        "task_id": "012a693f-a097-407b-b2b5-2c431caa95d0",
+        "contract_version": 3,
+        "baseline_delivery_id": "c8565f87-b3a2-4795-a06a-3dd2616cfdab",
+        "instruction_entry_id": "1135f77d-7121-47fc-b687-1e4f94f6ca2a",
+        "input_id": "9cbc1469-6bea-4d19-8a68-749130b96df2",
+        "created_at": 1792050472565
+      }
+    ],
+    "directions": [
+      {
+        "entry_id": "5607dc59-0ad2-4e26-8b01-e1e58f56f834",
+        "task_id": "012a693f-a097-407b-b2b5-2c431caa95d0",
+        "sequence": 1,
+        "kind": "result",
+        "causation_id": null,
+        "created_at": 1792050467204,
+        "status": null,
+        "assignment_epoch": null,
+        "updated_at": null
+      },
+      {
+        "entry_id": "1135f77d-7121-47fc-b687-1e4f94f6ca2a",
+        "task_id": "012a693f-a097-407b-b2b5-2c431caa95d0",
+        "sequence": 2,
+        "kind": "instruction",
+        "causation_id": null,
+        "created_at": 1792050472565,
+        "status": "confirmed",
+        "assignment_epoch": 2,
+        "updated_at": 1792050488817
+      },
+      {
+        "entry_id": "e32a4726-0f90-44c7-89fb-5342cdd4433d",
+        "task_id": "012a693f-a097-407b-b2b5-2c431caa95d0",
+        "sequence": 3,
+        "kind": "ack",
+        "causation_id": "1135f77d-7121-47fc-b687-1e4f94f6ca2a",
+        "created_at": 1792050488817,
+        "status": null,
+        "assignment_epoch": null,
+        "updated_at": null
+      },
+      {
+        "entry_id": "1b9182eb-0a8d-4608-bbc1-08e7825dcf1c",
+        "task_id": "012a693f-a097-407b-b2b5-2c431caa95d0",
+        "sequence": 4,
+        "kind": "result",
+        "causation_id": null,
+        "created_at": 1792050569940,
+        "status": null,
+        "assignment_epoch": null,
+        "updated_at": null
+      }
+    ],
+    "deliveries": [
+      {
+        "delivery_id": "c8565f87-b3a2-4795-a06a-3dd2616cfdab",
+        "task_run_id": "e67935da-5da0-469c-acbe-93e5571b2516",
+        "status": "delivered",
+        "reply_status": "delivered",
+        "attempts": 0,
+        "reply_attempts": 0,
+        "created_at": 1792050467206,
+        "delivered_at": 1792050467215,
+        "chat_persisted_at": 1792050467943
+      },
+      {
+        "delivery_id": "b1dd29db-7ae3-4b82-9351-19b5437f944d",
+        "task_run_id": "27101481-e897-48f5-aed4-7adcb78a133e",
+        "status": "delivered",
+        "reply_status": "delivered",
+        "attempts": 0,
+        "reply_attempts": 0,
+        "created_at": 1792050569941,
+        "delivered_at": 1792050569956,
+        "chat_persisted_at": 1792050570874
+      }
+    ],
+    "usage": [
+      {
+        "operation": "agent.answer",
+        "provider": "deepseek",
+        "model": "deepseek-flash",
+        "status": "succeeded",
+        "calls": 88,
+        "duration_ms": 73247,
+        "input_tokens": 83662,
+        "output_tokens": 556,
+        "estimated_cost_microusd": 34240
+      },
+      {
+        "operation": "agent.answer",
+        "provider": "xopc-cloud",
+        "model": "auto",
+        "status": "succeeded",
+        "calls": 3,
+        "duration_ms": 10475,
+        "input_tokens": 61213,
+        "output_tokens": 833,
+        "estimated_cost_microusd": null
+      },
+      {
+        "operation": "agent.continue_after_tool",
+        "provider": "deepseek",
+        "model": "deepseek-flash",
+        "status": "aborted",
+        "calls": 1,
+        "duration_ms": 18,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "estimated_cost_microusd": 0
+      },
+      {
+        "operation": "agent.continue_after_tool",
+        "provider": "deepseek",
+        "model": "deepseek-flash",
+        "status": "succeeded",
+        "calls": 2,
+        "duration_ms": 3692,
+        "input_tokens": 873,
+        "output_tokens": 480,
+        "estimated_cost_microusd": 1057
+      },
+      {
+        "operation": "agent.continue_after_tool",
+        "provider": "xopc-cloud",
+        "model": "auto",
+        "status": "succeeded",
+        "calls": 26,
+        "duration_ms": 119886,
+        "input_tokens": 29755,
+        "output_tokens": 15366,
+        "estimated_cost_microusd": null
+      },
+      {
+        "operation": "personal.reply_composition",
+        "provider": "deepseek",
+        "model": "deepseek-flash",
+        "status": "succeeded",
+        "calls": 2,
+        "duration_ms": 1620,
+        "input_tokens": 9380,
+        "output_tokens": 107,
+        "estimated_cost_microusd": 2971
+      },
+      {
+        "operation": "session.generate_title",
+        "provider": "xopc-cloud",
+        "model": "auto",
+        "status": "running",
+        "calls": 1,
+        "duration_ms": null,
+        "input_tokens": null,
+        "output_tokens": null,
+        "estimated_cost_microusd": null
+      },
+      {
+        "operation": "session.generate_title",
+        "provider": "xopc-cloud",
+        "model": "auto",
+        "status": "succeeded",
+        "calls": 1,
+        "duration_ms": 1090,
+        "input_tokens": 513,
+        "output_tokens": 6,
+        "estimated_cost_microusd": null
+      },
+      {
+        "operation": "task.allocation",
+        "provider": "xopc-cloud",
+        "model": "auto",
+        "status": "succeeded",
+        "calls": 2,
+        "duration_ms": 4607,
+        "input_tokens": 9190,
+        "output_tokens": 141,
+        "estimated_cost_microusd": null
+      },
+      {
+        "operation": "task.plan_contract",
+        "provider": "xopc-cloud",
+        "model": "auto",
+        "status": "succeeded",
+        "calls": 2,
+        "duration_ms": 6546,
+        "input_tokens": 2977,
+        "output_tokens": 631,
+        "estimated_cost_microusd": null
+      },
+      {
+        "operation": "task.research_review",
+        "provider": "xopc-cloud",
+        "model": "auto",
+        "status": "succeeded",
+        "calls": 3,
+        "duration_ms": 10250,
+        "input_tokens": 5780,
+        "output_tokens": 1505,
+        "estimated_cost_microusd": null
+      }
+    ]
+  },
+  "scope": "Same-source isolated real-model idle/background comparison, not a pre-change code or production baseline. Local writes have smoke coverage only. A failed or unsampled gate remains visible."
+}

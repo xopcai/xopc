@@ -1,0 +1,35 @@
+{
+  "success": false,
+  "interrupted": true,
+  "reason": "Published artifact IDs were not visible in model-facing receipts; final selection guessed IDs and was safely rejected. Stopped to fix receipts. Not acceptance evidence.",
+  "isolatedStateDirectory": "/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-personal-handoff-live-kej3Wo",
+  "workerToolErrors": [
+    {
+      "tool": "publish_task_result",
+      "content": [
+        {
+          "type": "text",
+          "text": "{\"code\":\"source_quote_mismatch\",\"message\":\"Sources have no matching successful tool read.\",\"failures\":[{\"sourceId\":\"src-materialize-report\",\"reason\":\"excerpt_or_url_not_observed\",\"matchingToolCallIds\":[]},{\"sourceId\":\"src-materialize-csv\",\"reason\":\"excerpt_or_url_not_observed\",\"matchingToolCallIds\":[]},{\"sourceId\":\"src-materialize-mjs\",\"reason\":\"excerpt_or_url_not_observed\",\"matchingToolCallIds\":[]}],\"recovery\":\"Fix all listed sources together. Prefer a supplied observedExcerpt as one contiguous quote. Never concatenate separated passages. Read task_collaboration(get, section=evidence) for real toolCallIds, then read one toolCallId and copy a short contiguous excerpt. Omit a URL absent from the observed read. Keep stable IDs; change invalid sources or retire unsupported claims. Your draft final reply and earlier reviews are not evidence. Do not retry unchanged input.\",\"availableReads\":[{\"toolCallId\":\"call_00_HemdqzwenELsAr6bCkDf1599\",\"toolName\":\"task_collaboration\",\"chars\":703},{\"toolCallId\":\"call_01_4rrwlQnNTCld1r0bZQEO1126\",\"toolName\":\"task_collaboration\",\"chars\":704},{\"toolCallId\":\"call_02_7Gw3eiVxYcwNXBIozkqP8030\",\"toolName\":\"task_collaboration\",\"chars\":692},{\"toolCallId\":\"call_00_VTO7CdmWIqcQS7LHfIXj2230\",\"toolName\":\"read_file\",\"chars\":427},{\"toolCallId\":\"call_01_uG3y2UJZIuJNd1sSZAAU4289\",\"toolName\":\"read_file\",\"chars\":93},{\"toolCallId\":\"call_00_QtR5AcLQbdcCJyf7g46c4892\",\"toolName\":\"exec_command\",\"chars\":1209},{\"toolCallId\":\"call_00_fV8fk3DV7N9I6kmh0Uh81872\",\"toolName\":\"exec_command\",\"chars\":353},{\"toolCallId\":\"call_00_AqcKX6EXbh0CiNZov0WT7694\",\"toolName\":\"publish_artifacts\",\"chars\":125},{\"toolCallId\":\"call_00_m3BVdcVHD7gfFWrRNL9u1207\",\"toolName\":\"exec_command\",\"chars\":2700},{\"toolCallId\":\"call_00_1xMTWaNPIMR1xiVWwwpR6984\",\"toolName\":\"task_collaboration\",\"chars\":3206}]}"
+        }
+      ]
+    },
+    {
+      "tool": "publish_task_result",
+      "content": [
+        {
+          "type": "text",
+          "text": "Final artifact selection contains an unavailable or foreign publication"
+        }
+      ]
+    },
+    {
+      "tool": "publish_task_result",
+      "content": [
+        {
+          "type": "text",
+          "text": "Final artifact selection contains an unavailable or foreign publication"
+        }
+      ]
+    }
+  ]
+}

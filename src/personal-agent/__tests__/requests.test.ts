@@ -52,6 +52,7 @@ import { personalCapabilities } from '../capability-service.js';
 import { submitPersonalRequest, resolvePersonalRequestConnection, cancelPersonalRequest, requirePersonalWorkerConnection } from '../request-service.js';
 import { getPersonalRequest, listPersonalRequests } from '../request-repository.js';
 import { drainPersonalRequestContinuations, drainPersonalRequestResults } from '../request-delivery.js';
+import * as resultReader from '../result-reader.js';
 import { TaskResultDeliveryService } from '../../tasks/task-result-delivery-service.js';
 import { PersonalReplyComposer } from '../reply-composer.js';
 import { acquireEmbeddedRunLease } from '../../agent/embedded/runs.js';
@@ -64,6 +65,7 @@ describe('Personal connected-app requests', () => {
   let conversationId: string;
   let agentId: string;
   beforeEach(() => {
+    vi.spyOn(resultReader, 'warmPersonalResult').mockImplementation(() => {});
     directory = mkdtempSync(join(tmpdir(), 'xopc-personal-request-'));
     vi.stubEnv('XOPC_STATE_DIR', directory);
     vi.stubEnv('XOPC_LOG_LEVEL', 'silent');
@@ -84,7 +86,8 @@ describe('Personal connected-app requests', () => {
       status: 'queued', content: '查一下最近的重要邮件', origin: { type: 'endpoint', endpointId: 'test' } });
     claimNextSessionInput(conversationId, 'main-run');
   });
-  afterEach(() => {
+  afterEach(async () => {
+    await resultReader.stopPersonalResultPreparations();
     vi.restoreAllMocks();
     closeXopcDatabase();
     resetXopcDatabaseSingletonForTest();
@@ -560,6 +563,32 @@ describe('Personal connected-app requests', () => {
       expect(new TaskRunRepository().getActiveRoot(request.taskId!)).toEqual(newRun);
     } finally { releaseAck(); old.release(); next?.release(); }
   });
+
+  it('reads retained connected results after completion and rechecks account access on a cached read', async () => {
+    const { request, worker: chat, coordinator } = worker();
+    await createPersonalRequestResultTool(() => chat.key).execute('publish-read', { summary: 'Saved result summary', coverage: { from: '2026-10-02T00:00:00+08:00', to: '2026-10-08T00:00:00+08:00', scannedCount: 10, partial: false }, items: [{
+      messageId: 'mail-read', subject: 'RETAINED-SUBJECT-735', sender: 'Saved sender', receivedAt: '2026-10-07T09:00:00Z',
+      importanceReason: 'The deadline is Thursday; this is a frozen saved result.' }] }, undefined, undefined);
+    coordinator.finalize({ status: 'succeeded', summary: 'Mail summarized', assistantText: 'Result published' });
+    drainPersonalRequestResults();
+    const resultId = `personal-request:${request.requestId}`;
+    expect(resultReader.listPersonalResults(conversationId).items.map(item => item.resultId)).toContain(resultId);
+    let body: Record<string, unknown> = {};
+    for (let n = 0; n < 100; n++) {
+      body = await resultReader.readPersonalResult(conversationId, { command: 'read', resultId });
+      if (body.status !== 'preparing') break;
+      await new Promise(resolve => setTimeout(resolve, 50));
+    }
+    expect(body.status).toBe('ready');
+    expect(body.text).toContain('RETAINED-SUBJECT-735');
+    upsertConnectorInstallation({ ...installation(), allowedAgentIds: [agentId, 'mail-worker'] });
+    const retained = resultReader.resolvePersonalResultReference(conversationId, resultId);
+    expect(() => resultReader.assertPersonalResultDelegateAccess(conversationId, retained, 'mail-worker')).not.toThrow();
+    expect(() => resultReader.assertPersonalResultDelegateAccess(conversationId, retained, 'unpermitted-worker')).toThrow('permit this Task executor');
+    upsertConnectorInstallation({ ...installation(), enabled: false });
+    await expect(resultReader.readPersonalResult(conversationId, { command: 'read', resultId })).rejects.toThrow('account access');
+    expect(resultReader.listPersonalResults(conversationId).items).toHaveLength(0);
+  }, 15000);
 
   it('delivers structured mail while the main run is active, without duplicate results', async () => {
     const { request, worker: chat, coordinator } = worker();

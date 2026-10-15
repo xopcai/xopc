@@ -113,7 +113,7 @@ export type Attachment = MessageAttachment;
 
 export interface MessageContextRef {
   refId?: string;
-  kind: 'note' | 'file' | 'session' | 'browser_tab' | 'mcp_resource';
+  kind: 'result' | 'note' | 'file' | 'session' | 'browser_tab' | 'mcp_resource';
   sourceId: string;
   version: string;
   title: string;

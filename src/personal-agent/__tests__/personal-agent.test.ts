@@ -439,9 +439,9 @@ describe('personal Agent identity', () => {
       expect(refreshed.toolAllowlist).not.toEqual(expect.arrayContaining(['user_context_get', 'knowledge_search']));
       expect(refreshed.profile?.instructions).toContain('accept the next typed or spoken answer normally');
       expect(refreshed.toolAllowlist).not.toEqual(expect.arrayContaining(['web_search', 'web_fetch', 'exec_command']));
-      expect(refreshed.profile?.instructions).toContain('Answer immediately');
-      expect(refreshed.profile?.instructions).toContain('without asking permission again');
-      expect(refreshed.profile?.instructions).toContain('do not read repeated chunks');
+      expect(refreshed.profile?.instructions).toContain('Answer directly when context is sufficient');
+      expect(refreshed.profile?.instructions).toContain('personal_result');
+      expect(refreshed.profile?.instructions).toContain('bounded ranges even when the complete file is large');
       expect(refreshed.profile?.instructions).toContain('For current news or other live facts');
       expect(refreshed.profile?.instructions).toContain('Keep my custom instruction.');
       expect(refreshed.profile?.instructions).toContain('MCP, Codemode and dynamic tool discovery belong to specialist execution');

@@ -20,6 +20,7 @@ describe('electron-runtime-externals', () => {
       'node-pty',
       '@trycua/cua-driver',
       'quickjs-wasi',
+      'pdfjs-dist',
     ]);
     expect(ELECTRON_GATEWAY_EXTERNALS).toContain('sharp');
     expect(ELECTRON_GATEWAY_EXTERNALS).toContain('playwright-core');
@@ -41,6 +42,7 @@ describe('electron-runtime-externals', () => {
         'node-pty': '1.1.0',
         '@trycua/cua-driver': '0.28.2',
         'quickjs-wasi': '3.6.2',
+        'pdfjs-dist': '6.2.108',
       },
       devDependencies: {
         vitest: '^4.0.0',
@@ -61,6 +63,7 @@ describe('electron-runtime-externals', () => {
       'node-pty',
       '@trycua/cua-driver',
       'quickjs-wasi',
+      'pdfjs-dist',
     ]);
     expect(minimal).not.toHaveProperty('devDependencies');
     expect(minimal).not.toHaveProperty('peerDependencies');
@@ -80,6 +83,7 @@ describe('electron-runtime-externals', () => {
         'silk-wasm': '^3.7.1',
         '@trycua/cua-driver': '0.28.2',
         'quickjs-wasi': '3.6.2',
+        'pdfjs-dist': '6.2.108',
       },
       devDependencies: {
         'node-pty': '1.1.0',
@@ -92,6 +96,7 @@ describe('electron-runtime-externals', () => {
       'node-pty': '1.1.0',
       '@trycua/cua-driver': '0.28.2',
         'quickjs-wasi': '3.6.2',
+        'pdfjs-dist': '6.2.108',
     });
   });
 
@@ -108,6 +113,7 @@ describe('electron-runtime-externals', () => {
           'node-pty': '1.1.0',
           '@trycua/cua-driver': '0.28.2',
         'quickjs-wasi': '3.6.2',
+        'pdfjs-dist': '6.2.108',
         },
       },
       repoRoot,
@@ -119,6 +125,7 @@ describe('electron-runtime-externals', () => {
       'node-pty': resolveInstalledPackageVersion(repoRoot, 'node-pty'),
       '@trycua/cua-driver': resolveInstalledPackageVersion(repoRoot, '@trycua/cua-driver'),
       'quickjs-wasi': resolveInstalledPackageVersion(repoRoot, 'quickjs-wasi'),
+      'pdfjs-dist': resolveInstalledPackageVersion(repoRoot, 'pdfjs-dist'),
     });
     expect(Object.values(minimal.dependencies as Record<string, string>).every((v) => !v.startsWith('^'))).toBe(true);
   });
@@ -160,6 +167,7 @@ describe('electron-runtime-externals', () => {
         'node-pty': '1.1.0',
         '@trycua/cua-driver': '0.28.2',
         'quickjs-wasi': '3.6.2',
+        'pdfjs-dist': '6.2.108',
       },
       devDependencies: {
         electron: '^41.7.1',

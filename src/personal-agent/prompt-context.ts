@@ -6,6 +6,7 @@ import { resolveUserContextSessionAccess } from '../user-context/access-policy.j
 import { canUseAssertion, getActiveAssertionForSlot } from '../user-model/index.js';
 import { isPersonalConversation } from './repository.js';
 import { TaskOriginRepository } from '../tasks/task-origin-repository.js';
+import { listPersonalResults } from './result-reader.js';
 
 const clip = (value: string | undefined, limit: number) => value && (value.length > limit ? `${value.slice(0, limit - 1)}…` : value);
 
@@ -44,6 +45,7 @@ export class PersonalPromptContext {
       `User: ${packPersonalSnapshot(user, 300)}`,
       `Project: ${packPersonalSnapshot(projectRows, 500)}`,
       `Delegated tasks: ${packPersonalSnapshot(delegated, 1800)}`,
+      `Work results (read full content with personal_result): ${packPersonalSnapshot(listPersonalResults(conversationId, { limit: 3 }).items, 1000)}`,
     ].join('\n');
   }
 }
