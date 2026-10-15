@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, generateKeyPairSync, randomBytes, randomUUID, sign, verify } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const mock = vi.hoisted(() => {
   Object.assign(globalThis, { ObservedV2: (value: unknown) => value, Trace: () => undefined });
@@ -16,7 +16,8 @@ vi.mock('@kit.ArkTS', () => ({ util: { generateRandomUUID: randomUUID } }));
 vi.mock('@kit.NetworkKit', () => ({ http: { createHttp: () => ({ request: mock.request, destroy: mock.destroy }), RequestMethod: { POST: 'POST' }, HttpDataType: { ARRAY_BUFFER: 'buffer' } } }));
 vi.mock('@kit.CoreFileKit', () => ({ fileIo: { OpenMode: { CREATE: 1, READ_WRITE: 2 }, open: mock.open,
   write: async (_fd: number, bytes: ArrayBuffer) => bytes.byteLength, close: mock.close, unlink: mock.unlink } }));
-vi.mock('../entry/src/main/ets/service/gatewaySession.ets', () => ({ gatewaySession: { transferAuth: async () => ({ origin: 'https://gateway.example', token: 'test-token' }) } }));
+vi.mock('../entry/src/main/ets/service/gatewaySession.ets', () => ({ gatewaySession: { transferAuth: async () => ({ origin: 'https://gateway.example', token: 'xopc_at_test-token' }) } }));
+import { registerRequestProof } from '../entry/src/main/ets/service/requestProof.ets';
 import { XopcChatReadAloud } from '../entry/src/main/ets/service/chatReadAloud.ets';
 describe('chat read aloud lifecycle', () => {
   let reader: XopcChatReadAloud;
@@ -24,8 +25,16 @@ describe('chat read aloud lifecycle', () => {
   let session: { on: ReturnType<typeof vi.fn>; setAVMetadata: ReturnType<typeof vi.fn>; setAVPlaybackState: ReturnType<typeof vi.fn>;
     activate: ReturnType<typeof vi.fn>; deactivate: ReturnType<typeof vi.fn>; destroy: ReturnType<typeof vi.fn> };
   let events: Map<string, (...args: any[]) => void>;
+  const keyPair = generateKeyPairSync('ec', { namedCurve: 'P-256' });
+  const digest = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest('hex');
   const context = { cacheDir: '/test-cache' } as never;
   beforeEach(() => {
+    registerRequestProof('xopc_at_test-token', 'gateway-test', ['https://gateway.example'], {
+      encodeText: (text: string) => new TextEncoder().encode(text),
+      digest: async (bytes: Uint8Array) => digest(bytes),
+      nonce: async () => randomBytes(24).toString('base64url'),
+      sign: async (message: string) => sign('sha256', Buffer.from(message), { key: keyPair.privateKey, dsaEncoding: 'ieee-p1363' }).toString('base64url'),
+    } as never);
     vi.resetAllMocks(); reader = new XopcChatReadAloud(); events = new Map();
     player = { on: vi.fn((event, listener) => events.set(event, listener)), prepare: vi.fn(async () => {}), play: vi.fn(async () => {}), release: vi.fn(async () => {}), pause: vi.fn(async () => {}), duration: 1000 };
     session = { on: vi.fn(), setAVMetadata: vi.fn(async () => {}), setAVPlaybackState: vi.fn(async () => {}),
@@ -38,7 +47,7 @@ describe('chat read aloud lifecycle', () => {
     await reader.speak(context, 'Hello', 'row-1', 'en');
     expect(mock.createSession).toHaveBeenCalledWith(context, 'xopc-chat-read-aloud', 'audio');
     expect(mock.startBackground).toHaveBeenCalledWith(context, 2, {});
-    expect(mock.request).toHaveBeenCalledWith('https://gateway.example/api/voice/speech', expect.objectContaining({ maxRedirects: 0, header: { Authorization: 'Bearer test-token', 'Content-Type': 'application/json' } }));
+    expect(mock.request).toHaveBeenCalledWith('https://gateway.example/api/voice/speech', expect.objectContaining({ maxRedirects: 0, header: expect.objectContaining({ Authorization: 'Bearer xopc_at_test-token', 'Content-Type': 'application/json', 'X-Xopc-Proof': expect.any(String) }) }));
     events.get('stateChange')?.('initialized'); expect(player.prepare).toHaveBeenCalledOnce();
     events.get('stateChange')?.('prepared'); expect(player.play).toHaveBeenCalledOnce();
     events.get('stateChange')?.('playing'); await reader.toggle(); expect(player.pause).toHaveBeenCalledOnce();
@@ -47,6 +56,24 @@ describe('chat read aloud lifecycle', () => {
     expect(session.deactivate).toHaveBeenCalledOnce(); expect(session.destroy).toHaveBeenCalledOnce();
     expect(mock.stopBackground).toHaveBeenCalledWith(context);
     expect(mock.close).toHaveBeenCalledOnce(); expect(mock.unlink.mock.calls[0][0]).toMatch(/^\/test-cache\/xopc-speech-[\w-]+\.audio$/);
+  });
+  it('signs the exact body of initial and prefetched speech requests with distinct nonces', async () => {
+    await reader.speak(context, 'First. Second.', 'signed-row', 'en');
+    events.get('stateChange')?.('prepared');
+    await vi.waitFor(() => expect(mock.request).toHaveBeenCalledTimes(2));
+    const nonces: string[] = [];
+    for (const [url, options] of mock.request.mock.calls) {
+      const [timestamp, nonce, bodyDigest, signature] = options.header['X-Xopc-Proof'].split('.');
+      nonces.push(nonce);
+      expect(url).toBe('https://gateway.example/api/voice/speech');
+      expect(options.method).toBe('POST');
+      expect(bodyDigest).toBe(digest(new TextEncoder().encode(options.extraData)));
+      const message = ['xopc-request-v1', 'gateway-test', digest(new TextEncoder().encode('xopc_at_test-token')),
+        'POST', '/api/voice/speech', bodyDigest, 'application/json', '', '', '', '', timestamp, nonce].join('\n');
+      expect(verify('sha256', Buffer.from(message), { key: keyPair.publicKey, dsaEncoding: 'ieee-p1363' },
+        Buffer.from(signature, 'base64url'))).toBe(true);
+    }
+    expect(new Set(nonces).size).toBe(2);
   });
   it('keeps current playback alive when the ability moves to the background', async () => {
     await reader.speak(context, 'Hello', 'one', 'en');

@@ -1,0 +1,384 @@
+{
+  "startedAt": "2026-10-15T11:27:28.194Z",
+  "authentication": "existing real account; access token only; no OAuth browser reauthorization",
+  "results": [
+    {
+      "name": "fresh-onboarding-configuration",
+      "passed": true,
+      "durationMs": 19,
+      "details": {
+        "result": {
+          "configured": true,
+          "missing": [],
+          "selection": {
+            "chat": "auto",
+            "vision": "auto",
+            "imageGeneration": "image",
+            "stt": "stt",
+            "tts": "tts",
+            "ttsVoice": "default",
+            "realtimeStt": "stt",
+            "realtimeTts": {
+              "model": "tts",
+              "voice": "default"
+            },
+            "realtimeOmni": {
+              "model": "realtime",
+              "voice": "default"
+            }
+          }
+        },
+        "models": {
+          "chat": {
+            "primary": "xopc-cloud/auto",
+            "fallbacks": []
+          },
+          "intents": {},
+          "imageUnderstanding": {
+            "primary": "xopc-cloud/auto",
+            "fallbacks": []
+          },
+          "imageGeneration": {
+            "primary": "xopc-cloud/image",
+            "fallbacks": [],
+            "autoProviderFallback": false
+          }
+        },
+        "realtime": {
+          "enabled": true,
+          "defaultEngine": "agent",
+          "silenceDurationMs": 1200,
+          "idleTimeoutMs": 60000,
+          "maxDictationMs": 600000,
+          "maxConversationMs": 3600000,
+          "bargeIn": true,
+          "stt": {
+            "provider": "xopc-cloud",
+            "model": "stt"
+          },
+          "tts": {
+            "provider": "xopc-cloud",
+            "model": "tts",
+            "voice": "default"
+          },
+          "omni": {
+            "provider": "xopc-cloud",
+            "model": "realtime",
+            "voice": "default",
+            "instructions": "Keep replies conversational and concise. You cannot execute tools."
+          }
+        }
+      }
+    },
+    {
+      "name": "idempotent-onboarding",
+      "passed": true,
+      "durationMs": 1
+    },
+    {
+      "name": "cli-and-gateway-configuration-equivalence",
+      "passed": true,
+      "durationMs": 71
+    },
+    {
+      "name": "explicit-settings-preserved-with-real-catalog",
+      "passed": true,
+      "durationMs": 12,
+      "details": {
+        "chat": "custom/offline",
+        "voiceEnabled": false,
+        "sttEnabled": false,
+        "ttsEnabled": false
+      }
+    },
+    {
+      "name": "authenticated-gateway-voice-readiness",
+      "passed": true,
+      "durationMs": 89,
+      "details": {
+        "enabled": true,
+        "openingGreeting": true,
+        "capabilities": {
+          "dictation": {
+            "available": true
+          },
+          "assistant": {
+            "available": true
+          },
+          "natural": {
+            "available": true
+          },
+          "languages": [
+            "zh",
+            "en"
+          ],
+          "bargeIn": true,
+          "mediaTransports": [
+            "websocket-pcm"
+          ]
+        },
+        "defaultMode": "assistant",
+        "omni": {
+          "provider": "xopc-cloud",
+          "model": "realtime",
+          "managed": true
+        },
+        "stt": {
+          "provider": "xopc-cloud",
+          "model": "stt",
+          "managed": true
+        },
+        "tts": {
+          "provider": "xopc-cloud",
+          "model": "tts",
+          "managed": true,
+          "voice": "default"
+        }
+      }
+    },
+    {
+      "name": "real-default-chat-model",
+      "passed": true,
+      "durationMs": 2726,
+      "details": {
+        "model": "xopc-cloud/auto",
+        "text": "CLOUD_ONBOARDING_OK"
+      }
+    },
+    {
+      "name": "real-image-generation",
+      "passed": true,
+      "durationMs": 22615,
+      "details": {
+        "provider": "xopc-cloud",
+        "model": "image",
+        "imageBytes": 85201,
+        "mimeType": "image/jpeg"
+      }
+    },
+    {
+      "name": "real-image-understanding",
+      "passed": true,
+      "durationMs": 2145,
+      "details": {
+        "model": "xopc-cloud/auto",
+        "text": "A soft pink gradient forms a large, blurred circular shape fading into white."
+      }
+    },
+    {
+      "name": "real-cloud-text-to-speech",
+      "passed": true,
+      "durationMs": 2399,
+      "details": {
+        "bytes": 55771,
+        "format": "audio/mpeg",
+        "provider": "xopc-cloud"
+      }
+    },
+    {
+      "name": "real-cloud-speech-recognition",
+      "passed": true,
+      "durationMs": 1863,
+      "details": {
+        "ok": true,
+        "payload": {
+          "text": "你好，请只回答语音测试成功。",
+          "refinementAvailable": false,
+          "language": "zh",
+          "provider": "xopc-cloud",
+          "attempts": [
+            {
+              "provider": "xopc-cloud",
+              "task": "success",
+              "reasonCode": "success",
+              "latencyMs": 1856
+            }
+          ],
+          "latencyMs": 1857
+        }
+      }
+    },
+    {
+      "name": "real-stt-agent-tts-websocket-roundtrip",
+      "passed": true,
+      "durationMs": 12547,
+      "details": [
+        {
+          "stage": "transcript",
+          "text": "你好，请只回答语音测试成功。"
+        },
+        {
+          "stage": "response",
+          "text": "语音测试成功。",
+          "audioBytes": 93120,
+          "finishReason": "completed"
+        },
+        {
+          "passed": true,
+          "mode": "assistant",
+          "agentId": "main",
+          "rounds": 1,
+          "transcripts": 1,
+          "responses": 1,
+          "audioBytes": 93120
+        }
+      ]
+    },
+    {
+      "name": "real-natural-voice-websocket-roundtrip",
+      "passed": true,
+      "durationMs": 7975,
+      "details": [
+        {
+          "stage": "transcript",
+          "text": "你好，请只回答语音测试成功。"
+        },
+        {
+          "stage": "response",
+          "text": "语音测试成功",
+          "audioBytes": 76800,
+          "finishReason": "completed"
+        },
+        {
+          "passed": true,
+          "mode": "natural",
+          "agentId": "main",
+          "rounds": 1,
+          "transcripts": 1,
+          "responses": 1,
+          "audioBytes": 76800
+        }
+      ]
+    },
+    {
+      "name": "real-react-browser-capture-and-playback",
+      "passed": true,
+      "durationMs": 45617,
+      "details": [
+        {
+          "passed": true,
+          "agentId": "main",
+          "transcripts": [
+            "你好，请只回答语音测试成功。"
+          ],
+          "replies": [
+            {
+              "responseId": "resp_8e03d9e2-5a16-4e57-9206-79e16c1daa6f",
+              "finishReason": "completed",
+              "audio": true
+            }
+          ],
+          "uplink": 917,
+          "downlink": 104333,
+          "playback": {
+            "buffers": 101,
+            "nonzero": 72,
+            "running": 101
+          }
+        }
+      ]
+    }
+  ],
+  "catalog": {
+    "count": 16,
+    "models": [
+      {
+        "id": "auto",
+        "kind": "language",
+        "available": "available"
+      },
+      {
+        "id": "advanced",
+        "kind": "language",
+        "available": "available"
+      },
+      {
+        "id": "computer",
+        "kind": "language",
+        "available": "available"
+      },
+      {
+        "id": "image",
+        "kind": "image",
+        "available": "available"
+      },
+      {
+        "id": "stt",
+        "kind": "stt",
+        "available": "available",
+        "voiceModes": [
+          "transcription",
+          "transcription.stream"
+        ],
+        "voiceServiceVersion": 5
+      },
+      {
+        "id": "tts",
+        "kind": "tts",
+        "available": "available",
+        "voiceModes": [
+          "speech",
+          "speech.stream"
+        ],
+        "voiceServiceVersion": 5
+      },
+      {
+        "id": "realtime",
+        "kind": "omni",
+        "available": "available",
+        "voiceModes": [
+          "conversation"
+        ],
+        "voiceServiceVersion": 5
+      },
+      {
+        "id": "openai-codex/gpt-6-luna",
+        "kind": "language",
+        "available": "available"
+      },
+      {
+        "id": "openai-codex/gpt-6-sol",
+        "kind": "language",
+        "available": "available"
+      },
+      {
+        "id": "openai-codex/gpt-6.1-sol",
+        "kind": "language",
+        "available": "available"
+      },
+      {
+        "id": "openai-codex/gpt-5.3-codex-spark",
+        "kind": "language",
+        "available": "available"
+      },
+      {
+        "id": "openai-codex/gpt-5.5",
+        "kind": "language",
+        "available": "available"
+      },
+      {
+        "id": "openai-codex/gpt-5.6-luna",
+        "kind": "language",
+        "available": "available"
+      },
+      {
+        "id": "openai-codex/gpt-5.6-sol",
+        "kind": "language",
+        "available": "available"
+      },
+      {
+        "id": "openai-codex/gpt-5.6-terra",
+        "kind": "language",
+        "available": "available"
+      },
+      {
+        "id": "openai-codex/gpt-6-astra",
+        "kind": "language",
+        "available": "available"
+      }
+    ]
+  },
+  "originalConfigAndCredentialsUnchanged": true,
+  "completedAt": "2026-10-15T11:29:18.484Z",
+  "passed": true
+}

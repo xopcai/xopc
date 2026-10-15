@@ -1,13 +1,12 @@
 import type { VoiceModeCapability } from '@xopcai/realtime-protocol/voice';
 
-import type { Config } from '../config/schema.js';
-import type { AgentDefaults } from '../agent-config/index.js';
+import { ConfigSchema, type Config } from '../config/schema.js';
+import { DEFAULT_AGENT_MODEL_REF, type AgentDefaults } from '../agent-config/index.js';
 import { AgentCatalogRepository } from '../agent-catalog/repository.js';
 import { AgentCatalogService } from '../agent-catalog/service.js';
 import type { CatalogModel, CatalogSource } from '../providers/model-catalog-store.js';
 import { getModelCatalogStore } from '../providers/model-catalog-store.js';
 import { compareCatalogModels } from '../providers/model-catalog-ranking.js';
-import { getAvailableModels } from '../providers/index.js';
 import { prepareUpdateGlobalDefaults } from './global-defaults-admin.js';
 
 type CloudCapability = 'chat' | 'vision' | 'image-generation' | 'stt' | 'tts';
@@ -240,7 +239,6 @@ export async function applyXopcCloudCapabilitySetup(service: {
   }
   const selection = selectXopcCloudCapabilities(source);
   const currentDefaults = new AgentCatalogRepository().getSettings().defaults;
-  const availableModels = new Set((await getAvailableModels()).map((model) => `${model.provider}/${model.id}`));
   const nextDefaults = structuredClone(currentDefaults);
   const nextConfig = structuredClone(service.currentConfig);
   const chat = recommendedModel(source, 'chat');
@@ -253,7 +251,8 @@ export async function applyXopcCloudCapabilitySetup(service: {
   const realtimeTts = recommendedVoiceModel(source, 'speech.stream');
   const realtimeOmni = recommendedVoiceModel(source, 'conversation');
 
-  if (chat && !availableModels.has(currentDefaults.models.chat.primary)) {
+  if (chat && currentDefaults.models.chat.primary === DEFAULT_AGENT_MODEL_REF
+    && currentDefaults.models.chat.fallbacks.length === 0) {
     nextDefaults.models.chat = { primary: `xopc-cloud/${chat.id}`, fallbacks: [] };
   }
   if (vision && !currentDefaults.models.imageUnderstanding) {
@@ -282,6 +281,10 @@ export async function applyXopcCloudCapabilitySetup(service: {
       timeoutMs: 60_000,
       providers: { 'xopc-cloud': { model: tts.id, voice: tts.tts.defaultVoice } },
     };
+  }
+  // A missing voice section is a fresh setup; an existing disabled section is a user choice.
+  if (!nextConfig.voice && (realtimeStt || realtimeTts || realtimeOmni)) {
+    nextConfig.voice = ConfigSchema.parse({ voice: { realtime: { enabled: true } } }).voice;
   }
   const realtime = nextConfig.voice?.realtime;
   if (realtime?.enabled) {

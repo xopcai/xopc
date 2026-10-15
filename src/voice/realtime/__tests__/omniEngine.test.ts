@@ -101,11 +101,22 @@ describe('Omni voice engine', () => {
     expect(test.send.mock.calls.some(([type]) => type === 'session.error')).toBe(false);
   });
 
+  it('waits for Cloud-generated replies without sending unsupported response.create', async () => {
+    const test = await setup(undefined, true, true);
+    test.emit({ type: 'conversation.item.input_audio_transcription.completed', item_id: 'managed-input', transcript: 'Hello' });
+    await vi.waitFor(() => expect(test.send).toHaveBeenCalledWith('turn.committed', expect.anything()));
+    await realDelay(20);
+    expect(test.received.some(event => event.type === 'response.create')).toBe(false);
+    test.emit({ type: 'response.created', response: { id: 'managed-reply' } });
+    await vi.waitFor(() => expect(test.send).toHaveBeenCalledWith('response.created', { responseId: 'managed-reply' }));
+  });
+
   it('negotiates a vendor-neutral managed session and explicitly cancels interrupted generation', async () => {
     const test = await setup(undefined, true, true);
     const update = test.received.find(event => event.type === 'session.update');
     expect(update?.session.input_audio_format).toBeUndefined();
     expect(update?.session.input_audio_transcription).toBeUndefined();
+    expect(update?.session.turn_detection).toMatchObject({ create_response: true, interrupt_response: false });
     test.emit({type:'response.created',response:{id:'managed-response'}});
     test.emit({type:'input_audio_buffer.speech_started',item_id:'interrupt'});
     await vi.waitFor(() => expect(test.received.filter(event => event.type === 'response.cancel')).toHaveLength(1));

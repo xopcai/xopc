@@ -9,8 +9,9 @@ import { decodeVoiceAudioFrame, encodeVoiceUplinkAudioFrame } from '@xopcai/real
 const audio = readFileSync(process.argv[2]!);
 const agentId = process.argv[3] ?? 'main';
 const rounds = Number(process.argv[4] ?? 2);
-if (!audio.length || audio.length % 640 || !Number.isInteger(rounds) || rounds < 1 || rounds > 10) {
-  throw new Error('Usage: probe-gateway-voice-e2e.ts PCM16_16KHZ_FILE [AGENT_ID] [ROUNDS]');
+const mode = process.argv[5] ?? 'assistant';
+if (!['assistant', 'natural'].includes(mode) || !audio.length || audio.length % 640 || !Number.isInteger(rounds) || rounds < 1 || rounds > 10) {
+  throw new Error('Usage: probe-gateway-voice-e2e.ts PCM16_16KHZ_FILE [AGENT_ID] [ROUNDS] [assistant|natural]');
 }
 const config = JSON.parse(readFileSync(process.env.XOPC_CONFIG_PATH ?? process.env.XOPC_CONFIG
   ?? join(homedir(), '.xopc', 'xopc.json'), 'utf8'));
@@ -51,7 +52,7 @@ try {
   }
   if (!ready) throw new Error('Diagnostic conversation did not become ready');
   session = await request('/api/voice/realtime/sessions', 'POST', {
-    purpose: 'conversation', mode: 'assistant', conversationId, language: 'zh', supportedProtocolVersions: [3], mediaPreferences: ['websocket-pcm'],
+    purpose: 'conversation', mode, conversationId, language: 'zh', supportedProtocolVersions: [3], mediaPreferences: ['websocket-pcm'],
   });
   socket = new WebSocket(base.replace('http:', 'ws:') + session!.websocketPath);
   socket.on('error', error => { failure = error; });
@@ -97,7 +98,7 @@ try {
     await waitFor(() => completed() > before, 90_000);
     if (transcripts < round + 1) throw new Error('Reply completed without an input transcript');
   }
-  console.log(JSON.stringify({ passed: true, mode: 'assistant', agentId, rounds, transcripts, responses: completed(),
+  console.log(JSON.stringify({ passed: true, mode, agentId, rounds, transcripts, responses: completed(),
     audioBytes: [...responses.values()].reduce((total, response) => total + response.bytes, 0) }));
 } finally {
   if (socket?.readyState === WebSocket.OPEN) send('session.stop', { reason: 'user_finished' });

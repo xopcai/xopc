@@ -12,8 +12,8 @@ import {
   saveModelsJson,
   type ModelsJsonConfig,
 } from '../../../config/models-json.js';
-import type { Config } from '../../../config/schema.js';
-import { getAgentDefaultModelRef } from '../../../config/schema.js';
+import { ConfigSchema, getAgentDefaultModelRef, type Config } from '../../../config/schema.js';
+import { applyXopcCloudCapabilitySetup } from '../../../gateway/xopc-cloud-capability-setup.js';
 import { prepareUpdateGlobalDefaults } from '../../../gateway/global-defaults-admin.js';
 import {
   getAllProviders,
@@ -79,7 +79,18 @@ export async function setPrimaryModel(
   if (agent && agent.workspace !== workspacePath) {
     await service.update(catalog.defaultAgentId, { workspace: workspacePath });
   }
-  return config;
+  return modelRef.startsWith('xopc-cloud/') ? setupCloudCapabilities(config) : config;
+}
+
+/** Return media settings for the onboarding wizard to persist with its other changes. */
+async function setupCloudCapabilities(config: Config): Promise<Config> {
+  let nextConfig = ConfigSchema.parse(config);
+  const result = await applyXopcCloudCapabilitySetup({
+    currentConfig: nextConfig,
+    saveConfig: async (next) => { nextConfig = next; return { saved: true }; },
+  });
+  if (result.configured === false) throw new Error(result.error);
+  return nextConfig;
 }
 
 function formatRecommended(provider: string): string | undefined {
@@ -534,6 +545,12 @@ export async function setupModel(existingConfig: Config | null, ctx: CLIContext)
     const keepCurrent = await confirm({ message: 'Keep using this model?', default: true });
     if (keepCurrent) {
       console.log('✅ Keeping:', currentModel);
+      if (currentModel.startsWith('xopc-cloud/')) {
+        const credentialOk = await ensureProviderCredential('xopc-cloud', getProviderDisplayName('xopc-cloud'));
+        if (!credentialOk) throw new Error('XOPC Cloud credentials are unavailable');
+        await refreshOnboardModelCatalogIfNeeded('xopc-cloud', getModelsForProvider('xopc-cloud').length > 0);
+        return setupCloudCapabilities(config);
+      }
       return config;
     }
   }

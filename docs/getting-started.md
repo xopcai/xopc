@@ -6,11 +6,11 @@ xopc is open-source, local-first personal AI. Start with the desktop app, connec
 
 | Model route | What you need |
 | --- | --- |
-| XOPC Cloud | Sign in and select a service available in the current catalog |
+| XOPC Cloud | Sign in during onboarding to configure available chat, image, and voice services automatically |
 | Your API key | Connect a supported provider and choose a model |
 | Local model | Start and connect a compatible local model service such as Ollama |
 
-Once the model works, [talk with Ada](./personal-ai.md) or go directly to [files and projects](./workspace-guide.md). Voice, images, and Computer Use need their own compatible services; ordinary chat setup does not enable every capability.
+Once the model works, [talk with Ada](./personal-ai.md) or go directly to [files and projects](./workspace-guide.md). XOPC Cloud onboarding configures available image and voice services and enables supported realtime voice modes, while preserving existing explicit settings. Automatic reply playback stays off by default. Other model providers and Computer Use need their own compatible service configuration.
 
 ## Choose how to start
 
