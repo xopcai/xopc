@@ -1,5 +1,14 @@
 {
   "string": [
+    {"name": "discussion_regenerate_audio", "value": "从原音重新生成"},
+    {"name": "discussion_retry_scheduled", "value": "暂时未能完成，将自动重试；原音和处理进度已保留。"},
+    {"name": "discussion_regenerate_retained", "value": "重新生成期间保留原有结果及人工修改。"},
+    {"name": "capture_recovered", "value": "发现未完成的录音，可重试保存已录部分。"},
+    {"name": "capture_interrupted", "value": "录音已停止，已保存部分保留在本机。"},
+    {"name": "capture_local_saved", "value": "已在本机保存至 %s"},
+    {"name": "capture_foreground_only", "value": "暂不支持后台录音，请保持应用在前台。"},
+    {"name": "capture_sync_pending", "value": "原音已保存在本机，联网后可重试同步。"},
+    {"name": "capture_storage_failed", "value": "存储无法继续写入，录音已停止；可恢复已保存部分。"},
     { "name": "personal_chat_entry_title", "value": "来找我的 AI 聊聊" },
     { "name": "personal_chat_entry_subtitle", "value": "想法、烦恼和要推进的事，都可以从这里开始。" },
     { "name": "personal_chat_resume_title", "value": "继续和%s聊聊" },
