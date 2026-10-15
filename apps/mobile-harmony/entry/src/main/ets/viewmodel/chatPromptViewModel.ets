@@ -1,14 +1,10 @@
+import { XopcClarification, XopcClarificationCommand, XopcClarificationResponse } from '../model/clarification';
 import { gatewaySession } from '../service/gatewaySession';
 import { XopcDeviceCrypto } from '../service/deviceCrypto';
 import { XopcPayload } from '../model/realtime';
 import { localSessionStore } from '../service/localSessionStore';
 
-export interface XopcClarification {
-  id: string; conversationId: string; kind: string; status: string; question: string; choices?: string[];
-  suggestedAnswer?: string; version: number; expiresAt?: number;
-}
 interface XopcClarificationSnapshot { clarification?: XopcClarification; }
-interface XopcClarificationResponse { action: string; answer?: string; expectedVersion: number; idempotencyKey: string; }
 
 @ObservedV2
 export class XopcChatPromptViewModel {
@@ -47,15 +43,15 @@ export class XopcChatPromptViewModel {
       if (this.prompt?.expiresAt) this.expiryTimer = setTimeout((): void => { this.prompt = undefined; this.refresh(); }, Math.max(0, this.prompt.expiresAt - Date.now()) + 1);
     } catch (error) { if (request === this.request) this.error = (error as Error).message; }
   }
-  async respond(action: string, answer?: string): Promise<void> {
+  async respond(command: XopcClarificationCommand): Promise<void> {
     const prompt = this.prompt;
-    if (this.busy || !prompt || !['answer', 'agent_decide', 'cancel'].includes(action)
-      || (action === 'answer' && !answer?.trim()) || (prompt.expiresAt !== undefined && prompt.expiresAt <= Date.now())) return;
+    if (this.busy || !prompt || !['answer', 'agent_decide', 'cancel'].includes(command.action)
+      || (prompt.kind === 'approval' && command.action === 'agent_decide') || (prompt.expiresAt !== undefined && prompt.expiresAt <= Date.now())) return;
     const generation = this.generation; this.busy = true; this.error = ''; this.request++;
-    const signature = JSON.stringify([prompt.id, prompt.version, action, answer]);
+    const signature = JSON.stringify([prompt.id, prompt.version, command]);
     if (signature !== this.signature) { this.signature = signature; this.identity = this.crypto.uuid(); }
     try {
-      const body: XopcClarificationResponse = { action, answer, expectedVersion: prompt.version, idempotencyKey: this.identity };
+      const body: XopcClarificationResponse = { action: command.action, response: command.response, decision: command.decision, expectedVersion: prompt.version, idempotencyKey: this.identity };
       await gatewaySession.request('/api/clarifications/' + encodeURIComponent(prompt.id) + '/responses', 'POST', JSON.stringify(body));
       if (generation !== this.generation) return;
       this.prompt = undefined; this.signature = ''; clearTimeout(this.expiryTimer);

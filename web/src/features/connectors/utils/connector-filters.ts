@@ -50,5 +50,5 @@ export function installedConnectorMatchesQuery(instance: ConnectorInstance, quer
 export function customServerMatchesQuery(row: McpServerRow, query: string): boolean {
   const normalized = query.trim().toLowerCase();
   if (!normalized) return true;
-  return [row.id, row.command ?? '', row.url ?? '', row.transport].some((value) => value.toLowerCase().includes(normalized));
+  return [row.displayName ?? '', row.id, row.command ?? '', row.url ?? '', row.transport].some((value) => value.toLowerCase().includes(normalized));
 }

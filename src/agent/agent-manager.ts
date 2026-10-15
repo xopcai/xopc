@@ -1,3 +1,4 @@
+import { connectorArgumentsPreview } from '../connectors/approval.js';
 import { MemoryLearningService } from '../memory-learning/service.js';
 import { enqueueConversationLearning } from '../memory-learning/repository.js';
 import { runPersistentLearningJob } from './background-review/run-background-review.js';
@@ -1619,14 +1620,14 @@ export class AgentManager implements AgentInstanceGateway {
     if (existing) return existing === 'approved';
     const runId = getEmbeddedExecutionRunId();
     if (!runId) return false;
+    const argumentsPreview = connectorArgumentsPreview(JSON.parse(detail));
     const result = await request({ conversationId, runId, toolCallId: `approval:${approvalKey}` }, {
       kind: 'approval',
-      question: `Allow ${toolName} to run once?\n${detail.slice(0, 500)}`,
-      choices: ['Allow once', 'Deny'],
-      suggestedAnswer: 'Deny',
+      approval: { operation: toolName, argumentsPreview },
+      question: `Allow ${toolName} to run once?\n${JSON.stringify(argumentsPreview)}`,
       approvalKey,
-    }).catch(() => ({ status: 'answered' as const, answer: 'Deny' }));
-    return result.status === 'answered' && result.answer === 'Allow once';
+    }).catch(() => ({ status: 'answered' as const, answer: 'deny' }));
+    return result.status === 'answered' && result.answer === 'approve';
   }
 
   private refreshDynamicContextIfChanged(instance: AgentInstance, force = false): void {

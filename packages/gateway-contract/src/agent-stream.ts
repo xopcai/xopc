@@ -1,3 +1,4 @@
+import type { ClarificationPresentation } from './clarifications.js';
 export interface AgentStreamProgressState {
   stage: string;
   message: string;
@@ -107,12 +108,11 @@ export type AgentStreamTtsAudioPayload = {
   messageId?: string;
 };
 
-export type AgentStreamClarifyRequestPayload = {
+export type AgentStreamClarifyRequestPayload = ClarificationPresentation & {
   requestId: string;
   kind: 'input' | 'approval';
   question: string;
-  choices?: string[];
-  suggestedAnswer?: string;
+
   version: number;
   createdAt: number;
   expiresAt?: number;

@@ -1072,6 +1072,8 @@ export const McpOAuthConfigSchema = z.object({
   clientRegistration: z.enum(['dcr', 'cimd']).optional(), authServerMetadataUrl: z.string().url().optional(),
 }).strict();
 export const McpServerSchema = z.object({
+  displayName: z.string().optional(),
+  xopcOAuthCredentialId: z.string().regex(/^mcp_draft_[a-f0-9]{32}$/).optional(),
   type: z.enum(['stdio', 'http', 'streamable-http']).optional(),
   command: z.string().min(1).optional(), args: z.array(z.string()).optional(),
   env: z.record(z.string(), McpConfigScalarSchema).optional(), cwd: z.string().optional(),

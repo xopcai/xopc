@@ -86,6 +86,8 @@ fun MainNavigation(appearanceMode: String, onAppearanceModeChange: (String) -> U
             onSetContextDirectory = gateway::setContextDirectory,
             onAddContextFile = gateway::addContextFile,
             onCreateContextConversation = gateway::createContextConversation,
+            onRefreshClarification = gateway::refreshClarification,
+            onRespondToClarification = gateway::respondToClarification,
             onRefreshConnectionWait = gateway::refreshConnectionWait,
             onRefreshProgress = gateway::refreshProgress,
             onRefreshProgressHome = gateway::refreshProgressHome,

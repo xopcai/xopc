@@ -1,3 +1,4 @@
+import { XopcClarification, XopcClarificationChoice, XopcClarificationApproval } from './clarification';
 export interface XopcVoiceAvailability {
   available: boolean;
   reasonCode?: string;
@@ -113,21 +114,16 @@ export interface XopcVoiceEventPayload {
   requestId?: string;
   kind?: string;
   question?: string;
-  choices?: string[];
-  suggestedAnswer?: string;
+  choiceDetails?: XopcClarificationChoice[];
+  interactionMode?: string;
+  recommendedChoiceId?: string;
+  approval?: XopcClarificationApproval;
   version?: number;
   createdAt?: number;
   expiresAt?: number;
 }
 
-export interface XopcVoiceClarification {
-  requestId: string;
-  question: string;
-  choices: string[];
-  suggestedAnswer: string;
-  version: number;
-  kind: string;
-}
+export interface XopcVoiceClarification extends XopcClarification {}
 
 export interface XopcVoiceApproval {
   id: string;

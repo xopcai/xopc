@@ -55,7 +55,7 @@ describe('clarification wait repository', () => {
       toolCallId: 'tool-1',
       kind: 'input',
       question: 'Which environment?',
-      choices: ['staging', 'production'],
+      choiceDetails: [{ id: 'staging', label: 'staging' }, { id: 'production', label: 'production' }],
       now: createdAt,
     });
     expect(wait.expiresAt).toBeUndefined();
@@ -67,7 +67,7 @@ describe('clarification wait repository', () => {
       expectedVersion: wait.version,
       idempotencyKey: 'answer-1',
       action: 'answer',
-      answer: 'staging',
+      response: { text: 'staging' },
       now: createdAt + 7 * 24 * 60 * 60_000,
     });
     expect(resolved).toMatchObject({ ok: true, queued: true, idempotent: false });
@@ -102,14 +102,14 @@ describe('clarification wait repository', () => {
       expectedVersion: first.version,
       idempotencyKey: 'same-response',
       action: 'answer',
-      answer: 'A',
+      response: { text: 'A' },
     });
     const retry = resolveClarification({
       id: first.id,
       expectedVersion: first.version,
       idempotencyKey: 'same-response',
       action: 'answer',
-      answer: 'A',
+      response: { text: 'A' },
     });
     expect(firstResponse).toMatchObject({ ok: true, idempotent: false });
     expect(retry).toMatchObject({ ok: true, idempotent: true });
@@ -122,8 +122,8 @@ describe('clarification wait repository', () => {
       toolCallId: 'approval-1',
       kind: 'approval',
       question: 'Allow delete?',
-      choices: ['Allow once', 'Deny'],
-      suggestedAnswer: 'Deny',
+      approval: { operation: 'Run tool' },
+
       now: 1_000,
     });
     finishSessionInputRun(conversationId, 'origin-run', 'suspended');
@@ -132,7 +132,7 @@ describe('clarification wait repository', () => {
       expectedVersion: wait.version,
       idempotencyKey: 'late-approval',
       action: 'answer',
-      answer: 'Allow once',
+      decision: 'approve',
       now: wait.expiresAt! + 1,
     });
     expect(result).toMatchObject({ ok: false, code: 'EXPIRED' });
@@ -153,14 +153,14 @@ describe('clarification wait repository', () => {
       expectedVersion: wait.version,
       idempotencyKey: 'answer-a',
       action: 'answer',
-      answer: 'A',
+      response: { text: 'A' },
     })).toMatchObject({ ok: true });
     expect(resolveClarification({
       id: wait.id,
       expectedVersion: wait.version,
       idempotencyKey: 'answer-b',
       action: 'answer',
-      answer: 'B',
+      response: { text: 'B' },
     })).toMatchObject({ ok: false, code: 'CONFLICT' });
   });
 
@@ -171,7 +171,7 @@ describe('clarification wait repository', () => {
       toolCallId: 'tool-cancel',
       kind: 'input',
       question: 'Choose?',
-      suggestedAnswer: 'A',
+
     });
     finishSessionInputRun(conversationId, 'origin-run', 'suspended');
     expect(resolveClarification({

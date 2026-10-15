@@ -1,3 +1,4 @@
+import type { ClarificationPresentation } from '@xopcai/gateway-contract';
 import type { Message } from '@/features/chat/messages/messages.types';
 
 export type SideChatSelection = {
@@ -17,12 +18,12 @@ export type SideChatView = {
   expiresAt: string | null;
   serverNow?: string;
   runId?: string;
-  clarification?: {
+  clarification?: ClarificationPresentation & {
     requestId: string;
     kind: 'input' | 'approval';
     question: string;
-    choices?: string[];
-    suggestedAnswer?: string;
+
+    expiresAt?: number;
   };
   messageCount: number;
   context: {

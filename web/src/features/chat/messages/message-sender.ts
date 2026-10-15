@@ -1,3 +1,4 @@
+import { readClarificationPresentation } from '@xopcai/gateway-contract';
 import { captureTurnEnvironment } from '@/features/endpoint-tools/turn-environment';
 import { useChatSessionStore } from '../session/chat-session-store';
 import {
@@ -897,18 +898,13 @@ export class MessageSender {
         const requestId = typeof payload.requestId === 'string' ? payload.requestId.trim() : '';
         const question = typeof payload.question === 'string' ? payload.question.trim() : '';
         if (requestId && question && cb?.onClarifyRequest) {
-          const choices = Array.isArray(payload.choices)
-            ? (payload.choices as unknown[]).filter((x): x is string => typeof x === 'string' && x.trim().length > 0)
-            : undefined;
-          const suggestedAnswer = typeof payload.suggestedAnswer === 'string' && payload.suggestedAnswer.trim()
-            ? payload.suggestedAnswer.trim()
-            : undefined;
+
           cb.onClarifyRequest({
+            ...readClarificationPresentation(payload),
             requestId,
             kind: payload.kind === 'approval' ? 'approval' : 'input',
             question,
-            choices: choices && choices.length >= 2 ? choices : undefined,
-            suggestedAnswer,
+
             version: typeof payload.version === 'number' ? payload.version : 1,
             createdAt: typeof payload.createdAt === 'number' ? payload.createdAt : Date.now(),
             expiresAt: typeof payload.expiresAt === 'number' ? payload.expiresAt : undefined,

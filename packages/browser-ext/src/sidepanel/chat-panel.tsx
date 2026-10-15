@@ -1,3 +1,4 @@
+import type { ClarificationSubmission } from '@xopcai/gateway-contract';
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { appendPageContext } from './composer-contexts';
 
@@ -130,6 +131,9 @@ export function ChatPanel({ gatewayId, deviceId }: { gatewayId: string; deviceId
   const [screenshotFallbackError, setScreenshotFallbackError] = useState('');
   const [copiedMessageId, setCopiedMessageId] = useState('');
   const [clarificationAnswer, setClarificationAnswer] = useState('');
+  const [clarificationChoice, setClarificationChoice] = useState<string>();
+  const [clarificationEditing, setClarificationEditing] = useState(false);
+  useEffect(() => { setClarificationAnswer(''); setClarificationChoice(undefined); setClarificationEditing(false); }, [snapshot.clarification?.id]);
   const [clarificationSubmitting, setClarificationSubmitting] = useState(false);
   const [tabMention, setTabMention] = useState<TabMention>();
   const [mentionTabs, setMentionTabs] = useState<MentionableTab[]>([]);
@@ -513,11 +517,11 @@ export function ChatPanel({ gatewayId, deviceId }: { gatewayId: string; deviceId
     await client.loadSessions(value).catch((cause) => setError(cause instanceof Error ? cause.message : String(cause)));
   }
 
-  async function respondToClarification(action: 'answer' | 'agent_decide' | 'cancel', answer?: string) {
+  async function respondToClarification(action: 'answer' | 'agent_decide' | 'cancel', submission?: ClarificationSubmission) {
     setClarificationSubmitting(true);
     setError('');
     try {
-      await client.respondToClarification(action, answer);
+      await client.respondToClarification(action, submission);
       setClarificationAnswer('');
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
@@ -672,29 +676,32 @@ export function ChatPanel({ gatewayId, deviceId }: { gatewayId: string; deviceId
         }}
       >
         {draggingFiles ? <div className="file-drop-overlay"><PaperclipIcon /><span>{t('dropFiles')}</span></div> : null}
-        {snapshot.clarification?.kind === 'input' ? (
+        {snapshot.clarification ? (
           <section className="request-card" aria-label={t('agentQuestion')}>
             <div className="request-card-title"><SparkleIcon /><strong>{t('xopcNeedsInput')}</strong></div>
             <p>{snapshot.clarification.question}</p>
-            {snapshot.clarification.choices?.length ? <div className="choice-list">{snapshot.clarification.choices.map((choice) => (
-              <button key={choice} type="button" disabled={clarificationSubmitting} onClick={() => void respondToClarification('answer', choice)}>{choice}</button>
-            ))}</div> : null}
-            <div className="clarification-answer">
-              <input
-                value={clarificationAnswer}
-                onChange={(event) => setClarificationAnswer(event.target.value)}
-                placeholder={snapshot.clarification.suggestedAnswer ?? t('typeAnswer')}
-              />
-              <button
-                type="button"
-                disabled={clarificationSubmitting || !clarificationAnswer.trim()}
-                onClick={() => void respondToClarification('answer', clarificationAnswer.trim())}
-              >{t('send')}</button>
-            </div>
-            <div className="clarification-actions">
-              <button type="button" disabled={clarificationSubmitting} onClick={() => void respondToClarification('agent_decide')}>{t('letXopcDecide')}</button>
-              <button type="button" disabled={clarificationSubmitting} onClick={() => void respondToClarification('cancel')}>{t('cancelTask')}</button>
-            </div>
+            {snapshot.clarification.kind === 'approval' ? <>
+              <p>{snapshot.clarification.approval?.operation}</p>
+              <p>{snapshot.clarification.approval?.target}</p><p>{snapshot.clarification.approval?.impact}</p>
+              <pre>{JSON.stringify(snapshot.clarification.approval?.argumentsPreview, null, 2)}</pre>
+              <button disabled={clarificationSubmitting} onClick={() => void respondToClarification('answer', { decision: 'deny' })}>{t('clarifyDeny')}</button>
+              <button disabled={clarificationSubmitting} onClick={() => void respondToClarification('answer', { decision: 'approve' })}>{t('clarifyApprove')}</button>
+            </> : <>
+              <button disabled={clarificationSubmitting} onClick={() => setClarificationEditing(true)}>{t('clarifyCompose')}</button>
+              <div className="choice-list">{snapshot.clarification.choiceDetails?.map(choice => <button key={choice.id} disabled={clarificationSubmitting}
+                aria-pressed={clarificationChoice === choice.id} onClick={() => {
+                  if (snapshot.clarification?.interactionMode === 'compose' || clarificationEditing || clarificationAnswer) setClarificationChoice(choice.id);
+                  else void respondToClarification('answer', { response: { choiceId: choice.id } });
+                }}>{choice.label}{snapshot.clarification?.recommendedChoiceId === choice.id ? ' · ' + t('clarifyRecommended') : ''}<small>{choice.description}</small></button>)}</div>
+              {clarificationChoice ? <button onClick={() => setClarificationChoice(undefined)}>{t('clarifyClear')}</button> : null}
+              <label>{t('typeAnswer')}<textarea value={clarificationAnswer} rows={3} disabled={clarificationSubmitting}
+                onChange={event => { setClarificationAnswer(event.target.value); if (event.target.value) setClarificationEditing(true); }} /></label>
+              <button disabled={clarificationSubmitting || clarificationAnswer.trim().length > 8000 || (!clarificationChoice && !clarificationAnswer.trim())}
+                onClick={() => void respondToClarification('answer', { response: { choiceId: clarificationChoice, text: clarificationAnswer.trim() || undefined } })}>{t('send')}</button>
+              <button disabled={clarificationSubmitting} onClick={() => void respondToClarification('agent_decide')}>{t('letXopcDecide')}</button>
+              <button disabled={clarificationSubmitting} onClick={() => void respondToClarification('cancel')}>{t('cancelTask')}</button>
+            </>}
+
           </section>
         ) : null}
         {processing ? <div className="composer-notice" role="status">{t('processingAttachments')}</div> : null}

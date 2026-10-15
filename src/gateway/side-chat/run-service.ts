@@ -1,3 +1,5 @@
+import { readClarificationPresentation } from '@xopcai/gateway-contract';
+import type { ClarificationSubmission } from '@xopcai/gateway-contract';
 import { randomUUID } from 'node:crypto';
 
 import type { AgentService } from '../../agent/service.js';
@@ -85,7 +87,7 @@ export class SideChatRunService {
     return this.options.manager.dispose(sideChatId, clientInstanceId);
   }
 
-  submitClarification(sideChatId: string, clientInstanceId: string, requestId: string, answer: string): boolean {
+  submitClarification(sideChatId: string, clientInstanceId: string, requestId: string, answer: ClarificationSubmission): boolean {
     const sideChat = this.options.manager.get(sideChatId, clientInstanceId);
     if (sideChat.clarification?.requestId !== requestId) return false;
     const handled = this.options.agentRunner.answerEphemeralClarification(requestId, answer);
@@ -111,11 +113,13 @@ export class SideChatRunService {
       if (run.abortController.signal.aborted) return;
       if (event.type === 'clarify_request') {
         this.options.manager.waitForInput(run.sideChatId, run.clientInstanceId, {
+          ...readClarificationPresentation(event),
+          expiresAt: typeof event.expiresAt === 'number' ? event.expiresAt : undefined,
           requestId: String(event.requestId),
           kind: event.kind === 'approval' ? 'approval' : 'input',
           question: String(event.question),
-          choices: Array.isArray(event.choices) ? event.choices.filter((choice): choice is string => typeof choice === 'string') : undefined,
-          suggestedAnswer: typeof event.suggestedAnswer === 'string' ? event.suggestedAnswer : undefined,
+
+
         }, event.kind === 'approval' ? 'waiting-approval' : 'waiting-input');
       }
       for (const mapped of mapper.map(event)) publish(mapped);

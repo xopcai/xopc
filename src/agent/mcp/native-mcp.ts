@@ -6,6 +6,7 @@ import { getAgentDir, type LoadedMcpConfig, type McpServerConfig } from '@earend
 import { resolveStateDir } from '../../config/paths-state.js';
 import { McpServerSchema, type Config } from '../../config/schema.js';
 import { resolveConnectorSecretReferences } from '../../connectors/secret-store.js';
+import { createNativeMcpCredentials, routeNativeMcpCredentials, type NativeMcpCredentials } from './credential-store.js';
 import { loadMergedMcpConfig } from './config.js';
 
 /** One process-wide pi directory: sessions share native OAuth credentials, never swap roots per turn. */
@@ -16,8 +17,10 @@ export function getNativePiAgentDir(): string {
   return directory;
 }
 
+export type NativeMcpConfig = LoadedMcpConfig & { credentials?: NativeMcpCredentials; credentialAliases?: Record<string, string> };
+
 /** Only projects host configuration and secret references; all MCP execution belongs to pi. */
-export async function prepareNativeMcpConfig(config: Config, workspaceDir: string): Promise<LoadedMcpConfig> {
+export async function prepareNativeMcpConfig(config: Config, workspaceDir: string): Promise<NativeMcpConfig> {
   getNativePiAgentDir();
   const merged = loadMergedMcpConfig({ cfg: config, workspaceDir });
   const result: LoadedMcpConfig = { servers: [], errors: merged.diagnostics.map(item => item.message) };
@@ -37,6 +40,13 @@ export async function prepareNativeMcpConfig(config: Config, workspaceDir: strin
     const projected = Object.fromEntries(fields.filter(key => value[key] !== undefined).map(key => [key, value[key]]));
     if (projected.type === 'streamable-http') projected.type = 'http';
     result.servers.push({ name, config: projected as unknown as McpServerConfig, source: 'xopc.json', scope: 'extension' });
+  }
+  const aliases = new Map(Object.entries(config.mcp?.servers ?? {})
+    .filter(([, value]) => typeof value.xopcOAuthCredentialId === 'string')
+    .map(([name, value]) => [name, value.xopcOAuthCredentialId as string]));
+  if (aliases.size) {
+    (result as NativeMcpConfig).credentials = routeNativeMcpCredentials(await createNativeMcpCredentials(), aliases);
+    (result as NativeMcpConfig).credentialAliases = Object.fromEntries(aliases);
   }
   return result;
 }

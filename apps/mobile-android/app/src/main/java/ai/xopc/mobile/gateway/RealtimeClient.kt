@@ -28,7 +28,7 @@ data class RunStreamEvent(val runId: String, val conversationId: String, val typ
       val runId = topic.removePrefix("run:")
       if (!topic.startsWith("run:") || data.optString("runId") != runId) return null
       val conversationId = data.optString("conversationId").takeIf(String::isNotBlank) ?: return null
-      if (event !in setOf("assistant_delta", "assistant_message_end", "run_end", "error")) return null
+      if (event !in setOf("assistant_delta", "assistant_message_end", "clarify_request", "run_end", "error")) return null
       val payload = data.optJSONObject("payload") ?: return null
       return RunStreamEvent(runId, conversationId, event,
         (payload.opt("messageId") as? String)?.takeIf(String::isNotBlank),

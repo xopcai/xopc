@@ -1,3 +1,4 @@
+import { clarificationSubmissionSchema } from '@xopcai/gateway-contract';
 import type { Context, Hono } from 'hono';
 import { chooseModelThinking } from '@xopcai/gateway-contract';
 
@@ -156,13 +157,13 @@ export function registerSideChatRoutes(authenticated: Hono, deps: AuthenticatedR
   authenticated.post('/api/side-chats/:sideChatId/clarify/:requestId', deps.chatRateLimitMiddleware, async (c) => {
     try {
       const body = await c.req.json().catch(() => ({})) as Record<string, unknown>;
-      const answer = body.skip === true ? '' : typeof body.answer === 'string' ? body.answer.trim() : '';
-      if (body.skip !== true && !answer) throw new SideChatError('answer is required', 'INVALID_REQUEST');
+      const submission = clarificationSubmissionSchema.safeParse(body);
+      if (!submission.success) throw new SideChatError('Invalid clarification response', 'INVALID_REQUEST');
       const handled = service.sideChatRuns.submitClarification(
         c.req.param('sideChatId'),
         readClientInstanceId(c, body.clientInstanceId),
         c.req.param('requestId'),
-        answer,
+        submission.data,
       );
       if (!handled) throw new SideChatError('Clarification request not found', 'NOT_FOUND');
       return c.json({ ok: true });

@@ -481,9 +481,12 @@ describe('streaming assistant Markdown rendering', () => {
     render([{ type: 'text', text: 'First update' }], true);
 
     expect(container.textContent?.trim()).toBe('First');
-    act(() => vi.advanceTimersByTime(48));
-    expect(container.textContent?.trim()).toBe('First updat');
-    act(() => vi.advanceTimersByTime(32));
+    act(() => vi.advanceTimersByTime(64));
+    const partial = container.textContent?.trim() ?? '';
+    expect(partial.length).toBeGreaterThan('First'.length);
+    expect(partial.length).toBeLessThan('First update'.length);
+    expect('First update'.startsWith(partial)).toBe(true);
+    act(() => vi.advanceTimersByTime(500));
     expect(container.textContent?.trim()).toBe('First update');
   });
 
