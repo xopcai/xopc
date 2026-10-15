@@ -36,6 +36,7 @@ import type {
   ListDiscussionsQuery,
 } from './types.js';
 import { editMeeting } from './edits.js';
+import { createProcessingRun, processingProgress, resetProcessingRetry } from './processing.js';
 import { saveTranscriptRevision, readTranscriptRevision, refreshCanonicalTranscript } from './revisions.js';
 import { assembleDiscussionTranscript } from './transcript.js';
 
@@ -296,6 +297,7 @@ export class DiscussionService {
       const capture = getDiscussionCapture(id);
       if (!capture) throw new DiscussionServiceError('not_found', 'Discussion not found');
       if (!['completed', 'needs_attention'].includes(capture.status) || !capture.canonicalTranscript) throw new DiscussionServiceError('conflict', 'Transcript is not ready');
+      resetProcessingRetry(id);
       const updated = updateDiscussionCapture(id, { status: 'organizing', template: template as import('./types.js').DiscussionTemplate, failureCode: undefined, failureMessage: undefined }, [capture.status]);
       this.emit?.('discussion.updated', updated);
       return this.detail(updated!);
@@ -383,26 +385,39 @@ export class DiscussionService {
     });
   }
 
-  async retry(id: string): Promise<DiscussionDetail | null> {
-    const capture = getDiscussionCapture(id);
-    if (!capture) return null;
-    if (capture.status !== 'needs_attention') {
-      throw new DiscussionServiceError('conflict', 'Only discussions needing attention can be retried');
-    }
-    if (getRecordingJob(id)?.state === 'failed') {
+  async retry(id: string, mode: import('./types.js').DiscussionRetryMode = 'resume'): Promise<DiscussionDetail | null> {
+    if (mode !== 'resume' && mode !== 'from_audio') throw new DiscussionServiceError('invalid_input', 'Invalid retry mode');
+    if (mode === 'resume' && getRecordingJob(id)?.state === 'failed') {
       await this.sealRecording(id, getRecordingJobInput(id)!);
       return this.get(id);
     }
-    const updated = updateDiscussionCapture(id, {
-      status: capture.canonicalTranscript ? 'organizing' : 'stopping',
-      ...(!capture.canonicalTranscript ? { recordingStoppedAt: Date.now() } : {}),
-      failureStage: undefined,
-      failureCode: undefined,
-      failureMessage: undefined,
-    }, ['needs_attention']);
-    if (!updated) throw new DiscussionServiceError('conflict', 'Discussion changed while retrying');
-    this.emit?.('discussion.updated', updated);
-    return this.detail(updated);
+    return this.enqueueMutation(id, async () => {
+      const capture = getDiscussionCapture(id);
+      if (!capture) return null;
+      if (mode === 'from_audio') {
+        if (!['completed', 'needs_attention'].includes(capture.status)) throw new DiscussionServiceError('conflict', 'Wait for current processing to finish');
+        if (!capture.audioAttachmentId || capture.audioDeletedAt || !await this.notes.getAttachmentPath(capture.noteId, capture.audioAttachmentId)) {
+          throw new DiscussionServiceError('conflict', 'Saved original audio is unavailable');
+        }
+      } else if (capture.status !== 'needs_attention') {
+        throw new DiscussionServiceError('conflict', 'Only discussions needing attention can be retried');
+      }
+      const updated = runSqliteWriteTransaction(() => {
+        if (mode === 'from_audio') {
+          saveTranscriptRevision(id);
+          createProcessingRun(capture, true);
+        } else resetProcessingRetry(id);
+        const status = mode === 'from_audio' || capture.failureStage === 'transcript_sealing'
+          ? 'sealing' : capture.canonicalTranscript ? 'organizing' : 'stopping';
+        return updateDiscussionCapture(id, { status,
+          ...(status === 'stopping' ? { recordingStoppedAt: Date.now() } : {}),
+          failureStage: undefined, failureCode: undefined, failureMessage: undefined,
+        }, [capture.status]);
+      });
+      if (!updated) throw new DiscussionServiceError('conflict', 'Discussion changed while retrying');
+      this.emit?.('discussion.updated', updated);
+      return this.detail(updated);
+    });
   }
 
   async cancel(id: string): Promise<DiscussionDetail | null> {
@@ -472,6 +487,7 @@ export class DiscussionService {
     const recordingJob = getRecordingJob(capture.id);
     return {
       discussion: capture,
+      processing: processingProgress(capture.id),
       note,
       transcript: this.transcript(capture.id)!,
       ...(recordingJob ? { recordingJob } : {}),

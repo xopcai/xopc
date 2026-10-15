@@ -226,6 +226,17 @@ describe('discussion note document', () => {
       expect(invalid.status).toBe(416);
       const exported = await fetch(`${base}/api/discussions/${playable.discussion.id}/export?format=txt`, { headers: { authorization: 'Bearer meeting-test' } });
       expect(exported.status).toBe(200);
+      const retryUrl = `${base}/api/discussions/${playable.discussion.id}/retry`;
+      updateDiscussionCapture(playable.discussion.id, { status: 'completed' });
+      const retryBody = JSON.stringify({ mode: 'from_audio' });
+      expect((await fetch(retryUrl, { method: 'POST', body: retryBody })).status).toBe(401);
+      expect((await fetch(retryUrl, { method: 'POST', headers: { authorization: 'Bearer meeting-test', 'x-test-read-only': '1', 'content-type': 'application/json' }, body: retryBody })).status).toBe(403);
+      expect((await fetch(retryUrl, { method: 'POST', headers: { authorization: 'Bearer meeting-test', 'content-type': 'application/json' }, body: JSON.stringify({ mode: 'unknown' }) })).status).toBe(400);
+      const regenerated = await fetch(retryUrl, { method: 'POST', headers: { authorization: 'Bearer meeting-test', 'content-type': 'application/json' }, body: retryBody });
+      expect(regenerated.status).toBe(200);
+      expect(await regenerated.json()).toMatchObject({ discussion: { id: playable.discussion.id, status: 'sealing', audioAttachmentId: expect.any(String) }, processing: { fromAudio: true } });
+      expect((await fetch(audioUrl, { headers: { authorization: 'Bearer meeting-test', range: 'bytes=0-3' } })).status).toBe(206);
+
 
     } finally {
       await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));

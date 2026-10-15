@@ -1,5 +1,14 @@
 {
   "string": [
+    {"name": "discussion_regenerate_audio", "value": "Regenerate from saved audio"},
+    {"name": "discussion_retry_scheduled", "value": "A temporary failure occurred. Processing will retry automatically; saved audio and progress are retained."},
+    {"name": "discussion_regenerate_retained", "value": "Previous results and manual edits remain available while the new result is generated."},
+    {"name": "capture_recovered", "value": "Unfinished recording recovered. Retry to save the recorded portion."},
+    {"name": "capture_interrupted", "value": "Recording stopped. The saved portion is retained on this device."},
+    {"name": "capture_local_saved", "value": "Saved on this device to %s"},
+    {"name": "capture_foreground_only", "value": "Background recording is unavailable. Keep this app in the foreground."},
+    {"name": "capture_sync_pending", "value": "Original audio is saved locally. Sync will retry when connected."},
+    {"name": "capture_storage_failed", "value": "Storage could not keep up. Recording stopped; only the saved portion can be recovered."},
     { "name": "location_reason", "value": "仅在你允许本次查询时使用位置，查询天气或附近地点。" },
     { "name": "personal_chat_entry_title", "value": "Meet your personal AI" },
     { "name": "personal_chat_entry_subtitle", "value": "A familiar place to think aloud and get things moving." },

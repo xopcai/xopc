@@ -61,19 +61,10 @@ export async function fetchWithTimeoutGuarded(
   const controller = new AbortController();
   const timeoutHandle = setTimeout(() => controller.abort(), options.timeoutMs);
 
-  const callerSignal = options.signal;
-  if (callerSignal) {
-    if (callerSignal.aborted) {
-      controller.abort(callerSignal.reason);
-    } else {
-      callerSignal.addEventListener('abort', () => controller.abort(callerSignal.reason), {
-        once: true,
-      });
-    }
-  }
+  const signal = options.signal ? AbortSignal.any([options.signal, controller.signal]) : controller.signal;
 
   try {
-    return await fetch(url, { ...options.init, signal: controller.signal });
+    return await fetch(url, { ...options.init, signal });
   } finally {
     clearTimeout(timeoutHandle);
   }

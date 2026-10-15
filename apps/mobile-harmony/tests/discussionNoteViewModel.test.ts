@@ -50,4 +50,16 @@ describe('voice note discussion detail', () => {
     await Promise.resolve();
     expect(model.detail).toBeUndefined();
   });
+
+  it('requests a fresh original-audio generation and continues polling its durable server state', async () => {
+    mocks.byNote.mockResolvedValueOnce(result('completed', 'Previous text')).mockResolvedValueOnce(result('sealing', 'Previous text'));
+    mocks.retry.mockResolvedValue(undefined);
+    const model = new XopcDiscussionNoteViewModel(); model.start('note');
+    await vi.waitFor(() => expect(model.detail?.discussion.status).toBe('completed'));
+    await model.retry(true);
+    expect(mocks.retry).toHaveBeenCalledWith('capture', true);
+    expect(model.detail?.transcript.text).toBe('Previous text');
+    expect(model.detail?.discussion.status).toBe('sealing'); model.stop();
+  });
+
 });

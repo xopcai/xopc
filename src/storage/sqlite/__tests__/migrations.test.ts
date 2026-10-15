@@ -47,6 +47,22 @@ describe('SQLite migrations', () => {
     rmSync(migrationsDir, { recursive: true, force: true });
   });
 
+  it('adds restartable discussion processing without changing existing audio and cascades checkpoint cleanup', () => {
+    const db = openEmptyDb();
+    try {
+      installBaseline(db); applyPendingMigrations(db, { targetVersion: 252 });
+      db.exec("INSERT INTO notes (note_id,kind,status,payload_json,created_at,updated_at) VALUES ('note','text','active','{}',1,1)");
+      db.exec("INSERT INTO discussion_captures (id,client_request_id,note_id,source,status,audio_attachment_id,recording_started_at,created_at,updated_at) VALUES ('capture','request','note','web','needs_attention','original',1,1,1)");
+      applyPendingMigrations(db);
+      expect(db.prepare("SELECT status,audio_attachment_id FROM discussion_captures WHERE id='capture'").get()).toEqual({ status: 'needs_attention', audio_attachment_id: 'original' });
+      db.exec("INSERT INTO discussion_processing (discussion_id,run_id,base_transcript_revision) VALUES ('capture','run',0)");
+      db.exec("INSERT INTO discussion_transcription_checkpoints VALUES ('run',0,20000,'{}',1)");
+      db.exec("DELETE FROM discussion_processing WHERE discussion_id='capture'");
+      expect(db.prepare('SELECT COUNT(*) n FROM discussion_transcription_checkpoints').get()).toEqual({ n: 0 });
+      expect(db.prepare("SELECT audio_attachment_id FROM discussion_captures WHERE id='capture'").get()).toEqual({ audio_attachment_id: 'original' });
+    } finally { db.close(); }
+  });
+
   it('moves historical personal thinking settings into the dedicated session', () => {
     const db = openEmptyDb();
     try {

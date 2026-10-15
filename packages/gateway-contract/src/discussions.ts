@@ -83,6 +83,16 @@ export interface DiscussionOrganization {
   projectAlternativeConfidence?: number;
 }
 
+export type DiscussionRetryMode = 'resume' | 'from_audio';
+export interface DiscussionProcessingProgress {
+  fromAudio: boolean;
+  completedChunks: number;
+  transcribedMs: number;
+  attemptCount: number;
+  maxAttempts: number;
+  nextAttemptAt?: number;
+}
+
 export interface DiscussionCapture {
   id: string;
   clientRequestId: string;

@@ -23,6 +23,7 @@ import {
   listDiscussionLiveSegments,
   saveDiscussionLiveSegment,
 } from './discussion-draft-store';
+import { readDiscussionConsent, rememberDiscussionConsent } from './discussion-consent-cache';
 import { OPEN_DISCUSSION_CAPTURE_EVENT } from './discussion-events';
 import { drainDiscussionSegmentUploadQueue } from './discussion-segment-upload-queue';
 import type { DiscussionDetail, DiscussionTranscript } from './discussion-types';
@@ -107,16 +108,6 @@ export function GlobalDiscussionCaptureHost() {
     return ensureSegmentQueueDrain();
   }, [ensureSegmentQueueDrain]);
 
-  const flushSegmentQueue = useCallback(async (draftId: string, discussionId: string): Promise<void> => {
-    segmentQueueTargetRef.current = { draftId, discussionId };
-    while (true) {
-      await ensureSegmentQueueDrain();
-      const pending = await listDiscussionLiveSegments(draftId);
-      setPendingSegmentCount(pending.length);
-      if (pending.length === 0) return;
-    }
-  }, [ensureSegmentQueueDrain]);
-
   const uploadLiveSegment = useCallback(async (
     draftId: string,
     segment: { sequence: number; blob: Blob; startedAtMs: number; endedAtMs: number; sha256: string },
@@ -136,6 +127,7 @@ export function GlobalDiscussionCaptureHost() {
     setUploadProgress(0);
     const draft = await recorder.start({
       ...(projectId ? { projectId } : {}),
+      consentPolicyVersion: policyVersion,
       onLiveSegment: uploadLiveSegment,
     });
     if (!draft) return;
@@ -145,6 +137,7 @@ export function GlobalDiscussionCaptureHost() {
       ...(projectId ? { contextProjectId: projectId } : {}),
       consentPolicyVersion: policyVersion,
       source: isElectron() ? 'electron' : 'web',
+      recordedAt: draft.startedAt,
     });
     createPromiseRef.current = creation;
     try {
@@ -164,7 +157,8 @@ export function GlobalDiscussionCaptureHost() {
     setVisible(true);
     setOperationError(null);
     try {
-      const settings = await getDiscussionCaptureSettings();
+      const settings = readDiscussionConsent() ?? await getDiscussionCaptureSettings();
+      rememberDiscussionConsent(settings);
       if (settings.consentAcknowledgedAt == null) {
         setPendingProjectId(projectId);
         setConsentVersion(settings.consentPolicyVersion);
@@ -219,7 +213,7 @@ export function GlobalDiscussionCaptureHost() {
   const confirmConsent = async () => {
     if (consentVersion == null) return;
     try {
-      await acknowledgeDiscussionConsent(consentVersion);
+      rememberDiscussionConsent(await acknowledgeDiscussionConsent(consentVersion));
       await beginRecording(pendingProjectId, consentVersion);
     } catch (error) {
       setOperationError(error instanceof Error ? error.message : copy.saveFailed);
@@ -235,20 +229,28 @@ export function GlobalDiscussionCaptureHost() {
     try {
       const stopped = await recorder.stop();
       if (!stopped) throw new Error(copy.emptyRecording);
-      const created = await createPromiseRef.current;
-      if (!created) throw new Error(copy.saveFailed);
+      const created = await createPromiseRef.current?.catch(() => null) ?? await createDiscussion({
+        clientRequestId: stopped.id,
+        ...(stopped.projectId ? { contextProjectId: stopped.projectId } : {}),
+        consentPolicyVersion: stopped.consentPolicyVersion ?? (await getDiscussionCaptureSettings()).consentPolicyVersion,
+        source: isElectron() ? 'electron' : 'web',
+        recordedAt: stopped.startedAt,
+      });
+      createPromiseRef.current = Promise.resolve(created);
+      setDetail(created);
+      await recorder.setServerDiscussionId(created.discussion.id);
       setBackgroundUploading(true);
       await originalUploadRef.current;
       await uploadDraftRecording(stopped, created.discussion.id, setUploadProgress);
       // The original recording repairs failed live text; a live outage must not block saving.
-      await flushSegmentQueue(stopped.id, created.discussion.id).catch(() => undefined);
+      segmentQueueAbortRef.current?.abort();
       setDetail(await getDiscussion(created.discussion.id));
       await recorder.discard(stopped.id);
       segmentQueueTargetRef.current = null;
       setPendingSegmentCount(0);
       navigate(`/notes/${encodeURIComponent(created.note.id)}`);
     } catch (error) {
-      await recorder.markUploadFailed();
+      await recorder.markUploadFailed().catch(() => undefined);
       setOperationError(error instanceof Error ? error.message : copy.saveFailed);
       setVisible(true);
     } finally {
@@ -277,15 +279,17 @@ export function GlobalDiscussionCaptureHost() {
   };
 
   const recoverDraft = async () => {
-    const candidate = recorder.recoverableDrafts[0];
+    let candidate = recorder.recoverableDrafts[0];
     if (!candidate || recovering) return;
+    recordingSessionRef.current = false;
     setRecovering(true);
     setVisible(true);
     setOperationError(null);
     setUploadProgress(0);
     try {
-      await recorder.restore(candidate);
-      const settings = await getDiscussionCaptureSettings();
+      candidate = await recorder.restore(candidate);
+      const settings = readDiscussionConsent() ?? await getDiscussionCaptureSettings();
+      rememberDiscussionConsent(settings);
       if (settings.consentAcknowledgedAt == null) {
         throw new Error(copy.consent);
       }
@@ -298,6 +302,7 @@ export function GlobalDiscussionCaptureHost() {
           ...(candidate.projectId ? { contextProjectId: candidate.projectId } : {}),
           consentPolicyVersion: settings.consentPolicyVersion,
           source: isElectron() ? 'electron' : 'web',
+          recordedAt: candidate.startedAt,
         });
       }
       createPromiseRef.current = Promise.resolve(created);
@@ -308,10 +313,8 @@ export function GlobalDiscussionCaptureHost() {
         return;
       }
       if (created.discussion.status === 'cancelled') throw new Error('This recording was cancelled');
-      const pendingSegments = await listDiscussionLiveSegments(candidate.id);
-      const lastSequence = pendingSegments.reduce((highest, segment) => Math.max(highest, segment.sequence), candidate.lastSequence);
-      if (!created.discussion.audioAttachmentId) await uploadDraftRecording({ ...candidate, lastSequence }, created.discussion.id, setUploadProgress);
-      await flushSegmentQueue(candidate.id, created.discussion.id).catch(() => undefined);
+      if (!created.discussion.audioAttachmentId) await uploadDraftRecording(candidate, created.discussion.id, setUploadProgress);
+      segmentQueueAbortRef.current?.abort();
       const current = await getDiscussion(created.discussion.id);
       if (current.discussion.status === 'needs_attention') {
         const { retryDiscussion } = await import('./discussion-api');
@@ -321,7 +324,7 @@ export function GlobalDiscussionCaptureHost() {
       }
       await recorder.discard(candidate.id);
     } catch (error) {
-      await recorder.markUploadFailed();
+      await recorder.markUploadFailed().catch(() => undefined);
       setOperationError(error instanceof Error ? error.message : copy.saveFailed);
     } finally {
       setRecovering(false);
@@ -414,7 +417,7 @@ export function GlobalDiscussionCaptureHost() {
           <div className="min-w-0">
             <p className="truncate text-sm font-medium text-fg">{detail?.note.title ?? copy.title}</p>
             <p className="text-xs text-fg-muted">
-              {finishing ? copy.finalizing : recorder.phase === 'paused' ? copy.paused : recorder.phase === 'requesting_permission' ? copy.requesting : copy.recording}
+              {finishing ? copy.finalizing : recorder.phase === 'paused' ? copy.paused : recorder.phase === 'requesting_permission' ? copy.requesting : recorder.phase === 'error' ? copy.interrupted : recorder.phase === 'stopped' ? copy.savedLocally : copy.recording}
             </p>
           </div>
         </div>
@@ -453,6 +456,7 @@ export function GlobalDiscussionCaptureHost() {
             <div className="h-full bg-accent transition-[width]" style={{ width: `${uploadProgress}%` }} />
           </div>
         ) : null}
+        {recorder.draft?.chunkCount ? <p className="text-xs text-fg-muted">{copy.savedLocally} · {formatDuration(recorder.draft.durationMs)}</p> : null}
         {operationError || recorder.error ? <p className="text-sm text-danger">{operationError ?? recorder.error}</p> : null}
       </div>
 
@@ -470,6 +474,9 @@ export function GlobalDiscussionCaptureHost() {
           ) : null}
           {recorder.phase === 'paused' ? (
             <Button onClick={recorder.resume}><Play className="size-4" aria-hidden />{copy.resume}</Button>
+          ) : null}
+          {recorder.phase === 'error' && recorder.draft ? (
+            <Button disabled={recovering || finishing} onClick={() => void recoverDraft()}>{copy.recover}</Button>
           ) : null}
           {(recorder.phase === 'recording' || recorder.phase === 'paused') ? (
             <Button variant="primary" disabled={finishing} onClick={() => void finish()}>

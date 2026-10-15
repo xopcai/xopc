@@ -281,7 +281,8 @@ export function claimNextDiscussionCapture(owner: string, now = Date.now(), leas
   return runSqliteWriteTransaction((db) => {
     const row = db.prepare(`SELECT * FROM discussion_captures
       WHERE status='organizing' AND (work_lease_owner IS NULL OR work_lease_expires_at <= ?)
-      ORDER BY updated_at ASC LIMIT 1`).get(now) as (DiscussionRow & { work_lease_owner: string | null }) | undefined;
+      AND NOT EXISTS (SELECT 1 FROM discussion_processing p WHERE p.discussion_id=discussion_captures.id AND p.next_attempt_at>?)
+      ORDER BY updated_at ASC LIMIT 1`).get(now, now) as (DiscussionRow & { work_lease_owner: string | null }) | undefined;
     if (!row) return null;
     const changed = db.prepare(`UPDATE discussion_captures SET work_lease_owner=?, work_lease_expires_at=?, updated_at=?
       WHERE id=? AND status='organizing' AND (work_lease_owner IS NULL OR work_lease_expires_at <= ?)`)
@@ -362,7 +363,8 @@ export function completeDiscussionTranscriptSegment(
       raw_text=?, display_text=?, provider=?, language=?, confidence=?, audio_blob=NULL,
       lease_owner=NULL, lease_expires_at=NULL, next_attempt_at=NULL, last_error=NULL,
       revision=revision+1, updated_at=? WHERE discussion_id=? AND sequence=?
-      AND status='transcribing' AND lease_owner=?`)
+      AND status='transcribing' AND lease_owner=?
+      AND EXISTS (SELECT 1 FROM discussion_captures d WHERE d.id=discussion_id AND d.status IN ('recording','stopping'))`)
       .run(text, text, provider, language ?? null, confidence ?? null, now, discussionId, sequence, owner).changes;
     if (changed) db.prepare('UPDATE discussion_captures SET transcript_revision=transcript_revision+1, updated_at=? WHERE id=?')
       .run(now, discussionId);

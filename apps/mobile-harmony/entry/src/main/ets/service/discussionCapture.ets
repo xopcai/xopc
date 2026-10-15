@@ -3,23 +3,24 @@ import { util } from '@kit.ArkTS';
 import { audio } from '@kit.AudioKit';
 import { avSession } from '@kit.AVSessionKit';
 import { backgroundTaskManager } from '@kit.BackgroundTasksKit';
-import { fileIo as fs } from '@kit.CoreFileKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { xopcAudioLevel, xopcPcm16Wav, xopcPcmDurationMs } from '../common/discussionAudio';
 import { XopcDiscussionCapturePhase, XopcDiscussionRecordingManifest,
   XopcDiscussionTranscript } from '../model/discussionCapture';
 import { XopcDiscussionCaptureRepository } from '../repository/discussionCaptureRepository';
 import { XopcDiscussionLiveTranscription } from './discussionLiveTranscription';
+import { XopcDiscussionRecordingStore, XopcLocalRecording } from './discussionRecordingStore';
+import { gatewaySession } from './gatewaySession';
 
 const XOPC_CAPTURE_SEGMENT_BYTES: number = 96000;
 const XOPC_CAPTURE_MAX_MS: number = 120 * 60 * 1000;
 
-interface XopcPendingCaptureChunk {
-  sequence: number;
-  startedAtMs: number;
-  endedAtMs: number;
-  path: string;
-  wav: Uint8Array;
+function xopcCaptureShutdown(task: Promise<void>): Promise<void> {
+  return new Promise<void>((resolve: () => void): void => {
+    const timer = setTimeout(resolve, 1500);
+    const finish = (): void => { clearTimeout(timer); resolve(); };
+    task.then(finish, finish);
+  });
 }
 
 @ObservedV2
@@ -34,6 +35,9 @@ export class XopcDiscussionCapture {
   @Trace error: string = '';
   @Trace noteId: string = '';
   @Trace markers: number[] = [];
+  @Trace savedDurationMs: number = 0;
+  @Trace recovered: boolean = false;
+  @Trace backgroundAvailable: boolean = false;
   private repository: XopcDiscussionCaptureRepository = new XopcDiscussionCaptureRepository();
   private capturer?: audio.AudioCapturer;
   private context?: common.UIAbilityContext;
@@ -44,12 +48,19 @@ export class XopcDiscussionCapture {
   private pcmParts: Uint8Array[] = [];
   private pcmBytes: number = 0;
   private capturedBytes: number = 0;
-  private pending: XopcPendingCaptureChunk[] = [];
-  private uploadQueue: Promise<void> = Promise.resolve();
+  private localStore: XopcDiscussionRecordingStore = new XopcDiscussionRecordingStore();
+  private localSession?: XopcLocalRecording;
+  private uploadTask?: Promise<void>;
+  private uploadRequested: boolean = false;
+  private liveUploadTask?: Promise<void>;
+  private localFinishTask?: Promise<void>;
+  private stopTask?: Promise<string>;
+  private storageFailed: boolean = false;
+  private writeTask?: Promise<void>;
+  private starting: boolean = false;
   private captureTask: Promise<void> = Promise.resolve();
   private pollTimer: number = -1;
   private clockTimer: number = -1;
-  private limitTimer: number = -1;
   private capturing: boolean = false;
   private backgroundRunning: boolean = false;
   private live?: XopcDiscussionLiveTranscription;
@@ -62,7 +73,37 @@ export class XopcDiscussionCapture {
 
   get active(): boolean {
     return this.phase === 'starting' || this.phase === 'recording' || this.phase === 'paused' ||
-      this.phase === 'stopping' || this.phase === 'organizing' || (this.phase === 'error' && !!this.discussionId);
+      this.phase === 'stopping' || this.phase === 'organizing' || (this.phase === 'error' && !!this.localSession);
+  }
+
+  async restore(context: common.UIAbilityContext): Promise<void> {
+    if (this.active) return;
+    await this.localStore.initialize(context);
+    const gatewayId = gatewaySession.currentProfile()?.gatewayId;
+    if (!gatewayId) return;
+    const sessions = await this.localStore.pending(gatewayId);
+    let session: XopcLocalRecording | undefined = undefined;
+    for (const candidate of sessions) {
+      if (candidate.noteId) {
+        try {
+          const detail = await this.repository.byNote(candidate.noteId);
+          if (detail.discussion.audioAttachmentId) { await this.localStore.remove(candidate.id); continue; }
+        } catch (_error) { /* Local audio remains available while offline. */ }
+      }
+      session = candidate; break;
+    }
+    if (!session) return;
+    this.context = context; this.localSession = session;
+    this.discussionId = session.discussionId; this.noteId = session.noteId; this.markers = session.markers;
+    this.recovered = true; this.phase = 'error';
+    const chunks = await this.localStore.chunks(session.id).catch((caught: Error) => {
+      this.error = caught.message; throw caught;
+    });
+    this.sequence = chunks.length;
+    this.savedDurationMs = chunks.length ? chunks[chunks.length - 1].endedAtMs : 0;
+    this.elapsedMs = this.savedDurationMs; this.capturedBytes = this.savedDurationMs * 32;
+    this.pcmParts = []; this.pcmBytes = 0; this.storageFailed = false;
+    this.recovered = true; this.error = 'CAPTURE_RECOVERED'; this.phase = 'error';
   }
 
   async consentVersion(): Promise<number | undefined> {
@@ -70,25 +111,45 @@ export class XopcDiscussionCapture {
     return settings.consentAcknowledgedAt ? undefined : settings.consentPolicyVersion;
   }
 
-  async acknowledge(version: number): Promise<void> { await this.repository.acknowledge(version); }
+  async acknowledge(version: number): Promise<void> {
+    await this.repository.acknowledge(version);
+    const gatewayId = gatewaySession.currentProfile()?.gatewayId;
+    if (gatewayId) await this.localStore.saveConsent(gatewayId, version);
+  }
 
   async start(context: common.UIAbilityContext): Promise<void> {
-    if (this.phase !== 'idle' && this.phase !== 'completed' && this.phase !== 'error') return;
+    if (this.active || this.stopTask || this.starting) return;
+    this.starting = true;
+    try { await this.begin(context); } finally { this.starting = false; }
+  }
+
+  private async begin(context: common.UIAbilityContext): Promise<void> {
+    await this.restore(context);
+    if (this.active) return;
     const generation = ++this.generation;
     this.phase = 'starting'; this.error = ''; this.transcript = ''; this.realtimeTranscript = '';
-    this.realtimeActive = false; this.noteId = ''; this.markers = [];
-    this.elapsedMs = 0; this.level = 0; this.sequence = 0; this.capturedBytes = 0; this.pcmBytes = 0;
-    this.pcmParts = []; this.pending = []; this.context = context; this.discussionId = '';
+    this.realtimeActive = false; this.noteId = ''; this.markers = []; this.recovered = false;
+    this.elapsedMs = 0; this.savedDurationMs = 0; this.level = 0; this.sequence = 0; this.capturedBytes = 0; this.pcmBytes = 0;
+    this.pcmParts = []; this.context = context; this.discussionId = ''; this.storageFailed = false;
+    this.localFinishTask = undefined;
     try {
-      const settings = await this.repository.settings();
-      if (!settings.consentAcknowledgedAt) throw new Error('CONSENT_REQUIRED:' + settings.consentPolicyVersion);
+      const gatewayId = gatewaySession.currentProfile()?.gatewayId;
+      if (!gatewayId) throw new Error('NOT_PAIRED');
+      let version = await this.localStore.consent(gatewayId);
+      if (version === undefined) {
+        const settings = await this.repository.settings();
+        if (!settings.consentAcknowledgedAt) throw new Error('CONSENT_REQUIRED:' + settings.consentPolicyVersion);
+        version = settings.consentPolicyVersion;
+        await this.localStore.saveConsent(gatewayId, version);
+      }
       const permission = await abilityAccessCtrl.createAtManager().requestPermissionsFromUser(context,
         ['ohos.permission.MICROPHONE']);
       if (generation !== this.generation) return;
       if (permission.authResults[0] !== 0) throw new Error('MICROPHONE_PERMISSION_REQUIRED');
-      const detail = await this.repository.create(util.generateRandomUUID(), settings.consentPolicyVersion);
-      if (generation !== this.generation) return;
-      this.discussionId = detail.discussion.id; this.noteId = detail.discussion.noteId;
+      const session: XopcLocalRecording = { id: util.generateRandomUUID(), gatewayId, consentVersion: version,
+        recordedAt: Date.now(), discussionId: '', noteId: '', markers: [] };
+      await this.localStore.create(session);
+      this.localSession = session;
       const streamInfo: audio.AudioStreamInfo = { samplingRate: 16000, channels: audio.AudioChannel.CHANNEL_1,
         sampleFormat: audio.AudioSampleFormat.SAMPLE_FORMAT_S16LE, encodingType: audio.AudioEncodingType.ENCODING_TYPE_RAW };
       this.capturer = await audio.createAudioCapturer({ streamInfo,
@@ -97,17 +158,14 @@ export class XopcDiscussionCapture {
         if (generation === this.generation && this.capturing) void this.fail('CAPTURE_INTERRUPTED');
       });
       await this.capturer.start();
-      await this.startBackground(context, generation);
       if (generation !== this.generation) return;
       this.capturing = true; this.phase = 'recording'; this.startTimers(generation);
-      this.startRealtime(generation);
       this.captureTask = this.captureLoop(generation);
+      void this.startBackground(context, generation);
+      this.startRealtime(generation);
+      this.scheduleUpload();
     } catch (caught) {
       if (generation === this.generation) { this.error = (caught as Error).message; this.phase = 'error'; }
-      if (this.discussionId && !this.capturedBytes) {
-        try { await this.repository.cancel(this.discussionId); } catch (_error) {}
-        this.discussionId = ''; this.noteId = '';
-      }
       await this.releaseAudio();
       throw caught as Error;
     }
@@ -119,52 +177,92 @@ export class XopcDiscussionCapture {
   }
 
   mark(): void {
-    if (this.phase === 'recording' || this.phase === 'paused') this.markers = this.markers.concat([this.elapsedMs]);
+    if (this.phase !== 'recording' && this.phase !== 'paused') return;
+    this.markers = this.markers.concat([xopcPcmDurationMs(this.capturedBytes)]);
+    const session = this.localSession;
+    if (session) void this.localStore.saveMarkers(session.id, this.markers).catch((): void => { void this.fail('CAPTURE_STORAGE_FAILED'); });
   }
 
-  async stop(): Promise<string> {
-    if (this.phase !== 'recording' && this.phase !== 'paused' && this.phase !== 'error') return this.noteId;
-    if (!this.discussionId) return this.noteId;
-    this.phase = 'stopping'; this.clearTimers(); this.capturing = false; this.level = 0;
-    this.live?.commit();
-    const capturer = this.capturer;
-    if (capturer) { try { await capturer.stop(); } catch (_error) {} }
-    try { await this.captureTask; } catch (_error) {}
-    this.flushChunk();
-    await this.uploadQueue;
-    if (this.pending.length) {
-      const retry = this.pending.slice();
-      for (const chunk of retry) await this.uploadChunk(chunk);
-    }
-    if (this.pending.length) {
-      this.error = 'CAPTURE_UPLOAD_PENDING'; this.phase = 'error';
-      await this.releaseAudio(); await this.releaseRealtime('surface_closed'); return this.noteId;
-    }
-    this.phase = 'organizing';
-    const manifest: XopcDiscussionRecordingManifest = { lastSequence: this.sequence - 1, chunkCount: this.sequence,
-      mimeType: 'audio/wav', fileName: 'voice-note-' + Date.now() + '.wav', containerMode: 'independent_wav' };
+  stop(): Promise<string> {
+    if (this.stopTask) return this.stopTask;
+    this.stopTask = this.finish().finally((): void => { this.stopTask = undefined; });
+    return this.stopTask;
+  }
+
+  private async finish(): Promise<string> {
+    const session = this.localSession;
+    if (!session || (this.phase !== 'recording' && this.phase !== 'paused' && this.phase !== 'error')) return this.noteId;
+    const recoveringPrefix = this.phase === 'error';
+    this.phase = 'stopping';
     try {
-      await this.repository.seal(this.discussionId, manifest);
-      await this.refreshTranscript(); this.phase = 'completed';
-    } catch (caught) { this.error = (caught as Error).message; this.phase = 'error'; }
-    await this.releaseAudio();
-    await this.releaseRealtime('user_finished');
+      await this.finishLocal();
+      if (this.storageFailed) {
+        // The durable prefix remains recoverable even if the final write failed.
+        this.recovered = true;
+        this.storageFailed = false;
+        if (!recoveringPrefix) throw new Error('CAPTURE_STORAGE_FAILED');
+      }
+      await this.uploadTask;
+      await this.uploadOriginals();
+      this.assertGateway(session);
+      const detail = await this.repository.byNote(this.noteId);
+      if (!detail.discussion.audioAttachmentId) {
+        const manifest: XopcDiscussionRecordingManifest = { lastSequence: -1, chunkCount: this.sequence,
+          mimeType: 'audio/wav', fileName: 'voice-note-' + session.recordedAt + '.wav', containerMode: 'independent_wav' };
+        await this.repository.seal(this.discussionId, manifest);
+      } else {
+        await this.localStore.remove(session.id);
+        this.localSession = undefined;
+      }
+      // A queued seal is not confirmation of the assembled original. Retain local audio until checked on return/restart.
+      this.phase = 'completed'; this.error = ''; this.recovered = false;
+    } catch (caught) {
+      this.error = (caught as Error).message; this.phase = 'error';
+    } finally { void this.releaseRealtime('user_finished'); }
     return this.noteId;
   }
 
+  private finishLocal(): Promise<void> {
+    if (this.localFinishTask) return this.localFinishTask;
+    this.capturing = false; this.level = 0; this.clearTimers();
+    this.localFinishTask = this.closeLocal();
+    return this.localFinishTask;
+  }
+
+  private async closeLocal(): Promise<void> {
+    try {
+      await this.releaseAudio();
+      await xopcCaptureShutdown(this.captureTask);
+      await this.flushChunk();
+    } catch (_error) {
+      this.storageFailed = true;
+    } finally {
+      this.elapsedMs = this.savedDurationMs;
+    }
+  }
+
   async discard(): Promise<void> {
-    ++this.generation; this.capturing = false; this.clearTimers();
-    await this.releaseAudio(); await this.releaseRealtime('surface_closed');
-    if (this.discussionId) { try { await this.repository.cancel(this.discussionId); } catch (_error) {} }
-    for (const chunk of this.pending) { try { await fs.unlink(chunk.path); } catch (_error) {} }
-    this.pending = []; this.pcmParts = []; this.pcmBytes = 0; this.discussionId = ''; this.noteId = ''; this.context = undefined;
+    await this.finishLocal().catch((): void => {});
+    ++this.generation;
+    // In-flight network work must finish before its session can be removed or replaced.
+    await this.uploadTask;
+    const session = this.localSession;
+    if (session?.discussionId) {
+      try { this.assertGateway(session); await this.repository.cancel(session.discussionId); }
+      catch (caught) { this.error = (caught as Error).message; this.phase = 'error'; return; }
+    }
+    if (session) await this.localStore.remove(session.id);
+    void this.releaseRealtime('surface_closed');
+    this.localSession = undefined; this.pcmParts = []; this.pcmBytes = 0; this.discussionId = ''; this.noteId = ''; this.context = undefined;
     this.phase = 'idle'; this.error = ''; this.transcript = ''; this.realtimeTranscript = ''; this.realtimeActive = false;
-    this.elapsedMs = 0; this.level = 0; this.markers = [];
+    this.elapsedMs = 0; this.savedDurationMs = 0; this.level = 0; this.markers = []; this.recovered = false;
+    this.localFinishTask = undefined;
   }
 
   reset(): void {
     if (this.active) return;
     this.phase = 'idle'; this.error = ''; this.transcript = ''; this.realtimeTranscript = ''; this.realtimeActive = false;
+    this.localSession = undefined; this.localFinishTask = undefined;
     this.noteId = ''; this.elapsedMs = 0;
     this.level = 0; this.markers = []; this.discussionId = ''; this.context = undefined;
   }
@@ -179,55 +277,109 @@ export class XopcDiscussionCapture {
         if (generation !== this.generation || !this.capturing) return;
         const bytes = new Uint8Array(data);
         if (this.phase === 'paused' || !bytes.byteLength) continue;
-        const copy = bytes.slice();
+        const copy = bytes.slice(0, Math.min(bytes.byteLength, XOPC_CAPTURE_MAX_MS * 32 - this.capturedBytes));
         this.pcmParts.push(copy); this.pcmBytes += copy.byteLength; this.capturedBytes += copy.byteLength;
-        this.live?.audio(copy);
+        try { this.live?.audio(copy); } catch (_error) { void this.releaseRealtime('surface_closed'); }
         this.level = xopcAudioLevel(copy);
-        if (this.pcmBytes >= XOPC_CAPTURE_SEGMENT_BYTES) this.flushChunk();
+        if (this.pcmBytes >= XOPC_CAPTURE_SEGMENT_BYTES) await this.flushChunk();
+        if (xopcPcmDurationMs(this.capturedBytes) >= XOPC_CAPTURE_MAX_MS) { void this.stop(); return; }
       }
     } catch (caught) {
-      if (generation === this.generation && this.capturing) await this.fail((caught as Error).message || 'CAPTURE_FAILED');
+      if (generation === this.generation && this.capturing) void this.fail((caught as Error).message || 'CAPTURE_FAILED');
     }
   }
 
-  private flushChunk(): void {
-    if (!this.pcmBytes || !this.discussionId || !this.context) return;
+  private flushChunk(): Promise<void> {
+    if (this.writeTask) return this.writeTask;
+    this.writeTask = this.persistChunk().finally((): void => { this.writeTask = undefined; });
+    return this.writeTask;
+  }
+
+  private async persistChunk(): Promise<void> {
+    const session = this.localSession;
+    if (!this.pcmBytes || !session || this.storageFailed) return;
     const endedAtMs = xopcPcmDurationMs(this.capturedBytes);
-    const startedAtMs = endedAtMs - xopcPcmDurationMs(this.pcmBytes);
+    const startedAtMs = this.savedDurationMs;
     const wav = xopcPcm16Wav(this.pcmParts);
-    const sequence = this.sequence++;
-    const path = this.context.cacheDir + '/xopc-capture-' + this.discussionId + '-' + sequence + '.wav';
-    const chunk: XopcPendingCaptureChunk = { sequence, startedAtMs, endedAtMs, path, wav };
-    this.pending.push(chunk); this.pcmParts = []; this.pcmBytes = 0; this.transcriptPending = true;
-    this.uploadQueue = this.uploadQueue.then(async (): Promise<void> => { await this.uploadChunk(chunk); });
-  }
-
-  private async uploadChunk(chunk: XopcPendingCaptureChunk): Promise<void> {
     try {
-      await this.writeChunk(chunk);
-      const transcript = await this.repository.upload(this.discussionId, chunk.sequence, chunk.wav,
-        chunk.startedAtMs, chunk.endedAtMs);
-      this.applyTranscript(transcript);
-      this.pending = this.pending.filter((item: XopcPendingCaptureChunk): boolean => item.sequence !== chunk.sequence);
-      try { await fs.unlink(chunk.path); } catch (_error) {}
+      await this.localStore.append(session.id, { sequence: this.sequence, startedAtMs, endedAtMs, uploaded: false }, wav);
+      this.sequence++; this.savedDurationMs = endedAtMs;
+      this.pcmParts = []; this.pcmBytes = 0;
+      this.transcriptPending = true;
+      this.scheduleUpload();
     } catch (caught) {
-      hilog.warn(0x0000, 'XopcCapture', 'Capture segment upload delayed: %{public}s', (caught as Error).message);
-      this.error = 'LIVE_TRANSCRIPTION_DELAYED';
-    } finally { this.transcriptPending = this.pending.length > 0; }
+      this.storageFailed = true;
+      this.pcmParts = []; this.pcmBytes = 0;
+      throw caught as Error;
+    }
   }
 
-  private async writeChunk(chunk: XopcPendingCaptureChunk): Promise<void> {
-    let output: fs.File | undefined = undefined;
-    try {
-      output = await fs.open(chunk.path, fs.OpenMode.CREATE | fs.OpenMode.WRITE_ONLY | fs.OpenMode.TRUNC);
-      const data = chunk.wav.buffer.slice(chunk.wav.byteOffset, chunk.wav.byteOffset + chunk.wav.byteLength);
-      if (await fs.write(output.fd, data) !== chunk.wav.byteLength) throw new Error('INCOMPLETE_CAPTURE_WRITE');
-    } finally { if (output) await fs.close(output); }
+  private assertGateway(session: XopcLocalRecording): void {
+    if (gatewaySession.currentProfile()?.gatewayId !== session.gatewayId) throw new Error('RECORDING_GATEWAY_CHANGED');
+  }
+
+  private scheduleUpload(): void {
+    this.uploadRequested = true;
+    if (this.uploadTask) return;
+    this.uploadTask = this.drainOriginals().catch((caught: Error): void => {
+      this.uploadRequested = false;
+      hilog.warn(0x0000, 'XopcCapture', 'Original audio sync delayed: %{public}s', caught.message);
+      if (this.phase === 'recording' || this.phase === 'paused') this.error = 'CAPTURE_UPLOAD_PENDING';
+    }).finally((): void => {
+      this.uploadTask = undefined;
+      if (this.uploadRequested && this.capturing) this.scheduleUpload();
+    });
+  }
+
+  private async drainOriginals(): Promise<void> {
+    do {
+      this.uploadRequested = false;
+      await this.uploadOriginals();
+    } while (this.uploadRequested && this.capturing);
+  }
+
+  private async uploadOriginals(): Promise<void> {
+    const session = this.localSession;
+    if (!session) return;
+    this.assertGateway(session);
+    if (!session.discussionId) {
+      const detail = await this.repository.create(session.id, session.consentVersion, session.recordedAt);
+      this.assertGateway(session);
+      await this.localStore.attachServer(session.id, detail.discussion.id, detail.discussion.noteId);
+      session.discussionId = detail.discussion.id; session.noteId = detail.discussion.noteId;
+      this.discussionId = session.discussionId; this.noteId = session.noteId;
+    }
+    // Recover a lost seal response before attempting to upload chunks removed by the server.
+    let remoteSequences: number[] | undefined = undefined;
+    if (!this.capturing) {
+      const detail = await this.repository.byNote(session.noteId);
+      if (detail.discussion.audioAttachmentId || detail.recordingJob?.state === 'queued' || detail.recordingJob?.state === 'running') return;
+      remoteSequences = await this.repository.recordingSequences(session.discussionId);
+      this.assertGateway(session);
+    }
+    const chunks = await this.localStore.chunks(session.id);
+    for (const chunk of chunks) {
+      if (remoteSequences ? remoteSequences.includes(chunk.sequence) : chunk.uploaded) continue;
+      this.assertGateway(session);
+      const wav = await this.localStore.audio(session.id, chunk.sequence);
+      await this.repository.uploadOriginal(session.discussionId, chunk.sequence, wav);
+      this.assertGateway(session);
+      await this.localStore.acknowledge(session.id, chunk.sequence);
+      // Live text is best effort, bounded to one in-flight segment. Original audio repairs skipped text.
+      if (!this.liveUploadTask && this.capturing) {
+        this.liveUploadTask = this.repository.uploadTranscript(session.discussionId, chunk.sequence, wav,
+          chunk.startedAtMs, chunk.endedAtMs).then((transcript: XopcDiscussionTranscript): void => {
+            if (this.localSession?.id === session.id) this.applyTranscript(transcript);
+          }).catch((): void => {}).finally((): void => { this.liveUploadTask = undefined; });
+      }
+    }
+    this.transcriptPending = false;
+    if (this.error === 'CAPTURE_UPLOAD_PENDING') this.error = '';
   }
 
   private applyTranscript(value: XopcDiscussionTranscript): void {
     this.transcript = value.text.trim();
-    if (this.transcript) this.error = '';
+    if (this.transcript && this.phase !== 'error' && this.error === 'LIVE_TRANSCRIPTION_DELAYED') this.error = '';
   }
 
   private async refreshTranscript(): Promise<void> {
@@ -242,20 +394,19 @@ export class XopcDiscussionCapture {
     }, 250);
     this.pollTimer = setInterval((): void => { if (generation === this.generation && !this.realtimeActive)
       void this.refreshTranscript(); }, 800);
-    this.limitTimer = setTimeout((): void => { if (generation === this.generation) void this.stop(); }, XOPC_CAPTURE_MAX_MS);
+
   }
 
   private clearTimers(): void {
     if (this.clockTimer !== -1) clearInterval(this.clockTimer);
     if (this.pollTimer !== -1) clearInterval(this.pollTimer);
-    if (this.limitTimer !== -1) clearTimeout(this.limitTimer);
-    this.clockTimer = -1; this.pollTimer = -1; this.limitTimer = -1;
+    this.clockTimer = -1; this.pollTimer = -1;
   }
 
   private async startBackground(context: common.UIAbilityContext, generation: number): Promise<void> {
     try {
       const session = await avSession.createAVSession(context, 'xopc-voice-note', 'audio');
-      if (generation !== this.generation) { await session.destroy(); return; }
+      if (generation !== this.generation || !this.capturing) { await session.destroy(); return; }
       this.session = session;
       session.on('stop', (): void => { if (generation === this.generation) void this.stop(); });
       await session.setAVMetadata({ assetId: 'xopc-voice-note', title: 'xopc', artist: 'Voice note' });
@@ -266,13 +417,22 @@ export class XopcDiscussionCapture {
         actionType: wantAgent.OperationType.START_ABILITY, requestCode: 3,
         actionFlags: [wantAgent.WantAgentFlags.UPDATE_PRESENT_FLAG] });
       await backgroundTaskManager.startBackgroundRunning(context, ['audioRecording'], agent);
-      this.backgroundRunning = generation === this.generation;
-    } catch (_error) { /* Foreground capture remains available when the notification cannot be created. */ }
+      this.backgroundRunning = generation === this.generation && this.capturing;
+      this.backgroundAvailable = this.backgroundRunning;
+      if (!this.backgroundRunning) {
+        await backgroundTaskManager.stopBackgroundRunning(context);
+        await session.destroy();
+      }
+    } catch (_error) { this.backgroundAvailable = false; }
   }
 
   private async fail(reason: string): Promise<void> {
-    this.error = reason; this.phase = 'error'; this.capturing = false; this.clearTimers();
-    await this.releaseAudio(); await this.releaseRealtime('surface_closed');
+    this.error = reason;
+    try { await this.finishLocal(); }
+    catch (_error) { this.error = 'CAPTURE_STORAGE_FAILED'; }
+    if (this.storageFailed) this.error = 'CAPTURE_STORAGE_FAILED';
+    this.phase = 'error';
+    void this.releaseRealtime('surface_closed');
   }
 
   private startRealtime(generation: number): void {
@@ -281,12 +441,12 @@ export class XopcDiscussionCapture {
       onAvailability: (available: boolean): void => { if (generation === this.generation) this.realtimeActive = available; }
     });
     this.live = live;
-    void live.start();
+    void live.start().catch((): void => { this.realtimeActive = false; });
   }
 
   private async releaseRealtime(reason: 'user_finished' | 'surface_closed'): Promise<void> {
     const live = this.live; this.live = undefined; this.realtimeActive = false;
-    await live?.close(reason);
+    try { await live?.close(reason); } catch (_error) { /* Original audio is independent of live transport teardown. */ }
   }
 
   private async releaseAudio(): Promise<void> {
@@ -296,16 +456,16 @@ export class XopcDiscussionCapture {
     this.capturer = undefined; this.session = undefined; this.backgroundRunning = false;
     if (capturer) {
       try { capturer.off('audioInterrupt'); } catch (_error) {}
-      try { await capturer.stop(); } catch (_error) {}
-      try { await capturer.release(); } catch (_error) {}
+      try { await xopcCaptureShutdown(capturer.stop()); } catch (_error) {}
+      try { await xopcCaptureShutdown(capturer.release()); } catch (_error) {}
     }
     if (session) {
-      try { await session.setAVPlaybackState({ state: avSession.PlaybackState.PLAYBACK_STATE_STOP }); } catch (_error) {}
-      try { await session.deactivate(); } catch (_error) {}
-      try { await session.destroy(); } catch (_error) {}
+      try { await xopcCaptureShutdown(session.setAVPlaybackState({ state: avSession.PlaybackState.PLAYBACK_STATE_STOP })); } catch (_error) {}
+      try { await xopcCaptureShutdown(session.deactivate()); } catch (_error) {}
+      try { await xopcCaptureShutdown(session.destroy()); } catch (_error) {}
     }
     if (context && backgroundRunning) {
-      try { await backgroundTaskManager.stopBackgroundRunning(context); } catch (_error) {}
+      try { await xopcCaptureShutdown(backgroundTaskManager.stopBackgroundRunning(context)); } catch (_error) {}
     }
   }
 }

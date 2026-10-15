@@ -25,6 +25,7 @@ export async function createDiscussion(input: {
   contextProjectId?: string;
   consentPolicyVersion: number;
   source: 'web' | 'electron';
+  recordedAt?: number;
 }): Promise<DiscussionDetail> {
   return fetchJson<DiscussionDetail>(apiUrl('/api/discussions'), {
     method: 'POST',
@@ -65,8 +66,8 @@ export function uploadDiscussionSegment(
   });
 }
 
-export function retryDiscussion(id: string): Promise<DiscussionDetail> {
-  return fetchJson(apiUrl(`/api/discussions/${encodeURIComponent(id)}/retry`), { method: 'POST' });
+export function retryDiscussion(id: string, mode: 'resume' | 'from_audio' = 'resume'): Promise<DiscussionDetail> {
+  return fetchJson(apiUrl(`/api/discussions/${encodeURIComponent(id)}/retry`), { method: 'POST', body: JSON.stringify({ mode }) });
 }
 
 export function cancelDiscussion(id: string): Promise<DiscussionDetail> {

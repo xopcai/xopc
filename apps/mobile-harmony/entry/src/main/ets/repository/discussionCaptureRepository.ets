@@ -8,6 +8,8 @@ import {
   XopcDiscussionTranscript
 } from '../model/discussionCapture';
 
+interface XopcRecordingChunkReceipt { sequence: number; sha256: string; bytes: number; }
+
 interface XopcDiscussionHeaders {
   Authorization: string;
   'Content-Type': string;
@@ -30,8 +32,8 @@ export class XopcDiscussionCaptureRepository {
     await gatewaySession.request('/api/discussion-capture/settings', 'PUT', JSON.stringify({ consentPolicyVersion }));
   }
 
-  async create(clientRequestId: string, consentPolicyVersion: number): Promise<XopcDiscussionDetail> {
-    const body: XopcCreateDiscussionBody = { clientRequestId, consentPolicyVersion, source: 'mobile', recordedAt: Date.now() };
+  async create(clientRequestId: string, consentPolicyVersion: number, recordedAt: number = Date.now()): Promise<XopcDiscussionDetail> {
+    const body: XopcCreateDiscussionBody = { clientRequestId, consentPolicyVersion, source: 'mobile', recordedAt };
     return JSON.parse(await gatewaySession.request('/api/discussions', 'POST', JSON.stringify(body), clientRequestId)) as XopcDiscussionDetail;
   }
 
@@ -43,11 +45,34 @@ export class XopcDiscussionCaptureRepository {
     return JSON.parse(await gatewaySession.request('/api/discussions/by-note/' + encodeURIComponent(noteId))) as XopcDiscussionDetail;
   }
 
-  async retry(id: string): Promise<void> {
-    await gatewaySession.request('/api/discussions/' + encodeURIComponent(id) + '/retry', 'POST');
+  async retry(id: string, fromAudio: boolean = false): Promise<void> {
+    await gatewaySession.request('/api/discussions/' + encodeURIComponent(id) + '/retry', 'POST', JSON.stringify({ mode: fromAudio ? 'from_audio' : 'resume' }));
   }
 
-  async upload(id: string, sequence: number, wav: Uint8Array, startedAtMs: number,
+  async recordingSequences(id: string): Promise<number[]> {
+    const chunks = JSON.parse(await gatewaySession.request('/api/discussions/' + encodeURIComponent(id) + '/recording/chunks')) as XopcRecordingChunkReceipt[];
+    return chunks.map((chunk: XopcRecordingChunkReceipt): number => chunk.sequence);
+  }
+
+  async uploadOriginal(id: string, sequence: number, wav: Uint8Array): Promise<void> {
+    const sha256 = await xopcSha256(wav);
+    const revision = gatewaySession.connectionRevision();
+    const auth = await gatewaySession.transferAuth();
+    gatewaySession.assertConnection(revision);
+    const request = http.createHttp();
+    const headers: XopcDiscussionHeaders = { Authorization: 'Bearer ' + auth.token, 'Content-Type': 'application/octet-stream',
+      'x-audio-sha256': sha256 };
+    try {
+      const recording = await signedHttpRequest(request, auth.origin + '/api/discussions/' + encodeURIComponent(id) +
+        '/recording/chunks/' + sequence, { method: http.RequestMethod.PUT, header: headers,
+        extraData: wav.buffer.slice(wav.byteOffset, wav.byteOffset + wav.byteLength),
+        expectDataType: http.HttpDataType.STRING, maxRedirects: 0, connectTimeout: 8000, readTimeout: 60000, usingCache: false });
+      gatewaySession.assertConnection(revision);
+      if (recording.responseCode !== 201) throw new XopcHttpError(recording.responseCode);
+    } finally { request.destroy(); }
+  }
+
+  async uploadTranscript(id: string, sequence: number, wav: Uint8Array, startedAtMs: number,
     endedAtMs: number): Promise<XopcDiscussionTranscript> {
     const sha256 = await xopcSha256(wav);
     const revision = gatewaySession.connectionRevision();
@@ -55,17 +80,10 @@ export class XopcDiscussionCaptureRepository {
     gatewaySession.assertConnection(revision);
     const request = http.createHttp();
     const data = wav.buffer.slice(wav.byteOffset, wav.byteOffset + wav.byteLength);
-    const headers: XopcDiscussionHeaders = { Authorization: 'Bearer ' + auth.token, 'Content-Type': 'application/octet-stream',
-      'x-audio-sha256': sha256 };
+    const headers: XopcDiscussionHeaders = { Authorization: 'Bearer ' + auth.token, 'Content-Type': 'multipart/form-data' };
     try {
-      const recording = await signedHttpRequest(request, auth.origin + '/api/discussions/' + encodeURIComponent(id) +
-        '/recording/chunks/' + sequence, { method: http.RequestMethod.PUT, header: headers, extraData: data,
-        expectDataType: http.HttpDataType.STRING, maxRedirects: 0, connectTimeout: 8000, readTimeout: 60000, usingCache: false });
-      gatewaySession.assertConnection(revision);
-      if (recording.responseCode !== 201) throw new XopcHttpError(recording.responseCode);
-      const multipartHeaders: XopcDiscussionHeaders = { Authorization: 'Bearer ' + auth.token, 'Content-Type': 'multipart/form-data' };
       const segment = await signedHttpRequest(request, auth.origin + '/api/discussions/' + encodeURIComponent(id) + '/segments/' + sequence, {
-        method: http.RequestMethod.PUT, header: multipartHeaders, expectDataType: http.HttpDataType.STRING,
+        method: http.RequestMethod.PUT, header: headers, expectDataType: http.HttpDataType.STRING,
         multiFormDataList: [
           { name: 'file', contentType: 'audio/wav', remoteFileName: 'segment-' + sequence + '.wav', data },
           { name: 'startedAtMs', contentType: 'text/plain', data: startedAtMs.toString() },
