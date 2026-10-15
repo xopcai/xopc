@@ -91,6 +91,10 @@ export struct XopcHomeView {
   aboutToAppear(): void {
     layoutState.dismissTabNavigation = (): boolean => this.handleTabBack();
     pushNotifications.restore();
+    const captureContext = this.getUIContext().getHostContext() as common.UIAbilityContext;
+    void this.capture.restore(captureContext).catch((caught: Error): void => {
+      this.getUIContext().getPromptAction().showToast({ message: userErrorMessage(caught.message, 'save') });
+    });
     try {
       layoutState.reduceMotion = accessibility.isAnimationReduceEnabledSync();
       accessibility.onAnimationReduceStateChange(this.onMotionChange);
@@ -525,7 +529,8 @@ export struct XopcHomeView {
             .fontColor(this.colors.foreground)
           Text(this.capture.phase === 'organizing' || this.capture.phase === 'stopping'
             ? $r('app.string.capture_saving') : this.capture.phase === 'paused'
-              ? $r('app.string.capture_paused') : $r('app.string.capture_live'))
+              ? $r('app.string.capture_paused') : this.capture.phase === 'error'
+                ? $r('app.string.capture_interrupted') : $r('app.string.capture_live'))
             .fontSize(14).fontColor(this.colors.secondary).layoutWeight(1)
           SymbolGlyph($r('sys.symbol.chevron_up')).fontSize(14).fontColor([this.colors.tertiary])
         }.width('100%').height(48).padding({ left: 16, right: 14 })

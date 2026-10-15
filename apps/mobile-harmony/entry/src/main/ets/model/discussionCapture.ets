@@ -51,11 +51,21 @@ export interface XopcDiscussionTranscript {
   text: string;
 }
 
+export interface XopcDiscussionProcessingProgress {
+  fromAudio: boolean;
+  completedChunks: number;
+  transcribedMs: number;
+  attemptCount: number;
+  maxAttempts: number;
+  nextAttemptAt?: number;
+}
+
 export interface XopcDiscussionDetail {
   discussion: XopcDiscussionCaptureSummary;
   transcript: XopcDiscussionTranscript;
   organization?: XopcDiscussionOrganizationRecord;
   recordingJob?: XopcDiscussionRecordingJob;
+  processing?: XopcDiscussionProcessingProgress;
 }
 
 export interface XopcDiscussionRecordingManifest {

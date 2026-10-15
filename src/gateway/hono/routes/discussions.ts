@@ -239,8 +239,11 @@ export function registerDiscussionRoutes(authenticated: Hono, deps: Authenticate
   });
 
   authenticated.post('/api/discussions/:id/retry', strictRateLimitMiddleware, async (c) => {
+    const body = await c.req.json().catch(() => ({})) as Record<string, unknown> | null;
+    if (!body || typeof body !== 'object' || Array.isArray(body)) return c.json({ error: 'Invalid retry request' }, 400);
+    if (body.mode !== undefined && body.mode !== 'resume' && body.mode !== 'from_audio') return c.json({ error: 'Invalid retry mode' }, 400);
     try {
-      const detail = await service.discussions.retry(c.req.param('id'));
+      const detail = await service.discussions.retry(c.req.param('id'), body.mode === 'from_audio' ? 'from_audio' : 'resume');
       return detail ? c.json(detail) : c.json({ error: 'Discussion not found' }, 404);
     } catch (error) {
       const response = errorResponse(error);

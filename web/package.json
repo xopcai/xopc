@@ -106,6 +106,7 @@
     "@vitejs/plugin-react": "^6",
     "babel-plugin-react-compiler": "1",
     "eslint": "^10.2.1",
+    "fake-indexeddb": "^6.2.5",
     "react-doctor": "0.2.6",
     "tailwindcss": "^4.2.4",
     "typescript": "^6.0.3",
