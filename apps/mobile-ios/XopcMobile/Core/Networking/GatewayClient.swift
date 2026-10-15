@@ -9,7 +9,7 @@ protocol GatewayServing: Sendable {
     func fetchAgentConfiguration(conversationID: String) async throws -> SessionAgentConfiguration
     func updateAgentConfiguration(conversationID: String, model: String, thinkingLevel: String) async throws
     func fetchClarification(conversationID: String) async throws -> ClarificationRequest?
-    func respondToClarification(_ clarification: ClarificationRequest, action: String, answer: String?) async throws
+    func respondToClarification(_ clarification: ClarificationRequest, command: ClarificationResponseCommand) async throws
     func fetchInputState(conversationID: String) async throws -> InputState
     func searchReferences(
         kind: ContextReferenceKind,

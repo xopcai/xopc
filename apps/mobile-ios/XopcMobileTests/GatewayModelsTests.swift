@@ -306,8 +306,9 @@ struct GatewayModelsTests {
               "kind": "input",
               "status": "open",
               "question": "Which environment should I use?",
-              "choices": ["Local", "Worktree"],
-              "suggestedAnswer": "Local",
+              "choiceDetails": [{"id":"local","label":"Local","description":"Current directory"},{"id":"worktree","label":"Worktree"}],
+              "interactionMode":"compose",
+              "recommendedChoiceId":"local",
               "version": 2
             }
           }
@@ -317,8 +318,26 @@ struct GatewayModelsTests {
         let envelope = try JSONDecoder().decode(GatewayEnvelope<ClarificationSnapshot>.self, from: data)
 
         #expect(envelope.payload?.clarification?.isOpen == true)
-        #expect(envelope.payload?.clarification?.choices == ["Local", "Worktree"])
+        #expect(envelope.payload?.clarification?.choiceDetails?.map(\.label) == ["Local", "Worktree"])
         #expect(envelope.payload?.clarification?.version == 2)
+    }
+
+    @Test func encodesStructuredClarificationWithoutTextFallback() throws {
+        let command = ClarificationResponseCommand(action: "answer", response: .init(choiceId: "prod", text: "After 22:00\nVerify first"),
+            decision: nil, expectedVersion: 3, idempotencyKey: "same-attempt")
+        let value = try #require(JSONSerialization.jsonObject(with: JSONEncoder().encode(command)) as? [String: Any])
+        #expect(value["answer"] == nil)
+        let response = try #require(value["response"] as? [String: String])
+        #expect(response["choiceId"] == "prod")
+        #expect(response["text"] == "After 22:00\nVerify first")
+    }
+
+    @Test func encodesExplicitApprovalDecision() throws {
+        let command = ClarificationResponseCommand(action: "answer", response: nil, decision: "deny", expectedVersion: 3, idempotencyKey: "approval-attempt")
+        let value = try #require(JSONSerialization.jsonObject(with: JSONEncoder().encode(command)) as? [String: Any])
+        #expect(value["decision"] as? String == "deny")
+        #expect(value["answer"] == nil)
+        #expect(value["response"] == nil)
     }
 
     @Test func decodesQueuedInputState() throws {

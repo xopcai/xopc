@@ -5,10 +5,10 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { McpSettingsMessages } from '@/i18n/messages';
 
-import { fetchMcpTools, type McpToolInfo } from './mcp-config-api';
+import { fetchMcpDraftTools, fetchMcpTools, type McpToolInfo } from './mcp-config-api';
 
-export function McpToolsDialog({ serverId, t, onClose, onConfigure }: {
-  serverId: string; t: McpSettingsMessages; onClose: () => void; onConfigure?: () => void;
+export function McpToolsDialog({ serverId, draftId, t, onClose, onConfigure }: {
+  serverId: string; draftId?: string; t: McpSettingsMessages; onClose: () => void; onConfigure?: () => void;
 }) {
   const [tools, setTools] = useState<McpToolInfo[]>([]);
   const [loading, setLoading] = useState(true);
@@ -21,7 +21,7 @@ export function McpToolsDialog({ serverId, t, onClose, onConfigure }: {
     setLoading(true);
     setError('');
     setTools([]);
-    void fetchMcpTools(serverId, controller.signal).then(result => {
+    void (draftId ? fetchMcpDraftTools(draftId, controller.signal) : fetchMcpTools(serverId, controller.signal)).then(result => {
       if (active) setTools(result);
     }).catch(error => {
       if (active) setError(error instanceof Error ? error.message : String(error));
@@ -29,7 +29,7 @@ export function McpToolsDialog({ serverId, t, onClose, onConfigure }: {
       if (active) setLoading(false);
     });
     return () => { active = false; controller.abort(); };
-  }, [serverId, revision]);
+  }, [serverId, draftId, revision]);
   const needle = query.trim().toLowerCase();
   const visible = tools.filter(tool => `${tool.name} ${tool.description}`.toLowerCase().includes(needle));
   return <Dialog.Root open onOpenChange={open => { if (!open) onClose(); }}><Dialog.Portal>

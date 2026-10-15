@@ -810,4 +810,19 @@
     <string name="progress_execution_verifying">验证中</string>
     <string name="progress_execution_blocked">受阻</string>
     <string name="progress_agents_unavailable">暂无可用 Agent，请刷新或检查 Gateway 配置。</string>
+    <string name="clarify_approval_title">需要你的批准</string>
+    <string name="clarify_title">助手需要补充信息</string>
+    <string name="clarify_expired">此审批已过期</string>
+    <string name="clarify_remaining">剩余时间：%1$d:%2$02d</string>
+    <string name="clarify_details">查看参数详情</string>
+    <string name="clarify_once">授权仅适用于本次操作，且只能执行一次。</string>
+    <string name="clarify_deny">拒绝本次操作</string>
+    <string name="clarify_approve">批准本次操作</string>
+    <string name="clarify_quick_hint">点击选项即可回答</string>
+    <string name="clarify_compose">选择并补充</string>
+    <string name="clarify_recommended">推荐</string>
+    <string name="clarify_clear">清除选择</string>
+    <string name="clarify_custom">自定义回答</string>
+    <string name="clarify_supplement">补充说明（可选）</string>
+    <string name="clarify_cancel">取消任务</string>
 </resources>

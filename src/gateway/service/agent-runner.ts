@@ -1,3 +1,4 @@
+import { readClarificationPresentation, type ClarificationSubmission } from '@xopcai/gateway-contract';
 import crypto from 'node:crypto';
 import type { TurnOrigin } from '@xopcai/endpoint-tools-protocol';
 import type { ClarificationResponseAction } from '@xopcai/gateway-contract';
@@ -380,7 +381,7 @@ export class GatewayAgentRunner {
     return { aborted: true, idle: true };
   }
 
-  answerEphemeralClarification(requestId: string, answer: string): boolean {
+  answerEphemeralClarification(requestId: string, answer: ClarificationSubmission): boolean {
     return this.ephemeralClarifications.answer(requestId, answer);
   }
 
@@ -388,12 +389,11 @@ export class GatewayAgentRunner {
     return getClarificationSnapshot(conversationId);
   }
 
-  resolveClarificationResponse(input: {
+  resolveClarificationResponse(input: ClarificationSubmission & {
     id: string;
     expectedVersion: number;
     idempotencyKey: string;
     action: ClarificationResponseAction;
-    answer?: string;
   }) {
     const result = resolveClarification(input);
     if (result.ok) {
@@ -409,27 +409,24 @@ export class GatewayAgentRunner {
 
   answerClarificationChoice(requestId: string, choiceIndex: number, idempotencyKey: string): boolean {
     const wait = getClarification(requestId);
-    const answer = wait?.status === 'open' ? wait.choices?.[choiceIndex] : undefined;
-    if (!answer) return false;
-    return this.resolveClarificationResponse({
-      id: wait.id,
-      expectedVersion: wait.version,
-      idempotencyKey,
-      action: 'answer',
-      answer,
-    }).ok;
+    const choice = wait?.status === 'open' ? wait.choiceDetails?.[choiceIndex] : undefined;
+    if (!choice) return false;
+    return this.resolveClarificationResponse({ id: wait.id, expectedVersion: wait.version,
+      idempotencyKey, action: 'answer', response: { choiceId: choice.id } }).ok;
   }
 
-  answerClarificationText(conversationId: string, answer: string, idempotencyKey: string): boolean {
+  answerClarificationDecision(requestId: string, decision: 'approve' | 'deny', idempotencyKey: string): boolean {
+    const wait = getClarification(requestId);
+    if (!wait || wait.kind !== 'approval' || wait.status !== 'open') return false;
+    return this.resolveClarificationResponse({ id: wait.id, expectedVersion: wait.version,
+      idempotencyKey, action: 'answer', decision }).ok;
+  }
+
+  answerClarificationText(conversationId: string, text: string, idempotencyKey: string): boolean {
     const wait = getClarificationSnapshot(conversationId)?.clarification;
-    if (!wait || wait.status !== 'open' || !answer.trim()) return false;
-    return this.resolveClarificationResponse({
-      id: wait.id,
-      expectedVersion: wait.version,
-      idempotencyKey,
-      action: 'answer',
-      answer,
-    }).ok;
+    if (!wait || wait.kind === 'approval' || wait.status !== 'open' || !text.trim()) return false;
+    return this.resolveClarificationResponse({ id: wait.id, expectedVersion: wait.version,
+      idempotencyKey, action: 'answer', response: { text } }).ok;
   }
 
   /** Same execution path as scheduled continuation, but lets callers observe failures. */
@@ -541,9 +538,10 @@ export class GatewayAgentRunner {
       runId: opts.runId,
       toolCallId: opts.toolCallId,
       kind: request.kind === 'approval' ? 'approval' : 'input',
+      ...readClarificationPresentation(request),
       question: request.question,
-      choices: request.choices,
-      suggestedAnswer: request.suggestedAnswer,
+
+
       approvalKey: request.approvalKey,
     });
     this.opts.emit('clarification.created', wait);
@@ -551,9 +549,10 @@ export class GatewayAgentRunner {
       type: 'clarify_request',
       requestId: wait.id,
       kind: wait.kind,
+      ...readClarificationPresentation(wait),
       question: wait.question,
-      choices: wait.choices,
-      suggestedAnswer: wait.suggestedAnswer,
+
+
       expiresAt: wait.expiresAt,
       createdAt: wait.createdAt,
       version: wait.version,
@@ -575,25 +574,13 @@ export class GatewayAgentRunner {
     }
 
     let body = ctx.request.question;
-    if (ctx.request.suggestedAnswer) {
-      body += `\n\nSuggested answer (never selected automatically): ${ctx.request.suggestedAnswer}`;
-    }
-
     body += ctx.request.kind === 'approval'
       ? '\n\nFor safety, this approval expires after 10 minutes.'
       : '\n\nThis question remains available until you answer or cancel the task.';
-
-    const choices = ctx.request.choices;
-    const buttonRows =
-      choices && choices.length >= 2
-        ? choices.map((c, i) => [
-            {
-              text: c.length > 64 ? `${c.slice(0, 61)}…` : c,
-              callback_data: `clarify:${ctx.requestId}:${i}`,
-            },
-          ])
-        : undefined;
-
+    const buttonRows = ctx.request.kind === 'approval'
+      ? [[{ text: 'Approve once', callback_data: `clarify:${ctx.requestId}:approve` },
+          { text: 'Deny', callback_data: `clarify:${ctx.requestId}:deny` }]]
+      : ctx.request.choiceDetails?.map((choice, index) => [{ text: choice.label.slice(0, 64), callback_data: `clarify:${ctx.requestId}:${index}` }]);
     body += buttonRows
       ? '\n\nReply with your answer, or tap an option below.'
       : '\n\nReply with your answer.';

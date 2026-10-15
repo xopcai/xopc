@@ -810,4 +810,19 @@
     <string name="progress_execution_verifying">Verifying</string>
     <string name="progress_execution_blocked">Blocked</string>
     <string name="progress_agents_unavailable">No Agents available. Refresh or check the Gateway configuration.</string>
+    <string name="clarify_approval_title">Your approval is needed</string>
+    <string name="clarify_title">Assistant needs input</string>
+    <string name="clarify_expired">This approval has expired</string>
+    <string name="clarify_remaining">Time left: %1$d:%2$02d</string>
+    <string name="clarify_details">View parameters</string>
+    <string name="clarify_once">Authorization applies to this operation once.</string>
+    <string name="clarify_deny">Deny this operation</string>
+    <string name="clarify_approve">Approve this operation</string>
+    <string name="clarify_quick_hint">Click an option to answer immediately</string>
+    <string name="clarify_compose">Select and add details</string>
+    <string name="clarify_recommended">Recommended</string>
+    <string name="clarify_clear">Clear selection</string>
+    <string name="clarify_custom">Your answer</string>
+    <string name="clarify_supplement">Additional information (optional)</string>
+    <string name="clarify_cancel">Cancel task</string>
 </resources>

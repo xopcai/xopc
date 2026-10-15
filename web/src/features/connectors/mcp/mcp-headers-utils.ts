@@ -2,6 +2,7 @@ export type McpHeaderEntry = {
   clientKey: string;
   key: string;
   value: string;
+  reference?: Record<string, unknown>;
 };
 
 export function createMcpHeaderEntry(key = '', value = ''): McpHeaderEntry {
@@ -17,9 +18,7 @@ export function parseHeadersPaste(text: string): McpHeaderEntry[] | null {
   try {
     const parsed = JSON.parse(trimmed) as unknown;
     if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-      return Object.entries(parsed as Record<string, unknown>).map(([key, value]) =>
-        createMcpHeaderEntry(key, value == null ? '' : String(value)),
-      );
+      return recordToHeaders(parsed as Record<string, unknown>);
     }
   } catch {
     // fall through to line parsing
@@ -36,12 +35,12 @@ export function parseHeadersPaste(text: string): McpHeaderEntry[] | null {
   return rows.length > 0 ? rows : null;
 }
 
-export function headersToRecord(headers: McpHeaderEntry[]): Record<string, string> | undefined {
-  const out: Record<string, string> = {};
+export function headersToRecord(headers: McpHeaderEntry[]): Record<string, unknown> | undefined {
+  const out: Record<string, unknown> = Object.create(null);
   for (const row of headers) {
     const key = row.key.trim();
     if (!key) continue;
-    out[key] = row.value;
+    out[key] = row.reference ?? row.value;
   }
   return Object.keys(out).length > 0 ? out : undefined;
 }
@@ -51,7 +50,9 @@ export function recordToHeaders(record: Record<string, unknown> | undefined): Mc
     return [createMcpHeaderEntry()];
   }
   const rows = Object.entries(record).map(([key, value]) =>
-    createMcpHeaderEntry(key, value == null ? '' : String(value)),
+    typeof value === 'object' && value !== null && !Array.isArray(value)
+      ? { ...createMcpHeaderEntry(key), reference: value as Record<string, unknown> }
+      : createMcpHeaderEntry(key, value == null ? '' : String(value)),
   );
   return rows.length > 0 ? rows : [createMcpHeaderEntry()];
 }

@@ -653,7 +653,7 @@ describe('SideChatConversation composer', () => {
 
   it('recovers waiting questions on reload and does not delete when the page is hidden', async () => {
     const view = await getSideChat('side-1');
-    vi.mocked(getSideChat).mockResolvedValueOnce({ ...view, status: 'waiting-input', runId: 'run-waiting', clarification: { requestId: 'question-1', kind: 'input', question: 'Which option?', choices: ['A', 'B'] } });
+    vi.mocked(getSideChat).mockResolvedValueOnce({ ...view, status: 'waiting-input', runId: 'run-waiting', clarification: { requestId: 'question-1', kind: 'input', question: 'Which option?', choiceDetails: [{ id: 'a', label: 'A' }, { id: 'b', label: 'B' }] } });
     await renderColumn();
     expect(container.textContent).toContain('Which option?');
     await act(async () => { window.dispatchEvent(new Event('pagehide')); });

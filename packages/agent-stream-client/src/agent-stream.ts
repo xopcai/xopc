@@ -1,3 +1,4 @@
+import { readClarificationPresentation } from '@xopcai/gateway-contract';
 /** Dispatches Chat Stream Protocol events received from realtime run topics. */
 
 import type {
@@ -369,18 +370,13 @@ export function dispatchAgentStreamEvent(
       const requestId = typeof p.requestId === 'string' ? p.requestId.trim() : '';
       const question = typeof p.question === 'string' ? p.question.trim() : '';
       if (requestId && question && cb?.onClarifyRequest) {
-        const choices = Array.isArray(p.choices)
-          ? (p.choices as unknown[]).filter((x): x is string => typeof x === 'string' && x.trim().length > 0)
-          : undefined;
-        const suggestedAnswer = typeof p.suggestedAnswer === 'string' && p.suggestedAnswer.trim()
-          ? p.suggestedAnswer.trim()
-          : undefined;
+
         cb.onClarifyRequest({
+          ...readClarificationPresentation(p),
           requestId,
           kind: p.kind === 'approval' ? 'approval' : 'input',
           question,
-          choices: choices && choices.length >= 2 ? choices : undefined,
-          suggestedAnswer,
+
           version: typeof p.version === 'number' ? p.version : 1,
           createdAt: typeof p.createdAt === 'number' ? p.createdAt : Date.now(),
           expiresAt: typeof p.expiresAt === 'number' ? p.expiresAt : undefined,

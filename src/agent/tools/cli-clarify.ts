@@ -1,43 +1,23 @@
 import * as readline from 'node:readline/promises';
 import { stdin as input, stdout as output } from 'node:process';
+import { normalizeClarificationSubmission } from '@xopcai/gateway-contract';
+import type { GatewayClarifyRequestFn } from './clarify-tool.js';
 
-import type { ClarifyRequestPayload, GatewayClarifyRequestFn } from './clarify-tool.js';
-
-/**
- * stdin/stdout prompts for `clarify` when running the CLI agent (no gateway).
- */
 export function createCliReadlineClarifyRequestFn(): GatewayClarifyRequestFn {
-  return async (_context, req: ClarifyRequestPayload) => {
+  return async (_context, request) => {
     const rl = readline.createInterface({ input, output });
-
     try {
-      const choices = req.choices;
-      if (choices && choices.length >= 2) {
-        output.write(`\n${req.question}\n`);
-        choices.forEach((c, i) => output.write(`  ${i + 1}) ${c}\n`));
-        if (req.suggestedAnswer) {
-          output.write(`  (recommended: ${req.suggestedAnswer})\n`);
-        }
-        const raw = (await rl.question('Choice (number or exact text): ')).trim();
-        const n = parseInt(raw, 10);
-        if (!Number.isNaN(n) && n >= 1 && n <= choices.length) {
-          return { status: 'answered', answer: choices[n - 1]! };
-        }
-        if (raw) return { status: 'answered', answer: raw };
-        if (req.suggestedAnswer) return { status: 'answered', answer: req.suggestedAnswer };
-        throw new Error('No answer provided');
+      output.write(`\n${request.question}\n`);
+      if (request.kind === 'approval') {
+        output.write(`${JSON.stringify(request.approval)}\n`);
+        const decision = (await rl.question('Type approve or deny: ')).trim();
+        return { status: 'answered', answer: normalizeClarificationSubmission(request, { decision }).answer };
       }
-
-      output.write(`\n${req.question}\n`);
-      if (req.suggestedAnswer) {
-        output.write(`(Press Enter for recommendation: ${req.suggestedAnswer})\n`);
-      }
-      const raw = (await rl.question('> ')).trim();
-      if (raw) return { status: 'answered', answer: raw };
-      if (req.suggestedAnswer) return { status: 'answered', answer: req.suggestedAnswer };
-      throw new Error('No answer provided');
-    } finally {
-      rl.close();
-    }
+      request.choiceDetails?.forEach((choice, index) => output.write(`  ${index + 1}) ${choice.label}${choice.description ? ` — ${choice.description}` : ''}${choice.id === request.recommendedChoiceId ? ' (recommended)' : ''}\n`));
+      const raw = (await rl.question('Choice number or your answer: ')).trim();
+      const choice = /^\d+$/.test(raw) ? request.choiceDetails?.[Number(raw) - 1] : undefined;
+      const text = choice && request.interactionMode === 'compose' ? (await rl.question('Additional information (optional): ')).trim() : choice ? undefined : raw;
+      return { status: 'answered', answer: normalizeClarificationSubmission(request, { response: { choiceId: choice?.id, text } }).answer };
+    } finally { rl.close(); }
   };
 }

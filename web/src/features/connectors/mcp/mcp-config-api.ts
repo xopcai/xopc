@@ -9,9 +9,9 @@ import { apiUrl } from '@/lib/url';
 
 export type McpTransportKind = 'stdio' | 'streamable-http';
 export type McpServerRow = {
-  clientKey: string; id: string; transport: McpTransportKind;
+  clientKey: string; id: string; displayName?: string; transport: McpTransportKind;
   command: string; argsText: string; envJson: string; cwd: string; url: string;
-  headers: McpHeaderEntry[]; oauthClientId: string; timeout: number | undefined;
+  headers: McpHeaderEntry[]; envEntries?: McpHeaderEntry[]; oauthClientId: string; timeout: number | undefined;
   exposure: 'codemode' | 'deferred' | 'direct' | 'hidden';
   extra: Record<string, unknown>;
 };
@@ -48,7 +48,7 @@ export function extractManagedMcpServers(cfg: unknown): Record<string, Record<st
   return managed;
 }
 
-function parseArgsText(text: string): string[] | undefined {
+export function parseArgsText(text: string): string[] | undefined {
   const trimmed = text.trim();
   if (!trimmed) return undefined;
   if (trimmed.startsWith('[')) {
@@ -60,7 +60,7 @@ function parseArgsText(text: string): string[] | undefined {
   let value = '', quote = '', started = false;
   for (let i = 0; i < trimmed.length; i++) {
     const char = trimmed[i];
-    if (char === '\\' && trimmed[i + 1] && quote !== "'") { value += trimmed[++i]; started = true; }
+    if (char === '\\' && trimmed[i + 1] && quote !== "'" && /[\s"'\\]/.test(trimmed[i + 1])) { value += trimmed[++i]; started = true; }
     else if (quote) { if (char === quote) quote = ''; else value += char; }
     else if (char === '"' || char === "'") { quote = char; started = true; }
     else if (/\s/.test(char)) { if (started) { args.push(value); value = ''; started = false; } }
@@ -83,14 +83,23 @@ function parseJsonObject(text: string): Record<string, unknown> | undefined {
 
 function rowToServerConfig(row: McpServerRow): Record<string, unknown> {
   const config: Record<string, unknown> = { ...row.extra, exposure: row.exposure };
+  if (row.displayName?.trim()) config.displayName = row.displayName.trim(); else delete config.displayName;
   delete config.command; delete config.args; delete config.env; delete config.cwd;
   delete config.url; delete config.headers; delete config.type;
   if (row.transport === 'stdio') {
     config.type = 'stdio'; config.command = row.command.trim();
     const args = parseArgsText(row.argsText); if (args) config.args = args;
     if (row.cwd.trim()) config.cwd = row.cwd.trim();
-    if (row.envJson.trim()) config.env = parseJsonObject(row.envJson);
-    delete config.oauth;
+    if (row.envEntries) {
+      const names = new Set<string>();
+      for (const entry of row.envEntries) {
+        if (!entry.key.trim() && !entry.value && !entry.reference) continue;
+        if (!entry.key.trim() || names.has(entry.key.trim())) throw new Error('Environment variable names must be non-empty and unique.');
+        names.add(entry.key.trim());
+      }
+      const env = headersToRecord(row.envEntries); if (env) config.env = env;
+    } else if (row.envJson.trim()) config.env = parseJsonObject(row.envJson);
+    delete config.oauth; delete config.auth;
   } else {
     config.type = 'http'; config.url = row.url.trim();
     const headers = headersToRecord(row.headers); if (headers) config.headers = headers;
@@ -103,7 +112,7 @@ function rowToServerConfig(row: McpServerRow): Record<string, unknown> {
 }
 function serverConfigToRow(id: string, raw: Record<string, unknown>): McpServerRow {
   const oauth = raw.oauth as Record<string, unknown> | undefined;
-  return { clientKey: id, id, transport: typeof raw.url === 'string' ? 'streamable-http' : 'stdio',
+  return { clientKey: id, id, displayName: typeof raw.displayName === 'string' ? raw.displayName : '', transport: typeof raw.url === 'string' ? 'streamable-http' : 'stdio',
     command: typeof raw.command === 'string' ? raw.command : '', argsText: Array.isArray(raw.args) ? JSON.stringify(raw.args) : '',
     envJson: raw.env ? JSON.stringify(raw.env, null, 2) : '', cwd: typeof raw.cwd === 'string' ? raw.cwd : '',
     url: typeof raw.url === 'string' ? raw.url : '', headers: recordToHeaders(raw.headers as Record<string, unknown> | undefined),
@@ -135,6 +144,7 @@ export function parseMcpConfigImport(text: string): McpServerRow[] {
   const input = JSON.parse(text);
   if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error('Expected a JSON object.');
   const configs = input.mcpServers ?? input.mcp?.servers ?? input.servers;
+  if (configs !== undefined && (!configs || typeof configs !== 'object' || Array.isArray(configs))) throw new Error('Expected a server configuration object.');
   const entries: Array<[string, unknown]> = configs ? Object.entries(configs) : [['', input]];
   if (!entries.length) throw new Error('No MCP servers found.');
   return entries.map(([id, value]) => {
@@ -159,7 +169,7 @@ export function normalizeMcpSettingsFromConfig(cfg: unknown): McpSettingsState {
 }
 export function buildMcpServerConfigFromRow(row: McpServerRow): Record<string, unknown> { return rowToServerConfig(row); }
 export async function patchMcpSettings(state: McpSettingsState, managedServers: Record<string, Record<string, unknown>> = {}): Promise<void> {
-  const servers = { ...managedServers };
+  const servers: Record<string, Record<string, unknown>> = Object.assign(Object.create(null), managedServers);
   for (const row of state.servers) {
     const id = row.id.trim();
     if (!/^[a-zA-Z0-9_-]+$/.test(id)) throw new Error('MCP IDs require letters, digits, underscores or hyphens.');
@@ -204,4 +214,60 @@ export async function cancelMcpSignIn(id: string): Promise<void> {
 }
 export async function submitMcpSignInRedirect(id: string, url: string): Promise<void> {
   await fetchJson(apiUrl(`/api/mcp/auth/${encodeURIComponent(id)}/redirect`), { method: 'POST', body: JSON.stringify({ url }) });
+}
+
+export type McpConnectionDraft = { id: string; serverId: string; expiresAt: number };
+export async function createMcpConnectionDraft(row: McpServerRow, sourceServerId: string | undefined, expectedServer: unknown, signal: AbortSignal): Promise<McpConnectionDraft> {
+  const result = await fetchJson<{ payload: McpConnectionDraft }>(apiUrl('/api/mcp/drafts'), {
+    method: 'POST', signal, body: JSON.stringify({ serverId: row.id, sourceServerId, expectedServer, server: rowToServerConfig(row) }),
+  });
+  return result.payload;
+}
+export async function probeMcpDraft(id: string, signal: AbortSignal): Promise<McpConnectionProbe> {
+  const result = await fetchJson<{ payload: McpConnectionProbe }>(apiUrl(`/api/mcp/drafts/${encodeURIComponent(id)}/probe`), {
+    method: 'POST', signal: AbortSignal.any([signal, AbortSignal.timeout(95_000)]),
+  });
+  return result.payload;
+}
+export async function deleteMcpDraft(id: string): Promise<void> {
+  await fetchJson(apiUrl(`/api/mcp/drafts/${encodeURIComponent(id)}`), { method: 'DELETE' });
+}
+export async function commitMcpDraft(id: string, enable = false): Promise<{ serverId: string; reloadRequired?: boolean }> {
+  const result = await fetchJson<{ payload: { serverId: string; reloadRequired?: boolean } }>(apiUrl(`/api/mcp/drafts/${encodeURIComponent(id)}/commit`), { method: 'POST', body: JSON.stringify({ enable }) });
+  void revalidateGatewayConfig();
+  return result.payload;
+}
+export async function startMcpDraftSignIn(id: string): Promise<McpAuthorization> {
+  const result = await fetchJson<{ payload: McpAuthorization }>(apiUrl(`/api/mcp/drafts/${encodeURIComponent(id)}/auth`), { method: 'POST' });
+  return result.payload;
+}
+export async function readMcpDraftSignIn(id: string, signal: AbortSignal): Promise<McpAuthorization> {
+  const result = await fetchJson<{ payload: McpAuthorization }>(apiUrl(`/api/mcp/drafts/${encodeURIComponent(id)}/auth`), { signal });
+  return result.payload;
+}
+export async function cancelMcpDraftSignIn(id: string): Promise<void> {
+  await fetchJson(apiUrl(`/api/mcp/drafts/${encodeURIComponent(id)}/auth`), { method: 'DELETE' });
+}
+export async function submitMcpDraftRedirect(id: string, url: string): Promise<void> {
+  await fetchJson(apiUrl(`/api/mcp/drafts/${encodeURIComponent(id)}/auth/redirect`), { method: 'POST', body: JSON.stringify({ url }) });
+}
+export async function fetchMcpDraftTools(id: string, signal: AbortSignal): Promise<McpToolInfo[]> {
+  const result = await fetchJson<{ payload: { tools: McpToolInfo[] } }>(apiUrl(`/api/mcp/drafts/${encodeURIComponent(id)}/tools`), { signal });
+  return result.payload.tools;
+}
+
+export type McpLastCheck = { checkedAt: string; toolCount: number };
+export async function fetchMcpConnectionChecks(signal: AbortSignal): Promise<Record<string, McpLastCheck>> {
+  const result = await fetchJson<{ payload: { servers: Array<{ id: string; lastCheck?: McpLastCheck }> } }>(apiUrl('/api/mcp/servers'), { signal });
+  return Object.fromEntries(result.payload.servers.filter(item => item.lastCheck && Number.isFinite(Date.parse(item.lastCheck.checkedAt)))
+    .map(item => [item.id, item.lastCheck!]));
+}
+
+/** Delete only this version of this entry; never replace the client's stale full server collection. */
+export async function deleteMcpServer(row: McpServerRow): Promise<{ reloadRequired?: boolean }> {
+  const result = await fetchJson<{ payload: { reloadRequired?: boolean } }>(apiUrl(`/api/mcp/servers/${encodeURIComponent(row.id)}`), {
+    method: 'DELETE', body: JSON.stringify({ expectedServer: row.extra }),
+  });
+  void revalidateGatewayConfig();
+  return result.payload;
 }

@@ -146,8 +146,8 @@ struct FeatureStateTests {
             kind: "input",
             status: "open",
             question: "Which option?",
-            choices: ["A", "B"],
-            suggestedAnswer: nil,
+            choiceDetails: [.init(id: "a", label: "A", description: nil), .init(id: "b", label: "B", description: nil)],
+            interactionMode: "compose", recommendedChoiceId: "a", approval: nil,
             version: 1,
             expiresAt: nil
         )
@@ -286,7 +286,7 @@ private struct StreamingGatewayStub: GatewayServing {
         nil
     }
 
-    func respondToClarification(_: ClarificationRequest, action _: String, answer _: String?) async throws {}
+    func respondToClarification(_: ClarificationRequest, command _: ClarificationResponseCommand) async throws {}
     func fetchInputState(conversationID _: String) async throws -> InputState {
         InputState(activeRunId: nil)
     }

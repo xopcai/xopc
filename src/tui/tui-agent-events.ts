@@ -417,8 +417,8 @@ export function dispatchAgentEvent(
     case 'clarify_request': {
       const requestId = typeof p.requestId === 'string' ? p.requestId : `${runId}:question`;
       const kind = p.kind === 'approval' ? 'approval' : 'question';
-      const choices = Array.isArray(p.choices)
-        ? p.choices.filter((choice): choice is string => typeof choice === 'string')
+      const choices = Array.isArray(p.choiceDetails)
+        ? p.choiceDetails.map((choice: { label: string }) => choice.label)
         : [];
       chatLog.upsertSemanticCell(requestId, {
         kind,

@@ -1,3 +1,4 @@
+import { readClarificationPresentation } from '@xopcai/gateway-contract';
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
 import { isUserTurnDocument, parseTurnOutcome, resolveToolActivity } from '@xopcai/gateway-contract';
 
@@ -134,11 +135,12 @@ export class ChatStreamMapper {
       case 'clarify_request':
         return [
           this.make('clarify_request', {
+            ...readClarificationPresentation(event),
             requestId: String(event.requestId ?? ''),
             kind: event.kind === 'approval' ? 'approval' : 'input',
             question: String(event.question ?? ''),
-            choices: Array.isArray(event.choices) ? event.choices.filter((x): x is string => typeof x === 'string') : undefined,
-            suggestedAnswer: typeof event.suggestedAnswer === 'string' ? event.suggestedAnswer : undefined,
+
+
             version: typeof event.version === 'number' ? event.version : 1,
             createdAt: typeof event.createdAt === 'number' ? event.createdAt : Date.now(),
             expiresAt: typeof event.expiresAt === 'number' ? event.expiresAt : undefined,

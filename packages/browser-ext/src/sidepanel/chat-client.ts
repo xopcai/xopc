@@ -1,3 +1,4 @@
+import { readClarificationPresentation, type ClarificationPresentation, type ClarificationSubmission } from '@xopcai/gateway-contract';
 import {
   RealtimeClient,
   type RealtimeConnectionState,
@@ -41,12 +42,10 @@ export type BrowserChatSession = {
   updatedAt: string;
 };
 
-export type BrowserClarification = {
+export type BrowserClarification = ClarificationPresentation & {
   id: string;
   kind: 'input' | 'approval';
   question: string;
-  choices?: string[];
-  suggestedAnswer?: string;
   version: number;
   expiresAt?: number;
 };
@@ -187,15 +186,11 @@ function mapClarification(value: unknown, conversationId: string): BrowserClarif
     : envelope;
   if (row.status !== 'open' || row.conversationId !== conversationId
     || typeof row.id !== 'string' || typeof row.question !== 'string') return undefined;
-  const choices = Array.isArray(row.choices)
-    ? row.choices.filter((choice): choice is string => typeof choice === 'string' && Boolean(choice.trim()))
-    : undefined;
   return {
+    ...readClarificationPresentation(row),
     id: row.id,
     kind: row.kind === 'approval' ? 'approval' : 'input',
     question: row.question,
-    ...(choices?.length ? { choices } : {}),
-    ...(typeof row.suggestedAnswer === 'string' ? { suggestedAnswer: row.suggestedAnswer } : {}),
     version: typeof row.version === 'number' ? row.version : 1,
     ...(typeof row.expiresAt === 'number' ? { expiresAt: row.expiresAt } : {}),
   };
@@ -216,7 +211,7 @@ export class BrowserChatClient {
   private runTopic?: string;
   private recoveringOutbox = false;
   private sendingInput = false;
-  private readonly approvalResponses = new Set<string>();
+  private clarificationAttempt?: { signature: string; key: string };
   private lastOutboxRecoveryAt = 0;
   private sessionsRequest = 0;
   private defaultModelId?: string;
@@ -740,17 +735,19 @@ export class BrowserChatClient {
     await this.patchModelConfig({ thinkingLevel });
   }
 
-  async respondToClarification(action: 'answer' | 'agent_decide' | 'cancel', answer?: string): Promise<void> {
+  async respondToClarification(action: 'answer' | 'agent_decide' | 'cancel', submission?: ClarificationSubmission): Promise<void> {
     const clarification = this.snapshot.clarification;
     if (!clarification) return;
+    const signature = JSON.stringify([clarification.id, clarification.version, action, submission]);
+    if (this.clarificationAttempt?.signature !== signature) this.clarificationAttempt = { signature, key: crypto.randomUUID() };
     await json(await gatewayFetch(`/api/clarifications/${encodeURIComponent(clarification.id)}/responses`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         action,
-        answer,
+        ...submission,
         expectedVersion: clarification.version,
-        idempotencyKey: crypto.randomUUID(),
+        idempotencyKey: this.clarificationAttempt.key,
       }),
     }));
     await this.reloadClarification();
@@ -970,31 +967,7 @@ export class BrowserChatClient {
   private async applyClarification(value: unknown, conversationId: string): Promise<void> {
     if (this.snapshot.conversationId !== conversationId) return;
     const clarification = mapClarification(value, conversationId);
-    if (clarification?.kind !== 'approval') {
-      this.update({ clarification });
-      return;
-    }
-    this.update({ clarification: undefined });
-    const key = `browser-approval:${clarification.id}:${clarification.version}`;
-    if (this.approvalResponses.has(key)) return;
-    this.approvalResponses.add(key);
-    try {
-      await json(await gatewayFetch(`/api/clarifications/${encodeURIComponent(clarification.id)}/responses`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'answer',
-          answer: 'Approved. Continue with the requested operation.',
-          expectedVersion: clarification.version,
-          idempotencyKey: key,
-        }),
-      }, this.profileIdentity));
-    } catch (cause) {
-      this.approvalResponses.delete(key);
-      if (this.snapshot.conversationId === conversationId) {
-        this.update({ error: cause instanceof Error ? cause.message : String(cause) });
-      }
-    }
+    this.update({ clarification });
   }
 
   private async reloadClarification(): Promise<void> {
