@@ -103,7 +103,8 @@ export function createOmniVoiceEngine(options: {
     responseCreateQueued = false;
     clearTimeout(responseStartTimer);
     responseStartTimer = setTimeout(() => fail('OMNI_RESPONSE_START_TIMEOUT'), RESPONSE_START_TIMEOUT_MS);
-    send('response.create');
+    // Managed Cloud sessions generate replies after VAD and reject response.create.
+    if (!options.route.route.managed) send('response.create');
   }
   const turn = new TurnCoordinator(options.silenceDurationMs, (_text, decision, turnId) => {
     if (closed || failed || muted || inputBlocked) return;
@@ -280,7 +281,7 @@ export function createOmniVoiceEngine(options: {
                 modalities: ['text', 'audio'], voice: options.route.voice,
                 instructions: options.route.instructions,
                 ...(!options.route.route.managed ? { input_audio_format: 'pcm', output_audio_format: 'pcm', input_audio_transcription: { model: 'gummy-realtime-v1' } } : {}),
-                turn_detection: { type: 'server_vad', threshold: 0.5, silence_duration_ms: options.silenceDurationMs, create_response: false, interrupt_response: false },
+                turn_detection: { type: 'server_vad', threshold: 0.5, silence_duration_ms: options.silenceDurationMs, create_response: options.route.route.managed, interrupt_response: false },
               } });
             } else if (event.type === 'session.updated' && !ready) {
               if (options.route.route.managed && (event.session?.input_sample_rate !== 16000 || event.session?.output_sample_rate !== 24000)) throw new Error('Unsupported platform audio format');

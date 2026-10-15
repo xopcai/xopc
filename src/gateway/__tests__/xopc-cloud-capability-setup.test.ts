@@ -115,7 +115,7 @@ describe('XOPC Cloud capability setup', () => {
 
   it('sets up published chat capabilities even if image and speech models are missing', async () => {
     initializeTestAgentCatalog({ defaults: {
-      models: { chat: { primary: 'missing/model', fallbacks: [] }, intents: {} },
+      models: { chat: { primary: 'xopc-cloud/auto', fallbacks: [] }, intents: {} },
       skills: { mode: 'selected', include: [] }, tools: {}, workflows: {}, runtime: {},
     } });
     getModelCatalogStore().saveSource('xopc-cloud', source([model({ id: 'chat', kind: 'language' })]));
@@ -128,6 +128,82 @@ describe('XOPC Cloud capability setup', () => {
     expect(saved).toHaveLength(1);
     expect(new AgentCatalogRepository().getSettings().defaults.models.chat.primary).toBe('xopc-cloud/chat');
   });
+  it('enables every published media mode on a fresh install and is idempotent', async () => {
+    initializeTestAgentCatalog();
+    getModelCatalogStore().saveSource('xopc-cloud', completeCatalog);
+    let config = ConfigSchema.parse({});
+    const service = {
+      get currentConfig() { return config; },
+      saveConfig: async (next: typeof config) => { config = ConfigSchema.parse(next); return { saved: true }; },
+    };
+    expect(await applyXopcCloudCapabilitySetup(service)).toMatchObject({ configured: true, missing: [] });
+    expect(new AgentCatalogRepository().getSettings().defaults.models).toMatchObject({
+      chat: { primary: 'xopc-cloud/chat' },
+      imageUnderstanding: { primary: 'xopc-cloud/vision-recommended' },
+      imageGeneration: { primary: 'xopc-cloud/image-recommended' },
+    });
+    expect(config.tools.media?.audio).toMatchObject({ enabled: true, provider: 'xopc-cloud', providers: { 'xopc-cloud': { model: 'stt-recommended' } } });
+    expect(config.messages?.tts).toMatchObject({ enabled: true, provider: 'xopc-cloud', trigger: 'off', providers: { 'xopc-cloud': { model: 'tts-recommended', voice: 'Chelsie' } } });
+    expect(config.voice?.realtime).toMatchObject({
+      enabled: true,
+      stt: { provider: 'xopc-cloud', model: 'stt-live' },
+      tts: { provider: 'xopc-cloud', model: 'tts-recommended', voice: 'voice-a' },
+      omni: { provider: 'xopc-cloud', model: 'omni-live', voice: 'voice-a' },
+    });
+    const first = structuredClone(config);
+    const defaults = new AgentCatalogRepository().getSettings().defaults;
+    await applyXopcCloudCapabilitySetup(service);
+    expect(config).toEqual(first);
+    expect(new AgentCatalogRepository().getSettings().defaults).toEqual(defaults);
+  });
+
+  it('preserves explicit unavailable chat and image routes and disabled realtime voice', async () => {
+    initializeTestAgentCatalog({ defaults: {
+      models: {
+        chat: { primary: 'custom/offline', fallbacks: [] }, intents: {},
+        imageUnderstanding: { primary: 'custom/vision', fallbacks: [] },
+        imageGeneration: { primary: 'custom/image', fallbacks: [], autoProviderFallback: false },
+      },
+      skills: { mode: 'selected', include: [] }, tools: {}, workflows: {}, runtime: {},
+    } });
+    const defaults = new AgentCatalogRepository().getSettings().defaults;
+    getModelCatalogStore().saveSource('xopc-cloud', completeCatalog);
+    const config = ConfigSchema.parse({ voice: { realtime: { enabled: false } } });
+    let saved = config;
+    await applyXopcCloudCapabilitySetup({ currentConfig: config, saveConfig: async (next) => { saved = next; return { saved: true }; } });
+    expect(new AgentCatalogRepository().getSettings().defaults).toEqual(defaults);
+    expect(saved.voice).toEqual(config.voice);
+  });
+
+  it('keeps explicit voice choices while filling missing modes on enabled realtime', async () => {
+    initializeTestAgentCatalog();
+    getModelCatalogStore().saveSource('xopc-cloud', completeCatalog);
+    const config = ConfigSchema.parse({ voice: { realtime: { enabled: true, tts: { provider: 'alibaba', model: 'my-model', voice: 'my-voice' } } } });
+    let saved = config;
+    await applyXopcCloudCapabilitySetup({ currentConfig: config, saveConfig: async (next) => { saved = next; return { saved: true }; } });
+    expect(saved.voice?.realtime.tts).toEqual(config.voice?.realtime.tts);
+    expect(saved.voice?.realtime.stt?.model).toBe('stt-live');
+    expect(saved.voice?.realtime.omni?.model).toBe('omni-live');
+  });
+
+  it('does not enable realtime when the catalog offers no realtime models', async () => {
+    initializeTestAgentCatalog();
+    getModelCatalogStore().saveSource('xopc-cloud', source(completeCatalog.models.map(({ voice: _voice, ...entry }) => entry)));
+    let saved = ConfigSchema.parse({});
+    await applyXopcCloudCapabilitySetup({ currentConfig: saved, saveConfig: async (next) => { saved = next; return { saved: true }; } });
+    expect(saved.voice).toBeUndefined();
+    expect(saved.tools.media?.audio?.enabled).toBe(true);
+    expect(saved.messages?.tts?.enabled).toBe(true);
+  });
+
+  it('does not persist Agent defaults when config saving fails', async () => {
+    initializeTestAgentCatalog();
+    const defaults = new AgentCatalogRepository().getSettings().defaults;
+    getModelCatalogStore().saveSource('xopc-cloud', completeCatalog);
+    expect(await applyXopcCloudCapabilitySetup({ currentConfig: ConfigSchema.parse({}), saveConfig: async () => ({ saved: false, error: 'disk full' }) })).toMatchObject({ configured: false, error: 'disk full' });
+    expect(new AgentCatalogRepository().getSettings().defaults).toEqual(defaults);
+  });
+
   it('selects the Cloud recommendation for every managed capability', () => {
     expect(selectXopcCloudCapabilities(completeCatalog)).toEqual({
       missing: [],

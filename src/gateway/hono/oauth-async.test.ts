@@ -2,6 +2,10 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest
 
 import { initializeTestAgentCatalog } from '../../agent-catalog/test-support.js';
 import type { GatewayService } from '../service.js';
+import { voiceManifestSchema } from '@xopcai/realtime-protocol/voice';
+import { xopcCloudOAuthProvider } from '../../auth/oauth/xopc-cloud.js';
+import { getModelCatalogStore } from '../../providers/model-catalog-store.js';
+import { createOAuthHandler } from './oauth.js';
 import { ConfigSchema } from '../../config/schema.js';
 import { CredentialResolver } from '../../auth/credentials.js';
 import { openaiOAuthProvider } from '../../auth/oauth/openai.js';
@@ -178,5 +182,58 @@ describe('buildOAuthCompletionReadiness', () => {
       state: 'connected-degraded',
       catalog: { state: 'unavailable' },
     });
+  });
+});
+
+
+describe('Cloud capability setup through web and desktop OAuth', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it.each(['web', 'desktop'] as const)('enables published voice capabilities after %s authorization', async (client) => {
+    initializeTestAgentCatalog();
+    vi.spyOn(CredentialResolver.prototype, 'saveOAuthCredentials').mockResolvedValue();
+    vi.spyOn(xopcCloudOAuthProvider, 'login').mockResolvedValue({
+      access: 'test-access', refresh: 'test-refresh', expires: Date.now() + 3600_000,
+    });
+    const voice = voiceManifestSchema.parse({
+      protocolVersion: 1, serviceVersion: 1, modes: ['conversation'], transport: 'websocket-pcm',
+      inputFormat: { encoding: 'pcm_s16le', sampleRate: 16000, channels: 1 },
+      outputFormat: { encoding: 'pcm_s16le', sampleRate: 24000, channels: 1 },
+      turnDetection: ['server_vad'], bargeIn: true, tools: false, resumable: false,
+      voices: [{ id: 'voice-a', name: 'Voice A', languages: ['zh'] }], defaultVoice: 'voice-a',
+      limits: { maxFrameBytes: 65536, maxSessionSeconds: 1800 },
+    });
+    let config = ConfigSchema.parse({});
+    const service = {
+      get currentConfig() { return config; },
+      saveConfig: vi.fn(async (next: typeof config) => { config = ConfigSchema.parse(next); return { saved: true }; }),
+      emit: vi.fn(),
+      getModelCatalogSync: () => ({ refreshNow: async () => {
+        getModelCatalogStore().saveSource('xopc-cloud', {
+          providerId: 'xopc-cloud', baseUrl: 'https://cloud.test/v1', api: 'openai-completions',
+          etag: null, recommendedModel: null, lastSuccessAt: Date.now(),
+          models: [{
+            id: 'realtime', name: 'Realtime', kind: 'omni', availability: 'available', voice,
+            input: ['audio'], output: ['audio'], operations: ['audio.conversation'],
+            reasoning: false, contextWindow: 32000, maxOutputTokens: 4096,
+          }],
+        });
+        return { state: 'ready', source: 'network', modelCount: 1 };
+      } }),
+    } as unknown as GatewayService;
+    const handler = client === 'desktop' ? createOAuthAsyncHandler(service) : createOAuthHandler(service);
+    const response = await handler.request('/start', { method: 'POST', body: JSON.stringify({ provider: 'xopc-cloud' }) });
+    expect(response.status).toBe(200);
+    if (client === 'desktop') {
+      const { payload: { sessionId } } = await response.json() as { payload: { sessionId: string } };
+      await vi.waitFor(async () => {
+        const { payload } = await (await handler.request(`/${sessionId}/status`)).json() as { payload: { status: string; readiness: { configuration: { applied: boolean } } } };
+        expect(payload.status).toBe('completed');
+        expect(payload.readiness.configuration.applied).toBe(true);
+      });
+    } else {
+      expect(await response.json()).toMatchObject({ payload: { success: true, readiness: { configuration: { applied: true } } } });
+    }
+    expect(config.voice?.realtime).toMatchObject({ enabled: true, omni: { provider: 'xopc-cloud', model: 'realtime', voice: 'voice-a' } });
   });
 });
