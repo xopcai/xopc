@@ -77,7 +77,10 @@ describe('durable clarification notifications', () => {
     const sendHarmony = vi.fn().mockResolvedValue('accepted');
     const service = new NotificationService({ publish: vi.fn(), sendHarmony });
     flushClarificationNotifications(plan => service.persistPlan(plan));
-    expect(resolveClarification({ id: wait.id, expectedVersion: wait.version, idempotencyKey: 'respond', action, answer: 'A' }).ok).toBe(true);
+    expect(resolveClarification({
+      id: wait.id, expectedVersion: wait.version, idempotencyKey: 'respond', action,
+      ...(action === 'answer' ? { response: { text: 'A' } } : {}),
+    }).ok).toBe(true);
     await service.drain();
     expect(sendHarmony).not.toHaveBeenCalled();
     expect(notificationDeliveryMetrics()).toMatchObject({ cancelled: 1, dead: 0 });
@@ -94,7 +97,7 @@ describe('durable clarification notifications', () => {
   });
 
   it('cancels expired approvals and honors changed preferences before delivery', async () => {
-    const wait = createClarificationWait({ ...request, kind: 'approval' });
+    const wait = createClarificationWait({ ...request, kind: 'approval', approval: { operation: 'Test approval' } });
     const sendHarmony = vi.fn().mockResolvedValue('accepted');
     const service = new NotificationService({ publish: vi.fn(), sendHarmony });
     flushClarificationNotifications(plan => service.persistPlan(plan));
@@ -131,7 +134,7 @@ describe('durable clarification notifications', () => {
 
   it('uses the Personal destination and supplies approval expiry to push', async () => {
     getSqliteDatabase().prepare("UPDATE sessions SET custom_data_json = '{\"personalAgent\":true}' WHERE conversation_id = ?").run(conversationId);
-    const wait = createClarificationWait({ ...request, kind: 'approval' });
+    const wait = createClarificationWait({ ...request, kind: 'approval', approval: { operation: 'Test approval' } });
     const sendHarmony = vi.fn().mockResolvedValue('accepted');
     await new NotificationService({ publish: vi.fn(), sendHarmony }).drain();
     expect(listNotificationEvents({ since: 0 }).items[0]?.target).toEqual({ kind: 'chat', conversationId, personal: true });
