@@ -324,7 +324,7 @@ struct GatewayModelsTests {
 
     @Test func encodesStructuredClarificationWithoutTextFallback() throws {
         let command = ClarificationResponseCommand(action: "answer", response: .init(choiceId: "prod", text: "After 22:00\nVerify first"),
-            decision: nil, expectedVersion: 3, idempotencyKey: "same-attempt")
+                                                   decision: nil, expectedVersion: 3, idempotencyKey: "same-attempt")
         let value = try #require(JSONSerialization.jsonObject(with: JSONEncoder().encode(command)) as? [String: Any])
         #expect(value["answer"] == nil)
         let response = try #require(value["response"] as? [String: String])

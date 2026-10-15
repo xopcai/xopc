@@ -330,10 +330,10 @@ extension RealtimeVoiceCall {
         guard !clarification.isExpired else { return }
         let previous = clarificationAttempt
         let candidate = ClarificationResponseCommand(action: action, response: submission?.response, decision: submission?.decision,
-            expectedVersion: clarification.version, idempotencyKey: previous?.command.idempotencyKey ?? UUID().uuidString.lowercased())
+                                                     expectedVersion: clarification.version, idempotencyKey: previous?.command.idempotencyKey ?? UUID().uuidString.lowercased())
         let command = previous?.id == clarification.id && previous?.command == candidate ? candidate
             : ClarificationResponseCommand(action: action, response: submission?.response, decision: submission?.decision,
-                expectedVersion: clarification.version, idempotencyKey: UUID().uuidString.lowercased())
+                                           expectedVersion: clarification.version, idempotencyKey: UUID().uuidString.lowercased())
         clarificationAttempt = (clarification.id, command)
         let current = generation
         respondingToIntervention = true
@@ -481,10 +481,10 @@ private extension RealtimeVoiceCall {
             await pause(reason: "UNSUPPORTED_FORMAT")
         case "response.clarification" where payload.responseId == responseID:
             clarification = ClarificationRequest(id: payload.requestId ?? "", conversationId: conversationID ?? "",
-                kind: payload.kind ?? "input", status: "open", question: payload.question ?? "",
-                choiceDetails: payload.choiceDetails, interactionMode: payload.interactionMode,
-                recommendedChoiceId: payload.recommendedChoiceId, approval: payload.approval,
-                version: payload.version ?? 1, expiresAt: payload.expiresAt)
+                                                 kind: payload.kind ?? "input", status: "open", question: payload.question ?? "",
+                                                 choiceDetails: payload.choiceDetails, interactionMode: payload.interactionMode,
+                                                 recommendedChoiceId: payload.recommendedChoiceId, approval: payload.approval,
+                                                 version: payload.version ?? 1, expiresAt: payload.expiresAt)
             try? await transport.send("input.mute", payload: .init(muted: true))
         case "response.cancelled" where payload.responseId == responseID:
             audio.flush()

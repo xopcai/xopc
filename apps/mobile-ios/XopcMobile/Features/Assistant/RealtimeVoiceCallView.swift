@@ -1,6 +1,5 @@
 import SwiftUI
 
-// swiftlint:disable:next type_body_length
 struct RealtimeVoiceCallView: View {
     let call: RealtimeVoiceCall
 
@@ -218,9 +217,9 @@ struct RealtimeVoiceCallView: View {
 
     private func clarificationCard(_ clarification: ClarificationRequest) -> some View {
         ClarificationCard(clarification: clarification, isSubmitting: call.respondingToIntervention,
-            errorMessage: call.errorCode, onRespond: { action, submission in
-                Task { await call.submitClarification(action: action, submission: submission) }
-            }).id(clarification.id)
+                          errorMessage: call.errorCode, onRespond: { action, submission in
+                              Task { await call.submitClarification(action: action, submission: submission) }
+                          }).id(clarification.id)
     }
 
     private func approvalCard(_ approval: RealtimeVoiceApproval) -> some View {

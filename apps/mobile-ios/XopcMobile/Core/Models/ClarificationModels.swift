@@ -16,23 +16,31 @@ struct ClarificationChoice: Codable, Equatable, Identifiable, Sendable {
 indirect enum ClarificationJSON: Codable, Equatable, Sendable {
     case string(String), number(Double), bool(Bool), object([String: ClarificationJSON]), array([ClarificationJSON]), null
     init(from decoder: any Decoder) throws {
-        let c = try decoder.singleValueContainer()
-        if c.decodeNil() { self = .null }
-        else if let v = try? c.decode(Bool.self) { self = .bool(v) }
-        else if let v = try? c.decode(Double.self) { self = .number(v) }
-        else if let v = try? c.decode(String.self) { self = .string(v) }
-        else if let v = try? c.decode([String: ClarificationJSON].self) { self = .object(v) }
-        else { self = .array(try c.decode([ClarificationJSON].self)) }
+        let container = try decoder.singleValueContainer()
+        if container.decodeNil() {
+            self = .null
+        } else if let value = try? container.decode(Bool.self) {
+            self = .bool(value)
+        } else if let value = try? container.decode(Double.self) {
+            self = .number(value)
+        } else if let value = try? container.decode(String.self) {
+            self = .string(value)
+        } else if let value = try? container.decode([String: ClarificationJSON].self) {
+            self = .object(value)
+        } else {
+            self = try .array(container.decode([ClarificationJSON].self))
+        }
     }
+
     func encode(to encoder: any Encoder) throws {
-        var c = encoder.singleValueContainer()
+        var container = encoder.singleValueContainer()
         switch self {
-        case let .string(v): try c.encode(v)
-        case let .number(v): try c.encode(v)
-        case let .bool(v): try c.encode(v)
-        case let .object(v): try c.encode(v)
-        case let .array(v): try c.encode(v)
-        case .null: try c.encodeNil()
+        case let .string(value): try container.encode(value)
+        case let .number(value): try container.encode(value)
+        case let .bool(value): try container.encode(value)
+        case let .object(value): try container.encode(value)
+        case let .array(value): try container.encode(value)
+        case .null: try container.encodeNil()
         }
     }
 }
@@ -56,7 +64,10 @@ struct ClarificationSubmission: Codable, Equatable, Sendable {
     static func input(choiceId: String? = nil, text: String? = nil) -> Self {
         .init(response: .init(choiceId: choiceId, text: text), decision: nil)
     }
-    static func approval(_ decision: String) -> Self { .init(response: nil, decision: decision) }
+
+    static func approval(_ decision: String) -> Self {
+        .init(response: nil, decision: decision)
+    }
 }
 
 struct ClarificationRequest: Decodable, Equatable, Identifiable, Sendable {
@@ -71,8 +82,13 @@ struct ClarificationRequest: Decodable, Equatable, Identifiable, Sendable {
     let approval: ClarificationApproval?
     let version: Int
     let expiresAt: Int?
-    var isOpen: Bool { status == "open" }
-    var isExpired: Bool { expiresAt.map { Double($0) <= Date().timeIntervalSince1970 * 1000 } ?? false }
+    var isOpen: Bool {
+        status == "open"
+    }
+
+    var isExpired: Bool {
+        expiresAt.map { Double($0) <= Date().timeIntervalSince1970 * 1000 } ?? false
+    }
 }
 
 struct InputState: Decodable, Sendable {
