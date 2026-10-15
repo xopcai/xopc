@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { once } from 'node:events';
 
-import type { TurnOutcome } from '@xopcai/gateway-contract';
+import { resultReferenceVersion, type TurnOutcome } from '@xopcai/gateway-contract';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { serve } from '@hono/node-server';
 
@@ -15,6 +15,12 @@ import { createConversation } from '../../storage/sqlite/conversation-repository
 import { getSqliteDatabase } from '../../storage/sqlite/transaction.js';
 import { loadTranscriptRowsForSession } from '../../storage/sqlite/transcript-repository.js';
 import { buildSessionContextForLlm } from '../../session/session-context-for-llm.js';
+import { materializeTaskHandoffFile, resolveTaskHandoffReferences } from '../task-handoff.js';
+import { createPersonalTaskTool } from '../../agent/tools/personal-task-tool.js';
+import { TaskReadModelProjector } from '../task-read-model-projector.js';
+import { TaskRepository } from '../task-repository.js';
+import { createHash } from 'node:crypto';
+import { resolveMediaReference } from '../../media/media-reference.js';
 import { TaskApplicationService } from '../task-application-service.js';
 import { TaskConversationRepository } from '../task-conversation-repository.js';
 import { TaskRunCoordinator } from '../task-run-coordinator.js';
@@ -33,11 +39,14 @@ import { PERSONAL_PERSONA_GUIDANCE } from '../../personal-agent/persona.js';
 import { PersonalReplyComposer, buildPersonalReplyPrompt, parsePersonalReplyDraft, type PersonalReplyPacket } from '../../personal-agent/reply-composer.js';
 import * as modelCalls from '../../providers/model-call.js';
 import * as providers from '../../providers/index.js';
+import * as resultReader from '../../personal-agent/result-reader.js';
+import { personalPerformanceSnapshot } from '../../personal-agent/performance.js';
 import { insertSessionInput, claimNextSessionInput, finishSessionInputRun, bumpSessionInputRevision } from '../../storage/sqlite/session-input-repository.js';
 
 describe('background task result delivery', () => {
   let stateDir: string;
   beforeEach(() => {
+    vi.spyOn(resultReader, 'warmPersonalResult').mockImplementation(() => {});
     stateDir = mkdtempSync(join(tmpdir(), 'xopc-task-result-'));
     vi.stubEnv('XOPC_STATE_DIR', stateDir);
     resetXopcDatabaseSingletonForTest();
@@ -52,12 +61,12 @@ describe('background task result delivery', () => {
     rmSync(stateDir, { recursive: true, force: true });
   });
 
-  function task() {
+  function task(criteria: string[] = []) {
     const main = createConversation({ agentId: 'main' });
     const worker = createConversation({ agentId: 'worker' });
     const created = new TaskApplicationService().create({ idempotencyKey: `draw:${main.key}`,
       title: 'Draw sunset', locale: 'zh', priority: 'normal', originConversationId: main.key,
-      contract: { objective: 'Draw sunset', expectedOutputs: ['Image'], acceptanceCriteria: [],
+      contract: { objective: 'Draw sunset', expectedOutputs: ['Image'], acceptanceCriteria: criteria,
         constraints: [], approvalRequired: [], assumptions: [], risks: [], acceptancePolicy: 'manual', outputDestinations: [] },
       dependencies: [], context: [], authorityGrants: [],
       activation: { mode: 'start', executor: { kind: 'agent', agentId: 'worker' } } });
@@ -89,6 +98,217 @@ describe('background task result delivery', () => {
     getSqliteDatabase().prepare("UPDATE sessions SET agent_id = ?, custom_data_json = json_set(COALESCE(custom_data_json, '{}'), '$.personalAgent', 1) WHERE conversation_id = ?")
       .run(agentId, conversationId);
   }
+
+  it('atomically reopens the same Task, preserves the prior run and delivery, and retries one revision idempotently', async () => {
+    const { main, worker, coordinator, runId, taskId } = task(); markPersonal(main.key);
+    coordinator.captureOutcome(await image(runId));
+    coordinator.finalize({ status: 'succeeded', summary: 'Ready', assistantText: 'Original full result.' });
+    await new TaskResultDeliveryService().drain(vi.fn());
+    const db = getSqliteDatabase();
+    const before = db.prepare('SELECT delivery_id,payload_json FROM task_result_deliveries').get() as { delivery_id: string; payload_json: string };
+    const delivery = JSON.parse(before.payload_json);
+    expect(resultReader.listPersonalResults(main.key).items[0].baselineVersion).toBe(resultReferenceVersion(delivery));
+    expect(new TaskReadModelProjector().get(taskId)?.allowedCommands).toContain('revise');
+    const tool = createPersonalTaskTool({ getCurrentConversationId: () => main.key, getCurrentAgentId: () => personalAgentId('local-owner') });
+    const conflict = await tool.execute('revision-conflict', { command: 'revise', taskId, instruction: 'Change blue', baselineResultId: delivery.deliveryId, baselineVersion: '1', expectedVersion: new TaskRepository().require(taskId).version });
+    const recovery = JSON.parse(conflict.content[0].type === 'text' ? conflict.content[0].text : 'null');
+    expect(recovery).toMatchObject({ ok: false, reason: 'conflict', revisionBaseline: { resultId: delivery.deliveryId, baselineVersion: resultReferenceVersion(delivery) } });
+    const input = { taskId, conversationId: main.key, baselineResultId: delivery.deliveryId,
+      baselineVersion: resultReferenceVersion(delivery), expectedVersion: new TaskRepository().require(taskId).version,
+      instruction: 'Change the sunset to blue. Retain the rest.', idempotencyKey: 'blue-revision' };
+    const service = new TaskApplicationService();
+    expect(service.reviseCompleted({ ...input, supersedesEntryIds: [delivery.deliveryId] })).toMatchObject({ ok: false, reason: 'invalid_reference' });
+    expect(service.reviseCompleted({ ...input, baselineVersion: 'wrong' })).toMatchObject({ ok: false, reason: 'conflict' });
+    expect(db.prepare('SELECT count(*) AS n FROM task_work_revisions').get()).toMatchObject({ n: 0 });
+    expect(service.reviseCompleted(input)).toMatchObject({ ok: true });
+    expect(service.reviseCompleted(input)).toMatchObject({ ok: true });
+    expect(() => service.reviseCompleted({ ...input, instruction: 'Different' })).toThrow(/idempotency/);
+    expect(db.prepare('SELECT count(*) AS n FROM task_work_revisions').get()).toMatchObject({ n: 1 });
+    expect(db.prepare('SELECT count(*) AS n FROM tasks').get()).toMatchObject({ n: 1 });
+    expect(db.prepare('SELECT status FROM task_runs WHERE run_id = ?').get(runId)).toMatchObject({ status: 'succeeded' });
+    expect(db.prepare('SELECT payload_json FROM task_result_deliveries').get()).toMatchObject({ payload_json: before.payload_json });
+    expect(db.prepare('SELECT status FROM task_allocations').get()).toMatchObject({ status: 'pending' });
+    const revisionInstruction = (db.prepare('SELECT instruction_entry_id FROM task_work_revisions').get() as { instruction_entry_id: string }).instruction_entry_id;
+    expect(db.prepare('SELECT status FROM task_collaboration_deliveries WHERE entry_id = ?').get(revisionInstruction)).toMatchObject({ status: 'pending' });
+    expect(new TaskConversationRepository().getActiveSession(taskId)).toBeUndefined();
+    expect(new TaskConversationRepository().getState(taskId)?.activeConversationId).toBeUndefined();
+    const next = service.execute({ taskId, expectedVersion: new TaskRepository().require(taskId).version,
+      idempotencyKey: 'new-root', actor: { kind: 'system', id: 'task-router' }, command: { type: 'start', executor: { kind: 'agent', agentId: 'worker' } } });
+    if (!next.ok || !next.runId) throw new Error('Expected a new root Run');
+    expect(next.runId).not.toBe(runId);
+    expect(new TaskConversationRepository().activateExecutionSession({ taskId, conversationId: worker.key, agentId: 'worker', runId: next.runId }).assignmentEpoch).toBeGreaterThan(delivery.assignmentEpoch);
+    await expect(tool.execute('bad-command', { command: 'start', taskId } as never)).rejects.toThrow(/Unsupported personal_task command/);
+    await resolveTaskHandoffReferences(taskId);
+    const workspace = join(stateDir, 'executor'); mkdirSync(workspace);
+    const copy = await materializeTaskHandoffFile(taskId, 1, workspace, ConfigSchema.parse({}));
+    expect(readFileSync(copy.readOnlyPath, 'utf8')).toBe('published-image');
+    expect(copy.sha256).toBe(createHash('sha256').update('published-image').digest('hex'));
+    expect((await materializeTaskHandoffFile(taskId, 1, workspace, ConfigSchema.parse({}))).readOnlyPath).toBe(copy.readOnlyPath);
+    await expect(materializeTaskHandoffFile(taskId, 0, workspace, ConfigSchema.parse({}))).rejects.toThrow(/body is text/);
+    const media = await resolveMediaReference(delivery.outcome.deliverables[0].uri);
+    writeFileSync(media.path, 'mutated-file');
+    await expect(materializeTaskHandoffFile(taskId, 1, join(stateDir, 'executor'), ConfigSchema.parse({}))).rejects.toThrow(/immutable revision/);
+  });
+
+  it('preserves four immutable results through three completed revisions on one Task', async () => {
+    const { main, worker, coordinator, taskId, runId } = task(['Image available']); markPersonal(main.key);
+    coordinator.captureOutcome(await image(runId));
+    coordinator.finalize({ status: 'succeeded', summary: 'Ready', assistantText: 'Original result' });
+    const deliveryService = new TaskResultDeliveryService();
+    await deliveryService.drain(vi.fn());
+    const db = getSqliteDatabase();
+    const versions: Array<{ deliveryId: string; serialized: string }> = [];
+    for (let index = 1; index <= 3; index++) {
+      const row = db.prepare('SELECT delivery_id,payload_json FROM task_result_deliveries ORDER BY created_at DESC, rowid DESC LIMIT 1').get()!;
+      const delivery = JSON.parse(String(row.payload_json));
+      versions.push({ deliveryId: delivery.deliveryId, serialized: String(row.payload_json) });
+      expect(delivery.resultRevision).toBe(index);
+      const service = new TaskApplicationService();
+      const applied = service.reviseCompleted({ taskId, conversationId: main.key,
+        baselineResultId: delivery.deliveryId, baselineVersion: resultReferenceVersion(delivery),
+        expectedVersion: new TaskRepository().require(taskId).version,
+        instruction: `Revision ${index}: retain the previous image and update its explanation.`, idempotencyKey: `three-revisions-${index}` });
+      expect(applied.ok).toBe(true);
+      const next = service.execute({ taskId, expectedVersion: new TaskRepository().require(taskId).version,
+        idempotencyKey: `three-roots-${index}`, actor: { kind: 'system', id: 'task-router' },
+        command: { type: 'start', executor: { kind: 'agent', agentId: 'worker' } } });
+      if (!next.ok || !next.runId) throw new Error('Expected revision root');
+      new TaskConversationRepository().activateExecutionSession({ taskId, conversationId: worker.key, agentId: 'worker', runId: next.runId });
+      const run = TaskRunCoordinator.start({ runId: next.runId, fallbackObjective: `Revision ${index}`,
+        context: { runId: next.runId, conversationId: worker.key, agentId: 'worker', taskId, channel: 'webchat', origin: 'task', triggerKind: 'user' } })!;
+      run.captureOutcome(await image(next.runId));
+      run.finalize({ status: 'succeeded', summary: 'Ready', assistantText: `Revised explanation ${index}` });
+      await deliveryService.drain(vi.fn());
+      for (const saved of versions) {
+        expect(db.prepare('SELECT payload_json FROM task_result_deliveries WHERE delivery_id = ?').get(saved.deliveryId)?.payload_json).toBe(saved.serialized);
+      }
+    }
+    const latest = JSON.parse(String(db.prepare('SELECT payload_json FROM task_result_deliveries ORDER BY created_at DESC, rowid DESC LIMIT 1').get()!.payload_json));
+    expect(latest.resultRevision).toBe(4);
+    expect(latest.previousResultId).toBe(versions[2].deliveryId);
+    expect(db.prepare('SELECT count(*) AS n FROM tasks').get()).toMatchObject({ n: 1 });
+    expect(db.prepare('SELECT count(*) AS n FROM task_work_revisions').get()).toMatchObject({ n: 3 });
+    expect(db.prepare('SELECT count(*) AS n FROM task_runs WHERE parent_run_id IS NULL').get()).toMatchObject({ n: 4 });
+  });
+
+  it('delivers only explicitly selected final artifacts, excluding failed intermediate publications', async () => {
+    const { main, coordinator, runId } = task(['Final image available']); markPersonal(main.key);
+    const intermediate = await image(runId, '-intermediate');
+    intermediate.deliverables[0].title = 'obsolete.png'; intermediate.deliverables[0].availability = 'failed';
+    coordinator.captureOutcome(intermediate);
+    const final = await image(runId, '-final'); final.deliverables[0].title = 'final.png';
+    coordinator.captureOutcome(final);
+    const contractVersion = Number((getSqliteDatabase().prepare('SELECT latest_contract_version AS v FROM tasks').get() as { v: number }).v);
+    coordinator.captureOutcome({ ...final, outcomeId: 'selected-review', deliverables: [], research: {
+      version: 1, contractVersion, instructionSequence: 0,
+      finalArtifactIds: [final.deliverables[0].artifactId], inspectedArtifactIds: [final.deliverables[0].artifactId],
+      sources: [{ id: 's', toolCallId: 'actual', toolName: 'publish_artifacts', excerpt: 'File available', snapshotHash: 'a'.repeat(64), observedAt: Date.now() }],
+      claims: [{ id: 'c', kind: 'fact', statement: 'File available', sourceIds: ['s'], support: 'supported' }], checks: [{ criterionIndex: 0, criterion: 'Final image available', status: 'passed', claimIds: ['c'], note: 'Selected final image is published.' }], instructionChecks: [], review: 'model_reviewed' } });
+    coordinator.captureOutcome({ ...final, outcomeId: 'late-generic-turn', status: 'partial', deliverables: [...intermediate.deliverables, ...final.deliverables] });
+    coordinator.finalize({ status: 'succeeded', summary: 'Ready', assistantText: 'Final only.' });
+    await new TaskResultDeliveryService().drain(vi.fn());
+    const row = getSqliteDatabase().prepare('SELECT payload_json FROM task_result_deliveries').get() as { payload_json: string };
+    const delivery = JSON.parse(row.payload_json);
+    expect(delivery.outcome.deliverables.map((item: { title: string }) => item.title)).toEqual(['final.png']);
+    expect(delivery.outcome.deliverables[0].sha256).toMatch(/^[a-f0-9]{64}$/);
+    expect(delivery.text).toBe('Final only.');
+    expect(delivery.outcome.status).toBe('succeeded');
+  });
+
+  it('retries exhausted delivery without another TaskRun, artifact generation or duplicate message', async () => {
+    const { main, coordinator, runId } = task(); markPersonal(main.key);
+    coordinator.captureOutcome(await image(runId));
+    coordinator.finalize({ status: 'succeeded', summary: 'Ready', assistantText: 'Retained delivery.' });
+    const db = getSqliteDatabase();
+    const row = db.prepare('SELECT delivery_id FROM task_result_deliveries').get() as { delivery_id: string };
+    const repository = new TaskResultDeliveryRepository();
+    for (let i = 0; i < 8; i++) repository.retry(row.delivery_id, 'offline');
+    expect(db.prepare('SELECT status FROM task_result_deliveries').get()).toMatchObject({ status: 'failed' });
+    expect(resultReader.listPersonalResults(main.key).items[0].deliveryState).toBe('failed');
+    expect(resultReader.retryPersonalResultDelivery(main.key, row.delivery_id)).toMatchObject({ retryQueued: true, executionRestarted: false });
+    await new TaskResultDeliveryService().drain(vi.fn());
+    await new PersonalReplyComposer(async () => 'Delivered retained result.').drain(vi.fn());
+    const count = loadTranscriptRowsForSession(main.key).length;
+    db.prepare('UPDATE task_result_deliveries SET notified_at = -1, reply_notified_at = -1, reply_attempts = 8').run();
+    expect(resultReader.retryPersonalResultDelivery(main.key, row.delivery_id)).toMatchObject({ retryQueued: true });
+    await new TaskResultDeliveryService().drain(vi.fn());
+    await new PersonalReplyComposer(vi.fn()).drain(vi.fn());
+    expect(loadTranscriptRowsForSession(main.key)).toHaveLength(count);
+    expect(db.prepare('SELECT count(*) AS n FROM task_runs').get()).toMatchObject({ n: 1 });
+    expect(resultReader.retryPersonalResultDelivery(main.key, row.delivery_id)).toMatchObject({ retryQueued: false });
+  });
+
+  it('delivers deterministic retained text after five seconds while foreground is unavailable, exactly once', async () => {
+    const { main, coordinator, runId } = task(); markPersonal(main.key);
+    const outcome = await image(runId); outcome.deliverables = [];
+    coordinator.captureOutcome(outcome);
+    coordinator.finalize({ status: 'succeeded', summary: 'Ready', assistantText: 'Full text with limitations: isolated example only.' });
+    await new TaskResultDeliveryService().drain(vi.fn());
+    getSqliteDatabase().prepare('UPDATE task_result_deliveries SET created_at = ?').run(Date.now() - 6000);
+    const compose = vi.fn(async () => 'Should not run'); const notify = vi.fn();
+    const composer = new PersonalReplyComposer(compose);
+    await composer.drain(notify, () => false); await composer.drain(notify, () => false);
+    expect(compose).not.toHaveBeenCalled(); expect(notify).toHaveBeenCalledOnce();
+    expect(loadTranscriptRowsForSession(main.key)).toHaveLength(1);
+    expect(JSON.stringify(loadTranscriptRowsForSession(main.key))).toContain('isolated example only');
+    const payload = getSqliteDatabase().prepare('SELECT payload_json FROM task_result_deliveries').get() as { payload_json: string };
+    expect(JSON.parse(payload.payload_json).text).toContain('Full text with limitations');
+  });
+  it('persists simultaneous completions within the fallback budget under continuous foreground work', async () => {
+    const tasks = [task(), task(), task()];
+    markPersonal(tasks[0].main.key);
+    for (const item of tasks.slice(1)) getSqliteDatabase().prepare('UPDATE sessions SET agent_id=?, custom_data_json=? WHERE conversation_id=?')
+      .run(personalAgentId('local-owner'), JSON.stringify({ personalAgent: true }), item.main.key);
+    for (const item of tasks) {
+      const outcome = await image(item.runId); outcome.deliverables = [];
+      item.coordinator.captureOutcome(outcome);
+      item.coordinator.finalize({ status: 'succeeded', summary: 'Ready', assistantText: `Retained result ${item.taskId}` });
+    }
+    await new TaskResultDeliveryService().drain(vi.fn());
+    const notify = vi.fn(); const compose = vi.fn(async () => { throw new Error('429 rate limited'); });
+    const composer = new PersonalReplyComposer(compose);
+    try {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(Date.now() + 5100);
+      await Promise.all(Array.from({ length: 4 }, () => composer.drain(notify, () => false)));
+      expect(compose).not.toHaveBeenCalled();
+      expect(notify).toHaveBeenCalledTimes(3);
+      for (const item of tasks) {
+        const rows = loadTranscriptRowsForSession(item.main.key);
+        expect(rows).toHaveLength(1);
+        expect(JSON.stringify(rows)).toContain(`Retained result ${item.taskId}`);
+        const sample = personalPerformanceSnapshot().find(row => row.phase === 'busy_fallback' && row.taskId === item.taskId);
+        expect(sample?.durationMs).toBeGreaterThanOrEqual(5100);
+        expect(sample?.durationMs).toBeLessThanOrEqual(6000);
+      }
+    } finally { vi.useRealTimers(); }
+  });
+
+  it('lets durable fallback cancel a slow Composer and prevents its late draft from duplicating the final message', async () => {
+    const { main, coordinator, runId } = task(); markPersonal(main.key);
+    const outcome = await image(runId); outcome.deliverables = [];
+    coordinator.captureOutcome(outcome);
+    coordinator.finalize({ status: 'succeeded', summary: 'Ready', assistantText: 'Original retained result.' });
+    await new TaskResultDeliveryService().drain(vi.fn());
+    let release!: (text: string) => void;
+    let started!: () => void;
+    let observedSignal: AbortSignal | undefined;
+    const began = new Promise<void>(resolve => { started = resolve; });
+    const compose = async (_packet: PersonalReplyPacket, signal: AbortSignal) => {
+      observedSignal = signal; started(); return new Promise<string>(resolve => { release = resolve; });
+    };
+    const notify = vi.fn();
+    const slow = new PersonalReplyComposer(compose).drain(notify);
+    await began;
+    getSqliteDatabase().prepare('UPDATE task_result_deliveries SET created_at = ?').run(Date.now() - 6000);
+    await new PersonalReplyComposer(vi.fn()).drain(notify, () => false);
+    await slow;
+    expect(observedSignal?.aborted).toBe(true);
+    release('Late model draft'); await Promise.resolve();
+    expect(loadTranscriptRowsForSession(main.key)).toHaveLength(1);
+    expect(JSON.stringify(loadTranscriptRowsForSession(main.key))).not.toContain('Late model draft');
+    expect(notify).toHaveBeenCalledOnce();
+  });
 
   it('composes personal text once, retains report sources internally, and recovers push failure without regenerating', async () => {
     const { main, coordinator, runId } = task();

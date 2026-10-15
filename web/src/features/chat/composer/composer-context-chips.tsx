@@ -22,7 +22,7 @@ export function ComposerContextChips({
         >
           {ref.kind === 'file' && ref.fileKind === 'directory' ? (
             <Folder className="size-3.5 shrink-0 text-accent-fg" aria-hidden />
-          ) : ref.kind === 'file' ? (
+          ) : ref.kind === 'file' || ref.kind === 'result' ? (
             <FileText className="size-3.5 shrink-0 text-accent-fg" aria-hidden />
           ) : ref.kind === 'session' ? (
             <MessagesSquare className="size-3.5 shrink-0 text-accent-fg" aria-hidden />

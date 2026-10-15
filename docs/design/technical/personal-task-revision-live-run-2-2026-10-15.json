@@ -1,0 +1,238 @@
+{
+  "success": false,
+  "interrupted": true,
+  "reason": "Initial delivery succeeded. Main model confused numeric resultRevision with baselineVersion; metadata directory lacked exact baselineVersion and read-model allowedCommands omitted revise. Conflicting attempts were rejected and no revision opened. Stopped to fix metadata and actionable conflicts. Not acceptance evidence.",
+  "isolatedStateDirectory": "/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-personal-handoff-live-4r6no9",
+  "deliveries": [
+    {
+      "version": 1,
+      "deliveryId": "fdea9688-5dbc-4c5e-ba71-9ff0c8b0e017",
+      "taskId": "5966b7ee-2050-4810-af73-50e461150950",
+      "taskRunId": "1e149ba8-0ec9-4638-8157-121d40da11e9",
+      "taskTitle": "复制并检查文件包，发布三个文件",
+      "conversationId": "9f6bdb4e-f415-5925-82c7-98103b05aac6",
+      "originTranscriptId": "4b756afa-8ce7-4ab5-8d44-dbf4708ff4ab",
+      "requestInputId": "fc0f76d4-cab3-463b-86a6-486f8782e241",
+      "assignmentEpoch": 1,
+      "resultRevision": 1,
+      "contractVersion": 2,
+      "instructionSequence": 0,
+      "adoption": [],
+      "outcome": {
+        "version": 1,
+        "outcomeId": "5a979a01-4cc5-4161-9a91-08734299208d:outcome",
+        "runId": "5a979a01-4cc5-4161-9a91-08734299208d",
+        "turnId": "5a979a01-4cc5-4161-9a91-08734299208d",
+        "status": "succeeded",
+        "summary": "Message processed successfully",
+        "deliverables": [
+          {
+            "artifactId": "report---edbfdf3c-b776-46e5-a336-c9f10148a4ef.md",
+            "sourceFileId": "K10453X7RWJeYddJihnq5LQk.cmVwb3J0Lm1k",
+            "title": "report.md",
+            "kind": "document",
+            "mimeType": "text/markdown",
+            "sizeBytes": 42926,
+            "availability": "available",
+            "location": "artifact_store",
+            "capabilities": [
+              "preview",
+              "download"
+            ],
+            "uri": "media://outbound/report---edbfdf3c-b776-46e5-a336-c9f10148a4ef.md",
+            "sha256": "286b442fa326d9cda9ab14445b9b36276a64acfb4e10975dc3ee591e6887c02d"
+          },
+          {
+            "artifactId": "monthly_summary---2d317f87-11d4-49c7-88fd-ea656bd18b1d.csv",
+            "sourceFileId": "K10453X7RWJeYddJihnq5LQk.bW9udGhseV9zdW1tYXJ5LmNzdg",
+            "title": "monthly_summary.csv",
+            "kind": "spreadsheet",
+            "mimeType": "text/csv",
+            "sizeBytes": 36,
+            "availability": "available",
+            "location": "artifact_store",
+            "capabilities": [
+              "preview",
+              "download"
+            ],
+            "uri": "media://outbound/monthly_summary---2d317f87-11d4-49c7-88fd-ea656bd18b1d.csv",
+            "sha256": "412359e374bd855ab032ea0db39ccde7540fa5105a0e1e4d0bb0dd5e023fd1df"
+          },
+          {
+            "artifactId": "reproduce---78b9d3bb-51ea-40cf-b49b-6b732d852b35.mjs",
+            "sourceFileId": "K10453X7RWJeYddJihnq5LQk.cmVwcm9kdWNlLm1qcw",
+            "title": "reproduce.mjs",
+            "kind": "file",
+            "mimeType": "application/octet-stream",
+            "sizeBytes": 370,
+            "availability": "available",
+            "location": "artifact_store",
+            "capabilities": [
+              "download"
+            ],
+            "uri": "media://outbound/reproduce---78b9d3bb-51ea-40cf-b49b-6b732d852b35.mjs",
+            "sha256": "76481ffc6a73ecf8f4006e9f7abdf8cfcde663f2fecf3167c5beb13a669b84d7"
+          }
+        ],
+        "evidence": [],
+        "research": {
+          "version": 1,
+          "contractVersion": 2,
+          "instructionSequence": 0,
+          "sources": [
+            {
+              "id": "src-copy",
+              "toolCallId": "call_00_ma6zfh3aUygC1sGQf8EY5540",
+              "toolName": "exec_command",
+              "excerpt": "286b442fa326d9cda9ab14445b9b36276a64acfb4e10975dc3ee591e6887c02d  source-report.md\n286b442fa326d9cda9ab14445b9b36276a64acfb4e10975dc3ee591e6887c02d  report.md\n412359e374bd855ab032ea0db39ccde7540fa5105a0e1e4d0bb0dd5e023fd1df  monthly_summary.csv\n76481ffc6a73ecf8f4006e9f7abdf8cfcde663f2fecf3167c5beb13a669b84d7  reproduce.mjs",
+              "snapshotHash": "359eeaa3dcdbd6e9b81b06b7e8ba9e3f915e5c0c54b68cefe46da3a830dd7709",
+              "observedAt": 1792045363013
+            },
+            {
+              "id": "src-run",
+              "toolCallId": "call_00_hd3JrdHBo2uNkBxOAzuQ6949",
+              "toolName": "exec_command",
+              "excerpt": "Fixture files verified\nexit=0",
+              "snapshotHash": "85400af97197f21a5e532f96c04a6e1cadf690a8b585067b37ac80312bb90296",
+              "observedAt": 1792045373385
+            },
+            {
+              "id": "src-publish",
+              "toolCallId": "call_00_k0c5SR6EocNNZfIwxCKB6516",
+              "toolName": "publish_artifacts",
+              "excerpt": "3 artifacts published: report.md, monthly_summary.csv, reproduce.mjs",
+              "snapshotHash": "38ed65dc5da68844b18ddb859d8fc85ae5287f993b655d3439ea6403a6b393fe",
+              "observedAt": 1792045375670
+            },
+            {
+              "id": "src-materialize-report",
+              "toolCallId": "call_00_WUgKk6w4EYF1BuHpbFO46107",
+              "toolName": "task_collaboration",
+              "excerpt": "\"sha256\":\"286b442fa326d9cda9ab14445b9b36276a64acfb4e10975dc3ee591e6887c02d\",\"bytes\":42926",
+              "snapshotHash": "6bbceb2b3075a43c165cb98f6a5a27b05ede3492952ea14c5cef71d260a145c8",
+              "observedAt": 1792045357087
+            },
+            {
+              "id": "src-materialize-csv",
+              "toolCallId": "call_01_I8hLBz7azQuXw6JJAHPL4691",
+              "toolName": "task_collaboration",
+              "excerpt": "\"sha256\":\"412359e374bd855ab032ea0db39ccde7540fa5105a0e1e4d0bb0dd5e023fd1df\",\"bytes\":36",
+              "snapshotHash": "4965eed0ef63518fd8312ef342b44949efd06b3ecc8c9f1e238d2f9a63278bd8",
+              "observedAt": 1792045357089
+            },
+            {
+              "id": "src-materialize-mjs",
+              "toolCallId": "call_02_JngDy6xkP7kdgkUj8m0P1743",
+              "toolName": "task_collaboration",
+              "excerpt": "\"sha256\":\"76481ffc6a73ecf8f4006e9f7abdf8cfcde663f2fecf3167c5beb13a669b84d7\",\"bytes\":370",
+              "snapshotHash": "794d6cdcc415274944322c8fe7713e43242dd935d1d4d0f3d10de5abc61cc81b",
+              "observedAt": 1792045357090
+            }
+          ],
+          "claims": [
+            {
+              "id": "c1",
+              "statement": "工作区 source-report.md 已原样复制为 report.md：两者 SHA-256 均为 286b442fa326d9cda9ab14445b9b36276a64acfb4e10975dc3ee591e6887c02d，与输入源文件校验值一致。",
+              "kind": "fact",
+              "sourceIds": [
+                "src-copy",
+                "src-materialize-report"
+              ],
+              "support": "supported",
+              "note": "复制前后 SHA-256 一致，且与输入源校验值相同，可证原样复制。"
+            },
+            {
+              "id": "c2",
+              "statement": "已运行 node reproduce.mjs，脚本断言 report.md 内容与 source-report.md 完全一致、monthly_summary.csv 内容与预期一致，输出 \"Fixture files verified\"，退出码 0，检查通过。",
+              "kind": "fact",
+              "sourceIds": [
+                "src-run"
+              ],
+              "support": "supported",
+              "note": "脚本输出 \"Fixture files verified\" 且 exit=0，断言内容与已审阅的 reproduce.mjs 一致。"
+            },
+            {
+              "id": "c3",
+              "statement": "已发布三个文件：report.md、monthly_summary.csv、reproduce.mjs，状态均为 available。",
+              "kind": "fact",
+              "sourceIds": [
+                "src-publish"
+              ],
+              "support": "supported",
+              "note": "发布回执显示三个文件均已发布，finalArtifactIds 与之一致。"
+            },
+            {
+              "id": "c4",
+              "statement": "monthly_summary.csv 与 reproduce.mjs 均按原文件发布（复制后 SHA-256 分别为 412359e3... 与 76481ffc...，与输入源一致）。",
+              "kind": "fact",
+              "sourceIds": [
+                "src-copy",
+                "src-materialize-csv",
+                "src-materialize-mjs"
+              ],
+              "support": "supported",
+              "note": "两文件复制后 SHA-256 与输入源校验值一致，可证按原文件发布。"
+            }
+          ],
+          "checks": [
+            {
+              "criterionIndex": 0,
+              "criterion": "report.md 已发布，且其字节内容与工作区 source-report.md 完全一致（原样复制，未改写、未调整）。",
+              "status": "passed",
+              "claimIds": [
+                "c1",
+                "c3"
+              ],
+              "note": "report.md 已发布，且其 SHA-256 与 source-report.md 完全一致。"
+            },
+            {
+              "criterionIndex": 1,
+              "criterion": "monthly_summary.csv 已按原文件发布。",
+              "status": "passed",
+              "claimIds": [
+                "c4",
+                "c3"
+              ],
+              "note": "monthly_summary.csv 已发布，校验值与输入源一致。"
+            },
+            {
+              "criterionIndex": 2,
+              "criterion": "reproduce.mjs 已按原文件发布。",
+              "status": "passed",
+              "claimIds": [
+                "c4",
+                "c3"
+              ],
+              "note": "reproduce.mjs 已发布，校验值与输入源一致。"
+            },
+            {
+              "criterionIndex": 3,
+              "criterion": "已运行 node reproduce.mjs，并在",
+              "status": "passed",
+              "claimIds": [
+                "c2"
+              ],
+              "note": "已运行 node reproduce.mjs，输出 \"Fixture files verified\"，退出码 0。"
+            }
+          ],
+          "review": "model_reviewed",
+          "finalArtifactIds": [
+            "report---edbfdf3c-b776-46e5-a336-c9f10148a4ef.md",
+            "monthly_summary---2d317f87-11d4-49c7-88fd-ea656bd18b1d.csv",
+            "reproduce---78b9d3bb-51ea-40cf-b49b-6b732d852b35.mjs"
+          ],
+          "inspectedArtifactIds": [
+            "report---edbfdf3c-b776-46e5-a336-c9f10148a4ef.md",
+            "monthly_summary---2d317f87-11d4-49c7-88fd-ea656bd18b1d.csv",
+            "reproduce---78b9d3bb-51ea-40cf-b49b-6b732d852b35.mjs"
+          ],
+          "instructionChecks": []
+        },
+        "createdAt": "2026-10-15T06:23:23.778Z"
+      },
+      "text": "三个文件已交付：\n\n- **report.md** — 已发布，内容与 source-report.md 逐字节一致（SHA-256 相同）。\n- **monthly_summary.csv** — 已按原文件发布。\n- **reproduce.mjs** — 已按原文件发布。\n\n检查脚本运行结果：`node reproduce.mjs` 输出 `Fixture files verified`，退出码 0；脚本对 report.md 与 monthly_summary.csv 的两项内容断言均通过。",
+      "createdAt": 1792045406004
+    }
+  ],
+  "revisionCount": 0
+}

@@ -1,3 +1,6 @@
+import { buildResultAgentContext } from '../agent/source-context/result-context.js';
+import { drainPersonalResultReads } from '../personal-agent/result-read-continuations.js';
+import { stopPersonalResultPreparations } from '../personal-agent/result-reader.js';
 import { PersonalProactivityService } from '../personal-agent/proactivity/service.js';
 import { reconcilePersonalProactivityAutomation } from '../personal-agent/proactivity/automation.js';
 import { flushTracing } from '../observability/runtime.js';
@@ -100,6 +103,10 @@ import {
 import { DomainOutboxDispatcher } from '../infra/domain-outbox-dispatcher.js';
 import { TaskConversationRepository } from '../tasks/task-conversation-repository.js';
 import { TaskAllocationDispatcher } from '../tasks/task-allocation-service.js';
+import { assertTaskExecutorReady } from '../tasks/task-execution-capabilities.js';
+import { getTaskHandoff, assertTaskHandoffAccess } from '../tasks/task-handoff.js';
+import { TaskAllocationRepository } from '../tasks/task-allocation-repository.js';
+
 import { TaskRunDispatcher } from '../tasks/task-run-dispatcher.js';
 import { onTaskResultQueued } from '../tasks/task-result-delivery-repository.js';
 import { TaskResultDeliveryService } from '../tasks/task-result-delivery-service.js';
@@ -570,6 +577,7 @@ export class GatewayService {
       getChannelManager: () => this.channelManager,
       getConfig: () => this.config,
       resolveTurnContext: async (ref, conversationId) => {
+        if (ref.kind === 'result') return buildResultAgentContext(conversationId, ref.sourceId, ref.expectedVersion);
         if (ref.kind === 'task') return buildTaskAgentContext(new TaskRepository().get(ref.sourceId), ref.expectedVersion);
         if (ref.kind === 'user_assertion') {
           const metadata = await this.sessionIndex.getSessionMetadata(conversationId);
@@ -823,6 +831,18 @@ export class GatewayService {
         ensureSession: async (taskId, runId, requestedAgentId) => {
           return (await this.ensureTaskConversation(taskId, { runId, requestedAgentId })).conversationId;
         },
+        validateExecutor: (taskId, agentId) => {
+          const allocation = new TaskAllocationRepository().get(taskId);
+          if (!allocation || !agentId) return;
+          const handoff = getTaskHandoff(taskId);
+          if (handoff) assertTaskHandoffAccess(handoff);
+          assertTaskExecutorReady(taskId, allocation.origin_conversation_id, agentId, {
+            ownAgentId: getSessionMetadata(allocation.origin_conversation_id)?.agentId ?? '',
+            getConfig: () => this.config,
+            getAgentSkillAvailability: id => this.agentService.getAgentSkillAvailability(id),
+            getAgentToolAvailability: (id, tool) => this.agentService.getAgentToolAvailability(id, tool),
+          });
+        },
         runAgent: async (runId, conversationId, message) => {
           for (const adapter of this.sceneHost?.http.activationAdapters.list() ?? []) {
             if (adapter.executeTask && await adapter.executeTask(runId, conversationId)) {
@@ -944,6 +964,12 @@ export class GatewayService {
       if (reply) this.emit('personal.reply.delivered', reply);
     };
     await new TaskResultDeliveryService().drain(notify);
+    await drainPersonalResultReads({
+      isAvailable: conversationId => !this.stopping && !this.agentRunner.hasActiveRun(conversationId)
+        && !this.agentRunner.inputs.isAcceptingInput(conversationId) && !this.voiceRealtime.hasConversation(conversationId),
+      submit: async input => (await this.agentRunner.submitSessionInput({ ...input, delivery: 'next',
+        origin: { type: 'system', source: 'task_update' } })).ok,
+    });
     // Reply leases bound concurrency without delaying the next artifact dispatch.
     void new PersonalReplyComposer().drain(async (conversationId, deliveryId) => {
       const reply = personalReplyNotification(conversationId, deliveryId);
@@ -1009,7 +1035,7 @@ export class GatewayService {
       return { conversationId: active.conversationId, agentId, created: false, conversation };
     }
 
-    const peerId = `task-${sanitizeSegment(task.id) || Date.now()}`;
+    const peerId = `task-${sanitizeSegment(task.id) || Date.now()}${options.runId ? `-${sanitizeSegment(options.runId)}` : ''}`;
     const conversationId = resolveConversationId({
       agentId,
       source: 'webchat',
@@ -1743,6 +1769,7 @@ export class GatewayService {
       this.taskRunDispatchTimer = null;
     }
     await this.sessionPreparations.stop();
+    await stopPersonalResultPreparations();
 
     setPairingBroadcastSink(null);
     this.stopRealtimeLogBridge?.();

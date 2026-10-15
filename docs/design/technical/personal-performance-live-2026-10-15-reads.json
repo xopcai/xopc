@@ -1,0 +1,29 @@
+{
+  "success": true,
+  "runs": {
+    "body": {
+      "count": 50,
+      "p50Ms": 0.37716699999987213,
+      "p95Ms": 1.5159589999998389,
+      "p99Ms": 4.905291999999918,
+      "maxMs": 4.905291999999918,
+      "readyCount": 50,
+      "maxOutputChars": 461
+    },
+    "reportArtifact": {
+      "count": 50,
+      "p50Ms": 0.4609169999998812,
+      "p95Ms": 0.5366669999998521,
+      "p99Ms": 0.6199999999998909,
+      "maxMs": 0.6199999999998909,
+      "readyCount": 50,
+      "maxOutputChars": 4000
+    }
+  },
+  "preparationWaitMs": 11.441041999999925,
+  "sourceId": "report---b18b06c3-bfb5-484e-b29b-a27b7e22e8aa.md",
+  "originalSourceId": "report---aa700154-e154-4456-801a-1acf664b9227.md",
+  "originalTailReadable": true,
+  "revisedTailReadable": true,
+  "scope": "Local permission-checked result API against retained real-chain SQLite and published media. Cold preparation excluded; every measured read returned ready. No model calls or regenerated results."
+}
