@@ -62,7 +62,7 @@ final class MathMarkdownTests: XCTestCase {
         let page = try XCTUnwrap(web)
         let ready = try await page.evaluateJavaScript("document.querySelectorAll('math').length")
         XCTAssertEqual(ready as? Int, 1)
-        let fonts = try await page.callAsyncJavaScript("await document.fonts.ready; return document.fonts.check('16px KaTeX_Main')", in: nil, contentWorld: .page)
+        let fonts = try await page.callAsyncJavaScript("await document.fonts.load('16px KaTeX_Main'); return document.fonts.check('16px KaTeX_Main')", in: nil, contentWorld: .page)
         XCTAssertEqual(fonts as? Bool, true)
         let payload: [String: Any] = ["revision": 100, "markdown": #"\[x^"#, "streaming": true, "dark": false, "fontSize": 16]
         _ = try await page.callAsyncJavaScript("window.xopcMath.update(payload)", arguments: ["payload": payload], in: nil, contentWorld: .page)
