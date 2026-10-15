@@ -30,7 +30,10 @@ function mockService() {
   };
   return {
     currentConfig,
-    saveConfig: vi.fn(async () => ({ saved: true })),
+    saveConfig: vi.fn(async (config: typeof currentConfig) => {
+      Object.assign(currentConfig, config);
+      return { saved: true };
+    }),
     getAuthToken: () => 'gateway-secret-token',
     getResolvedAuth: () => ({ mode: 'token' as const, token: 'gateway-secret-token' }),
     getHealth: () => ({ status: 'ok', version: '0', uptime: 0 }),
