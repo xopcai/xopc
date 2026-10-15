@@ -1,3 +1,5 @@
+import type { ClarificationSubmission } from '@xopcai/gateway-contract';
+import { readClarificationPresentation } from '@xopcai/gateway-contract';
 import type { AppContextEnvelope } from '@xopcai/gateway-contract';
 import {
   useCallback,
@@ -51,7 +53,7 @@ export type ChatFollowUpClarifyApi = {
   movePendingFollowUp: (id: string, dir: 'up' | 'down') => void;
   reorderPendingFollowUp: (fromIndex: number, toIndex: number) => void;
   steerPendingFollowUp: (id: string) => Promise<void>;
-  submitClarifyAnswer: (answer: string) => Promise<void>;
+  submitClarifyAnswer: (submission: ClarificationSubmission) => Promise<void>;
   letAgentDecideClarification: () => Promise<void>;
   cancelClarification: () => Promise<void>;
   clearVisibleClarify: () => void;
@@ -73,21 +75,19 @@ function parseClarification(raw: unknown, expectedConversationId?: string): Clar
   const requestId = typeof value.id === 'string' ? value.id : value.requestId;
   const question = value.question;
   const kind = value.kind === 'approval' ? 'approval' : 'input';
-  const choices = Array.isArray(value.choices)
-    ? value.choices.filter((choice): choice is string => typeof choice === 'string' && Boolean(choice.trim()))
-    : undefined;
+
   if (typeof requestId !== 'string' || !requestId.trim() || typeof question !== 'string' || !question.trim()) return null;
   return {
+    ...readClarificationPresentation(value),
     requestId: requestId.trim(),
     kind,
     question: question.trim(),
-    choices: choices && choices.length >= 2 ? choices : undefined,
-    suggestedAnswer: typeof value.suggestedAnswer === 'string' && value.suggestedAnswer.trim()
-      ? value.suggestedAnswer.trim()
-      : undefined,
+
+
     version: typeof value.version === 'number' ? value.version : 1,
     createdAt: typeof value.createdAt === 'number' ? value.createdAt : Date.now(),
     expiresAt: typeof value.expiresAt === 'number' ? value.expiresAt : undefined,
+    serverTime: typeof record.serverTime === 'number' ? record.serverTime : undefined,
   };
 }
 
@@ -434,10 +434,10 @@ export function useChatFollowUpClarify(options: {
     }
   }, [applyState, removePendingFollowUp, conversationIdRef]);
 
-  const respondToClarification = useCallback(async (action: 'answer' | 'agent_decide' | 'cancel', answer?: string) => {
+  const respondToClarification = useCallback(async (action: 'answer' | 'agent_decide' | 'cancel', submission?: ClarificationSubmission) => {
     const p = clarifyPromptRef.current;
     if (!p) return;
-    const signature = `${p.requestId}\n${p.version}\n${action}\n${answer ?? ''}`;
+    const signature = JSON.stringify([p.requestId, p.version, action, submission]);
     if (clarificationAttemptRef.current?.signature !== signature) {
       clarificationAttemptRef.current = { signature, idempotencyKey: crypto.randomUUID() };
     }
@@ -448,8 +448,9 @@ export function useChatFollowUpClarify(options: {
       const res = await apiFetch(apiUrl(`/api/clarifications/${encodeURIComponent(p.requestId)}/responses`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action, answer, expectedVersion: p.version, idempotencyKey }),
+        body: JSON.stringify({ action, ...submission, expectedVersion: p.version, idempotencyKey }),
       });
+      if (clarifyPromptRef.current?.requestId !== p.requestId) return;
       if (!res.ok) {
         const j = (await res.json().catch(() => ({}))) as { error?: { message?: string } };
         setClarifySubmitError(j.error?.message ?? res.statusText ?? 'Clarify failed');
@@ -460,13 +461,15 @@ export function useChatFollowUpClarify(options: {
       clarificationAttemptRef.current = null;
       setClarifyPrompt(null);
       setClarifySubmitError(null);
+    } catch (error) {
+      if (clarifyPromptRef.current?.requestId === p.requestId) setClarifySubmitError(error instanceof Error ? error.message : String(error));
     } finally {
       setClarifySubmitting(false);
     }
   }, [refreshClarification, conversationIdRef]);
 
   const submitClarifyAnswer = useCallback(
-    (answer: string) => respondToClarification('answer', answer),
+    (submission: ClarificationSubmission) => respondToClarification('answer', submission),
     [respondToClarification],
   );
   const letAgentDecideClarification = useCallback(() => respondToClarification('agent_decide'), [respondToClarification]);

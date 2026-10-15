@@ -62,15 +62,9 @@ extension GatewayClient {
 
     func respondToClarification(
         _ clarification: ClarificationRequest,
-        action: String,
-        answer: String?
+        command: ClarificationResponseCommand
     ) async throws {
-        let body = try encoder.encode(ClarificationResponseCommand(
-            action: action,
-            answer: answer,
-            expectedVersion: clarification.version,
-            idempotencyKey: UUID().uuidString.lowercased()
-        ))
+        let body = try encoder.encode(command)
         let envelope: GatewayEnvelope<IgnoredResponse> = try await request(
             path: "/api/clarifications/\(clarification.id)/responses",
             method: "POST",

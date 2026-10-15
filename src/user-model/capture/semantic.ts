@@ -173,19 +173,37 @@ function groundedEvidenceRefs(
   return grounded ? [...new Set(item.evidence.map((claim) => claim.ref))] : undefined;
 }
 
+export interface InterpretationParseFailure {
+  reason: 'empty_output' | 'invalid_json' | 'schema_validation';
+  issues: Array<{ path: string; code: string }>;
+}
+
 export function parseUserModelInterpretation(
   raw: string,
   evidence: CaptureEvidence[],
   allowedTargetIds: string[] = [],
+  onInvalid?: (failure: InterpretationParseFailure) => void,
 ): UserModelInterpretation | null {
-  let parsed: z.infer<typeof InterpretationSchema>;
-  try {
-    const result = InterpretationSchema.safeParse(extractJson(raw));
-    if (!result.success) return null;
-    parsed = result.data;
-  } catch {
+  if (!raw.trim()) {
+    onInvalid?.({ reason: 'empty_output', issues: [] });
     return null;
   }
+  let json: unknown;
+  try {
+    json = extractJson(raw);
+  } catch {
+    onInvalid?.({ reason: 'invalid_json', issues: [] });
+    return null;
+  }
+  const result = InterpretationSchema.safeParse(json);
+  if (!result.success) {
+    // Schema paths and codes identify failures without exposing memory content.
+    onInvalid?.({ reason: 'schema_validation', issues: result.error.issues.slice(0, 8).map(issue => ({
+      path: issue.path.join('.'), code: issue.code,
+    })) });
+    return null;
+  }
+  const parsed = result.data;
   const evidenceByRef = new Map(evidence.map((item) => [item.ref, item]));
   const assertionIntents = new Set<UserModelCaptureIntent>(['remember', 'correct', 'confirm', 'user_assertion']);
   const allowed = new Set(allowedTargetIds);

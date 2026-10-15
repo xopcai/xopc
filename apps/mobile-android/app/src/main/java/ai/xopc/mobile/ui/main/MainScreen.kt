@@ -1,5 +1,7 @@
 package ai.xopc.mobile.ui.main
 
+import ai.xopc.mobile.gateway.ClarificationCommand
+
 import ai.xopc.mobile.gateway.ProgressTaskEdit
 
 import android.Manifest
@@ -436,6 +438,8 @@ fun MainScreen(
   onSetContextDirectory: () -> Unit = {},
   onAddContextFile: (ManagedFile) -> Unit = {},
   onCreateContextConversation: (String?, String?) -> Unit = { _, _ -> },
+  onRefreshClarification: () -> Unit = {},
+  onRespondToClarification: (ClarificationCommand) -> Unit = {},
   onRefreshConnectionWait: () -> Unit = {},
   onRefreshProgress: () -> Unit = {},
   onRefreshProgressHome: () -> Unit = {},
@@ -747,6 +751,8 @@ fun MainScreen(
     onReloadContext = onReloadContext, onLoadContextPanel = onLoadContextPanel,
     onSetContextDirectory = onSetContextDirectory, onAddContextFile = onAddContextFile,
     onCreateContextConversation = onCreateContextConversation,
+    onRefreshClarification = onRefreshClarification,
+    onRespondToClarification = onRespondToClarification,
     onRefreshConnectionWait = onRefreshConnectionWait,
     onRefreshProgress = onRefreshProgress, onLoadMoreProgressTasks = onLoadMoreProgressTasks,
     onRefreshProgressHome = onRefreshProgressHome, onRefreshProgressTasks = onRefreshProgressTasks,
@@ -939,6 +945,8 @@ internal fun MainContent(
   onSetContextDirectory: () -> Unit = {},
   onAddContextFile: (ManagedFile) -> Unit = {},
   onCreateContextConversation: (String?, String?) -> Unit = { _, _ -> },
+  onRefreshClarification: () -> Unit = {},
+  onRespondToClarification: (ClarificationCommand) -> Unit = {},
   onRefreshConnectionWait: () -> Unit = {},
   onRefreshProgress: () -> Unit = {},
   onRefreshProgressHome: () -> Unit = {},
@@ -1078,7 +1086,7 @@ internal fun MainContent(
       { id -> currentPendingVoiceApproval(id) },
       { approval, allow -> currentRespondVoiceApproval(approval, allow) })
   }
-  var voiceAnswer by remember(voiceCall) { mutableStateOf("") }
+
   LaunchedEffect(voiceCall) {
     try { awaitCancellation() }
     finally { withContext(NonCancellable) { voiceCall.stop() } }
@@ -1226,12 +1234,14 @@ internal fun MainContent(
   LaunchedEffect(selectedTab, connection.profile?.gatewayId) {
     if (connection.profile != null && selectedTab in setOf(HomeTab.Me, HomeTab.Conversations)) onLoadPersonalAgent()
   }
+  val latestClarificationRefresh by rememberUpdatedState(onRefreshClarification)
   val latestConnectionWaitRefresh by rememberUpdatedState(onRefreshConnectionWait)
   LaunchedEffect(selectedTab, connection.profile?.gatewayId, connection.selectedConversationId) {
     if (selectedTab == HomeTab.Assistant && connection.profile != null &&
       connection.selectedConversationId != null) {
       while (true) {
         latestConnectionWaitRefresh()
+        latestClarificationRefresh()
         delay(5_000)
       }
     }
@@ -1552,7 +1562,7 @@ internal fun MainContent(
           onUpdateQueuedInput, onCancelQueuedInput, onReloadAgents, onSwitchAgent,
           onReloadContext,
           onLoadContextPanel, onSetContextDirectory, onAddContextFile, onCreateContextConversation,
-          onRefreshConnectionWait,
+          onRefreshClarification, onRespondToClarification, onRefreshConnectionWait,
           onOpenExecution, onRetryExecution, onCloseExecution,
           onCopyMessageText, onSaveMessageAsNote, onReuseMessage, onRegenerateMessage,
           onLoadMessageMedia, onSpeechChunk, onOpenMessageTarget = { target ->
@@ -1756,31 +1766,8 @@ internal fun MainContent(
       if (voiceCall.assistantText.isNotBlank()) MarkdownContent(voiceCall.assistantText,
         modifier = Modifier.testTag("voice-assistant-transcript"))
       voiceCall.clarification?.let { pending ->
-        Text(pending.question, style = MaterialTheme.typography.titleSmall)
-        pending.choices.forEach { choice ->
-          TextButton(onClick = { voiceScope.launch {
-            voiceCall.answerClarification("answer", choice)
-          } }, enabled = !voiceCall.clarificationBusy) { Text(choice) }
-        }
-        OutlinedTextField(voiceAnswer, { voiceAnswer = it },
-          modifier = Modifier.fillMaxWidth().testTag("voice-answer"),
-          placeholder = { Text(pending.suggestedAnswer.ifBlank {
-            stringResource(R.string.voice_answer_hint)
-          }) })
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-          TextButton(onClick = { voiceScope.launch {
-            voiceCall.answerClarification("agent_decide")
-          } }, enabled = !voiceCall.clarificationBusy) {
-            Text(stringResource(R.string.voice_agent_decide))
-          }
-          Button(onClick = { voiceScope.launch {
-            voiceCall.answerClarification("answer", voiceAnswer)
-            voiceAnswer = ""
-          } }, enabled = !voiceCall.clarificationBusy && voiceAnswer.isNotBlank(),
-            modifier = Modifier.testTag("voice-answer-submit")) {
-            Text(stringResource(R.string.voice_answer_send))
-          }
-        }
+        ClarificationCard(pending, voiceCall.clarificationBusy, voiceCall.error.ifBlank { null },
+          onCommand = { command -> voiceScope.launch { voiceCall.answerClarification(command) } }, modifier = Modifier.fillMaxWidth())
       }
       voiceCall.approval?.let { approval ->
         Text(stringResource(R.string.voice_approval_needed),
@@ -2464,6 +2451,8 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
   onSetContextDirectory: () -> Unit,
   onAddContextFile: (ManagedFile) -> Unit,
   onCreateContextConversation: (String?, String?) -> Unit,
+  onRefreshClarification: () -> Unit,
+  onRespondToClarification: (ClarificationCommand) -> Unit,
   onRefreshConnectionWait: () -> Unit,
   onOpenExecution: (String) -> Unit,
   onRetryExecution: () -> Unit, onCloseExecution: () -> Unit,
@@ -2885,7 +2874,12 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
         }
       }
     }
-  if (showConnectionWait) Box(modifier = Modifier.align(Alignment.BottomCenter)
+  connection.clarification?.let { prompt ->
+    Box(Modifier.align(Alignment.BottomCenter).padding(start = 16.dp, end = 16.dp, bottom = bottomChromeHeight + 8.dp)) {
+      ClarificationCard(prompt, connection.clarificationBusy, connection.clarificationError, onRespondToClarification, Modifier.fillMaxWidth())
+    }
+  }
+  if (showConnectionWait && connection.clarification == null) Box(modifier = Modifier.align(Alignment.BottomCenter)
     .padding(start = 16.dp, end = 16.dp, bottom = bottomChromeHeight + 8.dp)) {
     ConnectionWaitCard(connection.connectionWait, onRefreshConnectionWait)
   }

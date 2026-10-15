@@ -1,3 +1,4 @@
+import { clarificationResponseCommandSchema } from '@xopcai/gateway-contract';
 import type { Hono } from 'hono';
 import { parseUserTurnDocument, userTurnDocumentRefIds } from '@xopcai/gateway-contract';
 
@@ -111,22 +112,11 @@ export function registerAgentStreamRoutes(authenticated: Hono, deps: Authenticat
   authenticated.post('/api/clarifications/:id/responses', chatRateLimitMiddleware, async (c) => {
     const id = c.req.param('id')?.trim() ?? '';
     const body = await c.req.json().catch(() => null);
-    const record = body && typeof body === 'object' ? body as Record<string, unknown> : {};
-    const action = record.action;
-    const expectedVersion = record.expectedVersion;
-    const idempotencyKey = typeof record.idempotencyKey === 'string' ? record.idempotencyKey.trim() : '';
-    if (!id || !idempotencyKey || typeof expectedVersion !== 'number'
-      || !Number.isInteger(expectedVersion)
-      || (action !== 'answer' && action !== 'agent_decide' && action !== 'cancel')) {
+    const command = clarificationResponseCommandSchema.safeParse(body);
+    if (!id || !command.success) {
       return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Invalid clarification response' } }, 400);
     }
-    const result = service.resolveClarificationResponse({
-      id,
-      expectedVersion,
-      idempotencyKey,
-      action,
-      answer: typeof record.answer === 'string' ? record.answer : undefined,
-    });
+    const result = service.resolveClarificationResponse({ id, ...command.data });
     if (result.ok === true) return c.json({ ok: true, payload: result }, result.queued ? 202 : 200);
     const status = result.code === 'NOT_FOUND' ? 404 : result.code === 'EXPIRED' ? 410 : result.code === 'INVALID' ? 400 : 409;
     const message = result.code === 'NOT_FOUND'

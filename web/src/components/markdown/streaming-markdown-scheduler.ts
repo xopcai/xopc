@@ -23,17 +23,12 @@ export function classifyStreamingMarkdownTail(
 }
 
 const BASE_INTERVAL_MS: Record<StreamingMarkdownTailKind, number> = {
-  plain: 32,
-  long_text: 48,
-  list: 40,
+  plain: 50,
+  long_text: 50,
+  list: 50,
   table: 72,
   code: 64,
 };
-
-const FIRST_COMMIT_INTERVAL_MS = 48;
-const TARGET_CATCHUP_MS = 120;
-const MIN_COMMIT_SIZE = 6;
-const MAX_COMMIT_SIZE = 512;
 
 export function streamingMarkdownCommitIntervalMs({
   tailKind,
@@ -47,32 +42,54 @@ export function streamingMarkdownCommitIntervalMs({
   return Math.min(120, Math.max(base, Math.ceil(latestParseMs * 2)));
 }
 
-export function streamingMarkdownCommitDelayMs({
-  intervalMs,
-  elapsedMs,
-  firstCommit,
-}: {
-  intervalMs: number;
-  elapsedMs: number;
-  firstCommit: boolean;
-}): number {
-  if (firstCommit) return Math.max(FIRST_COMMIT_INTERVAL_MS, intervalMs);
-  return Math.max(0, intervalMs - elapsedMs);
-}
+/** Smooth arrival-rate samples and drain bursts gradually without a timed full flush. */
+export class AdaptiveStreamingMarkdownPacer {
+  private targetLength: number;
+  private lastArrivalAt: number | null = null;
+  private lastDrainAt: number | null = null;
+  private arrivalRate = 40;
+  private outputRate = 40;
+  private carry = 0;
 
-export function nextStreamingMarkdownCommitLength({
-  visibleLength,
-  pendingContent,
-  elapsedMs = 32,
-}: {
-  visibleLength: number;
-  pendingContent: string;
-  elapsedMs?: number;
-}): number {
-  if (visibleLength >= pendingContent.length) return pendingContent.length;
-  const commitSize = Math.min(
-    MAX_COMMIT_SIZE,
-    Math.max(MIN_COMMIT_SIZE, Math.ceil((pendingContent.length - visibleLength) * elapsedMs / TARGET_CATCHUP_MS)),
-  );
-  return graphemeCommitBoundary(pendingContent, Math.min(pendingContent.length, visibleLength + commitSize));
+  constructor(initialLength: number) {
+    this.targetLength = initialLength;
+  }
+
+  reset(length: number): void {
+    this.targetLength = length;
+    this.lastArrivalAt = null;
+    this.lastDrainAt = null;
+    this.arrivalRate = 40;
+    this.outputRate = 40;
+    this.carry = 0;
+  }
+
+  observe(length: number, now: number): void {
+    const added = length - this.targetLength;
+    if (added <= 0) return;
+    const sample = this.lastArrivalAt === null ? added
+      : added * 1000 / Math.max(10, now - this.lastArrivalAt);
+    this.arrivalRate = Math.max(1, this.arrivalRate * 0.9 + sample * 0.1);
+    this.targetLength = length;
+    this.lastArrivalAt = now;
+    this.lastDrainAt ??= now;
+  }
+
+  nextLength(visibleLength: number, content: string, now: number): number {
+    const backlog = content.length - visibleLength;
+    if (backlog <= 0) return content.length;
+    const elapsedMs = Math.max(0, Math.min(120, now - (this.lastDrainAt ?? now)));
+    this.lastDrainAt = now;
+    // Keep a small tail moving while accelerating smoothly when a burst builds up.
+    const targetRate = Math.max(20, this.arrivalRate, backlog / 0.6);
+    this.outputRate += (targetRate - this.outputRate) * (1 - Math.exp(-elapsedMs / 120));
+    const credit = this.carry + this.outputRate * elapsedMs / 1000;
+    const length = graphemeCommitBoundary(content, Math.min(content.length, visibleLength + Math.floor(credit)));
+    this.carry = Math.max(0, credit - (length - visibleLength));
+    if (length === content.length) {
+      this.lastDrainAt = null;
+      this.carry = 0;
+    }
+    return length;
+  }
 }

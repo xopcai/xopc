@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { parseUserModelInterpretation, type CaptureEvidence } from '../semantic.js';
 
@@ -43,6 +43,17 @@ function response(overrides: Record<string, unknown> = {}): string {
 }
 
 describe('user model semantic capture', () => {
+  it.each([
+    ['', 'empty_output'],
+    ['not JSON', 'invalid_json'],
+    ['{"intent":"task","assertions":null,"targetAssertionIds":[]}', 'schema_validation'],
+  ])('reports safe diagnostics for invalid output: %s', (raw, reason) => {
+    const onInvalid = vi.fn();
+    expect(parseUserModelInterpretation(raw, evidence, [], onInvalid)).toBeNull();
+    expect(onInvalid).toHaveBeenCalledWith({ reason, issues: reason === 'schema_validation'
+      ? [{ path: 'assertions', code: 'invalid_type' }] : [] });
+  });
+
   it('classifies each grounded assertion independently in a mixed work transcript', () => {
     const input = JSON.parse(response({ intent: 'user_assertion' }));
     input.intent = 'task';

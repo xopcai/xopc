@@ -21,7 +21,7 @@ import { createChatBlockParser, parseChatMarkdownBlocks } from './chat-math-bloc
 import { MathElement } from '@/components/markdown/math-element';
 import { ChatCodeBlock } from './chat-code-block';
 import { rehypeChatFileMentions, rehypeChatFragments, rehypeChatLinks, remarkChatContent } from './chat-markdown-plugins';
-import { createRevealPlugin, RevealBudgetContext, RevealLedgerContext, RevealSpan, type RevealLedger } from './chat-text-reveal';
+import { createRevealPlugin, REVEAL_DURATION_MS, RevealBudgetContext, RevealLedgerContext, RevealSpan, type RevealLedger } from './chat-text-reveal';
 
 type Environment = {
   openLink: (href: string) => void; linkError: string | null;
@@ -174,7 +174,7 @@ const ChatBlock = memo(function ChatBlock(props: BlockProps) {
     if (replacing) ledger.starts.clear();
     previous.current = props.content;
     mounted.current = true;
-    for (const [id, at] of ledger.starts) if (performance.now() - at >= 600) ledger.starts.delete(id);
+    for (const [id, at] of ledger.starts) if (performance.now() - at >= REVEAL_DURATION_MS) ledger.starts.delete(id);
   }, [props.content, environment.metricsKey, ledger, replacing]);
 
   useEffect(() => {
@@ -183,7 +183,7 @@ const ChatBlock = memo(function ChatBlock(props: BlockProps) {
       if (selection && !selection.isCollapsed && host.current?.contains(selection.anchorNode)) return;
       if (host.current?.querySelector('[data-xopc-segment]')) { ledger.starts.clear(); refresh(n => n + 1); }
     };
-    const timer = window.setTimeout(settle, 650);
+    const timer = window.setTimeout(settle, REVEAL_DURATION_MS + 50);
     document.addEventListener('selectionchange', settle);
     return () => { window.clearTimeout(timer); document.removeEventListener('selectionchange', settle); };
   }, [props.content, ledger]);

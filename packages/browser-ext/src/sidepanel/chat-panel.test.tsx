@@ -65,9 +65,12 @@ describe('browser composer interactions', () => {
     expect(mocks.bind).toHaveBeenCalledWith('act');
   });
 
-  it('does not display approval clarifications as user questions', async () => {
+  it('displays an approval with explicit decision controls', async () => {
     await act(async () => emit({ clarification: { id: 'approval', kind: 'approval', question: 'Approve operation?' } }));
-    expect(container.textContent).not.toContain('Approve operation?');
+    expect(container.textContent).toContain('Approve operation?');
+    expect(container.textContent).toContain('clarifyApprove');
+    expect(container.textContent).toContain('clarifyDeny');
+    expect(container.textContent).not.toContain('letXopcDecide');
     await act(async () => emit({ clarification: { id: 'question', kind: 'input', question: 'Which account?' } }));
     expect(container.textContent).toContain('Which account?');
   });

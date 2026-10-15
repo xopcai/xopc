@@ -1216,6 +1216,22 @@
     {"name": "task_execution_verifying", "value": "Verifying"},
     {"name": "task_execution_blocked", "value": "Blocked"},
     {"name": "task_detail_title", "value": "Task details"},
-    {"name": "task_edit_title", "value": "Edit task"}
+    {"name": "task_edit_title", "value": "Edit task"},
+    { "name": "clarify_approval_title", "value": "Your approval is needed" },
+    { "name": "clarify_title", "value": "Assistant needs input" },
+    { "name": "clarify_expired", "value": "This approval has expired" },
+    { "name": "clarify_remaining", "value": "%d seconds remaining" },
+    { "name": "clarify_details", "value": "View parameters" },
+    { "name": "clarify_once", "value": "Authorization applies to this operation once." },
+    { "name": "clarify_deny", "value": "Deny operation" },
+    { "name": "clarify_approve", "value": "Approve operation" },
+    { "name": "clarify_quick_hint", "value": "Tap an option to answer immediately" },
+    { "name": "clarify_compose", "value": "Select and add details" },
+    { "name": "clarify_recommended", "value": "Recommended" },
+    { "name": "clarify_clear", "value": "Clear selection" },
+    { "name": "clarify_custom", "value": "Your answer" },
+    { "name": "clarify_supplement", "value": "Additional information (optional)" },
+    { "name": "clarify_cancel", "value": "Cancel task" },
+    { "name": "clarify_submitting", "value": "Submitting…" }
   ]
 }

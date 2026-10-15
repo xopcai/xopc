@@ -25,17 +25,10 @@ final class RealtimeVoiceCall {
     private(set) var taskCancelling = false
     private(set) var networkQuality = "good"
     private(set) var route = "system"
-    private(set) var clarification: Clarification?
+    private(set) var clarification: ClarificationRequest?
+    private var clarificationAttempt: (id: String, command: ClarificationResponseCommand)?
     private(set) var approval: RealtimeVoiceApproval?
     private(set) var respondingToIntervention = false
-
-    struct Clarification: Sendable {
-        let requestID: String
-        let question: String
-        let choices: [String]
-        let suggestedAnswer: String
-        let version: Int
-    }
 
     private let audio = RealtimeVoiceAudio()
     private let transport = RealtimeVoiceTransport()
@@ -332,14 +325,22 @@ final class RealtimeVoiceCall {
 }
 
 extension RealtimeVoiceCall {
-    func submitClarification(action: String, answer: String? = nil) async {
+    func submitClarification(action: String, submission: ClarificationSubmission? = nil) async {
         guard let clarification, let gateway, !respondingToIntervention else { return }
+        guard !clarification.isExpired else { return }
+        let previous = clarificationAttempt
+        let candidate = ClarificationResponseCommand(action: action, response: submission?.response, decision: submission?.decision,
+            expectedVersion: clarification.version, idempotencyKey: previous?.command.idempotencyKey ?? UUID().uuidString.lowercased())
+        let command = previous?.id == clarification.id && previous?.command == candidate ? candidate
+            : ClarificationResponseCommand(action: action, response: submission?.response, decision: submission?.decision,
+                expectedVersion: clarification.version, idempotencyKey: UUID().uuidString.lowercased())
+        clarificationAttempt = (clarification.id, command)
         let current = generation
         respondingToIntervention = true
         defer { respondingToIntervention = false }
         do {
             try await gateway.respondToRealtimeVoiceClarification(
-                id: clarification.requestID, version: clarification.version, action: action, answer: answer
+                id: clarification.id, command: command
             )
             guard generation == current else { return }
             self.clarification = nil
@@ -479,11 +480,11 @@ private extension RealtimeVoiceCall {
         case "response.audio.started" where payload.format?.sampleRate != 24000:
             await pause(reason: "UNSUPPORTED_FORMAT")
         case "response.clarification" where payload.responseId == responseID:
-            clarification = Clarification(
-                requestID: payload.requestId ?? "", question: payload.question ?? "",
-                choices: payload.choices ?? [], suggestedAnswer: payload.suggestedAnswer ?? "",
-                version: payload.version ?? 1
-            )
+            clarification = ClarificationRequest(id: payload.requestId ?? "", conversationId: conversationID ?? "",
+                kind: payload.kind ?? "input", status: "open", question: payload.question ?? "",
+                choiceDetails: payload.choiceDetails, interactionMode: payload.interactionMode,
+                recommendedChoiceId: payload.recommendedChoiceId, approval: payload.approval,
+                version: payload.version ?? 1, expiresAt: payload.expiresAt)
             try? await transport.send("input.mute", payload: .init(muted: true))
         case "response.cancelled" where payload.responseId == responseID:
             audio.flush()

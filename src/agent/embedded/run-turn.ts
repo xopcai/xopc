@@ -686,7 +686,7 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
       }
       const resume = getClarificationResumeInput(conversationId, runId);
       const wait = resume?.payload?.waitId ? getClarification(resume.payload.waitId) : undefined;
-      if (wait?.approvalKey?.startsWith('computer:') && wait.answer !== '已在桌面端处理，继续') {
+      if (wait?.approvalKey?.startsWith('computer:') && wait.decision !== 'approve') {
         await stopComputerControl(conversationId);
       }
       if (isComputerControlActive(conversationId) && !isComputerLeaseTool(context.toolCall.name)) {

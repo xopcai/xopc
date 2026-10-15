@@ -1,3 +1,4 @@
+import type { ClarificationSubmission } from '@xopcai/gateway-contract';
 import { apiFetch, fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 import type { WireAttachment } from '@/features/chat/composer/composer.types';
@@ -68,11 +69,11 @@ export async function abortSideChat(id: string, runId?: string): Promise<void> {
   });
 }
 
-export async function answerSideChatClarification(id: string, requestId: string, answer: string): Promise<void> {
+export async function answerSideChatClarification(id: string, requestId: string, submission: ClarificationSubmission): Promise<void> {
   await fetchJson(apiUrl(`/api/side-chats/${id}/clarify/${requestId}`), {
     method: 'POST',
     headers: headers(),
-    body: JSON.stringify({ answer }),
+    body: JSON.stringify(submission),
   });
 }
 

@@ -1,5 +1,9 @@
 package ai.xopc.mobile.ui.main
 
+import ai.xopc.mobile.gateway.ClarificationRepository
+import ai.xopc.mobile.gateway.ClarificationRequest
+import ai.xopc.mobile.gateway.ClarificationCommand
+
 import ai.xopc.mobile.gateway.DeviceRequestProof
 import ai.xopc.mobile.gateway.VoiceCallConnection
 import ai.xopc.mobile.gateway.VOICE_PROXY_WS_PATH
@@ -48,8 +52,6 @@ import java.util.UUID
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 
-internal data class VoiceClarification(val requestId: String, val question: String,
-  val choices: List<String>, val suggestedAnswer: String, val version: Int)
 data class VoiceApproval(val id: String, val actionId: String, val conversationId: String)
 
 private sealed interface PendingVoiceReply {
@@ -72,7 +74,7 @@ internal class RealtimeVoiceController(private val context: Context, private val
   var muted by mutableStateOf(false); private set
   var speaker by mutableStateOf(false); private set
   var mode by mutableStateOf("natural"); private set
-  var clarification by mutableStateOf<VoiceClarification?>(null); private set
+  var clarification by mutableStateOf<ClarificationRequest?>(null); private set
   var clarificationBusy by mutableStateOf(false); private set
   var approval by mutableStateOf<VoiceApproval?>(null); private set
   var approvalBusy by mutableStateOf(false); private set
@@ -345,11 +347,7 @@ internal class RealtimeVoiceController(private val context: Context, private val
         }
       }
       "response.clarification" -> if (incomingId == responseId) {
-        val rows = payload.optJSONArray("choices")
-        clarification = VoiceClarification(payload.getString("requestId"),
-          payload.getString("question"),
-          (0 until (rows?.length() ?: 0).coerceAtMost(8)).map { rows!!.getString(it) },
-          payload.optString("suggestedAnswer"), payload.optInt("version", 1))
+        clarification = ClarificationRepository.parse(payload, activeConversationId)
         updateMute()
       }
       "response.cancelled" -> if (incomingId == responseId) {
@@ -611,16 +609,19 @@ internal class RealtimeVoiceController(private val context: Context, private val
     start(activeConversationId, mode, fresh = false)
   }
 
-  suspend fun answerClarification(action: String, answer: String = "") {
+  private var clarificationAttempt: Triple<String, ClarificationCommand, String>? = null
+  suspend fun answerClarification(command: ClarificationCommand) {
     val pending = clarification ?: return
-    if (clarificationBusy) return
-    require(action == "answer" || action == "agent_decide") { "INVALID_CLARIFICATION_ACTION" }
+    if (clarificationBusy || pending.expired()) return
+    val previous = clarificationAttempt
+    val key = if (previous?.first == pending.id && previous.second == command) previous.third else java.util.UUID.randomUUID().toString()
+    clarificationAttempt = Triple(pending.id, command, key)
     clarificationBusy = true
     try {
-      respond(pending.requestId, pending.version, action, answer.trim())
-      clarification = null
-      updateMute()
-    } catch (failure: Exception) { error = failure.message ?: "CLARIFICATION_FAILED" }
+      respond(pending.id, pending.version, command.action, command.body(pending.version, key).toString())
+      if (clarification?.id == pending.id) { clarification = null; clarificationAttempt = null; updateMute() }
+    } catch (failure: CancellationException) { throw failure }
+    catch (failure: Exception) { error = failure.message ?: "CLARIFICATION_FAILED" }
     finally { clarificationBusy = false }
   }
 

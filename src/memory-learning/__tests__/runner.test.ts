@@ -14,10 +14,10 @@ vi.mock('@earendil-works/pi-agent-core', () => ({ Agent: class {
   state: Record<string, unknown>;
   constructor(options: { initialState: Record<string, unknown> }) { this.state = { messages: [], ...options.initialState }; }
   async prompt(input: unknown) {
-    await prompt(input);
+    const output = await prompt(input);
     const messages = this.state.messages as Array<{ content: string }>;
     const ref = /\[evidence_ref:([^\]]+)\]/.exec(messages[0]!.content)![1];
-    this.state.messages = [...messages, { role: 'assistant', stopReason: 'stop', content: JSON.stringify({
+    this.state.messages = [...messages, { role: 'assistant', stopReason: 'stop', content: output ?? JSON.stringify({
       intent: 'task', assertions: [], goals: [], collaborationRules: [], targetAssertionIds: [],
       knowledge: [{ kind: 'decision', topicKey: 'atlas', predicate: 'storage.choice', scope: 'workspace',
         statement: 'Atlas uses SQLite for local deployment.', confidence: 0.9, importance: 0.8,
@@ -35,7 +35,7 @@ vi.mock('../../providers/extension-stream-bridge.js', () => ({ createExtensionAw
 
 const id = '4dffa204-0300-4d2d-89ce-55305490c550';
 describe('learning worker integration', () => {
-  beforeEach(() => { resetXopcDatabaseSingletonForTest(); openXopcDatabase({ path: ':memory:' }); seedTestAgentCatalog(); prompt.mockClear(); });
+  beforeEach(() => { resetXopcDatabaseSingletonForTest(); openXopcDatabase({ path: ':memory:' }); seedTestAgentCatalog(); prompt.mockReset(); });
   afterEach(() => { closeXopcDatabase(); resetXopcDatabaseSingletonForTest(); });
   it('runs a persisted job without a live main Agent and commits grounded work knowledge with progress', async () => {
     ensureSessionRecord(id, '', { agentId: 'main', sourceChannel: 'webchat', sourceChatId: 'owner', sessionType: 'chat',
@@ -55,4 +55,35 @@ describe('learning worker integration', () => {
     expect(prompt).toHaveBeenCalledTimes(2);
     expect(getSqliteDatabase().prepare('SELECT COUNT(*) AS n FROM knowledge_items').get()).toEqual({ n: 1 });
   });
+  it('repairs a schema-invalid response before committing progress', async () => {
+    ensureSessionRecord(id, '', { agentId: 'main', sourceChannel: 'webchat', sessionType: 'chat',
+      routing: { agentId: 'main', source: 'webchat', accountId: 'default', peerKind: 'direct', peerId: 'owner' } });
+    appendTranscriptEntry(id, { role: 'user', content: 'Use SQLite for local deployment.', timestamp: Date.now() });
+    appendTranscriptEntry(id, { role: 'assistant', content: 'Done.', timestamp: Date.now() } as never);
+    const config = ConfigSchema.parse({});
+    enqueueConversationLearning(config, id, '/workspace', true);
+    prompt.mockResolvedValueOnce('{"intent":"task","assertions":null}');
+    await runPersistentLearningJob(claimLearningJob()!, () => config);
+    expect(prompt).toHaveBeenCalledTimes(2);
+    expect(prompt.mock.calls[1]![0].content).toContain('schema_validation');
+    expect(prompt.mock.calls[1]![0].content).toContain('assertions');
+    expect(getSqliteDatabase().prepare('SELECT state FROM memory_learning_jobs').get()).toMatchObject({ state: 'succeeded' });
+    expect(getSqliteDatabase().prepare('SELECT COUNT(*) AS n FROM knowledge_items').get()).toEqual({ n: 1 });
+  });
+
+  it('bounds repair attempts and does not advance progress for invalid output', async () => {
+    ensureSessionRecord(id, '', { agentId: 'main', sourceChannel: 'webchat', sessionType: 'chat',
+      routing: { agentId: 'main', source: 'webchat', accountId: 'default', peerKind: 'direct', peerId: 'owner' } });
+    appendTranscriptEntry(id, { role: 'user', content: 'Use SQLite for local deployment.', timestamp: Date.now() });
+    appendTranscriptEntry(id, { role: 'assistant', content: 'Done.', timestamp: Date.now() } as never);
+    const config = ConfigSchema.parse({});
+    enqueueConversationLearning(config, id, '/workspace', true);
+    prompt.mockResolvedValue('invalid JSON');
+    await expect(runPersistentLearningJob(claimLearningJob()!, () => config)).rejects.toThrow('Memory extraction returned invalid output');
+    expect(prompt).toHaveBeenCalledTimes(2);
+    expect(getSqliteDatabase().prepare('SELECT COUNT(*) AS n FROM knowledge_items').get()).toEqual({ n: 0 });
+    expect(getSqliteDatabase().prepare('SELECT processed_seq FROM memory_learning_cursors').get()).toEqual({ processed_seq: 0 });
+    expect(getSqliteDatabase().prepare('SELECT status FROM context_extraction_runs').get()).toEqual({ status: 'failed' });
+  });
+
 });

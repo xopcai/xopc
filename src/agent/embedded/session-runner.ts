@@ -7,7 +7,6 @@ import {
   createAgentSession,
   DefaultResourceLoader,
   createMcpExtension,
-  type LoadedMcpConfig,
   SettingsManager,
   type AgentSession,
 } from '@earendil-works/pi-coding-agent';
@@ -27,7 +26,7 @@ import { createXopcCodemodeExtension, type CodemodePolicy } from './codemode-ext
 import { isCodemodeCoreRead } from '../tools/codemode-permissions.js';
 import { deferredToolContract, getXopcToolMetadata } from './tool-metadata.js';
 import { createXopcToolSearchExtension, TOOL_DISCOVERY_STATE } from './tool-search-extension.js';
-import { getNativePiAgentDir } from '../mcp/native-mcp.js';
+import { type NativeMcpConfig, getNativePiAgentDir } from '../mcp/native-mcp.js';
 import { abortEmbeddedRun } from './runs.js';
 import { filterExecutionTools, resolveExecutionToolPolicy, type ExecutionToolPolicy } from './execution-tool-policy.js';
 import { AGENT_PROFILE_CONTEXT_STATE, createAgentProfileContextExtension } from './agent-profile-context.js';
@@ -49,7 +48,7 @@ export type EmbeddedRunnerFingerprintInput = {
   thinkingLevel: string;
   credentialRevision: string;
   codemode?: CodemodePolicy;
-  mcp?: LoadedMcpConfig;
+  mcp?: NativeMcpConfig;
   executionToolPolicy?: ExecutionToolPolicy;
 };
 
@@ -70,7 +69,7 @@ export function buildEmbeddedRunnerFingerprint(input: EmbeddedRunnerFingerprintI
     input.thinkingLevel,
     input.credentialRevision,
     JSON.stringify(input.codemode ?? null),
-    JSON.stringify(input.mcp ?? null),
+    JSON.stringify(input.mcp ? { servers: input.mcp.servers, errors: input.mcp.errors, credentialAliases: input.mcp.credentialAliases } : null),
     JSON.stringify(input.executionToolPolicy ?? null),
   ].join('\0')).digest('base64url');
 }
@@ -100,7 +99,7 @@ export type AcquireEmbeddedSessionRunnerParams = {
   thinkingLevel: ThinkingLevel;
   transcriptRuntime: EmbeddedTranscriptRuntime;
   codemode?: CodemodePolicy;
-  mcp?: LoadedMcpConfig;
+  mcp?: NativeMcpConfig;
   executionToolPolicy?: ExecutionToolPolicy;
 };
 
@@ -359,7 +358,7 @@ export class EmbeddedSessionRunnerPool {
       extensionFactories: [
         ...(codemode ? [createXopcCodemodeExtension(codemode, tools, () => boundSession)] : []),
         ...(discovery ? [createXopcToolSearchExtension(tools)] : []),
-        ...(mcp ? [createMcpExtension({ loadConfig: () => mcp, logPath: join(getNativePiAgentDir(), 'mcp.log') })] : []),
+        ...(mcp ? [createMcpExtension({ loadConfig: () => mcp, credentials: mcp.credentials, logPath: join(getNativePiAgentDir(), 'mcp.log') })] : []),
         createAgentProfileContextExtension(runtimeId),
       ],
     });

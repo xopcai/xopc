@@ -21,5 +21,11 @@ class RunStreamEventTest {
     assertNull(RunStreamEvent.parse("run:run-2", "assistant_delta", data))
     assertNull(RunStreamEvent.parse("run:run-1", "unknown", data))
   }
+  @Test fun clarificationEventsTriggerConversationRefresh() {
+    val data = JSONObject("""{"runId":"run-1","conversationId":"conversation-1","payload":{"requestId":"q1","question":"Where?","interactionMode":"compose"}}""")
+    val event = RunStreamEvent.parse("run:run-1", "clarify_request", data)
+    assertEquals("clarify_request", event?.type)
+    assertEquals("conversation-1", event?.conversationId)
+  }
 
 }

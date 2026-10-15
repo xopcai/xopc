@@ -18,6 +18,7 @@ final class AssistantState {
     private(set) var contextError: String?
     private(set) var executionActivity: [ExecutionActivityItem] = []
     private(set) var activityLabel: String?
+    private var clarificationAttempt: (id: String, command: ClarificationResponseCommand)?
     private(set) var clarification: ClarificationRequest?
     private(set) var clarificationError: String?
     private(set) var isRespondingToClarification = false
@@ -453,23 +454,32 @@ extension AssistantState {
 
     func respondToClarification(
         action: String,
-        answer: String?,
+        submission: ClarificationSubmission?,
         in conversation: ConversationSelection,
         using gateway: any GatewayServing
     ) async {
         guard let clarification, !isRespondingToClarification else { return }
-        let normalizedAnswer = answer?.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard action != "answer" || normalizedAnswer?.isEmpty == false else { return }
+        guard !clarification.isExpired else { return }
+        if action == "answer" && submission == nil { return }
+        if clarification.kind == "approval" && action == "agent_decide" { return }
+        let previous = clarificationAttempt
+        let candidate = ClarificationResponseCommand(action: action, response: submission?.response, decision: submission?.decision,
+            expectedVersion: clarification.version, idempotencyKey: previous?.command.idempotencyKey ?? UUID().uuidString.lowercased())
+        let command = previous?.id == clarification.id && previous?.command == candidate ? candidate
+            : ClarificationResponseCommand(action: action, response: submission?.response, decision: submission?.decision,
+                expectedVersion: clarification.version, idempotencyKey: UUID().uuidString.lowercased())
+        clarificationAttempt = (clarification.id, command)
 
         isRespondingToClarification = true
         clarificationError = nil
         do {
             try await gateway.respondToClarification(
                 clarification,
-                action: action,
-                answer: normalizedAnswer
+                command: command
             )
+            guard self.clarification?.id == clarification.id else { isRespondingToClarification = false; return }
             self.clarification = nil
+            clarificationAttempt = nil
             isSending = true
             activityLabel = AppLocalization.resolve("正在继续")
             runID = await findActiveRun(in: conversation, using: gateway)
@@ -478,8 +488,9 @@ extension AssistantState {
         } catch is CancellationError {
             isSending = false
         } catch {
-            clarificationError = error.localizedDescription
+            let responseError = error.localizedDescription
             await refreshClarification(for: conversation, using: gateway)
+            if self.clarification?.id == clarification.id { clarificationError = responseError }
             isSending = false
         }
         isRespondingToClarification = false

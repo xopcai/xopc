@@ -11,3 +11,7 @@ it.each([{ type: 'sse', url: 'https://example.com' }, { url: 'https://example.co
 it('rejects names colliding under native pi normalization', () => {
   expect(McpConfigSchema.safeParse({ servers: { 'a-b': { command: 'node' }, a_b: { command: 'node' } } }).success).toBe(false);
 });
+it('accepts an optional display name without changing server identity', () => {
+  expect(McpConfigSchema.parse({ servers: { stable_id: { command: 'node', displayName: '团队知识库' } } })?.servers?.stable_id.displayName).toBe('团队知识库');
+  expect(McpServerSchema.safeParse({ command: 'node', displayName: 123 }).success).toBe(false);
+});

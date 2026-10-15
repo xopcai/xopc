@@ -280,5 +280,10 @@
   "recordingParameters": { "message": "Parameters" },
   "recordingNew": { "message": "New recording" },
   "recordingStopped": { "message": "Run stopped" },
-  "recordingRequestFailed": { "message": "Could not complete this action. Please try again." }
+  "recordingRequestFailed": { "message": "Could not complete this action. Please try again." },
+  "clarifyDeny": { "message": "Deny operation" },
+  "clarifyApprove": { "message": "Approve once" },
+  "clarifyCompose": { "message": "Select and add details" },
+  "clarifyClear": { "message": "Clear selection" },
+  "clarifyRecommended": { "message": "Recommended" }
 }

@@ -1,3 +1,4 @@
+import { normalizeClarificationQuestion, normalizeClarificationSubmission, type ClarificationPresentation, type ClarificationSubmission } from '@xopcai/gateway-contract';
 import { randomUUID } from 'node:crypto';
 
 import type {
@@ -32,24 +33,22 @@ type ClarificationRow = {
   data_json: string;
 };
 
-export type CreateClarificationInput = {
+export type CreateClarificationInput = ClarificationPresentation & {
   conversationId: string;
   runId: string;
   toolCallId: string;
   kind: ClarificationKind;
   question: string;
-  choices?: string[];
-  suggestedAnswer?: string;
+
   approvalKey?: string;
   now?: number;
 };
 
-export type ResolveClarificationInput = {
+export type ResolveClarificationInput = ClarificationSubmission & {
   id: string;
   expectedVersion: number;
   idempotencyKey: string;
   action: ClarificationResponseAction;
-  answer?: string;
   now?: number;
 };
 
@@ -183,6 +182,7 @@ export function getClarificationSnapshot(conversationId: string): ClarificationW
 }
 
 export function createClarificationWait(input: CreateClarificationInput): ClarificationWait {
+  input = normalizeClarificationQuestion(input);
   return runSqliteWriteTransaction((db) => {
     const transcriptId = readCurrentTranscriptId(db, input.conversationId);
     if (!transcriptId) throw new Error('Clarification requires a persisted session.');
@@ -230,8 +230,10 @@ export function createClarificationWait(input: CreateClarificationInput): Clarif
       kind: input.kind,
       status: 'open',
       question: input.question.trim(),
-      choices: input.choices,
-      suggestedAnswer: input.suggestedAnswer,
+      interactionMode: input.interactionMode,
+      choiceDetails: input.choiceDetails,
+      recommendedChoiceId: input.recommendedChoiceId,
+      approval: input.approval,
       checkpoint: {
         transcriptEntryId: lastEntry?.entry_id,
         objectiveSummary: origin?.content ?? input.question.trim(),
@@ -296,30 +298,33 @@ export function resolveClarification(input: ResolveClarificationInput): ResolveC
       return { ok: false, code: 'NOT_FOUND' };
     }
     const now = input.now ?? Date.now();
-    if (wait.kind === 'approval' && wait.expiresAt !== undefined && wait.expiresAt <= now) {
-      return { ok: false, code: 'EXPIRED', clarification: expireApproval(wait, now) };
-    }
-    const existingInput = db.prepare(
-      'SELECT id FROM session_inputs WHERE conversation_id = ? AND client_message_id = ?',
-    ).get(wait.conversationId, input.idempotencyKey) as { id: string } | undefined;
-    if (existingInput) {
-      return { ok: true, clarification: wait, idempotent: true, queued: wait.status === 'queued' };
-    }
-    if (wait.responseIdempotencyKey === input.idempotencyKey) {
-      return { ok: true, clarification: wait, idempotent: true, queued: wait.status === 'queued' };
-    }
-    if (wait.version !== input.expectedVersion || wait.status !== 'open') {
-      return { ok: false, code: 'CONFLICT', clarification: wait };
-    }
-    const trimmed = input.answer?.trim() ?? '';
-    if (input.action === 'answer' && !trimmed) return { ok: false, code: 'INVALID' };
+    let normalized: ReturnType<typeof normalizeClarificationSubmission> | undefined;
+    try {
+      if (input.action === 'answer') normalized = normalizeClarificationSubmission(wait, { response: input.response, decision: input.decision });
+      else if (input.response !== undefined || input.decision !== undefined) return { ok: false, code: 'INVALID' };
+    } catch { return { ok: false, code: 'INVALID' }; }
     if (input.action === 'agent_decide' && wait.kind === 'approval') return { ok: false, code: 'INVALID' };
-
     const resolution: ClarificationResolution = input.action === 'answer'
       ? 'answered'
       : input.action === 'agent_decide'
         ? 'agent_decide'
         : 'cancelled';
+    if (wait.responseIdempotencyKey === input.idempotencyKey) {
+      if (wait.resolution !== resolution || (normalized && wait.answer !== normalized.answer)) {
+        return { ok: false, code: 'CONFLICT', clarification: wait };
+      }
+      return { ok: true, clarification: wait, idempotent: true, queued: wait.status === 'queued' };
+    }
+    if (wait.kind === 'approval' && wait.expiresAt !== undefined && wait.expiresAt <= now
+      && (wait.status === 'open' || wait.status === 'queued')) {
+      return { ok: false, code: 'EXPIRED', clarification: expireApproval(wait, now) };
+    }
+    const existingInput = db.prepare(
+      'SELECT id FROM session_inputs WHERE conversation_id = ? AND client_message_id = ?',
+    ).get(wait.conversationId, input.idempotencyKey) as { id: string } | undefined;
+    if (existingInput || wait.version !== input.expectedVersion || wait.status !== 'open') {
+      return { ok: false, code: 'CONFLICT', clarification: wait };
+    }
     if (input.action === 'cancel') {
       const cancelled = writeWait({
         ...wait,
@@ -338,10 +343,12 @@ export function resolveClarification(input: ResolveClarificationInput): ResolveC
 
     const answer = input.action === 'agent_decide'
       ? 'Use your best judgment and continue without additional user input.'
-      : trimmed;
+      : normalized!.answer;
     const queued = writeWait({
       ...wait,
       status: 'queued',
+      response: normalized?.response,
+      decision: normalized?.decision,
       answer,
       resolution,
       responseIdempotencyKey: input.idempotencyKey,
@@ -438,7 +445,8 @@ export function consumeClarificationApproval(
     if (!wait || wait.kind !== 'approval' || wait.approvalKey !== approvalKey || wait.approvalConsumedAt) {
       return undefined;
     }
-    const approved = wait.answer === 'Allow once';
+    const approved = (wait.expiresAt === undefined || wait.expiresAt > Date.now())
+      && wait.decision === 'approve';
     writeWait({ ...wait, approvalConsumedAt: Date.now(), updatedAt: Date.now() }, wait.version);
     return approved ? 'approved' : 'denied';
   });

@@ -46,3 +46,21 @@ describe('native MCP config', () => {
     expect(() => buildMcpServerConfigFromRow({ ...row, argsText: "'unterminated" })).toThrow('unclosed quote');
   });
 });
+
+it('preserves Windows paths and empty arguments when editing a pasted argument list', () => {
+  const row = { ...emptyMcpServerRow(), transport: 'stdio' as const, command: 'node', argsText: '"C:\\work\\docs" ""' };
+  expect(buildMcpServerConfigFromRow(row).args).toEqual(['C:\\work\\docs', '']);
+});
+
+it('round-trips environment references and rejects duplicate variable names before saving', () => {
+  const reference = { xopcSecretRef: { provider: 'vault', fieldKey: 'TOKEN' } };
+  const row = normalizeMcpSettingsFromConfig({ mcp: { servers: { local: { command: 'node', env: { TOKEN: reference, MODE: 'test' } } } } }).servers[0];
+  expect(buildMcpServerConfigFromRow(row).env).toEqual({ TOKEN: reference, MODE: 'test' });
+  expect(() => buildMcpServerConfigFromRow({ ...row, envEntries: [{ clientKey: '1', key: 'TOKEN', value: 'one' }, { clientKey: '2', key: 'TOKEN', value: 'two' }] })).toThrow('unique');
+});
+
+it('stores display names separately from stable IDs and rejects invalid import containers', () => {
+  const row = normalizeMcpSettingsFromConfig({ mcp: { servers: { stable_id: { command: 'node', displayName: '团队知识库' } } } }).servers[0];
+  expect(row.id).toBe('stable_id'); expect(buildMcpServerConfigFromRow(row).displayName).toBe('团队知识库');
+  expect(() => parseMcpConfigImport('{"mcpServers":[]}')).toThrow('object');
+});

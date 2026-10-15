@@ -280,5 +280,10 @@
   "recordingParameters": { "message": "运行参数" },
   "recordingNew": { "message": "再次录制" },
   "recordingStopped": { "message": "运行已停止" },
-  "recordingRequestFailed": { "message": "操作未完成，请重试。" }
+  "recordingRequestFailed": { "message": "操作未完成，请重试。" },
+  "clarifyDeny": { "message": "拒绝本次操作" },
+  "clarifyApprove": { "message": "批准本次操作" },
+  "clarifyCompose": { "message": "选择并补充" },
+  "clarifyClear": { "message": "清除选择" },
+  "clarifyRecommended": { "message": "推荐" }
 }

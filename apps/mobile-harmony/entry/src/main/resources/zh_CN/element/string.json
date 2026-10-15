@@ -1214,6 +1214,22 @@
     {"name": "task_execution_verifying", "value": "验证中"},
     {"name": "task_execution_blocked", "value": "受阻"},
     {"name": "task_detail_title", "value": "任务详情"},
-    {"name": "task_edit_title", "value": "编辑任务"}
+    {"name": "task_edit_title", "value": "编辑任务"},
+    { "name": "clarify_approval_title", "value": "需要你的批准" },
+    { "name": "clarify_title", "value": "助手需要补充信息" },
+    { "name": "clarify_expired", "value": "此审批已过期" },
+    { "name": "clarify_remaining", "value": "剩余 %d 秒" },
+    { "name": "clarify_details", "value": "查看参数详情" },
+    { "name": "clarify_once", "value": "授权仅适用于本次操作，且只能执行一次。" },
+    { "name": "clarify_deny", "value": "拒绝本次操作" },
+    { "name": "clarify_approve", "value": "批准本次操作" },
+    { "name": "clarify_quick_hint", "value": "点击选项即可回答" },
+    { "name": "clarify_compose", "value": "选择并补充" },
+    { "name": "clarify_recommended", "value": "推荐" },
+    { "name": "clarify_clear", "value": "清除选择" },
+    { "name": "clarify_custom", "value": "自定义回答" },
+    { "name": "clarify_supplement", "value": "补充说明（可选）" },
+    { "name": "clarify_cancel", "value": "取消任务" },
+    { "name": "clarify_submitting", "value": "正在提交…" }
   ]
 }

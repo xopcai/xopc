@@ -1,3 +1,5 @@
+import { XopcClarificationCard } from './ClarificationCard';
+import { XopcClarificationCommand } from '../model/clarification';
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { XopcVoiceCall } from '../service/voiceCall';
 import { userErrorMessage } from '../common/userError';
@@ -9,7 +11,6 @@ export struct XopcVoiceCallView {
   @Param viewportWidth: number = 0;
   @Param viewportHeight: number = 0;
   @Local now: number = Date.now();
-  @Local answer: string = '';
   @Local miniX: number = 16;
   @Local miniY: number = 66;
   private timer: number = -1;
@@ -63,25 +64,8 @@ export struct XopcVoiceCallView {
   @Builder
   intervention() {
     if (this.call.clarification) {
-      Column({ space: 10 }) {
-        Text(this.call.clarification.question).fontSize(15).fontWeight(FontWeight.Medium).fontColor(this.colors.foreground).width('100%')
-        if (this.call.clarification.choices.length) {
-          Flex({ wrap: FlexWrap.Wrap, justifyContent: FlexAlign.Start }) {
-            ForEach(this.call.clarification.choices, (choice: string): void => {
-              Button(choice).height(34).fontSize(12).margin({ right: 7, bottom: 7 }).backgroundColor(this.colors.accentSoft)
-                .fontColor(this.colors.accent).onClick((): void => { this.call.submitClarification('answer', choice); })
-            }, (choice: string): string => choice)
-          }.width('100%')
-        }
-        TextInput({ text: this.answer, placeholder: this.call.clarification.suggestedAnswer || $r('app.string.voice_call_answer') })
-          .height(42).backgroundColor(this.colors.input).borderRadius(12).onChange((value: string): void => { this.answer = value; })
-        Row({ space: 8 }) {
-          Button($r('app.string.voice_call_agent_decide')).layoutWeight(1).height(38).fontSize(12).backgroundColor(this.colors.input)
-            .fontColor(this.colors.foreground).onClick((): void => { this.call.submitClarification('agent_decide'); })
-          Button($r('app.string.send')).layoutWeight(1).height(38).fontSize(12).backgroundColor(this.colors.accent)
-            .onClick((): void => { if (this.answer.trim()) { this.call.submitClarification('answer', this.answer.trim()); this.answer = ''; } })
-        }.width('100%')
-      }.width('100%').padding(14).backgroundColor(this.colors.panel).borderRadius(18)
+      XopcClarificationCard({ prompt: this.call.clarification, submitting: this.call.clarificationBusy, errorMessage: this.call.error,
+        onRespond: (command: XopcClarificationCommand): void => { this.call.submitClarification(command); } })
     } else if (this.call.approval) {
       Column({ space: 10 }) {
         Text($r('app.string.voice_call_approval')).fontSize(13).fontColor(this.colors.secondary).width('100%')

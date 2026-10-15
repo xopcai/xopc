@@ -5,7 +5,7 @@ import { SKIP, visitParents } from 'unist-util-visit-parents';
 import { graphemeCommitBoundary, splitRevealText } from './text-segments';
 export { graphemeCommitBoundary, splitRevealText } from './text-segments';
 
-export const REVEAL_DURATION_MS = 600;
+export const REVEAL_DURATION_MS = 700;
 const MAX_ACTIVE_SEGMENTS = 256;
 
 export type RevealLedger = { length: number; starts: Map<number, number> };

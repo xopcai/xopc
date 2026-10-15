@@ -43,9 +43,10 @@ import {
 } from './connectors-api';
 import { CustomMcpServerDialog } from './custom-mcp-server-dialog';
 import {
-  extractManagedMcpServers,
+  fetchMcpConnectionChecks,
+  type McpLastCheck,
+  deleteMcpServer,
   normalizeMcpSettingsFromConfig,
-  patchMcpSettings,
   type McpServerRow,
 } from './mcp/mcp-config-api';
 import {
@@ -190,8 +191,14 @@ export function ConnectorsPage({ embedded = false, onHeaderActionChange }: { emb
   const customServers = mcpSettings?.servers ?? [];
   const installedCount = state.instances.length + customServers.length + pluginExtensions.reduce((n, extension) => n + (extension.components?.mcp.length ?? 0), 0);
 
+  const [lastChecks, setLastChecks] = useState<Record<string, McpLastCheck>>({});
   useEffect(() => {
-  }, [mcpSettings]);
+    setLastChecks({});
+    if (!hasToken || !config) return;
+    const controller = new AbortController();
+    void fetchMcpConnectionChecks(controller.signal).then(checks => { if (!controller.signal.aborted) setLastChecks(checks); }).catch(() => {});
+    return () => controller.abort();
+  }, [hasToken, config]);
 
   const load = useCallback(async () => {
     if (!token) {
@@ -393,15 +400,11 @@ export function ConnectorsPage({ embedded = false, onHeaderActionChange }: { emb
   );
 
   const removeCustomServer = useCallback(async (row: McpServerRow) => {
-    if (!mcpSettings || config === undefined) return;
-    const nextServers = customServers.filter((server) => server.clientKey !== row.clientKey);
-    await patchMcpSettings(
-      { servers: nextServers },
-      extractManagedMcpServers(config),
-    );
+    const result = await deleteMcpServer(row);
     await mutateConfig();
     await load();
-  }, [config, customServers, load, mcpSettings, mutateConfig]);
+    if (result.reloadRequired) setState(previous => ({ ...previous, error: mcp.setupReloadRequired }));
+  }, [load, mutateConfig, mcp.setupReloadRequired]);
 
   const openAddCustomServer = useCallback(() => {
     setCustomDialog({ mode: 'add', row: buildNewCustomServerRow(customServers, managedServerIds) });
@@ -670,6 +673,7 @@ export function ConnectorsPage({ embedded = false, onHeaderActionChange }: { emb
                             <CustomMcpServerRow
                               key={row.clientKey}
                               row={row}
+                              lastCheck={lastChecks[row.id]}
                               t={mcp}
                               cs={cs}
                               onEdit={() => setCustomDialog({ mode: 'edit', row: structuredClone(row) })}

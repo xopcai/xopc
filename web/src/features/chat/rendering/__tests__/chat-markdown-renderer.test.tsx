@@ -73,6 +73,9 @@ describe('React chat Markdown', () => {
     expect(animate).not.toHaveBeenCalled();
     render('已有文字。新增内容。', true);
     expect(animate, container.innerHTML).toHaveBeenCalled();
+    expect(animate).toHaveBeenCalledWith([{ opacity: 0 }, { opacity: 1 }], {
+      duration: 700, easing: 'cubic-bezier(.37,.55,.86,.88)', fill: 'both',
+    });
     act(() => root.render(null));
     expect(cancel).toHaveBeenCalled();
     delete (HTMLElement.prototype as Partial<HTMLElement>).animate;

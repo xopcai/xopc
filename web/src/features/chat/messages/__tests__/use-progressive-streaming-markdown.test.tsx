@@ -54,18 +54,23 @@ describe('useProgressiveStreamingMarkdown', () => {
 
     act(() => root.render(<Harness content="abcdefghijkl" streaming />));
     expect(container.textContent).toBe('abcdef');
-    act(() => vi.advanceTimersByTime(48));
+    act(() => vi.advanceTimersByTime(64));
+    expect(container.textContent).toBe('abcdefgh');
+    act(() => vi.advanceTimersByTime(64));
+    act(() => vi.advanceTimersByTime(64));
     expect(container.textContent).toBe('abcdefghijkl');
   });
   it('does not wait for a timer before revealing the first Personal delta', () => {
     act(() => root.render(<Harness content="" streaming immediateFirstCommit />));
     act(() => root.render(<Harness content="先看结论。" streaming immediateFirstCommit />));
     expect(container.textContent).toBe('先看结论。');
-    act(() => root.render(<Harness content="先看结论。\n\n这是后续说明。" streaming immediateFirstCommit />));
+    act(() => root.render(<Harness content={'先看结论。\n\n这是后续说明。'} streaming immediateFirstCommit />));
     expect(container.textContent).toBe('先看结论。');
-    act(() => vi.advanceTimersByTime(48));
+    act(() => vi.advanceTimersByTime(64));
+    expect(container.textContent).toMatch(/^先看结论。\n/);
+    for (let frame = 0; frame < 3; frame++) act(() => vi.advanceTimersByTime(64));
     expect(container.textContent).toContain('这是');
-    act(() => root.render(<Harness content="先看结论。\n\n这是后续说明。" streaming={false} immediateFirstCommit />));
+    act(() => root.render(<Harness content={'先看结论。\n\n这是后续说明。'} streaming={false} immediateFirstCommit />));
     expect(container.textContent).toContain('这是后续说明。');
   });
 
@@ -82,7 +87,10 @@ describe('useProgressiveStreamingMarkdown', () => {
         <Harness content="abcdefghijkl" streaming />
       </StrictMode>,
     ));
-    act(() => vi.advanceTimersByTime(48));
+    act(() => vi.advanceTimersByTime(64));
+    expect(container.textContent).toBe('abcdefgh');
+    act(() => vi.advanceTimersByTime(64));
+    act(() => vi.advanceTimersByTime(64));
     expect(container.textContent).toBe('abcdefghijkl');
   });
 
@@ -91,6 +99,40 @@ describe('useProgressiveStreamingMarkdown', () => {
     act(() => root.render(<Harness content="abcdefghijklmnopqr" streaming />));
     act(() => root.render(<Harness content="abcdefghijklmnopqr" streaming={false} />));
     expect(container.textContent).toBe('abcdefghijklmnopqr');
+  });
+
+  it('drains a burst across frames without a timed full flush', () => {
+    act(() => root.render(<Harness content="Start." streaming />));
+    const content = 'Start.' + '内容持续平滑显示。'.repeat(200);
+    act(() => root.render(<Harness content={content} streaming />));
+    act(() => vi.advanceTimersByTime(300));
+    const partial = container.textContent ?? '';
+    expect(partial.length).toBeGreaterThan(6);
+    expect(partial.length).toBeLessThan(content.length);
+    expect(content.startsWith(partial)).toBe(true);
+    act(() => vi.advanceTimersByTime(5000));
+    expect(container.textContent).toBe(content);
+  });
+
+  it('discards a pending animation frame when final text arrives', () => {
+    const onComplete = vi.fn();
+    act(() => root.render(<Harness content="Start." streaming onComplete={onComplete} />));
+    act(() => root.render(<Harness content={'Start.' + 'x'.repeat(1000)} streaming onComplete={onComplete} />));
+    act(() => vi.advanceTimersByTime(50));
+    act(() => root.render(<Harness content="Final text." streaming={false} onComplete={onComplete} />));
+    expect(container.textContent).toBe('Final text.');
+    act(() => vi.runAllTimers());
+    expect(container.textContent).toBe('Final text.');
+    expect(onComplete).toHaveBeenCalledTimes(1);
+  });
+
+  it('resets pacing when pending content is replaced even if the visible prefix is unchanged', () => {
+    act(() => root.render(<Harness content="Start." streaming />));
+    act(() => root.render(<Harness content={'Start.' + 'x'.repeat(1000)} streaming />));
+    act(() => root.render(<Harness content="Start. revised" streaming />));
+    expect(container.textContent).toBe('Start. revised');
+    act(() => vi.runAllTimers());
+    expect(container.textContent).toBe('Start. revised');
   });
 
   it('commits the complete terminal text before layout effects observe the completed shell', () => {

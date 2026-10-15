@@ -367,10 +367,12 @@ describe('dispatchAgentStreamEvent', () => {
       'clarify_request',
       JSON.stringify(envelope('clarify_request', 'run-1', {
         requestId: 'clarify-1',
+        interactionMode: 'compose',
+        choiceDetails: [{ id: 'stage', label: 'Staging', description: 'Test first' }, { id: 'prod', label: 'Production' }],
+        recommendedChoiceId: 'stage',
         kind: 'input',
         question: 'Which environment?',
-        choices: ['Staging', 'Production'],
-        suggestedAnswer: 'Staging',
+
         version: 3,
         createdAt: 123,
       })),
@@ -378,8 +380,11 @@ describe('dispatchAgentStreamEvent', () => {
     );
     expect(onClarifyRequest).toHaveBeenCalledWith(expect.objectContaining({
       requestId: 'clarify-1',
+      interactionMode: 'compose',
+      choiceDetails: [{ id: 'stage', label: 'Staging', description: 'Test first' }, { id: 'prod', label: 'Production' }],
+      recommendedChoiceId: 'stage',
       kind: 'input',
-      suggestedAnswer: 'Staging',
+
       version: 3,
       createdAt: 123,
       expiresAt: undefined,

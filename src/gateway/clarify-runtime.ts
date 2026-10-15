@@ -1,5 +1,6 @@
 export type ClarificationChannelRuntime = {
   answerChoice(requestId: string, choiceIndex: number, idempotencyKey: string): boolean;
+  answerDecision(requestId: string, decision: 'approve' | 'deny', idempotencyKey: string): boolean;
   answerText(conversationId: string, text: string, idempotencyKey: string): boolean;
 };
 
@@ -23,4 +24,8 @@ export function answerClarificationTextFromChannel(
   idempotencyKey: string,
 ): boolean {
   return runtime?.answerText(conversationId, text, idempotencyKey) ?? false;
+}
+
+export function answerClarificationDecisionFromChannel(requestId: string, decision: 'approve' | 'deny', idempotencyKey: string): boolean {
+  return runtime?.answerDecision(requestId, decision, idempotencyKey) ?? false;
 }

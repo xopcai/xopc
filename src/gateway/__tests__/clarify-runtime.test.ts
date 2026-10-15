@@ -12,7 +12,7 @@ describe('clarification channel runtime', () => {
   it('forwards durable channel answers with their idempotency keys', () => {
     const answerChoice = vi.fn(() => true);
     const answerText = vi.fn(() => true);
-    registerClarificationChannelRuntime({ answerChoice, answerText });
+    registerClarificationChannelRuntime({ answerChoice, answerText, answerDecision: vi.fn(() => true) });
 
     expect(answerClarificationChoiceFromChannel('wait-1', 1, 'callback-1')).toBe(true);
     expect(answerClarificationTextFromChannel('session-1', 'Production', 'message-1')).toBe(true);

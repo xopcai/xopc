@@ -1,9 +1,12 @@
+import { normalizeClarificationQuestion, normalizeClarificationSubmission, readClarificationPresentation, type ClarificationSubmission } from '@xopcai/gateway-contract';
 import type { ClarifyRequestPayload } from '../agent/tools/clarify-tool.js';
 
 export type ClarificationStreamEvent = { type: string } & Record<string, unknown>;
 
 type PendingClarification = {
   runId: string;
+  request: ClarifyRequestPayload;
+  expiresAt?: number;
   resolve: (answer: string) => void;
   reject: (error: Error) => void;
   beforeResponse?: () => boolean;
@@ -19,10 +22,14 @@ export class EphemeralClarificationWaiter {
     request: ClarifyRequestPayload;
     beforeResponse?: () => boolean;
   }): Promise<string> {
+    const request = normalizeClarificationQuestion(input.request);
     const requestId = crypto.randomUUID();
+    const expiresAt = request.kind === 'approval' ? Date.now() + 10 * 60_000 : undefined;
     return new Promise<string>((resolve, reject) => {
       this.pending.set(requestId, {
         runId: input.runId,
+        request,
+        expiresAt,
         resolve,
         reject,
         beforeResponse: input.beforeResponse,
@@ -30,21 +37,27 @@ export class EphemeralClarificationWaiter {
       input.publish({
         type: 'clarify_request',
         requestId,
-        kind: input.request.kind ?? 'input',
-        question: input.request.question,
-        choices: input.request.choices,
-        suggestedAnswer: input.request.suggestedAnswer,
+        ...readClarificationPresentation(request),
+        kind: request.kind ?? 'input',
+        question: request.question,
+
+
+        expiresAt,
         version: 1,
         createdAt: Date.now(),
       });
     });
   }
 
-  answer(requestId: string, answer: string): boolean {
+  answer(requestId: string, answer: ClarificationSubmission): boolean {
     const pending = this.pending.get(requestId);
-    if (!pending || pending.beforeResponse?.() === false) return false;
+    if (!pending || pending.beforeResponse?.() === false
+      || (pending.expiresAt !== undefined && pending.expiresAt <= Date.now())) return false;
+    let normalized: ReturnType<typeof normalizeClarificationSubmission>;
+    try { normalized = normalizeClarificationSubmission(pending.request, answer); }
+    catch { return false; }
     this.pending.delete(requestId);
-    pending.resolve(answer.trim());
+    pending.resolve(normalized.answer);
     return true;
   }
 

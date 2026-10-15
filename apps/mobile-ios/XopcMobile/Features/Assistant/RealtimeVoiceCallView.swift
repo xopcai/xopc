@@ -216,44 +216,11 @@ struct RealtimeVoiceCallView: View {
         .accessibilityLabel(Text(title))
     }
 
-    private func clarificationCard(_ clarification: RealtimeVoiceCall.Clarification) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text(clarification.question).font(.subheadline.weight(.medium))
-            if !clarification.choices.isEmpty {
-                ScrollView(.horizontal) {
-                    HStack {
-                        ForEach(clarification.choices, id: \.self) { choice in
-                            Button(choice) { Task { await call.submitClarification(action: "answer", answer: choice) } }
-                                .buttonStyle(.bordered)
-                                .disabled(call.respondingToIntervention)
-                        }
-                    }
-                }
-            }
-            TextField(
-                clarification.suggestedAnswer.isEmpty
-                    ? AppLocalization.string("输入回答", locale: locale)
-                    : clarification.suggestedAnswer,
-                text: $answer
-            )
-            .textFieldStyle(.roundedBorder)
-            HStack {
-                Button("交给助手决定") { Task { await call.submitClarification(action: "agent_decide") } }
-                    .buttonStyle(.bordered)
-                    .disabled(call.respondingToIntervention)
-                Spacer()
-                Button("发送") {
-                    let text = answer.trimmingCharacters(in: .whitespacesAndNewlines)
-                    guard !text.isEmpty else { return }
-                    Task { await call.submitClarification(action: "answer", answer: text) }
-                    answer = ""
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(call.respondingToIntervention || answer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            }
-        }
-        .padding(14)
-        .background(Color(uiColor: .secondarySystemGroupedBackground), in: .rect(cornerRadius: 18))
+    private func clarificationCard(_ clarification: ClarificationRequest) -> some View {
+        ClarificationCard(clarification: clarification, isSubmitting: call.respondingToIntervention,
+            errorMessage: call.errorCode, onRespond: { action, submission in
+                Task { await call.submitClarification(action: action, submission: submission) }
+            }).id(clarification.id)
     }
 
     private func approvalCard(_ approval: RealtimeVoiceApproval) -> some View {

@@ -105,9 +105,10 @@ struct AgentConfigurationCommand: Encodable {
     let thinkingLevel: String
 }
 
-struct ClarificationResponseCommand: Encodable {
+struct ClarificationResponseCommand: Encodable, Equatable {
     let action: String
-    let answer: String?
+    let response: ClarificationSubmission.Response?
+    let decision: String?
     let expectedVersion: Int
     let idempotencyKey: String
 }

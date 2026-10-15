@@ -273,7 +273,7 @@ describe('lazy route bundles', () => {
 
   it('routes MCP resources through the MCP bundle without capturing nearby paths', () => {
     expect(findAuthenticatedLazyRouteBundle('/api/mcp/resources')).toBeUndefined();
-    expect(findAuthenticatedLazyRouteBundle('/api/mcp/servers/docs')).toBeUndefined();
+    expect(findAuthenticatedLazyRouteBundle('/api/mcp/servers/docs/unknown')).toBeUndefined();
     expect(findAuthenticatedLazyRouteBundle('/api/mcp/servers')?.id).toBe('mcp');
     expect(findAuthenticatedLazyRouteBundle('/api/mcpish/resources')).toBeUndefined();
   });
@@ -359,4 +359,13 @@ describe('lazy route bundles', () => {
     const ids = AUTHENTICATED_LAZY_ROUTE_BUNDLES.map((bundle) => bundle.id);
     expect(new Set(ids).size).toBe(ids.length);
   });
+});
+
+it('routes MCP draft testing, OAuth, tools, deletion and commit without overlapping unrelated routes', () => {
+  for (const path of ['/api/mcp/servers/docs', '/api/mcp/drafts', '/api/mcp/drafts/id', '/api/mcp/drafts/id/probe', '/api/mcp/drafts/id/auth', '/api/mcp/drafts/id/auth/redirect', '/api/mcp/drafts/id/commit', '/api/mcp/drafts/id/tools']) {
+    expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('mcp');
+  }
+  for (const path of ['/api/mcp/drafts-extra', '/api/mcp/drafts/id/extra', '/api/mcp/drafts/id/commit/extra', '/api/mcp/drafts/id/auth/extra']) {
+    expect(findAuthenticatedLazyRouteBundle(path)).toBeUndefined();
+  }
 });

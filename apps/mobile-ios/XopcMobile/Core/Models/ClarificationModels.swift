@@ -7,20 +7,72 @@ struct ClarificationSnapshot: Decodable, Sendable {
     let clarification: ClarificationRequest?
 }
 
+struct ClarificationChoice: Codable, Equatable, Identifiable, Sendable {
+    let id: String
+    let label: String
+    let description: String?
+}
+
+indirect enum ClarificationJSON: Codable, Equatable, Sendable {
+    case string(String), number(Double), bool(Bool), object([String: ClarificationJSON]), array([ClarificationJSON]), null
+    init(from decoder: any Decoder) throws {
+        let c = try decoder.singleValueContainer()
+        if c.decodeNil() { self = .null }
+        else if let v = try? c.decode(Bool.self) { self = .bool(v) }
+        else if let v = try? c.decode(Double.self) { self = .number(v) }
+        else if let v = try? c.decode(String.self) { self = .string(v) }
+        else if let v = try? c.decode([String: ClarificationJSON].self) { self = .object(v) }
+        else { self = .array(try c.decode([ClarificationJSON].self)) }
+    }
+    func encode(to encoder: any Encoder) throws {
+        var c = encoder.singleValueContainer()
+        switch self {
+        case let .string(v): try c.encode(v)
+        case let .number(v): try c.encode(v)
+        case let .bool(v): try c.encode(v)
+        case let .object(v): try c.encode(v)
+        case let .array(v): try c.encode(v)
+        case .null: try c.encodeNil()
+        }
+    }
+}
+
+struct ClarificationApproval: Codable, Equatable, Sendable {
+    let operation: String
+    let target: String?
+    let impact: String?
+    let argumentsPreview: [String: ClarificationJSON]?
+    var preview: String? {
+        guard let argumentsPreview else { return nil }
+        let encoder = JSONEncoder(); encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        return (try? encoder.encode(argumentsPreview)).flatMap { String(data: $0, encoding: .utf8) }
+    }
+}
+
+struct ClarificationSubmission: Codable, Equatable, Sendable {
+    struct Response: Codable, Equatable, Sendable { let choiceId: String?; let text: String? }
+    let response: Response?
+    let decision: String?
+    static func input(choiceId: String? = nil, text: String? = nil) -> Self {
+        .init(response: .init(choiceId: choiceId, text: text), decision: nil)
+    }
+    static func approval(_ decision: String) -> Self { .init(response: nil, decision: decision) }
+}
+
 struct ClarificationRequest: Decodable, Equatable, Identifiable, Sendable {
     let id: String
     let conversationId: String
     let kind: String
     let status: String
     let question: String
-    let choices: [String]?
-    let suggestedAnswer: String?
+    let choiceDetails: [ClarificationChoice]?
+    let interactionMode: String?
+    let recommendedChoiceId: String?
+    let approval: ClarificationApproval?
     let version: Int
     let expiresAt: Int?
-
-    var isOpen: Bool {
-        status == "open"
-    }
+    var isOpen: Bool { status == "open" }
+    var isExpired: Bool { expiresAt.map { Double($0) <= Date().timeIntervalSince1970 * 1000 } ?? false }
 }
 
 struct InputState: Decodable, Sendable {

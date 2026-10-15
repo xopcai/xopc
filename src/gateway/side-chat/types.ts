@@ -1,3 +1,4 @@
+import type { ClarificationPresentation } from '@xopcai/gateway-contract';
 import type { ThinkingLevel } from '@earendil-works/pi-agent-core';
 
 export type SideChatStatus = 'idle' | 'running' | 'waiting-approval' | 'waiting-input' | 'promoting' | 'closing';
@@ -61,12 +62,12 @@ export interface SideChatView {
   expiresAt: string | null;
   serverNow?: string;
   runId?: string;
-  clarification?: {
+  clarification?: ClarificationPresentation & {
     requestId: string;
     kind: 'input' | 'approval';
     question: string;
-    choices?: string[];
-    suggestedAnswer?: string;
+
+    expiresAt?: number;
   };
   messageCount: number;
   context: SideChatContextSnapshot;

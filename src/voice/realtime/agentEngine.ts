@@ -1,3 +1,4 @@
+import { readClarificationPresentation } from '@xopcai/gateway-contract';
 import crypto from 'node:crypto';
 import type { StreamingSttSession, StreamingSttEvent } from '../../media-understanding/types.js';
 import { createLogger } from '../../utils/logger.js';
@@ -447,12 +448,13 @@ export function createAgentVoiceEngine(options: {
           if (event.type === 'clarify_request' && typeof event.payload?.requestId === 'string' && typeof event.payload?.question === 'string') {
             response.awaitingClarification = true;
             send('response.clarification', {
+              ...readClarificationPresentation(event.payload),
               responseId: response.id,
               requestId: event.payload.requestId.slice(0, 160),
               kind: event.payload.kind === 'approval' ? 'approval' : 'input',
               question: event.payload.question.slice(0, 8_000),
-              ...(Array.isArray(event.payload.choices) ? { choices: event.payload.choices.filter((choice): choice is string => typeof choice === 'string').slice(0, 20).map((choice) => choice.slice(0, 1_000)) } : {}),
-              ...(typeof event.payload.suggestedAnswer === 'string' ? { suggestedAnswer: event.payload.suggestedAnswer.slice(0, 1_000) } : {}),
+
+
               version: typeof event.payload.version === 'number' ? event.payload.version : 1,
               createdAt: typeof event.payload.createdAt === 'number' ? event.payload.createdAt : Date.now(),
               ...(typeof event.payload.expiresAt === 'number' ? { expiresAt: event.payload.expiresAt } : {}),

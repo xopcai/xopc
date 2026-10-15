@@ -23,6 +23,8 @@
  * than holding our own copy so other coordinators (sessions, marketplace,
  * agent runner) see the latest config the moment a reload commits.
  */
+import { isDeepStrictEqual } from 'node:util';
+
 import { configureTracing } from '../../observability/runtime.js';
 import type { Config } from '../../config/schema.js';
 import type { Config as SurfaceConfig } from '../../config/config-surface.js';
@@ -65,6 +67,7 @@ export class GatewayConfigCoordinator {
   private configReloader: ConfigHotReloader | null = null;
   private channelReloadFlushPromise: Promise<void> | null = null;
   private channelReloadPending = false;
+  private configWrite: Promise<unknown> = Promise.resolve();
 
   constructor(opts: GatewayConfigCoordinatorOptions) {
     this.opts = opts;
@@ -124,33 +127,40 @@ export class GatewayConfigCoordinator {
 
   // ── Persist (PATCH /api/config, marketplace install, etc.) ─────────────
 
-  async saveConfig(config: Config): Promise<{ saved: boolean; error?: string }> {
+  async saveConfig(config: Config, expectedConfig = this.opts.getConfig()): Promise<{ saved: boolean; error?: string; persisted?: boolean; conflict?: boolean }> {
+    const candidate = structuredClone(config), expected = structuredClone(expectedConfig);
+    return this.queueConfigWrite(async () => {
+      if (!isDeepStrictEqual(this.opts.getConfig(), expected)) return { saved: false, conflict: true, error: 'Configuration changed before saving. Please retry.' };
+      return this.persistConfig(candidate);
+    });
+  }
+
+  private async queueConfigWrite<T>(operation: () => Promise<T>): Promise<T> {
+    const next = this.configWrite.catch(() => {}).then(operation);
+    this.configWrite = next;
+    return next;
+  }
+
+  private async persistConfig(config: Config): Promise<{ saved: boolean; error?: string; persisted?: boolean }> {
+    let persisted = false;
     try {
-      await this.writeConfigAndReloadFromDisk(config);
+      await this.writeConfigAndReloadFromDisk(config, () => { persisted = true; });
       this.scheduleChannelPluginsAfterPersist();
       return { saved: true };
     } catch (err) {
       const em = err instanceof Error ? err.message : String(err);
       log.error({ err, errorMessage: em, phase: 'infra.config' }, `Failed to save config: ${em}`);
-      return { saved: false, error: em };
+      return { saved: false, error: em, persisted };
     }
   }
 
   /** Merge partial updates into `currentConfig` and persist. */
   async updateConfig(updates: Partial<Config>): Promise<{ updated: boolean; error?: string }> {
-    try {
-      log.debug('Updating configuration...');
-      const merged = { ...this.opts.getConfig(), ...updates };
-      this.opts.setConfig(merged);
-      await this.writeConfigAndReloadFromDisk(merged);
-      this.scheduleChannelPluginsAfterPersist();
-      log.debug('Configuration updated successfully');
-      return { updated: true };
-    } catch (err) {
-      const em = err instanceof Error ? err.message : String(err);
-      log.error({ err, errorMessage: em, phase: 'infra.config' }, `Failed to update config: ${em}`);
-      return { updated: false, error: em };
-    }
+    const patch = structuredClone(updates);
+    return this.queueConfigWrite(async () => {
+      const result = await this.persistConfig({ ...this.opts.getConfig(), ...patch });
+      return { updated: result.saved, ...(result.error ? { error: result.error } : {}) };
+    });
   }
 
   /**
@@ -374,8 +384,11 @@ export class GatewayConfigCoordinator {
    * runtime matches disk (PATCH merge objects can drift from Zod-normalized
    * output).
    */
-  private async writeConfigAndReloadFromDisk(configToWrite: Config): Promise<void> {
+  private async writeConfigAndReloadFromDisk(configToWrite: Config, onPersisted?: () => void): Promise<void> {
     await writeConfigToDisk(configToWrite, this.opts.configPath);
+    onPersisted?.();
+    // Keep subsequent writes based on the committed file even if reload fails.
+    this.opts.setConfig(structuredClone(configToWrite));
     const reloaded = loadConfig(this.opts.configPath);
     this.opts.setConfig(reloaded);
     await configureTracing(reloaded.observability?.tracing);

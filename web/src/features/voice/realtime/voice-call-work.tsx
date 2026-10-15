@@ -1,3 +1,4 @@
+import type { ClarificationSubmission } from '@xopcai/gateway-contract';
 import { useRef, useState } from 'react';
 import useSWR from 'swr';
 
@@ -26,10 +27,10 @@ export function VoiceCallWork({ voice, conversationId, m }: { voice: UseRealtime
     try { await action(); } catch (err) { setError(err instanceof Error ? err.message : String(err)); }
     finally { submitting.current = false; setPending(false); }
   };
-  const answer = (action: 'answer' | 'agent_decide' | 'cancel', text?: string) => {
+  const answer = (action: 'answer' | 'agent_decide' | 'cancel', submission?: ClarificationSubmission) => {
     const clarification = voice.clarification;
     if (!clarification) return;
-    const signature = `${clarification.requestId}\n${clarification.version}\n${action}\n${text ?? ''}`;
+    const signature = JSON.stringify([clarification.requestId, clarification.version, action, submission]);
     if (clarificationAttempt.current?.signature !== signature) {
       clarificationAttempt.current = { signature, idempotencyKey: crypto.randomUUID() };
     }
@@ -38,7 +39,7 @@ export function VoiceCallWork({ voice, conversationId, m }: { voice: UseRealtime
         method: 'POST',
         body: JSON.stringify({
           action,
-          answer: text,
+          ...submission,
           expectedVersion: clarification.version,
           idempotencyKey: clarificationAttempt.current!.idempotencyKey,
         }),
@@ -54,7 +55,7 @@ export function VoiceCallWork({ voice, conversationId, m }: { voice: UseRealtime
       writeFile: m.stepWriteFile, editFile: m.stepEditFile, openUrl: m.stepOpenUrl,
       fetchUrl: m.stepFetchUrl, unknownTool: m.stepUnknownTool,
     })} · {activity.status === 'running' ? m.callWorking : activity.status === 'failed' ? m.callWorkFailed : m.callWorkDone}</p>)}
-    <ClarifyPrompt prompt={voice.clarification} labels={m} submitting={pending} submitError={error} onSubmit={(text) => answer('answer', text)} onAgentDecide={() => answer('agent_decide')} onCancel={() => answer('cancel')} />
+    <ClarifyPrompt prompt={voice.clarification} labels={m} submitting={pending} submitError={error} onSubmit={(submission) => answer('answer', submission)} onAgentDecide={() => answer('agent_decide')} onCancel={() => answer('cancel')} />
     {scopedApprovals.map((approval) => <div key={approval.id} className="space-y-2 rounded-lg border border-edge p-3">
       <p className="font-medium">{m.callApproval}</p><p>{approval.actionId}</p>
       <pre className="max-h-40 overflow-auto whitespace-pre-wrap break-all text-xs">{JSON.stringify(approval.argumentsPreview, null, 2)}</pre>

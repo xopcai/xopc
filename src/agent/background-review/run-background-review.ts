@@ -23,6 +23,7 @@ import {
   executeUserModelInterpretation,
   parseUserModelInterpretation,
   type CaptureEvidence,
+  type InterpretationParseFailure,
   type UserModelCaptureResult,
   type UserModelInterpretation,
 } from '../../user-model/capture/index.js';
@@ -34,7 +35,7 @@ import { createLogger } from '../../utils/logger.js';
 import { extractTextContent } from '../context/workspace.js';
 import { readAgentMessageContent } from '../memory/agent-message-access.js';
 import { runAgentTurnWithTimeout, resolveAgentTurnTimeoutMs } from '../orchestration/run-agent-turn-with-timeout.js';
-import { isAssistantTurnAborted, isAssistantTurnFailed } from '../orchestration/llm-turn-retry.js';
+import { getAssistantTurnErrorMessage, getLastAssistantMessage, isAssistantTurnAborted, isAssistantTurnFailed } from '../orchestration/llm-turn-retry.js';
 
 import type { BackgroundReviewSettings } from './settings.js';
 import {
@@ -170,6 +171,8 @@ async function interpret(params: {
     getApiKey: (provider: string) => resolveProviderApiKeySync(provider) ?? getApiKeySync(provider) ?? '',
   });
   reviewAgent.state.messages = params.evidence.map(tagMessage);
+  let interpretation: UserModelInterpretation | null = null;
+  const diagnostics = { conversationId: params.conversationId, provider: params.model.provider, modelId: params.model.id };
   try {
     await runAgentTurnWithTimeout(reviewAgent, async () => {
       const timezone = params.getConfig()?.userContext.userModel.maintenance.timezone
@@ -188,19 +191,39 @@ async function interpret(params: {
         timestamp: Date.now(),
       });
       await reviewAgent.waitForIdle();
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        if (isAssistantTurnAborted(reviewAgent) || isAssistantTurnFailed(reviewAgent)) {
+          log.warn({ ...diagnostics, failureReason: isAssistantTurnAborted(reviewAgent) ? 'aborted' : 'model_failed',
+            errorMessage: getAssistantTurnErrorMessage(reviewAgent) }, 'User-understanding model turn failed');
+          return;
+        }
+        const raw = lastAssistantText(reviewAgent);
+        let failure: InterpretationParseFailure | undefined;
+        interpretation = parseUserModelInterpretation(raw, params.evidence,
+          params.availableAssertions.map(item => item.id), value => { failure = value; });
+        if (interpretation) return;
+        const fields = { ...diagnostics, ...failure, outputChars: raw.length,
+          stopReason: (getLastAssistantMessage(reviewAgent.state.messages) as { stopReason?: string } | undefined)?.stopReason };
+        if (attempt === 1) {
+          log.warn(fields, 'User-understanding output invalid after one repair attempt');
+          return;
+        }
+        log.debug(fields, 'Repairing invalid user-understanding output');
+        await reviewAgent.prompt({ role: 'user', timestamp: Date.now(), content:
+          `Your previous response did not satisfy the required JSON schema (${JSON.stringify(failure)}). `
+          + 'Return a corrected complete JSON object using exactly the shapes, allowed values, and limits above. '
+          + 'Omit optional fields instead of returning null. Do not invent evidence or relax grounding. '
+          + 'Return empty candidate arrays when no supported candidates exist. Return JSON only.' });
+        await reviewAgent.waitForIdle();
+      }
     }, Math.min(params.timeoutMs, resolveAgentTurnTimeoutMs(params.getConfig())));
   } catch (err) {
-    log.warn({ err, conversationId: params.conversationId }, 'User-understanding interpretation failed or timed out');
+    log.warn({ err, ...diagnostics }, 'User-understanding interpretation failed or timed out');
     reviewAgent.abort();
     await reviewAgent.waitForIdle().catch(() => {});
     return null;
   }
-  if (isAssistantTurnAborted(reviewAgent) || isAssistantTurnFailed(reviewAgent)) return null;
-  return parseUserModelInterpretation(
-    lastAssistantText(reviewAgent),
-    params.evidence,
-    params.availableAssertions.map((item) => item.id),
-  );
+  return interpretation;
 }
 
 async function executeReview(params: {

@@ -1,4 +1,10 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { Check } from 'lucide-react';
+import {
+  CLARIFICATION_ANSWER_LIMIT,
+  normalizeClarificationSubmission,
+  type ClarificationPresentation, type ClarificationSubmission,
+} from '@xopcai/gateway-contract';
 
 import { Button } from '@/components/ui/button';
 import { MarkdownView } from '@/features/chat/markdown/markdown-view';
@@ -6,312 +12,170 @@ import type { ChatMessages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
 
-export type ClarifyPromptState = {
+export type ClarifyPromptState = ClarificationPresentation & {
   requestId: string;
   kind: 'input' | 'approval';
   question: string;
-  choices?: string[];
-  suggestedAnswer?: string;
+
   version: number;
   createdAt: number;
   expiresAt?: number;
+  serverTime?: number;
 };
 
-type ClarifyPromptView = Pick<ClarifyPromptState, 'requestId' | 'question' | 'choices' | 'suggestedAnswer' | 'expiresAt'>
-  & Partial<Pick<ClarifyPromptState, 'kind' | 'version' | 'createdAt'>>;
+type ClarifyPromptView = ClarificationPresentation & Pick<ClarifyPromptState,
+  'requestId' | 'question' | 'expiresAt' | 'serverTime'>
+  & Partial<Pick<ClarifyPromptState, 'kind' | 'version' | 'createdAt'>>
+  & { durable?: boolean };
 
-function formatClock(totalSeconds: number): string {
-  const m = Math.floor(totalSeconds / 60);
-  const s = totalSeconds % 60;
-  return `${m}:${s.toString().padStart(2, '0')}`;
-}
-
-export type ClarifyPromptCopy = Pick<
-  ChatMessages,
-  | 'clarifyRegionAria'
-  | 'clarifyResumeHint'
-  | 'clarifyDurableNote'
-  | 'clarifyApprovalTimeout'
-  | 'clarifyChoicesGroupAria'
-  | 'clarifyCustomLabel'
-  | 'clarifyPlaceholder'
-  | 'clarifySend'
-  | 'clarifyUseSuggested'
-  | 'clarifySuggestedChoice'
-  | 'clarifyAgentDecide'
-  | 'clarifyCancel'
-  | 'clarifyTimeRemaining'
->;
+export type ClarifyPromptCopy = Pick<ChatMessages,
+  'clarifyRegionAria' | 'clarifyResumeHint' | 'clarifyDurableNote' | 'clarifyApprovalTimeout'
+  | 'clarifyChoicesGroupAria' | 'clarifyCustomLabel' | 'clarifyPlaceholder' | 'clarifySend'
+  | 'clarifyAgentDecide' | 'clarifyCancel'
+  | 'clarifyTimeRemaining' | 'clarifyQuickHint' | 'clarifyCompose' | 'clarifySupplement'
+  | 'clarifyRecommended' | 'clarifyClearChoice' | 'clarifyKeyboardHint' | 'clarifyApprovalTitle'
+  | 'clarifyApprove' | 'clarifyDeny' | 'clarifyOperation' | 'clarifyTarget' | 'clarifyImpact'
+  | 'clarifyDetails' | 'clarifyOnce' | 'clarifyExpired' | 'clarifyAnswerTooLong' | 'clarifySubmitting'>;
 
 type ClarifyPromptProps = {
   prompt: ClarifyPromptView | null;
   submitting: boolean;
   submitError: string | null;
   labels: ClarifyPromptCopy;
-  onSubmit: (answer: string) => void | Promise<void>;
+  onSubmit: (submission: ClarificationSubmission) => void | Promise<void>;
   onAgentDecide?: () => void | Promise<void>;
   onCancel: () => void | Promise<void>;
 };
 
-export function ClarifyPrompt({
-  prompt,
-  submitting,
-  submitError,
-  labels,
-  onSubmit,
-  onAgentDecide,
-  onCancel,
-}: ClarifyPromptProps) {
-  if (!prompt) {
-    return null;
-  }
-
-  return (
-    <ClarifyPromptBody
-      key={prompt.requestId}
-      prompt={prompt}
-      submitting={submitting}
-      submitError={submitError}
-      labels={labels}
-      onSubmit={onSubmit}
-      onAgentDecide={onAgentDecide}
-      onCancel={onCancel}
-    />
-  );
+export function ClarifyPrompt(props: ClarifyPromptProps) {
+  return props.prompt ? <ClarifyPromptBody key={props.prompt.requestId} {...props} prompt={props.prompt} /> : null;
 }
 
-function ClarifyPromptBody({
-  prompt,
-  submitting,
-  submitError,
-  labels,
-  onSubmit,
-  onAgentDecide,
-  onCancel,
-}: {
-  prompt: ClarifyPromptView;
-  submitting: boolean;
-  submitError: string | null;
-  labels: ClarifyPromptCopy;
-  onSubmit: (answer: string) => void | Promise<void>;
-  onAgentDecide?: () => void | Promise<void>;
-  onCancel: () => void | Promise<void>;
-}) {
-  const [customDraft, setCustomDraft] = useState('');
-  const [tick, setTick] = useState(0);
-  const regionRef = useRef<HTMLDivElement>(null);
+function ClarifyPromptBody({ prompt, submitting, submitError, labels, onSubmit, onAgentDecide, onCancel }:
+  Omit<ClarifyPromptProps, 'prompt'> & { prompt: ClarifyPromptView }) {
+  const [draft, setDraft] = useState('');
+  const [selected, setSelected] = useState<string>();
+  const [editing, setEditing] = useState(false);
+  const [now, setNow] = useState(Date.now);
+  const [busy, setBusy] = useState(false);
+  const sending = useRef(false);
+  const region = useRef<HTMLElement>(null);
+  const errorRegion = useRef<HTMLDivElement>(null);
+  const input = useRef<HTMLTextAreaElement>(null);
+  const [clockOffset] = useState(() => prompt.serverTime ? prompt.serverTime - Date.now() : 0);
+  const remaining = prompt.expiresAt === undefined ? null : Math.max(0, Math.ceil((prompt.expiresAt - now - clockOffset) / 1000));
+  const expired = remaining === 0;
+  const disabled = submitting || busy || expired;
+  const approval = prompt.kind === 'approval';
+  const compose = prompt.interactionMode === 'compose' || editing;
+  const choices = prompt.choiceDetails ?? [];
+  const selectedChoice = choices.find(choice => choice.id === selected);
+  const tooLong = draft.trim().length > CLARIFICATION_ANSWER_LIMIT;
+  const inputId = `clarify-answer-${prompt.requestId}`;
+  const errorId = `clarify-error-${prompt.requestId}`;
+  const hintId = `clarify-hint-${prompt.requestId}`;
+  const recommended = prompt.recommendedChoiceId;
 
+  useEffect(() => { region.current?.focus(); }, []);
+  useEffect(() => {
+    if (submitError) errorRegion.current?.focus();
+  }, [submitError]);
   useEffect(() => {
     if (!prompt.expiresAt) return;
-    const id = window.setInterval(() => setTick((n) => n + 1), 1000);
-    return () => window.clearInterval(id);
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
   }, [prompt.expiresAt]);
-
   useEffect(() => {
-    regionRef.current?.focus();
-  }, []);
+    if (!input.current) return;
+    input.current.style.height = 'auto';
+    input.current.style.height = `${Math.min(160, input.current.scrollHeight)}px`;
+  }, [draft]);
 
-  const pick = useCallback(
-    (answer: string) => {
-      void onSubmit(answer);
-    },
-    [onSubmit],
-  );
+  const submit = async (submission: ClarificationSubmission) => {
+    if (disabled || sending.current) return;
+    normalizeClarificationSubmission(prompt, submission);
+    sending.current = true;
+    setBusy(true);
+    try { await onSubmit(submission); }
+    finally { sending.current = false; setBusy(false); }
+  };
+  const pick = (id: string) => {
+    if (disabled) return;
+    if (compose || draft.length) { setEditing(true); setSelected(id); }
+    else void submit({ response: { choiceId: id } });
+  };
+  const sendDraft = () => {
+    if (tooLong || (!selectedChoice && !draft.trim())) return;
+    void submit({ response: { choiceId: selectedChoice?.id, text: draft.trim() || undefined } });
+  };
 
-  const remainingSeconds = useMemo(() => {
-    void tick;
-    return prompt.expiresAt
-      ? Math.max(0, Math.ceil((prompt.expiresAt - Date.now()) / 1000))
-      : null;
-  }, [prompt.expiresAt, tick]);
-
-  const metaId = `clarify-meta-${prompt.requestId}`;
-  const errId = submitError ? `clarify-err-${prompt.requestId}` : undefined;
-
-  const onKeyDownRegion = useCallback(
-    (e: KeyboardEvent<HTMLDivElement>) => {
-      if (e.key === 'Escape' && !submitting) {
-        e.preventDefault();
-        e.stopPropagation();
-        void onCancel();
-      }
-    },
-    [onCancel, submitting],
-  );
-
-  const hasChoices = Array.isArray(prompt.choices) && prompt.choices.length >= 2;
-  const suggestedLabel = prompt.suggestedAnswer
-    ? labels.clarifySuggestedChoice.replace('{{text}}', prompt.suggestedAnswer)
-    : null;
-  const timeLeftLine = remainingSeconds === null
-    ? null
-    : labels.clarifyTimeRemaining.replace('{{time}}', formatClock(remainingSeconds));
-
-  return (
-    <section
-      data-clarification-id={prompt.requestId}
-      ref={regionRef}
-      tabIndex={-1}
-      aria-label={labels.clarifyRegionAria}
-      aria-describedby={metaId}
-      onKeyDown={onKeyDownRegion}
-      className={cn(
-        'mb-4 rounded-lg border border-edge bg-surface-panel px-4 py-3 text-sm text-fg shadow-sm outline-none',
-        interaction.focusRingPanel,
-      )}
-    >
-      <p className="mb-2 text-xs text-fg-muted">{labels.clarifyResumeHint}</p>
-      <MarkdownView content={prompt.question} compact className="mb-3" />
-
-      <ul id={metaId} className="mb-3 list-inside list-disc space-y-1 text-xs text-fg-muted">
-        <li>{prompt.kind === 'approval' ? labels.clarifyApprovalTimeout : labels.clarifyDurableNote}</li>
-        {timeLeftLine ? <li>{timeLeftLine}</li> : null}
-      </ul>
-
-      {submitError ? (
-        <div
-          id={errId}
-          role="alert"
-          className="mb-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200"
-        >
-          {submitError}
+  return <section ref={region} tabIndex={-1} data-clarification-id={prompt.requestId}
+    aria-label={approval ? labels.clarifyApprovalTitle : labels.clarifyRegionAria}
+    aria-busy={submitting || busy}
+    className={cn('mb-4 rounded-lg border border-edge bg-surface-panel px-4 py-3 text-sm text-fg outline-none', interaction.focusRingPanel)}>
+    <p className="mb-2 font-medium">{approval ? labels.clarifyApprovalTitle : labels.clarifyResumeHint}</p>
+    <MarkdownView content={prompt.question} compact className="mb-3" />
+    {approval && prompt.approval ? <dl className="mb-3 space-y-2">
+      {([[labels.clarifyOperation, prompt.approval.operation], [labels.clarifyTarget, prompt.approval.target],
+        [labels.clarifyImpact, prompt.approval.impact]] as const).map(([label, value]) => value ? <div key={label}>
+        <dt className="text-xs text-fg-muted">{label}</dt><dd className="whitespace-pre-wrap break-words">{value}</dd>
+      </div> : null)}
+    </dl> : null}
+    {approval && prompt.approval?.argumentsPreview ? <details className="mb-3">
+      <summary className="cursor-pointer text-fg-muted">{labels.clarifyDetails}</summary>
+      <pre className="max-h-40 overflow-auto whitespace-pre-wrap break-all text-xs">{JSON.stringify(prompt.approval.argumentsPreview, null, 2)}</pre>
+    </details> : null}
+    <div className="mb-3 space-y-1 text-xs text-fg-muted">
+      {approval ? <><p>{labels.clarifyOnce}</p><p>{labels.clarifyApprovalTimeout}</p></>
+        : prompt.durable !== false ? <p>{labels.clarifyDurableNote}</p> : null}
+      {remaining !== null ? <p role="status">{expired ? labels.clarifyExpired
+        : labels.clarifyTimeRemaining.replace('{{time}}', `${Math.floor(remaining / 60)}:${String(remaining % 60).padStart(2, '0')}`)}</p> : null}
+    </div>
+    {submitError ? <div ref={errorRegion} tabIndex={-1} id={errorId} role="alert" className="mb-3 rounded-md border border-edge p-3 text-red-600">{submitError}</div> : null}
+    {submitting || busy ? <p role="status" className="mb-2 text-xs text-fg-muted">{labels.clarifySubmitting}</p> : null}
+    {approval ? <div className="flex flex-wrap gap-2">
+      <Button variant="secondary" disabled={disabled} onClick={() => void submit({ decision: 'deny' })}>{labels.clarifyDeny}</Button>
+      <Button variant="primary" disabled={disabled} onClick={() => void submit({ decision: 'approve' })}>{labels.clarifyApprove}</Button>
+    </div> : <>
+      {choices.length ? <>
+        {!compose ? <div className="mb-2 flex flex-wrap items-center justify-between gap-2 text-xs text-fg-muted">
+          <span>{labels.clarifyQuickHint}</span><Button variant="ghost" disabled={disabled} onClick={() => { setEditing(true); input.current?.focus(); }}>{labels.clarifyCompose}</Button>
+        </div> : null}
+        <div role="group" aria-label={labels.clarifyChoicesGroupAria} className="max-h-64 space-y-2 overflow-y-auto">
+          {choices.map(choice => <Button key={choice.id} type="button" variant="secondary"
+            aria-pressed={compose ? selected === choice.id : undefined} disabled={disabled}
+            className={cn('min-h-11 w-full justify-start whitespace-normal px-3 py-2 text-left font-normal shadow-none', selected === choice.id && 'border-accent bg-surface-active')}
+            onClick={() => pick(choice.id)}>
+            {selected === choice.id ? <Check aria-hidden="true" className="size-4 shrink-0" /> : null}
+            <span className="min-w-0 break-words"><span className="font-medium">{choice.label}</span>
+              {recommended === choice.id ? <span className="ml-2 text-xs text-accent">{labels.clarifyRecommended}</span> : null}
+              {choice.description ? <span className="mt-1 block text-xs text-fg-muted">{choice.description}</span> : null}
+            </span>
+          </Button>)}
         </div>
-      ) : null}
-
-      {hasChoices ? (
-        <>
-          <div
-            className="max-h-[min(40vh,16rem)] overflow-y-auto overflow-x-hidden pr-1 [scrollbar-gutter:stable]"
-            aria-label={labels.clarifyChoicesGroupAria}
-          >
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-              {prompt.choices!.map((c) => (
-                <Button
-                  key={c}
-                  type="button"
-                  variant="secondary"
-                  disabled={submitting}
-                  className={cn(
-                    'min-h-9 w-full justify-start rounded-lg px-3 py-2 text-left text-sm font-normal shadow-none',
-                    'hover:border-edge',
-                  )}
-                  onClick={() => pick(c)}
-                >
-                  {c}
-                </Button>
-              ))}
-              {prompt.suggestedAnswer ? (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  disabled={submitting}
-                  className={cn(
-                    'min-h-9 w-full justify-start rounded-lg border border-dashed border-edge px-3 py-2 text-left text-sm font-normal text-fg-muted',
-                    'hover:border-edge hover:text-fg',
-                  )}
-                  onClick={() => pick(prompt.suggestedAnswer!)}
-                >
-                  {suggestedLabel}
-                </Button>
-              ) : null}
-            </div>
-          </div>
-
-          <div className="mt-3 border-t border-edge-subtle pt-3">
-            <p className="mb-2 text-xs font-medium text-fg-muted">{labels.clarifyCustomLabel}</p>
-            <form
-              className="flex flex-col gap-2 sm:flex-row sm:items-end"
-              onSubmit={(e) => {
-                e.preventDefault();
-                const t = customDraft.trim();
-                if (!t) return;
-                void onSubmit(t);
-              }}
-            >
-              <input
-                type="text"
-                value={customDraft}
-                onChange={(e) => setCustomDraft(e.target.value)}
-                disabled={submitting}
-                placeholder={labels.clarifyPlaceholder}
-                aria-label={labels.clarifyPlaceholder}
-                className="min-w-0 flex-1 rounded-md border border-edge bg-surface-panel px-3 py-2 text-fg placeholder:text-fg-muted focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50"
-              />
-              <Button
-                type="submit"
-                variant="primary"
-                disabled={submitting || !customDraft.trim()}
-                className="shrink-0 rounded-lg px-4 py-2 shadow-surface"
-              >
-                {labels.clarifySend}
-              </Button>
-            </form>
-          </div>
-        </>
-      ) : (
-        <form
-          className="flex flex-col gap-2 sm:flex-row sm:items-end"
-          onSubmit={(e) => {
-            e.preventDefault();
-            const t = customDraft.trim();
-            if (!t) return;
-            void onSubmit(t);
-            setCustomDraft('');
+        {selected ? <Button variant="ghost" disabled={disabled} onClick={() => setSelected(undefined)}>{labels.clarifyClearChoice}</Button> : null}
+      </> : null}
+      <form className="mt-3 space-y-2 border-t border-edge-subtle pt-3" onSubmit={event => { event.preventDefault(); sendDraft(); }}>
+        <label htmlFor={inputId} className="block text-xs font-medium text-fg-muted">{selected ? labels.clarifySupplement : labels.clarifyCustomLabel}</label>
+        <textarea id={inputId} ref={input} value={draft} rows={2} disabled={disabled}
+          placeholder={labels.clarifyPlaceholder} aria-invalid={tooLong} aria-describedby={`${hintId}${submitError ? ` ${errorId}` : ''}`}
+          onChange={event => { setDraft(event.target.value); if (event.target.value) setEditing(true); }}
+          onKeyDown={event => {
+            if (event.key === 'Enter' && (event.metaKey || event.ctrlKey) && !event.nativeEvent.isComposing) { event.preventDefault(); sendDraft(); }
           }}
-        >
-          <input
-            type="text"
-            value={customDraft}
-            onChange={(e) => setCustomDraft(e.target.value)}
-            disabled={submitting}
-            placeholder={labels.clarifyPlaceholder}
-            aria-label={labels.clarifyPlaceholder}
-            className="min-w-0 flex-1 rounded-md border border-edge bg-surface-panel px-3 py-2 text-fg placeholder:text-fg-muted focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50"
-          />
-          <Button
-            type="submit"
-            variant="primary"
-            disabled={submitting || !customDraft.trim()}
-            className="shrink-0 rounded-lg px-4 py-2 shadow-surface"
-          >
-            {labels.clarifySend}
-          </Button>
-          {prompt.suggestedAnswer ? (
-            <Button
-              type="button"
-              variant="secondary"
-              disabled={submitting}
-              className="shrink-0 rounded-lg px-3 py-2 text-sm font-normal text-fg-muted shadow-none hover:text-fg"
-              onClick={() => pick(prompt.suggestedAnswer!)}
-            >
-              {labels.clarifyUseSuggested}
-            </Button>
-          ) : null}
-        </form>
-      )}
-
-      <div className="mt-3 flex flex-wrap items-center justify-end gap-2 border-t border-edge-subtle pt-3">
-        {prompt.kind === 'input' && onAgentDecide ? (
-          <Button
-            type="button"
-            variant="ghost"
-            disabled={submitting}
-            className="text-fg-muted hover:text-fg"
-            onClick={() => void onAgentDecide()}
-          >
-            {labels.clarifyAgentDecide}
-          </Button>
-        ) : null}
-        <Button
-          type="button"
-          variant="ghost"
-          disabled={submitting}
-          className="text-fg-muted hover:text-fg"
-          onClick={() => void onCancel()}
-        >
-          {labels.clarifyCancel}
-        </Button>
+          className="max-h-40 min-h-16 w-full resize-none overflow-y-auto rounded-md border border-edge bg-surface-panel px-3 py-2 text-fg placeholder:text-fg-muted focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50" />
+        <div id={hintId} className="flex flex-wrap justify-between gap-2 text-xs text-fg-muted">
+          <span>{tooLong ? labels.clarifyAnswerTooLong : labels.clarifyKeyboardHint}</span>
+          <span aria-live={tooLong ? 'polite' : 'off'}>{draft.trim().length}/{CLARIFICATION_ANSWER_LIMIT}</span>
+        </div>
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <Button type="submit" variant="primary" disabled={disabled || tooLong || (!selectedChoice && !draft.trim())}>{labels.clarifySend}</Button>
+        </div>
+      </form>
+      <div className="mt-3 flex flex-wrap justify-end gap-2 border-t border-edge-subtle pt-3">
+        {onAgentDecide ? <Button variant="ghost" disabled={disabled} onClick={() => void onAgentDecide()}>{labels.clarifyAgentDecide}</Button> : null}
+        <Button variant="ghost" disabled={submitting || busy} onClick={() => void onCancel()}>{labels.clarifyCancel}</Button>
       </div>
-    </section>
-  );
+    </>}
+  </section>;
 }

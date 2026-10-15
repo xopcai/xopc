@@ -1,3 +1,4 @@
+import type { ClarificationPresentation } from '@xopcai/gateway-contract';
 import { Type } from '@sinclair/typebox';
 import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
 
@@ -5,27 +6,15 @@ const ClarifySchema = Type.Object({
   question: Type.String({
     description: 'The question to ask the user. Be specific and concise.',
   }),
-  choices: Type.Optional(
-    Type.Array(Type.String(), {
-      description:
-        'Optional list of choices for multiple-choice questions. ' +
-        'If provided, the user picks one. If omitted, the user types a free-form answer.',
-      minItems: 2,
-      maxItems: 10,
-    }),
-  ),
-  suggestedAnswer: Type.Optional(
-    Type.String({
-      description: 'Optional recommendation shown to the user. It is never selected automatically.',
-    }),
-  ),
-});
+  interactionMode: Type.Optional(Type.Union([Type.Literal('quick'), Type.Literal('compose')], { description: 'quick submits a choice immediately; compose lets the user select and add details before submitting.' })),
+  choiceDetails: Type.Optional(Type.Array(Type.Object({ id: Type.String(), label: Type.String(), description: Type.Optional(Type.String()) }), { minItems: 2, maxItems: 10, description: 'Answer choices with stable unique IDs and optional descriptions.' })),
+  recommendedChoiceId: Type.Optional(Type.String()),
+}, { additionalProperties: false });
 
-export type ClarifyRequestPayload = {
+export type ClarifyRequestPayload = ClarificationPresentation & {
   kind?: 'approval';
   question: string;
-  choices?: string[];
-  suggestedAnswer?: string;
+
   /** Stable hash of the exact operation guarded by an approval. */
   approvalKey?: string;
 };
@@ -59,7 +48,7 @@ function waitForAbort(signal: AbortSignal | undefined): Promise<never> {
   });
 }
 
-type ClarifyParams = { question: string; choices?: string[]; suggestedAnswer?: string };
+type ClarifyParams = Omit<ClarifyRequestPayload, 'kind' | 'approval' | 'approvalKey'>;
 
 export function createClarifyTool(deps: ClarifyToolDeps): AgentTool {
   return {
@@ -79,7 +68,7 @@ export function createClarifyTool(deps: ClarifyToolDeps): AgentTool {
       'TIPS:\n' +
       '- Provide choices when there are clear options (faster for the user)\n' +
       '- Keep questions short and specific\n' +
-      '- Include a suggested answer when one option is clearly more likely',
+      '- Set recommendedChoiceId when one option is clearly more likely',
     parameters: ClarifySchema,
 
     async execute(
@@ -102,9 +91,10 @@ export function createClarifyTool(deps: ClarifyToolDeps): AgentTool {
       }
 
       const payload: ClarifyRequestPayload = {
+        interactionMode: p.interactionMode,
+        choiceDetails: p.choiceDetails,
+        recommendedChoiceId: p.recommendedChoiceId,
         question: p.question,
-        choices: p.choices,
-        suggestedAnswer: p.suggestedAnswer,
       };
 
       try {

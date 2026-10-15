@@ -1,3 +1,5 @@
+import type { ClarificationPresentation, ClarificationSubmission } from '@xopcai/gateway-contract';
+import { readClarificationPresentation } from '@xopcai/gateway-contract';
 import { ChevronRight, MessageSquarePlus, MessageSquareText, Plus, Save, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { useLocation } from 'react-router-dom';
@@ -56,12 +58,12 @@ import {
 import type { SideChatTab, SideChatView } from './side-chat.types';
 import { buildSideChatReading, limitSideChatDraft, SIDE_CHAT_DRAFT_BYTES, textBytes } from './side-chat-reading';
 
-type SideChatClarifyPrompt = {
+type SideChatClarifyPrompt = ClarificationPresentation & {
   requestId: string;
   kind: 'input' | 'approval';
   question: string;
-  choices?: string[];
-  suggestedAnswer?: string;
+
+  expiresAt?: number;
 };
 const SIDE_CHAT_CLOSE_CONFIRM_DISABLED_KEY = 'xopc:side-chat-close-confirm-disabled:v1';
 const loadNoOlderSideChatMessages = () => {};
@@ -592,11 +594,13 @@ export function SideChatConversation({
         else if (event.event === 'tool_end') mutateAssistant((message) => completeTool(message.content, String(payload.toolName ?? 'tool'), payload.status === 'error', payload.result, String(payload.toolCallId ?? ''), Date.now(), payload.activity as never));
         else if (event.event === 'clarify_request') {
           setClarify({
+            ...readClarificationPresentation(payload),
+            expiresAt: typeof payload.expiresAt === 'number' ? payload.expiresAt : undefined,
             requestId: String(payload.requestId ?? ''),
             kind: payload.kind === 'approval' ? 'approval' : 'input',
             question: String(payload.question ?? ''),
-            choices: Array.isArray(payload.choices) ? payload.choices.filter((choice): choice is string => typeof choice === 'string') : undefined,
-            suggestedAnswer: typeof payload.suggestedAnswer === 'string' ? payload.suggestedAnswer : undefined,
+
+
           });
           setClarifyError(null);
           void reload();
@@ -674,12 +678,12 @@ export function SideChatConversation({
       }).finally(() => { submittingRef.current = false; });
   };
 
-  const answerClarify = async (answer: string) => {
+  const answerClarify = async (submission: ClarificationSubmission) => {
     if (!clarify || endedRef.current) return;
     setClarifySubmitting(true);
     setClarifyError(null);
     try {
-      await answerSideChatClarification(sideChatId, clarify.requestId, answer);
+      await answerSideChatClarification(sideChatId, clarify.requestId, submission);
       setClarify(null);
       void reload();
     } catch (cause) {
@@ -834,12 +838,12 @@ export function SideChatConversation({
       {clarify && !ended ? (
         <div className="shrink-0 border-t border-edge px-3 pt-3">
           <ClarifyPrompt
-            prompt={clarify}
+            prompt={{ ...clarify, durable: false }}
             submitting={clarifySubmitting}
             submitError={clarifyError}
             labels={m.chat}
             onSubmit={answerClarify}
-            onAgentDecide={() => answerClarify('Use your best judgment and continue without additional user input.')}
+            onAgentDecide={() => answerClarify({ response: { text: 'Use your best judgment and continue without additional user input.' } })}
             onCancel={stopRun}
           />
         </div>

@@ -9,6 +9,9 @@ import ai.xopc.mobile.gateway.GatewayProbe
 import ai.xopc.mobile.gateway.GatewaySession
 import ai.xopc.mobile.gateway.GatewayHttpException
 import ai.xopc.mobile.gateway.VoiceCallConnection
+import ai.xopc.mobile.gateway.ClarificationRepository
+import ai.xopc.mobile.gateway.ClarificationRequest
+import ai.xopc.mobile.gateway.ClarificationCommand
 import ai.xopc.mobile.gateway.ConversationRepository
 import ai.xopc.mobile.gateway.ConversationSummary
 import ai.xopc.mobile.gateway.ConversationTaskGroup
@@ -249,6 +252,9 @@ data class PersonalUiState(val gatewayId: String? = null, val summary: PersonalS
   val assertionDeletedRevision: Int = 0, val understandingChatError: Boolean = false)
 
 data class ConnectionUiState(
+  val clarification: ClarificationRequest? = null,
+  val clarificationBusy: Boolean = false,
+  val clarificationError: String? = null,
   val profile: GatewayProfile? = null,
   val gatewayProfiles: List<GatewayProfile> = emptyList(),
   val gatewayProbes: Map<String, GatewayProbeUiState> = emptyMap(),
@@ -406,6 +412,9 @@ private data class RestoredGateway(val profile: GatewayProfile?, val conversatio
 class GatewayViewModel(application: Application) : AndroidViewModel(application) {
   private val session = GatewaySession(application)
   private val conversations = ConversationRepository(session, application)
+  private val clarificationRepository = ClarificationRepository(session)
+  private var clarificationJob: Job? = null
+  private var clarificationAttempt: Triple<String, ClarificationCommand, String>? = null
   private val connectionWaitRepository = ConnectionWaitRepository(session)
   private val progressRepository = ProgressRepository(session)
   private val automationRepository = AutomationRepository(session)
@@ -1186,12 +1195,10 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
   }
 
   suspend fun respondToVoiceClarification(requestId: String, version: Int,
-    action: String, answer: String) = runInterruptible(Dispatchers.IO) {
-    require(requestId.matches(Regex("[A-Za-z0-9_-]{1,128}")) && version > 0 &&
-      action in setOf("answer", "agent_decide")) { "INVALID_CLARIFICATION" }
-    val body = org.json.JSONObject().put("action", action).put("expectedVersion", version)
-      .put("idempotencyKey", UUID.randomUUID().toString())
-    if (action == "answer") body.put("answer", answer.take(10_000))
+    action: String, submissionJson: String) = runInterruptible(Dispatchers.IO) {
+    require(requestId.matches(Regex("[A-Za-z0-9_-]{1,160}")) && version > 0)
+    val body = org.json.JSONObject(submissionJson)
+    require(body.getString("action") == action && body.getInt("expectedVersion") == version)
     session.request("/api/clarifications/$requestId/responses", "POST", body.toString())
     Unit
   }
@@ -2503,6 +2510,7 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
           if (status == "connected") mutableState.value.selectedConversationId?.let { id ->
             refreshSelectedHistory(id)
             refreshRunState(id)
+            refreshClarification()
           }
         },
         onInvalidation = { topic ->
@@ -2511,6 +2519,7 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
             mutableState.value.selectedConversationId?.let { id ->
               refreshSelectedHistory(id)
               refreshRunState(id)
+            refreshClarification()
             }
           } else if (topic.startsWith("run:")) {
             val current = mutableState.value
@@ -2519,6 +2528,7 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
               current.selectedConversationId?.let { id ->
                 refreshSelectedHistory(id)
                 refreshRunState(id)
+            refreshClarification()
               }
             }
           }
@@ -2569,7 +2579,9 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
           flushStream()
         }
       }
+      "clarify_request" -> refreshClarification()
       "run_end" -> {
+        refreshClarification()
         realtime.watchRun(null)
         mutableState.update { it.copy(activeRunId = null, liveNarration = null) }
         refreshSelectedHistory(current.selectedConversationId)
@@ -2622,10 +2634,11 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
       }
     }
     val readers = listOf(searchJob, historyJob, olderHistoryJob, executionJob, runStateJob, modelJob, agentJob,
-      contextJob, contextPanelJob, connectionWaitJob, referenceJob, progressJob, progressHomeJob, progressMetricsJob,
+      contextJob, contextPanelJob, connectionWaitJob, clarificationJob, referenceJob, progressJob, progressHomeJob, progressMetricsJob,
       progressMoreJob, progressDetailJob,
       projectsJob, projectDetailJob, automationJob, notesJob, sharesJob, noteDetailJob, noteHistoryJob,
       noteSnapshotJob, personalJob, personalListJob, personalDetailJob)
+    clarificationAttempt = null
     readers.forEach { it?.cancel() }
     readers.forEach { it?.join() }
     foregroundRecoveryJob?.cancelAndJoin()
@@ -3007,11 +3020,14 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
     contextPanelRevision++
     connectionWaitJob?.cancel()
     connectionWaitRevision++
+    clarificationJob?.cancel()
+    clarificationAttempt = null
     referenceJob?.cancel()
     referenceRevision++
     realtime.watchRun(null)
     val revision = ++historyRevision
     mutableState.update { it.copy(selectedConversationId = id, taskConversationTaskId = taskId,
+      clarification = null, clarificationBusy = false, clarificationError = null,
       requestedReferenceKind = null, requestedReferenceConversationId = null,
       taskScopeLoading = taskId == null, messages = emptyList(), draftText = "", draftRefs = emptyList(),
       draftAttachments = emptyList(), attachmentLoading = false, attachmentError = false, historyLoading = true,
@@ -3070,6 +3086,7 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
           if (revision == historyRevision) loadAgents(id)
           if (revision == historyRevision) loadContext()
           if (revision == historyRevision) refreshConnectionWait()
+          if (revision == historyRevision) refreshClarification()
         }
       } catch (error: CancellationException) {
         throw error
@@ -3352,6 +3369,49 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
       (mode == null || mode == current.context?.environment?.kind)) return
     createConversationFor(current.selectedAgentId.ifBlank { current.defaultAgentId }, false,
       projectId = projectId, executionMode = mode)
+  }
+
+  fun refreshClarification() {
+    val current = mutableState.value
+    val id = current.selectedConversationId ?: return
+    val gatewayId = current.profile?.gatewayId ?: return
+    if (current.historyLoading || current.clarificationBusy || clarificationJob?.isActive == true) return
+    clarificationJob = viewModelScope.launch {
+      try {
+        val prompt = runInterruptible(Dispatchers.IO) { if (conversations.draft(id) != null) null else clarificationRepository.snapshot(id) }
+        if (mutableState.value.selectedConversationId == id && mutableState.value.profile?.gatewayId == gatewayId)
+          mutableState.update { it.copy(clarification = prompt) }
+      } catch (failure: CancellationException) { throw failure }
+      catch (failure: Exception) {
+        if (mutableState.value.selectedConversationId == id && mutableState.value.profile?.gatewayId == gatewayId)
+          mutableState.update { it.copy(clarificationError = failure.message) }
+      }
+    }
+  }
+
+  fun respondToClarification(command: ClarificationCommand) {
+    val current = mutableState.value
+    val prompt = current.clarification ?: return
+    if (current.clarificationBusy || prompt.expired()) return
+    val gatewayId = current.profile?.gatewayId
+    val previous = clarificationAttempt
+    val key = if (previous?.first == prompt.id && previous.second == command) previous.third else UUID.randomUUID().toString()
+    clarificationAttempt = Triple(prompt.id, command, key)
+    mutableState.update { it.copy(clarificationBusy = true, clarificationError = null) }
+    viewModelScope.launch {
+      try {
+        runInterruptible(Dispatchers.IO) { clarificationRepository.respond(prompt, command, key) }
+        if (mutableState.value.profile?.gatewayId == gatewayId && mutableState.value.clarification?.id == prompt.id) {
+          mutableState.update { it.copy(clarification = null, clarificationBusy = false) }
+          clarificationAttempt = null
+          refreshRunState(prompt.conversationId); refreshSelectedHistory(prompt.conversationId)
+        }
+      } catch (failure: CancellationException) { throw failure }
+      catch (failure: Exception) {
+        if (mutableState.value.profile?.gatewayId == gatewayId && mutableState.value.clarification?.id == prompt.id)
+          mutableState.update { it.copy(clarificationBusy = false, clarificationError = failure.message) }
+      }
+    }
   }
 
   fun refreshConnectionWait() {

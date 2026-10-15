@@ -1045,11 +1045,11 @@ private extension AssistantView {
                 clarification: clarification,
                 isSubmitting: state.isRespondingToClarification,
                 errorMessage: state.clarificationError,
-                onRespond: { action, answer in
+                onRespond: { action, submission in
                     Task {
                         await state.respondToClarification(
                             action: action,
-                            answer: answer,
+                            submission: submission,
                             in: conversation,
                             using: GatewayClient(configuration: configuration)
                         )

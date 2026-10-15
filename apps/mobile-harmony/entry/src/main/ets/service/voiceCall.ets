@@ -1,3 +1,4 @@
+import { XopcClarificationCommand, XopcClarificationResponse } from '../model/clarification';
 import { common } from '@kit.AbilityKit';
 import { util } from '@kit.ArkTS';
 import { hilog } from '@kit.PerformanceAnalysisKit';
@@ -22,12 +23,7 @@ interface XopcVoicePreflight {
   timingMetrics?: string[];
 }
 
-interface XopcClarificationBody {
-  action: string;
-  answer?: string;
-  expectedVersion: number;
-  idempotencyKey: string;
-}
+
 
 interface XopcVoicePendingReply {
   event?: XopcVoiceServerEvent;
@@ -262,8 +258,9 @@ export class XopcVoiceCall {
     else if (event.type === 'task.activity' && payload.taskId === this.taskId) this.activity = payload.status === 'running' ? payload.toolName ?? '' : '';
     else if (event.type === 'task.done' && payload.taskId === this.taskId) { this.taskId = ''; this.taskCancelling = false; this.activity = ''; }
     else if (event.type === 'response.clarification' && payload.responseId === this.responseId) {
-      this.clarification = { requestId: payload.requestId ?? '', question: payload.question ?? '', choices: payload.choices ?? [],
-        suggestedAnswer: payload.suggestedAnswer ?? '', version: payload.version ?? 1, kind: payload.kind ?? 'input' };
+      this.clarification = { id: payload.requestId ?? '', conversationId: this.target?.conversationId ?? '', status: 'open', question: payload.question ?? '',
+        choiceDetails: payload.choiceDetails, interactionMode: payload.interactionMode, recommendedChoiceId: payload.recommendedChoiceId,
+        approval: payload.approval, expiresAt: payload.expiresAt, version: payload.version ?? 1, kind: payload.kind ?? 'input' };
       this.syncInput();
     } else if (event.type === 'response.cancelled' && payload.responseId === this.responseId) {
       voiceCallAudio.flush(); this.finishResponse('cancelled');
@@ -322,14 +319,24 @@ export class XopcVoiceCall {
     this.taskCancelling = true; this.transport?.send('task.cancel', { taskId: this.taskId });
   }
 
-  async submitClarification(action: string, answer: string = ''): Promise<void> {
-    const clarification = this.clarification; if (!clarification || !this.target) return;
-    const body: XopcClarificationBody = { action, expectedVersion: clarification.version,
-      idempotencyKey: util.generateRandomUUID() };
-    if (action === 'answer') body.answer = answer;
-    await gatewaySession.request('/api/clarifications/' + encodeURIComponent(clarification.requestId) + '/responses', 'POST', JSON.stringify(body));
-    if (this.clarification !== clarification) return;
-    this.clarification = undefined; this.syncInput();
+  @Trace clarificationBusy: boolean = false;
+  private clarificationSignature: string = '';
+  private clarificationIdentity: string = '';
+  async submitClarification(command: XopcClarificationCommand): Promise<void> {
+    const clarification = this.clarification;
+    if (!clarification || !this.target || this.clarificationBusy || (clarification.expiresAt !== undefined && clarification.expiresAt <= Date.now())) return;
+    if (clarification.kind === 'approval' && command.action === 'agent_decide') return;
+    const signature = JSON.stringify([clarification.id, clarification.version, command]);
+    if (signature !== this.clarificationSignature) { this.clarificationSignature = signature; this.clarificationIdentity = util.generateRandomUUID(); }
+    const body: XopcClarificationResponse = { action: command.action, response: command.response, decision: command.decision,
+      expectedVersion: clarification.version, idempotencyKey: this.clarificationIdentity };
+    this.clarificationBusy = true;
+    try {
+      await gatewaySession.request('/api/clarifications/' + encodeURIComponent(clarification.id) + '/responses', 'POST', JSON.stringify(body));
+      if (this.clarification?.id !== clarification.id) return;
+      this.clarification = undefined; this.clarificationSignature = ''; this.syncInput();
+    } catch (error) { this.error = (error as Error).message; }
+    finally { this.clarificationBusy = false; }
   }
 
   private async loadApproval(): Promise<void> {

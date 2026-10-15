@@ -126,20 +126,20 @@ describe('SideChatRunService', () => {
   it.each([undefined, 'approval'] as const)('restores %s waiting details and cancels the active run when waiting expires', async (kind) => {
     let now = 0;
     const ctx = await setup(async (params) => {
-      params.onEvent?.({ type: 'clarify_request', kind, requestId: 'q1', question: 'Which one?', choices: ['A', 'B'] });
+      params.onEvent?.({ type: 'clarify_request', kind, requestId: 'q1', question: 'Which one?', choiceDetails: [{ id: 'A', label: 'A' }, { id: 'B', label: 'B' }] });
       await new Promise<void>((resolve) => params.abortSignal?.addEventListener('abort', () => resolve(), { once: true }));
       return { ok: false, errorMessage: 'cancelled' };
     }, { now: () => now, idleTtlMs: 1000 });
     const { runId } = ctx.service.submit(ctx.sideChat.id, 'tab-1', { content: 'question' });
     expect(ctx.manager.get(ctx.sideChat.id, 'tab-1')).toMatchObject({ status: kind === 'approval' ? 'waiting-approval' : 'waiting-input', runId, clarification: { requestId: 'q1', question: 'Which one?' } });
     expect(ctx.agentRunner.registerExternalWebchatRun).toHaveBeenCalledWith(expect.any(String), runId, expect.any(Function), expect.objectContaining({ beforeClarificationResponse: expect.any(Function) }));
-    expect(ctx.service.submitClarification(ctx.sideChat.id, 'tab-1', 'foreign-question', 'A')).toBe(false);
+    expect(ctx.service.submitClarification(ctx.sideChat.id, 'tab-1', 'foreign-question', { response: { text: 'A' } })).toBe(false);
     expect(ctx.agentRunner.answerEphemeralClarification).not.toHaveBeenCalled();
     now = 1000;
     await ctx.manager.sweepExpired();
     expect(ctx.agentRunner.cancelClarificationForRun).toHaveBeenCalledWith(runId);
     await vi.waitFor(() => expect(ctx.completed).toContain(`run:${runId}`));
-    expect(() => ctx.service.submitClarification(ctx.sideChat.id, 'tab-1', 'q1', 'A')).toThrow(expect.objectContaining({ code: 'EXPIRED' }));
+    expect(() => ctx.service.submitClarification(ctx.sideChat.id, 'tab-1', 'q1', { response: { text: 'A' } })).toThrow(expect.objectContaining({ code: 'EXPIRED' }));
     await ctx.manager.disposeAll();
   });
 
@@ -153,7 +153,7 @@ describe('SideChatRunService', () => {
     }, { now: () => now, idleTtlMs: 1000 });
     ctx.service.submit(ctx.sideChat.id, 'tab-1', { content: 'question' });
     now = 500;
-    expect(ctx.service.submitClarification(ctx.sideChat.id, 'tab-1', 'q1', 'yes')).toBe(true);
+    expect(ctx.service.submitClarification(ctx.sideChat.id, 'tab-1', 'q1', { response: { text: 'yes' } })).toBe(true);
     expect(ctx.manager.get(ctx.sideChat.id, 'tab-1')).toMatchObject({ status: 'running', expiresAt: null });
     now = 50_000;
     await expect(ctx.manager.sweepExpired()).resolves.toBe(0);

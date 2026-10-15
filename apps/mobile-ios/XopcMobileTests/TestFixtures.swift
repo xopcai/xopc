@@ -160,7 +160,7 @@ struct GatewayStub: GatewayServing {
         clarification
     }
 
-    func respondToClarification(_: ClarificationRequest, action _: String, answer _: String?) async throws {}
+    func respondToClarification(_: ClarificationRequest, command _: ClarificationResponseCommand) async throws {}
     func fetchInputState(conversationID _: String) async throws -> InputState {
         InputState(activeRunId: nil)
     }

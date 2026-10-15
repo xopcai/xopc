@@ -1,3 +1,4 @@
+import type { ClarificationPresentation } from '@xopcai/gateway-contract';
 import { awaitVoiceStartupStep } from './startup-step';
 import { acceptTranscriptRevision } from './transcript-revisions';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -84,17 +85,16 @@ export interface UseRealtimeVoiceReturn {
   finalTranscript: string;
   responseText: string;
   activities: Array<{ toolCallId: string; toolName: string; status: 'running' | 'completed' | 'failed' }>;
-  clarification: {
+  clarification: (ClarificationPresentation & {
     responseId: string;
     requestId: string;
     kind: 'input' | 'approval';
     question: string;
-    choices?: string[];
-    suggestedAnswer?: string;
+
     version: number;
     createdAt: number;
     expiresAt?: number;
-  } | null;
+  }) | null;
   dismissClarification: (requestId: string) => void;
   responsePhase: VoiceResponsePhase;
   callConnectionStage: CallConnectionStage;
