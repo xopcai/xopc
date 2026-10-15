@@ -12,8 +12,8 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const requireRoot = createRequire(join(root, 'package.json'));
 const requireFromBuilder = createRequire(requireRoot.resolve('electron-builder/package.json'));
 const asar = requireFromBuilder('@electron/asar');
-// Includes the reviewed native voice/CUA runtimes with headroom across target platforms.
-export const DEFAULT_MAX_NODE_MODULES_BYTES = 90 * 1024 * 1024;
+// Includes the PDF.js parser and its required Canvas native runtime across target platforms.
+export const DEFAULT_MAX_NODE_MODULES_BYTES = 125 * 1024 * 1024;
 const maxNodeModulesBytes = Number(
   process.env['XOPC_ELECTRON_ASAR_NODE_MODULES_MAX_BYTES'] ?? DEFAULT_MAX_NODE_MODULES_BYTES,
 );
@@ -28,8 +28,8 @@ function findAppAsarFiles(dir, acc = []) {
   return acc;
 }
 
-function findDefaultAsar() {
-  const asars = findAppAsarFiles(join(root, 'dist/release'));
+function findDefaultAsar(releaseDir = join(root, 'dist/release')) {
+  const asars = findAppAsarFiles(releaseDir);
   if (asars.length === 0) throw new Error('No packaged app.asar found under dist/release/');
   asars.sort((a, b) => statSync(b).mtimeMs - statSync(a).mtimeMs);
   return asars[0];
