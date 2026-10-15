@@ -20,9 +20,8 @@ type SelectionPopup = {
 };
 
 /** Selection actions for the main conversation and its temporary side chats. */
-export function SideChatSelectionLauncher() {
+export function SideChatSelectionLauncher({ conversationId }: { conversationId: string | null }) {
   const { pathname } = useLocation();
-  const conversationId = pathname.startsWith('/chat/') ? pathname.slice('/chat/'.length) : '';
   const language = useLocaleStore((state) => state.language);
   const m = getMessages(language).sideChat;
   const requestCreate = useSideChatStore((state) => state.requestCreate);
@@ -73,10 +72,8 @@ export function SideChatSelectionLauncher() {
   }, [pathname, pendingCreate, conversationId]);
 
   useEffect(() => {
-    if (!pathname.startsWith('/chat/')) {
-      setPopup(null);
-      return;
-    }
+    setPopup(null);
+    if (!conversationId) return;
     const inspectAfterBrowserSelection = () => window.requestAnimationFrame(inspectSelection);
     const dismiss = () => setPopup(null);
     document.addEventListener('pointerup', inspectAfterBrowserSelection);
@@ -89,7 +86,7 @@ export function SideChatSelectionLauncher() {
       window.removeEventListener('scroll', dismiss, true);
       window.removeEventListener('resize', dismiss);
     };
-  }, [inspectSelection, pathname]);
+  }, [conversationId, inspectSelection, pathname]);
 
   if (!popup || !conversationId || conversationId === 'new') return null;
 
@@ -117,9 +114,8 @@ export function SideChatSelectionLauncher() {
         type="button"
         className="inline-flex flex-1 items-center justify-center gap-1.5 border-l border-edge px-3 transition-colors hover:bg-surface-hover focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent"
         onClick={() => {
-          const parentConversationId = decodeURIComponent(conversationId);
           setWorkspaceOpen(false);
-          requestCreate(parentConversationId, [{
+          requestCreate(conversationId, [{
             id: crypto.randomUUID(),
             type: 'text',
             text: popup.text,
