@@ -1,6 +1,8 @@
 import Foundation
 import Observation
 
+// swiftlint:disable file_length
+
 @MainActor
 @Observable
 // swiftlint:disable:next type_body_length
@@ -460,14 +462,18 @@ extension AssistantState {
     ) async {
         guard let clarification, !isRespondingToClarification else { return }
         guard !clarification.isExpired else { return }
-        if action == "answer" && submission == nil { return }
-        if clarification.kind == "approval" && action == "agent_decide" { return }
+        if action == "answer" && submission == nil {
+            return
+        }
+        if clarification.kind == "approval" && action == "agent_decide" {
+            return
+        }
         let previous = clarificationAttempt
         let candidate = ClarificationResponseCommand(action: action, response: submission?.response, decision: submission?.decision,
-            expectedVersion: clarification.version, idempotencyKey: previous?.command.idempotencyKey ?? UUID().uuidString.lowercased())
+                                                     expectedVersion: clarification.version, idempotencyKey: previous?.command.idempotencyKey ?? UUID().uuidString.lowercased())
         let command = previous?.id == clarification.id && previous?.command == candidate ? candidate
             : ClarificationResponseCommand(action: action, response: submission?.response, decision: submission?.decision,
-                expectedVersion: clarification.version, idempotencyKey: UUID().uuidString.lowercased())
+                                           expectedVersion: clarification.version, idempotencyKey: UUID().uuidString.lowercased())
         clarificationAttempt = (clarification.id, command)
 
         isRespondingToClarification = true
@@ -490,7 +496,9 @@ extension AssistantState {
         } catch {
             let responseError = error.localizedDescription
             await refreshClarification(for: conversation, using: gateway)
-            if self.clarification?.id == clarification.id { clarificationError = responseError }
+            if self.clarification?.id == clarification.id {
+                clarificationError = responseError
+            }
             isSending = false
         }
         isRespondingToClarification = false
