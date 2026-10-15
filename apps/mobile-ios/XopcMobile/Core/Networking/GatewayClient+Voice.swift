@@ -14,8 +14,6 @@ private struct RealtimeVoiceAcknowledgement: Decodable {
     let timingMetrics: [String]?
 }
 
-
-
 private struct RealtimeVoiceApprovalDecision: Encodable {
     let id: String
     let decision: String
