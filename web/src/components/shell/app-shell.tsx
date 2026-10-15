@@ -10,6 +10,7 @@ import { SidebarColumn } from '@/components/shell/sidebar-column';
 import { WorkspaceColumn } from '@/components/shell/workspace-column';
 import { SideChatColumn } from '@/features/side-chat/side-chat-column';
 import { SideChatSelectionLauncher } from '@/features/side-chat/side-chat-selection-launcher';
+import { useChatRouteConversationId } from '@/features/chat/use-chat-route-conversation-id';
 import { TokenDialog } from '@/components/shell/token-dialog';
 import { WindowsTitlebar } from '@/components/shell/windows-titlebar';
 import { ElectronGatewayExitBanner } from '@/features/electron/electron-gateway-exit-banner';
@@ -104,12 +105,7 @@ function AppShellContent() {
   const language = useLocaleStore((s) => s.language);
   const updateReminder = useUpdateReminder();
   const previewPath = useWorkspacePreviewStore((s) => s.path);
-  const chatPathConversationId = pathname.startsWith('/chat/task/')
-    ? ''
-    : pathname.startsWith('/chat/') ? pathname.slice('/chat/'.length) : '';
-  const parentConversationId = chatPathConversationId && chatPathConversationId !== 'new'
-    ? decodeURIComponent(chatPathConversationId)
-    : null;
+  const parentConversationId = useChatRouteConversationId(pathname);
   const sideChatOpen = useSideChatStore((s) => (
     parentConversationId ? s.panes[parentConversationId]?.open === true : false
   ));
@@ -215,7 +211,7 @@ function AppShellContent() {
       <GlobalDiscussionCaptureHost />
       <SupportReportHost />
       <GlobalVoiceInputShortcutHost />
-      <SideChatSelectionLauncher />
+      <SideChatSelectionLauncher conversationId={parentConversationId} />
       <TokenDialog />
       <OnboardingDialog />
       {productPreviewTarget ? (
