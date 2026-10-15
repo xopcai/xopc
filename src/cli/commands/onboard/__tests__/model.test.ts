@@ -1,4 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { voiceManifestSchema } from '@xopcai/realtime-protocol/voice';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { initializeTestAgentCatalog } from '../../../../agent-catalog/test-support.js';
 import {
@@ -8,8 +9,16 @@ import {
 import {
   refreshOnboardModelCatalogIfNeeded,
   setPrimaryModel,
+  setupModel,
 } from '../model.js';
 import { AgentCatalogRepository } from '../../../../agent-catalog/repository.js';
+import { getModelCatalogStore } from '../../../../providers/model-catalog-store.js';
+
+vi.mock('@inquirer/prompts', () => ({ confirm: vi.fn(async () => true), select: vi.fn(), input: vi.fn() }));
+vi.mock('../../../../auth/profiles/index.js', async (importOriginal) => ({
+  ...await importOriginal<typeof import('../../../../auth/profiles/index.js')>(),
+  listProfilesForProvider: vi.fn(() => [{ id: 'xopc-cloud:default' }]),
+}));
 
 describe('refreshOnboardModelCatalogIfNeeded', () => {
   it('loads the XOPC Cloud catalog when the local catalog is empty', async () => {
@@ -54,17 +63,51 @@ describe('refreshOnboardModelCatalogIfNeeded', () => {
 });
 
 describe('XOPC Cloud onboard defaults', () => {
-  beforeEach(() => initializeTestAgentCatalog());
+  beforeEach(() => {
+    initializeTestAgentCatalog();
+    const voice = voiceManifestSchema.parse({
+      protocolVersion: 1, serviceVersion: 1, modes: ['transcription.stream'], transport: 'websocket-pcm',
+      inputFormat: { encoding: 'pcm_s16le', sampleRate: 16000, channels: 1 },
+      outputFormat: { encoding: 'pcm_s16le', sampleRate: 24000, channels: 1 },
+      turnDetection: ['server_vad'], bargeIn: true, tools: false, resumable: false,
+      voices: [], limits: { maxFrameBytes: 65536, maxSessionSeconds: 1800 },
+    });
+    getModelCatalogStore().saveSource('xopc-cloud', {
+      providerId: 'xopc-cloud', baseUrl: 'https://cloud.test/v1', api: 'openai-completions',
+      etag: null, recommendedModel: 'chat-model', lastSuccessAt: Date.now(),
+      models: [{
+        id: 'chat-model', name: 'Chat', kind: 'language', availability: 'available',
+        input: ['text', 'image'], output: ['text'], operations: ['chat.completions'],
+        reasoning: false, contextWindow: 32000, maxOutputTokens: 4096,
+      }, {
+        id: 'stt', name: 'Speech', kind: 'stt', availability: 'available',
+        input: ['audio'], output: ['text'], operations: ['audio.transcription'], voice,
+        reasoning: false, contextWindow: 0, maxOutputTokens: null,
+      }],
+    });
+  });
 
-  it('persists only the selected chat model', async () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it('fills capabilities when keeping the built-in Cloud chat model', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    const updated = await setupModel(ConfigSchema.parse({}), {
+      configPath: '/tmp/xopc.json', workspacePath: '/tmp/xopc-main', isVerbose: false, argv: [],
+    });
+    expect(updated.tools.media?.audio?.provider).toBe('xopc-cloud');
+    expect(updated.voice?.realtime).toMatchObject({ enabled: true, stt: { model: 'stt' } });
+  });
+
+  it('sets the selected chat model and enables published Cloud capabilities', async () => {
     const config = ConfigSchema.parse({});
     const updated = await setPrimaryModel(config, '/tmp/xopc-main', 'xopc-cloud/chat-model');
     const defaults = new AgentCatalogRepository().getSettings().defaults;
 
     expect(getAgentDefaultModelRef()).toBe('xopc-cloud/chat-model');
-    expect(defaults.models.imageUnderstanding).toBeUndefined();
+    expect(defaults.models.imageUnderstanding?.primary).toBe('xopc-cloud/chat-model');
     expect(defaults.models.imageGeneration).toBeUndefined();
-    expect(updated.tools.media?.audio).toBeUndefined();
+    expect(updated.tools.media?.audio).toMatchObject({ enabled: true, provider: 'xopc-cloud', providers: { 'xopc-cloud': { model: 'stt' } } });
+    expect(updated.voice?.realtime).toMatchObject({ enabled: true, stt: { provider: 'xopc-cloud', model: 'stt' } });
     expect(updated.messages?.tts).toBeUndefined();
   });
 
