@@ -41,6 +41,7 @@ import {
   type ProductReference,
 } from '@xopcai/gateway-contract';
 
+import { parseTaskHandoffReferences } from '../../tasks/task-handoff.js';
 import { resolveResponseLanguageForSession } from '../prompt/response-language.js';
 import { resolveTaskLocale } from '../../tasks/task-language.js';
 import { runWithActivityContext } from '../../activity/index.js';
@@ -1029,6 +1030,8 @@ async function handleTask(
     const agentId = config && projectService
       ? resolveProjectAgentId({ config, projects: projectService, explicitAgentId, projectId })
       : explicitAgentId ?? (config ? getDefaultAgentId() : deps.getCurrentAgentId?.() ?? 'main');
+    const sourceRefs = parseTaskHandoffReferences(args.sourceRefs);
+    if (!sourceRefs || sourceRefs.some(ref => !['result', 'note', 'task', 'file'].includes(ref.kind))) return { ok: false, error: 'Invalid selected task sourceRefs' };
     const input = {
       idempotencyKey: trimString(args.idempotencyKey) ?? randomUUID(),
       title: trimString(args.title) ?? objective,
@@ -1045,14 +1048,16 @@ async function handleTask(
         outputDestinations: [],
       },
       dependencies: dependsOnTaskIds,
-      context: args.includeConversationContext === false ? [] : conversationId ? [{
+      context: [...(args.includeConversationContext === false ? [] : conversationId ? [{
         targetKind: 'session' as const,
         targetId: conversationId,
         role: 'input' as const,
         pinned: false,
         retrievalPolicy: {},
         metadata: {},
-      }] : [],
+      }] : []), ...sourceRefs.map(ref => ({ targetKind: 'source' as const, targetId: `${ref.kind}:${ref.sourceId}`,
+        role: 'input' as const, pinned: true, retrievalPolicy: { currentAuthorizationRequired: true },
+        metadata: { kind: 'task_reference_request', ref } }))],
       authorityGrants: [],
       activation: createMode === 'allocate'
         ? { mode: 'allocate' as const, requirements: normalizeSpecialistRequirements(args.requirements) }

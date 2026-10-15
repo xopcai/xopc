@@ -9,12 +9,14 @@ import { extractAssistantText, getAssistantMessageErrorReason, stripCodeFences }
 import { AgentCatalogRepository } from '../agent-catalog/repository.js';
 import { getSessionConfig } from '../storage/sqlite/config-repository.js';
 import { appendTranscriptEntry, loadLlmMessagesForSession } from '../storage/sqlite/transcript-repository.js';
+import { recordPersonalPerformance } from './performance.js';
 import { readCurrentTranscriptId } from '../storage/sqlite/session-instance-repository.js';
 import { getSqliteDatabase, runSqliteWriteTransaction } from '../storage/sqlite/transaction.js';
 import { emitSessionTranscriptUpdate } from '../session/transcript-events.js';
 import { TaskRepository } from '../tasks/task-repository.js';
 import { TaskCollaborationRepository } from '../tasks/task-collaboration-repository.js';
 import { TaskCriterionReviewRepository } from '../tasks/task-criterion-review-repository.js';
+import { taskInstructionSequence } from '../tasks/task-research-result.js';
 import { TaskRunRepository } from '../tasks/task-run-repository.js';
 import { TaskConversationRepository } from '../tasks/task-conversation-repository.js';
 import { createLogger } from '../utils/logger.js';
@@ -28,6 +30,7 @@ import { hasPersonalResultFileLinks, sanitizePersonalResultFileLinks } from './r
 
 const log = createLogger('PersonalReplyComposer');
 const TIMEOUT_MS = 12_000;
+const composingReplies = new Map<string, AbortController>();
 const DraftSchema = z.object({ text: z.string().trim().min(1).max(32_000),
   sourceIds: z.array(z.literal('result')).default(['result']), limitationIds: z.array(z.literal('status')).default(['status']) }).strict();
 const PacketSchema = z.object({ delivery: TaskResultDeliverySchema, report: z.string().min(1), objective: z.string(),
@@ -73,6 +76,7 @@ function valid(packet: PersonalReplyPacket): boolean {
   const state = new TaskConversationRepository().getState(d.taskId);
   const task = db.prepare('SELECT version, resolution FROM tasks WHERE task_id = ?').get(d.taskId) as
     { version: number; resolution: string | null } | undefined;
+  if (d.instructionSequence !== undefined && d.instructionSequence !== taskInstructionSequence(d.taskId)) return false;
   if (!task || task.version !== packet.taskVersion || (task.resolution && task.resolution !== 'done')
     || !run || !['succeeded', 'failed'].includes(run.status)
     || new TaskRunRepository().getLatestRoot(d.taskId)?.id !== run.id
@@ -206,6 +210,34 @@ export class PersonalReplyComposer {
 
   async drain(notify: (conversationId: string, deliveryId: string) => void | Promise<void>, isAvailable: (conversationId: string) => boolean = () => true): Promise<void> {
     const db = getSqliteDatabase();
+    // The durable text outbox competes atomically with composition, independent of foreground/voice availability.
+    runSqliteWriteTransaction(() => {
+      const overdue = db.prepare(`SELECT delivery_id, reply_payload_json FROM task_result_deliveries
+        WHERE status = 'delivered' AND reply_status IN ('pending','generating','ready')
+        AND reply_payload_json IS NOT NULL AND created_at <= ? ORDER BY created_at LIMIT 20`).all(Date.now() - 5000) as Array<{ delivery_id: string; reply_payload_json: string }>;
+      for (const row of overdue) {
+        const packet = PacketSchema.parse(JSON.parse(row.reply_payload_json));
+        composingReplies.get(row.delivery_id)?.abort(new Error('Durable final delivery superseded composition'));
+        if (!valid(packet)) {
+          db.prepare("UPDATE task_result_deliveries SET reply_status = 'stale', reply_lease_token = NULL, reply_lease_until = 0 WHERE delivery_id = ?").run(row.delivery_id);
+          continue;
+        }
+        const prefix = packet.delivery.outcome.status === 'succeeded' ? '' : packet.delivery.outcome.status === 'partial'
+          ? '部分完成 / Partial result.\n\n' : '未完成 / Incomplete result.\n\n';
+        const text = prefix + sanitizePersonalResultFileLinks(packet.preservedText ?? packet.report);
+        const delivery = TaskResultDeliverySchema.parse({ ...packet.delivery, deliveryId: `reply:${packet.delivery.deliveryId}`, text,
+          outcome: { ...packet.delivery.outcome, deliverables: [], summary: text.slice(0, 2000) } });
+        const entry = appendTranscriptEntry(delivery.conversationId, { role: 'custom', customType: TASK_RESULT_DELIVERY_TYPE,
+          content: text, details: delivery, display: true, timestamp: Date.now() });
+        db.prepare(`UPDATE task_result_deliveries SET reply_status = 'delivered', reply_message_entry_id = ?, reply_text = ?,
+          reply_lease_token = NULL, reply_lease_until = 0 WHERE delivery_id = ?`).run(entry.entry_id, text, row.delivery_id);
+        if (packet.requestId) db.prepare('UPDATE personal_requests SET delivery_entry_id = ? WHERE request_id = ?').run(entry.entry_id, packet.requestId);
+        recordPersonalPerformance({ phase: 'busy_fallback', conversationId: delivery.conversationId,
+          taskId: delivery.taskId, runId: delivery.taskRunId, deliveryId: row.delivery_id,
+          resultRevision: delivery.resultRevision, contractVersion: delivery.contractVersion, instructionSequence: delivery.instructionSequence,
+          durationMs: Math.max(0, Date.now() - packet.delivery.createdAt), status: 'success' });
+      }
+    });
     // At most two independent model calls across concurrent drain invocations.
     const deliveries = runSqliteWriteTransaction(() => {
       const active = db.prepare("SELECT conversation_id FROM task_result_deliveries WHERE reply_status = 'generating' AND reply_lease_until > ?")
@@ -254,6 +286,7 @@ export class PersonalReplyComposer {
           let text = row.draft_transcript_id === transcriptId && row.context_revision === conversation.revision ? row.text : null;
           if (!text) {
             const controller = new AbortController();
+            composingReplies.set(row.delivery_id, controller);
             const compositionStartedAt = performance.now();
             let compositionFallback = false;
             let timer: ReturnType<typeof setTimeout> | undefined;
@@ -266,7 +299,9 @@ export class PersonalReplyComposer {
               // Large/exact deliveries retain the full report while receiving a conversational introduction.
               const promptPacket = preserve && !packet.preservedText
                 ? { ...packet, report: packet.report.slice(0, 2000), preservedText: packet.report } : packet;
-              text = await Promise.race([this.compose(promptPacket, controller.signal), new Promise<never>((_, reject) => {
+              text = await Promise.race([this.compose(promptPacket, controller.signal), new Promise<never>((_resolve, reject) => {
+                controller.signal.addEventListener('abort', () => reject(controller.signal.reason ?? new Error('Reply composition aborted')), { once: true });
+              }), new Promise<never>((_, reject) => {
                 timer = setTimeout(() => { controller.abort(); reject(new Error('Reply composition timed out')); }, this.timeoutMs);
               })]);
               if (!text.trim() || text.trim() === 'NO_REPLY') throw new Error('Reply composition was empty');
@@ -290,6 +325,7 @@ export class PersonalReplyComposer {
               log.warn({ err, conversationId: packet.delivery.conversationId, taskRunId: packet.delivery.taskRunId }, 'Reply composition failed; delivering the recorded result');
             } finally {
               if (timer) clearTimeout(timer);
+              if (composingReplies.get(row.delivery_id) === controller) composingReplies.delete(row.delivery_id);
               controller.abort();
             }
             const status = packet.delivery.outcome.status;
@@ -329,6 +365,11 @@ export class PersonalReplyComposer {
             return true;
           });
           if (!persisted) return;
+          recordPersonalPerformance({ phase: 'reply_persisted', conversationId: packet.delivery.conversationId,
+            taskId: packet.delivery.taskId, runId: packet.delivery.taskRunId, deliveryId: row.delivery_id,
+            resultRevision: packet.delivery.resultRevision, contractVersion: packet.delivery.contractVersion,
+            instructionSequence: packet.delivery.instructionSequence,
+            durationMs: Math.max(0, Date.now() - row.created_at), status: 'success' });
           log.info({ replyId: row.delivery_id, conversationId: packet.delivery.conversationId,
             phase: 'reply_persisted', readyToPersistedMs: Math.max(0, Date.now() - row.created_at),
             durationMs: performance.now() - startedMonotonic }, 'Personal reply persisted for display');

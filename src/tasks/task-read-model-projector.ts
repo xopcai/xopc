@@ -18,6 +18,7 @@ export interface TaskReadModel {
   operationalState: TaskOperationalState;
   attention: TaskAttentionItem[];
   allowedCommands: string[];
+  revisionBaseline?: { resultId: string; baselineVersion: string; resultRevision: number; expectedVersion: number };
 }
 
 export class TaskReadModelProjector {
@@ -83,6 +84,14 @@ export class TaskReadModelProjector {
     if (allocation && ['blocked', 'failed'].includes(allocation.status) && task.phase !== 'closed' && !paused) {
       allowedCommands.push('retry_allocation');
     }
+    const resultRow = getSqliteDatabase().prepare(`SELECT payload_json FROM task_result_deliveries WHERE task_run_id IN
+      (SELECT run_id FROM task_runs WHERE task_id = ?) AND status IN ('pending','delivered','stale') ORDER BY created_at DESC, rowid DESC LIMIT 1`)
+      .get(task.id) as { payload_json: string } | undefined;
+    const result = resultRow ? JSON.parse(resultRow.payload_json) : undefined;
+    const revisionBaseline = result ? { resultId: String(result.deliveryId), baselineVersion: `${result.taskRunId}:${result.assignmentEpoch}:${result.outcome.outcomeId}`,
+      resultRevision: Number(result.resultRevision ?? 1), expectedVersion: task.version } : undefined;
+    if (revisionBaseline && !activeRun && !waits.length && ['closed', 'review'].includes(task.phase) && (!task.resolution || task.resolution === 'done')
+      && !getSqliteDatabase().prepare('SELECT 1 FROM personal_requests WHERE task_id = ?').get(task.id)) allowedCommands.push('revise');
     const operationalState = task.phase !== 'closed' && !paused && !activeRun && waits.length === 0 && allocation
       ? allocating ? 'allocating' : allocation.status === 'blocked' ? 'blocked' : allocation.status === 'failed' ? 'failed' : executionState
       : executionState;
@@ -92,6 +101,7 @@ export class TaskReadModelProjector {
       operationalState,
       attention: task.phase === 'closed' || paused ? [] : attention,
       allowedCommands,
+      ...(revisionBaseline ? { revisionBaseline } : {}),
     };
   }
 

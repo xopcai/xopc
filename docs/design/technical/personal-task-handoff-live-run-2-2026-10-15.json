@@ -1,0 +1,428 @@
+{
+  "success": false,
+  "pingMs": 2651,
+  "totalMs": 183817,
+  "submissionMs": [
+    26.649124999999913,
+    12.680666999993264
+  ],
+  "taskCount": 2,
+  "firstOutcome": "partial",
+  "selectedOutcome": "succeeded",
+  "handoff": {
+    "originalCaptured": true,
+    "selectedSourcePinned": true,
+    "noFullConversation": true
+  },
+  "executionNeeds": [
+    {
+      "capability": "read_input",
+      "source": "background_inference",
+      "reason": "Minimal operation inferred by the background contract planner; no authority granted"
+    },
+    {
+      "capability": "execute_code",
+      "source": "background_inference",
+      "reason": "Minimal operation inferred by the background contract planner; no authority granted"
+    },
+    {
+      "capability": "publish_files",
+      "source": "background_inference",
+      "reason": "Minimal operation inferred by the background contract planner; no authority granted"
+    }
+  ],
+  "selectedSourceReads": 4,
+  "sourceValidationRetries": 0,
+  "selectedOutput": {
+    "bytes": 109,
+    "sha256": "946874771c4cb669b73229aea04828a20dde7fc2dcbb7f4ecd02e6c14720c775",
+    "content": "核对码：CEDAR-aaf3c2ae\n适用范围：仅适用于隔离验收样本，不适用于生产经营预测。\n"
+  },
+  "executorRevocationBlocked": true,
+  "failure": "Source changed during verification",
+  "marker": "RESULT-3f99b74a",
+  "toolCalls": [
+    {
+      "name": "personal_task",
+      "input": {
+        "command": "submit",
+        "title": "复制并检查后发布三文件",
+        "objective": "在隔离工作区把 source-report.md 原样复制为 report.md，运行现有 reproduce.mjs 检查 report.md 与 monthly_summary.csv，然后只发布 report.md、monthly_summary.csv、reproduce.mjs 这三个文件。",
+        "description": "用户已准备好文件包与检查脚本，不需要新增分析、研究或改写。\n\n请执行：\n1. 在工作区（source-report.md、monthly_summary.csv、reproduce.mjs 所在目录）将 `source-report.md` 原样复制为 `report.md`，内容不做任何修改或改写。\n2. 运行现有的 `node reproduce.mjs`，检查 `report.md` 与 `monthly_summary.csv`。记录脚本实际输出与退出状态，不要修改脚本或数据文件。\n3. 只发布以下三个文件，不发布其他文件：\n   - report.md\n   - monthly_summary.csv\n   - reproduce.mjs\n\n约束：\n- 允许在隔离工作区复制文件、运行该检查脚本并发布上述三个指定文件。\n- 不新增分析、研究或改写内容；不要改动原文件与脚本。\n\n最终回复只说明交付情况（三个文件是否按指定交付、检查脚本运行的实际结果与任何未完成或异常之处），不要复述文件正文或附录核对码。"
+      },
+      "durationMs": 26.649124999999913,
+      "output": [
+        {
+          "type": "text",
+          "text": "{\n  \"ok\": true,\n  \"task\": {\n    \"id\": \"17a7aef6-6066-440c-aefa-c863f68ae01c\",\n    \"title\": \"复制并检查后发布三文件\",\n    \"phase\": \"ready\",\n    \"version\": 1\n  },\n  \"operationalState\": \"allocating\",\n  \"allocation\": {\n    \"id\": \"68eef854-8559-40ee-8f2f-debd4bb351b9\",\n    \"taskId\": \"17a7aef6-6066-440c-aefa-c863f68ae01c\",\n    \"status\": \"pending\",\n    \"attempts\": 0,\n    \"updatedAt\": 1792039258093\n  }\n}\nOpen in xopc: [Open](xopc://open?kind=task&id=17a7aef6-6066-440c-aefa-c863f68ae01c)\nxopc-product-delivery:%7B%22version%22%3A2%2C%22operation%22%3A%22created%22%2C%22primary%22%3A%7B%22kind%22%3A%22task%22%2C%22id%22%3A%2217a7aef6-6066-440c-aefa-c863f68ae01c%22%2C%22title%22%3A%22%E5%A4%8D%E5%88%B6%E5%B9%B6%E6%A3%80%E6%9F%A5%E5%90%8E%E5%8F%91%E5%B8%83%E4%B8%89%E6%96%87%E4%BB%B6%22%2C%22status%22%3A%22ready%2Fallocating%22%2C%22revision%22%3A%221%22%2C%22capabilities%22%3A%5B%22open%22%2C%22edit%22%2C%22continue_in_chat%22%5D%7D%7D"
+        }
+      ]
+    },
+    {
+      "name": "personal_result",
+      "input": {
+        "command": "get",
+        "resultId": "1cd4a2df-1be4-4205-970b-d48561a5ce78"
+      },
+      "durationMs": 2.3481659999961266,
+      "output": [
+        {
+          "type": "text",
+          "text": "{\"resultId\":\"1cd4a2df-1be4-4205-970b-d48561a5ce78\",\"taskId\":\"17a7aef6-6066-440c-aefa-c863f68ae01c\",\"runId\":\"6e763268-f6f1-4a25-8873-027e448fa8f3\",\"sourceId\":\"body\",\"status\":\"partial\",\"body\":{\"sourceId\":\"body\",\"description\":\"Retained execution result, not the composed chat reply\"},\"sources\":[{\"sourceId\":\"report---0ca0bf73-becf-42fa-b48d-97feeb721026.md\",\"title\":\"report.md\",\"kind\":\"document\",\"availability\":\"available\",\"mimeType\":\"text/markdown\"},{\"sourceId\":\"monthly_summary---31e64255-c484-47d9-955a-c323f2bcfe95.csv\",\"title\":\"monthly_summary.csv\",\"kind\":\"spreadsheet\",\"availability\":\"available\",\"mimeType\":\"text/csv\"},{\"sourceId\":\"reproduce---d7dbe275-8e92-4997-ace8-7370bb48feeb.mjs\",\"title\":\"reproduce.mjs\",\"kind\":\"file\",\"availability\":\"available\",\"mimeType\":\"application/octet-stream\"}],\"guidance\":\"Use read/search with sourceId=body or an exact artifact sourceId. Omitted chat text is available here when retained.\"}"
+        }
+      ]
+    },
+    {
+      "name": "personal_task",
+      "input": {
+        "command": "submit",
+        "description": "这是一个全新的独立任务，请勿复用此前任何任务（尤其不要复用任务 17a7aef6-6066-440c-aefa-c863f68ae01c 的执行结果或产物副本），也不要重新生成或改写报告。\n\n输入：仅使用用户明确选中的那一份报告产物，其引用为\n- 之前结果中的来源 `report---0ca0bf73-becf-42fa-b48d-97feeb721026.md`（标题 report.md），来自 resultId `1cd4a2df-1be4-4205-970b-d48561a5ce78`（taskId 17a7aef6-6066-440c-aefa-c863f68ae01c，版本 6e763268-f6f1-4a25-8873-027e448fa8f3:1:585e9768-9e36-4511-80e2-570b38ac355d:outcome）。\n- 除这一份报告外，不要使用任何其他输入文件。\n\n要求：\n1. 从该报告中定位第三节（第三节的核对码与适用范围两项）。\n2. 将这两项的**原文**写入 `摘录.txt`（逐字摘录，不做改写、总结、翻译或格式重排）。\n3. 发布 `摘录.txt` 这一个文件。\n\n约束：\n- 不要复用上个任务，不要重新生成报告，不要在结果中复述报告其余内容。\n- 若第三节中找不到“核对码”或“适用范围”中的任一项，请如实说明缺失情况，不要自行编造或从别处补齐内容。\n\n最终回复只需说明：摘录了哪两项、摘录.txt 是否成功发布，以及任何缺失或异常。",
+        "objective": "仅以用户选中的那份报告为输入，读取其第三节的核对码与适用范围两项原文，写入并发布 摘录.txt，同时新建独立任务、不复用旧任务。",
+        "title": "摘录选定报告第三节两项并发布"
+      },
+      "durationMs": 12.680666999993264,
+      "output": [
+        {
+          "type": "text",
+          "text": "{\n  \"ok\": true,\n  \"task\": {\n    \"id\": \"edeffd24-e06d-4d8b-901e-7d9ab5f8e798\",\n    \"title\": \"摘录选定报告第三节两项并发布\",\n    \"phase\": \"ready\",\n    \"version\": 1\n  },\n  \"operationalState\": \"allocating\",\n  \"allocation\": {\n    \"id\": \"8dec4eb9-2a88-4462-9734-331835053c0c\",\n    \"taskId\": \"edeffd24-e06d-4d8b-901e-7d9ab5f8e798\",\n    \"status\": \"pending\",\n    \"attempts\": 0,\n    \"updatedAt\": 1792039346745\n  }\n}\nOpen in xopc: [Open](xopc://open?kind=task&id=edeffd24-e06d-4d8b-901e-7d9ab5f8e798)\nxopc-product-delivery:%7B%22version%22%3A2%2C%22operation%22%3A%22created%22%2C%22primary%22%3A%7B%22kind%22%3A%22task%22%2C%22id%22%3A%22edeffd24-e06d-4d8b-901e-7d9ab5f8e798%22%2C%22title%22%3A%22%E6%91%98%E5%BD%95%E9%80%89%E5%AE%9A%E6%8A%A5%E5%91%8A%E7%AC%AC%E4%B8%89%E8%8A%82%E4%B8%A4%E9%A1%B9%E5%B9%B6%E5%8F%91%E5%B8%83%22%2C%22status%22%3A%22ready%2Fallocating%22%2C%22revision%22%3A%221%22%2C%22capabilities%22%3A%5B%22open%22%2C%22edit%22%2C%22continue_in_chat%22%5D%7D%7D"
+        }
+      ]
+    }
+  ],
+  "usage": [
+    {
+      "operation": "agent.answer",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 6072
+    },
+    {
+      "operation": "task.plan_contract",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 3975
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 2040
+    },
+    {
+      "operation": "task.allocation",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 3481
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 3557
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 2305
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 2915
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 3174
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 3095
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 4965
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 4095
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 7007
+    },
+    {
+      "operation": "task.research_review",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 3396
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 6033
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 5368
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 4740
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 5718
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 4906
+    },
+    {
+      "operation": "personal.reply_composition",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 2517
+    },
+    {
+      "operation": "session.generate_title",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 2213
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 2378
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 4582
+    },
+    {
+      "operation": "task.plan_contract",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 4883
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 2370
+    },
+    {
+      "operation": "task.allocation",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 2688
+    },
+    {
+      "operation": "agent.answer",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 5333
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 4201
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 5226
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 4543
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 4303
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 6717
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 4225
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 5515
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 4976
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 5564
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 5506
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 3967
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 5448
+    },
+    {
+      "operation": "task.research_review",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 5124
+    },
+    {
+      "operation": "agent.continue_after_tool",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 3834
+    },
+    {
+      "operation": "personal.reply_composition",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "status": "succeeded",
+      "duration_ms": 3113
+    },
+    {
+      "operation": "session.generate_title",
+      "provider": "xopc-cloud",
+      "model": "auto",
+      "status": "succeeded",
+      "duration_ms": 2617
+    }
+  ],
+  "isolatedStateDirectory": "/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-personal-handoff-live-dpm9QD",
+  "models": {
+    "personal": "deepseek/deepseek-flash",
+    "global": "xopc-cloud/auto"
+  },
+  "sourceCommit": "30959e330cfa0f00e2f1d11e825c8d7e18a6e3fa",
+  "sourceHashes": {
+    "src/personal-agent/result-reader.ts": "587356f8779ba0170da7e5a34c31bbb85cb63e373496ae8bda1a98a4731426be",
+    "src/personal-agent/result-extraction.ts": "ac96c5ec453b4e8b426822a9caad237777f09067336294cf9121c958c38c1028",
+    "src/personal-agent/result-read-continuations.ts": "99fd1f2424a8be701e105f3b682d695a9b8d42888d23389b3fee9ac8710e17fd",
+    "src/agent/tools/personal-result-tool.ts": "51dfd26f13d7056979a7e615df2a59846974ad5ae9498c4076d731364566cf66",
+    "src/agent/source-context/result-context.ts": "328078e2601644d6f0fc0056cc12610b9d91e4a01fd2eade9c3a182d055d2ae0",
+    "src/personal-agent/prompts.ts": "7249f8a4a0e4337c48f6a430758333a652f4758f79651c70a82a40d070e00a26",
+    "src/personal-agent/policy.ts": "9ac77142744294dd7830a4324d012f04644ed1f9a25aae20e7d72abcdd2e4fb2",
+    "src/personal-agent/request-delivery.ts": "dea14498aa96fc0202fd7a8beb7f6f4538020f0b59b1df2dd2f21b6c407af06f",
+    "src/session/session-context-for-llm.ts": "d5a4516a6ffc3fe0f0f400269e317feded955108288a78477c3013150687e596",
+    "src/gateway/service.ts": "c564e60f3a10bcd12db37926ad78bf97ef18bb644395ae6a6831dc9bc73be252",
+    "src/storage/sqlite/migrations/251_personal_result_reads.sql": "3e24146d178e81edac970c2ceb208b2297c54b384475acacdeb215a007c82677",
+    "src/agent/tools/factory.ts": "42c1d5441e1ad687176865e85fc05b5c2f755ab98c89fcceb0da9a2fdf79efb7",
+    "web/src/features/chat/messages/message-bubble.tsx": "8a241fa7352ca8c4cb1b06fedeb5b57a41dff9e6c6a1e7007efe338c0cee2204",
+    "web/src/features/chat/composer/chat-composer.tsx": "f717d3d627930204f41e67a47af8a16a1cee2464809ffd8b79c26d05c63b73a7",
+    "web/src/features/chat/messages/message-context-attachments.tsx": "f1cbcf906a55b5e51b66c65076de9cf01c20f39f86ee507367857ef3d7b1f9a7",
+    "scripts/build-personal-result-worker.mjs": "9bd76e63fa3912e8d85f2c995f63fb65dfbeb541dcd7b9129f2658e9686ac9e3",
+    "scripts/build-electron-server.mjs": "82463aeb5e863165303c7beb16c2f21045c060b2d7387577d9f453ba25844ceb",
+    "scripts/tsdown-build.mjs": "17c7e6478af9064c7d99f3f0119f2bc2888c39bed23a04f8fb04508cb1456581",
+    "tsdown.config.ts": "8680815cb9301664acb4fd619441f7276bafb0a4c59f303a5e597d0d88847449",
+    "scripts/personal-task-handoff-live-smoke.mts": "c9f5e9fedee13b3d2ee5d54dccc2b53d306154b2cd5ab9c920c79ce8986a9eef",
+    "src/tasks/task-handoff.ts": "e43e02a241d3041b27f5dbb8cee9ad7c662574b8ef8f8bccafbf5de0881f8cbb",
+    "src/tasks/task-execution-capabilities.ts": "e12ecba4975678bb8aa55b756bc55c7602169d96a94d34a40328f9b89fa7d28b",
+    "src/tasks/task-allocation-service.ts": "41d2bd1f20f76e9e5b4c595e5bb5ba465e4c012bdb1b9c31fb6218eea39d4b24",
+    "src/tasks/task-research-result.ts": "6fdc26101c1a07897356df67e39d650561f8f23f7b0f2bd733d60552120f4090",
+    "src/tasks/task-contract-planner.ts": "865f3a676bfef7256270e5c6f2bcea81de1f278bcd8295a2ada8db8850bc5063",
+    "src/agent/tools/task-evidence.ts": "81db6a1fbccace9915d3d264e3933dd4eb5a5f4f79aadd617326d3e2454ab8ec",
+    "src/agent/tools/task-collaboration-tool.ts": "7e71af422162c16f0d4c44fed53023cc8e5967993a8e14b566473fdc6b4c8fac",
+    "src/agent/tools/task-result-tool.ts": "2181f86f2d0fff9fbaec283d6127ecf70454e85ede5f6044992a4e515af98c73",
+    "src/tasks/task-run-dispatcher.ts": "412749d01b40b290645a775f5fb43b04816e8eb050f8506d8da10c74efaf7e7d",
+    "pnpm-lock.yaml": "dafdd4572eecba69104ef37ce3348a09c4924ca4a5ddb523e146ccb985391898"
+  },
+  "sourceChangedDuringRun": true,
+  "limitations": "Real configured models and authenticated Gateway; isolated synthetic files. Registration and policy checks are not third-party network or binary parser readiness probes. Not production p95."
+}

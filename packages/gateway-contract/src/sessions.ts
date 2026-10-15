@@ -6,7 +6,7 @@ export type SessionStatus = 'active' | 'idle' | 'archived' | 'pinned';
 
 /** Current associations and the latest explicit references, not a record of what a model has read. */
 export interface SessionContextSource {
-  kind: 'note' | 'file' | 'session' | 'browser_tab' | 'mcp_resource' | 'attachment' | 'browser_page' | 'app_context';
+  kind: 'result' | 'note' | 'file' | 'session' | 'browser_tab' | 'mcp_resource' | 'attachment' | 'browser_page' | 'app_context';
   id: string;
   title?: string;
   unavailable?: boolean;

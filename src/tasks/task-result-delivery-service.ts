@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+import { createReadStream } from 'node:fs';
 import { lstat } from 'node:fs/promises';
 
 import { TASK_RESULT_DELIVERY_TYPE, TaskResultDeliverySchema, type TurnOutcomeDeliverable } from '@xopcai/gateway-contract';
@@ -10,7 +12,10 @@ import { emitSessionTranscriptUpdate } from '../session/transcript-events.js';
 import { createLogger } from '../utils/logger.js';
 import { getPersonalAgentByConversation } from '../personal-agent/repository.js';
 import { enqueuePersonalReply } from '../personal-agent/reply-composer.js';
+import { warmPersonalResult } from '../personal-agent/result-reader.js';
+import { recordPersonalPerformance } from '../personal-agent/performance.js';
 import { personalRequestForTask } from '../personal-agent/request-repository.js';
+import { taskInstructionSequence } from './task-research-result.js';
 import { TaskRepository } from './task-repository.js';
 import { TaskConversationRepository } from './task-conversation-repository.js';
 import { TaskRunRepository } from './task-run-repository.js';
@@ -27,7 +32,9 @@ async function materializedArtifact(item: TurnOutcomeDeliverable): Promise<TurnO
   if (media?.bucket === 'outbound' && item.location === 'artifact_store') {
     const file = await lstat(resolveMediaBufferPath(media.id, media.bucket)).catch(() => null);
     if (file?.isFile() && file.size <= MEDIA_ARTIFACT_MAX_BYTES) {
-      return { ...artifact, sizeBytes: file.size, shareUrl: undefined,
+      const digest = createHash('sha256');
+      for await (const chunk of createReadStream(resolveMediaBufferPath(media.id, media.bucket))) digest.update(chunk);
+      return { ...artifact, sha256: digest.digest('hex'), sizeBytes: file.size, shareUrl: undefined,
         capabilities: item.capabilities.filter(capability => capability === 'preview' || capability === 'download') };
     }
     return { ...artifact, availability: 'missing', uri: undefined, shareUrl: undefined, capabilities: [] };
@@ -62,7 +69,7 @@ export class TaskResultDeliveryService {
             const session = db.prepare('SELECT active_transcript_id FROM sessions WHERE conversation_id = ?')
               .get(delivery.conversationId);
             const task = db.prepare('SELECT resolution FROM tasks WHERE task_id = ?').get(delivery.taskId) as { resolution: string | null };
-            if (!session || !run || !['succeeded', 'failed'].includes(run.status)
+            if (delivery.instructionSequence !== undefined && delivery.instructionSequence !== taskInstructionSequence(delivery.taskId) || !session || !run || !['succeeded', 'failed'].includes(run.status)
               || (task.resolution && task.resolution !== 'done')
               || new TaskRunRepository().getLatestRoot(delivery.taskId)?.id !== run.id
               || state?.assignmentEpoch !== delivery.assignmentEpoch
@@ -81,6 +88,7 @@ export class TaskResultDeliveryService {
               : `${delivery.taskTitle}: ${outcome.status === 'failed' ? 'Request incomplete' : outcome.status === 'partial' ? 'Partial results ready'
                 : deliverables.length ? 'Results ready' : 'Result returned'}.`;
             const personal = getPersonalAgentByConversation(delivery.conversationId);
+            if (personal) warmPersonalResult(delivery.conversationId, delivery.deliveryId);
             if (personal && !personalRequestForTask(delivery.taskId)) enqueuePersonalReply({ delivery: { ...delivery, outcome },
               report: delivery.text?.trim() || delivery.outcome.summary?.trim() || statusText,
               objective: new TaskRepository().get(delivery.taskId)?.contract?.objective ?? delivery.taskTitle });
@@ -93,10 +101,18 @@ export class TaskResultDeliveryService {
             }) : undefined;
             db.prepare(`UPDATE task_result_deliveries SET status = 'delivered', payload_json = ?,
               message_entry_id = ?, delivered_at = ? WHERE delivery_id = ?`)
-              .run(JSON.stringify(details), entry?.entry_id ?? null, Date.now(), row.delivery_id);
+              .run(JSON.stringify({ ...delivery, outcome }), entry?.entry_id ?? null, Date.now(), row.delivery_id);
             return true;
           });
           if (!persisted) continue;
+          const saved = getSqliteDatabase().prepare('SELECT message_entry_id, delivered_at FROM task_result_deliveries WHERE delivery_id = ?').get(row.delivery_id);
+          if (saved?.message_entry_id && getPersonalAgentByConversation(delivery.conversationId)) {
+            recordPersonalPerformance({ phase: 'result_to_chat', conversationId: delivery.conversationId,
+              taskId: delivery.taskId, runId: delivery.taskRunId, deliveryId: delivery.deliveryId,
+              resultRevision: delivery.resultRevision, contractVersion: delivery.contractVersion,
+              instructionSequence: delivery.instructionSequence, assignmentEpoch: delivery.assignmentEpoch,
+              durationMs: Math.max(0, Number(saved.delivered_at) - delivery.createdAt), status: 'success' });
+          }
         }
         // Persist first. An interrupted publish is retried without another transcript append.
         emitSessionTranscriptUpdate({ conversationId: delivery.conversationId });

@@ -38,4 +38,9 @@ describe('published Pi dependency constraints', () => {
     const pkg = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8'));
     expect(collectPublishManifestErrors(pkg)).toEqual([]);
   });
+  it.each(['file:web/vendor/package.tgz', 'link:../local'])('rejects a runtime-only local dependency %s', specifier => {
+    const pkg = manifest();
+    pkg.dependencies.local = specifier;
+    expect(collectPublishManifestErrors(pkg).join('\n')).toContain(specifier);
+  });
 });

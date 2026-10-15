@@ -13,9 +13,13 @@ export function inspectTaskPublications(runId: string, research?: TaskResearchRe
     WHERE task_run_id = ? ORDER BY created_at, rowid`).all(runId) as Array<{ outcome_json: string }>;
   const artifacts = new Map<string, ReturnType<typeof TurnOutcomeSchema.parse>['deliverables'][number]>();
   for (const row of rows) for (const item of TurnOutcomeSchema.parse(JSON.parse(row.outcome_json)).deliverables) {
-    artifacts.set(item.sourceFileId ?? item.artifactId, item);
+    artifacts.set(research?.finalArtifactIds ? item.artifactId : item.sourceFileId ?? item.artifactId, item);
   }
-  const missing: string[] = [];
+  const missingSelections = research?.finalArtifactIds?.filter(id => !artifacts.has(id)) ?? [];
+  if (research?.finalArtifactIds) {
+    for (const key of artifacts.keys()) if (!research.finalArtifactIds.includes(key)) artifacts.delete(key);
+  }
+  const missing: string[] = missingSelections.map(id => `Selected artifact ${id}`);
   const unreviewed: string[] = [];
   for (const item of artifacts.values()) {
     const media = item.uri && tryParseMediaUri(item.uri);

@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 
-import { TaskExecutorSelectionSchema, verifiedTaskCriteria } from '@xopcai/gateway-contract';
+import { TaskExecutorSelectionSchema, verifiedTaskCriteria, resultReferenceId, resultReferenceVersion } from '@xopcai/gateway-contract';
 
 import type {
   ActorRef,
@@ -18,6 +18,11 @@ import { enqueueTaskAttentionRequiredEvent, enqueueTaskChangedEvent } from './ta
 import { TaskDependencyService } from './task-dependency-service.js';
 import { TaskReadModelProjector, type TaskReadModel } from './task-read-model-projector.js';
 import { TaskAllocationRepository } from './task-allocation-repository.js';
+import { resolvePersonalResultReference } from '../personal-agent/result-reader.js';
+import { personalRequestForTask } from '../personal-agent/request-repository.js';
+import { TaskOriginRepository } from './task-origin-repository.js';
+import type { TurnContextRef } from '../agent/source-context/types.js';
+import { captureTaskHandoff } from './task-handoff.js';
 import { TaskRepository } from './task-repository.js';
 import { TaskRunRepository } from './task-run-repository.js';
 import { TaskCollaborationRepository } from './task-collaboration-repository.js';
@@ -29,6 +34,8 @@ import { resolveTaskLocale } from './task-language.js';
 export type TaskApplicationResult =
   | { ok: true; model: TaskReadModel; runId?: string }
   | { ok: false; reason: 'not_found' | 'conflict' | 'invalid_transition' | 'blocked'; model?: TaskReadModel };
+
+export type TaskRevisionApplicationResult = TaskApplicationResult | { ok: false; reason: 'invalid_reference'; model: TaskReadModel };
 
 function requestHash(value: unknown): string {
   return createHash('sha256').update(JSON.stringify(value)).digest('hex');
@@ -133,6 +140,9 @@ export class TaskApplicationService {
       for (const edge of input.context) {
         this.#context.add({ taskId: task.id, ...edge, createdBy: actor });
       }
+      if (input.originConversationId && input.activation.mode === 'allocate') {
+        captureTaskHandoff(task.id, input.originConversationId, input.body ?? input.contract.objective);
+      }
       for (const grant of input.authorityGrants) {
         this.#context.grant({ taskId: task.id, ...grant, grantedBy: actor });
       }
@@ -194,6 +204,76 @@ export class TaskApplicationService {
         }
       }
       return started;
+    });
+  }
+
+  /** Atomically open a new work revision; allocation and source IO remain background work. */
+  reviseCompleted(input: { taskId: string; conversationId: string; baselineResultId: string; baselineVersion: string;
+    expectedVersion: number; instruction: string; idempotencyKey: string; sourceRefs?: TurnContextRef[]; supersedesEntryIds?: string[] }): TaskRevisionApplicationResult {
+    const db = getSqliteDatabase();
+    const task = this.#tasks.get(input.taskId);
+    if (!task || !new TaskOriginRepository().owns(task.id, input.conversationId)) return { ok: false, reason: 'not_found' };
+    if (personalRequestForTask(task.id)) throw new Error('Connected requests require a new authorized Request; completed Task revision cannot repeat external account actions');
+    const hash = requestHash(input);
+    const duplicate = db.prepare('SELECT request_hash FROM task_work_revisions WHERE idempotency_key = ?').get(input.idempotencyKey) as { request_hash: string } | undefined;
+    if (duplicate) {
+      if (duplicate.request_hash !== hash) throw new Error('Revision idempotency key reused with different input');
+      return { ok: true, model: this.#projector.project(task) };
+    }
+    if (task.version !== input.expectedVersion) return { ok: false, reason: 'conflict', model: this.#projector.project(task) };
+    if (this.#runs.getActiveRoot(task.id) || this.#runs.listActiveWaits(task.id).length || !this.#runs.getLatestRoot(task.id)
+      || !['closed', 'review'].includes(task.phase) || task.resolution && task.resolution !== 'done') return { ok: false, reason: 'invalid_transition', model: this.#projector.project(task) };
+    const baseline = resolvePersonalResultReference(input.conversationId, input.baselineResultId);
+    const latest = db.prepare(`SELECT delivery_id FROM task_result_deliveries WHERE task_run_id IN
+      (SELECT run_id FROM task_runs WHERE task_id = ?) AND status IN ('pending','delivered','stale') ORDER BY created_at DESC, rowid DESC LIMIT 1`).get(task.id) as { delivery_id: string } | undefined;
+    if (baseline.taskId !== task.id || resultReferenceVersion(baseline) !== input.baselineVersion || latest?.delivery_id !== baseline.deliveryId) return { ok: false, reason: 'conflict', model: this.#projector.project(task) };
+    const instruction = input.instruction.trim();
+    if (!instruction || instruction.length > 8000 || !input.idempotencyKey.trim()) throw new Error('Revision requires a bounded instruction and idempotency key');
+    const board = new TaskCollaborationRepository();
+    for (const id of input.supersedesEntryIds ?? []) {
+      const entry = board.get(id);
+      if (!entry || entry.taskId !== task.id || !['instruction', 'answer'].includes(entry.kind) || !['main_agent', 'user'].includes(entry.authorKind)) return { ok: false, reason: 'invalid_reference', model: this.#projector.project(task) };
+    }
+    return runSqliteWriteTransaction(() => {
+      const actor: ActorRef = { kind: 'user' };
+      const entry = board.append({ taskId: task.id, authorKind: 'main_agent', authorId: input.conversationId,
+        kind: 'instruction', body: instruction, deliverToWorker: true, idempotencyKey: `revision:${input.idempotencyKey}` });
+      let current = task.phase === 'closed' ? this.#tasks.setLifecycle({ taskId: task.id, expectedVersion: task.version, phase: 'ready' })! : task;
+      const contract = task.contract!;
+      const originalBody = db.prepare('SELECT original_body FROM task_work_revisions WHERE task_id = ? AND original_body IS NOT NULL ORDER BY contract_version LIMIT 1').get(task.id) as { original_body: string } | undefined;
+      const originalObjective = String(db.prepare('SELECT objective FROM task_contracts WHERE task_id = ? ORDER BY version LIMIT 1').get(task.id)?.objective ?? contract.objective);
+      current = this.#tasks.reviseContract({ ...contract, taskId: task.id, expectedVersion: current.version,
+        objective: `${originalObjective}\nCurrent revision: ${instruction}`, acceptanceCriteria: task.contract!.acceptanceCriteria, createdBy: actor })!;
+      current = this.#tasks.update(task.id, { expectedVersion: current.version,
+        body: `${originalBody?.original_body ?? task.body ?? contract.objective}\n\n## Work revision\nBaseline result: ${baseline.deliveryId} (${input.baselineVersion}).\n${instruction}\nRetain unaffected requirements. Publish only the selected final artifacts of this revision. Prior runs are historical.` })!;
+      db.prepare(`UPDATE task_origin_links SET origin_transcript_id = (SELECT active_transcript_id FROM sessions WHERE conversation_id = ?),
+        request_input_id = (SELECT id FROM session_inputs WHERE conversation_id = ? AND status = 'running' ORDER BY created_at_ms DESC LIMIT 1) WHERE task_id = ?`)
+        .run(input.conversationId, input.conversationId, task.id);
+      const refs = [...(input.sourceRefs ?? [])];
+      for (const sourceId of ['body', ...baseline.outcome.deliverables.filter(item => item.availability === 'available').map(item => item.artifactId)]) {
+        const ref = { kind: 'result' as const, sourceId: resultReferenceId(baseline.deliveryId, sourceId), expectedVersion: input.baselineVersion };
+        if (!refs.some(item => item.kind === ref.kind && item.sourceId === ref.sourceId)) refs.push(ref);
+      }
+      if (refs.length > 51) throw new Error('Revision input manifest exceeds 51 sources');
+      captureTaskHandoff(task.id, input.conversationId, current.body!, refs);
+      db.prepare(`INSERT INTO task_work_revisions (revision_id, task_id, contract_version, baseline_delivery_id, baseline_version,
+        instruction_entry_id, input_id, idempotency_key, request_hash, supersedes_json, original_body, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, (SELECT request_input_id FROM task_origin_links WHERE task_id = ?), ?, ?, ?, ?, ?)`)
+        .run(randomUUID(), task.id, current.latestContractVersion, baseline.deliveryId, input.baselineVersion, entry.id, task.id,
+          input.idempotencyKey, hash, JSON.stringify(input.supersedesEntryIds ?? []), originalBody ? null : task.body ?? contract.objective, Date.now());
+      db.prepare("UPDATE task_sessions SET status = 'superseded', ended_at = ? WHERE task_id = ? AND role = 'execution' AND status = 'active'").run(Date.now(), task.id);
+      db.prepare("UPDATE task_conversation_state SET active_conversation_id = NULL, current_executor_agent_id = NULL, status = 'idle', updated_at = ? WHERE task_id = ?").run(Date.now(), task.id);
+      const allocation = new TaskAllocationRepository();
+      const previous = allocation.get(task.id);
+      if (previous) db.prepare(`UPDATE task_allocations SET id = ?, status = 'pending', attempts = 0, selected_agent_id = NULL,
+        lease_token = NULL, lease_expires_at = NULL, selection_reason = NULL, reason_code = NULL, task_version = ?, next_attempt_at = ?, updated_at = ? WHERE task_id = ?`)
+        .run(randomUUID(), current.version, Date.now(), Date.now(), task.id);
+      else allocation.create(task.id, input.conversationId, current.version, { version: 1, summary: instruction.slice(0, 300) });
+      if (previous) allocation.publish(task.id, '修改要求已保存，正在为新修订分配执行者。');
+      db.prepare(`UPDATE task_result_deliveries SET reply_status = 'stale' WHERE task_run_id IN
+        (SELECT run_id FROM task_runs WHERE task_id = ?) AND reply_status IN ('pending','generating','ready')`).run(task.id);
+      enqueueTaskChangedEvent(db, { taskId: task.id, version: current.version, changedFields: ['contract', 'body', 'phase', 'context'], actor });
+      return { ok: true, model: this.#projector.project(current) };
     });
   }
 

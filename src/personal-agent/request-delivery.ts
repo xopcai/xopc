@@ -12,6 +12,7 @@ import { getPersonalRequest, updatePersonalRequest } from './request-repository.
 import { PersonalRequestResultSchema, renderPersonalRequestResult } from './request-result.js';
 import { getPersonalAgentByConversation } from './repository.js';
 import { enqueuePersonalReply } from './reply-composer.js';
+import { warmPersonalResult } from './result-reader.js';
 
 const log = createLogger('PersonalRequestDelivery');
 
@@ -102,7 +103,7 @@ export function drainPersonalRequestResults(notify?: (conversationId: string, re
         const fallback = assistant?.role === 'assistant'
           ? assistant.content.filter(part => part.type === 'text').map(part => part.text).join('\n').trim() : '';
         const content = parsed?.success ? renderPersonalRequestResult(parsed.data)
-          : fallback && fallback !== 'NO_REPLY' ? fallback.slice(0, 16000) : receipt?.summary?.trim() || 'Request finished without a readable result.';
+          : fallback && fallback !== 'NO_REPLY' ? fallback : receipt?.summary?.trim() || 'Request finished without a readable result.';
         const failed = run.status !== 'succeeded';
         const adoptionWarning = outdated ? 'Supplemental requirements arrived after the saved connected-app result. Their completion is unverified; do not treat the older structured items as current.' : '';
         const display = failed ? `查询未完成。\n\n${content}` : content;
@@ -115,6 +116,7 @@ export function drainPersonalRequestResults(notify?: (conversationId: string, re
             turnId: `personal-request:${request.requestId}`, status: failed ? 'failed' : outdated || (parsed?.success && parsed.data.coverage?.partial) ? 'partial' : 'succeeded',
             summary: content.slice(0, 2000), deliverables: [], evidence: [], createdAt: new Date(now).toISOString() }, createdAt: now });
         const personal = getPersonalAgentByConversation(request.conversationId);
+        if (personal) warmPersonalResult(request.conversationId, delivery.deliveryId);
         if (personal) enqueuePersonalReply({ delivery, objective: request.objective, requestId: request.requestId,
           report: parsed?.success ? parsed.data.summary : [adoptionWarning, content].filter(Boolean).join('\n\n'),
           ...(parsed?.success ? { preservedText: renderPersonalRequestResult({ ...parsed.data, summary: '' }).trim() } : {}) });

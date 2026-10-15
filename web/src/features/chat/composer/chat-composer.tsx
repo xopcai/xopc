@@ -330,6 +330,16 @@ export const ChatComposer = memo(function ChatComposer({
     return ref;
   }, [m.chat.commandPalette.contextLimitReached, setContextRefs]);
 
+  useEffect(() => {
+    const selectResult = (event: Event) => {
+      const detail = (event as CustomEvent<{ conversationId: string; reference: ComposerContextRef }>).detail;
+      if (detail?.conversationId !== conversationId || detail.reference.kind !== 'result') return;
+      addContextRef(detail.reference);
+    };
+    window.addEventListener('chat-result-reference', selectResult);
+    return () => window.removeEventListener('chat-result-reference', selectResult);
+  }, [conversationId, addContextRef]);
+
   const onUnavailableSkill = useCallback(
     (item: import('@/features/chat/palette/command-palette.types').SkillPaletteItem) => {
       const reason = item.availability.status === 'agent-denied'

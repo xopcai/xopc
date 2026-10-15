@@ -1,3 +1,5 @@
+import type { ExecutionCapability } from './task-execution-capabilities.js';
+
 export interface TaskContractDefinition {
   objective: string;
   expectedOutputs: string[];
@@ -6,6 +8,8 @@ export interface TaskContractDefinition {
   approvalRequired: string[];
   assumptions: string[];
   risks: string[];
+  requiredCapabilities?: ExecutionCapability[];
+  capabilityPlanning?: 'complete' | 'unavailable';
 }
 
 export function defineTaskContract(objectiveInput: string, locale?: 'en' | 'zh'): TaskContractDefinition {

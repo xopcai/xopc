@@ -16,7 +16,7 @@ export function collectPublishManifestErrors(packageJson) {
   const errors = [];
   for (const section of ['dependencies', 'optionalDependencies', 'peerDependencies']) {
     for (const [name, specifier] of Object.entries(packageJson[section] ?? {})) {
-      if (typeof specifier === 'string' && specifier.startsWith('workspace:')) {
+      if (typeof specifier === 'string' && /^(?:workspace:|file:|link:)/.test(specifier)) {
         errors.push(`Runtime dependency ${section}.${name} must not use ${specifier}`);
       }
     }

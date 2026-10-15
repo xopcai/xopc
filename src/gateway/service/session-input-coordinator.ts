@@ -91,7 +91,7 @@ function contextRefsMatchFrozenSnapshot(
   requested: readonly TurnContextRef[],
   frozen: SessionInputState['inputs'][number]['contextRefs'],
 ): boolean {
-  const editable = frozen?.filter(ref => ref.kind === 'note' || ref.kind === 'task'
+  const editable = frozen?.filter(ref => ref.kind === 'result' || ref.kind === 'note' || ref.kind === 'task'
     || ref.kind === 'file' || ref.kind === 'session' || ref.kind === 'browser_tab'
     || ref.kind === 'user_assertion') ?? [];
   if (requested.length !== editable.length) return false;

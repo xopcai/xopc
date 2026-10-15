@@ -1,0 +1,979 @@
+{
+  "passed": true,
+  "checks": {
+    "functionalChain": true,
+    "regressionPassed": true,
+    "basicAnswerQuality": true,
+    "unchangedRuntime": true,
+    "unchangedRuntimeAfterRun": true,
+    "isolatedConfigCleaned": true,
+    "noAdditionalMainModelCall": true,
+    "mainP95": true,
+    "fullBackgroundOverlap": true,
+    "hotReadP95": true,
+    "retainedOldAndRevisedContentReadable": true,
+    "localWriteSmoke": true,
+    "foregroundInputReadSmoke": true,
+    "originalDeliverySmoke": true,
+    "fallbackBudget": true,
+    "noSourceValidationFailures": true,
+    "noUnchangedFailedRetries": true,
+    "allFailuresTraceable": true,
+    "verifiedTerminalRecovery": true,
+    "hostRangeProvenance": true,
+    "noMaterializationMisuse": true,
+    "preservedVersionedDelivery": true
+  },
+  "main": {
+    "baseline": {
+      "count": 40,
+      "p50Ms": 965.7987920000014,
+      "p95Ms": 1095.2642919999998,
+      "p99Ms": 1476.3160410000019,
+      "maxMs": 1476.3160410000019
+    },
+    "loaded": {
+      "count": 40,
+      "p50Ms": 945.8475000000035,
+      "p95Ms": 1109.0435409999918,
+      "p99Ms": 1199.4405839999963,
+      "maxMs": 1199.4405839999963
+    },
+    "failures": 0,
+    "minimumSamples": 40,
+    "ratio": 1.0125807525184907,
+    "limit": 1.1,
+    "verdict": "passed"
+  },
+  "localWriteSmoke": {
+    "count": 2,
+    "p50Ms": 13.341750000006869,
+    "p95Ms": 13.58704100002069,
+    "p99Ms": 13.58704100002069,
+    "maxMs": 13.58704100002069
+  },
+  "hotRead": {
+    "count": 50,
+    "p50Ms": 0.4609169999998812,
+    "p95Ms": 0.5366669999998521,
+    "p99Ms": 0.6199999999998909,
+    "maxMs": 0.6199999999998909,
+    "readyCount": 50,
+    "maxOutputChars": 4000
+  },
+  "bodyRead": {
+    "count": 50,
+    "p50Ms": 0.37716699999987213,
+    "p95Ms": 1.5159589999998389,
+    "p99Ms": 4.905291999999918,
+    "maxMs": 4.905291999999918,
+    "readyCount": 50,
+    "maxOutputChars": 461
+  },
+  "originalDeliverySmoke": {
+    "count": 2,
+    "p50Ms": 16,
+    "p95Ms": 20,
+    "p99Ms": 20,
+    "maxMs": 20
+  },
+  "busyFallback": {
+    "count": 0,
+    "p50Ms": null,
+    "p95Ms": null,
+    "p99Ms": null,
+    "maxMs": null
+  },
+  "fallbackCoverage": "injected_clock_regression",
+  "regression": {
+    "success": true,
+    "passedTests": 434,
+    "failedTests": 0
+  },
+  "workerFailures": [
+    {
+      "tool": "publish_task_result",
+      "toolCallId": "call_00_ACUdRH7Dc4srfroIU5O74671",
+      "error": "Evidence range must select 1..1000 observed Unicode characters within the successful read"
+    }
+  ],
+  "repeatedFailedInputs": 0,
+  "zeroToolFailures": false,
+  "hostRangeCitations": 20,
+  "modelCallCoverage": {
+    "sampledRuns": 80,
+    "linkedRuns": 80,
+    "singleCallRuns": 80
+  },
+  "costCoverage": [
+    {
+      "cost_source": "model_catalog",
+      "calls": 92,
+      "estimated_cost_microusd": 48844
+    },
+    {
+      "cost_source": "unknown",
+      "calls": 30,
+      "estimated_cost_microusd": null
+    }
+  ],
+  "sourceChangesAfterRun": [],
+  "remainingConfigFiles": [],
+  "trace": {
+    "inputs": [
+      {
+        "id": "92c01302-52b5-4b6d-a94f-d3b83550a644",
+        "run_id": "fe4a43c2-4e1f-4db6-a2d8-5c4dbd6b7a6e",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792051752272
+      },
+      {
+        "id": "6cebc3a8-26b3-4914-a45b-5b5c5176b6c4",
+        "run_id": "673548cd-20cd-462d-b526-d220e47109a3",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792051754482
+      },
+      {
+        "id": "e8852868-6f47-41ee-909f-943a8e239861",
+        "run_id": "98ee4af2-e36b-447c-9ca4-5a314d98f2bd",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792051755714
+      },
+      {
+        "id": "3797fde3-4f32-4de3-97bd-d3f86aa09f39",
+        "run_id": "73eda318-8979-42dc-ba5f-3c10800c773c",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792051756839
+      },
+      {
+        "id": "78653364-a252-4e76-babc-2f55b8dfc53b",
+        "run_id": "7ba0a8aa-9ecf-4b09-b772-21fa7f5d5ca1",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792051757974
+      },
+      {
+        "id": "690b1304-adfd-4ee0-b224-0de30662016f",
+        "run_id": "e1383435-32a3-450c-86c4-448ad47098d4",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792051759210
+      },
+      {
+        "id": "05b00a1a-a5e3-4a83-8315-73801fb4c682",
+        "run_id": "979bc83e-da05-4431-996b-172f6aaedd1f",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792051760349
+      },
+      {
+        "id": "c2b5aa0e-ba5d-4d2e-a64b-c8f860eff9ef",
+        "run_id": "fdb86d57-c2da-4b3b-a8e3-d012eef46e6d",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792051762098
+      },
+      {
+        "id": "1e53fe75-4f23-4ce7-adb3-466d21d8a0d0",
+        "run_id": "a50a7392-9ac6-41cd-be25-9ce054f58572",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792051763336
+      },
+      {
+        "id": "e03fe9ee-9646-40d4-a087-c307e1cb7eb1",
+        "run_id": "fd81b80c-38bf-4b7e-b0f2-3c2fd49816f5",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792051764466
+      },
+      {
+        "id": "6f22a718-6250-4c72-b47a-f033bca9289a",
+        "run_id": "7fbaec30-07c6-4aed-b9d2-4ef81e6cbe48",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792051765498
+      },
+      {
+        "id": "595e8165-2b39-4317-9486-615976bf7e6b",
+        "run_id": "62f62115-2d1f-4cac-a66e-4995b72300ec",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792051766631
+      },
+      {
+        "id": "75a28030-ea38-4b14-a3ba-0c5659359ac3",
+        "run_id": "4eff2939-397e-4328-bad8-d8ad1912ff0e",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792051767764
+      },
+      {
+        "id": "a4b9cfef-95dc-4a13-aca9-5580faf5ad5e",
+        "run_id": "3e60f33c-79df-42af-b5e6-11f2927a2eda",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792051768893
+      },
+      {
+        "id": "7538ce49-4b42-4059-bc7f-955afbe0b35f",
+        "run_id": "593cada2-cab9-43d6-aeea-e05ac0d44c8d",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792051770122
+      },
+      {
+        "id": "8b76f93a-5c10-49e6-99a6-67d46923690a",
+        "run_id": "ab4ace69-7e0f-42dc-8e7e-0c731eac7286",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792051771256
+      },
+      {
+        "id": "51b1215a-6a66-496d-adfd-eab25b14fa3d",
+        "run_id": "48698a53-7f3d-41dc-b1f1-335022b6db79",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792051772294
+      },
+      {
+        "id": "c064addb-605b-4a31-95be-89b081b1b669",
+        "run_id": "92bb5ef3-678f-49ee-a4a4-bd4117a0f3c2",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792051773527
+      },
+      {
+        "id": "5090f5d5-4eca-4090-8f1c-8b644acea0a5",
+        "run_id": "8c5002fb-64ec-4dbc-b458-90cd2c9740ef",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792051774555
+      },
+      {
+        "id": "841282c6-d7b0-429c-a261-ecc47a3f9504",
+        "run_id": "9f1eef61-cb75-425d-9cb7-0d8056f295e6",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792051775888
+      },
+      {
+        "id": "779a6b2d-43db-4ba7-8463-73ec81135999",
+        "run_id": "b688fdb1-ee69-4b44-9512-f32efde98c18",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792051777018
+      },
+      {
+        "id": "72cab499-522c-4422-8b6f-dbb253459341",
+        "run_id": "c8d5a920-ecf5-4fed-8cbe-b9989ca1df61",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792051778248
+      },
+      {
+        "id": "f0572588-fb23-42e8-9f7c-37ae63ec5f3b",
+        "run_id": "75a395cb-cb5a-40cc-8cb2-cc1ec3f1366b",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792051779288
+      },
+      {
+        "id": "f8cc1fe4-2204-4178-afcd-530c9cc4850c",
+        "run_id": "ca623ac9-fec4-4b0c-95d3-c7b9399e69eb",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792051780315
+      },
+      {
+        "id": "6aaed067-7d54-4da2-998b-11b8d4c16e6e",
+        "run_id": "514da92d-7cd5-44c2-b10f-3bf9acba5ada",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792051781347
+      },
+      {
+        "id": "a1d08de2-72dd-4604-bcce-78e603a0dcd1",
+        "run_id": "59d030e2-7878-4a2a-a628-eb506c4557b2",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792051782172
+      },
+      {
+        "id": "8a5c751f-1440-4d47-af98-599cadd5093a",
+        "run_id": "cde4c677-0295-489b-be64-d5f290444d4c",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792051783300
+      },
+      {
+        "id": "726978a7-800a-46c6-92d5-eac56c2ed97c",
+        "run_id": "b6bd5fcf-0b02-4edb-ace1-b2c5c8cfd856",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792051784431
+      },
+      {
+        "id": "b43c8ec5-0a62-44f4-8f04-ec1570ed2c7f",
+        "run_id": "f9f67fab-ce4d-4708-8882-b54dd87ee574",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792051785466
+      },
+      {
+        "id": "f8b29884-11c9-4942-bd45-4ea069921f21",
+        "run_id": "859e8820-5b18-48dc-ab24-1ed307c5010e",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792051786698
+      },
+      {
+        "id": "297411e5-8f79-453c-9653-a66c334e72a9",
+        "run_id": "2ad006a5-323f-429d-a685-15949c175cae",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792051787725
+      },
+      {
+        "id": "2c37faba-06f9-4f2b-a552-dfcc9bd4b830",
+        "run_id": "cbc80976-d9ea-4913-b110-fe0f004cf4ec",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792051789076
+      },
+      {
+        "id": "a181f74c-1d6f-4f10-83a6-058954417e6b",
+        "run_id": "64e310f4-9f6c-4b24-b8d5-67c09e84b3e6",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792051790205
+      },
+      {
+        "id": "6a8a7a80-8c1c-43ff-87cd-d8f1c3c892e2",
+        "run_id": "63455643-c678-497d-b2ba-93fa532beb54",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792051791437
+      },
+      {
+        "id": "0ca2d932-a43f-4ee7-9c0b-c7ec97e321e1",
+        "run_id": "55b58c04-933f-4839-8411-74c1a3e17986",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792051792775
+      },
+      {
+        "id": "705780a3-86b6-44cc-bdf1-4a8b98420169",
+        "run_id": "9394ab73-eacd-4d0f-8953-e0f5f9423c17",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792051793600
+      },
+      {
+        "id": "843afcd0-a7fd-4bd5-bb4a-9c4ad5ac0842",
+        "run_id": "73b5f8ca-8a78-4d44-82dd-80a4343a1548",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792051794733
+      },
+      {
+        "id": "92fa7beb-c373-4013-98bb-c6d9503afc68",
+        "run_id": "0957f28a-25f6-405f-9875-323ee45aa20a",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792051795455
+      },
+      {
+        "id": "21a2c3b7-0ead-43c9-84d3-b1503f65efd0",
+        "run_id": "3800fe3f-7398-4b47-8ad3-91648783ba4b",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792051796181
+      },
+      {
+        "id": "b74bc6b2-8339-466d-9d5a-a2b5ffcffbae",
+        "run_id": "8a673251-2819-4e52-b153-341ab050ff53",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792051797105
+      },
+      {
+        "id": "a9b165da-2205-4c98-a79b-b627dd0a31c5",
+        "run_id": "14923849-f0f3-4f9e-8e14-fa12e5720999",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792051798337
+      },
+      {
+        "id": "68dde2f8-9076-4b55-8a88-3453d5137874",
+        "run_id": "c771e088-8d90-4efa-9cc5-e25d50b6b7c5",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792051799772
+      },
+      {
+        "id": "393ed074-1137-4c47-952f-30e051046595",
+        "run_id": "6cdb5625-9b44-40ea-a5fa-c7ae75ea277f",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792051801002
+      },
+      {
+        "id": "c6b89588-600d-4959-bc69-40f86270c5d6",
+        "run_id": "7be38cea-1730-4ddc-a27d-8ed1e0cac4f7",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792051802340
+      },
+      {
+        "id": "71618c7e-a36b-4a7e-89f6-2d6d69855b78",
+        "run_id": "0bd932da-7d94-417c-ac78-aae9b5bf1c0b",
+        "task_run_id": "d363b8a7-fc42-4ca1-bd32-bc59d9ce1588",
+        "status": "completed",
+        "created_at_ms": 1792051813001
+      },
+      {
+        "id": "da015e95-2604-411b-8ec0-dfc087abd849",
+        "run_id": "48049ef7-1629-46de-b886-6d0c005bf3a2",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792051813082
+      },
+      {
+        "id": "0560ed9c-70e4-4e41-ba6d-d12378199b09",
+        "run_id": "20372d63-180b-44e5-83f4-f3a4c3383c03",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792051814003
+      },
+      {
+        "id": "07c7c030-6f83-403e-93af-ee026b101641",
+        "run_id": "32b27f5d-6bda-4d6d-a185-8ad282ce95fa",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792051815229
+      },
+      {
+        "id": "2ef6a6f0-7a84-40e2-a6fc-e8b790409ec5",
+        "run_id": "7db87268-9666-4d10-b641-cfbf97beb38d",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792051816351
+      },
+      {
+        "id": "2ac286e4-b4a4-4223-8b4a-e7e184239f3e",
+        "run_id": "eac2a2d7-f54e-4619-8d8a-d1b34e07339d",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792051817797
+      },
+      {
+        "id": "b3a6c9a2-ef9b-4b94-b3c0-88bfc475c9d5",
+        "run_id": "93cfd477-fdb4-476e-902e-6408c40835d9",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792051818932
+      },
+      {
+        "id": "ed01d46d-510d-4635-bdaa-fa012a104700",
+        "run_id": "a38384af-371f-4a21-9c96-e729f887fe9d",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792051820162
+      },
+      {
+        "id": "c1dad9e0-5d36-4824-bee2-9971921014e9",
+        "run_id": "c6852b63-76de-4eda-b2fb-3a9007987d80",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792051821284
+      },
+      {
+        "id": "c83f405c-56fa-4251-99b0-fed6100549ba",
+        "run_id": "159fe190-4812-4ed4-a8b2-cd5c8cb46c24",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792051822514
+      },
+      {
+        "id": "42aed289-d06e-41da-9751-3d778a6d7a5a",
+        "run_id": "a75fff94-dff9-49d1-a207-b8369ac7e389",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792051823539
+      },
+      {
+        "id": "00adce60-c942-4379-baaa-fd9e3b4a3168",
+        "run_id": "509277be-0496-4621-876d-9ddef781640c",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792051824673
+      },
+      {
+        "id": "110cdace-220b-46f4-8cc7-c87a413dff59",
+        "run_id": "d32ece93-f220-4b80-9164-48d6add3a04d",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792051825910
+      },
+      {
+        "id": "66815047-89bc-4e23-ac42-7dc273b8fd6a",
+        "run_id": "1b9ff81c-6f56-498d-a262-4f60f47e174d",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792051827140
+      },
+      {
+        "id": "1432c679-a830-4b07-a4c1-80789db42dfc",
+        "run_id": "81ac39c6-aa09-42e0-b802-c9df383b47f2",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792051828365
+      },
+      {
+        "id": "6494607b-3797-4d47-abef-813e685f5a53",
+        "run_id": "cef23759-5b77-41a9-bccf-c8151a008d41",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792051829597
+      },
+      {
+        "id": "7546f484-1558-4548-9ed7-eeeb31f76b07",
+        "run_id": "a04f2c75-4508-44e1-bb37-e9506916f091",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792051830717
+      },
+      {
+        "id": "3b457033-853c-4030-b48c-d3c982690fcb",
+        "run_id": "ec2f2a7d-69ad-4407-bd49-06a59036f515",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792051831853
+      },
+      {
+        "id": "c951bb51-43b9-4548-b8f5-c7f5af1e917a",
+        "run_id": "d00eec28-a3bf-45a5-8872-132b6a1977a4",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792051832683
+      },
+      {
+        "id": "01b11893-a434-4d9d-a71d-2affa652e1b6",
+        "run_id": "981029ef-e93d-4220-84ed-08914c6b88f4",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792051833916
+      },
+      {
+        "id": "d99e7baf-4b17-4559-b695-aba55a1d2781",
+        "run_id": "6972b98e-9d6a-4cc4-b536-5acdb8620f62",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792051835053
+      },
+      {
+        "id": "e3ecff7d-3040-44d7-8674-9795cbf3df97",
+        "run_id": "4473a5f3-9bcc-4bcb-a6f4-de786c985c57",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792051836185
+      },
+      {
+        "id": "ab9a9f88-d0b6-4b8c-a9d6-c87251d82346",
+        "run_id": "fa793bd1-bd7f-40db-911f-20ecd23ee7a8",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792051837110
+      },
+      {
+        "id": "0a64106f-1a96-430f-aceb-7c94a6da4f82",
+        "run_id": "8d2b3883-a358-4bc8-ad97-40469e2cc48a",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792051838340
+      },
+      {
+        "id": "5b00cff7-3ade-4268-b3f4-c54c51a051cf",
+        "run_id": "a8354b97-c993-4338-aeb1-f7e9a3cdea09",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792051839571
+      },
+      {
+        "id": "804118de-f980-47d6-ae09-50562560e382",
+        "run_id": "1ab6de7f-b475-4509-b6c5-610459768be3",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792051840900
+      },
+      {
+        "id": "30bb8f70-e2a4-40f9-a947-d60ac06bd8ac",
+        "run_id": "400c1832-350a-42d9-97aa-52ed8b7efbe8",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792051842026
+      },
+      {
+        "id": "aaee23bf-6261-44d6-855e-e736f13a978e",
+        "run_id": "1bd311ee-e7ea-4260-a8b1-cc6df0f237e6",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792051843056
+      },
+      {
+        "id": "8773f3b8-b026-41d1-a9bb-55f7a360d360",
+        "run_id": "f741f6b4-4b99-49ce-805d-71341434e225",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792051844088
+      },
+      {
+        "id": "37b22b71-eca2-4fb1-a668-bfab2293b6ec",
+        "run_id": "1fb97980-b87f-4f23-8a64-1ac82bc53db2",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792051845223
+      },
+      {
+        "id": "1490905c-2277-48f3-9795-24dc5be1c81f",
+        "run_id": "91889ca8-2321-48cd-bd9b-987bf72e5c35",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792051846350
+      },
+      {
+        "id": "0c0efc84-b716-4a04-9241-1f4c5f6a18ff",
+        "run_id": "5f3149a9-61fa-47c2-8e84-e0dfbc52a358",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792051847581
+      },
+      {
+        "id": "78d939ae-6bc2-41dd-82f8-a0b4338aa3c0",
+        "run_id": "5ae2cbdf-b8f2-4660-85fe-ffeb2b3a326c",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792051848608
+      },
+      {
+        "id": "ba989167-44d8-4841-8195-068f4855c889",
+        "run_id": "da1dbfff-b92c-4332-8b57-ba2be555635f",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792051849945
+      },
+      {
+        "id": "3c004561-7452-4402-b19d-2caa842d4833",
+        "run_id": "dc2340d6-d16f-490b-8daa-ceb65f542ec9",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792051851078
+      },
+      {
+        "id": "fa0ee5a1-5c7f-4ae4-8b67-8ab639ed5551",
+        "run_id": "6330082d-6926-4e3d-bbd5-d8b5e6a27874",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792051852109
+      },
+      {
+        "id": "1f316048-5d40-4fac-abf8-25604ebdde45",
+        "run_id": "0e8ae1ad-36dc-4136-9546-e4df5900a664",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792051853244
+      },
+      {
+        "id": "e748a59d-fbd9-46f1-b373-ff5e53f2f1a1",
+        "run_id": "ccbb78e1-2976-4008-91fd-a6c0322177ad",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792051854476
+      },
+      {
+        "id": "431c12c0-c0fd-44b8-94a3-6a225d979ca5",
+        "run_id": "8347d579-7e81-42c3-9f0e-1fa2b33f0403",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792051855504
+      },
+      {
+        "id": "49d848b1-be5a-42a1-9482-6409ed460d39",
+        "run_id": "44607a92-e958-4753-93f4-4dc0c39229df",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792051856530
+      },
+      {
+        "id": "150dde88-a7c9-4131-884d-ab4e1bc1c041",
+        "run_id": "c7b21b66-c25f-4a82-9b87-72df63d1a493",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792051857558
+      },
+      {
+        "id": "b5a114ca-2af6-43e7-8100-bc87679de1e4",
+        "run_id": "20043909-6812-4e67-81b8-3f66e012dddd",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792051858881
+      },
+      {
+        "id": "87367fa9-f707-47c4-ba49-91a29dac1761",
+        "run_id": "d26da9c5-5127-4cf8-a67c-cd77c24f10bf",
+        "task_run_id": null,
+        "status": "cancelled",
+        "created_at_ms": 1792051945111
+      },
+      {
+        "id": "5eccd5f6-d881-485d-ba08-c7cacb900e03",
+        "run_id": "bab0d5f1-8db8-4f2f-88bc-846538e55859",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792051949788
+      },
+      {
+        "id": "77401347-f4d5-4976-b041-d98af32af6b8",
+        "run_id": "6d1fb817-4115-410b-8abd-9f5a4b2b51f4",
+        "task_run_id": "c6055d94-95c9-49b8-8731-77fc5792be2f",
+        "status": "completed",
+        "created_at_ms": 1792051958710
+      },
+      {
+        "id": "7160e6af-9671-47fc-9f0f-b5c3f725e5c7",
+        "run_id": null,
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792051959765
+      },
+      {
+        "id": "a3744c57-7bc8-4c2d-b98e-4055d470b8f8",
+        "run_id": "e9541f84-19b2-4fc2-9f59-c99363c05f45",
+        "task_run_id": null,
+        "status": "completed",
+        "created_at_ms": 1792051964709
+      }
+    ],
+    "runs": [
+      {
+        "run_id": "d363b8a7-fc42-4ca1-bd32-bc59d9ce1588",
+        "task_id": "d8de0dde-5a2d-427f-88e4-88ea8b6a7c5c",
+        "parent_run_id": null,
+        "contract_version": 2,
+        "status": "succeeded",
+        "queued_at": 1792051812799,
+        "started_at": 1792051813003,
+        "completed_at": 1792051943707
+      },
+      {
+        "run_id": "c6055d94-95c9-49b8-8731-77fc5792be2f",
+        "task_id": "d8de0dde-5a2d-427f-88e4-88ea8b6a7c5c",
+        "parent_run_id": null,
+        "contract_version": 4,
+        "status": "succeeded",
+        "queued_at": 1792051958461,
+        "started_at": 1792051958713,
+        "completed_at": 1792052020087
+      }
+    ],
+    "revisions": [
+      {
+        "revision_id": "c11603d5-02bb-47fd-8fe9-da9b1eb5581e",
+        "task_id": "d8de0dde-5a2d-427f-88e4-88ea8b6a7c5c",
+        "contract_version": 3,
+        "baseline_delivery_id": "321ceca4-7708-46f6-90dd-6a7dc10f7ed4",
+        "instruction_entry_id": "8c6b3630-c1db-40f4-b51a-3704c79677c0",
+        "input_id": "87367fa9-f707-47c4-ba49-91a29dac1761",
+        "created_at": 1792051949762
+      }
+    ],
+    "directions": [
+      {
+        "entry_id": "c9b7e193-9525-43dc-ae28-899c94c00249",
+        "task_id": "d8de0dde-5a2d-427f-88e4-88ea8b6a7c5c",
+        "sequence": 1,
+        "kind": "result",
+        "causation_id": null,
+        "created_at": 1792051943707,
+        "status": null,
+        "assignment_epoch": null,
+        "updated_at": null
+      },
+      {
+        "entry_id": "8c6b3630-c1db-40f4-b51a-3704c79677c0",
+        "task_id": "d8de0dde-5a2d-427f-88e4-88ea8b6a7c5c",
+        "sequence": 2,
+        "kind": "instruction",
+        "causation_id": null,
+        "created_at": 1792051949761,
+        "status": "confirmed",
+        "assignment_epoch": 2,
+        "updated_at": 1792051964693
+      },
+      {
+        "entry_id": "664e6e99-feb0-466b-8c3f-42ab9ac0c396",
+        "task_id": "d8de0dde-5a2d-427f-88e4-88ea8b6a7c5c",
+        "sequence": 3,
+        "kind": "ack",
+        "causation_id": "8c6b3630-c1db-40f4-b51a-3704c79677c0",
+        "created_at": 1792051964692,
+        "status": null,
+        "assignment_epoch": null,
+        "updated_at": null
+      },
+      {
+        "entry_id": "174369f5-6aad-4e22-9359-62b83d8005c3",
+        "task_id": "d8de0dde-5a2d-427f-88e4-88ea8b6a7c5c",
+        "sequence": 4,
+        "kind": "progress",
+        "causation_id": null,
+        "created_at": 1792052016533,
+        "status": null,
+        "assignment_epoch": null,
+        "updated_at": null
+      },
+      {
+        "entry_id": "c8ae462a-ba02-4f13-877e-13d44a1bdd80",
+        "task_id": "d8de0dde-5a2d-427f-88e4-88ea8b6a7c5c",
+        "sequence": 5,
+        "kind": "result",
+        "causation_id": null,
+        "created_at": 1792052020087,
+        "status": null,
+        "assignment_epoch": null,
+        "updated_at": null
+      }
+    ],
+    "deliveries": [
+      {
+        "delivery_id": "321ceca4-7708-46f6-90dd-6a7dc10f7ed4",
+        "task_run_id": "d363b8a7-fc42-4ca1-bd32-bc59d9ce1588",
+        "status": "delivered",
+        "reply_status": "delivered",
+        "attempts": 0,
+        "reply_attempts": 0,
+        "created_at": 1792051943709,
+        "delivered_at": 1792051943729,
+        "chat_persisted_at": 1792051945015
+      },
+      {
+        "delivery_id": "77e18726-af05-4c16-a45b-fe6d7aa92f39",
+        "task_run_id": "c6055d94-95c9-49b8-8731-77fc5792be2f",
+        "status": "delivered",
+        "reply_status": "delivered",
+        "attempts": 0,
+        "reply_attempts": 0,
+        "created_at": 1792052020088,
+        "delivered_at": 1792052020104,
+        "chat_persisted_at": 1792052021320
+      }
+    ],
+    "usage": [
+      {
+        "operation": "agent.answer",
+        "provider": "deepseek",
+        "model": "deepseek-flash",
+        "status": "succeeded",
+        "calls": 88,
+        "duration_ms": 71207,
+        "input_tokens": 112433,
+        "output_tokens": 1018,
+        "estimated_cost_microusd": 43575
+      },
+      {
+        "operation": "agent.answer",
+        "provider": "xopc-cloud",
+        "model": "auto",
+        "status": "succeeded",
+        "calls": 3,
+        "duration_ms": 8401,
+        "input_tokens": 58443,
+        "output_tokens": 564,
+        "estimated_cost_microusd": null
+      },
+      {
+        "operation": "agent.continue_after_tool",
+        "provider": "deepseek",
+        "model": "deepseek-flash",
+        "status": "succeeded",
+        "calls": 2,
+        "duration_ms": 3927,
+        "input_tokens": 999,
+        "output_tokens": 516,
+        "estimated_cost_microusd": 1149
+      },
+      {
+        "operation": "agent.continue_after_tool",
+        "provider": "xopc-cloud",
+        "model": "auto",
+        "status": "succeeded",
+        "calls": 18,
+        "duration_ms": 79708,
+        "input_tokens": 19023,
+        "output_tokens": 9677,
+        "estimated_cost_microusd": null
+      },
+      {
+        "operation": "personal.reply_composition",
+        "provider": "deepseek",
+        "model": "deepseek-flash",
+        "status": "succeeded",
+        "calls": 2,
+        "duration_ms": 2465,
+        "input_tokens": 13089,
+        "output_tokens": 138,
+        "estimated_cost_microusd": 4120
+      },
+      {
+        "operation": "session.generate_title",
+        "provider": "xopc-cloud",
+        "model": "auto",
+        "status": "succeeded",
+        "calls": 2,
+        "duration_ms": 2645,
+        "input_tokens": 1419,
+        "output_tokens": 18,
+        "estimated_cost_microusd": null
+      },
+      {
+        "operation": "task.allocation",
+        "provider": "xopc-cloud",
+        "model": "auto",
+        "status": "succeeded",
+        "calls": 2,
+        "duration_ms": 4414,
+        "input_tokens": 9706,
+        "output_tokens": 152,
+        "estimated_cost_microusd": null
+      },
+      {
+        "operation": "task.plan_contract",
+        "provider": "xopc-cloud",
+        "model": "auto",
+        "status": "succeeded",
+        "calls": 2,
+        "duration_ms": 6267,
+        "input_tokens": 3253,
+        "output_tokens": 711,
+        "estimated_cost_microusd": null
+      },
+      {
+        "operation": "task.research_review",
+        "provider": "xopc-cloud",
+        "model": "auto",
+        "status": "succeeded",
+        "calls": 3,
+        "duration_ms": 11804,
+        "input_tokens": 9490,
+        "output_tokens": 1727,
+        "estimated_cost_microusd": null
+      }
+    ]
+  },
+  "scope": "Same-source isolated real-model idle/background comparison, not a pre-change code or production baseline. Local writes have smoke coverage only. Failed calls are retained: acceptance requires verified final outputs and no identical failed retries, rather than claiming models never make rejected calls. A failed or unsampled gate remains visible."
+}

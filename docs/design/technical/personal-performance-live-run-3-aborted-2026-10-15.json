@@ -1,0 +1,10 @@
+{
+  "status": "aborted_before_acceptance",
+  "reason": "Local regression startup overlapped baseline sampling; exclude this run from p95 evidence",
+  "isolatedStateDirectory": "/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-personal-handoff-live-GCdRD3",
+  "configurationFilesRemoved": [
+    "xopc.json",
+    "xopc.json.bak",
+    "xopc.json.cloud-public-models-v1.sqlite.bak"
+  ]
+}
