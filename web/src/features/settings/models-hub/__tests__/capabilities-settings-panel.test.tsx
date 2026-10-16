@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { afterEach, expect, it, vi } from 'vitest';
 vi.mock('../connected-providers-grid', () => ({ useConnectedProviders: () => ({ cards: [], builtinRows: [], allModels: [], loading: false }), ConnectedProvidersGrid: () => null }));
 vi.mock('../../settings-page-layout', () => ({ SettingsPageFrame: ({children}: any) => <div>{children}</div>, SettingsPageHeader: () => null }));
@@ -30,4 +30,23 @@ it('leaves background document scrolling untouched when embedded', async () => {
   } finally {
     if (descriptor) Object.defineProperty(document, 'scrollingElement', descriptor); else Reflect.deleteProperty(document, 'scrollingElement');
   }
+});
+
+
+it.each(['chat', 'vision', 'image', 'transcription', 'speech', 'conversation', 'background'])('opens %s connections without leaving the service accounts page', async use => {
+  container = document.createElement('div'); document.body.append(container); root = createRoot(container);
+  const events: unknown[] = [];
+  const record = (event: Event) => events.push((event as CustomEvent).detail);
+  window.addEventListener('open-capability-settings', record);
+  const route = '/settings/capabilities/models?view=services&returnTo=%2Fchat%2Fdraft';
+  function Location() { const location = useLocation(); return <output>{location.pathname + location.search}</output>; }
+  try {
+    await act(async () => root.render(<MemoryRouter initialEntries={[route]}><Routes><Route path="/settings/capabilities/:capability" element={<><CapabilitiesSettingsPanel /><Location /></>} /></Routes></MemoryRouter>));
+    const buttons = container.querySelectorAll<HTMLButtonElement>('button[aria-haspopup="dialog"]');
+    expect(buttons).toHaveLength(7);
+    const index = ['chat', 'vision', 'image', 'transcription', 'speech', 'conversation', 'background'].indexOf(use);
+    await act(async () => buttons[index].click());
+    expect(events).toEqual([{ use, view: 'services' }]);
+    expect(container.querySelector('output')?.textContent).toBe(route);
+  } finally { window.removeEventListener('open-capability-settings', record); }
 });
