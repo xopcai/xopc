@@ -47,9 +47,9 @@ describe('resolveSTTProviderChain', () => {
     expect(chain.map(entry => entry.id)).toEqual(enabled ? ['qwen-token-plan-cn', 'openai'] : ['qwen-token-plan-cn']);
   });
 
-  it('does not add a connected subscription to automatic recognition fallback', () => {
+  it('includes a connected subscription in automatic recognition fallback', () => {
     vi.stubEnv('QWEN_TOKEN_PLAN_CN_API_KEY','plan-fixture');
-    expect(resolveSTTProviderChain({enabled:true,provider:'openai',managedAuto:true,providers:{openai:{apiKey:'fixture'}},fallback:{enabled:false,order:[]}}).map(provider=>provider.id)).not.toContain('qwen-token-plan-cn');
+    expect(resolveSTTProviderChain({enabled:true,provider:'openai',managedAuto:true,providers:{openai:{apiKey:'fixture'}},fallback:{enabled:false,order:[]}}).map(provider=>provider.id)).toContain('qwen-token-plan-cn');
     expect(resolveSTTProviderChain({enabled:true,provider:'qwen-token-plan-cn',fallback:{enabled:false,order:[]}}).map(provider=>provider.id)).toEqual(['qwen-token-plan-cn']);
   });
   it('prefers models[] over primary/fallback', () => {

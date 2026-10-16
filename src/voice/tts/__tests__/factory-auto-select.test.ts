@@ -9,10 +9,10 @@ import { voiceFixture } from '../../__tests__/voice-fixture.js';
 afterEach(() => { resetModelCatalogStore(); vi.unstubAllEnvs(); });
 
 describe('resolveProviderOrder', () => {
-  it('does not charge a connected subscription through automatic speech fallback', () => {
+  it('includes a connected subscription in automatic speech fallback', () => {
     vi.stubEnv('QWEN_TOKEN_PLAN_CN_API_KEY','plan-fixture');
     const config = { enabled:true,provider:'edge',trigger:'off',managedAuto:true } as TTSConfig;
-    expect(resolveProviderOrder('edge',{enabled:false,order:[]},config)).not.toContain('qwen-token-plan-cn');
+    expect(resolveProviderOrder('edge',{enabled:false,order:[]},config)).toContain('qwen-token-plan-cn');
     expect(resolveSpeechProviderChain({...config,provider:'qwen-token-plan-cn',managedAuto:false,fallback:{enabled:false,order:[]}}).map(provider=>provider.providerId)).toEqual(['qwen-token-plan-cn']);
   });
   it('uses explicit fallback order when enabled', () => {

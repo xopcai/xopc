@@ -672,24 +672,24 @@ describe('discussion note document', () => {
     }
     expect(recognize).toHaveBeenCalledOnce();
     expect(getModelUsageOrigin()).toBe('unknown');
-    expect(() => assertProviderUsage('qwen-token-plan-cn')).toThrow('provider_usage_scope_denied');
+    expect(() => assertProviderUsage('qwen-token-plan-cn')).not.toThrow();
   });
 
-  it.each(['live', 'saved'] as const)('does not upgrade explicit background callers in %s recording transcription', async mode => {
+  it.each(['live', 'saved'] as const)('retains explicit background origin in %s recording transcription', async mode => {
     const created = await create(`background-${mode}`);
     const recognize = vi.fn(async () => {
       expect(getModelUsageOrigin()).toBe('background');
       assertProviderUsage('qwen-token-plan-cn');
-      return { text: 'Must not publish', provider: 'qwen-token-plan-cn' };
+      return { text: 'Background recognized', provider: 'qwen-token-plan-cn' };
     });
     if (mode === 'live') {
       uploadSegment(created.discussion.id, 0, 'audio');
       await withModelUsageOrigin('background', () => new DiscussionLiveWorker({ notes, projects, getConfig: () => ({}) as never, transcribeSegment: recognize }).tick());
-      expect(service.transcript(created.discussion.id)?.segments[0]?.status).not.toBe('confirmed');
+      expect(service.transcript(created.discussion.id)?.segments[0]?.status).toBe('confirmed');
     } else {
       await uploadRecording(created.discussion.id, null, 2_000);
       await withModelUsageOrigin('background', () => new DiscussionSealer({ notes, getConfig: () => ({}) as never, transcribeRecording: recognize }).tick());
-      expect((await service.get(created.discussion.id))?.discussion.canonicalTranscript).toBeUndefined();
+      expect((await service.get(created.discussion.id))?.discussion.canonicalTranscript).toBe('Background recognized');
     }
     expect(recognize).toHaveBeenCalledOnce();
     expect(getModelUsageOrigin()).toBe('unknown');

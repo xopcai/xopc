@@ -129,9 +129,12 @@ describe('model setup authenticated Gateway HTTP', () => {
     expect((await response.json()).error.message).toContain('Voice settings saved');
     expect(listGlobalDefaults().defaults.models.chat.primary).toBe('openai/concurrent');
   });
-  it('rejects invalid input and does not silently configure an unsupported background use', async () => {
+  it('configures a selected subscription background model and rejects invalid overrides', async () => {
     const preview = await (await request('qwen-token-plan-cn')).json() as { payload: ModelSetupPreview };
-    expect((await request('qwen-token-plan-cn', '/apply', { selected: ['background'], revision: preview.payload.revision })).status).toBe(400);
+    const background = preview.payload.uses.find(use => use.id === 'background');
+    expect(background?.recommended).toMatch(/^qwen-token-plan-cn\//);
+    expect((await request('qwen-token-plan-cn', '/apply', { selected: ['background'], revision: preview.payload.revision })).status).toBe(200);
+    expect(listGlobalDefaults().defaults.models.background?.primary).toBe(background?.recommended);
     expect((await request('qwen-token-plan-cn', '/preview', { overrides: { vision: 'other/model' } })).status).toBe(400);
   });
 });
