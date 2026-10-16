@@ -13,6 +13,8 @@ import { messages } from '@/i18n/messages';
 import { secretInputLabelsFromChannels } from '@/lib/secret-input-labels';
 import type { StoredLanguage } from '@/lib/storage';
 
+import { capabilityLabels } from './capability-navigation';
+import { serviceDisplayName } from './capability-presentation';
 import { OAuthProviderConnect } from './oauth-provider-connect';
 import { applyModelSetup, previewModelSetup } from './provider-setup-api';
 
@@ -30,9 +32,12 @@ export function ProviderSetupPanel({ providerId, row, modelIds, existingConnecti
   language: StoredLanguage; onBack?: () => void; onDone: () => void; onApplied?: () => void;
 }) {
   const zh = language === 'zh';
+  const initialized = useRef(false);
   const [preview, setPreview] = useState<ModelSetupPreview | null>(null);
   const [request, setRequest] = useState<ModelSetupRequest>({ mode: targetUse ? 'replace' : 'fill', modelIds });
   const [apiKey, setApiKey] = useState('');
+  const [editingKey, setEditingKey] = useState(false);
+  const [credentialSaved, setCredentialSaved] = useState(false);
   const [connected, setConnected] = useState(existingConnection || Boolean(row?.configured));
   const [busy, setBusy] = useState(false);
   const saving = useRef(false);
@@ -44,7 +49,10 @@ export function ProviderSetupPanel({ providerId, row, modelIds, existingConnecti
     void previewModelSetup(providerId, { modelIds, ...(connectOnly ? { selected: [] } : {}), ...(targetUse && !connectOnly ? { mode: 'replace', selected: [targetUse] } as const : {}) }).then(data => {
       if (!active) return;
       setPreview(data); setConnected(data.configured);
-      setRequest({ mode: targetUse ? 'replace' : 'fill', modelIds, selected: connectOnly ? [] : data.uses.filter(use => use.selected).map(use => use.id) });
+      if (!initialized.current) {
+        initialized.current = true;
+        setRequest({ mode: targetUse ? 'replace' : 'fill', modelIds, selected: connectOnly ? [] : data.uses.filter(use => use.selected).map(use => use.id) });
+      }
       setError('');
     }).catch(cause => { if (active) setError(cause instanceof Error ? cause.message : String(cause)); });
     return () => { active = false; };
@@ -58,11 +66,12 @@ export function ProviderSetupPanel({ providerId, row, modelIds, existingConnecti
     if (!preview || saving.current) return;
     saving.current = true;
     setBusy(true); setError('');
-    let savedCredential = connected;
+    setCredentialSaved(false);
+    let savedCredential = false;
     try {
       if (apiKey.trim()) {
         await patchProviderApiKeys({ [providerId]: apiKey.trim() });
-        savedCredential = true; setConnected(true); setApiKey('');
+        savedCredential = true; setCredentialSaved(true); setConnected(true); setEditingKey(false); setApiKey('');
       }
       const fresh = await previewModelSetup(providerId, request);
       setConnected(fresh.configured);
@@ -82,11 +91,36 @@ export function ProviderSetupPanel({ providerId, row, modelIds, existingConnecti
       setPreview(fresh); setDone(true); onApplied?.();
     } catch (cause) {
       const detail = cause instanceof Error ? cause.message : String(cause);
-      setError((savedCredential ? (zh ? '服务已保存，用途配置未完成。' : 'Connection saved; model setup is incomplete. ') : '') + detail);
+      setError((!inline && savedCredential ? (zh ? '服务已保存，用途配置未完成。' : 'Connection saved; model setup is incomplete. ') : '') + detail);
     } finally { saving.current = false; setBusy(false); }
   };
   const title = preview?.profile.name ?? row?.name ?? providerId;
   const keyUrl = preview?.profile.apiKeyUrl ?? PROVIDER_ENRICHMENT[providerId]?.apiKeyUrl;
+  if (inline) {
+    const use = preview?.uses.find(use => use.id === targetUse);
+    const chosen = targetUse ? request.overrides?.[targetUse] ?? use?.recommended : undefined;
+    const displayName = serviceDisplayName(providerId, title, zh);
+    return <div className="space-y-6 p-4 sm:p-5">
+      <div className="flex items-start justify-between gap-3"><div className="min-w-0"><h3 className="text-base font-semibold text-fg">{displayName}</h3><p className="mt-1 text-sm text-fg-muted">{targetUse ? `${zh ? '用于' : 'For '}${capabilityLabels[targetUse][zh ? 0 : 1]}` : ''}</p></div><Button variant="ghost" disabled={busy} onClick={onDone}>{zh ? '更换服务' : 'Change service'}</Button></div>
+      {!preview && !error ? <Skeleton className="h-48 w-full rounded-xl" /> : null}
+      {preview ? <>
+        {preview.profile.credential === 'oauth' && !connected ? <OAuthProviderConnect providerId={providerId} displayName={displayName} connected={connected} onConnected={() => { setConnected(true); setAttempt(value => value + 1); }} /> : null}
+        {preview.profile.credential === 'oauth' && connected && !row?.supportsApiKey ? <p className="flex items-center gap-2 rounded-xl bg-surface-inset px-4 py-3 text-sm text-fg"><CheckCircle2 className="size-4 text-fg-muted" aria-hidden />{zh ? '使用已有连接' : 'Using the existing connection'}</p> : null}
+        {(preview.profile.credential === 'api-key' || (preview.profile.credential === 'oauth' && row?.supportsApiKey)) ? <div className="space-y-3">
+          {connected && !editingKey ? <div className="flex items-center justify-between gap-3 rounded-xl bg-surface-inset px-4 py-3"><p className="flex items-center gap-2 text-sm text-fg"><CheckCircle2 className="size-4 text-fg-muted" aria-hidden />{zh ? '使用已有连接' : 'Using the existing connection'}</p><Button variant="ghost" disabled={busy} onClick={() => setEditingKey(true)}>{zh ? '更换' : 'Change'}</Button></div> : <>
+            <div className="flex items-center justify-between gap-3"><label htmlFor="provider-setup-key" className="text-sm font-medium text-fg">{preview.profile.access === 'subscription' ? (zh ? '订阅 API Key' : 'Subscription API key') : 'API Key'}</label>{connected ? <Button variant="ghost" disabled={busy} onClick={() => { setEditingKey(false); setApiKey(''); }}>{zh ? '保留原 Key' : 'Keep saved key'}</Button> : null}</div>
+            <SecretInput id="provider-setup-key" disabled={busy} value={apiKey} onChange={setApiKey} placeholder={connected ? (zh ? '输入新的 API Key' : 'Enter a new API key') : (zh ? '粘贴 API Key' : 'Paste your API key')} labels={secretInputLabelsFromChannels(messages(language).providersSettings)} />
+            {connected ? <p className="text-xs leading-relaxed text-fg-muted">{zh ? '此服务的其他已配置模型也会使用新的 Key。' : 'Other models configured with this service will also use the new key.'}</p> : null}
+            {keyUrl ? <a className="inline-flex min-h-10 items-center text-sm text-accent-fg hover:underline" href={keyUrl} target="_blank" rel="noopener noreferrer">{zh ? '获取 API Key' : 'Get an API key'}</a> : null}
+          </>}
+        </div> : null}
+        {use ? <div className="space-y-2"><label className="block text-sm font-medium text-fg">{zh ? '选择模型' : 'Model'}</label><Select value={chosen ?? ''} disabled={busy || !use.choices.length} aria-label={zh ? '选择模型' : 'Model'} onChange={event => setRequest({ ...request, selected: [use.id], overrides: { ...request.overrides, [use.id]: event.target.value } })}>{use.choices.map(model => <SelectOption key={model.id} value={model.id}>{model.name}</SelectOption>)}</Select></div> : null}
+        <p className="text-sm leading-relaxed text-fg-muted">{zh ? '只更改当前能力使用的模型。' : 'Changes the model for this capability only.'}{preview.profile.interactiveOnly ? (zh ? ' 后台任务继续使用原服务。' : ' Background tasks keep their current service.') : ''}</p>
+      </> : null}
+      {error ? <div role="alert" className="space-y-2 rounded-xl border border-edge p-3"><p className="text-sm text-danger">{credentialSaved ? (zh ? '连接信息已保存，模型尚未切换。请重试。' : 'Connection saved. The model has not switched; please retry.') : (zh ? '未能应用配置，请重试。' : 'Could not apply settings. Please retry.')}</p><details className="text-xs text-fg-muted"><summary className="cursor-pointer">{zh ? '查看详情' : 'Show details'}</summary><p className="mt-2 break-words">{error}</p></details></div> : null}
+      <div className="flex items-center justify-end gap-3 border-t border-edge-subtle pt-4"><Button variant="primary" disabled={busy || (!preview && !error) || (Boolean(preview) && ((!connected && !apiKey.trim()) || !chosen || !use?.choices.some(model => model.id === chosen)))} onClick={() => { if (!preview) setAttempt(value => value + 1); else void save(); }}>{busy ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}{busy ? (zh ? '正在应用…' : 'Applying…') : !preview && error ? (zh ? '重新加载' : 'Reload') : error ? (zh ? '重试' : 'Retry') : connected && !apiKey.trim() ? (zh ? '使用此模型' : 'Use this model') : (zh ? '连接并使用' : 'Connect and use')}</Button></div>
+    </div>;
+  }
   const Title = inline ? 'h3' : Dialog.Title;
   const Description = inline ? 'p' : Dialog.Description;
   return <>

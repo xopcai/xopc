@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act } from 'react';
+import { Activity, act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 const api = vi.hoisted(() => ({ preview: vi.fn(), apply: vi.fn(), key: vi.fn() }));
@@ -20,7 +20,7 @@ it('connects and applies only the current capability inline, including a non-rec
   expect(container.querySelector('[role="dialog"]')).toBeNull(); expect(container.textContent).not.toContain('对话与任务');
   const select = container.querySelector('select')!;
   await act(async () => { select.value = 'future-plan/b'; select.dispatchEvent(new Event('change', { bubbles: true })); });
-  const apply = [...container.querySelectorAll('button')].find(button => button.textContent === '连接并用于语音合成')!;
+  const apply = [...container.querySelectorAll('button')].find(button => button.textContent === '使用此模型')!;
   await act(async () => apply.click());
   expect(api.key).not.toHaveBeenCalled();
   expect(api.apply).toHaveBeenCalledExactlyOnceWith('future-plan', { mode: 'replace', modelIds: undefined, selected: ['speech'], overrides: { speech: 'future-plan/b' } }, 'revision');
@@ -29,14 +29,69 @@ it('connects and applies only the current capability inline, including a non-rec
 it('keeps the form and reports conflicts without applying a stale choice', async () => {
   let calls = 0; api.preview.mockImplementation(async () => ({ ...snapshot(), revision: ++calls === 1 ? 'old' : 'new' }));
   await act(async () => root.render(<ProviderSetupPanel inline providerId="future-plan" targetUse="speech" language="zh" onDone={() => {}} />));
-  await act(async () => [...container.querySelectorAll('button')].find(button => button.textContent === '连接并用于语音合成')!.click());
+  await act(async () => [...container.querySelectorAll('button')].find(button => button.textContent === '使用此模型')!.click());
   expect(api.apply).not.toHaveBeenCalled(); expect(container.querySelector('[role="alert"]')?.textContent).toContain('核对后再次应用');
 });
 it('coalesces repeated apply clicks while a request is running', async () => {
   let finish!: () => void; api.apply.mockImplementation(() => new Promise<void>(resolve => { finish = resolve; }));
   await act(async () => root.render(<ProviderSetupPanel inline providerId="future-plan" targetUse="speech" language="zh" onDone={() => {}} />));
-  const apply = [...container.querySelectorAll('button')].find(button => button.textContent === '连接并用于语音合成')!;
+  const apply = [...container.querySelectorAll('button')].find(button => button.textContent === '使用此模型')!;
   await act(async () => { apply.click(); apply.click(); });
   expect(api.apply).toHaveBeenCalledOnce();
   await act(async () => finish());
+});
+
+it('reuses a saved key by default and can discard a replacement without applying', async () => {
+  await act(async () => root.render(<ProviderSetupPanel inline providerId="future-plan" targetUse="speech" language="zh" onDone={() => {}} />));
+  expect(container.querySelector('#provider-setup-key')).toBeNull();
+  expect(container.textContent).toContain('使用已有连接');
+  await act(async () => [...container.querySelectorAll('button')].find(button => button.textContent === '更换')!.click());
+  expect(container.querySelector('#provider-setup-key')).not.toBeNull();
+  await act(async () => [...container.querySelectorAll('button')].find(button => button.textContent === '保留原 Key')!.click());
+  expect(container.querySelector('#provider-setup-key')).toBeNull();
+  expect(api.apply).not.toHaveBeenCalled(); expect(api.key).not.toHaveBeenCalled();
+});
+it('does not claim an existing credential was newly saved after a failed model change', async () => {
+  api.apply.mockRejectedValue(new Error('upstream unavailable'));
+  await act(async () => root.render(<ProviderSetupPanel inline providerId="future-plan" targetUse="speech" language="zh" onDone={() => {}} />));
+  await act(async () => [...container.querySelectorAll('button')].find(button => button.textContent === '使用此模型')!.click());
+  expect(container.querySelector('[role="alert"]')?.textContent).toContain('未能应用配置');
+  expect(container.querySelector('[role="alert"]')?.textContent).not.toContain('已保存');
+  expect(container.querySelector('details')?.textContent).toContain('upstream unavailable');
+});
+
+it('preserves a specific model when a retained dialog resumes its effects', async () => {
+  const render = (visible: boolean) => root.render(<Activity mode={visible ? 'visible' : 'hidden'}><ProviderSetupPanel inline providerId="future-plan" targetUse="speech" language="zh" onDone={() => {}} /></Activity>);
+  await act(async () => render(true));
+  const select = container.querySelector('select')!;
+  await act(async () => { select.value = 'future-plan/b'; select.dispatchEvent(new Event('change', {bubbles:true})); });
+  await act(async () => render(false)); await act(async () => render(true));
+  expect(container.querySelector('select')?.value).toBe('future-plan/b');
+  expect(api.apply).not.toHaveBeenCalled();
+});
+
+it('shows the existing OAuth connection and applies without requesting an API key', async () => {
+  api.preview.mockImplementation(async () => ({ ...snapshot(), profile: { ...snapshot().profile, credential: 'oauth' } }));
+  await act(async () => root.render(<ProviderSetupPanel inline providerId="future-plan" targetUse="speech" language="zh" onDone={() => {}} />));
+  expect(container.textContent).toContain('使用已有连接');
+  expect(container.querySelector('#provider-setup-key')).toBeNull();
+  await act(async () => [...container.querySelectorAll('button')].find(button => button.textContent === '使用此模型')!.click());
+  expect(api.apply).toHaveBeenCalledOnce();
+  expect(api.key).not.toHaveBeenCalled();
+});
+
+it('returns to the saved connection summary if key replacement succeeds but model application fails', async () => {
+  api.apply.mockRejectedValue(new Error('upstream unavailable'));
+  await act(async () => root.render(<ProviderSetupPanel inline providerId="future-plan" targetUse="speech" language="zh" onDone={() => {}} />));
+  await act(async () => [...container.querySelectorAll('button')].find(button => button.textContent === '更换')!.click());
+  const input = container.querySelector<HTMLInputElement>('#provider-setup-key')!;
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, 'fixture-replacement-key');
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  await act(async () => [...container.querySelectorAll('button')].find(button => button.textContent === '连接并使用')!.click());
+  expect(api.key).toHaveBeenCalledExactlyOnceWith({ 'future-plan': 'fixture-replacement-key' });
+  expect(container.querySelector('#provider-setup-key')).toBeNull();
+  expect(container.textContent).toContain('使用已有连接');
+  expect(container.querySelector('[role="alert"]')?.textContent).toContain('连接信息已保存');
 });

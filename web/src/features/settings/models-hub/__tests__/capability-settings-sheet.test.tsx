@@ -32,7 +32,7 @@ it('opens either modal tab directly and retains the editor while changing tabs',
   expect(document.querySelector('[data-view]')?.getAttribute('data-view')).toBe('services');
   const input = document.querySelector<HTMLInputElement>('input[aria-label="Service draft"]')!;
   input.value = 'unsaved connection';
-  await act(async () => [...document.querySelectorAll('button')].find(button => ['模型与参数', 'Model and parameters'].includes(button.textContent ?? ''))!.click());
+  await act(async () => [...document.querySelectorAll<HTMLButtonElement>('[role="tab"]')].find(button => ['模型与参数', 'Model and parameters'].includes(button.textContent ?? ''))!.click());
   expect(document.querySelector('[data-view]')?.getAttribute('data-view')).toBe('settings');
   expect(document.querySelector('input[aria-label="Service draft"]')).toBe(input);
   expect(input.value).toBe('unsaved connection');
@@ -40,4 +40,16 @@ it('opens either modal tab directly and retains the editor while changing tabs',
   await act(async () => openCapabilitySettings('transcription', 'services'));
   expect(document.querySelector('input[aria-label="Service draft"]')).toBe(input);
   expect(input.value).toBe('unsaved connection');
+});
+
+it('supports keyboard tab navigation with correct selection semantics', async () => {
+  container = document.createElement('div'); document.body.append(container); root = createRoot(container);
+  await act(async () => root.render(<MemoryRouter><CapabilitySettingsSheet /></MemoryRouter>));
+  await act(async () => openCapabilitySettings('speech'));
+  const tabs = [...document.querySelectorAll<HTMLButtonElement>('[role="tab"]')];
+  expect(tabs[0].getAttribute('aria-selected')).toBe('true');
+  await act(async () => { tabs[0].focus(); tabs[0].dispatchEvent(new KeyboardEvent('keydown', {key:'ArrowRight', bubbles:true})); });
+  expect(tabs[1].getAttribute('aria-selected')).toBe('true');
+  expect(document.activeElement).toBe(tabs[1]);
+  expect(document.querySelector('[role="tabpanel"]')?.getAttribute('aria-labelledby')).toBe(tabs[1].id);
 });
