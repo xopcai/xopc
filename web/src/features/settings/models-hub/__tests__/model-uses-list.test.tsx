@@ -7,12 +7,18 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { ModelSetupPreview, ModelSetupUse } from '@xopcai/gateway-contract';
 
 const api = vi.hoisted(() => ({ fetch: vi.fn(), preview: vi.fn(), apply: vi.fn(), defaults: vi.fn(), voiceConfig: vi.fn<() => unknown>() }));
+vi.mock('@/features/settings/voice-config-api', async importOriginal => ({
+  ...await importOriginal<typeof import('@/features/settings/voice-config-api')>(),
+  fetchVoiceProviders: async () => ({providers: []}),
+  fetchVoiceSttProviders: async () => ({providers: []}),
+}));
+vi.mock('@/features/settings/image-generation-api', () => ({fetchImageCatalog: async () => ({providers: []})}));
 vi.mock('../provider-setup-api', () => ({ fetchModelSetup: api.fetch, previewModelSetup: api.preview, applyModelSetup: api.apply }));
 vi.mock('@/features/settings/global-defaults-api', () => ({ fetchGlobalDefaults: api.defaults }));
 vi.mock('@/features/gateway/gateway-config-swr', () => ({ useGatewayConfigSwr: () => ({ data: api.voiceConfig() }) }));
-vi.mock('@/components/ui/popover-select', () => ({ PopoverSelect: ({ options, value, disabled, ariaLabel, onChange }: {
-  options: Array<{ value: string; label: string }>; value: string; disabled: boolean; ariaLabel: string; onChange: (ref: string) => void;
-}) => <fieldset aria-label={ariaLabel} data-value={value}>{options.map(option => <button key={option.value} disabled={disabled} onClick={() => onChange(option.value)}>{option.label}</button>)}</fieldset> }));
+vi.mock('@/components/ui/popover-select', () => ({ PopoverSelect: ({ options, value, disabled, ariaLabel, selectedLabel, onChange }: {
+  options: Array<{ value: string; label: string }>; value: string; disabled: boolean; ariaLabel: string; selectedLabel?: string; onChange: (ref: string) => void;
+}) => <fieldset aria-label={ariaLabel} data-value={value}><legend>{selectedLabel}</legend>{options.map(option => <button key={option.value} disabled={disabled} onClick={() => onChange(option.value)}>{option.label}</button>)}</fieldset> }));
 
 import { ModelUsesList, modelUseOptions } from '../model-uses-list';
 import type { ConnectedProvidersData } from '../connected-providers-grid';
@@ -117,4 +123,34 @@ it('does not query a preset whose model registry connection has not been created
   const pendingPreset = { ...data, cards: [...data.cards, { id: 'dashscope-cn', configured: true }] } as ConnectedProvidersData;
   await act(async () => root.render(<SWRConfig value={{ provider: () => new Map() }}><ModelUsesList data={pendingPreset} zh onChange={() => {}} /></SWRConfig>));
   expect(api.fetch.mock.calls.map(([provider]) => provider)).not.toContain('dashscope-cn');
+});
+
+it('keeps a legacy implicit speech model and presents it as a default model', async () => {
+  api.voiceConfig.mockReturnValue({ payload: { config: { tts: { enabled: true, provider: cloud, providers: {} } } } });
+  await render();
+  const speech = container.querySelector('[aria-label="选择 文字转语音"]');
+  expect(speech?.getAttribute('data-value')).toBe(`${cloud}/default`);
+  expect(speech?.querySelector('legend')?.textContent).toBe('默认模型');
+  expect(api.apply).not.toHaveBeenCalled();
+});
+
+it('gives an unconnected capability one direct connection action instead of an empty picker', async () => {
+  const connect = vi.fn();
+  await act(async () => root.render(<SWRConfig value={{provider:()=>new Map()}}><ModelUsesList data={{...data, cards:[]}} zh onChange={connect} onSettings={()=>{}} /></SWRConfig>));
+  const row = container.querySelector('[data-capability="transcription"]')!;
+  expect(row.querySelector('[aria-label="选择 录音与听写"]')).toBeNull();
+  expect(row.querySelectorAll('button')).toHaveLength(1);
+  await act(async () => row.querySelector<HTMLButtonElement>('button')!.click());
+  expect(connect).toHaveBeenCalledExactlyOnceWith('transcription');
+  expect(api.apply).not.toHaveBeenCalled();
+});
+
+
+it('disables the empty connection action while another settings save is pending', async () => {
+  const connect = vi.fn();
+  await act(async () => root.render(<SWRConfig value={{ provider: () => new Map() }}><ModelUsesList data={{ ...data, cards: [] }} zh disabled onChange={connect} onSettings={() => {}} /></SWRConfig>));
+  const action = container.querySelector<HTMLButtonElement>('[aria-label="连接 录音与听写"]')!;
+  expect(action.disabled).toBe(true);
+  await act(async () => action.click());
+  expect(connect).not.toHaveBeenCalled();
 });

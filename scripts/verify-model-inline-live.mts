@@ -18,7 +18,8 @@ const before = await request('/api/global-defaults');
 const savedConfigBefore = (await request('/api/config')).config;
 const voiceBefore = savedConfigBefore.tts;
 const originalVoice = voiceBefore.providers?.['qwen-token-plan-cn']?.voice;
-const report = { directory, passed: false, realGateway: true, realVendorRequests: false, checks: [] as string[], errors: [] as string[], error: '' };
+// Set XOPC_VENDOR_E2E=1 to explicitly enable paid speech probes for both services.
+const report = { directory, passed: false, realGateway: true, realVendorRequests: process.env.XOPC_VENDOR_E2E === '1', checks: [] as string[], errors: [] as string[], error: '' };
 const browser = await playwright.chromium.launch({ channel: 'chrome', headless: true });
 const page = await browser.newPage({ viewport: { width: 1440, height: 1000 }, reducedMotion: 'reduce' });
 page.setDefaultTimeout(20_000);
@@ -37,7 +38,7 @@ try {
   await page.goto(web + '#/settings/capabilities/models');
   await page.getByRole('heading', { name: '能力总览', exact: true }).waitFor();
   assert.equal(await page.getByRole('link', { name: /^配置 / }).count(), 0);
-  assert.equal(await page.getByRole('button', { name: /^选择 / }).count(), 7);
+  assert.equal(await page.locator('[data-capability]:visible').count(), 7);
   const origin = page.url();
   const speech = page.locator('[data-capability="speech"]');
   await speech.getByRole('button', { name: '设置', exact: true }).click();
@@ -58,19 +59,20 @@ try {
   await transcription.getByRole('button', { name: '管理服务', exact: true }).click();
   const transcriptionDialog = page.getByRole('dialog').first();
   await transcriptionDialog.screenshot({ path: join(directory, 'transcription-services-modal.png') });
-  await transcriptionDialog.getByRole('button', { name: /Bailian.*[Ss]ubscription/ }).click();
-  await transcriptionDialog.getByRole('heading', { name: '连接服务 · 录音识别', exact: true }).waitFor();
+  await transcriptionDialog.getByRole('button', { name: /阿里云百炼订阅 · 北京/ }).click();
+  await transcriptionDialog.getByRole('heading', { name: '阿里云百炼订阅 · 北京', exact: true }).waitFor();
+  await transcriptionDialog.getByRole('button', { name: '更换', exact: true }).click();
   const connectionDraft = transcriptionDialog.locator('#provider-setup-key');
   await connectionDraft.fill('fixture-unsaved-not-a-key');
   await transcriptionDialog.getByRole('button', { name: '完成', exact: true }).click();
   await transcription.getByRole('button', { name: '管理服务', exact: true }).click();
   assert.equal(await connectionDraft.inputValue(), 'fixture-unsaved-not-a-key');
-  await connectionDraft.fill('');
+  await transcriptionDialog.getByRole('button', { name: '保留原 Key', exact: true }).click();
   report.checks.push('Service draft survives closing and reopening the modal without saving a key');
   assert.equal(await transcriptionDialog.getByText('对话与任务', { exact: true }).count(), 0);
   assert.equal(await page.getByRole('dialog').count(), 1, 'Connecting must not stack a new modal over settings');
-  await transcriptionDialog.getByRole('button', { name: '连接并用于录音识别', exact: true }).click();
-  await transcriptionDialog.getByRole('heading', { name: '连接服务 · 录音识别', exact: true }).waitFor({ state: 'hidden' });
+  await transcriptionDialog.getByRole('button', { name: '使用此模型', exact: true }).click();
+  await transcriptionDialog.getByRole('heading', { name: '阿里云百炼订阅 · 北京', exact: true }).waitFor({ state: 'hidden' });
   assert.equal(page.url(), origin);
   report.checks.push('Saved Bailian credential reused and applied only to transcription within the same modal');
   const languageBefore = savedConfigBefore.voice;
@@ -85,6 +87,76 @@ try {
   await request('/api/config', 'PATCH', { voicePatchMode: 'merge', voice: { languageMode, language: languageBefore.language } });
   report.checks.push('Recognition language saves twice with acknowledged revisions and preserves the model');
   await transcriptionDialog.getByRole('button', { name: '完成', exact: true }).click();
+  if (report.realVendorRequests) {
+    const selectService = async (capability: string, provider: string) => {
+      console.log(JSON.stringify({ step: 'service', capability, provider }));
+      await page.locator(`[data-capability="${capability}"]`).getByRole('button', { name: '管理服务', exact: true }).click();
+      const dialog = page.getByRole('dialog').first();
+      await dialog.getByRole('button', { name: provider === 'xopc-cloud' ? /XOPC Cloud/ : /阿里云百炼订阅 · 北京/ }).click();
+      await dialog.getByText('使用已有连接', { exact: true }).waitFor();
+      assert.equal(await dialog.locator('#provider-setup-key').count(), 0);
+      await dialog.getByRole('button', { name: '使用此模型', exact: true }).click();
+      await dialog.getByText('使用已有连接', { exact: true }).waitFor({ state: 'hidden' });
+      await dialog.getByRole('button', { name: '完成', exact: true }).click();
+      await page.waitForFunction(capability => document.activeElement?.closest('[data-capability]')?.getAttribute('data-capability') === capability, capability);
+      assert.equal(page.url(), origin);
+      assert.deepEqual((await request('/api/global-defaults')).defaults.models.background, before.defaults.models.background);
+    };
+    for (const provider of ['xopc-cloud', 'qwen-token-plan-cn']) {
+      await selectService('chat', provider);
+      assert.ok((await request('/api/global-defaults')).defaults.models.chat.primary.startsWith(provider + '/'));
+      await selectService('transcription', provider);
+      await selectService('speech', provider);
+      console.log(JSON.stringify({ step: 'voice', provider }));
+      await speech.getByRole('button', { name: '设置', exact: true }).click();
+      const dialog = page.getByRole('dialog').first();
+      const voicePicker = dialog.locator(`#voice-tts-${provider}-voice`);
+      await voicePicker.click();
+      const choices = page.locator('[data-select-scroll-region]:visible button:not([disabled])');
+      await choices.first().waitFor();
+      assert.ok(await choices.count() > 0, 'Expected an available voice');
+      const hasAlternative = await choices.count() > 1;
+      const alternative = hasAlternative ? page.locator('[data-select-scroll-region]:visible button:not([disabled]):not(.bg-surface-active)').first() : choices.first();
+      const previousVoice = (await request('/api/config')).config.tts.providers[provider].voice;
+      const voiceName = await alternative.innerText();
+      await alternative.click();
+      await dialog.getByRole('heading').first().click();
+      await waitConfig(value => value.tts.provider === provider && Boolean(value.tts.providers?.[provider]?.voice) && (!hasAlternative || value.tts.providers[provider].voice !== previousVoice));
+      for (let attempt = 0; await dialog.getByRole('button', { name: '完成', exact: true }).isDisabled() && attempt < 80; attempt++) await page.waitForTimeout(100);
+      const savedVoice = (await request('/api/config')).config.tts.providers[provider].voice;
+      assert.ok(savedVoice, 'Voice must be persisted');
+      const trigger = (await request('/api/config')).config.tts.trigger === 'tagged' ? 'always' : 'tagged';
+      await dialog.getByRole('button', { name: '消息自动朗读', exact: true }).click();
+      await page.getByRole('button', { name: trigger === 'always' ? '始终' : '标签（[[tts]]）', exact: true }).click();
+      await dialog.getByRole('heading').first().click();
+      await waitConfig(value => value.tts.trigger === trigger);
+      await dialog.getByRole('button', { name: '完成', exact: true }).click();
+      await speech.getByRole('button', { name: '设置', exact: true }).click();
+      assert.equal(await voicePicker.innerText(), voiceName);
+      assert.equal((await request('/api/config')).config.tts.providers[provider].voice, savedVoice);
+      await dialog.getByRole('button', { name: '完成', exact: true }).click();
+      const audioResponse = await fetch(base + '/api/voice/speech', { method: 'POST', headers, body: JSON.stringify({ text: '[[tts]]语音配置测试，验证数字：四七二九。', language: 'zh' }), signal: AbortSignal.timeout(90_000) });
+      if (!audioResponse.ok) throw new Error(`${provider} TTS HTTP ${audioResponse.status}: ${(await audioResponse.text()).replaceAll(config.gateway.auth.token, '[redacted]').replace(/sk-[\w.-]+/g, '[redacted]')}`);
+      const audio = await audioResponse.arrayBuffer();
+      const mime = audioResponse.headers.get('content-type')?.split(';')[0] ?? '';
+      assert.ok(mime.startsWith('audio/') && audio.byteLength > 1000);
+      const form = new FormData();
+      form.set('audio', new Blob([audio], { type: mime }), mime.includes('wav') ? 'speech.wav' : 'speech.mp3');
+      form.set('language', 'zh');
+      form.set('expectedProvider', provider);
+      const response = await fetch(base + '/api/voice/transcriptions', { method: 'POST', headers: { Authorization: headers.Authorization }, body: form, signal: AbortSignal.timeout(90_000) });
+      assert.ok(response.ok, `${provider} STT HTTP ${response.status}`);
+      const data = await response.json(); const transcript = data.payload ?? data;
+      assert.equal(transcript.provider, provider);
+      assert.match(String(transcript.text).replace(/[四七二九]/g, char => ({ 四: '4', 七: '7', 二: '2', 九: '9' }[char]!)), /4729/);
+      report.checks.push(`${provider}: existing connection reused, chat and voice models switched, available voice retained and readout parameter saved across close/reopen, real TTS and STT succeeded; background unchanged`);
+    }
+    await request('/api/config', 'PATCH', { stt: config.tools.media.audio, tts: config.messages.tts, voice: config.voice });
+    const changed = await request('/api/global-defaults');
+    await request('/api/global-defaults', 'PATCH', { defaults: before.defaults, scope: 'models', expectedModels: changed.defaults.models });
+    await page.reload();
+    await page.getByRole('heading', { name: '能力总览', exact: true }).waitFor();
+  }
   const plan = await request('/api/models/setup/qwen-token-plan-cn');
   const vision = plan.uses.find((use: any) => use.id === 'vision');
   const different = vision.choices.find((choice: any) => choice.id !== vision.current);
@@ -143,7 +215,7 @@ try {
   report.checks.push('Context settings sheet preserves chat route, draft, focusable model picker and modal stacking');
   await page.evaluate(() => window.dispatchEvent(new CustomEvent('open-capability-settings', { detail: { use: 'image' } })));
   const imageSheet = page.getByRole('dialog').first();
-  await imageSheet.getByRole('button', { name: '管理服务', exact: true }).first().click();
+  await imageSheet.getByRole('tab', { name: '管理服务', exact: true }).first().click();
   await imageSheet.getByRole('button', { name: '添加图片服务', exact: true }).click();
   const nestedImage = imageSheet.locator('[role="dialog"]');
   await nestedImage.getByRole('heading', { name: '添加图片服务', exact: true }).waitFor();
@@ -155,7 +227,7 @@ try {
   report.checks.push('Custom image connection dialog stays visible inside the settings sheet and closes back to the draft');
   await page.goto(web + '#/settings/capabilities/voice');
   await page.getByRole('heading', { name: '能力总览', exact: true }).waitFor();
-  assert.equal(await page.getByRole('button', { name: /^选择 / }).count(), 3);
+  assert.equal(await page.locator('[data-capability]:visible').count(), 3);
   await page.locator('[data-capability="speech"]').getByRole('button', { name: '设置', exact: true }).click();
   const voiceDialog = page.getByRole('dialog').first();
   await voiceDialog.getByRole('button', { name: '消息自动朗读', exact: true }).waitFor();
@@ -170,9 +242,20 @@ try {
   report.error = String(error).replaceAll(config.gateway.auth.token, '[redacted]').replace(/sk-[\w.-]+/g, '[redacted]');
   await page.screenshot({ path: join(directory, 'failure.png') }).catch(() => {}); process.exitCode = 1;
 } finally {
+  try {
   const current = await request('/api/global-defaults');
   if (JSON.stringify(current.defaults.models) !== JSON.stringify(before.defaults.models)) await request('/api/global-defaults', 'PATCH', { defaults: before.defaults, scope: 'models', expectedModels: current.defaults.models });
+  if (report.realVendorRequests) await request('/api/config', 'PATCH', { stt: config.tools.media.audio, tts: config.messages.tts, voice: config.voice });
   if (savedConfigBefore.voice) await request('/api/config', 'PATCH', { voicePatchMode: 'merge', voice: { languageMode: savedConfigBefore.voice.languageMode, language: savedConfigBefore.voice.language } });
   if (originalVoice) await request('/api/config', 'PATCH', { tts: { enabled: voiceBefore.enabled, trigger: voiceBefore.trigger, providers: { 'qwen-token-plan-cn': { voice: originalVoice } } } });
+  assert.deepEqual((await request('/api/config')).config.voiceSettingsRevisions, savedConfigBefore.voiceSettingsRevisions, 'All original voice settings must be restored');
+  const afterDisk = JSON.parse(await readFile(join(homedir(), '.xopc/xopc.json'), 'utf8'));
+  const credentials = (value: any, prefix = ''): unknown[] => value && typeof value === 'object' ? Object.entries(value).flatMap(([key, item]): unknown[] => /apiKey|token|secret/i.test(key) ? [[prefix + key, item]] : credentials(item, prefix + key + '.')) : [];
+  assert.ok(JSON.stringify(credentials(afterDisk)) === JSON.stringify(credentials(config)), 'Saved credentials must remain unchanged');
+  report.checks.push('Original model routes, complete voice settings and saved credentials restored');
+  } catch (error) {
+    report.passed = false; process.exitCode = 1;
+    report.error += ` Restoration failed: ${String(error).replaceAll(config.gateway.auth.token, '[redacted]').replace(/sk-[\w.-]+/g, '[redacted]')}`;
+  }
   await browser.close(); await writeFile(join(directory, 'report.json'), JSON.stringify(report, null, 2)); console.log(JSON.stringify(report));
 }
