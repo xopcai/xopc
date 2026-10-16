@@ -16,7 +16,7 @@ const render = async (id = 'note',query = 'keyword',active = false) => { await a
 const button = (label: string) => [...container.querySelectorAll('button')].find(b => b.textContent?.startsWith(label))!;
 it('searches the Note once, opens versioned text, shows coverage gaps and plays mapped context', async () => {
   mocks.fetch.mockResolvedValue(response()); await render();
-  expect(mocks.fetch.mock.calls[0]![0]).toContain('/review?q=keyword');
+  expect(mocks.fetch.mock.calls[0][0]).toContain('/review?q=keyword');
   expect(container.textContent).toContain('1:30 / 120:00'); expect(container.textContent).toMatch(/连续处理至\s*1:00/); expect(container.textContent).toContain('已发布分析基于旧版原文');
   await act(async () => button('查看对应原文').click());
   expect(evidence).toHaveBeenCalledWith(expect.objectContaining({ transcriptRevision: 8,segments: [entry.segments[0]] }));
@@ -26,7 +26,7 @@ it('searches the Note once, opens versioned text, shows coverage gaps and plays 
 it('shows partial chapters and checkpoint text before the overview completes without inventing current evidence IDs', async () => {
   mocks.fetch.mockResolvedValue(response({ query: '',chapters: [{ ...entry,id: 'chapter',kind: 'chapter',provisional: true,title: 'Completed chapter' }],hits: [{ ...entry,id: 'checkpoint:run',provisional: true,transcriptRevision: undefined }] }));
   await render('note',''); expect(container.textContent).toContain('Completed chapter'); expect(container.textContent).toContain('阶段性结果');
-  await act(async () => [...container.querySelectorAll('button')].filter(b => b.textContent === '查看对应原文')[1]!.click());
+  await act(async () => [...container.querySelectorAll('button')].filter(b => b.textContent === '查看对应原文')[1].click());
   expect(evidence).not.toHaveBeenCalled(); expect(container.textContent).toContain('正式发布后才能校对');
 });
 it('fences old Note and old query responses and restarts pagination against the same version', async () => {
