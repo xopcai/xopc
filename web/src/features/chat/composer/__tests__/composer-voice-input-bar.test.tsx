@@ -54,6 +54,18 @@ describe('ComposerVoiceInputBar', () => {
     expect(container.querySelector('button[aria-label="重新转写"]')).toBeNull();
   });
 
+  it('opens transcription settings in place and prevents navigation', () => {
+    render({ error: messages('zh').chat.voiceSttNotConfigured, settingsRequired: true });
+    const opened = vi.fn(); window.addEventListener('open-capability-settings', opened);
+    const link = container.querySelector('a')!;
+    const click = new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 });
+    act(() => { link.dispatchEvent(click); });
+    window.removeEventListener('open-capability-settings', opened);
+    expect(click.defaultPrevented).toBe(true);
+    expect(opened).toHaveBeenCalledOnce();
+    expect(opened.mock.calls[0][0].detail).toEqual({ use: 'transcription', view: 'settings' });
+  });
+
   it('keeps retry available for a transcription failure', () => {
     render({ error: '转写服务暂时不可用', settingsRequired: false });
 

@@ -1,3 +1,4 @@
+import { voiceSettingsRevisions } from './voice-settings-revisions.js';
 import {
   listAgentEntries,
   normalizeAgentId,
@@ -246,6 +247,7 @@ export async function buildSafeWebConfigPayload(service: GatewayService, options
     update: {
       ...resolveUpdateConfigForWeb(config),
     },
+    voiceSettingsRevisions: voiceSettingsRevisions(config),
     stt: maskSttConfigForWeb(config.tools?.media?.audio),
     tts: maskTtsConfigForWeb(config.messages?.tts),
     voice: maskRealtimeVoiceConfigForWeb(config.voice),

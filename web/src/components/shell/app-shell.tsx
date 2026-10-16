@@ -25,6 +25,7 @@ import { ProductPreviewModal } from '@/features/chat/product-preview/product-pre
 import { closeProductPreviewHref, PRODUCT_PREVIEW_PARAM, resolveProductPreviewTarget } from '@/features/chat/product-preview/product-preview-route';
 import { NotePreviewModal } from '@/features/notes/note-preview-modal';
 import { GlobalQuickCaptureHost } from '@/features/notes/global-quick-capture';
+import { CapabilitySettingsSheet } from '@/features/settings/models-hub/capability-settings-sheet';
 import { GlobalDiscussionCaptureHost } from '@/features/discussions/global-discussion-capture';
 import { GatewayRealtimeBridge } from '@/features/gateway/gateway-realtime-bridge';
 import { ProductNotificationCoordinator } from '@/features/notifications/product-notification-coordinator';
@@ -209,6 +210,7 @@ function AppShellContent() {
       <GlobalCommandPaletteHost />
       <GlobalQuickCaptureHost />
       <GlobalDiscussionCaptureHost />
+      <CapabilitySettingsSheet />
       <SupportReportHost />
       <GlobalVoiceInputShortcutHost />
       <SideChatSelectionLauncher conversationId={parentConversationId} />

@@ -170,7 +170,7 @@ function ImageSettingsSkeleton() {
   );
 }
 
-export function ImageModelsSettingsPanel({ connectOnly = false, onConnected }: { connectOnly?: boolean; onConnected?: () => void } = {}) {
+export function ImageModelsSettingsPanel({ connectOnly = false, onConnected, onPendingChange }: { connectOnly?: boolean; onConnected?: () => void; onPendingChange?: (pending: boolean) => void } = {}) {
   const language = useLocaleStore((state) => state.language);
   const text = copy[language];
   const hasToken = Boolean(useGatewayStore((state) => state.conversationId));
@@ -179,6 +179,9 @@ export function ImageModelsSettingsPanel({ connectOnly = false, onConnected }: {
   const [apiKey, setApiKey] = useState('');
   const [providerConfig, setProviderConfig] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
+  const [customBusy, setCustomBusy] = useState(false);
+  const [panelElement, setPanelElement] = useState<HTMLDivElement | null>(null);
+  useEffect(() => { onPendingChange?.(saving || customBusy); return () => onPendingChange?.(false); }, [saving, customBusy, onPendingChange]);
   const [error, setError] = useState<string>();
   const [saved, setSaved] = useState(false);
   const [customDialogOpen, setCustomDialogOpen] = useState(false);
@@ -324,7 +327,7 @@ export function ImageModelsSettingsPanel({ connectOnly = false, onConnected }: {
   };
 
   return (
-    <div className="flex flex-col gap-4">
+    <div ref={setPanelElement} className="flex flex-col gap-4">
       <section className="rounded-xl bg-surface-hover/20 p-4">
         <div className="flex items-start gap-3">
           <div className="rounded-lg bg-accent/10 p-2 text-accent"><ImageIcon className="size-5" /></div>
@@ -467,7 +470,7 @@ export function ImageModelsSettingsPanel({ connectOnly = false, onConnected }: {
               <span className="grid">
                 <span aria-hidden className="invisible col-start-1 row-start-1">{text.enable}</span>
                 <span aria-hidden className="invisible col-start-1 row-start-1">{text.enabling}</span>
-                <span className="col-start-1 row-start-1">{connectOnly ? (saving ? (language === 'zh' ? '保存中…' : 'Saving…') : (language === 'zh' ? '保存图片连接并返回' : 'Save image connection and return')) : saving ? text.enabling : text.enable}</span>
+                <span className="col-start-1 row-start-1">{connectOnly ? (saving ? (language === 'zh' ? '保存中…' : 'Saving…') : (language === 'zh' ? '保存图片连接' : 'Save image connection')) : saving ? text.enabling : text.enable}</span>
               </span>
             </Button>
           </div>
@@ -475,6 +478,8 @@ export function ImageModelsSettingsPanel({ connectOnly = false, onConnected }: {
       ) : null}
 
       <CustomImageProviderDialog
+        portalContainer={panelElement?.closest<HTMLElement>('[role="dialog"]')}
+        onPendingChange={setCustomBusy}
         open={customDialogOpen}
         onOpenChange={setCustomDialogOpen}
         provider={editingCustomProvider}

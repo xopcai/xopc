@@ -1,6 +1,6 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import { CheckCircle2, ChevronLeft, Loader2, X } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { ModelSetupPreview, ModelSetupRequest, ModelSetupUse } from '@xopcai/gateway-contract';
 
 import { Button } from '@/components/ui/button';
@@ -23,9 +23,9 @@ const labels: Record<ModelSetupUse, [string, string]> = {
 };
 
 /** One connection/apply interaction for account providers, API keys and Token Plans. */
-export function ProviderSetupPanel({ providerId, row, modelIds, existingConnection = false, targetUse, connectOnly = false, language, alternatives = [], onChooseProvider, onBack, onDone, onApplied }: {
+export function ProviderSetupPanel({ providerId, row, modelIds, existingConnection = false, targetUse, connectOnly = false, language, alternatives = [], onChooseProvider, onBack, onDone, onApplied, inline = false, onPendingChange }: {
   providerId: string; row?: ProviderRowModel; modelIds?: string[]; existingConnection?: boolean;
-  targetUse?: ModelSetupUse; connectOnly?: boolean;
+  targetUse?: ModelSetupUse; connectOnly?: boolean; inline?: boolean; onPendingChange?: (pending: boolean) => void;
   alternatives?: ProviderRowModel[]; onChooseProvider?: (id: string) => void;
   language: StoredLanguage; onBack?: () => void; onDone: () => void; onApplied?: () => void;
 }) {
@@ -35,6 +35,7 @@ export function ProviderSetupPanel({ providerId, row, modelIds, existingConnecti
   const [apiKey, setApiKey] = useState('');
   const [connected, setConnected] = useState(existingConnection || Boolean(row?.configured));
   const [busy, setBusy] = useState(false);
+  const saving = useRef(false);
   const [error, setError] = useState('');
   const [done, setDone] = useState(false);
   const [attempt, setAttempt] = useState(0);
@@ -48,12 +49,14 @@ export function ProviderSetupPanel({ providerId, row, modelIds, existingConnecti
     }).catch(cause => { if (active) setError(cause instanceof Error ? cause.message : String(cause)); });
     return () => { active = false; };
   }, [providerId, modelIds, targetUse, connectOnly, attempt]);
+  useEffect(() => { onPendingChange?.(busy); return () => onPendingChange?.(false); }, [busy, onPendingChange]);
   const selected = request.selected ?? [];
   const changeMode = (mode: 'fill' | 'replace') => {
     setRequest({ ...request, mode, selected: preview?.uses.filter(use => use.recommended && use.choices.length && (mode === 'replace' || use.selected)).map(use => use.id) ?? [] });
   };
   const save = async () => {
-    if (!preview || busy) return;
+    if (!preview || saving.current) return;
+    saving.current = true;
     setBusy(true); setError('');
     let savedCredential = connected;
     try {
@@ -68,7 +71,7 @@ export function ProviderSetupPanel({ providerId, row, modelIds, existingConnecti
         setPreview(fresh); setDone(true); onApplied?.(); return;
       }
       const before = preview.uses.filter(use => selected.includes(use.id)).map(use => request.overrides?.[use.id] ?? use.recommended);
-      const after = fresh.uses.filter(use => selected.includes(use.id)).map(use => use.recommended);
+      const after = fresh.uses.filter(use => selected.includes(use.id)).map(use => request.overrides?.[use.id] ?? use.recommended);
       if (preview.revision !== fresh.revision || JSON.stringify(before) !== JSON.stringify(after)) {
         setPreview(fresh);
         setRequest({ ...request, selected: fresh.uses.filter(use => use.selected).map(use => use.id) });
@@ -80,14 +83,16 @@ export function ProviderSetupPanel({ providerId, row, modelIds, existingConnecti
     } catch (cause) {
       const detail = cause instanceof Error ? cause.message : String(cause);
       setError((savedCredential ? (zh ? '服务已保存，用途配置未完成。' : 'Connection saved; model setup is incomplete. ') : '') + detail);
-    } finally { setBusy(false); }
+    } finally { saving.current = false; setBusy(false); }
   };
   const title = preview?.profile.name ?? row?.name ?? providerId;
   const keyUrl = preview?.profile.apiKeyUrl ?? PROVIDER_ENRICHMENT[providerId]?.apiKeyUrl;
+  const Title = inline ? 'h3' : Dialog.Title;
+  const Description = inline ? 'p' : Dialog.Description;
   return <>
     <div className="flex shrink-0 items-start gap-3 px-5 py-5">
       {onBack && !busy && !done ? <Button variant="ghost" className="shrink-0 p-1.5" aria-label={zh ? '返回' : 'Back'} onClick={onBack}><ChevronLeft className="size-4" /></Button> : null}
-      <div className="min-w-0 flex-1"><Dialog.Title className="text-base font-semibold text-fg">{targetUse ? `${zh ? '连接服务 · ' : 'Connect service · '}${labels[targetUse][zh ? 0 : 1]}` : (zh ? '连接模型服务' : 'Connect model service')}</Dialog.Title><Dialog.Description className="mt-2 text-sm text-fg-muted">{title}</Dialog.Description></div>
+      <div className="min-w-0 flex-1"><Title className="text-base font-semibold text-fg">{targetUse ? `${zh ? '连接服务 · ' : 'Connect service · '}${labels[targetUse][zh ? 0 : 1]}` : (zh ? '连接模型服务' : 'Connect model service')}</Title><Description className="mt-2 text-sm text-fg-muted">{title}</Description></div>
       <Button variant="ghost" className="shrink-0 p-1.5" disabled={busy} aria-label={zh ? '关闭' : 'Close'} onClick={onDone}><X className="size-4" /></Button>
     </div>
     <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 pb-5">
@@ -101,33 +106,33 @@ export function ProviderSetupPanel({ providerId, row, modelIds, existingConnecti
             <SecretInput id="provider-setup-key" disabled={busy} value={apiKey} onChange={setApiKey} placeholder={connected ? (zh ? '留空使用已保存的凭据' : 'Leave empty to use saved credentials') : 'API Key'} labels={secretInputLabelsFromChannels(messages(language).providersSettings)} />
             {keyUrl ? <a className="inline-flex min-h-8 items-center text-sm text-accent-fg hover:underline" href={keyUrl} target="_blank" rel="noopener noreferrer">{zh ? '获取对应接入方式的 Key' : 'Get a key for this access method'}</a> : null}
           </div> : null}
-          {!connectOnly ? <div className="flex flex-wrap items-center justify-between gap-2"><span className="text-sm font-medium text-fg">{zh ? '模型用途' : 'Model uses'}</span><div className="flex gap-2">
+          {!connectOnly && !inline ? <div className="flex flex-wrap items-center justify-between gap-2"><span className="text-sm font-medium text-fg">{zh ? '模型用途' : 'Model uses'}</span><div className="flex gap-2">
             {(['fill', 'replace'] as const).map(mode => <Button key={mode} variant={request.mode === mode ? 'secondary' : 'ghost'} disabled={busy} aria-pressed={request.mode === mode} onClick={() => changeMode(mode)}>{mode === 'fill' ? (zh ? '补齐未配置' : 'Fill missing') : (zh ? '改用此服务' : 'Switch to this service')}</Button>)}
-          </div></div> : <p className="text-sm text-fg-muted">{zh ? '保存连接后返回能力设置，再选择要使用的模型。' : 'Save the connection, then choose a model in capability settings.'}</p>}
+          </div></div> : <p className="text-sm text-fg-muted">{inline ? (zh ? '仅更新当前能力，其他模型和参数保持原设置。' : 'Only this capability changes; other settings are preserved.') : (zh ? '保存连接后返回能力设置，再选择要使用的模型。' : 'Save the connection, then choose a model in capability settings.')}</p>}
         </>}
         {connectOnly ? <p className="text-xs text-fg-muted">{zh ? '支持用途：' : 'Supported uses: '}{preview.uses.filter(use => use.choices.length && (!targetUse || use.id === targetUse)).map(use => labels[use.id][zh ? 0 : 1]).join('、')}</p> : null}
         {!connectOnly ? <div className="divide-y divide-edge rounded-xl border border-edge bg-surface-inset px-4">
-          {preview.uses.map(use => {
+          {preview.uses.filter(use => !inline || !targetUse || use.id === targetUse).map(use => {
             const chosen = request.overrides?.[use.id] ?? use.recommended;
             const choice = use.choices.find(model => model.id === chosen);
             return <div key={use.id} className="space-y-2 py-3">
-              <label className="flex min-h-10 items-start gap-3"><input type="checkbox" className="ui-checkbox mt-1" checked={selected.includes(use.id)} disabled={busy || done || !chosen || !use.choices.length} onChange={event => setRequest({ ...request, selected: event.target.checked ? [...selected, use.id] : selected.filter(id => id !== use.id) })} />
+              <label className="flex min-h-10 items-start gap-3"><input hidden={inline} type="checkbox" className="ui-checkbox mt-1" checked={selected.includes(use.id)} disabled={inline || busy || done || !chosen || !use.choices.length} onChange={event => setRequest({ ...request, selected: event.target.checked ? [...selected, use.id] : selected.filter(id => id !== use.id) })} />
                 <span className="min-w-0 flex-1"><span className="block text-sm font-medium text-fg">{labels[use.id][zh ? 0 : 1]}</span><span className="mt-1 block break-all text-xs text-fg-muted">{selected.includes(use.id) ? `${use.current ? `${use.current} → ` : ''}${choice?.name ?? chosen ?? ''}` : use.current ? `${zh ? '保留：' : 'Keep: '}${use.current}` : use.reason === 'interactive_only' ? (zh ? '此套餐不用于后台任务' : 'This plan is not used for background tasks') : choice?.name ?? (zh ? '暂无可自动配置的模型' : 'No automatic model selection available')}</span></span>
               </label>
-              {!done && use.choices.length > 1 ? <details className="pl-7"><summary className="text-xs text-accent-fg">{zh ? '选择具体模型' : 'Choose a model'}</summary><Select value={chosen ?? ''} disabled={busy} aria-label={labels[use.id][zh ? 0 : 1]} onChange={event => setRequest({ ...request, selected: [...new Set([...selected, use.id])], overrides: { ...request.overrides, [use.id]: event.target.value } })}>{use.choices.map(model => <SelectOption key={model.id} value={model.id}>{model.name}</SelectOption>)}</Select></details> : null}
+              {!done && use.choices.length > 1 ? <details open={inline || undefined} className="pl-7"><summary className="text-xs text-accent-fg">{zh ? '选择具体模型' : 'Choose a model'}</summary><Select value={chosen ?? ''} disabled={busy} aria-label={labels[use.id][zh ? 0 : 1]} onChange={event => setRequest({ ...request, selected: [...new Set([...selected, use.id])], overrides: { ...request.overrides, [use.id]: event.target.value } })}>{use.choices.map(model => <SelectOption key={model.id} value={model.id}>{model.name}</SelectOption>)}</Select></details> : null}
             </div>;
           })}
         </div>
         : null}
         {!done ? <Button variant="ghost" disabled={busy} onClick={() => setAttempt(value => value + 1)}>{zh ? '刷新目录' : 'Refresh catalog'}</Button> : null}
-        {!connectOnly ? <details><summary className="text-xs text-accent-fg">{zh ? '任务模型与其他用途' : 'Task models and other uses'}</summary><div className="mt-2 space-y-1 text-xs text-fg-muted">{Object.entries(preview.taskModels).map(([intent, ref]) => <p key={intent}>{intent}: {ref}</p>)}<p>{zh ? '未选用途与电脑操作保留当前配置；所选用途清除跨服务回退。' : 'Unselected uses and Computer Use keep their settings. Selected uses clear cross-service fallbacks.'}</p></div></details> : null}
+        {!connectOnly && !inline ? <details><summary className="text-xs text-accent-fg">{zh ? '任务模型与其他用途' : 'Task models and other uses'}</summary><div className="mt-2 space-y-1 text-xs text-fg-muted">{Object.entries(preview.taskModels).map(([intent, ref]) => <p key={intent}>{intent}: {ref}</p>)}<p>{zh ? '未选用途与电脑操作保留当前配置；所选用途清除跨服务回退。' : 'Unselected uses and Computer Use keep their settings. Selected uses clear cross-service fallbacks.'}</p></div></details> : null}
         <p className="text-xs leading-5 text-fg-muted">{preview.profile.interactiveOnly ? (zh ? '此套餐仅用于交互任务。后台调用会检查使用范围，不会自动切换到其他收费来源。' : 'This plan is for interactive tasks. Background calls check usage scope and do not automatically switch billing sources.') : (zh ? '仅更新勾选的全局用途，智能体和会话的独立设置继续生效。' : 'Only selected global uses change. Agent and session overrides remain effective.')}</p>
         <p className="text-xs text-fg-muted">{zh ? '配置保存与模型真实调用验证分别显示；此操作不会发送测试请求。' : 'Saving settings does not perform a model test request.'}</p>
       </> : null}
       {error ? <p role="alert" className="text-sm text-danger">{error}</p> : null}
     </div>
     <div className="flex shrink-0 items-center justify-between gap-3 border-t border-edge px-5 py-4"><span className="text-xs text-fg-muted">{preview && !done && !connectOnly ? (zh ? `将配置 ${selected.length} 项` : `${selected.length} uses selected`) : ''}</span>
-      {done ? <Button onClick={onDone}>{zh ? '完成' : 'Done'}</Button> : !preview && error ? <Button onClick={() => setAttempt(value => value + 1)}>{zh ? '重试' : 'Retry'}</Button> : <Button onClick={() => void save()} disabled={busy || !preview || (!connected && !apiKey.trim())}>{busy ? <Loader2 className="mr-2 size-4 animate-spin" aria-hidden /> : null}{busy ? (zh ? '正在应用…' : 'Applying…') : selected.length ? (zh ? '连接并应用' : 'Connect and apply') : (zh ? '仅连接' : 'Connect only')}</Button>}
+      {done ? <Button onClick={onDone}>{zh ? '完成' : 'Done'}</Button> : !preview && error ? <Button onClick={() => setAttempt(value => value + 1)}>{zh ? '重试' : 'Retry'}</Button> : <Button onClick={() => void save()} disabled={busy || !preview || (!connected && !apiKey.trim()) || (inline && !selected.some(id => request.overrides?.[id] || preview.uses.find(use => use.id === id)?.recommended))}>{busy ? <Loader2 className="mr-2 size-4 animate-spin" aria-hidden /> : null}{busy ? (zh ? '正在应用…' : 'Applying…') : selected.length ? (inline && targetUse ? `${zh ? '连接并用于' : 'Connect and use for '}${labels[targetUse][zh ? 0 : 1]}` : (zh ? '连接并应用' : 'Connect and apply')) : (zh ? '仅连接' : 'Connect only')}</Button>}
     </div>
   </>;
 }

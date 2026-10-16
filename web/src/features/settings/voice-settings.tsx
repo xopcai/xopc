@@ -16,6 +16,8 @@ import {
   fetchVoiceSttProviders,
   fetchTtsVoices,
   normalizeVoiceSettings,
+  readVoiceSettingsRevisions,
+  type VoiceSettingsRevisions,
   patchVoiceSettings,
   testTtsVoice,
   type SttProviderListEntry,
@@ -189,7 +191,14 @@ function voiceFormReducer(state: VoiceFormDraft, action: VoiceFormAction): Voice
   }
 }
 
-export function VoiceSettingsPanel({ capability, onPendingChange, disabled = false }: { capability?: 'transcription' | 'speech' | 'conversation'; onPendingChange?: (pending: boolean) => void; disabled?: boolean } = {}) {
+type VoiceSettingsPanelProps = { capability?: 'transcription' | 'speech' | 'conversation'; onPendingChange?: (pending: boolean) => void; disabled?: boolean };
+
+export function VoiceSettingsPanel(props: VoiceSettingsPanelProps = {}) {
+  const [generation, setGeneration] = useState(0);
+  return <VoiceSettingsEditor key={generation} {...props} onReload={() => setGeneration(value => value + 1)} />;
+}
+
+function VoiceSettingsEditor({ capability, onPendingChange, disabled = false, onReload }: VoiceSettingsPanelProps & { onReload: () => void }) {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
   const v = m.voiceSettings;
@@ -212,6 +221,7 @@ export function VoiceSettingsPanel({ capability, onPendingChange, disabled = fal
   const [models, setModels] = useState<VoiceModelsPayload | null>(null);
   const [readoutOpen, setReadoutOpen] = useState(false);
   const dirtyRef = useRef(false);
+  const revisions = useRef<VoiceSettingsRevisions>({});
   const formRef = useRef(form);
   formRef.current = form;
   const trackedVoiceSyncRef = useRef<{
@@ -282,6 +292,7 @@ export function VoiceSettingsPanel({ capability, onPendingChange, disabled = fal
       trackedVoiceSyncRef.current.models !== voiceModels
     ) {
       trackedVoiceSyncRef.current = { parsed: voiceParsed, models: voiceModels };
+      revisions.current = readVoiceSettingsRevisions(cfgData?.payload?.config);
       dispatchForm({ type: 'sync', value: voiceParsed });
       setModels(voiceModels);
     }
@@ -408,7 +419,8 @@ export function VoiceSettingsPanel({ capability, onPendingChange, disabled = fal
 
   const save = useCallback(async (snapshot: VoiceSettingsState) => {
     try {
-      await patchVoiceSettings(snapshot, capability);
+      const receipt = await patchVoiceSettings(snapshot, capability, capability ? revisions.current[capability] : undefined);
+      revisions.current = { ...revisions.current, ...receipt };
       dispatchForm({ type: 'saved', value: snapshot });
       dirtyRef.current = Boolean(
         formRef.current && JSON.stringify(formRef.current) !== JSON.stringify(snapshot),
@@ -463,9 +475,9 @@ export function VoiceSettingsPanel({ capability, onPendingChange, disabled = fal
   const refinement = form.voice.input.refinement;
   const apiKeyLabels = voiceApiKeyLabels(v);
 
-  if (capability) return <fieldset disabled={disabled} className="flex min-w-0 flex-col gap-4" onBlurCapture={autosave.onBlurCapture}>
+  if (capability) return <fieldset disabled={disabled} className="flex min-w-0 flex-col gap-4" onBlurCapture={autosave.error ? undefined : autosave.onBlurCapture}>
     <AutosaveStatus status={autosave.status} error={autosave.error} />
-    {autosave.error ? <Button variant="secondary" className="w-fit" onClick={autosave.retry}>{language === 'zh' ? '重试保存' : 'Retry saving'}</Button> : null}
+    {autosave.error ? <div className="flex flex-wrap gap-2"><Button variant="secondary" onClick={autosave.retry}>{language === 'zh' ? '重试保存' : 'Retry saving'}</Button><Button variant="ghost" onClick={() => { void mutCfg().then(() => onReload()).catch(() => {}); }}>{language === 'zh' ? '重新加载（放弃未保存更改）' : 'Reload and discard unsaved changes'}</Button></div> : null}
     {capability === 'transcription' ? <>
       <DictationSettingsSummary zh={language === 'zh'} />
       <SttSection managedModel={Boolean(capability)} v={v} apiKeyLabels={apiKeyLabels} stt={stt} models={models} sttProviders={sttProviders} updateStt={updateStt} updateSttFallback={updateSttFallback} />
@@ -1014,10 +1026,12 @@ function VoiceProviderConfigFields({
   const v = messages(language).voiceSettings;
   const scoped = managedModel;
   const isEssential = (field: VoiceConfigFieldMetadata) => field.required || ['apiKey', 'model', 'voice'].includes(field.key);
-  const advancedFields = fields.filter((field) => !isEssential(field));
+  const isConnectionField = (field: VoiceConfigFieldMetadata) => field.secret || field.type === 'password' || ['apiKey', 'baseUrl', 'region', 'groupId'].includes(field.key);
+  const visibleFields = fields.filter(field => !scoped || (field.key !== 'model' && !isConnectionField(field)));
+  const advancedFields = visibleFields.filter((field) => !isEssential(field));
   const renderFields = (values: VoiceConfigFieldMetadata[]) => values.map((field) => {
     if (managedModel && field.key === 'model') return null;
-    if (scoped && (field.secret || field.type === 'password' || ['apiKey', 'baseUrl', 'region', 'groupId'].includes(field.key))) return <CapabilitySettingsLink key={field.key} className="text-sm text-accent-fg hover:underline" to={`/settings/capabilities/models?view=services&use=${kind === 'stt' ? 'transcription' : 'speech'}`}>{language === 'zh' ? `管理服务连接 · ${field.label}` : `Manage connection · ${field.label}`}</CapabilitySettingsLink>;
+
     if (field.key === 'apiKey') {
       return (
         <div key={field.key} className={cn('flex flex-col gap-1.5', credentialFieldWidthClass)}>
@@ -1090,7 +1104,8 @@ function VoiceProviderConfigFields({
     );
   });
   return <>
-    {renderFields(fields.filter(isEssential))}
+    {scoped && fields.some(isConnectionField) ? <CapabilitySettingsLink className="text-sm text-accent-fg hover:underline" to={`/settings/capabilities/models?view=services&use=${kind === 'stt' ? 'transcription' : 'speech'}`}>{language === 'zh' ? '管理服务连接' : 'Manage service connection'}</CapabilitySettingsLink> : null}
+    {renderFields(visibleFields.filter(isEssential))}
     {advancedFields.length ? <details className="rounded-lg border border-edge p-3 sm:col-span-2">
       <summary className="cursor-pointer text-sm font-medium text-fg">{v.experience.providerOptions}</summary>
       <div className="mt-3 grid gap-3 sm:grid-cols-2">{renderFields(advancedFields)}</div>

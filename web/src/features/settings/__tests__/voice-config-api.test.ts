@@ -9,7 +9,7 @@ vi.mock('@/lib/fetch', () => ({ fetchJson }));
 vi.mock('@/features/gateway/gateway-config-swr', () => ({ revalidateGatewayConfig }));
 vi.mock('@/lib/url', () => ({ apiUrl: (path: string) => path }));
 
-import { normalizeVoiceSettings, patchVoiceSettings } from '../voice-config-api';
+import { normalizeVoiceSettings, patchVoiceSettings, readVoiceSettingsRevisions } from '../voice-config-api';
 import { configureRealtimeService } from '../voice-service-setup';
 
 describe('voice-config-api', () => {
@@ -26,6 +26,14 @@ describe('voice-config-api', () => {
     if (capability !== 'speech') expect(payload.voicePatchMode).toBe('merge');
     if (capability === 'conversation') expect(Object.keys(payload.voice)).toEqual(['realtime']);
     if (capability === 'transcription') expect(Object.keys(payload.voice).sort()).toEqual(['language', 'languageMode']);
+  });
+  it('sends a scoped expected revision and returns the acknowledged revision', async () => {
+    const revision = 'a'.repeat(64), next = 'b'.repeat(64);
+    fetchJson.mockResolvedValue({ payload: { config: { voiceSettingsRevisions: { speech: next } } } });
+    const receipt = await patchVoiceSettings(normalizeVoiceSettings({}), 'speech', revision);
+    expect(JSON.parse(fetchJson.mock.calls[0][1].body).expectedVoiceRevision).toEqual({ capability: 'speech', revision });
+    expect(receipt.speech).toBe(next);
+    expect(readVoiceSettingsRevisions({})).toEqual({});
   });
   it('uses user-safe defaults and disables hidden transcript refinement', () => {
     const state = normalizeVoiceSettings({});

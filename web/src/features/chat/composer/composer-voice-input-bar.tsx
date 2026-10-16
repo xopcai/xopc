@@ -1,3 +1,4 @@
+import { openCapabilitySettings } from '@/features/settings/models-hub/open-capability-settings';
 import { Check, CircleAlert, RotateCcw, Settings2, X } from 'lucide-react';
 import { memo } from 'react';
 
@@ -81,7 +82,7 @@ export const ComposerVoiceInputBar = memo(function ComposerVoiceInputBar({
           <X className="size-4" aria-hidden />{m.voiceInputCancel}
         </button>
         {failed && settingsRequired ? (
-          <a href="#/settings/capabilities/models?use=transcription" className={cn(iconBtnClass, 'text-accent-fg')}>
+          <a onClick={event => { if (!event.metaKey && !event.ctrlKey && !event.shiftKey && event.button === 0) { event.preventDefault(); openCapabilitySettings('transcription'); } }} href="#/settings/capabilities/models?use=transcription" className={cn(iconBtnClass, 'text-accent-fg')}>
             <Settings2 className="size-4" aria-hidden />{m.voiceOpenSettings}
           </a>
         ) : failed ? (

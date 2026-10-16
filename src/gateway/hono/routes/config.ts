@@ -6,6 +6,7 @@ import type { Config } from '../../../config/schema.js';
 import { getTunnelService } from '../../../tunnel/tunnel-service.js';
 import { enumerateLanGatewayCandidates } from '../../host.js';
 import { buildSafeWebConfigPayload } from '../lib/config-payload.js';
+import { voiceSettingsRevisions, VOICE_SETTING_SCOPES, type VoiceSettingScope } from '../lib/voice-settings-revisions.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 import {
   applyChannelsPatch,
@@ -48,6 +49,15 @@ export function registerConfigRoutes(authenticated: Hono, deps: AuthenticatedRou
     const body = await c.req.json();
     const expectedConfig = structuredClone(service.currentConfig);
     const config: Config = structuredClone(expectedConfig) as Config;
+    if (body.expectedVoiceRevision !== undefined) {
+      const guard = body.expectedVoiceRevision;
+      if (!guard || typeof guard !== 'object' || !VOICE_SETTING_SCOPES.includes(guard.capability) || typeof guard.revision !== 'string' || !/^[a-f0-9]{64}$/.test(guard.revision)) {
+        return c.json({ ok: false, error: 'Invalid voice settings revision' }, 400);
+      }
+      if (voiceSettingsRevisions(expectedConfig)[guard.capability as VoiceSettingScope] !== guard.revision) {
+        return c.json({ ok: false, error: 'Voice settings changed. Reload before saving to preserve the current model.' }, 409);
+      }
+    }
     applyChannelsPatch(config, body);
 
     const gatewayResult = applyGatewayPatch(config, body);
