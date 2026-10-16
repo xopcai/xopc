@@ -80,7 +80,7 @@ describe('Personal AI message styling', () => {
     expect(container.textContent).toContain('我先核对论文里的数值。');
     expect(container.textContent).toContain('这项结果检验的是轨道衰减。');
     render(opening, false, true);
-    expect(container.querySelector('.assistant-markdown-content')).toBeNull();
+    expect(container.querySelector('.assistant-markdown-content')?.textContent).toContain('我先核对论文里的数值。');
   });
 
   it('does not reveal a fragmented silent-reply marker in the Personal conversation', () => {

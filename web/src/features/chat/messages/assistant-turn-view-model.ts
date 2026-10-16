@@ -85,10 +85,12 @@ export function buildAssistantTurnViewModel({
 }): AssistantTurnViewModel {
   // The Personal page also supplies this mode for historical messages.
   const conversationalText = usesConversationText(message, personal);
+  const isLiveText = (block: MessageContent) =>
+    isStreaming && block.type === 'text' && block.presentation === 'pending';
   const answerContent = (message.content ?? []).filter((block) => (
     block.type === 'review'
     || (block.type === 'text'
-      && (conversationalText || (block.presentation !== 'pending'
+      && (conversationalText || isLiveText(block) || (block.presentation !== 'pending'
         && block.presentation !== 'narration')))
   ));
   const allActivityBlocks = filterVisibleSteps(collectTurnActivityBlocks(message.content ?? []));
@@ -99,11 +101,12 @@ export function buildAssistantTurnViewModel({
       if (block.type === 'thinking') return Boolean(block.text?.trim()) || Boolean(block.streaming);
       return block.type === 'text'
         && !conversationalText
+        && !isLiveText(block)
         && (block.presentation === 'pending' || block.presentation === 'narration')
         && Boolean(block.text?.trim());
     },
   );
-  const answerStarted = conversationalText
+  const answerStarted = conversationalText || answerContent.some(isLiveText)
     ? answerContent.some((block) => block.type === 'text' && Boolean(block.text?.trim()))
     : hasAssistantAnswerText(answerContent);
   const toolBlocks = allActivityBlocks.filter(

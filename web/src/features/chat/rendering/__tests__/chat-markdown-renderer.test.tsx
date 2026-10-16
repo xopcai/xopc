@@ -81,6 +81,24 @@ describe('React chat Markdown', () => {
     delete (HTMLElement.prototype as Partial<HTMLElement>).animate;
   });
 
+  it('lets active text fades finish after streaming ends', () => {
+    vi.useFakeTimers();
+    const cancel = vi.fn();
+    const animate = vi.fn(() => ({ currentTime: 0, cancel, onfinish: null }));
+    Object.defineProperty(HTMLElement.prototype, 'animate', { configurable: true, value: animate });
+    render('已有文字。', true);
+    render('已有文字。新增内容。', true);
+    const segment = container.querySelector('[data-xopc-segment]');
+    expect(segment).not.toBeNull();
+    cancel.mockClear();
+    render('已有文字。新增内容。', false);
+    expect(container.querySelector('[data-xopc-segment]')).toBe(segment);
+    expect(cancel).not.toHaveBeenCalled();
+    act(() => vi.advanceTimersByTime(800));
+    expect(container.querySelector('[data-xopc-segment]')).toBeNull();
+    expect(container.textContent).toBe('已有文字。新增内容。');
+  });
+
   it('segments continuous Chinese and never cuts a family emoji or combining grapheme', () => {
     expect(splitRevealText('我们一起分析').length).toBeGreaterThan(1);
     const text = 'a👨‍👩‍👧‍👦e\u0301';

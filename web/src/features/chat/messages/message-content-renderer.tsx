@@ -407,7 +407,7 @@ export function ChatMarkdownView({
     <>
       {providerPayload ? <ProviderSetupRequiredCard payload={providerPayload} /> : <MarkdownView
         content={streamingContent}
-        streaming={streaming}
+        streaming={streaming || streamingContent !== content}
         compact={compact}
         onWorkspaceFileOpen={openFile}
         onWorkspaceImageLoad={loadFileImage}

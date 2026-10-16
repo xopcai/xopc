@@ -160,7 +160,8 @@ const ChatBlock = memo(function ChatBlock(props: BlockProps) {
   // Remend adds closing delimiters to an unfinished block; those closers are not source edits.
   const previousPrefix = previous.current.trimEnd().replace(/[*_~`]+$/, '');
   const replacing = mounted.current && !props.content.startsWith(previousPrefix);
-  const animate = environment.streaming && !wholeDocument(props.content) && !replacing;
+  // Let in-flight fades finish when the transport marks the response complete.
+  const animate = (environment.streaming || ledger.starts.size > 0) && !wholeDocument(props.content) && !replacing;
   const revealPlugin = useMemo(() => createRevealPlugin(ledger, animate, initial, budget, blockId), [ledger, animate, initial, settledRevision, budget, blockId]);
   const remaining = environment.mathRemaining[props.index] ?? 256;
   const rehypePlugins = useMemo(() => [...(props.rehypePlugins ?? []).map(plugin => Array.isArray(plugin) && plugin[0] === rehypeXopcMath
