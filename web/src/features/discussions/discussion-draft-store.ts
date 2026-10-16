@@ -1,5 +1,6 @@
 import type { DiscussionDraft, DiscussionDraftChunk, DiscussionLiveSegment } from './discussion-types';
 import { verifiedSavedThrough } from './recording-status';
+import { RecordingMediaCoverageReader } from './recording-media-coverage';
 
 const DATABASE_NAME = 'xopc-discussion-drafts';
 const DATABASE_VERSION = 2;
@@ -162,7 +163,7 @@ export async function deleteDiscussionDraft(draftId: string): Promise<void> {
   }
 }
 
-/** Reload committed metadata and verify the audio prefix without loading its blobs. */
+/** Verify committed chunk keys; recheck old gap and resumed-epoch proofs with bounded memory. */
 export async function loadDiscussionDraftForRecovery(id: string): Promise<DiscussionDraft> {
   const db = await openDraftDatabase();
   try {
@@ -187,8 +188,34 @@ export async function loadDiscussionDraftForRecovery(id: string): Promise<Discus
     if (!draft) throw new Error('The recording draft is missing');
     if (gap || count !== draft.chunkCount) throw new Error('Local recording has missing chunks. Retained audio has not been deleted.');
     if (!count) throw new Error('No audio was saved before the recording stopped');
+    let mediaCoverage = verifiedSavedThrough(draft) === null ? undefined : draft.mediaCoverage;
+    let epochs = draft.epochs;
+    if (draft.mediaCoverage?.status === 'gap' || (epochs?.length ?? 0) > 1) {
+      const checkedEpochs = (epochs?.length ? epochs : [{ firstChunk: 0, mimeType: draft.mimeType, startedAt: draft.startedAt }]).map(epoch => ({ ...epoch }));
+      for (let epoch = 0; epoch < checkedEpochs.length; epoch++) {
+        const current = checkedEpochs[epoch];
+        const end = checkedEpochs[epoch + 1]?.firstChunk ?? count;
+        if (!Number.isInteger(current.firstChunk) || (epoch === 0 && current.firstChunk !== 0)
+          || current.firstChunk < 0 || current.firstChunk > end || end > count) {
+          throw new Error('Local recording has invalid audio boundaries. Retained audio has not been deleted.');
+        }
+        const reader = new RecordingMediaCoverageReader(current.mimeType);
+        for (let index = current.firstChunk; index < end; index++) {
+          const reading = db.transaction(CHUNKS, 'readonly');
+          const committed = transactionDone(reading);
+          const part = await requestResult(reading.objectStore(CHUNKS).get([id, index])) as DiscussionDraftChunk | undefined;
+          await committed;
+          if (!part) throw new Error('Local recording has missing chunks. Retained audio has not been deleted.');
+          reader.append(new Uint8Array(await part.blob.arrayBuffer()));
+        }
+        if (epoch < checkedEpochs.length - 1) current.savedThroughMs = reader.snapshot().verifiedThroughMs;
+        else mediaCoverage = { ...reader.snapshot(), committedChunkCount: count };
+      }
+      if (epochs?.length) epochs = checkedEpochs;
+    }
     return { ...draft,
-      mediaCoverage: verifiedSavedThrough(draft) === null ? undefined : draft.mediaCoverage,
+      epochs,
+      mediaCoverage,
       saveOutcome: draft.state === 'recording' ? 'interrupted' : draft.saveOutcome,
     };
   } finally { db.close(); }

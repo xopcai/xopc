@@ -121,9 +121,16 @@ export class RecordingMediaCoverageReader {
     const start = (this.clusterTime + relative) * this.timeScaleMs;
     const end = start + duration;
     if (!Number.isFinite(end) || start < 0 || start <= this.lastStart) throw new Error('Non-monotonic media time');
+    // Chrome quantizes capture timestamps down to WebM ticks. Compare against
+    // the epoch's accumulated Opus samples, not the preceding rounded timestamp:
+    // returning from -1 ms to zero is not a missing millisecond of audio.
+    // Only accept early quantization, bounded to one tick and at most 1 ms.
+    // A forward jump or cumulative drift remains a gap, including after jitter.
+    const quantizationMs = Math.min(1, this.timeScaleMs);
+    const delta = start - this.decoded;
+    if (delta > 0 || delta < -quantizationMs) this.gap = true;
     this.lastStart = start; this.decoded += duration;
-    if (start !== this.observed) this.gap = true;
     this.observed = Math.max(this.observed, end);
-    if (!this.gap) this.prefix = this.observed;
+    if (!this.gap) this.prefix = Math.min(this.decoded, this.observed);
   }
 }

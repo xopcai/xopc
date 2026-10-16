@@ -25,6 +25,8 @@ vi.mock('../live-pcm-segmenter', () => ({ LivePcmSegmenter: { start: mocks.segme
 vi.mock('@/features/voice/microphone-lease', () => ({ acquireMicrophoneLease: mocks.acquire, releaseMicrophoneLease: mocks.release }));
 
 import { useDiscussionRecorder } from '../use-discussion-recorder';
+import { projectRecordingStatus } from '../recording-status';
+import { recordingSaveLabel } from '../recording-status-panel';
 import { mediaHeader, mediaCluster } from './recording-media-fixture';
 
 class Recorder {
@@ -181,6 +183,26 @@ describe('original recording durability and recovery', () => {
     expect(api.draft?.saveOutcome).toBe('incomplete');
   });
 
+  it.each([false, true])('projects committed quantized media and preserves real gaps (missing frame: %s)', async missing => {
+    await start();
+    await act(async () => {
+      Recorder.latest.ondataavailable?.({ data: new Blob([Uint8Array.from([...mediaHeader, ...mediaCluster(0), ...mediaCluster(19)])]) });
+    });
+    expect(api.draft?.mediaCoverage).toMatchObject({ status: 'verified', verifiedThroughMs: 39 });
+    let commit!: () => void;
+    const save = mocks.saveChunk.getMockImplementation()!;
+    mocks.saveChunk.mockImplementationOnce(async (...args) => { await new Promise<void>(done => { commit = done; }); await save(...args); });
+    const packets: number[] = [];
+    for (let time = 40; time < 3000; time += 20) if (!missing || time !== 40) packets.push(...mediaCluster(time));
+    await act(async () => { Recorder.latest.ondataavailable?.({ data: new Blob([Uint8Array.from(packets)]) }); });
+    expect(api.draft?.mediaCoverage?.verifiedThroughMs).toBe(39);
+    await act(async () => { commit(); });
+    const status = projectRecordingStatus({ phase: api.phase, draft: api.draft, online: true, syncStage: 'pending', pendingText: 0, liveAvailable: true });
+    expect(status).toMatchObject({ savedThroughMs: missing ? 39 : 3000, timingUncertain: missing });
+    expect(recordingSaveLabel(status, 'zh')).toBe(missing ? '本机已确认保存至 00:00' : '本机已确认保存至 00:03');
+    expect(api.draft?.mediaCoverage?.committedChunkCount).toBe(2);
+  });
+
   it('does not declare local completion until stop metadata commits and ignores packets delivered after a stop timeout', async () => {
     await start(); await emit();
     let commit!: () => void;
@@ -203,6 +225,33 @@ describe('original recording durability and recovery', () => {
     expect(api.phase).toBe('stopped'); expect(api.draft?.saveOutcome).toBe('interrupted');
     expect(track.stop).toHaveBeenCalled();
   });
+  it.each(['mute', 'freeze'])('closes an interrupted epoch on %s and continues the same saved recording', async event => {
+    await start(); await emit();
+    await act(async () => { await api.setServerDiscussionId('same-note-source'); });
+    const original = api.draft!;
+    const prefix = mocks.chunks.get(`${original.id}:0`);
+    await act(async () => { (event === 'mute' ? track : document).dispatchEvent(new Event(event)); });
+    expect(api.phase).toBe('stopped');
+    expect(api.draft).toMatchObject({ id: original.id, serverDiscussionId: 'same-note-source', saveOutcome: 'interrupted', chunkCount: 2 });
+    await act(async () => { await api.start({ continuation: api.draft!, onLiveSegment: vi.fn() }); });
+    expect(api.draft!.epochs).toHaveLength(2);
+    expect(api.draft!.serverDiscussionId).toBe('same-note-source');
+    expect(api.phase).toBe('waiting_for_audio');
+    expect(mocks.chunks.get(`${original.id}:0`)).toBe(prefix);
+    expect(mocks.drafts.size).toBe(1);
+  });
+
+  it('keeps recording when a healthy source is hidden and removes old lifecycle listeners', async () => {
+    await start(); await emit();
+    await act(async () => { document.dispatchEvent(new Event('visibilitychange')); });
+    expect(Recorder.latest.state).toBe('recording');
+    await act(async () => { await api.stop(); });
+    const stopped = api.draft;
+    await act(async () => { document.dispatchEvent(new Event('freeze')); track.dispatchEvent(new Event('mute')); });
+    expect(api.draft).toBe(stopped);
+    expect(api.draft!.saveOutcome).toBe('complete');
+  });
+
   it('detects a silent recorder shutdown and ignores ended events from an earlier recording', async () => {
     await start(); await emit();
     const previous = Recorder.latest;
