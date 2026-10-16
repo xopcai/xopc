@@ -14,11 +14,15 @@ export type GlobalDefaultsPayload = {
   builtinTools: GatewayBuiltinToolSummary[];
 };
 
-export type UpdateGlobalDefaultsBody = { defaults: AgentDefaults };
+export type UpdateGlobalDefaultsBody = {
+  defaults: AgentDefaults;
+  scope?: 'models' | 'agent';
+  expectedModels?: AgentDefaults['models'];
+};
 
 export type GlobalDefaultsAdminResult<T> =
   | { ok: true; data: T }
-  | { ok: false; error: string; status?: 400 | 404 | 500 };
+  | { ok: false; error: string; status?: 400 | 404 | 409 | 500 };
 
 export function listGlobalDefaults(): GlobalDefaultsPayload {
   return {
@@ -33,11 +37,16 @@ export function listGlobalDefaults(): GlobalDefaultsPayload {
 export function prepareUpdateGlobalDefaults(
   body: UpdateGlobalDefaultsBody,
 ): GlobalDefaultsAdminResult<{ defaults: AgentDefaults; changed: boolean }> {
-  const parsed = AgentDefaultsSchema.safeParse(body.defaults);
+  const current = new AgentCatalogRepository().getSettings().defaults;
+  if (body.expectedModels && !isDeepStrictEqual(current.models, body.expectedModels)) {
+    return { ok: false, error: 'Model settings changed. Refresh before retrying.', status: 409 };
+  }
+  const requested = body.scope === 'models' ? { ...current, models: body.defaults.models }
+    : body.scope === 'agent' ? { ...body.defaults, models: current.models } : body.defaults;
+  const parsed = AgentDefaultsSchema.safeParse(requested);
   if (!parsed.success) {
     return { ok: false, error: `defaults ${parsed.error.issues[0]?.message ?? 'is invalid'}`, status: 400 };
   }
-  const current = new AgentCatalogRepository().getSettings().defaults;
   try {
     validateComputerModelChange(parsed.data.models.computerUse, current.models.computerUse);
   } catch (error) {

@@ -45,4 +45,30 @@ describe('global defaults admin', () => {
     if (!result.ok) return;
     expect(result.data.changed).toBe(false);
   });
+
+  it('checks model conflicts at write time before preparing any update', () => {
+    const defaults = catalog.getSettings().defaults;
+    const oldModels = { ...defaults.models, chat: { primary: 'old/chat', fallbacks: [] } };
+    expect(prepareUpdateGlobalDefaults({ defaults, scope: 'models', expectedModels: oldModels })).toMatchObject({ ok: false, status: 409 });
+  });
+
+  it('keeps current non-model settings when applying model-only changes', () => {
+    const current = catalog.getSettings().defaults;
+    const submitted = { ...current, tools: {}, models: { ...current.models, chat: { primary: 'openai/gpt-5', fallbacks: [] } } };
+    const result = prepareUpdateGlobalDefaults({ defaults: submitted, scope: 'models', expectedModels: current.models });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.data.defaults.tools).toEqual(current.tools);
+    expect(result.data.defaults.models).toEqual(submitted.models);
+  });
+
+  it('keeps the current model routes when an agent settings page saves an old snapshot', () => {
+    const current = catalog.getSettings().defaults;
+    const submitted = { ...current, models: { ...current.models, chat: { primary: 'old/chat', fallbacks: [] } }, tools: { exec_command: { mode: 'ask' as const } } };
+    const result = prepareUpdateGlobalDefaults({ defaults: submitted, scope: 'agent' });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.data.defaults.models).toEqual(current.models);
+    expect(result.data.defaults.tools).toEqual(submitted.tools);
+  });
 });

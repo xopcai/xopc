@@ -87,7 +87,7 @@ export function ProviderSetupPanel({ providerId, row, modelIds, existingConnecti
   return <>
     <div className="flex shrink-0 items-start gap-3 px-5 py-5">
       {onBack && !busy && !done ? <Button variant="ghost" className="shrink-0 p-1.5" aria-label={zh ? '返回' : 'Back'} onClick={onBack}><ChevronLeft className="size-4" /></Button> : null}
-      <div className="min-w-0 flex-1"><Dialog.Title className="text-base font-semibold text-fg">{zh ? '连接模型服务' : 'Connect model service'}</Dialog.Title><Dialog.Description className="mt-2 text-sm text-fg-muted">{title}</Dialog.Description></div>
+      <div className="min-w-0 flex-1"><Dialog.Title className="text-base font-semibold text-fg">{targetUse ? `${zh ? '连接服务 · ' : 'Connect service · '}${labels[targetUse][zh ? 0 : 1]}` : (zh ? '连接模型服务' : 'Connect model service')}</Dialog.Title><Dialog.Description className="mt-2 text-sm text-fg-muted">{title}</Dialog.Description></div>
       <Button variant="ghost" className="shrink-0 p-1.5" disabled={busy} aria-label={zh ? '关闭' : 'Close'} onClick={onDone}><X className="size-4" /></Button>
     </div>
     <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 pb-5">
@@ -105,7 +105,7 @@ export function ProviderSetupPanel({ providerId, row, modelIds, existingConnecti
             {(['fill', 'replace'] as const).map(mode => <Button key={mode} variant={request.mode === mode ? 'secondary' : 'ghost'} disabled={busy} aria-pressed={request.mode === mode} onClick={() => changeMode(mode)}>{mode === 'fill' ? (zh ? '补齐未配置' : 'Fill missing') : (zh ? '改用此服务' : 'Switch to this service')}</Button>)}
           </div></div> : <p className="text-sm text-fg-muted">{zh ? '保存连接后返回能力设置，再选择要使用的模型。' : 'Save the connection, then choose a model in capability settings.'}</p>}
         </>}
-        {connectOnly ? <p className="text-xs text-fg-muted">{zh ? '支持用途：' : 'Supported uses: '}{preview.uses.filter(use => use.choices.length).map(use => labels[use.id][zh ? 0 : 1]).join('、')}</p> : null}
+        {connectOnly ? <p className="text-xs text-fg-muted">{zh ? '支持用途：' : 'Supported uses: '}{preview.uses.filter(use => use.choices.length && (!targetUse || use.id === targetUse)).map(use => labels[use.id][zh ? 0 : 1]).join('、')}</p> : null}
         {!connectOnly ? <div className="divide-y divide-edge rounded-xl border border-edge bg-surface-inset px-4">
           {preview.uses.map(use => {
             const chosen = request.overrides?.[use.id] ?? use.recommended;
@@ -126,7 +126,7 @@ export function ProviderSetupPanel({ providerId, row, modelIds, existingConnecti
       </> : null}
       {error ? <p role="alert" className="text-sm text-danger">{error}</p> : null}
     </div>
-    <div className="flex shrink-0 items-center justify-between gap-3 border-t border-edge px-5 py-4"><span className="text-xs text-fg-muted">{preview && !done ? (zh ? `将配置 ${selected.length} 项` : `${selected.length} uses selected`) : ''}</span>
+    <div className="flex shrink-0 items-center justify-between gap-3 border-t border-edge px-5 py-4"><span className="text-xs text-fg-muted">{preview && !done && !connectOnly ? (zh ? `将配置 ${selected.length} 项` : `${selected.length} uses selected`) : ''}</span>
       {done ? <Button onClick={onDone}>{zh ? '完成' : 'Done'}</Button> : !preview && error ? <Button onClick={() => setAttempt(value => value + 1)}>{zh ? '重试' : 'Retry'}</Button> : <Button onClick={() => void save()} disabled={busy || !preview || (!connected && !apiKey.trim())}>{busy ? <Loader2 className="mr-2 size-4 animate-spin" aria-hidden /> : null}{busy ? (zh ? '正在应用…' : 'Applying…') : selected.length ? (zh ? '连接并应用' : 'Connect and apply') : (zh ? '仅连接' : 'Connect only')}</Button>}
     </div>
   </>;

@@ -35,17 +35,19 @@ function extensionForMime(mimeType: string): string {
   return 'webm';
 }
 
-export async function transcribeVoiceBlob(blob: Blob, mimeType: string): Promise<VoiceTranscribeResult> {
+export async function transcribeVoiceBlob(blob: Blob, mimeType: string, signal?: AbortSignal, expectedProvider?: string): Promise<VoiceTranscribeResult> {
   const resolvedMime = blob.type || mimeType || 'audio/webm';
   const audio = blob.type ? blob : new Blob([blob], { type: resolvedMime });
   const form = new FormData();
   form.append('audio', audio, `recording.${extensionForMime(resolvedMime)}`);
+  if (expectedProvider) form.append('expectedProvider', expectedProvider);
   const res = await fetchJson<{
     ok?: boolean;
     payload?: VoiceTranscribeResult;
   }>(apiUrl('/api/voice/transcriptions'), {
     method: 'POST',
     body: form,
+    ...(signal ? { signal } : {}),
   });
 
   if (!res.payload) {
@@ -53,6 +55,12 @@ export async function transcribeVoiceBlob(blob: Blob, mimeType: string): Promise
   }
 
   return res.payload;
+}
+
+export async function fetchDictationRoute(signal: AbortSignal): Promise<{ mode: 'recorded' | 'streaming' | 'unavailable'; provider?: string }> {
+  const status = await fetchJson<{ voice?: { dictation?: { mode: 'recorded' | 'streaming' | 'unavailable'; provider?: string } } }>(apiUrl('/api/status'), { signal });
+  // Older gateways keep their existing streaming path.
+  return status.voice?.dictation ?? { mode: 'streaming' };
 }
 
 const STT_AVAILABILITY_TTL_MS = 10_000;
