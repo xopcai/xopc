@@ -159,6 +159,7 @@ import { getPersonalAgentByConversation } from '../personal-agent/repository.js'
 import { PersonalReplyComposer } from '../personal-agent/reply-composer.js';
 import { TaskMainUpdateDecisionService } from '../tasks/task-main-update-decision-service.js';
 import { selectTaskMainUpdateAttempt, submitAndConfirmTaskMainUpdate } from '../tasks/task-main-update-input.js';
+import { TaskMainUpdateExhaustedError } from '../tasks/task-main-update-retry.js';
 import type { SceneAccess } from '../scenes/httpServices.js';
 import { createProductDispatcher } from '../capabilities/runtime/product.js';
 import { prepareAppContext, checkAppContextAccess } from './service/app-context-access.js';
@@ -924,6 +925,7 @@ export class GatewayService {
         if (this.voiceRealtime.hasConversation(input.conversationId)) {
           const attempt = selectTaskMainUpdateAttempt(input.conversationId, input.clientMessageId, findSessionInput);
           if (attempt.kind === 'completed') return Promise.resolve(true);
+          if (attempt.kind === 'exhausted') throw new TaskMainUpdateExhaustedError();
           if (attempt.kind !== 'new' || !attempt.clientMessageId) return Promise.resolve(false);
           return this.voiceRealtime.offerTaskUpdate({ ...input, clientMessageId: attempt.clientMessageId });
         }

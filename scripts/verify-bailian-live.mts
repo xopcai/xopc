@@ -148,9 +148,12 @@ if(only==='omni')await run('runtime.subscription-omni',async()=>{
  }finally{await engine.close();}
 });
 if(only==='policy')await run('runtime.background-scope',async()=>{
- const {withModelUsageOrigin,assertProviderUsage,ProviderUsageScopeError}=await import('../src/providers/model-usage.js');
- let denied=false;try{withModelUsageOrigin('background',()=>withModelUsageOrigin('interactive',()=>assertProviderUsage('qwen-token-plan-cn')));}catch(error){if(!(error instanceof ProviderUsageScopeError))throw error;denied=true;}
- if(!denied)throw new Error('Background scope could be upgraded');return{denied:true,networkRequests:0};
+ const {withModelUsageOrigin,assertProviderUsage,getModelUsageOrigin}=await import('../src/providers/model-usage.js');
+ for(const provider of ['qwen-token-plan-cn','xiaomi-token-plan-cn','kimi-coding','volcengine-plan','stepfun-plan']) {
+  assertProviderUsage(provider);
+  withModelUsageOrigin('background',()=>withModelUsageOrigin('interactive',()=>{assertProviderUsage(provider);if(getModelUsageOrigin()!=='background')throw new Error('Call origin attribution changed');}));
+ }
+ return{providerBackgroundAllowed:true,networkRequests:0};
 });
 if(only==='browser')await run('browser.saved-configuration',async()=>{
  const {default:playwright}=await import('playwright-core');
