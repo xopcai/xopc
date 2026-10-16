@@ -6,10 +6,18 @@ import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ChatTerminalDock } from '@/features/chat/terminal/chat-terminal-dock';
+import { resolveSession } from '@/features/sessions/session-api';
 import { useLocaleStore } from '@/stores/locale-store';
 import { useTerminalPanelStore } from '@/stores/terminal-panel-store';
 
-const { terminalOptions } = vi.hoisted(() => ({ terminalOptions: [] as ITerminalOptions[] }));
+const { terminalOptions, materialize } = vi.hoisted(() => ({
+  terminalOptions: [] as ITerminalOptions[],
+  materialize: vi.fn(async () => {}),
+}));
+
+vi.mock('@/features/chat/session/session-manager', () => ({
+  SessionManager: class { materialize = materialize; },
+}));
 
 vi.mock('@xterm/xterm', () => ({
   Terminal: class {
@@ -91,6 +99,44 @@ describe('ChatTerminalDock', () => {
     });
     expect(api.create).toHaveBeenCalledOnce();
     expect(container.querySelectorAll('[role="tab"]')).toHaveLength(1);
+  });
+
+  it('materializes a new conversation before resolving its transcript and opening the PTY', async () => {
+    let finishPreparation!: () => void;
+    materialize.mockImplementationOnce(() => new Promise<void>((resolve) => { finishPreparation = resolve; }));
+    await act(async () => root.render(<ChatTerminalDock conversationId="session-key" />));
+
+    expect(materialize).toHaveBeenCalledWith('session-key', 'session_resources');
+    expect(resolveSession).not.toHaveBeenCalled();
+    expect(api.create).not.toHaveBeenCalled();
+    expect(container.querySelector('[aria-busy="true"]')).not.toBeNull();
+
+    await act(async () => finishPreparation());
+
+    expect(resolveSession).toHaveBeenCalledWith({ conversationId: 'session-key' });
+    expect(api.create).toHaveBeenCalledWith(expect.objectContaining({
+      conversationId: 'session-key', transcriptId: 'session-id',
+    }));
+  });
+
+  it('shows preparation failures without trying to resolve a missing session', async () => {
+    materialize.mockRejectedValueOnce(new Error('Conversation environment is not ready yet'));
+    await act(async () => root.render(<ChatTerminalDock conversationId="session-key" />));
+
+    expect(container.querySelector('[role="alert"]')?.textContent).toBe('Conversation environment is not ready yet');
+    expect(resolveSession).not.toHaveBeenCalled();
+    expect(api.create).not.toHaveBeenCalled();
+  });
+
+  it('does not open a terminal if the dock unmounts during session preparation', async () => {
+    let finishPreparation!: () => void;
+    materialize.mockImplementationOnce(() => new Promise<void>((resolve) => { finishPreparation = resolve; }));
+    await act(async () => root.render(<ChatTerminalDock conversationId="session-key" />));
+    await act(async () => root.render(null));
+    await act(async () => finishPreparation());
+
+    expect(resolveSession).not.toHaveBeenCalled();
+    expect(api.create).not.toHaveBeenCalled();
   });
 
   it('updates the terminal theme in place without recreating the PTY', async () => {
