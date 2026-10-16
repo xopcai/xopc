@@ -1,3 +1,4 @@
+import { withModelUsageOrigin } from '../../providers/model-usage.js';
 import { DEFAULT_AGENT_ID, normalizeAgentId } from '../../agent/agent-scope.js';
 import { resolveConversationId } from '../../routing/session-key.js';
 import { createLogger } from '../../utils/logger.js';
@@ -177,7 +178,7 @@ export class AutomationActionExecutor {
     const deadlineAtMs = run.deadlineAtMs ?? Date.now() + configuredTimeoutMs;
     const timeoutMs = Math.max(1, deadlineAtMs - Date.now());
     await hooks.onRunPatch?.({ deadlineAtMs });
-    return executeWithDeadline(
+    return withModelUsageOrigin('background', () => executeWithDeadline(
       (deadlineSignal) => this.executeWithoutTimeout(
         automation,
         run,
@@ -189,7 +190,7 @@ export class AutomationActionExecutor {
       timeoutMs,
       signal,
       deadlineAtMs,
-    ).catch((err) => {
+    )).catch((err) => {
       const message = err instanceof Error ? err.message : String(err);
       if (err instanceof AutomationExecutionStoppedError) {
         return {

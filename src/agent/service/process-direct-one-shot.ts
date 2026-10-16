@@ -1,3 +1,4 @@
+import { withModelUsageOrigin, modelUsageOriginFromTurn } from '../../providers/model-usage.js';
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
 import type { TurnOrigin } from '@xopcai/endpoint-tools-protocol';
 
@@ -71,6 +72,10 @@ export async function runProcessDirect(
     deadlineAtMs?: number;
   },
 ): Promise<string> {
+  return withModelUsageOrigin(modelUsageOriginFromTurn(input.origin), () => runProcessDirectInner(deps, input));
+}
+
+async function runProcessDirectInner(deps: RunProcessDirectDeps, input: Parameters<typeof runProcessDirect>[1]): Promise<string> {
   deps.sessionStore?.idleCompaction?.interrupt(input.conversationId);
   const { channel, chatId } = await deps.resolveSessionEndpoint(input.conversationId);
   deps.initSessionContext(input.conversationId, channel, chatId, input.origin);

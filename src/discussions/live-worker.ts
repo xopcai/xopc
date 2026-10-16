@@ -4,6 +4,7 @@ import { ObjectLinkService } from '../activity/service.js';
 import type { Config } from '../config/schema.js';
 import type { NotesService } from '../notes/service.js';
 import type { ProjectService } from '../projects/project-service.js';
+import { withModelUsageOrigin } from '../providers/model-usage.js';
 import { createLogger } from '../utils/logger.js';
 import { isSTTAvailable, mergeSttConfigFromAppConfig, transcribe } from '../voice/stt/index.js';
 
@@ -83,9 +84,10 @@ export class DiscussionLiveWorker {
     if (!segment) return;
     try {
       try {
-        const result = this.deps.transcribeSegment
-          ? await this.deps.transcribeSegment(segment.audioBuffer)
-          : await this.transcribeSegment(segment.audioBuffer);
+        // Claimed audio belongs to an explicit recording request, even after a restart.
+        const result = await withModelUsageOrigin('interactive', () => this.deps.transcribeSegment
+          ? this.deps.transcribeSegment(segment.audioBuffer)
+          : this.transcribeSegment(segment.audioBuffer));
         const completed = completeDiscussionTranscriptSegment(
           segment.discussionId,
           segment.sequence,

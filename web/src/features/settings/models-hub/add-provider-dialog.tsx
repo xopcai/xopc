@@ -1,3 +1,4 @@
+import type { ModelSetupUse } from '@xopcai/gateway-contract';
 import {
   CheckCircle2,
   ChevronRight,
@@ -9,7 +10,6 @@ import {
 } from 'lucide-react';
 import {
   useCallback,
-  useEffect,
   useLayoutEffect,
   useMemo,
   useReducer,
@@ -24,25 +24,10 @@ import { Button } from '@/components/ui/button';
 import { SecretInput } from '@/components/ui/secret-input';
 import { SETTINGS_SHELL_CONTENT_Z, SETTINGS_SHELL_OVERLAY_Z } from '@/lib/settings-shell-dialog-layer';
 import {
-  cancelOAuth,
-  cleanupOAuthSession,
-  fetchOAuthSessionStatus,
-  startAsyncOAuthLogin,
-  submitOAuthCode,
-} from '@/features/settings/oauth-api';
-import {
-  closeOAuthAuthorizationWindow,
-  openOAuthAuthorizationUrl,
-  reserveOAuthAuthorizationWindow,
-} from '@/features/settings/oauth-authorization-window';
-import {
-  patchProviderApiKeys,
   type ProviderRowModel,
 } from '@/features/settings/providers-api';
 import {
   PROVIDER_ENRICHMENT,
-  getOrderedApiKeyLinks,
-  providerApiKeyLinkLabel,
 } from '@/features/settings/provider-enrichment';
 import { CATEGORY_ORDER, groupByCategory } from '@/features/settings/providers/providers-settings-lib';
 import {
@@ -68,9 +53,10 @@ import { interaction } from '@/lib/interaction';
 import type { StoredLanguage } from '@/lib/storage';
 import { Select, SelectOption } from '@/components/ui/popover-select';
 
-import { revalidateModelsHubCaches } from './models-hub-cache';
 import { type DefaultModelTarget } from './default-model-candidates';
 import { DefaultModelSuccessStep } from './default-model-success-step';
+import { ProviderSetupPanel } from './provider-setup-panel';
+
 
 export interface AddProviderDialogMessages {
   title: string;
@@ -132,10 +118,11 @@ type DialogStep =
   | { type: 'custom'; presetKey?: string }
   | { type: 'success'; target: DefaultModelTarget };
 
-const RECOMMENDED_PROVIDER_ID = 'xopc-cloud';
 
 interface AddProviderDialogProps {
   open: boolean;
+  initialProviderId?: string;
+  initialUse?: ModelSetupUse;
   onOpenChange: (open: boolean) => void;
   builtinRows: ProviderRowModel[];
   customConfig: ModelsJsonConfig | null;
@@ -146,6 +133,8 @@ interface AddProviderDialogProps {
 
 export function AddProviderDialog({
   open,
+  initialProviderId,
+  initialUse,
   onOpenChange,
   builtinRows,
   customConfig,
@@ -155,7 +144,9 @@ export function AddProviderDialog({
 }: AddProviderDialogProps) {
   const [step, setStep] = useState<DialogStep>({ type: 'pick' });
   const [searchQuery, setSearchQuery] = useState('');
+  const activeStep = step.type === 'pick' && initialProviderId ? { type: 'builtin' as const, providerId: initialProviderId } : step;
   const pickScrollTopRef = useRef(0);
+  const selectedBrand = activeStep.type === 'builtin' ? builtinRows.find(row => row.id === activeStep.providerId)?.setupProfile?.brand : undefined;
 
   const handleOpenChange = useCallback(
     (next: boolean) => {
@@ -172,9 +163,9 @@ export function AddProviderDialog({
   );
 
   const handleSaved = useCallback((providerId: string, modelIds?: string[]) => {
-    onSaved(providerId);
     const existing = builtinRows.some(row => row.id === providerId && row.configured);
     if (modelIds?.length === 0 || (modelIds === undefined && existing)) {
+      onSaved(providerId);
       handleOpenChange(false);
     } else {
       setStep({ type: 'success', target: { providerId, modelIds } });
@@ -196,9 +187,9 @@ export function AddProviderDialog({
             SETTINGS_SHELL_CONTENT_Z,
           )}
         >
-          {step.type === 'success' ? (
-            <DefaultModelSuccessStep target={step.target} zh={language === 'zh'} onDone={() => handleOpenChange(false)} />
-          ) : step.type === 'pick' ? (
+          {activeStep.type === 'success' ? (
+            <DefaultModelSuccessStep target={activeStep.target} targetUse={initialUse} zh={language === 'zh'} onApplied={() => onSaved(activeStep.target.providerId)} onDone={() => handleOpenChange(false)} />
+          ) : activeStep.type === 'pick' ? (
             <PickProviderStep
               builtinRows={builtinRows}
               searchQuery={searchQuery}
@@ -212,18 +203,25 @@ export function AddProviderDialog({
               }}
               onPickCustom={() => setStep({ type: 'custom' })}
             />
-          ) : step.type === 'builtin' ? (
-            <ConfigureBuiltinStep
-              providerId={step.providerId}
-              builtinRows={builtinRows}
-              labels={labels}
+          ) : activeStep.type === 'builtin' ? (
+            <ProviderSetupPanel
+              key={activeStep.providerId}
+              providerId={activeStep.providerId}
+              targetUse={initialUse}
+              row={builtinRows.find(row => row.id === activeStep.providerId)}
               language={language}
-              onBack={() => setStep({ type: 'pick' })}
-              onSaved={() => handleSaved(step.providerId)}
+              alternatives={selectedBrand ? builtinRows.filter(row => row.setupProfile?.brand === selectedBrand) : []}
+              onChooseProvider={id => {
+                const presetKey = modelsJsonPresetKeyForProviderId(id);
+                setStep(presetKey ? { type: 'custom', presetKey } : { type: 'builtin', providerId: id });
+              }}
+              onBack={initialProviderId ? undefined : () => setStep({ type: 'pick' })}
+              onApplied={() => onSaved(activeStep.providerId)}
+              onDone={() => handleOpenChange(false)}
             />
           ) : (
             <ConfigureCustomStep
-              initialPresetKey={step.presetKey}
+              initialPresetKey={activeStep.presetKey}
               customConfig={customConfig}
               labels={labels}
               language={language}
@@ -282,7 +280,7 @@ function PickProviderStep({
     }
   }, [scrollTopRef]);
 
-  const filteredRows = useMemo(() => {
+  const matchedRows = useMemo(() => {
     if (!query) return builtinRows;
     return builtinRows.filter((r) => {
       const enrichment = PROVIDER_ENRICHMENT[r.id];
@@ -295,15 +293,25 @@ function PickProviderStep({
     });
   }, [builtinRows, query]);
 
-  const recommendedRow = filteredRows.find((row) => row.id === RECOMMENDED_PROVIDER_ID);
+  const filteredRows = useMemo(() => {
+    const brands = new Set<string>();
+    return matchedRows.filter(row => {
+      const brand = row.setupProfile?.brand ?? row.id;
+      if (brands.has(brand)) return false;
+      brands.add(brand);
+      return true;
+    });
+  }, [matchedRows]);
+  const quickStartRows = filteredRows.filter(row => row.onboardingFeatured && ['subscription', 'account'].includes(row.setupProfile?.access ?? '')).slice(0, 6);
+  const quickStartIds = quickStartRows.map(row => row.id);
   const connectedRows = filteredRows.filter(
-    (row) => row.configured && row.id !== RECOMMENDED_PROVIDER_ID,
+    (row) => row.configured && !quickStartIds.includes(row.id),
   );
   const groups = useMemo(
     () => groupByCategory(filteredRows.filter(
-      (row) => row.id !== RECOMMENDED_PROVIDER_ID && !row.configured,
+      (row) => !quickStartIds.includes(row.id) && !row.configured,
     )),
-    [filteredRows],
+    [filteredRows, quickStartIds],
   );
   const providerDescription = (row: ProviderRowModel) => {
     const enrichment = PROVIDER_ENRICHMENT[row.id];
@@ -366,15 +374,16 @@ function PickProviderStep({
           </ProviderSection>
         ) : (
           <div className="flex flex-col gap-4">
-            {recommendedRow ? (
+            {quickStartRows.length > 0 ? (
               <ProviderSection title={labels.quickStart}>
-                <ProviderPickButton
-                  row={recommendedRow}
-                  description={providerDescription(recommendedRow)}
+                {quickStartRows.map(row => <ProviderPickButton
+                  key={row.id}
+                  row={row}
+                  description={providerDescription(row)}
                   labels={labels}
                   prominent
                   onPick={onPickBuiltin}
-                />
+                />)}
               </ProviderSection>
             ) : null}
 
@@ -485,341 +494,6 @@ function ProviderPickButton({
       ) : null}
       <ChevronRight className="size-4 shrink-0 text-fg-subtle" aria-hidden />
     </button>
-  );
-}
-
-/* ── Step 2a: Configure built-in provider (just API key) ── */
-
-function ConfigureBuiltinStep({
-  providerId,
-  builtinRows,
-  labels,
-  language,
-  onBack,
-  onSaved,
-}: {
-  providerId: string;
-  builtinRows: ProviderRowModel[];
-  labels: AddProviderDialogMessages;
-  language: StoredLanguage;
-  onBack: () => void;
-  onSaved: () => void;
-}) {
-  const row = builtinRows.find((r) => r.id === providerId);
-  const enrichment = PROVIDER_ENRICHMENT[providerId];
-  const enrichmentDescription = language === 'zh'
-    ? enrichment?.descriptionZh ?? enrichment?.description
-    : enrichment?.description;
-  const [apiKey, setApiKey] = useState('');
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [saved, setSaved] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
-  const providerLabels = messages(language).providersSettings;
-  const secretLabels = secretInputLabelsFromChannels(providerLabels);
-  const apiKeyLinks = useMemo(
-    () => getOrderedApiKeyLinks(providerId, language),
-    [providerId, language],
-  );
-  const supportsApiKey = row?.supportsApiKey !== false;
-  const supportsOAuth = row?.supportsOAuth === true;
-
-  const [oauthSessionId, setOAuthSessionId] = useState<string | null>(null);
-  const [oauthMessage, setOAuthMessage] = useState<string | null>(null);
-  const [oauthStatus, setOAuthStatus] = useState<'idle' | 'waiting' | 'waiting_code' | 'success' | 'error'>('idle');
-  const [authUrl, setAuthUrl] = useState<string | null>(null);
-  const [instructions, setInstructions] = useState<string | null>(null);
-  const [deviceCode, setDeviceCode] = useState<string | null>(null);
-  const [codeInput, setCodeInput] = useState('');
-  const oauthPopupRef = useRef<Window | null>(null);
-  const openedAuthUrlRef = useRef<string | null>(null);
-  const oauthLoading = oauthStatus === 'waiting' || oauthStatus === 'waiting_code';
-
-  useEffect(() => {
-    if (!oauthSessionId || !oauthLoading) return;
-    const intervalId = window.setInterval(() => {
-      void (async () => {
-        try {
-          const status = await fetchOAuthSessionStatus(oauthSessionId);
-          if (status.status === 'waiting_auth' || status.status === 'waiting_code') {
-            setOAuthStatus(status.status === 'waiting_code' ? 'waiting_code' : 'waiting');
-            setOAuthMessage(status.message ?? null);
-            setAuthUrl(status.authUrl ?? null);
-            setInstructions(status.instructions ?? null);
-            setDeviceCode(status.deviceCode ?? null);
-            if (status.authUrl && status.authUrl !== openedAuthUrlRef.current) {
-              openedAuthUrlRef.current = status.authUrl;
-              void openOAuthAuthorizationUrl(status.authUrl, oauthPopupRef.current).catch(() => {});
-            }
-          } else if (status.status === 'completed') {
-            window.clearInterval(intervalId);
-            closeOAuthAuthorizationWindow(oauthPopupRef.current);
-            oauthPopupRef.current = null;
-            if (providerId === 'xopc-cloud') await revalidateModelsHubCaches();
-            setOAuthStatus('success');
-            setOAuthMessage(status.message ?? providerLabels.saved);
-            window.setTimeout(onSaved, 600);
-          } else if (status.status === 'failed' || status.status === 'cancelled') {
-            window.clearInterval(intervalId);
-            closeOAuthAuthorizationWindow(oauthPopupRef.current);
-            oauthPopupRef.current = null;
-            setOAuthStatus('error');
-            setOAuthMessage(status.error ?? status.message ?? providerLabels.revokeFailed);
-          }
-        } catch {
-          // Keep polling; transient gateway reloads should not kill the flow.
-        }
-      })();
-    }, 1000);
-    return () => window.clearInterval(intervalId);
-  }, [oauthSessionId, oauthLoading, onSaved, providerId, providerLabels.revokeFailed, providerLabels.saved]);
-
-  useEffect(() => {
-    return () => {
-      if (oauthSessionId) {
-        void cleanupOAuthSession(oauthSessionId).catch(() => {});
-      }
-    };
-  }, [oauthSessionId]);
-
-  useEffect(() => () => {
-    closeOAuthAuthorizationWindow(oauthPopupRef.current);
-    oauthPopupRef.current = null;
-  }, []);
-
-  const startOAuth = async () => {
-    closeOAuthAuthorizationWindow(oauthPopupRef.current);
-    oauthPopupRef.current = reserveOAuthAuthorizationWindow();
-    openedAuthUrlRef.current = null;
-    setOAuthStatus('waiting');
-    setOAuthMessage(providerLabels.oauthStarting);
-    setAuthUrl(null);
-    setInstructions(null);
-    setDeviceCode(null);
-    setError(null);
-    try {
-      const result = await startAsyncOAuthLogin(providerId);
-      setOAuthSessionId(result.sessionId);
-    } catch (e) {
-      closeOAuthAuthorizationWindow(oauthPopupRef.current);
-      oauthPopupRef.current = null;
-      setOAuthStatus('error');
-      setOAuthMessage(e instanceof Error ? e.message : providerLabels.revokeFailed);
-    }
-  };
-
-  const cancelFlow = async () => {
-    if (!oauthSessionId) return;
-    try {
-      await cancelOAuth(oauthSessionId);
-    } catch {
-      // Best effort cancellation.
-    }
-    closeOAuthAuthorizationWindow(oauthPopupRef.current);
-    oauthPopupRef.current = null;
-    openedAuthUrlRef.current = null;
-    setOAuthStatus('idle');
-    setOAuthMessage(null);
-    setOAuthSessionId(null);
-    setAuthUrl(null);
-    setInstructions(null);
-    setDeviceCode(null);
-  };
-
-  const submitCode = async () => {
-    if (!oauthSessionId || !codeInput.trim()) return;
-    try {
-      await submitOAuthCode(oauthSessionId, codeInput.trim());
-      setCodeInput('');
-      setOAuthMessage(providerLabels.oauthProcessingCode);
-    } catch (e) {
-      setOAuthStatus('error');
-      setOAuthMessage(e instanceof Error ? e.message : providerLabels.revokeFailed);
-    }
-  };
-
-  const handleSave = async () => {
-    const trimmed = apiKey.trim();
-    if (!trimmed || !supportsApiKey) return;
-    setSaving(true);
-    setError(null);
-    try {
-      await patchProviderApiKeys({ [providerId]: trimmed });
-      setSaved(true);
-      window.setTimeout(onSaved, 600);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : labels.saveError);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <>
-      <div className="flex items-center gap-2 px-5 pb-3 pt-5">
-        <button
-          type="button"
-          onClick={onBack}
-          className={cn('rounded-lg p-1.5 text-fg-muted hover:bg-surface-hover hover:text-fg', interaction.press)}
-          aria-label={labels.back}
-        >
-          <ChevronRight className="size-4 rotate-180" aria-hidden />
-        </button>
-        <Dialog.Title className="min-w-0 flex-1 text-base font-semibold text-fg">
-          {row?.name ?? providerId}
-        </Dialog.Title>
-        <DialogCloseButton label={labels.close} />
-      </div>
-
-      <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-5">
-        <div className="flex flex-col gap-4 rounded-xl bg-surface-hover/20 p-4">
-          {enrichmentDescription ? (
-            <p className="text-sm text-fg-muted">{enrichmentDescription}</p>
-          ) : null}
-
-        {supportsApiKey ? (
-          <div className="flex flex-col gap-1.5">
-            <label htmlFor="builtin-api-key" className="text-sm font-medium text-fg">
-              {labels.apiKeyLabel}
-            </label>
-            <SecretInput
-              id="builtin-api-key"
-              value={apiKey}
-              onChange={setApiKey}
-              placeholder={labels.apiKeyPlaceholder}
-              labels={secretLabels}
-              inputRef={inputRef}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') void handleSave();
-              }}
-            />
-          </div>
-        ) : null}
-
-        {supportsOAuth ? (
-          <div className="flex flex-col gap-2 rounded-lg bg-surface-base/55 p-3">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="min-w-0">
-                <p className="text-sm font-medium text-fg">{providerLabels.oauth}</p>
-                <p className="mt-0.5 text-xs text-fg-muted">{providerLabels.oauthHint}</p>
-              </div>
-              <Button
-                type="button"
-                variant="primary"
-                className="gap-1.5"
-                disabled={oauthLoading}
-                onClick={() => void startOAuth()}
-              >
-                {oauthLoading ? <Loader2 className="size-3.5 animate-spin" aria-hidden /> : null}
-                {providerLabels.oauth}
-              </Button>
-            </div>
-            {oauthMessage ? (
-              <p className={cn('text-xs', oauthStatus === 'error' ? 'text-red-600 dark:text-red-400' : 'text-fg-muted')}>
-                {oauthMessage}
-              </p>
-            ) : null}
-            {(oauthStatus === 'waiting' || oauthStatus === 'waiting_code') ? (
-              <div className="flex flex-wrap gap-2">
-                {authUrl ? (
-                  <a
-                    href={authUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex items-center gap-1.5 rounded-md bg-accent px-3 py-2 text-sm font-medium text-on-accent hover:bg-accent-hover"
-                  >
-                    {providerLabels.openAuthPage}
-                    <span className="size-3" aria-hidden>↗</span>
-                  </a>
-                ) : null}
-                <Button type="button" variant="secondary" onClick={() => void cancelFlow()}>
-                  {providerLabels.cancelOAuth}
-                </Button>
-              </div>
-            ) : null}
-            {instructions ? <p className="text-xs text-fg-muted">{instructions}</p> : null}
-            {deviceCode ? (
-              <div className="rounded-lg bg-surface-base/70 px-3 py-2">
-                <p className="text-xs text-fg-muted">{providerLabels.deviceCodeLabel}</p>
-                <code className="mt-1 block select-all font-mono text-lg font-semibold tracking-widest text-fg">
-                  {deviceCode}
-                </code>
-                <p className="mt-1 text-xs text-fg-subtle">{providerLabels.deviceCodeHint}</p>
-              </div>
-            ) : null}
-            {oauthStatus === 'waiting_code' ? (
-              <div className="flex flex-col gap-2 sm:flex-row">
-                <input
-                  type="text"
-                  value={codeInput}
-                  onChange={(event) => setCodeInput(event.target.value)}
-                  onKeyDown={(event) => event.key === 'Enter' && void submitCode()}
-                  placeholder={providerLabels.pasteRedirectUrl}
-                  className={cn(
-                    'min-w-0 flex-1 rounded-lg border border-edge bg-surface-panel px-3 py-2 text-sm text-fg placeholder:text-fg-subtle',
-                    settingsInputFocusClass,
-                  )}
-                />
-                <Button type="button" variant="primary" onClick={() => void submitCode()}>
-                  {providerLabels.submitCode}
-                </Button>
-              </div>
-            ) : null}
-          </div>
-        ) : null}
-
-        {apiKeyLinks.length > 0 && supportsApiKey ? (
-          <div className="flex flex-wrap gap-2">
-            {apiKeyLinks.map(({ kind, href }) => (
-              <a
-                key={kind}
-                href={href}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-1 text-xs text-accent hover:underline"
-              >
-                {providerApiKeyLinkLabel(kind, labels)}
-                <span className="size-3" aria-hidden>↗</span>
-              </a>
-            ))}
-          </div>
-        ) : null}
-
-        {error ? (
-          <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
-        ) : null}
-
-        </div>
-      </div>
-
-      <div className="flex items-center justify-end gap-2 bg-surface-hover/15 px-5 py-3">
-        <Button type="button" variant="secondary" onClick={onBack}>
-          {labels.cancel}
-        </Button>
-        {supportsApiKey ? (
-          <Button
-            type="button"
-            variant="primary"
-            disabled={!apiKey.trim() || saving || saved}
-            onClick={() => void handleSave()}
-          >
-            {saved ? (
-              <span className="flex items-center gap-1.5">
-                <CheckCircle2 className="size-3.5" aria-hidden />
-                {labels.saved}
-              </span>
-            ) : saving ? (
-              <span className="flex items-center gap-1.5">
-                <Loader2 className="size-3.5 animate-spin" aria-hidden />
-                {labels.saving}
-              </span>
-            ) : (
-              labels.save
-            )}
-          </Button>
-        ) : null}
-      </div>
-    </>
   );
 }
 

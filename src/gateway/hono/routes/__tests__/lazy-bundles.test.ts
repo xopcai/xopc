@@ -6,6 +6,11 @@ import {
 } from '../lazy-bundles.js';
 
 describe('lazy route bundles', () => {
+  it('maps provider setup preview and apply through the models bundle', () => {
+    for (const path of ['/api/models/setup/qwen-token-plan-cn', '/api/models/setup/xopc-cloud/preview', '/api/models/setup/xiaomi-token-plan-cn/apply']) expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('models');
+    expect(findAuthenticatedLazyRouteBundle('/api/models-setup/xopc-cloud')).toBeUndefined();
+    expect(findAuthenticatedLazyRouteBundle('/api/global-defaults')?.id).not.toBe('models');
+  });
   it('maps next turn suggestions without capturing adjacent session endpoints', () => {
     for (const path of ['/api/sessions/id/next-turn-suggestion', '/api/sessions/id/next-turn-suggestion-feedback']) {
       expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('next-turn-suggestions');

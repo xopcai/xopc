@@ -1,3 +1,4 @@
+import { withModelUsageOrigin, modelUsageOriginFromTurn } from '../../providers/model-usage.js';
 /**
  * Agent Orchestrator - Coordinates Agent execution flow
  *
@@ -83,6 +84,10 @@ export class AgentOrchestrator {
    * Process a message through the agent orchestration pipeline
    */
   async process(msg: InboundMessage, context: SessionContext): Promise<void> {
+    return withModelUsageOrigin(modelUsageOriginFromTurn(context.origin), () => this.processScoped(msg, context));
+  }
+
+  private async processScoped(msg: InboundMessage, context: SessionContext): Promise<void> {
     const { conversationId } = context;
 
     log.debug({ conversationId }, 'Processing message through agent orchestrator');

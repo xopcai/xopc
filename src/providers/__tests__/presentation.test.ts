@@ -1,9 +1,19 @@
 import { describe, expect, it } from 'vitest';
 
-import { getAllProviders, getModelsByProvider } from '../index.js';
-import { getRecommendedModelsForProvider, modelToCatalogView } from '../presentation.js';
+import { getAllProviders, getModelsByProvider, PROVIDER_META } from '../index.js';
+import { getOnboardingFeaturedProviders, getRecommendedModelsForProvider, modelToCatalogView } from '../presentation.js';
 
 describe('provider presentation catalog', () => {
+  it('exposes the pi China subscription provider and recommends its vision models', () => {
+    const provider = 'qwen-token-plan-cn';
+    expect(getAllProviders()).toContain(provider);
+    expect(PROVIDER_META[provider]).toMatchObject({ category: 'domestic', supportsApiKey: true });
+    expect(getOnboardingFeaturedProviders()).toContain(provider);
+    const recommendations = getRecommendedModelsForProvider(provider);
+    expect(recommendations[0]).toMatchObject({ id: 'qwen3.8-flash', vision: true });
+    expect(recommendations.some(model => model.id === 'qwen3.8-max')).toBe(true);
+  });
+
   it('does not recommend a GUI actor even when its public alias matches a chat recommendation', () => {
     expect(modelToCatalogView({ provider: 'openai', id: 'gpt-5', name: 'GUI alias', api: 'openai-completions',
       input: ['text', 'image'], computerUse: { profile: 'structured-tools-v1' } } as never).recommended).toBe(false);
