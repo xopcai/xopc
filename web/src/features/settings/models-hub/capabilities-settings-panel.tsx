@@ -1,6 +1,6 @@
 import type { ModelSetupUse } from '@xopcai/gateway-contract';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { Link, Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { Link, Navigate, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
 import { ImageModelsSettingsPanel } from '@/features/settings/image-models-settings';
@@ -11,6 +11,7 @@ import {
 import { VoiceSettingsPanel } from '@/features/settings/voice-settings';
 import { WebSearchSettingsPanel } from '@/features/settings/web-search-settings';
 import { messages } from '@/i18n/messages';
+import { isComputerUseAvailable } from '@/lib/electron-env';
 import {
   CAPABILITY_SETTINGS_SECTIONS,
   capabilitySettingsPath,
@@ -21,7 +22,7 @@ import { useLocaleStore } from '@/stores/locale-store';
 
 import { CapabilityConnectionContext } from './capability-settings-link';
 import { CapabilityServiceConnections } from './capability-service-connections';
-import { capabilityGroups, capabilityLabels, modelCapabilityPath, parseCapabilityUse, withCapabilityReturnContext } from './capability-navigation';
+import { capabilityLabels, modelCapabilityPath, parseCapabilityUse, withCapabilityReturnContext } from './capability-navigation';
 import { MediaServiceConnections } from './media-service-connections';
 import { openCapabilitySettings } from './open-capability-settings';
 import { ModelUsesList } from './model-uses-list';
@@ -42,6 +43,7 @@ export function CapabilitiesSettingsPanel({ inlineUse, inlineView = 'settings', 
   const m = messages(language);
   const c = m.capabilitiesSettings;
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const returnTo = searchParams.get('returnTo');
   const chatReturnPath = returnTo?.startsWith('/chat/') ? returnTo : null;
@@ -65,7 +67,12 @@ export function CapabilitiesSettingsPanel({ inlineUse, inlineView = 'settings', 
     if (!setupUse) { openCapabilitySettings(use, 'services'); return; }
     onViewChange?.('services'); setConnectionUse(use); setConnectionSaved(undefined);
   };
-  const openServices = () => setupUse ? openConnection(setupUse) : navigate(capabilityPath(undefined, true));
+  const servicesRef = useRef<HTMLElement>(null);
+  const openServices = () => {
+    if (setupUse) { openConnection(setupUse); return; }
+    servicesRef.current?.scrollIntoView?.({ block: 'start' });
+    servicesRef.current?.focus({ preventScroll: true });
+  };
   const pageRef = useRef<HTMLDivElement>(null);
   const scrollPositions = useRef(new Map<string, number>());
   const viewKey = `${capability}:${setupUse ?? 'overview'}:${services}:${searchParams.get('voiceTab') ?? ''}`;
@@ -106,6 +113,12 @@ export function CapabilitiesSettingsPanel({ inlineUse, inlineView = 'settings', 
     return <Navigate to={capabilitySettingsPath('models')} replace />;
   }
 
+  if (capability === 'models' && services && !setupUse) {
+    const next = new URLSearchParams(searchParams);
+    next.delete('view');
+    return <Navigate to={{ pathname: capabilitySettingsPath('models'), search: next.toString() }} state={location.state} replace />;
+  }
+
   if (voiceOverview && setupUse) return <Navigate to={withCapabilityReturnContext(modelCapabilityPath(setupUse, false, 'voice'), searchParams)} replace />;
 
   if (capability === 'image') return <Navigate to={capabilityPath('image')} replace />;
@@ -137,29 +150,28 @@ export function CapabilitiesSettingsPanel({ inlineUse, inlineView = 'settings', 
     {renderCapabilitySettings(inlineUse)}
   </div>;
 
+  const modelOverview = capability === 'models' && !setupUse && !services;
   return (
     <div ref={pageRef} className="contents"><SettingsPageFrame>
       <SettingsPageHeader
         title={pageTitle}
-        docsLink={docsGuidePageUrl(language, 'configuration')}
+        subtitle={modelOverview ? (zh ? '按用途选择模型，在设置中调整参数与服务连接。' : 'Choose models by purpose. Adjust parameters and connections in settings.') : undefined}
+        docsLink={modelOverview ? undefined : docsGuidePageUrl(language, 'configuration')}
         docsLabel={c.docsLink}
+        actions={modelOverview ? <div className="flex items-center gap-2"><a href={docsGuidePageUrl(language, 'configuration')} target="_blank" rel="noreferrer" className="inline-flex min-h-11 items-center rounded-lg px-2 text-xs text-fg-muted hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">{c.docsLink}</a><Button variant="secondary" disabled={settingsPending} onClick={openServices}>{zh ? '服务账户' : 'Service accounts'}</Button></div> : undefined}
       />
 
       {chatReturnPath ? <Link aria-disabled={settingsPending} onClick={event => { if (settingsPending) event.preventDefault(); }} to={chatReturnPath} className="text-sm text-accent-fg hover:underline">{language === 'zh' ? '返回对话' : 'Return to conversation'}</Link> : null}
-      <div className="flex flex-wrap items-center justify-between gap-2">
+      {!modelOverview ? <div className="flex flex-wrap items-center justify-between gap-2">
         {capability !== 'models' || setupUse || services ? <Link aria-disabled={settingsPending} onClick={event => { if (settingsPending) event.preventDefault(); }} className="text-sm text-accent-fg hover:underline" to={returnUse ? capabilityPath(returnUse) : fromVoice ? withCapabilityReturnContext('/settings/capabilities/voice', searchParams) : capabilityPath()}>{returnUse ? `${zh ? '返回' : 'Back to '}${capabilityLabels[returnUse][zh ? 0 : 1]}` : fromVoice ? (zh ? '返回语音' : 'Back to voice') : zh ? '返回能力总览' : 'Back to capabilities'}</Link> : <p className="text-sm text-fg-muted">{zh ? '选择需要配置的能力。' : 'Choose a capability to configure.'}</p>}
         {capability === 'models' && !services ? <Button variant="secondary" disabled={settingsPending} onClick={openServices}>{setupUse ? (zh ? '连接或管理服务' : 'Connect or manage services') : (zh ? '服务账户' : 'Service accounts')}</Button> : null}
-      </div>
-      <div className="flex min-w-0 flex-col gap-4">
+      </div> : null}
+      <div className="flex min-w-0 flex-col gap-6">
         {capability === 'models' ? (
           <>
             {services ? <>
               {setupUse ? <p role="status" className="text-sm text-fg-muted">{zh ? '连接后返回原能力选择模型；其他用途保持当前设置。' : 'Return to the capability after connecting to select a model.'}</p> : null}
-              {setupUse ? <Link className="text-sm text-accent-fg hover:underline" to={capabilityPath(undefined, true)}>{zh ? '管理全部服务' : 'Manage all services'}</Link> : <section className="space-y-3 rounded-xl border border-edge p-4">
-                <h2 className="text-sm font-semibold text-fg">{zh ? '按能力接入服务' : 'Connect by capability'}</h2>
-                <p className="text-sm text-fg-muted">{zh ? '选择能力，在弹窗中连接服务、切换模型或调整参数，关闭后继续管理服务。' : 'Choose a capability to connect services, switch models or adjust parameters in a dialog, then continue here.'}</p>
-                <div className="grid gap-2 sm:grid-cols-2">{capabilityGroups.flatMap(group => group.uses).map(use => <button key={use} type="button" aria-haspopup="dialog" disabled={settingsPending} className="min-h-11 rounded-lg border border-edge p-3 text-left text-sm text-accent-fg transition-colors hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50" onClick={() => openConnection(use)}>{capabilityLabels[use][zh ? 0 : 1]}</button>)}</div>
-              </section>}
+              {setupUse ? <Link className="text-sm text-accent-fg hover:underline" to={capabilityPath(undefined, true)}>{zh ? '管理全部服务' : 'Manage all services'}</Link> : null}
               {voiceServiceUse ? <>
                 <CapabilityServiceConnections key={voiceServiceUse} use={voiceServiceUse} data={providerData} language={language} labels={c.addProviderDialog} onSaved={() => { handleSaved(); navigate(capabilityPath(setupUse)); }} />
                 {voiceServiceUse !== 'conversation' ? <MediaServiceConnections key={`native-${voiceServiceUse}`} kind={voiceServiceUse === 'transcription' ? 'stt' : 'tts'} modelServiceIds={providerData.builtinRows.map(row => row.id)} zh={zh} onSaved={() => { handleSaved(); navigate(capabilityPath(setupUse)); }} /> : null}
@@ -176,7 +188,13 @@ export function CapabilitiesSettingsPanel({ inlineUse, inlineView = 'settings', 
               <ModelUsesList returnTo={chatReturnPath ?? undefined} data={providerData} zh={zh} onlyUse={setupUse} disabled={voicePending || connectionPending} onPendingChange={setModelPending}
                 onChange={openConnection}
                 onSettings={setupUse ? undefined : use => { if (!settingsPending) openCapabilitySettings(use); }} />
-              {setupUse ? renderCapabilitySettings(setupUse) : null}
+              {setupUse ? renderCapabilitySettings(setupUse) : <section ref={servicesRef} tabIndex={-1} aria-labelledby="model-services-heading" className="space-y-4 scroll-mt-4 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
+                <div><h2 id="model-services-heading" className="text-base font-semibold text-fg">{zh ? '连接的服务' : 'Connected services'}</h2><p className="mt-1 text-sm text-fg-muted">{zh ? '在这里管理账户和密钥；各项能力的模型与参数在上方调整。' : 'Manage accounts and keys here. Choose models and adjust capability settings above.'}</p></div>
+                {xopcCloudConfigured ? <XopcCloudAccountCard labels={c.xopcCloudAccount} /> : null}
+                <ConnectedProvidersGrid labels={c.connectedProviders} data={providerData} onAdd={() => setAddDialogOpen(true)} onManage={(providerId, isCustom) => setManageTarget({ providerId, isCustom })} />
+                {providerData.cards.length > 0 ? <ModelCatalogStatus showCapabilities={false} /> : null}
+                {isComputerUseAvailable() ? <Link className="inline-block text-sm text-accent-fg hover:underline" to="/settings/computer-use">{zh ? '电脑操作设置' : 'Computer use settings'}</Link> : null}
+              </section>}
             </>}
           </>
         ) : voiceOverview ? <>

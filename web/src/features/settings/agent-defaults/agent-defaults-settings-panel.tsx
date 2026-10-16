@@ -1,12 +1,11 @@
-import { Gauge, Puzzle, ShieldCheck, Sparkles } from 'lucide-react';
+import { Gauge, Puzzle, ShieldCheck } from 'lucide-react';
 import { useCallback, useState } from 'react';
 import useSWR from 'swr';
-import { useSearchParams } from 'react-router-dom';
+import { Navigate, useLocation, useSearchParams } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
 import { AutosaveStatus } from '@/components/ui/autosave-status';
 import { Skeleton } from '@/components/ui/skeleton';
-import { AgentDefaultsModelsPanel } from '@/features/settings/agent-defaults/agent-defaults-models-panel';
 import { AgentDefaultsRuntimePanel } from '@/features/settings/agent-defaults/agent-defaults-runtime-panel';
 import { AgentDefaultsSkillsPanel } from '@/features/settings/agent-defaults/agent-defaults-skills-panel';
 import { AgentDefaultsToolsPanel } from '@/features/settings/agent-defaults/agent-defaults-tools-panel';
@@ -18,7 +17,7 @@ import { useAutosave } from '@/lib/use-autosave';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
 
-type DefaultsPanel = 'models' | 'skills' | 'tools' | 'runtime';
+type DefaultsPanel = 'skills' | 'tools' | 'runtime';
 
 function DefaultsSkeleton() {
   return (
@@ -40,11 +39,9 @@ function AgentDefaultsEditor({
   builtinTools: BuiltinToolSummary[];
   zh: boolean;
 }) {
-  const { data: shared } = useSWR('settings-agent-defaults', fetchGlobalDefaults);
-  const dataModels = shared?.defaults ?? initial;
   const [searchParams, setSearchParams] = useSearchParams();
   const requestedPanel = searchParams.get('panel');
-  const activePanel: DefaultsPanel = requestedPanel === 'skills' || requestedPanel === 'tools' || requestedPanel === 'runtime' ? requestedPanel : 'models';
+  const activePanel: DefaultsPanel = requestedPanel === 'skills' || requestedPanel === 'tools' || requestedPanel === 'runtime' ? requestedPanel : 'skills';
   const setActivePanel = (panel: DefaultsPanel) => {
     const next = new URLSearchParams(searchParams);
     next.set('panel', panel);
@@ -54,8 +51,7 @@ function AgentDefaultsEditor({
   const [saved, setSaved] = useState<AgentDefaults>(() => structuredClone(initial));
   const dirty = JSON.stringify(draft) !== JSON.stringify(saved);
 
-  const tabs: Array<{ id: DefaultsPanel; label: string; icon: typeof Sparkles }> = [
-    { id: 'models', label: zh ? '共用模型' : 'Shared models', icon: Sparkles },
+  const tabs: Array<{ id: DefaultsPanel; label: string; icon: typeof Puzzle }> = [
     { id: 'skills', label: zh ? '技能' : 'Skills', icon: Puzzle },
     { id: 'tools', label: zh ? '工具' : 'Tools', icon: ShieldCheck },
     { id: 'runtime', label: zh ? '运行' : 'Runtime', icon: Gauge },
@@ -90,7 +86,7 @@ function AgentDefaultsEditor({
         </div>
       ) : null}
 
-      <nav className="grid grid-cols-2 gap-1 rounded-xl bg-surface-hover/20 p-1 lg:grid-cols-4" aria-label={zh ? '默认配置分区' : 'Default configuration sections'}>
+      <nav className="grid grid-cols-3 gap-1 rounded-xl bg-surface-hover/20 p-1" aria-label={zh ? '默认配置分区' : 'Default configuration sections'}>
         {tabs.map(({ id, label, icon: Icon }) => (
           <button key={id} type="button" aria-pressed={activePanel === id} onClick={() => setActivePanel(id)} className={cn('flex min-w-0 items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent', activePanel === id ? 'bg-surface-base text-fg shadow-surface' : 'text-fg-muted hover:bg-surface-hover hover:text-fg')}>
             <Icon className={cn('size-4 shrink-0', activePanel === id ? 'text-accent' : 'text-fg-subtle')} />
@@ -99,7 +95,6 @@ function AgentDefaultsEditor({
         ))}
       </nav>
 
-      {activePanel === 'models' ? <AgentDefaultsModelsPanel draft={dataModels} zh={zh} /> : null}
       {activePanel === 'skills' ? <AgentDefaultsSkillsPanel draft={draft} setDraft={setDraft} zh={zh} /> : null}
       {activePanel === 'tools' ? <AgentDefaultsToolsPanel draft={draft} setDraft={setDraft} builtinTools={builtinTools} zh={zh} /> : null}
       {activePanel === 'runtime' ? <AgentDefaultsRuntimePanel draft={draft} setDraft={setDraft} zh={zh} /> : null}
@@ -108,10 +103,18 @@ function AgentDefaultsEditor({
 }
 
 export function AgentDefaultsSettingsPanel() {
+  const [searchParams] = useSearchParams();
+  const location = useLocation();
   const token = useGatewayStore((state) => state.conversationId);
   const language = useLocaleStore((state) => state.language);
   const zh = language === 'zh';
   const { data, error, isLoading, mutate } = useSWR(token ? 'settings-agent-defaults' : null, fetchGlobalDefaults);
+
+  if (searchParams.get('panel') === 'models') {
+    const next = new URLSearchParams(searchParams);
+    next.delete('panel');
+    return <Navigate to={{ pathname: '/settings/capabilities/models', search: next.toString() }} state={location.state} replace />;
+  }
 
   if (!token) return <SettingsPageFrame><p className="text-sm text-fg-muted">{zh ? '需要本机服务令牌。' : 'Local service token required.'}</p></SettingsPageFrame>;
   if (error && !data) return <SettingsPageFrame><p className="rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-600">{String(error)}</p><Button onClick={() => void mutate()}>{zh ? '重试' : 'Retry'}</Button></SettingsPageFrame>;
