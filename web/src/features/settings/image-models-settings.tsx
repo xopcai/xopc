@@ -11,6 +11,7 @@ import { CustomImageProviderDialog } from '@/features/settings/custom-image-prov
 import {
   fetchCustomImageProviders,
   fetchImageCatalog,
+  saveImageProviderCredential,
   type CustomImageProvider,
   type ImageProvider,
 } from '@/features/settings/image-generation-api';
@@ -169,7 +170,7 @@ function ImageSettingsSkeleton() {
   );
 }
 
-export function ImageModelsSettingsPanel() {
+export function ImageModelsSettingsPanel({ connectOnly = false, onConnected }: { connectOnly?: boolean; onConnected?: () => void } = {}) {
   const language = useLocaleStore((state) => state.language);
   const text = copy[language];
   const hasToken = Boolean(useGatewayStore((state) => state.conversationId));
@@ -272,6 +273,7 @@ export function ImageModelsSettingsPanel() {
       setApiKey(next.configured ? MASKED_API_KEY : '');
       setProviderConfig(initialProviderConfig(next));
       setEditingCustomProvider(nextCustom?.find((provider) => provider.providerId === nextProviderId));
+      if (connectOnly && next.configured) onConnected?.();
     }
   };
 
@@ -281,6 +283,13 @@ export function ImageModelsSettingsPanel() {
     setError(undefined);
     setSaved(false);
     try {
+      if (connectOnly) {
+        if (apiKey.trim() && !isMaskedSecret(apiKey)) await saveImageProviderCredential(selectedProvider.id, apiKey.trim());
+        if (Object.keys(providerConfig).length) await fetchJson(apiUrl('/api/config'), { method: 'PATCH', body: JSON.stringify({ providersConfig: { [selectedProvider.id]: providerConfig } }) });
+        const [fresh] = await Promise.all([mutateProviders(), revalidateGatewayConfig()]);
+        if (!fresh?.find(provider => provider.id === selectedProvider.id)?.configured) throw new Error(language === 'zh' ? '连接尚未就绪，请先完成对应服务的授权或凭据设置。' : 'Connection is not ready. Complete authorization or credentials first.');
+        setSaved(true); onConnected?.(); return;
+      }
       const response = await fetchJson<{ payload?: SetupResult }>(
         apiUrl('/api/image-generation/default/setup'),
         {
@@ -321,7 +330,7 @@ export function ImageModelsSettingsPanel() {
           <div className="rounded-lg bg-accent/10 p-2 text-accent"><ImageIcon className="size-5" /></div>
           <div className="min-w-0 flex-1">
             <h3 className="text-sm font-semibold text-fg">{text.title}</h3>
-            <p className="mt-1 text-sm leading-relaxed text-fg-muted">{text.intro}</p>
+            <p className="mt-1 text-sm leading-relaxed text-fg-muted">{connectOnly ? (language === 'zh' ? '连接图片来源，不修改默认模型，也不发送生成测试请求。' : 'Connect image sources without changing defaults or sending generation tests.') : text.intro}</p>
           </div>
         </div>
       </section>
@@ -369,7 +378,7 @@ export function ImageModelsSettingsPanel() {
       {selectedProvider ? (
         <section className="rounded-xl bg-surface-hover/20 p-4">
           <div className="grid gap-4 md:grid-cols-2">
-            <label className="block text-xs font-medium text-fg-muted">
+            {!connectOnly ? <label className="block text-xs font-medium text-fg-muted">
               {text.model}
               <PopoverSelect
                 value={modelId}
@@ -379,7 +388,7 @@ export function ImageModelsSettingsPanel() {
                 onChange={setModelId}
                 triggerClassName="mt-1.5"
               />
-            </label>
+            </label> : null}
             {selectedProvider.configFields.filter((field) => field.required).map((field) => (
               <ImageProviderConfigField
                 key={field.key}
@@ -449,7 +458,7 @@ export function ImageModelsSettingsPanel() {
             </div>
           </details> : null}
 
-          {saved ? <p className="mt-4 rounded-lg bg-emerald-500/10 px-3 py-2 text-sm text-emerald-700 dark:text-emerald-300" role="status">{text.enabled}</p> : null}
+          {saved ? <p className="mt-4 rounded-lg bg-emerald-500/10 px-3 py-2 text-sm text-emerald-700 dark:text-emerald-300" role="status">{connectOnly ? (language === 'zh' ? '连接已保存' : 'Connection saved') : text.enabled}</p> : null}
           {error ? <p className="mt-4 rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-600 dark:text-red-400">{error}</p> : null}
 
           <div className="mt-4 flex justify-end">
@@ -458,7 +467,7 @@ export function ImageModelsSettingsPanel() {
               <span className="grid">
                 <span aria-hidden className="invisible col-start-1 row-start-1">{text.enable}</span>
                 <span aria-hidden className="invisible col-start-1 row-start-1">{text.enabling}</span>
-                <span className="col-start-1 row-start-1">{saving ? text.enabling : text.enable}</span>
+                <span className="col-start-1 row-start-1">{connectOnly ? (saving ? (language === 'zh' ? '保存中…' : 'Saving…') : (language === 'zh' ? '保存图片连接并返回' : 'Save image connection and return')) : saving ? text.enabling : text.enable}</span>
               </span>
             </Button>
           </div>

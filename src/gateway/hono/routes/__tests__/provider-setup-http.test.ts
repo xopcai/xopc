@@ -7,6 +7,7 @@ import { initializeTestAgentCatalog } from '../../../../agent-catalog/test-suppo
 import { closeXopcDatabase } from '../../../../storage/sqlite/index.js';
 import { getModelCatalogStore, resetModelCatalogStore } from '../../../../providers/model-catalog-store.js';
 import { resetModelRegistry } from '../../../../providers/model-registry.js';
+import { reloadImageGenerationProviders } from '../../../../agent/image/generation/provider-registry.js';
 import { ConfigSchema, type Config } from '../../../../config/schema.js';
 import { listGlobalDefaults, updateGlobalDefaults } from '../../../global-defaults-admin.js';
 import { auth } from '../../middleware/auth.js';
@@ -43,6 +44,7 @@ describe('model setup authenticated Gateway HTTP', () => {
   });
   afterEach(async () => {
     await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
+    reloadImageGenerationProviders({ providers: {} });
     closeXopcDatabase(); resetLazyRouteBundlesForTests(); resetModelRegistry(); resetModelCatalogStore(); vi.unstubAllEnvs();
   });
   it.each(['qwen-token-plan-cn', 'xopc-cloud', 'xiaomi-token-plan-cn'])('previews and applies %s through lazy loading and authentication', async provider => {
@@ -57,6 +59,45 @@ describe('model setup authenticated Gateway HTTP', () => {
     expect(listGlobalDefaults().defaults.models.chat.primary).toMatch(new RegExp(`^${provider}/`));
     const stale = await request(provider, '/apply', { mode: 'replace', selected: ['chat'], revision: payload.revision });
     expect(stale.status).toBe(409);
+  });
+  it('supports image-only custom sources without adding chat or background choices', async () => {
+    reloadImageGenerationProviders({ providers: { 'local-image-fixture': {
+      baseUrl: 'http://127.0.0.1:8080/v1', imageGeneration: { api: 'openai-images', name: 'Local image', defaultModel: 'image-one', auth: {type:'none'},
+        models: [{id:'image-one',capabilities:{generate:{maxCount:1},edit:{enabled:false}}}] },
+    } } });
+    const before = listGlobalDefaults().defaults;
+    const response = await request('local-image-fixture');
+    expect(response.status).toBe(200);
+    const { payload } = await response.json() as { payload: ModelSetupPreview };
+    expect(payload.configured).toBe(true);
+    expect(payload.uses.find(use => use.id === 'chat')?.choices).toEqual([]);
+    expect(payload.uses.find(use => use.id === 'background')?.choices).toEqual([]);
+    expect((await request('local-image-fixture', '/apply', { mode:'replace',selected:['image'],revision:payload.revision })).status).toBe(200);
+    expect(listGlobalDefaults().defaults.models.chat).toEqual(before.models.chat);
+    expect(listGlobalDefaults().defaults.models.imageGeneration).toMatchObject({primary:'local-image-fixture/image-one',fallbacks:[],autoProviderFallback:false});
+  });
+  it('supports local speech without a chat provider or credential and changes only speech', async () => {
+    const defaults = listGlobalDefaults().defaults;
+    const previous = service.currentConfig.tools;
+    const response = await request('edge', '/preview', { mode: 'replace', selected: ['speech'] });
+    expect(response.status).toBe(200);
+    const { payload } = await response.json() as { payload: ModelSetupPreview };
+    expect(payload.configured).toBe(true);
+    expect(payload.uses.find(use => use.id === 'speech')?.choices.length).toBeGreaterThan(0);
+    expect(payload.uses.find(use => use.id === 'chat')?.choices).toEqual([]);
+    expect((await request('edge', '/apply', { mode: 'replace', selected: ['speech'], revision: payload.revision })).status).toBe(200);
+    expect(service.currentConfig.messages?.tts?.provider).toBe('edge');
+    expect(service.currentConfig.tools).toEqual(previous);
+    expect(listGlobalDefaults().defaults).toEqual(defaults);
+  });
+  it('does not treat native voice credentials as language model credentials', async () => {
+    vi.stubEnv('OPENAI_API_KEY', '');
+    service.currentConfig = ConfigSchema.parse({ tools: { media: { audio: { provider: 'openai', providers: { openai: { apiKey: 'native-only-fixture' } } } } } });
+    const { payload } = await (await request('openai')).json() as { payload: ModelSetupPreview };
+    expect(payload.configured).toBe(true);
+    expect(payload.uses.find(use => use.id === 'chat')?.choices).toEqual([]);
+    expect(payload.uses.find(use => use.id === 'transcription')?.choices.length).toBeGreaterThan(0);
+    expect((await request('openai', '/apply', { mode: 'replace', selected: ['chat'], revision: payload.revision })).status).toBe(400);
   });
   it('saves three voice uses through the same authenticated setup route without copying secrets', async () => {
     const { payload } = await (await request('qwen-token-plan-cn', '/preview', { mode:'replace' })).json() as { payload: ModelSetupPreview };

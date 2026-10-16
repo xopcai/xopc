@@ -241,16 +241,17 @@ export async function fetchVoiceSettings(): Promise<VoiceSettingsState> {
   return normalizeVoiceSettings(res.payload?.config ?? {});
 }
 
-export async function patchVoiceSettings(state: VoiceSettingsState): Promise<void> {
+export async function patchVoiceSettings(state: VoiceSettingsState, capability?: 'transcription' | 'speech' | 'conversation'): Promise<void> {
   await fetchJson(apiUrl('/api/config'), {
     method: 'PATCH',
     body: JSON.stringify({
-      stt: toSttPayload(state.stt),
-      tts: toTtsPayload(state.tts),
-      voice: state.voice,
+      ...(capability === 'transcription' || capability === 'conversation' ? { voicePatchMode: 'merge' } : {}),
+      ...(!capability || capability === 'transcription' ? { stt: toSttPayload(state.stt) } : {}),
+      ...(!capability || capability === 'speech' ? { tts: toTtsPayload(state.tts) } : {}),
+      ...(!capability ? { voice: state.voice } : capability === 'conversation' ? { voice: { realtime: state.voice.realtime } } : capability === 'transcription' ? { voice: { language: state.voice.language, languageMode: state.voice.languageMode } } : {}),
     }),
   });
-  if (state.voice.languageMode === 'auto') {
+  if ((!capability || capability === 'transcription') && state.voice.languageMode === 'auto') {
     await fetchJson(apiUrl('/api/voice/language'), {
       method: 'POST',
       body: JSON.stringify({ language: state.voice.language }),
