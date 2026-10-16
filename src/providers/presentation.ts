@@ -45,6 +45,7 @@ export interface ProviderCatalogView {
 
 const FEATURED_PROVIDER_ORDER = [
   'xopc-cloud',
+  'qwen-token-plan-cn',
   'deepseek',
   'openai',
   'anthropic',
@@ -76,6 +77,7 @@ const FEATURED_PROVIDER_ORDER = [
 
 const PROVIDER_HINTS: Record<string, string> = {
   'xopc-cloud': 'Official XOPC model service with models discovered from your account.',
+  'qwen-token-plan-cn': 'Alibaba Bailian subscription: one key for chat, vision and image generation.',
   openai: 'Frontier OpenAI models from the official API.',
   anthropic: 'Claude models for coding, long context, and reasoning.',
   xai: 'Grok models from xAI.',
@@ -115,6 +117,7 @@ const PROVIDER_HINTS: Record<string, string> = {
 
 const RECOMMENDED_MODEL_PATTERNS: Record<string, RegExp[]> = {
   'xopc-cloud': [/^auto$/],
+  'qwen-token-plan-cn': [/^qwen3\.8-flash$/i, /^qwen3\.8-max$/i, /^qwen3\.7-plus$/i, /^qwen3\.6-flash$/i],
   openai: [/^gpt-6-sol$/i, /^gpt-6-luna$/i, /^gpt-6-astra$/i, /^gpt-5\.6-sol$/i, /^gpt-5\.6-terra$/i, /^gpt-5\.6-luna$/i, /^gpt-5\.5$/i, /^gpt-5\.5-pro$/i],
   anthropic: [/^claude-sonnet-5$/i, /^claude-opus-4-8$/i, /^claude-fable-5$/i, /^claude-sonnet-4-6$/i, /^claude-sonnet-4-5$/i],
   google: [/^gemini-3\.5-flash$/i, /^gemini-3\.1-pro-preview$/i, /^gemini-3-flash-preview$/i, /^gemini-3-pro-preview$/i],

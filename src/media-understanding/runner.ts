@@ -1,3 +1,4 @@
+import { assertProviderUsage, isProviderUsageScopeError } from '../providers/model-usage.js';
 /**
  * MediaUnderstanding capability runner.
  *
@@ -205,6 +206,7 @@ export async function runCapability(
       }
       const startedAt = Date.now();
       try {
+        assertProviderUsage(provider.id, (request as { baseUrl?: string }).baseUrl);
         // We narrow `method` by capability above; cast through `unknown` to keep
         // a single call site without per-capability ceremony.
         const callResult = await (method as (req: unknown) => Promise<{
@@ -248,6 +250,7 @@ export async function runCapability(
         });
         break;
       } catch (error) {
+        if (isProviderUsageScopeError(error)) throw error;
         if (options.signal?.aborted) {
           throw error;
         }

@@ -1,3 +1,4 @@
+import { assertProviderUsage, withModelUsageOrigin, modelUsageOriginForCall } from './model-usage.js';
 import {
   completeSimple,
   normalizeContext,
@@ -59,6 +60,7 @@ export async function resolveModelCallOptions(
   credentialOptions?: CredentialResolverOptions,
 ): Promise<SimpleStreamOptions> {
   assertCloudCreditBudgetActive();
+  assertProviderUsage(model.provider, model.baseUrl);
   if (model.provider === 'xopc-cloud') options = withCloudUsageResponse(options);
   const apiKey = options.apiKey ?? await resolveModelCallApiKey(model, credentialOptions);
   if (!apiKey) {
@@ -77,13 +79,16 @@ export async function resolveModelCallOptions(
 /**
  * Complete a one-shot request with xopc credential resolution and extension-provider routing.
  */
-export async function completeWithResolvedCredentials(
+async function completeWithResolvedCredentialsInner(
   model: Model<Api>,
   context: Context,
   options: SimpleStreamOptions,
   credentialOptions: CredentialResolverOptions | undefined,
   usageContext: AiUsageContext,
 ): Promise<AssistantMessage> {
+  if (usageContext.trigger === 'scheduled' || usageContext.trigger === 'system') {
+    withModelUsageOrigin('background', () => assertProviderUsage(model.provider, model.baseUrl));
+  }
   const resolvedOptions = await resolveModelCallOptions(model, options, credentialOptions);
   const usageCall = startAiUsageCall(model, usageContext, { context, options: { reasoning: options.reasoning, temperature: options.temperature, maxTokens: options.maxTokens } });
   try {
@@ -109,13 +114,16 @@ export async function completeWithResolvedCredentials(
  * Callers that need live visible output should consume the returned stream before calling
  * its `result()` method.
  */
-export async function createResolvedModelStream(
+async function createResolvedModelStreamInner(
   model: Model<Api>,
   context: Context,
   options: SimpleStreamOptions,
   credentialOptions: CredentialResolverOptions | undefined,
   usageContext: AiUsageContext,
 ) {
+  if (usageContext.trigger === 'scheduled' || usageContext.trigger === 'system') {
+    withModelUsageOrigin('background', () => assertProviderUsage(model.provider, model.baseUrl));
+  }
   const resolvedOptions = await resolveModelCallOptions(model, options, credentialOptions);
   const usageCall = startAiUsageCall(model, usageContext, { context, options: { reasoning: options.reasoning, temperature: options.temperature, maxTokens: options.maxTokens } });
   try {
@@ -128,4 +136,11 @@ export async function createResolvedModelStream(
     usageCall?.finish({ status: 'failed', errorSummary: error instanceof Error ? error.message : String(error) });
     throw error;
   }
+}
+
+export function completeWithResolvedCredentials(...args: Parameters<typeof completeWithResolvedCredentialsInner>) {
+  return withModelUsageOrigin(modelUsageOriginForCall(args[4]), () => completeWithResolvedCredentialsInner(...args));
+}
+export function createResolvedModelStream(...args: Parameters<typeof createResolvedModelStreamInner>) {
+  return withModelUsageOrigin(modelUsageOriginForCall(args[4]), () => createResolvedModelStreamInner(...args));
 }

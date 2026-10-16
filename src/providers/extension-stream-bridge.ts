@@ -1,3 +1,4 @@
+import { assertProviderUsage } from './model-usage.js';
 import {
 	streamSimple,
 	createAssistantMessageEventStream,
@@ -76,6 +77,7 @@ function collectExtraStreamOptions(options?: SimpleStreamOptions): Record<string
 /** Wraps {@link streamSimple} so extension-registered models use the plugin `createStream()` path. */
 export function createExtensionAwareStreamFn(): StreamFn {
 	return ((model: Model<Api>, context: TranscriptContext, options?: SimpleStreamOptions) => {
+		assertProviderUsage(model.provider, model.baseUrl);
 		if (model.baseUrl !== EXTENSION_PROVIDER_BASE_URL) {
 			return streamSimple(model, context, options);
 		}

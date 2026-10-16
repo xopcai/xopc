@@ -1,3 +1,4 @@
+import { getModelUsageOrigin } from '../providers/model-usage.js';
 import { ModelIntentSchema, type ModelIntent } from '../agent-config/index.js';
 import { resolveEffectiveAgentConfigForAgent } from './agent-profile.js';
 import { parseModelRef, type Config } from './schema.js';
@@ -50,5 +51,6 @@ export function resolveModelSelector(config: Config, agentId: string, selector: 
   }
   const resolved = resolveModelIntentRef(config, agentId, intent.data);
   if (resolved) return resolved;
-  return resolveEffectiveAgentConfigForAgent(agentId).config.models.chat.primary;
+  const models = resolveEffectiveAgentConfigForAgent(agentId).config.models;
+  return (getModelUsageOrigin() === 'background' ? models.background?.primary : undefined) ?? models.chat.primary;
 }

@@ -48,6 +48,15 @@ export function providerApiKeyLinkLabel(
  * Covers all providers in PROVIDER_ENV_MAP plus additional managed providers.
  */
 export const PROVIDER_ENRICHMENT: Record<string, ProviderEnrichment> = {
+  'qwen-token-plan-cn': {
+    apiKeyUrl: 'https://bailian.console.aliyun.com/cn-beijing/subscription/overview',
+    docsUrl: 'https://help.aliyun.cn/zh/model-studio/token-plan-personal-quick-start',
+    description: 'Alibaba Bailian subscription. Configure chat, vision and image generation with one key.',
+    descriptionZh: '阿里云百炼订阅，一份 Key 配置对话、视觉和图片生成。',
+    bestFor: ['general', 'coding', 'vision'],
+    aliases: ['阿里云订阅', '百炼订阅', 'aliyun', 'bailian', 'qwen', 'token plan', '通义', '千问'],
+    envVars: ['QWEN_TOKEN_PLAN_CN_API_KEY'],
+  },
   openai: {
     apiKeyUrl: 'https://platform.openai.com/api-keys',
     pricingUrl: 'https://openai.com/pricing',

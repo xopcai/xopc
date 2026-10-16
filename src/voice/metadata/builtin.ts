@@ -166,6 +166,22 @@ export const builtinVoiceProviderMetadata: VoiceProviderMetadata[] = [
   },
 ];
 
+builtinVoiceProviderMetadata.push({
+  id: 'qwen-token-plan-cn', capability: 'tts', displayName: 'Alibaba Bailian Subscription',
+  description: 'Subscription speech synthesis using the saved model-service credential.',
+  models: [{ id: 'qwen-audio-3.0-tts-plus', name: 'Qwen Audio 3.0 TTS Plus' }],
+  voices: [{ id: 'longanhuan_v3.6', name: 'Long Anhuan' }],
+  fields: [{ key: 'model', label: 'Model', type: 'select', options: [{ id: 'qwen-audio-3.0-tts-plus', name: 'Qwen Audio 3.0 TTS Plus' }] },
+    { key: 'voice', label: 'Voice', type: 'string', defaultValue: 'longanhuan_v3.6' }],
+  diagnostics: { requiresApiKey: false, configPath: 'messages.tts.providers.qwen-token-plan-cn' },
+}, {
+  id: 'qwen-token-plan-cn', capability: 'stt', displayName: 'Alibaba Bailian Subscription',
+  description: 'Recorded-audio recognition using the saved model-service credential. Streaming dictation is not configured by this adapter.',
+  models: [{ id: 'qwen-audio-3.0-asr-flash', name: 'Qwen Audio 3.0 ASR Flash' }],
+  fields: [{ key: 'model', label: 'Model', type: 'select', options: [{ id: 'qwen-audio-3.0-asr-flash', name: 'Qwen Audio 3.0 ASR Flash' }] }],
+  diagnostics: { requiresApiKey: false, configPath: 'tools.media.audio.providers.qwen-token-plan-cn' },
+});
+
 for (const metadata of builtinVoiceProviderMetadata) {
   registerVoiceProviderMetadata(metadata);
 }

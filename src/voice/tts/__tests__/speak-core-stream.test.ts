@@ -26,6 +26,7 @@ vi.mock('../factory.js', () => {
 });
 
 import { prepareSpeechStreamSession, speakStream } from '../speak-core.js';
+import { ProviderUsageScopeError } from '../../../providers/model-usage.js';
 import type { TTSConfig } from '../types.js';
 
 const config = {
@@ -72,6 +73,12 @@ describe('speakStream fallback control', () => {
 
     expect(result.provider).toBe('edge');
     expect(mocks.fallbackStream).toHaveBeenCalledOnce();
+  });
+  it.each([new ProviderUsageScopeError('qwen-token-plan-cn', 'background'), new Error('Transport failed: provider_usage_scope_denied')])('stops on usage-scope denial rather than falling back to another billing source: %s', async error => {
+    mocks.primaryStream.mockRejectedValueOnce(error);
+    mocks.fallbackStream.mockResolvedValueOnce(streamResult());
+    await expect(speakStream('hello', config)).rejects.toThrow('provider_usage_scope_denied');
+    expect(mocks.fallbackStream).not.toHaveBeenCalled();
   });
   it('never calls a provider for an already-cancelled reply', async () => {
     const controller = new AbortController();

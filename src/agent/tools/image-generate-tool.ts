@@ -287,11 +287,16 @@ export function createImageGenerateTool(options: {
     applyImageGenerationModelConfigDefaults(options.config, imageGenerationModelConfig) ??
     options.config;
 
+  const primaryRef = imageGenerationModelConfig.primary;
+  const primaryProvider = primaryRef ? getImageGenerationProvider(primaryRef.slice(0, primaryRef.indexOf('/'))) : undefined;
+  const primaryModel = primaryRef?.slice(primaryRef.indexOf('/') + 1);
+  const capabilities = primaryModel ? primaryProvider?.modelCapabilities?.[primaryModel] ?? primaryProvider?.capabilities : undefined;
+
   return {
     name: 'image_generate',
     label: 'Image Generation',
     description:
-      'Generate and attach images with the configured image-generation model. Use action="list" to see providers. Also saves files under workspace/media/generated/. Do not call send_media for generated images.',
+      `Generate and attach images with the configured image-generation model (${primaryRef}). ${capabilities ? `Configured model capabilities: ${JSON.stringify(capabilities)}. ` : ''}Omit optional image parameters unless needed. Keep the configured model unless the user asks for another provider/model. Use action="list" to see providers. Also saves files under workspace/media/generated/. Do not call send_media for generated images.`,
     parameters: ImageGenerateToolSchema,
     async execute(
       _toolCallId: string,

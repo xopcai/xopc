@@ -14,3 +14,4 @@
 export { openAiTranscriptionProvider } from './openai-transcription.js';
 export { alibabaTranscriptionProvider } from './alibaba-transcription.js';
 export { xopcCloudTranscriptionProvider } from './xopc-cloud-transcription.js';
+export { bailianPlanTranscriptionProvider } from './bailian-plan-transcription.js';

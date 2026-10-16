@@ -14,6 +14,7 @@ const { resolveModel } = vi.hoisted(() => ({
 vi.mock('../../../providers/index.js', () => ({
   getAllModels: vi.fn(() => []),
   getDefaultModelSync: vi.fn(() => 'xopc-cloud/deepseek-v4-flash'),
+  isProviderConfiguredSync: vi.fn(() => true),
   resolveModel,
 }));
 
@@ -53,6 +54,16 @@ describe('ModelManager session initialization', () => {
     expect(manager.getModelForSession('chat')).toBe('xopc-cloud/deepseek-v4-flash');
     expect(manager.getFallbackCandidatesForSession('chat')).toEqual([{ provider: 'xopc-cloud', model: 'deepseek-v4-flash' }]);
     expect(() => manager.getResolvedModelForSession('chat')).toThrow('Model not found');
+  });
+
+  it('retains an explicit empty Agent fallback list instead of adding the global default', () => {
+    const manager = new ModelManager({ defaultModel: 'openai/gpt-4o' });
+    manager.setSessionProfileDefault('chat', 'qwen-token-plan-cn/chat', []);
+    expect(manager.getFallbackCandidatesForSession('chat')).toEqual([{ provider: 'qwen-token-plan-cn', model: 'chat' }]);
+    manager.restoreSessionModel('chat', 'qwen-token-plan-cn/chat', true);
+    expect(manager.hasSessionModelOverride('chat')).toBe(true);
+    manager.clearSessionModelOverride('chat');
+    expect(manager.hasSessionModelOverride('chat')).toBe(false);
   });
 
 });

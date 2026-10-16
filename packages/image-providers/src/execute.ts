@@ -1,7 +1,7 @@
 import { getImageProviderSpec } from './catalog.js';
 import { assertImageResponseOk, authenticatedJobUrl, decodeBase64, encodeBase64, imageFromBytes, MAX_IMAGE_BYTES, MAX_RESPONSE_BYTES, readBytesLimited, readImageJson, waitForImagePoll } from './http.js';
 import type { ImageExecution, ImageModel, ImageResult } from './types.js';
-import { ImageProviderError, validateImageRequest } from './validation.js';
+import { ImageProviderError, normalizeImageGeometry, validateImageRequest } from './validation.js';
 
 type Json = Record<string, unknown>;
 const object = (value: unknown): Json => value && typeof value === 'object' && !Array.isArray(value) ? value as Json : {};
@@ -228,6 +228,7 @@ export async function executeImageProvider(execution: ImageExecution): Promise<I
   const spec = getImageProviderSpec(execution.providerId);
   const model = spec.models.find((item) => item.id === execution.request.model);
   if (!model) throw new ImageProviderError(`Unsupported image model: ${execution.request.model}`, 400);
+  execution = { ...execution, request: normalizeImageGeometry(execution.request, model.capabilities, Boolean(execution.request.inputImages?.length)) };
   validateImageRequest(execution.request, model.capabilities);
   const maxPrompt = spec.protocol === 'zhipu' ? 1000 : spec.protocol === 'tokenhub' && model.id === 'hy-image-v3' ? 8192 : spec.protocol === 'dashscope' && model.id.startsWith('wan') ? 5000 : Infinity;
   if ([...execution.request.prompt].length > maxPrompt) throw new ImageProviderError('Image prompt exceeds model limit', 400);

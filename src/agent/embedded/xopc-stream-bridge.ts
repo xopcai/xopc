@@ -1,3 +1,4 @@
+import { assertProviderUsage } from '../../providers/model-usage.js';
 import {
   getCurrentSystemPrompt,
   getCurrentTools,
@@ -36,6 +37,7 @@ export function wrapStreamFnForXopcExtensions(
 
   return ((model: Model<Api>, context: TranscriptContext, options?: SimpleStreamOptions) => {
     assertCloudCreditBudgetActive();
+    assertProviderUsage(model.provider, model.baseUrl);
     if (model.provider === 'xopc-cloud') options = withCloudUsageResponse(options);
     const promptContext = {
       systemPrompt: getCurrentSystemPrompt(context.messages),

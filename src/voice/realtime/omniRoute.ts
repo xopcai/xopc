@@ -3,6 +3,7 @@ import { voiceSupportsMode, type VoiceProviderRoute } from '@xopcai/realtime-pro
 
 import type { Config } from '../../config/schema.js';
 import { getProviderAuthService } from '../../providers/provider-auth-service.js';
+import { BAILIAN_PLAN_HOST, BAILIAN_PLAN_PROVIDER } from '../token-plan.js';
 import { resolveXopcModelRouterUrl } from '../../providers/xopc-cloud-config.js';
 
 export interface OmniRoute {
@@ -28,13 +29,13 @@ export async function resolveOmniRoute(config: Config): Promise<OmniRoute> {
   const managed = slice.provider === 'xopc-cloud';
   const url = new URL(managed
     ? `${resolveXopcModelRouterUrl(slice.baseUrl)}/audio/conversations/realtime`
-    : slice.baseUrl ?? 'wss://dashscope.aliyuncs.com/api-ws/v1/realtime');
+    : slice.provider === BAILIAN_PLAN_PROVIDER ? `${BAILIAN_PLAN_HOST.replace('https:', 'wss:')}/api-ws/v1/realtime` : slice.baseUrl ?? 'wss://dashscope.aliyuncs.com/api-ws/v1/realtime');
   if (managed && url.protocol === 'https:') url.protocol = 'wss:';
   if (url.protocol !== 'wss:' || url.username || url.password || url.hash || url.port) throw new Error('Omni requires a secure WebSocket endpoint');
   if (!managed && (!(new Set(['dashscope.aliyuncs.com', 'dashscope-intl.aliyuncs.com']).has(url.hostname)
     || /^[a-zA-Z0-9-]+\.(cn-beijing|ap-southeast-1)\.maas\.aliyuncs\.com$/.test(url.hostname))
     || url.pathname !== '/api-ws/v1/realtime')) throw new Error('Unsupported DashScope realtime endpoint');
-  const apiKey = managed ? await getProviderAuthService().resolveApiKey('xopc-cloud')
+  const apiKey = managed || slice.provider === BAILIAN_PLAN_PROVIDER ? await getProviderAuthService().resolveApiKey(slice.provider)
     : slice.apiKey ?? config.tools?.media?.audio?.providers?.alibaba?.apiKey ?? await getProviderAuthService().resolveApiKey('dashscope');
   if (!apiKey) throw new Error('Omni credentials are unavailable');
   url.search = new URLSearchParams({ model: slice.model }).toString();
