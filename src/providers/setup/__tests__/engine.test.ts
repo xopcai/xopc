@@ -38,13 +38,13 @@ describe('shared model setup', () => {
     const data = snapshot('qwen-token-plan-cn'); data.configuredProviders.delete('existing');
     expect(previewProviderSetup(data).uses.find(use => use.id === 'chat')?.selected).toBe(true);
   });
-  it('fills an invalid subscription background route using an eligible service', () => {
+  it('retains an existing subscription background route when filling other uses', () => {
     const data = snapshot('xopc-cloud');
-    data.defaults.models.background = { primary: 'qwen-token-plan-cn/qwen3.8-flash', fallbacks: [] };
-    data.configuredProviders.add('qwen-token-plan-cn');
+    data.defaults.models.background = { primary: 'xiaomi-token-plan-cn/mimo-v2.5', fallbacks: [] };
+    data.configuredProviders.add('xiaomi-token-plan-cn');
     const preview = previewProviderSetup(data);
-    expect(preview.uses.find(use => use.id === 'background')?.selected).toBe(true);
-    expect(applyProviderSetup(data, {}, preview.revision).defaults.models.background?.primary).toBe('xopc-cloud/auto');
+    expect(preview.uses.find(use => use.id === 'background')?.selected).toBe(false);
+    expect(applyProviderSetup(data, {}, preview.revision).defaults.models.background?.primary).toBe('xiaomi-token-plan-cn/mimo-v2.5');
   });
   it('preserves configured task intents when filling a missing chat route', () => {
     const data = snapshot('qwen-token-plan-cn');
@@ -59,7 +59,8 @@ describe('shared model setup', () => {
     data.defaults.runtime.maxTurns = 42;
     expect(() => applyProviderSetup(data, {}, revision)).toThrow(SetupConflictError);
     expect(() => previewProviderSetup(data, { overrides: { vision: 'other/text-only' } })).toThrow('Invalid vision');
-    expect(() => applyProviderSetup(data, { selected: ['background'] }, previewProviderSetup(data).revision)).toThrow('No eligible');
+    const restricted = snapshot('custom'); restricted.models = [];
+    expect(() => applyProviderSetup(restricted, { selected: ['background'] }, previewProviderSetup(restricted).revision)).toThrow('No eligible');
   });
   it('does not guess a model from array order and allows explicit model selection', () => {
     const data = snapshot('custom'); data.models = [{ ref: 'custom/one', name: 'One' }, { ref: 'custom/two', name: 'Two' }];
@@ -74,12 +75,26 @@ describe('shared model setup', () => {
     data.configured = true; data.configuredProviders.add('newly-connected');
     expect(previewProviderSetup(data).revision).toBe(revision);
   });
-  it('filters subscription endpoint aliases from background choices and detects policy changes', () => {
+  it('includes subscription endpoint aliases in background choices and detects snapshot changes', () => {
     const data = snapshot('custom');
-    data.models = [{ ref: 'custom/plan', name: 'Plan', baseUrl: 'https://token-plan.cn-beijing.maas.aliyuncs.com/v1', recommended: true }, { ref: 'custom/api', name: 'API' }];
+    data.models = [{ ref: 'custom/plan', name: 'Plan', baseUrl: 'https://token-plan-cn.xiaomimimo.com/v1', recommended: true }, { ref: 'custom/api', name: 'API' }];
     const preview = previewProviderSetup(data);
-    expect(preview.uses.find(use => use.id === 'background')?.choices).toEqual([{ id: 'custom/api', name: 'API' }]);
+    expect(preview.uses.find(use => use.id === 'background')?.choices).toEqual([{ id: 'custom/plan', name: 'Plan' }, { id: 'custom/api', name: 'API' }]);
     data.backgroundRestrictedModels = new Set(['existing/chat']);
     expect(previewProviderSetup(data).revision).not.toBe(preview.revision);
   });
+});
+
+
+it.each(['qwen-token-plan-cn', 'qwen-token-plan', 'qwen-token-plan-individual', 'xiaomi-token-plan-cn', 'xiaomi-token-plan-ams', 'xiaomi-token-plan-sgp', 'zai-coding-cn', 'zai-coding-global', 'zhipu-coding-cn', 'kimi-coding', 'volcengine-plan', 'byteplus-plan', 'stepfun-plan', 'stepfun-plan-cn', 'stepfun-plan-intl'])('keeps %s as subscription access without interactive-only restrictions', provider => {
+  expect(getProviderSetupProfile(provider)).toMatchObject({ access: 'subscription', interactiveOnly: false });
+});
+it('offers and applies Bailian background models without changing the chat route', () => {
+  const data = snapshot('qwen-token-plan-cn');
+  const request = { mode: 'replace' as const, selected: ['background' as const] };
+  const preview = previewProviderSetup(data, request);
+  expect(preview.uses.find(use => use.id === 'background')?.choices.length).toBeGreaterThan(0);
+  const result = applyProviderSetup(data, request, preview.revision);
+  expect(result.defaults.models.background?.primary).toBe('qwen-token-plan-cn/qwen3.8-flash');
+  expect(result.defaults.models.chat).toEqual(data.defaults.models.chat);
 });

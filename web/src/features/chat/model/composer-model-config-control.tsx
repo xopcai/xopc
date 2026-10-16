@@ -92,7 +92,7 @@ export function ComposerModelConfigControl({ chat: m, sessionModel, modelDisable
             <button ref={backButtonRef} type="button" onClick={() => setView('config')} className={cn('mb-2 flex min-h-11 shrink-0 items-center gap-2 rounded-lg px-2 text-sm text-fg hover:bg-surface-hover', interaction.focusRingPanel)}>
               <ArrowLeft className="size-4" aria-hidden />{m.modelBack}
             </button>
-            <ModelPickerList models={models} value={sessionModel} disabled={busy}
+            <ModelPickerList models={models} value={sessionModel} disabled={busy} groupByProvider
               searchPlaceholder={m.modelSearchPlaceholder} noMatches={m.modelNoMatches}
               onChange={(id) => {
                 const nextModel = models.find((model) => model.id === id);

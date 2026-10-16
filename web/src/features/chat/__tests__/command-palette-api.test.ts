@@ -69,4 +69,22 @@ describe('command palette API', () => {
     await getChatSkillsCached('writer', 'local-uuid');
     expect(apiFetch).toHaveBeenLastCalledWith('/api/chat/skills?agentId=writer&conversationId=local-uuid');
   });
+
+  it('falls back to the agent catalog for a missing conversation without caching that scope', async () => {
+    const payload = { agentId: 'writer', skills: [] };
+    apiFetch.mockResolvedValueOnce(new Response(JSON.stringify({ ok: false, error: 'Conversation not found' }), { status: 404 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true, payload })))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true, payload: { ...payload, workspacePath: '/project' } })));
+
+    await expect(getChatSkillsCached('writer', 'missing-uuid')).resolves.toEqual(payload);
+    expect(apiFetch).toHaveBeenNthCalledWith(2, '/api/chat/skills?agentId=writer');
+    await expect(getChatSkillsCached('writer', 'missing-uuid')).resolves.toMatchObject({ workspacePath: '/project' });
+    expect(apiFetch).toHaveBeenNthCalledWith(3, '/api/chat/skills?agentId=writer&conversationId=missing-uuid');
+  });
+
+  it('preserves unexpected session skill errors instead of falling back', async () => {
+    apiFetch.mockResolvedValue(new Response(JSON.stringify({ error: 'Skill load failed' }), { status: 500 }));
+    await expect(getChatSkillsCached('writer', 'session-uuid')).rejects.toThrow('Skill load failed');
+    expect(apiFetch).toHaveBeenCalledTimes(1);
+  });
 });

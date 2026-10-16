@@ -5,6 +5,7 @@ import { TaskResultDeliveryRepository } from './task-result-delivery-repository.
 import { TaskAllocationRepository } from './task-allocation-repository.js';
 import { TaskRunRepository } from './task-run-repository.js';
 import { personalRequestForTask } from '../personal-agent/request-repository.js';
+import { TASK_MAIN_UPDATE_MAX_ATTEMPTS, TaskMainUpdateExhaustedError, taskMainUpdateRetryDelay } from './task-main-update-retry.js';
 
 const log = createLogger('TaskMainUpdateDelivery');
 
@@ -17,7 +18,7 @@ export class TaskMainUpdateDelivery {
     submitAndConfirm: (message: { conversationId: string; clientMessageId: string; content: string }) => Promise<boolean>;
   }, limit = 20): Promise<number> {
     let delivered = 0;
-    for (const { entry, conversationId, decision, decisionReason } of this.#entries.pendingMainUpdates(limit)) {
+    for (const { entry, conversationId, decision, decisionReason, failureCount } of this.#entries.pendingMainUpdates(limit)) {
       const connected = personalRequestForTask(entry.taskId);
       if (entry.kind === 'result' && connected) {
         this.#entries.markMainUpdateDelivered(entry.id);
@@ -87,9 +88,12 @@ export class TaskMainUpdateDelivery {
           this.#entries.deferMainUpdate(entry.id);
         }
       } catch (error) {
-        log.warn({ err: error, conversationId, taskId: entry.taskId, entryId: entry.id },
-          'Main Agent update delivery failed');
-        this.#entries.deferMainUpdate(entry.id);
+        const failures = failureCount + 1;
+        const terminal = error instanceof TaskMainUpdateExhaustedError || failures >= TASK_MAIN_UPDATE_MAX_ATTEMPTS;
+        const retryDelayMs = terminal ? 0 : taskMainUpdateRetryDelay(error, failures);
+        this.#entries.failMainUpdate(entry.id, error instanceof Error ? error.message : String(error), retryDelayMs, terminal);
+        log.warn({ err: error, conversationId, taskId: entry.taskId, entryId: entry.id, failures, terminal, retryDelayMs },
+          terminal ? 'Main Agent update delivery stopped after retry limit' : 'Main Agent update delivery failed; retry deferred');
       }
     }
     return delivered;

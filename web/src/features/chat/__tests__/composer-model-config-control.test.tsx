@@ -53,8 +53,8 @@ describe('composer model configuration', () => {
     await act(async () => useLocaleStore.setState({ language: 'zh' }));
     expect(container.querySelector('button')?.textContent).toContain('标准');
     await click(document.querySelector('button[title="xopc-cloud/auto"]') as HTMLButtonElement);
-    expect(button('标准xopc-cloud').getAttribute('aria-pressed')).toBe('true');
-    await click(button('标准xopc-cloud'));
+    expect(document.querySelector('[data-select-scroll-region] button[title="xopc-cloud/auto"]')!.getAttribute('aria-pressed')).toBe('true');
+    await click(document.querySelector('[data-select-scroll-region] button[title="xopc-cloud/auto"]') as HTMLButtonElement);
     expect(change).toHaveBeenCalledWith('xopc-cloud/auto', 'off');
   });
 
@@ -65,7 +65,10 @@ describe('composer model configuration', () => {
     expect(trigger.title).toBe('gpt-6-luna');
     expect(trigger.getAttribute('aria-label')).not.toContain('openai');
     await click(button('gpt-6-luna'));
-    expect(button('openai/gpt-6-lunaxopc-cloud').getAttribute('aria-pressed')).toBe('true');
+    expect(button('openai/gpt-6-luna').getAttribute('aria-pressed')).toBe('true');
+    const cloudGroup = document.querySelector('[role="group"][aria-label="xopc-cloud"]')!;
+    expect(cloudGroup.querySelectorAll('button')).toHaveLength(2);
+    expect([...document.querySelectorAll('[data-select-scroll-region] [role="group"]')].map(group => group.getAttribute('aria-label'))).toEqual(['xopc-cloud', 'test', 'other', 'fixed']);
   });
 
   it('shows concrete identity and only supported thinking levels in one popover', async () => {

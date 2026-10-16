@@ -1,14 +1,19 @@
-import { completeWithResolvedCredentials } from '../model-call.js';
 import { describe, expect, it, vi } from 'vitest';
-import { assertProviderUsage, getModelUsageOrigin, modelUsageOriginFromTurn, ProviderUsageScopeError, withModelUsageOrigin } from '../model-usage.js';
+import { assertProviderUsage, getModelUsageOrigin, modelUsageOriginFromTurn, modelUsageOriginForCall, withModelUsageOrigin } from '../model-usage.js';
 import { wrapStreamFnForXopcExtensions } from '../../agent/embedded/xopc-stream-bridge.js';
-import { fetchWithTimeoutGuarded } from '../../media-shared/http/provider-http.js';
 
 describe('provider usage scope', () => {
-  it.each(['qwen-token-plan-cn', 'xiaomi-token-plan-cn'])('blocks unknown and background calls for %s', provider => {
-    expect(() => assertProviderUsage(provider)).toThrow(ProviderUsageScopeError);
-    expect(() => withModelUsageOrigin('background', () => assertProviderUsage(provider))).toThrow(ProviderUsageScopeError);
+  it.each(['xiaomi-token-plan-cn', 'kimi-coding'])('allows unknown and background calls for %s', provider => {
+    expect(() => assertProviderUsage(provider)).not.toThrow();
+    expect(() => withModelUsageOrigin('background', () => assertProviderUsage(provider))).not.toThrow();
     expect(() => withModelUsageOrigin('interactive', () => assertProviderUsage(provider))).not.toThrow();
+  });
+  it.each(['qwen-token-plan-cn', 'qwen-token-plan', 'qwen-token-plan-individual', 'QWEN-TOKEN-PLAN-CN'])('allows Bailian %s in background and unknown scopes', provider => {
+    expect(() => assertProviderUsage(provider)).not.toThrow();
+    expect(() => withModelUsageOrigin('background', () => assertProviderUsage(provider))).not.toThrow();
+  });
+  it.each(['token-plan.cn-beijing.maas.aliyuncs.com', 'token-plan.ap-southeast-1.maas.aliyuncs.com', 'coding.dashscope.aliyuncs.com', 'coding-intl.dashscope.aliyuncs.com'])('allows a Bailian endpoint alias at %s', hostname => {
+    expect(() => withModelUsageOrigin('background', () => assertProviderUsage('custom', `https://${hostname}./v1`))).not.toThrow();
   });
   it('keeps Cloud and ordinary API background calls available', () => {
     expect(() => withModelUsageOrigin('background', () => { assertProviderUsage('xopc-cloud'); assertProviderUsage('openai'); })).not.toThrow();
@@ -20,11 +25,10 @@ describe('provider usage scope', () => {
     ]);
     expect(getModelUsageOrigin()).toBe('unknown');
   });
-  it('does not let one-shot user telemetry upgrade a background task or a scheduled call inherit user scope', async () => {
-    const model = { provider: 'qwen-token-plan-cn', baseUrl: 'https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1' } as never;
-    await expect(withModelUsageOrigin('background', () => completeWithResolvedCredentials(model, {} as never, {}, undefined, { operation: 'test', trigger: 'user' }))).rejects.toThrow(ProviderUsageScopeError);
-    await expect(withModelUsageOrigin('interactive', () => completeWithResolvedCredentials(model, {} as never, {}, undefined, { operation: 'test', trigger: 'scheduled' }))).rejects.toThrow(ProviderUsageScopeError);
-    await expect(withModelUsageOrigin('interactive', () => completeWithResolvedCredentials(model, {} as never, {}, undefined, { operation: 'session.generate_title' }))).rejects.toThrow(ProviderUsageScopeError);
+  it('keeps usage attribution for nested user, scheduled and automatic calls', () => {
+    withModelUsageOrigin('background', () => withModelUsageOrigin(modelUsageOriginForCall({ operation: 'test', trigger: 'user' }), () => expect(getModelUsageOrigin()).toBe('background')));
+    withModelUsageOrigin('interactive', () => withModelUsageOrigin(modelUsageOriginForCall({ operation: 'test', trigger: 'scheduled' }), () => expect(getModelUsageOrigin()).toBe('background')));
+    expect(withModelUsageOrigin('interactive', () => modelUsageOriginForCall({ operation: 'session.generate_title' }))).toBe('background');
   });
 
   it('lets synchronous workflow children inherit the user scope, while an independent workflow is background', () => {
@@ -39,16 +43,14 @@ describe('provider usage scope', () => {
     expect(modelUsageOriginFromTurn({ type: 'system', source: 'automation' })).toBe('background');
     expect(modelUsageOriginFromTurn({ type: 'endpoint', endpointId: 'browser' })).toBe('interactive');
   });
-  it('blocks aliases and media endpoints before network access', async () => {
-    await expect(fetchWithTimeoutGuarded('https://token-plan.cn-beijing.maas.aliyuncs.com/api/v1/services/audio/tts/SpeechSynthesizer', { timeoutMs: 1000, label: 'test' })).rejects.toThrow(ProviderUsageScopeError);
-    expect(() => assertProviderUsage('custom-alias', 'https://token-plan-cn.xiaomimimo.com/v1')).toThrow(ProviderUsageScopeError);
-    expect(() => assertProviderUsage('QWEN-TOKEN-PLAN-CN')).toThrow(ProviderUsageScopeError);
-    expect(() => assertProviderUsage('custom-alias', 'https://token-plan.cn-beijing.maas.aliyuncs.com./v1')).toThrow(ProviderUsageScopeError);
+  it.each(['https://token-plan-cn.xiaomimimo.com/v1', 'https://token-plan-ams.xiaomimimo.com/v1', 'https://ark.cn-beijing.volces.com/api/coding/', 'https://ark.ap-southeast.bytepluses.com/api/coding/'])('allows subscription endpoint aliases at %s', url => {
+    expect(() => assertProviderUsage('custom-alias', url)).not.toThrow();
+    expect(() => withModelUsageOrigin('background', () => assertProviderUsage('custom-alias', url))).not.toThrow();
   });
-  it('rejects pi embedded streaming before the underlying transport is invoked', () => {
-    const transport = vi.fn();
+  it('forwards background subscription streaming to the underlying transport', () => {
+    const transport = vi.fn().mockReturnValue({ marker: 'transport' });
     const stream = wrapStreamFnForXopcExtensions(transport);
-    expect(() => stream({ provider: 'qwen-token-plan-cn', baseUrl: 'https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1' } as never, {} as never)).toThrow(ProviderUsageScopeError);
-    expect(transport).not.toHaveBeenCalled();
+    expect(withModelUsageOrigin('background', () => stream({ provider: 'xiaomi-token-plan-cn', baseUrl: 'https://token-plan-cn.xiaomimimo.com/v1' } as never, { messages: [] } as never))).toEqual({ marker: 'transport' });
+    expect(transport).toHaveBeenCalledOnce();
   });
 });

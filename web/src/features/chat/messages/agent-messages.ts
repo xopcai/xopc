@@ -24,6 +24,7 @@ import {
   normalizeWireMedia,
 } from '@/features/chat/messages/wire-attachments';
 import { stripUserMessageForDisplay } from '@/features/chat/messages/wire-text-scrub';
+import { dedupeTaskTriggerMessages } from '@/features/chat/messages/task-trigger-messages';
 
 /** Plain text for search / previews over wire-format or UI message content. */
 export function messageWireSearchText(content: unknown): string {
@@ -294,7 +295,7 @@ export function sessionWireToUiMessages(raw: readonly unknown[]): Message[] {
     }
   }
 
-  return mergeConsecutiveAssistantMessages(out);
+  return mergeConsecutiveAssistantMessages(dedupeTaskTriggerMessages(out));
 }
 
 export function normalizeTaskTrigger(value: unknown): NonNullable<Message['taskTrigger']> | null {

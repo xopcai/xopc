@@ -79,7 +79,7 @@ export function CapabilitiesSettingsPanel({ inlineUse, inlineView = 'settings', 
       <div hidden={inlineView === 'services'} className="space-y-4">
         {inlineUse === 'transcription' || inlineUse === 'speech' || inlineUse === 'conversation' ? <VoiceSettingsPanel key={inlineUse} capability={inlineUse} onPendingChange={setVoicePending} disabled={modelPending || connectionPending} /> : null}
         {inlineUse === 'chat' || inlineUse === 'vision' || inlineUse === 'image' ? <ModelExecutionSettings capability={inlineUse} zh={zh} disabled={modelPending || connectionPending} onPendingChange={setVoicePending} /> : null}
-        {inlineUse === 'background' ? <p className="text-sm text-fg-muted">{zh ? '仅可选择支持无人值守调用的来源。仅限交互的 Token Plan 不用于后台任务，也不会自动回退到其他计费服务。' : 'Only unattended-capable sources are eligible. No automatic cross-service billing fallback.'}</p> : null}
+        {inlineUse === 'background' ? <p className="text-sm text-fg-muted">{zh ? '使用所选模型执行自动化、定时和无人值守任务。此设置不会启用任务，也不会自动改用其他计费服务。' : 'Use the selected model for automations, schedules and unattended tasks. This does not enable tasks or automatically switch billing services.'}</p> : null}
       </div>
     </CapabilityConnectionContext.Provider>
   </div>;

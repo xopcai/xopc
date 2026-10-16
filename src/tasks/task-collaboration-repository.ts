@@ -151,10 +151,10 @@ export class TaskCollaborationRepository {
 
   pendingMainUpdates(limit = 20): Array<{
     entry: TaskCollaborationEntry; conversationId: string;
-    decision?: 'notify' | 'silent'; decisionReason?: string;
+    decision?: 'notify' | 'silent'; decisionReason?: string; failureCount: number;
   }> {
     const rows = getSqliteDatabase().prepare(`SELECT entry.*, main.conversation_id,
-        main.decision, main.decision_reason,
+        main.decision, main.decision_reason, main.failure_count,
         delivery.status AS delivery_status
       FROM task_collaboration_entries entry
       LEFT JOIN task_collaboration_deliveries delivery ON delivery.entry_id = entry.entry_id
@@ -164,9 +164,9 @@ export class TaskCollaborationRepository {
         WHEN 'question' THEN 0 WHEN 'failure' THEN 1 WHEN 'result' THEN 2 ELSE 3 END,
         main.updated_at, entry.sequence, entry.entry_id LIMIT ?`)
       .all(Date.now(), Math.max(1, Math.min(100, Math.floor(limit)))) as unknown as Array<EntryRow & {
-        conversation_id: string; decision: 'notify' | 'silent' | null; decision_reason: string | null;
+        conversation_id: string; decision: 'notify' | 'silent' | null; decision_reason: string | null; failure_count: number;
       }>;
-    return rows.map((row) => ({ entry: fromRow(row), conversationId: row.conversation_id,
+    return rows.map((row) => ({ entry: fromRow(row), conversationId: row.conversation_id, failureCount: row.failure_count,
       ...(row.decision ? { decision: row.decision } : {}),
       ...(row.decision_reason ? { decisionReason: row.decision_reason } : {}),
     }));
@@ -203,6 +203,13 @@ export class TaskCollaborationRepository {
   deferMainUpdate(entryId: string, delayMs = 1_000): void {
     getSqliteDatabase().prepare(`UPDATE task_main_update_deliveries SET updated_at = ?
       WHERE entry_id = ? AND status = 'pending'`).run(Date.now() + delayMs, entryId);
+  }
+
+  failMainUpdate(entryId: string, error: string, delayMs: number, terminal: boolean): void {
+    getSqliteDatabase().prepare(`UPDATE task_main_update_deliveries
+      SET failure_count = failure_count + 1, last_error = ?, status = ?, updated_at = ?
+      WHERE entry_id = ? AND status = 'pending'`)
+      .run(error.slice(0, 1_000), terminal ? 'failed' : 'pending', Date.now() + delayMs, entryId);
   }
 
   markDelivered(entryId: string, conversationId: string, assignmentEpoch: number): void {

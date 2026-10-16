@@ -2,7 +2,7 @@ import { IdleCompactionScheduler } from '../../memory/idle-compaction-scheduler.
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
 import type { EmbeddedStreamEvent } from '../types.js';
-import { ProviderUsageScopeError, withModelUsageOrigin } from '../../../providers/model-usage.js';
+import { withModelUsageOrigin } from '../../../providers/model-usage.js';
 
 /**
  * Tests for pre-turn automatic compaction in runEmbeddedTurnForSession.
@@ -204,12 +204,13 @@ describe('pre-turn auto-compaction', () => {
     expect(mockRunXopcEmbeddedTurn.mock.calls[0][0].modelRef).toBe('test/test-model');
   });
 
-  it('does not skip an unconfigured subscription primary into a paid fallback', async () => {
-    const manager = createMockModelManager(); manager.getModelForSession.mockReturnValue('qwen-token-plan-cn/old-model');
-    manager.getFallbackCandidatesForSession.mockReturnValue([{provider:'openai',model:'paid'}]);
-    await expect(withModelUsageOrigin('background', () => runEmbeddedTurnForSession({ conversationId:'scope-route',userMessage:{role:'user',content:'test'} as AgentMessage,
-      sessionStore:createMockSessionStore({needsCompaction:false}) as any,agentManager:createMockAgentManager() as any,modelManager:manager as any }))).rejects.toThrow(ProviderUsageScopeError);
-    expect(mockRunXopcEmbeddedTurn).not.toHaveBeenCalled();
+  it('runs a configured subscription background route without rejecting its provider', async () => {
+    profile.models.background = { primary: 'xiaomi-token-plan-cn/mimo-v2.5', fallbacks: [] };
+    const manager = createMockModelManager(); manager.getModelForSession.mockReturnValue('test/test-model');
+    await withModelUsageOrigin('background', () => runEmbeddedTurnForSession({ conversationId:'scope-route',userMessage:{role:'user',content:'test'} as AgentMessage,
+      sessionStore:createMockSessionStore({needsCompaction:false}) as any,agentManager:createMockAgentManager() as any,modelManager:manager as any,getConfig:()=>configWithCompaction(false) as any }));
+    expect(mockRunXopcEmbeddedTurn).toHaveBeenCalledOnce();
+    expect(mockRunXopcEmbeddedTurn.mock.calls[0][0].modelRef).toBe('xiaomi-token-plan-cn/mimo-v2.5');
   });
 
   it('lets personal chat reply above the soft threshold and keeps hard-limit recovery', async () => {
