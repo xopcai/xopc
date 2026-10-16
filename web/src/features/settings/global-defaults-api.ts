@@ -17,11 +17,11 @@ export async function fetchGlobalDefaults(): Promise<GlobalDefaultsPayload> {
   return response.payload;
 }
 
-export async function updateGlobalDefaults(defaults: AgentDefaults): Promise<GlobalDefaultsPayload> {
+export async function updateGlobalDefaults(defaults: AgentDefaults, options: { scope?: 'models' | 'agent'; expectedModels?: AgentDefaults['models'] } = {}): Promise<GlobalDefaultsPayload> {
   const response = await fetchJson<{ payload?: GlobalDefaultsPayload }>(apiUrl('/api/global-defaults'), {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ defaults }),
+    body: JSON.stringify({ defaults, ...options }),
   });
   if (!response.payload?.defaults || !Array.isArray(response.payload.builtinTools)) {
     throw new Error('Invalid global defaults response');

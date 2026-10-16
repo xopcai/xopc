@@ -34,15 +34,17 @@ function VoiceStatus({
   enabled,
   details,
   zh,
+  href,
 }: {
   icon: typeof Mic;
   label: string;
   enabled: boolean;
   details?: string;
   zh: boolean;
+  href: string;
 }) {
   return (
-    <div className="flex items-start gap-3 rounded-xl bg-surface-base/55 p-4">
+    <Link to={href} className="flex items-start gap-3 rounded-xl bg-surface-base/55 p-4 hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
       <div className="rounded-lg bg-accent/10 p-2 text-accent"><Icon className="size-4" aria-hidden /></div>
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-2">
@@ -55,7 +57,7 @@ function VoiceStatus({
           {enabled ? details : (zh ? '不处理语音' : 'Voice processing is disabled')}
         </p>
       </div>
-    </div>
+    </Link>
   );
 }
 
@@ -86,12 +88,12 @@ export function AgentDefaultsVoiceSummary({ zh }: { zh: boolean }) {
         <div>
           <h2 className="text-base font-semibold text-fg">{zh ? '语音能力' : 'Voice capabilities'}</h2>
           <p className="mt-1 text-sm text-fg-muted">
-            {zh ? '语音识别和朗读由所有智能体共用，在语音设置中统一管理。' : 'STT and TTS are shared by every agent and managed in global voice settings.'}
+            {zh ? '语音识别和朗读由所有智能体共用，在「模型与能力」统一管理。' : 'STT and TTS are shared by every agent and managed under Models and capabilities.'}
           </p>
         </div>
         <Button asChild variant="secondary" className="shrink-0">
-          <Link to="/settings/capabilities/voice">
-            {zh ? '管理语音设置' : 'Manage voice settings'}
+          <Link to="/settings/capabilities/models">
+            {zh ? '管理语音能力' : 'Manage voice capabilities'}
             <ArrowUpRight className="size-4" aria-hidden />
           </Link>
         </Button>
@@ -112,13 +114,15 @@ export function AgentDefaultsVoiceSummary({ zh }: { zh: boolean }) {
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
           <VoiceStatus
             icon={Mic}
-            label={zh ? '语音转文字（STT）' : 'Speech to text (STT)'}
+            href="/settings/capabilities/models?use=transcription"
+            label={zh ? '录音与听写（STT）' : 'Recording and dictation (STT)'}
             enabled={voice.stt.enabled}
             details={sttDetails}
             zh={zh}
           />
           <VoiceStatus
             icon={AudioLines}
+            href="/settings/capabilities/models?use=speech"
             label={zh ? '文字转语音（TTS）' : 'Text to speech (TTS)'}
             enabled={voice.tts.enabled}
             details={ttsDetails}

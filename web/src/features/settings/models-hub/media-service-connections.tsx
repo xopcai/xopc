@@ -12,11 +12,11 @@ import { apiUrl } from '@/lib/url';
 import { revalidateModelsHubCaches } from './models-hub-cache';
 
 /** Preserve the native STT/TTS credential domains; connecting never assigns a route. */
-export function MediaServiceConnections({ zh, onSaved }: { zh: boolean; onSaved: () => void }) {
-  const { data, error, mutate } = useSWR('native-voice-connections', async () => {
-    const [stt, tts] = await Promise.all([fetchVoiceSttProviders(), fetchVoiceProviders()]);
+export function MediaServiceConnections({ zh, kind, modelServiceIds, onSaved }: { zh: boolean; kind?: 'stt' | 'tts'; modelServiceIds: string[]; onSaved: () => void }) {
+  const { data, error, mutate } = useSWR(['native-voice-connections', kind ?? 'all', modelServiceIds.join(',')], async () => {
+    const [stt, tts] = await Promise.all([kind === 'tts' ? Promise.resolve({ providers: [] }) : fetchVoiceSttProviders(), kind === 'stt' ? Promise.resolve({ providers: [] }) : fetchVoiceProviders()]);
     return [...stt.providers.map(entry => ({ ...entry, kind: 'stt' as const })), ...tts.providers.map(entry => ({ ...entry, kind: 'tts' as const }))]
-      .filter(entry => !['qwen-token-plan-cn', 'xopc-cloud'].includes(entry.id));
+      .filter(entry => entry.diagnostics.requiresApiKey || !modelServiceIds.includes(entry.id));
   });
   const [selected, setSelected] = useState('');
   const [fields, setFields] = useState<Record<string, string>>({});
@@ -37,7 +37,7 @@ export function MediaServiceConnections({ zh, onSaved }: { zh: boolean; onSaved:
     finally { setBusy(false); }
   };
   return <section className="space-y-4 rounded-xl border border-edge p-4">
-    <h2 className="text-sm font-semibold text-fg">{zh ? '语音 API 与本地语音' : 'Voice APIs and local speech'}</h2>
+    <h2 className="text-sm font-semibold text-fg">{kind === 'stt' ? (zh ? '其他识别服务' : 'Other recognition services') : kind === 'tts' ? (zh ? '其他合成服务与本地语音' : 'Other synthesis services and local speech') : (zh ? '语音 API 与本地语音' : 'Voice APIs and local speech')}</h2>
     {!data && !error ? <Skeleton className="h-20 w-full" /> : null}
     {error ? <p role="alert">{zh ? '语音服务加载失败' : 'Could not load voice services'}<Button variant="ghost" onClick={() => void mutate()}>{zh ? '重试' : 'Retry'}</Button></p> : null}
     <Select value={selected} disabled={busy} aria-label={zh ? '语音服务接入' : 'Connect voice service'} onChange={event => { setSelected(event.target.value); setFields({}); setFailure(''); }}>

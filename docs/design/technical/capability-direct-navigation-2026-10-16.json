@@ -1,0 +1,29 @@
+{
+  "directory": "/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-direct-capabilities-J86XR6",
+  "passed": true,
+  "realGateway": true,
+  "checks": [
+    "Capability row opens model and voice settings with keyboard Enter",
+    "Voice entry has three direct capabilities; service and detail return preserve voice context",
+    "Voice device settings return directly to Voice",
+    "Conversation settings preserve chat return through service navigation",
+    "Mobile dark voice entry has no horizontal overflow"
+  ],
+  "errors": [],
+  "defaultModelAssignmentsChanged": false,
+  "vendorTestRequests": false,
+  "validation": {
+    "unitTestFiles": 14,
+    "unitTestsPassed": 103,
+    "fixtureConnectionFlow": true,
+    "webTypecheck": true,
+    "webBuild": true,
+    "targetedLint": true
+  },
+  "screenshots": {
+    "voice": "/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-direct-capabilities-J86XR6/voice.png",
+    "overview": "/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-direct-capabilities-J86XR6/capabilities.png",
+    "speech": "/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-direct-capabilities-J86XR6/speech-settings.png",
+    "mobile": "/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-direct-capabilities-J86XR6/voice-mobile-dark.png"
+  }
+}

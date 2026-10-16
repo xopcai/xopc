@@ -70,6 +70,9 @@ const probeChat=async(name:string,content:string,attachments?:unknown[],modelRef
       await new Promise(resolve=>setTimeout(resolve,1000));
       const history=await request(`/api/sessions/${conversationId}/messages?limit=20`).catch(()=>undefined);
       const rows=history?.messages??[];
+      const raw=await request(`/api/sessions/${conversationId}?include=transcriptRows`);
+      const failed=(raw.session?.transcriptRows??[]).findLast((row:{role?:string;errorMessage?:string})=>row.role==='assistant'&&row.errorMessage);
+      if(failed)throw new Error(clean(failed.errorMessage));
       const assistant=rows.findLast((row:{role?:string})=>row.role==='assistant');
       const text=typeof assistant?.content==='string'?assistant.content:assistant?.content?.filter((block:{type:string})=>block.type==='text').map((block:{text:string})=>block.text).join('');
       if(text?.trim()){
@@ -93,6 +96,8 @@ if(only==='chat-image')await run('gateway.chat-image-tool',async()=>{
     while(Date.now()<deadline){
       await new Promise(resolve=>setTimeout(resolve,1000));
       const history=await request(`/api/sessions/${conversationId}?include=transcriptRows`);
+      const failed=(history.session?.transcriptRows??[]).findLast((row:any)=>row.role==='assistant'&&row.errorMessage);
+      if(failed)throw new Error(clean(failed.errorMessage));
       const results=(history.session?.transcriptRows??[]).filter((row:any)=>row.role==='toolResult'&&row.toolName==='image_generate');
       const failure=results.find((row:any)=>row.details?.error);
       if(failure)throw new Error(clean(JSON.stringify(failure.content)));

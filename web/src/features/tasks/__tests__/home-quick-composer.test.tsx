@@ -14,6 +14,7 @@ function createVoice(
   return {
     phase: 'idle',
     voiceActive: false,
+    recordedDictation: false,
     elapsedLabel: '0:00',
     audioLevel: 0,
     partialTranscript: '',

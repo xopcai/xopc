@@ -111,7 +111,7 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
     setMore(false);
     setMiniPosition(null);
   };
-  const settingsPath = `/settings/capabilities/voice?returnTo=${encodeURIComponent(`/chat/${encodeURIComponent(target?.conversationId ?? '')}`)}`;
+  const settingsPath = `/settings/capabilities/models?use=conversation&returnTo=${encodeURIComponent(`/chat/${encodeURIComponent(target?.conversationId ?? '')}`)}`;
   const settingsLink = <Link to={settingsPath} onClick={() => setExpanded(false)} className="text-sm text-accent-fg hover:underline">{m.callSettings}</Link>;
 
   return <VoiceCallContext.Provider value={context}>

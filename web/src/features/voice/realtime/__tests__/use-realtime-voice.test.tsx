@@ -14,6 +14,11 @@ import type { ChatMessages } from '@/i18n/messages';
 
 const mocks = vi.hoisted(() => ({
   refine: vi.fn(async (_url: string, options: RequestInit) => ({ payload: { text: JSON.parse(options.body as string).text } })),
+  route: vi.fn(async (): Promise<{ mode: string; provider?: string }> => ({ mode: 'streaming' })),
+  transcribe: vi.fn(),
+  recordedStart: vi.fn(),
+  recordedStop: vi.fn(),
+  recordedCancel: vi.fn(),
   connect: vi.fn(),
   preflight: vi.fn(async () => {}),
   startCapture: vi.fn(),
@@ -29,6 +34,7 @@ const mocks = vi.hoisted(() => ({
   pendingAudio: false,
 }));
 
+vi.mock('@/features/chat/composer/voice-transcribe-api', () => ({ fetchDictationRoute: mocks.route, transcribeVoiceBlob: mocks.transcribe }));
 vi.mock('@/lib/fetch', () => ({ fetchJson: mocks.refine }));
 vi.mock('@/features/voice/realtime/voice-session-client', () => ({
   VoiceSessionClient: { connect: mocks.connect, preflight: mocks.preflight },
@@ -51,6 +57,7 @@ vi.mock('@/features/voice/realtime/pcm-player', () => ({
 }));
 vi.mock('@xopcai/composer-core/pcm-wav-recorder', () => ({
   PcmFrameCapture: { start: mocks.startCapture },
+  PcmWavRecorder: { start: mocks.recordedStart },
   PcmStreamEncoder: class {
     push() { return new ArrayBuffer(4); }
     flush() { return new ArrayBuffer(2); }
@@ -93,6 +100,10 @@ describe('useRealtimeVoice', () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     vi.clearAllMocks();
     mocks.pendingAudio = false;
+    mocks.route.mockResolvedValue({ mode: 'streaming' });
+    mocks.recordedStop.mockResolvedValue(new Blob(['audio'], { type: 'audio/wav' }));
+    mocks.recordedStart.mockResolvedValue({ stop: mocks.recordedStop, cancel: mocks.recordedCancel });
+    mocks.transcribe.mockResolvedValue({ text: 'recorded words' });
     bargeIn = true;
     track.enabled = true;
     const stream = { getTracks: () => [track], getAudioTracks: () => [track] } as unknown as MediaStream;
@@ -148,6 +159,72 @@ describe('useRealtimeVoice', () => {
     act(() => root.render(<Harness />));
     return onTranscript;
   }
+
+  it('uses configured recorded STT without creating a streaming session', async () => {
+    mocks.route.mockResolvedValue({ mode: 'recorded', provider: 'qwen-token-plan-cn' });
+    const transcript = render();
+    await act(async () => voice.startVoiceInput());
+    expect(voice.recordedDictation).toBe(true);
+    expect(mocks.preflight).not.toHaveBeenCalled();
+    expect(mocks.connect).not.toHaveBeenCalled();
+    await act(async () => voice.confirmVoiceInput());
+    expect(mocks.transcribe).toHaveBeenCalledWith(expect.any(Blob), 'audio/wav', expect.any(AbortSignal), 'qwen-token-plan-cn');
+    expect(transcript).toHaveBeenCalledExactlyOnceWith('recorded words');
+    expect(voice.phase).toBe('idle');
+  });
+
+  it('retains recorded audio on failure and retries without recapture or another service', async () => {
+    mocks.route.mockResolvedValue({ mode: 'recorded' });
+    mocks.transcribe.mockRejectedValueOnce(new Error('401 invalid key'));
+    const transcript = render();
+    await act(async () => voice.startVoiceInput());
+    await act(async () => voice.confirmVoiceInput());
+    expect(voice.phase).toBe('error');
+    expect(transcript).not.toHaveBeenCalled();
+    expect(mocks.connect).not.toHaveBeenCalled();
+    await act(async () => voice.retryVoiceInput());
+    expect(mocks.recordedStart).toHaveBeenCalledOnce();
+    expect(mocks.recordedStop).toHaveBeenCalledOnce();
+    expect(mocks.transcribe).toHaveBeenCalledTimes(2);
+    expect(transcript).toHaveBeenCalledExactlyOnceWith('recorded words');
+  });
+
+  it('discards a late recorded transcription after cancellation', async () => {
+    mocks.route.mockResolvedValue({ mode: 'recorded' });
+    let done!: (value: { text: string }) => void;
+    mocks.transcribe.mockImplementationOnce(() => new Promise(resolve => { done = resolve; }));
+    const transcript = render();
+    await act(async () => voice.startVoiceInput());
+    await act(async () => voice.confirmVoiceInput());
+    act(() => voice.cancelVoiceInput());
+    await act(async () => done({ text: 'discarded' }));
+    expect(transcript).not.toHaveBeenCalled();
+    expect(voice.phase).toBe('idle');
+  });
+
+  it('discards late recorder output after cancellation before upload', async () => {
+    mocks.route.mockResolvedValue({ mode: 'recorded' });
+    let done!: (blob: Blob) => void;
+    mocks.recordedStop.mockImplementationOnce(() => new Promise(resolve => { done = resolve; }));
+    const transcript = render();
+    await act(async () => voice.startVoiceInput());
+    act(() => voice.confirmVoiceInput());
+    act(() => voice.cancelVoiceInput());
+    await act(async () => done(new Blob(['late audio'])));
+    act(() => voice.retryVoiceInput());
+    expect(mocks.transcribe).not.toHaveBeenCalled();
+    expect(transcript).not.toHaveBeenCalled();
+    expect(voice.phase).toBe('idle');
+  });
+
+  it('does not fall back to a service when route discovery fails', async () => {
+    mocks.route.mockRejectedValueOnce(new Error('offline'));
+    render();
+    await act(async () => voice.startVoiceInput());
+    expect(voice.phase).toBe('error');
+    expect(mocks.preflight).not.toHaveBeenCalled();
+    expect(mocks.recordedStart).not.toHaveBeenCalled();
+  });
 
   it('streams microphone frames and applies final transcripts', async () => {
     const onTranscript = render();
@@ -241,7 +318,7 @@ describe('useRealtimeVoice', () => {
       'error',
       'No streaming STT',
       undefined,
-      { href: '/settings/capabilities/voice' },
+      { href: '/settings/capabilities/models?use=transcription' },
     );
   });
 
@@ -419,6 +496,10 @@ describe('useRealtimeVoice', () => {
     expect(voice.responsePhase).toBe('speaking');
     expect(acknowledgeAudio).not.toHaveBeenCalled();
     mocks.pendingAudio = false;
+    mocks.route.mockResolvedValue({ mode: 'streaming' });
+    mocks.recordedStop.mockResolvedValue(new Blob(['audio'], { type: 'audio/wav' }));
+    mocks.recordedStart.mockResolvedValue({ stop: mocks.recordedStop, cancel: mocks.recordedCancel });
+    mocks.transcribe.mockResolvedValue({ text: 'recorded words' });
     act(played);
     expect(acknowledgeAudio).toHaveBeenCalledWith('r1', 24_000);
     expect(voice.responsePhase).toBe('idle');
@@ -435,6 +516,10 @@ describe('useRealtimeVoice', () => {
     expect(mocks.playerEnqueue).toHaveBeenCalledOnce();
     expect(voice.responsePhase).toBe('speaking');
     mocks.pendingAudio = false;
+    mocks.route.mockResolvedValue({ mode: 'streaming' });
+    mocks.recordedStop.mockResolvedValue(new Blob(['audio'], { type: 'audio/wav' }));
+    mocks.recordedStart.mockResolvedValue({ stop: mocks.recordedStop, cancel: mocks.recordedCancel });
+    mocks.transcribe.mockResolvedValue({ text: 'recorded words' });
     act(played);
     expect(acknowledgeAudio).toHaveBeenCalledWith('r1', 24_000);
   });
@@ -490,6 +575,10 @@ describe('useRealtimeVoice', () => {
   it('finishes a response whose audio drained before the completion event', async () => {
     const played = await startResponse();
     mocks.pendingAudio = false;
+    mocks.route.mockResolvedValue({ mode: 'streaming' });
+    mocks.recordedStop.mockResolvedValue(new Blob(['audio'], { type: 'audio/wav' }));
+    mocks.recordedStart.mockResolvedValue({ stop: mocks.recordedStop, cancel: mocks.recordedCancel });
+    mocks.transcribe.mockResolvedValue({ text: 'recorded words' });
     act(played);
     act(() => onEvent({ type: 'response.done', payload: { responseId: 'r1' } }));
     expect(voice.responsePhase).toBe('idle');

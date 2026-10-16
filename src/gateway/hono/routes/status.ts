@@ -6,6 +6,7 @@ import type { Hono } from 'hono';
 import type { Config } from '../../../config/schema.js';
 import { getGatewayAgentEffectiveConfig } from '../../agents-admin.js';
 import { isSTTAvailable, mergeSttConfigFromAppConfig } from '../../../voice/stt/index.js';
+import { resolveDictationRoute } from '../../../voice/dictation.js';
 import { getDefaultModelSync, resolveModel } from '../../../providers/index.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 
@@ -103,6 +104,7 @@ function buildStatusPayload(service: AuthenticatedRouteDeps['service']) {
       sttAvailable: sttConfig ? isSTTAvailable(sttConfig) : false,
       sttEnabled: sttConfig?.enabled === true,
       sttProvider: sttConfig?.provider ?? null,
+      dictation: config ? resolveDictationRoute(config) : { mode: 'unavailable' },
       refineAvailable: isRefineAvailable(config),
     },
   };

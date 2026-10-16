@@ -119,6 +119,7 @@ export function HomeQuickComposer({
           <ComposerVoiceInputBar
             phase={voice.phase}
             elapsedLabel={voice.elapsedLabel}
+            recordedDictation={voice.recordedDictation}
             audioLevel={voice.audioLevel}
             partialTranscript={voice.partialTranscript}
             finalTranscript={voice.finalTranscript}

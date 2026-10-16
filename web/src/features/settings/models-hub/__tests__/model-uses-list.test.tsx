@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
+import { MemoryRouter } from 'react-router-dom';
 import { SWRConfig } from 'swr';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { ModelSetupPreview, ModelSetupUse } from '@xopcai/gateway-contract';
@@ -48,7 +49,7 @@ const choose = async (name: string) => {
 it('uses server capabilities for every use, including background restrictions', async () => {
   await render();
   expect(api.fetch.mock.calls.map(([provider]) => provider).sort()).toEqual([plan, cloud].sort());
-  const background = container.querySelector('[aria-label="选择 后台任务"]')!;
+  const background = container.querySelector('[aria-label="选择 自动与后台任务"]')!;
   expect(background.textContent).toContain(`${cloud} background`);
   expect(background.textContent).not.toContain(plan);
   expect(modelUseOptions([preview(plan)], 'speech')[0]?.value).toBe(`${plan}/speech`);
@@ -57,13 +58,13 @@ it('uses server capabilities for every use, including background restrictions', 
 it('honors server restrictions for a model alias even when provider metadata looks unrestricted', async () => {
   api.defaults.mockResolvedValue({ defaults: { models: { chat: { primary: 'alias/plan' }, background: { primary: 'alias/plan' } } }, builtinTools: [] });
   await render();
-  expect(container.querySelector('[aria-label="选择 后台任务"]')?.getAttribute('data-value')).toBe('');
+  expect(container.querySelector('[aria-label="选择 自动与后台任务"]')?.getAttribute('data-value')).toBe('');
 });
 
 it.each([[false, 'omni'], [true, 'agent']] as const)('does not show dormant Omni settings when enabled=%s and engine=%s', async (enabled, defaultEngine) => {
   api.voiceConfig.mockReturnValue({ payload: { config: { voice: { realtime: { enabled, defaultEngine, omni: { provider: plan, model: 'conversation' } } } } } });
   await render();
-  expect(container.querySelector('[aria-label="选择 实时语音对话"]')?.getAttribute('data-value')).toBe('');
+  expect(container.querySelector('[aria-label="选择 实时语音对话"]')?.getAttribute('data-value')).toBe(enabled && defaultEngine === 'agent' ? 'agent' : '');
   await choose(`${plan} conversation`);
   expect(api.apply).toHaveBeenCalledExactlyOnceWith(plan, { mode: 'replace', selected: ['conversation'], overrides: { conversation: `${plan}/conversation` } }, 'a'.repeat(64));
 });
@@ -92,4 +93,20 @@ it('blocks concurrent selections until saving finishes and refreshes the saved s
   expect([...container.querySelectorAll('fieldset button')].every(button => (button as HTMLButtonElement).disabled)).toBe(true);
   await act(async () => finish());
   expect(container.querySelector('[aria-label="选择 对话与任务"]')?.getAttribute('data-value')).toBe(`${plan}/chat`);
+});
+
+
+it('opens capability details from the entire overview row without showing model selectors', async () => {
+  await act(async () => root.render(<MemoryRouter><SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0 }}><ModelUsesList data={data} zh onChange={() => {}} onSettings={() => {}} /></SWRConfig></MemoryRouter>));
+  expect(container.querySelectorAll('a[aria-label^="配置 "]')).toHaveLength(7);
+  expect(container.querySelector('[aria-label^="选择 "]')).toBeNull();
+  expect(container.querySelector('a[aria-label="配置 文字转语音"]')?.getAttribute('href')).toBe('/settings/capabilities/models?use=speech');
+  expect(api.apply).not.toHaveBeenCalled();
+});
+
+it('makes Voice a focused three-capability entry with a return destination', async () => {
+  await act(async () => root.render(<MemoryRouter><SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0 }}><ModelUsesList data={data} zh voiceOverview onChange={() => {}} onSettings={() => {}} /></SWRConfig></MemoryRouter>));
+  expect(container.querySelectorAll('a[aria-label^="配置 "]')).toHaveLength(3);
+  expect(container.querySelector('a[aria-label="配置 文字转语音"]')?.getAttribute('href')).toBe('/settings/capabilities/models?use=speech&from=voice');
+  expect(container.querySelector('a[aria-label="配置 对话与任务"]')).toBeNull();
 });

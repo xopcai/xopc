@@ -13,9 +13,12 @@ function parsePatchBody(raw: unknown): UpdateGlobalDefaultsBody | { error: strin
     return { error: 'body must be an object' };
   }
   const body = raw as Record<string, unknown>;
+  if (body.scope !== undefined && body.scope !== 'models' && body.scope !== 'agent') return { error: 'scope must be models or agent' };
+  const expected = body.expectedModels === undefined ? undefined : AgentDefaultsSchema.shape.models.safeParse(body.expectedModels);
+  if (expected && !expected.success) return { error: 'expectedModels is invalid' };
   const parsed = AgentDefaultsSchema.safeParse(body.defaults);
   return parsed.success
-    ? { defaults: parsed.data }
+    ? { defaults: parsed.data, ...(body.scope ? { scope: body.scope as 'models' | 'agent' } : {}), ...(expected?.success ? { expectedModels: expected.data } : {}) }
     : { error: `defaults ${parsed.error.issues[0]?.message ?? 'is invalid'}` };
 }
 

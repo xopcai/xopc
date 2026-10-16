@@ -54,6 +54,15 @@ describe('voice transcription routes', () => {
     });
   });
 
+  it('rejects a changed recording provider before sending audio to a service', async () => {
+    const form = new FormData();
+    form.append('audio', new File(['audio'], 'sample.wav', { type: 'audio/wav' }));
+    form.append('expectedProvider', 'qwen-token-plan-cn');
+    const response = await createApp().request('/api/voice/transcriptions', { method: 'POST', body: form });
+    expect(response.status).toBe(409);
+    expect(transcribe).not.toHaveBeenCalled();
+  });
+
   it('returns provider text without waiting for configured refinement', async () => {
     const form = new FormData();
     form.append('audio', new File(['audio'], 'sample.wav', { type: 'audio/wav' }));

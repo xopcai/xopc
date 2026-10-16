@@ -2,7 +2,7 @@ import { PlatformVoiceSettings } from './platform-voice-settings';
 import { Loader2, Mic, Play, Square, Volume2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState, type ReactNode } from 'react';
 import useSWR from 'swr';
-import { Link, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 
 import { NumberInput } from '@/components/ui/number-input';
 import { Button } from '@/components/ui/button';
@@ -40,6 +40,8 @@ import { useLocaleStore } from '@/stores/locale-store';
 import { Select, SelectOption } from '@/components/ui/popover-select';
 import { VoiceDeviceSettings } from './voice-device-settings';
 import { useVoicePreferencesStore } from '@/stores/voice-preferences-store';
+import { CapabilitySettingsLink } from './models-hub/capability-settings-link';
+import { DictationSettingsSummary } from './dictation-settings-summary';
 import { VoiceSetup } from './voice-setup';
 import { OmniVoiceSettings } from './omni-voice-settings';
 
@@ -465,6 +467,7 @@ export function VoiceSettingsPanel({ capability, onPendingChange, disabled = fal
     <AutosaveStatus status={autosave.status} error={autosave.error} />
     {autosave.error ? <Button variant="secondary" className="w-fit" onClick={autosave.retry}>{language === 'zh' ? '重试保存' : 'Retry saving'}</Button> : null}
     {capability === 'transcription' ? <>
+      <DictationSettingsSummary zh={language === 'zh'} />
       <SttSection managedModel={Boolean(capability)} v={v} apiKeyLabels={apiKeyLabels} stt={stt} models={models} sttProviders={sttProviders} updateStt={updateStt} updateSttFallback={updateSttFallback} />
       <VoiceLanguageSection v={v} voice={form.voice} updateLanguageMode={updateVoiceLanguageMode} />
     </> : capability === 'speech' ? <>
@@ -1014,7 +1017,7 @@ function VoiceProviderConfigFields({
   const advancedFields = fields.filter((field) => !isEssential(field));
   const renderFields = (values: VoiceConfigFieldMetadata[]) => values.map((field) => {
     if (managedModel && field.key === 'model') return null;
-    if (scoped && (field.secret || field.type === 'password' || ['apiKey', 'baseUrl', 'region', 'groupId'].includes(field.key))) return <Link key={field.key} className="text-sm text-accent-fg hover:underline" to={`/settings/capabilities/models?view=services&use=${kind === 'stt' ? 'transcription' : 'speech'}`}>{language === 'zh' ? `管理服务连接 · ${field.label}` : `Manage connection · ${field.label}`}</Link>;
+    if (scoped && (field.secret || field.type === 'password' || ['apiKey', 'baseUrl', 'region', 'groupId'].includes(field.key))) return <CapabilitySettingsLink key={field.key} className="text-sm text-accent-fg hover:underline" to={`/settings/capabilities/models?view=services&use=${kind === 'stt' ? 'transcription' : 'speech'}`}>{language === 'zh' ? `管理服务连接 · ${field.label}` : `Manage connection · ${field.label}`}</CapabilitySettingsLink>;
     if (field.key === 'apiKey') {
       return (
         <div key={field.key} className={cn('flex flex-col gap-1.5', credentialFieldWidthClass)}>

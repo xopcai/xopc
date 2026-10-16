@@ -10,6 +10,7 @@ import { interaction } from '@/lib/interaction';
 export interface ComposerVoiceInputBarProps {
   phase: VoiceInputPhase;
   elapsedLabel: string;
+  recordedDictation?: boolean;
   audioLevel: number;
   partialTranscript: string;
   finalTranscript: string;
@@ -34,6 +35,7 @@ const iconBtnClass = cn(
 export const ComposerVoiceInputBar = memo(function ComposerVoiceInputBar({
   phase,
   elapsedLabel,
+  recordedDictation,
   audioLevel,
   partialTranscript,
   finalTranscript,
@@ -55,7 +57,7 @@ export const ComposerVoiceInputBar = memo(function ComposerVoiceInputBar({
     : requesting ? m.voiceRequestingMicrophone
       : connecting ? m.voiceConnectingService
         : starting ? m.voiceStartingMicrophone
-        : transcribing ? m.voiceTranscribing : m.voiceRecordingStatus;
+        : transcribing ? m.voiceTranscribing : recordedDictation ? m.voiceRecordedDictationStatus : m.voiceRecordingStatus;
   const transcript = [finalTranscript, partialTranscript].filter(Boolean).join(' ');
 
   return (
@@ -79,7 +81,7 @@ export const ComposerVoiceInputBar = memo(function ComposerVoiceInputBar({
           <X className="size-4" aria-hidden />{m.voiceInputCancel}
         </button>
         {failed && settingsRequired ? (
-          <a href="#/settings/capabilities/voice" className={cn(iconBtnClass, 'text-accent-fg')}>
+          <a href="#/settings/capabilities/models?use=transcription" className={cn(iconBtnClass, 'text-accent-fg')}>
             <Settings2 className="size-4" aria-hidden />{m.voiceOpenSettings}
           </a>
         ) : failed ? (
