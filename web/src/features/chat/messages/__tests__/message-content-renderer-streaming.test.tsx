@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ChunkedContent } from '@/features/chat/messages/message-content-renderer';
 import { AssistantStepsBlock } from '@/features/chat/messages/assistant-steps-block';
+import { buildAssistantTurnViewModel } from '@/features/chat/messages/assistant-turn-view-model';
 import type { AssistantTurnWorkLogPresentation } from '@/features/chat/messages/assistant-turn-view-model';
 import type { MessageContent } from '@/features/chat/messages/messages.types';
 import { useLocaleStore } from '@/stores/locale-store';
@@ -365,6 +366,37 @@ describe('streaming assistant Markdown rendering', () => {
     ).find((element) => element.textContent?.includes('Still streaming'));
 
     expect(completedBlock).toBe(previousTail);
+  });
+
+  it('renders ordinary pending answers progressively and preserves their tree through final classification', () => {
+    vi.useFakeTimers();
+    const answer = (text: string, presentation: 'pending' | 'answer', streaming: boolean) => {
+      const view = buildAssistantTurnViewModel({
+        message: { role: 'assistant', content: [{ type: 'text', text, segmentId: 'reply', presentation }] },
+        isStreaming: streaming,
+        reasoningLevel: 'off',
+      });
+      render(view.answerContent, streaming);
+    };
+    answer('先看结论。', 'pending', true);
+    const tree = container.querySelector('.xopc-chat-markdown');
+    expect(tree?.textContent).toBe('先看结论。');
+    const content = '先看结论。' + '这部分正文应该逐渐显示。'.repeat(40);
+    answer(content, 'pending', true);
+    act(() => vi.advanceTimersByTime(128));
+    const partial = tree?.textContent ?? '';
+    expect(partial.length).toBeGreaterThan(5);
+    expect(partial.length).toBeLessThan(content.length);
+    expect(content.startsWith(partial)).toBe(true);
+
+    answer(content, 'answer', false);
+    expect(container.querySelector('.xopc-chat-markdown')).toBe(tree);
+    expect(tree?.textContent).toBe(partial);
+    act(() => vi.advanceTimersByTime(128));
+    expect((tree?.textContent ?? '').length).toBeGreaterThan(partial.length);
+    expect((tree?.textContent ?? '').length).toBeLessThan(content.length);
+    act(() => vi.advanceTimersByTime(192));
+    expect(tree?.textContent).toBe(content);
   });
 
   it('keeps the streaming block tree mounted when the response completes', () => {
