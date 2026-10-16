@@ -17,6 +17,9 @@ export async function revalidateModelsHubCaches(): Promise<void> {
     mutate(MODEL_CATALOG_SWR_KEY),
     mutate(CAPABILITY_READINESS_SWR_KEY),
     mutate('settings-agent-defaults'),
+    mutate('model-capability-media-sources'),
+    mutate('native-voice-connections'),
+    mutate(key => Array.isArray(key) && key[0] === 'model-use-choices'),
     invalidateConfiguredModelsCache(),
   ]);
 }

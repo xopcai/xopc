@@ -123,6 +123,7 @@ interface AddProviderDialogProps {
   open: boolean;
   initialProviderId?: string;
   initialUse?: ModelSetupUse;
+  connectOnly?: boolean;
   onOpenChange: (open: boolean) => void;
   builtinRows: ProviderRowModel[];
   customConfig: ModelsJsonConfig | null;
@@ -135,6 +136,7 @@ export function AddProviderDialog({
   open,
   initialProviderId,
   initialUse,
+  connectOnly = false,
   onOpenChange,
   builtinRows,
   customConfig,
@@ -164,13 +166,13 @@ export function AddProviderDialog({
 
   const handleSaved = useCallback((providerId: string, modelIds?: string[]) => {
     const existing = builtinRows.some(row => row.id === providerId && row.configured);
-    if (modelIds?.length === 0 || (modelIds === undefined && existing)) {
+    if (connectOnly || modelIds?.length === 0 || (modelIds === undefined && existing)) {
       onSaved(providerId);
       handleOpenChange(false);
     } else {
       setStep({ type: 'success', target: { providerId, modelIds } });
     }
-  }, [onSaved, handleOpenChange, builtinRows]);
+  }, [onSaved, handleOpenChange, builtinRows, connectOnly]);
 
   return (
     <Dialog.Root open={open} onOpenChange={handleOpenChange}>
@@ -208,6 +210,7 @@ export function AddProviderDialog({
               key={activeStep.providerId}
               providerId={activeStep.providerId}
               targetUse={initialUse}
+              connectOnly={connectOnly}
               row={builtinRows.find(row => row.id === activeStep.providerId)}
               language={language}
               alternatives={selectedBrand ? builtinRows.filter(row => row.setupProfile?.brand === selectedBrand) : []}
@@ -216,7 +219,7 @@ export function AddProviderDialog({
                 setStep(presetKey ? { type: 'custom', presetKey } : { type: 'builtin', providerId: id });
               }}
               onBack={initialProviderId ? undefined : () => setStep({ type: 'pick' })}
-              onApplied={() => onSaved(activeStep.providerId)}
+              onApplied={() => { onSaved(activeStep.providerId); if (connectOnly) handleOpenChange(false); }}
               onDone={() => handleOpenChange(false)}
             />
           ) : (

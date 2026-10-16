@@ -50,7 +50,7 @@ export function VoiceSetup({ section, v, form, pending, onChange }: {
   const omniAlibabaVoices = voices.filter((voice) => ['Cherry', 'Ethan', 'Serena', 'Chelsie'].includes(voice.id));
   const native = realtime.defaultEngine === 'omni';
   const currentVoice = native ? realtime.omni?.voice ?? '' : selection?.voice ?? status?.tts?.voice ?? '';
-  const voiceOptions = native ? realtime.omni?.provider === 'xopc-cloud'
+  const voiceOptions = native && realtime.omni?.provider === 'qwen-token-plan-cn' ? [{ id: realtime.omni.voice, name: realtime.omni.voice }] : native ? realtime.omni?.provider === 'xopc-cloud'
     ? catalog?.models.find(model => model.id === realtime.omni?.model)?.voice.voices.filter(voice => voiceSupportsMode(voice, 'conversation')) ?? []
     : omniAlibabaVoices.length ? omniAlibabaVoices : ['Cherry', 'Ethan', 'Serena', 'Chelsie'].map((id) => ({ id, name: id })) : realtimeVoices;
   const canListen = Boolean(status?.enabled && status.stt);

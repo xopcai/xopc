@@ -18,6 +18,15 @@ describe('voice-config-api', () => {
     revalidateGatewayConfig.mockReset();
   });
 
+  it.each(['transcription', 'speech', 'conversation'] as const)('saves only the %s capability', async capability => {
+    fetchJson.mockResolvedValue({ ok: true });
+    await patchVoiceSettings(normalizeVoiceSettings({}), capability);
+    const payload = JSON.parse(fetchJson.mock.calls[0][1].body);
+    expect(Object.keys(payload).sort()).toEqual(capability === 'transcription' ? ['stt', 'voice', 'voicePatchMode'] : capability === 'speech' ? ['tts'] : ['voice', 'voicePatchMode']);
+    if (capability !== 'speech') expect(payload.voicePatchMode).toBe('merge');
+    if (capability === 'conversation') expect(Object.keys(payload.voice)).toEqual(['realtime']);
+    if (capability === 'transcription') expect(Object.keys(payload.voice).sort()).toEqual(['language', 'languageMode']);
+  });
   it('uses user-safe defaults and disables hidden transcript refinement', () => {
     const state = normalizeVoiceSettings({});
 

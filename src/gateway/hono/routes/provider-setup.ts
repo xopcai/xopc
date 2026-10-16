@@ -3,7 +3,7 @@ import { isDeepStrictEqual } from 'node:util';
 import type { Hono } from 'hono';
 import { z } from 'zod';
 
-import { loadProviderSetupSnapshot, readProviderSetupSnapshot } from '../../provider-model-setup.js';
+import { loadProviderSetupSnapshot } from '../../provider-model-setup.js';
 import { updateGlobalDefaults, prepareUpdateGlobalDefaults, listGlobalDefaults } from '../../global-defaults-admin.js';
 import { applyProviderSetup, previewProviderSetup, SetupConflictError } from '../../../providers/setup/engine.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
@@ -37,9 +37,9 @@ export function registerProviderSetupRoutes(app: Hono, deps: AuthenticatedRouteD
     if (!parsed.success) return c.json({ ok: false, error: { message: 'Invalid setup apply request' } }, 400);
     let voiceSaved = false;
     try {
-      const loaded = await loadProviderSetupSnapshot(c.req.param('providerId'), deps.service.currentConfig);
       const expectedConfig = structuredClone(deps.service.currentConfig);
-      const snapshot = readProviderSetupSnapshot(c.req.param('providerId'), loaded.configured, expectedConfig);
+      const snapshot = await loadProviderSetupSnapshot(c.req.param('providerId'), expectedConfig);
+      if (!isDeepStrictEqual(deps.service.currentConfig, expectedConfig)) throw new SetupConflictError('Configuration changed while preparing setup. Review and retry.');
       const applied = applyProviderSetup(snapshot, parsed.data, parsed.data.revision);
       const prepared = prepareUpdateGlobalDefaults({ defaults: applied.defaults });
       if (prepared.ok === false) return c.json({ ok: false, error: { message: prepared.error } }, prepared.status ?? 400);
