@@ -85,8 +85,10 @@ export function createRevealPlugin(ledger: RevealLedger, animate: boolean, initi
           'data-xopc-segment': id, 'data-xopc-new': isNew,
         }, children: [{ type: 'text', value: segment.text }] });
       }
-      parent.children.splice(parent.children.indexOf(node), 1, ...output);
-      return SKIP;
+      const index = parent.children.indexOf(node);
+      parent.children.splice(index, 1, ...output);
+      // Generated whitespace/text siblings must not be counted a second time.
+      return [SKIP, index + output.length];
     });
     tree.children.push({ type: 'element', tagName: 'span', properties: {
       hidden: true, 'data-xopc-watermark': cursor,
