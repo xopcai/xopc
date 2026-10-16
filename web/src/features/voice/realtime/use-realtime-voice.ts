@@ -517,7 +517,7 @@ export function useRealtimeVoice(options: UseRealtimeVoiceOptions): UseRealtimeV
             setFailureKind('session');
             setSettingsRequired(needsSettings);
             if (purpose === 'dictation') {
-              showComposerNotification('error', message, undefined, needsSettings ? { href: '/settings/capabilities/models?use=transcription' } : undefined);
+              showComposerNotification('error', message, undefined, needsSettings ? { href: '/settings/capabilities/models?configure=transcription' } : undefined);
             }
             clientRef.current?.stop('surface_closed');
             if (purpose === 'conversation') reset();
@@ -631,7 +631,7 @@ export function useRealtimeVoice(options: UseRealtimeVoiceOptions): UseRealtimeV
       setFailureKind(failureKind);
       setSettingsRequired(needsSettings);
       if (purpose === 'dictation') {
-        showComposerNotification('error', message, undefined, needsSettings ? { href: '/settings/capabilities/models?use=transcription' } : undefined);
+        showComposerNotification('error', message, undefined, needsSettings ? { href: '/settings/capabilities/models?configure=transcription' } : undefined);
       }
     }
   }, [disabled, handleSessionClose, m, reset, startTimer, stopMedia, stopTimer, updatePhase]);

@@ -46,12 +46,8 @@ describe('buildRouteSeeds', () => {
     expect(seeds.find((s) => s.id === 'route:settings:capabilities:models')?.path).toBe(
       '/settings/capabilities/models',
     );
-    expect(seeds.find((s) => s.id === 'route:settings:capabilities:image')?.path).toBe(
-      '/settings/capabilities/image',
-    );
-    expect(seeds.find((s) => s.id === 'route:settings:capabilities:voice')?.path).toBe(
-      '/settings/capabilities/voice',
-    );
+    expect(seeds.find(s => s.id === 'route:settings:capabilities:image')).toBeUndefined();
+    expect(seeds.find(s => s.id === 'route:settings:capabilities:voice')).toBeUndefined();
     expect(seeds.find((s) => s.id === 'route:settings:capabilities:search')?.path).toBe(
       '/settings/capabilities/search',
     );

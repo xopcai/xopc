@@ -57,7 +57,6 @@ function filterRouteSeedsBySettingsMode(
 export function buildRouteSeeds(language: StoredLanguage): RouteHitSeed[] {
   const m = messages(language);
   const r = m.commandPalette.routes;
-  const c = m.capabilitiesSettings;
   const ch = m.channelsSettings;
   const settingsMode = useSettingsModeStore.getState().mode;
   return filterRouteSeedsBySettingsMode(
@@ -192,23 +191,10 @@ export function buildRouteSeeds(language: StoredLanguage): RouteHitSeed[] {
         'llm',
         '模型',
         '模型服务',
+        '语音', '音色', '听写', 'voice', 'stt', 'tts', 'image',
         '服务商',
         '密钥',
       ],
-    },
-    {
-      id: 'route:settings:capabilities:image',
-      title: c.tabs.image,
-      subtitle: r.imageModelsSubtitle,
-      path: capabilitySettingsPath('image'),
-      keywords: ['image', 'vision', 'generate', 'picture', '图片', '图像', '视觉', '生成图片'],
-    },
-    {
-      id: 'route:settings:capabilities:voice',
-      title: m.nav.settingsVoice,
-      subtitle: r.voiceSubtitle,
-      path: capabilitySettingsPath('voice'),
-      keywords: ['tts', 'stt', 'speech', 'microphone', '语音', '语音识别', '语音合成'],
     },
     {
       id: 'route:settings:capabilities:search',

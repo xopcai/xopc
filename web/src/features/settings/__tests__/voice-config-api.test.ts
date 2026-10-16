@@ -10,7 +10,6 @@ vi.mock('@/features/gateway/gateway-config-swr', () => ({ revalidateGatewayConfi
 vi.mock('@/lib/url', () => ({ apiUrl: (path: string) => path }));
 
 import { normalizeVoiceSettings, patchVoiceSettings, readVoiceSettingsRevisions } from '../voice-config-api';
-import { configureRealtimeService } from '../voice-service-setup';
 
 describe('voice-config-api', () => {
   beforeEach(() => {
@@ -25,7 +24,7 @@ describe('voice-config-api', () => {
     expect(Object.keys(payload).sort()).toEqual(capability === 'transcription' ? ['stt', 'voice', 'voicePatchMode'] : capability === 'speech' ? ['tts'] : ['voice', 'voicePatchMode']);
     if (capability !== 'speech') expect(payload.voicePatchMode).toBe('merge');
     if (capability === 'conversation') expect(Object.keys(payload.voice)).toEqual(['realtime']);
-    if (capability === 'transcription') expect(Object.keys(payload.voice).sort()).toEqual(['language', 'languageMode']);
+    if (capability === 'transcription') expect(Object.keys(payload.voice).sort()).toEqual(['input', 'language', 'languageMode']);
   });
   it('sends a scoped expected revision and returns the acknowledged revision', async () => {
     const revision = 'a'.repeat(64), next = 'b'.repeat(64);
@@ -55,28 +54,9 @@ describe('voice-config-api', () => {
     const omni = { provider: 'alibaba', model: 'qwen3-omni-flash-realtime', voice: 'Cherry', apiKey: '••••••', instructions: 'Chat without tools' };
     const tts = { provider: 'alibaba', voice: 'Ethan' };
     const state = normalizeVoiceSettings({ voice: { realtime: { enabled: true, tts, omni } } });
-    await patchVoiceSettings(state);
+    await patchVoiceSettings(state, 'conversation');
     expect(JSON.parse(String(fetchJson.mock.calls[0]?.[1].body)).voice.realtime.omni).toEqual(omni);
     expect(JSON.parse(String(fetchJson.mock.calls[0]?.[1].body)).voice.realtime.tts).toEqual(tts);
-  });
-
-  it('saves an own-key switch without a stale hosted streaming selection', async () => {
-    fetchJson.mockResolvedValue({ ok: true });
-    const previous = normalizeVoiceSettings({
-      stt: { enabled: true, provider: 'xopc-cloud', providers: {
-        alibaba: { apiKey: '••••••', model: 'qwen-audio-3.0-asr-flash' },
-      } },
-      tts: { enabled: true, provider: 'edge', trigger: 'inbound' },
-      voice: { realtime: { enabled: true, stt: { provider: 'xopc-cloud', model: 'hosted-asr' } } },
-    });
-    await patchVoiceSettings(configureRealtimeService(previous, 'alibaba'));
-    const payload = JSON.parse(String(fetchJson.mock.calls[0]?.[1].body));
-    expect(payload.stt.provider).toBe('alibaba');
-    expect(payload.stt.providers.alibaba).toEqual(previous.stt.providers!.alibaba);
-    expect(payload.voice.realtime).not.toHaveProperty('stt');
-    expect(payload.voice.realtime.tts.provider).toBe('alibaba');
-    expect(payload.tts.provider).toBe('edge');
-    expect(payload.tts.trigger).toBe('inbound');
   });
 
   it('round-trips explicit refinement in the safe config patch', async () => {
@@ -85,14 +65,13 @@ describe('voice-config-api', () => {
       voice: { input: { refinement: { mode: 'punctuation', model: 'openai/gpt-test' } } },
     });
 
-    await patchVoiceSettings(state);
+    await patchVoiceSettings(state, 'transcription');
 
     const init = fetchJson.mock.calls[0]?.[1] as RequestInit;
     expect(JSON.parse(String(init.body))).toMatchObject({
       voice: {
         input: { refinement: { mode: 'punctuation', model: 'openai/gpt-test' } },
       },
-      tts: { trigger: 'off', timeoutMs: 60_000 },
     });
     expect(fetchJson).toHaveBeenNthCalledWith(2, '/api/voice/language', {
       method: 'POST',
@@ -114,7 +93,7 @@ describe('voice-config-api', () => {
     });
 
     expect(state.tts.providers?.['xopc-cloud']).toEqual({ model: 'cloud-tts', voice: 'voice-a' });
-    await patchVoiceSettings(state);
+    await patchVoiceSettings(state, 'speech');
 
     const init = fetchJson.mock.calls[0]?.[1] as RequestInit;
     const payload = JSON.parse(String(init.body)) as { tts: Record<string, unknown> };
@@ -142,7 +121,7 @@ describe('voice-config-api', () => {
     });
 
     expect(state.stt.providers?.['xopc-cloud']).toEqual({ model: 'cloud-stt', language: 'zh' });
-    await patchVoiceSettings(state);
+    await patchVoiceSettings(state, 'transcription');
 
     const init = fetchJson.mock.calls[0]?.[1] as RequestInit;
     const payload = JSON.parse(String(init.body)) as { stt: Record<string, unknown> };

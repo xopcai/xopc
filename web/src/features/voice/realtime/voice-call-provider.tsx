@@ -112,7 +112,7 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
     setMore(false);
     setMiniPosition(null);
   };
-  const settingsPath = `/settings/capabilities/models?use=conversation&returnTo=${encodeURIComponent(`/chat/${encodeURIComponent(target?.conversationId ?? '')}`)}`;
+  const settingsPath = `/settings/capabilities/models?configure=conversation&returnTo=${encodeURIComponent(`/chat/${encodeURIComponent(target?.conversationId ?? '')}`)}`;
   const settingsLink = <Link to={settingsPath} onClick={event => { if (!event.metaKey && !event.ctrlKey && !event.shiftKey && event.button === 0) { event.preventDefault(); openCapabilitySettings('conversation'); setExpanded(false); } }} className="text-sm text-accent-fg hover:underline">{m.callSettings}</Link>;
 
   return <VoiceCallContext.Provider value={context}>

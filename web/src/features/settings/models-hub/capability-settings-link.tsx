@@ -6,11 +6,11 @@ import { parseCapabilityUse, withCapabilityReturnContext } from './capability-na
 
 export const CapabilityConnectionContext = createContext<((use: ModelSetupUse) => void) | null>(null);
 
-/** Keep capability origin and chat return links through legacy voice settings. */
+/** Open the current capability connection tab without leaving its editor. */
 export function CapabilitySettingsLink({ to, ...props }: Omit<LinkProps, 'to'> & { to: string }) {
   const [context] = useSearchParams();
   const connect = useContext(CapabilityConnectionContext);
   const query = new URLSearchParams(to.split('?')[1] ?? '');
-  const use = parseCapabilityUse(query.get('use'));
-  return <Link {...props} onClick={event => { props.onClick?.(event); if (!event.defaultPrevented && !event.metaKey && !event.ctrlKey && !event.shiftKey && event.button === 0 && connect && use && query.get('view') === 'services') { event.preventDefault(); connect(use); } }} to={withCapabilityReturnContext(to, context)} />;
+  const use = parseCapabilityUse(query.get('configure'));
+  return <Link {...props} onClick={event => { props.onClick?.(event); if (!event.defaultPrevented && !event.metaKey && !event.ctrlKey && !event.shiftKey && event.button === 0 && connect && use && query.get('tab') === 'services') { event.preventDefault(); connect(use); } }} to={withCapabilityReturnContext(to, context)} />;
 }

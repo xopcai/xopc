@@ -249,18 +249,18 @@ export function readVoiceSettingsRevisions(config: unknown): VoiceSettingsRevisi
     ['transcription', 'speech', 'conversation'].includes(scope) && typeof value === 'string' && /^[a-f0-9]{64}$/.test(value)));
 }
 
-export async function patchVoiceSettings(state: VoiceSettingsState, capability?: 'transcription' | 'speech' | 'conversation', expectedRevision?: string): Promise<VoiceSettingsRevisions> {
+export async function patchVoiceSettings(state: VoiceSettingsState, capability: 'transcription' | 'speech' | 'conversation', expectedRevision?: string): Promise<VoiceSettingsRevisions> {
   const result = await fetchJson<{ payload?: { config?: unknown } }>(apiUrl('/api/config'), {
     method: 'PATCH',
     body: JSON.stringify({
-      ...(capability && expectedRevision ? { expectedVoiceRevision: { capability, revision: expectedRevision } } : {}),
+      ...(expectedRevision ? { expectedVoiceRevision: { capability, revision: expectedRevision } } : {}),
       ...(capability === 'transcription' || capability === 'conversation' ? { voicePatchMode: 'merge' } : {}),
-      ...(!capability || capability === 'transcription' ? { stt: toSttPayload(state.stt) } : {}),
-      ...(!capability || capability === 'speech' ? { tts: toTtsPayload(state.tts) } : {}),
-      ...(!capability ? { voice: state.voice } : capability === 'conversation' ? { voice: { realtime: state.voice.realtime } } : capability === 'transcription' ? { voice: { language: state.voice.language, languageMode: state.voice.languageMode } } : {}),
+      ...(capability === 'transcription' ? { stt: toSttPayload(state.stt) } : {}),
+      ...(capability === 'speech' ? { tts: toTtsPayload(state.tts) } : {}),
+      ...(capability === 'conversation' ? { voice: { realtime: state.voice.realtime } } : capability === 'transcription' ? { voice: { language: state.voice.language, languageMode: state.voice.languageMode, input: state.voice.input } } : {}),
     }),
   });
-  if ((!capability || capability === 'transcription') && state.voice.languageMode === 'auto') {
+  if ((capability === 'transcription') && state.voice.languageMode === 'auto') {
     await fetchJson(apiUrl('/api/voice/language'), {
       method: 'POST',
       body: JSON.stringify({ language: state.voice.language }),

@@ -113,12 +113,6 @@ it('keeps direct model switching and separate modal actions on every capability'
   await act(async () => [...row.querySelectorAll('button')].find(button => button.textContent === '管理服务')!.click());
   expect(connect).toHaveBeenCalledExactlyOnceWith('speech');
 });
-it('shows only three capabilities in the voice overview', async () => {
-  await act(async () => root.render(<MemoryRouter><SWRConfig value={{ provider: () => new Map() }}><ModelUsesList data={data} zh voiceOverview onChange={() => {}} onSettings={() => {}} /></SWRConfig></MemoryRouter>));
-  expect(container.querySelectorAll('[data-capability]')).toHaveLength(3);
-  expect(container.querySelector('[data-capability="chat"]')).toBeNull();
-});
-
 it('does not query a preset whose model registry connection has not been created', async () => {
   const pendingPreset = { ...data, cards: [...data.cards, { id: 'dashscope-cn', configured: true }] } as ConnectedProvidersData;
   await act(async () => root.render(<SWRConfig value={{ provider: () => new Map() }}><ModelUsesList data={pendingPreset} zh onChange={() => {}} /></SWRConfig>));

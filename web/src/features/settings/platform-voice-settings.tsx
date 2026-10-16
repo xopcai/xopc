@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import useSWR from 'swr';
 import { voiceSettingsCatalogSchema, voiceSupportsMode, type VoiceSelection } from '@xopcai/realtime-protocol/voice';
 import { Select, SelectOption } from '@/components/ui/popover-select';
@@ -10,10 +10,11 @@ import { modelDisplayName } from '@/lib/model-display-name';
 import { useLocaleStore } from '@/stores/locale-store';
 import { revalidateGatewayConfig } from '@/features/gateway/gateway-config-swr';
 
-export function PlatformVoiceSettings({ disabled = false, engine = 'agent' }: { disabled?: boolean; engine?: 'agent' | 'omni' }) {
+export function PlatformVoiceSettings({ disabled = false, modes, onPendingChange }: { disabled?: boolean; modes: VoiceSelection['mode'][]; onPendingChange?: (pending: boolean) => void }) {
   const language = useLocaleStore(state => state.language);
   const zh = language === 'zh';
   const [busy, setBusy] = useState(false);
+  useEffect(() => { onPendingChange?.(busy); return () => onPendingChange?.(false); }, [busy, onPendingChange]);
   const [error, setError] = useState('');
   const { data, mutate, error: loadError } = useSWR(apiUrl('/api/voice/catalog'), async (url: string) => {
     const response = await fetchJson<{ payload: unknown }>(url);
@@ -52,17 +53,12 @@ export function PlatformVoiceSettings({ disabled = false, engine = 'agent' }: { 
         </Select>{voices.find(voice => voice.id === selectedVoice)?.description ? <span className="block text-xs text-fg-muted">{voices.find(voice => voice.id === selectedVoice)?.description}</span> : null}</label> : null}
       </div>;
   };
-  const callModes: VoiceSelection['mode'][] = engine === 'omni' ? ['conversation'] : ['transcription.stream', 'speech.stream'];
   return <section className="space-y-4 rounded-xl bg-surface-hover/20 p-4">
     <div className="flex items-center justify-between gap-3"><h3 className="font-medium">{zh ? 'XOPC 托管语音模型' : 'XOPC managed voice models'}</h3><Button variant="secondary" disabled={busy || disabled || !data} onClick={() => void request()}>{zh ? '刷新目录' : 'Refresh catalog'}</Button></div>
     <p className="text-xs text-fg-muted">{zh ? '修改在下次调用生效。各设备共用此 Gateway 的配置。' : 'Changes apply to the next call and are shared across devices.'}</p>
     {error || loadError ? <p role="alert" className="text-sm text-red-600">{error || String(loadError)}</p> : null}
     {!data ? <Skeleton className="h-48 w-full" /> : <>
-      {callModes.map(renderMode)}
-      <details className="rounded-lg border border-edge p-3">
-        <summary className="cursor-pointer text-sm font-medium text-fg">{zh ? '其他语音场景' : 'Other voice features'}</summary>
-        <div className="mt-4 space-y-4">{(Object.keys(labels) as VoiceSelection['mode'][]).filter(mode => !callModes.includes(mode)).map(renderMode)}</div>
-      </details>
+      {modes.map(renderMode)}
     </>}
   </section>;
 }

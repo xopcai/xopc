@@ -3,10 +3,8 @@ import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 import { modelDisplayName } from '@/lib/model-display-name';
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
 import useSWR from 'swr';
 
-import { Button } from '@/components/ui/button';
 import { Select, SelectOption } from '@/components/ui/popover-select';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { VoiceSettingsMessages } from '@/i18n/messages';
@@ -15,12 +13,11 @@ import { useLocaleStore } from '@/stores/locale-store';
 
 import { fetchRealtimeVoiceStatus, fetchTtsVoices } from './voice-config-api';
 import { VoiceDiagnostics } from './voice-diagnostics';
-import { configureRealtimeService } from './voice-service-setup';
 import type { VoiceSettingsState } from './voice-settings.types';
 
 
 export function VoiceSetup({ section, v, form, pending, onChange }: {
-  section: 'service' | 'listening' | 'diagnostics';
+  section: 'listening' | 'diagnostics';
   v: VoiceSettingsMessages;
   form: VoiceSettingsState;
   pending: boolean;
@@ -37,7 +34,6 @@ export function VoiceSetup({ section, v, form, pending, onChange }: {
   );
   const { data: catalog } = useSWR(apiUrl('/api/voice/catalog'), async (url: string) => voiceSettingsCatalogSchema.parse((await fetchJson<{payload: unknown}>(url)).payload));
   const realtime = form.voice.realtime;
-  const provider = form.stt.provider;
   const selection = realtime.tts;
   const outputProvider = selection?.provider ?? status?.tts?.provider;
   const outputModel = status?.tts?.model;
@@ -49,7 +45,7 @@ export function VoiceSetup({ section, v, form, pending, onChange }: {
   const realtimeVoices = voices;
   const omniAlibabaVoices = voices.filter((voice) => ['Cherry', 'Ethan', 'Serena', 'Chelsie'].includes(voice.id));
   const native = realtime.defaultEngine === 'omni';
-  const currentVoice = native ? realtime.omni?.voice ?? '' : selection?.voice ?? status?.tts?.voice ?? '';
+  const currentVoice = native ? realtime.omni?.voice ?? '' : selection?.voice ?? '';
   const voiceOptions = native && realtime.omni?.provider === 'qwen-token-plan-cn' ? [{ id: realtime.omni.voice, name: realtime.omni.voice }] : native ? realtime.omni?.provider === 'xopc-cloud'
     ? catalog?.models.find(model => model.id === realtime.omni?.model)?.voice.voices.filter(voice => voiceSupportsMode(voice, 'conversation')) ?? []
     : omniAlibabaVoices.length ? omniAlibabaVoices : ['Cherry', 'Ethan', 'Serena', 'Chelsie'].map((id) => ({ id, name: id })) : realtimeVoices;
@@ -58,30 +54,10 @@ export function VoiceSetup({ section, v, form, pending, onChange }: {
   const updateRealtime = (patch: Partial<typeof realtime>) => onChange({
     ...form, voice: { ...form.voice, realtime: { ...realtime, ...patch } },
   });
-  const configure = (id: 'alibaba' | 'xopc-cloud') => onChange(configureRealtimeService(form, id));
   const statusLabel = (configured: boolean, passed: boolean) => !realtime.enabled ? s.disabled : pending ? s.pending : configured ? passed && verified.signature === signature ? s.verified : s.unverified : s.needsSetup;
 
   return (
     <section className="space-y-5 rounded-xl bg-surface-hover/20 p-4 sm:p-5" aria-label={s.service}>
-      {section === 'service' ? <>
-      {error ? <p role="alert" className="text-xs text-red-600 dark:text-red-400">{s.statusError}</p> : null}
-      <fieldset className="space-y-3">
-        <legend className="text-sm font-medium text-fg">{s.service}</legend>
-        <div className="grid gap-3 sm:grid-cols-2">
-          {(['xopc-cloud', 'alibaba'] as const).map((id) => <label key={id} className="flex cursor-pointer items-start gap-3 rounded-lg bg-surface-base/55 px-3 py-3 text-sm text-fg has-checked:bg-accent-soft">
-            <input type="radio" name="realtime-service" value={id} checked={id === 'xopc-cloud' ? provider === id : provider !== 'xopc-cloud'} onChange={() => configure(id)} className="mt-1 accent-accent" />
-            <span><span className="block font-medium">{id === 'xopc-cloud' ? s.hosted : s.ownKey}</span><span className="mt-1 block text-xs text-fg-muted">{id === 'xopc-cloud' ? s.hostedHint : s.ownKeyHint}</span></span>
-          </label>)}
-        </div>
-      </fieldset>
-      {provider !== 'alibaba' && provider !== 'xopc-cloud' ? <p className="text-xs text-fg-muted">{s.customProvider.replace('{provider}', provider)}</p> : null}
-      {provider === 'xopc-cloud' ? <p className="text-xs text-fg-muted">{s.hostedAccountHint} <Link className="text-accent hover:underline" to="/settings/capabilities/models">{s.manageAccount}</Link></p> : null}
-      {!selection && !pending && !status?.tts && (provider === 'alibaba' || provider === 'xopc-cloud') ? <div className="rounded-lg bg-surface-base p-3 text-xs">
-        <p className="font-medium text-fg">{s.finishSetup}</p>
-        <p className="mt-1 text-fg-muted">{form.tts.provider === 'edge' ? s.edgeHint : s.outputHint}</p>
-        <Button className="mt-2" type="button" variant="secondary" onClick={() => configure(provider)}>{s.configureConversation}</Button>
-      </div> : null}
-      </> : null}
       {section === 'listening' ? <>
       <label className="flex items-center justify-between gap-3 text-sm font-medium text-fg"><span>{s.enable}</span><input type="checkbox" role="switch" aria-checked={realtime.enabled} className="ui-checkbox" checked={realtime.enabled} onChange={(e) => updateRealtime({ enabled: e.target.checked })} /></label>
       <label className="block space-y-2 text-sm"><span>{v.experience.defaultMode}</span>
@@ -94,7 +70,12 @@ export function VoiceSetup({ section, v, form, pending, onChange }: {
         <label htmlFor="realtime-voice" className="text-sm font-medium text-fg">{s.voice}</label>
         <Select id="realtime-voice" className={`${selectTriggerClass} w-full sm:w-56`} value={currentVoice} disabled={native ? !realtime.omni : !selection && !status?.tts} onChange={(e) => {
           if (native && realtime.omni) { updateRealtime({ omni: { ...realtime.omni, voice: e.target.value } }); return; }
-          if (outputProvider === 'alibaba' || outputProvider === 'xopc-cloud') updateRealtime({ tts: { ...realtime.tts, provider: outputProvider, ...(e.target.value ? { voice: e.target.value } : {}) }, ...(realtime.omni && ['Cherry', 'Ethan', 'Serena', 'Chelsie'].includes(e.target.value) ? { omni: { ...realtime.omni, voice: e.target.value } } : {}) });
+          if (outputProvider === 'alibaba' || outputProvider === 'xopc-cloud') {
+            const tts: NonNullable<typeof realtime.tts> = { ...realtime.tts, provider: outputProvider };
+            if (e.target.value) tts.voice = e.target.value;
+            else delete tts.voice;
+            updateRealtime({ tts });
+          }
         }}>
           {!native ? <SelectOption value="">{s.defaultVoice}</SelectOption> : null}
           {currentVoice && !voiceOptions.some((voice) => voice.id === currentVoice) ? <SelectOption value={currentVoice}>{currentVoice}</SelectOption> : null}

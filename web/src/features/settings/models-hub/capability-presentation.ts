@@ -6,7 +6,7 @@ export const capabilityDescriptions: Record<ModelSetupUse, [string, string]> = {
   image: ['根据描述生成图片', 'Create images from a description'],
   transcription: ['聊天听写与笔记录音转文字', 'Dictate messages and transcribe recorded notes'],
   speech: ['朗读消息，选择喜欢的音色', 'Read messages aloud in your preferred voice'],
-  conversation: ['与助手进行实时语音对话', 'Talk with your assistant in real time'],
+  conversation: ['实时通话、音色与音频设备', 'Live calls, voices and audio devices'],
   background: ['自动化、定时和无人值守任务', 'Automations, schedules and unattended tasks'],
 };
 

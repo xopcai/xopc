@@ -117,28 +117,17 @@ try {
     assert.ok(!(await page.getByRole('dialog').innerText()).includes('xiaomi-token-plan-cn'));
     await page.keyboard.press('Escape');
   } else assert.ok(await page.getByRole('button',{name:'连接 自动与后台任务',exact:true}).isVisible());
-  await page.goto(`${url}#/settings/capabilities/voice?voiceTab=service&use=transcription`);
-  await page.waitForURL('**/voice?voiceTab=service&use=transcription');
-  await page.getByRole('link',{name:'返回录音与听写',exact:true}).click();
-  await page.waitForURL('**use=transcription');
-  await page.getByRole('link',{name:'返回能力总览',exact:true}).click();
   await page.setViewportSize({width:390,height:844});
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
   await page.screenshot({path:join(directory,'overview-mobile.png'),fullPage:true});
   await page.evaluate(()=>document.documentElement.classList.add('dark'));
   await page.screenshot({path:join(directory,'overview-dark.png'),fullPage:true});
-  await page.goto(`${url}#/settings/capabilities/models?view=services&use=transcription&from=voice&returnTo=%2Fchat%2Flegacy-recording`);
-  await page.getByRole('heading', { name: '接入服务 · 录音与听写', exact: true }).waitFor();
-  assert.equal(await page.getByRole('link', { name: '返回对话', exact: true }).getAttribute('href'), '#/chat/legacy-recording');
-  await page.getByRole('link', { name: '返回录音与听写', exact: true }).click();
-  const legacyReturn = new URL(page.url().split('#')[1], 'https://fixture.local');
-  assert.equal(legacyReturn.searchParams.get('use'), 'transcription');
-  assert.equal(legacyReturn.searchParams.get('from'), 'voice');
-  assert.equal(legacyReturn.searchParams.get('returnTo'), '/chat/legacy-recording');
-  assert.equal(legacyReturn.searchParams.get('view'), null);
-  await page.goto(`${url}#/settings/capabilities/models?view=services`);
+  await page.goto(`${url}#/settings/capabilities/models?configure=transcription&returnTo=%2Fchat%2Frecording`);
+  await modal.getByRole('heading', { name: '录音与听写', exact: true }).waitFor();
+  await page.waitForURL(`${url}#/settings/capabilities/models?returnTo=%2Fchat%2Frecording`);
+  await modal.getByRole('button', { name: '完成', exact: true }).click();
+  await page.goto(`${url}#/settings/capabilities/models`);
   await page.getByRole('heading', { name: '连接的服务', exact: true }).waitFor();
-  await page.waitForURL(`${url}#/settings/capabilities/models`);
   const serviceOrigin = page.url();
   const serviceWriteCount = writes.length;
   const backgroundBeforeService = structuredClone(defaults.models.background);
@@ -219,12 +208,8 @@ try {
   await page.screenshot({ path: join(directory, 'overview-large-text-mobile.png'), fullPage: true });
   await page.evaluate(() => document.documentElement.style.fontSize = '16px');
 
-  await page.goto(`${url}#/settings/capabilities/image`);
-  await page.waitForURL('**use=image');
-  await page.getByRole('heading',{name:'生成图片',exact:true}).waitFor();
-  assert.equal(configWrites.length,1,'Opening legacy image settings must not write configuration');
   assert.deepEqual(errors,[]);
-  const report={passed:true,connectionAppliesOnlyCurrentCapability:true,samePageSettings:true,serviceAccountsStayInPlace:true,serviceAccountApplyInPlace:true,capabilityRepairPreservesFocus:true,serviceDraftPreserved:true,legacyServiceReturnContextPreserved:true,explicitSingleUseSwitch:true,switchLocksVoiceParameters:true,advancedVoiceReturnsToOriginalCapability:true,backgroundPlansExcluded:true,mobileOverflow:false,legacyImageUrlPreserved:true,realCredentialsUsed:false,directory};
+  const report={passed:true,connectionAppliesOnlyCurrentCapability:true,samePageSettings:true,serviceAccountsStayInPlace:true,serviceAccountApplyInPlace:true,capabilityRepairPreservesFocus:true,serviceDraftPreserved:true,directModalLinks:true,explicitSingleUseSwitch:true,switchLocksVoiceParameters:true,backgroundPlansExcluded:true,mobileOverflow:false,realCredentialsUsed:false,directory};
   await writeFile(join(directory,'report.json'),JSON.stringify(report,null,2));
   console.log(JSON.stringify(report));
 } catch (error) {

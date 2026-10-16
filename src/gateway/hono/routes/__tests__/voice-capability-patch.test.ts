@@ -39,3 +39,11 @@ describe('scoped voice capability patches', () => {
     expect(await applyMiscPatch(config, {voice: {}, voicePatchMode: 'invalid'})).toMatchObject({ok:false});
   });
 });
+
+it('saves recognition text processing without changing the selected conversation route', async () => {
+  const config = ConfigSchema.parse({ voice: { realtime: { defaultEngine: 'agent', silenceDurationMs: 2000 } } });
+  const conversation = structuredClone(config.voice!.realtime);
+  await applyMiscPatch(config, { voicePatchMode: 'merge', voice: { input: { refinement: { mode: 'punctuation' } } } });
+  expect(config.voice!.input.refinement.mode).toBe('punctuation');
+  expect(config.voice!.realtime).toEqual(conversation);
+});

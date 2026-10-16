@@ -15,7 +15,6 @@ describe('settings navigation information architecture', () => {
 
     expect(capabilities?.tabs).toEqual([
       'settingsModels',
-      'settingsVoice',
       'settingsSearch',
       'settingsAgentDefaults',
     ]);
@@ -41,12 +40,11 @@ describe('settings navigation information architecture', () => {
 
   it('maps each intelligence destination directly and keeps image models under Models', () => {
     expect(pathForTab('settingsModels')).toBe('/settings/capabilities/models');
-    expect(pathForTab('settingsVoice')).toBe('/settings/capabilities/voice');
     expect(pathForTab('settingsSearch')).toBe('/settings/capabilities/search');
     expect(pathForTab('settingsComputerUse')).toBe('/settings/computer-use');
     expect(isSettingsTabActiveAtPath('settingsComputerUse', '/settings/computer-use')).toBe(true);
     expect(isSettingsTabActiveAtPath('settingsAgentBrowser', '/settings/computer-use')).toBe(false);
-    expect(isSettingsTabActiveAtPath('settingsModels', '/settings/capabilities/image')).toBe(true);
-    expect(isSettingsTabActiveAtPath('settingsVoice', '/settings/capabilities/image')).toBe(false);
+    expect(isSettingsTabActiveAtPath('settingsModels', '/settings/capabilities/models')).toBe(true);
+    expect(isSettingsTabActiveAtPath('settingsModels', '/settings/capabilities/voice')).toBe(false);
   });
 });

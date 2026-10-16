@@ -13,7 +13,6 @@ describe('settings-nav-visibility', () => {
   it('hides power-user tabs in simple mode', () => {
     expect(isSettingsTabVisibleInMode('settingsOverview', 'simple')).toBe(true);
     expect(isSettingsTabVisibleInMode('settingsModels', 'simple')).toBe(true);
-    expect(isSettingsTabVisibleInMode('settingsVoice', 'simple')).toBe(true);
     expect(isSettingsTabVisibleInMode('settingsSearch', 'simple')).toBe(true);
     expect(isSettingsTabVisibleInMode('settingsTunnel', 'simple')).toBe(true);
     expect(isSettingsTabVisibleInMode('settingsShares', 'simple')).toBe(true);

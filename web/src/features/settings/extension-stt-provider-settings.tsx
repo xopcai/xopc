@@ -138,7 +138,7 @@ function ExtensionSttProviderSettingsBody({
           model: snapshot.model,
         },
       };
-      await patchVoiceSettings(next);
+      await patchVoiceSettings(next, 'transcription');
       await mutateVoice(next, false);
       dirtyRef.current = JSON.stringify(draftRef.current) !== JSON.stringify(snapshot);
       setLocalDraft((current) => current && JSON.stringify(current) === JSON.stringify(snapshot) ? null : current);

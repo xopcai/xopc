@@ -25,6 +25,6 @@ export function DictationSettingsSummary({ zh }: { zh: boolean }) {
           : data?.mode === 'streaming' ? (zh ? `当前使用流式识别${data.provider ? ` · ${data.provider}` : ''}。` : `Using streaming recognition${data.provider ? ` · ${data.provider}` : ''}.`)
             : (zh ? '听写未就绪，请检查识别模型或已有的流式配置。' : 'Check the recognition model or existing streaming configuration.')}
     </p>}
-    {data?.mode !== 'recorded' ? <CapabilitySettingsLink className="inline-block text-accent-fg hover:underline" to="/settings/capabilities/models?view=services&use=transcription">{zh ? '管理识别服务' : 'Manage recognition services'}</CapabilitySettingsLink> : null}
+    {data?.mode !== 'recorded' ? <CapabilitySettingsLink className="inline-block text-accent-fg hover:underline" to="/settings/capabilities/models?tab=services&configure=transcription">{zh ? '管理识别服务' : 'Manage recognition services'}</CapabilitySettingsLink> : null}
   </section>;
 }

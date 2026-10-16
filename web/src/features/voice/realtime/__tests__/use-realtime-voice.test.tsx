@@ -318,7 +318,7 @@ describe('useRealtimeVoice', () => {
       'error',
       'No streaming STT',
       undefined,
-      { href: '/settings/capabilities/models?use=transcription' },
+      { href: '/settings/capabilities/models?configure=transcription' },
     );
   });
 
