@@ -1,5 +1,5 @@
-import { spawn } from 'node:child_process';
 import type { NotesService } from '../notes/service.js';
+import { spawnProcess } from '../process/run-process.js';
 import { DiscussionServiceError } from './errors.js';
 import { getDiscussionCapture } from './repository.js';
 
@@ -16,11 +16,12 @@ export async function discussionAudioClip(id: string,startMs: number,endMs: numb
   try {
     return await new Promise<Buffer>((resolve,reject) => {
       signal.throwIfAborted();
-      const child = spawn(process.env.XOPC_FFMPEG_PATH || 'ffmpeg',['-v','error','-protocol_whitelist','file,pipe','-ss',String(startMs / 1000),'-i',source.filePath,'-t',String((endMs - startMs) / 1000),'-map','0:a:0','-vn','-ar','16000','-ac','1','-f','wav','pipe:1'],{ stdio: ['ignore','pipe','ignore'] });
+      const handle = spawnProcess({ program: process.env.XOPC_FFMPEG_PATH || 'ffmpeg', args: ['-v','error','-protocol_whitelist','file,pipe','-ss',String(startMs / 1000),'-i',source.filePath,'-t',String((endMs - startMs) / 1000),'-map','0:a:0','-vn','-ar','16000','-ac','1','-f','wav','pipe:1'], maxOutputBytes: 0 });
+      const child = handle.child;
       const chunks: Buffer[] = []; let bytes = 0;
-      const abort = () => { child.kill('SIGKILL'); reject(new Error('Audio clip interrupted')); };
+      const abort = () => { handle.terminate(); reject(new Error('Audio clip interrupted')); };
       const timer = setTimeout(abort,30_000); timer.unref(); signal.addEventListener('abort',abort,{ once: true });
-      child.stdout.on('data',(chunk: Buffer) => { bytes += chunk.length; if (bytes > 4 * 1024 * 1024) abort(); else chunks.push(chunk); });
+      child.stdout?.on('data',(chunk: Buffer) => { bytes += chunk.length; if (bytes > 4 * 1024 * 1024) abort(); else chunks.push(chunk); });
       child.once('error',reject); child.once('close',code => { clearTimeout(timer); signal.removeEventListener('abort',abort); if (code || bytes <= 44) reject(new Error('Audio clip unavailable')); else resolve(Buffer.concat(chunks)); });
     });
   } finally { active--; }

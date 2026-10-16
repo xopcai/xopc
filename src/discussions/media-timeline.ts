@@ -1,5 +1,5 @@
-import { spawn } from 'node:child_process';
 import type { DiscussionPlaybackRange } from '@xopcai/gateway-contract';
+import { spawnProcess } from '../process/run-process.js';
 
 export interface MediaSpan { sourceMs: number; pcmMs: number; durationMs: number }
 export interface MediaEpoch { baseMs: number; durationMs: number; spans: MediaSpan[]; verified: boolean }
@@ -12,13 +12,14 @@ export async function probeMediaEpoch(path: string, durationMs: number, baseMs: 
   try {
     await new Promise<void>((resolve, reject) => {
       signal.throwIfAborted();
-      const child = spawn(process.env.XOPC_FFPROBE_PATH || 'ffprobe', ['-v', 'error', '-select_streams', 'a:0', '-show_packets', '-show_entries', 'packet=pts_time,duration_time:packet_side_data=skip_samples,discard_padding', '-of', 'compact=p=0', path], { stdio: ['ignore', 'pipe', 'ignore'] });
+      const handle = spawnProcess({ program: process.env.XOPC_FFPROBE_PATH || 'ffprobe', args: ['-v', 'error', '-select_streams', 'a:0', '-show_packets', '-show_entries', 'packet=pts_time,duration_time:packet_side_data=skip_samples,discard_padding', '-of', 'compact=p=0', path], maxOutputBytes: 0 });
+      const child = handle.child;
       let pending = ''; let pcm = 0; let packets = 0; let lastStart = -Infinity;
-      const abort = () => { child.kill('SIGKILL'); reject(new Error('Timing inspection cancelled')); };
+      const abort = () => { handle.terminate(); reject(new Error('Timing inspection cancelled')); };
       const timer = setTimeout(abort, 30_000); timer.unref();
       signal.addEventListener('abort', abort, { once: true });
-      child.stdout.setEncoding('utf8');
-      child.stdout.on('data', (text: string) => {
+      child.stdout?.setEncoding('utf8');
+      child.stdout?.on('data', (text: string) => {
         pending += text;
         const lines = pending.split('\n'); pending = lines.pop()!;
         if (pending.length > 8192) { abort(); return; }
