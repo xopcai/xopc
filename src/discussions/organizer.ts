@@ -1,3 +1,4 @@
+import { chapterScope } from './long-review.js';
 import { runSqliteWriteTransaction } from '../storage/sqlite/transaction.js';
 import { ObjectLinkService } from '../activity/service.js';
 import type { Config } from '../config/schema.js';
@@ -50,6 +51,7 @@ export class DiscussionOrganizer {
         transcript,
         segments: listDiscussionTranscriptSegments(capture.id),
         discussionId: capture.id,
+        reviewScope: chapterScope(capture.id),
         template: capture.template,
         projects: projects.map(({ id, name }) => ({ id, name })),
         signal,

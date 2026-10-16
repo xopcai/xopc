@@ -1,0 +1,104 @@
+{
+  "date": "2026-10-15T15:52:59.639Z",
+  "directory": "/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-recording-browser-Blvha3",
+  "durationMs": 30000,
+  "syntheticMicrophone": true,
+  "passed": true,
+  "checks": [
+    {
+      "scenario": "offline capture, SIGKILL, browser restart, IndexedDB restore and audio decode",
+      "savedChunks": 6,
+      "savedDurationMs": 30234,
+      "decodedDurationMs": 30180,
+      "mediaCoverage": {
+        "version": 1,
+        "verifiedThroughMs": 30180,
+        "observedThroughMs": 30180,
+        "status": "verified",
+        "committedChunkCount": 6
+      },
+      "bytes": 244700,
+      "prefixHash": "cd16f0babeeabe271cbfdf1fe7dc1d5ddbd3dff8cd3a9e0dee9bb890c57f2378"
+    },
+    {
+      "scenario": "all microphone tracks stop; MediaRecorder closes and saves tail",
+      "chunks": 2,
+      "durationMs": 5060.799999952316
+    },
+    {
+      "scenario": "pause, resume after real audio input, stop barrier and local success",
+      "mediaCoverage": {
+        "version": 1,
+        "verifiedThroughMs": 5040,
+        "observedThroughMs": 5103,
+        "status": "gap",
+        "committedChunkCount": 2
+      },
+      "saveOutcome": "complete"
+    }
+  ],
+  "browser": "155.0.8059.40",
+  "mediaPreflight": {
+    "passed": true,
+    "decodedMs": 30180,
+    "boundaries": [
+      {
+        "bytesPerSlice": 1,
+        "coverage": {
+          "version": 1,
+          "verifiedThroughMs": 30180,
+          "observedThroughMs": 30180,
+          "status": "verified"
+        }
+      },
+      {
+        "bytesPerSlice": 257,
+        "coverage": {
+          "version": 1,
+          "verifiedThroughMs": 30180,
+          "observedThroughMs": 30180,
+          "status": "verified"
+        }
+      },
+      {
+        "bytesPerSlice": 65536,
+        "coverage": {
+          "version": 1,
+          "verifiedThroughMs": 30180,
+          "observedThroughMs": 30180,
+          "status": "verified"
+        }
+      }
+    ],
+    "append": {
+      "supported": false,
+      "coverage": {
+        "version": 1,
+        "verifiedThroughMs": 30180,
+        "observedThroughMs": 30180,
+        "status": "unknown"
+      },
+      "decision": "Keep independent source assets and map them with a versioned manifest. Do not concatenate container bytes.",
+      "assetHashes": [
+        "cd16f0babeeabe271cbfdf1fe7dc1d5ddbd3dff8cd3a9e0dee9bb890c57f2378",
+        "a6d7374c062d4e15227304cffe15cec2a11cc5b0fe4f944f0cb6f2e2a1b2ec8a"
+      ]
+    },
+    "verifiedSources": {
+      "web/src/features/discussions/recording-media-coverage.ts": "25a9310763af4ba23fb2cdde900767018ff426ac192ca5971a7087cfacdac8f9",
+      "web/src/features/discussions/recording-status.ts": "937783ffb48e4cc7f284d03e2b444fd0c5b315e86c2ea81b464f846f0bdf0d6e",
+      "web/src/features/discussions/use-discussion-recorder.ts": "1d595bfb691efa227b3cf63c04592098d16001b02775e13882b20e5d5c74be09"
+    }
+  },
+  "gatewayIngestion": {
+    "passed": true,
+    "directory": "/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-recovered-ingestion-ZAOy1r",
+    "chunks": 1,
+    "segments": 2,
+    "bytes": 244700,
+    "sha256": "cd16f0babeeabe271cbfdf1fe7dc1d5ddbd3dff8cd3a9e0dee9bb890c57f2378",
+    "decodedDurationMs": 30180,
+    "attachmentId": "attachment_8fc348833d391bff51684c727339432e",
+    "discussionId": "6433c330-3fdd-40f2-9ee4-6795a4d90405"
+  }
+}

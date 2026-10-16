@@ -40,12 +40,16 @@ import { MAX_ATTACHMENTS } from '../common/attachments';
 import { XopcBrandLoading } from './MobileComponents';
 import { common } from '@kit.AbilityKit';
 import { discussionCapture, XopcDiscussionCapture } from '../service/discussionCapture';
-import { xopcFormatCaptureTime } from '../common/discussionAudio';
+import { XopcDiscussionRecordingPanel } from '../viewmodel/discussionRecordingPanel';
+import { XopcDiscussionRecordingPanelView } from './DiscussionRecordingPanel';
 
 @ComponentV2
 export struct XopcHomeView {
   @Local colors: XopcThemeColors = appThemeColors;
   @Local capture: XopcDiscussionCapture = discussionCapture;
+  @Local recordingPanel: XopcDiscussionRecordingPanel = new XopcDiscussionRecordingPanel();
+  @Local recordingViewportWidth: number = 0;
+  @Local recordingViewportHeight: number = 0;
   @Local tab: number = 0;
   @Computed get quickComposerPlaceholder(): ResourceStr {
     return this.tab === 2 ? $r('app.string.quick_chat_progress_placeholder')
@@ -219,6 +223,7 @@ export struct XopcHomeView {
 
   private async startNoteCapture(): Promise<void> {
     this.selectTab(3);
+    this.recordingPanel.fresh();
     const context = this.getUIContext().getHostContext() as common.UIAbilityContext;
     try {
       await this.capture.start(context);
@@ -519,27 +524,6 @@ export struct XopcHomeView {
     }.width('100%').height(52).padding(4)
   }
 
-  @Builder
-  noteCaptureBar() {
-    if (this.capture.active) {
-      Button({ type: ButtonType.Normal }) {
-        Row({ space: 10 }) {
-          Row() {}.width(9).height(9).borderRadius(5).backgroundColor(this.colors.danger)
-          Text(xopcFormatCaptureTime(this.capture.elapsedMs)).fontSize(15).fontWeight(FontWeight.Medium)
-            .fontColor(this.colors.foreground)
-          Text(this.capture.phase === 'organizing' || this.capture.phase === 'stopping'
-            ? $r('app.string.capture_saving') : this.capture.phase === 'paused'
-              ? $r('app.string.capture_paused') : this.capture.phase === 'error'
-                ? $r('app.string.capture_interrupted') : $r('app.string.capture_live'))
-            .fontSize(14).fontColor(this.colors.secondary).layoutWeight(1)
-          SymbolGlyph($r('sys.symbol.chevron_up')).fontSize(14).fontColor([this.colors.tertiary])
-        }.width('100%').height(48).padding({ left: 16, right: 14 })
-      }.id('note-capture-mini').width('100%').height(48).padding(0).backgroundColor(this.colors.input)
-        .borderRadius(16).accessibilityText($r('app.string.capture_open_details'))
-        .onClick((): void => { this.selectTab(3); })
-    }
-  }
-
   private disabledQuickActionIds(): string[] {
     return this.quickFiles.length >= MAX_ATTACHMENTS ? ['photos', 'camera', 'document'] : [];
   }
@@ -633,14 +617,13 @@ export struct XopcHomeView {
   chatDock() {
     if (this.tab === 0 && this.layout.isMainDockVisible(0)) {
       Column() {
-        if (this.capture.active) { this.noteCaptureBar() }
         this.dockItems()
       }.id('main-tab-dock').width('100%')
     }
   }
 
   build() {
-    Stack() {
+    Stack({ alignContent: Alignment.TopStart }) {
       Navigation(this.pathStack) {
         Stack({ alignContent: Alignment.Bottom }) {
       Column() {
@@ -694,9 +677,7 @@ export struct XopcHomeView {
         Column().id('secondary-dock-corner-mask').width('100%').height(24).backgroundColor(this.colors.surface)
         Column() {
           Column() {
-            if (this.capture.active) {
-              this.noteCaptureBar()
-            } else {
+            if (!this.capture.active) {
               this.quickComposer()
               XopcChatActionPanel({ open: this.quickPanelOpen, idPrefix: 'home-quick-action',
                 disabledIds: this.disabledQuickActionIds(),
@@ -715,9 +696,16 @@ export struct XopcHomeView {
       }.hideTitleBar(true).mode(NavigationMode.Stack).navDestination(this.destination)
         .onNavBarStateChange((shown: boolean): void => { this.detailVisible = !shown; })
         .width('100%').height('100%').backgroundColor(this.colors.surface)
+      if (!this.recordingPanel.dismissed && (this.capture.active || this.capture.phase === 'completed') && this.recordingViewportWidth > 0 && this.recordingViewportHeight > 0) {
+        XopcDiscussionRecordingPanelView({ panel: this.recordingPanel,viewportWidth: this.recordingViewportWidth,viewportHeight: this.recordingViewportHeight,
+          onSaved: (_id: string): void => {},
+          onOpenNote: (id: string): void => { this.recordingPanel.setCompact(true); this.navigate({ page: 'notes',itemId: id }); },
+          onRecovery: (): void => { this.pathStack.clear(); this.selectTab(3); void this.capture.refreshPending(this.getUIContext().getHostContext() as common.UIAbilityContext); } })
+      }
       XopcShareIntakeDialog({ onExplore: async (value: XopcIncomingShare): Promise<boolean> => await this.exploreShare(value),
         onSaved: (noteId: string): void => { this.navigate({ page: 'notes', itemId: noteId }); } })
     }.width('100%').height('100%')
+      .onAreaChange((_previous: Area,current: Area): void => { this.recordingViewportWidth = Number(current.width); this.recordingViewportHeight = Number(current.height); })
       .bindSheet($$this.creationSheetOpen, this.creationChatSheet, {
         height: SheetSize.LARGE, dragBar: true, showClose: false, backgroundColor: this.colors.surface,
         enableOutsideInteractive: false, keyboardAvoidMode: SheetKeyboardAvoidMode.RESIZE_ONLY,

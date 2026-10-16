@@ -786,12 +786,12 @@ function NoteDetailPanelInner({
           payloadValue={noteId}
           className="mb-3 shrink-0"
         />
-        {meeting ? <div className="mb-2 flex shrink-0 gap-4 text-sm"><button className={showMeeting ? 'text-accent-fg' : 'text-fg-muted'} onClick={() => setShowMeeting(true)}>{language === 'zh' ? '会议' : 'Meeting'}</button><button className={!showMeeting ? 'text-accent-fg' : 'text-fg-muted'} onClick={() => setShowMeeting(false)}>{language === 'zh' ? '我的笔记' : 'My notes'}</button></div> : null}
+        {meeting && !showMeeting ? <button className="mb-2 inline-flex min-h-11 shrink-0 items-center self-start rounded-lg px-2 text-sm text-accent-fg focus-visible:ring-2 focus-visible:ring-accent" onClick={() => setShowMeeting(true)}>{language === 'zh' ? '← 返回录音笔记' : '← Back to recording'}</button> : null}
         <div
           ref={editorContainerRef}
           className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-edge-subtle bg-surface-panel xl:flex-row"
         >
-          {meeting && showMeeting ? <DiscussionNoteSections noteId={noteId} /> : null}
+          {meeting && showMeeting ? <DiscussionNoteSections noteId={noteId} onPersonalNotes={() => { setShowMeeting(false); window.setTimeout(() => titleInputRef.current?.focus(),0); }} /> : null}
           <div className={meeting && showMeeting ? "hidden" : "min-h-0 min-w-0 flex-1"}>
             {isPreviewingSnapshot ? (
               <div className="h-full overflow-y-auto px-4 py-4 sm:px-6">

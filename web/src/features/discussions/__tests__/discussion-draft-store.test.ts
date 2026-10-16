@@ -21,6 +21,13 @@ async function database() {
 }
 
 describe('atomic original audio commits', () => {
+  it('never overwrites an immutable audio chunk during competing recovery attempts', async () => {
+    await saveDiscussionDraft(draft);
+    await saveDiscussionDraftChunk(chunk(0), { ...draft, chunkCount: 1 });
+    await expect(saveDiscussionDraftChunk({ ...chunk(0), blob: new Blob(['replacement']) }, { ...draft, chunkCount: 2 })).rejects.toThrow();
+    expect(await loadDiscussionDraftForRecovery(draft.id)).toMatchObject({ chunkCount: 1 });
+  });
+
   it('reopens the committed prefix and metadata after an interrupted session', async () => {
     await saveDiscussionDraft(draft);
     for (let index = 0; index < 3; index++) await saveDiscussionDraftChunk(chunk(index), {
@@ -68,5 +75,11 @@ describe('atomic original audio commits', () => {
     const saving = saveDiscussionDraftChunk(chunk(0), { ...draft, chunkCount: 1 });
     await saving; db.close();
     expect((await loadDiscussionDraftForRecovery(draft.id)).chunkCount).toBe(1);
+  });
+  it('downgrades an interrupted session and an inconsistent media proof without losing its original bytes', async () => {
+    await saveDiscussionDraftChunk(chunk(0), { ...draft, chunkCount: 1, durationMs: 90_000,
+      mediaCoverage: { version: 1, verifiedThroughMs: 5_000, observedThroughMs: 5_000, status: 'verified', committedChunkCount: 2 } });
+    expect(await loadDiscussionDraftForRecovery(draft.id)).toMatchObject({ saveOutcome: 'interrupted', mediaCoverage: undefined });
+    expect(await getDiscussionDraftChunk(draft.id, 0)).toBeDefined();
   });
 });

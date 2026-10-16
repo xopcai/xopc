@@ -290,6 +290,7 @@ export function NotesWorkbench({
           )}
         >
           <h1 className="min-w-0 truncate text-base font-semibold tracking-tight text-fg">{listTitle ?? n.title}</h1>
+          <button type="button" className="text-xs text-fg-muted" onClick={() => window.dispatchEvent(new CustomEvent('open-recording-recoveries'))}>{n.discussionCapture.recoveredTitle}</button>
           {noteCountLabel ? (
             <span className="shrink-0 text-xs text-fg-muted">{noteCountLabel}</span>
           ) : null}
@@ -298,7 +299,7 @@ export function NotesWorkbench({
       end: headerEnd,
     });
     return () => clearPageHeader();
-  }, [clearPageHeader, hasToken, headerEnd, listTitle, managePageHeader, n.title, noteCountLabel, selectedNoteId, setPageHeader]);
+  }, [clearPageHeader, hasToken, headerEnd, listTitle, managePageHeader, n.title, n.discussionCapture.recoveredTitle, noteCountLabel, selectedNoteId, setPageHeader]);
 
   const timeLabels: NoteTimeLabels = useMemo(() => ({
     justNow: n.justNow,
@@ -656,17 +657,18 @@ export function NotesWorkbench({
               <button
                 type="button"
                 onClick={() => setNotesListCollapsed(true)}
-                className="hidden size-8 items-center justify-center rounded-lg text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent lg:inline-flex"
+                className="hidden size-11 items-center justify-center rounded-lg text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent lg:inline-flex"
                 aria-label={n.collapseNotesList}
                 title={n.collapseNotesList}
               >
                 <PanelLeft className="size-4" strokeWidth={1.5} aria-hidden />
               </button>
+              <button type="button" onClick={() => openDiscussionCapture(projectId)} aria-label={language === 'zh' ? '开始录音' : 'Start recording'} className="inline-flex size-11 shrink-0 items-center justify-center rounded-full text-fg-muted hover:bg-surface-hover focus-visible:ring-2 focus-visible:ring-accent"><Mic className="size-4" aria-hidden /></button>
               <button
                 type="button"
                 onClick={handleCreateBlankNote}
                 disabled={creatingBlankNote}
-                className="inline-flex size-8 items-center justify-center rounded-lg text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-not-allowed disabled:opacity-50"
+                className="inline-flex size-11 items-center justify-center rounded-lg text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-not-allowed disabled:opacity-50"
                 aria-label={n.createBlankNote}
                 title={n.createBlankShortcut}
               >
@@ -675,7 +677,7 @@ export function NotesWorkbench({
               <button
                 type="button"
                 onClick={() => setSearchOpen(true)}
-                className="inline-flex size-8 items-center justify-center rounded-lg text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                className="inline-flex size-11 items-center justify-center rounded-lg text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                 aria-label={n.searchDialogTitle}
                 title={n.searchDialogTitle}
               >
@@ -834,6 +836,7 @@ export function NotesWorkbench({
               <StickyNote className="mx-auto size-9 text-fg-muted" aria-hidden />
               <h2 className="mt-4 text-base font-semibold text-fg">{n.emptyEditorTitle}</h2>
               <p className="mt-2 text-sm leading-6 text-fg-muted">{n.emptyEditorDescription}</p>
+              <button type="button" onClick={() => openDiscussionCapture(projectId)} aria-label={language === 'zh' ? '开始录音' : 'Start recording'} className="inline-flex size-11 shrink-0 items-center justify-center rounded-full text-fg-muted hover:bg-surface-hover focus-visible:ring-2 focus-visible:ring-accent"><Mic className="size-4" aria-hidden /></button>
               <button
                 type="button"
                 onClick={handleCreateBlankNote}

@@ -1,4 +1,5 @@
 import type { DiscussionDraft, DiscussionDraftChunk, DiscussionLiveSegment } from './discussion-types';
+import { verifiedSavedThrough } from './recording-status';
 
 const DATABASE_NAME = 'xopc-discussion-drafts';
 const DATABASE_VERSION = 2;
@@ -60,7 +61,7 @@ export async function saveDiscussionDraftChunk(chunk: DiscussionDraftChunk, draf
     const transaction = db.transaction(draft ? [CHUNKS, DRAFTS] : [CHUNKS], 'readwrite', { durability: 'strict' });
     const done = transactionDone(transaction);
     try {
-      transaction.objectStore(CHUNKS).put(chunk);
+      transaction.objectStore(CHUNKS).add(chunk);
       if (draft) transaction.objectStore(DRAFTS).put(draft);
       await done;
     } catch (error) {
@@ -186,6 +187,9 @@ export async function loadDiscussionDraftForRecovery(id: string): Promise<Discus
     if (!draft) throw new Error('The recording draft is missing');
     if (gap || count !== draft.chunkCount) throw new Error('Local recording has missing chunks. Retained audio has not been deleted.');
     if (!count) throw new Error('No audio was saved before the recording stopped');
-    return draft;
+    return { ...draft,
+      mediaCoverage: verifiedSavedThrough(draft) === null ? undefined : draft.mediaCoverage,
+      saveOutcome: draft.state === 'recording' ? 'interrupted' : draft.saveOutcome,
+    };
   } finally { db.close(); }
 }

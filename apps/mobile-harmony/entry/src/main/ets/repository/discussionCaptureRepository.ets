@@ -1,3 +1,5 @@
+import { XopcDiscussionReview } from '../model/discussionCapture';
+import { XopcDiscussionAnnotation, XopcAnnotationInput, XopcResolvedAnnotation, XopcDiscussionEvidence } from '../model/discussionCapture';
 import { signedHttpRequest } from '../service/requestProof';
 import { http } from '@kit.NetworkKit';
 import { cryptoFramework } from '@kit.CryptoArchitectureKit';
@@ -24,6 +26,31 @@ interface XopcCreateDiscussionBody {
 }
 
 export class XopcDiscussionCaptureRepository {
+  async review(id: string,query: string = '',offset: number = 0,version: string = ''): Promise<XopcDiscussionReview> {
+    return JSON.parse(await gatewaySession.request('/api/discussions/' + encodeURIComponent(id) + '/review?q=' + encodeURIComponent(query) + '&offset=' + offset + (version ? '&version=' + version : ''))) as XopcDiscussionReview;
+  }
+  async annotations(id: string): Promise<XopcResolvedAnnotation[]> {
+    return JSON.parse(await gatewaySession.request('/api/discussions/' + encodeURIComponent(id) + '/annotations')) as XopcResolvedAnnotation[];
+  }
+  async saveAnnotation(id: string,input: XopcAnnotationInput): Promise<XopcDiscussionAnnotation> {
+    return JSON.parse(await gatewaySession.request('/api/discussions/' + encodeURIComponent(id) + '/annotations/' + encodeURIComponent(input.id),'PUT',JSON.stringify(input))) as XopcDiscussionAnnotation;
+  }
+  async evidence(id: string,revision: number,sequences: number[]): Promise<XopcDiscussionEvidence> {
+    return JSON.parse(await gatewaySession.request('/api/discussions/' + encodeURIComponent(id) + '/evidence?revision=' + revision + '&segments=' + sequences.join(','))) as XopcDiscussionEvidence;
+  }
+  async audioClip(id: string,startMs: number,endMs: number): Promise<ArrayBuffer> {
+    const revision = gatewaySession.connectionRevision(); const auth = await gatewaySession.transferAuth(); gatewaySession.assertConnection(revision);
+    const request = http.createHttp();
+    try {
+      const headers: XopcDiscussionHeaders = { Authorization: 'Bearer ' + auth.token, 'Content-Type': 'application/octet-stream' };
+      const result = await signedHttpRequest(request,auth.origin + '/api/discussions/' + encodeURIComponent(id) + '/audio-clip?startMs=' + startMs + '&endMs=' + endMs,
+        { method: http.RequestMethod.GET, header: headers, expectDataType: http.HttpDataType.ARRAY_BUFFER, maxLimit: 4 * 1024 * 1024, maxRedirects: 0, connectTimeout: 8000, readTimeout: 35000, usingCache: false });
+      gatewaySession.assertConnection(revision);
+      if (result.responseCode !== 200) throw new XopcHttpError(result.responseCode);
+      return result.result as ArrayBuffer;
+    } finally { request.destroy(); }
+  }
+
   async settings(): Promise<XopcDiscussionCaptureSettings> {
     return JSON.parse(await gatewaySession.request('/api/discussion-capture/settings')) as XopcDiscussionCaptureSettings;
   }
@@ -43,6 +70,10 @@ export class XopcDiscussionCaptureRepository {
 
   async byNote(noteId: string): Promise<XopcDiscussionDetail> {
     return JSON.parse(await gatewaySession.request('/api/discussions/by-note/' + encodeURIComponent(noteId))) as XopcDiscussionDetail;
+  }
+
+  async organize(id: string, template: string = 'general'): Promise<void> {
+    await gatewaySession.request('/api/discussions/' + encodeURIComponent(id) + '/organize', 'POST', JSON.stringify({ template: template }));
   }
 
   async retry(id: string, fromAudio: boolean = false): Promise<void> {

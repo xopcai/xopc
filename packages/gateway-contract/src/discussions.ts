@@ -4,7 +4,15 @@ export const DISCUSSION_AUDIO_MAX_BYTES = 1024 * 1024 * 1024;
 export const DISCUSSION_CHUNK_MAX_BYTES = 8 * 1024 * 1024;
 export const DISCUSSION_SEGMENT_MAX_BYTES = 2 * 1024 * 1024;
 export interface DiscussionRecordingChunk { sequence: number; sha256: string; bytes: number }
-export interface DiscussionRecordingManifest { chunkCount: number; mimeType: string; fileName: string; lastSequence: number; containerMode?: 'independent_wav' }
+export interface DiscussionRecordingManifest {
+  chunkCount: number;
+  mimeType: string;
+  fileName: string;
+  lastSequence: number;
+  containerMode?: 'independent_wav';
+  events?: { recordedAt: number; kind: string; savedMs: number }[];
+  epochs?: { firstChunk: number; mimeType: string; startedAt: number; previousEndedAt?: number }[];
+}
 export interface DiscussionRecordingJob {
   id: string;
   discussionId: string;
@@ -73,6 +81,8 @@ export interface DiscussionOrganization {
   summaryEditedByUser?: boolean;
   changes?: Array<{ fromId: string; toId: string; relation: 'supersedes' | 'contradicts' }>;
   keyPoints: string[];
+  keyPointEvidence?: DiscussionFact[];
+  summaryEvidenceSegmentIds?: number[];
   decisions: DiscussionFact[];
   actionItems: DiscussionActionItem[];
   risks: DiscussionFact[];
@@ -220,4 +230,95 @@ export interface DiscussionMetrics {
   failedSegments: number;
   retriedSegments: number;
   averageSegmentLatencyMs: number | null;
+}
+
+/** Original anchors are retained across transcript correction and regeneration. */
+export interface DiscussionAnnotationAnchor {
+  type: 'time' | 'transcript';
+  capturedAt: number;
+  epoch?: number;
+  coordinate?: 'encoded' | 'pcm';
+  offsetMs?: number;
+  positionMs?: number;
+  transcriptRevision?: number;
+  segmentIds?: number[];
+}
+export interface DiscussionAnnotation {
+  id: string;
+  kind: 'highlight' | 'question' | 'note';
+  text: string;
+  anchor: DiscussionAnnotationAnchor;
+  revision: number;
+  deleted: boolean;
+  createdAt: number;
+  updatedAt: number;
+}
+export interface DiscussionAnnotationInput {
+  id: string;
+  kind: DiscussionAnnotation['kind'];
+  text: string;
+  anchor: DiscussionAnnotationAnchor;
+  expectedRevision: number;
+  deleted?: boolean;
+}
+export interface DiscussionPlaybackRange { startedAtMs: number; endedAtMs: number }
+export interface DiscussionEvidenceSegment {
+  sequence: number;
+  startedAtMs: number;
+  endedAtMs: number;
+  text: string;
+  speakerLabel?: string;
+  playback: DiscussionPlaybackRange[];
+}
+export interface DiscussionEvidence {
+  transcriptRevision: number;
+  stale: boolean;
+  audioAvailable: boolean;
+  timingVerified: boolean;
+  segments: DiscussionEvidenceSegment[];
+}
+export interface DiscussionResolvedAnnotation {
+  annotation: DiscussionAnnotation;
+  state: 'located' | 'pending' | 'unavailable';
+  positionMs?: number;
+  playback: DiscussionPlaybackRange[];
+  evidence?: DiscussionEvidence;
+}
+
+/** A review projection never replaces the published transcript or its evidence IDs. */
+export interface DiscussionReviewEntry {
+  id: string;
+  kind: 'transcript' | 'chapter' | 'analysis' | 'annotation';
+  title: string;
+  text: string;
+  transcriptRevision?: number;
+  provisional: boolean;
+  stale: boolean;
+  startedAtMs?: number;
+  endedAtMs?: number;
+  segments: DiscussionEvidenceSegment[];
+  playback: DiscussionPlaybackRange[];
+  highlightCount?: number;
+  actionCount?: number;
+}
+export interface DiscussionReview {
+  version: string;
+  query: string;
+  offset: number;
+  total: number;
+  hasMore: boolean;
+  hits: DiscussionReviewEntry[];
+  chapters: DiscussionReviewEntry[];
+  coverage: {
+    durationMs: number;
+    audioAvailable: boolean;
+    transcriptRanges: DiscussionPlaybackRange[];
+    processedRanges: DiscussionPlaybackRange[];
+    processedMs: number;
+    continuousThroughMs: number;
+    analysisRanges: DiscussionPlaybackRange[];
+    analysisRevision?: number;
+    analysisStale: boolean;
+    complete: boolean;
+  };
 }

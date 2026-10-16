@@ -1,9 +1,12 @@
+import { getDiscussionCapture } from '../repository.js';
+import { chapterScope, saveReviewChapter, unionReviewRanges } from '../long-review.js';
+import { createProcessingRun, saveCheckpoint } from '../processing.js';
 import { applyMeetingEdits } from '../edits.js';
 import { updateDiscussionCapture } from '../repository.js';
 import { convertMeetingAction, meetingActionTasks } from '../action-tasks.js';
 import { createDiscussionOrganization, completeDiscussionOrganization } from '../repository.js';
 import { saveTranscriptRevision, replaceTranscriptSegments } from '../revisions.js';
-import { claimRecordingJob, finishRecordingJob } from '../recordingJobs.js';
+import { claimRecordingJob, finishRecordingJob, getRecordingJobInput } from '../recordingJobs.js';
 import { getSqliteDatabase } from '../../storage/sqlite/transaction.js';
 import { serve } from '@hono/node-server';
 import { Hono } from 'hono';
@@ -85,6 +88,157 @@ describe('discussion note document', () => {
     if (!finalize) return (await service.get(id))!;
     return finalizeRecording(service, id, { chunkCount: 1, mimeType: 'audio/wav', fileName: 'meeting.wav' });
   }
+
+  it('exposes durable partial chapters and checkpoint text without replacing published evidence, and survives reopening', async () => {
+    const created = await create('long-partial'); const id = created.discussion.id;
+    await uploadRecording(id,undefined,6000);
+    replaceTranscriptSegments(id,[{ text: 'Original searchable words',startedAtMs: 0,endedAtMs: 1000 },{ text: 'Tail decision',startedAtMs: 4000,endedAtMs: 5000 }]);
+    const capture = getDiscussionCapture(id)!;
+    const run = createProcessingRun(capture,true);
+    saveCheckpoint(run.run_id,0,2000,{ segments: [{ text: 'New partial words',startedAtMs: 0,endedAtMs: 2000 }] });
+    saveCheckpoint(run.run_id,3000,4000,{ segments: [{ text: 'Recovered after gap',startedAtMs: 3000,endedAtMs: 4000 }] });
+    updateDiscussionCapture(id,{ status: 'sealing' });
+    let review = await service.review(id);
+    expect(review.coverage).toMatchObject({ processedMs: 3000,continuousThroughMs: 2000,complete: false });
+    expect(review.hits.map(hit => hit.text)).toEqual(['New partial words','Recovered after gap']);
+    expect(review.hits[0]).toMatchObject({ provisional: true,playback: [{ startedAtMs: 0,endedAtMs: 6000 }] });
+    expect(service.transcript(id)!.segments[0]!.displayText).toBe('Original searchable words');
+    expect((await service.review(id,{ query: 'partial' })).hits[0]!.id).toContain(run.run_id);
+    const scope = chapterScope(id);
+    const chapter = { title: 'Chapter',summary: 'A partial analysis',keyPoints: [],decisions: [],risks: [],openQuestions: [],actionItems: [],chapters: [{ title: 'Chapter',summary: 'A partial analysis',startedAtMs: 0,endedAtMs: 1000 }] };
+    saveReviewChapter(id,'hash',0,chapter,scope);
+    closeXopcDatabase(); openXopcDatabase({ path: join(stateDir,'xopc.db') });
+    review = await service.review(id);
+    expect(review.chapters[0]).toMatchObject({ provisional: true,startedAtMs: 0,endedAtMs: 1000 });
+    expect(review.coverage.analysisRanges).toEqual([{ startedAtMs: 0,endedAtMs: 1000 }]);
+    updateDiscussionCapture(id,{ transcriptRevision: capture.transcriptRevision + 1 });
+    saveReviewChapter(id,'stale',1,chapter,scope);
+    expect((await service.review(id)).chapters).toHaveLength(0);
+  });
+
+  it('searches a two-hour transcript tail and all review sources with stable pagination, historical references and literal keywords', async () => {
+    const created = await create('long-search'); const id = created.discussion.id;
+    updateDiscussionCapture(id,{ durationMs: 7200000,status: 'completed' });
+    replaceTranscriptSegments(id,Array.from({ length: 1200 },(_,index) => ({ text: index === 1199 ? 'TARGET literal [a.*] 全角ＡＢＣ' : `context ${index}`,startedAtMs: index * 6000,endedAtMs: (index+1)*6000 })));
+    const revision = service.transcript(id)!.revision;
+    const record = createDiscussionOrganization({ discussionId: id,transcriptRevision: revision,inputTranscriptSha256: 'hash',promptVersion: 'test',modelRef: 'test' });
+    completeDiscussionOrganization(record.id,{ title: 'Meeting',summary: 'TARGET overview',keyPoints: [],decisions: [{ id: 'decision',text: 'TARGET decision',evidenceSegmentIds: [1199] }],risks: [],openQuestions: [],actionItems: [],chapters: [{ title: 'TARGET chapter',summary: 'Ending',startedAtMs: 7140000,endedAtMs: 7200000 }] });
+    service.saveAnnotation(id,{ id: 'target',kind: 'highlight',text: 'TARGET personal context',anchor: { type: 'transcript',capturedAt: 1,transcriptRevision: revision,segmentIds: [1199] },expectedRevision: 0 });
+    const first = await service.review(id,{ query: 'target',limit: 2 });
+    expect(first.total).toBe(5); expect(first.hasMore).toBe(true);
+    expect(first.hits[0]).toMatchObject({ kind: 'transcript',startedAtMs: 7194000 });
+    expect(first.hits[0]!.segments.map(s => s.text)).toContain('context 1198');
+    const second = await service.review(id,{ query: 'target',offset: 2,limit: 3,version: first.version });
+    expect(second.hits.map(h => h.kind)).toEqual(['analysis','analysis','annotation']);
+    expect((await service.review(id,{ query: '[a.*]' })).total).toBeGreaterThan(0);
+    expect((await service.review(id,{ query: 'abc' })).hits.some(h => h.kind === 'transcript')).toBe(true);
+    await expect(service.review(id,{ query: 'x'.repeat(201) })).rejects.toThrow('Invalid review');
+    service.correctSegment(id,1199,'Corrected tail',service.transcript(id)!.segments[1199]!.revision);
+    await expect(service.review(id,{ query: 'target',version: first.version })).rejects.toThrow('restart search');
+    const historical = await service.review(id,{ query: 'TARGET decision' });
+    expect(historical.hits[0]).toMatchObject({ stale: true,transcriptRevision: revision });
+    expect(historical.hits[0]!.segments[0]!.text).toContain('TARGET literal');
+    expect(historical.coverage.analysisStale).toBe(true);
+    expect(historical.coverage.analysisRanges).toEqual([]);
+  });
+
+  it('unions overlapping coverage without counting gaps or invalid intervals', () => {
+    expect(unionReviewRanges([{ startedAtMs: 0,endedAtMs: 10 },{ startedAtMs: 5,endedAtMs: 20 },{ startedAtMs: 30,endedAtMs: 100 },{ startedAtMs: NaN,endedAtMs: 40 }],50)).toEqual([{ startedAtMs: 0,endedAtMs: 20 },{ startedAtMs: 30,endedAtMs: 50 }]);
+  });
+
+  it('persists highlights idempotently, fences stale edits and keeps evidence on its original transcript revision', async () => {
+    const created = await create('annotations'); const id = created.discussion.id;
+    await uploadRecording(id, undefined, 5000);
+    replaceTranscriptSegments(id,[{ text: 'Original decision',startedAtMs: 0,endedAtMs: 2000 },{ text: 'Next action',startedAtMs: 2000,endedAtMs: 5000 }]);
+    const transcript = service.transcript(id)!;
+    const input = { id: 'highlight',kind: 'highlight' as const,text: 'My interpretation',anchor: { type: 'transcript' as const,capturedAt: 1,transcriptRevision: transcript.revision,segmentIds: [0] },expectedRevision: 0 };
+    const saved = service.saveAnnotation(id,input);
+    expect(service.saveAnnotation(id,input)).toEqual(saved);
+    expect(() => service.saveAnnotation(id,{ ...input,text: 'Stale edit' })).toThrow('changed');
+    expect(() => service.saveAnnotation(id,{ ...input,expectedRevision: saved.revision,anchor: { ...input.anchor,segmentIds: [1] } })).toThrow('immutable');
+    service.correctSegment(id,0,'Corrected decision',transcript.segments[0]!.revision);
+    const resolved = (await service.annotations(id))[0]!;
+    expect(resolved.evidence).toMatchObject({ stale: true,transcriptRevision: transcript.revision,audioAvailable: true });
+    expect(resolved.evidence!.segments[0]!.text).toBe('Original decision');
+    expect(resolved.playback).toEqual([{ startedAtMs: 0,endedAtMs: 2000 }]);
+    const removed = service.saveAnnotation(id,{ ...input,expectedRevision: saved.revision,deleted: true });
+    expect(service.saveAnnotation(id,{ ...input,expectedRevision: saved.revision,deleted: true })).toEqual(removed);
+    expect(() => service.saveAnnotation(id,input)).toThrow('changed');
+    expect((await service.annotations(id))[0]!.annotation.deleted).toBe(true);
+  });
+
+  it('never snaps an unsaved mark to nearby text and retains readable evidence after audio deletion', async () => {
+    const created = await create('missing-marker-audio'); const id = created.discussion.id;
+    await uploadRecording(id,undefined,2000);
+    replaceTranscriptSegments(id,[{ text: 'Saved text',startedAtMs: 0,endedAtMs: 2000 }]);
+    for (const [name,position] of [['saved',1000],['missing',3000]] as const) service.saveAnnotation(id,{ id: name,kind: 'highlight',text: '',anchor: { type: 'time',capturedAt: 1,positionMs: position },expectedRevision: 0 });
+    const marks = await service.annotations(id);
+    expect(marks.find(row => row.annotation.id === 'saved')?.state).toBe('located');
+    expect(marks.find(row => row.annotation.id === 'missing')).toMatchObject({ state: 'unavailable',playback: [] });
+    const revision = service.transcript(id)!.revision;
+    updateDiscussionCapture(id,{ status: 'needs_attention' }); await service.deleteAudio(id);
+    const evidence = await service.evidence(id,revision,[0]);
+    expect(evidence).toMatchObject({ audioAvailable: false,timingVerified: false });
+    expect(evidence.segments[0]).toMatchObject({ text: 'Saved text',playback: [] });
+    expect(await service.annotations(id)).toHaveLength(2);
+  });
+
+  it('generates bounded native clips without changing the original source', async () => {
+    const created = await create('native-clip'); await uploadRecording(created.discussion.id,undefined,2000);
+    const before = (await service.get(created.discussion.id))!.discussion.audioSha256;
+    const clip = await service.audioClip(created.discussion.id,500,1500,new AbortController().signal);
+    expect(clip.toString('ascii',0,4)).toBe('RIFF'); expect(clip.length).toBeGreaterThan(32000); expect(clip.length).toBeLessThan(33000);
+    await expect(service.audioClip(created.discussion.id,0,121000,new AbortController().signal)).rejects.toThrow('120 seconds');
+    expect((await service.get(created.discussion.id))!.discussion.audioSha256).toBe(before);
+  });
+
+  it('keeps resumed WebM originals independent and seals them into the same Note idempotently', async () => {
+    const created = await create('resumed-webm');
+    const audio = (frequency: number) => {
+      const result = spawnSync('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-f', 'lavfi', '-i', `sine=frequency=${frequency}:duration=1.2`, '-c:a', 'libopus', '-f', 'webm', 'pipe:1']);
+      if (result.status !== 0) throw new Error(String(result.stderr));
+      return result.stdout;
+    };
+    const originals = [audio(440), audio(880)];
+    for (const [sequence, buffer] of originals.entries()) {
+      await service.uploadRecordingChunk(created.discussion.id, sequence, createHash('sha256').update(buffer).digest('hex'), new Blob([buffer]).stream());
+    }
+    const manifest = { chunkCount: 2, mimeType: 'audio/webm', fileName: 'resumed.webm', lastSequence: -1,
+      epochs: [{ firstChunk: 0, mimeType: 'audio/webm', startedAt: 1000 }, { firstChunk: 1, mimeType: 'audio/webm', startedAt: 9000, previousEndedAt: 2200 }] };
+    await expect(service.sealRecording(created.discussion.id, { ...manifest, epochs: [{ ...manifest.epochs[0]!, firstChunk: 1 }, manifest.epochs[1]!] })).rejects.toThrow('Invalid recording epochs');
+    const submitted = await service.sealRecording(created.discussion.id, manifest);
+    expect(await service.sealRecording(created.discussion.id, manifest)).toEqual(submitted);
+    await expect(service.sealRecording(created.discussion.id, { ...manifest, epochs: manifest.epochs.map(epoch => ({ ...epoch, startedAt: 42 })) })).rejects.toThrow('manifest differs');
+    const add = notes.addAttachment.bind(notes); let additions = 0;
+    const failOnce = vi.spyOn(notes, 'addAttachment').mockImplementation(async (...args) => {
+      if (++additions === 2) throw new Error('DISK_WRITE_INTERRUPTED');
+      return add(...args);
+    });
+    await service.processRecordingJob();
+    expect(service.recordingJob(created.discussion.id)?.state).toBe('failed');
+    expect(service.recordingChunks(created.discussion.id)).toHaveLength(2);
+    failOnce.mockRestore();
+    await service.sealRecording(created.discussion.id, manifest);
+    await service.processRecordingJob();
+    expect(service.recordingJob(created.discussion.id)?.state).toBe('completed');
+    const recovered = await service.get(created.discussion.id);
+    expect(recovered?.note.id).toBe(created.note.id);
+    expect(recovered?.discussion.mimeType).toBe('audio/wav');
+    expect(recovered?.discussion.durationMs).toBeGreaterThanOrEqual(2400);
+    const current = await notes.getNote(created.note.id);
+    const sources = current!.attachments.filter(attachment => attachment.fileName.startsWith('recording-part-'));
+    expect(sources).toHaveLength(2);
+    for (const [index, attachment] of sources.entries()) {
+      const source = await notes.getAttachmentPath(created.note.id, attachment.id);
+      expect(await readFile(source!.filePath)).toEqual(originals[index]);
+    }
+    expect(current!.attachments.filter(attachment => attachment.fileName === `recording-sources-${created.discussion.id}.json`)).toHaveLength(1);
+    expect((await create('resumed-webm')).note.id).toBe(created.note.id);
+    expect(service.list().total).toBe(1);
+    updateDiscussionCapture(created.discussion.id, { status: 'needs_attention' });
+    await service.deleteAudio(created.discussion.id);
+    expect((await notes.getNote(created.note.id))!.attachments).toHaveLength(0);
+  });
 
   it('assembles independent mobile WAV chunks and produces a meeting summary', async () => {
     const consentPolicyVersion = service.settings().consentPolicyVersion;
@@ -215,6 +369,12 @@ describe('discussion note document', () => {
       expect((await fetch(jobUrl)).status).toBe(401);
       expect((await fetch(jobUrl, { headers: { authorization: 'Bearer meeting-test', 'x-test-read-only': '1' } })).status).toBe(200);
       expect(await (await fetch(jobUrl, { headers: { authorization: 'Bearer meeting-test' } })).json()).toMatchObject({ id: job.id, state: 'queued' });
+      const resumed = await create('http-resumed');
+      for (const sequence of [0, 1]) await service.uploadRecordingChunk(resumed.discussion.id, sequence, createHash('sha256').update('test').digest('hex'), new Blob(['test']).stream());
+      const epochs = [{ firstChunk: 0, mimeType: 'audio/webm', startedAt: 1000 }, { firstChunk: 1, mimeType: 'audio/webm', startedAt: 9000, previousEndedAt: 2000 }];
+      const epochResponse = await fetch(`${base}/api/discussions/${resumed.discussion.id}/capture/seal`, { method: 'POST', headers: { authorization: 'Bearer meeting-test', 'content-type': 'application/json' }, body: JSON.stringify({ chunkCount: 2, mimeType: 'audio/webm', fileName: 'meeting.webm', lastSequence: -1, epochs }) });
+      expect(epochResponse.status).toBe(202); expect(getRecordingJobInput(resumed.discussion.id)?.epochs).toEqual(epochs);
+      await service.cancel(resumed.discussion.id);
       await service.cancel(created.discussion.id);
       const playable = await create('http-playback');
       await uploadRecording(playable.discussion.id, { name: 'meeting.wav', buffer: Buffer.from('audio'), mimeType: 'audio/wav' }, 2_000);
@@ -227,6 +387,27 @@ describe('discussion note document', () => {
       expect(invalid.status).toBe(416);
       const exported = await fetch(`${base}/api/discussions/${playable.discussion.id}/export?format=txt`, { headers: { authorization: 'Bearer meeting-test' } });
       expect(exported.status).toBe(200);
+      replaceTranscriptSegments(playable.discussion.id,[{ text: 'HTTP source',startedAtMs: 0,endedAtMs: 2000 }]);
+      const evidenceRevision = service.transcript(playable.discussion.id)!.revision;
+      const annotationsUrl = `${base}/api/discussions/${playable.discussion.id}/annotations`;
+      expect((await fetch(annotationsUrl)).status).toBe(401);
+      const annotationBody = JSON.stringify({ kind: 'highlight',text: 'HTTP context',expectedRevision: 0,anchor: { type: 'transcript',capturedAt: 1,transcriptRevision: evidenceRevision,segmentIds: [0] } });
+      expect((await fetch(annotationsUrl + '/http-mark',{ method: 'PUT',headers: { authorization: 'Bearer meeting-test','content-type': 'application/json','x-test-read-only': '1' },body: annotationBody })).status).toBe(403);
+      expect((await fetch(annotationsUrl + '/http-mark',{ method: 'PUT',headers: { authorization: 'Bearer meeting-test','content-type': 'application/json' },body: annotationBody })).status).toBe(200);
+      const evidenceUrl = `${base}/api/discussions/${playable.discussion.id}/evidence?revision=${evidenceRevision}&segments=0`;
+      expect((await fetch(evidenceUrl)).status).toBe(401);
+      const evidenceResponse = await fetch(evidenceUrl,{ headers: { authorization: 'Bearer meeting-test' } }); expect(evidenceResponse.status).toBe(200);
+      const reviewUrl = `${base}/api/discussions/${playable.discussion.id}/review?q=HTTP`;
+      expect((await fetch(reviewUrl)).status).toBe(401);
+      const reviewResponse = await fetch(reviewUrl,{ headers: { authorization: 'Bearer meeting-test','x-test-read-only': '1' } });
+      expect(reviewResponse.status).toBe(200);
+      expect(await reviewResponse.json()).toMatchObject({ query: 'HTTP',hits: expect.arrayContaining([expect.objectContaining({ kind: 'annotation' })]) });
+      expect((await fetch(`${reviewUrl}&limit=51`,{ headers: { authorization: 'Bearer meeting-test' } })).status).toBe(400);
+
+      expect(await evidenceResponse.json()).toMatchObject({ transcriptRevision: evidenceRevision,audioAvailable: true });
+      const clipUrl = `${base}/api/discussions/${playable.discussion.id}/audio-clip?startMs=0&endMs=1000`;
+      expect((await fetch(clipUrl)).status).toBe(401);
+      expect((await fetch(clipUrl,{ headers: { authorization: 'Bearer meeting-test' } })).status).toBe(200);
       const retryUrl = `${base}/api/discussions/${playable.discussion.id}/retry`;
       updateDiscussionCapture(playable.discussion.id, { status: 'completed' });
       const retryBody = JSON.stringify({ mode: 'from_audio' });

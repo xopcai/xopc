@@ -284,9 +284,11 @@ describe('saved original to Note recovery', () => {
     await worker().tick();
     expect(getDiscussionCapture(id)?.status).toBe('organizing');
     expect(modelMocks.complete).toHaveBeenCalledTimes(2);
+    expect((await service.review(id)).chapters).toEqual([expect.objectContaining({ text: 'First chapter',provisional: true })]);
     expect(Number(getSqliteDatabase().prepare('SELECT COUNT(*) n FROM discussion_analysis_chunks WHERE discussion_id=?').get(id)!.n)).toBe(1);
     closeXopcDatabase(); resetXopcDatabaseSingletonForTest(); openXopcDatabase({ path: join(directory, 'xopc.db') });
     getSqliteDatabase().prepare('UPDATE discussion_processing SET next_attempt_at=0 WHERE discussion_id=?').run(id);
+    expect((await service.review(id)).chapters[0]?.text).toBe('First chapter');
     await worker().tick();
     expect(modelMocks.complete).toHaveBeenCalledTimes(4);
     expect(modelMocks.complete.mock.calls[2][1].messages[0].content).toContain('B'.repeat(5_000));

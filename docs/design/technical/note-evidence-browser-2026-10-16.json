@@ -1,0 +1,179 @@
+{
+  "date": "2026-10-16T00:07:04.546Z",
+  "directory": "/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-recording-browser-VSQvU4",
+  "durationMs": 12000,
+  "syntheticMicrophone": true,
+  "passed": true,
+  "checks": [
+    {
+      "scenario": "offline highlight committed before SIGKILL, stable ID and encoded anchor survive process restart",
+      "marks": [
+        {
+          "recordingId": "179e6dcb-bf16-4e24-b948-9e5b6b6e3f77",
+          "annotation": {
+            "id": "b3fa2ebe-1326-49b2-9646-06d34a618954",
+            "kind": "highlight",
+            "text": "",
+            "anchor": {
+              "type": "time",
+              "capturedAt": 1792109231329,
+              "epoch": 0,
+              "coordinate": "pcm",
+              "offsetMs": 5039
+            },
+            "revision": 0,
+            "deleted": false,
+            "createdAt": 1792109231329,
+            "updatedAt": 1792109231329
+          },
+          "nonce": "51f1298d-ece0-41cb-9b38-145cdb7fb42b",
+          "state": "pending"
+        }
+      ]
+    },
+    {
+      "scenario": "offline capture, SIGKILL, browser restart, IndexedDB restore and audio decode",
+      "savedChunks": 4,
+      "savedDurationMs": 15116,
+      "decodedDurationMs": 15060,
+      "mediaCoverage": {
+        "version": 1,
+        "verifiedThroughMs": 15060,
+        "observedThroughMs": 15060,
+        "status": "verified",
+        "committedChunkCount": 4
+      },
+      "bytes": 122180,
+      "prefixHash": "9e5ac7e6872ecd6195331dfe4b050d2cd6b62b30a4f41be864c0e767835786df"
+    },
+    {
+      "scenario": "continue after SIGKILL into independent media containers, unchanged source prefix and valid local export archive",
+      "draftId": "179e6dcb-bf16-4e24-b948-9e5b6b6e3f77",
+      "epochs": [
+        {
+          "firstChunk": 0,
+          "mimeType": "audio/webm;codecs=opus",
+          "startedAt": 1792109226269,
+          "savedThroughMs": 15060
+        },
+        {
+          "firstChunk": 4,
+          "mimeType": "audio/webm;codecs=opus",
+          "startedAt": 1792109244323,
+          "previousEndedAt": 1792109241390
+        }
+      ],
+      "epochPaths": [
+        "/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-recording-browser-VSQvU4/epoch-0.webm",
+        "/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-recording-browser-VSQvU4/epoch-1.webm"
+      ],
+      "archivePath": "/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-recording-browser-VSQvU4/recovery.tar"
+    },
+    {
+      "scenario": "all microphone tracks stop; MediaRecorder closes and saves tail",
+      "chunks": 2,
+      "durationMs": 5057.700000047684
+    },
+    {
+      "scenario": "pause, resume after real audio input, stop barrier and local success",
+      "mediaCoverage": {
+        "version": 1,
+        "verifiedThroughMs": 5100,
+        "observedThroughMs": 5213,
+        "status": "gap",
+        "committedChunkCount": 3
+      },
+      "saveOutcome": "complete"
+    }
+  ],
+  "browser": "155.0.8059.40",
+  "originalMarks": [
+    {
+      "recordingId": "179e6dcb-bf16-4e24-b948-9e5b6b6e3f77",
+      "annotation": {
+        "id": "b3fa2ebe-1326-49b2-9646-06d34a618954",
+        "kind": "highlight",
+        "text": "",
+        "anchor": {
+          "type": "time",
+          "capturedAt": 1792109231329,
+          "epoch": 0,
+          "coordinate": "pcm",
+          "offsetMs": 5039
+        },
+        "revision": 0,
+        "deleted": false,
+        "createdAt": 1792109231329,
+        "updatedAt": 1792109231329
+      },
+      "nonce": "51f1298d-ece0-41cb-9b38-145cdb7fb42b",
+      "state": "pending"
+    }
+  ],
+  "pausedMarks": [
+    {
+      "recordingId": "036b4315-0775-4e6c-b92f-ac944b82665a",
+      "annotation": {
+        "id": "f8db220b-2009-45ac-b33a-183e6033e56a",
+        "kind": "highlight",
+        "text": "",
+        "anchor": {
+          "type": "time",
+          "capturedAt": 1792109262301,
+          "epoch": 0,
+          "coordinate": "pcm",
+          "offsetMs": 5099
+        },
+        "revision": 0,
+        "deleted": false,
+        "createdAt": 1792109262301,
+        "updatedAt": 1792109262301
+      },
+      "nonce": "a5e71ec2-938c-492a-8e5c-b6cee0c78f65",
+      "state": "pending"
+    }
+  ],
+  "gatewayEvidence": {
+    "passed": true,
+    "directory": "/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-evidence-media-LJeZpO",
+    "checks": [
+      {
+        "scenario": "recovered",
+        "noteId": "3f13542f-ed1d-4eb8-a43c-371181b5af62",
+        "sourceSha256": "9e5ac7e6872ecd6195331dfe4b050d2cd6b62b30a4f41be864c0e767835786df",
+        "markerCoordinate": "pcm",
+        "markerOffsetMs": 5039,
+        "normalizedMarkerMs": 5039,
+        "playback": [
+          {
+            "startedAtMs": 3039,
+            "endedAtMs": 13039
+          }
+        ],
+        "clipDurationMs": 10000,
+        "historicalRevision": 1
+      },
+      {
+        "scenario": "paused",
+        "noteId": "df06ce32-53c8-4f2a-95e3-6f9d8f726b81",
+        "sourceSha256": "3bbbc0460a6b2bc05171035fff00cd7f2d8c01cc451419fb5fb7647960f28404",
+        "markerCoordinate": "pcm",
+        "markerOffsetMs": 5099,
+        "normalizedMarkerMs": 5099,
+        "playback": [
+          {
+            "startedAtMs": 3099,
+            "endedAtMs": 5100
+          },
+          {
+            "startedAtMs": 5093,
+            "endedAtMs": 5213
+          }
+        ],
+        "clipDurationMs": 2008,
+        "historicalRevision": 1
+      }
+    ],
+    "sqliteRestartRetainsAnnotations": true
+  }
+}

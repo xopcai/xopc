@@ -6,6 +6,9 @@ export interface DiscussionDetail { discussion: DiscussionCapture; note: Note; t
 
 export interface DiscussionDraft {
   id: string;
+  gatewayUrl?: string;
+  epochs?: { firstChunk: number; mimeType: string; startedAt: number; previousEndedAt?: number; savedThroughMs?: number }[];
+  sealRequested?: boolean;
   projectId?: string;
   serverDiscussionId?: string;
   consentPolicyVersion?: number;
@@ -13,10 +16,13 @@ export interface DiscussionDraft {
   mimeType: string;
   startedAt: number;
   updatedAt: number;
+  endedAt?: number;
   durationMs: number;
   chunkCount: number;
   lastSequence: number;
   state: 'recording' | 'stopped' | 'upload_failed';
+  mediaCoverage?: import('./recording-media-coverage').RecordingMediaCoverage & { committedChunkCount: number };
+  saveOutcome?: 'complete' | 'interrupted' | 'incomplete';
 }
 
 export interface DiscussionDraftChunk {

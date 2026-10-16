@@ -13,8 +13,8 @@ describe('HarmonyOS voice note surface', () => {
     expect(home).not.toContain(".id('note-capture-start')");
     expect(home).not.toContain('if (this.tab !== 3) {');
     expect(home).toContain('this.quickComposer()');
-    expect(home).toContain(".id('note-capture-mini')");
-    expect(home).toContain("if (this.capture.active) { this.noteCaptureBar() }");
+    expect(home).toContain('XopcDiscussionRecordingPanelView({ panel: this.recordingPanel');
+    expect(home).not.toContain('this.noteCaptureBar()');
     expect(home).toContain('onStartVoice: (): void => { void this.startNoteCapture(); }');
     expect(home).toContain('await this.capture.start(context)');
     expect(notes).toContain(".id('notes-create-text')");
@@ -24,13 +24,16 @@ describe('HarmonyOS voice note surface', () => {
   });
 
   it('renders live transcript, pause, marker, finish and retry states', () => {
+    const panel = source('../entry/src/main/ets/view/DiscussionRecordingPanel.ets');
+    expect(panel).toContain(".id('discussion-recording-float')");
+    expect(panel).toContain('this.capture.visibleTranscript');
+    expect(panel).toContain('this.panel.pause(this.capture)');
+    expect(panel).toContain('this.panel.mark(this.capture)');
+    expect(panel).toContain('void this.finishRecording()');
+    expect(panel).toContain('.onActionCancel((): void => { this.panel.dragCancel(); })');
+    expect(panel).toContain('this.positionChoices()');
     const notes = source('../entry/src/main/ets/view/NotesTabView.ets');
-    expect(notes).toContain(".id('notes-live-capture')");
-    expect(notes).toContain('this.capture.visibleTranscript');
-    expect(notes).toContain('.textAlign(TextAlign.Center)');
-    expect(notes).toContain('this.capture.togglePause()');
-    expect(notes).toContain('this.capture.mark()');
-    expect(notes).toContain('void this.finishCapture()');
+    expect(notes).not.toContain('this.capturePane()');
   });
 
   it('uses realtime dictation with durable chunked transcription as fallback', () => {

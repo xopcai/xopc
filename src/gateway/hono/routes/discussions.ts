@@ -96,9 +96,42 @@ export function registerDiscussionRoutes(authenticated: Hono, deps: Authenticate
     return detail ? c.json(detail) : c.json({ error: 'Discussion not found' }, 404);
   });
 
+  authenticated.get('/api/discussions/:id/review', async (c) => {
+    try {
+      return c.json(await service.discussions.review(c.req.param('id'), {
+        query: c.req.query('q'), offset: Number(c.req.query('offset') ?? 0), limit: Number(c.req.query('limit') ?? 20), version: c.req.query('version'),
+      }));
+    } catch (error) {
+      const response = errorResponse(error);
+      if (response) return c.json(response.body,response.status);
+      throw error;
+    }
+  });
+
   authenticated.get('/api/discussions/:id', async (c) => {
     const detail = await service.discussions.get(c.req.param('id'));
     return detail ? c.json(detail) : c.json({ error: 'Discussion not found' }, 404);
+  });
+
+  authenticated.get('/api/discussions/:id/audio-clip', mediaRateLimitMiddleware, async c => {
+    try {
+      const bytes = await service.discussions.audioClip(c.req.param('id'),Number(c.req.query('startMs')),Number(c.req.query('endMs')),c.req.raw.signal);
+      c.header('Cache-Control','no-store'); c.header('Content-Type','audio/wav'); return c.body(new Uint8Array(bytes));
+    } catch (error) { const response = errorResponse(error); if (response) return c.json(response.body,response.status); throw error; }
+  });
+
+  authenticated.get('/api/discussions/:id/annotations', async c => {
+    try { return c.json(await service.discussions.annotations(c.req.param('id'))); }
+    catch (error) { const response = errorResponse(error); if (response) return c.json(response.body,response.status); throw error; }
+  });
+  authenticated.put('/api/discussions/:id/annotations/:annotationId', strictRateLimitMiddleware, async c => {
+    const body = await c.req.json().catch(() => ({}));
+    try { return c.json(service.discussions.saveAnnotation(c.req.param('id'), { ...body, id: c.req.param('annotationId') })); }
+    catch (error) { const response = errorResponse(error); if (response) return c.json(response.body,response.status); throw error; }
+  });
+  authenticated.get('/api/discussions/:id/evidence', async c => {
+    try { return c.json(await service.discussions.evidence(c.req.param('id'),Number(c.req.query('revision')), (c.req.query('segments') ?? '').split(',').filter(Boolean).map(Number))); }
+    catch (error) { const response = errorResponse(error); if (response) return c.json(response.body,response.status); throw error; }
   });
 
   authenticated.get('/api/discussions/:id/transcript', (c) => {
@@ -233,6 +266,8 @@ export function registerDiscussionRoutes(authenticated: Hono, deps: Authenticate
       return c.json(await service.discussions.sealRecording(c.req.param('id'), {
         lastSequence: Number(body.lastSequence),
         chunkCount: Number(body.chunkCount), mimeType: typeof body.mimeType === 'string' ? body.mimeType : '', fileName: typeof body.fileName === 'string' ? body.fileName : '',
+        ...(body.events !== undefined ? { events: body.events as import('@xopcai/gateway-contract').DiscussionRecordingManifest['events'] } : {}),
+        ...(body.epochs !== undefined ? { epochs: body.epochs as import('@xopcai/gateway-contract').DiscussionRecordingManifest['epochs'] } : {}),
         ...(body.containerMode === 'independent_wav' ? { containerMode: 'independent_wav' as const } : {}),
       }), 202);
     } catch (error) { const response = errorResponse(error); if (response) return c.json(response.body, response.status); throw error; }

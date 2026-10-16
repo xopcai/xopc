@@ -32,11 +32,13 @@ beforeEach(() => {
 });
 afterEach(async () => { await act(async () => root.unmount()); container.remove(); });
 const render = async () => { await act(async () => { root.render(<MemoryRouter><DiscussionNoteSections noteId="note" /></MemoryRouter>); }); };
-const find = (text: string) => [...container.querySelectorAll('button')].find(button => button.textContent === text);
+const find = (text: string) => [...document.querySelectorAll('button')].find(button => button.textContent === text);
 
 describe('original-audio regeneration controls', () => {
   it('distinguishes a full original-audio rerun from summary-only regeneration', async () => {
     await render();
+    expect(find('重新整理纪要')).toBeUndefined();
+    await act(async () => document.querySelector<HTMLButtonElement>('button[aria-label="更多笔记操作"]')!.click());
     expect(find('重新整理纪要')).toBeDefined();
     await act(async () => find('从原音重新生成')!.click());
     expect(mocks.retry).toHaveBeenCalledWith('capture', 'from_audio');
@@ -48,7 +50,7 @@ describe('original-audio regeneration controls', () => {
     mocks.state.detail!.processing = { fromAudio: true, completedChunks: 2, transcribedMs: 40_000, attemptCount: 1, maxAttempts: 3, nextAttemptAt: Date.now() + 5_000 };
     await render();
     expect(find('从原音重新生成')).toBeUndefined();
-    expect(container.textContent).toContain('将自动重试');
+    expect(container.textContent).toContain('系统稍后自动重试');
     expect(container.textContent).toContain('Previous published summary');
   });
 
@@ -56,4 +58,27 @@ describe('original-audio regeneration controls', () => {
     mocks.state.detail!.discussion.audioDeletedAt = Date.now();
     await render(); expect(find('从原音重新生成')).toBeUndefined();
   });
+  it.each([['organization','重试生成笔记'],['transcript_sealing','继续整理文字']])('retries %s in place while preserving the original source and previous results', async (failureStage,label) => {
+    mocks.state.detail!.discussion.status = 'needs_attention';
+    mocks.state.detail!.discussion.failureStage = failureStage as 'organization' | 'transcript_sealing';
+    await render();await act(async () => find(label)!.click());
+    expect(mocks.retry).toHaveBeenCalledExactlyOnceWith('capture','resume');
+    expect(container.textContent).toContain('Previous published summary');
+    expect(container.textContent).toContain('原音 · 可用');
+  });
+
+  it('offers original confirmation retry even if a failed assembly left the capture in recording status', async () => {
+    mocks.state.detail!.discussion.status = 'recording';mocks.state.detail!.discussion.audioAttachmentId = undefined;
+    mocks.state.detail!.recordingJob = { state: 'failed' } as DiscussionDetail['recordingJob'];
+    await render();expect(container.textContent).toContain('原音确认未完成');
+    await act(async () => find('重试确认原音')!.click());
+    expect(mocks.retry).toHaveBeenCalledExactlyOnceWith('capture','resume');
+  });
+
+  it('keeps older notes with plain key points readable without inventing evidence', async () => {
+    mocks.state.detail!.organization!.organization!.keyPoints = ['Keep the original recording safe'];
+    await render();expect(container.textContent).toContain('Keep the original recording safe');
+    expect(find('原话')).toBeUndefined();
+  });
+
 });

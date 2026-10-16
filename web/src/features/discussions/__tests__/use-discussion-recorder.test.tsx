@@ -1,5 +1,8 @@
 // @vitest-environment jsdom
+import { IDBFactory, IDBKeyRange } from 'fake-indexeddb';
+import { listLocalAnnotations } from '../discussion-annotation-store';
 import { act } from 'react';
+import { Blob as NodeBlob } from 'node:buffer';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -22,6 +25,7 @@ vi.mock('../live-pcm-segmenter', () => ({ LivePcmSegmenter: { start: mocks.segme
 vi.mock('@/features/voice/microphone-lease', () => ({ acquireMicrophoneLease: mocks.acquire, releaseMicrophoneLease: mocks.release }));
 
 import { useDiscussionRecorder } from '../use-discussion-recorder';
+import { mediaHeader, mediaCluster } from './recording-media-fixture';
 
 class Recorder {
   static latest: Recorder;
@@ -37,6 +41,7 @@ class Recorder {
   start() { this.state = 'recording'; }
   pause() { this.state = 'paused'; }
   resume() { this.state = 'recording'; }
+  requestData() { this.emit(); }
   emit(text = 'audio') { this.ondataavailable?.({ data: new Blob([text]) }); }
   stop() {
     this.stopCalls++;
@@ -70,6 +75,7 @@ beforeEach(async () => {
   mocks.segmenterStart.mockResolvedValue({ cancel: mocks.cancel, stop: () => new Promise(() => {}), pause: vi.fn(), resume: vi.fn() });
   track = Object.assign(new EventTarget(), { stop: vi.fn() });
   vi.stubGlobal('MediaRecorder', Recorder);
+  vi.stubGlobal('Blob', NodeBlob);
   Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: {
     getUserMedia: vi.fn(async () => ({ getTracks: () => [track], getAudioTracks: () => [track] })),
   } });
@@ -81,6 +87,137 @@ afterEach(async () => {
 });
 
 describe('original recording durability and recovery', () => {
+  it('persists a one-click highlight before feedback and resolves it only from newly committed encoded media', async () => {
+    vi.useRealTimers(); vi.stubGlobal('indexedDB',new IDBFactory()); vi.stubGlobal('IDBKeyRange',IDBKeyRange);
+    await start();
+    await act(async () => { await api.mark(); });
+    expect(api.markerMessage).toBe('saved');
+    const pending = (await listLocalAnnotations(api.draft!.id))[0]; expect(pending.annotation.anchor.offsetMs).toBeUndefined();
+    await act(async () => { Recorder.latest.ondataavailable?.({ data: new Blob([Uint8Array.from([...mediaHeader,...mediaCluster(0)])]) }); });
+    // Invalid earlier bytes must never manufacture a timed anchor.
+    expect((await listLocalAnnotations(api.draft!.id))[0].annotation.id).toBe(pending.annotation.id);
+    expect(api.phase).not.toBe('error');
+  });
+  it('anchors a new highlight to committed encoded media instead of the UI clock', async () => {
+    vi.useRealTimers(); vi.stubGlobal('indexedDB',new IDBFactory()); vi.stubGlobal('IDBKeyRange',IDBKeyRange);
+    await start();
+    Recorder.latest.requestData = () => Recorder.latest.ondataavailable?.({ data: new Blob([Uint8Array.from([...mediaHeader,...mediaCluster(0)])]) });
+    await act(async () => { await api.mark(); });
+    await vi.waitFor(async () => expect((await listLocalAnnotations(api.draft!.id))[0].annotation.anchor.offsetMs).toBeGreaterThan(0));
+    expect((await listLocalAnnotations(api.draft!.id))[0].annotation.anchor.epoch).toBe(0);
+    expect(api.phase).toBe('recording');
+  });
+
+  it('does not stop healthy source capture when local highlight persistence fails', async () => {
+    vi.useRealTimers(); vi.stubGlobal('indexedDB',undefined);
+    await start(); await act(async () => { await api.mark(); });
+    expect(api.markerError).toBeTruthy(); expect(Recorder.latest.state).toBe('recording');
+    expect(api.markerMessage).toBeNull();
+  });
+
+  it('continues a committed interrupted draft with unchanged identity and immutable old chunks', async () => {
+    await start(); await emit();
+    await act(async () => { await api.stop(); });
+    const original = api.draft!;
+    const chunks = [...mocks.chunks.entries()]; const oldRecorder = Recorder.latest;
+    await act(async () => { await api.start({ continuation: original, onLiveSegment: vi.fn() }); });
+    expect(api.draft!.id).toBe(original.id); expect(api.phase).toBe('waiting_for_audio');
+    expect(api.draft!.epochs).toHaveLength(2);
+    expect(api.draft!.epochs![1].firstChunk).toBe(original.chunkCount);
+    await act(async () => { oldRecorder.emit('late-old-event'); });
+    expect(api.draft!.chunkCount).toBe(original.chunkCount);
+    await emit();
+    expect(api.draft!.chunkCount).toBe(original.chunkCount + 1);
+    for (const [key, blob] of chunks) expect(mocks.chunks.get(key)).toBe(blob);
+    await act(async () => { await api.stop(); });
+    expect(mocks.drafts.size).toBe(1);
+  });
+  it('refuses to continue a possibly committed seal or a draft belonging to a different Gateway', async () => {
+    await start(); await emit(); await act(async () => { await api.stop(); });
+    const original = api.draft!;
+    mocks.drafts.set(original.id, { ...original, sealRequested: true });
+    await act(async () => { expect(await api.start({ continuation: original, onLiveSegment: vi.fn() })).toBeNull(); });
+    expect(api.error).toContain('submitted');
+    mocks.drafts.set(original.id, { ...original, gatewayUrl: 'https://old.example' });
+    await act(async () => { expect(await api.start({ continuation: original, gatewayUrl: 'https://new.example', onLiveSegment: vi.fn() })).toBeNull(); });
+    expect(api.error).toContain('original Gateway'); expect(mocks.drafts.get(original.id)!.chunkCount).toBe(original.chunkCount);
+  });
+
+  it('waits for actual samples and does not treat permission or an empty recorder header as audio input', async () => {
+    await start(); expect(api.phase).toBe('waiting_for_audio');
+    await act(async () => { Recorder.latest.ondataavailable?.({ data: new Blob([Uint8Array.from(mediaHeader)]) }); });
+    expect(api.phase).toBe('waiting_for_audio');
+    await act(async () => { mocks.segmenterStart.mock.calls[0][2](0); });
+    expect(api.phase).toBe('recording'); expect(api.inputLevel).toBe(0);
+    await act(async () => { api.pause(); api.resume(); });
+    expect(api.phase).toBe('waiting_for_audio');
+    await act(async () => { mocks.segmenterStart.mock.calls[0][2](0.2); });
+    expect(api.phase).toBe('recording');
+  });
+  it('stops advertising active capture when both audio callbacks stall and reconfirms actual input', async () => {
+    await start(); await act(async () => { mocks.segmenterStart.mock.calls[0][2](0); });
+    expect(api.phase).toBe('recording');
+    await act(async () => { await vi.advanceTimersByTimeAsync(15_001); });
+    expect(api.phase).toBe('waiting_for_audio'); expect(api.inputLevel).toBeNull();
+    await act(async () => { mocks.segmenterStart.mock.calls[0][2](0); });
+    expect(api.phase).toBe('recording');
+  });
+
+  it('publishes only committed encoded media time and leaves the boundary unchanged when the next write fails', async () => {
+    await start();
+    let commit!: () => void;
+    const save = mocks.saveChunk.getMockImplementation()!;
+    mocks.saveChunk.mockImplementationOnce(async (...args) => { await new Promise<void>(done => { commit = done; }); await save(...args); });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(30_000);
+      Recorder.latest.ondataavailable?.({ data: new Blob([Uint8Array.from([...mediaHeader, ...mediaCluster(0)])]) });
+    });
+    expect(api.draft?.mediaCoverage).toBeUndefined();
+    await act(async () => { commit(); });
+    expect(api.draft?.mediaCoverage).toMatchObject({ verifiedThroughMs: 20, committedChunkCount: 1 });
+    mocks.saveChunk.mockRejectedValueOnce(new Error('Disk full'));
+    await act(async () => { Recorder.latest.ondataavailable?.({ data: new Blob([Uint8Array.from(mediaCluster(20))]) }); });
+    expect(api.draft?.mediaCoverage?.verifiedThroughMs).toBe(20); expect(api.phase).toBe('error');
+    expect(api.draft?.saveOutcome).toBe('incomplete');
+  });
+
+  it('does not declare local completion until stop metadata commits and ignores packets delivered after a stop timeout', async () => {
+    await start(); await emit();
+    let commit!: () => void;
+    const save = mocks.save.getMockImplementation()!;
+    mocks.save.mockImplementationOnce(async (...args) => { await new Promise<void>(done => { commit = done; }); await save(...args); });
+    let stopping!: Promise<DiscussionDraft | null>;
+    await act(async () => { stopping = api.stop(); });
+    expect(api.phase).toBe('stopping'); expect(api.draft?.saveOutcome).toBeUndefined();
+    await act(async () => { commit(); await stopping; });
+    expect(api.draft?.saveOutcome).toBe('complete');
+    await start(); await emit(); Recorder.latest.hung = true;
+    await act(async () => { const pending = api.stop().catch(() => null); await vi.advanceTimersByTimeAsync(5_001); await pending; });
+    const count = api.draft!.chunkCount;
+    await emit(); expect(api.draft!.chunkCount).toBe(count); expect(api.draft?.saveOutcome).toBe('incomplete');
+  });
+
+  it('retains the interruption outcome after a real track-ended event instead of claiming a complete recording', async () => {
+    await start(); await emit();
+    await act(async () => { track.dispatchEvent(new Event('ended')); });
+    expect(api.phase).toBe('stopped'); expect(api.draft?.saveOutcome).toBe('interrupted');
+    expect(track.stop).toHaveBeenCalled();
+  });
+  it('detects a silent recorder shutdown and ignores ended events from an earlier recording', async () => {
+    await start(); await emit();
+    const previous = Recorder.latest;
+    await act(async () => { await api.stop(); });
+    await start();
+    await act(async () => { previous.onerror?.(); previous.onstop?.(); });
+    expect(api.phase).toBe('waiting_for_audio');
+    await act(async () => {
+      Recorder.latest.state = 'inactive';
+      await vi.advanceTimersByTimeAsync(1_000);
+    });
+    expect(api.phase).toBe('stopping');
+    await act(async () => { Recorder.latest.emit('last'); Recorder.latest.onstop?.(); });
+    expect(api.draft?.saveOutcome).toBe('interrupted'); expect(api.phase).toBe('stopped');
+  });
   it('stops original audio once and saves its tail without waiting for a hung live segmenter', async () => {
     await start(); await act(async () => { await vi.advanceTimersByTimeAsync(5_000); }); await emit();
     let first!: Promise<DiscussionDraft | null>; let second!: Promise<DiscussionDraft | null>;
@@ -93,7 +230,7 @@ describe('original recording durability and recovery', () => {
 
   it('starts and stops original audio even if live capture initialization never resolves', async () => {
     mocks.segmenterStart.mockReturnValue(new Promise(() => {}));
-    await start(); expect(api.phase).toBe('recording');
+    await start(); expect(api.phase).toBe('waiting_for_audio');
     await act(async () => { await api.stop(); });
     expect(api.phase).toBe('stopped'); expect(track.stop).toHaveBeenCalled();
   });

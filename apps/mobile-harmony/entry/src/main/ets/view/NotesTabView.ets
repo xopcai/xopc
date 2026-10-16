@@ -1,3 +1,4 @@
+import { XopcLocalRecording } from '../service/discussionRecordingStore';
 import { common } from '@kit.AbilityKit';
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { XopcMobileRoute } from '../model/home';
@@ -24,6 +25,7 @@ export struct XopcNotesTabView {
   @Local files: XopcFilesViewModel = new XopcFilesViewModel();
   @Local contentWidth: number = 0;
   @Local selectedId: string = '';
+  @Local recoveriesOpen: boolean = false;
   @Local creationSheetOpen: boolean = false;
   @Local pendingCreation: string = '';
   private initialized: boolean = false;
@@ -78,136 +80,10 @@ export struct XopcNotesTabView {
     }.width('100%').padding({ left: 20, right: 20, top: 10, bottom: 16 })
   }
 
-  private async finishCapture(): Promise<void> {
-    const noteId = await this.capture.stop();
-    if (!noteId || this.capture.phase === 'error') return;
-    this.capture.reset();
-    void this.model.list();
-    this.onNavigate({ page: 'notes', itemId: noteId });
-  }
-
-  @Builder
-  captureControl(label: ResourceStr, symbol: Resource, action: () => void, primary: boolean = false) {
-    Button({ type: ButtonType.Normal }) {
-      Column({ space: 5 }) {
-        Row() {
-          SymbolGlyph(symbol).fontSize(primary ? 22 : 20)
-            .fontColor([primary ? this.colors.panel : this.colors.foreground])
-        }.width(primary ? 52 : 44).height(primary ? 52 : 44).borderRadius(primary ? 26 : 22)
-          .justifyContent(FlexAlign.Center).backgroundColor(primary ? this.colors.danger : this.colors.input)
-        Text(label).fontSize(12).fontColor(this.colors.secondary)
-      }
-    }.height(76).padding(0).backgroundColor(Color.Transparent).onClick(action)
-  }
-
-  @Builder
-  capturePane() {
-    Column() {
-      Row() {
-        Text($r('app.string.capture_title')).fontSize(22).fontWeight(FontWeight.Bold)
-          .fontColor(this.colors.foreground).layoutWeight(1)
-        Row({ space: 7 }) {
-          Row() {}.width(7).height(7).borderRadius(4).backgroundColor(this.colors.danger)
-          Text(xopcFormatCaptureTime(this.capture.elapsedMs)).fontSize(14).fontWeight(FontWeight.Medium)
-            .fontColor(this.colors.secondary)
-        }.height(34).padding({ left: 12, right: 12 }).borderRadius(17).backgroundColor(this.colors.input)
-      }.width('100%').padding({ left: 20, right: 20, top: 18, bottom: 8 }).alignItems(VerticalAlign.Center)
-      Column() {
-        Row({ space: 4 }) {
-          ForEach([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15], (index: number) => {
-            Row() {}.width(4).height(7 + Math.max(0.08, this.capture.level) * (10 + (index % 5) * 5))
-              .borderRadius(2).backgroundColor(this.capture.phase === 'paused' ? this.colors.border : this.colors.danger)
-              .opacity(index % 3 === 0 ? 1 : 0.55)
-          }, (index: number): string => index.toString())
-        }.height(56).width('100%').justifyContent(FlexAlign.Center)
-        if (this.capture.visibleTranscript) {
-          Scroll() {
-            Column({ space: 12 }) {
-              Text(this.capture.visibleTranscript).fontSize(19).lineHeight(31).fontColor(this.colors.foreground)
-                .textAlign(TextAlign.Start).width('100%')
-              if (!this.capture.realtimeActive && this.capture.transcriptPending) {
-                Row({ space: 7 }) {
-                  LoadingProgress().width(13).height(13).color(this.colors.secondary)
-                  Text($r('app.string.capture_transcribing')).fontSize(13).fontColor(this.colors.secondary)
-                }.width('100%')
-              }
-              if (this.capture.markers.length) {
-                Text($r('app.string.capture_markers', this.capture.markers.length)).fontSize(13)
-                  .fontColor(this.colors.accent).width('100%').textAlign(TextAlign.Start)
-              }
-              if (this.capture.error) {
-                Text(this.capture.phase === 'error' ? $r('app.string.capture_interrupted') : $r('app.string.capture_transcript_delayed')).fontSize(13).fontColor(this.colors.secondary)
-                  .width('100%').textAlign(TextAlign.Start)
-              }
-            }.width('100%').alignItems(HorizontalAlign.Start).padding({ left: 24, right: 24, top: 10, bottom: 24 })
-          }.layoutWeight(1).width('100%').scrollBar(BarState.Off)
-        } else {
-          Column({ space: 8 }) {
-            Text(this.capture.phase === 'error' ? $r('app.string.capture_interrupted') : this.capture.phase === 'paused' ? $r('app.string.capture_paused') : $r('app.string.capture_listening'))
-              .fontSize(20).fontWeight(FontWeight.Medium).fontColor(this.colors.foreground)
-              .width('100%').textAlign(TextAlign.Center)
-            Text($r('app.string.capture_listening_hint')).fontSize(14).lineHeight(21).fontColor(this.colors.tertiary)
-              .width('100%').textAlign(TextAlign.Center)
-            if (!this.capture.realtimeActive && this.capture.transcriptPending) {
-              Text($r('app.string.capture_transcribing')).fontSize(13).fontColor(this.colors.secondary)
-                .margin({ top: 8 }).width('100%').textAlign(TextAlign.Center)
-            }
-          }.layoutWeight(1).width('100%').justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
-            .padding({ left: 32, right: 32, bottom: 42 })
-        }
-      }.layoutWeight(1).width('100%')
-      if (this.capture.recovered) {
-        Text($r('app.string.capture_recovered')).fontSize(13).fontColor(this.colors.secondary)
-          .width('100%').padding({ left: 20, right: 20, bottom: 8 })
-      }
-      if (this.capture.savedDurationMs > 0) {
-        Text($r('app.string.capture_local_saved', xopcFormatCaptureTime(this.capture.savedDurationMs)))
-          .fontSize(13).fontColor(this.colors.secondary).width('100%').padding({ left: 20, right: 20, bottom: 8 })
-      }
-      if (this.capture.phase === 'recording' && !this.capture.backgroundAvailable) {
-        Text($r('app.string.capture_foreground_only')).fontSize(13).fontColor(this.colors.danger)
-          .width('100%').padding({ left: 20, right: 20, bottom: 8 })
-      }
-      if (this.capture.error === 'CAPTURE_UPLOAD_PENDING') {
-        Text($r('app.string.capture_sync_pending')).fontSize(13).fontColor(this.colors.secondary)
-          .width('100%').padding({ left: 20, right: 20, bottom: 8 })
-      }
-      if (this.capture.error === 'CAPTURE_STORAGE_FAILED') {
-        Text($r('app.string.capture_storage_failed')).fontSize(13).fontColor(this.colors.danger)
-          .width('100%').padding({ left: 20, right: 20, bottom: 8 })
-      }
-      if (this.capture.phase === 'recording' || this.capture.phase === 'paused') {
-        Row() {
-          this.captureControl($r('app.string.capture_marker'), $r('sys.symbol.bookmark'), (): void => { this.capture.mark(); })
-          Blank().layoutWeight(1)
-          this.captureControl(this.capture.phase === 'paused' ? $r('app.string.resume') : $r('app.string.pause'),
-            this.capture.phase === 'paused' ? $r('sys.symbol.play_fill') : $r('sys.symbol.pause_fill'),
-            (): void => { this.capture.togglePause(); })
-          Blank().layoutWeight(1)
-          this.captureControl($r('app.string.capture_finish'), $r('sys.symbol.stop_circle_fill'), (): void => { void this.finishCapture(); }, true)
-        }.width('100%').padding({ left: 28, right: 28, top: 8, bottom: this.bottomInset + 12 })
-      } else if (this.capture.phase === 'error') {
-        Row({ space: 10 }) {
-          Button($r('app.string.capture_discard')).layoutWeight(1).height(48).borderRadius(14)
-            .backgroundColor(this.colors.input).fontColor(this.colors.secondary)
-            .onClick((): void => { void this.capture.discard(); })
-          Button($r('app.string.retry')).layoutWeight(1).height(48).borderRadius(14)
-            .backgroundColor(this.colors.foreground).fontColor(this.colors.panel)
-            .onClick((): void => { void this.finishCapture(); })
-        }.width('100%').padding({ left: 20, right: 20, top: 8, bottom: this.bottomInset + 12 })
-      } else {
-        Row({ space: 10 }) {
-          LoadingProgress().width(18).height(18).color(this.colors.accent)
-          Text($r('app.string.capture_saving')).fontSize(15).fontColor(this.colors.secondary)
-        }.height(64 + this.bottomInset).padding({ bottom: this.bottomInset })
-      }
-    }.id('notes-live-capture').width('100%').height('100%').alignItems(HorizontalAlign.Center)
-      .backgroundColor(this.colors.surface)
-  }
-
   @Monitor('activePage')
   updateActivity(): void {
     if (!this.activePage) return;
+    void this.capture.refreshPending(this.getUIContext().getHostContext() as common.UIAbilityContext);
     if (!this.initialized) {
       this.initialized = true;
       const context = this.getUIContext().getHostContext() as common.Context;
@@ -215,6 +91,14 @@ export struct XopcNotesTabView {
     } else {
       void this.model.list();
     }
+  }
+
+  private async restoreRecording(id: string): Promise<void> {
+    if (this.capture.recoveryBusy) return;
+    const noteId = await this.capture.recoverRecording(this.getUIContext().getHostContext() as common.UIAbilityContext, id);
+    if (!noteId || this.capture.phase === 'error') return;
+    this.capture.reset();
+    void this.model.list(); this.onNavigate({ page: 'notes', itemId: noteId });
   }
 
   @Builder
@@ -230,6 +114,41 @@ export struct XopcNotesTabView {
           .width(44).height(44).padding(0).borderRadius(14).backgroundColor(this.colors.input)
           .accessibilityText($r('app.string.files')).onClick((): void => { this.onNavigate({ page: 'files', itemId: '' }); })
       }.width('100%').padding({ left: 20, right: 20, bottom: 12 })
+      if (this.capture.pendingRecordings.length && this.capture.phase !== 'recording' && this.capture.phase !== 'paused') {
+        Button({ type: ButtonType.Normal }) {
+          Row({ space: 8 }) {
+            Text($r('app.string.capture_recovery_list')).fontSize(14).fontColor(this.colors.foreground).layoutWeight(1).textAlign(TextAlign.Start)
+            Text(this.capture.pendingRecordings.length.toString()).fontSize(13).fontColor(this.colors.secondary)
+            SymbolGlyph(this.recoveriesOpen ? $r('sys.symbol.chevron_up') : $r('sys.symbol.chevron_down')).fontSize(13).fontColor([this.colors.secondary])
+          }.width('100%')
+        }.width('100%').height(48).padding({ left: 20,right: 20 }).backgroundColor(this.colors.input).onClick((): void => { this.recoveriesOpen = !this.recoveriesOpen; })
+        if (this.recoveriesOpen) {
+        Scroll() {
+        Column({ space: 8 }) {
+          Text($r('app.string.capture_recovery_list')).fontSize(16).fontColor(this.colors.foreground)
+          ForEach(this.capture.pendingRecordings, (recording: XopcLocalRecording) => {
+            Column({ space: 4 }) {
+              Text(new Date(recording.recordedAt).toLocaleString()).fontSize(13).fontColor(this.colors.foreground)
+              Text(recording.gatewayId + ' · ' + recording.id).fontSize(11).fontColor(this.colors.secondary)
+              Text(recording.recoveryError ? $r('app.string.capture_storage_failed') : $r('app.string.capture_local_saved', xopcFormatCaptureTime(recording.savedDurationMs ?? 0))).fontSize(12).fontColor(this.colors.secondary)
+              Row({ space: 8 }) {
+                Button($r('app.string.retry')).enabled(!this.capture.recoveryBusy)
+                  .onClick((): void => { void this.restoreRecording(recording.id); })
+                Button($r('app.string.capture_continue')).enabled(!this.capture.recoveryBusy && !recording.sealRequested)
+                  .onClick((): void => { void this.capture.continueRecording(this.getUIContext().getHostContext() as common.UIAbilityContext, recording.id); })
+              }
+              Row({ space: 8 }) {
+                Button($r('app.string.capture_export')).enabled(!this.capture.recoveryBusy)
+                  .onClick((): void => { void this.capture.exportRecording(this.getUIContext().getHostContext() as common.UIAbilityContext, recording.id); })
+                Button($r('app.string.capture_discard')).enabled(!this.capture.recoveryBusy)
+                  .onClick((): void => { void this.capture.discardRecording(this.getUIContext().getHostContext() as common.UIAbilityContext, recording.id); })
+              }
+            }.width('100%').alignItems(HorizontalAlign.Start)
+          }, (recording: XopcLocalRecording): string => recording.id)
+        }.width('100%').padding(16)
+        }.width('100%').height(260)
+        }
+      }
       if (this.model.error) {
         Row({ space: 12 }) {
           Text(userErrorMessage(this.model.error, 'collection')).fontSize(13).fontColor(this.colors.secondary)
@@ -252,7 +171,7 @@ export struct XopcNotesTabView {
                   Column({ space: 5 }) {
                     Row({ space: 6 }) {
                       if (item.pinned) { SymbolGlyph($r('sys.symbol.pin')).fontSize(13).fontColor([this.colors.accent]) }
-                      Text(item.title || $r('app.string.untitled')).fontSize(17).fontWeight(FontWeight.Medium)
+                      Text(item.kind === 'voice' && /^Discussion · \d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(item.title) ? $r('app.string.note_voice_option') : item.title || $r('app.string.untitled')).fontSize(17).fontWeight(FontWeight.Medium)
                         .fontColor(this.colors.foreground).layoutWeight(1).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
                     }.width('100%')
                     Text(item.snippet ?? '').fontSize(14).lineHeight(20).fontColor(this.colors.secondary)
@@ -304,9 +223,6 @@ export struct XopcNotesTabView {
 
   build() {
     Stack({ alignContent: Alignment.Top }) {
-      if (this.capture.active) {
-        this.capturePane()
-      } else {
         Row() {
         this.listPane()
         if (this.contentWidth >= 840) {
@@ -323,7 +239,6 @@ export struct XopcNotesTabView {
         }
         }.id('notes-tab-content-viewport').width('100%').height('100%')
           .clip(true)
-      }
     }.id('notes-tab-root').width('100%').height('100%').backgroundColor(this.colors.surface)
       .onAreaChange((_previous: Area, current: Area): void => { this.contentWidth = Number(current.width); })
       .bindSheet($$this.creationSheetOpen, this.creationSheet, {

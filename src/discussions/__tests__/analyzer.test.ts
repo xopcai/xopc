@@ -38,6 +38,13 @@ describe('normalizeDiscussionOrganization', () => {
     expect(organization.actionItems[0]).not.toHaveProperty('dueDate');
   });
 
+  it('retains explicit key-point and overview evidence and rejects unsupported citations', () => {
+    const organization = normalizeDiscussionOrganization({ ...baseOrganization(),summaryEvidenceSegmentIds: [1],keyPoints: [{ text: 'Supported conclusion',evidenceSegmentIds: [1] }] });
+    expect(organization.keyPoints).toEqual(['Supported conclusion']); expect(organization.keyPointEvidence?.[0].evidenceSegmentIds).toEqual([1]);
+    expect(() => validateDiscussionEvidence(organization,new Set([1]))).not.toThrow();
+    expect(() => validateDiscussionEvidence(organization,new Set([0]))).toThrow();
+  });
+
   it('keeps required fields strict and reports the failing path', () => {
     expect(() => normalizeDiscussionOrganization({
       ...baseOrganization(),

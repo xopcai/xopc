@@ -2,6 +2,7 @@ import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { Archive, MoreVertical, Pin, PinOff, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 
+import { useLocaleStore } from '@/stores/locale-store';
 import { cn } from '@/lib/cn';
 
 import { NoteCoverThumbnail } from './note-cover-thumbnail';
@@ -35,6 +36,8 @@ function noteCardPreviewText(note: NoteIndexEntry, labels: NoteCardProps['labels
 }
 
 export function NoteCard({ note, selected = false, onPress, onPin, onArchive, onDelete, labels, timeLabels }: NoteCardProps) {
+  const zh = useLocaleStore(state => state.language) === 'zh';
+  const displayTitle = note.kind === 'voice' && /^Discussion · \d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(note.title ?? '') ? (zh ? '语音笔记' : 'Voice note') : note.title;
   const previewText = noteCardPreviewText(note, labels);
   const isFallbackText = !note.snippet?.trim();
   const [nowMs] = useState(() => Date.now());
@@ -76,7 +79,7 @@ export function NoteCard({ note, selected = false, onPress, onPin, onArchive, on
         ) : null}
         <div className="min-w-0 flex-1">
           {note.title && (
-            <h3 className="mb-0.5 truncate text-sm font-semibold text-fg">{note.title}</h3>
+            <h3 className="mb-0.5 truncate text-sm font-semibold text-fg">{displayTitle}</h3>
           )}
           <p
             className={cn(
