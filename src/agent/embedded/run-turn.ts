@@ -680,8 +680,9 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
       if (!allowsExecutionTool(executionToolPolicy, context.toolCall.name)) {
         return { block: true, reason: 'Tool is outside this execution scope.' };
       }
-      if (executionToolPolicy.surface !== 'agent'
-        && resolveExecutionToolPolicy(toolPolicyConversationId).surface !== executionToolPolicy.surface) {
+      const currentToolPolicy = resolveExecutionToolPolicy(toolPolicyConversationId);
+      if (currentToolPolicy.surface !== executionToolPolicy.surface
+        || currentToolPolicy.taskExecution !== executionToolPolicy.taskExecution) {
         policyStopped = true;
         policyStopReason = 'Execution identity changed during the run';
         quarantineRunner = true;

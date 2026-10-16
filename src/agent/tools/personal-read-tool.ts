@@ -1,6 +1,8 @@
 import type { AgentTool } from '@earendil-works/pi-agent-core';
 import { Type } from '@sinclair/typebox';
 
+import { getEmbeddedExecutionSession } from '../embedded/execution-context.js';
+import { isPersonalConversation } from '../../personal-agent/repository.js';
 import { CapabilityDispatcher } from '../../capabilities/runtime/dispatcher.js';
 import { registerNoteReadCapabilities } from '../../notes/capabilities/read.js';
 import { registerProjectReadCapabilities } from '../../projects/capabilities/read.js';
@@ -65,6 +67,8 @@ export function createPersonalReadTool(deps: XopcUseToolDeps): AgentTool {
     description: 'Read local notes, projects or automation state. Only list/get; bounded excerpts, no network or model calls. Use personal_task for delegated tasks.',
     parameters: schema, supportsParallel: true, idempotent: true,
     async execute(_id, raw, signal) {
+      const conversationId = getEmbeddedExecutionSession() ?? deps.getCurrentConversationId?.();
+      if (!conversationId || !isPersonalConversation(conversationId)) throw new Error('Personal conversation is unavailable');
       const input = raw as { kind: string; command: string; id?: string; search?: string; projectId?: string; offset?: number; limit?: number };
       if (!['note', 'project', 'automation'].includes(input.kind) || !['list', 'get'].includes(input.command)) {
         throw new Error('Only local note/project/automation list/get is supported');
