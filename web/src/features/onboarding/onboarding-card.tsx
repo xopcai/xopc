@@ -1,11 +1,14 @@
 import { CheckCircle2, ChevronRight, LoaderCircle, X } from 'lucide-react';
-import { useEffect, useMemo, useReducer, useState } from 'react';
+import { useEffect, useMemo, useReducer, useRef, useState } from 'react';
 
 import { Loopi } from '@/components/brand/loopi';
 import { Button } from '@/components/ui/button';
 import { OnboardingLanguageSwitch } from '@/features/onboarding/onboarding-language-switch';
 import { OnboardingProviderGrid } from '@/features/onboarding/onboarding-provider-grid';
 import { cn } from '@/lib/cn';
+import { isElectron } from '@/lib/electron-env';
+import { OAuthProviderConnect } from '@/features/settings/models-hub/oauth-provider-connect';
+import { applyModelSetup, previewModelSetup } from '@/features/settings/models-hub/provider-setup-api';
 import { AddProviderDialog } from '@/features/settings/models-hub/add-provider-dialog';
 import { useConnectedProviders } from '@/features/settings/models-hub/connected-providers-grid';
 import {
@@ -20,6 +23,7 @@ interface OnboardingCardProps {
   onComplete: () => void | Promise<void>;
   onDismiss: () => void;
   canDismiss?: boolean;
+  onPendingChange?: (pending: boolean) => void;
 }
 
 type OnboardingStep = 'callName' | 'provider' | 'success';
@@ -76,7 +80,7 @@ function OnboardingProgress({ step, label }: { step: OnboardingStep; label: stri
   );
 }
 
-export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: OnboardingCardProps) {
+export function OnboardingCard({ onComplete, onDismiss, canDismiss = true, onPendingChange }: OnboardingCardProps) {
   const language = useLocaleStore((s) => s.language);
   const setLanguage = useLocaleStore((s) => s.setLanguage);
   const o = messages(language).onboarding;
@@ -84,9 +88,15 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
   const [state, dispatch] = useReducer(onboardingReducer, initialOnboarding);
   const [providerDialogOpen, setProviderDialogOpen] = useState(false);
   const providerData = useConnectedProviders();
+  const desktop = isElectron();
+  const applyingCloud = useRef(false);
+  const [cloudAuthorized, setCloudAuthorized] = useState(false);
+  const cloudConnected = cloudAuthorized || providerData.cards.some(provider => provider.id === 'xopc-cloud' && provider.configured);
   const {
     step, selectedProvider, busy, error, callName,
   } = state;
+
+  useEffect(() => { onPendingChange?.(busy); return () => onPendingChange?.(false); }, [busy, onPendingChange]);
 
   const stepLabel = useMemo(
     () => o.stepOf.replace('{{current}}', String(stepNumber(step))).replace('{{total}}', String(STEP_ORDER.length)),
@@ -141,6 +151,26 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
     }
   };
 
+  const finishCloudSetup = async () => {
+    if (applyingCloud.current) return;
+    applyingCloud.current = true;
+    dispatch({ type: 'patch', patch: { busy: true, error: null } });
+    try {
+      const request = { mode: 'replace' as const, selected: ['chat' as const] };
+      const preview = await previewModelSetup('xopc-cloud', request);
+      if (!preview.configured || !preview.uses.find(use => use.id === 'chat')?.recommended) {
+        throw new Error(language === 'zh' ? 'XOPC Cloud 尚未就绪，请稍后重试。' : 'XOPC Cloud is not ready yet. Please retry.');
+      }
+      await applyModelSetup('xopc-cloud', request, preview.revision);
+      dispatch({ type: 'patch', patch: { step: 'success' } });
+    } catch (cause) {
+      dispatch({ type: 'patch', patch: { error: cause instanceof Error ? cause.message : String(cause) } });
+    } finally {
+      applyingCloud.current = false;
+      dispatch({ type: 'patch', patch: { busy: false } });
+    }
+  };
+
   const completeOnboarding = async () => {
     dispatch({ type: 'patch', patch: { busy: true, error: null } });
     try { await onComplete(); }
@@ -163,6 +193,7 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
             <button
               type="button"
               aria-label={o.skipSetup}
+              disabled={busy}
               className="inline-flex size-10 items-center justify-center rounded-xl text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
               onClick={onDismiss}
             >
@@ -215,11 +246,11 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
 
             {step === 'provider' ? (
               <div className="flex min-h-[30rem] flex-col">
-                <p className="text-xs font-medium tracking-wide text-accent-fg">{language === 'zh' ? '模型设置' : 'Model setup'}</p>
-                <h1 className="mt-3 text-[2rem] font-semibold leading-tight tracking-[-0.035em] text-fg sm:text-4xl">{o.step1Title}</h1>
-                <p className="mt-3 max-w-md text-sm leading-6 text-fg-muted">{o.step1Subtitle}</p>
+                <p className="text-xs font-medium tracking-wide text-accent-fg">{desktop ? 'XOPC Cloud' : language === 'zh' ? '模型设置' : 'Model setup'}</p>
+                <h1 className="mt-3 text-[2rem] font-semibold leading-tight tracking-[-0.035em] text-fg sm:text-4xl">{desktop ? (language === 'zh' ? '连接 XOPC Cloud' : 'Connect XOPC Cloud') : o.step1Title}</h1>
+                <p className="mt-3 max-w-md text-sm leading-6 text-fg-muted">{desktop ? (language === 'zh' ? '登录后自动配置默认模型，无需 API Key。' : 'Sign in to set up your default model automatically. No API key required.') : o.step1Subtitle}</p>
                 <div className="mt-8">
-                  <OnboardingProviderGrid
+                  {desktop ? <fieldset disabled={busy} className="min-w-0"><OAuthProviderConnect providerId="xopc-cloud" displayName="XOPC Cloud" connected={cloudConnected} onConnected={() => { setCloudAuthorized(true); void finishCloudSetup(); }} /></fieldset> : <OnboardingProviderGrid
                     onSelect={(id) => {
                       dispatch({ type: 'patch', patch: { selectedProvider: id, error: null } });
                       setProviderDialogOpen(true);
@@ -227,13 +258,13 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
                     onBrowseProviders={() => { dispatch({ type: 'patch', patch: { selectedProvider: null } }); setProviderDialogOpen(true); }}
                     disabled={busy}
                     browseDisabled={providerData.loading}
-                  />
+                  />}
                 </div>
                 <div className="mt-3 min-h-5">{error ? <p className="text-sm text-danger" role="alert">{error}</p> : null}</div>
                 <div className="mt-auto grid grid-cols-[1fr_auto_1fr] items-center gap-3 pt-8">
-                  <Button variant="ghost" className="justify-self-start" onClick={() => dispatch({ type: 'patch', patch: { step: 'callName', error: null } })}>{o.back}</Button>
+                  <Button variant="ghost" className="justify-self-start" disabled={busy} onClick={() => dispatch({ type: 'patch', patch: { step: 'callName', error: null } })}>{o.back}</Button>
                   <OnboardingProgress step={step} label={stepLabel} />
-                  <span />
+                  {desktop && cloudConnected ? <Button variant="primary" className="h-11 justify-self-end px-5" disabled={busy} onClick={() => void finishCloudSetup()}>{busy ? <LoaderCircle className="size-4 animate-spin" aria-hidden /> : null}{error ? (language === 'zh' ? '重试' : 'Retry') : o.continue}</Button> : <span />}
                 </div>
               </div>
             ) : null}
@@ -252,6 +283,7 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
                 <p className="mt-3 max-w-md text-sm leading-6 text-fg-muted">
                   {language === 'zh' ? '模型服务配置已保存。可以开始对话，其他用途可随时在模型设置中调整。' : 'Model service settings are saved. Start a conversation and adjust other uses in Model settings whenever needed.'}
                 </p>
+                <div className="mt-3 min-h-5">{error ? <p className="text-sm text-danger" role="alert">{error}</p> : null}</div>
                 <div className="mt-auto grid grid-cols-[1fr_auto_1fr] items-center gap-3 pt-10">
                   <span />
                   <OnboardingProgress step={step} label={stepLabel} />
@@ -266,7 +298,7 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
           </div>
         </section>
       </main>
-      <AddProviderDialog
+      {!desktop ? <AddProviderDialog
         open={providerDialogOpen}
         initialProviderId={selectedProvider ?? undefined}
         onOpenChange={setProviderDialogOpen}
@@ -279,7 +311,7 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
             .then(() => { setProviderDialogOpen(false); dispatch({ type: 'patch', patch: { step: 'success', error: null } }); })
             .catch(cause => dispatch({ type: 'patch', patch: { error: cause instanceof Error ? cause.message : String(cause) } }));
         }}
-      />
+      /> : null}
     </div>
   );
 }
