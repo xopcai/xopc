@@ -1,9 +1,8 @@
 import useSWR from 'swr';
-import { Link } from 'react-router-dom';
-import { ChevronRight } from 'lucide-react';
 import { fetchVoiceProviders, fetchVoiceSttProviders } from '@/features/settings/voice-config-api';
+import { modelsJsonPresetKeyForProviderId } from '@/features/settings/models/models-settings-lib';
 import { fetchImageCatalog } from '@/features/settings/image-generation-api';
-import { capabilityGroups, capabilityLabels, modelCapabilityPath } from './capability-navigation';
+import { capabilityGroups, capabilityLabels } from './capability-navigation';
 import { useEffect, useRef, useState } from 'react';
 import type { ModelSetupPreview, ModelSetupRequest, ModelSetupUse } from '@xopcai/gateway-contract';
 
@@ -32,14 +31,14 @@ function ModelUsePicker({ label, value, currentLabel, options, loading, disabled
 }
 
 /** Reads effective global routes rather than maintaining a separate assignment store. */
-export function ModelUsesList({ data, zh, onChange, onSettings, onlyUse, disabled = false, onPendingChange, voiceOverview = false, returnTo }: { data: ConnectedProvidersData; zh: boolean; onChange: (use: ModelSetupUse) => void; onSettings?: (use: ModelSetupUse) => void; onlyUse?: ModelSetupUse; voiceOverview?: boolean; returnTo?: string; disabled?: boolean; onPendingChange?: (pending: boolean) => void }) {
+export function ModelUsesList({ data, zh, onChange, onSettings, onlyUse, disabled = false, onPendingChange, voiceOverview = false }: { data: ConnectedProvidersData; zh: boolean; onChange: (use: ModelSetupUse) => void; onSettings?: (use: ModelSetupUse) => void; onlyUse?: ModelSetupUse; voiceOverview?: boolean; returnTo?: string; disabled?: boolean; onPendingChange?: (pending: boolean) => void }) {
   const { data: result, error, mutate } = useSWR('settings-agent-defaults', fetchGlobalDefaults);
   const { data: voiceConfig } = useGatewayConfigSwr(true);
   const { data: media, isLoading: loadingMedia, error: mediaError, mutate: refreshMedia } = useSWR('model-capability-media-sources', async () => {
     const results = await Promise.allSettled([fetchVoiceProviders(), fetchVoiceSttProviders(), fetchImageCatalog()]);
     return { ids: [...new Set(results.flatMap(result => result.status === 'fulfilled' ? (Array.isArray(result.value) ? result.value : result.value.providers).filter(entry => entry.configured).map(entry => entry.id) : []))], failed: results.some(result => result.status === 'rejected') };
   });
-  const providers = [...new Set([...data.cards.filter(card => card.configured).map(card => card.id), ...(media?.ids ?? [])])].sort();
+  const providers = [...new Set([...data.cards.filter(card => card.configured && (!modelsJsonPresetKeyForProviderId(card.id) || Boolean(data.customConfig?.providers?.[card.id]))).map(card => card.id), ...(media?.ids ?? [])])].sort();
   const { data: catalog, isLoading: loadingCatalog, mutate: refreshCatalog } = useSWR(
     data.loading ? null : ['model-use-choices', ...providers],
     async () => {
@@ -90,37 +89,14 @@ export function ModelUsesList({ data, zh, onChange, onSettings, onlyUse, disable
   ];
   return <section className="min-w-0">
     <h2 className="mb-2 text-sm font-semibold text-fg">{onlyUse ? (zh ? '当前模型' : 'Current model') : (zh ? '能力总览' : 'Capabilities')}</h2>
-    {!onlyUse ? <p className="mb-4 text-sm text-fg-muted">{zh ? '选择一项能力，配置模型并调整使用方式。' : 'Choose a capability to configure its model and behavior.'}</p> : null}
+    {!onlyUse ? <p className="mb-4 text-sm text-fg-muted">{zh ? '直接切换模型；设置与服务连接在弹窗中完成。' : 'Choose a capability to configure its model and behavior.'}</p> : null}
     <div className="space-y-4">{capabilityGroups.filter(group => (!onlyUse || group.uses.includes(onlyUse)) && (!voiceOverview || group.label[1] === 'Voice')).map(group => <section key={group.uses[0]} className="rounded-xl border border-edge bg-surface-panel px-4 py-2">
       {!onlyUse && !voiceOverview ? <div className="flex items-center justify-between border-b border-edge-subtle py-3"><h3 className="text-sm font-semibold text-fg">{group.label[zh ? 0 : 1]}</h3><span className="text-xs text-fg-muted">{group.uses[0] === 'chat' ? (zh ? '基础能力' : 'Core capability') : (zh ? '按需启用' : 'Optional')}</span></div> : null}
       <div className="divide-y divide-edge-subtle">{group.uses.filter(id => !onlyUse || id === onlyUse).map(id => {
       const row = rows.find(row => row.id === id)!;
       const options = modelUseOptions(catalog?.previews ?? [], row.id);
       const current = row.id === 'conversation' && voice?.voice.realtime.enabled && voice.voice.realtime.defaultEngine === 'agent' ? (zh ? '语音助手 · 使用对话、听写和语音输出配置' : 'Voice assistant · Uses chat, dictation and voice output') : row.ref ? data.allModels.find(model => model.id === row.ref)?.name ?? row.ref : undefined;
-      if (onSettings && !onlyUse) {
-        const selected = options.find(option => option.value === row.ref);
-        const modelLabel = selected ? `${selected.label} · ${selected.group}` : current;
-        const hints: Record<ModelSetupUse, [string, string]> = {
-          chat: ['默认对话、任务路由与备用模型', 'Default chat, task routing and fallbacks'],
-          vision: ['图片和视觉内容理解', 'Understand images and visual content'],
-          image: ['生成图片与图片参数', 'Generate images and adjust image settings'],
-          transcription: ['聊天听写与笔记录音转文字', 'Chat dictation and recorded notes'],
-          speech: ['音色、朗读方式与试听', 'Voice, read-aloud preferences and preview'],
-          conversation: ['语音对话方式与设备', 'Conversation mode and devices'],
-          background: ['自动化与无人值守任务', 'Automations and unattended work'],
-        };
-        return <Link key={row.id} to={modelCapabilityPath(row.id, false, voiceOverview ? 'voice' : undefined, returnTo)}
-          aria-label={`${zh ? '配置' : 'Configure'} ${capabilityLabels[row.id][zh ? 0 : 1]}`}
-          className="group flex min-h-24 items-center gap-4 rounded-lg px-2 py-4 transition-colors hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-2"><span className="text-sm font-medium text-fg">{capabilityLabels[row.id][zh ? 0 : 1]}</span><span className="text-xs text-fg-subtle">{row.ref ? (zh ? '已配置' : 'Configured') : (zh ? '未配置' : 'Not configured')}</span></div>
-            <p className="mt-1 text-sm text-fg-muted">{hints[row.id][zh ? 0 : 1]}</p>
-            {modelLabel ? <p className="mt-1 break-words text-xs text-fg-subtle">{modelLabel}</p> : null}
-          </div>
-          <ChevronRight className="size-4 shrink-0 text-fg-subtle group-hover:text-fg" aria-hidden />
-        </Link>;
-      }
-      return <div key={row.id} className={`flex min-h-16 flex-col gap-2 py-3 sm:grid sm:items-center sm:gap-4 ${onSettings ? 'sm:grid-cols-[minmax(0,1fr)_minmax(0,24rem)_auto]' : 'sm:grid-cols-[minmax(0,1fr)_minmax(0,24rem)]'}`}>
+      return <div key={row.id} data-capability={row.id}><div className={`flex min-h-16 flex-col gap-2 py-3 sm:grid sm:items-center sm:gap-4 ${onSettings ? 'sm:grid-cols-[minmax(0,1fr)_minmax(0,24rem)_auto]' : 'sm:grid-cols-[minmax(0,1fr)_minmax(0,24rem)]'}`}>
         <div className="min-w-0"><p className="text-sm font-medium text-fg">{capabilityLabels[row.id][zh ? 0 : 1]}</p><p className="mt-1 text-xs text-fg-muted">{row.ref ? (options.some(option => option.value === row.ref) || row.ref === 'agent' ? (zh ? '已配置 · 待验证' : 'Configured · Not verified') : (zh ? '已保存配置 · 请检查连接和模型' : 'Settings saved · Check connection and model')) : (zh ? '未启用' : 'Not enabled')}</p>
           {row.inherited ? <p className="mt-1 text-xs text-fg-muted">{zh ? '继承默认对话' : 'Inherits chat default'}</p> : null}
           {row.id === 'background' ? <p className="mt-1 text-xs text-fg-muted">{zh ? '仅显示支持后台调用的模型' : 'Only background-capable models are listed'}</p> : null}
@@ -130,10 +106,9 @@ export function ModelUsesList({ data, zh, onChange, onSettings, onlyUse, disable
             zh={zh} onSelect={ref => { if (ref !== row.ref) void switchModel(row.id, ref); }} />
           {saving === row.id ? <p role="status" className="text-xs text-fg-muted">{zh ? '正在切换…' : 'Switching…'}</p> : null}
           {feedback?.use === row.id ? <p role={feedback.error ? 'alert' : 'status'} className={feedback.error ? 'text-xs text-danger' : 'text-xs text-fg-muted'}>{feedback.error ?? (zh ? '已切换' : 'Model changed')}</p> : null}
-          {!loadingCatalog && !data.loading && !options.length ? <Button variant="ghost" disabled={saving !== null || disabled} onClick={() => onChange(row.id)}>{zh ? '接入模型服务' : 'Connect a model service'}</Button> : null}
         </div>
-        {onSettings ? <Button variant="ghost" className="self-end sm:self-center" disabled={saving !== null || disabled} onClick={() => onSettings(row.id)}>{zh ? '设置' : 'Settings'}</Button> : null}
-      </div>;
+        {onSettings ? <div className="flex items-center justify-end gap-1"><Button variant="ghost" disabled={saving !== null || disabled} onClick={() => onSettings(row.id)}>{zh ? '设置' : 'Settings'}</Button><Button variant="ghost" disabled={saving !== null || disabled} onClick={() => onChange(row.id)}>{zh ? '管理服务' : 'Manage services'}</Button></div> : !loadingCatalog && !data.loading && !options.length ? <Button variant="ghost" disabled={saving !== null || disabled} onClick={() => onChange(row.id)}>{zh ? '连接服务' : 'Connect service'}</Button> : null}
+      </div></div>;
     })}</div></section>)}</div>
     {(!onSettings || onlyUse) && (catalog?.failed || media?.failed || mediaError) ? <p role="alert" className="mt-2 text-xs text-danger">{zh ? '部分服务的模型加载失败' : 'Some model services could not be loaded'}<Button variant="ghost" onClick={() => void Promise.all([refreshMedia(), refreshCatalog()])}>{zh ? '重试' : 'Retry'}</Button></p> : null}
     {onlyUse || onSettings ? null : <p className="mt-2 text-xs text-fg-muted">{zh ? '快速与复杂任务模型随对话配置；音色、流式听写及电脑操作可在详细设置中调整。' : 'Fast and complex task models follow chat setup. Voices, streaming dictation and Computer Use have detailed settings.'}</p>}
