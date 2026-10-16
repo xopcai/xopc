@@ -40,6 +40,8 @@ function AgentDefaultsEditor({
   builtinTools: BuiltinToolSummary[];
   zh: boolean;
 }) {
+  const { data: shared } = useSWR('settings-agent-defaults', fetchGlobalDefaults);
+  const dataModels = shared?.defaults ?? initial;
   const [searchParams, setSearchParams] = useSearchParams();
   const requestedPanel = searchParams.get('panel');
   const activePanel: DefaultsPanel = requestedPanel === 'skills' || requestedPanel === 'tools' || requestedPanel === 'runtime' ? requestedPanel : 'models';
@@ -53,7 +55,7 @@ function AgentDefaultsEditor({
   const dirty = JSON.stringify(draft) !== JSON.stringify(saved);
 
   const tabs: Array<{ id: DefaultsPanel; label: string; icon: typeof Sparkles }> = [
-    { id: 'models', label: zh ? '模型' : 'Models', icon: Sparkles },
+    { id: 'models', label: zh ? '共用模型' : 'Shared models', icon: Sparkles },
     { id: 'skills', label: zh ? '技能' : 'Skills', icon: Puzzle },
     { id: 'tools', label: zh ? '工具' : 'Tools', icon: ShieldCheck },
     { id: 'runtime', label: zh ? '运行' : 'Runtime', icon: Gauge },
@@ -61,7 +63,8 @@ function AgentDefaultsEditor({
 
   const save = useCallback(async (snapshot: AgentDefaults) => {
     const submitted = structuredClone(snapshot);
-    const next = await updateGlobalDefaults(submitted);
+    const latest = await fetchGlobalDefaults();
+    const next = await updateGlobalDefaults({ ...submitted, models: latest.defaults.models }, { scope: 'agent' });
     const normalized = structuredClone(next.defaults);
     setDraft((current) => JSON.stringify(current) === JSON.stringify(submitted) ? normalized : current);
     setSaved(structuredClone(normalized));
@@ -96,7 +99,7 @@ function AgentDefaultsEditor({
         ))}
       </nav>
 
-      {activePanel === 'models' ? <AgentDefaultsModelsPanel draft={draft} setDraft={setDraft} zh={zh} /> : null}
+      {activePanel === 'models' ? <AgentDefaultsModelsPanel draft={dataModels} zh={zh} /> : null}
       {activePanel === 'skills' ? <AgentDefaultsSkillsPanel draft={draft} setDraft={setDraft} zh={zh} /> : null}
       {activePanel === 'tools' ? <AgentDefaultsToolsPanel draft={draft} setDraft={setDraft} builtinTools={builtinTools} zh={zh} /> : null}
       {activePanel === 'runtime' ? <AgentDefaultsRuntimePanel draft={draft} setDraft={setDraft} zh={zh} /> : null}

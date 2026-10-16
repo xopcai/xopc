@@ -19,7 +19,8 @@ export async function revalidateModelsHubCaches(): Promise<void> {
     mutate('settings-agent-defaults'),
     mutate('model-capability-media-sources'),
     mutate('native-voice-connections'),
-    mutate(key => Array.isArray(key) && key[0] === 'model-use-choices'),
+    mutate('voice-dictation-route'),
+    mutate(key => Array.isArray(key) && ['model-use-choices', 'native-voice-connections', 'capability-service-connections'].includes(key[0])),
     invalidateConfiguredModelsCache(),
   ]);
 }

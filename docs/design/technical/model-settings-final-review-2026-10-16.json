@@ -1,0 +1,104 @@
+{
+  "date": "2026-10-16",
+  "regression": {
+    "files": 34,
+    "tests": 254,
+    "passed": true,
+    "stagedSnapshotVerified": true
+  },
+  "gatewaySaveScope": {
+    "passed": true,
+    "realAuthenticatedGateway": true,
+    "defaultsUnchanged": true,
+    "checks": [
+      {
+        "name": "stale models",
+        "status": 409,
+        "passed": true
+      },
+      {
+        "name": "model scope no-op",
+        "status": 200,
+        "passed": true
+      },
+      {
+        "name": "agent scope preserves current models",
+        "status": 200,
+        "passed": true
+      },
+      {
+        "name": "legacy snapshot no-op",
+        "status": 200,
+        "passed": true
+      },
+      {
+        "name": "invalid scope",
+        "status": 400,
+        "passed": true
+      }
+    ],
+    "uses": [
+      {
+        "use": "chat",
+        "model": "qwen-token-plan-cn/qwen3.8-flash"
+      },
+      {
+        "use": "vision",
+        "model": "qwen-token-plan-cn/qwen3.8-flash"
+      },
+      {
+        "use": "image",
+        "model": "qwen-token-plan-cn/qwen-image-3.0-pro"
+      },
+      {
+        "use": "background",
+        "model": "xopc-cloud/auto"
+      },
+      {
+        "use": "transcription",
+        "model": "qwen-token-plan-cn/qwen-audio-3.0-asr-flash"
+      },
+      {
+        "use": "speech",
+        "model": "qwen-token-plan-cn/qwen-audio-3.0-tts-plus"
+      },
+      {
+        "use": "conversation",
+        "model": "xopc-cloud/realtime"
+      }
+    ]
+  },
+  "serviceNavigation": {
+    "directory": "/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-direct-capabilities-qJLmNx",
+    "passed": true,
+    "realGateway": true,
+    "checks": [
+      "Capability row opens model and voice settings with keyboard Enter",
+      "Voice entry has three direct capabilities; service and detail return preserve voice context",
+      "Voice device settings return directly to Voice",
+      "Conversation settings preserve chat return through service navigation",
+      "transcription connects saved Bailian credentials with no text setup and returns to capability",
+      "speech connects saved Bailian credentials with no text setup and returns to capability",
+      "All services directory groups capability entries without stacked voice/image forms",
+      "Mobile dark voice entry has no horizontal overflow"
+    ],
+    "errors": []
+  },
+  "fixtureFlow": {
+    "passed": true,
+    "connectionDoesNotAssign": true,
+    "returnsToOriginalCapability": true,
+    "explicitSingleUseSwitch": true,
+    "switchLocksVoiceParameters": true,
+    "advancedVoiceReturnsToOriginalCapability": true,
+    "backgroundPlansExcluded": true,
+    "mobileOverflow": false,
+    "legacyImageUrlPreserved": true,
+    "realCredentialsUsed": false,
+    "directory": "/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-capabilities-p1-7WOxTt"
+  },
+  "limitations": [
+    "Service navigation checks do not invoke paid models. Prior live vendor evidence is stored separately.",
+    "Physical microphone and additional vendors were not newly exercised."
+  ]
+}
