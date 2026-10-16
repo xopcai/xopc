@@ -9,6 +9,10 @@ export interface XopcLocalRecording {
   discussionId: string;
   noteId: string;
   markers: number[];
+  sealRequested?: boolean;
+  savedDurationMs?: number;
+  recoveryError?: string;
+  interruptionCount?: number;
 }
 
 export interface XopcLocalRecordingChunk {
@@ -41,7 +45,9 @@ export class XopcDiscussionRecordingStore {
     await db.executeSql('CREATE TABLE IF NOT EXISTS recording_audio (' +
       'session_id TEXT NOT NULL, sequence INTEGER NOT NULL, started_at_ms INTEGER NOT NULL, ended_at_ms INTEGER NOT NULL, ' +
       'audio BLOB NOT NULL, uploaded INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (session_id, sequence))');
+    await db.executeSql('CREATE TABLE IF NOT EXISTS recording_events (session_id TEXT NOT NULL, recorded_at INTEGER NOT NULL, kind TEXT NOT NULL, saved_ms INTEGER NOT NULL)');
     await db.executeSql('CREATE TABLE IF NOT EXISTS recording_consent (gateway_id TEXT PRIMARY KEY, version INTEGER NOT NULL)');
+    await db.executeSql('DELETE FROM recording_events WHERE session_id IN (SELECT id FROM recording_sessions WHERE completed=1)');
     await db.executeSql('DELETE FROM recording_audio WHERE session_id IN (SELECT id FROM recording_sessions WHERE completed=1)');
     await db.executeSql('DELETE FROM recording_sessions WHERE completed=1');
     this.store = db;
@@ -72,7 +78,29 @@ export class XopcDiscussionRecordingStore {
           discussionId: rows.getString(rows.getColumnIndex('discussion_id')), noteId: rows.getString(rows.getColumnIndex('note_id')),
           markers: JSON.parse(rows.getString(rows.getColumnIndex('markers'))) as number[] });
       }
+      for (const session of sessions) {
+        const events = await this.events(session.id);
+        session.interruptionCount = events.filter((event: XopcRecordingEvent): boolean => event.kind === 'resume').length;
+        session.sealRequested = events.some((event: XopcRecordingEvent): boolean => event.kind === 'seal');
+        try {
+          const chunks = await this.chunks(session.id);
+          session.savedDurationMs = chunks.length ? chunks[chunks.length - 1].endedAtMs : 0;
+        } catch (caught) { session.recoveryError = (caught as Error).message; }
+      }
       return sessions;
+    } finally { rows.close(); }
+  }
+
+  async event(id: string, kind: string, savedMs: number): Promise<void> {
+    await this.db().executeSql('INSERT INTO recording_events (session_id, recorded_at, kind, saved_ms) VALUES (?, ?, ?, ?)', [id, Date.now(), kind, savedMs]);
+  }
+
+  async events(id: string): Promise<XopcRecordingEvent[]> {
+    const rows = await this.db().querySql('SELECT recorded_at, kind, saved_ms FROM recording_events WHERE session_id=? ORDER BY recorded_at', [id]);
+    const events: XopcRecordingEvent[] = [];
+    try {
+      while (rows.goToNextRow()) events.push({ recordedAt: rows.getLong(0), kind: rows.getString(1), savedMs: rows.getLong(2) });
+      return events;
     } finally { rows.close(); }
   }
 
@@ -91,13 +119,13 @@ export class XopcDiscussionRecordingStore {
       [id, chunk.sequence, chunk.startedAtMs, chunk.endedAtMs, wav]);
   }
 
-  async chunks(id: string): Promise<XopcLocalRecordingChunk[]> {
+  async chunks(id: string, validate: boolean = true): Promise<XopcLocalRecordingChunk[]> {
     const rows = await this.db().querySql('SELECT sequence, started_at_ms, ended_at_ms, uploaded FROM recording_audio WHERE session_id=? ORDER BY sequence', [id]);
     const chunks: XopcLocalRecordingChunk[] = [];
     try {
       while (rows.goToNextRow()) {
         const sequence = rows.getLong(0); const start = rows.getLong(1); const end = rows.getLong(2);
-        if (sequence !== chunks.length || start !== (chunks.length ? chunks[chunks.length - 1].endedAtMs : 0) || end <= start) {
+        if (validate && (sequence !== chunks.length || start !== (chunks.length ? chunks[chunks.length - 1].endedAtMs : 0) || end <= start)) {
           throw new Error('RECORDING_CHUNK_GAP');
         }
         chunks.push({ sequence, startedAtMs: start, endedAtMs: end, uploaded: rows.getLong(3) === 1 });
@@ -122,6 +150,7 @@ export class XopcDiscussionRecordingStore {
     // A crash during cleanup must not offer a half-deleted recording for recovery.
     await this.db().executeSql('UPDATE recording_sessions SET completed=1 WHERE id=?', [id]);
     await this.db().executeSql('DELETE FROM recording_audio WHERE session_id=?', [id]);
+    await this.db().executeSql('DELETE FROM recording_events WHERE session_id=?', [id]);
     await this.db().executeSql('DELETE FROM recording_sessions WHERE id=?', [id]);
   }
 
@@ -130,3 +159,5 @@ export class XopcDiscussionRecordingStore {
     return this.store;
   }
 }
+
+export interface XopcRecordingEvent { recordedAt: number; kind: string; savedMs: number; }

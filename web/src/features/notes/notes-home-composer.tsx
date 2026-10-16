@@ -152,6 +152,7 @@ export function NotesHomeComposer({ projects, projectId, onProjectChange, onCrea
             <Icon className="size-3.5" aria-hidden />{h.templateOptions[id].label}
           </button>;
         })}
+        <button type="button" className="text-xs text-fg-muted" onClick={() => window.dispatchEvent(new CustomEvent('open-recording-recoveries'))}>{labels.discussionCapture.recoveredTitle}</button>
         <MeetingImportButton />
       </div>
     </section>

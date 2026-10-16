@@ -1,0 +1,64 @@
+{
+  "date": "2026-10-15T23:44:19.405Z",
+  "directory": "/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-recording-browser-b0NUXp",
+  "durationMs": 12000,
+  "syntheticMicrophone": true,
+  "passed": true,
+  "checks": [
+    {
+      "scenario": "offline capture, SIGKILL, browser restart, IndexedDB restore and audio decode",
+      "savedChunks": 3,
+      "savedDurationMs": 15115.300000071526,
+      "decodedDurationMs": 15060,
+      "mediaCoverage": {
+        "version": 1,
+        "verifiedThroughMs": 15060,
+        "observedThroughMs": 15060,
+        "status": "verified",
+        "committedChunkCount": 3
+      },
+      "bytes": 122180,
+      "prefixHash": "87ca594e6c03f642be0bb928677f4af4a11c382001f44e19b479b11c1f0a2311"
+    },
+    {
+      "scenario": "continue after SIGKILL into independent media containers, unchanged source prefix and valid local export archive",
+      "draftId": "5ebd16b5-e2b9-456d-8f2d-359c52767f39",
+      "epochs": [
+        {
+          "firstChunk": 0,
+          "mimeType": "audio/webm;codecs=opus",
+          "startedAt": 1792107861653,
+          "savedThroughMs": 15060
+        },
+        {
+          "firstChunk": 3,
+          "mimeType": "audio/webm;codecs=opus",
+          "startedAt": 1792107879725,
+          "previousEndedAt": 1792107876774
+        }
+      ],
+      "epochPaths": [
+        "/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-recording-browser-b0NUXp/epoch-0.webm",
+        "/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-recording-browser-b0NUXp/epoch-1.webm"
+      ],
+      "archivePath": "/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-recording-browser-b0NUXp/recovery.tar"
+    },
+    {
+      "scenario": "all microphone tracks stop; MediaRecorder closes and saves tail",
+      "chunks": 2,
+      "durationMs": 5054.399999976158
+    },
+    {
+      "scenario": "pause, resume after real audio input, stop barrier and local success",
+      "mediaCoverage": {
+        "version": 1,
+        "verifiedThroughMs": 5040,
+        "observedThroughMs": 8044,
+        "status": "gap",
+        "committedChunkCount": 3
+      },
+      "saveOutcome": "complete"
+    }
+  ],
+  "browser": "155.0.8059.40"
+}

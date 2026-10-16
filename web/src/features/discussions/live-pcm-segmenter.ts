@@ -145,12 +145,14 @@ export class LivePcmSegmenter {
   static async start(
     stream: MediaStream,
     onSegment: (segment: LivePcmSegment) => Promise<void> | void,
+    onAudioFrame?: (level: number) => void,
   ): Promise<LivePcmSegmenter> {
     const emitState: EmitState = { pending: new Set() };
     let segmenter: LivePcmSegmenter | undefined;
     const earlySamples: Float32Array[] = [];
     const capture = await PcmFrameCapture.start(stream, {
       onSamples: (samples) => {
+        if (samples.length) onAudioFrame?.(calculateRmsLevel(samples));
         if (!segmenter) {
           earlySamples.push(samples);
           return;

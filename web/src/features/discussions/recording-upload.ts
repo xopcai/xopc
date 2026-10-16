@@ -3,6 +3,7 @@ import { DISCUSSION_CHUNK_MAX_BYTES, type DiscussionRecordingJob } from '@xopcai
 import { sealRecording, getRecordingJob, getDiscussion, getRecordingChunks, uploadRecordingChunk } from './discussion-api';
 import { deleteDiscussionDraft, getDiscussionDraftChunk, saveDiscussionDraft, saveDiscussionDraftChunk } from './discussion-draft-store';
 import type { DiscussionDraft } from './discussion-types';
+import type { RecordingSyncStage } from './recording-status';
 
 async function checksum(blob: Blob): Promise<string> {
   const digest = await crypto.subtle.digest('SHA-256', await blob.arrayBuffer());
@@ -22,11 +23,18 @@ async function waitForRecording(id: string, initial: DiscussionRecordingJob) {
 }
 
 /** Read and upload one persisted chunk at a time; never assemble a whole recording. */
-export async function uploadDraftRecording(draft: DiscussionDraft, id: string, onProgress: (percent: number) => void, complete = true) {
+export async function uploadDraftRecording(draft: DiscussionDraft, id: string, onProgress: (percent: number) => void, complete = true, onStage?: (stage: RecordingSyncStage) => void) {
+  onStage?.('uploading');
   if (complete) {
     const detail = await getDiscussion(id);
-    if (detail.discussion.audioAttachmentId) return detail;
-    if (detail.recordingJob?.state === 'queued' || detail.recordingJob?.state === 'running') return waitForRecording(id, detail.recordingJob);
+    if (detail.discussion.audioDeletedAt) throw new Error('Original recording was deleted');
+    if (detail.discussion.audioAttachmentId) { onStage?.('available'); return detail; }
+    if (detail.recordingJob?.state === 'queued' || detail.recordingJob?.state === 'running') {
+      onStage?.('verifying');
+      const result = await waitForRecording(id, detail.recordingJob);
+      if (!result.discussion.audioAttachmentId || result.discussion.audioDeletedAt) throw new Error('Original audio attachment is not confirmed');
+      onStage?.('available'); return result;
+    }
   }
   const existing = new Map((await getRecordingChunks(id)).map((chunk) => [chunk.sequence, chunk]));
   for (let index = 0; index < draft.chunkCount; index += 1) {
@@ -39,9 +47,14 @@ export async function uploadDraftRecording(draft: DiscussionDraft, id: string, o
     onProgress(Math.round((index + 1) / draft.chunkCount * 100));
   }
   if (complete) {
-    const job = await sealRecording(id, { lastSequence: draft.lastSequence, chunkCount: draft.chunkCount, mimeType: draft.mimeType, fileName: draft.fileName ?? `meeting-${draft.startedAt}.${draft.mimeType.includes('mp4') ? 'm4a' : draft.mimeType.includes('ogg') ? 'ogg' : 'webm'}` });
-    return waitForRecording(id, job);
+    onStage?.('verifying');
+    await saveDiscussionDraft({ ...draft, serverDiscussionId: id, sealRequested: true });
+    const job = await sealRecording(id, { lastSequence: draft.lastSequence, chunkCount: draft.chunkCount, ...(draft.epochs && draft.epochs.length > 1 ? { epochs: draft.epochs } : {}), mimeType: draft.mimeType, fileName: draft.fileName ?? `meeting-${draft.startedAt}.${draft.mimeType.includes('mp4') ? 'm4a' : draft.mimeType.includes('ogg') ? 'ogg' : 'webm'}` });
+    const result = await waitForRecording(id, job);
+    if (!result.discussion.audioAttachmentId || result.discussion.audioDeletedAt) throw new Error('Original audio attachment is not confirmed');
+    onStage?.('available'); return result;
   }
+  onStage?.('pending');
 }
 
 export async function persistMeetingImport(file: File, id: string): Promise<DiscussionDraft> {
