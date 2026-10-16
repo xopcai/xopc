@@ -6,13 +6,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => {
   const recorder: Record<string, unknown> = {};
   return { recorder, create: vi.fn(), settings: vi.fn(), get: vi.fn(),
-    upload: vi.fn(), navigate: vi.fn(), drain: vi.fn() };
+    upload: vi.fn(), cancel: vi.fn(), navigate: vi.fn(), drain: vi.fn(), annotations: vi.fn(async () => {}) };
 });
+vi.mock('../discussion-annotation-sync', () => ({ syncDiscussionAnnotations: mocks.annotations }));
 vi.mock('../use-discussion-recorder', () => ({ useDiscussionRecorder: () => mocks.recorder }));
 vi.mock('../discussion-api', () => ({
   createDiscussion: mocks.create, getDiscussionCaptureSettings: mocks.settings, getDiscussion: mocks.get,
   getDiscussionTranscript: vi.fn(async () => ({ text: '' })),
-  acknowledgeDiscussionConsent: vi.fn(), cancelDiscussion: vi.fn(), unlinkDiscussionProject: vi.fn(), uploadDiscussionSegment: vi.fn(),
+  acknowledgeDiscussionConsent: vi.fn(), cancelDiscussion: mocks.cancel, unlinkDiscussionProject: vi.fn(), uploadDiscussionSegment: vi.fn(),
 }));
 vi.mock('../recording-upload', () => ({ uploadDraftRecording: mocks.upload }));
 vi.mock('../discussion-draft-store', () => ({
@@ -34,7 +35,7 @@ import { messages } from '@/i18n/messages';
 let root: ReturnType<typeof createRoot>;
 let container: HTMLDivElement;
 const draft = { id: 'local', startedAt: 42, durationMs: 5_000, chunkCount: 1, lastSequence: -1,
-  mimeType: 'audio/webm', state: 'stopped', consentPolicyVersion: 1 };
+  mimeType: 'audio/webm', state: 'stopped', saveOutcome: 'complete', consentPolicyVersion: 1 };
 const detail = { discussion: { id: 'server', status: 'stopping', audioAttachmentId: 'audio' }, note: { id: 'note', title: 'Note' } };
 const copy = messages('en').notes.discussionCapture;
 async function click(label: string) {
@@ -59,6 +60,77 @@ beforeEach(async () => {
 afterEach(async () => { await act(async () => root.unmount()); container.remove(); });
 
 describe('recording completion and recovery orchestration', () => {
+  it('lists and discards the chosen recording without cancelling a Note or touching another draft', async () => {
+    mocks.recorder.recoverableDrafts = [draft, { ...draft, id: 'second', serverDiscussionId: 'second-server', startedAt: 200 }];
+    await act(async () => { window.dispatchEvent(new Event('open-recording-recoveries')); });
+    const articles = container.querySelectorAll('article'); expect(articles).toHaveLength(2);
+    await act(async () => { [...articles[1].querySelectorAll('button')].find(button => button.textContent === 'Discard local copy')!.click(); });
+    expect(mocks.recorder.discard).toHaveBeenCalledWith('second');
+    expect(mocks.cancel).not.toHaveBeenCalled(); expect(mocks.create).not.toHaveBeenCalled();
+  });
+  it('recovers the selected draft without creating a replacement Note when its known server is unavailable', async () => {
+    const selected = { ...draft, id: 'second', serverDiscussionId: 'existing' };
+    mocks.recorder.recoverableDrafts = [draft, selected];
+    mocks.recorder.restore = vi.fn(async (candidate) => candidate);
+    mocks.get.mockRejectedValue(new Error('OFFLINE'));
+    await act(async () => { window.dispatchEvent(new Event('open-recording-recoveries')); });
+    await act(async () => { [...container.querySelectorAll('article')[1].querySelectorAll('button')].find(button => button.textContent === copy.recover)!.click(); });
+    expect(mocks.recorder.restore).toHaveBeenCalledWith(selected);
+    expect(mocks.get).toHaveBeenCalledWith('existing'); expect(mocks.create).not.toHaveBeenCalled();
+    expect(mocks.recorder.discard).not.toHaveBeenCalled();
+  });
+  it('continues into the existing recording identity and refuses recovery actions during capture', async () => {
+    mocks.recorder.recoverableDrafts = [{ ...draft, serverDiscussionId: 'existing' }];
+    mocks.get.mockResolvedValue({ ...detail, discussion: { id: 'existing', status: 'recording' } });
+    await act(async () => { window.dispatchEvent(new Event('open-recording-recoveries')); });
+    await click('Continue recording');
+    expect(mocks.recorder.start).toHaveBeenCalledWith(expect.objectContaining({ continuation: expect.objectContaining({ id: 'local' }) }));
+    expect(mocks.create).not.toHaveBeenCalled();
+    await act(async () => { window.dispatchEvent(new Event('open-recording-recoveries')); });
+    for (const button of container.querySelectorAll('article button')) expect((button as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('keeps interrupted audio open for continuation instead of automatically sealing it', async () => {
+    await act(async () => { window.dispatchEvent(new Event(OPEN_DISCUSSION_CAPTURE_EVENT)); });
+    mocks.recorder.phase = 'stopped'; mocks.recorder.draft = { ...draft, saveOutcome: 'interrupted' };
+    await act(async () => { root.render(<GlobalDiscussionCaptureHost />); });
+    expect(mocks.recorder.stop).not.toHaveBeenCalled();
+    expect(container.textContent).toContain('Continue recording');
+    expect(mocks.upload.mock.calls.filter(call => call[3] !== false)).toHaveLength(0);
+  });
+
+  it('shows local completion only after its barrier and independently of an unconfirmed server upload', async () => {
+    let finishStop!: () => void; let finishUpload!: () => void;
+    mocks.recorder.stop = vi.fn(async () => {
+      mocks.recorder.phase = 'stopping';
+      await new Promise<void>(done => { finishStop = done; });
+      mocks.recorder.phase = 'stopped'; return draft;
+    });
+    mocks.upload.mockImplementation(async (_draft, _id, progress, _complete, stage) => {
+      if (_complete === false) return detail;
+      progress(100); stage?.('verifying'); await new Promise<void>(done => { finishUpload = done; }); return detail;
+    });
+    mocks.create.mockResolvedValue({ ...detail, discussion: { id: 'server', status: 'recording' } });
+    await act(async () => { window.dispatchEvent(new Event(OPEN_DISCUSSION_CAPTURE_EVENT)); });
+    await click(copy.stop);
+    expect(container.textContent).not.toContain('Recording saved on this device. You can leave this page.');
+    await act(async () => { finishStop(); });
+    expect(container.textContent).toContain('Recording saved on this device. You can leave this page.');
+    expect(container.textContent).toContain('Confirming uploaded audio');
+    expect(container.textContent).not.toContain('Original audio synced. You can leave this page.');
+    expect(container.textContent).toContain('View later');
+    await act(async () => { finishUpload(); });
+    expect(mocks.recorder.discard).toHaveBeenCalledWith('local');
+  });
+
+  it('never shows full local success when stop or storage finalization fails', async () => {
+    mocks.recorder.stop = vi.fn(async () => { mocks.recorder.phase = 'error'; throw new Error('Local commit failed'); });
+    await act(async () => { window.dispatchEvent(new Event(OPEN_DISCUSSION_CAPTURE_EVENT)); });
+    await click(copy.stop);
+    expect(container.textContent).not.toContain('Recording saved on this device. You can leave this page.');
+    expect(container.textContent).toContain('Part of the recording was retained');
+    expect(mocks.upload.mock.calls.filter(call => call[3] !== false)).toHaveLength(0);
+  });
   it('starts locally with cached consent and retries a failed server creation using the original recording identity', async () => {
     mocks.create.mockRejectedValueOnce(new Error('OFFLINE')).mockResolvedValue(detail);
     await act(async () => { window.dispatchEvent(new Event(OPEN_DISCUSSION_CAPTURE_EVENT)); });
@@ -67,14 +139,18 @@ describe('recording completion and recovery orchestration', () => {
     expect(mocks.create).toHaveBeenCalledTimes(2);
     for (const [input] of mocks.create.mock.calls) expect(input).toMatchObject({ clientRequestId: 'local', recordedAt: 42 });
     expect(mocks.recorder.discard).toHaveBeenCalledWith('local');
+    expect(mocks.navigate).not.toHaveBeenCalled();
+    await click(copy.openNote);
     expect(mocks.navigate).toHaveBeenCalledWith('/notes/note');
   });
 
-  it('finishes and navigates after the original is saved even when the live text queue is blocked', async () => {
+  it('offers opening the same Note after the original is saved even when the live text queue is blocked', async () => {
     mocks.drain.mockReturnValue(new Promise(() => {}));
     await act(async () => { window.dispatchEvent(new Event(OPEN_DISCUSSION_CAPTURE_EVENT)); });
     await click(copy.stop);
     expect(mocks.upload).toHaveBeenCalled(); expect(mocks.recorder.discard).toHaveBeenCalledWith('local');
+    expect(mocks.navigate).not.toHaveBeenCalled();
+    await click(copy.openNote);
     expect(mocks.navigate).toHaveBeenCalledWith('/notes/note');
   });
 
@@ -85,4 +161,54 @@ describe('recording completion and recovery orchestration', () => {
     expect(mocks.recorder.stop).not.toHaveBeenCalled();
     expect(mocks.recorder.discard).toHaveBeenCalledOnce();
   });
+  it('retains local audio and highlights without misreporting an annotation outage as an audio failure', async () => {
+    mocks.annotations.mockRejectedValue(new Error('Annotation offline'));
+    await act(async () => { window.dispatchEvent(new Event(OPEN_DISCUSSION_CAPTURE_EVENT)); });
+    await click(copy.stop);
+    expect(mocks.recorder.discard).not.toHaveBeenCalled();
+    expect(mocks.recorder.markUploadFailed).not.toHaveBeenCalled();
+    expect(container.textContent).toContain('Original audio synced. You can leave this page.');
+    expect(container.textContent).toContain('Retry highlights');
+    expect(mocks.create).toHaveBeenCalledOnce();
+  });
+  it('allows dismissal after the local barrier while sync continues, without showing another blocking panel', async () => {
+    mocks.upload.mockImplementation(async (_draft, _id, _progress, complete) => complete === false ? detail : await new Promise(() => {}));
+    await act(async () => { window.dispatchEvent(new Event(OPEN_DISCUSSION_CAPTURE_EVENT)); });
+    await click(copy.stop);
+    await click('View later');
+    expect(container.querySelector('[data-recording-outcome]')).toBeNull();
+    expect(mocks.recorder.discard).not.toHaveBeenCalled();
+  });
+
+  it('never labels an empty recording as a retained partial source', async () => {
+    mocks.create.mockResolvedValue({ ...detail,discussion: { id: 'server',status: 'recording' } });
+    mocks.recorder.draft = { ...draft,chunkCount: 0,saveOutcome: 'incomplete' };
+    mocks.recorder.stop = vi.fn(async () => { mocks.recorder.phase = 'error'; throw new Error('No audio'); });
+    await act(async () => { window.dispatchEvent(new Event(OPEN_DISCUSSION_CAPTURE_EVENT)); });
+    await click(copy.stop);
+    expect(container.textContent).toContain('Recording could not be saved');
+    expect(container.textContent).not.toContain('Part of the recording was retained');
+    expect(container.textContent).not.toContain('You can leave this page');
+  });
+  it('retries highlights independently and removes the local source only after confirmed sync', async () => {
+    mocks.annotations.mockRejectedValueOnce(new Error('Annotation offline')).mockResolvedValue(undefined);
+    await act(async () => { window.dispatchEvent(new Event(OPEN_DISCUSSION_CAPTURE_EVENT)); });
+    await click(copy.stop);
+    const uploads = mocks.upload.mock.calls.length;
+    await click('Retry highlights');
+    expect(mocks.upload).toHaveBeenCalledTimes(uploads);
+    expect(mocks.create).toHaveBeenCalledOnce();expect(mocks.recorder.discard).toHaveBeenCalledWith('local');
+    expect(container.textContent).not.toContain('Retry highlights');
+  });
+
+  it('preserves same-Note continuation after an interruption in the completion surface', async () => {
+    await act(async () => { window.dispatchEvent(new Event(OPEN_DISCUSSION_CAPTURE_EVENT)); });
+    mocks.recorder.phase = 'error';mocks.recorder.draft = { ...draft,saveOutcome: 'interrupted',serverDiscussionId: 'server' };
+    mocks.get.mockResolvedValue({ ...detail,discussion: { id: 'server',status: 'recording' } });
+    await act(async () => root.render(<GlobalDiscussionCaptureHost />));
+    await click('Continue recording');
+    expect(mocks.recorder.start).toHaveBeenLastCalledWith(expect.objectContaining({ continuation: expect.objectContaining({ id: 'local',serverDiscussionId: 'server' }) }));
+    expect(mocks.create).toHaveBeenCalledTimes(1);
+  });
+
 });
