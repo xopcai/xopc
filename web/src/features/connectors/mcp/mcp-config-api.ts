@@ -193,7 +193,7 @@ export async function fetchMcpTools(serverId: string, signal: AbortSignal): Prom
   return result.payload.tools;
 }
 
-export type McpConnectionProbe = { state: 'connected' | 'oauth_required' | 'token_required' | 'error'; toolCount?: number; error?: string };
+export type McpConnectionProbe = { state: 'connected' | 'oauth_required' | 'token_required' | 'error'; toolCount?: number; error?: string; errorCode?: string };
 export type McpAuthorization = { id: string; serverId: string; state: 'starting' | 'authorizing' | 'connected' | 'error' | 'cancelled';
   authorizationUrl?: string; acceptsRedirect?: boolean; toolCount?: number; error?: string };
 export async function probeMcpServer(serverId: string, signal: AbortSignal): Promise<McpConnectionProbe> {
