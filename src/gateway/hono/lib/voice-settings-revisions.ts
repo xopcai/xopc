@@ -9,7 +9,7 @@ export type VoiceSettingScope = typeof VOICE_SETTING_SCOPES[number];
 /** Opaque per-capability versions; credentials never appear in the public snapshot. */
 export function voiceSettingsRevisions(config: Config): Record<VoiceSettingScope, string> {
   const values = {
-    transcription: { stt: config.tools?.media?.audio, language: config.voice?.language, languageMode: config.voice?.languageMode },
+    transcription: { stt: config.tools?.media?.audio, language: config.voice?.language, languageMode: config.voice?.languageMode, input: config.voice?.input },
     speech: config.messages?.tts,
     conversation: config.voice?.realtime,
   };

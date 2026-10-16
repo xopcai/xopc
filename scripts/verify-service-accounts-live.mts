@@ -37,7 +37,7 @@ const wait = async (predicate: () => Promise<boolean>, message: string) => {
   for (let attempt = 0; attempt < 80; attempt++) { if (await predicate()) return; await page.waitForTimeout(150); }
   throw new Error(message);
 };
-const labels = { chat: '对话与任务', vision: '看图', transcription: '录音与听写', speech: '文字转语音', background: '自动与后台任务' };
+const labels = { chat: '对话与任务', vision: '看图', transcription: '录音与听写', speech: '文字转语音', conversation: '实时语音对话', background: '自动与后台任务' };
 type Use = keyof typeof labels;
 const dialog = page.getByRole('dialog').first();
 const servicesUrl = web + '#/settings/capabilities/models';
@@ -107,13 +107,13 @@ try {
     if (/\/oauth\//.test(url.pathname) && method === 'POST') { report.authorizationAttemptsBlocked++; return route.abort(); }
     return route.continue({ headers: [new URL(web).origin, new URL(base).origin].includes(url.origin) ? { ...route.request().headers(), Authorization: headers.Authorization } : route.request().headers() });
   });
-  await page.goto(servicesUrl + '?view=services');
+  await page.goto(servicesUrl);
   await page.waitForURL(servicesUrl);
   await entry('chat').waitFor();
   assert.equal(await page.getByText('按能力接入服务', { exact: true }).count(), 0);
   assert.equal(await page.getByText('可选能力', { exact: true }).count(), 0);
   assert.equal(await page.locator('[data-capability]').count(), 7);
-  report.checks.push('Legacy services link resolves to one merged page with exactly seven capability rows and no duplicate configuration list');
+  report.checks.push('One page has exactly seven capability rows and no duplicate configuration list');
   await page.getByRole('heading', { name: '连接的服务', exact: true }).waitFor();
   await page.getByRole('button', { name: '服务账户', exact: true }).click();
   assert.equal(page.url(), servicesUrl);
@@ -167,6 +167,16 @@ try {
         await close(use); await open(use, true);
         assert.equal((await currentConfig()).voice.languageMode, mode);
         assert.ok(await dialog.getByRole('button', { name: mode === 'auto' ? '跟随应用语言' : '保留手动设置', exact: true }).isVisible());
+        const processing = dialog.locator('[data-voice-section="input-processing"]');
+        await processing.locator('summary').click();
+        const nextProcessing = (await currentConfig()).voice.input?.refinement?.mode === 'punctuation' ? 'off' : 'punctuation';
+        await processing.getByRole('button').click();
+        await page.getByRole('button', { name: nextProcessing === 'off' ? '关闭（保留原文）' : '仅补标点', exact: true }).click();
+        await dialog.getByRole('heading').first().click();
+        await wait(async () => (await currentConfig()).voice.input?.refinement?.mode === nextProcessing, 'Dictation text processing did not save');
+        await close(use); await open(use, true);
+        assert.equal((await currentConfig()).voice.input.refinement.mode, nextProcessing);
+
       }
       if (use === 'speech') {
         const picker = dialog.locator(`#voice-tts-${provider}-voice`);
@@ -209,6 +219,33 @@ try {
     await open('speech', true); assert.equal((await currentConfig()).tts.provider, provider); await close('speech');
     report.checks.push(`${provider}: saved connection reused, chat/vision/STT/TTS switched in place; parameters, focus and route retained after close/reopen and page reload${report.realVendorRequests ? '; real TTS/STT passed' : ''}`);
   }
+  const beforeConversation = await currentConfig();
+  await open('conversation', true);
+  await dialog.locator('label').filter({ hasText: '默认通话方案' }).getByRole('button').click();
+  await page.getByRole('button', { name: '当前助手', exact: true }).click();
+  await dialog.getByRole('heading').first().click();
+  await wait(async () => (await currentConfig()).voice.realtime.defaultEngine === 'agent', 'Conversation mode did not save');
+  const callVoice = dialog.locator('#realtime-voice');
+  await wait(() => callVoice.isEnabled(), 'Assistant voices unavailable');
+  await callVoice.click();
+  const callChoices = page.locator('[data-select-scroll-region]:visible button:not([disabled])').filter({ hasNotText: '服务默认音色' });
+  await callChoices.first().waitFor();
+  const chosenVoice = (await callChoices.last().innerText()).trim();
+  await callChoices.last().click(); await dialog.getByRole('heading').first().click();
+  await wait(async () => !!(await currentConfig()).voice.realtime.tts?.voice, 'Assistant voice did not save');
+  await close('conversation'); await open('conversation', true);
+  assert.equal((await callVoice.innerText()).trim(), chosenVoice);
+  await callVoice.click(); await page.getByRole('button', { name: '服务默认音色', exact: true }).click();
+  await dialog.getByRole('heading').first().click();
+  await wait(async () => !(await currentConfig()).voice.realtime.tts?.voice, 'Service default did not clear the voice override');
+  await close('conversation'); await open('conversation', true);
+  assert.equal((await callVoice.innerText()).trim(), '服务默认音色');
+  const afterConversation = await currentConfig();
+  equal(afterConversation.voice.realtime.omni, beforeConversation.voice.realtime.omni, 'Assistant voice changed natural conversation settings');
+  equal(afterConversation.stt, beforeConversation.stt, 'Conversation controls changed recorded recognition');
+  equal(afterConversation.tts, beforeConversation.tts, 'Conversation controls changed readout settings');
+  await close('conversation');
+  report.checks.push('Assistant voice selection and reset to service default persist after reopening; natural conversation, STT and readout remain unchanged');
   await open('background');
   if (!plans['qwen-token-plan-cn'].uses.some((use: any) => use.id === 'background' && use.choices.length > 0)) assert.equal(await dialog.getByRole('button', { name: /百炼订阅/ }).count(), 0);
   await close('background');

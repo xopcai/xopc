@@ -11,7 +11,6 @@ export type Tab =
   | 'settingsOverview'
   | 'settingsAppearance'
   | 'settingsModels'
-  | 'settingsVoice'
   | 'settingsSearch'
   | 'settingsGateway'
   | 'settingsRuntimes'

@@ -15,21 +15,21 @@ export const capabilityLabels: Record<ModelSetupUse, [string, string]> = {
 export function parseCapabilityUse(value: string | null): ModelSetupUse | undefined {
   return value && Object.hasOwn(capabilityLabels, value) ? value as ModelSetupUse : undefined;
 }
-export function modelCapabilityPath(use?: ModelSetupUse, services = false, from?: 'voice', returnTo?: string): string {
+export function capabilityReturnPath(value: string | null): string | undefined {
+  return value && (value.startsWith('/chat/') || value === '/personal') ? value : undefined;
+}
+export function modelCapabilityPath(use?: ModelSetupUse, services = false, returnTo?: string): string {
   const query = new URLSearchParams();
-  if (use) query.set('use', use);
-  if (services) query.set('view', 'services');
-  if (from) query.set('from', from);
-  if (returnTo?.startsWith('/chat/')) query.set('returnTo', returnTo);
+  if (use) query.set('configure', use);
+  if (services) query.set('tab', 'services');
+  const back = capabilityReturnPath(returnTo ?? null);
+  if (back) query.set('returnTo', back);
   return `/settings/capabilities/models${query.size ? `?${query}` : ''}`;
 }
-
 export function withCapabilityReturnContext(path: string, context: URLSearchParams): string {
-  const separator = path.indexOf('?');
-  const pathname = separator < 0 ? path : path.slice(0, separator);
-  const query = new URLSearchParams(separator < 0 ? '' : path.slice(separator + 1));
-  if (context.get('from') === 'voice') query.set('from', 'voice');
-  const returnTo = context.get('returnTo');
-  if (returnTo?.startsWith('/chat/')) query.set('returnTo', returnTo);
+  const [pathname, search] = path.split('?');
+  const query = new URLSearchParams(search);
+  const back = capabilityReturnPath(context.get('returnTo'));
+  if (back) query.set('returnTo', back);
   return `${pathname}${query.size ? `?${query}` : ''}`;
 }
