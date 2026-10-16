@@ -48,7 +48,7 @@ function formatDuration(durationMs: number): string {
 
 export function GlobalDiscussionCaptureHost() {
   const navigate = useNavigate();
-  const location = useLocation();
+  const { pathname } = useLocation();
   const token = useGatewayStore((state) => state.conversationId);
   const gatewayUrl = useGatewayStore(state => state.baseUrl);
   const [annotationSyncFailed, setAnnotationSyncFailed] = useState(false);
@@ -320,9 +320,9 @@ export function GlobalDiscussionCaptureHost() {
   });
 
   useEffect(() => {
-    if ((openedResultNote.current || location.pathname === `/notes/${encodeURIComponent(detail?.note.id ?? '')}`) && !annotationSyncFailed && detail?.discussion.audioAttachmentId && !detail.discussion.audioDeletedAt
+    if ((openedResultNote.current || pathname === `/notes/${encodeURIComponent(detail?.note.id ?? '')}`) && !annotationSyncFailed && detail?.discussion.audioAttachmentId && !detail.discussion.audioDeletedAt
       && !['recording','paused','waiting_for_audio','requesting_permission'].includes(recorder.phase)) setVisible(false);
-  },[detail,recorder.phase,annotationSyncFailed,location.pathname]);
+  },[detail,recorder.phase,annotationSyncFailed,pathname]);
 
   const openNote = () => {
     if (!detail) return;
