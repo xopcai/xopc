@@ -2,10 +2,28 @@ import { describe, expect, it, vi } from 'vitest';
 
 import type { SessionInputStatus } from '../../storage/sqlite/session-input-repository.js';
 import { selectTaskMainUpdateAttempt, submitAndConfirmTaskMainUpdate } from '../task-main-update-input.js';
+import { TaskMainUpdateExhaustedError, taskMainUpdateRetryDelay } from '../task-main-update-retry.js';
 
 const input = { conversationId: 'conversation', clientMessageId: 'task-main-update:entry', content: 'Update' };
 
 describe('submitAndConfirmTaskMainUpdate', () => {
+  it('stops submitting when all twenty durable input attempts have failed', async () => {
+    const submit = vi.fn();
+    const waitForCompletion = vi.fn();
+    await expect(submitAndConfirmTaskMainUpdate(input, {
+      findInput: () => ({ status: 'failed' }), submit, waitForCompletion,
+    })).rejects.toBeInstanceOf(TaskMainUpdateExhaustedError);
+    expect(submit).not.toHaveBeenCalled();
+    expect(waitForCompletion).not.toHaveBeenCalled();
+  });
+
+  it('backs off rate limits exponentially up to fifteen minutes', () => {
+    const error = new Error('429: {"code":"platform_token_limit_exceeded"}');
+    expect([1, 2, 3, 6, 20].map((count) => taskMainUpdateRetryDelay(error, count)))
+      .toEqual([30_000, 60_000, 120_000, 900_000, 900_000]);
+    expect(taskMainUpdateRetryDelay(new Error('rate_limit_error'), 1)).toBe(30_000);
+    expect(taskMainUpdateRetryDelay(new Error('Network failed'), 1)).toBe(1_000);
+  });
   it.each(['failed', 'interrupted'] as const)(
     'keeps a %s update pending and retries with a new idempotency key', async (failedStatus) => {
       const states = new Map<string, SessionInputStatus>();

@@ -266,7 +266,7 @@ export function ModelSelector({
 }
 
 /** Shared list content for form selectors and the composer's single popover. */
-export function ModelPickerList({ models, value, onChange, searchPlaceholder, noMatches, disabled, showSearch = models.length > 10, outOfFilterNote }: {
+export function ModelPickerList({ models, value, onChange, searchPlaceholder, noMatches, disabled, showSearch = models.length > 10, outOfFilterNote, groupByProvider = false }: {
   models: ConfiguredModel[];
   value: string;
   onChange: (id: string) => void;
@@ -275,18 +275,28 @@ export function ModelPickerList({ models, value, onChange, searchPlaceholder, no
   disabled?: boolean;
   showSearch?: boolean;
   outOfFilterNote?: string;
+  groupByProvider?: boolean;
 }) {
   const language = useLocaleStore((s) => s.language);
   const [query, setQuery] = useState('');
   const filtered = modelsMatchingQuery(models, showSearch ? query : '');
+  const groups = new Map<string, ConfiguredModel[]>();
+  for (const model of models) {
+    const key = groupByProvider ? model.provider : '';
+    if (!groups.has(key)) groups.set(key, []);
+  }
+  for (const model of filtered) groups.get(groupByProvider ? model.provider : '')!.push(model);
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       {showSearch && <input type="search" aria-label={searchPlaceholder} placeholder={searchPlaceholder}
         value={query} onChange={(event) => setQuery(event.target.value)}
         className={cn('mx-1 mb-2 rounded-lg border border-edge bg-surface-base px-3 py-2 text-sm text-fg', formControlBorderFocusClass)} />}
-      <div data-select-scroll-region className={selectPopoverScrollAreaClass}>
+      <div data-select-scroll-region className={cn(selectPopoverScrollAreaClass, groupByProvider && 'scroll-pt-8')}>
         {filtered.length === 0 && <p className="px-3 py-4 text-sm text-fg-muted">{noMatches}</p>}
-        {filtered.map((model) => (
+        {[...groups].filter(([, entries]) => entries.length > 0).map(([provider, entries]) => <div key={provider} role={groupByProvider ? 'group' : undefined} aria-label={groupByProvider ? provider : undefined}
+          className={groupByProvider ? 'border-t border-edge-subtle pb-1 first:border-t-0' : undefined}>
+          {groupByProvider && <p className="sticky top-0 z-10 bg-surface-panel px-3 pb-1 pt-3 text-xs font-medium text-fg-muted">{provider}</p>}
+          {entries.map((model) => (
           <button key={model.id} type="button" disabled={disabled} title={model.id}
             aria-pressed={model.id === value}
             style={models.length > 50 ? { contentVisibility: 'auto', containIntrinsicSize: 'auto 60px' } : undefined}
@@ -294,13 +304,14 @@ export function ModelPickerList({ models, value, onChange, searchPlaceholder, no
             onClick={() => onChange(model.id)}>
             <span className="min-w-0 flex-1">
               <span className="block truncate font-medium">{modelDisplayName(model, language)}</span>
-              <span className="block truncate text-xs text-fg-muted">{model.provider}</span>
+              {!groupByProvider && <span className="block truncate text-xs text-fg-muted">{model.provider}</span>}
               {model.computerUse && <span className="block text-xs text-fg-muted">Computer Use</span>}
               {outOfFilterNote && !model.vision && model.id === value && <span className="block text-xs text-fg-muted">{outOfFilterNote}</span>}
             </span>
             <Check className={cn('size-4 shrink-0 text-accent-fg', model.id !== value && 'invisible')} aria-hidden />
           </button>
-        ))}
+          ))}
+        </div>)}
       </div>
     </div>
   );

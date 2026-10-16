@@ -135,6 +135,9 @@ export async function getChatSkillsCached(
   if (conversationId?.trim()) params.set('conversationId', conversationId.trim());
   const request = apiFetch(apiUrl(`/api/chat/skills?${params.toString()}`))
     .then(async (res) => {
+      if (res.status === 404 && conversationId) {
+        return getChatSkillsCached(agentId, undefined, forceRefresh);
+      }
       if (!res.ok) throw new Error(await readErrorMessage(res));
       const data = (await res.json()) as { ok?: boolean; payload?: ChatSkillsPayload };
       if (!data.payload || !Array.isArray(data.payload.skills)) {

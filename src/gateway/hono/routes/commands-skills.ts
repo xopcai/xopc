@@ -8,6 +8,7 @@ import { effectiveWorkspacePathForSession, projectWorkspacePath } from '../../..
 import { resolveEffectiveAgentProfile } from '../../../config/agent-profile.js';
 import { ProjectService } from '../../../projects/index.js';
 import { getProjectForSession } from '../../../projects/workspace.js';
+import { getSessionMetadata } from '../../../storage/sqlite/session-repository.js';
 import { buildReviewContext, resolveGitRoot } from '../../../review/review-git.js';
 import {
   isSkillInstallTarget,
@@ -116,6 +117,9 @@ export function registerCommandsSkillsRoutes(authenticated: Hono, deps: Authenti
 
   authenticated.get('/api/chat/skills', async (c) => {
     const conversationId = c.req.query('conversationId')?.trim();
+    if (conversationId && !getSessionMetadata(conversationId)) {
+      return c.json({ ok: false, error: 'Conversation not found' }, 404);
+    }
     const agentId = c.req.query('agentId')?.trim() || resolveDefaultAgentId();
     const payload = conversationId
       ? await service.marketplace.getSessionSkillsApi(conversationId)
@@ -127,6 +131,9 @@ export function registerCommandsSkillsRoutes(authenticated: Hono, deps: Authenti
     const conversationId = c.req.query('conversationId')?.trim();
     if (!conversationId) {
       return c.json({ ok: false, error: 'Missing conversationId' }, 400);
+    }
+    if (!getSessionMetadata(conversationId)) {
+      return c.json({ ok: false, error: 'Conversation not found' }, 404);
     }
     const payload = await service.marketplace.getSessionWorkspaceTrustApi(conversationId);
     return c.json({ ok: true, payload });
@@ -142,6 +149,9 @@ export function registerCommandsSkillsRoutes(authenticated: Hono, deps: Authenti
     const conversationId = typeof body.conversationId === 'string' ? body.conversationId.trim() : '';
     if (!conversationId || typeof body.trusted !== 'boolean') {
       return c.json({ ok: false, error: 'Expected { conversationId: string, trusted: boolean }' }, 400);
+    }
+    if (!getSessionMetadata(conversationId)) {
+      return c.json({ ok: false, error: 'Conversation not found' }, 404);
     }
     const payload = await service.marketplace.setSessionWorkspaceTrustApi(conversationId, body.trusted);
     return c.json({ ok: true, payload });
