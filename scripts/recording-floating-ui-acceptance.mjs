@@ -1,0 +1,63 @@
+// Synthetic UI acceptance: no microphone capture or provider calls.
+import assert from 'node:assert/strict';
+import { createRequire } from 'node:module';
+import { mkdtemp,writeFile,rm,mkdir } from 'node:fs/promises';
+import { resolve,join } from 'node:path';
+import { chromium } from 'playwright-core';
+const root = resolve('web'); const require = createRequire(join(root,'package.json'));
+const { createServer } = await import(require.resolve('vite'));
+const { default: react } = await import(require.resolve('@vitejs/plugin-react'));
+const { default: tailwind } = await import(require.resolve('@tailwindcss/vite'));
+const fixture = await mkdtemp(join(root,'.recording-ui-')); const outputs = resolve('/tmp/xopc-recording-window'); await mkdir(outputs,{ recursive: true });
+let server,browser;
+try {
+  await writeFile(join(fixture,'index.html'),'<html><meta name="viewport" content="width=device-width,initial-scale=1"><div id="root"></div><script type="module" src="./main.tsx"></script></html>');
+  await writeFile(join(fixture,'main.tsx'),`
+import React from 'react'; import {createRoot} from 'react-dom/client'; import {MemoryRouter} from 'react-router-dom';
+import '/src/styles/globals.css'; import {GlobalDiscussionCaptureHost} from '/src/features/discussions/global-discussion-capture';
+import {useGatewayStore} from '/src/stores/gateway-store'; import {useLocaleStore} from '/src/stores/locale-store';
+import {rememberDiscussionConsent} from '/src/features/discussions/discussion-consent-cache'; import {OPEN_DISCUSSION_CAPTURE_EVENT} from '/src/features/discussions/discussion-events';
+useGatewayStore.setState({conversationId:'preview'}); useLocaleStore.setState({language:'zh'}); rememberDiscussionConsent({consentPolicyVersion:1,consentAcknowledgedAt:1});
+createRoot(document.getElementById('root')!).render(<MemoryRouter><main className="min-h-screen bg-surface-base p-8 text-fg"><h1 className="text-2xl font-semibold">笔记</h1><p className="mt-2 text-sm text-fg-muted">会议记录与想法，随时回顾。</p><button id="record" className="mt-6 rounded-xl bg-accent px-4 py-2 text-on-accent" onClick={()=>window.dispatchEvent(new Event(OPEN_DISCUSSION_CAPTURE_EVENT))}>开始录音</button><GlobalDiscussionCaptureHost/></main></MemoryRouter>);
+`);
+  process.chdir(root);
+  server = await createServer({ root,configFile: false,resolve: { alias: { '@': join(root,'src') } },cacheDir: join(fixture,'vite-cache'),server: { host: '127.0.0.1',port: 0,hmr: false },plugins: [react(),tailwind(),{ name: 'synthetic-recorder',enforce: 'pre',load(id) {
+    if (id.endsWith('/features/discussions/recording-upload.ts')) return 'export async function uploadDraftRecording(draft,id,progress,complete,onStage){onStage?.("uploading");return null}';
+    if (!id.endsWith('/features/discussions/use-discussion-recorder.ts')) return;
+    return `import {useState} from 'react'; const draft={id:'preview',state:'recording',startedAt:42,chunkCount:1,lastSequence:0,mimeType:'audio/webm',mediaCoverage:{version:1,status:'verified',verifiedThroughMs:2535000,observedThroughMs:2535000,committedChunkCount:1}};
+const recorder={phase:'idle',draft,elapsedMs:2538000,inputLevel:.32,liveTranscriptionAvailable:true,recoverableDrafts:[],error:null,markerMessage:null,update:()=>{},async start(){this.phase='recording';this.update(x=>x+1);return draft},async setServerDiscussionId(){},refreshRecoverableDrafts(){},pause(){recorder.phase='paused';recorder.update(x=>x+1)},resume(){recorder.phase='recording';recorder.update(x=>x+1)},async mark(){this.markerMessage='saved';this.update(x=>x+1)}};
+export function useDiscussionRecorder(){const[,update]=useState(0);recorder.update=update;return recorder;}`;
+  } }] });
+  await server.listen(); browser = await chromium.launch({ executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',headless: true });
+  const page = await browser.newPage({ viewport: { width: 1280,height: 900 } });
+  page.setDefaultTimeout(10000);
+  const errors = []; page.on('pageerror',error => errors.push(error.message));
+  await page.route('**/api/discussions**',route => route.fulfill({ json: route.request().url().includes('/annotations') ? [] : route.request().url().includes('/transcript') ? {text:'',segments:[],stats:{confirmed:0}} : {discussion:{id:'preview',clientRequestId:'preview',status:'recording'},note:{id:'note',title:'Discussion · 2026-10-16 00:21'}} }));
+  await page.goto(server.resolvedUrls.local[0] + fixture.split('/').at(-1)+'/index.html'); await page.locator('#record').click();
+  const panel = page.locator('[data-recording-window]'); await panel.waitFor(); await page.getByRole('button',{name:'缩小录音窗'}).waitFor();
+  await page.screenshot({ path: join(outputs,'expanded.png') }); await panel.screenshot({path:join(outputs,'expanded-panel.png')});
+  assert.match(await panel.innerText(),/本机已确认保存至 42:15/);
+  assert.equal(await panel.locator('details[open]').count(),0);
+  const before = await panel.boundingBox(); const handle = page.getByRole('button',{name:'移动录音窗',exact:true}); const grip = await handle.boundingBox();
+  await page.mouse.move(grip.x+15,grip.y+15); await page.mouse.down(); await page.mouse.move(120,100,{steps:12}); await page.mouse.up();
+  const moved = await panel.boundingBox(); assert.ok(moved.x < before.x && moved.y < before.y); assert.ok(moved.x >= 12 && moved.y >= 12);
+  assert.equal(await page.getByRole('button',{name:'左上角',exact:true}).count(),0);
+  await page.getByRole('button',{name:'缩小录音窗'}).click(); assert.equal(await panel.getAttribute('data-recording-window'),'compact');
+  await page.screenshot({path:join(outputs,'compact.png')}); await panel.screenshot({path:join(outputs,'compact-panel.png')});
+  await page.getByRole('button',{name:'标重点',exact:true}).click(); assert.match(await panel.innerText(),/已标记重点/);
+  await page.getByRole('button',{name:'暂停',exact:true}).click(); assert.match(await panel.innerText(),/暂停/);
+  await page.getByRole('button',{name:'继续',exact:true}).click();
+  await page.getByRole('button',{name:'展开录音窗'}).click();
+  await handle.click(); await page.getByRole('button',{name:'右下角',exact:true}).click();
+  await page.setViewportSize({width:375,height:640});
+  await page.waitForTimeout(100); let rect = await panel.boundingBox(); assert.ok(rect.x+rect.width <= 363.5 && rect.y+rect.height <= 628.5);
+  assert.equal(await panel.evaluate(e=>e.scrollWidth > e.clientWidth),false);
+  await page.screenshot({path:join(outputs,'narrow.png')});
+  await page.getByRole('button',{name:'缩小录音窗'}).click();
+  rect = await panel.boundingBox(); assert.ok(rect.x+rect.width <= 363.5 && rect.y+rect.height <= 628.5);
+  await page.screenshot({path:join(outputs,'narrow-compact.png')});
+  await handle.focus(); await page.keyboard.press('Home'); await page.keyboard.press('ArrowLeft'); const keyboard = await panel.boundingBox(); assert.ok(keyboard.x < 23);
+  assert.deepEqual(errors,[]); assert.equal(await panel.locator('[role=alert]').count(),0);
+  const report = {passed:true,syntheticUI:true,checks:['expanded hierarchy','drag and boundaries','compact actions','pause and resume','highlight feedback','375px resize','keyboard and tap positioning'],screenshots:outputs};
+  await writeFile(join(outputs,'report.json'),JSON.stringify(report,null,2)); console.log(JSON.stringify(report));
+} finally { await browser?.close(); await server?.close(); await rm(fixture,{recursive:true,force:true}); }

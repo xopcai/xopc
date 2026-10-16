@@ -11,6 +11,7 @@ import { XopcNativeNoteEditor } from './NativeNoteEditor';
 import { XopcShareResultView } from './ShareResultView';
 import { XopcVoiceCapture } from '../service/voiceCapture';
 import { XopcChatMediaView } from './ChatMediaView';
+import { XopcDiscussionReviewPlayer } from './DiscussionReviewPlayer';
 import { XopcDiscussionNoteView } from './DiscussionNoteView';
 import { userErrorMessage } from '../common/userError';
 
@@ -231,7 +232,7 @@ export struct XopcNotesView {
                   Column({ space: 5 }) {
                     Row({ space: 6 }) {
                       if (item.pinned) { SymbolGlyph($r('sys.symbol.pin')).fontSize(13).fontColor([this.colors.accent]) }
-                      Text(item.title || $r('app.string.untitled')).fontSize(17).fontWeight(FontWeight.Medium)
+                      Text(item.kind === 'voice' && /^Discussion · \d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(item.title) ? $r('app.string.note_voice_option') : item.title || $r('app.string.untitled')).fontSize(17).fontWeight(FontWeight.Medium)
                         .fontColor(this.colors.foreground).layoutWeight(1).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
                     }.width('100%')
                     Text(item.snippet ?? '').fontSize(14).lineHeight(20).fontColor(this.colors.secondary)
@@ -379,7 +380,7 @@ export struct XopcNotesView {
           ListItem() {
             Column({ space: 16 }) {
               Column({ space: 7 }) {
-                Text(this.model.selected.title || $r('app.string.untitled')).fontSize(27).lineHeight(34).fontWeight(FontWeight.Bold)
+                Text(this.model.selected.kind === 'voice' && /^Discussion · \d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(this.model.selected.title) ? $r('app.string.note_voice_option') : this.model.selected.title || $r('app.string.untitled')).fontSize(27).lineHeight(34).fontWeight(FontWeight.Bold)
                   .fontColor(this.colors.foreground).width('100%')
                 Row({ space: 8 }) {
                   Text(new Date(this.model.selected.updatedAt).toLocaleString()).fontSize(12).fontColor(this.colors.tertiary)
@@ -430,8 +431,11 @@ export struct XopcNotesView {
             }.width('100%').padding({ left: 20, right: 20, top: 8, bottom: 30 }).alignItems(HorizontalAlign.Start)
           }
         }.id('note-detail-content').height('100%').width('100%').scrollBar(BarState.Off)
-          .contentEndOffset(92).edgeEffect(EdgeEffect.Spring)
-        this.detailToolbar()
+          .contentEndOffset(this.model.selected.kind === 'voice' ? 210 : 92).edgeEffect(EdgeEffect.Spring)
+        Column({ space: 8 }) {
+          if (this.model.selected.kind === 'voice') XopcDiscussionReviewPlayer({ noteId: this.model.selected.id })
+          this.detailToolbar()
+        }.width('100%')
       }.layoutWeight(1).width('100%').clip(true)
     }
   }

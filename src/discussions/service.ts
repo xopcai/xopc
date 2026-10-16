@@ -1,3 +1,4 @@
+import { longRecordingReview } from './long-review.js';
 import { createHash, randomUUID } from 'node:crypto';
 
 import { DISCUSSION_MAX_DURATION_MS, DISCUSSION_SEGMENT_MAX_BYTES, type DiscussionRecordingManifest } from '@xopcai/gateway-contract';
@@ -35,6 +36,8 @@ import type {
   DiscussionTranscript,
   ListDiscussionsQuery,
 } from './types.js';
+import { discussionAudioClip } from './audio-clip.js';
+import { putAnnotation, resolvedAnnotations, evidenceFor } from './review.js';
 import { editMeeting } from './edits.js';
 import { createProcessingRun, processingProgress, resetProcessingRetry } from './processing.js';
 import { saveTranscriptRevision, readTranscriptRevision, refreshCanonicalTranscript } from './revisions.js';
@@ -64,6 +67,11 @@ export class DiscussionService {
     private readonly projects: ProjectService,
     private readonly emit?: (type: string, payload: unknown) => void,
   ) {}
+
+  audioClip(id: string,start: number,end: number,signal: AbortSignal) { return discussionAudioClip(id,start,end,this.notes,signal); }
+  annotations(id: string) { return resolvedAnnotations(id, this.notes); }
+  saveAnnotation(id: string, input: import('@xopcai/gateway-contract').DiscussionAnnotationInput) { return putAnnotation(id, input); }
+  evidence(id: string, revision: number, ids: number[]) { return evidenceFor(id, revision, ids, this.notes); }
 
   settings(): DiscussionCaptureSettings {
     return getDiscussionCaptureSettings();
@@ -453,6 +461,12 @@ export class DiscussionService {
       await removeRecordingChunks(capture);
       cancelRecordingJob(id);
       if (capture.audioAttachmentId) await this.notes.removeAttachment(capture.noteId, capture.audioAttachmentId);
+      const sourceNote = await this.notes.getNote(capture.noteId);
+      for (const attachment of sourceNote?.attachments ?? []) {
+        if (attachment.retainWithoutReference && (attachment.fileName.startsWith(`recording-part-${capture.id}-`) || (attachment.fileName === `recording-sources-${capture.id}.json` || attachment.fileName === `recording-events-${capture.id}.json`))) {
+          await this.notes.removeAttachment(capture.noteId, attachment.id);
+        }
+      }
       deleteDiscussionSegmentAudio(id);
       const updated = updateDiscussionCapture(id, {
         audioAttachmentId: undefined,
@@ -480,6 +494,8 @@ export class DiscussionService {
     this.emit?.('discussion.updated', updated);
     return this.detail(updated);
   }
+
+  review(id: string, options: Parameters<typeof longRecordingReview>[2] = {}) { return longRecordingReview(id,this.notes,options); }
 
   private async detail(capture: DiscussionCapture): Promise<DiscussionDetail> {
     const note = await this.notes.getNote(capture.noteId);
