@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { voiceFixture } from '../../../voice/__tests__/voice-fixture.js';
 import { getModelCatalogStore, resetModelCatalogStore } from '../../model-catalog-store.js';
 import { ConfigSchema } from '../../../config/schema.js';
@@ -13,7 +13,40 @@ function snapshot(config = ConfigSchema.parse({})): SetupSnapshot {
     defaults: AgentDefaultsSchema.parse({ models: { chat: { primary: 'existing/chat', fallbacks: [] } } }), models: [], images: [], voice: readSetupVoiceState(provider, config) };
 }
 describe('shared voice setup', () => {
-  afterEach(() => resetModelCatalogStore());
+  it('projects native voice candidates from their own credentials and preserves other uses', () => {
+    vi.stubEnv('OPENAI_API_KEY', '');
+    const config = ConfigSchema.parse({ tools: { media: { audio: { enabled: false, provider: 'openai', providers: { openai: { apiKey: 'fixture-native-key', model: 'whisper-1' } } } } }, messages: { tts: { enabled: false, provider: 'edge' } } });
+    const native = readSetupVoiceState('openai', config);
+    expect(native.choices.transcription.length).toBeGreaterThan(0);
+    expect(native.choices.speech).toEqual([]);
+    const model = native.choices.transcription[0]!;
+    const next = applySetupVoice(config, [{ use: 'transcription', model }]);
+    expect(next.tools.media?.audio?.providers?.openai?.apiKey).toBe('fixture-native-key');
+    expect(next.tools.media?.audio?.fallback).toEqual({ enabled: false, order: [] });
+    expect(next.messages).toEqual(config.messages);
+    expect(next.voice).toEqual(config.voice);
+    const edge = readSetupVoiceState('edge', config);
+    expect(edge.choices.speech.length).toBeGreaterThan(0);
+    expect(edge.choices.conversation).toEqual([]);
+    expect(readSetupVoiceState('openai', ConfigSchema.parse({})).choices.transcription).toEqual([]);
+  });
+  afterEach(() => { resetModelCatalogStore(); vi.unstubAllEnvs(); });
+  it('retains saved subscription parameters when re-enabling the same models', () => {
+    const config = ConfigSchema.parse({ messages: { tts: { enabled: false, provider, providers: { [provider]: { model:'qwen-audio-3.0-tts-plus', voice:'saved-voice', speed:1.2 } } } }, tools: {media:{audio:{enabled:false,provider,providers:{[provider]:{model:'qwen-audio-3.0-asr-flash',language:'zh',prompt:'Saved prompt'}}}}} });
+    const voice = readSetupVoiceState(provider, config);
+    const next = applySetupVoice(config, [{use:'speech',model:voice.choices.speech[0]!}, {use:'transcription',model:voice.choices.transcription[0]!}]);
+    expect(next.messages?.tts?.providers?.[provider]).toMatchObject({voice:'saved-voice',speed:1.2});
+    expect(next.tools.media?.audio?.providers?.[provider]).toMatchObject({language:'zh',prompt:'Saved prompt'});
+    expect(next.messages?.tts?.enabled).toBe(true);
+    expect(next.tools.media?.audio?.enabled).toBe(true);
+  });
+  it('does not carry a native voice choice into a different model', () => {
+    vi.stubEnv('OPENAI_API_KEY', '');
+    const config = ConfigSchema.parse({messages:{tts:{provider:'openai',providers:{openai:{apiKey:'fixture',model:'gpt-4o-mini-tts',voice:'coral'}}}}});
+    const choices = readSetupVoiceState('openai',config).choices.speech;
+    expect(choices.find(choice => choice.model === 'gpt-4o-mini-tts')?.voice).toBe('coral');
+    expect(choices.find(choice => choice.model === 'tts-1')?.voice).not.toBe('coral');
+  });
   it('uses the same setup engine for account-discovered Cloud voice models', () => {
     getModelCatalogStore().replaceSourceModels('xopc-cloud', { providerId:'xopc-cloud',baseUrl:'https://test/v1',api:'openai-completions',etag:null,recommendedModel:null,lastSuccessAt:1 },
       (['tts','stt','omni'] as const).map(kind => ({id:`voice-${kind}`,name:kind,kind,input:['audio'],output:['text','audio'],operations:['audio.transcriptions','audio.speech'],reasoning:false,contextWindow:0,maxOutputTokens:null,

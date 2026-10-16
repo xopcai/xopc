@@ -2,7 +2,7 @@ import { PlatformVoiceSettings } from './platform-voice-settings';
 import { Loader2, Mic, Play, Square, Volume2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState, type ReactNode } from 'react';
 import useSWR from 'swr';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 
 import { NumberInput } from '@/components/ui/number-input';
 import { Button } from '@/components/ui/button';
@@ -187,7 +187,7 @@ function voiceFormReducer(state: VoiceFormDraft, action: VoiceFormAction): Voice
   }
 }
 
-export function VoiceSettingsPanel() {
+export function VoiceSettingsPanel({ capability, onPendingChange, disabled = false }: { capability?: 'transcription' | 'speech' | 'conversation'; onPendingChange?: (pending: boolean) => void; disabled?: boolean } = {}) {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
   const v = m.voiceSettings;
@@ -406,7 +406,7 @@ export function VoiceSettingsPanel() {
 
   const save = useCallback(async (snapshot: VoiceSettingsState) => {
     try {
-      await patchVoiceSettings(snapshot);
+      await patchVoiceSettings(snapshot, capability);
       dispatchForm({ type: 'saved', value: snapshot });
       dirtyRef.current = Boolean(
         formRef.current && JSON.stringify(formRef.current) !== JSON.stringify(snapshot),
@@ -414,9 +414,11 @@ export function VoiceSettingsPanel() {
     } catch (e) {
       throw new Error(e instanceof Error ? e.message : v.saveError);
     }
-  }, [v.saveError]);
+  }, [v.saveError, capability]);
 
   const autosave = useAutosave({ value: form, dirty, onSave: save });
+  useEffect(() => { onPendingChange?.(dirty || autosave.status === 'saving'); }, [dirty, autosave.status, onPendingChange]);
+  useEffect(() => () => onPendingChange?.(false), [onPendingChange]);
   const updateForm = useCallback((value: VoiceSettingsState) => {
     dirtyRef.current = true;
     dispatchForm({ type: 'update', updater: () => value });
@@ -459,6 +461,22 @@ export function VoiceSettingsPanel() {
   const refinement = form.voice.input.refinement;
   const apiKeyLabels = voiceApiKeyLabels(v);
 
+  if (capability) return <fieldset disabled={disabled} className="flex min-w-0 flex-col gap-4" onBlurCapture={autosave.onBlurCapture}>
+    <AutosaveStatus status={autosave.status} error={autosave.error} />
+    {autosave.error ? <Button variant="secondary" className="w-fit" onClick={autosave.retry}>{language === 'zh' ? '重试保存' : 'Retry saving'}</Button> : null}
+    {capability === 'transcription' ? <>
+      <SttSection managedModel={Boolean(capability)} v={v} apiKeyLabels={apiKeyLabels} stt={stt} models={models} sttProviders={sttProviders} updateStt={updateStt} updateSttFallback={updateSttFallback} />
+      <VoiceLanguageSection v={v} voice={form.voice} updateLanguageMode={updateVoiceLanguageMode} />
+    </> : capability === 'speech' ? <>
+      <TtsSection managedModel={Boolean(capability)} v={v} apiKeyLabels={apiKeyLabels} tts={tts} models={models} ttsProviders={ttsProviders} updateTts={updateTts} />
+      <VoiceReadoutPreference v={v} tts={tts} updateTts={updateTts} />
+    </> : <>
+      <VoiceSetup section="listening" v={v} form={form} pending={dirty || autosave.status === 'saving' || Boolean(autosave.error)} onChange={updateForm} />
+      {form.voice.realtime.omni ? <OmniVoiceSettings value={form.voice.realtime.omni} onChange={omni => updateRealtime({ omni })} /> : null}
+      <VoiceDeviceSettings v={v} />
+    </>}
+  </fieldset>;
+
   return (
     <div className="flex w-full flex-col gap-4" onBlurCapture={autosave.onBlurCapture}>
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -499,19 +517,19 @@ export function VoiceSettingsPanel() {
       </> : null}
       {group === 'service' ? <>
         {stt.provider === 'xopc-cloud' ? <PlatformVoiceSettings engine={form.voice.realtime.defaultEngine} disabled={dirty || autosave.status === 'saving'} /> : <>
-          <SttSection v={v} apiKeyLabels={apiKeyLabels} stt={stt} models={models} sttProviders={sttProviders} updateStt={updateStt} updateSttFallback={updateSttFallback} />
+          <SttSection managedModel={Boolean(capability)} v={v} apiKeyLabels={apiKeyLabels} stt={stt} models={models} sttProviders={sttProviders} updateStt={updateStt} updateSttFallback={updateSttFallback} />
         </>}
         {form.voice.realtime.enabled && form.voice.realtime.omni?.provider === 'alibaba' ? <OmniVoiceSettings value={form.voice.realtime.omni} onChange={(omni) => updateRealtime({ omni })} /> : null}
         <details open={readoutOpen} className="rounded-xl bg-surface-hover/20 p-4" data-voice-section="readout-service">
           <summary onClick={(event) => { event.preventDefault(); setReadoutOpen(!readoutOpen); }} className="cursor-pointer text-sm font-medium text-fg">{v.experience.readoutService}<span className="ml-2 font-normal text-fg-muted">{ttsProviderLabel(tts.provider, v)}</span></summary>
           {readoutOpen ? <>
             <p className="mt-3 text-xs text-fg-muted">{v.setup.readoutHint}</p>
-            <TtsSection v={v} apiKeyLabels={apiKeyLabels} tts={tts} models={models} ttsProviders={ttsProviders} updateTts={updateTts} />
+            <TtsSection managedModel={Boolean(capability)} v={v} apiKeyLabels={apiKeyLabels} tts={tts} models={models} ttsProviders={ttsProviders} updateTts={updateTts} />
           </> : null}
         </details>
         {stt.provider === 'xopc-cloud' ? <details className="rounded-xl bg-surface-hover/20 p-4" data-voice-section="advanced">
           <summary className="cursor-pointer text-sm font-medium text-fg">{v.experience.technical}</summary>
-          <SttSection v={v} apiKeyLabels={apiKeyLabels} stt={stt} models={models} sttProviders={sttProviders} updateStt={updateStt} updateSttFallback={updateSttFallback} />
+          <SttSection managedModel={Boolean(capability)} v={v} apiKeyLabels={apiKeyLabels} stt={stt} models={models} sttProviders={sttProviders} updateStt={updateStt} updateSttFallback={updateSttFallback} />
           <p className="mt-3 text-xs text-fg-muted">{v.notes.envVars}</p>
         </details> : null}
       </> : null}
@@ -576,6 +594,7 @@ function SttSection({
   sttProviders,
   updateStt,
   updateSttFallback,
+  managedModel = false,
 }: {
   v: VoiceSettingsMessages;
   apiKeyLabels: VoiceApiKeyFieldLabels;
@@ -584,6 +603,7 @@ function SttSection({
   sttProviders: SttProviderListEntry[];
   updateStt: (p: Partial<VoiceSettingsState['stt']>) => void;
   updateSttFallback: (p: Partial<NonNullable<VoiceSettingsState['stt']['fallback']>>) => void;
+  managedModel?: boolean;
 }) {
   const providerOptions = useMemo(() => {
     const seen = new Set<string>();
@@ -622,10 +642,10 @@ function SttSection({
   );
 
   useEffect(() => {
-    if (modelField && currentModel && configuredModel !== currentModel) {
+    if (!managedModel && modelField && currentModel && configuredModel !== currentModel) {
       updateProviderSlice({ model: currentModel });
     }
-  }, [configuredModel, currentModel, modelField, updateProviderSlice]);
+  }, [managedModel, configuredModel, currentModel, modelField, updateProviderSlice]);
 
   return (
     <section className="rounded-xl bg-surface-hover/20 px-4 py-5 sm:px-5">
@@ -640,7 +660,7 @@ function SttSection({
         {stt.enabled ? (
           <>
             <div className="grid gap-3 sm:grid-cols-2">
-              <div className={cn('flex flex-col gap-1.5', credentialFieldWidthClass)}>
+              {!managedModel ? <div className={cn('flex flex-col gap-1.5', credentialFieldWidthClass)}>
                 <FieldLabel>{v.stt.provider}</FieldLabel>
                 <Select
                   aria-label={v.stt.provider}
@@ -655,9 +675,10 @@ function SttSection({
                     </SelectOption>
                   ))}
                 </Select>
-              </div>
+              </div> : null}
 
               <VoiceProviderConfigFields
+                managedModel={managedModel}
                 kind="stt"
                 providerId={stt.provider}
                 fields={activeProvider?.fields ?? []}
@@ -700,6 +721,7 @@ function TtsSection({
   models,
   ttsProviders,
   updateTts,
+  managedModel = false,
 }: {
   v: VoiceSettingsMessages;
   apiKeyLabels: VoiceApiKeyFieldLabels;
@@ -707,6 +729,7 @@ function TtsSection({
   models: VoiceModelsPayload | null;
   ttsProviders: TtsProviderListEntry[];
   updateTts: (p: Partial<VoiceSettingsState['tts']>) => void;
+  managedModel?: boolean;
 }) {
   const [testText, setTestText] = useState(v.tts.test.sampleText);
   const [testState, setTestState] = useState<
@@ -785,11 +808,12 @@ function TtsSection({
   );
 
   useEffect(() => {
+    if (managedModel) return;
     const next: Record<string, unknown> = {};
     if (modelField && currentModel && configuredModel !== currentModel) next.model = currentModel;
     if (voiceField && currentVoice && configuredVoice !== currentVoice) next.voice = currentVoice;
     if (Object.keys(next).length > 0) updateProviderSlice(next);
-  }, [configuredModel, configuredVoice, currentModel, currentVoice, modelField, updateProviderSlice, voiceField]);
+  }, [managedModel, configuredModel, configuredVoice, currentModel, currentVoice, modelField, updateProviderSlice, voiceField]);
 
   useEffect(() => () => stopTestAudio(), [stopTestAudio]);
 
@@ -853,7 +877,7 @@ function TtsSection({
       <div className="space-y-4">
         <>
             <div className="grid gap-3 sm:grid-cols-2">
-              <div className={cn('flex flex-col gap-1.5', credentialFieldWidthClass)}>
+              {!managedModel ? <div className={cn('flex flex-col gap-1.5', credentialFieldWidthClass)}>
                 <FieldLabel>{v.tts.provider}</FieldLabel>
                 <Select
                   aria-label={v.tts.provider}
@@ -876,11 +900,12 @@ function TtsSection({
                   {' · '}
                   {activeProvider?.description ?? providerCapabilityHint(tts.provider, v)}
                 </p>
-              </div>
+              </div> : null}
             </div>
 
             <div className="grid gap-3 sm:grid-cols-2">
                   <VoiceProviderConfigFields
+                managedModel={managedModel}
                     kind="tts"
                     providerId={tts.provider}
                     fields={visibleFields}
@@ -967,6 +992,7 @@ function VoiceProviderConfigFields({
   apiKeyLabels,
   onPatch,
   resetVoiceOnModelChange = false,
+  managedModel = false,
 }: {
   kind: 'stt' | 'tts';
   providerId: string;
@@ -979,12 +1005,16 @@ function VoiceProviderConfigFields({
   apiKeyLabels: VoiceApiKeyFieldLabels;
   onPatch: (patch: Record<string, unknown>) => void;
   resetVoiceOnModelChange?: boolean;
+  managedModel?: boolean;
 }) {
   const language = useLocaleStore((state) => state.language);
   const v = messages(language).voiceSettings;
+  const scoped = managedModel;
   const isEssential = (field: VoiceConfigFieldMetadata) => field.required || ['apiKey', 'model', 'voice'].includes(field.key);
   const advancedFields = fields.filter((field) => !isEssential(field));
   const renderFields = (values: VoiceConfigFieldMetadata[]) => values.map((field) => {
+    if (managedModel && field.key === 'model') return null;
+    if (scoped && (field.secret || field.type === 'password' || ['apiKey', 'baseUrl', 'region', 'groupId'].includes(field.key))) return <Link key={field.key} className="text-sm text-accent-fg hover:underline" to={`/settings/capabilities/models?view=services&use=${kind === 'stt' ? 'transcription' : 'speech'}`}>{language === 'zh' ? `管理服务连接 · ${field.label}` : `Manage connection · ${field.label}`}</Link>;
     if (field.key === 'apiKey') {
       return (
         <div key={field.key} className={cn('flex flex-col gap-1.5', credentialFieldWidthClass)}>
