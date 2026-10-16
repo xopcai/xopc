@@ -1,9 +1,9 @@
-// Real Chromium MediaRecorder/IndexedDB recovery with synthetic microphone input; no Gateway fixture.
+// Real Chromium MediaRecorder/IndexedDB recovery; physical microphone is opt-in and stays local.
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { createRequire } from 'node:module';
-import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -15,20 +15,41 @@ const { createServer } = await import(require.resolve('vite'));
 const directory = await mkdtemp(join(tmpdir(), 'xopc-recording-browser-'));
 const fixture = await mkdtemp(join(root, '.recording-acceptance-'));
 const reportPath = resolve(process.env.XOPC_NOTE_BROWSER_REPORT ?? 'docs/design/technical/note-recording-browser-2026-10-15.json');
+const physicalMicrophone = process.env.XOPC_NOTE_BROWSER_PHYSICAL_MIC === '1';
+const background = process.env.XOPC_NOTE_BROWSER_BACKGROUND === '1';
 const durationMs = Number(process.env.XOPC_NOTE_BROWSER_DURATION_MS ?? 60_000);
 assert.ok(Number.isFinite(durationMs) && durationMs >= 12_000 && durationMs <= 7_200_000);
 process.chdir(root);
-const report = { date: new Date().toISOString(), directory, durationMs, syntheticMicrophone: true, passed: false, checks: [], failure: undefined };
-let server, context, activePage;
+const report = { date: new Date().toISOString(), directory, durationMs, syntheticMicrophone: !physicalMicrophone, physicalMicrophone, background, passed: false, checks: [], failure: undefined };
+let server, context, activePage, ownedBrowser;
 const errors = [];
 const open = async () => {
-  context = await chromium.launchPersistentContext(join(directory, 'profile'), {
-    executablePath: process.env.XOPC_VOICE_SMOKE_BROWSER || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-    headless: true, permissions: ['microphone'],
-    args: ['--enable-automation', '--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream', `--use-file-for-fake-audio-capture=${join(directory, 'microphone.wav')}`, '--autoplay-policy=no-user-gesture-required'],
-  });
+  const executablePath = process.env.XOPC_VOICE_SMOKE_BROWSER || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+  const audioArgs = !physicalMicrophone ? ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream', `--use-file-for-fake-audio-capture=${join(directory, 'microphone.wav')}`] : [];
+  if (background) {
+    const profile = join(directory, 'profile'); await mkdir(profile, { recursive: true });
+    await rm(join(profile, 'DevToolsActivePort'), { force: true });
+    ownedBrowser = spawn(executablePath, [`--user-data-dir=${profile}`, '--remote-debugging-port=0', '--enable-automation', '--no-first-run', '--no-default-browser-check', ...audioArgs, 'about:blank'], { stdio: 'ignore' });
+    let port;
+    for (let attempt = 0; attempt < 100; attempt++) {
+      port = await readFile(join(profile, 'DevToolsActivePort'), 'utf8').then(text => Number(text.split('\n')[0])).catch(() => undefined);
+      if (port) break;
+      await new Promise(done => setTimeout(done, 100));
+    }
+    assert.ok(port, 'Owned native Chrome did not expose its debugging port');
+    const browser = await chromium.connectOverCDP(`http://127.0.0.1:${port}`, { noDefaults: true });
+    context = browser.contexts()[0]; await context.grantPermissions(['microphone']);
+  } else {
+    context = await chromium.launchPersistentContext(join(directory, 'profile'), {
+      executablePath, headless: !physicalMicrophone, permissions: ['microphone'],
+      args: ['--enable-automation', ...audioArgs, '--autoplay-policy=no-user-gesture-required'],
+    });
+  }
   const page = await context.newPage(); activePage = page; page.on('pageerror', error => errors.push(error.message));
   page.setDefaultTimeout(20_000);
+  // Native background tabs stop animation frames; assertions must use timer polling.
+  const waitForFunction = page.waitForFunction.bind(page);
+  page.waitForFunction = (fn, arg, options = {}) => waitForFunction(fn, arg, { polling: 100, ...options });
   await page.addInitScript(() => {
     const capture = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
     navigator.mediaDevices.getUserMedia = async (...args) => { const stream = await capture(...args); window.testStream = stream; return stream; };
@@ -47,7 +68,7 @@ async function waitForTimedMarks(page,id) {
   throw new Error('Highlight position did not reach durable storage');
 }
 try {
-  execFileSync(process.env.XOPC_FFMPEG_PATH ?? 'ffmpeg', ['-v', 'error', '-y', '-f', 'lavfi', '-i', 'sine=frequency=440:sample_rate=48000:duration=5', '-c:a', 'pcm_s16le', join(directory, 'microphone.wav')]);
+  if (!physicalMicrophone) execFileSync(process.env.XOPC_FFMPEG_PATH ?? 'ffmpeg', ['-v', 'error', '-y', '-f', 'lavfi', '-i', 'sine=frequency=440:sample_rate=48000:duration=5', '-c:a', 'pcm_s16le', join(directory, 'microphone.wav')]);
   await writeFile(join(fixture, 'index.html'), '<html><div id="root"></div><script type="module" src="./main.jsx"></script></html>');
   await writeFile(join(fixture, 'main.jsx'), `import React from 'react';import{createRoot}from'react-dom/client';
 import{useDiscussionRecorder}from'/src/features/discussions/use-discussion-recorder';
@@ -67,13 +88,52 @@ createRoot(document.getElementById('root')).render(<Harness/>);`);
   await page.getByRole('button', { name: 'Record', exact: true }).click();
   await page.waitForFunction(() => window.recorder.phase === 'recording');
   await page.waitForFunction(() => window.recorder.draft?.chunkCount >= 1);
+  report.input = await page.evaluate(() => window.testStream.getAudioTracks().map(track => ({ label: track.label, settings: track.getSettings(), readyState: track.readyState, muted: track.muted })));
+  if (background) {
+    const sample = () => page.evaluate(() => ({ hidden: document.hidden, phase: window.recorder.phase, chunks: window.recorder.draft.chunkCount, coverage: window.recorder.draft.mediaCoverage?.verifiedThroughMs, muted: window.testStream.getAudioTracks()[0].muted }));
+    const recordingCdp = await context.newCDPSession(page);
+    await recordingCdp.send('Emulation.setFocusEmulationEnabled', { enabled: false });
+    const before = await sample();
+    const nextPage = context.waitForEvent('page');
+    await recordingCdp.send('Target.createTarget', { url: 'about:blank', newWindow: false });
+    const other = await nextPage; await other.bringToFront();
+    await recordingCdp.send('Emulation.setFocusEmulationEnabled', { enabled: false });
+    const otherCdp = await context.newCDPSession(other);
+    await otherCdp.send('Emulation.setFocusEmulationEnabled', { enabled: false });
+    report.backgroundWindows = { recording: await recordingCdp.send('Browser.getWindowForTarget'), other: await otherCdp.send('Browser.getWindowForTarget') };
+    console.log(JSON.stringify(report.backgroundWindows));
+    await page.waitForFunction(() => document.hidden, undefined, { polling: 100 });
+    await new Promise(done => setTimeout(done, 20_000));
+    const hidden = await sample();
+    assert.equal(hidden.hidden, true); assert.equal(hidden.phase, 'recording'); assert.ok(hidden.chunks > before.chunks);
+    const windowCdp = await context.newCDPSession(other);
+    const { windowId } = await windowCdp.send('Browser.getWindowForTarget');
+    await windowCdp.send('Browser.setWindowBounds', { windowId, bounds: { windowState: 'minimized' } });
+    assert.equal((await windowCdp.send('Browser.getWindowBounds', { windowId })).bounds.windowState, 'minimized');
+    await new Promise(done => setTimeout(done, 20_000));
+    const minimized = await sample();
+    assert.equal(minimized.phase, 'recording'); assert.ok(minimized.chunks > hidden.chunks);
+    await windowCdp.send('Browser.setWindowBounds', { windowId, bounds: { windowState: 'normal' } });
+    await page.bringToFront(); await other.close();
+    report.checks.push({ scenario: 'real tab background and native window minimization preserve input and committed audio', before, hidden, minimized, after: await sample() });
+  }
   await context.setOffline(true);
   if (process.env.XOPC_NOTE_BROWSER_ANNOTATIONS === '1') {
     await page.evaluate(async () => window.recorder.mark());
     report.originalMarks = await waitForTimedMarks(page,await page.evaluate(() => window.recorder.draft.id));
   }
   console.log(`Recording offline for ${durationMs} ms with real MediaRecorder`);
-  await new Promise(done => setTimeout(done, durationMs));
+  const recordingDeadline = Date.now() + durationMs;
+  while (Date.now() < recordingDeadline) {
+    await new Promise(done => setTimeout(done, Math.min(30_000, recordingDeadline - Date.now())));
+    const progress = await page.evaluate(() => ({ phase: window.recorder.phase, chunks: window.recorder.draft?.chunkCount, savedThroughMs: window.recorder.draft?.mediaCoverage?.verifiedThroughMs, error: window.recorder.error }));
+    assert.equal(progress.phase, 'recording', JSON.stringify(progress));
+    assert.equal(progress.error, null);
+    report.progress ??= []; report.progress.push({ at: new Date().toISOString(), ...progress });
+    await mkdir(resolve(reportPath, '..'), { recursive: true });
+    await writeFile(reportPath, JSON.stringify(report, null, 2) + '\n');
+    console.log(JSON.stringify(progress));
+  }
   const before = await page.evaluate(async () => {
     const saved = await window.readSavedAudio(window.recorder.draft.id);
     const bytes = Uint8Array.from(saved.bytes);
@@ -109,8 +169,9 @@ createRoot(document.getElementById('root')).render(<Harness/>);`);
   const pcm = JSON.parse(execFileSync('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'json', join(directory, 'recovered.wav')], { encoding: 'utf8' }));
   const decodedDurationMs = Number(pcm.format.duration) * 1000;
   assert.ok(Math.abs(decodedDurationMs - restored.draft.durationMs) < 1_000, 'Decoded duration must match committed metadata');
-  assert.equal(restored.draft.mediaCoverage.status, 'verified');
-  assert.ok(Math.abs(restored.draft.mediaCoverage.verifiedThroughMs - decodedDurationMs) < 2, 'Saved range must come from encoded media time');
+  if (!physicalMicrophone) assert.equal(restored.draft.mediaCoverage.status, 'verified');
+  if (restored.draft.mediaCoverage.status === 'verified') assert.ok(Math.abs(restored.draft.mediaCoverage.verifiedThroughMs - decodedDurationMs) < 2, 'Saved range must come from encoded media time');
+  else assert.ok(restored.draft.mediaCoverage.verifiedThroughMs <= decodedDurationMs, 'Unproven gaps must never count as continuous saved audio');
   report.checks.push({ scenario: 'offline capture, SIGKILL, browser restart, IndexedDB restore and audio decode',
     savedChunks: restored.draft.chunkCount, savedDurationMs: restored.draft.durationMs, decodedDurationMs,
     mediaCoverage: restored.draft.mediaCoverage, bytes: restored.bytes.length, prefixHash: before.hash, reportedContainerDuration: decoded.format?.duration });
@@ -162,10 +223,50 @@ createRoot(document.getElementById('root')).render(<Harness/>);`);
   const paused = await page.evaluate(() => window.readSavedAudio(window.recorder.draft.id));
   await writeFile(join(directory, 'paused.webm'), Buffer.from(paused.bytes));
   report.checks.push({ scenario: 'pause, resume after real audio input, stop barrier and local success', mediaCoverage: paused.draft.mediaCoverage, saveOutcome: paused.draft.saveOutcome });
+  // A page refresh is a separate interruption boundary from a killed browser process.
+  await page.getByRole('button', { name: 'Record', exact: true }).click();
+  await page.waitForFunction(() => window.recorder.phase === 'recording');
+  await page.waitForFunction(() => window.recorder.draft?.chunkCount >= 2);
+  const refreshPrefix = await page.evaluate(() => window.readSavedAudio(window.recorder.draft.id));
+  await page.evaluate(async () => window.recorder.mark());
+  const refreshMarks = await waitForTimedMarks(page, refreshPrefix.draft.id);
+  await page.reload();
+  await page.waitForFunction(id => window.recorder.recoverableDrafts.some(draft => draft.id === id), refreshPrefix.draft.id);
+  await page.evaluate(async id => window.recorder.restore(window.recorder.recoverableDrafts.find(draft => draft.id === id)), refreshPrefix.draft.id);
+  await page.waitForFunction(() => window.recorder.phase === 'stopped');
+  const refreshed = await page.evaluate(id => window.readSavedAudio(id), refreshPrefix.draft.id);
+  assert.deepEqual(Buffer.from(refreshed.bytes).subarray(0, refreshPrefix.bytes.length), Buffer.from(refreshPrefix.bytes));
+  const refreshedMarks = await page.evaluate(id => window.readSavedMarks(id), refreshPrefix.draft.id);
+  assert.deepEqual(refreshedMarks, refreshMarks);
+  assert.equal(refreshed.draft.id, refreshPrefix.draft.id);
+  assert.equal(await page.evaluate(() => window.captureStatus.localComplete), false);
+  report.checks.push({ scenario: 'page refresh restores the same draft and highlights without changing the committed audio prefix', draftId: refreshed.draft.id, chunks: refreshed.draft.chunkCount, prefixHash: createHash('sha256').update(Buffer.from(refreshPrefix.bytes)).digest('hex'), marks: refreshedMarks });
+  if (background) {
+    await page.getByRole('button', { name: 'Record', exact: true }).click();
+    await page.waitForFunction(() => window.recorder.phase === 'recording' && window.recorder.draft.chunkCount >= 1);
+    const prefix = await page.evaluate(() => window.readSavedAudio(window.recorder.draft.id));
+    const lifecycle = await context.newCDPSession(page);
+    await lifecycle.send('Page.setWebLifecycleState', { state: 'frozen' });
+    await new Promise(done => setTimeout(done, 3_000));
+    await lifecycle.send('Page.setWebLifecycleState', { state: 'active' });
+    await page.waitForFunction(id => (window.recorder.phase === 'stopped' && window.recorder.draft?.id === id) || window.recorder.recoverableDrafts.some(draft => draft.id === id && draft.state === 'stopped'), prefix.draft.id);
+    await page.evaluate(id => window.recorder.draft?.id === id ? undefined : window.recorder.restore(window.recorder.recoverableDrafts.find(draft => draft.id === id)), prefix.draft.id);
+    const recovered = await page.evaluate(id => window.readSavedAudio(id), prefix.draft.id);
+    assert.equal(recovered.draft.saveOutcome, 'interrupted');
+    assert.deepEqual(Buffer.from(recovered.bytes).subarray(0, prefix.bytes.length), Buffer.from(prefix.bytes));
+    await page.evaluate(() => window.recorder.start({ continuation: window.recorder.draft, onLiveSegment: () => {} }));
+    await page.waitForFunction(() => window.recorder.phase === 'recording');
+    await page.waitForFunction(count => window.recorder.draft.chunkCount > count, recovered.draft.chunkCount);
+    await page.evaluate(() => window.recorder.stop());
+    assert.equal(await page.evaluate(() => window.recorder.draft.id), prefix.draft.id);
+    report.checks.push({ scenario: 'CDP page freeze and thaw (not OS sleep), interrupted source persisted and same draft continued', draftId: prefix.draft.id, savedChunks: recovered.draft.chunkCount });
+  }
   assert.deepEqual(errors, []); report.passed = true;
-} catch (error) { report.failure = error instanceof Error ? error.stack : String(error); report.pageState = await activePage?.evaluate(() => ({ text: document.body.innerText, phase: window.recorder?.phase, error: window.recorder?.error })).catch(() => null); report.pageErrors = errors; process.exitCode = 1; }
+} catch (error) { report.failure = error instanceof Error ? error.stack : String(error); report.pageState = await activePage?.evaluate(() => ({ text: document.body.innerText, phase: window.recorder?.phase, error: window.recorder?.error })).catch(() => null); report.pageErrors = errors;
+  if (activePage) { const saved = await activePage.evaluate(() => window.recorder?.draft ? window.readSavedAudio(window.recorder.draft.id) : null).catch(() => null); if (saved) await writeFile(join(directory, 'failure.webm'), Buffer.from(saved.bytes)); }
+  process.exitCode = 1; }
 finally {
-  await context?.close(); await server?.close(); await rm(fixture, { recursive: true, force: true });
+  await context?.close(); ownedBrowser?.kill('SIGTERM'); await server?.close(); await rm(fixture, { recursive: true, force: true });
   await mkdir(resolve(reportPath, '..'), { recursive: true }); await writeFile(reportPath, JSON.stringify(report, null, 2) + '\n');
   console.log(JSON.stringify({ passed: report.passed, reportPath, failure: report.failure }));
 }

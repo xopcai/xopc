@@ -75,6 +75,7 @@ export function useDiscussionRecorder() {
   const lastAudioAtRef = useRef(0);
   const [inputLevel, setInputLevel] = useState<number | null>(null);
   const intervalRef = useRef<number | null>(null);
+  const lifecycleCleanupRef = useRef<(() => void) | null>(null);
   const startInFlightRef = useRef(false);
   const stopRef = useRef<() => Promise<DiscussionDraft | null>>(() => Promise.resolve(null));
 
@@ -93,6 +94,8 @@ export function useDiscussionRecorder() {
   const stopTimersAndStream = useCallback(() => {
     if (intervalRef.current != null) window.clearInterval(intervalRef.current);
     intervalRef.current = null;
+    lifecycleCleanupRef.current?.();
+    lifecycleCleanupRef.current = null;
     releaseMicrophoneLease(microphoneOwner.current);
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
@@ -346,7 +349,28 @@ export function useDiscussionRecorder() {
       recorderStoppedRef.current = new Promise<void>((resolve) => {
         recorder.onstop = () => { resolve(); if (!stopPromise.current) interrupt(); };
       });
-      stream.getAudioTracks().forEach((track) => track.addEventListener('ended', interrupt, { once: true }));
+      const tracks = stream.getAudioTracks();
+      const checkSource = () => {
+        if (tracks.some(track => track.muted || track.readyState === 'ended')) interrupt();
+      };
+      // Muted sources may still produce encoded silence and PCM callbacks.
+      // Close this epoch so a missing interval cannot appear to be complete audio.
+      tracks.forEach(track => {
+        track.addEventListener('ended', interrupt);
+        track.addEventListener('mute', interrupt);
+      });
+      document.addEventListener('freeze', interrupt);
+      document.addEventListener('visibilitychange', checkSource);
+      window.addEventListener('pageshow', checkSource);
+      lifecycleCleanupRef.current = () => {
+        tracks.forEach(track => {
+          track.removeEventListener('ended', interrupt);
+          track.removeEventListener('mute', interrupt);
+        });
+        document.removeEventListener('freeze', interrupt);
+        document.removeEventListener('visibilitychange', checkSource);
+        window.removeEventListener('pageshow', checkSource);
+      };
       recorder.start(5_000);
       let lastLevelAt = -Infinity;
       void LivePcmSegmenter.start(stream, (segment) => {
@@ -366,6 +390,7 @@ export function useDiscussionRecorder() {
       setDraft(nextDraft);
       setElapsedMs(nextDraft.durationMs);
       setPhase('waiting_for_audio');
+      checkSource();
       intervalRef.current = window.setInterval(() => {
         if (recorder.state === 'inactive' && !stopPromise.current) { interrupt(); return; }
         if (recorder.state === 'recording' && performance.now() - lastAudioAtRef.current >= 15_000) {

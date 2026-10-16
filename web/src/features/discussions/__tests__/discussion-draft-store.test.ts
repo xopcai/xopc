@@ -1,8 +1,10 @@
 // @vitest-environment jsdom
+import { Blob as NodeBlob } from 'node:buffer';
 import { IDBFactory, IDBKeyRange, IDBObjectStore } from 'fake-indexeddb';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getDiscussionDraftChunk, listDiscussionDrafts, loadDiscussionDraftForRecovery, saveDiscussionDraft, saveDiscussionDraftChunk } from '../discussion-draft-store';
+import { mediaHeader, mediaCluster } from './recording-media-fixture';
 import type { DiscussionDraft } from '../discussion-types';
 
 const draft: DiscussionDraft = { id: 'recording', mimeType: 'audio/webm', startedAt: 1, updatedAt: 1,
@@ -65,6 +67,51 @@ describe('atomic original audio commits', () => {
   it('does not report an empty permission-stage session as recoverable audio', async () => {
     await saveDiscussionDraft(draft);
     await expect(loadDiscussionDraftForRecovery(draft.id)).rejects.toThrow('No audio was saved');
+  });
+
+  it.each([40, 41])('rechecks retained audio instead of trusting an old gap proof (next timestamp %i)', async timestamp => {
+    vi.stubGlobal('Blob', NodeBlob);
+    const parts = [new Blob([Uint8Array.from([...mediaHeader, ...mediaCluster(0), ...mediaCluster(19)])]),
+      new Blob([Uint8Array.from([...mediaCluster(timestamp), ...mediaCluster(60)])])];
+    const old = { ...draft, chunkCount: 2, durationMs: 80, serverDiscussionId: 'same-note',
+      mediaCoverage: { version: 1 as const, verifiedThroughMs: 20, observedThroughMs: 80, status: 'gap' as const, committedChunkCount: 2 } };
+    for (let index = 0; index < parts.length; index++) await saveDiscussionDraftChunk({ ...chunk(index), blob: parts[index] }, old);
+    const recovered = await loadDiscussionDraftForRecovery(draft.id);
+    expect(recovered).toMatchObject({ id: draft.id, serverDiscussionId: 'same-note', chunkCount: 2, saveOutcome: 'interrupted',
+      mediaCoverage: { status: timestamp === 40 ? 'verified' : 'gap', verifiedThroughMs: timestamp === 40 ? 80 : 39 } });
+    for (let index = 0; index < parts.length; index++) {
+      expect(await (await getDiscussionDraftChunk(draft.id, index))!.blob.arrayBuffer()).toEqual(await parts[index].arrayBuffer());
+    }
+  });
+
+  it('rechecks each resumed epoch without joining across the interruption', async () => {
+    vi.stubGlobal('Blob', NodeBlob);
+    const epoch = (last: number) => new Blob([Uint8Array.from([...mediaHeader, ...mediaCluster(0), ...mediaCluster(19), ...mediaCluster(last)])]);
+    const old: DiscussionDraft = { ...draft, chunkCount: 2, durationMs: 120,
+      epochs: [{ firstChunk: 0, mimeType: 'audio/webm', startedAt: 1, savedThroughMs: 20 },
+        { firstChunk: 1, mimeType: 'audio/webm', startedAt: 1000, previousEndedAt: 500 }],
+      mediaCoverage: { version: 1, verifiedThroughMs: 20, observedThroughMs: 61, status: 'gap', committedChunkCount: 2 } };
+    await saveDiscussionDraftChunk({ ...chunk(0), blob: epoch(40) }, old);
+    await saveDiscussionDraftChunk({ ...chunk(1), blob: epoch(41) }, old);
+    const recovered = await loadDiscussionDraftForRecovery(draft.id);
+    expect(recovered.epochs![0]).toMatchObject({ savedThroughMs: 60 });
+    expect(recovered.epochs![1]).toEqual(old.epochs![1]);
+    expect(recovered.mediaCoverage).toMatchObject({ status: 'gap', verifiedThroughMs: 39, observedThroughMs: 61 });
+    const { verifiedSavedThrough } = await import('../recording-status');
+    expect(verifiedSavedThrough(recovered)).toBe(60);
+  });
+
+  it('retains earlier audio when a resumed epoch crashed before producing its first packet', async () => {
+    vi.stubGlobal('Blob', NodeBlob);
+    const old: DiscussionDraft = { ...draft, chunkCount: 1, durationMs: 60,
+      epochs: [{ firstChunk: 0, mimeType: 'audio/webm', startedAt: 1, savedThroughMs: 20 },
+        { firstChunk: 1, mimeType: 'audio/webm', startedAt: 1000, previousEndedAt: 500 }] };
+    await saveDiscussionDraftChunk({ ...chunk(0), blob: new Blob([Uint8Array.from([...mediaHeader, ...mediaCluster(0), ...mediaCluster(19), ...mediaCluster(40)])]) }, old);
+    const recovered = await loadDiscussionDraftForRecovery(draft.id);
+    expect(recovered.epochs![0].savedThroughMs).toBe(60);
+    expect(recovered.mediaCoverage).toMatchObject({ status: 'unknown', verifiedThroughMs: 0 });
+    expect(recovered.saveOutcome).toBe('interrupted');
+    expect(await getDiscussionDraftChunk(draft.id, 0)).toBeDefined();
   });
 
   it('waits for transaction commit rather than the individual audio request', async () => {
