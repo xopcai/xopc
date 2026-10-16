@@ -35,6 +35,57 @@ describe('committed media time proof', () => {
     expect(reader.append(Uint8Array.from([...mediaHeader, ...mediaCluster(0), ...mediaCluster(21)])))
       .toMatchObject({ status: 'gap', verifiedThroughMs: 20, observedThroughMs: 41 });
   });
+  it('accepts bounded early timestamp quantization and its return to the cumulative sample clock', () => {
+    // Captured device pattern: 2939 after 2880 + 60; 20040 after 19979 + 60.
+    const packets = [...mediaHeader];
+    for (let time = 0; time < 55_320; time += 60) {
+      const timestamp = time >= 2940 && time < 20_040 ? time - 1 : time;
+      packets.push(...mediaCluster(timestamp, 0, [0x18, 0]));
+    }
+    const source = Uint8Array.from(packets);
+    for (const size of [1, 7, 5003, source.length]) {
+      const reader = new RecordingMediaCoverageReader('audio/webm');
+      for (let offset = 0; offset < source.length; offset += size) reader.append(source.subarray(offset, offset + size));
+      expect(reader.snapshot()).toMatchObject({ status: 'verified', verifiedThroughMs: 55_320, observedThroughMs: 55_320 });
+    }
+  });
+  it.each([1, 20, 1000])('never bridges a forward gap of %i ms after timestamp quantization', gap => {
+    const reader = new RecordingMediaCoverageReader('audio/webm');
+    reader.append(Uint8Array.from([...mediaHeader, ...mediaCluster(0), ...mediaCluster(19)]));
+    expect(reader.snapshot()).toMatchObject({ status: 'verified', verifiedThroughMs: 39 });
+    reader.append(Uint8Array.from([...mediaCluster(40 + gap), ...mediaCluster(60), ...mediaCluster(80)]));
+    expect(reader.snapshot()).toMatchObject({ status: 'gap', verifiedThroughMs: 39 });
+  });
+  it('does not accumulate a fresh millisecond of tolerance per packet', () => {
+    const reader = new RecordingMediaCoverageReader('audio/webm');
+    reader.append(Uint8Array.from([...mediaHeader, ...mediaCluster(0), ...mediaCluster(19), ...mediaCluster(38)]));
+    expect(reader.snapshot()).toMatchObject({ status: 'gap', verifiedThroughMs: 39 });
+  });
+  it('does not round a coarse WebM clock into permission to bridge large overlaps', () => {
+    const reader = new RecordingMediaCoverageReader('audio/webm');
+    // 2 ms ticks: these starts represent 0 ms and 18 ms.
+    const scale = element([0x2a, 0xd7, 0xb1], [0x1e, 0x84, 0x80]);
+    reader.append(Uint8Array.from([...mediaHeader, ...scale, ...mediaCluster(0), ...mediaCluster(9)]));
+    expect(reader.snapshot()).toMatchObject({ status: 'gap', verifiedThroughMs: 20 });
+  });
+  it('keeps sub-millisecond Opus packet timing exact across quantized timestamps', () => {
+    const reader = new RecordingMediaCoverageReader('audio/webm');
+    reader.append(Uint8Array.from(mediaHeader));
+    // Opus config 16 contains one 2.5 ms frame.
+    for (let index = 0; index < 20; index++) reader.append(Uint8Array.from(mediaCluster(Math.floor(index * 2.5), 0, [0x80, 0])));
+    expect(reader.snapshot()).toMatchObject({ status: 'verified', verifiedThroughMs: 49 });
+    const before = reader.snapshot().verifiedThroughMs;
+    // Drop the next 2.5 ms frame, even though the preceding timestamp was rounded down.
+    reader.append(Uint8Array.from(mediaCluster(52, 0, [0x80, 0])));
+    expect(reader.snapshot()).toMatchObject({ status: 'gap', verifiedThroughMs: before });
+  });
+  it('does not lose or accumulate saved time over two hours of quantized timestamps', () => {
+    const reader = new RecordingMediaCoverageReader('audio/webm');
+    reader.append(Uint8Array.from(mediaHeader));
+    for (let time = 0; time < 7_200_000; time += 20) reader.append(Uint8Array.from(mediaCluster(time - (time % 60 === 20 ? 1 : 0))));
+    expect(reader.snapshot()).toMatchObject({ status: 'verified', verifiedThroughMs: 7_200_000 });
+  });
+
   it('keeps the proven prefix but stops making timing claims for unsupported lacing', () => {
     const reader = new RecordingMediaCoverageReader('audio/webm');
     reader.append(Uint8Array.from([...mediaHeader, ...mediaCluster(0), ...mediaCluster(20, 2)]));
