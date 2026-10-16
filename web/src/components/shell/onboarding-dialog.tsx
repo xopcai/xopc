@@ -34,6 +34,7 @@ export function OnboardingDialog() {
   const [workDiscovery, setWorkDiscovery] = useState<WorkDiscoveryOnboardingSnapshot | null>(null);
   const [experienceClosed, setExperienceClosed] = useState(false);
   const [setupInProgress, setSetupInProgress] = useState(false);
+  const [setupPending, setSetupPending] = useState(false);
 
   useEffect(() => {
     setExperienceClosed(false);
@@ -95,7 +96,7 @@ export function OnboardingDialog() {
       open={experience.open}
       onOpenChange={(nextOpen) => {
         if (!nextOpen) {
-          if (experience.stage === 'setup') dismissExperience();
+          if (experience.stage === 'setup') { if (!setupPending) dismissExperience(); }
           else if (experience.stage === 'cloud') void dismissCloud().catch(closeExperience);
           else leaveExperience();
         }
@@ -110,6 +111,7 @@ export function OnboardingDialog() {
               ? 'bottom-4 right-4 max-h-[calc(100vh-2rem)] w-[min(32rem,calc(100vw-2rem))] overflow-y-auto rounded-2xl border border-edge bg-surface-panel shadow-xl'
               : 'xopc-onboarding-dialog inset-0 overflow-hidden',
           )}
+          onEscapeKeyDown={event => { if (experience.stage === 'setup' && setupPending) event.preventDefault(); }}
           onPointerDownOutside={(e) => e.preventDefault()}
           onOpenAutoFocus={(e) => e.preventDefault()}
         >
@@ -124,13 +126,14 @@ export function OnboardingDialog() {
                 const cloudStatus = await cloudOnboarding.refresh().catch(() => null);
                 let cloudPromptPending = cloudStatus?.status === 'unseen' && !cloudStatus.hasGrant;
                 if (isElectron() && cloudPromptPending) {
-                  // The desktop setup wizard already presented XOPC Cloud as its recommended provider.
+                  // The desktop setup wizard already connected the default XOPC Cloud service.
                   await cloudOnboarding.dismiss().catch(() => undefined);
                   cloudPromptPending = false;
                 }
                 setSetupInProgress(false);
                 if (!hasPendingWorkDiscovery(workDiscovery) && !cloudPromptPending) leaveExperience();
               }}
+              onPendingChange={setSetupPending}
               onDismiss={dismissExperience}
               canDismiss
             />
