@@ -258,3 +258,40 @@ it('discards the old draft after an authorization polling failure before allowin
   await click(t.setupTestConnection); await click(t.setupAddConnection);
   expect(api.commitMcpDraft).toHaveBeenCalledWith('draft-2', false);
 });
+
+
+it.each([
+  [429, 'setupRateLimited'], [401, 'setupGatewayUnauthorized'], [404, 'setupConflict'], [503, 'setupGatewayCheckFailed'],
+] as const)('explains Gateway HTTP %s without showing raw errors or attempting a commit', async (status, key) => {
+  api.createMcpConnectionDraft.mockRejectedValueOnce(Object.assign(new Error('private-url?token=fixture-secret'), { status }));
+  await render(); await connect();
+  expect(document.body.textContent).toContain(t[key]);
+  expect(document.body.textContent).not.toContain('fixture-secret');
+  expect(api.commitMcpDraft).not.toHaveBeenCalled();
+});
+
+it.each([
+  ['tls', 'setupTlsFailed'], ['network', 'setupServiceNetworkFailed'], ['not_found', 'setupEndpointNotFound'],
+  ['rate_limited', 'setupServiceRateLimited'], ['invalid_response', 'setupInvalidResponse'],
+] as const)('explains the safe %s service failure category and preserves unsaved inputs', async (errorCode, key) => {
+  api.probeMcpDraft.mockResolvedValueOnce({ state: 'error', errorCode, error: 'private-url?token=fixture-secret' });
+  await render(); await connect();
+  expect(document.body.textContent).toContain(t[key]);
+  expect(document.body.textContent).not.toContain('fixture-secret');
+  expect(document.querySelector<HTMLInputElement>('input[placeholder="https://example.com/mcp"]')!.value).toContain('mcp.example.com');
+  expect(api.commitMcpDraft).not.toHaveBeenCalled();
+});
+
+it('distinguishes browser-to-Gateway network failure from an MCP service rejection', async () => {
+  api.createMcpConnectionDraft.mockRejectedValueOnce(new TypeError('Failed to fetch'));
+  await render(); await connect();
+  expect(document.body.textContent).toContain(t.setupGatewayNetworkFailed);
+});
+
+
+it('keeps a legacy service fetch failure distinct from browser-to-Gateway connectivity', async () => {
+  api.probeMcpDraft.mockResolvedValueOnce({ state: 'error', error: 'fetch failed' });
+  await render(); await connect();
+  expect(document.body.textContent).toContain(t.setupServiceNetworkFailed);
+  expect(document.body.textContent).not.toContain(t.setupGatewayNetworkFailed);
+});

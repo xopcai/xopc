@@ -27,7 +27,8 @@ const requests: string[] = [];
 Object.assign(window, { mcpFixtureRequests: requests });
 window.fetch = async (input, init) => {
   const url = String(input); requests.push(`${init?.method ?? 'GET'} ${url}`);
-  const payload = url.endsWith('/drafts') ? { id: 'fixture-draft', serverId: 'docs', expiresAt: Date.now() + 600_000 } : url.endsWith('/probe') ? stage === 'error' ? { state: 'error', error: 'fixture connection unavailable' } : stage === 'oauth' ? { state: 'oauth_required' } : { state: 'connected', toolCount: 8 }
+  if (stage === 'limited' && url.endsWith('/drafts')) return Response.json({ ok: false, error: 'fixture-secret' }, { status: 429 });
+  const payload = url.endsWith('/drafts') ? { id: 'fixture-draft', serverId: 'docs', expiresAt: Date.now() + 600_000 } : url.endsWith('/probe') ? stage === 'tls' ? { state: 'error', errorCode: 'tls', error: 'fixture-secret' } : stage === 'error' ? { state: 'error', error: 'fixture connection unavailable' } : stage === 'oauth' ? { state: 'oauth_required' } : { state: 'connected', toolCount: 8 }
     : url.endsWith('/commit') ? { serverId: 'docs', ...(stage === 'reload' ? { reloadRequired: true } : {}) }
     : url.endsWith('/auth') ? init?.method === 'POST' ? { id: 'fixture-auth', state: 'starting', serverId: 'docs' } : { id: 'fixture-auth', state: cancelled ? 'cancelled' : 'authorizing', acceptsRedirect: true, serverId: 'docs', authorizationUrl: 'https://example.com/authorize' }
     : url.includes('/auth/fixture-auth') ? { id: 'fixture-auth', state: cancelled ? 'cancelled' : 'authorizing', acceptsRedirect: true, serverId: 'docs', authorizationUrl: 'https://example.com/authorize' }

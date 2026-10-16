@@ -2,13 +2,18 @@ import { createHash, randomUUID } from 'node:crypto';
 
 import type { Config } from '../../config/schema.js';
 import { isManagedConnectorServer } from '../../connectors/materialize.js';
+import { createLogger } from '../../utils/logger.js';
+import { classifyMcpConnectionError, type McpConnectionErrorCode } from './connection-errors.js';
 import { prepareNativeMcpConfig } from './native-mcp.js';
 import { discoverMcpTools, McpAuthenticationRequiredError, signInNativeMcp, type McpSessionOptions } from './tool-catalog.js';
+
+const log = createLogger('McpConnectionSetup');
 
 export type McpConnectionProbe = {
   state: 'connected' | 'oauth_required' | 'token_required' | 'error';
   toolCount?: number;
   error?: string;
+  errorCode?: McpConnectionErrorCode;
 };
 
 function httpUrl(value: string): URL {
@@ -19,23 +24,28 @@ function httpUrl(value: string): URL {
   return url;
 }
 
-async function metadata(url: URL): Promise<Record<string, unknown> | undefined> {
+async function metadata(url: URL, signal?: AbortSignal): Promise<Record<string, unknown> | undefined> {
   try {
-    const response = await fetch(url, { signal: AbortSignal.timeout(5_000), redirect: 'error', headers: { Accept: 'application/json' } });
+    const response = await fetch(url, { signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(5_000)]) : AbortSignal.timeout(5_000), redirect: 'error', headers: { Accept: 'application/json' } });
     if (!response.ok) return;
     const result = await response.json();
     if (result && typeof result === 'object' && !Array.isArray(result)) return result as Record<string, unknown>;
-  } catch { /* An absent metadata endpoint is a common token-only configuration. */ }
+  } catch {
+    signal?.throwIfAborted();
+    // An absent metadata endpoint is a common token-only configuration.
+  }
 }
 
 /** A 401 alone is not evidence that a service supports OAuth. */
-async function advertisesOAuth(config: Config, workspace: string, serverId: string): Promise<boolean> {
+async function advertisesOAuth(config: Config, workspace: string, serverId: string, signal?: AbortSignal): Promise<boolean> {
+  signal?.throwIfAborted();
   const loaded = await prepareNativeMcpConfig(config, workspace);
+  signal?.throwIfAborted();
   const entry = loaded.servers.find(server => server.name === serverId);
   if (!entry || !('url' in entry.config)) return false;
   const url = httpUrl(entry.config.url);
   if (Object.keys(entry.config.headers ?? {}).some(name => name.toLowerCase() === 'authorization')) return false;
-  const response = await fetch(url, { method: 'POST', signal: AbortSignal.timeout(10_000), redirect: 'error',
+  const response = await fetch(url, { method: 'POST', signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(10_000)]) : AbortSignal.timeout(10_000), redirect: 'error',
     headers: { Accept: 'application/json, text/event-stream', 'Content-Type': 'application/json',
       ...(entry.config.headers as Record<string, string> | undefined) },
     body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'initialize', params: {
@@ -51,7 +61,8 @@ async function advertisesOAuth(config: Config, workspace: string, serverId: stri
     new URL('/.well-known/oauth-protected-resource', url),
   ];
   for (const candidate of candidates) {
-    const data = await metadata(candidate);
+    signal?.throwIfAborted();
+    const data = await metadata(candidate, signal);
     if (data && typeof data.resource === 'string' && data.resource === url.href
       && Array.isArray(data.authorization_servers) && data.authorization_servers.some(value => {
         try { return typeof value === 'string' && Boolean(httpUrl(value)); } catch { return false; }
@@ -59,7 +70,7 @@ async function advertisesOAuth(config: Config, workspace: string, serverId: stri
   }
   // Older MCP services publish authorization-server metadata at the origin.
   if (!/\bBearer\b/i.test(challenge)) return false;
-  const legacy = await metadata(new URL('/.well-known/oauth-authorization-server', url));
+  const legacy = await metadata(new URL('/.well-known/oauth-authorization-server', url), signal);
   return Boolean(legacy && legacy.issuer === url.origin && typeof legacy.authorization_endpoint === 'string'
     && typeof legacy.token_endpoint === 'string');
 }
@@ -69,14 +80,22 @@ export async function probeMcpConnection(config: Config, workspace: string, serv
     const tools = await discoverMcpTools(config, workspace, serverId, options);
     return { state: 'connected', toolCount: tools.length };
   } catch (error) {
-    if (error instanceof McpAuthenticationRequiredError) {
-      try { return { state: await advertisesOAuth(config, workspace, serverId) ? 'oauth_required' : 'token_required' }; }
-      catch (error) { return { state: 'error', error: error instanceof Error ? error.message : String(error) }; }
-    }
+    const failed = (cause: unknown): McpConnectionProbe => {
+      const errorCode = classifyMcpConnectionError(cause);
+      log.warn({ serverId, errorCode }, `MCP connection check failed: ${errorCode}`);
+      return { state: 'error', error: cause instanceof Error ? cause.message : String(cause), errorCode };
+    };
     const server = config.mcp?.servers?.[serverId];
-    if (server?.url && Object.keys(server.headers ?? {}).some(name => name.toLowerCase() === 'authorization')
-      && /401|403|unauthorized|forbidden/i.test(String(error))) return { state: 'token_required' };
-    return { state: 'error', error: error instanceof Error ? error.message : String(error) };
+    const rejectedCredential = /\b401\b|unauthorized|invalid_token/i.test(String(error));
+    const hasCredentials = server?.auth || Object.keys(server?.headers ?? {}).some(name => name.toLowerCase() === 'authorization');
+    if (error instanceof McpAuthenticationRequiredError || server?.url && rejectedCredential && !hasCredentials) {
+      try {
+        options?.signal?.throwIfAborted();
+        return { state: await advertisesOAuth(config, workspace, serverId, options?.signal) ? 'oauth_required' : 'token_required' };
+      } catch (cause) { return failed(cause); }
+    }
+    if (server?.url && hasCredentials && /\b(?:401|403)\b|unauthorized|forbidden/i.test(String(error))) return { state: 'token_required' };
+    return failed(error);
   }
 }
 
