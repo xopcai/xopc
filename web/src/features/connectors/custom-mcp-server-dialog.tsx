@@ -20,12 +20,25 @@ import { McpServerFormFields } from './mcp/mcp-server-form-fields';
 import { McpToolsDialog } from './mcp/mcp-tools-dialog';
 
 function connectionFailure(error: unknown, t: McpSettingsMessages): string {
-  const message = error instanceof Error ? error.message : String(error ?? '');
+  const detail = error as { status?: number; errorCode?: string; error?: string } | undefined;
+  if (detail?.status === 429) return t.setupRateLimited;
+  if (detail?.status === 401) return t.setupGatewayUnauthorized;
+  if (detail?.status === 404 || detail?.status === 409) return t.setupConflict;
+  if (detail?.status && detail.status >= 500) return t.setupGatewayCheckFailed;
+  const categories: Record<string, string> = {
+    command_missing: t.setupCommandMissing, connection_refused: t.setupConnectionRefused, host_not_found: t.setupHostNotFound,
+    timeout: t.setupTimedOut, access_denied: t.setupAccessDenied, network: t.setupServiceNetworkFailed,
+    tls: t.setupTlsFailed, invalid_response: t.setupInvalidResponse, not_found: t.setupEndpointNotFound,
+    rate_limited: t.setupServiceRateLimited, configuration: t.setupInvalidConfig,
+  };
+  if (detail?.errorCode && Object.hasOwn(categories, detail.errorCode)) return categories[detail.errorCode];
+  const message = error instanceof Error ? error.message : typeof error === 'string' ? error : detail?.error ?? '';
   if (/ENOENT|command not found|executable.{0,30}not found/i.test(message)) return t.setupCommandMissing;
   if (/ECONNREFUSED|connection refused/i.test(message)) return t.setupConnectionRefused;
   if (/ENOTFOUND|EAI_AGAIN|could not resolve/i.test(message)) return t.setupHostNotFound;
   if (/timeout|timed out/i.test(message)) return t.setupTimedOut;
-  if (/403|forbidden|permission denied/i.test(message)) return t.setupAccessDenied;
+  if (/fetch failed|failed to fetch|network error|NetworkError/i.test(message)) return detail?.error !== undefined ? t.setupServiceNetworkFailed : t.setupGatewayNetworkFailed;
+  if (/\b(?:401|403)\b|unauthorized|forbidden|permission denied/i.test(message)) return t.setupAccessDenied;
   return t.setupCheckFailed;
 }
 
@@ -218,7 +231,7 @@ export function CustomMcpServerDialog(props: { open: boolean; mode: 'add' | 'edi
       const result = await probeMcpDraft(draft.id, controller.signal);
       if (!mounted.current || controller.signal.aborted) return;
       setProbe(result);
-      if (result.state === 'error') setError(connectionFailure(result.error, t));
+      if (result.state === 'error') setError(connectionFailure(result, t));
     } catch (error) {
       if (mounted.current && !controller.signal.aborted) setError((error as { status?: number }).status === 409 ? t.setupConflict : connectionFailure(error, t));
     } finally { if (mounted.current && operation.current === controller) setPhase('idle'); }
