@@ -41,7 +41,7 @@ function ModelUsePicker({ label, value, currentLabel, options, loading, disabled
 }
 
 /** Reads effective global routes rather than maintaining a separate assignment store. */
-export function ModelUsesList({ data, zh, onChange, onSettings, onlyUse, disabled = false, onPendingChange, voiceOverview = false }: { data: ConnectedProvidersData; zh: boolean; onChange: (use: ModelSetupUse) => void; onSettings?: (use: ModelSetupUse) => void; onlyUse?: ModelSetupUse; voiceOverview?: boolean; returnTo?: string; disabled?: boolean; onPendingChange?: (pending: boolean) => void }) {
+export function ModelUsesList({ data, zh, onChange, onSettings, onlyUse, disabled = false, onPendingChange }: { data: ConnectedProvidersData; zh: boolean; onChange: (use: ModelSetupUse) => void; onSettings?: (use: ModelSetupUse) => void; onlyUse?: ModelSetupUse; disabled?: boolean; onPendingChange?: (pending: boolean) => void }) {
   const { data: result, error, mutate } = useSWR('settings-agent-defaults', fetchGlobalDefaults);
   const { data: voiceConfig } = useGatewayConfigSwr(true);
   const { data: media, isLoading: loadingMedia, error: mediaError, mutate: refreshMedia } = useSWR('model-capability-media-sources', async () => {
@@ -103,8 +103,8 @@ export function ModelUsesList({ data, zh, onChange, onSettings, onlyUse, disable
   ];
   return <section ref={listRef} className="@container min-w-0">
     <h2 className={onlyUse ? "mb-2 text-sm font-semibold text-fg" : "sr-only"}>{onlyUse ? (zh ? '当前模型' : 'Current model') : (zh ? '能力总览' : 'Capabilities')}</h2>
-    <div className={onlyUse ? "space-y-4" : "overflow-hidden rounded-2xl border border-edge bg-surface-panel"}>{capabilityGroups.filter(group => (!onlyUse || group.uses.includes(onlyUse)) && (!voiceOverview || group.label[1] === 'Voice')).map(group => <section key={group.uses[0]} className={onlyUse ? 'min-w-0' : 'min-w-0 border-t border-edge first:border-t-0'}>
-      {!onlyUse && !voiceOverview ? <div className="flex items-center justify-between bg-surface-inset/55 px-4 py-2"><h3 className="text-xs font-medium text-fg-muted">{group.label[zh ? 0 : 1]}</h3><span className="text-xs text-fg-subtle">{group.uses[0] === 'chat' ? (zh ? '基础能力' : 'Core capability') : (zh ? '按需启用' : 'Optional')}</span></div> : null}
+    <div className={onlyUse ? "space-y-4" : "overflow-hidden rounded-2xl border border-edge bg-surface-panel"}>{capabilityGroups.filter(group => (!onlyUse || group.uses.includes(onlyUse))).map(group => <section key={group.uses[0]} className={onlyUse ? 'min-w-0' : 'min-w-0 border-t border-edge first:border-t-0'}>
+      {!onlyUse ? <div className="flex items-center justify-between bg-surface-inset/55 px-4 py-2"><h3 className="text-xs font-medium text-fg-muted">{group.label[zh ? 0 : 1]}</h3><span className="text-xs text-fg-subtle">{group.uses[0] === 'chat' ? (zh ? '基础能力' : 'Core capability') : (zh ? '按需启用' : 'Optional')}</span></div> : null}
       <div className={onlyUse ? "divide-y divide-edge-subtle" : "divide-y divide-edge-subtle px-4"}>{group.uses.filter(id => !onlyUse || id === onlyUse).map(id => {
       const row = rows.find(row => row.id === id)!;
       const options = modelUseOptions(catalog?.previews ?? [], row.id, zh);

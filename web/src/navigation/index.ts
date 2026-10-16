@@ -83,7 +83,6 @@ export const SETTINGS_SHELL_NAV_GROUPS: readonly SettingsShellNavGroup[] = [
     id: 'capabilities',
     tabs: [
       'settingsModels',
-      'settingsVoice',
       'settingsSearch',
       'settingsAgentDefaults',
     ],
@@ -147,7 +146,6 @@ export function pathForTab(tab: Tab): string {
   if (tab === 'settingsAgentBrowser') return '/settings/agent-browser';
   if (tab === 'settingsComputerUse') return '/settings/computer-use';
   if (tab === 'settingsModels') return capabilitySettingsPath('models');
-  if (tab === 'settingsVoice') return capabilitySettingsPath('voice');
   if (tab === 'settingsSearch') return capabilitySettingsPath('search');
   const section = tabToSettingsSection(tab);
   if (section) return `/settings/${section}`;
@@ -157,12 +155,10 @@ export function pathForTab(tab: Tab): string {
   return `/${tab}`;
 }
 
-export type CapabilitySettingsSectionId = 'models' | 'image' | 'voice' | 'search';
+export type CapabilitySettingsSectionId = 'models' | 'search';
 
 export const CAPABILITY_SETTINGS_SECTIONS: readonly CapabilitySettingsSectionId[] = [
   'models',
-  'image',
-  'voice',
   'search',
 ] as const;
 
@@ -170,10 +166,10 @@ export function capabilitySettingsPath(section: CapabilitySettingsSectionId): st
   return `/settings/capabilities/${section}`;
 }
 
-/** Image models are a subsection of the Models destination in the settings rail. */
+/** All model and voice configuration shares the Models destination. */
 export function isSettingsTabActiveAtPath(tab: Tab, pathname: string): boolean {
   if (tab === 'settingsModels') {
-    return pathname === capabilitySettingsPath('models') || pathname === capabilitySettingsPath('image');
+    return pathname === capabilitySettingsPath('models');
   }
   return pathname === pathForTab(tab);
 }

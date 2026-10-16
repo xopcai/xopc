@@ -1,7 +1,7 @@
 import { Gauge, Puzzle, ShieldCheck } from 'lucide-react';
 import { useCallback, useState } from 'react';
 import useSWR from 'swr';
-import { Navigate, useLocation, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
 import { AutosaveStatus } from '@/components/ui/autosave-status';
@@ -103,18 +103,10 @@ function AgentDefaultsEditor({
 }
 
 export function AgentDefaultsSettingsPanel() {
-  const [searchParams] = useSearchParams();
-  const location = useLocation();
   const token = useGatewayStore((state) => state.conversationId);
   const language = useLocaleStore((state) => state.language);
   const zh = language === 'zh';
   const { data, error, isLoading, mutate } = useSWR(token ? 'settings-agent-defaults' : null, fetchGlobalDefaults);
-
-  if (searchParams.get('panel') === 'models') {
-    const next = new URLSearchParams(searchParams);
-    next.delete('panel');
-    return <Navigate to={{ pathname: '/settings/capabilities/models', search: next.toString() }} state={location.state} replace />;
-  }
 
   if (!token) return <SettingsPageFrame><p className="text-sm text-fg-muted">{zh ? '需要本机服务令牌。' : 'Local service token required.'}</p></SettingsPageFrame>;
   if (error && !data) return <SettingsPageFrame><p className="rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-600">{String(error)}</p><Button onClick={() => void mutate()}>{zh ? '重试' : 'Retry'}</Button></SettingsPageFrame>;

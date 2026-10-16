@@ -135,7 +135,7 @@ export function PersonalVoiceSetting({ record, zh, onSelectVoice, onGreetingChan
           </button>
         </div>
         <p className="text-xs leading-relaxed text-fg-muted">{selectedVoice?.description || selectedVoice?.style || (selected ? (zh ? '选择后自动保存，用于之后的语音通话。' : 'Saved automatically for future voice calls.') : (zh ? '跟随语音服务的默认音色。' : 'Uses the voice service’s default voice.'))}</p>
-      </div> : <p className="mt-3 text-sm text-fg-muted">{zh ? '当前没有可用音色。' : 'No voice is ready.'} <Link to="/settings/capabilities/voice?returnTo=%2Fpersonal" className="text-accent underline">{zh ? '设置语音服务' : 'Set up voice'}</Link></p>}
+      </div> : <p className="mt-3 text-sm text-fg-muted">{zh ? '当前没有可用音色。' : 'No voice is ready.'} <Link to="/settings/capabilities/models?configure=speech&returnTo=%2Fpersonal" className="text-accent underline">{zh ? '设置语音服务' : 'Set up voice'}</Link></p>}
     {onGreetingChange && greetingSupported && <label className="mt-4 flex items-center justify-between gap-3 text-sm text-fg">
       {zh ? '连接时打招呼' : 'Greet me when connected'}
       <input type="checkbox" checked={record.voiceCallPreferences?.openingGreetingEnabled ?? true} disabled={busy}

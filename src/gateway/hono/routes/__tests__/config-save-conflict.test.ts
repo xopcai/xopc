@@ -66,3 +66,14 @@ it('isolates each voice capability version from unrelated settings', async () =>
   expect(after.speech).not.toBe(before.speech);
   expect(after.transcription).toBe(before.transcription); expect(after.conversation).toBe(before.conversation);
 });
+
+it('versions text processing with recognition without invalidating speech or conversation settings', async () => {
+  const { voiceSettingsRevisions } = await import('../../lib/voice-settings-revisions.js');
+  const config = ConfigSchema.parse({ voice: { input: { refinement: { mode: 'off' } } } });
+  const before = voiceSettingsRevisions(config);
+  config.voice!.input.refinement.mode = 'punctuation';
+  const after = voiceSettingsRevisions(config);
+  expect(after.transcription).not.toBe(before.transcription);
+  expect(after.speech).toBe(before.speech);
+  expect(after.conversation).toBe(before.conversation);
+});

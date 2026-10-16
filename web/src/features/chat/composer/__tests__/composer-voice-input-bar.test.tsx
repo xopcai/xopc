@@ -49,7 +49,7 @@ describe('ComposerVoiceInputBar', () => {
     });
 
     expect(container.textContent).toContain('听写尚未配置');
-    const settingsLink = container.querySelector<HTMLAnchorElement>('a[href="#/settings/capabilities/models?use=transcription"]');
+    const settingsLink = container.querySelector<HTMLAnchorElement>('a[href="#/settings/capabilities/models?configure=transcription"]');
     expect(settingsLink?.textContent).toContain('去设置');
     expect(container.querySelector('button[aria-label="重新转写"]')).toBeNull();
   });
@@ -70,7 +70,7 @@ describe('ComposerVoiceInputBar', () => {
     render({ error: '转写服务暂时不可用', settingsRequired: false });
 
     expect(container.textContent).toContain('转写服务暂时不可用');
-    expect(container.querySelector('a[href="#/settings/capabilities/models?use=transcription"]')).toBeNull();
+    expect(container.querySelector('a[href="#/settings/capabilities/models?configure=transcription"]')).toBeNull();
     expect(container.querySelector('button[aria-label="重新转写"]')).not.toBeNull();
   });
   it('keeps completed speech visible while the next phrase is being transcribed', () => {
