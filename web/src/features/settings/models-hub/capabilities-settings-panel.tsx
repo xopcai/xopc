@@ -32,7 +32,7 @@ export function CapabilitiesSettingsPanel({ inlineUse, inlineView = 'settings', 
   const c = messages(language).capabilitiesSettings;
   const { capability } = useParams<{ capability: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
-  const location = useLocation();
+  const { state: locationState } = useLocation();
   const returnTo = capabilityReturnPath(searchParams.get('returnTo'));
   const [connectionSaved, setConnectionSaved] = useState<ModelSetupUse>();
   const [connectionEditing, setConnectionEditing] = useState(false);
@@ -56,10 +56,10 @@ export function CapabilitiesSettingsPanel({ inlineUse, inlineView = 'settings', 
       else setAddDialogOpen(true);
       const next = new URLSearchParams(searchParams);
       next.delete('configure'); next.delete('tab'); next.delete('add');
-      setSearchParams(next, { replace: true, state: location.state });
+      setSearchParams(next, { replace: true, state: locationState });
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [capability, inlineUse, searchParams, setSearchParams, location.state]);
+  }, [capability, inlineUse, searchParams, setSearchParams, locationState]);
   const openConnection = (use: ModelSetupUse) => {
     if (settingsPending) return;
     if (!inlineUse) { openCapabilitySettings(use, 'services'); return; }
