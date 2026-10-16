@@ -1,6 +1,6 @@
 import { getDiscussionCapture } from '../repository.js';
 import { chapterScope, saveReviewChapter, unionReviewRanges } from '../long-review.js';
-import { createProcessingRun, saveCheckpoint } from '../processing.js';
+import { createProcessingRun, processingProgress, saveCheckpoint } from '../processing.js';
 import { applyMeetingEdits } from '../edits.js';
 import { updateDiscussionCapture } from '../repository.js';
 import { convertMeetingAction, meetingActionTasks } from '../action-tasks.js';
@@ -426,7 +426,7 @@ describe('discussion note document', () => {
     }
   });
 
-  it.skipIf(process.env.XOPC_MEETING_LONG_SMOKE !== '1')('ingests a two-hour recording with bounded chunks and verifies the decoded duration', async () => {
+  it.skipIf(process.env.XOPC_MEETING_LONG_SMOKE !== '1')('ingests two hours and resumes transcription after a midpoint rate limit and database restart', async () => {
     const source = join(stateDir, 'two-hour.wav');
     const generated = spawnSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', 'anullsrc=r=16000:cl=mono', '-t', '7200', '-c:a', 'pcm_s16le', source], { timeout: 30_000 });
     expect(generated.status).toBe(0);
@@ -446,7 +446,61 @@ describe('discussion note document', () => {
     expect(result.discussion.durationMs).toBe(7_200_000);
     expect(result.discussion.audioSizeBytes).toBeGreaterThan(200_000_000);
     expect(service.recordingChunks(capture.discussion.id)).toEqual([]);
-  }, 60_000);
+    const id = capture.discussion.id;
+    await notes.updateNote(capture.note.id, { markdown: 'Keep my long-recording notes' });
+    const first = vi.fn(async () => {
+      if (first.mock.calls.length === 181) throw Object.assign(new Error('Rate limited'), { status: 429 });
+      return { text: `Section ${first.mock.calls.length}`, provider: 'controlled' };
+    });
+    await new DiscussionSealer({ notes, getConfig: () => ({}) as never, transcribeSegment: first }).tick();
+    expect(processingProgress(id)).toMatchObject({ completedChunks: 180, transcribedMs: 3_600_000, attemptCount: 1 });
+    expect(getDiscussionCapture(id)?.status).toBe('sealing');
+    closeXopcDatabase(); resetXopcDatabaseSingletonForTest(); openXopcDatabase({ path: join(stateDir, 'xopc.db') });
+    service = new DiscussionService(notes, projects);
+    const remainder = vi.fn(async () => ({ text: `Remaining ${remainder.mock.calls.length}`, provider: 'controlled' }));
+    await new DiscussionSealer({ notes, getConfig: () => ({}) as never, transcribeSegment: remainder }).tick(processingProgress(id)!.nextAttemptAt! + 1);
+    expect(remainder).toHaveBeenCalledTimes(180);
+    expect(processingProgress(id)).toMatchObject({ completedChunks: 360, transcribedMs: 7_200_000 });
+    expect(getDiscussionCapture(id)).toMatchObject({ status: 'organizing', noteId: capture.note.id, audioSha256: result.discussion.audioSha256 });
+    expect(service.transcript(id)?.segments).toHaveLength(360);
+    expect((await notes.getNote(capture.note.id))?.markdown).toBe('Keep my long-recording notes');
+  }, 120_000);
+
+  it.skipIf(process.env.XOPC_MEETING_LONG_SMOKE !== '1').each([
+    [7200.84, true], [7206, false],
+  ])('retains a two-hour encoded tail within grace and rejects larger overruns (%s seconds)', async (seconds, accepted) => {
+    const path = join(stateDir, 'recording-tail.wav');
+    expect(spawnSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', 'anullsrc=r=16000:cl=mono', '-t', String(seconds - 1), '-c:a', 'pcm_s16le', path], { timeout: 30_000 }).status).toBe(0);
+    const capture = await create('recording-tail'); const id = capture.discussion.id;
+    const file = await open(path, 'r'); let sequence = 0;
+    try {
+      while (true) {
+        const buffer = Buffer.alloc(8 * 1024 * 1024); const { bytesRead } = await file.read(buffer);
+        if (!bytesRead) break;
+        const chunk = buffer.subarray(0, bytesRead);
+        await service.uploadRecordingChunk(id, sequence++, createHash('sha256').update(chunk).digest('hex'), new Blob([chunk]).stream());
+      }
+    } finally { await file.close(); }
+    const secondPath = join(stateDir, 'last-epoch.wav');
+    expect(spawnSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', 'anullsrc=r=16000:cl=mono', '-t', '1', '-c:a', 'pcm_s16le', secondPath]).status).toBe(0);
+    const second = await readFile(secondPath); const split = sequence;
+    await service.uploadRecordingChunk(id, sequence++, createHash('sha256').update(second).digest('hex'), new Blob([second]).stream());
+    await service.sealRecording(id, { chunkCount: sequence, mimeType: 'audio/wav', fileName: 'tail.wav', lastSequence: -1,
+      epochs: [{ firstChunk: 0, mimeType: 'audio/wav', startedAt: Date.now() - 1000 }, { firstChunk: split, mimeType: 'audio/wav', startedAt: Date.now() }] });
+    await service.processRecordingJob();
+    if (!accepted) {
+      expect(service.recordingJob(id)).toMatchObject({ state: 'failed' });
+      expect(getDiscussionCapture(id)?.audioAttachmentId).toBeUndefined();
+      expect(service.recordingChunks(id)).toHaveLength(sequence);
+      return;
+    }
+    expect(service.recordingJob(id)).toMatchObject({ state: 'completed' });
+    expect(getDiscussionCapture(id)).toMatchObject({ noteId: capture.note.id, durationMs: seconds * 1000 });
+    await new DiscussionSealer({ notes, getConfig: () => ({}) as never, transcribeSegment: async () => ({ text: 'Preserved source', provider: 'controlled' }) }).tick();
+    expect(getDiscussionCapture(id)?.status).toBe('organizing');
+    expect(processingProgress(id)).toMatchObject({ completedChunks: 361, transcribedMs: seconds * 1000 });
+    expect(service.transcript(id)?.segments.at(-1)?.endedAtMs).toBe(seconds * 1000);
+  }, 120_000);
 
   it('persists chunks across service reconstruction and rejects missing or changed content', async () => {
     const created = await create('durable');

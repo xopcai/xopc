@@ -1,0 +1,2171 @@
+{
+  "passed": true,
+  "finishedAt": "2026-10-16T06:47:58.538Z",
+  "source": "Real-time Chrome MediaRecorder with looping synthetic speech; no accelerated clock",
+  "durationTargetMs": 7200000,
+  "recordedDurationMs": 7200961.999999881,
+  "recordingStartedAt": "2026-10-16T04:29:58.477Z",
+  "recordingFinishedAt": "2026-10-16T06:30:10.122Z",
+  "original": {
+    "attachmentId": "attachment_8eccc40b8940dfbf32ac06cdc05cb75b",
+    "sha256": "dbe1ddf6be6f0b4f69fc5c99f570116d1dcd462783c7e40a764cc85f9f5e8b67",
+    "durationMs": 7200840,
+    "bytes": 230426924
+  },
+  "finalCapture": {
+    "id": "c482cfbe-aae6-4351-8e17-c2f26dd74c87",
+    "note_id": "3ee18bda-f1c5-46b7-b1e0-962f469be091",
+    "status": "completed",
+    "duration_ms": 7200840,
+    "audio_sha256": "dbe1ddf6be6f0b4f69fc5c99f570116d1dcd462783c7e40a764cc85f9f5e8b67"
+  },
+  "discussionCount": 1,
+  "checks": [
+    "after-refresh",
+    "after-kill",
+    "Original recovered, resumed and uploaded in the same Note",
+    "Real transcription and note generation complete without recreating Note or losing manual notes",
+    "Recovered original plays from the Note"
+  ],
+  "transcriptCharacters": 55212,
+  "summaryCharacters": 591,
+  "manualNotesPreserved": true,
+  "errors": [],
+  "supplierCalls": {
+    "alibaba:200": 361,
+    "deepseek:200": 43
+  },
+  "processing": {
+    "fromAudio": false,
+    "completedChunks": 361,
+    "transcribedMs": 7200840,
+    "attemptCount": 0,
+    "maxAttempts": 3
+  },
+  "progress": [
+    {
+      "at": "2026-10-16T04:30:04.120Z",
+      "durationMs": 5037.899999976158,
+      "chunks": 1,
+      "state": "recording",
+      "savedThroughMs": 4980,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T04:30:34.126Z",
+      "durationMs": 35277.799999952316,
+      "chunks": 8,
+      "state": "recording",
+      "savedThroughMs": 35220,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T04:31:04.129Z",
+      "durationMs": 65517.59999990463,
+      "chunks": 14,
+      "state": "recording",
+      "savedThroughMs": 65460,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T04:31:34.136Z",
+      "durationMs": 90718.19999992847,
+      "chunks": 19,
+      "state": "recording",
+      "savedThroughMs": 90660,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T04:32:04.145Z",
+      "durationMs": 120957.79999995232,
+      "chunks": 25,
+      "state": "recording",
+      "savedThroughMs": 120900,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T04:32:34.150Z",
+      "durationMs": 151197.79999995232,
+      "chunks": 31,
+      "state": "recording",
+      "savedThroughMs": 151140,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T04:33:04.153Z",
+      "durationMs": 181437.19999992847,
+      "chunks": 37,
+      "state": "recording",
+      "savedThroughMs": 181380,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T04:33:34.156Z",
+      "durationMs": 211677,
+      "chunks": 43,
+      "state": "recording",
+      "savedThroughMs": 211620,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T04:34:04.159Z",
+      "durationMs": 241917.69999992847,
+      "chunks": 49,
+      "state": "recording",
+      "savedThroughMs": 241860,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T04:34:34.163Z",
+      "durationMs": 272157.39999997616,
+      "chunks": 55,
+      "state": "recording",
+      "savedThroughMs": 272100,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T04:35:04.175Z",
+      "durationMs": 302397.1999999285,
+      "chunks": 61,
+      "state": "recording",
+      "savedThroughMs": 302340,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T04:35:34.182Z",
+      "durationMs": 332638,
+      "chunks": 67,
+      "state": "recording",
+      "savedThroughMs": 332580,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T04:36:04.186Z",
+      "durationMs": 362877.09999990463,
+      "chunks": 73,
+      "state": "recording",
+      "savedThroughMs": 362820,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T04:36:34.189Z",
+      "durationMs": 393117.39999997616,
+      "chunks": 79,
+      "state": "recording",
+      "savedThroughMs": 393060,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T04:37:04.192Z",
+      "durationMs": 423357.59999990463,
+      "chunks": 85,
+      "state": "recording",
+      "savedThroughMs": 423300,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T04:37:34.196Z",
+      "durationMs": 453597.7999999523,
+      "chunks": 91,
+      "state": "recording",
+      "savedThroughMs": 453540,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T04:38:04.200Z",
+      "durationMs": 483837.7999999523,
+      "chunks": 97,
+      "state": "recording",
+      "savedThroughMs": 483780,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T04:38:34.204Z",
+      "durationMs": 514077.7999999523,
+      "chunks": 103,
+      "state": "recording",
+      "savedThroughMs": 514020,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T04:39:04.207Z",
+      "durationMs": 544318,
+      "chunks": 109,
+      "state": "recording",
+      "savedThroughMs": 544260,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T04:39:34.211Z",
+      "durationMs": 574557.7999999523,
+      "chunks": 115,
+      "state": "recording",
+      "savedThroughMs": 574500,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T04:40:04.215Z",
+      "durationMs": 604797.7999999523,
+      "chunks": 121,
+      "state": "recording",
+      "savedThroughMs": 604740,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T04:40:34.219Z",
+      "durationMs": 635037.5999999046,
+      "chunks": 127,
+      "state": "recording",
+      "savedThroughMs": 634980,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T04:41:04.222Z",
+      "durationMs": 665277.2999999523,
+      "chunks": 133,
+      "state": "recording",
+      "savedThroughMs": 665220,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T04:41:34.226Z",
+      "durationMs": 695517.3999999762,
+      "chunks": 139,
+      "state": "recording",
+      "savedThroughMs": 695460,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T04:42:04.230Z",
+      "durationMs": 720717.1999999285,
+      "chunks": 144,
+      "state": "recording",
+      "savedThroughMs": 720660,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T04:42:34.235Z",
+      "durationMs": 750957.6999999285,
+      "chunks": 150,
+      "state": "recording",
+      "savedThroughMs": 750900,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T04:43:04.240Z",
+      "durationMs": 781197.7999999523,
+      "chunks": 156,
+      "state": "recording",
+      "savedThroughMs": 781140,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T04:43:34.244Z",
+      "durationMs": 811437.1999999285,
+      "chunks": 162,
+      "state": "recording",
+      "savedThroughMs": 811380,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T04:44:04.246Z",
+      "durationMs": 841677.6999999285,
+      "chunks": 168,
+      "state": "recording",
+      "savedThroughMs": 841620,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T04:44:34.248Z",
+      "durationMs": 871917.3999999762,
+      "chunks": 174,
+      "state": "recording",
+      "savedThroughMs": 871860,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T04:45:04.253Z",
+      "durationMs": 902157.7999999523,
+      "chunks": 180,
+      "state": "recording",
+      "savedThroughMs": 902100,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T04:45:34.256Z",
+      "durationMs": 932397.8999999762,
+      "chunks": 186,
+      "state": "recording",
+      "savedThroughMs": 932340,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T04:46:04.258Z",
+      "durationMs": 962637.5999999046,
+      "chunks": 192,
+      "state": "recording",
+      "savedThroughMs": 962580,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T04:46:34.262Z",
+      "durationMs": 992877,
+      "chunks": 198,
+      "state": "recording",
+      "savedThroughMs": 992820,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T04:47:04.266Z",
+      "durationMs": 1023117.1999999285,
+      "chunks": 204,
+      "state": "recording",
+      "savedThroughMs": 1023060,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T04:47:34.270Z",
+      "durationMs": 1053357,
+      "chunks": 210,
+      "state": "recording",
+      "savedThroughMs": 1053300,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T04:48:04.273Z",
+      "durationMs": 1083597.1999999285,
+      "chunks": 216,
+      "state": "recording",
+      "savedThroughMs": 1083540,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T04:48:34.277Z",
+      "durationMs": 1113837.7999999523,
+      "chunks": 222,
+      "state": "recording",
+      "savedThroughMs": 1113780,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T04:49:04.281Z",
+      "durationMs": 1144077.1999999285,
+      "chunks": 228,
+      "state": "recording",
+      "savedThroughMs": 1144020,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T04:49:34.285Z",
+      "durationMs": 1174317,
+      "chunks": 234,
+      "state": "recording",
+      "savedThroughMs": 1174260,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T04:50:04.288Z",
+      "durationMs": 1204557.7999999523,
+      "chunks": 240,
+      "state": "recording",
+      "savedThroughMs": 1204500,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T04:50:34.292Z",
+      "durationMs": 1234797.5,
+      "chunks": 246,
+      "state": "recording",
+      "savedThroughMs": 1234740,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T04:51:04.282Z",
+      "durationMs": 1265037.2999999523,
+      "chunks": 252,
+      "state": "recording",
+      "savedThroughMs": 1264980,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T04:51:34.280Z",
+      "durationMs": 1295277.7999999523,
+      "chunks": 258,
+      "state": "recording",
+      "savedThroughMs": 1295220,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T04:52:04.283Z",
+      "durationMs": 1325517.5999999046,
+      "chunks": 264,
+      "state": "recording",
+      "savedThroughMs": 1325460,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T04:52:34.287Z",
+      "durationMs": 1355757.8999999762,
+      "chunks": 270,
+      "state": "recording",
+      "savedThroughMs": 1355700,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T04:53:04.291Z",
+      "durationMs": 1380957.8999999762,
+      "chunks": 275,
+      "state": "recording",
+      "savedThroughMs": 1380900,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T04:53:34.295Z",
+      "durationMs": 1411197.3999999762,
+      "chunks": 281,
+      "state": "recording",
+      "savedThroughMs": 1411140,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T04:54:04.299Z",
+      "durationMs": 1441437.7999999523,
+      "chunks": 287,
+      "state": "recording",
+      "savedThroughMs": 1441380,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T04:54:34.303Z",
+      "durationMs": 1471677.6999999285,
+      "chunks": 293,
+      "state": "recording",
+      "savedThroughMs": 1471620,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T04:55:04.307Z",
+      "durationMs": 1501917.2999999523,
+      "chunks": 299,
+      "state": "recording",
+      "savedThroughMs": 1501860,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T04:55:34.310Z",
+      "durationMs": 1532157.8999999762,
+      "chunks": 305,
+      "state": "recording",
+      "savedThroughMs": 1532100,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T04:56:04.314Z",
+      "durationMs": 1562397.1999999285,
+      "chunks": 311,
+      "state": "recording",
+      "savedThroughMs": 1562340,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T04:56:34.318Z",
+      "durationMs": 1592637.5,
+      "chunks": 317,
+      "state": "recording",
+      "savedThroughMs": 1592580,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T04:57:04.322Z",
+      "durationMs": 1622877.7999999523,
+      "chunks": 323,
+      "state": "recording",
+      "savedThroughMs": 1622820,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T04:57:34.327Z",
+      "durationMs": 1653116.8999999762,
+      "chunks": 329,
+      "state": "recording",
+      "savedThroughMs": 1653060,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T04:58:04.330Z",
+      "durationMs": 1683357.6999999285,
+      "chunks": 335,
+      "state": "recording",
+      "savedThroughMs": 1683300,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T04:58:34.333Z",
+      "durationMs": 1713597.5999999046,
+      "chunks": 341,
+      "state": "recording",
+      "savedThroughMs": 1713540,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T04:59:04.336Z",
+      "durationMs": 1743837.2999999523,
+      "chunks": 347,
+      "state": "recording",
+      "savedThroughMs": 1743780,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T04:59:34.340Z",
+      "durationMs": 1774077.2999999523,
+      "chunks": 353,
+      "state": "recording",
+      "savedThroughMs": 1774020,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T05:00:04.343Z",
+      "durationMs": 1804317.5,
+      "chunks": 359,
+      "state": "recording",
+      "savedThroughMs": 1804260,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T05:00:34.346Z",
+      "durationMs": 1834557.2999999523,
+      "chunks": 365,
+      "state": "recording",
+      "savedThroughMs": 1834500,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T05:01:04.349Z",
+      "durationMs": 1864797.7999999523,
+      "chunks": 371,
+      "state": "recording",
+      "savedThroughMs": 1864740,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T05:01:34.351Z",
+      "durationMs": 1895037.1999999285,
+      "chunks": 377,
+      "state": "recording",
+      "savedThroughMs": 1894980,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T05:02:04.354Z",
+      "durationMs": 1925277,
+      "chunks": 383,
+      "state": "recording",
+      "savedThroughMs": 1925220,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T05:02:34.359Z",
+      "durationMs": 1955517.8999999762,
+      "chunks": 389,
+      "state": "recording",
+      "savedThroughMs": 1955460,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T05:03:04.362Z",
+      "durationMs": 1985757.6999999285,
+      "chunks": 395,
+      "state": "recording",
+      "savedThroughMs": 1985700,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T05:03:34.366Z",
+      "durationMs": 2010957.0999999046,
+      "chunks": 400,
+      "state": "recording",
+      "savedThroughMs": 2010900,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T05:04:04.369Z",
+      "durationMs": 2041197.5999999046,
+      "chunks": 406,
+      "state": "recording",
+      "savedThroughMs": 2041140,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T05:04:34.373Z",
+      "durationMs": 2071437.5999999046,
+      "chunks": 412,
+      "state": "recording",
+      "savedThroughMs": 2071380,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T05:05:04.376Z",
+      "durationMs": 2101678,
+      "chunks": 418,
+      "state": "recording",
+      "savedThroughMs": 2101620,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T05:05:34.379Z",
+      "durationMs": 2131917.399999976,
+      "chunks": 424,
+      "state": "recording",
+      "savedThroughMs": 2131860,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T05:06:04.384Z",
+      "durationMs": 2162157.1999999285,
+      "chunks": 430,
+      "state": "recording",
+      "savedThroughMs": 2162100,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T05:06:34.386Z",
+      "durationMs": 2192397.399999976,
+      "chunks": 436,
+      "state": "recording",
+      "savedThroughMs": 2192340,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T05:07:04.390Z",
+      "durationMs": 2222637.899999976,
+      "chunks": 442,
+      "state": "recording",
+      "savedThroughMs": 2222580,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T05:07:34.383Z",
+      "durationMs": 2252877,
+      "chunks": 448,
+      "state": "recording",
+      "savedThroughMs": 2252820,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T05:08:04.386Z",
+      "durationMs": 2283117.6999999285,
+      "chunks": 454,
+      "state": "recording",
+      "savedThroughMs": 2283060,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T05:08:34.390Z",
+      "durationMs": 2313357.0999999046,
+      "chunks": 460,
+      "state": "recording",
+      "savedThroughMs": 2313300,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T05:09:04.394Z",
+      "durationMs": 2343597.399999976,
+      "chunks": 466,
+      "state": "recording",
+      "savedThroughMs": 2343540,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T05:09:34.401Z",
+      "durationMs": 2373837.399999976,
+      "chunks": 472,
+      "state": "recording",
+      "savedThroughMs": 2373780,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T05:10:04.409Z",
+      "durationMs": 2404077.5999999046,
+      "chunks": 478,
+      "state": "recording",
+      "savedThroughMs": 2404020,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T05:10:34.415Z",
+      "durationMs": 2434317.7999999523,
+      "chunks": 484,
+      "state": "recording",
+      "savedThroughMs": 2434260,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T05:11:04.419Z",
+      "durationMs": 2464557.0999999046,
+      "chunks": 490,
+      "state": "recording",
+      "savedThroughMs": 2464500,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T05:11:34.428Z",
+      "durationMs": 2494799.0999999046,
+      "chunks": 496,
+      "state": "recording",
+      "savedThroughMs": 2494740,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T05:12:04.444Z",
+      "durationMs": 2525038.2999999523,
+      "chunks": 502,
+      "state": "recording",
+      "savedThroughMs": 2524980,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T05:12:34.502Z",
+      "durationMs": 2555279.2999999523,
+      "chunks": 508,
+      "state": "recording",
+      "savedThroughMs": 2555220,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T05:13:04.515Z",
+      "durationMs": 2585518.2999999523,
+      "chunks": 514,
+      "state": "recording",
+      "savedThroughMs": 2585460,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T05:13:34.525Z",
+      "durationMs": 2615758,
+      "chunks": 520,
+      "state": "recording",
+      "savedThroughMs": 2615700,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T05:14:04.534Z",
+      "durationMs": 2645998.399999976,
+      "chunks": 526,
+      "state": "recording",
+      "savedThroughMs": 2645940,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T05:14:34.542Z",
+      "durationMs": 2671197.2999999523,
+      "chunks": 531,
+      "state": "recording",
+      "savedThroughMs": 2671140,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T05:15:04.547Z",
+      "durationMs": 2701437.399999976,
+      "chunks": 537,
+      "state": "recording",
+      "savedThroughMs": 2701380,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T05:15:34.555Z",
+      "durationMs": 2731677.6999999285,
+      "chunks": 543,
+      "state": "recording",
+      "savedThroughMs": 2731620,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T05:16:04.561Z",
+      "durationMs": 2761917.899999976,
+      "chunks": 549,
+      "state": "recording",
+      "savedThroughMs": 2761860,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T05:16:34.567Z",
+      "durationMs": 2792158.0999999046,
+      "chunks": 555,
+      "state": "recording",
+      "savedThroughMs": 2792100,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T05:17:04.570Z",
+      "durationMs": 2822397.6999999285,
+      "chunks": 561,
+      "state": "recording",
+      "savedThroughMs": 2822340,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T05:17:34.573Z",
+      "durationMs": 2852638,
+      "chunks": 567,
+      "state": "recording",
+      "savedThroughMs": 2852580,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T05:18:04.579Z",
+      "durationMs": 2882878.1999999285,
+      "chunks": 573,
+      "state": "recording",
+      "savedThroughMs": 2882820,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T05:18:34.583Z",
+      "durationMs": 2913117.7999999523,
+      "chunks": 579,
+      "state": "recording",
+      "savedThroughMs": 2913060,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T05:19:04.588Z",
+      "durationMs": 2943357.2999999523,
+      "chunks": 585,
+      "state": "recording",
+      "savedThroughMs": 2943300,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T05:19:34.595Z",
+      "durationMs": 2973597.5,
+      "chunks": 591,
+      "state": "recording",
+      "savedThroughMs": 2973540,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T05:20:04.600Z",
+      "durationMs": 3003837.899999976,
+      "chunks": 597,
+      "state": "recording",
+      "savedThroughMs": 3003780,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T05:20:34.604Z",
+      "durationMs": 3034077.1999999285,
+      "chunks": 603,
+      "state": "recording",
+      "savedThroughMs": 3034020,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T05:21:04.611Z",
+      "durationMs": 3064317.7999999523,
+      "chunks": 609,
+      "state": "recording",
+      "savedThroughMs": 3064260,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T05:21:34.613Z",
+      "durationMs": 3094557,
+      "chunks": 615,
+      "state": "recording",
+      "savedThroughMs": 3094500,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T05:22:04.618Z",
+      "durationMs": 3124797.6999999285,
+      "chunks": 621,
+      "state": "recording",
+      "savedThroughMs": 3124740,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T05:22:34.624Z",
+      "durationMs": 3155037.1999999285,
+      "chunks": 627,
+      "state": "recording",
+      "savedThroughMs": 3154980,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T05:23:04.628Z",
+      "durationMs": 3185277.7999999523,
+      "chunks": 633,
+      "state": "recording",
+      "savedThroughMs": 3185220,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T05:23:34.608Z",
+      "durationMs": 3215518.0999999046,
+      "chunks": 639,
+      "state": "recording",
+      "savedThroughMs": 3215460,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T05:24:04.610Z",
+      "durationMs": 3245757.7999999523,
+      "chunks": 645,
+      "state": "recording",
+      "savedThroughMs": 3245700,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T05:24:34.614Z",
+      "durationMs": 3275997.6999999285,
+      "chunks": 651,
+      "state": "recording",
+      "savedThroughMs": 3275940,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T05:25:04.618Z",
+      "durationMs": 3301197.1999999285,
+      "chunks": 656,
+      "state": "recording",
+      "savedThroughMs": 3301140,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T05:25:34.624Z",
+      "durationMs": 3331437.1999999285,
+      "chunks": 662,
+      "state": "recording",
+      "savedThroughMs": 3331380,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T05:26:04.628Z",
+      "durationMs": 3361677.1999999285,
+      "chunks": 668,
+      "state": "recording",
+      "savedThroughMs": 3361620,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T05:26:34.634Z",
+      "durationMs": 3391917.7999999523,
+      "chunks": 674,
+      "state": "recording",
+      "savedThroughMs": 3391860,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T05:27:04.640Z",
+      "durationMs": 3422157.399999976,
+      "chunks": 680,
+      "state": "recording",
+      "savedThroughMs": 3422100,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T05:27:34.646Z",
+      "durationMs": 3452397.5999999046,
+      "chunks": 686,
+      "state": "recording",
+      "savedThroughMs": 3452340,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T05:28:04.652Z",
+      "durationMs": 3482637.899999976,
+      "chunks": 692,
+      "state": "recording",
+      "savedThroughMs": 3482580,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T05:28:34.658Z",
+      "durationMs": 3512877.0999999046,
+      "chunks": 698,
+      "state": "recording",
+      "savedThroughMs": 3512820,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T05:29:04.661Z",
+      "durationMs": 3543117.7999999523,
+      "chunks": 704,
+      "state": "recording",
+      "savedThroughMs": 3543060,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T05:29:34.665Z",
+      "durationMs": 3573357.5999999046,
+      "chunks": 710,
+      "state": "recording",
+      "savedThroughMs": 3573300,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T05:30:01.313Z",
+      "durationMs": 3598558,
+      "chunks": 715,
+      "state": "recording",
+      "savedThroughMs": 3598500,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T05:30:02.759Z",
+      "durationMs": 3603598,
+      "chunks": 716,
+      "state": "recording",
+      "savedThroughMs": 3603540,
+      "epochs": 1
+    },
+    {
+      "at": "2026-10-16T05:30:12.387Z",
+      "durationMs": 3608641.2999999523,
+      "chunks": 717,
+      "state": "recording",
+      "savedThroughMs": 4980,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T05:30:42.390Z",
+      "durationMs": 3638880.0999999046,
+      "chunks": 723,
+      "state": "recording",
+      "savedThroughMs": 35220,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T05:31:12.394Z",
+      "durationMs": 3669119.5,
+      "chunks": 729,
+      "state": "recording",
+      "savedThroughMs": 65460,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T05:31:42.398Z",
+      "durationMs": 3699359.399999976,
+      "chunks": 735,
+      "state": "recording",
+      "savedThroughMs": 95700,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T05:32:12.408Z",
+      "durationMs": 3729599.5,
+      "chunks": 741,
+      "state": "recording",
+      "savedThroughMs": 125940,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T05:32:42.412Z",
+      "durationMs": 3759839.899999976,
+      "chunks": 747,
+      "state": "recording",
+      "savedThroughMs": 156180,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T05:33:12.416Z",
+      "durationMs": 3790079.399999976,
+      "chunks": 753,
+      "state": "recording",
+      "savedThroughMs": 186420,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T05:33:42.420Z",
+      "durationMs": 3820319.6999999285,
+      "chunks": 759,
+      "state": "recording",
+      "savedThroughMs": 216660,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T05:34:12.424Z",
+      "durationMs": 3850560.0999999046,
+      "chunks": 765,
+      "state": "recording",
+      "savedThroughMs": 246900,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T05:34:42.427Z",
+      "durationMs": 3875760,
+      "chunks": 770,
+      "state": "recording",
+      "savedThroughMs": 272100,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T05:35:12.430Z",
+      "durationMs": 3906000.1999999285,
+      "chunks": 776,
+      "state": "recording",
+      "savedThroughMs": 302340,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T05:35:42.434Z",
+      "durationMs": 3936239.899999976,
+      "chunks": 782,
+      "state": "recording",
+      "savedThroughMs": 332580,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T05:36:12.439Z",
+      "durationMs": 3966479.7999999523,
+      "chunks": 788,
+      "state": "recording",
+      "savedThroughMs": 362820,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T05:36:42.441Z",
+      "durationMs": 3996719.399999976,
+      "chunks": 794,
+      "state": "recording",
+      "savedThroughMs": 393060,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T05:37:12.444Z",
+      "durationMs": 4026959.5999999046,
+      "chunks": 800,
+      "state": "recording",
+      "savedThroughMs": 423300,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T05:37:42.449Z",
+      "durationMs": 4057200,
+      "chunks": 806,
+      "state": "recording",
+      "savedThroughMs": 453540,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T05:38:12.451Z",
+      "durationMs": 4087439.2999999523,
+      "chunks": 812,
+      "state": "recording",
+      "savedThroughMs": 483780,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T05:38:42.455Z",
+      "durationMs": 4117680,
+      "chunks": 818,
+      "state": "recording",
+      "savedThroughMs": 514020,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T05:39:12.461Z",
+      "durationMs": 4147919.2999999523,
+      "chunks": 824,
+      "state": "recording",
+      "savedThroughMs": 544260,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T05:39:42.469Z",
+      "durationMs": 4178159.899999976,
+      "chunks": 830,
+      "state": "recording",
+      "savedThroughMs": 574500,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T05:40:12.473Z",
+      "durationMs": 4208399.299999952,
+      "chunks": 836,
+      "state": "recording",
+      "savedThroughMs": 604740,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T05:40:42.477Z",
+      "durationMs": 4238639.5,
+      "chunks": 842,
+      "state": "recording",
+      "savedThroughMs": 634980,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T05:41:12.482Z",
+      "durationMs": 4268880.1999999285,
+      "chunks": 848,
+      "state": "recording",
+      "savedThroughMs": 665220,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T05:41:42.486Z",
+      "durationMs": 4299119.6999999285,
+      "chunks": 854,
+      "state": "recording",
+      "savedThroughMs": 695460,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T05:42:12.488Z",
+      "durationMs": 4329360.099999905,
+      "chunks": 860,
+      "state": "recording",
+      "savedThroughMs": 725700,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T05:42:42.489Z",
+      "durationMs": 4359600.1999999285,
+      "chunks": 866,
+      "state": "recording",
+      "savedThroughMs": 755940,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T05:43:12.493Z",
+      "durationMs": 4389839.5,
+      "chunks": 872,
+      "state": "recording",
+      "savedThroughMs": 786180,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T05:43:42.496Z",
+      "durationMs": 4420079.5,
+      "chunks": 878,
+      "state": "recording",
+      "savedThroughMs": 816420,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T05:44:12.500Z",
+      "durationMs": 4450320.099999905,
+      "chunks": 884,
+      "state": "recording",
+      "savedThroughMs": 846660,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T05:44:42.505Z",
+      "durationMs": 4480559.799999952,
+      "chunks": 890,
+      "state": "recording",
+      "savedThroughMs": 876900,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T05:45:12.514Z",
+      "durationMs": 4505760.1999999285,
+      "chunks": 895,
+      "state": "recording",
+      "savedThroughMs": 902100,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T05:45:42.519Z",
+      "durationMs": 4535999.399999976,
+      "chunks": 901,
+      "state": "recording",
+      "savedThroughMs": 932340,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T05:46:12.524Z",
+      "durationMs": 4566240.299999952,
+      "chunks": 907,
+      "state": "recording",
+      "savedThroughMs": 962580,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T05:46:42.528Z",
+      "durationMs": 4596480.099999905,
+      "chunks": 913,
+      "state": "recording",
+      "savedThroughMs": 992820,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T05:47:12.531Z",
+      "durationMs": 4626720.1999999285,
+      "chunks": 919,
+      "state": "recording",
+      "savedThroughMs": 1023060,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T05:47:42.534Z",
+      "durationMs": 4656959.5,
+      "chunks": 925,
+      "state": "recording",
+      "savedThroughMs": 1053300,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T05:48:12.538Z",
+      "durationMs": 4687199.899999976,
+      "chunks": 931,
+      "state": "recording",
+      "savedThroughMs": 1083540,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T05:48:42.542Z",
+      "durationMs": 4717439.5,
+      "chunks": 937,
+      "state": "recording",
+      "savedThroughMs": 1113780,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T05:49:12.546Z",
+      "durationMs": 4747680.1999999285,
+      "chunks": 943,
+      "state": "recording",
+      "savedThroughMs": 1144020,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T05:49:42.550Z",
+      "durationMs": 4777919.799999952,
+      "chunks": 949,
+      "state": "recording",
+      "savedThroughMs": 1174260,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T05:50:12.554Z",
+      "durationMs": 4808160,
+      "chunks": 955,
+      "state": "recording",
+      "savedThroughMs": 1204500,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T05:50:42.557Z",
+      "durationMs": 4838399.5,
+      "chunks": 961,
+      "state": "recording",
+      "savedThroughMs": 1234740,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T05:51:12.563Z",
+      "durationMs": 4868639.6999999285,
+      "chunks": 967,
+      "state": "recording",
+      "savedThroughMs": 1264980,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T05:51:42.567Z",
+      "durationMs": 4898880.099999905,
+      "chunks": 973,
+      "state": "recording",
+      "savedThroughMs": 1295220,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T05:52:12.570Z",
+      "durationMs": 4929120,
+      "chunks": 979,
+      "state": "recording",
+      "savedThroughMs": 1325460,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T05:52:42.573Z",
+      "durationMs": 4959360,
+      "chunks": 985,
+      "state": "recording",
+      "savedThroughMs": 1355700,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T05:53:12.577Z",
+      "durationMs": 4989600.099999905,
+      "chunks": 991,
+      "state": "recording",
+      "savedThroughMs": 1385940,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T05:53:42.579Z",
+      "durationMs": 5019840,
+      "chunks": 997,
+      "state": "recording",
+      "savedThroughMs": 1416180,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T05:54:12.584Z",
+      "durationMs": 5050079.899999976,
+      "chunks": 1003,
+      "state": "recording",
+      "savedThroughMs": 1446420,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T05:54:42.590Z",
+      "durationMs": 5080320.399999976,
+      "chunks": 1009,
+      "state": "recording",
+      "savedThroughMs": 1476660,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T05:55:12.594Z",
+      "durationMs": 5110560.1999999285,
+      "chunks": 1015,
+      "state": "recording",
+      "savedThroughMs": 1506900,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T05:55:42.595Z",
+      "durationMs": 5140800,
+      "chunks": 1021,
+      "state": "recording",
+      "savedThroughMs": 1537140,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T05:56:12.601Z",
+      "durationMs": 5165999.599999905,
+      "chunks": 1026,
+      "state": "recording",
+      "savedThroughMs": 1562340,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T05:56:42.608Z",
+      "durationMs": 5196239.599999905,
+      "chunks": 1032,
+      "state": "recording",
+      "savedThroughMs": 1592580,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T05:57:12.611Z",
+      "durationMs": 5226480.1999999285,
+      "chunks": 1038,
+      "state": "recording",
+      "savedThroughMs": 1622820,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T05:57:42.615Z",
+      "durationMs": 5256719.299999952,
+      "chunks": 1044,
+      "state": "recording",
+      "savedThroughMs": 1653060,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T05:58:12.619Z",
+      "durationMs": 5286959.6999999285,
+      "chunks": 1050,
+      "state": "recording",
+      "savedThroughMs": 1683300,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T05:58:42.622Z",
+      "durationMs": 5317199.599999905,
+      "chunks": 1056,
+      "state": "recording",
+      "savedThroughMs": 1713540,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T05:59:12.624Z",
+      "durationMs": 5347440,
+      "chunks": 1062,
+      "state": "recording",
+      "savedThroughMs": 1743780,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T05:59:42.627Z",
+      "durationMs": 5377680,
+      "chunks": 1068,
+      "state": "recording",
+      "savedThroughMs": 1774020,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T06:00:12.631Z",
+      "durationMs": 5407919.399999976,
+      "chunks": 1074,
+      "state": "recording",
+      "savedThroughMs": 1804260,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T06:00:42.636Z",
+      "durationMs": 5438160.1999999285,
+      "chunks": 1080,
+      "state": "recording",
+      "savedThroughMs": 1834500,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T06:01:12.641Z",
+      "durationMs": 5468400,
+      "chunks": 1086,
+      "state": "recording",
+      "savedThroughMs": 1864740,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T06:01:42.646Z",
+      "durationMs": 5498639.6999999285,
+      "chunks": 1092,
+      "state": "recording",
+      "savedThroughMs": 1894980,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T06:02:12.649Z",
+      "durationMs": 5528879.799999952,
+      "chunks": 1098,
+      "state": "recording",
+      "savedThroughMs": 1925220,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T06:02:42.654Z",
+      "durationMs": 5559119.299999952,
+      "chunks": 1104,
+      "state": "recording",
+      "savedThroughMs": 1955460,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T06:03:12.658Z",
+      "durationMs": 5589360.1999999285,
+      "chunks": 1110,
+      "state": "recording",
+      "savedThroughMs": 1985700,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T06:03:42.662Z",
+      "durationMs": 5619599.899999976,
+      "chunks": 1116,
+      "state": "recording",
+      "savedThroughMs": 2015940,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T06:04:12.666Z",
+      "durationMs": 5649839.399999976,
+      "chunks": 1122,
+      "state": "recording",
+      "savedThroughMs": 2046180,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T06:04:42.670Z",
+      "durationMs": 5680080.299999952,
+      "chunks": 1128,
+      "state": "recording",
+      "savedThroughMs": 2076420,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T06:05:12.674Z",
+      "durationMs": 5710320.1999999285,
+      "chunks": 1134,
+      "state": "recording",
+      "savedThroughMs": 2106660,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T06:05:42.677Z",
+      "durationMs": 5740559.399999976,
+      "chunks": 1140,
+      "state": "recording",
+      "savedThroughMs": 2136900,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T06:06:12.681Z",
+      "durationMs": 5770799.6999999285,
+      "chunks": 1146,
+      "state": "recording",
+      "savedThroughMs": 2167140,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T06:06:42.685Z",
+      "durationMs": 5795999.599999905,
+      "chunks": 1151,
+      "state": "recording",
+      "savedThroughMs": 2192340,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T06:07:12.689Z",
+      "durationMs": 5826239.5,
+      "chunks": 1157,
+      "state": "recording",
+      "savedThroughMs": 2222580,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T06:07:42.693Z",
+      "durationMs": 5856479.399999976,
+      "chunks": 1163,
+      "state": "recording",
+      "savedThroughMs": 2252820,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T06:08:12.698Z",
+      "durationMs": 5886720.299999952,
+      "chunks": 1169,
+      "state": "recording",
+      "savedThroughMs": 2283060,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T06:08:42.703Z",
+      "durationMs": 5916960.1999999285,
+      "chunks": 1175,
+      "state": "recording",
+      "savedThroughMs": 2313300,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T06:09:12.708Z",
+      "durationMs": 5947200.099999905,
+      "chunks": 1181,
+      "state": "recording",
+      "savedThroughMs": 2343540,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T06:09:42.712Z",
+      "durationMs": 5977440.099999905,
+      "chunks": 1187,
+      "state": "recording",
+      "savedThroughMs": 2373780,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T06:10:12.717Z",
+      "durationMs": 6007679.299999952,
+      "chunks": 1193,
+      "state": "recording",
+      "savedThroughMs": 2404020,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T06:10:42.721Z",
+      "durationMs": 6037919.5,
+      "chunks": 1199,
+      "state": "recording",
+      "savedThroughMs": 2434260,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T06:11:12.725Z",
+      "durationMs": 6068159.799999952,
+      "chunks": 1205,
+      "state": "recording",
+      "savedThroughMs": 2464500,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T06:11:42.728Z",
+      "durationMs": 6098400.099999905,
+      "chunks": 1211,
+      "state": "recording",
+      "savedThroughMs": 2494740,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T06:12:12.731Z",
+      "durationMs": 6128640.1999999285,
+      "chunks": 1217,
+      "state": "recording",
+      "savedThroughMs": 2524980,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T06:12:42.712Z",
+      "durationMs": 6158879.299999952,
+      "chunks": 1223,
+      "state": "recording",
+      "savedThroughMs": 2555220,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T06:13:12.712Z",
+      "durationMs": 6189119.899999976,
+      "chunks": 1229,
+      "state": "recording",
+      "savedThroughMs": 2585460,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T06:13:42.715Z",
+      "durationMs": 6219359.399999976,
+      "chunks": 1235,
+      "state": "recording",
+      "savedThroughMs": 2615700,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T06:14:12.719Z",
+      "durationMs": 6249599.399999976,
+      "chunks": 1241,
+      "state": "recording",
+      "savedThroughMs": 2645940,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T06:14:42.724Z",
+      "durationMs": 6279839.799999952,
+      "chunks": 1247,
+      "state": "recording",
+      "savedThroughMs": 2676180,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T06:15:12.730Z",
+      "durationMs": 6310080,
+      "chunks": 1253,
+      "state": "recording",
+      "savedThroughMs": 2706420,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T06:15:42.735Z",
+      "durationMs": 6340320.1999999285,
+      "chunks": 1259,
+      "state": "recording",
+      "savedThroughMs": 2736660,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T06:16:12.741Z",
+      "durationMs": 6370559.299999952,
+      "chunks": 1265,
+      "state": "recording",
+      "savedThroughMs": 2766900,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T06:16:42.744Z",
+      "durationMs": 6400799.899999976,
+      "chunks": 1271,
+      "state": "recording",
+      "savedThroughMs": 2797140,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T06:17:12.749Z",
+      "durationMs": 6431039.599999905,
+      "chunks": 1277,
+      "state": "recording",
+      "savedThroughMs": 2827380,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T06:17:42.755Z",
+      "durationMs": 6456239.799999952,
+      "chunks": 1282,
+      "state": "recording",
+      "savedThroughMs": 2852580,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T06:18:12.761Z",
+      "durationMs": 6486479.799999952,
+      "chunks": 1288,
+      "state": "recording",
+      "savedThroughMs": 2882820,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T06:18:42.764Z",
+      "durationMs": 6516720,
+      "chunks": 1294,
+      "state": "recording",
+      "savedThroughMs": 2913060,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T06:19:12.770Z",
+      "durationMs": 6546960.099999905,
+      "chunks": 1300,
+      "state": "recording",
+      "savedThroughMs": 2943300,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T06:19:42.776Z",
+      "durationMs": 6577199.6999999285,
+      "chunks": 1306,
+      "state": "recording",
+      "savedThroughMs": 2973540,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T06:20:12.779Z",
+      "durationMs": 6607440.099999905,
+      "chunks": 1312,
+      "state": "recording",
+      "savedThroughMs": 3003780,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T06:20:42.783Z",
+      "durationMs": 6637679.799999952,
+      "chunks": 1318,
+      "state": "recording",
+      "savedThroughMs": 3034020,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T06:21:12.786Z",
+      "durationMs": 6667920.299999952,
+      "chunks": 1324,
+      "state": "recording",
+      "savedThroughMs": 3064260,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T06:21:42.791Z",
+      "durationMs": 6698159.899999976,
+      "chunks": 1330,
+      "state": "recording",
+      "savedThroughMs": 3094500,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T06:22:12.797Z",
+      "durationMs": 6728399.799999952,
+      "chunks": 1336,
+      "state": "recording",
+      "savedThroughMs": 3124740,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T06:22:42.801Z",
+      "durationMs": 6758639.299999952,
+      "chunks": 1342,
+      "state": "recording",
+      "savedThroughMs": 3154980,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T06:23:12.806Z",
+      "durationMs": 6788879.799999952,
+      "chunks": 1348,
+      "state": "recording",
+      "savedThroughMs": 3185220,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T06:23:42.809Z",
+      "durationMs": 6819119.5,
+      "chunks": 1354,
+      "state": "recording",
+      "savedThroughMs": 3215460,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T06:24:12.813Z",
+      "durationMs": 6849359.899999976,
+      "chunks": 1360,
+      "state": "recording",
+      "savedThroughMs": 3245700,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T06:24:42.821Z",
+      "durationMs": 6879600.1999999285,
+      "chunks": 1366,
+      "state": "recording",
+      "savedThroughMs": 3275940,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T06:25:12.826Z",
+      "durationMs": 6909840.099999905,
+      "chunks": 1372,
+      "state": "recording",
+      "savedThroughMs": 3306180,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T06:25:42.830Z",
+      "durationMs": 6940080,
+      "chunks": 1378,
+      "state": "recording",
+      "savedThroughMs": 3336420,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T06:26:12.834Z",
+      "durationMs": 6970320.1999999285,
+      "chunks": 1384,
+      "state": "recording",
+      "savedThroughMs": 3366660,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T06:26:42.837Z",
+      "durationMs": 7000559.5,
+      "chunks": 1390,
+      "state": "recording",
+      "savedThroughMs": 3396900,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T06:27:12.841Z",
+      "durationMs": 7030800.099999905,
+      "chunks": 1396,
+      "state": "recording",
+      "savedThroughMs": 3427140,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T06:27:42.845Z",
+      "durationMs": 7061039.5,
+      "chunks": 1402,
+      "state": "recording",
+      "savedThroughMs": 3457380,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T06:28:12.849Z",
+      "durationMs": 7086239.299999952,
+      "chunks": 1407,
+      "state": "recording",
+      "savedThroughMs": 3482580,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T06:28:42.853Z",
+      "durationMs": 7116480,
+      "chunks": 1413,
+      "state": "recording",
+      "savedThroughMs": 3512820,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T06:29:12.857Z",
+      "durationMs": 7146720.099999905,
+      "chunks": 1419,
+      "state": "recording",
+      "savedThroughMs": 3543060,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T06:29:36.142Z",
+      "durationMs": 7171919.599999905,
+      "chunks": 1424,
+      "state": "recording",
+      "savedThroughMs": 3568260,
+      "epochs": 2
+    },
+    {
+      "at": "2026-10-16T06:29:50.212Z",
+      "durationMs": 7181998.599999905,
+      "chunks": 1426,
+      "state": "recording",
+      "savedThroughMs": 4980,
+      "epochs": 3
+    },
+    {
+      "at": "2026-10-16T06:30:07.217Z",
+      "durationMs": 7200961.999999881,
+      "chunks": 1430,
+      "state": "upload_failed",
+      "savedThroughMs": 24000,
+      "epochs": 3
+    }
+  ],
+  "snapshots": [
+    {
+      "label": "before-refresh",
+      "chunks": 716,
+      "bytes": 29200961,
+      "sha256": "c056f5c1cd121b599d79d46bf9a84edaab0cb1948aae65019bb38a52b054e860",
+      "at": "2026-10-16T05:30:04.338Z",
+      "durationMs": 3603598,
+      "epochs": [
+        {
+          "firstChunk": 0,
+          "mimeType": "audio/webm;codecs=opus",
+          "startedAt": 1792124998477
+        }
+      ],
+      "mediaCoverage": {
+        "version": 1,
+        "verifiedThroughMs": 3603540,
+        "observedThroughMs": 3603540,
+        "status": "verified",
+        "committedChunkCount": 716
+      }
+    },
+    {
+      "label": "after-refresh",
+      "chunks": 716,
+      "bytes": 29200961,
+      "sha256": "c056f5c1cd121b599d79d46bf9a84edaab0cb1948aae65019bb38a52b054e860",
+      "at": "2026-10-16T05:30:12.385Z",
+      "durationMs": 3608641.2999999523,
+      "epochs": [
+        {
+          "firstChunk": 0,
+          "mimeType": "audio/webm;codecs=opus",
+          "startedAt": 1792124998477,
+          "savedThroughMs": 3603540
+        },
+        {
+          "firstChunk": 716,
+          "mimeType": "audio/webm;codecs=opus",
+          "startedAt": 1792128605298,
+          "previousEndedAt": 1792128602054
+        }
+      ],
+      "mediaCoverage": {
+        "version": 1,
+        "verifiedThroughMs": 4980,
+        "observedThroughMs": 4980,
+        "status": "verified",
+        "committedChunkCount": 717
+      }
+    },
+    {
+      "label": "before-kill",
+      "chunks": 1424,
+      "bytes": 58116035,
+      "sha256": "524f160d02cba1abb9115604a98e5d03415bd14c54a92e2b6d6b25c5128b8520",
+      "at": "2026-10-16T06:29:39.531Z",
+      "durationMs": 7171919.599999905,
+      "epochs": [
+        {
+          "firstChunk": 0,
+          "mimeType": "audio/webm;codecs=opus",
+          "startedAt": 1792124998477,
+          "savedThroughMs": 3603540
+        },
+        {
+          "firstChunk": 716,
+          "mimeType": "audio/webm;codecs=opus",
+          "startedAt": 1792128605298,
+          "previousEndedAt": 1792128602054
+        }
+      ],
+      "mediaCoverage": {
+        "version": 1,
+        "verifiedThroughMs": 3568260,
+        "observedThroughMs": 3568260,
+        "status": "verified",
+        "committedChunkCount": 1424
+      }
+    },
+    {
+      "label": "after-kill",
+      "chunks": 1424,
+      "bytes": 58116035,
+      "sha256": "524f160d02cba1abb9115604a98e5d03415bd14c54a92e2b6d6b25c5128b8520",
+      "at": "2026-10-16T06:29:50.210Z",
+      "durationMs": 7181998.599999905,
+      "epochs": [
+        {
+          "firstChunk": 0,
+          "mimeType": "audio/webm;codecs=opus",
+          "startedAt": 1792124998477,
+          "savedThroughMs": 3603540
+        },
+        {
+          "firstChunk": 716,
+          "mimeType": "audio/webm;codecs=opus",
+          "startedAt": 1792128605298,
+          "previousEndedAt": 1792128602054,
+          "savedThroughMs": 3573300
+        },
+        {
+          "firstChunk": 1425,
+          "mimeType": "audio/webm;codecs=opus",
+          "startedAt": 1792132181109,
+          "previousEndedAt": 1792132178645
+        }
+      ],
+      "mediaCoverage": {
+        "version": 1,
+        "verifiedThroughMs": 4980,
+        "observedThroughMs": 4980,
+        "status": "verified",
+        "committedChunkCount": 1426
+      }
+    },
+    {
+      "label": "final-original",
+      "chunks": 1430,
+      "bytes": 58351501,
+      "sha256": "ceb41a52b321ba735e19f7d8666890559ee2c5309c51b4356d306ac0e4c9a226",
+      "at": "2026-10-16T06:30:10.121Z",
+      "durationMs": 7200961.999999881,
+      "epochs": [
+        {
+          "firstChunk": 0,
+          "mimeType": "audio/webm;codecs=opus",
+          "startedAt": 1792124998477,
+          "savedThroughMs": 3603540
+        },
+        {
+          "firstChunk": 716,
+          "mimeType": "audio/webm;codecs=opus",
+          "startedAt": 1792128605298,
+          "previousEndedAt": 1792128602054,
+          "savedThroughMs": 3573300
+        },
+        {
+          "firstChunk": 1425,
+          "mimeType": "audio/webm;codecs=opus",
+          "startedAt": 1792132181109,
+          "previousEndedAt": 1792132178645
+        }
+      ],
+      "mediaCoverage": {
+        "version": 1,
+        "verifiedThroughMs": 24000,
+        "observedThroughMs": 24000,
+        "status": "verified",
+        "committedChunkCount": 1430
+      }
+    }
+  ],
+  "inRunFix": {
+    "observedFailure": "Recording exceeds duration limit",
+    "cause": "Recorder stop delivered 0.84 seconds beyond the two-hour source limit",
+    "captureLimitMs": 7200000,
+    "maxSavedDurationMs": 7205000,
+    "reusedOriginal": true,
+    "reusedNoteId": "3ee18bda-f1c5-46b7-b1e0-962f469be091"
+  },
+  "artifacts": "/tmp/xopc-note-realtime-two-hour-2026-10-16",
+  "boundary": "Production Notes pages, capture host, Hono handlers, SQLite and real Alibaba/DeepSeek processing. Simplified application shell and fixture login; route rate limits bypassed. Synthetic microphone, no physical microphone or Harmony device verification.",
+  "sourceHashes": {
+    "scripts/note-web-realtime-acceptance.mts": "2c7e79df873e360a41658b2840d16c023eadbb0b4481570b96a61d5ca2b63a3f",
+    "packages/gateway-contract/src/discussions.ts": "e64f32973de2019819e8153700b7da071f4b89edf81dbfaabd88405e259d5344",
+    "src/discussions/recording.ts": "ad5b11cadbd1228571acdc853386ab0093463621752950fd69af02523d0c1d02",
+    "src/discussions/sealer.ts": "c232c819457c75892b337d60d9e1aacca95fbe19f383a71f801c23944eb07961",
+    "web/src/features/discussions/global-discussion-capture.tsx": "4cbe43061963989229291892d7b5e195dd2d409c433f9601100484ed2f90a15b"
+  },
+  "noteCount": 1
+}

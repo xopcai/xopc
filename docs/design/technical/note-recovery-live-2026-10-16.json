@@ -1,0 +1,225 @@
+{
+  "date": "2026-10-16T03:12:37.595Z",
+  "directory": "/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-note-live-dECqBt",
+  "source": "Synthetic macOS speech, 45 seconds PCM WAV",
+  "stt": "alibaba/qwen-audio-3.1-asr-flash",
+  "model": "deepseek/deepseek-flash",
+  "boundary": "Real provider successes; socket disconnection and HTTP 429 injected on loopback only. No device testing or induced supplier quota exhaustion.",
+  "sourceHashes": {
+    "src/discussions/sealer.ts": "d795fdcd78a0245e01e862e9a6bd7be3f673d620979fb05778aa693685589437",
+    "src/discussions/processing.ts": "529fe6ed38f4db92344fb27ed8012c7a14ca3a3b30beeeca106812497ceb9a2c",
+    "src/discussions/organizer-worker.ts": "f8600a813eb1c39b7e48a32930aee95b62fea31d80475b838ffbddb0ce0dcb3e",
+    "src/discussions/analyzer.ts": "b90f98aafac89868bd70a19cc8ab39722c7e71748ddb733275943330373f5864",
+    "src/media-shared/http/provider-http.ts": "e6a5c422fe073e8408ff914b3bfbe37de3d05642f8e4bf32588334a8cfad3a32",
+    "scripts/note-recovery-live-acceptance.mts": "2e9be4699a29bb3846d4173f8d709c62ccf47a2cf22c50d9d425db5b25fc38db"
+  },
+  "node": "v24.16.0",
+  "passed": true,
+  "evidence": [
+    {
+      "mode": "seed",
+      "status": "stopping",
+      "checkpoints": 0,
+      "attempts": 0,
+      "calls": [],
+      "audioHash": "469ffd293958e5fe9d0738699df5253ff272131c19d9bf4997639101eb291905",
+      "noteId": "6694267c-76c3-4c22-ac6e-91fdea2f2b65",
+      "summaryCharacters": 0,
+      "transcriptCharacters": 0,
+      "markdown": "Independent acceptance notes"
+    },
+    {
+      "mode": "stt-network",
+      "status": "sealing",
+      "checkpoints": 1,
+      "attempts": 1,
+      "nextAttemptAt": 1792120407679,
+      "calls": [
+        {
+          "stage": "stt",
+          "outcome": "supplier",
+          "status": 200,
+          "requestId": "d83df164-ebcc-9c45-9404-8c75c4d89667"
+        },
+        {
+          "stage": "stt",
+          "outcome": "stt-network:transport-failure"
+        }
+      ],
+      "audioHash": "469ffd293958e5fe9d0738699df5253ff272131c19d9bf4997639101eb291905",
+      "noteId": "6694267c-76c3-4c22-ac6e-91fdea2f2b65",
+      "summaryCharacters": 0,
+      "transcriptCharacters": 0,
+      "failure": "Alibaba STT failed: fetch failed",
+      "markdown": "Independent acceptance notes"
+    },
+    {
+      "mode": "stt-rate-limit",
+      "status": "sealing",
+      "checkpoints": 1,
+      "attempts": 2,
+      "nextAttemptAt": 1792120436269,
+      "calls": [
+        {
+          "stage": "stt",
+          "outcome": "stt-rate-limit",
+          "status": 429
+        }
+      ],
+      "audioHash": "469ffd293958e5fe9d0738699df5253ff272131c19d9bf4997639101eb291905",
+      "noteId": "6694267c-76c3-4c22-ac6e-91fdea2f2b65",
+      "summaryCharacters": 0,
+      "transcriptCharacters": 0,
+      "failure": "Alibaba STT failed: Alibaba STT (429): Acceptance injected rate limit [type=rate_limit_error, code=rate_limit_exceeded] [code=rate_limit_exceeded]",
+      "markdown": "Independent acceptance notes"
+    },
+    {
+      "mode": "stt-kill",
+      "status": "sealing",
+      "checkpoints": 2,
+      "attempts": 2,
+      "nextAttemptAt": 1792120436269,
+      "calls": [
+        {
+          "stage": "stt",
+          "outcome": "supplier",
+          "status": 200,
+          "requestId": "86eca13f-0c7e-91fd-b9b3-f6c56aad0245"
+        },
+        {
+          "stage": "stt",
+          "outcome": "stt-kill"
+        }
+      ],
+      "audioHash": "469ffd293958e5fe9d0738699df5253ff272131c19d9bf4997639101eb291905",
+      "noteId": "6694267c-76c3-4c22-ac6e-91fdea2f2b65",
+      "summaryCharacters": 0,
+      "transcriptCharacters": 0,
+      "failure": "Alibaba STT failed: Alibaba STT (429): Acceptance injected rate limit [type=rate_limit_error, code=rate_limit_exceeded] [code=rate_limit_exceeded]",
+      "leaseUntil": 1792120508077,
+      "markdown": "Independent acceptance notes"
+    },
+    {
+      "mode": "stt-before-lease-expiry",
+      "status": "sealing",
+      "checkpoints": 2,
+      "attempts": 2,
+      "nextAttemptAt": 1792120436269,
+      "calls": [],
+      "audioHash": "469ffd293958e5fe9d0738699df5253ff272131c19d9bf4997639101eb291905",
+      "noteId": "6694267c-76c3-4c22-ac6e-91fdea2f2b65",
+      "summaryCharacters": 0,
+      "transcriptCharacters": 0,
+      "failure": "Alibaba STT failed: Alibaba STT (429): Acceptance injected rate limit [type=rate_limit_error, code=rate_limit_exceeded] [code=rate_limit_exceeded]",
+      "leaseUntil": 1792120508077,
+      "markdown": "Independent acceptance notes"
+    },
+    {
+      "mode": "stt-recover",
+      "status": "organizing",
+      "checkpoints": 3,
+      "attempts": 0,
+      "calls": [
+        {
+          "stage": "stt",
+          "outcome": "supplier",
+          "status": 200,
+          "requestId": "a4f7c29b-c598-9b48-9000-cf40ad23cd75"
+        }
+      ],
+      "audioHash": "469ffd293958e5fe9d0738699df5253ff272131c19d9bf4997639101eb291905",
+      "noteId": "6694267c-76c3-4c22-ac6e-91fdea2f2b65",
+      "summaryCharacters": 0,
+      "transcriptCharacters": 671,
+      "markdown": "Independent acceptance notes"
+    },
+    {
+      "mode": "llm-kill",
+      "status": "organizing",
+      "checkpoints": 3,
+      "attempts": 0,
+      "calls": [
+        {
+          "stage": "llm",
+          "outcome": "llm-kill"
+        }
+      ],
+      "audioHash": "469ffd293958e5fe9d0738699df5253ff272131c19d9bf4997639101eb291905",
+      "noteId": "6694267c-76c3-4c22-ac6e-91fdea2f2b65",
+      "summaryCharacters": 0,
+      "transcriptCharacters": 671,
+      "leaseUntil": 1792120828630,
+      "markdown": "Independent acceptance notes"
+    },
+    {
+      "mode": "llm-before-lease-expiry",
+      "status": "organizing",
+      "checkpoints": 3,
+      "attempts": 0,
+      "calls": [],
+      "audioHash": "469ffd293958e5fe9d0738699df5253ff272131c19d9bf4997639101eb291905",
+      "noteId": "6694267c-76c3-4c22-ac6e-91fdea2f2b65",
+      "summaryCharacters": 0,
+      "transcriptCharacters": 671,
+      "leaseUntil": 1792120828630,
+      "markdown": "Independent acceptance notes"
+    },
+    {
+      "mode": "llm-rate-limit",
+      "status": "organizing",
+      "checkpoints": 3,
+      "attempts": 1,
+      "nextAttemptAt": 1792120845497,
+      "calls": [
+        {
+          "stage": "llm",
+          "outcome": "llm-rate-limit",
+          "status": 429
+        }
+      ],
+      "audioHash": "469ffd293958e5fe9d0738699df5253ff272131c19d9bf4997639101eb291905",
+      "noteId": "6694267c-76c3-4c22-ac6e-91fdea2f2b65",
+      "summaryCharacters": 0,
+      "transcriptCharacters": 671,
+      "failure": "Discussion model call failed: 429: {\"message\":\"Acceptance injected rate limit\",\"type\":\"rate_limit_error\",\"code\":\"rate_limit_exceeded\"}",
+      "markdown": "Independent acceptance notes"
+    },
+    {
+      "mode": "llm-network",
+      "status": "organizing",
+      "checkpoints": 3,
+      "attempts": 2,
+      "nextAttemptAt": 1792120874466,
+      "calls": [
+        {
+          "stage": "llm",
+          "outcome": "llm-network:transport-failure"
+        }
+      ],
+      "audioHash": "469ffd293958e5fe9d0738699df5253ff272131c19d9bf4997639101eb291905",
+      "noteId": "6694267c-76c3-4c22-ac6e-91fdea2f2b65",
+      "summaryCharacters": 0,
+      "transcriptCharacters": 671,
+      "failure": "Discussion model call failed: Connection error.",
+      "markdown": "Independent acceptance notes"
+    },
+    {
+      "mode": "llm-recover",
+      "status": "completed",
+      "checkpoints": 3,
+      "attempts": 0,
+      "calls": [
+        {
+          "stage": "llm",
+          "outcome": "supplier",
+          "status": 200
+        }
+      ],
+      "audioHash": "469ffd293958e5fe9d0738699df5253ff272131c19d9bf4997639101eb291905",
+      "noteId": "6694267c-76c3-4c22-ac6e-91fdea2f2b65",
+      "summaryCharacters": 208,
+      "transcriptCharacters": 671,
+      "markdown": "Independent acceptance notes"
+    }
+  ]
+}

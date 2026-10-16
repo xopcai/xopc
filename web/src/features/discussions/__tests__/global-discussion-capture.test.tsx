@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => {
   const recorder: Record<string, unknown> = {};
-  return { recorder, create: vi.fn(), settings: vi.fn(), get: vi.fn(),
+  return { recorder, pathname: '/notes', create: vi.fn(), settings: vi.fn(), get: vi.fn(),
     upload: vi.fn(), cancel: vi.fn(), navigate: vi.fn(), drain: vi.fn(), annotations: vi.fn(async () => {}) };
 });
 vi.mock('../discussion-annotation-sync', () => ({ syncDiscussionAnnotations: mocks.annotations }));
@@ -20,7 +20,7 @@ vi.mock('../discussion-draft-store', () => ({
   deleteDiscussionLiveSegment: vi.fn(), listDiscussionLiveSegments: async () => [], saveDiscussionLiveSegment: vi.fn(),
 }));
 vi.mock('../discussion-segment-upload-queue', () => ({ drainDiscussionSegmentUploadQueue: mocks.drain }));
-vi.mock('react-router-dom', () => ({ useNavigate: () => mocks.navigate }));
+vi.mock('react-router-dom', () => ({ useNavigate: () => mocks.navigate, useLocation: () => ({ pathname: mocks.pathname }) }));
 vi.mock('@/stores/gateway-store', () => ({ useGatewayStore: Object.assign(
   (selector: (state: { conversationId: string }) => unknown) => selector({ conversationId: 'session' }),
   { getState: () => ({ baseUrl: window.location.origin }) },
@@ -42,7 +42,7 @@ async function click(label: string) {
   await act(async () => { [...container.querySelectorAll('button')].find(button => button.textContent === label)!.click(); });
 }
 beforeEach(async () => {
-  Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true }); vi.clearAllMocks(); localStorage.clear();
+  Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true }); vi.clearAllMocks(); localStorage.clear(); mocks.pathname = '/notes';
   rememberDiscussionConsent({ consentPolicyVersion: 1, consentAcknowledgedAt: 1 });
   Object.assign(mocks.recorder, {
     phase: 'idle', draft, recoverableDrafts: [draft], elapsedMs: 5_000, liveTranscriptionAvailable: true, error: null,
@@ -60,6 +60,21 @@ beforeEach(async () => {
 afterEach(async () => { await act(async () => root.unmount()); container.remove(); });
 
 describe('recording completion and recovery orchestration', () => {
+  it('retains the confirmed original duration after local recorder state is released', async () => {
+    mocks.get.mockResolvedValue({ ...detail, discussion: { ...detail.discussion, durationMs: 7200840 } });
+    await click(copy.recover);
+    Object.assign(mocks.recorder, { elapsedMs: 0, draft: null });
+    await act(async () => root.render(<GlobalDiscussionCaptureHost />));
+    expect(container.textContent).toContain('120:00');
+  });
+
+  it('dismisses the finished recording when its confirmed Note is opened through navigation', async () => {
+    await click(copy.recover);
+    mocks.pathname = '/notes/note';
+    await act(async () => root.render(<GlobalDiscussionCaptureHost />));
+    expect(container.querySelector('[data-recording-window]')).toBeNull();
+  });
+
   it('lists and discards the chosen recording without cancelling a Note or touching another draft', async () => {
     mocks.recorder.recoverableDrafts = [draft, { ...draft, id: 'second', serverDiscussionId: 'second-server', startedAt: 200 }];
     await act(async () => { window.dispatchEvent(new Event('open-recording-recoveries')); });
@@ -209,6 +224,37 @@ describe('recording completion and recovery orchestration', () => {
     await click('Continue recording');
     expect(mocks.recorder.start).toHaveBeenLastCalledWith(expect.objectContaining({ continuation: expect.objectContaining({ id: 'local',serverDiscussionId: 'server' }) }));
     expect(mocks.create).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows preparation rather than stopped/saved status and gates duplicate start requests', async () => {
+    localStorage.clear();let finishSettings!: (value: unknown) => void;
+    mocks.settings.mockReturnValue(new Promise(resolve => { finishSettings = resolve; }));
+    await act(async () => { window.dispatchEvent(new Event(OPEN_DISCUSSION_CAPTURE_EVENT));window.dispatchEvent(new Event(OPEN_DISCUSSION_CAPTURE_EVENT)); });
+    expect(mocks.settings).toHaveBeenCalledTimes(1);expect(mocks.recorder.start).not.toHaveBeenCalled();
+    expect(container.textContent).toContain('Preparing to record');expect(container.textContent).not.toContain(copy.status.stopped);
+    await act(async () => { finishSettings({ consentPolicyVersion: 1,consentAcknowledgedAt: 1 }); });
+    expect(mocks.recorder.start).toHaveBeenCalledTimes(1);expect(mocks.create).toHaveBeenCalledTimes(1);
+  });
+  it('dismisses redundant saved feedback after opening the confirmed original in the same Note', async () => {
+    await act(async () => window.dispatchEvent(new Event(OPEN_DISCUSSION_CAPTURE_EVENT)));
+    await click(copy.stop);await click(copy.openNote);
+    expect(mocks.navigate).toHaveBeenCalledWith('/notes/note');
+    expect(container.querySelector('[data-recording-window]')).toBeNull();
+  });
+
+  it('uses the offline recording hint for expected network failures while keeping actual recorder failures visible', async () => {
+    const online = vi.spyOn(navigator,'onLine','get').mockReturnValue(false);
+    try {
+      mocks.create.mockResolvedValue({ ...detail,discussion: { id: 'server',status: 'recording' } });
+      mocks.upload.mockRejectedValue(new TypeError('Failed to fetch'));
+      await act(async () => { window.dispatchEvent(new Event('offline'));window.dispatchEvent(new Event(OPEN_DISCUSSION_CAPTURE_EVENT)); });
+      expect(container.textContent).toContain('Recording offline');
+      expect(container.querySelector('[role=alert]')).toBeNull();
+      mocks.recorder.error = 'Local storage failed';
+      await act(async () => root.render(<GlobalDiscussionCaptureHost />));
+      expect(container.querySelector('[role=alert]')).not.toBeNull();
+      expect(container.textContent).toContain('Local storage failed');
+    } finally { online.mockRestore(); }
   });
 
 });

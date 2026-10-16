@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { noteHomePreview, notesHomeQuery } from '../notes-home-model';
+import { noteHomePreview, noteHomeTitle, notesHomeQuery } from '../notes-home-model';
 import type { NoteIndexEntry } from '../notes-api';
 
 describe('notes home queries', () => {
@@ -18,4 +18,10 @@ describe('notes home queries', () => {
     expect(noteHomePreview({ title: 'Design', snippet: 'Design · The next steps' } as NoteIndexEntry)).toBe('The next steps');
     expect(noteHomePreview({ title: 'Design', snippet: 'Key decisions' } as NoteIndexEntry)).toBe('Key decisions');
   });
+  it('does not repeat empty preview copy or expose generated recorder timestamps as titles', () => {
+    expect(noteHomeTitle({ title: '',snippet: '',kind: 'thought' } as NoteIndexEntry,'Untitled','Voice note')).toBe('Untitled');
+    expect(noteHomeTitle({ title: 'Discussion · 2026-10-16 00:21',kind: 'voice' } as NoteIndexEntry,'Untitled','Voice note')).toBe('Voice note');
+    expect(noteHomeTitle({ title: 'My discussion',kind: 'voice' } as NoteIndexEntry,'Untitled','Voice note')).toBe('My discussion');
+  });
+
 });

@@ -1,5 +1,7 @@
 /** Shared limits for durable meeting capture and import. */
 export const DISCUSSION_MAX_DURATION_MS = 120 * 60 * 1_000;
+/** Preserve final encoded packets while an asynchronous recorder finishes at the capture limit. */
+export const DISCUSSION_MAX_SAVED_DURATION_MS = DISCUSSION_MAX_DURATION_MS + 5_000;
 export const DISCUSSION_AUDIO_MAX_BYTES = 1024 * 1024 * 1024;
 export const DISCUSSION_CHUNK_MAX_BYTES = 8 * 1024 * 1024;
 export const DISCUSSION_SEGMENT_MAX_BYTES = 2 * 1024 * 1024;

@@ -26,3 +26,9 @@ export function noteHomePreview(note: NoteIndexEntry): string {
     ? snippet.slice(title.length).replace(/^[\s:：·—-]+/, '')
     : snippet;
 }
+
+/** Keep generated recorder timestamps and empty snippets out of user-facing titles. */
+export function noteHomeTitle(note: NoteIndexEntry, untitled: string, voiceNote: string): string {
+  if (note.kind === 'voice' && /^Discussion · \d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(note.title ?? '')) return voiceNote;
+  return note.title?.trim() || noteHomePreview(note).slice(0,48) || untitled;
+}

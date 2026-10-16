@@ -1,5 +1,5 @@
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
-import { Archive, ArrowLeft, ArrowRight, AudioLines, Bookmark, ChevronDown, FileText, Folder, Inbox, Loader2, MoreHorizontal, NotebookText, Plus, Search, Sparkles, Star, Trash2 } from 'lucide-react';
+import { Archive, ArrowLeft, ArrowRight, AudioLines, Bookmark, ChevronDown, FileText, Folder, Inbox, Loader2, MoreHorizontal, Mic, NotebookText, Plus, Search, Sparkles, Star, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import useSWR from 'swr';
@@ -17,8 +17,9 @@ import { useLocaleStore } from '@/stores/locale-store';
 import { usePageHeaderStore } from '@/stores/page-header-store';
 
 import { createNote, deleteNote, listNoteProjects, listNotes, updateNote, type NoteIndexEntry } from './notes-api';
+import { openDiscussionCapture } from '@/features/discussions/discussion-events';
 import { NotesHomeComposer } from './notes-home-composer';
-import { noteHomePreview, notesHomeQuery, NOTES_HOME_PAGE_SIZE } from './notes-home-model';
+import { noteHomePreview, noteHomeTitle, notesHomeQuery, NOTES_HOME_PAGE_SIZE } from './notes-home-model';
 import { formatRelativeTime, type NoteTimeLabels } from './note-time';
 
 const quietButton = 'touch-target inline-flex min-h-9 items-center justify-center gap-2 rounded-lg px-3 text-sm text-fg-muted hover:bg-surface-hover hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-not-allowed disabled:opacity-50';
@@ -229,21 +230,24 @@ export function NotesHomePage() {
           {actionError ? <p className="mb-4 rounded-lg border border-danger/25 bg-danger-soft px-3 py-2 text-sm text-danger" role="alert">{actionError}</p> : null}
           <section aria-label={h.startAction}>
             <div className="grid gap-3 sm:grid-cols-2">
-              <button type="button" onClick={() => {
-                setComposerOpen((open) => !open);
-                if (!composerOpen) window.requestAnimationFrame(() => document.getElementById('notes-home-prompt')?.focus());
-              }} aria-expanded={composerOpen} aria-controls="notes-home-agent-composer"
-                className={cn('touch-target flex min-h-20 items-center gap-3 rounded-xl border p-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent', composerOpen ? 'border-accent/60 bg-accent-soft' : 'border-edge bg-surface-panel hover:bg-surface-hover')}>
-                <Sparkles className="size-5 shrink-0 text-accent-fg" aria-hidden />
-                <span className="min-w-0 flex-1"><span className="block text-sm font-semibold text-fg">{h.agentAction}</span><span className="mt-1 block text-xs leading-5 text-fg-muted">{h.agentActionHint}</span></span>
-                <ChevronDown className={cn('size-4 shrink-0 text-fg-muted transition-transform', composerOpen && 'rotate-180')} aria-hidden />
-              </button>
               <button type="button" onClick={() => void createBlank()} disabled={creatingBlank}
                 className="touch-target flex min-h-20 items-center gap-3 rounded-xl border border-edge bg-surface-panel p-4 text-left transition-colors hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50">
                 {creatingBlank ? <Loader2 className="size-5 shrink-0 animate-spin text-fg-muted" aria-hidden /> : <Plus className="size-5 shrink-0 text-fg-muted" aria-hidden />}
                 <span><span className="block text-sm font-semibold text-fg">{h.blankNote}</span><span className="mt-1 block text-xs leading-5 text-fg-muted">{h.blankActionHint}</span></span>
               </button>
+              <button type="button" aria-label={h.recordAction} onClick={() => openDiscussionCapture(projectId || undefined)}
+                className="touch-target flex min-h-20 items-center gap-3 rounded-xl border border-edge bg-surface-panel p-4 text-left transition-colors hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
+                <Mic className="size-5 shrink-0 text-accent-fg" aria-hidden />
+                <span><span className="block text-sm font-semibold text-fg">{h.recordAction}</span><span className="mt-1 block text-xs leading-5 text-fg-muted">{h.recordActionHint}</span></span>
+              </button>
             </div>
+            <button type="button" onClick={() => {
+              setComposerOpen((open) => !open);
+              if (!composerOpen) window.requestAnimationFrame(() => document.getElementById('notes-home-prompt')?.focus());
+            }} aria-expanded={composerOpen} aria-controls="notes-home-agent-composer" title={h.agentActionHint}
+              className="touch-target mt-2 inline-flex min-h-11 items-center gap-2 rounded-lg px-2 text-sm text-fg-muted hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
+              <Sparkles className="size-4 text-accent-fg" aria-hidden />{h.agentAction}<ChevronDown className={cn('size-4 transition-transform', composerOpen && 'rotate-180')} aria-hidden />
+            </button>
             <div id="notes-home-agent-composer" hidden={!composerOpen} className={cn('mt-3', !composerOpen && 'hidden')}><NotesHomeComposer projects={projects} projectId={destination} onProjectChange={setDestination} onCreated={refresh} labels={n}
               projectsLoading={projectsLoading} projectsError={Boolean(projectError)} /></div>
           </section>
@@ -289,11 +293,12 @@ export function NotesHomePage() {
               <ul className="divide-y divide-edge">
                 {notes.map((note) => {
                   const Icon = note.voiceAttachmentId || note.kind === 'voice' ? AudioLines : note.kind === 'bookmark' ? Bookmark : FileText;
+                  const displayTitle = noteHomeTitle(note,n.titlePlaceholder,h.voiceNote);
                   const preview = noteHomePreview(note) || (note.coverAttachmentId ? n.imageNote : n.noText);
                   return <li key={note.id} className="group flex min-w-0 items-center gap-3 py-4">
                     <button type="button" onClick={() => openNote(note.id)} className="touch-target flex min-w-0 flex-1 items-center gap-3 rounded-md text-left focus-visible:ring-2 focus-visible:ring-accent">
                       <span className="flex h-10 w-8 shrink-0 items-center justify-center rounded-md border border-edge text-fg-muted"><Icon className="size-4" aria-hidden /></span>
-                      <span className="min-w-0 flex-1"><span className="block truncate text-base font-medium text-fg sm:text-sm group-hover:text-accent-fg">{note.title || preview.slice(0, 48) || n.titlePlaceholder}</span>
+                      <span className="min-w-0 flex-1"><span className="block truncate text-base font-medium text-fg sm:text-sm group-hover:text-accent-fg">{displayTitle}</span>
                         <span className="mt-1 flex min-w-0 items-center gap-1.5 text-xs text-fg-muted">
                           {note.lastEditTrigger === 'ai_edit' ? <span className="inline-flex shrink-0 items-center gap-1 text-accent-fg"><Sparkles className="size-3" aria-hidden />{h.agentEditLabel}<span aria-hidden>·</span></span> : null}
                           <span className="truncate">{preview}</span>
@@ -303,7 +308,7 @@ export function NotesHomePage() {
                     </button>
                     <span className="hidden max-w-32 truncate text-xs text-fg-muted md:block" title={note.projects?.map((p) => p.name).join(' · ')}>{note.projects?.map((p) => p.name).join(' · ') || h.unassigned}</span>
                     <time dateTime={new Date(note.updatedAt).toISOString()} className="hidden w-24 shrink-0 text-right text-xs text-fg-muted sm:block">{formatRelativeTime(note.updatedAt, now, timeLabels)}</time>
-                    <button type="button" onClick={() => void toggleFavorite(note.id, !note.pinned)} disabled={pinning.has(note.id)} aria-label={`${note.pinned ? h.unfavorite : h.favorite}: ${note.title || n.titlePlaceholder}`} aria-pressed={Boolean(note.pinned)}
+                    <button type="button" onClick={() => void toggleFavorite(note.id, !note.pinned)} disabled={pinning.has(note.id)} aria-label={`${note.pinned ? h.unfavorite : h.favorite}: ${displayTitle}`} aria-pressed={Boolean(note.pinned)}
                       className="touch-target inline-flex size-9 shrink-0 items-center justify-center rounded-md text-fg-muted hover:bg-surface-hover hover:text-fg disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-accent">
                       <Star className={cn('size-4', note.pinned && 'fill-current text-fg')} aria-hidden />
                     </button>
@@ -312,7 +317,7 @@ export function NotesHomePage() {
                         <button
                           type="button"
                           disabled={deletingNoteId === note.id}
-                          aria-label={`${n.noteActions}: ${note.title || n.titlePlaceholder}`}
+                          aria-label={`${n.noteActions}: ${displayTitle}`}
                           className="touch-target inline-flex size-9 shrink-0 items-center justify-center rounded-md text-fg-muted hover:bg-surface-hover hover:text-fg disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-accent"
                         >
                           {deletingNoteId === note.id

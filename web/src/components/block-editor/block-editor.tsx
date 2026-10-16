@@ -89,6 +89,7 @@ export function BlockEditor({
       StarterKit.configure({
         ...NOTE_STARTER_KIT_OPTIONS,
         codeBlock: false,
+        trailingNode: false,
       }),
       DiagramCodeBlock.configure({ HTMLAttributes: { class: 'block-editor-code' } }),
       BlockTrailingNode,

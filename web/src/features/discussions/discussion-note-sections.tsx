@@ -1,4 +1,4 @@
-import { DiscussionTools } from './discussion-tools';
+import { DiscussionTools, type DiscussionNoteManagementActions } from './discussion-tools';
 import { RecordingOutcomeCard, recordingOutcomeInput } from './recording-outcome-card';
 import { DiscussionLongReview } from './discussion-long-review';
 import type { DiscussionEvidence } from '@xopcai/gateway-contract';
@@ -27,7 +27,7 @@ import type { DiscussionFact, DiscussionTranscript, DiscussionTranscriptSegment,
 const clock = (ms: number) => `${String(Math.floor(ms / 60_000)).padStart(2, '0')}:${String(Math.floor(ms / 1000) % 60).padStart(2, '0')}`;
 type ActionTask = { actionId: string; taskId: string; phase?: string; resolution?: string; deleted: boolean };
 
-export function DiscussionNoteSections({ noteId, onPersonalNotes }: { noteId: string; onPersonalNotes?: () => void }) {
+export function DiscussionNoteSections({ noteId, onPersonalNotes, noteActions }: { noteId: string; onPersonalNotes?: () => void; noteActions?: DiscussionNoteManagementActions }) {
   const location = useLocation();
   const zh = useLocaleStore(state => state.language) === 'zh';
   const { data: detail, mutate, isLoading } = useSWR(['note-discussion-document', noteId], () => getDiscussionForNote(noteId), { refreshInterval: data => data && (['recording', 'stopping', 'sealing', 'organizing'].includes(data.discussion.status) || data.recordingJob?.state === 'queued' || data.recordingJob?.state === 'running') ? 3_000 : 0 });
@@ -140,7 +140,7 @@ export function DiscussionNoteSections({ noteId, onPersonalNotes }: { noteId: st
     <header className="flex shrink-0 items-start gap-3 px-5 pb-3 pt-5 sm:px-7">
       <div className="min-w-0 flex-1"><h2 className="text-xl font-semibold leading-snug tracking-tight">{!detail.note.title || /^Discussion · \d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(detail.note.title) ? (zh ? '语音笔记' : 'Voice note') : detail.note.title}</h2><p className="mt-1 text-xs text-fg-muted">{zh ? '录音' : 'Recording'} · {clock(discussion.durationMs ?? 0)}</p></div>
       <button type="button" aria-label={zh ? '搜索此 Note' : 'Search this Note'} aria-expanded={searchOpen || !!query} onClick={() => { setSearchOpen(open => !open); if (searchOpen) setQuery(''); }} className="inline-flex size-11 shrink-0 items-center justify-center rounded-full text-fg-muted hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"><Search className="size-5" aria-hidden /></button>
-      <DiscussionTools detail={detail} template={template} onTemplate={setTemplate} zh={zh} busy={busy} processing={processing} pageText={pageText} editing={!!edit || !!editing} onPersonalNotes={onPersonalNotes}
+      <DiscussionTools noteActions={noteActions} detail={detail} template={template} onTemplate={setTemplate} zh={zh} busy={busy} processing={processing} pageText={pageText} editing={!!edit || !!editing} onPersonalNotes={onPersonalNotes}
         onOrganize={() => void operation(() => fetchJson(apiUrl(`${base}/organize`),{ method: 'POST',body: JSON.stringify({ template }) }))}
         onRegenerate={() => void operation(() => retryDiscussion(discussion.id,'from_audio'))} />
     </header>
@@ -156,7 +156,7 @@ export function DiscussionNoteSections({ noteId, onPersonalNotes }: { noteId: st
       {tab === 'marks' ? <DiscussionAnnotations key={discussion.id} recordingId={discussion.clientRequestId} discussionId={discussion.id} zh={zh} onEvidence={showEvidence} onPlay={range => seek(range.startedAtMs,range.endedAtMs)} /> : tab === 'summary' ? organization ? <div className="mx-auto max-w-3xl space-y-6">
         <div className="flex items-center justify-between gap-3"><h3 className="text-base font-medium">{zh ? '摘要' : 'Summary'}</h3><button className="inline-flex size-11 shrink-0 items-center justify-center rounded-full text-fg-muted hover:bg-surface-hover focus-visible:ring-2 focus-visible:ring-accent" aria-label={zh ? '编辑概要' : 'Edit overview'} title={zh ? '编辑概要' : 'Edit overview'} disabled={busy || processing} onClick={() => setEdit({ kind: 'summary', itemId: 'summary', text: organization.summary })}><SquarePen className="size-4" aria-hidden /></button></div>
         <p className="whitespace-pre-wrap text-[15px] leading-7">{organization.summary}</p>{organization.summaryEditedByUser ? <p className="text-xs text-fg-muted">{zh ? '已由你编辑' : 'Edited by you'}</p> : null}
-        {organization.summaryEvidenceSegmentIds?.length ? Array.from({ length: Math.ceil(organization.summaryEvidenceSegmentIds.length / 100) },(_,index) => <Button key={index} onClick={() => void cite(organization.summaryEvidenceSegmentIds!.slice(index * 100,(index + 1) * 100))}>{zh ? '概览的原分析依据' : 'Overview source evidence'} {index + 1}</Button>) : null}
+        {organization.summaryEvidenceSegmentIds?.length ? Array.from({ length: Math.ceil(organization.summaryEvidenceSegmentIds.length / 100) },(_,index) => <Button key={index} onClick={() => void cite(organization.summaryEvidenceSegmentIds!.slice(index * 100,(index + 1) * 100))}>{zh ? '查看原话' : 'View source'}{organization.summaryEvidenceSegmentIds!.length > 100 ? ` · ${index + 1}` : ''}</Button>) : null}
         {organization.keyPointEvidence?.length ? <section className="space-y-2"><h3>{zh ? '重点结论' : 'Key points'}</h3>{organization.keyPointEvidence.map(point => <div key={point.id} className="flex gap-2 text-sm"><p className="flex-1">{point.text}</p><Button onClick={() => void cite(point.evidenceSegmentIds,point.evidenceRevision)}>{zh ? '原话' : 'Source'}</Button></div>)}</section> : organization.keyPoints.length ? <section className="space-y-3"><h3 className="text-base font-medium">{zh ? '重点结论' : 'Key points'}</h3><ul className="list-disc space-y-2 pl-5 text-[15px] leading-7">{organization.keyPoints.map((point,index) => <li key={`${index}:${point}`}>{point}</li>)}</ul></section> : null}
         {[...organization.decisions,...organization.actionItems,...organization.risks,...organization.openQuestions].some(item => item.ignored) ? <label className="flex items-center gap-2 text-xs text-fg-muted"><input type="checkbox" className="ui-checkbox" checked={showIgnored} onChange={event => setShowIgnored(event.target.checked)} />{zh ? '显示已忽略项' : 'Show ignored items'}</label> : null}
         {selected.length ? <Button disabled={busy} onClick={() => void operation(async () => {
