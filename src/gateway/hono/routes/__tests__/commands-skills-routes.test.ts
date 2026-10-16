@@ -1,6 +1,8 @@
 import { Hono } from 'hono';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { createConversation } from '../../../../storage/sqlite/conversation-repository.js';
+import { closeXopcDatabase, openXopcDatabase, resetXopcDatabaseSingletonForTest } from '../../../../storage/sqlite/index.js';
 import type { GatewayService } from '../../../service.js';
 import { registerCommandsSkillsRoutes } from '../commands-skills.js';
 
@@ -45,9 +47,21 @@ function createApp() {
 }
 
 describe('commands and skills routes', () => {
+  const conversationId = '1698ede7-5aa5-473e-96f8-502d99fd7713';
+
+  beforeEach(() => {
+    resetXopcDatabaseSingletonForTest();
+    openXopcDatabase({ path: ':memory:' });
+    createConversation({ agentId: 'main' }, '/project', conversationId);
+  });
+
+  afterEach(() => {
+    closeXopcDatabase();
+    resetXopcDatabaseSingletonForTest();
+  });
+
   it('loads chat skills from the effective session workspace when conversationId is present', async () => {
     const { app, getAgentSkillsApi, getSessionSkillsApi } = createApp();
-    const conversationId = 'agent:main:webchat:default:direct:project-chat';
 
     const response = await app.request(
       `/api/chat/skills?agentId=main&conversationId=${encodeURIComponent(conversationId)}`,
@@ -74,7 +88,6 @@ describe('commands and skills routes', () => {
 
   it('reads and persists trust only for the session workspace', async () => {
     const { app, getSessionWorkspaceTrustApi, setSessionWorkspaceTrustApi } = createApp();
-    const conversationId = 'agent:main:webchat:default:direct:project-chat';
 
     const read = await app.request(
       `/api/chat/workspace-trust?conversationId=${encodeURIComponent(conversationId)}`,
@@ -101,6 +114,30 @@ describe('commands and skills routes', () => {
     });
 
     expect(response.status).toBe(400);
+    expect(setSessionWorkspaceTrustApi).not.toHaveBeenCalled();
+  });
+
+  it.each(['skills', 'workspace-trust'])('returns 404 for %s when the conversation does not exist', async (resource) => {
+    const { app, getAgentSkillsApi, getSessionSkillsApi, getSessionWorkspaceTrustApi } = createApp();
+    const missingId = '11111111-1111-4111-8111-111111111111';
+    const response = await app.request(`/api/chat/${resource}?conversationId=${missingId}`);
+
+    expect(response.status).toBe(404);
+    await expect(response.json()).resolves.toEqual({ ok: false, error: 'Conversation not found' });
+    expect(getAgentSkillsApi).not.toHaveBeenCalled();
+    expect(getSessionSkillsApi).not.toHaveBeenCalled();
+    expect(getSessionWorkspaceTrustApi).not.toHaveBeenCalled();
+  });
+
+  it('does not change workspace trust for a missing conversation', async () => {
+    const { app, setSessionWorkspaceTrustApi } = createApp();
+    const response = await app.request('/api/chat/workspace-trust', {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ conversationId: '11111111-1111-4111-8111-111111111111', trusted: true }),
+    });
+
+    expect(response.status).toBe(404);
     expect(setSessionWorkspaceTrustApi).not.toHaveBeenCalled();
   });
 });

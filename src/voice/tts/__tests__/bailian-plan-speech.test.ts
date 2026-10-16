@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { ProviderUsageScopeError, withModelUsageOrigin } from '../../../providers/model-usage.js';
+import { withModelUsageOrigin } from '../../../providers/model-usage.js';
 
 const mocks = vi.hoisted(() => ({ post: vi.fn(), download: vi.fn(), key: vi.fn().mockResolvedValue('subscription-test-key') }));
 vi.mock('../../../media-shared/http/index.js', () => ({ postJsonRequest: mocks.post, fetchWithTimeoutGuarded: mocks.download }));
@@ -40,10 +40,12 @@ describe('Bailian subscription voice bindings', () => {
     await withModelUsageOrigin('interactive',()=>bailianPlanSpeechProvider.synthesize!(request));
     expect(mocks.download).toHaveBeenCalledWith('https://audio.example.test/short-lived.mp3?signature=fixture',expect.objectContaining({allowPrivateNetwork:false,init:{redirect:'error'}}));
   });
-  it('rejects background and unknown speech before resolving credentials or making a request', async () => {
-    await expect(bailianPlanSpeechProvider.synthesize!(request)).rejects.toThrow(ProviderUsageScopeError);
-    await expect(withModelUsageOrigin('background', () => bailianPlanTranscriptionProvider.transcribeAudio!({ buffer: Buffer.from('wav'), fileName: 'test.wav', timeoutMs: 1000 }))).rejects.toThrow(ProviderUsageScopeError);
-    expect(mocks.key).not.toHaveBeenCalled(); expect(mocks.post).not.toHaveBeenCalled();
+  it('allows unknown speech and background transcription with the saved subscription credential', async () => {
+    mocks.post.mockResolvedValueOnce(new Response(new Uint8Array([73, 68, 51, 1]), { headers: { 'content-type': 'audio/mpeg' } }));
+    expect((await bailianPlanSpeechProvider.synthesize!(request)).audioBuffer.length).toBe(4);
+    mocks.post.mockResolvedValueOnce(new Response(JSON.stringify({ output: { text: '你好' } })));
+    expect((await withModelUsageOrigin('background', () => bailianPlanTranscriptionProvider.transcribeAudio!({ buffer: Buffer.from('wav'), fileName: 'test.wav', timeoutMs: 1000 }))).text).toBe('你好');
+    expect(mocks.post).toHaveBeenCalledTimes(2);
   });
   it('rejects empty or JSON responses rather than treating them as an audio file', async () => {
     mocks.post.mockResolvedValueOnce(new Response('{}', { headers: { 'content-type': 'application/json' } }));

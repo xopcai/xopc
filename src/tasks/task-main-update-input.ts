@@ -1,4 +1,5 @@
 import type { SessionInputStatus } from '../storage/sqlite/session-input-repository.js';
+import { TASK_MAIN_UPDATE_MAX_ATTEMPTS, TaskMainUpdateExhaustedError } from './task-main-update-retry.js';
 
 type InputState = { status: SessionInputStatus; error?: string };
 
@@ -7,7 +8,7 @@ export function selectTaskMainUpdateAttempt(
   baseClientMessageId: string,
   findInput: (conversationId: string, clientMessageId: string) => InputState | undefined,
 ): { kind: 'completed' | 'accepted' | 'new' | 'exhausted'; clientMessageId?: string } {
-  for (let attempt = 0; attempt < 20; attempt += 1) {
+  for (let attempt = 0; attempt < TASK_MAIN_UPDATE_MAX_ATTEMPTS; attempt += 1) {
     const clientMessageId = attempt === 0 ? baseClientMessageId : `${baseClientMessageId}:retry:${attempt}`;
     const existing = findInput(conversationId, clientMessageId);
     if (existing?.status === 'completed' || existing?.status === 'suspended') {
@@ -30,7 +31,7 @@ export async function submitAndConfirmTaskMainUpdate(
 ): Promise<boolean> {
   const attempt = selectTaskMainUpdateAttempt(input.conversationId, input.clientMessageId, deps.findInput);
   if (attempt.kind === 'completed') return true;
-  if (attempt.kind === 'exhausted' || !attempt.clientMessageId) throw new Error('Task update retry limit reached');
+  if (attempt.kind === 'exhausted' || !attempt.clientMessageId) throw new TaskMainUpdateExhaustedError();
   if (attempt.kind === 'new' && !await deps.submit({ ...input, clientMessageId: attempt.clientMessageId })) return false;
   await deps.waitForCompletion(input.conversationId, attempt.clientMessageId);
   const settled = deps.findInput(input.conversationId, attempt.clientMessageId);

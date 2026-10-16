@@ -2,6 +2,7 @@ import type { AgentStreamRunStatus } from '@xopcai/gateway-contract';
 
 import type { CompactionState, MessagingCallbacks } from '@/features/chat/messages/message-sender';
 import type { Message } from '@/features/chat/messages/messages.types';
+import { dedupeTaskTriggerMessages } from '@/features/chat/messages/task-trigger-messages';
 import { claimLatestUnassignedUserTurn } from '@/features/chat/messages/user-message-from-stream';
 import { chatRunManager } from '@/features/chat/session/chat-run-manager';
 import {
@@ -148,9 +149,7 @@ export function createAgentStreamMessagingCallbacks(opts: {
       markChatRunRunning(chatId);
       beforeAssistantDelta();
       if (taskTrigger) store().updateSessionMessages(chatId, (messages) =>
-        messages.some((message) => message.role === 'task' && message.turnId === turnId)
-          ? messages
-          : [...messages, { role: 'task', content: [], taskTrigger, turnId, timestamp: Date.now() }]);
+        dedupeTaskTriggerMessages([...messages, { role: 'task', content: [], taskTrigger, turnId, timestamp: Date.now() }]));
       store().updateSessionMessages(
         chatId,
         (messages) => claimLatestUnassignedUserTurn(messages, turnId),

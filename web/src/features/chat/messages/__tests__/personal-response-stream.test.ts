@@ -14,6 +14,27 @@ vi.mock('@/features/gateway/gateway-realtime', () => ({ subscribeRealtimeTopic: 
 afterEach(() => { useChatSessionStore.setState({ sessions: {} }); sessionStorage.clear(); vi.resetAllMocks(); });
 
 describe('Personal response realtime replay', () => {
+  it('keeps one task failure notification across live retry and replay starts', () => {
+    const conversationId = 'task-update-retries';
+    useChatSessionStore.getState().seedSessionIfEmpty(conversationId, [], false, true);
+    const callbacks = createAgentStreamMessagingCallbacks({
+      chatId: conversationId, shouldApplyStreamUpdate: () => true, beforeAssistantDelta: () => {},
+      reconcileHydratedAssistantText: true, setStreamingOnStreamStart: true,
+      clearResumeRunIdOnBackgroundTerminal: true, clearResumeRunIdOnVisibleError: true,
+      setError: vi.fn(), sessionMgrRef: { current: { loadSession: vi.fn() } as unknown as SessionManager },
+      applyLoadedSessionSnapshot: vi.fn(), finalizeMessage: vi.fn(),
+      fq: { dismissClarifyForSession: vi.fn(), makeOnClarifyRequest: () => vi.fn() },
+    });
+    const trigger = { entryId: 'failure-1', taskId: 'task-1', taskTitle: 'Research', kind: 'failure' as const };
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      callbacks.onStreamStart?.(`retry-${attempt}`, true, trigger);
+    }
+    callbacks.onStreamStart?.('retry-19', true, trigger);
+    const markers = getChatSessionSnapshot(conversationId)!.messages.filter((message) => message.role === 'task');
+    expect(markers).toHaveLength(1);
+    expect(markers[0]).toMatchObject({ taskTrigger: trigger, turnId: 'retry-19' });
+  });
+
   it('recovers immediate conversation text from a delta even when start events were missed', async () => {
     const conversationId = 'personal-stream-test';
     const runId = 'personal-run-test';

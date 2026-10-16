@@ -113,8 +113,8 @@ try {
   const backgroundPicker = page.getByRole('button',{name:'选择 自动与后台任务',exact:true});
   if (await backgroundPicker.count()) {
     await backgroundPicker.click();
-    assert.ok(!(await page.getByRole('dialog').innerText()).includes('qwen-token-plan-cn'));
-    assert.ok(!(await page.getByRole('dialog').innerText()).includes('xiaomi-token-plan-cn'));
+    assert.ok((await page.getByRole('dialog').innerText()).includes('qwen-token-plan-cn'));
+    assert.ok((await page.getByRole('dialog').innerText()).includes('xiaomi-token-plan-cn'));
     await page.keyboard.press('Escape');
   } else assert.ok(await page.getByRole('button',{name:'连接 自动与后台任务',exact:true}).isVisible());
   await page.setViewportSize({width:390,height:844});
@@ -209,7 +209,7 @@ try {
   await page.evaluate(() => document.documentElement.style.fontSize = '16px');
 
   assert.deepEqual(errors,[]);
-  const report={passed:true,connectionAppliesOnlyCurrentCapability:true,samePageSettings:true,serviceAccountsStayInPlace:true,serviceAccountApplyInPlace:true,capabilityRepairPreservesFocus:true,serviceDraftPreserved:true,directModalLinks:true,explicitSingleUseSwitch:true,switchLocksVoiceParameters:true,backgroundPlansExcluded:true,mobileOverflow:false,realCredentialsUsed:false,directory};
+  const report={passed:true,connectionAppliesOnlyCurrentCapability:true,samePageSettings:true,serviceAccountsStayInPlace:true,serviceAccountApplyInPlace:true,capabilityRepairPreservesFocus:true,serviceDraftPreserved:true,directModalLinks:true,explicitSingleUseSwitch:true,switchLocksVoiceParameters:true,providerBackgroundAvailable:true,mobileOverflow:false,realCredentialsUsed:false,directory};
   await writeFile(join(directory,'report.json'),JSON.stringify(report,null,2));
   console.log(JSON.stringify(report));
 } catch (error) {

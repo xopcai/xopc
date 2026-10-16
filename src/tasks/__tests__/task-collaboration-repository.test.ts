@@ -18,6 +18,7 @@ import { TaskMainAgentRepository } from '../task-main-agent-repository.js';
 import { createConversation } from '../../storage/sqlite/conversation-repository.js';
 import { insertSessionInput, listTaskUpdateTriggers } from '../../storage/sqlite/session-input-repository.js';
 import { getSqliteDatabase } from '../../storage/sqlite/transaction.js';
+import { TaskMainUpdateExhaustedError } from '../task-main-update-retry.js';
 
 describe('TaskCollaborationRepository', () => {
   let stateDir: string;
@@ -28,9 +29,63 @@ describe('TaskCollaborationRepository', () => {
     openXopcDatabase({ path: join(stateDir, 'xopc.db') });
   });
   afterEach(() => {
+    vi.useRealTimers();
     closeXopcDatabase();
     resetXopcDatabaseSingletonForTest();
     rmSync(stateDir, { recursive: true, force: true });
+  });
+
+  it.each([false, true])('durably stops main update delivery at its retry limit (already exhausted: %s)', async (exhausted) => {
+    const owner = createConversation({ agentId: 'main' });
+    const task = new TaskRepository().create({ title: 'Research', objective: 'Research options' });
+    getSqliteDatabase().prepare(`INSERT INTO task_origin_links
+      (task_id, conversation_id, created_at) VALUES (?, ?, ?)`).run(task.id, owner.key, Date.now());
+    const board = new TaskCollaborationRepository();
+    const entry = board.append({ taskId: task.id, authorKind: 'worker_agent', authorId: 'worker',
+      kind: 'failure', body: 'Failed', idempotencyKey: 'failure' });
+    const submitAndConfirm = vi.fn(async () => {
+      throw exhausted ? new TaskMainUpdateExhaustedError() : new Error('429 rate_limit_error');
+    });
+    const deps = { isAvailable: () => true, decide: vi.fn(), submitAndConfirm };
+    for (let attempt = 0; attempt < (exhausted ? 1 : 20); attempt += 1) {
+      getSqliteDatabase().prepare('UPDATE task_main_update_deliveries SET updated_at = 0').run();
+      await new TaskMainUpdateDelivery().drain(deps);
+    }
+    expect(getSqliteDatabase().prepare('SELECT status, failure_count, last_error FROM task_main_update_deliveries WHERE entry_id = ?')
+      .get(entry.id)).toMatchObject({ status: 'failed', failure_count: exhausted ? 1 : 20, last_error: expect.any(String) });
+    closeXopcDatabase();
+    openXopcDatabase({ path: join(stateDir, 'xopc.db') });
+    await new TaskMainUpdateDelivery().drain(deps);
+    expect(board.pendingMainUpdates()).toEqual([]);
+    expect(submitAndConfirm).toHaveBeenCalledTimes(exhausted ? 1 : 20);
+  });
+
+  it('persists rate limit backoff across dispatches and resumes when due', async () => {
+    vi.useFakeTimers();
+    const owner = createConversation({ agentId: 'main' });
+    const task = new TaskRepository().create({ title: 'Research', objective: 'Research options' });
+    getSqliteDatabase().prepare(`INSERT INTO task_origin_links
+      (task_id, conversation_id, created_at) VALUES (?, ?, ?)`).run(task.id, owner.key, Date.now());
+    const board = new TaskCollaborationRepository();
+    const entry = board.append({ taskId: task.id, authorKind: 'worker_agent', authorId: 'worker',
+      kind: 'failure', body: 'Failed', idempotencyKey: 'failure' });
+    const submitAndConfirm = vi.fn(async () => { throw new Error('429 platform_token_limit_exceeded'); });
+    const deps = { isAvailable: () => true, decide: vi.fn(), submitAndConfirm };
+    await new TaskMainUpdateDelivery().drain(deps);
+    expect(board.pendingMainUpdates()).toEqual([]);
+    closeXopcDatabase();
+    openXopcDatabase({ path: join(stateDir, 'xopc.db') });
+    vi.advanceTimersByTime(29_999);
+    await new TaskMainUpdateDelivery().drain(deps);
+    expect(submitAndConfirm).toHaveBeenCalledTimes(1);
+    vi.advanceTimersByTime(1);
+    await new TaskMainUpdateDelivery().drain(deps);
+    expect(submitAndConfirm).toHaveBeenCalledTimes(2);
+    expect(getSqliteDatabase().prepare('SELECT updated_at FROM task_main_update_deliveries WHERE entry_id = ?')
+      .get(entry.id)).toEqual({ updated_at: Date.now() + 60_000 });
+    vi.advanceTimersByTime(60_000);
+    expect(await new TaskMainUpdateDelivery().drain({ ...deps, submitAndConfirm: async () => true })).toBe(1);
+    expect(board.pendingMainUpdates()).toEqual([]);
   });
 
   it('keeps a per-task ordered board and one durable delivery per instruction', () => {
