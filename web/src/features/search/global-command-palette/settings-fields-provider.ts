@@ -144,14 +144,14 @@ function buildFieldSeeds(language: StoredLanguage): FieldSeed[] {
       id: 'field:voice:sttProvider',
       title: isZh ? 'STT 语音识别提供商' : 'STT Provider',
       subtitle: isZh ? '语音转文字服务商' : 'Speech-to-text service provider',
-      path: '/settings/capabilities/voice',
+      path: '/settings/capabilities/models?configure=transcription',
       keywords: ['stt', 'speech', 'recognition', 'whisper', 'deepgram', '语音识别'],
     },
     {
       id: 'field:voice:ttsProvider',
       title: isZh ? 'TTS 语音合成提供商' : 'TTS Provider',
       subtitle: isZh ? '文字转语音服务商' : 'Text-to-speech service provider',
-      path: '/settings/capabilities/voice',
+      path: '/settings/capabilities/models?configure=speech',
       keywords: ['tts', 'speech', 'synthesis', 'voice', 'elevenlabs', '语音合成'],
     },
 

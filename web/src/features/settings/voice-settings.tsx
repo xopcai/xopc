@@ -2,7 +2,6 @@ import { PlatformVoiceSettings } from './platform-voice-settings';
 import { Loader2, Mic, Play, Square, Volume2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState, type ReactNode } from 'react';
 import useSWR from 'swr';
-import { useSearchParams } from 'react-router-dom';
 
 import { NumberInput } from '@/components/ui/number-input';
 import { Button } from '@/components/ui/button';
@@ -191,9 +190,9 @@ function voiceFormReducer(state: VoiceFormDraft, action: VoiceFormAction): Voice
   }
 }
 
-type VoiceSettingsPanelProps = { capability?: 'transcription' | 'speech' | 'conversation'; onPendingChange?: (pending: boolean) => void; disabled?: boolean };
+type VoiceSettingsPanelProps = { capability: 'transcription' | 'speech' | 'conversation'; onPendingChange?: (pending: boolean) => void; disabled?: boolean };
 
-export function VoiceSettingsPanel(props: VoiceSettingsPanelProps = {}) {
+export function VoiceSettingsPanel(props: VoiceSettingsPanelProps) {
   const [generation, setGeneration] = useState(0);
   return <VoiceSettingsEditor key={generation} {...props} onReload={() => setGeneration(value => value + 1)} />;
 }
@@ -202,24 +201,16 @@ function VoiceSettingsEditor({ capability, onPendingChange, disabled = false, on
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
   const v = m.voiceSettings;
-  const [searchParams, setSearchParams] = useSearchParams();
-  const requestedGroup = searchParams.get('voiceTab');
-  const group = requestedGroup === 'service' || requestedGroup === 'devices' ? requestedGroup : 'listening';
-  const setGroup = (value: 'listening' | 'service' | 'devices') => setSearchParams((current) => {
-    const next = new URLSearchParams(current);
-    next.set('voiceTab', value);
-    return next;
-  });
   const captions = useVoicePreferencesStore((state) => state.captions);
   const setCaptions = useVoicePreferencesStore((state) => state.setCaptions);
   const token = useGatewayStore((st) => st.conversationId);
   const hasToken = Boolean(token);
 
+  const [catalogPending, setCatalogPending] = useState(false);
   const [formDraft, dispatchForm] = useReducer(voiceFormReducer, { form: null, baseline: null });
   const form = formDraft.form;
   const baseline = formDraft.baseline;
   const [models, setModels] = useState<VoiceModelsPayload | null>(null);
-  const [readoutOpen, setReadoutOpen] = useState(false);
   const dirtyRef = useRef(false);
   const revisions = useRef<VoiceSettingsRevisions>({});
   const formRef = useRef(form);
@@ -419,7 +410,7 @@ function VoiceSettingsEditor({ capability, onPendingChange, disabled = false, on
 
   const save = useCallback(async (snapshot: VoiceSettingsState) => {
     try {
-      const receipt = await patchVoiceSettings(snapshot, capability, capability ? revisions.current[capability] : undefined);
+      const receipt = await patchVoiceSettings(snapshot, capability, revisions.current[capability]);
       revisions.current = { ...revisions.current, ...receipt };
       dispatchForm({ type: 'saved', value: snapshot });
       dirtyRef.current = Boolean(
@@ -431,7 +422,7 @@ function VoiceSettingsEditor({ capability, onPendingChange, disabled = false, on
   }, [v.saveError, capability]);
 
   const autosave = useAutosave({ value: form, dirty, onSave: save });
-  useEffect(() => { onPendingChange?.(dirty || autosave.status === 'saving'); }, [dirty, autosave.status, onPendingChange]);
+  useEffect(() => { onPendingChange?.(dirty || autosave.status === 'saving' || catalogPending); }, [dirty, autosave.status, catalogPending, onPendingChange]);
   useEffect(() => () => onPendingChange?.(false), [onPendingChange]);
   const updateForm = useCallback((value: VoiceSettingsState) => {
     dirtyRef.current = true;
@@ -475,37 +466,27 @@ function VoiceSettingsEditor({ capability, onPendingChange, disabled = false, on
   const refinement = form.voice.input.refinement;
   const apiKeyLabels = voiceApiKeyLabels(v);
 
-  if (capability) return <fieldset disabled={disabled} className="flex min-w-0 flex-col gap-4" onBlurCapture={autosave.error ? undefined : autosave.onBlurCapture}>
+  return <fieldset disabled={disabled || catalogPending} className="flex min-w-0 flex-col gap-4" onBlurCapture={autosave.error ? undefined : autosave.onBlurCapture}>
     <AutosaveStatus status={autosave.status} error={autosave.error} />
     {autosave.error ? <div className="flex flex-wrap gap-2"><Button variant="secondary" onClick={autosave.retry}>{language === 'zh' ? '重试保存' : 'Retry saving'}</Button><Button variant="ghost" onClick={() => { void mutCfg().then(() => onReload()).catch(() => {}); }}>{language === 'zh' ? '重新加载（放弃未保存更改）' : 'Reload and discard unsaved changes'}</Button></div> : null}
     {capability === 'transcription' ? <>
       <DictationSettingsSummary zh={language === 'zh'} />
-      <SttSection managedModel={Boolean(capability)} v={v} apiKeyLabels={apiKeyLabels} stt={stt} models={models} sttProviders={sttProviders} updateStt={updateStt} updateSttFallback={updateSttFallback} />
+      <SttSection managedModel v={v} apiKeyLabels={apiKeyLabels} stt={stt} models={models} sttProviders={sttProviders} updateStt={updateStt} updateSttFallback={updateSttFallback} />
       <VoiceLanguageSection v={v} voice={form.voice} updateLanguageMode={updateVoiceLanguageMode} />
+        <details data-voice-section="input-processing" className="rounded-xl bg-surface-hover/20 p-4"><summary className="cursor-pointer text-sm font-medium text-fg">{v.experience.inputProcessing} · {refinement.mode === 'off' ? v.stt.refinementOff : refinement.mode === 'punctuation' ? v.stt.refinementPunctuation : refinement.mode === 'light' ? v.stt.refinementLight : v.setup.advanced}</summary>
+        <label className="mt-4 block space-y-2 text-sm"><span>{v.stt.refinement}</span><p className="text-xs text-fg-muted">{v.stt.refinementDesc}</p>
+          <Select className={selectClassName()} value={refinement.mode} onChange={(e) => updateVoiceRefinement({ mode: e.target.value as typeof refinement.mode })}>
+            <SelectOption value="off">{v.stt.refinementOff}</SelectOption><SelectOption value="punctuation">{v.stt.refinementPunctuation}</SelectOption><SelectOption value="light">{v.stt.refinementLight}</SelectOption>
+            {refinement.mode === 'custom' ? <SelectOption value="custom">{v.setup.advanced}</SelectOption> : null}
+          </Select>
+        </label></details>
+      {stt.provider === 'xopc-cloud' ? <details className="rounded-xl border border-edge p-4"><summary className="cursor-pointer text-sm font-medium">{language === 'zh' ? '实时听写' : 'Live dictation'}</summary><div className="mt-4"><PlatformVoiceSettings modes={['transcription.stream']} disabled={dirty || autosave.status === 'saving'} onPendingChange={setCatalogPending} /></div></details> : null}
     </> : capability === 'speech' ? <>
-      <TtsSection managedModel={Boolean(capability)} v={v} apiKeyLabels={apiKeyLabels} tts={tts} models={models} ttsProviders={ttsProviders} updateTts={updateTts} />
+      <TtsSection managedModel v={v} apiKeyLabels={apiKeyLabels} tts={tts} models={models} ttsProviders={ttsProviders} updateTts={updateTts} />
       <VoiceReadoutPreference v={v} tts={tts} updateTts={updateTts} />
     </> : <>
       <VoiceSetup section="listening" v={v} form={form} pending={dirty || autosave.status === 'saving' || Boolean(autosave.error)} onChange={updateForm} />
-      {form.voice.realtime.omni ? <OmniVoiceSettings value={form.voice.realtime.omni} onChange={omni => updateRealtime({ omni })} /> : null}
-      <VoiceDeviceSettings v={v} />
-    </>}
-  </fieldset>;
-
-  return (
-    <div className="flex w-full flex-col gap-4" onBlurCapture={autosave.onBlurCapture}>
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <AutosaveStatus status={autosave.status} error={autosave.error} />
-      </div>
-      {autosave.error ? <p className="text-sm text-red-600 dark:text-red-400">{autosave.error}</p> : null}
-
-      <nav aria-label={v.experience.tabsLabel} className="flex flex-wrap gap-2">
-        {(['listening', 'service', 'devices'] as const).map((id) => <Button key={id} variant={group === id ? 'secondary' : 'ghost'} aria-pressed={group === id} onClick={() => setGroup(id)}>{v.experience[id]}</Button>)}
-      </nav>
-      <p className="text-sm text-fg-muted">{v.experience[`${group}Hint`]}</p>
-      {group !== 'devices' ? <VoiceSetup section={group} v={v} form={form} pending={dirty || autosave.status === 'saving' || Boolean(autosave.error)} onChange={updateForm} /> : null}
-      {group === 'listening' ? <>
-        <VoiceLanguageSection v={v} voice={form.voice} updateLanguageMode={updateVoiceLanguageMode} />
+      {form.voice.realtime.defaultEngine === 'omni' && form.voice.realtime.omni ? <OmniVoiceSettings value={form.voice.realtime.omni} onChange={omni => updateRealtime({ omni })} /> : null}
         <section className="rounded-xl bg-surface-hover/20 px-4 py-5 sm:px-5">
           <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(12rem,18rem)] sm:items-center">
             <div className="text-sm font-semibold text-fg">{v.experience.pace}</div>
@@ -517,39 +498,11 @@ function VoiceSettingsEditor({ capability, onPendingChange, disabled = false, on
         </section>
 
         <label className="flex items-center justify-between text-sm">{v.experience.captions}<input type="checkbox" role="switch" aria-checked={captions} className="ui-checkbox" checked={captions} onChange={(e) => setCaptions(e.target.checked)} /></label>
-        <details className="rounded-xl bg-surface-hover/20 p-4"><summary className="cursor-pointer text-sm font-medium text-fg">{v.experience.inputProcessing} · {refinement.mode === 'off' ? v.stt.refinementOff : refinement.mode === 'punctuation' ? v.stt.refinementPunctuation : refinement.mode === 'light' ? v.stt.refinementLight : v.setup.advanced}</summary>
-        <label className="mt-4 block space-y-2 text-sm"><span>{v.stt.refinement}</span><p className="text-xs text-fg-muted">{v.stt.refinementDesc}</p>
-          <Select className={selectClassName()} value={refinement.mode} onChange={(e) => updateVoiceRefinement({ mode: e.target.value as typeof refinement.mode })}>
-            <SelectOption value="off">{v.stt.refinementOff}</SelectOption><SelectOption value="punctuation">{v.stt.refinementPunctuation}</SelectOption><SelectOption value="light">{v.stt.refinementLight}</SelectOption>
-            {refinement.mode === 'custom' ? <SelectOption value="custom">{v.setup.advanced}</SelectOption> : null}
-          </Select>
-        </label></details>
-        <VoiceReadoutPreference v={v} tts={tts} updateTts={updateTts} />
-      </> : null}
-      {group === 'devices' ? <>
-        <VoiceDeviceSettings v={v} />
-        <VoiceSetup section="diagnostics" v={v} form={form} pending={dirty || autosave.status === 'saving' || Boolean(autosave.error)} onChange={updateForm} />
-      </> : null}
-      {group === 'service' ? <>
-        {stt.provider === 'xopc-cloud' ? <PlatformVoiceSettings engine={form.voice.realtime.defaultEngine} disabled={dirty || autosave.status === 'saving'} /> : <>
-          <SttSection managedModel={Boolean(capability)} v={v} apiKeyLabels={apiKeyLabels} stt={stt} models={models} sttProviders={sttProviders} updateStt={updateStt} updateSttFallback={updateSttFallback} />
-        </>}
-        {form.voice.realtime.enabled && form.voice.realtime.omni?.provider === 'alibaba' ? <OmniVoiceSettings value={form.voice.realtime.omni} onChange={(omni) => updateRealtime({ omni })} /> : null}
-        <details open={readoutOpen} className="rounded-xl bg-surface-hover/20 p-4" data-voice-section="readout-service">
-          <summary onClick={(event) => { event.preventDefault(); setReadoutOpen(!readoutOpen); }} className="cursor-pointer text-sm font-medium text-fg">{v.experience.readoutService}<span className="ml-2 font-normal text-fg-muted">{ttsProviderLabel(tts.provider, v)}</span></summary>
-          {readoutOpen ? <>
-            <p className="mt-3 text-xs text-fg-muted">{v.setup.readoutHint}</p>
-            <TtsSection managedModel={Boolean(capability)} v={v} apiKeyLabels={apiKeyLabels} tts={tts} models={models} ttsProviders={ttsProviders} updateTts={updateTts} />
-          </> : null}
-        </details>
-        {stt.provider === 'xopc-cloud' ? <details className="rounded-xl bg-surface-hover/20 p-4" data-voice-section="advanced">
-          <summary className="cursor-pointer text-sm font-medium text-fg">{v.experience.technical}</summary>
-          <SttSection managedModel={Boolean(capability)} v={v} apiKeyLabels={apiKeyLabels} stt={stt} models={models} sttProviders={sttProviders} updateStt={updateStt} updateSttFallback={updateSttFallback} />
-          <p className="mt-3 text-xs text-fg-muted">{v.notes.envVars}</p>
-        </details> : null}
-      </> : null}
-    </div>
-  );
+      {form.voice.realtime.defaultEngine === 'agent' && stt.provider === 'xopc-cloud' ? <details className="rounded-xl border border-edge p-4"><summary className="cursor-pointer text-sm font-medium">{language === 'zh' ? '语音助手输出' : 'Assistant speech output'}</summary><div className="mt-4"><PlatformVoiceSettings modes={['speech.stream']} disabled={dirty || autosave.status === 'saving'} onPendingChange={setCatalogPending} /></div></details> : null}
+      <details className="rounded-xl border border-edge p-4"><summary className="cursor-pointer text-sm font-medium">{language === 'zh' ? '麦克风、扬声器与诊断' : 'Microphone, speakers and diagnostics'}</summary><div className="mt-4 space-y-4"><VoiceDeviceSettings v={v} /><VoiceSetup section="diagnostics" v={v} form={form} pending={dirty || autosave.status === 'saving' || Boolean(autosave.error)} onChange={updateForm} /></div></details>
+    </>}
+  </fieldset>;
+
 }
 
 function VoiceReadoutPreference({ v, tts, updateTts }: {
@@ -1104,7 +1057,7 @@ function VoiceProviderConfigFields({
     );
   });
   return <>
-    {scoped && fields.some(isConnectionField) ? <CapabilitySettingsLink className="text-sm text-accent-fg hover:underline" to={`/settings/capabilities/models?view=services&use=${kind === 'stt' ? 'transcription' : 'speech'}`}>{language === 'zh' ? '管理服务连接' : 'Manage service connection'}</CapabilitySettingsLink> : null}
+    {scoped && fields.some(isConnectionField) ? <CapabilitySettingsLink className="text-sm text-accent-fg hover:underline" to={`/settings/capabilities/models?tab=services&configure=${kind === 'stt' ? 'transcription' : 'speech'}`}>{language === 'zh' ? '管理服务连接' : 'Manage service connection'}</CapabilitySettingsLink> : null}
     {renderFields(visibleFields.filter(isEssential))}
     {advancedFields.length ? <details className="rounded-lg border border-edge p-3 sm:col-span-2">
       <summary className="cursor-pointer text-sm font-medium text-fg">{v.experience.providerOptions}</summary>

@@ -99,7 +99,7 @@ function imageDomain(
       total > 0
         ? labels.imageReady(configured, total)
         : labels.imageNoProviders,
-    managePath: '/settings/capabilities/image',
+    managePath: '/settings/capabilities/models?configure=image&tab=services',
   };
 }
 
@@ -129,12 +129,13 @@ function voiceDomain(
   voice: VoiceSettingsState | null,
   labels: CredentialsHubLabels,
 ): CredentialDomainSummary {
+  const managePath = `/settings/capabilities/models?configure=${voice && !voice.stt.enabled && voice.tts.enabled ? 'speech' : 'transcription'}&tab=services`;
   if (!voice) {
     return {
       id: 'voice',
       status: 'missing',
       detail: labels.voiceMissing,
-      managePath: '/settings/capabilities/voice',
+      managePath,
     };
   }
 
@@ -162,7 +163,7 @@ function voiceDomain(
       id: 'voice',
       status: 'notNeeded',
       detail: labels.voiceDisabled,
-      managePath: '/settings/capabilities/voice',
+      managePath,
     };
   }
 
@@ -171,7 +172,7 @@ function voiceDomain(
       id: 'voice',
       status: 'ready',
       detail: labels.voiceReadyNoKeys,
-      managePath: '/settings/capabilities/voice',
+      managePath,
     };
   }
 
@@ -183,7 +184,7 @@ function voiceDomain(
     id: 'voice',
     status,
     detail: labels.voiceKeysReady(haveKeys, needKeys),
-    managePath: '/settings/capabilities/voice',
+    managePath,
   };
 }
 

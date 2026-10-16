@@ -27,9 +27,9 @@ it.each(['', '?panel=skills', '?panel=tools', '?panel=runtime'])('keeps agent-sp
   expect(container.textContent).not.toMatch(/Shared models|共用模型|cloud\/chat/);
   expect(mocks.save).not.toHaveBeenCalled();
 });
-it('redirects the old model tab to the unified page, preserving conversation and back state', async () => {
-  await render('?panel=models&returnTo=%2Fchat%2Fdraft&from=voice');
-  expect(container.querySelector('output')?.textContent).toBe('/settings/capabilities/models?returnTo=%2Fchat%2Fdraft&from=voice');
-  expect(container.querySelector('output')?.getAttribute('data-return')).toBe('/chat/origin');
+it('uses the default skills panel for unsupported sections without maintaining model aliases', async () => {
+  await render('?panel=models');
+  expect(container.querySelector('[data-testid="skills"]')).not.toBeNull();
+  expect(container.querySelector('output')).toBeNull();
   expect(mocks.save).not.toHaveBeenCalled();
 });
