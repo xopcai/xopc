@@ -57,6 +57,8 @@ import { messages } from '@/i18n/messages';
 
 import { type DefaultModelTarget } from './default-model-candidates';
 import { DefaultModelSuccessStep } from './default-model-success-step';
+import { ProviderSetupPanel } from './provider-setup-panel';
+
 
 export interface ProviderManageDialogMessages {
   apiKeyLabel: string;
@@ -118,9 +120,10 @@ export function ProviderManageDialog({
   language,
   onSaved,
 }: ProviderManageDialogProps) {
+  const [subscriptionSetup, setSubscriptionSetup] = useState(false);
   const [successTarget, setSuccessTarget] = useState<DefaultModelTarget | null>(null);
   const handleOpenChange = (next: boolean) => {
-    if (!next) setSuccessTarget(null);
+    if (!next) { setSuccessTarget(null); setSubscriptionSetup(false); }
     onOpenChange(next);
   };
   return (
@@ -140,6 +143,16 @@ export function ProviderManageDialog({
         >
           {successTarget ? (
             <DefaultModelSuccessStep target={successTarget} zh={language === 'zh'} onDone={() => handleOpenChange(false)} />
+          ) : !isCustom && subscriptionSetup ? (
+            <ProviderSetupPanel
+              providerId={providerId}
+              existingConnection
+              row={builtinRows.find(row => row.id === providerId)}
+              language={language}
+              onApplied={onSaved}
+              onBack={() => setSubscriptionSetup(false)}
+              onDone={() => handleOpenChange(false)}
+            />
           ) : isCustom ? (
             <ManageCustomProvider
               providerId={providerId}
@@ -159,6 +172,7 @@ export function ProviderManageDialog({
               language={language}
               onClose={() => onOpenChange(false)}
               onSaved={onSaved}
+              onQuickSetup={() => setSubscriptionSetup(true)}
             />
           )}
         </Dialog.Content>
@@ -177,6 +191,7 @@ function ManageBuiltinProvider({
   language,
   onClose,
   onSaved,
+  onQuickSetup,
 }: {
   providerId: string;
   builtinRows: ProviderRowModel[];
@@ -185,6 +200,7 @@ function ManageBuiltinProvider({
   language: StoredLanguage;
   onClose: () => void;
   onSaved: () => void;
+  onQuickSetup?: () => void;
 }) {
   const row = builtinRows.find((r) => r.id === providerId);
   const enrichment = PROVIDER_ENRICHMENT[providerId];
@@ -385,6 +401,7 @@ function ManageBuiltinProvider({
       </div>
 
       <div className="flex flex-col gap-4 overflow-y-auto px-5 py-4">
+        {onQuickSetup ? <Button variant="secondary" onClick={onQuickSetup}>{language === 'zh' ? '配置模型用途' : 'Configure model uses'}</Button> : null}
         {enrichment?.description ? (
           <p className="text-sm text-fg-muted">{enrichment.description}</p>
         ) : null}

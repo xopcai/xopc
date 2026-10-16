@@ -46,6 +46,38 @@ xopc models auth login --provider <provider>
 
 Keep provider keys out of `xopc.json` when the credential store, auth profile, or environment variable can be used instead.
 
+## One-page model service setup
+
+Open **Add provider** in model settings or choose a service during first-run setup. The same page connects an account/API key and previews **Chat and tasks**, **Image understanding**, **Image generation**, **Background tasks**, **Recorded audio recognition**, **Speech synthesis**, and **Realtime conversation**. Voice uses appear only with bindings supported by that service; unsupported uses remain unavailable. Connected services expose **Configure model uses** from management; each use on the settings page also has a **Change** action.
+
+The default **Fill missing** mode retains uses and task intents backed by configured providers. **Switch to this service** explicitly replaces the checked uses. Expand a use to choose another eligible catalog model. The chat selection also assigns available fast/reasoning/coding/review recommendations; no recommendation is invented for an ambiguous catalog. You can connect a service without changing any use.
+
+Recommendations come from a shared server-side engine over the existing pi catalog and media adapters. The preview includes the current routes and a configuration/catalog revision. Concurrent changes require a fresh review. Credentials and model assignments are saved separately, so a failed assignment can be retried with the saved connection. The flow does not make a billable test request or claim that account quota/model access has been verified.
+
+Only checked global uses change. Their fallback lists are cleared, and image auto-provider fallback is disabled. Agent/session overrides, unselected voice uses, Computer Use and the explicit `understanding` intent keep their existing configuration. Explicit empty Agent fallback lists remain empty; they do not acquire a global provider fallback.
+
+### Alibaba Bailian subscription
+
+Select the Beijing subscription access method and enter its Token Plan API key. This reuses pi's `qwen-token-plan-cn` provider and catalog without creating a custom `models.json` provider. The current preferred models are Qwen 3.8 Flash for chat/vision and Qwen 3.8 Max for complex tasks, when present in the catalog.
+
+Image generation shares that credential and the existing DashScope adapter through `https://token-plan.cn-beijing.maas.aliyuncs.com`. The registered models are `qwen-image-3.0-pro` and `wan2.7-image`; setup recommends the former. Initial support is text-to-image at 1024×1024. Image editing is not advertised by this adapter.
+
+Voice uses the same stored `qwen-token-plan-cn` credential, without copying it into speech configuration. `qwen-audio-3.0-tts-plus` uses the subscription TTS endpoint (MP3, 24 kHz, default voice `longanhuan_v3.6`), accepting both direct audio and the JSON audio-link response observed in live testing. `qwen-audio-3.0-asr-flash` reuses the existing recorded-audio recognition adapter through the subscription host. `qwen-audio-3.0-realtime-plus` reuses the existing native WebSocket conversation engine with default voice `longanqian`. Selecting realtime conversation makes it the default voice conversation mode. This recorded-audio adapter does not advertise streaming dictation or substitute an unverified streaming model. Audio links are downloaded through the SSRF guard; HTTP links are fetched over HTTPS with the signed path/query preserved. Speech synthesis uses the one-shot protocol; low-latency standalone TTS streaming is not advertised. See [multimodal integration](https://help.aliyun.cn/zh/model-studio/token-plan-multimodal-gen), [ASR HTTP protocol](https://help.aliyun.com/en/model-studio/fun-asr-flash-recorded-speech-recognition-http-api), and [realtime endpoints](https://help.aliyun.cn/zh/model-studio/realtime-token-authentication).
+
+Voice assignments disable cross-provider fallback. Merely connecting a subscription does not add it to automatic STT/TTS selection. Existing ordinary DashScope keys, models, voices and endpoints stay separate. Voice settings and SQLite model defaults have separate storage: setup saves voice first, then rechecks model defaults before writing them. Voice-save failures leave model defaults unchanged; concurrent default changes after a voice save return an explicit partial-save message and require review, rather than overwriting the newer defaults.
+
+For team-specific Base URLs, use the advanced custom-provider form with the address supplied by the console. See [subscription terms and models](https://help.aliyun.cn/zh/model-studio/token-plan-personal-overview).
+
+### Background usage scope
+
+`models.background` is an optional route with the same global-default/Agent-override layers as other model settings. Background calls use it when inheriting the default chat route. An explicitly selected model or task intent still undergoes usage-scope validation.
+
+Known Token/Coding Plan profiles are conservatively limited to interactive work. A trusted host entry establishes the call origin, which is inherited by synchronous child tasks. Automations (including manually triggered automations), system/background jobs, idle compaction and persistent learning establish a background origin. Background scope cannot be upgraded by a nested user trigger. Unknown origins cannot use restricted plans. Known host scenarios such as automatic title generation retain their background classification even when started from a user turn. Compaction required by an active user turn inherits that interactive scope; idle compaction enters background scope and uses the configured background model when no explicit compaction model exists. Guards run before chat and media transports, including recognized subscription host aliases; a rejected scope is terminal rather than a transient retry.
+
+XOPC Cloud and ordinary API/local services can supply a separate background route. A missing permitted route does not silently select another billing source. Adding another Token Plan using an existing protocol requires catalog/profile and policy/recommendation data, without a new setup component. Unknown provider policy should be reviewed before exposing a new plan.
+
+The generic engine, authenticated HTTP routes and browser setup flows are covered with Alibaba `qwen-token-plan-cn`, XOPC Cloud and Xiaomi `xiaomi-token-plan-cn`. The regression checks use catalog metadata and isolated test credentials. A separate explicit live probe, `pnpm exec tsx scripts/verify-bailian-live.mts`, uses the existing local Gateway and saved subscription credential; it makes paid calls, creates/removes temporary diagnostic conversations, and writes sanitized reports/audio/image artifacts to a temporary directory. Optional modes include `--chat --vision --image`, `--only=voice`, `--only=reasoning`, `--only=omni --pcm=<16-kHz-PCM-file>`, `--only=policy`, and `--only=browser`. It does not change provider configuration. Live verification on 2026-10-16 covered Flash/Max chat, vision, image generation, speech-to-transcription round trip, and the subscription native conversation engine. The native-engine probe is distinct from the currently saved natural-conversation provider; the report records that provider without switching it.
+
 ## pi 1.1 provider changes
 
 Use `openai` for both API keys and **Sign in with ChatGPT**. Subscription users must sign in again with `xopc models auth login --provider openai`; old `openai-codex` credentials are not reused. A stored API key profile takes precedence over OAuth; remove that profile when choosing subscription access. An environment key is used when no stored profile or OAuth credential exists.

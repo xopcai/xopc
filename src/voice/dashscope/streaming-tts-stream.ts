@@ -1,3 +1,4 @@
+import { assertProviderUsage } from '../../providers/model-usage.js';
 import crypto from 'node:crypto';
 import { createRequire } from 'node:module';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -118,6 +119,7 @@ async function openStreamingTtsAttempt(
   if (!request.apiKey) throw new Error('DashScope TTS API key is unavailable');
   request.signal.throwIfAborted();
   const startedAt = Date.now();
+  assertProviderUsage('alibaba', request.baseUrl);
   const socket = new WebSocket(realtimeUrl(request.baseUrl, request.model), {
     headers: { Authorization: `Bearer ${request.apiKey}` },
     perMessageDeflate: false,

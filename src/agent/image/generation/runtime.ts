@@ -1,4 +1,5 @@
-import { ImageProviderError } from '@xopcai/image-providers';
+import { assertProviderUsage } from '../../../providers/model-usage.js';
+import { ImageProviderError, normalizeImageGeometry } from '@xopcai/image-providers';
 
 import type { Config } from '../../../config/schema.js';
 import { PROVIDER_ENV_MAP } from '../../../providers/env-keys.js';
@@ -98,22 +99,16 @@ export async function generateImage(
       const capabilityProvider = modelCapabilities
         ? { ...provider, capabilities: modelCapabilities }
         : provider;
+      const candidateParams = normalizeImageGeometry(params, capabilityProvider.capabilities, Boolean(params.inputImages?.length));
       validateImageGenerationRequest({
         provider: capabilityProvider,
-        size: params.size,
-        count: params.count,
-        aspectRatio: params.aspectRatio,
-        resolution: params.resolution,
-        quality: params.quality,
-        outputFormat: params.outputFormat,
-        background: params.background,
-        inputImages: params.inputImages,
+        ...candidateParams,
       });
 
       const request = buildProviderRequest({
         provider,
         candidate,
-        params,
+        params: candidateParams,
       });
 
       log.debug(
@@ -125,6 +120,7 @@ export async function generateImage(
         `image-generation provider invoked: ${candidate.provider}/${candidate.model}`,
       );
 
+      assertProviderUsage(candidate.provider, request.cfg?.providers?.[candidate.provider]?.baseUrl);
       const result = await provider.generateImage(request);
       if (!result.images?.length) {
         throw new Error('Image generation provider returned no images.');

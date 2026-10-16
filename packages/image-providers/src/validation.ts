@@ -32,6 +32,24 @@ export function validateImageRequest(request: ImageRequest, caps: ImageCapabilit
   if (request.background === 'transparent' && request.outputFormat === 'jpeg') fail('Transparent images require PNG or WebP');
 }
 
+/** Translate ratios only when the selected model has an exact supported pixel size. */
+export function normalizeImageGeometry<T extends { size?: string; aspectRatio?: string; resolution?: unknown }>(request: T, caps: ImageCapabilities, editing = false): T {
+  const mode = editing ? caps.edit : caps.generate;
+  if (!request.aspectRatio || mode?.supportsAspectRatio || !mode?.supportsSize || request.resolution) return request;
+  const ratio = /^(\d+):(\d+)$/.exec(request.aspectRatio);
+  if (!ratio || Number(ratio[1]) <= 0 || Number(ratio[2]) <= 0) return request;
+  const geometry = editing && caps.edit?.geometry ? caps.edit.geometry : caps.geometry;
+  const sizes = request.size ? [request.size] : geometry?.sizes ?? [];
+  const size = sizes.find(value => {
+    const dimensions = /^(\d+)x(\d+)$/.exec(value);
+    return dimensions && Number(dimensions[1]) * Number(ratio[2]) === Number(dimensions[2]) * Number(ratio[1])
+      && isSupportedImageSize(value, geometry);
+  });
+  if (!size) return request;
+  const { aspectRatio: _aspectRatio, ...rest } = request;
+  return { ...rest, size } as T;
+}
+
 export function isSupportedImageSize(size: string, geometry?: ImageGeometry): boolean {
   if (geometry?.sizes?.includes(size)) return true;
   const match = /^(\d+)x(\d+)$/.exec(size);

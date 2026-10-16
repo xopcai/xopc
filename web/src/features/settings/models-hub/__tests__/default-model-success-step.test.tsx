@@ -3,183 +3,92 @@ import * as Dialog from '@radix-ui/react-dialog';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import type { ModelSetupPreview } from '@xopcai/gateway-contract';
 
-import type { ConfiguredModel } from '@/features/chat/api/registry-api';
-import type { GlobalDefaultsPayload } from '@/features/settings/global-defaults-api';
+const api = vi.hoisted(() => ({ preview: vi.fn(), apply: vi.fn(), key: vi.fn() }));
+vi.mock('../provider-setup-api', () => ({ previewModelSetup: api.preview, applyModelSetup: api.apply }));
+vi.mock('@/features/settings/providers-api', async original => ({ ...await original<typeof import('@/features/settings/providers-api')>(), patchProviderApiKeys: api.key }));
+vi.mock('../oauth-provider-connect', () => ({ OAuthProviderConnect: ({ onConnected }: { onConnected: () => void }) => <button onClick={onConnected}>Connect account</button> }));
+vi.mock('@/components/ui/popover-select', () => ({ SelectOption: ({children}: {children: React.ReactNode}) => children,
+  Select: ({onChange,children}: {onChange: (e: {target: {value: string}}) => void;children: React.ReactNode}) => <div>{children}<button onClick={() => onChange({target:{value:'custom/second'}})}>Choose second</button></div> }));
 
-const api = vi.hoisted(() => ({ registry: vi.fn(), defaults: vi.fn(), update: vi.fn(), mutate: vi.fn() }));
-vi.mock('@/features/chat/api/registry-api', () => ({ fetchConfiguredModelsCached: api.registry }));
-vi.mock('@/features/settings/global-defaults-api', () => ({ fetchGlobalDefaults: api.defaults, updateGlobalDefaults: api.update }));
-vi.mock('swr', () => ({ mutate: api.mutate }));
-vi.mock('@/features/chat/model/model-selector', () => ({
-  ModelSelector: ({ models, onChange }: { models: ConfiguredModel[]; onChange: (id: string) => void }) =>
-    <div>{models.map(model => <button key={model.id} onClick={() => onChange(model.id)}>{model.id}</button>)}</div>,
-}));
-
-import { defaultModelCandidates, type DefaultModelTarget } from '../default-model-candidates';
 import { DefaultModelSuccessStep } from '../default-model-success-step';
+import { ProviderSetupPanel } from '../provider-setup-panel';
+import { defaultModelCandidates } from '../default-model-candidates';
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
-let root: ReturnType<typeof createRoot> | undefined;
+let root: ReturnType<typeof createRoot>;
 let container: HTMLDivElement;
 const done = vi.fn();
-const model = (id: string): ConfiguredModel => ({ id, name: id, provider: 'New provider' });
-const initial: GlobalDefaultsPayload = {
-  defaults: {
-    models: { chat: { primary: 'old/chat', fallbacks: ['old/backup'] }, intents: { coding: { primary: 'old/code', fallbacks: [] } } },
-    skills: { mode: 'all-enabled', exclude: [] }, tools: {}, workflows: {}, runtime: { maxTurns: 12 },
-  },
-  builtinTools: [],
-};
+const applied = vi.fn();
+function preview(provider = 'qwen-token-plan-cn'): ModelSetupPreview {
+  const cloud = provider === 'xopc-cloud';
+  return { providerId: provider, profile: { id: provider, brand: provider, name: provider, access: cloud ? 'account' : 'subscription', credential: cloud ? 'oauth' : 'api-key', interactiveOnly: !cloud },
+    revision: 'a'.repeat(64), configured: true, mode: 'fill', taskModels: {}, uses: [
+      { id: 'chat', current: 'existing/chat', recommended: `${provider}/fast`, selected: false, choices: [{ id: `${provider}/fast`, name: 'Fast' }] },
+      { id: 'vision', recommended: `${provider}/fast`, selected: true, choices: [{ id: `${provider}/fast`, name: 'Fast' }] },
+      { id: 'image', selected: false, choices: [], reason: 'not_supported' },
+      { id: 'background', selected: false, choices: [], reason: 'interactive_only' },
+    ] };
+}
 beforeEach(() => {
-  vi.clearAllMocks();
-  api.registry.mockResolvedValue([model('new/chat')]);
-  api.defaults.mockResolvedValue(initial);
-  api.update.mockImplementation(async defaults => ({ ...initial, defaults }));
-  api.mutate.mockResolvedValue(undefined);
-  container = document.createElement('div');
-  document.body.append(container);
-  root = createRoot(container);
+  vi.clearAllMocks(); api.preview.mockImplementation(async provider => preview(provider)); api.apply.mockResolvedValue(undefined); api.key.mockResolvedValue(undefined);
+  container = document.createElement('div'); document.body.append(container); root = createRoot(container);
 });
-afterEach(async () => {
-  await act(async () => root?.unmount());
-  container.remove();
-  vi.useRealTimers();
-});
-async function render(target: DefaultModelTarget = { providerId: 'new' }) {
-  await act(async () => root!.render(<Dialog.Root open><Dialog.Content>
-    <DefaultModelSuccessStep target={target} zh onDone={done} />
-  </Dialog.Content></Dialog.Root>));
+afterEach(async () => { await act(async () => root.unmount()); container.remove(); });
+async function render(provider = 'qwen-token-plan-cn', connect = false) {
+  await act(async () => root.render(<Dialog.Root open><Dialog.Content>{connect
+    ? <ProviderSetupPanel providerId={provider} language="zh" onDone={done} onApplied={applied} />
+    : <DefaultModelSuccessStep target={{ providerId: provider }} zh onDone={done} onApplied={applied} />}</Dialog.Content></Dialog.Root>));
 }
-async function click(label: string) {
-  const button = Array.from(document.querySelectorAll('button')).find(entry => entry.textContent === label);
-  expect(button, label).toBeDefined();
-  await act(async () => button!.click());
+async function click(text: string) {
+  const button = [...document.querySelectorAll('button')].find(b => b.textContent === text || b.getAttribute('aria-label') === text);
+  expect(button, text).toBeDefined(); await act(async () => button!.click());
 }
-
-it('limits candidates to this addition and excludes computer models and similar provider prefixes', () => {
-  const gui = { ...model('new/gui'), computerUse: { profile: 'structured-tools-v1' as const } };
-  expect(defaultModelCandidates([model('new/chat'), model('new/other'), model('new-other/chat'), gui], {
-    providerId: 'new', modelIds: ['chat', 'gui'],
-  })).toEqual([model('new/chat')]);
+async function fillKey(value: string) {
+  const input = document.querySelector<HTMLInputElement>('#provider-setup-key')!;
+  await act(async () => { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input,value); input.dispatchEvent(new Event('input',{bubbles:true})); });
+}
+it.each(['qwen-token-plan-cn','xopc-cloud','xiaomi-token-plan-cn'])('uses the same one-page model flow for %s', async provider => {
+  await render(provider); await click('连接并应用');
+  expect(api.apply).toHaveBeenCalledExactlyOnceWith(provider, expect.objectContaining({ selected: ['vision'], mode: 'fill' }), 'a'.repeat(64));
+  expect(document.querySelector('[role="status"]')?.textContent).toContain('已保存'); expect(applied).toHaveBeenCalledOnce();
 });
-
-it('keeps the saved configuration when skipping or closing without updating defaults', async () => {
-  await render();
-  await click('暂不更改');
-  expect(done).toHaveBeenCalledOnce();
-  const close = document.querySelector<HTMLButtonElement>('button[aria-label="关闭"]');
-  await act(async () => close!.click());
-  expect(api.update).not.toHaveBeenCalled();
+it('shows the replacement and changes only explicitly selected uses', async () => {
+  await render(); expect(document.body.textContent).toContain('保留：existing/chat');
+  await click('改用此服务'); expect(document.body.textContent).toContain('existing/chat → Fast');
+  await click('连接并应用'); expect(api.apply.mock.calls[0][1].selected).toEqual(['chat','vision']);
 });
-
-it('reads the latest defaults and preserves fallbacks, task routes and other settings', async () => {
-  const latest = { ...initial, defaults: { ...initial.defaults, runtime: { maxTurns: 42 } } };
-  api.defaults.mockResolvedValueOnce(initial).mockResolvedValue(latest);
-  await render({ providerId: 'new', modelIds: ['chat'] });
-  await click('设为全局默认');
-  expect(api.update).toHaveBeenCalledWith({ ...latest.defaults, models: {
-    ...latest.defaults.models, chat: { ...latest.defaults.models.chat, primary: 'new/chat' },
-  } });
-  expect(document.body.textContent).toContain('全局默认对话模型已更新');
-  expect(api.mutate).toHaveBeenCalledWith('settings-agent-defaults', expect.objectContaining({ defaults: expect.objectContaining({ runtime: { maxTurns: 42 } }) }), false);
+it('does not write configuration on close', async () => { await render(); await click('关闭'); expect(done).toHaveBeenCalledOnce(); expect(api.apply).not.toHaveBeenCalled(); });
+it('keeps API key access available for services supporting both OAuth and keys', async () => {
+  const data = preview('dual-auth'); data.profile.credential = 'oauth'; data.configured = false;
+  api.preview.mockResolvedValue(data);
+  await act(async () => root.render(<Dialog.Root open><Dialog.Content><ProviderSetupPanel providerId="dual-auth" language="zh" onDone={done}
+    row={{ id:'dual-auth', name:'Dual auth', category:'common', supportsOAuth:true, supportsApiKey:true, configured:false, apiKey:'' }} /></Dialog.Content></Dialog.Root>));
+  expect(document.body.textContent).toContain('Connect account');
+  expect(document.querySelector('#provider-setup-key')).toBeTruthy();
+  await fillKey('test-key');
+  await click('连接并应用');
+  expect(api.key).toHaveBeenCalledExactlyOnceWith({'dual-auth':'test-key'});
 });
-
-it('requires an explicit choice when multiple models are added', async () => {
-  api.registry.mockResolvedValue([model('new/chat'), model('new/second')]);
-  await render();
-  const primary = Array.from(document.querySelectorAll('button')).find(button => button.textContent === '设为全局默认');
-  expect(primary?.disabled).toBe(true);
-  await click('new/second');
-  await click('设为全局默认');
-  expect(api.update.mock.calls[0][0].models.chat.primary).toBe('new/second');
+it('saves one credential, and retries configuration without saving the key again', async () => {
+  await render('qwen-token-plan-cn', true); await fillKey('sk-sp-fixture'); api.apply.mockRejectedValueOnce(new Error('Save failed'));
+  await click('连接并应用'); expect(document.querySelector('[role="alert"]')?.textContent).toContain('服务已保存');
+  expect(applied).not.toHaveBeenCalled(); await click('连接并应用'); expect(api.key).toHaveBeenCalledExactlyOnceWith({'qwen-token-plan-cn':'sk-sp-fixture'}); expect(applied).toHaveBeenCalledOnce();
 });
-
-it('offers retry after an update failure without repeating the model configuration save', async () => {
-  api.update.mockRejectedValueOnce(new Error('Network failed'));
-  await render();
-  await click('设为全局默认');
-  expect(document.querySelector('[role="alert"]')?.textContent).toContain('模型已保存');
-  expect(done).not.toHaveBeenCalled();
-  await click('重试');
-  expect(api.update).toHaveBeenCalledTimes(2);
-  expect(document.body.textContent).toContain('全局默认对话模型已更新');
+it('requires a renewed review when a preview changes before saving', async () => {
+  api.preview.mockResolvedValueOnce(preview()).mockResolvedValue({...preview(), revision:'b'.repeat(64)});
+  await render(); await click('连接并应用'); expect(api.apply).not.toHaveBeenCalled(); expect(document.querySelector('[role="alert"]')?.textContent).toContain('再次应用');
+  await click('连接并应用'); expect(api.apply).toHaveBeenCalledOnce(); expect(api.apply.mock.calls[0][2]).toBe('b'.repeat(64));
 });
-
-it('does not write when the model is already the default', async () => {
-  api.defaults.mockResolvedValue({ ...initial, defaults: { ...initial.defaults, models: { ...initial.defaults.models, chat: { primary: 'new/chat', fallbacks: [] } } } });
-  await render();
-  expect(document.body.textContent).toContain('已是全局默认对话模型');
-  await click('完成');
-  expect(done).toHaveBeenCalledOnce();
-  expect(api.update).not.toHaveBeenCalled();
+it('offers retry for a failed preview load', async () => {
+  api.preview.mockRejectedValueOnce(new Error('Network failed')); await render(); await click('重试'); expect(document.body.textContent).toContain('模型用途');
 });
-
-it('retries loading and allows completion when no eligible models exist', async () => {
-  api.registry.mockRejectedValueOnce(new Error('Catalog unavailable')).mockResolvedValue([]);
-  await render();
-  expect(document.querySelector('[role="alert"]')?.textContent).toContain('Catalog unavailable');
-  await click('重试');
-  expect(document.body.textContent).toContain('暂无可设为默认的对话模型');
-  await click('完成');
-  expect(api.update).not.toHaveBeenCalled();
+it('restricts model additions to the supplied candidate IDs', async () => {
+  await act(async () => root.render(<Dialog.Root open><Dialog.Content><DefaultModelSuccessStep target={{providerId:'custom',modelIds:['new']}} zh onDone={done}/></Dialog.Content></Dialog.Root>));
+  expect(api.preview).toHaveBeenCalledWith('custom',{modelIds:['new']});
 });
-
-it('rejects a model removed after the success step loaded', async () => {
-  api.registry.mockResolvedValueOnce([model('new/chat')]).mockResolvedValue([]);
-  await render();
-  await click('设为全局默认');
-  expect(document.querySelector('[role="alert"]')?.textContent).toContain('所选模型已不可用');
-  expect(api.update).not.toHaveBeenCalled();
-});
-
-it('updates conversation and image understanding defaults together while preserving the image fallback', async () => {
-  const vision = { ...model('new/vision'), vision: true };
-  api.registry.mockResolvedValue([model('new/chat'), vision]);
-  const latest = { ...initial, defaults: { ...initial.defaults, models: {
-    ...initial.defaults.models, imageUnderstanding: { primary: 'old/vision', fallbacks: ['old/vision-backup'] },
-  } } };
-  api.defaults.mockResolvedValue(latest);
-  await render();
-  const visionCheckbox = Array.from(document.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')).find(input => input.parentElement?.textContent?.includes('同时设置图片理解模型'))!;
-  expect(visionCheckbox.checked).toBe(false);
-  await click('new/chat');
-  await act(async () => visionCheckbox.click());
-  await click('保存默认配置');
-  expect(api.update).toHaveBeenCalledWith({ ...latest.defaults, models: {
-    ...latest.defaults.models,
-    chat: { primary: 'new/chat', fallbacks: ['old/backup'] },
-    imageUnderstanding: { primary: 'new/vision', fallbacks: ['old/vision-backup'] },
-  } });
-  expect(document.body.textContent).toContain('全局默认模型配置已更新');
-});
-
-it('allows updating only image understanding and preserves the conversation route', async () => {
-  api.registry.mockResolvedValue([{ ...model('new/vision'), vision: true }]);
-  await render();
-  const checkboxes = document.querySelectorAll<HTMLInputElement>('input[type="checkbox"]');
-  await act(async () => { checkboxes[0].click(); checkboxes[1].click(); });
-  await click('保存默认配置');
-  expect(api.update.mock.calls[0][0].models).toEqual({
-    ...initial.defaults.models,
-    imageUnderstanding: { primary: 'new/vision', fallbacks: [] },
-  });
-});
-
-it('leaves image understanding unchanged unless the user opts in', async () => {
-  api.registry.mockResolvedValue([{ ...model('new/vision'), vision: true }]);
-  await render();
-  await click('设为全局默认');
-  expect(api.update.mock.calls[0][0].models.imageUnderstanding).toBeUndefined();
-});
-
-
-it('closes the existing dialog after displaying the successful update', async () => {
-  vi.useFakeTimers();
-  await render();
-  await click('设为全局默认');
-  expect(document.body.textContent).toContain('全局默认对话模型已更新');
-  expect(done).not.toHaveBeenCalled();
-  await act(async () => { await vi.advanceTimersByTimeAsync(600); });
-  expect(done).toHaveBeenCalledOnce();
+it('still filters dedicated computer models and unrelated providers for legacy picker consumers', () => {
+  const model = {id:'custom/model',name:'Model',provider:'custom'};
+  expect(defaultModelCandidates([model,{...model,id:'custom/gui',computerUse:{profile:'structured-tools-v1'}},{...model,id:'other/model',provider:'other'}],{providerId:'custom'})).toEqual([model]);
 });

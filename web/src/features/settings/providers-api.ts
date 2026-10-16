@@ -1,3 +1,4 @@
+import type { ProviderSetupProfile } from '@xopcai/gateway-contract';
 import { type ConfiguredModel } from '@/features/chat/api/registry-api';
 import { revalidateModelsHubCaches } from '@/features/settings/models-hub/models-hub-cache';
 import { fetchJson } from '@/lib/fetch';
@@ -36,6 +37,7 @@ export interface ProviderRecommendedModel {
 }
 
 export interface ProviderMeta {
+  setupProfile?: ProviderSetupProfile;
   id: string;
   name: string;
   category: ProviderCategory;

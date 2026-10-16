@@ -1,3 +1,6 @@
+import { withModelUsageOrigin } from '../../../providers/model-usage.js';
+import { getProviderSetupProfile } from '../../../providers/setup/profiles.js';
+import { registerProviderSetupRoutes } from './provider-setup.js';
 import { getModelThinking } from '../../../providers/model-thinking.js';
 import { resolveEffectiveAgentConfigForAgent } from '../../../config/agent-profile.js';
 import { computerModelProfile, isDedicatedComputerModel } from '../../../computer/model-policy.js';
@@ -124,6 +127,7 @@ function mapPluginModel(providerId: string, model: ProviderModelDefinition, avai
 }
 
 export function registerModelsRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
+  registerProviderSetupRoutes(authenticated, deps);
   const { service, strictRateLimitMiddleware } = deps;
   const catalogSync = service.getModelCatalogSync();
   const xopcCloudAccount = new XopcCloudAccountService();
@@ -591,14 +595,14 @@ export function registerModelsRoutes(authenticated: Hono, deps: AuthenticatedRou
         ? body.prompt.trim()
         : 'A simple blue circle centered on a white background.';
       try {
-        const result = await provider.generateImage({
+        const result = await withModelUsageOrigin('interactive', () => provider.generateImage({
           provider: providerId,
           model: modelId,
           prompt,
           count: 1,
           cfg: service.currentConfig as Config,
           timeoutMs: 120_000,
-        });
+        }));
         return c.json({
           ok: true,
           payload: {
@@ -871,6 +875,7 @@ export function registerModelsRoutes(authenticated: Hono, deps: AuthenticatedRou
         const registryModelCount = getAllModels().filter((m) => m.provider === provider).length;
         return {
           id: provider,
+          setupProfile: getProviderSetupProfile(provider, PROVIDER_META[provider]?.name ?? domesticPreset?.displayName ?? provider, PROVIDER_META[provider]?.supportsOAuth, resolveProviderApiBaseUrl(provider)),
           name: plugin?.name ?? domesticPreset?.displayName ?? PROVIDER_META[provider]?.name ?? provider,
           category: plugin ? ('extension' as const) : PROVIDER_META[provider]?.category || (domesticPreset ? 'domestic' : 'specialty'),
           supportsOAuth: plugin ? false : (PROVIDER_META[provider]?.supportsOAuth ?? false),
@@ -896,6 +901,7 @@ export function registerModelsRoutes(authenticated: Hono, deps: AuthenticatedRou
         const extensionId = resolveExtensionIdForProvider(service, plugin.id);
         meta.push({
           id: plugin.id,
+          setupProfile: getProviderSetupProfile(plugin.id, plugin.name),
           name: plugin.name,
           category: 'extension',
           supportsOAuth: false,

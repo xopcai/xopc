@@ -1,3 +1,4 @@
+import { assertProviderUsage, isProviderUsageScopeError } from '../../providers/model-usage.js';
 /**
  * speak-core — orchestrates per-call TTS synthesis through the SpeechProviderPlugin chain.
  *
@@ -285,6 +286,7 @@ export async function speak(
         'audio-file',
         options?.signal,
       );
+      assertProviderUsage(resolved.providerId, resolved.providerConfig?.baseUrl as string | undefined);
       const result = await resolved.plugin.synthesize(request);
       const durationSeconds = (Date.now() - startTime) / 1000;
       attempts.push({
@@ -318,6 +320,7 @@ export async function speak(
         wasSummarized: prepared.wasSummarized,
       };
     } catch (error) {
+      if (isProviderUsageScopeError(error)) throw error;
       const latencyMs = Date.now() - startTime;
       const reasonCode = classifyError(error);
       const errorMsg = error instanceof Error ? error.message : String(error);
@@ -371,6 +374,7 @@ export async function speakWithProvider(
     'audio-file',
     options?.signal,
   );
+  assertProviderUsage(resolved.providerId, resolved.providerConfig?.baseUrl as string | undefined);
   const result = await resolved.plugin.synthesize(request);
   const durationSeconds = (Date.now() - startTime) / 1000;
 
@@ -451,6 +455,7 @@ export async function speakStream(
         options?.signal,
       );
 
+      assertProviderUsage(resolved.providerId, resolved.providerConfig?.baseUrl as string | undefined);
       let streamResult: SpeechSynthesisStreamResult;
       if (typeof resolved.plugin.synthesizeStream === 'function') {
         streamResult = await resolved.plugin.synthesizeStream(baseRequest);
@@ -493,6 +498,7 @@ export async function speakStream(
         wasSummarized: prepared.wasSummarized,
       };
     } catch (error) {
+      if (isProviderUsageScopeError(error)) throw error;
       options?.signal?.throwIfAborted();
       lastError = error instanceof Error ? error : new Error(String(error));
       log.warn(
@@ -532,6 +538,7 @@ export function prepareSpeechStreamSession(
   if (!resolved?.plugin.openStreamSession) return undefined;
   const request = buildSynthesisRequest(resolved, '', options.tts, undefined,
     options.appConfig, 'voice-note', options.signal);
+  assertProviderUsage(resolved.providerId, resolved.providerConfig?.baseUrl as string | undefined);
   // Setup and each synthesis have their own provider timeout. Agent thinking
   // and the combined reply must not inherit a single synthesis deadline.
   const sessionRequest = { ...request, signal: options.signal ?? new AbortController().signal };

@@ -63,6 +63,7 @@ function collectModelPolicy(out: CollectedReference[], value: unknown, location:
       out, ref, `${location}.chat.fallbacks[${index}]`,
     ));
   }
+  collectToolModel(out, policy.background, `${location}.background`);
   const intents = asRecord(policy.intents);
   for (const [intent, routeValue] of Object.entries(intents ?? {})) {
     const route = asRecord(routeValue);

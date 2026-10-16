@@ -23,6 +23,19 @@ function buildProviderMock(overrides: Partial<ImageGenerationProvider> & { id: s
 const baseModelConfig = { primary: 'mock/mock-default' };
 
 describe('generateImage runtime', () => {
+  it('normalizes supported ratios before runtime validation without changing the provider', async () => {
+    const generate = vi.fn(async (request) => {
+      expect(request.size).toBe('1024x1024');
+      expect(request.aspectRatio).toBeUndefined();
+      return { images: [{ buffer: Buffer.from('image'), mimeType: 'image/png' }] };
+    });
+    const provider = buildProviderMock({ id: 'qwen-token-plan-cn', capabilities: { generate: { supportsSize: true }, geometry: { sizes: ['1024x1024'] } }, generateImage: generate });
+    const { withModelUsageOrigin } = await import('../../../../providers/model-usage.js');
+    const result = await withModelUsageOrigin('interactive', () => generateImage({ modelConfig: { primary: 'qwen-token-plan-cn/qwen-token-plan-cn-default' }, prompt: 'cat', aspectRatio: '1:1' }, { getProvider: () => provider, listProviders: () => [provider] }));
+    expect(result.provider).toBe('qwen-token-plan-cn');
+    expect(generate).toHaveBeenCalledOnce();
+  });
+
   it('returns provider/model/attempts on success and provider metadata', async () => {
     const provider = buildProviderMock({
       id: 'mock',

@@ -16,6 +16,7 @@ export async function revalidateModelsHubCaches(): Promise<void> {
     mutate(MODELS_JSON_SWR_KEY),
     mutate(MODEL_CATALOG_SWR_KEY),
     mutate(CAPABILITY_READINESS_SWR_KEY),
+    mutate('settings-agent-defaults'),
     invalidateConfiguredModelsCache(),
   ]);
 }

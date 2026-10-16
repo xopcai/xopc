@@ -1,3 +1,4 @@
+import { assertProviderUsage } from '../../providers/model-usage.js';
 /**
  * Shared provider HTTP client (voice, STT/TTS, image-generation extensions).
  *
@@ -56,6 +57,7 @@ export async function fetchWithTimeoutGuarded(
   url: string | URL,
   options: FetchWithGuardOptions,
 ): Promise<Response> {
+  assertProviderUsage('endpoint', String(url));
   await assertSafeUrl(url, options);
 
   const controller = new AbortController();

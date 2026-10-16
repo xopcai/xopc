@@ -5,6 +5,7 @@ export type ModelIntent = 'fast' | 'reasoning' | 'coding' | 'review' | 'vision' 
 export type AgentModelsDefaults = {
   computerUse?: ModelRoute;
   chat: ModelRoute;
+  background?: ModelRoute;
   intents: Partial<Record<ModelIntent, ModelRoute>>;
   imageUnderstanding?: ModelRoute;
   imageGeneration?: ModelRoute & { timeoutMs?: number; autoProviderFallback: boolean };
@@ -12,6 +13,7 @@ export type AgentModelsDefaults = {
 export type AgentModelsOverride = {
   computerUse?: ModelRoute | null;
   chat?: ModelRoute;
+  background?: ModelRoute | null;
   intents?: Partial<Record<ModelIntent, ModelRoute | null>>;
   imageUnderstanding?: ModelRoute | null;
   imageGeneration?: (ModelRoute & { timeoutMs?: number; autoProviderFallback: boolean }) | null;

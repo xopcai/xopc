@@ -3,6 +3,7 @@ import { createReadStream } from 'node:fs';
 
 import type { Config } from '../config/schema.js';
 import type { NotesService } from '../notes/service.js';
+import { withModelUsageOrigin } from '../providers/model-usage.js';
 import { runSqliteWriteTransaction } from '../storage/sqlite/transaction.js';
 import { createLogger } from '../utils/logger.js';
 import { forEachNormalizedAudioSegment } from '../voice/audio/normalize.js';
@@ -122,7 +123,8 @@ export class DiscussionSealer {
       const confirmed = segments.filter(segment => segment.status === 'confirmed');
       const useSegments = !run.force_audio && expected >= 0 && !missing && !pending && confirmed.length === expected + 1;
       const result: TranscriptionResult = useSegments ? { text: assembleDiscussionTranscript(confirmed) }
-        : await this.transcribeFullRecording(sealing, run, signal);
+        // Finish the user's saved recording request; timer execution is not its origin.
+        : await withModelUsageOrigin('interactive', () => this.transcribeFullRecording(sealing, run, signal));
       const text = result.text.trim();
       if (!text) throw new Error('Discussion transcription produced no text');
       const updated = runSqliteWriteTransaction(() => {

@@ -1,0 +1,60 @@
+{
+  "passed": true,
+  "writes": [
+    {
+      "provider": "qwen-token-plan-cn",
+      "selected": [
+        "chat"
+      ]
+    },
+    {
+      "provider": "xiaomi-token-plan-cn",
+      "selected": [
+        "chat"
+      ]
+    },
+    {
+      "provider": "qwen-token-plan-cn",
+      "selected": [
+        "vision"
+      ]
+    },
+    {
+      "provider": "qwen-token-plan-cn",
+      "selected": [
+        "image"
+      ]
+    },
+    {
+      "provider": "xopc-cloud",
+      "selected": [
+        "background"
+      ]
+    },
+    {
+      "provider": "qwen-token-plan-cn",
+      "selected": [
+        "transcription"
+      ]
+    },
+    {
+      "provider": "qwen-token-plan-cn",
+      "selected": [
+        "speech"
+      ]
+    },
+    {
+      "provider": "qwen-token-plan-cn",
+      "selected": [
+        "conversation"
+      ]
+    }
+  ],
+  "conflictKeepsSelection": true,
+  "keyboardOpen": true,
+  "mobileOverflow": false,
+  "realCredentialsUsed": false,
+  "directory": "/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-model-use-browser-1TO3SD",
+  "date": "2026-10-16",
+  "tests": "Real React components and configuration engine with intercepted API fixtures"
+}

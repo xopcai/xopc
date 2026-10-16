@@ -1,3 +1,4 @@
+import { assertProviderUsage, getModelUsageOrigin, isProviderUsageScopeError } from '../../providers/model-usage.js';
 import crypto from 'node:crypto';
 import { connectionObjectiveContext } from '../context/connection-objective-context.js';
 import { traceRun, startObservation, traceOperation, setTraceIdentity } from '../../observability/runtime.js';
@@ -142,16 +143,29 @@ async function runEmbeddedTurnForSessionInner(params: RunEmbeddedForSessionParam
     const candidates = typeof mm.getFallbackCandidatesForSession === 'function'
       ? mm.getFallbackCandidatesForSession(conversationId)
       : [];
-    const candidateModelRefs = candidates.length > 0
+    const effective = config ? resolveEffectiveAgentProfileForSession(conversationId).config : undefined;
+    const background = getModelUsageOrigin() === 'background' && !mm.hasSessionModelOverride?.(conversationId)
+      && configuredModelRef === effective?.models.chat.primary
+      ? effective.models.background : undefined;
+    const candidateModelRefs = background ? [background.primary, ...background.fallbacks] : candidates.length > 0
       ? candidates.map((candidate: { provider: string; model: string }) => `${candidate.provider}/${candidate.model}`)
       : [configuredModelRef];
+    const selectedRef = background?.primary ?? configuredModelRef;
+    assertProviderUsage(selectedRef.split('/')[0]!);
+    try {
+      const selected = !background && typeof mm.getResolvedModelForSession === 'function'
+        ? mm.getResolvedModelForSession(conversationId) : resolveModel(selectedRef);
+      assertProviderUsage(selected.provider, selected.baseUrl);
+    } catch (error) {
+      if (isProviderUsageScopeError(error)) throw error;
+    }
     const resolvedCandidates: Array<{
       ref: string;
       model: RunXopcEmbeddedTurnParams['model'];
     }> = [];
     for (const [index, ref] of candidateModelRefs.entries()) {
       try {
-        const resolved = index === 0 && typeof mm.getResolvedModelForSession === 'function'
+        const resolved = !background && index === 0 && typeof mm.getResolvedModelForSession === 'function'
           ? mm.getResolvedModelForSession(conversationId)
           : resolveModel(ref);
         resolvedCandidates.push({
@@ -159,6 +173,7 @@ async function runEmbeddedTurnForSessionInner(params: RunEmbeddedForSessionParam
           model: resolved as RunXopcEmbeddedTurnParams['model'],
         });
       } catch (err) {
+        if (index === 0) assertProviderUsage(ref.split('/')[0]!);
         log.warn({ err, conversationId, runId, modelRef: ref }, 'Skipping unavailable model candidate');
       }
     }
@@ -167,6 +182,7 @@ async function runEmbeddedTurnForSessionInner(params: RunEmbeddedForSessionParam
 
     const modelRef = primary.ref;
     const model = primary.model;
+    assertProviderUsage(model.provider, model.baseUrl);
     if (typeof mm.applyResolvedModel === 'function') {
       mm.applyResolvedModel(agent, model, modelRef);
     } else {
@@ -190,7 +206,7 @@ async function runEmbeddedTurnForSessionInner(params: RunEmbeddedForSessionParam
           systemPrompt, tools, reserveTokens: idlePolicy.reserveTokens,
           triggerThreshold: idlePolicy.personalIdle.triggerThreshold });
         if (budget.estimatedTokens <= budget.triggerTokens || messages.length < idlePolicy.minMessagesBeforeCompact) return 'skipped';
-        const summaryModel = idlePolicy.personalIdle.model ?? idlePolicy.model;
+        const summaryModel = idlePolicy.personalIdle.model ?? idlePolicy.model ?? effective?.models.background?.primary;
         const candidate = await sessionStore.prepareCompaction(conversationId,
           summaryModel ? resolveModel(summaryModel) as typeof model : model,
           { ...idlePolicy, keepRecentTokens: idlePolicy.personalIdle.keepRecentTokens,
@@ -362,6 +378,7 @@ async function runEmbeddedTurnForSessionInner(params: RunEmbeddedForSessionParam
         }
 
         lastResult = turnResult;
+        if (isProviderUsageScopeError(turnResult.errorMessage)) return await finish({ ...turnResult, retryable: false });
         if (supervisor.signal.aborted || turnResult.retryable === false) break;
         log.warn(
           {
@@ -379,6 +396,7 @@ async function runEmbeddedTurnForSessionInner(params: RunEmbeddedForSessionParam
         );
       } catch (err) {
         attempt.finish('error', err instanceof Error ? err.message : String(err));
+        if (isProviderUsageScopeError(err)) return await finish({ ok: false, retryable: false, errorMessage: err instanceof Error ? err.message : String(err) });
         lastError = err;
         if (err instanceof DOMException && err.name === 'AbortError') {
           await finish({ ok: false, errorMessage: 'aborted' });

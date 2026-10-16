@@ -49,6 +49,7 @@ const ModelIntentOverridesSchema = z.partialRecord(ModelIntentSchema, ModelRoute
 
 export const AgentModelsDefaultsSchema = z.object({
   chat: ModelRouteSchema,
+  background: ModelRouteSchema.optional(),
   intents: ModelIntentRoutesSchema.default({}),
   imageUnderstanding: ModelRouteSchema.optional(),
   computerUse: ComputerModelRouteSchema.optional(),
@@ -57,6 +58,7 @@ export const AgentModelsDefaultsSchema = z.object({
 
 export const AgentModelsOverrideSchema = z.object({
   chat: ModelRouteSchema.optional(),
+  background: ModelRouteSchema.nullable().optional(),
   intents: ModelIntentOverridesSchema.optional(),
   imageUnderstanding: ModelRouteSchema.nullable().optional(),
   computerUse: ComputerModelRouteSchema.nullable().optional(),

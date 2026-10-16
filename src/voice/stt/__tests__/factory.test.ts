@@ -1,11 +1,11 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { resolveSTTProviderChain, resolveSTTProviderConfig } from '../factory.js';
 import '../providers/index.js';
 import { getModelCatalogStore, resetModelCatalogStore } from '../../../providers/model-catalog-store.js';
 import { voiceFixture } from '../../__tests__/voice-fixture.js';
 
-afterEach(() => resetModelCatalogStore());
+afterEach(() => { resetModelCatalogStore(); vi.unstubAllEnvs(); });
 
 describe('resolveSTTProviderConfig', () => {
   it('reads apiKey from providers map', () => {
@@ -36,6 +36,22 @@ describe('resolveSTTProviderConfig', () => {
 });
 
 describe('resolveSTTProviderChain', () => {
+  it.each([false, true])('respects explicit recognition fallback=%s when shared audio models exist', enabled => {
+    vi.stubEnv('QWEN_TOKEN_PLAN_CN_API_KEY', 'plan-fixture');
+    const chain = resolveSTTProviderChain({ enabled: true, provider: 'qwen-token-plan-cn',
+      fallback: { enabled, order: [] },
+      models: [{ provider: 'qwen-token-plan-cn', model: 'qwen-audio-3.0-asr-flash', capabilities: ['audio'] }],
+      sharedModels: [{ provider: 'openai', model: 'gpt-4o-mini-transcribe', capabilities: ['audio'] }],
+      providers: { openai: { apiKey: 'fixture' } },
+    });
+    expect(chain.map(entry => entry.id)).toEqual(enabled ? ['qwen-token-plan-cn', 'openai'] : ['qwen-token-plan-cn']);
+  });
+
+  it('does not add a connected subscription to automatic recognition fallback', () => {
+    vi.stubEnv('QWEN_TOKEN_PLAN_CN_API_KEY','plan-fixture');
+    expect(resolveSTTProviderChain({enabled:true,provider:'openai',managedAuto:true,providers:{openai:{apiKey:'fixture'}},fallback:{enabled:false,order:[]}}).map(provider=>provider.id)).not.toContain('qwen-token-plan-cn');
+    expect(resolveSTTProviderChain({enabled:true,provider:'qwen-token-plan-cn',fallback:{enabled:false,order:[]}}).map(provider=>provider.id)).toEqual(['qwen-token-plan-cn']);
+  });
   it('prefers models[] over primary/fallback', () => {
     const chain = resolveSTTProviderChain({
       enabled: true,
@@ -120,5 +136,9 @@ describe('resolveSTTProviderChain', () => {
     expect(chain.map((entry) => `${entry.id}/${entry.model}`).slice(0, 2)).toEqual([
       'xopc-cloud/stt-a', 'xopc-cloud/stt-b',
     ]);
+    const pinned = resolveSTTProviderChain({ enabled: true, provider: 'xopc-cloud',
+      fallback: { enabled: false, order: [] }, models: [{ provider: 'xopc-cloud', model: 'stt-b', capabilities: ['audio'] }],
+    });
+    expect(pinned.map(entry => `${entry.id}/${entry.model}`)).toEqual(['xopc-cloud/stt-b']);
   });
 });

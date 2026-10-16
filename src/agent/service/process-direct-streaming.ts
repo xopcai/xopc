@@ -1,3 +1,4 @@
+import { withModelUsageOrigin, modelUsageOriginFromTurn } from '../../providers/model-usage.js';
 import { resolveAgentMainConversationId } from '../../routing/agent-session-key.js';
 import { resolveDefaultAgentId } from '../agent-scope.js';
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
@@ -268,7 +269,7 @@ function pushAssistantReceipt(
   queue.push({ type: 'message_end', runId, message });
 }
 
-export async function* runProcessDirectStreaming(
+async function* runProcessDirectStreamingInner(
   deps: ProcessDirectStreamingDeps,
   input: ProcessDirectStreamingInput,
 ): AsyncGenerator<ProcessDirectStreamEvent, void, unknown> {
@@ -671,4 +672,17 @@ export async function* runProcessDirectStreaming(
     }
     deps.endDirectRequestContext();
   }
+}
+
+/** Bind each generator advancement so independent streams retain their own origin. */
+export async function* runProcessDirectStreaming(deps: ProcessDirectStreamingDeps, input: ProcessDirectStreamingInput): AsyncGenerator<ProcessDirectStreamEvent, void, unknown> {
+  const iterator = runProcessDirectStreamingInner(deps, input);
+  const origin = modelUsageOriginFromTurn(input.origin);
+  try {
+    while (true) {
+      const result = await withModelUsageOrigin(origin, () => iterator.next());
+      if (result.done) return;
+      yield result.value as ProcessDirectStreamEvent;
+    }
+  } finally { await withModelUsageOrigin(origin, () => iterator.return()); }
 }

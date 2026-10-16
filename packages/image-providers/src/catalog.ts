@@ -1,6 +1,6 @@
 import type { ImageCapabilities, ImageModel, ImageProviderSpec } from './types.js';
 
-export const IMAGE_CATALOG_VERSION = '2026-10-09';
+export const IMAGE_CATALOG_VERSION = '2026-10-16';
 const ratios = ['1:1', '2:3', '3:2', '3:4', '4:3', '4:5', '5:4', '9:16', '16:9', '21:9'];
 const square = ['1024x1024', '1536x1024', '1024x1536'];
 const pixelGeometry = (minPixels: number, maxPixels: number, maxEdge: number, step = 1, maxRatio = 8, minEdge = 64) => ({
@@ -39,6 +39,13 @@ const providers: ImageProviderSpec[] = [
     regions: { cn: 'https://dashscope.aliyuncs.com', intl: 'https://dashscope-intl.aliyuncs.com' },
     documentationUrl: 'https://help.aliyun.com/zh/model-studio/qwen-image-generation-and-editing-api-reference', apiKeyUrl: 'https://bailian.console.aliyun.com/',
     models: [model('qwen-image-3.0-pro', cap(1, 3, pixelGeometry(512 ** 2, 2048 ** 2, 4096))), model('qwen-image-3.0', cap(1, 3, pixelGeometry(512 ** 2, 2048 ** 2, 4096))), model('wan2.7-image-pro', wan(true)), model('wan2.7-image', wan(false))],
+  },
+  {
+    id: 'qwen-token-plan-cn', name: 'Alibaba Bailian Subscription (China)', protocol: 'dashscope',
+    baseUrl: 'https://token-plan.cn-beijing.maas.aliyuncs.com', timeoutMs: 600000,
+    documentationUrl: 'https://help.aliyun.cn/zh/model-studio/token-plan-multimodal-gen',
+    apiKeyUrl: 'https://bailian.console.aliyun.com/cn-beijing/subscription/overview',
+    models: [model('qwen-image-3.0-pro', cap(1, 0, { sizes: ['1024x1024'] })), model('wan2.7-image', cap(1, 0, { sizes: ['1024x1024'] }))],
   },
   {
     id: 'minimax', name: 'MiniMax', protocol: 'minimax', baseUrl: 'https://api.minimax.io', timeoutMs: 180000,

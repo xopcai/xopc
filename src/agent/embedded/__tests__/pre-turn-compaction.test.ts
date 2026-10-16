@@ -2,6 +2,7 @@ import { IdleCompactionScheduler } from '../../memory/idle-compaction-scheduler.
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
 import type { EmbeddedStreamEvent } from '../types.js';
+import { ProviderUsageScopeError, withModelUsageOrigin } from '../../../providers/model-usage.js';
 
 /**
  * Tests for pre-turn automatic compaction in runEmbeddedTurnForSession.
@@ -32,8 +33,9 @@ vi.mock('../../../providers/index.js', () => ({
   },
 }));
 
+const profile = vi.hoisted(() => ({ models: { chat: { primary: 'test/test-model', fallbacks: [] }, background: undefined as { primary: string; fallbacks: string[] } | undefined } }));
 vi.mock('../../../config/agent-profile.js', () => ({
-  resolveEffectiveAgentProfileForSession: () => ({ config: { runtime: {} } }),
+  resolveEffectiveAgentProfileForSession: () => ({ config: { runtime: {}, models: profile.models } }),
 }));
 
 vi.mock('../../../personal-agent/repository.js', () => ({ isPersonalConversation: vi.fn(() => false) }));
@@ -155,11 +157,59 @@ describe('pre-turn auto-compaction', () => {
   let runEmbeddedTurnForSession: typeof import('../run-for-session.js').runEmbeddedTurnForSession;
 
   beforeEach(async () => {
+    profile.models.background = undefined;
     vi.clearAllMocks();
     mockRunXopcEmbeddedTurn.mockReset();
     mockRunXopcEmbeddedTurn.mockResolvedValue({ ok: true });
     const mod = await import('../run-for-session.js');
     runEmbeddedTurnForSession = mod.runEmbeddedTurnForSession;
+  });
+
+  it('uses the background route for inherited chat without mutating the session model choice', async () => {
+    profile.models.background = { primary:'openai/background', fallbacks:[] };
+    const manager = createMockModelManager(); manager.getModelForSession.mockReturnValue('test/test-model');
+    const input = { conversationId:'background-route',userMessage:{role:'user',content:'test'} as AgentMessage,
+      sessionStore:createMockSessionStore({needsCompaction:false}) as any,agentManager:createMockAgentManager() as any,modelManager:manager as any,getConfig:()=>configWithCompaction(false) as any };
+    await withModelUsageOrigin('background', () => runEmbeddedTurnForSession(input));
+    expect(mockRunXopcEmbeddedTurn.mock.calls[0][0].modelRef).toBe('openai/background');
+    mockRunXopcEmbeddedTurn.mockClear();
+    await withModelUsageOrigin('interactive', () => runEmbeddedTurnForSession(input));
+    expect(mockRunXopcEmbeddedTurn.mock.calls[0][0].modelRef).toBe('test/test-model');
+  });
+
+  it('selects the background model when idle compaction follows an interactive turn', async () => {
+    const { isPersonalConversation } = await import('../../../personal-agent/repository.js');
+    vi.mocked(isPersonalConversation).mockReturnValue(true);
+    profile.models.background = {primary:'openai/background',fallbacks:[]};
+    const scheduler = {beginTurn:vi.fn(()=>1),endTurn:vi.fn((_id:string,_generation:number,_job?:unknown)=>{})};
+    const store = {...createMockSessionStore({needsCompaction:false}),idleCompaction:scheduler,
+      prepareCompaction:vi.fn(async(_id:string,_model:unknown)=>({result:{compacted:true,tokensBefore:150000,tokensAfter:100}})),commitCompaction:vi.fn(async()=>true)};
+    try {
+      await withModelUsageOrigin('interactive',()=>runEmbeddedTurnForSession({conversationId:'idle-route',userMessage:{role:'user',content:'test'} as AgentMessage,
+        sessionStore:store as any,agentManager:createMockAgentManager() as any,modelManager:createMockModelManager() as any,getConfig:()=>configWithCompaction(true) as any}));
+      store.load.mockResolvedValue(Array.from({length:4},()=>({role:'user',content:'x'.repeat(150000)})) as AgentMessage[]);
+      const job = scheduler.endTurn.mock.calls[0]?.[2] as (signal:AbortSignal,isCurrent:()=>boolean)=>Promise<unknown>;
+      expect(job).toBeTypeOf('function');
+      await withModelUsageOrigin('background',()=>job(new AbortController().signal,()=>true));
+      expect(store.prepareCompaction.mock.calls[0]?.[1]).toMatchObject({provider:'openai',id:'background'});
+    } finally { vi.mocked(isPersonalConversation).mockReturnValue(false); }
+  });
+
+  it('retains explicit session overrides even when they equal the default chat ref', async () => {
+    profile.models.background = { primary:'openai/background', fallbacks:[] };
+    const manager = { ...createMockModelManager(),hasSessionModelOverride:()=>true };
+    manager.getModelForSession.mockReturnValue('test/test-model');
+    await withModelUsageOrigin('background', () => runEmbeddedTurnForSession({ conversationId:'explicit-route',userMessage:{role:'user',content:'test'} as AgentMessage,
+      sessionStore:createMockSessionStore({needsCompaction:false}) as any,agentManager:createMockAgentManager() as any,modelManager:manager as any,getConfig:()=>configWithCompaction(false) as any }));
+    expect(mockRunXopcEmbeddedTurn.mock.calls[0][0].modelRef).toBe('test/test-model');
+  });
+
+  it('does not skip an unconfigured subscription primary into a paid fallback', async () => {
+    const manager = createMockModelManager(); manager.getModelForSession.mockReturnValue('qwen-token-plan-cn/old-model');
+    manager.getFallbackCandidatesForSession.mockReturnValue([{provider:'openai',model:'paid'}]);
+    await expect(withModelUsageOrigin('background', () => runEmbeddedTurnForSession({ conversationId:'scope-route',userMessage:{role:'user',content:'test'} as AgentMessage,
+      sessionStore:createMockSessionStore({needsCompaction:false}) as any,agentManager:createMockAgentManager() as any,modelManager:manager as any }))).rejects.toThrow(ProviderUsageScopeError);
+    expect(mockRunXopcEmbeddedTurn).not.toHaveBeenCalled();
   });
 
   it('lets personal chat reply above the soft threshold and keeps hard-limit recovery', async () => {

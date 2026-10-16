@@ -13,6 +13,7 @@
 import { createLogger } from '../../utils/logger.js';
 import { getModelCatalogStore } from '../../providers/model-catalog-store.js';
 import { compareCatalogModels } from '../../providers/model-catalog-ranking.js';
+import { isInteractiveOnlyProvider } from '../../providers/setup/profiles.js';
 
 import './providers/index.js'; // side-effect: register built-in providers
 import { buildTtsResolveRawConfig } from './config-slice.js';
@@ -93,7 +94,7 @@ export function resolveProviderOrder(
   const configured = listSpeechProviders()
     .map((plugin) => {
       const resolved = resolveSpeechProvider(plugin.id, config);
-      return resolved ? plugin : null;
+      return resolved && !isInteractiveOnlyProvider(plugin.id, resolved.providerConfig.baseUrl as string | undefined) ? plugin : null;
     })
     .filter((plugin): plugin is SpeechProviderPlugin => plugin !== null)
     .sort((left, right) => {

@@ -1,4 +1,5 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { ProviderUsageScopeError } from '../../providers/model-usage.js';
 
 import {
   _clearMediaUnderstandingRegistryForTests,
@@ -10,6 +11,16 @@ import type { AudioTranscriptionRequest } from '../types.js';
 describe('runAudioTranscription', () => {
   afterEach(() => {
     _clearMediaUnderstandingRegistryForTests();
+  });
+
+  it('rejects a restricted plan before invocation and does not try another provider', async () => {
+    const primary = vi.fn(); const fallback = vi.fn();
+    registerMediaUnderstandingProvider({ id: 'qwen-token-plan-cn', capabilities: ['audio'], requiresApiKey: false, transcribeAudio: primary });
+    registerMediaUnderstandingProvider({ id: 'paid-fallback', capabilities: ['audio'], requiresApiKey: false, transcribeAudio: fallback });
+    await expect(runAudioTranscription({ providers: [{ id: 'qwen-token-plan-cn', model: 'stt' }, { id: 'paid-fallback', model: 'stt' }],
+      attachments: [{ attachmentIndex: 0, buffer: Buffer.from('audio'), mime: 'audio/webm' }], timeoutMs: 1000,
+    })).rejects.toThrow(ProviderUsageScopeError);
+    expect(primary).not.toHaveBeenCalled(); expect(fallback).not.toHaveBeenCalled();
   });
 
   it('propagates upload metadata and cancellation while recording real latency', async () => {

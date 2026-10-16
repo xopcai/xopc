@@ -7,6 +7,7 @@ import { messages } from '@/i18n/messages';
 import { isElectron } from '@/lib/electron-env';
 import { useLocaleStore } from '@/stores/locale-store';
 
+
 import { resolveRecommendedOnboardingProvider } from './onboarding-provider-options';
 
 function providerSubtitle(provider: ProviderMeta): string | undefined {

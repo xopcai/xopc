@@ -1,3 +1,4 @@
+import { assertProviderUsage } from '../providers/model-usage.js';
 import WebSocket from 'ws';
 import type { StreamingSttOpenRequest, StreamingSttSession } from '../media-understanding/types.js';
 import type { SpeechSynthesisStreamResult } from './tts/speech-provider-types.js';
@@ -26,6 +27,7 @@ export class PlatformVoiceError extends Error {
 
 function connect(url: string, token: string, signal: AbortSignal, onEvent: (event: Event) => void, onFailure: (error: Error) => void) {
   signal.throwIfAborted();
+  assertProviderUsage('xopc-cloud', String(url));
   const socket = new WebSocket(url, { headers: { Authorization: `Bearer ${token}` }, perMessageDeflate: false, maxPayload: 1024 * 1024 });
   let ended = false;
   const close = () => {

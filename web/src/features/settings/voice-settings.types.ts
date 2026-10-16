@@ -107,7 +107,7 @@ export interface VoiceSettingsState {
       stt?: { provider: 'xopc-cloud'; model: string };
       tts?: { provider: 'alibaba' | 'xopc-cloud'; model?: string; voice?: string };
       omni?: {
-        provider: 'alibaba' | 'xopc-cloud';
+        provider: 'alibaba' | 'xopc-cloud' | 'qwen-token-plan-cn';
         model: string;
         voice: string;
         apiKey?: string;

@@ -114,7 +114,7 @@ it('keeps the add-provider dialog open and offers only the models added in that 
   expect(mocks.save).toHaveBeenCalledOnce();
   expect(document.querySelector('[role="dialog"]')).toBe(dialog);
   expect(document.querySelector('[data-testid="success"]')?.textContent).toBe('chat');
-  expect(onSaved).toHaveBeenCalledWith('custom');
+  expect(onSaved).not.toHaveBeenCalled();
 });
 
 it('keeps duplicate model ID rows mounted when editing and removing an earlier slot', async () => {

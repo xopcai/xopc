@@ -8,6 +8,7 @@ vi.mock('../../../providers/model-call.js', async (importOriginal) => {
 });
 
 import { completeWithResolvedCredentials } from '../../../providers/model-call.js';
+import { ProviderUsageScopeError, withModelUsageOrigin } from '../../../providers/model-usage.js';
 import type { XopcTranscriptCompactionEntry } from '../../../session/session-context-for-llm.js';
 import type { TranscriptSourceEntry } from '../../../storage/sqlite/transcript-repository.js';
 import { SessionCompactor } from '../compaction.js';
@@ -61,6 +62,20 @@ function completion(text: string) {
 describe('SessionCompactor', () => {
   beforeEach(() => {
     vi.mocked(completeWithResolvedCredentials).mockReset();
+  });
+
+  it('does not retry or cross services after a usage-scope rejection', async () => {
+    vi.mocked(completeWithResolvedCredentials).mockRejectedValue(new ProviderUsageScopeError('qwen-token-plan-cn', 'background'));
+    await expect(new SessionCompactor({ minMessagesBeforeCompact: 4, keepRecentTokens: 1, recentTurnsPreserve: 1, summaryRetries: 2 })
+      .compact(sources(conversation()), model, undefined, true, { fallbackModels: [{ ...model, provider: 'paid', id: 'fallback' }] })).rejects.toThrow(ProviderUsageScopeError);
+    expect(completeWithResolvedCredentials).toHaveBeenCalledOnce();
+  });
+
+  it('retains interactive scope for compaction required by the active user turn', async () => {
+    vi.mocked(completeWithResolvedCredentials).mockResolvedValue(completion(ledger()));
+    await withModelUsageOrigin('interactive', () => new SessionCompactor({ minMessagesBeforeCompact: 4, keepRecentTokens: 1, recentTurnsPreserve: 1 })
+      .compact(sources(conversation()), model, undefined, true));
+    expect(vi.mocked(completeWithResolvedCredentials).mock.calls[0]?.[4]?.trigger).toBe('agent');
   });
 
   it('builds a cited handover from raw transcript entries and preserves recent turns', async () => {

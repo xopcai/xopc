@@ -276,6 +276,7 @@ export const AUTHENTICATED_LAZY_ROUTE_BUNDLES: readonly AuthenticatedLazyRouteBu
   },
   {
     id: 'models',
+    // Includes /api/models/setup/:providerId and its preview/apply actions.
     match: (path) =>
       startsWithAny(path, ['/api/models', '/api/models-json', '/api/providers', '/api/capabilities/readiness']),
     load: async () => {

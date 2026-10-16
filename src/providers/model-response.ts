@@ -47,7 +47,7 @@ export function extractAssistantText(content: unknown): string {
 /** True when retrying a model request may recover from a transport or upstream 5xx failure. */
 export function isTransientProviderErrorMessage(message: string): boolean {
   const lower = message.toLowerCase();
-  if (/insufficient_quota|usage_limit_reached|usage_not_included|credit_budget_exhausted/.test(lower)) return false;
+  if (/provider_usage_scope_denied|insufficient_quota|usage_limit_reached|usage_not_included|credit_budget_exhausted/.test(lower)) return false;
   return TRANSIENT_PROVIDER_ERROR_SUBSTRINGS.some((value) => lower.includes(value))
     || lower.trim() === 'terminated'
     || /(?:^|\D)(?:408|409|429|500|502|503|504|529)(?:\D|$)/.test(lower);

@@ -50,3 +50,4 @@ export { isSessionCommandRejected } from './session-command-rejection.js';
 export * from './personal-proactivity.js';
 export * from './specialists.js';
 export * from './result-reference.js';
+export * from './provider-setup.js';

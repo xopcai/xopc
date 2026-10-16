@@ -57,6 +57,17 @@ describe('resolveEffectiveAgentConfig', () => {
     expect(result.sources['runtime.thinkingLevel']).toBe('agent');
   });
 
+  it('inherits, overrides and explicitly clears the independent background route', () => {
+    const global = { ...defaults, models: { ...defaults.models, background: { primary: 'local/background', fallbacks: [] } } };
+    expect(resolveEffectiveAgentConfig({ defaults: global, agent: agent() }).config.models.background?.primary).toBe('local/background');
+    const overridden = resolveEffectiveAgentConfig({ defaults: global, agent: agent({ models: { background: { primary: 'cloud/background', fallbacks: [] } } }) });
+    expect(overridden.config.models.background?.primary).toBe('cloud/background');
+    expect(overridden.sources['models.background.primary']).toBe('agent');
+    const cleared = resolveEffectiveAgentConfig({ defaults: global, agent: agent({ models: { background: null } }) });
+    expect(cleared.config.models.background).toBeUndefined();
+    expect(cleared.sources['models.background.primary']).toBeUndefined();
+  });
+
   it('inherits global defaults for a minimal agent', () => {
     const result = resolveEffectiveAgentConfig({ defaults, agent: agent() });
 

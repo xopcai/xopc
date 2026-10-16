@@ -1,3 +1,4 @@
+import { getModelUsageOrigin, withModelUsageOrigin } from '../../../providers/model-usage.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { IdleCompactionScheduler } from '../idle-compaction-scheduler.js';
@@ -12,6 +13,13 @@ beforeEach(() => { vi.useFakeTimers(); scheduler = new IdleCompactionScheduler()
 afterEach(() => { scheduler.dispose(); vi.useRealTimers(); });
 
 describe('idle compaction scheduling', () => {
+  it('downgrades inherited interactive timer context before running an idle job', async () => {
+    const origins: string[] = [];
+    withModelUsageOrigin('interactive', () => schedule('scope', async () => { origins.push(getModelUsageOrigin()); return 'committed'; }));
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(origins).toEqual(['background']);
+  });
+
   it('waits for idle and invalidates a provider that ignores cancellation', async () => {
     let resolve!: () => void;
     let mayCommit = true;

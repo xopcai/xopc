@@ -23,6 +23,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { NotesService, NotesStore } from '../../notes/index.js';
 import { ProjectService } from '../../projects/index.js';
+import { assertProviderUsage, getModelUsageOrigin, withModelUsageOrigin } from '../../providers/model-usage.js';
 import {
   closeXopcDatabase,
   openXopcDatabase,
@@ -416,6 +417,47 @@ describe('discussion note document', () => {
     expect(corrected.segments[0]).toMatchObject({ displayText: 'corrected one', correctedByUser: true });
     expect(() => service.correctSegment(created.discussion.id, 0, 'stale', first.revision))
       .toThrowError(DiscussionServiceError);
+  });
+
+  it.each(['live', 'saved'] as const)('retains the user origin for %s recording transcription after dispatch', async mode => {
+    const created = await create(`scope-${mode}`);
+    const recognize = vi.fn(async () => {
+      expect(getModelUsageOrigin()).toBe('interactive');
+      assertProviderUsage('qwen-token-plan-cn');
+      return { text: 'Recording recognized.', provider: 'qwen-token-plan-cn' };
+    });
+    if (mode === 'live') {
+      uploadSegment(created.discussion.id, 0, 'audio');
+      await new DiscussionLiveWorker({ notes, projects, getConfig: () => ({}) as never, transcribeSegment: recognize }).tick();
+      expect(service.transcript(created.discussion.id)?.segments[0]?.status).toBe('confirmed');
+    } else {
+      await uploadRecording(created.discussion.id, null, 2_000);
+      await new DiscussionSealer({ notes, getConfig: () => ({}) as never, transcribeRecording: recognize }).tick();
+      expect((await service.get(created.discussion.id))?.discussion.canonicalTranscript).toBe('Recording recognized.');
+    }
+    expect(recognize).toHaveBeenCalledOnce();
+    expect(getModelUsageOrigin()).toBe('unknown');
+    expect(() => assertProviderUsage('qwen-token-plan-cn')).toThrow('provider_usage_scope_denied');
+  });
+
+  it.each(['live', 'saved'] as const)('does not upgrade explicit background callers in %s recording transcription', async mode => {
+    const created = await create(`background-${mode}`);
+    const recognize = vi.fn(async () => {
+      expect(getModelUsageOrigin()).toBe('background');
+      assertProviderUsage('qwen-token-plan-cn');
+      return { text: 'Must not publish', provider: 'qwen-token-plan-cn' };
+    });
+    if (mode === 'live') {
+      uploadSegment(created.discussion.id, 0, 'audio');
+      await withModelUsageOrigin('background', () => new DiscussionLiveWorker({ notes, projects, getConfig: () => ({}) as never, transcribeSegment: recognize }).tick());
+      expect(service.transcript(created.discussion.id)?.segments[0]?.status).not.toBe('confirmed');
+    } else {
+      await uploadRecording(created.discussion.id, null, 2_000);
+      await withModelUsageOrigin('background', () => new DiscussionSealer({ notes, getConfig: () => ({}) as never, transcribeRecording: recognize }).tick());
+      expect((await service.get(created.discussion.id))?.discussion.canonicalTranscript).toBeUndefined();
+    }
+    expect(recognize).toHaveBeenCalledOnce();
+    expect(getModelUsageOrigin()).toBe('unknown');
   });
 
   it('stops immediately, accepts late uploads, seals confirmed segments, and organizes without changing user markdown', async () => {

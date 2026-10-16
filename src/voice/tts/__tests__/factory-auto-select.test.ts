@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { resolveProviderOrder, resolveSpeechProviderChain } from '../factory.js';
 import '../providers/index.js';
@@ -6,9 +6,15 @@ import type { TTSConfig } from '../types.js';
 import { getModelCatalogStore, resetModelCatalogStore } from '../../../providers/model-catalog-store.js';
 import { voiceFixture } from '../../__tests__/voice-fixture.js';
 
-afterEach(() => resetModelCatalogStore());
+afterEach(() => { resetModelCatalogStore(); vi.unstubAllEnvs(); });
 
 describe('resolveProviderOrder', () => {
+  it('does not charge a connected subscription through automatic speech fallback', () => {
+    vi.stubEnv('QWEN_TOKEN_PLAN_CN_API_KEY','plan-fixture');
+    const config = { enabled:true,provider:'edge',trigger:'off',managedAuto:true } as TTSConfig;
+    expect(resolveProviderOrder('edge',{enabled:false,order:[]},config)).not.toContain('qwen-token-plan-cn');
+    expect(resolveSpeechProviderChain({...config,provider:'qwen-token-plan-cn',managedAuto:false,fallback:{enabled:false,order:[]}}).map(provider=>provider.providerId)).toEqual(['qwen-token-plan-cn']);
+  });
   it('uses explicit fallback order when enabled', () => {
     const order = resolveProviderOrder(
       'openai',

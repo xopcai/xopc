@@ -1,3 +1,5 @@
+import type { ModelSetupUse } from '@xopcai/gateway-contract';
+import { ModelUsesList } from './model-uses-list';
 import { ImageIcon, Plug, type LucideIcon } from 'lucide-react';
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { Link, Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
@@ -47,6 +49,7 @@ export function CapabilitiesSettingsPanel() {
   const chatReturnPath = returnTo?.startsWith('/chat/') ? returnTo : null;
   const { capability } = useParams<{ capability: string }>();
 
+  const [setupUse, setSetupUse] = useState<ModelSetupUse | undefined>();
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [manageTarget, setManageTarget] = useState<{ providerId: string; isCustom: boolean } | null>(null);
   const providerData = useConnectedProviders();
@@ -124,9 +127,10 @@ export function CapabilitiesSettingsPanel() {
             <ConnectedProvidersGrid
               labels={c.connectedProviders}
               data={providerData}
-              onAdd={() => setAddDialogOpen(true)}
+              onAdd={() => { setSetupUse(undefined); setAddDialogOpen(true); }}
               onManage={(providerId, isCustom) => setManageTarget({ providerId, isCustom })}
             />
+            <ModelUsesList data={providerData} zh={language === 'zh'} onChange={use => { setSetupUse(use); setAddDialogOpen(true); }} />
             {providerData.cards.length > 0 ? <ModelCatalogStatus /> : null}
           </>
         ) : (
@@ -136,6 +140,7 @@ export function CapabilitiesSettingsPanel() {
 
       <AddProviderDialog
         open={addDialogOpen}
+        initialUse={setupUse}
         onOpenChange={setAddDialogOpen}
         builtinRows={providerData.builtinRows}
         customConfig={providerData.customConfig}

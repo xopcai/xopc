@@ -1,3 +1,4 @@
+import { assertProviderUsage } from '../../providers/model-usage.js';
 import crypto from 'node:crypto';
 import { createRequire } from 'node:module';
 
@@ -76,6 +77,7 @@ export async function openDashScopeStreamingStt(
   }
 
   const taskId = crypto.randomUUID();
+  assertProviderUsage('alibaba', request.baseUrl);
   const socket = new NodeWebSocket(realtimeUrl(request.baseUrl), {
     headers: {
       Authorization: `Bearer ${request.apiKey}`,

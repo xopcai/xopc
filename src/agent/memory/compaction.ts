@@ -4,6 +4,7 @@ import type { AgentMessage } from '@earendil-works/pi-agent-core';
 import { type Api, type Model, type UserMessage } from '@earendil-works/pi-ai/compat';
 
 import { completeWithResolvedCredentials } from '../../providers/model-call.js';
+import { getModelUsageOrigin, isProviderUsageScopeError } from '../../providers/model-usage.js';
 import { buildSessionContextForLlm, isTranscriptCompactionEntry } from '../../session/session-context-for-llm.js';
 import {
   isCompactionHandover,
@@ -619,6 +620,7 @@ Return a valid JSON delta only.`;
           auditModelRef: reviewed.modelRef,
         };
       } catch (error) {
+        if (isProviderUsageScopeError(error)) throw error;
         signal?.throwIfAborted();
         log.warn({ err: error, conversationId, phase: 'audit' }, 'Compaction gap audit failed; preserving structurally valid handover');
         audit = {
@@ -745,7 +747,7 @@ Return a JSON delta containing only missing facts, using {"upserts":[]}. Include
           }, undefined, {
             operation: 'session.compact',
             conversationId: callContext.conversationId,
-            trigger: attempt === 0 && modelIndex === 0 ? 'system' : 'retry',
+            trigger: attempt === 0 && modelIndex === 0 ? (getModelUsageOrigin() === 'interactive' ? 'agent' : 'system') : 'retry',
           });
           parentSignal?.throwIfAborted();
           if (linked.timedOut()) throw new CompactionRequestError('timeout', 'Compaction handover timed out');
@@ -772,6 +774,7 @@ Return a JSON delta containing only missing facts, using {"upserts":[]}. Include
           'Compaction handover response received');
           return { text, modelRef: `${model.provider}/${model.id}` };
         } catch (error) {
+          if (isProviderUsageScopeError(error)) throw error;
           parentSignal?.throwIfAborted();
           lastError = linked.timedOut()
             ? new CompactionRequestError('timeout', `Compaction handover timed out after ${this.config.summaryTimeoutMs}ms`)

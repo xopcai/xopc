@@ -1,4 +1,6 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { ProviderUsageScopeError } from '../../../../providers/model-usage.js';
+import { describeImagesWithFallback } from '../runtime.js';
 
 import {
   clearImageUnderstandingRegistryForTests,
@@ -32,6 +34,14 @@ describe('ImageUnderstandingProvider registry', () => {
 
     expect(getImageUnderstandingProvider('customvision')).toBe(provider);
     expect(getImageUnderstandingProvider('CUSTOMVISION')).toBe(provider);
+  });
+
+  it('rejects restricted fallback routes without invoking either provider', async () => {
+    const primary = vi.fn(); const fallback = vi.fn();
+    registerImageUnderstandingProvider({ ...createProvider('qwen-token-plan-cn'), describeImages: primary });
+    registerImageUnderstandingProvider({ ...createProvider('paid'), describeImages: fallback });
+    await expect(describeImagesWithFallback({ modelRef: 'qwen-token-plan-cn/vision', fallbacks: ['paid/vision'], images: [], prompt: 'describe' })).rejects.toThrow(ProviderUsageScopeError);
+    expect(primary).not.toHaveBeenCalled(); expect(fallback).not.toHaveBeenCalled();
   });
 
   it('lazily creates and caches providers through registered factories', () => {

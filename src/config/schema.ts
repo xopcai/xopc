@@ -1,3 +1,4 @@
+import { getModelUsageOrigin } from '../providers/model-usage.js';
 import { z } from 'zod';
 
 import semver from 'semver';
@@ -868,7 +869,7 @@ export const VoiceConfigSchema = z
           voice: z.string().trim().min(1).max(200).optional(),
         }).strict().optional(),
         omni: z.object({
-          provider: z.enum(['alibaba', 'xopc-cloud']),
+          provider: z.enum(['alibaba', 'xopc-cloud', 'qwen-token-plan-cn']),
           model: z.string().min(1).max(200),
           voice: z.string().min(1).max(100),
           baseUrl: z.string().url().optional(),
@@ -1319,11 +1320,13 @@ export interface ParsedModelRef {
 }
 
 export function getAgentDefaultModelRef(): string | undefined {
-  return getAgentDefaultModelsConfig()?.chat.primary;
+  const models = getAgentDefaultModelsConfig();
+  return (getModelUsageOrigin() === 'background' ? models?.background?.primary : undefined) ?? models?.chat.primary;
 }
 
 export function getAgentDefaultChatModelConfig(): AgentModelConfig | undefined {
-  return getAgentDefaultModelsConfig()?.chat;
+  const models = getAgentDefaultModelsConfig();
+  return (getModelUsageOrigin() === 'background' ? models?.background : undefined) ?? models?.chat;
 }
 
 function getAgentDefaultModelsConfig(requestedAgentId?: string): ReturnType<typeof resolveEffectiveAgentConfig>['config']['models'] | undefined {

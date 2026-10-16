@@ -1,3 +1,4 @@
+import { assertProviderUsage, isProviderUsageScopeError } from '../../../providers/model-usage.js';
 import { parseModelRef } from '../../../config/schema.js';
 import { getImageUnderstandingProvider } from './provider-registry.js';
 import type { ImageUnderstandingRequest, ImageUnderstandingResult } from './types.js';
@@ -31,6 +32,7 @@ export async function describeImages(
     throw new Error(`Invalid model reference: ${params.modelRef}`);
   }
 
+  assertProviderUsage(parsed.provider);
   const provider = getImageUnderstandingProvider(parsed.provider);
   if (!provider) {
     throw new Error(
@@ -76,6 +78,7 @@ export async function describeImagesWithFallback(
     }
 
     try {
+      assertProviderUsage(parsed.provider);
       const result = await provider.describeImages(parsed.model, {
         images: params.images,
         prompt: params.prompt,
@@ -85,6 +88,7 @@ export async function describeImagesWithFallback(
       });
       return { ...result, attempts };
     } catch (err) {
+      if (isProviderUsageScopeError(err)) throw err;
       lastError = err;
       attempts.push({
         provider: parsed.provider,
