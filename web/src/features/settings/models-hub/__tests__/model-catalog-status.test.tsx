@@ -31,6 +31,7 @@ const mockState = vi.hoisted(() => {
   return {
     catalog,
     catalogError,
+    loading: false,
     capabilities: {
       vision: { status: 'ready', selectionSource: 'explicit-config', primary: { provider: 'cloud', model: 'vision' } },
       'image-generation': { status: 'ready', selectionSource: 'explicit-config', primary: { provider: 'cloud', model: 'image' } },
@@ -44,7 +45,7 @@ const mockState = vi.hoisted(() => {
 vi.mock('swr', () => ({ default: (key: string) => ({
   data: key === 'model-catalog' ? mockState.catalog : { capabilities: mockState.capabilities },
   error: key === 'model-catalog' ? mockState.catalogError : null,
-  isLoading: false,
+  isLoading: key === 'model-catalog' && mockState.loading,
 }) }));
 vi.mock('../models-hub-cache', () => ({
   MODEL_CATALOG_SWR_KEY: 'model-catalog', CAPABILITY_READINESS_SWR_KEY: 'capability-readiness',
@@ -52,6 +53,8 @@ vi.mock('../models-hub-cache', () => ({
 }));
 
 import { ModelCatalogStatus } from '../model-catalog-status';
+import { openCapabilitySettings } from '../open-capability-settings';
+vi.mock('../open-capability-settings', () => ({ openCapabilitySettings: vi.fn() }));
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 const previousApi = window.electronAPI;
@@ -60,8 +63,10 @@ afterEach(async () => {
   await act(async () => root?.unmount());
   root = undefined;
   window.electronAPI = previousApi;
+  vi.mocked(openCapabilitySettings).mockClear();
   mockState.catalog = { sources: {}, references: [], sync: { refreshing: false } };
   mockState.catalogError = null;
+  mockState.loading = false;
   Object.assign(mockState.capabilities, {
     vision: { status: 'ready', selectionSource: 'explicit-config', primary: { provider: 'cloud', model: 'vision' } },
     'image-generation': { status: 'ready', selectionSource: 'explicit-config', primary: { provider: 'cloud', model: 'image' } },
@@ -81,20 +86,29 @@ it.each(['darwin', 'win32', 'linux', undefined])('shows computer setup and its w
   expect(container.textContent).toMatch(/Vision|图片理解/);
 });
 
-it('links every available capability card to its configuration page', async () => {
+it('opens each model capability in its settings dialog instead of navigating', async () => {
   window.electronAPI = undefined;
   const container = document.createElement('div');
   root = createRoot(container);
   await act(async () => root!.render(<MemoryRouter><ModelCatalogStatus /></MemoryRouter>));
+  const cards = container.querySelectorAll<HTMLButtonElement>('button[aria-haspopup="dialog"]');
+  expect(cards).toHaveLength(4);
+  expect(container.querySelector('a[href^="/settings/capabilities/"]')).toBeNull();
+  for (const card of cards) await act(async () => card.click());
+  expect(vi.mocked(openCapabilitySettings).mock.calls).toEqual([
+    ['vision', 'settings'], ['image', 'settings'], ['transcription', 'settings'], ['speech', 'settings'],
+  ]);
+});
 
-  expect(container.querySelector('a[href="/settings/capabilities/models"]')?.textContent).toMatch(/Vision|图片理解/);
-  expect(container.querySelector('a[href="/settings/capabilities/image"]')?.textContent).toMatch(/Image generation|图片生成/);
-  const voiceCards = container.querySelectorAll('a[href="/settings/capabilities/voice"]');
-  expect(voiceCards).toHaveLength(2);
-  expect(Array.from(voiceCards, card => card.textContent)).toEqual(expect.arrayContaining([
-    expect.stringMatching(/STT/),
-    expect.stringMatching(/TTS/),
-  ]));
+it('opens a misconfigured speech capability directly in the service connection tab', async () => {
+  window.electronAPI = undefined;
+  Object.assign(mockState.capabilities.stt, { status: 'unavailable', rejected: [{ provider: 'cloud', model: 'stt' }] });
+  const container = document.createElement('div');
+  root = createRoot(container);
+  await act(async () => root!.render(<MemoryRouter><ModelCatalogStatus /></MemoryRouter>));
+  const card = [...container.querySelectorAll<HTMLButtonElement>('button[aria-haspopup="dialog"]')].find(button => button.textContent?.includes('STT'))!;
+  await act(async () => card.click());
+  expect(openCapabilitySettings).toHaveBeenCalledExactlyOnceWith('transcription', 'services');
 });
 
 it('presents never-configured optional capabilities without warnings', async () => {
@@ -164,4 +178,35 @@ it('keeps confirmed unresolved references actionable without exposing a generic 
   expect(container.textContent).toContain('Agent reviewer');
   expect(container.querySelector('a[href="/capabilities/agents/reviewer"]')).not.toBeNull();
   expect(container.querySelector('[role="alert"]')).toBeNull();
+});
+
+
+it('retains the expanded capability list when an inline repair refreshes its status', async () => {
+  window.electronAPI = undefined;
+  Object.assign(mockState.capabilities.stt, { status: 'unavailable', rejected: [{ provider: 'cloud', model: 'stt' }] });
+  const container = document.createElement('div'); root = createRoot(container);
+  const render = () => root!.render(<MemoryRouter><ModelCatalogStatus /></MemoryRouter>);
+  await act(async () => render());
+  const details = container.querySelector('details')!;
+  expect(details.open).toBe(true);
+  Object.assign(mockState.capabilities.stt, { status: 'ready', rejected: [] });
+  await act(async () => render());
+  expect(details.open).toBe(true);
+  details.open = false;
+  await act(async () => render());
+  expect(details.open).toBe(false);
+});
+
+
+it('opens an actionable warning when readiness arrives before the model catalog', async () => {
+  window.electronAPI = undefined;
+  mockState.loading = true;
+  Object.assign(mockState.capabilities.stt, { status: 'unavailable', rejected: [{ provider: 'cloud', model: 'stt' }] });
+  const container = document.createElement('div'); root = createRoot(container);
+  const render = () => root!.render(<MemoryRouter><ModelCatalogStatus /></MemoryRouter>);
+  await act(async () => render());
+  expect(container.querySelector('details')).toBeNull();
+  mockState.loading = false;
+  await act(async () => render());
+  expect(container.querySelector('details')?.open).toBe(true);
 });

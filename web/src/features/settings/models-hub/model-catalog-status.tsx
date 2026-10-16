@@ -1,5 +1,5 @@
 import { AlertTriangle, ArrowRight, CheckCircle2, ChevronRight, CircleDashed, Loader2, RefreshCw, Wrench } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import useSWR from 'swr';
 
@@ -10,8 +10,9 @@ import { cn } from '@/lib/cn';
 import { isComputerUseAvailable } from '@/lib/electron-env';
 import { apiFetch } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
-import { capabilitySettingsPath } from '@/navigation';
 import { useLocaleStore } from '@/stores/locale-store';
+
+import { openCapabilitySettings } from './open-capability-settings';
 
 import {
   CAPABILITY_READINESS_SWR_KEY,
@@ -74,48 +75,29 @@ function capabilityAction(capability: CapabilityId, zh: boolean) {
   switch (capability) {
     case 'computer-use':
       return {
-        href: '/settings/computer-use',
         guidance: zh ? '选择兼容的电脑控制模型；本机权限需单独授权' : 'Select a compatible computer model; local access requires separate approval',
         action: zh ? '配置电脑控制' : 'Configure computer use',
       };
     case 'vision':
       return {
-        href: `${capabilitySettingsPath('models')}?add=1`,
         guidance: zh ? '接入支持图片理解的模型服务' : 'Connect a model service that supports vision',
         action: zh ? '去接入模型' : 'Connect model',
       };
     case 'image-generation':
       return {
-        href: capabilitySettingsPath('image'),
         guidance: zh ? '选择图片模型并配置所需凭据' : 'Choose an image model and configure its credentials',
         action: zh ? '去配置图片生成' : 'Configure image generation',
       };
     case 'stt':
       return {
-        href: capabilitySettingsPath('voice'),
         guidance: zh ? '选择语音识别服务，或安装自管 STT 扩展' : 'Choose a speech-to-text service or install a self-managed STT extension',
         action: zh ? '去配置语音识别' : 'Configure speech-to-text',
       };
     case 'tts':
       return {
-        href: capabilitySettingsPath('voice'),
         guidance: zh ? '选择语音合成服务并完成凭据配置' : 'Choose a text-to-speech service and configure its credentials',
         action: zh ? '去配置语音合成' : 'Configure text-to-speech',
       };
-  }
-}
-
-function capabilitySettingsHref(capability: CapabilityId): string {
-  switch (capability) {
-    case 'computer-use':
-      return '/settings/computer-use';
-    case 'vision':
-      return capabilitySettingsPath('models');
-    case 'image-generation':
-      return capabilitySettingsPath('image');
-    case 'stt':
-    case 'tts':
-      return capabilitySettingsPath('voice');
   }
 }
 
@@ -159,10 +141,6 @@ export function ModelCatalogStatus() {
   const [refreshing, setRefreshing] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
-  if (isLoading) {
-    return <Skeleton className="h-24 w-full rounded-2xl" />;
-  }
-
   const sources = Object.values(data?.sources ?? {});
   const availableCount = sources.reduce(
     (sum, source) => sum + source.models.filter((model) => model.availability === 'available').length,
@@ -188,6 +166,13 @@ export function ModelCatalogStatus() {
     return status === 'degraded' || status === 'misconfigured';
   });
   const readyCount = capabilityEntries.filter(([, plan]) => deriveCapabilityDisplayStatus(plan) === 'ready').length;
+  const capabilityDetails = useRef<HTMLDetailsElement>(null);
+  useEffect(() => {
+    if (capabilityNeedsAttention && !isLoading) capabilityDetails.current?.setAttribute('open', '');
+  }, [capabilityNeedsAttention, isLoading]);
+
+  if (isLoading) return <Skeleton className="h-24 w-full rounded-2xl" />;
+
 
   const refresh = async () => {
     setRefreshing(true);
@@ -205,7 +190,7 @@ export function ModelCatalogStatus() {
 
   return (
     <section className="rounded-xl bg-surface-hover/25 p-4 sm:p-5">
-      <details className="group" open={capabilityNeedsAttention || undefined}>
+      <details ref={capabilityDetails} className="group">
         <summary className="cursor-pointer list-none rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
           <div className="flex min-h-10 items-center gap-2">
             {capabilityNeedsAttention ? (
@@ -287,20 +272,17 @@ export function ModelCatalogStatus() {
                 </>
               );
 
-              return (
-                <Link
-                  key={capability}
-                  to={needsAttention ? action.href : capabilitySettingsHref(capability)}
-                  aria-label={needsAttention ? `${label}：${action.action}` : `${zh ? '配置' : 'Configure'} ${label}`}
-                  className={cn(
-                    'rounded-lg bg-surface-base/45 px-3 py-3 transition-colors',
-                    needsAttention ? 'bg-amber-500/5 hover:bg-amber-500/10' : 'hover:bg-surface-hover/30',
-                    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
-                  )}
-                >
-                  {content}
-                </Link>
-              );
+              const props = {
+                'aria-label': needsAttention ? `${label}：${action.action}` : `${zh ? '配置' : 'Configure'} ${label}`,
+                className: cn(
+                  'rounded-lg bg-surface-base/45 px-3 py-3 text-left transition-colors',
+                  needsAttention ? 'bg-amber-500/5 hover:bg-amber-500/10' : 'hover:bg-surface-hover/30',
+                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+                ),
+              };
+              if (capability === 'computer-use') return <Link key={capability} to="/settings/computer-use" {...props}>{content}</Link>;
+              const use = ({ vision: 'vision', 'image-generation': 'image', stt: 'transcription', tts: 'speech' } as const)[capability];
+              return <button key={capability} type="button" aria-haspopup="dialog" {...props} onClick={() => openCapabilitySettings(use, needsAttention ? 'services' : 'settings')}>{content}</button>;
             })}
           </div>
         ) : null}

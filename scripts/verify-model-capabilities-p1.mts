@@ -31,6 +31,7 @@ let server: Awaited<ReturnType<typeof createServer>> | undefined;
 let browser: Awaited<ReturnType<typeof playwright.chromium.launch>> | undefined;
 const writes: Array<{ provider: string; selected: string[] }> = [];
 let connected = false;
+let visionNeedsRepair = false;
 let holdApply = false;
 let releaseApply: (() => void) | undefined;
 const configWrites: unknown[] = [];
@@ -55,13 +56,14 @@ try {
         if (holdApply) await new Promise<void>(resolve => { releaseApply = resolve; });
         const result = applyProviderSetup(snapshot(match[1]), request, request.revision);
         defaults = result.defaults; config = applySetupVoice(config, result.voiceAssignments);
+        if (request.selected?.includes('vision')) visionNeedsRepair = false;
         writes.push({ provider: match[1], selected: request.selected });
       }
       body = { payload: previewProviderSetup(snapshot(match[1]), match[2] === 'preview' ? request : {}) };
     } else if (path === '/api/config' && route.request().method() === 'PATCH') { configWrites.push(route.request().postDataJSON()); connected = true; body = { ok:true }; }
     else if (path === '/api/providers/meta') body = { payload: { providers: providers.filter(id => id !== 'xopc-cloud').map(id => ({id, name:id, category:'common', supportsOAuth:false,supportsApiKey:true,configured:id !== 'qwen-token-plan-cn' || connected,setupProfile:getProviderSetupProfile(id)})) } };
-    else if (path === '/api/models/catalog') body = {payload:{sources:{},references:[],sync:{refreshing:false}}};
-    else if (path === '/api/capabilities/readiness') body = {payload:{capabilities:[]}};
+    else if (path === '/api/models/catalog') body = {ok:true,payload:{sources:{},references:[],sync:{refreshing:false}}};
+    else if (path === '/api/capabilities/readiness') body = { ok: true, payload: { capabilities: { vision: visionNeedsRepair ? { status: 'unavailable', selectionSource: 'explicit-config', rejected: [{ provider: 'xopc-cloud', model: 'removed' }] } : { status: 'ready', selectionSource: 'explicit-config', primary: { provider: 'qwen-token-plan-cn', model: 'fast' } } } } };
     else if (path === '/api/models-json') body = { payload: { config: {providers:{}} } };
     else if (path === '/api/voice/models') body = { payload: { models:{stt:{},tts:{},ttsVoices:{}} } };
     else if (path === '/api/image-generation/default') body = {payload:{model:null}};
@@ -125,14 +127,98 @@ try {
   await page.screenshot({path:join(directory,'overview-mobile.png'),fullPage:true});
   await page.evaluate(()=>document.documentElement.classList.add('dark'));
   await page.screenshot({path:join(directory,'overview-dark.png'),fullPage:true});
+  await page.goto(`${url}#/settings/capabilities/models?view=services&use=transcription&from=voice&returnTo=%2Fchat%2Flegacy-recording`);
+  await page.getByRole('heading', { name: '接入服务 · 录音与听写', exact: true }).waitFor();
+  assert.equal(await page.getByRole('link', { name: '返回对话', exact: true }).getAttribute('href'), '#/chat/legacy-recording');
+  await page.getByRole('link', { name: '返回录音与听写', exact: true }).click();
+  const legacyReturn = new URL(page.url().split('#')[1], 'https://fixture.local');
+  assert.equal(legacyReturn.searchParams.get('use'), 'transcription');
+  assert.equal(legacyReturn.searchParams.get('from'), 'voice');
+  assert.equal(legacyReturn.searchParams.get('returnTo'), '/chat/legacy-recording');
+  assert.equal(legacyReturn.searchParams.get('view'), null);
+  await page.goto(`${url}#/settings/capabilities/models?view=services`);
+  await page.getByRole('heading', { name: '连接的服务', exact: true }).waitFor();
+  const serviceOrigin = page.url();
+  const serviceWriteCount = writes.length;
+  const backgroundBeforeService = structuredClone(defaults.models.background);
+  const serviceLabels = ['对话与任务', '看图', '生成图片', '录音与听写', '文字转语音', '实时语音对话', '自动与后台任务'];
+  for (const label of serviceLabels) {
+    const entry = page.getByRole('button', { name: label, exact: true });
+    await entry.scrollIntoViewIfNeeded();
+    const scrollState = await entry.evaluateHandle(element => {
+      const positions: Array<{ element: HTMLElement; top: number }> = [];
+      for (let parent = element.parentElement; parent; parent = parent.parentElement) positions.push({ element: parent, top: parent.scrollTop });
+      return positions;
+    });
+    await entry.click();
+    await modal.getByRole('heading', { name: label, exact: true }).first().waitFor();
+    assert.equal(page.url(), serviceOrigin);
+    assert.equal(await modal.getByRole('tab', { name: '管理服务', exact: true }).getAttribute('aria-selected'), 'true');
+    if (label === '录音与听写') {
+      await modal.getByRole('button', { name: /阿里云百炼订阅 · 北京/ }).click();
+      await modal.getByRole('button', { name: '更换', exact: true }).click();
+      const keyDraft = modal.locator('#provider-setup-key');
+      await keyDraft.fill('fixture-unsaved-service-key');
+      await modal.getByRole('button', { name: '完成', exact: true }).click();
+      await page.waitForFunction(label => document.activeElement?.textContent?.trim() === label, label);
+      await entry.click();
+      assert.equal(await keyDraft.inputValue(), 'fixture-unsaved-service-key');
+      await modal.getByRole('button', { name: '保留原 Key', exact: true }).click();
+      assert.equal(page.url(), serviceOrigin);
+    }
+    if (label === '对话与任务') {
+      await modal.getByRole('button', { name: /阿里云百炼订阅 · 北京/ }).click();
+      await modal.getByRole('button', { name: '使用此模型', exact: true }).click();
+      await modal.getByRole('heading', { name: '阿里云百炼订阅 · 北京', exact: true }).waitFor({ state: 'hidden' });
+      assert.equal(await modal.getByRole('tab', { name: '模型与参数', exact: true }).getAttribute('aria-selected'), 'true');
+      assert.equal(defaults.models.chat.primary, 'qwen-token-plan-cn/fast');
+      assert.deepEqual(defaults.models.background, backgroundBeforeService);
+    }
+    await modal.getByRole('tab', { name: '模型与参数', exact: true }).click();
+    assert.equal(page.url(), serviceOrigin);
+    await modal.getByRole('button', { name: '完成', exact: true }).click();
+    await page.waitForFunction(label => document.activeElement?.textContent?.trim() === label, label);
+    assert.equal(page.url(), serviceOrigin);
+    assert.ok(await scrollState.evaluate(positions => positions.every(({ element, top }) => Math.abs(element.scrollTop - top) <= 1)), 'Service page scroll must survive closing settings');
+    await scrollState.dispose();
+  }
+  assert.equal(configWrites.length, 1, 'Reusing a service must not rewrite its credentials');
+  assert.equal(writes.length, serviceWriteCount + 1, 'Only the explicit chat application may write models');
+  assert.deepEqual(writes.at(-1), { provider: 'qwen-token-plan-cn', selected: ['chat'] });
+  await page.screenshot({path:join(directory,'service-accounts-mobile.png'),fullPage:true});
+  visionNeedsRepair = true;
+  await page.reload();
+  const repair = page.getByRole('button', { name: '图片理解：去接入模型', exact: true });
+  await repair.waitFor();
+  await repair.click();
+  await modal.getByRole('heading', { name: '看图', exact: true }).waitFor();
+  assert.equal(page.url(), serviceOrigin);
+  await modal.getByRole('button', { name: /阿里云百炼订阅 · 北京/ }).click();
+  await modal.getByRole('button', { name: '使用此模型', exact: true }).click();
+  await modal.getByRole('heading', { name: '阿里云百炼订阅 · 北京', exact: true }).waitFor({ state: 'hidden' });
+  await page.waitForFunction(() => document.querySelector('button[aria-label="配置 图片理解"]') !== null);
+  const configuredVision = page.locator('button[aria-label="配置 图片理解"]');
+  assert.ok(await configuredVision.evaluate(element => element.closest('details')!.open), 'Status refresh must not collapse the invoking capability list');
+  await modal.getByRole('button', { name: '完成', exact: true }).click();
+  await page.waitForFunction(() => document.activeElement?.getAttribute('aria-label') === '配置 图片理解');
+  assert.ok(await configuredVision.isVisible());
+  assert.equal(page.url(), serviceOrigin);
+  assert.equal(writes.length, serviceWriteCount + 2);
+  assert.deepEqual(writes.at(-1), { provider: 'qwen-token-plan-cn', selected: ['vision'] });
+  assert.deepEqual(defaults.models.background, backgroundBeforeService);
+
   await page.goto(`${url}#/settings/capabilities/image`);
   await page.waitForURL('**use=image');
   await page.getByRole('heading',{name:'生成图片',exact:true}).waitFor();
   assert.equal(configWrites.length,1,'Opening legacy image settings must not write configuration');
   assert.deepEqual(errors,[]);
-  const report={passed:true,connectionAppliesOnlyCurrentCapability:true,samePageSettings:true,explicitSingleUseSwitch:true,switchLocksVoiceParameters:true,advancedVoiceReturnsToOriginalCapability:true,backgroundPlansExcluded:true,mobileOverflow:false,legacyImageUrlPreserved:true,realCredentialsUsed:false,directory};
+  const report={passed:true,connectionAppliesOnlyCurrentCapability:true,samePageSettings:true,serviceAccountsStayInPlace:true,serviceAccountApplyInPlace:true,optionalRepairPreservesExpansionAndFocus:true,serviceDraftPreserved:true,legacyServiceReturnContextPreserved:true,explicitSingleUseSwitch:true,switchLocksVoiceParameters:true,advancedVoiceReturnsToOriginalCapability:true,backgroundPlansExcluded:true,mobileOverflow:false,legacyImageUrlPreserved:true,realCredentialsUsed:false,directory};
   await writeFile(join(directory,'report.json'),JSON.stringify(report,null,2));
   console.log(JSON.stringify(report));
-} catch (error) { console.error(error); throw error; } finally {
+} catch (error) {
+  const page = browser?.contexts()[0]?.pages()[0];
+  await page?.screenshot({ path: join(directory, 'failure.png'), fullPage: true }).catch(() => {});
+  console.error(error); throw error;
+} finally {
   await browser?.close(); await server?.close(); await Promise.all(files.map(file => rm(file, { force: true })));
 }
