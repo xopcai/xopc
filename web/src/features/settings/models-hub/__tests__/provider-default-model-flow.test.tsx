@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act } from 'react';
+import { act, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
@@ -138,4 +138,25 @@ it('keeps duplicate model ID rows mounted when editing and removing an earlier s
   expect(inputs[0].isConnected).toBe(false);
   expect(inputs[1].isConnected).toBe(true);
   expect(inputs[1].value).toBe('same-model');
+});
+
+
+it('returns keyboard focus to the service card after the management dialog closes', async () => {
+  function Account() {
+    const [open, setOpen] = useState(false);
+    return <><button onClick={() => setOpen(true)}>Service card</button>{open ? <ProviderManageDialog open onOpenChange={setOpen}
+      providerId="custom" isCustom builtinRows={[]} allModels={[]}
+      customConfig={{ providers: { custom: { baseUrl: 'https://example.com', models: [{ id: 'existing' }] } } }}
+      labels={messages('en').capabilitiesSettings.manageProviderDialog} language="en" onSaved={onSaved}
+    /> : null}</>;
+  }
+  await act(async () => root.render(<MemoryRouter><Account /></MemoryRouter>));
+  const card = container.querySelector('button')!;
+  card.focus();
+  await act(async () => card.click());
+  expect(document.querySelector('[role="dialog"]')).not.toBeNull();
+  await act(async () => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })));
+  await act(async () => new Promise(resolve => setTimeout(resolve, 20)));
+  expect(document.querySelector('[role="dialog"]')).toBeNull();
+  expect(document.activeElement).toBe(card);
 });
