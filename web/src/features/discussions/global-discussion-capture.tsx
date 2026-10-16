@@ -3,9 +3,10 @@ import { apiUrl } from '@/lib/url';
 import { RecordingOutcomeCard, recordingOutcomeInput } from './recording-outcome-card';
 import { Bookmark, FileText, Mic, Pause, Play, Square, Unlink, X } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
 import { isElectron } from '@/lib/electron-env';
 import { messages } from '@/i18n/messages';
 import { useGatewayStore } from '@/stores/gateway-store';
@@ -47,6 +48,7 @@ function formatDuration(durationMs: number): string {
 
 export function GlobalDiscussionCaptureHost() {
   const navigate = useNavigate();
+  const location = useLocation();
   const token = useGatewayStore((state) => state.conversationId);
   const gatewayUrl = useGatewayStore(state => state.baseUrl);
   const [annotationSyncFailed, setAnnotationSyncFailed] = useState(false);
@@ -55,6 +57,9 @@ export function GlobalDiscussionCaptureHost() {
   const language = useLocaleStore((state) => state.language);
   const copy = messages(language).notes.discussionCapture;
   const recorder = useDiscussionRecorder();
+  const openedResultNote = useRef(false);
+  const startInFlight = useRef(false);
+  const [preparing, setPreparing] = useState(false);
   const [compact, setCompact] = useState(false);
   const [visible, setVisible] = useState(false);
   const [consentVersion, setConsentVersion] = useState<number | null>(null);
@@ -66,6 +71,7 @@ export function GlobalDiscussionCaptureHost() {
   const [recovering, setRecovering] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [pendingSegmentCount, setPendingSegmentCount] = useState(0);
+  const [captureSyncError, setCaptureSyncError] = useState<string | null>(null);
   const [operationError, setOperationError] = useState<string | null>(null);
   const [syncStage, setSyncStage] = useState<RecordingSyncStage>('pending');
   const [localReleased, setLocalReleased] = useState(false);
@@ -112,7 +118,7 @@ export function GlobalDiscussionCaptureHost() {
       window.setTimeout(() => restartSegmentQueueRef.current(), 0);
     }).catch((error) => {
       if (!controller.signal.aborted) {
-        setOperationError(error instanceof Error ? error.message : copy.saveFailed);
+        setCaptureSyncError(error instanceof Error ? error.message : copy.saveFailed);
       }
     });
     return running;
@@ -146,6 +152,7 @@ export function GlobalDiscussionCaptureHost() {
   }, [ensureSegmentQueueDrain]);
 
   const beginRecording = useCallback(async (projectId: string | undefined, policyVersion: number) => {
+    openedResultNote.current = false; setCaptureSyncError(null);
     setCompact(false);
     setConsentVersion(null);
     setPendingProjectId(undefined);
@@ -178,14 +185,16 @@ export function GlobalDiscussionCaptureHost() {
       void connectSegmentQueue(draft.id, created.discussion.id);
     } catch (error) {
       setSyncStage('failed');
-      setOperationError(error instanceof Error ? error.message : copy.saveFailed);
+      setCaptureSyncError(error instanceof Error ? error.message : copy.saveFailed);
     }
   }, [connectSegmentQueue, copy.saveFailed, recorder, uploadLiveSegment, gatewayUrl]);
 
   useEffect(() => () => segmentQueueAbortRef.current?.abort(), []);
 
   const prepareStart = useCallback(async (projectId?: string) => {
-    if (!token || ['recording', 'waiting_for_audio', 'requesting_permission', 'paused', 'stopping'].includes(recorder.phase) || finishing) return;
+    if (!token || startInFlight.current || finishing) return;
+    if (['recording', 'waiting_for_audio', 'requesting_permission', 'paused', 'stopping'].includes(recorder.phase)) { setVisible(true); setCompact(false); return; }
+    startInFlight.current = true; setPreparing(true);
     setVisible(true);
     setOperationError(null);
     try {
@@ -199,7 +208,7 @@ export function GlobalDiscussionCaptureHost() {
       await beginRecording(projectId, settings.consentPolicyVersion);
     } catch (error) {
       setOperationError(error instanceof Error ? error.message : copy.saveFailed);
-    }
+    } finally { startInFlight.current = false; setPreparing(false); }
   }, [beginRecording, copy.saveFailed, finishing, recorder.phase, token]);
 
   useEffect(() => {
@@ -216,7 +225,7 @@ export function GlobalDiscussionCaptureHost() {
     const id = detail?.discussion.id;
     if (!draft || !id || !draft.chunkCount || finishing || originalUploadRef.current || !['recording', 'waiting_for_audio', 'paused'].includes(recorder.phase)) return;
     const upload = uploadDraftRecording(draft, id, setUploadProgress, false, setSyncStage)
-      .catch((error) => { setSyncStage('failed'); setOperationError(error instanceof Error ? error.message : copy.saveFailed); })
+      .catch((error) => { setSyncStage('failed'); setCaptureSyncError(error instanceof Error ? error.message : copy.saveFailed); })
       .finally(() => { originalUploadRef.current = null; });
     originalUploadRef.current = upload;
   }, [recorder.draft, recorder.phase, detail?.discussion.id, finishing, copy.saveFailed]);
@@ -249,13 +258,14 @@ export function GlobalDiscussionCaptureHost() {
   }, [detail, refreshServerState]);
 
   const confirmConsent = async () => {
-    if (consentVersion == null) return;
+    if (consentVersion == null || startInFlight.current) return;
+    startInFlight.current = true; setPreparing(true);
     try {
       rememberDiscussionConsent(await acknowledgeDiscussionConsent(consentVersion));
       await beginRecording(pendingProjectId, consentVersion);
     } catch (error) {
       setOperationError(error instanceof Error ? error.message : copy.saveFailed);
-    }
+    } finally { startInFlight.current = false; setPreparing(false); }
   };
 
   const finish = async () => {
@@ -309,9 +319,16 @@ export function GlobalDiscussionCaptureHost() {
     if (recorder.phase === 'stopped' && recorder.draft?.saveOutcome === 'complete' && recordingSessionRef.current) void finish();
   });
 
+  useEffect(() => {
+    if ((openedResultNote.current || location.pathname === `/notes/${encodeURIComponent(detail?.note.id ?? '')}`) && !annotationSyncFailed && detail?.discussion.audioAttachmentId && !detail.discussion.audioDeletedAt
+      && !['recording','paused','waiting_for_audio','requesting_permission'].includes(recorder.phase)) setVisible(false);
+  },[detail,recorder.phase,annotationSyncFailed,location.pathname]);
+
   const openNote = () => {
     if (!detail) return;
+    openedResultNote.current = !['recording','paused','waiting_for_audio','requesting_permission'].includes(recorder.phase);
     setCompact(true);
+    if (openedResultNote.current && detail.discussion.audioAttachmentId && !detail.discussion.audioDeletedAt && !annotationSyncFailed) setVisible(false);
     navigate(`/notes/${encodeURIComponent(detail.note.id)}`);
   };
 
@@ -487,7 +504,7 @@ export function GlobalDiscussionCaptureHost() {
             </button>
           </div>
           {operationError ? <p className="mt-3 text-sm text-danger">{operationError}</p> : null}
-          <Button variant="primary" className="mt-5 w-full" onClick={() => void confirmConsent()}>
+          <Button variant="primary" className="mt-5 w-full" disabled={preparing} onClick={() => void confirmConsent()}>
             <Mic className="size-4" aria-hidden />
             {copy.consentAction}
           </Button>
@@ -495,6 +512,10 @@ export function GlobalDiscussionCaptureHost() {
       </div>
     );
   }
+
+  if (preparing && !['recording','paused','waiting_for_audio','requesting_permission'].includes(recorder.phase)) return <RecordingFloatingPanel compact={compact} onCompactChange={setCompact} language={language} title={language === 'zh' ? '准备录音' : 'Preparing to record'}>
+    <div className="space-y-3 p-4" role="status"><Skeleton className="h-7 w-24" /><Skeleton className="h-3 w-3/4" /></div>
+  </RecordingFloatingPanel>;
 
   const active = ['recording', 'paused', 'requesting_permission', 'waiting_for_audio'].includes(recorder.phase);
   if (!active && (finishing || locallyFinalized || recorder.phase === 'stopping' || recorder.phase === 'error')) {
@@ -508,7 +529,7 @@ export function GlobalDiscussionCaptureHost() {
       } catch (error) { setOperationError(String(error)); }
       finally { setOutcomeBusy(false); }
     };
-    return <RecordingFloatingPanel compact={compact} onCompactChange={setCompact} language={language} title={language === 'zh' ? '录音已结束' : 'Recording ended'} subtitle={formatDuration(recorder.elapsedMs)}>
+    return <RecordingFloatingPanel compact={compact} onCompactChange={setCompact} language={language} title={language === 'zh' ? '录音已结束' : 'Recording ended'} subtitle={formatDuration(detail?.discussion.durationMs ?? locallyFinalized?.durationMs ?? recorder.elapsedMs)}>
       <div className="p-3"><RecordingOutcomeCard input={input} zh={language === 'zh'} compact={compact} busy={outcomeBusy || finishing || recovering} onRetry={mode => void retryOutcome(mode)}>
         {annotationSyncFailed ? <div className="text-xs text-fg-muted"><p>{language === 'zh' ? '重点同步未完成，原音和笔记处理不受影响。' : 'Highlights are not synced yet. Audio and note processing are unaffected.'}</p><Button disabled={outcomeBusy || finishing || recovering} onClick={() => void (async () => {
           if (!detail || !locallyFinalized || outcomeBusy) return;
@@ -536,7 +557,7 @@ export function GlobalDiscussionCaptureHost() {
     {recorder.phase === 'paused' ? <Button className={small ? 'size-10 shrink-0 px-0 shadow-none' : 'min-w-0 whitespace-nowrap shadow-none'} aria-label={copy.resume} title={copy.resume} onClick={recorder.resume}><Play className="size-4 shrink-0" aria-hidden />{!small ? copy.resume : null}</Button> : null}
     {['recording','waiting_for_audio','paused'].includes(recorder.phase) ? <Button variant="primary" className={small ? 'size-10 shrink-0 px-0' : 'min-w-0 whitespace-nowrap'} aria-label={copy.stop} title={copy.stop} disabled={finishing} onClick={() => void finish()}><Square className="size-4 shrink-0" aria-hidden />{!small ? copy.stop : null}</Button> : null}
   </>;
-  const warning = operationError ?? recorder.error ?? recorder.markerError;
+  const warning = operationError ?? recorder.error ?? recorder.markerError ?? (online && status.sync === 'failed' ? captureSyncError : null);
   const warningLabel = status.capture === 'interrupted' ? (zh ? '录音已中断，请展开查看已保存内容。' : 'Recording interrupted. Review the saved content.')
     : recorder.markerError ? (zh ? '重点未能保存，请稍后重试。' : 'Highlight could not be saved. Try again.')
     : status.sync === 'failed' ? (zh ? '暂时无法同步，请稍后重试。' : 'Sync is unavailable. Please try again later.')
