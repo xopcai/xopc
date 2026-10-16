@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import useSWR from 'swr';
 
 import { Button } from '@/components/ui/button';
@@ -12,7 +12,7 @@ import { apiUrl } from '@/lib/url';
 import { revalidateModelsHubCaches } from './models-hub-cache';
 
 /** Preserve the native STT/TTS credential domains; connecting never assigns a route. */
-export function MediaServiceConnections({ zh, kind, modelServiceIds, onSaved }: { zh: boolean; kind?: 'stt' | 'tts'; modelServiceIds: string[]; onSaved: () => void }) {
+export function MediaServiceConnections({ zh, kind, modelServiceIds, onSaved, onPendingChange }: { zh: boolean; kind?: 'stt' | 'tts'; modelServiceIds: string[]; onSaved: () => void; onPendingChange?: (pending: boolean) => void }) {
   const { data, error, mutate } = useSWR(['native-voice-connections', kind ?? 'all', modelServiceIds.join(',')], async () => {
     const [stt, tts] = await Promise.all([kind === 'tts' ? Promise.resolve({ providers: [] }) : fetchVoiceSttProviders(), kind === 'stt' ? Promise.resolve({ providers: [] }) : fetchVoiceProviders()]);
     return [...stt.providers.map(entry => ({ ...entry, kind: 'stt' as const })), ...tts.providers.map(entry => ({ ...entry, kind: 'tts' as const }))]
@@ -21,11 +21,14 @@ export function MediaServiceConnections({ zh, kind, modelServiceIds, onSaved }: 
   const [selected, setSelected] = useState('');
   const [fields, setFields] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
+  const saving = useRef(false);
   const [failure, setFailure] = useState('');
+  useEffect(() => { onPendingChange?.(busy); return () => onPendingChange?.(false); }, [busy, onPendingChange]);
   const entry = data?.find(entry => `${entry.kind}:${entry.id}` === selected);
   const connectionFields = entry?.fields.filter(field => field.secret || field.type === 'password' || ['baseUrl', 'region', 'groupId'].includes(field.key)) ?? [];
   const save = async () => {
-    if (!entry || busy) return;
+    if (!entry || saving.current) return;
+    saving.current = true;
     setBusy(true); setFailure('');
     try {
       const patch = Object.fromEntries(Object.entries(fields).filter(([, value]) => value.trim()).map(([key, value]) => [key, value.trim()]));
@@ -34,7 +37,7 @@ export function MediaServiceConnections({ zh, kind, modelServiceIds, onSaved }: 
       if (!fresh?.find(source => source.kind === entry.kind && source.id === entry.id)?.configured) throw new Error(zh ? '连接尚未就绪，请补齐所需凭据。' : 'Connection is not ready. Complete the required credentials.');
       setFields({}); onSaved();
     } catch (cause) { setFailure(cause instanceof Error ? cause.message : String(cause)); }
-    finally { setBusy(false); }
+    finally { saving.current = false; setBusy(false); }
   };
   return <section className="space-y-4 rounded-xl border border-edge p-4">
     <h2 className="text-sm font-semibold text-fg">{kind === 'stt' ? (zh ? '其他识别服务' : 'Other recognition services') : kind === 'tts' ? (zh ? '其他合成服务与本地语音' : 'Other synthesis services and local speech') : (zh ? '语音 API 与本地语音' : 'Voice APIs and local speech')}</h2>
@@ -50,7 +53,7 @@ export function MediaServiceConnections({ zh, kind, modelServiceIds, onSaved }: 
         {field.secret || field.type === 'password' ? <SecretInput labels={DEFAULT_SECRET_INPUT_LABELS} value={fields[field.key] ?? ''} onChange={value => setFields(current => ({ ...current, [field.key]: value }))} disabled={busy} /> : field.options?.length ? <Select value={fields[field.key] ?? ''} disabled={busy} onChange={event => setFields(current => ({ ...current, [field.key]: event.target.value }))}><SelectOption value="">{zh ? '保留现有值' : 'Keep existing'}</SelectOption>{field.options.map(option => <SelectOption key={option.id} value={option.id}>{option.name}</SelectOption>)}</Select> : <input className="w-full rounded-lg border border-edge bg-surface-panel p-2" value={fields[field.key] ?? ''} disabled={busy} placeholder={field.placeholder} onChange={event => setFields(current => ({ ...current, [field.key]: event.target.value }))} />}
       </label>)}
       {failure ? <p role="alert" className="text-sm text-danger">{failure}</p> : null}
-      <Button disabled={busy || (!entry.configured && entry.diagnostics.requiresApiKey && !Object.values(fields).some(value => value.trim()))} onClick={() => void save()}>{busy ? (zh ? '保存中…' : 'Saving…') : (zh ? '保存连接并返回' : 'Save connection and return')}</Button>
+      <Button disabled={busy || (!entry.configured && entry.diagnostics.requiresApiKey && !Object.values(fields).some(value => value.trim()))} onClick={() => void save()}>{busy ? (zh ? '保存中…' : 'Saving…') : (zh ? '保存连接' : 'Save connection')}</Button>
     </> : null}
   </section>;
 }

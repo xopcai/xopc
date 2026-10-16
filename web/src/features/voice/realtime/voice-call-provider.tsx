@@ -1,3 +1,4 @@
+import { openCapabilitySettings } from '@/features/settings/models-hub/open-capability-settings';
 import * as Dialog from '@radix-ui/react-dialog';
 import { AudioLines, Captions, Ellipsis, Mic, MicOff, Minimize2, Phone, PhoneOff } from 'lucide-react';
 import { useEffect, useRef, useState, type PointerEvent, type ReactNode } from 'react';
@@ -112,7 +113,7 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
     setMiniPosition(null);
   };
   const settingsPath = `/settings/capabilities/models?use=conversation&returnTo=${encodeURIComponent(`/chat/${encodeURIComponent(target?.conversationId ?? '')}`)}`;
-  const settingsLink = <Link to={settingsPath} onClick={() => setExpanded(false)} className="text-sm text-accent-fg hover:underline">{m.callSettings}</Link>;
+  const settingsLink = <Link to={settingsPath} onClick={event => { if (!event.metaKey && !event.ctrlKey && !event.shiftKey && event.button === 0) { event.preventDefault(); openCapabilitySettings('conversation'); setExpanded(false); } }} className="text-sm text-accent-fg hover:underline">{m.callSettings}</Link>;
 
   return <VoiceCallContext.Provider value={context}>
     {children}

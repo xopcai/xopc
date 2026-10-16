@@ -1,0 +1,180 @@
+{
+  "date": "2026-10-16",
+  "configurationFlow": {
+    "directory": "/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-model-inline-rYSfZM",
+    "passed": true,
+    "realGateway": true,
+    "realVendorRequests": false,
+    "checks": [
+      "Speech readout parameter saved inline and restored; no route change",
+      "Service draft survives closing and reopening the modal without saving a key",
+      "Saved Bailian credential reused and applied only to transcription within the same modal",
+      "Recognition language saves twice with acknowledged revisions and preserves the model",
+      "Direct model switching changes vision only and leaves background and chat routes unchanged; original settings restored",
+      "Authenticated stale voice write returns 409 before changing the model; legacy unguarded save remains supported",
+      "Legacy detail connection mounts one speech editor",
+      "Stale voice save preserves its draft; inline reload recovers without leaving chat",
+      "Context settings sheet preserves chat route, draft, focusable model picker and modal stacking",
+      "Custom image connection dialog stays visible inside the settings sheet and closes back to the draft",
+      "Voice entry retains three inline capabilities and fits mobile dark mode"
+    ],
+    "errors": [],
+    "error": ""
+  },
+  "liveMedia": {
+    "startedAt": "2026-10-16T10:34:37.878Z",
+    "directory": "/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-model-consolidation-iCaQxt",
+    "realGateway": true,
+    "realVendorRequests": true,
+    "syntheticMicrophone": true,
+    "checks": [
+      {
+        "name": "default-tts",
+        "passed": true,
+        "provider": "qwen-token-plan-cn"
+      },
+      {
+        "name": "single-model-settings-entry",
+        "passed": true,
+        "summaryLinksToCapability": true,
+        "advancedTaskRoutesRetained": true
+      },
+      {
+        "name": "shared-transcription-settings",
+        "passed": true
+      },
+      {
+        "name": "page-dictation",
+        "passed": true,
+        "provider": "qwen-token-plan-cn",
+        "transcript": "这是百炼订阅测试，测试成功，验证数字4729。这是百炼订阅测试。",
+        "editorText": "这是百炼订阅测试，测试成功，验证数字4729。这是百炼订阅测试。",
+        "route": {
+          "mode": "recorded",
+          "provider": "qwen-token-plan-cn"
+        }
+      },
+      {
+        "name": "page-recording",
+        "passed": true,
+        "discussionId": "d838222b-0a89-4e81-9f12-798521b1fbc9",
+        "noteId": "fa662603-9c37-4084-ad2c-b34356daadf3",
+        "transcript": "这是百炼订阅测试，测试成功，验证数字4729。这是百炼订阅测试。",
+        "originalAudioPlayback": true,
+        "completed": true
+      },
+      {
+        "name": "page-chat-image",
+        "passed": true,
+        "provider": "qwen-token-plan-cn",
+        "model": "qwen-image-3.0-pro",
+        "attachmentRead": true,
+        "rendered": true,
+        "attempts": []
+      }
+    ],
+    "errors": [],
+    "passed": true,
+    "finishedAt": "2026-10-16T10:35:51.040Z"
+  },
+  "liveChatAndVision": {
+    "startedAt": "2026-10-16T10:29:26.118Z",
+    "directory": "/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-bailian-live-GiimrZ",
+    "tests": [
+      {
+        "name": "gateway.chat",
+        "passed": true,
+        "durationMs": 3104,
+        "detail": {
+          "conversationId": "2f55d3e5-12d2-4fc3-999b-0da30309245e",
+          "text": "BAILIAN_E2E_OK",
+          "provider": "qwen-token-plan-cn",
+          "model": "qwen-token-plan-cn/qwen3.8-flash"
+        }
+      },
+      {
+        "name": "gateway.vision",
+        "passed": true,
+        "durationMs": 6100,
+        "detail": {
+          "conversationId": "52563653-8f40-47fa-834d-9b4653a80208",
+          "text": "红色。",
+          "provider": "qwen-token-plan-cn",
+          "model": "qwen-token-plan-cn/qwen3.8-flash"
+        }
+      }
+    ],
+    "uses": [
+      {
+        "id": "chat",
+        "current": "qwen-token-plan-cn/qwen3.8-flash",
+        "recommended": "qwen-token-plan-cn/qwen3.8-flash"
+      },
+      {
+        "id": "vision",
+        "current": "qwen-token-plan-cn/qwen3.8-flash",
+        "recommended": "qwen-token-plan-cn/qwen3.8-flash"
+      },
+      {
+        "id": "image",
+        "current": "qwen-token-plan-cn/qwen-image-3.0-pro",
+        "recommended": "qwen-token-plan-cn/qwen-image-3.0-pro"
+      },
+      {
+        "id": "background",
+        "current": "xopc-cloud/auto"
+      },
+      {
+        "id": "transcription",
+        "current": "qwen-token-plan-cn/qwen-audio-3.0-asr-flash",
+        "recommended": "qwen-token-plan-cn/qwen-audio-3.0-asr-flash"
+      },
+      {
+        "id": "speech",
+        "current": "qwen-token-plan-cn/qwen-audio-3.0-tts-plus",
+        "recommended": "qwen-token-plan-cn/qwen-audio-3.0-tts-plus"
+      },
+      {
+        "id": "conversation",
+        "current": "xopc-cloud/realtime",
+        "recommended": "qwen-token-plan-cn/qwen-audio-3.0-realtime-plus"
+      }
+    ],
+    "finishedAt": "2026-10-16T10:29:35.449Z"
+  },
+  "fixtureCompatibility": {
+    "passed": true,
+    "connectionAppliesOnlyCurrentCapability": true,
+    "samePageSettings": true,
+    "explicitSingleUseSwitch": true,
+    "switchLocksVoiceParameters": true,
+    "advancedVoiceReturnsToOriginalCapability": true,
+    "backgroundPlansExcluded": true,
+    "mobileOverflow": false,
+    "legacyImageUrlPreserved": true,
+    "realCredentialsUsed": false,
+    "directory": "/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-capabilities-p1-kVOm55"
+  },
+  "regression": {
+    "files": 27,
+    "tests": 183,
+    "passed": true
+  },
+  "checks": {
+    "webTypes": true,
+    "webBuild": true,
+    "legacyVoiceAndImageLinks": true,
+    "backgroundUsesCloud": true,
+    "rootTypes": true,
+    "scopedVoiceRevisionGuard": true,
+    "legacyUnguardedConfigSave": true,
+    "webLint": true,
+    "modalServiceDraftPreserved": true,
+    "modalTabs": true
+  },
+  "limits": [
+    "Browser microphone input uses real Bailian TTS audio through Chrome fake capture, not a physical microphone.",
+    "No new realtime voice vendor session was exercised.",
+    "ESLint does not currently include the .mts acceptance scripts."
+  ]
+}

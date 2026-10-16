@@ -92,6 +92,8 @@ export function CustomImageProviderDialog({
   configured,
   language,
   onSaved,
+  portalContainer,
+  onPendingChange,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -99,6 +101,8 @@ export function CustomImageProviderDialog({
   configured: boolean;
   language: Language;
   onSaved: (providerId?: string) => Promise<void> | void;
+  portalContainer?: HTMLElement | null;
+  onPendingChange?: (pending: boolean) => void;
 }) {
   const text = copy[language];
   const [providerId, setProviderId] = useState('');
@@ -120,6 +124,7 @@ export function CustomImageProviderDialog({
   const [error, setError] = useState<string>();
   const [feedback, setFeedback] = useState<string>();
   const [preview, setPreview] = useState<string>();
+  useEffect(() => { onPendingChange?.(Boolean(busy)); return () => onPendingChange?.(false); }, [busy, onPendingChange]);
 
   useEffect(() => {
     if (!open) return;
@@ -269,8 +274,8 @@ export function CustomImageProviderDialog({
   };
 
   return (
-    <Dialog.Root open={open} onOpenChange={onOpenChange}>
-      <Dialog.Portal>
+    <Dialog.Root open={open} onOpenChange={value => { if (!busy) onOpenChange(value); }}>
+      <Dialog.Portal container={portalContainer}>
         <Dialog.Overlay className={cn('xopc-dialog-overlay fixed inset-0 bg-scrim', SETTINGS_SHELL_OVERLAY_Z)} />
         <Dialog.Content
           className={cn('xopc-dialog-content fixed left-1/2 top-1/2 flex h-[min(88vh,760px)] w-[min(calc(100%-2rem),52rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-edge bg-surface-overlay shadow-popover', SETTINGS_SHELL_CONTENT_Z)}
@@ -278,10 +283,10 @@ export function CustomImageProviderDialog({
         >
           <header className="flex shrink-0 items-start justify-between gap-4 border-b border-edge px-5 py-4">
             <div><Dialog.Title className="font-semibold text-fg">{provider ? text.editTitle : text.addTitle}</Dialog.Title><Dialog.Description className="mt-1 text-sm text-fg-muted">{text.intro}</Dialog.Description></div>
-            <Dialog.Close asChild><button type="button" className="rounded-md p-1 text-fg-muted hover:bg-surface-inset hover:text-fg" aria-label={text.cancel}><X className="size-5" /></button></Dialog.Close>
+            <Dialog.Close asChild><button type="button" disabled={Boolean(busy)} className="rounded-md p-1 text-fg-muted hover:bg-surface-inset hover:text-fg" aria-label={text.cancel}><X className="size-5" /></button></Dialog.Close>
           </header>
 
-          <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-5 py-4">
+          <fieldset disabled={Boolean(busy)} className="min-h-0 min-w-0 flex-1 space-y-6 overflow-y-auto px-5 py-4">
             <section className="space-y-4">
               <h3 className="text-xs font-semibold uppercase tracking-wide text-fg-subtle">{text.connection}</h3>
               <div className="grid gap-4 md:grid-cols-2">
@@ -307,11 +312,11 @@ export function CustomImageProviderDialog({
             {preview ? <section className="rounded-lg border border-edge bg-surface-base p-3"><div className="mb-2 flex items-center gap-2 text-sm font-medium text-fg"><Eye className="size-4" />{text.testReady}</div><img src={preview} alt="Generated provider test" className="max-h-72 rounded-lg object-contain" /></section> : null}
             {feedback ? <p className="rounded-lg bg-emerald-500/10 px-3 py-2 text-sm text-emerald-700 dark:text-emerald-300" role="status">{feedback}</p> : null}
             {error ? <p className="rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-600 dark:text-red-400">{error}</p> : null}
-          </div>
+          </fieldset>
 
           <footer className="flex shrink-0 flex-wrap items-center gap-2 border-t border-edge px-5 py-3">
             {provider ? <Button variant="secondary" className="border-red-500/30 text-red-600 hover:bg-red-500/10 dark:text-red-400" disabled={Boolean(busy)} onClick={() => void remove()}>{busy === 'delete' ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}{confirmDelete ? text.confirmDelete : text.delete}</Button> : null}
-            <div className="ml-auto flex gap-2"><Dialog.Close asChild><Button variant="secondary">{text.cancel}</Button></Dialog.Close><Button variant="secondary" disabled={Boolean(busy)} onClick={() => void test()}>{busy === 'test' ? <Loader2 className="size-4 animate-spin" /> : null}{busy === 'test' ? text.testing : text.test}</Button><Button variant="primary" disabled={Boolean(busy)} onClick={() => void save()}>{busy === 'save' ? <Loader2 className="size-4 animate-spin" /> : null}{busy === 'save' ? text.saving : text.save}</Button></div>
+            <div className="ml-auto flex gap-2"><Dialog.Close asChild><Button variant="secondary" disabled={Boolean(busy)}>{text.cancel}</Button></Dialog.Close><Button variant="secondary" disabled={Boolean(busy)} onClick={() => void test()}>{busy === 'test' ? <Loader2 className="size-4 animate-spin" /> : null}{busy === 'test' ? text.testing : text.test}</Button><Button variant="primary" disabled={Boolean(busy)} onClick={() => void save()}>{busy === 'save' ? <Loader2 className="size-4 animate-spin" /> : null}{busy === 'save' ? text.saving : text.save}</Button></div>
           </footer>
         </Dialog.Content>
       </Dialog.Portal>

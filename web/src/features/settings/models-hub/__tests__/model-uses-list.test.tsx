@@ -96,17 +96,25 @@ it('blocks concurrent selections until saving finishes and refreshes the saved s
 });
 
 
-it('opens capability details from the entire overview row without showing model selectors', async () => {
-  await act(async () => root.render(<MemoryRouter><SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0 }}><ModelUsesList data={data} zh onChange={() => {}} onSettings={() => {}} /></SWRConfig></MemoryRouter>));
-  expect(container.querySelectorAll('a[aria-label^="配置 "]')).toHaveLength(7);
-  expect(container.querySelector('[aria-label^="选择 "]')).toBeNull();
-  expect(container.querySelector('a[aria-label="配置 文字转语音"]')?.getAttribute('href')).toBe('/settings/capabilities/models?use=speech');
-  expect(api.apply).not.toHaveBeenCalled();
+it('keeps direct model switching and separate modal actions on every capability', async () => {
+  const settings = vi.fn(); const connect = vi.fn();
+  await act(async () => root.render(<MemoryRouter><SWRConfig value={{ provider: () => new Map() }}><ModelUsesList data={data} zh onChange={connect} onSettings={settings} /></SWRConfig></MemoryRouter>));
+  expect(container.querySelectorAll('[aria-label^="选择 "]')).toHaveLength(7);
+  expect(container.querySelector('a')).toBeNull();
+  const row = container.querySelector('[data-capability="speech"]')!;
+  await act(async () => [...row.querySelectorAll('button')].find(button => button.textContent === '设置')!.click());
+  expect(settings).toHaveBeenCalledExactlyOnceWith('speech');
+  await act(async () => [...row.querySelectorAll('button')].find(button => button.textContent === '管理服务')!.click());
+  expect(connect).toHaveBeenCalledExactlyOnceWith('speech');
+});
+it('shows only three capabilities in the voice overview', async () => {
+  await act(async () => root.render(<MemoryRouter><SWRConfig value={{ provider: () => new Map() }}><ModelUsesList data={data} zh voiceOverview onChange={() => {}} onSettings={() => {}} /></SWRConfig></MemoryRouter>));
+  expect(container.querySelectorAll('[data-capability]')).toHaveLength(3);
+  expect(container.querySelector('[data-capability="chat"]')).toBeNull();
 });
 
-it('makes Voice a focused three-capability entry with a return destination', async () => {
-  await act(async () => root.render(<MemoryRouter><SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0 }}><ModelUsesList data={data} zh voiceOverview onChange={() => {}} onSettings={() => {}} /></SWRConfig></MemoryRouter>));
-  expect(container.querySelectorAll('a[aria-label^="配置 "]')).toHaveLength(3);
-  expect(container.querySelector('a[aria-label="配置 文字转语音"]')?.getAttribute('href')).toBe('/settings/capabilities/models?use=speech&from=voice');
-  expect(container.querySelector('a[aria-label="配置 对话与任务"]')).toBeNull();
+it('does not query a preset whose model registry connection has not been created', async () => {
+  const pendingPreset = { ...data, cards: [...data.cards, { id: 'dashscope-cn', configured: true }] } as ConnectedProvidersData;
+  await act(async () => root.render(<SWRConfig value={{ provider: () => new Map() }}><ModelUsesList data={pendingPreset} zh onChange={() => {}} /></SWRConfig>));
+  expect(api.fetch.mock.calls.map(([provider]) => provider)).not.toContain('dashscope-cn');
 });

@@ -96,7 +96,8 @@ try {
   assert.equal(note.discussion.status, 'completed');
   assert.match(note.discussion.canonicalTranscript, /4729|四七二九/);
   assert.ok(note.discussion.audioAttachmentId);
-  await page.getByRole('button', { name: '稍后查看', exact: true }).click();
+  const dismissRecording = page.getByRole('button', { name: '稍后查看', exact: true });
+  if (await dismissRecording.isVisible()) await dismissRecording.click();
   await page.goto(web + `#/notes/${capture.noteId}`);
   await page.locator('audio').waitFor();
   await page.locator('audio').evaluate((audio: HTMLAudioElement) => audio.play());
@@ -133,7 +134,7 @@ try {
   const image = await fetch(`${base}/api/media/read?uri=${encodeURIComponent(media.uri)}&conversationId=${conversationId}`, { headers, signal: AbortSignal.timeout(20_000) });
   assert.ok(image.ok);
   await writeFile(join(directory, 'dancing-cat.png'), Buffer.from(await image.arrayBuffer()));
-  await page.waitForFunction(() => Array.from(document.images).some(image => image.naturalWidth > 256));
+  await page.waitForFunction(() => Array.from(document.images).some(image => image.naturalWidth > 256), undefined, { timeout: 120_000 });
   await page.screenshot({ path: join(directory, 'chat-image.png') });
   checks.push({ name: 'page-chat-image', passed: true, provider: success.details.provider, model: success.details.model, attachmentRead: true, rendered: true, attempts: success.details.attempts });
   assert.deepEqual((await request('/api/global-defaults')).defaults, before.defaults);
