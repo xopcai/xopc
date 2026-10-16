@@ -13,13 +13,17 @@ import {
   resolveAgentCapabilityCatalog,
 } from '../../capabilities/index.js';
 import { runWithEmbeddedExecutionSession } from '../../embedded/execution-context.js';
+import { AgentCatalogRepository } from '../../../agent-catalog/repository.js';
+import { personalAgentId } from '../../../personal-agent/repository.js';
+import { TaskRepository } from '../../../tasks/task-repository.js';
+import { TaskConversationRepository } from '../../../tasks/task-conversation-repository.js';
 import { PERSONAL_MAIN_TOOL_IDS } from '../../../personal-agent/policy.js';
 import { STARTER_AGENTS } from '../../starter-agents.js';
 import { closeXopcDatabase } from '../../../storage/sqlite/index.js';
 import { AgentToolsFactory } from '../factory.js';
 
 describe('AgentToolsFactory', () => {
-  beforeAll(() => initializeTestAgentCatalog());
+  beforeAll(() => initializeTestAgentCatalog({ agents: [{ id: personalAgentId('local-owner') }] }));
   afterAll(() => closeXopcDatabase());
 
   it('offers batching to ordinary agents while preserving individual tool denials', async () => {
@@ -45,20 +49,51 @@ describe('AgentToolsFactory', () => {
     expect(names).toHaveLength(2);
     expect(factory.createCapabilityTools(['desktop-pet-authoring'], { toolAllowlist })).toEqual([]);
   });
-  it('registers personal tools only when the Agent allowlist requests them', () => {
-    const factory = new AgentToolsFactory({
-      workspace: '/tmp', bus: {} as MessageBus, getCurrentContext: () => null,
-      dispatchTaskRuns: () => {},
-    });
-    expect(factory.createCoreTools().map(tool => tool.name)).not.toContain('personal_task');
-    expect(factory.createCoreTools({ toolAllowlist: ['personal_task', 'personal_preference'] }).map(tool => tool.name))
-      .toEqual(['personal_task', 'personal_preference']);
+  it('does not expose Personal tools to ordinary or unidentified conversations despite an explicit allowlist', () => {
+    const factory = new AgentToolsFactory({ workspace: '/tmp', bus: {} as MessageBus,
+      getCurrentContext: () => null, dispatchTaskRuns: () => {} });
+    for (const conversationId of [undefined, createConversation({ agentId: 'main' }).key,
+      createConversation({ agentId: personalAgentId('local-owner') }).key]) {
+      const names = factory.createCoreTools({ conversationId,
+        toolAllowlist: [...PERSONAL_MAIN_TOOL_IDS, 'clarify'] }).map(tool => tool.name);
+      expect(names.some(name => name.startsWith('personal_'))).toBe(false);
+      expect(names).toContain('clarify');
+    }
+  });
+  it('checks prospective Task capability without registering tools in ordinary chats', () => {
+    const factory = new AgentToolsFactory({ workspace: '/tmp', bus: {} as MessageBus, getCurrentContext: () => null });
+    const catalog = new AgentCatalogRepository();
+    catalog.create({ id: 'task-tools-denied', tools: { task_collaboration: { mode: 'deny' } },
+      toolAllowlist: ['task_collaboration'] }, { ready: true });
+    catalog.create({ id: 'task-tools-excluded', toolAllowlist: ['read_file'] }, { ready: true });
+    for (const name of ['task_collaboration', 'publish_task_result']) {
+      expect(factory.getAgentToolAvailability('main', name).state).toBe('verified');
+      expect(factory.getAgentToolAvailability('task-tools-excluded', name).state).toBe('blocked');
+      expect(factory.createCoreTools().some(tool => tool.name === name)).toBe(false);
+    }
+    expect(factory.getAgentToolAvailability('task-tools-denied', 'task_collaboration').state).toBe('blocked');
+  });
+  it('exposes Task tools only while the conversation is an active execution', () => {
+    const conversationId = createConversation({ agentId: 'main' }).key;
+    const factory = new AgentToolsFactory({ workspace: '/tmp', bus: {} as MessageBus, getCurrentContext: () => null });
+    const names = () => factory.createCoreTools({ conversationId }).map(tool => tool.name);
+    const taskTools = ['task_collaboration', 'publish_task_result'];
+    for (const name of taskTools) expect(names()).not.toContain(name);
+    const task = new TaskRepository().create({ title: 'Tool boundary', objective: 'Verify execution tools' });
+    new TaskConversationRepository().activateExecutionSession({ taskId: task.id, conversationId, agentId: 'main' });
+    expect(names()).toEqual(expect.arrayContaining(taskTools));
+    expect(factory.createCoreTools({ conversationId, disabledTools: new Set(taskTools) })
+      .some(tool => taskTools.includes(tool.name))).toBe(false);
+    const replacement = createConversation({ agentId: 'main' }).key;
+    new TaskConversationRepository().activateExecutionSession({ taskId: task.id, conversationId: replacement, agentId: 'main' });
+    for (const name of taskTools) expect(names()).not.toContain(name);
   });
   it('exposes bounded local personal reads without network or directory scanning tools', () => {
     const factory = new AgentToolsFactory({ workspace: '/tmp', bus: {} as MessageBus, getCurrentContext: () => null,
       dispatchTaskRuns: () => {}, getSessionStore: () => ({}) as never,
       getPrimaryModel: () => ({ provider: 'test', id: 'fast', input: ['text'] }) as never });
-    const tools = factory.createCoreTools({ toolAllowlist: PERSONAL_MAIN_TOOL_IDS });
+    const conversationId = createConversation({ agentId: personalAgentId('local-owner'), customData: { personalAgent: true } }).key;
+    const tools = factory.createCoreTools({ conversationId, toolAllowlist: PERSONAL_MAIN_TOOL_IDS });
     expect(tools.map(tool => tool.name)).toEqual(expect.arrayContaining(['read_file', 'read_media', 'session_search', 'personal_read', 'user_context_read', 'knowledge_read']));
     expect(tools.map(tool => tool.name)).not.toEqual(expect.arrayContaining(['user_context_search', 'user_context_get', 'knowledge_search', 'knowledge_get']));
     expect(PERSONAL_MAIN_TOOL_IDS).toContain('personal_attention');
@@ -71,7 +106,8 @@ describe('AgentToolsFactory', () => {
   it('blocks ordinary clarification on personal Agents even with a stale allowlist, preserving specialist tools', () => {
     const factory = new AgentToolsFactory({ workspace: '/tmp', bus: {} as MessageBus, getCurrentContext: () => null,
       dispatchTaskRuns: () => {} });
-    expect(factory.createCoreTools({ toolAllowlist: ['personal_task', 'clarify'] }).map(tool => tool.name)).toEqual(['personal_task']);
+    const conversationId = createConversation({ agentId: personalAgentId('local-owner'), customData: { personalAgent: true } }).key;
+    expect(factory.createCoreTools({ conversationId, toolAllowlist: ['personal_task', 'clarify'] }).map(tool => tool.name)).toEqual(['personal_task']);
     expect(factory.createCoreTools({ toolAllowlist: ['clarify'] }).map(tool => tool.name)).toEqual(['clarify']);
   });
 

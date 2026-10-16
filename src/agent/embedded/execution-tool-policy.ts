@@ -5,6 +5,9 @@ import { isPersonalConversation } from '../../personal-agent/repository.js';
 import { personalRequestForExecution } from '../../personal-agent/request-repository.js';
 import { isXopcDatabaseOpen } from '../../storage/sqlite/connection.js';
 import { getSessionMetadata } from '../../storage/sqlite/session-repository.js';
+import { TaskConversationRepository } from '../../tasks/task-conversation-repository.js';
+
+export const TASK_EXECUTION_TOOL_IDS: readonly string[] = ['task_collaboration', 'publish_task_result'];
 
 export const PERSONAL_REQUEST_TOOL_IDS = [
   'xopc_tool_search', 'xopc_tool_describe', 'xopc_tool_execute',
@@ -13,6 +16,7 @@ export const PERSONAL_REQUEST_TOOL_IDS = [
 
 export type ExecutionToolPolicy = Readonly<{
   surface: 'agent' | 'personal_main' | 'personal_request_worker';
+  taskExecution: boolean;
   nativeMcp: boolean;
   externalMaterialization: boolean;
   discovery: boolean;
@@ -29,12 +33,15 @@ export function resolveExecutionToolPolicy(conversationId: string): ExecutionToo
     surface = 'personal_request_worker';
   }
   const configured = surface === 'agent';
-  return { surface, nativeMcp: configured, externalMaterialization: configured,
-    discovery: configured, codemode: configured, revision: 'personal-tool-boundaries-v2' };
+  const taskExecution = Boolean(isXopcDatabaseOpen()
+    && new TaskConversationRepository().resolveActiveExecutionSession(conversationId));
+  return { surface, taskExecution, nativeMcp: configured, externalMaterialization: configured,
+    discovery: configured, codemode: configured, revision: 'personal-tool-boundaries-v3' };
 }
 
 export function allowsExecutionTool(policy: ExecutionToolPolicy, name: string): boolean {
-  if (policy.surface === 'agent') return true;
+  if (TASK_EXECUTION_TOOL_IDS.includes(name) && !policy.taskExecution) return false;
+  if (policy.surface === 'agent') return !name.startsWith('personal_');
   const names: readonly string[] = policy.surface === 'personal_main' ? PERSONAL_MAIN_TOOL_IDS : PERSONAL_REQUEST_TOOL_IDS;
   return names.includes(name);
 }

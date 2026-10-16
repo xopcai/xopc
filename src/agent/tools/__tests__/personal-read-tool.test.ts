@@ -1,19 +1,45 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 
+import { initializeTestAgentCatalog } from '../../../agent-catalog/test-support.js';
+import { createConversation } from '../../../storage/sqlite/conversation-repository.js';
+import { closeXopcDatabase } from '../../../storage/sqlite/index.js';
+import { personalAgentId } from '../../../personal-agent/repository.js';
+import { runWithEmbeddedExecutionSession } from '../../embedded/execution-context.js';
 import { createPersonalReadTool } from '../personal-read-tool.js';
+
+let conversationId: string;
+beforeEach(() => {
+  initializeTestAgentCatalog({ agents: [{ id: personalAgentId('local-owner') }] });
+  conversationId = createConversation({ agentId: personalAgentId('local-owner'), customData: { personalAgent: true } }).key;
+});
+afterEach(() => closeXopcDatabase());
 
 function setup(authorizeCapability?: () => boolean) {
   const note = { id: 'note-1', markdown: 'x'.repeat(50000), title: 'Title', kind: 'thought', status: 'inbox', createdAt: 1, updatedAt: 2 };
   const notes = { getNote: vi.fn(async () => note), listNotes: vi.fn(async () => ({ items: [note], total: 1 })) };
-  return { notes, tool: createPersonalReadTool({ getNotesService: () => notes as never, authorizeCapability }) };
+  return { notes, tool: createPersonalReadTool({ getCurrentConversationId: () => conversationId, getNotesService: () => notes as never, authorizeCapability }) };
 }
 
 describe('personal_read', () => {
+  it('rejects absent, ordinary and embedded non-Personal identities before reading data', async () => {
+    const { tool, notes } = setup();
+    const ordinary = createConversation({ agentId: 'main' }).key;
+    await runWithEmbeddedExecutionSession(ordinary, async () => {
+      await expect(tool.execute('get', { kind: 'note', command: 'get', id: 'note-1' })).rejects.toThrow('Personal conversation');
+    });
+    for (const id of [undefined, ordinary]) {
+      const restricted = createPersonalReadTool({ getCurrentConversationId: () => id, getNotesService: () => notes as never });
+      await expect(restricted.execute('list', { kind: 'note', command: 'list' })).rejects.toThrow('Personal conversation');
+    }
+    expect(notes.getNote).not.toHaveBeenCalled();
+    expect(notes.listNotes).not.toHaveBeenCalled();
+  });
+
   it('shrinks JSON fields and list rows within the total budget while preserving IDs and cursors', async () => {
     const note = { id: 'note-1', title: '"\\\n'.repeat(6000), markdown: '"\\\n'.repeat(6000), description: 'x'.repeat(12000),
       kind: 'thought', status: 'inbox', createdAt: 1, updatedAt: 2 };
     const rows = Array.from({ length: 10 }, (_, i) => ({ ...note, id: `note-${i + 1}` }));
-    const tool = createPersonalReadTool({ getNotesService: () => ({ getNote: async () => note,
+    const tool = createPersonalReadTool({ getCurrentConversationId: () => conversationId, getNotesService: () => ({ getNote: async () => note,
       listNotes: async () => ({ items: rows, total: 30 }) }) as never });
     const get = await tool.execute('get', { kind: 'note', command: 'get', id: 'note-1' });
     const getText = (get.content[0] as { text: string }).text;
