@@ -99,6 +99,17 @@ describe('React chat Markdown', () => {
     expect(container.textContent).toBe('已有文字。新增内容。');
   });
 
+  it('counts generated whitespace once so earlier words never acquire new reveal offsets', () => {
+    const animate = vi.fn(() => ({ currentTime: 0, cancel: vi.fn(), onfinish: null }));
+    Object.defineProperty(HTMLElement.prototype, 'animate', { configurable: true, value: animate });
+    render('已有文字。', true);
+    for (const text of ['已有文字。 Streaming words', '已有文字。 Streaming words should', '已有文字。 Streaming words should remain stable.']) {
+      render(text, true);
+      expect(Number(container.querySelector('[data-xopc-watermark]')?.getAttribute('data-xopc-watermark'))).toBe(text.length);
+      expect(container.querySelector('[data-xopc-segment="6"]')?.textContent).toBe('Streaming');
+    }
+  });
+
   it('segments continuous Chinese and never cuts a family emoji or combining grapheme', () => {
     expect(splitRevealText('我们一起分析').length).toBeGreaterThan(1);
     const text = 'a👨‍👩‍👧‍👦e\u0301';

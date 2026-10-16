@@ -667,7 +667,7 @@ export const MessageBubble = memo(function MessageBubble({
                   />
                   {showStreamingCursor ? (
                     <span aria-hidden data-chat-streaming-cursor
-                      className="pointer-events-none absolute start-0 top-full mt-1 h-3 w-0.5 animate-pulse bg-accent motion-reduce:animate-none" />
+                      className="pointer-events-none absolute start-0 top-full mt-1 h-3 w-0.5 bg-accent opacity-60" />
                   ) : null}
                 </div>
                 {isUser && userMessageCanExpand ? (

@@ -65,6 +65,9 @@ describe('Personal AI message styling', () => {
 
     render({ role: 'assistant', content: [{ type: 'text', text: 'Hello back' }] }, true, true);
     expect(container.querySelector('.xopc-personal-thinking')).toBeNull();
+    const cursor = container.querySelector('[data-chat-streaming-cursor]');
+    expect(cursor).not.toBeNull();
+    expect(cursor?.classList.contains('animate-pulse')).toBe(false);
 
     render({ role: 'assistant', content: [] }, false, true);
     expect(container.querySelector('.xopc-personal-thinking')).toBeNull();

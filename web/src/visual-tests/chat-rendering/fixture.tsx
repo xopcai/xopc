@@ -1,4 +1,5 @@
 import { useRef } from 'react';
+import { runChatRevealFixture, type ChatRevealOptions, type ChatRevealReport } from './reveal-fixture';
 import { flushSync } from 'react-dom';
 import { createRoot } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
@@ -27,6 +28,7 @@ const fixtures = {
 
 declare global {
   interface Window {
+    runChatRevealFixture: (options: ChatRevealOptions) => Promise<ChatRevealReport>;
     runChatCompletionFixture: (options: ChatCompletionOptions) => Promise<ChatCompletionReport>;
     runChatRenderingFixture: (name: keyof typeof fixtures) => Promise<{
       commitMs: number[]; durationMs: number; nodes: number; longTasks: number[]; textLength: number;
@@ -36,6 +38,7 @@ declare global {
 }
 
 const registerContent = () => {};
+window.runChatRevealFixture = options => runChatRevealFixture(root, options);
 window.runChatCompletionFixture = options => runChatCompletionFixture(root, options);
 function StoredHistory() {
   const scrollRef = useRef<HTMLDivElement>(null);
