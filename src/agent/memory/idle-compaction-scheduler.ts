@@ -1,3 +1,4 @@
+import { withModelUsageOrigin } from '../../providers/model-usage.js';
 import { createLogger } from '../../utils/logger.js';
 
 const log = createLogger('IdleCompaction');
@@ -100,7 +101,7 @@ export class IdleCompactionScheduler {
       state.deadline = timeout;
       timeout.unref?.();
     });
-    const operation = Promise.resolve().then(() => job(controller.signal, isCurrent));
+    const operation = Promise.resolve().then(() => withModelUsageOrigin('background', () => job(controller.signal, isCurrent)));
     void Promise.race([operation, deadline])
       .then(outcome => {
         this.metrics[outcome]++;

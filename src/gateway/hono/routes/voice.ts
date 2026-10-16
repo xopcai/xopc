@@ -1,3 +1,4 @@
+import { withModelUsageOrigin } from '../../../providers/model-usage.js';
 import { VOICE_TIMING_METRICS, voiceSelectionSchema } from '@xopcai/realtime-protocol/voice';
 import { voiceSettingsCatalog, selectPlatformVoice } from '../../../voice/platform-settings.js';
 /**
@@ -164,7 +165,7 @@ async function refineTranscript(
         signal: mergedSignal as AbortSignal,
       },
       undefined,
-      { operation: 'voice.select' },
+      { operation: 'voice.select', trigger: 'user' },
     );
 
     let out = '';
@@ -263,7 +264,7 @@ export function registerVoiceRoutes(authenticated: Hono, deps: AuthenticatedRout
       const text = config.voice?.language === 'en'
         ? 'Hello, I am your assistant. You can talk to me naturally.'
         : '你好，我是你的助手。现在可以和我自然对话了。';
-      result = await speakStream(text, previewConfig, { signal, appConfig: config, allowFallback: false, parseDirectives: false });
+      result = await withModelUsageOrigin('interactive', () => speakStream(text, previewConfig, { signal, appConfig: config, allowFallback: false, parseDirectives: false }));
       if (result.outputFormat !== 'pcm') throw new Error('Realtime preview requires PCM audio');
       reader = result.audioStream.getReader();
       const chunks: Uint8Array[] = [];
@@ -497,12 +498,12 @@ export function registerVoiceRoutes(authenticated: Hono, deps: AuthenticatedRout
     }
 
     try {
-      const result = await speak(text, ttsConfig, {
+      const result = await withModelUsageOrigin('interactive', () => speak(text, ttsConfig, {
         appConfig: config,
         parseDirectives: false,
         signal: c.req.raw.signal,
         tts: voice ? { voice } : undefined,
-      });
+      }));
       if (!result.audio.length) {
         throw new Error(`TTS provider \"${result.provider}\" returned empty audio`);
       }
@@ -574,14 +575,14 @@ export function registerVoiceRoutes(authenticated: Hono, deps: AuthenticatedRout
 
     try {
       const startedAt = Date.now();
-      const result = await speak(text, ttsConfig, {
+      const result = await withModelUsageOrigin('interactive', () => speak(text, ttsConfig, {
         appConfig: config,
         parseDirectives: false,
         tts: {
           ...(typeof body.model === 'string' && body.model.trim() ? { model: body.model.trim() } : {}),
           ...(typeof body.voice === 'string' && body.voice.trim() ? { voice: body.voice.trim() } : {}),
         },
-      });
+      }));
       if (!result.audio.length) {
         throw new Error(`TTS provider "${result.provider}" returned empty audio`);
       }
@@ -643,12 +644,12 @@ export function registerVoiceRoutes(authenticated: Hono, deps: AuthenticatedRout
 
     const startedAt = Date.now();
     try {
-      const result = await transcribe(input.audioBuffer, sttConfig, {
+      const result = await withModelUsageOrigin('interactive', () => transcribe(input.audioBuffer, sttConfig, {
         language: input.language,
         mime: input.mimeType,
         fileName: input.fileName,
         signal: c.req.raw.signal,
-      });
+      }));
       const detectedLanguage = result.language ?? input.language;
       const refinementAvailable = (config.voice?.input?.refinement?.mode ?? 'off') !== 'off';
       return c.json({

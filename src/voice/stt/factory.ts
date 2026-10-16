@@ -10,6 +10,7 @@
 import { createLogger } from '../../utils/logger.js';
 import { getModelCatalogStore } from '../../providers/model-catalog-store.js';
 import { compareCatalogModels } from '../../providers/model-catalog-ranking.js';
+import { isInteractiveOnlyProvider } from '../../providers/setup/profiles.js';
 
 import './providers/index.js'; // side-effect: register built-in STT providers
 import { resolveModelEntries } from '../../media-understanding/resolve-entries.js';
@@ -111,7 +112,10 @@ export function resolveSTTProviderOrder(
   if (!config.managedAuto) return [primary];
 
   const configured = sortAudioProvidersByAutoPriority(listMediaUnderstandingProviders()).filter(
-    (providerId) => resolveSTTProviderConfig(providerId, config) !== null,
+    (providerId) => {
+      const resolved = resolveSTTProviderConfig(providerId, config);
+      return resolved !== null && !isInteractiveOnlyProvider(providerId, resolved.baseUrl);
+    },
   );
 
   const order: string[] = [primary];
@@ -124,10 +128,11 @@ export function resolveSTTProviderOrder(
 }
 
 function resolveModelEntryChain(config: STTConfig): AudioProviderResolvedConfig[] {
+  const pinned = Boolean(config.models?.length) && config.fallback?.enabled === false && !config.managedAuto;
   const entries = resolveModelEntries({
     capability: 'audio',
     capabilityModels: config.models,
-    sharedModels: config.sharedModels,
+    sharedModels: pinned ? undefined : config.sharedModels,
   });
   const chain: AudioProviderResolvedConfig[] = [];
   for (const entry of entries) {
@@ -140,7 +145,7 @@ function resolveModelEntryChain(config: STTConfig): AudioProviderResolvedConfig[
       chain.push(resolved);
     }
   }
-  if (chain.some((entry) => entry.id === 'xopc-cloud')) {
+  if (!pinned && chain.some((entry) => entry.id === 'xopc-cloud')) {
     appendManagedCloudModels(chain, config);
   }
   return chain;

@@ -1,3 +1,4 @@
+import { assertProviderUsage } from '../../providers/model-usage.js';
 import crypto from 'node:crypto';
 import WebSocket from 'ws';
 
@@ -243,6 +244,7 @@ export function createOmniVoiceEngine(options: {
     start() {
       return new Promise<void>((resolve, reject) => {
         rejectStart = reject;
+        assertProviderUsage(options.route.route.provider, options.route.url);
         socket = new WebSocket(options.route.url, { headers: { Authorization: `Bearer ${options.route.apiKey}` }, maxPayload: 1024 * 1024, perMessageDeflate: false, handshakeTimeout: 15_000 });
         socket.on('upgrade', (response) => {
           const id = response.headers['x-xopc-request-id'];

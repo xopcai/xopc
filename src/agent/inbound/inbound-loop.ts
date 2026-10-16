@@ -1,3 +1,4 @@
+import { withModelUsageOrigin } from '../../providers/model-usage.js';
 /**
  * InboundLoop — owns the bus-driven inbound pipeline.
  *
@@ -174,6 +175,10 @@ export class InboundLoop {
   }
 
   private async handleInboundMessage(msg: InboundMessage): Promise<void> {
+    return withModelUsageOrigin(msg.channel === 'system' ? 'background' : 'interactive', () => this.handleInboundMessageScoped(msg));
+  }
+
+  private async handleInboundMessageScoped(msg: InboundMessage): Promise<void> {
     const requestId = inboundMessageLogRequestId(msg);
 
     await runWithLogContext({ requestId }, async () => {

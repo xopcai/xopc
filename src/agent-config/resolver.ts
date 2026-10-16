@@ -88,6 +88,8 @@ export function resolveEffectiveAgentConfig(params: {
   const models = {
     chat: structuredClone(agent.models?.chat ?? defaults.models.chat),
     intents,
+    ...(agent.models?.background === null ? {} : (agent.models?.background ?? defaults.models.background)
+      ? { background: structuredClone(agent.models?.background ?? defaults.models.background!) } : {}),
     ...((agent.models?.computerUse ?? defaults.models.computerUse)
       ? { computerUse: structuredClone(agent.models?.computerUse ?? defaults.models.computerUse) }
       : {}),
@@ -107,6 +109,10 @@ export function resolveEffectiveAgentConfig(params: {
           : {}),
   };
 
+  if (agent.models && Object.hasOwn(agent.models, 'background')) {
+    clearSources('models.background', sources);
+    if (agent.models.background) markObjectSources(agent.models.background, 'agent', 'models.background', sources);
+  }
   if (agent.models?.chat) markObjectSources(agent.models.chat, 'agent', 'models.chat', sources);
   if (agent.models?.computerUse) {
     clearSources('models.computerUse', sources);

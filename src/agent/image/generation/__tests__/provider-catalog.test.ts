@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ModelsJsonConfig } from '../../../../config/models-json.js';
+import type { AuthProfileStore } from '../../../../providers/auth-runtime/index.js';
 import * as providerHttp from '../../../../media-shared/http/index.js';
 import {
   getModelCatalogStore,
@@ -28,6 +29,7 @@ describe('built-in image generation provider catalog', () => {
     expect(listImageGenerationProviders().map((provider) => provider.id)).toEqual([
       'openai',
       'dashscope',
+      'qwen-token-plan-cn',
       'minimax',
       'google',
       'fal', 'seedream', 'ideogram', 'bfl', 'zhipu-cn', 'tokenhub', 'stability',
@@ -61,6 +63,7 @@ describe('built-in image generation provider catalog', () => {
       'xopc-cloud',
       'openai',
       'dashscope',
+      'qwen-token-plan-cn',
       'minimax',
       'google',
       'fal', 'seedream', 'ideogram', 'bfl', 'zhipu-cn', 'tokenhub', 'stability',
@@ -71,6 +74,35 @@ describe('built-in image generation provider catalog', () => {
     expect(getImageGenerationProvider('google')?.id).toBe('google');
     expect(getImageGenerationProvider('gemini')).toBeUndefined();
     expect(getImageGenerationProvider('GOOGLE')).toBeUndefined();
+  });
+
+  it('uses the chat subscription credential with the subscription image endpoint', async () => {
+    const providerId = 'qwen-token-plan-cn';
+    const lookups: string[] = [];
+    const store: AuthProfileStore = {
+      get: (id) => {
+        lookups.push(id);
+        return id === providerId ? { provider: id, profileId: 'default', mode: 'api-key', apiKey: 'sk-sp-fixture' } : undefined;
+      },
+      list: () => [], getApiKeySync: () => undefined, hasCredentialSync: () => false,
+    };
+    const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jJYQAAAAASUVORK5CYII=', 'base64');
+    const transport = vi.spyOn(providerHttp, 'fetchWithTimeoutGuarded').mockImplementation(async (url, options) => {
+      if (String(url).startsWith('https://cdn.test/')) {
+        expect(new Headers(options.init?.headers).has('authorization')).toBe(false);
+        return new Response(png);
+      }
+      expect(String(url)).toBe('https://token-plan.cn-beijing.maas.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation');
+      expect(new Headers(options.init?.headers).get('authorization')).toBe('Bearer sk-sp-fixture');
+      expect(JSON.parse(String(options.init?.body))).toMatchObject({ model: 'qwen-image-3.0-pro', input: { messages: [{ role: 'user', content: [{ text: 'A cat' }] }] } });
+      return Response.json({ output: { choices: [{ message: { content: [{ image: 'https://cdn.test/image.png' }] } }] } });
+    });
+    const provider = getImageGenerationProvider(providerId)!;
+    const result = await provider.generateImage({ model: provider.defaultModel, prompt: 'A cat', authStore: store });
+    expect(result.images[0]?.buffer).toEqual(png);
+    expect(lookups).toEqual([providerId]);
+    expect(transport).toHaveBeenCalledTimes(2);
+    expect(provider.capabilities.edit?.enabled).toBe(false);
   });
 
   it('returns detached model arrays in summaries', () => {

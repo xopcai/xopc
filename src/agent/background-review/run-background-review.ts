@@ -1,3 +1,4 @@
+import { withModelUsageOrigin } from '../../providers/model-usage.js';
 import { Agent, type AgentMessage, type ThinkingLevel } from '@earendil-works/pi-agent-core';
 import type { Api, Model } from '@earendil-works/pi-ai';
 
@@ -226,7 +227,7 @@ async function interpret(params: {
   return interpretation;
 }
 
-async function executeReview(params: {
+async function executeReviewInner(params: {
   conversationId: string;
   mainAgent: Agent;
   workspaceId: string;
@@ -335,7 +336,7 @@ function listAvailableAssertions(): AvailableUserAssertion[] {
 }
 
 /** Persisted job runner; independent of an interactive Agent instance surviving eviction. */
-export async function runPersistentLearningJob(job: LearningJob, getConfig: () => Config | undefined): Promise<void> {
+async function runPersistentLearningJobInner(job: LearningJob, getConfig: () => Config | undefined): Promise<void> {
   const config = getConfig();
   if (!config || !resolveUserContextSessionAccess(config, job.conversation_id).enabled
     || learningPolicyHash(config) !== job.policy_hash) {
@@ -421,4 +422,12 @@ export async function runPersistentLearningJob(job: LearningJob, getConfig: () =
     throw err;
   }
   if (!committed) finishContextExtractionRun({ runId: extraction.run.id, status: 'skipped', errorCode: 'lease_lost' });
+}
+
+async function executeReview(params: Parameters<typeof executeReviewInner>[0]) {
+  return withModelUsageOrigin('background', () => executeReviewInner(params));
+}
+
+export async function runPersistentLearningJob(job: LearningJob, getConfig: () => Config | undefined): Promise<void> {
+  return withModelUsageOrigin('background', () => runPersistentLearningJobInner(job, getConfig));
 }

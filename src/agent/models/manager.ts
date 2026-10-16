@@ -56,11 +56,7 @@ export class ModelManager {
   setSessionProfileDefault(conversationId: string, modelRef: string, fallbacks: string[] = []): void {
     this.sessionProfileDefaults.set(conversationId, modelRef);
     const cleanFallbacks = fallbacks.map((ref) => ref.trim()).filter(Boolean);
-    if (cleanFallbacks.length > 0) {
-      this.sessionProfileFallbacks.set(conversationId, cleanFallbacks);
-    } else {
-      this.sessionProfileFallbacks.delete(conversationId);
-    }
+    this.sessionProfileFallbacks.set(conversationId, cleanFallbacks);
   }
 
   /**
@@ -145,6 +141,10 @@ export class ModelManager {
     }
 
     return this.defaultModel;
+  }
+
+  hasSessionModelOverride(conversationId: string): boolean {
+    return this.sessionModels.has(conversationId);
   }
 
   /**

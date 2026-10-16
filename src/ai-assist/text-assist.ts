@@ -1,16 +1,14 @@
-import { normalizeContext, type AssistantMessage, type UserMessage } from '@earendil-works/pi-ai';
+import { type AssistantMessage, type UserMessage } from '@earendil-works/pi-ai';
 
 import { getAssistantMessageErrorReason, stripCodeFences } from '../providers/model-response.js';
 import type { Config } from '../config/schema.js';
 import { getDefaultModelSync, resolveModel } from '../providers/index.js';
-import { createExtensionAwareStreamFn } from '../providers/extension-stream-bridge.js';
 import {
   isLocalModelBaseUrl,
   resolveModelCallApiKey,
-  resolveModelCallOptions,
+  createResolvedModelStream,
 } from '../providers/model-call.js';
 import { createLogger } from '../utils/logger.js';
-import { trackAiUsageStream } from '../usage/recorder.js';
 
 const log = createLogger('AiTextAssist');
 
@@ -346,25 +344,14 @@ export async function* streamTextAssist(
   const modelRef = getDefaultModelSync(config);
   const model = resolveModel(modelRef);
   const prompt = buildPrompt(resolvedRequest, scenario);
-  const modelCallOptions = await resolveModelCallOptions(model, {
+  const stream = await createResolvedModelStream(model, prompt, {
     maxTokens: 1600,
     temperature: intent === 'fix' ? 0.15 : 0.25,
     signal,
-  });
-  log.debug(
-    {
-      provider: model.provider,
-      modelId: model.id,
-      hasApiKey: Boolean(modelCallOptions.apiKey),
-      localBaseUrl: isLocalModelBaseUrl(model.baseUrl),
-    },
-    'Resolved AI text assist model auth',
-  );
+  }, undefined, { operation: 'text_assist.generate', trigger: 'user' });
 
   yield { type: 'start', provider: model.provider, modelId: model.id, scenario: scenario.id };
 
-  const stream = await trackAiUsageStream(model, { operation: 'text_assist.generate', trigger: 'user' }, () =>
-    createExtensionAwareStreamFn()(model, normalizeContext(prompt), modelCallOptions));
   let streamedText = '';
 
   for await (const event of stream) {

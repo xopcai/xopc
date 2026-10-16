@@ -1,3 +1,4 @@
+import { withModelUsageOrigin } from '../../providers/model-usage.js';
 import { verifyDeviceConnectionProof } from '../../gateway/security/device-request-proof.js';
 import crypto from 'node:crypto';
 import type { IncomingMessage } from 'node:http';
@@ -654,7 +655,7 @@ export class VoiceRealtimeRuntime {
     };
 
     const clientMetrics = new Set<string>();
-    socket.on('message', (data, isBinary) => {
+    socket.on('message', (data, isBinary) => withModelUsageOrigin('interactive', () => {
       lastActivityAt = Date.now();
       if (isBinary) {
         if (!claim) {
@@ -800,7 +801,7 @@ export class VoiceRealtimeRuntime {
       } else {
         send('session.error', { code: 'INVALID_STATE', message: 'Voice session is already started', recoverable: true });
       }
-    });
+    }));
 
     socket.once('close', () => void shutdown('disconnected', false));
     socket.once('error', (err) => log.debug({ err }, 'Voice client socket failed'));

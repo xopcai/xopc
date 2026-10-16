@@ -4,6 +4,7 @@ import type { Api, Model } from '@earendil-works/pi-ai';
 import { resolveProviderApiKeySync } from '../auth/sync-provider-auth.js';
 import { getApiKeySync } from '../providers/index.js';
 import { createExtensionAwareStreamFn } from '../providers/extension-stream-bridge.js';
+import { withModelUsageOrigin, modelUsageOriginForCall } from '../providers/model-usage.js';
 import { trackAiUsageStream } from '../usage/recorder.js';
 import { readOnlyResultSchema, type SceneReadOnlyExecutor } from './execution.js';
 
@@ -12,6 +13,10 @@ export class SceneAgentExecutor implements SceneReadOnlyExecutor {
   constructor(private readonly resolveModel: () => Model<Api>) {}
 
   async execute(input: Parameters<SceneReadOnlyExecutor['execute']>[0]): Promise<unknown> {
+    return withModelUsageOrigin(modelUsageOriginForCall(input.usage), () => this.executeScoped(input));
+  }
+
+  private async executeScoped(input: Parameters<SceneReadOnlyExecutor['execute']>[0]): Promise<unknown> {
     input.signal.throwIfAborted();
     const stream = createExtensionAwareStreamFn();
     let calls = 0;

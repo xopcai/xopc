@@ -1,3 +1,4 @@
+import { ProviderUsageScopeError } from '../../providers/model-usage.js';
 import { traceRun, traceTools, traceOperation, setTraceIdentity } from '../../observability/runtime.js';
 import { getConnectionResumeInput, isConnectionSuspended } from '../../storage/sqlite/connection-wait-repository.js';
 import { isComputerControlActive, isComputerLeaseTool, stopComputerControl } from '../../computer/control-guard.js';
@@ -342,6 +343,7 @@ export async function runXopcEmbeddedTurn(params: RunXopcEmbeddedTurnParams): Pr
   return withCloudCreditBudget({ conversationId: params.conversationId, runId: params.runId, limitCreditMicro }, async () => {
     try {
       const result = await traceRun('agent.run', { conversationId: params.conversationId, runId: params.runId }, () => runXopcEmbeddedTurnInner(params), params.userMessage);
+      if (result.errorMessage?.includes('provider_usage_scope_denied')) return { ...result, ok: false, retryable: false };
       const stopped = cloudCreditBudgetStopMessage();
       if (stopped) return { ...result, ok: false, retryable: false, errorMessage: stopped };
       if (result.errorMessage && isCloudCreditBudgetExhausted(result.errorMessage)) {
@@ -350,6 +352,7 @@ export async function runXopcEmbeddedTurn(params: RunXopcEmbeddedTurnParams): Pr
       }
       return result;
     } catch (error) {
+      if (error instanceof ProviderUsageScopeError) return { ok: false, retryable: false, errorMessage: error.message };
       const message = error instanceof Error ? error.message : String(error);
       if (isCloudCreditBudgetExhausted(message)) {
         reportCloudCreditError(message);

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { executeImageProvider, getImageProviderSpec, listImageProviderSpecs, validateImageRequest } from '../index.js';
+import { executeImageProvider, getImageProviderSpec, listImageProviderSpecs, normalizeImageGeometry, validateImageRequest } from '../index.js';
 import { authenticatedJobUrl, encodeBase64, readBytesLimited } from '../http.js';
 
 const png = Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jJYQAAAAASUVORK5CYII='), c => c.charCodeAt(0));
@@ -9,7 +9,7 @@ const reply = (id: string) => id === 'google' ? { status: 'completed', steps: [{
   : id === 'minimax' ? { base_resp: { status_code: 0 }, data: { image_base64: [b64] } }
   : id === 'tokenhub' ? { choices: [{ delta: { type: 'image', image: { url: 'https://cdn.test/image.png' } } }] }
   : ['zhipu-cn', 'ideogram'].includes(id) ? { data: [{ url: 'https://cdn.test/image.png' }] }
-  : id === 'dashscope' ? { output: { choices: [{ message: { content: [{ image: 'https://cdn.test/image.png' }] } }] } }
+  : ['dashscope', 'qwen-token-plan-cn'].includes(id) ? { output: { choices: [{ message: { content: [{ image: 'https://cdn.test/image.png' }] } }] } }
   : { data: [{ b64_json: b64 }] };
 
 for (const spec of listImageProviderSpecs()) describe(spec.id, () => {
@@ -56,6 +56,29 @@ for (const spec of listImageProviderSpecs()) describe(spec.id, () => {
 });
 
 describe('strict image execution', () => {
+  it.each([undefined, '1024x1024'])('converts a square ratio to supported subscription pixels with size %s', async size => {
+    const spec = getImageProviderSpec('qwen-token-plan-cn');
+    const fetchImpl = vi.fn<typeof fetch>(async (url, init) => {
+      if (String(url).startsWith('https://cdn.test')) return new Response(png);
+      expect(JSON.parse(String(init?.body))).toMatchObject({ parameters: { size: '1024*1024' } });
+      return Response.json({ output: { choices: [{ message: { content: [{ image: 'https://cdn.test/image.png' }] } }] } });
+    });
+    const request = { model: spec.models[0]!.id, prompt: 'cat', aspectRatio: '1:1', ...(size ? { size } : {}) };
+    await executeImageProvider({ providerId: spec.id, baseUrl: spec.baseUrl, apiKey: 'test', request, fetchImpl, signal: AbortSignal.timeout(1000) });
+    expect(request.aspectRatio).toBe('1:1');
+  });
+
+  it('rejects unsupported subscription ratios and contradictory geometry before network', async () => {
+    const spec = getImageProviderSpec('qwen-token-plan-cn');
+    const fetchImpl = vi.fn<typeof fetch>();
+    for (const request of [{ aspectRatio: '16:9' }, { aspectRatio: '16:9', size: '1024x1024' }]) {
+      await expect(executeImageProvider({ providerId: spec.id, baseUrl: spec.baseUrl, apiKey: 'test', request: { model: spec.models[0]!.id, prompt: 'cat', ...request }, fetchImpl, signal: AbortSignal.timeout(1000) })).rejects.toThrow('Unsupported aspect ratio');
+    }
+    expect(fetchImpl).not.toHaveBeenCalled();
+    const native = { aspectRatio: '1:1' };
+    expect(normalizeImageGeometry(native, getImageProviderSpec('google').models[0]!.capabilities)).toBe(native);
+  });
+
   const spec = getImageProviderSpec('openai');
   const base = { providerId: spec.id, baseUrl: spec.baseUrl, apiKey: 'secret', signal: AbortSignal.timeout(1000) };
   it('rejects retired models and unsupported options before network access', async () => {
