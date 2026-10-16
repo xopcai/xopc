@@ -1,5 +1,5 @@
 import type { ModelSetupPreview, ModelSetupUse } from '@xopcai/gateway-contract';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import useSWR from 'swr';
 
 import { Button } from '@/components/ui/button';
@@ -9,6 +9,7 @@ import { fetchVoiceProviders, fetchVoiceSttProviders } from '@/features/settings
 import type { StoredLanguage } from '@/lib/storage';
 
 import { AddProviderDialog, type AddProviderDialogMessages } from './add-provider-dialog';
+import { serviceDisplayName } from './capability-presentation';
 import { capabilityLabels } from './capability-navigation';
 import type { ConnectedProvidersData } from './connected-providers-grid';
 import { ProviderSetupPanel } from './provider-setup-panel';
@@ -20,9 +21,9 @@ export function eligibleCapabilityServices(previews: ModelSetupPreview[], use: M
     && preview.uses.some(entry => entry.id === use && entry.choices.length > 0));
 }
 
-export function CapabilityServiceConnections({ use, data, language, labels, onSaved, inline = false, onPendingChange }: {
+export function CapabilityServiceConnections({ use, data, language, labels, onSaved, inline = false, onPendingChange, onEditingChange }: {
   use: ModelSetupUse; data: ConnectedProvidersData; language: StoredLanguage;
-  labels: AddProviderDialogMessages; onSaved: () => void; inline?: boolean; onPendingChange?: (pending: boolean) => void;
+  labels: AddProviderDialogMessages; onSaved: () => void; inline?: boolean; onPendingChange?: (pending: boolean) => void; onEditingChange?: (editing: boolean) => void;
 }) {
   const zh = language === 'zh';
   const [provider, setProvider] = useState<string>();
@@ -42,16 +43,21 @@ export function CapabilityServiceConnections({ use, data, language, labels, onSa
     return { services: eligibleCapabilityServices(previews, use, nativeIds), failed: results.some(result => result.status === 'rejected') };
   }, { revalidateOnFocus: false });
   const eligibleIds = new Set(catalog?.services.map(service => service.providerId));
+  useEffect(() => { onEditingChange?.(Boolean(provider)); return () => onEditingChange?.(false); }, [provider, onEditingChange]);
+  if (provider && inline) return <section className="overflow-hidden rounded-xl border border-edge"><ProviderSetupPanel key={provider} inline providerId={provider} row={data.builtinRows.find(row => row.id === provider)} targetUse={use} language={language} onPendingChange={setPending} onDone={() => setProvider(undefined)} onApplied={() => { void mutate(); setProvider(undefined); onSaved(); }} /></section>;
   return <section className="space-y-3 rounded-xl border border-edge p-4">
-    <h2 className="text-sm font-semibold text-fg">{zh ? '支持此能力的模型服务' : 'Model services supporting this capability'}</h2>
+    <h2 className="text-sm font-semibold text-fg">{zh ? '选择服务' : 'Choose a service'}</h2>
     {data.loading || isLoading ? <Skeleton className="h-24 w-full" /> : null}
     {error || catalog?.failed ? <p role="alert" className="text-sm text-fg-muted">{zh ? '部分服务目录暂时不可用。' : 'Some service catalogs are unavailable.'}<Button variant="ghost" onClick={() => void mutate()}>{zh ? '重试' : 'Retry'}</Button></p> : null}
-    {catalog?.services.map(service => <button key={service.providerId} type="button" disabled={busy} onClick={() => setProvider(service.providerId)} className="flex min-h-14 w-full items-center justify-between gap-3 rounded-lg border border-edge px-3 py-3 text-left hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
-      <span className="min-w-0 text-sm font-medium text-fg">{service.profile.name}</span>
-      <span className="shrink-0 text-xs text-accent-fg">{service.configured ? (zh ? '已连接 · 管理凭据' : 'Connected · Credentials') : (zh ? '连接' : 'Connect')}</span>
-    </button>)}
+    {([true, false] as const).map(configured => {
+      const services = catalog?.services.filter(service => service.configured === configured) ?? [];
+      return services.length ? <div key={String(configured)} className="space-y-2"><h3 className="text-xs font-medium text-fg-muted">{configured ? (zh ? '已连接' : 'Connected') : (zh ? '添加服务' : 'Add a service')}</h3>{services.map(service => <button key={service.providerId} type="button" disabled={busy} onClick={() => setProvider(service.providerId)} className="flex min-h-14 w-full items-center justify-between gap-3 rounded-lg px-3 py-3 text-left transition-colors hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50">
+      <span className="min-w-0 text-sm font-medium text-fg">{serviceDisplayName(service.providerId, service.profile.name, zh)}</span>
+      <span className="shrink-0 text-sm text-accent-fg">{configured ? (zh ? '选择' : 'Choose') : (zh ? '连接' : 'Connect')}</span>
+    </button>)}</div> : null;
+    })}
     {catalog && !catalog.services.length && !catalog.failed ? <p className="text-sm text-fg-muted">{zh ? '暂无支持此能力的模型服务。' : 'No model services currently support this capability.'}</p> : null}
-    <p className="text-xs text-fg-muted">{zh ? `仅展示支持“${capabilityLabels[use][0]}”的服务。${inline ? '已有凭据可直接复用，在此选择模型并应用。' : '已有凭据可直接复用；连接后返回选择模型。'}` : 'Only compatible services are shown. Reuse saved credentials, then return to select a model.'}</p>
-    {provider && inline ? <div className="overflow-hidden rounded-xl border border-edge"><ProviderSetupPanel key={provider} inline providerId={provider} row={data.builtinRows.find(row => row.id === provider)} targetUse={use} language={language} onPendingChange={setPending} onDone={() => setProvider(undefined)} onApplied={() => { void mutate(); setProvider(undefined); onSaved(); }} /></div> : provider ? <AddProviderDialog key={provider} open initialProviderId={provider} initialUse={use} connectOnly onOpenChange={open => { if (!open) setProvider(undefined); }} builtinRows={data.builtinRows.filter(row => eligibleIds.has(row.id))} customConfig={data.customConfig} labels={labels} language={language} onSaved={() => { void mutate(); setProvider(undefined); onSaved(); }} /> : null}
+    <p className="text-xs text-fg-muted">{zh ? `仅列出支持${capabilityLabels[use][0]}的服务。` : 'Only compatible services are shown. Reuse saved credentials, then return to select a model.'}</p>
+    {provider ? <AddProviderDialog key={provider} open initialProviderId={provider} initialUse={use} connectOnly onOpenChange={open => { if (!open) setProvider(undefined); }} builtinRows={data.builtinRows.filter(row => eligibleIds.has(row.id))} customConfig={data.customConfig} labels={labels} language={language} onSaved={() => { void mutate(); setProvider(undefined); onSaved(); }} /> : null}
   </section>;
 }

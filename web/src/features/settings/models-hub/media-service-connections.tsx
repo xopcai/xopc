@@ -39,21 +39,22 @@ export function MediaServiceConnections({ zh, kind, modelServiceIds, onSaved, on
     } catch (cause) { setFailure(cause instanceof Error ? cause.message : String(cause)); }
     finally { saving.current = false; setBusy(false); }
   };
-  return <section className="space-y-4 rounded-xl border border-edge p-4">
+  if (data && !data.length) return null;
+  return <details className="rounded-xl border border-edge p-4"><summary className="cursor-pointer text-sm font-medium text-fg">{zh ? '其他语音服务与本地语音' : 'Other voice services and local speech'}</summary><section className="mt-4 space-y-4">
     <h2 className="text-sm font-semibold text-fg">{kind === 'stt' ? (zh ? '其他识别服务' : 'Other recognition services') : kind === 'tts' ? (zh ? '其他合成服务与本地语音' : 'Other synthesis services and local speech') : (zh ? '语音 API 与本地语音' : 'Voice APIs and local speech')}</h2>
     {!data && !error ? <Skeleton className="h-20 w-full" /> : null}
     {error ? <p role="alert">{zh ? '语音服务加载失败' : 'Could not load voice services'}<Button variant="ghost" onClick={() => void mutate()}>{zh ? '重试' : 'Retry'}</Button></p> : null}
     <Select value={selected} disabled={busy} aria-label={zh ? '语音服务接入' : 'Connect voice service'} onChange={event => { setSelected(event.target.value); setFields({}); setFailure(''); }}>
       <SelectOption value="">{zh ? '选择语音来源' : 'Choose a voice source'}</SelectOption>
-      {data?.map(entry => <SelectOption key={`${entry.kind}:${entry.id}`} value={`${entry.kind}:${entry.id}`}>{entry.displayName} · {entry.kind.toUpperCase()}{entry.configured ? (zh ? ' · 已连接' : ' · Connected') : ''}</SelectOption>)}
+      {data?.map(entry => <SelectOption key={`${entry.kind}:${entry.id}`} value={`${entry.kind}:${entry.id}`}>{entry.displayName}{!kind ? ` · ${entry.kind.toUpperCase()}` : ''}{entry.configured ? (zh ? ' · 已连接' : ' · Connected') : ''}</SelectOption>)}
     </Select>
     {entry ? <>
-      <p className="text-xs text-fg-muted">{entry.diagnostics.requiresApiKey ? (zh ? '凭据按语音用途独立保存；留空保留现有值。连接不会启用或切换模型。' : 'Voice credentials are stored independently. Leave empty to preserve existing values. Connecting does not change models.') : (zh ? '此来源无需 API Key，可返回能力设置选择。' : 'No API key needed. Choose this source in capability settings.')}</p>
+      <p className="text-xs text-fg-muted">{entry.diagnostics.requiresApiKey ? (zh ? '此服务使用独立的 API Key。保存连接后，可在“模型与参数”中选用。' : 'This service uses its own API key. Save the connection, then choose it in Model and parameters.') : (zh ? '此来源无需 API Key，可返回能力设置选择。' : 'No API key needed. Choose this source in capability settings.')}</p>
       {connectionFields.map((field: VoiceConfigFieldMetadata) => <label key={field.key} className="block space-y-1 text-sm text-fg"><span>{field.label}</span>
         {field.secret || field.type === 'password' ? <SecretInput labels={DEFAULT_SECRET_INPUT_LABELS} value={fields[field.key] ?? ''} onChange={value => setFields(current => ({ ...current, [field.key]: value }))} disabled={busy} /> : field.options?.length ? <Select value={fields[field.key] ?? ''} disabled={busy} onChange={event => setFields(current => ({ ...current, [field.key]: event.target.value }))}><SelectOption value="">{zh ? '保留现有值' : 'Keep existing'}</SelectOption>{field.options.map(option => <SelectOption key={option.id} value={option.id}>{option.name}</SelectOption>)}</Select> : <input className="w-full rounded-lg border border-edge bg-surface-panel p-2" value={fields[field.key] ?? ''} disabled={busy} placeholder={field.placeholder} onChange={event => setFields(current => ({ ...current, [field.key]: event.target.value }))} />}
       </label>)}
       {failure ? <p role="alert" className="text-sm text-danger">{failure}</p> : null}
       <Button disabled={busy || (!entry.configured && entry.diagnostics.requiresApiKey && !Object.values(fields).some(value => value.trim()))} onClick={() => void save()}>{busy ? (zh ? '保存中…' : 'Saving…') : (zh ? '保存连接' : 'Save connection')}</Button>
     </> : null}
-  </section>;
+  </section></details>;
 }

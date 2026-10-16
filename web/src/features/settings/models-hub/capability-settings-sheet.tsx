@@ -1,35 +1,59 @@
 import * as Dialog from '@radix-ui/react-dialog';
-import { Activity, lazy, Suspense, useEffect, useState } from 'react';
+import { Activity, lazy, Suspense, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import type { ModelSetupUse } from '@xopcai/gateway-contract';
 
+import { X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { SettingsPanelSkeleton } from '@/features/settings/settings-loading-skeleton';
 import { useLocaleStore } from '@/stores/locale-store';
+import { capabilityDescriptions } from './capability-presentation';
 import { capabilityLabels, parseCapabilityUse } from './capability-navigation';
 
 const Editor = lazy(() => import('./capabilities-settings-panel').then(module => ({ default: module.CapabilitiesSettingsPanel })));
 
 export function CapabilitySettingsSheet() {
+  const id = useId();
+  const returnFocus = useRef<HTMLElement | null>(null);
+  const isOpen = useRef(false);
+  const body = useRef<HTMLDivElement>(null);
+  const scrollPositions = useRef(new Map<string, number>());
   const [open, setOpen] = useState(false);
   const [use, setUse] = useState<ModelSetupUse>();
   const [view, setView] = useState<'settings' | 'services'>('settings');
   const [pending, setPending] = useState(false);
+  isOpen.current = open;
   const zh = useLocaleStore(state => state.language) === 'zh';
   useEffect(() => {
     const open = (event: Event) => {
       const detail = (event as CustomEvent<{ use?: string; view?: string }>).detail;
       const use = parseCapabilityUse(detail?.use ?? null);
-      if (use && !pending) { setUse(use); setOpen(true); setView(detail?.view === 'services' ? 'services' : 'settings'); }
+      if (use && !pending) { if (!isOpen.current) returnFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null; setUse(use); setOpen(true); setView(detail?.view === 'services' ? 'services' : 'settings'); }
     };
     window.addEventListener('open-capability-settings', open);
     return () => window.removeEventListener('open-capability-settings', open);
   }, [pending]);
+  useLayoutEffect(() => {
+    const element = body.current;
+    if (!element) return;
+    const key = `${use}:${view}`;
+    element.scrollTop = scrollPositions.current.get(key) ?? 0;
+    return () => { scrollPositions.current.set(key, element.scrollTop); };
+  }, [view, use]);
+  const changeView = (next: 'settings' | 'services') => {
+    if (!pending) setView(next);
+  };
   return <Dialog.Root open={open} onOpenChange={value => { if (!pending) setOpen(value); }}><Dialog.Portal forceMount><div className="contents"><Activity mode={open ? 'visible' : 'hidden'}>
-    <Dialog.Overlay className="fixed inset-0 z-[150] bg-scrim" />
-    <Dialog.Content forceMount className="fixed inset-x-3 top-1/2 z-[151] mx-auto flex h-[min(48rem,calc(100dvh-2rem))] w-[calc(100%-1.5rem)] max-w-3xl -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-edge bg-surface-overlay" onEscapeKeyDown={event => { if (pending) event.preventDefault(); }} onInteractOutside={event => { if (pending) event.preventDefault(); }}>
-      <header className="flex shrink-0 items-center justify-between gap-3 border-b border-edge px-5 py-4"><div><Dialog.Title className="text-base font-semibold text-fg">{use ? capabilityLabels[use][zh ? 0 : 1] : ''}</Dialog.Title><Dialog.Description className="mt-1 text-xs text-fg-muted">{zh ? '调整全局默认设置，关闭后继续当前操作。' : 'Edit global defaults, then continue where you left off.'}</Dialog.Description></div><Button variant="ghost" disabled={pending} onClick={() => setOpen(false)}>{zh ? '完成' : 'Done'}</Button></header>
-      <nav className="flex shrink-0 gap-1 border-b border-edge px-5 py-2" aria-label={zh ? '能力配置' : 'Capability configuration'}>{(['settings', 'services'] as const).map(tab => <Button key={tab} variant={view === tab ? 'secondary' : 'ghost'} aria-pressed={view === tab} disabled={pending} onClick={() => setView(tab)}>{tab === 'settings' ? (zh ? '模型与参数' : 'Model and parameters') : (zh ? '管理服务' : 'Manage services')}</Button>)}</nav>
-      <div className="min-h-0 flex-1 overflow-y-auto p-5">{use ? <Suspense fallback={<SettingsPanelSkeleton />}><Editor key={use} inlineUse={use} inlineView={view} onViewChange={setView} onPendingChange={setPending} /></Suspense> : null}</div>
+    <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-[150] bg-scrim" />
+    <Dialog.Content forceMount onCloseAutoFocus={event => { event.preventDefault(); requestAnimationFrame(() => returnFocus.current?.focus()); }} className="xopc-dialog-content fixed inset-x-3 top-1/2 z-[151] mx-auto flex h-[min(48rem,calc(100dvh-2rem))] w-[calc(100%-1.5rem)] max-w-3xl -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-edge bg-surface-overlay" onEscapeKeyDown={event => { if (pending) event.preventDefault(); }} onInteractOutside={event => { if (pending) event.preventDefault(); }}>
+      <header className="flex shrink-0 items-center justify-between gap-3 border-b border-edge px-5 py-4"><div><Dialog.Title className="text-base font-semibold text-fg">{use ? capabilityLabels[use][zh ? 0 : 1] : ''}</Dialog.Title><Dialog.Description className="mt-1 text-xs text-fg-muted">{use ? capabilityDescriptions[use][zh ? 0 : 1] : ''}</Dialog.Description></div><Button variant="ghost" className="size-11 shrink-0 p-0" aria-label={zh ? '关闭设置' : 'Close settings'} disabled={pending} onClick={() => setOpen(false)}><X className="size-4" aria-hidden /></Button></header>
+      <div className="shrink-0 border-b border-edge px-5 py-3"><div role="tablist" aria-label={zh ? '能力配置' : 'Capability configuration'} className="inline-flex gap-1 rounded-xl bg-surface-inset p-1">{(['settings', 'services'] as const).map(tab => <Button key={tab} id={`${id}-${tab}`} role="tab" aria-selected={view === tab} aria-controls={`${id}-panel`} tabIndex={view === tab ? 0 : -1} variant="ghost" className={view === tab ? 'bg-surface-panel text-fg shadow-sm hover:bg-surface-panel' : ''} disabled={pending} onClick={() => changeView(tab)} onKeyDown={event => {
+        if (pending || !['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+        event.preventDefault();
+        const next = event.key === 'Home' ? 'settings' : event.key === 'End' ? 'services' : tab === 'settings' ? 'services' : 'settings';
+        changeView(next); document.getElementById(`${id}-${next}`)?.focus();
+      }}>{tab === 'settings' ? (zh ? '模型与参数' : 'Model and parameters') : (zh ? '管理服务' : 'Manage services')}</Button>)}</div></div>
+      <div ref={body} id={`${id}-panel`} role="tabpanel" aria-labelledby={`${id}-${view}`} className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-5">{use ? <Suspense fallback={<SettingsPanelSkeleton />}><Editor key={use} inlineUse={use} inlineView={view} onViewChange={setView} onPendingChange={setPending} /></Suspense> : null}</div>
+      <footer className="flex shrink-0 items-center justify-between gap-4 border-t border-edge px-5 py-3"><p className="text-xs leading-relaxed text-fg-muted">{pending ? (zh ? '完成保存后即可关闭。' : 'Finish saving before closing.') : view === 'settings' ? (zh ? '参数更改会自动保存。' : 'Parameter changes are saved automatically.') : (zh ? '选择服务，为当前能力配置模型。' : 'Choose a service for this capability.')}</p><Button variant="secondary" disabled={pending} onClick={() => setOpen(false)}>{zh ? '完成' : 'Done'}</Button></footer>
     </Dialog.Content>
   </Activity></div></Dialog.Portal></Dialog.Root>;
 }

@@ -58,6 +58,7 @@ export function CapabilitiesSettingsPanel({ inlineUse, inlineView = 'settings', 
   const zh = language === 'zh';
   const [connectionUse, setConnectionUse] = useState<ModelSetupUse>();
   const [connectionSaved, setConnectionSaved] = useState<ModelSetupUse>();
+  const [connectionEditing, setConnectionEditing] = useState(false);
   const [connectionPending, setConnectionPending] = useState(false);
   const openConnection = (use: ModelSetupUse) => {
     if (settingsPending) return;
@@ -110,11 +111,11 @@ export function CapabilitiesSettingsPanel({ inlineUse, inlineView = 'settings', 
   if (capability === 'image') return <Navigate to={capabilityPath('image')} replace />;
 
   const renderCapabilitySettings = (use: ModelSetupUse) => <CapabilityConnectionContext.Provider value={openConnection}><div className="min-w-0 space-y-4">
-    {connectionSaved === use ? <p role="status" className="text-sm text-fg-muted">{zh ? '服务设置已保存' : 'Service settings saved'}</p> : null}
+    {connectionSaved === use && (!inlineUse || inlineView === 'settings') ? <p role="status" className="text-sm text-fg-muted">{zh ? '服务设置已保存' : 'Service settings saved'}</p> : null}
     {(inlineUse || connectionUse === use) ? <fieldset hidden={Boolean(inlineUse && inlineView !== 'services')} disabled={connectionPending} className="min-w-0 space-y-3" aria-label={zh ? `接入 ${capabilityLabels[use][0]}` : `Connect ${capabilityLabels[use][1]}`}>
-      <div className="flex items-center justify-between"><h3 className="text-sm font-semibold text-fg">{zh ? '连接服务与选择模型' : 'Connect and choose a model'}</h3>{!inlineUse ? <Button variant="ghost" disabled={connectionPending} onClick={() => setConnectionUse(undefined)}>{zh ? '收起连接' : 'Collapse connection'}</Button> : null}</div>
-      <CapabilityServiceConnections key={use} inline use={use} data={providerData} language={language} labels={c.addProviderDialog} onPendingChange={setConnectionPending} onSaved={() => { handleSaved(); setConnectionUse(undefined); onViewChange?.('settings'); setConnectionSaved(use); }} />
-      {use === 'transcription' || use === 'speech' ? <MediaServiceConnections key={`inline-${use}`} kind={use === 'transcription' ? 'stt' : 'tts'} modelServiceIds={providerData.builtinRows.map(row => row.id)} zh={zh} onPendingChange={setConnectionPending} onSaved={() => { handleSaved(); setConnectionUse(undefined); onViewChange?.('settings'); setConnectionSaved(use); }} /> : null}
+      <div className="flex items-center justify-between">{!inlineUse ? <Button variant="ghost" disabled={connectionPending} onClick={() => setConnectionUse(undefined)}>{zh ? '收起连接' : 'Collapse connection'}</Button> : null}</div>
+      <CapabilityServiceConnections key={use} inline onEditingChange={setConnectionEditing} use={use} data={providerData} language={language} labels={c.addProviderDialog} onPendingChange={setConnectionPending} onSaved={() => { handleSaved(); setConnectionUse(undefined); onViewChange?.('settings'); setConnectionSaved(use); }} />
+      {use === 'transcription' || use === 'speech' ? <div hidden={connectionEditing}><MediaServiceConnections key={`inline-${use}`} kind={use === 'transcription' ? 'stt' : 'tts'} modelServiceIds={providerData.builtinRows.map(row => row.id)} zh={zh} onPendingChange={setConnectionPending} onSaved={() => { handleSaved(); setConnectionUse(undefined); onViewChange?.('settings'); setConnectionSaved(use); }} /></div> : null}
       {use === 'image' ? <ImageModelsSettingsPanel connectOnly onPendingChange={setConnectionPending} onConnected={() => { handleSaved(); setConnectionUse(undefined); onViewChange?.('settings'); setConnectionSaved(use); }} /> : null}
     </fieldset> : null}
     <div hidden={Boolean(inlineUse && inlineView === 'services')} className="space-y-4">
