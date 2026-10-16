@@ -62,7 +62,7 @@ describe('buildAssistantTurnViewModel', () => {
     expect(view.lifecycle.state).toBe('using_tool');
   });
 
-  it('does not treat provisional narration as the final answer', () => {
+  it('shows pending text in the answer surface while streaming', () => {
     const message: Message = {
       role: 'assistant',
       content: [
@@ -76,8 +76,10 @@ describe('buildAssistantTurnViewModel', () => {
       reasoningLevel: 'stream',
     });
 
-    expect(view.answer.started).toBe(false);
-    expect(view.lifecycle.state).toBe('starting');
+    expect(view.answerContent).toEqual(message.content);
+    expect(view.answer.started).toBe(true);
+    expect(view.lifecycle.state).toBe('answering');
+    expect(view.workLog.items).toEqual([]);
   });
 
   it.each<{
