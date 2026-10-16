@@ -1,0 +1,202 @@
+{
+  "passed": true,
+  "date": "2026-10-16T03:14:36.058Z",
+  "directory": "/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-note-manual-live-cW00y6",
+  "syntheticSpeech": true,
+  "realProviders": true,
+  "faults": "Loopback socket close and HTTP 429; successful requests reach real suppliers",
+  "stages": [
+    {
+      "mode": "seed",
+      "status": "stopping",
+      "checkpoints": 0,
+      "attempts": 0,
+      "calls": [],
+      "audioHash": "a6dac0c0d4098aebbe79a63b351a2e3a807025bbbbddb2cdab6053b04bd106b2",
+      "noteId": "f6fd4a0d-3c0f-4a02-9ab6-cf07592c5457",
+      "summaryCharacters": 0,
+      "transcriptCharacters": 0,
+      "markdown": "Independent acceptance notes"
+    },
+    {
+      "mode": "stt-network",
+      "status": "sealing",
+      "checkpoints": 1,
+      "attempts": 1,
+      "nextAttemptAt": 1792120505248,
+      "calls": [
+        {
+          "stage": "stt",
+          "outcome": "supplier",
+          "status": 200,
+          "requestId": "de22486a-4594-9acb-8018-f7115c933a1b"
+        },
+        {
+          "stage": "stt",
+          "outcome": "stt-network:transport-failure"
+        }
+      ],
+      "audioHash": "a6dac0c0d4098aebbe79a63b351a2e3a807025bbbbddb2cdab6053b04bd106b2",
+      "noteId": "f6fd4a0d-3c0f-4a02-9ab6-cf07592c5457",
+      "summaryCharacters": 0,
+      "transcriptCharacters": 0,
+      "failure": "Alibaba STT failed: fetch failed",
+      "markdown": "Independent acceptance notes"
+    },
+    {
+      "mode": "stt-rate-limit",
+      "status": "sealing",
+      "checkpoints": 1,
+      "attempts": 2,
+      "nextAttemptAt": 1792120537430,
+      "calls": [
+        {
+          "stage": "stt",
+          "outcome": "stt-rate-limit",
+          "status": 429
+        }
+      ],
+      "audioHash": "a6dac0c0d4098aebbe79a63b351a2e3a807025bbbbddb2cdab6053b04bd106b2",
+      "noteId": "f6fd4a0d-3c0f-4a02-9ab6-cf07592c5457",
+      "summaryCharacters": 0,
+      "transcriptCharacters": 0,
+      "failure": "Alibaba STT failed: Alibaba STT (429): Acceptance injected rate limit [type=rate_limit_error, code=rate_limit_exceeded] [code=rate_limit_exceeded]",
+      "markdown": "Independent acceptance notes"
+    },
+    {
+      "mode": "stt-rate-limit",
+      "status": "needs_attention",
+      "checkpoints": 1,
+      "attempts": 3,
+      "calls": [
+        {
+          "stage": "stt",
+          "outcome": "stt-rate-limit",
+          "status": 429
+        }
+      ],
+      "audioHash": "a6dac0c0d4098aebbe79a63b351a2e3a807025bbbbddb2cdab6053b04bd106b2",
+      "noteId": "f6fd4a0d-3c0f-4a02-9ab6-cf07592c5457",
+      "summaryCharacters": 0,
+      "transcriptCharacters": 0,
+      "failure": "Alibaba STT failed: Alibaba STT (429): Acceptance injected rate limit [type=rate_limit_error, code=rate_limit_exceeded] [code=rate_limit_exceeded]",
+      "markdown": "Independent acceptance notes"
+    },
+    {
+      "mode": "stt-recover",
+      "status": "organizing",
+      "checkpoints": 3,
+      "attempts": 0,
+      "calls": [
+        {
+          "stage": "stt",
+          "outcome": "supplier",
+          "status": 200,
+          "requestId": "c376d977-157a-9bf2-8e3a-fa74f669670a"
+        },
+        {
+          "stage": "stt",
+          "outcome": "supplier",
+          "status": 200,
+          "requestId": "3d04787b-ab27-9917-9a07-3c378298236b"
+        }
+      ],
+      "audioHash": "a6dac0c0d4098aebbe79a63b351a2e3a807025bbbbddb2cdab6053b04bd106b2",
+      "noteId": "f6fd4a0d-3c0f-4a02-9ab6-cf07592c5457",
+      "summaryCharacters": 0,
+      "transcriptCharacters": 462,
+      "markdown": "Independent acceptance notes"
+    },
+    {
+      "mode": "llm-rate-limit",
+      "status": "organizing",
+      "checkpoints": 3,
+      "attempts": 1,
+      "nextAttemptAt": 1792120614581,
+      "calls": [
+        {
+          "stage": "llm",
+          "outcome": "llm-rate-limit",
+          "status": 429
+        }
+      ],
+      "audioHash": "a6dac0c0d4098aebbe79a63b351a2e3a807025bbbbddb2cdab6053b04bd106b2",
+      "noteId": "f6fd4a0d-3c0f-4a02-9ab6-cf07592c5457",
+      "summaryCharacters": 0,
+      "transcriptCharacters": 462,
+      "failure": "Discussion model call failed: 429: {\"message\":\"Acceptance injected rate limit\",\"type\":\"rate_limit_error\",\"code\":\"rate_limit_exceeded\"}",
+      "markdown": "Independent acceptance notes"
+    },
+    {
+      "mode": "llm-rate-limit",
+      "status": "organizing",
+      "checkpoints": 3,
+      "attempts": 2,
+      "nextAttemptAt": 1792120643473,
+      "calls": [
+        {
+          "stage": "llm",
+          "outcome": "llm-rate-limit",
+          "status": 429
+        }
+      ],
+      "audioHash": "a6dac0c0d4098aebbe79a63b351a2e3a807025bbbbddb2cdab6053b04bd106b2",
+      "noteId": "f6fd4a0d-3c0f-4a02-9ab6-cf07592c5457",
+      "summaryCharacters": 0,
+      "transcriptCharacters": 462,
+      "failure": "Discussion model call failed: 429: {\"message\":\"Acceptance injected rate limit\",\"type\":\"rate_limit_error\",\"code\":\"rate_limit_exceeded\"}",
+      "markdown": "Independent acceptance notes"
+    },
+    {
+      "mode": "llm-rate-limit",
+      "status": "needs_attention",
+      "checkpoints": 3,
+      "attempts": 3,
+      "calls": [
+        {
+          "stage": "llm",
+          "outcome": "llm-rate-limit",
+          "status": 429
+        }
+      ],
+      "audioHash": "a6dac0c0d4098aebbe79a63b351a2e3a807025bbbbddb2cdab6053b04bd106b2",
+      "noteId": "f6fd4a0d-3c0f-4a02-9ab6-cf07592c5457",
+      "summaryCharacters": 0,
+      "transcriptCharacters": 462,
+      "failure": "Discussion model call failed: 429: {\"message\":\"Acceptance injected rate limit\",\"type\":\"rate_limit_error\",\"code\":\"rate_limit_exceeded\"}",
+      "markdown": "Independent acceptance notes"
+    },
+    {
+      "mode": "llm-recover",
+      "status": "completed",
+      "checkpoints": 3,
+      "attempts": 0,
+      "calls": [
+        {
+          "stage": "llm",
+          "outcome": "supplier",
+          "status": 200
+        }
+      ],
+      "audioHash": "a6dac0c0d4098aebbe79a63b351a2e3a807025bbbbddb2cdab6053b04bd106b2",
+      "noteId": "f6fd4a0d-3c0f-4a02-9ab6-cf07592c5457",
+      "summaryCharacters": 215,
+      "transcriptCharacters": 462,
+      "markdown": "Independent acceptance notes"
+    }
+  ],
+  "http": [
+    {
+      "operation": "unauthenticated retry denied",
+      "status": 401
+    },
+    {
+      "operation": "sealing resume through authenticated lazy route",
+      "status": 200
+    },
+    {
+      "operation": "organizing resume through authenticated lazy route",
+      "status": 200
+    }
+  ]
+}

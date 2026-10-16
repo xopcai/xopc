@@ -641,13 +641,13 @@ function NoteDetailPanelInner({
   useLayoutEffect(() => {
     setPageHeader({
       startExtra: headerStart,
-      main: note ? headerMain : null,
-      end: note ? headerEnd : null,
+      main: note && !(meeting && showMeeting) ? headerMain : null,
+      end: note && !(meeting && showMeeting) ? headerEnd : null,
     });
     return () => {
       if (clearHeaderOnCleanup) clearPageHeader();
     };
-  }, [clearHeaderOnCleanup, clearPageHeader, headerEnd, headerMain, headerStart, note, setPageHeader]);
+  }, [clearHeaderOnCleanup, clearPageHeader, headerEnd, headerMain, headerStart, meeting, showMeeting, note, setPageHeader]);
 
   const handleSave = useCallback(
     (content: string) => {
@@ -791,7 +791,7 @@ function NoteDetailPanelInner({
           ref={editorContainerRef}
           className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-edge-subtle bg-surface-panel xl:flex-row"
         >
-          {meeting && showMeeting ? <DiscussionNoteSections noteId={noteId} onPersonalNotes={() => { setShowMeeting(false); window.setTimeout(() => titleInputRef.current?.focus(),0); }} /> : null}
+          {meeting && showMeeting ? <DiscussionNoteSections noteId={noteId} noteActions={{ onAnalyze: handleBreakdownClick,onChat: () => { void handleOpenNoteChat(false); },onShare: () => { void handleShare(); },onHistory: () => setActiveSidePanel(activeSidePanel === 'history' ? null : 'history'),onDelete: () => setDeleteConfirmOpen(true),busy: deleting || saving || catalyzing || openingChat }} onPersonalNotes={() => { setShowMeeting(false); window.setTimeout(() => titleInputRef.current?.focus(),0); }} /> : null}
           <div className={meeting && showMeeting ? "hidden" : "min-h-0 min-w-0 flex-1"}>
             {isPreviewingSnapshot ? (
               <div className="h-full overflow-y-auto px-4 py-4 sm:px-6">

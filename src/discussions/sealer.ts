@@ -1,3 +1,5 @@
+import { DISCUSSION_MAX_SAVED_DURATION_MS } from '@xopcai/gateway-contract';
+
 import { createHash, randomUUID } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 
@@ -180,7 +182,7 @@ export class DiscussionSealer {
       speakerLabel: segment.speakerLabel, correctedByUser: segment.correctedByUser }));
     let offset = 0;
     let language: string | undefined;
-    await forEachNormalizedAudioSegment({ filePath: attachment.filePath, maxDurationSeconds: 120 * 60, signal }, async (buffer, index) => {
+    await forEachNormalizedAudioSegment({ filePath: attachment.filePath, maxDurationSeconds: DISCUSSION_MAX_SAVED_DURATION_MS / 1000, signal }, async (buffer, index) => {
       assertCurrent();
       const decoded = decodeWavToMonoFloat32(buffer);
       const durationMs = decoded.durationSeconds * 1_000;

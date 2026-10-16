@@ -3,7 +3,7 @@ import { createReadStream } from 'node:fs';
 import { mkdir, open, rename, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 
-import { DISCUSSION_AUDIO_MAX_BYTES, DISCUSSION_CHUNK_MAX_BYTES, DISCUSSION_MAX_DURATION_MS, type DiscussionRecordingChunk, type DiscussionRecordingManifest } from '@xopcai/gateway-contract';
+import { DISCUSSION_AUDIO_MAX_BYTES, DISCUSSION_CHUNK_MAX_BYTES, DISCUSSION_MAX_SAVED_DURATION_MS, type DiscussionRecordingChunk, type DiscussionRecordingManifest } from '@xopcai/gateway-contract';
 
 import { resolveNoteMediaDir } from '../notes/paths.js';
 import type { NotesService } from '../notes/service.js';
@@ -69,7 +69,7 @@ export async function saveRecordingChunk(capture: DiscussionCapture, sequence: n
 
 export function validateRecordingManifest(capture: DiscussionCapture, input: DiscussionRecordingManifest): void {
   if (input.containerMode !== undefined && (input.containerMode !== 'independent_wav' || input.mimeType !== 'audio/wav')) throw invalid('Unsupported recording container');
-  if (input.events !== undefined && (!Array.isArray(input.events) || input.events.length > 1000 || input.events.some(event => !event || !Number.isSafeInteger(event.recordedAt) || event.recordedAt < 0 || !Number.isSafeInteger(event.savedMs) || event.savedMs < 0 || event.savedMs > DISCUSSION_MAX_DURATION_MS || !['start', 'resume', 'interrupted', 'seal'].includes(event.kind)))) throw invalid('Invalid recording events');
+  if (input.events !== undefined && (!Array.isArray(input.events) || input.events.length > 1000 || input.events.some(event => !event || !Number.isSafeInteger(event.recordedAt) || event.recordedAt < 0 || !Number.isSafeInteger(event.savedMs) || event.savedMs < 0 || event.savedMs > DISCUSSION_MAX_SAVED_DURATION_MS || !['start', 'resume', 'interrupted', 'seal'].includes(event.kind)))) throw invalid('Invalid recording events');
   if (input.epochs !== undefined) {
     if (input.containerMode || !Array.isArray(input.epochs) || input.epochs.length < 2 || input.epochs.length > 100
       || input.epochs.some((epoch, index) => !epoch || !Number.isSafeInteger(epoch.firstChunk)
@@ -98,7 +98,7 @@ export async function completeRecording(capture: DiscussionCapture, input: Discu
     } else {
     if (input.containerMode === 'independent_wav') {
       const samples = chunks.reduce((total, chunk) => total + (chunk.bytes - 44) / 2, 0);
-      if (!Number.isSafeInteger(samples) || samples <= 0 || samples > 16000 * DISCUSSION_MAX_DURATION_MS / 1000) throw invalid('Invalid PCM recording duration');
+      if (!Number.isSafeInteger(samples) || samples <= 0 || samples > 16000 * DISCUSSION_MAX_SAVED_DURATION_MS / 1000) throw invalid('Invalid PCM recording duration');
       const header = recordingWavHeader(samples);
       hash.update(header);
       await file.writeFile(header);
@@ -145,7 +145,7 @@ export async function completeRecording(capture: DiscussionCapture, input: Discu
   } finally { await file.close(); }
     // Decode all media before accepting it, with bounded memory and duration.
     let durationMs = 0;
-    await forEachNormalizedAudioSegment({ filePath: target, segmentSeconds: 30, maxDurationSeconds: DISCUSSION_MAX_DURATION_MS / 1_000, signal: AbortSignal.any([signal, AbortSignal.timeout(180_000)]) }, async (buffer) => {
+    await forEachNormalizedAudioSegment({ filePath: target, segmentSeconds: 30, maxDurationSeconds: DISCUSSION_MAX_SAVED_DURATION_MS / 1_000, signal: AbortSignal.any([signal, AbortSignal.timeout(180_000)]) }, async (buffer) => {
       durationMs += decodeWavToMonoFloat32(buffer).durationSeconds * 1_000;
     });
     if (durationMs < 1_000) throw invalid('Recording must contain at least one second of audio');
@@ -233,12 +233,12 @@ async function assembleEpochs(capture: DiscussionCapture, input: DiscussionRecor
       } finally { await source.close(); }
       let epochSamples = 0;
       await forEachNormalizedAudioSegment({ filePath: path, segmentSeconds: 30,
-        maxDurationSeconds: DISCUSSION_MAX_DURATION_MS / 1000, signal: AbortSignal.any([signal, AbortSignal.timeout(180_000)]) }, async buffer => {
+        maxDurationSeconds: DISCUSSION_MAX_SAVED_DURATION_MS / 1000, signal: AbortSignal.any([signal, AbortSignal.timeout(180_000)]) }, async buffer => {
         const audio = decodeWavToMonoFloat32(buffer);
         const pcm = Buffer.alloc(audio.samples.length * 2);
         for (let i = 0; i < audio.samples.length; i++) pcm.writeInt16LE(Math.max(-32768, Math.min(32767, Math.round(audio.samples[i]! * 32768))), i * 2);
         samples += audio.samples.length; epochSamples += audio.samples.length;
-        if (samples > 16000 * DISCUSSION_MAX_DURATION_MS / 1000) throw invalid('Recording exceeds duration limit');
+        if (samples > 16000 * DISCUSSION_MAX_SAVED_DURATION_MS / 1000) throw invalid('Recording exceeds duration limit');
         await output.writeFile(pcm);
       });
       if (!epochSamples) throw invalid('Recording epoch has no decodable audio');

@@ -45,7 +45,9 @@ try {
   const segments = await forEachNormalizedAudioSegment({ filePath: attached!.filePath }, async buffer => {
     decodedDurationMs += decodeWavToMonoFloat32(buffer).durationSeconds * 1000;
   });
-  assert.ok(Math.abs(decodedDurationMs - report.checks[0].savedDurationMs) < 1_000);
+  const recovery = report.checks.find((check: { savedDurationMs?: number }) => check.savedDurationMs !== undefined);
+  assert.ok(recovery, 'Browser report must contain the recovered audio duration');
+  assert.ok(Math.abs(decodedDurationMs - recovery.savedDurationMs) < 1_000);
   report.gatewayIngestion = { passed: true, directory, chunks, segments, bytes: source.length,
     sha256: sha256(source), decodedDurationMs, attachmentId: detail.discussion.audioAttachmentId, discussionId: detail.discussion.id };
   writeFileSync(reportPath, JSON.stringify(report, null, 2) + '\n');
