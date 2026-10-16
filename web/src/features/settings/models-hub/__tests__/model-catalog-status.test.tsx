@@ -153,7 +153,7 @@ it('presents provider sync failures as temporarily unverified with repair action
   expect(container.textContent).toContain('Check again');
   expect(container.textContent).toContain('Replace model');
   expect(container.textContent).toContain('View 1 reference');
-  expect(container.querySelector('a[href="/settings/agent-defaults"]')).not.toBeNull();
+  expect(container.querySelector('a[href="/settings/capabilities/models"]')).not.toBeNull();
   expect(container.querySelector('[role="alert"]')).toBeNull();
   expect(container.querySelector('[aria-label="Sync error details"]')?.textContent).toContain('deepseek: fetch failed');
 });
@@ -209,4 +209,14 @@ it('opens an actionable warning when readiness arrives before the model catalog'
   mockState.loading = false;
   await act(async () => render());
   expect(container.querySelector('details')?.open).toBe(true);
+});
+
+it('keeps catalog diagnostics without duplicating capability configuration in the merged overview', async () => {
+  mockState.catalog.sync.sourceErrors = { cloud: 'Connection unavailable' };
+  const container = document.createElement('div');
+  root = createRoot(container);
+  await act(async () => root!.render(<MemoryRouter><ModelCatalogStatus showCapabilities={false} /></MemoryRouter>));
+  expect(container.querySelector('button[aria-haspopup="dialog"]')).toBeNull();
+  expect(container.textContent).not.toMatch(/Optional capabilities|可选能力/);
+  expect(container.textContent).toContain('Connection unavailable');
 });

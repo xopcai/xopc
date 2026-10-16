@@ -120,6 +120,7 @@ export function ProviderManageDialog({
   language,
   onSaved,
 }: ProviderManageDialogProps) {
+  const returnFocus = useRef<HTMLElement | null>(null);
   const [subscriptionSetup, setSubscriptionSetup] = useState(false);
   const [successTarget, setSuccessTarget] = useState<DefaultModelTarget | null>(null);
   const handleOpenChange = (next: boolean) => {
@@ -136,6 +137,12 @@ export function ProviderManageDialog({
           )}
         />
         <Dialog.Content
+          onOpenAutoFocus={() => { returnFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null; }}
+          onCloseAutoFocus={event => {
+            if (!returnFocus.current?.isConnected) return;
+            event.preventDefault();
+            returnFocus.current.focus({ preventScroll: true });
+          }}
           className={cn(
             'xopc-dialog-content fixed left-1/2 top-1/2 flex h-[min(85vh,720px)] w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-edge bg-surface-overlay',
             SETTINGS_SHELL_CONTENT_Z,

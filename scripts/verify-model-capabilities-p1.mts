@@ -138,12 +138,14 @@ try {
   assert.equal(legacyReturn.searchParams.get('view'), null);
   await page.goto(`${url}#/settings/capabilities/models?view=services`);
   await page.getByRole('heading', { name: '连接的服务', exact: true }).waitFor();
+  await page.waitForURL(`${url}#/settings/capabilities/models`);
   const serviceOrigin = page.url();
   const serviceWriteCount = writes.length;
   const backgroundBeforeService = structuredClone(defaults.models.background);
   const serviceLabels = ['对话与任务', '看图', '生成图片', '录音与听写', '文字转语音', '实时语音对话', '自动与后台任务'];
-  for (const label of serviceLabels) {
-    const entry = page.getByRole('button', { name: label, exact: true });
+  const serviceUses = ['chat', 'vision', 'image', 'transcription', 'speech', 'conversation', 'background'];
+  for (const [index, label] of serviceLabels.entries()) {
+    const entry = page.locator(`[data-capability="${serviceUses[index]}"]`).getByRole('button', { name: '管理服务', exact: true });
     await entry.scrollIntoViewIfNeeded();
     const scrollState = await entry.evaluateHandle(element => {
       const positions: Array<{ element: HTMLElement; top: number }> = [];
@@ -160,7 +162,7 @@ try {
       const keyDraft = modal.locator('#provider-setup-key');
       await keyDraft.fill('fixture-unsaved-service-key');
       await modal.getByRole('button', { name: '完成', exact: true }).click();
-      await page.waitForFunction(label => document.activeElement?.textContent?.trim() === label, label);
+      await page.waitForFunction(use => document.activeElement?.closest('[data-capability]')?.getAttribute('data-capability') === use && document.activeElement?.textContent?.trim() === '管理服务', serviceUses[index]);
       await entry.click();
       assert.equal(await keyDraft.inputValue(), 'fixture-unsaved-service-key');
       await modal.getByRole('button', { name: '保留原 Key', exact: true }).click();
@@ -177,7 +179,7 @@ try {
     await modal.getByRole('tab', { name: '模型与参数', exact: true }).click();
     assert.equal(page.url(), serviceOrigin);
     await modal.getByRole('button', { name: '完成', exact: true }).click();
-    await page.waitForFunction(label => document.activeElement?.textContent?.trim() === label, label);
+    await page.waitForFunction(use => document.activeElement?.closest('[data-capability]')?.getAttribute('data-capability') === use && document.activeElement?.textContent?.trim() === '管理服务', serviceUses[index]);
     assert.equal(page.url(), serviceOrigin);
     assert.ok(await scrollState.evaluate(positions => positions.every(({ element, top }) => Math.abs(element.scrollTop - top) <= 1)), 'Service page scroll must survive closing settings');
     await scrollState.dispose();
@@ -188,7 +190,7 @@ try {
   await page.screenshot({path:join(directory,'service-accounts-mobile.png'),fullPage:true});
   visionNeedsRepair = true;
   await page.reload();
-  const repair = page.getByRole('button', { name: '图片理解：去接入模型', exact: true });
+  const repair = page.locator('[data-capability="vision"]').getByRole('button', { name: '管理服务', exact: true });
   await repair.waitFor();
   await repair.click();
   await modal.getByRole('heading', { name: '看图', exact: true }).waitFor();
@@ -196,23 +198,33 @@ try {
   await modal.getByRole('button', { name: /阿里云百炼订阅 · 北京/ }).click();
   await modal.getByRole('button', { name: '使用此模型', exact: true }).click();
   await modal.getByRole('heading', { name: '阿里云百炼订阅 · 北京', exact: true }).waitFor({ state: 'hidden' });
-  await page.waitForFunction(() => document.querySelector('button[aria-label="配置 图片理解"]') !== null);
-  const configuredVision = page.locator('button[aria-label="配置 图片理解"]');
-  assert.ok(await configuredVision.evaluate(element => element.closest('details')!.open), 'Status refresh must not collapse the invoking capability list');
+  await modal.getByRole('tab', { name: '模型与参数', exact: true }).waitFor();
   await modal.getByRole('button', { name: '完成', exact: true }).click();
-  await page.waitForFunction(() => document.activeElement?.getAttribute('aria-label') === '配置 图片理解');
-  assert.ok(await configuredVision.isVisible());
+  await page.waitForFunction(() => document.activeElement?.closest('[data-capability]')?.getAttribute('data-capability') === 'vision' && document.activeElement?.textContent?.trim() === '管理服务');
+  assert.ok(await repair.isVisible());
   assert.equal(page.url(), serviceOrigin);
   assert.equal(writes.length, serviceWriteCount + 2);
   assert.deepEqual(writes.at(-1), { provider: 'qwen-token-plan-cn', selected: ['vision'] });
   assert.deepEqual(defaults.models.background, backgroundBeforeService);
+
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.evaluate(() => document.documentElement.style.fontSize = '32px');
+  const overlaps = await page.locator('[data-capability]').evaluateAll(rows => rows.filter(row => {
+    const cells = row.firstElementChild!.children;
+    if (cells.length < 3) return false;
+    const label = cells[0].getBoundingClientRect(); const actions = cells[2].getBoundingClientRect();
+    return label.left < actions.right && label.right > actions.left && label.top < actions.bottom && label.bottom > actions.top;
+  }).map(row => row.getAttribute('data-capability')));
+  assert.deepEqual(overlaps, [], 'Large text must not overlap capability actions on narrow screens');
+  await page.screenshot({ path: join(directory, 'overview-large-text-mobile.png'), fullPage: true });
+  await page.evaluate(() => document.documentElement.style.fontSize = '16px');
 
   await page.goto(`${url}#/settings/capabilities/image`);
   await page.waitForURL('**use=image');
   await page.getByRole('heading',{name:'生成图片',exact:true}).waitFor();
   assert.equal(configWrites.length,1,'Opening legacy image settings must not write configuration');
   assert.deepEqual(errors,[]);
-  const report={passed:true,connectionAppliesOnlyCurrentCapability:true,samePageSettings:true,serviceAccountsStayInPlace:true,serviceAccountApplyInPlace:true,optionalRepairPreservesExpansionAndFocus:true,serviceDraftPreserved:true,legacyServiceReturnContextPreserved:true,explicitSingleUseSwitch:true,switchLocksVoiceParameters:true,advancedVoiceReturnsToOriginalCapability:true,backgroundPlansExcluded:true,mobileOverflow:false,legacyImageUrlPreserved:true,realCredentialsUsed:false,directory};
+  const report={passed:true,connectionAppliesOnlyCurrentCapability:true,samePageSettings:true,serviceAccountsStayInPlace:true,serviceAccountApplyInPlace:true,capabilityRepairPreservesFocus:true,serviceDraftPreserved:true,legacyServiceReturnContextPreserved:true,explicitSingleUseSwitch:true,switchLocksVoiceParameters:true,advancedVoiceReturnsToOriginalCapability:true,backgroundPlansExcluded:true,mobileOverflow:false,legacyImageUrlPreserved:true,realCredentialsUsed:false,directory};
   await writeFile(join(directory,'report.json'),JSON.stringify(report,null,2));
   console.log(JSON.stringify(report));
 } catch (error) {

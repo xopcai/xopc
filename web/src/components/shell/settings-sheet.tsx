@@ -32,7 +32,10 @@ export const SettingsSheet = memo(function SettingsSheet({ children }: SettingsS
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
+      if (e.key === 'Escape' && !e.defaultPrevented) {
+        // Nested Radix layers handle Escape after this window capture listener.
+        const nestedSurface = document.querySelectorAll<HTMLElement>('[data-state="open"]:is([role="dialog"], [role="alertdialog"], [role="menu"], [role="listbox"])');
+        if (Array.from(nestedSurface).some(element => element.getClientRects().length > 0)) return;
         e.stopPropagation();
         navigate(closeTarget);
       }

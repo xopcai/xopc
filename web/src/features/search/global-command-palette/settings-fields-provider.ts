@@ -59,7 +59,7 @@ function buildFieldSeeds(language: StoredLanguage): FieldSeed[] {
       id: 'field:agent-defaults:models',
       title: isZh ? 'Agent 全局模型' : 'Global agent models',
       subtitle: isZh ? '设置所有 Agent 继承的模型与回退' : 'Set inherited models and fallbacks',
-      path: '/settings/agent-defaults?panel=models',
+      path: '/settings/capabilities/models',
       keywords: ['agent defaults', 'model intents', 'fallbacks', 'llm', '全局默认', '模型意图'],
     },
     {

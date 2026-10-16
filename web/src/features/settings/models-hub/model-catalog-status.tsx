@@ -48,8 +48,8 @@ interface CatalogPayload {
 function referenceLocation(location: string, zh: boolean): { label: string; href: string } {
   if (location.startsWith('agentCatalog.defaults.models')) {
     return {
-      label: zh ? '全局智能体默认模型' : 'Global agent defaults',
-      href: '/settings/agent-defaults',
+      label: zh ? '模型与能力' : 'Models and capabilities',
+      href: '/settings/capabilities/models',
     };
   }
   const agentMatch = location.match(/^agentCatalog\.agents\.([^.]+)\.models/);
@@ -127,7 +127,7 @@ async function fetchCapabilityReadiness(): Promise<CapabilityReadinessPayload> {
   return body.payload;
 }
 
-export function ModelCatalogStatus() {
+export function ModelCatalogStatus({ showCapabilities = true }: { showCapabilities?: boolean } = {}) {
   const zh = useLocaleStore((state) => state.language) === 'zh';
   const { data, error, isLoading } = useSWR(MODEL_CATALOG_SWR_KEY, fetchCatalog, {
     revalidateOnFocus: true,
@@ -190,7 +190,7 @@ export function ModelCatalogStatus() {
 
   return (
     <section className="rounded-xl bg-surface-hover/25 p-4 sm:p-5">
-      <details ref={capabilityDetails} className="group">
+      {showCapabilities ? <details ref={capabilityDetails} className="group">
         <summary className="cursor-pointer list-none rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
           <div className="flex min-h-10 items-center gap-2">
             {capabilityNeedsAttention ? (
@@ -286,7 +286,7 @@ export function ModelCatalogStatus() {
             })}
           </div>
         ) : null}
-      </details>
+      </details> : null}
       {unavailable.length > 0 ? (
         <div className="mt-3 space-y-2" aria-live="polite">
           {unavailable.map((reference) => (
