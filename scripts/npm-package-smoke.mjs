@@ -26,7 +26,7 @@ try {
   console.log('Installing packed artifact into an empty npm prefix (without the workspace lockfile)...');
   // npm is intentional here: this reproduces end-user global installs, not workspace dependency management.
   await exec('npm', ['install', '-g', '--prefix', prefix, archive, '--no-audit', '--no-fund', '--loglevel=error'], {
-    cwd: work, timeout: 300_000, maxBuffer: 1024 * 1024,
+    cwd: work, timeout: 600_000, maxBuffer: 1024 * 1024,
     env: { ...process.env, NPM_CONFIG_CACHE: join(work, 'npm-cache') },
   });
   const packageRoot = join(prefix, process.platform === 'win32' ? '' : 'lib', 'node_modules', '@xopcai/xopc');
