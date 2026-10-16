@@ -241,10 +241,19 @@ export async function fetchVoiceSettings(): Promise<VoiceSettingsState> {
   return normalizeVoiceSettings(res.payload?.config ?? {});
 }
 
-export async function patchVoiceSettings(state: VoiceSettingsState, capability?: 'transcription' | 'speech' | 'conversation'): Promise<void> {
-  await fetchJson(apiUrl('/api/config'), {
+export type VoiceSettingsRevisions = Partial<Record<'transcription' | 'speech' | 'conversation', string>>;
+
+export function readVoiceSettingsRevisions(config: unknown): VoiceSettingsRevisions {
+  if (!isRecord(config) || !isRecord(config.voiceSettingsRevisions)) return {};
+  return Object.fromEntries(Object.entries(config.voiceSettingsRevisions).filter(([scope, value]) =>
+    ['transcription', 'speech', 'conversation'].includes(scope) && typeof value === 'string' && /^[a-f0-9]{64}$/.test(value)));
+}
+
+export async function patchVoiceSettings(state: VoiceSettingsState, capability?: 'transcription' | 'speech' | 'conversation', expectedRevision?: string): Promise<VoiceSettingsRevisions> {
+  const result = await fetchJson<{ payload?: { config?: unknown } }>(apiUrl('/api/config'), {
     method: 'PATCH',
     body: JSON.stringify({
+      ...(capability && expectedRevision ? { expectedVoiceRevision: { capability, revision: expectedRevision } } : {}),
       ...(capability === 'transcription' || capability === 'conversation' ? { voicePatchMode: 'merge' } : {}),
       ...(!capability || capability === 'transcription' ? { stt: toSttPayload(state.stt) } : {}),
       ...(!capability || capability === 'speech' ? { tts: toTtsPayload(state.tts) } : {}),
@@ -261,6 +270,7 @@ export async function patchVoiceSettings(state: VoiceSettingsState, capability?:
     window.dispatchEvent(new Event('voice-config-changed'));
   }
   void revalidateGatewayConfig();
+  return readVoiceSettingsRevisions(result?.payload?.config);
 }
 
 export async function fetchVoiceModels(): Promise<VoiceModelsPayload> {

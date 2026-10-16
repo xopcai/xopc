@@ -1,0 +1,43 @@
+// @vitest-environment jsdom
+import { act } from 'react';
+import { createRoot } from 'react-dom/client';
+import { MemoryRouter } from 'react-router-dom';
+import { afterEach, expect, it, vi } from 'vitest';
+vi.mock('../capabilities-settings-panel', () => ({ CapabilitiesSettingsPanel: ({ inlineUse, inlineView, onPendingChange }: any) => <div><span data-view={inlineView}>{inlineUse}</span><input aria-label="Service draft" defaultValue="" /><button onClick={() => onPendingChange(true)}>Start saving</button><button onClick={() => onPendingChange(false)}>Finish saving</button></div> }));
+import { CapabilitySettingsSheet } from '../capability-settings-sheet';
+import { openCapabilitySettings } from '../open-capability-settings';
+let container: HTMLDivElement; let root: ReturnType<typeof createRoot>;
+afterEach(async () => { await act(async () => root.unmount()); container.remove(); });
+it('keeps the invoking screen mounted and prevents closing or switching during a save', async () => {
+  container = document.createElement('div'); document.body.append(container); root = createRoot(container);
+  await act(async () => root.render(<MemoryRouter><textarea defaultValue="unsent draft" /><CapabilitySettingsSheet /></MemoryRouter>));
+  const draft = container.querySelector('textarea');
+  await act(async () => openCapabilitySettings('speech'));
+  expect(document.querySelector('[role="dialog"]')?.textContent).toContain('speech');
+  expect(container.querySelector('textarea')).toBe(draft);
+  const click = async (name: string) => act(async () => [...document.querySelectorAll('button')].find(button => button.textContent === name)!.click());
+  await click('Start saving');
+  const done = [...document.querySelectorAll('button')].find(button => ['完成','Done'].includes(button.textContent ?? ''))!;
+  expect(done.disabled).toBe(true);
+  await act(async () => openCapabilitySettings('transcription'));
+  expect(document.querySelector('[role="dialog"]')?.textContent).not.toContain('transcription');
+  await click('Finish saving'); await act(async () => done.click());
+  expect((document.querySelector('[role="dialog"]') as HTMLElement).style.display).toBe('none'); expect(draft?.value).toBe('unsent draft');
+});
+
+it('opens either modal tab directly and retains the editor while changing tabs', async () => {
+  container = document.createElement('div'); document.body.append(container); root = createRoot(container);
+  await act(async () => root.render(<MemoryRouter><CapabilitySettingsSheet /></MemoryRouter>));
+  await act(async () => openCapabilitySettings('transcription', 'services'));
+  expect(document.querySelector('[data-view]')?.getAttribute('data-view')).toBe('services');
+  const input = document.querySelector<HTMLInputElement>('input[aria-label="Service draft"]')!;
+  input.value = 'unsaved connection';
+  await act(async () => [...document.querySelectorAll('button')].find(button => ['模型与参数', 'Model and parameters'].includes(button.textContent ?? ''))!.click());
+  expect(document.querySelector('[data-view]')?.getAttribute('data-view')).toBe('settings');
+  expect(document.querySelector('input[aria-label="Service draft"]')).toBe(input);
+  expect(input.value).toBe('unsaved connection');
+  await act(async () => [...document.querySelectorAll('button')].find(button => ['完成','Done'].includes(button.textContent ?? ''))!.click());
+  await act(async () => openCapabilitySettings('transcription', 'services'));
+  expect(document.querySelector('input[aria-label="Service draft"]')).toBe(input);
+  expect(input.value).toBe('unsaved connection');
+});
