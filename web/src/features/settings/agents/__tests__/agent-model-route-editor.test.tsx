@@ -95,13 +95,13 @@ it('preserves unavailable saved models until a replacement is selected', async (
 
 it('retains customize, inherit, use Chat and disable semantics', async () => {
   await render(undefined);
-  await click(button('自定义'));
+  await click(button('单独设置'));
   expect(current).toEqual({ primary: 'test/one', fallbacks: ['test/two'] });
   await click(button('使用 Chat'));
   expect(current).toBeNull();
-  await click(button('继承'));
+  await click(button('继承全局'));
   expect(current).toBeUndefined();
-  await click(button('自定义'));
+  await click(button('单独设置'));
   await click(button('禁用'));
   expect(current).toBeNull();
 });

@@ -20,6 +20,7 @@ import { getDefaultModelSync, resolveModel } from '../../../providers/index.js';
 import { completeWithResolvedCredentials } from '../../../providers/model-call.js';
 import {
   isSTTAvailable,
+  resolveSTTProviderChain,
   mergeSttConfigFromAppConfig,
   STTTranscriptionError,
   transcribe,
@@ -617,6 +618,7 @@ export function registerVoiceRoutes(authenticated: Hono, deps: AuthenticatedRout
     mimeType: string;
     fileName: string;
     language?: string;
+    expectedProvider?: string;
   };
 
   const runTranscription = async (c: Context, input: TranscriptionInput) => {
@@ -635,6 +637,9 @@ export function registerVoiceRoutes(authenticated: Hono, deps: AuthenticatedRout
       config.tools?.media?.audio,
       config.tools?.media,
     );
+    if (input.expectedProvider && input.expectedProvider !== resolveSTTProviderChain(sttConfig)[0]?.id) {
+      return c.json({ ok: false, error: { message: 'Speech recognition provider changed during recording. Restore the previous model or start a new recording.' } }, 409);
+    }
     if (!isSTTAvailable(sttConfig)) {
       return c.json({
         ok: false,
@@ -714,6 +719,7 @@ export function registerVoiceRoutes(authenticated: Hono, deps: AuthenticatedRout
       return c.json({ ok: false, error: { message: 'Missing required file field: audio' } }, 400);
     }
     const languageValue = form.get('language');
+    const expectedProvider = form.get('expectedProvider');
     const language = typeof languageValue === 'string' && languageValue.trim()
       ? languageValue.trim()
       : undefined;
@@ -724,6 +730,7 @@ export function registerVoiceRoutes(authenticated: Hono, deps: AuthenticatedRout
       audioBuffer: Buffer.from(await audio.arrayBuffer()),
       mimeType: audio.type || 'audio/webm',
       fileName,
+      ...(typeof expectedProvider === 'string' && expectedProvider ? { expectedProvider } : {}),
       ...(language ? { language } : {}),
     });
   });

@@ -893,6 +893,7 @@ export const ChatComposer = memo(function ChatComposer({
             <ComposerVoiceInputBar
               phase={voice.phase}
               elapsedLabel={voice.elapsedLabel}
+              recordedDictation={voice.recordedDictation}
               audioLevel={voice.audioLevel}
               partialTranscript={voice.partialTranscript}
               finalTranscript={voice.finalTranscript}

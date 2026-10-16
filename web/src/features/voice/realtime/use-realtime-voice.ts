@@ -13,7 +13,9 @@ import { fetchJson } from '@/lib/fetch';
 import type { ChatMessages } from '@/i18n/messages';
 import type { VoiceMode } from '@xopcai/realtime-protocol/voice';
 
-import { PcmFrameCapture, PcmStreamEncoder } from '@xopcai/composer-core/pcm-wav-recorder';
+import { PcmFrameCapture, PcmStreamEncoder, PcmWavRecorder } from '@xopcai/composer-core/pcm-wav-recorder';
+
+import { fetchDictationRoute, transcribeVoiceBlob } from '@/features/chat/composer/voice-transcribe-api';
 
 import { acquireMicrophoneLease, releaseMicrophoneLease } from '../microphone-lease';
 
@@ -79,6 +81,7 @@ export interface UseRealtimeVoiceOptions {
 export interface UseRealtimeVoiceReturn {
   phase: VoiceInputPhase;
   voiceActive: boolean;
+  recordedDictation: boolean;
   elapsedLabel: string;
   audioLevel: number;
   partialTranscript: string;
@@ -116,6 +119,10 @@ export interface UseRealtimeVoiceReturn {
 export function useRealtimeVoice(options: UseRealtimeVoiceOptions): UseRealtimeVoiceReturn {
   const { disabled, chat: m, onTranscript } = options;
   const [phase, setPhase] = useState<VoiceInputPhase>('idle');
+  const [recordedDictation, setRecordedDictation] = useState(false);
+  const recorderRef = useRef<PcmWavRecorder | null>(null);
+  const recordedBlobRef = useRef<Blob | null>(null);
+  const recordedProviderRef = useRef<string | undefined>(undefined);
   const [elapsedSec, setElapsedSec] = useState(0);
   const [audioLevel, setAudioLevel] = useState(0);
   const [partialTranscript, setPartialTranscript] = useState('');
@@ -189,6 +196,11 @@ export function useRealtimeVoice(options: UseRealtimeVoiceOptions): UseRealtimeV
     slowConnectionTimerRef.current = null;
     playerRef.current?.stopRingback();
     stopMedia();
+    recorderRef.current?.cancel();
+    recorderRef.current = null;
+    recordedBlobRef.current = null;
+    recordedProviderRef.current = undefined;
+    setRecordedDictation(false);
     captureRef.current?.cancel();
     captureRef.current = null;
     encoderRef.current = null;
@@ -230,11 +242,11 @@ export function useRealtimeVoice(options: UseRealtimeVoiceOptions): UseRealtimeV
     setEndedReason(null);
   }, [finishIdle]);
 
-  const finishDictation = useCallback(async () => {
+  const finishDictation = useCallback(async (recognizedText?: string) => {
     if (finalizingRef.current) return;
     finalizingRef.current = true;
     const attempt = attemptRef.current;
-    const text = [...dictationRef.current.values()].join(' ').trim();
+    const text = recognizedText ?? [...dictationRef.current.values()].join(' ').trim();
     stopMedia();
     stopTimer();
     captureRef.current?.cancel();
@@ -256,6 +268,39 @@ export function useRealtimeVoice(options: UseRealtimeVoiceOptions): UseRealtimeV
     onTranscriptRef.current(result);
     finishIdle();
   }, [finishIdle, m.voiceRefinementFailed, m.voiceTranscribeEmpty, stopMedia, stopTimer, updatePhase]);
+
+  const finishRecordedDictation = useCallback(async () => {
+    if (finalizingRef.current) return;
+    finalizingRef.current = true;
+    const attempt = attemptRef.current;
+    stopTimer();
+    updatePhase('transcribing');
+    try {
+      const recorder = recorderRef.current;
+      if (!recordedBlobRef.current && recorder) {
+        const blob = await recorder.stop();
+        if (attempt !== attemptRef.current) return;
+        recordedBlobRef.current = blob;
+      }
+      recorderRef.current = null;
+      stopMedia();
+      if (attempt !== attemptRef.current) return;
+      const audio = recordedBlobRef.current;
+      if (!audio) throw new Error(m.voiceTranscribeEmpty);
+      const result = await transcribeVoiceBlob(audio, audio.type,
+        AbortSignal.any([controllerRef.current!.signal, AbortSignal.timeout(90_000)]), recordedProviderRef.current);
+      if (attempt !== attemptRef.current) return;
+      finalizingRef.current = false;
+      await finishDictation(result.text.trim());
+    } catch (cause) {
+      if (attempt !== attemptRef.current) return;
+      stopMedia();
+      finalizingRef.current = false;
+      setError(cause instanceof Error ? cause.message : m.voiceTranscribeFailed);
+      setFailureKind('session');
+      updatePhase('error');
+    }
+  }, [finishDictation, m.voiceTranscribeEmpty, m.voiceTranscribeFailed, stopMedia, stopTimer, updatePhase]);
 
   const handleSessionClose = useCallback((reason: string) => {
     setEndedReason(reason);
@@ -323,7 +368,15 @@ export function useRealtimeVoice(options: UseRealtimeVoiceOptions): UseRealtimeV
         if (!isCurrent()) { void player.close(); return; }
       }
       stage = 'session';
-      const timingMetrics = await wait(VoiceSessionClient.preflight({ purpose, ...(purpose === 'conversation' ? { mode: callMode, conversationId: conversationKey } : {}), signal: controller.signal }), 20_000);
+      const route = purpose === 'dictation' ? await wait(fetchDictationRoute(controller.signal), 20_000) : null;
+      if (!isCurrent()) return;
+      if (route?.mode === 'unavailable') {
+        const unavailable = new Error(m.voiceSttNotConfigured);
+        Object.assign(unavailable, { body: { error: { code: 'PROVIDER_UNAVAILABLE' } } });
+        throw unavailable;
+      }
+      const recorded = route?.mode === 'recorded';
+      const timingMetrics = recorded ? [] : await wait(VoiceSessionClient.preflight({ purpose, ...(purpose === 'conversation' ? { mode: callMode, conversationId: conversationKey } : {}), signal: controller.signal }), 20_000);
       if (!isCurrent()) return;
       stage = 'permission';
       const electronSystem = window.electronAPI?.system;
@@ -350,6 +403,22 @@ export function useRealtimeVoice(options: UseRealtimeVoiceOptions): UseRealtimeV
         return;
       }
       mediaStreamRef.current = stream;
+      if (recorded) {
+        stage = 'recorder';
+        const recorder = await wait(PcmWavRecorder.start(stream, {
+          onAudioLevel: ({ level }) => { if (isCurrent()) setAudioLevel(Math.min(1, level * 8)); },
+        }), 15_000, lateRecorder => lateRecorder.cancel());
+        if (!isCurrent()) { recorder.cancel(); return; }
+        recorderRef.current = recorder;
+        recordedProviderRef.current = route.provider;
+        setRecordedDictation(true);
+        maxSessionMsRef.current = 600_000;
+        recordStartPerfRef.current = performance.now();
+        setElapsedSec(0);
+        updatePhase('recording');
+        startTimer();
+        return;
+      }
       if (purpose === 'conversation') {
         setCallConnectionStage('dialing');
         playerRef.current?.startRingback();
@@ -448,7 +517,7 @@ export function useRealtimeVoice(options: UseRealtimeVoiceOptions): UseRealtimeV
             setFailureKind('session');
             setSettingsRequired(needsSettings);
             if (purpose === 'dictation') {
-              showComposerNotification('error', message, undefined, needsSettings ? { href: '/settings/capabilities/voice' } : undefined);
+              showComposerNotification('error', message, undefined, needsSettings ? { href: '/settings/capabilities/models?use=transcription' } : undefined);
             }
             clientRef.current?.stop('surface_closed');
             if (purpose === 'conversation') reset();
@@ -562,13 +631,14 @@ export function useRealtimeVoice(options: UseRealtimeVoiceOptions): UseRealtimeV
       setFailureKind(failureKind);
       setSettingsRequired(needsSettings);
       if (purpose === 'dictation') {
-        showComposerNotification('error', message, undefined, needsSettings ? { href: '/settings/capabilities/voice' } : undefined);
+        showComposerNotification('error', message, undefined, needsSettings ? { href: '/settings/capabilities/models?use=transcription' } : undefined);
       }
     }
   }, [disabled, handleSessionClose, m, reset, startTimer, stopMedia, stopTimer, updatePhase]);
 
   const confirmVoiceInput = useCallback(() => {
     if (callConversationIdRef.current) return;
+    if (recorderRef.current || recordedBlobRef.current) { void finishRecordedDictation(); return; }
     if (phaseRef.current === 'error' && dictationRef.current.size) { void finishDictation(); return; }
     if (phaseRef.current !== 'recording') return;
     updatePhase('transcribing');
@@ -589,13 +659,15 @@ export function useRealtimeVoice(options: UseRealtimeVoiceOptions): UseRealtimeV
       reset();
       updatePhase('error');
     });
-  }, [finishDictation, m.voiceTranscribeFailed, reset, stopMedia, stopTimer, updatePhase]);
+  }, [finishDictation, finishRecordedDictation, m.voiceTranscribeFailed, reset, stopMedia, stopTimer, updatePhase]);
   confirmRef.current = confirmVoiceInput;
 
   useEffect(() => () => {
     releaseMicrophoneLease(ownerRef.current);
     attemptRef.current += 1;
     controllerRef.current?.abort();
+    recorderRef.current?.cancel();
+    recordedBlobRef.current = null;
     captureRef.current?.cancel();
     clientRef.current?.stop('surface_closed');
     void playerRef.current?.close();
@@ -606,10 +678,11 @@ export function useRealtimeVoice(options: UseRealtimeVoiceOptions): UseRealtimeV
 
   const retryVoiceInput = useCallback(() => {
     if (phaseRef.current !== 'error') return;
+    if (recordedBlobRef.current) { void finishRecordedDictation(); return; }
     reset();
     updatePhase('idle');
     void beginCapture(mode, callModeRef.current, callConversationIdRef.current, true);
-  }, [beginCapture, mode, reset, updatePhase]);
+  }, [beginCapture, finishRecordedDictation, mode, reset, updatePhase]);
 
   const startVoiceInput = useCallback(() => beginCapture('dictation'), [beginCapture]);
   const startVoiceConversation = useCallback((key: string, callMode?: VoiceMode) => beginCapture('conversation', callMode, key), [beginCapture]);
@@ -644,6 +717,7 @@ export function useRealtimeVoice(options: UseRealtimeVoiceOptions): UseRealtimeV
   return {
     phase,
     voiceActive: phase !== 'idle',
+    recordedDictation,
     elapsedLabel: formatElapsed(elapsedSec),
     audioLevel,
     partialTranscript,

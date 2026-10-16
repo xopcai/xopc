@@ -53,16 +53,16 @@ export function ModelRouteEditor({
         <div className="min-w-0">
           <div className="flex items-center gap-2">
             <h4 className="text-sm font-medium text-fg">{label}</h4>
-            {value === undefined ? <InheritedBadge>{zh ? '继承' : 'Inherited'}</InheritedBadge> : null}
+            {value === undefined ? <InheritedBadge>{zh ? '继承全局' : 'Inherited globally'}</InheritedBadge> : null}
             {value === null ? <InheritedBadge>{allowDisabled ? (zh ? '已禁用' : 'Disabled') : (zh ? '使用 Chat' : 'Uses Chat')}</InheritedBadge> : null}
           </div>
           {value === undefined ? <p className="mt-1 truncate font-mono text-xs text-fg-muted">{inherited?.primary ?? (zh ? '全局未配置' : 'Not configured globally')}</p> : null}
         </div>
         <div className="flex gap-1">
-          {value !== undefined ? <Button variant="ghost" className="px-2 py-1 text-xs" onClick={() => onChange(undefined)}>{zh ? '继承' : 'Inherit'}</Button> : null}
+          {value !== undefined ? <Button variant="ghost" className="px-2 py-1 text-xs" onClick={() => onChange(undefined)}>{zh ? '继承全局' : 'Inherit globally'}</Button> : null}
           {allowChatFallback && value !== null ? <Button variant="ghost" className="px-2 py-1 text-xs" onClick={() => onChange(null)}>{zh ? '使用 Chat' : 'Use Chat'}</Button> : null}
           {allowDisabled && value !== null ? <Button variant="ghost" className="px-2 py-1 text-xs" onClick={() => onChange(null)}>{zh ? '禁用' : 'Disable'}</Button> : null}
-          {!customized ? <Button className="px-2 py-1 text-xs" onClick={() => onChange({ primary: inherited?.primary ?? '', fallbacks: [...(inherited?.fallbacks ?? [])] })}>{zh ? '自定义' : 'Customize'}</Button> : null}
+          {!customized ? <Button className="px-2 py-1 text-xs" onClick={() => onChange({ primary: inherited?.primary ?? '', fallbacks: [...(inherited?.fallbacks ?? [])] })}>{zh ? '单独设置' : 'Override for this agent'}</Button> : null}
         </div>
       </div>
       {customized ? (
