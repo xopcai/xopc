@@ -17,9 +17,14 @@ vi.mock('../model-runtime.js', async () => {
   } };
 });
 
+import { AgentManager } from '../../agent-manager.js';
+import { ConfigSchema } from '../../../config/schema.js';
+import type { MessageBus } from '../../../infra/bus/index.js';
 import { initializeTestAgentCatalog } from '../../../agent-catalog/test-support.js';
 import { createConversation } from '../../../storage/sqlite/conversation-repository.js';
 import { patchSessionMetadata } from '../../../storage/sqlite/session-repository.js';
+import { TaskRepository } from '../../../tasks/task-repository.js';
+import { TaskConversationRepository } from '../../../tasks/task-conversation-repository.js';
 import { personalAgentId } from '../../../personal-agent/repository.js';
 import { PERSONAL_MAIN_TOOL_IDS } from '../../../personal-agent/policy.js';
 import { PERSONAL_REQUEST_TOOL_IDS, resolveExecutionToolPolicy } from '../execution-tool-policy.js';
@@ -60,7 +65,7 @@ async function fixture() {
   const params = { runtimeId: conversationId, transcriptId: runtime.transcriptId,
     workspaceDir: root, model, modelRef: 'openai/fixture', tools: [
       ...PERSONAL_MAIN_TOOL_IDS.map(tool), ...PERSONAL_REQUEST_TOOL_IDS.map(tool), deferred,
-      tool('exec_command'), tool('list_mcp_resources'), tool('mcp__fixture__write'),
+      tool('publish_task_result'), tool('exec_command'), tool('list_mcp_resources'), tool('mcp__fixture__write'),
     ], systemPrompt: 'Personal boundary fixture', thinkingLevel: 'off' as const, transcriptRuntime: runtime, codemode };
   return { params, conversationId, runtime, pool };
 }
@@ -75,7 +80,7 @@ it.each(['direct', 'deferred', 'codemode'] as const)('blocks native %s exposure 
     const acquired = await f.pool.acquire({ ...f.params, mcp: { servers: [{ name: 'must_not_start',
       config: { command: process.execPath, args: ['-e', 'throw new Error("Forbidden MCP startup")'], exposure },
       source: 'fixture' }], errors: [], autoEnableCodemode: true } });
-    const allowed = surface === 'personal_main' ? PERSONAL_MAIN_TOOL_IDS : PERSONAL_REQUEST_TOOL_IDS;
+    const allowed = surface === 'personal_main' ? PERSONAL_MAIN_TOOL_IDS : PERSONAL_REQUEST_TOOL_IDS.filter(name => name !== 'task_collaboration');
     expect(acquired.session.getAllTools().map(t => t.name).toSorted()).toEqual([...allowed].toSorted());
     expect(acquired.session.agent.state.tools.map(t => t.name).toSorted()).toEqual([...allowed].toSorted());
     expect(acquired.session.agent.state.systemPrompt).not.toContain('must_not_start');
@@ -100,4 +105,62 @@ it('rebuilds a pooled ordinary runner after scope changes and then reuses the re
   expect(reused.reused).toBe(true);
   expect(f.pool.getStats()).toMatchObject({ creates: 2, reuses: 1, evictions: 1 });
   reused.release();
+}, 15000);
+
+it('filters injected Personal and Task tools from ordinary runners and evicts Task tools after reassignment', async () => {
+  const f = await fixture();
+  const taskTools = ['task_collaboration', 'publish_task_result'];
+  const ordinary = await f.pool.acquire(f.params);
+  expect(ordinary.session.getAllTools().some(tool => tool.name.startsWith('personal_') || taskTools.includes(tool.name))).toBe(false);
+  ordinary.release();
+  const task = new TaskRepository().create({ title: 'Runtime boundary', objective: 'Verify scoped Task tools' });
+  const repository = new TaskConversationRepository();
+  repository.activateExecutionSession({ taskId: task.id, conversationId: f.conversationId, agentId: personalAgentId('local-owner') });
+  const active = await f.pool.acquire(f.params);
+  expect(active.reused).toBe(false);
+  expect(active.session.agent.state.tools.map(tool => tool.name)).toEqual(expect.arrayContaining(taskTools));
+  active.release();
+  const replacement = createConversation({ agentId: 'main' }).key;
+  repository.activateExecutionSession({ taskId: task.id, conversationId: replacement, agentId: 'main' });
+  const inactive = await f.pool.acquire(f.params);
+  expect(inactive.reused).toBe(false);
+  expect(inactive.session.getAllTools().some(tool => taskTools.includes(tool.name))).toBe(false);
+  inactive.release();
+}, 15000);
+
+it('preserves collaboration for a Request worker with an active Task execution', async () => {
+  const f = await fixture();
+  patchSessionMetadata(f.conversationId, { customData: { personalReadRequestId: 'request-fixture' } });
+  const task = new TaskRepository().create({ title: 'Request worker', objective: 'Verify scoped collaboration' });
+  new TaskConversationRepository().activateExecutionSession({ taskId: task.id,
+    conversationId: f.conversationId, agentId: personalAgentId('local-owner') });
+  const worker = await f.pool.acquire(f.params);
+  expect(worker.session.getAllTools().map(tool => tool.name).toSorted()).toEqual([...PERSONAL_REQUEST_TOOL_IDS].toSorted());
+  worker.release();
+}, 15000);
+
+it('rebuilds a cached Agent when its ordinary conversation becomes a Task execution and when it is superseded', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'xopc-task-tool-agent-'));
+  roots.push(root);
+  initializeTestAgentCatalog({ agents: [{ id: 'main', workspace: root, models: { chat: { primary: 'openai/gpt-4o-mini' } } }] });
+  const conversationId = createConversation({ agentId: 'main' }).key;
+  const manager = new AgentManager({ workspace: root, model: 'openai/gpt-4o-mini',
+    config: ConfigSchema.parse({ userContext: { enabled: false } }),
+    bus: {} as MessageBus, getCurrentContext: () => null });
+  try {
+    const ordinary = manager.getOrCreateAgent(conversationId);
+    expect(ordinary.state.tools.some(tool => tool.name === 'task_collaboration')).toBe(false);
+    expect(manager.getOrCreateAgent(conversationId)).toBe(ordinary);
+    const task = new TaskRepository().create({ title: 'Cached tools', objective: 'Verify Agent lifecycle' });
+    const repository = new TaskConversationRepository();
+    repository.activateExecutionSession({ taskId: task.id, conversationId, agentId: 'main' });
+    const active = manager.getOrCreateAgent(conversationId);
+    expect(active).not.toBe(ordinary);
+    expect(active.state.tools.map(tool => tool.name)).toEqual(expect.arrayContaining(['task_collaboration', 'publish_task_result']));
+    expect(manager.getOrCreateAgent(conversationId)).toBe(active);
+    repository.activateExecutionSession({ taskId: task.id, conversationId: createConversation({ agentId: 'main' }).key, agentId: 'main' });
+    const superseded = manager.getOrCreateAgent(conversationId);
+    expect(superseded).not.toBe(active);
+    expect(superseded.state.tools.some(tool => ['task_collaboration', 'publish_task_result'].includes(tool.name))).toBe(false);
+  } finally { manager.dispose(); }
 }, 15000);
