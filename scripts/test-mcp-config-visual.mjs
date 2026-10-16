@@ -27,7 +27,7 @@ try {
   page.on('pageerror', error => errors.push(error.message));
   // Never open external authorization pages during fixture verification.
   page.on('popup', popup => void popup.close());
-  for (const width of [1280, 375]) for (const mode of ['light', 'dark']) for (const lang of ['zh', 'en']) for (const stage of ['default', 'bearer', 'apiKey', 'headers', 'command', 'reference', 'disabled', 'import', 'oauth', 'error', 'success', 'reload']) {
+  for (const width of [1280, 375]) for (const mode of ['light', 'dark']) for (const lang of ['zh', 'en']) for (const stage of ['default', 'bearer', 'apiKey', 'headers', 'command', 'reference', 'disabled', 'import', 'oauth', 'error', 'success', 'reload', 'limited', 'tls']) {
     await page.setViewportSize({ width, height: 812 });
     await page.goto(`${server.resolvedUrls.local[0]}mcp-config-visual.html?stage=${stage}&mode=${mode}&lang=${lang}`, { waitUntil: 'networkidle' });
     const dialog = page.getByRole('dialog').first();
@@ -47,14 +47,17 @@ try {
       await dialog.getByRole('button', { name: labels.preview, exact: true }).click();
       assert(await dialog.getByRole('button', { name: labels.apply, exact: true }).isEnabled());
     }
-    if (stage === 'oauth' || stage === 'error' || stage === 'success' || stage === 'reload') {
+    if (stage === 'oauth' || stage === 'error' || stage === 'success' || stage === 'reload' || stage === 'limited' || stage === 'tls') {
       await dialog.getByPlaceholder('https://example.com/mcp').fill('https://example.com/mcp');
       await dialog.getByRole('button', { name: labels.connect, exact: true }).click();
       if (stage === 'oauth') {
         await dialog.getByRole('button', { name: labels.signIn, exact: true }).click();
         await dialog.getByRole('button', { name: labels.cancel, exact: true }).waitFor();
-      } else if (stage === 'error') {
+      } else if (stage === 'error' || stage === 'limited' || stage === 'tls') {
         await dialog.getByRole('alert').waitFor();
+        if (stage === 'limited') assert.match(await dialog.getByRole('alert').innerText(), lang === 'zh' ? /操作过于频繁/ : /temporarily limiting/);
+        if (stage === 'tls') assert.match(await dialog.getByRole('alert').innerText(), lang === 'zh' ? /HTTPS 证书/ : /HTTPS certificate/);
+        assert.equal((await dialog.innerText()).includes('fixture-secret'), false);
         assert.equal(await dialog.getByRole('button', { name: labels.save, exact: true }).count(), 0);
       } else {
         await dialog.getByRole('button', { name: labels.save, exact: true }).waitFor();
