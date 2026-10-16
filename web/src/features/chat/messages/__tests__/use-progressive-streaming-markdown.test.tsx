@@ -71,6 +71,7 @@ describe('useProgressiveStreamingMarkdown', () => {
     for (let frame = 0; frame < 3; frame++) act(() => vi.advanceTimersByTime(64));
     expect(container.textContent).toContain('这是');
     act(() => root.render(<Harness content={'先看结论。\n\n这是后续说明。'} streaming={false} immediateFirstCommit />));
+    act(() => vi.advanceTimersByTime(320));
     expect(container.textContent).toContain('这是后续说明。');
   });
 
@@ -94,10 +95,15 @@ describe('useProgressiveStreamingMarkdown', () => {
     expect(container.textContent).toBe('abcdefghijkl');
   });
 
-  it('flushes pending text when the realtime stream ends', () => {
+  it('smoothly drains pending text when the realtime stream ends', () => {
     act(() => root.render(<Harness content="abcdef" streaming />));
     act(() => root.render(<Harness content="abcdefghijklmnopqr" streaming />));
     act(() => root.render(<Harness content="abcdefghijklmnopqr" streaming={false} />));
+    expect(container.textContent).toBe('abcdef');
+    act(() => vi.advanceTimersByTime(64));
+    expect((container.textContent ?? '').length).toBeGreaterThan(6);
+    expect((container.textContent ?? '').length).toBeLessThan(18);
+    act(() => vi.advanceTimersByTime(256));
     expect(container.textContent).toBe('abcdefghijklmnopqr');
   });
 
@@ -135,7 +141,7 @@ describe('useProgressiveStreamingMarkdown', () => {
     expect(container.textContent).toBe('Start. revised');
   });
 
-  it('commits the complete terminal text before layout effects observe the completed shell', () => {
+  it('keeps draining after completion and notifies only when all text is visible', () => {
     const commits: Array<{ streaming: boolean; text: string }> = [];
     const onComplete = vi.fn();
     function Probe({ content, streaming }: { content: string; streaming: boolean }) {
@@ -147,8 +153,11 @@ describe('useProgressiveStreamingMarkdown', () => {
     act(() => root.render(<Probe content="Short answer with a final burst." streaming />));
     expect(container.textContent).toBe('Short');
     act(() => root.render(<Probe content="Short answer with a final burst." streaming={false} />));
-    expect(commits.filter(commit => !commit.streaming).every(commit => commit.text === 'Short answer with a final burst.')).toBe(true);
-    expect(onComplete).toHaveBeenCalledTimes(1);
+    expect(commits.at(-1)).toEqual({ streaming: false, text: 'Short' });
+    expect(onComplete).not.toHaveBeenCalled();
+    act(() => vi.advanceTimersByTime(128));
+    expect((container.textContent ?? '').length).toBeGreaterThan(5);
+    expect((container.textContent ?? '').length).toBeLessThan('Short answer with a final burst.'.length);
     act(() => vi.runAllTimers());
     expect(container.textContent).toBe('Short answer with a final burst.');
     expect(onComplete).toHaveBeenCalledTimes(1);
@@ -166,6 +175,18 @@ describe('useProgressiveStreamingMarkdown', () => {
     act(() => root.render(<Probe content="先看结论。" />));
     expect(commits.length).toBeGreaterThan(0);
     expect(commits.every(text => text === '先看结论。')).toBe(true);
+  });
+
+  it('shows the terminal snapshot immediately when reduced motion is requested', () => {
+    vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: true })));
+    try {
+      act(() => root.render(<Harness content="Start." streaming />));
+      act(() => root.render(<Harness content="Start. Final answer." streaming={false} />));
+      expect(container.textContent).toBe('Start. Final answer.');
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it('renders non-streamed history immediately', () => {
