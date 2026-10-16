@@ -1,10 +1,9 @@
 import { MeetingImportButton } from '@/features/discussions/meeting-import-button';
-import { ArrowUp, AudioLines, CalendarDays, ChevronDown, FileText, Folder, Loader2, Mic, Paperclip, ScanSearch, Sparkles, X } from 'lucide-react';
+import { ArrowUp, AudioLines, CalendarDays, ChevronDown, FileText, Folder, Loader2, Paperclip, ScanSearch, Sparkles, X } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { PopoverSelect } from '@/components/ui/popover-select';
-import { openDiscussionCapture } from '@/features/discussions/discussion-events';
 import type { MessageBundle } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 
@@ -139,9 +138,7 @@ export function NotesHomeComposer({ projects, projectId, onProjectChange, onCrea
           onClick={() => setTemplatesOpen((open) => !open)} className="touch-target inline-flex items-center gap-1.5 rounded-md px-2 py-2 hover:bg-surface-hover focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50">
           {h.templates}<ChevronDown className={cn('size-3.5 transition-transform', templatesOpen && 'rotate-180')} aria-hidden />
         </button>
-        <button type="button" disabled={busy} onClick={() => openDiscussionCapture()} className="touch-target ml-auto inline-flex items-center gap-1.5 rounded-md px-2 py-2 hover:bg-surface-hover focus-visible:ring-2 focus-visible:ring-accent">
-          <Mic className="size-3.5" aria-hidden />{h.recordDiscussion}
-        </button>
+
       </div>
       <div id="notes-home-templates" hidden={!templatesOpen} className={cn('mt-1 flex-wrap items-center gap-1 text-xs text-fg-muted', templatesOpen ? 'flex' : 'hidden')}>
         {(Object.keys(templateIcons) as TemplateId[]).map((id) => {
