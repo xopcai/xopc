@@ -1,7 +1,7 @@
 import { createPersonalAttentionTool } from './personal-attention-tool.js';
 import { markCodemodeCoreRead } from './codemode-permissions.js';
 import { LOCAL_READ_MAX_CHARS } from './local-read-budget.js';
-import { filterExecutionTools, PERSONAL_REQUEST_TOOL_IDS, resolveExecutionToolPolicy } from '../embedded/execution-tool-policy.js';
+import { filterExecutionTools, PERSONAL_REQUEST_TOOL_IDS, resolveExecutionToolPolicy, TASK_EXECUTION_TOOL_IDS } from '../embedded/execution-tool-policy.js';
 import type { SceneAccess } from '../../scenes/httpServices.js';
 import { resolveEffectiveAgentConfigForAgent } from '../../config/agent-profile.js';
 /**
@@ -228,7 +228,9 @@ export class AgentToolsFactory {
     const tools = this.createAllTools({ agentId: candidateId, workspace: candidate.workspace,
       conversationId: '', disabledTools: denied, toolAllowlist: candidate.toolAllowlist });
     const registered = tools.some(tool => tool.name === name);
-    const activatable = this.getLazyCapabilityToolNames().includes(name);
+    const taskActivatable = TASK_EXECUTION_TOOL_IDS.includes(name) && !denied.has(name)
+      && (!candidate.toolAllowlist || candidate.toolAllowlist.includes(name));
+    const activatable = this.getLazyCapabilityToolNames().includes(name) || taskActivatable;
     return { condition: `tool:${name}`, state: registered || activatable ? 'verified' as const : 'blocked' as const,
       reasonCode: registered ? 'tool_registered' : activatable ? 'tool_activatable' : 'tool_not_registered',
       detail: candidate.tools[name]?.mode === 'ask' ? 'Runtime approval is still required' : 'Registration checked; execution environment is checked by the tool' };
@@ -375,9 +377,8 @@ export class AgentToolsFactory {
     let allowed = options?.toolAllowlist ? new Set(options.toolAllowlist) : undefined;
     const currentConversationId = () => options?.conversationId ?? this.deps.getCurrentContext?.()?.conversationId;
     const executionConversationId = currentConversationId();
-    const executionToolPolicy = executionConversationId ? resolveExecutionToolPolicy(executionConversationId) : undefined;
-    const personalToolsConfigured = executionToolPolicy?.surface === 'personal_main'
-      || Boolean(allowed?.has('personal_task') || allowed?.has('personal_preference'));
+    const executionToolPolicy = resolveExecutionToolPolicy(executionConversationId ?? '');
+    const personalToolsConfigured = executionToolPolicy.surface === 'personal_main';
 
     const primary = getPrimary?.();
     const modelHasVision = primary?.input?.includes('image') ?? false;
@@ -574,8 +575,10 @@ export class AgentToolsFactory {
         : []),
       createSendMediaTool(workspace, bus, deliveryContext),
       createPublishArtifactsTool(workspace),
-      createTaskResultTool(currentConversationId),
-      createTaskCollaborationTool({ ...productToolDeps, getWorkspace: () => workspace, getCurrentConversationId: currentConversationId }),
+      ...(executionToolPolicy.taskExecution ? [
+        createTaskResultTool(currentConversationId),
+        createTaskCollaborationTool({ ...productToolDeps, getWorkspace: () => workspace, getCurrentConversationId: currentConversationId }),
+      ] : []),
       createReadMediaTool(personalToolsConfigured ? { textOnly: true, maxChars: LOCAL_READ_MAX_CHARS, maxReadBytes: 12000 } : undefined),
       ...(isShareToolAvailable(cfg)
         ? [
@@ -702,7 +705,7 @@ export class AgentToolsFactory {
             createXopcUseTool(productToolDeps),
             ...(personalToolsConfigured ? [
               createPersonalTaskTool(productToolDeps),
-              createPersonalReadTool(productToolDeps),
+              createPersonalReadTool({ ...productToolDeps, getCurrentConversationId: currentConversationId }),
               createPersonalResultTool(currentConversationId),
               ...createPersonalRequestTools(productToolDeps),
               createPersonalAttentionTool({ getConversationId: () => this.deps.getCurrentContext()?.conversationId, getConfig: () => this.deps.getConfig?.() }),
@@ -825,7 +828,7 @@ export class AgentToolsFactory {
       .filter(tool => (!allowed || allowed.has(tool.name)) && !(personalToolsConfigured && tool.name === 'clarify'))
       .map(tool => personalToolsConfigured && !tool.name.startsWith('personal_') && PERSONAL_TOOL_DESCRIPTIONS[tool.name]
         ? { ...tool, description: PERSONAL_TOOL_DESCRIPTIONS[tool.name] } : tool);
-    return executionToolPolicy ? filterExecutionTools(executionToolPolicy, selected) : selected;
+    return filterExecutionTools(executionToolPolicy, selected);
   }
 
   createCapabilityTools(

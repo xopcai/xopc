@@ -41,6 +41,7 @@ import { CredentialResolver } from '../auth/credentials.js';
 import { resolveBundledSkillsDir, resolveStateDir } from '../config/paths.js';
 import { extractTextContent } from './context/workspace.js';
 import { PersonalPromptContext } from '../personal-agent/prompt-context.js';
+import { resolveExecutionToolPolicy } from './embedded/execution-tool-policy.js';
 import { isPersonalConversation } from '../personal-agent/repository.js';
 import { buildExecutionScopeContextForPrompt } from './context/execution-scope.js';
 import { clearBootstrapSnapshot, resolveBootstrapContextSync } from './bootstrap/bootstrap-files.js';
@@ -233,6 +234,7 @@ export interface AgentInstance {
   activeProjectContext?: string;
   interactionStateVersion?: number;
   userContextAccessVersion: string;
+  executionToolPolicyVersion: string;
 
   /** Declared env var names from skill_view; exec_command reads values from process.env at spawn time. */
   skillEnvPassthroughKeys: Set<string>;
@@ -1150,10 +1152,12 @@ export class AgentManager implements AgentInstanceGateway {
   getOrCreateAgent(conversationId: string): Agent {
     const targetPath = this.getResolvedWorkspaceForSession(conversationId);
     const existing = this.agents.get(conversationId);
+    const executionToolPolicyVersion = JSON.stringify(resolveExecutionToolPolicy(conversationId));
     if (existing) {
       const currentConfig = resolveEffectiveAgentProfileForSession(conversationId).config;
       if (!existing.agent.state.isStreaming && (
-        existing.resolvedWorkspacePath !== targetPath
+        existing.executionToolPolicyVersion !== executionToolPolicyVersion
+        || existing.resolvedWorkspacePath !== targetPath
         || JSON.stringify(existing.effectiveProfile.config) !== JSON.stringify(currentConfig)
       )) {
         this.removeAgent(conversationId);
@@ -1207,6 +1211,7 @@ export class AgentManager implements AgentInstanceGateway {
       activeProjectContext,
       interactionStateVersion: this.getInteractionStateVersion(conversationId),
       userContextAccessVersion: this.getUserContextAccessVersion(conversationId),
+      executionToolPolicyVersion,
       skillEnvPassthroughKeys: new Set<string>(),
     });
 
