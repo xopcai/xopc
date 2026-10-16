@@ -6,6 +6,7 @@ import { type CSSProperties, useCallback, useEffect, useRef, useState } from 're
 
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { SessionManager } from '@/features/chat/session/session-manager';
 import { resolveSession } from '@/features/sessions/session-api';
 import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
@@ -98,11 +99,17 @@ export function ChatTerminalDock({ conversationId }: { conversationId: string })
       return;
     }
     let cancelled = false;
+    setSessionId(null);
     setResolvingSession(true);
     setError(null);
-    void resolveSession({ conversationId })
+    const prepareSession = async () => {
+      await new SessionManager().materialize(conversationId, 'session_resources');
+      if (cancelled) return;
+      return resolveSession({ conversationId });
+    };
+    void prepareSession()
       .then((resolved) => {
-        if (cancelled) return;
+        if (cancelled || !resolved) return;
         setSessionId(resolved.transcriptId);
         setResolvingSession(false);
       })
