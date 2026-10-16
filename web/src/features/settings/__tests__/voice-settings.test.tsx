@@ -71,6 +71,18 @@ describe('voice settings navigation', () => {
     expect(choices.some((button) => button.textContent?.includes('Whisper'))).toBe(true);
   }
 
+  it.each(['transcription', 'speech'] as const)('opening %s does not fill or save implicit defaults', async capability => {
+    mocks.responses.set('/api/config', { payload: { config: { stt: { enabled: false, provider: 'openai' }, tts: { enabled: false, provider: 'openai' } } } });
+    mocks.responses.set('/api/voice/providers', { providers: [{ id: 'openai', configured: true, fields: [{key:'model',label:'Model',type:'string',defaultValue:'tts-1'}, {key:'voice',label:'Voice',type:'string',defaultValue:'alloy'}] }] });
+    const pending = vi.fn();
+    await act(async () => root.render(createElement(MemoryRouter, { initialEntries: [`/settings/capabilities/models?use=${capability}`] }, createElement<NonNullable<Parameters<typeof VoiceSettingsPanel>[0]>>(VoiceSettingsPanel, { capability, onPendingChange: pending }))));
+    expect(pending).toHaveBeenCalledWith(false);
+    expect(pending).not.toHaveBeenCalledWith(true);
+    expect(container.querySelector(`[aria-label="${v.stt.provider}"]`)).toBeNull();
+    expect(container.querySelector(`[aria-label="${v.tts.provider}"]`)).toBeNull();
+    expect(container.querySelector(`#voice-${capability === 'transcription' ? 'stt' : 'tts'}-openai-model`)).toBeNull();
+    expect(container.querySelectorAll('nav button')).toHaveLength(0);
+  });
   it('uses three task-focused groups and keeps provider configuration accessible', async () => {
     await render();
     expect(container.querySelectorAll('nav button')).toHaveLength(3);

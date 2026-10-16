@@ -57,12 +57,14 @@ try {
       body = { payload: previewProviderSetup(snapshot(match[1]), match[2] === 'preview' ? request : {}) };
     } else if (path === '/api/config') body = { payload: { config: { ...config, stt: config.tools.media?.audio, tts: config.messages?.tts } } };
     else if (path === '/api/global-defaults') body = { payload: { defaults, builtinTools: [] } };
+    else if (path === '/api/voice/providers' || path === '/api/voice/stt-providers') body = { payload: { providers: [] } };
+    else if (path === '/api/image-generation/catalog') body = { payload: { providers: [] } };
     else if (path === '/api/models') body = { payload: { models: [] } };
     await route.fulfill({ json: body });
   });
   const url = `${server.resolvedUrls!.local[0]}.model-use-verify.html`;
   await page.goto(url);
-  await page.getByText('模型用途', { exact: true }).waitFor().catch(async error => {
+  await page.getByText('能力总览', { exact: true }).waitFor().catch(async error => {
     console.log(JSON.stringify({ errors, body: await page.locator('body').innerText() }));
     throw error;
   });
@@ -80,18 +82,18 @@ try {
   assert.equal(defaults.models.chat.primary, 'xiaomi-token-plan-cn/fast');
   await choose('看图', 'qwen-token-plan-cn', 'qwen-token-plan-cn Fast');
   assert.equal(defaults.models.imageUnderstanding?.primary, 'qwen-token-plan-cn/fast');
-  await choose('画图', 'Qwen Image', 'Qwen Image 3.0 Pro');
+  await choose('生成图片', 'Qwen Image', 'Qwen Image 3.0 Pro');
   assert.equal(defaults.models.imageGeneration?.primary, 'qwen-token-plan-cn/qwen-image-3.0-pro');
-  await page.getByRole('button', { name: '选择 后台任务', exact: true }).click();
+  await page.getByRole('button', { name: '选择 自动与后台任务', exact: true }).click();
   assert.ok(!(await page.getByRole('dialog').textContent())?.includes('qwen-token-plan-cn'));
   assert.ok(!(await page.getByRole('dialog').textContent())?.includes('xiaomi-token-plan-cn'));
   await page.getByRole('searchbox').fill('xopc-cloud');
   await page.getByRole('button', { name: 'xopc-cloud Fast', exact: true }).click();
   await page.getByRole('status').filter({ hasText: '已切换' }).waitFor();
   assert.equal(defaults.models.background?.primary, 'xopc-cloud/fast');
-  await choose('录音识别', 'Qwen Audio', 'Qwen Audio 3.0 ASR Flash');
+  await choose('录音转文字', 'Qwen Audio', 'Qwen Audio 3.0 ASR Flash');
   assert.equal(config.tools.media.audio.provider, 'qwen-token-plan-cn');
-  await choose('语音合成', 'Qwen Audio', 'Qwen Audio 3.0 TTS Plus');
+  await choose('文字转语音', 'Qwen Audio', 'Qwen Audio 3.0 TTS Plus');
   await choose('实时语音对话', 'Qwen Audio', 'Qwen Audio 3.0 Realtime Plus');
   assert.ok(writes.every(write => write.selected.length === 1));
   await page.screenshot({ path: join(directory, 'desktop.png') });

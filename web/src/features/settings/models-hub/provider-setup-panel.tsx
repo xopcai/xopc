@@ -23,9 +23,9 @@ const labels: Record<ModelSetupUse, [string, string]> = {
 };
 
 /** One connection/apply interaction for account providers, API keys and Token Plans. */
-export function ProviderSetupPanel({ providerId, row, modelIds, existingConnection = false, targetUse, language, alternatives = [], onChooseProvider, onBack, onDone, onApplied }: {
+export function ProviderSetupPanel({ providerId, row, modelIds, existingConnection = false, targetUse, connectOnly = false, language, alternatives = [], onChooseProvider, onBack, onDone, onApplied }: {
   providerId: string; row?: ProviderRowModel; modelIds?: string[]; existingConnection?: boolean;
-  targetUse?: ModelSetupUse;
+  targetUse?: ModelSetupUse; connectOnly?: boolean;
   alternatives?: ProviderRowModel[]; onChooseProvider?: (id: string) => void;
   language: StoredLanguage; onBack?: () => void; onDone: () => void; onApplied?: () => void;
 }) {
@@ -40,14 +40,14 @@ export function ProviderSetupPanel({ providerId, row, modelIds, existingConnecti
   const [attempt, setAttempt] = useState(0);
   useEffect(() => {
     let active = true;
-    void previewModelSetup(providerId, { modelIds, ...(targetUse ? { mode: 'replace', selected: [targetUse] } as const : {}) }).then(data => {
+    void previewModelSetup(providerId, { modelIds, ...(connectOnly ? { selected: [] } : {}), ...(targetUse && !connectOnly ? { mode: 'replace', selected: [targetUse] } as const : {}) }).then(data => {
       if (!active) return;
       setPreview(data); setConnected(data.configured);
-      setRequest({ mode: targetUse ? 'replace' : 'fill', modelIds, selected: data.uses.filter(use => use.selected).map(use => use.id) });
+      setRequest({ mode: targetUse ? 'replace' : 'fill', modelIds, selected: connectOnly ? [] : data.uses.filter(use => use.selected).map(use => use.id) });
       setError('');
     }).catch(cause => { if (active) setError(cause instanceof Error ? cause.message : String(cause)); });
     return () => { active = false; };
-  }, [providerId, modelIds, targetUse, attempt]);
+  }, [providerId, modelIds, targetUse, connectOnly, attempt]);
   const selected = request.selected ?? [];
   const changeMode = (mode: 'fill' | 'replace') => {
     setRequest({ ...request, mode, selected: preview?.uses.filter(use => use.recommended && use.choices.length && (mode === 'replace' || use.selected)).map(use => use.id) ?? [] });
@@ -63,6 +63,10 @@ export function ProviderSetupPanel({ providerId, row, modelIds, existingConnecti
       }
       const fresh = await previewModelSetup(providerId, request);
       setConnected(fresh.configured);
+      if (connectOnly) {
+        if (!fresh.configured) throw new Error(zh ? '请先连接此服务。' : 'Connect this service first.');
+        setPreview(fresh); setDone(true); onApplied?.(); return;
+      }
       const before = preview.uses.filter(use => selected.includes(use.id)).map(use => request.overrides?.[use.id] ?? use.recommended);
       const after = fresh.uses.filter(use => selected.includes(use.id)).map(use => use.recommended);
       if (preview.revision !== fresh.revision || JSON.stringify(before) !== JSON.stringify(after)) {
@@ -90,18 +94,19 @@ export function ProviderSetupPanel({ providerId, row, modelIds, existingConnecti
       {!preview && !error ? <Skeleton className="h-64 w-full rounded-xl" /> : null}
       {preview ? <>
         {!done && alternatives.length > 1 && onChooseProvider ? <div><label className="mb-2 block text-xs text-fg-muted">{zh ? '接入方式 / 地域' : 'Access method / region'}</label><Select value={providerId} disabled={busy} aria-label={zh ? '接入方式 / 地域' : 'Access method / region'} onChange={event => onChooseProvider(event.target.value)}>{alternatives.map(option => <SelectOption key={option.id} value={option.id}>{option.setupProfile?.name ?? option.name}</SelectOption>)}</Select></div> : null}
-        {done ? <p role="status" className="flex items-center gap-2 text-sm text-fg"><CheckCircle2 className="size-4" />{zh ? '所选用途配置已保存' : 'Selected model uses saved'}</p> : <>
+        {done ? <p role="status" className="flex items-center gap-2 text-sm text-fg"><CheckCircle2 className="size-4" />{connectOnly ? (zh ? '服务连接已保存' : 'Connection saved') : (zh ? '所选用途配置已保存' : 'Selected model uses saved')}</p> : <>
           {preview.profile.credential === 'oauth' && !connected ? <OAuthProviderConnect providerId={providerId} displayName={title} connected={connected} onConnected={() => { setConnected(true); setAttempt(value => value + 1); }} /> : null}
           {(preview.profile.credential === 'api-key' || (preview.profile.credential === 'oauth' && row?.supportsApiKey)) && !existingConnection ? <div className="space-y-2">
             <label htmlFor="provider-setup-key" className="text-sm font-medium text-fg">{preview.profile.access === 'subscription' ? (zh ? '套餐 API Key' : 'Plan API key') : 'API Key'}</label>
             <SecretInput id="provider-setup-key" disabled={busy} value={apiKey} onChange={setApiKey} placeholder={connected ? (zh ? '留空使用已保存的凭据' : 'Leave empty to use saved credentials') : 'API Key'} labels={secretInputLabelsFromChannels(messages(language).providersSettings)} />
             {keyUrl ? <a className="inline-flex min-h-8 items-center text-sm text-accent-fg hover:underline" href={keyUrl} target="_blank" rel="noopener noreferrer">{zh ? '获取对应接入方式的 Key' : 'Get a key for this access method'}</a> : null}
           </div> : null}
-          <div className="flex flex-wrap items-center justify-between gap-2"><span className="text-sm font-medium text-fg">{zh ? '模型用途' : 'Model uses'}</span><div className="flex gap-2">
+          {!connectOnly ? <div className="flex flex-wrap items-center justify-between gap-2"><span className="text-sm font-medium text-fg">{zh ? '模型用途' : 'Model uses'}</span><div className="flex gap-2">
             {(['fill', 'replace'] as const).map(mode => <Button key={mode} variant={request.mode === mode ? 'secondary' : 'ghost'} disabled={busy} aria-pressed={request.mode === mode} onClick={() => changeMode(mode)}>{mode === 'fill' ? (zh ? '补齐未配置' : 'Fill missing') : (zh ? '改用此服务' : 'Switch to this service')}</Button>)}
-          </div></div>
+          </div></div> : <p className="text-sm text-fg-muted">{zh ? '保存连接后返回能力设置，再选择要使用的模型。' : 'Save the connection, then choose a model in capability settings.'}</p>}
         </>}
-        <div className="divide-y divide-edge rounded-xl border border-edge bg-surface-inset px-4">
+        {connectOnly ? <p className="text-xs text-fg-muted">{zh ? '支持用途：' : 'Supported uses: '}{preview.uses.filter(use => use.choices.length).map(use => labels[use.id][zh ? 0 : 1]).join('、')}</p> : null}
+        {!connectOnly ? <div className="divide-y divide-edge rounded-xl border border-edge bg-surface-inset px-4">
           {preview.uses.map(use => {
             const chosen = request.overrides?.[use.id] ?? use.recommended;
             const choice = use.choices.find(model => model.id === chosen);
@@ -113,8 +118,9 @@ export function ProviderSetupPanel({ providerId, row, modelIds, existingConnecti
             </div>;
           })}
         </div>
+        : null}
         {!done ? <Button variant="ghost" disabled={busy} onClick={() => setAttempt(value => value + 1)}>{zh ? '刷新目录' : 'Refresh catalog'}</Button> : null}
-        <details><summary className="text-xs text-accent-fg">{zh ? '任务模型与其他用途' : 'Task models and other uses'}</summary><div className="mt-2 space-y-1 text-xs text-fg-muted">{Object.entries(preview.taskModels).map(([intent, ref]) => <p key={intent}>{intent}: {ref}</p>)}<p>{zh ? '未选用途与电脑操作保留当前配置；所选用途清除跨服务回退。' : 'Unselected uses and Computer Use keep their settings. Selected uses clear cross-service fallbacks.'}</p></div></details>
+        {!connectOnly ? <details><summary className="text-xs text-accent-fg">{zh ? '任务模型与其他用途' : 'Task models and other uses'}</summary><div className="mt-2 space-y-1 text-xs text-fg-muted">{Object.entries(preview.taskModels).map(([intent, ref]) => <p key={intent}>{intent}: {ref}</p>)}<p>{zh ? '未选用途与电脑操作保留当前配置；所选用途清除跨服务回退。' : 'Unselected uses and Computer Use keep their settings. Selected uses clear cross-service fallbacks.'}</p></div></details> : null}
         <p className="text-xs leading-5 text-fg-muted">{preview.profile.interactiveOnly ? (zh ? '此套餐仅用于交互任务。后台调用会检查使用范围，不会自动切换到其他收费来源。' : 'This plan is for interactive tasks. Background calls check usage scope and do not automatically switch billing sources.') : (zh ? '仅更新勾选的全局用途，智能体和会话的独立设置继续生效。' : 'Only selected global uses change. Agent and session overrides remain effective.')}</p>
         <p className="text-xs text-fg-muted">{zh ? '配置保存与模型真实调用验证分别显示；此操作不会发送测试请求。' : 'Saving settings does not perform a model test request.'}</p>
       </> : null}
