@@ -7,10 +7,20 @@
 1. 安装包含电脑控制功能的已签名 macOS 桌面版本。
 2. 打开 **设置 → 集成 → 电脑控制**（`#/settings/computer-use`），启用控制，并为 xopc 授予 macOS 辅助功能和屏幕录制权限。
 3. 允许需要使用的应用。建议先逐个授权应用。
-4. 从已连接目录选择兼容 GUI 模型并保存。自有密钥先连接对应服务商；使用 XOPC Cloud 时先登录并刷新目录。普通聊天的模型选择不会自动配置电脑控制。
+4. 从已连接目录选择支持截图输入和工具调用的模型或兼容 GUI 模型并保存。自有密钥先连接对应服务商；使用 XOPC Cloud 时先登录并刷新目录。普通聊天的模型选择不会自动配置电脑控制。
 5. 在桌面聊天中说：`读取飞书当前页面，不要点击。` 如果需要启动应用，请明确说：`打开飞书并读取当前页面。`
 
 授权修改前，核对回答对应的应用与窗口。多个窗口或进程匹配时，选择实际目标。
+
+## 自定义 OpenAI 兼容模型
+
+自定义服务商使用 `openai-completions` 或 `openai-responses`，且模型配置包含 `input: ["text", "image"]` 时，会自动出现在电脑控制选择列表中，不限制服务商名称或模型型号。调用使用标准函数工具，由本地电脑控制服务校验并执行动作。模型仍可用于普通聊天和视觉识别。
+
+OpenAI 兼容接口默认按支持函数工具处理；可以在 `models.json` 的模型定义或 `modelOverrides` 中设置 `supportsTools: false`，排除不支持工具调用的模型，也可以设置 `supportsTools: true` 显式声明支持。请确认服务实际支持图片和函数工具；列表展示不代表已经通过远端调用验证。电脑控制模型连接目前要求 HTTPS。
+
+`computerUse.profile` 的显式配置仍优先。`openai-responses-computer-v1` 仅用于服务端确实支持原生 `computer` 工具的模型；普通视觉模型自动使用 `structured-tools-v1`，按所配置的 API 调用函数工具，无需原生 `computer` 支持。
+
+在 xopc 的 OpenAI 服务商中通过 ChatGPT OAuth 登录，也可复用该绑定进行电脑控制。已用 `openai/gpt-6.1-sol` 完成真实截图识别和临时原生测试窗口按钮点击；详见[OAuth 实测记录](../design/technical/computer-use-chatgpt-oauth-validation.md)。这不代表目录中每个模型都已经实测。
 
 ## 描述任务
 

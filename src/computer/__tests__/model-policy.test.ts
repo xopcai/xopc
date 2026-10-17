@@ -1,20 +1,29 @@
 import { describe, expect, it, vi } from 'vitest';
 import { ComputerModelRouteSchema } from '../../agent-config/index.js';
-import { computerModelProfile } from '../model-policy.js';
+import { computerModelProfile, isDedicatedComputerModel } from '../model-policy.js';
 import { validateComputerModelChange } from '../model-config.js';
 
 vi.mock('../../providers/index.js', () => ({ resolveModel: vi.fn((ref: string) => ref === 'cloud/gui'
   ? { api: 'openai-completions', input: ['image'], computerUse: { profile: 'structured-tools-v1' } }
-  : { api: 'openai-completions', input: ['image'] }) }));
+  : { api: 'openai-completions', input: ['text'] }) }));
 
 describe('computer model policy', () => {
   it('requires both the supported action protocol and compatible inference API', () => {
     const model = { api: 'openai-completions', input: ['image'], computerUse: { profile: 'structured-tools-v1' } };
     expect(computerModelProfile(model)).toBe('structured-tools-v1');
-    for (const invalid of [{ ...model, input: ['text'] }, { ...model, api: 'openai-responses' },
-      { ...model, computerUse: undefined }, { ...model, computerUse: { profile: 'future' } }]) {
+    for (const invalid of [{ ...model, input: ['text'] }, { ...model, api: 'anthropic-messages' }, { ...model, computerUse: { profile: 'future' } }]) {
       expect(computerModelProfile(invalid)).toBeUndefined();
     }
+  });
+  it.each(['openai-completions', 'openai-responses'])('infers general visual tools for arbitrary models using %s', api => {
+    const model = { provider: 'custom-proxy', id: 'any-visual-model', api, input: ['text', 'image'] };
+    expect(computerModelProfile(model)).toBe('structured-tools-v1');
+    expect(isDedicatedComputerModel(model)).toBe(false);
+    expect(computerModelProfile({ ...model, supportsTools: true })).toBe('structured-tools-v1');
+    expect(computerModelProfile({ ...model, supportsTools: false })).toBeUndefined();
+    expect(computerModelProfile({ ...model, input: ['text'] })).toBeUndefined();
+    expect(computerModelProfile({ ...model, provider: 'xopc-cloud' })).toBeUndefined();
+    expect(computerModelProfile({ ...model, baseUrl: 'extension://provider-plugin' })).toBeUndefined();
   });
   it('accepts the native OpenAI computer protocol only on the Responses API', () => {
     const model = { api: 'openai-responses', input: ['text', 'image'], computerUse: { profile: 'openai-responses-computer-v1' } };

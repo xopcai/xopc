@@ -7,6 +7,7 @@ export function buildPickerModels(
 ): ConfiguredModel[] {
   if (capabilitiesFilter === 'computer-use') return models.filter(m => Boolean(m.computerUse));
   const dedicatedComputer = (model: ConfiguredModel) => model.computerUse?.profile !== undefined
+    && model.computerUse.dedicated !== false
     && model.computerUse.profile !== 'openai-responses-computer-v1';
   if (capabilitiesFilter !== 'vision') return models.filter(m => !dedicatedComputer(m) || m.id === valueTrimmed);
   const visionOk = models.filter((m) => m.vision === true && !dedicatedComputer(m));

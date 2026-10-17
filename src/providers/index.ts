@@ -21,7 +21,6 @@ import { getModelOAuthProviderIds } from '../auth/oauth/registry.js';
 import { getApiKeyFromEnv } from './env-keys.js';
 import { EXTENSION_PROVIDER_BASE_URL } from './constants.js';
 import {
-	applyOfficialModelMetadataCorrections,
 	getSupplementalModels,
 } from './model-supplements.js';
 import { splitProviderModelRef } from './model-ref.js';
@@ -35,7 +34,7 @@ export { getApiKeyFromEnv, PROVIDER_ENV_MAP } from './env-keys.js';
 
 function normalizeProviderModel(model: Model<Api>): Model<Api> {
 	assertCurrentModelProvider(model.provider);
-	return applyOfficialModelMetadataCorrections(model);
+	return model;
 }
 
 /** Map a plugin registry model to the pi-ai {@link Model} shape. */

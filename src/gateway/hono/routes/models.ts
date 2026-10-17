@@ -386,7 +386,7 @@ export function registerModelsRoutes(authenticated: Hono, deps: AuthenticatedRou
       name: m.name,
       ...catalogDisplayNames(m.provider, m.id),
       provider: m.provider,
-      ...(computerModelProfile(m) ? { computerUse: { profile: computerModelProfile(m)! } } : {}),
+      ...(computerModelProfile(m) ? { computerUse: { profile: computerModelProfile(m)!, dedicated: isDedicatedComputerModel(m) } } : {}),
       contextWindow: m.contextWindow ?? 128000,
       maxTokens: m.maxTokens ?? 4096,
       reasoning: m.reasoning ?? false,
