@@ -3,7 +3,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { createAssistantMessageEventStream, type AssistantMessage } from '@earendil-works/pi-ai';
+import { createAssistantMessageEventStream, getCurrentSystemPrompt, type AssistantMessage } from '@earendil-works/pi-ai';
 import { expect, it, vi } from 'vitest';
 
 const scripted = vi.hoisted(() => ({ stream: vi.fn() }));
@@ -94,7 +94,9 @@ it('runs a real AgentSession through edit, early completion, bounded repair and 
       if (responses.length === 1) {
         const checked = context.messages.findLast((message: any) => message.role === 'toolResult' && message.toolName === 'exec_command');
         expect(checked.content).toContainEqual({ type: 'text', text: 'Verification pending for current files: none.' });
+        expect(getCurrentSystemPrompt(context.messages)).toContain('give the final answer now');
       }
+      if (responses.length === 4) expect(getCurrentSystemPrompt(context.messages)).toContain('Read the inputs named by the current request directly');
       const content = responses.shift();
       if (!content) throw new Error('Harness made an unexpected extra model request');
       const message = { role: 'assistant', content, api: 'openai-completions', provider: 'openai', model: 'gpt-4.1',
@@ -117,10 +119,68 @@ it('runs a real AgentSession through edit, early completion, bounded repair and 
     expect(responses).toHaveLength(0);
     expect(events).toContain('turn_end'); expect(events).toContain('tool_execution_end');
     const receipt = runtime.openSessionManager(root).getBranch().findLast(entry => entry.type === 'custom' && entry.customType === 'coding_verification');
+    expect(JSON.stringify(runtime.openSessionManager(root).getBranch())).not.toContain('xopc.execution-focus');
     expect(receipt).toMatchObject({ data: { changed: true, evidence: expect.arrayContaining([
       expect.objectContaining({ kind: 'check', command: 'node --test test.mjs', status: 'passed' }),
       expect.objectContaining({ kind: 'diff-review', status: 'passed' }),
     ]) } });
+  } finally { evictEmbeddedSessionRunner(conversationId); await rm(root, { recursive: true, force: true }); }
+}, 20_000);
+
+it('shares repeated reads and reviews in model context without rewriting their durable receipts', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'evidence-harness-'));
+  const conversationId = crypto.randomUUID();
+  const runtime = new InMemoryTranscriptRuntime({ runtimeId: conversationId, cwd: root });
+  const note = 'Relevant evidence kept in full.\n'.repeat(150);
+  try {
+    await writeFile(join(root, 'answer.mjs'), 'export const answer = 0;\n');
+    await writeFile(join(root, 'test.mjs'), 'import { answer } from "./answer.mjs"; import assert from "node:assert/strict"; assert.equal(answer, 42);');
+    execFileSync('git', ['init', '-q'], { cwd: root }); execFileSync('git', ['add', '.'], { cwd: root });
+    execFileSync('git', ['-c', 'user.name=Test', '-c', 'user.email=test@xopc.local', 'commit', '-qm', 'fixture'], { cwd: root });
+    await writeFile(join(root, 'notes.md'), note);
+    const calls = [
+      { id: 'read-first', name: 'read_file', arguments: { path: 'notes.md' } },
+      { id: 'read-latest', name: 'read_file', arguments: { path: 'notes.md' } },
+      { id: 'edit', name: 'apply_patch', arguments: { patch: '*** Begin Patch\n*** Update File: answer.mjs\n@@\n-export const answer = 0;\n+export const answer = 42;\n*** End Patch' } },
+      { id: 'review-first', name: 'review_workspace', arguments: {} },
+      { id: 'review-latest', name: 'review_workspace', arguments: {} },
+      { id: 'check', name: 'exec_command', arguments: { cmd: 'node --test test.mjs' } },
+    ];
+    let request = 0;
+    scripted.stream.mockImplementation((_model, context) => {
+      if (request === 2) expect(JSON.stringify(context.messages)).toContain('Repeated tool calls are producing no new evidence');
+      if (request === 6) {
+        const readResults = context.messages.filter((message: any) => message.role === 'toolResult' && message.toolName === 'read_file');
+        const [firstRead, latestRead] = readResults;
+        const firstReview = context.messages.find((message: any) => message.role === 'toolResult' && message.toolName === 'review_workspace');
+        expect(JSON.stringify(firstRead.content)).toContain('later retained read_file result');
+        expect(latestRead.content[0].text).toBe(note);
+        expect(JSON.stringify(firstReview.content)).toContain('last complete review in this user turn');
+        expect(getCurrentSystemPrompt(context.messages)).toContain('give the final answer now');
+      }
+      const call = calls[request++];
+      const message = { role: 'assistant', api: 'openai-completions', provider: 'openai', model: 'gpt-4.1',
+        content: call ? [{ type: 'toolCall', ...call }] : [{ type: 'text', text: 'Verified.' }],
+        stopReason: call ? 'toolUse' : 'stop', timestamp: Date.now(),
+        usage: { input: 10, output: 10, cacheRead: 0, cacheWrite: 0, totalTokens: 20, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
+      } as AssistantMessage;
+      const stream = createAssistantMessageEventStream();
+      stream.push({ type: 'done', reason: message.stopReason as 'stop' | 'toolUse', message });
+      return stream;
+    });
+    const result = await runXopcEmbeddedTurn({ conversationId, runId: 'evidence-test', workspaceDir: root, transcriptRuntime: runtime,
+      userMessage: { role: 'user', content: 'Inspect the notes and fix answer.', timestamp: Date.now() },
+      systemPrompt: 'Fix and verify the code.', modelRef: 'openai/gpt-4.1', verifyChanges: true, timeoutMs: 15000,
+      model: { id: 'gpt-4.1', name: 'Test', provider: 'openai', api: 'openai-completions', baseUrl: 'https://example.invalid', reasoning: false, input: ['text'], contextWindow: 128000, maxTokens: 4096, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 } },
+      tools: [createReadFileTool(root), createApplyPatchTool(root), createExecCommandTool(root), createReviewWorkspaceTool(root)],
+      turnPolicy: createAgentTurnPolicy({ maxTurns: 9 }),
+    });
+    expect(result, JSON.stringify(result)).toMatchObject({ ok: true, lastAssistantText: 'Verified.' });
+    expect(request).toBe(7);
+    const transcript = JSON.stringify(runtime.openSessionManager(root).getBranch());
+    expect(transcript).not.toContain('context sharing');
+    expect(transcript).not.toContain('Identical successful read');
+    expect(transcript).not.toContain('xopc.execution-focus');
   } finally { evictEmbeddedSessionRunner(conversationId); await rm(root, { recursive: true, force: true }); }
 }, 20_000);
 

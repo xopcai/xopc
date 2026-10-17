@@ -26,6 +26,8 @@ The [ten-scenario xopc-core suite](suites/xopc-core/README.md) reuses this frame
 
 See the [context and tool overhead investigation](../../docs/design/technical/benchmark-context-overhead-2026-10-17.md) for the unchanged-budget Qwen comparison. The original baseline, candidate results, and unsuccessful development trials are retained separately under `baselines/`.
 
+The follow-up [execution convergence and delivery report](../../docs/design/technical/benchmark-execution-convergence-2026-10-17.md) records the C01/C02 fixes and the complete 10/10 Qwen run with the same suite, budget and graders. It preserves every unsuccessful development revision and the original 8/10 baseline.
+
 ## Quick start
 
 Requirements: the same Node.js and pnpm versions as the xopc monorepo.
