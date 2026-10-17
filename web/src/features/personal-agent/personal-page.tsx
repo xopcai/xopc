@@ -354,7 +354,7 @@ export function PersonalPage() {
   useLayoutEffect(() => {
     const ready = record?.state === 'ready';
     const avatar = ready ? record.appearance : appearance;
-    const title = ready ? record.displayName : 'Loopi';
+    const title = ready ? record.displayName : 'Ada';
     setPageHeader({
       startExtra: null,
       main: <div className="flex min-w-0 items-center gap-2.5">
@@ -429,7 +429,7 @@ export function PersonalPage() {
                   setDisplayName(event.currentTarget.value);
                   event.currentTarget.blur();
                 }
-              }} maxLength={60} placeholder="Loopi"
+              }} maxLength={60} placeholder="Ada"
               className="mt-3 w-full min-w-0 rounded-lg border border-transparent bg-transparent px-2 py-1 text-center text-lg font-semibold text-fg outline-none transition-colors hover:border-edge focus:border-edge focus:bg-surface-base focus-visible:ring-2 focus-visible:ring-accent" />
             {savingCount > 0 && <span className="absolute right-4 top-4 text-xs text-fg-muted">{zh ? '正在保存…' : 'Saving…'}</span>}
           </div>

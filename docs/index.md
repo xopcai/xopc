@@ -4,7 +4,7 @@ layout: home
 hero:
   name: xopc
   text: Start here. Keep what matters moving.
-  tagline: "The xopc docs. Set up your assistant, start a conversation with Loopi, then explore files, tasks, and automations at your own pace."
+  tagline: "The xopc docs. Set up your assistant, start a conversation with Ada, then explore files, tasks, and automations at your own pace."
   image:
     src: /loopi.svg
     alt: Loopi, your friendly xopc companion

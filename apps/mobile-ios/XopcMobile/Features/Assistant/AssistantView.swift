@@ -515,7 +515,7 @@ struct AssistantView<Dock: View>: View {
 
     private var conversationNavigationTitle: String {
         if isPersonalConversation {
-            return personalAgent?.displayName ?? "Loopi"
+            return personalAgent?.displayName ?? "Ada"
         }
         guard let title = conversation?.title, !showsConversationTitleInTimeline else {
             return AppLocalization.string("助手", locale: locale)
@@ -534,7 +534,7 @@ struct AssistantView<Dock: View>: View {
 
     private var currentAgentName: String {
         isPersonalConversation
-            ? (personalAgent?.displayName ?? "Loopi")
+            ? (personalAgent?.displayName ?? "Ada")
             : (state.agents.first(where: { $0.id == conversation?.agentId })?.displayName
                 ?? state.selectedAgent?.displayName ?? AppLocalization.string("未选择", locale: locale))
     }
@@ -605,7 +605,7 @@ struct AssistantView<Dock: View>: View {
                 .accessibilityIdentifier("chat-welcome-loopi")
             Text(verbatim: isPersonalConversation
                 ? (locale.language.languageCode?.identifier == "zh"
-                    ? "你好，我是\(personalAgent?.displayName ?? "Loopi")。" : "Hi, I'm \(personalAgent?.displayName ?? "Loopi").")
+                    ? "你好，我是\(personalAgent?.displayName ?? "Ada")。" : "Hi, I'm \(personalAgent?.displayName ?? "Ada").")
                 : (locale.language.languageCode?.identifier == "zh"
                     ? "今天想推进什么？" : "What do you want to move forward?"))
                 .font(.system(size: 20, weight: .medium))
@@ -879,7 +879,7 @@ struct PersonalAgentProfileView: View {
             }
             .task { await reloadProfile(); await loadVoices() }
             .navigationTitle((locale.language.languageCode?.identifier == "zh" ? "配置 " : "Configure ")
-                + (record.displayName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Loopi" : record.displayName))
+                + (record.displayName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "ADA" : record.displayName))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {

@@ -38,7 +38,7 @@ describe('Personal AI editor', () => {
         agentId: 'personal',
         conversationId: 'conversation-1',
         state: 'ready',
-        displayName: body?.displayName ?? 'Loopi',
+        displayName: body?.displayName ?? 'Ada',
         userCallName: 'Shared name',
         appearance: body?.appearance ?? 'loopi',
         preferences: body?.preferences ?? {},
@@ -71,7 +71,7 @@ describe('Personal AI editor', () => {
 
     const chat = container.querySelector('[data-testid="personal-chat"]');
     expect(chat).not.toBeNull();
-    act(() => headerContainer.querySelector<HTMLButtonElement>('button[aria-label="Edit Loopi\'s profile"]')?.click());
+    act(() => headerContainer.querySelector<HTMLButtonElement>('button[aria-label="Edit Ada\'s profile"]')?.click());
 
     const editor = document.querySelector('[data-radix-popper-content-wrapper] [aria-label="Edit Personal AI"]');
     expect(editor).not.toBeNull();
@@ -172,7 +172,7 @@ describe('Personal AI editor', () => {
       : String(url).includes('/models')
         ? { ok: true, payload: [] }
         : { ok: true, payload: { agentId: 'personal', conversationId: 'conversation-1',
-          state: 'ready', displayName: 'Loopi', appearance: 'loopi', preferences: {}, revision: 1 } });
+          state: 'ready', displayName: 'Ada', appearance: 'loopi', preferences: {}, revision: 1 } });
     await act(async () => root.render(<MemoryRouter><PersonalPage /></MemoryRouter>));
     act(() => headerRoot.render(<MemoryRouter>{usePageHeaderStore.getState().end}</MemoryRouter>));
     await act(async () => headerContainer.querySelector<HTMLButtonElement>('button[aria-label="Activity"]')?.click());

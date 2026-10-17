@@ -81,7 +81,7 @@ flowchart LR
 
 ### 复用现有存储
 
-个人身份、名称、形象、回应偏好及 revision 使用现有 `agents` 目录和 `profile`；创建状态使用 Agent Catalog 的 provisioning 状态。唯一主会话使用现有 `sessions`，以 `customData.personalAgent` 标记，并由本地所有者的稳定 Agent ID 定位。个人主会话的模型与思考偏好以 `session_config` 为唯一权威，thinking 初始为 `off`，用户可按模型支持的档位调整。创建时使用 Agent 模型作为初始选择，之后读取、修改、恢复主会话都不改写 Agent 配置；同一个 Loopi Agent 的普通对话独立保存模型与思考级别。历史写入 Agent 的个人思考偏好迁移到主会话后移除。不新增个人 Agent 身份表，也不复制一份权威偏好。长期责任继续复用现有 Task 与 Automation；推断性偏好及来源复用 User Model。
+个人身份、名称、形象、回应偏好及 revision 使用现有 `agents` 目录和 `profile`；创建状态使用 Agent Catalog 的 provisioning 状态。唯一主会话使用现有 `sessions`，以 `customData.personalAgent` 标记，并由本地所有者的稳定 Agent ID 定位。个人主会话的模型与思考偏好以 `session_config` 为唯一权威，thinking 初始为 `off`，用户可按模型支持的档位调整。创建时使用 Agent 模型作为初始选择，之后读取、修改、恢复主会话都不改写 Agent 配置；同一个 Ada Agent 的普通对话独立保存模型与思考级别。历史写入 Agent 的个人思考偏好迁移到主会话后移除。不新增个人 Agent 身份表，也不复制一份权威偏好。长期责任继续复用现有 Task 与 Automation；推断性偏好及来源复用 User Model。
 
 ### 幂等创建状态机
 
@@ -196,7 +196,7 @@ Web 新增 `web/src/features/personal-agent/`：初始化向导、个人会话�
 
 ### 验收门槛
 
-- **个人会话思考偏好隔离**：默认 `off`，文字、语音和恢复流程尊重用户选择；普通 Loopi 对话可独立使用其他模型支持的思考级别，不受个人会话设置影响。
+- **个人会话思考偏好隔离**：默认 `off`，文字、语音和恢复流程尊重用户选择；普通 Ada 对话可独立使用其他模型支持的思考级别，不受个人会话设置影响。
 - 同一所有者的重复创建、刷新、重启都只得到一个 Agent 和一个固定 `conversationId`。
 - 主 Agent 没有泛化写工具；对 Task、连接器和设备的每次动作能追溯授权与来源。
 - 后台任务不会阻塞主对话；Task 完成、失败与待决定事件最终可见且不重复。
