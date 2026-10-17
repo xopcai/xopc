@@ -84,7 +84,7 @@ describe('Loopi companion', () => {
     act(() => root.render(<Loopi interactive cycle language="zh" />));
     expect(container.querySelector('.loopi-pause')).toBeNull();
     expect(container.querySelectorAll('button')).toHaveLength(1);
-    expect(container.querySelector('button')?.getAttribute('aria-label')).toBe('和小环打个招呼');
+    expect(container.querySelector('button')?.getAttribute('aria-label')).toBe('和 Loopi 打个招呼');
     requestFrame.mockClear();
     act(() => intersection([{ isIntersecting: false } as IntersectionObserverEntry], {} as IntersectionObserver));
     expect(cancelFrame).toHaveBeenCalledWith(42);

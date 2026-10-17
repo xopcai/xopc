@@ -3301,9 +3301,9 @@ class MainScreenTest {
       assertEquals(2, opens)
       state.value = state.value.copy(personal = state.value.personal.copy(agentError = false,
         agent = ai.xopc.mobile.gateway.PersonalAgentRecord("personal", "11111111-2222-3333-4444-555555555555",
-          "ready", "Ada", "loopi", null)))
+          "ready", "Loopi", "loopi", null)))
     }
-    composeTestRule.onNodeWithText(composeTestRule.activity.getString(R.string.personal_chat_resume_title, "Ada")).assertExists()
+    composeTestRule.onNodeWithText(composeTestRule.activity.getString(R.string.personal_chat_resume_title, "Loopi")).assertExists()
   }
 
 }

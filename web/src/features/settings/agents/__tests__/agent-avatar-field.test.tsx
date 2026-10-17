@@ -47,14 +47,14 @@ it('preserves stored avatars until the user explicitly chooses a replacement', a
   await click('默认头像');
   expect(onChange).not.toHaveBeenCalled();
   expect(container.textContent).not.toContain('xopc:custom');
-  await click('小环 · 温暖');
+  await click('Loopi · 温暖');
   expect(onChange).toHaveBeenCalledWith('xopc:loopi:care');
 });
 
 it('keeps an existing Loopi selected without exposing its storage identifier', async () => {
   await render('xopc:loopi:care');
   await click('默认头像');
-  expect(container.querySelector('button[aria-pressed="true"]')?.textContent).toContain('小环 · 温暖');
+  expect(container.querySelector('button[aria-pressed="true"]')?.textContent).toContain('Loopi · 温暖');
   expect(container.textContent).not.toContain('xopc:loopi:care');
   await click('自动头像');
   expect(onChange).toHaveBeenCalledWith('');

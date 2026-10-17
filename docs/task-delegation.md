@@ -1,10 +1,10 @@
 # Delegate a task and receive the result
 
-Give Ada a concrete result to prepare, keep talking while it works, and return to the delivered file or task record. Use this when execution should survive beyond a single reply.
+Give Loopi a concrete result to prepare, keep talking while it works, and return to the delivered file or task record. Use this when execution should survive beyond a single reply.
 
 ## Before you begin
 
-Set up [Ada](./personal-ai.md), keep the Gateway running, and make the required files and tools available. Connecting a model does not grant access to every folder or external service.
+Set up [Loopi](./personal-ai.md), keep the Gateway running, and make the required files and tools available. Connecting a model does not grant access to every folder or external service.
 
 ## Give a useful brief
 

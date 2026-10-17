@@ -1,4 +1,6 @@
-# Loopi / 小环 · 动态角色设计
+# Loopi · 动态角色设计
+
+中英文均使用 **Loopi**，不使用中文译名。
 
 品牌 Logo、应用图标、favicon 和系统启动标识始终使用 `assets/brand/xopc-mark.svg` 的纯 80/20 圆环。Loopi 的脸与陶瓷材质只用于官网 landing、对话欢迎页、Onboarding 等产品内的动态角色场景，不进入静态 icon 资源。
 

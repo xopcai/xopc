@@ -1,4 +1,4 @@
-# 鸿蒙小环接入 v1.0
+# 鸿蒙Loopi接入 v1.0
 
 ## 1. 目标
 将已确认的 Web Loopi 品牌形象原生接入鸿蒙，表达温和陪伴，不模拟任务成功。
@@ -10,14 +10,14 @@
 Chat 沿用并行更新后的欢迎布局尺寸（紧凑 88vp、常规 108vp）、Tab 28vp、个人入口 44vp、关于你 64vp。沿用 Web 薄陶瓷矢量材质，石墨长弧、蓝色短弧、象牙核心，品牌色封装在媒体资源，暗色资源提升环的对比度。脸部不旋转。文字保留现有字号及 themePalette 前景/次级色。
 
 ## 4. 交互
-- Chat 出现 → 温和呼吸、非固定间隔眨眼/眼神 → 自动循环；触摸小环 → 短暂笑眼 → 恢复；不发送消息、不抢焦点，保留原收键盘行为。
+- Chat 出现 → 温和呼吸、非固定间隔眨眼/眼神 → 自动循环；触摸Loopi → 短暂笑眼 → 恢复；不发送消息、不抢焦点，保留原收键盘行为。
 - 选中助手 Tab → 一次轻回应 → 静止；保留导航、选中语义与其他 Tab 角标。
-- 点击个人卡 → 原 about-you 路由 → 关于你页面；小环不拥有嵌套点击，用户缩写保留。
+- 点击个人卡 → 原 about-you 路由 → 关于你页面；Loopi不拥有嵌套点击，用户缩写保留。
 - 关于你加载/保存 → 专注姿态；失败 → 温和姿态；正常 → 倾听。原骨架、重试、搜索、编辑不变。
 - 离开页面、不可见、后台、减少动态 → 取消所有计时并复位 → 恢复可见时重新开始，不补播。
 
 ## 5. 多设备
-手机沿用当前纵向布局；平板及展开折叠屏沿用既有内容宽度与 dock，不新增断点。小环固定 vp 尺寸、不占额外全屏区域，欢迎区继续可滚动；大字模式仍由文字原布局处理。
+手机沿用当前纵向布局；平板及展开折叠屏沿用既有内容宽度与 dock，不新增断点。Loopi固定 vp 尺寸、不占额外全屏区域，欢迎区继续可滚动；大字模式仍由文字原布局处理。
 
 ## 6. 状态模型
 组件参数 extent、activePage、compact、mood、interactive；共享 layout.reduceMotion / foreground。内部 pose（浮动、环角度、视线、眼睑）仅用于展示，无持久化。motion 控制器不依赖网络或 ArkUI。
@@ -39,7 +39,7 @@ Chat 沿用并行更新后的欢迎布局尺寸（紧凑 88vp、常规 108vp）�
 
 2026-10-03 实施结果：
 
-- DevEco MCP `check_ets_files`：新组件、motion、个人页、生命周期文件无诊断；既有 ChatView/HomeView/AboutYouView 有未使用符号和异常处理警告，无新增小环错误。
+- DevEco MCP `check_ets_files`：新组件、motion、个人页、生命周期文件无诊断；既有 ChatView/HomeView/AboutYouView 有未使用符号和异常处理警告，无新增Loopi错误。
 - DevEco MCP `build_project`：最终 Debug HAP 构建成功；产物为 `entry-default-unsigned.hap`，当前 default 产品没有签名配置。
 - `tests/loopi-motion.test.ts`：8/8 通过，覆盖静态降级、循环、Tab 单次响应、停止/恢复、真实 mood、连续触摸及销毁。
 - 鸿蒙全套：604 通过 / 3 失败；针对失败重跑仍相同。`chatViewModel.test.ts` 重试调用新增尾参数与断言不一致；`sessionMenu.test.ts` 测试 Handler 未提供 onDelete；`mobileLoadingExperience.test.ts` 依赖旧 pendingChatId 源码断言。对应逻辑未被本次品牌接入修改，不在本次修复范围。
