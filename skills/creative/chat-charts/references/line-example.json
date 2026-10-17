@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "type": "line",
+  "title": "Monthly income and spending (example)",
+  "summary": "Illustrative income rises while spending declines over three months.",
+  "dataKind": "example",
+  "xAxis": { "label": "Month", "values": ["2026-01", "2026-02", "2026-03"] },
+  "yAxis": { "label": "Amount", "unit": "CNY" },
+  "series": [
+    { "name": "Income", "values": [12000, 12500, 13000] },
+    { "name": "Spending", "values": [8000, 7200, 6500] }
+  ]
+}
