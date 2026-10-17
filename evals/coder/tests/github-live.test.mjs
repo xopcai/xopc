@@ -19,6 +19,8 @@ describe('manual live evaluation', () => {
     expect(() => settingsFromEnv({ ...input, CODER_EVAL_REPETITIONS: '100' })).toThrow('Repetitions');
     expect(() => settingsFromEnv({ ...input, CODER_EVAL_REASONING: 'invalid' })).toThrow('reasoning');
     expect(settingsFromEnv(input)).toMatchObject({ repetitions: 1, reasoning: 'high' });
+    expect(settingsFromEnv({ ...input, CODER_EVAL_REASONING: 'xhigh' }, { benchmark: true }).reasoning).toBe('xhigh');
+    expect(() => settingsFromEnv({ ...input, CODER_EVAL_REASONING: 'xhigh' })).toThrow('reasoning');
   });
 
   it('uses the real config schema and disables background model work', () => {

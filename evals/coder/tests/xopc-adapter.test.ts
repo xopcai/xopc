@@ -1,4 +1,7 @@
 import { createPublicKey, randomUUID, verify } from 'node:crypto';
+import { existsSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { createServer, type IncomingMessage } from 'node:http';
 
 import { XopcGatewayAdapter } from '@agent-evals/adapter-xopc';
@@ -112,11 +115,13 @@ it('submits signed session input and captures ordered realtime replay without du
 
 it.each(['gap', 'error'] as const)('does not report success after a realtime %s', async mode => {
   const f = await fixture(mode);
+  f.request.evalCase.followUps = [{ message: 'This must not be submitted after failure' }];
   const adapter = new XopcGatewayAdapter();
   try {
     const result = adapter.run(f.request, () => {}, new AbortController().signal);
     if (mode === 'gap') await expect(result).rejects.toThrow('trace is incomplete');
     else expect(await result).toMatchObject({ status: 'failed', error: 'provider rejected' });
+    expect(f.requests.filter(r => r.url.endsWith('/inputs'))).toHaveLength(1);
   } finally { await adapter.cleanup(f.request.runId); await f.close(); }
 });
 
@@ -133,4 +138,49 @@ it('aborts the active server run and closes realtime on cancellation', async () 
     await expect(result).rejects.toThrow('aborted');
     expect(f.requests.find(r => r.url === '/api/agent/abort')?.body).toEqual({ runId: 'xopc-run' });
   } finally { await adapter.cleanup(f.request.runId); await f.close(); }
+});
+
+
+it('keeps follow-ups in the same conversation, records actual file loss and aggregates usage', async () => {
+  const f = await fixture();
+  const root = mkdtempSync(join(tmpdir(), 'eval-follow-up-'));
+  const path = join(root, 'report.md');
+  writeFileSync(path, 'Initial artifact');
+  f.request.environment.workspace = root;
+  f.request.evalCase.followUps = [{ message: 'Restore the missing report and apply the new requirement', removeFiles: ['report.md'] }];
+  const adapter = new XopcGatewayAdapter();
+  const events: TraceEvent[] = [];
+  try {
+    const result = await adapter.run(f.request, event => { events.push(event); }, new AbortController().signal);
+    const inputs = f.requests.filter(r => r.url.endsWith('/inputs'));
+    expect(inputs).toHaveLength(2);
+    expect(inputs[0]?.url).toBe(inputs[1]?.url);
+    expect(inputs[1]?.body.input.content).toBe('Restore the missing report and apply the new requirement');
+    expect(result.finalText).toBe('done');
+    expect(result.usage).toMatchObject({ input: 10, output: 4, total: 14 });
+    expect(existsSync(path)).toBe(false);
+    expect(events.find(e => e.payload.kind === 'harness.file_removed')?.payload).toMatchObject({ turnIndex: 1, path: 'report.md', sizeBytes: 16 });
+    expect(events.filter(e => e.payload.kind === 'harness.follow_up')).toHaveLength(1);
+    expect(f.requests.filter(r => r.url.endsWith('/materialize'))).toHaveLength(1);
+  } finally { await adapter.cleanup(f.request.runId); await f.close(); rmSync(root, { recursive: true, force: true }); }
+});
+
+it.each((['escape', 'symlink', 'missing', 'empty'] as const).filter(mode => mode !== 'symlink' || process.platform !== 'win32'))('refuses invalid %s fault targets before sending follow-up input', async mode => {
+  const f = await fixture();
+  const root = mkdtempSync(join(tmpdir(), 'eval-fault-target-'));
+  const workspace = join(root, 'workspace');
+  const { mkdirSync } = await import('node:fs');
+  mkdirSync(workspace);
+  writeFileSync(join(root, 'outside.md'), 'Do not delete');
+  if (mode === 'symlink') symlinkSync(join(root, 'outside.md'), join(workspace, 'link.md'));
+  if (mode === 'empty') writeFileSync(join(workspace, 'empty.md'), '');
+  f.request.environment.workspace = workspace;
+  const path = mode === 'escape' ? '../outside.md' : mode === 'symlink' ? 'link.md' : mode === 'empty' ? 'empty.md' : 'missing.md';
+  f.request.evalCase.followUps = [{ message: 'Check deliverables', removeFiles: [path] }];
+  const adapter = new XopcGatewayAdapter();
+  try {
+    await expect(adapter.run(f.request, () => {}, new AbortController().signal)).rejects.toThrow();
+    expect(readFileSync(join(root, 'outside.md'), 'utf8')).toBe('Do not delete');
+    expect(f.requests.filter(r => r.url.endsWith('/inputs'))).toHaveLength(1);
+  } finally { await adapter.cleanup(f.request.runId); await f.close(); rmSync(root, { recursive: true, force: true }); }
 });

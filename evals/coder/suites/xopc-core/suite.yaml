@@ -1,0 +1,446 @@
+{
+  "id": "xopc-core",
+  "version": "1.0.2",
+  "description": "Frozen ten-case direct-agent benchmark; calibration is not a live-model score.",
+  "cases": [
+    {
+      "id": "R01-price-comparison",
+      "title": "R01-price-comparison",
+      "repo": {
+        "source": "local",
+        "path": "${EVAL_FIXTURE_REPO}",
+        "commit": "${EVAL_FIXTURE_COMMIT}"
+      },
+      "task": "Read sources.json. Compare ASR cost for 120 minutes. result.json fields: vendorACents, vendorBCents, cheaper (a or b), sourceIds (primary sources used), asOf (source date). Write result.json with exactly the requested fields and a human-readable report.md explaining your result and limitations. Use only the frozen local inputs; do not use network access. Preserve all input files. Do not claim live vendor prices. ",
+      "budget": {
+        "timeoutMs": 300000,
+        "maxModelRequests": 40,
+        "maxTokens": 300000
+      },
+      "tags": [
+        "research",
+        "frozen",
+        "direct-agent"
+      ],
+      "graders": [
+        {
+          "type": "command",
+          "command": "node .xopc-eval-hidden/check.mjs R01-price-comparison",
+          "hiddenFiles": [
+            {
+              "source": "hidden/check.mjs",
+              "target": ".xopc-eval-hidden/check.mjs"
+            }
+          ]
+        },
+        {
+          "type": "unchanged",
+          "paths": [
+            "sources.json",
+            "sales.csv",
+            "quoted.csv",
+            "invoice.json",
+            "retry-source.mjs"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "R02-conflicting-source",
+      "title": "R02-conflicting-source",
+      "repo": {
+        "source": "local",
+        "path": "${EVAL_FIXTURE_REPO}",
+        "commit": "${EVAL_FIXTURE_COMMIT}"
+      },
+      "task": "Read sources.json. Resolve the conflicting vendor A hourly ASR price using source authority. Fields: acceptedCentsPerHour, rejectedSourceId, evidenceSourceId, conflictDetected (boolean). Explain the conflict in report.md. Write result.json with exactly the requested fields and a human-readable report.md explaining your result and limitations. Use only the frozen local inputs; do not use network access. Preserve all input files. Do not claim live vendor prices. ",
+      "budget": {
+        "timeoutMs": 300000,
+        "maxModelRequests": 40,
+        "maxTokens": 300000
+      },
+      "tags": [
+        "research",
+        "frozen",
+        "direct-agent"
+      ],
+      "graders": [
+        {
+          "type": "command",
+          "command": "node .xopc-eval-hidden/check.mjs R02-conflicting-source",
+          "hiddenFiles": [
+            {
+              "source": "hidden/check.mjs",
+              "target": ".xopc-eval-hidden/check.mjs"
+            }
+          ]
+        },
+        {
+          "type": "unchanged",
+          "paths": [
+            "sources.json",
+            "sales.csv",
+            "quoted.csv",
+            "invoice.json",
+            "retry-source.mjs"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "R03-missing-evidence",
+      "title": "R03-missing-evidence",
+      "repo": {
+        "source": "local",
+        "path": "${EVAL_FIXTURE_REPO}",
+        "commit": "${EVAL_FIXTURE_COMMIT}"
+      },
+      "task": "Read sources.json. Determine vendor A total ASR+TTS cost for one hour. Fields: asrCents, ttsCents (null if unknown), totalCents (null if unknown), disposition (partial if not fully knowable), missing (list of unknown components), sourceIds. Do not invent missing prices. Write result.json with exactly the requested fields and a human-readable report.md explaining your result and limitations. Use only the frozen local inputs; do not use network access. Preserve all input files. Do not claim live vendor prices. ",
+      "budget": {
+        "timeoutMs": 300000,
+        "maxModelRequests": 40,
+        "maxTokens": 300000
+      },
+      "tags": [
+        "research",
+        "frozen",
+        "direct-agent"
+      ],
+      "graders": [
+        {
+          "type": "command",
+          "command": "node .xopc-eval-hidden/check.mjs R03-missing-evidence",
+          "hiddenFiles": [
+            {
+              "source": "hidden/check.mjs",
+              "target": ".xopc-eval-hidden/check.mjs"
+            }
+          ]
+        },
+        {
+          "type": "unchanged",
+          "paths": [
+            "sources.json",
+            "sales.csv",
+            "quoted.csv",
+            "invoice.json",
+            "retry-source.mjs"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "D01-monthly-sales",
+      "title": "D01-monthly-sales",
+      "repo": {
+        "source": "local",
+        "path": "${EVAL_FIXTURE_REPO}",
+        "commit": "${EVAL_FIXTURE_COMMIT}"
+      },
+      "task": "Analyze sales.csv. Fields: rowCount, januaryCents, februaryCents, growthPercent. Also write reproduce.mjs that reads sales.csv and recreates result.json when executed with node reproduce.mjs; use integer cents. Write result.json with exactly the requested fields and a human-readable report.md explaining your result and limitations. Use only the frozen local inputs; do not use network access. Preserve all input files. Do not claim live vendor prices. ",
+      "budget": {
+        "timeoutMs": 300000,
+        "maxModelRequests": 40,
+        "maxTokens": 300000
+      },
+      "tags": [
+        "data",
+        "frozen",
+        "direct-agent"
+      ],
+      "graders": [
+        {
+          "type": "command",
+          "command": "node .xopc-eval-hidden/check.mjs D01-monthly-sales",
+          "hiddenFiles": [
+            {
+              "source": "hidden/check.mjs",
+              "target": ".xopc-eval-hidden/check.mjs"
+            }
+          ]
+        },
+        {
+          "type": "unchanged",
+          "paths": [
+            "sources.json",
+            "sales.csv",
+            "quoted.csv",
+            "invoice.json",
+            "retry-source.mjs"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "D02-quoted-csv",
+      "title": "D02-quoted-csv",
+      "repo": {
+        "source": "local",
+        "path": "${EVAL_FIXTURE_REPO}",
+        "commit": "${EVAL_FIXTURE_COMMIT}"
+      },
+      "task": "Parse quoted.csv including escaped quotes, commas and embedded newlines. Fields: rowCount, names (ordered decoded names), totalCents. Also write reproduce.mjs that reads quoted.csv and recreates result.json. Write result.json with exactly the requested fields and a human-readable report.md explaining your result and limitations. Use only the frozen local inputs; do not use network access. Preserve all input files. Do not claim live vendor prices. ",
+      "budget": {
+        "timeoutMs": 300000,
+        "maxModelRequests": 40,
+        "maxTokens": 300000
+      },
+      "tags": [
+        "data",
+        "frozen",
+        "direct-agent"
+      ],
+      "graders": [
+        {
+          "type": "command",
+          "command": "node .xopc-eval-hidden/check.mjs D02-quoted-csv",
+          "hiddenFiles": [
+            {
+              "source": "hidden/check.mjs",
+              "target": ".xopc-eval-hidden/check.mjs"
+            }
+          ]
+        },
+        {
+          "type": "unchanged",
+          "paths": [
+            "sources.json",
+            "sales.csv",
+            "quoted.csv",
+            "invoice.json",
+            "retry-source.mjs"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "D03-exact-money",
+      "title": "D03-exact-money",
+      "repo": {
+        "source": "local",
+        "path": "${EVAL_FIXTURE_REPO}",
+        "commit": "${EVAL_FIXTURE_COMMIT}"
+      },
+      "task": "Calculate invoice.json exactly in integer cents. Fields: lineCents (in order), totalCents, currency (CNY). Also write reproduce.mjs that reads invoice.json and recreates result.json. Write result.json with exactly the requested fields and a human-readable report.md explaining your result and limitations. Use only the frozen local inputs; do not use network access. Preserve all input files. Do not claim live vendor prices. ",
+      "budget": {
+        "timeoutMs": 300000,
+        "maxModelRequests": 40,
+        "maxTokens": 300000
+      },
+      "tags": [
+        "data",
+        "frozen",
+        "direct-agent"
+      ],
+      "graders": [
+        {
+          "type": "command",
+          "command": "node .xopc-eval-hidden/check.mjs D03-exact-money",
+          "hiddenFiles": [
+            {
+              "source": "hidden/check.mjs",
+              "target": ".xopc-eval-hidden/check.mjs"
+            }
+          ]
+        },
+        {
+          "type": "unchanged",
+          "paths": [
+            "sources.json",
+            "sales.csv",
+            "quoted.csv",
+            "invoice.json",
+            "retry-source.mjs"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "C01-add-deliverable",
+      "title": "C01-add-deliverable",
+      "repo": {
+        "source": "local",
+        "path": "${EVAL_FIXTURE_REPO}",
+        "commit": "${EVAL_FIXTURE_COMMIT}"
+      },
+      "task": "Analyze sales.csv. Write result.json fields januaryCents, februaryCents, growthPercent, with all regions included. Write result.json with exactly the requested fields and a human-readable report.md explaining your result and limitations. Use only the frozen local inputs; do not use network access. Preserve all input files. Do not claim live vendor prices. ",
+      "budget": {
+        "timeoutMs": 300000,
+        "maxModelRequests": 40,
+        "maxTokens": 300000
+      },
+      "tags": [
+        "change",
+        "frozen",
+        "direct-agent"
+      ],
+      "graders": [
+        {
+          "type": "command",
+          "command": "node .xopc-eval-hidden/check.mjs C01-add-deliverable",
+          "hiddenFiles": [
+            {
+              "source": "hidden/check.mjs",
+              "target": ".xopc-eval-hidden/check.mjs"
+            }
+          ]
+        },
+        {
+          "type": "unchanged",
+          "paths": [
+            "sources.json",
+            "sales.csv",
+            "quoted.csv",
+            "invoice.json",
+            "retry-source.mjs"
+          ]
+        }
+      ],
+      "followUps": [
+        {
+          "message": "Add rowCount and revision=\"add-count-v1\" to result.json, preserving previous fields. Also create change_notes.md identifying the added row count and revision. Update report.md."
+        }
+      ]
+    },
+    {
+      "id": "C02-replace-scope",
+      "title": "C02-replace-scope",
+      "repo": {
+        "source": "local",
+        "path": "${EVAL_FIXTURE_REPO}",
+        "commit": "${EVAL_FIXTURE_COMMIT}"
+      },
+      "task": "Analyze all regions in sales.csv. Fields: region (all), januaryCents, februaryCents, growthPercent. Write result.json with exactly the requested fields and a human-readable report.md explaining your result and limitations. Use only the frozen local inputs; do not use network access. Preserve all input files. Do not claim live vendor prices. ",
+      "budget": {
+        "timeoutMs": 300000,
+        "maxModelRequests": 40,
+        "maxTokens": 300000
+      },
+      "tags": [
+        "change",
+        "frozen",
+        "direct-agent"
+      ],
+      "graders": [
+        {
+          "type": "command",
+          "command": "node .xopc-eval-hidden/check.mjs C02-replace-scope",
+          "hiddenFiles": [
+            {
+              "source": "hidden/check.mjs",
+              "target": ".xopc-eval-hidden/check.mjs"
+            }
+          ]
+        },
+        {
+          "type": "unchanged",
+          "paths": [
+            "sources.json",
+            "sales.csv",
+            "quoted.csv",
+            "invoice.json",
+            "retry-source.mjs"
+          ]
+        }
+      ],
+      "followUps": [
+        {
+          "message": "Replace the scope with east only. Recalculate all totals and growthPercent (round to two decimal places), set region=\"east\" and add revision=\"east-only-v1\". Supersede all-region conclusions in report.md."
+        }
+      ]
+    },
+    {
+      "id": "F01-lost-artifact",
+      "title": "F01-lost-artifact",
+      "repo": {
+        "source": "local",
+        "path": "${EVAL_FIXTURE_REPO}",
+        "commit": "${EVAL_FIXTURE_COMMIT}"
+      },
+      "task": "Analyze sales.csv. Fields: rowCount, totalCents. Write the report and result files before replying. Write result.json with exactly the requested fields and a human-readable report.md explaining your result and limitations. Use only the frozen local inputs; do not use network access. Preserve all input files. Do not claim live vendor prices. ",
+      "budget": {
+        "timeoutMs": 300000,
+        "maxModelRequests": 40,
+        "maxTokens": 300000
+      },
+      "tags": [
+        "recovery",
+        "frozen",
+        "direct-agent"
+      ],
+      "graders": [
+        {
+          "type": "command",
+          "command": "node .xopc-eval-hidden/check.mjs F01-lost-artifact",
+          "hiddenFiles": [
+            {
+              "source": "hidden/check.mjs",
+              "target": ".xopc-eval-hidden/check.mjs"
+            }
+          ]
+        },
+        {
+          "type": "unchanged",
+          "paths": [
+            "sources.json",
+            "sales.csv",
+            "quoted.csv",
+            "invoice.json",
+            "retry-source.mjs"
+          ]
+        }
+      ],
+      "followUps": [
+        {
+          "message": "Verify both final deliverables still exist and are complete. Restore any missing output from the original inputs before your final reply.",
+          "removeFiles": [
+            "result.json",
+            "report.md"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "F02-transient-read",
+      "title": "F02-transient-read",
+      "repo": {
+        "source": "local",
+        "path": "${EVAL_FIXTURE_REPO}",
+        "commit": "${EVAL_FIXTURE_COMMIT}"
+      },
+      "task": "Run node retry-source.mjs to obtain an external-source simulation receipt. A temporary failure is retryable; use at most three attempts. Do not edit the reader or fabricate its receipt. Fields: receipt, totalCents, recovered (boolean). Write result.json with exactly the requested fields and a human-readable report.md explaining your result and limitations. Use only the frozen local inputs; do not use network access. Preserve all input files. Do not claim live vendor prices. ",
+      "budget": {
+        "timeoutMs": 300000,
+        "maxModelRequests": 40,
+        "maxTokens": 300000
+      },
+      "tags": [
+        "recovery",
+        "frozen",
+        "direct-agent"
+      ],
+      "graders": [
+        {
+          "type": "command",
+          "command": "node .xopc-eval-hidden/check.mjs F02-transient-read",
+          "hiddenFiles": [
+            {
+              "source": "hidden/check.mjs",
+              "target": ".xopc-eval-hidden/check.mjs"
+            }
+          ]
+        },
+        {
+          "type": "unchanged",
+          "paths": [
+            "sources.json",
+            "sales.csv",
+            "quoted.csv",
+            "invoice.json",
+            "retry-source.mjs"
+          ]
+        }
+      ]
+    }
+  ]
+}
