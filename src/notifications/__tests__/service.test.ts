@@ -12,11 +12,7 @@ import {
 } from '../../storage/sqlite/index.js';
 import { registerNotificationDevice } from '../device-store.js';
 import { NotificationService } from '../service.js';
-import type { NotificationDomainDelivery } from '../domain-delivery.js';
-import type { NotificationPlan } from '../planner.js';
-import { getSqliteDatabase } from '../../storage/sqlite/transaction.js';
 import {
-  createNotificationEvent,
   notificationDeliveryMetrics,
   rescheduleNotificationDelivery,
 } from '../store.js';
@@ -29,13 +25,6 @@ const chatEvent = {
   completedAtMs: 1,
   source: 'webchat',
   target: { kind: 'chat', conversationId: 'session-1' },
-};
-
-const domainPlan: NotificationPlan = {
-  dedupeKey: 'scene-result', notification: {
-    type: 'scene.result', target: { kind: 'scene_result', activationId: 'activation', presentationId: 'presentation' },
-    priority: 'normal', title: { en: 'Private title', zh: '私人标题' }, payload: {},
-  },
 };
 
 describe('NotificationService', () => {
@@ -64,12 +53,7 @@ describe('NotificationService', () => {
     rmSync(stateDir, { recursive: true, force: true });
   });
 
-  it('delivers ordinary notifications without any Proactive or Heartbeat tables', async () => {
-    const db = getSqliteDatabase();
-    db.exec('PRAGMA foreign_keys = OFF');
-    const tables = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND (name GLOB 'proactive_*' OR name = 'heartbeat_checks')").all();
-    for (const row of tables) db.exec(`DROP TABLE "${String(row.name).replaceAll('"', '""')}"`);
-    db.exec('PRAGMA foreign_keys = ON');
+  it('delivers ordinary notifications', async () => {
     const fetchMock = vi.fn<typeof fetch>();
     const sendHarmony = vi.fn().mockResolvedValue('huawei-request-id');
     const service = new NotificationService({ publish: vi.fn(), fetch: fetchMock, sendHarmony });
@@ -80,15 +64,6 @@ describe('NotificationService', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('rejects uninstalled domain publication and does not send an already queued domain event', async () => {
-    const fetchMock = vi.fn<typeof fetch>();
-    const service = new NotificationService({ publish: vi.fn(), fetch: fetchMock });
-    expect(() => service.persistPlan(domainPlan)).toThrow('domain delivery is not installed');
-    createNotificationEvent({ ...domainPlan, deviceIds: ['device-1'] });
-    await service.drain();
-    expect(notificationDeliveryMetrics()).toMatchObject({ dead: 1 });
-    expect(fetchMock).not.toHaveBeenCalled();
-  });
 
   it('honors injected notification preferences before persistence and queued delivery', async () => {
     const fetchMock = vi.fn<typeof fetch>();
@@ -103,28 +78,6 @@ describe('NotificationService', () => {
     expect(notificationDeliveryMetrics()).toMatchObject({ dead: 1 });
   });
 
-  it('enqueues domain work atomically once and applies injected mobile policy and private preview', async () => {
-    const enqueue = vi.fn();
-    const domain: NotificationDomainDelivery = {
-      owns: (type) => type === 'scene.result', allowsDevice: () => true, planEvent: () => null,
-      prepare: (plan, devices) => ({ plan, deviceIds: devices.map((device) => device.id), enqueue }),
-      flush: () => [], drain: async () => {}, recheckMobile: () => 'send',
-      mobilePreview: () => ({ title: 'Result ready', body: 'Open the app.' }),
-    };
-    const fetchMock = vi.fn<typeof fetch>();
-    const sendHarmony = vi.fn().mockResolvedValue('huawei-request-id');
-    const service = new NotificationService({ publish: vi.fn(), fetch: fetchMock, domainDelivery: domain, sendHarmony });
-    enqueue.mockImplementationOnce(() => { throw new Error('ledger unavailable'); });
-    expect(() => service.persistPlan(domainPlan)).toThrow('ledger unavailable');
-    expect(getSqliteDatabase().prepare('SELECT count(*) AS n FROM notification_events').get()?.n).toBe(0);
-    enqueue.mockClear();
-    expect(service.persistPlan(domainPlan)).not.toBeNull();
-    expect(service.persistPlan(domainPlan)).toBeNull();
-    expect(enqueue).toHaveBeenCalledOnce();
-    await service.drain();
-    expect(sendHarmony).toHaveBeenCalledWith(expect.objectContaining({ title: 'Result ready', body: 'Open the app.' }), fetchMock);
-    expect(notificationDeliveryMetrics()).toMatchObject({ accepted: 1 });
-  });
 
   it('routes HarmonyOS only to its own provider without receipt polling', async () => {
     const fetchMock = vi.fn<typeof fetch>();

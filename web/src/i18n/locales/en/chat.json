@@ -39,7 +39,6 @@
         "workflow_definition": "Workflow",
         "workflow_run": "Workflow run",
         "automation": "Automation",
-        "scene": "Monitor",
         "local_app": "App",
         "chat_preview": "Chat preview",
         "file": "File",
@@ -344,7 +343,6 @@
       },
       "objects": {
         "context": "context",
-        "scene": "monitor",
         "chatPreview": "chat preview",
         "productItem": "product item",
         "project": "project",

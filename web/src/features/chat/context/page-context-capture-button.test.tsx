@@ -41,7 +41,7 @@ describe('explicit resource capture action', () => {
   }
   async function click() { await act(async () => container.querySelector<HTMLButtonElement>('button[aria-busy]')!.click()); }
 
-  it.each(['task', 'project', 'scene', 'local_app'] as const)('captures %s from the validated server preview', async kind => {
+  it.each(['task', 'project', 'local_app'] as const)('captures %s from the validated server preview', async kind => {
     await render(kind); await click();
     expect(mocks.read).toHaveBeenCalledWith('xopc.context.resolve', expect.objectContaining({ resourceRefs: [{ kind, id: 'resource', revision: '3' }] }));
     expect(mocks.create).toHaveBeenCalledWith();
@@ -84,7 +84,7 @@ describe('explicit resource capture action', () => {
   });
 
   it('does not capture while editing is blocked', async () => {
-    await render('scene', true); await click();
+    await render('task', true); await click();
     expect(mocks.read).not.toHaveBeenCalled();
   });
 

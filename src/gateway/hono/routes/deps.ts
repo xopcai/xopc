@@ -1,7 +1,6 @@
 import type { MiddlewareHandler } from 'hono';
 
 import type { GatewayService } from '../../service.js';
-import type { SceneHttpServices } from '../../../scenes/httpServices.js';
 
 export interface AuthenticatedRouteDeps {
   service: GatewayService;
@@ -11,5 +10,4 @@ export interface AuthenticatedRouteDeps {
   taskRateLimitMiddleware?: MiddlewareHandler;
   xopcCloudPollRateLimitMiddleware: MiddlewareHandler;
   channelRateLimitMiddleware?: MiddlewareHandler;
-  scenes?: SceneHttpServices;
 }

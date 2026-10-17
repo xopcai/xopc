@@ -12,7 +12,6 @@ export function registerCapabilityOperationRoutes(app: Hono, deps: Authenticated
     getAutomations: () => deps.service.automationServiceInstance,
     getWorkDiscovery: () => deps.service.workDiscovery,
     getLocalApps: () => deps.service.localApps,
-    ...(deps.scenes ? { getSceneAccess: () => ({ services: deps.scenes!, principal: { ownerId: 'local-owner', workspaceId: deps.service.currentWorkspacePath } }) } : {}),
     wake: runId => runId ? deps.service.dispatchTaskRuns() : deps.service.dispatchTaskEvents(),
     abortConversation: async conversationId => {
       const liveRunId = deps.service.getActiveWebchatRunId(conversationId);

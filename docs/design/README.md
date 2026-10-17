@@ -16,10 +16,6 @@ Active proposed designs:
 
 - [Personal AI work continuity](./personal-ai-work-continuity-plan.md): result reading, durable handoffs, follow-up revisions, and foreground latency targets.
 - [Personal result reading, stage A](./technical/personal-result-reading-stage-a-2026-10-15.md): implementation, access boundaries, cold-read continuation, and verification evidence.
-- [Scenes product north star and evolution plan](./scenes-product-north-star.md)
-- [Scenes technical design and direct cutover plan](./scenes-technical-design.md)
-- [Scenes implementation progress and review log](./scenes-implementation-progress.md)
-- [Scenes launch plan and release gates](./scenes-launch-plan.md)
 - [Realtime voice product requirements](./realtime-voice-prd.md)
 - [Realtime voice technical design](./realtime-voice-technical-design.md)
 - [Realtime voice WebSocket protocol](./realtime-voice-websocket-protocol.md)

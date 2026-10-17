@@ -14,14 +14,6 @@ describe('project operating summary', () => {
       running: [],
       recentResults: [],
       digest: { health: 'attention', summary: 'Needs attention', recommendedAction: 'Approve' },
-      monitoring: {
-        projectId: 'p',
-        mode: 'observe',
-        allowedActions: [],
-        confidenceThreshold: 1,
-        scenarios: [],
-        configured: false,
-      },
     });
 
     expect(summary.counts).toEqual({ ready: 0, moving: 1, waiting: 0, needsUser: 1, done: 1 });

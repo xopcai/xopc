@@ -48,12 +48,6 @@ describe('gateway scopes', () => {
     expect(requiredGatewayScope('GET', '/api/task-runs-other')).toBe('gateway.admin');
   });
 
-  it('restricts the first scene release to local administrators', () => {
-    for (const path of ['/api/scenes/activations', '/api/scenes/preferences', '/api/scenes/browser/subscriptions']) {
-      expect(requiredGatewayScope('GET', path)).toBe('gateway.admin');
-      expect(requiredGatewayScope('POST', path)).toBe('gateway.admin');
-    }
-  });
 
   it('restricts AI usage and cost data to gateway administrators', () => {
     expect(requiredGatewayScope('GET', '/api/observability/traces')).toBe('gateway.admin');

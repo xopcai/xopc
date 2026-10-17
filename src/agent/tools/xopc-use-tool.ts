@@ -1,4 +1,3 @@
-import type { SceneAccess } from '../../scenes/httpServices.js';
 import { randomUUID } from 'node:crypto';
 import { createProductDispatcher } from '../../capabilities/runtime/product.js';
 import { localAppCapabilities } from '../../local-apps/capabilities/runtime.js';
@@ -35,7 +34,6 @@ import {
   ProjectCreateInputSchema, ProjectEditInputSchema, ProjectDeleteInputSchema, ProjectDeleteOutputSchema, ProjectSetPinnedInputSchema, ProjectMutationOutputSchema, ProjectMilestoneCreateInputSchema, ProjectMilestoneUpdateInputSchema, ProjectMilestoneDeleteInputSchema,
   ProjectMilestoneOutputSchema, ProjectMilestoneDeleteOutputSchema, ProjectUpdateCreateInputSchema, ProjectUpdateOutputSchema,
   ProjectResolveWorkspaceInputSchema, ProjectResolveWorkspaceOutputSchema,
-  SceneWriteContracts,
   type TaskPriority,
   type ProductDeliveryEnvelope,
   type ProductReference,
@@ -72,7 +70,6 @@ import { TaskCollaborationRepository, type TaskCollaborationKind } from '../../t
 const XopcUseToolSchema = Type.Object({
   mode: Type.Union([
     Type.Literal('context'),
-    Type.Literal('scene'),
     Type.Literal('project'),
     Type.Literal('automation'),
     Type.Literal('note'),
@@ -91,7 +88,7 @@ const XopcUseToolSchema = Type.Object({
       'Project milestone writes support idempotencyKey; update_milestone/delete_milestone require original expectedRevision for stable retries, and create_update requires original expectedVersion. TaskRun cancel accepts idempotencyKey and expectedVersion, and does not confirm external execution stopped. ' +
       'Automation diagnostics: get_run/run_events {runId}, metrics {}, events {eventType?, source?, limit?}, deliveries {runId?, limit?}, product_events {eventType, source?, payloadKey?, payloadValue?, limit?}; payload filters require both key and value. Recovery commands: replay_event {eventId, reason, idempotencyKey}, retry_delivery {runId, destinationKey, reason, idempotencyKey}. ' +
       'Automation also supports cancel/read {runId, idempotencyKey?} and read_all {projectId?, idempotencyKey?}; omitted projectId means all projects. Cancel acceptance is not confirmation of stopping. ' +
-      'Object command. Scene commands: templates, list, get {id}, mail_accounts, mail_search {accountId, query}, mail_sources, read_notes {id}, preflight/start {templateKey, templateVersion, goal, scope, permissions}, configure {id, expectedRevision, goal, scope, permissions}, transition {id, expectedRevision, status: paused|active|completed|archived}, check {id}, notes {id, expectedRevision, content, validUntil?}, work_item {id, subjectId, accountId, dueAt}, update_work_item {workItemId, expectedRevision, dueAt?, status?}, schedule {id, triggerKey, expectedRevision, schedule}, results {id?}, feedback {presentationId, expectedRevision, rating}, mark_read {presentationId, read}, diagnostics, get_preferences, set_preferences {expectedRevision, ...preferences}. Start and check accept a stable requestId for retries. Scenes prepare read-only suggestions and drafts; never send mail. Only create a scene for work explicitly delegated by the user; inspect existing scenes first. Supports project list/get/create/update/resolve_workspace/list_milestones/create_milestone/update_milestone/list_updates/create_update, automation list/get/create/update/delete/run/rerun/pause/resume/history (rerun takes runId; run/rerun accept idempotencyKey), note list/get/project_summaries/history {noteId}/snapshot {noteId, timestamp}/create/append/update/preview_edit/delete, task list/get/create/update_dependencies/add_context/remove_context/command/delete, task_run list/get/cancel, chat_preview create/revise/get, local_app list/get/create/validate, and settings open.',
+      'Object command. Supports project list/get/create/update/resolve_workspace/list_milestones/create_milestone/update_milestone/list_updates/create_update, automation list/get/create/update/delete/run/rerun/pause/resume/history (rerun takes runId; run/rerun accept idempotencyKey), note list/get/project_summaries/history {noteId}/snapshot {noteId, timestamp}/create/append/update/preview_edit/delete, task list/get/create/update_dependencies/add_context/remove_context/command/delete, task_run list/get/cancel, chat_preview create/revise/get, local_app list/get/create/validate, and settings open.',
   }),
   args: Type.Optional(Type.Record(Type.String(), Type.Any())),
   dryRun: Type.Optional(Type.Boolean({
@@ -99,7 +96,7 @@ const XopcUseToolSchema = Type.Object({
   })),
 });
 
-export type XopcUseMode = 'context' | 'scene' | 'project' | 'automation' | 'note' | 'task' | 'task_run' | 'chat_preview' | 'local_app' | 'agent' | 'settings';
+export type XopcUseMode = 'context' | 'project' | 'automation' | 'note' | 'task' | 'task_run' | 'chat_preview' | 'local_app' | 'agent' | 'settings';
 
 export interface XopcUseToolInput {
   mode: XopcUseMode;
@@ -115,7 +112,6 @@ export interface XopcUseToolDeps {
   getCurrentAgentId?: () => string | undefined;
   getCurrentConversationId?: () => string | undefined;
   getAutomationService?: () => AutomationService | undefined;
-  getSceneAccess?: () => SceneAccess | undefined;
   getNotesService?: () => NotesService | undefined;
   getProjectService?: () => ProjectService | undefined;
   getWorkDiscovery?: () => import('../../work-discovery/service.js').WorkDiscoveryService | undefined;
@@ -238,8 +234,8 @@ function deliveryForXopcResult(
   if (!resultRecord || resultRecord.ok === false) return undefined;
   if (command === 'list') {
     const rows = resultRecord.items ?? resultRecord.activations ?? resultRecord.apps;
-    if (!Array.isArray(rows) || !['task', 'note', 'project', 'automation', 'scene', 'local_app'].includes(mode)) return undefined;
-    const field = mode === 'scene' ? 'activation' : mode === 'local_app' ? 'app' : mode;
+    if (!Array.isArray(rows) || !['task', 'note', 'project', 'automation', 'local_app'].includes(mode)) return undefined;
+    const field = mode === 'local_app' ? 'app' : mode;
     const items = rows.slice(0, 50).flatMap(row => {
       const reference = deliveryForXopcResult(mode, 'get', { [field]: row }, false)?.primary;
       return reference ? [{ ...reference, capabilities: ['open' as const] }] : [];
@@ -296,19 +292,6 @@ function deliveryForXopcResult(
         revision: deliveryRevision(source?.updatedAtMs),
         projectId: deliveryText(source?.projectId),
         capabilities: ['open', 'edit', 'continue_in_chat', 'run', enabled ? 'pause' : 'resume'],
-      };
-    }
-  } else if (mode === 'scene') {
-    source = record(resultRecord.activation);
-    const id = deliveryText(source?.id);
-    if (id) {
-      primary = {
-        kind: 'scene',
-        id,
-        title: deliveryText(source?.goal) ?? 'Scene',
-        status: deliveryText(source?.status),
-        revision: deliveryRevision(source?.revision),
-        capabilities: ['open', 'edit', 'continue_in_chat'],
       };
     }
   } else if (mode === 'note') {
@@ -418,9 +401,8 @@ function deliveryForXopcResult(
     version: PRODUCT_DELIVERY_VERSION,
     operation: (mode === 'task' && deliveryText(resultRecord.runId))
       || (mode === 'automation' && (command === 'run' || command === 'rerun'))
-      || (mode === 'scene' && command === 'check')
       ? 'started'
-      : command === 'create' || (mode === 'scene' && command === 'start')
+      : command === 'create'
       ? 'created'
       : command === 'get' || command === 'resolve_workspace' || mode === 'settings'
         ? 'opened'
@@ -1287,7 +1269,6 @@ export function createXopcUseTool(deps: XopcUseToolDeps): AgentTool<typeof XopcU
     getConfig: deps.getConfig, getProjects: deps.getProjectService,
     getWorkDiscovery: deps.getWorkDiscovery,
     getLocalApps: deps.getLocalAppService,
-    getSceneAccess: deps.getSceneAccess,
     getAutomations: deps.getAutomationService,
     wake: deps.dispatchTaskRuns || deps.dispatchTaskEvents ? runId => runId ? deps.dispatchTaskRuns?.() : deps.dispatchTaskEvents?.() : undefined,
   });
@@ -1295,7 +1276,7 @@ export function createXopcUseTool(deps: XopcUseToolDeps): AgentTool<typeof XopcU
     name: 'xopc_use',
     label: 'XOPC Use',
     description:
-      'Operate first-class xopc objects through one safe entry point. To delegate work for immediate execution: mode task, command create, args {title:"Short task name", objective:"One-sentence outcome", body:"Full Markdown task brief", createMode:"start", agentId:"researcher"}; omitting createMode creates a backlog task only. To start an existing Task: mode task, command command, args {taskId, type:"start", expectedVersion, commandArgs:{executor:{kind:"agent",agentId:"main"}}}. Inspect an existing Task and its run before creating another Task for the same objective. For delegated work, task delegated_tasks lists this conversation\'s tasks; task collaboration reads the shared board; task collaboration_post writes {taskId, kind, body, causationId?, idempotencyKey?}. Workers report progress or questions; the main Agent writes instructions and answers. Use chat_preview for lightweight UI mockups in the current conversation; do not create a Local App unless the user asks for a durable app. Local App capabilities takes extensionId and discovers already granted bindings. Local App invoke requires extensionId, the discovered manifestDigest, capabilityId and a pinned call {majorVersion, descriptorDigest, input, idempotencyKey for writes}. Never manufacture grants or change a retry key after an uncertain write. Use for Agents, scenes, projects, automations, notes, tasks, TaskRuns, chat previews, local apps, and exact settings jump targets instead of editing storage files directly. For non-trivial object changes, load the built-in manual first with tool_manual({ tool: "xopc_use" }).',
+      'Operate first-class xopc objects through one safe entry point. To delegate work for immediate execution: mode task, command create, args {title:"Short task name", objective:"One-sentence outcome", body:"Full Markdown task brief", createMode:"start", agentId:"researcher"}; omitting createMode creates a backlog task only. To start an existing Task: mode task, command command, args {taskId, type:"start", expectedVersion, commandArgs:{executor:{kind:"agent",agentId:"main"}}}. Inspect an existing Task and its run before creating another Task for the same objective. For delegated work, task delegated_tasks lists this conversation\'s tasks; task collaboration reads the shared board; task collaboration_post writes {taskId, kind, body, causationId?, idempotencyKey?}. Workers report progress or questions; the main Agent writes instructions and answers. Use chat_preview for lightweight UI mockups in the current conversation; do not create a Local App unless the user asks for a durable app. Local App capabilities takes extensionId and discovers already granted bindings. Local App invoke requires extensionId, the discovered manifestDigest, capabilityId and a pinned call {majorVersion, descriptorDigest, input, idempotencyKey for writes}. Never manufacture grants or change a retry key after an uncertain write. Use for Agents, projects, automations, notes, tasks, TaskRuns, chat previews, local apps, and exact settings jump targets instead of editing storage files directly. For non-trivial object changes, load the built-in manual first with tool_manual({ tool: "xopc_use" }).',
     parameters: XopcUseToolSchema,
     mutatesWorkspace: true,
     mutationScope: 'external',
@@ -1327,43 +1308,6 @@ export function createXopcUseTool(deps: XopcUseToolDeps): AgentTool<typeof XopcU
         const caller: CapabilityContext = { principalId: `agent:${deps.getCurrentAgentId?.() ?? 'main'}`,
           surface: 'agent', scopes: ['gateway.admin'], authorize: deps.authorizeCapability ?? (() => true), signal };
         return okText({ ...details, result: await capabilities.call('xopc.context.resolve', args, caller) });
-      }
-      if (mode === 'scene' && (['configure', 'check', 'notes', 'work_item', 'update_work_item', 'schedule', 'set_preferences', 'feedback', 'mark_read', 'transition'].includes(command) || (command === 'start' && !dryRun))) {
-        const operation = `xopc.scenes.${command}` as keyof typeof SceneWriteContracts;
-        const { requestId, idempotencyKey, workItemId, presentationId, ...fields } = args;
-        if ((requestId !== undefined && typeof requestId !== 'string') || (idempotencyKey !== undefined && typeof idempotencyKey !== 'string')) {
-          return errorText('Request identity must be a string', details);
-        }
-        const projectedInput = command === 'update_work_item' ? { ...fields, id: workItemId ?? fields.id }
-          : command === 'feedback' || command === 'mark_read' ? { ...fields, id: presentationId ?? fields.id } : fields;
-        const parsed = SceneWriteContracts[operation].input.safeParse(projectedInput);
-        if (!parsed.success) {
-          const issue = parsed.error.issues[0];
-          const field = issue?.path.join('.') || 'input';
-          const expected = issue?.code === 'invalid_type' ? issue.expected : undefined;
-          return errorText(expected ? `${field} must be ${/^[aeiou]/.test(expected) ? 'an' : 'a'} ${expected}` : issue?.message ?? 'Invalid input', details);
-        }
-        if (dryRun) return okText({ ...details, result: { preview: true, command, input: parsed.data } });
-        const caller: CapabilityContext = { principalId: `agent:${deps.getCurrentAgentId?.() ?? 'main'}`,
-          surface: 'agent', scopes: ['gateway.admin'], authorize: deps.authorizeCapability ?? (() => true), signal };
-        try {
-          const result = await capabilities.call(operation, parsed.data, caller, { ...capabilities.describe(operation, caller),
-            idempotencyKey: typeof idempotencyKey === 'string' ? idempotencyKey : typeof requestId === 'string' ? requestId : toolCallId });
-          return okText({ ...details, result, delivery: deliveryForXopcResult(mode, command, result, dryRun) });
-        } catch (error) {
-          if (error instanceof CapabilityError) return errorText(error.message, details);
-          throw error;
-        }
-      }
-      if (mode === 'scene' && (['templates', 'get_template', 'list', 'get', 'read_notes', 'list_runs', 'list_schedules', 'list_work_items', 'get_preferences', 'preflight',
-        'mail_accounts', 'mail_sources', 'results', 'get_presentation', 'get_feedback', 'digest_results', 'metrics', 'diagnostics'].includes(command) || (command === 'start' && dryRun))) {
-        const caller: CapabilityContext = { principalId: `agent:${deps.getCurrentAgentId?.() ?? 'main'}`,
-          surface: 'agent', scopes: ['gateway.admin'], authorize: deps.authorizeCapability ?? (() => true), signal };
-        const { id: _id, requestId: _requestId, triggerKey: _triggerKey, ...preflightInput } = args;
-        const result = await capabilities.call(`xopc.scenes.${command === 'start' ? 'preflight' : command}`,
-          command === 'start' || command === 'preflight' ? preflightInput
-            : command === 'results' ? { ...preflightInput, activationId: args.activationId ?? args.id } : args, caller);
-        return okText({ ...details, result, delivery: deliveryForXopcResult(mode, command, result, dryRun) });
       }
       if (mode === 'settings' && command === 'open') {
         const caller: CapabilityContext = { principalId: `agent:${deps.getCurrentAgentId?.() ?? 'main'}`,
@@ -1494,9 +1438,7 @@ export function createXopcUseTool(deps: XopcUseToolDeps): AgentTool<typeof XopcU
             source: { kind: 'xopc_use', toolCallId },
           },
           async () =>
-            mode === 'scene'
-              ? await handleScene(command, args, deps, dryRun)
-              : mode === 'agent'
+            mode === 'agent'
                 ? await handleAgent(command, args, dryRun, capabilities, deps, toolCallId, signal)
               : mode === 'project'
             ? await handleProject(command, args, deps, dryRun, capabilities)
@@ -1531,14 +1473,4 @@ export function createXopcUseTool(deps: XopcUseToolDeps): AgentTool<typeof XopcU
       }
     },
   } as AgentTool<typeof XopcUseToolSchema, XopcUseDetails>;
-}
-
-async function handleScene(command: string, args: Record<string, unknown>, deps: XopcUseToolDeps, dryRun: boolean) {
-  if (command !== 'mail_search') throw new Error('Unsupported scene command');
-  const access = deps.getSceneAccess?.();
-  if (!access) throw new Error('Scene service is unavailable');
-  const { services, principal } = access;
-  if (!services.mailDiscovery) throw new Error('Mail search is unavailable');
-  if (dryRun) return { preview: true, command, input: args };
-  return { sources: await services.mailDiscovery.searchSources(principal, args, AbortSignal.timeout(15000)) };
 }

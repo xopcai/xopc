@@ -1,8 +1,8 @@
 # Agent 原生能力 HTTP 入口核对清单
 
-日期：2026-09-21。按 TypeScript AST 检查核心领域路由声明，覆盖 Notes、Tasks／TaskRuns、Projects（含理解／技能）、Automations、Scenes、LocalApps。
+日期：2026-09-21。按 TypeScript AST 检查核心领域路由声明，覆盖 Notes、Tasks／TaskRuns、Projects（含理解／技能）、Automations、LocalApps。
 
-这是一份入口核对清单，不是完成声明。`已接统一能力`仅表示该处理器可见明确 capability 调用；仍须以实施账册中的行为测试为准。`待逐项迁移／分类`不能直接按 HTTP 方法判定副作用：例如笔记 context-status 的 GET 会构建理解，Local App validate 的 POST 则只检查文件，不写验证状态；模型、文件、配置及外部执行需各自恢复协议。资源文件下载／预览继续保留专用传输，不强行变成 JSON 能力。以下路由快照较早，Scene／LocalApp 的最新迁移覆盖以实施账册为准。
+这是一份入口核对清单，不是完成声明。`已接统一能力`仅表示该处理器可见明确 capability 调用；仍须以实施账册中的行为测试为准。`待逐项迁移／分类`不能直接按 HTTP 方法判定副作用：例如笔记 context-status 的 GET 会构建理解，Local App validate 的 POST 则只检查文件，不写验证状态；模型、文件、配置及外部执行需各自恢复协议。资源文件下载／预览继续保留专用传输，不强行变成 JSON 能力。以下路由快照较早，LocalApp 的最新迁移覆盖以实施账册为准。
 
 所有已迁移 capability 的恢复策略：read 不产生写回执；local-write 使用同库事务和持久回执；目录／文件副作用仅由提交后的持久任务处理。未标为已迁移的写入口不得宣称具有统一恢复保障。
 
@@ -99,54 +99,6 @@
 | GET `/api/notes/:id/hosted-publications` | 待逐项迁移／分类 | [shares.ts:888](../../src/gateway/hono/routes/shares.ts) |
 | POST `/api/notes/:id/hosted-publications` | 待逐项迁移／分类 | [shares.ts:898](../../src/gateway/hono/routes/shares.ts) |
 | POST `/api/notes/:id/hosted-publications/:publicationId/refresh` | 待逐项迁移／分类 | [shares.ts:935](../../src/gateway/hono/routes/shares.ts) |
-
-## scenes（43 个静态入口）
-
-| 方法／路径 | 当前调用归属 | 源码 |
-| --- | --- | --- |
-| GET `/api/scenes/source-providers` | 待逐项迁移／分类 | [scenes.ts:32](../../src/gateway/hono/routes/scenes.ts) |
-| GET `/api/scenes/source-providers/:provider/accounts` | 待逐项迁移／分类 | [scenes.ts:33](../../src/gateway/hono/routes/scenes.ts) |
-| POST `/api/scenes/source-providers/:provider/resolve-link` | 待逐项迁移／分类 | [scenes.ts:36](../../src/gateway/hono/routes/scenes.ts) |
-| GET `/api/scenes/task-follow-ups` | 待逐项迁移／分类 | [scenes.ts:44](../../src/gateway/hono/routes/scenes.ts) |
-| GET `/api/scenes/task-follow-ups/projects/:projectId/branches` | 待逐项迁移／分类 | [scenes.ts:45](../../src/gateway/hono/routes/scenes.ts) |
-| POST `/api/scenes/task-follow-ups/branch-links` | 待逐项迁移／分类 | [scenes.ts:49](../../src/gateway/hono/routes/scenes.ts) |
-| POST `/api/scenes/task-follow-ups/preflight` | 待逐项迁移／分类 | [scenes.ts:55](../../src/gateway/hono/routes/scenes.ts) |
-| POST `/api/scenes/task-follow-ups` | 待逐项迁移／分类 | [scenes.ts:59](../../src/gateway/hono/routes/scenes.ts) |
-| GET `/api/scenes/task-follow-ups/:id` | 待逐项迁移／分类 | [scenes.ts:63](../../src/gateway/hono/routes/scenes.ts) |
-| PATCH `/api/scenes/task-follow-ups/:id` | 待逐项迁移／分类 | [scenes.ts:67](../../src/gateway/hono/routes/scenes.ts) |
-| POST `/api/scenes/browser/prepare` | 待逐项迁移／分类 | [scenes.ts:76](../../src/gateway/hono/routes/scenes.ts) |
-| POST `/api/scenes/browser/subscriptions` | 待逐项迁移／分类 | [scenes.ts:77](../../src/gateway/hono/routes/scenes.ts) |
-| DELETE `/api/scenes/browser/subscriptions/:id` | 待逐项迁移／分类 | [scenes.ts:79](../../src/gateway/hono/routes/scenes.ts) |
-| GET `/api/scenes/preferences` | 待逐项迁移／分类 | [scenes.ts:83](../../src/gateway/hono/routes/scenes.ts) |
-| PATCH `/api/scenes/preferences` | 待逐项迁移／分类 | [scenes.ts:84](../../src/gateway/hono/routes/scenes.ts) |
-| POST `/api/scenes/presence` | 待逐项迁移／分类 | [scenes.ts:86](../../src/gateway/hono/routes/scenes.ts) |
-| GET `/api/scenes/templates` | 待逐项迁移／分类 | [scenes.ts:90](../../src/gateway/hono/routes/scenes.ts) |
-| GET `/api/scenes/diagnostics` | 待逐项迁移／分类 | [scenes.ts:91](../../src/gateway/hono/routes/scenes.ts) |
-| GET `/api/scenes/metrics` | 待逐项迁移／分类 | [scenes.ts:92](../../src/gateway/hono/routes/scenes.ts) |
-| GET `/api/scenes/sources/mail/accounts` | 待逐项迁移／分类 | [scenes.ts:96](../../src/gateway/hono/routes/scenes.ts) |
-| POST `/api/scenes/sources/mail/search` | 待逐项迁移／分类 | [scenes.ts:97](../../src/gateway/hono/routes/scenes.ts) |
-| GET `/api/scenes/sources/mail` | 待逐项迁移／分类 | [scenes.ts:102](../../src/gateway/hono/routes/scenes.ts) |
-| GET `/api/scenes/templates/:key/versions/:version` | 待逐项迁移／分类 | [scenes.ts:107](../../src/gateway/hono/routes/scenes.ts) |
-| POST `/api/scenes/preflight` | 待逐项迁移／分类 | [scenes.ts:108](../../src/gateway/hono/routes/scenes.ts) |
-| GET `/api/scenes/activations` | 待逐项迁移／分类 | [scenes.ts:109](../../src/gateway/hono/routes/scenes.ts) |
-| POST `/api/scenes/activations` | 待逐项迁移／分类 | [scenes.ts:114](../../src/gateway/hono/routes/scenes.ts) |
-| GET `/api/scenes/activations/:id` | 待逐项迁移／分类 | [scenes.ts:118](../../src/gateway/hono/routes/scenes.ts) |
-| PATCH `/api/scenes/activations/:id` | 待逐项迁移／分类 | [scenes.ts:119](../../src/gateway/hono/routes/scenes.ts) |
-| POST `/api/scenes/activations/:id/checks` | 待逐项迁移／分类 | [scenes.ts:130](../../src/gateway/hono/routes/scenes.ts) |
-| GET `/api/scenes/activations/:id/runs` | 待逐项迁移／分类 | [scenes.ts:133](../../src/gateway/hono/routes/scenes.ts) |
-| PATCH `/api/scenes/activations/:id/notes` | 待逐项迁移／分类 | [scenes.ts:138](../../src/gateway/hono/routes/scenes.ts) |
-| GET `/api/scenes/activations/:id/notes` | 待逐项迁移／分类 | [scenes.ts:141](../../src/gateway/hono/routes/scenes.ts) |
-| GET `/api/scenes/activations/:id/work-items` | 待逐项迁移／分类 | [scenes.ts:142](../../src/gateway/hono/routes/scenes.ts) |
-| POST `/api/scenes/activations/:id/work-items` | 待逐项迁移／分类 | [scenes.ts:147](../../src/gateway/hono/routes/scenes.ts) |
-| GET `/api/scenes/activations/:id/schedules` | 待逐项迁移／分类 | [scenes.ts:150](../../src/gateway/hono/routes/scenes.ts) |
-| PATCH `/api/scenes/activations/:id/schedules/:triggerKey` | 待逐项迁移／分类 | [scenes.ts:151](../../src/gateway/hono/routes/scenes.ts) |
-| PATCH `/api/scenes/work-items/:id` | 待逐项迁移／分类 | [scenes.ts:154](../../src/gateway/hono/routes/scenes.ts) |
-| GET `/api/scenes/outcomes` | 待逐项迁移／分类 | [scenes.ts:157](../../src/gateway/hono/routes/scenes.ts) |
-| GET `/api/scenes/digests/:id` | 待逐项迁移／分类 | [scenes.ts:162](../../src/gateway/hono/routes/scenes.ts) |
-| GET `/api/scenes/presentations/:id/feedback` | 待逐项迁移／分类 | [scenes.ts:166](../../src/gateway/hono/routes/scenes.ts) |
-| GET `/api/scenes/presentations/:id` | 待逐项迁移／分类 | [scenes.ts:167](../../src/gateway/hono/routes/scenes.ts) |
-| POST `/api/scenes/presentations/:id/feedback` | 待逐项迁移／分类 | [scenes.ts:168](../../src/gateway/hono/routes/scenes.ts) |
-| PATCH `/api/scenes/presentations/:id` | 待逐项迁移／分类 | [scenes.ts:171](../../src/gateway/hono/routes/scenes.ts) |
 
 ## tasks（18 个静态入口）
 

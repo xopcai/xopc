@@ -7,7 +7,7 @@ import { expect, it, vi } from 'vitest';
 
 import { requireNodeSqlite } from '../../../infra/node-sqlite.js';
 import {
-  backupBeforeConversationCutover,
+  backupDatabaseBeforeCutover,
   flushBackupFile,
 } from '../migrations/conversation-backup.js';
 
@@ -18,9 +18,9 @@ it('flushes the backup through a writable, non-truncating handle', () => {
     close: vi.fn(),
   };
 
-  flushBackupFile('xopc.db.pre-v178.bak', operations);
+  flushBackupFile('xopc.db.test.bak', operations);
 
-  expect(operations.open).toHaveBeenCalledWith('xopc.db.pre-v178.bak', 'r+');
+  expect(operations.open).toHaveBeenCalledWith('xopc.db.test.bak', 'r+');
   expect(operations.fsync).toHaveBeenCalledWith(42);
   expect(operations.close).toHaveBeenCalledWith(42);
 });
@@ -32,7 +32,7 @@ it('closes the backup handle when flushing fails', () => {
     close: vi.fn(),
   };
 
-  expect(() => flushBackupFile('xopc.db.pre-v178.bak', operations)).toThrow('flush failed');
+  expect(() => flushBackupFile('xopc.db.test.bak', operations)).toThrow('flush failed');
   expect(operations.close).toHaveBeenCalledWith(42);
 });
 
@@ -48,12 +48,12 @@ it('refuses the cutover while another process holds the database and succeeds af
   const exited = once(child, 'exit');
   try {
     await Promise.race([once(child.stdout, 'data'), once(child, 'error').then(([error]) => { throw error; })]);
-    expect(() => backupBeforeConversationCutover(db, databasePath)).toThrow('Stop other xopc database processes');
+    expect(() => backupDatabaseBeforeCutover(db, databasePath, 'test')).toThrow('Stop other xopc database processes');
     expect(readdirSync(directory).some(name => name.endsWith('.bak'))).toBe(false);
     expect(db.prepare('SELECT value FROM sentinel').get()?.value).toBe('preserved');
     child.kill();
     await exited;
-    const backup = new DatabaseSync(backupBeforeConversationCutover(db, databasePath), { readOnly: true });
+    const backup = new DatabaseSync(backupDatabaseBeforeCutover(db, databasePath, 'test'), { readOnly: true });
     try { expect(backup.prepare('SELECT value FROM sentinel').get()?.value).toBe('preserved'); }
     finally { backup.close(); }
   } finally {

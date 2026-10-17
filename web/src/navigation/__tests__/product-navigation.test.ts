@@ -19,7 +19,6 @@ describe('product navigation', () => {
 
   it('keeps automation destinations focused on distinct top-level tools', () => {
     expect(PRODUCT_DOMAINS.find((domain) => domain.id === 'automation')?.sections.map((section) => section.id)).toEqual([
-      'automation-scenes',
       'automation-triggers',
       'automation-workflows',
       'automation-browser',
@@ -45,7 +44,7 @@ describe('product navigation', () => {
     ['/projects/project-1/notes/note-1', 'work'],
     ['/notes/note-1', 'work'],
     ['/automations', 'automation'],
-    ['/scenes/inbox', 'automation'],
+    ['/scenes/inbox', null],
     ['/workflows/example/edit', 'automation'],
     ['/browser-automations', 'automation'],
     ['/capabilities/connectors', 'capabilities'],

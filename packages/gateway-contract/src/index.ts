@@ -5,7 +5,6 @@ export * from './tasks.js';
 export * from './task-lifecycle.js';
 export * from './task-runs.js';
 export * from './product-delivery.js';
-export * from './project-monitoring.js';
 export * from './project-operating.js';
 export * from './sessions.js';
 export * from './session-identity.js';
@@ -38,7 +37,6 @@ export * from './clarifications.js';
 
 export * from './discussions.js';
 export * from './capabilities.js';
-export * from './scenes.js';
 export * from './app-context.js';
 export * from './extension-capabilities.js';
 export * from './local-apps.js';

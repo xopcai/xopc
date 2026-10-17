@@ -15,10 +15,7 @@ import { registerAutomationReadCapabilities } from '../../automations/capabiliti
 import { registerAutomationWriteCapabilities } from '../../automations/capabilities/write.js';
 import { registerAutomationDraftCapabilities } from '../../automations/capabilities/drafts.js';
 import { registerTaskWriteCapabilities, type TaskWriteCapabilityDeps } from '../../tasks/capabilities/write.js';
-import { CapabilityDispatcher, CapabilityError, type CapabilityContext } from './dispatcher.js';
-import { registerSceneReadCapabilities } from '../../scenes/capabilities/read.js';
-import { registerSceneWriteCapabilities } from '../../scenes/capabilities/write.js';
-import type { SceneAccess } from '../../scenes/httpServices.js';
+import { CapabilityDispatcher, CapabilityError } from './dispatcher.js';
 import { registerSettingsCapability } from './settings.js';
 import { registerAppContextCapability } from './app-context.js';
 import { registerAgentCapabilities } from '../../agent-catalog/capabilities.js';
@@ -26,16 +23,11 @@ import { registerAgentCapabilities } from '../../agent-catalog/capabilities.js';
 export function createProductDispatcher(getNotes?: () => NotesService | undefined, taskWrites?: TaskWriteCapabilityDeps & ProjectWriteCapabilityDeps & {
   getAutomations?: () => AutomationService | undefined;
   getLocalApps?: () => LocalAppService | undefined;
-  getSceneAccess?: (context: CapabilityContext) => SceneAccess | undefined;
 }): CapabilityDispatcher {
   const dispatcher = new CapabilityDispatcher();
   registerSettingsCapability(dispatcher);
   registerAppContextCapability(dispatcher);
   registerAgentCapabilities(dispatcher);
-  if (taskWrites?.getSceneAccess) {
-    registerSceneReadCapabilities(dispatcher, taskWrites.getSceneAccess);
-    registerSceneWriteCapabilities(dispatcher, taskWrites.getSceneAccess);
-  }
   const localApps = taskWrites?.getLocalApps?.();
   if (localApps) {
     registerLocalAppReadCapabilities(dispatcher, localApps);

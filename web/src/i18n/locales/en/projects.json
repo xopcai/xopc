@@ -88,8 +88,6 @@
       "advisorSetupHint": "Return home after setup. The suggestion will stay here and be checked again.",
       "advisorConfigure": "Configure",
       "advisorDegradedStart": "Continue with available context",
-      "advisorSceneHint": "This pattern has succeeded before. If it repeats, you can turn it into continuous help.",
-      "advisorSceneAction": "View monitors",
       "advisorAutomationHint": "This work has succeeded repeatedly. Generate an Automation draft, then confirm its trigger, schedule, scope, and external actions before publishing.",
       "advisorAutomationAction": "Generate draft",
       "advisorHistory": "Suggestion history",
@@ -382,27 +380,6 @@
       "views": {
         "board": "Board",
         "graph": "Dependencies"
-      },
-      "monitoring": {
-        "title": "Follow-up policy",
-        "description": "Choose when AI observes silently, asks for approval, or runs explicitly allowed low-risk actions.",
-        "mode": "Behavior",
-        "modes": {
-          "observe": "Observe only",
-          "ask_before_action": "Ask before acting",
-          "auto_low_risk": "Auto-run low-risk actions"
-        },
-        "confidence": "Minimum confidence",
-        "quietHours": "Enable quiet hours",
-        "quietStart": "Start hour",
-        "quietEnd": "End hour",
-        "timezone": "Timezone",
-        "allowTaskCreation": "Allow follow-up task creation",
-        "allowTaskCreationDescription": "Only creates a backlog task in this project; it never starts an agent or performs an external action.",
-        "cancel": "Cancel",
-        "save": "Save policy",
-        "saving": "Saving…",
-        "saveFailed": "Could not save the policy."
       },
       "graph": {
         "showCompleted": "Show completed",
