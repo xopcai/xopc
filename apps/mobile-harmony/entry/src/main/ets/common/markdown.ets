@@ -3,7 +3,7 @@ import { internalMessageLink } from './messageLink';
 
 export interface XopcMarkdownCell { id: string; text: string; align: string; }
 export interface XopcMarkdownTableRow { id: string; cells: XopcMarkdownCell[]; header: boolean; }
-export interface XopcMarkdownBlock { id: string; kind: string; text: string; level: number; language?: string; rows?: XopcMarkdownTableRow[]; href?: string; }
+export interface XopcMarkdownBlock { id: string; kind: string; text: string; level: number; language?: string; closed?: boolean; rows?: XopcMarkdownTableRow[]; href?: string; }
 export interface XopcMarkdownSpan { id: string; kind: string; text: string; href?: string; start?: number; end?: number; }
 
 export function markdownLink(target: string): string {
@@ -44,7 +44,8 @@ export function markdownBlocks(source: string): XopcMarkdownBlock[] {
     if (fence) {
       if (language === 'math') mathRaw += '\n' + line;
       if (marker && marker[1][0] === fence[0] && marker[1].length >= fence.length && !marker[2].trim()) {
-        push(language === 'math' ? 'math' : 'code', language === 'math' ? mathRaw : code.join('\n')).language = language; code = []; fence = ''; mathRaw = '';
+        const block = push(language === 'math' ? 'math' : 'code', language === 'math' ? mathRaw : code.join('\n'));
+        block.language = language; block.closed = true; code = []; fence = ''; mathRaw = '';
       } else code.push(line);
       continue;
     }

@@ -83,6 +83,7 @@ dependencies {
   implementation(libs.androidx.camera.camera2)
   implementation(libs.androidx.camera.lifecycle)
   implementation(libs.androidx.camera.view)
+  implementation(libs.androidx.webkit)
   implementation(libs.commonmark)
   implementation(libs.commonmark.gfm.tables)
   implementation(libs.commonmark.gfm.strikethrough)
@@ -128,3 +129,14 @@ val generateMathAssets by tasks.registering(Exec::class) {
   outputs.dir(projectDir.resolve("src/main/assets/math"))
 }
 tasks.named("preBuild").configure { dependsOn(generateMathAssets) }
+
+val generateChartAssets by tasks.registering(Exec::class) {
+  workingDir(rootProject.projectDir.resolve("../.."))
+  commandLine("node", "packages/chart-spec/scripts/build-mobile.mjs", "android")
+  inputs.dir(rootProject.projectDir.resolve("../../packages/chart-spec/src"))
+  inputs.dir(rootProject.projectDir.resolve("../../packages/chart-spec/mobile"))
+  inputs.file(rootProject.projectDir.resolve("../../packages/chart-spec/scripts/build-mobile.mjs"))
+  inputs.file(rootProject.projectDir.resolve("../../pnpm-lock.yaml"))
+  outputs.dir(projectDir.resolve("src/main/assets/charts"))
+}
+tasks.named("preBuild").configure { dependsOn(generateChartAssets) }

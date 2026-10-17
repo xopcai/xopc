@@ -37,6 +37,7 @@ enum MarkdownBlock: Equatable, Sendable {
     case numbered(number: String, level: Int, text: String)
     case quote(String)
     case code(String)
+    case chart(source: String, closed: Bool)
     case math(String)
     case image(alt: String, source: String)
     case table(rows: [MarkdownTableRow], alignments: [MarkdownTableAlignment])
@@ -50,6 +51,8 @@ enum MarkdownBlock: Equatable, Sendable {
         var paragraph: [String] = []
         var code: [String] = []
         var inCode = false
+        var fence = ""
+        var language = ""
 
         func finishParagraph() {
             guard !paragraph.isEmpty else { return }
@@ -70,17 +73,25 @@ enum MarkdownBlock: Equatable, Sendable {
             {
                 finishParagraph(); blocks.append(.math(math.source)); index = math.next; continue
             }
-            if trimmed.hasPrefix("```") {
-                finishParagraph()
-                if inCode {
-                    blocks.append(.code(code.joined(separator: "\n")))
-                    code.removeAll()
+            let marker = String(trimmed.prefix { $0 == "`" || $0 == "~" })
+            let validMarker = marker.count >= 3 && Set(marker).count == 1 && line.prefix { $0 == " " }.count < 4
+            if inCode {
+                if validMarker, marker.first == fence.first, marker.count >= fence.count,
+                   trimmed.dropFirst(marker.count).trimmingCharacters(in: .whitespaces).isEmpty
+                {
+                    let source = code.joined(separator: "\n")
+                    blocks.append(language == "chart" ? .chart(source: source, closed: true) : .code(source))
+                    code.removeAll(); inCode = false
+                } else {
+                    code.append(line)
                 }
-                inCode.toggle()
                 continue
             }
-            if inCode {
-                code.append(line)
+            if validMarker {
+                finishParagraph()
+                fence = marker
+                language = String(trimmed.dropFirst(marker.count)).trimmingCharacters(in: .whitespaces)
+                inCode = true
                 continue
             }
             if trimmed.isEmpty {
@@ -104,7 +115,8 @@ enum MarkdownBlock: Equatable, Sendable {
         }
         finishParagraph()
         if inCode {
-            blocks.append(.code(code.joined(separator: "\n")))
+            let source = code.joined(separator: "\n")
+            blocks.append(language == "chart" ? .chart(source: source, closed: false) : .code(source))
         }
         return blocks
     }

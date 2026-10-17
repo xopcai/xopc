@@ -4,5 +4,5 @@
   "private": true,
   "type": "module",
   "sideEffects": false,
-  "exports": { ".": "./src/index.ts" }
+  "exports": { ".": "./src/index.ts", "./option": "./src/option.ts" }
 }

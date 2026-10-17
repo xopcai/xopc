@@ -50,6 +50,7 @@ export class XopcMarkdownRenderBlock implements XopcMarkdownBlock {
   @Trace text: string = '';
   @Trace level: number = 0;
   @Trace language: string = '';
+  @Trace closed: boolean = false;
   @Trace href: string = '';
   @Trace rows: XopcMarkdownTableRow[] = [];
   private tableSignature: string = '[]';
@@ -59,7 +60,7 @@ export class XopcMarkdownRenderBlock implements XopcMarkdownBlock {
     if (block === this.source) return;
     this.source = block;
     this.kind = block.kind; this.text = block.text; this.level = block.level;
-    this.language = block.language || ''; this.href = block.href || '';
+    this.closed = block.closed === true; this.language = block.language || ''; this.href = block.href || '';
     const signature = JSON.stringify(block.rows || []);
     if (this.tableSignature !== signature) { this.tableSignature = signature; this.rows = block.rows || []; }
   }

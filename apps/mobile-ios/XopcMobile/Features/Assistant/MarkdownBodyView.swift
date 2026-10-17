@@ -72,6 +72,8 @@ private struct MarkdownPartView: View {
             .fixedSize(horizontal: false, vertical: true)
         case let .math(source):
             MathMarkdownView(markdown: source, streaming: streaming, display: true, enabled: mathEnabled)
+        case let .chart(source, closed):
+            ChartMarkdownView(source: source, closed: closed)
         case let .code(text):
             VStack(alignment: .leading, spacing: 4) {
                 HStack {
