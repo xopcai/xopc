@@ -8,7 +8,8 @@ import { WorkflowModelSelect } from '../workflow-model-select';
 
 vi.mock('swr', () => ({ default: () => ({ data: { defaults: { models: { chat: { primary: 'provider/global-model' } } } } }) }));
 vi.mock('@/features/chat/model/model-selector', () => ({ ModelSelector: ({ value, placeholder, onChange }: { value: string; placeholder: string; onChange: (value: string) => void }) => <>
-  <button role="combobox">{value || placeholder}</button>
+  <button type="button" role="combobox" aria-controls="workflow-model-options" aria-expanded="false">{value || placeholder}</button>
+  <div id="workflow-model-options" role="listbox" hidden />
   <button onClick={() => onChange('provider/special-model')}>Pick model</button>
   <button onClick={() => onChange('')}>Use default</button>
 </> }));
