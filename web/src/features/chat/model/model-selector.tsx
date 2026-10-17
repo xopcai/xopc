@@ -305,7 +305,6 @@ export function ModelPickerList({ models, value, onChange, searchPlaceholder, no
             <span className="min-w-0 flex-1">
               <span className="block truncate font-medium">{modelDisplayName(model, language)}</span>
               {!groupByProvider && <span className="block truncate text-xs text-fg-muted">{model.provider}</span>}
-              {model.computerUse && <span className="block text-xs text-fg-muted">Computer Use</span>}
               {outOfFilterNote && !model.vision && model.id === value && <span className="block text-xs text-fg-muted">{outOfFilterNote}</span>}
             </span>
             <Check className={cn('size-4 shrink-0 text-accent-fg', model.id !== value && 'invisible')} aria-hidden />
