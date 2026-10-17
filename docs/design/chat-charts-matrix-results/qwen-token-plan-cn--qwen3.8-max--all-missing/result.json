@@ -1,0 +1,30 @@
+{
+  "key": "qwen-token-plan-cn--qwen3.8-max--all-missing",
+  "model": "qwen-token-plan-cn/qwen3.8-max",
+  "scenario": "all-missing",
+  "conversationId": "aa26cbf8-4594-4584-b26b-2b108ccf5100",
+  "startedAt": "2026-10-17T05:14:42.972Z",
+  "prompt": "请直接在聊天回复中画图并用一句中文说明；下面都是演示数据，不是真实业务数据。我想看一张三个月的折线图，但2026-01、2026-02、2026-03的读数全部缺失，没有任何数值。请判断现在是否有足够数据作图，不要推测、补零或编造测量值；如果不能画，请明确说明。",
+  "passed": true,
+  "checks": {
+    "agent": true,
+    "data": true,
+    "safeFallback": true,
+    "unitAndModelPostAudit": true
+  },
+  "toolCalls": [],
+  "skillReads": [],
+  "errors": [],
+  "cleanup": {
+    "conversationDeleted": true
+  },
+  "skillHash": "6e4f1cd269074e3db0b9f5c04087efaabe3cd8aa71f4b6fa0a3143b60815f762",
+  "runId": "8d13834c-e3de-4474-bbd8-598f98598f62",
+  "status": "success",
+  "actualModels": [
+    "qwen-token-plan-cn/qwen3.8-max"
+  ],
+  "charts": [],
+  "finishedAt": "2026-10-17T05:14:52.219Z",
+  "elapsedMs": 9247
+}
