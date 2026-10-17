@@ -39,9 +39,23 @@ async function main() {
   ipcMain.handle('electron-theme:get', () => 'light');
   ipcMain.handle('electron-theme:set', (_event, theme) => ({ ok: true, theme }));
   ipcMain.handle('gateway:get-credential', () => undefined);
+  let messageDestination: BrowserWindow | undefined;
   initDesktopPetWindow({
     resolveUrl: () => `${process.env.XOPC_PET_RENDERER_URL ?? 'http://127.0.0.1:5179/'}#/desktop-pet`,
-    openMainWindow: (path) => console.info('OPEN_MAIN_WINDOW', path),
+    openMainWindow: (path) => {
+      console.info('OPEN_MAIN_WINDOW', path);
+      if (!messageDestination || messageDestination.isDestroyed()) {
+        messageDestination = new BrowserWindow({ width: 640, height: 360, show: false, title: 'Pet message destination' });
+        void messageDestination.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent('<h1>会话已打开</h1><p>本窗口用于验证点击消息后，主窗口获得焦点、宠物继续显示。</p>')}`).then(() => {
+          messageDestination!.show();
+          messageDestination!.focus();
+          void getDesktopPetState().then((state) => console.info('MESSAGE_OPENED', { petVisible: state.visible, petBounds: window.getBounds() }));
+        });
+      } else {
+        messageDestination.show();
+        messageDestination.focus();
+      }
+    },
     disableSandbox: false,
   });
   await patchDesktopPetPrefs({
@@ -79,6 +93,7 @@ async function main() {
       };
       await sendDesktopPetEvent(update);
     }
+    window.focus();
     console.info('STATE', name, 'BOUNDS', window.getBounds());
   }
   Menu.setApplicationMenu(Menu.buildFromTemplate([
