@@ -8,9 +8,16 @@ export function compactRunEvent(message: RealtimeDelivery): RealtimeDelivery | n
   const event = message.payload.data as ChatStreamEvent;
   let payload: unknown = event.payload;
   switch (event.type) {
+    case 'tool_start':
+      if (!event.payload.toolCallId) return null;
+      payload = { toolCallId: event.payload.toolCallId, messageId: event.payload.messageId,
+        toolName: event.payload.toolName, activity: event.payload.activity };
+      break;
     case 'tool_end':
-      if (!event.payload.deliveries?.length || event.payload.status !== 'success') return null;
-      payload = { deliveries: event.payload.deliveries };
+      payload = { toolCallId: event.payload.toolCallId, messageId: event.payload.messageId,
+        toolName: event.payload.toolName, status: event.payload.status, activity: event.payload.activity,
+        ...(event.payload.status === 'success' && event.payload.deliveries?.length
+          ? { deliveries: event.payload.deliveries } : {}) };
       break;
     case 'progress':
       if (!event.payload.petFeedback.publicSummary) return null;

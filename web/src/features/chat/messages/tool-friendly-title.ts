@@ -156,6 +156,24 @@ export function hasSpecificToolExecutionTitle(name: string): boolean {
   return id === 'xopc_use' || id in BUILTIN_SEMANTICS;
 }
 
+/** Public activity titles never interpolate arbitrary tool names or input previews. */
+export function getPublicToolExecutionTitle(
+  block: { name: string; input?: unknown; activity?: ToolActivity },
+  state: ToolExecutionState,
+  labels: ToolExecutionLabels,
+  friendlyLabels: FriendlyToolTitleLabels,
+  runningLabels: Record<ToolDisplayKind, string>,
+): string {
+  if (hasSpecificToolExecutionTitle(block.name)) {
+    return getToolExecutionTitle(block.name, normalizedToolId(block.name) === 'xopc_use' ? block.input : undefined,
+      state, labels, friendlyLabels, block.activity);
+  }
+  const kind = classifyToolDisplay(block.name, block.activity);
+  if (state === 'running') return runningLabels[kind];
+  if (kind === 'other') return labels.fallback.completed.replace(/\{\{name\}\}/g, '').trim();
+  return getFriendlyToolTitle(block.name, friendlyLabels, block.activity);
+}
+
 const XOPC_INSPECT_COMMANDS = new Set([
   'list', 'get', 'get_card', 'history', 'list_milestones', 'list_updates', 'mail_sources',
   'preview_edit', 'resolve_workspace',

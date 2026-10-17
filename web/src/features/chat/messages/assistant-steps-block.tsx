@@ -1,5 +1,5 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronDown } from 'lucide-react';
+import { BookOpen, ChevronDown, Circle, FilePenLine, Globe, Search, Sparkles, TriangleAlert } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 import {
@@ -22,13 +22,11 @@ import { knownPartRenderKey } from '@/features/chat/rendering/part-identity';
 import { useChatContentPart } from '@/features/chat/rendering/use-chat-render-state';
 import { formatParamsJson, getKeyDetailLine } from '@/features/chat/messages/tool-input-preview';
 import {
-  getToolExecutionTitle,
-  hasSpecificToolExecutionTitle,
+  getPublicToolExecutionTitle,
   type ToolExecutionLabels,
 } from '@/features/chat/messages/tool-friendly-title';
 import {
   classifyTool,
-  actionKindRunningLabel,
   type ActionKind,
   type StepsClusterIngLabels,
 } from '@/features/chat/messages/tool-action-cluster';
@@ -46,7 +44,6 @@ import { formatStepRoundDuration } from '@/features/chat/time/step-round-duratio
 import { ExtensionChatWidget } from '@/features/extensions/extension-chat-widget';
 import { useUiExtensions } from '@/features/extensions/extension-provider';
 import { useChatWidgetMatch } from '@/features/extensions/use-chat-widget-match';
-import { routeWheelThroughVerticalScrollChain } from '@/features/chat/scroll/wheel-scroll-chain';
 import { cn } from '@/lib/cn';
 import type { StoredLanguage } from '@/lib/storage';
 import { useLocaleStore } from '@/stores/locale-store';
@@ -55,6 +52,11 @@ import { WorkflowCard, type WorkflowCardLabels } from '@/features/chat/workflow/
 import { isWorkflowToolBlock } from '@/features/chat/workflow/workflow.utils';
 import { CodemodeOutputLink } from './codemode-output-link';
 import { codemodeOutputPath } from './codemode-output-path';
+
+function activityItemKey(block: AssistantWorkLogItem, index = 0): string {
+  return knownPartRenderKey(block) ?? (block.type === 'tool_use' ? block.id
+    : block.type === 'text' ? block.segmentId ?? `narration-${index}` : `thinking-${index}`);
+}
 
 export interface AssistantActivityWorkflowOptions {
   labels: WorkflowCardLabels;
@@ -92,7 +94,7 @@ const StepRoundDurationText = memo(function StepRoundDurationText({
         ? formatStepRoundDuration(frozenMs, language)
         : null;
   if (!text) return null;
-  return <span className={className}>{text}</span>;
+  return <span className={className} aria-hidden={active || undefined}>{text}</span>;
 });
 
 /** One turn-level disclosure for narration, reasoning summaries, and tool execution. */
@@ -165,13 +167,33 @@ export function AssistantStepsBlock({
   const anyActive = workLog.active;
   const stepsDrawerOpen = workLog.expandedByDefault && anyActive;
   const [userExpanded, setUserExpanded] = useState<boolean | null>(null);
-  const [autoExpanded, setAutoExpanded] = useState(stepsDrawerOpen);
+  const autoExpanded = stepsDrawerOpen;
+  const [showEarlier, setShowEarlier] = useState(false);
+  const processRef = useRef<HTMLDivElement>(null);
+  const [readingSelection, setReadingSelection] = useState(false);
+  const [hasOpened, setHasOpened] = useState(false);
   useEffect(() => {
-    if (stepsDrawerOpen) setAutoExpanded(true);
-    else if (!anyActive) setAutoExpanded(false);
-  }, [stepsDrawerOpen, anyActive]);
+    if (!anyActive && !readingSelection) return;
+    const updateSelection = () => {
+      const selection = window.getSelection();
+      setReadingSelection(Boolean(selection && !selection.isCollapsed
+        && processRef.current?.contains(selection.anchorNode)));
+    };
+    document.addEventListener('selectionchange', updateSelection);
+    return () => document.removeEventListener('selectionchange', updateSelection);
+  }, [anyActive, readingSelection]);
 
-  const expanded = !workLog.compact && visibleItems.length > 0 && (userExpanded ?? autoExpanded);
+  const expanded = !workLog.compact && visibleItems.length > 0 && (userExpanded ?? (autoExpanded || readingSelection));
+  useEffect(() => {
+    if (expanded) { setHasOpened(true); return; }
+    if (!hasOpened) return;
+    const timer = window.setTimeout(() => setHasOpened(false), 200);
+    return () => window.clearTimeout(timer);
+  }, [expanded, hasOpened]);
+  const stableItems = visibleItems.every(item => knownPartRenderKey(item)
+    || item.type === 'tool_use' || (item.type === 'text' && item.segmentId));
+  const recentStart = stableItems && anyActive && !showEarlier && !showRawToolData ? Math.max(0, visibleItems.length - 3) : 0;
+  const timelineItems = visibleItems.slice(recentStart);
   const effectiveStartedAt = workLog.startedAt ?? null;
   const completedDurationMs = workLog.durationMs ?? null;
   const friendlyTitleLabels = useMemo(() => ({
@@ -192,35 +214,25 @@ export function AssistantStepsBlock({
   const semanticTitle = useMemo(() => (
     block: ToolUseContent,
     state: 'running' | 'completed',
-  ): string | null => {
-    const kind = classifyTool(block.name, block.activity);
-    if (kind !== 'other' && !hasSpecificToolExecutionTitle(block.name)) {
-      const detail = getKeyDetailLine(block.input);
-      const title = actionKindRunningLabel(kind, clusterLabels.ing);
-      return detail ? `${title.replace(/[…]+$/, '')} · ${detail}` : title;
-    }
-    return getToolExecutionTitle(
-      block.name,
-      block.input,
-      state,
-      stepLabels.toolActivity,
-      friendlyTitleLabels,
-      block.activity,
-    );
-  }, [friendlyTitleLabels, stepLabels.toolActivity, clusterLabels.ing]);
+  ): string => getPublicToolExecutionTitle(block, state, stepLabels.toolActivity,
+    friendlyTitleLabels, clusterLabels.ing),
+  [friendlyTitleLabels, stepLabels.toolActivity, clusterLabels.ing]);
 
   const streamingHeaderText = useMemo(() => {
     if (!anyActive) return null;
+    const runningCount = activityBlocks.filter(block => block.type === 'tool_use'
+      && (block.status === 'running' || block.activity?.status === 'running')).length;
+    if (runningCount > 1) return chatLabels.activityParallel.replace('{{count}}', String(runningCount));
     return buildStepsRoundStreamingSummary(
       activityBlocks,
       clusterLabels.ing,
       (block) => semanticTitle(block, 'running'),
     );
-  }, [anyActive, activityBlocks, clusterLabels, semanticTitle]);
+  }, [anyActive, activityBlocks, clusterLabels, semanticTitle, chatLabels.activityParallel]);
   const pendingLabel = pendingStatus === 'sending' ? chatLabels.sendingLabel
     : pendingStatus === 'waiting' ? (waitingLong ? chatLabels.waitingLongLabel : chatLabels.waitingLabel) : null;
-  const fallbackLabel = activityBlocks.some((block) => block.type === 'thinking')
-    ? chatLabels.organizingLabel : stepLabels.workLogRunning;
+  const fallbackLabel = activityBlocks.some((block) => block.type === 'thinking' && block.streaming)
+    ? chatLabels.thinkingLabel : stepLabels.workLogRunning;
   const statusPhase = pendingStatus ?? (activityBlocks.some((block) => block.type === 'tool_use' && block.status === 'running')
     ? 'tool' : activityBlocks.some((block) => block.type === 'thinking' && block.streaming)
       ? 'thinking' : activityBlocks.length > 0 ? 'organizing' : 'working');
@@ -262,7 +274,9 @@ export function AssistantStepsBlock({
         aria-live="polite"
         aria-atomic="true"
       >
-        {activeHeaderLabel}
+        <span className="assistant-activity-shimmer inline-block max-w-full truncate align-bottom">
+          {activeHeaderLabel}
+        </span>
       </span>
       <StepRoundDurationText
         active={anyActive}
@@ -313,6 +327,7 @@ export function AssistantStepsBlock({
         onClick={showDisclosure ? () => setUserExpanded((current) => !(current ?? autoExpanded)) : undefined}
         aria-expanded={showDisclosure ? expanded : undefined}
       >
+        <Sparkles className={cn('size-4 shrink-0', anyActive && 'assistant-activity-busy')} aria-hidden />
         <div className="min-w-0 flex-1 overflow-hidden">
           <span className="flex h-6 w-full min-w-0 items-center">
             {headerMain}
@@ -326,19 +341,27 @@ export function AssistantStepsBlock({
       </button> : null}
       {workLog.items.filter((item): item is ToolUseContent => item.type === 'tool_use').map((block) => (
         <StepRow key={block.id} block={block} toolLabels={toolLabels} stepLabels={timelineLabels}
-          cardLabels={cardLabels} conversationId={conversationId} workflowOptions={workflowOptions} surfaceOnly />
+          cardLabels={cardLabels} conversationId={conversationId} workflowOptions={workflowOptions} surfaceOnly runActive={anyActive} />
       ))}
-      {expanded ? (
-        <div className="mt-1 w-full min-w-0 pb-1 pl-1">
-          <AssistantStepsTimeline
-            blocks={visibleItems}
-            toolLabels={toolLabels}
-            stepLabels={timelineLabels}
-            cardLabels={cardLabels}
-            conversationId={conversationId}
-            workflowOptions={workflowOptions}
-            className="assistant-steps-scroll max-h-[min(60vh,28rem)] overflow-y-auto pr-1 [scrollbar-gutter:stable]"
-          />
+      {expanded || hasOpened ? (
+        <div className="assistant-activity-disclosure" data-open={expanded} aria-hidden={!expanded} inert={!expanded}>
+          <div className="min-h-0 overflow-hidden">
+            <div ref={processRef} className="assistant-activity-flow mt-1 w-full min-w-0 pb-1 pl-1" data-assistant-activity-flow
+              onFocusCapture={() => setUserExpanded(true)}>
+              {recentStart > 0 ? <button type="button" className="mb-3 text-xs text-fg-muted hover:text-fg"
+                onClick={() => setShowEarlier(true)}>{chatLabels.activityEarlier}</button> : null}
+              <AssistantStepsTimeline
+                blocks={timelineItems}
+                toolLabels={toolLabels}
+                stepLabels={timelineLabels}
+                cardLabels={cardLabels}
+                conversationId={conversationId}
+                workflowOptions={workflowOptions}
+                animateNew={anyActive && expanded && !showEarlier}
+                runActive={anyActive}
+              />
+            </div>
+          </div>
         </div>
       ) : null}
     </div>
@@ -353,7 +376,11 @@ export function AssistantStepsTimeline({
   className,
   conversationId,
   workflowOptions,
+  animateNew = false,
+  runActive,
 }: {
+  animateNew?: boolean;
+  runActive?: boolean;
   blocks: AssistantWorkLogItem[];
   toolLabels: { input: string; output: string; noOutput: string };
   stepLabels: {
@@ -383,19 +410,8 @@ export function AssistantStepsTimeline({
   conversationId?: string | null;
   workflowOptions: AssistantActivityWorkflowOptions;
 }) {
-  const scrollRegionRef = useRef<HTMLDivElement>(null);
+  const initialKeys = useRef(new Set(blocks.map(activityItemKey)));
   const hasBlocks = blocks.length > 0;
-
-  useEffect(() => {
-    const scrollRegion = scrollRegionRef.current;
-    if (!scrollRegion) return;
-
-    const handleWheel = (event: WheelEvent) => {
-      routeWheelThroughVerticalScrollChain(event, scrollRegion);
-    };
-    scrollRegion.addEventListener('wheel', handleWheel, { passive: false });
-    return () => scrollRegion.removeEventListener('wheel', handleWheel);
-  }, [hasBlocks]);
 
   if (!hasBlocks) {
     return null;
@@ -403,24 +419,21 @@ export function AssistantStepsTimeline({
 
   return (
     <div
-      ref={scrollRegionRef}
       className={cn('min-w-0 overflow-x-hidden', className)}
     >
       <div className="min-w-0 space-y-2.5 pl-1">
         {blocks.map((b, i) => (
-          <StepRow
-            key={b.type === 'tool_use'
-              ? b.id
-              : b.type === 'text'
-                ? b.segmentId ?? `narration-${i}`
-                : `thinking-${i}`}
-            block={b}
-            toolLabels={toolLabels}
-            stepLabels={stepLabels}
-            cardLabels={cardLabels}
-            conversationId={conversationId}
-            workflowOptions={workflowOptions}
-          />
+          <div key={activityItemKey(b, i)} className={cn(animateNew && !initialKeys.current.has(activityItemKey(b, i)) && b.type !== 'text' && 'assistant-activity-enter')}>
+            <StepRow
+              block={b}
+              toolLabels={toolLabels}
+              stepLabels={stepLabels}
+              cardLabels={cardLabels}
+              conversationId={conversationId}
+              workflowOptions={workflowOptions}
+              runActive={runActive}
+            />
+          </div>
         ))}
       </div>
     </div>
@@ -504,8 +517,10 @@ function StepRow({
   conversationId,
   workflowOptions,
   surfaceOnly = false,
+  runActive = true,
 }: {
   surfaceOnly?: boolean;
+  runActive?: boolean;
   block: AssistantWorkLogItem;
   toolLabels: { input: string; output: string; noOutput: string };
   stepLabels: {
@@ -577,7 +592,7 @@ function StepRow({
     return (
       <div className="min-w-0">
         <div className="min-w-0 space-y-1">
-          <span className="inline-flex max-w-full min-w-0 break-words text-sm text-fg-muted [overflow-wrap:anywhere]">
+          <span className="inline-flex max-w-full min-w-0 break-words text-[13px] text-fg-muted [overflow-wrap:anywhere]">
             {streaming ? stepLabels.thoughtsStreaming : stepLabels.thoughts}
           </span>
           {showRawToolData && text ? (
@@ -609,7 +624,7 @@ function StepRow({
     );
   }
 
-  const isStreaming = block.status === 'running' || block.activity?.status === 'running';
+  const isStreaming = runActive && (block.status === 'running' || block.activity?.status === 'running');
   const isError = block.status === 'error' || block.activity?.status === 'failed';
   const failureSummary = isError
     ? toolFailureSummary(block, stepLabels.toolError, cardLabels)
@@ -650,18 +665,14 @@ function StepRow({
     fetchUrl: stepLabels.fetchUrl,
     unknownTool: stepLabels.unknownTool,
   };
-  const statefulTitle = kind === 'other' || hasSpecificToolExecutionTitle(block.name);
+
   const title = isError ? stepLabels.toolError : memoryActivity?.title
-    ?? (isStreaming && !statefulTitle
-      ? actionKindRunningLabel(kind, stepLabels.runningActions)
-      : getToolExecutionTitle(
-          block.name,
-          block.input,
-          isStreaming ? 'running' : 'completed',
-          stepLabels.toolActivity,
-          friendlyLabels,
-          block.activity,
-        ));
+    ?? getPublicToolExecutionTitle(block, isStreaming ? 'running' : 'completed',
+      stepLabels.toolActivity, friendlyLabels, stepLabels.runningActions);
+  const Icon = isError ? TriangleAlert : kind.includes('Search') || kind === 'search' ? Search
+    : kind === 'readFile' ? BookOpen : kind === 'editFile' || kind === 'writeFile' ? FilePenLine
+      : kind === 'fetchUrl' || kind === 'openUrl' ? Globe : Circle;
+
   const detailLine = memoryActivity ? '' : getKeyDetailLine(block.input);
 
   const paramsJson = block.input !== undefined ? formatParamsJson(block.input) : '';
@@ -692,12 +703,13 @@ function StepRow({
   return (
     <div className={block.parentToolCallId ? 'ml-4 min-w-0 border-l border-edge pl-3' : 'min-w-0'}>
       <div className="min-w-0 space-y-1.5">
-        <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1">
-          <span className="inline-flex max-w-full min-w-0 break-words text-sm text-fg-muted [overflow-wrap:anywhere]">
+        <div className="flex min-w-0 items-start gap-2" data-activity-status={isError ? 'failed' : isStreaming ? 'running' : 'completed'}>
+          <Icon className={cn('mt-0.5 size-4 shrink-0 text-fg-subtle', isStreaming && 'assistant-activity-busy')} aria-hidden />
+          <span className="inline-flex max-w-full min-w-0 break-words text-[13px] text-fg-muted [overflow-wrap:anywhere]">
             {title}
           </span>
         </div>
-        {card}
+        {card ? <details className="min-w-0 text-xs text-fg-muted"><summary className="cursor-pointer hover:text-fg">{stepLabels.stepDetails}</summary>{card}</details> : null}
         {memoryActivity ? (
           <div className="space-y-1 text-xs text-fg-muted">
             <p>{memoryActivity.purpose}</p>
@@ -719,17 +731,17 @@ function StepRow({
             </details>
           </div>
         ) : null}
-        {failureSummary ? (
+        {failureSummary && showRawToolData ? (
           <p className="text-xs leading-relaxed text-fg-subtle">
             {failureSummary}
           </p>
         ) : null}
-        {!hasCard && detailLine ? (
+        {showRawToolData && !hasCard && detailLine ? (
           <p className="min-w-0 break-words text-xs text-fg-muted [overflow-wrap:anywhere]">
             {detailLine}
           </p>
         ) : null}
-        {liveOutputText ? (
+        {showRawToolData && liveOutputText ? (
           <pre className="max-h-48 min-w-0 overflow-y-auto overflow-x-hidden rounded-md bg-surface-hover/60 p-2 whitespace-pre-wrap break-words font-mono text-xs leading-relaxed text-fg-muted [overflow-wrap:anywhere] dark:bg-surface-hover/35">
             {liveOutputText}
           </pre>

@@ -15,7 +15,7 @@ describe('compact history', () => {
     const compact = compactHistory(messages);
     expect(compact[0].metadata?.clientMessageId).toBe('client');
     expect(compact[1].content.length).toBeLessThanOrEqual(160);
-    expect(compact[1].rawContent).toMatchObject([{ presentation: 'narration' }]);
+    expect(compact[1].rawContent).toMatchObject([{ presentation: 'narration' }, { type: 'tool_use', id: 't', name: 'read', status: 'done' }]);
     expect(compact[2].content).toBe('final'.repeat(5000));
     expect(JSON.stringify(compact)).not.toMatch(/private|secret|toolCalls|output/);
     expect(JSON.stringify(messages)).toBe(before);
@@ -27,8 +27,14 @@ describe('compact history', () => {
       toolCalls: [{ name: 'create', result: 'large', details: { delivery, secret: 'hidden' } }],
     }]);
     expect(result[0].deliveries).toEqual([delivery]);
-    expect(result[0].rawContent).toHaveLength(2);
+    expect(result[0].rawContent).toHaveLength(3);
     expect(JSON.stringify(result)).not.toContain('hidden');
     expect(productDeliveries(null)).toEqual([]);
+  });
+  it('keeps a failed action without exposing its arguments or raw error', () => {
+    const result = compactHistory([{ id: 'm', role: 'assistant', content: '',
+      toolCalls: [{ id: 't', name: 'read_file', args: { path: '/private' }, isError: true, result: 'secret failure' }] }]);
+    expect(result[0].rawContent).toEqual([{ type: 'tool_use', id: 't', name: 'read_file', status: 'error' }]);
+    expect(JSON.stringify(result)).not.toMatch(/private|secret/);
   });
 });

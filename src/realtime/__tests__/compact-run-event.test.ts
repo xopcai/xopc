@@ -24,6 +24,24 @@ describe('compact run transport', () => {
     expect(output).toMatchObject({ payload: { data: { payload: { deliveries: [delivery] } } } });
     expect(JSON.stringify(output).length).toBeLessThan(1000);
   });
+  it('retains tool lifecycle for consecutive actions without arguments, output or raw failures', () => {
+    const mapper = new ChatStreamMapper({ runId: 'r', conversationId: 'c', channel: 'webchat' });
+    const broker = new RealtimeBroker();
+    const outputs = [];
+    for (const id of ['a', 'b', 'c']) {
+      for (const event of [
+        ...mapper.map({ type: 'tool_execution_start', toolCallId: id, toolName: 'read_file', args: { path: 'secret-path' } }),
+        ...mapper.map({ type: 'tool_execution_end', toolCallId: id, toolName: 'read_file', isError: id === 'c',
+          result: { content: [{ type: 'text', text: 'secret-output' }] } }),
+      ]) {
+        const output = compactRunEvent(broker.publish('run:r', event.type, event));
+        if (output) outputs.push(output);
+      }
+    }
+    expect(outputs).toHaveLength(6);
+    expect(outputs[5]).toMatchObject({ payload: { data: { payload: { toolCallId: 'c', status: 'error' } } } });
+    expect(JSON.stringify(outputs)).not.toMatch(/secret-path|secret-output|errorMessage|"args"|"result"/);
+  });
   it.each(['error', 'clarify_request', 'run_end', 'tts_audio', 'review'])('retains %s', type => {
     const event = new RealtimeBroker().publish('run:r', type, { type, payload: { message: 'important' } });
     expect(compactRunEvent(event)).toEqual(event);

@@ -28,12 +28,15 @@ export function compactHistory(messages: ClientHistoryMessage[]): ClientHistoryM
     const mediaAndReview = raw.filter(block => block && typeof block === 'object'
       && ['image', 'audio', 'tts_audio', 'review'].includes(String((block as Record<string, unknown>).type)));
     const deliveries = (message.toolCalls ?? []).filter(call => !call.isError).flatMap(productDeliveries);
+    const activities = (message.toolCalls ?? []).map((call, index) => ({ type: 'tool_use',
+      id: call.id ?? `${message.id ?? message.turnId ?? message.timestamp ?? 'activity'}:tool:${index}`,
+      name: call.name, status: call.isError ? 'error' : 'done' }));
     const outcome = message.metadata?.turnOutcome;
-    if (!content && !mediaAndReview.length && !message.media?.length && !outcome && !deliveries.length) return [];
+    if (!content && !mediaAndReview.length && !message.media?.length && !outcome && !deliveries.length && !activities.length) return [];
     return [{ id: message.id, turnId: message.turnId, startsNewBubble: message.startsNewBubble,
       role: message.role, content, timestamp: message.timestamp,
       media: message.media, deliveries,
-      rawContent: [...(content ? [{ type: 'text', text: content, presentation: narration ? 'narration' : 'answer' }] : []), ...mediaAndReview],
+      rawContent: [...(content ? [{ type: 'text', text: content, presentation: narration ? 'narration' : 'answer' }] : []), ...activities, ...mediaAndReview],
       ...(outcome ? { metadata: { turnOutcome: { ...outcome, evidence: [], changeSet: undefined },
         ...(message.metadata?.taskResultDelivery ? { taskResultDelivery: message.metadata.taskResultDelivery } : {}) } } : {}),
     }];

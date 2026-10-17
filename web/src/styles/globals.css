@@ -2460,3 +2460,61 @@ html[data-desktop-pet="true"] body {
   background: var(--color-surface-panel);
   box-shadow: 0 1px 3px var(--color-edge);
 }
+
+/* Activity motion is local to the working indicator and newly received actions. */
+.assistant-activity-busy {
+  animation: assistant-activity-breathe 1.4s ease-in-out infinite;
+}
+/* A quiet highlight travels through the status text without moving its glyphs. */
+@supports ((background-clip: text) or (-webkit-background-clip: text)) {
+  .assistant-activity-shimmer {
+    background-color: var(--color-fg-muted);
+    background-image: linear-gradient(100deg,
+      var(--color-fg-muted) 38%,
+      color-mix(in srgb, var(--color-fg) 65%, var(--color-fg-muted)) 50%,
+      var(--color-fg-muted) 62%);
+    background-size: 250% 100%;
+    background-position: 100% 0;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    animation: assistant-activity-shimmer 2.2s ease-in-out infinite;
+  }
+}
+.assistant-activity-enter {
+  animation: assistant-activity-enter 180ms ease-out both;
+}
+.assistant-activity-disclosure {
+  display: grid;
+  grid-template-rows: 0fr;
+  visibility: hidden;
+  transition: grid-template-rows 200ms ease-out, visibility 200ms;
+}
+.assistant-activity-disclosure[data-open='true'] {
+  grid-template-rows: 1fr;
+  visibility: visible;
+}
+.assistant-activity-disclosure[data-open='false'] .assistant-activity-busy {
+  animation: none;
+}
+@keyframes assistant-activity-breathe {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+@keyframes assistant-activity-shimmer {
+  0%, 12% { background-position: 100% 0; }
+  78%, 100% { background-position: 0% 0; }
+}
+@keyframes assistant-activity-enter {
+  from { opacity: 0; transform: translateY(3px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .assistant-activity-busy, .assistant-activity-enter { animation: none; }
+  .assistant-activity-shimmer {
+    animation: none;
+    background: none;
+    color: var(--color-fg-muted);
+  }
+  .assistant-activity-disclosure { transition: none; }
+}

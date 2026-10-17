@@ -726,7 +726,7 @@ function normalizeContentBlocks(raw: unknown, messageStartedAt?: number): Messag
         toolCallId: id,
         name,
         input,
-        status: 'done',
+        status: item.status === 'error' ? 'error' : 'done',
         startedAt: messageStartedAt,
         result: typeof item.result === 'string' ? item.result : undefined,
         details: item.details,
