@@ -4,6 +4,18 @@ import { assistantVisibleMessage } from '@/features/chat/messages/assistant-visi
 import type { Message } from '@/features/chat/messages/messages.types';
 
 describe('assistantVisibleMessage', () => {
+  it('hides all standalone silent markers without discarding tools or attachments', () => {
+    const message: Message = { role: 'assistant', content: [
+      { type: 'text', text: ' NO_REPLY \n' },
+      { type: 'tool_use', id: 'tool-1', name: 'read', status: 'done' },
+      { type: 'text', text: 'NO_REPLY' },
+    ], attachments: [{ name: 'report.txt' }] };
+    const visible = assistantVisibleMessage(message, { hideSilentReply: true });
+    expect(visible.content).toEqual([message.content[1]]);
+    expect(visible.attachments).toBe(message.attachments);
+    expect(message.content).toHaveLength(3);
+  });
+
   it('removes a leaked silent marker from the beginning of a visible reply', () => {
     const message: Message = {
       role: 'assistant',

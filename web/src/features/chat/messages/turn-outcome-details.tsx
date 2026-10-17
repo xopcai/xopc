@@ -9,7 +9,9 @@ export function TurnOutcomeDetails({ outcome }: { outcome: TurnOutcome }) {
   const t = messages(language).chat.turnOutcome;
   const hasChanges = Boolean(outcome.changeSet);
   const hasEvidence = outcome.evidence.length > 0;
-  if (!hasChanges && !hasEvidence) return null;
+  if (!hasChanges && !hasEvidence) return outcome.status === 'failed'
+    ? <p role="alert" className="text-sm text-danger">{outcome.summary || t.statusFailed}</p>
+    : null;
 
   const passed = outcome.evidence.filter((item) => item.status === 'passed').length;
   const failed = outcome.evidence.filter((item) => item.status === 'failed').length;
