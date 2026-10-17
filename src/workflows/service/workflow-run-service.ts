@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 
 import type { AgentTool } from '@earendil-works/pi-agent-core';
 
+import { AgentCatalogRepository } from '../../agent-catalog/repository.js';
 import type { BuildChildToolsOptions } from '../../agent/child-agent-factory.js';
 import { automationEventPublisher, getAutomationEventForRun } from '../../automations/events/event-repository.js';
 import {
@@ -668,7 +669,7 @@ export class WorkflowRunService {
       workspace,
       bus: gatewayService.messageBusInstance,
       agentId: profileAgentId,
-      getDefaultModel: () => resolveModelById(gatewayService.agentService.getModelForSession(params.conversationId)),
+      getDefaultModel: () => resolveModelById(new AgentCatalogRepository().getSettings().defaults.models.chat.primary),
       getConfig: () => gatewayService.currentConfig,
       sessionStore: gatewayService.sessionIndexInstance.getStore(),
       buildChildTools: (childOptions) => this.options.buildChildTools({
