@@ -1,0 +1,4392 @@
+{
+  "label": "fixed-4x",
+  "startedAt": "2026-10-17T05:30:39.385Z",
+  "rounds": 6,
+  "cpuThrottling": 4,
+  "revision": "44edf1b8595ff0eef6324f2675fdb4dc1350eda0",
+  "workingTreeDirty": true,
+  "fixtureSeed": "synthetic-chart-history-v1",
+  "environment": {
+    "platform": "darwin",
+    "arch": "arm64",
+    "cpu": "Apple M5 Pro"
+  },
+  "budgets": {
+    "activeInline": 2,
+    "activeWithDialog": 3,
+    "mountedVirtualRows": 80,
+    "postGcGrowthMiB": 8,
+    "scrollFrameP95Ms": 50,
+    "scrollFramesOver50Ratio": 0.05
+  },
+  "samples": [
+    {
+      "name": "virtual-300",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 2,
+      "dialogs": 0,
+      "nodes": 277,
+      "scrollTop": 25146,
+      "scrollHeight": 52350,
+      "background": "#fff",
+      "sessions": 1,
+      "counters": {
+        "created": 4,
+        "disposed": 2,
+        "active": 2,
+        "peak": 2,
+        "colors": [
+          "#fff",
+          "#fff"
+        ]
+      },
+      "jsHeapUsedMiB": 32.07039260864258
+    },
+    {
+      "name": "virtual-1000",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 2,
+      "dialogs": 0,
+      "nodes": 274,
+      "scrollTop": 81146,
+      "scrollHeight": 164350,
+      "background": "#fff",
+      "sessions": 1,
+      "counters": {
+        "created": 9,
+        "disposed": 7,
+        "active": 2,
+        "peak": 2,
+        "colors": [
+          "#fff",
+          "#fff"
+        ]
+      },
+      "jsHeapUsedMiB": 38.592445373535156
+    },
+    {
+      "name": "dense-40",
+      "rows": 1,
+      "virtualized": false,
+      "chartBlocks": 40,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 2,
+      "dialogs": 0,
+      "nodes": 759,
+      "scrollTop": 18984,
+      "scrollHeight": 19704,
+      "background": "#fff",
+      "sessions": 1,
+      "counters": {
+        "created": 29,
+        "disposed": 27,
+        "active": 2,
+        "peak": 2,
+        "colors": [
+          "#fff",
+          "#fff"
+        ]
+      },
+      "jsHeapUsedMiB": 55.978092193603516
+    },
+    {
+      "name": "dense-preview-0-0",
+      "rows": 1,
+      "virtualized": false,
+      "chartBlocks": 40,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 1,
+      "dialogs": 1,
+      "nodes": 776,
+      "scrollTop": 0,
+      "scrollHeight": 19704,
+      "theme": "dark",
+      "background": "#1b1f26",
+      "sessions": 1,
+      "counters": {
+        "created": 32,
+        "disposed": 30,
+        "active": 2,
+        "peak": 2,
+        "colors": [
+          "#1b1f26",
+          "#1b1f26"
+        ]
+      },
+      "jsHeapUsedMiB": 30.67241668701172
+    },
+    {
+      "name": "dense-preview-0-1",
+      "rows": 1,
+      "virtualized": false,
+      "chartBlocks": 40,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 1,
+      "dialogs": 1,
+      "nodes": 776,
+      "scrollTop": 0,
+      "scrollHeight": 19704,
+      "theme": "light",
+      "background": "#fff",
+      "sessions": 1,
+      "counters": {
+        "created": 34,
+        "disposed": 32,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#fff",
+          "#fff"
+        ]
+      },
+      "jsHeapUsedMiB": 43.44578552246094
+    },
+    {
+      "name": "dense-preview-0-2",
+      "rows": 1,
+      "virtualized": false,
+      "chartBlocks": 40,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 1,
+      "dialogs": 1,
+      "nodes": 776,
+      "scrollTop": 0,
+      "scrollHeight": 19704,
+      "theme": "dark",
+      "background": "#1b1f26",
+      "sessions": 1,
+      "counters": {
+        "created": 36,
+        "disposed": 34,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#1b1f26",
+          "#1b1f26"
+        ]
+      },
+      "jsHeapUsedMiB": 31.067794799804688
+    },
+    {
+      "name": "dense-preview-0-3",
+      "rows": 1,
+      "virtualized": false,
+      "chartBlocks": 40,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 1,
+      "dialogs": 1,
+      "nodes": 776,
+      "scrollTop": 0,
+      "scrollHeight": 19704,
+      "theme": "light",
+      "background": "#fff",
+      "sessions": 1,
+      "counters": {
+        "created": 38,
+        "disposed": 36,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#fff",
+          "#fff"
+        ]
+      },
+      "jsHeapUsedMiB": 34.99381637573242
+    },
+    {
+      "name": "dense-preview-1-0",
+      "rows": 1,
+      "virtualized": false,
+      "chartBlocks": 40,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 1,
+      "dialogs": 1,
+      "nodes": 776,
+      "scrollTop": 322,
+      "scrollHeight": 19704,
+      "theme": "dark",
+      "background": "#1b1f26",
+      "sessions": 1,
+      "counters": {
+        "created": 40,
+        "disposed": 38,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#1b1f26",
+          "#1b1f26"
+        ]
+      },
+      "jsHeapUsedMiB": 34.14299392700195
+    },
+    {
+      "name": "dense-preview-1-1",
+      "rows": 1,
+      "virtualized": false,
+      "chartBlocks": 40,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 1,
+      "dialogs": 1,
+      "nodes": 776,
+      "scrollTop": 322,
+      "scrollHeight": 19704,
+      "theme": "light",
+      "background": "#fff",
+      "sessions": 1,
+      "counters": {
+        "created": 42,
+        "disposed": 40,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#fff",
+          "#fff"
+        ]
+      },
+      "jsHeapUsedMiB": 42.26888656616211
+    },
+    {
+      "name": "dense-preview-1-2",
+      "rows": 1,
+      "virtualized": false,
+      "chartBlocks": 40,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 1,
+      "dialogs": 1,
+      "nodes": 776,
+      "scrollTop": 322,
+      "scrollHeight": 19704,
+      "theme": "dark",
+      "background": "#1b1f26",
+      "sessions": 1,
+      "counters": {
+        "created": 44,
+        "disposed": 42,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#1b1f26",
+          "#1b1f26"
+        ]
+      },
+      "jsHeapUsedMiB": 35.2295036315918
+    },
+    {
+      "name": "dense-preview-1-3",
+      "rows": 1,
+      "virtualized": false,
+      "chartBlocks": 40,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 1,
+      "dialogs": 1,
+      "nodes": 776,
+      "scrollTop": 322,
+      "scrollHeight": 19704,
+      "theme": "light",
+      "background": "#fff",
+      "sessions": 1,
+      "counters": {
+        "created": 46,
+        "disposed": 44,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#fff",
+          "#fff"
+        ]
+      },
+      "jsHeapUsedMiB": 44.79462432861328
+    },
+    {
+      "name": "large-8000-points",
+      "rows": 1,
+      "virtualized": false,
+      "chartBlocks": 1,
+      "canvases": 1,
+      "visibleCharts": 1,
+      "visibleCanvases": 1,
+      "dialogs": 0,
+      "nodes": 52,
+      "scrollTop": 0,
+      "scrollHeight": 720,
+      "theme": "light",
+      "background": "#fff",
+      "sessions": 1,
+      "counters": {
+        "created": 48,
+        "disposed": 47,
+        "active": 1,
+        "peak": 3,
+        "colors": [
+          "#fff"
+        ]
+      },
+      "jsHeapUsedMiB": 34.8537712097168
+    },
+    {
+      "name": "warm",
+      "rows": 0,
+      "virtualized": false,
+      "chartBlocks": 0,
+      "canvases": 0,
+      "visibleCharts": 0,
+      "visibleCanvases": 0,
+      "dialogs": 0,
+      "nodes": 13,
+      "scrollTop": 0,
+      "scrollHeight": 0,
+      "theme": "light",
+      "background": "",
+      "sessions": 2,
+      "counters": {
+        "created": 56,
+        "disposed": 56,
+        "active": 0,
+        "peak": 3,
+        "colors": []
+      },
+      "jsHeapUsedMiB": 26.369548797607422
+    },
+    {
+      "name": "scroll-0",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 2,
+      "dialogs": 0,
+      "nodes": 278,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "light",
+      "background": "#fff",
+      "sessions": 2,
+      "counters": {
+        "created": 87,
+        "disposed": 85,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#fff",
+          "#fff"
+        ]
+      },
+      "jsHeapUsedMiB": 38.0545768737793
+    },
+    {
+      "name": "focus-0",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 2,
+      "dialogs": 0,
+      "nodes": 278,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "light",
+      "background": "#fff",
+      "sessions": 2,
+      "counters": {
+        "created": 87,
+        "disposed": 85,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#fff",
+          "#fff"
+        ]
+      },
+      "jsHeapUsedMiB": 38.351036071777344
+    },
+    {
+      "name": "preview-open-0-0",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 1,
+      "dialogs": 1,
+      "nodes": 294,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "light",
+      "background": "#fff",
+      "sessions": 2,
+      "counters": {
+        "created": 88,
+        "disposed": 86,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#fff",
+          "#fff"
+        ]
+      },
+      "jsHeapUsedMiB": 39.81242370605469
+    },
+    {
+      "name": "preview-open-0-1",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 1,
+      "dialogs": 1,
+      "nodes": 294,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "light",
+      "background": "#fff",
+      "sessions": 2,
+      "counters": {
+        "created": 90,
+        "disposed": 88,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#fff",
+          "#fff"
+        ]
+      },
+      "jsHeapUsedMiB": 42.17863845825195
+    },
+    {
+      "name": "preview-open-0-2",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 1,
+      "dialogs": 1,
+      "nodes": 294,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "light",
+      "background": "#fff",
+      "sessions": 2,
+      "counters": {
+        "created": 92,
+        "disposed": 90,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#fff",
+          "#fff"
+        ]
+      },
+      "jsHeapUsedMiB": 44.528846740722656
+    },
+    {
+      "name": "preview-open-0-3",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 1,
+      "dialogs": 1,
+      "nodes": 294,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "light",
+      "background": "#fff",
+      "sessions": 2,
+      "counters": {
+        "created": 94,
+        "disposed": 92,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#fff",
+          "#fff"
+        ]
+      },
+      "jsHeapUsedMiB": 46.88022994995117
+    },
+    {
+      "name": "preview-open-0-4",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 1,
+      "dialogs": 1,
+      "nodes": 294,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "light",
+      "background": "#fff",
+      "sessions": 2,
+      "counters": {
+        "created": 96,
+        "disposed": 94,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#fff",
+          "#fff"
+        ]
+      },
+      "jsHeapUsedMiB": 49.184627532958984
+    },
+    {
+      "name": "preview-open-0-5",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 1,
+      "dialogs": 1,
+      "nodes": 294,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "light",
+      "background": "#fff",
+      "sessions": 2,
+      "counters": {
+        "created": 98,
+        "disposed": 96,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#fff",
+          "#fff"
+        ]
+      },
+      "jsHeapUsedMiB": 30.83423614501953
+    },
+    {
+      "name": "preview-open-0-6",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 1,
+      "dialogs": 1,
+      "nodes": 294,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "light",
+      "background": "#fff",
+      "sessions": 2,
+      "counters": {
+        "created": 100,
+        "disposed": 98,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#fff",
+          "#fff"
+        ]
+      },
+      "jsHeapUsedMiB": 33.16131591796875
+    },
+    {
+      "name": "preview-open-0-7",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 1,
+      "dialogs": 1,
+      "nodes": 294,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "light",
+      "background": "#fff",
+      "sessions": 2,
+      "counters": {
+        "created": 102,
+        "disposed": 100,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#fff",
+          "#fff"
+        ]
+      },
+      "jsHeapUsedMiB": 35.5146598815918
+    },
+    {
+      "name": "preview-0",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 2,
+      "dialogs": 0,
+      "nodes": 278,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "light",
+      "background": "#fff",
+      "sessions": 2,
+      "counters": {
+        "created": 103,
+        "disposed": 101,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#fff",
+          "#fff"
+        ]
+      },
+      "jsHeapUsedMiB": 36.587703704833984
+    },
+    {
+      "name": "theme-0-0",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 2,
+      "dialogs": 0,
+      "nodes": 278,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "dark",
+      "background": "#1b1f26",
+      "sessions": 2,
+      "counters": {
+        "created": 103,
+        "disposed": 101,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#1b1f26",
+          "#1b1f26"
+        ]
+      },
+      "jsHeapUsedMiB": 38.21235656738281
+    },
+    {
+      "name": "theme-0-1",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 2,
+      "dialogs": 0,
+      "nodes": 278,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "light",
+      "background": "#fff",
+      "sessions": 2,
+      "counters": {
+        "created": 103,
+        "disposed": 101,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#fff",
+          "#fff"
+        ]
+      },
+      "jsHeapUsedMiB": 39.706485748291016
+    },
+    {
+      "name": "theme-0-2",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 2,
+      "dialogs": 0,
+      "nodes": 278,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "dark",
+      "background": "#1b1f26",
+      "sessions": 2,
+      "counters": {
+        "created": 103,
+        "disposed": 101,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#1b1f26",
+          "#1b1f26"
+        ]
+      },
+      "jsHeapUsedMiB": 41.204097747802734
+    },
+    {
+      "name": "theme-0-3",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 2,
+      "dialogs": 0,
+      "nodes": 278,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "light",
+      "background": "#fff",
+      "sessions": 2,
+      "counters": {
+        "created": 103,
+        "disposed": 101,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#fff",
+          "#fff"
+        ]
+      },
+      "jsHeapUsedMiB": 42.686912536621094
+    },
+    {
+      "name": "theme-0-4",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 2,
+      "dialogs": 0,
+      "nodes": 278,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "dark",
+      "background": "#1b1f26",
+      "sessions": 2,
+      "counters": {
+        "created": 103,
+        "disposed": 101,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#1b1f26",
+          "#1b1f26"
+        ]
+      },
+      "jsHeapUsedMiB": 32.50505447387695
+    },
+    {
+      "name": "theme-0-5",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 2,
+      "dialogs": 0,
+      "nodes": 278,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "light",
+      "background": "#fff",
+      "sessions": 2,
+      "counters": {
+        "created": 103,
+        "disposed": 101,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#fff",
+          "#fff"
+        ]
+      },
+      "jsHeapUsedMiB": 33.99767303466797
+    },
+    {
+      "name": "theme-0-6",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 2,
+      "dialogs": 0,
+      "nodes": 278,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "dark",
+      "background": "#1b1f26",
+      "sessions": 2,
+      "counters": {
+        "created": 103,
+        "disposed": 101,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#1b1f26",
+          "#1b1f26"
+        ]
+      },
+      "jsHeapUsedMiB": 35.49403762817383
+    },
+    {
+      "name": "theme-0-7",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 2,
+      "dialogs": 0,
+      "nodes": 278,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "light",
+      "background": "#fff",
+      "sessions": 2,
+      "counters": {
+        "created": 103,
+        "disposed": 101,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#fff",
+          "#fff"
+        ]
+      },
+      "jsHeapUsedMiB": 36.9738655090332
+    },
+    {
+      "name": "theme-0",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 2,
+      "dialogs": 0,
+      "nodes": 278,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "light",
+      "background": "#fff",
+      "sessions": 2,
+      "counters": {
+        "created": 103,
+        "disposed": 101,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#fff",
+          "#fff"
+        ]
+      },
+      "jsHeapUsedMiB": 37.00054931640625
+    },
+    {
+      "name": "switch-0",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 2,
+      "dialogs": 0,
+      "nodes": 278,
+      "scrollTop": 81146,
+      "scrollHeight": 164350,
+      "theme": "light",
+      "background": "#fff",
+      "sessions": 2,
+      "counters": {
+        "created": 133,
+        "disposed": 131,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#fff",
+          "#fff"
+        ]
+      },
+      "jsHeapUsedMiB": 54.75419235229492
+    },
+    {
+      "name": "round-0",
+      "rows": 0,
+      "virtualized": false,
+      "chartBlocks": 0,
+      "canvases": 0,
+      "visibleCharts": 0,
+      "visibleCanvases": 0,
+      "dialogs": 0,
+      "nodes": 13,
+      "scrollTop": 0,
+      "scrollHeight": 0,
+      "theme": "light",
+      "background": "",
+      "sessions": 2,
+      "counters": {
+        "created": 133,
+        "disposed": 133,
+        "active": 0,
+        "peak": 3,
+        "colors": []
+      },
+      "jsHeapUsedMiB": 27.743850708007812
+    },
+    {
+      "name": "scroll-1",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 2,
+      "dialogs": 0,
+      "nodes": 278,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "light",
+      "background": "#fff",
+      "sessions": 2,
+      "counters": {
+        "created": 164,
+        "disposed": 162,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#fff",
+          "#fff"
+        ]
+      },
+      "jsHeapUsedMiB": 48.68107223510742
+    },
+    {
+      "name": "focus-1",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 2,
+      "dialogs": 0,
+      "nodes": 278,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "light",
+      "background": "#fff",
+      "sessions": 2,
+      "counters": {
+        "created": 164,
+        "disposed": 162,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#fff",
+          "#fff"
+        ]
+      },
+      "jsHeapUsedMiB": 39.04426193237305
+    },
+    {
+      "name": "preview-open-1-0",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 1,
+      "dialogs": 1,
+      "nodes": 294,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "light",
+      "background": "#fff",
+      "sessions": 2,
+      "counters": {
+        "created": 165,
+        "disposed": 163,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#fff",
+          "#fff"
+        ]
+      },
+      "jsHeapUsedMiB": 31.51382064819336
+    },
+    {
+      "name": "preview-open-1-1",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 1,
+      "dialogs": 1,
+      "nodes": 294,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "light",
+      "background": "#fff",
+      "sessions": 2,
+      "counters": {
+        "created": 167,
+        "disposed": 165,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#fff",
+          "#fff"
+        ]
+      },
+      "jsHeapUsedMiB": 33.897640228271484
+    },
+    {
+      "name": "preview-open-1-2",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 1,
+      "dialogs": 1,
+      "nodes": 294,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "light",
+      "background": "#fff",
+      "sessions": 2,
+      "counters": {
+        "created": 169,
+        "disposed": 167,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#fff",
+          "#fff"
+        ]
+      },
+      "jsHeapUsedMiB": 31.61487579345703
+    },
+    {
+      "name": "preview-open-1-3",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 1,
+      "dialogs": 1,
+      "nodes": 294,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "light",
+      "background": "#fff",
+      "sessions": 2,
+      "counters": {
+        "created": 171,
+        "disposed": 169,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#fff",
+          "#fff"
+        ]
+      },
+      "jsHeapUsedMiB": 33.986515045166016
+    },
+    {
+      "name": "preview-open-1-4",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 1,
+      "dialogs": 1,
+      "nodes": 294,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "light",
+      "background": "#fff",
+      "sessions": 2,
+      "counters": {
+        "created": 173,
+        "disposed": 171,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#fff",
+          "#fff"
+        ]
+      },
+      "jsHeapUsedMiB": 36.345149993896484
+    },
+    {
+      "name": "preview-open-1-5",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 1,
+      "dialogs": 1,
+      "nodes": 294,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "light",
+      "background": "#fff",
+      "sessions": 2,
+      "counters": {
+        "created": 175,
+        "disposed": 173,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#fff",
+          "#fff"
+        ]
+      },
+      "jsHeapUsedMiB": 38.64584732055664
+    },
+    {
+      "name": "preview-open-1-6",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 1,
+      "dialogs": 1,
+      "nodes": 294,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "light",
+      "background": "#fff",
+      "sessions": 2,
+      "counters": {
+        "created": 177,
+        "disposed": 175,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#fff",
+          "#fff"
+        ]
+      },
+      "jsHeapUsedMiB": 31.676158905029297
+    },
+    {
+      "name": "preview-open-1-7",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 1,
+      "dialogs": 1,
+      "nodes": 294,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "light",
+      "background": "#fff",
+      "sessions": 2,
+      "counters": {
+        "created": 179,
+        "disposed": 177,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#fff",
+          "#fff"
+        ]
+      },
+      "jsHeapUsedMiB": 34.02629089355469
+    },
+    {
+      "name": "preview-1",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 2,
+      "dialogs": 0,
+      "nodes": 278,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "light",
+      "background": "#fff",
+      "sessions": 2,
+      "counters": {
+        "created": 180,
+        "disposed": 178,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#fff",
+          "#fff"
+        ]
+      },
+      "jsHeapUsedMiB": 35.09711837768555
+    },
+    {
+      "name": "theme-1-0",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 2,
+      "dialogs": 0,
+      "nodes": 278,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "dark",
+      "background": "#1b1f26",
+      "sessions": 2,
+      "counters": {
+        "created": 180,
+        "disposed": 178,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#1b1f26",
+          "#1b1f26"
+        ]
+      },
+      "jsHeapUsedMiB": 36.75870895385742
+    },
+    {
+      "name": "theme-1-1",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 2,
+      "dialogs": 0,
+      "nodes": 278,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "light",
+      "background": "#fff",
+      "sessions": 2,
+      "counters": {
+        "created": 180,
+        "disposed": 178,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#fff",
+          "#fff"
+        ]
+      },
+      "jsHeapUsedMiB": 38.26325225830078
+    },
+    {
+      "name": "theme-1-2",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 2,
+      "dialogs": 0,
+      "nodes": 278,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "dark",
+      "background": "#1b1f26",
+      "sessions": 2,
+      "counters": {
+        "created": 180,
+        "disposed": 178,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#1b1f26",
+          "#1b1f26"
+        ]
+      },
+      "jsHeapUsedMiB": 39.766319274902344
+    },
+    {
+      "name": "theme-1-3",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 2,
+      "dialogs": 0,
+      "nodes": 278,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "light",
+      "background": "#fff",
+      "sessions": 2,
+      "counters": {
+        "created": 180,
+        "disposed": 178,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#fff",
+          "#fff"
+        ]
+      },
+      "jsHeapUsedMiB": 41.283660888671875
+    },
+    {
+      "name": "theme-1-4",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 2,
+      "dialogs": 0,
+      "nodes": 278,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "dark",
+      "background": "#1b1f26",
+      "sessions": 2,
+      "counters": {
+        "created": 180,
+        "disposed": 178,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#1b1f26",
+          "#1b1f26"
+        ]
+      },
+      "jsHeapUsedMiB": 42.826663970947266
+    },
+    {
+      "name": "theme-1-5",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 2,
+      "dialogs": 0,
+      "nodes": 278,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "light",
+      "background": "#fff",
+      "sessions": 2,
+      "counters": {
+        "created": 180,
+        "disposed": 178,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#fff",
+          "#fff"
+        ]
+      },
+      "jsHeapUsedMiB": 33.21736145019531
+    },
+    {
+      "name": "theme-1-6",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 2,
+      "dialogs": 0,
+      "nodes": 278,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "dark",
+      "background": "#1b1f26",
+      "sessions": 2,
+      "counters": {
+        "created": 180,
+        "disposed": 178,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#1b1f26",
+          "#1b1f26"
+        ]
+      },
+      "jsHeapUsedMiB": 34.7047004699707
+    },
+    {
+      "name": "theme-1-7",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 2,
+      "dialogs": 0,
+      "nodes": 278,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "light",
+      "background": "#fff",
+      "sessions": 2,
+      "counters": {
+        "created": 180,
+        "disposed": 178,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#fff",
+          "#fff"
+        ]
+      },
+      "jsHeapUsedMiB": 36.16990280151367
+    },
+    {
+      "name": "theme-1",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 2,
+      "dialogs": 0,
+      "nodes": 278,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "light",
+      "background": "#fff",
+      "sessions": 2,
+      "counters": {
+        "created": 180,
+        "disposed": 178,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#fff",
+          "#fff"
+        ]
+      },
+      "jsHeapUsedMiB": 36.19532012939453
+    },
+    {
+      "name": "switch-1",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 2,
+      "dialogs": 0,
+      "nodes": 278,
+      "scrollTop": 81146,
+      "scrollHeight": 164350,
+      "theme": "light",
+      "background": "#fff",
+      "sessions": 2,
+      "counters": {
+        "created": 211,
+        "disposed": 209,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#fff",
+          "#fff"
+        ]
+      },
+      "jsHeapUsedMiB": 43.71222686767578
+    },
+    {
+      "name": "round-1",
+      "rows": 0,
+      "virtualized": false,
+      "chartBlocks": 0,
+      "canvases": 0,
+      "visibleCharts": 0,
+      "visibleCanvases": 0,
+      "dialogs": 0,
+      "nodes": 13,
+      "scrollTop": 0,
+      "scrollHeight": 0,
+      "theme": "light",
+      "background": "",
+      "sessions": 2,
+      "counters": {
+        "created": 211,
+        "disposed": 211,
+        "active": 0,
+        "peak": 3,
+        "colors": []
+      },
+      "jsHeapUsedMiB": 27.896560668945312
+    },
+    {
+      "name": "scroll-2",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 2,
+      "dialogs": 0,
+      "nodes": 278,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "light",
+      "background": "#fff",
+      "sessions": 2,
+      "counters": {
+        "created": 242,
+        "disposed": 240,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#fff",
+          "#fff"
+        ]
+      },
+      "jsHeapUsedMiB": 46.51939392089844
+    },
+    {
+      "name": "focus-2",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 2,
+      "dialogs": 0,
+      "nodes": 278,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "light",
+      "background": "#fff",
+      "sessions": 2,
+      "counters": {
+        "created": 242,
+        "disposed": 240,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#fff",
+          "#fff"
+        ]
+      },
+      "jsHeapUsedMiB": 30.431468963623047
+    },
+    {
+      "name": "preview-open-2-0",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 1,
+      "dialogs": 1,
+      "nodes": 294,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "light",
+      "background": "#fff",
+      "sessions": 2,
+      "counters": {
+        "created": 243,
+        "disposed": 241,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#fff",
+          "#fff"
+        ]
+      },
+      "jsHeapUsedMiB": 31.900665283203125
+    },
+    {
+      "name": "preview-open-2-1",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 1,
+      "dialogs": 1,
+      "nodes": 294,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "light",
+      "background": "#fff",
+      "sessions": 2,
+      "counters": {
+        "created": 245,
+        "disposed": 243,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#fff",
+          "#fff"
+        ]
+      },
+      "jsHeapUsedMiB": 34.26227569580078
+    },
+    {
+      "name": "preview-open-2-2",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 1,
+      "dialogs": 1,
+      "nodes": 294,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "light",
+      "background": "#fff",
+      "sessions": 2,
+      "counters": {
+        "created": 247,
+        "disposed": 245,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#fff",
+          "#fff"
+        ]
+      },
+      "jsHeapUsedMiB": 32.09589385986328
+    },
+    {
+      "name": "preview-open-2-3",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 1,
+      "dialogs": 1,
+      "nodes": 294,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "light",
+      "background": "#fff",
+      "sessions": 2,
+      "counters": {
+        "created": 249,
+        "disposed": 247,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#fff",
+          "#fff"
+        ]
+      },
+      "jsHeapUsedMiB": 34.48979187011719
+    },
+    {
+      "name": "preview-open-2-4",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 1,
+      "dialogs": 1,
+      "nodes": 294,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "light",
+      "background": "#fff",
+      "sessions": 2,
+      "counters": {
+        "created": 251,
+        "disposed": 249,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#fff",
+          "#fff"
+        ]
+      },
+      "jsHeapUsedMiB": 36.80344772338867
+    },
+    {
+      "name": "preview-open-2-5",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 1,
+      "dialogs": 1,
+      "nodes": 294,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "light",
+      "background": "#fff",
+      "sessions": 2,
+      "counters": {
+        "created": 253,
+        "disposed": 251,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#fff",
+          "#fff"
+        ]
+      },
+      "jsHeapUsedMiB": 32.10110092163086
+    },
+    {
+      "name": "preview-open-2-6",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 1,
+      "dialogs": 1,
+      "nodes": 294,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "light",
+      "background": "#fff",
+      "sessions": 2,
+      "counters": {
+        "created": 255,
+        "disposed": 253,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#fff",
+          "#fff"
+        ]
+      },
+      "jsHeapUsedMiB": 34.44175720214844
+    },
+    {
+      "name": "preview-open-2-7",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 1,
+      "dialogs": 1,
+      "nodes": 294,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "light",
+      "background": "#fff",
+      "sessions": 2,
+      "counters": {
+        "created": 257,
+        "disposed": 255,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#fff",
+          "#fff"
+        ]
+      },
+      "jsHeapUsedMiB": 36.798828125
+    },
+    {
+      "name": "preview-2",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 2,
+      "dialogs": 0,
+      "nodes": 278,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "light",
+      "background": "#fff",
+      "sessions": 2,
+      "counters": {
+        "created": 258,
+        "disposed": 256,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#fff",
+          "#fff"
+        ]
+      },
+      "jsHeapUsedMiB": 30.57071304321289
+    },
+    {
+      "name": "theme-2-0",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 2,
+      "dialogs": 0,
+      "nodes": 278,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "dark",
+      "background": "#1b1f26",
+      "sessions": 2,
+      "counters": {
+        "created": 258,
+        "disposed": 256,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#1b1f26",
+          "#1b1f26"
+        ]
+      },
+      "jsHeapUsedMiB": 32.27939224243164
+    },
+    {
+      "name": "theme-2-1",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 2,
+      "dialogs": 0,
+      "nodes": 278,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "light",
+      "background": "#fff",
+      "sessions": 2,
+      "counters": {
+        "created": 258,
+        "disposed": 256,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#fff",
+          "#fff"
+        ]
+      },
+      "jsHeapUsedMiB": 33.812198638916016
+    },
+    {
+      "name": "theme-2-2",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 2,
+      "dialogs": 0,
+      "nodes": 278,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "dark",
+      "background": "#1b1f26",
+      "sessions": 2,
+      "counters": {
+        "created": 258,
+        "disposed": 256,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#1b1f26",
+          "#1b1f26"
+        ]
+      },
+      "jsHeapUsedMiB": 35.35556411743164
+    },
+    {
+      "name": "theme-2-3",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 2,
+      "dialogs": 0,
+      "nodes": 278,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "light",
+      "background": "#fff",
+      "sessions": 2,
+      "counters": {
+        "created": 258,
+        "disposed": 256,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#fff",
+          "#fff"
+        ]
+      },
+      "jsHeapUsedMiB": 36.860260009765625
+    },
+    {
+      "name": "theme-2-4",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 2,
+      "dialogs": 0,
+      "nodes": 278,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "dark",
+      "background": "#1b1f26",
+      "sessions": 2,
+      "counters": {
+        "created": 258,
+        "disposed": 256,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#1b1f26",
+          "#1b1f26"
+        ]
+      },
+      "jsHeapUsedMiB": 38.40788650512695
+    },
+    {
+      "name": "theme-2-5",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 2,
+      "dialogs": 0,
+      "nodes": 278,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "light",
+      "background": "#fff",
+      "sessions": 2,
+      "counters": {
+        "created": 258,
+        "disposed": 256,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#fff",
+          "#fff"
+        ]
+      },
+      "jsHeapUsedMiB": 39.90201950073242
+    },
+    {
+      "name": "theme-2-6",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 2,
+      "dialogs": 0,
+      "nodes": 278,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "dark",
+      "background": "#1b1f26",
+      "sessions": 2,
+      "counters": {
+        "created": 258,
+        "disposed": 256,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#1b1f26",
+          "#1b1f26"
+        ]
+      },
+      "jsHeapUsedMiB": 41.39730453491211
+    },
+    {
+      "name": "theme-2-7",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 2,
+      "dialogs": 0,
+      "nodes": 278,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "light",
+      "background": "#fff",
+      "sessions": 2,
+      "counters": {
+        "created": 258,
+        "disposed": 256,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#fff",
+          "#fff"
+        ]
+      },
+      "jsHeapUsedMiB": 42.87665939331055
+    },
+    {
+      "name": "theme-2",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 2,
+      "dialogs": 0,
+      "nodes": 278,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "light",
+      "background": "#fff",
+      "sessions": 2,
+      "counters": {
+        "created": 258,
+        "disposed": 256,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#fff",
+          "#fff"
+        ]
+      },
+      "jsHeapUsedMiB": 42.90204620361328
+    },
+    {
+      "name": "switch-2",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 2,
+      "dialogs": 0,
+      "nodes": 278,
+      "scrollTop": 81146,
+      "scrollHeight": 164350,
+      "theme": "light",
+      "background": "#fff",
+      "sessions": 2,
+      "counters": {
+        "created": 287,
+        "disposed": 285,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#fff",
+          "#fff"
+        ]
+      },
+      "jsHeapUsedMiB": 40.469139099121094
+    },
+    {
+      "name": "round-2",
+      "rows": 0,
+      "virtualized": false,
+      "chartBlocks": 0,
+      "canvases": 0,
+      "visibleCharts": 0,
+      "visibleCanvases": 0,
+      "dialogs": 0,
+      "nodes": 13,
+      "scrollTop": 0,
+      "scrollHeight": 0,
+      "theme": "light",
+      "background": "",
+      "sessions": 2,
+      "counters": {
+        "created": 287,
+        "disposed": 287,
+        "active": 0,
+        "peak": 3,
+        "colors": []
+      },
+      "jsHeapUsedMiB": 28.093597412109375
+    },
+    {
+      "name": "scroll-3",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 2,
+      "dialogs": 0,
+      "nodes": 278,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "light",
+      "background": "#fff",
+      "sessions": 2,
+      "counters": {
+        "created": 317,
+        "disposed": 315,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#fff",
+          "#fff"
+        ]
+      },
+      "jsHeapUsedMiB": 46.540931701660156
+    },
+    {
+      "name": "focus-3",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 2,
+      "dialogs": 0,
+      "nodes": 278,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "light",
+      "background": "#fff",
+      "sessions": 2,
+      "counters": {
+        "created": 317,
+        "disposed": 315,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#fff",
+          "#fff"
+        ]
+      },
+      "jsHeapUsedMiB": 46.81386184692383
+    },
+    {
+      "name": "preview-open-3-0",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 1,
+      "dialogs": 1,
+      "nodes": 294,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "light",
+      "background": "#fff",
+      "sessions": 2,
+      "counters": {
+        "created": 318,
+        "disposed": 316,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#fff",
+          "#fff"
+        ]
+      },
+      "jsHeapUsedMiB": 32.067466735839844
+    },
+    {
+      "name": "preview-open-3-1",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 1,
+      "dialogs": 1,
+      "nodes": 294,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "light",
+      "background": "#fff",
+      "sessions": 2,
+      "counters": {
+        "created": 320,
+        "disposed": 318,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#fff",
+          "#fff"
+        ]
+      },
+      "jsHeapUsedMiB": 34.4300651550293
+    },
+    {
+      "name": "preview-open-3-2",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 1,
+      "dialogs": 1,
+      "nodes": 294,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "light",
+      "background": "#fff",
+      "sessions": 2,
+      "counters": {
+        "created": 322,
+        "disposed": 320,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#fff",
+          "#fff"
+        ]
+      },
+      "jsHeapUsedMiB": 32.06367492675781
+    },
+    {
+      "name": "preview-open-3-3",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 1,
+      "dialogs": 1,
+      "nodes": 294,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "light",
+      "background": "#fff",
+      "sessions": 2,
+      "counters": {
+        "created": 324,
+        "disposed": 322,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#fff",
+          "#fff"
+        ]
+      },
+      "jsHeapUsedMiB": 34.46410369873047
+    },
+    {
+      "name": "preview-open-3-4",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 1,
+      "dialogs": 1,
+      "nodes": 294,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "light",
+      "background": "#fff",
+      "sessions": 2,
+      "counters": {
+        "created": 326,
+        "disposed": 324,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#fff",
+          "#fff"
+        ]
+      },
+      "jsHeapUsedMiB": 36.800052642822266
+    },
+    {
+      "name": "preview-open-3-5",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 1,
+      "dialogs": 1,
+      "nodes": 294,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "light",
+      "background": "#fff",
+      "sessions": 2,
+      "counters": {
+        "created": 328,
+        "disposed": 326,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#fff",
+          "#fff"
+        ]
+      },
+      "jsHeapUsedMiB": 39.125465393066406
+    },
+    {
+      "name": "preview-open-3-6",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 1,
+      "dialogs": 1,
+      "nodes": 294,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "light",
+      "background": "#fff",
+      "sessions": 2,
+      "counters": {
+        "created": 330,
+        "disposed": 328,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#fff",
+          "#fff"
+        ]
+      },
+      "jsHeapUsedMiB": 32.39152526855469
+    },
+    {
+      "name": "preview-open-3-7",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 1,
+      "dialogs": 1,
+      "nodes": 294,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "light",
+      "background": "#fff",
+      "sessions": 2,
+      "counters": {
+        "created": 332,
+        "disposed": 330,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#fff",
+          "#fff"
+        ]
+      },
+      "jsHeapUsedMiB": 34.73980712890625
+    },
+    {
+      "name": "preview-3",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 2,
+      "dialogs": 0,
+      "nodes": 278,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "light",
+      "background": "#fff",
+      "sessions": 2,
+      "counters": {
+        "created": 333,
+        "disposed": 331,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#fff",
+          "#fff"
+        ]
+      },
+      "jsHeapUsedMiB": 35.80767822265625
+    },
+    {
+      "name": "theme-3-0",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 2,
+      "dialogs": 0,
+      "nodes": 278,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "dark",
+      "background": "#1b1f26",
+      "sessions": 2,
+      "counters": {
+        "created": 333,
+        "disposed": 331,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#1b1f26",
+          "#1b1f26"
+        ]
+      },
+      "jsHeapUsedMiB": 37.494850158691406
+    },
+    {
+      "name": "theme-3-1",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 2,
+      "dialogs": 0,
+      "nodes": 278,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "light",
+      "background": "#fff",
+      "sessions": 2,
+      "counters": {
+        "created": 333,
+        "disposed": 331,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#fff",
+          "#fff"
+        ]
+      },
+      "jsHeapUsedMiB": 38.987911224365234
+    },
+    {
+      "name": "theme-3-2",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 2,
+      "dialogs": 0,
+      "nodes": 278,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "dark",
+      "background": "#1b1f26",
+      "sessions": 2,
+      "counters": {
+        "created": 333,
+        "disposed": 331,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#1b1f26",
+          "#1b1f26"
+        ]
+      },
+      "jsHeapUsedMiB": 40.486454010009766
+    },
+    {
+      "name": "theme-3-3",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 2,
+      "dialogs": 0,
+      "nodes": 278,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "light",
+      "background": "#fff",
+      "sessions": 2,
+      "counters": {
+        "created": 333,
+        "disposed": 331,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#fff",
+          "#fff"
+        ]
+      },
+      "jsHeapUsedMiB": 41.99774169921875
+    },
+    {
+      "name": "theme-3-4",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 2,
+      "dialogs": 0,
+      "nodes": 278,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "dark",
+      "background": "#1b1f26",
+      "sessions": 2,
+      "counters": {
+        "created": 333,
+        "disposed": 331,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#1b1f26",
+          "#1b1f26"
+        ]
+      },
+      "jsHeapUsedMiB": 43.47601318359375
+    },
+    {
+      "name": "theme-3-5",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 2,
+      "dialogs": 0,
+      "nodes": 278,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "light",
+      "background": "#fff",
+      "sessions": 2,
+      "counters": {
+        "created": 333,
+        "disposed": 331,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#fff",
+          "#fff"
+        ]
+      },
+      "jsHeapUsedMiB": 33.94450759887695
+    },
+    {
+      "name": "theme-3-6",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 2,
+      "dialogs": 0,
+      "nodes": 278,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "dark",
+      "background": "#1b1f26",
+      "sessions": 2,
+      "counters": {
+        "created": 333,
+        "disposed": 331,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#1b1f26",
+          "#1b1f26"
+        ]
+      },
+      "jsHeapUsedMiB": 35.44435501098633
+    },
+    {
+      "name": "theme-3-7",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 2,
+      "dialogs": 0,
+      "nodes": 278,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "light",
+      "background": "#fff",
+      "sessions": 2,
+      "counters": {
+        "created": 333,
+        "disposed": 331,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#fff",
+          "#fff"
+        ]
+      },
+      "jsHeapUsedMiB": 36.90816879272461
+    },
+    {
+      "name": "theme-3",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 2,
+      "dialogs": 0,
+      "nodes": 278,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "light",
+      "background": "#fff",
+      "sessions": 2,
+      "counters": {
+        "created": 333,
+        "disposed": 331,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#fff",
+          "#fff"
+        ]
+      },
+      "jsHeapUsedMiB": 36.933502197265625
+    },
+    {
+      "name": "switch-3",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 2,
+      "dialogs": 0,
+      "nodes": 278,
+      "scrollTop": 81146,
+      "scrollHeight": 164350,
+      "theme": "light",
+      "background": "#fff",
+      "sessions": 2,
+      "counters": {
+        "created": 361,
+        "disposed": 359,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#fff",
+          "#fff"
+        ]
+      },
+      "jsHeapUsedMiB": 36.26360321044922
+    },
+    {
+      "name": "round-3",
+      "rows": 0,
+      "virtualized": false,
+      "chartBlocks": 0,
+      "canvases": 0,
+      "visibleCharts": 0,
+      "visibleCanvases": 0,
+      "dialogs": 0,
+      "nodes": 13,
+      "scrollTop": 0,
+      "scrollHeight": 0,
+      "theme": "light",
+      "background": "",
+      "sessions": 2,
+      "counters": {
+        "created": 361,
+        "disposed": 361,
+        "active": 0,
+        "peak": 3,
+        "colors": []
+      },
+      "jsHeapUsedMiB": 28.226177215576172
+    },
+    {
+      "name": "scroll-4",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 2,
+      "dialogs": 0,
+      "nodes": 278,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "light",
+      "background": "#fff",
+      "sessions": 2,
+      "counters": {
+        "created": 392,
+        "disposed": 390,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#fff",
+          "#fff"
+        ]
+      },
+      "jsHeapUsedMiB": 46.87283706665039
+    },
+    {
+      "name": "focus-4",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 2,
+      "dialogs": 0,
+      "nodes": 278,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "light",
+      "background": "#fff",
+      "sessions": 2,
+      "counters": {
+        "created": 392,
+        "disposed": 390,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#fff",
+          "#fff"
+        ]
+      },
+      "jsHeapUsedMiB": 47.13538360595703
+    },
+    {
+      "name": "preview-open-4-0",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 1,
+      "dialogs": 1,
+      "nodes": 294,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "light",
+      "background": "#fff",
+      "sessions": 2,
+      "counters": {
+        "created": 393,
+        "disposed": 391,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#fff",
+          "#fff"
+        ]
+      },
+      "jsHeapUsedMiB": 32.101768493652344
+    },
+    {
+      "name": "preview-open-4-1",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 1,
+      "dialogs": 1,
+      "nodes": 294,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "light",
+      "background": "#fff",
+      "sessions": 2,
+      "counters": {
+        "created": 395,
+        "disposed": 393,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#fff",
+          "#fff"
+        ]
+      },
+      "jsHeapUsedMiB": 34.46240997314453
+    },
+    {
+      "name": "preview-open-4-2",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 1,
+      "dialogs": 1,
+      "nodes": 294,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "light",
+      "background": "#fff",
+      "sessions": 2,
+      "counters": {
+        "created": 397,
+        "disposed": 395,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#fff",
+          "#fff"
+        ]
+      },
+      "jsHeapUsedMiB": 32.24367141723633
+    },
+    {
+      "name": "preview-open-4-3",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 1,
+      "dialogs": 1,
+      "nodes": 294,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "light",
+      "background": "#fff",
+      "sessions": 2,
+      "counters": {
+        "created": 399,
+        "disposed": 397,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#fff",
+          "#fff"
+        ]
+      },
+      "jsHeapUsedMiB": 34.618892669677734
+    },
+    {
+      "name": "preview-open-4-4",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 1,
+      "dialogs": 1,
+      "nodes": 294,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "light",
+      "background": "#fff",
+      "sessions": 2,
+      "counters": {
+        "created": 401,
+        "disposed": 399,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#fff",
+          "#fff"
+        ]
+      },
+      "jsHeapUsedMiB": 36.95974349975586
+    },
+    {
+      "name": "preview-open-4-5",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 1,
+      "dialogs": 1,
+      "nodes": 294,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "light",
+      "background": "#fff",
+      "sessions": 2,
+      "counters": {
+        "created": 403,
+        "disposed": 401,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#fff",
+          "#fff"
+        ]
+      },
+      "jsHeapUsedMiB": 39.180076599121094
+    },
+    {
+      "name": "preview-open-4-6",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 1,
+      "dialogs": 1,
+      "nodes": 294,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "light",
+      "background": "#fff",
+      "sessions": 2,
+      "counters": {
+        "created": 405,
+        "disposed": 403,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#fff",
+          "#fff"
+        ]
+      },
+      "jsHeapUsedMiB": 32.21694564819336
+    },
+    {
+      "name": "preview-open-4-7",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 1,
+      "dialogs": 1,
+      "nodes": 294,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "light",
+      "background": "#fff",
+      "sessions": 2,
+      "counters": {
+        "created": 407,
+        "disposed": 405,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#fff",
+          "#fff"
+        ]
+      },
+      "jsHeapUsedMiB": 34.563968658447266
+    },
+    {
+      "name": "preview-4",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 2,
+      "dialogs": 0,
+      "nodes": 278,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "light",
+      "background": "#fff",
+      "sessions": 2,
+      "counters": {
+        "created": 408,
+        "disposed": 406,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#fff",
+          "#fff"
+        ]
+      },
+      "jsHeapUsedMiB": 35.641883850097656
+    },
+    {
+      "name": "theme-4-0",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 2,
+      "dialogs": 0,
+      "nodes": 278,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "dark",
+      "background": "#1b1f26",
+      "sessions": 2,
+      "counters": {
+        "created": 408,
+        "disposed": 406,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#1b1f26",
+          "#1b1f26"
+        ]
+      },
+      "jsHeapUsedMiB": 37.295291900634766
+    },
+    {
+      "name": "theme-4-1",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 2,
+      "dialogs": 0,
+      "nodes": 278,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "light",
+      "background": "#fff",
+      "sessions": 2,
+      "counters": {
+        "created": 408,
+        "disposed": 406,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#fff",
+          "#fff"
+        ]
+      },
+      "jsHeapUsedMiB": 38.78873825073242
+    },
+    {
+      "name": "theme-4-2",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 2,
+      "dialogs": 0,
+      "nodes": 278,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "dark",
+      "background": "#1b1f26",
+      "sessions": 2,
+      "counters": {
+        "created": 408,
+        "disposed": 406,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#1b1f26",
+          "#1b1f26"
+        ]
+      },
+      "jsHeapUsedMiB": 40.28738784790039
+    },
+    {
+      "name": "theme-4-3",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 2,
+      "dialogs": 0,
+      "nodes": 278,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "light",
+      "background": "#fff",
+      "sessions": 2,
+      "counters": {
+        "created": 408,
+        "disposed": 406,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#fff",
+          "#fff"
+        ]
+      },
+      "jsHeapUsedMiB": 41.82952880859375
+    },
+    {
+      "name": "theme-4-4",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 2,
+      "dialogs": 0,
+      "nodes": 278,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "dark",
+      "background": "#1b1f26",
+      "sessions": 2,
+      "counters": {
+        "created": 408,
+        "disposed": 406,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#1b1f26",
+          "#1b1f26"
+        ]
+      },
+      "jsHeapUsedMiB": 43.355472564697266
+    },
+    {
+      "name": "theme-4-5",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 2,
+      "dialogs": 0,
+      "nodes": 278,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "light",
+      "background": "#fff",
+      "sessions": 2,
+      "counters": {
+        "created": 408,
+        "disposed": 406,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#fff",
+          "#fff"
+        ]
+      },
+      "jsHeapUsedMiB": 33.841529846191406
+    },
+    {
+      "name": "theme-4-6",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 2,
+      "dialogs": 0,
+      "nodes": 278,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "dark",
+      "background": "#1b1f26",
+      "sessions": 2,
+      "counters": {
+        "created": 408,
+        "disposed": 406,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#1b1f26",
+          "#1b1f26"
+        ]
+      },
+      "jsHeapUsedMiB": 35.32169723510742
+    },
+    {
+      "name": "theme-4-7",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 2,
+      "dialogs": 0,
+      "nodes": 278,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "light",
+      "background": "#fff",
+      "sessions": 2,
+      "counters": {
+        "created": 408,
+        "disposed": 406,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#fff",
+          "#fff"
+        ]
+      },
+      "jsHeapUsedMiB": 36.78489685058594
+    },
+    {
+      "name": "theme-4",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 2,
+      "dialogs": 0,
+      "nodes": 278,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "light",
+      "background": "#fff",
+      "sessions": 2,
+      "counters": {
+        "created": 408,
+        "disposed": 406,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#fff",
+          "#fff"
+        ]
+      },
+      "jsHeapUsedMiB": 36.81023025512695
+    },
+    {
+      "name": "switch-4",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 2,
+      "dialogs": 0,
+      "nodes": 278,
+      "scrollTop": 81146,
+      "scrollHeight": 164350,
+      "theme": "light",
+      "background": "#fff",
+      "sessions": 2,
+      "counters": {
+        "created": 439,
+        "disposed": 437,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#fff",
+          "#fff"
+        ]
+      },
+      "jsHeapUsedMiB": 54.14739990234375
+    },
+    {
+      "name": "round-4",
+      "rows": 0,
+      "virtualized": false,
+      "chartBlocks": 0,
+      "canvases": 0,
+      "visibleCharts": 0,
+      "visibleCanvases": 0,
+      "dialogs": 0,
+      "nodes": 13,
+      "scrollTop": 0,
+      "scrollHeight": 0,
+      "theme": "light",
+      "background": "",
+      "sessions": 2,
+      "counters": {
+        "created": 439,
+        "disposed": 439,
+        "active": 0,
+        "peak": 3,
+        "colors": []
+      },
+      "jsHeapUsedMiB": 28.308467864990234
+    },
+    {
+      "name": "scroll-5",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 2,
+      "dialogs": 0,
+      "nodes": 278,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "light",
+      "background": "#fff",
+      "sessions": 2,
+      "counters": {
+        "created": 469,
+        "disposed": 467,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#fff",
+          "#fff"
+        ]
+      },
+      "jsHeapUsedMiB": 46.1329231262207
+    },
+    {
+      "name": "focus-5",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 2,
+      "dialogs": 0,
+      "nodes": 278,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "light",
+      "background": "#fff",
+      "sessions": 2,
+      "counters": {
+        "created": 469,
+        "disposed": 467,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#fff",
+          "#fff"
+        ]
+      },
+      "jsHeapUsedMiB": 46.4100341796875
+    },
+    {
+      "name": "preview-open-5-0",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 1,
+      "dialogs": 1,
+      "nodes": 294,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "light",
+      "background": "#fff",
+      "sessions": 2,
+      "counters": {
+        "created": 470,
+        "disposed": 468,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#fff",
+          "#fff"
+        ]
+      },
+      "jsHeapUsedMiB": 32.30705642700195
+    },
+    {
+      "name": "preview-open-5-1",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 1,
+      "dialogs": 1,
+      "nodes": 294,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "light",
+      "background": "#fff",
+      "sessions": 2,
+      "counters": {
+        "created": 472,
+        "disposed": 470,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#fff",
+          "#fff"
+        ]
+      },
+      "jsHeapUsedMiB": 34.649452209472656
+    },
+    {
+      "name": "preview-open-5-2",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 1,
+      "dialogs": 1,
+      "nodes": 294,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "light",
+      "background": "#fff",
+      "sessions": 2,
+      "counters": {
+        "created": 474,
+        "disposed": 472,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#fff",
+          "#fff"
+        ]
+      },
+      "jsHeapUsedMiB": 32.26567840576172
+    },
+    {
+      "name": "preview-open-5-3",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 1,
+      "dialogs": 1,
+      "nodes": 294,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "light",
+      "background": "#fff",
+      "sessions": 2,
+      "counters": {
+        "created": 476,
+        "disposed": 474,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#fff",
+          "#fff"
+        ]
+      },
+      "jsHeapUsedMiB": 34.65524673461914
+    },
+    {
+      "name": "preview-open-5-4",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 1,
+      "dialogs": 1,
+      "nodes": 294,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "light",
+      "background": "#fff",
+      "sessions": 2,
+      "counters": {
+        "created": 478,
+        "disposed": 476,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#fff",
+          "#fff"
+        ]
+      },
+      "jsHeapUsedMiB": 36.99470138549805
+    },
+    {
+      "name": "preview-open-5-5",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 1,
+      "dialogs": 1,
+      "nodes": 294,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "light",
+      "background": "#fff",
+      "sessions": 2,
+      "counters": {
+        "created": 480,
+        "disposed": 478,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#fff",
+          "#fff"
+        ]
+      },
+      "jsHeapUsedMiB": 39.30086135864258
+    },
+    {
+      "name": "preview-open-5-6",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 1,
+      "dialogs": 1,
+      "nodes": 294,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "light",
+      "background": "#fff",
+      "sessions": 2,
+      "counters": {
+        "created": 482,
+        "disposed": 480,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#fff",
+          "#fff"
+        ]
+      },
+      "jsHeapUsedMiB": 32.32908248901367
+    },
+    {
+      "name": "preview-open-5-7",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 1,
+      "dialogs": 1,
+      "nodes": 294,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "light",
+      "background": "#fff",
+      "sessions": 2,
+      "counters": {
+        "created": 484,
+        "disposed": 482,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#fff",
+          "#fff"
+        ]
+      },
+      "jsHeapUsedMiB": 34.674591064453125
+    },
+    {
+      "name": "preview-5",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 2,
+      "dialogs": 0,
+      "nodes": 278,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "light",
+      "background": "#fff",
+      "sessions": 2,
+      "counters": {
+        "created": 485,
+        "disposed": 483,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#fff",
+          "#fff"
+        ]
+      },
+      "jsHeapUsedMiB": 35.74361038208008
+    },
+    {
+      "name": "theme-5-0",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 2,
+      "dialogs": 0,
+      "nodes": 278,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "dark",
+      "background": "#1b1f26",
+      "sessions": 2,
+      "counters": {
+        "created": 485,
+        "disposed": 483,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#1b1f26",
+          "#1b1f26"
+        ]
+      },
+      "jsHeapUsedMiB": 37.417236328125
+    },
+    {
+      "name": "theme-5-1",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 2,
+      "dialogs": 0,
+      "nodes": 278,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "light",
+      "background": "#fff",
+      "sessions": 2,
+      "counters": {
+        "created": 485,
+        "disposed": 483,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#fff",
+          "#fff"
+        ]
+      },
+      "jsHeapUsedMiB": 38.907222747802734
+    },
+    {
+      "name": "theme-5-2",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 2,
+      "dialogs": 0,
+      "nodes": 278,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "dark",
+      "background": "#1b1f26",
+      "sessions": 2,
+      "counters": {
+        "created": 485,
+        "disposed": 483,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#1b1f26",
+          "#1b1f26"
+        ]
+      },
+      "jsHeapUsedMiB": 40.40300750732422
+    },
+    {
+      "name": "theme-5-3",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 2,
+      "dialogs": 0,
+      "nodes": 278,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "light",
+      "background": "#fff",
+      "sessions": 2,
+      "counters": {
+        "created": 485,
+        "disposed": 483,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#fff",
+          "#fff"
+        ]
+      },
+      "jsHeapUsedMiB": 41.890560150146484
+    },
+    {
+      "name": "theme-5-4",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 2,
+      "dialogs": 0,
+      "nodes": 278,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "dark",
+      "background": "#1b1f26",
+      "sessions": 2,
+      "counters": {
+        "created": 485,
+        "disposed": 483,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#1b1f26",
+          "#1b1f26"
+        ]
+      },
+      "jsHeapUsedMiB": 43.407962799072266
+    },
+    {
+      "name": "theme-5-5",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 2,
+      "dialogs": 0,
+      "nodes": 278,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "light",
+      "background": "#fff",
+      "sessions": 2,
+      "counters": {
+        "created": 485,
+        "disposed": 483,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#fff",
+          "#fff"
+        ]
+      },
+      "jsHeapUsedMiB": 33.887901306152344
+    },
+    {
+      "name": "theme-5-6",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 2,
+      "dialogs": 0,
+      "nodes": 278,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "dark",
+      "background": "#1b1f26",
+      "sessions": 2,
+      "counters": {
+        "created": 485,
+        "disposed": 483,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#1b1f26",
+          "#1b1f26"
+        ]
+      },
+      "jsHeapUsedMiB": 35.366294860839844
+    },
+    {
+      "name": "theme-5-7",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 2,
+      "dialogs": 0,
+      "nodes": 278,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "light",
+      "background": "#fff",
+      "sessions": 2,
+      "counters": {
+        "created": 485,
+        "disposed": 483,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#fff",
+          "#fff"
+        ]
+      },
+      "jsHeapUsedMiB": 36.83124923706055
+    },
+    {
+      "name": "theme-5",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 2,
+      "dialogs": 0,
+      "nodes": 278,
+      "scrollTop": 81146,
+      "scrollHeight": 165328,
+      "theme": "light",
+      "background": "#fff",
+      "sessions": 2,
+      "counters": {
+        "created": 485,
+        "disposed": 483,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#fff",
+          "#fff"
+        ]
+      },
+      "jsHeapUsedMiB": 36.85658264160156
+    },
+    {
+      "name": "switch-5",
+      "rows": 9,
+      "virtualized": true,
+      "chartBlocks": 5,
+      "canvases": 2,
+      "visibleCharts": 2,
+      "visibleCanvases": 2,
+      "dialogs": 0,
+      "nodes": 275,
+      "scrollTop": 81146,
+      "scrollHeight": 164350,
+      "theme": "light",
+      "background": "#fff",
+      "sessions": 2,
+      "counters": {
+        "created": 513,
+        "disposed": 511,
+        "active": 2,
+        "peak": 3,
+        "colors": [
+          "#fff",
+          "#fff"
+        ]
+      },
+      "jsHeapUsedMiB": 42.028194427490234
+    },
+    {
+      "name": "round-5",
+      "rows": 0,
+      "virtualized": false,
+      "chartBlocks": 0,
+      "canvases": 0,
+      "visibleCharts": 0,
+      "visibleCanvases": 0,
+      "dialogs": 0,
+      "nodes": 13,
+      "scrollTop": 0,
+      "scrollHeight": 0,
+      "theme": "light",
+      "background": "",
+      "sessions": 2,
+      "counters": {
+        "created": 513,
+        "disposed": 513,
+        "active": 0,
+        "peak": 3,
+        "colors": []
+      },
+      "jsHeapUsedMiB": 28.39777374267578
+    },
+    {
+      "name": "released",
+      "rows": 0,
+      "virtualized": false,
+      "chartBlocks": 0,
+      "canvases": 0,
+      "visibleCharts": 0,
+      "visibleCanvases": 0,
+      "dialogs": 0,
+      "nodes": 13,
+      "scrollTop": 0,
+      "scrollHeight": 0,
+      "theme": "light",
+      "background": "",
+      "sessions": 0,
+      "counters": {
+        "created": 513,
+        "disposed": 513,
+        "active": 0,
+        "peak": 3,
+        "colors": []
+      },
+      "jsHeapUsedMiB": 25.66065216064453
+    }
+  ],
+  "phases": [
+    {
+      "name": "scroll-0",
+      "elapsedMs": 2621,
+      "frameCount": 152,
+      "frameP50Ms": 16.700000000000728,
+      "frameP95Ms": 16.799999999999272,
+      "maxFrameMs": 100,
+      "over50Ratio": 0.006578947368421052,
+      "longTasks": [
+        103
+      ]
+    },
+    {
+      "name": "focus-0",
+      "elapsedMs": 30,
+      "frameCount": 2,
+      "frameP50Ms": 10.900000047684443,
+      "frameP95Ms": 16.799999999999272,
+      "maxFrameMs": 16.799999999999272,
+      "over50Ratio": 0,
+      "longTasks": []
+    },
+    {
+      "name": "preview-0",
+      "elapsedMs": 1452,
+      "frameCount": 88,
+      "frameP50Ms": 16.69999999999709,
+      "frameP95Ms": 16.700000000000728,
+      "maxFrameMs": 16.799999999999272,
+      "over50Ratio": 0,
+      "longTasks": []
+    },
+    {
+      "name": "theme-0",
+      "elapsedMs": 1200,
+      "frameCount": 63,
+      "frameP50Ms": 16.700000000000728,
+      "frameP95Ms": 33.400000000001455,
+      "maxFrameMs": 50.099999999998545,
+      "over50Ratio": 0.015873015873015872,
+      "longTasks": []
+    },
+    {
+      "name": "switch-0",
+      "elapsedMs": 3937,
+      "frameCount": 218,
+      "frameP50Ms": 16.700000000000728,
+      "frameP95Ms": 33.30000000000291,
+      "maxFrameMs": 50,
+      "over50Ratio": 0,
+      "longTasks": [
+        63,
+        52,
+        52,
+        62
+      ]
+    },
+    {
+      "name": "scroll-1",
+      "elapsedMs": 2497,
+      "frameCount": 150,
+      "frameP50Ms": 16.69999999999709,
+      "frameP95Ms": 16.700000000004366,
+      "maxFrameMs": 16.80000000000291,
+      "over50Ratio": 0,
+      "longTasks": []
+    },
+    {
+      "name": "focus-1",
+      "elapsedMs": 30,
+      "frameCount": 2,
+      "frameP50Ms": 11.700000023840403,
+      "frameP95Ms": 16.599999999998545,
+      "maxFrameMs": 16.599999999998545,
+      "over50Ratio": 0,
+      "longTasks": []
+    },
+    {
+      "name": "preview-1",
+      "elapsedMs": 1315,
+      "frameCount": 79,
+      "frameP50Ms": 16.69999999999709,
+      "frameP95Ms": 16.700000000004366,
+      "maxFrameMs": 16.80000000000291,
+      "over50Ratio": 0,
+      "longTasks": []
+    },
+    {
+      "name": "theme-1",
+      "elapsedMs": 1198,
+      "frameCount": 64,
+      "frameP50Ms": 16.69999999999709,
+      "frameP95Ms": 33.30000000000291,
+      "maxFrameMs": 33.400000000001455,
+      "over50Ratio": 0,
+      "longTasks": []
+    },
+    {
+      "name": "switch-1",
+      "elapsedMs": 3911,
+      "frameCount": 217,
+      "frameP50Ms": 16.69999999999709,
+      "frameP95Ms": 33.299999999995634,
+      "maxFrameMs": 50.099999999998545,
+      "over50Ratio": 0.004608294930875576,
+      "longTasks": [
+        58,
+        54,
+        51
+      ]
+    },
+    {
+      "name": "scroll-2",
+      "elapsedMs": 2565,
+      "frameCount": 152,
+      "frameP50Ms": 16.69999999999709,
+      "frameP95Ms": 16.700000000004366,
+      "maxFrameMs": 33.30000000000291,
+      "over50Ratio": 0,
+      "longTasks": []
+    },
+    {
+      "name": "focus-2",
+      "elapsedMs": 54,
+      "frameCount": 3,
+      "frameP50Ms": 16.69999999999709,
+      "frameP95Ms": 16.69999999999709,
+      "maxFrameMs": 16.69999999999709,
+      "over50Ratio": 0,
+      "longTasks": []
+    },
+    {
+      "name": "preview-2",
+      "elapsedMs": 1682,
+      "frameCount": 97,
+      "frameP50Ms": 16.69999999999709,
+      "frameP95Ms": 16.80000000000291,
+      "maxFrameMs": 66.69999999999709,
+      "over50Ratio": 0.010309278350515464,
+      "longTasks": [
+        70
+      ]
+    },
+    {
+      "name": "theme-2",
+      "elapsedMs": 1198,
+      "frameCount": 64,
+      "frameP50Ms": 16.69999999999709,
+      "frameP95Ms": 33.30000000000291,
+      "maxFrameMs": 33.400000000001455,
+      "over50Ratio": 0,
+      "longTasks": []
+    },
+    {
+      "name": "switch-2",
+      "elapsedMs": 4529,
+      "frameCount": 224,
+      "frameP50Ms": 16.69999999999709,
+      "frameP95Ms": 50,
+      "maxFrameMs": 150.09999999999854,
+      "over50Ratio": 0.03125,
+      "longTasks": [
+        165,
+        82,
+        73,
+        58,
+        59,
+        55,
+        81,
+        67,
+        78,
+        55,
+        105,
+        58,
+        66,
+        58
+      ]
+    },
+    {
+      "name": "scroll-3",
+      "elapsedMs": 2494,
+      "frameCount": 149,
+      "frameP50Ms": 16.69999999999709,
+      "frameP95Ms": 16.799999999995634,
+      "maxFrameMs": 33.400000000001455,
+      "over50Ratio": 0,
+      "longTasks": []
+    },
+    {
+      "name": "focus-3",
+      "elapsedMs": 31,
+      "frameCount": 2,
+      "frameP50Ms": 11.299999976159597,
+      "frameP95Ms": 16.69999999999709,
+      "maxFrameMs": 16.69999999999709,
+      "over50Ratio": 0,
+      "longTasks": []
+    },
+    {
+      "name": "preview-3",
+      "elapsedMs": 1564,
+      "frameCount": 94,
+      "frameP50Ms": 16.69999999999709,
+      "frameP95Ms": 16.700000000004366,
+      "maxFrameMs": 16.80000000000291,
+      "over50Ratio": 0,
+      "longTasks": []
+    },
+    {
+      "name": "theme-3",
+      "elapsedMs": 1207,
+      "frameCount": 64,
+      "frameP50Ms": 16.69999999999709,
+      "frameP95Ms": 33.39999999999418,
+      "maxFrameMs": 33.39999999999418,
+      "over50Ratio": 0,
+      "longTasks": []
+    },
+    {
+      "name": "switch-3",
+      "elapsedMs": 4264,
+      "frameCount": 221,
+      "frameP50Ms": 16.69999999999709,
+      "frameP95Ms": 50,
+      "maxFrameMs": 83.40000000000146,
+      "over50Ratio": 0.02262443438914027,
+      "longTasks": [
+        84,
+        64,
+        69,
+        56,
+        64,
+        55,
+        57,
+        58,
+        54,
+        56,
+        64,
+        61,
+        58
+      ]
+    },
+    {
+      "name": "scroll-4",
+      "elapsedMs": 2461,
+      "frameCount": 147,
+      "frameP50Ms": 16.69999999999709,
+      "frameP95Ms": 16.799999999995634,
+      "maxFrameMs": 33.19999999999709,
+      "over50Ratio": 0,
+      "longTasks": []
+    },
+    {
+      "name": "focus-4",
+      "elapsedMs": 31,
+      "frameCount": 2,
+      "frameP50Ms": 12.000000047686626,
+      "frameP95Ms": 16.69999999999709,
+      "maxFrameMs": 16.69999999999709,
+      "over50Ratio": 0,
+      "longTasks": []
+    },
+    {
+      "name": "preview-4",
+      "elapsedMs": 1347,
+      "frameCount": 81,
+      "frameP50Ms": 16.69999999999709,
+      "frameP95Ms": 16.70000000001164,
+      "maxFrameMs": 16.80000000000291,
+      "over50Ratio": 0,
+      "longTasks": []
+    },
+    {
+      "name": "theme-4",
+      "elapsedMs": 1201,
+      "frameCount": 64,
+      "frameP50Ms": 16.69999999999709,
+      "frameP95Ms": 33.30000000000291,
+      "maxFrameMs": 33.39999999999418,
+      "over50Ratio": 0,
+      "longTasks": []
+    },
+    {
+      "name": "switch-4",
+      "elapsedMs": 4269,
+      "frameCount": 222,
+      "frameP50Ms": 16.69999999999709,
+      "frameP95Ms": 33.30000000000291,
+      "maxFrameMs": 116.60000000000582,
+      "over50Ratio": 0.02252252252252252,
+      "longTasks": [
+        54,
+        51,
+        107,
+        61,
+        61,
+        51,
+        120,
+        75
+      ]
+    },
+    {
+      "name": "scroll-5",
+      "elapsedMs": 2466,
+      "frameCount": 148,
+      "frameP50Ms": 16.69999999999709,
+      "frameP95Ms": 16.80000000000291,
+      "maxFrameMs": 16.80000000000291,
+      "over50Ratio": 0,
+      "longTasks": []
+    },
+    {
+      "name": "focus-5",
+      "elapsedMs": 30,
+      "frameCount": 2,
+      "frameP50Ms": 11.400000047680805,
+      "frameP95Ms": 16.69999999999709,
+      "maxFrameMs": 16.69999999999709,
+      "over50Ratio": 0,
+      "longTasks": []
+    },
+    {
+      "name": "preview-5",
+      "elapsedMs": 1466,
+      "frameCount": 88,
+      "frameP50Ms": 16.69999999999709,
+      "frameP95Ms": 16.70000000001164,
+      "maxFrameMs": 16.80000000000291,
+      "over50Ratio": 0,
+      "longTasks": []
+    },
+    {
+      "name": "theme-5",
+      "elapsedMs": 1198,
+      "frameCount": 64,
+      "frameP50Ms": 16.69999999999709,
+      "frameP95Ms": 33.30000000000291,
+      "maxFrameMs": 33.39999999999418,
+      "over50Ratio": 0,
+      "longTasks": []
+    },
+    {
+      "name": "switch-5",
+      "elapsedMs": 4206,
+      "frameCount": 223,
+      "frameP50Ms": 16.69999999999709,
+      "frameP95Ms": 49.90000000000873,
+      "maxFrameMs": 66.59999999999127,
+      "over50Ratio": 0.017937219730941704,
+      "longTasks": [
+        77,
+        63,
+        60,
+        55,
+        56,
+        59,
+        58,
+        57,
+        54,
+        57,
+        63,
+        61
+      ]
+    }
+  ],
+  "memory": [
+    {
+      "name": "warm",
+      "jsHeapUsedMiB": 26.34673309326172,
+      "jsHeapTotalMiB": 27.125,
+      "backingStorageMiB": 4.42545223236084,
+      "rendererRssMiB": 486.359375,
+      "documents": 2,
+      "nodes": 1386,
+      "jsEventListeners": 512
+    },
+    {
+      "name": "round-0",
+      "jsHeapUsedMiB": 27.720962524414062,
+      "jsHeapTotalMiB": 28.875,
+      "backingStorageMiB": 4.427433013916016,
+      "rendererRssMiB": 489.203125,
+      "documents": 2,
+      "nodes": 382,
+      "jsEventListeners": 345
+    },
+    {
+      "name": "round-1",
+      "jsHeapUsedMiB": 27.87401580810547,
+      "jsHeapTotalMiB": 28.875,
+      "backingStorageMiB": 4.427433013916016,
+      "rendererRssMiB": 482.5625,
+      "documents": 2,
+      "nodes": 382,
+      "jsEventListeners": 345
+    },
+    {
+      "name": "round-2",
+      "jsHeapUsedMiB": 28.07105255126953,
+      "jsHeapTotalMiB": 29.375,
+      "backingStorageMiB": 4.427433013916016,
+      "rendererRssMiB": 427.25,
+      "documents": 2,
+      "nodes": 382,
+      "jsEventListeners": 345
+    },
+    {
+      "name": "round-3",
+      "jsHeapUsedMiB": 28.203632354736328,
+      "jsHeapTotalMiB": 29.375,
+      "backingStorageMiB": 4.427433013916016,
+      "rendererRssMiB": 440.84375,
+      "documents": 2,
+      "nodes": 382,
+      "jsEventListeners": 345
+    },
+    {
+      "name": "round-4",
+      "jsHeapUsedMiB": 28.28614044189453,
+      "jsHeapTotalMiB": 29.375,
+      "backingStorageMiB": 4.427433013916016,
+      "rendererRssMiB": 424.390625,
+      "documents": 2,
+      "nodes": 382,
+      "jsEventListeners": 345
+    },
+    {
+      "name": "round-5",
+      "jsHeapUsedMiB": 28.375228881835938,
+      "jsHeapTotalMiB": 29.375,
+      "backingStorageMiB": 4.427433013916016,
+      "rendererRssMiB": 432.453125,
+      "documents": 2,
+      "nodes": 382,
+      "jsEventListeners": 345
+    },
+    {
+      "name": "released",
+      "jsHeapUsedMiB": 25.638107299804688,
+      "jsHeapTotalMiB": 26.375,
+      "backingStorageMiB": 4.424095153808594,
+      "rendererRssMiB": 429.96875,
+      "documents": 2,
+      "nodes": 382,
+      "jsEventListeners": 345
+    }
+  ],
+  "errors": [],
+  "violations": [],
+  "browser": "155.0.8059.40",
+  "postGcGrowthMiB": 2.0284957885742188,
+  "passed": true,
+  "finishedAt": "2026-10-17T05:32:11.234Z"
+}

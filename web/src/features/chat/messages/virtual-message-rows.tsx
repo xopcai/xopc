@@ -43,18 +43,11 @@ export function VirtualMessageRows({ rows, scrollRef, renderRow, footerRef }: {
     const update = () => {
       const selection = window.getSelection();
       const selected = Boolean(selection && !selection.isCollapsed && parent.contains(selection.anchorNode));
-      const focused = document.activeElement instanceof Element
-        && Boolean(document.activeElement.closest('[data-chat-message-row]'))
-        && parent.contains(document.activeElement);
-      setRetainRows(selected || focused);
+      setRetainRows(selected);
     };
     document.addEventListener('selectionchange', update);
-    parent.addEventListener('focusin', update);
-    parent.addEventListener('focusout', update);
     return () => {
       document.removeEventListener('selectionchange', update);
-      parent.removeEventListener('focusin', update);
-      parent.removeEventListener('focusout', update);
     };
   }, [parent]);
 
