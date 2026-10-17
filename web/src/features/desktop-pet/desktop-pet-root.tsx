@@ -68,7 +68,7 @@ function activityCtaText(item: Activity, labels: { open: string; needsInput: str
 
 function fallbackState(): DesktopPetState {
   const now = Date.now();
-  return { prefs: { enabled: true, showOnStartup: false, selectedPetId: "ember", alwaysOnTop: true, bubbleEnabled: true, clickThroughWhenIdle: false, muted: false, behaviorMode: "companion", proactiveTipsEnabled: true, interactionEnabled: true, reducedMotion: false, sizePercent: 100, collapsed: false }, relationship: { firstMetAt: now, lastSeenAt: now, completedTaskCount: 0, unlockedReactions: [], recentCompletedRunIds: [] }, pets: [], visible: true, customPetsDir: "", petIssues: [], activities: [] };
+  return { prefs: { enabled: true, showOnStartup: false, selectedPetId: "loopi", alwaysOnTop: true, bubbleEnabled: true, clickThroughWhenIdle: false, muted: false, behaviorMode: "companion", proactiveTipsEnabled: true, interactionEnabled: true, reducedMotion: false, sizePercent: 100, collapsed: false }, relationship: { firstMetAt: now, lastSeenAt: now, completedTaskCount: 0, unlockedReactions: [], recentCompletedRunIds: [] }, pets: [], visible: true, customPetsDir: "", petIssues: [], activities: [] };
 }
 
 export function DesktopPetRoot() {
@@ -176,20 +176,36 @@ export function DesktopPetRoot() {
     const next = await window.electronAPI?.pet?.setPrefs({ collapsed: !state.prefs.collapsed });
     if (next) setState(next);
   };
-  const beginDrag = useCallback((event: PointerEvent<HTMLButtonElement>) => { if (event.button !== 0) return; dragRef.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY, moved: false }; event.currentTarget.setPointerCapture(event.pointerId); void window.electronAPI?.pet?.startDrag({ screenX: event.screenX, screenY: event.screenY }); }, []);
-  const moveDrag = useCallback((event: PointerEvent<HTMLButtonElement>) => { const drag = dragRef.current; if (!drag || drag.pointerId !== event.pointerId) return; if (Math.abs(event.clientX - drag.x) + Math.abs(event.clientY - drag.y) > 4) { drag.moved = true; setInteractionAction("pickedUp"); void window.electronAPI?.pet?.drag({ screenX: event.screenX, screenY: event.screenY }); } }, []);
-  const endDrag = useCallback((event: PointerEvent<HTMLButtonElement>) => {
+  const beginDrag = useCallback((event: PointerEvent<HTMLButtonElement>) => { if (event.button !== 0) return; dragRef.current = { pointerId: event.pointerId, x: event.screenX, y: event.screenY, moved: false }; event.currentTarget.setPointerCapture(event.pointerId); void window.electronAPI?.pet?.startDrag({ screenX: event.screenX, screenY: event.screenY }); }, []);
+  const moveDrag = useCallback((event: PointerEvent<HTMLButtonElement>) => { const drag = dragRef.current; if (!drag || drag.pointerId !== event.pointerId) return; if (drag.moved || Math.abs(event.screenX - drag.x) + Math.abs(event.screenY - drag.y) > 4) { drag.moved = true; setInteractionAction("pickedUp"); void window.electronAPI?.pet?.drag({ screenX: event.screenX, screenY: event.screenY }); } }, []);
+  const endDrag = useCallback((event?: Pick<PointerEvent<HTMLButtonElement>, "pointerId" | "screenX" | "screenY" | "type">) => {
     const drag = dragRef.current;
-    if (!drag || drag.pointerId !== event.pointerId) return;
+    if (!drag || (event && drag.pointerId !== event.pointerId)) return;
     dragRef.current = null;
+    // Native window moves can coalesce pointermove events; commit the actual release point.
+    const released = event?.type === "pointerup" && Number.isFinite(event.screenX) && Number.isFinite(event.screenY);
+    const moved = drag.moved || (released && Math.abs(event.screenX - drag.x) + Math.abs(event.screenY - drag.y) > 4);
+    if (moved && released) void window.electronAPI?.pet?.drag({ screenX: event.screenX, screenY: event.screenY });
     void window.electronAPI?.pet?.endDrag();
-    if (drag.moved) {
+    if (moved) {
       setInteractionAction("released");
       window.setTimeout(() => setInteractionAction(null), 700);
       suppressClickRef.current = true;
       window.setTimeout(() => { suppressClickRef.current = false; }, 0);
     }
   }, []);
+  useEffect(() => {
+    const release = (event: globalThis.PointerEvent) => endDrag(event);
+    const blur = () => endDrag();
+    window.addEventListener("pointerup", release);
+    window.addEventListener("pointercancel", release);
+    window.addEventListener("blur", blur);
+    return () => {
+      window.removeEventListener("pointerup", release);
+      window.removeEventListener("pointercancel", release);
+      window.removeEventListener("blur", blur);
+    };
+  }, [endDrag]);
   const handlePetClick = () => {
     if (suppressClickRef.current) return;
     open();
@@ -219,6 +235,6 @@ export function DesktopPetRoot() {
       return <div key={item.conversationId} className={`desktop-pet-session desktop-pet-session--${item.state}${health ? " desktop-pet-session--health" : ""}`}><button type="button" className="desktop-pet-session-open" onClick={() => open(item)}><span className="desktop-pet-session-dot" /><span className="desktop-pet-session-main"><strong>{item.sessionLabel}</strong><span>{displayText}{completion || health ? "" : activityDetailText(item, now, t.tipTargetSuffix)}</span></span>{cta ? <span className="desktop-pet-session-cta">{cta}</span> : null}</button><button type="button" className="desktop-pet-session-close" aria-label={t.dismissSession} onClick={() => { void window.electronAPI?.pet?.acknowledgeEvent(item.conversationId, item.runId); setDismissals((current) => ({ ...current, [item.conversationId]: { runId: item.runId, state: item.state } })); }}><X size={12} /></button></div>;
     })}</div> : null}
     {idleTipVisible ? <div ref={queueRef} className="desktop-pet-bubble desktop-pet-queue desktop-pet-idle-tip"><div className="desktop-pet-session desktop-pet-session--idle"><button type="button" className="desktop-pet-session-open" onClick={() => open()}><span className="desktop-pet-session-dot" /><span className="desktop-pet-session-main"><strong>{t.idleTipTitle}</strong><span>{stablePhrase(selectedPet.persona?.phrases?.greeting ?? personaPhrases.greeting, { conversationId: "idle", runId: "idle", sessionLabel: "", sequence: 0, timestamp: lastActivityAt, state: "running", phase: "waiting", action: t.idleTipBody }) ?? t.idleTipBody}</span></span></button><button type="button" className="desktop-pet-session-close" aria-label={t.dismissSession} onClick={() => setIdleDismissedUntil(now + IDLE_COMPANION_COOLDOWN_MS)}><X size={12} /></button></div></div> : null}
-    <div ref={stageRef} className="desktop-pet-stage"><button type="button" className="desktop-pet-menu-button" onClick={() => void toggle()} aria-label={t.menu}>{menuCount > 0 ? <span className="desktop-pet-tip-count">{Math.min(99, menuCount)}</span> : <ChevronDown className="desktop-pet-menu-chevron size-4" />}</button><button type="button" className="desktop-pet-hit-area" onClick={handlePetClick} onPointerEnter={() => { if (!primary && state.prefs.interactionEnabled && state.prefs.behaviorMode === "playful") setInteractionAction("greet"); }} onPointerLeave={() => { if (!dragRef.current) setInteractionAction(null); }} onPointerDown={beginDrag} onPointerMove={moveDrag} onPointerUp={endDrag} onPointerCancel={endDrag} title={t.openApp}><DesktopPetSprite pet={selectedPet} action={action} reducedMotion={state.prefs.reducedMotion} displayHeight={Math.round(112 * sizeScale)} /></button></div>
+    <div ref={stageRef} className="desktop-pet-stage"><button type="button" className="desktop-pet-menu-button" onClick={() => void toggle()} aria-label={t.menu}>{menuCount > 0 ? <span className="desktop-pet-tip-count">{Math.min(99, menuCount)}</span> : <ChevronDown className="desktop-pet-menu-chevron size-4" />}</button><button type="button" className="desktop-pet-hit-area" onClick={handlePetClick} onPointerEnter={() => { if (!primary && state.prefs.interactionEnabled && state.prefs.behaviorMode === "playful") setInteractionAction("greet"); }} onPointerLeave={() => { if (!dragRef.current) setInteractionAction(null); }} onPointerDown={beginDrag} onPointerMove={moveDrag} onPointerUp={endDrag} onPointerCancel={endDrag} onLostPointerCapture={endDrag} title={t.openApp}><DesktopPetSprite key={`${selectedPet.id}:${primary?.runId ?? "idle"}`} pet={selectedPet} action={action} reducedMotion={state.prefs.reducedMotion} displayHeight={Math.round(112 * sizeScale)} /></button></div>
   </div>;
 }

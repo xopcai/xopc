@@ -22,20 +22,20 @@ export function desktopPetDefaultAnchor(
   };
 }
 
-/** Keeps the pet's interactive region reachable while allowing it to touch display edges. */
+/** Keeps all visible pet content, including expanded bubbles, within the display. */
 export function clampDesktopPetAnchor(
   anchor: DesktopPetAnchor,
   workArea: DesktopPetWindowBounds,
-  interactiveWidth: number,
-  interactiveHeight: number,
+  contentWidth: number,
+  contentHeight: number,
 ): DesktopPetAnchor {
   return {
     x: Math.min(
-      Math.max(workArea.x + interactiveWidth, anchor.x),
+      Math.max(workArea.x + contentWidth, anchor.x),
       workArea.x + workArea.width,
     ),
     y: Math.min(
-      Math.max(workArea.y + interactiveHeight, anchor.y),
+      Math.max(workArea.y + contentHeight, anchor.y),
       workArea.y + workArea.height,
     ),
   };

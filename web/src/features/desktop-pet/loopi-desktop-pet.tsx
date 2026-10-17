@@ -1,0 +1,54 @@
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
+
+import { renderLoopiSvg } from '../../../../src/pets/loopi-artwork';
+
+import type { DesktopPetAction } from '@/types/electron';
+
+import './loopi-desktop-pet.css';
+
+export function loopiStateForAction(action: DesktopPetAction): string {
+  if (['research', 'read', 'create', 'execute', 'prepare'].includes(action)) return 'work';
+  if (action === 'success') return 'done';
+  if (action === 'wait') return 'wait';
+  if (['sleep', 'concern', 'pickedUp', 'released'].includes(action)) return action;
+  return 'idle';
+}
+
+export function LoopiDesktopPet({ action, displayHeight, reducedMotion, className }: {
+  action: DesktopPetAction;
+  displayHeight: number;
+  reducedMotion: boolean;
+  className?: string;
+}) {
+  const id = useId();
+  const artwork = useMemo(() => ({ __html: renderLoopiSvg(id.replace(/[^a-zA-Z0-9_-]/g, '')) }), [id]);
+  const host = useRef<HTMLSpanElement>(null);
+  const [paused, setPaused] = useState(() => document.hidden);
+
+  useEffect(() => {
+    let visible = true;
+    const update = () => setPaused(document.hidden || !visible);
+    const observer = new IntersectionObserver(([entry]) => {
+      visible = entry.isIntersecting;
+      update();
+    });
+    if (host.current) observer.observe(host.current);
+    document.addEventListener('visibilitychange', update);
+    return () => {
+      observer.disconnect();
+      document.removeEventListener('visibilitychange', update);
+    };
+  }, []);
+
+  return <span
+    ref={host}
+    className={`loopi-desktop ${className ?? ''}`}
+    data-state={loopiStateForAction(action)}
+    data-paused={paused}
+    data-reduced-motion={reducedMotion}
+    style={{ width: displayHeight, height: displayHeight }}
+    aria-hidden
+    // Artwork is static application-owned SVG; no pet package content is interpolated.
+    dangerouslySetInnerHTML={artwork}
+  />;
+}
