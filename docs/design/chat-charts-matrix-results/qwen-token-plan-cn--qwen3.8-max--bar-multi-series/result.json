@@ -1,0 +1,107 @@
+{
+  "key": "qwen-token-plan-cn--qwen3.8-max--bar-multi-series",
+  "model": "qwen-token-plan-cn/qwen3.8-max",
+  "scenario": "bar-multi-series",
+  "conversationId": "9ed17c57-ddad-4323-b1b9-309295ad6ade",
+  "startedAt": "2026-10-17T05:14:24.321Z",
+  "prompt": "请直接在聊天回复中画图并用一句中文说明；下面都是演示数据，不是真实业务数据。用一张分组柱状图比较甲、乙、丙三个小组四周的投入时长（单位：小时），不要合计、四舍五入或堆叠。横轴依次为第1周、第2周、第3周、第4周。甲组依次为10.5、11.75、9.25、12；乙组依次为8.5、9、10.25、11.5；丙组依次为7、7.5、8、8.75。",
+  "passed": true,
+  "checks": {
+    "agent": true,
+    "data": true,
+    "skill": true,
+    "render": true,
+    "history": true,
+    "unitAndModelPostAudit": true
+  },
+  "toolCalls": [
+    {
+      "name": "skill_view",
+      "arguments": {
+        "name": "chat-charts"
+      }
+    },
+    {
+      "name": "skill_view",
+      "arguments": {
+        "name": "chat-charts",
+        "path": "references/chart-spec.md"
+      }
+    }
+  ],
+  "skillReads": [
+    {
+      "tool": "skill_view",
+      "file": "SKILL.md",
+      "contentVerified": true
+    },
+    {
+      "tool": "skill_view",
+      "file": "references/chart-spec.md",
+      "contentVerified": true
+    }
+  ],
+  "errors": [],
+  "cleanup": {
+    "conversationDeleted": true
+  },
+  "skillHash": "6e4f1cd269074e3db0b9f5c04087efaabe3cd8aa71f4b6fa0a3143b60815f762",
+  "runId": "d4788b78-3e2c-4a56-a76a-f27de2fb0910",
+  "status": "success",
+  "actualModels": [
+    "qwen-token-plan-cn/qwen3.8-max"
+  ],
+  "charts": [
+    {
+      "version": 1,
+      "type": "bar",
+      "title": "甲、乙、丙三个小组四周投入时长对比",
+      "summary": "分组柱状图比较三个小组在第1周至第4周的投入时长（小时）。甲组依次为10.5、11.75、9.25、12；乙组依次为8.5、9、10.25、11.5；丙组依次为7、7.5、8、8.75。",
+      "dataKind": "example",
+      "xAxis": {
+        "label": "周次",
+        "values": [
+          "第1周",
+          "第2周",
+          "第3周",
+          "第4周"
+        ]
+      },
+      "yAxis": {
+        "label": "投入时长",
+        "unit": "小时"
+      },
+      "series": [
+        {
+          "name": "甲组",
+          "values": [
+            10.5,
+            11.75,
+            9.25,
+            12
+          ]
+        },
+        {
+          "name": "乙组",
+          "values": [
+            8.5,
+            9,
+            10.25,
+            11.5
+          ]
+        },
+        {
+          "name": "丙组",
+          "values": [
+            7,
+            7.5,
+            8,
+            8.75
+          ]
+        }
+      ]
+    }
+  ],
+  "finishedAt": "2026-10-17T05:14:42.971Z",
+  "elapsedMs": 18650
+}

@@ -1,0 +1,104 @@
+{
+  "key": "minimax-cn--MiniMax-M2.7--line-gaps",
+  "model": "minimax-cn/MiniMax-M2.7",
+  "scenario": "line-gaps",
+  "conversationId": "ce6d3e38-ebb9-443d-a1a4-3f4b9c8a5dbb",
+  "startedAt": "2026-10-17T05:15:26.158Z",
+  "prompt": "请直接在聊天回复中画图并用一句中文说明；下面都是演示数据，不是真实业务数据。用一张折线图比较甲、乙两个设备五个月的产量（单位：件）。按给定月份保留所有位置，没记录的地方保持缺口，不补值，也不能当作零。月份依次为2026-01、2026-02、2026-03、2026-04、2026-05。甲设备依次为12、没记录、18、0、21；乙设备依次为9、11、没记录、14、17。",
+  "passed": true,
+  "checks": {
+    "agent": true,
+    "data": true,
+    "skill": true,
+    "render": true,
+    "history": true,
+    "unitAndModelPostAudit": true
+  },
+  "toolCalls": [
+    {
+      "name": "skill_view",
+      "arguments": {
+        "name": "chat-charts"
+      }
+    },
+    {
+      "name": "skill_view",
+      "arguments": {
+        "name": "chat-charts",
+        "path": "references/chart-spec.md"
+      }
+    }
+  ],
+  "skillReads": [
+    {
+      "tool": "skill_view",
+      "file": "SKILL.md",
+      "contentVerified": true
+    },
+    {
+      "tool": "skill_view",
+      "file": "references/chart-spec.md",
+      "contentVerified": true
+    }
+  ],
+  "errors": [],
+  "cleanup": {
+    "conversationDeleted": true
+  },
+  "skillHash": "6e4f1cd269074e3db0b9f5c04087efaabe3cd8aa71f4b6fa0a3143b60815f762",
+  "runId": "c3d2df2d-ebea-41c8-8415-94bba152696b",
+  "status": "success",
+  "actualModels": [
+    "minimax-cn/MiniMax-M2.7"
+  ],
+  "charts": [
+    {
+      "version": 1,
+      "type": "line",
+      "title": "甲、乙设备五个月产量对比",
+      "summary": "甲设备在2026-01产量为12件，2026-02无记录，2026-03上升至18件，2026-04降至0件后于2026-05回升至21件；乙设备从2026-01的9件逐月增长至2026-05的17件，2026-03无记录。",
+      "dataKind": "example",
+      "sources": [
+        "演示数据，仅供展示图表效果"
+      ],
+      "xAxis": {
+        "label": "月份",
+        "values": [
+          "2026-01",
+          "2026-02",
+          "2026-03",
+          "2026-04",
+          "2026-05"
+        ]
+      },
+      "yAxis": {
+        "label": "产量",
+        "unit": "件"
+      },
+      "series": [
+        {
+          "name": "甲设备",
+          "values": [
+            12,
+            null,
+            18,
+            0,
+            21
+          ]
+        },
+        {
+          "name": "乙设备",
+          "values": [
+            9,
+            11,
+            null,
+            14,
+            17
+          ]
+        }
+      ]
+    }
+  ],
+  "finishedAt": "2026-10-17T05:15:39.819Z",
+  "elapsedMs": 13661
+}

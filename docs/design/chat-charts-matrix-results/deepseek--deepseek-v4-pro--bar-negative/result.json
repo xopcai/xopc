@@ -1,0 +1,89 @@
+{
+  "key": "deepseek--deepseek-v4-pro--bar-negative",
+  "model": "deepseek/deepseek-v4-pro",
+  "scenario": "bar-negative",
+  "conversationId": "b2cfdf60-abdd-41f9-95fc-b6d8bd6d8190",
+  "startedAt": "2026-10-17T05:15:01.635Z",
+  "prompt": "请直接在聊天回复中画图并用一句中文说明；下面都是演示数据，不是真实业务数据。用一张柱状图比较各部门净收支（单位：元）：部门甲为-1250，部门乙为0，部门丙为875，部门丁为-420。保持甲、乙、丙、丁的顺序，负数必须保留负号，不能取绝对值，也不能删掉零值。",
+  "passed": true,
+  "checks": {
+    "agent": true,
+    "data": true,
+    "skill": true,
+    "render": true,
+    "history": true,
+    "unitAndModelPostAudit": true
+  },
+  "toolCalls": [
+    {
+      "name": "skill_view",
+      "arguments": {
+        "name": "chat-charts"
+      }
+    },
+    {
+      "name": "skill_view",
+      "arguments": {
+        "name": "chat-charts",
+        "path": "references/chart-spec.md"
+      }
+    }
+  ],
+  "skillReads": [
+    {
+      "tool": "skill_view",
+      "file": "SKILL.md",
+      "contentVerified": true
+    },
+    {
+      "tool": "skill_view",
+      "file": "references/chart-spec.md",
+      "contentVerified": true
+    }
+  ],
+  "errors": [],
+  "cleanup": {
+    "conversationDeleted": true
+  },
+  "skillHash": "6e4f1cd269074e3db0b9f5c04087efaabe3cd8aa71f4b6fa0a3143b60815f762",
+  "runId": "f9be6a6d-973c-4b9d-90c6-539280abe4c6",
+  "status": "success",
+  "actualModels": [
+    "deepseek/deepseek-v4-pro"
+  ],
+  "charts": [
+    {
+      "version": 1,
+      "type": "bar",
+      "title": "各部门净收支对比（元）",
+      "summary": "部门甲净收支 -1250 元，部门乙 0 元，部门丙 875 元，部门丁 -420 元。负值保留负号表示净支出，乙为 0 表示收支平衡。",
+      "dataKind": "example",
+      "xAxis": {
+        "label": "部门",
+        "values": [
+          "部门甲",
+          "部门乙",
+          "部门丙",
+          "部门丁"
+        ]
+      },
+      "yAxis": {
+        "label": "净收支",
+        "unit": "CNY"
+      },
+      "series": [
+        {
+          "name": "净收支",
+          "values": [
+            -1250,
+            0,
+            875,
+            -420
+          ]
+        }
+      ]
+    }
+  ],
+  "finishedAt": "2026-10-17T05:15:10.838Z",
+  "elapsedMs": 9203
+}
