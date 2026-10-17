@@ -96,8 +96,8 @@ function clampAnchor(anchor: DesktopPetAnchor): DesktopPetAnchor {
   return clampDesktopPetAnchor(
     anchor,
     display,
-    interactiveSize.width,
-    interactiveSize.height,
+    Math.max(interactiveSize.width, contentSize.width),
+    Math.max(interactiveSize.height, contentSize.height),
   );
 }
 
@@ -367,11 +367,12 @@ export function setDesktopPetContentSize(next: DesktopPetContentSize): void {
   const height = Math.max(1, Math.round(next.height));
   if (width === contentSize.width && height === contentSize.height) return;
   const bounds = petWindow.getBounds();
-  const anchor = clampAnchor({
+  const previousAnchor = {
     x: bounds.x + contentSize.width,
     y: bounds.y + contentSize.height,
-  });
+  };
   contentSize = { width, height };
+  const anchor = clampAnchor(previousAnchor);
   petWindow.setBounds(boundsForAnchor(anchor));
 }
 

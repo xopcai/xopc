@@ -1,0 +1,265 @@
+.loopi-desktop {
+  display: block;
+  flex-shrink: 0;
+}
+
+.loopi-desktop svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.loopi-pet-body-motion {
+  transform-origin: 200px 190px;
+  animation: loopi-pet-breath 4.4s ease-in-out infinite;
+}
+
+.loopi-pet-core-motion {
+  transform-origin: 200px 190px;
+  animation: loopi-pet-core-breathe 4.4s ease-in-out infinite;
+}
+
+.loopi-pet-eyes {
+  transform-origin: 200px 184px;
+  animation: loopi-pet-blink 6.1s infinite;
+}
+
+.loopi-pet-work-card,
+.loopi-pet-happy-eyes,
+.loopi-pet-happy-mouth,
+.loopi-pet-wait-cue {
+  opacity: 0;
+}
+
+.loopi-pet-normal-mouth,
+.loopi-pet-normal-eyes {
+  opacity: 1;
+}
+
+.loopi-pet-look {
+  transition: transform .45s ease;
+}
+
+.loopi-pet-ground {
+  transform-origin: 200px 352px;
+  animation: loopi-pet-shadow 4.4s ease-in-out infinite;
+}
+
+.loopi-pet-happy-mouth {
+  fill: #232832;
+}
+
+.loopi-pet-cheeks {
+  opacity: .34;
+}
+
+.loopi-pet-work-card {
+  transform-origin: 282px 240px;
+}
+
+.loopi-pet-wait-cue {
+  transition: opacity .5s ease;
+}
+
+.loopi-desktop[data-state=work] .loopi-pet-look {
+  transform: translate(4px, 9px);
+}
+
+.loopi-desktop[data-state=work] .loopi-pet-core-motion {
+  animation: loopi-pet-work-nod 2.8s ease-in-out infinite;
+}
+
+.loopi-desktop[data-state=work] .loopi-pet-work-card {
+  opacity: 1;
+  animation: loopi-pet-card 2.8s ease-in-out infinite;
+}
+
+.loopi-desktop[data-state=work] .loopi-pet-body-motion {
+  animation: loopi-pet-work-breathe 3.6s ease-in-out infinite;
+}
+
+.loopi-desktop[data-state=work] .loopi-pet-scan {
+  animation: loopi-pet-scan 2s ease-in-out infinite;
+}
+
+.loopi-desktop[data-state=wait] .loopi-pet-body-motion {
+  animation: loopi-pet-breath 6s ease-in-out infinite;
+}
+
+.loopi-desktop[data-state=wait] .loopi-pet-core-motion {
+  animation: loopi-pet-core-breathe 6s ease-in-out infinite;
+}
+
+.loopi-desktop[data-state=wait] .loopi-pet-wait-cue {
+  opacity: .7;
+}
+
+.loopi-desktop[data-state=wait] .loopi-pet-look {
+  transform: translate(0, -2px);
+}
+
+.loopi-desktop[data-state=done] .loopi-pet-normal-eyes,
+.loopi-desktop[data-state=done] .loopi-pet-normal-mouth {
+  opacity: 0;
+}
+
+.loopi-desktop[data-state=done] .loopi-pet-happy-eyes,
+.loopi-desktop[data-state=done] .loopi-pet-happy-mouth {
+  opacity: 1;
+}
+
+.loopi-desktop[data-state=done] .loopi-pet-body-motion {
+  animation: loopi-pet-celebrate .95s ease-in-out 1, loopi-pet-breath 4.4s .95s ease-in-out infinite;
+}
+
+.loopi-desktop[data-state=done] .loopi-pet-eyes {
+  animation: none;
+}
+
+.loopi-desktop[data-state=done] .loopi-pet-core-motion {
+  animation: loopi-pet-joy .95s ease-in-out 1;
+}
+
+.loopi-desktop[data-state=done] .loopi-pet-ground {
+  animation: loopi-pet-landing .95s ease-in-out 1;
+}
+
+.loopi-desktop[data-state=done] .loopi-pet-cheeks {
+  opacity: .65;
+}
+
+@keyframes loopi-pet-breath {
+  50% {
+    transform: translateY(-3px);
+  }
+}
+
+@keyframes loopi-pet-core-breathe {
+  50% {
+    transform: translateY(-1.5px) scale(1.012, 1.006);
+  }
+}
+
+@keyframes loopi-pet-blink {
+  0%,43%,47%,100% {
+    transform: scaleY(1);
+  }
+  45% {
+    transform: scaleY(.08);
+  }
+}
+
+@keyframes loopi-pet-shadow {
+  50% {
+    transform: scaleX(.94);
+    opacity: .1;
+  }
+}
+
+@keyframes loopi-pet-work-nod {
+  0%,100% {
+    transform: translate(1px, 2px);
+  }
+  45% {
+    transform: translate(2px, 5px);
+  }
+}
+
+@keyframes loopi-pet-work-breathe {
+  50% {
+    transform: translateY(-2px);
+  }
+}
+
+@keyframes loopi-pet-card {
+  50% {
+    transform: translateY(-2px) rotate(-2deg);
+  }
+}
+
+@keyframes loopi-pet-scan {
+  0%,100% {
+    opacity: .3;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes loopi-pet-celebrate {
+  0%,100% {
+    transform: translateY(0);
+  }
+  22% {
+    transform: translateY(3px);
+  }
+  48% {
+    transform: translateY(-15px);
+  }
+  77% {
+    transform: translateY(2px);
+  }
+}
+
+@keyframes loopi-pet-joy {
+  22% {
+    transform: scale(1.035, .96);
+  }
+  48% {
+    transform: scale(.99, 1.025);
+  }
+  80% {
+    transform: scale(1.02, .98);
+  }
+}
+
+@keyframes loopi-pet-landing {
+  48% {
+    transform: scaleX(.78);
+    opacity: .07;
+  }
+  80% {
+    transform: scaleX(1.05);
+  }
+}
+
+.loopi-desktop[data-paused="true"] * {
+  animation-play-state: paused !important;
+  transition: none !important;
+}
+
+.loopi-desktop[data-reduced-motion="true"] * {
+  animation: none !important;
+  transition: none !important;
+}
+
+.loopi-desktop[data-state="sleep"] .loopi-pet-eyes {
+  transform: scaleY(.08);
+  animation: none;
+}
+
+.loopi-desktop[data-state="sleep"] .loopi-pet-body-motion {
+  animation-duration: 7s;
+}
+
+.loopi-desktop[data-state="concern"] .loopi-pet-normal-mouth {
+  transform: translateY(3px) scaleY(-1);
+  transform-origin: 200px 207px;
+}
+
+.loopi-desktop[data-state="pickedUp"] .loopi-pet-body-motion {
+  animation: none;
+  transform: translateY(-5px);
+}
+
+.loopi-desktop[data-state="released"] .loopi-pet-body-motion {
+  animation: loopi-pet-joy .7s ease-out 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loopi-desktop * {
+    animation: none !important;
+    transition: none !important;
+  }
+}
