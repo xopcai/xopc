@@ -49,7 +49,7 @@ The ECharts runtime is dynamically imported only for a valid, active chart. Inli
 
 Charts provide JSON copy, source switching, an accessible data table, a fixed-size responsive preview, and bounded PNG export. The preview owns an independent instance; the inline canvas is released while it is open.
 
-This first version is wired into the chat Markdown renderer. The separate document/notes Markdown renderer and native mobile renderers are not adapted by this change.
+Chat and note Markdown renderers support the same `chart` fences. Notes reuse the chart validator and interactive component while retaining their document Markdown parser, attachment hydration, math and Mermaid support. Other document Markdown consumers can opt in through `MarkdownView.renderChart`; native clients require their own renderer integration.
 
 ## Verification
 
@@ -68,6 +68,8 @@ node scripts/verify-chat-charts.mjs
 ```
 
 The script verifies real Canvas rendering, copying, PNG bytes, source switching, the data table, preview, dark/mobile layout, streaming completion, reload, and that invalid/incomplete input does not load the engine. Its fixture is available at `/src/visual-tests/chat-charts/` on the Vite server.
+
+For the note Markdown integration, start a Vite server on port 5188 and run `node scripts/verify-note-charts.mjs`. The `/src/visual-tests/note-charts/` fixture uses the actual `NoteMarkdownView` and checks both chart types, data edits, source switching, copy, preview, PNG export, formula/Mermaid coexistence, narrow/dark layout, and invalid or incomplete source fallback. Note preview and detail views both use this renderer; persisted Markdown stays unchanged.
 
 To verify actual skill selection and generation with a configured model, run:
 
