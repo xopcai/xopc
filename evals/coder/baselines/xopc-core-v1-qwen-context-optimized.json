@@ -1,0 +1,325 @@
+{
+  "schemaVersion": 1,
+  "evidenceClass": "live-direct-agent",
+  "experimentId": "9fea54d4-4675-4fb6-85aa-82dcc8ba696a",
+  "suiteHash": "b7335af765b54cee3c956b7ec7362925dd96c5b5d63f2acf305f30490c109cb5",
+  "passed": false,
+  "sourceDrift": false,
+  "variants": [
+    {
+      "id": "candidate",
+      "expectedRuns": 10,
+      "observedRuns": 10,
+      "passed": 8,
+      "successRate": 0.8,
+      "reportedEstimatedCost": null,
+      "reportedEstimatedCostPerSuccess": null,
+      "durationsMs": [
+        89592,
+        121424,
+        56644,
+        55838,
+        81880,
+        84166,
+        57379,
+        41620,
+        67591,
+        69088
+      ],
+      "totalReportedTokens": null,
+      "statuses": {
+        "passed": 8,
+        "failed": 0,
+        "error": 0,
+        "timed_out": 0,
+        "budget_exceeded": 2
+      },
+      "categories": [
+        {
+          "category": "research",
+          "expectedRuns": 3,
+          "passed": 3
+        },
+        {
+          "category": "data",
+          "expectedRuns": 3,
+          "passed": 3
+        },
+        {
+          "category": "change",
+          "expectedRuns": 2,
+          "passed": 0
+        },
+        {
+          "category": "recovery",
+          "expectedRuns": 2,
+          "passed": 2
+        }
+      ]
+    }
+  ],
+  "cases": [
+    {
+      "caseId": "R01-price-comparison",
+      "variantId": "candidate",
+      "runId": "143162d9-3a6e-4d1d-ba26-0529cdb83b88",
+      "status": "passed",
+      "artifactChecksPassed": true,
+      "durationMs": 41620,
+      "observedResponseTokens": 85008,
+      "usageCoverage": "Observed completed responses only; interrupted requests may be unreported."
+    },
+    {
+      "caseId": "R02-conflicting-source",
+      "variantId": "candidate",
+      "runId": "b9f22b8f-6bcd-487c-a693-c72fd6b6d88e",
+      "status": "passed",
+      "artifactChecksPassed": true,
+      "durationMs": 67591,
+      "observedResponseTokens": 108343,
+      "usageCoverage": "Observed completed responses only; interrupted requests may be unreported."
+    },
+    {
+      "caseId": "R03-missing-evidence",
+      "variantId": "candidate",
+      "runId": "eea23ae6-60c5-4757-bde8-6478eb6c0ce8",
+      "status": "passed",
+      "artifactChecksPassed": true,
+      "durationMs": 69088,
+      "observedResponseTokens": 116489,
+      "usageCoverage": "Observed completed responses only; interrupted requests may be unreported."
+    },
+    {
+      "caseId": "D01-monthly-sales",
+      "variantId": "candidate",
+      "runId": "cd7cbe6f-53d8-4873-a25a-cd1edae6f6bb",
+      "status": "passed",
+      "artifactChecksPassed": true,
+      "durationMs": 56644,
+      "observedResponseTokens": 106797,
+      "usageCoverage": "Observed completed responses only; interrupted requests may be unreported."
+    },
+    {
+      "caseId": "D02-quoted-csv",
+      "variantId": "candidate",
+      "runId": "f4fc9790-a0fe-4fa4-b8da-86dcfc32ee1c",
+      "status": "passed",
+      "artifactChecksPassed": true,
+      "durationMs": 55838,
+      "observedResponseTokens": 106636,
+      "usageCoverage": "Observed completed responses only; interrupted requests may be unreported."
+    },
+    {
+      "caseId": "D03-exact-money",
+      "variantId": "candidate",
+      "runId": "3d95df6f-4916-4bc5-906b-229587d1f3f9",
+      "status": "passed",
+      "artifactChecksPassed": true,
+      "durationMs": 81880,
+      "observedResponseTokens": 143547,
+      "usageCoverage": "Observed completed responses only; interrupted requests may be unreported."
+    },
+    {
+      "caseId": "C01-add-deliverable",
+      "variantId": "candidate",
+      "runId": "8f4ac49e-e8b6-4214-bebe-b7518b05ab56",
+      "status": "budget_exceeded",
+      "artifactChecksPassed": false,
+      "durationMs": 89592,
+      "observedResponseTokens": 313374,
+      "usageCoverage": "Observed completed responses only; interrupted requests may be unreported."
+    },
+    {
+      "caseId": "C02-replace-scope",
+      "variantId": "candidate",
+      "runId": "cde2f3c9-75d3-452f-97d0-2aeddae87a4b",
+      "status": "budget_exceeded",
+      "artifactChecksPassed": false,
+      "durationMs": 121424,
+      "observedResponseTokens": 322625,
+      "usageCoverage": "Observed completed responses only; interrupted requests may be unreported."
+    },
+    {
+      "caseId": "F01-lost-artifact",
+      "variantId": "candidate",
+      "runId": "8e0bbc6a-b281-4d20-a6ec-aae6adee0e89",
+      "status": "passed",
+      "artifactChecksPassed": true,
+      "durationMs": 84166,
+      "observedResponseTokens": 255983,
+      "usageCoverage": "Observed completed responses only; interrupted requests may be unreported."
+    },
+    {
+      "caseId": "F02-transient-read",
+      "variantId": "candidate",
+      "runId": "2e7ab41c-8171-4c70-857d-4cdc61aa8fce",
+      "status": "passed",
+      "artifactChecksPassed": true,
+      "durationMs": 57379,
+      "observedResponseTokens": 193119,
+      "usageCoverage": "Observed completed responses only; interrupted requests may be unreported."
+    }
+  ],
+  "falseCompletionRate": null,
+  "costPerSuccess": null,
+  "unmeasured": [
+    "false-completion semantics",
+    "complete provider cost coverage",
+    "autonomous background recovery",
+    "research prose quality"
+  ],
+  "model": "qwen-token-plan-cn/qwen3.8-flash",
+  "reasoning": "medium",
+  "repetitions": 1,
+  "suiteVersion": "1.0.2",
+  "fixtureCommit": "073bc27b5bd88e55c0f947236e3e126a66388e8c",
+  "comparison": ".xopc-evals/qwen-core-v1-context-comparison.json",
+  "evidenceDirectory": ".xopc-evals/qwen-core-v1-context-lean/benchmark",
+  "previousBaseline": "evals/coder/baselines/xopc-core-v1-qwen.json",
+  "sourceCommit": "0ae4a42d802ec3528d101c7ef9981d33ca1f7b26",
+  "traceUsage": [
+    {
+      "caseId": "R01-price-comparison",
+      "runId": "143162d9-3a6e-4d1d-ba26-0529cdb83b88",
+      "status": "passed",
+      "requests": 8,
+      "responses": 8,
+      "totalTokens": 85008,
+      "cacheReadTokens": 67328,
+      "outputTokens": 2128,
+      "firstResponseTokens": 8431,
+      "tools": 7,
+      "durationMs": 41620
+    },
+    {
+      "caseId": "R02-conflicting-source",
+      "runId": "b9f22b8f-6bcd-487c-a693-c72fd6b6d88e",
+      "status": "passed",
+      "requests": 9,
+      "responses": 9,
+      "totalTokens": 108343,
+      "cacheReadTokens": 92928,
+      "outputTokens": 3297,
+      "firstResponseTokens": 8451,
+      "tools": 8,
+      "durationMs": 67591
+    },
+    {
+      "caseId": "R03-missing-evidence",
+      "runId": "eea23ae6-60c5-4757-bde8-6478eb6c0ce8",
+      "status": "passed",
+      "requests": 10,
+      "responses": 10,
+      "totalTokens": 116489,
+      "cacheReadTokens": 101632,
+      "outputTokens": 3261,
+      "firstResponseTokens": 8445,
+      "tools": 13,
+      "durationMs": 69088
+    },
+    {
+      "caseId": "D01-monthly-sales",
+      "runId": "cd7cbe6f-53d8-4873-a25a-cd1edae6f6bb",
+      "status": "passed",
+      "requests": 9,
+      "responses": 9,
+      "totalTokens": 106797,
+      "cacheReadTokens": 91904,
+      "outputTokens": 3104,
+      "firstResponseTokens": 8442,
+      "tools": 8,
+      "durationMs": 56644
+    },
+    {
+      "caseId": "D02-quoted-csv",
+      "runId": "f4fc9790-a0fe-4fa4-b8da-86dcfc32ee1c",
+      "status": "passed",
+      "requests": 9,
+      "responses": 9,
+      "totalTokens": 106636,
+      "cacheReadTokens": 90624,
+      "outputTokens": 3204,
+      "firstResponseTokens": 8434,
+      "tools": 9,
+      "durationMs": 55838
+    },
+    {
+      "caseId": "D03-exact-money",
+      "runId": "3d95df6f-4916-4bc5-906b-229587d1f3f9",
+      "status": "passed",
+      "requests": 11,
+      "responses": 11,
+      "totalTokens": 143547,
+      "cacheReadTokens": 124160,
+      "outputTokens": 4361,
+      "firstResponseTokens": 8445,
+      "tools": 10,
+      "durationMs": 81880
+    },
+    {
+      "caseId": "C01-add-deliverable",
+      "runId": "8f4ac49e-e8b6-4214-bebe-b7518b05ab56",
+      "status": "budget_exceeded",
+      "requests": 20,
+      "responses": 20,
+      "totalTokens": 313374,
+      "cacheReadTokens": 284672,
+      "outputTokens": 4702,
+      "firstResponseTokens": 8420,
+      "tools": 20,
+      "durationMs": 89592
+    },
+    {
+      "caseId": "C02-replace-scope",
+      "runId": "cde2f3c9-75d3-452f-97d0-2aeddae87a4b",
+      "status": "budget_exceeded",
+      "requests": 20,
+      "responses": 20,
+      "totalTokens": 322625,
+      "cacheReadTokens": 278528,
+      "outputTokens": 7068,
+      "firstResponseTokens": 8403,
+      "tools": 20,
+      "durationMs": 121424
+    },
+    {
+      "caseId": "F01-lost-artifact",
+      "runId": "8e0bbc6a-b281-4d20-a6ec-aae6adee0e89",
+      "status": "passed",
+      "requests": 17,
+      "responses": 17,
+      "totalTokens": 255983,
+      "cacheReadTokens": 221184,
+      "outputTokens": 5106,
+      "firstResponseTokens": 8433,
+      "tools": 16,
+      "durationMs": 84166
+    },
+    {
+      "caseId": "F02-transient-read",
+      "runId": "2e7ab41c-8171-4c70-857d-4cdc61aa8fce",
+      "status": "passed",
+      "requests": 16,
+      "responses": 16,
+      "totalTokens": 193119,
+      "cacheReadTokens": 166144,
+      "outputTokens": 2969,
+      "firstResponseTokens": 8431,
+      "tools": 16,
+      "durationMs": 57379
+    }
+  ],
+  "runtimeSourceHashes": {
+    "src/agent/tools/toolExposure.ts": "09f1fc000b7d964ae606f5509fd74308d0098270fa2822ae01d320144f1eefe6",
+    "src/agent/coding/run-verification.ts": "5974591cfc4c6b02e7296505798814ce5ce0a690bbc7836de8aa23fbb66c62c3",
+    "src/agent/embedded/run-turn.ts": "6662f70081c8069dd98a1e834dea60a361af1ff7f2c56c05de98f34fc8d110af",
+    "src/agent/prompt/sections/behavior.ts": "6ea1734d06ccd6850550a21614994d5fee20ed61144300f62e5f908b9ee95e2d",
+    "src/agent/prompt/sections/tooling.ts": "5f6d906adb2832149cfab6fa038a9d005030396769335587ca5793e4156469e2",
+    "src/agent/tools/factory.ts": "6c848518ebd3199a23eba721fc7c676420db01d808be2d8adb65e75f7209381a"
+  },
+  "limitations": [
+    "C01 and C02 remain over the unchanged total-token budget.",
+    "Overall agent-visible tool calls increased from 103 to 127; this trial does not establish overall call-count efficiency.",
+    "One final trial per case, with unsuccessful development revisions retained separately."
+  ]
+}

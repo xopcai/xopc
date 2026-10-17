@@ -21,10 +21,27 @@ import { PERSONAL_MAIN_TOOL_IDS } from '../../../personal-agent/policy.js';
 import { STARTER_AGENTS } from '../../starter-agents.js';
 import { closeXopcDatabase } from '../../../storage/sqlite/index.js';
 import { AgentToolsFactory } from '../factory.js';
+import { getXopcToolMetadata } from '../../embedded/tool-metadata.js';
 
 describe('AgentToolsFactory', () => {
   beforeAll(() => initializeTestAgentCatalog({ agents: [{ id: personalAgentId('local-owner') }] }));
   afterAll(() => closeXopcDatabase());
+
+  it('keeps core execution eager and preserves specialized capabilities through native discovery', () => {
+    const factory = new AgentToolsFactory({ workspace: '/tmp', bus: {} as MessageBus, getCurrentContext: () => null });
+    const tools = factory.createAllTools();
+    for (const name of ['read_file', 'write_file', 'exec_command', 'review_workspace']) {
+      expect(getXopcToolMetadata(tools.find(tool => tool.name === name)!)?.exposure).not.toBe('deferred');
+    }
+    for (const name of ['browser_use', 'web_search', 'send_message', 'knowledge_write', 'data_batch', 'clarify', 'update_plan', 'tool_manual', 'session_status']) {
+      expect(getXopcToolMetadata(tools.find(tool => tool.name === name)!)?.exposure).toBe('deferred');
+    }
+    const all = tools.reduce((sum, tool) => sum + JSON.stringify(tool.parameters).length, 0);
+    const eager = tools.filter(tool => getXopcToolMetadata(tool)?.exposure !== 'deferred')
+      .reduce((sum, tool) => sum + JSON.stringify(tool.parameters).length, 0);
+    expect(eager).toBeLessThan(all * 0.35);
+    expect(factory.createCoreTools({ disabledTools: new Set(['web_search']) }).some(tool => tool.name === 'web_search')).toBe(false);
+  });
 
   it('offers batching to ordinary agents while preserving individual tool denials', async () => {
     const factory = new AgentToolsFactory({ workspace: '/tmp', bus: {} as MessageBus, getCurrentContext: () => null });

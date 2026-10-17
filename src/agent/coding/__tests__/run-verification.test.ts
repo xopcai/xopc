@@ -25,13 +25,20 @@ describe('coding verification', () => {
         result: { content: [], details: { command, exitCode, complete: true } },
       } as unknown as AfterToolCallContext);
     };
-    await execute('apply_patch', '', 0, 'edited');
-    await execute('exec_command', 'echo test');
+    const changed = await execute('apply_patch', '', 0, 'edited');
+    expect(changed.result.details).toMatchObject({ verificationPending: ['check', 'diff-review'] });
+    const inspection = await execute('exec_command', 'node --test verify.test.cjs && git status');
+    expect(inspection.result.details).toMatchObject({ verificationPending: ['check', 'diff-review'], verificationHint: expect.stringContaining('standalone') });
+    expect(inspection.result.content).toContainEqual({ type: 'text', text: expect.stringContaining('This command did not record a check') });
+    expect((inspection.result.details as any).verification).toBeUndefined();
     expect(await run.pendingContext()).toContain('Run the smallest');
     await execute('review_workspace', 'review_workspace');
-    await execute('exec_command', 'pnpm test');
+    const checked = await execute('exec_command', 'pnpm test');
+    expect(checked.result.details).toMatchObject({ verificationPending: [] });
+    expect(checked.result.content).toContainEqual({ type: 'text', text: 'Verification pending for current files: none.' });
     expect(await run.pendingContext()).toBe('');
-    await execute('apply_patch', '', 0, 'edited-again');
+    const editedAgain = await execute('apply_patch', '', 0, 'edited-again');
+    expect(editedAgain.result.details).toMatchObject({ verificationPending: ['check', 'diff-review'] });
     expect(await run.pendingContext()).toContain('Run the smallest');
     expect((await run.summary()).evidence.every((item) => item.status === 'unverified')).toBe(true);
     const failed = await execute('exec_command', 'pnpm test', 1);
