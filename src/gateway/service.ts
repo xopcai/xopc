@@ -1,4 +1,5 @@
 import type { ClarificationSubmission } from '@xopcai/gateway-contract';
+import { configureGatewayHttpProxy } from '../infra/http-proxy-env.js';
 import { buildResultAgentContext } from '../agent/source-context/result-context.js';
 import { drainPersonalResultReads } from '../personal-agent/result-read-continuations.js';
 import { stopPersonalResultPreparations } from '../personal-agent/result-reader.js';
@@ -392,6 +393,7 @@ export class GatewayService {
     markStaleAiUsageEventsUnknown(now - 6 * 60 * 60 * 1000, now);
     pruneAiUsageEvents(now - AI_USAGE_RETENTION_MS);
     this.config = loadConfig(this.configPath);
+    configureGatewayHttpProxy(this.config.gateway.outboundProxy);
     let bootstrapConfigChanged = initializeVoiceDefaults(
       this.config,
       inferProductLanguageFromEnvironment(),

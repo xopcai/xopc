@@ -7,7 +7,7 @@ it('validates GUI profiles against the effective model API and image input', () 
   } } });
   expect(validateModelsConfig(config('openai-completions', ['text', 'image'])).valid).toBe(true);
   expect(validateModelsConfig(config('openai-completions', ['text'])).valid).toBe(false);
-  expect(validateModelsConfig(config('openai-responses', ['text', 'image'])).valid).toBe(false);
+  expect(validateModelsConfig(config('openai-responses', ['text', 'image'])).valid).toBe(true);
 });
 
 it('validates the native Computer Use profile against the Responses API', () => {

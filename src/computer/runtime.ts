@@ -187,7 +187,7 @@ export class ComputerRuntime {
         if (!parsedDeployment.success || !parsedLimits.success) throw new Error('COMPUTER_DEPLOYMENT_UNAVAILABLE');
         deployment = parsedDeployment.data; serviceLimits = parsedLimits.data;
       }
-      const adapter = createComputerModelAdapter({ modelId: model.id, baseUrl: model.baseUrl, apiKey, profile, headers: model.headers, deploymentRevision: deployment?.revision,
+      const adapter = createComputerModelAdapter({ modelId: model.id, baseUrl: model.baseUrl, api: model.api, apiKey, profile, headers: model.headers, deploymentRevision: deployment?.revision,
         maxOutputTokens: Math.min(2048, model.maxTokens ?? 2048, serviceLimits?.maxOutputTokens ?? 2048) });
       signal.throwIfAborted();
       s = { id: randomUUID(), owner, appRef: input.appRef, mode: input.mode, prepare: input.prepare, windowRef: input.windowRef, endpointId: endpoint.endpointId, adapter,

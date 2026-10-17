@@ -62,6 +62,20 @@ function fixture(autoApprove = true, flowStore?: ComputerFlowRepository) {
     open: async (appRef: string, mode: 'observe' | 'control' = 'control') => runtime.execute('owner', { op: 'open', appRef, mode, prepare: false }) };
 }
 describe('agent to broker desktop lifecycle', () => {
+  it.each(['openai-completions', 'openai-responses'])('runs a custom visual model with inferred function tools on %s', async api => {
+    const f = fixture();
+    vi.mocked(resolveModel).mockReturnValueOnce({ id: 'arbitrary-vision', provider: 'custom', api,
+      input: ['text', 'image'], baseUrl: 'https://proxy.test/v1' } as any);
+    const proposal = { kind: 'action', action: { kind: 'click', point: { x: 400, y: 300 }, button: 'left', count: 1 } };
+    const args = JSON.stringify({ proposal });
+    f.fetch.mockResolvedValueOnce(Response.json(api === 'openai-responses'
+      ? { status: 'completed', output: [{ type: 'function_call', name: 'computer_proposal', arguments: args }] }
+      : { choices: [{ message: { tool_calls: [{ function: { name: 'computer_proposal', arguments: args } }] } }] }));
+    await f.open(await f.discover());
+    await f.runtime.execute('owner', { op: 'step', goal: 'Click the button' });
+    expect(f.driver.perform).toHaveBeenCalledTimes(1);
+    expect(f.fetch.mock.calls[0][0]).toBe(`https://proxy.test/v1/${api === 'openai-responses' ? 'responses' : 'chat/completions'}`);
+  });
   it('makes reports local, conversation-scoped and readable after release without reconnecting', async () => {
     const f = fixture(); await f.open(await f.discover());
     await f.runtime.execute('owner', { op: 'step', goal: 'Private task text' });

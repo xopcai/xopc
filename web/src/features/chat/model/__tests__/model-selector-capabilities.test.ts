@@ -17,3 +17,11 @@ it('keeps dedicated GUI models out of ordinary choices without hiding general na
   expect(buildPickerModels(models, undefined, '').map(m => m.id)).toEqual(['xopc-cloud/advanced', 'openai/gpt']);
   expect(buildPickerModels(models, 'vision', '').map(m => m.id)).toEqual(['xopc-cloud/advanced', 'openai/gpt']);
 });
+
+it('keeps inferred visual function-tool models in chat, vision and computer choices', () => {
+  const model: ConfiguredModel = { id: 'custom/any-vision', name: 'Any vision', provider: 'custom', vision: true,
+    computerUse: { profile: 'structured-tools-v1', dedicated: false } };
+  for (const filter of [undefined, 'vision', 'computer-use'] as const) {
+    expect(buildPickerModels([model], filter, '')).toEqual([model]);
+  }
+});

@@ -61,6 +61,7 @@ function sortedStringList(values: string[]): string[] {
 /** Snapshot of gateway settings that require a process restart. */
 function snapshotGatewayRestartSettings(state: GatewaySettingsState): string {
   return JSON.stringify({
+    outboundProxy: state.outboundProxy,
     bind: state.bind,
     customBindHost: state.customBindHost.trim(),
     port: state.port,
@@ -178,7 +179,19 @@ export function isNonLoopbackGatewayBind(state: GatewaySettingsState): boolean {
   return true;
 }
 
+export function isValidOutboundProxyUrl(value: string): boolean {
+  try {
+    const url = new URL(value.trim());
+    return ['http:', 'https:'].includes(url.protocol) && Boolean(url.hostname) && !url.username && !url.password
+      && !url.search && !url.hash && (!url.pathname || url.pathname === '/');
+  } catch { return false; }
+}
+
 export function validateGatewaySettings(state: GatewaySettingsState): string | null {
+  const proxy = state.outboundProxy;
+  if ((proxy.mode === 'custom' || proxy.url.trim()) && !isValidOutboundProxyUrl(proxy.url)) {
+    return 'Use an HTTP or HTTPS proxy origin without credentials, path, query or fragment.';
+  }
   const nonLoopback = isNonLoopbackGatewayBind(state);
 
   if (nonLoopback && state.auth.mode === 'none') {
@@ -222,7 +235,13 @@ export function normalizeGatewayFromConfig(config: unknown): GatewaySettingsStat
     typeof gw.customBindHost === 'string' && gw.customBindHost.trim()
       ? gw.customBindHost.trim()
       : '';
+  const proxy = isRecord(gw.outboundProxy) ? gw.outboundProxy : {};
   return {
+    outboundProxy: {
+      mode: proxy.mode === 'custom' || proxy.mode === 'direct' ? proxy.mode : 'environment',
+      url: typeof proxy.url === 'string' ? proxy.url : '',
+      noProxy: typeof proxy.noProxy === 'string' ? proxy.noProxy : '',
+    },
     bind,
     customBindHost,
     port:
@@ -309,6 +328,7 @@ export async function patchGatewaySettings(state: GatewaySettingsState): Promise
     method: 'PATCH',
     body: JSON.stringify({
       gateway: {
+        outboundProxy: state.outboundProxy,
         bind: state.bind,
         ...(state.bind === 'custom' ? { customBindHost: state.customBindHost.trim() } : {}),
         port: state.port,

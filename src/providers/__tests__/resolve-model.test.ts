@@ -1,6 +1,7 @@
 import { getModel as getPiModel } from '@earendil-works/pi-ai/compat';
 import { describe, expect, it } from 'vitest';
 
+import { computerModelProfile } from '../../computer/model-policy.js';
 import { validateModelsConfig } from '../../config/models-json.js';
 import { getAllModels, getAllProviders, isProviderConfigured, isProviderConfiguredSync, providerSupportsOAuth, resolveModel } from '../index.js';
 
@@ -36,9 +37,10 @@ describe('resolveModel', () => {
     expect(validateModelsConfig({ providers: { azure: { baseUrl: 'https://example.com/v1', api: 'azure-openai-responses' } } }).valid).toBe(true);
   });
 
-  it('keeps the native Computer Use contract for explicit supported models', () => {
-    expect(resolveModel('openai/gpt-6-astra')).toMatchObject({
-      api: 'openai-responses', computerUse: { profile: 'openai-responses-computer-v1' },
-    });
+  it('infers visual function tools without a GPT model allowlist', () => {
+    for (const id of ['gpt-6-astra', 'gpt-6-sol', 'gpt-6-luna']) {
+      const model = resolveModel(`openai/${id}`);
+      expect(computerModelProfile(model)).toBe('structured-tools-v1');
+    }
   });
 });

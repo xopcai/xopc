@@ -12,6 +12,16 @@ Use the macOS desktop app to ask xopc to read or operate one application window.
 
 Verify that the answer matches the intended application and window before authorizing changes. If several windows or processes match, select the intended one rather than guessing.
 
+## Custom OpenAI-compatible models
+
+Models using `openai-completions` or `openai-responses` with `input: ["text", "image"]` automatically appear in the Computer Use picker, regardless of provider name or model ID. They use standard function tools to propose actions for the local broker to validate and execute, and remain available for ordinary chat and vision.
+
+OpenAI-compatible APIs are assumed to support function tools unless the model definition or `modelOverrides` in `models.json` sets `supportsTools: false`. Set `supportsTools: true` to declare support explicitly. Confirm that your service supports both images and function tools; appearing in the picker does not verify remote capability. Computer Use connections currently require HTTPS.
+
+An explicit `computerUse.profile` takes precedence. Use `openai-responses-computer-v1` only for endpoints supporting the native `computer` tool. Other compatible visual models automatically use `structured-tools-v1` with function tools on their configured API.
+
+The OpenAI provider can reuse its ChatGPT OAuth binding for Computer Use. `openai/gpt-6.1-sol` has passed real visual recognition and a native disposable-window button press; see [OAuth validation evidence](./design/technical/computer-use-chatgpt-oauth-validation.md) for scope and reproduction.
+
 ## XOPC Cloud service
 
 The hosted `computer` service retains the GUI-Plus Preview capability and its published limits. Upgrading to a client containing the public-service migration converts `xopc-cloud/computer-gui-plus-preview` to `xopc-cloud/computer`. Your own provider model references remain unchanged. `auto` and `advanced` do not replace this dedicated GUI model.

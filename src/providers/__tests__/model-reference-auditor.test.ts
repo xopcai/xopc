@@ -15,7 +15,7 @@ describe('auditModelReferences', () => {
       ...settings.defaults,
       models: { ...settings.defaults.models, computerUse: { primary: 'cloud/gui', fallbacks: [] } },
     }, settings.revision);
-    const registry = { resolve: () => ({ api: 'openai-completions', input: ['text', 'image'] }) } as unknown as ModelRegistry;
+    const registry = { resolve: () => ({ api: 'openai-completions', input: ['text'] }) } as unknown as ModelRegistry;
     const report = auditModelReferences(new Map(), { registry, catalog: { sources: {} } });
     expect(report).toEqual(expect.arrayContaining([
       { ref: 'cloud/gui', availability: 'unavailable', locations: ['agentCatalog.defaults.models.computerUse.primary'] },

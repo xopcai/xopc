@@ -3,6 +3,7 @@ import { z } from 'zod';
 
 import semver from 'semver';
 import { TracingConfigSchema } from '../observability/config.js';
+import { OutboundProxySchema } from './outbound-proxy.js';
 import { ComputerConfigSchema } from '../computer/config.js';
 
 import {
@@ -484,6 +485,7 @@ export const GatewayWebchatConfigSchema = z.object({
 });
 
 export const GatewayConfigSchema = z.object({
+  outboundProxy: OutboundProxySchema.optional(),
   /** Semantic bind mode. */
   bind: GatewayBindModeSchema.optional(),
   /** IPv4 listen address when `bind` is `custom`. */

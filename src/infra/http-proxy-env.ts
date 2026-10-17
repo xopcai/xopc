@@ -1,5 +1,6 @@
-import { EnvHttpProxyAgent, setGlobalDispatcher } from 'undici';
+import { Agent, EnvHttpProxyAgent, setGlobalDispatcher } from 'undici';
 
+import type { OutboundProxyConfig } from '../config/outbound-proxy.js';
 const PROXY_ENV_KEYS = [
   'http_proxy',
   'HTTP_PROXY',
@@ -25,3 +26,18 @@ export function installGlobalProxyDispatcherFromEnv(env: ProxyEnv = process.env)
 }
 
 installGlobalProxyDispatcherFromEnv();
+
+/** Applied once at Gateway startup; saved changes require a process restart. */
+export function configureGatewayHttpProxy(config?: OutboundProxyConfig, env: ProxyEnv = process.env): void {
+  if (config?.mode === 'direct') {
+    setGlobalDispatcher(new Agent());
+    return;
+  }
+  const httpProxy = config?.mode === 'custom' ? config.url : env.http_proxy ?? env.HTTP_PROXY ?? '';
+  const httpsProxy = config?.mode === 'custom' ? config.url : env.https_proxy ?? env.HTTPS_PROXY ?? httpProxy;
+  const bypass = [config?.mode === 'custom' ? '' : env.no_proxy ?? env.NO_PROXY ?? '', config?.noProxy ?? ''];
+  const noProxy = bypass.some(value => value.split(/[,\s]+/).includes('*'))
+    ? '*'
+    : ['localhost', '127.0.0.1', '::1', ...bypass].filter(Boolean).join(',');
+  setGlobalDispatcher(new EnvHttpProxyAgent({ httpProxy, httpsProxy, noProxy }));
+}

@@ -240,3 +240,16 @@ describe('gatewaySettingsRequireRestart', () => {
     expect(gatewaySettingsRequireRestart(from, to)).toBe(false);
   });
 });
+
+describe('outbound proxy form state', () => {
+  it('defaults to the startup environment and requires a restart after proxy edits', () => {
+    const before = normalizeGatewayFromConfig({});
+    expect(before.outboundProxy).toEqual({ mode: 'environment', url: '', noProxy: '' });
+    const after = normalizeGatewayFromConfig({ gateway: { outboundProxy: { mode: 'custom', url: 'http://127.0.0.1:7897', noProxy: '.internal.test' } } });
+    expect(gatewaySettingsRequireRestart(before, after)).toBe(true);
+    expect(validateGatewaySettings(after)).toBeNull();
+  });
+  it.each(['', 'socks5://127.0.0.1:7897', 'http://user:secret@proxy.test', 'http://proxy.test/path'])('rejects invalid custom addresses before saving: %s', url => {
+    expect(validateGatewaySettings(normalizeGatewayFromConfig({ gateway: { outboundProxy: { mode: 'custom', url } } }))).toMatch(/HTTP or HTTPS proxy/);
+  });
+});

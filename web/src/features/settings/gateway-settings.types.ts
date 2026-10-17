@@ -22,6 +22,7 @@ export interface GatewayTrustedProxyState {
 export type GatewayChannelConnectDeferMode = 'auto' | 'off' | 'explicit';
 
 export interface GatewaySettingsState {
+  outboundProxy: { mode: 'environment' | 'custom' | 'direct'; url: string; noProxy: string };
   bind: GatewayBindMode;
   customBindHost: string;
   port: number;

@@ -1,3 +1,4 @@
+import { GatewayOutboundProxySettings } from './gateway-outbound-proxy-settings';
 import {
   AlertCircle,
   KeyRound,
@@ -511,6 +512,10 @@ export function GatewaySettingsPanel() {
             <Button type="button" variant="secondary" onClick={() => dispatchUi({ type: 'patch', patch: { restartConfirmOpen: true } })}>{g.restartGatewayButton}</Button>
           </div>
         </section>
+        <GatewayOutboundProxySettings value={form.outboundProxy} g={g} onChange={outboundProxy => {
+          dirtyRef.current = true;
+          dispatchForm({ type: 'set-form', updater: current => ({ ...current, outboundProxy }) });
+        }} />
         <SettingsAdvancedSection title={language === "zh" ? "服务监听配置" : "Service listener configuration"} summary={`${form.bind} · ${form.port}`}>
           <div className="grid gap-3 sm:grid-cols-2">
             <div>

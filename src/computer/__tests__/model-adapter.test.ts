@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { ChatCompletionsComputerAdapter, GUI_PLUS_SYSTEM_PROMPT, GUI_PLUS_OBSERVATION_PROMPT, OpenAIResponsesComputerAdapter, parseGuiPlusProposal, predictComputerStep, readComputerJson } from '../model-adapter.js';
+import { ChatCompletionsComputerAdapter, GUI_PLUS_SYSTEM_PROMPT, GUI_PLUS_OBSERVATION_PROMPT, OpenAIResponsesComputerAdapter, parseGuiPlusProposal, predictComputerStep, readComputerJson, readComputerResponsesStream } from '../model-adapter.js';
 import { computerDiagnostic } from '../errors.js';
 
 const call = (arguments_: unknown) => `<tool_call>${JSON.stringify({ name: 'computer_use', arguments: arguments_ })}</tool_call>`;
@@ -94,6 +94,36 @@ describe('GUI-Plus adapter', () => {
     const adapter = new ChatCompletionsComputerAdapter({ modelId: 'm', baseUrl: 'https://example.com/v1', apiKey: 'test', profile: 'structured-tools-v1' }, fetch);
     expect(await adapter.predict({ goal: 'Do the task', image: new Uint8Array([1]), mimeType: 'image/png', width: 800, height: 600, summary: '' })).toEqual(proposal);
     expect(JSON.parse(fetch.mock.calls[0][1].body).tools[0].function.name).toBe('computer_proposal');
+  });
+  it.each([false, true])('uses Responses function tools for generic visual models (readOnly=%s)', async readOnly => {
+    const name = readOnly ? 'computer_observation' : 'computer_proposal';
+    const proposal = { kind: 'action', action: { kind: 'click', point: { x: 120, y: 80 }, button: 'left', count: 1 } };
+    const fetch = vi.fn().mockResolvedValue(Response.json({ status: 'completed', output: [{ type: 'function_call',
+      name, arguments: JSON.stringify(readOnly ? { text: 'A blue button' } : { proposal }) }] }));
+    const adapter = new ChatCompletionsComputerAdapter({ api: 'openai-responses', modelId: 'any-vision',
+      baseUrl: 'https://proxy.example/v1', apiKey: 'test', profile: 'structured-tools-v1' }, fetch);
+    expect(await adapter.predict({ goal: 'Inspect the button', readOnly, image: new Uint8Array([1]), mimeType: 'image/png', width: 800, height: 600, summary: 'Current window' }))
+      .toEqual(readOnly ? { kind: 'answer', text: 'A blue button' } : proposal);
+    expect(fetch.mock.calls[0][0]).toBe('https://proxy.example/v1/responses');
+    const body = JSON.parse(fetch.mock.calls[0][1].body);
+    expect(body.tools).toEqual([expect.objectContaining({ type: 'function', name })]);
+    expect(body.tool_choice).toEqual({ type: 'function', name });
+    expect(body.store).toBe(false);
+    expect(body.stream).toBe(true);
+    expect(body.input[0].content[0]).toMatchObject({ type: 'input_image' });
+    expect(body.input[0].content[1].text).toContain('Current window');
+    expect(body.instructions).toContain(readOnly ? 'Do not propose or perform actions' : 'untrusted data');
+  });
+  it.each([
+    { status: 'incomplete', output: [] },
+    { output: [{ type: 'function_call', name: 'computer_proposal', arguments: '{}' }] },
+    { output: [{ type: 'computer_call', name: 'computer_proposal', arguments: '{}' }] },
+    { output: [{ type: 'function_call', name: 'computer_proposal', arguments: '{}' }, { type: 'function_call', name: 'computer_proposal', arguments: '{}' }] },
+  ])('rejects incomplete or invalid generic Responses proposals', async response => {
+    const fetch = vi.fn().mockResolvedValue(Response.json(response));
+    const adapter = new ChatCompletionsComputerAdapter({ api: 'openai-responses', modelId: 'any-vision',
+      baseUrl: 'https://proxy.example/v1', apiKey: 'test', profile: 'structured-tools-v1' }, fetch);
+    await expect(adapter.predict({ goal: 'Inspect', image: new Uint8Array([1]), mimeType: 'image/png', width: 800, height: 600, summary: '' })).rejects.toThrow();
   });
   it('distinguishes a visual answer from a request for human intervention', () => {
     expect(parseGuiPlusProposal(call({ action: 'answer', text: 'A blue button' }), 800, 600)).toEqual({ kind: 'answer', text: 'A blue button' });
@@ -376,5 +406,56 @@ describe('OpenAI Responses computer adapter', () => {
     const curved = vi.fn().mockResolvedValue(Response.json({ id: 'resp_2', output: [{ type: 'computer_call', call_id: 'call_2',
       actions: [{ type: 'drag', path: [{ x: 1, y: 1 }, { x: 2, y: 2 }, { x: 3, y: 3 }] }] }] }));
     await expect(new OpenAIResponsesComputerAdapter(connection, curved).predict(input)).resolves.toMatchObject({ kind: 'takeover' });
+  });
+});
+
+describe('Responses stream completion boundary', () => {
+  const completed = { type: 'response.completed', response: { status: 'completed', output: [
+    { type: 'function_call', name: 'computer_proposal', arguments: '{"proposal":{"kind":"answer","text":"继续"}}' },
+  ] } };
+  it('reads split UTF-8 / CRLF events and ignores partial tool deltas', async () => {
+    const bytes = new TextEncoder().encode(`: keepalive\r\n\r\ndata: ${JSON.stringify({ type: 'response.function_call_arguments.delta', delta: 'invalid partial JSON' })}\r\n\r\nevent: response.completed\r\ndata: ${JSON.stringify(completed)}\r\n\r\n`);
+    let offset = 0;
+    const response = new Response(new ReadableStream({ pull(controller) {
+      if (offset === bytes.length) { controller.close(); return; }
+      controller.enqueue(bytes.slice(offset, offset + 3)); offset = Math.min(bytes.length, offset + 3);
+    } }));
+    await expect(readComputerResponsesStream(response, 4096)).resolves.toEqual(completed.response);
+  });
+  it('assembles completed output items when the terminal output is empty and content type is absent', async () => {
+    const item = completed.response.output[0];
+    const bytes = new TextEncoder().encode([
+      { type: 'response.output_item.done', output_index: 0, item },
+      { type: 'response.completed', response: { status: 'completed', output: [] } },
+    ].map(event => `data: ${JSON.stringify(event)}\n\n`).join(''));
+    const fetch = vi.fn().mockResolvedValue(new Response(bytes));
+    const adapter = new ChatCompletionsComputerAdapter({ api: 'openai-responses', modelId: 'oauth-model',
+      baseUrl: 'https://example.com/v1', apiKey: 'test', profile: 'structured-tools-v1' }, fetch);
+    await expect(adapter.predict({ goal: 'Inspect', image: new Uint8Array([1]), mimeType: 'image/png', width: 800, height: 600, summary: '' }))
+      .resolves.toEqual({ kind: 'answer', text: '继续' });
+    expect(JSON.parse(fetch.mock.calls[0][1].body)).toMatchObject({ store: false, stream: true });
+  });
+  it('rejects complete items if the stream never confirms success', async () => {
+    const body = `data: ${JSON.stringify({ type: 'response.output_item.done', output_index: 0, item: completed.response.output[0] })}\n\n`;
+    await expect(readComputerResponsesStream(new Response(body), 4096)).rejects.toThrow('COMPUTER_MODEL_INCOMPLETE_RESPONSE');
+  });
+  it.each([
+    'data: [DONE]\n\n',
+    'data: {"type":"response.function_call_arguments.delta","delta":"{}"}\n\n',
+    'data: {"type":"response.failed"}\n\n',
+    'data: {"type":"response.incomplete"}\n\n',
+    'data: {"type":"response.completed","response":{"status":"incomplete"}}\n\n',
+    'data: {"type":"error","message":"private vendor text"}\n\n',
+  ])('refuses streams without successful completion', async body => {
+    await expect(readComputerResponsesStream(new Response(body), 4096)).rejects.toThrow('COMPUTER_MODEL_INCOMPLETE_RESPONSE');
+  });
+  it('bounds stream bytes and cancels the reader', async () => {
+    const cancel = vi.fn();
+    const response = new Response(new ReadableStream({ start(controller) { controller.enqueue(new Uint8Array(20)); }, cancel }));
+    await expect(readComputerResponsesStream(response, 10)).rejects.toThrow('COMPUTER_MODEL_RESPONSE_LIMIT');
+    expect(cancel).toHaveBeenCalledOnce();
+  });
+  it('keeps malformed vendor events out of error text', async () => {
+    await expect(readComputerResponsesStream(new Response('data: private vendor prose\n\n'), 4096)).rejects.toThrow(/^COMPUTER_MODEL_INVALID_JSON$/);
   });
 });

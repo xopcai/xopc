@@ -154,6 +154,7 @@ export async function buildSafeWebConfigPayload(service: GatewayService, options
     /** Masked `cfg.providers` for capability keys (image / STT / etc.). */
     providersConfig: buildSafeProvidersConfigForWeb(config.providers),
     gateway: {
+      outboundProxy: config.gateway?.outboundProxy ?? { mode: 'environment', url: '', noProxy: '' },
       bind: config.gateway?.bind ?? 'loopback',
       customBindHost: config.gateway?.customBindHost,
       port: config.gateway?.port,
