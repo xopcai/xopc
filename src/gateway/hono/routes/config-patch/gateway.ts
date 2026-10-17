@@ -14,6 +14,7 @@
  * a brand-new install gets a working gateway after the first PATCH.
  */
 import type { Config, GatewayBindMode } from '../../../../config/schema.js';
+import { OutboundProxySchema } from '../../../../config/outbound-proxy.js';
 import { isValidIPv4 } from '../../../../config/gateway-bind.js';
 import { validatePublicUrl } from '../../../../config/public-url.js';
 import { mergeShareConfigPatch } from '../../../../share/share-config.js';
@@ -47,6 +48,11 @@ function parseDeferIdList(raw: unknown): string[] | null {
 }
 
 export function applyGatewayPatch(config: Config, body: any): PatchResult {
+  if (body.gateway?.outboundProxy !== undefined) {
+    const parsed = OutboundProxySchema.safeParse(body.gateway.outboundProxy);
+    if (!parsed.success) return patchError('Invalid outbound proxy: use an HTTP(S) origin without credentials, with environment/custom/direct mode');
+    ensureGateway(config).outboundProxy = parsed.data;
+  }
   if (body.gateway?.webchat?.activityDetailDefault !== undefined) {
     const level = body.gateway.webchat.activityDetailDefault;
     if (level !== 'off' && level !== 'on' && level !== 'stream') {
