@@ -109,3 +109,13 @@ export function productSectionAtLocation(pathname: string, _search = ''): Produc
   }
   return null;
 }
+
+export function productDomainDefinition(id: ProductDomainId): ProductDomainDefinition {
+  return PRODUCT_DOMAINS.find((domain) => domain.id === id)!;
+}
+
+export function showsProductSectionHeader(pathname: string): boolean {
+  if (isPath(pathname, '/chat') || isPath(pathname, '/tasks')) return false;
+  const domain = productDomainAtPath(pathname);
+  return domain === 'work' || domain === 'automation' || domain === 'capabilities';
+}

@@ -56,15 +56,25 @@ describe('product primary navigation', () => {
       '/automations',
     ]);
     expect(container.textContent).not.toContain('Workflows');
-    const more = openMore();
-    expect(more.className).toContain('bg-surface-active');
-    expect(document.body.querySelector<HTMLAnchorElement>('a[href="/projects"]')?.getAttribute('aria-current')).toBe('page');
-    expect(document.body.textContent).toContain('Workflows');
-    expect(document.body.textContent).toContain('Browser automation');
-    expect(document.body.textContent).toContain('Capabilities');
+    expect(container.querySelector('a[href="/"]')?.getAttribute('aria-current')).toBe('page');
+    expect(container.querySelector('button[aria-label="More navigation items"]')?.className).not.toContain('bg-surface-active');
+    openMore();
     expect(document.body.textContent).toContain('Apps');
-    expect(document.body.textContent).toContain('App Studio');
-    expect(document.body.textContent).not.toContain('Run history');
+    expect(document.body.querySelector('a[href="/local-apps"]')).not.toBeNull();
+    for (const path of ['/projects', '/notes', '/workflows', '/browser-automations', '/capabilities/connectors', '/capabilities/extensions']) {
+      expect(document.body.querySelector(`a[href="${path}"]`)).toBeNull();
+    }
+  });
+
+  it.each(['/capabilities/connectors/service', '/capabilities/agents/main', '/capabilities/channels/telegram', '/capabilities/extensions'])('keeps Capabilities active for %s', (path) => {
+    renderAt(path, <SidebarNavItems />);
+    expect(container.querySelector('a[href="/capabilities/skills"]')?.getAttribute('aria-current')).toBe('page');
+    expect(container.querySelector('a[href="/capabilities/skills"]')?.textContent).toBe('Capabilities');
+  });
+
+  it.each(['/workflows/example/edit', '/browser-automations/example'])('keeps Automations active for %s', (path) => {
+    renderAt(path, <SidebarNavItems />);
+    expect(container.querySelector('a[href="/automations"]')?.getAttribute('aria-current')).toBe('page');
   });
 
   it.each([1, 9, 99, 100, 123])('shows %i unread replies beside Personal AI', count => {
@@ -89,17 +99,17 @@ describe('product primary navigation', () => {
     expect(document.body.textContent).not.toContain('Run history');
   });
 
-  it('allows the visible shortcut area to grow to five items', () => {
-    renderAt('/', <SidebarNavItems visibleLimit={5} />);
+  it('shows all four domains when the shortcut area expands', () => {
+    renderAt('/', <SidebarNavItems visibleLimit={4} />);
 
     expect([...container.querySelectorAll('a')].map((link) => link.getAttribute('href'))).toEqual([
       '/personal',
       '/',
       '/capabilities/skills',
       '/automations',
-      '/capabilities/connectors',
-      '/projects',
+      '/local-apps',
     ]);
+    expect(container.querySelector('button[aria-label="More navigation items"]')).toBeNull();
   });
 
   it('allows the visible shortcut area to shrink to one item', () => {

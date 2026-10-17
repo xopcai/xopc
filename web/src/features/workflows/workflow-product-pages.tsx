@@ -215,7 +215,7 @@ export function WorkflowDetailPage() {
       main: (
         <div className="min-w-0">
           <h1 className="truncate text-base font-semibold tracking-tight text-fg">
-            {definition?.title ?? (language === 'zh' ? '工作流详情' : 'Workflow details')}
+            {localized?.title ?? (language === 'zh' ? '工作流详情' : 'Workflow details')}
           </h1>
           {definition ? (
             <p className="truncate text-xs text-fg-muted">
@@ -236,7 +236,7 @@ export function WorkflowDetailPage() {
       ) : null,
     });
     return () => clearPageHeader();
-  }, [clearPageHeader, definition, editHref, labels.badgeBuiltin, labels.badgeUser, labels.copyAndEditWorkflow, labels.editWorkflow, language, libraryHref, setPageHeader]);
+  }, [clearPageHeader, definition, editHref, labels.badgeBuiltin, labels.badgeUser, labels.copyAndEditWorkflow, labels.editWorkflow, language, localized?.title, libraryHref, setPageHeader]);
 
   const start = useCallback(async () => {
     if (!definition || !inputValidity.valid || starting) return;
@@ -345,7 +345,7 @@ export function WorkflowDetailPage() {
                 onChange={setSetup}
                 mode="manual"
                 badgeLabel={labels.readyToStart}
-                aiAssist={{ context: { surface: 'workflow-start', workflowId: definition.id, workflowName: definition.name, workflowTitle: definition.title, workflowDescription: localized.description } }}
+                aiAssist={{ context: { surface: 'workflow-start', workflowId: definition.id, workflowName: definition.name, workflowTitle: localized.title, workflowDescription: localized.description } }}
               />
             </div>
             {actionError ? <p className="mt-3 text-sm text-danger">{actionError}</p> : null}
