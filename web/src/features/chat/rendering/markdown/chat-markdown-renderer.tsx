@@ -20,6 +20,8 @@ import { PartErrorBoundary } from '../part-error-boundary';
 import { createChatBlockParser, parseChatMarkdownBlocks } from './chat-math-blocks';
 import { MathElement } from '@/components/markdown/math-element';
 import { ChatCodeBlock } from './chat-code-block';
+import { ChatChartBlock } from './chat-chart-block';
+import { isChartFenceClosed } from './chart-fence';
 import { rehypeChatFileMentions, rehypeChatFragments, rehypeChatLinks, remarkChatContent } from './chat-markdown-plugins';
 import { createRevealPlugin, REVEAL_DURATION_MS, RevealBudgetContext, RevealLedgerContext, RevealSpan, type RevealLedger } from './chat-text-reveal';
 
@@ -31,6 +33,7 @@ type Environment = {
   loadImage?: (target: WorkspaceFileLinkTarget) => Promise<Blob>;
 };
 const EnvironmentContext = createContext<Environment | null>(null);
+const BlockSourceContext = createContext('');
 
 function ChatLink({ node, href = '', children, className, ...props }: ComponentProps<'a'> & { node?: Element }) {
   const environment = useContext(EnvironmentContext)!;
@@ -101,10 +104,15 @@ function textIn(node: Element): string {
 
 function ChatPre({ node }: ComponentProps<'pre'> & { node?: Element }) {
   const environment = useContext(EnvironmentContext)!;
+  const blockSource = useContext(BlockSourceContext);
   const incomplete = useIsCodeFenceIncomplete();
   const child = node?.children.find((n): n is Element => n.type === 'element' && n.tagName === 'code');
   const language = String(child?.properties.className ?? '').match(/language-([^,\s]+)/)?.[1] ?? '';
-  return <ChatCodeBlock code={child ? textIn(child).replace(/\n$/, '') : ''} language={language}
+  const code = child ? textIn(child).replace(/\n$/, '') : '';
+  if (language === 'chart') return <ChatChartBlock source={code}
+    incomplete={incomplete || !isChartFenceClosed(blockSource, node?.position?.start.line, node?.position?.end.line)}
+    streaming={environment.streaming} copy={environment.copy} />;
+  return <ChatCodeBlock code={code} language={language}
     incomplete={incomplete} renderMermaid={environment.renderMermaid} actions={environment.mermaidActions} copy={environment.copy} />;
 }
 
@@ -191,7 +199,7 @@ const ChatBlock = memo(function ChatBlock(props: BlockProps) {
 
   return <div ref={host} className="markdown-stream-block">
     <PartErrorBoundary content={props.content}>
-      <RevealLedgerContext.Provider value={ledger}><Block {...props} shouldParseIncompleteMarkdown={props.shouldParseIncompleteMarkdown && mathRanges(props.content).length === 0} rehypePlugins={rehypePlugins} /></RevealLedgerContext.Provider>
+      <BlockSourceContext.Provider value={props.content}><RevealLedgerContext.Provider value={ledger}><Block {...props} shouldParseIncompleteMarkdown={props.shouldParseIncompleteMarkdown && mathRanges(props.content).length === 0} rehypePlugins={rehypePlugins} /></RevealLedgerContext.Provider></BlockSourceContext.Provider>
     </PartErrorBoundary>
   </div>;
 });
@@ -249,7 +257,7 @@ export const ChatMarkdownRenderer = memo(function ChatMarkdownRenderer({
     const blocks = host.current?.querySelectorAll('.markdown-stream-block');
     recordStreamingShape(streamingMetricsKey, Math.max(0, (blocks?.length ?? 0) - 1), blocks?.item((blocks.length ?? 1) - 1)?.textContent?.length ?? 0);
   }, [content, streamingMetricsKey]);
-  return <EnvironmentContext.Provider value={environment}><RevealBudgetContext.Provider value={budget}>
+  return <EnvironmentContext.Provider value={environment}><BlockSourceContext.Provider value={content}><RevealBudgetContext.Provider value={budget}>
     <div ref={host} className="markdown-render-boundary" data-chat-markdown={id}>
       <PartErrorBoundary content={content}>
         <Streamdown className={['markdown-body xopc-chat-markdown', compact ? 'markdown-compact' : '',
@@ -263,5 +271,5 @@ export const ChatMarkdownRenderer = memo(function ChatMarkdownRenderer({
       </PartErrorBoundary>
       {linkError ? <p role="alert" className="mt-2 text-sm text-danger">{messages(locale).chat.contentLinks.failed}</p> : null}
     </div>
-  </RevealBudgetContext.Provider></EnvironmentContext.Provider>;
+  </RevealBudgetContext.Provider></BlockSourceContext.Provider></EnvironmentContext.Provider>;
 });
