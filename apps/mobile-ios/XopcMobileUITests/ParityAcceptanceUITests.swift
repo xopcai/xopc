@@ -2137,7 +2137,7 @@ final class MobileLayoutParityUITests: XCTestCase {
         capture("notes-search-icons")
         tab("profile")
         XCTAssertTrue(app.buttons["profile-personal-agent-configure"].waitForExistence(timeout: 10))
-        XCTAssertGreaterThan(app.staticTexts["Loopi"].frame.minY - app.staticTexts["工程师"].frame.maxY, 16)
+        XCTAssertGreaterThan(app.staticTexts["Ada"].frame.minY - app.staticTexts["工程师"].frame.maxY, 16)
         capture("profile-card-spacing")
         app.buttons["profile-personal-agent-configure"].tap()
         capture("profile-personal-configuration")

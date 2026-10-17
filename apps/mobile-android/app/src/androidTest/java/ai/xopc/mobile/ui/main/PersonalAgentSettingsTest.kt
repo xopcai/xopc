@@ -26,7 +26,7 @@ class PersonalAgentSettingsTest {
   @Test fun chatSettingsSaveUsesPersonalProfileAndClosesAfterSuccess() {
     val id = "11111111-2222-3333-4444-555555555555"
     val profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), "")
-    val agent = PersonalAgentRecord("personal", id, "ready", "Loopi", "loopi", null,
+    val agent = PersonalAgentRecord("personal", id, "ready", "Ada", "loopi", null,
       revision = 7, preferences = mapOf("warmth" to "gentle", "guidance" to "Keep context", "humor" to "playful", "supportMode" to "listen"), userCallName = "Joyce")
     val state = mutableStateOf(ConnectionUiState(profile = profile, selectedConversationId = id,
       personal = PersonalUiState(gatewayId = "gateway", agent = agent)))
@@ -55,7 +55,7 @@ class PersonalAgentSettingsTest {
     compose.onNodeWithTag("personal-agent-profile-save").assertIsDisplayed().performClick()
     compose.waitForIdle()
     compose.runOnIdle {
-      assertEquals("Loopi", savedName)
+      assertEquals("Ada", savedName)
       assertNull(savedPreferences["addressAs"])
       assertEquals("gentle", savedPreferences["warmth"])
       assertEquals("Keep context", savedPreferences["guidance"])
@@ -69,7 +69,7 @@ class PersonalAgentSettingsTest {
   @Test fun profileSettingsShowCustomNameAndPreserveAdvancedPreferences() {
     val preferences = mapOf("proactivity" to "open", "warmth" to "reserved", "guidance" to "Keep context")
     val agent = PersonalAgentRecord("personal", "11111111-2222-3333-4444-555555555555",
-      "ready", "My Loopi", "loopi", null, revision = 7, preferences = preferences)
+      "ready", "My ADA", "loopi", null, revision = 7, preferences = preferences)
     val state = mutableStateOf(PersonalUiState(gatewayId = "gateway", agent = agent,
       agentVoiceChoices = PersonalVoiceChoices("xopc-cloud", "tts", listOf(
         PersonalVoiceOption("default", "Default voice"), PersonalVoiceOption("voice-warm", "Warm voice")))))
@@ -85,7 +85,7 @@ class PersonalAgentSettingsTest {
         }, {})
       }
     }
-    compose.onNodeWithText(compose.activity.getString(R.string.personal_agent_settings_title, "My Loopi")).assertIsDisplayed()
+    compose.onNodeWithText(compose.activity.getString(R.string.personal_agent_settings_title, "My ADA")).assertIsDisplayed()
     compose.onNodeWithTag("personal-outreach-options").assertDoesNotExist()
     compose.onNodeWithText(compose.activity.getString(R.string.personal_agent_voice) + " · " +
       compose.activity.getString(R.string.personal_agent_default_voice)).performScrollTo().performClick()

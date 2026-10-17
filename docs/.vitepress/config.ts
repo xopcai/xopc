@@ -5,7 +5,7 @@ const base = '/xopc/'
 
 export default defineConfig({
   title: 'xopc',
-  description: 'Open-source, local-first personal AI. Chat with Loopi, delegate tasks, and work with files and projects using cloud or local models.',
+  description: 'Open-source, local-first personal AI. Chat with Ada, delegate tasks, and work with files and projects using cloud or local models.',
   base,
   // Product documentation is published here. Engineering plans and ADRs stay
   // in the repository, but are deliberately excluded from the user site.
@@ -33,12 +33,12 @@ export default defineConfig({
     ['link', { rel: 'icon', type: 'image/svg+xml', href: `${base}favicon.svg` }],
     ['link', { rel: 'apple-touch-icon', sizes: '180x180', href: `${base}apple-touch-icon.png` }],
     ['meta', { property: 'og:title', content: 'xopc — Keep what matters moving.' }],
-    ['meta', { property: 'og:description', content: 'Open-source, local-first personal AI. Chat with Loopi, delegate tasks, and work with files and projects using cloud or local models.' }],
+    ['meta', { property: 'og:description', content: 'Open-source, local-first personal AI. Chat with Ada, delegate tasks, and work with files and projects using cloud or local models.' }],
     ['meta', { property: 'og:image', content: `https://xopcai.github.io${base}social-preview.png` }],
     ['meta', { property: 'og:type', content: 'website' }],
     ['meta', { name: 'twitter:card', content: 'summary_large_image' }],
     ['meta', { name: 'twitter:title', content: 'xopc — Keep what matters moving.' }],
-    ['meta', { name: 'twitter:description', content: 'Open-source, local-first personal AI. Chat with Loopi, delegate tasks, and work with files and projects using cloud or local models.' }],
+    ['meta', { name: 'twitter:description', content: 'Open-source, local-first personal AI. Chat with Ada, delegate tasks, and work with files and projects using cloud or local models.' }],
     ['meta', { name: 'twitter:image', content: `https://xopcai.github.io${base}social-preview.png` }],
   ],
   locales: {
@@ -77,7 +77,7 @@ export default defineConfig({
           {
             text: 'Daily use',
             items: [
-              { text: 'Meet Loopi', link: '/personal-ai' },
+              { text: 'Meet Ada', link: '/personal-ai' },
               { text: 'Delegate and receive results', link: '/task-delegation' },
               { text: 'Work with files and projects', link: '/workspace-guide' },
               { text: 'Review and accept a Task', link: '/task-review' },
@@ -164,7 +164,7 @@ export default defineConfig({
     zh: {
       label: '简体中文',
       lang: 'zh-CN',
-      description: '开源、本地优先的个人 AI。和 Loopi 聊聊、交办任务，或直接处理文件与项目，使用云端或本地模型。',
+      description: '开源、本地优先的个人 AI。和 Ada 聊聊、交办任务，或直接处理文件与项目，使用云端或本地模型。',
       link: '/zh/',
       themeConfig: {
         siteTitle: 'xopc',
@@ -198,7 +198,7 @@ export default defineConfig({
           {
             text: '日常使用',
             items: [
-              { text: '认识 Loopi', link: '/zh/personal-ai' },
+              { text: '认识 Ada', link: '/zh/personal-ai' },
               { text: '交办与接收结果', link: '/zh/task-delegation' },
               { text: '处理文件与项目', link: '/zh/workspace-guide' },
               { text: '检查与验收任务', link: '/zh/task-review' },

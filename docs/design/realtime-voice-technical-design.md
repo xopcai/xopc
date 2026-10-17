@@ -95,7 +95,7 @@ The existing Harmony installation rejoined with new call UUIDs in durable IDs an
 
 ## Platform voice failure and recovery evidence, 2026-10-12
 
-This section records the Loopi investigation's historical fixes and acceptance scope. It does not describe a new deployment.
+This section records the Ada investigation's historical fixes and acceptance scope. It does not describe a new deployment.
 
 - Initial Harmony logs showed zero buffered/played output and `Platform voice disconnected before completion`. An authenticated public TTS v5 probe closed after 1,680ms with 1011 and zero audio. This located the failure before phone rendering; it did not prove a renderer defect.
 - Independently, persisted Personal final replies were connected to the active assistant voice synthesis queue and playback acknowledgements without another Agent run or duplicate chat reply. Busy calls defer through the result outbox; delivery IDs deduplicate within a call. Failure before output is retryable, but interrupted output already submitted is consumed to avoid repeated speech. The outbox lease lasts until asynchronous delivery resolves; text delivery stays available. Bounded provider close codes/reasons are retained for diagnostics.

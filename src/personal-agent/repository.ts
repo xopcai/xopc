@@ -64,7 +64,7 @@ function toRecord(ownerId: string, agent: StoredAgent, session: PersonalSession 
     agentId: agent.id,
     conversationId: session?.conversation_id ?? personalConversationId(ownerId),
     state: agent.provisioningState === 'error' ? 'error' : ready ? 'ready' : 'provisioning',
-    displayName: agent.profile?.name ?? 'Loopi',
+    displayName: agent.profile?.name ?? 'Ada',
     userCallName: getUserProfileSnapshot().callName ?? null,
     appearance: appearanceFrom(agent),
     voicePreference: agent.profile?.voicePreference ?? null,

@@ -7,7 +7,7 @@
 <p align="center">
   <strong>让重要的事持续向前。</strong><br />
   开源、本地优先的个人 AI，记住你的上下文，与你一起推进工作。<br />
-  和 Loopi 理清想法、交办任务，或直接在工作空间处理文件与项目，<br />
+  和 Ada 理清想法、交办任务，或直接在工作空间处理文件与项目，<br />
   查看并继续打磨成果。
 </p>
 
@@ -31,7 +31,7 @@
 
 ## 两种方式，从同一个 xopc 开始
 
-**先和 Loopi 聊聊。** Loopi 是 xopc 中的个人 Agent，无需单独安装。告诉它你的背景、回复偏好和想做的事；需要时交办任务，继续对话，再回来查看结果。[认识 Loopi](https://xopcai.github.io/xopc/zh/personal-ai)。
+**先和 Ada 聊聊。** Ada 是 xopc 中的个人 Agent，无需单独安装。告诉它你的背景、回复偏好和想做的事；需要时交办任务，继续对话，再回来查看结果。[认识 Ada](https://xopcai.github.io/xopc/zh/personal-ai)。
 
 **直接进入工作空间。** 带入文件和目标，处理资料、分析数据、修改代码或制作汇报。把对话、成果与项目留在一起，稍后接着做。[工作空间指南](https://xopcai.github.io/xopc/zh/workspace-guide)。
 
@@ -108,7 +108,7 @@ xopc
 
 | 你想做什么 | 指南 |
 | --- | --- |
-| 设置个人助手 | [认识 Loopi](https://xopcai.github.io/xopc/zh/personal-ai) |
+| 设置个人助手 | [认识 Ada](https://xopcai.github.io/xopc/zh/personal-ai) |
 | 交办并修改成果 | [任务交付](https://xopcai.github.io/xopc/zh/task-delegation) |
 | 处理文件与项目 | [工作空间](https://xopcai.github.io/xopc/zh/workspace-guide) |
 | 检查结果与重试 | [任务验收](https://xopcai.github.io/xopc/zh/task-review) |

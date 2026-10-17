@@ -4,7 +4,7 @@ import { getSqliteDatabase } from '../storage/sqlite/transaction.js';
 
 export const PersonalOnboardingStepSchema = z.enum(['intro', 'identity', 'voice', 'connections']);
 export const PersonalOnboardingDraftSchema = z.object({
-  displayName: z.string().trim().min(1).max(60).default('Loopi'),
+  displayName: z.string().trim().min(1).max(60).default('Ada'),
   appearance: z.enum(['loopi', 'loopi-curious', 'loopi-care']).default('loopi'),
   voice: z.string().trim().min(1).max(200).nullable().default(null),
 }).strict();

@@ -61,4 +61,4 @@ Project 用于组织相关 Task、对话、文件和活动。它是上下文，�
 
 ## 从当前界面开始
 
-[认识 Loopi](./personal-ai.md) · [交办与接收结果](./task-delegation.md) · [处理文件与项目](./workspace-guide.md) · [任务验收](./task-review.md)。
+[认识 Ada](./personal-ai.md) · [交办与接收结果](./task-delegation.md) · [处理文件与项目](./workspace-guide.md) · [任务验收](./task-review.md)。

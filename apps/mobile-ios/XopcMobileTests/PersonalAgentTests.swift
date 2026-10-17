@@ -15,7 +15,7 @@ struct PersonalAgentTests {
 
         let ready = try decoder.decode(
             GatewayEnvelope<PersonalAgentRecord>.self,
-            from: Data(#"{"ok":true,"payload":{"agentId":"personal","conversationId":"fixed","state":"ready","displayName":"Loopi","appearance":"loopi","errorMessage":null}}"#.utf8)
+            from: Data(#"{"ok":true,"payload":{"agentId":"personal","conversationId":"fixed","state":"ready","displayName":"Ada","appearance":"loopi","errorMessage":null}}"#.utf8)
         )
         #expect(ready.payload?.isReady == true)
         #expect(ready.payload?.conversationId == "fixed")
@@ -24,7 +24,7 @@ struct PersonalAgentTests {
             GatewayEnvelope<PersonalAgentRecord>.self,
             from: Data(#"""
             {"ok":true,"payload":{"agentId":"personal","conversationId":"fixed","state":"ready",
-            "displayName":"Loopi","appearance":"loopi-care","revision":4,
+            "displayName":"Ada","appearance":"loopi-care","revision":4,
             "preferences":{"warmth":"gentle"},
             "voiceCallPreferences":{"openingGreetingEnabled":false},
             "voicePreference":{"provider":"alibaba","model":"tts","voice":"voice-a"},

@@ -7,7 +7,7 @@
 <p align="center">
   <strong>Keep what matters moving.</strong><br />
   Open-source, local-first personal AI that remembers your context and helps you move work forward.<br />
-  Chat with Loopi, delegate a task, or work directly with files and projects.<br />
+  Chat with Ada, delegate a task, or work directly with files and projects.<br />
   Review the result and keep refining it.
 </p>
 
@@ -31,7 +31,7 @@
 
 ## Two ways to start in one xopc
 
-**Talk with Loopi.** Loopi is the personal Agent inside xopc; no separate installation is needed. Share your background, response preferences, and a goal. Delegate a task when you need a hand, keep talking, then return to the result. [Meet Loopi](https://xopcai.github.io/xopc/personal-ai).
+**Talk with Ada.** Ada is the personal Agent inside xopc; no separate installation is needed. Share your background, response preferences, and a goal. Delegate a task when you need a hand, keep talking, then return to the result. [Meet Ada](https://xopcai.github.io/xopc/personal-ai).
 
 **Open your workspace.** Bring files and a goal to organize material, analyze data, change code, or prepare a report. Keep conversations, deliverables, and project context together so you can continue later. [Workspace guide](https://xopcai.github.io/xopc/workspace-guide).
 
@@ -108,7 +108,7 @@ Authorize sources, tools, and channels as needed. Execution confirmation depends
 
 | You want to… | Read |
 | --- | --- |
-| Set up your personal assistant | [Meet Loopi](https://xopcai.github.io/xopc/personal-ai) |
+| Set up your personal assistant | [Meet Ada](https://xopcai.github.io/xopc/personal-ai) |
 | Delegate and refine a result | [Task delivery](https://xopcai.github.io/xopc/task-delegation) |
 | Work with files and projects | [Workspace](https://xopcai.github.io/xopc/workspace-guide) |
 | Review results and retry | [Task acceptance](https://xopcai.github.io/xopc/task-review) |

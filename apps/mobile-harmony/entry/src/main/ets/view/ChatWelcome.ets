@@ -14,7 +14,7 @@ export struct XopcChatWelcome {
   @Param language: string = 'en';
   @Param contextPending: boolean = false;
   @Param personal: boolean = false;
-  @Param personalName: string = 'Loopi';
+  @Param personalName: string = 'Ada';
   @Param personalAgentId: string = '';
   @Param personalAppearance: string = 'loopi';
   @Event onChoose: (prompt: string) => void = (_prompt: string): void => {};

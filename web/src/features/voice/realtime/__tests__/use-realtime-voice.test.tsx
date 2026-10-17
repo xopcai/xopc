@@ -747,11 +747,11 @@ describe('useRealtimeVoice', () => {
       await act(async () => button!.click());
     };
     act(() => root.render(<App showPage />));
-    await act(async () => call.open({ conversationId: 'same-session', name: 'Loopi' }));
+    await act(async () => call.open({ conversationId: 'same-session', name: 'Ada' }));
     expect(call.active).toBe(true);
     expect(document.querySelector('[role="dialog"]')).toBeNull();
     const initialMiniCard = document.querySelector<HTMLElement>('[role="region"]')!;
-    expect(initialMiniCard.textContent).toContain('Loopi');
+    expect(initialMiniCard.textContent).toContain('Ada');
     expect(initialMiniCard.className).toContain('top-[calc(5rem+env(safe-area-inset-top))]');
     await act(async () => initialMiniCard.querySelector<HTMLButtonElement>('button')!.click());
     expect(document.querySelector('[role="dialog"]')).not.toBeNull();
@@ -770,7 +770,7 @@ describe('useRealtimeVoice', () => {
     expect(stop).not.toHaveBeenCalled();
     expect(track.stop).not.toHaveBeenCalled();
     const miniCard = document.querySelector<HTMLElement>('[role="region"]')!;
-    expect(miniCard.textContent).toContain('Loopi');
+    expect(miniCard.textContent).toContain('Ada');
     vi.spyOn(miniCard, 'getBoundingClientRect').mockReturnValue({ left: 600, top: 500, width: 240, height: 64 } as DOMRect);
     const miniButton = miniCard.querySelector<HTMLButtonElement>('button')!;
     miniButton.setPointerCapture = vi.fn();
@@ -792,7 +792,7 @@ describe('useRealtimeVoice', () => {
     await click(labels.callEnd);
     expect(stop).toHaveBeenCalledWith('user_finished');
     act(() => root.render(<App showPage />));
-    await act(async () => call.open({ conversationId: 'same-session', name: 'Loopi' }));
+    await act(async () => call.open({ conversationId: 'same-session', name: 'Ada' }));
     expect(mocks.connect.mock.calls.map(([options]) => options.conversationId)).toEqual(['same-session', 'same-session']);
   });
 

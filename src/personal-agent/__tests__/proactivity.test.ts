@@ -53,7 +53,7 @@ describe('Personal proactive participation', () => {
     now = Date.parse('2026-10-09T12:00:00+08:00'); available = true;
     patchProactivitySettings(ownerId, { ...getProactivitySettings(ownerId), timezone: 'Asia/Shanghai' });
     const catalog = new AgentCatalogRepository(); catalog.ensureInitialized();
-    catalog.create({ id: personalAgentId(ownerId), profile: { name: 'Loopi' } }, { ready: true });
+    catalog.create({ id: personalAgentId(ownerId), profile: { name: 'Ada' } }, { ready: true });
     createConversation({ agentId: personalAgentId(ownerId), sourceChannel: 'webchat', customData: { personalAgent: true } }, '', conversationId);
     setSessionConfig(conversationId, { fixedModel: true }, dir);
     sourceId = appendTranscriptEntry(conversationId, { role: 'user', content: '帮我继续关注产品方案，下周跟进一下', timestamp: now }).entry_id;

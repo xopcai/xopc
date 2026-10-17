@@ -6,7 +6,7 @@ These are user-facing entry points as of October 10, 2026. See [GitHub Releases]
 
 Recent versions add the Personal AI destination, profile and response preferences, delegated-task activity, and delivery of results and files into the personal conversation. Delegate work, keep discussing, then inspect the result and request changes.
 
-- [Meet Loopi](./personal-ai.md)
+- [Meet Ada](./personal-ai.md)
 - [Delegate and receive results](./task-delegation.md)
 - [Review and accept a Task](./task-review.md)
 

@@ -1,6 +1,6 @@
 # Get started with xopc
 
-xopc is open-source, local-first personal AI. Start with the desktop app, connect one model, then chat with Loopi or work directly with files and projects.
+xopc is open-source, local-first personal AI. Start with the desktop app, connect one model, then chat with Ada or work directly with files and projects.
 
 ## Choose a model and a starting point
 
@@ -10,7 +10,7 @@ xopc is open-source, local-first personal AI. Start with the desktop app, connec
 | Your API key | Connect a supported provider and choose a model |
 | Local model | Start and connect a compatible local model service such as Ollama |
 
-Once the model works, [talk with Loopi](./personal-ai.md) or go directly to [files and projects](./workspace-guide.md). XOPC Cloud onboarding configures available image and voice services and enables supported realtime voice modes, while preserving existing explicit settings. Automatic reply playback stays off by default. Other model providers and Computer Use need their own compatible service configuration.
+Once the model works, [talk with Ada](./personal-ai.md) or go directly to [files and projects](./workspace-guide.md). XOPC Cloud onboarding configures available image and voice services and enables supported realtime voice modes, while preserving existing explicit settings. Automatic reply playback stays off by default. Other model providers and Computer Use need their own compatible service configuration.
 
 ## Choose how to start
 
@@ -91,4 +91,4 @@ xopc config show
 
 ## Start from the current experience
 
-[Meet Loopi](./personal-ai.md) · [Delegate and receive results](./task-delegation.md) · [Work with files and projects](./workspace-guide.md) · [Task acceptance](./task-review.md).
+[Meet Ada](./personal-ai.md) · [Delegate and receive results](./task-delegation.md) · [Work with files and projects](./workspace-guide.md) · [Task acceptance](./task-review.md).

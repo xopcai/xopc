@@ -14,7 +14,7 @@ describe('personal onboarding', () => {
     openXopcDatabase({ path: join(dir, 'xopc.db') });
     try {
       expect(getPersonalOnboarding('local-owner')).toMatchObject({
-        step: 'intro', draft: { displayName: 'Loopi', appearance: 'loopi', voice: null }, completed: false, welcomeDone: false,
+        step: 'intro', draft: { displayName: 'Ada', appearance: 'loopi', voice: null }, completed: false, welcomeDone: false,
       });
       savePersonalOnboarding('local-owner', 'voice', { displayName: 'Mira', appearance: 'loopi-care', voice: 'Serena' });
       expect(getPersonalOnboarding('local-owner')).toMatchObject({
