@@ -153,12 +153,16 @@ export function xopcToolsToDefinitions(tools: AgentTool[]): ToolDefinition[] {
           }
         }
 
-        return withDataToolPermissions(new Set(tools.map(item => item.name)), () => (tool as { execute: (...a: never[]) => unknown }).execute(
+        const execute = () => (tool as { execute: (...a: never[]) => unknown }).execute(
           toolCallId as never,
           params as never,
           signal as never,
           onUpdate as never,
-        )) as never;
+        );
+        // Launching another execution must not leak this session's read scope into it.
+        return (tool.name === 'data_batch'
+          ? withDataToolPermissions(new Set(tools.map(item => item.name)), execute)
+          : execute()) as never;
       },
     };
     return def as unknown as ToolDefinition;
