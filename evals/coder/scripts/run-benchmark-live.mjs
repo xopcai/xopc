@@ -6,10 +6,12 @@ import { main } from './run-github-eval.mjs';
 
 const { values } = parseArgs({ options: {
   model: { type: 'string' },
+  suite: { type: 'string', default: 'xopc-core' },
   output: { type: 'string' },
   repetitions: { type: 'string', default: '1' },
   reasoning: { type: 'string' },
 } });
+if (!['xopc-core', 'xopc-agent-growth'].includes(values.suite)) throw new Error('Unknown benchmark suite');
 if (!values.model) throw new Error('Pass --model provider/model; credentials are resolved locally and passed only to the isolated Gateway.');
 const output = resolve(values.output ?? `.xopc-evals/live-core-v1-${new Date().toISOString().replaceAll(':', '-')}`);
 mkdirSync(dirname(output), { recursive: true });
@@ -25,4 +27,4 @@ process.env.CODER_EVAL_MODEL = values.model;
 process.env.CODER_EVAL_API_KEY = key;
 process.env.CODER_EVAL_REASONING = reasoning;
 process.env.CODER_EVAL_REPETITIONS = values.repetitions;
-await main({ benchmark: true, outputDirectory: output });
+await main({ benchmark: true, benchmarkSuite: values.suite, outputDirectory: output });

@@ -141,6 +141,7 @@ const log = createLogger('AgentToolsFactory');
 const CLARIFY_SUPPORTED_CHANNELS = new Set(['webchat', 'telegram', 'cli']);
 
 export interface ToolFactoryDeps {
+  isWorkspaceTrusted?: (workspaceDir: string) => boolean | null | undefined;
   workspace: string;
   extensionRegistry?: ExtensionRegistry;
   getCurrentContext: () => { channel: string; chatId: string; conversationId: string; origin: TurnOrigin } | null;
@@ -749,6 +750,7 @@ export class AgentToolsFactory {
       ...(primary
         ? [
             createDelegateTool({
+              isWorkspaceTrusted: this.deps.isWorkspaceTrusted,
               workspace,
               getParentTools: () => options?.getParentTools?.() ?? filterToolsByDisabledSet(core, disabled),
               createParentPolicy: options?.createDelegationPolicy ?? (() => createNoninteractiveToolPolicy({

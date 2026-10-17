@@ -38,6 +38,7 @@ export const DELEGATE_BLOCKED_TOOLS = new Set([
 ]);
 
 export interface DelegateToolDeps {
+  isWorkspaceTrusted?: (workspaceDir: string) => boolean | null | undefined;
   getParentTools: () => AgentTool<any, any>[];
   createParentPolicy?: () => AgentTurnPolicy;
   workspace: string;
@@ -128,6 +129,7 @@ export function createDelegateTool(deps: DelegateToolDeps): AgentTool {
         const abort = () => child?.abort(resolveAgentAbortReason(signal?.reason));
         try {
           child = createDelegateChildHandle({
+            isWorkspaceTrusted: deps.isWorkspaceTrusted,
             workspace, goal: mode === 'review'
               ? `Independently review the actual changes. Inspect review_workspace and relevant source/tests. Report actionable defects with file and line evidence, severity and a concrete failure example. If there are no findings, state the checks and remaining uncertainty. Do not treat the parent's completion claim as evidence.\n\n${input.goal}` : input.goal,
             context: [input.context, research ? researchResumeContext(research.checkpoint) : undefined].filter(Boolean).join('\n\n') || undefined,

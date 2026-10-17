@@ -82,4 +82,22 @@ describe('unchanged grader', () => {
     expect(result.passed).toBe(true);
     expect(existsSync(join(workspace, '.xopc-eval-hidden', 'check.mjs'))).toBe(false);
   });
+  it('exports evaluator-owned hydrated traces only inside the hidden directory and cleans up on rejection', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'agent-evals-trace-grader-'));
+    roots.push(root);
+    const workspace = join(root, 'workspace'); mkdirSync(workspace);
+    const payloadPath = join(root, 'payload.json');
+    writeFileSync(payloadPath, JSON.stringify({payload:{result:{details:{verification:{status:'passed'}}}}}));
+    const checkPath = join(root, 'check.mjs');
+    writeFileSync(checkPath, `import assert from 'node:assert/strict';import {readFileSync} from 'node:fs';const trace=JSON.parse(readFileSync('.xopc-eval-hidden/trace.json'));assert.equal(trace.events[0].payload.payload.result.details.verification.status,'passed');`);
+    const context = {runId:'r',workspace,artifactStore:new ArtifactStore(join(root,'artifacts')),
+      store:{recordArtifact(){},getRun(){return {events:[{type:'tool.finished',payload_json:'{"truncated":true}',artifact_refs_json:'["payload"]'}],artifacts:[{id:'payload',kind:'trace-payload-tool.finished',path:payloadPath}]};}} as unknown as EvalStore};
+    const spec = {type:'command' as const,command:'node .xopc-eval-hidden/check.mjs',traceFile:'.xopc-eval-hidden/trace.json',hiddenFiles:[{source:checkPath,target:'.xopc-eval-hidden/check.mjs'}]};
+    expect((await runGrader(spec,0,context)).passed).toBe(true);
+    expect(existsSync(join(workspace,'.xopc-eval-hidden'))).toBe(false);
+    await expect(runGrader({...spec,traceFile:'leaked.json'},0,context)).rejects.toThrow('Trace snapshot must stay inside');
+    expect(existsSync(join(workspace,'leaked.json'))).toBe(false);
+    expect(existsSync(join(workspace,'.xopc-eval-hidden'))).toBe(false);
+  });
+
 });

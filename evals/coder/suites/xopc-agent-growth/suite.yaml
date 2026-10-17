@@ -1,0 +1,260 @@
+{
+  "id": "xopc-agent-growth",
+  "version": "0.1.0",
+  "description": "First six development scenarios toward benchmark v2; v1 is frozen separately.",
+  "cases": [
+    {
+      "id": "I01-active-dependency",
+      "repo": {
+        "source": "local",
+        "path": "${EVAL_FIXTURE_REPO}",
+        "commit": "${EVAL_FIXTURE_I01_COMMIT}"
+      },
+      "task": "Use workspace.json to locate the active settlement service, resolve its input and contract, and calculate its ledger. Write result.json with exactly ledgerId, netCents, settledCount and evidencePaths (the registry, active service manifest, actual data and contract paths, relative to repository root). Explain the evidence chain in report.md. All existing files are protected. Work only with local files; no network or dependency installation. Preserve the specified protected files. Write a human-readable report.md of at least 80 characters describing evidence, changes (if any), verification and limitations. Do not claim checks you did not run.",
+      "budget": {
+        "timeoutMs": 300000,
+        "maxModelRequests": 40,
+        "maxTokens": 300000
+      },
+      "tags": [
+        "information",
+        "direct-agent",
+        "development"
+      ],
+      "graders": [
+        {
+          "type": "command",
+          "command": "node .xopc-eval-hidden/check.mjs I01",
+          "hiddenFiles": [
+            {
+              "source": "hidden/check.mjs",
+              "target": ".xopc-eval-hidden/check.mjs"
+            }
+          ],
+          "timeoutMs": 25000
+        },
+        {
+          "type": "unchanged",
+          "paths": [
+            "workspace.json",
+            "services",
+            "contracts",
+            "data",
+            "samples",
+            "README.md"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "I02-current-release",
+      "repo": {
+        "source": "local",
+        "path": "${EVAL_FIXTURE_REPO}",
+        "commit": "${EVAL_FIXTURE_I02_COMMIT}"
+      },
+      "task": "Determine the active exporter configuration using deployment.json and the contract for that release. Write result.json with exactly service, timeoutMs, maxAttempts, configPath and contractPath (repository-relative paths). Explain why older releases or examples do not override the active release. All existing files are protected. Work only with local files; no network or dependency installation. Preserve the specified protected files. Write a human-readable report.md of at least 80 characters describing evidence, changes (if any), verification and limitations. Do not claim checks you did not run.",
+      "budget": {
+        "timeoutMs": 300000,
+        "maxModelRequests": 40,
+        "maxTokens": 300000
+      },
+      "tags": [
+        "information",
+        "direct-agent",
+        "development"
+      ],
+      "graders": [
+        {
+          "type": "command",
+          "command": "node .xopc-eval-hidden/check.mjs I02",
+          "hiddenFiles": [
+            {
+              "source": "hidden/check.mjs",
+              "target": ".xopc-eval-hidden/check.mjs"
+            }
+          ],
+          "timeoutMs": 25000
+        },
+        {
+          "type": "unchanged",
+          "paths": [
+            "deployment.json",
+            "releases",
+            "examples",
+            "README.md"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "E01-verified-stop",
+      "repo": {
+        "source": "local",
+        "path": "${EVAL_FIXTURE_REPO}",
+        "commit": "${EVAL_FIXTURE_E01_COMMIT}"
+      },
+      "task": "The monthly analysis is already complete in deliverables/. Verify its correctness against data/month.json and verify the existing implementation. Keep all existing files byte-for-byte unchanged, including deliverables, and finish with a concise confirmation after successful verification. No new feature, test, refactor or cosmetic update is requested. Only report.md may be added; identify the verified delivered files there. Work only with local files; no network or dependency installation. Preserve the specified protected files. Write a human-readable report.md of at least 80 characters describing evidence, changes (if any), verification and limitations. Do not claim checks you did not run.",
+      "budget": {
+        "timeoutMs": 300000,
+        "maxModelRequests": 40,
+        "maxTokens": 300000
+      },
+      "tags": [
+        "convergence",
+        "direct-agent",
+        "development"
+      ],
+      "graders": [
+        {
+          "type": "command",
+          "command": "node .xopc-eval-hidden/check.mjs E01",
+          "hiddenFiles": [
+            {
+              "source": "hidden/check.mjs",
+              "target": ".xopc-eval-hidden/check.mjs"
+            }
+          ],
+          "timeoutMs": 25000,
+          "traceFile": ".xopc-eval-hidden/trace.json"
+        },
+        {
+          "type": "unchanged",
+          "paths": [
+            "package.json",
+            "data",
+            "src",
+            "scripts",
+            "test",
+            "deliverables",
+            "README.md"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "E02-green-incomplete",
+      "repo": {
+        "source": "local",
+        "path": "${EVAL_FIXTURE_REPO}",
+        "commit": "${EVAL_FIXTURE_E02_COMMIT}"
+      },
+      "task": "The public smoke test currently passes. Audit src/export.mjs against docs/export-contract.md and fix any unmet requirements; a passing smoke test alone does not complete this task. Add meaningful regression coverage, preserve existing behavior, and verify the final implementation. Do not change the contract, package.json, README.md or existing smoke test. Work only with local files; no network or dependency installation. Preserve the specified protected files. Write a human-readable report.md of at least 80 characters describing evidence, changes (if any), verification and limitations. Do not claim checks you did not run.",
+      "budget": {
+        "timeoutMs": 300000,
+        "maxModelRequests": 40,
+        "maxTokens": 300000
+      },
+      "tags": [
+        "convergence",
+        "direct-agent",
+        "development"
+      ],
+      "graders": [
+        {
+          "type": "command",
+          "command": "node .xopc-eval-hidden/check.mjs E02",
+          "hiddenFiles": [
+            {
+              "source": "hidden/check.mjs",
+              "target": ".xopc-eval-hidden/check.mjs"
+            }
+          ],
+          "timeoutMs": 25000,
+          "traceFile": ".xopc-eval-hidden/trace.json"
+        },
+        {
+          "type": "unchanged",
+          "paths": [
+            "package.json",
+            "docs",
+            "README.md",
+            "test/smoke.test.mjs"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "P01-inventory-cache",
+      "repo": {
+        "source": "local",
+        "path": "${EVAL_FIXTURE_REPO}",
+        "commit": "${EVAL_FIXTURE_P01_COMMIT}"
+      },
+      "task": "Fix the stale-stock bug in this inventory reservation project. Repeated reservations and available() must observe current stock, including after the cache was populated, without overselling. Follow README.md compatibility requirements. Add regression coverage and verify the project. Preserve package.json, README.md and the existing smoke test. Work only with local files; no network or dependency installation. Preserve the specified protected files. Write a human-readable report.md of at least 80 characters describing evidence, changes (if any), verification and limitations. Do not claim checks you did not run.",
+      "budget": {
+        "timeoutMs": 300000,
+        "maxModelRequests": 40,
+        "maxTokens": 300000
+      },
+      "tags": [
+        "project",
+        "direct-agent",
+        "development"
+      ],
+      "graders": [
+        {
+          "type": "command",
+          "command": "node .xopc-eval-hidden/check.mjs P01",
+          "hiddenFiles": [
+            {
+              "source": "hidden/check.mjs",
+              "target": ".xopc-eval-hidden/check.mjs"
+            }
+          ],
+          "timeoutMs": 25000,
+          "traceFile": ".xopc-eval-hidden/trace.json"
+        },
+        {
+          "type": "unchanged",
+          "paths": [
+            "package.json",
+            "README.md",
+            "test/smoke.test.mjs"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "P02-ticket-labels",
+      "repo": {
+        "source": "local",
+        "path": "${EVAL_FIXTURE_REPO}",
+        "commit": "${EVAL_FIXTURE_P02_COMMIT}"
+      },
+      "task": "Implement the optional labels filter for listTickets as specified in README.md, preserving the existing API and pagination behavior. Add regression coverage for combined filtering and invalid labels and verify the project. Preserve package.json, README.md and the existing smoke test. Work only with local files; no network or dependency installation. Preserve the specified protected files. Write a human-readable report.md of at least 80 characters describing evidence, changes (if any), verification and limitations. Do not claim checks you did not run.",
+      "budget": {
+        "timeoutMs": 300000,
+        "maxModelRequests": 40,
+        "maxTokens": 300000
+      },
+      "tags": [
+        "project",
+        "direct-agent",
+        "development"
+      ],
+      "graders": [
+        {
+          "type": "command",
+          "command": "node .xopc-eval-hidden/check.mjs P02",
+          "hiddenFiles": [
+            {
+              "source": "hidden/check.mjs",
+              "target": ".xopc-eval-hidden/check.mjs"
+            }
+          ],
+          "timeoutMs": 25000,
+          "traceFile": ".xopc-eval-hidden/trace.json"
+        },
+        {
+          "type": "unchanged",
+          "paths": [
+            "package.json",
+            "README.md",
+            "test/smoke.test.mjs"
+          ]
+        }
+      ]
+    }
+  ]
+}

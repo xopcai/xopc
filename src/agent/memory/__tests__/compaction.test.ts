@@ -108,6 +108,27 @@ describe('SessionCompactor', () => {
     expect(vi.mocked(completeWithResolvedCredentials).mock.calls[0]?.[2]).not.toHaveProperty('reasoning');
   });
 
+  it('carries scoped communication preferences and single-turn exceptions into handover context', async () => {
+    const rows = conversation();
+    rows[0] = { role: 'user', content: 'For this conversation, answer in English and keep an informal style.', timestamp: 1 };
+    rows[2] = { role: 'user', content: 'Only for this next answer, use Chinese.', timestamp: 3 };
+    vi.mocked(completeWithResolvedCredentials).mockResolvedValueOnce(completion(JSON.stringify({ upserts: [{
+      kind: 'constraint', text: 'Conversation preference: English and informal; the Chinese override applies to one answer only.',
+      status: 'active', sourceSeqs: [1, 3], identifiers: [],
+    }] })));
+    const result = await new SessionCompactor({ minMessagesBeforeCompact: 4, keepRecentTokens: 1, recentTurnsPreserve: 1 })
+      .compact(sources(rows), model, undefined, true);
+    expect(result.compacted).toBe(true);
+    expect(result.handover?.items[0]).toMatchObject({ kind: 'constraint', sources: [
+      { entryId: 'entry-1', seq: 1 }, { entryId: 'entry-3', seq: 3 },
+    ] });
+    expect(JSON.stringify(result.messages[0])).toContain('English and informal');
+    const context = vi.mocked(completeWithResolvedCredentials).mock.calls[0][1];
+    expect(context.systemPrompt).toContain('Preserve explicit ongoing language and style preferences as constraints with their conversation scope and source evidence');
+    expect(context.systemPrompt).toContain('a single-turn exception does not supersede an ongoing preference');
+    expect(JSON.stringify(context.messages)).toContain('For this conversation');
+  });
+
   it('only enables low reasoning when explicitly configured', async () => {
     vi.mocked(completeWithResolvedCredentials).mockResolvedValueOnce(completion(ledger()));
     await new SessionCompactor({

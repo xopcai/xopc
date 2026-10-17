@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "benchmark": "xopc-agent-growth",
+  "version": "0.1.0",
+  "trials": [
+    {
+      "status": "interrupted-development-trial",
+      "reason": "Stopped before E01 to close an untracked-file grading gap: E01 permits only report.md as a new file. Retain this trial; do not pool with the final baseline.",
+      "formalBaseline": false,
+      "evidenceDirectory": ".xopc-evals/qwen-agent-growth-v0.1.0/",
+      "recordedRows": [
+        {
+          "case_id": "I01-active-dependency",
+          "status": "running"
+        }
+      ],
+      "observedCompletedResponseTokens": 126463
+    },
+    {
+      "evidenceClass": "live-direct-agent",
+      "formalBaseline": true,
+      "evidenceDirectory": ".xopc-evals/qwen-agent-growth-v0.1.0-final/benchmark/",
+      "experimentId": "62f11e0a-80e5-4fa6-8976-1a2c953a896a",
+      "suiteHash": "df2333ee2f1ace2f135bf5d8ce8eef56bb0d72d836bd1842422df8994df88472",
+      "expectedRuns": 18,
+      "passed": 16,
+      "statuses": {
+        "passed": 16,
+        "failed": 1,
+        "error": 0,
+        "timed_out": 0,
+        "budget_exceeded": 1
+      },
+      "sourceDrift": false
+    }
+  ]
+}

@@ -1,0 +1,381 @@
+{
+  "schemaVersion": 1,
+  "evidenceClass": "harness-calibration",
+  "experimentId": "f80e5987-44cf-4534-9cf0-b3d6bd2ff2f1",
+  "suiteHash": "df2333ee2f1ace2f135bf5d8ce8eef56bb0d72d836bd1842422df8994df88472",
+  "passed": true,
+  "sourceDrift": false,
+  "variants": [
+    {
+      "id": "broken",
+      "expectedRuns": 6,
+      "observedRuns": 6,
+      "passed": 0,
+      "successRate": 0,
+      "reportedEstimatedCost": null,
+      "reportedEstimatedCostPerSuccess": null,
+      "durationsMs": [
+        71,
+        77,
+        75,
+        79,
+        77,
+        80
+      ],
+      "totalReportedTokens": null,
+      "statuses": {
+        "passed": 0,
+        "failed": 6,
+        "error": 0,
+        "timed_out": 0,
+        "budget_exceeded": 0
+      },
+      "categories": [
+        {
+          "category": "information",
+          "expectedRuns": 2,
+          "passed": 0
+        },
+        {
+          "category": "convergence",
+          "expectedRuns": 2,
+          "passed": 0
+        },
+        {
+          "category": "project",
+          "expectedRuns": 2,
+          "passed": 0
+        }
+      ]
+    },
+    {
+      "id": "reference",
+      "expectedRuns": 6,
+      "observedRuns": 6,
+      "passed": 6,
+      "successRate": 1,
+      "reportedEstimatedCost": null,
+      "reportedEstimatedCostPerSuccess": null,
+      "durationsMs": [
+        190,
+        304,
+        122,
+        137,
+        319,
+        305
+      ],
+      "totalReportedTokens": null,
+      "statuses": {
+        "passed": 6,
+        "failed": 0,
+        "error": 0,
+        "timed_out": 0,
+        "budget_exceeded": 0
+      },
+      "categories": [
+        {
+          "category": "information",
+          "expectedRuns": 2,
+          "passed": 2
+        },
+        {
+          "category": "convergence",
+          "expectedRuns": 2,
+          "passed": 2
+        },
+        {
+          "category": "project",
+          "expectedRuns": 2,
+          "passed": 2
+        }
+      ]
+    }
+  ],
+  "cases": [
+    {
+      "caseId": "I01-active-dependency",
+      "variantId": "broken",
+      "runId": "31755607-84dd-4093-a9b3-e25046db9607",
+      "status": "failed",
+      "artifactChecksPassed": false,
+      "durationMs": 75,
+      "observedResponseTokens": null,
+      "usageCoverage": "Observed completed responses only; interrupted requests may be unreported.",
+      "diagnostics": {
+        "toolCounts": {},
+        "distinctExplicitReadPaths": [],
+        "toolCompletionCoverage": {
+          "total": 0,
+          "recovered": 0
+        },
+        "repeatedSuccessfulCallsAtObservedRevision": 0,
+        "explicitEditsAfterSuccessfulCheckAtObservedRevision": 0,
+        "explicitReadsAfterSuccessfulCheckAtObservedRevision": 0,
+        "limitations": "Counts model-visible tools only. Identical arguments are compared verbatim; shell I/O and semantic necessity are not inferred. Missing trace payloads yield null diagnostic totals."
+      }
+    },
+    {
+      "caseId": "I01-active-dependency",
+      "variantId": "reference",
+      "runId": "48560167-9592-4923-8dc5-98cda4bf2483",
+      "status": "passed",
+      "artifactChecksPassed": true,
+      "durationMs": 122,
+      "observedResponseTokens": null,
+      "usageCoverage": "Observed completed responses only; interrupted requests may be unreported.",
+      "diagnostics": {
+        "toolCounts": {},
+        "distinctExplicitReadPaths": [],
+        "toolCompletionCoverage": {
+          "total": 0,
+          "recovered": 0
+        },
+        "repeatedSuccessfulCallsAtObservedRevision": 0,
+        "explicitEditsAfterSuccessfulCheckAtObservedRevision": 0,
+        "explicitReadsAfterSuccessfulCheckAtObservedRevision": 0,
+        "limitations": "Counts model-visible tools only. Identical arguments are compared verbatim; shell I/O and semantic necessity are not inferred. Missing trace payloads yield null diagnostic totals."
+      }
+    },
+    {
+      "caseId": "I02-current-release",
+      "variantId": "reference",
+      "runId": "7f37d090-df64-4f6a-91a1-33bd2e36dfd9",
+      "status": "passed",
+      "artifactChecksPassed": true,
+      "durationMs": 137,
+      "observedResponseTokens": null,
+      "usageCoverage": "Observed completed responses only; interrupted requests may be unreported.",
+      "diagnostics": {
+        "toolCounts": {},
+        "distinctExplicitReadPaths": [],
+        "toolCompletionCoverage": {
+          "total": 0,
+          "recovered": 0
+        },
+        "repeatedSuccessfulCallsAtObservedRevision": 0,
+        "explicitEditsAfterSuccessfulCheckAtObservedRevision": 0,
+        "explicitReadsAfterSuccessfulCheckAtObservedRevision": 0,
+        "limitations": "Counts model-visible tools only. Identical arguments are compared verbatim; shell I/O and semantic necessity are not inferred. Missing trace payloads yield null diagnostic totals."
+      }
+    },
+    {
+      "caseId": "I02-current-release",
+      "variantId": "broken",
+      "runId": "e6211325-31c6-4d72-8eec-adce2db18d13",
+      "status": "failed",
+      "artifactChecksPassed": false,
+      "durationMs": 79,
+      "observedResponseTokens": null,
+      "usageCoverage": "Observed completed responses only; interrupted requests may be unreported.",
+      "diagnostics": {
+        "toolCounts": {},
+        "distinctExplicitReadPaths": [],
+        "toolCompletionCoverage": {
+          "total": 0,
+          "recovered": 0
+        },
+        "repeatedSuccessfulCallsAtObservedRevision": 0,
+        "explicitEditsAfterSuccessfulCheckAtObservedRevision": 0,
+        "explicitReadsAfterSuccessfulCheckAtObservedRevision": 0,
+        "limitations": "Counts model-visible tools only. Identical arguments are compared verbatim; shell I/O and semantic necessity are not inferred. Missing trace payloads yield null diagnostic totals."
+      }
+    },
+    {
+      "caseId": "E01-verified-stop",
+      "variantId": "reference",
+      "runId": "a48a6d63-7e71-4305-9acc-65be91a8b01b",
+      "status": "passed",
+      "artifactChecksPassed": true,
+      "durationMs": 190,
+      "observedResponseTokens": null,
+      "usageCoverage": "Observed completed responses only; interrupted requests may be unreported.",
+      "diagnostics": {
+        "toolCounts": {},
+        "distinctExplicitReadPaths": [],
+        "toolCompletionCoverage": {
+          "total": 1,
+          "recovered": 1
+        },
+        "repeatedSuccessfulCallsAtObservedRevision": 0,
+        "explicitEditsAfterSuccessfulCheckAtObservedRevision": 0,
+        "explicitReadsAfterSuccessfulCheckAtObservedRevision": 0,
+        "limitations": "Counts model-visible tools only. Identical arguments are compared verbatim; shell I/O and semantic necessity are not inferred. Missing trace payloads yield null diagnostic totals."
+      }
+    },
+    {
+      "caseId": "E01-verified-stop",
+      "variantId": "broken",
+      "runId": "1ba23706-f2f0-43e6-9128-288cea58f5f7",
+      "status": "failed",
+      "artifactChecksPassed": false,
+      "durationMs": 71,
+      "observedResponseTokens": null,
+      "usageCoverage": "Observed completed responses only; interrupted requests may be unreported.",
+      "diagnostics": {
+        "toolCounts": {},
+        "distinctExplicitReadPaths": [],
+        "toolCompletionCoverage": {
+          "total": 0,
+          "recovered": 0
+        },
+        "repeatedSuccessfulCallsAtObservedRevision": 0,
+        "explicitEditsAfterSuccessfulCheckAtObservedRevision": 0,
+        "explicitReadsAfterSuccessfulCheckAtObservedRevision": 0,
+        "limitations": "Counts model-visible tools only. Identical arguments are compared verbatim; shell I/O and semantic necessity are not inferred. Missing trace payloads yield null diagnostic totals."
+      }
+    },
+    {
+      "caseId": "E02-green-incomplete",
+      "variantId": "broken",
+      "runId": "e7499f4c-85a8-460c-9999-a3e527ee6ccf",
+      "status": "failed",
+      "artifactChecksPassed": false,
+      "durationMs": 77,
+      "observedResponseTokens": null,
+      "usageCoverage": "Observed completed responses only; interrupted requests may be unreported.",
+      "diagnostics": {
+        "toolCounts": {},
+        "distinctExplicitReadPaths": [],
+        "toolCompletionCoverage": {
+          "total": 0,
+          "recovered": 0
+        },
+        "repeatedSuccessfulCallsAtObservedRevision": 0,
+        "explicitEditsAfterSuccessfulCheckAtObservedRevision": 0,
+        "explicitReadsAfterSuccessfulCheckAtObservedRevision": 0,
+        "limitations": "Counts model-visible tools only. Identical arguments are compared verbatim; shell I/O and semantic necessity are not inferred. Missing trace payloads yield null diagnostic totals."
+      }
+    },
+    {
+      "caseId": "E02-green-incomplete",
+      "variantId": "reference",
+      "runId": "f06e700b-1e19-4e48-9222-dfedb68eec26",
+      "status": "passed",
+      "artifactChecksPassed": true,
+      "durationMs": 304,
+      "observedResponseTokens": null,
+      "usageCoverage": "Observed completed responses only; interrupted requests may be unreported.",
+      "diagnostics": {
+        "toolCounts": {},
+        "distinctExplicitReadPaths": [],
+        "toolCompletionCoverage": {
+          "total": 1,
+          "recovered": 1
+        },
+        "repeatedSuccessfulCallsAtObservedRevision": 0,
+        "explicitEditsAfterSuccessfulCheckAtObservedRevision": 0,
+        "explicitReadsAfterSuccessfulCheckAtObservedRevision": 0,
+        "limitations": "Counts model-visible tools only. Identical arguments are compared verbatim; shell I/O and semantic necessity are not inferred. Missing trace payloads yield null diagnostic totals."
+      }
+    },
+    {
+      "caseId": "P01-inventory-cache",
+      "variantId": "reference",
+      "runId": "3d92d948-76fc-42a2-ab03-ef2215ef0e89",
+      "status": "passed",
+      "artifactChecksPassed": true,
+      "durationMs": 319,
+      "observedResponseTokens": null,
+      "usageCoverage": "Observed completed responses only; interrupted requests may be unreported.",
+      "diagnostics": {
+        "toolCounts": {},
+        "distinctExplicitReadPaths": [],
+        "toolCompletionCoverage": {
+          "total": 1,
+          "recovered": 1
+        },
+        "repeatedSuccessfulCallsAtObservedRevision": 0,
+        "explicitEditsAfterSuccessfulCheckAtObservedRevision": 0,
+        "explicitReadsAfterSuccessfulCheckAtObservedRevision": 0,
+        "limitations": "Counts model-visible tools only. Identical arguments are compared verbatim; shell I/O and semantic necessity are not inferred. Missing trace payloads yield null diagnostic totals."
+      }
+    },
+    {
+      "caseId": "P01-inventory-cache",
+      "variantId": "broken",
+      "runId": "7c55a62e-2fb7-437b-b61b-607ff1b38493",
+      "status": "failed",
+      "artifactChecksPassed": false,
+      "durationMs": 77,
+      "observedResponseTokens": null,
+      "usageCoverage": "Observed completed responses only; interrupted requests may be unreported.",
+      "diagnostics": {
+        "toolCounts": {},
+        "distinctExplicitReadPaths": [],
+        "toolCompletionCoverage": {
+          "total": 0,
+          "recovered": 0
+        },
+        "repeatedSuccessfulCallsAtObservedRevision": 0,
+        "explicitEditsAfterSuccessfulCheckAtObservedRevision": 0,
+        "explicitReadsAfterSuccessfulCheckAtObservedRevision": 0,
+        "limitations": "Counts model-visible tools only. Identical arguments are compared verbatim; shell I/O and semantic necessity are not inferred. Missing trace payloads yield null diagnostic totals."
+      }
+    },
+    {
+      "caseId": "P02-ticket-labels",
+      "variantId": "broken",
+      "runId": "210e6b8c-7ecf-43fe-a158-341499fb33a3",
+      "status": "failed",
+      "artifactChecksPassed": false,
+      "durationMs": 80,
+      "observedResponseTokens": null,
+      "usageCoverage": "Observed completed responses only; interrupted requests may be unreported.",
+      "diagnostics": {
+        "toolCounts": {},
+        "distinctExplicitReadPaths": [],
+        "toolCompletionCoverage": {
+          "total": 0,
+          "recovered": 0
+        },
+        "repeatedSuccessfulCallsAtObservedRevision": 0,
+        "explicitEditsAfterSuccessfulCheckAtObservedRevision": 0,
+        "explicitReadsAfterSuccessfulCheckAtObservedRevision": 0,
+        "limitations": "Counts model-visible tools only. Identical arguments are compared verbatim; shell I/O and semantic necessity are not inferred. Missing trace payloads yield null diagnostic totals."
+      }
+    },
+    {
+      "caseId": "P02-ticket-labels",
+      "variantId": "reference",
+      "runId": "1a4b6cb9-3c07-4cbe-bd9d-6dfa98faa9ce",
+      "status": "passed",
+      "artifactChecksPassed": true,
+      "durationMs": 305,
+      "observedResponseTokens": null,
+      "usageCoverage": "Observed completed responses only; interrupted requests may be unreported.",
+      "diagnostics": {
+        "toolCounts": {},
+        "distinctExplicitReadPaths": [],
+        "toolCompletionCoverage": {
+          "total": 1,
+          "recovered": 1
+        },
+        "repeatedSuccessfulCallsAtObservedRevision": 0,
+        "explicitEditsAfterSuccessfulCheckAtObservedRevision": 0,
+        "explicitReadsAfterSuccessfulCheckAtObservedRevision": 0,
+        "limitations": "Counts model-visible tools only. Identical arguments are compared verbatim; shell I/O and semantic necessity are not inferred. Missing trace payloads yield null diagnostic totals."
+      }
+    }
+  ],
+  "falseCompletionRate": null,
+  "costPerSuccess": null,
+  "unmeasured": [
+    "false-completion semantics",
+    "complete provider cost coverage",
+    "autonomous background recovery",
+    "research prose quality"
+  ],
+  "benchmark": "xopc-agent-growth",
+  "version": "0.1.0",
+  "fixtureCaseCommits": {
+    "I01": "5a1b98b7e2096906d4c6df37169629ed3e5f5825",
+    "I02": "9c47dbb53ae5e616c989d8693da5feeba45afa55",
+    "E01": "cec4636543b0527c37c906ba37ed088dafb26fc4",
+    "E02": "36ebae2d5c8cbc5001f463a913d16466e9274673",
+    "P01": "cfe5ce256c3bc58d8dfa393ffe67d40274eb0307",
+    "P02": "bdc66c44f1b5c3c602d925cc87111affb93438bb"
+  },
+  "sourceCommit": "e565fa5675f315eae246d56f1643ae1e5072f841",
+  "evidenceDirectory": ".xopc-evals/growth-v0.1.0-frozen-calibration/",
+  "manifestSha256": "9d6904d8ab4c36baffda08b0a3883eef85b86d53400a26444070884afdb825d1"
+}

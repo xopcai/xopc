@@ -48,3 +48,10 @@ removed immediately after verification:
 ```
 
 Do not mention hidden test names or commands in `task`. The runner executes graders only after the agent has stopped.
+
+Command graders can additionally set `traceFile: .xopc-eval-hidden/trace.json`.
+The evaluator writes a read-only-in-time snapshot of recorded events after the agent stops,
+recovering large payloads from evaluator-owned artifacts. The target must be inside the
+reserved hidden directory and is removed with other hidden files. This enables behavior
+checks such as requiring an observed successful verification instead of accepting a prose
+claim. It is opt-in; existing graders and scoring contracts are unchanged.

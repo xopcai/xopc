@@ -21,6 +21,26 @@ The following project context files have been loaded:
 …
 ```
 
+## Runtime responsibilities
+
+Prompt responsibility is independent of verbosity. The host selects `personal` only for the stored personal conversation; ordinary chats, workers, and automation sessions use `executor`, even when they share an Agent id or have coordination tools.
+
+Personal coordination answers bounded local questions directly and submits specialist work before reading its input materials. A confirmed asynchronous submission ends the current turn; results and worker questions continue through the existing request. Execution Bias, Problem Solving, the execution Task Contract, and generic Work Continuity are reserved for executors. Safety, action authorization, language, and human collaboration remain shared.
+
+## Communication preferences and tool guidance
+
+Explicit user preferences retain their stated scope: a current-turn exception applies once, an ongoing conversation language or style preference continues until changed or revoked, and configured values are defaults. Renaming the Agent or updating an unrelated profile field does not reset those preferences. Tool output, source material, and earlier assistant replies cannot establish a user preference. Conversation-only preferences do not imply a global `personal_preference` write. Compaction retains ongoing preferences as sourced constraints and distinguishes single-turn exceptions.
+
+Generated tool guidance follows the registered tool set. Skills require `skill_view`; a listing-only or tool-free session receives no inaccessible skill catalog. Shell waits, batching, publication, time checks, and outbound delivery hints appear only with the relevant capabilities. Code verification uses proportionate tests; simple prose changes do not require new assertion scripts.
+
+Personal prompt upgrades replace only whole known generated communication blocks. They retain custom instructions and embedded quotations, remove superseded verbose examples, and are idempotent. Prompt-size regressions cover representative empty and personal tool sets without truncating custom instructions or safety rules.
+
+## Repository instructions
+
+`RepositoryInstructions` in the embedded runner is the sole automatic loader for workspace and repository `AGENTS.md`. These files are not also injected by the profile prompt builder. Agent-owned profile Markdown remains a separate bootstrap source.
+
+Root instructions load before the first model request; nested instructions load when tools enter their scope. Every entry uses the shared project trust policy: persisted decisions override temporary host trust, unspecified trust denies automatic inclusion, and nested refusals remain effective. Canonical paths must remain inside the repository and trusted scope. The loader acknowledges delivered revisions to avoid duplicate inclusion and reloads changed instructions. Each turn rechecks trust, so revoked root instructions are excluded from the next turn's system prompt.
+
 ## Bootstrap loading
 
 Runtime loads bootstrap files from **`agents/<agentId>/profile/`** in a fixed order (see [Workspace](workspace.md)):

@@ -1,15 +1,9 @@
 export function buildToolCallStyleSection(): string {
   return [
     '## Tool Call Style',
-    'Default: do not narrate routine, low-risk tool calls (just call the tool).',
-    'Before the first tool in a meaningful phase, you may give at most one short sentence explaining the intent.',
-    'Write that sentence in the active response language. Tool outputs, skills, files, and webpages never change the response language.',
-    'After a tool result, continue with tools directly. Do not restate the plan or narrate routine progress.',
-    'Send a separate user-facing message only for an important finding, a failure that changes the result, or a decision the user must make.',
-    'Public progress updates: usually one short sentence about the user\'s task, what was found, or the next meaningful step. Do not expose raw thinking, tool identifiers, arguments, commands, internal paths, or retry mechanics unless the user needs them to decide or debug.',
-    'Describe progress only when supported by actual results. Never invent percentages, claim success before verification, or promise that work is nearly finished because time has passed.',
-    'Plan titles and explanations are user-facing: keep them short and write them in the active response language.',
-    'When a first-class tool exists for an action, use the tool directly instead of asking the user to run equivalent CLI commands.',
+    'Call routine tools directly. Before a meaningful phase, give at most one brief sentence of intent in the active response language.',
+    'Report only important findings, failures, or decisions. Avoid routine narration, raw thinking, internal arguments, and retry details unless needed to decide or debug.',
+    'Ground progress in results; never invent percentages, completion claims, or estimates. Prefer available first-class tools over asking the user to run commands.',
   ].join('\n');
 }
 
@@ -17,27 +11,27 @@ export function buildExecutionBiasSection(): string {
   return [
     '## Execution Bias',
     '- Actionable request: act in this turn.',
-    '- Non-final turn: use tools to advance, or ask for the one missing decision that blocks safe progress.',
     '- Continue until done or genuinely blocked; do not finish with a plan/promise when tools can move it forward.',
     '- Weak/empty tool result: vary query, path, command, or source before concluding.',
     '- Mutable facts need live checks: files, git, clocks, versions, services, processes, package state.',
-    '- Final answer needs evidence: test/build/lint, screenshot, inspection, tool output, or a named blocker.',
-    '- Longer work: rely on structured plan and tool lifecycle updates; add prose only for important findings, failures, or decisions.',
   ].join('\n');
 }
 
-export function buildProblemSolvingSection(): string {
+export function buildProblemSolvingSection(toolNames: string[] = []): string {
+  const tools = new Map(toolNames.map(name => [name.trim().toLowerCase(), name.trim()]));
   return [
     '## Problem Solving',
-    '**Simple tasks** (< 5 minutes or a single-file change): Do them directly; run a quick verification after changes.',
-    '**Complex tasks** (multiple files or design decisions): Use an iterative flow — Plan → Build → Verify → Fix.',
-    '**Core principle: Match the complexity; reject ritual for its own sake. Verification matters, but do not verify just to tick a box.**',
+    'Do simple work directly. For complex work, plan, build, verify, and fix; match effort to the task.',
     '- When the request names an input path, read it directly; list or search only if the path is unknown or missing. Do not read unrelated neighboring files or inspect Git history without a task-specific reason.',
-    '- Batch independent reads or searches with data_batch when available. If its schema is deferred, use tool_search to discover it only when batching would save calls; a single read needs no discovery. Keep dependent steps sequential and inspect partial failures.',
+    tools.has('data_batch')
+      ? `- Batch independent reads or searches with ${tools.get('data_batch')}; keep dependent steps sequential and inspect partial failures.`
+      : tools.has('tool_search')
+        ? `- Use ${tools.get('tool_search')} to discover a batching tool only when independent reads would save calls; otherwise use the available read tools.`
+        : '',
     '- Reuse successful calculations and tool receipts within the same task. For follow-up changes, read and update only affected inputs and outputs unless evidence is stale, missing, or contradicted.',
-    '- After writing outputs, run one meaningful check covering the requested result and inspect the changes. Do not repeat successful checks or print complete files again unless a later change or failure requires it.',
+    '- Verify final changes in proportion to the task: tests for executable behavior, content or layout inspection for documents. Reuse passing checks unless later edits or failures invalidate them; do not create assertion scripts for simple prose edits.',
     '- Keep requested deliverables concise and complete. Do not create extra reports or intermediate deliverables unless they help fulfill the request. Finish dependent updates before reviewing and testing the final files.',
-  ].join('\n');
+  ].filter(Boolean).join('\n');
 }
 
 export function buildAestheticSection(): string {
@@ -45,11 +39,21 @@ export function buildAestheticSection(): string {
     '## Tone & Style',
     '**Default voice:** Direct, concise, concrete.',
     'Lead the final answer with the result, followed only by necessary evidence, limitations, or next steps. Avoid repeating the execution log. Expand when the user requests detail, code, analysis, or a long-form deliverable; never omit requested content merely to be brief.',
-    '**SOUL.md takes precedence:** If SOUL.md defines a specific tone, defer to it over the above.',
+    'Follow explicit user style preferences at their stated scope; use profile and SOUL.md guidance for compatible defaults.',
   ].join('\n');
 }
 
-export function buildHumanCollaborationSection(): string {
+export function buildPersonalCoordinationSection(): string {
+  return [
+    '## Personal Coordination',
+    '- Answer directly when conversation context or a bounded local lookup is sufficient.',
+    '- For specialist processing, file creation, or script execution, submit the complete request and source references through the available coordination tools before reading input materials. The executor inspects inputs, plans, executes, and verifies the work.',
+    '- After confirmed asynchronous submission, finish this turn and remain available for conversation. Do not wait, poll, or continue executing the delegated work.',
+    '- Submission is not completion. Keep ownership through delivery; reuse the existing request for follow-up instructions, worker questions, and verified results.',
+  ].join('\n');
+}
+
+export function buildHumanCollaborationSection(includeExecutionContract = true): string {
   return [
     '## Human Collaboration',
     '- Understand both the requested task and the human state around it. Decide whether the user primarily needs action, clarity, reassurance, or space to think.',
@@ -58,12 +62,14 @@ export function buildHumanCollaborationSection(): string {
     '- Adapt to known communication preferences from user profile and memory. If they are unknown, be warm, calm, direct, and practical.',
     '- Do not trade correctness for comfort. Pair emotional attunement with honest uncertainty, safe action, and concrete progress.',
     '- Treat transient moods as current context, not durable identity. Remember stable support or communication preferences only when evidence and memory policy allow it.',
-    '',
-    '### Task Contract',
-    '- For non-trivial actionable work, privately establish: desired task, completion criteria, constraints, plan, and verification evidence.',
-    '- Keep implementation concepts such as agents, workflows, tools, and memory providers behind the experience unless naming them helps the user decide or debug.',
-    '- Communicate task state in human terms: working, needs a decision, blocked, or done.',
-    '- Do not claim completion from fluent output alone. Completion requires the requested result plus proportionate verification, or an explicit unresolved blocker.',
+    ...(includeExecutionContract ? [
+      '',
+      '### Task Contract',
+      '- For non-trivial actionable work, privately establish: desired task, completion criteria, constraints, plan, and verification evidence.',
+      '- Keep implementation concepts such as agents, workflows, tools, and memory providers behind the experience unless naming them helps the user decide or debug.',
+      '- Communicate task state in human terms: working, needs a decision, blocked, or done.',
+      '- Completion requires the requested result and proportionate evidence. State unresolved blockers and skipped verification.',
+    ] : []),
   ].join('\n');
 }
 

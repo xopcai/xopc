@@ -28,6 +28,10 @@ See the [context and tool overhead investigation](../../docs/design/technical/be
 
 The follow-up [execution convergence and delivery report](../../docs/design/technical/benchmark-execution-convergence-2026-10-17.md) records the C01/C02 fixes and the complete 10/10 Qwen run with the same suite, budget and graders. It preserves every unsuccessful development revision and the original 8/10 baseline.
 
+## Agent growth scenarios
+
+The [first six agent-growth scenarios](suites/xopc-agent-growth/README.md) add information location, execution convergence and multi-module project changes in a separate `xopc-agent-growth@0.1.0` development suite. It retains v1 budgets and deterministic scoring; v1 remains frozen. Select it with `--suite xopc-agent-growth` on `eval:benchmark` or `eval:benchmark:live`. The original suite is still the default. The [initial Qwen report](../../docs/design/technical/benchmark-agent-growth-2026-10-17.md) records all 18 live attempts, including one scope failure and one budget breach; versioned results are under `baselines/xopc-agent-growth-v0.1.0-*.json`.
+
 ## Quick start
 
 Requirements: the same Node.js and pnpm versions as the xopc monorepo.
