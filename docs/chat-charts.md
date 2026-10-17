@@ -78,3 +78,13 @@ node --import tsx/esm scripts/verify-chat-charts-live.mjs
 This invokes the configured live chat model through the running authenticated Gateway and its production Web UI. It creates a temporary Agent (inheriting the skills catalog, with only skill-reading tools enabled), submits an ordinary chart request through the composer without naming the skill or supplying a JSON template, verifies the persisted skill tool calls and returned file content, validates the generated specs and original numbers, and checks both charts before and after reload. It saves a report, the generated Markdown and chart screenshots in a temporary output directory, then removes the temporary Agent, conversation, workspace and browser session. It reads credentials locally without putting them in the report.
 
 Optional overrides: `XOPC_CONFIG_PATH`, `XOPC_STATE_DIR`, `XOPC_CHART_LIVE_MODEL`, `XOPC_CHART_LIVE_WEB` and `XOPC_CHART_LIVE_REPORT_DIR`. The Web URL must be allowed by the Gateway origin policy; the default same-origin production page avoids development proxy differences. This test makes real model requests and requires an installed Google Chrome.
+
+For acceptance with the actual default Agent's unrestricted tool policy and full enabled skills catalog:
+
+```bash
+node --import tsx/esm scripts/verify-chat-charts-matrix.mjs
+```
+
+The matrix covers configured Qwen Flash, Qwen Max, DeepSeek V4 Pro and MiniMax M2.7 across line-chart gaps, signed bar values, multiple series with decimals, and an all-missing-data fallback. It uses a fresh conversation for each combination, submits natural requests through the production chat UI without skill hints or protocol templates, checks the recorded model and on-demand skill reads, compares each series/category/value with the supplied data, and verifies actual Canvas rendering and reload. It does not patch the default Agent's configuration or restrict its tools/skills; only each temporary conversation's model is selected. Conversations and the test browser session are cleaned up.
+
+Set `XOPC_CHART_MATRIX_MODELS` to comma-separated configured model refs, `XOPC_CHART_MATRIX_CASES` to comma-separated case IDs (`line-gaps`, `bar-negative`, `bar-multi-series`, `all-missing`), and `XOPC_CHART_MATRIX_DIR` to an output directory when running a subset or collecting evidence. All selected models must already be available. Each selected combination makes a real model request. Regressions are retained as failed cases; the runner does not send corrective prompts to turn an initial failure into a pass.
