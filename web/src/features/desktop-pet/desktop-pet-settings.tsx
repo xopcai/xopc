@@ -49,6 +49,7 @@ function ToggleRow({
       <input
         type="checkbox"
         role="switch"
+        aria-checked={checked}
         className="ui-checkbox"
         disabled={disabled}
         checked={checked}
