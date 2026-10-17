@@ -214,14 +214,6 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
               />
             </div>
           ) : null}
-          {userContextMode === 'temporary' ? (
-            <span
-              className="shrink-0 rounded-full border border-edge px-2 py-1 text-xs font-medium text-fg-muted"
-              title={m.chat.temporarySessionHint}
-            >
-              {m.chat.temporarySession}
-            </span>
-          ) : null}
           {hasMessages && onFindOpen ? (
             <button
               type="button"
@@ -303,8 +295,6 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
     m.chat.agentPlaceholder,
     m.chat.agentSearchPlaceholder,
     m.chat.agentNoMatches,
-    m.chat.temporarySession,
-    m.chat.temporarySessionHint,
     m.chat.find.input,
     m.chat.terminal.open,
     terminalShortcut,
