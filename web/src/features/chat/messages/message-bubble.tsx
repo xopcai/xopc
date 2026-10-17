@@ -42,6 +42,7 @@ import { buildAssistantTurnViewModel } from '@/features/chat/messages/assistant-
 import { useChatSessionStore } from '@/features/chat/session/chat-session-store';
 import { AssistantTurnTasks } from '@/features/chat/messages/assistant-turn-tasks';
 import { assistantVisibleMessage } from '@/features/chat/messages/assistant-visible-message';
+import { shouldShowAssistantWorkLog } from '@/features/chat/messages/message-row-visibility';
 import { usesConversationText } from '@/features/chat/messages/personal-text-surface';
 import { TaskTriggerCard } from '@/features/chat/messages/task-trigger-card';
 import { MessageContextAttachments } from '@/features/chat/messages/message-context-attachments';
@@ -555,7 +556,7 @@ export const MessageBubble = memo(function MessageBubble({
   }, [isUser, userCopyText]);
 
   const retryDisabled = deleteRoundDisabled || !userMessageCanRetry;
-  const assistantStepsBlock = showAssistantWorkLog && assistantTurnView
+  const assistantStepsBlock = assistantTurnView && shouldShowAssistantWorkLog(assistantTurnView, showAssistantWorkLog)
     && (assistantTurnView.workLog.active || assistantTurnView.workLog.items.length > 0)
     ? <AssistantStepsBlock
         workLog={assistantTurnView.workLog}

@@ -5,6 +5,11 @@ const SILENT_REPLY_MARKER = 'NO_REPLY';
 export function assistantVisibleMessage(message: Message, options?: { hideSilentReply?: boolean; streaming?: boolean }): Message {
   if (message.role !== 'assistant' || !message.content?.length) return message;
 
+  if (options?.hideSilentReply) {
+    const content = message.content.filter(block => block.type !== 'text' || block.text.trim() !== SILENT_REPLY_MARKER);
+    if (content.length !== message.content.length) return assistantVisibleMessage({ ...message, content }, options);
+  }
+
   const firstTextIndex = message.content.findIndex((block) => block.type === 'text');
   if (firstTextIndex < 0) return message;
   const block = message.content[firstTextIndex];
