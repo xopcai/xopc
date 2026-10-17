@@ -31,6 +31,40 @@ describe('Loopi desktop renderer', () => {
     act(() => root.unmount());
     container.remove();
     vi.unstubAllGlobals();
+    delete window.electronAPI;
+  });
+
+  it('retains the latest cursor while paused or dragged, restores it without movement, and cleans up on unmount', () => {
+    container.className = 'desktop-pet-window';
+    let pointer: (point: { x: number; y: number }) => void = () => {};
+    const off = vi.fn();
+    const subscribe = vi.fn((callback: typeof pointer) => { pointer = callback; return off; });
+    window.electronAPI = { pet: { onPointerChanged: subscribe } } as never;
+    render('idle');
+    const host = container.querySelector<HTMLElement>('.loopi-desktop')!;
+    const svg = host.querySelector('svg');
+    act(() => pointer({ x: 1, y: -.5 }));
+    expect(host.style.getPropertyValue('--loopi-pointer-x')).toBe('1');
+    expect(host.style.getPropertyValue('--loopi-pointer-y')).toBe('-0.5');
+    render('execute');
+    expect(host.querySelector('svg')).toBe(svg);
+    expect(host.style.getPropertyValue('--loopi-pointer-x')).toBe('1');
+    render('pickedUp');
+    expect(off).not.toHaveBeenCalled();
+    expect(host.style.getPropertyValue('--loopi-pointer-x')).toBe('0');
+    act(() => pointer({ x: -.6, y: .2 }));
+    expect(host.style.getPropertyValue('--loopi-pointer-x')).toBe('0');
+    render('wait');
+    expect(subscribe).toHaveBeenCalledOnce();
+    expect(host.style.getPropertyValue('--loopi-pointer-x')).toBe('-0.6');
+    render('wait', true);
+    expect(host.style.getPropertyValue('--loopi-pointer-x')).toBe('0');
+    render('wait');
+    expect(host.style.getPropertyValue('--loopi-pointer-x')).toBe('-0.6');
+    expect(host.querySelector('svg')).toBe(svg);
+    act(() => root.unmount());
+    expect(off).toHaveBeenCalledOnce();
+    root = createRoot(container);
   });
 
   function render(action: DesktopPetAction, reducedMotion = false) {
