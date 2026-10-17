@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectOption } from '@/components/ui/popover-select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { fetchProjects } from '@/features/projects/api';
+import { agentListDisplayName } from '@/features/settings/agents/agent-display-names';
 import { fetchGatewayAgents } from '@/features/settings/agents-admin-api';
 import { messages } from '@/i18n/messages';
 import { formatMediumDateTime } from '@/lib/date-formatters';
@@ -58,7 +59,7 @@ function useWorkflowOwnerAgent() {
   const requestedAgentId = searchParams.get('agentId')?.trim() || undefined;
   const agents = useSWR(token ? ['workflow-route-agents', token] : null, fetchGatewayAgents, { revalidateOnFocus: false });
   const ownerAgentId = requestedAgentId ?? agents.data?.defaultId;
-  return { ownerAgentId, loading: agents.isLoading };
+  return { ownerAgentId, agents: agents.data?.agents ?? [], loading: agents.isLoading };
 }
 
 function useWorkflowDefinition(definitionId: string | undefined) {
@@ -98,7 +99,9 @@ export function WorkflowDetailPage() {
   const localeTag = language === 'zh' ? 'zh-CN' : 'en-US';
   const setPageHeader = usePageHeaderStore((state) => state.setPageHeader);
   const clearPageHeader = usePageHeaderStore((state) => state.clearPageHeader);
-  const { ownerAgentId } = useWorkflowOwnerAgent();
+  const { ownerAgentId: defaultOwnerAgentId, agents: executionAgents, loading: agentsLoading } = useWorkflowOwnerAgent();
+  const [executionAgentId, setExecutionAgentId] = useState<string>();
+  const ownerAgentId = executionAgentId ?? defaultOwnerAgentId;
   const projectId = searchParams.get('projectId')?.trim() || undefined;
   const definitionView = searchParams.get('view') === 'source' ? 'source' : 'canvas';
   const { definition, loading, error } = useWorkflowDefinition(definitionId);
@@ -179,7 +182,6 @@ export function WorkflowDetailPage() {
   }, [definition, labels.projectWorkflowRemoveFailed, projectId, projectPresets, savingPreset]);
 
   const libraryParams = new URLSearchParams({ tab: 'library' });
-  if (ownerAgentId) libraryParams.set('agentId', ownerAgentId);
   if (projectId) libraryParams.set('projectId', projectId);
   const libraryHref = `/workflows?${libraryParams.toString()}`;
   const runParams = new URLSearchParams();
@@ -239,7 +241,7 @@ export function WorkflowDetailPage() {
   }, [clearPageHeader, definition, editHref, labels.badgeBuiltin, labels.badgeUser, labels.copyAndEditWorkflow, labels.editWorkflow, language, localized?.title, libraryHref, setPageHeader]);
 
   const start = useCallback(async () => {
-    if (!definition || !inputValidity.valid || starting) return;
+    if (!definition || !ownerAgentId || !inputValidity.valid || starting) return;
     setStarting(true);
     setActionError(null);
     try {
@@ -319,6 +321,14 @@ export function WorkflowDetailPage() {
                   .map((project) => <SelectOption key={project.id} value={project.id}>{project.name}</SelectOption>)}
               </Select>
             </label>
+            <label className="mt-3 block text-xs font-medium text-fg-muted">
+              {language === 'zh' ? '执行助手' : 'Execution assistant'}
+              {agentsLoading ? <Skeleton className="mt-1 h-10 w-full rounded-lg" /> : (
+                <Select value={ownerAgentId ?? ''} onChange={(event) => setExecutionAgentId(event.target.value)} className="mt-1 w-full" aria-label={language === 'zh' ? '执行助手' : 'Execution assistant'}>
+                  {executionAgents.map((agent) => <SelectOption key={agent.id} value={agent.id}>{agentListDisplayName(agent, messages(language).agentsSettings)}</SelectOption>)}
+                </Select>
+              )}
+            </label>
             <div className="mt-3">
               <WorkflowContextPicker projectId={projectId} language={language} value={contextRefs} onChange={setContextRefs} />
             </div>
@@ -349,7 +359,7 @@ export function WorkflowDetailPage() {
               />
             </div>
             {actionError ? <p className="mt-3 text-sm text-danger">{actionError}</p> : null}
-            <Button variant="primary" className="mt-4 w-full" disabled={!inputValidity.valid || starting} onClick={() => void start()}>
+            <Button variant="primary" className="mt-4 w-full" disabled={!ownerAgentId || agentsLoading || !inputValidity.valid || starting} onClick={() => void start()}>
               <Play className="size-4" aria-hidden />
               {starting ? labels.starting : labels.runWorkflow}
             </Button>

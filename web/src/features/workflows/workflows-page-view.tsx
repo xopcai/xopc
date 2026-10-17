@@ -84,6 +84,7 @@ function WorkflowRunRowSkeleton() {
 export function WorkflowsPageView({ vm }: { vm: WorkflowsPageVm }) {
   const {
     language,
+    ownerAgentId,
     localeTag,
     labels,
     hasToken,
@@ -123,7 +124,7 @@ export function WorkflowsPageView({ vm }: { vm: WorkflowsPageVm }) {
     filterRunsForBoard(runs, { searchQuery, workflowFilterId, triggerFilter })
       .filter((run) => matchesStatusFilter(run, statusFilter)),
   );
-  const hasRunFilters = Boolean(searchQuery || workflowFilterId || triggerFilter !== 'all' || statusFilter !== 'all');
+  const hasRunFilters = Boolean(ownerAgentId || searchQuery || workflowFilterId || triggerFilter !== 'all' || statusFilter !== 'all');
 
   useLayoutEffect(() => {
     if (!hasToken) {
