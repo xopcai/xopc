@@ -794,6 +794,7 @@ export class AgentService {
         systemPrompt: agent.state.systemPrompt ?? '',
         thinkingLevel: params.thinkingLevel ?? agent.state.thinkingLevel,
         workspaceDir,
+        isWorkspaceTrusted: this.agentManager.isProjectWorkspaceTrusted.bind(this.agentManager),
         transcriptRuntime: params.transcriptRuntime,
         timeoutMs: resolveAgentTurnTimeoutMs(this.effectiveAppConfig(), params.parentConversationId),
         turnPolicy: this.agentManager.createAgentTurnPolicy(params.parentConversationId),

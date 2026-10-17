@@ -28,6 +28,13 @@ function setup() {
 
 describe('research child deadlines and checkpoint tool', () => {
   afterEach(() => { vi.useRealTimers(); embedded.run.mockReset(); });
+  it('preserves host workspace trust when starting an isolated child', async () => {
+    const { options } = setup();
+    const isWorkspaceTrusted = vi.fn(() => true);
+    embedded.run.mockResolvedValueOnce({ ok: true, lastAssistantText: 'Done' });
+    await createDelegateChildHandle({ ...options, isWorkspaceTrusted }).run();
+    expect(embedded.run.mock.calls[0][0].isWorkspaceTrusted).toBe(isWorkspaceTrusted);
+  });
   it('persists findings through its scoped internal tool without asking for external write access', async () => {
     const { options, sink, parentPolicy } = setup();
     embedded.run.mockImplementationOnce(async params => {

@@ -30,6 +30,9 @@ export interface AgentInstanceGateway {
    */
   getResolvedWorkspaceForSession(conversationId: string): string;
 
+  /** Shared project trust policy, including host-provided temporary trust. */
+  isProjectWorkspaceTrusted?(workspaceDir: string): boolean;
+
   /**
    * Apply (or clear) the per-session workspace override. Passing `null`
    * removes the override so the session falls back to the agent default.
