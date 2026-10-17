@@ -43,6 +43,35 @@ function envelope(observed: Awaited<ReturnType<typeof ready>>) {
 }
 afterEach(async () => { await Promise.all(brokers.splice(0).map((b) => b.dispose())); });
 describe('desktop computer authority', () => {
+  it.each(['activate', 'showMenu'] as const)('keeps %s inside consent, freshness and execution receipt boundaries', async kind => {
+    const f = fixture(); const obs = await ready(f);
+    const command = { op: 'act' as const, owner: 'o', sessionId: 's', envelope: {
+      ...envelope(obs), action: { kind, ref: 'e1' },
+    } };
+    expect((await f.broker.command(command)).status).toBe('pending_action');
+    expect(f.driver.perform).not.toHaveBeenCalled();
+    expect(f.approvals.at(-1)).toMatchObject({ kind: 'action', action: { kind, ref: 'e1' } });
+    f.settle(true); await Promise.resolve(); await Promise.resolve();
+    expect((await f.broker.command(command)).receipt).toMatchObject({ dispatch: 'completed', outcome: 'unknown', verification: 'visual' });
+    expect(f.driver.perform).toHaveBeenCalledWith(target, { kind, ref: 'e1' }, expect.any(AbortSignal));
+    await f.broker.command(command);
+    expect(f.driver.perform).toHaveBeenCalledOnce();
+  });
+  it.each(['activate', 'showMenu'] as const)('refuses %s in read-only sessions and after a window change', async kind => {
+    const f = fixture(true); await f.open('observe');
+    const obs = await f.broker.command({ op: 'observe', owner: 'o', sessionId: 's' });
+    const command = { op: 'act' as const, owner: 'o', sessionId: 's', envelope: {
+      ...envelope(obs), action: { kind, ref: 'e1' },
+    } };
+    await expect(f.broker.command(command)).rejects.toThrow('READ_ONLY');
+    expect(f.driver.perform).not.toHaveBeenCalled();
+    const control = fixture(true); await control.open();
+    const fresh = await control.broker.command({ op: 'observe', owner: 'o', sessionId: 's' });
+    const changed = { ...command, envelope: { ...envelope(fresh), action: { kind, ref: 'e1' } } };
+    await control.broker.command(changed); await Promise.resolve(); control.move();
+    expect(await control.broker.command(changed)).toMatchObject({ errorCode: 'COMPUTER_OBSERVATION_CHANGED' });
+    expect(control.driver.perform).not.toHaveBeenCalled();
+  });
   it('binds discovery references to the requesting task and expires them', async () => {
     const f = fixture(true);
     const appRef = (await f.broker.command({ op: 'discover', owner: 'o', sessionId: 'd', query: 'Fixture' })).apps![0].appRef;

@@ -198,7 +198,7 @@ describe('desktop principal reenrollment', () => {
   });
 
   it('detects revocation on reconnect and stops the old connection before reenrollment', async () => {
-    const fetch = vi.fn().mockResolvedValue(Response.json({ ok: true })); vi.stubGlobal('fetch', fetch);
+    const fetch = vi.fn().mockImplementation(async () => Response.json({ ok: true })); vi.stubGlobal('fetch', fetch);
     const desktop = host(); await desktop.start(); const client = state.clients[0];
     client.binding.onReady!({ endpointId: 'old', turnToken: 'old-turn-token' } as any);
     expect(desktop.snapshot().connected).toBe(true);

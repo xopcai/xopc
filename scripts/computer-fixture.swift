@@ -27,6 +27,7 @@ final class Fixture: NSObject, NSApplicationDelegate {
         content.addSubview(text)
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
+        window.makeFirstResponder(nil)
     }
     @objc func continueClicked() { status.stringValue = "PASS: Continue clicked" }
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }

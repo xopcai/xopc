@@ -41,3 +41,11 @@ Passwords, verification codes, payments and security changes require manual hand
 A model saying it finished is not proof that a save or remote transaction succeeded. Review the actual output. Stop computer control before switching to another browser or application tool.
 
 For website-only work, see [Browser automations](./browser-automations.md). For provider connection, see [Models and providers](./models.md).
+
+## Native semantic controls
+
+For native controls that advertise accessibility actions, xopc can activate the exact observed element or open its context menu without aiming at pixels. This includes buttons and supported checkbox, radio and disclosure controls. Native text fields retain direct value entry. Every action uses the existing application access policy, bound window, fresh observation and execution receipt.
+
+Structured GUI models can request these actions by element reference. Coordinate models also benefit: an unambiguous single click on a supported native control is converted before authorization into an element action. Double clicks, overlapping targets, incomplete accessibility observations and web content retain coordinate handling. A refused or uncertain semantic action is never automatically retried with coordinates. Observe the actual result before continuing; a successful native call does not prove that a save or submission succeeded.
+
+Native activation and the real TextEdit context menu have been verified on macOS. See [validation evidence and reproduction](./design/technical/computer-use-native-semantics-validation.md) for the tested scope and live test commands.

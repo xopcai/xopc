@@ -60,6 +60,8 @@ describe('GUI-Plus adapter', () => {
     expect(() => new ChatCompletionsComputerAdapter({ ...connection, maxOutputTokens: 0 })).toThrow('COMPUTER_MODEL_OUTPUT_BUDGET');
   });
   it.each([
+    { kind: 'action', action: { kind: 'activate', ref: 'e1' } },
+    { kind: 'action', action: { kind: 'showMenu', ref: 'e2' } },
     { kind: 'action', action: { kind: 'wait', durationMs: 0 } },
     { kind: 'finished', claimedSuccess: true },
     { kind: 'takeover', reason: 'Please sign in' },

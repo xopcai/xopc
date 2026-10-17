@@ -52,6 +52,16 @@ export default defineConfig({
       {
         extends: true,
         test: {
+          name: 'computer-desktop',
+          include: ['electron/computer/**/*.{test,spec}.{ts,tsx}'],
+          setupFiles: [setupFile],
+          maxWorkers: 2,
+          sequence: { groupOrder: 4 },
+        },
+      },
+      {
+        extends: true,
+        test: {
           name: 'unit',
           include: coreTests,
           exclude: [...componentTests, ...integrationTests],

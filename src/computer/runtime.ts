@@ -12,6 +12,7 @@ import { getApiKey, resolveModel } from '../providers/index.js';
 import { createComputerModelAdapter, predictComputerStep, readComputerJson, type ComputerStepAdapter } from './model-adapter.js';
 import { enterComputerControl, leaveComputerControl } from './control-guard.js';
 import { computerModelProfile, ComputerServiceLimitsSchema, type ComputerServiceLimits } from './model-policy.js';
+import { groundComputerAction } from './semantic-actions.js';
 import { ComputerDiagnosticSchema, ComputerOperationError, computerDiagnostic, computerRecovery } from './errors.js';
 import { createLogger } from '../utils/logger.js';
 import { ComputerExpectationSchema, ComputerTaskState, verifyComputerExpectation,
@@ -177,9 +178,10 @@ export class ComputerRuntime {
           if (proposal.kind === 'finished') return { status: 'model_finished', sessionId: s.id, claimedSuccess: proposal.claimedSuccess, verified: false, verification, budget: this.budget(s),
             nextAction: 'The model claim is not proof. Check the requested completion condition using native or artifact evidence before reporting success.' };
           if (proposal.kind === 'takeover') return { status: 'takeover', sessionId: s.id, pending: true, budget: this.budget(s), summary: 'The GUI model requests user assistance. Inspect the authorized window locally.' };
+          const action = groundComputerAction(proposal.action, o);
           const e: ActionEnvelope = { actionId: randomUUID(), sessionId: s.id, observationId: o.id, brokerEpoch: o.brokerEpoch,
-            generation: o.generation, grantId: observed.value.grantId!, deadlineAt: Date.now() + 120_000, action: proposal.action };
-          s.task.assertProgress(proposal.action, o);
+            generation: o.generation, grantId: observed.value.grantId!, deadlineAt: Date.now() + 120_000, action };
+          s.task.assertProgress(action, o);
           s.pendingContext = { goal: input.goal, before: o, expectation: input.expect };
           phase = 'dispatch';
           const result = await this.dispatchAction(s, e, signal);
