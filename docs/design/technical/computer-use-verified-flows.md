@@ -27,3 +27,5 @@ Tests exercise Runtime with the real Broker and deterministic native/model fixtu
 The existing independent executor/oracle evaluator can compare the same authorized tasks with and without selected flow hints, using its current duration, model-request, action and safety measurements. Saved native condition evidence and a successful capture do not grade a later run. Fixture checks do not establish real-app task success, unattended safety or a reduction in model calls; reuse deliberately retains fresh inference rather than bypassing it.
 
 See [live TextEdit validation](./computer-use-verified-flows-live-validation.md) for the pinned-driver completeness limitation and the three-process capture/reuse/lost-reply check.
+
+See [real hosted GUI-Plus validation](./computer-use-verified-flows-hosted-validation.md) for the additional actual-provider matrix and the bounded native-ref prompt extension.

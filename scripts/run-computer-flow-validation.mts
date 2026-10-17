@@ -8,6 +8,9 @@ import { join, resolve } from 'node:path';
 import { build } from 'esbuild';
 
 assert.equal(process.platform, 'darwin', 'This check requires macOS and existing Electron AX/screen permissions');
+assert.ok(process.argv.slice(2).every(arg => arg === '--hosted'), 'Only --hosted is supported');
+const hosted = process.argv.includes('--hosted');
+if (hosted) assert.ok(process.env.DASHSCOPE_API_KEY, 'Hosted validation requires the existing DASHSCOPE_API_KEY');
 const repo = resolve(import.meta.dirname, '..');
 const output = join(repo, '.cache', 'flow-live');
 await mkdir(output, { recursive: true });
@@ -19,12 +22,12 @@ await build({ entryPoints: [join(repo, 'scripts/verify-computer-flows.mts')], ou
   banner: { js: 'import { createRequire as __flowCreateRequire } from "node:module"; const require = __flowCreateRequire(import.meta.url);' } });
 const env: NodeJS.ProcessEnv = { ...process.env, XOPC_HOME: root, XOPC_STATE_DIR: root, XOPC_CONFIG_PATH: join(root, 'xopc.json'),
   XOPC_CREDENTIALS_DIR: join(root, 'credentials'), XOPC_LOG_LEVEL: 'fatal', XOPC_LOG_FILE: 'false',
-  XOPC_SQLITE_ASSET_ROOT: join(repo, 'src/storage/sqlite') };
+  XOPC_SQLITE_ASSET_ROOT: join(repo, 'src/storage/sqlite'), XOPC_FLOW_HOSTED: hosted ? '1' : '0' };
 delete env.ELECTRON_RUN_AS_NODE;
 // Precondition: TextEdit Settings is open on New Document. Keep it visible; the test never requests foreground preparation.
 const results: any[] = [];
 for (const phase of ['capture', 'reuse', 'unknown']) {
-  console.log(`Running real TextEdit flow validation: ${phase}`);
+  console.log(`Running real TextEdit flow validation (${hosted ? 'hosted GUI-Plus' : 'deterministic planner'}): ${phase}`);
   const child = spawnSync(electron, [join(output, 'verify.mjs'), phase, root], {
     cwd: repo, env, encoding: 'utf8', timeout: 180_000, maxBuffer: 2 * 1024 * 1024,
   });

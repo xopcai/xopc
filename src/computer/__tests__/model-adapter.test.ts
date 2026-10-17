@@ -40,12 +40,33 @@ describe('GUI-Plus adapter', () => {
     expect(computerDiagnostic(error)?.serviceErrorCode).toBeUndefined();
     expect(error.message).not.toContain('private-secret');
   });
-  it('uses a flat hosted signature without advertising unsupported native actions', () => {
+  it('uses a flat hosted signature with bounded native extensions', () => {
     const tool = JSON.parse(GUI_PLUS_SYSTEM_PROMPT.match(/<tools>\n(.*)\n<\/tools>/)![1]);
     expect(tool.function.parameters.type).toBe('object');
     expect(tool.function.parameters.anyOf).toBeUndefined();
     expect(tool.function.parameters.properties.coordinate.type).toBe('array');
     expect(tool.function.parameters.properties.action.enum).not.toEqual(expect.arrayContaining(['mouse_move', 'left_click_drag', 'middle_click']));
+  });
+  it.each([['activate', 'activate'], ['show_menu', 'showMenu']])('parses the explicit native %s extension without coordinate conversion', (action, kind) => {
+    expect(parseGuiPlusProposal(call({ action, ref: 'current-ref' }), 800, 600))
+      .toEqual({ kind: 'action', action: { kind, ref: 'current-ref' } });
+    const tool = JSON.parse(GUI_PLUS_SYSTEM_PROMPT.match(/<tools>\n(.*)\n<\/tools>/)![1]);
+    expect(tool.function.parameters.properties.action.enum).toContain(action);
+    expect(GUI_PLUS_SYSTEM_PROMPT).toContain('exact current accessibility ref');
+  });
+  it.each([
+    { action: 'activate' }, { action: 'activate', ref: '' }, { action: 'activate', ref: 'x'.repeat(201) },
+    { action: 'activate', ref: 'e1', coordinate: [500, 500] }, { action: 'show_menu', ref: 'e1', text: 'extra' },
+    { action: 'set_value', ref: 'e1', text: 'value' },
+  ])('rejects malformed or unsupported native extensions: %j', args => {
+    expect(() => parseGuiPlusProposal(call(args), 800, 600)).toThrow('COMPUTER_INVALID_MODEL_OUTPUT');
+  });
+  it('refuses native actions in read-only GUI-Plus responses', async () => {
+    const fetch = vi.fn().mockResolvedValue(Response.json({ choices: [{ message: { content: call({ action: 'activate', ref: 'e1' }) } }] }));
+    const adapter = new ChatCompletionsComputerAdapter({ modelId: 'm', baseUrl: 'https://example.com/v1', apiKey: 'test', profile: 'gui-plus-2026-02-26' }, fetch);
+    await expect(adapter.predict({ readOnly: true, goal: 'Describe', image: new Uint8Array([1]), mimeType: 'image/png', width: 800, height: 600, summary: '' }))
+      .rejects.toThrow('COMPUTER_READ_ONLY_MODEL_OUTPUT');
+    expect(fetch).toHaveBeenCalledTimes(1);
   });
   it('refuses the malformed coordinate returned by a hosted grounding regression', () => {
     expect(() => parseGuiPlusProposal('<tool_call>{"name":"computer_use","arguments":{"action":"left_click","coordinate":224, 205]}}</tool_call>', 800, 600)).toThrow('COMPUTER_INVALID_MODEL_OUTPUT');
