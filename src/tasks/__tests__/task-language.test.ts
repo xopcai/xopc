@@ -26,4 +26,14 @@ describe('task language', () => {
     expect(hasUnlocalizedTaskText(['report.md', 'https://www.wbmshanghai.com/tickets'], 'zh')).toBe(false);
     expect(hasUnlocalizedTaskText(['The response contains official clickable ticketing URLs.'], 'en')).toBe(false);
   });
+
+  it('detects English sentences even when they contain a Chinese proper noun', () => {
+    expect(hasUnlocalizedTaskText([
+      "The response provides clear textual steps for locating and entering the 'West Bund Life' (西岸生活) WeChat mini-program if a direct link is not available.",
+    ], 'zh')).toBe(true);
+    expect(hasUnlocalizedTaskText([
+      '购票说明包含 West Bund Museum 官方网站，以及 West Bund Life 小程序的入口。',
+    ], 'zh')).toBe(false);
+    expect(hasUnlocalizedTaskText(['The New York Times 报道中标注的来源和日期均已核对。'], 'zh')).toBe(false);
+  });
 });
