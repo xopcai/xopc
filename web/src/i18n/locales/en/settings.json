@@ -1094,7 +1094,7 @@
     "activityDetailSaveError": "Could not save the activity detail default.",
     "activityDetailLevels": {
       "off": "Concise · hide normal activity",
-      "on": "Collapsed · expandable after completion",
+      "on": "Lightweight activity · collapses on completion",
       "stream": "Live · expand while working"
     },
     "developerGroupTitle": "Developer",

@@ -597,7 +597,7 @@ describe('streaming assistant Markdown rendering', () => {
     expect(container.textContent).toContain('30');
   });
 
-  it('keeps a failed tool reason inside the collapsed trace', () => {
+  it('keeps technical failure data in on-demand details', () => {
     const failedTool = {
       type: 'tool_use',
       id: 'command-1',
@@ -619,9 +619,9 @@ describe('streaming assistant Markdown rendering', () => {
     const disclosure = container.querySelector<HTMLButtonElement>('button[aria-expanded="false"]');
     act(() => disclosure?.click());
 
-    const trace = container.querySelector('.assistant-steps-scroll');
-    expect(trace?.textContent).toContain('Exit 1');
-    expect(trace?.querySelector('svg')).toBeNull();
+    const trace = container.querySelector('[data-assistant-activity-flow]');
+    expect(trace?.querySelector('[data-activity-status="failed"]')).not.toBeNull();
+    expect(trace?.querySelector('details')?.hasAttribute('open')).toBe(false);
     expect(trace?.querySelector('[class*="text-red"]')).toBeNull();
   });
 
@@ -647,7 +647,7 @@ describe('streaming assistant Markdown rendering', () => {
     expect(container.textContent).toContain('Updated note');
   });
 
-  it('keeps expanded assistant activity in a bounded scroll region', () => {
+  it('lets the chat viewport own scrolling through the lightweight process', () => {
     useDevViewStore.setState({ showRawToolData: true });
     const thinking = { type: 'thinking', text: 'Long reasoning', streaming: false } as const;
 
@@ -663,51 +663,13 @@ describe('streaming assistant Markdown rendering', () => {
     expect(disclosure).not.toBeNull();
     act(() => disclosure?.click());
 
-    const activityScroll = container.querySelector<HTMLElement>('.assistant-steps-scroll');
-    expect(activityScroll).not.toBeNull();
-    expect(activityScroll?.classList.contains('overflow-y-auto')).toBe(true);
-    expect(activityScroll?.classList.contains('overscroll-y-contain')).toBe(false);
-    expect(activityScroll?.className).toContain('max-h-[min(60vh,28rem)]');
-
-    container.classList.add('chat-messages');
-    Object.defineProperties(activityScroll, {
-      clientHeight: { configurable: true, value: 100 },
-      scrollHeight: { configurable: true, value: 300 },
-    });
-    Object.defineProperties(container, {
-      clientHeight: { configurable: true, value: 400 },
-      scrollHeight: { configurable: true, value: 1_000 },
-    });
-    const nestedOutput = document.createElement('pre');
-    nestedOutput.style.overflowY = 'auto';
-    Object.defineProperties(nestedOutput, {
-      clientHeight: { configurable: true, value: 100 },
-      scrollHeight: { configurable: true, value: 130 },
-    });
-    activityScroll?.append(nestedOutput);
-    nestedOutput.scrollTop = 20;
-    activityScroll!.scrollTop = 175;
-    container.scrollTop = 80;
-
+    const flow = container.querySelector<HTMLElement>('[data-assistant-activity-flow]');
+    expect(flow).not.toBeNull();
+    expect(container.querySelector('.assistant-steps-scroll')).toBeNull();
     const wheel = new WheelEvent('wheel', { bubbles: true, cancelable: true, deltaY: 40 });
-    act(() => nestedOutput.dispatchEvent(wheel));
+    act(() => flow?.dispatchEvent(wheel));
+    expect(wheel.defaultPrevented).toBe(false);
 
-    expect(nestedOutput.scrollTop).toBe(30);
-    expect(activityScroll?.scrollTop).toBe(200);
-    expect(container.scrollTop).toBe(85);
-    expect(wheel.defaultPrevented).toBe(true);
-
-    nestedOutput.scrollTop = 5;
-    activityScroll!.scrollTop = 10;
-    container.scrollTop = 100;
-
-    const reverseWheel = new WheelEvent('wheel', { bubbles: true, cancelable: true, deltaY: -30 });
-    act(() => nestedOutput.dispatchEvent(reverseWheel));
-
-    expect(nestedOutput.scrollTop).toBe(0);
-    expect(activityScroll?.scrollTop).toBe(0);
-    expect(container.scrollTop).toBe(85);
-    expect(reverseWheel.defaultPrevented).toBe(true);
   });
 
   it('renders punctuation-bound strong text after progressive streaming completes', () => {

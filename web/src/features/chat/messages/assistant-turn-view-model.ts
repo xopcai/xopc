@@ -185,7 +185,7 @@ export function buildAssistantTurnViewModel({
       status: workLogStatus,
       compact: reasoningLevel === 'off',
       expandedByDefault:
-        reasoningLevel === 'stream' && isStreaming && !answerStarted,
+        reasoningLevel !== 'off' && isStreaming && !answerStarted,
       startedAt: workLogStartedAt,
       durationMs: workLogDurationMs,
     },
