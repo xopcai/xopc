@@ -8,7 +8,7 @@ vi.mock('../entry/src/main/ets/service/gatewaySession.ets', () => ({ gatewaySess
 
 import { XopcPersonalAgentViewModel } from '../entry/src/main/ets/viewmodel/personalAgentViewModel.ets';
 
-const record = { agentId: 'personal-1', conversationId: 'conversation-1', state: 'ready', displayName: 'Ada',
+const record = { agentId: 'personal-1', conversationId: 'conversation-1', state: 'ready', displayName: 'Loopi',
   appearance: 'loopi', errorMessage: null };
 
 describe('Personal AI on HarmonyOS', () => {

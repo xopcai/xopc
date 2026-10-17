@@ -8,7 +8,7 @@ xopc 是开源、本地优先的个人 AI。它运行在你的环境中，记住
 
 它不是等待岗位说明的 AI 员工，不是只在一个代码仓库里工作的编码 Agent，也不是要求用户先把一切整理好的任务管理器。模型、Agent、Task、Project、Workflow 和 Automation 都是支撑能力；这些能力最终服务的是一段可以长期发展的协作关系。
 
-Ada 是 xopc 中的个人 Agent，承接目标讨论、回复偏好、任务交办和结果返回；工作空间提供直接处理文件与项目的入口。两种方式都服务于同一个人的持续工作。
+Loopi 是 xopc 中的个人 Agent，承接目标讨论、回复偏好、任务交办和结果返回；工作空间提供直接处理文件与项目的入口。两种方式都服务于同一个人的持续工作。
 
 ## AI 承担执行，人保留方向
 
@@ -145,4 +145,4 @@ xopc 应该理解结果为什么重要，澄清不确定之处，调查已授权
 
 ## 从当前界面开始
 
-[认识 Ada](./personal-ai.md) · [交办与接收结果](./task-delegation.md) · [处理文件与项目](./workspace-guide.md) · [任务验收](./task-review.md)。
+[认识 Loopi](./personal-ai.md) · [交办与接收结果](./task-delegation.md) · [处理文件与项目](./workspace-guide.md) · [任务验收](./task-review.md)。

@@ -61,4 +61,4 @@ If the Task state has changed, refresh before acting again. Resolve requests for
 
 ## Start from the current experience
 
-[Meet Ada](./personal-ai.md) · [Delegate and receive results](./task-delegation.md) · [Work with files and projects](./workspace-guide.md) · [Task acceptance](./task-review.md).
+[Meet Loopi](./personal-ai.md) · [Delegate and receive results](./task-delegation.md) · [Work with files and projects](./workspace-guide.md) · [Task acceptance](./task-review.md).

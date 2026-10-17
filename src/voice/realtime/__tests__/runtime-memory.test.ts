@@ -44,7 +44,7 @@ describe('native voice memory lifecycle', () => {
     socket.send(JSON.stringify({ protocolVersion: VOICE_REALTIME_PROTOCOL_VERSION, messageId: crypto.randomUUID(), sentAt: Date.now(), type: 'session.start', payload: { sessionId: session.sessionId, ticket: session.ticket } }));
     if (ready) await vi.waitFor(() => expect(events.some((e) => e.type === 'session.ready')).toBe(true));
   }
-  const context = (): VoiceConversationContext => ({ identity: 'Ada', history: [], memory: {
+  const context = (): VoiceConversationContext => ({ identity: 'Loopi', history: [], memory: {
     block: '{"backgroundMemory":{"name":"Mic"}}', references: [], isCurrent: () => true,
     subscribe: (invalidate) => onUserContextChange(() => invalidate()),
   } });
@@ -72,7 +72,7 @@ describe('native voice memory lifecycle', () => {
   });
 
   it('keeps history-only calls working and closes them on a real Chat reset', async () => {
-    await start({ identity: 'Ada', history: [] });
+    await start({ identity: 'Loopi', history: [] });
     notifyUserContextChange({ kind: 'policy' }); await Promise.resolve();
     expect(engine.close).not.toHaveBeenCalled();
     const closed = once(socket, 'close');
@@ -82,7 +82,7 @@ describe('native voice memory lifecycle', () => {
 
   it('ends a history-only call when its agent persona snapshot changes', async () => {
     let current = true;
-    await start({ identity: 'Ada', history: [], isCurrent: () => current });
+    await start({ identity: 'Loopi', history: [], isCurrent: () => current });
     const closed = once(socket, 'close');
     current = false;
     await closed;

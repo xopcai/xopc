@@ -9,7 +9,7 @@ vi.mock('@kit.NetworkKit', () => ({ http: {} }));
 import { XopcHttpError } from '../entry/src/main/ets/service/transport.ets';
 import { XopcPersonalAgentSettingsViewModel } from '../entry/src/main/ets/viewmodel/personalAgentSettingsViewModel.ets';
 
-const record = { agentId: 'personal', conversationId: 'fixed', state: 'ready' as const, displayName: 'Ada',
+const record = { agentId: 'personal', conversationId: 'fixed', state: 'ready' as const, displayName: 'Loopi',
   appearance: 'loopi', errorMessage: null, revision: 7, preferences: { warmth: 'gentle', guidance: 'Keep context' },
   voiceCallPreferences: { openingGreetingEnabled: true },
   voicePreference: { provider: 'old', model: 'old-tts', voice: 'existing' } };
@@ -32,7 +32,7 @@ describe('Personal AI settings on HarmonyOS', () => {
     await model.load(record);
     expect(model.voices).toEqual([{ id: 'other', name: 'Other', displayNames: { 'zh-CN': '温暖', en: 'Other' } }]);
     mocks.request.mockResolvedValueOnce(JSON.stringify({ ok: true, payload: { ...record, revision: 8 } }));
-    await model.saveProfile('Ada', 'loopi', record.preferences, 'existing');
+    await model.saveProfile('Loopi', 'loopi', record.preferences, 'existing');
     const patch = JSON.parse(mocks.request.mock.calls.at(-1)![2]);
     expect(patch).toMatchObject({ revision: 7, voicePreference: record.voicePreference, preferences: record.preferences });
     expect(model.record?.revision).toBe(8);
@@ -42,7 +42,7 @@ describe('Personal AI settings on HarmonyOS', () => {
     const model = new XopcPersonalAgentSettingsViewModel(); await model.load(record);
     mocks.request.mockResolvedValueOnce(JSON.stringify({ ok: true, payload: { ...record,
       voiceCallPreferences: { openingGreetingEnabled: false } } }));
-    await model.saveProfile('Ada', 'loopi', record.preferences, 'existing', false);
+    await model.saveProfile('Loopi', 'loopi', record.preferences, 'existing', false);
     const patch = JSON.parse(mocks.request.mock.calls.at(-1)![2]);
     expect(patch.voiceCallPreferences).toEqual({ openingGreetingEnabled: false });
     expect(patch.preferences).toEqual(record.preferences);
@@ -52,7 +52,7 @@ describe('Personal AI settings on HarmonyOS', () => {
     const model = new XopcPersonalAgentSettingsViewModel();
     await model.load(record);
     mocks.request.mockResolvedValueOnce(JSON.stringify({ ok: true, payload: record }));
-    await model.saveProfile('Ada', 'loopi', record.preferences, 'existing');
+    await model.saveProfile('Loopi', 'loopi', record.preferences, 'existing');
     expect(mocks.request.mock.calls.some(([path]) => path.includes('/proactivity'))).toBe(false);
   });
 
@@ -90,7 +90,7 @@ describe('Personal AI settings on HarmonyOS', () => {
     expect(await model.saveProfile('Phone name', 'loopi', record.preferences, 'existing')).toBeNull();
     expect(mocks.request.mock.calls.length - before).toBe(2);
     expect(model.error).toBe('PERSONAL_PROFILE_CONFLICT');
-    expect(model.record?.displayName).toBe('Ada');
+    expect(model.record?.displayName).toBe('Loopi');
     expect(model.saving).toBe(false);
   });
 
@@ -126,7 +126,7 @@ describe('Personal AI settings on HarmonyOS', () => {
     model.dispose();
     resolve(JSON.stringify({ ok: true, payload: { ...record, displayName: 'Changed' } }));
     expect(await pending).toBeNull();
-    expect(model.record?.displayName).toBe('Ada');
+    expect(model.record?.displayName).toBe('Loopi');
     mocks.assertConnection.mockImplementation(() => { throw new Error('GATEWAY_CHANGED'); });
     const second = new XopcPersonalAgentSettingsViewModel();
     await second.load(record);
