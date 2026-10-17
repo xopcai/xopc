@@ -120,7 +120,13 @@ it('isolates MCP drafts and OAuth until an explicit version-checked commit throu
     redirect.searchParams.set('code', 'draft-code'); redirect.searchParams.set('state', authorization.searchParams.get('state')!);
     expect((await request(`/drafts/${oauth}/auth/redirect`, 'POST', { url: redirect.href })).response.status).toBe(200);
     expect((await waitFor(oauth, result => result.state === 'connected')).state).toBe('connected');
-    expect((await request(`/drafts/${oauth}/tools`)).data.payload.tools[0].name).toContain('lookup');
+    const toolListsBefore = calls.filter(method => method === 'tools/list').length;
+    const concurrentTools = await Promise.all(Array.from({ length: 3 }, () => request(`/drafts/${oauth}/tools`)));
+    for (const result of concurrentTools) {
+      expect(result.response.status).toBe(200);
+      expect(result.data.payload.tools[0].name).toContain('lookup');
+    }
+    expect(calls.filter(method => method === 'tools/list')).toHaveLength(toolListsBefore + 1);
     expect(await readFile(configPath, 'utf8')).toBe(original);
     expect(await readFile(join(root, 'mcp-auth.json'), 'utf8')).toBe(credentialsBefore);
     saveFails = true;
