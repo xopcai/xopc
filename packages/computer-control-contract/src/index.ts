@@ -12,6 +12,8 @@ export type ComputerProfile = z.infer<typeof ComputerProfileSchema>;
 const Id = z.string().min(1).max(200);
 const Point = z.object({ x: z.number().finite().min(0), y: z.number().finite().min(0) }).strict();
 export const ComputerActionSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('activate'), ref: Id }).strict(),
+  z.object({ kind: z.literal('showMenu'), ref: Id }).strict(),
   z.object({ kind: z.literal('click'), point: Point, button: z.enum(['left', 'right']), count: z.union([z.literal(1), z.literal(2)]) }).strict(),
   z.object({ kind: z.literal('drag'), from: Point, to: Point }).strict(),
   z.object({ kind: z.literal('setValue'), ref: Id, text: z.string().max(16_384) }).strict(),

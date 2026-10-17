@@ -23,6 +23,16 @@ const Bounds = z.object({ x: z.number(), y: z.number(), width: z.number().positi
 const hash = (data: string | Uint8Array) => createHash('sha256').update(data).digest('hex');
 const DENIED_APPS = /(^com\.apple\.(Terminal|systempreferences|KeychainAccess)$|password|1password|bitwarden|iterm)/i;
 
+function semanticActions(element: Record<string, unknown>): string[] {
+  if (typeof element.element_token !== 'string' || !element.element_token || element.enabled === false
+    || element.in_web_content === true || element.role === 'AXSecureTextField') return [];
+  const actions = Array.isArray(element.actions) ? element.actions : [];
+  return [
+    ...(actions.includes('AXPress') ? ['activate'] : []),
+    ...(actions.includes('AXShowMenu') ? ['showMenu'] : []),
+  ];
+}
+
 function elementId(value: unknown): string | undefined {
   if (typeof value === 'bigint') return value.toString();
   if (typeof value === 'string' && /^\d+$/.test(value)) return value;
@@ -87,6 +97,7 @@ export class CuaComputerDriver implements ComputerDriver {
   private generation = 0;
   private elements: Array<Record<string, unknown>> = [];
   private frame?: { bounds: z.infer<typeof Bounds>; width: number; height: number };
+  private observedTarget?: ComputerTarget;
   private setupStage = 'START';
   private readonly referenceSalt = randomUUID();
   constructor(
@@ -277,6 +288,7 @@ export class CuaComputerDriver implements ComputerDriver {
     return { appId, pid, processIdentity, windowId: window.windowId.toString(), width: Math.round(window.bounds.width), height: Math.round(window.bounds.height), geometryRevision: hash(JSON.stringify(window.bounds)) };
   }
   async observe(target: ComputerTarget, signal: AbortSignal): Promise<DriverObservation> {
+    this.elements = []; this.frame = undefined; this.observedTarget = undefined;
     if (await this.processIdentity(target.pid) !== target.processIdentity) throw new Error('COMPUTER_PROCESS_CHANGED');
     const windowId = BigInt(target.windowId);
     const state = await this.getWindowState(target.pid, windowId, { includeScreenshot: true, maxElements: 180, maxDepth: 12, maxDimension: 1600 }, signal);
@@ -308,14 +320,33 @@ export class CuaComputerDriver implements ComputerDriver {
     }));
     const scoped = scopeWindowAccessibility({ elements: normalizedElements, tree_markdown: state.treeMarkdown });
     const { elements, text } = scoped;
-    this.elements = elements;
     this.frame = { bounds, width, height };
     const stableElements = elements.map(({ element_token: _token, ...item }) => item);
+    const publicElements = elements.map(element => {
+      const { element_token: _token, ...item } = element;
+      const frame = item.frame as { x: number; y: number; w: number; h: number } | undefined;
+      const validFrame = frame && [frame.x, frame.y, frame.w, frame.h].every(Number.isFinite) && frame.w > 0 && frame.h > 0;
+      return { ...item, semanticActions: semanticActions(element), ...(validFrame ? { bounds: {
+        x: (frame.x - bounds.x) * width / bounds.width,
+        y: (frame.y - bounds.y) * height / bounds.height,
+        width: frame.w * width / bounds.width, height: frame.h * height / bounds.height,
+      } } : {}) };
+    });
+    const summary = summarizeWindowAccessibility(publicElements, text, scoped.truncated === true || state.truncated === true || state.elementsComplete === false);
+    const exposed = new Set(JSON.parse(summary).elements.map((item: { ref: string }) => item.ref));
+    this.elements = elements.filter(item => exposed.has(`e${item.element_index}`));
+    this.observedTarget = { ...target };
     return { target: { ...target, width: Math.round(bounds.width), height: Math.round(bounds.height), geometryRevision: hash(JSON.stringify(bounds)) },
-      summary: summarizeWindowAccessibility(stableElements, text, scoped.truncated === true || state.truncated === true || state.elementsComplete === false),
+      summary,
       // Do not include per-snapshot tokens in the digest; compare visible content + geometry.
       stateDigest: hash(JSON.stringify({ elements: stableElements, bounds, width, height }) + hash(image)),
       image, mimeType: screenshot.mimeType as 'image/png' | 'image/jpeg', imageWidth: width, imageHeight: height };
+  }
+  private semanticElement(action: Extract<ComputerAction, { kind: 'activate' | 'showMenu' }>) {
+    const matches = this.elements.filter(item => action.ref === `e${item.element_index}`);
+    if (matches.length !== 1 || typeof matches[0].element_token !== 'string' || !matches[0].element_token) throw new Error('COMPUTER_ELEMENT_REF_REQUIRED');
+    if (!semanticActions(matches[0]).includes(action.kind)) throw new Error('COMPUTER_SEMANTIC_ACTION_UNSUPPORTED');
+    return matches[0];
   }
   private editable(action: Extract<ComputerAction, { kind: 'typeText' | 'setValue' }>) {
     const frame = this.frame;
@@ -333,6 +364,7 @@ export class CuaComputerDriver implements ComputerDriver {
     return candidates[0];
   }
   validateAction(action: ComputerAction): void {
+    if (action.kind === 'activate' || action.kind === 'showMenu') this.semanticElement(action);
     if (action.kind === 'typeText' || action.kind === 'setValue') this.editable(action);
     if (action.kind === 'pressKeys') {
       const keys = nativeKeys(action.keys);
@@ -350,10 +382,23 @@ export class CuaComputerDriver implements ComputerDriver {
     if (await this.processIdentity(target.pid) !== target.processIdentity) throw new Error('COMPUTER_PROCESS_CHANGED');
     signal.throwIfAborted();
     this.validateAction(action);
+    if ('ref' in action && (!this.observedTarget || this.observedTarget.appId !== target.appId
+      || this.observedTarget.pid !== target.pid || this.observedTarget.processIdentity !== target.processIdentity
+      || this.observedTarget.windowId !== target.windowId)) throw new Error('COMPUTER_ELEMENT_TARGET_CHANGED');
     const windowId = BigInt(target.windowId);
     if (!this.client || !this.sdk) throw new Error('COMPUTER_DRIVER_OFFLINE');
     const actionTarget = new this.sdk.ActionTarget.Window({ pid: target.pid, windowId });
     switch (action.kind) {
+      case 'activate': case 'showMenu': {
+        const result = await this.client.click({ target: actionTarget,
+          position: new this.sdk.ClickPosition.Element({ elementToken: this.semanticElement(action).element_token as string }),
+          deliveryMode: this.sdk.InputDeliveryMode.Background, count: 1,
+          button: action.kind === 'activate' ? this.sdk.ClickButton.Left : this.sdk.ClickButton.Right }, { signal });
+        if (result.route !== this.sdk.ActionRoute.Accessibility || ![
+          this.sdk.ActionEffect.Confirmed, this.sdk.ActionEffect.Unverifiable,
+        ].includes(result.effect)) throw new Error('COMPUTER_SEMANTIC_ACTION_UNCONFIRMED');
+        return;
+      }
       case 'wait': await delay(action.durationMs, undefined, { signal }); return;
       case 'click': {
         const button = action.button === 'right' ? this.sdk.ClickButton.Right : this.sdk.ClickButton.Left;
@@ -402,7 +447,7 @@ export class CuaComputerDriver implements ComputerDriver {
     return this.stopping;
   }
   private async cleanup(): Promise<void> {
-    this.elements = []; this.frame = undefined;
+    this.elements = []; this.frame = undefined; this.observedTarget = undefined;
     const client = this.client; this.client = undefined;
     this.sdk = undefined;
     const host = this.host; this.host = undefined;
