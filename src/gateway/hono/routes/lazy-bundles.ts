@@ -113,14 +113,6 @@ export const AUTHENTICATED_LAZY_ROUTE_BUNDLES: readonly AuthenticatedLazyRouteBu
     },
   },
   {
-    id: 'scenes',
-    match: (path) => startsWithAny(path, ['/api/scenes']),
-    load: async () => {
-      const { registerSceneRoutes } = await import('./scenes.js');
-      return { register: registerSceneRoutes };
-    },
-  },
-  {
     id: 'runtime-tools',
     match: (path) => startsWithAny(path, ['/api/runtime-tools']),
     load: async () => {

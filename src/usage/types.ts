@@ -15,7 +15,6 @@ export type AiUsageCategory =
   | 'session_search'
   | 'note_generation'
   | 'automation'
-  | 'scene'
   | 'task_planning'
   | 'task_judging'
   | 'voice_summary'

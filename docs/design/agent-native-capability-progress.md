@@ -36,13 +36,13 @@ SDK `capability.describe/call` → 已登记 iframe 宿主 → 认证 Local App 
 
 新增 iframe 身份 6 项、授权宿主 3 项测试；最终 MCP/Local App/扩展联合 7 文件 41 项通过。真实隔离 Gateway 验证授权接口缺摘要 400、旧摘要 409、匹配摘要成功；完整构建在本次授权修改前通过，授权修改后根/Web 类型检查及 Web 构建通过。新增宿主测试位于 Web tsconfig 排除目录，直接执行其 ESLint 被项目配置拒绝；未称测试文件 lint 通过，生产文件单独检查。浏览器隔离 Local App 新源码自动验收通过，停在 Add to sidebar 安装前，待用户确认安装／运行本地生成的测试应用后继续真实 iframe 宿主握手验证。该项不同于仍独立待授权的第三方真实账号写入验收；Local App SDK 能力包等其余本地阶段依然未完成。
 
-2026-09-22 S4 结果卡与审批自审增量：ProductDeliveryEnvelope 增加有界资源表格与建议编辑预览；Notes/Tasks/Projects/Automations/Scenes/LocalApps 列表及 Notes preview_edit 进入生产工具调用链。纯文本渲染，不增加应用编辑或审批按钮；同轮多结果按工具调用 ID 去重并保留多张卡片，渠道保留文本及内部深链。修正笔记和项目卡片 revision 来源。旧浏览器审批卡片改为先读取服务端状态，响应以服务端决定为准；过期／消费／拒绝不能显示成已批准，重复提交和退出登录后的迟到响应被阻断。这不是通用 operation 审批绑定完成声明。
+2026-09-22 S4 结果卡与审批自审增量：ProductDeliveryEnvelope 增加有界资源表格与建议编辑预览；Notes/Tasks/Projects/Automations/LocalApps 列表及 Notes preview_edit 进入生产工具调用链。纯文本渲染，不增加应用编辑或审批按钮；同轮多结果按工具调用 ID 去重并保留多张卡片，渠道保留文本及内部深链。修正笔记和项目卡片 revision 来源。旧浏览器审批卡片改为先读取服务端状态，响应以服务端决定为准；过期／消费／拒绝不能显示成已批准，重复提交和退出登录后的迟到响应被阻断。这不是通用 operation 审批绑定完成声明。
 
 S5 MCP 增量：新增显式 `xopc mcp capabilities --allow-capability <ids...>` stdio HTTP 代理，仅开放白名单与当前 Gateway HTTP 授权目录交集，每次调用重新检查目录并由 Gateway 再鉴权；传入精确 majorVersion/digest，写入强制稳定幂等键，未知结果不自动重试，不代用户批准。复用现有凭证配置，不自动安装或修改 MCP 配置；审计仍是 HTTP surface。保留现有 channel bridge 源码，不恢复旧 channel 命令。HTTP 客户端拒绝重定向、30 秒超时并保留安全的结构化错误码。
 
 验证：联合 17 文件 140 项通过；MCP SDK 内存传输覆盖白名单、撤权、契约变化、缺失幂等键、伪造身份字段、领域冲突及未知写结果。实际 stdio CLI → 隔离认证 Gateway 验证目录白名单、本地笔记写入与同 key 重放、拒绝未授权能力；未使用真实账号或外部写入。根类型检查、Web 构建与相关 ESLint 通过。Local App capability contributions/SDK 授权闭环、通用审批绑定、完整 S4 浏览器模型交互及 S6 发布门禁仍未完成，不能标记整体完成。
 
-2026-09-22 S4 多页面采集增量：Task、Project、Scene（含 task-follow-up）和 Local App 详情使用共享显式引用按钮，经 typed `xopc.context.resolve` 获取已校验正文、版本和截断标识，再创建普通新对话。编辑未保存／操作进行中禁用采集；异步期间切页、切身份、资源版本变化及卸载会使旧请求失效；重复点击不重复创建对话。修复任务解析器错误读取旧 description/goal 字段，改为当前 body/contract.objective；场景预览标题使用目标而非 UUID。
+2026-09-22 S4 多页面采集增量：Task、Project（含 task-follow-up）和 Local App 详情使用共享显式引用按钮，经 typed `xopc.context.resolve` 获取已校验正文、版本和截断标识，再创建普通新对话。编辑未保存／操作进行中禁用采集；异步期间切页、切身份、资源版本变化及卸载会使旧请求失效；重复点击不重复创建对话。修复任务解析器错误读取旧 description/goal 字段，改为当前 body/contract.objective；场景预览标题使用目标而非 UUID。
 
 Discussions 保持纪要／逐字稿与用户笔记的独立存储，会议区域新增显式引用按钮：附带当前纪要或已加载的筛选逐字稿，保留观察到的纪要／转写版本，作为 user-supplied 文本，不冒充持久笔记正文。忽略项按当前显示状态处理，不采集录音、隐藏逐字稿页或 iframe 内容；超过 16K 明确拒绝并提示缩小范围。复用普通笔记资源授权，不新增绕过领域权限的讨论读取接口。
 
@@ -52,7 +52,7 @@ Discussions 保持纪要／逐字稿与用户笔记的独立存储，会议区�
 
 自审修复笔记离开页面触发自动保存导致旧 revision 立即过期的问题；保存失败保留待保存内容，异步期间切换页面／身份不跳转，发现新增编辑时停止采集并提示重试。沿用 ui-ux-pro-max 的可访问交互要求，使用原生展开控件、可见焦点和现有语义色。
 
-验证：6 文件 39 项回归通过，包含预览／移除、纯文本转义、草稿保留、身份与会话隔离、接受／拒绝及后端权限检查；Web 类型检查、相关 ESLint 与构建通过（保留既有构建警告）。隔离本地 Gateway 浏览器验证笔记采集进入新对话、展开正文和版本、移除卡片。测试环境无模型配置，浏览器未执行发送；发送行为由自动化测试覆盖，不称为真实模型端到端验收。当前页面入口仅覆盖 Notes，Task／Project／Scene／LocalApp 的页面采集入口及 S4 其余项仍待接入；刷新不恢复内存快照。真实外部写入验收仍独立待授权。
+验证：6 文件 39 项回归通过，包含预览／移除、纯文本转义、草稿保留、身份与会话隔离、接受／拒绝及后端权限检查；Web 类型检查、相关 ESLint 与构建通过（保留既有构建警告）。隔离本地 Gateway 浏览器验证笔记采集进入新对话、展开正文和版本、移除卡片。测试环境无模型配置，浏览器未执行发送；发送行为由自动化测试覆盖，不称为真实模型端到端验收。当前页面入口仅覆盖 Notes，Task／Project／LocalApp 的页面采集入口及 S4 其余项仍待接入；刷新不恢复内存快照。真实外部写入验收仍独立待授权。
 
 2026-09-22 S4 输入框接受语义修复：继续接入时发现项目 composer 丢弃 onSend 的异步结果，导致请求未被服务器接受即清空草稿。新增独立 input acceptance 通知，在真实 202 回执解析后触发；上层返回接受结果，不再把整轮流式生成结束当作输入接受。项目 composer 透传结果，拒绝／提交异常保留草稿；后续生成错误不撤销已经接受的提交。发送前复制草稿，迟到接受回调仅清空仍与所提交文字／附件／引用一致的草稿，保留用户等待期间的新修改。沿用既有错误反馈与 commitAcceptedSend，不增加全局当前页面状态。
 
@@ -74,7 +74,7 @@ Discussions 保持纪要／逐字稿与用户笔记的独立存储，会议区�
 
 此转换器目前只有测试调用，页面采集 provider、HTTP 提交接入、执行前权限复核、客户端指纹调用点和可见上下文交互仍未串通，不将存储基础或隔离测试记作生产端到端能力。S4 及 S0／S2／S3／S5／S6 剩余项仍需推进；真实账号验收继续单独列为待授权，未执行真实外部写入。
 
-S4 纯协议增量：目录 94 项（不含 Scene 为 65 项），新增 xopc.context.resolve。共享 AppContextEnvelope 包含 client/tab、sequence、显式资源 revision 和未保存选区；最多 20 引用、16K 选区、64 KiB UTF-8，拒绝重复资源和越限，不静默截断输入。服务端逐项经过原读取 capability 授权，不因 resolve 权限而提升资源 scope／委托范围；核对 Note／Task／Project／Scene 的版本，LocalApp 使用源码 hash。返回有界摘要并标注截断；不返回 LocalApp 预览令牌等完整 DTO。选区明确标记 user-supplied，不作为数据库事实或授权。
+S4 纯协议增量：目录 94 项（不含 Scene 为 65 项），新增 xopc.context.resolve。共享 AppContextEnvelope 包含 client/tab、sequence、显式资源 revision 和未保存选区；最多 20 引用、16K 选区、64 KiB UTF-8，拒绝重复资源和越限，不静默截断输入。服务端逐项经过原读取 capability 授权，不因 resolve 权限而提升资源 scope／委托范围；核对 Note／Task／Project 的版本，LocalApp 使用源码 hash。返回有界摘要并标注截断；不返回 LocalApp 预览令牌等完整 DTO。选区明确标记 user-supplied，不作为数据库事实或授权。
 
 本增量协议／授权测试 2 文件 11 项、Agent／上下文组合 2 文件 24 项、根类型检查和相关 ESLint 通过；xopc_use context/resolve 使用相同解析和资源授权。真实隔离 Gateway 94 项目录及指定版本笔记上下文解析冒烟通过；最终完整 Node／声明／Web 构建通过，保留既有构建警告。该能力只解析调用方明确提交的不可变快照，没有建立共享“当前页面”，也未接入页面 provider、输入持久化／指纹、Discussions、导航或 renderer；因此 S4 仍未完成，不能把 stateless fixture 的 tab 测试说成浏览器多 tab 验收。
 
@@ -82,7 +82,6 @@ S4 纯协议增量：目录 94 项（不含 Scene 为 65 项），新增 xopc.co
 
 自查修复：LocalApps 后台恢复事件沿用原 Gateway 通知路径，不能被通用 outbox 误投递为 Task／自动化触发。Composio successful=false 的响应保留原始证据并转 unknown，不假定远端未生效。Notes 本地预览／Automation 本地模拟的 POST 路由按真实只读语义授权，不与 dispatcher 权限冲突。
 
-该增量 LocalApp 18 项通过，包含事务故障、源码冲突、必需检查、提交后发布失败与数据库重开恢复；Task／Scene 事件回归通过，lazy matcher 最终 28 项通过；最新 Composio／LocalApp／外部操作组合 3 文件 65 项通过，scope 7 项通过。93 项真实隔离 Gateway 冒烟通过。完整构建、根／Web 类型检查及相关 lint 已通过（最后的 Composio 失败响应和 scope 小幅调整另有测试／类型验证）。未部署、未改个人数据库、未进行真实外部写入。
 
 2026-09-22：真实第三方写入仅作为独立的待授权验收项，不再阻塞本地开发、fixture 故障注入或其他阶段；未执行该项时不宣称真实 provider 协议验收通过。
 
@@ -98,9 +97,7 @@ CLI 审批、并发领取、数据库重开、权限收回、同 revision 的契
 
 当前累计验证分组：场景／Host／能力／迁移／LocalApp／前端缓存 29 文件 316 项通过；Notes／Projects／Tasks／Automations／路由等 35 文件 313 项通过；LocalApp 后续 17 项通过；真实隔离 Gateway 的 88 项目录及 Scene 资源事件冒烟通过。最终完整构建（Node、声明、Web）、根／Web 类型检查、相关 ESLint 和 diff 检查通过，保留既有 chunk 大小／动态导入／插件耗时警告。LocalApp 旧 index.js 运行时入口兼容函数与分支已删除，旧草稿只报验证失败，不静默改写用户文件。
 
-实时同步增量：v199 为 Scene 聚合维护独立资源 revision（不冒充 activation 编辑版本），领域表变更与既有 domain_outbox 原子记录，覆盖配置、资料、调度、工作项、运行、成果、反馈、偏好和跟进状态。租约心跳不产生刷新事件；能力调用关联 operationId，后台变更无需经过 HTTP 才能通知页面。打开／重开数据库均安装事务上下文 SQL 函数。Gateway 复用 resources:scenes，Web 在 Scene 专属 SWR provider 内订阅、批量失效并在重连／缺口后重新读取。编辑草稿保存原 revision；移除按 revision 重建表单的行为，避免实时更新丢失输入或静默覆盖。
 
-Scene 事件回滚、单次重放、后台成果、心跳抑制和数据库重开 4 项通过；真实 Gateway 验证偏好事件仅一份并带 operationId；缓存 hook／领域 Host／事件／迁移联合 5 文件 54 项通过。最新 UI 类型检查和相关 ESLint 通过。尚未把实际浏览器交互及 S3 全领域迁移声明为完成。
 
 LocalApp validate 经重新逐行核查是只读文件检查，没有验证状态写入；此前清单分类有误，现已纠正并接入共享读取能力，新增无文件／数据库变更断言。完整目录现为 88 项，Scene 未启用时为 59 项。验收记录 acceptance、安装等仍是写操作，尚未统一。其他剩余阶段不变。
 
@@ -211,10 +208,6 @@ S2 已完成本地事务子集：`xopc.tasks.create` 和 `xopc.tasks.command` �
 | `src/automations/capabilities/read.ts` | list, get, history, get_run, run_events, metrics, product_events | 只读；automations.read | 已迁移 HTTP／Agent，保留通知／对话策略、运行诊断和历史查询 |
 | `src/automations/capabilities/write.ts` | create, update, delete, set_enabled, run, rerun, cancel, read, read_all | SQLite 业务状态与回执同事务；提交后唤醒／取消；回执记录接受时状态 | 已迁移 HTTP 与双 Agent 工具；草稿等其他入口待迁移 |
 | `src/automations/capabilities/drafts.ts` | simulate, draft, repair_draft | 模拟纯读取；生成调用模型，manual 恢复和持久回执，不应用草稿 | HTTP／xopc_use 已迁移；模型验证使用 fixture |
-| `src/scenes/capabilities/read.ts` | templates, get_template, list, get, read_notes, list_runs, list_schedules, list_work_items, get_preferences, preflight | 管理员入口；owner/workspace 隔离；预检保留 account/provider 授权 | 已迁移 HTTP／Agent |
-| `src/scenes/capabilities/read.ts` | mail_accounts, mail_sources, results, get_presentation, get_feedback, digest_results, metrics, diagnostics | 管理员、owner/workspace 隔离及领域可见性检查 | 已迁移 HTTP／Agent |
-| `src/scenes/httpServices.ts` | mail_search、source-provider／TaskFollowUp 专属入口 | 外部读取、用量／缓存副作用及账户授权，不按纯读取处理 | 待迁移 |
-| `src/scenes/capabilities/write.ts` | start, configure, transition, check, notes, work_item, update_work_item, schedule, set_preferences, feedback, mark_read | 精确版本、异步只读预检、业务／资源事件／回执同事务；check 仅排队；可信归属绑定 | HTTP／Agent 已迁移；资源实时事件与 Scene 缓存已接入，实际浏览器验收待完成 |
 | `src/tasks/capabilities/read.ts`、`runs.ts` | tasks.metrics, task_runs.list/get/cancel/feedback | 读取；取消／反馈事务回执及事件 | 已迁移 HTTP／Agent；外部执行停止确认仍是独立缺口 |
 | `src/local-apps/capabilities/read.ts` | list, get, validate | 管理员权限读取／文件检查，保留预览令牌权限边界 | 已迁移 HTTP／Agent |
 | `src/local-apps/capabilities/write.ts` | record_acceptance | 当前源码 hash 校验；验收记录、回执和事件同事务 | HTTP／Agent 已迁移；不代表浏览器检查已经执行 |
@@ -281,6 +274,6 @@ Automations 启停增量：`xopc.automations.set_enabled` 统一原 REST pause/r
 
 最新联合回归：23 个文件 219 项通过；之后新增外部租约、Automation 契约／读取验证独立通过。根／Web／retired cross-platform client 类型检查通过，retired cross-platform client 7 项请求测试通过。完整构建通过，保留现有 chunk 大小与动态 import 警告。真实 Gateway 冒烟在与重型构建和测试并行时出现过一次启动超时；待构建结束后独立重跑通过，未把该超时计为功能验收通过。
 
-仍需开发：Notes 文件／分享／会话等剩余操作、TaskRun 执行停止确认及 handoff 等入口、Projects 主体写入／工作区及对应资源事件、Automations 草稿／修复草稿／模拟及其他渠道入口核全、Scenes、Local Apps；S4 页面上下文与结构化结果、S5 Local App 能力贡献和 MCP、S6 升级回退及性能验收均未完成。当前没有部署或移动端发布。
+仍需开发：Notes 文件／分享／会话等剩余操作、TaskRun 执行停止确认及 handoff 等入口、Projects 主体写入／工作区及对应资源事件、Automations 草稿／修复草稿／模拟及其他渠道入口核全、Local Apps；S4 页面上下文与结构化结果、S5 Local App 能力贡献和 MCP、S6 升级回退及性能验收均未完成。当前没有部署或移动端发布。
 
 S2–S6 尚未完成。真实外部写入验收需要用户指定已授权的测试连接器、账号及测试对象；未得到授权前只能进行本地和 fixture 验证。不得把 mock 结果写成真实第三方验收通过。

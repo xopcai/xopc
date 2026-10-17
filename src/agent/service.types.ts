@@ -1,4 +1,3 @@
-import type { SceneAccess } from '../scenes/httpServices.js';
 import type { ThinkingLevel } from '@earendil-works/pi-agent-core';
 
 import type { Config } from '../config/schema.js';
@@ -32,7 +31,6 @@ export interface AgentServiceConfig {
     requestClarification: GatewayClarifyRequestFn;
   };
   getAutomationService?: () => AutomationService | undefined;
-  getSceneAccess?: () => SceneAccess | undefined;
   getBrowserAutomationService?: () => import('../browser/automations/index.js').BrowserAutomationService | undefined;
   emitBrowserEvent?: (type: string, payload: unknown) => void;
   /** Gateway: exposes first-class xopc product objects for the `xopc_use` tool. */

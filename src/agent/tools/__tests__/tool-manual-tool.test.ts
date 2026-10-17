@@ -37,8 +37,9 @@ describe('tool_manual tool', () => {
     expect(text).toContain('create_update');
     expect(text).toContain('`automation`');
     expect(text).toContain('`workflow`');
-    expect(text).toContain('`scene`');
-    expect(text).toContain('Safe start protocol');
+    expect(text).toContain('`task`');
+    expect(text).not.toContain('`scene`');
+    expect(text).not.toContain('Scene delegation');
     expect(text).not.toContain('mode `proactive`');
   });
 

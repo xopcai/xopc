@@ -96,7 +96,7 @@ export const HomeRunningConversationSchema = z.object({
 
 export const HomeEvidenceSchema = z.strictObject({
   id: z.string().trim().min(1).max(300),
-  sourceType: z.enum(['project', 'task', 'conversation', 'scene', 'calendar', 'mail', 'communication', 'file', 'user_model']),
+  sourceType: z.enum(['project', 'task', 'conversation', 'calendar', 'mail', 'communication', 'file', 'user_model']),
   sourceRef: z.string().trim().min(1).max(1_000),
   revision: z.string().trim().min(1).max(300),
   observation: z.string().trim().min(1).max(1_000),
@@ -159,11 +159,6 @@ export const HomeOpportunitySchema = z.strictObject({
   actionPrompt: z.string().trim().min(1).max(4_000),
   degradedActionPrompt: z.string().trim().min(1).max(4_000).optional(),
   continuation: z.discriminatedUnion('kind', [
-    z.strictObject({
-      kind: z.literal('scene'),
-      reason: z.literal('prior_success'),
-      href: z.string().trim().min(1).max(2_000),
-    }),
     z.strictObject({
       kind: z.literal('automation'),
       reason: z.literal('repeated_success'),

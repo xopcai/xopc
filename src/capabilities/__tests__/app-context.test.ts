@@ -26,12 +26,11 @@ describe('explicit app context snapshots', () => {
     ['task', { title: 'Task', body: 'Task body', contract: { objective: 'Goal' }, version: 3 }, 'Task body'],
     ['task', { title: 'Task', contract: { objective: 'Goal' }, version: 3 }, 'Goal'],
     ['project', { name: 'Project', brief: 'Project brief', version: 3 }, 'Project brief'],
-    ['scene', { goal: 'Scene goal', revision: 3 }, 'Scene goal'],
     ['local_app', { name: 'App', idea: 'App idea', previewToken: 'not-context' }, 'App idea'],
   ] as const)('uses the persisted %s content shape', async (kind, row, expected) => {
     const dispatcher = new CapabilityDispatcher();
     const domain = kind === 'local_app' ? 'local_apps' : `${kind}s`;
-    const field = kind === 'scene' ? 'activation' : kind === 'local_app' ? 'app' : kind;
+    const field = kind === 'local_app' ? 'app' : kind;
     dispatcher.register(defineReadCapability({ id: `xopc.${domain}.get`, description: 'Fixture', effect: 'read', majorVersion: 1,
       surfaces: ['http'], scopes: ['workspace.read'], input: z.object({ id: z.string() }), output: z.record(z.string(), z.unknown()),
       execute: () => ({ [field]: row }),
@@ -43,7 +42,6 @@ describe('explicit app context snapshots', () => {
     registerAppContextCapability(dispatcher);
     const result = await dispatcher.call('xopc.context.resolve', { ...snapshot, resourceRefs: [{ kind, id: 'fixture', revision: '3' }] }, caller);
     expect(result).toMatchObject({ resources: [{ text: expected }] });
-    if (kind === 'scene') expect(result).toMatchObject({ resources: [{ title: 'Scene goal' }] });
     expect(JSON.stringify(result)).not.toContain('not-context');
   });
 

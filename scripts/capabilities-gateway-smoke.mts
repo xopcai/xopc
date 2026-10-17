@@ -30,7 +30,7 @@ await new Promise<void>(resolve => listener.close(() => resolve()));
 const origin = `http://127.0.0.1:${port}`;
 const token = 'isolated-capability-smoke';
 const config = join(directory, 'xopc.json');
-writeFileSync(config, JSON.stringify({ gateway: { bind: 'loopback', port, auth: { mode: 'token', token }, scenes: { enabled: true } }, browser: { enabled: false } }));
+writeFileSync(config, JSON.stringify({ gateway: { bind: 'loopback', port, auth: { mode: 'token', token } }, browser: { enabled: false } }));
 const child = spawn(process.execPath, ['--import', 'tsx', 'src/cli/bin.ts', 'gateway', '--port', String(port), '--bind', 'loopback', '--no-hot-reload'], {
   env: { ...process.env, XOPC_STATE_DIR: directory, XOPC_WORKSPACE: workspace, XOPC_CONFIG_PATH: config, XOPC_CONFIG: config,
     XOPC_HOME: directory, XOPC_SKIP_CHANNELS: '1', XOPC_NO_RESPAWN: '1', XOPC_LOG_LEVEL: 'fatal' },
@@ -55,7 +55,12 @@ try {
   const catalog = await request(root);
   assert.equal(catalog.status, 200);
   const { capabilities } = await catalog.json();
-  assert.equal(capabilities.length, 94);
+  assert.ok(capabilities.some((item: { id: string }) => item.id === 'xopc.tasks.create'));
+  assert.ok(capabilities.some((item: { id: string }) => item.id === 'xopc.automations.create'));
+  assert.ok(capabilities.every((item: { id: string }) => !item.id.startsWith('xopc.scenes.')));
+  for (const path of ['/api/scenes/templates', '/api/scenes/activations', '/api/scenes/preferences']) {
+    assert.equal((await request(path)).status, 404);
+  }
   const localCapabilities = '/api/local-app-capabilities/grant-smoke';
   assert.equal((await fetch(`${origin}${localCapabilities}`)).status, 401);
   assert.equal((await request(localCapabilities)).status, 400);
@@ -101,35 +106,6 @@ try {
     assert.equal(response.status, 200, await response.clone().text());
     return (await response.json()).data.resources[0];
   }
-  const sceneTemplates = await request('/api/scenes/templates');
-  assert.equal(sceneTemplates.status, 200, await sceneTemplates.clone().text());
-  const templates = (await sceneTemplates.json()).templates;
-  assert.ok(templates.length > 0);
-  const sceneDescriptor = capabilities.find((item: { id: string }) => item.id === 'xopc.scenes.templates');
-  const sceneRead = await request(`${root}/xopc.scenes.templates/invocations`, 'POST', {
-    input: {}, majorVersion: sceneDescriptor.majorVersion, descriptorDigest: sceneDescriptor.descriptorDigest,
-  });
-  assert.equal(sceneRead.status, 200, await sceneRead.clone().text());
-  assert.deepEqual((await sceneRead.json()).data.templates, templates);
-  assert.equal((await request('/api/scenes/activations?ownerId=other')).status, 400);
-  const scenePreferencesInput = { expectedRevision: 0, level: 'quiet', timezone: 'UTC', digestEnabled: true };
-  const scenePreferencesWrite = await request('/api/scenes/preferences', 'PATCH', scenePreferencesInput, { 'idempotency-key': 'scene-preferences' });
-  assert.equal(scenePreferencesWrite.status, 200, await scenePreferencesWrite.clone().text());
-  const scenePreferencesResult = await scenePreferencesWrite.json();
-  const scenePreferencesDescriptor = capabilities.find((item: { id: string }) => item.id === 'xopc.scenes.set_preferences');
-  const scenePreferencesReplay = await request(`${root}/xopc.scenes.set_preferences/invocations`, 'POST', {
-    input: scenePreferencesInput, idempotencyKey: 'scene-preferences', majorVersion: scenePreferencesDescriptor.majorVersion,
-    descriptorDigest: scenePreferencesDescriptor.descriptorDigest,
-  });
-  assert.equal(scenePreferencesReplay.status, 200, await scenePreferencesReplay.clone().text());
-  assert.deepEqual((await scenePreferencesReplay.json()).data, scenePreferencesResult);
-  const scenePreferencesPatch = await request('/api/scenes/preferences', 'PATCH', { expectedRevision: 1, notificationsMuted: true });
-  assert.equal(scenePreferencesPatch.status, 200, await scenePreferencesPatch.clone().text());
-  const scenePreferencesCurrent = await scenePreferencesPatch.json();
-  assert.equal(scenePreferencesCurrent.level, 'quiet');
-  assert.equal(scenePreferencesCurrent.timezone, 'UTC');
-  assert.equal(scenePreferencesCurrent.digestEnabled, true);
-  assert.equal((await request('/api/scenes/preferences', 'PATCH', scenePreferencesInput, { 'idempotency-key': 'scene-preferences-stale' })).status, 409);
   const settingsDescriptor = capabilities.find((item: { id: string }) => item.id === 'xopc.settings.open');
   const settingsResult = await request(`${root}/xopc.settings.open/invocations`, 'POST', {
     input: { section: 'capabilities/models' }, majorVersion: settingsDescriptor.majorVersion, descriptorDigest: settingsDescriptor.descriptorDigest,
@@ -161,7 +137,7 @@ try {
   assert.deepEqual((await acceptanceReplay.json()).data, await acceptanceResponse.json());
   const automationInput = {
     name: 'Isolated manual fixture', trigger: { kind: 'manual' }, action: { kind: 'agent', instruction: 'Never executed in this test' },
-    conversationMode: 'continuous', notificationPolicy: 'none',
+    conversationMode: 'continuous',
   };
   const automationResponse = await request('/api/automations', 'POST', automationInput, { 'idempotency-key': 'automation-create' });
   const simulation = await request('/api/automations/simulate', 'POST', automationInput);
@@ -275,7 +251,7 @@ try {
   assert.equal((await request(editPath, 'DELETE', deleteBody, { 'idempotency-key': 'stale-delete' })).status, 409);
   const runnableResponse = await request('/api/automations', 'POST', {
     name: 'Safe queue fixture', trigger: { kind: 'manual' }, action: { kind: 'workflow', workflowId: 'never-executed' },
-    safety: { mode: 'suggest_only' }, notificationPolicy: 'none',
+    safety: { mode: 'suggest_only' },
   });
   assert.equal(runnableResponse.status, 201, await runnableResponse.clone().text());
   const runnable = (await runnableResponse.json()).automation;
@@ -345,34 +321,23 @@ try {
   socket = new WebSocket(origin.replace('http:', 'ws:') + '/api/realtime/v1/ws');
   const resourceEvents: Array<{ id: string; revision: number; operation: string; operationId?: string }> = [];
   const projectResourceEvents: Array<{ id: string; revision: number; operation: string; operationId?: string }> = [];
-  const sceneResourceEvents: Array<{ id: string; revision: number; operation: string; operationId?: string }> = [];
   let resourceSubscriptions = 0;
   await new Promise<void>((resolve, reject) => {
     const timeout = setTimeout(() => reject(new Error('Resource subscription timed out')), 5000);
     socket!.once('error', error => { clearTimeout(timeout); reject(error); });
     socket!.on('message', data => {
       const message = JSON.parse(data.toString());
-      if (message.kind === 'realtime.subscribed' && ++resourceSubscriptions === 3) { clearTimeout(timeout); resolve(); }
+      if (message.kind === 'realtime.subscribed' && ++resourceSubscriptions === 2) { clearTimeout(timeout); resolve(); }
       if (message.kind === 'realtime.event' && message.payload.event === 'resource.changed') {
         if (message.payload.topic === 'resources:projects') projectResourceEvents.push(message.payload.data);
-        else if (message.payload.topic === 'resources:scenes') sceneResourceEvents.push(message.payload.data);
         else resourceEvents.push(message.payload.data);
       }
     });
     socket!.once('open', () => socket!.send(JSON.stringify({
       protocolVersion: REALTIME_PROTOCOL_VERSION, messageId: crypto.randomUUID(), kind: 'realtime.hello', sentAt: Date.now(),
-      payload: { ticket: ticket.payload.ticket, clientId: 'capability-smoke', clientKind: 'web', subscriptions: [{ topic: 'resources:notes' }, { topic: 'resources:projects' }, { topic: 'resources:scenes' }] },
+      payload: { ticket: ticket.payload.ticket, clientId: 'capability-smoke', clientKind: 'web', subscriptions: [{ topic: 'resources:notes' }, { topic: 'resources:projects' }] },
     })));
   });
-  const sceneRealtimeInput = { expectedRevision: 2, notificationsMuted: false };
-  for (let attempt = 0; attempt < 2; attempt++) {
-    const response = await request('/api/scenes/preferences', 'PATCH', sceneRealtimeInput, { 'idempotency-key': 'scene-realtime' });
-    assert.equal(response.status, 200, await response.clone().text());
-  }
-  for (let attempt = 0; attempt < 100 && !sceneResourceEvents.some(event => event.id === 'preferences' && event.revision === 3); attempt++) await new Promise(resolve => setTimeout(resolve, 30));
-  const sceneChanges = sceneResourceEvents.filter(event => event.id === 'preferences' && event.revision >= 3);
-  assert.equal(sceneChanges.length, 1);
-  assert.equal(typeof sceneChanges[0].operationId, 'string');
   const noteInput = { markdown: 'Smoke original', capturedVia: { channel: 'web' } };
   const realtimeMilestoneHeaders = { 'idempotency-key': 'realtime-milestone' };
   const realtimeMilestoneResponse = await request(milestonePath, 'POST', { title: 'Realtime milestone' }, realtimeMilestoneHeaders);

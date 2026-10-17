@@ -655,8 +655,6 @@ export function HomePage() {
               setupHint: t.home.advisorSetupHint,
               configure: t.home.advisorConfigure,
               degradedStart: t.home.advisorDegradedStart,
-              sceneHint: t.home.advisorSceneHint,
-              sceneAction: t.home.advisorSceneAction,
               automationHint: t.home.advisorAutomationHint,
               automationAction: t.home.advisorAutomationAction,
             }}

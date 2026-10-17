@@ -432,9 +432,9 @@
       "sunday": "周日"
     },
     "experience": {
-      "scenes": "从一项智能关注开始",
-      "scenesDescription": "选择希望 AI 持续关注的事项，再确认内容和时间。",
-      "discover": "探索智能关注",
+      "starterTemplates": "从一项自动化开始",
+      "starterTemplatesDescription": "选择要定期执行的工作，再确认内容和时间。",
+      "discover": "创建自动化",
       "custom": "用一句话描述",
       "settings": "任务设置",
       "executionIssues": "执行异常",

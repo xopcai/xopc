@@ -159,15 +159,6 @@ export class HomeAdvicePolicy {
         },
       };
     }
-    if (successCount === 1) {
-      return {
-        continuation: {
-          kind: 'scene',
-          reason: 'prior_success',
-          href: '/scenes',
-        },
-      };
-    }
     return {};
   }
 }

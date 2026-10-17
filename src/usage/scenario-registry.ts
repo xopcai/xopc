@@ -20,7 +20,6 @@ const SCENARIOS: Readonly<Record<string, Scenario>> = {
   'tool.session_search_summarize': { category: 'session_search', reasonKey: 'usage.reason.sessionSearch', trigger: 'agent' },
   'note.generate': { category: 'note_generation', reasonKey: 'usage.reason.noteGeneration', trigger: 'user' },
   'automation.generate_draft': { category: 'automation', reasonKey: 'usage.reason.automationDraft', trigger: 'user' },
-  'scene.execute': { category: 'scene', reasonKey: 'usage.reason.sceneExecution', trigger: 'scheduled' },
   'task.plan_contract': { category: 'task_planning', reasonKey: 'usage.reason.taskPlanning', trigger: 'agent' },
   'task.judge_result': { category: 'task_judging', reasonKey: 'usage.reason.taskJudging', trigger: 'agent' },
   'voice.summarize_for_tts': { category: 'voice_summary', reasonKey: 'usage.reason.voiceSummary', trigger: 'user' },

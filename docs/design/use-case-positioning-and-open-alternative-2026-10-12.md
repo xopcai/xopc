@@ -22,8 +22,6 @@
 - [模型](../zh/models.md)：云、本地、自定义接口；能接入不等于场景质量达标。
 - [连接器](../zh/connectors/index.md)：飞书、企业微信、WPS 365 Beta，以及钉钉 MCP、腾讯会议灰度能力；服务能力不能相互类推。
 - [浏览器自动化](../zh/browser-automations.md)：成功执行一次后保存、参数化和定时复用。
-- [场景北极星](./scenes-product-north-star.md)：当前优先事项包括 Slack 开发 thread 的持续接手；国内办公拓展不应挤掉这项已有主线。
-- [场景发布评审](./scenes-production-readiness-review.md)：2026-09-20 的历史评审结论为受控内测，真实投递与连续运行待验证；不能用来证明当前候选包已全面就绪。
 - [Coder Evals](../../evals/coder/README.md)：已有黑盒评测工具、版本化任务和 grader，可用于建立编码质量证据；文档本身不是得分。
 
 外部依据（2026-10-12 查阅）：

@@ -203,9 +203,6 @@ export async function buildSafeWebConfigPayload(service: GatewayService, options
       webchat: {
         activityDetailDefault: config.gateway?.webchat?.activityDetailDefault ?? 'on',
       },
-      scenes: {
-        enabled: config.gateway?.scenes?.enabled === true,
-      },
       channelConnectDeferMode: config.gateway?.channelConnectDeferMode ?? 'auto',
       channelConnectDeferIds: Array.isArray(config.gateway?.channelConnectDeferIds)
         ? config.gateway.channelConnectDeferIds

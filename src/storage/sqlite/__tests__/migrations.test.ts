@@ -22,7 +22,6 @@ import {
   setSchemaVersion,
 } from '../schema-version.js';
 import { ensureXopcDatabaseSchema } from '../schema.js';
-import { AutomationSchema } from '../../../automations/domain/validation.js';
 
 const { DatabaseSync } = requireNodeSqlite();
 
@@ -163,242 +162,8 @@ describe('SQLite migrations', () => {
     } finally { db.close(); }
   });
 
-  it('migrates connected work threads to the global work-memory kind', () => {
-    const db = openEmptyDb();
-    try {
-      installBaseline(db);
-      applyPendingMigrations(db, { targetVersion: 199 });
-      db.prepare(`INSERT INTO knowledge_items (
-        knowledge_id, principal_id, kind, scope_type, scope_id, content, canonical_key,
-        status, confidence, importance, origin_class, source_agent_id, source_json,
-        created_at, updated_at, record_class
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-        .run('connected', 'local-owner', 'project_fact', 'agent', 'main', 'Atlas launch',
-          'connected-thread:composio:gmail:atlas', 'candidate', 0.9, 0.75, 'untrusted',
-          'main', '{"sourceRunId":"run-1"}', 1, 1, 'memory');
-      db.prepare(`INSERT INTO knowledge_item_status_events (
-        event_id, knowledge_id, to_status, actor_type, reason, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?)`)
-        .run('event-1', 'connected', 'candidate', 'runtime', 'Knowledge admitted.', 1);
-
-      applyPendingMigrations(db);
-
-      expect(db.prepare(`SELECT kind, scope_type, scope_id FROM knowledge_items
-        WHERE knowledge_id = ?`).get('connected')).toEqual({
-        kind: 'work_thread', scope_type: 'global', scope_id: null,
-      });
-      expect(db.prepare('SELECT knowledge_id FROM knowledge_item_status_events WHERE event_id = ?')
-        .get('event-1')).toEqual({ knowledge_id: 'connected' });
-      expect(db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
-    } finally { db.close(); }
-  });
-
-  it('deduplicates connector source runs and removes legacy extraction object types', () => {
-    const db = openEmptyDb();
-    try {
-      installBaseline(db);
-      applyPendingMigrations(db, { targetVersion: 200 });
-      db.prepare(`INSERT INTO understanding_source_grants (
-        grant_id, source_key, adapter_id, category, platform, display_name, status, access_mode,
-        retention_policy, processing_policy, config_json, checkpoint_json, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
-        'grant-1', 'connector-account:one', 'connector:gmail', 'mail', 'all', 'Mail', 'active',
-        'continuous', 'bounded_raw', 'remote_allowed', '{}', '{}', 1, 1,
-      );
-      db.prepare(`INSERT INTO understanding_source_runs (
-        run_id, grant_id, kind, status, items_seen, metadata_json, started_at, completed_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).run(
-        'run-completed', 'grant-1', 'bootstrap', 'completed', 10,
-        '{"connectorLearningJobId":"job-1","semanticStatus":"completed"}', 1, 2,
-      );
-      db.prepare(`INSERT INTO understanding_source_runs (
-        run_id, grant_id, kind, status, items_seen, metadata_json, started_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?)`).run(
-        'run-orphan', 'grant-1', 'bootstrap', 'queued', 0,
-        '{"connectorLearningJobId":"job-1"}', 3,
-      );
-      db.prepare(`INSERT INTO context_extraction_runs (
-        extraction_run_id, principal_id, source_ref, extractor_id, extractor_version,
-        processing_policy, destination, input_hash, status, started_at, completed_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
-        'extract-1', 'local-owner', 'understanding-source-run:run-completed', 'connector-semantic', '1',
-        'remote_allowed', 'remote_model', 'hash', 'completed', 1, 2,
-      );
-      db.prepare(`INSERT INTO context_extraction_outputs (
-        output_id, extraction_run_id, ordinal, candidate_key, object_type, object_id, outcome, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).run(
-        'output-1', 'extract-1', 0, 'candidate', 'understanding', 'old-object', 'created', 2,
-      );
-
-      applyPendingMigrations(db);
-
-      expect(db.prepare(`SELECT run_id, connector_learning_job_id FROM understanding_source_runs
-        WHERE connector_learning_job_id = ?`).all('job-1')).toEqual([
-        { run_id: 'run-completed', connector_learning_job_id: 'job-1' },
-      ]);
-      expect(db.prepare('SELECT object_type, object_id FROM context_extraction_outputs WHERE output_id = ?')
-        .get('output-1')).toEqual({ object_type: null, object_id: null });
-      expect(db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
-    } finally { db.close(); }
-  });
-
-  it('adds durable note deletion cleanup without changing existing note data', () => {
-    const db = openEmptyDb();
-    try {
-      installBaseline(db);
-      applyPendingMigrations(db, { targetVersion: 196 });
-      const notes = db.prepare('SELECT * FROM notes').all();
-      applyPendingMigrations(db);
-      db.prepare("INSERT INTO note_deletion_cleanup(kind, object_id, created_at) VALUES ('media', 'test-note', 1)").run();
-      expect(db.prepare('SELECT attempts, next_attempt_at FROM note_deletion_cleanup').get()).toEqual({ attempts: 0, next_attempt_at: 0 });
-      expect(() => db.prepare("INSERT INTO note_deletion_cleanup(kind, object_id, created_at) VALUES ('unsafe', 'test-note', 1)").run()).toThrow();
-      expect(db.prepare('SELECT * FROM notes').all()).toEqual(notes);
-      applyPendingMigrations(db);
-      expect(db.prepare('SELECT * FROM note_deletion_cleanup').all()).toHaveLength(1);
-    } finally { db.close(); }
-  });
-
-  it('freezes queued execution configuration during the run-request migration', () => {
-    const db = openEmptyDb();
-    try {
-      installBaseline(db);
-      applyPendingMigrations(db, { targetVersion: 195 });
-      db.prepare(`INSERT INTO automations (automation_id, name, enabled, trigger_json, action_json, state_json, created_at_ms, updated_at_ms, notification_policy)
-        VALUES (?, ?, 1, ?, ?, ?, 10, 12, 'none')`).run('queued-owner', 'Current name', '{"kind":"manual"}', '{"kind":"agent","instruction":"Current"}', '{"runningRunId":"queued"}');
-      db.prepare(`INSERT INTO automation_runs (run_id, automation_id, automation_name, status, trigger_snapshot_json, action_snapshot_json, manual, created_at_ms)
-        VALUES ('queued', 'queued-owner', 'Queued name', 'queued', ?, ?, 1, 11)`)
-        .run('{"kind":"manual"}', '{"kind":"workflow","workflowId":"accepted","input":{"keep":null}}');
-      applyPendingMigrations(db);
-      const snapshot = db.prepare('SELECT automation_json FROM automation_run_requests WHERE run_id = ?').get('queued');
-      expect(AutomationSchema.parse(JSON.parse(String(snapshot?.automation_json)))).toMatchObject({
-        id: 'queued-owner', enabled: true, name: 'Queued name', delivery: { notificationPolicy: 'none' },
-        action: { kind: 'workflow', workflowId: 'accepted', input: { keep: null } },
-      });
-      db.prepare('UPDATE automations SET name = ?').run('Later');
-      applyPendingMigrations(db);
-      expect(db.prepare('SELECT automation_json FROM automation_run_requests WHERE run_id = ?').get('queued')).toEqual(snapshot);
-      expect(db.prepare('PRAGMA integrity_check').get()).toEqual({ integrity_check: 'ok' });
-    } finally { db.close(); }
-  });
-
-  it('adds deleted automation revision storage without changing existing automations', () => {
-    const db = openEmptyDb();
-    try {
-      installBaseline(db);
-      applyPendingMigrations(db, { targetVersion: 194 });
-      db.prepare(`INSERT INTO automations (automation_id, name, enabled, trigger_json, action_json, state_json, created_at_ms, updated_at_ms)
-        VALUES (?, ?, 1, ?, ?, ?, 10, 12)`).run('retained', 'Retained', '{"kind":"manual"}', '{"kind":"agent","instruction":"Do not execute"}', '{"lastError":"Retained"}');
-      applyPendingMigrations(db);
-      expect(db.prepare('SELECT * FROM automations').all()).toEqual([
-        expect.objectContaining({ automation_id: 'retained', name: 'Retained', enabled: 1,
-          trigger_json: '{"kind":"manual"}', action_json: '{"kind":"agent","instruction":"Do not execute"}',
-          state_json: '{"lastError":"Retained"}',
-          delivery_json: '{"notificationPolicy":"attention","destinations":[{"key":"gateway_event","kind":"gateway_event"}]}',
-          created_at_ms: 10, updated_at_ms: 12 }),
-      ]);
-      expect(db.prepare('SELECT * FROM automation_deleted_revisions').all()).toEqual([]);
-      db.prepare('INSERT INTO automation_deleted_revisions VALUES (?, ?)').run('removed', 42);
-      applyPendingMigrations(db);
-      expect(db.prepare('SELECT revision FROM automation_deleted_revisions WHERE automation_id = ?').get('removed')).toEqual({ revision: 42 });
-      expect(db.prepare('PRAGMA integrity_check').get()).toEqual({ integrity_check: 'ok' });
-    } finally { db.close(); }
-  });
-
-  it('migrates v212 automation queues and delivery policy to the reliability contract', () => {
-    const db = openEmptyDb();
-    try {
-      installBaseline(db);
-      applyPendingMigrations(db, { targetVersion: 212 });
-      db.prepare(`INSERT INTO automations (
-        automation_id, name, enabled, trigger_json, action_json, state_json,
-        created_at_ms, updated_at_ms, conversation_mode, delivery_json
-      ) VALUES ('automation-1', 'Legacy result', 1, ?, ?, '{}', 10, 11, 'new_session', ?)`)
-        .run('{"kind":"manual"}', '{"kind":"agent","instruction":"Done"}',
-          '{"notificationPolicy":"all","completionWebhookUrl":"https://example.com/result"}');
-      db.prepare(`INSERT INTO automation_runs (
-        run_id, automation_id, automation_name, status, trigger_snapshot_json,
-        action_snapshot_json, manual, created_at_ms, ended_at_ms
-      ) VALUES ('run-1', 'automation-1', 'Legacy result', 'succeeded', ?, ?, 1, 20, 30)`)
-        .run('{"kind":"manual"}', '{"kind":"agent","instruction":"Done"}');
-      db.prepare(`INSERT INTO automation_events (
-        event_id, event_type, source, occurred_at_ms, ingested_at_ms, correlation_id,
-        root_event_id, trust, payload_json, projection_attempts
-      ) VALUES ('event-1', 'fixture.changed', 'test', 20, 20, 'event-1', 'event-1', 'system', '{}', 2)`).run();
-      db.prepare(`INSERT INTO automation_event_deliveries (
-        event_id, automation_id, status, run_id, attempts, next_attempt_at_ms, created_at_ms, updated_at_ms
-      ) VALUES ('event-1', 'automation-1', 'completed', 'run-1', 1, 20, 20, 30)`).run();
-      db.prepare(`INSERT INTO automation_result_deliveries (
-        run_id, destination_key, kind, status, config_json, attempts,
-        next_attempt_at_ms, last_error, created_at_ms, updated_at_ms
-      ) VALUES ('run-1', 'completion_webhook', 'webhook', 'failed', ?, 5, 30, 'timeout', 20, 30)`)
-        .run('{"url":"https://example.com/result"}');
-
-      applyPendingMigrations(db);
-
-      const automation = db.prepare(`SELECT delivery_json FROM automations WHERE automation_id = 'automation-1'`).get();
-      expect(JSON.parse(String(automation?.delivery_json))).toEqual({
-        notificationPolicy: 'all',
-        destinations: [
-          { key: 'gateway_event', kind: 'gateway_event' },
-          { key: 'completion_webhook', kind: 'webhook', endpoint: 'https://example.com/result', secretId: 'completion_webhook' },
-        ],
-      });
-      expect(db.prepare(`SELECT projection_status, projection_attempts FROM automation_events WHERE event_id = 'event-1'`).get())
-        .toEqual({ projection_status: 'pending', projection_attempts: 2 });
-      expect(db.prepare(`SELECT status, attempts, config_json FROM automation_result_deliveries
-        WHERE run_id = 'run-1' AND destination_key = 'completion_webhook'`).get()).toEqual({
-        status: 'dead_letter', attempts: 5,
-        config_json: '{"key":"completion_webhook","kind":"webhook","endpoint":"https://example.com/result","secretId":"completion_webhook"}',
-      });
-      expect(db.prepare(`SELECT result_id FROM automation_results WHERE run_id = 'run-1'`).get())
-        .toEqual({ result_id: 'result:run-1' });
-      expect(db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
-    } finally { db.close(); }
-  });
-
-  it('migrates connection allowlists once and preserves account and authorization references', () => {
-    const db = openEmptyDb();
-    try {
-      installBaseline(db); applyPendingMigrations(db, { targetVersion: 181 });
-      db.exec(`INSERT INTO connector_installations(id,connector_id,principal_id,enabled,allowed_agent_ids_json,max_scope,confirmation_policy,selected_connection_ids_json,created_at,updated_at)
-        VALUES ('limited','composio-gmail','owner',1,'[]','read','writes','["auth"]','now','now'),
-               ('all','composio-gmail','other',1,'[]','read','writes','[]','now','now');
-        INSERT INTO connector_accounts(id,connector_id,principal_id,identity_json,created_at,updated_at)
-        VALUES ('account','composio-gmail','owner','{}','now','now');
-        INSERT INTO connector_connections(id,account_id,installation_id,connector_id,provider,principal_id,provider_connection_id,alias,created_at,updated_at)
-        VALUES ('auth','account','limited','composio-gmail','composio','owner','ca','Work','now','now');`);
-      applyPendingMigrations(db);
-      expect(db.prepare('SELECT selected_account_ids_json FROM connector_installations WHERE id = ?').get('limited'))
-        .toEqual({ selected_account_ids_json: '["account"]' });
-      expect(db.prepare('SELECT selected_account_ids_json FROM connector_installations WHERE id = ?').get('all'))
-        .toEqual({ selected_account_ids_json: 'null' });
-      expect(db.prepare('SELECT label, enabled, allowed_agent_ids_json FROM connector_accounts').get())
-        .toEqual({ label: 'Work', enabled: 1, allowed_agent_ids_json: null });
-      expect(db.prepare('SELECT account_id, installation_id FROM connector_connections').get())
-        .toEqual({ account_id: 'account', installation_id: 'limited' });
-      expect(db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
-      expect(applyPendingMigrations(db)).toBe(XOPC_DB_SCHEMA_VERSION);
-    } finally { db.close(); }
-  });
-
-  it('repairs unambiguous account backend ownership without changing account policies', () => {
-    const db = openEmptyDb();
-    try {
-      installBaseline(db); applyPendingMigrations(db, { targetVersion: 182 });
-      db.exec(`INSERT INTO connector_backends(id,mode,label,created_at) VALUES ('backend','managed','Cloud','now');
-        INSERT INTO connector_accounts(id,connector_id,principal_id,identity_json,created_at,updated_at,enabled,allowed_agent_ids_json)
-        VALUES ('account','composio-gmail','owner','{}','now','now',0,'["work"]');
-        INSERT INTO connector_connections(id,account_id,connector_id,provider,principal_id,provider_connection_id,metadata_json,created_at,updated_at)
-        VALUES ('auth','account','composio-gmail','composio','owner','ca','{"backendId":"backend"}','now','now');`);
-      applyPendingMigrations(db);
-      expect(db.prepare('SELECT backend_id, enabled, allowed_agent_ids_json FROM connector_accounts').get())
-        .toEqual({ backend_id: 'backend', enabled: 0, allowed_agent_ids_json: '["work"]' });
-      expect(db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
-    } finally { db.close(); }
-  });
-
-  it('migrates the retained v165 baseline to the current registered version', () => {
-    expect(XOPC_DB_BASELINE_SCHEMA_VERSION).toBe(165);
+  it('migrates the retained v217 baseline to the current registered version', () => {
+    expect(XOPC_DB_BASELINE_SCHEMA_VERSION).toBe(217);
     expect(XOPC_DB_SCHEMA_VERSION).toBeGreaterThan(XOPC_DB_BASELINE_SCHEMA_VERSION);
 
     const db = openEmptyDb();
@@ -440,69 +205,6 @@ describe('SQLite migrations', () => {
     } finally { db.close(); }
   });
 
-  it('adds memory suppression and replaces approval notifications once', () => {
-    const db = openEmptyDb();
-    try {
-      installBaseline(db);
-      applyPendingMigrations(db, { targetVersion: 183 });
-      db.prepare(`INSERT INTO notification_events
-        (event_id, dedupe_key, event_type, target_json, priority, title_en, title_zh, created_at)
-        VALUES ('memory', 'work_discovery.review_ready:one', 'work_discovery.review_ready', '{}', 'normal', 'Review', '确认', 1)`).run();
-      applyPendingMigrations(db);
-      expect(db.prepare('SELECT event_type, title_en FROM notification_events WHERE event_id = ?').get('memory'))
-        .toEqual({ event_type: 'work_discovery.completed', title_en: 'Understanding updated' });
-      db.prepare('INSERT INTO memory_suppressions VALUES (?, ?)').run('hash', 1);
-      applyPendingMigrations(db);
-      expect(db.prepare('SELECT COUNT(*) AS n FROM memory_suppressions').get()).toEqual({ n: 1 });
-    } finally { db.close(); }
-  });
-
-  it('migrates proactive pause controls once without retaining old fields', () => {
-    const db = openEmptyDb();
-    try {
-      installBaseline(db);
-      applyPendingMigrations(db, { targetVersion: 175 });
-      db.prepare('INSERT INTO proactive_preferences(workspace_id, preferences_json, revision) VALUES (?, ?, ?)')
-        .run('paused', JSON.stringify({ level: 'off', pausedUntil: '2026-09-17T00:00:00Z' }), 4);
-      applyPendingMigrations(db, { targetVersion: 177 });
-      const row = db.prepare('SELECT preferences_json, revision FROM proactive_preferences').get()!;
-      const preferences = JSON.parse(String(row.preferences_json));
-      expect(preferences).toMatchObject({
-        level: 'balanced',
-        checksPaused: true,
-        checksPausedUntil: '2026-09-17T00:00:00Z',
-      });
-      expect(preferences).not.toHaveProperty('pausedUntil');
-      expect(row.revision).toBe(4);
-      expect(applyPendingMigrations(db)).toBe(XOPC_DB_SCHEMA_VERSION);
-    } finally {
-      db.close();
-    }
-  });
-
-  it('derives execution environment ownership during the v180 migration', () => {
-    const db = openEmptyDb();
-    try {
-      installBaseline(db);
-      applyPendingMigrations(db, { targetVersion: 179 });
-      const insert = db.prepare(`INSERT INTO execution_environments (
-        environment_id, kind, status, root_path, version, created_at, updated_at
-      ) VALUES (?, ?, 'ready', ?, 1, 1, 1)`);
-      insert.run('local', 'local_checkout', '/tmp/local');
-      insert.run('managed', 'managed_worktree', '/tmp/managed');
-
-      applyPendingMigrations(db);
-
-      expect(db.prepare('SELECT environment_id, ownership FROM execution_environments ORDER BY environment_id').all())
-        .toEqual([
-          { environment_id: 'local', ownership: 'registered' },
-          { environment_id: 'managed', ownership: 'xopc_created' },
-        ]);
-    } finally {
-      db.close();
-    }
-  });
-
   it('bootstraps a fresh database at the release target', () => {
     const db = openEmptyDb();
     try {
@@ -510,32 +212,6 @@ describe('SQLite migrations', () => {
       expect(readSchemaVersion(db)).toBe(XOPC_DB_SCHEMA_VERSION);
       expect(db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
       expect(db.prepare("SELECT name FROM sqlite_master WHERE name GLOB 'proactive_*'").all()).toEqual([]);
-    } finally {
-      db.close();
-    }
-  });
-
-  it('removes the retired file-memory schema', () => {
-    const db = openEmptyDb();
-    try {
-      ensureSchemaMetaTable(db);
-      db.exec(`
-        CREATE TABLE memory_files (file_id TEXT PRIMARY KEY);
-        CREATE TABLE memory_chunks (
-          chunk_id TEXT PRIMARY KEY,
-          file_id TEXT NOT NULL REFERENCES memory_files(file_id) ON DELETE CASCADE
-        );
-        CREATE TABLE memory_relations (relation_id TEXT PRIMARY KEY);
-        CREATE VIRTUAL TABLE memory_fts USING fts5(content);
-      `);
-      setSchemaVersion(db, 216);
-
-      applyPendingMigrations(db, { targetVersion: 217 });
-
-      expect(db.prepare(`SELECT name FROM sqlite_master
-        WHERE name IN ('memory_files', 'memory_chunks', 'memory_relations', 'memory_fts')`).all()).toEqual([]);
-      expect(readSchemaVersion(db)).toBe(217);
-      expect(db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
     } finally {
       db.close();
     }
@@ -648,43 +324,11 @@ describe('SQLite migrations', () => {
     }
   });
 
-  it('removes retired proactive contracts while preserving user rules', () => {
-    const db = openEmptyDb();
-    try {
-      installBaseline(db);
-      applyPendingMigrations(db, { targetVersion: 202 });
-      db.exec(`BEGIN;
-        INSERT INTO collaboration_rules (
-          rule_id, principal_id, category, status, priority, scope_type, scope_id,
-          conditions_json, current_revision_id, created_at, updated_at
-        ) VALUES ('rule', 'local-owner', 'proactive', 'active', 10, 'global', NULL, '{}', 'revision', 1, 1);
-        INSERT INTO collaboration_rule_revisions (
-          revision_id, rule_id, statement, created_by, created_at
-        ) VALUES ('revision', 'rule', 'Offer suggestions when useful.', 'user', 1);
-        COMMIT;
-        INSERT INTO context_snapshots (
-          snapshot_id, trace_id, owner_kind, owner_id, query, created_at
-        ) VALUES ('snapshot', 'trace', 'proactive_run', 'run', 'legacy', 1);`);
-
-      applyPendingMigrations(db);
-
-      expect(db.prepare("SELECT name FROM sqlite_master WHERE name = 'relationship_settings'").get()).toBeUndefined();
-      expect(db.prepare("SELECT category FROM collaboration_rules WHERE rule_id = 'rule'").get())
-        .toEqual({ category: 'initiative' });
-      expect(db.prepare("SELECT snapshot_id FROM context_snapshots WHERE snapshot_id = 'snapshot'").get()).toBeUndefined();
-      expect(db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
-    } finally {
-      db.close();
-    }
-  });
-
-  it('validateMigrationSequence rejects gaps regardless of the first retained version', () => {
-    expect(() =>
-      validateMigrationSequence([
-        { targetVersion: 166, filename: '166_a.sql', sql: '' },
-        { targetVersion: 168, filename: '168_b.sql', sql: '' },
-      ]),
-    ).toThrow(/sequence gap/);
+  it('rejects missing migration sequence entries', () => {
+    expect(() => validateMigrationSequence([
+      { targetVersion: 218, filename: '218_a.sql', sql: '' },
+      { targetVersion: 220, filename: '220_b.sql', sql: '' },
+    ])).toThrow(/sequence gap/);
   });
 
   it('applyPendingMigrations runs sequential SQL files and bumps schema_meta', () => {

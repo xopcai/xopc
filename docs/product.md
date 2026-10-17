@@ -128,7 +128,7 @@ On macOS, the experimental Work Discovery onboarding can request separate operat
 
 Ask your assistant to [follow a topic](./personal-agent-proactivity.md), keep [Task results and acceptance criteria](./projects-tasks-notes.md), or [schedule repeatable work](./automations.md). Authorize external sources through [Connectors](./connectors/index.md).
 
-Experimental [Scenes](./scenes.md) require an explicit preview switch. Check each guide for current availability and runtime requirements.
+Describe recurring work in chat and use Tasks or Automations to manage it. The separate Scenes feature has been removed.
 
 ## Product measure
 

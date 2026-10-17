@@ -150,7 +150,6 @@ import {
   startConnectorLearningCoordinator,
   type ConnectorLearningCoordinator,
 } from '../connectors/learning-coordinator.js';
-import { GatewaySceneHost } from './scenes/host.js';
 import { getSqliteDatabase } from '../storage/sqlite/transaction.js';
 import { TaskCollaborationDelivery } from '../tasks/task-collaboration-delivery.js';
 import { TaskMainUpdateDelivery } from '../tasks/task-main-update-delivery.js';
@@ -160,7 +159,6 @@ import { PersonalReplyComposer } from '../personal-agent/reply-composer.js';
 import { TaskMainUpdateDecisionService } from '../tasks/task-main-update-decision-service.js';
 import { selectTaskMainUpdateAttempt, submitAndConfirmTaskMainUpdate } from '../tasks/task-main-update-input.js';
 import { TaskMainUpdateExhaustedError } from '../tasks/task-main-update-retry.js';
-import type { SceneAccess } from '../scenes/httpServices.js';
 import { createProductDispatcher } from '../capabilities/runtime/product.js';
 import { prepareAppContext, checkAppContextAccess } from './service/app-context-access.js';
 import type { GatewayPrincipal } from './security/gateway-principal.js';
@@ -208,7 +206,6 @@ export class GatewayService {
   private notesService: NotesService;
   private extensionLoader: ExtensionLoader | null = null;
   private extensionMetadataSnapshot: import('../extensions/extension-metadata-snapshot.js').ExtensionMetadataSnapshot | null = null;
-  private sceneHost: GatewaySceneHost | null = null;
   private homeIntelligenceHost: HomeIntelligenceHost | null = null;
   private sessionIndex: SessionIndex;
   private running = false;
@@ -386,11 +383,6 @@ export class GatewayService {
   readonly localApps: LocalAppService;
   /** Immutable, conversation-scoped UI previews that do not create projects. */
   readonly chatPreviews: ChatPreviewService;
-
-  get sceneAccess(): SceneAccess | undefined {
-    return this.sceneHost ? { services: this.sceneHost.http,
-      principal: { ownerId: 'local-owner', workspaceId: this.workspacePath } } : undefined;
-  }
 
   constructor(private serviceConfig: GatewayServiceConfig = {}) {
     this.bus = new MessageBus();
@@ -749,7 +741,6 @@ export class GatewayService {
       extensionRegistry: this.extensionLoader?.getRegistry(),
       endpointTools: this.endpointTools,
       getAutomationService: () => this.automationService,
-      getSceneAccess: () => this.sceneAccess,
       getBrowserAutomationService: () => this.browserAutomations,
       emitBrowserEvent: (type, payload) => this.emit(type, payload),
       getNotesService: () => this.notesService,
@@ -846,13 +837,6 @@ export class GatewayService {
           });
         },
         runAgent: async (runId, conversationId, message) => {
-          for (const adapter of this.sceneHost?.http.activationAdapters.list() ?? []) {
-            if (adapter.executeTask && await adapter.executeTask(runId, conversationId)) {
-              // The shared AgentService owns the single transcript persistence listener.
-              this.ensureAgentService();
-              return;
-            }
-          }
           const clientMessageId = new TaskRunRepository().nextAgentInputClientMessageId(runId);
           const session = await this.sessionIndex.getSessionMetadata(conversationId);
           if (!session) throw new Error('Task session is unavailable');
@@ -872,13 +856,7 @@ export class GatewayService {
     if (!this.notificationService) {
       this.notificationService = new NotificationService({
         publish: (type, payload) => this.realtime.broker.publish('gateway', type, payload),
-        allowsNotification: notification => {
-          if (!allowsPersonalTaskNotification(notification)) return false;
-          if (notification.target.kind !== 'task') return true;
-          const taskId = notification.target.taskId;
-          return (this.sceneHost?.http.activationAdapters.list() ?? [])
-            .every(adapter => adapter.allowsTaskNotification?.(taskId) !== false);
-        },
+        allowsNotification: allowsPersonalTaskNotification,
       });
     }
     return this.notificationService;
@@ -1120,7 +1098,6 @@ export class GatewayService {
   private appContextDispatcher() {
     return createProductDispatcher(() => this.notesService, {
       getProjects: () => this.projects, getLocalApps: () => this.localApps,
-      getSceneAccess: () => this.sceneAccess,
     });
   }
 
@@ -1320,8 +1297,6 @@ export class GatewayService {
       await this.startRuntime();
     } catch (err) {
       await this.stop().catch((cleanupError) => log.error({ err: cleanupError }, 'Gateway startup cleanup failed'));
-      await this.sceneHost?.stop();
-      this.sceneHost = null;
       this.homeIntelligenceHost?.stop();
       this.homeIntelligenceHost = null;
       this.stopRealtimeLogBridge?.();
@@ -1381,13 +1356,6 @@ export class GatewayService {
     this.stopTaskResultQueued = onTaskResultQueued(() => this.taskResultDispatch());
     this.taskRunDispatchTimer = setInterval(() => this.dispatchTaskRuns(), 1_000);
     this.taskRunDispatchTimer.unref?.();
-    if (this.config.gateway?.scenes?.enabled === true) {
-      this.sceneHost = new GatewaySceneHost(getSqliteDatabase(), {
-        principal: { ownerId: 'local-owner', workspaceId: this.workspacePath },
-        config: () => this.config,
-        publish: (type, notification) => this.realtime.broker.publish('gateway', type, notification),
-      });
-    }
     this.startupTrace = createGatewayStartupTrace();
     this.readiness.markStarting(this.startTime);
     const trace = this.startupTrace;
@@ -1647,7 +1615,6 @@ export class GatewayService {
       trace.mark('service.started-awaiting-http');
     }
 
-    this.sceneHost?.start();
     this.homeIntelligenceHost.start();
     log.debug('Gateway service started');
   }
@@ -1785,8 +1752,6 @@ export class GatewayService {
     this.readiness.markStarting();
     this.endpointTools.close();
     await this.sideChats.disposeAll();
-    await this.sceneHost?.stop();
-    this.sceneHost = null;
     this.homeIntelligenceHost?.stop();
     this.homeIntelligenceHost = null;
     this.realtime.close();
@@ -2341,15 +2306,14 @@ export class GatewayService {
         this._workDiscovery?.abortDeletedProjectRuns(event.payload.projectId, runIds);
       }
     }
-    if (event.type === 'note.created' || event.type === 'note.updated' || event.type === 'note.deleted' || event.type === 'task.changed.v2' || event.type === 'task.deleted.v1' || event.type === 'project.changed' || event.type === 'project.created' || event.type === 'project.deleted' || event.type === 'scene.changed' || event.type === 'scene.created' || event.type === 'scene.deleted') {
+    if (event.type === 'note.created' || event.type === 'note.updated' || event.type === 'note.deleted' || event.type === 'task.changed.v2' || event.type === 'task.deleted.v1' || event.type === 'project.changed' || event.type === 'project.created' || event.type === 'project.deleted') {
       const note = event.type.startsWith('note.');
       const project = event.type.startsWith('project.');
-      const scene = event.type.startsWith('scene.');
       const payload = event.payload as Record<string, unknown>;
       if (typeof payload.sourceEventId === 'string') this.realtime.broker.publish(
-        note ? 'resources:notes' : project ? 'resources:projects' : scene ? 'resources:scenes' : 'resources:tasks', 'resource.changed', {
-          eventId: payload.sourceEventId, kind: note ? 'note' : project ? 'project' : scene ? 'scene' : 'task',
-          id: note ? payload.noteId : project ? payload.projectId : scene ? payload.sceneId : payload.taskId, revision: note || scene ? payload.revision : payload.version,
+        note ? 'resources:notes' : project ? 'resources:projects' : 'resources:tasks', 'resource.changed', {
+          eventId: payload.sourceEventId, kind: note ? 'note' : project ? 'project' : 'task',
+          id: note ? payload.noteId : project ? payload.projectId : payload.taskId, revision: note ? payload.revision : payload.version,
           operation: event.type === 'task.deleted.v1' || event.type.endsWith('.deleted') ? 'deleted' : event.type.endsWith('.created') ? 'created' : 'updated',
           ...(typeof payload.operationId === 'string' ? { operationId: payload.operationId } : {}),
         });

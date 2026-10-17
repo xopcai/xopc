@@ -74,7 +74,7 @@ export interface HomeOpportunityFeedbackInput {
   note?: string;
   scope?: Record<string, unknown>;
   snoozedUntil?: number;
-  resolution?: { kind: 'session' | 'task' | 'scene'; ref: string };
+  resolution?: { kind: 'session' | 'task'; ref: string };
 }
 
 interface GenerationRow {
@@ -107,7 +107,7 @@ interface HistoryRow extends OpportunityRow {
   feedback_kind: HomeFeedbackKind | null;
   task_phase: string | null;
   task_resolution: string | null;
-  resolution_kind: 'session' | 'task' | 'scene' | null;
+  resolution_kind: 'session' | 'task' | null;
   resolution_ref: string | null;
 }
 

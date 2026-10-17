@@ -432,9 +432,9 @@
       "sunday": "Sunday"
     },
     "experience": {
-      "scenes": "Start with a monitor",
-      "scenesDescription": "Choose what AI should monitor, then confirm the content and schedule.",
-      "discover": "Explore monitors",
+      "starterTemplates": "Start with an automation",
+      "starterTemplatesDescription": "Choose recurring work, then confirm the content and schedule.",
+      "discover": "Create automation",
       "custom": "Describe what you need",
       "settings": "Task settings",
       "executionIssues": "Execution issues",

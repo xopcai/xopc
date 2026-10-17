@@ -1,2 +1,0 @@
--- The runner initializes current scene storage and discards experimental history
--- in this version's transaction. No data import, file journal or backup is needed.

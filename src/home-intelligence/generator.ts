@@ -76,7 +76,7 @@ function buildSystemPrompt(locale: HomeContextSnapshot['locale']): string {
     'Omit optional properties projectId, estimatedMinutes, and degradedActionPrompt when they do not apply; do not use null.',
     'Every recommendation must cite existing evidence IDs. Do not invent facts, dates, capabilities, or completed work.',
     'meeting_prep requires calendar evidence. commitment_follow_up requires mail or communication evidence.',
-    'successfulPatterns are verified completed outcomes. Use automation_candidate only for repeatable work with a matching successful pattern, and copy that pattern outcome exactly; the system independently decides whether Scene or Automation is eligible.',
+    'successfulPatterns are verified completed outcomes. Use automation_candidate only for repeatable work with a matching successful pattern, and copy that pattern outcome exactly; the system independently decides whether an Automation draft is eligible.',
     'Prefer outcomes over feature promotion. Mention a connector or skill only when it materially enables the outcome.',
     'When useful work remains possible without a missing capability, provide degradedActionPrompt using only supplied evidence.',
     'External writes always require user confirmation.',

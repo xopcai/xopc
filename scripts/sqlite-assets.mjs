@@ -16,7 +16,7 @@ export function copySqliteAssets(source, destination, { clean = false } = {}) {
   mkdirSync(destination, { recursive: true });
   cpSync(join(source, 'schema.sql'), join(destination, 'schema.sql'));
   // Only Electron's asset-only directory may be cleaned: dist also contains JS.
-  for (const directory of ['migrations', 'schemas']) {
+  for (const directory of ['migrations']) {
     if (clean) rmSync(join(destination, directory), { recursive: true, force: true });
     copySqlTree(join(source, directory), join(destination, directory));
   }

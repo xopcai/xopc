@@ -17,7 +17,6 @@ import {
   loadAgentBrowserSettingsPage,
   loadComputerSettingsPage,
   loadAutomationsPage,
-  loadScenesPage,
   loadBrowserAutomationsPage,
   loadHomePage,
   loadTaskDetailPage,
@@ -50,7 +49,6 @@ const TracingSettingsPage = lazy(() => import('@/features/tracing/tracing-settin
 const UsageSettingsPage = lazy(() => loadUsagePage().then((m) => ({ default: m.UsageSettingsPage })));
 const AutomationsPage = lazy(() => loadAutomationsPage().then((m) => ({ default: m.AutomationsPage })));
 const BrowserAutomationsPage = lazy(() => loadBrowserAutomationsPage().then((m) => ({ default: m.BrowserAutomationsPage })));
-const ScenesPage = lazy(() => loadScenesPage().then((m) => ({ default: m.ScenesPage })));
 const HomePage = lazy(() => loadHomePage().then((m) => ({ default: m.HomePage })));
 const TaskDetailPage = lazy(() => loadTaskDetailPage().then((m) => ({ default: m.TaskDetailPage })));
 const ProjectsPage = lazy(() => loadProjectsPage().then((m) => ({ default: m.ProjectsPage })));
@@ -194,9 +192,6 @@ const router = createHashRouter([
           { path: CHAT_SESSION_ROUTE_PATH, element: <ChatPage /> },
         ],
       },
-      ...['scenes', 'scenes/inbox', 'scenes/new/:templateKey', 'scenes/:activationId'].map((path) => ({
-        path, element: <Suspense fallback={<SecondaryRouteFallback />}><ScenesPage /></Suspense>,
-      })),
       {
         path: 'automations',
         element: (

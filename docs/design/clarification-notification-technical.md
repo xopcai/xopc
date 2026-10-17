@@ -25,7 +25,6 @@
 | 持久化通知 | `src/notifications/store.ts` | dedupe_key 唯一，保存事件和移动设备 delivery；客户端可补拉通知、ack |
 | 桌面 | Web coordinator → Electron IPC → native Notification | 主进程当前无条件抑制主窗口 focused 时的通知；Electron 退出后不能靠 renderer 提醒 |
 | 在线 Web | coordinator → `showNotification` | 一般聊天当前在文档 visible + focused 时抑制，即使用户在其他对话或设置页 |
-| 离线 Web Push | `browserTransport.ts`、`src/gateway/scenes/browserNotifications.ts`、`web/public/notification-sw.js` | 已有 VAPID、订阅和持久投递，但 host 绑定场景授权，SW push 路径白名单也仅允许 scenes，不能直接用于聊天 |
 | 鸿蒙 | NotificationService → `sendHarmonyPush` → notificationNavigation | 已有设备注册、系统推送和 gateway 校验的点击路由；需要接入新事件，现有普通 Push TTL 是 24 小时 |
 | iOS / Android | 服务端 platform 枚举包含两端，但 `NotificationService.send` 只投递 harmonyos | 尚不能承诺后台系统通知；本次检索未找到对应 APNs/FCM 产品通知注册链路 |
 

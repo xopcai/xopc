@@ -55,7 +55,7 @@ function isAuthorizedTopic(topic: string, scopes: readonly GatewayScope[]): bool
   if (topic === 'resources:notes' || topic === 'resources:projects') return hasGatewayScope(scopes, 'workspace.read');
   if (topic === 'resources:tasks') return hasGatewayScope(scopes, 'tasks.read');
   if (topic === 'resources:automations') return hasGatewayScope(scopes, 'automations.read');
-  if (topic === 'resources:scenes' || topic === 'resources:local_apps') return hasGatewayScope(scopes, 'gateway.admin');
+  if (topic === 'resources:local_apps') return hasGatewayScope(scopes, 'gateway.admin');
   if (topic === 'gateway') return hasGatewayScope(scopes, 'gateway.status');
   if (topic === 'logs') return hasGatewayScope(scopes, 'gateway.admin');
   if (topic === 'sessions' || topic.startsWith('session:')) {

@@ -7,7 +7,7 @@ Load this manual before a non-trivial mutation.
 
 \`\`\`json
 {
-  "mode": "agent | scene | project | automation | note | task | task_run | chat_preview | local_app | settings",
+  "mode": "agent | project | automation | note | task | task_run | chat_preview | local_app | settings",
   "command": "...",
   "args": {},
   "dryRun": false
@@ -17,19 +17,11 @@ Load this manual before a non-trivial mutation.
 Send one object command per call. Inspect the returned JSON \`ok\` field; a tool call can
 complete successfully while the product command returns \`ok: false\`.
 
-## Scene delegation
-
-Use mode \`scene\` only after the user explicitly delegates recurring or future work. Inspect
-\`list\` before \`start\`; configure an existing matching scene instead of creating a duplicate.
-Confirm the goal, source scope, timing, promised result, and read-only action boundary in ordinary
-language. A scene prepares suggestions or drafts and never sends mail or performs external writes.
-
 ## Object routing
 
 | Object | Tool |
 | --- | --- |
 | Agent definition and default Agent | \`xopc_use\` mode \`agent\` |
-| Scene and scene result | \`xopc_use\` mode \`scene\` |
 | Project, milestone, project update | \`xopc_use\` mode \`project\` |
 | Automation | \`xopc_use\` mode \`automation\` |
 | Task intent and lifecycle | \`xopc_use\` mode \`task\` |
@@ -89,45 +81,6 @@ also removes it. Use \`dryRun: true\` to validate the exact same input contract 
 Timestamps are Unix epoch milliseconds. Array fields are arrays of strings. Omission
 preserves a patchable field; an empty array intentionally clears it. Prefer explicit
 \`projectId\`, \`taskId\`, \`runId\`, \`noteId\`, and \`localAppId\` fields over \`id\`.
-
-## Scenes
-
-Commands: \`templates\`, \`list\`, \`get\`, \`mail_accounts\`, \`mail_search\`,
-\`mail_sources\`, \`read_notes\`, \`preflight\`, \`start\`, \`configure\`, \`transition\`,
-\`check\`, \`notes\`, \`work_item\`, \`update_work_item\`, \`schedule\`, \`results\`,
-\`feedback\`, \`mark_read\`, \`diagnostics\`, \`get_preferences\`, and \`set_preferences\`.
-
-Templates are installed capabilities, not a fixed scenario list. Discover them instead of guessing
-keys, versions, context providers, or execution adapters. The core read-only start protocol applies
-to templates whose execution kind is \`agent\`; adapter-backed templates expose their own setup in
-the Monitors UI. Timestamps are Unix epoch milliseconds. Use \`preflight\` or \`dryRun: true\` before
-\`start\` when account or model readiness is uncertain.
-
-### Safe start protocol
-
-1. Call \`list\` and reuse a matching activation when one exists.
-2. Call \`templates\`; for mail, call \`mail_accounts\` and \`mail_search\` with the exact account.
-3. Explain the selected source and timing to the user before creating the scene.
-4. Call \`preflight\` with the complete start input.
-5. Call \`start\` with the same input and a stable \`requestId\` for retry safety.
-6. Add notes, a work item, or a schedule as required; then call \`get\` to verify the state.
-
-Family plans use scope \`{ "kind": "personal" }\` and permissions with only
-\`user_notes\`. Mail follow-up uses one selected mail source in an objects scope and exactly one
-authorized account. Never broaden either scope to make preflight pass.
-
-### Mutations and results
-
-Read the current activation \`revision\` before \`configure\` or \`transition\`. Read the current
-notes, schedule, work-item, or feedback revision before changing that object. On a conflict,
-read again and reconsider; do not retry with a guessed revision.
-
-\`check\` queues work and does not mean a result already exists. Use a stable \`requestId\` and
-inspect \`results\` later. \`no_change\` intentionally creates no user-facing draft. A returned
-draft is not a sent message. Use \`diagnostics\` for source, model, queue, or notification failures.
-
-Scene preferences control checks and reminders globally for the current principal. Read them
-with \`get_preferences\` before \`set_preferences\`; preserve fields the user did not ask to change.
 
 ## Projects
 

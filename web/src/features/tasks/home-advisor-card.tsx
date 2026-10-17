@@ -35,8 +35,6 @@ interface HomeAdvisorCopy {
   setupHint: string;
   configure: string;
   degradedStart: string;
-  sceneHint: string;
-  sceneAction: string;
   automationHint: string;
   automationAction: string;
 }
@@ -83,13 +81,13 @@ function OpportunityBody({
       <h3 className="mt-3 text-xl font-semibold leading-7 tracking-tight text-fg">{opportunity.title}</h3>
       <p className="mt-2 text-sm leading-6 text-fg-muted">{opportunity.outcome}</p>
       <p className="mt-4 text-sm leading-6 text-fg-muted"><span className="font-medium text-fg">{copy.why}：</span>{opportunity.rationale}</p>
-      {opportunity.continuation ? (
+      {opportunity.continuation?.kind === 'automation' ? (
         <div className="mt-4 flex flex-col gap-3 rounded-xl border border-edge bg-surface-subtle p-3 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-xs leading-5 text-fg-muted">
-            {opportunity.continuation.kind === 'automation' ? copy.automationHint : copy.sceneHint}
+            {copy.automationHint}
           </p>
           <a href={`#${opportunity.continuation.href}`} className="inline-flex min-h-11 shrink-0 items-center rounded-lg px-3 text-xs font-medium text-accent hover:bg-accent-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
-            {opportunity.continuation.kind === 'automation' ? copy.automationAction : copy.sceneAction}
+            {copy.automationAction}
           </a>
         </div>
       ) : null}

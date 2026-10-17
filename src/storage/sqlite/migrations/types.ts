@@ -10,6 +10,4 @@ export type ApplyMigrationsOptions = {
   migrationsDir?: string;
   /** Target schema version. Defaults to {@link XOPC_DB_SCHEMA_VERSION}. */
   targetVersion?: number;
-  /** Database file path used for mandatory cutover backups. */
-  databasePath?: string;
 };

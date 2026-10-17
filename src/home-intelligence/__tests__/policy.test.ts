@@ -201,7 +201,7 @@ describe('HomeAdvicePolicy', () => {
       .toEqual({ state: 'quiet', reason: 'insufficient_value' });
   });
 
-  it('suggests a Scene only after the same automation pattern previously succeeded', () => {
+  it('does not suggest a retired Scene after one successful automation pattern', () => {
     const experienced = new HomeAdvicePolicy(
       resolveCapabilities,
       new Set(),
@@ -211,10 +211,8 @@ describe('HomeAdvicePolicy', () => {
       state: 'ready',
       candidates: [candidate({ kind: 'automation_candidate' })],
     }, now);
-    expect(result).toMatchObject({
-      state: 'ready',
-      opportunities: [{ continuation: { kind: 'scene', reason: 'prior_success', href: '/scenes' } }],
-    });
+    expect(result.state).toBe('ready');
+    expect(result.opportunities?.[0].continuation).toBeUndefined();
   });
 
   it('offers an Automation draft only after the same pattern succeeded twice', () => {

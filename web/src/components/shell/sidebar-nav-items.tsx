@@ -2,7 +2,6 @@ import * as Popover from '@radix-ui/react-popover';
 import {
   Box,
   Cable,
-  CircleDotDashed,
   FolderKanban,
   GitBranch,
   Home,
@@ -55,7 +54,6 @@ const ALL_SECTION_IDS = [
   'automation-browser',
   'apps-library',
   'capabilities-extensions',
-  'automation-scenes',
 ] as const satisfies readonly ProductSectionId[];
 
 type SidebarSectionId = typeof ALL_SECTION_IDS[number];
@@ -65,7 +63,6 @@ const SECTION_GROUP: Record<SidebarSectionId, ProductDomainId> = {
   'work-projects': 'work',
   'work-notes': 'work',
   'apps-library': 'apps',
-  'automation-scenes': 'automation',
   'automation-triggers': 'automation',
   'automation-workflows': 'automation',
   'automation-browser': 'automation',
@@ -81,7 +78,6 @@ const SECTION_ICONS = {
   'work-projects': FolderKanban,
   'work-notes': NotebookText,
   'apps-library': Box,
-  'automation-scenes': CircleDotDashed,
   'automation-triggers': Zap,
   'automation-workflows': GitBranch,
   'automation-browser': MonitorPlay,

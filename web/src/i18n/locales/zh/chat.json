@@ -39,7 +39,6 @@
         "workflow_definition": "工作流",
         "workflow_run": "工作流运行",
         "automation": "自动化",
-        "scene": "智能关注",
         "local_app": "应用",
         "chat_preview": "对话预览",
         "file": "文件",
@@ -344,7 +343,6 @@
       },
       "objects": {
         "context": "上下文",
-        "scene": "智能关注",
         "chatPreview": "对话预览",
         "productItem": "产品对象",
         "project": "项目",

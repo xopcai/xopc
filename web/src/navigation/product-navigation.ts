@@ -4,7 +4,6 @@ export type ProductSectionId =
   | 'work-overview'
   | 'work-projects'
   | 'work-notes'
-  | 'automation-scenes'
   | 'automation-triggers'
   | 'automation-workflows'
   | 'automation-browser'
@@ -35,7 +34,6 @@ const workSections = [
 ] as const satisfies readonly ProductSectionDefinition[];
 
 const automationSections = [
-  { id: 'automation-scenes', domain: 'automation', path: '/scenes' },
   { id: 'automation-triggers', domain: 'automation', path: '/automations' },
   { id: 'automation-workflows', domain: 'automation', path: '/workflows' },
   { id: 'automation-browser', domain: 'automation', path: '/browser-automations' },
@@ -64,7 +62,7 @@ const meSections = [
 
 export const PRODUCT_DOMAINS = [
   { id: 'work', path: '/', sections: workSections },
-  { id: 'automation', path: '/scenes', sections: automationSections },
+  { id: 'automation', path: '/automations', sections: automationSections },
   { id: 'capabilities', path: '/capabilities/skills', sections: capabilitySections },
   { id: 'apps', path: '/local-apps', sections: appSections },
   { id: 'me', path: '/user-model', sections: meSections },
@@ -78,7 +76,7 @@ export function productDomainAtPath(pathname: string): ProductDomainId | null {
   if (pathname === '/' || isPath(pathname, '/chat') || isPath(pathname, '/tasks') || isPath(pathname, '/projects') || isPath(pathname, '/notes')) {
     return 'work';
   }
-  if (isPath(pathname, '/automations') || isPath(pathname, '/scenes') || isPath(pathname, '/workflows') || isPath(pathname, '/browser-automations')) {
+  if (isPath(pathname, '/automations') || isPath(pathname, '/workflows') || isPath(pathname, '/browser-automations')) {
     return 'automation';
   }
   if (isPath(pathname, '/capabilities')) {
@@ -98,7 +96,6 @@ export function productSectionAtLocation(pathname: string, _search = ''): Produc
   if (isPath(pathname, '/projects')) return 'work-projects';
   if (isPath(pathname, '/notes')) return 'work-notes';
   if (isPath(pathname, '/automations')) return 'automation-triggers';
-  if (isPath(pathname, '/scenes')) return 'automation-scenes';
   if (isPath(pathname, '/workflows')) return 'automation-workflows';
   if (isPath(pathname, '/browser-automations')) return 'automation-browser';
   if (isPath(pathname, '/local-apps') || isPath(pathname, '/open')) return 'apps-library';

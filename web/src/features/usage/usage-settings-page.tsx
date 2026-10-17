@@ -134,7 +134,6 @@ export function UsageSettingsPage() {
     'usage.reason.sessionSearch': t.reasons.sessionSearch,
     'usage.reason.noteGeneration': t.reasons.noteGeneration,
     'usage.reason.automationDraft': t.reasons.automationDraft,
-    'usage.reason.sceneExecution': t.reasons.sceneExecution,
     'usage.reason.taskPlanning': t.reasons.taskPlanning,
     'usage.reason.taskJudging': t.reasons.taskJudging,
     'usage.reason.voiceSummary': t.reasons.voiceSummary,
