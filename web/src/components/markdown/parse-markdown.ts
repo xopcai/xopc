@@ -28,47 +28,71 @@ hljs.registerAliases(['js', 'jsx'], { languageName: 'javascript' });
 hljs.registerAliases(['ts', 'tsx'], { languageName: 'typescript' });
 hljs.registerAliases(['sh', 'shell', 'zsh'], { languageName: 'bash' });
 
-const markdownParser = new Marked(
-  appLinksExtension,
-  markedMath,
-  markedHighlight({
-    emptyLangClass: 'hljs',
-    langPrefix: 'hljs language-',
-    highlight(code, lang) {
-      if (lang?.trim() === 'math') return code;
-      const safeLang = (lang ?? '').trim() || 'plaintext';
-      const language = hljs.getLanguage(safeLang) ? safeLang : 'plaintext';
-      return hljs.highlight(code, { language }).value;
-    },
-  }),
-  {
-    renderer: {
-      code(token) {
-        if (token.lang?.trim() !== 'math') return false;
-        const source = readMathFenceAt(token.raw);
-        return source ? mathPlaceholder(source) : false;
+function createMarkdownParser(renderChart?: (token: Tokens.Code) => string): Marked {
+  return new Marked(
+    appLinksExtension,
+    markedMath,
+    markedHighlight({
+      emptyLangClass: 'hljs',
+      langPrefix: 'hljs language-',
+      highlight(code, lang) {
+        if (lang?.trim() === 'math' || lang?.trim() === 'chart') return code;
+        const safeLang = (lang ?? '').trim() || 'plaintext';
+        const language = hljs.getLanguage(safeLang) ? safeLang : 'plaintext';
+        return hljs.highlight(code, { language }).value;
       },
-      html({ text }) {
-        return escapeHtml(text);
-      },
-    },
-    extensions: [
-      {
-        name: 'punctuationBoundStrong',
-        level: 'inline',
-        start(src) {
-          const index = src.indexOf('**');
-          return index >= 0 ? index : undefined;
+    }),
+    {
+      renderer: {
+        code(token) {
+          if (renderChart && token.lang?.trim().split(/\s+/)[0] === 'chart') return renderChart(token);
+          if (token.lang?.trim() !== 'math') return false;
+          const source = readMathFenceAt(token.raw);
+          return source ? mathPlaceholder(source) : false;
         },
-        tokenizer(src) {
-          return tokenizePunctuationBoundStrong(src, (text) =>
-            this.lexer.inlineTokens(text),
-          );
+        html({ text }) {
+          return escapeHtml(text);
         },
       },
-    ],
-  },
-);
+      extensions: [
+        {
+          name: 'punctuationBoundStrong',
+          level: 'inline',
+          start(src) {
+            const index = src.indexOf('**');
+            return index >= 0 ? index : undefined;
+          },
+          tokenizer(src) {
+            return tokenizePunctuationBoundStrong(src, (text) =>
+              this.lexer.inlineTokens(text),
+            );
+          },
+        },
+      ],
+    },
+  );
+}
+
+const markdownParser = createMarkdownParser();
+
+export type MarkdownChartBlock = { source: string; closed: boolean };
+
+/** Collect chart data separately from sanitized HTML; never interpolate model JSON into markup. */
+export function parseMarkdownWithCharts(
+  text: string,
+  overrides?: Partial<Omit<MarkedOptions, 'async'>>,
+): { html: string; charts: MarkdownChartBlock[] } {
+  const charts: MarkdownChartBlock[] = [];
+  const parser = createMarkdownParser(token => {
+    const lines = token.raw.trimEnd().split(/\r?\n/);
+    const opening = lines[0]?.match(/^ {0,3}(`{3,}|~{3,})[ \t]*chart(?:\s|$)/)?.[1];
+    const closing = lines.at(-1)?.match(/^ {0,3}(`{3,}|~{3,})[ \t]*$/)?.[1];
+    const closed = Boolean(lines.length > 1 && opening && closing && opening[0] === closing[0] && closing.length >= opening.length);
+    const index = charts.push({ source: token.text, closed }) - 1;
+    return `<div data-md-chart="${index}"></div>`;
+  });
+  return { html: parser.parse(text, { ...MARKED_OPTIONS, ...overrides, async: false }), charts };
+}
 
 function escapeHtml(text: string): string {
   return text
