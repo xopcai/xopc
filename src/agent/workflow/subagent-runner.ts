@@ -31,7 +31,7 @@ import {
 } from '../tools/delegate-tool.js';
 import type { ToolExecutorConfig } from '../tools/executor.js';
 import { resolveDelegationTools, protectDelegatedTool, DELEGATION_TOOL_CAPABILITIES } from '../tools/delegation-policy.js';
-import { createDelegationParentPolicy } from '../tools/delegation-parent-policy.js';
+import { createNoninteractiveToolPolicy } from '../tools/noninteractive-tool-policy.js';
 
 import {
   createStructuredOutputTool,
@@ -93,8 +93,8 @@ export class DelegateSubagentRunner implements SubagentRunner {
       agentId: this.deps.agentId,
       getConfig: this.deps.getConfig,
       toolExecutorConfig: this.deps.toolExecutorConfig,
-      authorizeToolCall: createDelegationParentPolicy({ getConfig: this.deps.getConfig,
-        conversationId: opts.sessionMetadata?.parentConversationId, agentId: this.deps.agentId }).beforeToolCall,
+      authorizeToolCall: createNoninteractiveToolPolicy({ getConfig: this.deps.getConfig,
+        agentId: this.deps.agentId }).beforeToolCall,
       buildChildTools: (childOpts) => {
         const candidates = this.deps.buildChildTools({ ...childOpts, agentId: this.deps.agentId ?? childOpts.agentId });
         const access = resolveDelegationTools(candidates.map(tool => tool.name), 'custom',

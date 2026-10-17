@@ -16,7 +16,6 @@ import { resolveEffectiveAgentConfigForAgent } from '../../config/agent-profile.
 import type { AgentTool } from '@earendil-works/pi-agent-core';
 import type { Model, Api } from '@earendil-works/pi-ai';
 import { BROWSER_CONTROL_ENDPOINT_TOOL_NAME } from '@xopcai/browser-control-contract';
-import { resolveEffectiveAgentConfigForSession } from '../../config/agent-profile.js';
 import type { Config } from '../../config/schema.js';
 import { PERSONAL_TOOL_DESCRIPTIONS } from '../../personal-agent/policy.js';
 import type { EndpointToolRuntime } from '../../endpoint-tools/index.js';
@@ -29,7 +28,6 @@ import {
 } from '../embedded/execution-context.js';
 import {
   createDefaultExternalToolGatewayTools,
-  EXTERNAL_TOOL_NAMES,
 } from '../external-tools/index.js';
 import type { MessageBus } from '../../infra/bus/index.js';
 import {
@@ -108,7 +106,7 @@ import { createComputerUseTool } from './computer-use-tool.js';
 import { createReviewWorkspaceTool } from './review-workspace.js';
 import { createLanguageDiagnosticsTool } from './language-diagnostics.js';
 import { createDelegateTool } from './delegate-tool.js';
-import { createDelegationParentPolicy } from './delegation-parent-policy.js';
+import { createNoninteractiveToolPolicy } from './noninteractive-tool-policy.js';
 import { createWorkflowTool } from './workflow-tool.js';
 import { createWorkflowCatalog } from '../workflow/catalog.js';
 import type { AutomationService } from '../../automations/index.js';
@@ -395,7 +393,9 @@ export class AgentToolsFactory {
       agentId: options?.agentId ?? (cfg ? resolveDefaultAgentId() : 'main'),
     });
     const agentId = options?.agentId;
-    const resolvedAgentId = agentId ?? (cfg ? resolveDefaultAgentId() : 'main');
+    const resolvedAgentId = agentId
+      ?? (executionConversationId ? getSessionMetadata(executionConversationId)?.agentId : undefined)
+      ?? (cfg ? resolveDefaultAgentId() : 'main');
     const personalExecution = executionConversationId ? personalRequestForExecution(executionConversationId) : undefined;
     const personalExecutionMarker = executionConversationId && isXopcDatabaseOpen()
       ? getSessionMetadata(executionConversationId)?.customData?.personalReadRequestId : undefined;
@@ -425,7 +425,7 @@ export class AgentToolsFactory {
     };
     const getCommandIsolation = () => {
       const config = this.deps.getConfig?.();
-      return config ? (currentConversationId() ? resolveEffectiveAgentConfigForSession(currentConversationId()) : resolveEffectiveAgentConfigForAgent(resolvedAgentId)).config.runtime.commandIsolation : undefined;
+      return config ? resolveEffectiveAgentConfigForAgent(resolvedAgentId).config.runtime.commandIsolation : undefined;
     };
 
     const externalTools = createDefaultExternalToolGatewayTools({
@@ -751,7 +751,7 @@ export class AgentToolsFactory {
             createDelegateTool({
               workspace,
               getParentTools: () => options?.getParentTools?.() ?? filterToolsByDisabledSet(core, disabled),
-              createParentPolicy: options?.createDelegationPolicy ?? (() => createDelegationParentPolicy({
+              createParentPolicy: options?.createDelegationPolicy ?? (() => createNoninteractiveToolPolicy({
                 getConfig: () => this.deps.getConfig?.(), conversationId: currentConversationId(), agentId: resolvedAgentId,
               })),
               getSubagentModel: () => {
@@ -773,6 +773,9 @@ export class AgentToolsFactory {
               // Injected so `child-agent-factory.ts` does not need to import
               // `AgentToolsFactory` directly (which would form a cycle).
               buildChildTools: (childOpts) => {
+                const childAgentId = childOpts.agentId ?? resolvedAgentId;
+                const childConfig = childOpts.getConfig()
+                  ? resolveEffectiveAgentConfigForAgent(childAgentId).config : undefined;
                 const childFactory = new AgentToolsFactory({
                   workspace: childOpts.workspace,
                   bus: childOpts.bus,
@@ -780,22 +783,18 @@ export class AgentToolsFactory {
                   getConfig: childOpts.getConfig,
                   getPrimaryModel: () => childOpts.model,
                   endpointTools: childOpts.endpointTools ?? this.deps.endpointTools,
-                  toolExecutorConfig: childOpts.toolExecutorConfig,
+                  toolExecutorConfig: { ...childOpts.toolExecutorConfig,
+                    resolveTimeoutMs: name => childOpts.getConfig()
+                      ? resolveEffectiveAgentConfigForAgent(childAgentId).config.tools[name]?.timeoutMs : undefined },
                 });
                 return childFactory.createAllTools({
                   workspace: childOpts.workspace,
                   getPrimaryModel: () => childOpts.model,
-                  agentId: options?.agentId ?? childOpts.agentId,
-                  conversationId: childOpts.browserConversationId,
-                  toolAllowlist: options?.toolAllowlist,
-                  disabledTools: new Set([
-                    ...(disabled ?? []),
-                    EXTERNAL_TOOL_NAMES.search,
-                    EXTERNAL_TOOL_NAMES.describe,
-                    EXTERNAL_TOOL_NAMES.execute,
-                    EXTERNAL_TOOL_NAMES.requireConnection,
-                    EXTERNAL_TOOL_NAMES.updateConnectionObjective,
-                  ]),
+                  agentId: childAgentId,
+                  conversationId: childOpts.conversationId,
+                  toolAllowlist: childConfig?.toolAllowlist,
+                  disabledTools: new Set(Object.entries(childConfig?.tools ?? {})
+                    .filter(([, policy]) => policy.mode === 'deny').map(([name]) => name)),
                 });
               },
             }),
@@ -808,9 +807,7 @@ export class AgentToolsFactory {
     if (['read_file', 'grep', 'exec_command', 'knowledge_search', 'knowledge_get', 'web_search', 'web_fetch', 'xopc_tool_execute'].some(name => !disabled?.has(name))) {
       const dataTools = () => {
         const config = this.deps.getConfig?.();
-        const policies = config ? (currentConversationId()
-          ? resolveEffectiveAgentConfigForSession(currentConversationId())
-          : resolveEffectiveAgentConfigForAgent(resolvedAgentId)).config.tools : undefined;
+        const policies = config ? resolveEffectiveAgentConfigForAgent(resolvedAgentId).config.tools : undefined;
         if (policies?.data_batch?.mode === 'deny') return [];
         return filterToolsByDisabledSet(core, disabled)
           .filter(tool => (!allowed || allowed.has(tool.name)) && policies?.[tool.name]?.mode !== 'deny');

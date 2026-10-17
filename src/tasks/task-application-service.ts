@@ -104,7 +104,7 @@ export class TaskApplicationService {
         ownerId: input.ownerId,
         delegateAgentId: input.delegateAgentId,
         source: 'api',
-        locale: input.locale,
+        locale: resolveTaskLocale({ locale: input.locale, title: input.title, contract: input.contract }),
         ...input.contract,
         createdBy: actor,
       });

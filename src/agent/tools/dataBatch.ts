@@ -9,6 +9,10 @@ import { createLogger } from '../../utils/logger.js';
 const executionTools = new AsyncLocalStorage<ReadonlySet<string>>();
 const log = createLogger('DataAcquisition');
 
+export function withoutDataToolPermissions<T>(run: () => T): T {
+  return executionTools.exit(run);
+}
+
 export function withDataToolPermissions<T>(names: ReadonlySet<string>, run: () => T): T {
   const parent = executionTools.getStore();
   const allowed = parent ? new Set([...names].filter(name => parent.has(name))) : names;
