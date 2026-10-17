@@ -39,9 +39,9 @@ it('uses the renamed personal identity after an authenticated profile update whi
     new AgentCatalogRepository().ensureInitialized();
     const record = await createOrResumePersonalAgent(service, 'local-owner', 'test/fast',
       async () => [{ id: 'test/fast', name: 'Fast' }]);
-    expect(record.displayName).toBe('Loopi');
+    expect(record.displayName).toBe('Ada');
     appendTranscriptEntry(record.conversationId, { role: 'user', content: '你叫什么名字？' });
-    appendTranscriptEntry(record.conversationId, { role: 'assistant', content: '我是 Loopi。' });
+    appendTranscriptEntry(record.conversationId, { role: 'assistant', content: '我是 Ada。' });
     if (!server.listening) await once(server, 'listening');
     const address = server.address();
     if (!address || typeof address === 'string') throw new Error('Missing Gateway address');
@@ -60,13 +60,13 @@ it('uses the renamed personal identity after an authenticated profile update whi
     const prompt = buildSystemPrompt(dir, {
       agentProfile: profile.config.profile,
       customInstructions: profile.customInstructions,
-      contextFiles: [{ path: 'profile/SOUL.md', content: 'Your name is Loopi.' }],
+      contextFiles: [{ path: 'profile/SOUL.md', content: 'Your name is Ada.' }],
     });
     expect(prompt).toContain('You are "阿沐".');
-    expect(prompt).not.toContain('You are "Loopi".');
+    expect(prompt).not.toContain('You are "Ada".');
     expect(prompt).toContain('It replaces conflicting Agent settings in earlier conversation, summaries, memory, and profile Markdown');
     expect(loadLlmMessagesForSession(record.conversationId)).toEqual(expect.arrayContaining([
-      expect.objectContaining({ role: 'assistant', content: '我是 Loopi。' }),
+      expect.objectContaining({ role: 'assistant', content: '我是 Ada。' }),
     ]));
   } finally {
     server.closeAllConnections();

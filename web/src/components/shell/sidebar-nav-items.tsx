@@ -164,7 +164,7 @@ export function SidebarNavItems({
         to="/personal"
         aria-current={pathname === '/personal' ? 'page' : undefined}
         className={cn('relative', rowClass(collapsed, pathname === '/personal'))}
-        title={personal?.payload?.displayName || 'Loopi'}
+        title={personal?.payload?.displayName || 'Ada'}
         onMouseEnter={() => preloadRouteForPath('/personal')}
         onFocus={() => preloadRouteForPath('/personal')}
         onClick={() => {
@@ -175,7 +175,7 @@ export function SidebarNavItems({
         <span className="flex size-5 shrink-0 items-center justify-center" aria-hidden>
           <PersonalAvatar appearance={personal?.payload?.appearance ?? 'loopi'} agentId={personal?.payload?.agentId} className="size-5" />
         </span>
-        {!collapsed && <span className="min-w-0 flex-1 truncate">{personal?.payload?.displayName || 'Loopi'}</span>}
+        {!collapsed && <span className="min-w-0 flex-1 truncate">{personal?.payload?.displayName || 'Ada'}</span>}
         {personalUnreadCount > 0 && <span
           aria-label={language === 'zh' ? `${personalUnreadCount} 条未读消息` : `${personalUnreadCount} unread messages`}
           className={cn('shrink-0 rounded-full bg-accent/15 px-1.5 text-center text-[10px] font-semibold leading-5 tabular-nums text-accent',

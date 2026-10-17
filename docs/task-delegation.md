@@ -1,10 +1,10 @@
 # Delegate a task and receive the result
 
-Give Loopi a concrete result to prepare, keep talking while it works, and return to the delivered file or task record. Use this when execution should survive beyond a single reply.
+Give Ada a concrete result to prepare, keep talking while it works, and return to the delivered file or task record. Use this when execution should survive beyond a single reply.
 
 ## Before you begin
 
-Set up [Loopi](./personal-ai.md), keep the Gateway running, and make the required files and tools available. Connecting a model does not grant access to every folder or external service.
+Set up [Ada](./personal-ai.md), keep the Gateway running, and make the required files and tools available. Connecting a model does not grant access to every folder or external service.
 
 The selected Agent executes a Task using its own effective configuration: global defaults plus that Agent's settings. The originating Agent's tools, model, skills, instructions, execution environment and run budget are not inherited. Task goals, source material and explicit constraints travel with the brief; account and resource access still require authorization. Retries and resumed executions follow the same rule.
 
