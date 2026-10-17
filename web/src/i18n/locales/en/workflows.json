@@ -1,5 +1,6 @@
 {
   "workflows": {
+    "allAgents": "All assistants",
     "title": "Workflows",
     "runDetailsTitle": "Run details",
     "backToRuns": "Back to workflow runs",

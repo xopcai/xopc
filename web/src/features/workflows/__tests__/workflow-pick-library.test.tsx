@@ -2,12 +2,14 @@
 
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 
 import { BUILTIN_WORKFLOWS } from '../../../../../src/agent/workflow/builtins/index';
+import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
 
-import type { WorkflowRunSummary } from '../workflow-api';
+import type { JsonSchema, WorkflowRunSummary } from '../workflow-api';
 import { WorkflowPickLibrary } from '../workflow-pick-library';
 
 const audit = BUILTIN_WORKFLOWS.find((definition) => definition.name === 'audit_repo')!;
@@ -60,5 +62,37 @@ describe('workflow library language switching', () => {
       container.remove();
       useLocaleStore.setState({ language: originalLanguage });
     }
+  });
+});
+
+
+describe('workflow library input form badge', () => {
+  const cases: Array<{ name: string; schema?: JsonSchema; visible: boolean }> = [
+    { name: 'no input schema', visible: false },
+    { name: 'empty schema', schema: {}, visible: false },
+    { name: 'open object without fields', schema: { type: 'object', additionalProperties: true }, visible: false },
+    { name: 'empty properties', schema: { type: 'object', properties: {} }, visible: false },
+    { name: 'non-object schema', schema: { type: 'array', properties: { query: { type: 'string' } } }, visible: false },
+    { name: 'required text field', schema: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] }, visible: true },
+    { name: 'optional numeric field', schema: { type: 'object', properties: { count: { type: 'number' } } }, visible: true },
+  ];
+
+  it.each(cases)('$name: badge visible = $visible', ({ schema, visible }) => {
+    for (const language of ['en', 'zh'] as const) {
+      const html = renderToStaticMarkup(<WorkflowPickLibrary
+        definitions={[{ ...audit, inputSchema: schema }]} runs={[]} language={language}
+        onPick={() => {}} onDetail={() => {}} onEdit={() => {}}
+      />);
+      expect(html.includes(messages(language).workflows.inputSchemaBadge)).toBe(visible);
+    }
+  });
+
+  it('does not label any of the 16 builtin open input declarations as a form', () => {
+    const html = renderToStaticMarkup(<WorkflowPickLibrary
+      definitions={[...BUILTIN_WORKFLOWS]} runs={[]} language="zh"
+      onPick={() => {}} onDetail={() => {}} onEdit={() => {}}
+    />);
+    expect(html.match(/<article /g)).toHaveLength(16);
+    expect(html).not.toContain(messages('zh').workflows.inputSchemaBadge);
   });
 });

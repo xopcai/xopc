@@ -2,7 +2,7 @@ import { MarkdownView } from '@/components/markdown/markdown-view';
 import * as Dialog from '@radix-ui/react-dialog';
 import * as Popover from '@radix-ui/react-popover';
 import { TaskChangedEventSchema, TaskDeletedEventSchema, type ProjectOperatingView, type ProjectTaskCard, type TaskCommand, type TaskPhase } from '@xopcai/gateway-contract';
-import { AlertCircle, Archive, ArrowLeft, Check, ChevronDown, Clock, Columns3, Copy, File, Folder, FolderPlus, GitBranch, History, LayoutDashboard, MessageSquarePlus, Pin, PinOff, Plus, RotateCcw, Save, Search, Settings, Sparkles, Trash2, X, Zap, type LucideIcon } from 'lucide-react';
+import { AlertCircle, Archive, ArrowLeft, Check, ChevronDown, Clock, Columns3, Copy, File, Folder, FolderPlus, History, LayoutDashboard, MessageSquarePlus, Pin, PinOff, Plus, RotateCcw, Save, Search, Settings, Sparkles, Trash2, X, Zap, type LucideIcon } from 'lucide-react';
 import { type CSSProperties, type FormEvent, type MouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
@@ -51,6 +51,7 @@ import {
   type ProjectStatus,
   type ProjectWithDetails,
 } from '@/features/projects/api';
+import { ProjectWorkflowRunButton } from '@/features/projects/project-workflow-run-dialog';
 import { ProjectSkillsPanel } from '@/features/projects/project-skills-panel';
 import { mergeProjectSettingsDraft, projectSettingsDraft, type ProjectSettingsDraft } from '@/features/projects/project-settings-draft';
 import { ProjectUnderstandingCheckbox, ProjectUnderstandingPanel } from '@/features/projects/project-understanding';
@@ -1174,12 +1175,7 @@ export function ProjectDetailPage() {
     () => project ? (
       <>
         <PageContextCaptureButton resource={{ kind: 'project', id: project.id, revision: String(project.version) }} disabled={saving || projectSettingsDirty(draft, project)} />
-        <Button asChild variant="secondary" className="h-9 rounded-lg">
-          <Link to={`/workflows?tab=library&projectId=${encodeURIComponent(project.id)}`}>
-            <GitBranch className="size-4" aria-hidden />
-            {pm.common.runWorkflow}
-          </Link>
-        </Button>
+        <ProjectWorkflowRunButton key={project.id} projectId={project.id} />
         <Button variant="secondary" className="h-9 rounded-lg" onClick={openTaskCreate}>
           <Plus className="size-4" aria-hidden />
           {pm.board.create}
@@ -1192,7 +1188,7 @@ export function ProjectDetailPage() {
         </Button>
       </>
     ) : null,
-    [openTaskCreate, onProjectTabLinkClick, pm.board.create, pm.common.newChat, pm.common.runWorkflow, project, saving, draft],
+    [openTaskCreate, onProjectTabLinkClick, pm.board.create, pm.common.newChat, project, saving, draft],
   );
 
   useLayoutEffect(() => {

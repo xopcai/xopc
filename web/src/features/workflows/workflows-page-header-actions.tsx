@@ -14,6 +14,7 @@ export function WorkflowsPageHeaderActions({ vm }: { vm: ReturnType<typeof useWo
     labels,
     language,
     loading,
+    pageTab,
     ownerAgentId,
     agentOptions,
     setOwnerAgentId,
@@ -24,13 +25,14 @@ export function WorkflowsPageHeaderActions({ vm }: { vm: ReturnType<typeof useWo
 
   return (
     <div className="flex min-w-0 flex-wrap items-center gap-2">
-      {agentOptions.length > 1 ? (
+      {pageTab === 'runs' && agentOptions.length > 1 ? (
         <Select
           value={ownerAgentId ?? ''}
           aria-label={labels.agentFilterAria}
           onChange={(event) => setOwnerAgentId(event.target.value)}
           className="h-9 min-w-32 rounded-lg border border-edge bg-surface-panel px-2.5 text-xs font-medium text-fg shadow-surface"
         >
+          <SelectOption value="">{labels.allAgents}</SelectOption>
           {agentOptions.map((agent) => (
             <SelectOption key={agent.id} value={agent.id}>
               {agentListDisplayName(agent, messages(language).agentsSettings)}

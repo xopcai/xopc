@@ -29,6 +29,7 @@ import { formatMediumDateTime } from '@/lib/date-formatters';
 import { interaction } from '@/lib/interaction';
 import type { StoredLanguage } from '@/lib/storage';
 
+import { WorkflowModelSelect } from './workflow-model-select';
 import {
   deleteWorkflowAuthoringDraft,
   getWorkflowRevision,
@@ -640,7 +641,7 @@ export function WorkflowEditor({
 
                 <div className="my-4 border-t border-edge" />
                 {selectedNode ? (
-                  <NodeInspector node={selectedNode} copy={copy} updateNode={updateNode} onDelete={removeSelectedNode} />
+                  <NodeInspector node={selectedNode} language={language} copy={copy} updateNode={updateNode} onDelete={removeSelectedNode} />
                 ) : (
                   <div className="py-8 text-center text-sm text-fg-muted">{copy.selectNode}</div>
                 )}
@@ -703,7 +704,7 @@ function WorkflowNodeCard({ data, selected }: NodeProps<StudioNode>) {
 
 const NODE_TYPES = { workflow: WorkflowNodeCard };
 
-function NodeInspector({ node, copy, updateNode, onDelete }: { node: WorkflowGraphNode; copy: ReturnType<typeof studioCopy>; updateNode: (id: string, update: (node: WorkflowGraphNode) => WorkflowGraphNode) => void; onDelete: () => void }) {
+function NodeInspector({ node, language, copy, updateNode, onDelete }: { node: WorkflowGraphNode; language: StoredLanguage; copy: ReturnType<typeof studioCopy>; updateNode: (id: string, update: (node: WorkflowGraphNode) => WorkflowGraphNode) => void; onDelete: () => void }) {
   const update = (patch: Partial<WorkflowGraphNode>) => updateNode(node.id, (current) => ({ ...current, ...patch }));
   const updateConfig = (patch: Record<string, unknown>) => updateNode(node.id, (current) => ({ ...current, config: { ...current.config, ...patch } }));
   return (
@@ -718,8 +719,8 @@ function NodeInspector({ node, copy, updateNode, onDelete }: { node: WorkflowGra
           <summary className="cursor-pointer text-xs font-medium text-fg-muted">{copy.advanced}</summary>
           <label className="mt-3 block text-xs font-medium text-fg" htmlFor="node-prompt">{copy.instructions}</label>
           <textarea id="node-prompt" value={String(node.config.prompt ?? '')} onChange={(event) => updateConfig({ prompt: event.target.value })} className={`${fieldClass} min-h-36 resize-y`} />
-          <label className="mt-3 block text-xs font-medium text-fg" htmlFor="node-model">{copy.model}</label>
-          <input id="node-model" value={String(node.config.model ?? '')} onChange={(event) => updateConfig({ model: event.target.value || undefined })} placeholder={copy.defaultModel} className={fieldClass} />
+          <div className="mt-3 text-xs font-medium text-fg">{copy.model}</div>
+          <WorkflowModelSelect value={node.config.model} language={language} onChange={(model) => updateConfig({ model })} />
         </details>
       </> : null}
       {node.kind === 'decision' ? <>

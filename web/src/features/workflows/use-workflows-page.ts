@@ -11,7 +11,7 @@ import {
   cancelWorkflowRun,
   listProjectWorkflowPresets,
   listWorkflowDefinitions,
-  listWorkflowRuns,
+  listWorkflowRunsForAgents,
   retryWorkflowRun,
   type WorkflowDefinition,
   type WorkflowRunSummary,
@@ -59,11 +59,8 @@ export function useWorkflowsPage() {
   const [actionError, setActionError] = useState<string | null>(null);
 
   const agentsSwr = useSWR(hasToken ? ['workflow-agents', token] : null, fetchGatewayAgents, { revalidateOnFocus: false });
-  const ownerAgentId = useMemo(() => {
-    const agents = agentsSwr.data?.agents ?? [];
-    if (ownerAgentParam && (agents.length === 0 || agents.some((agent) => agent.id === ownerAgentParam))) return ownerAgentParam;
-    return agentsSwr.data?.defaultId;
-  }, [agentsSwr.data, ownerAgentParam]);
+  const ownerAgentId = ownerAgentParam || undefined;
+  const runAgentIds = ownerAgentId ? [ownerAgentId] : (agentsSwr.data?.agents ?? []).map((agent) => agent.id);
   const definitionsSwr = useSWR(hasToken ? ['workflow-definitions', token] : null, listWorkflowDefinitions, { revalidateOnFocus: false });
   const projectPresetsSwr = useSWR(
     hasToken && projectId ? ['workflow-project-presets', token, projectId] : null,
@@ -71,8 +68,8 @@ export function useWorkflowsPage() {
     { revalidateOnFocus: false },
   );
   const runsSwr = useSWR(
-    hasToken && ownerAgentId ? ['workflow-runs', token, ownerAgentId, projectId ?? ''] : null,
-    () => listWorkflowRuns(RUN_FETCH_LIMIT, { ownerAgentId, projectId }),
+    hasToken && runAgentIds.length ? ['workflow-runs', token, runAgentIds, projectId ?? ''] : null,
+    () => listWorkflowRunsForAgents(runAgentIds, RUN_FETCH_LIMIT, { projectId }),
     {
       revalidateOnFocus: false,
       refreshInterval: (latest) => latest?.some((run) => run.status === 'queued' || run.status === 'running') ? 3000 : 0,
@@ -125,20 +122,18 @@ export function useWorkflowsPage() {
     next.delete(WORKFLOW_WF_FILTER_PARAM);
     next.delete(WORKFLOW_TRIGGER_FILTER_PARAM);
     next.delete(WORKFLOW_STATUS_FILTER_PARAM);
+    next.delete(WORKFLOW_AGENT_PARAM);
   }), [patchSearchParams]);
 
   const routeSearch = useMemo(() => {
     const params = new URLSearchParams();
-    if (ownerAgentId) params.set('agentId', ownerAgentId);
     if (projectId) params.set('projectId', projectId);
     return params.size ? `?${params.toString()}` : '';
-  }, [ownerAgentId, projectId]);
+  }, [projectId]);
   const openDefinitionDetails = useCallback((definition: WorkflowDefinition) => navigate(`/workflows/${definition.id}${routeSearch}`), [navigate, routeSearch]);
   const startWorkflowCreation = useCallback(() => {
-    navigate(workflowChatCreateHref(labels.createWithAssistantPrompt, projectId), {
-      state: ownerAgentId ? { agentId: ownerAgentId } : undefined,
-    });
-  }, [labels.createWithAssistantPrompt, navigate, ownerAgentId, projectId]);
+    navigate(workflowChatCreateHref(labels.createWithAssistantPrompt, projectId));
+  }, [labels.createWithAssistantPrompt, navigate, projectId]);
   const openManualWorkflowCreator = useCallback(() => {
     navigate(`/workflows/new${routeSearch}`);
   }, [navigate, routeSearch]);
@@ -150,7 +145,13 @@ export function useWorkflowsPage() {
       ? `/workflows/${definition.id}/edit${routeSearch}`
       : `/workflows/new${params.size ? `?${params.toString()}` : ''}`);
   }, [navigate, routeSearch]);
-  const openRunDetails = useCallback((run: WorkflowRunSummary) => navigate(`/workflows/runs/${run.id}${routeSearch}`), [navigate, routeSearch]);
+  const runRouteSearch = useCallback((run: WorkflowRunSummary) => {
+    const params = new URLSearchParams(routeSearch.slice(1));
+    const agentId = run.ownerAgentId ?? run.metadata?.agentId ?? ownerAgentId;
+    if (agentId) params.set('agentId', agentId);
+    return params.size ? `?${params.toString()}` : '';
+  }, [ownerAgentId, routeSearch]);
+  const openRunDetails = useCallback((run: WorkflowRunSummary) => navigate(`/workflows/runs/${run.id}${runRouteSearch(run)}`), [navigate, runRouteSearch]);
   const openRunInChat = useCallback((run: WorkflowRunSummary) => {
     const conversationId = resolveRunConversationId(run);
     if (conversationId) navigate(workflowChatHref(conversationId));
@@ -158,20 +159,21 @@ export function useWorkflowsPage() {
 
   const cancelRun = useCallback(async (runId: string) => {
     try {
-      await cancelWorkflowRun(runId, { ownerAgentId });
+      await cancelWorkflowRun(runId, { ownerAgentId: runs.find((run) => run.id === runId)?.ownerAgentId ?? ownerAgentId });
       await runsSwr.mutate();
     } catch (cause) {
       setActionError(cause instanceof Error ? cause.message : labels.cancelFailed);
     }
-  }, [labels.cancelFailed, ownerAgentId, runsSwr]);
+  }, [labels.cancelFailed, ownerAgentId, runs, runsSwr]);
   const retryRun = useCallback(async (runId: string) => {
     try {
-      const result = await retryWorkflowRun(runId, { ownerAgentId });
-      navigate(`/workflows/runs/${result.runId}${routeSearch}`);
+      const run = runs.find((item) => item.id === runId);
+      const result = await retryWorkflowRun(runId, { ownerAgentId: run?.ownerAgentId ?? ownerAgentId });
+      navigate(`/workflows/runs/${result.runId}${run ? runRouteSearch(run) : routeSearch}`);
     } catch (cause) {
       setActionError(cause instanceof Error ? cause.message : labels.retryFailed);
     }
-  }, [labels.retryFailed, navigate, ownerAgentId, routeSearch]);
+  }, [labels.retryFailed, navigate, ownerAgentId, routeSearch, runRouteSearch, runs]);
   useEffect(() => {
     const refresh = () => void runsSwr.mutate();
     window.addEventListener('workflow-run-updated', refresh);

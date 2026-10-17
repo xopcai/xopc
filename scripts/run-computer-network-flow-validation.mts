@@ -8,13 +8,13 @@ import { mkdtemp, mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { build } from 'esbuild';
-import { APP, WINDOW, EXPECT } from './lib/computer-flow-network-target.mjs';
+import { APP, WINDOW, EXPECT, DESTINATION, TEXTEDIT } from './lib/computer-flow-network-target.mjs';
 import { createComputerFlowNetworkProxy } from './lib/computer-flow-network-proxy.mjs';
 import { REALTIME_PROTOCOL_VERSION } from '@xopcai/realtime-protocol';
 const { WebSocket } = createRequire(import.meta.url)('ws') as typeof import('ws');
 
 assert.equal(process.platform, 'darwin');
-assert.equal(process.argv.length, 2, 'This opt-in check takes no arguments');
+assert.deepEqual(process.argv.slice(2), TEXTEDIT ? ['--textedit'] : [], 'Use XOPC_FLOW_TARGET=textedit with --textedit');
 assert.ok(process.env.DASHSCOPE_API_KEY, 'Requires the existing DASHSCOPE_API_KEY');
 const repo = resolve(import.meta.dirname, '..'), root = await mkdtemp(join(tmpdir(), 'xopc-network-flow-'));
 const cache = join(repo, '.cache/flow-network'); await mkdir(cache, { recursive: true });
@@ -22,21 +22,23 @@ const electron = createRequire(import.meta.url)('electron') as string;
 await build({ entryPoints: [join(repo, 'scripts/verify-computer-network-desktop.mts')], outfile: join(cache, 'desktop.mjs'),
   bundle: true, platform: 'node', format: 'esm', external: ['electron', '@trycua/cua-driver', '@earendil-works/*', 'sharp', 'better-sqlite3'],
   banner: { js: 'import { createRequire as __flowRequire } from "node:module"; const require = __flowRequire(import.meta.url);' } });
-const fixturePath = join(cache, 'XOPCFlowValidation.app/Contents');
-await mkdir(join(fixturePath, 'MacOS'), { recursive: true });
-await writeFile(join(fixturePath, 'Info.plist'), `<?xml version="1.0" encoding="UTF-8"?><plist version="1.0"><dict><key>CFBundleIdentifier</key><string>${APP}</string><key>CFBundleExecutable</key><string>FlowValidation</string><key>CFBundleName</key><string>XOPC Flow Validation</string><key>CFBundlePackageType</key><string>APPL</string><key>CFBundleVersion</key><string>1</string></dict></plist>`);
-execFileSync('xcrun', ['swiftc', join(repo, 'scripts/fixtures/ComputerFlowValidation.swift'), '-o', join(fixturePath, 'MacOS/FlowValidation')], { timeout: 60_000 });
-const fixture = spawn('/usr/bin/open', ['-n', '-W', join(cache, 'XOPCFlowValidation.app'), '--args', join(root, 'fixture.pid'), String(process.pid)], { stdio: 'ignore' });
-let fixturePid: number | undefined;
-process.on('exit', () => { if (fixturePid) { try { process.kill(fixturePid); } catch { /* Already stopped. */ } } fixture.kill(); });
-const fixtureDeadline = Date.now() + 15_000;
-while (!fixturePid) {
-  fixturePid = await readFile(join(root, 'fixture.pid'), 'utf8').then(v => Number(v), () => undefined);
-  assert.ok(Date.now() < fixtureDeadline, 'Native fixture did not launch');
-  if (!fixturePid) await new Promise(r => setTimeout(r, 50));
+let fixture: ReturnType<typeof spawn> | undefined, fixturePid: number | undefined;
+if (!TEXTEDIT) {
+  const fixturePath = join(cache, 'XOPCFlowValidation.app/Contents');
+  await mkdir(join(fixturePath, 'MacOS'), { recursive: true });
+  await writeFile(join(fixturePath, 'Info.plist'), `<?xml version="1.0" encoding="UTF-8"?><plist version="1.0"><dict><key>CFBundleIdentifier</key><string>${APP}</string><key>CFBundleExecutable</key><string>FlowValidation</string><key>CFBundleName</key><string>XOPC Flow Validation</string><key>CFBundlePackageType</key><string>APPL</string><key>CFBundleVersion</key><string>1</string></dict></plist>`);
+  execFileSync('xcrun', ['swiftc', join(repo, 'scripts/fixtures/ComputerFlowValidation.swift'), '-o', join(fixturePath, 'MacOS/FlowValidation')], { timeout: 60_000 });
+  fixture = spawn('/usr/bin/open', ['-n', '-W', join(cache, 'XOPCFlowValidation.app'), '--args', join(root, 'fixture.pid'), String(process.pid)], { stdio: 'ignore' });
+  process.on('exit', () => { if (fixturePid) { try { process.kill(fixturePid); } catch { /* Already stopped. */ } } fixture?.kill(); });
+  const fixtureDeadline = Date.now() + 15_000;
+  while (!fixturePid) {
+    fixturePid = await readFile(join(root, 'fixture.pid'), 'utf8').then(v => Number(v), () => undefined);
+    assert.ok(Date.now() < fixtureDeadline, 'Native fixture did not launch');
+    if (!fixturePid) await new Promise(r => setTimeout(r, 50));
+  }
+  const fixtureMetadata = JSON.parse(await readFile(join(root, 'fixture.pid.json'), 'utf8'));
+  assert.equal(fixtureMetadata.id, APP); assert.equal(fixtureMetadata.policy, 0, 'Fixture must be a regular discoverable application');
 }
-const fixtureMetadata = JSON.parse(await readFile(join(root, 'fixture.pid.json'), 'utf8'));
-assert.equal(fixtureMetadata.id, APP); assert.equal(fixtureMetadata.policy, 0, 'Fixture must be a regular discoverable application');
 const token = randomBytes(32).toString('hex');
 const free = createServer(); await new Promise<void>(r => free.listen(0, '127.0.0.1', r));
 const gatewayPort = (free.address() as any).port; await new Promise<void>(r => free.close(() => r()));
@@ -113,36 +115,40 @@ for (const phase of ['capture', 'reuse', 'unknown']) {
     await request(`/api/endpoint-tools/bindings/${status.owner}`, { endpointId: endpoint.endpointId }, 'PUT');
     const execute = (input: unknown) => gateway.rpc('execute', { input });
     const settle = async (input: unknown) => {
-      let value = await execute(input); const until = Date.now() + 30_000;
+      let value = await execute(input); const until = Date.now() + (TEXTEDIT && (input as any).op === 'open' ? 270_000 : 30_000);
       while (['pending_action', 'pending_authorization'].includes(value.status)) {
-        assert.ok(Date.now() < until); await pause(); value = await execute(value.status === 'pending_action' ? { op: 'step', goal: 'Resume the held action' } : { op: 'observe' });
+        assert.ok(Date.now() < until); if (TEXTEDIT) await new Promise(r => setTimeout(r, 250)); else await pause(); value = await execute(value.status === 'pending_action' ? { op: 'step', goal: 'Resume the held action' } : { op: 'observe' });
       } return value;
     };
     const open = async () => {
       const apps = await execute({ op: 'discover', query: APP }); assert.equal(apps.apps.length, 1);
       const input = { op: 'open', appRef: apps.apps[0].appRef, mode: 'control', prepare: false };
       let value = await settle(input);
-      if (value.windows) windowEvidence = value.windows.map((w: any) => ({ title: w.title, visible: w.visible }));
-      if (value.errorCode === 'COMPUTER_WINDOW_AMBIGUOUS') {
+      if (value.windows) windowEvidence = value.windows.map((w: any) => ({ title: w.title === WINDOW ? WINDOW : 'other', visible: w.visible }));
+      if (['COMPUTER_WINDOW_AMBIGUOUS', 'COMPUTER_WINDOW_CHANGED'].includes(value.errorCode)) {
         const candidates = value.windows.filter((w: any) => w.title === WINDOW);
-        if (candidates.length === 1) { await desktop!.rpc('drained'); value = await settle({ ...input, windowRef: candidates[0].windowRef }); }
+        if (candidates.length === 1) {
+          await desktop!.rpc('drained');
+          if (TEXTEDIT) console.log(`Waiting for local TextEdit Settings visibility: ${phase}`);
+          value = await settle({ ...input, windowRef: candidates[0].windowRef });
+        }
       }
       return value;
     };
-    const baseline = async (first = false) => {
+    const baseline = async (first = false, keepOpen = false) => {
       await desktop!.rpc('mode', { mode: 'setup' }); assert.equal((await open()).status, 'ready'); await execute({ op: 'observe' });
       assert.equal((await desktop!.rpc('baseline', { owner: status.owner, requireSelected: first })).selected, true);
-      await execute({ op: 'close' });
+      if (!keepOpen) await execute({ op: 'close' });
     };
     const flows = await execute({ op: 'flows' }); assert.equal(flows.flows.length, flowId ? 1 : 0); if (flowId) assert.equal(flows.flows[0].id, flowId);
     await desktop.rpc('access', { allowed: false }); assert.equal((await open()).errorCode, 'COMPUTER_APP_NOT_AUTHORIZED');
     const denied = await desktop.rpc('status'); assert.equal(denied.observations, 0); assert.equal(denied.inputs, 0); assert.equal((await gateway.rpc('status')).modelRequests, 0);
     await desktop.rpc('access', { allowed: true });
-    await baseline(phase === 'capture'); await desktop.rpc('mode', { mode: 'scenario' });
-    assert.equal((await open()).status, 'ready');
+    await baseline(TEXTEDIT || phase === 'capture', TEXTEDIT); await desktop.rpc('mode', { mode: 'scenario' });
+    if (!TEXTEDIT) assert.equal((await open()).status, 'ready');
     const before = await desktop.rpc('status');
     if (phase === 'unknown') bridge.arm();
-    const step = { op: 'step', goal: 'Open Navigation Page using exactly one native activate action with its ref from the current accessibility context. Do not use coordinate clicks, keys, typing, or other controls; request interaction if no native target is advertised.',
+    const step = { op: 'step', goal: `${TEXTEDIT ? "Open the Open and Save settings tab" : DESTINATION} using exactly one native activate action with its ref from the current accessibility context. Do not use coordinate clicks, keys, typing, or other controls; request interaction if no native target is advertised.`,
       expect: EXPECT, ...(flowId ? { flowId } : {}) };
     if (phase === 'unknown') {
       await assert.rejects(settle(step), /COMPUTER_DISPATCH_FAILED/);
@@ -156,7 +162,7 @@ for (const phase of ['capture', 'reuse', 'unknown']) {
       verificationEvidence = evidenceFor(result);
       if (!result.verified) verificationEvidence = { first: verificationEvidence, readOnlyProbe: evidenceFor(await execute({ op: 'observe', expect: step.expect })) };
       assert.equal(result.verified, true);
-      const closed = await execute({ op: 'close', ...(phase === 'capture' ? { saveFlowAs: 'Native network navigation' } : {}) });
+      const closed = await execute({ op: 'close', ...(phase === 'capture' ? { saveFlowAs: TEXTEDIT ? 'TextEdit settings network navigation' : 'Native network navigation' } : {}) });
       assert.equal(closed.status, 'stopped'); assert.ok(!closed.errorCode); if (phase === 'capture') { assert.ok(closed.savedFlow); flowId = closed.savedFlow.id; }
     }
     const after = await desktop.rpc('status'), actual = await gateway.rpc('status');
@@ -167,7 +173,7 @@ for (const phase of ['capture', 'reuse', 'unknown']) {
     assert.ok(bridge.counts.registrations >= 1 && bridge.counts.tickets >= 1 && bridge.counts.hellos >= 1 && bridge.counts.uploads >= 2);
     await baseline(); await desktop.rpc('access', { allowed: false });
     const final = await desktop.rpc('status'); assert.equal(final.cleanupInputs, 1);
-    const evidence = { phase, app: APP, window: WINDOW, gatewayPid: gateway.proc.pid, desktopPid: desktop.proc.pid, status: 'passed', restarted: phase !== 'capture',
+    const evidence = { phase, app: APP, window: WINDOW, nativeAppPid: after.nativeAppPid, nativeVerification: verificationEvidence, gatewayPid: gateway.proc.pid, desktopPid: desktop.proc.pid, status: 'passed', restarted: phase !== 'capture',
       samePrincipalAfterRestart: phase !== 'capture', freshEndpointAfterRestart: phase !== 'capture', flowIdPreserved: phase !== 'capture',
       unauthorizedHttpRejected: true, invalidRealtimeTicketRejected: true, osEncryptedIdentity: true, modelCredentialOnlyInGateway: true, invalidUploadGrantRejected: true, deniedWithoutAppAccess: true, framesReleasedWithoutDiskFiles: true, scenarioNativeInputs: after.inputs,
       modelRequests: actual.modelRequests, hostedResponses: actual.hostedResponses, hintRequests: actual.hintRequests,
@@ -179,8 +185,8 @@ for (const phase of ['capture', 'reuse', 'unknown']) {
   } catch (error) {
     const gatewayState = await gateway.rpc('status').catch(() => undefined), desktopState = await desktop?.rpc('status').catch(() => undefined);
     // Keep only metadata; never persist tokens, identities, raw observations or model text.
-    await writeFile(join(root, `${phase}-failure.json`), JSON.stringify({ phase, modelRequests: gatewayState?.modelRequests,
-      windowEvidence, verificationEvidence, lastError: gatewayState?.lastError, report: gatewayState?.report, inputs: desktopState?.inputs, observations: desktopState?.observations, network: bridge.counts }, null, 2), { mode: 0o600 });
+    await writeFile(join(root, `${phase}-failure.json`), JSON.stringify({ phase, app: APP, gatewayPid: gateway.proc.pid, desktopPid: desktop?.proc.pid, modelRequests: gatewayState?.modelRequests,
+      windowEvidence, verificationEvidence, preparation: desktopState?.preparation, nativeEvidence: desktopState?.nativeEvidence, lastError: gatewayState?.lastError, report: gatewayState?.report, inputs: desktopState?.inputs, observations: desktopState?.observations, network: bridge.counts }, null, 2), { mode: 0o600 });
     throw new Error(`${phase} failed; no phase is retried. Evidence: ${root}. ${error instanceof Error ? error.message : 'Validation failed'}`);
   } finally {
     desktop?.proc.kill(); gateway.proc.kill(); await bridge.close();
@@ -188,5 +194,5 @@ for (const phase of ['capture', 'reuse', 'unknown']) {
 }
 assert.equal(new Set(results.map(r => r.gatewayPid)).size, 3); assert.equal(new Set(results.map(r => r.desktopPid)).size, 3);
 assert.equal(new Set(results.flatMap(r => [r.gatewayPid, r.desktopPid])).size, 6);
-fixture.kill();
-console.log(JSON.stringify({ status: 'passed', evidenceDirectory: root, independentGatewayProcesses: 3, independentDesktopProcesses: 3, nativeAppPid: fixturePid, modelRef: 'dashscope-cn/gui-plus-2026-02-26', results }, null, 2));
+fixture?.kill();
+console.log(JSON.stringify({ status: 'passed', evidenceDirectory: root, independentGatewayProcesses: 3, independentDesktopProcesses: 3, nativeAppPid: fixturePid ?? results[0]?.nativeAppPid, modelRef: 'dashscope-cn/gui-plus-2026-02-26', results }, null, 2));

@@ -227,7 +227,7 @@ export class CuaComputerDriver implements ComputerDriver {
       await this.callUntyped('launch_app', { bundle_id: appId }, signal);
       rows = await this.listApps(signal);
     }
-    const matches = rows.filter(app => app.bundleId === appId && app.pid > 0);
+    let matches = rows.filter(app => app.bundleId === appId && app.pid > 0);
     if (!matches.length) throw new Error('COMPUTER_APP_NOT_RUNNING');
     if (matches.length !== 1) throw new Error('COMPUTER_APP_INSTANCE_AMBIGUOUS');
     const pid = matches[0].pid;
@@ -238,6 +238,8 @@ export class CuaComputerDriver implements ComputerDriver {
     if (options.prepare && !options.windowRef && windows.length > 1 && windows.every(window => !window.isOnScreen)) {
       if (await this.processIdentity(pid) !== processIdentity) throw new Error('COMPUTER_PROCESS_CHANGED');
       await this.callUntyped('bring_to_front', { pid }, signal);
+      matches = (await this.listApps(signal)).filter(app => app.bundleId === appId && app.pid > 0);
+      if (matches.length !== 1 || matches[0].pid !== pid || await this.processIdentity(pid) !== processIdentity) throw new Error('COMPUTER_PROCESS_CHANGED');
       windows = await this.listWindows(pid, signal);
     }
     const ref = (window: typeof windows[number]) => hash(`${this.referenceSalt}:${appId}:${processIdentity}:${window.windowId}`);

@@ -18,6 +18,7 @@ import {
   type WorkflowSourceFilter,
 } from './workflow-page.constants';
 import { filterDefinitions, interpolate } from './workflow-page.utils';
+import { schemaToFields, supportsWorkflowSchemaForm } from './workflow-schema-input';
 
 type WorkflowsMessages = ReturnType<typeof messages>['workflows'];
 
@@ -48,6 +49,9 @@ function WorkflowLibraryCard({
   const localized = resolveWorkflowLocalizedCopy(definition, language);
   const scale = agentScaleLabel(definition, labels);
   const isUser = definition.metadata.source === 'user';
+  const hasInputFields = definition.inputSchema
+    && supportsWorkflowSchemaForm(definition.inputSchema)
+    && schemaToFields(definition.inputSchema).length > 0;
 
   return (
     <article className="flex min-h-48 flex-col rounded-xl border border-edge-subtle bg-surface-base p-4 transition-colors hover:border-edge hover:bg-surface-hover/35">
@@ -60,7 +64,7 @@ function WorkflowLibraryCard({
             )}>
               {isUser ? labels.badgeUser : labels.badgeBuiltin}
             </span>
-            {definition.inputSchema ? (
+            {hasInputFields ? (
               <span className="inline-flex items-center gap-1 rounded-full bg-surface-inset px-2 py-0.5 text-[10px] text-fg-subtle">
                 <Braces className="size-2.5" aria-hidden />
                 {labels.inputSchemaBadge}

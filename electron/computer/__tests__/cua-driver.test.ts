@@ -83,6 +83,24 @@ describe('private native driver admission', () => {
     expect(f.call).toHaveBeenCalledWith('bring_to_front', { pid: 42 }, expect.any(AbortSignal));
     expect(f.call).toHaveBeenCalledWith('bring_to_front', { pid: 42, window_id: 5 }, expect.any(AbortSignal));
   });
+  it('refreshes activation after app preparation without a redundant window activation', async () => {
+    const rows = [window(9, 'Settings', false), window(10, '', false)];
+    const f = native(rows); let active = false;
+    vi.spyOn(f.driver as any, 'listApps').mockImplementation(async () => [{ bundleId: 'fixture', pid: 42, active }]);
+    f.call.mockImplementation(async (name: unknown, args: any) => {
+      if (name === 'bring_to_front') { expect(args.window_id).toBeUndefined(); active = true; rows[0].is_on_screen = true; }
+      return { data: name === 'get_window_state' ? { pid: 42, window_id: args.window_id, elements: args.window_id === 9 ? [{ role: 'AXWindow', depth: 0 }] : [] } : { windows: rows } };
+    });
+    await expect(f.driver.resolveTarget('fixture', new AbortController().signal, { prepare: true })).resolves.toMatchObject({ windowId: '9' });
+    expect(f.call.mock.calls.filter(([name]) => name === 'bring_to_front')).toHaveLength(1);
+  });
+  it('rejects a changed process after app preparation before selecting or capturing', async () => {
+    const f = native([window(9, 'Settings', false), window(10, '', false)]);
+    vi.spyOn(f.driver as any, 'listApps').mockResolvedValueOnce([{ bundleId: 'fixture', pid: 42, active: false }])
+      .mockResolvedValueOnce([{ bundleId: 'fixture', pid: 99, active: true }]);
+    await expect(f.driver.resolveTarget('fixture', new AbortController().signal, { prepare: true })).rejects.toThrow('COMPUTER_PROCESS_CHANGED');
+    expect(f.call.mock.calls.filter(([name]) => name === 'get_window_state')).toHaveLength(0);
+  });
   it('does not restore an unprepared app or infer the target from its only nonempty title', async () => {
     const f = native([window(9, 'Today', false), window(10, '', false)]);
     await expect(f.driver.resolveTarget('fixture', new AbortController().signal, { prepare: false })).rejects.toThrow('WINDOW_AMBIGUOUS');

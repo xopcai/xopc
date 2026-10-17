@@ -264,6 +264,7 @@ export interface WorkflowRunDefinitionSnapshot {
 }
 
 export interface WorkflowRunSummary {
+  ownerAgentId?: string;
   id: string;
   definitionId: string;
   title: string;
@@ -708,6 +709,18 @@ export async function listWorkflowRuns(limit = 50, options?: WorkflowOwnerAgentO
   if (projectId) searchParams.set('projectId', projectId);
   const data = await fetchJson<{ runs: WorkflowRunSummary[] }>(apiUrl(`/api/workflows/runs?${searchParams.toString()}`));
   return data.runs ?? [];
+}
+
+export async function listWorkflowRunsForAgents(
+  agentIds: string[],
+  limit = 50,
+  options?: Pick<WorkflowOwnerAgentOptions, 'projectId'>,
+): Promise<WorkflowRunSummary[]> {
+  const groups = await Promise.all([...new Set(agentIds)].map(async (ownerAgentId) => {
+    const runs = await listWorkflowRuns(limit, { ...options, ownerAgentId });
+    return runs.map((run) => ({ ...run, ownerAgentId }));
+  }));
+  return groups.flat().sort((a, b) => b.createdAtMs - a.createdAtMs).slice(0, limit);
 }
 
 export async function getWorkflowRun(runId: string, options?: WorkflowOwnerAgentOptions): Promise<WorkflowRunView> {
