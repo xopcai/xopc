@@ -510,6 +510,7 @@ export type DesktopPetRelationship = {
 };
 
 export interface ElectronDesktopPetAPI {
+  onPointerChanged(callback: (point: { x: number; y: number }) => void): () => void;
   getState(): Promise<DesktopPetState>;
   setPrefs(patch: Partial<DesktopPetPrefs>): Promise<DesktopPetState>;
   show(): Promise<void>;

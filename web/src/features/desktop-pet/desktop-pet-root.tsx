@@ -156,7 +156,9 @@ export function DesktopPetRoot() {
       if (!rects.length) return;
       const left = Math.min(...rects.map((rect) => rect.left)); const top = Math.min(...rects.map((rect) => rect.top));
       const right = Math.max(...rects.map((rect) => rect.right)); const bottom = Math.max(...rects.map((rect) => rect.bottom));
-      void pet.setContentSize({ width: Math.ceil(right - left), height: Math.ceil(bottom - top) });
+      const targetStage = Math.round(132 * sizeScale);
+      const targetHeight = targetStage + (queueRef.current ? 8 + queueRef.current.offsetHeight : 0);
+      void pet.setContentSize({ width: Math.ceil(Math.max(right - left, targetStage)), height: Math.ceil(Math.max(bottom - top, targetHeight)) });
     };
     const observer = new ResizeObserver(report); observer.observe(root); if (queueRef.current) observer.observe(queueRef.current); if (stageRef.current) observer.observe(stageRef.current); report();
     return () => observer.disconnect();
@@ -219,7 +221,7 @@ export function DesktopPetRoot() {
   if (!selectedPet) return null;
   const style = { "--desktop-pet-stage-size": `${Math.round(132 * sizeScale)}px`, "--desktop-pet-menu-size": `${Math.round(28 * sizeScale)}px`, "--desktop-pet-menu-left": "0px", "--desktop-pet-menu-bottom": `${Math.round(12 * sizeScale)}px` } as CSSProperties;
   const menuCount = state.prefs.collapsed ? queued.length : hiddenQueueCount;
-  return <div ref={rootRef} className="desktop-pet-window" style={style}>
+  return <div ref={rootRef} className="desktop-pet-window" data-reduced-motion={state.prefs.reducedMotion} style={style}>
     {!state.prefs.collapsed && queued.length > 0 ? <div ref={queueRef} className="desktop-pet-bubble desktop-pet-queue">{queued.map((item) => {
       const health = activityHealthText(item, now, { longRunning: t.tipLongRunning, stale: t.tipStaleSignal });
       const completion = activityCompletionText(item, t.tipCompleteSummary);
