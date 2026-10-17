@@ -9,6 +9,7 @@ export function normalizeWorkflowLocale(language: StoredLanguage | undefined): W
 }
 
 export interface WorkflowLocalizedCopy {
+  title: string;
   description: string;
   whenToUse?: string;
   examplePrompts: WorkflowDefinitionExamplePrompt[];
@@ -19,12 +20,13 @@ export function resolveWorkflowLocalizedCopy(
   language: StoredLanguage | undefined,
 ): WorkflowLocalizedCopy {
   const locale = normalizeWorkflowLocale(language);
-  const bundle = locale !== 'en' ? definition.metadata.i18n?.[locale] : undefined;
+  const bundle = definition.metadata.i18n?.[locale];
   const examplePrompts =
     bundle?.examplePrompts && bundle.examplePrompts.length > 0
       ? bundle.examplePrompts
       : (definition.metadata.examplePrompts ?? []);
   return {
+    title: pickNonEmpty(bundle?.title, definition.title),
     description: pickNonEmpty(bundle?.description, definition.description),
     whenToUse: pickOptional(bundle?.whenToUse, definition.metadata.whenToUse),
     examplePrompts,
@@ -39,6 +41,7 @@ export function collectWorkflowSearchText(definition: WorkflowDefinition): strin
     definition.metadata.whenToUse ?? '',
     ...(definition.metadata.examplePrompts ?? []).map((item) => item.text),
     ...Object.values(definition.metadata.i18n ?? {}).flatMap((bundle) => [
+      bundle.title ?? '',
       bundle.description ?? '',
       bundle.whenToUse ?? '',
       ...(bundle.examplePrompts ?? []).map((item) => item.text),

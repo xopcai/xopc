@@ -8,6 +8,7 @@ import { getLocalApp, getLocalAppSnapshot } from '@/features/local-apps/api';
 import { localAppOpenRoute } from '@/features/local-apps/open-route';
 import { fetchProject } from '@/features/projects/api';
 import { getWorkflowRun, listWorkflowDefinitions } from '@/features/workflows/workflow-api';
+import { resolveWorkflowLocalizedCopy } from '@/features/workflows/workflow-meta-locale';
 import { isWorkflowResultEnvelope, workflowResultToMarkdown } from '@/features/workflows/workflow-page.utils';
 import { messages } from '@/i18n/messages';
 import { apiUrl } from '@/lib/url';
@@ -82,7 +83,8 @@ export default function ProductPreviewContent({ target }: { target: ProductPrevi
   }
   if (data.kind === 'workflow_definition') {
     const definition = data.value;
-    return <div className="space-y-6"><h2 className={headingClass}>{definition.title || definition.name}</h2>{markdown(definition.description)}{markdown(definition.metadata?.whenToUse)}
+    const localized = resolveWorkflowLocalizedCopy(definition, language);
+    return <div className="space-y-6"><h2 className={headingClass}>{localized.title}</h2>{markdown(localized.description)}{markdown(localized.whenToUse)}
       {definition.phases.length > 0 && <section className={sectionClass}><h3 className="font-medium text-fg">{zh ? '执行阶段' : 'Phases'}</h3>{definition.phases.map((phase) => <div key={phase.id}><h4 className="text-sm font-medium text-fg">{phase.title}</h4>{markdown(phase.description)}</div>)}</section>}
     </div>;
   }
