@@ -4,6 +4,8 @@ import { renderLoopiSvg } from '../../../../src/pets/loopi-artwork';
 
 import type { DesktopPetAction } from '@/types/electron';
 
+import { followLoopiPointer } from './loopi-pointer-motion';
+
 import './loopi-desktop-pet.css';
 
 export function loopiStateForAction(action: DesktopPetAction): string {
@@ -26,6 +28,19 @@ export function LoopiDesktopPet({ action, animationKey, displayHeight, reducedMo
   const host = useRef<HTMLSpanElement>(null);
   const [paused, setPaused] = useState(() => document.hidden);
   const playback = useRef({ action, animationKey });
+  const pointerMotion = useRef<ReturnType<typeof followLoopiPointer> | null>(null);
+  const followingDisabled = paused || reducedMotion || action === 'sleep' || action === 'pickedUp' || action === 'released';
+
+  useEffect(() => {
+    if (!host.current) return;
+    const motion = followLoopiPointer(host.current, false);
+    pointerMotion.current = motion;
+    return () => { motion.dispose(); pointerMotion.current = null; };
+  }, []);
+
+  useEffect(() => {
+    pointerMotion.current?.setEnabled(!followingDisabled);
+  }, [followingDisabled]);
 
   useLayoutEffect(() => {
     const previous = playback.current;

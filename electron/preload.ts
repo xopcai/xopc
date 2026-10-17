@@ -472,6 +472,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
     },
   },
   pet: {
+    onPointerChanged: (callback: (point: { x: number; y: number }) => void) => {
+      const handler = (_: unknown, point: { x: number; y: number }) => callback(point);
+      ipcRenderer.on("desktop-pet:pointer", handler);
+      return () => ipcRenderer.removeListener("desktop-pet:pointer", handler);
+    },
     getState: () => ipcRenderer.invoke("desktop-pet:get-state"),
     setPrefs: (patch: Record<string, unknown>) =>
       ipcRenderer.invoke("desktop-pet:set-prefs", patch),

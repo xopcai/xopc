@@ -10,12 +10,13 @@ const native = vi.hoisted(() => ({
   setBounds: vi.fn(),
   cursor: { x: 0, y: 0 },
   ignoreMouse: vi.fn(),
+  send: vi.fn(),
 }));
 
 vi.mock('electron', () => {
   class BrowserWindow {
     static getAllWindows() { return []; }
-    webContents = { send: vi.fn(), on: vi.fn() };
+    webContents = { send: native.send, on: vi.fn() };
     constructor(options: typeof native.bounds) { native.bounds = { ...options }; }
     getBounds() { return native.bounds; }
     setBounds(bounds: typeof native.bounds) { native.bounds = bounds; native.setBounds(bounds); }
@@ -43,6 +44,7 @@ vi.mock('../../config/paths-state.js', () => ({ resolveStateDir: () => native.ro
 
 import { patchDesktopPetPrefs, readDesktopPetPrefs } from '../../../electron/desktop-pet/prefs.js';
 import {
+  applyDesktopPetPrefs,
   destroyDesktopPetWindow, dragDesktopPet, endDesktopPetDrag,
   initDesktopPetWindow, setDesktopPetContentSize, showDesktopPet, startDesktopPetDrag,
 } from '../../../electron/desktop-pet/window.js';
@@ -109,12 +111,31 @@ describe('native desktop pet visible bounds', () => {
     native.cursor = { x: 830, y: 580 };
     vi.advanceTimersByTime(40);
     expect(native.ignoreMouse).toHaveBeenLastCalledWith(false, { forward: true });
+    expect(native.send).toHaveBeenLastCalledWith('desktop-pet:pointer', { x: -.036, y: -.036 });
     startDesktopPetDrag({ screenX: 830, screenY: 580 });
     native.cursor = { x: 200, y: 200 };
     vi.advanceTimersByTime(40);
     expect(native.ignoreMouse).toHaveBeenLastCalledWith(false, { forward: true });
+    expect(native.send).toHaveBeenLastCalledWith('desktop-pet:pointer', { x: 0, y: 0 });
     await endDesktopPetDrag();
     vi.advanceTimersByTime(40);
     expect(native.ignoreMouse).toHaveBeenLastCalledWith(true, { forward: true });
+  });
+
+  it('preserves the current surface on scale changes and reserves the renderer destination without shrinking', async () => {
+    native.root = await mkdtemp(join(tmpdir(), 'xopc-pet-scale-'));
+    initDesktopPetWindow({ resolveUrl: () => 'http://localhost/#/desktop-pet', openMainWindow: vi.fn(), disableSandbox: false });
+    await patchDesktopPetPrefs({ anchor: { x: 900, y: 650 }, sizePercent: 100 });
+    await showDesktopPet();
+    setDesktopPetContentSize({ width: 420, height: 204 });
+    await applyDesktopPetPrefs({ sizePercent: 140 });
+    expect(native.bounds).toMatchObject({ width: 420, height: 204 });
+    setDesktopPetContentSize({ width: 420, height: 257 });
+    expect(native.bounds).toMatchObject({ x: 480, y: 393, width: 420, height: 257 });
+    native.setBounds.mockClear();
+    await applyDesktopPetPrefs({ sizePercent: 70 });
+    expect(native.setBounds).not.toHaveBeenCalled();
+    setDesktopPetContentSize({ width: 92, height: 92 });
+    expect(native.bounds).toMatchObject({ x: 480, y: 393, width: 420, height: 257 });
   });
 });

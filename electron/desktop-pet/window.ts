@@ -11,6 +11,7 @@ import {
 } from "electron";
 
 import { createDesktopPetPackage } from "../../src/pets/factory.js";
+import { desktopPetPointerTarget, type DesktopPetPointer } from "../../src/pets/pointer.js";
 import {
   desktopPetCustomDir,
   patchDesktopPetPrefs,
@@ -45,6 +46,7 @@ let runtime: DesktopPetRuntime | null = null;
 let petWindow: BrowserWindow | null = null;
 let mouseTimer: ReturnType<typeof setInterval> | undefined;
 let ignoringMouse: boolean | undefined;
+let pointerFollowingEnabled = true;
 let dragState: {
   startPoint: DesktopPetDragPoint;
   startAnchor: DesktopPetAnchor;
@@ -137,6 +139,7 @@ async function createPetWindow(): Promise<BrowserWindow | null> {
 
   const prefs = await readDesktopPetPrefs();
   updateInteractiveSize(prefs);
+  pointerFollowingEnabled = prefs.interactionEnabled && !prefs.reducedMotion;
   contentSize = defaultContentSize(prefs);
   visibleContentSize = { ...contentSize };
   const bounds = boundsForAnchor(await getInitialAnchor());
@@ -162,6 +165,7 @@ async function createPetWindow(): Promise<BrowserWindow | null> {
   petWindow = win;
   win.setAlwaysOnTop(prefs.alwaysOnTop, "floating");
   ignoringMouse = undefined;
+  let lastPointer: DesktopPetPointer | undefined;
   // Native cursor hit testing also works when Chromium is not receiving mouse
   // events through the transparent part of the retained backing surface.
   const windowMouseTimer = setInterval(() => {
@@ -178,6 +182,13 @@ async function createPetWindow(): Promise<BrowserWindow | null> {
       && y < bounds.height - interactiveSize.height - 8;
     const ignore = !dragState && !onPet && !onBubble;
     setDesktopPetClickThrough(ignore);
+    const pointer = pointerFollowingEnabled && !dragState
+      ? desktopPetPointerTarget(cursor, { x: bounds.x + bounds.width - interactiveSize.height / 2, y: bounds.y + bounds.height - interactiveSize.height / 2 }, interactiveSize.height)
+      : { x: 0, y: 0 };
+    if (pointer.x !== lastPointer?.x || pointer.y !== lastPointer?.y) {
+      lastPointer = pointer;
+      win.webContents.send("desktop-pet:pointer", pointer);
+    }
   }, 40);
   windowMouseTimer.unref();
   mouseTimer = windowMouseTimer;
@@ -235,13 +246,13 @@ export async function applyDesktopPetPrefs(
   patch: Partial<DesktopPetPrefs>,
 ): Promise<DesktopPetState> {
   const prefs = await patchDesktopPetPrefs(patch);
+  pointerFollowingEnabled = prefs.interactionEnabled && !prefs.reducedMotion;
   if (petWindow && !petWindow.isDestroyed()) {
     petWindow.setAlwaysOnTop(prefs.alwaysOnTop, "floating");
     if (patch.sizePercent !== undefined) {
       updateInteractiveSize(prefs);
-      contentSize = defaultContentSize(prefs);
-      visibleContentSize = { ...contentSize };
-      petWindow.setBounds(boundsForAnchor(await getInitialAnchor()));
+      // The renderer reserves its destination bounds before animating. Keep the
+      // existing surface here so intermediate frames and bubbles are not clipped.
     }
     if (!prefs.enabled) {
       petWindow.hide();

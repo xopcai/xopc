@@ -1,6 +1,11 @@
 .loopi-desktop {
   display: block;
   flex-shrink: 0;
+  transition: width 240ms cubic-bezier(.22, 1, .36, 1), height 240ms cubic-bezier(.22, 1, .36, 1);
+}
+
+.loopi-desktop[data-reduced-motion="true"] {
+  transition: none;
 }
 
 .loopi-desktop svg {
@@ -8,6 +13,22 @@
   width: 100%;
   height: 100%;
   overflow: visible;
+}
+
+.loopi-pet-pointer-body {
+  transform-origin: 200px 190px;
+  transform: translate(calc(var(--loopi-pointer-x, 0) * 2px), calc(var(--loopi-pointer-y, 0) * 1px)) rotate(calc(var(--loopi-pointer-x, 0) * 2.5deg));
+  transition: transform 320ms cubic-bezier(.22, 1, .36, 1);
+}
+
+.loopi-pet-pointer-core {
+  transform: translate(calc(var(--loopi-pointer-x, 0) * 4px), calc(var(--loopi-pointer-y, 0) * 3px));
+  transition: transform 240ms cubic-bezier(.22, 1, .36, 1);
+}
+
+.loopi-pet-pointer-face {
+  transform: translate(calc(var(--loopi-pointer-x, 0) * 11px), calc(var(--loopi-pointer-y, 0) * 6px));
+  transition: transform 160ms cubic-bezier(.22, 1, .36, 1);
 }
 
 .loopi-pet-body-motion {
@@ -258,6 +279,14 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .loopi-desktop {
+    transition: none;
+  }
+  .loopi-pet-pointer-body,
+  .loopi-pet-pointer-core,
+  .loopi-pet-pointer-face {
+    transform: none !important;
+  }
   .loopi-desktop * {
     animation: none !important;
     transition: none !important;

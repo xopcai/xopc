@@ -2182,6 +2182,7 @@ html[data-desktop-pet="true"] body {
   display: grid;
   place-items: center;
   pointer-events: none;
+  transition: width 240ms cubic-bezier(.22, 1, .36, 1), height 240ms cubic-bezier(.22, 1, .36, 1);
   -webkit-app-region: no-drag;
 }
 
@@ -2195,6 +2196,7 @@ html[data-desktop-pet="true"] body {
   background: transparent;
   cursor: grab;
   pointer-events: auto;
+  transition: width 240ms cubic-bezier(.22, 1, .36, 1), height 240ms cubic-bezier(.22, 1, .36, 1);
   touch-action: none;
   user-select: none;
   -webkit-app-region: no-drag;
@@ -2202,6 +2204,16 @@ html[data-desktop-pet="true"] body {
 
 .desktop-pet-hit-area:active {
   cursor: grabbing;
+}
+
+.desktop-pet-window[data-reduced-motion="true"] * {
+  transition: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .desktop-pet-window * {
+    transition: none !important;
+  }
 }
 
 .desktop-pet-menu-button {
@@ -2222,7 +2234,10 @@ html[data-desktop-pet="true"] body {
   pointer-events: auto;
   transition:
     background 160ms ease,
-    color 160ms ease;
+    color 160ms ease,
+    width 240ms cubic-bezier(.22, 1, .36, 1),
+    height 240ms cubic-bezier(.22, 1, .36, 1),
+    bottom 240ms cubic-bezier(.22, 1, .36, 1);
   -webkit-app-region: no-drag;
 }
 
@@ -2252,6 +2267,7 @@ html[data-desktop-pet="true"] body {
   /* Do not derive this from 100vw: the Electron pet window starts at sprite width,
    * so a viewport-relative width creates a feedback loop that keeps the bubble tiny. */
   width: 420px;
+  transition: bottom 240ms cubic-bezier(.22, 1, .36, 1);
   pointer-events: auto;
   -webkit-app-region: no-drag;
   animation: desktop-pet-bubble-in 180ms cubic-bezier(0.22, 1, 0.36, 1) both;
