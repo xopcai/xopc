@@ -1,0 +1,5 @@
+{
+  "service": "exporter",
+  "timeoutSeconds": 1,
+  "retries": 0
+}

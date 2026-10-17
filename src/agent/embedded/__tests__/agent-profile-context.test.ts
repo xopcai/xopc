@@ -38,6 +38,8 @@ describe('Agent profile runtime context', () => {
       const manager = SessionManager.inMemory(dir);
       manager.appendMessage({ role: 'system', content: 'OLD SYSTEM PROFILE: Mira, botany, English.', timestamp: 1 });
       manager.appendMessage({ role: 'user', content: 'Earlier question', timestamp: 2 });
+      const standingPreference = 'For the rest of this conversation, answer in English with a concise, informal style.';
+      manager.appendMessage({ role: 'user', content: standingPreference, timestamp: 3 });
       const settingsManager = SettingsManager.inMemory({ retry: { enabled: false }, compaction: { enabled: false } });
       const resourceLoader = new DefaultResourceLoader({ cwd: dir, agentDir: dir, settingsManager,
         noExtensions: true, noContextFiles: true, systemPrompt: buildSystemPrompt(dir, { agentProfile: catalog.get(agent.id)!.profile }),
@@ -81,6 +83,20 @@ describe('Agent profile runtime context', () => {
       expect(prompt).not.toContain('OLD SYSTEM PROFILE');
       expect(sent.at(-1)).toMatchObject({ role: 'user', content: [{ type: 'text', text: question }] });
       expect(sent).toEqual(expect.arrayContaining([expect.objectContaining({ role: 'user', content: 'Earlier question' })]));
+      expect(sent).toEqual(expect.arrayContaining([expect.objectContaining({ role: 'user', content: standingPreference })]));
+      expect(prompt).toContain('an ongoing conversation preference remains until changed or revoked');
+      expect(prompt).not.toContain('requests in earlier turns do not override this configuration');
+
+      const exception = 'Only for this reply, use Chinese and a detailed list.';
+      await session.prompt(exception);
+      await session.prompt('继续解释。');
+      const continued = JSON.stringify(captured);
+      expect(continued).toContain(standingPreference);
+      expect(continued).toContain(exception);
+      expect(getCurrentSystemPrompt(captured as never)).toContain('A single-turn exception does not erase that preference');
+      expect(continued).toContain('agent_configuration_current');
+      expect((captured as { content: unknown }[]).at(-1)).toMatchObject({ content: [{ type: 'text', text: '继续解释。' }] });
+
     } finally {
       session?.dispose();
       await rm(dir, { recursive: true, force: true });

@@ -27,8 +27,12 @@ name questions, specific names, languages, or providers.
 
 Updates take effect on the next turn. Missing optional fields use explicit nulls
 in snapshots. Runs without conversation metadata retain their provided prompts.
-Response language precedence is: explicit request this turn, fixed response
-language preference, Agent primary language, then current request language.
+Response language precedence is: explicit request this turn, an applicable ongoing
+conversation preference, then the configured default (session preference before global
+preference). Automatic defaults follow the current user message, with the Agent primary
+language used only when that message has no identifiable language. A one-turn exception
+does not erase ongoing language or style preferences; unrelated profile updates do not
+reset them. Name and role still come from current runtime configuration.
 
 ## Verification on 2026-10-14
 

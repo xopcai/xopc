@@ -7,6 +7,9 @@
  */
 export type PromptMode = 'full' | 'minimal' | 'none';
 
+/** Runtime responsibility, independent of prompt verbosity or the Agent's name. */
+export type PromptRole = 'personal' | 'executor';
+
 /** Controls the generic silent-reply section. Channel-aware callers can set "none". */
 export type SilentReplyPromptMode = 'generic' | 'none';
 

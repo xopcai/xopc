@@ -65,6 +65,9 @@ export function formatSkillsForPrompt(
   skillsConfig?: SkillsConfig,
   options?: FormatSkillsForPromptOptions,
 ): string {
+  const registered = options?.registeredToolNames;
+  const view = registered?.find(name => name.trim().toLowerCase() === 'skill_view')?.trim();
+  if (registered !== undefined && !view) return '';
   const visibleSkills = selectSkillsVisibleInPrompt(skills, skillsConfig, options);
   if (visibleSkills.length === 0) return '';
   const maxSkills = skillsConfig?.limits?.maxSkillsInPrompt;
@@ -72,8 +75,8 @@ export function formatSkillsForPrompt(
 
   const lines = [
     '\n\n<available_skills>',
-    'Skills are folders of instructions, scripts, and resources.',
-    'Use skills_list to browse; use skill_view(name) for SKILL.md or skill_view(name, path) for references/, templates/, scripts/, or assets/.',
+    'Skills contain reusable procedures and resources.',
+    `Use ${view ?? 'skill_view'}(name, path) for referenced resources.`,
     '',
   ];
 

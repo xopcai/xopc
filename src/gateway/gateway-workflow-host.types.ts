@@ -4,6 +4,7 @@ import type { MessageBus } from '../infra/bus/index.js';
 import type { SessionStore } from '../session/store.js';
 
 export interface GatewayWorkflowAgentSurface {
+  getWorkspaceTrust?(workspacePath: string): { trusted: boolean };
   getModelForSession(conversationId: string): string;
   getWorkflowSkillInstructions(agentId: string, names: readonly string[]): string | undefined;
 }

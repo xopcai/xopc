@@ -1,0 +1,2 @@
+import {test} from 'node:test';import assert from 'node:assert/strict';import {listTickets} from '../src/api.mjs';
+test('legacy status, cursor and limit',()=>{const rows=[{id:'a',status:'open'},{id:'b',status:'closed'},{id:'c',status:'open'}];assert.deepEqual(listTickets(rows,{status:'open',after:'a',limit:1}),[rows[2]]);assert.deepEqual(listTickets(rows,{limit:0}),[]);assert.throws(()=>listTickets(rows,{limit:-1}),RangeError);});

@@ -1,10 +1,11 @@
 import type { Config } from '../../config/schema.js';
 import { listChannelPlugins } from '../../channels/plugins/registry.js';
 import { PACKAGE_VERSION } from '../../package-version.js';
+import { isPersonalConversation } from '../../personal-agent/repository.js';
 import { isCronConversationId, isSubagentConversationId, getConversationRouting } from '../../routing/session-key.js';
 import type { ProviderSystemPromptContribution } from './contribution.js';
 import { normalizePromptSection } from './cache-boundary.js';
-import type { MemoryCitationsMode, PromptMode, SilentReplyPromptMode } from './types.js';
+import type { MemoryCitationsMode, PromptMode, PromptRole, SilentReplyPromptMode } from './types.js';
 
 export type { RuntimeInfoInput } from './sections/workspace-runtime.js';
 
@@ -69,6 +70,7 @@ export interface SystemPromptBuildParams {
   workspaceDir: string;
   conversationId?: string;
   promptMode?: PromptMode;
+  promptRole: PromptRole;
   toolNames?: string[];
   toolSummaries?: Record<string, string>;
   runtimeInfo?: import('./sections/workspace-runtime.js').RuntimeInfoInput;
@@ -114,6 +116,7 @@ export function resolveSystemPromptBuildParams(
     workspaceDir: params.workspaceDir,
     conversationId,
     promptMode: params.promptMode ?? resolvePromptMode(conversationId),
+    promptRole: conversationId && isPersonalConversation(conversationId) ? 'personal' : 'executor',
     toolNames: params.toolNames,
     toolSummaries: params.toolSummaries,
     runtimeInfo: {

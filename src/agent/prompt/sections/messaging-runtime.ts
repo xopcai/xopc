@@ -17,50 +17,44 @@ export function buildMessagingSection(params: {
     '## Messaging',
     `- Reply in current session → automatically routes to the source channel (${channelList})`,
     messageToolLine,
-    `- If you use \`send_message\` to deliver your user-visible reply, respond with ONLY: ${NO_REPLY} (avoid duplicate replies)`,
+    ...(params.hasSendMessage ? [`- After delivering your reply with \`send_message\`, respond only ${NO_REPLY} to avoid duplicates.`] : []),
   ].join('\n');
 }
 
 export function buildSilentRepliesSection(params: {
   isMinimal: boolean;
   silentReplyPromptMode?: 'generic' | 'none';
+  hasSendMessage?: boolean;
 }): string {
   if (params.isMinimal || params.silentReplyPromptMode === 'none') {
     return '';
   }
   return [
     '## Silent Replies',
-    `Use ${NO_REPLY} only for background or system-generated events that need no user-facing update, or after you have already delivered the reply with send_message.`,
-    'Always answer a direct message from a person in the current conversation, even if it is brief, unclear, repeated, or looks like a test. Acknowledge it or ask a short clarifying question.',
-    '',
-    'Rules:',
-    '- It must be your ENTIRE message — nothing else',
-    `- Never append it to an actual response (never include "${NO_REPLY}" in real replies)`,
-    '- Never wrap it in markdown or code blocks',
-    '',
-    `Wrong: "Here's help... ${NO_REPLY}"`,
-    `Right: ${NO_REPLY}`,
+    `Use ${NO_REPLY} only for background or system events needing no update${params.hasSendMessage ? ', or after delivering the reply with send_message' : ''}.`,
+    'Always answer a direct message from a person, even if brief, unclear, repeated, or a test.',
+    `The marker must be the entire message, without Markdown or other text.`,
   ].join('\n');
 }
 
-export function buildOutputDirectivesSection(isMinimal: boolean): string {
-  if (isMinimal) {
+export function buildOutputDirectivesSection(isMinimal: boolean, toolNames: string[] = [], channels: string[] = []): string {
+  const tools = new Set(toolNames.map(name => name.trim().toLowerCase()));
+  const hasFiles = ['publish_artifacts', 'send_media', 'send_message'].some(name => tools.has(name));
+  const hasVoice = tools.has('text_to_speech') || tools.has('send_media');
+  const hasReplyTags = channels.some(channel => !['webchat', 'cli'].includes(channel));
+  if (isMinimal || (!hasFiles && !hasReplyTags && !hasVoice)) {
     return '';
   }
   return [
     '## Assistant Output Directives',
-    'Use these when you need delivery metadata in an assistant message:',
-    '- Deliver files through the available artifact or messaging tools and their confirmed structured references. Text such as `MEDIA:<path-or-url>` does not publish a file; do not emit MEDIA directives or host paths as a substitute for a delivered attachment.',
-    '- `[[audio_as_voice]]` marks attached audio as a voice-note style delivery hint when supported.',
-    '- To request a native reply/quote on supported surfaces, include one reply tag in your reply:',
-    '- Reply tags must be the very first token in the message (no leading text/newlines): [[reply_to_current]] your reply.',
-    '- [[reply_to_current]] replies to the triggering message.',
-    '- Prefer [[reply_to_current]]. Use [[reply_to:<id>]] only when an id was explicitly provided.',
-    'Supported tags are stripped before user-visible rendering; support still depends on the current channel config.',
-  ].join('\n');
+    hasFiles ? 'Deliver attachments through available artifact or messaging tools using confirmed references. MEDIA:<path-or-url> and host paths do not publish files.' : '',
+    hasVoice ? '`[[audio_as_voice]]` requests voice-note delivery for attached audio when supported.' : '',
+    hasReplyTags ? 'For supported native replies, put [[reply_to_current]] first in the message. Use [[reply_to:<id>]] only for an explicitly supplied id. Tags are stripped on supported channels.' : '',
+  ].filter(Boolean).join('\n');
 }
 
-export function buildTimeSection(timezone?: string): string {
+export function buildTimeSection(timezone?: string, toolNames: string[] = []): string {
+  const status = toolNames.find(name => name.trim().toLowerCase() === 'session_status')?.trim();
   if (!timezone) {
     return '';
   }
@@ -68,6 +62,8 @@ export function buildTimeSection(timezone?: string): string {
     '## Current Date & Time',
     `Time zone: ${timezone}`,
     '',
-    'If you need the current date/time/day-of-week, use the `session_status` tool or the inbound message timestamp envelope (when present).',
+    status
+      ? `For current date/time, use \`${status}\` or the inbound timestamp envelope.`
+      : 'Use the inbound timestamp envelope for current date/time when present; otherwise verify with an available clock source rather than guessing.',
   ].join('\n');
 }

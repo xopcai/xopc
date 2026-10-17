@@ -15,7 +15,6 @@ import {
   clearBootstrapSnapshot,
   resolveBootstrapContextSync,
 } from '../bootstrap-files.js';
-import { loadProjectAgentsContextFile } from '../project-agents-context.js';
 
 function fixtureProfileDir(prefix: string): string {
   const profileDir = join(mkdtempSync(join(tmpdir(), prefix)), 'profile');
@@ -97,23 +96,15 @@ describe('bootstrap-files', () => {
     expect(afterReset.contextFiles.length).toBeGreaterThan(0);
   });
 
-  it('loads project AGENTS.md from workspace root only', () => {
-    seedConversationFixtures();
+  it('keeps repository instructions out of profile bootstrap context', () => {
     const workspaceDir = mkdtempSync(join(tmpdir(), 'xopc-project-agents-'));
-    mkdirSync(join(workspaceDir, 'nested'), { recursive: true });
-    writeFileSync(
-      join(workspaceDir, 'AGENTS.md'),
-      `---\ntitle: ignored\n---\n# Project Rules\n\nRun pnpm test.\n`,
-    );
-    writeFileSync(join(workspaceDir, 'nested', 'AGENTS.md'), '# Nested Rules');
+    const profileDir = join(workspaceDir, 'profile');
+    mkdirSync(profileDir);
+    writeFileSync(join(workspaceDir, 'AGENTS.md'), 'Repository-only rule');
+    writeFileSync(join(profileDir, 'AGENTS.md'), 'Profile-only rule');
 
-    const rootContext = loadProjectAgentsContextFile(workspaceDir);
-    const nestedContext = loadProjectAgentsContextFile(join(workspaceDir, 'nested'));
-
-    expect(rootContext?.path).toBe(join(workspaceDir, 'AGENTS.md'));
-    expect(rootContext?.content).toContain('Workspace AGENTS.md contains project-local instructions.');
-    expect(rootContext?.content).toContain('# Project Rules');
-    expect(rootContext?.content).not.toContain('title: ignored');
-    expect(nestedContext?.content).toContain('# Nested Rules');
+    const { contextFiles } = resolveBootstrapContextSync({ profileDir });
+    expect(contextFiles.map(file => file.content).join('\n')).toContain('Profile-only rule');
+    expect(contextFiles.map(file => file.content).join('\n')).not.toContain('Repository-only rule');
   });
 });

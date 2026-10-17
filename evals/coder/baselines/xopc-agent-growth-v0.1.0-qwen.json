@@ -1,0 +1,1093 @@
+{
+  "schemaVersion": 1,
+  "evidenceClass": "live-direct-agent",
+  "experimentId": "62f11e0a-80e5-4fa6-8976-1a2c953a896a",
+  "suiteHash": "df2333ee2f1ace2f135bf5d8ce8eef56bb0d72d836bd1842422df8994df88472",
+  "passed": false,
+  "sourceDrift": false,
+  "variants": [
+    {
+      "id": "candidate",
+      "expectedRuns": 18,
+      "observedRuns": 18,
+      "passed": 16,
+      "successRate": 0.8888888888888888,
+      "reportedEstimatedCost": null,
+      "reportedEstimatedCostPerSuccess": null,
+      "durationsMs": [
+        107276,
+        64256,
+        113616,
+        98059,
+        76923,
+        124393,
+        66917,
+        82408,
+        77836,
+        86954,
+        59081,
+        53585,
+        157004,
+        99973,
+        98184,
+        65531,
+        85891,
+        92511
+      ],
+      "totalReportedTokens": null,
+      "statuses": {
+        "passed": 16,
+        "failed": 1,
+        "error": 0,
+        "timed_out": 0,
+        "budget_exceeded": 1
+      },
+      "categories": [
+        {
+          "category": "information",
+          "expectedRuns": 6,
+          "passed": 6
+        },
+        {
+          "category": "convergence",
+          "expectedRuns": 6,
+          "passed": 5
+        },
+        {
+          "category": "project",
+          "expectedRuns": 6,
+          "passed": 5
+        }
+      ]
+    }
+  ],
+  "cases": [
+    {
+      "caseId": "I01-active-dependency",
+      "variantId": "candidate",
+      "runId": "39ec1a1a-ff69-4fd0-a05a-6c6e0cd29717",
+      "status": "passed",
+      "artifactChecksPassed": true,
+      "durationMs": 66917,
+      "observedResponseTokens": 147765,
+      "usageCoverage": "Observed completed responses only; interrupted requests may be unreported.",
+      "diagnostics": {
+        "toolCounts": {
+          "list_dir": 1,
+          "read_file": 4,
+          "exec_command": 4,
+          "write_file": 3,
+          "review_workspace": 1
+        },
+        "distinctExplicitReadPaths": [
+          "contracts/settlement.md",
+          "data/live/october.json",
+          "services/settlement/service.json",
+          "workspace.json"
+        ],
+        "toolCompletionCoverage": {
+          "total": 13,
+          "recovered": 13
+        },
+        "repeatedSuccessfulCallsAtObservedRevision": 0,
+        "explicitEditsAfterSuccessfulCheckAtObservedRevision": 0,
+        "explicitReadsAfterSuccessfulCheckAtObservedRevision": 0,
+        "limitations": "Counts model-visible tools only. Identical arguments are compared verbatim; shell I/O and semantic necessity are not inferred. Missing trace payloads yield null diagnostic totals."
+      },
+      "modelRequests": 13,
+      "toolCalls": 13,
+      "runtimeIdentity": {
+        "effectiveModelRef": "qwen-token-plan-cn/qwen3.8-flash",
+        "effectiveThinkingLevel": "medium",
+        "configHash": "2383097772ae432e63fc909e739eddd5f547f14e117ea1024bf8701c3f286a7c",
+        "toolPolicyHash": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+        "skillPolicyHash": "ef06d04eee82893c99242e72a476bb835a18a715b0dfc52c69928fee75ac3830"
+      },
+      "grades": [
+        {
+          "grader_index": 0,
+          "passed": 1,
+          "summary": "Command passed"
+        },
+        {
+          "grader_index": 1,
+          "passed": 1,
+          "summary": "Protected paths were unchanged"
+        }
+      ],
+      "error": null,
+      "failureEvidence": []
+    },
+    {
+      "caseId": "I02-current-release",
+      "variantId": "candidate",
+      "runId": "6c2403cb-abfe-44d3-87a4-c3fe16651cbb",
+      "status": "passed",
+      "artifactChecksPassed": true,
+      "durationMs": 86954,
+      "observedResponseTokens": 196337,
+      "usageCoverage": "Observed completed responses only; interrupted requests may be unreported.",
+      "diagnostics": {
+        "toolCounts": {
+          "exec_command": 6,
+          "write_file": 3,
+          "review_workspace": 2,
+          "apply_patch": 1
+        },
+        "distinctExplicitReadPaths": [],
+        "toolCompletionCoverage": {
+          "total": 12,
+          "recovered": 12
+        },
+        "repeatedSuccessfulCallsAtObservedRevision": 0,
+        "explicitEditsAfterSuccessfulCheckAtObservedRevision": 1,
+        "explicitReadsAfterSuccessfulCheckAtObservedRevision": 0,
+        "limitations": "Counts model-visible tools only. Identical arguments are compared verbatim; shell I/O and semantic necessity are not inferred. Missing trace payloads yield null diagnostic totals."
+      },
+      "modelRequests": 14,
+      "toolCalls": 12,
+      "runtimeIdentity": {
+        "effectiveModelRef": "qwen-token-plan-cn/qwen3.8-flash",
+        "effectiveThinkingLevel": "medium",
+        "configHash": "2383097772ae432e63fc909e739eddd5f547f14e117ea1024bf8701c3f286a7c",
+        "toolPolicyHash": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+        "skillPolicyHash": "ef06d04eee82893c99242e72a476bb835a18a715b0dfc52c69928fee75ac3830"
+      },
+      "grades": [
+        {
+          "grader_index": 0,
+          "passed": 1,
+          "summary": "Command passed"
+        },
+        {
+          "grader_index": 1,
+          "passed": 1,
+          "summary": "Protected paths were unchanged"
+        }
+      ],
+      "error": null,
+      "failureEvidence": []
+    },
+    {
+      "caseId": "E01-verified-stop",
+      "variantId": "candidate",
+      "runId": "785afea5-f236-43a9-ba6a-7258851ea099",
+      "status": "failed",
+      "artifactChecksPassed": false,
+      "durationMs": 107276,
+      "observedResponseTokens": 219865,
+      "usageCoverage": "Observed completed responses only; interrupted requests may be unreported.",
+      "diagnostics": {
+        "toolCounts": {
+          "exec_command": 8,
+          "write_file": 6,
+          "review_workspace": 1
+        },
+        "distinctExplicitReadPaths": [],
+        "toolCompletionCoverage": {
+          "total": 15,
+          "recovered": 15
+        },
+        "repeatedSuccessfulCallsAtObservedRevision": 0,
+        "explicitEditsAfterSuccessfulCheckAtObservedRevision": 0,
+        "explicitReadsAfterSuccessfulCheckAtObservedRevision": 0,
+        "limitations": "Counts model-visible tools only. Identical arguments are compared verbatim; shell I/O and semantic necessity are not inferred. Missing trace payloads yield null diagnostic totals."
+      },
+      "modelRequests": 16,
+      "toolCalls": 15,
+      "runtimeIdentity": {
+        "effectiveModelRef": "qwen-token-plan-cn/qwen3.8-flash",
+        "effectiveThinkingLevel": "medium",
+        "configHash": "2383097772ae432e63fc909e739eddd5f547f14e117ea1024bf8701c3f286a7c",
+        "toolPolicyHash": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+        "skillPolicyHash": "ef06d04eee82893c99242e72a476bb835a18a715b0dfc52c69928fee75ac3830"
+      },
+      "grades": [
+        {
+          "grader_index": 0,
+          "passed": 0,
+          "summary": "Command failed with exit code 1"
+        },
+        {
+          "grader_index": 1,
+          "passed": 1,
+          "summary": "Protected paths were unchanged"
+        }
+      ],
+      "error": null,
+      "failureEvidence": [
+        {
+          "artifactId": "23d4f906-2b2f-4121-8554-93565ab6fdb1",
+          "sha256": "99dae572dbba5c763d0e5cd909355dc8bb2e7287cb1679d5d882bbe21f066d27",
+          "assertion": "AssertionError [ERR_ASSERTION]: Only the requested report may be added to the completed task"
+        }
+      ]
+    },
+    {
+      "caseId": "E02-green-incomplete",
+      "variantId": "candidate",
+      "runId": "6999e1df-b58d-4016-82bc-8908848fdf32",
+      "status": "passed",
+      "artifactChecksPassed": true,
+      "durationMs": 98059,
+      "observedResponseTokens": 178927,
+      "usageCoverage": "Observed completed responses only; interrupted requests may be unreported.",
+      "diagnostics": {
+        "toolCounts": {
+          "list_dir": 2,
+          "read_file": 5,
+          "apply_patch": 3,
+          "write_file": 4,
+          "exec_command": 2,
+          "review_workspace": 1
+        },
+        "distinctExplicitReadPaths": [
+          "docs/export-contract.md",
+          "package.json",
+          "src/export.mjs",
+          "src/orders.mjs",
+          "test/smoke.test.mjs"
+        ],
+        "toolCompletionCoverage": {
+          "total": 17,
+          "recovered": 17
+        },
+        "repeatedSuccessfulCallsAtObservedRevision": 0,
+        "explicitEditsAfterSuccessfulCheckAtObservedRevision": 0,
+        "explicitReadsAfterSuccessfulCheckAtObservedRevision": 0,
+        "limitations": "Counts model-visible tools only. Identical arguments are compared verbatim; shell I/O and semantic necessity are not inferred. Missing trace payloads yield null diagnostic totals."
+      },
+      "modelRequests": 14,
+      "toolCalls": 17,
+      "runtimeIdentity": {
+        "effectiveModelRef": "qwen-token-plan-cn/qwen3.8-flash",
+        "effectiveThinkingLevel": "medium",
+        "configHash": "2383097772ae432e63fc909e739eddd5f547f14e117ea1024bf8701c3f286a7c",
+        "toolPolicyHash": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+        "skillPolicyHash": "ef06d04eee82893c99242e72a476bb835a18a715b0dfc52c69928fee75ac3830"
+      },
+      "grades": [
+        {
+          "grader_index": 0,
+          "passed": 1,
+          "summary": "Command passed"
+        },
+        {
+          "grader_index": 1,
+          "passed": 1,
+          "summary": "Protected paths were unchanged"
+        }
+      ],
+      "error": null,
+      "failureEvidence": []
+    },
+    {
+      "caseId": "P01-inventory-cache",
+      "variantId": "candidate",
+      "runId": "65fc1474-afe9-4901-ba2a-6dd504b18fd2",
+      "status": "budget_exceeded",
+      "artifactChecksPassed": true,
+      "durationMs": 157004,
+      "observedResponseTokens": 319265,
+      "usageCoverage": "Observed completed responses only; interrupted requests may be unreported.",
+      "diagnostics": {
+        "toolCounts": {
+          "list_dir": 1,
+          "exec_command": 7,
+          "read_file": 7,
+          "apply_patch": 1,
+          "write_file": 5,
+          "review_workspace": 1
+        },
+        "distinctExplicitReadPaths": [
+          "README.md",
+          "package.json",
+          "src/catalog.mjs",
+          "src/index.mjs",
+          "src/repository.mjs",
+          "src/reservations.mjs",
+          "test/smoke.test.mjs"
+        ],
+        "toolCompletionCoverage": {
+          "total": 21,
+          "recovered": 21
+        },
+        "repeatedSuccessfulCallsAtObservedRevision": 0,
+        "explicitEditsAfterSuccessfulCheckAtObservedRevision": 0,
+        "explicitReadsAfterSuccessfulCheckAtObservedRevision": 0,
+        "limitations": "Counts model-visible tools only. Identical arguments are compared verbatim; shell I/O and semantic necessity are not inferred. Missing trace payloads yield null diagnostic totals."
+      },
+      "modelRequests": 22,
+      "toolCalls": 22,
+      "runtimeIdentity": {
+        "effectiveModelRef": "qwen-token-plan-cn/qwen3.8-flash",
+        "effectiveThinkingLevel": "medium",
+        "configHash": "2383097772ae432e63fc909e739eddd5f547f14e117ea1024bf8701c3f286a7c",
+        "toolPolicyHash": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+        "skillPolicyHash": "ef06d04eee82893c99242e72a476bb835a18a715b0dfc52c69928fee75ac3830"
+      },
+      "grades": [
+        {
+          "grader_index": 0,
+          "passed": 1,
+          "summary": "Command passed"
+        },
+        {
+          "grader_index": 1,
+          "passed": 1,
+          "summary": "Protected paths were unchanged"
+        }
+      ],
+      "error": "Evaluation aborted",
+      "failureEvidence": [
+        {
+          "artifactId": "6802d7b3-e57b-4e38-87ee-da50863bca6a",
+          "sha256": "d61468cf1e5b68f2091eee9567256037408826d49b3cfdc396da9cdc82368514",
+          "assertion": null
+        }
+      ]
+    },
+    {
+      "caseId": "P02-ticket-labels",
+      "variantId": "candidate",
+      "runId": "f0149320-2140-4e66-a112-64cba8f07a45",
+      "status": "passed",
+      "artifactChecksPassed": true,
+      "durationMs": 65531,
+      "observedResponseTokens": 129207,
+      "usageCoverage": "Observed completed responses only; interrupted requests may be unreported.",
+      "diagnostics": {
+        "toolCounts": {
+          "list_dir": 1,
+          "read_file": 6,
+          "find": 1,
+          "apply_patch": 2,
+          "write_file": 2,
+          "exec_command": 2,
+          "review_workspace": 1
+        },
+        "distinctExplicitReadPaths": [
+          "README.md",
+          "package.json",
+          "src/api.mjs",
+          "src/pagination.mjs",
+          "src/query.mjs",
+          "test/smoke.test.mjs"
+        ],
+        "toolCompletionCoverage": {
+          "total": 15,
+          "recovered": 15
+        },
+        "repeatedSuccessfulCallsAtObservedRevision": 0,
+        "explicitEditsAfterSuccessfulCheckAtObservedRevision": 0,
+        "explicitReadsAfterSuccessfulCheckAtObservedRevision": 0,
+        "limitations": "Counts model-visible tools only. Identical arguments are compared verbatim; shell I/O and semantic necessity are not inferred. Missing trace payloads yield null diagnostic totals."
+      },
+      "modelRequests": 11,
+      "toolCalls": 15,
+      "runtimeIdentity": {
+        "effectiveModelRef": "qwen-token-plan-cn/qwen3.8-flash",
+        "effectiveThinkingLevel": "medium",
+        "configHash": "2383097772ae432e63fc909e739eddd5f547f14e117ea1024bf8701c3f286a7c",
+        "toolPolicyHash": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+        "skillPolicyHash": "ef06d04eee82893c99242e72a476bb835a18a715b0dfc52c69928fee75ac3830"
+      },
+      "grades": [
+        {
+          "grader_index": 0,
+          "passed": 1,
+          "summary": "Command passed"
+        },
+        {
+          "grader_index": 1,
+          "passed": 1,
+          "summary": "Protected paths were unchanged"
+        }
+      ],
+      "error": null,
+      "failureEvidence": []
+    },
+    {
+      "caseId": "I01-active-dependency",
+      "variantId": "candidate#2",
+      "runId": "b1f10f9c-ebea-4bd7-bfbe-93d8eafc38ae",
+      "status": "passed",
+      "artifactChecksPassed": true,
+      "durationMs": 82408,
+      "observedResponseTokens": 242810,
+      "usageCoverage": "Observed completed responses only; interrupted requests may be unreported.",
+      "diagnostics": {
+        "toolCounts": {
+          "exec_command": 11,
+          "write_file": 3,
+          "apply_patch": 2,
+          "review_workspace": 1
+        },
+        "distinctExplicitReadPaths": [],
+        "toolCompletionCoverage": {
+          "total": 17,
+          "recovered": 17
+        },
+        "repeatedSuccessfulCallsAtObservedRevision": 0,
+        "explicitEditsAfterSuccessfulCheckAtObservedRevision": 0,
+        "explicitReadsAfterSuccessfulCheckAtObservedRevision": 0,
+        "limitations": "Counts model-visible tools only. Identical arguments are compared verbatim; shell I/O and semantic necessity are not inferred. Missing trace payloads yield null diagnostic totals."
+      },
+      "modelRequests": 18,
+      "toolCalls": 17,
+      "runtimeIdentity": {
+        "effectiveModelRef": "qwen-token-plan-cn/qwen3.8-flash",
+        "effectiveThinkingLevel": "medium",
+        "configHash": "2383097772ae432e63fc909e739eddd5f547f14e117ea1024bf8701c3f286a7c",
+        "toolPolicyHash": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+        "skillPolicyHash": "ef06d04eee82893c99242e72a476bb835a18a715b0dfc52c69928fee75ac3830"
+      },
+      "grades": [
+        {
+          "grader_index": 0,
+          "passed": 1,
+          "summary": "Command passed"
+        },
+        {
+          "grader_index": 1,
+          "passed": 1,
+          "summary": "Protected paths were unchanged"
+        }
+      ],
+      "error": null,
+      "failureEvidence": []
+    },
+    {
+      "caseId": "I02-current-release",
+      "variantId": "candidate#2",
+      "runId": "3cf963e2-c74a-49aa-88e8-4d59afb6f962",
+      "status": "passed",
+      "artifactChecksPassed": true,
+      "durationMs": 59081,
+      "observedResponseTokens": 136806,
+      "usageCoverage": "Observed completed responses only; interrupted requests may be unreported.",
+      "diagnostics": {
+        "toolCounts": {
+          "list_dir": 3,
+          "read_file": 7,
+          "exec_command": 4,
+          "write_file": 3,
+          "review_workspace": 1
+        },
+        "distinctExplicitReadPaths": [
+          "README.md",
+          "deployment.json",
+          "examples/exporter/config.json",
+          "releases/2026-09/exporter/config.json",
+          "releases/2026-09/exporter/contract.md",
+          "releases/2026-10/exporter/config.json",
+          "releases/2026-10/exporter/contract.md"
+        ],
+        "toolCompletionCoverage": {
+          "total": 18,
+          "recovered": 18
+        },
+        "repeatedSuccessfulCallsAtObservedRevision": 0,
+        "explicitEditsAfterSuccessfulCheckAtObservedRevision": 0,
+        "explicitReadsAfterSuccessfulCheckAtObservedRevision": 0,
+        "limitations": "Counts model-visible tools only. Identical arguments are compared verbatim; shell I/O and semantic necessity are not inferred. Missing trace payloads yield null diagnostic totals."
+      },
+      "modelRequests": 12,
+      "toolCalls": 18,
+      "runtimeIdentity": {
+        "effectiveModelRef": "qwen-token-plan-cn/qwen3.8-flash",
+        "effectiveThinkingLevel": "medium",
+        "configHash": "2383097772ae432e63fc909e739eddd5f547f14e117ea1024bf8701c3f286a7c",
+        "toolPolicyHash": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+        "skillPolicyHash": "ef06d04eee82893c99242e72a476bb835a18a715b0dfc52c69928fee75ac3830"
+      },
+      "grades": [
+        {
+          "grader_index": 0,
+          "passed": 1,
+          "summary": "Command passed"
+        },
+        {
+          "grader_index": 1,
+          "passed": 1,
+          "summary": "Protected paths were unchanged"
+        }
+      ],
+      "error": null,
+      "failureEvidence": []
+    },
+    {
+      "caseId": "E01-verified-stop",
+      "variantId": "candidate#2",
+      "runId": "8804c962-38ff-4c3d-9e66-8860d0ae831a",
+      "status": "passed",
+      "artifactChecksPassed": true,
+      "durationMs": 64256,
+      "observedResponseTokens": 149265,
+      "usageCoverage": "Observed completed responses only; interrupted requests may be unreported.",
+      "diagnostics": {
+        "toolCounts": {
+          "exec_command": 7,
+          "write_file": 3,
+          "review_workspace": 2
+        },
+        "distinctExplicitReadPaths": [],
+        "toolCompletionCoverage": {
+          "total": 12,
+          "recovered": 12
+        },
+        "repeatedSuccessfulCallsAtObservedRevision": 0,
+        "explicitEditsAfterSuccessfulCheckAtObservedRevision": 0,
+        "explicitReadsAfterSuccessfulCheckAtObservedRevision": 0,
+        "limitations": "Counts model-visible tools only. Identical arguments are compared verbatim; shell I/O and semantic necessity are not inferred. Missing trace payloads yield null diagnostic totals."
+      },
+      "modelRequests": 12,
+      "toolCalls": 12,
+      "runtimeIdentity": {
+        "effectiveModelRef": "qwen-token-plan-cn/qwen3.8-flash",
+        "effectiveThinkingLevel": "medium",
+        "configHash": "2383097772ae432e63fc909e739eddd5f547f14e117ea1024bf8701c3f286a7c",
+        "toolPolicyHash": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+        "skillPolicyHash": "ef06d04eee82893c99242e72a476bb835a18a715b0dfc52c69928fee75ac3830"
+      },
+      "grades": [
+        {
+          "grader_index": 0,
+          "passed": 1,
+          "summary": "Command passed"
+        },
+        {
+          "grader_index": 1,
+          "passed": 1,
+          "summary": "Protected paths were unchanged"
+        }
+      ],
+      "error": null,
+      "failureEvidence": []
+    },
+    {
+      "caseId": "E02-green-incomplete",
+      "variantId": "candidate#2",
+      "runId": "4bc288bc-9ceb-4213-ab2a-08974c2b33fd",
+      "status": "passed",
+      "artifactChecksPassed": true,
+      "durationMs": 76923,
+      "observedResponseTokens": 120733,
+      "usageCoverage": "Observed completed responses only; interrupted requests may be unreported.",
+      "diagnostics": {
+        "toolCounts": {
+          "list_dir": 3,
+          "read_file": 5,
+          "apply_patch": 1,
+          "write_file": 3,
+          "exec_command": 2,
+          "review_workspace": 1
+        },
+        "distinctExplicitReadPaths": [
+          "docs/export-contract.md",
+          "package.json",
+          "src/export.mjs",
+          "src/orders.mjs",
+          "test/smoke.test.mjs"
+        ],
+        "toolCompletionCoverage": {
+          "total": 15,
+          "recovered": 15
+        },
+        "repeatedSuccessfulCallsAtObservedRevision": 0,
+        "explicitEditsAfterSuccessfulCheckAtObservedRevision": 0,
+        "explicitReadsAfterSuccessfulCheckAtObservedRevision": 0,
+        "limitations": "Counts model-visible tools only. Identical arguments are compared verbatim; shell I/O and semantic necessity are not inferred. Missing trace payloads yield null diagnostic totals."
+      },
+      "modelRequests": 10,
+      "toolCalls": 15,
+      "runtimeIdentity": {
+        "effectiveModelRef": "qwen-token-plan-cn/qwen3.8-flash",
+        "effectiveThinkingLevel": "medium",
+        "configHash": "2383097772ae432e63fc909e739eddd5f547f14e117ea1024bf8701c3f286a7c",
+        "toolPolicyHash": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+        "skillPolicyHash": "ef06d04eee82893c99242e72a476bb835a18a715b0dfc52c69928fee75ac3830"
+      },
+      "grades": [
+        {
+          "grader_index": 0,
+          "passed": 1,
+          "summary": "Command passed"
+        },
+        {
+          "grader_index": 1,
+          "passed": 1,
+          "summary": "Protected paths were unchanged"
+        }
+      ],
+      "error": null,
+      "failureEvidence": []
+    },
+    {
+      "caseId": "P01-inventory-cache",
+      "variantId": "candidate#2",
+      "runId": "ebaff0de-c903-4b42-9d36-d5fb3f91c8a2",
+      "status": "passed",
+      "artifactChecksPassed": true,
+      "durationMs": 99973,
+      "observedResponseTokens": 172483,
+      "usageCoverage": "Observed completed responses only; interrupted requests may be unreported.",
+      "diagnostics": {
+        "toolCounts": {
+          "exec_command": 3,
+          "read_file": 8,
+          "apply_patch": 3,
+          "write_file": 2,
+          "review_workspace": 1
+        },
+        "distinctExplicitReadPaths": [
+          "README.md",
+          "package.json",
+          "src/catalog.mjs",
+          "src/index.mjs",
+          "src/repository.mjs",
+          "src/reservations.mjs",
+          "test/smoke.test.mjs"
+        ],
+        "toolCompletionCoverage": {
+          "total": 17,
+          "recovered": 17
+        },
+        "repeatedSuccessfulCallsAtObservedRevision": 0,
+        "explicitEditsAfterSuccessfulCheckAtObservedRevision": 1,
+        "explicitReadsAfterSuccessfulCheckAtObservedRevision": 0,
+        "limitations": "Counts model-visible tools only. Identical arguments are compared verbatim; shell I/O and semantic necessity are not inferred. Missing trace payloads yield null diagnostic totals."
+      },
+      "modelRequests": 15,
+      "toolCalls": 17,
+      "runtimeIdentity": {
+        "effectiveModelRef": "qwen-token-plan-cn/qwen3.8-flash",
+        "effectiveThinkingLevel": "medium",
+        "configHash": "2383097772ae432e63fc909e739eddd5f547f14e117ea1024bf8701c3f286a7c",
+        "toolPolicyHash": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+        "skillPolicyHash": "ef06d04eee82893c99242e72a476bb835a18a715b0dfc52c69928fee75ac3830"
+      },
+      "grades": [
+        {
+          "grader_index": 0,
+          "passed": 1,
+          "summary": "Command passed"
+        },
+        {
+          "grader_index": 1,
+          "passed": 1,
+          "summary": "Protected paths were unchanged"
+        }
+      ],
+      "error": null,
+      "failureEvidence": []
+    },
+    {
+      "caseId": "P02-ticket-labels",
+      "variantId": "candidate#2",
+      "runId": "e9c42c96-aa76-483c-8294-c091aa243a8a",
+      "status": "passed",
+      "artifactChecksPassed": true,
+      "durationMs": 85891,
+      "observedResponseTokens": 134900,
+      "usageCoverage": "Observed completed responses only; interrupted requests may be unreported.",
+      "diagnostics": {
+        "toolCounts": {
+          "list_dir": 3,
+          "read_file": 6,
+          "apply_patch": 1,
+          "write_file": 3,
+          "exec_command": 2,
+          "review_workspace": 1
+        },
+        "distinctExplicitReadPaths": [
+          "README.md",
+          "package.json",
+          "src/api.mjs",
+          "src/pagination.mjs",
+          "src/query.mjs",
+          "test/smoke.test.mjs"
+        ],
+        "toolCompletionCoverage": {
+          "total": 16,
+          "recovered": 16
+        },
+        "repeatedSuccessfulCallsAtObservedRevision": 0,
+        "explicitEditsAfterSuccessfulCheckAtObservedRevision": 0,
+        "explicitReadsAfterSuccessfulCheckAtObservedRevision": 0,
+        "limitations": "Counts model-visible tools only. Identical arguments are compared verbatim; shell I/O and semantic necessity are not inferred. Missing trace payloads yield null diagnostic totals."
+      },
+      "modelRequests": 11,
+      "toolCalls": 16,
+      "runtimeIdentity": {
+        "effectiveModelRef": "qwen-token-plan-cn/qwen3.8-flash",
+        "effectiveThinkingLevel": "medium",
+        "configHash": "2383097772ae432e63fc909e739eddd5f547f14e117ea1024bf8701c3f286a7c",
+        "toolPolicyHash": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+        "skillPolicyHash": "ef06d04eee82893c99242e72a476bb835a18a715b0dfc52c69928fee75ac3830"
+      },
+      "grades": [
+        {
+          "grader_index": 0,
+          "passed": 1,
+          "summary": "Command passed"
+        },
+        {
+          "grader_index": 1,
+          "passed": 1,
+          "summary": "Protected paths were unchanged"
+        }
+      ],
+      "error": null,
+      "failureEvidence": []
+    },
+    {
+      "caseId": "I01-active-dependency",
+      "variantId": "candidate#3",
+      "runId": "5ee8de85-f5d5-4a1e-8dcd-f8c1acd27bad",
+      "status": "passed",
+      "artifactChecksPassed": true,
+      "durationMs": 77836,
+      "observedResponseTokens": 171282,
+      "usageCoverage": "Observed completed responses only; interrupted requests may be unreported.",
+      "diagnostics": {
+        "toolCounts": {
+          "exec_command": 7,
+          "write_file": 5,
+          "review_workspace": 1
+        },
+        "distinctExplicitReadPaths": [],
+        "toolCompletionCoverage": {
+          "total": 13,
+          "recovered": 13
+        },
+        "repeatedSuccessfulCallsAtObservedRevision": 0,
+        "explicitEditsAfterSuccessfulCheckAtObservedRevision": 0,
+        "explicitReadsAfterSuccessfulCheckAtObservedRevision": 0,
+        "limitations": "Counts model-visible tools only. Identical arguments are compared verbatim; shell I/O and semantic necessity are not inferred. Missing trace payloads yield null diagnostic totals."
+      },
+      "modelRequests": 13,
+      "toolCalls": 13,
+      "runtimeIdentity": {
+        "effectiveModelRef": "qwen-token-plan-cn/qwen3.8-flash",
+        "effectiveThinkingLevel": "medium",
+        "configHash": "2383097772ae432e63fc909e739eddd5f547f14e117ea1024bf8701c3f286a7c",
+        "toolPolicyHash": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+        "skillPolicyHash": "ef06d04eee82893c99242e72a476bb835a18a715b0dfc52c69928fee75ac3830"
+      },
+      "grades": [
+        {
+          "grader_index": 0,
+          "passed": 1,
+          "summary": "Command passed"
+        },
+        {
+          "grader_index": 1,
+          "passed": 1,
+          "summary": "Protected paths were unchanged"
+        }
+      ],
+      "error": null,
+      "failureEvidence": []
+    },
+    {
+      "caseId": "I02-current-release",
+      "variantId": "candidate#3",
+      "runId": "7f7e3796-9279-4ec4-8a72-751e9b92c380",
+      "status": "passed",
+      "artifactChecksPassed": true,
+      "durationMs": 53585,
+      "observedResponseTokens": 144678,
+      "usageCoverage": "Observed completed responses only; interrupted requests may be unreported.",
+      "diagnostics": {
+        "toolCounts": {
+          "list_dir": 3,
+          "read_file": 1,
+          "exec_command": 5,
+          "write_file": 3,
+          "review_workspace": 1
+        },
+        "distinctExplicitReadPaths": [
+          "deployment.json"
+        ],
+        "toolCompletionCoverage": {
+          "total": 13,
+          "recovered": 13
+        },
+        "repeatedSuccessfulCallsAtObservedRevision": 0,
+        "explicitEditsAfterSuccessfulCheckAtObservedRevision": 0,
+        "explicitReadsAfterSuccessfulCheckAtObservedRevision": 0,
+        "limitations": "Counts model-visible tools only. Identical arguments are compared verbatim; shell I/O and semantic necessity are not inferred. Missing trace payloads yield null diagnostic totals."
+      },
+      "modelRequests": 13,
+      "toolCalls": 13,
+      "runtimeIdentity": {
+        "effectiveModelRef": "qwen-token-plan-cn/qwen3.8-flash",
+        "effectiveThinkingLevel": "medium",
+        "configHash": "2383097772ae432e63fc909e739eddd5f547f14e117ea1024bf8701c3f286a7c",
+        "toolPolicyHash": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+        "skillPolicyHash": "ef06d04eee82893c99242e72a476bb835a18a715b0dfc52c69928fee75ac3830"
+      },
+      "grades": [
+        {
+          "grader_index": 0,
+          "passed": 1,
+          "summary": "Command passed"
+        },
+        {
+          "grader_index": 1,
+          "passed": 1,
+          "summary": "Protected paths were unchanged"
+        }
+      ],
+      "error": null,
+      "failureEvidence": []
+    },
+    {
+      "caseId": "E01-verified-stop",
+      "variantId": "candidate#3",
+      "runId": "b9ac74a9-4edc-471f-bf31-8a29aaaa4925",
+      "status": "passed",
+      "artifactChecksPassed": true,
+      "durationMs": 113616,
+      "observedResponseTokens": 219630,
+      "usageCoverage": "Observed completed responses only; interrupted requests may be unreported.",
+      "diagnostics": {
+        "toolCounts": {
+          "exec_command": 9,
+          "write_file": 3,
+          "review_workspace": 2,
+          "apply_patch": 1
+        },
+        "distinctExplicitReadPaths": [],
+        "toolCompletionCoverage": {
+          "total": 15,
+          "recovered": 15
+        },
+        "repeatedSuccessfulCallsAtObservedRevision": 0,
+        "explicitEditsAfterSuccessfulCheckAtObservedRevision": 1,
+        "explicitReadsAfterSuccessfulCheckAtObservedRevision": 0,
+        "limitations": "Counts model-visible tools only. Identical arguments are compared verbatim; shell I/O and semantic necessity are not inferred. Missing trace payloads yield null diagnostic totals."
+      },
+      "modelRequests": 16,
+      "toolCalls": 15,
+      "runtimeIdentity": {
+        "effectiveModelRef": "qwen-token-plan-cn/qwen3.8-flash",
+        "effectiveThinkingLevel": "medium",
+        "configHash": "2383097772ae432e63fc909e739eddd5f547f14e117ea1024bf8701c3f286a7c",
+        "toolPolicyHash": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+        "skillPolicyHash": "ef06d04eee82893c99242e72a476bb835a18a715b0dfc52c69928fee75ac3830"
+      },
+      "grades": [
+        {
+          "grader_index": 0,
+          "passed": 1,
+          "summary": "Command passed"
+        },
+        {
+          "grader_index": 1,
+          "passed": 1,
+          "summary": "Protected paths were unchanged"
+        }
+      ],
+      "error": null,
+      "failureEvidence": []
+    },
+    {
+      "caseId": "E02-green-incomplete",
+      "variantId": "candidate#3",
+      "runId": "9c4982ff-eaaf-40a2-bdcd-a100d752d62f",
+      "status": "passed",
+      "artifactChecksPassed": true,
+      "durationMs": 124393,
+      "observedResponseTokens": 198032,
+      "usageCoverage": "Observed completed responses only; interrupted requests may be unreported.",
+      "diagnostics": {
+        "toolCounts": {
+          "exec_command": 7,
+          "read_file": 5,
+          "apply_patch": 3,
+          "write_file": 2,
+          "review_workspace": 1
+        },
+        "distinctExplicitReadPaths": [
+          "README.md",
+          "docs/export-contract.md",
+          "src/export.mjs",
+          "src/orders.mjs",
+          "test/smoke.test.mjs"
+        ],
+        "toolCompletionCoverage": {
+          "total": 18,
+          "recovered": 18
+        },
+        "repeatedSuccessfulCallsAtObservedRevision": 0,
+        "explicitEditsAfterSuccessfulCheckAtObservedRevision": 0,
+        "explicitReadsAfterSuccessfulCheckAtObservedRevision": 0,
+        "limitations": "Counts model-visible tools only. Identical arguments are compared verbatim; shell I/O and semantic necessity are not inferred. Missing trace payloads yield null diagnostic totals."
+      },
+      "modelRequests": 14,
+      "toolCalls": 18,
+      "runtimeIdentity": {
+        "effectiveModelRef": "qwen-token-plan-cn/qwen3.8-flash",
+        "effectiveThinkingLevel": "medium",
+        "configHash": "2383097772ae432e63fc909e739eddd5f547f14e117ea1024bf8701c3f286a7c",
+        "toolPolicyHash": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+        "skillPolicyHash": "ef06d04eee82893c99242e72a476bb835a18a715b0dfc52c69928fee75ac3830"
+      },
+      "grades": [
+        {
+          "grader_index": 0,
+          "passed": 1,
+          "summary": "Command passed"
+        },
+        {
+          "grader_index": 1,
+          "passed": 1,
+          "summary": "Protected paths were unchanged"
+        }
+      ],
+      "error": null,
+      "failureEvidence": []
+    },
+    {
+      "caseId": "P01-inventory-cache",
+      "variantId": "candidate#3",
+      "runId": "af3614eb-286a-4d68-a397-c04e744d3230",
+      "status": "passed",
+      "artifactChecksPassed": true,
+      "durationMs": 98184,
+      "observedResponseTokens": 198160,
+      "usageCoverage": "Observed completed responses only; interrupted requests may be unreported.",
+      "diagnostics": {
+        "toolCounts": {
+          "list_dir": 1,
+          "exec_command": 7,
+          "apply_patch": 1,
+          "write_file": 3,
+          "review_workspace": 1
+        },
+        "distinctExplicitReadPaths": [],
+        "toolCompletionCoverage": {
+          "total": 13,
+          "recovered": 13
+        },
+        "repeatedSuccessfulCallsAtObservedRevision": 0,
+        "explicitEditsAfterSuccessfulCheckAtObservedRevision": 0,
+        "explicitReadsAfterSuccessfulCheckAtObservedRevision": 0,
+        "limitations": "Counts model-visible tools only. Identical arguments are compared verbatim; shell I/O and semantic necessity are not inferred. Missing trace payloads yield null diagnostic totals."
+      },
+      "modelRequests": 14,
+      "toolCalls": 13,
+      "runtimeIdentity": {
+        "effectiveModelRef": "qwen-token-plan-cn/qwen3.8-flash",
+        "effectiveThinkingLevel": "medium",
+        "configHash": "2383097772ae432e63fc909e739eddd5f547f14e117ea1024bf8701c3f286a7c",
+        "toolPolicyHash": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+        "skillPolicyHash": "ef06d04eee82893c99242e72a476bb835a18a715b0dfc52c69928fee75ac3830"
+      },
+      "grades": [
+        {
+          "grader_index": 0,
+          "passed": 1,
+          "summary": "Command passed"
+        },
+        {
+          "grader_index": 1,
+          "passed": 1,
+          "summary": "Protected paths were unchanged"
+        }
+      ],
+      "error": null,
+      "failureEvidence": []
+    },
+    {
+      "caseId": "P02-ticket-labels",
+      "variantId": "candidate#3",
+      "runId": "f4da0c8d-a213-4250-8c10-77ed77509f6f",
+      "status": "passed",
+      "artifactChecksPassed": true,
+      "durationMs": 92511,
+      "observedResponseTokens": 201531,
+      "usageCoverage": "Observed completed responses only; interrupted requests may be unreported.",
+      "diagnostics": {
+        "toolCounts": {
+          "list_dir": 3,
+          "read_file": 6,
+          "apply_patch": 4,
+          "write_file": 3,
+          "review_workspace": 2,
+          "exec_command": 3
+        },
+        "distinctExplicitReadPaths": [
+          "README.md",
+          "package.json",
+          "src/api.mjs",
+          "src/pagination.mjs",
+          "src/query.mjs",
+          "test/smoke.test.mjs"
+        ],
+        "toolCompletionCoverage": {
+          "total": 21,
+          "recovered": 21
+        },
+        "repeatedSuccessfulCallsAtObservedRevision": 0,
+        "explicitEditsAfterSuccessfulCheckAtObservedRevision": 0,
+        "explicitReadsAfterSuccessfulCheckAtObservedRevision": 0,
+        "limitations": "Counts model-visible tools only. Identical arguments are compared verbatim; shell I/O and semantic necessity are not inferred. Missing trace payloads yield null diagnostic totals."
+      },
+      "modelRequests": 15,
+      "toolCalls": 21,
+      "runtimeIdentity": {
+        "effectiveModelRef": "qwen-token-plan-cn/qwen3.8-flash",
+        "effectiveThinkingLevel": "medium",
+        "configHash": "2383097772ae432e63fc909e739eddd5f547f14e117ea1024bf8701c3f286a7c",
+        "toolPolicyHash": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+        "skillPolicyHash": "ef06d04eee82893c99242e72a476bb835a18a715b0dfc52c69928fee75ac3830"
+      },
+      "grades": [
+        {
+          "grader_index": 0,
+          "passed": 1,
+          "summary": "Command passed"
+        },
+        {
+          "grader_index": 1,
+          "passed": 1,
+          "summary": "Protected paths were unchanged"
+        }
+      ],
+      "error": null,
+      "failureEvidence": []
+    }
+  ],
+  "falseCompletionRate": null,
+  "costPerSuccess": null,
+  "unmeasured": [
+    "false-completion semantics",
+    "complete provider cost coverage",
+    "autonomous background recovery",
+    "research prose quality"
+  ],
+  "benchmark": "xopc-agent-growth",
+  "version": "0.1.0",
+  "sourceCommit": "e565fa5675f315eae246d56f1643ae1e5072f841",
+  "model": "qwen-token-plan-cn/qwen3.8-flash",
+  "reasoning": "medium",
+  "repetitions": 3,
+  "fixtureCaseCommits": {
+    "I01": "5a1b98b7e2096906d4c6df37169629ed3e5f5825",
+    "I02": "9c47dbb53ae5e616c989d8693da5feeba45afa55",
+    "E01": "cec4636543b0527c37c906ba37ed088dafb26fc4",
+    "E02": "36ebae2d5c8cbc5001f463a913d16466e9274673",
+    "P01": "cfe5ce256c3bc58d8dfa393ffe67d40274eb0307",
+    "P02": "bdc66c44f1b5c3c602d925cc87111affb93438bb"
+  },
+  "evidenceDirectory": ".xopc-evals/qwen-agent-growth-v0.1.0-final/benchmark/",
+  "manifestSha256": "45919956ffbec1d2ce1f5fe0cfd10cd3054a0dc18fb71e28caafbbf7b85fff78",
+  "budgetPerScenario": {
+    "timeoutMs": 300000,
+    "maxModelRequests": 40,
+    "maxTokens": 300000
+  }
+}

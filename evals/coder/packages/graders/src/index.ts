@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process';
-import { copyFile, lstat, mkdir, readFile, rm } from 'node:fs/promises';
+import { copyFile, lstat, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { dirname, isAbsolute, relative, resolve } from 'node:path';
 import { promisify } from 'node:util';
 
@@ -69,7 +69,7 @@ export async function runGrader(
 
   if (spec.type === 'command') {
     const hiddenRoot = resolve(context.workspace, '.xopc-eval-hidden');
-    const hasHiddenFiles = (spec.hiddenFiles?.length ?? 0) > 0;
+    const hasHiddenFiles = (spec.hiddenFiles?.length ?? 0) > 0 || spec.traceFile !== undefined;
     let createdHiddenRoot = false;
     let result: Awaited<ReturnType<typeof runShellCommand>>;
     try {
@@ -96,6 +96,25 @@ export async function runGrader(
         }
         await mkdir(dirname(target), { recursive: true });
         await copyFile(hiddenFile.source, target);
+      }
+      if (spec.traceFile !== undefined) {
+        const target = workspacePath(context.workspace, spec.traceFile);
+        const rel = relative(hiddenRoot, target);
+        if (!rel || rel === '..' || rel.startsWith(`..${process.platform === 'win32' ? '\\' : '/'}`) || isAbsolute(rel)) {
+          throw new Error('Trace snapshot must stay inside .xopc-eval-hidden');
+        }
+        const run = context.store.getRun(context.runId);
+        const events = await Promise.all((run?.events ?? []).map(async event => {
+          let payload = JSON.parse(String(event.payload_json)) as Record<string, unknown>;
+          if (payload.truncated === true) {
+            const refs = JSON.parse(String(event.artifact_refs_json ?? '[]')) as string[];
+            const artifact = run?.artifacts.find(item => refs.includes(String(item.id)) && String(item.kind).startsWith('trace-payload-'));
+            if (artifact) payload = JSON.parse(await readFile(String(artifact.path), 'utf8')) as Record<string, unknown>;
+          }
+          return { type: event.type, payload };
+        }));
+        await mkdir(dirname(target), { recursive: true });
+        await writeFile(target, JSON.stringify({ events }));
       }
       result = await runShellCommand(spec.command, {
         cwd: context.workspace,

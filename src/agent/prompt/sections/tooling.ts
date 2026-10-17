@@ -44,7 +44,7 @@ const CORE_TOOL_ORDER = [
 const CORE_TOOL_SUMMARIES: Record<string, string> = {
   read_file: 'Read targeted file contents before editing',
   data_batch: 'Read or search independent data items together; keep dependent queries separate and check partial results',
-  write_file: 'Create new files or intentional complete rewrites; prefer apply_patch for code changes',
+  write_file: 'Create new files or intentional complete rewrites',
   apply_patch: 'Apply source edits with patches that begin exactly with *** Begin Patch and end exactly with *** End Patch',
   grep: 'Search file contents for literals, errors, config values, and docs',
   find: 'Find files by glob pattern',
@@ -166,7 +166,7 @@ export function buildToolingSection(params: {
     toolLines.length > 0
       ? toolLines.join('\n')
       : '- No tools are registered for this session.',
-    `For long waits, avoid rapid poll loops: use \`${execToolName}\` with a sufficient timeout or poll in reasonable intervals.`,
+    hasExec ? `For long waits, use \`${execToolName}\` with a sufficient timeout; avoid rapid polling.` : '',
     hasRead
       ? `Use \`${readToolName}\` for targeted file inspection before editing; do not rely on filenames alone.`
       : '',
@@ -191,23 +191,22 @@ export function buildToolingSection(params: {
     hasExec
       ? `Use \`${execToolName}\` for verification and safe inspection, not routine file editing.`
       : '',
-    hasExec && availableTools.has('review_workspace')
-      ? 'After the final file change and before answering, use `review_workspace` and run the smallest meaningful assertion test. Reuse an existing test runner; for standalone file/data tasks, save a small test importing node:test and node:assert/strict, then run `node --test verify.test.cjs` directly. Do not combine --test with -e, pipe test output, or chain a test with shell inspection. A printout of values is not an assertion test. Successful checks must cover the final files; further edits invalidate their evidence.'
+    availableTools.has('review_workspace')
+      ? `After code changes, use \`${resolveToolName('review_workspace')}\` to inspect the final diff.`
       : '',
     hasWrite || hasExec
       ? 'When delivering a user-facing workspace file, include a clickable Markdown link in the final response using `xopc://workspace/file?path=<workspace-relative-path>`; URL-encode spaces and special characters, and do not invent an HTTP or `file://` URL.'
       : '',
     hasPublishArtifacts
-      ? 'Declare final user-facing files in `exec_command.outputs`. Use `publish_artifacts` only when files were created by another runtime or were not known when the command started. Do not publish temporary files, code edits, or build intermediates.'
+      ? hasExec
+        ? `Declare final user-facing files in \`${execToolName}.outputs\`; use \`${resolveToolName('publish_artifacts')}\` for files from another runtime or omitted from the command declaration. Exclude temporary files and code edits.`
+        : `Publish completed user-facing files with \`${resolveToolName('publish_artifacts')}\`; exclude temporary files and code edits.`
       : '',
     hasPlan
       ? `Use \`${planToolName}\` for multi-step coding work: keep exactly one active step when work is in progress, and update it after meaningful progress or review.`
       : '',
     hasToolManual
       ? 'Some complex tools have built-in manuals. Use `tool_manual(tool)` before non-trivial use.'
-      : '',
-    hasDelegate
-      ? 'If a task is complex or long-running, delegate it. Completion is push-based: the sub-agent result returns when done.'
       : '',
     ...orchestrationLines,
     hasDelegate || hasWorkflow ? 'Do not poll delegate/workflow status in a tight loop; check on-demand or wait for completion.' : '',
@@ -217,6 +216,6 @@ export function buildToolingSection(params: {
 }
 
 export function hasSkillsTools(toolNames: string[]): boolean {
-  const normalized = new Set(toolNames.map((t) => t.toLowerCase()));
-  return normalized.has('skills_list') || normalized.has('skill_view');
+  const normalized = new Set(toolNames.map((t) => t.trim().toLowerCase()));
+  return normalized.has('skill_view');
 }

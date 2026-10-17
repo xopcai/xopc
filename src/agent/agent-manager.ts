@@ -44,7 +44,6 @@ import { resolveExecutionToolPolicy } from './embedded/execution-tool-policy.js'
 import { isPersonalConversation } from '../personal-agent/repository.js';
 import { buildExecutionScopeContextForPrompt } from './context/execution-scope.js';
 import { clearBootstrapSnapshot, resolveBootstrapContextSync } from './bootstrap/bootstrap-files.js';
-import { loadProjectAgentsContextFile } from './bootstrap/project-agents-context.js';
 import type { EmbeddedContextFile } from './bootstrap/types.js';
 import { AgentToolsFactory } from './tools/factory.js';
 import type {
@@ -100,7 +99,7 @@ import { WorkspaceRuntimeRegistry, type WorkspaceRuntime } from './workspace-run
 import { maybeRequestChannelExecApproval } from '../channels/exec-approval-runtime.js';
 import { SkillFilesystemWatcher } from './skills/filesystem-watcher.js';
 import { resolveWorkspaceSkillsDir, resolveWorkspaceSkillsLockPath } from './skills/workspace-skills-dir.js';
-import { ProjectTrustStore, hasTrustRequiringProjectResources } from '../project-trust/trust-store.js';
+import { ProjectTrustStore, hasTrustRequiringProjectResources, isProjectWorkspaceTrusted } from '../project-trust/trust-store.js';
 import { replaceAgentSystemPrompt } from './prompt/agent-system-prompt.js';
 import {
   createAgentTurnPolicy as buildAgentTurnPolicy,
@@ -465,6 +464,7 @@ export class AgentManager implements AgentInstanceGateway {
    */
   private buildToolsFactoryDeps(): ConstructorParameters<typeof AgentToolsFactory>[0] {
     return {
+      isWorkspaceTrusted: (workspaceDir) => this.isProjectWorkspaceTrusted(workspaceDir),
       workspace: this.baseWorkspacePath,
       extensionRegistry: this.config.extensionRegistry,
       endpointTools: this.config.endpointTools,
@@ -732,21 +732,12 @@ export class AgentManager implements AgentInstanceGateway {
     };
   }
 
-  private isProjectWorkspaceTrusted(workspaceDir: string): boolean {
-    if (!hasTrustRequiringProjectResources(workspaceDir)) {
-      return false;
-    }
-
-    const persisted = this.projectTrustStore.get(workspaceDir);
-    if (persisted === false) {
-      return false;
-    }
-    if (persisted === true) {
-      return true;
-    }
-
+  isProjectWorkspaceTrusted(workspaceDir: string): boolean {
     try {
-      return this.config.isWorkspaceTrusted?.(workspaceDir) === true;
+      return isProjectWorkspaceTrusted(workspaceDir, {
+        trustStore: this.projectTrustStore,
+        isWorkspaceTrusted: this.config.isWorkspaceTrusted,
+      });
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
       log.warn({ err, workspaceDir, errorMessage }, `Workspace trust override failed: ${errorMessage}`);
@@ -767,19 +758,6 @@ export class AgentManager implements AgentInstanceGateway {
       conversationId,
       contextInjection,
     });
-    const shouldAppendProjectContext =
-      contextInjection === 'always' ||
-      (contextInjection === 'continuation-skip' && contextFiles.length > 0);
-    const workspaceDir = this.getResolvedWorkspaceForSession(conversationId);
-    if (
-      shouldAppendProjectContext &&
-      this.isProjectWorkspaceTrusted(workspaceDir)
-    ) {
-      const projectAgentsFile = loadProjectAgentsContextFile(workspaceDir);
-      if (projectAgentsFile) {
-        contextFiles.push(projectAgentsFile);
-      }
-    }
     return contextFiles;
   }
 

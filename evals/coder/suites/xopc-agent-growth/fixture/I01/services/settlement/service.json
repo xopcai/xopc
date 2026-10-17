@@ -1,0 +1,5 @@
+{
+  "ledgerId": "settlement-oct",
+  "input": "../../data/live/october.json",
+  "rules": "../../contracts/settlement.md"
+}

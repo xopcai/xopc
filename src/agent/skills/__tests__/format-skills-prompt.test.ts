@@ -48,3 +48,17 @@ describe('formatSkillsForPrompt', () => {
     expect(limitedByChars).toBe('');
   });
 });
+
+describe('skill catalog tool availability', () => {
+  it.each([[], ['skills_list'], ['read_file']])('omits unreachable skill bodies for %j', (...registeredToolNames: string[]) => {
+    expect(formatSkillsForPrompt([baseSkill], {}, { registeredToolNames })).toBe('');
+  });
+
+  it('uses the actual loader name without inventing a listing tool', () => {
+    const prompt = formatSkillsForPrompt([baseSkill], {}, { registeredToolNames: [' SKILL_VIEW '] });
+    expect(prompt).toContain('<name>alpha</name>');
+    expect(prompt).toContain('SKILL_VIEW(name, path)');
+    expect(prompt).not.toContain('skills_list');
+    expect(prompt).not.toContain('skill_view');
+  });
+});

@@ -64,7 +64,7 @@ it('uses the renamed personal identity after an authenticated profile update whi
     });
     expect(prompt).toContain('You are "阿沐".');
     expect(prompt).not.toContain('You are "Ada".');
-    expect(prompt).toContain('It replaces conflicting Agent settings in earlier conversation, summaries, memory, and profile Markdown');
+    expect(prompt).toContain('replacing stale settings in conversation, summaries, memory, and profile Markdown');
     expect(loadLlmMessagesForSession(record.conversationId)).toEqual(expect.arrayContaining([
       expect.objectContaining({ role: 'assistant', content: '我是 Ada。' }),
     ]));

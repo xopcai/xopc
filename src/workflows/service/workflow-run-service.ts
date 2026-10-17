@@ -665,6 +665,7 @@ export class WorkflowRunService {
     const workspace = getProjectWorkspacePathForSession(params.conversationId)
       ?? agentWorkspace;
     const runner = new DelegateSubagentRunner({
+      isWorkspaceTrusted: (path) => gatewayService.agentService.getWorkspaceTrust?.(path)?.trusted,
       workspace,
       bus: gatewayService.messageBusInstance,
       agentId: profileAgentId,

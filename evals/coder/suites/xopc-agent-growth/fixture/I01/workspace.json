@@ -1,0 +1,8 @@
+{
+  "services": {
+    "settlement": {
+      "entry": "services/settlement/service.json"
+    }
+  },
+  "note": "Resolve service inputs from the registry; archive and samples are inactive."
+}

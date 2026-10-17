@@ -309,3 +309,57 @@ it('hands off saved research after aborting a real long model request at the res
     expect(checkpoint.nextSteps).toEqual(['Check concurrency']);
   } finally { await rm(root, { recursive: true, force: true }); }
 }, 15_000);
+
+it('reviews prose changes without requiring shell tools or generating an assertion script', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'prose-harness-'));
+  const conversationId = crypto.randomUUID();
+  const runtime = new InMemoryTranscriptRuntime({ runtimeId: conversationId, cwd: root });
+  try {
+    await writeFile(join(root, 'report.md'), 'Old wording\n');
+    execFileSync('git', ['init', '-q'], { cwd: root });
+    execFileSync('git', ['add', '.'], { cwd: root });
+    execFileSync('git', ['-c', 'user.name=Test', '-c', 'user.email=test@xopc.local', 'commit', '-qm', 'fixture'], { cwd: root });
+    const responses: AssistantMessage['content'][] = [
+      [{ type: 'toolCall', id: 'edit-prose', name: 'apply_patch', arguments: {
+        patch: '*** Begin Patch\n*** Update File: report.md\n@@\n-Old wording\n+Clear wording\n*** End Patch',
+      } }],
+      [{ type: 'toolCall', id: 'review-prose', name: 'review_workspace', arguments: {} }],
+      [{ type: 'text', text: 'Wording updated and reviewed.' }],
+    ];
+    scripted.stream.mockImplementation((_model, context) => {
+      const prompt = getCurrentSystemPrompt(context.messages);
+      expect(prompt).not.toContain('exec_command');
+      if (responses.length === 2) {
+        expect(prompt).toContain('no assertion script is required');
+        const edited = context.messages.findLast((message: any) => message.role === 'toolResult' && message.toolName === 'apply_patch');
+        expect(edited.content).toContainEqual({ type: 'text', text: 'Verification pending for current files: review_workspace.' });
+        expect(JSON.stringify(edited.content)).not.toContain('standalone assertion test');
+      }
+      const content = responses.shift();
+      if (!content) throw new Error('Prose editing triggered an unnecessary continuation');
+      const message = { role: 'assistant', content, api: 'openai-completions', provider: 'openai', model: 'gpt-4.1',
+        stopReason: content.some(block => block.type === 'toolCall') ? 'toolUse' : 'stop', timestamp: Date.now(),
+        usage: { input: 1, output: 1, cacheRead: 0, cacheWrite: 0, totalTokens: 2,
+          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
+      } as AssistantMessage;
+      const stream = createAssistantMessageEventStream();
+      stream.push({ type: 'done', reason: message.stopReason as 'stop' | 'toolUse', message });
+      return stream;
+    });
+    const result = await runXopcEmbeddedTurn({ verifyChanges: true, conversationId, runId: 'prose',
+      userMessage: { role: 'user', content: 'Improve report.md wording.', timestamp: Date.now() },
+      model: { id: 'gpt-4.1', name: 'Test', provider: 'openai', api: 'openai-completions', baseUrl: 'https://example.invalid',
+        reasoning: false, input: ['text'], contextWindow: 128000, maxTokens: 4096,
+        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 } },
+      modelRef: 'openai/gpt-4.1', systemPrompt: 'Improve the requested wording and inspect it.',
+      tools: [createApplyPatchTool(root), createReviewWorkspaceTool(root)],
+      workspaceDir: root, transcriptRuntime: runtime, timeoutMs: 10_000,
+      turnPolicy: createAgentTurnPolicy({ maxTurns: 4 }),
+    });
+    expect(result, JSON.stringify(result)).toMatchObject({ ok: true, lastAssistantText: 'Wording updated and reviewed.' });
+    expect(responses).toHaveLength(0);
+  } finally {
+    evictEmbeddedSessionRunner(conversationId);
+    await rm(root, { recursive: true, force: true });
+  }
+}, 15000);

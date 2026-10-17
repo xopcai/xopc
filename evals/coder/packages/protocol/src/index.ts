@@ -120,6 +120,8 @@ export interface CommandGraderSpec extends GraderPolicy {
   command: string;
   timeoutMs?: number;
   hiddenFiles?: HiddenFileSpec[];
+  /** Evaluator-owned trace snapshot written after agent execution inside the hidden directory. */
+  traceFile?: string;
 }
 
 export interface UnchangedGraderSpec extends GraderPolicy {

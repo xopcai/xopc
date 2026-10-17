@@ -70,6 +70,8 @@ export type RunXopcEmbeddedTurnParams = {
   codemode?: import('./codemode-extension.js').CodemodePolicy;
   mcp?: import('@earendil-works/pi-coding-agent').LoadedMcpConfig;
   workspaceDir: string;
+  /** Host-owned temporary trust; persisted project decisions always take precedence. */
+  isWorkspaceTrusted?: (workspaceDir: string) => boolean | null | undefined;
   sessionStore?: SessionStore;
   transcriptRuntime?: EmbeddedTranscriptRuntime;
   timeoutMs: number;

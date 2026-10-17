@@ -1,0 +1,2 @@
+# Inventory reservation service
+Public API: createInventory(seed) exposes available(sku) and reserve(sku, positiveInteger). Each reservation must use current stock, update subsequent availability immediately, and leave stock unchanged on failure. Independent instances must not share data. Unknown SKUs fail. Existing return objects and validation behavior are compatibility requirements. Run node --test test/*.test.mjs.

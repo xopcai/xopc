@@ -165,6 +165,22 @@ describe('pre-turn auto-compaction', () => {
     runEmbeddedTurnForSession = mod.runEmbeddedTurnForSession;
   });
 
+  it('passes the live workspace trust policy to embedded execution', async () => {
+    const manager = { ...createMockAgentManager(),
+      isProjectWorkspaceTrusted: vi.fn(function (this: unknown, path: string) {
+        expect(this).toBe(manager);
+        return path === '/trusted';
+      }) };
+    await runEmbeddedTurnForSession({ conversationId: 'trust-forwarding',
+      userMessage: { role: 'user', content: 'Read the repository' } as AgentMessage,
+      sessionStore: createMockSessionStore({ needsCompaction: false }) as any,
+      agentManager: manager as any, modelManager: createMockModelManager() as any,
+      getConfig: () => configWithCompaction(false) as any });
+    const trust = mockRunXopcEmbeddedTurn.mock.calls[0][0].isWorkspaceTrusted;
+    expect(trust('/trusted')).toBe(true);
+    expect(trust('/untrusted')).toBe(false);
+  });
+
   it('uses the background route for inherited chat without mutating the session model choice', async () => {
     profile.models.background = { primary:'openai/background', fallbacks:[] };
     const manager = createMockModelManager(); manager.getModelForSession.mockReturnValue('test/test-model');

@@ -1,0 +1,26 @@
+[
+  {
+    "id": "a",
+    "status": "settled",
+    "amountCents": 12000,
+    "refundCents": 2000
+  },
+  {
+    "id": "b",
+    "status": "pending",
+    "amountCents": 900000,
+    "refundCents": 0
+  },
+  {
+    "id": "c",
+    "status": "settled",
+    "amountCents": 7250,
+    "refundCents": 250
+  },
+  {
+    "id": "d",
+    "status": "cancelled",
+    "amountCents": 4300,
+    "refundCents": 0
+  }
+]

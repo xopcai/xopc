@@ -83,3 +83,77 @@ describe('coding verification', () => {
     expect((result.result.details as any).verification.status).toBe('unverified');
   });
 });
+
+describe('proportionate runtime verification', () => {
+  function fixture(options: ConstructorParameters<typeof RunVerification>[1] = {}) {
+    let revision = 'initial';
+    const run = new RunVerification(async () => revision, options);
+    let count = 0;
+    const execute = async (name: string, args: Record<string, unknown>, change = false) => {
+      const id = String(++count);
+      await run.beforeTool(id, name);
+      if (change) revision = `revision-${count}`;
+      return run.afterTool({ toolCall: { id, name }, args, isError: false,
+        result: { content: [], details: { command: args.cmd ?? name, exitCode: 0, complete: true } },
+      } as unknown as AfterToolCallContext);
+    };
+    return { run, execute };
+  }
+
+  it('does not add coding instructions to passive evidence collection', async () => {
+    const { run, execute } = fixture({ required: false });
+    const changed = await execute('write_file', { path: 'report.md' }, true);
+    expect(changed.result.content).toEqual([]);
+    expect(changed.result.details).not.toHaveProperty('verificationPending');
+    expect(run.modelGuidance()).toBe('');
+    expect(await run.pendingContext()).toBe('');
+    expect(await run.summary()).toMatchObject({ changed: true });
+  });
+
+  it('requires content review for prose without inventing assertion scripts', async () => {
+    const { run, execute } = fixture();
+    const changed = await execute('write_file', { path: 'report.md' }, true);
+    expect(changed.result.details).toMatchObject({ verificationPending: ['diff-review'] });
+    expect(run.modelGuidance()).toContain('no assertion script is required');
+    expect(run.modelGuidance()).not.toContain('standalone assertion test');
+    await execute('review_workspace', {});
+    expect(await run.pendingContext()).toBe('');
+    expect(run.modelGuidance()).toContain('give the final answer now');
+    expect(await run.summary()).toMatchObject({ proseOnly: true });
+    const code = await execute('write_file', { path: 'logic.ts' }, true);
+    expect(code.result.details).toMatchObject({ verificationPending: ['check', 'diff-review'] });
+  });
+
+  it.each([
+    '*** Update File: report.md\n*** Update File: logic.ts',
+    '*** Update File: report.md\n*** Move to: logic.ts',
+    '*** Update File: config.json',
+  ])('keeps behavior checks for mixed, renamed, or machine-readable changes', async patch => {
+    const { execute } = fixture();
+    expect((await execute('apply_patch', { patch }, true)).result.details)
+      .toMatchObject({ verificationPending: ['check', 'diff-review'] });
+  });
+
+  it('does not instruct missing review or shell tools', async () => {
+    const { run, execute } = fixture({ toolNames: ['write_file', 'read_file'] });
+    const result = await execute('write_file', { path: 'report.md' }, true);
+    const guidance = [run.modelGuidance(), await run.pendingContext(), JSON.stringify(result.result.content)].join('\n');
+    expect(guidance).toContain('content inspection');
+    expect(guidance).not.toContain('exec_command');
+    expect(guidance).not.toContain('review_workspace');
+  });
+
+  it('preserves prose scope on resume but treats unknown changes conservatively', async () => {
+    const { run, execute } = fixture();
+    await execute('write_file', { path: 'report.md' }, true);
+    const checkpoint = await run.summary();
+    const resumed = new RunVerification(async () => checkpoint.revision);
+    await resumed.beforeTool('initialize');
+    resumed.restore(checkpoint, true);
+    expect(resumed.modelGuidance()).not.toContain('standalone assertion test');
+    const unknown = new RunVerification(async () => 'different');
+    await unknown.beforeTool('initialize');
+    unknown.restore(checkpoint, true);
+    expect(unknown.modelGuidance()).toContain('standalone assertion test');
+  });
+});

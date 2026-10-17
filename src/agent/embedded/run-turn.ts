@@ -422,7 +422,7 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
       transcriptId: transcriptRuntime.transcriptId,
       runId,
     });
-    const instructions = await RepositoryInstructions.open(workspaceDir);
+    const instructions = await RepositoryInstructions.open(workspaceDir, { isWorkspaceTrusted: params.isWorkspaceTrusted });
     const rootInstructions = await instructions.load('.', true);
     runner = await acquireEmbeddedSessionRunner({
       runtimeId: transcriptRuntime.runtimeId,
@@ -677,7 +677,7 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
       }, () => streamFnWithXopcExtensions(streamModel, effectiveContext, { ...options }), { context: effectiveContext, reasoning: options?.reasoning });
     };
     session.agent.streamFunction = loggingStreamFn;
-    const verification = await RunVerification.open(workspaceDir);
+    const verification = await RunVerification.open(workspaceDir, { required: params.verifyChanges === true, toolNames: tools.map(tool => tool.name) });
     const checkpoints = runner.piSm.getBranch?.() ?? [];
     const recoveryTurn = params.resumeLastUserMessage === true || Boolean(params.recoveryMessage);
     const lastStart = checkpoints.findLastIndex(entry => entry.type === 'custom' && entry.customType === 'coding_run_started');

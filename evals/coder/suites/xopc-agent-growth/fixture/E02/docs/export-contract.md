@@ -1,0 +1,2 @@
+# Order export contract
+exportOrders(orders, {limit}) returns {ids,totalCents}. Exclude cancelled orders, preserve input order, and apply a nonnegative integer limit to ids only. totalCents covers ALL eligible orders before the limit. limit defaults to all eligible orders; zero yields empty ids but the same total. Reject negative or noninteger limits with RangeError. Do not mutate input objects or arrays. Keep the public API.

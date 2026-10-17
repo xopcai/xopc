@@ -339,6 +339,7 @@ async function runEmbeddedTurnForSessionInner(params: RunEmbeddedForSessionParam
             promptCachePolicy,
             compactionPolicy: resolveCompactionPolicy(config),
             workspaceDir,
+            isWorkspaceTrusted: agentManager.isProjectWorkspaceTrusted?.bind(agentManager),
             sessionStore,
             timeoutMs: attemptPlan.timeoutMs,
             turnPolicy,

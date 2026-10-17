@@ -184,6 +184,7 @@ export async function main(options = {}) {
       const benchmarkOutput = join(output, 'benchmark');
       try {
         execFileSync(process.execPath, ['--import', 'tsx', 'evals/coder/apps/cli/src/benchmark.ts',
+          '--suite', options.benchmarkSuite ?? 'xopc-core',
           '--mode', 'live', '--base-url', baseUrl, '--model', settings.model,
           '--reasoning', settings.reasoning, '--repetitions', String(settings.repetitions),
           '--output', benchmarkOutput], {

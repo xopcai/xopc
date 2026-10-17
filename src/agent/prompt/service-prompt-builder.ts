@@ -112,6 +112,7 @@ export class SystemPromptBuilder {
     const basePrompt = buildBaseSystemPrompt(ws, {
       contextFiles,
       promptMode: resolved.promptMode,
+      promptRole: resolved.promptRole,
       toolNames: resolved.toolNames,
       toolSummaries: resolved.toolSummaries,
       memoryCitationsMode: resolved.memoryCitationsMode,
@@ -139,7 +140,7 @@ export class SystemPromptBuilder {
         ? options.skillPromptText
         : this.skillManager.getPromptForSkillAllowlist(
             options.skillAllowlist,
-            options.registeredToolNames,
+            reg,
           );
 
     const fullPrompt = skillPrompt
@@ -191,6 +192,7 @@ export class SystemPromptBuilder {
     return buildBaseSystemPrompt(ws, {
       contextFiles,
       promptMode: resolved.promptMode,
+      promptRole: resolved.promptRole,
       toolNames: resolved.toolNames,
       userTimezone: resolved.userTimezone,
       runtime: resolved.runtimeInfo,

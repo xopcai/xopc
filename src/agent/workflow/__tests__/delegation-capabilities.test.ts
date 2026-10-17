@@ -65,3 +65,13 @@ it('preserves empty toolsets and admits browser only when explicitly requested',
   expect(await worker.run('Browse', { allowedToolNames: ['browser_use'] })).toBe('Done');
   expect(fixture.tools.map(tool => tool.name)).toEqual(['browser_use']);
 });
+
+it('preserves host workspace trust for workflow children', async () => {
+  const isWorkspaceTrusted = vi.fn(() => true);
+  const worker = new DelegateSubagentRunner({ workspace: '/tmp', bus: {} as MessageBus,
+    isWorkspaceTrusted, getConfig: () => undefined,
+    getDefaultModel: () => ({ id: 'test', provider: 'openai' } as never),
+    buildChildTools: () => [tool('read_file')] });
+  expect(await worker.run('Read the repository', { label: 'Read' })).toBe('Done');
+  expect(fixture.options.isWorkspaceTrusted).toBe(isWorkspaceTrusted);
+});
