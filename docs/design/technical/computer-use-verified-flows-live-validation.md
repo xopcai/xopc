@@ -1,5 +1,7 @@
 # Verified flows: real TextEdit validation
 
+For the additional real hosted GUI-Plus matrix, see [hosted model validation](./computer-use-verified-flows-hosted-validation.md). The original deterministic run below remains a separate baseline.
+
 Validated on 2026-10-17, macOS 26.6.2, Electron 42.4.1 and pinned Cua Driver 0.28.2. The application is the real macOS TextEdit (`com.apple.TextEdit`), not a synthetic GUI fixture. Only its English Settings window and the **New Document / Open and Save** navigation tabs are used. No document, preference value, clipboard or personal credential is modified. Successful phases restore New Document.
 
 [Committed metadata-only evidence](./evidence/computer-use-flows-2026-10-17.json) contains the actual process IDs, access checks, native dispatch counts and uncertain-delivery results. Screenshots and AX window text are not written to those results.

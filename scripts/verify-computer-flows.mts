@@ -32,15 +32,17 @@ async function main() {
   await app.whenReady();
   app.setActivationPolicy('accessory');
   await mkdir(join(root, 'electron'), { recursive: true });
+  const hosted = process.env.XOPC_FLOW_HOSTED === '1';
+  const modelRef = hosted ? 'dashscope-cn/gui-plus-2026-02-26' : 'flow-validation/native-navigation';
   const workspace = join(root, 'workspace');
-  await writeFile(join(root, 'models.json'), JSON.stringify({ providers: { 'flow-validation': {
+  if (!hosted) await writeFile(join(root, 'models.json'), JSON.stringify({ providers: { 'flow-validation': {
     baseUrl: 'https://flow-validation.invalid/v1', apiKey: 'synthetic-local-only', api: 'openai-completions',
     models: [{ id: 'native-navigation', input: ['text', 'image'], computerUse: { profile: 'structured-tools-v1' } }],
   } } }), { mode: 0o600 });
   openXopcDatabase({ path: join(root, 'xopc.db') });
   const catalog = new AgentCatalogRepository(); catalog.ensureInitialized();
   if (!catalog.get('flow-validation')) catalog.create({ id: 'flow-validation', workspace,
-    models: { computerUse: { primary: 'flow-validation/native-navigation' } } } as any, { ready: true });
+    models: { computerUse: { primary: modelRef } } } as any, { ready: true });
   const owner = createConversation({ agentId: 'flow-validation', sourceChannel: 'webchat' }, workspace).key;
   const config = ConfigSchema.parse({ computer: { enabled: true } });
   const window = new BrowserWindow({ width: 360, height: 150, show: false,
@@ -57,30 +59,36 @@ async function main() {
     return approve(request, signal);
   };
   let mode: 'scenario' | 'setup' = 'setup', observations = 0, inputs = 0, setupInputs = 0, modelRequests = 0, hintRequests = 0;
+  let hostedResponses = 0;
   let lastGrantId: string | undefined;
   let lastObservation: any, lastNodes: any[] = [], lost = false, actAfterLoss = 0, lostOracle = false;
   const target = driver.resolveTarget.bind(driver);
   driver.resolveTarget = async (...args) => {
+    // Enumerate candidates through the normal invalid-ref response before any screenshot.
+    // Native stacking can otherwise select a proxy surface above Settings.
+    if (!args[2].windowRef) return target(args[0], args[1], { ...args[2], windowRef: 'validation-enumerate-only' });
     const value = await target(...args);
     const windows = await (driver as any).listWindows(value.pid, args[1]);
-    assert.equal(windows.find((w: any) => String(w.windowId) === value.windowId)?.title, 'Settings', 'Never capture a document');
+    if (windows.find((w: any) => String(w.windowId) === value.windowId)?.title !== 'Settings') throw new Error('COMPUTER_VALIDATION_SETTINGS_TARGET_REQUIRED');
     return value;
   };
   const observe = driver.observe.bind(driver);
   driver.observe = async (...args) => {
     assert.equal(args[0].appId, APP);
     const windows = await (driver as any).listWindows(args[0].pid, args[1]);
-    assert.equal(windows.find((w: any) => String(w.windowId) === args[0].windowId)?.title, 'Settings');
+    if (windows.find((w: any) => String(w.windowId) === args[0].windowId)?.title !== 'Settings') throw new Error('COMPUTER_VALIDATION_SETTINGS_OBSERVATION_REQUIRED');
     const value = await observe(...args); observations++;
     lastNodes = JSON.parse(value.summary).elements;
     return value;
   };
+  let inputGuard: unknown;
   const perform = driver.perform.bind(driver);
   driver.perform = async (target, action, signal) => {
-    assert.equal(action.kind, 'activate', 'No keys, typing, coordinates or preference mutations');
     const node = lastNodes.find(node => node.ref === (action as any).ref);
+    inputGuard = { kind: action.kind, refObserved: !!node, nativeTab: node?.role === 'AXRadioButton', expectedTab: node?.label === (mode === 'scenario' ? DESTINATION : BASELINE) };
+    assert.equal(action.kind, 'activate', 'No keys, typing, coordinates or preference mutations');
     assert.equal(node?.role, 'AXRadioButton');
-    assert.equal(node.label, mode === 'scenario' ? DESTINATION : BASELINE);
+    assert.ok(node?.label === (mode === 'scenario' ? DESTINATION : BASELINE), 'COMPUTER_VALIDATION_NATIVE_TARGET_REQUIRED');
     if (mode === 'scenario') inputs++; else setupInputs++;
     return perform(target, action, signal);
   };
@@ -112,11 +120,22 @@ async function main() {
   const runtime = new ComputerRuntime(endpoint, () => config, () => 'live-textedit');
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (url, init) => {
-    assert.equal(String(url), 'https://flow-validation.invalid/v1/chat/completions', 'No hosted inference or network fallback');
+    assert.equal(String(url), hosted ? 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions'
+      : 'https://flow-validation.invalid/v1/chat/completions', 'A single pinned recipient; no network fallback');
+    assert.ok(!lost, 'No model call after uncertain dispatch');
     modelRequests++;
     const body = JSON.parse(String(init?.body));
     const prompt = body.messages[1].content[1].text;
     if (prompt.includes('Untrusted historical navigation hints')) hintRequests++;
+    if (hosted) {
+      assert.equal(body.model, 'gui-plus-2026-02-26');
+      assert.equal(body.messages[1].content[0].type, 'image_url');
+      assert.match(body.messages[1].content[0].image_url.url, /^data:image\/(png|jpeg);base64,/);
+      assert.equal(init?.redirect, 'error');
+      const response = await originalFetch(url, init);
+      if (response.ok) hostedResponses++;
+      return response;
+    }
     const snapshot = JSON.parse(prompt.split('Untrusted window context: ')[1].split('\n')[0]);
     const matches = snapshot.elements.filter((e: any) => e.role === 'AXRadioButton' && e.label === DESTINATION);
     assert.equal(matches.length, 1); assert.equal(matches[0].selected, false);
@@ -136,7 +155,8 @@ async function main() {
     const found = await runtime.execute(owner, { op: 'discover', query: APP }); assert.equal(found.apps?.length, 1);
     const input = { op: 'open', appRef: found.apps[0].appRef, prepare: false, mode: 'control' } as const;
     let result = await settle(input);
-    if (result.errorCode === 'COMPUTER_WINDOW_AMBIGUOUS') {
+    if (['COMPUTER_WINDOW_AMBIGUOUS', 'COMPUTER_WINDOW_CHANGED'].includes(result.errorCode ?? '')) {
+      await broker.stop();
       const settings = result.windows?.filter(w => w.title === 'Settings'); assert.equal(settings?.length, 1);
       result = await settle({ ...input, windowRef: settings[0].windowRef });
     }
@@ -180,7 +200,7 @@ async function main() {
     assert.equal(opened.status, 'ready', JSON.stringify({ stage: mode, status: opened.status, errorCode: opened.errorCode }));
     assert.ok(approvals.session > sessionChecksBeforeOpen, 'A saved flow must not bypass session access checks');
     const beforeInputs = inputs, beforeModels = modelRequests, beforeApprovals = { ...approvals };
-    const step = { op: 'step', goal: 'Open the Open and Save settings tab; do not modify preferences', expect: EXPECT,
+    const step = { op: 'step', goal: 'Open the Open and Save settings tab using exactly one native activate action with its ref from the current accessibility context. Do not use coordinate clicks, keys, typing, or modify preferences; request interaction if no native target is advertised.', expect: EXPECT,
       ...(prior ? { flowId: prior.flowId } : {}) } as const;
     if (phase === 'unknown') {
       await assert.rejects(settle(step), /COMPUTER_DISPATCH_FAILED/);
@@ -203,24 +223,31 @@ async function main() {
         assert.ok(!/"ref"|"goal"|"image"|"coordinates"|synthetic-local-only/.test(JSON.stringify(stored)));
       }
     }
-    assert.equal(inputs - beforeInputs, 1); assert.equal(modelRequests - beforeModels, 1);
-    assert.equal(hintRequests, prior ? 1 : 0);
+    assert.equal(inputs - beforeInputs, 1); assert.ok(modelRequests - beforeModels >= 1 && modelRequests - beforeModels <= (hosted ? 2 : 1));
+    assert.equal(hintRequests, prior ? modelRequests : 0);
     assert.equal(approvals.action - beforeApprovals.action, 1, 'Every reused input must pass the real local access policy');
+    assert.equal(hostedResponses, hosted ? modelRequests : 0);
     assert.equal(frames.size, 0);
     assert.equal((await runtime.execute(owner, { op: 'flows' })).flows?.length, 1);
     const scenarioReport = runtime.getReport(owner)!;
     const evidence = { status: 'passed', phase, pid: process.pid, app: APP, isolatedState: true, restarted: !!prior,
       deniedWithoutAppAccess: true, localSessionChecks: approvals.session, localActionChecks: approvals.action,
-      scenarioNativeInputs: inputs, modelRequests, hintRequests, uncertainReplyInjected: lost, actAfterLoss,
+      scenarioNativeInputs: inputs, modelRequests, hostedResponses, hintRequests, uncertainReplyInjected: lost, actAfterLoss,
       realEffectObservedAfterLoss: lostOracle, failureDispatch: scenarioReport.failure?.dispatch ?? null,
       unknownDispatches: scenarioReport.counters.unknownDispatches, releaseStatus: scenarioReport.status,
       rescueAttempts: runtime.getReport(owner)?.counters.rescueAttempts ?? 0,
-      hostedInference: false };
+      hostedInference: hosted, modelRef, profile: hosted ? 'gui-plus-2026-02-26' : 'structured-tools-v1',
+      recipientOrigin: hosted ? 'https://dashscope.aliyuncs.com' : null };
     // Cleanup is a different explicitly authorized tab activation, never an uncertain-input replay.
     await baseline(); evidence.localSessionChecks = approvals.session; evidence.localActionChecks = approvals.action;
     await host.setComputerAppAccess(APP, false);
     await writeFile(join(root, `${phase}-result.json`), JSON.stringify({ ...evidence, cleanupInputs: setupInputs, baselineRestored: true }, null, 2), { mode: 0o600 });
     console.log(JSON.stringify(evidence));
+  } catch (error) {
+    const report = runtime.getReport(owner);
+    await writeFile(join(root, `${phase}-failure.json`), JSON.stringify({ phase, pid: process.pid, inputs, setupInputs, modelRequests, hostedResponses, inputGuard, report }, null, 2), { mode: 0o600 });
+    console.error(JSON.stringify({ phase, inputs, setupInputs, modelRequests, inputGuard, failure: report?.failure }));
+    throw error;
   } finally {
     globalThis.fetch = originalFetch;
     for (const image of frames.values()) image.fill(0); frames.clear();
