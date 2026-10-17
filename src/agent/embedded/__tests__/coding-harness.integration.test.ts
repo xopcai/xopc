@@ -86,7 +86,15 @@ it('runs a real AgentSession through edit, early completion, bounded repair and 
         { type: 'toolCall', id: 'check', name: 'exec_command', arguments: { cmd: 'node --test test.mjs' } }],
       [{ type: 'text', text: 'Verified the change.' }],
     ];
-    scripted.stream.mockImplementation(() => {
+    scripted.stream.mockImplementation((_model, context) => {
+      if (responses.length === 3) {
+        const edited = context.messages.findLast((message: any) => message.role === 'toolResult' && message.toolName === 'apply_patch');
+        expect(edited.content).toContainEqual({ type: 'text', text: expect.stringContaining('standalone assertion test, review_workspace') });
+      }
+      if (responses.length === 1) {
+        const checked = context.messages.findLast((message: any) => message.role === 'toolResult' && message.toolName === 'exec_command');
+        expect(checked.content).toContainEqual({ type: 'text', text: 'Verification pending for current files: none.' });
+      }
       const content = responses.shift();
       if (!content) throw new Error('Harness made an unexpected extra model request');
       const message = { role: 'assistant', content, api: 'openai-completions', provider: 'openai', model: 'gpt-4.1',

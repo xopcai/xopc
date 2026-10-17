@@ -44,7 +44,7 @@ function fingerprint() {
     }
   }
   for (const path of ['evals/coder/packages', 'evals/coder/apps/cli/src', 'evals/coder/scripts', 'evals/coder/suites/xopc-core']) walk(join(repository, path));
-  const runtimePaths = execFileSync('git', ['ls-files', '-z', '--', 'src', 'packages', 'extensions'], { cwd: repository, encoding: 'utf8' }).split('\0').filter(Boolean);
+  const runtimePaths = execFileSync('git', ['ls-files', '--cached', '--others', '--exclude-standard', '-z', '--', 'src', 'packages', 'extensions'], { cwd: repository, encoding: 'utf8' }).split('\0').filter(Boolean);
   for (const path of runtimePaths) {
     try { files[path] = createHash('sha256').update(readFileSync(join(repository, path))).digest('hex'); } catch { files[path] = 'missing'; }
   }

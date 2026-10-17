@@ -621,6 +621,8 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
           messageCount: effectiveContext.messages.filter(message => message.role !== 'system').length,
           transcriptRepaired: hygienicMessages !== sourceMessages,
           toolCount: effectiveTools.length,
+          toolSchemaChars: JSON.stringify(effectiveTools).length,
+          estimatedContextTokens: assessed.evaluation.estimatedTokens,
           lastUserMessagePreview: getLastUserMessagePreview(effectiveContext.messages),
           loopWarningInjected: !!loopGuard.injection,
           promptCache: promptCacheSnapshot,
@@ -646,7 +648,8 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
         log.info({ conversationId, runId, modelRef: latencyModelRef, thinking: latencyReasoning ?? 'off',
           phase: 'first_model_request', preparationMs: firstModelRequestAt - preparationStartedAt,
           messageCount: effectiveContext.messages.length, systemPromptLength: effectiveSystemPrompt.length,
-          toolCount: effectiveTools.length }, 'Embedded first model request ready');
+          toolCount: effectiveTools.length, toolSchemaChars: JSON.stringify(effectiveTools).length,
+          estimatedContextTokens: assessed.evaluation.estimatedTokens }, 'Embedded first model request ready');
       }
       return trackAiUsageStream(streamModel, {
         operation: continuesAfterTool(effectiveContext.messages) ? 'agent.continue_after_tool' : 'agent.answer',
