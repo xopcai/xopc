@@ -38,6 +38,7 @@ import {
   WriteFileCard,
   type ToolCardLabels,
 } from '@/features/chat/tool-results/tool-result-cards';
+import { SearchDetailsCard } from '@/features/chat/tool-results/search-details-card';
 import { parseToolResult } from '@/features/chat/tool-results/parse-tool-result';
 import { useDevViewStore } from '@/stores/dev-view-store';
 import { formatStepRoundDuration } from '@/features/chat/time/step-round-duration';
@@ -710,6 +711,8 @@ function StepRow({
           </span>
         </div>
         {card ? <details className="min-w-0 text-xs text-fg-muted"><summary className="cursor-pointer hover:text-fg">{stepLabels.stepDetails}</summary>{card}</details> : null}
+        {kind === 'webSearch' && !isStreaming ? <SearchDetailsCard block={block} summary={stepLabels.stepDetails}
+          labels={messages(outputLanguage).chat.searchDetails} developer={showRawToolData} language={outputLanguage} /> : null}
         {memoryActivity ? (
           <div className="space-y-1 text-xs text-fg-muted">
             <p>{memoryActivity.purpose}</p>

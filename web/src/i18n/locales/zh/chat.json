@@ -375,6 +375,39 @@
       "other": "正在处理…",
       "mixed": "正在处理…"
     },
+    "searchDetails": {
+      "provider": "搜索服务",
+      "unknown": "未知",
+      "upstreamUnknown": "上游未知",
+      "cached": "缓存结果",
+      "fresh": "本次获取",
+      "cacheUnknown": "缓存状态未知",
+      "cacheHint": "显示的是该缓存结果的原始服务商。",
+      "route": "请求尝试链路",
+      "incompleteRoute": "部分尝试详情不可用。",
+      "cachedRoute": "缓存结果的原始请求链路",
+      "attempts": "尝试次数",
+      "capturedAt": "获取时间",
+      "outcomes": {
+        "success": "成功",
+        "empty": "无结果",
+        "error": "失败",
+        "skipped": "跳过"
+      },
+      "reasons": {
+        "permission_denied": "权限拒绝",
+        "rate_limited": "触发限流",
+        "timeout": "请求超时",
+        "cancelled": "已取消",
+        "provider_error": "服务商不可用",
+        "authentication": "上游鉴权失败",
+        "balance": "上游余额不足",
+        "rate_limit": "上游限流",
+        "unsupported_request": "不支持该查询或筛选条件",
+        "unavailable": "上游不可用",
+        "response_too_large": "响应过大"
+      }
+    },
     "toolCard": {
       "copyPath": "复制路径",
       "copyCommand": "复制命令",

@@ -1,5 +1,5 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
-import type { SearchResult } from './types.js';
+import type { SearchMetadata, SearchResult } from './types.js';
 
 export const SEARCH_CACHE_TTL_MS = 10 * 60_000;
 export interface SearchCacheEntry {
@@ -9,6 +9,7 @@ export interface SearchCacheEntry {
   results: SearchResult[];
   provider: string;
   capturedAt: number;
+  metadata?: SearchMetadata;
 }
 export interface SearchCache {
   get(key: string): SearchCacheEntry | undefined;

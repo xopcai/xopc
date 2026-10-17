@@ -4,8 +4,35 @@ import { SessionManager } from '@earendil-works/pi-coding-agent';
 import { guardSessionManager } from '../session-tool-result-guard.js';
 import { repairAssistantUsageInSessionManager } from '../session-manager-init.js';
 import { onSessionTranscriptUpdate } from '../../../session/transcript-events.js';
+import { transcriptRowsToClientHistory } from '../../../session/client-history.js';
 
 describe('session-tool-result-guard', () => {
+  it('retains compact search provenance when large results exceed the persisted details limit', () => {
+    const listener = vi.fn();
+    const unsubscribe = onSessionTranscriptUpdate(listener);
+    try {
+      const sm = guardSessionManager(SessionManager.inMemory(process.cwd()), { conversationId: 'search-history-test' });
+      const searchInfo = { provider: 'xopc-cloud', upstream: 'tavily', cached: true, capturedAt: 123, attemptCount: 2, attempts: [
+        { provider: 'xopc-cloud', upstream: 'deepseek', outcome: 'error', reason: 'timeout' },
+        { provider: 'xopc-cloud', upstream: 'tavily', outcome: 'success' },
+      ] };
+      sm.appendMessage({ role: 'toolResult', toolCallId: 'search-1', toolName: 'web_search',
+        content: [{ type: 'text', text: 'Search results' }], timestamp: Date.now(), details: {
+          provider: 'xopc-cloud', results: [{ description: 'x'.repeat(40_000) }], searchInfo,
+        },
+      } as never);
+      const persisted = listener.mock.calls.at(-1)?.[0]?.message;
+      expect(persisted?.details).toMatchObject({ persistedDetailsTruncated: true, searchInfo });
+      expect(Buffer.byteLength(JSON.stringify(persisted?.details))).toBeLessThanOrEqual(8192);
+      expect(persisted?.details.results).toBeUndefined();
+      const history = transcriptRowsToClientHistory([
+        { role: 'assistant', content: [{ type: 'toolCall', id: 'search-1', name: 'web_search', arguments: { query: 'query' } }], timestamp: 1 },
+        persisted,
+      ] as never);
+      expect(history[0]?.toolCalls?.[0]?.details).toMatchObject({ searchInfo });
+    } finally { unsubscribe(); }
+  });
+
   it('appendMessage emits transcript update for SQLite-backed session key', () => {
     const listener = vi.fn();
     const unsubscribe = onSessionTranscriptUpdate(listener);
