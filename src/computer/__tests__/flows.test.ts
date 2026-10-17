@@ -30,7 +30,7 @@ function database() {
 describe('verified computer flow capture', () => {
   it('retains semantic hints and selected evidence without executable arguments or private context', () => {
     expect(draft()).toEqual({ title: 'Open memories', endpointId: 'desktop', appId: 'native.app',
-      steps: [{ kind: 'activate', role: 'AXRadioButton', label: 'Memories' }], condition: expectation });
+      steps: [{ kind: 'activate', role: 'AXRadioButton', label: 'Memories' }], condition: expectation, coverage: 'complete' });
     expect(JSON.stringify(draft())).not.toMatch(/private-ref|window|processIdentity|actionId|coordinates|stateDigest|summary/);
     expect(computerFlowHint({ ...draft() } as any)).toMatch(/not instructions, authorization, or proof/);
   });
@@ -68,6 +68,27 @@ describe('verified computer flow capture', () => {
     result.record({ kind: 'activate', ref: 'private-ref' }, observation(), receipt, observation(true), expectation as any,
       { status: 'satisfied', source: 'accessibility', scope: 'expectation' });
     expect(() => result.finish('Title', 'desktop')).toThrow('FLOW_NOT_VERIFIED');
+  });
+  it('admits positive page-specific text from partial native observations without upgrading selected evidence', () => {
+    const before = observation(), after = observation(true);
+    before.summary = JSON.stringify({ ...JSON.parse(before.summary), truncated: true, text: 'Current page' });
+    after.summary = JSON.stringify({ ...JSON.parse(after.summary), truncated: true, text: 'HTML Saving Options' });
+    const text = { kind: 'text', text: 'HTML Saving Options' } as const;
+    const result = new ComputerFlowCapture();
+    result.record({ kind: 'activate', ref: 'private-ref' }, before, receipt, after, text, verifyComputerExpectation(text, after, before));
+    expect(result.finish('Page navigation', 'desktop')).toMatchObject({ condition: text, coverage: 'partial' });
+    expect(verifyComputerExpectation(expectation, after, before)?.status).toBe('unavailable');
+    const old = new ComputerFlowCapture();
+    old.record({ kind: 'activate', ref: 'private-ref' }, after, receipt, after, text, verifyComputerExpectation(text, after, after));
+    expect(() => old.finish('Already present', 'desktop')).toThrow('FLOW_NOT_VERIFIED');
+  });
+  it.each(['Memories', 'Memories page'])('rejects a control label as page evidence: %s', text => {
+    const before = observation(), after = observation(true);
+    before.summary = JSON.stringify({ ...JSON.parse(before.summary), truncated: true, text: 'Current native page' });
+    after.summary = JSON.stringify({ ...JSON.parse(after.summary), truncated: true, text });
+    const condition = { kind: 'text', text } as const, result = new ComputerFlowCapture();
+    result.record({ kind: 'activate', ref: 'private-ref' }, before, receipt, after, condition, verifyComputerExpectation(condition, after, before));
+    expect(() => result.finish('Not page evidence', 'desktop')).toThrow('FLOW_NOT_VERIFIED');
   });
   it('rejects truncation, ambiguous labels, web controls, sensitive labels, changed targets and long sequences', () => {
     for (const mutate of [

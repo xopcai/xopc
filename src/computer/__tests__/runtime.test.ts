@@ -549,6 +549,26 @@ describe('verified flow lifecycle through the desktop broker', () => {
     expect(await f.runtime.execute('owner', { op: 'forget_flow', flowId: closed.savedFlow!.id })).toMatchObject({ status: 'flow_deleted' });
     expect((await f.runtime.execute('owner', { op: 'flows' })).flows).toEqual([]);
   });
+  it('saves positive page evidence from partial native snapshots without certifying selected-state evidence', async () => {
+    const store = flowRepository(), f = fixture(true, store); nativeNavigation(f);
+    vi.mocked(resolveModel).mockReturnValueOnce({ id: 'native-fixture', provider: 'ali', api: 'openai-completions', input: ['text', 'image'],
+      baseUrl: 'https://model.test/v1', computerUse: { profile: 'structured-tools-v1' } } as any);
+    f.fetch.mockResolvedValueOnce(Response.json({ choices: [{ message: { tool_calls: [{ function: { name: 'computer_proposal',
+      arguments: JSON.stringify({ proposal: { kind: 'action', action: { kind: 'activate', ref: 'original-ref' } } }) } }] } }] }));
+    const observe = f.driver.observe.getMockImplementation()!;
+    f.driver.observe.mockImplementation(async () => {
+      const value = await observe(), tree = JSON.parse(value.summary);
+      const selected = tree.elements.find((e: any) => e.label === 'Memories').selected;
+      return { ...value, summary: JSON.stringify({ ...tree, truncated: true, text: selected ? 'HTML Saving Options' : 'Native navigation controls' }) };
+    });
+    await f.open(await f.discover());
+    expect(await f.runtime.execute('owner', { ...navigationStep, expect: { kind: 'text', text: 'HTML Saving Options' } })).toMatchObject({ verified: true });
+    const observed = await f.runtime.execute('owner', { op: 'observe', expect: navigationStep.expect });
+    expect(observed.verification?.status).toBe('unavailable');
+    expect(await f.runtime.execute('owner', { op: 'close', saveFlowAs: 'Page navigation' })).toMatchObject({ savedFlow: { steps: 1 } });
+    expect(store.save.mock.calls[0][1]).toMatchObject({ coverage: 'partial', condition: { kind: 'text', text: 'HTML Saving Options' } });
+    expect(f.runtime.getReport('owner')?.counters.successClaims).toBe(0);
+  });
   it('never saves automatically or learns from a model success claim', async () => {
     const store = flowRepository(), f = fixture(true, store); nativeNavigation(f);
     await f.open(await f.discover()); await f.runtime.execute('owner', navigationStep);
