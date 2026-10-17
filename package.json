@@ -135,7 +135,11 @@
     "electron:build": "pnpm run build:node && pnpm run build:web && pnpm run electron:build:artifacts && pnpm run electron:package",
     "electron:preview": "cross-env ELECTRON_ENTRY=out/main/index.js electron-vite preview",
     "mobile:charts:assets": "node packages/chart-spec/scripts/build-mobile.mjs ios android harmony",
-    "mobile:math:assets": "pnpm --filter @xopcai/markdown-math build:mobile ios android harmony"
+    "mobile:math:assets": "pnpm --filter @xopcai/markdown-math build:mobile ios android harmony",
+    "eval:benchmark": "tsx evals/coder/apps/cli/src/benchmark.ts",
+    "eval:benchmark:check": "pnpm -C evals/coder run typecheck && pnpm -C evals/coder exec vitest run --configLoader native tests/benchmark-v1.test.ts tests/xopc-adapter.test.ts tests/suite-loader.test.ts",
+    "eval:benchmark:live": "node --import tsx evals/coder/scripts/run-benchmark-live.mjs",
+    "eval:benchmark:regrade": "tsx evals/coder/apps/cli/src/benchmark-regrade.ts"
   },
   "keywords": [
     "agentic-ai",

@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -83,4 +83,35 @@ describe('GitCloneSandbox', () => {
     })).rejects.toThrow('Prepare commands must not mutate source-controlled files');
     await sandbox.cleanupAll();
   });
+  it('preserves frozen CSV bytes when the host Git defaults to CRLF checkout', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'coder-evals-line-endings-'));
+    roots.push(root);
+    const repo = join(root, 'repo');
+    mkdirSync(repo);
+    const content = 'name,amount\n"Two\nlines",0.30\n';
+    writeFileSync(join(repo, 'quoted.csv'), content);
+    const git = (args: string[]) => execFileSync('git', args, { cwd: repo, stdio: 'pipe' });
+    git(['init', '-q']);
+    git(['config', 'core.autocrlf', 'false']);
+    git(['config', 'user.email', 'eval@example.com']);
+    git(['config', 'user.name', 'Eval Test']);
+    git(['add', '.']);
+    git(['commit', '-qm', 'fixture']);
+    const config = join(root, 'gitconfig');
+    writeFileSync(config, '[core]\n  autocrlf = true\n');
+    const saved = process.env.GIT_CONFIG_GLOBAL;
+    process.env.GIT_CONFIG_GLOBAL = config;
+    const sandbox = new GitCloneSandbox();
+    try {
+      const environment = await sandbox.prepare({
+        id: 'frozen-bytes', repo: { source: 'local', path: repo, commit: 'HEAD' }, task: 'Read CSV',
+        budget: { timeoutMs: 30000 }, graders: [{ type: 'command', command: 'true' }], tags: [],
+      });
+      expect(readFileSync(join(environment.workspace, 'quoted.csv'), 'utf8')).toBe(content);
+    } finally {
+      if (saved === undefined) delete process.env.GIT_CONFIG_GLOBAL; else process.env.GIT_CONFIG_GLOBAL = saved;
+      sandbox.cleanupAll();
+    }
+  });
+
 });

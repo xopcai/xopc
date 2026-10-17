@@ -87,7 +87,7 @@ export class GitCloneSandbox {
       : evalCase.repo.url;
     if (!source) throw new Error(`Eval case ${evalCase.id} is missing a repository source`);
 
-    await execFileAsync('git', ['clone', '--quiet', '--no-hardlinks', source, workspace], {
+    await execFileAsync('git', ['clone', '--config', 'core.autocrlf=false', '--quiet', '--no-hardlinks', source, workspace], {
       timeout: 120_000,
       maxBuffer: 8 * 1024 * 1024,
     });

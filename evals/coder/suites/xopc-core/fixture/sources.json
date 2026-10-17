@@ -1,0 +1,21 @@
+{
+  "notice": "Synthetic frozen benchmark facts, not real vendor prices.",
+  "a": {
+    "id": "primary-a",
+    "asOf": "2026-10-01",
+    "currency": "CNY",
+    "asrPerHour": 1.2,
+    "ttsPerHour": null
+  },
+  "b": {
+    "id": "primary-b",
+    "asOf": "2026-10-01",
+    "currency": "CNY",
+    "asrPerMinute": 0.03
+  },
+  "secondary": {
+    "id": "secondary-note",
+    "vendorAAsrPerHour": 12,
+    "authority": "unverified"
+  }
+}

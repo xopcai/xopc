@@ -20,6 +20,10 @@ Suite / Experiment
 
 The target agent never receives the suite directory or hidden grader definitions. Only the isolated repository clone and task prompt are passed to the adapter.
 
+## xopc benchmark v1
+
+The [ten-scenario xopc-core suite](suites/xopc-core/README.md) reuses this framework for frozen research, data files, requirement changes and recovery. Run `pnpm run eval:benchmark` from the repository root for evaluator calibration, or use its explicit live mode against an isolated Gateway. Calibration results are not model scores. For a built-in API-key model, `pnpm run eval:benchmark:live --model provider/model` automatically starts and cleans up an isolated Gateway, resolves the configured key without writing it to reports, and selects a supported reasoning level.
+
 ## Quick start
 
 Requirements: the same Node.js and pnpm versions as the xopc monorepo.

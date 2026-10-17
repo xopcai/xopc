@@ -1,0 +1,328 @@
+{
+  "schemaVersion": 1,
+  "evidenceClass": "harness-calibration",
+  "experimentId": "746eb070-f7ba-42fa-b491-11278d11de18",
+  "suiteHash": "b7335af765b54cee3c956b7ec7362925dd96c5b5d63f2acf305f30490c109cb5",
+  "passed": true,
+  "sourceDrift": false,
+  "variants": [
+    {
+      "id": "broken",
+      "expectedRuns": 10,
+      "observedRuns": 10,
+      "passed": 0,
+      "successRate": 0,
+      "reportedEstimatedCost": null,
+      "reportedEstimatedCostPerSuccess": null,
+      "durationsMs": [
+        81,
+        76,
+        79,
+        79,
+        77,
+        76,
+        89,
+        83,
+        77,
+        76
+      ],
+      "totalReportedTokens": null,
+      "statuses": {
+        "passed": 0,
+        "failed": 10,
+        "error": 0,
+        "timed_out": 0,
+        "budget_exceeded": 0
+      },
+      "categories": [
+        {
+          "category": "research",
+          "expectedRuns": 3,
+          "passed": 0
+        },
+        {
+          "category": "data",
+          "expectedRuns": 3,
+          "passed": 0
+        },
+        {
+          "category": "change",
+          "expectedRuns": 2,
+          "passed": 0
+        },
+        {
+          "category": "recovery",
+          "expectedRuns": 2,
+          "passed": 0
+        }
+      ]
+    },
+    {
+      "id": "reference",
+      "expectedRuns": 10,
+      "observedRuns": 10,
+      "passed": 10,
+      "successRate": 1,
+      "reportedEstimatedCost": null,
+      "reportedEstimatedCostPerSuccess": null,
+      "durationsMs": [
+        120,
+        104,
+        205,
+        195,
+        200,
+        107,
+        213,
+        119,
+        108,
+        106
+      ],
+      "totalReportedTokens": null,
+      "statuses": {
+        "passed": 10,
+        "failed": 0,
+        "error": 0,
+        "timed_out": 0,
+        "budget_exceeded": 0
+      },
+      "categories": [
+        {
+          "category": "research",
+          "expectedRuns": 3,
+          "passed": 3
+        },
+        {
+          "category": "data",
+          "expectedRuns": 3,
+          "passed": 3
+        },
+        {
+          "category": "change",
+          "expectedRuns": 2,
+          "passed": 2
+        },
+        {
+          "category": "recovery",
+          "expectedRuns": 2,
+          "passed": 2
+        }
+      ]
+    }
+  ],
+  "cases": [
+    {
+      "caseId": "R01-price-comparison",
+      "variantId": "broken",
+      "runId": "9272745c-d337-4d7a-9078-38a7d8f7ff4f",
+      "status": "failed",
+      "artifactChecksPassed": false,
+      "durationMs": 83,
+      "observedResponseTokens": null,
+      "usageCoverage": "Observed completed responses only; interrupted requests may be unreported."
+    },
+    {
+      "caseId": "R01-price-comparison",
+      "variantId": "reference",
+      "runId": "d09fb9fd-e268-4a18-b853-fbd98ad81c96",
+      "status": "passed",
+      "artifactChecksPassed": true,
+      "durationMs": 119,
+      "observedResponseTokens": null,
+      "usageCoverage": "Observed completed responses only; interrupted requests may be unreported."
+    },
+    {
+      "caseId": "R02-conflicting-source",
+      "variantId": "reference",
+      "runId": "c7b9336f-0f08-4c1f-b034-bc31afc8d910",
+      "status": "passed",
+      "artifactChecksPassed": true,
+      "durationMs": 108,
+      "observedResponseTokens": null,
+      "usageCoverage": "Observed completed responses only; interrupted requests may be unreported."
+    },
+    {
+      "caseId": "R02-conflicting-source",
+      "variantId": "broken",
+      "runId": "9f4413ba-4d10-4811-bfa2-f873de252dfc",
+      "status": "failed",
+      "artifactChecksPassed": false,
+      "durationMs": 77,
+      "observedResponseTokens": null,
+      "usageCoverage": "Observed completed responses only; interrupted requests may be unreported."
+    },
+    {
+      "caseId": "R03-missing-evidence",
+      "variantId": "broken",
+      "runId": "ad8fcad9-6a82-4dd2-8ae3-710ec347ad19",
+      "status": "failed",
+      "artifactChecksPassed": false,
+      "durationMs": 76,
+      "observedResponseTokens": null,
+      "usageCoverage": "Observed completed responses only; interrupted requests may be unreported."
+    },
+    {
+      "caseId": "R03-missing-evidence",
+      "variantId": "reference",
+      "runId": "b96183d3-7805-4935-a9d9-f409d6e2451a",
+      "status": "passed",
+      "artifactChecksPassed": true,
+      "durationMs": 106,
+      "observedResponseTokens": null,
+      "usageCoverage": "Observed completed responses only; interrupted requests may be unreported."
+    },
+    {
+      "caseId": "D01-monthly-sales",
+      "variantId": "reference",
+      "runId": "d93bcd63-6bed-43cb-ac19-f135e56821d7",
+      "status": "passed",
+      "artifactChecksPassed": true,
+      "durationMs": 205,
+      "observedResponseTokens": null,
+      "usageCoverage": "Observed completed responses only; interrupted requests may be unreported."
+    },
+    {
+      "caseId": "D01-monthly-sales",
+      "variantId": "broken",
+      "runId": "64831433-2876-4644-a4f4-85778d0413af",
+      "status": "failed",
+      "artifactChecksPassed": false,
+      "durationMs": 79,
+      "observedResponseTokens": null,
+      "usageCoverage": "Observed completed responses only; interrupted requests may be unreported."
+    },
+    {
+      "caseId": "D02-quoted-csv",
+      "variantId": "reference",
+      "runId": "76fea971-ac02-4d5d-8d13-bc0e3eda83e9",
+      "status": "passed",
+      "artifactChecksPassed": true,
+      "durationMs": 195,
+      "observedResponseTokens": null,
+      "usageCoverage": "Observed completed responses only; interrupted requests may be unreported."
+    },
+    {
+      "caseId": "D02-quoted-csv",
+      "variantId": "broken",
+      "runId": "46778e68-5c36-46ad-a450-0e438b7d69d3",
+      "status": "failed",
+      "artifactChecksPassed": false,
+      "durationMs": 79,
+      "observedResponseTokens": null,
+      "usageCoverage": "Observed completed responses only; interrupted requests may be unreported."
+    },
+    {
+      "caseId": "D03-exact-money",
+      "variantId": "broken",
+      "runId": "dd9d781e-81ec-47ab-8ed7-2cbf6153d296",
+      "status": "failed",
+      "artifactChecksPassed": false,
+      "durationMs": 77,
+      "observedResponseTokens": null,
+      "usageCoverage": "Observed completed responses only; interrupted requests may be unreported."
+    },
+    {
+      "caseId": "D03-exact-money",
+      "variantId": "reference",
+      "runId": "cdc4c465-aebe-47fe-a68b-e7f3b0383c7d",
+      "status": "passed",
+      "artifactChecksPassed": true,
+      "durationMs": 200,
+      "observedResponseTokens": null,
+      "usageCoverage": "Observed completed responses only; interrupted requests may be unreported."
+    },
+    {
+      "caseId": "C01-add-deliverable",
+      "variantId": "reference",
+      "runId": "68fb763f-6700-44f9-ab06-df1d34393c3c",
+      "status": "passed",
+      "artifactChecksPassed": true,
+      "durationMs": 120,
+      "observedResponseTokens": null,
+      "usageCoverage": "Observed completed responses only; interrupted requests may be unreported."
+    },
+    {
+      "caseId": "C01-add-deliverable",
+      "variantId": "broken",
+      "runId": "f305c1b1-c186-4f5d-8d46-f9f331e279d2",
+      "status": "failed",
+      "artifactChecksPassed": false,
+      "durationMs": 81,
+      "observedResponseTokens": null,
+      "usageCoverage": "Observed completed responses only; interrupted requests may be unreported."
+    },
+    {
+      "caseId": "C02-replace-scope",
+      "variantId": "reference",
+      "runId": "782583bd-9d42-45e0-8bd3-4ce654f4fe85",
+      "status": "passed",
+      "artifactChecksPassed": true,
+      "durationMs": 104,
+      "observedResponseTokens": null,
+      "usageCoverage": "Observed completed responses only; interrupted requests may be unreported."
+    },
+    {
+      "caseId": "C02-replace-scope",
+      "variantId": "broken",
+      "runId": "d50a60a1-f120-4914-b3e8-48dfce20d5e5",
+      "status": "failed",
+      "artifactChecksPassed": false,
+      "durationMs": 76,
+      "observedResponseTokens": null,
+      "usageCoverage": "Observed completed responses only; interrupted requests may be unreported."
+    },
+    {
+      "caseId": "F01-lost-artifact",
+      "variantId": "reference",
+      "runId": "99585e93-2e1b-4ee3-90fa-3e859bd48877",
+      "status": "passed",
+      "artifactChecksPassed": true,
+      "durationMs": 107,
+      "observedResponseTokens": null,
+      "usageCoverage": "Observed completed responses only; interrupted requests may be unreported."
+    },
+    {
+      "caseId": "F01-lost-artifact",
+      "variantId": "broken",
+      "runId": "4065b0ff-8c37-4731-9780-36e9d0d98908",
+      "status": "failed",
+      "artifactChecksPassed": false,
+      "durationMs": 76,
+      "observedResponseTokens": null,
+      "usageCoverage": "Observed completed responses only; interrupted requests may be unreported."
+    },
+    {
+      "caseId": "F02-transient-read",
+      "variantId": "broken",
+      "runId": "a23ef975-a638-4892-ba9e-8fea5cbeade5",
+      "status": "failed",
+      "artifactChecksPassed": false,
+      "durationMs": 89,
+      "observedResponseTokens": null,
+      "usageCoverage": "Observed completed responses only; interrupted requests may be unreported."
+    },
+    {
+      "caseId": "F02-transient-read",
+      "variantId": "reference",
+      "runId": "6af0ff48-7c6f-4ece-9eab-cb828390596c",
+      "status": "passed",
+      "artifactChecksPassed": true,
+      "durationMs": 213,
+      "observedResponseTokens": null,
+      "usageCoverage": "Observed completed responses only; interrupted requests may be unreported."
+    }
+  ],
+  "falseCompletionRate": null,
+  "costPerSuccess": null,
+  "unmeasured": [
+    "false-completion semantics",
+    "complete provider cost coverage",
+    "autonomous background recovery",
+    "research prose quality"
+  ],
+  "version": "1.0.2",
+  "sourceCommit": "f3c966e8ddbe5c5dccf97c6e96bde32c2d75264c",
+  "fixtureCommit": "073bc27b5bd88e55c0f947236e3e126a66388e8c",
+  "lockfileHash": "4821e132fe804cd725bc7e379ae7f5ebadc9f4d31c77e67d679a9abdea927553",
+  "harnessHash": "c74bc3816ac8992101a0540011e82d257e7c833882aeb68b7aa51dda196f2910",
+  "note": "Evaluator calibration only. No model was used."
+}

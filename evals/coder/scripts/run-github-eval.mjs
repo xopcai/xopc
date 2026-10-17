@@ -11,7 +11,7 @@ import { createFixture } from '../suites/coding-core/create-fixture.mjs';
 
 const repository = fileURLToPath(new URL('../../../', import.meta.url));
 
-export function settingsFromEnv(env) {
+export function settingsFromEnv(env, options = {}) {
   const model = env.CODER_EVAL_MODEL?.trim();
   if (!model || !/^[a-z][a-z0-9-]*\/[a-zA-Z0-9][a-zA-Z0-9._:/-]*$/.test(model)) {
     throw new Error('CODER_EVAL_MODEL must be a registered provider/model reference.');
@@ -21,7 +21,7 @@ export function settingsFromEnv(env) {
     throw new Error('This workflow supports single API-key providers, not OAuth or cloud credential bundles.');
   }
   const reasoning = env.CODER_EVAL_REASONING || 'high';
-  if (!['off', 'low', 'medium', 'high'].includes(reasoning)) throw new Error('Invalid reasoning level.');
+  if (!(options.benchmark ? ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'] : ['off', 'low', 'medium', 'high']).includes(reasoning)) throw new Error('Invalid reasoning level.');
   const repetitions = Number(env.CODER_EVAL_REPETITIONS || '1');
   if (![1, 2, 3].includes(repetitions)) throw new Error('Repetitions must be 1, 2 or 3.');
   const apiKey = env.CODER_EVAL_API_KEY?.trim();
@@ -135,10 +135,10 @@ function stopGateway(child, signal) {
   try { process.kill(-child.pid, signal); } catch { child.kill(signal); }
 }
 
-export async function main() {
-  const settings = settingsFromEnv(process.env);
+export async function main(options = {}) {
+  const settings = settingsFromEnv(process.env, { benchmark: options.benchmark === true });
   const state = mkdtempSync(join(process.env.RUNNER_TEMP || tmpdir(), 'xopc-live-eval-'));
-  const output = resolve('coder-eval-results');
+  const output = resolve(options.outputDirectory ?? 'coder-eval-results');
   mkdirSync(output); // Never mix credentials or results with a previous run.
   const token = randomBytes(32).toString('hex');
   const secrets = [settings.apiKey, token];
@@ -177,6 +177,22 @@ export async function main() {
     console.log('Gateway ready.');
     if (process.argv.includes('--preflight-only')) {
       writeFileSync(join(output, 'summary.md'), 'Preflight passed: authenticated Gateway startup only; no model requests or coding score.\n');
+      return;
+    }
+
+    if (options.benchmark) {
+      const benchmarkOutput = join(output, 'benchmark');
+      try {
+        execFileSync(process.execPath, ['--import', 'tsx', 'evals/coder/apps/cli/src/benchmark.ts',
+          '--mode', 'live', '--base-url', baseUrl, '--model', settings.model,
+          '--reasoning', settings.reasoning, '--repetitions', String(settings.repetitions),
+          '--output', benchmarkOutput], {
+          cwd: repository, stdio: 'inherit', timeout: 120 * 60_000,
+          env: { ...process.env, XOPC_EVAL_TOKEN: token },
+        });
+      } catch { failed = true; }
+      const summaryPath = join(benchmarkOutput, 'summary.md');
+      if (existsSync(summaryPath)) writeFileSync(join(output, 'summary.md'), readFileSync(summaryPath));
       return;
     }
 
