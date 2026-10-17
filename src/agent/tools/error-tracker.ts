@@ -63,9 +63,10 @@ export class ToolErrorTracker {
 
     this.totalFailures++;
 
+    const errorMessage = error?.replace(/\s+/g, ' ').trim().slice(0, 500) || undefined;
     log.warn(
-      { toolName, failures: this.getFailureCount(toolName), total: this.totalFailures },
-      'Tool failure recorded'
+      { toolName, failures: this.getFailureCount(toolName), total: this.totalFailures, errorMessage },
+      errorMessage ? `Tool failure recorded (${toolName}): ${errorMessage}` : 'Tool failure recorded'
     );
   }
 
