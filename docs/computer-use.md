@@ -38,6 +38,8 @@ Passwords, verification codes, payments and security changes require manual hand
 | Model or upload request fails | Keep the diagnostic/request ID, inspect logs, and fix the reported cause before retrying |
 | An action may already have happened | Inspect the application before repeating it; an uncertain action is not automatically replayed |
 
+The runtime may discard a proposal and observe/plan again only when the desktop explicitly confirms that the window changed **before dispatch**, without an execution receipt. This uses a shared session allowance: `computer.maxRescuesPerSession` defaults to 1, accepts 0–3, and 0 disables rescue. Raising it requires a new session; lowering it takes effect immediately. New proposals retain the original goal, target, model and local authorization checks. Uncertain delivery, native failures and unchanged screenshots never trigger rescue. See [bounded rescue](./design/technical/computer-use-bounded-rescue.md).
+
 A model saying it finished is not proof that a save or remote transaction succeeded. Review the actual output. Stop computer control before switching to another browser or application tool.
 
 For failure diagnosis, ask for the current Computer Use report (`computer_use` with `op: "report"`). This reads local metadata without touching the desktop or model. It separates failure stage, actual model calls, completed or uncertain inputs and native condition checks. Errors and close also include the available report. Reports contain no screenshots or window/input text and expire from memory after thirty minutes; restarting clears them. See [diagnostics and paired evaluation](./design/technical/computer-use-diagnostics-evaluation.md) for metrics, comparison commands and tested limits.

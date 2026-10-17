@@ -52,6 +52,7 @@ const Count = z.number().int().nonnegative();
 const CountersSchema = z.object({
   observations: Count, predictionAttempts: Count, modelRequests: Count, proposedInputs: Count, completedInputs: Count,
   unknownDispatches: Count, unchangedInputs: Count, observationChanges: Count,
+  rescueAttempts: Count, rescueExhaustions: Count,
   takeovers: Count, successClaims: Count, verifiedConditions: Count,
 }).strict();
 export const ComputerSessionReportSchema = z.object({
@@ -80,7 +81,8 @@ export class ComputerSessionDiagnostics {
   constructor(private readonly now: () => number = Date.now) {
     this.data = { version: 1, reportId: randomUUID(), status: 'active', startedAt: now(), durationMs: 0,
       counters: { observations: 0, predictionAttempts: 0, modelRequests: 0, proposedInputs: 0, completedInputs: 0, unknownDispatches: 0,
-        unchangedInputs: 0, observationChanges: 0, takeovers: 0, successClaims: 0, verifiedConditions: 0 },
+        unchangedInputs: 0, observationChanges: 0, rescueAttempts: 0, rescueExhaustions: 0,
+        takeovers: 0, successClaims: 0, verifiedConditions: 0 },
       phaseMs: { open: 0, observe: 0, model: 0, dispatch: 0, release: 0 }, recentActions: [] };
   }
   bind(sessionId: string): void { this.data.sessionId = sessionId; }
