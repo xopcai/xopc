@@ -123,6 +123,7 @@ export interface WorkflowDefinitionExamplePrompt {
 }
 
 export interface WorkflowDefinitionLocaleBundle {
+  title?: string;
   description?: string;
   whenToUse?: string;
   examplePrompts?: WorkflowDefinitionExamplePrompt[];

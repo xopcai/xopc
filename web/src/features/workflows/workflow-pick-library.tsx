@@ -78,14 +78,14 @@ function WorkflowLibraryCard({
             className={cn('mt-2 line-clamp-2 text-left text-sm font-semibold leading-5 text-fg hover:text-accent-fg', interaction.focusRingPanel)}
             onClick={() => onDetail(definition)}
           >
-            {definition.title}
+            {localized.title}
           </button>
         </div>
         <Button
           type="button"
           variant="ghost"
           className="size-8 shrink-0 p-0"
-          aria-label={`${isUser ? labels.editWorkflow : labels.copyAndEditWorkflow}: ${definition.title}`}
+          aria-label={`${isUser ? labels.editWorkflow : labels.copyAndEditWorkflow}: ${localized.title}`}
           onClick={() => onEdit(definition)}
         >
           {isUser ? <Pencil className="size-3.5" aria-hidden /> : <CopyPlus className="size-3.5" aria-hidden />}
@@ -93,7 +93,7 @@ function WorkflowLibraryCard({
       </div>
 
       <p className="mt-2 line-clamp-2 text-xs leading-5 text-fg-muted">
-        {localized.whenToUse || localized.description || definition.description}
+        {localized.description}
       </p>
 
       <div className="mt-auto flex flex-wrap items-center gap-3 pt-4 text-[11px] text-fg-subtle">
@@ -183,7 +183,7 @@ export function WorkflowPickLibrary({
                 onClick={() => onPick(definition)}
               >
                 <span className="min-w-0">
-                  <span className="block truncate text-sm font-medium text-fg">{definition.title}</span>
+                  <span className="block truncate text-sm font-medium text-fg">{resolveWorkflowLocalizedCopy(definition, language).title}</span>
                   <span className="mt-0.5 block text-[11px] text-fg-subtle">{formatRelativeTime(lastRunAtMs, renderedAtMs, localeTag)}</span>
                 </span>
                 <Play className="size-3.5 shrink-0 text-accent-fg" aria-hidden />

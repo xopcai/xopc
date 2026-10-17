@@ -13,7 +13,7 @@ import { SidebarTaskList } from '@/components/shell/sidebar-task-list';
 
 const NAV_ITEM_PITCH_PX = 42;
 const MIN_VISIBLE_NAV_ITEMS = 1;
-const MAX_VISIBLE_NAV_ITEMS = 5;
+const MAX_VISIBLE_NAV_ITEMS = 4;
 const DEFAULT_VISIBLE_NAV_ITEMS = 3;
 const VISIBLE_APP_COUNT_STORAGE_KEY = 'xopc-web-sidebar-visible-app-count-v2';
 

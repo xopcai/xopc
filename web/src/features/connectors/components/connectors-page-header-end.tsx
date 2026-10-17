@@ -36,7 +36,7 @@ export const ConnectorsPageHeaderEnd = memo(function ConnectorsPageHeaderEnd({
     interaction.transition,
   );
   return (
-    <div className="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-2">
+    <div className="flex shrink-0 items-center justify-end gap-2">
       <DropdownMenu.Root>
         <DropdownMenu.Trigger asChild>
           <Button type="button" variant="primary" className="shrink-0 gap-2" aria-label={addLabel}>

@@ -173,6 +173,7 @@ export interface WorkflowDefinitionExamplePrompt {
 }
 
 export interface WorkflowDefinitionLocale {
+  title?: string;
   description?: string;
   whenToUse?: string;
   examplePrompts?: WorkflowDefinitionExamplePrompt[];

@@ -40,8 +40,9 @@ export interface WorkflowExamplePrompt {
   text: string;
 }
 
-/** Locale-specific copy overrides; top-level `description` / `whenToUse` / `examplePrompts` are English defaults. */
+/** Locale-specific display copy overrides; top-level fields provide the default copy. */
 export interface WorkflowLocaleCopy {
+  title?: string;
   description?: string;
   whenToUse?: string;
   examplePrompts?: WorkflowExamplePrompt[];
@@ -58,7 +59,7 @@ export interface WorkflowSnapshotDefinition {
   estimatedAgents?: WorkflowEstimatedAgents;
   /** English-default example prompts for the gateway start dialog. */
   examplePrompts?: WorkflowExamplePrompt[];
-  /** Non-English locale bundles keyed by BCP-47 language tag (e.g. `zh`). */
+  /** Locale bundles keyed by BCP-47 language tag (e.g. `zh`). */
   i18n?: Record<string, WorkflowLocaleCopy>;
 }
 

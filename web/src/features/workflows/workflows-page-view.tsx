@@ -16,6 +16,7 @@ import {
   formatRelativeTime,
   resolveRunCardTitle,
 } from './workflow-board.utils';
+import { resolveWorkflowLocalizedCopy } from './workflow-meta-locale';
 import { WorkflowPickLibrary } from './workflow-pick-library';
 import type { WorkflowStatusFilter } from './workflow-page.constants';
 import { WorkflowRunRow } from './workflow-run-row';
@@ -284,7 +285,7 @@ export function WorkflowsPageView({ vm }: { vm: WorkflowsPageVm }) {
                 >
                   <SelectOption value="">{labels.boardWorkflowFilterAll}</SelectOption>
                   {definitions.map((definition) => (
-                    <SelectOption key={definition.id} value={definition.id}>{definition.title}</SelectOption>
+                    <SelectOption key={definition.id} value={definition.id}>{resolveWorkflowLocalizedCopy(definition, language).title}</SelectOption>
                   ))}
                 </Select>
                 {hasRunFilters ? (

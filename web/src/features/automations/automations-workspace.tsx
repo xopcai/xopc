@@ -45,6 +45,7 @@ import type { StoredLanguage } from '@/lib/storage';
 import { useLocaleStore } from '@/stores/locale-store';
 import { usePageHeaderStore } from '@/stores/page-header-store';
 import { listWorkflowDefinitions, type WorkflowDefinition } from '@/features/workflows/workflow-api';
+import { resolveWorkflowLocalizedCopy } from '@/features/workflows/workflow-meta-locale';
 import { browserAutomationApi, type BrowserAutomation } from '@/features/browser-automations/browser-automation-api';
 import {
   browserAutomationInputsComplete,
@@ -3085,7 +3086,7 @@ function AutomationForm({
                 {!workflowsLoading && workflowDefinitions.length === 0 ? <SelectOption value="">{labels.form.noWorkflows}</SelectOption> : null}
                 {workflowDefinitions.map((workflow) => (
                   <SelectOption key={workflow.id} value={workflow.id}>
-                    {workflow.title || workflow.name}
+                    {resolveWorkflowLocalizedCopy(workflow, language).title}
                   </SelectOption>
                 ))}
               </Select>
@@ -3111,8 +3112,8 @@ function AutomationForm({
                     automationDescription: form.description,
                     triggerMode: form.triggerMode,
                     workflowId: selectedWorkflow.id,
-                    workflowTitle: selectedWorkflow.title,
-                    workflowDescription: selectedWorkflow.description,
+                    workflowTitle: resolveWorkflowLocalizedCopy(selectedWorkflow, language).title,
+                    workflowDescription: resolveWorkflowLocalizedCopy(selectedWorkflow, language).description,
                   },
                 }}
                 inputClassName="rounded-lg"

@@ -124,7 +124,7 @@ export function WorkflowInputEditor({
             ...aiAssist.context,
             workflowId: definition.id,
             workflowName: definition.name,
-            workflowTitle: definition.title,
+            workflowTitle: localized.title,
             workflowDescription: localized.description,
           },
         } : undefined}
@@ -155,7 +155,7 @@ export function WorkflowInputEditor({
               ...aiAssist.context,
               workflowId: definition.id,
               workflowName: definition.name,
-              workflowTitle: definition.title,
+              workflowTitle: localized.title,
               workflowDescription: localized.description,
             },
           } : undefined}
@@ -184,7 +184,7 @@ export function WorkflowInputEditor({
                 ...aiAssist.context,
                 workflowId: definition.id,
                 workflowName: definition.name,
-                workflowTitle: definition.title,
+                workflowTitle: localized.title,
                 workflowDescription: localized.description,
                 workflowInput: value.schemaInput,
               }}
