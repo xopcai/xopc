@@ -26,6 +26,7 @@ import { runXopcEmbeddedTurn } from '../run-turn.js';
 import { InMemoryTranscriptRuntime } from '../transcript-runtime.js';
 import { evictAllEmbeddedSessionRunners, evictEmbeddedSessionRunner } from '../session-runner.js';
 import { RuntimePolicySchema } from '../../../agent-config/schema.js';
+import { withCoreToolExposure } from '../../tools/toolExposure.js';
 import { markCodemodeCoreRead } from '../../tools/codemode-permissions.js';
 import { createReadFileTool } from '../../tools/read.js';
 import { createDataBatchTool } from '../../tools/dataBatch.js';
@@ -448,3 +449,19 @@ it('rejects oversized store writes and stays disabled without an explicit opt-in
   expect(RuntimePolicySchema.parse({})).toEqual({});
   expect(() => RuntimePolicySchema.parse({ codemode: { timeoutMs: 60001 } })).toThrow();
 }, 15_000);
+
+
+it('discovers an optional core tool without a namespace and restores its unchanged executable contract', async () => {
+  const { params } = await fixture();
+  const execute = vi.fn(async () => ({ content: [{ type: 'text' as const, text: 'Generated fixture' }], details: {} }));
+  const optional = withCoreToolExposure({ name: 'image_generate', label: 'Generate image', description: 'Generate an illustration',
+    parameters: Type.Object({ prompt: Type.String() }), execute });
+  params.tools.push(optional);
+  const search = await runScript(params, '', 'tool_search', { query: 'image_generate', limit: 1 });
+  expect(JSON.stringify(search.calls[0])).not.toContain('image_generate');
+  expect(JSON.stringify(search.calls.at(-1))).toContain('image_generate');
+  expect(execute).not.toHaveBeenCalled();
+  const loaded = await runScript({ ...params, runId: crypto.randomUUID() }, '', 'image_generate', { prompt: 'A tree' });
+  expect(execute).toHaveBeenCalledOnce();
+  expect(JSON.stringify(loaded.calls[0])).toContain('image_generate');
+});

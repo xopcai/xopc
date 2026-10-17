@@ -1,4 +1,5 @@
 import { createPersonalAttentionTool } from './personal-attention-tool.js';
+import { withCoreToolExposure } from './toolExposure.js';
 import { markCodemodeCoreRead } from './codemode-permissions.js';
 import { LOCAL_READ_MAX_CHARS } from './local-read-budget.js';
 import { filterExecutionTools, PERSONAL_REQUEST_TOOL_IDS, resolveExecutionToolPolicy, TASK_EXECUTION_TOOL_IDS } from '../embedded/execution-tool-policy.js';
@@ -824,7 +825,8 @@ export class AgentToolsFactory {
       .filter(tool => (!allowed || allowed.has(tool.name)) && !(personalToolsConfigured && tool.name === 'clarify'))
       .map(tool => personalToolsConfigured && !tool.name.startsWith('personal_') && PERSONAL_TOOL_DESCRIPTIONS[tool.name]
         ? { ...tool, description: PERSONAL_TOOL_DESCRIPTIONS[tool.name] } : tool);
-    return filterExecutionTools(executionToolPolicy, selected);
+    return filterExecutionTools(executionToolPolicy, selected)
+      .map(tool => executionToolPolicy.discovery ? withCoreToolExposure(tool) : tool);
   }
 
   createCapabilityTools(

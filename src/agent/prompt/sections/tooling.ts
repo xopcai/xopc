@@ -191,6 +191,9 @@ export function buildToolingSection(params: {
     hasExec
       ? `Use \`${execToolName}\` for verification and safe inspection, not routine file editing.`
       : '',
+    hasExec && availableTools.has('review_workspace')
+      ? 'After the final file change and before answering, use `review_workspace` and run the smallest meaningful assertion test. Reuse an existing test runner; for standalone file/data tasks, save a small test importing node:test and node:assert/strict, then run `node --test verify.test.cjs` directly. Do not combine --test with -e, pipe test output, or chain a test with shell inspection. A printout of values is not an assertion test. Successful checks must cover the final files; further edits invalidate their evidence.'
+      : '',
     hasWrite || hasExec
       ? 'When delivering a user-facing workspace file, include a clickable Markdown link in the final response using `xopc://workspace/file?path=<workspace-relative-path>`; URL-encode spaces and special characters, and do not invent an HTTP or `file://` URL.'
       : '',

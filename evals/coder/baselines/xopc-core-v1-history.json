@@ -233,6 +233,321 @@
         }
       ],
       "sourceDrift": false
+    },
+    {
+      "label": "context-shared-workspace-interrupted",
+      "evidenceDirectory": ".xopc-evals/qwen-core-v1-context-optimized/benchmark",
+      "evidenceClass": "interrupted-live-direct-agent",
+      "version": "1.0.2",
+      "suiteHash": "b7335af765b54cee3c956b7ec7362925dd96c5b5d63f2acf305f30490c109cb5",
+      "experimentId": "0eb41f6a-1a66-4b3b-9db5-907e17a39a34",
+      "variants": [
+        {
+          "id": "candidate",
+          "expectedRuns": 10,
+          "observedRuns": 10,
+          "passed": 0,
+          "successRate": 0,
+          "reportedEstimatedCost": null,
+          "reportedEstimatedCostPerSuccess": null,
+          "durationsMs": [
+            70,
+            67,
+            70,
+            62,
+            87,
+            76,
+            85,
+            24240,
+            72,
+            75
+          ],
+          "totalReportedTokens": null,
+          "statuses": {
+            "passed": 0,
+            "failed": 0,
+            "error": 10,
+            "timed_out": 0,
+            "budget_exceeded": 0
+          },
+          "categories": [
+            {
+              "category": "research",
+              "expectedRuns": 3,
+              "passed": 0
+            },
+            {
+              "category": "data",
+              "expectedRuns": 3,
+              "passed": 0
+            },
+            {
+              "category": "change",
+              "expectedRuns": 2,
+              "passed": 0
+            },
+            {
+              "category": "recovery",
+              "expectedRuns": 2,
+              "passed": 0
+            }
+          ]
+        }
+      ],
+      "sourceDrift": false,
+      "note": "Stopped by the evaluator after concurrent unrelated source edits were detected in the shared checkout. Excluded from the frozen comparison."
+    },
+    {
+      "label": "context-first-frozen-trial",
+      "evidenceDirectory": ".xopc-evals/qwen-core-v1-context-frozen/benchmark",
+      "evidenceClass": "live-direct-agent-diagnostic",
+      "version": "1.0.2",
+      "suiteHash": "b7335af765b54cee3c956b7ec7362925dd96c5b5d63f2acf305f30490c109cb5",
+      "experimentId": "93e78817-4d9f-449a-8e56-1b728087e025",
+      "variants": [
+        {
+          "id": "candidate",
+          "expectedRuns": 10,
+          "observedRuns": 10,
+          "passed": 7,
+          "successRate": 0.7,
+          "reportedEstimatedCost": null,
+          "reportedEstimatedCostPerSuccess": null,
+          "durationsMs": [
+            130260,
+            224703,
+            93276,
+            102980,
+            108056,
+            91057,
+            51824,
+            55430,
+            79955,
+            80252
+          ],
+          "totalReportedTokens": null,
+          "statuses": {
+            "passed": 7,
+            "failed": 1,
+            "error": 0,
+            "timed_out": 0,
+            "budget_exceeded": 2
+          },
+          "categories": [
+            {
+              "category": "research",
+              "expectedRuns": 3,
+              "passed": 2
+            },
+            {
+              "category": "data",
+              "expectedRuns": 3,
+              "passed": 3
+            },
+            {
+              "category": "change",
+              "expectedRuns": 2,
+              "passed": 0
+            },
+            {
+              "category": "recovery",
+              "expectedRuns": 2,
+              "passed": 2
+            }
+          ]
+        }
+      ],
+      "sourceDrift": false,
+      "note": "First optimization revision: deferred optional tools and general efficiency guidance. C01 and C02 still exceeded the frozen token budget; R03 failed its enum assertion. Retained in full, not pooled with the final revision."
+    },
+    {
+      "label": "context-verification-guidance-trial",
+      "evidenceDirectory": ".xopc-evals/qwen-core-v1-context-verification/benchmark",
+      "evidenceClass": "live-direct-agent-diagnostic",
+      "version": "1.0.2",
+      "suiteHash": "b7335af765b54cee3c956b7ec7362925dd96c5b5d63f2acf305f30490c109cb5",
+      "experimentId": "52ee3a1e-6b87-49bd-885b-28588b9d4748",
+      "variants": [
+        {
+          "id": "candidate",
+          "expectedRuns": 10,
+          "observedRuns": 10,
+          "passed": 7,
+          "successRate": 0.7,
+          "reportedEstimatedCost": null,
+          "reportedEstimatedCostPerSuccess": null,
+          "durationsMs": [
+            98151,
+            85983,
+            57484,
+            69324,
+            78643,
+            79360,
+            47857,
+            36466,
+            74308,
+            87433
+          ],
+          "totalReportedTokens": null,
+          "statuses": {
+            "passed": 7,
+            "failed": 2,
+            "error": 0,
+            "timed_out": 0,
+            "budget_exceeded": 1
+          },
+          "categories": [
+            {
+              "category": "research",
+              "expectedRuns": 3,
+              "passed": 2
+            },
+            {
+              "category": "data",
+              "expectedRuns": 3,
+              "passed": 3
+            },
+            {
+              "category": "change",
+              "expectedRuns": 2,
+              "passed": 0
+            },
+            {
+              "category": "recovery",
+              "expectedRuns": 2,
+              "passed": 2
+            }
+          ]
+        }
+      ],
+      "sourceDrift": false,
+      "note": "Second optimization revision with upfront verification guidance. C01 still exceeded budget; C02 and R03 failed strict output grading. Retained separately from the final receipt revision."
+    },
+    {
+      "label": "context-verification-receipts-trial",
+      "evidenceDirectory": ".xopc-evals/qwen-core-v1-context-receipts/benchmark",
+      "evidenceClass": "live-direct-agent-diagnostic",
+      "version": "1.0.2",
+      "suiteHash": "b7335af765b54cee3c956b7ec7362925dd96c5b5d63f2acf305f30490c109cb5",
+      "experimentId": "97b652e0-9b75-44f6-8ffe-089b5dba1968",
+      "variants": [
+        {
+          "id": "candidate",
+          "expectedRuns": 10,
+          "observedRuns": 10,
+          "passed": 8,
+          "successRate": 0.8,
+          "reportedEstimatedCost": null,
+          "reportedEstimatedCostPerSuccess": null,
+          "durationsMs": [
+            71918,
+            150395,
+            95842,
+            73882,
+            86700,
+            76212,
+            35925,
+            44576,
+            59131,
+            37629
+          ],
+          "totalReportedTokens": null,
+          "statuses": {
+            "passed": 8,
+            "failed": 1,
+            "error": 0,
+            "timed_out": 0,
+            "budget_exceeded": 1
+          },
+          "categories": [
+            {
+              "category": "research",
+              "expectedRuns": 3,
+              "passed": 2
+            },
+            {
+              "category": "data",
+              "expectedRuns": 3,
+              "passed": 3
+            },
+            {
+              "category": "change",
+              "expectedRuns": 2,
+              "passed": 1
+            },
+            {
+              "category": "recovery",
+              "expectedRuns": 2,
+              "passed": 2
+            }
+          ]
+        }
+      ],
+      "sourceDrift": false,
+      "note": "Third revision exposes pending verification in model-visible receipts. C01 passes; C02 still exceeds budget. Retained separately from lean tool-declaration revision."
+    },
+    {
+      "label": "context-lean-final-trial",
+      "evidenceDirectory": ".xopc-evals/qwen-core-v1-context-lean/benchmark",
+      "evidenceClass": "live-direct-agent",
+      "version": "1.0.2",
+      "suiteHash": "b7335af765b54cee3c956b7ec7362925dd96c5b5d63f2acf305f30490c109cb5",
+      "experimentId": "9fea54d4-4675-4fb6-85aa-82dcc8ba696a",
+      "variants": [
+        {
+          "id": "candidate",
+          "expectedRuns": 10,
+          "observedRuns": 10,
+          "passed": 8,
+          "successRate": 0.8,
+          "reportedEstimatedCost": null,
+          "reportedEstimatedCostPerSuccess": null,
+          "durationsMs": [
+            89592,
+            121424,
+            56644,
+            55838,
+            81880,
+            84166,
+            57379,
+            41620,
+            67591,
+            69088
+          ],
+          "totalReportedTokens": null,
+          "statuses": {
+            "passed": 8,
+            "failed": 0,
+            "error": 0,
+            "timed_out": 0,
+            "budget_exceeded": 2
+          },
+          "categories": [
+            {
+              "category": "research",
+              "expectedRuns": 3,
+              "passed": 3
+            },
+            {
+              "category": "data",
+              "expectedRuns": 3,
+              "passed": 3
+            },
+            {
+              "category": "change",
+              "expectedRuns": 2,
+              "passed": 0
+            },
+            {
+              "category": "recovery",
+              "expectedRuns": 2,
+              "passed": 2
+            }
+          ]
+        }
+      ],
+      "sourceDrift": false,
+      "note": "Final lean declaration revision: 8/10; D02 and F01 pass, C01 and C02 remain budget_exceeded. No per-case cherry-picking from earlier revisions."
     }
   ]
 }

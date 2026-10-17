@@ -90,15 +90,27 @@ export class RunVerification {
       };
       this.evidence.set(command, verification);
     }
+    const pending = this.pendingEvidence();
+    const verificationHint = !kind && toolCall.name === 'exec_command' && pending.includes('check')
+      ? 'This command did not record a check. Save an assertion test, then run a standalone test command such as node --test verify.test.cjs; do not chain, pipe, or delete the test before completion.' : '';
+    const receipt = this.changed && (mutation || command) ? [
+      `Verification pending for current files: ${pending.length ? pending.map(item => item === 'diff-review' ? 'review_workspace' : 'standalone assertion test').join(', ') : 'none'}.`,
+      verificationHint,
+    ].filter(Boolean).join(' ') : '';
     return {
       isError,
       result: {
         ...result,
+        content: [...result.content, ...(receipt ? [{ type: 'text' as const, text: receipt }] : [])],
         details: {
           ...details,
           workspaceRevision: revision ?? null,
           workspaceChanged: this.changed,
           ...(verification ? { verification } : {}),
+          ...(this.changed ? {
+            verificationPending: pending,
+            ...(verificationHint ? { verificationHint } : {}),
+          } : {}),
         },
       },
     };
@@ -107,6 +119,13 @@ export class RunVerification {
   private observeRevision(revision: string | undefined): void {
     if (this.revision && revision !== this.revision) this.changed = true;
     this.revision = revision;
+  }
+
+  private pendingEvidence(): CodingVerificationEvidence['kind'][] {
+    const current = [...this.evidence.values()].filter(item => item.revision && item.revision === this.revision);
+    return (['check', 'diff-review'] as const).filter(kind =>
+      !current.some(item => item.kind === kind && item.status === 'passed')
+      || current.some(item => item.kind === kind && item.status === 'failed'));
   }
 
   async pendingContext(): Promise<string> {

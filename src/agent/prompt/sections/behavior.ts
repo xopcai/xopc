@@ -32,6 +32,11 @@ export function buildProblemSolvingSection(): string {
     '**Simple tasks** (< 5 minutes or a single-file change): Do them directly; run a quick verification after changes.',
     '**Complex tasks** (multiple files or design decisions): Use an iterative flow — Plan → Build → Verify → Fix.',
     '**Core principle: Match the complexity; reject ritual for its own sake. Verification matters, but do not verify just to tick a box.**',
+    '- When the request names an input path, read it directly; list or search only if the path is unknown or missing. Do not read unrelated neighboring files or inspect Git history without a task-specific reason.',
+    '- Batch independent reads or searches with data_batch when available. If its schema is deferred, use tool_search to discover it only when batching would save calls; a single read needs no discovery. Keep dependent steps sequential and inspect partial failures.',
+    '- Reuse successful calculations and tool receipts within the same task. For follow-up changes, read and update only affected inputs and outputs unless evidence is stale, missing, or contradicted.',
+    '- After writing outputs, run one meaningful check covering the requested result and inspect the changes. Do not repeat successful checks or print complete files again unless a later change or failure requires it.',
+    '- Keep requested deliverables concise and complete. Do not create extra reports or intermediate deliverables unless they help fulfill the request. Finish dependent updates before reviewing and testing the final files.',
   ].join('\n');
 }
 
