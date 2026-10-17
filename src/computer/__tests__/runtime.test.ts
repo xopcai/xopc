@@ -60,6 +60,21 @@ function fixture(autoApprove = true) {
     open: async (appRef: string, mode: 'observe' | 'control' = 'control') => runtime.execute('owner', { op: 'open', appRef, mode, prepare: false }) };
 }
 describe('agent to broker desktop lifecycle', () => {
+  it('grounds a coordinate model prediction before authorization and retains the actual semantic action in history', async () => {
+    const f = fixture();
+    const observe = f.driver.observe.getMockImplementation()!;
+    f.driver.observe.mockImplementation(async () => ({ ...await observe(), summary: JSON.stringify({ elements: [
+      { ref: 'e1', role: 'AXButton', semanticActions: ['activate'], bounds: { x: 350, y: 250, width: 100, height: 100 } },
+    ] }) }));
+    await f.open(await f.discover());
+    const result = await f.runtime.execute('owner', { op: 'step', goal: 'Activate Continue' });
+    expect(result.receipt).toMatchObject({ dispatch: 'completed', outcome: 'unknown' });
+    const call = f.invoke.mock.calls.find(([input]) => input.arguments.op === 'act')![0];
+    expect(call.arguments.envelope.action).toEqual({ kind: 'activate', ref: 'e1' });
+    expect(f.driver.perform).toHaveBeenCalledWith(expect.anything(), { kind: 'activate', ref: 'e1' }, expect.any(AbortSignal));
+    const closed = await f.runtime.execute('owner', { op: 'close' });
+    expect(closed.handoff?.recentActions).toMatchObject([{ action: 'activate', dispatch: 'completed', outcome: 'unknown' }]);
+  });
   it('selects the native Responses adapter for an explicitly compatible OpenAI model', async () => {
     const f = fixture();
     vi.mocked(resolveModel).mockReturnValueOnce({ id: 'gpt-5.6-sol', provider: 'openai', api: 'openai-responses', input: ['text', 'image'],

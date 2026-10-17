@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { app } from 'electron';
 import { ComputerBroker } from '../src/computer/broker.js';
 import { CuaComputerDriver } from '../electron/computer/cua-driver.js';
+import { groundComputerAction } from '../src/computer/semantic-actions.js';
 
 async function main() {
 await app.whenReady();
@@ -28,7 +29,7 @@ const model = { modelRef: 'synthetic/no-inference', profile: 'structured-tools-v
 try {
   const catalog = await broker.command({ op: 'discover', owner, sessionId: 'discovery', query: 'XopcComputerFixture' });
   assert.equal(catalog.apps?.length, 1, 'Start only the disposable XopcComputerFixture app first');
-  const open = { op: 'open' as const, owner, appRef: catalog.apps[0].appRef, prepare: true, model };
+  const open = { op: 'open' as const, owner, appRef: catalog.apps[0].appRef, prepare: false, model };
   const waitForDecision = async (sessionId: string) => {
     const deadline = Date.now() + 5_000;
     while (broker.snapshot().status === 'pending_authorization' && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 20));
@@ -70,9 +71,25 @@ try {
   let after = await broker.command(action);
   if (after.status === 'pending_action') { await new Promise(resolve => setTimeout(resolve, 0)); after = await broker.command(action); }
   after.frame?.bytes.fill(0);
-  assert.equal(after.receipt?.dispatch, 'completed');
+  assert.equal(after.receipt?.dispatch, 'completed', JSON.stringify({ phase: 'setValue', status: after.status, errorCode: after.errorCode, receipt: after.receipt }));
   assert.ok(after.observation!.summary.includes(marker));
-  console.log(JSON.stringify({ status: 'passed', appDiscovery: true, readOnlyEnforced: true, nativeFieldVerified: true, personalScreenshots: false }));
+  const nativeTree = JSON.parse(after.observation!.summary);
+  const button = nativeTree.elements.find((element: any) => element.role === 'AXButton' && element.label === 'Continue');
+  assert.ok(button?.semanticActions?.includes('activate'), 'Expected an advertised native press');
+  const grounded = groundComputerAction({ kind: 'click', button: 'left', count: 1, point: {
+    x: button.bounds.x + button.bounds.width / 2, y: button.bounds.y + button.bounds.height / 2,
+  } }, after.observation!);
+  if (!nativeTree.truncated) assert.deepEqual(grounded, { kind: 'activate', ref: button.ref });
+  else assert.equal(grounded.kind, 'click', 'Incomplete trees must not automatically reinterpret coordinates');
+  const activation = { op: 'act' as const, owner, sessionId: 'control',
+    envelope: { ...envelope(after, 'control', { kind: 'activate', ref: button.ref }), actionId: randomUUID() } };
+  let pressed = await broker.command(activation);
+  if (pressed.status === 'pending_action') { await new Promise(resolve => setTimeout(resolve, 0)); pressed = await broker.command(activation); }
+  pressed.frame?.bytes.fill(0);
+  assert.equal(pressed.receipt?.dispatch, 'completed', JSON.stringify({ phase: 'activate', status: pressed.status, errorCode: pressed.errorCode, receipt: pressed.receipt }));
+  assert.ok(pressed.observation!.summary.includes('PASS: Continue clicked'), 'Native press must change the fixture-owned status');
+  console.log(JSON.stringify({ status: 'passed', appDiscovery: true, readOnlyEnforced: true, nativeFieldVerified: true,
+    nativeActivationVerified: true, coordinateGrounding: nativeTree.truncated ? 'refused-incomplete-tree' : 'verified', personalScreenshots: false }));
 } catch (error) {
   console.error(error instanceof Error ? error.message : 'Native validation failed');
   process.exitCode = 1;
