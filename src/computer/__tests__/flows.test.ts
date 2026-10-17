@@ -127,6 +127,14 @@ describe('private durable flow documents', () => {
     expect(store.delete('agent/workspace', saved.id)).toBe(true);
     expect(store.list('agent/workspace')).toEqual([]);
   });
+  it('deduplicates authenticated device flows across connections without merging legacy or other devices', () => {
+    database(); const store = new ComputerFlowStore();
+    const first = store.save('scope', { ...draft(), principalId: 'device-one' });
+    expect(store.save('scope', { ...draft(), endpointId: 'new-connection', principalId: 'device-one' }).id).toBe(first.id);
+    expect(store.save('scope', { ...draft(), principalId: 'device-two' }).id).not.toBe(first.id);
+    expect(store.save('scope', draft()).id).not.toBe(first.id);
+    expect(store.list('scope')).toHaveLength(3);
+  });
   it('caps storage, expires old flows and refuses tampered executable payloads', () => {
     database(); const store = new ComputerFlowStore();
     let first = '';

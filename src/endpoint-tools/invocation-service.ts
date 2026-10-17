@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 
 import Ajv2020 from 'ajv/dist/2020.js';
+import { z } from 'zod';
 
 import {
   ENDPOINT_INVOCATION_RECEIPT_TIMEOUT_MS,
@@ -92,6 +93,8 @@ export class EndpointInvocationService {
     private readonly options: EndpointInvocationServiceOptions = {},
   ) {
     this.policy = options.policy ?? new EndpointToolPolicy();
+    // Match the z.url() format emitted by the Computer model-binding contract.
+    this.ajv.addFormat('uri', { type: 'string', validate: (value: string) => z.url().safeParse(value).success });
   }
 
   invoke(params: {
