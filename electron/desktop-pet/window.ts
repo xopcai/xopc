@@ -43,11 +43,14 @@ type DesktopPetRuntime = {
 
 let runtime: DesktopPetRuntime | null = null;
 let petWindow: BrowserWindow | null = null;
+let mouseTimer: ReturnType<typeof setInterval> | undefined;
+let ignoringMouse: boolean | undefined;
 let dragState: {
   startPoint: DesktopPetDragPoint;
   startAnchor: DesktopPetAnchor;
 } | null = null;
 let contentSize: DesktopPetContentSize = { width: 138, height: 132 };
+let visibleContentSize: DesktopPetContentSize = { ...contentSize };
 let interactiveSize: DesktopPetContentSize = { width: 138, height: 132 };
 const recentActivities = new Map<string, PetSessionUpdate>();
 const RECENT_SUCCESS_TTL_MS = 60_000;
@@ -96,8 +99,8 @@ function clampAnchor(anchor: DesktopPetAnchor): DesktopPetAnchor {
   return clampDesktopPetAnchor(
     anchor,
     display,
-    Math.max(interactiveSize.width, contentSize.width),
-    Math.max(interactiveSize.height, contentSize.height),
+    Math.max(interactiveSize.width, visibleContentSize.width),
+    Math.max(interactiveSize.height, visibleContentSize.height),
   );
 }
 
@@ -135,6 +138,7 @@ async function createPetWindow(): Promise<BrowserWindow | null> {
   const prefs = await readDesktopPetPrefs();
   updateInteractiveSize(prefs);
   contentSize = defaultContentSize(prefs);
+  visibleContentSize = { ...contentSize };
   const bounds = boundsForAnchor(await getInitialAnchor());
   const options: BrowserWindowConstructorOptions = {
     ...bounds,
@@ -157,7 +161,29 @@ async function createPetWindow(): Promise<BrowserWindow | null> {
   const win = new BrowserWindow(options);
   petWindow = win;
   win.setAlwaysOnTop(prefs.alwaysOnTop, "floating");
+  ignoringMouse = undefined;
+  // Native cursor hit testing also works when Chromium is not receiving mouse
+  // events through the transparent part of the retained backing surface.
+  const windowMouseTimer = setInterval(() => {
+    if (win.isDestroyed() || !win.isVisible()) return;
+    const bounds = win.getBounds();
+    const cursor = screen.getCursorScreenPoint();
+    const x = cursor.x - bounds.x;
+    const y = cursor.y - bounds.y;
+    const onPet = x >= bounds.width - interactiveSize.width && x < bounds.width
+      && y >= bounds.height - interactiveSize.height && y < bounds.height;
+    const onBubble = visibleContentSize.height > interactiveSize.height
+      && x >= bounds.width - visibleContentSize.width && x < bounds.width
+      && y >= bounds.height - visibleContentSize.height
+      && y < bounds.height - interactiveSize.height - 8;
+    const ignore = !dragState && !onPet && !onBubble;
+    setDesktopPetClickThrough(ignore);
+  }, 40);
+  windowMouseTimer.unref();
+  mouseTimer = windowMouseTimer;
   win.on("closed", () => {
+    clearInterval(windowMouseTimer);
+    if (mouseTimer === windowMouseTimer) mouseTimer = undefined;
     if (petWindow === win) petWindow = null;
     emitStateChanged();
   });
@@ -184,6 +210,7 @@ export async function showDesktopPet(): Promise<void> {
   win.setAlwaysOnTop(prefs.alwaysOnTop, "floating");
   updateInteractiveSize(prefs);
   contentSize = defaultContentSize(prefs);
+  visibleContentSize = { ...contentSize };
   win.setBounds(boundsForAnchor(await getInitialAnchor()));
   win.showInactive();
   emitStateChanged();
@@ -213,6 +240,7 @@ export async function applyDesktopPetPrefs(
     if (patch.sizePercent !== undefined) {
       updateInteractiveSize(prefs);
       contentSize = defaultContentSize(prefs);
+      visibleContentSize = { ...contentSize };
       petWindow.setBounds(boundsForAnchor(await getInitialAnchor()));
     }
     if (!prefs.enabled) {
@@ -270,11 +298,13 @@ export function acknowledgeDesktopPetEvent(conversationId: string, runId: string
 
 export function setDesktopPetClickThrough(enabled: boolean): void {
   if (!petWindow || petWindow.isDestroyed()) return;
+  if (ignoringMouse === enabled) return;
   try {
     petWindow.setIgnoreMouseEvents(enabled, { forward: true });
   } catch {
     petWindow.setIgnoreMouseEvents(enabled);
   }
+  ignoringMouse = enabled;
 }
 
 export function openDesktopPetMainWindow(hashPath?: string): void {
@@ -365,18 +395,28 @@ export function setDesktopPetContentSize(next: DesktopPetContentSize): void {
   if (!Number.isFinite(next.width) || !Number.isFinite(next.height)) return;
   const width = Math.max(1, Math.round(next.width));
   const height = Math.max(1, Math.round(next.height));
-  if (width === contentSize.width && height === contentSize.height) return;
+  visibleContentSize = { width, height };
+  // Keep the transparent backing surface when a bubble closes. Moving and shrinking
+  // it together can briefly composite an old pet frame at the bubble's former origin.
+  const retainedWidth = Math.max(contentSize.width, width);
+  const retainedHeight = Math.max(contentSize.height, height);
   const bounds = petWindow.getBounds();
   const previousAnchor = {
     x: bounds.x + contentSize.width,
     y: bounds.y + contentSize.height,
   };
-  contentSize = { width, height };
+  contentSize = { width: retainedWidth, height: retainedHeight };
   const anchor = clampAnchor(previousAnchor);
-  petWindow.setBounds(boundsForAnchor(anchor));
+  const nextBounds = boundsForAnchor(anchor);
+  if (bounds.x !== nextBounds.x || bounds.y !== nextBounds.y || bounds.width !== nextBounds.width || bounds.height !== nextBounds.height) {
+    petWindow.setBounds(nextBounds);
+  }
 }
 
 export function destroyDesktopPetWindow(): void {
+  clearInterval(mouseTimer);
+  mouseTimer = undefined;
+  dragState = null;
   if (petWindow && !petWindow.isDestroyed()) {
     petWindow.destroy();
   }

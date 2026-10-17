@@ -69,4 +69,18 @@ describe('Loopi desktop renderer', () => {
       expect(loopiStateForAction(action)).toBe(action);
     }
   });
+
+  it('replays consecutive completed runs without remounting the artwork', () => {
+    act(() => root.render(<LoopiDesktopPet action="success" animationKey="run-1" displayHeight={112} reducedMotion={false} />));
+    const svg = container.querySelector('svg');
+    const animation = { currentTime: 500 };
+    const getAnimations = vi.fn(() => [animation]);
+    Object.assign(container.firstElementChild!, { getAnimations });
+    act(() => root.render(<LoopiDesktopPet action="success" animationKey="run-2" displayHeight={112} reducedMotion={false} />));
+    expect(animation.currentTime).toBe(0);
+    expect(container.querySelector('svg')).toBe(svg);
+    animation.currentTime = 200;
+    act(() => root.render(<LoopiDesktopPet action="success" animationKey="run-2" displayHeight={112} reducedMotion={false} />));
+    expect(animation.currentTime).toBe(200);
+  });
 });

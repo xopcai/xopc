@@ -11,6 +11,7 @@ export function DesktopPetSprite({
   size = 'normal',
   displayHeight: displayHeightOverride,
   reducedMotion = false,
+  animationKey,
   className,
 }: {
   pet: DesktopPetDefinition;
@@ -18,12 +19,13 @@ export function DesktopPetSprite({
   size?: 'tiny' | 'small' | 'normal';
   displayHeight?: number;
   reducedMotion?: boolean;
+  animationKey?: string;
   className?: string;
 }) {
   const defaultDisplayHeight = size === 'tiny' ? 40 : size === 'small' ? 54 : 112;
   const displayHeight = Math.max(1, Math.round(displayHeightOverride ?? defaultDisplayHeight));
   if (pet.renderer === 'loopi') {
-    return <LoopiDesktopPet action={action} displayHeight={displayHeight} reducedMotion={reducedMotion} className={className} />;
+    return <LoopiDesktopPet action={action} animationKey={animationKey} displayHeight={displayHeight} reducedMotion={reducedMotion} className={className} />;
   }
   const animation = pet.animations[action];
   const scale = displayHeight / animation.frameHeight;
