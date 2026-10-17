@@ -1,6 +1,9 @@
-import { useLayoutEffect, useRef } from 'react';
+import { useCallback, useLayoutEffect, useRef } from 'react';
 
 import { MarkdownView, type MarkdownViewProps } from '@/components/markdown/markdown-view';
+import type { MarkdownChartBlock } from '@/components/markdown/parse-markdown';
+import { ChatChartBlock } from '@/features/chat/rendering/markdown/chat-chart-block';
+import { InlinePreviewSchedulerProvider } from '@/features/chat/product-delivery/inline-preview-scheduler';
 
 import { parseNoteAttachmentTarget } from './attachment-ref';
 import { acquireNoteMediaObjectUrl, releaseNoteMediaObjectUrl } from './note-media-blob';
@@ -72,6 +75,9 @@ export type NoteMarkdownViewProps = MarkdownViewProps & {
 
 export function NoteMarkdownView({ content, noteId, ...rest }: NoteMarkdownViewProps) {
   const hostRef = useRef<HTMLDivElement>(null);
+  const renderChart = useCallback((block: MarkdownChartBlock) => (
+    <ChatChartBlock source={block.source} incomplete={!block.closed} streaming={rest.streaming ?? false} copy={rest.codeCopy ?? true} />
+  ), [rest.streaming, rest.codeCopy]);
 
   useLayoutEffect(() => {
     const host = hostRef.current;
@@ -81,12 +87,13 @@ export function NoteMarkdownView({ content, noteId, ...rest }: NoteMarkdownViewP
 
   return (
     <div ref={hostRef}>
-      <MarkdownView
+      <InlinePreviewSchedulerProvider><MarkdownView
         content={noteMarkdownForRender(content)}
         mermaidActions
         {...rest}
+        renderChart={renderChart}
         className={['markdown-note', rest.className].filter(Boolean).join(' ')}
-      />
+      /></InlinePreviewSchedulerProvider>
     </div>
   );
 }
