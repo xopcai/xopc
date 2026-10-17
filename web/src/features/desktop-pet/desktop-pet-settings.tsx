@@ -5,6 +5,7 @@ import {
   PencilLine,
   RotateCcw,
   WandSparkles,
+  ChevronDown,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -34,25 +35,26 @@ function ToggleRow({
   onChange,
 }: {
   title: string;
-  desc: string;
+  desc?: string;
   checked: boolean;
   disabled?: boolean;
   onChange: (checked: boolean) => void;
 }) {
   return (
-    <div className="flex items-center justify-between gap-3 rounded-xl bg-surface-hover/50 px-3 py-2.5 dark:bg-surface-hover/35">
-      <div className="min-w-0">
-        <div className="text-sm font-medium text-fg">{title}</div>
-        <p className="text-xs text-fg-muted">{desc}</p>
-      </div>
+    <label className="flex min-h-12 cursor-pointer items-center justify-between gap-3 py-3">
+      <span className="min-w-0">
+        <span className="block text-sm font-medium text-fg">{title}</span>
+        {desc ? <span className="block text-xs text-fg-muted">{desc}</span> : null}
+      </span>
       <input
         type="checkbox"
+        role="switch"
         className="ui-checkbox"
         disabled={disabled}
         checked={checked}
         onChange={(e) => onChange(e.target.checked)}
       />
-    </div>
+    </label>
   );
 }
 
@@ -193,298 +195,95 @@ export function DesktopPetSettings() {
   };
 
   return (
-    <SettingsPageFrame gap="gap-4">
-      <SettingsPageHeader
-        title={t.title}
-        subtitle={t.subtitle}
-        actions={
-          <div className="flex shrink-0 flex-wrap gap-2">
-            <RefreshButton
-              className="size-9 shrink-0 p-0"
-              disabled={busy}
-              label={t.refresh}
-              onClick={load}
-            />
-            <button
-              type="button"
-              className={cn(
-                'inline-flex items-center gap-1.5 rounded-lg border border-edge bg-surface-base px-2.5 py-1.5 text-xs font-medium text-fg hover:bg-surface-hover',
-                interaction.press,
-              )}
-              onClick={() => void api.openCustomPetsDir()}
-            >
-              <ExternalLink className="size-3.5" strokeWidth={1.75} />
-              {t.openFolder}
-            </button>
+    <SettingsPageFrame gap="gap-5">
+      <SettingsPageHeader title={t.title} subtitle={t.subtitle} actions={
+        <RefreshButton className="size-9 shrink-0 p-0" disabled={busy} label={t.refresh} onClick={load} />
+      } />
+
+      <section className="overflow-hidden rounded-xl border border-edge bg-surface-panel">
+        <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:gap-6">
+          <div className="grid h-40 w-40 shrink-0 place-items-center self-center rounded-xl bg-surface-hover/35">
+            {selectedPet ? <DesktopPetSprite pet={selectedPet} action="idle" displayHeight={Math.round(104 * displayedSize / 100)} reducedMotion={state.prefs.reducedMotion} /> : null}
           </div>
-        }
-      />
-
-      <section className="rounded-xl bg-surface-hover/20 p-4">
-        <div className="space-y-2">
-          <ToggleRow
-            title={t.enable}
-            desc={t.enableDesc}
-            checked={state.prefs.enabled}
-            disabled={busy}
-            onChange={(checked) => void setEnabled(checked)}
-          />
-          <ToggleRow
-            title={t.showOnStartup}
-            desc={t.showOnStartupDesc}
-            checked={state.prefs.showOnStartup}
-            disabled={busy}
-            onChange={(checked) => void patch({ showOnStartup: checked })}
-          />
-        </div>
-
-        <div className="mt-5 rounded-xl bg-surface-base/55 p-3">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex min-w-0 items-start gap-2">
-              <WandSparkles className="mt-0.5 size-4 text-accent-fg" strokeWidth={1.8} />
-              <div className="min-w-0 flex-1">
-                <h3 className="text-sm font-semibold text-fg">{t.createTitle}</h3>
-                <p className="text-xs text-fg-muted">{t.createDesc}</p>
-              </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2">
+              <h2 className="break-words text-xl font-semibold text-fg">{selectedPet ? petDisplayText(selectedPet).name : t.title}</h2>
+              <ToggleRow title={t.enable} checked={state.prefs.enabled} disabled={busy} onChange={(checked) => void setEnabled(checked)} />
             </div>
-            <button
-              type="button"
-              className={cn(
-                'inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-lg bg-accent px-3 text-xs font-semibold text-on-accent hover:bg-accent/90',
-                interaction.press,
-              )}
-              onClick={openCreatePetChat}
-            >
-              <MessageSquarePlus className="size-3.5" strokeWidth={1.75} />
-              {t.createInChat}
-            </button>
+            <p className="text-xs text-fg-muted">{t.bondSummary.replace('{days}', String(daysTogether)).replace('{tasks}', String(state.relationship.completedTaskCount))}</p>
+            {state.pets.length > 1 ? <div className="mt-4 max-w-56">
+              <Select aria-label={t.petList} value={selectedPet?.id ?? ''} onChange={(e) => choosePet(e.target.value)} disabled={busy}>
+                {state.pets.map((pet) => <SelectOption key={pet.id} value={pet.id}>{petDisplayText(pet).name}</SelectOption>)}
+              </Select>
+            </div> : null}
+            {selectedPet && !selectedPet.builtin ? <button type="button" onClick={() => openOptimizePetChat(selectedPet)} className="mt-3 inline-flex min-h-9 items-center gap-1.5 text-xs font-medium text-fg-muted hover:text-fg">
+              <PencilLine className="size-3.5" />{t.optimizeInChat}
+            </button> : null}
           </div>
         </div>
-
-        <div className="mt-3 flex items-center justify-between gap-3 rounded-xl bg-surface-base/55 p-3">
-          <div>
-            <h3 className="text-sm font-semibold text-fg">{t.bondTitle}</h3>
-            <p className="text-xs text-fg-muted">{t.bondDesc}</p>
-          </div>
-          <span className="shrink-0 rounded-full bg-accent-soft px-2.5 py-1 text-xs font-medium text-accent-fg">
-            {t.bondSummary.replace('{days}', String(daysTogether)).replace('{tasks}', String(state.relationship.completedTaskCount))}
-          </span>
-        </div>
-
-        <div className="mt-5">
-          <div className="mb-2 flex items-center justify-between gap-3">
-            <div>
-              <h3 className="text-sm font-semibold text-fg">{t.petList}</h3>
-              <p className="text-xs text-fg-muted">{t.petListDesc}</p>
-            </div>
-            {selectedPet ? (
-              <span className="rounded-full bg-accent-soft px-2.5 py-1 text-xs font-medium text-accent-fg">
-                {petDisplayText(selectedPet).name}
-              </span>
-            ) : null}
-          </div>
-          <div className="flex flex-col gap-1 rounded-xl bg-surface-base/45 p-1 [&>*]:rounded-lg [&>*]:bg-surface-panel/55">
-            {state.pets.map((pet) => {
-              const selected = pet.id === state.prefs.selectedPetId;
-              const displayText = petDisplayText(pet);
-              return (
-                <div key={pet.id} className="flex items-center gap-3 p-3">
-                  <DesktopPetSprite pet={pet} action="idle" size="tiny" />
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <p className="truncate text-sm font-semibold text-fg">{displayText.name}</p>
-                      {!pet.builtin ? (
-                        <span className="rounded-full bg-surface-hover px-2 py-0.5 text-[11px] font-medium text-fg-muted">
-                          {t.customBadge}
-                        </span>
-                      ) : null}
-                    </div>
-                    <p className="truncate text-xs text-fg-muted">{displayText.description}</p>
-                  </div>
-                  <div className="flex shrink-0 items-center gap-2">
-                    {!pet.builtin ? (
-                      <button
-                        type="button"
-                        className={cn(
-                          'inline-flex items-center gap-1.5 rounded-lg border border-edge bg-surface-base px-2.5 py-1.5 text-xs font-medium text-fg hover:bg-surface-hover',
-                          interaction.press,
-                        )}
-                        onClick={() => openOptimizePetChat(pet)}
-                      >
-                        <PencilLine className="size-3.5" strokeWidth={1.75} />
-                        {t.optimizeInChat}
-                      </button>
-                    ) : null}
-                    <button
-                      type="button"
-                      className={cn(
-                        'rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors',
-                        selected
-                          ? 'bg-surface-hover text-fg-muted'
-                          : 'bg-surface-panel text-fg hover:bg-surface-hover',
-                        interaction.press,
-                      )}
-                      disabled={selected || busy}
-                      onClick={() => choosePet(pet.id)}
-                    >
-                      {selected ? t.selected : t.select}
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-            <div className="flex flex-col gap-1 p-3 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <p className="text-xs font-semibold text-fg">{t.customPets}</p>
-                <p className="font-mono text-xs text-fg-muted">{state.customPetsDir}</p>
-              </div>
-              <button
-                type="button"
-                className="inline-flex items-center gap-1.5 text-xs font-medium text-fg-muted hover:text-fg"
-                onClick={() => void api.openCustomPetsDir()}
-              >
-                {t.openFolder}
-                <ExternalLink className="size-3.5" strokeWidth={1.75} />
-              </button>
-            </div>
-          </div>
-          {state.petIssues.length > 0 ? (
-            <div className="mt-2 rounded-xl bg-danger/10 p-3">
-              <div className="flex items-center gap-2 text-xs font-semibold text-danger">
-                <AlertCircle className="size-3.5" strokeWidth={1.8} />
-                {t.invalidPets}
-              </div>
-              <div className="mt-2 space-y-2">
-                {state.petIssues.map((issue) => (
-                  <div
-                    key={`${issue.dir}-${issue.reason}`}
-                    className="flex flex-col gap-2 rounded-lg bg-surface-base/70 p-2 text-xs text-fg-muted sm:flex-row sm:items-start sm:justify-between"
-                  >
-                    <div className="min-w-0">
-                      <p className="truncate font-mono text-[11px] text-fg">{issue.dir}</p>
-                      <p>{issue.reason}</p>
-                      {issue.details?.length ? (
-                        <p className="line-clamp-2">{issue.details.join('; ')}</p>
-                      ) : null}
-                    </div>
-                    <button
-                      type="button"
-                      className={cn(
-                        'inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-danger/30 bg-surface-base px-2.5 text-xs font-medium text-danger hover:bg-danger/10',
-                        interaction.press,
-                      )}
-                      onClick={() => openFixPetIssueChat(issue)}
-                    >
-                      <MessageSquarePlus className="size-3.5" strokeWidth={1.75} />
-                      {t.fixInChat}
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ) : null}
-        </div>
-
-        <div className="mt-5 grid gap-2">
-          <div className="rounded-xl bg-surface-hover/50 p-3 dark:bg-surface-hover/35">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <div className="text-sm font-medium text-fg">{t.size}</div>
-                <p className="text-xs text-fg-muted">{t.sizeDesc}</p>
-              </div>
-              <span className="text-xs font-medium text-fg-muted">{displayedSize}%</span>
-            </div>
-            <input
-              type="range"
-              min={70}
-              max={140}
-              step={5}
-              className="mt-3 w-full accent-accent"
-              value={displayedSize}
-              onChange={(e) => setSizeDraft(Number(e.target.value))}
-              onBlur={() => void commitSize()}
-              onKeyUp={(e) => {
-                if (e.key === 'Enter' || e.key === ' ' || e.key.startsWith('Arrow')) {
-                  void commitSize();
-                }
-              }}
-              onPointerUp={() => void commitSize()}
-            />
-          </div>
-          <div className="grid gap-2 sm:grid-cols-2">
-            <ToggleRow
-              title={t.alwaysOnTop}
-              desc={t.alwaysOnTopDesc}
-              checked={state.prefs.alwaysOnTop}
-              disabled={busy}
-              onChange={(checked) => void patch({ alwaysOnTop: checked })}
-            />
-            <ToggleRow
-              title={t.bubbles}
-              desc={t.bubblesDesc}
-              checked={state.prefs.bubbleEnabled}
-              disabled={busy}
-              onChange={(checked) => void patch({ bubbleEnabled: checked })}
-            />
-            <ToggleRow
-              title={t.proactiveTips}
-              desc={t.proactiveTipsDesc}
-              checked={state.prefs.proactiveTipsEnabled}
-              disabled={busy}
-              onChange={(checked) => void patch({ proactiveTipsEnabled: checked })}
-            />
-            <ToggleRow
-              title={t.interactions}
-              desc={t.interactionsDesc}
-              checked={state.prefs.interactionEnabled}
-              disabled={busy}
-              onChange={(checked) => void patch({ interactionEnabled: checked })}
-            />
-            <ToggleRow
-              title={t.reducedMotion}
-              desc={t.reducedMotionDesc}
-              checked={state.prefs.reducedMotion}
-              disabled={busy}
-              onChange={(checked) => void patch({ reducedMotion: checked })}
-            />
-            <ToggleRow
-              title={t.clickThrough}
-              desc={t.clickThroughDesc}
-              checked={state.prefs.clickThroughWhenIdle}
-              disabled={busy}
-              onChange={(checked) => void patch({ clickThroughWhenIdle: checked })}
-            />
-          </div>
-          <div className="flex flex-col gap-2 rounded-xl bg-surface-hover/50 p-3 dark:bg-surface-hover/35 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <div className="text-sm font-medium text-fg">{t.behaviorMode}</div>
-              <p className="text-xs text-fg-muted">{t.behaviorModeDesc}</p>
-            </div>
-            <Select
-              className="w-full sm:w-40"
-              triggerClassName="h-9 bg-surface-panel"
-              value={state.prefs.behaviorMode}
-              onChange={(e) => void patch({ behaviorMode: e.target.value as DesktopPetBehaviorMode })}
-            >
-              <SelectOption value="focus">{t.behaviorFocus}</SelectOption>
-              <SelectOption value="companion">{t.behaviorCompanion}</SelectOption>
-              <SelectOption value="playful">{t.behaviorPlayful}</SelectOption>
-            </Select>
-          </div>
-          <button
-            type="button"
-            className={cn(
-              'inline-flex w-fit items-center gap-1.5 rounded-lg border border-edge bg-surface-base px-3 py-1.5 text-xs font-medium text-fg hover:bg-surface-hover disabled:opacity-50',
-              interaction.press,
-            )}
-            disabled={busy}
-            onClick={() => void api.resetPosition().then(setState)}
-          >
-            <RotateCcw className="size-3.5" strokeWidth={1.75} />
-            {t.resetPosition}
+        <div className="border-t border-edge px-5 py-2">
+          <button type="button" onClick={openCreatePetChat} className={cn('inline-flex min-h-10 items-center gap-2 text-xs font-medium text-fg-muted hover:text-accent-fg', interaction.press)}>
+            <WandSparkles className="size-4" />{t.createTitle}
           </button>
         </div>
       </section>
+
+      {state.petIssues.length > 0 ? <section className="rounded-xl border border-danger/20 bg-danger/5 p-4">
+        <h3 className="flex items-center gap-2 text-sm font-medium text-danger"><AlertCircle className="size-4" />{t.invalidPets}</h3>
+        <div className="mt-3 space-y-3">{state.petIssues.map((issue) => <div key={`${issue.dir}-${issue.reason}`} className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0 text-xs text-fg-muted">
+            <p className="break-words">{issue.reason}</p>
+            <details className="mt-1"><summary className="cursor-pointer">{t.issueDetails}</summary>
+              <p className="mt-2 break-all font-mono">{issue.dir}</p>
+              {issue.details?.length ? <p className="mt-1 break-words">{issue.details.join('; ')}</p> : null}
+            </details>
+          </div>
+          <button type="button" onClick={() => openFixPetIssueChat(issue)} className="inline-flex min-h-9 shrink-0 items-center gap-1.5 text-xs font-medium text-danger"><MessageSquarePlus className="size-3.5" />{t.fixInChat}</button>
+        </div>)}</div>
+      </section> : null}
+
+      <section aria-label={t.displayGroup}>
+        <h3 className="mb-2 text-xs font-medium text-fg-muted">{t.displayGroup}</h3>
+        <div className="divide-y divide-edge rounded-xl border border-edge bg-surface-panel px-4">
+          <ToggleRow title={t.showOnStartup} checked={state.prefs.showOnStartup} disabled={busy} onChange={(checked) => void patch({ showOnStartup: checked })} />
+          <ToggleRow title={t.alwaysOnTop} checked={state.prefs.alwaysOnTop} disabled={busy} onChange={(checked) => void patch({ alwaysOnTop: checked })} />
+          <ToggleRow title={t.bubbles} checked={state.prefs.bubbleEnabled} disabled={busy} onChange={(checked) => void patch({ bubbleEnabled: checked })} />
+          <div className="py-3">
+            <label htmlFor="desktop-pet-size" className="flex items-center justify-between gap-3 text-sm font-medium text-fg">{t.size}<span className="text-xs tabular-nums text-fg-muted">{displayedSize}%</span></label>
+            <input id="desktop-pet-size" type="range" min={70} max={140} step={5} className="mt-3 w-full accent-accent" value={displayedSize} disabled={busy}
+              onChange={(e) => setSizeDraft(Number(e.target.value))} onBlur={() => void commitSize()}
+              onKeyUp={(e) => { if (e.key === 'Enter' || e.key === ' ' || e.key.startsWith('Arrow')) void commitSize(); }}
+              onPointerUp={() => void commitSize()} />
+          </div>
+        </div>
+      </section>
+
+      <section aria-label={t.interactionGroup}>
+        <h3 className="mb-2 text-xs font-medium text-fg-muted">{t.interactionGroup}</h3>
+        <div className="divide-y divide-edge rounded-xl border border-edge bg-surface-panel px-4">
+          <ToggleRow title={t.proactiveTips} checked={state.prefs.proactiveTipsEnabled} disabled={busy} onChange={(checked) => void patch({ proactiveTipsEnabled: checked })} />
+          <ToggleRow title={t.interactions} desc={t.interactionsDesc} checked={state.prefs.interactionEnabled} disabled={busy} onChange={(checked) => void patch({ interactionEnabled: checked })} />
+          <ToggleRow title={t.reducedMotion} checked={state.prefs.reducedMotion} disabled={busy} onChange={(checked) => void patch({ reducedMotion: checked })} />
+          <div className="flex min-h-12 flex-wrap items-center justify-between gap-3 py-3">
+            <span className="text-sm font-medium text-fg">{t.behaviorMode}</span>
+            <Select aria-label={t.behaviorMode} className="w-36" triggerClassName="h-9 bg-surface-panel" value={state.prefs.behaviorMode} disabled={busy} onChange={(e) => void patch({ behaviorMode: e.target.value as DesktopPetBehaviorMode })}>
+              <SelectOption value="focus">{t.behaviorFocus}</SelectOption><SelectOption value="companion">{t.behaviorCompanion}</SelectOption><SelectOption value="playful">{t.behaviorPlayful}</SelectOption>
+            </Select>
+          </div>
+        </div>
+      </section>
+
+      <details className="group rounded-xl border border-edge bg-surface-panel">
+        <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-4 text-sm font-medium text-fg [&::-webkit-details-marker]:hidden">{t.advanced}<ChevronDown className="size-4 text-fg-muted transition-transform group-open:rotate-180" /></summary>
+        <div className="space-y-3 border-t border-edge px-4 pb-4">
+          <ToggleRow title={t.clickThrough} desc={t.clickThroughDesc} checked={state.prefs.clickThroughWhenIdle} disabled={busy} onChange={(checked) => void patch({ clickThroughWhenIdle: checked })} />
+          <div className="flex flex-col gap-2 border-t border-edge pt-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0"><p className="text-sm font-medium text-fg">{t.customPets}</p><p className="mt-1 break-all font-mono text-xs text-fg-muted">{state.customPetsDir}</p></div>
+            <button type="button" onClick={() => void api.openCustomPetsDir()} className="inline-flex min-h-10 shrink-0 items-center gap-1.5 text-xs font-medium text-fg-muted hover:text-fg"><ExternalLink className="size-3.5" />{t.openFolder}</button>
+          </div>
+          <button type="button" className={cn('inline-flex min-h-10 items-center gap-1.5 text-xs font-medium text-fg-muted hover:text-fg disabled:opacity-50', interaction.press)} disabled={busy} onClick={() => void api.resetPosition().then(setState)}><RotateCcw className="size-3.5" />{t.resetPosition}</button>
+        </div>
+      </details>
     </SettingsPageFrame>
   );
 }
