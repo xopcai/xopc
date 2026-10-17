@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { spawnProcess } from '../process/run-process.js';
+import { classifyComputerFailure } from './diagnostics.js';
 import {
   ComputerEvaluationPlanSchema,
   ComputerEvaluationRunSchema,
@@ -31,6 +32,7 @@ const ExecutorResultSchema = ComputerEvaluationRunSchema.pick({
   inputTokens: true,
   outputTokens: true,
   cost: true,
+  actions: true, unchangedInputs: true, observationChanges: true, failure: true,
 }).extend({ runId: z.string().min(1).max(500) }).strict();
 
 const OracleResultSchema = ComputerEvaluationRunSchema.pick({ outcome: true, oracle: true }).extend({
@@ -72,7 +74,7 @@ export async function executeEvaluationCommand(spec: z.infer<typeof CommandSchem
     throw new Error('COMPUTER_EVALUATION_ABORTED');
   }
   if (result.exitCode !== 0) {
-    throw new Error(`COMPUTER_EVALUATION_PROCESS_FAILED:${result.spawnErrorCode ?? result.exitCode}:${result.stderr.slice(0, 1_000)}`);
+    throw new Error('COMPUTER_EVALUATION_PROCESS_FAILED');
   }
   try { return JSON.parse(result.stdout); }
   catch { throw new Error('COMPUTER_EVALUATION_INVALID_JSON'); }
@@ -82,8 +84,8 @@ export async function executeEvaluationCommand(spec: z.infer<typeof CommandSchem
 export async function runComputerEvaluationManifest(raw: unknown, options: {
   execute?: ExecuteCommand;
   signal?: AbortSignal;
-  onRun?: (run: ComputerEvaluationRun, evidenceRef: string) => void | Promise<void>;
-} = {}): Promise<{ plan: z.infer<typeof ComputerEvaluationPlanSchema>; runs: ComputerEvaluationRun[]; evidence: Record<string, string> }> {
+  onRun?: (run: ComputerEvaluationRun, evidenceRef?: string) => void | Promise<void>;
+} = {}): Promise<{ plan: z.infer<typeof ComputerEvaluationPlanSchema>; runs: ComputerEvaluationRun[]; evidence: Record<string, string>; interrupted: boolean }> {
   const manifest = ComputerEvaluationHarnessManifestSchema.parse(raw);
   const execute = options.execute ?? executeEvaluationCommand;
   const runs: ComputerEvaluationRun[] = [];
@@ -93,15 +95,38 @@ export async function runComputerEvaluationManifest(raw: unknown, options: {
       options.signal?.throwIfAborted();
       const request = { taskId, repetition, modelRef: manifest.plan.modelRef, environment: manifest.plan.environment,
         evidence: manifest.plan.evidence };
-      const execution = ExecutorResultSchema.parse(await execute(manifest.executor, request, options.signal));
-      const oracle = OracleResultSchema.parse(await execute(manifest.oracle, { ...request, execution }, options.signal));
+      const startedAt = Date.now();
+      let execution: z.infer<typeof ExecutorResultSchema> | undefined;
+      let oracle: z.infer<typeof OracleResultSchema>;
+      let phase: 'executor' | 'oracle' = 'executor';
+      try {
+        execution = ExecutorResultSchema.parse(await execute(manifest.executor, request, options.signal));
+        phase = 'oracle';
+        oracle = OracleResultSchema.parse(await execute(manifest.oracle, { ...request, execution }, options.signal));
+      } catch (error) {
+        options.signal?.throwIfAborted();
+        const { runId: _runId, ...measurements } = execution ?? { runId: '', claimedSuccess: false, takeover: false,
+          duplicateInputs: null, scopeViolations: null, postStopInputs: null,
+          durationMs: Math.max(0, Date.now() - startedAt), modelRequests: null, inputTokens: null, outputTokens: null, cost: null };
+        const run = ComputerEvaluationRunSchema.parse({ ...request, ...measurements, outcome: 'unknown', oracle: 'none',
+          failure: classifyComputerFailure(error instanceof z.ZodError ? new Error('COMPUTER_EVALUATION_INVALID_RESULT') : error,
+            phase, phase === 'executor' ? 'unknown' : 'completed') });
+        runs.push(run);
+        await options.onRun?.(run);
+        // A killed executor may already have delivered input. Preserve the partial matrix and stop.
+        return { plan: manifest.plan, runs, evidence, interrupted: true };
+      }
       const { runId: _runId, ...measurements } = execution;
       const { evidenceRef, ...grade } = oracle;
       const run = ComputerEvaluationRunSchema.parse({ ...request, ...measurements, ...grade });
       runs.push(run);
       evidence[`${taskId}:${repetition}`] = evidenceRef;
       await options.onRun?.(run, evidenceRef);
+      if (run.failure?.dispatch === 'unknown' || run.failure?.dispatch === 'started'
+        || run.scopeViolations !== 0 || run.postStopInputs !== 0 || run.duplicateInputs !== 0) {
+        return { plan: manifest.plan, runs, evidence, interrupted: true };
+      }
     }
   }
-  return { plan: manifest.plan, runs, evidence };
+  return { plan: manifest.plan, runs, evidence, interrupted: false };
 }

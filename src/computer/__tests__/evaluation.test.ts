@@ -26,4 +26,17 @@ describe('computer task quality gates', () => {
     expect(evaluateComputerRuns(full, [{ ...rows[0], postStopInputs: 1 }, ...rows.slice(1)])).toMatchObject({ betaGatePassed: false, incidents: 1 });
     expect(evaluateComputerRuns(full, rows.slice(1))).toMatchObject({ betaGatePassed: false, missingRuns: 1 });
   });
+  it('keeps unmeasured metrics unknown and groups failure attribution without counting a successful claim', () => {
+    const failure = { category: 'model', phase: 'model', dispatch: 'notStarted', errorCode: 'COMPUTER_MODEL_HTTP_429' } as const;
+    const report = evaluateComputerRuns(plan, [{ ...run, outcome: 'unknown', oracle: 'none', modelRequests: null,
+      inputTokens: null, outputTokens: null, duplicateInputs: null, failure }]);
+    expect(report).toMatchObject({ passed: 0, unknown: 1, falseSuccesses: 1, unmeasuredSafetyRuns: 1,
+      modelRequests: null, inputTokens: null, actions: null, failuresByCategory: { model: 1 }, failuresByPhase: { model: 1 } });
+  });
+  it('does not allow unknown safety measurements or delivery to pass the release gate', () => {
+    const full = { ...plan, taskIds: Array.from({ length: 60 }, (_, n) => `task-${n}`), evidence: 'real-app' };
+    const rows = full.taskIds.flatMap(taskId => Array.from({ length: 3 }, (_, repetition) => ({ ...run, taskId, repetition, evidence: 'real-app' })));
+    expect(evaluateComputerRuns(full, [{ ...rows[0], duplicateInputs: null }, ...rows.slice(1)]).betaGatePassed).toBe(false);
+    expect(evaluateComputerRuns(full, [{ ...rows[0], failure: { category: 'transport', phase: 'dispatch', dispatch: 'unknown', errorCode: 'COMPUTER_DISPATCH_FAILED' } }, ...rows.slice(1)]).betaGatePassed).toBe(false);
+  });
 });
