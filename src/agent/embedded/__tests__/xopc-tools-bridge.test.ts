@@ -1,6 +1,26 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { validateApplyPatchEnvelope, xopcToolsToDefinitions } from '../xopc-tools-bridge.js';
+import { createDataBatchTool } from '../../tools/dataBatch.js';
+
+it.each([true, false])('uses the launched task tool scope for batching (search allowed: %s)', async searchAllowed => {
+  const search = {
+    name: 'web_search', label: 'Search', description: 'Search', parameters: {},
+    execute: vi.fn(async () => ({ content: [{ type: 'text' as const, text: 'Found' }], details: {} })),
+  };
+  const batch = createDataBatchTool('/tmp', () => new Set(['web_search']), { getTools: () => [search] });
+  const worker = xopcToolsToDefinitions(searchAllowed ? [batch, search] : [batch]);
+  const [launcher] = xopcToolsToDefinitions([{
+    name: 'launch_task', label: 'Launch task', description: 'Launch task', parameters: {},
+    execute: async () => worker.find(tool => tool.name === 'data_batch')!.execute('batch', {
+      operations: [{ id: 'search', kind: 'web_search', query: 'exhibitions' }],
+    }, undefined, undefined),
+  } as never]);
+
+  const result = await launcher!.execute('launch', {}, undefined, undefined);
+  expect(result.details).toMatchObject({ status: searchAllowed ? 'completed' : 'failed', sourceRequests: searchAllowed ? 1 : 0 });
+  expect(search.execute).toHaveBeenCalledTimes(searchAllowed ? 1 : 0);
+});
 
 describe('validateApplyPatchEnvelope', () => {
   it('accepts an exact apply_patch envelope', () => {
