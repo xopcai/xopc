@@ -13,6 +13,7 @@ export interface SearchProvider {
   isAvailable(): boolean;
   cacheIdentity?(): string;
   search(query: string, count: number, signal?: AbortSignal): Promise<SearchResult[]>;
+  searchWithMetadata?(query: string, count: number, signal?: AbortSignal): Promise<SearchExecution>;
   /** Optional host-implemented batch transport; ids must be echoed for partial results. */
   searchBatch?(requests: SearchRequest[], signal?: AbortSignal): Promise<SearchBatchItem[]>;
 }
@@ -36,12 +37,29 @@ export interface SearchBatchItem {
   id: string;
   results?: SearchResult[];
   error?: SearchFailureInfo;
+  metadata?: SearchMetadata;
+}
+export interface SearchAttempt {
+  provider: string;
+  upstream?: string;
+  outcome: 'success' | 'empty' | 'error' | 'skipped';
+  reason?: string;
+}
+export interface SearchMetadata {
+  upstream?: string;
+  attemptCount?: number;
+  attempts?: SearchAttempt[];
+}
+export interface SearchExecution {
+  results: SearchResult[];
+  metadata?: SearchMetadata;
 }
 export interface SearchResponse {
   results: SearchResult[];
   provider: string;
   cached?: boolean;
   capturedAt?: number;
+  metadata?: SearchMetadata;
 }
 export interface SearchBatchResponse extends SearchRequest {
   response?: SearchResponse;

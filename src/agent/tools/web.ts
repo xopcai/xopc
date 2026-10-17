@@ -7,6 +7,7 @@ import { classifySearchError, searchFailureInfo, SearchError } from './search/er
 import type { SearchRequest, SearchResponse } from './search/types.js';
 import { SearchProviderRegistry } from './search/registry.js';
 import { resolveWebSearchConfig } from './search/resolve-config.js';
+import { sanitizeSearchInfo } from './search/search-info.js';
 import { fetchPublicText } from './fetch-text.js';
 
 // =============================================================================
@@ -35,7 +36,8 @@ export interface WebSearchBatchTool extends AgentTool {
 }
 function searchToolResult(query: string, count: number, response: SearchResponse): AgentToolResult<any> {
   return { content: [{ type: 'text', text: response.results.length ? formatSearchResults(response.results) : 'No results found.' }],
-    details: { results: response.results, provider: response.provider, query, count, cached: response.cached ?? false, capturedAt: response.capturedAt } };
+    details: { results: response.results, provider: response.provider, query, count, cached: response.cached ?? false, capturedAt: response.capturedAt,
+      searchInfo: sanitizeSearchInfo({ ...response.metadata, provider: response.provider, cached: response.cached ?? false, capturedAt: response.capturedAt }) } };
 }
 function searchToolError(error: unknown, signal?: AbortSignal): AgentToolResult<any> {
   const failure = classifySearchError(error, signal);
