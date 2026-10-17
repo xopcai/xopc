@@ -265,7 +265,7 @@ function openDatabaseAtPath(pathname: string): XopcDatabase {
       },
     });
 
-    ensureXopcDatabaseSchema(db, { databasePath: pathname });
+    ensureXopcDatabaseSchema(db);
     ensureDatabasePermissions(pathname);
 
     log.info({ path: pathname }, 'Opened xopc SQLite database');

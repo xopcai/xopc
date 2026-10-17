@@ -1,8 +1,6 @@
 import { z } from 'zod';
 
 export const NotificationTargetSchema = z.discriminatedUnion('kind', [
-  z.object({ kind: z.literal('scene_result'), activationId: z.string().min(1), presentationId: z.string().min(1) }),
-  z.object({ kind: z.literal('scene_digest'), digestId: z.string().min(1) }),
   z.object({ kind: z.literal('chat'), conversationId: z.string().min(1), personal: z.boolean().optional() }),
   z.object({ kind: z.literal('task'), taskId: z.string().min(1) }),
   z.object({ kind: z.literal('home') }),
@@ -22,8 +20,6 @@ export type NotificationTarget = z.infer<typeof NotificationTargetSchema>;
 export type NotificationSurface = 'web' | 'mobile';
 
 export const ProductNotificationTypeSchema = z.enum([
-  'scene.result',
-  'scene.digest',
   'chat.needs_input',
   'chat.completed',
   'chat.failed',
@@ -75,10 +71,6 @@ export function notificationTargetRoute(
   surface: NotificationSurface,
 ): string {
   switch (target.kind) {
-    case 'scene_result':
-      return `/scenes/${encodeURIComponent(target.activationId)}?result=${encodeURIComponent(target.presentationId)}`;
-    case 'scene_digest':
-      return `/scenes/inbox?digest=${encodeURIComponent(target.digestId)}`;
     case 'chat':
       return target.personal && surface === 'web' ? '/personal' : `/chat/${encodeURIComponent(target.conversationId)}`;
     case 'task':

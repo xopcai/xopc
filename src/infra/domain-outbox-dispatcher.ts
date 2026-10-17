@@ -25,7 +25,7 @@ export class DomainOutboxDispatcher {
         automationEventPublisher.publish({
           id: row.event_id,
           type: row.event_type,
-          source: row.subject_kind === 'note' ? 'notes' : row.subject_kind === 'project' ? 'projects' : row.subject_kind === 'scene' ? 'scenes' : row.subject_kind === 'local_app' ? 'local_apps' : 'tasks',
+          source: row.subject_kind === 'note' ? 'notes' : row.subject_kind === 'project' ? 'projects' : row.subject_kind === 'local_app' ? 'local_apps' : 'tasks',
           schemaVersion: 1,
           subject: { kind: row.subject_kind, id: row.subject_id },
           payload: { ...payload, sourceEventId: row.event_id, ...(row.operation_id ? { operationId: row.operation_id } : {}) },

@@ -1,7 +1,7 @@
 # xopc 数据库业务域、表模型与关系审计
 
 > 审计日期：2026-09-26<br>
-> 代码版本：数据库 schema v222（基线 v165 + 166–222 迁移）<br>
+> 代码版本：数据库 schema v256（基线 v217 + 218–256 迁移）<br>
 > 范围：`src/storage/sqlite/schema.sql`、`src/storage/sqlite/schemas/*.sql`、`src/storage/sqlite/migrations/*.sql` 以及生产代码中的 SQL 读写点。
 
 ## 1. 结论摘要
@@ -35,15 +35,11 @@ flowchart LR
   Automation[自动化] --> Session
   Automation --> Usage[AI 用量账本]
   Connector[连接器] --> Knowledge[知识采集]
-  Connector --> Scene[场景与主动工作]
   Knowledge --> Understanding[用户理解与上下文]
   Understanding --> Session
   Session --> Usage
   Notes[笔记与讨论] --> Project
   Notes --> Task[任务执行]
-  Scene --> Task
-  Scene --> Notify[通知与首页]
-  Scene --> Usage
   Device[设备、端点与网关] --> Session
   Device --> Notify
   App[本地应用与扩展] --> Project
@@ -289,36 +285,6 @@ erDiagram
 
 主要 TypeScript 模型：`src/connectors/`、`src/storage/sqlite/connector-account-repository.ts`、`src/storage/sqlite/connector-learning-repository.ts`、`src/capabilities/`。
 
-### 4.10 场景（Scenes）与主动执行
-
-| 表 | 职责 | 主要关系 |
-|---|---|---|
-| `scene_template_versions` | 场景模板不可变版本 | 聚合根 |
-| `scene_activations` | 用户启用的场景实例 | 复合 FK → template version |
-| `scene_activation_requests` | 激活请求幂等映射 | FK → activation |
-| `scene_preferences` | owner/workspace 场景偏好 | 作用域配置 |
-| `scene_notes` | activation 的运行说明 | FK → activation |
-| `scene_work_items` | 场景观察的业务对象和 revision | FK → activation |
-| `scene_events` | 外部/内部事件事实 | owner/workspace/account 为逻辑关系 |
-| `scene_trigger_intents` | 从 schedule/event 产生的待执行意图 | FK → activation、event |
-| `scene_intent_events` | intent 与多个 event 的连接表 | FK → intent、event |
-| `scene_schedule_cursors` | 每个 activation/trigger 的下次执行点 | FK → activation |
-| `scene_runs` | 有租约和重试的场景运行 | FK → activation、intent |
-| `scene_context_snapshots` | run/lease epoch 的证据快照 | FK → run |
-| `scene_model_reservations` | run 的模型预算预留 | FK → run、activation |
-| `scene_connector_usage` | account 的日请求计数 | account 为隐式关系 |
-| `scene_outcomes` | run 产出的结构化结果 | FK → run |
-| `scene_presentations` | outcome 的展示、过期、撤回和解决状态 | FK → outcome |
-| `scene_feedback` | presentation 当前反馈投影 | FK → presentation |
-| `scene_feedback_history` | presentation 反馈历史 | FK → presentation |
-| `scene_mail_sources` | 场景选中的邮件线程来源 | account/thread 为外部逻辑关系 |
-| `scene_source_health` | activation 来源健康与退避 | FK → activation |
-| `scene_task_bindings` | activation 到项目任务执行的桥 | FK → activation/task/run/environment |
-| `scene_task_revisions` | 观察到的任务内容 revision | FK → task binding |
-| `scene_task_branch_links` | project branch 到 task 的确认映射 | FK → project/task |
-| `scene_resource_revisions` | 触发器统一维护的资源 revision watermark | 无直接代码读写；由 v199 的资源触发器使用，**不是废表** |
-
-主要 TypeScript 模型：`src/scenes/model.ts`、`src/scenes/service.ts`、`src/scenes/execution.ts`、`src/storage/sqlite/scenes-schema.ts`。
 
 ### 4.11 通知、摘要、首页建议与注意力
 
@@ -401,7 +367,6 @@ erDiagram
 |---|---|---|
 | `ai_usage_events` | 每次真实模型供应商请求的追加式账本，记录 trace、归属、token、费用快照、状态和有界错误 | conversation/run/agent/parent event 均为隐式历史关系；不保存 prompt、完整响应或附件 |
 
-该表取代各业务域单独维护模型费用的做法，包含聊天、任务、自动化、Scene 和一次性生成。主要 TypeScript 模型：`src/usage/types.ts`、`src/storage/sqlite/ai-usage-repository.ts`；详细设计见 `docs/design/ai-usage-ledger-technical-design.md`。
 
 ### 4.17 平台可靠性、幂等与迁移
 
@@ -427,7 +392,6 @@ erDiagram
 | 讨论 | 笔记/项目/任务 | capture → note/project；action → task | 前两者 FK，task 为隐式 |
 | 连接器 | 知识 | learning job → source run/item | 一部分隐式，便于跨来源保留审计 |
 | 用户理解 | 证据/来源授权 | assertion/goal/observation → evidence/grant | 核心路径有 FK |
-| 场景 | 任务/环境 | `scene_task_bindings` | FK 完整，是跨域约束较好的区域 |
 | AI 用量 | 会话/Agent/各种 run | `ai_usage_events` 中的归属 ID | 有意保持为隐式历史关系，父对象删除后账本仍保留 |
 | 通知 | 设备 | `notification_deliveries.device_id` | FK → push endpoint |
 | 本地应用 | 项目/聊天预览 | app → project；preview revision → app | FK 完整 |
@@ -442,17 +406,13 @@ v217 按依赖顺序删除了 `memory_relations`、`memory_fts`、`memory_chunks
 
 以下名称仍可能出现在 baseline 或历史迁移里，但最终 v222 schema 已不存在，不应被新代码使用：
 
-- 旧 proactive 系统：`proactive_events`、`proactive_signal_batches`、`proactive_batch_events`、`proactive_scenarios`、`proactive_scenario_subscriptions`、`proactive_runs`、`proactive_insights`、`proactive_inbox_items` 及其 delivery/digest/push/follow-up 附属表。v188 场景迁移重置后由 `scene_*`、`notification_*`、`home_*` 取代。
 - `proactive_preview_runs`：v166 明确删除。
 - `relationship_settings`：v203 删除；协作规则中的 proactive 类别迁移为 initiative。
-- `scene_development_bindings`、`scene_development_revisions`、`scene_development_branch_links`：v191 重命名为 `scene_task_*`。
 - `duplicate_connector_source_runs`：v201 数据合并后删除。
-- `scene_model_usage`：v216 删除，Scene 的模型用量已经统一进入 `ai_usage_events`。
 - `automation_events_v212`、`automation_event_deliveries_v212`、`automation_result_deliveries_v212` 以及其他 `*_v199`、`*_v200`、`*_v203`、`*_next`：仅迁移过程中的临时重建表。
 
 ### 6.3 不能仅凭“代码无直接表名”删除
 
-- `scene_resource_revisions` 没有 TypeScript 直接读写，但由 v199 安装的 39 个 SQLite trigger 维护，用于资源 revision/outbox 语义，不能视为废表。
 - FTS5 shadow tables（例如 `notes_fts_data`、`notes_fts_idx`）由 SQLite 管理，不能手工删除；删除对应虚拟表时才会一并处理。
 - 快照、事件、审计、墓碑和补偿队列表可能只有单一 repository 写入，低调用量不代表废弃。
 
@@ -557,9 +517,9 @@ principal（用户/信任主体） -> device/endpoint instance（具体安装）
 - `(kind, id)` 索引规范；
 - doctor 深度检查，报告无法解析的多态引用。
 
-### P3：降低 baseline 的历史噪声
+### 已完成：精简数据库基线
 
-`schema.sql` 仍先创建多组随后由迁移删除的实验表，新数据库启动时会做无意义的建表/删表。长期建议生成一个 v222（或下一大版本）的 compact baseline，并只保留仍需支持的升级迁移。这样可减少审计误判、启动时间和 schema 漂移风险。
+`schema.sql` 已合并为 v217 基线，不包含已删除功能的表；仅保留 v218 起的迁移，不再支持更旧版本的升级路径。
 
 ## 8. 分阶段实施结果与后续顺序
 
@@ -569,7 +529,7 @@ principal（用户/信任主体） -> device/endpoint instance（具体安装）
 4. **完成（v219–v220）**：关键 JSON 约束与时间整数化。
 5. **完成（v221）**：AI 用量 180 天保留与 provider/model 索引。
 6. **完成（v222）**：session 配置单一权威源。
-7. **下一优先级**：生成 compact baseline，并将最终结构吸收到新基线。
+7. **完成**：生成 v217 基线，删除旧功能表和对应升级代码。
 8. **按证据推进**：继续补关键 JSON 校验、多态引用 doctor 与 AI 用量隐私删除/体积报告。
 
 ## 9. 审计限制

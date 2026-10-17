@@ -3,7 +3,6 @@
 日期：2026-09-23  
 状态：P3 工程实现完成，真实样本发布验证待执行
 
-本方案在现有[场景产品北极星](./scenes-product-north-star.md)、[场景系统技术设计](./scenes-technical-design.md)和[工作理解 onboarding](./work-discovery-onboarding.md)之上增加首页“场景建议”能力，不新增另一套任务、记忆或主动运行系统。
 
 ## 1. 产品决定
 

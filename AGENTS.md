@@ -394,7 +394,7 @@ cd web && pnpm run build                  # → ../dist/gateway/static/root (gat
 
 ### Session transcript (LLM vs on-disk rows)
 
-- **Conversation identity:** Stable UUID `conversationId`; Agent and channel routing come from stored metadata, never ID parsing. `sessions.active_transcript_id` points to the current `transcriptId`; reset preserves the conversation UUID. Create through `src/storage/sqlite/conversation-repository.ts`. Schema v178 performs the one-time historical conversion; old-key decoding belongs only in migration modules.
+- **Conversation identity:** Stable UUID `conversationId`; Agent and channel routing come from stored metadata, never ID parsing. `sessions.active_transcript_id` points to the current `transcriptId`; reset preserves the conversation UUID. Create through `src/storage/sqlite/conversation-repository.ts`. The retained database baseline is v217; historical key conversion and pre-v217 upgrades are not supported.
 - **Authoritative storage:** `~/.xopc/xopc.db` (SQLite). Session metadata, transcripts, per-session config, compaction checkpoints, and FTS5 search all live in `src/storage/sqlite/`. Gateway opens the DB on start via `openXopcDatabase()`.
 - **Runtime write path:** Gateway, channels, and CLI turns use `runXopcEmbeddedTurn` → `openSqliteHydratingSessionManager` (in-memory pi `SessionManager` hydrated from SQLite) → `guardSessionManager` appends → `emitSessionTranscriptUpdate` → `SessionStore.syncEmbeddedTranscriptUpdate` → `appendTranscriptEntry` (SQLite). Do **not** add turn-end `SessionStore.save` / `saveMessages` on agent paths.
 - **Index:** `SessionIndex` (`src/session/manager.ts`) delegates to `SessionStore`; `onSessionTranscriptUpdate` bumps counts after appends.

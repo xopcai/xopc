@@ -483,11 +483,6 @@ export const GatewayWebchatConfigSchema = z.object({
   activityDetailDefault: 'on',
 });
 
-export const GatewayScenesConfigSchema = z.object({
-  /** Explicit opt-in while real-device and sustained-load launch gates remain open. */
-  enabled: z.boolean().default(false),
-}).default({ enabled: false });
-
 export const GatewayConfigSchema = z.object({
   /** Semantic bind mode. */
   bind: GatewayBindModeSchema.optional(),
@@ -502,7 +497,6 @@ export const GatewayConfigSchema = z.object({
   tls: GatewayTlsSchema.optional(),
   auth: GatewayAuthSchema.optional(),
   webchat: GatewayWebchatConfigSchema.optional(),
-  scenes: GatewayScenesConfigSchema.optional(),
   corsOrigins: z.array(z.string()).optional(),
   /**
    * Reverse-proxy publicly reachable URL (e.g. `https://gateway.example.com`).
@@ -672,9 +666,6 @@ export const GatewayConfigSchema = z.object({
   },
   webchat: {
     activityDetailDefault: 'on',
-  },
-  scenes: {
-    enabled: false,
   },
   corsOrigins: [],
   skillsMarketplaceProvider: 'store',
@@ -1239,9 +1230,6 @@ export const ConfigSchema = z.object({
     },
     webchat: {
       activityDetailDefault: 'on' as const,
-    },
-    scenes: {
-      enabled: false,
     },
     corsOrigins: [],
     skillsMarketplaceProvider: 'store',

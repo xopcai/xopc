@@ -73,7 +73,6 @@ export type ToolExecutionLabels = {
   >;
   objects: Record<
     | 'context'
-    | 'scene'
     | 'chatPreview'
     | 'productItem'
     | 'project'
@@ -200,7 +199,6 @@ function xopcObject(
   if (mode === 'local_app') return 'localApp';
   if (mode === 'settings') return 'settings';
   if (mode === 'context') return 'context';
-  if (mode === 'scene') return 'scene';
   if (mode === 'chat_preview') return 'chatPreview';
   return 'productItem';
 }

@@ -8,17 +8,16 @@
 
 目标是让同一业务操作被用户界面、Agent、CLI、自动化、渠道和 MCP 安全、一致地调用，并让 Agent 理解用户当前正在处理的对象。交付价值通过接入成本、跨入口一致性、上下文准确率和副作用恢复质量衡量。
 
-保留 Node.js、pi-agent、Hono、SQLite、React、SWR、现有 WebSocket realtime，以及现有 Session／Task／TaskRun／Scene／Workflow 的领域职责。新增统一能力执行边界，不引入第二套 Agent Runtime、任务编排器或数据真相源。
+保留 Node.js、pi-agent、Hono、SQLite、React、SWR、现有 WebSocket realtime，以及现有 Session／Task／TaskRun／Workflow 的领域职责。新增统一能力执行边界，不引入第二套 Agent Runtime、任务编排器或数据真相源。
 
 最终范围包括：能力契约与执行器、调用身份与授权、审批绑定、持久执行记录、业务变更事件、页面上下文、结构化结果、显式 MCP 暴露、Local App 能力包。A2A、跨主机联邦、多人组织、云端数据库和任意生成代码执行不是本轮完成条件；契约为后续适配保留版本边界。
 
-本方案不改变 [Slack 开发事项方案](./ai-native-scenes-product-technical-design.md) 的业务范围和发布门禁。Scene 继续拥有持续委托，Task 拥有工作目标，TaskRun 拥有执行尝试；能力层只负责一次可识别操作的调用语义。现有 Slack 交付可以继续，新架构按本文阶段接入。
 
 ## 2. 已核实的实现基础
 
 | 已有实现 | 结论与复用方式 |
 | --- | --- |
-| `src/agent/tools/xopc-use-tool.ts` | 已聚合 Scene、Project、Automation、Note、Task、TaskRun、Local App、Settings；保留工具入口，分支逐项转发到注册能力 |
+| `src/agent/tools/xopc-use-tool.ts` | 已聚合 Project、Automation、Note、Task、TaskRun、Local App、Settings；保留工具入口，分支逐项转发到注册能力 |
 | `src/tasks/task-application-service.ts` | 已有命令幂等、版本校验和事务；复用领域服务，不在能力层重新实现状态机 |
 | `src/tasks/task-change-events.ts` | 已写入 `domain_outbox`；扩展关联信息及消费者，不另建平行变更总线 |
 | `packages/gateway-contract/src/product-delivery.ts` | 已有 ProductReference、ProductDeliveryEnvelope 和深链；结果协议扩展它们 |
@@ -106,7 +105,7 @@ interface CapabilityDefinition<Input, Output> {
 
 浏览器只提交输入、客户端重试键及可验证的上下文引用。不得提交可信 principal、scopes、approved=true、调用来源或 delegation。渠道通过现有身份／配对映射；MCP 从认证凭证映射；自动化使用持久授权快照并在执行时复核撤权。
 
-有效权限是调用主体、设备、Agent、Scene／Task、扩展授权、资源和账号权限的交集。`gateway.admin` 不能隐式绕过 Scene 的委托范围。UI 人工点击可以构成具体操作意图，但不能豁免权限，也不能通过伪造 `surface=ui` 豁免审批。
+有效权限是调用主体、设备、Agent、Task、扩展授权、资源和账号权限的交集。`gateway.admin` 不能隐式绕过用户的委托范围。UI 人工点击可以构成具体操作意图，但不能豁免权限，也不能通过伪造 `surface=ui` 豁免审批。
 
 ### 4.3 单一执行入口
 
@@ -260,7 +259,7 @@ Local App 发布原子固定 UI、manifest、能力绑定、Schema 和验收结�
 
 按领域切换到新 dispatcher，切换单位必须覆盖该领域的全部写入口；禁止 HTTP 走新路径而 Agent 继续绕过同一操作。可对只读调用 shadow 比较，写操作不能双执行。回退只回退入口适配，新增表保留，未决操作保持由新恢复器处理；存在未决外部写时禁止降级到无法理解它的旧二进制。
 
-迁移前备份 SQLite 并进行版本兼容检查。不改既有 conversation UUID、不重写 transcript 历史、不抹除 Task／Scene 运行记录。已经过期的旧审批按旧处理器完成或明确失效，不能自动升级为新授权。
+迁移前备份 SQLite 并进行版本兼容检查。不改既有 conversation UUID、不重写 transcript 历史、不抹除 Task 运行记录。已经过期的旧审批按旧处理器完成或明确失效，不能自动升级为新授权。
 
 ## 11. 参考与设计判断
 

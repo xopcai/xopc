@@ -97,8 +97,3 @@ export function backupDatabaseBeforeCutover(
   flushBackupFile(backupPath);
   return backupPath;
 }
-
-/** The old release does not participate in an application lock, so check open handles. */
-export function backupBeforeConversationCutover(db: DatabaseSync, databasePath: string): string {
-  return backupDatabaseBeforeCutover(db, databasePath, 'v178');
-}

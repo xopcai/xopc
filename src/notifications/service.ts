@@ -1,7 +1,5 @@
 import { localizeNotification, type ProductNotificationType } from '@xopcai/gateway-contract';
 
-import { runSqliteWriteTransaction } from '../storage/sqlite/transaction.js';
-
 import { createLogger } from '../utils/logger.js';
 
 import { getNotificationDevice, listDeliverableNotificationDevices } from './device-store.js';
@@ -9,7 +7,6 @@ import { notificationPlanFromGatewayEvent, type NotificationPlan } from './plann
 import {
   createNotificationEvent,
   cancelNotificationDelivery,
-  deferNotificationDelivery,
   expireUndeliverableNotificationDeliveries,
   listDueNotificationDeliveries,
   markNotificationDeliveryAccepted,
@@ -19,7 +16,6 @@ import {
   type NotificationDelivery,
 } from './store.js';
 import type { NotificationPreferences } from './types.js';
-import type { NotificationDomainDelivery } from './domain-delivery.js';
 import { sendHarmonyPush } from './harmony-push.js';
 import { getOrCreateGatewayIdentity } from '../storage/sqlite/gateway-identity-repository.js';
 import { flushClarificationNotifications, isClarificationNotificationActionable } from './clarification.js';
@@ -55,7 +51,6 @@ export class NotificationService {
   constructor(private readonly options: {
     publish: (type: string, payload: unknown) => void;
     fetch?: typeof fetch;
-    domainDelivery?: NotificationDomainDelivery;
     allowsNotification?: (notification: NotificationPlan['notification']) => boolean;
     sendHarmony?: typeof sendHarmonyPush;
   }) {}
@@ -89,27 +84,16 @@ export class NotificationService {
 
   /** Throws on persistence failure so durable producers can retry the handoff. */
   persistGatewayEvent(type: string, payload: unknown) {
-    const plan = notificationPlanFromGatewayEvent(type, payload) ?? this.options.domainDelivery?.planEvent(type, payload);
+    const plan = notificationPlanFromGatewayEvent(type, payload);
     if (!plan) return null;
     return this.persistPlan(plan);
   }
 
   persistPlan(plan: NotificationPlan) {
     if (this.options.allowsNotification?.(plan.notification) === false) return null;
-    const domain = this.options.domainDelivery?.owns(plan.notification.type) ? this.options.domainDelivery : undefined;
-    if (!domain && !Object.hasOwn(STANDARD_PREFERENCES, plan.notification.type)) {
-      throw new Error('Notification domain delivery is not installed');
-    }
     const devices = listDeliverableNotificationDevices()
-      .filter((device) => domain ? domain.allowsDevice(device.preferences) : preferenceAllows(plan.notification.type, device.preferences));
-    const result = runSqliteWriteTransaction(() => {
-      const selection = domain?.prepare(plan, devices);
-      const created = createNotificationEvent({
-        ...(selection?.plan ?? plan), deviceIds: selection?.deviceIds ?? devices.map((device) => device.id),
-      });
-      if (created.created) selection?.enqueue(created.notification);
-      return created;
-    });
+      .filter((device) => preferenceAllows(plan.notification.type, device.preferences));
+    const result = createNotificationEvent({ ...plan, deviceIds: devices.map((device) => device.id) });
     return result.created ? result.notification : null;
   }
 
@@ -127,9 +111,7 @@ export class NotificationService {
         this.lastMaintenanceAt = now;
       }
       for (const notification of flushClarificationNotifications(plan => this.persistPlan(plan))) this.options.publish('notification.created', notification);
-      for (const notification of this.options.domainDelivery?.flush((plan) => this.persistPlan(plan)) ?? []) this.options.publish('notification.created', notification);
       await this.deliverPending();
-      await this.options.domainDelivery?.drain();
     } catch (err) {
       log.warn({ err }, 'Notification delivery pass failed');
     } finally {
@@ -159,19 +141,8 @@ export class NotificationService {
       cancelNotificationDelivery(delivery.event.id, delivery.deviceId);
       return;
     }
-    const domain = this.options.domainDelivery?.owns(delivery.event.type) ? this.options.domainDelivery : undefined;
-    if (!domain && !Object.hasOwn(STANDARD_PREFERENCES, delivery.event.type)) {
-      markNotificationDeliveryDead(delivery.event.id, delivery.deviceId, 'Notification domain delivery is not installed');
-      return;
-    }
-    if (domain) {
-      const policy = domain.recheckMobile(delivery.event);
-      if (policy === 'cancel') { markNotificationDeliveryDead(delivery.event.id, delivery.deviceId, 'Notification policy changed'); return; }
-      if (policy instanceof Date) { deferNotificationDelivery(delivery.event.id, delivery.deviceId, policy.getTime()); return; }
-    }
     const fetchImpl = this.options.fetch ?? fetch;
     const localized = localizeNotification(delivery.event, delivery.locale);
-    const preview = domain?.mobilePreview(delivery.event, delivery.locale) ?? { title: localized.localizedTitle, body: localized.localizedBody };
     try {
       if (delivery.platform !== 'harmonyos') {
         markNotificationDeliveryDead(delivery.event.id, delivery.deviceId, 'Native push provider is not configured');
@@ -180,8 +151,8 @@ export class NotificationService {
       const ticket = await (this.options.sendHarmony ?? sendHarmonyPush)({
         pushToken: delivery.pushToken, eventId: delivery.event.id,
         gatewayId: getOrCreateGatewayIdentity().id, target: delivery.event.target,
-        title: preview.title,
-        body: preview.body,
+        title: localized.localizedTitle,
+        body: localized.localizedBody,
         ...(delivery.event.type === 'chat.needs_input' && typeof delivery.event.payload.expiresAt === 'number'
           ? { expiresAt: delivery.event.payload.expiresAt } : {}),
       }, fetchImpl);
