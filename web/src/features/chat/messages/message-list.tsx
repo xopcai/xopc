@@ -19,6 +19,7 @@ import { cn } from '@/lib/cn';
 import { useLocaleStore } from '@/stores/locale-store';
 
 import { VirtualMessageRows, type MessageRowDescriptor } from './virtual-message-rows';
+import { hasVisibleMessageRow } from './message-row-visibility';
 
 const ignoreWelcomePrompt = (_selection: WelcomeSuggestionSelection): void => {};
 
@@ -122,37 +123,46 @@ export const MessageList = memo(function MessageList({
   const now = Date.now();
   const lastUserIndex = list.findLastIndex((message) => message.role === 'user');
 
+  const isStreamingRow = (msg: Message, index: number) => Boolean(
+    (streaming || sending || msg.pendingResponseStatus) && index === list.length - 1 && msg.role === 'assistant',
+  );
+  const followUpTriggerFor = (msg: Message, index: number) => msg.role === 'assistant'
+    && Boolean(msg.turnId) && list[index - 1]?.role === 'task' && list[index - 1]?.turnId === msg.turnId
+    ? list[index - 1].taskTrigger : undefined;
+
   const rows: MessageRowDescriptor[] = list.flatMap((msg, index) => {
-    if (msg.role === 'assistant' && msg.content?.length
-      && msg.content.every(block => block.type === 'text' && block.text.trim() === 'NO_REPLY')) return [];
+    if (!hasVisibleMessageRow(msg, { personal, isStreaming: isStreamingRow(msg, index), reasoningLevel,
+      showAssistantWorkLog, followUpTrigger: followUpTriggerFor(msg, index) })) return [];
     if (msg.role === 'task' && msg.taskTrigger && msg.turnId
       && list[index + 1]?.role === 'assistant' && list[index + 1]?.turnId === msg.turnId) return [];
     return [{ key: messageRowKey(msg, index), index, aliases: msg.role === 'assistant'
       && list[index - 1]?.role === 'task' && msg.turnId === list[index - 1]?.turnId ? [index - 1] : [] }];
   });
+  const previousVisibleIndex = new Map(rows.map((row, offset) => [row.index, rows[offset - 1]?.index]));
   const renderRow = (index: number) => {
     const msg = list[index];
-    const isLast = index === list.length - 1;
-    const isStreamRow = Boolean((streaming || sending || msg.pendingResponseStatus) && isLast && msg.role === 'assistant');
+    const isStreamRow = isStreamingRow(msg, index);
     const isLastUserRow = index === lastUserIndex;
     const precedingTask = list[index - 1];
-    const followUpTrigger = msg.role === 'assistant'
-      && precedingTask?.role === 'task'
-      && Boolean(msg.turnId)
-      && precedingTask.turnId === msg.turnId
-      ? precedingTask.taskTrigger : undefined;
+    const followUpTrigger = followUpTriggerFor(msg, index);
+    const previousIndex = previousVisibleIndex.get(index);
+    const previousMessage = previousIndex === undefined ? undefined : list[previousIndex];
+    const previousTimestamp = previousMessage && previousIndex !== undefined
+      ? (followUpTriggerFor(previousMessage, previousIndex)
+        ? list[previousIndex - 1]?.timestamp ?? previousMessage.timestamp : previousMessage.timestamp)
+      : undefined;
     const key = messageRowKey(msg, index);
     const rowTimestamp = followUpTrigger ? precedingTask?.timestamp ?? msg.timestamp : msg.timestamp;
     const showTimeSeparator = shouldShowChatTimeSeparator(
       rowTimestamp,
-      followUpTrigger ? list[index - 2]?.timestamp : precedingTask?.timestamp,
+      previousTimestamp,
     );
     return (
       <div
         key={key}
         id={`chat-message-${index}`}
-        className={cn('scroll-mt-4', index > 0
-          && (list[index - 1]?.role === 'user' || list[index - 1]?.role === 'task')
+        className={cn('scroll-mt-4', previousMessage
+          && (previousMessage.role === 'user' || previousMessage.role === 'task')
           && !followUpTrigger && !showTimeSeparator && '-mt-5')}
         data-chat-message-index={index}
         data-chat-message-row
