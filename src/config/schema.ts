@@ -17,6 +17,7 @@ import { AgentCatalogRepository } from '../agent-catalog/repository.js';
 import { DEFAULT_CONTEXT_COMPACTION_POLICY, UserContextConfigSchema } from '../user-context/config.js';
 import { validatePublicUrl } from './public-url.js';
 import { PlatformConfigSchema } from '../platform/contracts.js';
+import { deepseekSearchEndpoint } from '../agent/tools/search/providers/deepseek-protocol.js';
 
 // ============================================
 // Agent Configs
@@ -193,11 +194,15 @@ export const SessionConfigSchema = z
 export const ChannelsConfigSchema = z.record(z.string(), z.unknown()).default({});
 
 export const SearchProviderEntrySchema = z.object({
-  type: z.enum(['brave', 'tavily', 'bing', 'searxng']),
+  type: z.enum(['brave', 'tavily', 'bing', 'searxng', 'deepseek']),
   apiKey: z.string().optional(),
-  /** SearXNG instance base URL (e.g. http://localhost:8080) */
+  /** SearXNG instance URL or optional DeepSeek HTTPS API base URL. */
   url: z.string().optional(),
   disabled: z.boolean().optional(),
+}).superRefine((entry, context) => {
+  if (entry.type !== 'deepseek' || !entry.url) return;
+  try { deepseekSearchEndpoint(entry.url); }
+  catch { context.addIssue({ code: 'custom', path: ['url'], message: 'Invalid DeepSeek API base URL' }); }
 });
 
 export type SearchProviderEntry = z.infer<typeof SearchProviderEntrySchema>;

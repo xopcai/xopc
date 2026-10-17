@@ -7,6 +7,7 @@ import { classifySearchError, searchFailureInfo, SearchError } from './errors.js
 import { currentSearchCache, SEARCH_CACHE_TTL_MS, SearchCacheWriteError, type SearchCache } from './cache.js';
 import type { ResolvedWebSearchConfig, SearchProvider, SearchResponse, SearchRequest, SearchBatchResponse } from './types.js';
 import { BraveProvider } from './providers/brave.js';
+import { DeepSeekProvider } from './providers/deepseek.js';
 import { TavilyProvider } from './providers/tavily.js';
 import { BingApiProvider } from './providers/bing-api.js';
 import { BingHtmlProvider } from './providers/bing-html.js';
@@ -22,6 +23,7 @@ export class SearchProviderRegistry {
   private readonly cache: SearchCache;
   private readonly cachePrefix: string;
   private readonly requestTimeoutMs: number;
+  private readonly cloudRequestTimeoutMs: number;
   private readonly retryDelayMs: number;
   sourceRequests = 0;
   private readonly cooldowns = new Map<string, { until: number; error: SearchError }>();
@@ -38,6 +40,7 @@ export class SearchProviderRegistry {
     } };
     this.cachePrefix = createHash('sha256').update(JSON.stringify([config, this.providers.map(provider => [provider.name, provider.cacheIdentity?.()]), this.fallbackProvider?.name])).digest('hex');
     this.requestTimeoutMs = options.requestTimeoutMs ?? 10_000;
+    this.cloudRequestTimeoutMs = options.requestTimeoutMs ?? 30_000;
     this.retryDelayMs = options.retryDelayMs ?? 300;
     log.debug(
       { region: config.region, configuredCount: this.providers.filter((p) => p.isAvailable()).length },
@@ -64,6 +67,9 @@ export class SearchProviderRegistry {
     for (const p of config.providers) {
       if (p.disabled) continue;
       switch (p.type) {
+        case 'deepseek':
+          list.push(new DeepSeekProvider(p.apiKey ?? '', p.url));
+          break;
         case 'brave':
           list.push(new BraveProvider(p.apiKey ?? ''));
           break;
@@ -108,7 +114,7 @@ export class SearchProviderRegistry {
     signal?.addEventListener('abort', abort, { once: true });
     try {
       return await executeWithTimeout(() => execute(controller.signal), { toolName: `web_search:${name}`,
-        timeoutMs: this.requestTimeoutMs, signal, onTimeout: error => controller.abort(error) });
+        timeoutMs: name === 'xopc-cloud' ? this.cloudRequestTimeoutMs : this.requestTimeoutMs, signal, onTimeout: error => controller.abort(error) });
     } catch (error) { throw classifySearchError(error, signal); }
     finally { signal?.removeEventListener('abort', abort); }
   }

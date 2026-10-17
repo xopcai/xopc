@@ -4,7 +4,7 @@ import { apiUrl } from '@/lib/url';
 
 export type SearchProviderRow = {
   clientKey?: string;
-  type: 'brave' | 'tavily' | 'bing' | 'searxng';
+  type: 'brave' | 'tavily' | 'bing' | 'searxng' | 'deepseek';
   apiKey: string;
   url: string;
   disabled: boolean;
@@ -57,7 +57,7 @@ export function normalizeWebSearchSettingsFromConfig(cfg: unknown): WebSearchSet
         const o = p && typeof p === 'object' ? (p as Record<string, unknown>) : {};
         const type = o.type;
         const t =
-          type === 'brave' || type === 'tavily' || type === 'bing' || type === 'searxng' ? type : 'brave';
+          type === 'brave' || type === 'tavily' || type === 'bing' || type === 'searxng' || type === 'deepseek' ? type : 'brave';
         return {
           clientKey: `search-provider-${index}`,
           type: t,
@@ -88,7 +88,7 @@ export async function patchWebSearchSettings(state: WebSearchSettingsState): Pro
         type: p.type,
         apiKey: p.apiKey,
       };
-      if (p.type === 'searxng' && p.url.trim()) {
+      if ((p.type === 'searxng' || p.type === 'deepseek') && p.url.trim()) {
         row.url = p.url.trim().replace(/\/+$/, '');
       }
       if (p.disabled) row.disabled = true;
