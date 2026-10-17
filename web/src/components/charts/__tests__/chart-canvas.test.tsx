@@ -67,6 +67,36 @@ describe('chart canvas resource lifecycle', () => {
     expect(error).not.toHaveBeenCalled();
   });
 
+  it('refreshes colors after delayed DOM theme changes without replacing the instance', async () => {
+    await render();
+    const host = container.querySelector<HTMLElement>('[role="img"]')!;
+    host.style.setProperty('--color-surface-panel', '#123456');
+    await act(async () => {
+      document.documentElement.dataset.theme = 'dark';
+      await new Promise(resolve => setTimeout(resolve, 0));
+      await new Promise(requestAnimationFrame);
+    });
+    expect(runtime.init).toHaveBeenCalledTimes(1);
+    expect(runtime.dispose).not.toHaveBeenCalled();
+    expect(runtime.setOption).toHaveBeenLastCalledWith(expect.objectContaining({ backgroundColor: '#123456' }), { notMerge: true });
+    const updates = runtime.setOption.mock.calls.length;
+    await act(async () => {
+      document.documentElement.dataset.colorScheme = 'default';
+      await new Promise(resolve => setTimeout(resolve, 0));
+      await new Promise(requestAnimationFrame);
+    });
+    expect(runtime.setOption).toHaveBeenCalledTimes(updates);
+    act(() => root.render(null));
+    expect(runtime.dispose).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      document.documentElement.dataset.theme = 'light';
+      await new Promise(requestAnimationFrame);
+    });
+    expect(runtime.setOption).toHaveBeenCalledTimes(updates);
+    delete document.documentElement.dataset.theme;
+    delete document.documentElement.dataset.colorScheme;
+  });
+
   it('reports dependency load failures', async () => {
     runtime.load.mockRejectedValue(new Error('offline'));
     await render();
