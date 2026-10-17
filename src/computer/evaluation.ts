@@ -30,6 +30,8 @@ export const ComputerEvaluationRunSchema = z.object({
   actions: z.number().int().nonnegative().nullable().optional(),
   unchangedInputs: z.number().int().nonnegative().nullable().optional(),
   observationChanges: z.number().int().nonnegative().nullable().optional(),
+  rescueAttempts: z.number().int().nonnegative().nullable().optional(),
+  rescueExhaustions: z.number().int().nonnegative().nullable().optional(),
   failure: ComputerFailureSchema.optional(),
 }).strict();
 export type ComputerEvaluationRun = z.infer<typeof ComputerEvaluationRunSchema>;
@@ -47,11 +49,12 @@ export function computerReportMeasurements(report: ComputerSessionReport) {
     ? classifyComputerFailure(new Error('COMPUTER_RELEASE_UNCONFIRMED'), 'release', 'unknown') : report.failure;
   return { durationMs: report.durationMs, modelRequests: report.counters.modelRequests,
     actions: report.counters.completedInputs, unchangedInputs: report.counters.unchangedInputs,
-    observationChanges: report.counters.observationChanges, takeover: report.counters.takeovers > 0,
+    observationChanges: report.counters.observationChanges,
+    rescueAttempts: report.counters.rescueAttempts, rescueExhaustions: report.counters.rescueExhaustions, takeover: report.counters.takeovers > 0,
     claimedSuccess: report.counters.successClaims > 0, ...(failure ? { failure } : {}) };
 }
 
-function measuredTotal(runs: ComputerEvaluationRun[], key: 'modelRequests' | 'inputTokens' | 'outputTokens' | 'actions' | 'unchangedInputs' | 'observationChanges') {
+function measuredTotal(runs: ComputerEvaluationRun[], key: 'modelRequests' | 'inputTokens' | 'outputTokens' | 'actions' | 'unchangedInputs' | 'observationChanges' | 'rescueAttempts' | 'rescueExhaustions') {
   return runs.length && runs.every(run => run[key] != null) ? runs.reduce((sum, run) => sum + run[key]!, 0) : null;
 }
 
@@ -97,6 +100,7 @@ export function evaluateComputerRuns(rawPlan: unknown, rawRuns: unknown[]) {
     inputTokens: measuredTotal(runs, 'inputTokens'), outputTokens: measuredTotal(runs, 'outputTokens'),
     actions: measuredTotal(runs, 'actions'), unchangedInputs: measuredTotal(runs, 'unchangedInputs'),
     observationChanges: measuredTotal(runs, 'observationChanges'),
+    rescueAttempts: measuredTotal(runs, 'rescueAttempts'), rescueExhaustions: measuredTotal(runs, 'rescueExhaustions'),
     costPerSuccess: totalCost !== null && passed ? totalCost / passed : null,
     betaGatePassed: plan.evidence === 'real-app' && tasks.size >= 60 && plan.repetitions >= 3
       && runs.length === expectedRuns && passed / expectedRuns >= 0.9 && !falseSuccesses && !incidents
