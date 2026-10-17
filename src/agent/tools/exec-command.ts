@@ -37,7 +37,7 @@ const ExecCommandSchema = Type.Object({
   outputs: Type.Optional(
     Type.Array(Type.String({ minLength: 1 }), {
       maxItems: 50,
-      description: 'Final user-facing files created by this command. Relative paths resolve under the effective cwd and are persisted as chat deliverables after a successful command.',
+      description: 'Final user-facing files to persist after this command succeeds, including files written earlier in the task. Put all final paths on the final verification command to verify and publish in one call. Relative paths resolve under the effective cwd.',
     }),
   ),
 });
@@ -158,7 +158,7 @@ export function createExecCommandTool(
       'Use apply_patch for file edits; do not edit files by shell redirection unless explicitly necessary.',
       'Relative cwd values resolve under the current agent workspace.',
       'Use a fresh output directory with mkdir -p. Avoid destructive cleanup such as rm -rf on variable paths; blocked cleanup should be removed, never disguised or moved to bypass policy. A syntax preflight on Unix host commands prevents partial writes from malformed shell syntax.',
-      'When the command creates final user-facing files, declare all final paths in outputs so they are persisted with this command.',
+      'Use outputs on the final verification command to persist all completed user-facing files together, including files written earlier. A successful artifact receipt needs no additional publish_artifacts call unless the file changes or capture failed.',
     ].join(' '),
     parameters: ExecCommandSchema,
     label: 'Run Command',
@@ -281,6 +281,7 @@ export function createExecCommandTool(
         const published = details.artifacts.filter(item => item.availability === 'available').length;
         const failed = details.artifacts.length - published;
         resultText += `\n\nArtifacts: ${published} published${failed > 0 ? `, ${failed} failed` : ''}.`;
+        resultText += `\n${details.artifacts.map(item => `${JSON.stringify(item.title)}: ${item.availability}`).join('\n')}`;
       }
       return { content: [{ type: 'text', text: resultText }], details };
     },

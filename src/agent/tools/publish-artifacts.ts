@@ -100,7 +100,7 @@ export function createPublishArtifactsTool(workspace: string): AgentTool {
     name: 'publish_artifacts',
     label: 'Publish Artifacts',
     description:
-      'Publish completed user-facing files into durable chat artifacts. Call this after exec_command or another runtime creates spreadsheets, presentations, PDFs, documents, archives, or other files. Pass every final deliverable together; do not publish temporary or source files.',
+      'Publish completed user-facing files that do not already have a current successful artifact receipt. Prefer exec_command.outputs on the final verification command, including files written earlier, to verify and capture in one call. Use this tool for uncaptured, changed, or previously failed files. Pass the missing final deliverables together; do not republish already captured unchanged files, temporary files, or source files.',
     parameters: PublishArtifactsSchema,
     mutationScope: 'none',
     supportsParallel: false,
