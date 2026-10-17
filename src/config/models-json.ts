@@ -127,6 +127,7 @@ export const ImageGenerationProviderSchema = z.object({
 // ============================================
 
 export const CustomModelSchema = z.object({
+  supportsTools: z.boolean().optional(),
   computerUse: z.object({ profile: ComputerProfileSchema }).strict().optional(),
 	id: z.string().min(1),
 	name: z.string().min(1).optional(),
@@ -160,6 +161,7 @@ export const CustomModelSchema = z.object({
 // ============================================
 
 export const ModelOverrideSchema = z.object({
+  supportsTools: z.boolean().optional(),
   computerUse: z.object({ profile: ComputerProfileSchema }).strict().optional(),
 	name: z.string().min(1).optional(),
 	reasoning: z.boolean().optional(),

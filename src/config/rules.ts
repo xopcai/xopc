@@ -33,6 +33,7 @@ export const BASE_RELOAD_RULES: ReloadRule[] = [
   { prefix: 'models.mode', kind: 'hot', description: 'Model merge mode' },
   
   // Gateway - restart required
+  { prefix: 'gateway.outboundProxy', kind: 'restart', description: 'Outbound HTTP proxy' },
   { prefix: 'gateway.bind', kind: 'restart', description: 'Gateway bind mode' },
   { prefix: 'gateway.customBindHost', kind: 'restart', description: 'Gateway custom bind host' },
   { prefix: 'gateway.port', kind: 'restart', description: 'Port number' },
