@@ -2,7 +2,7 @@
  * `xopc search` — manage web-search providers.
  *
  * Backed by `cfg.tools.web.search.providers[]` per `SearchProviderEntrySchema`.
- * Adds entries idempotently keyed by `type` (brave / tavily / bing / searxng).
+ * Adds entries idempotently keyed by `type` (brave / tavily / bing / searxng / deepseek).
  */
 
 import { Command } from 'commander';
@@ -23,7 +23,7 @@ import {
   type SetupTask,
 } from './setup-shared/index.js';
 
-const SEARCH_TYPES = ['brave', 'tavily', 'bing', 'searxng'] as const;
+const SEARCH_TYPES = ['brave', 'tavily', 'bing', 'searxng', 'deepseek'] as const;
 type SearchType = (typeof SEARCH_TYPES)[number];
 
 function isSearchType(value: string): value is SearchType {
@@ -121,7 +121,7 @@ function summarizeEntry(entry: SearchProviderEntry): Record<string, unknown> {
 
 function createSearchCommand(_ctx: CLIContext): Command {
   const cmd = new Command('search')
-    .description('Manage web-search providers (brave / tavily / bing / searxng)')
+    .description('Manage web-search providers (brave / tavily / bing / searxng / deepseek)')
     .addHelpText(
       'after',
       formatExamples([
@@ -168,8 +168,8 @@ function createSearchCommand(_ctx: CLIContext): Command {
   cmd
     .command('add <type>')
     .description('Add or replace a search provider entry (idempotent by type)')
-    .option('--key <value>', 'API key (brave / tavily / bing). Prompts securely if omitted.')
-    .option('--url <value>', 'SearXNG instance URL (required for type=searxng)')
+    .option('--key <value>', 'API key (brave / tavily / bing / deepseek). Prompts securely if omitted.')
+    .option('--url <value>', 'SearXNG instance URL or optional DeepSeek API base URL')
     .option('--dry-run', 'Show the change without writing', false)
     .option('--json', 'Emit a single JSON task line', false)
     .action(
@@ -245,6 +245,7 @@ function createSearchCommand(_ctx: CLIContext): Command {
             }
           }
           entry.apiKey = key;
+          if (t === 'deepseek' && opts.url) entry.url = opts.url.trim();
         }
 
         await runSetup({
@@ -324,11 +325,11 @@ function createSearchCommand(_ctx: CLIContext): Command {
             key: {
               type: 'string',
               secret: true,
-              description: 'API key (brave / tavily / bing).',
+              description: 'API key (brave / tavily / bing / deepseek).',
             },
             url: {
               type: 'url',
-              description: 'SearXNG instance URL (only for type=searxng).',
+              description: 'SearXNG instance URL or optional DeepSeek HTTPS API base URL.',
             },
           },
         },

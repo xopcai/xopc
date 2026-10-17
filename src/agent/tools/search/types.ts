@@ -18,7 +18,7 @@ export interface SearchProvider {
 }
 
 export interface ResolvedSearchProviderEntry {
-  type: 'brave' | 'tavily' | 'bing' | 'searxng';
+  type: 'brave' | 'tavily' | 'bing' | 'searxng' | 'deepseek';
   apiKey?: string;
   url?: string;
   disabled?: boolean;
