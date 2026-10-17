@@ -247,3 +247,16 @@ export class ProjectTrustStore {
     });
   }
 }
+
+/** Persisted decisions take precedence over host-provided temporary trust. */
+export function isProjectWorkspaceTrusted(
+  cwd: string,
+  options: {
+    trustStore?: ProjectTrustStore;
+    isWorkspaceTrusted?: (path: string) => boolean | null | undefined;
+  } = {},
+): boolean {
+  const decision = (options.trustStore ?? new ProjectTrustStore()).get(cwd);
+  if (decision !== null) return decision;
+  return options.isWorkspaceTrusted?.(canonicalizePath(cwd)) === true;
+}

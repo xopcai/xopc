@@ -1,7 +1,8 @@
-import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect, it } from 'vitest';
+import { ProjectTrustStore } from '../../../project-trust/trust-store.js';
 import { RepositoryInstructions } from '../repository-instructions.js';
 
 it('delivers scoped rules before edits and only acknowledges them at the next model request', async () => {
@@ -10,7 +11,7 @@ it('delivers scoped rules before edits and only acknowledges them at the next mo
     await mkdir(join(root, 'src/deep'), { recursive: true });
     await writeFile(join(root, 'AGENTS.md'), 'root rule');
     await writeFile(join(root, 'src/AGENTS.md'), 'source rule');
-    const loader = await RepositoryInstructions.open(root);
+    const loader = await RepositoryInstructions.open(root, { isWorkspaceTrusted: () => true });
     expect(await loader.load('.', true)).toContain('root rule'); loader.acknowledge();
     const patch = { patch: '*** Begin Patch\n*** Add File: src/deep/a.ts\n+x\n*** End Patch' };
     expect(await loader.forTool('apply_patch', patch)).toContain('source rule');
@@ -30,7 +31,7 @@ it('loads batch paths and surfaces newly discovered nested search instructions',
     await writeFile(join(root, 'AGENTS.md'), 'root rule');
     await writeFile(join(root, 'notes/AGENTS.md'), 'Use the documented index before broad searches.');
     await writeFile(join(root, 'notes/a.md'), 'evidence');
-    const loader = await RepositoryInstructions.open(root);
+    const loader = await RepositoryInstructions.open(root, { isWorkspaceTrusted: () => true });
     expect(await loader.forTool('data_batch', { operations: [{ id: 's', kind: 'file_search', paths: ['.'], patterns: ['evidence'] }] })).toContain('root rule');
     loader.acknowledge();
     const result = [{ type: 'text', text: JSON.stringify({ schemaVersion: 1, operations: [], fragments: [{
@@ -51,7 +52,7 @@ it('allows explicit reads of oversized instructions and reloads notices when the
     const content = 'Large repository rule.\n'.repeat(2_000);
     await writeFile(file, content);
     await writeFile(join(root, 'src/AGENTS.md'), 'nested rule');
-    const loader = await RepositoryInstructions.open(root);
+    const loader = await RepositoryInstructions.open(root, { isWorkspaceTrusted: () => true });
     const notice = await loader.forTool('exec_command', { cwd: '.' });
     expect(notice).toContain('32 KiB automatic inclusion limit');
     expect(notice).toContain(file);
@@ -68,4 +69,67 @@ it('allows explicit reads of oversized instructions and reloads notices when the
     await writeFile(file, 'shortened rule');
     expect(await loader.load('.', true)).toContain('shortened rule');
   } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+it('requires trust for root, scoped tool, and search-result instruction loading', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'untrusted-instructions-'));
+  try {
+    await mkdir(join(root, 'src'));
+    await writeFile(join(root, 'AGENTS.md'), 'private root rule');
+    await writeFile(join(root, 'src/AGENTS.md'), 'private nested rule');
+    const trustStore = new ProjectTrustStore(join(root, 'trust.json'));
+    const loader = await RepositoryInstructions.open(root, { trustStore });
+    const result = [{ type: 'text', text: JSON.stringify({ schemaVersion: 1, operations: [], fragments: [{
+      source: { kind: 'file', resource: join(root, 'src/a.ts') }, text: 'evidence', operationIds: ['s'],
+    }] }) }];
+    for (const decision of [null, false]) {
+      trustStore.set(root, decision);
+      expect(await loader.load('.', true)).toBe('');
+      expect(await loader.forTool('read_file', { path: 'src/a.ts' })).toBe('');
+      expect(await loader.forTool('write_file', { path: 'src/a.ts' })).toBe('');
+      expect(await loader.forTool('exec_command', { cwd: 'src' })).toBe('');
+      expect(await loader.forTool('data_batch', { operations: [{ id: 'r', kind: 'file_read', path: 'src/a.ts' }] })).toBe('');
+      expect(await loader.forDataResult(result)).toBe('');
+    }
+    trustStore.set(root, true);
+    expect(await loader.load('.', true)).toContain('private root rule');
+    loader.acknowledge();
+    expect(await loader.forDataResult(result)).toContain('private nested rule');
+    loader.acknowledge();
+    expect(await loader.forTool('read_file', { path: 'src/a.ts' })).toBe('');
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+it('honors persisted refusals over temporary grants and rechecks nested trust', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'revoked-instructions-'));
+  try {
+    await mkdir(join(root, 'src'));
+    await writeFile(join(root, 'AGENTS.md'), 'root rule');
+    await writeFile(join(root, 'src/AGENTS.md'), 'nested rule');
+    const trustStore = new ProjectTrustStore(join(root, 'trust.json'));
+    const loader = await RepositoryInstructions.open(root, { trustStore, isWorkspaceTrusted: () => true });
+    expect(await loader.load('.', true)).toContain('root rule');
+    trustStore.set(root, false);
+    expect(await loader.load('.', true)).toBe('');
+    expect(await loader.forTool('apply_patch', { patch: '*** Update File: src/a.ts' })).toBe('');
+    trustStore.set(root, true);
+    trustStore.set(join(root, 'src'), false);
+    expect(await loader.forTool('read_file', { path: 'src/a.ts' })).toBe('');
+    trustStore.set(join(root, 'src'), null);
+    expect(await loader.forTool('read_file', { path: 'src/a.ts' })).toContain('nested rule');
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+it('never includes instructions linked outside the repository even with temporary trust', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'linked-instructions-'));
+  const outside = await mkdtemp(join(tmpdir(), 'outside-instructions-'));
+  try {
+    await writeFile(join(outside, 'AGENTS.md'), 'outside rule');
+    await symlink(join(outside, 'AGENTS.md'), join(root, 'AGENTS.md'));
+    const loader = await RepositoryInstructions.open(root, { isWorkspaceTrusted: () => true });
+    await expect(loader.load('.', true)).rejects.toThrow('escapes repository');
+  } finally {
+    await rm(root, { recursive: true, force: true });
+    await rm(outside, { recursive: true, force: true });
+  }
 });

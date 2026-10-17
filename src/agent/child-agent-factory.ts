@@ -52,6 +52,7 @@ export interface DelegateChildProgressHooks {
 }
 
 export interface DelegateChildHandleOptions {
+  isWorkspaceTrusted?: (workspaceDir: string) => boolean | null | undefined;
   /** Host-owned completion signal, e.g. a validated structured result. */
   isComplete?: () => boolean;
   authorizeToolCall?: import('./orchestration/agent-turn-policy.js').AgentTurnPolicyOptions['authorizeToolCall'];
@@ -175,6 +176,7 @@ export function createDelegateChildHandle(options: DelegateChildHandleOptions): 
       try {
         const params: Parameters<typeof runXopcEmbeddedTurn>[0] = {
           conversationId, runId: randomUUID(), workspaceDir: options.workspace,
+          isWorkspaceTrusted: options.isWorkspaceTrusted,
           userMessage: { role: 'user', content: options.goal, timestamp: Date.now() },
           model: options.model, modelRef: `${options.model.provider}/${options.model.id}`,
           tools, transcriptRuntime: runtime, turnPolicy: policy, abortSignal: controller.signal,

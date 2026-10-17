@@ -1,0 +1,9 @@
+{
+  "activeRelease": "2026-10",
+  "services": {
+    "exporter": {
+      "config": "releases/2026-10/exporter/config.json",
+      "contract": "releases/2026-10/exporter/contract.md"
+    }
+  }
+}

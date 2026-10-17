@@ -13,10 +13,12 @@ import { EvalRunner, loadSuite } from '@agent-evals/runner';
 import { ArtifactStore, EvalStore } from '@agent-evals/storage';
 
 import { calibrationAdapter } from './benchmark-calibration.js';
+import { summarizeToolTrace } from './benchmark-diagnostics.js';
+import { growthCalibrationAdapter } from './growth-calibration.js';
 
 const repository = fileURLToPath(new URL('../../../../../', import.meta.url));
-const suiteDirectory = join(repository, 'evals/coder/suites/xopc-core');
 const { values } = parseArgs({ options: {
+  suite: { type: 'string', default: 'xopc-core' },
   mode: { type: 'string', default: 'calibration' },
   output: { type: 'string' },
   repetitions: { type: 'string', default: '1' },
@@ -25,11 +27,14 @@ const { values } = parseArgs({ options: {
   reasoning: { type: 'string', default: 'off' },
   'base-url': { type: 'string' },
 } });
+if (!['xopc-core', 'xopc-agent-growth'].includes(values.suite!)) throw new Error('Unknown benchmark suite');
+const suiteDirectory = join(repository, 'evals/coder/suites', values.suite!);
+const growth = values.suite === 'xopc-agent-growth';
 if (!['calibration', 'live'].includes(values.mode!)) throw new Error('--mode must be calibration or live');
 const repetitions = Number(values.repetitions);
 if (!Number.isInteger(repetitions) || repetitions < 1 || repetitions > 20) throw new Error('--repetitions must be 1–20');
 if (values.mode === 'live' && (!values.model || !values['base-url'])) throw new Error('Live mode requires --model provider/model and --base-url for an isolated Gateway; set XOPC_EVAL_TOKEN in the environment.');
-const output = resolve(values.output ?? `.xopc-evals/benchmark-v1/${new Date().toISOString().replaceAll(':', '-')}`);
+const output = resolve(values.output ?? `.xopc-evals/${values.suite}/${new Date().toISOString().replaceAll(':', '-')}`);
 mkdirSync(dirname(output), { recursive: true });
 mkdirSync(output, { recursive: false }); // Refuse to mix or overwrite experiment evidence.
 const temporary = mkdtempSync(join(tmpdir(), 'xopc-benchmark-v1-'));
@@ -43,7 +48,7 @@ function fingerprint() {
       else if (entry.isFile()) files[relative(repository, path)] = createHash('sha256').update(readFileSync(path)).digest('hex');
     }
   }
-  for (const path of ['evals/coder/packages', 'evals/coder/apps/cli/src', 'evals/coder/scripts', 'evals/coder/suites/xopc-core']) walk(join(repository, path));
+  for (const path of ['evals/coder/packages', 'evals/coder/apps/cli/src', 'evals/coder/scripts', `evals/coder/suites/${values.suite}`]) walk(join(repository, path));
   const runtimePaths = execFileSync('git', ['ls-files', '--cached', '--others', '--exclude-standard', '-z', '--', 'src', 'packages', 'extensions'], { cwd: repository, encoding: 'utf8' }).split('\0').filter(Boolean);
   for (const path of runtimePaths) {
     try { files[path] = createHash('sha256').update(readFileSync(join(repository, path))).digest('hex'); } catch { files[path] = 'missing'; }
@@ -53,28 +58,29 @@ function fingerprint() {
   return files;
 }
 const initialHashes = fingerprint();
-const manifest: Record<string, unknown> = { schemaVersion: 1, benchmark: 'xopc-core', version: '1.0.2',
+const manifest: Record<string, unknown> = { schemaVersion: 1, benchmark: values.suite, version: growth ? '0.1.0' : '1.0.2',
   evidenceClass: values.mode === 'live' ? 'live-direct-agent' : 'harness-calibration',
   sourceCommit: execFileSync('git', ['rev-parse', 'HEAD'], { cwd: repository, encoding: 'utf8' }).trim(),
   sourceHashes: initialHashes, startedAt: new Date().toISOString(), node: process.version,
   limitations: ['Direct agent workspace evaluation; does not grade asynchronous Personal Task delivery or authenticated artifact downloads.',
-    'Changes occur between completed turns; artifact restoration is explicitly requested.',
-    'Frozen synthetic research facts; prose semantics are not independently model-graded.',
+    growth ? 'No mid-run requirement changes, autonomous fault recovery or full production-repository tasks in this slice.' : 'Changes occur between completed turns; artifact restoration is explicitly requested.',
+    growth ? 'Six development scenarios in dependency-free multi-module fixture projects; not a held-out generalization or large-repository score.' : 'Frozen synthetic research facts; prose semantics are not independently model-graded.',
     'Calibration uses supplied reference answers and must never be reported as model performance.'] };
 writeFileSync(join(output, 'manifest.json'), JSON.stringify(manifest, null, 2));
 try {
-  const fixture = JSON.parse(execFileSync(process.execPath, [join(suiteDirectory, 'create-fixture.mjs'), temporary], { encoding: 'utf8' })) as { repo: string; commit: string };
+  const fixture = JSON.parse(execFileSync(process.execPath, [join(suiteDirectory, 'create-fixture.mjs'), temporary], { encoding: 'utf8' })) as { repo: string; commit: string; caseCommits?: Record<string, string> };
   execFileSync('git', ['bundle', 'create', join(output, 'fixture.bundle'), '--all'], { cwd: fixture.repo });
   process.env.EVAL_FIXTURE_REPO = fixture.repo;
   process.env.EVAL_FIXTURE_COMMIT = fixture.commit;
+  for (const [id, commit] of Object.entries(fixture.caseCommits ?? {})) process.env[`EVAL_FIXTURE_${id}_COMMIT`] = commit;
   const suite = await loadSuite(join(suiteDirectory, 'suite.yaml'));
-  const spec: ExperimentSpec = { name: `xopc benchmark v1 (${values.mode})`, repetitions, randomSeed: 'xopc-core-v1',
+  const spec: ExperimentSpec = { name: `${suite.id}@${suite.version} (${values.mode})`, repetitions, randomSeed: growth ? `${suite.id}@${suite.version}` : 'xopc-core-v1',
     variants: values.mode === 'live'
       ? [{ id: 'candidate', adapter: 'xopc', agentId: values.agent!, model: values.model!, reasoning: values.reasoning!, config: { baseUrl: values['base-url']! } }]
-      : [{ id: 'broken', adapter: 'xopc-core-calibration' }, { id: 'reference', adapter: 'xopc-core-calibration' }] };
-  Object.assign(manifest, { version: suite.version, fixtureCommit: fixture.commit, suiteHash: suite.contentHash, spec });
+      : [{ id: 'broken', adapter: growth ? 'xopc-growth-calibration' : 'xopc-core-calibration' }, { id: 'reference', adapter: growth ? 'xopc-growth-calibration' : 'xopc-core-calibration' }] };
+  Object.assign(manifest, { version: suite.version, fixtureCommit: fixture.commit, ...(fixture.caseCommits ? { fixtureCaseCommits: fixture.caseCommits } : {}), suiteHash: suite.contentHash, spec });
   writeFileSync(join(output, 'manifest.json'), JSON.stringify(manifest, null, 2));
-  const adapter = values.mode === 'live' ? new XopcGatewayAdapter() : calibrationAdapter();
+  const adapter = values.mode === 'live' ? new XopcGatewayAdapter() : growth ? growthCalibrationAdapter() : calibrationAdapter();
   const originalRun = adapter.run.bind(adapter);
   adapter.run = async (...args) => {
     console.log(`${args[0].evalCase.id} / ${args[0].variant.id}`);
@@ -84,7 +90,8 @@ try {
   const detail = store.getExperiment(result.experimentId)!;
   writeFileSync(join(output, 'results.json'), JSON.stringify(detail, null, 2));
   const cases = result.runs.map(run => {
-    const record = store.getRun(run.runId)!.run;
+    const runDetail = store.getRun(run.runId)!;
+    const record = runDetail.run;
     const usageEvents = store.getRun(run.runId)!.events.filter(event => event.type === 'model.response')
       .map(event => (JSON.parse(String(event.payload_json)) as { payload?: { usage?: Record<string, number> } }).payload?.usage);
     const observedTokens = usageEvents.length > 0 && usageEvents.every(usage => typeof usage?.total === 'number')
@@ -93,7 +100,8 @@ try {
       status: run.status, artifactChecksPassed: run.grades.length > 0 && run.grades.every(grade => grade.passed),
       durationMs: record.ended_at ? Date.parse(String(record.ended_at)) - Date.parse(String(record.started_at)) : null,
       observedResponseTokens: observedTokens,
-      usageCoverage: 'Observed completed responses only; interrupted requests may be unreported.' };
+      usageCoverage: 'Observed completed responses only; interrupted requests may be unreported.',
+      ...(growth ? { diagnostics: summarizeToolTrace(runDetail.events, runDetail.artifacts) } : {}) };
   });
   const sourceDrift = JSON.stringify(initialHashes) !== JSON.stringify(fingerprint());
   const variants = spec.variants.map(variant => {
@@ -109,7 +117,7 @@ try {
       durationsMs, totalReportedTokens: usage.length === expectedRuns && usage.every(item => typeof item.total === 'number')
         ? usage.reduce((sum, item) => sum + item.total!, 0) : null,
       statuses: Object.fromEntries(['passed','failed','error','timed_out','budget_exceeded'].map(status => [status, rows.filter(run => run.status === status).length])),
-      categories: ['research','data','change','recovery'].map(category => {
+      categories: (growth ? ['information','convergence','project'] : ['research','data','change','recovery']).map(category => {
         const ids = new Set(suite.cases.filter(c => c.tags.includes(category)).map(c => c.id));
         return { category, expectedRuns: ids.size * repetitions, passed: rows.filter(run => ids.has(String(run.case_id)) && run.status === 'passed').length };
       }) };
@@ -120,7 +128,7 @@ try {
     passed, sourceDrift, variants, cases, falseCompletionRate: null, costPerSuccess: null,
     unmeasured: ['false-completion semantics', 'complete provider cost coverage', 'autonomous background recovery', 'research prose quality'] };
   writeFileSync(join(output, 'summary.json'), JSON.stringify(summary, null, 2));
-  writeFileSync(join(output, 'summary.md'), [`# xopc benchmark v1 — ${manifest.evidenceClass}`, '',
+  writeFileSync(join(output, 'summary.md'), [`# ${suite.id}@${suite.version} — ${manifest.evidenceClass}`, '',
     ...variants.map(v => `- ${v.id}: ${v.passed}/${v.expectedRuns} (${v.observedRuns} observed)`), '',
     '| Case | Variant | Status | Artifact checks | Observed response tokens |',
     '| --- | --- | --- | --- | --- |',

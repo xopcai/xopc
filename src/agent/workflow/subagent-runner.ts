@@ -45,6 +45,7 @@ const log = createLogger('Agent:WorkflowSubagent');
 const DEFAULT_MAX_ITERATIONS = 30;
 
 export interface DelegateSubagentRunnerDeps {
+  isWorkspaceTrusted?: (workspaceDir: string) => boolean | null | undefined;
   workspace: string;
   bus: MessageBus;
   agentId?: string;
@@ -82,6 +83,7 @@ export class DelegateSubagentRunner implements SubagentRunner {
     const streamMode = resolveSubagentStreamMode(this.deps.getConfig);
 
     const childOptions: DelegateChildHandleOptions = {
+      isWorkspaceTrusted: this.deps.isWorkspaceTrusted,
       workspace: this.deps.workspace,
       goal: fullPrompt,
       requesterConversationId: opts.sessionMetadata?.parentConversationId,

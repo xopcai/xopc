@@ -9,7 +9,7 @@ export function buildMemorySection(params: {
   if (params.includeMemorySection === false) return '';
   const names = params.availableTools;
   const hasRecall = ['user_context_search', 'user_context_get', 'knowledge_search', 'knowledge_get',
-    'session_recall', 'session_search'].some((name) => names.has(name));
+    'session_recall', 'session_search', 'user_context_read', 'knowledge_read'].some((name) => names.has(name));
   if (!hasRecall && !params.hasProfileMemory) return '';
 
   const lines = [
@@ -20,6 +20,8 @@ export function buildMemorySection(params: {
     'When explaining or correcting a memory, inspect its source and distinguish explicit user statements from working assumptions. Current user corrections take precedence. If evidence cannot be recovered, say what remains uncertain; do not claim a memory was saved, corrected, or forgotten without a successful operation.',
     'When exact or additional context is needed:',
   ];
+  if (names.has('user_context_read')) lines.push('- Use `user_context_read` for user facts and preferences.');
+  if (names.has('knowledge_read')) lines.push('- Use `knowledge_read` for scoped project decisions and knowledge.');
   if (names.has('user_context_search')) {
     lines.push('- Use `user_context_search` for user identity, preferences, routines, and current state.');
   }
@@ -47,17 +49,12 @@ export function buildExternalMemorySection(text: string | undefined): string {
   return value ? `## External knowledge provider\n\n${value}` : '';
 }
 
-export function buildSkillsSection(hasSkillTools: boolean): string {
-  if (!hasSkillTools) return '';
+export function buildSkillsSection(toolNames: string[]): string {
+  const view = toolNames.find(name => name.trim().toLowerCase() === 'skill_view')?.trim();
+  if (!view) return '';
   return [
     '## Skills (mandatory)',
-    'Before replying: scan <available_skills> <description> entries.',
-    '- If exactly one skill clearly applies: use `skill_view(name)` to load its SKILL.md, then follow it.',
-    '- If multiple could apply: choose the most specific one, then load/follow it.',
-    '- If none clearly apply: do not load any SKILL.md.',
-    'Constraints: never load more than one skill up front; only load after selecting.',
-    '- When a skill drives external API writes, assume rate limits: prefer fewer larger writes, avoid tight one-item loops, serialize bursts when possible, and respect 429/Retry-After.',
-    '',
-    '**Division of labor:** Skills contain procedures; user context and knowledge contain declarative facts.',
+    `Scan <available_skills> descriptions before replying. Load the most specific applicable skill with ${view}(name); load no skill when none applies, and at most one up front.`,
+    'Follow its procedures within the authorized task. For external writes, batch requests, serialize bursts, and respect 429/Retry-After.',
   ].join('\n');
 }
