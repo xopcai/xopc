@@ -3,7 +3,7 @@ import type { CSSProperties } from 'react';
 import { cn } from '@/lib/cn';
 import type { DesktopPetAction, DesktopPetDefinition } from '@/types/electron';
 
-const FRAME_BLEED_PX = 8;
+import { LoopiDesktopPet } from './loopi-desktop-pet';
 
 export function DesktopPetSprite({
   pet,
@@ -20,9 +20,12 @@ export function DesktopPetSprite({
   reducedMotion?: boolean;
   className?: string;
 }) {
-  const animation = pet.animations[action];
   const defaultDisplayHeight = size === 'tiny' ? 40 : size === 'small' ? 54 : 112;
   const displayHeight = Math.max(1, Math.round(displayHeightOverride ?? defaultDisplayHeight));
+  if (pet.renderer === 'loopi') {
+    return <LoopiDesktopPet action={action} displayHeight={displayHeight} reducedMotion={reducedMotion} className={className} />;
+  }
+  const animation = pet.animations[action];
   const scale = displayHeight / animation.frameHeight;
   const displayWidth = Math.round(animation.frameWidth * scale);
   const sheetHeight = Math.max(
@@ -39,12 +42,10 @@ export function DesktopPetSprite({
       .filter((item) => item.imageDataUrl === animation.imageDataUrl)
       .map((item) => item.offsetX + item.frameWidth * item.frameCount),
   );
-  const visibleFrameHeight = Math.min(animation.frameHeight + FRAME_BLEED_PX, sheetHeight - animation.offsetY);
-  const displayFrameHeight = Math.round(visibleFrameHeight * scale);
   const durationSeconds = Math.max(0.1, animation.frameCount / animation.fps);
   const style = {
     width: `${displayWidth}px`,
-    height: `${displayFrameHeight}px`,
+    height: `${displayHeight}px`,
     backgroundSize: `${Math.round(sheetWidth * scale)}px ${Math.round(sheetHeight * scale)}px`,
     '--pet-frame-count': animation.frameCount,
     '--pet-frame-start-x': `${-animation.offsetX * scale}px`,

@@ -782,17 +782,9 @@
     "customBadge": "自定义",
     "customPets": "自定义宠物",
     "builtinPets": {
-      "ember": {
-        "name": "小焰",
-        "description": "温暖又可靠，每次事情向前推进都会亮起一点小光。"
-      },
-      "scout": {
-        "name": "探探",
-        "description": "好奇又机灵，随时准备追踪下一条线索。"
-      },
-      "sprout": {
-        "name": "芽芽",
-        "description": "安静又稳定，陪在旁边但不打断你的节奏。"
+      "loopi": {
+        "name": "Loopi",
+        "description": "安静陪伴、专注工作，把重要的决定留给你。"
       }
     },
     "invalidPets": "部分自定义宠物无法加载",
