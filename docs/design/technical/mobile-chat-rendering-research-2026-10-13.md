@@ -208,6 +208,6 @@ P1 已能带来更平稳的输出节奏。P2 完成后再做 P3，避免把动�
 - 阅读三端实时事件、状态、Markdown、列表、滚动、图片与相关历史接口，核对官方 ArkUI、Compose、SwiftUI 和解析库资料。
 - 鸿蒙 host 回归：6 个文件、49 个测试通过，覆盖 markdown、messageLink、chatCompactStream、chatPresentation、chatReplySpace、chatHistoryScroll。这些证明现有纯逻辑用例通过，不等于 ArkUI 节点复用、点击或帧率验收。
 - 没有 Android/iOS 构建、模拟器 UI 验收或三端真机性能数据；未修改移动端源码。
-- 近期前后台恢复报告已有各端验证记录，但不是本轮长回复性能基线，须保留现有修复并补相同场景回归。[前后台恢复调研](/Users/micjoyce/develop/github/xopc/docs/design/technical/mobile-chat-foreground-recovery-2026-10-12.md)
+- 近期前后台恢复报告已有各端验证记录，但不是本轮长回复性能基线，须保留现有修复并补相同场景回归。[前后台恢复与验证](../mobile-background-turn-continuity.md)
 
 开始实施时，先完成鸿蒙 P0/P1，用同一组事件与交互场景证明提交有界、历史稳定、滚动不争抢。再按上述差异落实 Android 和 iOS，避免三端机械复制同一套 renderer 或动画参数。

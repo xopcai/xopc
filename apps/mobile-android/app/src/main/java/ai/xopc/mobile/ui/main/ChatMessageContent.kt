@@ -52,6 +52,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
@@ -152,12 +155,13 @@ internal fun ChatMessageCard(message: ConversationMessage, onMore: () -> Unit,
       if (message.text.isNotBlank()) {
         if (isUser) {
           Text(message.text, style = MaterialTheme.typography.bodyLarge.copy(lineHeight = 25.sp),
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().then(if (showPreview)
+              Modifier.messagePreviewFade(MaterialTheme.colorScheme.primaryContainer) else Modifier),
             maxLines = if (showPreview) messagePreviewLineLimit(message.role) else Int.MAX_VALUE,
             overflow = TextOverflow.Ellipsis)
           if (showPreview) TextButton(onClick = onViewMore, modifier = Modifier.heightIn(min = 48.dp)
             .testTag("message-view-more-${message.id}")) {
-            Text(stringResource(R.string.assistant_view_more))
+            Text(stringResource(R.string.assistant_view_more), color = MaterialTheme.colorScheme.onSurfaceVariant)
           }
         } else if (showPreview) MessageTextPreview(message.id, message.text,
           messagePreviewLineLimit(message.role), onViewMore)
@@ -222,11 +226,24 @@ internal fun ChatMessageCard(message: ConversationMessage, onMore: () -> Unit,
 
 @Composable
 private fun MessageTextPreview(messageId: String, text: String, lineLimit: Int, onViewMore: () -> Unit) {
-  MarkdownContent(text, modifier = Modifier.testTag("message-preview-$messageId"),
+  MarkdownContent(text, modifier = Modifier.testTag("message-preview-$messageId")
+    .messagePreviewFade(MaterialTheme.colorScheme.surface),
     maxLines = lineLimit)
   TextButton(onClick = onViewMore, modifier = Modifier.heightIn(min = 48.dp)
     .testTag("message-view-more-$messageId")) {
-    Text(stringResource(R.string.assistant_view_more))
+    Text(stringResource(R.string.assistant_view_more), color = MaterialTheme.colorScheme.onSurfaceVariant)
+  }
+}
+
+private fun Modifier.messagePreviewFade(background: Color): Modifier = drawWithCache {
+  val fade = Brush.verticalGradient(
+    colors = listOf(background.copy(alpha = 0f), background),
+    startY = (size.height - 24.dp.toPx()).coerceAtLeast(0f),
+    endY = size.height,
+  )
+  onDrawWithContent {
+    drawContent()
+    drawRect(fade)
   }
 }
 
