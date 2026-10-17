@@ -73,7 +73,9 @@ describe('Agent profile runtime context', () => {
       expect(prompt).toContain('Your current role is "Astronomy educator".');
       expect(sent.some(message => message.role === 'user' && JSON.stringify(message.content)
         .includes('agent_configuration_updated'))).toBe(true);
-      expect(prompt).toContain('Write all user-facing prose in French.');
+      expect(prompt).toContain('Write user-facing prose in the language of the current user request.');
+      expect(prompt).toContain('Only when the current user message has no identifiable language, fall back to the Agent primary language: French.');
+      expect(prompt).not.toContain('Write all user-facing prose in French.');
       expect(prompt).toContain('<cwd>');
       expect(getCurrentTools(captured as never).map(tool => tool.name)).toContain('identity_probe');
       expect(prompt).not.toContain('OLD SYSTEM PROFILE');
