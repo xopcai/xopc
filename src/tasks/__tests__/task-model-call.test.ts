@@ -61,6 +61,37 @@ describe('task background model recovery', () => {
     expect(complete).toHaveBeenCalledTimes(2);
     expect(complete.mock.calls.every(args => args[2].signal === signal)).toBe(true);
   });
+  it('repairs English acceptance criteria for a Chinese task without losing requirements', async () => {
+    const english = { objective: '查找官方购票方式', requiredCapabilities: ['web_research'],
+      expectedOutputs: ['购票说明'], acceptanceCriteria: [
+        'The response contains direct clickable URLs to official ticketing pages.',
+        'The response includes the source and retrieval date.',
+      ] };
+    const chinese = { ...english, acceptanceCriteria: [
+      '购票说明包含可点击的官方购票页面链接。', '购票说明包含信息来源和查询日期。',
+    ] };
+    complete.mockResolvedValueOnce(success(JSON.stringify(english)))
+      .mockResolvedValueOnce(success(JSON.stringify(chinese)));
+    const planned = await new ModelTaskContractPlanner().plan({ objective: '查找官方购票方式',
+      taskContext: 'Research the official West Bund Museum ticketing links.' });
+    expect(planned.capabilityPlanning).toBe('complete');
+    expect(planned.acceptanceCriteria).toEqual(chinese.acceptanceCriteria);
+    expect(complete).toHaveBeenCalledTimes(2);
+    const prompt = complete.mock.calls[0][1].messages[0].content;
+    expect(prompt).toContain('Simplified Chinese');
+    expect(complete.mock.calls[1][1].messages.at(-1).content).toContain('wrong language');
+  });
+
+  it('does not persist untranslated planner criteria after both repair attempts fail', async () => {
+    complete.mockResolvedValue(success(JSON.stringify({ objective: '查找官方购票方式',
+      expectedOutputs: ['购票说明'], requiredCapabilities: ['web_research'],
+      acceptanceCriteria: ['The response includes verified official ticketing URLs.'] })));
+    const planned = await new ModelTaskContractPlanner().plan({ objective: '查找官方购票方式', locale: 'zh' });
+    expect(planned.capabilityPlanning).toBe('unavailable');
+    expect(planned.acceptanceCriteria[0]).toBe('已交付：查找官方购票方式');
+    expect(complete).toHaveBeenCalledTimes(2);
+  });
+
   it('marks operation planning unavailable after both malformed responses', async () => {
     complete.mockResolvedValue(success('{"expectedOutputs":[{"path":"report.md"}]}'));
     expect((await new ModelTaskContractPlanner().plan({ objective: 'Deliver' })).capabilityPlanning).toBe('unavailable');

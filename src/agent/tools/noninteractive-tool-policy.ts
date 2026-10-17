@@ -3,7 +3,7 @@ import { resolveEffectiveAgentConfigForAgent, resolveEffectiveAgentConfigForSess
 import { createAgentTurnPolicy } from '../orchestration/agent-turn-policy.js';
 
 /** Noninteractive callers cannot silently turn an ask policy into an allow. */
-export function createDelegationParentPolicy(options: { getConfig: () => Config | undefined; conversationId?: string; agentId?: string }) {
+export function createNoninteractiveToolPolicy(options: { getConfig: () => Config | undefined; conversationId?: string; agentId?: string }) {
   const policies = (name: string, args: unknown) => {
     const config = options.getConfig();
     if (!config) return [];
@@ -23,7 +23,7 @@ export function createDelegationParentPolicy(options: { getConfig: () => Config 
   return createAgentTurnPolicy({
     authorizeToolCall: async context => {
       const blocked = policies(context.toolCall.name, context.args).find(policy => policy.mode !== 'allow');
-      return blocked ? { block: true, reason: `${blocked.id} requires parent authorization (${blocked.mode}).` } : undefined;
+      return blocked ? { block: true, reason: `${blocked.id} requires authorization (${blocked.mode}).` } : undefined;
     },
     resolveToolLimit: (name, args) => {
       const limited = policies(name, args).filter(policy => policy.maxCallsPerTurn).sort((a, b) => a.maxCallsPerTurn! - b.maxCallsPerTurn!)[0];

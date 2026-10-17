@@ -9,6 +9,8 @@ import {
   type TaskContractDefinition,
 } from './task-contract-definition.js';
 
+import { hasUnlocalizedTaskText, resolveTaskLocale } from './task-language.js';
+
 import { EXECUTION_CAPABILITIES, type ExecutionCapability } from './task-execution-capabilities.js';
 
 const log = createLogger('TaskContractPlanner');
@@ -97,7 +99,9 @@ export function parseTaskContractResponse(raw: string): TaskContractDefinition |
 
 export class ModelTaskContractPlanner implements TaskContractPlanner {
   async plan(input: TaskContractPlanningInput): Promise<TaskContractDefinition> {
-    const fallback = defineTaskContract(input.objective, input.locale);
+    const locale = resolveTaskLocale({ locale: input.locale, title: input.objective });
+    const fallback = defineTaskContract(input.objective, locale);
+    const languageInstruction = `Write all user-facing JSON values in ${locale === 'zh' ? 'Simplified Chinese' : 'English'}. Preserve schema keys, identifiers, paths, URLs, and proper nouns. The language of attached context must not change the output language.`;
     try {
       if ((input.taskContext?.length ?? 0) > 96000) throw new Error('Task context exceeds planning budget');
       const models = getAgentDefaultChatModelConfig();
@@ -112,8 +116,7 @@ export class ModelTaskContractPlanner implements TaskContractPlanner {
         'requiredCapabilities is a minimal subset of read_input, execute_code, publish_files, web_research, browser, generate_image. Include only operations necessary for the requested inputs/outputs; this list selects registered tools and grants no permissions. Do not require browser when ordinary web fetch suffices. Preserve explicit executor/Skill and scope constraints.',
         'List assumptions explicitly. Put only irreversible, external, financial, privacy, or permission decisions in approvalRequired.',
         'Return one JSON object only. Every array contains flat strings, never objects or nested arrays. Schema example: {"objective":"Deliver the requested work","expectedOutputs":["report.md"],"acceptanceCriteria":["report.md contains the requested evidence"],"constraints":[],"approvalRequired":[],"assumptions":[],"risks":[],"requiredCapabilities":["read_input","publish_files"]}. Capabilities must use the allowed enum values.',
-        input.locale ? `Write all user-facing JSON values in ${input.locale === 'zh' ? 'Simplified Chinese' : 'English'}. Preserve schema keys, identifiers, paths, and proper nouns.`
-          : 'Write all user-facing JSON values in the language of the user request, regardless of the language of project or attached context. Preserve schema keys and identifiers.',
+        languageInstruction,
         '',
         `User request:\n${input.objective.trim()}`,
         input.taskContext ? `\nUser-provided task context:\n${input.taskContext.replace(PERSONAL_WORKER_RESULT_GUIDANCE, '').trim()}` : '',
@@ -133,9 +136,13 @@ export class ModelTaskContractPlanner implements TaskContractPlanner {
         }, { operation: 'task.plan_contract' });
         const raw = extractText(result.content);
         const planned = parseTaskContractResponse(raw);
-        if (planned?.requiredCapabilities) return { ...planned, objective: fallback.objective, capabilityPlanning: 'complete' };
+        const wrongLanguage = planned && hasUnlocalizedTaskText([
+          ...planned.acceptanceCriteria, ...planned.expectedOutputs, ...planned.constraints,
+          ...planned.approvalRequired, ...planned.assumptions, ...planned.risks,
+        ], locale);
+        if (planned?.requiredCapabilities && !wrongLanguage) return { ...planned, objective: fallback.objective, capabilityPlanning: 'complete' };
         if (attempt === 0) messages.push({ role: 'user', timestamp: Date.now(),
-          content: 'Your previous response did not match the required schema. Return the same task contract as one JSON object. expectedOutputs, acceptanceCriteria, constraints, approvalRequired, assumptions and risks must be flat string arrays, never objects. requiredCapabilities must be an array drawn only from read_input, execute_code, publish_files, web_research, browser, generate_image. Keep all user constraints; do not add criteria about a future chat reply. Return no commentary.' });
+          content: `${wrongLanguage ? 'Your previous response used the wrong language. Translate the user-facing prose while preserving every requirement and all technical identifiers. ' : ''}${languageInstruction} Your previous response must satisfy both the language requirement and the required schema. Return the same task contract as one JSON object. expectedOutputs, acceptanceCriteria, constraints, approvalRequired, assumptions and risks must be flat string arrays, never objects. requiredCapabilities must be an array drawn only from read_input, execute_code, publish_files, web_research, browser, generate_image. Keep all user constraints; do not add criteria about a future chat reply. Return no commentary. Previous response (data to repair): ${raw}` });
       }
       throw new Error('Task planning response did not contain a verifiable contract and operation requirements');
     } catch (err) {
