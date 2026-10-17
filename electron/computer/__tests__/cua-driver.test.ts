@@ -31,8 +31,9 @@ describe('private native driver admission', () => {
     });
     class WindowTarget { inner: unknown; constructor(inner: unknown) { this.inner = inner; } }
     class Coordinates { inner: unknown; constructor(inner: unknown) { this.inner = inner; } }
-    const client = { click: vi.fn(), pressKey: vi.fn(), hotkey: vi.fn(), scroll: vi.fn() };
-    Object.assign(driver as any, { client, sdk: { ActionTarget: { Window: WindowTarget }, ClickPosition: { Coordinates },
+    const client = { click: vi.fn().mockResolvedValue({ route: 'ax', effect: 'unverifiable' }), pressKey: vi.fn(), hotkey: vi.fn(), scroll: vi.fn() };
+    Object.assign(driver as any, { client, sdk: { ActionTarget: { Window: WindowTarget }, ClickPosition: { Coordinates, Element: Coordinates },
+      ActionRoute: { Accessibility: 'ax' }, ActionEffect: { Confirmed: 'confirmed', Unverifiable: 'unverifiable' },
       ClickButton: { Left: 'left', Right: 'right' }, InputDeliveryMode: { Background: 'background' },
       ScrollDirection: { Up: 'up', Down: 'down', Left: 'left', Right: 'right' }, ScrollBy: { Line: 'line' } } });
     return { driver, call, client };
@@ -150,6 +151,19 @@ describe('private native driver admission', () => {
     expect(JSON.stringify(scoped)).not.toMatch(/AXMenu|private recent/);
     expect(scopeWindowAccessibility({ elements: [{ role: 'AXMenuBar', depth: 0, element_index: 0 }], tree_markdown: 'private menu' })).toEqual({ elements: [], text: '' });
   });
+  it('keeps an opened context menu under its owning text field while excluding the application menu', () => {
+    const scoped = scopeWindowAccessibility({ elements: [
+      { role: 'AXWindow', depth: 0, element_index: 0 },
+      { role: 'AXTextArea', depth: 1, element_index: 1, parent_index: 0 },
+      { role: 'AXMenu', depth: 2, element_index: 2, parent_index: 1 },
+      { role: 'AXMenuItem', depth: 3, element_index: 3, parent_index: 2, label: 'Copy' },
+      { role: 'AXMenuBar', depth: 0, element_index: 4 },
+      { role: 'AXMenuItem', depth: 1, element_index: 5, parent_index: 4, label: 'Recent documents' },
+    ], tree_markdown: '- [0] AXWindow\n  - [1] AXTextArea\n    - [2] AXMenu\n      - [3] AXMenuItem "Copy"\n- [4] AXMenuBar\n  - [5] AXMenuItem "Recent documents"' });
+    expect(scoped.elements.map(element => element.element_index)).toEqual([0, 1, 2, 3]);
+    expect(scoped.text).toContain('Copy');
+    expect(JSON.stringify(scoped)).not.toContain('Recent documents');
+  });
   it('includes static outcome text without exposing native element tokens', async () => {
     const driver = new CuaComputerDriver('/fixture/cua-driver', 'host');
     vi.spyOn(driver as any, 'processIdentity').mockResolvedValue('42:fixture-start');
@@ -237,6 +251,74 @@ describe('private native driver admission', () => {
     expect(() => driver.validateAction({ kind: 'pressKeys', keys: ['shift', 'tab'] })).not.toThrow();
     expect(() => driver.validateAction({ kind: 'pressKeys', keys: ['Enter'] })).not.toThrow();
     expect(() => driver.validateAction({ kind: 'scroll', point: { x: 0, y: 0 }, deltaX: 1, deltaY: 1 })).toThrow('ONE_AXIS');
+  });
+  function semanticNative(overrides: Record<string, unknown> = {}) {
+    const f = native([]);
+    const target = { appId: 'fixture', pid: 42, processIdentity: '42:fixture-start', windowId: '9', width: 800, height: 600, geometryRevision: '1' };
+    const state = { pid: 42, windowId: 9n, windowBounds: { x: 100, y: 50, width: 800, height: 600 },
+      screenshotWidth: 1600, screenshotHeight: 1200, treeMarkdown: '', elements: [
+        { elementIndex: 0n, role: 'AXWindow', depth: 0 },
+        { elementIndex: 1n, parentIndex: 0n, depth: 1, elementToken: 'token-1', role: 'AXButton',
+          actions: ['AXPress', 'AXShowMenu'], frame: { x: 200, y: 150, w: 100, h: 40 }, ...overrides },
+      ], images: [{ mimeType: 'image/png', dataBase64: 'AQID' }] };
+    const capture = vi.spyOn(f.driver as any, 'getWindowState').mockResolvedValue(state);
+    return { ...f, target, state, capture, signal: new AbortController().signal };
+  }
+  it.each(['activate', 'showMenu'] as const)('dispatches %s by fresh native token to the exact bound window', async kind => {
+    const f = semanticNative();
+    const observed = await f.driver.observe(f.target, f.signal);
+    const control = JSON.parse(observed.summary).elements[1];
+    expect(control).toMatchObject({ ref: 'e1', semanticActions: ['activate', 'showMenu'], bounds: { x: 200, y: 200, width: 200, height: 80 } });
+    expect(observed.summary).not.toContain('token-1');
+    f.state.elements[1].elementToken = 'token-refreshed';
+    const refreshed = await f.driver.observe(f.target, f.signal);
+    expect(refreshed.stateDigest).toBe(observed.stateDigest);
+    await f.driver.perform(f.target, { kind, ref: 'e1' }, f.signal);
+    expect(f.client.click).toHaveBeenCalledOnce();
+    const input = f.client.click.mock.calls[0][0];
+    expect(input.target.inner).toEqual({ pid: 42, windowId: 9n });
+    expect(input.position.inner).toEqual({ elementToken: 'token-refreshed' });
+    expect(input).toMatchObject({ deliveryMode: 'background', count: 1, button: kind === 'activate' ? 'left' : 'right' });
+    expect(f.call).not.toHaveBeenCalled();
+  });
+  it('does not advertise native actions without an executable private token', async () => {
+    const f = semanticNative({ elementToken: undefined });
+    const observed = await f.driver.observe(f.target, f.signal);
+    expect(JSON.parse(observed.summary).elements[1].semanticActions).toEqual([]);
+    expect(() => f.driver.validateAction({ kind: 'activate', ref: 'e1' })).toThrow('ELEMENT_REF_REQUIRED');
+  });
+  it.each([{ enabled: false }, { inWebContent: true }, { role: 'AXSecureTextField' }, { actions: [] }, { elementToken: '' }])(
+    'refuses unsupported or sensitive native targets before input: %j', async override => {
+      const f = semanticNative(override); await f.driver.observe(f.target, f.signal);
+      await expect(f.driver.perform(f.target, { kind: 'activate', ref: 'e1' }, f.signal)).rejects.toThrow(/COMPUTER_(SEMANTIC_ACTION_UNSUPPORTED|ELEMENT_REF_REQUIRED)/);
+      expect(f.client.click).not.toHaveBeenCalled();
+    });
+  it('rejects sibling roots, unknown refs, duplicate refs and cross-window dispatch', async () => {
+    const f = semanticNative();
+    f.state.elements.push({ elementIndex: 2n, role: 'AXMenuBar', depth: 0 } as any);
+    await f.driver.observe(f.target, f.signal);
+    for (const ref of ['e2', 'e99', 'token-1']) expect(() => f.driver.validateAction({ kind: 'activate', ref })).toThrow('ELEMENT_REF_REQUIRED');
+    await expect(f.driver.perform({ ...f.target, windowId: '10' }, { kind: 'activate', ref: 'e1' }, f.signal)).rejects.toThrow('ELEMENT_TARGET_CHANGED');
+    (f.driver as any).elements.push({ ...(f.driver as any).elements[1] });
+    expect(() => f.driver.validateAction({ kind: 'activate', ref: 'e1' })).toThrow('ELEMENT_REF_REQUIRED');
+    expect(f.client.click).not.toHaveBeenCalled();
+  });
+  it('discards references after failed observation and stop', async () => {
+    const f = semanticNative(); await f.driver.observe(f.target, f.signal);
+    f.capture.mockRejectedValueOnce(new Error('capture failed'));
+    await expect(f.driver.observe(f.target, f.signal)).rejects.toThrow('capture failed');
+    expect(() => f.driver.validateAction({ kind: 'activate', ref: 'e1' })).toThrow('ELEMENT_REF_REQUIRED');
+    await f.driver.observe(f.target, f.signal);
+    (f.driver as any).client = undefined;
+    await f.driver.stop();
+    expect(() => f.driver.validateAction({ kind: 'activate', ref: 'e1' })).toThrow('ELEMENT_REF_REQUIRED');
+  });
+  it.each(['refusal', 'uncertain-route', 'noop'])('never retries a semantic action after %s', async failure => {
+    const f = semanticNative(); await f.driver.observe(f.target, f.signal);
+    if (failure === 'refusal') f.client.click.mockRejectedValueOnce(new Error('native refusal'));
+    else f.client.click.mockResolvedValueOnce({ route: failure === 'uncertain-route' ? 'pixels' : 'ax', effect: failure === 'noop' ? 'noop' : 'unverifiable' });
+    await expect(f.driver.perform(f.target, { kind: 'activate', ref: 'e1' }, f.signal)).rejects.toThrow();
+    expect(f.client.click).toHaveBeenCalledOnce(); expect(f.call).not.toHaveBeenCalled();
   });
   it('keeps large and escaped accessibility summaries valid without clipping field values', () => {
     const elements = [{ role: 'AXWindow', element_index: 0 }, ...Array.from({ length: 180 }, (_, i) => ({

@@ -36,6 +36,11 @@ export function computerRecovery(code: string): string {
     return 'Screenshot upload to the Gateway failed. No automatic retry. Report the diagnosticId and HTTP status; do not change model providers or bypass desktop controls.';
   }
   switch (code) {
+    case 'COMPUTER_ELEMENT_REF_REQUIRED': case 'COMPUTER_ELEMENT_TARGET_CHANGED':
+    case 'COMPUTER_SEMANTIC_ACTION_UNSUPPORTED':
+      return 'The native element reference or action is unavailable for this window. No automatic coordinate fallback. Reopen and observe fresh evidence before choosing a different action; never reuse an old reference or replay an uncertain input.';
+    case 'COMPUTER_SEMANTIC_ACTION_UNCONFIRMED':
+      return 'The native action returned uncertain execution evidence. Inspect the application before continuing. Do not repeat it or fall back to coordinates; its effect may already have occurred.';
     case 'COMPUTER_INVALID_MODEL_OUTPUT': case 'COMPUTER_EXPECTED_SINGLE_ACTION':
       return 'The GUI model returned an invalid action after bounded format correction. No input from this prediction was dispatched. Report validationReason and diagnosticId; do not guess coordinates, replay the action or change providers.';
     case 'COMPUTER_MODEL_HTTP_400': return 'The configured model service rejected the request. No input was dispatched from this model request. Report serviceErrorCode, requestId and diagnosticId; check the model request format and input/output limits before reopening. Do not automatically retry or change providers.';
