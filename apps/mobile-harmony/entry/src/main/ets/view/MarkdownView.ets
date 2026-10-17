@@ -1,3 +1,4 @@
+import { XopcChartMarkdownView } from './ChartMarkdownView';
 import { XopcMathMarkdownView } from './MathMarkdownView';
 import { mayContainMath, mathCandidateCount } from '../common/mathMarkdown';
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
@@ -218,6 +219,10 @@ export struct XopcMarkdownView {
         else if (item.item.kind === 'rule') {
           Column().width('100%').height(1).backgroundColor(this.colors.border)
             .margin({ top: 8, bottom: 8 })
+        }
+        else if (item.item.kind === 'code' && item.item.language === 'chart') {
+          XopcChartMarkdownView({ content: item.item.text, closed: item.item.closed === true,
+            onCopy: (source: string): void => { this.copyCode(source); } })
         }
         else if (item.item.kind === 'code') {
           Column() {

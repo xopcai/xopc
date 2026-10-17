@@ -18,8 +18,11 @@ targets:
     platform: iOS
     sources:
       - path: XopcMobile
-        excludes: [Resources/Math]
+        excludes: [Resources/Math, Resources/Charts]
       - path: XopcMobile/Resources/Math
+        type: folder
+        buildPhase: resources
+      - path: XopcMobile/Resources/Charts
         type: folder
         buildPhase: resources
     settings:

@@ -105,7 +105,7 @@ private fun StringBuilder.appendMarkdownFingerprint(node: Node) {
     is MathSourceBlock -> node.source
     is MarkdownTextNode -> node.literal
     is Code -> node.literal
-    is FencedCodeBlock -> node.info + ":" + node.literal
+    is FencedCodeBlock -> node.info + ":" + node.literal + ":" + node.closingFenceLength
     is IndentedCodeBlock -> node.literal
     is HtmlBlock -> node.literal
     is HtmlInline -> node.literal
@@ -170,7 +170,9 @@ private fun MarkdownBlock(node: Node, linkColor: Color,
         3 -> MaterialTheme.typography.bodyLarge.copy(fontSize = 18.sp, lineHeight = 26.sp)
         else -> MaterialTheme.typography.bodyLarge.copy(lineHeight = 24.sp)
       }, bold = true)
-    is FencedCodeBlock -> if (node.info.trim() == "math") {
+    is FencedCodeBlock -> if (node.info.trim() == "chart") {
+      ChartMarkdownView(node.literal, closed = node.hasClosedChartFence(), onCopy = onCopyCode)
+    } else if (node.info.trim() == "math") {
       val raw = LocalMarkdownSource.current
       val text = node.sourceSpans.map { raw.substring(it.inputIndex, (it.inputIndex + it.length).coerceAtMost(raw.length)) }.joinToString("\n")
       MathMarkdownView(text, LocalStreamingMarkdown.current, display = true, enabled = LocalMathEnabled.current, onCopy = onCopyCode)
@@ -386,3 +388,5 @@ private fun Node.children(): List<Node> = buildList {
   var child = firstChild
   while (child != null) { add(child); child = child.next }
 }
+
+internal fun FencedCodeBlock.hasClosedChartFence(): Boolean = (closingFenceLength ?: 0) >= openingFenceLength
