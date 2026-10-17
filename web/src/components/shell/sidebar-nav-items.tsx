@@ -1,17 +1,11 @@
 import * as Popover from '@radix-ui/react-popover';
 import {
-  Box,
-  Cable,
-  FolderKanban,
-  GitBranch,
-  Home,
-  Layers,
-  MonitorPlay,
+  Boxes,
+  BriefcaseBusiness,
+  Layers3,
   MoreHorizontal,
-  NotebookText,
-  Plug,
+
   Puzzle,
-  Users,
   Zap,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
@@ -30,67 +24,22 @@ import { preloadRouteForPath } from '@/lib/route-preload';
 import { apiUrl } from '@/lib/url';
 import {
   PRODUCT_DOMAINS,
-  productSectionAtLocation,
+  productDomainAtPath,
   type ProductDomainId,
-  type ProductSectionId,
 } from '@/navigation/product-navigation';
 import { useLocaleStore } from '@/stores/locale-store';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useSidebarStore } from '@/stores/sidebar-store';
 
 const DEFAULT_VISIBLE_ITEMS = 3;
-const MAX_VISIBLE_ITEMS = 5;
+const SIDEBAR_DOMAIN_IDS = ['work', 'capabilities', 'automation', 'apps'] as const;
 
-const ALL_SECTION_IDS = [
-  'work-overview',
-  'capabilities-skills',
-  'automation-triggers',
-  'capabilities-connectors',
-  'work-projects',
-  'work-notes',
-  'capabilities-agents',
-  'capabilities-channels',
-  'automation-workflows',
-  'automation-browser',
-  'apps-library',
-  'capabilities-extensions',
-] as const satisfies readonly ProductSectionId[];
-
-type SidebarSectionId = typeof ALL_SECTION_IDS[number];
-
-const SECTION_GROUP: Record<SidebarSectionId, ProductDomainId> = {
-  'work-overview': 'work',
-  'work-projects': 'work',
-  'work-notes': 'work',
-  'apps-library': 'apps',
-  'automation-triggers': 'automation',
-  'automation-workflows': 'automation',
-  'automation-browser': 'automation',
-  'capabilities-agents': 'capabilities',
-  'capabilities-skills': 'capabilities',
-  'capabilities-connectors': 'capabilities',
-  'capabilities-channels': 'capabilities',
-  'capabilities-extensions': 'capabilities',
-};
-
-const SECTION_ICONS = {
-  'work-overview': Home,
-  'work-projects': FolderKanban,
-  'work-notes': NotebookText,
-  'apps-library': Box,
-  'automation-triggers': Zap,
-  'automation-workflows': GitBranch,
-  'automation-browser': MonitorPlay,
-  'capabilities-agents': Users,
-  'capabilities-skills': Layers,
-  'capabilities-connectors': Cable,
-  'capabilities-channels': Plug,
-  'capabilities-extensions': Puzzle,
-} as const satisfies Record<SidebarSectionId, LucideIcon>;
-
-const SECTION_BY_ID = new Map(
-  PRODUCT_DOMAINS.flatMap((domain) => domain.sections.map((section) => [section.id, section] as const)),
-);
+const DOMAIN_ICONS = {
+  work: BriefcaseBusiness,
+  capabilities: Layers3,
+  automation: Zap,
+  apps: Boxes,
+} as const satisfies Partial<Record<ProductDomainId, LucideIcon>>;
 
 type MenuItem = {
   id: string;
@@ -132,11 +81,11 @@ export function SidebarNavItems({
   onNavigate?: () => void;
   visibleLimit?: number;
 }) {
-  const { pathname, search } = useLocation();
+  const { pathname } = useLocation();
   const language = useLocaleStore((state) => state.language);
   const m = messages(language);
   const copy = m.productNavigation;
-  const activeSection = productSectionAtLocation(pathname, search);
+  const activeDomain = productDomainAtPath(pathname);
   const uiExtensions = useUiExtensions();
   const browserSession = useGatewayStore((state) => state.conversationId);
   const { data: personal, mutate: refreshPersonal } = useSWR(
@@ -158,17 +107,19 @@ export function SidebarNavItems({
   }, [refreshPersonal]);
   const personalUnreadCount = usePersonalUnread();
   const [popoverOpen, setPopoverOpen] = useState(false);
-  const builtins: MenuItem[] = ALL_SECTION_IDS.map((sectionId) => {
-    const section = SECTION_BY_ID.get(sectionId)!;
+  const builtins: MenuItem[] = SIDEBAR_DOMAIN_IDS.map((domainId) => {
+    const domain = PRODUCT_DOMAINS.find((item) => item.id === domainId)!;
     return {
-      id: sectionId,
-      label: copy.sections[sectionId],
-      to: section.path,
-      Icon: SECTION_ICONS[sectionId],
-      active: activeSection === sectionId,
+      id: domainId,
+      label: copy.domains[domainId],
+      to: domain.path,
+      Icon: DOMAIN_ICONS[domainId],
+      active: activeDomain === domainId,
     };
   });
-  const limit = Math.min(MAX_VISIBLE_ITEMS, Math.max(1, Math.round(visibleLimit)));
+  const limit = Number.isFinite(visibleLimit)
+    ? Math.min(builtins.length, Math.max(1, Math.round(visibleLimit)))
+    : DEFAULT_VISIBLE_ITEMS;
   const visibleItems = builtins.slice(0, limit);
   const overflowItems = builtins.slice(limit);
   const extensionItems: MenuItem[] = uiExtensions.flatMap((extension) => {
@@ -186,13 +137,6 @@ export function SidebarNavItems({
         };
       });
   });
-  const overflowGroups = (['work', 'automation', 'capabilities', 'apps'] as const)
-    .map((groupId) => ({
-      id: groupId,
-      label: copy.domains[groupId],
-      items: overflowItems.filter((item) => SECTION_GROUP[item.id as SidebarSectionId] === groupId),
-    }))
-    .filter((group) => group.items.length > 0);
   const overflowActive = overflowItems.some((item) => item.active) || extensionItems.some((item) => item.active);
 
   const renderLink = (item: MenuItem, inPopover = false) => (
@@ -239,7 +183,7 @@ export function SidebarNavItems({
         >{personalUnreadLabel(personalUnreadCount)}</span>}
       </Link>
       {visibleItems.map((item) => renderLink(item))}
-      <Popover.Root open={popoverOpen} onOpenChange={setPopoverOpen}>
+      {overflowItems.length > 0 || extensionItems.length > 0 ? <Popover.Root open={popoverOpen} onOpenChange={setPopoverOpen}>
         <Popover.Trigger asChild>
           <button
             type="button"
@@ -268,14 +212,7 @@ export function SidebarNavItems({
             onOpenAutoFocus={(event) => event.preventDefault()}
           >
             <nav className="flex flex-col gap-1" aria-label={m.sidebar.moreAppsAria}>
-              {overflowGroups.map((group) => (
-                <section key={group.id} aria-labelledby={`sidebar-more-${group.id}`}>
-                  <div id={`sidebar-more-${group.id}`} className="px-2 pb-1 pt-1.5 text-[11px] font-semibold tracking-wide text-fg-subtle">
-                    {group.label}
-                  </div>
-                  <div className="flex flex-col gap-0.5">{group.items.map((item) => renderLink(item, true))}</div>
-                </section>
-              ))}
+              {overflowItems.map((item) => renderLink(item, true))}
               {extensionItems.length > 0 ? (
                 <section aria-labelledby="sidebar-more-extension-apps">
                   <div id="sidebar-more-extension-apps" className="px-2 pb-1 pt-1.5 text-[11px] font-semibold tracking-wide text-fg-subtle">
@@ -287,7 +224,7 @@ export function SidebarNavItems({
             </nav>
           </Popover.Content>
         </Popover.Portal>
-      </Popover.Root>
+      </Popover.Root> : null}
     </>
   );
 }
