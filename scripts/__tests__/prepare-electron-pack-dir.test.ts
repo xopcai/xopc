@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import { accessSync, constants, existsSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -5,6 +6,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import { ELECTRON_PACKAGED_DEPENDENCIES } from '../electron-runtime-externals.mjs';
 import { prepareElectronPackDir } from '../prepare-electron-pack-dir.mjs';
+import { CUA_MAC_NATIVE_FILES } from '../prepare-cua-sdk.mjs';
 
 describe('prepare-electron-pack-dir', () => {
   const tempRoots: string[] = [];
@@ -60,6 +62,11 @@ describe('prepare-electron-pack-dir', () => {
       }
     }
     if (process.platform === 'darwin') {
+      for (const name of CUA_MAC_NATIVE_FILES) {
+        const binary = join(packDir, 'node_modules/@trycua', `cua-driver-darwin-${process.arch}`, name);
+        expect(execFileSync('lipo', ['-archs', binary], { encoding: 'utf8' }).trim())
+          .toBe(process.arch === 'x64' ? 'x86_64' : process.arch);
+      }
       accessSync(
         join(packDir, 'node_modules/node-pty/prebuilds', `darwin-${process.arch}`, 'spawn-helper'),
         constants.X_OK,

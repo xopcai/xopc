@@ -11,6 +11,7 @@ import {
 } from './electron-runtime-externals.mjs';
 import { prepareNodePtyPackage, resolveNodePtyPackage } from './prepare-node-pty.mjs';
 import { pruneElectronPdfjsRuntime } from './prune-electron-pdfjs-runtime.mjs';
+import { prepareCuaSdkRuntime } from './prepare-cua-sdk.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const packDir = mkdtempSync(join(tmpdir(), 'xopc-electron-pack-'));
@@ -152,6 +153,7 @@ export function prepareElectronPackDir(
   writeFileSync(join(packDir, 'package.json'), `${JSON.stringify(minimalPkg, null, 2)}\n`);
 
   installRuntimeDeps(packDir, target);
+  prepareCuaSdkRuntime(packDir, target);
   pruneElectronPdfjsRuntime(packDir);
   stageNodePtyRuntime(repoRoot, packDir, target);
   stageRipgrepBinary(packDir, target);
