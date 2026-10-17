@@ -551,10 +551,9 @@ describe('verified flow lifecycle through the desktop broker', () => {
   });
   it('saves positive page evidence from partial native snapshots without certifying selected-state evidence', async () => {
     const store = flowRepository(), f = fixture(true, store); nativeNavigation(f);
-    vi.mocked(resolveModel).mockReturnValueOnce({ id: 'native-fixture', provider: 'ali', api: 'openai-completions', input: ['text', 'image'],
-      baseUrl: 'https://model.test/v1', computerUse: { profile: 'structured-tools-v1' } } as any);
-    f.fetch.mockResolvedValueOnce(Response.json({ choices: [{ message: { tool_calls: [{ function: { name: 'computer_proposal',
-      arguments: JSON.stringify({ proposal: { kind: 'action', action: { kind: 'activate', ref: 'original-ref' } } }) } }] } }] }));
+    f.fetch.mockResolvedValueOnce(Response.json({ choices: [{ message: {
+      content: '<tool_call>{"name":"computer_use","arguments":{"action":"activate","ref":"original-ref"}}</tool_call>',
+    } }] }));
     const observe = f.driver.observe.getMockImplementation()!;
     f.driver.observe.mockImplementation(async () => {
       const value = await observe(), tree = JSON.parse(value.summary);
