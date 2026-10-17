@@ -4,10 +4,10 @@ import { ComputerOperationError } from '../../../computer/errors.js';
 
 describe('computer tool error signaling', () => {
   const setup = () => {
-    const execute = vi.fn(), close = vi.fn();
-    const tool = createComputerUseTool({ runtime: { execute, close } as any,
+    const execute = vi.fn(), close = vi.fn(), getReport = vi.fn();
+    const tool = createComputerUseTool({ runtime: { execute, close, getReport } as any,
       context: () => ({ conversationId: 'owner', runId: 'run' }) });
-    return { execute, close, tool };
+    return { execute, close, getReport, tool };
   };
   it('throws structured failures because pi ignores returned isError flags', async () => {
     const f = setup();
@@ -35,6 +35,20 @@ describe('computer tool error signaling', () => {
   it('does not echo raw host errors, keys or exception payloads', async () => {
     const f = setup(); f.execute.mockRejectedValue(new Error('private upstream response'));
     await expect(f.tool.execute('call', { op: 'discover', query: '' }, undefined, undefined)).rejects.toThrow('COMPUTER_OPERATION_FAILED');
+  });
+  it('attaches only the conversation-scoped runtime report after a failure', async () => {
+    const f = setup();
+    f.getReport.mockReturnValue({ reportId: 'safe-report', counters: { modelRequests: 1 } });
+    f.execute.mockRejectedValue(new Error('private upstream body'));
+    const error = await f.tool.execute('call', { op: 'step', goal: 'Private goal' }, undefined, undefined).catch(error => error);
+    expect(JSON.parse(error.message)).toMatchObject({ report: { reportId: 'safe-report', counters: { modelRequests: 1 } } });
+    expect(error.message).not.toMatch(/upstream|Private goal/);
+    expect(f.getReport).toHaveBeenCalledWith('owner');
+  });
+  it('reads a report without requesting a continuation or closing the session', async () => {
+    const f = setup(); f.execute.mockResolvedValue({ status: 'report', sessionId: 's', report: { status: 'active' } });
+    await expect(f.tool.execute('call', { op: 'report' }, undefined, undefined)).resolves.toMatchObject({ details: { status: 'report' } });
+    expect(f.execute).toHaveBeenCalledOnce(); expect(f.close).not.toHaveBeenCalled();
   });
   it('retains bounded upload diagnostics across the endpoint error transport', async () => {
     const f = setup();
