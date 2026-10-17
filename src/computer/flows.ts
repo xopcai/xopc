@@ -14,7 +14,7 @@ const NativeTree = z.object({ text: z.string().optional(), truncated: z.boolean(
 })) });
 export const ComputerFlowSchema = z.object({
   version: z.literal(1), id: z.uuid(), title: Label,
-  endpointId: z.string().min(1).max(200), appId: z.string().min(1).max(200),
+  endpointId: z.string().min(1).max(200), principalId: z.string().min(1).max(200).optional(), appId: z.string().min(1).max(200),
   steps: z.array(Hint).min(1).max(12),
   condition: z.union([
     z.object({ kind: z.literal('selected'), label: Label }).strict(),
@@ -46,7 +46,7 @@ export class ComputerFlowStore implements ComputerFlowRepository {
     const now = Date.now();
     const flow = ComputerFlowSchema.parse({ ...input, version: 1, id: randomUUID(), createdAt: now, expiresAt: now + 30 * 86_400_000 });
     const state = this.state(scope);
-    const key = createHash('sha256').update(JSON.stringify([flow.title, flow.endpointId, flow.appId, flow.steps, flow.condition])).digest('hex');
+    const key = createHash('sha256').update(JSON.stringify([flow.title, flow.principalId ? ['principal', flow.principalId] : flow.endpointId, flow.appId, flow.steps, flow.condition])).digest('hex');
     return state.update(key, existing => {
       const parsed = ComputerFlowSchema.safeParse(existing);
       const value = parsed.success && parsed.data.expiresAt > now ? parsed.data : flow;

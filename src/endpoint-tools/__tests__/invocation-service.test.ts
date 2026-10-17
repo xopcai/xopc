@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import { COMPUTER_DESCRIPTOR } from '@xopcai/computer-control-contract';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -67,6 +68,30 @@ function fixture(options: EndpointInvocationServiceOptions = {}) {
 }
 
 describe('EndpointInvocationService', () => {
+  it.each(['discover', 'open', 'invalid-origin', 'invalid-upstream'])('validates the real Computer schema and URL formats: %s', async scenario => {
+    const f = fixture(), sent: string[] = [];
+    const descriptor = structuredClone(COMPUTER_DESCRIPTOR) as any;
+    f.registry.register({ principalId: 'desktop-device', endpointId: 'desktop-connection', connectionInstanceId: crypto.randomUUID(),
+      kind: 'desktop', platform: 'darwin', displayName: 'Desktop', appVersion: '1', availability: 'background', nonce: 'nonce',
+      signedAt: Date.now(), signature: 'unit-test-signature', tools: [descriptor] }, 'desktop-socket',
+    { readyState: 1, send: text => sent.push(text), close: () => {} });
+    const args = scenario === 'discover' ? { op: 'discover', owner: 'owner', sessionId: 'session', query: 'TextEdit' }
+      : { op: 'open', owner: 'owner', sessionId: 'session', appRef: 'app', mode: 'control', prepare: false,
+        model: { modelRef: 'provider/gui', profile: 'gui-plus-2026-02-26', origin: scenario === 'invalid-origin' ? 'not a URI' : 'https://model.example',
+          runtimeLocation: 'remote', ...(scenario === 'invalid-upstream' ? { upstreamOrigin: 'not a URI' } : {}) } };
+    const result = f.service.invoke({ endpointId: 'desktop-connection', toolName: descriptor.name, toolCallId: 'call',
+      descriptorRevision: endpointToolRevision(descriptor), arguments: args });
+    if (scenario.startsWith('invalid')) {
+      await expect(result).rejects.toMatchObject({ code: 'INVALID_ARGUMENTS' }); expect(sent).toHaveLength(0); return;
+    }
+    expect(sent).toHaveLength(1);
+    const invocationId = JSON.parse(sent[0]).payload.invocationId;
+    for (const type of ['tool.received', 'tool.result'] as const) f.service.handleMessage('desktop-connection', {
+      protocolVersion: ENDPOINT_PROTOCOL_VERSION, messageId: crypto.randomUUID(), type, sentAt: Date.now(),
+      payload: { invocationId, ...(type === 'tool.result' ? { content: [{ type: 'json' as const, value: { status: 'ready' } }] } : {}) },
+    } as any);
+    await expect(result).resolves.toMatchObject({ content: [{ type: 'json', value: { status: 'ready' } }] });
+  });
   it('tracks only the current endpoint connection', () => {
     const { registry } = fixture();
 

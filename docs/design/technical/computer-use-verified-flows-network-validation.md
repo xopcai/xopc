@@ -1,0 +1,50 @@
+# Verified flows through the real Gateway and desktop network
+
+This opt-in macOS matrix runs the production `GatewayServer` / `GatewayService` in a Node process and `DesktopEndpointHost` in a separate Electron process. Both processes exit and restart between capture, reuse and unknown-result phases. Only the disposable SQLite state, Agent/workspace and OS-encrypted desktop identity persist. The desktop child explicitly rejects the selected provider key in its environment; GUI inference and credential resolution stay in the Gateway process. It uses actual GUI-Plus inference at the existing direct DashScope provider and a real AppKit fixture application (`ai.xopc.computer-flow-validation`) built from `scripts/fixtures/ComputerFlowValidation.swift`. The fixture is a real OS process/window with native buttons and accessibility actions; neither the desktop driver nor the application observations are mocked.
+
+## Transport and authorization
+
+The desktop calls the actual authenticated, lazily loaded Gateway HTTP routes for compatibility, principal registration and one-use realtime tickets. Its normal OS-keychain identity signs the endpoint hello; the real Gateway authenticator verifies it and registers the connection. Conversation binding uses the authenticated HTTP binding endpoint. Tool invoke/received/result/cancel messages use the actual realtime WebSocket implementation and desktop host controller. Screenshots use the real invocation-bound HTTP upload grant, image validation, digest verification and private in-memory frame handoff.
+
+A loopback fault proxy forwards HTTP bodies/headers and WebSocket text messages unchanged. It preserves authentication close codes. It never authenticates on the Gateway's behalf, supplies tool results or creates model replies. The only deliberate loss is one completed scenario act result during the unknown phase. HTTP screenshot upload has already happened, and the proxy independently observes positive page-specific native evidence in the withheld result. The real 30-second invocation deadline expires; its ordinary cancellation and release messages remain deliverable. A later release acknowledgement must confirm revocation. If release cannot be confirmed, the test fails rather than claiming control was released.
+
+Each phase rejects unauthenticated HTTP, an invalid bearer token, a well-formed but invalid realtime ticket and an invalid upload grant. It then removes fixture-application access through the actual host settings method and requires denial with zero screenshots, model requests or native inputs. Granting access changes only the isolated policy file. Normal host session/action approval code remains in place; instrumentation only counts it. Device registration and historical hints never grant application access.
+
+Private inherited IPC supplies explicit ComputerRuntime tool arguments in the actual Gateway process and coordinates test-only local policy/setup operations in the desktop process. It does not carry scenario tool commands, screenshots or model decisions between Gateway and desktop. This tests the hosted-GUI-to-real-app network chain, not conversational task interpretation, renderer chat submission, external TLS/tunnel deployment or XOPC Cloud billing.
+
+## Corrections exposed by network validation
+
+* The real Gateway invocation service compiles the Computer descriptor's entire strict JSON Schema even for discovery. Its model-binding URL fields emit `format: uri`; AJV previously had no validator registered and refused the command before dispatch. The service now registers the same Zod URL validation used by the source contract. Strict schema validation remains enabled; malformed origin and upstream-origin values are refused before transport. No dependency or contract relaxation was introduced.
+* A desktop endpoint ID is a connection instance, regenerated after process restart. Newly saved flows additionally bind the authenticated persistent `principalId` obtained from the Gateway registry, while action dispatch remains pinned to the current endpoint/session/grant. Reuse on a fresh connection requires the same authenticated device principal and application plus the existing Agent/workspace scope. Another, missing or re-enrolled principal is refused before inference/input. Deduplication uses this stable device identity. Legacy flows without a principal retain exact endpoint binding; no device identity is inferred from an old string or silently migrated.
+
+The saved principal is a historical device scope, not permission. The usual local allowlist, visibility, active device registration, model binding, current observation, native capability, input budgets and receipts are still required. Flow hints contain neither device IDs nor old element refs.
+
+## Reproduce
+
+Use the existing macOS Accessibility/Screen Recording permissions, Xcode command-line Swift compiler and pinned Cua Driver 0.28.2. The runner compiles and starts its own disposable AppKit application, whose only content is two navigation buttons and a non-sensitive page label. Only this window is sent to DashScope. The runner uses the existing `DASHSCOPE_API_KEY`, creates a fresh random Gateway bearer token and isolated state, and binds the test Gateway and proxy to loopback. It never changes the user's real config, device enrollment, app allowlist or OS permissions.
+
+```sh
+pnpm exec tsx scripts/run-computer-network-flow-validation.mts
+```
+
+The fixture uses an ordinary layer-0 native window that stays visible across application deactivation and desktop Spaces, avoiding a manual focus dependency. The pinned driver enumerates [layer-0 windows](https://github.com/trycua/cua/blob/cua-driver-rs-v0.28.2/libs/cua-driver/rust/crates/platform-macos/src/tools/list_windows.rs), so a floating fixture window is deliberately excluded. This is fixture UI configuration, not a change to the driver or production visibility policy. The runtime uses `prepare: false`. The earlier real TextEdit run remains documented separately; native foreground-preparation refusals and unavailable post-action evidence stopped the initial TextEdit network attempts without input replay. This fixture matrix is scoped to network and persistence behavior, not TextEdit compatibility.
+
+The goal explicitly requires one native activation using a ref in the current AX observation. Only the New Document / Open and Save navigation controls may reach the real driver. Capture verifies **Verified Native Flow Destination**, releases control and explicitly saves. Reuse requires the same saved UUID and authenticated device identity after both processes restart, a different endpoint connection ID, a new GUI model request with untrusted hints and a newly authorized native action. Unknown result must produce `dispatch: unknown`, zero rescue/replay, confirmed release and refusal to save that session. Setup/restoration uses separate ordinary local Broker leases and an explicit Return to Start activation, counted separately from the network scenario.
+
+Every phase is run once; failure stops the matrix and writes metadata-only diagnostics. Failed/uncertain actions are never automatically repeated. A failed phase leaves the application state for inspection. Passing phases restore the native start page and revoke their isolated app access. Results do not contain bearer/upload/turn tokens, identity keys, raw HTTP/WS/model payloads, screenshots or AX text.
+
+## Observed result — 2026-10-17
+
+[Committed metadata-only evidence](./evidence/computer-use-flows-network-2026-10-17.json) records the passing matrix on macOS 26.6.2, Node 24.16.0, Electron 42.4.1 and pinned Cua Driver 0.28.2. The native fixture PID was 12973; it and all six Gateway/desktop processes exited after validation.
+
+| Phase | Gateway PID | Desktop PID | Actual model requests | Scenario native inputs | Lost results | Rescue attempts | Result |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| Capture | 12974 | 13248 | 2 | 1 | 0 | 1 | Positive native page verified; released; one flow saved |
+| Reuse | 45640 | 46408 | 1 | 1 | 0 | 0 | Same flow UUID and authenticated principal; fresh endpoint, inference and authorization |
+| Unknown | 78650 | 78949 | 1 | 1 | 1 | 0 | Actual effect observed, reply withheld, ordinary timeout and confirmed release; no replay or saving |
+
+Capture encountered one explicit `OBSERVATION_CHANGED` rejection **before dispatch**, without a receipt. The existing bounded-rescue path discarded that proposal and re-observed/replanned; only one native input was delivered. This is distinct from uncertain delivery: the unknown phase made exactly one model request, sent zero acts after loss, used zero rescues and recorded one unknown dispatch. Its failed session could not be saved; the original flow remained the only record.
+
+Each phase ran four ordinary session checks and one separate authorized baseline-restoration input. Capture ran three action checks (two proposals plus cleanup); the other phases ran two (scenario plus cleanup). These counts include known-pending approval/status handling, not repeated native input. Successful real HTTP frame uploads were 8, 7 and 7 respectively. Both observed hellos per phase include the deliberately invalid ticket attempt and the accepted signed desktop hello. Frames were consumed/zeroed or aborted after timeout; zero frames and zero on-disk upload files remained at the scenario boundary. All three phases restored the native start page and revoked their isolated app permission.
+
+Automated checks: 438 passed, 9 skipped across Computer Use, desktop host, endpoint tools, authenticated Gateway/lazy routes, proxy transport and evaluation CLI suites. Root TypeScript checking, the standalone runner TypeScript check and Electron main/preload production builds passed. The final unknown-result evidence was independently checked to require exactly one model request, zero acts after loss, zero rescues and confirmed release. This single-result-loss case keeps the socket available for release; it does not certify full disconnect/reconnect or unconfirmed-release recovery.
