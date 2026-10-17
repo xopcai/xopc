@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "type": "bar",
+  "title": "Category spending (example)",
+  "summary": "Illustrative spending is highest for housing, followed by food and transport.",
+  "dataKind": "example",
+  "xAxis": { "label": "Category", "values": ["Housing", "Food", "Transport"] },
+  "yAxis": { "label": "Spending", "unit": "CNY" },
+  "series": [{ "name": "Spending", "values": [4000, 1800, 700] }]
+}
