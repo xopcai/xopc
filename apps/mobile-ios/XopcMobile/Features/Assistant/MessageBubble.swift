@@ -15,6 +15,7 @@ struct MessageBubble: View {
     var onReading: () -> Void = {}
     @Environment(\.locale) private var locale
     @ScaledMetric(relativeTo: .body) private var previewHeight: CGFloat = 160
+    @ScaledMetric(relativeTo: .body) private var previewFadeHeight: CGFloat = 24
     @State private var isActionsPresented = false
     @State private var isDetailPresented = false
     @State private var isExecutionPresented = false
@@ -182,13 +183,13 @@ struct MessageBubble: View {
                                 VStack(spacing: 0) {
                                     Color.black
                                     LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: .bottom)
-                                        .frame(height: 20)
+                                        .frame(height: previewFadeHeight)
                                 }
                             }
                             .allowsHitTesting(false)
                         Text("查看更多")
                             .font(.subheadline.weight(.medium))
-                            .foregroundStyle(.blue)
+                            .foregroundStyle(.secondary)
                             .frame(minHeight: 44, alignment: .leading)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)

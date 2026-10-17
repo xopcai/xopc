@@ -67,4 +67,4 @@ XOPC_CODEMODE_SMOKE_ENTRY=out/server/index.js pnpm run test:codemode:gateway
 
 Gateway 验收脚本使用临时状态目录、本机模拟模型服务和真实 QuickJS worker，不消耗模型额度。覆盖鉴权输入、子调用事件、取消、SQLite 冷启动、reset 隔离，以及关闭开关时的 worker 终止和 `cancelled` 终态。
 
-第四阶段已完成 30 个任务、270 个真实模型样本的 [成本、速度和成功率评估](./design/technical/codemode-evaluation-2026-10-10.md)。本轮未达到推广门槛，继续默认关闭、按 Agent opt-in；推广阈值见 [pi 升级方案](./design/technical/pi-upgrade-plan-2026-10-10.md)。
+第四阶段已完成 30 个任务、270 个真实模型样本的 [成本、速度和成功率评估](https://github.com/xopcai/xopc/blob/main/docs/design/technical/codemode-evaluation-2026-10-10.md)。本轮未达到推广门槛，继续默认关闭、按 Agent opt-in；推广阈值见评估报告的[推广规则](https://github.com/xopcai/xopc/blob/main/docs/design/technical/codemode-evaluation-2026-10-10.md#推广规则)。

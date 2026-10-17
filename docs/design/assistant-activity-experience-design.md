@@ -33,7 +33,7 @@
 
 ### Codex：现有本地调研与公开资料
 
-仓库已有 [Codex 文字动画调研](./codex-streaming-text-animation-research.md)，记录了 2026-10-13 对本地安装包的只读检查：新增文字片段以透明度渐显，稳定身份避免旧内容重播，结束时完整提交。它没有实测运行时 DOM，因此不能把所有包内路径视为当前启用行为。
+仓库已有 [流式文字动效依据](./web-chat-message-rendering-technical-design.md#流式文字动效依据)，记录了 2026-10-13 对本地安装包的只读检查：新增文字片段以透明度渐显，稳定身份避免旧内容重播，结束时完整提交。它没有实测运行时 DOM，因此不能把所有包内路径视为当前启用行为。
 
 [OpenAI 对 Codex app 的介绍](https://openai.com/index/introducing-the-codex-app/)可支持“执行中可跟进工作”的产品方向，不支持本文的具体动效参数。正文渐显直接复用 xopc 已有实现，不增加第二套打字队列。
 

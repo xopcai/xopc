@@ -29,10 +29,13 @@ The following is illustrative data.
 
 Change `type` to `bar` for grouped vertical bars. Multiple series share one vertical axis and unit; split datasets with different units into separate charts. Missing values must be `null`, with the original category retained. The host uses a zero baseline and does not smooth lines or connect gaps.
 
-For real data set `dataKind` to `real` and include `sources`, for example:
+For real data, set these fields in the chart object:
 
 ```json
-"sources": ["User-provided ledger.csv, January–March 2026, CNY"]
+{
+  "dataKind": "real",
+  "sources": ["User-provided ledger.csv, January–March 2026, CNY"]
+}
 ```
 
 Source strings are displayed as text, never fetched. Keep the source and time range in surrounding prose as well.

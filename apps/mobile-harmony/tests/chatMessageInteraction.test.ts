@@ -13,7 +13,7 @@ describe('chat message interactions', () => {
     expect(sheet).not.toContain('Alignment.Center');
   });
   it('renders view more as a distinct accessible action without an underline', () => {
-    expect(content).toContain(".fontColor($r('app.color.accent'))");
+    expect(content).toMatch(/Text\(\$r\('app.string.chat_view_more'\)\)[\s\S]*?\.fontColor\(this.colors.secondary\)/);
     expect(content).not.toContain('TextDecorationType.Underline');
     expect(content).toContain(".id('chat-message-more-' + this.row.id).height(44)");
     expect(content).toContain(".accessibilityText($r('app.string.chat_view_more'))");

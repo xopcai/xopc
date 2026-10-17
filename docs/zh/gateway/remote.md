@@ -2,6 +2,24 @@
 
 SSH 隧道把远程主机上的本地 Gateway 端口安全转发到当前电脑。已经能够 SSH 登录远程主机时，这是最通用的备用方案。
 
+## 准备 VPS 主机
+
+在 Hetzner 等具有持久存储的 VPS 上：
+
+1. 按[安装指南](../getting-started.md)安装 Node.js >= 22.22.3 和 xopc。
+2. 将 `gateway.bind` 设置为 `loopback`，并配置强 Gateway Token。
+3. 安装并启动 Gateway 服务：
+
+   ```bash
+   xopc gateway service install
+   xopc gateway service start
+   ```
+
+4. 在主机防火墙中允许 SSH（通常为 22 端口）或 Tailscale，保持 Gateway 的 `18790` 端口私有。
+5. 建立下方的 SSH 隧道，或将 `gateway.tailscale.mode` 设置为 `serve`，使用 [Tailscale Serve](./tailscale.md)。
+
+若需要公网访问，先阅读[公网隧道安全说明](../../tunnel-security.md)，并在启用前接受隧道风险提示。可用的访问方式见[网络访问](../../network.md)。
+
 ## 建立隧道
 
 在本地电脑运行：

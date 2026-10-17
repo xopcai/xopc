@@ -47,6 +47,6 @@ Ada 可以读取少量本地文本、找回历史对话细节，以及查看笔�
 
 核心状态保存在本地 xopc 实例中；选择云模型时，对应提供商会处理发送过去的上下文。详见[数据与文件位置](./workspace.md)和[产品理念](./product.md)。
 
-任务交接会分别保存用户原话和主 Agent 的理解，固定所选输入版本，并允许执行者在获准范围内分页补读。沿用此前成果、笔记、Task 或文件时，可通过 `personal_task.sourceRefs` 交接稳定引用；提交后由后台完成归属和版本核验。后台分配检查必需操作、工具策略与注册、模型配置、Skill 和账户权限，真正启动执行前再次检查。详见[任务交接与能力校验](../design/technical/personal-task-handoff-stage-b-2026-10-15.md)。
+任务交接会分别保存用户原话和主 Agent 的理解，固定所选输入版本，并允许执行者在获准范围内分页补读。沿用此前成果、笔记、Task 或文件时，可通过 `personal_task.sourceRefs` 交接稳定引用；提交后由后台完成归属和版本核验。后台分配检查必需操作、工具策略与注册、模型配置、Skill 和账户权限，真正启动执行前再次检查。详见[任务交接与能力校验](https://github.com/xopcai/xopc/blob/main/docs/design/technical/personal-task-handoff-stage-b-2026-10-15.md)。
 
-已完成的普通 Task 可以在同一任务内继续修改，并保留原成果。`personal_task(get, section="revision")` 返回原子 `revise` 所需的准确基线与期望版本；执行仍在后台进行。成果卡会显示版本，`personal_result` 可继续读取历史版本。最终交付只使用明确选中的附件，不汇总运行期间出现过的所有文件；整理或前台繁忙时，已保存文字可独立投递。详见[后续修订与最终交付](../design/technical/personal-task-revision-stage-c-2026-10-15.md)。
+已完成的普通 Task 可以在同一任务内继续修改，并保留原成果。`personal_task(get, section="revision")` 返回原子 `revise` 所需的准确基线与期望版本；执行仍在后台进行。成果卡会显示版本，`personal_result` 可继续读取历史版本。最终交付只使用明确选中的附件，不汇总运行期间出现过的所有文件；整理或前台繁忙时，已保存文字可独立投递。详见[后续修订与最终交付](https://github.com/xopcai/xopc/blob/main/docs/design/technical/personal-task-revision-stage-c-2026-10-15.md)。
