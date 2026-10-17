@@ -6,7 +6,6 @@ import { useEffect, useRef, useState } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
-import { useThemeStore } from '@/stores/theme-store';
 
 import { compileChartOption, readChartColors } from './chart-option';
 import { loadChartRuntime } from './chart-runtime-loader';
@@ -18,8 +17,6 @@ export function ChartCanvas({ spec, onError, expanded = false }: {
   const instance = useRef<EChartsType | null>(null);
   const [ready, setReady] = useState(false);
   const [downloadFailed, setDownloadFailed] = useState(false);
-  const theme = useThemeStore(s => s.resolved);
-  const scheme = useThemeStore(s => s.colorScheme);
   const locale = useLocaleStore(s => s.language);
   const labels = messages(locale).chat.chart;
 
@@ -31,17 +28,24 @@ export function ChartCanvas({ spec, onError, expanded = false }: {
     let frame: number | undefined;
     let lastWidth = 0;
     let lastHeight = 0;
+    let lastColors = '';
     setReady(false);
     const update = () => {
       const width = element.clientWidth;
       const height = element.clientHeight;
       if (!current || !runtime || width <= 0 || height <= 0) return;
       try {
+        const colors = readChartColors(element);
+        const colorKey = JSON.stringify(colors);
         if (!instance.current) {
           instance.current = runtime.init(element, undefined, { renderer: 'canvas', devicePixelRatio: Math.min(window.devicePixelRatio || 1, 2) });
-          instance.current.setOption(compileChartOption(spec, readChartColors(element)), { notMerge: true });
           setReady(true);
-        } else if (width !== lastWidth || height !== lastHeight) {
+        }
+        if (colorKey !== lastColors) {
+          instance.current.setOption(compileChartOption(spec, colors), { notMerge: true });
+          lastColors = colorKey;
+        }
+        if (lastWidth && (width !== lastWidth || height !== lastHeight)) {
           instance.current.resize();
         }
         lastWidth = width;
@@ -58,6 +62,10 @@ export function ChartCanvas({ spec, onError, expanded = false }: {
     };
     const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(scheduleUpdate);
     observer?.observe(element);
+    // View transitions apply DOM theme attributes after the store notification.
+    const themeObserver = new MutationObserver(scheduleUpdate);
+    themeObserver.observe(document.documentElement, { attributes: true,
+      attributeFilter: ['class', 'data-theme', 'data-color-scheme', 'style'] });
     window.addEventListener('resize', scheduleUpdate);
     void loadChartRuntime().then(value => {
       if (!current) return;
@@ -68,11 +76,12 @@ export function ChartCanvas({ spec, onError, expanded = false }: {
       current = false;
       if (frame !== undefined) cancelAnimationFrame(frame);
       observer?.disconnect();
+      themeObserver.disconnect();
       window.removeEventListener('resize', scheduleUpdate);
       instance.current?.dispose();
       instance.current = null;
     };
-  }, [spec, theme, scheme, onError]);
+  }, [spec, onError]);
 
   const download = () => {
     if (!instance.current) return;
