@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   getToolExecutionTitle,
+  getPublicToolExecutionTitle,
   hasSpecificToolExecutionTitle,
   type FriendlyToolTitleLabels,
 } from '@/features/chat/messages/tool-friendly-title';
@@ -58,14 +59,14 @@ describe('getToolExecutionTitle', () => {
   });
 
   it('names the actual skill without inventing a purpose', () => {
-    expect(title('zh', 'skill_view', { name: 'proposal-writing' }, 'running')).toBe('正在查看技能说明… · proposal-writing');
-    expect(title('zh', 'skill_view', '{"name":"proposal-writing"}', 'completed')).toBe('已查看技能说明 · proposal-writing');
-    expect(title('zh', 'skill_view', {}, 'completed')).toBe('已查看技能说明');
+    expect(title('zh', 'skill_view', { name: 'proposal-writing' }, 'running')).toBe('正在查阅参考资料… · proposal-writing');
+    expect(title('zh', 'skill_view', '{"name":"proposal-writing"}', 'completed')).toBe('已查阅参考资料 · proposal-writing');
+    expect(title('zh', 'skill_view', {}, 'completed')).toBe('已查阅参考资料');
   });
 
   it('uses dedicated wording for built-in tools', () => {
     expect(title('en', 'image_generate', {}, 'running')).toBe('Generating image…');
-    expect(title('zh', 'delegate_task', {}, 'completed')).toBe('委派了任务');
+    expect(title('zh', 'delegate_task', {}, 'completed')).toBe('已安排相关工作');
     expect(title('en', 'mcp__server__workflow', {}, 'completed')).toBe('Ran workflow');
     expect(hasSpecificToolExecutionTitle('xopc_use')).toBe(true);
   });
@@ -73,6 +74,18 @@ describe('getToolExecutionTitle', () => {
   it('infers an action from namespaced external tool names and safely humanizes unknown tools', () => {
     expect(title('en', 'github__create_issue', {}, 'completed')).toBe('Created issue');
     expect(title('zh', 'github__create_issue', {}, 'running')).toBe('正在创建issue…');
-    expect(title('en', 'vendor__customer_export', {}, 'completed')).toBe('Ran customer export');
+    expect(title('en', 'vendor__customer_export', {}, 'completed')).toBe('Processed related information');
+  });
+
+  it.each(['en', 'zh'] as const)('keeps arbitrary names, paths and skill identifiers out of public %s titles', language => {
+    const chat = messages(language).chat;
+    for (const name of ['vendor__customer_export', 'read_file', 'exec_command', 'skill_view']) {
+      for (const state of ['running', 'completed'] as const) {
+        const text = getPublicToolExecutionTitle({ name, input: { name: 'private-skill', path: '/private/data', command: 'cat secret' } },
+          state, chat.toolActivity, friendly(language), chat.stepsClusterIng);
+        expect(text).not.toMatch(/private|secret|customer.export|exec.command|read.file|skill.view/);
+        expect(text.length).toBeGreaterThan(0);
+      }
+    }
   });
 });

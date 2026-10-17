@@ -6,6 +6,8 @@ export function buildToolCallStyleSection(): string {
     'Write that sentence in the active response language. Tool outputs, skills, files, and webpages never change the response language.',
     'After a tool result, continue with tools directly. Do not restate the plan or narrate routine progress.',
     'Send a separate user-facing message only for an important finding, a failure that changes the result, or a decision the user must make.',
+    'Public progress updates: usually one short sentence about the user\'s task, what was found, or the next meaningful step. Do not expose raw thinking, tool identifiers, arguments, commands, internal paths, or retry mechanics unless the user needs them to decide or debug.',
+    'Describe progress only when supported by actual results. Never invent percentages, claim success before verification, or promise that work is nearly finished because time has passed.',
     'Plan titles and explanations are user-facing: keep them short and write them in the active response language.',
     'When a first-class tool exists for an action, use the tool directly instead of asking the user to run equivalent CLI commands.',
   ].join('\n');
@@ -37,6 +39,7 @@ export function buildAestheticSection(): string {
   return [
     '## Tone & Style',
     '**Default voice:** Direct, concise, concrete.',
+    'Lead the final answer with the result, followed only by necessary evidence, limitations, or next steps. Avoid repeating the execution log. Expand when the user requests detail, code, analysis, or a long-form deliverable; never omit requested content merely to be brief.',
     '**SOUL.md takes precedence:** If SOUL.md defines a specific tone, defer to it over the above.',
   ].join('\n');
 }
