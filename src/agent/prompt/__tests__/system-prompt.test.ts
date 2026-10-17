@@ -171,17 +171,37 @@ describe('buildSystemPrompt prompt modes', () => {
 });
 
 describe('buildSystemPrompt response language', () => {
-  it.each(['full', 'minimal', 'none'] as const)('uses profile language in %s mode when response language is automatic', (promptMode) => {
-    const prompt = buildSystemPrompt('/ws', { promptMode, agentProfile: { name: 'Mira', language: 'fr' } });
-    expect(prompt).toContain('Write all user-facing prose in French.');
-    expect(prompt).not.toContain('Write user-facing prose in the language of the current user request.');
-    expect(prompt).toContain('A user may explicitly request a different response language for the current turn.');
+  describe.each(['full', 'minimal', 'none'] as const)('automatic response language in %s mode', (promptMode) => {
+    it.each([
+      ['en', 'English'],
+      ['fr', 'French'],
+      ['中文', '中文'],
+    ])('follows the current user message with %s as a fallback only', (language, displayName) => {
+      const prompt = buildSystemPrompt('/ws', { promptMode, responseLanguage: 'auto', agentProfile: { name: 'Mira', language } });
+      expect(prompt).toContain('Write user-facing prose in the language of the current user request.');
+      expect(prompt).toContain(`Only when the current user message has no identifiable language, fall back to the Agent primary language: ${displayName}.`);
+      expect(prompt).not.toContain(`Write all user-facing prose in ${displayName}.`);
+      expect(prompt).toContain('not surrounding runtime metadata, quoted material, or source context');
+      expect(prompt).toContain('Re-evaluate it on each turn.');
+      expect(prompt).toContain('A user may explicitly request a different response language for the current turn.');
+    });
+
+    it('follows the current user message without an Agent primary language', () => {
+      const prompt = buildSystemPrompt('/ws', { promptMode });
+      expect(prompt).toContain('Write user-facing prose in the language of the current user request.');
+      expect(prompt).not.toContain('fall back to the Agent primary language');
+    });
   });
 
-  it('keeps a fixed response-language preference above profile language', () => {
-    const prompt = buildSystemPrompt('/ws', { responseLanguage: 'zh-CN', agentProfile: { name: 'Mira', language: 'fr' } });
-    expect(prompt).toContain('Write all user-facing prose in Simplified Chinese.');
+  it.each([
+    ['zh-CN', 'Simplified Chinese'],
+    ['en', 'English'],
+  ] as const)('keeps fixed %s above profile language', (responseLanguage, displayName) => {
+    const prompt = buildSystemPrompt('/ws', { responseLanguage, agentProfile: { name: 'Mira', language: 'fr' } });
+    expect(prompt).toContain(`Write all user-facing prose in ${displayName}.`);
     expect(prompt).not.toContain('Write all user-facing prose in French.');
+    expect(prompt).not.toContain('Write user-facing prose in the language of the current user request.');
+    expect(prompt).not.toContain('fall back to the Agent primary language');
   });
 
   it('enforces Simplified Chinese without translating technical literals', () => {
