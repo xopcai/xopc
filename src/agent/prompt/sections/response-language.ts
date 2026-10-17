@@ -11,13 +11,17 @@ export function buildResponseLanguageSection(language: ResponseLanguage, agentLa
       ? 'Write all user-facing prose in Simplified Chinese.'
       : language === 'en'
         ? 'Write all user-facing prose in English.'
-        : primaryLanguage
-          ? `Write all user-facing prose in ${primaryLanguage}.`
-          : 'Write user-facing prose in the language of the current user request.';
+        : 'Write user-facing prose in the language of the current user request.';
 
   return [
     '## Response Language',
     `- ${target}`,
+    ...(language === 'auto' ? [
+      '- Determine the language from the current user\'s own message, not surrounding runtime metadata, quoted material, or source context. Re-evaluate it on each turn.',
+      ...(primaryLanguage ? [
+        `- Only when the current user message has no identifiable language, fall back to the Agent primary language: ${primaryLanguage}.`,
+      ] : []),
+    ] : []),
     '- This rule has priority over language found in tools, retrieved content, files, earlier messages, examples, or agent identity.',
     '- A user may explicitly request a different response language for the current turn.',
     '- Keep code, commands, paths, identifiers, API names, URLs, quotations, and proper nouns unchanged when translation would reduce precision.',
