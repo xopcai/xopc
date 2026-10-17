@@ -3,7 +3,7 @@
 > 日期：2026-10-13  
 > 状态：P0–P6 已实施；验证结果和测量范围见[实施记录](./web-chat-message-rendering-implementation.md)  
 > 范围：`web/` Gateway Console 的消息展示、Markdown、流式呈现、复杂内容与滚动  
-> 关联：[Codex 流式文字动画调研](./codex-streaming-text-animation-research.md)
+> 关联：[流式文字动效依据](#流式文字动效依据)
 
 ## 1. 目标与决策
 
@@ -384,3 +384,17 @@ P1 与 P2 可分别形成独立 PR，但本方案不要求并行代理工作。P
 - [assistant-ui selectors](https://www.assistant-ui.com/docs/api-reference/utilities/miscellaneous)：结构行与内容更新分离的设计参考。
 - [React memo](https://react.dev/reference/react/memo)：稳定 props、局部状态与 profiler 验证。
 - [react-virtuoso](https://github.com/petyosi/react-virtuoso)、[Virtuoso Message List](https://virtuoso.dev/message-list/)：通用开源虚拟列表与商业消息列表是不同包。
+
+## 流式文字动效依据
+
+2026-10-13 对本地 Codex 安装包的只读检查显示，其柔和尾部主要来自新增文字片段的透明度渐显、独立于权威正文的自适应缓冲、稳定片段身份和稳定 Markdown 前缀缓存。未检查运行时 DOM/computed styles；该观察不是公开 API，也不能证明所有 bundle 分支均已启用，或推断其它版本的行为。
+
+xopc 采用的维护原则：
+
+- 只对活动回复新增片段渐显，旧片段保持可读；不为整个消息叠加永久底部渐变。
+- 稳定 React 身份避免 Markdown 更新时重播旧文字；历史打开、重连、切会话立即显示既有快照。保留 sanitize、链接、代码、文件预览与 Mermaid 行为。
+- 呈现节奏按积压和到达速率调节，不叠加独立打字队列，不因总文档变长而增大每次突发提交。权威正文和呈现缓冲分离。
+- 完成/取消时提交完整正文，已启动动画可收尾，但不截断、不重播。减少动态效果时关闭渐显。
+- 覆盖中文分词、emoji grapheme、Markdown 结构变化、未闭合 fence、表格、后台、选择/复制和长回复；阅读区域保持稳定。
+
+早期建议的 500–700ms 仅是视觉起点；已实施的 600ms、活动动画预算、单一调度与性能局限见[实施与验收记录](./web-chat-message-rendering-implementation.md)，不把安装包参数当作 xopc 的性能承诺。

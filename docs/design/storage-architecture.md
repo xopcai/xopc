@@ -109,3 +109,27 @@ The extension namespace sanitizer previously merged different names and wrote un
 ## Validation
 
 Behavior tests cover database reopen, transaction rollback, separate scopes, concurrent Workflow sequence allocation, stale revision conflicts, same-millisecond note versions, cascade deletion, detached extension values, connector deduplication beyond 500 events, share view limits across store instances, expired lease replacement, failed IPC retries, cursor monotonicity and network filesystem rejection. Existing Workflow, notes, share, command and public-route regression suites remain part of validation.
+
+## Conversation identity and transcript boundaries
+
+A conversation has a stable UUIDv4 `conversationId`. Agent, channel, account, peer, thread and routing scope are stored metadata, never decoded from the UUID. `sessions.active_transcript_id` selects the active transcript; reset archives that transcript and creates another while preserving the conversation UUID. Fork and explicit new-chat actions create a new conversation UUID.
+
+| Identity or relation | Authority |
+| --- | --- |
+| Conversation and immutable Agent ownership | `sessions.conversation_id` and session metadata |
+| Transcript and owner | `transcripts.transcript_id`, `transcripts.conversation_id` |
+| Current transcript | `sessions.active_transcript_id` |
+| Route lookup | `conversation_routes(route_key, conversation_id)` |
+| Creation and identity checks | `src/storage/sqlite/conversation-repository.ts` |
+| Routing equivalence | `src/routing/conversation-route.ts` |
+| Boundary ID validation | `packages/gateway-contract/src/conversation-identity.ts` |
+
+New transcript IDs are UUIDs; retained safe historical opaque transcript tokens need not be renamed. A generic list/metadata `key` denotes the same conversation UUID, not a legacy route alias. Provider, pi, login, device and voice `sessionId` fields retain their own protocol meanings; immutable published share manifests are not rewritten by a global field-name replacement.
+
+Route lookup uses an explicit eight-field tuple (Agent, scope, channel, account, peer kind, peer, thread and business scope) with a unique key and transactional creation. Preserve channel-specific DM/account/group equivalence and identity-link rules. Outbound routing reads metadata. Missing conversations fail explicitly; a 404 must not silently create a replacement or guess an Agent. Metadata updates cannot reassign an existing conversation's Agent.
+
+Because route resolution can create the conversation before initialization, callers explicitly populate project, source and visibility metadata rather than assuming an existing row is initialized. Imported/forked external origin references need not resolve locally and must not create fictitious conversations; local parent references remain strict.
+
+The retained database baseline is v217. The historical v177→v178 UUID conversion and its old-key decoder are not a supported current upgrade path. Historical conversion logs remain in Git history; do not restore alias tables, legacy ID parsing or runtime dual writes. Database recovery requires stopped processes, a consistent snapshot and matching software; do not mix an old database with new WAL/SHM files or automatically overwrite post-upgrade writes with an older backup.
+
+Identity validation should cover authenticated creation, route reuse, reset, fork, restart, external-source references, transcript/FTS preservation and linkage checks through `xopc doctor --deep`. Historical migration tests and local simulated-model runs are not evidence of current production or native-client upgrade acceptance.

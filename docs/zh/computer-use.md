@@ -22,7 +22,7 @@
 
 ## 故障恢复
 
-只有桌面明确确认“界面在派发输入前发生变化”、且没有执行回执时，运行时才会丢弃提案，重新观察和规划。`computer.maxRescuesPerSession` 是整个会话共享的救援上限，默认 1 次，允许 0–3 次，0 表示禁用。提高上限需要新建会话，降低立即生效。救援保留原目标、应用窗口、模型和本地授权检查；执行结果不确定、原生操作失败或截图未变化都不会触发自动重试。详见[有限救援边界](../design/technical/computer-use-bounded-rescue.md)。
+只有桌面明确确认“界面在派发输入前发生变化”、且没有执行回执时，运行时才会丢弃提案，重新观察和规划。`computer.maxRescuesPerSession` 是整个会话共享的救援上限，默认 1 次，允许 0–3 次，0 表示禁用。提高上限需要新建会话，降低立即生效。救援保留原目标、应用窗口、模型和本地授权检查；执行结果不确定、原生操作失败或截图未变化都不会触发自动重试。详见[有限救援边界](https://github.com/xopcai/xopc/blob/main/docs/design/technical/computer-use-bounded-rescue.md)。
 
 | 现象 | 处理 |
 | --- | --- |
@@ -44,10 +44,10 @@
 
 `flows` 列出同一 Agent、工作区中保存的名称和 ID；在 `step` 中提供 `flowId` 与当前任务目标及完成条件即可参考。每一步仍会重新观察、请求当前 GUI 模型规划、绑定新的控件引用，并经过现有本地授权、应用／设备范围和预算检查。历史流程不会自动授予发送、删除等权限，也不会触发不确定动作重试。`forget_flow` 可在本地删除记录。
 
-流程使用现有私有 SQLite 数据库，重启后保留，30 天过期，每个 Agent／工作区最多 32 条。保存内容仅有名称、原生控件角色和标签、动作种类、历史条件、覆盖范围、应用和设备标识，不含截图、输入值、任务目标、坐标或旧元素引用。请使用不含敏感内容的名称和控件。选中条件只证明对应导航条件，不能证明保存、提交等完整业务成功。详见[保存与复用边界](../design/technical/computer-use-verified-flows.md)。
+流程使用现有私有 SQLite 数据库，重启后保留，30 天过期，每个 Agent／工作区最多 32 条。保存内容仅有名称、原生控件角色和标签、动作种类、历史条件、覆盖范围、应用和设备标识，不含截图、输入值、任务目标、坐标或旧元素引用。请使用不含敏感内容的名称和控件。选中条件只证明对应导航条件，不能证明保存、提交等完整业务成功。详见[保存与复用边界](https://github.com/xopcai/xopc/blob/main/docs/design/technical/computer-use-verified-flows.md)。
 
-固定版本的 macOS 驱动无法证明整棵可访问性树完整。此类快照仍标为部分覆盖：只允许保存已观察到的原生控件提示和具体页面内容的正向证据，不据此证明控件不存在、名称唯一或选中状态。控件名称本身及操作前已出现的文字不算保存依据。详见[真实 TextEdit 验证](../design/technical/computer-use-verified-flows-live-validation.md)。
+固定版本的 macOS 驱动无法证明整棵可访问性树完整。此类快照仍标为部分覆盖：只允许保存已观察到的原生控件提示和具体页面内容的正向证据，不据此证明控件不存在、名称唯一或选中状态。控件名称本身及操作前已出现的文字不算保存依据。详见[真实 TextEdit 验证](https://github.com/xopcai/xopc/blob/main/docs/design/technical/computer-use-verified-flows-live-validation.md)。
 
-[真实 GUI-Plus 模型验证](../design/technical/computer-use-verified-flows-hosted-validation.md)使用实际供应商响应，覆盖保存、独立进程重启后复用、本地授权和丢失回执后不重试。GUI-Plus 的 xopc 提示协议支持用当前 `ref` 显式请求 `activate`／`show_menu`，动作仍需通过现有原生校验与授权；部分覆盖时不会把坐标自动转换为原生动作。
+[真实 GUI-Plus 模型验证](https://github.com/xopcai/xopc/blob/main/docs/design/technical/computer-use-verified-flows-hosted-validation.md)使用实际供应商响应，覆盖保存、独立进程重启后复用、本地授权和丢失回执后不重试。GUI-Plus 的 xopc 提示协议支持用当前 `ref` 显式请求 `activate`／`show_menu`，动作仍需通过现有原生校验与授权；部分覆盖时不会把坐标自动转换为原生动作。
 
-新保存的流程绑定经过认证的持久桌面设备身份，重启后即使网络连接 ID 改变，也可以在重新授权后复用；重新注册成另一设备不能继承该流程。没有设备身份的旧流程仍保留原连接限制。详见[真实 Gateway／桌面网络验证](../design/technical/computer-use-verified-flows-network-validation.md)。
+新保存的流程绑定经过认证的持久桌面设备身份，重启后即使网络连接 ID 改变，也可以在重新授权后复用；重新注册成另一设备不能继承该流程。没有设备身份的旧流程仍保留原连接限制。详见[真实 Gateway／桌面网络验证](https://github.com/xopcai/xopc/blob/main/docs/design/technical/computer-use-verified-flows-network-validation.md)。

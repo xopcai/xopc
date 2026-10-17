@@ -153,3 +153,49 @@ Task contract 和 TaskRun receipt 仍分别是任务书与最终执行结论的�
 - 阶段 D：提供 `/api/tasks/orchestration-metrics` 汇总任务量、进展、问题、投递和延迟。真实语音派工延迟与进度问答准确率需要带可用语音服务的场景采样，不能从本地单元测试推断。
 
 当前产品范围不包含事件主动打断主 Agent 的语音回合，也不包含 natural 模式的工具桥接；这两项按第 6、9 节留在独立切片。
+
+## Personal 单层后台分配：现行契约与设计差异
+
+更新：2026-10-17，合并 2026-10-14 后台分配方案并按当前 `src/tasks/task-allocation-service.ts` 与实现记录核对。上文早期“主 Agent 选择执行者并创建 TaskRun”的流程，对普通 Personal 委派由本节异步分配替代；直接指定执行者的既有 Task、Workflow 和 Automation 沿各自入口处理。
+
+### 提交、身份与执行所有权
+
+- Personal 一次 `personal_task submit` 保存完整任务书、要求、材料引用和来源主会话，收到本地提交确认即可结束回合。候选扫描、Skill 加载、远程探测、规划/Router 模型和执行不进入 submit 热路径；dispatcher 通过 `setImmediate` 唤醒，持久化队列负责恢复。
+- 一个用户任务仍只有一个 Task；Router 是专门的 Catalog Agent（purpose=task_dispatcher），只做独立、无历史的结构化选人调用，不执行 TaskRun、不开放业务工具、不递归创建子任务。执行者在独立会话工作，同一时刻至多一个 active root TaskRun。
+- Task、origin/main links、输入引用、allocation 与提交事件在原创建事务保存。输入用共享 media/object/context 引用，不复制整个个人会话，也不把另一 Agent 的同名本地路径当作相同文件。完整验收条件和约束不能以启动文字截断代替；获准上下文交接见[阶段 B](./technical/personal-task-handoff-stage-b-2026-10-15.md)。
+- 用户明确点名的 Agent/Skill、输入和授权边界不得被 Router 改写。Personal 不扫描 Specialist 目录，不猜硬工具名；后台解析指定 Agent ID/唯一显示名并验证，找不到不能悄悄换人。
+
+### 后台分配与原子启动
+
+当前 `TaskAllocationDispatcher` 在 `task-allocation-service.ts` 内实现，使用两个分配槽位，独立于 TaskRun 执行池。单轮 40 秒取消期限、错误最多三次尝试属于当前工程配置，不是延迟或容量承诺。
+
+- 从 ready、enabled Catalog 候选中排除 personal、当前主 Agent 和 dispatcher，验证模型、工具、输入输出处理、必需 Skill 和材料权限。标签说明适合程度，不授予权限；blocked/unknown 条件不能当作可执行证明。
+- 用户明确指定者或唯一满足覆盖且无额外限制的候选可确定性分配；其他情况由真实 Router 比较候选。只接受 strict `select`、`needs_input`、`no_candidate`，不能选择未展示的 Agent，不能扩写目标或授权。
+- 超过 24 个可行候选明确报 `candidate_review_budget_exceeded`，不截取一批后声称全目录最优。模型调用在 SQLite 写事务外进行。
+- 提交前重查租约所有权、Task version、关闭/等待/active-root 状态、候选完整集合及其 revision；变化则废弃旧判断并重评。连接应用再检查原 connector/account 允许执行者，取消的 Request 不启动。
+- 同一写事务更新 Task 执行者、调用原 TaskApplicationService start、保存 selection 与 allocation assigned 状态。启动幂等键为 `allocation:<id>:start`，选择记录关联原输入和 transcript；assigned 可因依赖/授权等待而暂时没有 Run，不能误报已运行。
+- 分配失败可重试原 allocation；它不是执行失败重跑。执行中的 instruct/answer 交给原执行者，不能重新选人或重复外部效果。用户取消与分配提交按事务顺序处理，旧租约决策不能覆盖新状态。
+
+当前每 Task 一条 allocation，重试同一记录，复用 selectionSource=match/explicit 及 allocation ID 审计。原稿 proposed generation 历史和独立 attempts 表均未实现，不作为现行 schema。
+
+### 状态、结果与连接应用
+
+状态先写主会话 transcript 并发布 Task.changed，客户端复用状态消息和成果卡；不依赖仅内存 WebSocket。已分配、queued/running、待验收、已交付和用户接受分别表达，旧事件不能复活取消任务，删除的原会话不改投别的会话。
+
+submitted 在当前回合确认，assigned/started 不必每次唤醒模型；必要问题、权限/分配失败和最终结果经可靠主会话处理，忙时排队而不抢占用户输入。结果沿 TaskRunCoordinator → completeRun → 结果 outbox → TaskResultDeliveryService/PersonalReplyComposer，通知重试不重做任务，执行者 workspace 路径不冒充下载产物。
+
+连接应用已由[协作 P1](./technical/personal-connected-collaboration-p1-2026-10-14.md)接入后台 Task/Request 协作，保留选定账户、只读授权和原连接恢复 UI。旧稿“连接应用保持独立且不参与后台分配”的阶段范围不再代表当前完成度；不得为统一协作放宽账户权限。
+
+### 未实现设计与持续验收
+
+| 保留后续项 | 边界 |
+| --- | --- |
+| allocation generation 历史、独立 attempts 审计 | 当前是一 Task 一条 allocation，不新增文档中的拟议表/字段作为实现声明 |
+| 多批候选扩展、目录检索缓存 | 当前完整筛选后超过 24 个 eligible 候选受阻，未实现原稿 3 批/60 秒检索策略 |
+| 统一合并状态卡 | 当前使用状态消息及已有成果卡，不能宣称统一卡片已交付 |
+| 规模、选人准确率、配额公平性 | 需多 Agent/任务类别样本及 provider 配额竞争测量；移到后台不自动保证前台资源隔离 |
+| 更多自动进度与真实语音 | 有限里程碑投影、通知偏好与真实语音验收分别推进，不复制全部工具流 |
+
+[后台分配真实验证](./technical/personal-allocation-live-verification-2026-10-14.md)记录真实 Router 一次选中 data-analyst、本地 submit 13.62ms、后台分配 3.05s、期间主对话 1.34s 回复及执行后 1.50s 回传；这是单次合成样本，不是 p95。原失败 JSON、凭据复用修复和测量限制保留在该文；[阶段 D](./technical/personal-performance-stage-d-2026-10-15.md)另有前台/后台样本、费用和注入故障口径。
+
+继续维护的回归包括：相同输入/幂等键不重复 Task；超长材料与权限隔离；无候选/未知条件/超预算/未展示 ID；候选 revision 变化、取消/暂停、租约崩溃与重启；一个 Task/active root、正确执行者与会话；依赖/授权 waits；乱序状态、结果持久化与原会话恢复；主对话在后台选人和执行期间仍可响应。记录 submit 本地耗时、排队/决策、实际 run start、状态/结果送达、候选与模型调用/费用，不能将模拟验证称为真实选人质量。
