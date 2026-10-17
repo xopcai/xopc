@@ -32,6 +32,9 @@ export class ComputerTargetError extends Error {
 
 /** Recovery instructions are deterministic; never replay an input with unknown delivery. */
 export function computerRecovery(code: string): string {
+  if (code === 'COMPUTER_RECEIPT_MISMATCH') return 'The receipt could not be matched to the dispatched action, so its outcome is uncertain. Inspect the application locally; never automatically retry or replay the input. Wait for confirmed release before switching tools.';
+  if (code === 'COMPUTER_FLOW_NOT_FOUND' || code === 'COMPUTER_FLOW_TARGET_MISMATCH') return 'The saved flow is unavailable or belongs to another application/device. Do not replay it or switch targets automatically. List flows and inspect the authorized target before planning again.';
+  if (code === 'COMPUTER_FLOW_NOT_VERIFIED' || code === 'COMPUTER_FLOW_SAVE_FAILED') return 'Control was released. No reusable flow was confirmed saved. Saving requires verified native navigation, non-sensitive labels and working local storage; never repeat desktop input merely to save a flow.';
   if (code.startsWith('COMPUTER_FRAME_UPLOAD_')) {
     return 'Screenshot upload to the Gateway failed. No automatic retry. Report the diagnosticId and HTTP status; do not change model providers or bypass desktop controls.';
   }

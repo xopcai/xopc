@@ -58,6 +58,15 @@ describe('computer tool error signaling', () => {
     const error = await f.tool.execute('call', { op: 'step', goal: 'Inspect' }, undefined, undefined).catch(error => error);
     expect(JSON.parse(error.message)).toMatchObject({ status: 'error', ...diagnostic });
   });
+  it('passes explicit flow save/list/delete operations without starting an action loop', async () => {
+    const f = setup(), id = crypto.randomUUID();
+    for (const input of [{ op: 'close', saveFlowAs: 'Open memories' }, { op: 'flows' }, { op: 'forget_flow', flowId: id }]) {
+      f.execute.mockResolvedValueOnce({ status: 'stopped', sessionId: 's' });
+      await f.tool.execute('call', input, undefined, undefined);
+      expect(f.execute).toHaveBeenLastCalledWith('owner', input, undefined);
+    }
+    expect(f.close).not.toHaveBeenCalled();
+  });
   it('exposes no legacy bundle-ID or raw action schema', () => {
     const { tool } = setup();
     expect(Object.keys((tool.parameters as any).properties)).not.toEqual(expect.arrayContaining(['appId', 'action']));
