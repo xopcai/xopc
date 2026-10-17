@@ -1,5 +1,7 @@
 # Desktop pet
 
+Loopi is the only built-in companion. Its layered circular ring and expressive core reflect idle, working, waiting for confirmation, and completed states. Confirmation waits for real user input; completion celebrates once. The previous built-in characters have been removed.
+
 The desktop app can show a small animated companion that reflects broad Agent activity such as waiting, reading, working, succeeding, or needing attention.
 
 ## Enable or choose a pet

@@ -2,7 +2,13 @@
 
 中英文均使用 **Loopi**，不使用中文译名。
 
-品牌 Logo、应用图标、favicon 和系统启动标识始终使用 `assets/brand/xopc-mark.svg` 的纯 80/20 圆环。Loopi 的脸与陶瓷材质只用于官网 landing、对话欢迎页、Onboarding 等产品内的动态角色场景，不进入静态 icon 资源。
+品牌 Logo、应用图标、favicon 和系统启动标识始终使用 `assets/brand/xopc-mark.svg` 的纯 80/20 圆环。Loopi 的脸与材质用于官网 landing、对话欢迎页、Onboarding、桌宠等动态角色场景，不进入静态 icon 资源。
+
+## 桌宠接入（2026-10-17）
+
+桌宠使用 Concept 05 的等粗灰蓝圆环与白色核心，替换此前三个内置宠物。共享图形位于 `src/pets/loopi-artwork.ts`，正式渲染器位于 `web/src/features/desktop-pet/loopi-desktop-pet.tsx`，动画样式位于相邻 CSS。Electron 仅登记一个内置角色 `loopi`，不保留旧角色 id 或迁移映射。自定义序列帧宠物继续使用独立的 v2 包协议。
+
+待机、工作、等待确认、完成由真实任务状态驱动；睡眠、异常、提起与释放保留独立反馈。浏览器开发验证入口为 `/desktop-pet-visual.html`，直接使用正式渲染器对照四种状态及 112 px 深色背景。独立设计样稿仍保存在 `desktop-pet-preview-v5.html`。
 
 最新入口为 **preview.html**，设计已更新为克制的陶瓷质感圆环 + 正面扁圆核心。运行时通过独立 SVG 图层控制眼睛、嘴、核心、外圈，包含自然眨眼、视线跟随、轻点回应、八种表情、官网循环和等待确认的 Onboarding。
 

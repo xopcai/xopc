@@ -782,17 +782,9 @@
     "customBadge": "Custom",
     "customPets": "Custom pets",
     "builtinPets": {
-      "ember": {
-        "name": "Ember",
-        "description": "Warm and dependable, with a tiny glow when work moves forward."
-      },
-      "scout": {
-        "name": "Scout",
-        "description": "Curious and quick, always ready to investigate the next clue."
-      },
-      "sprout": {
-        "name": "Sprout",
-        "description": "Quiet and steady, keeping you company without getting in the way."
+      "loopi": {
+        "name": "Loopi",
+        "description": "A calm companion that helps with work and leaves important decisions to you."
       }
     },
     "invalidPets": "Some custom pets could not be loaded",

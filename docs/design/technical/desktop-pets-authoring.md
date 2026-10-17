@@ -2,7 +2,7 @@
 
 Desktop pets are small animated companions shown by the Electron desktop app.
 
-The pet runtime uses one asset protocol: every pet is a folder with a `manifest.json`, a thumbnail, and spritesheet animations for the required actions.
+The only built-in pet is Loopi, rendered as layered SVG with task-driven animation. Custom pets use folders containing a `manifest.json`, a thumbnail, and spritesheet animations for the required actions.
 
 ## Folder Layout
 
@@ -59,7 +59,7 @@ Custom pets live under `~/.xopc/pets` by default. The exact path is shown in Set
 }
 ```
 
-All fields shown above are required except `canvasWidth`, `canvasHeight`, `fps`, `loop`, `offsetX`, and `offsetY`.
+All fields shown above are required except `persona`, `loop`, `offsetX`, and `offsetY`.
 
 `schemaVersion` must be `2`; earlier manifests and unknown actions are rejected. `persona` is optional. Numeric traits are clamped to `0..1`. Phrase lists are intended for short, truthful ambient reactions; they must not demand attention, guilt the user, or claim biological needs. Runtime task facts remain system-owned so personality never obscures status accuracy.
 

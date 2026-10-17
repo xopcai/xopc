@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Loopi · 桌宠动态预览 05</title>
+<style>
+:root{font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#28313f;background:#f6f7f9;font-synthesis:none}*{box-sizing:border-box}body{margin:0}button{font:inherit;cursor:pointer}button:focus-visible,a:focus-visible{outline:3px solid #007aff;outline-offset:4px}main{max-width:1180px;margin:auto;padding:30px 36px 40px}header{display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #e0e4ea;padding-bottom:22px}.brand{font-size:22px;letter-spacing:-1px}.brand span{font-weight:400;color:#8b93a0;font-size:15px;letter-spacing:0}.edition,.eyebrow{font-size:11px;letter-spacing:2px;color:#7c8695}.layout{display:grid;grid-template-columns:1.5fr 1fr;gap:44px;margin-top:32px}.visual{background:#fff;border:1px solid #e3e7ee;border-radius:28px;overflow:hidden}.stage-meta{display:flex;align-items:center;justify-content:space-between;padding:21px 24px;font-size:12px;color:#858d9b}.live{display:flex;align-items:center;gap:7px}.live:before{content:"";width:6px;height:6px;border-radius:50%;background:#7d9a8c}.stage{height:420px;display:grid;place-items:center;background:radial-gradient(ellipse at 50% 56%,#eff3fa,transparent 65%)}.stage svg{width:390px;max-width:100%;overflow:visible}.caption{text-align:center;padding:0 20px 28px}.caption strong{font-size:20px;font-weight:550}.caption p{font-size:13px;color:#9299a5;margin:10px 0 0}.side{padding:10px 0}h1{font-size:34px;line-height:1.4;letter-spacing:-1.5px;margin:13px 0}.intro{color:#7e8796;font-size:14px;line-height:1.9;margin-bottom:26px}.states{display:grid;grid-template-columns:1fr 1fr;gap:10px}.state{background:#fff;border:1px solid #e1e5ec;border-radius:15px;text-align:left;padding:16px 17px;color:#4f5c70}.state b{display:block;font-size:14px;font-weight:550}.state span{font-size:11px;color:#929ba8;display:block;margin-top:6px}.state[aria-pressed=true]{border-color:#007aff;background:#edf5ff;box-shadow:0 0 0 1px #007aff;color:#0069dc}.state[aria-pressed=true] span{color:#5b8fc7}.actions{display:flex;gap:8px;margin:21px 0 15px;flex-wrap:wrap}.btn{border:1px solid #dfe4ec;border-radius:10px;background:#fff;padding:10px 14px;font-size:12px;color:#536075}.primary{background:#007aff;border-color:#007aff;color:#fff}.note{font-size:12px;line-height:1.8;color:#8c94a2;min-height:44px}.confirm{margin-top:15px;padding:15px;border:1px solid #cddff5;border-radius:14px;background:#f0f6ff;font-size:12px;color:#56718f}.confirm p{margin:0 0 10px}.confirm[hidden]{display:none}.desktop{margin-top:26px;border:1px solid #e2e6ed;border-radius:19px;background:linear-gradient(120deg,#e6ebf3,#eef1f6);height:164px;position:relative;overflow:hidden}.desktop.dark{background:linear-gradient(120deg,#212734,#303b4f)}.desktop-label{position:absolute;left:16px;top:16px;font-size:11px;color:#7f8b9d}.mini{position:absolute;width:112px;height:112px;right:14px;bottom:4px}.mini svg{width:100%;height:100%;overflow:visible}.mini-bubble{position:absolute;right:23px;top:18px;background:#fff;border:1px solid #e0e6f0;padding:8px 12px;border-radius:10px;font-size:11px;color:#5a6a7f}.theme{position:absolute;left:16px;bottom:16px;border:0;background:#ffffffb3;border-radius:7px;padding:6px 9px;color:#68778b;font-size:10px}footer{font-size:11px;color:#99a1ae;margin-top:25px;line-height:1.8}footer a{color:#778aa4}.render-note{padding:14px 22px;border-top:1px solid #eef0f4;font-size:11px;color:#939ba7;text-align:center}
+.body-motion{transform-origin:200px 190px;animation:breath 4.4s ease-in-out infinite}.core-motion{transform-origin:200px 190px;animation:core-breathe 4.4s ease-in-out infinite}.eyes{transform-origin:200px 184px;animation:blink 6.1s infinite}.work-card,.happy-eyes,.happy-mouth,.wait-cue{opacity:0}.normal-mouth,.normal-eyes{opacity:1}.look{transition:transform .45s ease}.ground{transform-origin:200px 352px;animation:shadow 4.4s ease-in-out infinite}.happy-mouth{fill:#232832}.cheeks{opacity:.34}.work-card{transform-origin:282px 240px}.wait-cue{transition:opacity .5s ease}
+body[data-state=work] .look{transform:translate(4px,9px)}body[data-state=work] .core-motion{animation:work-nod 2.8s ease-in-out infinite}body[data-state=work] .work-card{opacity:1;animation:card 2.8s ease-in-out infinite}body[data-state=work] .body-motion{animation:work-breathe 3.6s ease-in-out infinite}body[data-state=work] .scan{animation:scan 2s ease-in-out infinite}
+body[data-state=wait] .body-motion{animation:breath 6s ease-in-out infinite}body[data-state=wait] .core-motion{animation:core-breathe 6s ease-in-out infinite}body[data-state=wait] .wait-cue{opacity:.7}body[data-state=wait] .look{transform:translate(0,-2px)}
+body[data-state=done] .normal-eyes,body[data-state=done] .normal-mouth{opacity:0}body[data-state=done] .happy-eyes,body[data-state=done] .happy-mouth{opacity:1}body[data-state=done] .body-motion{animation:celebrate .95s ease-in-out 1,breath 4.4s .95s ease-in-out infinite}body[data-state=done] .eyes{animation:none}body[data-state=done] .core-motion{animation:joy .95s ease-in-out 1}body[data-state=done] .ground{animation:landing .95s ease-in-out 1}body[data-state=done] .cheeks{opacity:.65}
+.paused *{animation-play-state:paused!important}.paused .look{transition:none}@keyframes breath{50%{transform:translateY(-3px)}}@keyframes core-breathe{50%{transform:translateY(-1.5px) scale(1.012,1.006)}}@keyframes blink{0%,43%,47%,100%{transform:scaleY(1)}45%{transform:scaleY(.08)}}@keyframes shadow{50%{transform:scaleX(.94);opacity:.1}}@keyframes work-nod{0%,100%{transform:translate(1px,2px)}45%{transform:translate(2px,5px)}}@keyframes work-breathe{50%{transform:translateY(-2px)}}@keyframes card{50%{transform:translateY(-2px) rotate(-2deg)}}@keyframes scan{0%,100%{opacity:.3}50%{opacity:1}}@keyframes celebrate{0%,100%{transform:translateY(0)}22%{transform:translateY(3px)}48%{transform:translateY(-15px)}77%{transform:translateY(2px)}}@keyframes joy{22%{transform:scale(1.035,.96)}48%{transform:scale(.99,1.025)}80%{transform:scale(1.02,.98)}}@keyframes landing{48%{transform:scaleX(.78);opacity:.07}80%{transform:scaleX(1.05)}}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}@media(max-width:800px){main{padding:22px 18px}.layout{grid-template-columns:1fr;gap:24px}.stage{height:340px}.stage svg{width:330px}.side{padding:0}h1{font-size:28px}.edition{letter-spacing:1px}.desktop{height:155px}}
+</style>
+</head>
+<body data-state="idle"><main>
+<header><strong class="brand">Loopi</strong><span class="edition">DESKTOP MOTION STUDY · 05</span></header>
+<div class="layout">
+<section class="visual" aria-label="角色动作预览">
+<div class="stage-meta"><span class="live">等粗圆环 · 分层表情</span><span id="stateCode">01 / IDLE</span></div>
+<div class="stage" id="hero"></div>
+<div class="caption" aria-live="polite" aria-atomic="true"><strong id="title">我在，慢慢来。</strong><p id="description">轻呼吸、自然眨眼，安静地陪在旁边。</p></div>
+<div class="render-note">SVG 动效样稿 · 用于评审节奏与表情，最终 3D 材质以效果图为准</div>
+</section>
+<section class="side"><span class="eyebrow">A LITTLE PRESENCE.</span><h1>有回应，<br>也有安静的时候。</h1><p class="intro">圆环保持稳定，核心和眼神传递状态。<br>选一个状态，看看Loopi怎么陪你。</p>
+<div class="states" aria-label="选择预览状态">
+<button class="state" data-state="idle" aria-pressed="true"><b>01　待机</b><span>轻呼吸 · 自然眨眼</span></button>
+<button class="state" data-state="work" aria-pressed="false"><b>02　工作</b><span>视线下移 · 专注处理</span></button>
+<button class="state" data-state="wait" aria-pressed="false"><b>03　等我确认</b><span>看向你 · 安静等待</span></button>
+<button class="state" data-state="done" aria-pressed="false"><b>04　完成</b><span>笑眼 · 一次小弹跳</span></button>
+</div>
+<div class="actions"><button class="btn primary" id="flow">播放完整流程</button><button class="btn" id="pause" aria-pressed="false">暂停动态</button></div>
+<p class="note" id="note">流程演示：待机 → 工作 → 等你点击确认 → 完成。所有操作仅影响本地预览。</p>
+<div class="confirm" id="confirmation" hidden><p>方案准备好了，这一步听你的。</p><button class="btn primary" id="approve">确认，继续完成</button></div>
+<div class="desktop" id="desktop"><span class="desktop-label">桌面尺寸 · 112 px</span><div class="mini-bubble" id="bubble">我在这里。</div><div class="mini" id="mini" aria-hidden="true"></div><button class="theme" id="theme" aria-pressed="false">切换深色桌面</button></div>
+</section></div>
+<footer>静态外观参考 <a href="desktop-pet-concept-v5.png">Concept 05</a>。完成动作只播放一次；等待状态由你确认后继续；系统减少动态效果与页面后台均会停止动画。</footer>
+</main>
+<script>
+const svg = (key) => `<svg viewBox="0 0 400 400" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+<defs>
+<linearGradient id="gray-${key}" x1="85" y1="65" x2="270" y2="334" gradientUnits="userSpaceOnUse"><stop stop-color="#83858a"/><stop offset=".22" stop-color="#5a5c61"/><stop offset=".6" stop-color="#45474b"/><stop offset="1" stop-color="#33363a"/></linearGradient>
+<linearGradient id="blue-${key}" x1="210" y1="51" x2="332" y2="176" gradientUnits="userSpaceOnUse"><stop stop-color="#7bbaff"/><stop offset=".27" stop-color="#369bff"/><stop offset=".68" stop-color="#087dff"/><stop offset="1" stop-color="#0064dd"/></linearGradient>
+<radialGradient id="pearl-${key}" cx=".32" cy=".22" r=".85"><stop stop-color="#fffefa"/><stop offset=".5" stop-color="#f6f3f0"/><stop offset=".8" stop-color="#e7e4e1"/><stop offset="1" stop-color="#c9c9cb"/></radialGradient>
+<radialGradient id="eyes-${key}" cx=".3" cy=".25" r=".8"><stop stop-color="#4d5056"/><stop offset=".45" stop-color="#20232a"/><stop offset="1" stop-color="#090d14"/></radialGradient>
+<filter id="blur-${key}" x="-50%" y="-100%" width="200%" height="300%"><feGaussianBlur stdDeviation="4"/></filter>
+<filter id="soft-${key}" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="2.8"/></filter>
+<path id="long-${key}" d="M324.09 211.88 A126 126 0 1 1 178.12 65.91"/>
+<path id="short-${key}" d="M230.48 67.74 A126 126 0 0 1 322.26 159.52"/>
+</defs>
+<ellipse class="ground" cx="200" cy="352" rx="86" ry="7" fill="#334259" opacity=".14" filter="url(#blur-${key})"/>
+<g class="body-motion">
+<g class="ring" fill="none" stroke-width="44" stroke-linecap="round">
+<g transform="translate(0 3)"><use href="#long-${key}" stroke="#303237"/><use href="#short-${key}" stroke="#0063d6"/></g>
+<use href="#long-${key}" stroke="url(#gray-${key})"/><use href="#short-${key}" stroke="url(#blue-${key})"/>
+<g transform="translate(-2 -7)" stroke-width="9" opacity=".19" filter="url(#soft-${key})"><use href="#long-${key}" stroke="#fff"/><use href="#short-${key}" stroke="#e0f1ff"/></g>
+</g>
+<path class="wait-cue" d="M230.48 67.74 A126 126 0 0 1 322.26 159.52" fill="none" stroke="#a4d4ff" stroke-width="2" stroke-linecap="round"/>
+<g class="core-motion"><circle cx="200" cy="193" r="75" fill="#384353" opacity=".08" filter="url(#blur-${key})"/>
+<circle cx="200" cy="190" r="75" fill="url(#pearl-${key})"/><path d="M140 160 A69 69 0 0 1 231 129" stroke="#fff" stroke-width="2" opacity=".48" fill="none" stroke-linecap="round"/>
+<g class="look"><g class="cheeks" fill="#f0b8a0" filter="url(#soft-${key})"><ellipse cx="160" cy="208" rx="9" ry="5"/><ellipse cx="240" cy="208" rx="9" ry="5"/></g>
+<g class="eyes"><g class="normal-eyes"><ellipse cx="174" cy="184" rx="7.8" ry="10.3" fill="url(#eyes-${key})"/><ellipse cx="226" cy="184" rx="7.8" ry="10.3" fill="url(#eyes-${key})"/><ellipse cx="176" cy="180" rx="2.1" ry="2.8" fill="white"/><ellipse cx="228" cy="180" rx="2.1" ry="2.8" fill="white"/></g>
+<g class="happy-eyes" stroke="#242830" fill="none" stroke-width="4" stroke-linecap="round"><path d="M165 186 Q174 173 183 186"/><path d="M217 186 Q226 173 235 186"/></g></g>
+<path class="normal-mouth" d="M190 207 Q200 217 210 207" stroke="#292c33" stroke-width="3.8" stroke-linecap="round" fill="none"/>
+<g class="happy-mouth"><path d="M188 204 Q200 211 212 204 Q210 225 200 223 Q190 222 188 204"/><path d="M194 218 Q200 213 206 218 Q200 224 194 218" fill="#f3a79f"/></g>
+</g></g>
+<g class="work-card"><path d="M266 224 L322 217 Q327 216 325 222 L314 259 Q313 262 309 263 L255 269 Q251 270 253 265Z" fill="#c7cdd7" transform="translate(0 3)"/><path d="M266 224 L322 217 Q327 216 325 222 L314 259 Q313 262 309 263 L255 269 Q251 270 253 265Z" fill="#fbfcfe" stroke="#e0e4eb"/><path d="M273 235 L312 230 M270 243 L306 239 M267 252 L290 249" stroke="#c2d0e0" stroke-width="2.5" stroke-linecap="round"/><path class="scan" d="M273 235 L296 232" stroke="#2588f4" stroke-width="2.5" stroke-linecap="round"/></g>
+</g></svg>`;
+document.querySelector('#hero').innerHTML=svg('hero');document.querySelector('#mini').innerHTML=svg('mini');
+const labels={idle:['01 / IDLE','我在，慢慢来。','轻呼吸、自然眨眼，安静地陪在旁边。','我在这里。'],work:['02 / WORKING','我来把事情往前推。','看向任务卡片，小幅点头，专注但不紧绷。','正在整理方案…'],wait:['03 / YOUR CALL','这一步，听你的。','收起任务卡片，看向你；保持等待，不自动推进。','需要你确认一下。'],done:['04 / DONE','搞定啦。','笑眼和一次小弹跳，然后安静下来。','已经完成。']};
+let timers=[],paused=matchMedia('(prefers-reduced-motion: reduce)').matches,flow=false,current='idle';
+function clearTimers(){timers.forEach(clearInterval);timers=[]}
+function syncPause(){document.body.classList.toggle('paused',paused||document.hidden);const b=document.querySelector('#pause');b.textContent=paused?'播放动态':'暂停动态';b.setAttribute('aria-pressed',String(paused))}
+function setState(state){current=state;document.body.dataset.state='';void document.body.offsetWidth;document.body.dataset.state=state;const t=labels[state];document.querySelector('#stateCode').textContent=t[0];document.querySelector('#title').textContent=t[1];document.querySelector('#description').textContent=t[2];document.querySelector('#bubble').textContent=t[3];document.querySelector('#confirmation').hidden=state!=='wait';document.querySelectorAll('.state').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.state===state)));document.querySelector('#flow').textContent=flow?'重新播放流程':'播放完整流程'}
+document.querySelectorAll('.state').forEach(b=>b.onclick=()=>{clearTimers();flow=false;setState(b.dataset.state);document.querySelector('#note').textContent='手动预览当前状态。再次点击“完成”可重播庆祝动作。'});
+function tick(){if(paused||document.hidden)return;remaining-=100;if(remaining<=0){if(current==='idle'){setState('work');remaining=5600}else if(current==='work'){setState('wait');clearTimers();document.querySelector('#note').textContent='演示停在这里，点击下方确认按钮后才会完成。'}}}
+let remaining=0;
+document.querySelector('#flow').onclick=()=>{clearTimers();flow=true;remaining=3200;setState('idle');document.querySelector('#note').textContent='正在演示：待机 → 工作 → 等你确认。你可以随时切换状态。';timers.push(setInterval(tick,100))};
+document.querySelector('#approve').onclick=()=>{clearTimers();setState('done');document.querySelector('#note').textContent='已收到你的确认。完成动作只播放一次，保留开心表情。';document.querySelector('.state[data-state="done"]').focus()};
+document.querySelector('#pause').onclick=()=>{paused=!paused;syncPause()};
+document.querySelector('#theme').onclick=()=>{const dark=document.querySelector('#desktop').classList.toggle('dark');const b=document.querySelector('#theme');b.textContent=dark?'切换浅色桌面':'切换深色桌面';b.setAttribute('aria-pressed',String(dark))};
+document.addEventListener('visibilitychange',syncPause);matchMedia('(prefers-reduced-motion: reduce)').addEventListener('change',e=>{paused=e.matches;syncPause()});syncPause();
+</script>
+</body>
+</html>

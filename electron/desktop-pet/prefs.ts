@@ -6,6 +6,7 @@ import { app } from "electron";
 import { resolveStateDir } from "../../src/config/paths-state.js";
 import { validateDesktopPetPackage } from "../../src/pets/validator.js";
 import { DESKTOP_PET_SCHEMA_VERSION } from "../../src/pets/manifest.js";
+import { loopiDesktopPet } from "./loopi.js";
 import { readDesktopPetRelationship } from "./relationship-store.js";
 import type {
   DesktopPetAction,
@@ -40,68 +41,10 @@ const PET_ACTIONS: DesktopPetAction[] = [
   "released",
 ];
 
-type BuiltInPetKind = "ember" | "scout" | "sprout";
-
-type BuiltInPetPalette = {
-  id: string;
-  i18nKey: string;
-  name: string;
-  description: string;
-  kind: BuiltInPetKind;
-  accent: string;
-  accent2: string;
-  body: string;
-  face: string;
-  screen: string;
-  highlight: string;
-};
-
-const builtInPetPalettes: BuiltInPetPalette[] = [
-  {
-    id: "ember",
-    i18nKey: "ember",
-    name: "小焰",
-    description: "温暖可靠，会安静地替你守着正在进行的工作。",
-    kind: "ember",
-    accent: "#fb923c",
-    accent2: "#fb7185",
-    body: "#f97316",
-    face: "#431407",
-    screen: "#fff7ad",
-    highlight: "#ffedd5",
-  },
-  {
-    id: "scout",
-    i18nKey: "scout",
-    name: "探探",
-    description: "好奇机灵，最喜欢陪你搜索、浏览和发现线索。",
-    kind: "scout",
-    accent: "#facc15",
-    accent2: "#f59e0b",
-    body: "#d97706",
-    face: "#422006",
-    screen: "#fef3c7",
-    highlight: "#fde68a",
-  },
-  {
-    id: "sprout",
-    i18nKey: "sprout",
-    name: "芽芽",
-    description: "安静稳定，在深度工作时陪你慢慢把事情做好。",
-    kind: "sprout",
-    accent: "#84cc16",
-    accent2: "#22c55e",
-    body: "#a3e635",
-    face: "#365314",
-    screen: "#ecfccb",
-    highlight: "#d9f99d",
-  },
-];
-
 export const defaultDesktopPetPrefs: DesktopPetPrefs = {
   enabled: false,
   showOnStartup: false,
-  selectedPetId: "ember",
+  selectedPetId: "loopi",
   alwaysOnTop: true,
   bubbleEnabled: true,
   clickThroughWhenIdle: false,
@@ -266,316 +209,6 @@ async function imageToDataUrl(path: string): Promise<string | null> {
     return null;
   }
 }
-
-function svgToDataUrl(svg: string): string {
-  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
-}
-
-function actionFrameCount(action: DesktopPetAction): number {
-  if (action === "success" || action === "concern") return 8;
-  if (action === "idle" || action === "sleep") return 6;
-  return 10;
-}
-
-function actionFps(action: DesktopPetAction): number {
-  if (action === "idle" || action === "sleep") return 6;
-  if (action === "success" || action === "concern") return 12;
-  return 10;
-}
-
-function actionLoops(action: DesktopPetAction): boolean {
-  return action === "idle" || action === "sleep" || action === "research" ||
-    action === "read" || action === "create" || action === "execute" ||
-    action === "wait";
-}
-
-const PET_OUTLINE = "#111827";
-
-function renderBuiltInFace(
-  faceColor: string,
-  eye: string,
-  mouth: string,
-  x = 32,
-  y = 36,
-  width = 38,
-  height = 23,
-  rx = 8,
-): string {
-  const leftEyeX = x + 9;
-  const rightEyeX = x + width - 14;
-  const eyeY = y + 12;
-  const mouthOffsetX = x + Math.round(width / 2) - 9;
-  const mouthOffsetY = y + 10;
-  return `
-      <rect x="${x}" y="${y}" width="${width}" height="${height}" rx="${rx}" fill="${faceColor}"/>
-      <path d="M${leftEyeX} ${eyeY}q3 -5 6 0" fill="none" stroke="${eye}" stroke-width="3" stroke-linecap="round"/>
-      <path d="M${rightEyeX} ${eyeY}q3 -5 6 0" fill="none" stroke="${eye}" stroke-width="3" stroke-linecap="round"/>
-      <path d="${mouth}" fill="none" stroke="${eye}" stroke-width="3" stroke-linecap="round" transform="translate(${mouthOffsetX - 42} ${mouthOffsetY - 46})"/>`;
-}
-
-function renderBuiltInIdentityDetails(
-  palette: BuiltInPetPalette,
-  frame: number,
-): string {
-  const pulse = Math.sin((frame / 9) * Math.PI * 2);
-  if (palette.kind === "ember") {
-    return `
-      <path d="M26 28c-7-13 4-22 10-27 0 9 11 12 5 27z" fill="${palette.accent}" stroke="${PET_OUTLINE}" stroke-width="3"/>
-      <path d="M61 24c-2-12 8-17 11-24 3 9 10 14 2 27z" fill="${palette.accent2}" stroke="${PET_OUTLINE}" stroke-width="3"/>
-      <path d="M75 68c13 2 15 14 5 21 1-9-7-11-12-15z" fill="${palette.accent2}" stroke="${PET_OUTLINE}" stroke-width="3"/>`;
-  }
-  if (palette.kind === "scout") {
-    return `
-      <path d="M20 24l17-11 8 17z" fill="${palette.accent2}" stroke="${PET_OUTLINE}" stroke-width="3" stroke-linejoin="round"/>
-      <path d="M75 24L58 13l-8 17z" fill="${palette.accent2}" stroke="${PET_OUTLINE}" stroke-width="3" stroke-linejoin="round"/>
-      <path d="M25 60c-7 6-9 15-2 23" fill="none" stroke="${palette.highlight}" stroke-width="5" stroke-linecap="round"/>
-      <path d="M73 60c7 6 9 15 2 23" fill="none" stroke="${palette.highlight}" stroke-width="5" stroke-linecap="round"/>`;
-  }
-  if (palette.kind === "sprout") {
-    return `
-      <path d="M45 23c-10-18 11-23 20-13-1 14-11 19-20 13z" fill="${palette.accent2}" stroke="${PET_OUTLINE}" stroke-width="3"/>
-      <path d="M51 20l12-11" stroke="${palette.face}" stroke-width="2.5" stroke-linecap="round"/>
-      <path d="M36 25c-11-9-3-21 10-19 5 11 0 18-10 19z" fill="${palette.highlight}" stroke="${PET_OUTLINE}" stroke-width="3"/>`;
-  }
-  return `
-      <path d="M45 23c-10-18 11-23 20-13-1 14-11 19-20 13z" fill="${palette.accent2}" stroke="${PET_OUTLINE}" stroke-width="3"/>
-      <path d="M51 20l12-11" stroke="${palette.face}" stroke-width="2.5" stroke-linecap="round"/>
-      <path d="M36 25c-11-9-3-21 10-19 5 11 0 18-10 19z" fill="${palette.highlight}" stroke="${PET_OUTLINE}" stroke-width="3" opacity="${0.85 + Math.abs(pulse) * 0.15}"/>`;
-}
-
-function renderBuiltInBody(
-  palette: BuiltInPetPalette,
-  faceColor: string,
-  eye: string,
-  mouth: string,
-  leftArm: number,
-  rightArm: number,
-): string {
-  if (palette.kind === "scout") {
-    return `
-      <ellipse cx="49" cy="50" rx="31" ry="28" fill="${palette.body}" stroke="${PET_OUTLINE}" stroke-width="4"/>
-      ${renderBuiltInFace(faceColor, eye, mouth, 30, 38, 40, 23, 12)}
-      <path d="M37 70c5 6 19 6 25 0v15H37z" fill="${palette.body}" stroke="${PET_OUTLINE}" stroke-width="4" stroke-linejoin="round"/>
-      <rect x="39" y="83" width="12" height="8" rx="4" fill="${palette.body}" stroke="${PET_OUTLINE}" stroke-width="3"/>
-      <rect x="55" y="83" width="12" height="8" rx="4" fill="${palette.body}" stroke="${PET_OUTLINE}" stroke-width="3"/>`;
-  }
-  return `
-      <rect x="22" y="25" width="58" height="45" rx="15" fill="${palette.body}" stroke="${PET_OUTLINE}" stroke-width="4"/>
-      ${renderBuiltInFace(faceColor, eye, mouth)}
-      <circle cx="32" cy="56" r="3" fill="${palette.highlight}" opacity="0.74"/>
-      <circle cx="69" cy="56" r="3" fill="${palette.highlight}" opacity="0.74"/>
-      <rect x="36" y="66" width="32" height="21" rx="8" fill="${palette.body}" stroke="${PET_OUTLINE}" stroke-width="4"/>
-      <path d="M43 77h13" stroke="${palette.highlight}" stroke-width="3" stroke-linecap="round"/>
-      <rect x="22" y="70" width="13" height="20" rx="7" fill="${palette.body}" stroke="${PET_OUTLINE}" stroke-width="3" transform="rotate(${leftArm} 29 80)"/>
-      <rect x="68" y="70" width="13" height="20" rx="7" fill="${palette.body}" stroke="${PET_OUTLINE}" stroke-width="3" transform="rotate(${rightArm} 75 80)"/>
-      <rect x="39" y="83" width="13" height="8" rx="4" fill="${palette.body}" stroke="${PET_OUTLINE}" stroke-width="3"/>
-      <rect x="55" y="83" width="13" height="8" rx="4" fill="${palette.body}" stroke="${PET_OUTLINE}" stroke-width="3"/>`;
-}
-
-function renderBuiltInTool(
-  action: DesktopPetAction,
-  frame: number,
-  palette: BuiltInPetPalette,
-): string {
-  const bob =
-    Math.sin(
-      (frame / Math.max(1, actionFrameCount(action) - 1)) * Math.PI * 2,
-    ) * 2;
-  if (action === "sleep") {
-    return `<g fill="${palette.screen}" font-family="Arial, sans-serif" font-weight="800"><text x="70" y="28" font-size="13" opacity="${frame % 2 ? 0.45 : 0.9}">z</text><text x="80" y="17" font-size="10" opacity="${frame % 2 ? 0.9 : 0.45}">z</text></g>`;
-  }
-  if (action === "greet" || action === "wake" || action === "pet") {
-    return `<path d="M76 23c-7-9-19 1-7 13l7 7 7-7c12-12 0-22-7-13z" fill="${palette.accent2}" stroke="#111827" stroke-width="2"/>`;
-  }
-  if (action === "wait") {
-    return `<g fill="${palette.screen}" transform="translate(62 18)"><circle cx="0" cy="0" r="3" opacity="${frame % 3 === 0 ? 1 : 0.35}"/><circle cx="10" cy="0" r="3" opacity="${frame % 3 === 1 ? 1 : 0.35}"/><circle cx="20" cy="0" r="3" opacity="${frame % 3 === 2 ? 1 : 0.35}"/></g>`;
-  }
-  if (action === "create") {
-    const keyOpacity = frame % 2 === 0 ? 0.95 : 0.45;
-    return `
-      <g transform="translate(54 ${58 + bob})">
-        <rect x="3" y="0" width="30" height="24" rx="4" fill="#1e3a8a" stroke="#111827" stroke-width="3"/>
-        <path d="M14 8l5 5-5 5" fill="none" stroke="${palette.screen}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
-        <rect x="0" y="23" width="39" height="10" rx="4" fill="#2563eb" stroke="#111827" stroke-width="3"/>
-        <rect x="10" y="27" width="4" height="2" rx="1" fill="#bfdbfe" opacity="${keyOpacity}"/>
-        <rect x="18" y="27" width="4" height="2" rx="1" fill="#bfdbfe" opacity="${1 - keyOpacity / 2}"/>
-        <rect x="26" y="27" width="4" height="2" rx="1" fill="#bfdbfe" opacity="${keyOpacity}"/>
-      </g>`;
-  }
-  if (action === "prepare") {
-    const open = frame % 2 === 0 ? -10 : -2;
-    return `
-      <g transform="translate(8 ${60 + bob})">
-        <rect x="5" y="17" width="35" height="20" rx="6" fill="#f97316" stroke="#111827" stroke-width="3"/>
-        <rect x="9" y="${8 + open / 4}" width="27" height="12" rx="6" fill="#fb923c" stroke="#111827" stroke-width="3" transform="rotate(${open} 9 20)"/>
-        <path d="M17 9h10v7H17z" fill="none" stroke="#111827" stroke-width="3"/>
-        <rect x="16" y="${10 + open / 2}" width="5" height="16" rx="2" fill="#e5e7eb" stroke="#111827" stroke-width="2" transform="rotate(-24 18 26)"/>
-        <rect x="27" y="${8 + open / 2}" width="5" height="16" rx="2" fill="#e5e7eb" stroke="#111827" stroke-width="2" transform="rotate(25 29 24)"/>
-      </g>`;
-  }
-  if (action === "research") {
-    return `
-      <g transform="translate(57 ${58 + bob}) rotate(${frame % 2 === 0 ? -5 : 3} 18 18)">
-        <circle cx="15" cy="14" r="11" fill="#e0f2fe" stroke="#38bdf8" stroke-width="5"/>
-        <rect x="24" y="24" width="17" height="7" rx="3" fill="#38bdf8" stroke="#111827" stroke-width="3" transform="rotate(43 24 24)"/>
-      </g>`;
-  }
-  if (action === "read") {
-    return `
-      <g transform="translate(58 ${55 + bob}) rotate(${frame % 2 === 0 ? -4 : 4} 16 20)">
-        <path d="M5 1h22l9 9v31H5z" fill="#eff6ff" stroke="#111827" stroke-width="3" stroke-linejoin="round"/>
-        <path d="M27 1v10h9" fill="#60a5fa" stroke="#111827" stroke-width="3" stroke-linejoin="round"/>
-        <rect x="12" y="20" width="16" height="3" rx="1.5" fill="#2563eb"/>
-        <rect x="12" y="28" width="12" height="3" rx="1.5" fill="#2563eb"/>
-      </g>`;
-  }
-  if (action === "execute") {
-    return `
-      <g transform="translate(54 ${60 + bob})">
-        <rect x="0" y="0" width="39" height="29" rx="7" fill="#111827" stroke="#111827" stroke-width="3"/>
-        <path d="M10 10l6 5-6 5" fill="none" stroke="#86efac" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" opacity="${frame % 2 === 0 ? 1 : 0.4}"/>
-      </g>`;
-  }
-  if (action === "success") {
-    return `
-      <g fill="#facc15" transform="translate(62 ${12 + bob})">
-        <path d="M12 0l3 8 8 3-8 3-3 8-3-8-8-3 8-3z"/>
-        <path d="M-12 18l2 5 5 2-5 2-2 5-2-5-5-2 5-2z" opacity="0.78"/>
-      </g>`;
-  }
-  if (action === "concern") {
-    return `
-      <g transform="translate(62 ${56 + bob})">
-        <path d="M18 0l18 32H0z" fill="#facc15" stroke="#111827" stroke-width="3" stroke-linejoin="round"/>
-        <circle cx="18" cy="23" r="2.5" fill="#111827"/>
-        <path d="M18 8v10" stroke="#111827" stroke-width="4" stroke-linecap="round"/>
-      </g>`;
-  }
-  return "";
-}
-
-function renderBuiltInFrame(
-  palette: BuiltInPetPalette,
-  action: DesktopPetAction,
-  frame: number,
-): string {
-  const t = frame / Math.max(1, actionFrameCount(action) - 1);
-  const bob = action === "sleep" ? 7 : action === "pickedUp" ? -6 : action === "released" ? 4 : Math.sin(t * Math.PI * 2) * (action === "idle" ? 2.5 : 1.5);
-  const tilt =
-    action === "prepare"
-      ? Math.sin(t * Math.PI * 2) * 2
-      : action === "success"
-        ? Math.sin(t * Math.PI * 2) * 1.5
-        : 0;
-  const errorTint = action === "concern" ? "#3f0f18" : palette.face;
-  const eye = action === "concern" ? "#fca5a5" : palette.screen;
-  const mouth =
-    action === "success" || action === "greet" || action === "pet"
-      ? "M38 45q5 5 10 0"
-      : action === "concern"
-        ? "M40 47q5 -4 10 0"
-        : "M42 46h9";
-  const workSwing =
-    action === "create" || action === "execute" ? (frame % 2) * 12 : 0;
-  const toolAction = action === "prepare" || action === "read";
-  const greetingAction = action === "greet" || action === "wake";
-  const toolSwing = toolAction ? (frame % 2) * 10 : 0;
-  const leftArm =
-    action === "create" || action === "execute"
-      ? 22 + workSwing
-      : toolAction
-        ? 38 + toolSwing
-        : action === "pickedUp"
-          ? 58
-          : 10;
-  const rightArm =
-    action === "create" || action === "execute"
-      ? -22 - workSwing
-      : toolAction
-        ? -38 - toolSwing
-        : greetingAction
-          ? -48 - (frame % 2) * 12
-          : action === "pickedUp"
-            ? -58
-            : -10;
-  return `
-    <g transform="translate(0 ${bob}) rotate(${tilt} 48 76)">
-      <g filter="url(#shadow)">
-        ${renderBuiltInIdentityDetails(palette, frame)}
-      </g>
-      ${renderBuiltInBody(palette, errorTint, eye, mouth, leftArm, rightArm)}
-    </g>
-    ${renderBuiltInTool(action, frame, palette)}`;
-}
-
-function renderBuiltInSheet(
-  palette: BuiltInPetPalette,
-  action: DesktopPetAction,
-  frameCount = actionFrameCount(action),
-): string {
-  const width = FRAME_SIZE * frameCount;
-  const frames = Array.from({ length: frameCount }, (_, frame) => {
-    return `<g transform="translate(${frame * FRAME_SIZE} 0)">${renderBuiltInFrame(palette, action, frame)}</g>`;
-  }).join("");
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${FRAME_SIZE}" viewBox="0 0 ${width} ${FRAME_SIZE}">
-    <defs>
-      <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
-        <feDropShadow dx="0" dy="2" stdDeviation="0" flood-color="#111827" flood-opacity="0.85"/>
-      </filter>
-    </defs>
-    ${frames}
-  </svg>`;
-}
-
-function createBuiltInAnimation(
-  palette: BuiltInPetPalette,
-  action: DesktopPetAction,
-): DesktopPetAnimation {
-  return {
-    imageDataUrl: svgToDataUrl(renderBuiltInSheet(palette, action)),
-    frameWidth: FRAME_SIZE,
-    frameHeight: FRAME_SIZE,
-    frameCount: actionFrameCount(action),
-    fps: actionFps(action),
-    loop: actionLoops(action),
-    offsetX: 0,
-    offsetY: 0,
-  };
-}
-
-function builtInPersona(kind: BuiltInPetKind): DesktopPetPersona {
-  if (kind === "ember") {
-    return { tone: "warm", warmth: 0.92, energy: 0.44, humor: 0.08 };
-  }
-  if (kind === "scout") {
-    return { tone: "playful", warmth: 0.72, energy: 0.78, humor: 0.3 };
-  }
-  return { tone: "focused", warmth: 0.7, energy: 0.22, humor: 0.03 };
-}
-
-function createBuiltInPet(palette: BuiltInPetPalette): DesktopPetDefinition {
-  const animations = Object.fromEntries(
-    PET_ACTIONS.map((action) => [
-      action,
-      createBuiltInAnimation(palette, action),
-    ]),
-  ) as Record<DesktopPetAction, DesktopPetAnimation>;
-  return {
-    id: palette.id,
-    name: palette.name,
-    description: palette.description,
-    i18nKey: palette.i18nKey,
-    builtin: true,
-    canvasWidth: FRAME_SIZE,
-    canvasHeight: FRAME_SIZE,
-    thumbnailDataUrl: svgToDataUrl(renderBuiltInSheet(palette, "idle", 1)),
-    animations,
-    persona: builtInPersona(palette.kind),
-  };
-}
-
-const builtinPets: DesktopPetDefinition[] =
-  builtInPetPalettes.map(createBuiltInPet);
 
 function numberFromManifest(value: unknown, fallback: number): number {
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;
@@ -799,6 +432,7 @@ async function loadCustomPet(
         description,
         sourcePrompt,
         builtin: false,
+        renderer: "spritesheet",
         canvasWidth: Math.max(
           1,
           Math.round(numberFromManifest(raw.canvasWidth, FRAME_SIZE)),
@@ -849,7 +483,7 @@ export async function listDesktopPets(): Promise<{
       details: [message],
     });
   }
-  return { pets: [...builtinPets, ...custom], issues };
+  return { pets: [loopiDesktopPet, ...custom], issues };
 }
 
 export async function readDesktopPetState(

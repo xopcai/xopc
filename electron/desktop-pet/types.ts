@@ -81,7 +81,7 @@ export type DesktopPetPersona = {
   phrases?: DesktopPetPersonaPhrases;
 };
 
-export type DesktopPetDefinition = {
+type DesktopPetBase = {
   id: string;
   name: string;
   description: string;
@@ -91,9 +91,13 @@ export type DesktopPetDefinition = {
   canvasWidth: number;
   canvasHeight: number;
   thumbnailDataUrl: string;
-  animations: Record<DesktopPetAction, DesktopPetAnimation>;
   persona?: DesktopPetPersona;
 };
+
+export type DesktopPetDefinition = DesktopPetBase & (
+  | { renderer: "loopi" }
+  | { renderer: "spritesheet"; animations: Record<DesktopPetAction, DesktopPetAnimation> }
+);
 
 export type DesktopPetIssue = {
   dir: string;
