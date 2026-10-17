@@ -17,7 +17,7 @@ export function registerAppContextCapability(dispatcher: CapabilityDispatcher): 
       for (const reference of snapshot.resourceRefs) {
         const domain = reference.kind === 'local_app' ? 'local_apps' : `${reference.kind}s`;
         const data = await dispatcher.call(`xopc.${domain}.get`, { id: reference.id }, context) as Record<string, unknown>;
-        const row = data[reference.kind === 'scene' ? 'activation' : reference.kind === 'local_app' ? 'app' : reference.kind] as Record<string, unknown> | undefined;
+        const row = data[reference.kind === 'local_app' ? 'app' : reference.kind] as Record<string, unknown> | undefined;
         if (!row) throw new CapabilityError('INTERNAL', 'Resource returned no context object');
         let revision: unknown;
         let text: string;
@@ -25,7 +25,6 @@ export function registerAppContextCapability(dispatcher: CapabilityDispatcher): 
           case 'note': revision = row.remoteVersion ?? 1; text = String(row.markdown ?? ''); break;
           case 'task': revision = row.version; text = String(row.body ?? (row.contract as { objective?: string } | undefined)?.objective ?? ''); break;
           case 'project': revision = row.version; text = String(row.brief ?? row.description ?? ''); break;
-          case 'scene': revision = row.revision; text = String(row.goal ?? ''); break;
           case 'local_app': {
             const validation = await dispatcher.call('xopc.local_apps.validate', { id: reference.id }, context) as { validation: { sourceHash?: string } };
             revision = validation.validation.sourceHash;
@@ -36,7 +35,7 @@ export function registerAppContextCapability(dispatcher: CapabilityDispatcher): 
         if (revision === undefined || String(revision) !== reference.revision) {
           throw new CapabilityError('REVISION_CONFLICT', 'A page resource changed; capture its current revision again');
         }
-        resources.push({ reference, title: String(row.title ?? row.name ?? (reference.kind === 'scene' ? row.goal : undefined) ?? reference.id), text: text.slice(0, quota), truncated: text.length > quota });
+        resources.push({ reference, title: String(row.title ?? row.name ?? reference.id), text: text.slice(0, quota), truncated: text.length > quota });
       }
       return { snapshot, resources, selectionTrust: 'user-supplied' as const };
     },

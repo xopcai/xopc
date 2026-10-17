@@ -1360,8 +1360,8 @@ export function AutomationsWorkspace({
               <div className="min-h-[28rem] overflow-hidden rounded-xl border border-edge-subtle bg-surface-base shadow-surface">
                 {ownership === 'user' && ownershipAutomations.length === 0 ? (
                   <div className="p-5">
-                    <h2 className="text-sm font-semibold text-fg">{labels.experience.scenes}</h2>
-                    <p className="mt-1 text-sm text-fg-muted">{labels.experience.scenesDescription}</p>
+                    <h2 className="text-sm font-semibold text-fg">{labels.experience.starterTemplates}</h2>
+                    <p className="mt-1 text-sm text-fg-muted">{labels.experience.starterTemplatesDescription}</p>
                     <ScenarioCards templates={templates} labels={labels} onSelect={selectTemplate} />
                     <Button className="mt-4" variant="ghost" onClick={() => openCreate('draft')}>{labels.experience.custom}</Button>
                   </div>

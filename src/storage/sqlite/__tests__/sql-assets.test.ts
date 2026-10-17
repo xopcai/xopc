@@ -8,7 +8,6 @@ import { build } from 'esbuild';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { copySqliteAssets } from '../../../../scripts/sqlite-assets.mjs';
-import { SCENE_TABLES, NOTIFICATION_LEDGER_TABLES } from '../scenes-schema.js';
 
 const source = fileURLToPath(new URL('..', import.meta.url));
 const temporary: string[] = [];
@@ -40,7 +39,7 @@ describe('SQLite assets in distribution layouts', () => {
     expect(result.stdout.trim()).toBe('SELECT 203;');
   });
 
-  it('loads baseline and scene SQL beside a minified single-file gateway bundle', async () => {
+  it('loads baseline SQL beside a minified single-file gateway bundle', async () => {
     const directory = mkdtempSync(join(tmpdir(), 'xopc-sql-assets-')); temporary.push(directory);
     const outfile = join(directory, 'index.mjs');
     await build({
@@ -48,10 +47,8 @@ describe('SQLite assets in distribution layouts', () => {
         resolveDir: source,
         contents: `import { DatabaseSync } from 'node:sqlite';
           import { readSqliteAsset } from './sql-assets.ts';
-          import { installSceneStorage } from './scenes-schema.ts';
           const db = new DatabaseSync(':memory:');
           db.exec(readSqliteAsset('schema.sql'));
-          installSceneStorage(db);
           console.log(JSON.stringify(db.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all().map(row => row.name)));
           db.close();`,
       },
@@ -61,9 +58,9 @@ describe('SQLite assets in distribution layouts', () => {
     const result = spawnSync(process.execPath, [outfile], { encoding: 'utf8' });
     expect(result.status, result.stderr).toBe(0);
     expect(JSON.parse(result.stdout)).toEqual(expect.arrayContaining([
-      ...SCENE_TABLES, ...NOTIFICATION_LEDGER_TABLES,
+      'sessions', 'tasks', 'notification_events',
     ]));
-    rmSync(join(directory, 'schemas/notifications.sql'));
+    rmSync(join(directory, 'schema.sql'));
     const missing = spawnSync(process.execPath, [outfile], { encoding: 'utf8' });
     expect(missing.status).not.toBe(0);
     expect(missing.stderr).toContain('ENOENT');
@@ -75,9 +72,8 @@ describe('SQLite assets in distribution layouts', () => {
     mkdirSync(dirname(stale), { recursive: true }); writeFileSync(stale, 'STALE');
     copySqliteAssets(source, directory, { clean: true });
     expect(readdirSync(join(directory, 'migrations'))).not.toContain('stale.sql');
-    expect(readdirSync(join(directory, 'schemas')).filter((name) => !name.endsWith('.sql'))).toEqual([]);
-    expect(readFileSync(join(directory, 'schemas/scenes.sql'), 'utf8'))
-      .toBe(readFileSync(join(source, 'schemas/scenes.sql'), 'utf8'));
+    expect(readFileSync(join(directory, 'schema.sql'), 'utf8'))
+      .toBe(readFileSync(join(source, 'schema.sql'), 'utf8'));
     const runtime = join(directory, 'migrations/runner.js'); writeFileSync(runtime, 'current runtime');
     copySqliteAssets(source, directory);
     expect(readFileSync(runtime, 'utf8')).toBe('current runtime');

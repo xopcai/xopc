@@ -5,9 +5,6 @@ import { TaskDetailResponseSchema, TaskListResponseSchema, TaskPrioritySchema, T
 import { TaskRunSchema, TaskRunEventSchema } from './task-runs.js';
 import { AutomationSchema, AutomationRunSchema, AutomationRunEventSchema, AutomationMetricsSchema } from './automations.js';
 import { TaskValueMetricsSchema } from './home.js';
-import { sceneTemplateSchema, SceneActivationSchema, scenePreferencesSchema, activationInputSchema, SceneConfigureSchema,
-  SceneWorkItemCreateSchema, SceneWorkItemUpdateSchema, SceneWorkItemSchema, sceneNotesSchema,
-  ScenePreferencePatchSchema, SceneFeedbackSchema, SceneTransitionSchema, sceneScheduleSchema } from './scenes.js';
 import {
   LocalAppDetailSchema,
   LocalAppRecordSchema,
@@ -46,7 +43,7 @@ export const AutomationRepairDraftOutputSchema = z.object({ draftId: z.string(),
   risks: z.array(z.string()), requiresApproval: z.boolean(), repairAttempts: z.number().int().nonnegative() });
 
 export const ResourceChangedSchema = z.strictObject({
-  eventId: z.string().min(1), kind: z.enum(['note', 'task', 'project', 'automation', 'scene', 'local_app']),
+  eventId: z.string().min(1), kind: z.enum(['note', 'task', 'project', 'automation', 'local_app']),
   id: z.string().min(1), revision: z.number().int().nonnegative(),
   operation: z.enum(['created', 'updated', 'deleted']), operationId: z.string().optional(),
 });
@@ -64,25 +61,6 @@ export interface CapabilityDescriptor {
 }
 
 export const CapabilityResourceInputSchema = z.strictObject({ id: z.string().trim().min(1).max(512) });
-export const ScenePageInputSchema = z.strictObject({ limit: z.number().int().min(1).max(100).default(50), afterId: z.string().max(200).default('') });
-export const SceneWriteContracts = {
-  'xopc.scenes.start': { input: activationInputSchema, output: z.object({ activation: SceneActivationSchema }) },
-  'xopc.scenes.transition': { input: SceneTransitionSchema.extend({ id: z.string().min(1).max(512) }), output: z.object({ activation: SceneActivationSchema }) },
-  'xopc.scenes.set_preferences': { input: ScenePreferencePatchSchema, output: scenePreferencesSchema.extend({ revision: z.number().int().positive() }) },
-  'xopc.scenes.feedback': { input: SceneFeedbackSchema.extend({ id: z.string().min(1).max(512) }), output: z.object({ revision: z.number().int().positive() }) },
-  'xopc.scenes.mark_read': { input: CapabilityResourceInputSchema.extend({ read: z.boolean() }), output: z.object({ ok: z.literal(true), presentationId: z.string(), read: z.boolean() }) },
-  'xopc.scenes.schedule': { input: CapabilityResourceInputSchema.extend({ triggerKey: z.string().min(1).max(200), expectedRevision: z.number().int().nonnegative(), schedule: sceneScheduleSchema }), output: z.object({ revision: z.number().int().positive() }) },
-  'xopc.scenes.configure': { input: SceneConfigureSchema.extend({ id: z.string().min(1).max(512) }), output: z.object({ activation: SceneActivationSchema }) },
-  'xopc.scenes.check': { input: CapabilityResourceInputSchema, output: z.object({ intentId: z.string() }) },
-  'xopc.scenes.notes': { input: sceneNotesSchema.extend({ id: z.string().min(1).max(512) }), output: z.object({ revision: z.number().int().positive() }) },
-  'xopc.scenes.work_item': { input: SceneWorkItemCreateSchema.extend({ id: z.string().min(1).max(512) }), output: z.object({ workItem: SceneWorkItemSchema }) },
-  'xopc.scenes.update_work_item': { input: SceneWorkItemUpdateSchema.safeExtend({ id: z.string().min(1).max(512) }), output: z.object({ workItem: SceneWorkItemSchema }) },
-} as const;
-const SceneOutcomeReadSchema = z.looseObject({ id: z.string(), activationId: z.string(), outcomeId: z.string(), status: z.string(),
-  content: z.json(), readOnly: z.boolean(), createdAt: z.number(),
-  sources: z.array(z.object({ kind: z.string(), title: z.string(), sender: z.string(), href: z.string() })),
-  sourceHealth: z.record(z.string(), z.json()).nullable(),
-});
 export const TaskRunCancelInputSchema = CapabilityResourceInputSchema.extend({
   expectedVersion: z.number().int().positive(), reason: z.string().trim().min(1).max(4096).default('TaskRun cancelled'),
 });
@@ -327,40 +305,6 @@ export const ProductReadContracts = {
   'xopc.automations.history': { input: z.strictObject({ automationId: z.string().trim().min(1).optional(),
     projectId: z.string().trim().min(1).optional(), limit: z.number().int().min(1).max(200).default(50) }),
     output: z.object({ ok: z.literal(true), items: z.array(AutomationRunSchema.loose()), projectId: z.string().optional() }) },
-  'xopc.scenes.templates': { input: z.strictObject({}), output: z.object({ templates: z.array(sceneTemplateSchema) }) },
-  'xopc.scenes.mail_accounts': { input: z.strictObject({}), output: z.object({ accounts: z.array(z.object({ id: z.string(), label: z.string() })) }) },
-  'xopc.scenes.mail_sources': { input: ScenePageInputSchema, output: z.object({ sources: z.array(z.object({ id: z.string(), accountId: z.string(), subject: z.string(), sender: z.string() })), nextCursor: z.string().nullable() }) },
-  'xopc.scenes.results': { input: ScenePageInputSchema.extend({ activationId: z.string().min(1).max(200).optional() }), output: z.object({ outcomes: z.array(SceneOutcomeReadSchema), nextCursor: z.string().nullable() }) },
-  'xopc.scenes.get_presentation': { input: CapabilityResourceInputSchema, output: z.object({ outcome: SceneOutcomeReadSchema }) },
-  'xopc.scenes.get_feedback': { input: CapabilityResourceInputSchema, output: z.object({ feedback: z.object({ rating: z.enum(['useful', 'not_useful']), note: z.string(), revision: z.number().int().nonnegative() }).nullable() }) },
-  'xopc.scenes.digest_results': { input: ScenePageInputSchema.extend({ id: z.string().min(1).max(512) }), output: z.object({ outcomes: z.array(SceneOutcomeReadSchema), nextCursor: z.string().nullable() }) },
-  'xopc.scenes.metrics': { input: z.strictObject({ days: z.number().int().min(1).max(90).default(7) }), output: z.object({
-    window: z.object({ since: z.number(), until: z.number(), days: z.number().int() }),
-    ratedOutcomes: z.number().int().nonnegative(), usefulOutcomes: z.number().int().nonnegative(), unhelpfulOutcomes: z.number().int().nonnegative(),
-    scenesWithUsefulOutcomes: z.number().int().nonnegative(), checks: z.number().int().nonnegative(), failedChecks: z.number().int().nonnegative(), skippedChecks: z.number().int().nonnegative(),
-  }) },
-  'xopc.scenes.diagnostics': { input: z.strictObject({}), output: z.object({ checksPaused: z.boolean(), currentModel: z.string().nullable(),
-    pendingChecks: z.number().int().nonnegative(), oldestDueWaitMs: z.number().nonnegative(),
-    notifications: z.array(z.object({ status: z.string(), count: z.number().int().nonnegative() })), activations: z.array(z.record(z.string(), z.json())),
-  }) },
-  'xopc.scenes.get_preferences': { input: z.strictObject({}), output: scenePreferencesSchema.extend({ revision: z.number().int().nonnegative() }) },
-  'xopc.scenes.preflight': { input: activationInputSchema, output: z.object({ ready: z.boolean(), missing: z.array(z.string()) }) },
-  'xopc.scenes.get_template': { input: z.strictObject({ key: z.string().min(1).max(200), version: z.string().min(1).max(200) }), output: z.object({ template: sceneTemplateSchema }) },
-  'xopc.scenes.list': { input: ScenePageInputSchema, output: z.object({ activations: z.array(SceneActivationSchema), nextCursor: z.string().nullable() }) },
-  'xopc.scenes.get': { input: CapabilityResourceInputSchema, output: z.object({ activation: SceneActivationSchema,
-    runs: z.array(z.looseObject({ id: z.string(), status: z.string(), attempt: z.number().int(), reason: z.string().nullable(), createdAt: z.number() })),
-    schedules: z.array(z.looseObject({ triggerKey: z.string(), revision: z.number().int(), nextDueAt: z.number(), schedule: z.json() })),
-  }) },
-  'xopc.scenes.read_notes': { input: CapabilityResourceInputSchema, output: z.object({ notes: z.object({ content: z.string(), revision: z.number().int().nonnegative(), validUntil: z.number().nullable() }) }) },
-  'xopc.scenes.list_runs': { input: ScenePageInputSchema.extend({ id: z.string().min(1).max(512) }), output: z.object({
-    runs: z.array(z.looseObject({ id: z.string(), activationId: z.string(), status: z.string(), attempt: z.number().int(), reason: z.string().nullable(), createdAt: z.number() })), nextCursor: z.string().nullable(),
-  }) },
-  'xopc.scenes.list_schedules': { input: CapabilityResourceInputSchema, output: z.object({
-    schedules: z.array(z.looseObject({ triggerKey: z.string(), revision: z.number().int(), nextDueAt: z.number(), schedule: z.json() })),
-  }) },
-  'xopc.scenes.list_work_items': { input: ScenePageInputSchema.extend({ id: z.string().min(1).max(512) }), output: z.object({
-    workItems: z.array(z.looseObject({ id: z.string(), subjectId: z.string(), accountId: z.string(), dueAt: z.number(), status: z.string(), revision: z.number().int(), lastCheckReason: z.string().nullable() })), nextCursor: z.string().nullable(),
-  }) },
   'xopc.settings.open': { input: z.strictObject({
     section: z.string().trim().regex(/^[a-z0-9][a-z0-9/_-]*$/i).max(512).default('overview'),
     title: z.string().trim().min(1).max(512).default('Settings'), summary: z.string().trim().max(4096).optional(),

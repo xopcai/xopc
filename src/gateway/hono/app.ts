@@ -9,7 +9,6 @@ import { ENDPOINT_MAX_FILE_BYTES } from '@xopcai/endpoint-tools-protocol';
 import { resolveGatewayEffectiveHost } from '../../config/gateway-bind.js';
 import { createLogger } from '../../utils/logger.js';
 import type { GatewayService } from '../service.js';
-import type { SceneHttpServices } from '../../scenes/httpServices.js';
 import { resolveAllowedBrowserOrigins, resolveGatewayServiceListenPort } from '../host.js';
 import { loadTunnelState } from '../../tunnel/tunnel-state.js';
 import { maxSessionInputRequestBodyBytes } from '../chat-limits.js';
@@ -48,7 +47,6 @@ export interface HonoAppConfig {
   service: GatewayService;
   /** Actual host selected for this process; bind config changes take effect after restart. */
   listenHost?: string;
-  scenes?: SceneHttpServices;
 }
 
 /**
@@ -378,7 +376,6 @@ export function createHonoApp(config: HonoAppConfig): Hono {
     taskRateLimitMiddleware,
     xopcCloudPollRateLimitMiddleware,
     channelRateLimitMiddleware,
-    scenes: config.scenes ?? service.sceneAccess?.services,
   });
 
   const prewarm = prewarmStaticUiCache();

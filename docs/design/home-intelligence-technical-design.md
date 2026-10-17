@@ -3,7 +3,6 @@
 日期：2026-09-23  
 状态：P3 工程实现完成，真实样本发布验证待执行
 
-产品依据：[智能工作台场景建议产品方案](./home-intelligence-product-proposal.md)。领域边界继续遵循[场景产品北极星](./scenes-product-north-star.md)和[场景系统技术设计](./scenes-technical-design.md)。
 
 ## 0. 技术结论
 

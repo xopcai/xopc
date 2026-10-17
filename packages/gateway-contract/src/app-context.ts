@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 export const AppContextResourceSchema = z.strictObject({
-  kind: z.enum(['note', 'task', 'project', 'scene', 'local_app']),
+  kind: z.enum(['note', 'task', 'project', 'local_app']),
   id: z.string().min(1).max(512),
   revision: z.string().min(1).max(128),
 });

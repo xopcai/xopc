@@ -158,19 +158,12 @@ describe('lazy route bundles', () => {
     }
   });
 
-  it('maps scene resource families without capturing similarly named routes', () => {
-    for (const path of ['/api/scenes/diagnostics', '/api/scenes/preferences', '/api/scenes/presence', '/api/scenes/browser/prepare', '/api/scenes/browser/subscriptions', '/api/scenes/browser/subscriptions/id', '/api/scenes/sources/mail/accounts', '/api/scenes/sources/mail/search', '/api/scenes/templates', '/api/scenes/templates/mail/versions/1.0.0', '/api/scenes/preflight', '/api/scenes/sources/mail',
-      '/api/scenes/activations', '/api/scenes/activations/id', '/api/scenes/activations/id/checks', '/api/scenes/activations/id/runs',
-      '/api/scenes/activations/id/notes', '/api/scenes/activations/id/work-items', '/api/scenes/activations/id/schedules',
-      '/api/scenes/activations/id/schedules/weekly', '/api/scenes/work-items/id', '/api/scenes/outcomes', '/api/scenes/presentations/id',
-      '/api/scenes/presentations/id/feedback', '/api/scenes/metrics', '/api/scenes/digests/id']) expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('scenes');
-    for (const path of ['/api/scenes/source-providers',
-      '/api/scenes/source-providers/slack_thread/accounts', '/api/scenes/source-providers/slack_thread/resolve-link',
-      '/api/scenes/resources/projects/id/branches', '/api/scenes/resources/branch-links']) {
-      expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('scenes');
+  it('does not register retired scene routes', () => {
+    for (const path of ['/api/scenes/templates', '/api/scenes/activations', '/api/scenes/preferences']) {
+      expect(findAuthenticatedLazyRouteBundle(path)).toBeUndefined();
     }
-    for (const path of ['/api/scenes-other', '/api/scene', '/api/inbox/other', '/api/development']) expect(findAuthenticatedLazyRouteBundle(path)?.id).not.toBe('scenes');
   });
+
   it('maps connector account management without swallowing nearby paths', () => {
     for (const path of ['/api/connectors/composio/accounts/account-1', '/api/connectors/composio/setup-status', '/api/connectors/composio/authorizations/attempt-1', '/api/connectors/composio/backends/backend-1']) {
       expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('connectors');

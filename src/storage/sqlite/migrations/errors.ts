@@ -20,8 +20,7 @@ export class DatabaseSchemaTooOldError extends Error {
   constructor(dbVersion: number, minimumVersion: number) {
     super(
       `xopc database schema version ${dbVersion} is older than the minimum supported version ` +
-        `(${minimumVersion}). Install and run xopc v0.0.277 before upgrading to this release, ` +
-        'or start with a new xopc.db.',
+        `(${minimumVersion}). Start with a new xopc.db.`,
     );
     this.name = 'DatabaseSchemaTooOldError';
     this.dbVersion = dbVersion;
