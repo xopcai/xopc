@@ -26,6 +26,7 @@ type Draft = {
   server: McpServerConfig; config: Config; credentials: NativeMcpCredentials; controller: AbortController;
   expiresAt: number; timer: ReturnType<typeof setTimeout>; probe?: McpConnectionProbe; authorizationId?: string;
   running: boolean; committing: boolean; checkedAt?: string;
+  toolsPending?: ReturnType<typeof discoverMcpTools>;
 };
 export type McpDraftInput = { serverId: string; sourceServerId?: string; expectedServer?: unknown; server: unknown };
 
@@ -105,14 +106,18 @@ export class McpConnectionDrafts {
     draft.authorizationId = undefined; draft.probe = undefined;
   }
   async tools(owner: string, id: string) {
-    const draft = this.get(owner, id); this.assertIdle(draft);
+    const draft = this.get(owner, id);
+    if (draft.toolsPending) return draft.toolsPending;
+    this.assertIdle(draft);
     if (draft.probe?.state !== 'connected') throw new McpDraftError(409, 'Test the connection first.');
     draft.running = true;
-    try {
-      const tools = await discoverMcpTools(draft.config, draft.workspace, draft.serverId, { credentials: draft.credentials, signal: draft.controller.signal });
-      this.get(owner, id); return tools;
-    }
-    finally { draft.running = false; }
+    draft.toolsPending = (async () => {
+      try {
+        const tools = await discoverMcpTools(draft.config, draft.workspace, draft.serverId, { credentials: draft.credentials, signal: draft.controller.signal });
+        this.get(owner, id); return tools;
+      } finally { draft.running = false; draft.toolsPending = undefined; }
+    })();
+    return draft.toolsPending;
   }
 
   /** Caller serializes this with other Gateway config writes. Only this entry is merged into the latest config. */
