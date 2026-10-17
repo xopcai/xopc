@@ -60,7 +60,7 @@ describe('buildSystemPrompt prompt modes', () => {
       promptMode,
       runtime: { version: 'test' },
       agentProfile: { name: '阿沐', description: 'Astronomy educator', style: 'Patient', language: 'en' },
-      contextFiles: [{ path: 'profile/SOUL.md', content: 'Your name is Ada.' }],
+      contextFiles: [{ path: 'profile/SOUL.md', content: 'Your name is Loopi.' }],
     });
     expect(prompt).toContain('You are "阿沐".');
     expect(prompt.match(/## Current Agent profile/g)).toHaveLength(1);

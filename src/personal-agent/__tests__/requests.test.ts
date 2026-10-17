@@ -78,7 +78,7 @@ describe('Personal connected-app requests', () => {
     catalog.ensureInitialized();
     agentId = personalAgentId('local-owner');
     conversationId = personalConversationId('local-owner');
-    catalog.create({ id: agentId, profile: { name: 'Ada' }, toolAllowlist: ['personal_task', 'personal_request', 'personal_capability'] }, { ready: true });
+    catalog.create({ id: agentId, profile: { name: 'Loopi' }, toolAllowlist: ['personal_task', 'personal_request', 'personal_capability'] }, { ready: true });
     catalog.create({ id: 'mail-worker', profile: { name: 'Mail worker' },
       toolAllowlist: ['xopc_tool_search', 'xopc_tool_describe', 'xopc_tool_execute'] }, { ready: true });
     createConversation({ agentId, sourceChannel: 'webchat', customData: { personalAgent: true } }, '', conversationId);

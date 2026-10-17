@@ -34,10 +34,10 @@ export function AgentAvatarField({ agentId, avatar, zh, disabled, pending, onPen
 
   const options = [
     { value: '', label: zh ? '自动头像' : 'Automatic' },
-    { value: 'xopc:loopi:idle', label: zh ? '小环 · 平静' : 'Loopi · Calm' },
-    { value: 'xopc:loopi:care', label: zh ? '小环 · 温暖' : 'Loopi · Warm' },
-    { value: 'xopc:loopi:curious', label: zh ? '小环 · 好奇' : 'Loopi · Curious' },
-    { value: 'xopc:loopi:listen', label: zh ? '小环 · 倾听' : 'Loopi · Listening' },
+    { value: 'xopc:loopi:idle', label: zh ? 'Loopi · 平静' : 'Loopi · Calm' },
+    { value: 'xopc:loopi:care', label: zh ? 'Loopi · 温暖' : 'Loopi · Warm' },
+    { value: 'xopc:loopi:curious', label: zh ? 'Loopi · 好奇' : 'Loopi · Curious' },
+    { value: 'xopc:loopi:listen', label: zh ? 'Loopi · 倾听' : 'Loopi · Listening' },
     { value: buildXopcDicebearValue('bottts', agentId), label: zh ? '机器人' : 'Robot' },
     { value: buildXopcDicebearValue('adventurer', agentId), label: zh ? '插画人物' : 'Illustration' },
   ];

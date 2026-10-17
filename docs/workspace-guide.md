@@ -1,6 +1,6 @@
 # Work with files and projects
 
-Bring source material and a goal into xopc, inspect the output, and keep useful context with the project. You can start directly in Chat or from a Project without first discussing the task with Ada.
+Bring source material and a goal into xopc, inspect the output, and keep useful context with the project. You can start directly in Chat or from a Project without first discussing the task with Loopi.
 
 ## Before you begin
 
