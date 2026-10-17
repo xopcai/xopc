@@ -55,7 +55,7 @@
     "ios:mobile": "pnpm run mobile:ios:build",
     "mobile:android:build": "cd apps/mobile-android && ./gradlew :app:assembleDebug",
     "mobile:android:test": "cd apps/mobile-android && ./gradlew :app:testDebugUnitTest",
-    "mobile:ios:generate": "pnpm --filter @xopcai/markdown-math build:mobile ios && cd apps/mobile-ios && xcodegen generate",
+    "mobile:ios:generate": "pnpm --filter @xopcai/markdown-math build:mobile ios && node packages/chart-spec/scripts/build-mobile.mjs ios && cd apps/mobile-ios && xcodegen generate",
     "mobile:ios:build": "pnpm run mobile:ios:generate && cd apps/mobile-ios && xcodebuild -project XopcMobile.xcodeproj -scheme XopcMobile -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build",
     "mobile:ios:test": "pnpm run mobile:ios:generate && cd apps/mobile-ios && xcodebuild -project XopcMobile.xcodeproj -scheme XopcMobile -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -only-testing:XopcMobileTests CODE_SIGNING_ALLOWED=NO test",
     "mobile:test": "pnpm run mobile:android:test && pnpm run mobile:ios:test",
@@ -134,6 +134,7 @@
     "electron:frpc:download:all": "node --import tsx/esm scripts/download-frpc-binaries.mjs --all",
     "electron:build": "pnpm run build:node && pnpm run build:web && pnpm run electron:build:artifacts && pnpm run electron:package",
     "electron:preview": "cross-env ELECTRON_ENTRY=out/main/index.js electron-vite preview",
+    "mobile:charts:assets": "node packages/chart-spec/scripts/build-mobile.mjs ios android harmony",
     "mobile:math:assets": "pnpm --filter @xopcai/markdown-math build:mobile ios android harmony"
   },
   "keywords": [
