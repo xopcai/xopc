@@ -564,11 +564,14 @@
     "keyPlaceholderMasked": "••••••••（未修改）",
     "disabled": "跳过",
     "footerHint": "HTML 兜底依赖第三方页面，可能随站点改版变化。生产环境建议使用正式搜索 API（Brave、Tavily、必应或自建 SearXNG）。",
+    "deepseekUrlLabel": "API 地址（可选）",
+    "deepseekUrlDesc": "默认 https://api.deepseek.com，支持 HTTPS 域名及可选 /v1 路径。搜索词最多 128 个字符。",
     "providerTypes": {
       "brave": "Brave Search API",
       "tavily": "Tavily",
       "bing": "Bing Web Search API",
-      "searxng": "SearXNG"
+      "searxng": "SearXNG",
+      "deepseek": "DeepSeek Search"
     }
   }
 }

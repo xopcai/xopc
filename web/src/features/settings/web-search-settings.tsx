@@ -58,7 +58,7 @@ function selectClassName(): string {
   return cn(selectTriggerClass, selectFieldMaxWidthClass);
 }
 
-const PROVIDER_TYPES: SearchProviderRow['type'][] = ['brave', 'tavily', 'bing', 'searxng'];
+const PROVIDER_TYPES: SearchProviderRow['type'][] = ['brave', 'tavily', 'bing', 'searxng', 'deepseek'];
 
 function emptyProviderRow(): SearchProviderRow {
   return { clientKey: crypto.randomUUID(), type: 'brave', apiKey: '', url: '', disabled: false };
@@ -324,7 +324,8 @@ function ProviderRowEditor({
             onChange({
               ...row,
               type: e.target.value as SearchProviderRow['type'],
-              url: e.target.value === 'searxng' ? row.url : '',
+              url: '',
+              apiKey: '',
             })
           }
         >
@@ -349,13 +350,13 @@ function ProviderRowEditor({
           </Button>
         </div>
       </div>
-      {row.type === 'searxng' ? (
-        <Field label={labels.urlLabel} description={labels.urlDesc}>
+      {row.type === 'searxng' || row.type === 'deepseek' ? (
+        <Field label={row.type === 'deepseek' ? labels.deepseekUrlLabel : labels.urlLabel} description={row.type === 'deepseek' ? labels.deepseekUrlDesc : labels.urlDesc}>
           <input
             type="url"
             className={inputClassName()}
             value={row.url}
-            placeholder="http://localhost:8080"
+            placeholder={row.type === 'deepseek' ? 'https://api.deepseek.com' : 'http://localhost:8080'}
             onChange={(e) => onChange({ ...row, url: e.target.value })}
           />
         </Field>

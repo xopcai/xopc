@@ -15,7 +15,9 @@ export function resolveWebSearchConfig(web?: WebToolsConfig): ResolvedWebSearchC
 
   const providers = (search?.providers ?? []).map((p) => {
     const resolvedKey =
-      p.apiKey !== undefined && p.apiKey !== '' ? resolveKey(p.apiKey) : undefined;
+      p.type === 'deepseek' && /^[A-Z][A-Z0-9_]*$/.test(p.apiKey ?? '')
+        ? process.env[p.apiKey!]
+        : p.apiKey !== undefined && p.apiKey !== '' ? resolveKey(p.apiKey) : undefined;
     const url = p.url?.replace(/\/+$/, '');
     return {
       type: p.type,

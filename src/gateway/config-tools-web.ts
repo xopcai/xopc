@@ -1,3 +1,4 @@
+import { deepseekSearchEndpoint } from '../agent/tools/search/providers/deepseek-protocol.js';
 import type { Config, SearchProviderEntry } from '../config/schema.js';
 import {
   isMaskedSecretPatchValue,
@@ -138,17 +139,22 @@ export function applyToolsWebPatch(config: Config, body: Record<string, unknown>
     }
     const row = rawRow as Record<string, unknown>;
     const type = row.type;
-    if (type !== 'brave' && type !== 'tavily' && type !== 'bing' && type !== 'searxng') {
+    if (type !== 'brave' && type !== 'tavily' && type !== 'bing' && type !== 'searxng' && type !== 'deepseek') {
       return `Invalid search provider type: ${String(type)}`;
     }
-    const prev = prevProviders?.[i];
+    const previousOfType = prevProviders?.filter((entry) => entry.type === type) ?? [];
+    const prev = previousOfType.length === 1 ? previousOfType[0] : prevProviders?.[i]?.type === type ? prevProviders[i] : undefined;
     let apiKey = typeof row.apiKey === 'string' ? row.apiKey : '';
-    if (isMaskedApiKey(apiKey) && prev?.apiKey) {
+    if (isMaskedApiKey(apiKey)) {
+      if (!prev?.apiKey) return 'Cannot preserve an API key after changing provider type';
       apiKey = prev.apiKey;
     }
     const urlRaw = typeof row.url === 'string' ? row.url.trim().replace(/\/+$/, '') : '';
     const entry: SearchProviderEntry = { type };
-    if (type === 'searxng') {
+    if (type === 'deepseek' && urlRaw) {
+      try { deepseekSearchEndpoint(urlRaw); } catch { return 'Invalid DeepSeek API base URL'; }
+    }
+    if (type === 'searxng' || type === 'deepseek') {
       if (urlRaw) entry.url = urlRaw;
       if (apiKey) entry.apiKey = apiKey;
     } else {

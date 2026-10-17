@@ -564,11 +564,14 @@
     "keyPlaceholderMasked": "•••••••• (unchanged)",
     "disabled": "Skip",
     "footerHint": "HTML fallbacks depend on third-party pages and may change. For production, use a supported search API (Brave, Tavily, Bing, or self-hosted SearXNG).",
+    "deepseekUrlLabel": "API base URL (optional)",
+    "deepseekUrlDesc": "Defaults to https://api.deepseek.com. Accepts an HTTPS origin with optional /v1. Queries are limited to 128 characters.",
     "providerTypes": {
       "brave": "Brave Search API",
       "tavily": "Tavily",
       "bing": "Bing Web Search API",
-      "searxng": "SearXNG"
+      "searxng": "SearXNG",
+      "deepseek": "DeepSeek Search"
     }
   }
 }
