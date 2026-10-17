@@ -226,7 +226,148 @@ describe('agent to broker desktop lifecycle', () => {
     expect(f.fetch).toHaveBeenCalledTimes(2); expect(f.driver.perform).toHaveBeenCalledTimes(1);
     expect(result.budget?.actionsRemaining).toBe(1);
     expect(f.runtime.getReport('owner')?.counters).toMatchObject({ observationChanges: 1, modelRequests: 2,
-      predictionAttempts: 2, proposedInputs: 2, completedInputs: 1, unknownDispatches: 0 });
+      predictionAttempts: 2, proposedInputs: 2, completedInputs: 1, unknownDispatches: 0, rescueAttempts: 1, rescueExhaustions: 0 });
+  });
+  it('shares the rescue allowance across steps and never increases the opening ceiling', async () => {
+    const f = fixture(); const observe = f.driver.observe.getMockImplementation()!; let calls = 0;
+    f.driver.observe.mockImplementation(async () => ({ ...await observe(), stateDigest: ++calls === 1 ? 'old' : 'new' }));
+    await f.open(await f.discover());
+    expect((await f.runtime.execute('owner', { op: 'step', goal: 'Click once' })).budget?.rescuesRemaining).toBe(0);
+    f.config.computer.maxRescuesPerSession = 3;
+    f.driver.observe.mockImplementation(async () => ({ ...await observe(), stateDigest: String(++calls) }));
+    await expect(f.runtime.execute('owner', { op: 'step', goal: 'Different next action' })).rejects.toThrow('UI_UNSTABLE');
+    expect(f.fetch).toHaveBeenCalledTimes(3);
+    expect(f.driver.perform).toHaveBeenCalledOnce();
+    expect(f.runtime.getReport('owner')).toMatchObject({ status: 'released', counters: { rescueAttempts: 1, rescueExhaustions: 1 },
+      failure: { dispatch: 'notStarted', phase: 'dispatch' } });
+  });
+  it.each([0, 2, 3])('bounds stale rescues to the configured session allowance %i', async limit => {
+    const f = fixture(); f.config.computer.maxRescuesPerSession = limit;
+    const observe = f.driver.observe.getMockImplementation()!; let calls = 0;
+    f.driver.observe.mockImplementation(async () => ({ ...await observe(), stateDigest: String(++calls) }));
+    await f.open(await f.discover());
+    await expect(f.runtime.execute('owner', { op: 'step', goal: 'Click' })).rejects.toThrow('UI_UNSTABLE');
+    expect(f.fetch).toHaveBeenCalledTimes(limit + 1);
+    expect(f.driver.perform).not.toHaveBeenCalled();
+    expect(f.runtime.getReport('owner')?.counters).toMatchObject({ rescueAttempts: limit, rescueExhaustions: 1,
+      modelRequests: limit + 1, unknownDispatches: 0 });
+    expect(f.images.every(image => image.every(byte => byte === 0))).toBe(true);
+  });
+  it('honors a lowered rescue setting before another prediction', async () => {
+    const f = fixture(); const observe = f.driver.observe.getMockImplementation()!; let calls = 0;
+    await f.open(await f.discover());
+    f.config.computer.maxRescuesPerSession = 0;
+    f.driver.observe.mockImplementation(async () => ({ ...await observe(), stateDigest: String(++calls) }));
+    await expect(f.runtime.execute('owner', { op: 'step', goal: 'Click' })).rejects.toThrow('UI_UNSTABLE');
+    expect(f.fetch).toHaveBeenCalledOnce(); expect(f.driver.perform).not.toHaveBeenCalled();
+  });
+  it('rescues a stale approved proposal under its original goal and requests fresh approval', async () => {
+    const f = fixture(false); const observe = f.driver.observe.getMockImplementation()!;
+    let state = 'before';
+    f.driver.observe.mockImplementation(async () => ({ ...await observe(), stateDigest: state,
+      summary: JSON.stringify({ text: 'fixture', elements: [{ role: 'AXWindow' }] }) }));
+    await f.open(await f.discover()); f.approve();
+    await vi.waitFor(() => expect(f.broker.snapshot().status).toBe('ready'));
+    await f.runtime.execute('owner', { op: 'step', goal: 'Original authorized goal', expect: { kind: 'text', text: 'Original result' } });
+    state = 'changed'; f.approve(); await Promise.resolve(); await Promise.resolve();
+    const rescued = await f.runtime.execute('owner', { op: 'step', goal: 'Replacement goal', expect: { kind: 'text', text: 'fixture' } });
+    expect(rescued.status).toBe('pending_action');
+    expect(f.fetch).toHaveBeenCalledTimes(2); expect(f.driver.perform).not.toHaveBeenCalled();
+    const request = JSON.parse((f.fetch.mock.calls as any)[1][1].body);
+    expect(JSON.stringify(request)).toContain('Original authorized goal');
+    expect(JSON.stringify(request)).not.toContain('Replacement goal');
+    const acts = f.invoke.mock.calls.filter(([arg]) => arg.arguments.op === 'act');
+    expect(acts[0][0].arguments.envelope.actionId).not.toBe(acts.at(-1)![0].arguments.envelope.actionId);
+    f.approve(); await Promise.resolve(); await Promise.resolve();
+    const result = await f.runtime.execute('owner', { op: 'step', goal: 'Resume' });
+    expect(result.receipt?.dispatch).toBe('completed');
+    expect(result.verification?.status).toBe('not_met');
+    expect(f.fetch).toHaveBeenCalledTimes(2); expect(f.driver.perform).toHaveBeenCalledOnce();
+    expect(f.runtime.getReport('owner')?.counters).toMatchObject({ rescueAttempts: 1, proposedInputs: 2, completedInputs: 1 });
+    expect(f.runtime.getReport('owner')?.failure).toBeUndefined();
+  });
+  it('discards a native Responses continuation and queued batch on rescue', async () => {
+    const f = fixture(); const observe = f.driver.observe.getMockImplementation()!; let calls = 0;
+    f.driver.observe.mockImplementation(async () => ({ ...await observe(), stateDigest: ++calls === 1 ? 'old' : 'new' }));
+    vi.mocked(resolveModel).mockReturnValueOnce({ id: 'gpt-5.6-sol', provider: 'openai', api: 'openai-responses', input: ['text', 'image'],
+      maxTokens: 4096, baseUrl: 'https://api.openai.com/v1', computerUse: { profile: 'openai-responses-computer-v1' } } as any);
+    f.fetch.mockResolvedValueOnce(Response.json({ id: 'old_response', output: [{ type: 'computer_call', call_id: 'old_call',
+      actions: [{ type: 'click', button: 'left', x: 10, y: 10 }, { type: 'type', text: 'stale queued text' }] }] }))
+      .mockResolvedValueOnce(Response.json({ id: 'new_response', output: [{ type: 'computer_call', call_id: 'new_call', actions: [{ type: 'click', button: 'left', x: 20, y: 20 }] }] }));
+    await f.open(await f.discover());
+    await f.runtime.execute('owner', { op: 'step', goal: 'Click' });
+    expect(f.fetch).toHaveBeenCalledTimes(2);
+    expect(JSON.parse((f.fetch.mock.calls as any)[1][1].body)).not.toHaveProperty('previous_response_id');
+    expect(f.driver.perform).toHaveBeenCalledExactlyOnceWith(expect.anything(), expect.objectContaining({ kind: 'click', point: { x: 20, y: 20 } }), expect.any(AbortSignal));
+  });
+  it.each(['started', 'unknown', 'completed'] as const)('never rescues an observation error accompanied by a %s receipt', async dispatch => {
+    const f = fixture(); await f.open(await f.discover());
+    const invoke = f.invoke.getMockImplementation()!;
+    f.invoke.mockImplementation(async (args: any) => {
+      const result = await invoke(args);
+      if (args.arguments.op === 'act') Object.assign(result.content[0].value, {
+        status: 'ready', errorCode: 'COMPUTER_OBSERVATION_CHANGED',
+        receipt: { actionId: args.arguments.envelope.actionId, dispatch, outcome: 'unknown', verification: 'none' },
+      });
+      return result;
+    });
+    const result = await f.runtime.execute('owner', { op: 'step', goal: 'Click' });
+    expect(result.errorCode).toBe('COMPUTER_OBSERVATION_CHANGED');
+    expect(f.fetch).toHaveBeenCalledOnce(); expect(f.driver.perform).toHaveBeenCalledOnce();
+    expect(f.runtime.getReport('owner')?.counters.rescueAttempts).toBe(0);
+  });
+  it('does not turn a native execution refusal into a rescue or coordinate fallback', async () => {
+    const f = fixture(); await f.open(await f.discover());
+    f.driver.perform.mockRejectedValueOnce(new Error('COMPUTER_SEMANTIC_ACTION_UNCONFIRMED'));
+    const result = await f.runtime.execute('owner', { op: 'step', goal: 'Click' });
+    expect(result.receipt?.dispatch).toBe('unknown');
+    expect(f.fetch).toHaveBeenCalledOnce(); expect(f.driver.perform).toHaveBeenCalledOnce();
+    expect(f.runtime.getReport('owner')?.counters).toMatchObject({ rescueAttempts: 0, unknownDispatches: 1 });
+  });
+  it('honors cancellation during rescue observation without another prediction or input', async () => {
+    const f = fixture(); const observe = f.driver.observe.getMockImplementation()!; let calls = 0;
+    f.driver.observe.mockImplementation(async () => ({ ...await observe(), stateDigest: String(++calls) }));
+    await f.open(await f.discover());
+    const controller = new AbortController(); const invoke = f.invoke.getMockImplementation()!; let observations = 0;
+    f.invoke.mockImplementation(async (args: any) => {
+      const result = await invoke(args);
+      if (args.arguments.op === 'observe' && ++observations === 2) controller.abort();
+      return result;
+    });
+    await expect(f.runtime.execute('owner', { op: 'step', goal: 'Click' }, controller.signal)).rejects.toThrow();
+    expect(f.fetch).toHaveBeenCalledOnce(); expect(f.driver.perform).not.toHaveBeenCalled();
+    expect(f.runtime.getReport('owner')?.status).toBe('released');
+    expect(f.images.every(image => image.every(byte => byte === 0))).toBe(true);
+  });
+  it('checks session expiry before starting a rescue observation', async () => {
+    const f = fixture(); const observe = f.driver.observe.getMockImplementation()!; let calls = 0;
+    f.driver.observe.mockImplementation(async () => ({ ...await observe(), stateDigest: String(++calls) }));
+    await f.open(await f.discover());
+    const now = Date.now(); const clock = vi.spyOn(Date, 'now'); const invoke = f.invoke.getMockImplementation()!;
+    f.invoke.mockImplementation(async (args: any) => {
+      const result = await invoke(args);
+      if (args.arguments.op === 'act') clock.mockReturnValue(now + f.config.computer.maxSessionDurationMs + 1);
+      return result;
+    });
+    try {
+      await expect(f.runtime.execute('owner', { op: 'step', goal: 'Click' })).rejects.toThrow('SESSION_BUDGET');
+      expect(f.fetch).toHaveBeenCalledOnce(); expect(f.driver.perform).not.toHaveBeenCalled();
+      expect(f.invoke.mock.calls.filter(([arg]) => arg.arguments.op === 'observe')).toHaveLength(1);
+    } finally { clock.mockRestore(); }
+  });
+  it('validates rescue configuration bounds and permits disabling it', () => {
+    expect(ComputerConfigSchema.parse({}).maxRescuesPerSession).toBe(1);
+    for (const value of [-1, 4, 1.5]) expect(ComputerConfigSchema.safeParse({ maxRescuesPerSession: value }).success).toBe(false);
+    expect(ComputerConfigSchema.parse({ maxRescuesPerSession: 0 }).maxRescuesPerSession).toBe(0);
+  });
+  it('keeps rescue predictions within the existing model budget', async () => {
+    const f = fixture(); f.config.computer.maxModelRequests = 1;
+    const observe = f.driver.observe.getMockImplementation()!; let calls = 0;
+    f.driver.observe.mockImplementation(async () => ({ ...await observe(), stateDigest: String(++calls) }));
+    await f.open(await f.discover());
+    await expect(f.runtime.execute('owner', { op: 'step', goal: 'Click' })).rejects.toThrow('MODEL_BUDGET');
+    expect(f.fetch).toHaveBeenCalledOnce(); expect(f.driver.perform).not.toHaveBeenCalled();
+    expect(f.runtime.getReport('owner')?.failure).toMatchObject({ category: 'budget', dispatch: 'notStarted' });
   });
   it('reports the model stage, clears screenshots and releases the session on raw network errors', async () => {
     const f = fixture(); await f.open(await f.discover());

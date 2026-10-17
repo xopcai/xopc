@@ -33,6 +33,7 @@ const Reply = z.object({
 type Session = {
   id: string; owner: string; endpointId: string; appRef: string; mode: 'observe' | 'control'; prepare: boolean; windowRef?: string; binding: ComputerModelBinding;
   adapter: ComputerStepAdapter; createdAt: number; modelRequests: number; actions: number;
+  rescues: number; rescueLimit: number;
   pending?: ActionEnvelope; controller: AbortController;
   task: ComputerTaskState;
   diagnostics: ComputerSessionDiagnostics;
@@ -53,7 +54,7 @@ export interface ComputerPublicResult {
   status: string; sessionId: string; pending?: boolean; summary?: string;
   receipt?: z.infer<typeof Reply>['receipt']; claimedSuccess?: boolean; verified?: boolean;
   verification?: ComputerVerification;
-  budget?: { actionsRemaining: number; modelRequestsRemaining: number; expiresAt: number; serviceLimits?: ComputerServiceLimits };
+  budget?: { actionsRemaining: number; modelRequestsRemaining: number; rescuesRemaining: number; expiresAt: number; serviceLimits?: ComputerServiceLimits };
   handoff?: { recentActions: Array<{ goal: string; action: string; dispatch: string; outcome: string; verification?: ComputerVerification }> };
   observation?: { id: string; width: number; height: number };
   errorCode?: string;
@@ -159,7 +160,8 @@ export class ComputerRuntime {
       s = { id: randomUUID(), owner, appRef: input.appRef, mode: input.mode, prepare: input.prepare, windowRef: input.windowRef, endpointId: endpoint.endpointId, adapter,
         binding: { modelRef: ref, profile, origin: new URL(model.baseUrl).origin, runtimeLocation: 'unknown',
           ...(deployment?.origin ? { upstreamOrigin: deployment.origin } : {}) },
-        createdAt: Date.now(), actions: 0, modelRequests: 0, controller: new AbortController(), task: new ComputerTaskState(),
+        createdAt: Date.now(), actions: 0, modelRequests: 0, rescues: 0, rescueLimit: config.computer.maxRescuesPerSession,
+        controller: new AbortController(), task: new ComputerTaskState(),
         diagnostics: diagnostics!, serviceLimits };
       s.diagnostics.bind(s.id);
       this.sessions.set(owner, s);
@@ -190,11 +192,18 @@ export class ComputerRuntime {
       if (input.op === 'step' && s.mode === 'observe') throw new Error('COMPUTER_READ_ONLY');
       if (s.pending) {
         if (input.op === 'observe') return this.present(status.value);
+        const context = s.pendingContext;
         phase = 'dispatch';
-        return await this.dispatchAction(s, s.pending, signal);
-      }
-      if (status.value.status !== 'ready') return this.present(status.value);
-      for (let observationAttempt = 0; observationAttempt < 2; observationAttempt++) {
+        const result = await this.dispatchAction(s, s.pending, signal);
+        if (!this.isUndispatchedChange(result) || !context) return result;
+        // Approval resumes the original goal, never a replacement supplied while waiting.
+        input = { op: 'step', goal: context.goal, expect: context.expectation };
+        this.reserveRescue(s, signal);
+      } else if (status.value.status !== 'ready') return this.present(status.value);
+      while (true) {
+        signal.throwIfAborted();
+        if (Date.now() - s.createdAt >= config.computer.maxSessionDurationMs) throw new Error('COMPUTER_SESSION_BUDGET');
+        phase = 'observe';
         const observed = await this.send(s, { op: 'observe', sessionId: s.id, owner }, signal);
         try {
           const verification = verifyComputerExpectation(input.expect, observed.value.observation);
@@ -210,9 +219,10 @@ export class ComputerRuntime {
           const o = observed.value.observation;
           if (!o || !observed.frame || !observed.mimeType) throw new Error('COMPUTER_FRAME_REQUIRED');
           phase = 'model';
-          const proposal = await s.diagnostics.measure('model', () => predictComputerStep(s.adapter, { goal: input.op === 'observe' ? input.question! : input.goal, readOnly: input.op === 'observe', image: observed.frame, mimeType: observed.mimeType,
+          const predictionInput = input;
+          const proposal = await s.diagnostics.measure('model', () => predictComputerStep(s.adapter, { goal: predictionInput.op === 'observe' ? predictionInput.question! : predictionInput.goal, readOnly: predictionInput.op === 'observe', image: observed.frame, mimeType: observed.mimeType,
             width: o.imageWidth, height: o.imageHeight, summary: o.summary, stateDigest: o.stateDigest,
-            history: s.task.history, expectation: input.expect, onModelRequest: () => s!.diagnostics.count('modelRequests') }, () => {
+            history: s.task.history, expectation: predictionInput.expect, onModelRequest: () => s!.diagnostics.count('modelRequests') }, () => {
             if (++s!.modelRequests > config.computer.maxModelRequests) throw new Error('COMPUTER_MODEL_BUDGET');
             s!.diagnostics.count('predictionAttempts');
           }, signal));
@@ -229,12 +239,10 @@ export class ComputerRuntime {
           s.pendingContext = { goal: input.goal, before: o, expectation: input.expect };
           phase = 'dispatch';
           const result = await this.dispatchAction(s, e, signal);
-          if (result.status !== 'ready' || result.receipt || result.errorCode !== 'COMPUTER_OBSERVATION_CHANGED') return result;
-          // The broker positively confirms no dispatch. Re-observe and re-plan, never replay.
-          phase = 'observe';
+          if (!this.isUndispatchedChange(result)) return result;
+          this.reserveRescue(s, signal);
         } finally { observed.frame?.fill(0); }
       }
-      throw new Error('COMPUTER_UI_UNSTABLE');
     } catch (error) {
       const failure = signal.aborted || computerDiagnostic(error)
         || (error instanceof Error && /^COMPUTER_[A-Z_0-9]+$/.test(error.message)) ? error
@@ -244,6 +252,21 @@ export class ComputerRuntime {
       await this.close(owner);
       throw failure;
     }
+  }
+  private isUndispatchedChange(result: ComputerPublicResult): boolean {
+    return result.status === 'ready' && result.errorCode === 'COMPUTER_OBSERVATION_CHANGED' && !result.receipt;
+  }
+  private reserveRescue(s: Session, signal: AbortSignal): void {
+    signal.throwIfAborted();
+    const limit = Math.min(s.rescueLimit, this.getConfig().computer.maxRescuesPerSession);
+    if (s.rescues >= limit) {
+      s.diagnostics.count('rescueExhaustions');
+      throw new Error('COMPUTER_UI_UNSTABLE');
+    }
+    s.rescues++;
+    s.diagnostics.count('rescueAttempts');
+    // Drop queued native batches and continuation state before using a fresh screenshot.
+    s.adapter.reset?.();
   }
   private async dispatchAction(s: Session, envelope: ActionEnvelope, signal?: AbortSignal): Promise<ComputerPublicResult> {
     if (!s.pending) {
@@ -277,6 +300,7 @@ export class ComputerRuntime {
   private budget(s: Session) {
     const config = this.getConfig().computer;
     return { actionsRemaining: Math.max(0, config.maxActionsPerSession - s.actions), modelRequestsRemaining: Math.max(0, config.maxModelRequests - s.modelRequests),
+      rescuesRemaining: Math.max(0, Math.min(s.rescueLimit, config.maxRescuesPerSession) - s.rescues),
       expiresAt: s.createdAt + config.maxSessionDurationMs, ...(s.serviceLimits ? { serviceLimits: s.serviceLimits } : {}) };
   }
   private present(reply: z.infer<typeof Reply>): ComputerPublicResult {
