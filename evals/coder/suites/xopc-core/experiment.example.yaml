@@ -1,0 +1,19 @@
+name: xopc core v1 matched comparison
+repetitions: 3
+randomizeVariantOrder: true
+randomSeed: xopc-core-v1
+variants:
+  - id: baseline
+    adapter: xopc
+    agentId: coder
+    model: ${XOPC_BENCHMARK_BASELINE_MODEL}
+    reasoning: off
+    config:
+      baseUrl: ${XOPC_BENCHMARK_BASELINE_URL}
+  - id: candidate
+    adapter: xopc
+    agentId: coder
+    model: ${XOPC_BENCHMARK_CANDIDATE_MODEL}
+    reasoning: off
+    config:
+      baseUrl: ${XOPC_BENCHMARK_CANDIDATE_URL}

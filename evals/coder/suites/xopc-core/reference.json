@@ -1,0 +1,77 @@
+{
+  "R01-price-comparison": {
+    "vendorACents": 240,
+    "vendorBCents": 360,
+    "cheaper": "a",
+    "sourceIds": [
+      "primary-a",
+      "primary-b"
+    ],
+    "asOf": "2026-10-01"
+  },
+  "R02-conflicting-source": {
+    "acceptedCentsPerHour": 120,
+    "rejectedSourceId": "secondary-note",
+    "evidenceSourceId": "primary-a",
+    "conflictDetected": true
+  },
+  "R03-missing-evidence": {
+    "asrCents": 120,
+    "ttsCents": null,
+    "totalCents": null,
+    "disposition": "partial",
+    "missing": [
+      "tts"
+    ],
+    "sourceIds": [
+      "primary-a"
+    ]
+  },
+  "D01-monthly-sales": {
+    "rowCount": 4,
+    "januaryCents": 15000,
+    "februaryCents": 21000,
+    "growthPercent": 40
+  },
+  "D02-quoted-csv": {
+    "rowCount": 3,
+    "names": [
+      "Acme, Inc",
+      "A \"quoted\" shop",
+      "Two\nlines"
+    ],
+    "totalCents": 3060
+  },
+  "D03-exact-money": {
+    "lineCents": [
+      30,
+      3998,
+      10001
+    ],
+    "totalCents": 14029,
+    "currency": "CNY"
+  },
+  "C01-add-deliverable": {
+    "januaryCents": 15000,
+    "februaryCents": 21000,
+    "growthPercent": 40,
+    "rowCount": 4,
+    "revision": "add-count-v1"
+  },
+  "C02-replace-scope": {
+    "region": "east",
+    "januaryCents": 10010,
+    "februaryCents": 12020,
+    "growthPercent": 20.08,
+    "revision": "east-only-v1"
+  },
+  "F01-lost-artifact": {
+    "rowCount": 4,
+    "totalCents": 36000
+  },
+  "F02-transient-read": {
+    "receipt": "source-recovered-v1",
+    "totalCents": 36000,
+    "recovered": true
+  }
+}

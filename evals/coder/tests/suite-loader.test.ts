@@ -90,4 +90,15 @@ cases:
 
     await expect(loadExperiment(path)).rejects.toThrow('Duplicate variant id');
   });
+  it.each([null, [{ message: '' }], [{ message: 'next', removeFiles: [42] }]])('rejects malformed follow-up contracts: %j', async followUps => {
+    const root = mkdtempSync(join(tmpdir(), 'agent-evals-follow-up-'));
+    roots.push(root);
+    const path = join(root, 'suite.yaml');
+    writeFileSync(path, JSON.stringify({ id: 'follow-up', version: '1', cases: [{
+      id: 'case', repo: { source: 'local', path: './repo', commit: 'HEAD' }, task: 'Read input',
+      followUps, budget: { timeoutMs: 1000 }, graders: [{ type: 'command', command: 'true' }], tags: [],
+    }] }));
+    await expect(loadSuite(path)).rejects.toThrow('invalid follow-ups');
+  });
+
 });

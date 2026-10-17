@@ -56,3 +56,13 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm run eval:coder:smoke
+      - name: Calibrate xopc benchmark v1 (no model calls)
+        run: pnpm run eval:benchmark --output .xopc-evals/ci-core-v1
+      - name: Upload xopc benchmark calibration evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: xopc-core-v1-calibration
+          path: .xopc-evals/ci-core-v1/
+          if-no-files-found: ignore
+          retention-days: 14

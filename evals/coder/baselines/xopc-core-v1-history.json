@@ -1,0 +1,238 @@
+{
+  "schemaVersion": 1,
+  "note": "Separate evidence classes and suite hashes; never pool these as independent reliability samples.",
+  "trials": [
+    {
+      "label": "unsupported-thinking",
+      "evidenceDirectory": ".xopc-evals/qwen-core-v1-initial/benchmark",
+      "evidenceClass": "live-direct-agent",
+      "version": "1.0.0",
+      "suiteHash": "e092a568aaad03d13f38941be0fa8f096a9ffa85563256f22f297a0034389d27",
+      "experimentId": "f2554b7a-f859-4d89-9b5f-923c0f6a2590",
+      "variants": [
+        {
+          "id": "candidate",
+          "expectedRuns": 10,
+          "observedRuns": 10,
+          "passed": 0,
+          "successRate": 0,
+          "totalCost": null,
+          "costPerSuccess": null,
+          "durationsMs": [
+            90,
+            113,
+            65,
+            67,
+            71,
+            101,
+            88,
+            121,
+            68,
+            69
+          ],
+          "totalReportedTokens": null,
+          "statuses": {
+            "passed": 0,
+            "failed": 0,
+            "error": 10,
+            "timed_out": 0,
+            "budget_exceeded": 0
+          },
+          "categories": [
+            {
+              "category": "research",
+              "expectedRuns": 3,
+              "passed": 0
+            },
+            {
+              "category": "data",
+              "expectedRuns": 3,
+              "passed": 0
+            },
+            {
+              "category": "change",
+              "expectedRuns": 2,
+              "passed": 0
+            },
+            {
+              "category": "recovery",
+              "expectedRuns": 2,
+              "passed": 0
+            }
+          ]
+        }
+      ],
+      "sourceDrift": false
+    },
+    {
+      "label": "100k-budget-diagnostic",
+      "evidenceDirectory": ".xopc-evals/qwen-core-v1-medium/benchmark",
+      "evidenceClass": "live-direct-agent",
+      "version": "1.0.0",
+      "suiteHash": "e092a568aaad03d13f38941be0fa8f096a9ffa85563256f22f297a0034389d27",
+      "experimentId": "35029ddd-8940-4fb4-b953-d5d451d38361",
+      "variants": [
+        {
+          "id": "candidate",
+          "expectedRuns": 10,
+          "observedRuns": 10,
+          "passed": 0,
+          "successRate": 0,
+          "totalCost": null,
+          "costPerSuccess": null,
+          "durationsMs": [
+            23384,
+            33738,
+            34916,
+            45357,
+            31602,
+            25977,
+            12038,
+            29519,
+            52697,
+            40059
+          ],
+          "totalReportedTokens": null,
+          "statuses": {
+            "passed": 0,
+            "failed": 0,
+            "error": 0,
+            "timed_out": 0,
+            "budget_exceeded": 10
+          },
+          "categories": [
+            {
+              "category": "research",
+              "expectedRuns": 3,
+              "passed": 0
+            },
+            {
+              "category": "data",
+              "expectedRuns": 3,
+              "passed": 0
+            },
+            {
+              "category": "change",
+              "expectedRuns": 2,
+              "passed": 0
+            },
+            {
+              "category": "recovery",
+              "expectedRuns": 2,
+              "passed": 0
+            }
+          ]
+        }
+      ],
+      "sourceDrift": false
+    },
+    {
+      "label": "300k-live-original",
+      "evidenceDirectory": ".xopc-evals/qwen-core-v1-300k/benchmark",
+      "evidenceClass": "live-direct-agent",
+      "version": "1.0.1",
+      "suiteHash": "b7737a032c94e64ac919005c07e606c5622c7e34f90932779da1fc7f1d4f88f9",
+      "experimentId": "3af2497c-f882-45a5-b676-2b3146fa11d6",
+      "variants": [
+        {
+          "id": "candidate",
+          "expectedRuns": 10,
+          "observedRuns": 10,
+          "passed": 5,
+          "successRate": 0.5,
+          "reportedEstimatedCost": null,
+          "reportedEstimatedCostPerSuccess": null,
+          "durationsMs": [
+            70708,
+            74550,
+            78050,
+            65814,
+            71205,
+            56673,
+            49249,
+            46969,
+            60571,
+            56569
+          ],
+          "totalReportedTokens": null,
+          "statuses": {
+            "passed": 5,
+            "failed": 1,
+            "error": 0,
+            "timed_out": 0,
+            "budget_exceeded": 4
+          },
+          "categories": [
+            {
+              "category": "research",
+              "expectedRuns": 3,
+              "passed": 2
+            },
+            {
+              "category": "data",
+              "expectedRuns": 3,
+              "passed": 2
+            },
+            {
+              "category": "change",
+              "expectedRuns": 2,
+              "passed": 0
+            },
+            {
+              "category": "recovery",
+              "expectedRuns": 2,
+              "passed": 1
+            }
+          ]
+        }
+      ],
+      "sourceDrift": false
+    },
+    {
+      "label": "same-outputs-regraded",
+      "evidenceDirectory": ".xopc-evals/qwen-core-v1-regraded",
+      "evidenceClass": "regraded-live-direct-agent",
+      "version": "1.0.2",
+      "suiteHash": "b7335af765b54cee3c956b7ec7362925dd96c5b5d63f2acf305f30490c109cb5",
+      "experimentId": "de6aa9f3-e812-4538-996f-bd8c1375b6d5",
+      "variants": [
+        {
+          "id": "candidate",
+          "expectedRuns": 10,
+          "observedRuns": 10,
+          "passed": 6,
+          "statuses": {
+            "passed": 6,
+            "failed": 0,
+            "error": 0,
+            "timed_out": 0,
+            "budget_exceeded": 4
+          },
+          "categories": [
+            {
+              "category": "research",
+              "expectedRuns": 3,
+              "passed": 3
+            },
+            {
+              "category": "data",
+              "expectedRuns": 3,
+              "passed": 2
+            },
+            {
+              "category": "change",
+              "expectedRuns": 2,
+              "passed": 0
+            },
+            {
+              "category": "recovery",
+              "expectedRuns": 2,
+              "passed": 1
+            }
+          ]
+        }
+      ],
+      "sourceDrift": false
+    }
+  ]
+}
