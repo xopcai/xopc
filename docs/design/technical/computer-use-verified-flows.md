@@ -2,7 +2,7 @@
 
 ## Existing boundaries
 
-Flow capture is a bounded companion to the existing task history in ComputerRuntime. Documents use the existing private SQLite DurableState store under `computer.verified-flows.v1`; no new database, schema migration, skill installer, tool, Gateway route or execution engine is introduced. Scope is derived from the conversation's configured Agent ID and workspace, never from model-supplied IDs. Other conversations may reuse records only within that same scope. Each document also binds the originating desktop endpoint and application ID.
+Flow capture is a bounded companion to the existing task history in ComputerRuntime. Documents use the existing private SQLite DurableState store under `computer.verified-flows.v1`; no new database, schema migration, skill installer, tool, Gateway route or execution engine is introduced. Scope is derived from the conversation's configured Agent ID and workspace, never from model-supplied IDs. Other conversations may reuse records only within that same scope. Each document retains its originating desktop endpoint and application ID. New captures also bind the authenticated persistent desktop principal supplied by the endpoint registry. A fresh connection may reuse only flows for that same device principal and app; legacy documents without a principal retain exact endpoint binding.
 
 ## Admission and persistence
 
@@ -29,3 +29,5 @@ The existing independent executor/oracle evaluator can compare the same authoriz
 See [live TextEdit validation](./computer-use-verified-flows-live-validation.md) for the pinned-driver completeness limitation and the three-process capture/reuse/lost-reply check.
 
 See [real hosted GUI-Plus validation](./computer-use-verified-flows-hosted-validation.md) for the additional actual-provider matrix and the bounded native-ref prompt extension.
+
+See [real Gateway/desktop network validation](./computer-use-verified-flows-network-validation.md) for signed enrollment, authenticated HTTP/WebSocket dispatch, frame uploads, restart identity and lost-result timeout/release checks.

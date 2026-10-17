@@ -51,12 +51,13 @@ function fixture(autoApprove = true, flowStore?: ComputerFlowRepository) {
     if (frame) { frames.set('frame', frame.bytes); content.push({ type: 'file', fileId: 'frame', mimeType: frame.mimeType }); }
     return { content, invocationId: 'invoke' };
   });
+  const endpointIdentity = { kind: 'desktop', endpointId: 'endpoint', principalId: undefined as string | undefined };
   const endpoint = { bindings: { get: () => undefined, resolve: () => undefined }, registry: {
-    get: (id: string) => id === 'endpoint' ? ({ kind: 'desktop', endpointId: id }) : undefined, getTool: () => ({ revision: 'r1' }) },
+    get: (id: string) => id === endpointIdentity.endpointId ? endpointIdentity : undefined, getTool: () => ({ revision: 'r1' }) },
     invocations: { invoke }, uploads: { takeComputerFrame: (id: string) => { const value = frames.get(id); frames.delete(id); return value; } } };
-  const runtime = new ComputerRuntime(endpoint as any, () => config as any, () => 'endpoint', flowStore);
+  const runtime = new ComputerRuntime(endpoint as any, () => config as any, () => endpointIdentity.endpointId, flowStore);
   cleanups.push(async () => { await runtime.shutdown(); await broker.dispose(); });
-  return { runtime, broker, driver, frames, images, config, fetch, invoke, approve: (value = true) => approve(value),
+  return { runtime, broker, driver, frames, images, config, fetch, invoke, endpointIdentity, approve: (value = true) => approve(value),
     discover: async () => (await runtime.execute('owner', { op: 'discover', query: '飞书' })).apps![0].appRef,
     open: async (appRef: string, mode: 'observe' | 'control' = 'control') => runtime.execute('owner', { op: 'open', appRef, mode, prepare: false }) };
 }
@@ -548,6 +549,34 @@ describe('verified flow lifecycle through the desktop broker', () => {
     await f.runtime.execute('owner', { op: 'close' });
     expect(await f.runtime.execute('owner', { op: 'forget_flow', flowId: closed.savedFlow!.id })).toMatchObject({ status: 'flow_deleted' });
     expect((await f.runtime.execute('owner', { op: 'flows' })).flows).toEqual([]);
+  });
+  it.each(['same', 'other', 'missing', 'other-same-endpoint'])('binds new flows to the authenticated device principal after reconnect: %s', async identity => {
+    const store = flowRepository(), f = fixture(true, store), state = nativeNavigation(f);
+    f.endpointIdentity.principalId = 'authenticated-device';
+    await f.open(await f.discover()); await f.runtime.execute('owner', navigationStep);
+    const saved = await f.runtime.execute('owner', { op: 'close', saveFlowAs: 'Device navigation' });
+    expect(store.save.mock.calls[0][1]).toMatchObject({ endpointId: 'endpoint', principalId: 'authenticated-device' });
+    state.reset();
+    f.endpointIdentity.endpointId = identity === 'other-same-endpoint' ? 'endpoint' : 'new-connection';
+    f.endpointIdentity.principalId = identity === 'same' ? 'authenticated-device' : identity.startsWith('other') ? 'another-device' : undefined;
+    await f.open(await f.discover());
+    const calls = f.fetch.mock.calls.length, inputs = f.driver.perform.mock.calls.length;
+    if (identity === 'same') {
+      expect(await f.runtime.execute('owner', { ...navigationStep, flowId: saved.savedFlow!.id })).toMatchObject({ verified: true });
+      expect(f.fetch).toHaveBeenCalledTimes(calls + 1); expect(f.driver.perform).toHaveBeenCalledTimes(inputs + 1);
+    } else {
+      await expect(f.runtime.execute('owner', { ...navigationStep, flowId: saved.savedFlow!.id })).rejects.toThrow('COMPUTER_FLOW_TARGET_MISMATCH');
+      expect(f.fetch).toHaveBeenCalledTimes(calls); expect(f.driver.perform).toHaveBeenCalledTimes(inputs);
+    }
+  });
+  it('keeps legacy flows restricted to their original connection', async () => {
+    const store = flowRepository(), f = fixture(true, store), state = nativeNavigation(f);
+    await f.open(await f.discover()); await f.runtime.execute('owner', navigationStep);
+    const saved = await f.runtime.execute('owner', { op: 'close', saveFlowAs: 'Legacy navigation' });
+    state.reset(); f.endpointIdentity.endpointId = 'reconnected'; f.endpointIdentity.principalId = 'authenticated-device';
+    await f.open(await f.discover()); const calls = f.fetch.mock.calls.length;
+    await expect(f.runtime.execute('owner', { ...navigationStep, flowId: saved.savedFlow!.id })).rejects.toThrow('COMPUTER_FLOW_TARGET_MISMATCH');
+    expect(f.fetch).toHaveBeenCalledTimes(calls);
   });
   it('saves positive page evidence from partial native snapshots without certifying selected-state evidence', async () => {
     const store = flowRepository(), f = fixture(true, store); nativeNavigation(f);

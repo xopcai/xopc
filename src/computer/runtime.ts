@@ -37,7 +37,7 @@ type Session = {
   rescues: number; rescueLimit: number;
   pending?: ActionEnvelope; controller: AbortController;
   task: ComputerTaskState;
-  flowCapture: ComputerFlowCapture; flowScope: string; lastFlowId?: string;
+  flowCapture: ComputerFlowCapture; flowScope: string; flowPrincipalId?: string; lastFlowId?: string;
   diagnostics: ComputerSessionDiagnostics;
   pendingContext?: { goal: string; before: z.infer<typeof ComputerObservationSchema>; expectation?: ComputerExpectation; flowId?: string };
   serviceLimits?: ComputerServiceLimits;
@@ -111,7 +111,7 @@ export class ComputerRuntime {
         try { draft = session.flowCapture.finish(input.saveFlowAs, session.endpointId); }
         catch { return { status: 'stopped', sessionId, errorCode: 'COMPUTER_FLOW_NOT_VERIFIED', report,
           nextAction: 'Control was released. Only a complete native navigation sequence with non-sensitive labels and a final verified selected condition or positive page-specific text can be saved.' }; }
-        try { savedFlow = computerFlowMetadata(this.flowStore.save(session.flowScope, draft)); }
+        try { savedFlow = computerFlowMetadata(this.flowStore.save(session.flowScope, { ...draft, ...(session.flowPrincipalId ? { principalId: session.flowPrincipalId } : {}) })); }
         catch { return { status: 'stopped', sessionId, errorCode: 'COMPUTER_FLOW_SAVE_FAILED', report,
           nextAction: 'Control was released; no reusable flow was confirmed saved. Check native verification, non-sensitive labels and local storage. Do not repeat desktop input to save a flow.' }; }
       }
@@ -195,7 +195,7 @@ export class ComputerRuntime {
           ...(deployment?.origin ? { upstreamOrigin: deployment.origin } : {}) },
         createdAt: Date.now(), actions: 0, modelRequests: 0, rescues: 0, rescueLimit: config.computer.maxRescuesPerSession,
         controller: new AbortController(), task: new ComputerTaskState(),
-        flowCapture: new ComputerFlowCapture(), flowScope: JSON.stringify([effective.id, effective.workspace]),
+        flowCapture: new ComputerFlowCapture(), flowPrincipalId: endpoint.principalId, flowScope: JSON.stringify([effective.id, effective.workspace]),
         diagnostics: diagnostics!, serviceLimits };
       s.diagnostics.bind(s.id);
       this.sessions.set(owner, s);
@@ -262,7 +262,7 @@ export class ComputerRuntime {
             const flowId = input.flowId;
             const flow = this.flowStore.list(s.flowScope).find(item => item.id === flowId);
             if (!flow) throw new Error('COMPUTER_FLOW_NOT_FOUND');
-            if (flow.endpointId !== s.endpointId || flow.appId !== o.target.appId) throw new Error('COMPUTER_FLOW_TARGET_MISMATCH');
+            if ((flow.principalId ? flow.principalId !== s.flowPrincipalId : flow.endpointId !== s.endpointId) || flow.appId !== o.target.appId) throw new Error('COMPUTER_FLOW_TARGET_MISMATCH');
             flowHint = computerFlowHint(flow);
           }
           phase = 'model';

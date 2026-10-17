@@ -49,3 +49,5 @@
 固定版本的 macOS 驱动无法证明整棵可访问性树完整。此类快照仍标为部分覆盖：只允许保存已观察到的原生控件提示和具体页面内容的正向证据，不据此证明控件不存在、名称唯一或选中状态。控件名称本身及操作前已出现的文字不算保存依据。详见[真实 TextEdit 验证](../design/technical/computer-use-verified-flows-live-validation.md)。
 
 [真实 GUI-Plus 模型验证](../design/technical/computer-use-verified-flows-hosted-validation.md)使用实际供应商响应，覆盖保存、独立进程重启后复用、本地授权和丢失回执后不重试。GUI-Plus 的 xopc 提示协议支持用当前 `ref` 显式请求 `activate`／`show_menu`，动作仍需通过现有原生校验与授权；部分覆盖时不会把坐标自动转换为原生动作。
+
+新保存的流程绑定经过认证的持久桌面设备身份，重启后即使网络连接 ID 改变，也可以在重新授权后复用；重新注册成另一设备不能继承该流程。没有设备身份的旧流程仍保留原连接限制。详见[真实 Gateway／桌面网络验证](../design/technical/computer-use-verified-flows-network-validation.md)。
