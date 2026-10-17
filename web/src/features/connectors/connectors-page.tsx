@@ -655,12 +655,12 @@ export function ConnectorsPage({ embedded = false, onHeaderActionChange }: { emb
                     <PluginMcpConnection key={server.id} pluginId={extension.pluginId!} server={server} enabled={extension.active} />
                   ))}
                   {visibleCustomServers.length || !connectedSearchQuery.trim() ? (
-                    <details className="rounded-xl border border-edge bg-surface-base">
-                      <summary className="cursor-pointer px-4 py-3">
-                        <span className="text-sm font-medium text-fg">{cs.customIntegrationsTitle}</span>
+                    <section aria-label={cs.customIntegrationsTitle} className="rounded-xl border border-edge bg-surface-base">
+                      <div className="px-4 py-3">
+                        <h2 className="inline text-sm font-medium text-fg">{cs.customIntegrationsTitle}</h2>
                         <span className="ml-2 text-xs tabular-nums text-fg-subtle">{visibleCustomServers.length}</span>
                         <span className="mt-1 block text-xs text-fg-muted">{cs.customIntegrationsHint}</span>
-                      </summary>
+                      </div>
                       <div className="border-t border-edge-subtle">
                         <div className="flex flex-wrap gap-2 px-4 py-3">
                           <Button type="button" variant="secondary" className="h-8 text-xs" onClick={openAddCustomServer}>
@@ -682,7 +682,7 @@ export function ConnectorsPage({ embedded = false, onHeaderActionChange }: { emb
                           ))}
                         </div>
                       </div>
-                    </details>
+                    </section>
                   ) : null}
                 </div>
               )}
@@ -838,6 +838,7 @@ export function ConnectorsPage({ embedded = false, onHeaderActionChange }: { emb
             open
             mode={customDialog.mode}
             initialRow={customDialog.row}
+            lastCheck={customDialog.mode === 'edit' ? lastChecks[customDialog.row.id] : undefined}
             existingCustomServers={customServers}
             config={config}
             managedServerIds={managedServerIds}

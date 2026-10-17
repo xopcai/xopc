@@ -30,7 +30,8 @@ it('loads a skeleton then shows tools, schemas, filters and refreshes', async ()
   expect(button(t.refreshTools).disabled).toBe(true);
   await act(async () => resolve(tools));
   expect(document.body.textContent).toContain('mcp__docs__lookup');
-  expect(document.body.textContent).toContain('hidden');
+  expect(document.querySelector('h3')?.textContent).toBe('lookup');
+  expect(document.body.textContent).toContain(t.exposureLabels.hidden);
   expect(document.querySelector('pre')?.textContent).toContain('query');
   const input = document.querySelector('input')!;
   await act(async () => {
@@ -45,14 +46,33 @@ it('loads a skeleton then shows tools, schemas, filters and refreshes', async ()
 });
 
 it('shows connection errors and allows retry', async () => {
-  vi.mocked(fetchMcpTools).mockRejectedValueOnce(new Error('needs sign-in'));
+  vi.mocked(fetchMcpTools).mockRejectedValueOnce(new Error('request failed: https://example.com?token=secret'));
   await render();
-  expect(document.querySelector('[role="alert"]')?.textContent).toContain('needs sign-in');
-  expect(document.body.textContent).toContain(t.toolsAuthHint.replace('{{serverId}}', 'docs'));
+  expect(document.querySelector('[role="alert"]')?.textContent).toContain(t.toolsLoadFailed);
+  expect(document.body.textContent).toContain(t.toolsRetryHint);
+  expect(document.body.textContent).not.toContain('token=secret');
+  expect(document.body.textContent).not.toContain(t.toolsDialogSubtitle.replace('{{serverId}}', 'docs').replace('{{count}}', '0'));
   vi.mocked(fetchMcpTools).mockResolvedValueOnce(tools);
   await act(async () => button(t.refreshTools).click());
   expect(document.querySelector('[role="alert"]')).toBeNull();
   expect(document.querySelectorAll('article')).toHaveLength(2);
+});
+
+it('announces filtered results and clears an empty search without fetching again', async () => {
+  vi.mocked(fetchMcpTools).mockResolvedValueOnce(tools);
+  await act(async () => root.render(<McpToolsDialog serverId="docs" displayName="团队知识库" t={t} onClose={() => {}} />));
+  expect(document.body.textContent).toContain('团队知识库');
+  const input = document.querySelector('input')!;
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, 'missing');
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  expect(document.querySelector('[role="status"]')?.textContent).toBe(t.toolsSearchSummary.replace('{{visible}}', '0').replace('{{count}}', '2'));
+  expect(document.body.textContent).toContain(t.toolsDialogSearchEmpty);
+  await act(async () => button(t.toolsClearSearch).click());
+  expect(input.value).toBe('');
+  expect(document.querySelectorAll('article')).toHaveLength(2);
+  expect(fetchMcpTools).toHaveBeenCalledTimes(1);
 });
 
 it('aborts discovery on close', async () => {
@@ -61,4 +81,22 @@ it('aborts discovery on close', async () => {
   const signal = vi.mocked(fetchMcpTools).mock.calls[0][1];
   await act(async () => root.render(null));
   expect(signal.aborted).toBe(true);
+});
+
+it('restores focus to the tool-list trigger after closing', async () => {
+  vi.mocked(fetchMcpTools).mockResolvedValueOnce(tools);
+  const trigger = document.createElement('button');
+  document.body.append(trigger);
+  await act(async () => root.render(<McpToolsDialog serverId="docs" returnFocusTo={trigger} t={t} onClose={() => {}} />));
+  await act(async () => root.render(null));
+  await act(async () => new Promise(resolve => setTimeout(resolve, 10)));
+  expect(document.activeElement).toBe(trigger);
+  trigger.remove();
+});
+
+it('preserves tool names when a server ID contains a namespace separator', async () => {
+  vi.mocked(fetchMcpTools).mockResolvedValueOnce([{ ...tools[0], name: 'mcp__team__docs__lookup__note' }]);
+  await act(async () => root.render(<McpToolsDialog serverId="team__docs" t={t} onClose={() => {}} />));
+  expect(document.querySelector('h3')?.textContent).toBe('lookup__note');
+  expect(document.body.textContent).toContain('mcp__team__docs__lookup__note');
 });

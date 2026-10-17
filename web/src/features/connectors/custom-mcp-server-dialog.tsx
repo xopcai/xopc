@@ -13,7 +13,7 @@ import { McpAuthFields, McpHeaderFields, mcpInputClass } from './mcp/mcp-auth-fi
 import {
   buildMcpServerConfigFromRow, cancelMcpDraftSignIn, commitMcpDraft, createMcpConnectionDraft, deleteMcpDraft, normalizeMcpAddress, parseMcpConfigImport,
   probeMcpDraft, readMcpDraftSignIn, startMcpDraftSignIn, submitMcpDraftRedirect, suggestMcpServerId,
-  type McpAuthorization, type McpConnectionProbe, type McpServerRow,
+  type McpAuthorization, type McpConnectionProbe, type McpLastCheck, type McpServerRow,
 } from './mcp/mcp-config-api';
 import { mcpServerEndpointSummary } from './mcp/mcp-server-endpoint-summary';
 import { McpServerFormFields } from './mcp/mcp-server-form-fields';
@@ -50,7 +50,7 @@ function draftSignature(row: McpServerRow, auth: McpAuthDraft): string {
 }
 
 export function CustomMcpServerDialog(props: { open: boolean; mode: 'add' | 'edit'; initialRow: McpServerRow;
-  existingCustomServers: McpServerRow[]; config: unknown; managedServerIds: ReadonlySet<string>;
+  existingCustomServers: McpServerRow[]; config: unknown; managedServerIds: ReadonlySet<string>; lastCheck?: McpLastCheck;
   t: McpSettingsMessages; cs: ConnectorsSettingsMessages; onClose: () => void; onSaved: () => Promise<void> }) {
   const { t, cs } = props;
   const validationId = useId();
@@ -84,6 +84,7 @@ export function CustomMcpServerDialog(props: { open: boolean; mode: 'add' | 'edi
   const openedUrl = useRef('');
   const mounted = useRef(true);
   const dialog = useRef<HTMLDivElement>(null);
+  const toolsTrigger = useRef<HTMLButtonElement>(null);
   const form = useRef<HTMLFormElement>(null);
   const alert = useRef<HTMLParagraphElement>(null);
   const onSaved = useRef(props.onSaved);
@@ -170,7 +171,8 @@ export function CustomMcpServerDialog(props: { open: boolean; mode: 'add' | 'edi
   function update(patch: Partial<McpServerRow>) { setRow(current => ({ ...current, ...patch })); clearResult(); }
   function updateAuth(patch: Partial<McpAuthDraft>) { setAuth(current => ({ ...current, ...patch })); clearResult(); }
   function close() {
-    if (busy) return;
+    if (phase === 'saving' || authorizing) return;
+    if (phase === 'checking') { clearResult(); setPhase('idle'); }
     if (unsaved) setConfirmClose(true); else props.onClose();
   }
   function previewImport() {
@@ -282,7 +284,7 @@ export function CustomMcpServerDialog(props: { open: boolean; mode: 'add' | 'edi
       <div className="flex shrink-0 items-start justify-between gap-3 border-b border-edge p-5">
         <div><Dialog.Title className="font-semibold">{props.mode === 'edit' ? t.setupEditTitle : t.setupTitle}</Dialog.Title>
           <Dialog.Description className="mt-1 text-sm text-fg-muted">{t.setupHint}</Dialog.Description></div>
-        <button type="button" disabled={busy} onClick={close} className="rounded-lg p-2 text-fg-muted hover:bg-surface-hover disabled:opacity-50" aria-label={cs.modalClose}><X className="size-5" aria-hidden /></button>
+        <button type="button" disabled={phase === 'saving' || authorizing} onClick={close} className="rounded-lg p-2 text-fg-muted hover:bg-surface-hover disabled:opacity-50" aria-label={cs.modalClose}><X className="size-5" aria-hidden /></button>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-5">
         {importing ? <div className="space-y-4">
@@ -329,9 +331,9 @@ export function CustomMcpServerDialog(props: { open: boolean; mode: 'add' | 'edi
         {reloadRequired ? <p role="alert" className="mt-4 text-sm text-fg">{t.setupReloadRequired}</p> : null}
         {!importing && !reloadRequired ? <div className="mt-4 space-y-3" aria-live="polite">
           {phase !== 'idle' ? <p role="status" className="flex items-center gap-2 text-sm text-fg-muted"><Loader2 className="size-4 animate-spin motion-reduce:animate-none" aria-hidden />{phase === 'saving' ? t.setupSaving : t.setupChecking}</p> : null}
-          {phase === 'idle' && saved && !dirty && !probe && !error && !authorizing ? <p role="status" className="text-sm text-fg-muted">{disabled ? t.setupDisabled : t.setupSavedUnchecked}</p> : null}
+          {phase === 'idle' && saved && !dirty && !probe && !error && !authorizing ? <p role="status" className="text-sm text-fg-muted">{disabled ? t.setupDisabled : props.lastCheck ? t.setupLastCheck.replace('{{count}}', String(props.lastCheck.toolCount)) : t.setupSavedUnchecked}</p> : null}
           {probe?.state === 'connected' ? <div className="space-y-2"><p role="status" className="flex items-center gap-2 text-sm text-success"><CheckCircle2 className="size-4 shrink-0" aria-hidden />{probe.toolCount ? t.setupConnected.replace('{{count}}', String(probe.toolCount)) : t.setupZeroTools}</p>
-            <Button variant="secondary" onClick={() => setShowTools(true)}>{t.viewTools}</Button></div> : null}
+            <Button ref={toolsTrigger} variant="secondary" onClick={() => setShowTools(true)}>{t.viewTools}</Button></div> : null}
           {probe?.state === 'token_required' ? <p role="status" className="text-sm text-fg-muted">{t.setupNeedsAuth}</p> : null}
           {probe?.state === 'oauth_required' && !authorizing ? <p className="text-sm text-fg-muted">{t.setupOAuthRequired}</p> : null}
           {authorizing ? <div className="space-y-3 rounded-lg border border-edge p-4">
@@ -348,7 +350,7 @@ export function CustomMcpServerDialog(props: { open: boolean; mode: 'add' | 'edi
         </div> : null}
       </div>
       <div className="flex shrink-0 flex-wrap justify-end gap-2 border-t border-edge p-4">
-        <Button variant="secondary" disabled={busy} onClick={close}>{saved || reloadRequired ? t.setupClose : cs.modalCancel}</Button>
+        <Button variant="secondary" disabled={phase === 'saving' || authorizing} onClick={close}>{saved || reloadRequired ? t.setupClose : cs.modalCancel}</Button>
         {reloadRequired ? null : importing ? <Button variant="primary" disabled={!selected} onClick={applyImport}>{t.setupImportApply}</Button>
           : <>
             <Button variant={probe?.state === 'connected' ? 'secondary' : 'primary'} disabled={busy} onClick={() => canSignIn ? void signIn() : void connect()}>
@@ -364,6 +366,6 @@ export function CustomMcpServerDialog(props: { open: boolean; mode: 'add' | 'edi
   </Dialog.Portal></Dialog.Root>
     <ConfirmDialog open={confirmClose} title={t.setupUnsavedTitle} description={t.setupUnsavedHint} confirmLabel={t.setupDiscard} cancelLabel={t.setupKeepEditing}
       onCancel={() => setConfirmClose(false)} onConfirm={props.onClose} overlayClassName="z-[70]" contentClassName="z-[70]" />
-    {showTools ? <McpToolsDialog draftId={draftId.current} serverId={row.id} t={t} onClose={() => setShowTools(false)} /> : null}
+    {showTools ? <McpToolsDialog draftId={draftId.current} serverId={row.id} displayName={row.displayName} returnFocusTo={toolsTrigger.current} t={t} onClose={() => setShowTools(false)} /> : null}
   </>;
 }

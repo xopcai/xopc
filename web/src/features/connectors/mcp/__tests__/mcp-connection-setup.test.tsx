@@ -86,6 +86,21 @@ it('keeps generic credential failures neutral instead of assuming Bearer is requ
   await auth('API Key'); expect(input(t.setupApiKeyHeader)).toBeTruthy();
 });
 
+it('lets the user cancel a pending check and keep editing without accepting stale results', async () => {
+  let resolve!: (result: { state: 'connected'; toolCount: number }) => void;
+  api.probeMcpDraft.mockReturnValueOnce(new Promise(done => { resolve = done; }));
+  await render(); await connect();
+  const signal = api.probeMcpDraft.mock.calls[0][1] as AbortSignal;
+  expect(document.body.textContent).toContain(t.setupChecking);
+  await click(m.connectorsSettings.modalCancel);
+  expect(signal.aborted).toBe(true);
+  await click(t.setupKeepEditing);
+  await act(async () => resolve({ state: 'connected', toolCount: 8 }));
+  expect(document.body.textContent).not.toContain(t.setupConnected.replace('{{count}}', '8'));
+  expect(button(t.setupTestConnection).disabled).toBe(false);
+  expect(api.commitMcpDraft).not.toHaveBeenCalled();
+});
+
 it('keeps saved configuration after a failed check and does not expose raw credentials in errors', async () => {
   api.probeMcpDraft.mockResolvedValue({ state: 'error', error: 'request https://example.com/?token=super-secret failed' });
   const { onClose } = await render(); await connect();
@@ -109,6 +124,15 @@ it('tests disabled servers without enabling them and saves only after explicit c
   expect(api.createMcpConnectionDraft.mock.calls[0][0]).toMatchObject({ id: 'docs', displayName: '团队知识库', extra: { enabled: false, toolExposure: { write: 'hidden' } } });
   expect(api.commitMcpDraft).not.toHaveBeenCalled();
   await click(t.setupSaveOnly); expect(api.commitMcpDraft).toHaveBeenCalledWith('draft-1', false);
+});
+
+it('shows the saved last check when reopening an unchanged connection', async () => {
+  const server = normalizeMcpSettingsFromConfig({ mcp: { servers: { docs: { url: 'https://example.com/mcp' } } } }).servers[0];
+  await render({ mode: 'edit', initialRow: server, existingCustomServers: [server], lastCheck: { checkedAt: '2026-10-17T01:00:00Z', toolCount: 3 } });
+  expect(document.body.textContent).toContain(t.setupLastCheck.replace('{{count}}', '3'));
+  expect(document.body.textContent).not.toContain(t.setupSavedUnchecked);
+  expect(api.probeMcpDraft).not.toHaveBeenCalled();
+  expect(api.commitMcpDraft).not.toHaveBeenCalled();
 });
 
 it('requires a successful test before an explicit enable-and-save action', async () => {
