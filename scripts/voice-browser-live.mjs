@@ -42,7 +42,7 @@ try {
   await writeFile(dir + '/main.jsx', `import React from 'react';import{createRoot}from'react-dom/client';import{MemoryRouter}from'react-router-dom';
 import{VoiceCallProvider}from'/src/features/voice/realtime/voice-call-provider';import{useVoiceCall}from'/src/features/voice/realtime/voice-call-context';import{useGatewayStore}from'/src/stores/gateway-store';import{useLocaleStore}from'/src/stores/locale-store';import'/src/styles/globals.css';
 useGatewayStore.setState({conversationId:'live-voice-acceptance'});useLocaleStore.setState({language:'zh'});
-function Harness(){const call=useVoiceCall();return <button onClick={()=>call.open({conversationId:window.__voiceConversation,name:'Ada',mode:'assistant'})}>Live voice</button>}
+function Harness(){const call=useVoiceCall();return <button onClick={()=>call.open({conversationId:window.__voiceConversation,name:'Loopi',mode:'assistant'})}>Live voice</button>}
 createRoot(document.getElementById('root')).render(<MemoryRouter><VoiceCallProvider><Harness/></VoiceCallProvider></MemoryRouter>);`);
   server = await createServer({ configFile: webRoot + '/vite.config.ts', root: webRoot,
     server: { port: 3017, strictPort: true, open: false, proxy: { '/api': { target: gateway, changeOrigin: true, ws: true,

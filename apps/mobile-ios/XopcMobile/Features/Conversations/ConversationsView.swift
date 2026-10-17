@@ -136,8 +136,8 @@ struct ConversationsView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(verbatim: personalAgent?.isReady == true
                         ? (locale.language.languageCode?.identifier == "zh"
-                            ? "继续和\(personalAgent?.displayName ?? "Ada")对话"
-                            : "Continue with \(personalAgent?.displayName ?? "Ada")")
+                            ? "继续和\(personalAgent?.displayName ?? "Loopi")对话"
+                            : "Continue with \(personalAgent?.displayName ?? "Loopi")")
                         : (locale.language.languageCode?.identifier == "zh" ? "创建我的助手" : "Create my assistant"))
                         .mobileTextStyle(.rowTitle)
                         .foregroundStyle(.primary)

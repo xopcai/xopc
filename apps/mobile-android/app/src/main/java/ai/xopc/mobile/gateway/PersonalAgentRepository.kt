@@ -121,7 +121,7 @@ class PersonalAgentRepository(private val gateway: GatewaySession) {
         PersonalVoicePreference(it.optString("provider"), it.optString("model"), it.optString("voice"))
       }
       return PersonalAgentRecord(agentId, conversationId, state,
-        payload.optString("displayName").ifBlank { "Ada" },
+        payload.optString("displayName").ifBlank { "Loopi" },
         payload.optString("appearance").ifBlank { "loopi" },
         payload.optString("errorMessage").takeIf { !payload.isNull("errorMessage") && it.isNotBlank() },
         payload.optInt("revision"), preferences, voice, payload.optString("userCallName").takeIf { !payload.isNull("userCallName") && it.isNotBlank() },

@@ -125,7 +125,7 @@ async function provisionPersonalAgent(
       id: agentId,
       enabled: true,
       profile: {
-        name: initial?.displayName ?? 'Ada',
+        name: initial?.displayName ?? 'Loopi',
         description: 'A personal AI that adapts its responses to the user and coordinates work.',
         creature: 'assistant',
         language: 'zh',

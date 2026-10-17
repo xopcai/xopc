@@ -104,7 +104,7 @@ export struct XopcPersonalAgentSettings {
   build() {
     Column() {
       Row() {
-        Text(this.label('配置 ', 'Configure ') + (this.model.record?.displayName?.trim() || this.record?.displayName?.trim() || 'ADA')).fontSize(20).fontWeight(FontWeight.Medium)
+        Text(this.label('配置 ', 'Configure ') + (this.model.record?.displayName?.trim() || this.record?.displayName?.trim() || 'Loopi')).fontSize(20).fontWeight(FontWeight.Medium)
           .fontColor(this.colors.foreground).layoutWeight(1)
         Button('×').width(44).height(44).backgroundColor(Color.Transparent).fontColor(this.colors.secondary)
           .id('personal-setting-close').accessibilityText(this.label('关闭', 'Close'))

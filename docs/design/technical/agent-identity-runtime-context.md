@@ -42,7 +42,7 @@ provider/model responses.
 | `minimax-cn/MiniMax-M2.7` | 11/11 |
 | `deepseek/deepseek-v4-pro` | 11/11 |
 
-Each model used the same conversation across successive changes: Ada → Orion →
+Each model used the same conversation across successive changes: Loopi → Orion →
 岚舟; botany → astronomy; English → Chinese → French; explicit English and fixed
 Chinese overrides; restoration of the initial profile. Tests included stale SOUL
 notes, old answers, a role-specific activity, and self-introduction in French

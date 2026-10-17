@@ -1267,7 +1267,7 @@ export struct XopcChatView {
     if (!this.chat.loading && !this.chat.rows.length && !this.chat.liveRow && !this.chat.runId) {
       XopcChatWelcome({ activePage: this.activePage, scope: this.context.summary, language: appSettings.effectiveLanguage(),
         contextPending: this.context.loading || this.options.loading,
-        personal: this.personalConversation, personalName: this.personalAgent?.displayName ?? 'Ada',
+        personal: this.personalConversation, personalName: this.personalAgent?.displayName ?? 'Loopi',
         personalAgentId: this.personalAgent?.agentId ?? '', personalAppearance: this.personalAgent?.appearance ?? 'loopi',
         onDismissComposer: (): void => { this.dismissComposer(); },
         onChoose: (text: string): void => {
@@ -1699,7 +1699,7 @@ export struct XopcChatView {
       this.reader.stop(); this.voice.cancel();
       this.call.start(context, { conversationId: this.chat.selectedId,
         mode: id === 'voice-with-tools' || this.personalConversation ? 'assistant' : 'natural', background: true,
-        name: this.personalConversation ? this.personalAgent?.displayName ?? 'Ada'
+        name: this.personalConversation ? this.personalAgent?.displayName ?? 'Loopi'
           : this.chat.title || this.options.modelName(appSettings.effectiveLanguage()) });
     }
   }
@@ -1768,7 +1768,7 @@ export struct XopcChatView {
                   : this.options.agents.find((agent: XopcChatAgent): boolean => agent.id === (this.chat.agentId || this.options.agentId))?.avatar?.startsWith('xopc:loopi:') ? 'loopi' : 'configured',
                 avatarReference: this.options.agents.find((agent: XopcChatAgent): boolean => agent.id === (this.chat.agentId || this.options.agentId))?.avatar ?? '',
                 revision: this.personalConversation ? this.personalAgent?.revision ?? 0 : gatewaySession.connectionRevision() })
-              Text(this.personalConversation ? this.personalAgent?.displayName ?? 'Ada' : this.chat.title || $r('app.string.untitled'))
+              Text(this.personalConversation ? this.personalAgent?.displayName ?? 'Loopi' : this.chat.title || $r('app.string.untitled'))
                 .fontSize(16).fontWeight(FontWeight.Medium).fontColor(this.colors.foreground)
                 .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis }).constraintSize({ maxWidth: 140 })
             }.padding({ left: 6, right: 14 })

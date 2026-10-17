@@ -98,7 +98,7 @@ const STYLE_OPTIONS = [
 ] as const;
 
 const APPEARANCES = [
-  { id: 'loopi', zh: '小环', en: 'Loopi', color: 'bg-slate-100/50 dark:bg-slate-400/10' },
+  { id: 'loopi', zh: 'Loopi', en: 'Loopi', color: 'bg-slate-100/50 dark:bg-slate-400/10' },
   { id: 'loopi-curious', zh: '好奇', en: 'Curious', color: 'bg-blue-100/50 dark:bg-blue-400/10' },
   { id: 'loopi-care', zh: '温和', en: 'Gentle', color: 'bg-violet-100/50 dark:bg-violet-400/10' },
 ] as const;
@@ -354,7 +354,7 @@ export function PersonalPage() {
   useLayoutEffect(() => {
     const ready = record?.state === 'ready';
     const avatar = ready ? record.appearance : appearance;
-    const title = ready ? record.displayName : 'Ada';
+    const title = ready ? record.displayName : 'Loopi';
     setPageHeader({
       startExtra: null,
       main: <div className="flex min-w-0 items-center gap-2.5">
@@ -429,7 +429,7 @@ export function PersonalPage() {
                   setDisplayName(event.currentTarget.value);
                   event.currentTarget.blur();
                 }
-              }} maxLength={60} placeholder="Ada"
+              }} maxLength={60} placeholder="Loopi"
               className="mt-3 w-full min-w-0 rounded-lg border border-transparent bg-transparent px-2 py-1 text-center text-lg font-semibold text-fg outline-none transition-colors hover:border-edge focus:border-edge focus:bg-surface-base focus-visible:ring-2 focus-visible:ring-accent" />
             {savingCount > 0 && <span className="absolute right-4 top-4 text-xs text-fg-muted">{zh ? '正在保存…' : 'Saving…'}</span>}
           </div>

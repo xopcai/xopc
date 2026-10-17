@@ -87,7 +87,7 @@ internal fun PersonalAgentProfileSheet(state: PersonalUiState, onDismiss: () -> 
     Column(Modifier.fillMaxWidth().fillMaxHeight(0.65f).imePadding()) {
       Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-        Text(stringResource(R.string.personal_agent_settings_title, state.agent?.displayName?.takeIf { it.isNotBlank() } ?: "ADA"),
+        Text(stringResource(R.string.personal_agent_settings_title, state.agent?.displayName?.takeIf { it.isNotBlank() } ?: "Loopi"),
           modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleLarge)
         TextButton(onClick = onDismiss, enabled = !busy) { Text(stringResource(R.string.personal_agent_done)) }
       }

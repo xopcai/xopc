@@ -6,7 +6,7 @@
 
 近期版本增加了 Personal AI 入口、个人资料与回应偏好、委派任务活动，以及结果和文件返回个人对话的能力。你可以交办后继续讨论，再检查成果并要求修改。
 
-- [认识 Ada](./personal-ai.md)
+- [认识 Loopi](./personal-ai.md)
 - [交办与接收结果](./task-delegation.md)
 - [检查与验收任务](./task-review.md)
 

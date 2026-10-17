@@ -59,6 +59,6 @@ export function Loopi({ mood = 'idle', variant = 'hero', interactive = false, cy
     </svg>
   );
   return <span ref={host} className={`loopi loopi--${variant} ${className}`}>
-    {interactive ? <button className="loopi-touch" type="button" aria-label={language === 'zh' ? '和小环打个招呼' : 'Say hello to Loopi'}>{drawing}</button> : drawing}
+    {interactive ? <button className="loopi-touch" type="button" aria-label={language === 'zh' ? '和 Loopi 打个招呼' : 'Say hello to Loopi'}>{drawing}</button> : drawing}
   </span>;
 }

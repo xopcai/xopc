@@ -20,7 +20,7 @@ const workspace = mkdtempSync(join(tmpdir(), 'xopc-identity-live-'));
 const agentId = `identity-live-${randomUUID().slice(0, 8)}`;
 const db = new DatabaseSync(join(process.env.XOPC_STATE_DIR ?? dirname(configPath), 'xopc.db'), { readOnly: true });
 const report = { startedAt: new Date().toISOString(), gateway: base, models, checks: [], errors: [], cleanup: {} };
-const originalProfile = { name: 'Ada', description: 'A botany educator who teaches people about plants.',
+const originalProfile = { name: 'Loopi', description: 'A botany educator who teaches people about plants.',
   creature: 'AI assistant', style: 'Clear and concise', language: 'en' };
 let profile = { ...originalProfile };
 let created = false;
@@ -124,7 +124,7 @@ try {
   await api(`/api/agents/${agentId}`, { toolAllowlist: [], skills: { mode: 'replace', include: [] },
     runtime: { thinkingLevel: 'off' } }, 'PATCH');
   // A stale file is deliberately retained while catalog fields change.
-  await api(`/api/agents/${agentId}/files/SOUL.md`, { content: 'Earlier profile notes: Ada is a botany educator and speaks English.' }, 'PUT');
+  await api(`/api/agents/${agentId}/files/SOUL.md`, { content: 'Earlier profile notes: Loopi is a botany educator and speaks English.' }, 'PUT');
   realtime.subscribe('sessions');
   realtime.connect();
   await until(() => connected, 'realtime authentication', 15000);
@@ -132,15 +132,15 @@ try {
     try {
       await updateProfile(originalProfile);
       await newConversation(model);
-      await check(model, 'baseline_name', 'What is your name? Reply with just your name.', text => firstSentence(text).includes('Ada'));
+      await check(model, 'baseline_name', 'What is your name? Reply with just your name.', text => firstSentence(text).includes('Loopi'));
       await check(model, 'baseline_role', 'Describe your current specialty in one sentence.', text => botany(text) && english(text));
       await updateProfile({ name: 'Orion' });
-      await check(model, 'rename_with_history', 'What is your name? Reply with just your name.', text => firstSentence(text).includes('Orion') && !/Ada/.test(firstSentence(text)));
+      await check(model, 'rename_with_history', 'What is your name? Reply with just your name.', text => firstSentence(text).includes('Orion') && !/Loopi/.test(firstSentence(text)));
       await updateProfile({ description: 'An astronomy educator who teaches people about stars and the night sky.' });
       await check(model, 'role_change_with_history', 'Describe your current specialty in one sentence.', text => astronomy(text) && !botany(text));
       await check(model, 'role_behavior', 'Suggest one beginner activity in your current specialty. Keep it to one sentence.', text => astronomy(text) && !botany(text));
       await updateProfile({ name: '岚舟' });
-      await check(model, 'second_rename', 'What is your name? Reply with just your name.', text => firstSentence(text).includes('岚舟') && !/Ada|Orion/.test(firstSentence(text)));
+      await check(model, 'second_rename', 'What is your name? Reply with just your name.', text => firstSentence(text).includes('岚舟') && !/Loopi|Orion/.test(firstSentence(text)));
       await updateProfile({ language: 'zh-CN' });
       await check(model, 'language_zh_against_english_question', 'Describe your current specialty in one sentence.', text => chinese(text) && astronomy(text));
       await updateProfile({ language: 'fr' });

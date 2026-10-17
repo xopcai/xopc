@@ -260,7 +260,7 @@ describe('personal Agent identity', () => {
     expect(direct).toContain('For current news or other live facts');
   });
 
-  it('keeps personal model and thinking preferences in its conversation without restricting ordinary Ada chats', async () => {
+  it('keeps personal model and thinking preferences in its conversation without restricting ordinary Loopi chats', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'xopc-personal-create-'));
     const previousStateDir = process.env.XOPC_STATE_DIR;
     process.env.XOPC_STATE_DIR = dir;

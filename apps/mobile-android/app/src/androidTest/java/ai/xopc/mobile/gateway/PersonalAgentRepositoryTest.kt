@@ -10,9 +10,9 @@ class PersonalAgentRepositoryTest {
     val id = "11111111-2222-3333-4444-555555555555"
     val agent = PersonalAgentRepository.parse("""{"ok":true,"payload":{
       "agentId":"personal","conversationId":"$id","state":"ready",
-      "displayName":"Ada","appearance":"loopi","errorMessage":null}}""")
+      "displayName":"Loopi","appearance":"loopi","errorMessage":null}}""")
     assertEquals(id, agent?.conversationId)
-    assertEquals("Ada", agent?.displayName)
+    assertEquals("Loopi", agent?.displayName)
     assertNull(agent?.errorMessage)
     assertNull(PersonalAgentRepository.parse("""{"ok":true,"payload":null}"""))
     assertThrows(IllegalArgumentException::class.java) {

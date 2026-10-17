@@ -32,7 +32,7 @@ try {
   await writeFile(dir + '/main.jsx', `import React from 'react';import{createRoot}from'react-dom/client';import{MemoryRouter}from'react-router-dom';
 import{VoiceCallProvider}from'/src/features/voice/realtime/voice-call-provider';import{useVoiceCall}from'/src/features/voice/realtime/voice-call-context';import{useLocaleStore}from'/src/stores/locale-store';import{initGatewayFromWindow}from'/src/stores/gateway-store';import'/src/styles/globals.css';
 useLocaleStore.setState({language:'zh'});await initGatewayFromWindow();
-function Harness(){const call=useVoiceCall();return <button onClick={()=>call.open({conversationId:window.__conversationId,name:'Ada',mode:'assistant'})}>Opening acceptance</button>}
+function Harness(){const call=useVoiceCall();return <button onClick={()=>call.open({conversationId:window.__conversationId,name:'Loopi',mode:'assistant'})}>Opening acceptance</button>}
 createRoot(document.getElementById('root')).render(<MemoryRouter><VoiceCallProvider><Harness/></VoiceCallProvider></MemoryRouter>);`);
   process.chdir(webRoot);
   server = await createServer({ configFile: webRoot + '/vite.config.ts', root: webRoot,

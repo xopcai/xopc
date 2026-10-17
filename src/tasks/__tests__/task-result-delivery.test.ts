@@ -93,7 +93,7 @@ describe('background task result delivery', () => {
     const repository = new AgentCatalogRepository();
     repository.ensureInitialized();
     const agentId = personalAgentId('local-owner');
-    repository.create({ id: agentId, models: { chat: { primary: 'test/personal', fallbacks: [] } }, profile: { name: 'Ada', style: 'Natural and clear',
+    repository.create({ id: agentId, models: { chat: { primary: 'test/personal', fallbacks: [] } }, profile: { name: 'Loopi', style: 'Natural and clear',
       responsePreferences: { warmth: 'gentle', detailLevel: 'brief' } } }, { ready: true });
     getSqliteDatabase().prepare("UPDATE sessions SET agent_id = ?, custom_data_json = json_set(COALESCE(custom_data_json, '{}'), '$.personalAgent', 1) WHERE conversation_id = ?")
       .run(agentId, conversationId);
@@ -328,7 +328,7 @@ describe('background task result delivery', () => {
     expect(loadTranscriptRowsForSession(main.key)).toHaveLength(0);
     const compose = vi.fn(async (packet: PersonalReplyPacket) => {
       const prompt = buildPersonalReplyPrompt(packet);
-      expect(prompt).toContain('Ada');
+      expect(prompt).toContain('Loopi');
       expect(prompt).toContain('gentle');
       expect(prompt).toContain('Draw sunset');
       expect(prompt).toContain(PERSONAL_PERSONA_GUIDANCE);
