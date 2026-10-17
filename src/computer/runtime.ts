@@ -105,12 +105,12 @@ export class ComputerRuntime {
       if (input.saveFlowAs && released) {
         if (!canSaveFlow || !report || report.failure || report.counters.unknownDispatches || report.counters.takeovers) {
           return { status: 'stopped', sessionId, errorCode: 'COMPUTER_FLOW_NOT_VERIFIED', report,
-            nextAction: 'Control was released. Save only a complete native navigation sequence with a final verified selected condition and no failure or takeover.' };
+            nextAction: 'Control was released. Save only a complete native navigation sequence with a final verified selected condition or positive page-specific text and no failure or takeover.' };
         }
         let draft;
         try { draft = session.flowCapture.finish(input.saveFlowAs, session.endpointId); }
         catch { return { status: 'stopped', sessionId, errorCode: 'COMPUTER_FLOW_NOT_VERIFIED', report,
-          nextAction: 'Control was released. Only a complete native navigation sequence with non-sensitive labels and a final verified selected condition can be saved.' }; }
+          nextAction: 'Control was released. Only a complete native navigation sequence with non-sensitive labels and a final verified selected condition or positive page-specific text can be saved.' }; }
         try { savedFlow = computerFlowMetadata(this.flowStore.save(session.flowScope, draft)); }
         catch { return { status: 'stopped', sessionId, errorCode: 'COMPUTER_FLOW_SAVE_FAILED', report,
           nextAction: 'Control was released; no reusable flow was confirmed saved. Check native verification, non-sensitive labels and local storage. Do not repeat desktop input to save a flow.' }; }
