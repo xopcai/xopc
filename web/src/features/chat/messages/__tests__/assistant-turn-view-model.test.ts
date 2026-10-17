@@ -136,7 +136,7 @@ describe('buildAssistantTurnViewModel', () => {
     expanded: boolean;
   }>([
     { level: 'off', expectedTypes: ['tool_use'], expanded: false },
-    { level: 'on', expectedTypes: ['thinking', 'tool_use'], expanded: false },
+    { level: 'on', expectedTypes: ['thinking', 'tool_use'], expanded: true },
     { level: 'stream', expectedTypes: ['thinking', 'tool_use'], expanded: true },
   ])('applies the $level default expansion policy', ({ level, expectedTypes, expanded }) => {
     const message: Message = {

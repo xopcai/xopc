@@ -12,6 +12,11 @@ const review = {
 };
 
 describe('normalizeAgentMessages review blocks', () => {
+  it('retains a failed lightweight tool action after compact history reload', () => {
+    const ui = normalizeAgentMessages([{ role: 'assistant', content: '', timestamp: 1,
+      rawContent: [{ type: 'tool_use', id: 'failed-action', name: 'read_file', status: 'error' }] }]);
+    expect(ui[0]?.content).toMatchObject([{ type: 'tool_use', id: 'failed-action', status: 'error' }]);
+  });
   it('preserves review content blocks', () => {
     const ui = normalizeAgentMessages([
       { role: 'assistant', content: [review], timestamp: 1 },
