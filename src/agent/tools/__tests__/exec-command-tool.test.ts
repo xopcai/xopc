@@ -1,4 +1,4 @@
-import { access, mkdtemp, readFile, rm } from 'node:fs/promises';
+import { access, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import { tmpdir } from 'node:os';
 
@@ -138,6 +138,25 @@ describe('exec_command tool', () => {
     } finally {
       await rm(workspace, { recursive: true, force: true });
     }
+  });
+
+  it('captures previously written deliverables with a successful standalone check, never after a failed check', async () => {
+    const workspace = await mkdtemp(join(tmpdir(), 'xopc-exec-existing-'));
+    try {
+      await writeFile(join(workspace, 'report.md'), '# Verified result\n');
+      await writeFile(join(workspace, 'verify.test.cjs'), 'const assert = require("node:assert/strict"); const fs = require("node:fs"); assert.match(fs.readFileSync("report.md", "utf8"), /Verified result/);');
+      const tool = createExecCommandTool(workspace);
+      const result = await tool.execute('existing-output', { cmd: 'node --test verify.test.cjs', outputs: ['report.md'] });
+      expect(result.details.status).toBe('success');
+      expect(result.details.artifacts).toEqual([expect.objectContaining({ title: 'report.md', availability: 'available', location: 'artifact_store' })]);
+      expect(JSON.stringify(result.content)).toContain('report.md');
+      expect(JSON.stringify(result.content)).toContain('available');
+      expect(await readFile(join(workspace, 'report.md'), 'utf8')).toBe('# Verified result\n');
+      await writeFile(join(workspace, 'verify.test.cjs'), 'require("node:assert/strict").fail("verification failed");');
+      const failed = await tool.execute('failed-output', { cmd: 'node --test verify.test.cjs', outputs: ['report.md'] });
+      expect(failed.details.status).toBe('failed');
+      expect(failed.details.artifacts).toBeUndefined();
+    } finally { await rm(workspace, { recursive: true, force: true }); }
   });
 
   it('bounds captured output before constructing the result', async () => {

@@ -128,6 +128,14 @@ export class RunVerification {
       || current.some(item => item.kind === kind && item.status === 'failed'));
   }
 
+  modelGuidance(): string {
+    const focus = 'Read the inputs named by the current request directly. Inspect another file only for a concrete dependency or unresolved fact; directory neighbors are not dependencies. Reuse facts already read. Finish the requested changes before checking; avoid generalizing a bounded task into extra parsing, hardening, or documentation work. For JSON deliverables, match the requested container and exact field set. A single result described by named fields is an object; use a collection only when requested. Honor literal scalar field values and precision. Assert this contract independently before checking calculations; do not validate extra fields or a changed container against your own generated output.';
+    if (!this.changed) return `Execution phase: focused implementation. ${focus}`;
+    const pending = this.pendingEvidence();
+    if (pending.length === 0) return 'Execution phase: verification complete for the observed workspace revision. If the requested result is complete, give the final answer now. Files already captured successfully by exec_command.outputs or publish_artifacts do not need republishing unless changed; publish only missing or stale deliverables. Do not rerun successful checks, reread inputs, add validation, refactor, or polish the report. Edit again only for a concrete unmet user requirement or demonstrated correctness defect, then reverify the affected result. Passing checks alone does not establish that every user requirement is met.';
+    return `Execution phase: complete only outstanding requirements, then verify once. ${focus} Still missing: ${pending.map(kind => kind === 'check' ? 'a successful standalone assertion test' : 'review_workspace').join(', ')}. Use exec_command.outputs on the final standalone check to capture all final deliverables together, including files written earlier; no separate publishing call is needed for successful unchanged artifacts. Reuse current successful evidence for the other kind; a further file change invalidates it. If review finds no task-relevant defect, finish instead of making discretionary edits.`;
+  }
+
   async pendingContext(): Promise<string> {
     this.observeRevision(await this.snapshot());
     if (!this.changed) return '';

@@ -1,0 +1,526 @@
+{
+  "schemaVersion": 1,
+  "evidenceClass": "live-direct-agent",
+  "experimentId": "8c2bbf4a-be76-4c42-a12d-85dffb73f64b",
+  "suiteHash": "b7335af765b54cee3c956b7ec7362925dd96c5b5d63f2acf305f30490c109cb5",
+  "passed": true,
+  "sourceDrift": false,
+  "variants": [
+    {
+      "id": "candidate",
+      "expectedRuns": 10,
+      "observedRuns": 10,
+      "passed": 10,
+      "successRate": 1,
+      "reportedEstimatedCost": 0,
+      "reportedEstimatedCostPerSuccess": 0,
+      "durationsMs": [
+        80964,
+        76759,
+        66244,
+        57399,
+        61979,
+        55883,
+        46039,
+        36314,
+        83802,
+        88389
+      ],
+      "totalReportedTokens": 1314804,
+      "statuses": {
+        "passed": 10,
+        "failed": 0,
+        "error": 0,
+        "timed_out": 0,
+        "budget_exceeded": 0
+      },
+      "categories": [
+        {
+          "category": "research",
+          "expectedRuns": 3,
+          "passed": 3
+        },
+        {
+          "category": "data",
+          "expectedRuns": 3,
+          "passed": 3
+        },
+        {
+          "category": "change",
+          "expectedRuns": 2,
+          "passed": 2
+        },
+        {
+          "category": "recovery",
+          "expectedRuns": 2,
+          "passed": 2
+        }
+      ]
+    }
+  ],
+  "cases": [
+    {
+      "caseId": "R01-price-comparison",
+      "variantId": "candidate",
+      "runId": "db003ac9-566e-48ab-b2de-da48bdacf436",
+      "status": "passed",
+      "artifactChecksPassed": true,
+      "durationMs": 36314,
+      "observedResponseTokens": 76407,
+      "usageCoverage": "Observed completed responses only; interrupted requests may be unreported."
+    },
+    {
+      "caseId": "R02-conflicting-source",
+      "variantId": "candidate",
+      "runId": "3fde3906-8fe3-4145-b943-a428c9a8fc89",
+      "status": "passed",
+      "artifactChecksPassed": true,
+      "durationMs": 83802,
+      "observedResponseTokens": 87746,
+      "usageCoverage": "Observed completed responses only; interrupted requests may be unreported."
+    },
+    {
+      "caseId": "R03-missing-evidence",
+      "variantId": "candidate",
+      "runId": "1e83458d-28d3-4589-95bd-59f3c9e5b0ea",
+      "status": "passed",
+      "artifactChecksPassed": true,
+      "durationMs": 88389,
+      "observedResponseTokens": 182189,
+      "usageCoverage": "Observed completed responses only; interrupted requests may be unreported."
+    },
+    {
+      "caseId": "D01-monthly-sales",
+      "variantId": "candidate",
+      "runId": "b84614d8-87a7-4bdb-97d4-3cc673cb8218",
+      "status": "passed",
+      "artifactChecksPassed": true,
+      "durationMs": 66244,
+      "observedResponseTokens": 124186,
+      "usageCoverage": "Observed completed responses only; interrupted requests may be unreported."
+    },
+    {
+      "caseId": "D02-quoted-csv",
+      "variantId": "candidate",
+      "runId": "9761b859-c836-4653-943d-9394f7ea95eb",
+      "status": "passed",
+      "artifactChecksPassed": true,
+      "durationMs": 57399,
+      "observedResponseTokens": 100981,
+      "usageCoverage": "Observed completed responses only; interrupted requests may be unreported."
+    },
+    {
+      "caseId": "D03-exact-money",
+      "variantId": "candidate",
+      "runId": "b4a777b8-77a2-4793-a703-23a0f23516ae",
+      "status": "passed",
+      "artifactChecksPassed": true,
+      "durationMs": 61979,
+      "observedResponseTokens": 111275,
+      "usageCoverage": "Observed completed responses only; interrupted requests may be unreported."
+    },
+    {
+      "caseId": "C01-add-deliverable",
+      "variantId": "candidate",
+      "runId": "7bc786d4-5c82-4420-beda-719d70d0f042",
+      "status": "passed",
+      "artifactChecksPassed": true,
+      "durationMs": 80964,
+      "observedResponseTokens": 198768,
+      "usageCoverage": "Observed completed responses only; interrupted requests may be unreported."
+    },
+    {
+      "caseId": "C02-replace-scope",
+      "variantId": "candidate",
+      "runId": "7754da7c-65ea-4d24-ad13-ad3bb42ff5e7",
+      "status": "passed",
+      "artifactChecksPassed": true,
+      "durationMs": 76759,
+      "observedResponseTokens": 138592,
+      "usageCoverage": "Observed completed responses only; interrupted requests may be unreported."
+    },
+    {
+      "caseId": "F01-lost-artifact",
+      "variantId": "candidate",
+      "runId": "b57415c6-3a9d-4fc4-b9d6-ea34088c8eec",
+      "status": "passed",
+      "artifactChecksPassed": true,
+      "durationMs": 55883,
+      "observedResponseTokens": 151037,
+      "usageCoverage": "Observed completed responses only; interrupted requests may be unreported."
+    },
+    {
+      "caseId": "F02-transient-read",
+      "variantId": "candidate",
+      "runId": "6379f460-a225-416e-918c-6fca53658a62",
+      "status": "passed",
+      "artifactChecksPassed": true,
+      "durationMs": 46039,
+      "observedResponseTokens": 143623,
+      "usageCoverage": "Observed completed responses only; interrupted requests may be unreported."
+    }
+  ],
+  "falseCompletionRate": null,
+  "costPerSuccess": null,
+  "unmeasured": [
+    "false-completion semantics",
+    "complete provider cost coverage",
+    "autonomous background recovery",
+    "research prose quality"
+  ],
+  "suiteVersion": "1.0.2",
+  "model": "qwen-token-plan-cn/qwen3.8-flash",
+  "reasoning": "medium",
+  "repetitions": 1,
+  "fixtureCommit": "073bc27b5bd88e55c0f947236e3e126a66388e8c",
+  "sourceCommit": "0ae4a42d802ec3528d101c7ef9981d33ca1f7b26",
+  "previousBaseline": "evals/coder/baselines/xopc-core-v1-qwen-context-optimized.json",
+  "evidenceDirectory": ".xopc-evals/qwen-core-v1-verification-delivery/benchmark",
+  "comparison": ".xopc-evals/qwen-core-v1-convergence-comparison.json",
+  "traceUsage": [
+    {
+      "caseId": "R01-price-comparison",
+      "runId": "db003ac9-566e-48ab-b2de-da48bdacf436",
+      "status": "passed",
+      "totalTokens": 76407,
+      "cacheReadTokens": 49152,
+      "outputTokens": 1968,
+      "requests": 7,
+      "responses": 7,
+      "tools": 8,
+      "publicationCalls": 0,
+      "durationMs": 36314,
+      "extraInputReferences": [
+        {
+          "turnIndex": 0,
+          "tool": "read_file",
+          "files": [
+            "sources.json"
+          ]
+        },
+        {
+          "turnIndex": 0,
+          "tool": "exec_command",
+          "files": [
+            "sources.json",
+            "quoted.csv",
+            "invoice.json",
+            "retry-source.mjs"
+          ]
+        }
+      ],
+      "explicitEditsAfterReview": [],
+      "repeatedSuccessfulCallsAtObservedRevision": {
+        "observedExamples": [],
+        "total": 0
+      },
+      "toolCompletionCoverage": {
+        "retained": 8,
+        "total": 8
+      }
+    },
+    {
+      "caseId": "R02-conflicting-source",
+      "runId": "3fde3906-8fe3-4145-b943-a428c9a8fc89",
+      "status": "passed",
+      "totalTokens": 87746,
+      "cacheReadTokens": 56576,
+      "outputTokens": 4449,
+      "requests": 7,
+      "responses": 7,
+      "tools": 7,
+      "publicationCalls": 0,
+      "durationMs": 83802,
+      "extraInputReferences": [
+        {
+          "turnIndex": 0,
+          "tool": "read_file",
+          "files": [
+            "sources.json"
+          ]
+        }
+      ],
+      "explicitEditsAfterReview": [],
+      "repeatedSuccessfulCallsAtObservedRevision": {
+        "observedExamples": [],
+        "total": 0
+      },
+      "toolCompletionCoverage": {
+        "retained": 7,
+        "total": 7
+      }
+    },
+    {
+      "caseId": "R03-missing-evidence",
+      "runId": "1e83458d-28d3-4589-95bd-59f3c9e5b0ea",
+      "status": "passed",
+      "totalTokens": 182189,
+      "cacheReadTokens": 125440,
+      "outputTokens": 4713,
+      "requests": 13,
+      "responses": 13,
+      "tools": 11,
+      "publicationCalls": 0,
+      "durationMs": 88389,
+      "extraInputReferences": [
+        {
+          "turnIndex": 0,
+          "tool": "exec_command",
+          "files": [
+            "sources.json"
+          ]
+        },
+        {
+          "turnIndex": 0,
+          "tool": "exec_command",
+          "files": [
+            "quoted.csv",
+            "invoice.json",
+            "retry-source.mjs"
+          ]
+        }
+      ],
+      "explicitEditsAfterReview": [
+        {
+          "turnIndex": 0,
+          "tool": "write_file"
+        }
+      ],
+      "repeatedSuccessfulCallsAtObservedRevision": {
+        "observedExamples": [
+          {
+            "turnIndex": 0,
+            "tool": "exec_command"
+          }
+        ],
+        "total": null
+      },
+      "toolCompletionCoverage": {
+        "retained": 10,
+        "total": 11
+      }
+    },
+    {
+      "caseId": "D01-monthly-sales",
+      "runId": "b84614d8-87a7-4bdb-97d4-3cc673cb8218",
+      "status": "passed",
+      "totalTokens": 124186,
+      "cacheReadTokens": 94720,
+      "outputTokens": 3647,
+      "requests": 10,
+      "responses": 10,
+      "tools": 9,
+      "publicationCalls": 1,
+      "durationMs": 66244,
+      "extraInputReferences": [],
+      "explicitEditsAfterReview": [],
+      "repeatedSuccessfulCallsAtObservedRevision": {
+        "observedExamples": [],
+        "total": null
+      },
+      "toolCompletionCoverage": {
+        "retained": 7,
+        "total": 9
+      }
+    },
+    {
+      "caseId": "D02-quoted-csv",
+      "runId": "9761b859-c836-4653-943d-9394f7ea95eb",
+      "status": "passed",
+      "totalTokens": 100981,
+      "cacheReadTokens": 70400,
+      "outputTokens": 3408,
+      "requests": 8,
+      "responses": 8,
+      "tools": 8,
+      "publicationCalls": 0,
+      "durationMs": 57399,
+      "extraInputReferences": [
+        {
+          "turnIndex": 0,
+          "tool": "exec_command",
+          "files": [
+            "quoted.csv"
+          ]
+        },
+        {
+          "turnIndex": 0,
+          "tool": "exec_command",
+          "files": [
+            "quoted.csv"
+          ]
+        }
+      ],
+      "explicitEditsAfterReview": [],
+      "repeatedSuccessfulCallsAtObservedRevision": {
+        "observedExamples": [],
+        "total": null
+      },
+      "toolCompletionCoverage": {
+        "retained": 7,
+        "total": 8
+      }
+    },
+    {
+      "caseId": "D03-exact-money",
+      "runId": "b4a777b8-77a2-4793-a703-23a0f23516ae",
+      "status": "passed",
+      "totalTokens": 111275,
+      "cacheReadTokens": 80896,
+      "outputTokens": 3279,
+      "requests": 9,
+      "responses": 9,
+      "tools": 8,
+      "publicationCalls": 0,
+      "durationMs": 61979,
+      "extraInputReferences": [
+        {
+          "turnIndex": 0,
+          "tool": "exec_command",
+          "files": [
+            "invoice.json"
+          ]
+        },
+        {
+          "turnIndex": 0,
+          "tool": "exec_command",
+          "files": [
+            "sources.json",
+            "quoted.csv",
+            "retry-source.mjs"
+          ]
+        }
+      ],
+      "explicitEditsAfterReview": [],
+      "repeatedSuccessfulCallsAtObservedRevision": {
+        "observedExamples": [],
+        "total": 0
+      },
+      "toolCompletionCoverage": {
+        "retained": 8,
+        "total": 8
+      }
+    },
+    {
+      "caseId": "C01-add-deliverable",
+      "runId": "7bc786d4-5c82-4420-beda-719d70d0f042",
+      "status": "passed",
+      "totalTokens": 198768,
+      "cacheReadTokens": 145664,
+      "outputTokens": 3889,
+      "requests": 16,
+      "responses": 16,
+      "tools": 14,
+      "publicationCalls": 0,
+      "durationMs": 80964,
+      "extraInputReferences": [],
+      "explicitEditsAfterReview": [],
+      "repeatedSuccessfulCallsAtObservedRevision": {
+        "observedExamples": [],
+        "total": 0
+      },
+      "toolCompletionCoverage": {
+        "retained": 14,
+        "total": 14
+      }
+    },
+    {
+      "caseId": "C02-replace-scope",
+      "runId": "7754da7c-65ea-4d24-ad13-ad3bb42ff5e7",
+      "status": "passed",
+      "totalTokens": 138592,
+      "cacheReadTokens": 82944,
+      "outputTokens": 4328,
+      "requests": 10,
+      "responses": 10,
+      "tools": 11,
+      "publicationCalls": 0,
+      "durationMs": 76759,
+      "extraInputReferences": [],
+      "explicitEditsAfterReview": [],
+      "repeatedSuccessfulCallsAtObservedRevision": {
+        "observedExamples": [],
+        "total": 0
+      },
+      "toolCompletionCoverage": {
+        "retained": 11,
+        "total": 11
+      }
+    },
+    {
+      "caseId": "F01-lost-artifact",
+      "runId": "b57415c6-3a9d-4fc4-b9d6-ea34088c8eec",
+      "status": "passed",
+      "totalTokens": 151037,
+      "cacheReadTokens": 103424,
+      "outputTokens": 2974,
+      "requests": 12,
+      "responses": 12,
+      "tools": 13,
+      "publicationCalls": 0,
+      "durationMs": 55883,
+      "extraInputReferences": [],
+      "explicitEditsAfterReview": [],
+      "repeatedSuccessfulCallsAtObservedRevision": {
+        "observedExamples": [],
+        "total": 0
+      },
+      "toolCompletionCoverage": {
+        "retained": 13,
+        "total": 13
+      }
+    },
+    {
+      "caseId": "F02-transient-read",
+      "runId": "6379f460-a225-416e-918c-6fca53658a62",
+      "status": "passed",
+      "totalTokens": 143623,
+      "cacheReadTokens": 120320,
+      "outputTokens": 2139,
+      "requests": 13,
+      "responses": 13,
+      "tools": 12,
+      "publicationCalls": 1,
+      "durationMs": 46039,
+      "extraInputReferences": [
+        {
+          "turnIndex": 0,
+          "tool": "exec_command",
+          "files": [
+            "retry-source.mjs"
+          ]
+        },
+        {
+          "turnIndex": 0,
+          "tool": "read_file",
+          "files": [
+            "retry-source.mjs"
+          ]
+        },
+        {
+          "turnIndex": 0,
+          "tool": "exec_command",
+          "files": [
+            "retry-source.mjs"
+          ]
+        }
+      ],
+      "explicitEditsAfterReview": [],
+      "repeatedSuccessfulCallsAtObservedRevision": {
+        "observedExamples": [],
+        "total": 0
+      },
+      "toolCompletionCoverage": {
+        "retained": 12,
+        "total": 12
+      }
+    }
+  ],
+  "runtimeSourceHashes": {
+    "src/agent/coding/projectEvidence.ts": "118ab619a80718afbd06cf683404743c3c898d657f742dcae71392106724b965",
+    "src/agent/coding/run-verification.ts": "9e62dbe1a6437cdc1398ec63a1fd32c37d3a3ab877f8909c51a12dfa52a926bf",
+    "src/agent/embedded/run-turn.ts": "7ec0cb402f73804ba6a5b5aebf4a21ef2b3fe178d5b49f446022c28405ef0d85",
+    "src/agent/tools/exec-command.ts": "322f8e98f0eb91aff45185b9eed6db898f3628bcf1ba4d1f943918a251628cb7",
+    "src/agent/tools/publish-artifacts.ts": "2b076a8b3fcc25b7645715876636d7ab668ba7952b12bbea48b216be4a0fabab"
+  }
+}

@@ -65,6 +65,7 @@ import { resolvePromptCachePolicy } from '../../providers/prompt-cache-plan.js';
 import { markTurnToolResult } from '../memory/turn-provenance.js';
 import { RepositoryInstructions } from '../coding/repository-instructions.js';
 import { RunVerification } from '../coding/run-verification.js';
+import { projectWorkEvidence } from '../coding/projectEvidence.js';
 import { withDelegationScope } from '../orchestration/delegation-scope.js';
 import { runWithEmbeddedExecutionSession } from './execution-context.js';
 import type { CompactionDiscardedAttempt } from '../memory/compaction.js';
@@ -413,6 +414,7 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
   let runLease: ReturnType<typeof acquireEmbeddedRunLease> | undefined;
   let restorePrepareNextTurn: (() => void) | undefined;
   let restorePrepareRequest: (() => void) | undefined;
+  let restoreTransformContext: (() => void) | undefined;
 
   try {
     runLease = acquireEmbeddedRunLease({
@@ -534,11 +536,22 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
       session.agent.streamFunction,
       params.promptCachePolicy,
     );
+    let evidenceProjection: ReturnType<typeof projectWorkEvidence> | undefined;
+    const baseTransformContext = session.agent.transformContext;
+    const transformWorkEvidence: NonNullable<typeof session.agent.transformContext> = async (messages, signal) => {
+      const transformed = await baseTransformContext?.(messages, signal) ?? messages;
+      evidenceProjection = params.verifyChanges ? projectWorkEvidence(transformed) : undefined;
+      return evidenceProjection?.messages ?? transformed;
+    };
+    session.agent.transformContext = transformWorkEvidence;
+    restoreTransformContext = () => {
+      if (session.agent.transformContext === transformWorkEvidence) session.agent.transformContext = baseTransformContext;
+    };
     const loggingStreamFn: typeof session.agent.streamFunction = (streamModel, context, options) => {
       instructions.acknowledge();
       const sourceMessages = [...context.messages];
       const hygienicMessages = tryApplySessionTranscriptHygiene(sourceMessages, streamModel) as typeof sourceMessages;
-      const recentToolCalls = extractRecentToolCalls(hygienicMessages);
+      const recentToolCalls = extractRecentToolCalls(session.agent.state.messages);
       const loopGuard = detectToolLoops(recentToolCalls);
 
       let effectiveContext: typeof context = { ...context, messages: hygienicMessages };
@@ -546,6 +559,8 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
         effectiveContext = { ...effectiveContext, messages: [...hygienicMessages,
           { role: 'user' as const, content: loopGuard.injection, timestamp: Date.now() }] };
       }
+      if (params.verifyChanges) effectiveContext = { ...effectiveContext, messages: [...effectiveContext.messages,
+        { role: 'system' as const, content: '', sections: { 'xopc.execution-focus': verification.modelGuidance() }, timestamp: 0 }] };
 
       let effectiveSystemPrompt = getCurrentSystemPrompt(effectiveContext.messages);
       let effectiveTools = getCurrentTools(effectiveContext.messages);
@@ -620,6 +635,9 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
           systemPromptLength: effectiveSystemPrompt.length,
           messageCount: effectiveContext.messages.filter(message => message.role !== 'system').length,
           transcriptRepaired: hygienicMessages !== sourceMessages,
+          sharedEvidenceChars: evidenceProjection?.savedChars ?? 0,
+          sharedReviews: evidenceProjection?.sharedReviews ?? 0,
+          sharedReads: evidenceProjection?.sharedReads ?? 0,
           toolCount: effectiveTools.length,
           toolSchemaChars: JSON.stringify(effectiveTools).length,
           estimatedContextTokens: assessed.evaluation.estimatedTokens,
@@ -928,6 +946,8 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
       restorePrepareNextTurn = undefined;
       restorePrepareRequest();
       restorePrepareRequest = undefined;
+      restoreTransformContext();
+      restoreTransformContext = undefined;
       runAbortSignal.removeEventListener('abort', abortListener);
     }
   } catch (err) {
@@ -946,6 +966,7 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
   } finally {
     restorePrepareNextTurn?.();
     restorePrepareRequest?.();
+    restoreTransformContext?.();
     runLease?.release();
     unsubscribe?.();
     try {

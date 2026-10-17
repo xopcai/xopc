@@ -548,6 +548,258 @@
       ],
       "sourceDrift": false,
       "note": "Final lean declaration revision: 8/10; D02 and F01 pass, C01 and C02 remain budget_exceeded. No per-case cherry-picking from earlier revisions."
+    },
+    {
+      "label": "execution-convergence-first-trial",
+      "evidenceDirectory": ".xopc-evals/qwen-core-v1-execution-convergence/benchmark",
+      "evidenceClass": "live-direct-agent-diagnostic",
+      "version": "1.0.2",
+      "suiteHash": "b7335af765b54cee3c956b7ec7362925dd96c5b5d63f2acf305f30490c109cb5",
+      "experimentId": "25cef018-09ee-4a89-8558-f9894e7b5f28",
+      "variants": [
+        {
+          "id": "candidate",
+          "expectedRuns": 10,
+          "observedRuns": 10,
+          "passed": 8,
+          "successRate": 0.8,
+          "reportedEstimatedCost": 0,
+          "reportedEstimatedCostPerSuccess": 0,
+          "durationsMs": [
+            70161,
+            97889,
+            64409,
+            51453,
+            49616,
+            63723,
+            35552,
+            54738,
+            52202,
+            96512
+          ],
+          "totalReportedTokens": 1682058,
+          "statuses": {
+            "passed": 8,
+            "failed": 2,
+            "error": 0,
+            "timed_out": 0,
+            "budget_exceeded": 0
+          },
+          "categories": [
+            {
+              "category": "research",
+              "expectedRuns": 3,
+              "passed": 2
+            },
+            {
+              "category": "data",
+              "expectedRuns": 3,
+              "passed": 3
+            },
+            {
+              "category": "change",
+              "expectedRuns": 2,
+              "passed": 1
+            },
+            {
+              "category": "recovery",
+              "expectedRuns": 2,
+              "passed": 2
+            }
+          ]
+        }
+      ],
+      "sourceDrift": false,
+      "note": "Phase guidance and lossless evidence sharing. C01 passes; C02 is within budget but returns an array instead of the required object. R03 adds fields. Both strict failures retained; no budget breaches."
+    },
+    {
+      "label": "execution-contract-interrupted",
+      "evidenceDirectory": ".xopc-evals/qwen-core-v1-execution-contract/benchmark",
+      "evidenceClass": "interrupted-live-direct-agent",
+      "version": "1.0.2",
+      "suiteHash": "b7335af765b54cee3c956b7ec7362925dd96c5b5d63f2acf305f30490c109cb5",
+      "experimentId": "ac2d7318-9e5c-4df3-bc0b-5afe730accc7",
+      "variants": [
+        {
+          "id": "candidate",
+          "expectedRuns": 10,
+          "observedRuns": 10,
+          "passed": 0,
+          "successRate": 0,
+          "reportedEstimatedCost": null,
+          "reportedEstimatedCostPerSuccess": null,
+          "durationsMs": [
+            63,
+            61,
+            61,
+            65,
+            70,
+            61,
+            60,
+            43108,
+            70,
+            63
+          ],
+          "totalReportedTokens": null,
+          "statuses": {
+            "passed": 0,
+            "failed": 0,
+            "error": 10,
+            "timed_out": 0,
+            "budget_exceeded": 0
+          },
+          "categories": [
+            {
+              "category": "research",
+              "expectedRuns": 3,
+              "passed": 0
+            },
+            {
+              "category": "data",
+              "expectedRuns": 3,
+              "passed": 0
+            },
+            {
+              "category": "change",
+              "expectedRuns": 2,
+              "passed": 0
+            },
+            {
+              "category": "recovery",
+              "expectedRuns": 2,
+              "passed": 0
+            }
+          ]
+        }
+      ],
+      "sourceDrift": false,
+      "note": "Intentionally stopped to repair duplicate-loop detection against unprojected agent state. Excluded from the formal comparison; partial outputs retained."
+    },
+    {
+      "label": "execution-contract-full-trial",
+      "evidenceDirectory": ".xopc-evals/qwen-core-v1-execution-contract-final/benchmark",
+      "evidenceClass": "live-direct-agent-diagnostic",
+      "version": "1.0.2",
+      "suiteHash": "b7335af765b54cee3c956b7ec7362925dd96c5b5d63f2acf305f30490c109cb5",
+      "experimentId": "aa178d6b-7586-49a9-a467-fb3c3f88f542",
+      "variants": [
+        {
+          "id": "candidate",
+          "expectedRuns": 10,
+          "observedRuns": 10,
+          "passed": 9,
+          "successRate": 0.9,
+          "reportedEstimatedCost": null,
+          "reportedEstimatedCostPerSuccess": null,
+          "durationsMs": [
+            72341,
+            124453,
+            61791,
+            50680,
+            77216,
+            89629,
+            44671,
+            51183,
+            60050,
+            70469
+          ],
+          "totalReportedTokens": null,
+          "statuses": {
+            "passed": 9,
+            "failed": 0,
+            "error": 0,
+            "timed_out": 0,
+            "budget_exceeded": 1
+          },
+          "categories": [
+            {
+              "category": "research",
+              "expectedRuns": 3,
+              "passed": 3
+            },
+            {
+              "category": "data",
+              "expectedRuns": 3,
+              "passed": 3
+            },
+            {
+              "category": "change",
+              "expectedRuns": 2,
+              "passed": 1
+            },
+            {
+              "category": "recovery",
+              "expectedRuns": 2,
+              "passed": 2
+            }
+          ]
+        }
+      ],
+      "sourceDrift": false,
+      "note": "JSON output contract and preserved loop detection: C01 passes; C02 still exceeds budget at final artifact publication. Retained separately from the combined verification-and-delivery revision."
+    },
+    {
+      "label": "verification-delivery-final-trial",
+      "evidenceDirectory": ".xopc-evals/qwen-core-v1-verification-delivery/benchmark",
+      "evidenceClass": "live-direct-agent",
+      "version": "1.0.2",
+      "suiteHash": "b7335af765b54cee3c956b7ec7362925dd96c5b5d63f2acf305f30490c109cb5",
+      "experimentId": "8c2bbf4a-be76-4c42-a12d-85dffb73f64b",
+      "variants": [
+        {
+          "id": "candidate",
+          "expectedRuns": 10,
+          "observedRuns": 10,
+          "passed": 10,
+          "successRate": 1,
+          "reportedEstimatedCost": 0,
+          "reportedEstimatedCostPerSuccess": 0,
+          "durationsMs": [
+            80964,
+            76759,
+            66244,
+            57399,
+            61979,
+            55883,
+            46039,
+            36314,
+            83802,
+            88389
+          ],
+          "totalReportedTokens": 1314804,
+          "statuses": {
+            "passed": 10,
+            "failed": 0,
+            "error": 0,
+            "timed_out": 0,
+            "budget_exceeded": 0
+          },
+          "categories": [
+            {
+              "category": "research",
+              "expectedRuns": 3,
+              "passed": 3
+            },
+            {
+              "category": "data",
+              "expectedRuns": 3,
+              "passed": 3
+            },
+            {
+              "category": "change",
+              "expectedRuns": 2,
+              "passed": 2
+            },
+            {
+              "category": "recovery",
+              "expectedRuns": 2,
+              "passed": 2
+            }
+          ]
+        }
+      ],
+      "sourceDrift": false,
+      "note": "Final revision, 10/10. Both change cases pass under unchanged graders and budgets. Verification captures all final deliverables without a separate publication call."
     }
   ]
 }
