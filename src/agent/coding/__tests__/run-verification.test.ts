@@ -16,6 +16,7 @@ describe('coding verification', () => {
   it('binds evidence to file content and invalidates checks after another edit', async () => {
     let revision = 'before';
     const run = new RunVerification(async () => revision);
+    expect(run.modelGuidance()).toContain('Read the inputs named by the current request directly');
     const execute = async (name: string, command = '', exitCode = 0, mutate?: string) => {
       const id = `${name}-${command}`;
       await run.beforeTool(id);
@@ -27,6 +28,7 @@ describe('coding verification', () => {
     };
     const changed = await execute('apply_patch', '', 0, 'edited');
     expect(changed.result.details).toMatchObject({ verificationPending: ['check', 'diff-review'] });
+    expect(run.modelGuidance()).toContain('Still missing:');
     const inspection = await execute('exec_command', 'node --test verify.test.cjs && git status');
     expect(inspection.result.details).toMatchObject({ verificationPending: ['check', 'diff-review'], verificationHint: expect.stringContaining('standalone') });
     expect(inspection.result.content).toContainEqual({ type: 'text', text: expect.stringContaining('This command did not record a check') });
@@ -37,9 +39,11 @@ describe('coding verification', () => {
     expect(checked.result.details).toMatchObject({ verificationPending: [] });
     expect(checked.result.content).toContainEqual({ type: 'text', text: 'Verification pending for current files: none.' });
     expect(await run.pendingContext()).toBe('');
+    expect(run.modelGuidance()).toContain('give the final answer now');
     const editedAgain = await execute('apply_patch', '', 0, 'edited-again');
     expect(editedAgain.result.details).toMatchObject({ verificationPending: ['check', 'diff-review'] });
     expect(await run.pendingContext()).toContain('Run the smallest');
+    expect(run.modelGuidance()).not.toContain('verification complete');
     expect((await run.summary()).evidence.every((item) => item.status === 'unverified')).toBe(true);
     const failed = await execute('exec_command', 'pnpm test', 1);
     expect(failed.isError).toBe(true);
