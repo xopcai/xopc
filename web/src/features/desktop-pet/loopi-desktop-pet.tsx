@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 import { renderLoopiSvg } from '../../../../src/pets/loopi-artwork';
 
@@ -14,8 +14,9 @@ export function loopiStateForAction(action: DesktopPetAction): string {
   return 'idle';
 }
 
-export function LoopiDesktopPet({ action, displayHeight, reducedMotion, className }: {
+export function LoopiDesktopPet({ action, animationKey, displayHeight, reducedMotion, className }: {
   action: DesktopPetAction;
+  animationKey?: string;
   displayHeight: number;
   reducedMotion: boolean;
   className?: string;
@@ -24,6 +25,15 @@ export function LoopiDesktopPet({ action, displayHeight, reducedMotion, classNam
   const artwork = useMemo(() => ({ __html: renderLoopiSvg(id.replace(/[^a-zA-Z0-9_-]/g, '')) }), [id]);
   const host = useRef<HTMLSpanElement>(null);
   const [paused, setPaused] = useState(() => document.hidden);
+  const playback = useRef({ action, animationKey });
+
+  useLayoutEffect(() => {
+    const previous = playback.current;
+    playback.current = { action, animationKey };
+    if (action !== 'success' || previous.action !== 'success' || previous.animationKey === animationKey) return;
+    // Consecutive completed runs replay their celebration without replacing the SVG.
+    for (const animation of host.current?.getAnimations?.({ subtree: true }) ?? []) animation.currentTime = 0;
+  }, [action, animationKey]);
 
   useEffect(() => {
     let visible = true;
