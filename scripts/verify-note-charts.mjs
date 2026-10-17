@@ -1,0 +1,72 @@
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+
+import { chromium } from 'playwright-core';
+
+const base = process.argv[2] ?? 'http://127.0.0.1:5188';
+const browser = await chromium.launch({ channel: 'chrome', headless: true });
+try {
+  const context = await browser.newContext({ viewport: { width: 1100, height: 900 }, acceptDownloads: true, reducedMotion: 'reduce' });
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  const errors = [];
+  context.on('page', page => page.on('pageerror', error => errors.push(error.message)));
+  const page = await context.newPage();
+  await page.goto(`${base}/src/visual-tests/note-charts/`);
+  const charts = page.locator('[data-chart-block]');
+  await charts.first().locator('canvas').waitFor();
+  assert.equal(await charts.count(), 2);
+  await charts.first().getByRole('button', { name: 'Copy JSON', exact: true }).click();
+  assert.equal(JSON.parse(await page.evaluate(() => navigator.clipboard.readText())).type, 'line');
+  await page.getByRole('button', { name: 'Update data', exact: true }).click();
+  await charts.first().locator('canvas').waitFor();
+  await charts.first().getByRole('button', { name: 'Copy JSON', exact: true }).click();
+  assert.equal(JSON.parse(await page.evaluate(() => navigator.clipboard.readText())).series[0].values[0], 14320);
+  await charts.first().getByRole('button', { name: 'Source', exact: true }).click();
+  assert.ok((await charts.first().locator('pre').innerText()).includes('14320'));
+  await charts.first().getByRole('button', { name: 'Chart', exact: true }).click();
+  await charts.first().locator('canvas').waitFor();
+  await charts.first().getByRole('button', { name: 'Enlarge chart' }).click();
+  await page.getByRole('dialog').locator('canvas').waitFor();
+  await page.keyboard.press('Escape');
+  await charts.first().locator('canvas').waitFor();
+  const downloadEvent = page.waitForEvent('download');
+  await charts.first().getByRole('button', { name: 'Download PNG', exact: true }).click();
+  const download = await downloadEvent;
+  const png = await readFile(await download.path());
+  assert.equal(png.subarray(0, 8).toString('hex'), '89504e470d0a1a0a');
+  await charts.nth(1).scrollIntoViewIfNeeded();
+  await charts.nth(1).locator('canvas').waitFor();
+  await charts.nth(1).screenshot({ path: '/tmp/xopc-note-chart-bar.png' });
+  assert.ok(await page.locator('.katex').count() > 0);
+  assert.ok(await page.locator('[data-mermaid-diagram] svg').count() > 0);
+  assert.equal(await page.locator('[data-md-code-block]').count(), 1);
+  await page.getByRole('button', { name: 'Theme', exact: true }).click();
+  await page.setViewportSize({ width: 375, height: 812 });
+  await charts.first().scrollIntoViewIfNeeded();
+  await charts.first().locator('canvas').waitFor();
+  await page.waitForFunction(figure => {
+    const host = figure.querySelector('[role="img"]');
+    const canvas = host?.querySelector('canvas');
+    return canvas && Math.abs(Number.parseFloat(canvas.style.width) - host.clientWidth) < 1;
+  }, await charts.first().elementHandle());
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+  const box = await charts.first().boundingBox();
+  assert.ok(box.x >= 0 && box.x + box.width <= 375, 'Note chart must fit the narrow viewport');
+  await charts.first().screenshot({ path: '/tmp/xopc-note-chart-mobile.png' });
+  await page.getByRole('button', { name: 'Invalid', exact: true }).click();
+  await page.locator('[data-chart-error]').waitFor();
+  assert.equal(await page.locator('canvas').count(), 0);
+  await page.getByRole('button', { name: 'Incomplete', exact: true }).click();
+  await page.locator('[data-chart-pending]').waitFor();
+  assert.equal(await page.locator('canvas').count(), 0);
+  await page.getByRole('button', { name: 'Incomplete', exact: true }).click();
+  await page.getByRole('button', { name: 'Invalid', exact: true }).click();
+  await charts.first().locator('canvas').waitFor();
+  await page.getByRole('button', { name: 'Toggle charts', exact: true }).click();
+  assert.equal(await charts.count(), 0);
+  await page.waitForLoadState('networkidle');
+  assert.deepEqual(errors, []);
+  console.log('Verified NoteMarkdownView: line/bar, copy, live data update, source, preview, PNG, math, Mermaid, ordinary code, dark/mobile, invalid/incomplete fallback and removal.');
+} finally {
+  await browser.close();
+}

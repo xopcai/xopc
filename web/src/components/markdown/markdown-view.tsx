@@ -1,5 +1,6 @@
 import { sanitizeMarkdownHtml, sanitizeMermaidHtml } from './markdown-sanitize';
-import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 
 import { decorateAppLinks } from '@/lib/app-link';
 import { copyTextToClipboard } from '@/lib/copy-to-clipboard';
@@ -7,7 +8,7 @@ import { useAppLinkOpener } from '@/lib/use-app-link-opener';
 import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
 
-import { parseMarkdown } from './parse-markdown';
+import { parseMarkdown, parseMarkdownWithCharts, type MarkdownChartBlock } from './parse-markdown';
 import { recordStreamingParse } from './streaming-render-metrics';
 import {
   linkWorkspaceFileMentions,
@@ -67,6 +68,7 @@ function buildCopyButtonContent(mode: 'idle' | 'copied'): DocumentFragment {
 
 function unwrapMarkdownCodeBlocks(root: HTMLElement): void {
   root.querySelectorAll<HTMLElement>('[data-md-code-block]').forEach((wrap) => {
+    if (wrap.closest('[data-md-chart]')) return;
     const pre = wrap.querySelector(':scope > pre');
     const parent = wrap.parentNode;
     if (pre && parent) {
@@ -81,6 +83,7 @@ function mountMarkdownCodeBlocks(root: HTMLElement, labels: { copy: string; copi
   const disposers: Array<() => void> = [];
 
   for (const pre of pres) {
+    if (pre.closest('[data-md-chart]')) continue;
     if (pre.closest('[data-md-code-block]')) continue;
     const parent = pre.parentNode;
     if (!parent) continue;
@@ -152,7 +155,7 @@ function isMermaidCodeBlock(code: HTMLElement): boolean {
 }
 
 function findMermaidCodeBlocks(root: HTMLElement): HTMLElement[] {
-  return Array.from(root.querySelectorAll<HTMLElement>('pre code')).filter(isMermaidCodeBlock);
+  return Array.from(root.querySelectorAll<HTMLElement>('pre code')).filter(code => !code.closest('[data-md-chart]') && isMermaidCodeBlock(code));
 }
 
 function prepareMermaidShell(code: HTMLElement): HTMLElement | null {
@@ -274,6 +277,8 @@ function mountMermaidActions(
 
 export interface MarkdownViewProps {
   content: string;
+  /** Opt into React chart rendering while retaining the document Markdown parser. */
+  renderChart?: (block: MarkdownChartBlock) => ReactNode;
   /** Tighter heading/paragraph spacing for chat bubbles */
   compact?: boolean;
   /** GFM line breaks: single `\n` in paragraphs becomes `<br>` (chat-style wrapping). */
@@ -305,6 +310,7 @@ function MarkdownViewImpl({
   mermaidActions = false,
   streamingMetricsKey,
   streaming = false,
+  renderChart,
 }: MarkdownViewProps) {
   const openAppLink = useAppLinkOpener();
   const language = useLocaleStore((s) => s.language);
@@ -334,23 +340,32 @@ function MarkdownViewImpl({
     };
   }, [language]);
 
-  const safeHtml = useMemo(() => {
-    if (!content.trim()) return '';
+  const rendered = useMemo(() => {
+    if (!content.trim()) return { html: '', charts: [] as MarkdownChartBlock[] };
     const startedAt = streamingMetricsKey ? performance.now() : 0;
     const normalized = rewriteWorkspaceFileLinksInMarkdown(
       content,
       Boolean(onWorkspaceFileOpen),
       Boolean(onWorkspaceImageLoad),
     );
-    const raw = parseMarkdown(normalized, breaks ? { breaks: true } : undefined);
-    const sanitized = sanitizeMarkdownHtml(raw);
+    const options = breaks ? { breaks: true } : undefined;
+    const parsed = renderChart ? parseMarkdownWithCharts(normalized, options) : { html: parseMarkdown(normalized, options), charts: [] };
+    const sanitized = sanitizeMarkdownHtml(parsed.html);
     if (streamingMetricsKey) {
       recordStreamingParse(streamingMetricsKey, performance.now() - startedAt);
     }
-    return sanitized + (sanitized.includes('data-xopc-math-source') ? `<!--math-context:${streaming}:${language}-->` : '');
-  }, [content, breaks, onWorkspaceFileOpen, onWorkspaceImageLoad, streamingMetricsKey, streaming, language]);
+    return { html: sanitized + (sanitized.includes('data-xopc-math-source') ? `<!--math-context:${streaming}:${language}-->` : ''), charts: parsed.charts };
+  }, [content, breaks, onWorkspaceFileOpen, onWorkspaceImageLoad, streamingMetricsKey, streaming, language, renderChart]);
+  const safeHtml = rendered.html;
+  // Preserve DOM decorations and portal children when only React chart state changes.
+  const innerHtml = useMemo(() => ({ __html: safeHtml }), [safeHtml]);
 
   const hostRef = useRef<HTMLDivElement>(null);
+  const [chartMounts, setChartMounts] = useState<{ html: string; nodes: HTMLElement[] } | null>(null);
+  useLayoutEffect(() => {
+    const nodes = renderChart ? Array.from(hostRef.current?.querySelectorAll<HTMLElement>('[data-md-chart]') ?? []) : [];
+    setChartMounts(nodes.length ? { html: safeHtml, nodes } : null);
+  }, [safeHtml, renderChart]);
   const [mermaidPreview, setMermaidPreview] = useState<MermaidPreviewState | null>(null);
   const [linkError, setLinkError] = useState(false);
   const openMermaidPreview = useCallback((preview: MermaidPreviewState) => {
@@ -504,9 +519,14 @@ function MarkdownViewImpl({
         <div
           className={['markdown-body', compact ? 'markdown-compact' : '', className ?? ''].filter(Boolean).join(' ')}
           // safeHtml is sanitized via DOMPurify above; link behavior is applied only after sanitization.
-          dangerouslySetInnerHTML={{ __html: safeHtml }}
+          dangerouslySetInnerHTML={innerHtml}
         />
       </div>
+      {renderChart && chartMounts?.html === safeHtml ? chartMounts.nodes.map(node => {
+        const index = Number(node.dataset.mdChart);
+        const block = rendered.charts[index];
+        return block ? createPortal(renderChart(block), node, String(index)) : null;
+      }) : null}
       {linkError ? <p role="alert" className="mt-2 text-sm text-danger">{labels.links.failed}</p> : null}
       {mermaidActions ? (
         <MermaidPreviewDialog
