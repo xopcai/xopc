@@ -91,18 +91,24 @@ export struct XopcChatMessageContent {
         Text($r('app.string.chat_response_failed')).fontSize(13).fontColor(this.colors.danger)
       }
       if (this.showPreview) {
-        if (this.row.role === 'assistant') {
-          XopcMarkdownView({ content: this.previewMarkdown, conversationId: this.conversationId, compactReading: true,
-            previewLineLimit: this.previewLines, onNavigate: this.onNavigate,
-            onPreviewTap: (): void => { this.onShowMore(this.row); } })
-        } else {
-        Text(this.previewText).fontSize(16).lineHeight(this.row.role === 'assistant' ? 23 : 25)
-          .fontColor(this.colors.foreground).width('100%').textAlign(TextAlign.Start)
-          .maxLines(this.previewLines).textOverflow({ overflow: TextOverflow.Ellipsis })
-        }
+        Stack({ alignContent: Alignment.Bottom }) {
+          if (this.row.role === 'assistant') {
+            XopcMarkdownView({ content: this.previewMarkdown, conversationId: this.conversationId, compactReading: true,
+              previewLineLimit: this.previewLines, onNavigate: this.onNavigate,
+              onPreviewTap: (): void => { this.onShowMore(this.row); } })
+          } else {
+            Text(this.previewText).fontSize(16).lineHeight(this.row.role === 'assistant' ? 23 : 25)
+              .fontColor(this.colors.foreground).width('100%').textAlign(TextAlign.Start)
+              .maxLines(this.previewLines).textOverflow({ overflow: TextOverflow.Ellipsis })
+          }
+          Column() {}.width('100%').height(24)
+            .linearGradient({ direction: GradientDirection.Bottom,
+              colors: [[Color.Transparent, 0], [this.row.role === 'user' ? this.colors.accentSoft : this.colors.panel, 1]] })
+            .hitTestBehavior(HitTestMode.None).accessibilityLevel('no')
+        }.width('100%')
         Button() {
           Text($r('app.string.chat_view_more')).fontSize(15).fontWeight(FontWeight.Medium)
-            .fontColor($r('app.color.accent'))
+            .fontColor(this.colors.secondary)
         }.id('chat-message-more-' + this.row.id).height(44).padding(0).backgroundColor(Color.Transparent)
           .accessibilityText($r('app.string.chat_view_more'))
           .onClick((): void => { this.onShowMore(this.row); })

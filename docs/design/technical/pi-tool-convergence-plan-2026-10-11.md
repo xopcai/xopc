@@ -51,3 +51,17 @@ pi 状态目录默认位于 xopc 的 state/pi。OAuth 凭据交给 pi；旧凭�
 配置例子、登录方式、删除功能和迁移要求见 [MCP](../../cli/mcp.md)。后续升级优先升级 pi 并运行契约与 Gateway 冒烟。若新公开 API 能恢复所需管理能力，可另行接入；不为已删除的旧行为增加长期兼容层。
 
 参考：[pi MCP 文档](https://github.com/earendil-works/pi/blob/v1.1.0/packages/coding-agent/docs/mcp.md)、[公开 SDK 示例](https://github.com/earendil-works/pi/blob/v1.1.0/packages/coding-agent/examples/sdk/14-codemode-mcp.ts)。
+
+## SDK 升级与 Codemode 保留约束
+
+从 2026-10-10 升级记录保留以下维护边界；此前自建 MCP runtime、单服务 deferred 试点和工具发现开关的实施方案已被本页原生 MCP 决策替代。
+
+- 四个直接 pi 包保持同一明确版本；包导出、worker、WASM 与其他运行资源须同时验证 Node 发布包和 Electron Gateway server 产物。公开 ResourceLoader 接口是系统提示词入口，不恢复私有字段适配。
+- embedded 关闭 pi 自动重试，由 xopc 控制既有重试预算。`agent_end` 不是业务完成；等待 `agent_settled` 后仍须等待 xopc 自身恢复与续跑结束。取消与正常完成分别产生业务终态。
+- Provider 身份与 API 协议类型分别维护：`azure` 是 Provider ID，`azure-openai-responses` 仍是有效协议类型。旧 OpenAI Codex 身份不自动映射为新 ChatGPT OAuth，旧凭据文件不自动转换或删除，历史 transcript 不重写。
+- Codemode 默认关闭，普通直接调用可继续使用。核心读取身份、当前授权与 `data_batch` 嵌套权限取交集；猜测工具名或远端只读提示不能扩大权限。before/after 策略、目录指令、取消、工具锁及宿主预算覆盖子调用。
+- Codemode 状态沿现有 transcript append 链路写入，保持会话/reset 隔离，不增加 turn-end 全量保存。子调用保留父 ID 与耗时，不生成独立 LLM toolResult，usage 只汇总一次。开关、预算、工具契约和授权变化使 runner 指纹失效并终止活动脚本，不自动重放工具。
+- 升级验证包含真实 SDK/QuickJS、授权拒绝、目录变更、取消与资源释放、SQLite 冷启动/reset，以及通过认证 REST 和 realtime 的 Node/Electron server 冒烟。模拟模型、真实 SDK 与真实模型评估分别记录，server bundle 验证不等同于桌面安装器或原生 UI 验收。
+- 发布前先用隔离状态与数据库副本验证。不允许新旧进程混用同一状态目录；回退必须匹配代码、依赖、锁文件与状态备份，不能只降 npm 版本后继续写入新状态。观察失败率、提前完成、重试、取消耗时、runner 数量、数据库完整性和启动耗时，故障时停止推广。
+
+Codemode 的样本要求、收益/质量门槛、失败轮次及费用统一维护在[评估报告](./codemode-evaluation-2026-10-10.md#推广规则)。至少 30 个完整任务、每策略 3 次；组合任务中位耗时降低至少 20% 或输入降低至少 15%，成功率不降低、整体 P95 增幅不超过 10%，严重越权、跨会话泄漏、残留运行与落盘错误为零。单工具任务不强制脚本；达标后仍需确定性行为检查和明确 Agent 的日常试点，才考虑修改 defaults。2026-10-10 评估未达推广门槛，继续 opt-in。
