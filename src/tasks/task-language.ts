@@ -17,6 +17,9 @@ export function hasUnlocalizedTaskText(values: readonly string[], locale: TaskUi
   if (locale !== 'zh') return false;
   return values.some(value => {
     const prose = value.replace(/`[^`]*`|https?:\/\/\S+|\S*[\/.]\S*/g, '');
-    return !/[\u3400-\u9fff]/u.test(prose) && (prose.match(/[a-zA-Z]+/g)?.length ?? 0) >= 4;
+    const leadingProse = prose.split(/[\u3400-\u9fff]/u, 1)[0];
+    const englishSentence = /\b(?:is|are|must|should|contains?|includes?|provides?|has|have|can|will|needs?|requires?|verify|ensure|do)\b/i.test(leadingProse);
+    return (!/[\u3400-\u9fff]/u.test(prose) || englishSentence)
+      && (prose.match(/[a-zA-Z]+/g)?.length ?? 0) >= 4;
   });
 }
