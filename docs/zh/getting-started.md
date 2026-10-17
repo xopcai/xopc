@@ -10,7 +10,7 @@
 | 自带 API Key | 连接支持的提供商并选择模型 |
 | 本地模型 | 启动并连接兼容的本地模型服务，例如 Ollama |
 
-模型可用后，打开[个人 Agent](./personal-ai.md)和 Loopi 聊聊，或直接[处理文件与项目](./workspace-guide.md)。XOPC Cloud 引导会自动配置可用的图像与语音服务，启用支持的实时语音模式，并保留已有明确设置；回复自动朗读默认关闭。其他模型提供商和电脑控制需要单独配置兼容服务。
+模型可用后，打开[个人 Agent](./personal-ai.md)和 Ada 聊聊，或直接[处理文件与项目](./workspace-guide.md)。XOPC Cloud 引导会自动配置可用的图像与语音服务，启用支持的实时语音模式，并保留已有明确设置；回复自动朗读默认关闭。其他模型提供商和电脑控制需要单独配置兼容服务。
 
 ## 选择开始方式
 
@@ -91,4 +91,4 @@ xopc config show
 
 ## 从当前界面开始
 
-[认识 Loopi](./personal-ai.md) · [交办与接收结果](./task-delegation.md) · [处理文件与项目](./workspace-guide.md) · [任务验收](./task-review.md)。
+[认识 Ada](./personal-ai.md) · [交办与接收结果](./task-delegation.md) · [处理文件与项目](./workspace-guide.md) · [任务验收](./task-review.md)。

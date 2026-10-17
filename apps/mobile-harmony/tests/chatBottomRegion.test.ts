@@ -241,7 +241,7 @@ describe('chat bottom region composition', () => {
 
   it('shows the conversation title in the header and keeps model selection in the actions sheet', () => {
     const header = chat.slice(chat.indexOf('if (!this.embedded)'), chat.indexOf('if (this.sendFlightActive)'));
-    expect(header).toContain("this.personalConversation ? this.personalAgent?.displayName ?? 'Loopi' : this.chat.title || $r('app.string.untitled')");
+    expect(header).toContain("this.personalConversation ? this.personalAgent?.displayName ?? 'Ada' : this.chat.title || $r('app.string.untitled')");
     expect(header).not.toContain("$r('sys.symbol.line_3_horizontal')");
     expect(header).not.toContain("this.options.modelName(appSettings.effectiveLanguage())");
     expect(header).not.toContain(".id('chat-model-picker')");

@@ -1,13 +1,13 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640" role="img" aria-labelledby="title desc">
   <title id="title">xopc — Keep what matters moving.</title>
-  <desc id="desc">Open-source, local-first personal AI. Chat with Loopi, delegate tasks, and work with files and projects.</desc>
+  <desc id="desc">Open-source, local-first personal AI. Chat with Ada, delegate tasks, and work with files and projects.</desc>
   <rect width="1280" height="640" fill="#0f172a"/>
   <rect x="64" y="64" width="1152" height="512" rx="24" fill="#172033" stroke="#334155"/>
   <g font-family="Inter, system-ui, -apple-system, Segoe UI, sans-serif">
     <text x="112" y="145" fill="#93c5fd" font-size="36" font-weight="700">xopc</text>
     <text x="112" y="254" fill="#f8fafc" font-size="62" font-weight="700">Keep what matters moving.</text>
     <text x="112" y="325" fill="#cbd5e1" font-size="30">Personal AI. Your context, carried forward.</text>
-    <text x="112" y="380" fill="#cbd5e1" font-size="27">Chat with Loopi. Delegate a task. Work with files and projects.</text>
+    <text x="112" y="380" fill="#cbd5e1" font-size="27">Chat with Ada. Delegate a task. Work with files and projects.</text>
     <path d="M112 428H1168" stroke="#334155"/>
     <text x="112" y="485" fill="#93c5fd" font-size="25">Open source · Local-first · Cloud or local models</text>
     <text x="112" y="530" fill="#94a3b8" font-size="22">xopc.ai · github.com/xopcai/xopc</text>
