@@ -22,7 +22,7 @@ export function compareComputerEvaluations(rawBaseline: unknown, rawCandidate: u
     const b = isAutonomousComputerSuccess(before), c = isAutonomousComputerSuccess(after);
     if (c && !b) wins++; else if (b && !c) losses++; else ties++;
   }
-  const metric = (name: 'durationMs' | 'modelRequests' | 'actions' | 'unchangedInputs' | 'observationChanges' | 'cost') => {
+  const metric = (name: 'durationMs' | 'modelRequests' | 'actions' | 'unchangedInputs' | 'observationChanges' | 'rescueAttempts' | 'rescueExhaustions' | 'cost') => {
     const measured = pairs.filter(([before, after]) => before[name] != null && after[name] != null);
     if (!measured.length) return { pairedMeasurements: 0, baselineMean: null, candidateMean: null, deltaMean: null };
     const baselineMean = measured.reduce((sum, [before]) => sum + before[name]!, 0) / measured.length;
@@ -35,5 +35,6 @@ export function compareComputerEvaluations(rawBaseline: unknown, rawCandidate: u
     complete: pairs.length === baselineSummary.expectedRuns,
     wins, losses, ties, pairedSuccessRateDelta: pairs.length ? (wins - losses) / pairs.length : null,
     metrics: { durationMs: metric('durationMs'), modelRequests: metric('modelRequests'), actions: metric('actions'),
-      unchangedInputs: metric('unchangedInputs'), observationChanges: metric('observationChanges'), cost: metric('cost') } };
+      unchangedInputs: metric('unchangedInputs'), observationChanges: metric('observationChanges'),
+      rescueAttempts: metric('rescueAttempts'), rescueExhaustions: metric('rescueExhaustions'), cost: metric('cost') } };
 }

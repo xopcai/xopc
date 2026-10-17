@@ -13,11 +13,11 @@ describe('computer evaluation harness', () => {
     const execute = vi.fn(async (spec: any, input: any) => spec.command[0] === 'executor' ? {
       runId: `${input.taskId}-${input.repetition}`, claimedSuccess: true, takeover: false,
       duplicateInputs: 0, scopeViolations: 0, postStopInputs: 0, durationMs: 10,
-      modelRequests: 1, inputTokens: 2, outputTokens: 3, cost: 0.01,
+      modelRequests: 1, inputTokens: 2, outputTokens: 3, cost: 0.01, rescueAttempts: 1, rescueExhaustions: 0,
     } : { outcome: input.requestedOutcome ?? 'failed', oracle: 'application-state', evidenceRef: `evidence/${input.execution.runId}.json` });
     const result = await runComputerEvaluationManifest(manifest, { execute, onRun });
     expect(result.runs).toHaveLength(4);
-    expect(result.runs.every(run => run.outcome === 'failed')).toBe(true);
+    expect(result.runs.every(run => run.outcome === 'failed' && run.rescueAttempts === 1 && run.rescueExhaustions === 0)).toBe(true);
     expect(Object.values(result.evidence)).toEqual([
       'evidence/task-a-0.json', 'evidence/task-a-1.json', 'evidence/task-b-0.json', 'evidence/task-b-1.json',
     ]);

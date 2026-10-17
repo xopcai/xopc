@@ -36,7 +36,7 @@ describe('private computer session diagnostics', () => {
   });
   it('separates claims, verified conditions, stale replans, wait and unknown receipts', () => {
     const report = new ComputerSessionDiagnostics();
-    report.count('successClaims'); report.count('takeovers');
+    report.count('successClaims'); report.count('takeovers'); report.count('rescueAttempts'); report.count('rescueExhaustions');
     report.propose('discarded', 'click'); report.discard();
     report.propose('wait', 'wait'); report.record({ actionId: 'wait', dispatch: 'completed', outcome: 'unknown', verification: 'none' });
     report.propose('unknown', 'showMenu'); report.record({ actionId: 'unknown', dispatch: 'unknown', outcome: 'unknown', verification: 'none' });
@@ -44,6 +44,8 @@ describe('private computer session diagnostics', () => {
     expect(report.snapshot().counters).toMatchObject({ proposedInputs: 2, completedInputs: 0, unknownDispatches: 1,
       successClaims: 1, takeovers: 1, verifiedConditions: 0, observationChanges: 1 });
     expect(() => computerReportMeasurements(report.snapshot())).toThrow('SESSION_ACTIVE');
+    report.finish(true);
+    expect(computerReportMeasurements(report.snapshot())).toMatchObject({ rescueAttempts: 1, rescueExhaustions: 1 });
   });
   it.each([
     ['COMPUTER_READ_ONLY', 'permission'], ['COMPUTER_WINDOW_CHANGED', 'target'], ['COMPUTER_UI_UNSTABLE', 'observation'],

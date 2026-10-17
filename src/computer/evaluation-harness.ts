@@ -32,7 +32,7 @@ const ExecutorResultSchema = ComputerEvaluationRunSchema.pick({
   inputTokens: true,
   outputTokens: true,
   cost: true,
-  actions: true, unchangedInputs: true, observationChanges: true, failure: true,
+  actions: true, unchangedInputs: true, observationChanges: true, rescueAttempts: true, rescueExhaustions: true, failure: true,
 }).extend({ runId: z.string().min(1).max(500) }).strict();
 
 const OracleResultSchema = ComputerEvaluationRunSchema.pick({ outcome: true, oracle: true }).extend({
