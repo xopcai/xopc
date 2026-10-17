@@ -221,6 +221,11 @@ For \`update\`, patch fields may be direct args or nested under \`args.patch\`. 
 
 ## Tasks
 
+Task locale follows the conversation response language, then the user request and profile.
+Keep every user-facing contract field (criteria, expected outputs, constraints, assumptions and risks)
+in that language, even when attached source material is English. Preserve paths, URLs and proper nouns.
+An explicit locale must reflect the user’s language choice.
+
 Commands: \`list\`, \`get\`, \`create\`, \`delegated_tasks\`, \`collaboration\`,
 \`collaboration_post\`, \`update_dependencies\`, \`add_context\`, \`remove_context\`,
 \`command\`, and \`delete\`.

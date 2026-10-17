@@ -46,6 +46,7 @@ export interface AssistantTurnViewModel {
     activeTool?: ToolUseContent;
   };
   outcome: Message['outcome'];
+  resultRevision?: number;
   deliveries: Array<{ key: string; delivery: ProductDeliveryEnvelope }>;
   attachments?: MessageAttachment[];
   sources: SearchSource[];
@@ -146,9 +147,10 @@ export function buildAssistantTurnViewModel({
     (block): block is ImageContent =>
       block.type === 'image' && Boolean(block.source?.data),
   );
-  const outcomeArtifactIds = new Set(message.outcome?.deliverables.map((item) => item.artifactId));
+  const outcome = message.outcome ?? message.taskResultDelivery?.outcome;
+  const outcomeArtifactIds = new Set(outcome?.deliverables.map((item) => item.artifactId));
   const outcomeArtifactUris = new Set(
-    message.outcome?.deliverables.flatMap((item) => item.uri ? [item.uri] : []),
+    outcome?.deliverables.flatMap((item) => item.uri ? [item.uri] : []),
   );
   const standaloneAttachments = [
     ...imageContentBlocksToAttachments(imageBlocks),
@@ -199,7 +201,8 @@ export function buildAssistantTurnViewModel({
       state,
       activeTool: state === 'using_tool' ? runningTool : undefined,
     },
-    outcome: message.outcome,
+    outcome,
+    resultRevision: message.taskResultDelivery?.resultRevision,
     deliveries,
     attachments: standaloneAttachments,
     sources: extractSearchSources(toolBlocks),

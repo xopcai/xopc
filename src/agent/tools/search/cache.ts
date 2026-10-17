@@ -15,6 +15,7 @@ export interface SearchCache {
   set(entry: SearchCacheEntry): void;
 }
 const searchCache = new AsyncLocalStorage<SearchCache>();
+export function withoutSearchCache<T>(run: () => T): T { return searchCache.exit(run); }
 /** Research owns this scope. No account-wide or cross-conversation cache exists. */
 export function withSearchCache<T>(cache: SearchCache, run: () => T): T { return searchCache.run(cache, run); }
 export function currentSearchCache(): SearchCache | undefined { return searchCache.getStore(); }

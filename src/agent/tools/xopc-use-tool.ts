@@ -41,7 +41,7 @@ import {
 
 import { parseTaskHandoffReferences } from '../../tasks/task-handoff.js';
 import { resolveResponseLanguageForSession } from '../prompt/response-language.js';
-import { resolveTaskLocale } from '../../tasks/task-language.js';
+import { hasUnlocalizedTaskText, resolveTaskLocale } from '../../tasks/task-language.js';
 import { runWithActivityContext } from '../../activity/index.js';
 import type { AutomationService } from '../../automations/index.js';
 import { AutomationCreateCapabilityInputSchema, AutomationUpdatePatchSchema } from '../../automations/capabilities/write.js';
@@ -987,6 +987,8 @@ async function handleTask(
       if (args[field] === undefined) continue;
       const value = taskTextList(args[field]);
       if (!value) return { ok: false, error: `Invalid ${field}: pass a flat list of strings or omit this optional field` };
+      if (hasUnlocalizedTaskText(value, taskLocale)) return { ok: false, error:
+        `Write ${field} in Simplified Chinese to match the task language. Preserve all requirements, paths, URLs and proper nouns; translate only explanatory prose.` };
       contract[field] = value;
     }
     const originConversationId = deps.getCurrentConversationId?.();

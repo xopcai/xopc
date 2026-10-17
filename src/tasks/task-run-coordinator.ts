@@ -1,5 +1,7 @@
 import type { TaskEvidence, TaskRunReceipt, TurnOutcome } from '@xopcai/gateway-contract';
 
+import { AgentCatalogRepository } from '../agent-catalog/repository.js';
+
 import type { ExecutionContext } from './execution-context.js';
 import { personalRequestForTask } from '../personal-agent/request-repository.js';
 import { TaskAllocationRepository } from './task-allocation-repository.js';
@@ -88,9 +90,11 @@ export class TaskRunCoordinator {
     if (startingQueuedRun && run.status === 'running' && new TaskAllocationRepository().get(task.id)) {
       const executorAgentId = typeof run.executorRef.agentId === 'string'
         ? run.executorRef.agentId : task.delegateAgentId ?? input.context.agentId;
+      const zh = resolveTaskLocale(task) === 'zh';
+      const executorName = executorAgentId ? new AgentCatalogRepository().get(executorAgentId)?.profile?.name?.trim() : undefined;
       runSqliteWriteTransaction(() => new TaskAllocationRepository().publish(task.id,
-        resolveTaskLocale(task) === 'zh' ? `任务「${task.title}」由 ${executorAgentId ?? '执行者'} 开始执行。`
-          : `Task “${task.title}” started by ${executorAgentId ?? 'the assigned executor'}.`));
+        zh ? `任务「${task.title}」由 ${executorName || '执行者'} 开始执行。`
+          : `Task “${task.title}” started by ${executorName || 'the assigned executor'}.`));
     }
     return run.status === 'running' ? new TaskRunCoordinator(run.id) : undefined;
   }

@@ -9,6 +9,7 @@ import { MessageBubble } from '@/features/chat/messages/message-bubble';
 import type { Message } from '@/features/chat/messages/messages.types';
 import * as workspaceApi from '@/features/workspace/workspace-api';
 import { useLocaleStore } from '@/stores/locale-store';
+import { useWorkspacePreviewStore } from '@/stores/workspace-preview-store';
 
 describe('Personal AI message styling', () => {
   let container: HTMLDivElement;
@@ -24,6 +25,7 @@ describe('Personal AI message styling', () => {
   });
 
   afterEach(() => {
+    useWorkspacePreviewStore.getState().setPath(null);
     vi.restoreAllMocks();
     act(() => root.unmount());
     container.remove();
@@ -32,7 +34,7 @@ describe('Personal AI message styling', () => {
   function render(message: Message, personal: boolean, isStreaming: boolean) {
     act(() => root.render(
       <MemoryRouter>
-        <MessageBubble message={message} personal={personal} isStreaming={isStreaming} progress={null} />
+        <MessageBubble message={message} personal={personal} isStreaming={isStreaming} progress={null} conversationId="personal-chat" />
       </MemoryRouter>,
     ));
   }
@@ -46,6 +48,57 @@ describe('Personal AI message styling', () => {
       taskResultDelivery: { taskRunId: 'producing-run' } as never }, true, false);
     await act(async () => { container.querySelector<HTMLAnchorElement>('a')?.click(); });
     expect(resolveFile).toHaveBeenCalledWith('report.html', expect.objectContaining({ taskRunId: 'producing-run' }));
+  });
+
+  function taskReply(deliverables: NonNullable<Message['outcome']>['deliverables'] = []): Message {
+    return {
+      role: 'assistant', content: [{ type: 'text', text: 'Here is the answer.' }],
+      taskResultDelivery: {
+        version: 1, deliveryId: 'reply:result', taskId: 'task', taskRunId: 'worker',
+        taskTitle: 'Tomorrow’s exhibitions', conversationId: 'personal-chat',
+        originTranscriptId: 'transcript', assignmentEpoch: 0, resultRevision: 2, createdAt: 1,
+        outcome: { version: 1, outcomeId: 'outcome', runId: 'worker', turnId: 'worker',
+          status: 'succeeded', deliverables, evidence: [], createdAt: '2026-10-17T00:00:00Z' },
+      },
+    };
+  }
+
+  it('keeps personal conversation replies free of task references and result versions', () => {
+    render(taskReply(), true, false);
+    expect(container.textContent).toContain('Here is the answer.');
+    expect(container.querySelector('[data-result-follow-up]')).toBeNull();
+    expect(container.querySelector('[data-result-revision]')).toBeNull();
+    expect(container.querySelector('[data-result-attachment]')).toBeNull();
+  });
+
+  it('shows a generated report card and reveals its version only in the preview details', async () => {
+    render(taskReply([{ artifactId: 'report', title: 'Exhibition report.pdf', kind: 'pdf',
+      availability: 'available', location: 'artifact_store', capabilities: ['preview'],
+      uri: 'media://outbound/report.pdf', mimeType: 'application/pdf' }]), true, false);
+    const card = container.querySelector<HTMLButtonElement>('[data-result-attachment] button');
+    expect(card?.textContent).toContain('Exhibition report.pdf');
+    expect(container.querySelector('[data-result-follow-up]')).toBeNull();
+    expect(document.querySelector('[data-result-revision]')).toBeNull();
+    await act(async () => card?.click());
+    expect(document.querySelector('[role="dialog"] [data-result-revision]')?.textContent)
+      .toBe('Result version 2');
+  });
+
+  it('passes the result version into workspace file details and clears it for other files', () => {
+    render(taskReply([{ artifactId: 'report', title: 'Report.md', kind: 'document',
+      availability: 'available', location: 'workspace', capabilities: ['preview'],
+      workspaceRelativePath: 'Report.md' }]), true, false);
+    act(() => container.querySelector<HTMLButtonElement>('[data-result-attachment] button')?.click());
+    expect(useWorkspacePreviewStore.getState()).toMatchObject({
+      path: 'Report.md', conversationId: 'personal-chat', resultRevision: 2,
+    });
+    useWorkspacePreviewStore.getState().setPath('Other.md');
+    expect(useWorkspacePreviewStore.getState().resultRevision).toBeUndefined();
+  });
+
+  it('preserves task follow-up controls outside personal conversations', () => {
+    render(taskReply(), false, false);
+    expect(container.querySelector('[data-result-follow-up]')?.textContent).toContain('Ask about:');
   });
 
   it('uses consistent rounded corners for Personal AI and regular user bubbles', () => {

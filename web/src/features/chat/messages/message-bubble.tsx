@@ -691,7 +691,7 @@ export const MessageBubble = memo(function MessageBubble({
 
             {followUpTrigger ? assistantStepsBlock : null}
 
-            {!isUser && message.taskResultDelivery && conversationId ? (
+            {!personal && !isUser && message.taskResultDelivery && conversationId ? (
               <div className="flex flex-wrap items-center gap-2" data-result-follow-up>
                 {message.taskResultDelivery.resultRevision ? (
                   <span className="text-xs text-fg-muted" data-result-revision>

@@ -6,6 +6,7 @@ import { TaskRunRepository } from './task-run-repository.js';
 import { resolveTaskLocale } from './task-language.js';
 import { loadTranscriptRowsForSession } from '../storage/sqlite/index.js';
 import { canResumeAfterModelFailure } from '../agent/orchestration/turn-recovery.js';
+import { runInIndependentAgentExecution } from '../agent/independent-execution.js';
 
 const log = createLogger('TaskRunDispatcher');
 const LEASE_MS = 60_000;
@@ -46,7 +47,8 @@ export class TaskRunDispatcher {
     this.#runs.reconcileCancelledRuns();
     this.reconcileExpiredRuns();
     const count = Math.max(1, Math.min(8, this.deps.maxConcurrency ?? 3));
-    await Promise.all(Array.from({ length: count }, (_, slot) => this.drainSlot(`${this.deps.workerId}:${slot}`)));
+    await Promise.all(Array.from({ length: count }, (_, slot) =>
+      runInIndependentAgentExecution(() => this.drainSlot(`${this.deps.workerId}:${slot}`))));
   }
 
   private reconcileExpiredRuns(): void {

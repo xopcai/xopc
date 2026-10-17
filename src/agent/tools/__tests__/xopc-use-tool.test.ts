@@ -654,6 +654,17 @@ describe('xopc_use tool', () => {
     expect(created.task.contract.acceptanceCriteria[0]).toBe('已交付：Review the English project specification');
   });
 
+  it('asks for localized contract prose before persisting a Chinese task', async () => {
+    seedConversationFixtures();
+    const tool = createXopcUseTool({ getCurrentAgentId: () => 'main', getCurrentConversationId: () => CONVERSATION_ID });
+    const result = parseToolJson(await tool.execute('locale-criteria', {
+      mode: 'task', command: 'create', args: { objective: '查找官方购票入口', locale: 'zh',
+        acceptanceCriteria: ['The response contains official clickable ticketing URLs.'] },
+    }));
+    expect(result.ok).toBe(false);
+    expect(result.error).toContain('Write acceptanceCriteria in Simplified Chinese');
+  });
+
   it('captures a task by default and returns a task delivery reference', async () => {
     seedConversationFixtures();
     const project = projects.create({ name: 'Task Project' });

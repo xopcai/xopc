@@ -4,6 +4,10 @@ type EmbeddedExecutionContext = { conversationId: string; runId?: string };
 
 const executionSessionStorage = new AsyncLocalStorage<EmbeddedExecutionContext>();
 
+export function withoutEmbeddedExecutionSession<T>(run: () => T): T {
+  return executionSessionStorage.exit(run);
+}
+
 export function runWithEmbeddedExecutionSession<T>(
   conversationId: string,
   run: () => T,

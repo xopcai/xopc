@@ -12,6 +12,9 @@ import { TaskRunDispatcher } from '../task-run-dispatcher.js';
 import { TaskRunRepository } from '../task-run-repository.js';
 import { TaskContextRepository } from '../task-context-repository.js';
 import { TaskRepository } from '../task-repository.js';
+import { createDataBatchTool, withDataToolPermissions } from '../../agent/tools/dataBatch.js';
+import { getDelegationScope, withDelegationScope } from '../../agent/orchestration/delegation-scope.js';
+import { getEmbeddedExecutionSession, runWithEmbeddedExecutionSession } from '../../agent/embedded/execution-context.js';
 
 const contract = { objective: 'Do work', expectedOutputs: [], acceptanceCriteria: [], constraints: [],
   approvalRequired: [], assumptions: [], risks: [], acceptancePolicy: 'verified_auto' as const,
@@ -40,6 +43,34 @@ describe('TaskRunDispatcher', () => {
     if (!created.ok || !created.runId) throw new Error('Expected queued TaskRun');
     return created.runId;
   }
+
+  it('starts initial and subsequently queued Tasks outside the caller tool scope', async () => {
+    const search = { name: 'web_search', label: 'Search', description: 'Search', parameters: {},
+      execute: vi.fn(async () => ({ content: [{ type: 'text' as const, text: 'Found' }], details: {} })) };
+    const batch = createDataBatchTool(stateDir, () => new Set(['web_search']), { getTools: () => [search] });
+    const runAgent = vi.fn(async () => {
+      expect(getDelegationScope()).toBeUndefined();
+      expect(getEmbeddedExecutionSession()).toBeUndefined();
+      const result = await batch.execute('batch', { operations: [{ id: 's', kind: 'web_search', query: 'exhibitions' }] });
+      expect(result.details).toMatchObject({ status: 'completed', sourceRequests: 1 });
+    });
+    const ensureSession = vi.fn(async () => {
+      expect(getEmbeddedExecutionSession()).toBeUndefined();
+      return 'target-conversation';
+    });
+    const dispatcher = new TaskRunDispatcher({ workerId: 'independent', maxConcurrency: 1, ensureSession, runAgent });
+    await runWithEmbeddedExecutionSession('origin', () => withDelegationScope({ tools: [] }, () =>
+      withDataToolPermissions(new Set(), async () => {
+        queue('initial-independent');
+        await dispatcher.drain();
+        queue('later-independent');
+        await dispatcher.drain();
+        expect(getEmbeddedExecutionSession()).toBe('origin');
+        expect(getDelegationScope()?.tools).toEqual([]);
+      })));
+    expect(runAgent).toHaveBeenCalledTimes(2);
+    expect(search.execute).toHaveBeenCalledTimes(2);
+  });
 
   it('clears orphan waits of an already cancelled Run after restart without changing a new Run or its waits', async () => {
     const oldId = queue('cancelled-orphan-waits');

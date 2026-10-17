@@ -306,6 +306,12 @@ export function AssistantResultTail({
     ...outcomeAttachments(view.outcome, language),
     ...standaloneAttachments(view.attachments, language),
   ];
+  const isVersionedResult = (attachment: MessageAttachment) => Boolean(
+    view.resultRevision && view.outcome?.deliverables.some(item => item.artifactId === attachment.id),
+  );
+  const openResult = (attachment: MessageAttachment) => {
+    preview.openAttachment(attachment, isVersionedResult(attachment) ? view.resultRevision : undefined);
+  };
   const images = allAttachments.filter(item => !item.failed && item.attachment.mimeType?.startsWith('image/'));
   const attachments = allAttachments.filter(item => !images.includes(item));
   const hasTail = productCount > 0 || attachments.length > 0;
@@ -357,7 +363,7 @@ export function AssistantResultTail({
                 authToken={authToken}
                 conversationId={conversationId}
                 projectId={projectId}
-                onOpen={preview.openAttachment}
+                onOpen={openResult}
                 language={language}
               />
             ) : (
@@ -368,7 +374,7 @@ export function AssistantResultTail({
                   authToken={authToken}
                   conversationId={conversationId}
                   projectId={projectId}
-                  onOpen={preview.openAttachment}
+                  onOpen={openResult}
                 />
               ))
             )}
@@ -384,6 +390,7 @@ export function AssistantResultTail({
         <AttachmentPreviewDialog
           open={preview.open}
           attachment={preview.active}
+          resultRevision={preview.active && isVersionedResult(preview.active) ? view.resultRevision : undefined}
           authToken={authToken}
           conversationId={conversationId}
           onClose={preview.closePreview}

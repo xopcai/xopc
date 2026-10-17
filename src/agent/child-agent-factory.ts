@@ -34,7 +34,7 @@ export interface BuildChildToolsOptions {
   getConfig: () => Config | undefined;
   toolExecutorConfig?: Partial<ToolExecutorConfig>;
   endpointTools?: EndpointToolRuntime;
-  browserConversationId?: string;
+  conversationId: string;
 }
 
 export interface DelegateChildProgressHooks {
@@ -114,7 +114,7 @@ export function createDelegateChildHandle(options: DelegateChildHandleOptions): 
       let tools = options.buildChildTools({ workspace: options.workspace, bus: options.bus,
         model: options.model, agentId: options.agentId, getConfig: options.getConfig,
         toolExecutorConfig: options.toolExecutorConfig,
-        browserConversationId: options.requesterConversationId ?? options.conversationId,
+        conversationId,
       }).filter(tool => allow.has(tool.name)).map(tool => tool.name === 'data_batch' ? {
         ...tool, execute: (id, args, signal, onUpdate) => withDataToolPermissions(allow, () => tool.execute(id, args, signal, onUpdate)),
       } : tool);

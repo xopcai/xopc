@@ -18,6 +18,8 @@ const log = createLogger('CloudCreditBudget');
 const scopes = new AsyncLocalStorage<BudgetScope>();
 const EXHAUSTED = /credit_budget_exhausted|(?:task Credit|Credit task) budget exhausted/i;
 
+export function withoutCloudCreditBudget<T>(run: () => T): T { return scopes.exit(run); }
+
 export function hasCloudCreditBudget(): boolean { return Boolean(scopes.getStore()); }
 export function cloudCreditBudgetStopMessage(): string | undefined { return scopes.getStore()?.stopped; }
 

@@ -8,6 +8,10 @@ interface DelegationScope {
 }
 const storage = new AsyncLocalStorage<DelegationScope>();
 
+export function withoutDelegationScope<T>(run: () => T): T {
+  return storage.exit(run);
+}
+
 export function withDelegationScope<T>(scope: DelegationScope, run: () => T): T {
   return storage.run(scope, run);
 }

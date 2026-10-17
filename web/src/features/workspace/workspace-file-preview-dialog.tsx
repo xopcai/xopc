@@ -38,6 +38,7 @@ export interface WorkspaceFilePreviewPanelProps {
   filePath: string | null;
   onClose: () => void;
   targetLine?: number | null;
+  resultRevision?: number;
   /** Project workspace root. Takes priority over chat session / agent workspace. */
   projectId?: string;
   /** Per-chat session workspace (takes priority over `agentId`). */
@@ -50,6 +51,7 @@ export function WorkspaceFilePreviewPanel({
   filePath,
   onClose,
   targetLine,
+  resultRevision,
   projectId,
   conversationId,
   agentId,
@@ -161,6 +163,11 @@ export function WorkspaceFilePreviewPanel({
                   {m.workspace.lastModified}: {formatWorkspaceFileMtime(state.mtimeMs, language)}
                   {targetLine ? ` · Line ${targetLine}` : ''}
                 </p>
+              ) : null}
+              {resultRevision ? (
+                <span className="shrink-0" data-result-revision>
+                  {language === 'zh' ? '成果版本' : 'Result version'} {resultRevision}
+                </span>
               ) : null}
               {state.loading ? <Skeleton className="h-3.5 w-32" /> : null}
               {isEditableText && state.sourceEditMode && state.saveStatus !== 'idle' ? (

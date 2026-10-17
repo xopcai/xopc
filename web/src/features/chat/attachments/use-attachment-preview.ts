@@ -17,7 +17,7 @@ export function useAttachmentPreview({
   const [active, setActive] = useState<MessageAttachment | null>(null);
   const setPreviewPath = useWorkspacePreviewStore((state) => state.setPath);
 
-  const openAttachment = useCallback((attachment: MessageAttachment) => {
+  const openAttachment = useCallback((attachment: MessageAttachment, resultRevision?: number) => {
     const fileConversationId = workspaceConversationId ?? conversationId;
     if (
       layout === 'assistant'
@@ -26,7 +26,7 @@ export function useAttachmentPreview({
       && attachment.workspaceRelativePath?.trim()
       && (projectId?.trim() || fileConversationId?.trim())
     ) {
-      setPreviewPath(attachment.workspaceRelativePath.trim(), null, projectId, fileConversationId);
+      setPreviewPath(attachment.workspaceRelativePath.trim(), null, projectId, fileConversationId, resultRevision);
       return;
     }
     setActive(attachment);

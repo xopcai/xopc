@@ -30,6 +30,7 @@ export const WorkspacePreviewPane = memo(function WorkspacePreviewPane({
       : undefined
   );
   const path = useWorkspacePreviewStore((s) => s.path);
+  const resultRevision = useWorkspacePreviewStore((s) => s.resultRevision);
   const line = useWorkspacePreviewStore((s) => s.line);
   const previewProjectId = useWorkspacePreviewStore((s) => s.projectId);
   const projectId = previewProjectId ?? (!chatConversationId && pathname.startsWith('/chat')
@@ -69,6 +70,7 @@ export const WorkspacePreviewPane = memo(function WorkspacePreviewPane({
       <WorkspaceFilePreviewPanel
         filePath={path}
         targetLine={line}
+        resultRevision={resultRevision}
         projectId={projectId ?? undefined}
         conversationId={chatConversationId}
         agentId={editorAgentId.trim() || undefined}

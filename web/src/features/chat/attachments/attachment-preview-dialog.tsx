@@ -23,6 +23,7 @@ export function AttachmentPreviewDialog({
   open,
   attachment,
   images = [],
+  resultRevision,
   onAttachmentChange,
   authToken,
   conversationId,
@@ -32,6 +33,7 @@ export function AttachmentPreviewDialog({
   open: boolean;
   attachment: MessageAttachment | null;
   images?: MessageAttachment[];
+  resultRevision?: number;
   onAttachmentChange?: (attachment: MessageAttachment) => void;
   authToken?: string;
   conversationId?: string | null;
@@ -201,6 +203,11 @@ export function AttachmentPreviewDialog({
               extractedTextTruncated={resolved.extractedTextTruncated}
               actions={previewActions}
             />
+            {resultRevision ? (
+              <p className="shrink-0 border-t border-edge px-4 py-2 text-xs text-fg-muted" data-result-revision>
+                {language === 'zh' ? '成果版本' : 'Result version'} {resultRevision}
+              </p>
+            ) : null}
             {hasGallery ? (
               <div className="flex shrink-0 items-center justify-center gap-4 border-t border-edge bg-surface-panel px-3 py-2">
                 <button type="button" aria-label={labels.attachmentPreviewPreviousImage}

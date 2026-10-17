@@ -97,6 +97,42 @@ describe('background task allocation', () => {
     expect(updated.contract!.constraints).toContain('Write only within the supplied output directory');
     expect(new TaskRunRepository().getActiveRoot(task.id)!.contractVersion).toBe(updated.latestContractVersion);
   });
+  it('uses one persisted Chinese locale for submission, planning, assignment and execution', async () => {
+    const objective = '核对销售数据并提供报告';
+    const created = new TaskApplicationService().create(TaskCreateRequestSchema.parse({
+      idempotencyKey: 'chinese-task', title: objective, body: 'Read the English sales.csv source.',
+      originConversationId: conversationId,
+      contract: { ...defineTaskContract(objective), acceptancePolicy: 'manual', outputDestinations: [] },
+      activation: { mode: 'allocate', requirements },
+    }));
+    if (!created.ok) throw new Error('Expected submission');
+    const task = created.model.task;
+    expect(task.locale).toBe('zh');
+    const planner = { plan: vi.fn(async () => ({ ...defineTaskContract(objective, 'zh'),
+      acceptanceCriteria: ['报告中的月度合计与源数据一致。'] })) };
+    await new TaskAllocationDispatcher({ context, planner, wake: vi.fn(),
+      decide: async () => ({ kind: 'select', agentId: 'analyst', reason: '擅长销售数据核对。' }),
+    }).drain();
+    expect(planner.plan).toHaveBeenCalledWith(expect.objectContaining({ locale: 'zh' }));
+    const run = new TaskRunRepository().getActiveRoot(task.id)!;
+    const worker = createConversation({ agentId: 'analyst' }, '/tmp');
+    new TaskConversationRepository().activateExecutionSession({ taskId: task.id, runId: run.id,
+      agentId: 'analyst', conversationId: worker.key });
+    expect(TaskRunCoordinator.start({ runId: run.id, fallbackObjective: objective,
+      context: { runId: run.id, taskId: task.id, conversationId: worker.key,
+        channel: 'webchat', origin: 'task', triggerKind: 'system' },
+    })).toBeDefined();
+    const rows = getSqliteDatabase().prepare(`SELECT e.* FROM transcript_entries e
+      JOIN transcripts t ON t.transcript_id = e.transcript_id WHERE t.conversation_id = ?`).all(conversationId);
+    const transcript = JSON.stringify(rows);
+    expect(transcript).toContain('任务已提交，正在分配执行者。');
+    expect(transcript).toContain('已分配给 Data Analyst');
+    expect(transcript).toContain('已进入执行队列。');
+    expect(transcript).toContain('由 Data Analyst 开始执行。');
+    expect(transcript).not.toContain('Task submitted;');
+    expect(transcript).not.toContain('started by analyst');
+  });
+
   it('blocks rather than executing after background capability planning fails', async () => {
     const task = submit('planner-unavailable');
     await new TaskAllocationDispatcher({ context, decide, wake: vi.fn(), planner: { plan: async () => ({
@@ -646,7 +682,7 @@ describe('background task allocation', () => {
     expect(notify).toHaveBeenCalledWith(conversationId, expect.any(String));
     const transcript = getSqliteDatabase().prepare('SELECT e.* FROM transcript_entries e JOIN transcripts t ON t.transcript_id = e.transcript_id WHERE t.conversation_id = ?').all(conversationId);
     expect(JSON.stringify(transcript)).toContain('analyst');
-    expect(JSON.stringify(transcript)).toContain('started by analyst');
+    expect(JSON.stringify(transcript)).toContain('started by Data Analyst');
     expect(JSON.stringify(transcript)).not.toContain('started by undefined');
     expect(getSqliteDatabase().prepare('SELECT reply_status FROM task_result_deliveries WHERE task_run_id = ?').get(run.id)).toMatchObject({ reply_status: 'pending' });
     const board = new TaskCollaborationRepository();

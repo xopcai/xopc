@@ -17,7 +17,7 @@ vi.mock('../../child-agent-factory.js', () => ({ createDelegateChildHandle: (opt
 
 import { createDelegateTool } from '../delegate-tool.js';
 import { resolveDelegationTools, protectDelegatedTool } from '../delegation-policy.js';
-import { createDelegationParentPolicy } from '../delegation-parent-policy.js';
+import { createNoninteractiveToolPolicy } from '../noninteractive-tool-policy.js';
 import { AgentToolsFactory } from '../factory.js';
 import { ConfigSchema } from '../../../config/schema.js';
 import { AgentCatalogRepository } from '../../../agent-catalog/repository.js';
@@ -118,7 +118,7 @@ describe('delegated capabilities', () => {
       }, settings.revision);
     };
     updatePolicy('allow', 1);
-    const policy = createDelegationParentPolicy({ getConfig: () => config });
+    const policy = createNoninteractiveToolPolicy({ getConfig: () => config });
     const call = { toolCall: { id: 'call', name: 'web_search', arguments: {} }, args: {} } as any;
     expect(await policy.beforeToolCall(call)).toBeUndefined();
     expect(await policy.beforeToolCall(call)).toMatchObject({ block: true });
