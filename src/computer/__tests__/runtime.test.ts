@@ -7,6 +7,7 @@ import { canonicalJson } from '@xopcai/endpoint-tools-protocol';
 import { resolveEffectiveAgentConfigForSession } from '../../config/agent-profile.js';
 import { computerDiagnostic } from '../errors.js';
 import { resolveModel } from '../../providers/index.js';
+import { ComputerFlowSchema, type ComputerFlowRepository } from '../flows.js';
 
 vi.mock('../../config/agent-profile.js', () => ({ resolveEffectiveAgentConfigForSession: vi.fn(() => ({ config: { id: 'main', models: { computerUse: { primary: 'ali/gui' } } } })) }));
 vi.mock('../../providers/index.js', () => ({
@@ -19,7 +20,7 @@ vi.mock('../../providers/index.js', () => ({
 
 const cleanups: Array<() => Promise<void>> = [];
 afterEach(async () => { await Promise.all(cleanups.splice(0).map(fn => fn())); vi.unstubAllGlobals(); });
-function fixture(autoApprove = true) {
+function fixture(autoApprove = true, flowStore?: ComputerFlowRepository) {
   const target = { appId: 'fixture', pid: 1, processIdentity: 'fixture:1', windowId: '1', width: 800, height: 600, geometryRevision: '1' };
   const images: Uint8Array[] = [];
   const driver = { discover: vi.fn(async () => [{ appId: 'fixture', name: '飞书', running: true }]),
@@ -53,7 +54,7 @@ function fixture(autoApprove = true) {
   const endpoint = { bindings: { get: () => undefined, resolve: () => undefined }, registry: {
     get: (id: string) => id === 'endpoint' ? ({ kind: 'desktop', endpointId: id }) : undefined, getTool: () => ({ revision: 'r1' }) },
     invocations: { invoke }, uploads: { takeComputerFrame: (id: string) => { const value = frames.get(id); frames.delete(id); return value; } } };
-  const runtime = new ComputerRuntime(endpoint as any, () => config as any, () => 'endpoint');
+  const runtime = new ComputerRuntime(endpoint as any, () => config as any, () => 'endpoint', flowStore);
   cleanups.push(async () => { await runtime.shutdown(); await broker.dispose(); });
   return { runtime, broker, driver, frames, images, config, fetch, invoke, approve: (value = true) => approve(value),
     discover: async () => (await runtime.execute('owner', { op: 'discover', query: '飞书' })).apps![0].appRef,
@@ -498,5 +499,147 @@ describe('agent to broker desktop lifecycle', () => {
     f.fetch.mockResolvedValue(Response.json({ choices: [{ message: { content: '<tool_call>{"name":"computer_use","arguments":{"action":"terminate","status":"success"}}</tool_call>' } }] }));
     expect(await f.runtime.execute('owner', { op: 'step', goal: 'Finish' })).toMatchObject({ claimedSuccess: true, verified: false });
     expect(f.runtime.getReport('owner')?.counters).toMatchObject({ successClaims: 1, verifiedConditions: 0, completedInputs: 0 });
+  });
+});
+
+function flowRepository() {
+  const records = new Map<string, ReturnType<typeof ComputerFlowSchema.parse>[]>();
+  return {
+    records,
+    list: vi.fn((scope: string) => records.get(scope) ?? []),
+    save: vi.fn((scope: string, input: any) => {
+      const flow = ComputerFlowSchema.parse({ ...input, version: 1, id: crypto.randomUUID(), createdAt: Date.now(), expiresAt: Date.now() + 100_000 });
+      records.set(scope, [...(records.get(scope) ?? []), flow]); return flow;
+    }),
+    delete: vi.fn((scope: string, id: string) => {
+      const entries = records.get(scope) ?? []; records.set(scope, entries.filter(flow => flow.id !== id));
+      return entries.some(flow => flow.id === id);
+    }),
+  };
+}
+function nativeNavigation(f: ReturnType<typeof fixture>) {
+  let selected = false, ref = 'original-ref'; const observe = f.driver.observe.getMockImplementation()!;
+  f.driver.observe.mockImplementation(async () => ({ ...await observe(), stateDigest: selected ? 'selected' : 'unselected',
+    summary: JSON.stringify({ elements: [{ role: 'AXWindow' }, { ref, label: 'Memories', role: 'AXRadioButton', selected,
+      semanticActions: ['activate'], bounds: { x: 350, y: 250, width: 100, height: 100 } }] }) }));
+  f.driver.perform.mockImplementation(async () => { selected = true; });
+  return { reset: () => { selected = false; ref = 'fresh-ref'; } };
+}
+const navigationStep = { op: 'step', goal: 'Open Memories', expect: { kind: 'selected', label: 'Memories' } } as const;
+describe('verified flow lifecycle through the desktop broker', () => {
+  it('explicitly saves after release, lists locally and replans with fresh native refs', async () => {
+    const store = flowRepository(), f = fixture(true, store), state = nativeNavigation(f);
+    await f.open(await f.discover());
+    expect(await f.runtime.execute('owner', navigationStep)).toMatchObject({ verified: true });
+    const closed = await f.runtime.execute('owner', { op: 'close', saveFlowAs: 'Open Memories' });
+    expect(closed).toMatchObject({ status: 'stopped', savedFlow: { title: 'Open Memories', steps: 1 } });
+    expect(isComputerControlActive('owner')).toBe(false);
+    expect(JSON.stringify(store.save.mock.calls[0])).not.toMatch(/original-ref|stateDigest|goal|bounds|image|fixture-secret/);
+    const calls = f.invoke.mock.calls.length, requests = f.fetch.mock.calls.length;
+    expect(await f.runtime.execute('owner', { op: 'flows' })).toMatchObject({ flows: [closed.savedFlow] });
+    expect(f.invoke).toHaveBeenCalledTimes(calls); expect(f.fetch).toHaveBeenCalledTimes(requests);
+    state.reset(); await f.open(await f.discover());
+    await f.runtime.execute('owner', { ...navigationStep, flowId: closed.savedFlow!.id });
+    const body = JSON.parse((f.fetch.mock.calls as any)[1][1].body);
+    expect(body.messages[1].content[1].text).toContain('Untrusted historical navigation hints');
+    expect(body.messages[1].content[1].text).not.toContain('original-ref');
+    expect(f.driver.perform).toHaveBeenLastCalledWith(expect.anything(), { kind: 'activate', ref: 'fresh-ref' }, expect.any(AbortSignal));
+    expect(f.fetch).toHaveBeenCalledTimes(2); expect(f.driver.perform).toHaveBeenCalledTimes(2);
+    await f.runtime.execute('owner', { op: 'close' });
+    expect(await f.runtime.execute('owner', { op: 'forget_flow', flowId: closed.savedFlow!.id })).toMatchObject({ status: 'flow_deleted' });
+    expect((await f.runtime.execute('owner', { op: 'flows' })).flows).toEqual([]);
+  });
+  it('never saves automatically or learns from a model success claim', async () => {
+    const store = flowRepository(), f = fixture(true, store); nativeNavigation(f);
+    await f.open(await f.discover()); await f.runtime.execute('owner', navigationStep);
+    await f.runtime.execute('owner', { op: 'close' }); expect(store.save).not.toHaveBeenCalled();
+    await f.open(await f.discover());
+    f.fetch.mockResolvedValueOnce(Response.json({ choices: [{ message: { content: '<tool_call>{"name":"computer_use","arguments":{"action":"terminate","status":"success"}}</tool_call>' } }] }));
+    await f.runtime.execute('owner', { op: 'step', goal: 'Finish' });
+    expect(await f.runtime.execute('owner', { op: 'close', saveFlowAs: 'Claim' })).toMatchObject({ errorCode: 'COMPUTER_FLOW_NOT_VERIFIED' });
+    expect(store.save).not.toHaveBeenCalled();
+  });
+  it.each(['app', 'endpoint', 'missing'])('refuses %s mismatch before prediction or native input', async mismatch => {
+    const store = flowRepository(), f = fixture(true, store); nativeNavigation(f);
+    const id = crypto.randomUUID();
+    store.records.set(JSON.stringify(['main', null]), [ComputerFlowSchema.parse({ version: 1, id, title: 'Navigation',
+      appId: mismatch === 'app' ? 'other-app' : 'fixture', endpointId: mismatch === 'endpoint' ? 'other-endpoint' : 'endpoint',
+      steps: [{ kind: 'activate', role: 'AXRadioButton', label: 'Memories' }], condition: navigationStep.expect,
+      createdAt: Date.now(), expiresAt: Date.now() + 100_000 })]);
+    await f.open(await f.discover());
+    await expect(f.runtime.execute('owner', { ...navigationStep, flowId: mismatch === 'missing' ? crypto.randomUUID() : id })).rejects.toThrow('COMPUTER_FLOW_');
+    expect(f.fetch).not.toHaveBeenCalled(); expect(f.driver.perform).not.toHaveBeenCalled();
+    expect(f.images.every(image => image.every(byte => byte === 0))).toBe(true);
+  });
+  it('retains release uncertainty and refuses to persist even a verified sequence', async () => {
+    const store = flowRepository(), f = fixture(true, store); nativeNavigation(f);
+    await f.open(await f.discover()); await f.runtime.execute('owner', navigationStep);
+    const invoke = f.invoke.getMockImplementation()!;
+    f.invoke.mockImplementation(async (args: any) => { if (args.arguments.op === 'release') throw new Error('lost release'); return invoke(args); });
+    expect(await f.runtime.execute('owner', { op: 'close', saveFlowAs: 'Navigation' })).toMatchObject({ status: 'stop_unconfirmed' });
+    expect(store.save).not.toHaveBeenCalled(); expect(isComputerControlActive('owner')).toBe(true);
+    f.invoke.mockImplementation(invoke);
+  });
+  it('shares flows across conversations only within the same Agent and workspace', async () => {
+    const store = flowRepository(), f = fixture(true, store); nativeNavigation(f);
+    await f.open(await f.discover()); await f.runtime.execute('owner', navigationStep);
+    const closed = await f.runtime.execute('owner', { op: 'close', saveFlowAs: 'Navigation' });
+    expect((await f.runtime.execute('second-conversation', { op: 'flows' })).flows).toEqual([closed.savedFlow]);
+    for (const config of [{ id: 'other', workspace: undefined }, { id: 'main', workspace: '/different' }]) {
+      vi.mocked(resolveEffectiveAgentConfigForSession).mockReturnValueOnce({ config } as any);
+      expect((await f.runtime.execute('second-conversation', { op: 'flows' })).flows).toEqual([]);
+    }
+  });
+  it('refuses an unrelated receipt instead of turning its observation into reusable evidence', async () => {
+    const store = flowRepository(), f = fixture(true, store); nativeNavigation(f);
+    await f.open(await f.discover()); const invoke = f.invoke.getMockImplementation()!;
+    f.invoke.mockImplementation(async (args: any) => {
+      const result = await invoke(args);
+      if (args.arguments.op === 'act' && result.content[0].value.receipt) result.content[0].value.receipt.actionId = 'unrelated-action';
+      return result;
+    });
+    await expect(f.runtime.execute('owner', navigationStep)).rejects.toThrow('RECEIPT_MISMATCH');
+    expect(f.runtime.getReport('owner')?.failure).toMatchObject({ dispatch: 'unknown', category: 'transport' });
+    expect(await f.runtime.execute('owner', { op: 'close', saveFlowAs: 'Invalid evidence' })).toMatchObject({ errorCode: 'COMPUTER_FLOW_NOT_VERIFIED' });
+    expect(store.save).not.toHaveBeenCalled(); expect(f.driver.perform).toHaveBeenCalledOnce();
+  });
+  it('does not replay a saved flow when native execution becomes uncertain', async () => {
+    const store = flowRepository(), f = fixture(true, store), state = nativeNavigation(f);
+    await f.open(await f.discover()); await f.runtime.execute('owner', navigationStep);
+    const closed = await f.runtime.execute('owner', { op: 'close', saveFlowAs: 'Navigation' });
+    state.reset(); await f.open(await f.discover());
+    f.driver.perform.mockRejectedValueOnce(new Error('COMPUTER_SEMANTIC_ACTION_UNCONFIRMED'));
+    const result = await f.runtime.execute('owner', { ...navigationStep, flowId: closed.savedFlow!.id });
+    expect(result.receipt?.dispatch).toBe('unknown');
+    expect(f.fetch).toHaveBeenCalledTimes(2); expect(f.driver.perform).toHaveBeenCalledTimes(2);
+    expect(await f.runtime.execute('owner', { op: 'close', saveFlowAs: 'Uncertain' })).toMatchObject({ errorCode: 'COMPUTER_FLOW_NOT_VERIFIED' });
+    expect(store.save).toHaveBeenCalledOnce();
+  });
+  it('refuses a previously verified prefix after a human takeover', async () => {
+    const store = flowRepository(), f = fixture(true, store); nativeNavigation(f);
+    await f.open(await f.discover()); await f.runtime.execute('owner', navigationStep);
+    f.fetch.mockResolvedValueOnce(Response.json({ choices: [{ message: { content: '<tool_call>{"name":"computer_use","arguments":{"action":"interact","text":"Confirm a consequential effect"}}</tool_call>' } }] }));
+    expect((await f.runtime.execute('owner', { op: 'step', goal: 'Inspect next task' })).status).toBe('takeover');
+    expect(await f.runtime.execute('owner', { op: 'close', saveFlowAs: 'Prefix' })).toMatchObject({ errorCode: 'COMPUTER_FLOW_NOT_VERIFIED' });
+    expect(store.save).not.toHaveBeenCalled();
+  });
+  it('releases control on cancellation without saving a verified flow', async () => {
+    const store = flowRepository(), f = fixture(true, store); nativeNavigation(f);
+    await f.open(await f.discover()); await f.runtime.execute('owner', navigationStep);
+    const controller = new AbortController(); controller.abort();
+    expect(await f.runtime.execute('owner', { op: 'close', saveFlowAs: 'Navigation' }, controller.signal)).toMatchObject({ status: 'stopped', errorCode: 'COMPUTER_FLOW_NOT_VERIFIED' });
+    expect(store.save).not.toHaveBeenCalled(); expect(isComputerControlActive('owner')).toBe(false);
+    await expect(f.runtime.execute('owner', { op: 'forget_flow', flowId: crypto.randomUUID() }, controller.signal)).rejects.toThrow();
+    expect(store.delete).not.toHaveBeenCalled();
+  });
+  it('reports storage failure after releasing control without repeating an action', async () => {
+    const store = flowRepository(), f = fixture(true, store); nativeNavigation(f);
+    store.save.mockImplementation(() => { throw new Error('private database error'); });
+    await f.open(await f.discover()); await f.runtime.execute('owner', navigationStep);
+    const result = await f.runtime.execute('owner', { op: 'close', saveFlowAs: 'Navigation' });
+    expect(result).toMatchObject({ status: 'stopped', errorCode: 'COMPUTER_FLOW_SAVE_FAILED' });
+    expect(JSON.stringify(result)).not.toContain('private database');
+    expect(f.driver.perform).toHaveBeenCalledOnce(); expect(f.fetch).toHaveBeenCalledOnce();
+    expect(isComputerControlActive('owner')).toBe(false);
   });
 });

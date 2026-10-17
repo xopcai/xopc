@@ -53,3 +53,11 @@ For native controls that advertise accessibility actions, xopc can activate the 
 Structured GUI models can request these actions by element reference. Coordinate models also benefit: an unambiguous single click on a supported native control is converted before authorization into an element action. Double clicks, overlapping targets, incomplete accessibility observations and web content retain coordinate handling. A refused or uncertain semantic action is never automatically retried with coordinates. Observe the actual result before continuing; a successful native call does not prove that a save or submission succeeded.
 
 Native activation and the real TextEdit context menu have been verified on macOS. See [validation evidence and reproduction](./design/technical/computer-use-native-semantics-validation.md) for the tested scope and live test commands.
+
+## Reuse verified navigation
+
+Ask xopc to remember a successfully verified native navigation routine, such as opening a uniquely labelled tab. Saving is explicit: `computer_use` closes with `saveFlowAs`. It releases desktop control first and saves only a complete native activate/context-menu sequence ending with a verified selected condition. A model saying “done” is insufficient. Typing, coordinates, key shortcuts, ambiguous controls, failures, takeovers and uncertain execution are excluded from this first version.
+
+`flows` lists saved titles/IDs for the same Agent and workspace; `step` accepts a returned `flowId` alongside the **current** goal and completion condition. Reuse supplies historical hints to the selected GUI model and re-grounds a new action using a fresh observation. It preserves local authorization, app/device scope, existing budgets and the rule against retrying uncertain input. It does not replay a script or certify a business outcome. `forget_flow` removes a saved record locally.
+
+Flows survive restart in the existing private SQLite database, expire after thirty days and are capped at thirty-two per Agent/workspace. Only titles, native roles/labels, action kinds, selected condition and app/device identity are retained. No screenshots, typed values, goals, coordinates or old element refs are stored. Choose non-sensitive titles and controls. See [capture/reuse contract and validation](./design/technical/computer-use-verified-flows.md).

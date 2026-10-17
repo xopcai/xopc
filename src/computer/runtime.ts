@@ -13,6 +13,7 @@ import { createComputerModelAdapter, predictComputerStep, readComputerJson, type
 import { enterComputerControl, leaveComputerControl } from './control-guard.js';
 import { computerModelProfile, ComputerServiceLimitsSchema, type ComputerServiceLimits } from './model-policy.js';
 import { groundComputerAction } from './semantic-actions.js';
+import { ComputerFlowCapture, ComputerFlowStore, computerFlowMetadata, computerFlowHint, type ComputerFlowRepository } from './flows.js';
 import { ComputerSessionDiagnostics, type ComputerSessionReport } from './diagnostics.js';
 import { ComputerDiagnosticSchema, ComputerOperationError, computerDiagnostic, computerRecovery } from './errors.js';
 import { createLogger } from '../utils/logger.js';
@@ -36,8 +37,9 @@ type Session = {
   rescues: number; rescueLimit: number;
   pending?: ActionEnvelope; controller: AbortController;
   task: ComputerTaskState;
+  flowCapture: ComputerFlowCapture; flowScope: string; lastFlowId?: string;
   diagnostics: ComputerSessionDiagnostics;
-  pendingContext?: { goal: string; before: z.infer<typeof ComputerObservationSchema>; expectation?: ComputerExpectation };
+  pendingContext?: { goal: string; before: z.infer<typeof ComputerObservationSchema>; expectation?: ComputerExpectation; flowId?: string };
   serviceLimits?: ComputerServiceLimits;
 };
 export const ComputerUseInputSchema = z.discriminatedUnion('op', [
@@ -45,8 +47,10 @@ export const ComputerUseInputSchema = z.discriminatedUnion('op', [
   z.object({ op: z.literal('open'), appRef: z.string().min(1).max(200), windowRef: z.string().min(1).max(200).optional(),
     mode: z.enum(['observe', 'control']), prepare: z.boolean() }).strict(),
   z.object({ op: z.literal('observe'), question: z.string().min(1).max(4000).optional(), expect: ComputerExpectationSchema.optional() }).strict(),
-  z.object({ op: z.literal('step'), goal: z.string().min(1).max(4000), expect: ComputerExpectationSchema.optional() }).strict(),
-  z.object({ op: z.literal('close') }).strict(),
+  z.object({ op: z.literal('step'), goal: z.string().min(1).max(4000), expect: ComputerExpectationSchema.optional(), flowId: z.uuid().optional() }).strict(),
+  z.object({ op: z.literal('close'), saveFlowAs: z.string().trim().min(1).max(160).optional() }).strict(),
+  z.object({ op: z.literal('flows') }).strict(),
+  z.object({ op: z.literal('forget_flow'), flowId: z.uuid() }).strict(),
   z.object({ op: z.literal('report') }).strict(),
 ]);
 export type ComputerUseInput = z.infer<typeof ComputerUseInputSchema>;
@@ -64,6 +68,8 @@ export interface ComputerPublicResult {
   windows?: z.infer<typeof ComputerWindowSchema>[];
   reportId?: string;
   report?: ComputerSessionReport;
+  flows?: ReturnType<typeof computerFlowMetadata>[];
+  savedFlow?: ReturnType<typeof computerFlowMetadata>;
 }
 
 export class ComputerRuntime {
@@ -72,11 +78,18 @@ export class ComputerRuntime {
   private readonly reports = new Map<string, { diagnostics: ComputerSessionDiagnostics; expiresAt: number }>();
   private readonly openingReports = new Map<string, ComputerSessionDiagnostics>();
   constructor(private readonly endpoints: EndpointToolRuntime, private readonly getConfig: () => Config,
-    private readonly getTurnEndpoint?: (owner: string) => string | undefined) {}
+    private readonly getTurnEndpoint?: (owner: string) => string | undefined,
+    private readonly flowStore: ComputerFlowRepository = new ComputerFlowStore()) {}
 
   async execute(owner: string, input: ComputerUseInput, signal?: AbortSignal): Promise<ComputerPublicResult> {
     input = ComputerUseInputSchema.parse(input);
     if (!owner) throw new Error('COMPUTER_CONVERSATION_REQUIRED');
+    if (input.op === 'flows' || input.op === 'forget_flow') {
+      signal?.throwIfAborted();
+      const scope = this.flowScope(owner);
+      return input.op === 'flows' ? { status: 'flows', sessionId: 'none', flows: this.flowStore.list(scope).map(computerFlowMetadata) }
+        : { status: this.flowStore.delete(scope, input.flowId) ? 'flow_deleted' : 'flow_not_found', sessionId: 'none' };
+    }
     if (input.op === 'report') {
       const report = this.getReport(owner);
       return { status: report ? 'report' : 'no_report', sessionId: report?.sessionId ?? 'none', ...(report ? { report } : {}) };
@@ -84,10 +97,26 @@ export class ComputerRuntime {
     if (input.op === 'close') {
       const session = this.sessions.get(owner);
       const sessionId = session?.id ?? 'none';
+      const canSaveFlow = session && !session.pending && !this.operations.has(owner) && !signal?.aborted && session.mode === 'control';
       const handoff = { recentActions: (session?.task.history ?? []).map(({ goal, action, dispatch, outcome, verification }) => ({ goal, action, dispatch, outcome, verification })) };
       const released = await this.close(owner);
       const report = this.getReport(owner);
+      let savedFlow: ComputerPublicResult['savedFlow'];
+      if (input.saveFlowAs && released) {
+        if (!canSaveFlow || !report || report.failure || report.counters.unknownDispatches || report.counters.takeovers) {
+          return { status: 'stopped', sessionId, errorCode: 'COMPUTER_FLOW_NOT_VERIFIED', report,
+            nextAction: 'Control was released. Save only a complete native navigation sequence with a final verified selected condition and no failure or takeover.' };
+        }
+        let draft;
+        try { draft = session.flowCapture.finish(input.saveFlowAs, session.endpointId); }
+        catch { return { status: 'stopped', sessionId, errorCode: 'COMPUTER_FLOW_NOT_VERIFIED', report,
+          nextAction: 'Control was released. Only a complete native navigation sequence with non-sensitive labels and a final verified selected condition can be saved.' }; }
+        try { savedFlow = computerFlowMetadata(this.flowStore.save(session.flowScope, draft)); }
+        catch { return { status: 'stopped', sessionId, errorCode: 'COMPUTER_FLOW_SAVE_FAILED', report,
+          nextAction: 'Control was released; no reusable flow was confirmed saved. Check native verification, non-sensitive labels and local storage. Do not repeat desktop input to save a flow.' }; }
+      }
       return released ? { status: 'stopped', sessionId, handoff,
+        ...(savedFlow ? { savedFlow } : {}),
         ...(report ? { report } : {}),
         nextAction: 'Desktop control is released. Continue with an appropriate authorized tool; this does not permit bypassing a desktop refusal.' }
         : { status: 'stop_unconfirmed', sessionId, errorCode: 'COMPUTER_RELEASE_UNCONFIRMED', report, nextAction: computerRecovery('COMPUTER_RELEASE_UNCONFIRMED') };
@@ -116,7 +145,11 @@ export class ComputerRuntime {
       if (this.openingReports.get(owner) === diagnostics) this.openingReports.delete(owner);
     }
   }
-  private async executeInput(owner: string, input: Exclude<ComputerUseInput, { op: 'close' | 'report' }>, signal: AbortSignal,
+  private flowScope(owner: string): string {
+    const effective = resolveEffectiveAgentConfigForSession(owner).config;
+    return JSON.stringify([effective.id, effective.workspace]);
+  }
+  private async executeInput(owner: string, input: Exclude<ComputerUseInput, { op: 'close' | 'report' | 'flows' | 'forget_flow' }>, signal: AbortSignal,
     diagnostics?: ComputerSessionDiagnostics): Promise<ComputerPublicResult> {
     signal.throwIfAborted();
     const config = this.getConfig();
@@ -162,6 +195,7 @@ export class ComputerRuntime {
           ...(deployment?.origin ? { upstreamOrigin: deployment.origin } : {}) },
         createdAt: Date.now(), actions: 0, modelRequests: 0, rescues: 0, rescueLimit: config.computer.maxRescuesPerSession,
         controller: new AbortController(), task: new ComputerTaskState(),
+        flowCapture: new ComputerFlowCapture(), flowScope: JSON.stringify([effective.id, effective.workspace]),
         diagnostics: diagnostics!, serviceLimits };
       s.diagnostics.bind(s.id);
       this.sessions.set(owner, s);
@@ -197,9 +231,14 @@ export class ComputerRuntime {
         const result = await this.dispatchAction(s, s.pending, signal);
         if (!this.isUndispatchedChange(result) || !context) return result;
         // Approval resumes the original goal, never a replacement supplied while waiting.
-        input = { op: 'step', goal: context.goal, expect: context.expectation };
+        input = { op: 'step', goal: context.goal, expect: context.expectation, flowId: context.flowId };
         this.reserveRescue(s, signal);
       } else if (status.value.status !== 'ready') return this.present(status.value);
+      // Explicit reuse starts a fresh model decision, never a queued action from a previous call.
+      if (input.op === 'step') {
+        if (input.flowId || s.lastFlowId) s.adapter.reset?.();
+        s.lastFlowId = input.flowId;
+      }
       while (true) {
         signal.throwIfAborted();
         if (Date.now() - s.createdAt >= config.computer.maxSessionDurationMs) throw new Error('COMPUTER_SESSION_BUDGET');
@@ -218,11 +257,19 @@ export class ComputerRuntime {
           if (input.op === 'step' && s.actions >= config.computer.maxActionsPerSession) throw new Error('COMPUTER_ACTION_BUDGET');
           const o = observed.value.observation;
           if (!o || !observed.frame || !observed.mimeType) throw new Error('COMPUTER_FRAME_REQUIRED');
+          let flowHint: string | undefined;
+          if (input.op === 'step' && input.flowId) {
+            const flowId = input.flowId;
+            const flow = this.flowStore.list(s.flowScope).find(item => item.id === flowId);
+            if (!flow) throw new Error('COMPUTER_FLOW_NOT_FOUND');
+            if (flow.endpointId !== s.endpointId || flow.appId !== o.target.appId) throw new Error('COMPUTER_FLOW_TARGET_MISMATCH');
+            flowHint = computerFlowHint(flow);
+          }
           phase = 'model';
           const predictionInput = input;
           const proposal = await s.diagnostics.measure('model', () => predictComputerStep(s.adapter, { goal: predictionInput.op === 'observe' ? predictionInput.question! : predictionInput.goal, readOnly: predictionInput.op === 'observe', image: observed.frame, mimeType: observed.mimeType,
             width: o.imageWidth, height: o.imageHeight, summary: o.summary, stateDigest: o.stateDigest,
-            history: s.task.history, expectation: predictionInput.expect, onModelRequest: () => s!.diagnostics.count('modelRequests') }, () => {
+            history: s.task.history, expectation: predictionInput.expect, flowHint, onModelRequest: () => s!.diagnostics.count('modelRequests') }, () => {
             if (++s!.modelRequests > config.computer.maxModelRequests) throw new Error('COMPUTER_MODEL_BUDGET');
             s!.diagnostics.count('predictionAttempts');
           }, signal));
@@ -236,7 +283,7 @@ export class ComputerRuntime {
           const e: ActionEnvelope = { actionId: randomUUID(), sessionId: s.id, observationId: o.id, brokerEpoch: o.brokerEpoch,
             generation: o.generation, grantId: observed.value.grantId!, deadlineAt: Date.now() + 120_000, action };
           s.diagnostics.phase = 'dispatch'; s.task.assertProgress(action, o);
-          s.pendingContext = { goal: input.goal, before: o, expectation: input.expect };
+          s.pendingContext = { goal: input.goal, before: o, expectation: input.expect, flowId: input.flowId };
           phase = 'dispatch';
           const result = await this.dispatchAction(s, e, signal);
           if (!this.isUndispatchedChange(result)) return result;
@@ -277,6 +324,10 @@ export class ComputerRuntime {
       s.diagnostics.propose(envelope.actionId, envelope.action.kind);
     }
     const reply = await this.send(s, { op: 'act', sessionId: s.id, owner: s.owner, envelope }, signal);
+    if (reply.value.receipt && reply.value.receipt.actionId !== envelope.actionId) {
+      reply.frame?.fill(0);
+      throw new Error('COMPUTER_RECEIPT_MISMATCH');
+    }
     if (reply.value.status !== 'pending_action') s.pending = undefined;
     reply.frame?.fill(0);
     if (reply.value.status === 'ready' && reply.value.errorCode === 'COMPUTER_OBSERVATION_CHANGED' && !reply.value.receipt) {
@@ -290,7 +341,10 @@ export class ComputerRuntime {
     const failureCode = reply.value.errorCode ?? (reply.value.receipt?.dispatch === 'unknown' || reply.value.receipt?.dispatch === 'started'
       ? reply.value.receipt.errorCode ?? 'COMPUTER_NATIVE_ACTION_FAILED' : undefined);
     if (failureCode) s.diagnostics.fail(new Error(failureCode), 'dispatch', reply.value.receipt?.dispatch ?? 'notStarted');
-    if (context && reply.value.receipt) s.task.record(context.goal, envelope.action, context.before, reply.value.receipt, reply.value.observation, verification);
+    if (context && reply.value.receipt) {
+      s.task.record(context.goal, envelope.action, context.before, reply.value.receipt, reply.value.observation, verification);
+      s.flowCapture.record(envelope.action, context.before, reply.value.receipt, reply.value.observation, context.expectation, verification);
+    }
     if (!s.pending) s.pendingContext = undefined;
     if (reply.value.status === 'stopped') this.forget(s);
     return { ...this.present(reply.value), verification, verified: verification?.status === 'satisfied' && !verification.preexisting,
