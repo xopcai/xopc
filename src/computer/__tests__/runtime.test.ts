@@ -60,6 +60,53 @@ function fixture(autoApprove = true) {
     open: async (appRef: string, mode: 'observe' | 'control' = 'control') => runtime.execute('owner', { op: 'open', appRef, mode, prepare: false }) };
 }
 describe('agent to broker desktop lifecycle', () => {
+  it('makes reports local, conversation-scoped and readable after release without reconnecting', async () => {
+    const f = fixture(); await f.open(await f.discover());
+    await f.runtime.execute('owner', { op: 'step', goal: 'Private task text' });
+    const closed = await f.runtime.execute('owner', { op: 'close' });
+    expect(closed.report).toMatchObject({ status: 'released', counters: { modelRequests: 1, predictionAttempts: 1,
+      proposedInputs: 1, completedInputs: 1, unchangedInputs: 1, verifiedConditions: 0 } });
+    const before = f.invoke.mock.calls.length;
+    expect((await f.runtime.execute('owner', { op: 'report' })).report).toEqual(closed.report);
+    expect((await f.runtime.execute('other', { op: 'report' })).status).toBe('no_report');
+    expect(f.invoke).toHaveBeenCalledTimes(before);
+    expect(JSON.stringify(closed.report)).not.toMatch(/Private task|fixture-secret|stateDigest|image|appRef|actionPreview/);
+    expect(isComputerControlActive('owner')).toBe(false);
+  });
+  it('retains model-format failure attribution, both actual calls and zero dispatched inputs', async () => {
+    const f = fixture(); await f.open(await f.discover());
+    f.fetch.mockResolvedValue(Response.json({ choices: [{ message: { content: 'private malformed response' } }] }));
+    await expect(f.runtime.execute('owner', { op: 'step', goal: 'Private goal' })).rejects.toThrow();
+    const report = f.runtime.getReport('owner');
+    expect(report).toMatchObject({ status: 'released', counters: { modelRequests: 2, predictionAttempts: 2, completedInputs: 0 },
+      failure: { phase: 'model', category: 'model', dispatch: 'notStarted' } });
+    expect(JSON.stringify(report)).not.toMatch(/private|Private/);
+  });
+  it('reports a lost act reply as uncertain and never retries it', async () => {
+    const f = fixture(); await f.open(await f.discover());
+    const invoke = f.invoke.getMockImplementation()!;
+    f.invoke.mockImplementation(async (args: any) => {
+      const result = await invoke(args);
+      if (args.arguments.op === 'act') throw new Error('private socket error');
+      return result;
+    });
+    await expect(f.runtime.execute('owner', { op: 'step', goal: 'Click' })).rejects.toThrow();
+    expect(f.runtime.getReport('owner')).toMatchObject({ status: 'released', counters: { unknownDispatches: 1, completedInputs: 0 },
+      failure: { category: 'transport', phase: 'dispatch', dispatch: 'unknown' } });
+    expect(f.driver.perform).toHaveBeenCalledOnce();
+  });
+  it('retains setup failures and bounds completed reports by count and expiry', async () => {
+    const f = fixture();
+    const config = resolveEffectiveAgentConfigForSession as ReturnType<typeof vi.fn>;
+    for (let i = 0; i < 33; i++) {
+      config.mockReturnValueOnce({ config: { id: 'main', models: {} } });
+      await expect(f.runtime.execute(`owner-${i}`, { op: 'open', appRef: 'unused', mode: 'observe', prepare: false })).rejects.toThrow('MODEL_REQUIRED');
+    }
+    expect(f.runtime.getReport('owner-0')).toBeUndefined();
+    expect(f.runtime.getReport('owner-32')).toMatchObject({ failure: { phase: 'open', category: 'model' } });
+    const now = Date.now(); const clock = vi.spyOn(Date, 'now').mockReturnValue(now + 31 * 60_000);
+    try { expect(f.runtime.getReport('owner-32')).toBeUndefined(); } finally { clock.mockRestore(); }
+  });
   it('grounds a coordinate model prediction before authorization and retains the actual semantic action in history', async () => {
     const f = fixture();
     const observe = f.driver.observe.getMockImplementation()!;
@@ -178,6 +225,8 @@ describe('agent to broker desktop lifecycle', () => {
     expect(result.receipt?.dispatch).toBe('completed');
     expect(f.fetch).toHaveBeenCalledTimes(2); expect(f.driver.perform).toHaveBeenCalledTimes(1);
     expect(result.budget?.actionsRemaining).toBe(1);
+    expect(f.runtime.getReport('owner')?.counters).toMatchObject({ observationChanges: 1, modelRequests: 2,
+      predictionAttempts: 2, proposedInputs: 2, completedInputs: 1, unknownDispatches: 0 });
   });
   it('reports the model stage, clears screenshots and releases the session on raw network errors', async () => {
     const f = fixture(); await f.open(await f.discover());
@@ -287,6 +336,7 @@ describe('agent to broker desktop lifecycle', () => {
     expect(f.driver.perform).not.toHaveBeenCalled();
     const result = await f.runtime.execute('owner', { op: 'step', goal: 'Continue', expect: { kind: 'text', text: 'Button' } });
     expect(f.driver.perform).toHaveBeenCalledTimes(1); expect(f.fetch).toHaveBeenCalledTimes(1);
+    expect(f.runtime.getReport('owner')?.counters).toMatchObject({ proposedInputs: 1, completedInputs: 1, modelRequests: 1 });
     expect(result.receipt).toMatchObject({ dispatch: 'completed', outcome: 'unknown' });
     expect(result.verification?.status).toBe('not_met');
     expect(JSON.stringify(result)).not.toMatch(/fixture-secret|base64|image\/png/);
@@ -300,5 +350,12 @@ describe('agent to broker desktop lifecycle', () => {
     await expect(f.runtime.execute('owner', { op: 'step', goal: 'Again' })).rejects.toThrow('ACTION_BUDGET');
     expect(f.driver.perform).toHaveBeenCalledTimes(1); expect(f.fetch).toHaveBeenCalledTimes(1);
     expect(isComputerControlActive('owner')).toBe(false);
+    expect(f.runtime.getReport('owner')?.failure).toMatchObject({ category: 'budget', dispatch: 'notStarted' });
+  });
+  it('records a model completion claim separately from verified results', async () => {
+    const f = fixture(); await f.open(await f.discover());
+    f.fetch.mockResolvedValue(Response.json({ choices: [{ message: { content: '<tool_call>{"name":"computer_use","arguments":{"action":"terminate","status":"success"}}</tool_call>' } }] }));
+    expect(await f.runtime.execute('owner', { op: 'step', goal: 'Finish' })).toMatchObject({ claimedSuccess: true, verified: false });
+    expect(f.runtime.getReport('owner')?.counters).toMatchObject({ successClaims: 1, verifiedConditions: 0, completedInputs: 0 });
   });
 });

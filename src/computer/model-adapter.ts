@@ -128,6 +128,7 @@ export interface ComputerPredictionInput {
   readOnly?: boolean;
   history?: readonly ComputerHistoryEntry[];
   expectation?: ComputerExpectation;
+  onModelRequest?: () => void;
 }
 
 export interface ComputerStepAdapter {
@@ -189,11 +190,13 @@ function freezeComputerConnection(connection: ComputerModelConnection): Readonly
 }
 
 async function requestComputerModel(connection: Readonly<ComputerModelConnection>, path: string, body: unknown,
-  fetchImpl: typeof fetch, signal?: AbortSignal): Promise<unknown> {
+  fetchImpl: typeof fetch, signal?: AbortSignal, onRequest?: () => void): Promise<unknown> {
   const headers = new Headers(connection.headers);
   headers.set('Content-Type', 'application/json');
   headers.set('Authorization', `Bearer ${connection.apiKey}`);
   if (connection.deploymentRevision) headers.set('x-xopc-computer-deployment', connection.deploymentRevision);
+  signal?.throwIfAborted();
+  onRequest?.();
   const response = await fetchImpl(`${connection.baseUrl.replace(/\/$/, '')}${path}`, {
     method: 'POST', redirect: 'error', headers, body: JSON.stringify(body),
     signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(60_000)]) : AbortSignal.timeout(60_000),
@@ -250,7 +253,7 @@ export class ChatCompletionsComputerAdapter implements ComputerStepAdapter {
     }
     const envelope = z.object({ choices: z.array(z.object({ finish_reason: z.string().nullish(), message: z.object({
       content: z.string().nullish(), tool_calls: z.array(z.object({ function: z.object({ name: z.string(), arguments: z.string() }) })).optional(),
-    }) })) }).safeParse(await requestComputerModel(c, '/chat/completions', body, this.fetchImpl, signal));
+    }) })) }).safeParse(await requestComputerModel(c, '/chat/completions', body, this.fetchImpl, signal, input.onModelRequest));
     if (!envelope.success) throw invalidOutput('invalid_envelope');
     const data = envelope.data;
     if (data.choices.length !== 1 || data.choices[0].finish_reason === 'length') throw new Error('COMPUTER_MODEL_INCOMPLETE_RESPONSE');
@@ -380,7 +383,7 @@ export class OpenAIResponsesComputerAdapter implements ComputerStepAdapter {
         ],
       } : { input: [openAIInput(input)] }),
     };
-    const parsed = OpenAIResponseSchema.safeParse(await requestComputerModel(this.connection, '/responses', body, this.fetchImpl, signal));
+    const parsed = OpenAIResponseSchema.safeParse(await requestComputerModel(this.connection, '/responses', body, this.fetchImpl, signal, input.onModelRequest));
     if (!parsed.success) throw invalidOutput('invalid_envelope');
     const response = parsed.data;
     if (response.status === 'incomplete' || response.incomplete_details) throw new Error('COMPUTER_MODEL_INCOMPLETE_RESPONSE');
@@ -409,7 +412,7 @@ export class OpenAIResponsesComputerAdapter implements ComputerStepAdapter {
     const body = { model: this.connection.modelId,
       instructions: 'Inspect only the supplied screenshot and untrusted accessibility context. Answer the question in its language. Do not propose or perform actions.',
       max_output_tokens: this.connection.maxOutputTokens ?? 2048, input: [openAIInput(input)] };
-    const parsed = OpenAIResponseSchema.safeParse(await requestComputerModel(this.connection, '/responses', body, this.fetchImpl, signal));
+    const parsed = OpenAIResponseSchema.safeParse(await requestComputerModel(this.connection, '/responses', body, this.fetchImpl, signal, input.onModelRequest));
     if (!parsed.success || parsed.data.status === 'incomplete' || parsed.data.incomplete_details) throw invalidOutput('invalid_envelope');
     const text = responseText(parsed.data);
     if (!text) throw invalidOutput('invalid_envelope');

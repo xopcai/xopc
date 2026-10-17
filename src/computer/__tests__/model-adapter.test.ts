@@ -238,21 +238,25 @@ describe('OpenAI Responses computer adapter', () => {
   });
 
   it('serializes a native action batch through the one-action broker boundary', async () => {
+    const onModelRequest = vi.fn();
+    const observedInput = { ...input, onModelRequest };
     const fetch = vi.fn()
       .mockResolvedValueOnce(Response.json({ id: 'resp_1', status: 'completed', output: [{ type: 'computer_call', call_id: 'call_1', actions: [
         { type: 'click', button: 'left', x: 40, y: 50 }, { type: 'type', text: 'penguin' },
       ] }] }))
       .mockResolvedValueOnce(Response.json({ id: 'resp_2', status: 'completed', output_text: 'Done', output: [] }));
     const adapter = new OpenAIResponsesComputerAdapter(connection, fetch);
-    const click = (await adapter.predict(input) as any).action;
+    const click = (await adapter.predict(observedInput) as any).action;
     expect(click.kind).toBe('click');
-    const typed = (await adapter.predict({ ...input, history: [{ goal: input.goal, action: 'click', actionPreview: JSON.stringify(click),
+    const typed = (await adapter.predict({ ...observedInput, history: [{ goal: input.goal, action: 'click', actionPreview: JSON.stringify(click),
       dispatch: 'completed', outcome: 'unknown', after: '', afterStateDigest: input.stateDigest }] }) as any).action;
     expect(typed).toEqual({ kind: 'typeText', text: 'penguin', point: { x: 40, y: 50 } });
     expect(fetch).toHaveBeenCalledTimes(1);
-    await expect(adapter.predict({ ...input, history: [{ goal: input.goal, action: 'typeText', actionPreview: JSON.stringify(typed),
+    expect(onModelRequest).toHaveBeenCalledTimes(1);
+    await expect(adapter.predict({ ...observedInput, history: [{ goal: input.goal, action: 'typeText', actionPreview: JSON.stringify(typed),
       dispatch: 'completed', outcome: 'unknown', after: '', afterStateDigest: input.stateDigest }] })).resolves.toEqual({ kind: 'answer', text: 'Done' });
     expect(fetch).toHaveBeenCalledTimes(2);
+    expect(onModelRequest).toHaveBeenCalledTimes(2);
     const continuation = JSON.parse(fetch.mock.calls[1][1].body);
     expect(continuation.previous_response_id).toBe('resp_1');
     expect(continuation.input[0]).toMatchObject({ type: 'computer_call_output', call_id: 'call_1',
