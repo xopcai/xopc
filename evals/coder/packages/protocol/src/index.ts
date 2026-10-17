@@ -141,11 +141,18 @@ export interface AnswerContainsGraderSpec extends GraderPolicy {
 
 export type GraderSpec = CommandGraderSpec | UnchangedGraderSpec | FileContainsGraderSpec | AnswerContainsGraderSpec;
 
+export interface FollowUp {
+  message: string;
+  /** Harness fault injection between completed turns; existing regular files only. */
+  removeFiles?: string[];
+}
+
 export interface EvalCase {
   id: string;
   title?: string;
   repo: RepoSpec;
   task: string;
+  followUps?: FollowUp[];
   /** Environment/bootstrap commands. They must leave tracked source files unchanged. */
   prepare?: string[];
   /** Trusted commands that seed the task fixture and are committed before the agent runs. */

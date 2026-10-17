@@ -1,4 +1,6 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
+import { lstat, readFile, realpath, unlink } from 'node:fs/promises';
+import { isAbsolute, relative, resolve, sep } from 'node:path';
 
 import { runRealtimeInput } from './realtime-run.js';
 
@@ -166,36 +168,58 @@ export class XopcGatewayAdapter implements AgentAdapter {
     let finalText = '';
     let failure: string | undefined;
     let usage: Record<string, number> | undefined;
-    const agentRunId = await runRealtimeInput({
-      baseUrl, headers: requestHeaders, conversationId, transcriptId, configVersion, message: request.evalCase.task, signal,
-      ...(thinkingLevel ? { thinking: thinkingLevel } : {}),
-      onRunId: runId => {
-        const active = this.activeRuns.get(request.runId);
-        if (active) active.agentRunId = runId;
-      },
-      onEvent: async (event, decoded, seq) => {
-        const rawType = typeof decoded.type === 'string' ? decoded.type : event;
-        const payload = record(decoded.payload);
-        if (rawType === 'assistant_delta' && typeof payload.delta === 'string') finalText += payload.delta;
-        if (rawType === 'error') failure = typeof payload.message === 'string' ? payload.message : JSON.stringify(payload);
-        if (rawType === 'run_end' && payload.status !== 'success') {
-          failure = typeof payload.summary === 'string' ? payload.summary : `Run ended with status ${String(payload.status)}`;
+    let agentRunId: string | undefined;
+    const turns = [{ message: request.evalCase.task }, ...(request.evalCase.followUps ?? [])];
+    for (const [turnIndex, turn] of turns.entries()) {
+      if (signal.aborted) throw new Error('Evaluation aborted');
+      for (const path of 'removeFiles' in turn ? turn.removeFiles ?? [] : []) {
+        const root = await realpath(request.environment.workspace);
+        const target = resolve(root, path);
+        const rel = relative(root, target);
+        if (isAbsolute(path) || !rel || rel === '..' || rel.startsWith(`..${sep}`)
+          || (await realpath(target)) !== target || !(await lstat(target)).isFile()) {
+          throw new Error('Fault target must be an existing regular file inside the workspace');
         }
-        if (rawType === 'assistant_message_end' && payload.usage && typeof payload.usage === 'object') {
-          const reported = record(payload.usage);
-          const normalized: Record<string, number> = {};
-          for (const [key, field] of Object.entries({ input: 'inputTokens', output: 'outputTokens', cacheRead: 'cacheReadTokens', cacheWrite: 'cacheWriteTokens', total: 'totalTokens', cost: 'cost' })) {
-            if (typeof reported[field] === 'number') normalized[key] = reported[field];
+        const bytes = await readFile(target);
+        if (!bytes.length) throw new Error('Fault target must not be empty');
+        await unlink(target);
+        await trace.emit('agent.event', { kind: 'harness.file_removed', turnIndex, path,
+          sha256: createHash('sha256').update(bytes).digest('hex'), sizeBytes: bytes.length });
+      }
+      if (turnIndex > 0) await trace.emit('agent.event', { kind: 'harness.follow_up', turnIndex, message: turn.message });
+      finalText = '';
+      agentRunId = await runRealtimeInput({
+        baseUrl, headers: requestHeaders, conversationId, transcriptId, configVersion, message: turn.message, signal,
+        ...(thinkingLevel ? { thinking: thinkingLevel } : {}),
+        onRunId: runId => {
+          const active = this.activeRuns.get(request.runId);
+          if (active) active.agentRunId = runId;
+        },
+        onEvent: async (event, decoded, seq) => {
+          const rawType = typeof decoded.type === 'string' ? decoded.type : event;
+          const payload = record(decoded.payload);
+          if (rawType === 'assistant_delta' && typeof payload.delta === 'string') finalText += payload.delta;
+          if (rawType === 'error') failure = typeof payload.message === 'string' ? payload.message : JSON.stringify(payload);
+          if (rawType === 'run_end' && payload.status !== 'success') {
+            failure = typeof payload.summary === 'string' ? payload.summary : `Run ended with status ${String(payload.status)}`;
           }
-          usage ??= {};
-          for (const [key, value] of Object.entries(normalized)) usage[key] = (usage[key] ?? 0) + value;
-          payload.usage = normalized;
-        }
-        await trace.emit(mapEventType(rawType), {
-          source: 'xopc-realtime', rawType, seq, payload: redactSensitive(payload),
-        });
-      },
-    });
+          if (rawType === 'assistant_message_end' && payload.usage && typeof payload.usage === 'object') {
+            const reported = record(payload.usage);
+            const normalized: Record<string, number> = {};
+            for (const [key, field] of Object.entries({ input: 'inputTokens', output: 'outputTokens', cacheRead: 'cacheReadTokens', cacheWrite: 'cacheWriteTokens', total: 'totalTokens', cost: 'cost' })) {
+              if (typeof reported[field] === 'number') normalized[key] = reported[field];
+            }
+            usage ??= {};
+            for (const [key, value] of Object.entries(normalized)) usage[key] = (usage[key] ?? 0) + value;
+            payload.usage = normalized;
+          }
+          await trace.emit(mapEventType(rawType), {
+            source: 'xopc-realtime', rawType, seq, turnIndex, payload: redactSensitive(payload),
+          });
+        },
+      });
+      if (failure) break;
+    }
     return {
       status: failure ? 'failed' : 'completed',
       finalText,

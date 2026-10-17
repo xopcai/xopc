@@ -1,0 +1,190 @@
+{
+  "schemaVersion": 1,
+  "evidenceClass": "regraded-live-direct-agent",
+  "experimentId": "de6aa9f3-e812-4538-996f-bd8c1375b6d5",
+  "sourceExperimentId": "3af2497c-f882-45a5-b676-2b3146fa11d6",
+  "suiteHash": "b7335af765b54cee3c956b7ec7362925dd96c5b5d63f2acf305f30490c109cb5",
+  "passed": false,
+  "sourceDrift": false,
+  "variants": [
+    {
+      "id": "candidate",
+      "expectedRuns": 10,
+      "observedRuns": 10,
+      "passed": 6,
+      "statuses": {
+        "passed": 6,
+        "failed": 0,
+        "error": 0,
+        "timed_out": 0,
+        "budget_exceeded": 4
+      },
+      "categories": [
+        {
+          "category": "research",
+          "expectedRuns": 3,
+          "passed": 3
+        },
+        {
+          "category": "data",
+          "expectedRuns": 3,
+          "passed": 2
+        },
+        {
+          "category": "change",
+          "expectedRuns": 2,
+          "passed": 0
+        },
+        {
+          "category": "recovery",
+          "expectedRuns": 2,
+          "passed": 1
+        }
+      ]
+    }
+  ],
+  "cases": [
+    {
+      "caseId": "C01-add-deliverable",
+      "variantId": "candidate",
+      "runId": "a4fde6f7-3fb4-467b-805e-0222a0def3c3",
+      "originalRunId": "19291d6d-3927-46b2-8ce8-22ed6828058d",
+      "originalStatus": "budget_exceeded",
+      "status": "budget_exceeded",
+      "artifactChecksPassed": true,
+      "executionDurationMs": 70708,
+      "changed": false
+    },
+    {
+      "caseId": "C02-replace-scope",
+      "variantId": "candidate",
+      "runId": "5c68194b-8f2e-4ff1-bed2-4efeaa0ff917",
+      "originalRunId": "e9e5be6f-a0bb-4efe-bf14-f3921406780d",
+      "originalStatus": "budget_exceeded",
+      "status": "budget_exceeded",
+      "artifactChecksPassed": false,
+      "executionDurationMs": 74550,
+      "changed": false
+    },
+    {
+      "caseId": "D01-monthly-sales",
+      "variantId": "candidate",
+      "runId": "d50d24f3-0fed-4cdf-942e-b1ad96f2cf5c",
+      "originalRunId": "d5f7d665-a739-4a7e-9879-9b15ac792280",
+      "originalStatus": "passed",
+      "status": "passed",
+      "artifactChecksPassed": true,
+      "executionDurationMs": 78050,
+      "changed": false
+    },
+    {
+      "caseId": "D02-quoted-csv",
+      "variantId": "candidate",
+      "runId": "ba8d6de9-ecde-4707-9374-90b17b1f159c",
+      "originalRunId": "090ba980-b664-4d94-a1ec-62ffe1df9f3b",
+      "originalStatus": "budget_exceeded",
+      "status": "budget_exceeded",
+      "artifactChecksPassed": true,
+      "executionDurationMs": 65814,
+      "changed": false
+    },
+    {
+      "caseId": "D03-exact-money",
+      "variantId": "candidate",
+      "runId": "e64ca505-1df2-4cdf-badd-3f5c807a5d9b",
+      "originalRunId": "49d57459-909a-435c-9c73-506c81b400cd",
+      "originalStatus": "passed",
+      "status": "passed",
+      "artifactChecksPassed": true,
+      "executionDurationMs": 71205,
+      "changed": false
+    },
+    {
+      "caseId": "F01-lost-artifact",
+      "variantId": "candidate",
+      "runId": "c8367970-3f20-4da3-ba41-1a391c23faf0",
+      "originalRunId": "62873fa1-a64e-428a-b9ee-001d2215933b",
+      "originalStatus": "budget_exceeded",
+      "status": "budget_exceeded",
+      "artifactChecksPassed": false,
+      "executionDurationMs": 56673,
+      "changed": false
+    },
+    {
+      "caseId": "F02-transient-read",
+      "variantId": "candidate",
+      "runId": "17b90f16-4d8e-4c92-b6f8-a9c354dfbc04",
+      "originalRunId": "d2268d1a-057e-4444-8fbd-a20a745a4123",
+      "originalStatus": "passed",
+      "status": "passed",
+      "artifactChecksPassed": true,
+      "executionDurationMs": 49249,
+      "changed": false
+    },
+    {
+      "caseId": "R01-price-comparison",
+      "variantId": "candidate",
+      "runId": "e6141355-77f7-41fb-ae5d-8d5197fcaf92",
+      "originalRunId": "937abd5d-356d-44a1-afcb-3507586df622",
+      "originalStatus": "passed",
+      "status": "passed",
+      "artifactChecksPassed": true,
+      "executionDurationMs": 46969,
+      "changed": false
+    },
+    {
+      "caseId": "R02-conflicting-source",
+      "variantId": "candidate",
+      "runId": "23ae493c-443d-499b-b034-ea6958efd3b9",
+      "originalRunId": "8bd5a0b9-801b-41c0-bb7a-0924f2ae35df",
+      "originalStatus": "passed",
+      "status": "passed",
+      "artifactChecksPassed": true,
+      "executionDurationMs": 60571,
+      "changed": false
+    },
+    {
+      "caseId": "R03-missing-evidence",
+      "variantId": "candidate",
+      "runId": "d5f5fd33-250b-4fb9-b2df-3b6ad73d6939",
+      "originalRunId": "6f7a12c5-d660-49f3-90c7-3f65d1101710",
+      "originalStatus": "failed",
+      "status": "passed",
+      "artifactChecksPassed": true,
+      "executionDurationMs": 56569,
+      "changed": true
+    }
+  ],
+  "modelRequestsIssuedByRegrader": 0,
+  "costPerSuccess": null,
+  "falseCompletionRate": null,
+  "note": "Original live trajectories and output bytes were regraded. No model was rerun; original execution failures are preserved.",
+  "executionSuiteVersion": "1.0.1",
+  "gradingSuiteVersion": "1.0.2",
+  "executionSuiteHash": "b7737a032c94e64ac919005c07e606c5622c7e34f90932779da1fc7f1d4f88f9",
+  "executionSourceCommit": "fb1331c62030939b5d16b72edeca3d2a10932632",
+  "fixtureCommit": "073bc27b5bd88e55c0f947236e3e126a66388e8c",
+  "model": "qwen-token-plan-cn/qwen3.8-flash",
+  "reasoning": "medium",
+  "repetitions": 1,
+  "gradingSourceHashes": {
+    "evals/coder/apps/cli/src/benchmark-regrade.ts": "063216a8906344a1ba21c707b77d0c1b98b4e46b12ce203caae3679741138d8d",
+    "evals/coder/packages/graders/src/index.ts": "41a8a5f91648bed866b1c4b9eae6fd619d56d486ce1ed3d2a5045fe014265d62",
+    "evals/coder/packages/sandbox/src/index.ts": "9684d3b95eeecf4cac8d39398ba2abf2b45b952a91c1103298c2979bcc3043cb",
+    "evals/coder/packages/protocol/src/index.ts": "7b0a9f5e056e6ba1ce87a017d532abad09f3dffb8ac03f555c2fb612ddbe8a86",
+    "evals/coder/packages/runner/src/index.ts": "959e37429af6250662e59aff7cb99918b62c62e10fddb05aa8390f1d9a9855b7",
+    "evals/coder/packages/storage/src/index.ts": "3e0b531c7e3a3ece67b6db26bf5ca046ebb25c6073c029e0b52be5ef6deb2df1",
+    "evals/coder/suites/xopc-core/hidden/check.mjs": "f55d52f23eef23e808e40ebc8ffefff0655a3134e7424128aba913bb702fa653",
+    "evals/coder/suites/xopc-core/suite.yaml": "b57584499ddfc112d358df6d28e551725e900a7fceb36ad256e69df0b444669e"
+  },
+  "originalPassCount": 5,
+  "originalSummary": ".xopc-evals/qwen-core-v1-300k/benchmark/summary.json",
+  "evidenceDirectory": ".xopc-evals/qwen-core-v1-regraded",
+  "notes": [
+    "One live repetition only; not a production reliability estimate.",
+    "Regraded existing model outputs; no new model requests. Original failures and trials remain preserved.",
+    "Four budget breaches remain failures. Additional known consulted source IDs are accepted for the underspecified R03 citation list.",
+    "Provider cache state is uncontrolled. Reported catalog costs are estimates; actual billing cost per success is unknown.",
+    "Direct-agent workspace tasks; asynchronous Personal delivery and authenticated downloads are outside this suite."
+  ]
+}

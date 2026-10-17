@@ -83,6 +83,12 @@ function assertSuite(value: unknown): asserts value is RawSuite {
     if (!Array.isArray(evalCase.graders) || evalCase.graders.length === 0) {
       throw new Error(`Case ${evalCase.id} requires at least one grader`);
     }
+    if (evalCase.followUps !== undefined && (!Array.isArray(evalCase.followUps)
+      || evalCase.followUps.some(step => !step || typeof step.message !== 'string' || !step.message.trim()
+        || (step.removeFiles !== undefined && (!Array.isArray(step.removeFiles)
+          || step.removeFiles.some(path => typeof path !== 'string' || !path.trim())))))) {
+      throw new Error(`Case ${evalCase.id} has invalid follow-ups`);
+    }
     if (caseIds.has(evalCase.id)) throw new Error(`Duplicate case id: ${evalCase.id}`);
     caseIds.add(evalCase.id);
     for (const grader of evalCase.graders) {
