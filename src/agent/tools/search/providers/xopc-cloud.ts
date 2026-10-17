@@ -1,7 +1,7 @@
 import { searchHttpError } from '../errors.js';
 import { getModelCatalogStore, type ModelCatalogStore } from '../../../../providers/model-catalog-store.js';
 import { getProviderAuthService, type ProviderAuthService } from '../../../../providers/provider-auth-service.js';
-import type { SearchProvider, SearchResult } from '../types.js';
+import type { SearchExecution, SearchProvider, SearchResult } from '../types.js';
 
 interface XopcCloudSearchProviderOptions {
   region: 'cn' | 'global';
@@ -32,6 +32,10 @@ export class XopcCloudSearchProvider implements SearchProvider {
   }
 
   async search(query: string, count: number, signal?: AbortSignal): Promise<SearchResult[]> {
+    return (await this.searchWithMetadata(query, count, signal)).results;
+  }
+
+  async searchWithMetadata(query: string, count: number, signal?: AbortSignal): Promise<SearchExecution> {
     const source = this.catalogStore.getSource('xopc-cloud');
     if (!source?.search) throw new Error('XOPC Cloud search is not available');
     const requestSignal = signal
@@ -57,6 +61,8 @@ export class XopcCloudSearchProvider implements SearchProvider {
     const body = await response.json().catch(() => null) as {
       results?: Array<{ title?: unknown; url?: unknown; description?: unknown }>;
       error?: { message?: unknown };
+      upstream?: unknown;
+      trace?: unknown;
     } | null;
     if (!response.ok) {
       throw searchHttpError(response,
@@ -66,7 +72,7 @@ export class XopcCloudSearchProvider implements SearchProvider {
       );
     }
     if (!Array.isArray(body?.results)) throw new Error('XOPC Cloud search returned an invalid response');
-    return body.results.flatMap((result) => {
+    const results = body.results.flatMap((result) => {
       if (
         typeof result.title !== 'string'
         || typeof result.url !== 'string'
@@ -79,5 +85,22 @@ export class XopcCloudSearchProvider implements SearchProvider {
         source: this.name,
       }];
     });
+    const upstream = searchProviderId(response.headers.get('x-xopc-search-upstream')) ?? searchProviderId(body.upstream);
+    const countHeader = response.headers.get('x-xopc-provider-attempts');
+    const attemptCount = countHeader !== null && /^\d{1,4}$/.test(countHeader) && Number(countHeader) > 0 ? Number(countHeader) : undefined;
+    const attempts = Array.isArray(body.trace) ? body.trace.slice(0, 24).flatMap((item: unknown) => {
+      if (!item || typeof item !== 'object') return [];
+      const row = item as Record<string, unknown>;
+      const source = searchProviderId(row.provider);
+      if (!source || !['success', 'empty', 'error', 'skipped'].includes(String(row.outcome))) return [];
+      const reason = typeof row.reason === 'string' && /^[a-z_]{1,64}$/.test(row.reason) ? row.reason : undefined;
+      return [{ provider: this.name, upstream: source, outcome: row.outcome as 'success' | 'empty' | 'error' | 'skipped', ...(reason ? { reason } : {}) }];
+    }) : undefined;
+    return { results, metadata: { ...(upstream ? { upstream } : {}), ...(attemptCount ? { attemptCount } : {}),
+      ...(attempts?.length ? { attempts } : {}) } };
   }
+}
+
+function searchProviderId(value: unknown): string | undefined {
+  return typeof value === 'string' && /^[a-z0-9][a-z0-9_-]{0,63}$/.test(value) ? value : undefined;
 }

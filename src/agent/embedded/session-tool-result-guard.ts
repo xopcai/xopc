@@ -22,6 +22,7 @@ import type { AgentMessage } from '@earendil-works/pi-agent-core';
 import type { SessionManager } from '@earendil-works/pi-coding-agent';
 
 import type { Config } from '../../config/schema.js';
+import { sanitizeSearchInfo } from '../tools/search/search-info.js';
 import {
   boundedJsonUtf8Bytes,
   firstEnumerableOwnKeys,
@@ -265,6 +266,8 @@ function buildPersistedDetailsFallback(
   }
   if (src) {
     fallback.originalDetailKeys = firstEnumerableOwnKeys(src, 40);
+    const searchInfo = sanitizeSearchInfo(src.searchInfo);
+    if (searchInfo) fallback.searchInfo = searchInfo;
     for (const key of ['status', 'transcriptId', 'pid', 'exitCode', 'exitSignal', 'truncated']) {
       const field = src[key];
       if (field !== undefined) {
@@ -324,6 +327,8 @@ function sanitizeToolResultDetailsForPersistence(details: unknown): unknown {
     ...originalDetailsSizeFields(originalSize),
     originalDetailKeys: firstEnumerableOwnKeys(src, 40),
   };
+  const searchInfo = sanitizeSearchInfo(src.searchInfo);
+  if (searchInfo) out.searchInfo = searchInfo;
   for (const key of [
     'status',
     'transcriptId',

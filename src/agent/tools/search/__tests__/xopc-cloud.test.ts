@@ -64,4 +64,30 @@ describe('XopcCloudSearchProvider', () => {
     });
     await expect(provider.search('xopc', 5)).rejects.toThrow('quota exceeded');
   });
+
+  it('carries actual upstream and sanitized fallback trace without changing result sources', async () => {
+    const provider = new XopcCloudSearchProvider({ region: 'cn', catalogStore: { getSource: () => source() },
+      credentials: { resolveApiKey: async () => 'token' }, fetchImpl: async () => Response.json({
+        results: [{ title: 'Result', url: 'https://example.com', description: 'Summary' }],
+        trace: [{ provider: 'deepseek', outcome: 'skipped', reason: 'unsupported_request', apiKey: 'secret' },
+          { provider: 'tavily', outcome: 'success' }, { provider: 'bad value', outcome: 'error' }],
+      }, { headers: { 'x-xopc-search-upstream': 'tavily', 'x-xopc-provider-attempts': '2' } }),
+    });
+    const result = await provider.searchWithMetadata('query', 3);
+    expect(result.results[0]?.source).toBe('xopc-cloud');
+    expect(result.metadata).toEqual({ upstream: 'tavily', attemptCount: 2, attempts: [
+      { provider: 'xopc-cloud', upstream: 'deepseek', outcome: 'skipped', reason: 'unsupported_request' },
+      { provider: 'xopc-cloud', upstream: 'tavily', outcome: 'success' },
+    ] });
+    expect(JSON.stringify(result)).not.toContain('secret');
+  });
+
+  it('supports previously deployed cloud headers without inventing a missing route', async () => {
+    const provider = new XopcCloudSearchProvider({ region: 'global', catalogStore: { getSource: () => source() },
+      credentials: { resolveApiKey: async () => 'token' }, fetchImpl: async () => Response.json({ results: [] }, {
+        headers: { 'x-xopc-search-upstream': 'deepseek', 'x-xopc-provider-attempts': '1' },
+      }),
+    });
+    expect((await provider.searchWithMetadata('query', 3)).metadata).toEqual({ upstream: 'deepseek', attemptCount: 1 });
+  });
 });

@@ -375,6 +375,39 @@
       "other": "Working…",
       "mixed": "Working on it…"
     },
+    "searchDetails": {
+      "provider": "Search provider",
+      "unknown": "Unknown",
+      "upstreamUnknown": "Unknown upstream",
+      "cached": "Cached result",
+      "fresh": "Fetched this time",
+      "cacheUnknown": "Cache status unknown",
+      "cacheHint": "The provider shown is the original source of this cached result.",
+      "route": "Request attempts",
+      "incompleteRoute": "Some attempt details are unavailable.",
+      "cachedRoute": "Original request attempts for this cached result",
+      "attempts": "Attempt count",
+      "capturedAt": "Fetched at",
+      "outcomes": {
+        "success": "Succeeded",
+        "empty": "No results",
+        "error": "Failed",
+        "skipped": "Skipped"
+      },
+      "reasons": {
+        "permission_denied": "Permission denied",
+        "rate_limited": "Rate limited",
+        "timeout": "Timed out",
+        "cancelled": "Cancelled",
+        "provider_error": "Provider unavailable",
+        "authentication": "Upstream authentication failed",
+        "balance": "Upstream balance insufficient",
+        "rate_limit": "Upstream rate limited",
+        "unsupported_request": "Query or filters unsupported",
+        "unavailable": "Upstream unavailable",
+        "response_too_large": "Response too large"
+      }
+    },
     "toolCard": {
       "copyPath": "Copy path",
       "copyCommand": "Copy command",

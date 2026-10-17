@@ -36,3 +36,5 @@ xopc search remove deepseek
 ```
 
 For platform-managed DeepSeek, administrators configure **Cloud search** in xopc-platform. Clients use their existing XOPC Cloud OAuth connection; they do not receive the upstream API key.
+
+Expand a chat search step to see its actual provider, cloud upstream and cache status. Collapsed steps keep their existing summary. Developer view adds attempt counts and the fallback route. Cached results show their original provider; old history without provenance is marked unknown rather than inferred from current settings. Compact search metadata is retained when large result details are trimmed.

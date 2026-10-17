@@ -5,7 +5,7 @@ import { createLogger } from '../../../utils/logger.js';
 import { executeWithTimeout } from '../../lifecycle/timeout-wrapper.js';
 import { classifySearchError, searchFailureInfo, SearchError } from './errors.js';
 import { currentSearchCache, SEARCH_CACHE_TTL_MS, SearchCacheWriteError, type SearchCache } from './cache.js';
-import type { ResolvedWebSearchConfig, SearchProvider, SearchResponse, SearchRequest, SearchBatchResponse } from './types.js';
+import type { ResolvedWebSearchConfig, SearchProvider, SearchResponse, SearchRequest, SearchBatchResponse, SearchAttempt, SearchExecution } from './types.js';
 import { BraveProvider } from './providers/brave.js';
 import { DeepSeekProvider } from './providers/deepseek.js';
 import { TavilyProvider } from './providers/tavily.js';
@@ -100,10 +100,10 @@ export class SearchProviderRegistry {
   private cached(query: string, count: number): SearchResponse | undefined {
     const cached = this.cache.get(this.key(query, count));
     return cached && Date.now() >= cached.capturedAt && Date.now() - cached.capturedAt < SEARCH_CACHE_TTL_MS
-      ? { results: structuredClone(cached.results), provider: cached.provider, cached: true, capturedAt: cached.capturedAt } : undefined;
+      ? { results: structuredClone(cached.results), provider: cached.provider, cached: true, capturedAt: cached.capturedAt, ...(cached.metadata ? { metadata: structuredClone(cached.metadata) } : {}) } : undefined;
   }
   private remember(query: string, count: number, response: SearchResponse): void {
-    try { this.cache.set({ key: this.key(query, count), query: query.trim(), count, results: structuredClone(response.results), provider: response.provider, capturedAt: response.capturedAt ?? Date.now() }); }
+    try { this.cache.set({ key: this.key(query, count), query: query.trim(), count, results: structuredClone(response.results), provider: response.provider, ...(response.metadata ? { metadata: structuredClone(response.metadata) } : {}), capturedAt: response.capturedAt ?? Date.now() }); }
     catch (error) { throw new SearchCacheWriteError(error); }
   }
   private async attempt<T>(name: string, signal: AbortSignal | undefined, execute: (signal: AbortSignal) => Promise<T>): Promise<T> {
@@ -130,6 +130,7 @@ export class SearchProviderRegistry {
     const hit = this.cached(query, count);
     if (hit) return hit;
     let lastError: SearchError | undefined;
+    const attempts: SearchAttempt[] = [];
     for (const provider of [...this.providers, ...(this.fallbackProvider ? [this.fallbackProvider] : [])]) {
       signal?.throwIfAborted(); authorize();
       if (!provider.isAvailable()) continue;
@@ -138,9 +139,17 @@ export class SearchProviderRegistry {
       for (let attempt = 0; attempt < 2; attempt++) {
         signal?.throwIfAborted(); authorize();
         try {
-          const results = await this.attempt(provider.name, signal, requestSignal => provider.search(query, count, requestSignal));
+          const execution = await this.attempt(provider.name, signal, async (requestSignal): Promise<SearchExecution> => provider.searchWithMetadata
+            ? provider.searchWithMetadata(query, count, requestSignal)
+            : { results: await provider.search(query, count, requestSignal) });
           signal?.throwIfAborted(); authorize();
-          const response = { results, provider: provider.name, capturedAt: Date.now() };
+          const metadata = execution.metadata;
+          const route = metadata?.attempts?.length ? metadata.attempts
+            : provider.name === 'xopc-cloud' && (metadata?.attemptCount ?? 1) > 1 ? []
+              : [{ provider: provider.name, ...(metadata?.upstream ? { upstream: metadata.upstream } : {}), outcome: execution.results.length ? 'success' as const : 'empty' as const }];
+          const response = { results: execution.results, provider: provider.name, capturedAt: Date.now(), metadata: {
+            ...metadata, attemptCount: attempts.length + (metadata?.attemptCount ?? route.length), attempts: [...attempts, ...route].slice(-24),
+          } };
           this.remember(query, count, response);
           return response;
         } catch (error) {
@@ -148,6 +157,7 @@ export class SearchProviderRegistry {
           const failure = classifySearchError(error, signal);
           if (signal?.aborted || failure.kind === 'permission_denied' || failure.kind === 'cancelled') throw failure;
           lastError = failure;
+          attempts.push({ provider: provider.name, outcome: 'error', reason: failure.kind });
           if (failure.kind === 'rate_limited') this.cooldowns.set(provider.name, { until: Date.now() + (failure.retryAfterMs ?? this.retryDelayMs), error: failure });
           log.debug({ provider: provider.name, kind: failure.kind, attempt }, 'Search provider attempt failed');
           if (attempt || !['rate_limited', 'timeout'].includes(failure.kind) || !await this.backoff(failure, signal)) break;
@@ -182,7 +192,7 @@ export class SearchProviderRegistry {
         for (const request of pending) {
           const item = items.find(item => item.id === request.id);
           if (item?.results && !item.error) {
-            const response = { results: item.results, provider: provider.name, capturedAt: Date.now() };
+            const response = { results: item.results, provider: provider.name, capturedAt: Date.now(), metadata: item.metadata };
             this.remember(request.query, request.count, response);
             outputs.set(this.key(request.query, request.count), { ...request, response });
           } else if (item?.error) {
