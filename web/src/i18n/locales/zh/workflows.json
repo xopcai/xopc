@@ -1,5 +1,6 @@
 {
   "workflows": {
+    "allAgents": "全部助手",
     "title": "工作流",
     "runDetailsTitle": "运行详情",
     "backToRuns": "返回运行记录",

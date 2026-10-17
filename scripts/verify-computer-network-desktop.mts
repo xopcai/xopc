@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { basename, join } from 'node:path';
 import { app, BrowserWindow } from 'electron';
 import { DesktopEndpointHost } from '../electron/computer/desktop-host.js';
-import { APP, BASELINE, BASELINE_TEXT, DESTINATION, EXPECT } from './lib/computer-flow-network-target.mjs';
+import { APP, BASELINE, BASELINE_TEXT, DESTINATION, EXPECT, TEXTEDIT, WINDOW } from './lib/computer-flow-network-target.mjs';
 import { verifyComputerExpectation } from '../src/computer/task-state.js';
 
 async function main() {
@@ -16,24 +16,86 @@ async function main() {
   const window = new BrowserWindow({ width: 360, height: 150, show: false, title: 'XOPC network flow validation',
     webPreferences: { contextIsolation: true, nodeIntegration: false } });
   await window.loadURL('data:text/html,<title>XOPC network flow validation</title><p>Native navigation validation only.</p>');
+  if (TEXTEDIT) window.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
   window.showInactive();
   const host = new DesktopEndpointHost({ connection: () => ({ port: Number(process.env.XOPC_FLOW_PROXY_PORT), token: process.env.XOPC_FLOW_GATEWAY_TOKEN! }), window: () => window });
   const broker = host.broker, driver = (broker as any).driver;
+  let preparation: unknown, nativeEvidence: unknown;
   let mode = 'setup', observations = 0, inputs = 0, cleanupInputs = 0;
   let lastNodes: any[] = [], lastObservation: any, lastGrantId: string | undefined;
   const approvals = { session: 0, action: 0 };
   const approve = (host as any).approve.bind(host);
   (host as any).approve = async (request: any, signal: AbortSignal) => { approvals[request.kind as 'session' | 'action']++; return approve(request, signal); };
+  async function waitForSettings(signal: AbortSignal) {
+    await driver.start(); const deadline = Date.now() + 240_000;
+    let stableSince: number | undefined;
+    while (true) {
+      signal.throwIfAborted();
+      const applications = await driver.listApps(signal);
+      const instances = applications.filter((a: any) => a.bundleId === APP && a.pid > 0);
+      assert.equal(instances.length, 1);
+      const candidates = await driver.listWindows(instances[0].pid, signal);
+      const settings = candidates.filter((w: any) => w.title === WINDOW && w.isOnScreen && w.onCurrentSpace === true);
+      preparation = { stage: 'readiness', pid: instances[0].pid, active: instances[0].active,
+        windowCount: candidates.length, settings: candidates.filter((w: any) => w.title === WINDOW).map((w: any) => ({ visible: w.isOnScreen, id: String(w.windowId), onCurrentSpace: w.onCurrentSpace, currentSpaceId: w.currentSpaceId == null ? undefined : String(w.currentSpaceId), spaceIds: w.spaceIds?.map(String) })) };
+      if (settings.length === 1) {
+        stableSince ??= Date.now();
+        if (Date.now() - stableSince >= 1000) return;
+      } else stableSince = undefined;
+      if (Date.now() >= deadline) {
+        preparation = { ...(preparation as any), timedOut: true };
+        throw new Error('COMPUTER_WINDOW_REQUIRED');
+      }
+      await new Promise(r => setTimeout(r, 200));
+    }
+  }
+  if (TEXTEDIT) {
+    const resolveTarget = driver.resolveTarget.bind(driver);
+    driver.resolveTarget = async (...args: any[]) => {
+      // Enumerate without pixels before selecting Settings rather than a proxy surface.
+      if (!args[2].windowRef) return resolveTarget(args[0], args[1], { ...args[2], windowRef: 'validation-enumerate-only' });
+      await waitForSettings(args[1]);
+      let value;
+      try { value = await resolveTarget(...args); }
+      catch (error) {
+        const apps = await driver.listApps(args[1]);
+        const selected = apps.find((a: any) => a.bundleId === APP);
+        const windows = selected ? await driver.listWindows(selected.pid, args[1]) : [];
+        preparation = { pid: selected?.pid, active: selected?.active, windowCount: windows.length, settings: windows.filter((w: any) => w.title === WINDOW).map((w: any) => ({ visible: w.isOnScreen, id: String(w.windowId), onCurrentSpace: w.onCurrentSpace, currentSpaceId: w.currentSpaceId == null ? undefined : String(w.currentSpaceId), spaceIds: w.spaceIds?.map(String) })) };
+        throw error;
+      }
+      const windows = await driver.listWindows(value.pid, args[1]);
+      const selectedSettings = windows.find((w: any) => String(w.windowId) === value.windowId)?.title === WINDOW;
+      preparation = { stage: 'resolve', selectedSettings, pid: value.pid };
+      assert.ok(selectedSettings);
+      return value;
+    };
+  }
   const observe = driver.observe.bind(driver);
   driver.observe = async (...args: any[]) => {
     assert.equal(args[0].appId, APP);
-    assert.equal(args[0].pid, Number(process.env.XOPC_FLOW_FIXTURE_PID));
-    const value = await observe(...args); observations++; lastNodes = JSON.parse(value.summary).elements; return value;
+    if (TEXTEDIT) {
+      const windows = await driver.listWindows(args[0].pid, args[1]);
+      assert.equal(windows.find((w: any) => String(w.windowId) === args[0].windowId)?.title, WINDOW);
+    } else assert.equal(args[0].pid, Number(process.env.XOPC_FLOW_FIXTURE_PID));
+    const value = await observe(...args); observations++; lastNodes = JSON.parse(value.summary).elements;
+    const tree = JSON.parse(value.summary);
+    nativeEvidence = { roots: lastNodes.filter(n => n.role === 'AXWindow').length, elements: lastNodes.length,
+      heading: tree.text?.includes(EXPECT.text), textLength: tree.text?.length, truncated: tree.truncated,
+      baselineSelected: lastNodes.find(n => n.label === BASELINE)?.selected, fields: lastNodes.filter(n => n.role === 'AXTextField').length };
+    if (TEXTEDIT && lastNodes.some(n => n.label === BASELINE && n.selected === true)) {
+      try {
+        const fields = lastNodes.filter(n => n.role === 'AXTextField');
+        assert.equal(fields.length, 5, 'Settings property fields must be observable');
+        assert.ok(fields.slice(2).every(n => n.value == null || n.value === ''), 'Settings properties must be empty before model inference');
+      } catch (error) { value.image.fill(0); throw error; }
+    }
+    return value;
   };
   const perform = driver.perform.bind(driver);
   driver.perform = async (target: any, action: any, signal: AbortSignal) => {
     const node = lastNodes.find(n => n.ref === action.ref);
-    assert.equal(action.kind, 'activate'); assert.equal(node?.role, 'AXButton');
+    assert.equal(action.kind, 'activate'); assert.equal(node?.role, TEXTEDIT ? 'AXRadioButton' : 'AXButton');
     assert.ok(node?.label === (mode === 'scenario' ? DESTINATION : BASELINE), 'COMPUTER_VALIDATION_NATIVE_TARGET_REQUIRED');
     if (mode === 'scenario') inputs++; else cleanupInputs++;
     return perform(target, action, signal);
@@ -54,8 +116,8 @@ async function main() {
         case 'mode': mode = message.mode; value = true; break;
         case 'baseline': {
           assert.equal(mode, 'setup');
-          const tab = lastNodes.find(n => n.role === 'AXButton' && n.label === BASELINE); assert.ok(tab);
-          const atStart = JSON.parse(lastObservation.summary).text.includes(BASELINE_TEXT);
+          const tab = lastNodes.find(n => n.role === (TEXTEDIT ? 'AXRadioButton' : 'AXButton') && n.label === BASELINE); assert.ok(tab);
+          const atStart = TEXTEDIT ? tab.selected === true : JSON.parse(lastObservation.summary).text.includes(BASELINE_TEXT);
           if (message.requireSelected) assert.equal(atStart, true, 'Start on the native start page');
           if (!atStart) {
             const s = lastObservation;
@@ -66,10 +128,10 @@ async function main() {
             if (result.status === 'pending_action') { await new Promise(r => setTimeout(r, 30)); result = await broker.command(input); }
             result.frame?.bytes.fill(0); assert.equal(result.receipt?.dispatch, 'completed');
           }
-          value = { selected: JSON.parse(lastObservation.summary).text.includes(BASELINE_TEXT) }; break;
+          value = { selected: TEXTEDIT ? lastNodes.find(n => n.label === BASELINE)?.selected === true : JSON.parse(lastObservation.summary).text.includes(BASELINE_TEXT) }; break;
         }
-        case 'status': value = { pid: process.pid, connected: host.snapshot().connected, claim: host.snapshot().claim,
-          observations, inputs, cleanupInputs, approvals, sessionStatus: broker.snapshot().status,
+        case 'status': value = { pid: process.pid, nativeAppPid: lastObservation?.target?.pid, connected: host.snapshot().connected, claim: host.snapshot().claim,
+          preparation, nativeEvidence, observations, inputs, cleanupInputs, approvals, sessionStatus: broker.snapshot().status,
           pageObserved: verifyComputerExpectation(EXPECT, lastObservation)?.status === 'satisfied' }; break;
         case 'stop': await host.close(); window.destroy(); process.send?.({ id: message.id, value: true }, () => app.exit(0)); return;
         default: throw new Error('Unknown private test command');
