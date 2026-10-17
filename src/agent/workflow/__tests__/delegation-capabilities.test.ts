@@ -2,10 +2,15 @@ import { expect, it, vi } from 'vitest';
 import { Type } from '@sinclair/typebox';
 import type { AgentTool } from '@earendil-works/pi-agent-core';
 import type { MessageBus } from '../../../infra/bus/index.js';
+import { initializeTestAgentCatalog } from '../../../agent-catalog/test-support.js';
+import { ConfigSchema } from '../../../config/schema.js';
+import { createConversation } from '../../../storage/sqlite/conversation-repository.js';
+import { closeXopcDatabase } from '../../../storage/sqlite/index.js';
 
-const fixture = vi.hoisted(() => ({ tools: [] as any[] }));
+const fixture = vi.hoisted(() => ({ tools: [] as any[], options: undefined as any }));
 vi.mock('../../child-agent-factory.js', () => ({ createDelegateChildHandle: (options: any) => ({
   abort() {}, run: async () => {
+    fixture.options = options;
     fixture.tools = options.buildChildTools({});
     return { summary: 'Done', status: 'success' };
   },
@@ -17,6 +22,26 @@ const tool = (name: string): AgentTool<any, any> => ({ name, label: name, descri
   execute: vi.fn(async () => ({ content: [], details: {} })) });
 const runner = (tools: AgentTool<any, any>[]) => new DelegateSubagentRunner({ workspace: '/tmp', bus: {} as MessageBus,
   getConfig: () => undefined, getDefaultModel: () => ({ id: 'test', provider: 'openai' } as never), buildChildTools: () => tools });
+
+it('authorizes tools against the selected Agent even when the originating Agent denies them', async () => {
+  initializeTestAgentCatalog({ agents: [
+    { id: 'main', tools: { web_search: { mode: 'deny' } } },
+    { id: 'researcher', tools: { web_search: { mode: 'allow', maxCallsPerTurn: 1 } } },
+  ] });
+  try {
+    const origin = createConversation({ agentId: 'main' }).key;
+    const worker = new DelegateSubagentRunner({ workspace: '/tmp', bus: {} as MessageBus, agentId: 'researcher',
+      getConfig: () => ConfigSchema.parse({}), getDefaultModel: () => ({ id: 'test', provider: 'openai' } as never),
+      buildChildTools: () => [tool('web_search')] });
+    expect(await worker.run('Research', { label: 'Research', sessionMetadata: {
+      parentConversationId: origin, workflowRunId: 'run', workflowDefinitionId: 'definition',
+      workflowAgentId: 'research-node', workflowAgentLabel: 'Research',
+    } })).toBe('Done');
+    const call = { toolCall: { id: 'search', name: 'web_search', arguments: {} }, args: {} };
+    expect(await fixture.options.authorizeToolCall(call)).toBeUndefined();
+    expect(await fixture.options.authorizeToolCall(call)).toMatchObject({ block: true });
+  } finally { closeXopcDatabase(); }
+});
 
 it('inherits registered research tools and enforces external reads for workflows', async () => {
   const external = tool('xopc_tool_execute');

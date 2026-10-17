@@ -6,6 +6,8 @@ Give Loopi a concrete result to prepare, keep talking while it works, and return
 
 Set up [Loopi](./personal-ai.md), keep the Gateway running, and make the required files and tools available. Connecting a model does not grant access to every folder or external service.
 
+The selected Agent executes a Task using its own effective configuration: global defaults plus that Agent's settings. The originating Agent's tools, model, skills, instructions, execution environment and run budget are not inherited. Task goals, source material and explicit constraints travel with the brief; account and resource access still require authorization. Retries and resumed executions follow the same rule.
+
 ## Give a useful brief
 
 State the source material, intended result, completion checks, and boundaries. For example:
