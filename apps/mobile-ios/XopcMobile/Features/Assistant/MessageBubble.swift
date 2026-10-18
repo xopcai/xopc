@@ -80,7 +80,9 @@ struct MessageBubble: View {
         .accessibilityElement(children: .contain)
         .accessibilityHint("长按显示消息操作")
         .accessibilityAction(named: Text("消息操作")) {
-            if message.role == "assistant", !message.isPending { isActionsPresented = true }
+            if message.role == "assistant", !message.isPending {
+                isActionsPresented = true
+            }
         }
         .sheet(isPresented: $isDetailPresented) {
             MessageDetailView(
@@ -122,11 +124,13 @@ struct MessageBubble: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text(verbatim: receipt.title).font(.subheadline.weight(.medium))
                 Text(receipt.operation == "started" || receipt.operation == "created"
-                     ? "已转入任务，可在进展中查看" : "查看任务")
+                    ? "已转入任务，可在进展中查看" : "查看任务")
                     .font(.caption).foregroundStyle(.secondary)
             }
             Spacer()
-            if receipt.canOpen { Image(systemName: "chevron.right").font(.caption) }
+            if receipt.canOpen {
+                Image(systemName: "chevron.right").font(.caption)
+            }
         }
         .frame(minHeight: 48)
         .accessibilityIdentifier("chat-task-receipt-\(receipt.id)")
@@ -153,9 +157,9 @@ struct MessageBubble: View {
                 } label: {
                     Label {
                         Text(readAloud.sourceID == message.id && readAloud.state == .playing
-                             ? LocalizedStringResource("暂停朗读")
-                             : readAloud.sourceID == message.id && readAloud.state == .paused
-                             ? LocalizedStringResource("继续朗读") : LocalizedStringResource("朗读"))
+                            ? LocalizedStringResource("暂停朗读")
+                            : readAloud.sourceID == message.id && readAloud.state == .paused
+                            ? LocalizedStringResource("继续朗读") : LocalizedStringResource("朗读"))
                     } icon: {
                         Image(systemName: readAloud.sourceID == message.id && readAloud.state == .playing ? "pause" : "speaker.wave.2")
                     }

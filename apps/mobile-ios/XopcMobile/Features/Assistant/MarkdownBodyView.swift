@@ -175,20 +175,17 @@ private struct MarkdownPartView: View {
     }
 }
 
-private struct ChatTextSelectionKey: EnvironmentKey {
-    static let defaultValue = true
-}
-
 extension EnvironmentValues {
-    var chatTextSelectionEnabled: Bool {
-        get { self[ChatTextSelectionKey.self] }
-        set { self[ChatTextSelectionKey.self] = newValue }
-    }
+    @Entry var chatTextSelectionEnabled: Bool = true
 }
 
 extension View {
     @ViewBuilder
     func chatTextSelection(_ enabled: Bool) -> some View {
-        if enabled { textSelection(.enabled) } else { textSelection(.disabled) }
+        if enabled {
+            textSelection(.enabled)
+        } else {
+            textSelection(.disabled)
+        }
     }
 }
