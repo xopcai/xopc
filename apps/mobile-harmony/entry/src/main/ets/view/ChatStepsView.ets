@@ -1,6 +1,6 @@
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
-import { XopcChatRow, XopcLiveActivityTool } from '../model/chat';
-import { chatLiveCompletedCount, chatLiveElapsedSeconds, chatLiveNarration } from '../common/chatLiveActivity';
+import { XopcChatRow } from '../model/chat';
+import { chatLiveElapsedSeconds, chatLiveNarration } from '../common/chatLiveActivity';
 
 @ComponentV2
 export struct XopcChatStepsView {
@@ -8,73 +8,61 @@ export struct XopcChatStepsView {
   @Param row: XopcChatRow = { id: '', role: 'assistant', text: '' };
   @Param runStartedAtMs: number = 0;
   @Param connection: string = 'connected';
+  @Param animateDots: boolean = true;
   @Event onShowDetail: (row: XopcChatRow) => void = (_row: XopcChatRow): void => {};
   @Local nowMs: number = Date.now();
+  private appearedAtMs: number = Date.now();
   private clockTimer: number = -1;
-  private syncClock(): void {
-    if (this.row.live && this.clockTimer === -1) {
+  aboutToAppear(): void {
+    this.appearedAtMs = Date.now();
+    this.clockTimer = setInterval((): void => {
       this.nowMs = Date.now();
-      this.clockTimer = setInterval((): void => { this.nowMs = Date.now(); }, 1000);
-    } else if (!this.row.live && this.clockTimer !== -1) {
-      clearInterval(this.clockTimer);
-      this.clockTimer = -1;
-    }
+    }, 1000);
   }
-  aboutToAppear(): void { this.syncClock(); }
-  @Monitor('row') onRowChange(): void { this.syncClock(); }
   aboutToDisappear(): void { clearInterval(this.clockTimer); this.clockTimer = -1; }
-  @Computed get elapsedSeconds(): number { return chatLiveElapsedSeconds(this.runStartedAtMs, this.nowMs); }
-  @Computed get completedCount(): number { return chatLiveCompletedCount(this.row); }
-  @Computed get narration(): string { return chatLiveNarration(this.row); }
-  private statusLabel(): ResourceStr {
-    if (this.connection !== 'connected') return $r('app.string.chat_activity_reconnecting');
-    if (this.nowMs - (this.row.activityUpdatedAtMs || this.runStartedAtMs || this.nowMs) > 30000
-      && this.row.activity !== 'responding' && !(this.row.activityTools || []).some((tool: XopcLiveActivityTool): boolean => tool.status === 'running')) {
-      return $r('app.string.chat_activity_still_working');
-    }
-    switch (this.row.activity) {
-      case 'thinking': return $r('app.string.chat_steps_thinking');
-      case 'search': return $r('app.string.chat_steps_searching');
-      case 'read': return $r('app.string.chat_steps_reading');
-      case 'command': return $r('app.string.chat_steps_commanding');
-      case 'write': return $r('app.string.chat_steps_writing');
-      case 'edit': return $r('app.string.chat_steps_editing');
-      case 'fetch': return $r('app.string.chat_steps_fetching');
-      case 'responding': return this.narration || $r('app.string.chat_activity_responding');
-      case 'working':
-      case 'other': return $r('app.string.chat_steps_working');
-      default: return this.elapsedSeconds >= 2 ? $r('app.string.chat_steps_working')
-        : $r('app.string.chat_activity_preparing');
-    }
+  @Computed get elapsedSeconds(): number {
+    return chatLiveElapsedSeconds(this.runStartedAtMs || this.appearedAtMs, this.nowMs);
+  }
+  @Computed get narration(): string {
+    return this.elapsedSeconds >= 10 ? chatLiveNarration(this.row) : '';
   }
   build() {
-    Column({ space: 6 }) {
-      Button({ type: ButtonType.Normal }) {
-        Row({ space: 8 }) {
-          if (this.row.live) {
-            LoadingProgress().width(16).height(16).color(this.colors.accent)
-          } else {
-            SymbolGlyph($r('sys.symbol.checkmark_circle')).fontSize(16).fontColor([this.colors.secondary])
-          }
-          Text(this.row.live ? this.statusLabel() : $r('app.string.chat_steps'))
-            .fontSize(13).fontWeight(FontWeight.Medium)
-            .fontColor(this.row.live ? this.colors.foreground : this.colors.secondary)
-            .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis }).layoutWeight(1)
-          if (this.row.live && this.completedCount > 0) {
-            Text($r('app.string.chat_activity_completed', this.completedCount.toString()))
-              .fontSize(12).fontColor(this.colors.secondary).maxLines(1).flexShrink(0)
-          }
-          if (this.row.live && this.elapsedSeconds >= 8) {
-            Text($r('app.string.chat_activity_elapsed', this.elapsedSeconds.toString()))
-              .fontSize(12).fontColor(this.colors.tertiary).flexShrink(0)
-          }
-          SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(12).fontColor([this.colors.tertiary])
-        }.width('100%').height('100%').alignItems(VerticalAlign.Center)
-      }.id('chat-steps-' + this.row.id).width('100%').height(36).padding(0)
-        .backgroundColor(Color.Transparent)
-        .onClick((): void => {
-          this.onShowDetail(this.row);
-        })
-    }.width('100%').alignItems(HorizontalAlign.Start)
+    Column({ space: 8 }) {
+      if (this.connection !== 'connected') {
+        Text($r('app.string.chat_activity_reconnecting')).fontSize(13).fontColor(this.colors.secondary)
+          .width('100%').textAlign(TextAlign.Start)
+      } else {
+        Row({ space: 6 }) {
+          ForEach([0, 1, 2], (index: number) => {
+            XopcWaitingDot({ dotIndex: index, animate: this.animateDots })
+          }, (index: number): string => index.toString())
+        }.id('chat-waiting-dots-' + this.row.id).width(104).height(64).justifyContent(FlexAlign.Center)
+          .borderRadius(32).backgroundColor(this.colors.input)
+          .accessibilityText($r('app.string.chat_steps_working'))
+        if (this.narration) {
+          Text(this.narration).fontSize(13).fontColor(this.colors.secondary).maxLines(2)
+            .textOverflow({ overflow: TextOverflow.Ellipsis }).width('100%').textAlign(TextAlign.Start)
+        }
+      }
+    }.id('chat-waiting-' + this.row.id).width('100%').alignItems(HorizontalAlign.Start)
+  }
+}
+
+@ComponentV2
+struct XopcWaitingDot {
+  @Local colors: XopcThemeColors = appThemeColors;
+  @Param dotIndex: number = 0;
+  @Param animate: boolean = true;
+  @Local lifted: boolean = false;
+  @Monitor('animate') onAnimationChange(): void { this.lifted = this.animate; }
+  build() {
+    Circle().width(7).height(7).fill(this.colors.secondary)
+      .opacity(this.animate && this.lifted ? 0.85 : 0.4)
+      .translate({ y: this.animate && this.lifted ? -3 : 0 })
+      .scale({ x: this.animate && this.lifted ? 1.08 : 0.92, y: this.animate && this.lifted ? 1.08 : 0.92 })
+      .animation({ duration: this.animate ? 600 : 0, curve: Curve.EaseInOut,
+        delay: this.animate ? this.dotIndex * 150 : 0, iterations: this.animate ? -1 : 1, playMode: PlayMode.Alternate })
+      .onAppear((): void => { this.lifted = this.animate; })
+      .accessibilityLevel('no')
   }
 }

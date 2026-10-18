@@ -25,7 +25,7 @@ struct MessageBubble: View {
 
     var body: some View {
         if !message.text.isEmpty || !message.references.isEmpty || !message.attachments.isEmpty
-            || !message.resultLinks.isEmpty || !message.unavailableOutputs.isEmpty
+            || !message.resultLinks.isEmpty || !message.unavailableOutputs.isEmpty || !message.taskReceipts.isEmpty
         {
             messageContent
         }
@@ -37,6 +37,13 @@ struct MessageBubble: View {
                 messageText
                 references
                 attachments
+                ForEach(message.taskReceipts) { receipt in
+                    if let url = receipt.url {
+                        Link(destination: url) { taskReceiptLabel(receipt) }
+                    } else {
+                        taskReceiptLabel(receipt)
+                    }
+                }
                 ForEach(message.resultLinks) { result in
                     Link(destination: result.url) { Label(result.title, systemImage: "arrow.up.right.square") }
                         .frame(minHeight: 44)
@@ -108,6 +115,22 @@ struct MessageBubble: View {
         .alert(saveFeedback, isPresented: $isSaveFeedbackPresented) {
             Button("好", role: .cancel) {}
         }
+    }
+
+    private func taskReceiptLabel(_ receipt: HistoryTaskReceipt) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: "checklist")
+            VStack(alignment: .leading, spacing: 4) {
+                Text(verbatim: receipt.title).font(.subheadline.weight(.medium))
+                Text(receipt.operation == "started" || receipt.operation == "created"
+                     ? "已转入任务，可在进展中查看" : "查看任务")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            Spacer()
+            if receipt.canOpen { Image(systemName: "chevron.right").font(.caption) }
+        }
+        .frame(minHeight: 48)
+        .accessibilityIdentifier("chat-task-receipt-\(receipt.id)")
     }
 
     private var isUserAudioBubble: Bool {
@@ -195,8 +218,8 @@ struct MessageBubble: View {
                 .accessibilityIdentifier("chat-message-preview-\(message.id)")
                 .accessibilityHint("打开完整消息")
             } else if message.role == "assistant" {
-                MarkdownBodyView(parts: message.markdownParts, configuration: configuration,
-                                 conversationID: conversationID, markdown: message.text, streaming: message.isPending && animateStreaming)
+                ConfirmedAnswerView(message: message, configuration: configuration, conversationID: conversationID,
+                                    animate: animateStreaming)
             } else if message.role == "user" {
                 Text(verbatim: message.text).accessibilityIdentifier("chat-user-text-\(message.id)")
             }
@@ -453,5 +476,32 @@ private final class ChatAudioPlayback: NSObject, AVAudioPlayerDelegate {
             guard self.player.map(ObjectIdentifier.init) == identity else { return }
             self.stop()
         }
+    }
+}
+
+private struct ConfirmedAnswerView: View {
+    let message: TimelineMessage
+    let configuration: GatewayConfiguration
+    let conversationID: String?
+    let animate: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var displayed = ""
+
+    var body: some View {
+        MarkdownBodyView(parts: [], configuration: configuration, conversationID: conversationID,
+                         markdown: displayed, streaming: message.revealAnswer && animate)
+            .task(id: message.text) {
+                let source = message.text
+                guard message.revealAnswer, animate, !reduceMotion else { displayed = source; return }
+                let count = source.count
+                let step = max(12, (count + 31) / 32)
+                var end = 0
+                while end < count {
+                    guard !Task.isCancelled else { return }
+                    end = min(count, end + step)
+                    displayed = String(source.prefix(end))
+                    do { try await Task.sleep(for: .milliseconds(24)) } catch { return }
+                }
+            }
     }
 }

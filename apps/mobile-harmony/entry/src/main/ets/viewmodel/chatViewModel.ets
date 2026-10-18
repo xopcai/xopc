@@ -561,7 +561,13 @@ export class XopcChatViewModel {
       this.auxiliaryRevision++;
       this.snapshotMode = true;
       this.loadHistory(false);
-    } else if (event.event === 'error') this.error = payload.message ?? 'RUN_FAILED';
+    } else if (event.event === 'error') {
+      this.error = payload.message ?? 'RUN_FAILED';
+      this.liveRow = reduceChatStream(this.liveRow || this.liveActivityRow, event.event, payload, this.runId);
+      this.liveActivityRow = undefined;
+      this.trackRun(''); this.streaming = ''; this.thinking = ''; this.tool = '';
+      this.auxiliaryRevision++;
+    }
     else if (this.snapshotMode) {
       if (['thinking_delta', 'tool_start', 'tool_end', 'assistant_delta', 'progress'].includes(event.event)) {
         this.liveActivityRow = reduceChatSnapshotActivity(this.liveActivityRow, event.event, payload, this.runId);

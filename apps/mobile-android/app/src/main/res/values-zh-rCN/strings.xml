@@ -825,4 +825,5 @@
     <string name="clarify_custom">自定义回答</string>
     <string name="clarify_supplement">补充说明（可选）</string>
     <string name="clarify_cancel">取消任务</string>
+    <string name="assistant_connection_interrupted">连接中断 · 正在恢复…</string>
 </resources>

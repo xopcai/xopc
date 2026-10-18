@@ -7,13 +7,22 @@ describe('compact chat reducer', () => {
     const row = reduceChatStream(undefined, type, { delta: 'secret', args: { secret: true }, diff: 'private' }, 'r');
     expect(row.blocks).toEqual([]); expect(JSON.stringify(row)).not.toContain('secret');
   });
-  it('streams text immediately, deduplicates replay and keeps snapshots immutable', () => {
+  it('buffers unclassified text, deduplicates replay and keeps snapshots immutable', () => {
     const first = reduceChatStream(undefined, 'assistant_delta', { messageId: 'm', delta: 'hello', offset: 0 }, 'r');
     const replay = reduceChatStream(first, 'assistant_delta', { messageId: 'm', delta: 'hello', offset: 0 }, 'r');
     const next = reduceChatStream(replay, 'assistant_delta', { messageId: 'm', delta: ' world', offset: 5 }, 'r');
-    expect(chatAnswerText(first)).toBe('hello'); expect(chatAnswerText(next)).toBe('hello world');
+    expect(first.text).toBe('hello'); expect(next.text).toBe('hello world');
+    expect(chatAnswerText(first)).toBe(''); expect(chatAnswerText(next)).toBe('');
+    const answer = reduceChatStream(next, 'assistant_message_end', { messageId: 'm', presentation: 'answer' }, 'r');
+    expect(chatAnswerText(answer)).toBe('hello world');
     const notice = reduceChatStream(next, 'assistant_message_end', { messageId: 'm', presentation: 'narration' }, 'r');
     expect(chatAnswerText(notice)).toBe(''); expect(notice.blocks?.[0].presentation).toBe('narration');
+  });
+  it('stops waiting on errors without exposing an unclassified draft', () => {
+    const draft = reduceChatStream(undefined, 'assistant_delta', { messageId: 'm', delta: 'Draft', offset: 0 }, 'r');
+    const stopped = reduceChatStream(draft, 'error', { message: 'Failed' }, 'r');
+    expect(stopped.live).toBe(false);
+    expect(chatAnswerText(stopped)).toBe('');
   });
   it('retains deliveries, reviews, audio and failed outcomes at termination', () => {
     const delivery = { version: 2, operation: 'created', primary: { kind: 'note', id: 'n', title: 'Note', capabilities: ['open'] } };

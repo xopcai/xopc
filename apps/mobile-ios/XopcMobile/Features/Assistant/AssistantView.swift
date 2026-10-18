@@ -352,7 +352,7 @@ struct AssistantView<Dock: View>: View {
                         clarificationCard
                         queueCard
                         personalConnectionCard
-                        ForEach(state.messages) { message in
+                        ForEach(state.messages.filter { $0.role != "assistant" || $0.answerConfirmed }) { message in
                             MessageBubble(
                                 message: message,
                                 configuration: configuration,
@@ -375,19 +375,10 @@ struct AssistantView<Dock: View>: View {
                                 }
                             }
                         }
-                        if state.isRunActive {
-                            AssistantActivityView(
-                                label: state.activityLabel ?? AppLocalization.string("助手正在处理", locale: locale),
-                                items: state.executionActivity,
-                                runID: state.runID,
-                                onOpen: {
-                                    executionPresentation = ExecutionActivityPresentation(
-                                        conversationID: conversation?.isDraft == false ? conversation?.id : nil,
-                                        runID: state.runID,
-                                        items: state.executionActivity
-                                    )
-                                }
-                            )
+                        if state.isRunActive, state.errorMessage == nil, state.clarification == nil,
+                           !state.messages.contains(where: { $0.role == "assistant" && $0.turnId == state.runID && $0.answerConfirmed && !$0.text.isEmpty }) {
+                            AssistantActivityView(narration: state.executionActivity.last(where: { $0.id.hasPrefix("narration:") })?.title)
+                                .id(state.runID ?? "sending")
                             .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
                                 activityHeight = height
                                 updateReplySpace()
