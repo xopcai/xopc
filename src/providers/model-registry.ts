@@ -1,3 +1,4 @@
+import { cloudThinkingOverrides } from './cloud-thinking.js';
 /**
  * Model Registry - manages built-in and custom models from models.json
  * 
@@ -355,6 +356,7 @@ export class ModelRegistry {
 				provider: source.providerId,
 				baseUrl: source.baseUrl,
 				reasoning: model.reasoning,
+      ...cloudThinkingOverrides(source.providerId, model.id),
 				input: model.input.filter((value): value is 'text' | 'image' => value === 'text' || value === 'image'),
 				cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
 				contextWindow: model.contextWindow,

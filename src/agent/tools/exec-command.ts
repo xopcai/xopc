@@ -13,6 +13,8 @@ import { evaluateExecPolicy } from '../sandbox/exec-policy.js';
 import { publishArtifactPaths } from './publish-artifacts.js';
 import { formatSize, truncateTail } from './truncate.js';
 import { runProcess } from '../../process/run-process.js';
+import { classifyVerificationCommand } from '../coding/verification-command.js';
+import { readWorkspaceRevision } from '../coding/workspace-revision.js';
 
 const DEFAULT_MAX_OUTPUT_CHARS = 50_000;
 
@@ -34,6 +36,7 @@ const ExecCommandSchema = Type.Object({
     }),
   ),
   yieldTimeMs: Type.Optional(Type.Number({ minimum: 0, maximum: 60000, description: 'Return a running job after this wait; manage it with managed_job. Omit to wait for completion. Cannot be combined with outputs.' })),
+  reuseVerification: Type.Optional(Type.Boolean({ description: 'Publish outputs using this exact command and cwd from a prior successful check at the identical workspace revision, without executing again. Requires outputs. Fails closed if no matching evidence; omit when a fresh execution is required.' })),
   outputs: Type.Optional(
     Type.Array(Type.String({ minLength: 1 }), {
       maxItems: 50,
@@ -62,6 +65,8 @@ export interface ExecCommandDetails {
   aggregatedOutput: string;
   failureHint?: string;
   artifacts?: TurnOutcomeDeliverable[];
+  executionPerformed?: boolean;
+  reusedFromToolCallId?: string;
 }
 
 export interface ExecCommandUpdateDetails {
@@ -87,6 +92,7 @@ type ExecCommandParams = {
   maxOutputChars?: number;
   outputs?: string[];
   yieldTimeMs?: number;
+  reuseVerification?: boolean;
 };
 
 function clampMaxOutputChars(raw: unknown): number {
@@ -150,6 +156,7 @@ export function createExecCommandTool(
   workspaceCwd: string,
   options?: CreateExecCommandToolOptions,
 ): AgentTool {
+  const successfulChecks = new Map<string, { revision: string; toolCallId: string; details: ExecCommandDetails }>();
   return {
     name: 'exec_command',
     description: [
@@ -158,7 +165,7 @@ export function createExecCommandTool(
       'Use apply_patch for file edits; do not edit files by shell redirection unless explicitly necessary.',
       'Relative cwd values resolve under the current agent workspace.',
       'Use a fresh output directory with mkdir -p. Avoid destructive cleanup such as rm -rf on variable paths; blocked cleanup should be removed, never disguised or moved to bypass policy. A syntax preflight on Unix host commands prevents partial writes from malformed shell syntax.',
-      'Use outputs on the final verification command to persist all completed user-facing files together, including files written earlier. A successful artifact receipt needs no additional publish_artifacts call unless the file changes or capture failed.',
+      'Default delivery is a workspace link. For requested downloads, add outputs to a necessary check. After it passed, use reuseVerification:true with the same cmd/cwd and outputs to publish without executing again; never rerun solely for attachments. Successful receipts need no republishing.',
     ].join(' '),
     parameters: ExecCommandSchema,
     label: 'Run Command',
@@ -246,11 +253,25 @@ export function createExecCommandTool(
           return { content: [{ type: 'text', text: formatOutputForModel(details, maxOutputChars).text }], details };
         }
       }
+      const checkKey = JSON.stringify([policy.effectiveCwd, command]);
+      if (params.reuseVerification) {
+        signal?.throwIfAborted();
+        const previous = successfulChecks.get(checkKey);
+        const revision = await readWorkspaceRevision(workspaceCwd);
+        if (!params.outputs?.length || isolation || !revision || previous?.revision !== revision) {
+          throw new Error('Nothing executed or published: no reusable successful check at this workspace revision. Use an existing artifact receipt, publish_artifacts, or perform necessary fresh verification.');
+        }
+        const artifacts = await publishArtifactPaths({ paths: params.outputs, baseDir: policy.effectiveCwd, workspaceRoot: workspaceCwd, toolCallId });
+        return { content: [{ type: 'text', text: `No command executed. Reused successful check ${previous.toolCallId} at unchanged revision ${revision}. Artifacts: ${artifacts.filter(item => item.availability === 'available').length} published.` }],
+          details: { ...previous.details, id: undefined, durationMs: 0, stdout: '', stderr: '', aggregatedOutput: '',
+            executionPerformed: false, reusedFromToolCallId: previous.toolCallId, artifacts } };
+      }
       const runtimeEnv = options?.prepareEnv
         ? await options.prepareEnv(policy.sanitizedEnv, policy.effectiveCwd)
         : policy.sanitizedEnv;
       const owner = options?.getConversationId?.() ?? workspaceCwd;
       const registry = commandRegistry();
+      successfulChecks.delete(checkKey);
       let commandResult = await registry.start({
         workspace: workspaceCwd, isolation,
         owner, command, cwd: policy.effectiveCwd, env: { ...runtimeEnv, COLUMNS: '200' },
@@ -282,6 +303,13 @@ export function createExecCommandTool(
         const failed = details.artifacts.length - published;
         resultText += `\n\nArtifacts: ${published} published${failed > 0 ? `, ${failed} failed` : ''}.`;
         resultText += `\n${details.artifacts.map(item => `${JSON.stringify(item.title)}: ${item.availability}`).join('\n')}`;
+      }
+      if (!isolation && details.status === 'success' && details.exitCode === 0 && classifyVerificationCommand(command) === 'check') {
+        const revision = await readWorkspaceRevision(workspaceCwd);
+        const receipt = commandResult as typeof commandResult & { startRevision?: string; endRevision?: string };
+        if (revision && receipt.startRevision === revision && receipt.endRevision === revision) {
+          successfulChecks.set(checkKey, { revision, toolCallId, details });
+        }
       }
       return { content: [{ type: 'text', text: resultText }], details };
     },
