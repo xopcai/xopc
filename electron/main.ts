@@ -37,6 +37,7 @@ import {
   waitForGatewayReady,
   type GatewayProcessOptions,
 } from './gateway-process.js';
+import { registerBrowserIpc } from './browser/browser-host.js';
 import { registerAgentIpc } from './ipc/agent-ipc.js';
 import { registerUnderstandingSourcesIpc } from './ipc/understanding-sources-ipc.js';
 import { registerFileIpc } from './ipc/file-ipc.js';
@@ -1215,6 +1216,7 @@ app.whenReady().then(async () => {
   registerFileIpc(ipcMain, { allowedRoots: fileIpcRoots });
   registerSearchIpc(ipcMain, { allowedRoots: fileIpcRoots });
   registerAgentIpc(ipcMain);
+  registerBrowserIpc(ipcMain, () => mainWindow);
   registerTerminalIpc(ipcMain);
   registerUnderstandingSourcesIpc(ipcMain);
   registerSystemSettingsIpc(ipcMain, {

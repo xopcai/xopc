@@ -13,6 +13,7 @@ import { fetchTask, type TaskDetail } from '@/features/tasks/home-api';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
 import { usePageHeaderStore } from '@/stores/page-header-store';
+import { useRightWorkspaceStore } from '@/stores/right-workspace-store';
 import { useSideChatStore } from '@/stores/side-chat-store';
 import { useWorkspacePreviewStore } from '@/stores/workspace-preview-store';
 
@@ -35,15 +36,16 @@ vi.mock('@/components/shell/primary-app-header', () => ({
   PrimaryAppHeader: () => <header>{usePageHeaderStore((state) => state.end)}</header>,
 }));
 vi.mock('@/features/side-chat/side-chat-column', () => ({
-  SideChatColumn: ({ parentConversationId }: { parentConversationId: string }) => (
+  SideChatColumn: ({ parentConversationId, visible = true }: { parentConversationId: string; visible?: boolean }) => visible ? (
     <aside id="app-side-chat-panel" data-parent={parentConversationId} />
-  ),
+  ) : null,
 }));
 vi.mock('@/features/chat/context/use-session-context', () => ({ useSessionContext: () => ({ mutate: vi.fn() }) }));
 vi.mock('@/features/shares/session-share-button', () => ({ SessionShareButton: () => null }));
 vi.mock('@/features/voice/realtime/voice-call-provider', () => ({ VoiceCallProvider: ({ children }: { children: ReactNode }) => children }));
 vi.mock('@/features/voice/read-aloud-dock', () => ({ ReadAloudDockProvider: ({ children }: { children: ReactNode }) => children }));
 vi.mock('@/features/updater/use-update-reminder', () => ({ useUpdateReminder: () => null }));
+vi.mock('@/features/workspace/workspace-file-preview-dialog', () => ({ WorkspaceFilePreviewPanel: ({ active, filePath }: { active: boolean; filePath: string }) => active ? <div data-file-preview>{filePath}</div> : null }));
 vi.mock('@/components/shell/workspace-column', () => ({ WorkspaceColumn: () => <aside data-workspace /> }));
 vi.mock('@/components/shell/mobile-primary-nav', () => ({ MobilePrimaryNav: () => null }));
 vi.mock('@/components/shell/sidebar-column', () => ({ SidebarColumn: () => null }));
@@ -112,6 +114,10 @@ describe('AppShell task Sidechat', () => {
   }
 
   async function click(label: string) {
+    if (label === 'Open side chat' || label === 'Collapse side chat') {
+      await act(async () => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'b', ctrlKey: true, shiftKey: true, bubbles: true, cancelable: true })));
+      return;
+    }
     const element = [...container.querySelectorAll<HTMLElement>('button, a')]
       .find((node) => node.getAttribute('aria-label') === label || node.textContent === label);
     expect(element, label).toBeDefined();
@@ -122,7 +128,7 @@ describe('AppShell task Sidechat', () => {
     await render();
     await click('Open side chat');
     expect(container.querySelector('#app-side-chat-panel')?.getAttribute('data-parent')).toBe('conversation-task-1');
-    expect(container.querySelector('[aria-expanded="true"]')).not.toBeNull();
+    expect(useSideChatStore.getState().panes['conversation-task-1']?.open).toBe(true);
     await click('Collapse side chat');
     expect(container.querySelector('#app-side-chat-panel')).toBeNull();
     await click('Open side chat');
@@ -171,6 +177,25 @@ describe('AppShell task Sidechat', () => {
     expect(container.querySelector('#app-side-chat-panel')).toBeNull();
   });
 
+  it('keeps the main chat mounted with its draft while switching file and side chat tabs', async () => {
+    await render('/chat/ordinary');
+    const draft = container.querySelector<HTMLInputElement>('[data-main-draft]')!;
+    draft.value = 'unsent main draft';
+    let file = '';
+    await act(async () => { file = useRightWorkspaceStore.getState().openFile({ path: 'report.md', conversationId: 'ordinary' }, 'ordinary'); });
+    expect(container.querySelector('[data-file-preview]')?.textContent).toBe('report.md');
+    expect(container.querySelector('[data-main-draft]')).toBe(draft);
+    await act(async () => useSideChatStore.getState().addTab({ id: 'side-1', title: 'Side chat', parentConversationId: 'ordinary' }));
+    expect(container.querySelector('#app-side-chat-panel')).not.toBeNull();
+    expect(container.querySelector('[data-main-draft]')).toBe(draft);
+    expect(draft.value).toBe('unsent main draft');
+    await act(async () => useRightWorkspaceStore.getState().activate(file, 'ordinary'));
+    expect(container.querySelector('[data-file-preview]')?.textContent).toBe('report.md');
+    await act(async () => useRightWorkspaceStore.getState().setOpen(false, 'ordinary'));
+    expect(useRightWorkspaceStore.getState().panes.ordinary.open).toBe(false);
+    expect(draft.value).toBe('unsent main draft');
+  });
+
   it('creates a side chat from selected task text using the real parent conversation', async () => {
     await render();
     const message = container.querySelector('[data-chat-message-index]')!;
@@ -195,6 +220,7 @@ describe('AppShell task Sidechat', () => {
 
 function OrdinaryChat() {
   return <>
+    <input data-main-draft aria-label="Main draft" />
     <ChatPageHeaderRegistration conversationId="ordinary" hasMessages chatHeadline="Chat"
       chatAgents={[]} showChatAgentSelector={false} chatAgentId="main"
       onChatAgentChange={() => {}} chatAgentDisabled />

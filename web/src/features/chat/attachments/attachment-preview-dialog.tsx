@@ -1,6 +1,9 @@
 import { parseFileResourceArtifactUri } from '@xopcai/gateway-contract';
 import * as Dialog from '@radix-ui/react-dialog';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useWorkspaceOwner } from '@/features/right-workspace/workspace-context';
+import { useRightWorkspaceStore } from '@/stores/right-workspace-store';
+import { createPortal } from 'react-dom';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 import { ShareLinkDialog } from '@/features/shares/share-link-dialog';
@@ -19,8 +22,21 @@ import { interaction } from '@/lib/interaction';
 import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
 
-export function AttachmentPreviewDialog({
+export function AttachmentPreviewDialog(props: Parameters<typeof AttachmentPreviewContent>[0]) {
+  const owner = useWorkspaceOwner();
+  useEffect(() => {
+    if (!owner || props.embedded || !props.open || !props.attachment) return;
+    useRightWorkspaceStore.getState().openFile({ attachment: props.attachment, images: props.images, conversationId: props.conversationId || undefined, resultRevision: props.resultRevision }, owner);
+    props.onClose();
+  }, [owner, props]);
+  if (owner && !props.embedded) return null;
+  return <AttachmentPreviewContent {...props} />;
+}
+
+function AttachmentPreviewContent({
   open,
+  embedded = false,
+  tabId,
   attachment,
   images = [],
   resultRevision,
@@ -31,6 +47,8 @@ export function AttachmentPreviewDialog({
   onClose,
 }: {
   open: boolean;
+  embedded?: boolean;
+  tabId?: string;
   attachment: MessageAttachment | null;
   images?: MessageAttachment[];
   resultRevision?: number;
@@ -131,6 +149,78 @@ export function AttachmentPreviewDialog({
     interaction.focusRingBase,
   );
 
+  const fileContent = <>
+            <FilePreview
+              header={{
+                expanded,
+                onToggleExpanded: canExpandPreview ? () => setExpanded((value) => !value) : undefined,
+                hideClose: embedded,
+                onClose: handleClose,
+                share: canShare ? { onClick: handleShare, loading: share.loading } : undefined,
+                openWithSystemApp: canOpenWithLocalApp ? {
+                  onClick: () => void handleOpenWithLocalApp(),
+                  loading: openingLocalApp,
+                } : undefined,
+                textView: showToggle ? {
+                  active: resolved.showExtractedText,
+                  onChange: (active) => {
+                    resolved.setShowExtractedText(active);
+                    resolved.clearLoadError();
+                  },
+                } : undefined,
+              }}
+              chat={resolved.downloadBuffer ? {
+                conversationId,
+                createFile: async () => new File([resolved.downloadBuffer!], resolved.fileName, { type: resolved.descriptor.mimeType }),
+              } : undefined}
+              onImageSwipe={hasGallery ? navigateImage : undefined}
+              language={language}
+              descriptor={tabId ? { ...resolved.descriptor, id: tabId } : resolved.descriptor}
+              loading={resolved.loading}
+              loadError={resolved.loadError}
+              textContent={resolved.textContent}
+              binaryBuffer={resolved.binaryBuffer}
+              showExtractedText={resolved.showExtractedText}
+              extractedText={resolved.extractedText}
+              extractedTextTruncated={resolved.extractedTextTruncated}
+              actions={previewActions}
+            />
+            {resultRevision ? (
+              <p className="shrink-0 border-t border-edge px-4 py-2 text-xs text-fg-muted" data-result-revision>
+                {language === 'zh' ? '成果版本' : 'Result version'} {resultRevision}
+              </p>
+            ) : null}
+            {hasGallery ? (
+              <div className="flex shrink-0 items-center justify-center gap-4 border-t border-edge bg-surface-panel px-3 py-2">
+                <button type="button" aria-label={labels.attachmentPreviewPreviousImage}
+                  disabled={imageIndex === 0} onClick={() => navigateImage('previous')}
+                  className={cn('flex size-11 touch-manipulation items-center justify-center rounded-lg hover:bg-surface-hover disabled:opacity-30', interaction.focusRingBase)}>
+                  <ChevronLeft size={20} aria-hidden="true" />
+                </button>
+                <span role="status" className="min-w-16 text-center text-sm tabular-nums text-fg-muted">{imageIndex + 1} / {images.length}</span>
+                <button type="button" aria-label={labels.attachmentPreviewNextImage}
+                  disabled={imageIndex === images.length - 1} onClick={() => navigateImage('next')}
+                  className={cn('flex size-11 touch-manipulation items-center justify-center rounded-lg hover:bg-surface-hover disabled:opacity-30', interaction.focusRingBase)}>
+                  <ChevronRight size={20} aria-hidden="true" />
+                </button>
+              </div>
+            ) : null}
+  </>;
+  if (embedded) {
+    const panel = <div className={cn('flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-surface-panel', expanded && 'fixed inset-0 z-[85] h-[100dvh] w-screen', expanded && electronPreviewViewportClass())}>{fileContent}</div>;
+    return <>{expanded ? createPortal(panel, document.body) : panel}
+    <ShareLinkDialog
+      open={share.dialogOpen}
+      onOpenChange={share.handleOpenChange}
+      loading={share.loading}
+      error={share.error}
+      result={share.result}
+      pendingParams={share.pendingParams}
+      onConfirm={(options) => void share.confirmShareLink(options)}
+    />
+    </>;
+  }
+
   return (
     <>
     <Dialog.Root open={open} onOpenChange={(o) => !o && handleClose()}>
@@ -169,60 +259,7 @@ export function AttachmentPreviewDialog({
               'shadow-float dark:shadow-elevated',
             )}
           >
-            <FilePreview
-              header={{
-                expanded,
-                onToggleExpanded: canExpandPreview ? () => setExpanded((value) => !value) : undefined,
-                onClose: handleClose,
-                share: canShare ? { onClick: handleShare, loading: share.loading } : undefined,
-                openWithSystemApp: canOpenWithLocalApp ? {
-                  onClick: () => void handleOpenWithLocalApp(),
-                  loading: openingLocalApp,
-                } : undefined,
-                textView: showToggle ? {
-                  active: resolved.showExtractedText,
-                  onChange: (active) => {
-                    resolved.setShowExtractedText(active);
-                    resolved.clearLoadError();
-                  },
-                } : undefined,
-              }}
-              chat={resolved.downloadBuffer ? {
-                conversationId,
-                createFile: async () => new File([resolved.downloadBuffer!], resolved.fileName, { type: resolved.descriptor.mimeType }),
-              } : undefined}
-              onImageSwipe={hasGallery ? navigateImage : undefined}
-              language={language}
-              descriptor={resolved.descriptor}
-              loading={resolved.loading}
-              loadError={resolved.loadError}
-              textContent={resolved.textContent}
-              binaryBuffer={resolved.binaryBuffer}
-              showExtractedText={resolved.showExtractedText}
-              extractedText={resolved.extractedText}
-              extractedTextTruncated={resolved.extractedTextTruncated}
-              actions={previewActions}
-            />
-            {resultRevision ? (
-              <p className="shrink-0 border-t border-edge px-4 py-2 text-xs text-fg-muted" data-result-revision>
-                {language === 'zh' ? '成果版本' : 'Result version'} {resultRevision}
-              </p>
-            ) : null}
-            {hasGallery ? (
-              <div className="flex shrink-0 items-center justify-center gap-4 border-t border-edge bg-surface-panel px-3 py-2">
-                <button type="button" aria-label={labels.attachmentPreviewPreviousImage}
-                  disabled={imageIndex === 0} onClick={() => navigateImage('previous')}
-                  className={cn('flex size-11 touch-manipulation items-center justify-center rounded-lg hover:bg-surface-hover disabled:opacity-30', interaction.focusRingBase)}>
-                  <ChevronLeft size={20} aria-hidden="true" />
-                </button>
-                <span role="status" className="min-w-16 text-center text-sm tabular-nums text-fg-muted">{imageIndex + 1} / {images.length}</span>
-                <button type="button" aria-label={labels.attachmentPreviewNextImage}
-                  disabled={imageIndex === images.length - 1} onClick={() => navigateImage('next')}
-                  className={cn('flex size-11 touch-manipulation items-center justify-center rounded-lg hover:bg-surface-hover disabled:opacity-30', interaction.focusRingBase)}>
-                  <ChevronRight size={20} aria-hidden="true" />
-                </button>
-              </div>
-            ) : null}
+            {fileContent}
           </div>
 
           <button

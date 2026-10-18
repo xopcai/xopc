@@ -1,5 +1,6 @@
 {
   "chat": {
+    "modelRequiredForResources": "Choose a configured model for this conversation, then try again.",
     "referenceFallback": "Reference",
     "reviewCard": {
       "running": "Reviewing changes",
@@ -1006,6 +1007,7 @@
     "userMessageDeleteCancel": "Cancel",
     "userMessageDeleteOk": "Delete",
     "terminal": {
+      "retry": "Retry terminal",
       "title": "Terminal",
       "open": "Open terminal",
       "hide": "Hide terminal",

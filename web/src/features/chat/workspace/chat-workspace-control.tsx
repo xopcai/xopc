@@ -1,5 +1,5 @@
 import * as Dialog from '@radix-ui/react-dialog';
-import { FolderInput, FolderOpen } from 'lucide-react';
+import { FolderInput, SquarePlus } from 'lucide-react';
 import { useState } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -9,11 +9,12 @@ import { WorkingDirectoryPickerModal } from '@/features/fs/working-directory-pic
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import { useLocaleStore } from '@/stores/locale-store';
-import { useSideChatStore } from '@/stores/side-chat-store';
+import { useRightWorkspaceStore } from '@/stores/right-workspace-store';
 import { useWorkspacePanelStore } from '@/stores/workspace-panel-store';
 
 export function ChatWorkspaceControl({
   conversationId,
+  directoryOnly = false,
   workspacePath,
   canChangeWorkspace,
   disabled,
@@ -21,6 +22,7 @@ export function ChatWorkspaceControl({
   onWorkspaceChange,
 }: {
   conversationId: string | null;
+  directoryOnly?: boolean;
   workspacePath?: string | null;
   canChangeWorkspace: boolean;
   disabled: boolean;
@@ -30,8 +32,7 @@ export function ChatWorkspaceControl({
   const language = useLocaleStore((state) => state.language);
   const m = messages(language);
   const openWorkspacePanelForSession = useWorkspacePanelStore((state) => state.openForSession);
-  const workspacePanelOpen = useWorkspacePanelStore((state) => state.open);
-  const setSideChatOpen = useSideChatStore((state) => state.setOpen);
+  const workspacePanelOpen = useRightWorkspaceStore((state) => state.panes[conversationId ?? 'new']?.open === true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const normalizedPath = workspacePath?.trim() ?? '';
   const workspaceName = normalizedPath ? folderDisplayName(normalizedPath) : m.chat.workingDirectory.notSet;
@@ -47,51 +48,57 @@ export function ChatWorkspaceControl({
     initialPath: normalizedPath,
     onPicked: applyWorkspace,
   });
-  const pickerDisabled = disabled || directoryPicker.picking;
+  const pickerDisabled = disabled || !available || directoryPicker.picking;
 
-  const openProjectFiles = () => {
-    if (conversationId) setSideChatOpen(conversationId, false);
+  const toggleWorkspace = () => {
+    const workspace = useRightWorkspaceStore.getState();
+    const scope = conversationId ?? 'new';
+    workspace.setScope(scope);
+    const home = workspace.panes[scope]?.tabs.find((tab) => tab.kind === 'home');
+    if (home) workspace.activate(home.id, scope);
+    else workspace.openTools(scope);
     openWorkspacePanelForSession(conversationId ?? '');
   };
 
   return (
     <>
       <div className="flex min-w-0 items-center gap-0.5">
-        <button
+        {!directoryOnly ? <button
           type="button"
-          disabled={!available}
           className={cn(
             'inline-flex size-8 shrink-0 items-center justify-center rounded-lg text-fg-muted transition-colors',
             'hover:bg-surface-hover hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
             workspacePanelOpen && 'bg-surface-hover text-fg',
-            !available && 'cursor-not-allowed opacity-50',
           )}
-          title={`${m.workspace.openFiles}: ${normalizedPath || workspaceName}`}
-          aria-label={`${m.workspace.openFiles}: ${workspaceName}`}
+          title={language === 'zh' ? '打开工具' : 'Open workspace tools'}
+          aria-label={language === 'zh' ? '打开工具' : 'Open workspace tools'}
           aria-pressed={workspacePanelOpen}
-          onClick={openProjectFiles}
+          aria-controls="app-workspace-panel"
+          data-workspace-trigger
+          onClick={toggleWorkspace}
         >
-          <FolderOpen className="size-4 shrink-0" strokeWidth={1.75} aria-hidden />
-        </button>
-        {canChangeWorkspace ? (
+          <SquarePlus className="size-4 shrink-0" strokeWidth={1.75} aria-hidden />
+        </button> : null}
+        {directoryOnly && canChangeWorkspace ? (
           <button
             type="button"
             disabled={pickerDisabled}
             className={cn(
-              'inline-flex size-8 shrink-0 items-center justify-center rounded-lg text-fg-muted transition-colors',
+              'inline-flex h-8 max-w-full shrink-0 px-2 items-center justify-center rounded-lg text-fg-muted transition-colors',
               'hover:bg-surface-hover hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
               pickerDisabled && 'cursor-not-allowed opacity-50',
             )}
-            title={m.chat.workingDirectory.chooseFolder}
+            title={`${m.chat.workingDirectory.chooseFolder}: ${normalizedPath || workspaceName}`}
             aria-label={m.chat.workingDirectory.chooseFolder}
             onClick={directoryPicker.pick}
           >
-            <FolderInput className="size-4" strokeWidth={1.75} aria-hidden />
+            <FolderInput className="mr-2 size-4" strokeWidth={1.75} aria-hidden />
+            <span className="truncate text-xs">{m.chat.workingDirectory.chooseFolder}</span>
           </button>
         ) : null}
       </div>
 
-      {!directoryPicker.hasNativePicker ? (
+      {directoryOnly && !directoryPicker.hasNativePicker ? (
         <WorkingDirectoryPickerModal
           open={directoryPicker.modalOpen}
           onOpenChange={directoryPicker.setModalOpen}

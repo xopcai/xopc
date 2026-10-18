@@ -123,9 +123,22 @@ describe('ChatTerminalDock', () => {
     materialize.mockRejectedValueOnce(new Error('Conversation environment is not ready yet'));
     await act(async () => root.render(<ChatTerminalDock conversationId="session-key" />));
 
-    expect(container.querySelector('[role="alert"]')?.textContent).toBe('Conversation environment is not ready yet');
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain('Conversation environment is not ready yet');
     expect(resolveSession).not.toHaveBeenCalled();
     expect(api.create).not.toHaveBeenCalled();
+  });
+
+  it('retries a failed preparation in place without adding another terminal tab', async () => {
+    materialize.mockRejectedValueOnce(new Error('Choose a model first'));
+    await act(async () => root.render(<ChatTerminalDock conversationId="session-key" />));
+    expect(api.create).not.toHaveBeenCalled();
+    const retry = [...container.querySelectorAll<HTMLButtonElement>('button')].find(button => button.textContent === 'Retry terminal');
+    expect(retry).toBeDefined();
+    await act(async () => retry!.click());
+    expect(materialize).toHaveBeenCalledTimes(2);
+    expect(api.create).toHaveBeenCalledOnce();
+    expect(container.querySelector('[role="alert"]')).toBeNull();
+    expect(container.querySelectorAll('[role="tab"]')).toHaveLength(1);
   });
 
   it('does not open a terminal if the dock unmounts during session preparation', async () => {
