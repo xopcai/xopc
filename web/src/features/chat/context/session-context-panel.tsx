@@ -1,6 +1,6 @@
 import * as Popover from '@radix-ui/react-popover';
 import { AppWindow, Check, Copy, Database, FileText, Folder, FolderKanban, GitBranch, ListTodo, MessagesSquare, Monitor, Paperclip, RefreshCw, Target } from 'lucide-react';
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 
 import { Skeleton } from '@/components/ui/skeleton';
@@ -18,6 +18,7 @@ import { useSessionContext } from './use-session-context';
 
 export interface SessionContextPanelProps {
   conversationId: string | null;
+  environmentAction?: ReactNode;
   draftRefs?: ComposerContextRef[];
   draftAttachments?: ComposerAttachmentSummary[];
   draftPage?: ComposerAttachmentSummary | null;
@@ -139,11 +140,12 @@ export function SessionContextPanel({ conversationId, draftRefs = [], draftAttac
               {sourceNoteAvailable && props.onDraftSourceNote ? <button type="button" className={actionClass} onClick={() => { close(); props.onDraftSourceNote?.(); }}>{props.draftSourceNoteLabel}</button> : null}
             </section> : null}
 
-            {conversationId && (environment || environmentUnavailable) ? <section className="border-t border-edge-subtle pt-3">
+            {((conversationId && (environment || environmentUnavailable)) || props.environmentAction) ? <section className="border-t border-edge-subtle pt-3">
               <div className="mb-1 flex items-center justify-between px-2">
                 <h3 className="text-sm text-fg-subtle">{copy.environment}</h3>
                 {environmentUnavailable ? retry() : null}
               </div>
+              {!environment ? props.environmentAction : null}
               {environment ? <>
                 <div className="flex min-w-0 items-center gap-3 px-2 py-2 text-sm text-fg">
                   <Monitor className="size-4 shrink-0" strokeWidth={1.75} aria-hidden />
@@ -156,6 +158,7 @@ export function SessionContextPanel({ conversationId, draftRefs = [], draftAttac
                     {environmentPathCopied ? <Check className="size-3.5" aria-hidden /> : <Copy className="size-3.5" aria-hidden />}
                   </button>
                 </div>
+                {props.environmentAction}
                 {!environment.available ? <p className="px-2 py-1 text-xs text-fg-muted">{copy.unavailableEnvironment}</p> : null}
                 {currentProject && project?.workspaceRoot ? <Link className={actionClass} to={newChatHrefForProject(currentProject.id)} state={{ forceNewChat: true, agentId: props.agentId, temporary: props.temporary }} onClick={close}>{copy.newEnvironment}</Link> : null}
               </> : <p className="px-2 py-2 text-xs text-fg-muted">{copy.unavailable}</p>}

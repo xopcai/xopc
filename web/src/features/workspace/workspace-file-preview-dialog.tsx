@@ -1,7 +1,10 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 
 import { useFilePreviewExpanded } from '@/features/file-preview/use-file-preview-expanded';
+import { readPreviewView, savePreviewView } from '@/features/preview-runtime/preview-view-state';
+import { registerFileCloseGuard } from '@/features/right-workspace/file-close-guards';
+import { useRightWorkspaceStore } from '@/stores/right-workspace-store';
 import { FilePreview } from '@/features/file-preview/file-preview';
 import { Skeleton } from '@/components/ui/skeleton';
 import { showComposerNotification } from '@/features/chat/composer/composer-notifications';
@@ -35,6 +38,8 @@ function formatWorkspaceFileMtime(mtimeMs: number, language: 'en' | 'zh'): strin
 }
 
 export interface WorkspaceFilePreviewPanelProps {
+  tabId?: string;
+  active?: boolean;
   filePath: string | null;
   onClose: () => void;
   targetLine?: number | null;
@@ -49,6 +54,8 @@ export interface WorkspaceFilePreviewPanelProps {
 
 export function WorkspaceFilePreviewPanel({
   filePath,
+  tabId,
+  active = true,
   onClose,
   targetLine,
   resultRevision,
@@ -60,7 +67,7 @@ export function WorkspaceFilePreviewPanel({
   const m = messages(language);
   const resolvedTheme = useThemeStore((s) => s.resolved);
 
-  const state = useWorkspacePreviewState({ filePath, projectId, conversationId, agentId });
+  const state = useWorkspacePreviewState({ filePath, projectId, conversationId, agentId, initialEditMode: tabId ? readPreviewView(tabId).sourceEditMode : false });
   const {
     dialogOpen,
     loading,
@@ -74,6 +81,28 @@ export function WorkspaceFilePreviewPanel({
   const [pathCopied, setPathCopied] = useState(false);
   const [markdownWordWrap, setMarkdownWordWrap] = useState(false);
   const { expanded, setExpanded } = useFilePreviewExpanded(Boolean(filePath), dialogOpen);
+
+  useEffect(() => {
+    if (tabId) savePreviewView(tabId, { sourceEditMode: state.sourceEditMode });
+  }, [state.sourceEditMode, tabId]);
+  useEffect(() => {
+    if (!tabId) return;
+    return registerFileCloseGuard(tabId, state.flushSource);
+  }, [state.flushSource, tabId]);
+  useEffect(() => {
+    if (tabId && state.fileResourceId) useRightWorkspaceStore.getState().resolveFileIdentity(tabId, state.fileResourceId);
+  }, [state.fileResourceId, tabId]);
+  useEffect(() => {
+    if (tabId) useRightWorkspaceStore.getState().setFileStatus(tabId, state.saveStatus === 'error' ? 'error' : state.dirty ? 'dirty' : null);
+  }, [state.dirty, state.saveStatus, tabId]);
+  useEffect(() => {
+    const refresh = () => { if (document.visibilityState !== 'hidden') void state.checkForUpdates(); };
+    window.addEventListener('focus', refresh);
+    window.addEventListener('workspace-refresh-files', refresh);
+    window.addEventListener('agent-run-ended', refresh);
+    document.addEventListener('visibilitychange', refresh);
+    return () => { window.removeEventListener('focus', refresh); window.removeEventListener('workspace-refresh-files', refresh); window.removeEventListener('agent-run-ended', refresh); document.removeEventListener('visibilitychange', refresh); };
+  }, [state.checkForUpdates]);
 
   const name = filePath ? getPreviewFileName(filePath) : '';
   const isEditableText = ['text', 'markdown', 'code', 'html'].includes(state.descriptor.type);
@@ -138,7 +167,7 @@ export function WorkspaceFilePreviewPanel({
     canChooseOpenWithApp: state.canChooseOpenWithApp,
   };
 
-  if (!filePath) {
+  if (!filePath || !active) {
     return null;
   }
 
@@ -164,6 +193,7 @@ export function WorkspaceFilePreviewPanel({
                   {targetLine ? ` · Line ${targetLine}` : ''}
                 </p>
               ) : null}
+              {state.externalChange ? <span role="status" className="text-fg-muted">{language === 'zh' ? '文件已更新，请先处理当前编辑' : 'File changed; review your current edits'}</span> : null}
               {resultRevision ? (
                 <span className="shrink-0" data-result-revision>
                   {language === 'zh' ? '成果版本' : 'Result version'} {resultRevision}
@@ -182,7 +212,10 @@ export function WorkspaceFilePreviewPanel({
             </>
           ),
           expanded,
+          onRefresh: state.refresh,
+          onRetrySave: state.saveStatus === 'error' ? () => void state.flushSource() : undefined,
           onToggleExpanded: canExpandPreview ? () => setExpanded((value) => !value) : undefined,
+          hideClose: Boolean(tabId),
           onClose: handleClose,
           edit: isEditableText ? {
             active: state.sourceEditMode,
@@ -204,7 +237,7 @@ export function WorkspaceFilePreviewPanel({
         chat={{ createFile: state.createAttachmentFile, projectId, conversationId, agentId, disabled: state.saveStatus === 'saving' }}
         language={language}
         resolvedTheme={resolvedTheme}
-        descriptor={state.descriptor}
+        descriptor={tabId ? { ...state.descriptor, id: tabId } : state.descriptor}
         loading={state.loading}
         loadError={state.loadError}
         textContent={state.textContent}

@@ -25,6 +25,19 @@ function notifyPreload(
 }
 
 contextBridge.exposeInMainWorld("electronAPI", {
+  browser: {
+    ensure: (input: unknown) => ipcRenderer.invoke('browser:ensure', input),
+    navigate: (id: string, url: string) => ipcRenderer.invoke('browser:navigate', id, url),
+    command: (id: string, command: string) => ipcRenderer.invoke('browser:command', id, command),
+    present: (id: string, bounds: unknown) => ipcRenderer.invoke('browser:present', id, bounds),
+    close: (id: string) => ipcRenderer.invoke('browser:close', id),
+    release: () => ipcRenderer.invoke('browser:release'),
+    onEvent: (callback: (event: unknown) => void) => {
+      const listener = (_event: unknown, value: unknown) => callback(value);
+      ipcRenderer.on('browser:event', listener);
+      return () => ipcRenderer.removeListener('browser:event', listener);
+    },
+  },
   computer: {
     status: () => ipcRenderer.invoke('computer:status'),
     access: () => ipcRenderer.invoke('computer:access'),

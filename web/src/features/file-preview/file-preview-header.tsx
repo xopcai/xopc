@@ -1,6 +1,7 @@
-import { Check, Copy, Download, ExternalLink, Eye, FolderOpen, Link2, Loader2, Maximize2, MessageSquarePlus, Minimize2, MoreHorizontal, Pencil, WrapText, X } from 'lucide-react';
-import { useEffect, useState, type ReactNode } from 'react';
+import { Check, Copy, Download, ExternalLink, Eye, FolderOpen, Link2, Loader2, Maximize2, MessageSquarePlus, Minimize2, MoreHorizontal, Paperclip, Pencil, RefreshCw, Save, WrapText, X } from 'lucide-react';
+import { useContext, useEffect, useState, type ReactNode } from 'react';
 
+import { WorkspaceTreeControlContext } from '@/features/right-workspace/workspace-context';
 import { APP_CHROME_NO_DRAG_CLASS } from '@/components/shell/app-chrome';
 import { PreviewRuntimeToolbar, type PreviewRuntimeController } from '@/features/preview-runtime/preview-runtime';
 import type { PreviewActions } from '@/features/preview-runtime/preview-types';
@@ -17,12 +18,16 @@ type HeaderAction = {
 };
 
 export type FilePreviewHeaderProps = {
+  referenceActions?: Array<{ label: string; onClick: () => void; disabled?: boolean }>;
+  onRefresh?: () => void;
+  onRetrySave?: () => void;
   name: string;
   subtitle?: ReactNode;
   controller: PreviewRuntimeController;
   actions: PreviewActions;
   expanded: boolean;
   onToggleExpanded?: () => void;
+  hideClose?: boolean;
   onClose: () => void;
   edit?: { active: boolean; onToggle: () => void };
   wordWrap?: { active: boolean; onToggle: () => void };
@@ -92,8 +97,8 @@ function PreviewMenuItem({
 
 /** Shared file header, using the workspace preview's existing layout and actions. */
 export function FilePreviewHeader({
-  name, subtitle, controller, actions, expanded, onToggleExpanded, onClose,
-  edit, wordWrap, editInNewChat, share, openWithSystemApp, chooseApp,
+  referenceActions = [], onRefresh, onRetrySave, name, subtitle, controller, actions, expanded, onToggleExpanded, onClose,
+  hideClose, edit, wordWrap, editInNewChat, share, openWithSystemApp, chooseApp,
   recommendedApps = [], recentApps = [], onOpenWithApp, onRevealInFolder, copyPath, textView, openInBrowser,
 }: FilePreviewHeaderProps) {
   const language = useLocaleStore((s) => s.language);
@@ -104,6 +109,7 @@ export function FilePreviewHeader({
       : controller.plugin.id === 'spreadsheet' ? labels.chat.attachmentPreviewSpreadsheet
         : m.preview;
   const desktop = isElectron();
+  const treeControl = useContext(WorkspaceTreeControlContext);
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const hasPreviewControls = controller.plugin.capabilities.some((capability) =>
     ['zoom', 'search', 'rotate', 'pageNavigation'].includes(capability),
@@ -127,13 +133,17 @@ export function FilePreviewHeader({
   };
 
   return (
-    <div className={cn('shrink-0 bg-surface-hover/20 px-3 py-2 sm:px-4', APP_CHROME_NO_DRAG_CLASS)}>
+    <div data-workspace-toolbar className={cn('shrink-0 bg-surface-hover/20 px-3 py-2 sm:px-4', APP_CHROME_NO_DRAG_CLASS)}>
       <div className="flex min-w-0 items-start gap-2">
         <div className="min-w-0 flex-1 py-0.5">
           <h2 className="truncate text-base font-semibold leading-tight tracking-tight text-fg" title={name}>{name}</h2>
           {subtitle ? <div className="mt-0.5 flex min-w-0 items-center gap-2 text-xs leading-tight text-fg-muted">{subtitle}</div> : null}
         </div>
         <div className="flex shrink-0 items-center gap-1">
+          {treeControl}
+          {referenceActions[0] ? <HeaderButton label={referenceActions[0].label} disabled={referenceActions[0].disabled} onClick={referenceActions[0].onClick}><Paperclip className="size-4" /></HeaderButton> : null}
+          {onRetrySave ? <HeaderButton label={language === 'zh' ? '重试保存' : 'Retry save'} onClick={onRetrySave}><Save className="size-4" /></HeaderButton> : null}
+          {onRefresh ? <HeaderButton label={language === 'zh' ? '刷新文件' : 'Refresh file'} onClick={onRefresh}><RefreshCw className="size-4" /></HeaderButton> : null}
           {controller.plugin.capabilities.includes('edit') ? <HeaderButton label={edit?.active ? m.preview : m.edit} active={edit?.active ?? false} disabled={!edit} onClick={edit?.onToggle}>
             {edit?.active ? <Eye className="size-4" /> : <Pencil className="size-4" />}
           </HeaderButton> : null}
@@ -158,6 +168,7 @@ export function FilePreviewHeader({
             </button>
             {moreMenuOpen ? (
               <div role="menu" data-file-preview-menu className="absolute right-0 top-full z-50 mt-1 w-60 rounded-lg border border-edge bg-surface-panel p-1 shadow-popover">
+                {referenceActions.slice(1).map((action) => <PreviewMenuItem key={action.label} icon={<Paperclip className="size-4" />} label={action.label} disabled={action.disabled} onClick={() => runMenuAction(action.onClick)} />)}
                 {openInBrowser ? (
                   <a href={openInBrowser.href} target="_blank" rel="noopener noreferrer" role="menuitem"
                     className="flex h-9 w-full items-center gap-2.5 rounded-md px-2.5 text-sm text-fg hover:bg-surface-hover"
@@ -192,8 +203,7 @@ export function FilePreviewHeader({
               </div>
             ) : null}
           </div>
-          <div className="mx-0.5 h-5 w-px bg-edge-subtle" aria-hidden />
-          <HeaderButton label={m.close} onClick={onClose}><X className="size-4" strokeWidth={1.75} /></HeaderButton>
+          {!hideClose ? <><div className="mx-0.5 h-5 w-px bg-edge-subtle" aria-hidden /><HeaderButton label={m.close} onClick={onClose}><X className="size-4" strokeWidth={1.75} /></HeaderButton></> : null}
         </div>
       </div>
       {hasPreviewControls || textView ? <div className="mt-2 flex items-center gap-2 overflow-x-auto pb-0.5">

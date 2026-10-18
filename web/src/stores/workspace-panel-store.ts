@@ -1,5 +1,7 @@
 import { create } from 'zustand';
 
+import { useRightWorkspaceStore } from '@/stores/right-workspace-store';
+
 const STORAGE_KEY = 'xopc-web-workspace-panel-open';
 const WIDTH_STORAGE_KEY = 'xopc-web-workspace-panel-width-px';
 
@@ -63,6 +65,7 @@ type WorkspacePanelState = {
 export const useWorkspacePanelStore = create<WorkspacePanelState>((set, get) => ({
   open: readOpen(),
   setOpen: (open) => {
+    useRightWorkspaceStore.getState().setOpen(open);
     set(open ? { open } : { open, conversationIdOverride: null });
     queueMicrotask(() => writeOpen(open));
   },
@@ -72,6 +75,8 @@ export const useWorkspacePanelStore = create<WorkspacePanelState>((set, get) => 
   conversationIdOverride: null,
   openForSession: (conversationId) => {
     const normalizedConversationId = conversationId.trim();
+    useRightWorkspaceStore.getState().setScope(normalizedConversationId || 'new');
+    useRightWorkspaceStore.getState().setOpen(true, normalizedConversationId || 'new');
     set({ open: true, conversationIdOverride: normalizedConversationId || null });
     queueMicrotask(() => writeOpen(true));
   },

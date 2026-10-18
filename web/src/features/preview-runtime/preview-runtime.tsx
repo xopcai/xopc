@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import { readPreviewView, savePreviewView } from './preview-view-state';
 import { messages } from '@/i18n/messages';
 import { Skeleton } from '@/components/ui/skeleton';
 import { selectPreviewPlugin } from '@/features/preview-runtime/preview-plugins';
@@ -10,11 +11,12 @@ export type PreviewRuntimeController = ReturnType<typeof usePreviewRuntimeContro
 
 export function usePreviewRuntimeController(descriptor: PreviewRuntimeRenderProps['descriptor']) {
   const plugin = selectPreviewPlugin(descriptor.type);
-  const [zoom, setZoom] = useState(1);
-  const [rotation, setRotation] = useState(0);
-  const [page, setPageRaw] = useState(1);
-  const [pageCount, setPageCount] = useState<number | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
+  const cached = readPreviewView(descriptor.id);
+  const [zoom, setZoom] = useState(cached.zoom);
+  const [rotation, setRotation] = useState(cached.rotation);
+  const [page, setPageRaw] = useState(cached.page);
+  const [pageCount, setPageCount] = useState<number | null>(cached.pageCount);
+  const [searchQuery, setSearchQuery] = useState(cached.searchQuery);
 
   const setPage = useCallback(
     (next: number) => {
@@ -25,12 +27,17 @@ export function usePreviewRuntimeController(descriptor: PreviewRuntimeRenderProp
   );
 
   useEffect(() => {
-    setZoom(1);
-    setRotation(0);
-    setPageRaw(1);
-    setPageCount(null);
-    setSearchQuery('');
+    const saved = readPreviewView(descriptor.id);
+    setZoom(saved.zoom);
+    setRotation(saved.rotation);
+    setPageRaw(saved.page);
+    setPageCount(saved.pageCount);
+    setSearchQuery(saved.searchQuery);
   }, [descriptor.id, descriptor.type]);
+
+  const latest = useRef({ zoom, rotation, page, pageCount, searchQuery });
+  latest.current = { zoom, rotation, page, pageCount, searchQuery };
+  useEffect(() => () => savePreviewView(descriptor.id, latest.current), [descriptor.id]);
 
   const controls = useMemo(
     () => ({ zoom, rotation, page, pageCount, searchQuery, setPageCount, setPage }),

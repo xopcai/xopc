@@ -6,7 +6,7 @@ import { apiFetch } from '@/lib/fetch';
 import { apiFetchWithStartupRetry } from '@/lib/gateway-startup-retry';
 import type { Message } from '@/features/chat/messages/messages.types';
 import {
-  SessionManager,
+  SessionManager, SessionModelRequiredError,
 } from '@/features/chat/session/session-manager';
 
 vi.mock('@/lib/fetch', () => ({
@@ -270,6 +270,47 @@ describe('SessionManager materialization confirmation', () => {
     drafts.save.mockReset();
     vi.mocked(confirmSessionCommand).mockReset();
     vi.restoreAllMocks();
+  });
+
+  it('shares creation between concurrent file and terminal consumers with separate draft snapshots', async () => {
+    const files = new SessionManager();
+    const terminal = new SessionManager();
+    vi.spyOn(files, 'loadSessionAgentConfig').mockResolvedValue({} as never);
+    vi.spyOn(terminal, 'loadSessionAgentConfig').mockResolvedValue({} as never);
+    drafts.read.mockImplementation(async () => draft ? structuredClone(draft) : undefined);
+    let respond!: (response: Response) => void;
+    mockedApiFetch.mockImplementation(() => new Promise(resolve => { respond = resolve; }));
+    drafts.save.mockClear();
+    const first = files.materialize(conversationId, 'session_resources');
+    const second = terminal.materialize(conversationId, 'session_resources');
+    expect(second).toBe(first);
+    await vi.waitFor(() => expect(mockedApiFetch).toHaveBeenCalledOnce());
+    const commandId = draft!.materialization!.commandId;
+    respond(jsonResponse({ payload: { receipt: { conversationId, clientMessageId: commandId, transcriptId: 'transcript', lifecycle: 'ready' } } }, 202));
+    await Promise.all([first, second]);
+    expect(drafts.save).toHaveBeenCalledOnce();
+    expect(confirmSessionCommand).toHaveBeenCalledOnce();
+    expect(draft).toBeUndefined();
+  });
+
+  it('keeps an unconfigured draft editable so model selection can recover terminal creation', async () => {
+    const manager = new SessionManager();
+    vi.spyOn(manager, 'loadSessionAgentConfig').mockResolvedValue({} as never);
+    draft!.creation.model = '';
+    drafts.save.mockClear();
+    await expect(manager.materialize(conversationId, 'session_resources')).rejects.toBeInstanceOf(SessionModelRequiredError);
+    expect(draft!.materialization).toBeUndefined();
+    expect(drafts.save).not.toHaveBeenCalled();
+    expect(mockedApiFetch).not.toHaveBeenCalled();
+
+    await manager.patchSessionAgentConfig(conversationId, { model: 'test/model' });
+    mockedApiFetch.mockImplementation(async (_url, init) => {
+      const command = JSON.parse(String(init?.body));
+      return jsonResponse({ payload: { receipt: { conversationId, clientMessageId: command.commandId, transcriptId: 'transcript', lifecycle: 'ready' } } }, 202);
+    });
+    await manager.materialize(conversationId, 'session_resources');
+    expect(confirmSessionCommand).toHaveBeenCalledWith(conversationId, 'transcript');
+    expect(draft).toBeUndefined();
   });
 
   it.each(['preparing', 'preparation_failed'])('confirms persisted creation even while resources are %s', async lifecycle => {

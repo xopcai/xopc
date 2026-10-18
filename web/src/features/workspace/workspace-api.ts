@@ -151,7 +151,7 @@ export async function readWorkspaceFile(
   const resource = await resolveResource(path, options);
   const response = await apiFetch(apiUrl(`/api/files/${encodeURIComponent(resource.id)}/content`));
   if (!response.ok) throw await readApiError(response);
-  return { content: await response.text(), path: resource.relativePath, mtimeMs: resource.modifiedAt, revision: resource.revision };
+  return { content: await response.text(), path: resource.relativePath, mtimeMs: resource.modifiedAt, revision: response.headers.get('ETag') ?? resource.revision };
 }
 
 export async function readWorkspaceFileBase64(
@@ -224,11 +224,12 @@ export async function writeWorkspaceFile(
   path: string,
   content: string,
   options?: WorkspaceEditorRequestOptions,
+  expectedRevision?: string,
 ): Promise<{ path: string; mtimeMs?: number; revision: string }> {
   const resource = await resolveResource(path, options);
   const body = await requestJson(`/api/files/${encodeURIComponent(resource.id)}/content`, {
     method: 'PUT',
-    body: JSON.stringify({ content, revision: resource.revision }),
+    body: JSON.stringify({ content, revision: expectedRevision ?? resource.revision }),
   }) as { resource?: unknown };
   const updated = FileResourceSchema.parse(body.resource);
   return { path: updated.relativePath, mtimeMs: updated.modifiedAt, revision: updated.revision };

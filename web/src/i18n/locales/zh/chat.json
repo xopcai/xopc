@@ -1,5 +1,6 @@
 {
   "chat": {
+    "modelRequiredForResources": "请先为当前对话选择已配置的模型，然后重试。",
     "referenceFallback": "引用",
     "reviewCard": {
       "running": "正在审查修改",
@@ -1006,6 +1007,7 @@
     "userMessageDeleteCancel": "取消",
     "userMessageDeleteOk": "删除",
     "terminal": {
+      "retry": "重试终端",
       "title": "终端",
       "open": "打开终端",
       "hide": "隐藏终端",

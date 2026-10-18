@@ -114,6 +114,8 @@ vi.mock('@/features/chat/messages/message-list', () => ({
 }));
 
 import { getSideChat, heartbeatSideChat, extendSideChat } from '../side-chat-api';
+import { useRightWorkspaceStore } from '@/stores/right-workspace-store';
+import { dispatchFillChatComposer } from '@/features/chat/composer/fill-composer-dispatch';
 import { useSideChatStore } from '@/stores/side-chat-store';
 import { useLocaleStore } from '@/stores/locale-store';
 import { SideChatColumn, SideChatConversation } from '../side-chat-column';
@@ -126,6 +128,7 @@ describe('SideChatConversation composer', () => {
 
   beforeEach(async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    useRightWorkspaceStore.getState().reset();
     sendSideChatInput.mockClear();
     createSideChat.mockClear();
     deleteSideChat.mockClear();
@@ -705,6 +708,32 @@ describe('SideChatConversation composer', () => {
     await act(async () => reject(Object.assign(new Error('expired'), { status: 410 })));
     expect(container.querySelector('textarea')?.value).toBe('pending question');
     expect(container.querySelector('[data-testid="message-thread"]')?.textContent ?? '').not.toContain('pending question');
+  });
+
+  it('preserves background side chat subscriptions and drafts while a file tab is active', async () => {
+    useSideChatStore.getState().addTab({ id: 'side-1', parentConversationId: 'parent', title: 'Side chat', runId: 'run-1' });
+    useSideChatStore.getState().setDraftText('side-1', 'side draft');
+    useRightWorkspaceStore.getState().openFile({ path: 'report.md', conversationId: 'parent' }, 'parent');
+    await act(async () => root.render(<MemoryRouter><SideChatColumn parentConversationId="parent" embedded visible={false} /></MemoryRouter>));
+    expect(realtime.onEvent).not.toBeNull();
+    expect(container.querySelector('[data-testid="message-thread"]')).toBeNull();
+    await act(async () => dispatchFillChatComposer('main chat replacement'));
+    expect(useSideChatStore.getState().drafts['side-1'].text).toBe('side draft');
+    await act(async () => realtime.onEvent?.({ event: 'run_end', data: {} }));
+    expect(useSideChatStore.getState().tabs.find((tab) => tab.id === 'side-1')?.runId).toBeUndefined();
+    expect(useRightWorkspaceStore.getState().panes.parent.tabs).toHaveLength(2);
+  });
+
+  it('keeps an embedded side chat and its draft when stopping and closing fails', async () => {
+    useSideChatStore.getState().addTab({ id: 'side-1', parentConversationId: 'parent', title: 'Side chat' });
+    useSideChatStore.getState().setDraftText('side-1', 'keep me');
+    localStorage.setItem('xopc:side-chat-close-confirm-disabled:v1', 'true');
+    deleteSideChat.mockRejectedValueOnce(new Error('offline'));
+    await act(async () => root.render(<MemoryRouter><SideChatColumn parentConversationId="parent" embedded /></MemoryRouter>));
+    await act(async () => window.dispatchEvent(new CustomEvent('workspace-close-sidechat', { detail: 'side-1' })));
+    expect(useSideChatStore.getState().tabs.some((tab) => tab.id === 'side-1')).toBe(true);
+    expect(useSideChatStore.getState().drafts['side-1'].text).toBe('keep me');
+    expect(container.textContent).toContain('offline');
   });
 
 });

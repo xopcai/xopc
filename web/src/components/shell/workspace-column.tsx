@@ -43,7 +43,11 @@ import { clampWorkspacePanelWidthPx, useWorkspacePanelStore } from '@/stores/wor
 import { useWorkspacePreviewStore } from '@/stores/workspace-preview-store';
 
 /** Right-hand workspace file browser (project files only). Preview uses `WorkspacePreviewDialog`. */
-export const WorkspaceColumn = memo(function WorkspaceColumn({ elevated = false }: { elevated?: boolean }) {
+export const WorkspaceColumn = memo(function WorkspaceColumn({ elevated = false, embedded = false, scope, onCloseTree }: {
+  elevated?: boolean; embedded?: boolean;
+  scope?: { conversationId?: string; projectId?: string; agentId?: string };
+  onCloseTree?: () => void;
+}) {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
   const { pathname, search } = useLocation();
@@ -52,14 +56,16 @@ export const WorkspaceColumn = memo(function WorkspaceColumn({ elevated = false 
     pathname.startsWith('/chat') && conversationIdParam && conversationIdParam !== 'new'
       ? decodeURIComponent(conversationIdParam)
       : null;
-  const open = useWorkspacePanelStore((s) => s.open);
+  const panelOpen = useWorkspacePanelStore((s) => s.open);
+  const open = embedded || panelOpen;
   const wasOpenRef = useRef(open);
-  const setOpen = useWorkspacePanelStore((s) => s.setOpen);
+  const setPanelOpen = useWorkspacePanelStore((s) => s.setOpen);
+  const setOpen = useCallback((value: boolean) => { if (embedded) { if (!value) onCloseTree?.(); } else setPanelOpen(value); }, [embedded, onCloseTree, setPanelOpen]);
   const conversationIdOverride = useWorkspacePanelStore((s) => s.conversationIdOverride);
   const widthPx = useWorkspacePanelStore((s) => s.widthPx);
   const setWidthPx = useWorkspacePanelStore((s) => s.setWidthPx);
-  const chatConversationId = conversationIdOverride ?? routeChatConversationId;
-  const projectId = !chatConversationId && pathname.startsWith('/chat')
+  const chatConversationId = scope ? scope.conversationId ?? null : conversationIdOverride ?? routeChatConversationId;
+  const projectId = scope ? scope.projectId ?? null : !chatConversationId && pathname.startsWith('/chat')
     ? new URLSearchParams(search).get('projectId') : null;
   const [widthResizing, setWidthResizing] = useState(false);
   const [fileSearchOpen, setFileSearchOpen] = useState(false);
@@ -70,8 +76,12 @@ export const WorkspaceColumn = memo(function WorkspaceColumn({ elevated = false 
   const [pendingTrash, setPendingTrash] = useState<TreeEntry | null>(null);
   const [pendingDelete, setPendingDelete] = useState<TreeEntry | null>(null);
   const previewPath = useWorkspacePreviewStore((s) => s.path);
-  const setPreviewPath = useWorkspacePreviewStore((s) => s.setPath);
-  const workspaceAgentId = useWorkspaceEditorAgentStore((s) => s.agentId);
+  const legacySetPreviewPath = useWorkspacePreviewStore((s) => s.setPath);
+  const setPreviewPath = useCallback((path: string | null) => {
+    legacySetPreviewPath(path, null, projectId, chatConversationId);
+  }, [chatConversationId, legacySetPreviewPath, projectId]);
+  const selectedAgentId = useWorkspaceEditorAgentStore((s) => s.agentId);
+  const workspaceAgentId = scope?.agentId ?? selectedAgentId;
 
   const { tree, rootResource, loading, error, loadRoot, loadChildren, refreshDirectory, reset } = useWorkspaceTree(
     workspaceAgentId,
@@ -95,14 +105,13 @@ export const WorkspaceColumn = memo(function WorkspaceColumn({ elevated = false 
 
   const handleFileDragStart = useCallback(
     (event: DragEvent<HTMLButtonElement>, entry: { name: string; path: string }) => {
-      setPreviewPath(null);
       writeWorkspaceFileDrag(event.dataTransfer, {
         name: entry.name,
         path: entry.path,
         ...workspaceReadOpts,
       });
     },
-    [setPreviewPath, workspaceReadOpts],
+    [workspaceReadOpts],
   );
 
   const {
@@ -166,25 +175,25 @@ export const WorkspaceColumn = memo(function WorkspaceColumn({ elevated = false 
   );
 
   useEffect(() => {
-    if (!pathname.startsWith('/chat')) {
+    if (!embedded && !pathname.startsWith('/chat')) {
       setOpen(false);
     }
-  }, [pathname, setOpen]);
+  }, [embedded, pathname, setOpen]);
 
   useEffect(() => {
     const wasOpen = wasOpenRef.current;
     wasOpenRef.current = open;
     if (!open) {
       reset();
-      if (wasOpen) setPreviewPath(null);
+      if (wasOpen && !embedded) setPreviewPath(null);
       return;
     }
-    setPreviewPath(null);
+    if (!embedded) setPreviewPath(null);
     void loadRoot();
-  }, [open, treeScopeKey, loadRoot, reset, setPreviewPath]);
+  }, [embedded, open, treeScopeKey, loadRoot, reset, setPreviewPath]);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open || embedded) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
       if (fileSearchOpen) {
@@ -199,7 +208,7 @@ export const WorkspaceColumn = memo(function WorkspaceColumn({ elevated = false 
     };
     window.addEventListener('keydown', onKey, true);
     return () => window.removeEventListener('keydown', onKey, true);
-  }, [fileSearchOpen, open, setOpen]);
+  }, [embedded, fileSearchOpen, open, setOpen]);
 
   useEffect(() => {
     if (!open || !fileSearchOpen || !normalizedFileSearchQuery) {
@@ -231,7 +240,7 @@ export const WorkspaceColumn = memo(function WorkspaceColumn({ elevated = false 
   }, [fileSearchOpen, normalizedFileSearchQuery, open, workspaceReadOpts]);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open || embedded) return;
     const mq = window.matchMedia('(max-width: 767px)');
     if (!mq.matches) return;
     const prev = document.body.style.overflow;
@@ -239,7 +248,7 @@ export const WorkspaceColumn = memo(function WorkspaceColumn({ elevated = false 
     return () => {
       document.body.style.overflow = prev;
     };
-  }, [open]);
+  }, [embedded, open]);
 
   const handleExpandDir = useCallback(
     (dirPath: string) => {
@@ -342,11 +351,11 @@ export const WorkspaceColumn = memo(function WorkspaceColumn({ elevated = false 
       showComposerNotification('warning', result?.error ?? m.workspace.trashFailed, undefined, { duration: 4000 });
       return;
     }
-    if (previewPath === entry.path) setPreviewPath(null);
+    if (!embedded && previewPath === entry.path) setPreviewPath(null);
     setPendingTrash(null);
     await loadRoot();
     showComposerNotification('success', m.workspace.trashSuccess, undefined, { duration: 2500 });
-  }, [loadRoot, m.workspace.trashFailed, m.workspace.trashSuccess, pendingTrash, previewPath, setPreviewPath]);
+  }, [embedded, loadRoot, m.workspace.trashFailed, m.workspace.trashSuccess, pendingTrash, previewPath, setPreviewPath]);
 
   const uploadFiles = useCallback(async (files: File[], directory: string) => {
     try {
@@ -374,7 +383,7 @@ export const WorkspaceColumn = memo(function WorkspaceColumn({ elevated = false 
     if (!entry) return;
     try {
       await deleteWorkspaceFile(entry.fileId);
-      if (previewPath === entry.path) setPreviewPath(null);
+      if (!embedded && previewPath === entry.path) setPreviewPath(null);
       setPendingDelete(null);
       const separator = entry.path.lastIndexOf('/');
       await refreshDirectory(separator < 0 ? '' : entry.path.slice(0, separator)).catch(() => undefined);
@@ -387,11 +396,11 @@ export const WorkspaceColumn = memo(function WorkspaceColumn({ elevated = false 
         { duration: 4000 },
       );
     }
-  }, [m.workspace.deleteFailed, m.workspace.deleteSuccess, pendingDelete, previewPath, refreshDirectory, setPreviewPath]);
+  }, [embedded, m.workspace.deleteFailed, m.workspace.deleteSuccess, pendingDelete, previewPath, refreshDirectory, setPreviewPath]);
 
   return (
     <>
-      {open ? (
+      {open && !embedded ? (
         <button
           type="button"
           className={cn('fixed inset-0 bg-scrim md:hidden', elevated ? 'z-[109]' : 'z-40')}
@@ -401,31 +410,20 @@ export const WorkspaceColumn = memo(function WorkspaceColumn({ elevated = false 
       ) : null}
 
       <aside
-        id="app-workspace-panel"
+        id={embedded ? undefined : "app-workspace-panel"}
         aria-label={m.workspace.title}
         aria-hidden={!open}
-        className={cn(
+        className={embedded ? 'flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-surface-base' : cn(
           'flex min-h-0 flex-col overflow-hidden bg-surface-base',
-          'max-md:fixed max-md:right-0 max-md:top-0 max-md:h-[100dvh] max-md:shadow-popover',
-          'max-md:transition-transform max-md:duration-200 max-md:ease-out',
-          'motion-reduce:max-md:transition-none',
-          'max-md:w-[min(20rem,92vw)]',
+          'max-md:fixed max-md:right-0 max-md:top-0 max-md:h-[100dvh] max-md:shadow-popover max-md:w-[min(20rem,92vw)]',
           open ? 'max-md:translate-x-0' : 'max-md:pointer-events-none max-md:translate-x-full',
           'md:relative md:h-full md:translate-x-0',
           elevated && open ? 'pointer-events-auto z-[110]' : 'max-md:z-50',
-          'motion-reduce:md:transition-none',
-          !open &&
-            'md:pointer-events-none md:w-0 md:min-w-0 md:max-w-0 md:overflow-hidden',
+          !open && 'md:pointer-events-none md:w-0 md:min-w-0 md:max-w-0 md:overflow-hidden',
           open && 'app-workspace-panel-expanded-width md:shrink-0',
           open && widthResizing && 'workspace-panel-rail-resizing',
         )}
-        style={
-          open
-            ? ({
-                '--workspace-panel-px': `${widthPx}px`,
-              } as CSSProperties)
-            : undefined
-        }
+        style={!embedded && open ? { '--workspace-panel-px': `${widthPx}px` } as CSSProperties : undefined}
       >
         {open ? (
           <div
@@ -433,7 +431,7 @@ export const WorkspaceColumn = memo(function WorkspaceColumn({ elevated = false 
               'relative flex h-full min-h-0 w-full min-w-0 flex-col overflow-x-hidden overflow-y-hidden bg-surface-base',
             )}
           >
-            <div
+            {!embedded ? <div
               role="separator"
               aria-orientation="vertical"
               aria-label={m.workspace.resizeHandleAria}
@@ -449,6 +447,7 @@ export const WorkspaceColumn = memo(function WorkspaceColumn({ elevated = false 
                 APP_CHROME_NO_DRAG_CLASS,
               )}
             />
+            : null}
             <div className="flex h-11 shrink-0 items-center gap-2 border-b border-edge px-4 dark:border-edge">
               <h2 className="sr-only">{m.workspace.title}</h2>
               {!electron ? (

@@ -53,7 +53,7 @@ export default defineConfig({
         extends: true,
         test: {
           name: 'computer-desktop',
-          include: ['electron/computer/**/*.{test,spec}.{ts,tsx}'],
+          include: ['electron/computer/**/*.{test,spec}.{ts,tsx}', 'electron/browser/**/*.{test,spec}.{ts,tsx}'],
           setupFiles: [setupFile],
           maxWorkers: 2,
           sequence: { groupOrder: 4 },

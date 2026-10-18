@@ -137,7 +137,9 @@ export function useWorkspacePreviewState({
   projectId,
   conversationId,
   agentId,
+  initialEditMode = false,
 }: {
+  initialEditMode?: boolean;
   filePath: string | null;
   projectId?: string;
   conversationId?: string;
@@ -160,13 +162,19 @@ export function useWorkspacePreviewState({
 
   const [preview, dispatchPreview] = useReducer(previewReducer, descriptor, emptyLoaded);
   const [editorUi, dispatchEditorUi] = useReducer(editorReducer, {
-    sourceEditMode: false,
+    sourceEditMode: initialEditMode,
     saveStatus: 'idle',
   });
   const [recentOpenWithApps, setRecentOpenWithApps] = useState<Array<{ name: string; path: string; lastUsedAt: number }>>([]);
   const [recommendedOpenWithApps, setRecommendedOpenWithApps] = useState<Array<{ name: string; path: string }>>([]);
-  const saveStatusClearRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const trackedFilePathRef = useRef(filePath);
+  const revisionRef = useRef<string | undefined>(undefined);
+  const draftRef = useRef<string | null>(null);
+  const savedRef = useRef<string | null>(null);
+  const savingRef = useRef<Promise<boolean> | null>(null);
+  const [dirty, setDirty] = useState(false);
+  const [externalChange, setExternalChange] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   if (trackedFilePathRef.current !== filePath) {
     trackedFilePathRef.current = filePath;
@@ -213,7 +221,8 @@ export function useWorkspacePreviewState({
             type: detectPreviewFileType(resource.name, resource.mimeType),
           };
           if (readModeForPreviewType(resolvedDescriptor.type) === 'text') {
-            const { content, mtimeMs } = await readWorkspaceFile(filePath, readOpts);
+            const { content, mtimeMs, revision } = await readWorkspaceFile(filePath, readOpts);
+            if (!cancelled) { revisionRef.current = revision; draftRef.current = content; savedRef.current = content; setDirty(false); setExternalChange(false); }
             if (!cancelled) {
               dispatchPreview({
                 type: 'loadSuccess',
@@ -250,7 +259,8 @@ export function useWorkspacePreviewState({
         readWorkspaceFile(filePath, readOpts),
         resolveWorkspaceFileReference(filePath, readOpts).catch(() => null),
       ])
-        .then(([{ content, mtimeMs }, ref]) => {
+        .then(([{ content, mtimeMs, revision }, ref]) => {
+          if (!cancelled) { revisionRef.current = revision; draftRef.current = content; savedRef.current = content; setDirty(false); setExternalChange(false); }
           if (!cancelled) {
             dispatchPreview({
               type: 'loadSuccess',
@@ -289,7 +299,7 @@ export function useWorkspacePreviewState({
     return () => {
       cancelled = true;
     };
-  }, [descriptor, filePath, readOpts]);
+  }, [descriptor, filePath, readOpts, refreshKey]);
 
   useEffect(() => {
     if (!preview.binaryBuffer || preview.descriptor.type !== 'pptx') {
@@ -317,34 +327,68 @@ export function useWorkspacePreviewState({
     };
   }, [preview.binaryBuffer, preview.descriptor.fileName, preview.descriptor.type]);
 
-  const onSaveSource = useCallback(
-    async (next: string) => {
-      if (!filePath) return;
-      if (saveStatusClearRef.current !== undefined) clearTimeout(saveStatusClearRef.current);
+  const flushSource = useCallback(async (): Promise<boolean> => {
+    if (savingRef.current) {
+      const ok = await savingRef.current;
+      if (!ok) return false;
+    }
+    if (!filePath || draftRef.current === null || draftRef.current === savedRef.current) return true;
+    const save = async () => {
       dispatchEditorUi({ type: 'saveStatus', value: 'saving' });
       try {
-        const { mtimeMs } = await writeWorkspaceFile(filePath, next, readOpts);
-        if (typeof mtimeMs === 'number') dispatchPreview({ type: 'patchMtime', mtimeMs });
+        while (draftRef.current !== savedRef.current) {
+          const next = draftRef.current!;
+          const result = await writeWorkspaceFile(filePath, next, readOpts, revisionRef.current);
+          revisionRef.current = result.revision;
+          savedRef.current = next;
+          if (typeof result.mtimeMs === 'number') dispatchPreview({ type: 'patchMtime', mtimeMs: result.mtimeMs });
+        }
+        setDirty(false);
         dispatchEditorUi({ type: 'saveStatus', value: 'saved' });
-        saveStatusClearRef.current = setTimeout(() => dispatchEditorUi({ type: 'saveStatus', value: 'idle' }), 2000);
+        return true;
       } catch {
         dispatchEditorUi({ type: 'saveStatus', value: 'error' });
-        saveStatusClearRef.current = setTimeout(() => dispatchEditorUi({ type: 'saveStatus', value: 'idle' }), 4000);
+        return false;
       }
-    },
-    [filePath, readOpts],
-  );
+    };
+    const pending = save();
+    savingRef.current = pending;
+    try { return await pending; } finally { if (savingRef.current === pending) savingRef.current = null; }
+  }, [filePath, readOpts]);
+  const debouncedSourceSave = useDebouncedCallback(() => void flushSource(), 500);
+  const onSourceChange = useCallback((next: string) => {
+    draftRef.current = next;
+    setDirty(next !== savedRef.current);
+    dispatchPreview({ type: 'patchText', text: next });
+    debouncedSourceSave();
+  }, [debouncedSourceSave]);
+  useEffect(() => {
+    const leave = (event: BeforeUnloadEvent) => {
+      if (draftRef.current !== savedRef.current) { event.preventDefault(); event.returnValue = ''; }
+    };
+    window.addEventListener('beforeunload', leave);
+    return () => { window.removeEventListener('beforeunload', leave); debouncedSourceSave.cancel(); };
+  }, [debouncedSourceSave]);
+  const refresh = useCallback(() => {
+    if (!dirty && !savingRef.current) setRefreshKey((n) => n + 1);
+  }, [dirty]);
 
-  const debouncedSourceSave = useDebouncedCallback((value: string) => void onSaveSource(value), 500);
-  const onSourceChange = useCallback(
-    (next: string) => {
-      dispatchPreview({ type: 'patchText', text: next });
-      debouncedSourceSave(next);
-    },
-    [debouncedSourceSave],
-  );
-
-  useEffect(() => () => debouncedSourceSave.cancel(), [debouncedSourceSave, filePath]);
+  const checkingRef = useRef(false);
+  const checkForUpdates = useCallback(async () => {
+    if (!filePath || preview.loading || savingRef.current || checkingRef.current) return;
+    checkingRef.current = true;
+    try {
+      const resource = await resolveWorkspaceFileResource(filePath, readOpts);
+      if (!resource) return;
+      const changed = revisionRef.current ? resource.revision !== revisionRef.current
+        : preview.mtimeMs != null && resource.modifiedAt !== preview.mtimeMs;
+      if (!changed) return;
+      if (dirty || editorUi.sourceEditMode) setExternalChange(true);
+      else refresh();
+    } catch {
+      setExternalChange(true);
+    } finally { checkingRef.current = false; }
+  }, [dirty, editorUi.sourceEditMode, filePath, preview.loading, preview.mtimeMs, readOpts, refresh]);
 
   const onDownload = useCallback(async () => {
     if (!filePath) return;
@@ -463,6 +507,7 @@ export function useWorkspacePreviewState({
 
   return {
     ...preview,
+    dirty, externalChange, flushSource, refresh, checkForUpdates,
     extractedText: preview.descriptor.type === 'pptx' ? preview.pptxText : null,
     extractedTextTruncated: preview.pptxTruncated,
     sourceEditMode: editorUi.sourceEditMode,

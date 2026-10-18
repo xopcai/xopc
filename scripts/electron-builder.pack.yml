@@ -113,6 +113,7 @@ mac:
   notarize: true
 
 dmg:
+  sign: true
   background: dmg-background.png
   iconSize: 96
   iconTextSize: 13

@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChatPageHeaderRegistration } from '@/features/chat/chat-page-header-registration';
 import { useLocaleStore } from '@/stores/locale-store';
 import { usePageHeaderStore } from '@/stores/page-header-store';
+import { useRightWorkspaceStore } from '@/stores/right-workspace-store';
 import { useSideChatStore } from '@/stores/side-chat-store';
 import { useTerminalPanelStore } from '@/stores/terminal-panel-store';
 import { useWorkspacePanelStore } from '@/stores/workspace-panel-store';
@@ -54,6 +55,7 @@ describe('ChatPageHeaderRegistration', () => {
       activeTabKeyByConversationId: {},
       height: 300,
     });
+    useRightWorkspaceStore.setState({ panes: {}, scope: 'new' });
     useWorkspacePanelStore.setState({ open: false, conversationIdOverride: null });
     useSideChatStore.setState({ panes: {}, tabs: [], pendingCreate: null });
     Object.defineProperty(window, 'electronAPI', { configurable: true, value: undefined });
@@ -111,7 +113,7 @@ describe('ChatPageHeaderRegistration', () => {
     expect(states).toEqual([false]);
   });
 
-  it('keeps one context and files control through repeated session switches', () => {
+  it('keeps one context and workspace control through repeated session switches', () => {
     for (const conversationId of ['session-1', 'session-2', 'session-3', 'session-1']) {
       act(() => {
         root.render(
@@ -133,16 +135,16 @@ describe('ChatPageHeaderRegistration', () => {
       });
 
       expect(container.querySelectorAll('[aria-label="Session info"]')).toHaveLength(1);
-      expect(container.querySelectorAll('[aria-label="Project Files: xopc"]')).toHaveLength(1);
+      expect(container.querySelectorAll('[aria-label="Open workspace tools"]')).toHaveLength(1);
       expect(document.querySelector('[role="dialog"]')).toBeNull();
-      act(() => container.querySelector<HTMLButtonElement>('[aria-label="Project Files: xopc"]')!.click());
-      expect(useWorkspacePanelStore.getState().conversationIdOverride).toBe(conversationId);
+      act(() => container.querySelector<HTMLButtonElement>('[aria-label="Open workspace tools"]')!.click());
+      expect(useRightWorkspaceStore.getState().panes[conversationId]?.open).toBe(true);
       act(() => container.querySelector<HTMLButtonElement>('[aria-label="Session info"]')!.click());
       expect(document.querySelectorAll('[role="dialog"]')).toHaveLength(1);
     }
   });
 
-  it('opens project files directly and keeps directory selection separate for a new conversation', () => {
+  it('opens tools and places directory selection inside session info', () => {
     act(() => {
       root.render(
         <MemoryRouter initialEntries={['/chat/session-1']}>
@@ -172,26 +174,38 @@ describe('ChatPageHeaderRegistration', () => {
       );
     });
 
-    expect(container.querySelector('[aria-label="Project Files: xopc"]')).not.toBeNull();
+    expect(container.querySelector('[aria-label="Open workspace tools"]')).not.toBeNull();
     expect(document.querySelector('[role="dialog"]')).toBeNull();
     const projectFilesButton = document.querySelector<HTMLButtonElement>(
-      '[aria-label="Project Files: xopc"]',
+      '[aria-label="Open workspace tools"]',
     );
     const chooseFolderButton = document.querySelector<HTMLButtonElement>(
       '[aria-label="Choose folder…"]',
     );
     expect(projectFilesButton).not.toBeNull();
-    expect(projectFilesButton?.title).toContain('/Users/example/projects/xopc');
-    expect(chooseFolderButton).not.toBeNull();
+    expect(projectFilesButton?.title).toBe('Open workspace tools');
+    expect(chooseFolderButton).toBeNull();
 
     act(() => projectFilesButton?.click());
     expect(useWorkspacePanelStore.getState()).toMatchObject({
       open: true,
       conversationIdOverride: 'session-1',
     });
+    expect(useRightWorkspaceStore.getState().panes['session-1'].tabs[0]?.kind).toBe('home');
+    act(() => container.querySelector<HTMLButtonElement>('[aria-label="Session info"]')!.click());
+    expect(document.querySelector('[role="dialog"] [aria-label="Choose folder…"]')).not.toBeNull();
+    act(() => container.querySelector<HTMLButtonElement>('[aria-label="Session info"]')!.click());
+    act(() => { useRightWorkspaceStore.getState().openBrowser('https://example.test', 'session-1'); });
+    const activeId = useRightWorkspaceStore.getState().panes['session-1'].activeId;
+    act(() => projectFilesButton?.click());
+    expect(useRightWorkspaceStore.getState().panes['session-1'].tabs.find(t => t.id === useRightWorkspaceStore.getState().panes['session-1'].activeId)?.kind).toBe('home');
+    act(() => projectFilesButton?.click());
+    expect(useRightWorkspaceStore.getState().panes['session-1'].open).toBe(true);
+    expect(useRightWorkspaceStore.getState().panes['session-1'].tabs.some(t => t.id === activeId)).toBe(true);
+    expect(useRightWorkspaceStore.getState().panes['session-1'].tabs.filter(t => t.kind === 'home')).toHaveLength(1);
   });
 
-  it('opens project files before a session is created', () => {
+  it('opens tools before a session is created', () => {
     useWorkspacePanelStore.setState({ conversationIdOverride: 'previous-session' });
     act(() => {
       root.render(
@@ -217,10 +231,10 @@ describe('ChatPageHeaderRegistration', () => {
         </MemoryRouter>,
       );
     });
-    const button = container.querySelector<HTMLButtonElement>('[aria-label="Project Files: project"]');
+    const button = container.querySelector<HTMLButtonElement>('[aria-label="Open workspace tools"]');
     expect(button).not.toBeNull();
     expect(button?.disabled).toBe(false);
-    expect(button?.title).toContain('/repo/project');
+    expect(button?.title).toBe('Open workspace tools');
     act(() => button!.click());
     expect(useWorkspacePanelStore.getState()).toMatchObject({ open: true, conversationIdOverride: null });
   });
@@ -255,9 +269,8 @@ describe('ChatPageHeaderRegistration', () => {
       );
     });
 
-    const terminalButton = container.querySelector<HTMLButtonElement>('[aria-label="Open terminal"]');
-    expect(terminalButton).not.toBeNull();
-    await act(async () => terminalButton!.click());
+    expect(container.querySelector('[aria-label="Open terminal"]')).toBeNull();
+    await act(async () => window.dispatchEvent(new Event('workspace-open-terminal')));
 
     expect(prepareTerminalSession).toHaveBeenCalledOnce();
     expect(useTerminalPanelStore.getState().openByConversationId['created-session']).toBe(true);
@@ -296,7 +309,7 @@ describe('ChatPageHeaderRegistration', () => {
     });
 
     const projectFilesButton = document.querySelector<HTMLButtonElement>(
-      '[aria-label="Project Files: xopc"]',
+      '[aria-label="Open workspace tools"]',
     );
     expect(projectFilesButton).not.toBeNull();
     expect(projectFilesButton?.disabled).toBe(false);
@@ -309,7 +322,25 @@ describe('ChatPageHeaderRegistration', () => {
     });
   });
 
-  it('shows the side chat toggle only for a non-empty main chat', () => {
+  it('opens conversation search through the menu after it closes', async () => {
+    const find = vi.fn();
+    await act(async () => root.render(<MemoryRouter>
+      <ChatPageHeaderRegistration chatHeadline="Search" chatAgents={[]} showChatAgentSelector={false}
+        chatAgentId="main" onChatAgentChange={() => {}} chatAgentDisabled={false}
+        conversationId="session-1" hasMessages onFindOpen={find} />
+      <HeaderEnd />
+    </MemoryRouter>));
+    const menu = container.querySelector<HTMLButtonElement>('[aria-label="Chat menu"]')!;
+    await act(async () => menu.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })));
+    const item = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(el => el.textContent?.includes('Find in conversation'))!;
+    expect(item).toBeDefined();
+    await act(async () => item.click());
+    await act(async () => { await vi.waitFor(() => expect(find).toHaveBeenCalledOnce()); });
+    expect(document.querySelector('[role="menu"]')).toBeNull();
+    expect(document.activeElement).toBe(menu);
+  });
+
+  it('keeps only menu, context and tools while retaining the side chat shortcut', () => {
     const renderHeader = (hasMessages: boolean) => {
       act(() => {
         root.render(
@@ -334,12 +365,11 @@ describe('ChatPageHeaderRegistration', () => {
     expect(container.querySelector('[aria-label="Open side chat"]')).toBeNull();
 
     renderHeader(true);
-    const openButton = container.querySelector<HTMLButtonElement>('[aria-label="Open side chat"]');
-    expect(openButton).not.toBeNull();
-    expect(openButton?.getAttribute('aria-expanded')).toBe('false');
-    expect(openButton?.getAttribute('aria-keyshortcuts')).toBe('Control+Shift+B');
-    expect(openButton?.title).toContain('Ctrl+Shift+B');
-    expect(openButton?.parentElement?.lastElementChild).toBe(openButton);
+    expect(container.querySelector('[aria-label="Open side chat"]')).toBeNull();
+    expect(container.querySelectorAll('button')).toHaveLength(3);
+    expect(container.querySelector('[aria-label="Chat menu"]')).not.toBeNull();
+    expect(container.querySelector('[aria-label="Session info"]')).not.toBeNull();
+    expect(container.querySelector('[aria-label="Open workspace tools"]')).not.toBeNull();
 
     act(() => window.dispatchEvent(new KeyboardEvent('keydown', {
       ctrlKey: true,
@@ -349,9 +379,7 @@ describe('ChatPageHeaderRegistration', () => {
       cancelable: true,
     })));
     expect(useSideChatStore.getState().panes['session-1']?.open).toBe(true);
-    expect(container.querySelector('[aria-label="Collapse side chat"]')).not.toBeNull();
-
-    act(() => container.querySelector<HTMLButtonElement>('[aria-label="Collapse side chat"]')!.click());
+    act(() => window.dispatchEvent(new KeyboardEvent('keydown', { ctrlKey: true, key: 'b', shiftKey: true, bubbles: true, cancelable: true })));
     expect(useSideChatStore.getState().panes['session-1']?.open).toBe(false);
   });
 });

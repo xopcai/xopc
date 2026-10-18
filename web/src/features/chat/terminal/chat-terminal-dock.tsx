@@ -58,6 +58,7 @@ export function ChatTerminalDock({ conversationId }: { conversationId: string })
   const [transcriptId, setSessionId] = useState<string | null>(null);
   const [resolvingSession, setResolvingSession] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [retryVersion, setRetryVersion] = useState(0);
   const [rendered, setRendered] = useState(open);
   const [entering, setEntering] = useState(open);
   const [closing, setClosing] = useState(false);
@@ -121,7 +122,7 @@ export function ChatTerminalDock({ conversationId }: { conversationId: string })
     return () => {
       cancelled = true;
     };
-  }, [api, rendered, conversationId]);
+  }, [api, rendered, conversationId, retryVersion]);
 
   useEffect(() => {
     if (!rendered || !api || !transcriptId || !terminalKey || !containerRef.current) return;
@@ -227,7 +228,7 @@ export function ChatTerminalDock({ conversationId }: { conversationId: string })
       removeError();
       terminal.dispose();
     };
-  }, [api, m.exited, rendered, transcriptId, conversationId, terminalKey]);
+  }, [api, m.exited, rendered, transcriptId, conversationId, terminalKey, retryVersion]);
 
   const closeTerminalTab = useCallback((key: string) => {
     closeTerminal(conversationId, key);
@@ -332,7 +333,10 @@ export function ChatTerminalDock({ conversationId }: { conversationId: string })
         <div className="relative min-h-0 flex-1 px-4 pt-1 pb-3">
           <div ref={containerRef} className="h-full w-full overflow-hidden" />
           {error ? (
-            <div className="absolute inset-x-3 bottom-3 rounded-md border border-danger/30 bg-danger-soft px-3 py-2 text-xs text-danger" role="alert">{error}</div>
+            <div className="absolute inset-x-3 bottom-3 rounded-md border border-danger/30 bg-danger-soft px-3 py-2 text-xs text-danger" role="alert">
+              <span>{error}</span>
+              <button type="button" className="ml-3 rounded px-2 py-1 font-medium underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent" onClick={() => setRetryVersion(value => value + 1)}>{m.retry}</button>
+            </div>
           ) : null}
         </div>
       )}

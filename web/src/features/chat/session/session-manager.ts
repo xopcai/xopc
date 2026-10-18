@@ -16,6 +16,8 @@ import { sessionWireToUiMessages } from '@/features/chat/messages/agent-messages
 import { fetchSessionActiveRun } from '@/features/chat/session/resolve-resume-run-id';
 import { listSessions } from '@/features/sessions/session-api';
 import { apiFetch } from '@/lib/fetch';
+import { messages } from '@/i18n/messages';
+import { useLocaleStore } from '@/stores/locale-store';
 import { apiFetchWithStartupRetry } from '@/lib/gateway-startup-retry';
 import { apiUrl } from '@/lib/url';
 import { useGatewayStore } from '@/stores/gateway-store';
@@ -25,6 +27,13 @@ import { fetchGatewayAgentEffectiveConfig } from '@/features/settings/agents-adm
 
 /** `GET /api/sessions?channel=…` filters on {@link SessionMetadata.sourceChannel}. */
 export const WEB_UI_SESSION_SOURCE_CHANNELS = 'webchat';
+
+export class SessionModelRequiredError extends Error {
+  constructor() {
+    super(messages(useLocaleStore.getState().language).chat.modelRequiredForResources);
+    this.name = 'SessionModelRequiredError';
+  }
+}
 
 export type SessionAgentConfig = {
   localDraft?: boolean;
@@ -107,6 +116,7 @@ function parseSessionAgentConfigResponse(raw: unknown): SessionAgentConfig {
 }
 
 const _agentConfigInflight = new Map<string, Promise<SessionAgentConfig>>();
+const _materializationInflight = new Map<string, Promise<void>>();
 
 function captureScope(): () => void {
   const identity = useGatewayStore.getState().conversationId;
@@ -467,7 +477,18 @@ export class SessionManager {
     if (draft?.materialization) await this.submitMaterialization(draft, signal);
   }
 
-  async materialize(conversationId: string, purpose: 'voice' | 'session_resources'): Promise<void> {
+  materialize(conversationId: string, purpose: 'voice' | 'session_resources'): Promise<void> {
+    const key = JSON.stringify([useGatewayStore.getState().conversationId, conversationId]);
+    const existing = _materializationInflight.get(key);
+    if (existing) return existing;
+    const pending = this.materializeDraft(conversationId, purpose).finally(() => {
+      if (_materializationInflight.get(key) === pending) _materializationInflight.delete(key);
+    });
+    _materializationInflight.set(key, pending);
+    return pending;
+  }
+
+  private async materializeDraft(conversationId: string, purpose: 'voice' | 'session_resources'): Promise<void> {
     const assertScope = captureScope();
     if (!await readLocalSessionDraft(conversationId)) return;
     assertScope();
@@ -477,6 +498,7 @@ export class SessionManager {
     assertScope();
     if (!draft) return;
     if (draft.submission) throw new Error('The first input is awaiting confirmation');
+    if (!draft.creation.model.trim()) throw new SessionModelRequiredError();
     draft.materialization ??= { commandId: crypto.randomUUID(), purpose };
     await saveLocalSessionDraft(draft);
     assertScope();

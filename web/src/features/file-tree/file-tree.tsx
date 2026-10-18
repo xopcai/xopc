@@ -255,13 +255,17 @@ function TreeRow({
   /** Collapsed by default; chevron must match visibility of children (incl. lazy-loaded empty → []). */
   const [open, setOpen] = useState(false);
   const [dropActive, setDropActive] = useState(false);
-  const visibleOpen = forceOpen || open;
+  const containsSelection = Boolean(selectedPath && entry.isDirectory && selectedPath.startsWith(`${entry.path}/`));
+  const visibleOpen = forceOpen || open || containsSelection;
+  useEffect(() => {
+    if (containsSelection) onExpandDir?.(entry.path);
+  }, [containsSelection, entry.path, onExpandDir]);
   const isSel = selectedPath === entry.path;
 
   if (entry.isDirectory) {
     return (
       <div className="select-none">
-        <div className="group flex w-full items-stretch gap-0.5">
+        <div className="group flex w-full items-stretch gap-0.5 [content-visibility:auto] has-[[aria-expanded=true]]:[content-visibility:visible]" style={{ containIntrinsicSize: '32px' }}>
           <button
             type="button"
             aria-expanded={visibleOpen}
@@ -342,7 +346,7 @@ function TreeRow({
   }
 
   return (
-    <div className="group flex w-full items-stretch gap-0.5">
+    <div className="group flex w-full items-stretch gap-0.5 [content-visibility:auto] has-[[aria-expanded=true]]:[content-visibility:visible]" style={{ containIntrinsicSize: '32px' }}>
       <button
         type="button"
         draggable={Boolean(onFileDragStart)}

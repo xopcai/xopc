@@ -40,6 +40,7 @@ import {
   useSideChatStore,
 } from '@/stores/side-chat-store';
 import { cn } from '@/lib/cn';
+import { useRightWorkspaceStore } from '@/stores/right-workspace-store';
 import { quickCapture } from '@/features/notes/notes-api';
 import {
   abortSideChat,
@@ -136,16 +137,19 @@ function reconcilePendingUserMessages(
   return next;
 }
 
-export function SideChatColumn({ parentConversationId }: { parentConversationId: string }) {
+export function SideChatColumn({ parentConversationId, embedded = false, visible = true }: { parentConversationId: string; embedded?: boolean; visible?: boolean }) {
+  const workspace = useRightWorkspaceStore((s) => s.panes[parentConversationId]);
   const language = useLocaleStore((state) => state.language);
   const m = getMessages(language).sideChat;
   const open = useSideChatStore((state) => state.panes[parentConversationId]?.open === true);
   const allTabs = useSideChatStore((state) => state.tabs);
+  const readings = useSideChatStore((state) => state.readings);
   const tabs = useMemo(
     () => allTabs.filter((tab) => tab.parentConversationId === parentConversationId),
     [allTabs, parentConversationId],
   );
-  const activeId = useSideChatStore((state) => state.panes[parentConversationId]?.activeId ?? null);
+  const legacyActiveId = useSideChatStore((state) => state.panes[parentConversationId]?.activeId ?? null);
+  const activeId = embedded ? workspace?.activeId?.replace(/^side:/, '') : legacyActiveId;
   const pendingCreate = useSideChatStore((state) => state.pendingCreate);
   const requestCreate = useSideChatStore((state) => state.requestCreate);
   const claimPendingCreate = useSideChatStore((state) => state.claimPendingCreate);
@@ -171,26 +175,44 @@ export function SideChatColumn({ parentConversationId }: { parentConversationId:
     if (!request) return;
     setCreateError(null);
     const gateway = useGatewayStore.getState();
+    useRightWorkspaceStore.getState().setNotice(parentConversationId, '');
+    const before = useRightWorkspaceStore.getState().panes[parentConversationId];
+    const beforeActive = before?.activeId;
     void createSideChat(request.parentConversationId, request.selections)
       .then((sideChat) => {
         if (useGatewayStore.getState().conversationId !== gateway.conversationId || useGatewayStore.getState().baseUrl !== gateway.baseUrl) return;
         const wasOpen = useSideChatStore.getState().panes[sideChat.parentConversationId]?.open === true;
-        addTab({ id: sideChat.id, parentConversationId: sideChat.parentConversationId, title: 'Side chat' });
+        const after = useRightWorkspaceStore.getState();
+        const activate = !embedded || (after.scope === parentConversationId && after.panes[parentConversationId]?.open === true && after.panes[parentConversationId]?.activeId === beforeActive);
+        addTab({ id: sideChat.id, parentConversationId: sideChat.parentConversationId, title: 'Side chat' }, activate);
         if (!wasOpen) setOpen(sideChat.parentConversationId, false);
       })
       .catch((error) => {
         setCreateError(sideChatErrorMessage(error, m));
+        if (embedded) useRightWorkspaceStore.getState().setNotice(parentConversationId, sideChatErrorMessage(error, m));
       })
       .finally(() => {
         finishCreate(request.parentConversationId, request.requestId);
       });
-  }, [addTab, claimPendingCreate, finishCreate, m, parentConversationId, pendingCreate, setOpen]);
+  }, [addTab, claimPendingCreate, embedded, finishCreate, m, parentConversationId, pendingCreate, setOpen]);
 
-  const closeTab = useCallback((id: string) => {
+  const [closing, setClosing] = useState(false);
+  const closeTab = useCallback(async (id: string) => {
     const promoted = useSideChatStore.getState().tabs.find((tab) => tab.id === id)?.promotedConversationId;
-    removeTab(id);
-    if (!promoted) void deleteSideChat(id).catch(() => {});
-  }, [removeTab]);
+    setClosing(true);
+    try {
+      if (!promoted) await deleteSideChat(id);
+      removeTab(id);
+      setPendingCloseId(null);
+    } catch (error) {
+      const status = (error as { status?: number })?.status;
+      if (status === 404 || status === 410) { removeTab(id); setPendingCloseId(null); }
+      else {
+        setCreateError(sideChatErrorMessage(error, m));
+        if (embedded) useRightWorkspaceStore.getState().setNotice(parentConversationId, sideChatErrorMessage(error, m));
+      }
+    } finally { setClosing(false); }
+  }, [embedded, m, parentConversationId, removeTab]);
 
   const requestCloseTab = useCallback((id: string) => {
     const state = useSideChatStore.getState();
@@ -198,13 +220,13 @@ export function SideChatColumn({ parentConversationId }: { parentConversationId:
     const reading = state.readings[id];
     const sideDraft = state.drafts[id];
     if (tab?.promotedConversationId) {
-      closeTab(id);
+      void closeTab(id);
       return;
     }
     const empty = reading && !reading.messages.length && !reading.truncated
       && !sideDraft?.text.trim() && !sideDraft?.attachments.length && !tab?.runId;
     if (empty || isSideChatCloseConfirmDisabled()) {
-      closeTab(id);
+      void closeTab(id);
       return;
     }
     setDontAskCloseAgain(false);
@@ -235,27 +257,39 @@ export function SideChatColumn({ parentConversationId }: { parentConversationId:
     window.addEventListener('pointercancel', onDone);
   }, [setWidthPx]);
 
-  if (!open) return null;
+  useEffect(() => {
+    if (!embedded) return;
+    const close = (event: Event) => {
+      const id = (event as CustomEvent<string>).detail;
+      if (tabs.some((tab) => tab.id === id) && !closing) requestCloseTab(id);
+    };
+    window.addEventListener('workspace-close-sidechat', close);
+    return () => window.removeEventListener('workspace-close-sidechat', close);
+  }, [closing, embedded, requestCloseTab, tabs]);
+
+  if (!embedded && !open) return null;
   return (
     <aside
-      id="app-side-chat-panel"
+      id={!embedded || visible ? 'app-side-chat-panel' : undefined}
       aria-label={m.paneAria}
       className={cn(
-        'relative flex min-h-0 shrink-0 flex-col overflow-hidden border-l border-edge bg-surface-base',
-        'max-md:fixed max-md:inset-y-0 max-md:right-0 max-md:z-50 max-md:w-[min(92vw,34rem)] max-md:shadow-popover',
-        'app-side-chat-expanded-width app-side-chat-panel-enter',
+        embedded ? 'flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden' : 'relative flex min-h-0 shrink-0 flex-col overflow-hidden border-l border-edge bg-surface-base',
+        !embedded && 'max-md:fixed max-md:inset-y-0 max-md:right-0 max-md:z-50 max-md:w-[min(92vw,34rem)] max-md:shadow-popover',
+        !embedded && 'app-side-chat-expanded-width app-side-chat-panel-enter',
+        embedded && !visible && 'hidden',
         resizing && 'side-chat-panel-resizing',
       )}
       style={{ '--side-chat-panel-px': `${widthPx}px` } as CSSProperties}
     >
-      <div
+      {!embedded ? <div
         role="separator"
         aria-orientation="vertical"
         aria-label={m.resizeAria}
         onPointerDown={onResize}
         className="absolute left-0 top-0 z-20 hidden h-full w-2 cursor-col-resize touch-none md:block"
       />
-      <div data-side-chat-header className="flex h-11 shrink-0 items-center gap-1 overflow-x-auto px-2">
+      : null}
+      <div data-side-chat-header className={cn("h-11 shrink-0 items-center gap-1 overflow-x-auto px-2", embedded ? "hidden" : "flex")}>
         {tabs.map((tab) => (
           <div key={tab.id} className={cn('flex h-8 shrink-0 items-center rounded-lg pl-3 text-sm', tab.id === activeId ? 'bg-surface-hover text-fg' : 'text-fg-muted')}>
             <button type="button" className="max-w-40 truncate" onClick={() => setActive(tab.id)}>{tab.title === 'Side chat' ? m.title : tab.title}{tab.ended ? ` · ${tab.ended === 'promoted' ? m.savedLabel : m.endedLabel}` : ''}</button>
@@ -279,14 +313,18 @@ export function SideChatColumn({ parentConversationId }: { parentConversationId:
           <ChevronRight className="size-4" />
         </Button>
       </div>
-      {createError && activeTab ? <div className="shrink-0 border-b border-edge px-4 py-2 text-xs text-fg-muted" role="status">
+      {createError && (activeTab || embedded) ? <div className="shrink-0 border-b border-edge px-4 py-2 text-xs text-fg-muted" role="status">
         <p>{createError}</p>
         {allTabs.filter((tab) => !tab.ended).map((tab) => <button key={tab.id} type="button" className="mr-2 mt-1 rounded border border-edge px-2 py-1" onClick={() => {
           setActive(tab.id);
           window.dispatchEvent(new CustomEvent('navigate-to-chat', { detail: { conversationId: tab.parentConversationId } }));
         }}>{tab.title === 'Side chat' ? m.title : tab.title}</button>)}
       </div> : null}
-      {activeTab ? (
+      {embedded ? tabs.filter((tab) => !tab.ended || readings[tab.id] || (visible && workspace?.activeId === `side:${tab.id}`)).map((tab) => (
+        <SideChatConversation key={`${tab.id}:${token ?? ''}`} sideChatId={tab.id} token={token ?? undefined}
+          initialRunId={tab.runId} onRunIdChange={setTabRunId} parentConversationId={parentConversationId}
+          visible={visible && workspace?.activeId === `side:${tab.id}`} />
+      )) : activeTab ? (
         <SideChatConversation
           key={`${activeTab.id}:${token ?? ''}`}
           sideChatId={activeTab.id}
@@ -320,12 +358,12 @@ export function SideChatColumn({ parentConversationId }: { parentConversationId:
         onCheckboxCheckedChange={setDontAskCloseAgain}
         destructive
         onConfirm={() => {
+          if (closing) return;
           const id = pendingCloseId;
           if (!id) return;
           if (dontAskCloseAgain) disableSideChatCloseConfirm();
-          setPendingCloseId(null);
           setDontAskCloseAgain(false);
-          closeTab(id);
+          void closeTab(id);
         }}
         onCancel={() => {
           setPendingCloseId(null);
@@ -342,7 +380,9 @@ export function SideChatConversation({
   initialRunId,
   onRunIdChange,
   parentConversationId,
+  visible = true,
 }: {
+  visible?: boolean;
   sideChatId: string;
   token?: string;
   initialRunId?: string;
@@ -397,16 +437,18 @@ export function SideChatConversation({
   const m = getMessages(language);
   const sideChatMessages = m.sideChat;
   const attachments = useComposerAttachments({
+    conversationId: sideChatId,
     chat: m.chat,
     initialAttachments: draftAttachments,
     onAttachmentsChange: setDraftAttachments,
   });
   const editor = useComposerEditor({
+    receiveExternalFill: false,
     conversationId: sideChatId,
-    disabled: Boolean(ended) || connectionLost,
+    disabled: !visible || Boolean(ended) || connectionLost,
     initialValue: draftText,
     onValueChange: setDraftText,
-    autoFocusKey: sideChatId,
+    autoFocusKey: visible ? sideChatId : null,
     shouldSyncSelectionRef,
   });
   const kbdRef = useRef({} as ComposerKbdContext);
@@ -531,6 +573,18 @@ export function SideChatConversation({
     return () => window.clearTimeout(timer);
   }, [notice]);
 
+  const lastReadCount = useRef(0);
+  const visibleRef = useRef(visible);
+  visibleRef.current = visible;
+  const receivedWhileHidden = useRef(false);
+  useEffect(() => {
+    if (visible) { lastReadCount.current = messages.length; receivedWhileHidden.current = false; }
+    useSideChatStore.getState().setTabStatus(sideChatId, {
+      waiting: Boolean(clarify), disconnected: connectionLost,
+      unread: !visible && (receivedWhileHidden.current || messages.length > lastReadCount.current),
+    });
+  }, [clarify, connectionLost, messages, runId, sideChatId, visible]);
+
   const remainingMs = view?.expiresAt ? Date.parse(view.expiresAt) - (now + clockOffset) : Infinity;
   const warning = !ended && !connectionLost && remainingMs <= 5 * 60_000;
   const extend = async () => {
@@ -584,6 +638,7 @@ export function SideChatConversation({
     return subscribeRealtimeTopic(`run:${runId}`, {
       onEvent: (event) => {
         if (!isCurrent() || endedRef.current) return;
+        if (!visibleRef.current) receivedWhileHidden.current = true;
         const envelope = event.data as { payload?: Record<string, unknown> } | undefined;
         const payload = envelope?.payload ?? {};
         if (event.event === 'assistant_message_start') mutateAssistant(() => {});
@@ -782,7 +837,7 @@ export function SideChatConversation({
   };
 
   return (
-    <div className="relative flex min-h-0 flex-1 flex-col">
+    <div hidden={!visible} className={cn("relative min-h-0 flex-1 flex-col", visible ? "flex" : "hidden")}>
       <div className="relative min-h-0 flex-1">
         <div
           ref={scrollRef}
@@ -795,7 +850,7 @@ export function SideChatConversation({
               <Skeleton className="ml-auto h-12 w-3/4" />
               <Skeleton className="h-4 w-full" /><Skeleton className="h-4 w-4/5" />
             </div>
-          ) : messages.length ? (
+          ) : messages.length && visible ? (
             <MessageList
               messages={messages}
               authToken={token}

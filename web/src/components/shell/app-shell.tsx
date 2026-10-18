@@ -7,8 +7,9 @@ import { APP_CHROME_BAR_CLASS, APP_CHROME_DRAG_CLASS } from '@/components/shell/
 import { GatewayConnectLanding } from '@/components/shell/gateway-connect-landing';
 import { PrimaryAppHeader } from '@/components/shell/primary-app-header';
 import { SidebarColumn } from '@/components/shell/sidebar-column';
-import { WorkspaceColumn } from '@/components/shell/workspace-column';
-import { SideChatColumn } from '@/features/side-chat/side-chat-column';
+import { RightWorkspace } from '@/features/right-workspace/right-workspace';
+import { WorkspaceOwnerContext } from '@/features/right-workspace/workspace-context';
+import { useWorkspacePanelStore } from '@/stores/workspace-panel-store';
 import { SideChatSelectionLauncher } from '@/features/side-chat/side-chat-selection-launcher';
 import { useChatRouteConversationId } from '@/features/chat/use-chat-route-conversation-id';
 import { TokenDialog } from '@/components/shell/token-dialog';
@@ -30,7 +31,6 @@ import { GlobalDiscussionCaptureHost } from '@/features/discussions/global-discu
 import { GatewayRealtimeBridge } from '@/features/gateway/gateway-realtime-bridge';
 import { ProductNotificationCoordinator } from '@/features/notifications/product-notification-coordinator';
 import { SupportReportHost } from '@/features/support/support-report-host';
-import { WorkspacePreviewPane } from '@/features/workspace/workspace-preview-pane';
 import { ReadAloudDockProvider } from '@/features/voice/read-aloud-dock';
 import { GlobalReadAloudPlayer } from '@/features/voice/global-read-aloud-player';
 import { GlobalVoiceInputShortcutHost } from '@/features/voice/global-voice-input-shortcut-host';
@@ -48,8 +48,6 @@ import { isElectronDarwin } from '@/lib/electron-window-chrome';
 import { loadTaskDetailPage, loadWorkDiscoveryOverlay } from '@/lib/route-preload';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
-import { useWorkspacePreviewStore } from '@/stores/workspace-preview-store';
-import { useSideChatStore } from '@/stores/side-chat-store';
 
 const WorkDiscoveryOverlay = lazy(() =>
   loadWorkDiscoveryOverlay().then((module) => ({ default: module.WorkDiscoveryOverlay })),
@@ -105,15 +103,13 @@ function AppShellContent() {
   const isWorkDiscoveryRoute = pathname === '/onboarding/workspace';
   const language = useLocaleStore((s) => s.language);
   const updateReminder = useUpdateReminder();
-  const previewPath = useWorkspacePreviewStore((s) => s.path);
+  const workspaceOverride = useWorkspacePanelStore((s) => s.conversationIdOverride);
   const parentConversationId = useChatRouteConversationId(pathname);
-  const sideChatOpen = useSideChatStore((s) => (
-    parentConversationId ? s.panes[parentConversationId]?.open === true : false
-  ));
   const showWorkDiscoveryOverlay = pathname === '/user-model' && isWorkDiscoveryOverlaySearch(search);
   const taskModalId = pathname.startsWith('/tasks/')
     ? null
     : new URLSearchParams(search).get(TASK_DETAIL_MODAL_PARAM);
+  const workspaceScope = taskModalId && workspaceOverride ? workspaceOverride : parentConversationId ?? (pathname.startsWith('/chat') ? 'new' : workspaceOverride ?? 'new');
   const productPreviewRoute = isChatPreviewPath(pathname)
     ? new URLSearchParams(search).get(PRODUCT_PREVIEW_PARAM) : null;
   const productPreviewTarget = productPreviewRoute && !taskModalId ? resolveProductPreviewTarget(productPreviewRoute) : null;
@@ -235,6 +231,7 @@ function AppShellContent() {
           />
         </Suspense>
       ) : null}
+      <WorkspaceOwnerContext.Provider value={workspaceScope}>
       <div className="app-chrome-shell flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <WindowsTitlebar />
         <TopBannerStack>
@@ -249,11 +246,9 @@ function AppShellContent() {
           <div className="app-main-surface relative flex min-h-0 min-w-0 flex-1 min-w-0 flex-col overflow-hidden bg-surface-panel">
             <div className="flex min-h-0 min-w-0 flex-1 flex-row overflow-hidden">
               <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-                {!isSettingsRoute && !previewPath ? <PrimaryAppHeader /> : null}
+                {!isSettingsRoute ? <PrimaryAppHeader /> : null}
                 <main id="app-main-content" className="flex min-h-0 flex-1 flex-col overflow-hidden">
-                  {previewPath != null && !taskModalId ? (
-                    <WorkspacePreviewPane allowOutsideChat={pathname === '/personal'} />
-                  ) : (
+                  {(
                     <div
                       key={routeKey}
                       className={cn(
@@ -271,17 +266,16 @@ function AppShellContent() {
                   )}
                 </main>
                 <GlobalReadAloudPlayer />
-                {!isSettingsRoute && !pathname.startsWith('/chat') && !previewPath ? <MobilePrimaryNav /> : null}
+                {!isSettingsRoute && !pathname.startsWith('/chat') ? <MobilePrimaryNav /> : null}
               </div>
-              {!isSettingsRoute ? (
-                sideChatOpen && parentConversationId && !taskModalId
-                  ? <SideChatColumn parentConversationId={parentConversationId} />
-                  : <WorkspaceColumn elevated={Boolean(taskModalId)} />
-              ) : null}
+              <RightWorkspace scope={workspaceScope}
+                enabled={!isSettingsRoute && (pathname.startsWith('/chat') || pathname === '/personal' || ((Boolean(taskModalId) || pathname.startsWith('/tasks/')) && Boolean(workspaceOverride)))}
+                elevated={Boolean(taskModalId)} />
             </div>
           </div>
         </div>
       </div>
+      </WorkspaceOwnerContext.Provider>
     </div>
   );
 }

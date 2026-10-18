@@ -1,5 +1,6 @@
-import { useCallback, useRef, useState, type MutableRefObject } from 'react';
+import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 'react';
 
+import { registerComposerFileReceiver } from './composer-file-reference';
 import type { Attachment } from '@/features/chat/attachments/attachment-utils';
 import { formatFileSize, MAX_CHAT_ATTACHMENTS } from '@/features/chat/attachments/attachment-utils';
 import type { WireAttachment } from '@/features/chat/composer/composer.types';
@@ -9,6 +10,7 @@ import { MAX_WEBCHAT_ATTACHMENT_FILE_BYTES } from '@/features/chat/constants';
 import type { ChatMessages } from '@/i18n/messages';
 
 export interface UseComposerAttachmentsOptions {
+  conversationId?: string | null;
   chat: ChatMessages;
   initialAttachments?: Attachment[];
   onAttachmentsChange?: (attachments: Attachment[]) => void;
@@ -112,6 +114,15 @@ export function useComposerAttachments(options: UseComposerAttachmentsOptions): 
   );
 
   const processFiles = useCallback((files: File[]) => appendFiles(files), [appendFiles]);
+
+  useEffect(() => {
+    if (!options.conversationId) return;
+    return registerComposerFileReceiver(options.conversationId, async (file) => {
+      const before = attachmentsRef.current.length;
+      await appendFiles([file]);
+      return attachmentsRef.current.length > before;
+    });
+  }, [appendFiles, options.conversationId]);
 
   const processPastedText = useCallback(
     (paste: PastedTextAttachment) =>
