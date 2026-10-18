@@ -17,7 +17,7 @@ import { runProcess } from '../../process/run-process.js';
 const DEFAULT_MAX_OUTPUT_CHARS = 50_000;
 
 const ExecCommandSchema = Type.Object({
-  cmd: Type.String({ description: 'Command for the default platform shell: /bin/sh on Unix and in Docker; cmd.exe on Windows hosts. Use portable syntax, or invoke an installed shell explicitly for shell-specific features.' }),
+  cmd: Type.String({ description: 'Command for the default platform shell: /bin/sh on Unix and in Docker; cmd.exe on Windows hosts. Commands start in the workspace; use cwd instead of cd. For verification, invoke the existing test runner directly without shell chains, pipes, or output filters so its exit status and evidence remain unambiguous. Use maxOutputChars to limit output.' }),
   cwd: Type.Optional(
     Type.String({
       description: 'Working directory. Relative paths are resolved under the agent workspace.',

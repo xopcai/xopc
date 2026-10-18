@@ -38,6 +38,8 @@ describe('prompt tool capability boundaries', () => {
     const prompt = buildSystemPrompt('/ws', { toolNames: ['publish_artifacts'] });
     expect(prompt).toContain('Publish completed user-facing files with `publish_artifacts`');
     expect(prompt).not.toContain('exec_command.outputs');
+    expect(prompt).toContain('report the blocker without publishing the original');
+    expect(prompt).toContain('This tool cannot create, edit, or verify content');
   });
 
   it('chooses proportionate verification without requiring scripts for prose', () => {

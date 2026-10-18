@@ -363,3 +363,43 @@ it('reviews prose changes without requiring shell tools or generating an asserti
     await rm(root, { recursive: true, force: true });
   }
 }, 15000);
+
+it('projects passive prose closeout without enabling coding verification or another model turn', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'prose-closeout-'));
+  const conversationId = crypto.randomUUID();
+  const runtime = new InMemoryTranscriptRuntime({ runtimeId: conversationId, cwd: root });
+  let round = 0;
+  try {
+    await writeFile(join(root, 'note.md'), 'Old wording.\n');
+    execFileSync('git', ['init', '-q'], { cwd: root }); execFileSync('git', ['add', '.'], { cwd: root });
+    execFileSync('git', ['-c', 'user.name=Test', '-c', 'user.email=test@xopc.local', 'commit', '-qm', 'fixture'], { cwd: root });
+    scripted.stream.mockImplementation((_model, context) => {
+      round++;
+      if (round === 3) expect(getCurrentSystemPrompt(context.messages)).toContain('Document changes have been read back in full');
+      const content: AssistantMessage['content'] = round === 1
+        ? [{ type: 'toolCall', id: 'edit', name: 'apply_patch', arguments: { patch: '*** Begin Patch\n*** Update File: note.md\n@@\n-Old wording.\n+New wording.\n*** End Patch' } }]
+        : round === 2 ? [{ type: 'toolCall', id: 'inspect', name: 'read_file', arguments: { path: 'note.md' } }]
+        : [{ type: 'text', text: 'Updated and inspected the wording; no executable test was run.' }];
+      const message = { role: 'assistant', content, api: 'openai-completions', provider: 'openai', model: 'gpt-4.1',
+        stopReason: round < 3 ? 'toolUse' : 'stop', timestamp: Date.now(),
+        usage: { input: 10, output: 10, cacheRead: 0, cacheWrite: 0, totalTokens: 20, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
+      } as AssistantMessage;
+      const stream = createAssistantMessageEventStream();
+      stream.push({ type: 'start', partial: message }); stream.push({ type: 'done', reason: message.stopReason as 'stop' | 'toolUse', message });
+      return stream;
+    });
+    const result = await runXopcEmbeddedTurn({ verifyChanges: false,
+      conversationId, runId: 'prose-closeout', userMessage: { role: 'user', content: 'Change the wording in note.md.', timestamp: Date.now() },
+      model: { id: 'gpt-4.1', name: 'Test', provider: 'openai', api: 'openai-completions', baseUrl: 'https://example.invalid', reasoning: false, input: ['text'], contextWindow: 128000, maxTokens: 4096, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 } },
+      modelRef: 'openai/gpt-4.1', systemPrompt: 'Edit the requested document.', workspaceDir: root, transcriptRuntime: runtime,
+      tools: [createApplyPatchTool(root), createReadFileTool(root)], timeoutMs: 10_000,
+      turnPolicy: createAgentTurnPolicy({ maxTurns: 4 }),
+    });
+    expect(result.ok).toBe(true);
+    expect(round).toBe(3);
+    const branch = runtime.openSessionManager(root).getBranch();
+    expect(JSON.stringify(branch)).not.toContain('xopc.execution-focus');
+    expect(branch.findLast(entry => entry.type === 'custom' && entry.customType === 'coding_verification'))
+      .toMatchObject({ data: { required: false, evidence: [] } });
+  } finally { evictEmbeddedSessionRunner(conversationId); await rm(root, { recursive: true, force: true }); }
+}, 15_000);

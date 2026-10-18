@@ -1,6 +1,6 @@
 import type { AfterToolCallContext, AgentToolResult } from '@earendil-works/pi-agent-core';
 
-import { extname } from 'node:path';
+import { extname, resolve } from 'node:path';
 
 import { classifyVerificationCommand } from './verification-command.js';
 import { readWorkspaceRevision } from './workspace-revision.js';
@@ -27,11 +27,16 @@ export function toolResultFailed(result: AgentToolResult<unknown>, isError = fal
     || details.timedOut === true || (typeof details.exitCode === 'number' && details.exitCode !== 0);
 }
 
-type VerificationOptions = { required?: boolean; toolNames?: string[] };
+type VerificationOptions = { required?: boolean; toolNames?: string[]; workspace?: string };
+
+function mutationPaths(name: string, args: Record<string, unknown>): string[] {
+  return (name === 'write_file' ? [args.path]
+    : name === 'apply_patch' ? [...String(args.patch ?? '').matchAll(/^\*\*\* (?:Add File|Update File|Delete File|Move to): (.+)$/gm)].map(match => match[1]!.trim()) : [])
+    .filter((path): path is string => typeof path === 'string');
+}
 
 function editsOnlyProse(name: string, args: Record<string, unknown>): boolean {
-  const paths = name === 'write_file' ? [args.path]
-    : name === 'apply_patch' ? [...String(args.patch ?? '').matchAll(/^\*\*\* (?:Add File|Update File|Delete File|Move to): (.+)$/gm)].map(match => match[1]!.trim()) : [];
+  const paths = mutationPaths(name, args);
   return paths.length > 0 && paths.every(path => typeof path === 'string' && ['.md', '.txt', '.rst', '.adoc'].includes(extname(path).toLowerCase()));
 }
 
@@ -42,11 +47,14 @@ export class RunVerification {
   private proseOnly = true;
   private readonly before = new Map<string, string | undefined>();
   private readonly evidence = new Map<string, CodingVerificationEvidence>();
+  private readonly successfulCommands = new Map<string, string>();
+  private readonly editedProse = new Set<string>();
+  private readonly inspectedProse = new Map<string, string>();
 
   constructor(private readonly snapshot: () => Promise<string | undefined>, private readonly options: VerificationOptions = {}) {}
 
   static async open(workspace: string, options: VerificationOptions = {}): Promise<RunVerification> {
-    const run = new RunVerification(() => readWorkspaceRevision(workspace), options);
+    const run = new RunVerification(() => readWorkspaceRevision(workspace), { ...options, workspace });
     run.revision = await run.snapshot();
     return run;
   }
@@ -87,6 +95,12 @@ export class RunVerification {
     this.observeRevision(revision, mutation && !isError);
     if (mutation && !isError) this.proseOnly &&= editsOnlyProse(toolCall.name, record(args));
     if (mutation && !isError) this.changed = true;
+    if (mutation && !isError && this.proseOnly) {
+      for (const path of mutationPaths(toolCall.name, record(args))) this.editedProse.add(resolve(this.options.workspace ?? '.', path));
+    }
+    if (toolCall.name === 'read_file' && !isError && revision && revision === before && details.truncated === false && details.offset === 1 && typeof record(args).path === 'string') {
+      this.inspectedProse.set(resolve(this.options.workspace ?? '.', record(args).path as string), revision);
+    }
     const command = toolCall.name === 'exec_command' || toolCall.name === 'managed_job' || toolCall.name === 'language_diagnostics' || toolCall.name === 'review_workspace'
       ? String(details.command ?? record(args).cmd ?? '') : '';
     const kind = toolCall.name === 'review_workspace' && details.complete === true ? 'diff-review' : toolCall.name === 'language_diagnostics' && details.diagnosticEngine === 'typescript' ? 'check' : classifyVerificationCommand(command);
@@ -105,11 +119,19 @@ export class RunVerification {
       this.evidence.set(command, verification);
     }
     const pending = this.pendingEvidence();
+    const commandKey = JSON.stringify([record(args).cwd ?? '', command]);
+    const repeatedSuccess = toolCall.name === 'exec_command' && !isError && revision
+      && this.successfulCommands.get(commandKey) === revision;
+    if (toolCall.name === 'exec_command' && !isError && details.exitCode === 0 && revision === before && revision) {
+      this.successfulCommands.set(commandKey, revision);
+    }
     const verificationHint = this.options.required !== false && !kind && toolCall.name === 'exec_command' && pending.includes('check')
-      ? 'This command did not record a check. Save an assertion test, then run a standalone test command such as node --test verify.test.cjs; do not chain, pipe, or delete the test before completion.' : '';
+      ? 'This command did not record a check; repeating it will not supply missing evidence. Use the existing test runner as a standalone command. If the task has no tests and needs executable assertions, write one test file and run node --test path/to/file.test.mjs (never combine --test with --eval/-e); do not create another competing script. Finish requested files first; use cwd instead of cd, chains, or pipes.' : '';
     const receipt = this.options.required !== false && this.changed && (mutation || command) ? [
       `Verification pending for current files: ${pending.length ? pending.map(item => item === 'diff-review' ? this.hasTool('review_workspace') ? 'review_workspace' : 'content inspection' : 'standalone assertion test').join(', ') : 'none'}.`,
       verificationHint,
+      verification?.kind === 'check' && verification.status === 'failed' ? 'Resolve the failing assertion against current requirements and source facts before rerunning. Fix the discrepancy, not the expected value blindly; inspect the environment only for an actual runtime error.' : '',
+      repeatedSuccess ? 'This exact command already succeeded on the same workspace revision. Reuse its result; rerun only for a concrete freshness requirement or changed inputs.' : '',
     ].filter(Boolean).join(' ') : '';
     return {
       isError,
@@ -152,17 +174,23 @@ export class RunVerification {
   }
 
   modelGuidance(): string {
-    if (this.options.required === false) return '';
-    const focus = 'Read the inputs named by the current request directly. Inspect another file only for a concrete dependency or unresolved fact; directory neighbors are not dependencies. Reuse facts already read. Finish the requested changes before checking; avoid generalizing a bounded task into extra parsing, hardening, or documentation work. For JSON deliverables, match the requested container and exact field set. A single result described by named fields is an object; use a collection only when requested. Honor literal scalar field values and precision. Assert this contract independently before checking calculations; do not validate extra fields or a changed container against your own generated output.';
-    if (!this.changed) return `Execution phase: focused implementation. ${focus}`;
+    if (this.options.required === false) {
+      if (!this.changed || !this.proseOnly || this.editedProse.size === 0) return '';
+      const inspected = !!this.revision && [...this.editedProse].every(path => this.inspectedProse.get(path) === this.revision);
+      return inspected
+        ? 'Document changes have been read back in full at the current revision. If all requested requirements are met, give the final answer now. Do not add Git, byte, checksum, or executable checks for wording alone; honor any explicitly requested validation or delivery. State limitations honestly; inspection is not a behavior-test receipt.'
+        : 'For this prose-only edit, finish the requested wording, then inspect final content once with an available read tool. No assertion script, byte dump, or extra Git inspection is needed. Deliver the result with any capability limitations.';
+    }
+    const focus = 'Read the inputs named by the current request directly; search only if missing. Reuse observed facts. Check the requested schema independently: named fields require one root object, not an array/envelope; preserve JSON value types and add no unrequested keys. When the latest request replaces scope or names root fields, remove the superseded container and metadata; do not wrap the root fields in the old array. Small data tasks need the result, a concise method and an existing check, not a reusable pipeline or exhaustive report. On follow-up, update only affected artifacts and assertions; do not reread unchanged inputs or rebuild helpers unnecessarily.';
+    if (!this.changed) return `Execution phase: focused implementation. ${focus} Choose an existing runner before editing; run it as the entire command, with no echo, hash, Git, chain, pipe or filter appended. If executable assertions are needed and none exists, use one node:test file with node --test path/to/file.test.mjs; plain node/python scripts and inline shell programs do not record behavior-check evidence. No assertion scripts for prose.`;
     const pending = this.pendingEvidence();
-    const delivery = this.hasTool('exec_command') ? 'Use exec_command.outputs to capture final deliverables; do not republish unchanged artifacts.'
-      : this.hasTool('publish_artifacts') ? 'Use publish_artifacts only for missing final deliverables.' : '';
-    if (pending.length === 0) return `Execution phase: verification complete for the observed workspace revision. If the requested result is complete, give the final answer now. ${delivery} Do not rerun passing checks or edit for discretionary polish. Further edits invalidate current evidence; passing checks alone do not establish that all user requirements are met.`;
+    const delivery = this.hasTool('exec_command') ? 'Link completed workspace files directly. Publish downloadable copies only when requested: plan outputs on the necessary final check in advance, never repeat a passing check to attach files. Reuse receipts; source, tests and helpers stay in the workspace unless explicitly requested.'
+      : this.hasTool('publish_artifacts') ? 'Use publish_artifacts only for completed requested deliverables missing a successful receipt, never for blocked edits or source files.' : '';
+    if (pending.length === 0) return `Execution phase: verification complete for the observed workspace revision. If all requested fields and deliverables are complete, give the final answer now, briefly linking them with verification and any limitation. Do not repeat input tables or the work log. ${delivery} Stop calling tools when requirements and valid evidence are complete. Do not rerun passing checks, regenerate outputs, publish extra copies, inspect Git/checksums, or edit for discretionary polish. Further edits invalidate current evidence; passing checks alone do not establish that all user requirements are met.`;
     const missing = pending.map(kind => kind === 'check' ? 'a successful standalone assertion test'
       : this.hasTool('review_workspace') ? 'review_workspace' : 'content inspection with available read tools');
     const focusForChange = this.proseOnly ? 'Inspect the changed prose for the requested content; no assertion script is required.' : focus;
-    return `Execution phase: complete outstanding requirements, then verify once. ${focusForChange} Still missing: ${missing.join(', ')}. ${delivery} Reuse valid evidence; report unavailable verification as a blocker rather than invoking tools outside the registered set.`;
+    return `Execution phase: complete outstanding requirements, then verify once with a direct command (no cd, chains, or pipes). ${focusForChange} Still missing: ${missing.join(', ')}. ${delivery} Reuse valid evidence; report unavailable verification as a blocker rather than invoking tools outside the registered set.`;
   }
 
   async pendingContext(): Promise<string> {
@@ -172,6 +200,10 @@ export class RunVerification {
     const checked = !this.pendingEvidence().includes('check');
     const reviewed = current.some((item) => item.kind === 'diff-review' && item.status === 'passed');
     const failed = current.filter((item) => item.kind === 'check' && item.status === 'failed');
+    // Missing capabilities remain unverified; another model turn cannot supply them.
+    if (!this.pendingEvidence().some(kind => kind === 'check'
+      ? this.hasTool('exec_command') || this.hasTool('language_diagnostics')
+      : this.hasTool('review_workspace'))) return '';
     if (checked && reviewed && failed.length === 0) return '';
     return [
       'Workspace changes still need verification against the current files.',

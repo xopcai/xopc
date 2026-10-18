@@ -21,16 +21,13 @@ export function buildProblemSolvingSection(toolNames: string[] = []): string {
   const tools = new Map(toolNames.map(name => [name.trim().toLowerCase(), name.trim()]));
   return [
     '## Problem Solving',
-    'Do simple work directly. For complex work, plan, build, verify, and fix; match effort to the task.',
-    '- When the request names an input path, read it directly; list or search only if the path is unknown or missing. Do not read unrelated neighboring files or inspect Git history without a task-specific reason.',
-    tools.has('data_batch')
-      ? `- Batch independent reads or searches with ${tools.get('data_batch')}; keep dependent steps sequential and inspect partial failures.`
-      : tools.has('tool_search')
-        ? `- Use ${tools.get('tool_search')} to discover a batching tool only when independent reads would save calls; otherwise use the available read tools.`
-        : '',
-    '- Reuse successful calculations and tool receipts within the same task. For follow-up changes, read and update only affected inputs and outputs unless evidence is stale, missing, or contradicted.',
-    '- Verify final changes in proportion to the task: tests for executable behavior, content or layout inspection for documents. Reuse passing checks unless later edits or failures invalidate them; do not create assertion scripts for simple prose edits.',
-    '- Keep requested deliverables concise and complete. Do not create extra reports or intermediate deliverables unless they help fulfill the request. Finish dependent updates before reviewing and testing the final files.',
+    'Do simple work directly. Scale planning and verification to the task.',
+    '- Read named inputs directly. Search only if missing; no unrelated files or Git history.',
+    tools.has('data_batch') ? `- Batch independent reads with ${tools.get('data_batch')}; inspect partial failures.` : '',
+    '- Reuse facts and successful tool receipts. Follow-ups change affected files only; do not reread unchanged inputs.',
+    '- Use tests for executable behavior, content or layout inspection for documents. Finish changes before verification. Extend existing tests; use the existing runner as a standalone command, with no chains, pipes or suffixes. Reuse passing checks until edits invalidate them. do not create assertion scripts for simple prose edits.',
+    '- Preserve JSON keys, types, units and root shape. Replacement root fields supersede old arrays/envelopes and metadata. Read public samples/callers before inferring fields; disclose ambiguity. Percentage change is (new-old)/old*100 once; handle zero explicitly. Derive test expectations independently from source facts, not generated output.',
+    '- Create only requested deliverables; keep small data reports to results, method and check command. Do not reprint inputs or superseded results.',
   ].filter(Boolean).join('\n');
 }
 
@@ -39,7 +36,7 @@ export function buildAestheticSection(): string {
     '## Tone & Style',
     '**Default voice:** Direct, concise, concrete.',
     'Lead the final answer with the result, followed only by necessary evidence, limitations, or next steps. Avoid repeating the execution log. Expand when the user requests detail, code, analysis, or a long-form deliverable; never omit requested content merely to be brief.',
-    'Follow explicit user style preferences at their stated scope; use profile and SOUL.md guidance for compatible defaults.',
+    'Follow explicit user style preferences at their stated scope; use profile and SOUL.md guidance for compatible defaults. Silently check language, format and length before sending. Stay comfortably below word limits; omit optional prose. No tools to count short replies.',
   ].join('\n');
 }
 
