@@ -282,6 +282,7 @@ export const ChatComposer = memo(function ChatComposer({
   }, [m.chat.commandPalette, conversationId, workspaceTrustSaving]);
 
   const att = useComposerAttachments({
+    conversationId: conversationId ?? 'new',
     chat: m.chat,
     onAttachmentsChange: (attachments) => onDraftAttachmentsChange?.(attachments.map((attachment, index) => ({
       id: attachment.uri || attachment.id || `draft:${index}:${attachment.name}`,

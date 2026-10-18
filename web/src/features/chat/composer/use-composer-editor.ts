@@ -21,6 +21,7 @@ export function syncComposerPlaceholderClass(el: HTMLElement, wire: string): voi
 
 export interface UseComposerEditorOptions {
   disabled: boolean;
+  receiveExternalFill?: boolean;
   capabilities?: Readonly<ComposerCapabilities>;
   agentId?: string;
   conversationId?: string | null;
@@ -307,6 +308,7 @@ export function useComposerEditor(options: UseComposerEditorOptions): UseCompose
 
   useEffect(() => {
     const handler = (e: Event) => {
+      if (options.receiveExternalFill === false) return;
       const d = (e as CustomEvent<FillChatComposerDetail>).detail;
       if (typeof d?.text !== 'string') return;
       onExternalTextReplace?.(d);
@@ -314,7 +316,7 @@ export function useComposerEditor(options: UseComposerEditorOptions): UseCompose
     };
     window.addEventListener(FILL_CHAT_COMPOSER_EVENT, handler);
     return () => window.removeEventListener(FILL_CHAT_COMPOSER_EVENT, handler);
-  }, [onExternalTextReplace, resetEditor]);
+  }, [onExternalTextReplace, options.receiveExternalFill, resetEditor]);
 
   const onWireInput = useCallback((wire: string, caret: number) => {
     valueRef.current = wire;

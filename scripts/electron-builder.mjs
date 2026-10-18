@@ -26,6 +26,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { prepareElectronPackDir } from './prepare-electron-pack-dir.mjs';
+import { loadElectronSigningEnv } from './electron-signing-env.mjs';
 
 const root = join(fileURLToPath(new URL('..', import.meta.url)));
 const requireRoot = createRequire(join(root, 'package.json'));
@@ -39,7 +40,7 @@ function shouldStripProxy(value) {
   return typeof value === 'string' && LOCAL_PROXY.test(value);
 }
 
-const env = { ...process.env };
+const env = loadElectronSigningEnv(root);
 if (process.env['ELECTRON_BUILDER_KEEP_PROXY'] !== '1') {
   for (const k of PROXY_KEYS) {
     if (shouldStripProxy(env[k])) delete env[k];

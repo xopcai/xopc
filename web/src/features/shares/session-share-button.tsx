@@ -24,10 +24,17 @@ import { ReachabilityHint, ShareUrlCopyRows } from '@/features/shares/share-link
 import { cn } from '@/lib/cn';
 import { useLocaleStore } from '@/stores/locale-store';
 
-export function SessionShareButton({ conversationId }: { conversationId: string }) {
+export function SessionShareButton({ conversationId, dialogOpen, onDialogOpenChange, hideTrigger = false }: {
+  conversationId: string;
+  dialogOpen?: boolean;
+  onDialogOpenChange?: (open: boolean) => void;
+  hideTrigger?: boolean;
+}) {
   const language = useLocaleStore((state) => state.language);
   const t = language === 'zh' ? LABELS_ZH : LABELS_EN;
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = dialogOpen ?? internalOpen;
+  const setOpen = (value: boolean) => { setInternalOpen(value); onDialogOpenChange?.(value); };
   const [preview, setPreview] = useState<SessionSharePreview | null>(null);
   const [result, setResult] = useState<SessionShareResult | null>(null);
   const [loading, setLoading] = useState(false);
@@ -150,7 +157,7 @@ export function SessionShareButton({ conversationId }: { conversationId: string 
         if (!next) reset();
       }}
     >
-      <Dialog.Trigger asChild>
+      {!hideTrigger ? <Dialog.Trigger asChild>
         <button
           type="button"
           className="rounded-md p-2 text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg"
@@ -159,10 +166,15 @@ export function SessionShareButton({ conversationId }: { conversationId: string 
         >
           <MessageSquareShare className="size-4" />
         </button>
-      </Dialog.Trigger>
+      </Dialog.Trigger> : null}
       <Dialog.Portal>
         <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-[70] bg-scrim backdrop-blur-[2px]" />
         <Dialog.Content
+          onCloseAutoFocus={(event) => {
+            if (!hideTrigger) return;
+            event.preventDefault();
+            document.querySelector<HTMLElement>('[data-chat-menu-trigger]')?.focus();
+          }}
           className={cn(
             'xopc-dialog-content fixed left-1/2 top-1/2 z-[71] flex h-[min(35rem,calc(100dvh-2rem))] w-[min(34rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col',
             'overflow-hidden rounded-xl border border-edge bg-surface-overlay outline-none',
