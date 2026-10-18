@@ -5,4 +5,4 @@ export function useWorkspaceOwner() { return useContext(WorkspaceOwnerContext); 
 
 export const WorkspaceFileTargetsContext = createContext<Array<{ id: string; label: string }>>([]);
 
-export const WorkspaceTreeControlContext = createContext<ReactNode>(null);
+export const WorkspaceTreeControlContext = createContext<{ button: ReactNode; label: string; active: boolean; onToggle: () => void } | null>(null);
