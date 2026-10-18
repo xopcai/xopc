@@ -104,6 +104,7 @@ function AppShellContent() {
   const language = useLocaleStore((s) => s.language);
   const updateReminder = useUpdateReminder();
   const workspaceOverride = useWorkspacePanelStore((s) => s.conversationIdOverride);
+  const [workspaceDockedWidth, setWorkspaceDockedWidth] = useState(0);
   const parentConversationId = useChatRouteConversationId(pathname);
   const showWorkDiscoveryOverlay = pathname === '/user-model' && isWorkDiscoveryOverlaySearch(search);
   const taskModalId = pathname.startsWith('/tasks/')
@@ -220,7 +221,7 @@ function AppShellContent() {
       ) : null}
       {taskModalId ? (
         <Suspense fallback={null}>
-          <TaskDetailModal taskId={taskModalId} backgroundPath={taskModalBackgroundPath} onClose={closeTaskDetailModal} />
+          <TaskDetailModal taskId={taskModalId} backgroundPath={taskModalBackgroundPath} workspacePanelWidth={workspaceDockedWidth} onClose={closeTaskDetailModal} />
         </Suspense>
       ) : null}
       {workDiscoveryOverlayMounted ? (
@@ -269,6 +270,7 @@ function AppShellContent() {
                 {!isSettingsRoute && !pathname.startsWith('/chat') ? <MobilePrimaryNav /> : null}
               </div>
               <RightWorkspace scope={workspaceScope}
+                onDockedWidthChange={setWorkspaceDockedWidth}
                 enabled={!isSettingsRoute && (pathname.startsWith('/chat') || pathname === '/personal' || ((Boolean(taskModalId) || pathname.startsWith('/tasks/')) && Boolean(workspaceOverride)))}
                 elevated={Boolean(taskModalId)} />
             </div>
