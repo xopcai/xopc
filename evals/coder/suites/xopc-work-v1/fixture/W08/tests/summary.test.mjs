@@ -1,0 +1,1 @@
+import {test} from 'node:test';import assert from 'node:assert/strict';import {summarize} from '../src/summary.mjs';test('paid rows',()=>assert.deepEqual(summarize([{status:'paid',cents:1},{status:'cancelled',cents:9}]),{count:1,totalCents:1}));
