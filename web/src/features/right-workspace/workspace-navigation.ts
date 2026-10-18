@@ -21,13 +21,13 @@ export function useWorkspaceNavigation(scope: string, pane: WorkspacePane, enabl
     const id = params.get('workspaceTab');
     const changed = before?.pathname === pathname && before.scope === scope
       && new URLSearchParams(before.search).get('workspaceTab') !== id;
-    if ((id && pane.tabs.some((tab) => tab.id === id) && id !== pane.activeId) || changed) {
+    if ((id && pane.tabs.some((tab) => tab.id === id) && (id !== pane.activeId || !pane.open)) || changed) {
       applying.current = true;
       const state = useRightWorkspaceStore.getState();
       if (id && pane.tabs.some((tab) => tab.id === id)) state.activate(id, scope);
       else if (pane.activeId !== null) state.activate(null, scope);
     }
-  }, [pane.activeId, pane.tabs, pathname, scope, search]);
+  }, [pane.activeId, pane.open, pane.tabs, pathname, scope, search]);
 
   useEffect(() => {
     if (!enabled) return;
