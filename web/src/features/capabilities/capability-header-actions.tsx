@@ -73,7 +73,7 @@ export function CapabilityHeaderActions({ contribution }: { contribution: Capabi
               <Popover.Content
                 align="end"
                 sideOffset={8}
-                className="z-50 w-[min(20rem,calc(100vw-2rem))] rounded-xl border border-edge bg-surface-panel p-2 shadow-popover"
+                className="z-50 w-[min(20rem,calc(100vw-2rem))] rounded-xl border border-edge bg-surface-overlay p-2 shadow-popover"
               >
                 {contribution.search}
               </Popover.Content>

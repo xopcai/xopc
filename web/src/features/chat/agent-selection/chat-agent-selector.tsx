@@ -130,7 +130,7 @@ export function ChatAgentSelector({
           collisionPadding={8}
           className={cn(
             selectPopoverContentLayoutClass,
-            'z-50 w-[var(--radix-popover-trigger-width)] min-w-[12rem] rounded-lg border border-edge bg-surface-panel shadow-md',
+            'z-50 w-[var(--radix-popover-trigger-width)] min-w-[12rem] rounded-lg border border-edge bg-surface-overlay shadow-md',
             interaction,
           )}
           onOpenAutoFocus={(e) => e.preventDefault()}

@@ -160,7 +160,7 @@ export function WorkspaceOpenLocationMenu({
           align="end"
           side="bottom"
           sideOffset={6}
-          className="z-50 w-60 rounded-lg border border-edge bg-surface-panel p-1 shadow-popover outline-none"
+          className="z-50 w-60 rounded-lg border border-edge bg-surface-overlay p-1 shadow-popover outline-none"
         >
           {defaultApp ? (
             <button

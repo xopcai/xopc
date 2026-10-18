@@ -215,7 +215,7 @@ export function QuickCaptureBar({
               side="top"
               align="start"
               sideOffset={8}
-              className="z-50 min-w-44 rounded-xl border border-edge bg-surface-panel p-1 shadow-popover"
+              className="z-50 min-w-44 rounded-xl border border-edge bg-surface-overlay p-1 shadow-popover"
             >
               {onImagePick ? (
                 <DropdownMenu.Item

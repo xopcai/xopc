@@ -10,7 +10,6 @@ import { AttachmentPreviewDialog } from '@/features/chat/attachments/attachment-
 import { SideChatColumn } from '@/features/side-chat/side-chat-column';
 import { WorkspaceFilePreviewPanel } from '@/features/workspace/workspace-file-preview-dialog';
 import { detectPreviewFileType } from '@/features/preview-runtime/detect-preview-file';
-import { electronPreviewViewportClass } from '@/lib/electron-window-chrome';
 import { cn } from '@/lib/cn';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
@@ -212,26 +211,26 @@ export function RightWorkspace({ scope, enabled = true, elevated = false, onDock
   const retainedFiles = new Set([...allFiles].sort((a, b) => b.tab.visitedAt - a.tab.visitedAt).slice(0, 8).map(({ tab }) => tab.id));
 
   return <aside id="app-workspace-panel" ref={panelRef} aria-label={zh ? '文件与侧聊工作区' : 'Files and side chats'} data-right-workspace aria-hidden={!visible} inert={!visible}
-    className={cn('relative min-h-0 shrink-0 flex-col overflow-hidden border-l border-edge bg-surface-panel', present ? 'flex' : 'hidden',
-      present && (single || expanded) && 'fixed inset-0', present && (single || expanded) && electronPreviewViewportClass(), elevated ? 'z-[110]' : 'z-40')}
+    className={cn('relative min-h-0 shrink-0 flex-col overflow-hidden bg-surface-base', present ? 'flex' : 'hidden',
+      present && (single || expanded) && 'absolute inset-0', elevated ? 'z-[110]' : 'z-40')}
     style={{ width: single || expanded ? undefined : panelWidth }}>
     {!single && !expanded && active ? <div role="separator" aria-orientation="vertical" tabIndex={0} aria-label={zh ? '调整工作区宽度' : 'Resize workspace'} aria-valuemin={460} aria-valuemax={Math.max(460, available - 380)} aria-valuenow={Math.round(panelWidth)}
       className="absolute left-0 top-0 z-20 h-full w-2 -translate-x-1/2 cursor-col-resize touch-none focus-visible:bg-accent/30" onPointerDown={(e) => drag(e)}
       onKeyDown={(e) => { if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { e.preventDefault(); store.setWidth(Math.max(460, Math.min(available - 380, panelWidth + (e.key === 'ArrowLeft' ? 20 : -20)))); } if (e.key === 'Home') store.setWidth(0); }} /> : null}
     {resizing ? <div data-browser-occluder className="fixed inset-0 z-[120] cursor-col-resize" /> : null}
-    <div data-workspace-tab-bar className="flex h-14 shrink-0 items-center gap-1 border-b border-edge-subtle bg-surface-base/80 px-2">
+    <div data-workspace-tab-bar className="flex h-14 shrink-0 items-center gap-1 bg-surface-base px-2">
       <SlidingTabList ref={tabListRef} role="tablist" aria-label={zh ? '工作区标签' : 'Workspace tabs'} className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         onKeyDown={(event) => {
           const tabs = [...event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]')];
           const index = tabs.indexOf(document.activeElement as HTMLButtonElement);
           const next = event.key === 'ArrowRight' ? (index + 1) % tabs.length : event.key === 'ArrowLeft' ? (index - 1 + tabs.length) % tabs.length : event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : -1;
           if (next >= 0) { event.preventDefault(); tabs[next]?.focus(); }
-        }} indicatorClassName="rounded-md border border-edge bg-surface-panel">
+        }} indicatorClassName="rounded-md bg-surface-panel">
         {pane.tabs.map((tab) => {
           const side = tab.kind === 'sidechat' ? sideTabs.find((t) => t.id === tab.sideChatId) : undefined;
           const title = tabTitle(tab);
           const stateLabel = side?.waiting ? (zh ? '待处理' : 'Needs attention') : side?.disconnected ? (zh ? '连接中断' : 'Disconnected') : side?.ended ? (zh ? '已结束' : 'Ended') : side?.runId ? (zh ? '运行中' : 'Running') : side?.unread ? (zh ? '未读' : 'Unread') : fileStatus[tab.id] ? (zh ? '未保存' : 'Unsaved') : '';
-          return <div key={tab.id} data-sliding-active={tab.id === pane.activeId} className={cn('group flex h-9 shrink-0 items-center rounded-md border transition-colors', tab.id === pane.activeId ? 'border-edge bg-surface-panel text-fg' : 'border-transparent text-fg-muted hover:bg-surface-hover')}>
+          return <div key={tab.id} data-sliding-active={tab.id === pane.activeId} className={cn('group flex h-9 shrink-0 items-center rounded-md transition-colors', tab.id === pane.activeId ? 'bg-surface-panel text-fg' : 'text-fg-muted hover:bg-surface-hover')}>
             <button role="tab" id={`workspace-tab-${tab.id}`} aria-controls="workspace-content" aria-selected={tab.id === pane.activeId} tabIndex={tab.id === pane.activeId ? 0 : -1}
               title={tab.kind === 'file' ? tab.path || title : title} className="flex max-w-56 items-center gap-1.5 rounded-md px-2 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent" onClick={() => select(tab.id)} onDoubleClick={() => { if (tab.kind === 'file') store.keepFileOpen(tab.id); }}>
               {tab.kind === 'browser' ? <Globe className="size-4 shrink-0" aria-hidden /> : tab.kind === 'sidechat' ? <MessageSquare className="size-4 shrink-0" aria-hidden /> : tab.kind === 'files' ? <FolderOpen className="size-4 shrink-0" aria-hidden /> : <FileText className="size-4 shrink-0" aria-hidden />}
@@ -292,10 +291,10 @@ export function RightWorkspace({ scope, enabled = true, elevated = false, onDock
         {sideParents.map((parent) => <WorkspaceOwnerContext.Provider key={parent} value={parent}><SideChatColumn parentConversationId={parent} embedded visible={present && scope === parent && (active?.kind === 'sidechat' || ((!active || active.kind === 'home') && creatingSideChat))} /></WorkspaceOwnerContext.Provider>)}
       </div>
       {treeVisible && !treeOnly && !treeOverlay ? <div role="separator" aria-orientation="vertical" tabIndex={0} aria-label={zh ? '调整文件树宽度' : 'Resize file tree'} aria-valuemin={200} aria-valuemax={Math.min(320, contentWidth - minimumPreviewWidth - 8)} aria-valuenow={inlineTreeWidth}
-        className="z-10 w-2 shrink-0 cursor-col-resize touch-none border-l border-edge hover:bg-surface-hover focus-visible:bg-accent/30" onPointerDown={(event) => drag(event, true)}
+        className="z-10 w-2 shrink-0 cursor-col-resize touch-none bg-surface-base transition-colors duration-150 hover:bg-accent/20 focus-visible:bg-accent/30" onPointerDown={(event) => drag(event, true)}
         onKeyDown={(e) => { if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { e.preventDefault(); store.setTreeWidth(Math.min(contentWidth - minimumPreviewWidth - 8, inlineTreeWidth + (e.key === 'ArrowLeft' ? 20 : -20))); } }} /> : null}
       {treeOverlay ? <button data-browser-occluder style={{ top: treeOverlayInset }} className="absolute inset-0 z-20 bg-scrim" aria-label={zh ? '关闭文件树' : 'Close file tree'} onClick={() => setTreeOverlay(false)} /> : null}
-      <div data-workspace-tree className={cn('min-h-0 min-w-0 flex-col overflow-hidden', treeShown ? 'flex' : 'hidden', treeOnly && 'flex-1', treeOverlay && 'absolute inset-y-0 right-0 z-30 border-l border-edge bg-surface-panel')} style={!treeOnly ? { width: treeOverlay ? treeWidth : inlineTreeWidth, ...(treeOverlay ? { top: treeOverlayInset } : {}) } : undefined}>
+      <div data-workspace-tree className={cn('min-h-0 min-w-0 flex-col overflow-hidden bg-surface-base', treeShown ? 'flex' : 'hidden', treeOnly && 'flex-1', treeOverlay && 'absolute inset-y-0 right-0 z-30 bg-surface-base shadow-popover')} style={!treeOnly ? { width: treeOverlay ? treeWidth : inlineTreeWidth, ...(treeOverlay ? { top: treeOverlayInset } : {}) } : undefined}>
         {Object.entries(trees).map(([key, root]) => <div key={key} className={cn('h-full min-h-0 flex-col', key === treeKey ? 'flex' : 'hidden')}><WorkspaceColumn embedded scope={root} onCloseTree={() => treeOverlay ? setTreeOverlay(false) : !treeHome ? active?.kind === 'browser' ? setBrowserTreeOpen(false) : store.setTreeOpen(active?.kind === 'sidechat' ? 'sidechat' : 'file', false) : active && store.remove(active.id, scope)} /></div>)}
       </div>
     </div>
