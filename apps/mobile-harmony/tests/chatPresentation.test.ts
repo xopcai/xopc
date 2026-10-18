@@ -50,12 +50,12 @@ describe('one continuous assistant response', () => {
   });
   it('does not combine explicit different turns or cross a user message', () => {
     const live: XopcChatRow = { id: 'live:r', role: 'assistant', text: '', turnId: 'other', live: true };
-    expect(chatPresentationRows([user, steps], live, 'r')).toHaveLength(3);
-    expect(chatPresentationRows([steps, user], live, 'r')).toHaveLength(3);
+    expect(chatPresentationRows([user, steps], live, 'r')).toEqual([user, live]);
+    expect(chatPresentationRows([steps, user], live, 'r')).toEqual([user, live]);
   });
   it('uses one placeholder before the response and no placeholder after completion', () => {
     expect(chatPresentationRows([user], undefined, 'r')[1]).toMatchObject({ id: 'live:r', live: true });
-    expect(chatPresentationRows([user, steps], undefined, '')).toEqual([user, steps]);
+    expect(chatPresentationRows([user, steps], undefined, '')).toEqual([user]);
   });
   it('keeps the response identity and stops the active state on run end', () => {
     const live: XopcChatRow = { id: 'live:r', role: 'assistant', text: 'done', live: false,

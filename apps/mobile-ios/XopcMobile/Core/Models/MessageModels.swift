@@ -6,11 +6,25 @@ struct WireMessage: Decodable, Sendable {
     let turnId: String?
     let role: String
     let content: MessageContent
+    var deliveries: [HistoryProductDelivery]? = nil
     let rawContent: MessageContent?
     let toolCalls: [HistoryToolCall]?
     let attachments: [HistoryAttachment]?
     let media: [HistoryAttachment]?
     let metadata: WireMessageMetadata?
+
+    var answerText: String {
+        let hasTools = !(toolCalls ?? []).isEmpty
+        switch content {
+        case let .text(text): return hasTools ? "" : text
+        case let .blocks(blocks):
+            let containsTools = hasTools || blocks.contains { ["toolCall", "tool_use", "tool_call"].contains($0.type) }
+            return blocks.filter {
+                $0.type == "text" && $0.presentation != "pending" && $0.presentation != "narration"
+                    && ($0.presentation != nil || !containsTools)
+            }.compactMap(\.text).joined(separator: "\n")
+        }
+    }
 
     var details: [TimelineDetail] {
         let rawDetails = rawContent?.details ?? content.details
@@ -95,7 +109,7 @@ enum MessageContent: Decodable, Sendable {
     var text: String {
         switch self {
         case let .text(value): value
-        case let .blocks(blocks): blocks.filter { $0.type == "text" }.compactMap(\.text).joined(separator: "\n")
+        case let .blocks(blocks): blocks.filter { $0.type == "text" && $0.presentation != "pending" && $0.presentation != "narration" }.compactMap(\.text).joined(separator: "\n")
         }
     }
 
@@ -138,6 +152,7 @@ private extension String {
 }
 
 struct MessageBlock: Decodable, Sendable {
+    var presentation: String?
     let type: String
     let text: String?
     let thinking: String?
@@ -151,6 +166,8 @@ struct TimelineMessage: Equatable, Identifiable, Sendable {
     let role: String
     var text: String
     var isPending: Bool
+    var answerConfirmed = true
+    var revealAnswer = false
     var turnId: String?
     var markdownParts: [MarkdownPart] = []
     var details: [TimelineDetail] = []
@@ -158,6 +175,7 @@ struct TimelineMessage: Equatable, Identifiable, Sendable {
     var references: [ContextReference] = []
     var resultLinks: [HistoryResultLink] = []
     var unavailableOutputs: [String] = []
+    var taskReceipts: [HistoryTaskReceipt] = []
 }
 
 struct TimelineDetail: Equatable, Identifiable, Sendable {
@@ -165,4 +183,32 @@ struct TimelineDetail: Equatable, Identifiable, Sendable {
     let kind: String
     let title: String
     let text: String
+}
+
+struct HistoryProductDelivery: Decodable, Sendable {
+    let operation: String
+    let primary: HistoryProductReference?
+}
+
+struct HistoryProductReference: Decodable, Sendable {
+    let kind: String
+    let id: String
+    let title: String
+    let status: String?
+    let capabilities: [String]?
+}
+
+struct HistoryTaskReceipt: Equatable, Identifiable, Sendable {
+    let id: String
+    let title: String
+    let operation: String
+    let canOpen: Bool
+
+    var url: URL? {
+        guard canOpen else { return nil }
+        var parts = URLComponents()
+        parts.scheme = "xopc"; parts.host = "open"
+        parts.queryItems = [URLQueryItem(name: "kind", value: "task"), URLQueryItem(name: "id", value: id)]
+        return parts.url
+    }
 }

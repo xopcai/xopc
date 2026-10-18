@@ -2767,10 +2767,6 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
             }
           }
         }
-        if (connection.activeRunId != null && connection.liveNarration != null && connection.liveMessages.isEmpty()) item(key = "live-progress") {
-          Text(connection.liveNarration, style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
-        }
         val latestMessageId = displayMessages.lastOrNull {
           it.role == "user" || it.role == "assistant"
         }?.id
@@ -2798,7 +2794,15 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
               (message.turnId != null || message.hasNonTextContent)) {
               { onOpenExecution(message.id) }
             } else null,
+            revealAnswer = connection.liveMessages.any { it.answerConfirmed && it.id in message.sourceIds },
             loadMedia = { media -> onLoadMessageMedia(selectedMessageConversationId, media) })
+          }
+        }
+        if ((connection.sending || connection.activeRunId != null) && !connection.runError &&
+          connection.clarification == null && !connection.liveMessages.any { it.answerConfirmed && it.text.isNotBlank() }) {
+          item(key = "assistant-waiting") {
+            AssistantWaitingBubble(runId = connection.activeRunId ?: "sending", narration = connection.liveNarration,
+              connected = connection.realtimeStatus == "connected")
           }
         }
         if (connection.optimisticText.isNotBlank()) item(key = "send-flight") {
@@ -3183,6 +3187,12 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
         messageDetailId = actionsMessage.id
       }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("message-detail-action")) {
         Text(stringResource(R.string.assistant_message_detail), modifier = Modifier.fillMaxWidth())
+      }
+      if (actionsMessage.role == "assistant") TextButton(onClick = {
+        messageActionsId = null
+        onOpenExecution(actionsMessage.id)
+      }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("message-execution-action")) {
+        Text(stringResource(R.string.assistant_execution), modifier = Modifier.fillMaxWidth())
       }
       if (actionsMessage.role == "assistant" && actionsMessage.text.isNotBlank()) TextButton(onClick = {
         messageActionsId = null

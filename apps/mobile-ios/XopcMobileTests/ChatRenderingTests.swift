@@ -1,7 +1,25 @@
+import Foundation
 import Testing
 @testable import XopcMobile
 
 struct ChatRenderingTests {
+    @MainActor @Test func draftsBecomeVisibleOnlyWhenConfirmedAsAnswers() {
+        let state = AssistantState()
+        state.apply(delta("Checking sources", offset: 0), runID: "r")
+        #expect(state.messages.first?.answerConfirmed == false)
+        state.apply(.init(name: "assistant_message_end", sequence: 2, messageId: "answer", delta: nil, offset: nil,
+                          status: nil, errorMessage: nil, toolName: nil, stage: nil, presentation: "answer"), runID: "r")
+        #expect(state.messages.first?.answerConfirmed == true)
+        #expect(state.messages.first?.revealAnswer == true)
+    }
+
+    @Test func historySeparatesPublicNarrationFromAnswersAndPreservesTaskReceipts() throws {
+        let source = #"{"id":"a","role":"assistant","content":[{"type":"text","text":"Checking","presentation":"narration"},{"type":"text","text":"Draft","presentation":"pending"},{"type":"text","text":"Result","presentation":"answer"}],"deliveries":[{"operation":"started","primary":{"kind":"task","id":"t","title":"Research","capabilities":["open"]}}]}"#
+        let wire = try JSONDecoder().decode(WireMessage.self, from: Data(source.utf8))
+        #expect(wire.content.text == "Result")
+        #expect(wire.deliveries?.first?.primary?.id == "t")
+    }
+
     @MainActor @Test func continuousPacketsCommitBeforeTheStreamBecomesQuiet() async throws {
         let state = AssistantState()
         state.apply(delta("字", offset: 0), runID: "r")
