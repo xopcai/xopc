@@ -15,7 +15,7 @@ struct MessageBubble: View {
     var onReading: () -> Void = {}
     @Environment(\.locale) private var locale
     @ScaledMetric(relativeTo: .body) private var previewHeight: CGFloat = 160
-    @ScaledMetric(relativeTo: .body) private var previewFadeHeight: CGFloat = 24
+    @ScaledMetric(relativeTo: .body) private var previewFadeHeight: CGFloat = 48
     @State private var isActionsPresented = false
     @State private var isDetailPresented = false
     @State private var isExecutionPresented = false
@@ -187,10 +187,6 @@ struct MessageBubble: View {
                                 }
                             }
                             .allowsHitTesting(false)
-                        Text("查看更多")
-                            .font(.subheadline.weight(.medium))
-                            .foregroundStyle(.secondary)
-                            .frame(minHeight: 44, alignment: .leading)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .contentShape(.rect)

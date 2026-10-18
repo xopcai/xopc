@@ -63,6 +63,12 @@ export struct XopcChatMessageContent {
       || (this.row.toolCalls || []).length > 0 || (this.row.activityTools || []).length > 0;
   }
 
+  private previewFadeColor(alpha: string): string {
+    const background = this.row.role === 'user' ? this.colors.accentSoft : this.colors.panel;
+    const color = this.getUIContext().getHostContext()?.resourceManager.getColorSync(background) ?? 0xFFFFFFFF;
+    return '#' + alpha + (color >>> 0).toString(16).padStart(8, '0').slice(2);
+  }
+
   @Builder
   reference(ref: XopcContextRef) {
     Button({ type: ButtonType.Normal }) {
@@ -101,16 +107,12 @@ export struct XopcChatMessageContent {
               .fontColor(this.colors.foreground).width('100%').textAlign(TextAlign.Start)
               .maxLines(this.previewLines).textOverflow({ overflow: TextOverflow.Ellipsis })
           }
-          Column() {}.width('100%').height(24)
+          Column() {}.width('100%').height(48)
             .linearGradient({ direction: GradientDirection.Bottom,
-              colors: [[Color.Transparent, 0], [this.row.role === 'user' ? this.colors.accentSoft : this.colors.panel, 1]] })
+              colors: [[this.previewFadeColor('00'), 0], [this.previewFadeColor('FF'), 1]] })
             .hitTestBehavior(HitTestMode.None).accessibilityLevel('no')
-        }.width('100%')
-        Button() {
-          Text($r('app.string.chat_view_more')).fontSize(15).fontWeight(FontWeight.Medium)
-            .fontColor(this.colors.secondary)
-        }.id('chat-message-more-' + this.row.id).height(44).padding(0).backgroundColor(Color.Transparent)
-          .accessibilityText($r('app.string.chat_view_more'))
+        }.id('chat-message-preview-' + this.row.id).width('100%')
+          .accessibilityText($r('app.string.chat_message_detail'))
           .onClick((): void => { this.onShowMore(this.row); })
       } else {
         if (this.row.role !== 'user') {

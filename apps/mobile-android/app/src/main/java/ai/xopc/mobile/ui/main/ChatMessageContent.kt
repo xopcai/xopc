@@ -159,12 +159,8 @@ internal fun ChatMessageCard(message: ConversationMessage, onMore: () -> Unit,
               Modifier.messagePreviewFade(MaterialTheme.colorScheme.primaryContainer) else Modifier),
             maxLines = if (showPreview) messagePreviewLineLimit(message.role) else Int.MAX_VALUE,
             overflow = TextOverflow.Ellipsis)
-          if (showPreview) TextButton(onClick = onViewMore, modifier = Modifier.heightIn(min = 48.dp)
-            .testTag("message-view-more-${message.id}")) {
-            Text(stringResource(R.string.assistant_view_more), color = MaterialTheme.colorScheme.onSurfaceVariant)
-          }
         } else if (showPreview) MessageTextPreview(message.id, message.text,
-          messagePreviewLineLimit(message.role), onViewMore)
+          messagePreviewLineLimit(message.role))
         else MarkdownContent(message.text, modifier = Modifier.fillMaxWidth(),
           onOpenLink = onOpenLink, onCopyCode = onCopy, streaming = streaming)
       }
@@ -225,20 +221,16 @@ internal fun ChatMessageCard(message: ConversationMessage, onMore: () -> Unit,
 }
 
 @Composable
-private fun MessageTextPreview(messageId: String, text: String, lineLimit: Int, onViewMore: () -> Unit) {
+private fun MessageTextPreview(messageId: String, text: String, lineLimit: Int) {
   MarkdownContent(text, modifier = Modifier.testTag("message-preview-$messageId")
     .messagePreviewFade(MaterialTheme.colorScheme.surface),
     maxLines = lineLimit)
-  TextButton(onClick = onViewMore, modifier = Modifier.heightIn(min = 48.dp)
-    .testTag("message-view-more-$messageId")) {
-    Text(stringResource(R.string.assistant_view_more), color = MaterialTheme.colorScheme.onSurfaceVariant)
-  }
 }
 
 private fun Modifier.messagePreviewFade(background: Color): Modifier = drawWithCache {
   val fade = Brush.verticalGradient(
     colors = listOf(background.copy(alpha = 0f), background),
-    startY = (size.height - 24.dp.toPx()).coerceAtLeast(0f),
+    startY = (size.height - 48.dp.toPx()).coerceAtLeast(0f),
     endY = size.height,
   )
   onDrawWithContent {

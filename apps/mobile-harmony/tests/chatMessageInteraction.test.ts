@@ -12,11 +12,11 @@ describe('chat message interactions', () => {
     expect(sheet).not.toContain('FlexAlign.Center');
     expect(sheet).not.toContain('Alignment.Center');
   });
-  it('renders view more as a distinct accessible action without an underline', () => {
-    expect(content).toMatch(/Text\(\$r\('app.string.chat_view_more'\)\)[\s\S]*?\.fontColor\(this.colors.secondary\)/);
-    expect(content).not.toContain('TextDecorationType.Underline');
-    expect(content).toContain(".id('chat-message-more-' + this.row.id).height(44)");
-    expect(content).toContain(".accessibilityText($r('app.string.chat_view_more'))");
+  it('opens the full message from the preview without a separate view-more row', () => {
+    expect(content).not.toContain('app.string.chat_view_more');
+    expect(content).toContain(".id('chat-message-preview-' + this.row.id)");
+    expect(content).toContain(".accessibilityText($r('app.string.chat_message_detail'))");
+    expect(content).toContain('.onClick((): void => { this.onShowMore(this.row); })');
   });
 
   it('shows common assistant actions and opens secondary actions on tap', () => {
