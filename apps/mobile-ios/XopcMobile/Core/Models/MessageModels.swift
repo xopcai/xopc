@@ -6,7 +6,7 @@ struct WireMessage: Decodable, Sendable {
     let turnId: String?
     let role: String
     let content: MessageContent
-    var deliveries: [HistoryProductDelivery]? = nil
+    var deliveries: [HistoryProductDelivery]?
     let rawContent: MessageContent?
     let toolCalls: [HistoryToolCall]?
     let attachments: [HistoryAttachment]?
