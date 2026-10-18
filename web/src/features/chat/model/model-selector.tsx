@@ -176,7 +176,7 @@ export function ModelSelector({
           className={cn(
             settingsShellPopoverZ,
             selectPopoverContentLayoutClass,
-            'w-[min(22rem,calc(100vw-2rem))] rounded-xl border border-edge-subtle bg-surface-panel p-1 shadow-elevated dark:border-edge-subtle',
+            'w-[min(22rem,calc(100vw-2rem))] rounded-xl border border-edge-subtle bg-surface-overlay p-1 shadow-elevated dark:border-edge-subtle',
             popoverContentClassName,
           )}
           side={contentSide}
@@ -295,7 +295,7 @@ export function ModelPickerList({ models, value, onChange, searchPlaceholder, no
         {filtered.length === 0 && <p className="px-3 py-4 text-sm text-fg-muted">{noMatches}</p>}
         {[...groups].filter(([, entries]) => entries.length > 0).map(([provider, entries]) => <div key={provider} role={groupByProvider ? 'group' : undefined} aria-label={groupByProvider ? provider : undefined}
           className={groupByProvider ? 'border-t border-edge-subtle pb-1 first:border-t-0' : undefined}>
-          {groupByProvider && <p className="sticky top-0 z-10 bg-surface-panel px-3 pb-1 pt-3 text-xs font-medium text-fg-muted">{provider}</p>}
+          {groupByProvider && <p className="sticky top-0 z-10 bg-surface-overlay px-3 pb-1 pt-3 text-xs font-medium text-fg-muted">{provider}</p>}
           {entries.map((model) => (
           <button key={model.id} type="button" disabled={disabled} title={model.id}
             aria-pressed={model.id === value}

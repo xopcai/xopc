@@ -46,7 +46,7 @@ export const ConnectorsPageHeaderEnd = memo(function ConnectorsPageHeaderEnd({
           </Button>
         </DropdownMenu.Trigger>
         <DropdownMenu.Portal>
-          <DropdownMenu.Content className="z-50 min-w-[14rem] rounded-xl border border-edge bg-surface-panel p-1 shadow-popover dark:border-edge" sideOffset={6} align="end">
+          <DropdownMenu.Content className="z-50 min-w-[14rem] rounded-xl border border-edge bg-surface-overlay p-1 shadow-popover dark:border-edge" sideOffset={6} align="end">
             <DropdownMenu.Item className={menuItemClassName} onSelect={onBrowseCatalog}>
               <Store className="size-4 text-fg-muted" strokeWidth={1.75} aria-hidden />
               {browseLabel}
@@ -67,7 +67,7 @@ export const ConnectorsPageHeaderEnd = memo(function ConnectorsPageHeaderEnd({
         </DropdownMenu.Trigger>
         <DropdownMenu.Portal>
           <DropdownMenu.Content
-            className="z-50 min-w-[14rem] rounded-xl border border-edge bg-surface-panel p-1 shadow-popover dark:border-edge"
+            className="z-50 min-w-[14rem] rounded-xl border border-edge bg-surface-overlay p-1 shadow-popover dark:border-edge"
             sideOffset={6}
             align="end"
           >

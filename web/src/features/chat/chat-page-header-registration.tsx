@@ -210,7 +210,7 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
                 findRequested.current = false;
                 document.querySelector<HTMLElement>('[data-chat-menu-trigger]')?.focus();
                 onFindOpen?.();
-              }} align="end" sideOffset={8} className="workspace-menu z-[125] min-w-60 rounded-xl border border-edge bg-surface-panel p-1.5 text-sm shadow-popover outline-none">
+              }} align="end" sideOffset={8} className="workspace-menu z-[125] min-w-60 rounded-xl border border-edge bg-surface-overlay p-1.5 text-sm shadow-popover outline-none">
                 <DropdownMenu.Item disabled={!hasMessages || !onFindOpen} onSelect={() => { findRequested.current = true; }} className="flex cursor-default items-center gap-3 rounded-lg px-3 py-2 text-fg outline-none data-[highlighted]:bg-surface-hover data-[disabled]:opacity-40">
                   <Search className="size-4 text-fg-muted" aria-hidden /><span className="flex-1">{m.chat.find.input}</span><span className="text-xs text-fg-muted">{terminalPlatform === 'darwin' ? '⌘F' : 'Ctrl+F'}</span>
                 </DropdownMenu.Item>

@@ -87,7 +87,7 @@ export function ComposerModelConfigControl({ chat: m, sessionModel, modelDisable
       <Popover.Portal>
         <Popover.Content side="top" align="end" sideOffset={8} collisionPadding={12}
           aria-label={m.modelConfigLabel}
-          className={cn(APP_PORTALED_POPOVER_Z, 'xopc-composer-config-popover flex max-h-[min(21rem,calc(100dvh-3rem))] w-[min(20rem,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl border border-edge bg-surface-panel p-3 shadow-popover')}>
+          className={cn(APP_PORTALED_POPOVER_Z, 'xopc-composer-config-popover flex max-h-[min(21rem,calc(100dvh-3rem))] w-[min(20rem,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl border border-edge bg-surface-overlay p-3 shadow-popover')}>
           {view === 'models' ? <>
             <button ref={backButtonRef} type="button" onClick={() => setView('config')} className={cn('mb-2 flex min-h-11 shrink-0 items-center gap-2 rounded-lg px-2 text-sm text-fg hover:bg-surface-hover', interaction.focusRingPanel)}>
               <ArrowLeft className="size-4" aria-hidden />{m.modelBack}

@@ -82,10 +82,11 @@ describe('common file preview header', () => {
       const row = title!.parentElement!.parentElement!;
       const buttons = [...row.querySelectorAll<HTMLButtonElement>('button')];
       expect(buttons.map((button) => button.getAttribute('aria-label'))).toEqual([
-        labels.moreActions, labels.close,
+        labels.expandPreview, labels.moreActions, labels.close,
       ]);
-      await act(async () => buttons[0].click());
+      await act(async () => buttons.find(button => button.getAttribute('aria-label') === labels.moreActions)!.click());
       const menuItems = [...document.querySelectorAll<HTMLButtonElement>('button[role="menuitem"]')];
+      expect(menuItems.some(item => item.textContent === labels.expandPreview || item.textContent === labels.collapsePreview)).toBe(false);
       expect(menuItems.find((item) => item.textContent === labels.edit)?.disabled).toBe(!entry.editable);
       expect(menuItems.find((item) => item.textContent === labels.editInNewChat)?.disabled).toBe(!entry.canChat);
       expect(menuItems.find((item) => item.textContent === labels.shareLink)?.disabled).toBe(false);
@@ -94,6 +95,40 @@ describe('common file preview header', () => {
         expect(document.querySelector('a[role="menuitem"]')?.getAttribute('href')).toContain('/s/token-a?inline=1');
       }
     }
+  });
+
+  it.each(['workspace', 'attachment'] as const)('expands %s only inside the content surface and leaves navigation usable', async (entry) => {
+    useLocaleStore.setState({ language: 'en' });
+    const navigate = vi.fn();
+    await act(async () => root.render(<MemoryRouter>
+      <nav><button onClick={navigate}>Navigation</button></nav>
+      <div className="app-main-surface relative">
+        {entry === 'workspace' ? <WorkspaceFilePreviewPanel filePath="report.html" projectId="project-a" onClose={vi.fn()} />
+          : <AttachmentPreviewDialog embedded open conversationId="session-a" attachment={{ name: 'report.html', mimeType: 'text/html', data: btoa('<h1>Report</h1>') }} onClose={vi.fn()} />}
+      </div>
+    </MemoryRouter>));
+    const labels = messages('en').workspace;
+    const expand = container.querySelector<HTMLButtonElement>(`button[aria-label="${labels.expandPreview}"]`)!;
+    expect(expand.textContent).toBe('');
+    expect(expand.querySelector('svg')).not.toBeNull();
+    expect(expand.disabled).toBe(false);
+    await act(async () => expand.click());
+    const expanded = container.querySelector<HTMLElement>('[data-file-preview-expanded]')!;
+    expect(expanded).not.toBeNull();
+    expect(expanded.parentElement).toBe(container.querySelector('.app-main-surface'));
+    expect(expanded.classList.contains('absolute')).toBe(true);
+    expect(expanded.classList.contains('w-screen')).toBe(false);
+    expect(expanded.contains(container.querySelector('nav'))).toBe(false);
+    await act(async () => container.querySelector<HTMLButtonElement>('nav button')!.click());
+    expect(navigate).toHaveBeenCalledOnce();
+    const collapse = container.querySelector<HTMLButtonElement>(`button[aria-label="${labels.collapsePreview}"]`)!;
+    expect(collapse.textContent).toBe('');
+    await act(async () => collapse.click());
+    expect(container.querySelector('[data-file-preview-expanded]')).toBeNull();
+    await act(async () => container.querySelector<HTMLButtonElement>(`button[aria-label="${labels.expandPreview}"]`)!.click());
+    await act(async () => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', cancelable: true })));
+    expect(container.querySelector('[data-file-preview-expanded]')).toBeNull();
+    expect(container.querySelector('h2[title="report.html"]')).not.toBeNull();
   });
 
   it('uses the common chat action to hand off the file and its source project', async () => {

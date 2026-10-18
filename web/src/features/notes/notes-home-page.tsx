@@ -327,7 +327,7 @@ export function NotesHomePage() {
                         </button>
                       </DropdownMenu.Trigger>
                       <DropdownMenu.Portal>
-                        <DropdownMenu.Content align="end" sideOffset={4} className="z-50 min-w-36 rounded-lg border border-edge bg-surface-panel p-1 shadow-popover">
+                        <DropdownMenu.Content align="end" sideOffset={4} className="z-50 min-w-36 rounded-lg border border-edge bg-surface-overlay p-1 shadow-popover">
                           <DropdownMenu.Item
                             className="touch-target flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm text-danger outline-none hover:bg-danger-soft focus:bg-danger-soft"
                             onSelect={() => setDeleteTarget(note)}

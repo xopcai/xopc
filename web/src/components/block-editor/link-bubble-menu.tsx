@@ -43,7 +43,7 @@ export function LinkBubbleMenu({ editor, labels }: { editor: Editor; labels: Lin
       editor={editor}
       shouldShow={({ editor: currentEditor }) => currentEditor.isActive('link')}
       options={{ placement: 'bottom', offset: 8 }}
-      className="max-w-sm rounded-lg border border-edge bg-surface-panel p-2 shadow-xl"
+      className="max-w-sm rounded-lg border border-edge bg-surface-overlay p-2 shadow-xl"
     >
       <p className="max-w-xs truncate px-1 pb-2 text-xs text-fg-muted" title={href}>{href}</p>
       <div className="flex items-center gap-1">

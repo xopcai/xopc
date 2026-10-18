@@ -99,7 +99,7 @@ function NoteDetailModeSwitcher({
         <DropdownMenu.Content
           align="end"
           sideOffset={6}
-          className="z-50 min-w-36 rounded-xl border border-edge bg-surface-panel p-1 shadow-popover"
+          className="z-50 min-w-36 rounded-xl border border-edge bg-surface-overlay p-1 shadow-popover"
         >
           {modes.map(({ id, label, Icon }) => (
             <DropdownMenu.Item
@@ -573,7 +573,7 @@ function NoteDetailPanelInner({
             <DropdownMenu.Content
               align="end"
               sideOffset={6}
-              className="z-50 min-w-40 rounded-xl border border-edge bg-surface-panel p-1 shadow-popover"
+              className="z-50 min-w-40 rounded-xl border border-edge bg-surface-overlay p-1 shadow-popover"
             >
               <DropdownMenu.Item
                 onSelect={() => void handleShare()}
