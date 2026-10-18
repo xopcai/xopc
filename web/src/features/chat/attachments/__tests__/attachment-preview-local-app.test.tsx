@@ -205,15 +205,14 @@ describe('AttachmentPreviewDialog shared header', () => {
     const onClose = vi.fn();
     await act(async () => root.render(<AttachmentPreviewDialog open
       attachment={{ name: 'report.xlsx', data: 'AQID' }} onClose={onClose} />));
-    openMenu();
-    const expand = menuItem(labels.expandPreview);
-    expect(expand).toBeDefined();
+    const expand = document.querySelector<HTMLButtonElement>(`[aria-label="${labels.expandPreview}"]`);
+    expect(expand).not.toBeNull();
     expect(expand?.disabled).toBe(false);
     act(() => expand!.click());
-    expect(document.querySelector('[role="menu"]')).toBeNull();
+    expect(document.querySelector(`[aria-label="${labels.collapsePreview}"]`)).not.toBeNull();
 
     openMenu();
-    expect(menuItem(labels.collapsePreview)).toBeDefined();
+    expect(document.querySelector('[role="menu"]')).not.toBeNull();
     act(() => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })));
     expect(document.querySelector('[role="menu"]')).toBeNull();
     expect(document.activeElement?.getAttribute('aria-label')).toBe(labels.moreActions);
@@ -221,11 +220,9 @@ describe('AttachmentPreviewDialog shared header', () => {
 
     act(() => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })));
     expect(onClose).not.toHaveBeenCalled();
-    openMenu();
-    expect(menuItem(labels.expandPreview)).toBeDefined();
-    expect(menuItem(labels.collapsePreview)).toBeUndefined();
+    expect(document.querySelector(`[aria-label="${labels.expandPreview}"]`)).not.toBeNull();
+    expect(document.querySelector(`[aria-label="${labels.collapsePreview}"]`)).toBeNull();
     act(() => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })));
-    act(() => document.querySelector<HTMLButtonElement>(`[aria-label="${labels.close}"]`)?.click());
     expect(onClose).toHaveBeenCalledOnce();
   });
 });
