@@ -32,7 +32,7 @@ export function buildSilentRepliesSection(params: {
   return [
     '## Silent Replies',
     `Use ${NO_REPLY} only for background or system events needing no update${params.hasSendMessage ? ', or after delivering the reply with send_message' : ''}.`,
-    'Always answer a direct message from a person, even if brief, unclear, repeated, or a test.',
+    'Always answer a direct message from a person, even if brief, unclear, repeated, or a test. Profile updates/tool results do not cancel it.',
     `The marker must be the entire message, without Markdown or other text.`,
   ].join('\n');
 }

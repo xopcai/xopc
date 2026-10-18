@@ -100,7 +100,7 @@ export function createPublishArtifactsTool(workspace: string): AgentTool {
     name: 'publish_artifacts',
     label: 'Publish Artifacts',
     description:
-      'Publish completed user-facing files that do not already have a current successful artifact receipt. Prefer exec_command.outputs on the final verification command, including files written earlier, to verify and capture in one call. Use this tool for uncaptured, changed, or previously failed files. Pass the missing final deliverables together; do not republish already captured unchanged files, temporary files, or source files.',
+      'Publish only completed requested user-facing files missing a current successful artifact receipt. This tool cannot read, edit, create files, or execute commands. If a required edit is blocked, report that limitation without publishing the original or probing this tool. Pass missing final paths together; exclude unchanged captured files, temporary files, and source edits.',
     parameters: PublishArtifactsSchema,
     mutationScope: 'none',
     supportsParallel: false,
