@@ -826,4 +826,5 @@
     <string name="clarify_supplement">Additional information (optional)</string>
     <string name="clarify_cancel">Cancel task</string>
     <string name="assistant_connection_interrupted">Connection interrupted · Reconnecting…</string>
+    <string name="assistant_select_text">Select text</string>
 </resources>

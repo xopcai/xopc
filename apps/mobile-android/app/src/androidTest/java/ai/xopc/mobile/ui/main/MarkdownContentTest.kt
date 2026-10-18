@@ -91,7 +91,7 @@ class MarkdownContentTest {
         ChatMessageCard(ConversationMessage("wide", "assistant",
           "这是用于验证移动端长回复阅读宽度的正文，应该充分利用气泡内部可用的空间。"),
           onMore = {}, onOpenTarget = {}, onOpenPreview = { _, _ -> },
-          onOpenLink = {}, onCopy = {}, showMore = false)
+          onOpenLink = {}, onCopy = {}, actionsEnabled = false)
       }
     }
     composeTestRule.onNodeWithTag("markdown-content").assertWidthIsEqualTo(296.dp)

@@ -19,26 +19,18 @@ describe('chat message interactions', () => {
     expect(content).toContain('.onClick((): void => { this.onShowMore(this.row); })');
   });
 
-  it('shows common assistant actions and opens secondary actions on tap', () => {
-    const actionsStart = chat.indexOf('assistantMessageActions(row: XopcChatRow)');
-    const actionsEnd = chat.indexOf('@Builder\n  conversation()', actionsStart);
-    const actions = chat.slice(actionsStart, actionsEnd);
-    for (const label of ['chat_copy', 'chat_save_note', 'chat_read_aloud']) {
-      expect(actions).toContain(`app.string.${label}`);
+  it('keeps actions behind a single long-press menu and delegates native selection to details', () => {
+    expect(chat).not.toContain('assistantMessageActions(');
+    expect(chat).toContain('LongPressGesture({ repeat: false, duration: 500 })');
+    for (const id of ['copy', 'select', 'save', 'read', 'detail', 'execution', 'regenerate', 'copy-code']) {
+      expect(chat).toContain(`id: '${id}'`);
     }
-    const menuStart = chat.indexOf('assistantMessageMore(row: XopcChatRow)');
-    const menuEnd = chat.indexOf('@Builder\n  assistantMessageActions', menuStart);
-    const menu = chat.slice(menuStart, menuEnd);
-    expect(menu).not.toContain('showActionSheet');
-    expect(menu).toContain(".id('chat-assistant-menu')");
-    expect(chat).toContain('height: 112 + this.assistantMenuActionCount * 56');
-    expect(menu).toContain('app.string.chat_message_detail');
-    expect(menu).toContain('app.string.chat_regenerate');
-    expect(menu).toContain('app.string.chat_copy_code');
-    expect(menu).not.toContain('app.string.chat_copy)');
-    expect(menu).not.toContain('app.string.chat_save_note');
-    expect(actions).toContain('.onClick((): void => { this.assistantMessageMore(row); })');
-    expect(chat).not.toContain('.bindContextMenu(chatAnswerText(item.item)');
+    expect(chat).toContain(".id('chat-assistant-menu-' + action.id)");
+    expect(chat).toContain("height: '50%'");
+    expect(chat).toContain("action === 'detail' || action === 'select'");
+    expect(chat).toContain('textSelectable: true');
+    expect(content).toContain('@Param textSelectable: boolean = false;');
+    expect(markdown).toContain('.copyOption(this.textSelectable ? CopyOptions.InApp : CopyOptions.None)');
   });
 
   it('uses compact line and block spacing only for assistant chat content', () => {
