@@ -83,6 +83,7 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
   const activeConversationId = conversationId?.trim() || routedConversationId;
   const { data: contextSummary, error: contextError, mutate: refreshContext } = useSessionContext(activeConversationId ?? null, false);
   const workspaceAvailable = !contextError && (!contextSummary || Boolean(contextSummary.environment?.available));
+  const workspaceOpen = useRightWorkspaceStore((s) => s.panes[activeConversationId ?? 'new']?.open === true);
   const m = messages(language);
   const sidebarCollapsed = useSidebarStore((s) => s.collapsed);
   const setSideChatOpen = useSideChatStore((s) => s.setOpen);
@@ -233,8 +234,8 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
             temporary={userContextMode === 'temporary'}
             conversationId={activeConversationId ?? null}
           /> : null}
-          {showContextControls ? <span aria-hidden className="mx-0.5 h-6 w-px shrink-0 bg-edge-subtle" /> : null}
-          {showContextControls ? (
+          {showContextControls && !workspaceOpen ? <span aria-hidden className="mx-0.5 h-6 w-px shrink-0 bg-edge-subtle" /> : null}
+          {showContextControls && !workspaceOpen ? (
             <ChatWorkspaceControl
               key={`workspace:${activeConversationId ?? projectId}`}
               conversationId={activeConversationId}
@@ -274,6 +275,7 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
     terminalAvailable,
     terminalDisabled,
     showContextControls,
+    workspaceOpen,
     terminalPreparing,
     activeConversationId,
     hasMessages,

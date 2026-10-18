@@ -135,9 +135,10 @@ describe('ChatPageHeaderRegistration', () => {
       });
 
       expect(container.querySelectorAll('[aria-label="Session info"]')).toHaveLength(1);
-      expect(container.querySelectorAll('[aria-label="Open workspace tools"]')).toHaveLength(1);
+      const alreadyOpen = useRightWorkspaceStore.getState().panes[conversationId]?.open === true;
+      expect(container.querySelectorAll('[aria-label="Open workspace tools"]')).toHaveLength(alreadyOpen ? 0 : 1);
       expect(document.querySelector('[role="dialog"]')).toBeNull();
-      act(() => container.querySelector<HTMLButtonElement>('[aria-label="Open workspace tools"]')!.click());
+      if (!alreadyOpen) act(() => container.querySelector<HTMLButtonElement>('[aria-label="Open workspace tools"]')!.click());
       expect(useRightWorkspaceStore.getState().panes[conversationId]?.open).toBe(true);
       act(() => container.querySelector<HTMLButtonElement>('[aria-label="Session info"]')!.click());
       expect(document.querySelectorAll('[role="dialog"]')).toHaveLength(1);
@@ -192,14 +193,23 @@ describe('ChatPageHeaderRegistration', () => {
       conversationIdOverride: 'session-1',
     });
     expect(useRightWorkspaceStore.getState().panes['session-1'].tabs[0]?.kind).toBe('home');
+    expect(container.querySelector('[aria-label="Open workspace tools"]')).toBeNull();
+    expect(container.querySelector('[aria-label="Session info"]')).not.toBeNull();
+    act(() => useRightWorkspaceStore.getState().setOpen(false, 'session-1'));
+    expect(container.querySelector('[aria-label="Open workspace tools"]')).not.toBeNull();
+    act(() => useRightWorkspaceStore.getState().openFiles('session-1'));
+    expect(container.querySelector('[aria-label="Open workspace tools"]')).toBeNull();
+
     act(() => container.querySelector<HTMLButtonElement>('[aria-label="Session info"]')!.click());
     expect(document.querySelector('[role="dialog"] [aria-label="Choose folder…"]')).not.toBeNull();
     act(() => container.querySelector<HTMLButtonElement>('[aria-label="Session info"]')!.click());
     act(() => { useRightWorkspaceStore.getState().openBrowser('https://example.test', 'session-1'); });
     const activeId = useRightWorkspaceStore.getState().panes['session-1'].activeId;
-    act(() => projectFilesButton?.click());
+    expect(container.querySelector('[aria-label="Open workspace tools"]')).toBeNull();
+    act(() => useRightWorkspaceStore.getState().setOpen(false, 'session-1'));
+    act(() => container.querySelector<HTMLButtonElement>('[aria-label="Open workspace tools"]')!.click());
     expect(useRightWorkspaceStore.getState().panes['session-1'].tabs.find(t => t.id === useRightWorkspaceStore.getState().panes['session-1'].activeId)?.kind).toBe('home');
-    act(() => projectFilesButton?.click());
+    expect(container.querySelector('[aria-label="Open workspace tools"]')).toBeNull();
     expect(useRightWorkspaceStore.getState().panes['session-1'].open).toBe(true);
     expect(useRightWorkspaceStore.getState().panes['session-1'].tabs.some(t => t.id === activeId)).toBe(true);
     expect(useRightWorkspaceStore.getState().panes['session-1'].tabs.filter(t => t.kind === 'home')).toHaveLength(1);
