@@ -1006,16 +1006,15 @@ export function TaskDetailPage() {
   return <TaskDetailView taskId={taskId} presentation="page" />;
 }
 
-export function TaskDetailModal({ taskId, backgroundPath, onClose }: {
+export function TaskDetailModal({ taskId, backgroundPath, workspacePanelWidth = 0, onClose }: {
   taskId: string;
   backgroundPath: string;
+  workspacePanelWidth?: number;
   onClose: () => void;
 }) {
   const language = useLocaleStore((state) => state.language);
-  const workspacePanelOpen = useRightWorkspaceStore((state) => state.panes[state.scope]?.open === true);
-  const workspacePanelWidth = useRightWorkspaceStore((state) => state.width || 640);
   const setPreviewPath = useWorkspacePreviewStore((state) => state.setPath);
-  const workspacePanelOffset = workspacePanelOpen ? workspacePanelWidth : 0;
+  const workspacePanelOpen = workspacePanelWidth > 0;
 
   return (
     <Dialog.Root
@@ -1043,8 +1042,8 @@ export function TaskDetailModal({ taskId, backgroundPath, onClose }: {
           className="xopc-dialog-content task-detail-modal-content fixed top-1/2 z-[90] flex h-[min(54rem,calc(100dvh-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-edge bg-surface-overlay focus:outline-none"
           data-workspace-panel-open={workspacePanelOpen ? 'true' : 'false'}
           style={{
-            '--task-detail-workspace-offset': `${workspacePanelOffset / 2}px`,
-            '--task-detail-workspace-width': `${workspacePanelOffset}px`,
+            '--task-detail-workspace-offset': `${workspacePanelWidth / 2}px`,
+            '--task-detail-workspace-width': `${workspacePanelWidth}px`,
           } as CSSProperties}
           onEscapeKeyDown={(event) => {
             const target = event.target;
