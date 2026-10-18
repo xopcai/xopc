@@ -1,38 +1,50 @@
 import SwiftUI
 
 struct AssistantActivityView: View {
-    let label: String
-    let items: [ExecutionActivityItem]
-    let runID: String?
-    let onOpen: () -> Void
-    @Environment(\.locale) private var locale
+    let narration: String?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var appearedAt = Date()
 
     var body: some View {
-        Button(action: onOpen) {
-            HStack(spacing: 8) {
-                ProgressView()
-                Text(label)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                Spacer()
-                if !items.isEmpty || runID != nil {
-                    Text("步骤 \(items.count)")
-                        .font(.caption)
-                        .foregroundStyle(.tertiary)
-                    Image(systemName: "chevron.right")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.tertiary)
+        TimelineView(.periodic(from: appearedAt, by: 1)) { context in
+            let elapsed = context.date.timeIntervalSince(appearedAt)
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 6) {
+                    ForEach(0 ..< 3, id: \.self) { index in
+                        WaitingReplyDot(index: index, animate: !reduceMotion && scenePhase == .active)
+                    }
+                }
+                .padding(.horizontal, 12)
+                .frame(width: 104, height: 64)
+                .background(Color.secondary.opacity(0.1), in: .capsule)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("助手正在处理")
+                if elapsed >= 10, let narration, !narration.isEmpty {
+                    Text(verbatim: narration).font(.subheadline).foregroundStyle(.secondary).lineLimit(2)
                 }
             }
-            .padding(.horizontal)
-            .frame(maxWidth: .infinity, minHeight: 44)
-            .contentShape(Rectangle())
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .buttonStyle(.plain)
-        .disabled(items.isEmpty && runID == nil)
-        .accessibilityLabel(label)
-        .accessibilityHint(items.isEmpty && runID == nil ? "" : AppLocalization.string("查看执行步骤", locale: locale))
-        .accessibilityIdentifier("assistant-execution-activity")
+        .accessibilityIdentifier("assistant-waiting")
+    }
+}
+
+private struct WaitingReplyDot: View {
+    let index: Int
+    let animate: Bool
+    @State private var lifted = false
+
+    var body: some View {
+        Circle().fill(.secondary)
+            .frame(width: 7, height: 7)
+            .opacity(animate && lifted ? 0.85 : 0.4)
+            .scaleEffect(animate && lifted ? 1.08 : 0.92)
+            .offset(y: animate && lifted ? -3 : 0)
+            .animation(animate ? .easeInOut(duration: 0.6).repeatForever(autoreverses: true)
+                .delay(Double(index) * 0.15) : nil, value: lifted)
+            .onChange(of: animate, initial: true) { lifted = animate }
+            .accessibilityHidden(true)
     }
 }
 

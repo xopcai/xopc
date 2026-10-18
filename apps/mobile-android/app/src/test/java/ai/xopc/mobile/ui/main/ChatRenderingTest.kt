@@ -5,6 +5,21 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class ChatRenderingTest {
+  @Test fun transportDraftsWaitForAnswerClassification() {
+    val buffer = ChatStreamBuffer()
+    assertTrue(buffer.append("draft", "run", emptyList(), "Checking the sources", 0))
+    val drafts = buffer.drain(emptyList())
+    assertEquals("Checking the sources", drafts.single().text)
+    assertTrue(chatPresentationMessages(emptyList(), drafts).isEmpty())
+    val confirmed = drafts.map { it.copy(answerConfirmed = true) }
+    assertEquals(confirmed, chatPresentationMessages(emptyList(), confirmed))
+  }
+
+  @Test fun completedToolOnlyMessagesDoNotLeaveEmptyCards() {
+    val process = ConversationMessage("tool", "assistant", "", "run", hasNonTextContent = true)
+    assertTrue(chatPresentationMessages(listOf(process), emptyList()).isEmpty())
+  }
+
   @Test fun historyAndLiveSegmentsShareOnePresentationRow() {
     val saved = ConversationMessage("a", "assistant", "First", "r")
     val live = ConversationMessage("b", "assistant", "Second", "r")

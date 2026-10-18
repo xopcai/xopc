@@ -38,7 +38,7 @@ import Foundation
         }
         let retained = pending[id]
         let displayed = retained == nil ? visible.first { $0.id == id } : nil
-        let next = retained ?? Pending(displayed ?? TimelineMessage(id: id, role: "assistant", text: "", isPending: true, turnId: runID))
+        let next = retained ?? Pending(displayed ?? TimelineMessage(id: id, role: "assistant", text: "", isPending: true, answerConfirmed: false, turnId: runID))
         let offset = event.offset ?? next.text.length
         guard offset >= 0, offset <= next.text.length else { liveIDs.insert(id); return "gap" }
         let overlap = min(next.text.length - offset, delta.utf16.count)

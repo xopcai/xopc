@@ -89,7 +89,7 @@ export default function richChatTest(): void {
         await driver.waitForComponent(ON.text('A streamed paragraph continues without replacing its identity.'), 5000);
       } finally { await ui.getPromptAction().closeCustomDialog(content); content.dispose(); }
     }, 30000);
-    it('preservesExpandedStepsAndToolDetailsAcrossSnapshotReplacement', 0, async (): Promise<void> => {
+    it('keepsCompletedAnswersFreeOfInlineExecutionChrome', 0, async (): Promise<void> => {
       const delegator = abilityDelegatorRegistry.getAbilityDelegator();
       const driver = Driver.create();
       await delegator.startAbility({ bundleName: 'ai.xopc.xopc', abilityName: 'EntryAbility' });
@@ -98,11 +98,11 @@ export default function richChatTest(): void {
       const content = new ComponentContent(ui, wrapBuilder(fixtureBuilder), { row: executionRow() } as FixtureArgs);
       await ui.getPromptAction().openCustomDialog(content, { autoCancel: false });
       try {
-        await (await driver.waitForComponent(ON.id('chat-steps-rich'), 5000)).click();
-        await (await driver.waitForComponent(ON.id('chat-tool-read'), 5000)).click();
-        await driver.waitForComponent(ON.text('Reference loaded.'), 5000);
+        await driver.waitForComponent(ON.text('Completed'), 5000);
+        expect(await driver.findComponent(ON.id('chat-steps-rich'))).assertNull();
+        expect(await driver.findComponent(ON.text('Reference loaded.'))).assertNull();
         await (await driver.findComponent(ON.id('fixture-refresh'))).click();
-        await driver.waitForComponent(ON.text('Reference updated.'), 5000);
+        await driver.waitForComponent(ON.text('Completed'), 5000);
         expect(await driver.screenCap(delegator.getAppContext().filesDir + '/rich-chat-steps.png')).assertTrue();
       } finally { await ui.getPromptAction().closeCustomDialog(content); content.dispose(); }
     }, 30000);
@@ -122,7 +122,7 @@ export default function richChatTest(): void {
         expect(await driver.screenCap(delegator.getAppContext().filesDir + '/rich-chat-product.png')).assertTrue();
       } finally { await ui.getPromptAction().closeCustomDialog(content); content.dispose(); }
     }, 30000);
-    it('updatesLiveToolOutputAndRetainsPartialAnswerAfterCancellation', 0, async (): Promise<void> => {
+    it('replacesWaitingWithTheRetainedAnswerAfterCancellation', 0, async (): Promise<void> => {
       const delegator = abilityDelegatorRegistry.getAbilityDelegator(); const driver = Driver.create();
       const ui = (await window.getLastWindow((await delegator.getCurrentTopAbility()).context)).getUIContext();
       let row = reduceChatStream(undefined, 'thinking_delta', { delta: 'Live thinking' }, 'fixture');
@@ -130,10 +130,9 @@ export default function richChatTest(): void {
       const content = new ComponentContent(ui, wrapBuilder(fixtureBuilder), { row } as FixtureArgs);
       await ui.getPromptAction().openCustomDialog(content, { autoCancel: false });
       try {
-        await (await driver.waitForComponent(ON.id('chat-steps-live:fixture'), 5000)).click();
-        await (await driver.waitForComponent(ON.id('chat-tool-cmd'), 5000)).click();
+        await driver.waitForComponent(ON.id('chat-waiting-dots-live:fixture'), 5000);
         await (await driver.findComponent(ON.id('fixture-complete'))).click();
-        await driver.waitForComponent(ON.text('Command failed safely.'), 5000);
+        expect(await driver.findComponent(ON.text('Command failed safely.'))).assertNull();
         await driver.waitForComponent(ON.text('Partial answer retained.'), 5000);
         expect(await driver.screenCap(delegator.getAppContext().filesDir + '/rich-chat-live.png')).assertTrue();
       } finally { await ui.getPromptAction().closeCustomDialog(content); content.dispose(); }

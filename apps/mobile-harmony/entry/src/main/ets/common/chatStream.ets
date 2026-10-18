@@ -52,6 +52,7 @@ export function reduceChatStream(previous: XopcChatRow | undefined, event: strin
     if (index < 0) blocks.push(review); else blocks[index] = review;
   } else if (event === 'turn_outcome') row.outcome = chatOutcome(payload as Object as XopcTurnOutcome);
   else if (event === 'progress') row.progress = '';
+  else if (event === 'error') { row.live = false; row.progress = ''; }
   else if (event === 'run_end') {
     row.live = false; row.progress = '';
     blocks.forEach((block: XopcChatBlock): void => {

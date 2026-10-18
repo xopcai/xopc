@@ -94,6 +94,7 @@ internal fun ChatMessageCard(message: ConversationMessage, onMore: () -> Unit,
   savingNote: Boolean = false,
   onReadAloud: (() -> Unit)? = null,
   readAloudPhase: String = "idle",
+  revealAnswer: Boolean = false,
   loadMedia: (suspend (ConversationMedia) -> ByteArray)? = null, streaming: Boolean = false,
   onReading: () -> Unit = {}) {
   val pauseFollowing by rememberUpdatedState(onReading)
@@ -144,13 +145,6 @@ internal fun ChatMessageCard(message: ConversationMessage, onMore: () -> Unit,
         vertical = if (voiceOnly) 0.dp else if (isUser) 10.dp else 14.dp)
       .then(if (isUser) Modifier else Modifier.testTag("message-assistant-card-${message.id}")),
       verticalArrangement = Arrangement.spacedBy(8.dp)) {
-      if (!isUser && onOpenExecution != null) TextButton(onClick = onOpenExecution,
-        modifier = Modifier.fillMaxWidth().heightIn(min = 44.dp)
-          .testTag("message-steps-${message.id}")) {
-        Text(stringResource(R.string.assistant_execution), modifier = Modifier.weight(1f),
-          color = MaterialTheme.colorScheme.onSurfaceVariant)
-        ActionIcon(R.drawable.action_chevron_right, color = MaterialTheme.colorScheme.onSurfaceVariant, size = 16.dp)
-      }
       if (!isUser) MessageReferences(message.references, onOpenTarget)
       if (message.text.isNotBlank()) {
         if (isUser) {
@@ -161,7 +155,7 @@ internal fun ChatMessageCard(message: ConversationMessage, onMore: () -> Unit,
             overflow = TextOverflow.Ellipsis)
         } else if (showPreview) MessageTextPreview(message.id, message.text,
           messagePreviewLineLimit(message.role))
-        else MarkdownContent(message.text, modifier = Modifier.fillMaxWidth(),
+        else MarkdownContent(rememberAnswerText(message.text, revealAnswer), modifier = Modifier.fillMaxWidth(),
           onOpenLink = onOpenLink, onCopyCode = onCopy, streaming = streaming)
       }
       if (isUser) MessageReferences(message.references, onOpenTarget)

@@ -41,5 +41,8 @@ export function chatPresentationRows(history: XopcChatRow[], live: XopcChatRow |
     }
     else rows.push({ id: 'live:' + runId, role: 'assistant', text: '', live: true, executionActivity: true });
   }
-  return rows;
+  return rows.filter((row: XopcChatRow): boolean => row.role !== 'assistant' || !!row.live
+    || !!chatAnswerText(row) || (row.media || []).length > 0 || (row.deliveries || []).length > 0
+    || (row.outcome?.deliverables || []).length > 0 || row.outcome?.status === 'failed'
+    || (row.blocks || []).some((block: XopcChatBlock): boolean => block.kind === 'review'));
 }

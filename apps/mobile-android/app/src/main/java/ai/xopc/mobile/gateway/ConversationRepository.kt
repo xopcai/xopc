@@ -60,7 +60,7 @@ data class ConversationMessage(val id: String, val role: String, val text: Strin
   val hasNonTextContent: Boolean = false, val media: List<ConversationMedia> = emptyList(),
   val references: List<ConversationReference> = emptyList(),
   val targets: List<ConversationTarget> = emptyList(), val outcome: ConversationOutcome? = null,
-  val sourceIds: Set<String> = setOf(id), val renderId: String = id)
+  val sourceIds: Set<String> = setOf(id), val renderId: String = id, val answerConfirmed: Boolean = true)
 data class ConversationHistory(val conversationId: String, val transcriptId: String?, val messages: List<ConversationMessage>,
   val agentId: String? = null, val nextBeforeCursor: String? = null)
 data class ExecutionStep(val id: String, val kind: String, val category: String, val text: String,

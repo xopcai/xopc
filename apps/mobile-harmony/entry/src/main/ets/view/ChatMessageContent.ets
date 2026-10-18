@@ -5,7 +5,7 @@ import { XopcMarkdownView } from './MarkdownView';
 import { XopcChatStepsView } from './ChatStepsView';
 import { XopcChatMediaView } from './ChatMediaView';
 import { XopcChatResultTail } from './ChatResultTail';
-import { chatAnswerText } from '../common/chatRichContent';
+import { chatAnswerText, chatAnswerStarted } from '../common/chatRichContent';
 import { XopcChatDisclosure } from '../common/chatDisclosure';
 import { filePreviewKind } from '../common/filePreview';
 import { chatMessageNeedsPreview, chatMessagePreviewLines, chatMessagePreviewText } from '../common/chatMessagePreview';
@@ -20,6 +20,7 @@ export struct XopcChatMessageContent {
   @Param reasoning: string = 'on';
   @Param runStartedAtMs: number = 0;
   @Param connection: string = 'connected';
+  @Param showWaiting: boolean = true;
   @Param previewEligible: boolean = false;
   @Param disclosure: XopcChatDisclosure = new XopcChatDisclosure();
   @Event onNavigate: (route: XopcMobileRoute) => void = (_route: XopcMobileRoute): void => {};
@@ -53,7 +54,7 @@ export struct XopcChatMessageContent {
   @Computed get displayedMedia(): XopcHistoryMedia[] { return this.mediaExpanded ? this.attachmentMedia : this.attachmentMedia.slice(0, 3); }
   @Computed get body(): XopcChatBlock[] {
     return (this.row.blocks || []).filter((block: XopcChatBlock): boolean =>
-      block.kind === 'review' || (block.kind === 'text' && block.presentation !== 'narration'));
+      block.kind === 'review' || (block.kind === 'text' && block.presentation !== 'narration' && block.presentation !== 'pending'));
   }
   @Computed get hasProgress(): boolean {
     return !!this.row.live || !!this.row.executionActivity
@@ -89,9 +90,9 @@ export struct XopcChatMessageContent {
 
   build() {
     Column({ space: this.showPreview ? 2 : 8 }) {
-      if (this.row.role === 'assistant' && this.hasProgress) {
+      if (this.row.role === 'assistant' && this.row.live && this.showWaiting && !chatAnswerStarted(this.row)) {
         XopcChatStepsView({ row: this.row, runStartedAtMs: this.runStartedAtMs,
-          connection: this.connection, onShowDetail: this.onShowExecution })
+          connection: this.connection, animateDots: this.animateStreaming, onShowDetail: this.onShowExecution })
       }
       if (this.row.outcome?.status === 'failed') {
         Text($r('app.string.chat_response_failed')).fontSize(13).fontColor(this.colors.danger)
@@ -123,8 +124,8 @@ export struct XopcChatMessageContent {
         if (this.row.role === 'assistant') {
           Repeat<XopcChatBlock>(this.body).each((item: RepeatItem<XopcChatBlock>) => {
             if (item.item.kind === 'text' && item.item.text) {
-              XopcMarkdownView({ content: item.item.text, conversationId: this.conversationId, compactReading: true,
-                streaming: this.animateStreaming,
+              XopcChatAnswerView({ content: item.item.text, conversationId: this.conversationId,
+                reveal: this.animateStreaming,
                 onReading: this.onReading,
                 onNavigate: this.onNavigate })
             } else if (item.item.review) {
@@ -210,5 +211,40 @@ export struct XopcChatMessageContent {
         if (this.row.role === 'assistant') { XopcChatResultTail({ row: this.row, conversationId: this.conversationId, onNavigate: this.onNavigate, onFillDraft: this.onFillDraft }) }
       }
     }.width('100%').alignItems(this.row.role === 'user' ? HorizontalAlign.End : HorizontalAlign.Start)
+  }
+}
+
+@ComponentV2
+struct XopcChatAnswerView {
+  @Param content: string = '';
+  @Param conversationId: string = '';
+  @Param reveal: boolean = false;
+  @Event onReading: () => void = (): void => {};
+  @Event onNavigate: (route: XopcMobileRoute) => void = (_route: XopcMobileRoute): void => {};
+  @Local displayedText: string = '';
+  private revealTimer: number = -1;
+  private targetText: string = '';
+  aboutToAppear(): void { this.updateAnswer(); }
+  @Monitor('content') onContentChange(): void { this.updateAnswer(); }
+  aboutToDisappear(): void { clearInterval(this.revealTimer); this.revealTimer = -1; }
+  private updateAnswer(): void {
+    this.targetText = this.content;
+    if (!this.reveal || (this.displayedText && !this.content.startsWith(this.displayedText))) {
+      clearInterval(this.revealTimer); this.revealTimer = -1;
+      this.displayedText = this.content;
+      return;
+    }
+    if (this.revealTimer !== -1 || this.displayedText === this.targetText) return;
+    this.revealTimer = setInterval((): void => {
+      let end = Math.min(this.targetText.length, this.displayedText.length + Math.max(12, Math.ceil(this.targetText.length / 32)));
+      const last = this.targetText.charCodeAt(end - 1);
+      if (last >= 0xD800 && last <= 0xDBFF && end < this.targetText.length) end++;
+      this.displayedText = this.targetText.slice(0, end);
+      if (end >= this.targetText.length) { clearInterval(this.revealTimer); this.revealTimer = -1; }
+    }, 24);
+  }
+  build() {
+    XopcMarkdownView({ content: this.displayedText, conversationId: this.conversationId, compactReading: true,
+      streaming: this.reveal, onReading: this.onReading, onNavigate: this.onNavigate })
   }
 }

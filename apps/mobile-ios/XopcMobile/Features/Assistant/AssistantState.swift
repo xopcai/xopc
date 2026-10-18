@@ -347,6 +347,13 @@ final class AssistantState {
             streamBuffer.closeNarration(id)
             messages.removeAll { $0.id == id }
         }
+        if event.name == "assistant_message_end", event.presentation == "answer" {
+            let id = event.messageId ?? runID
+            if let index = messages.firstIndex(where: { $0.id == id }) {
+                messages[index].answerConfirmed = true
+                messages[index].revealAnswer = true
+            }
+        }
         guard event.name == "assistant_delta" else { return }
         let result = streamBuffer.append(event, runID: runID, visible: messages)
         if result == "gap" {
