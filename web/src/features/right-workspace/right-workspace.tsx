@@ -272,11 +272,11 @@ export function RightWorkspace({ scope, enabled = true, elevated = false }: { sc
           const side = tab.kind === 'sidechat' ? sideTabs.find((t) => t.id === tab.sideChatId) : undefined;
           const title = tabTitle(tab);
           const stateLabel = side?.waiting ? (zh ? '待处理' : 'Needs attention') : side?.disconnected ? (zh ? '连接中断' : 'Disconnected') : side?.ended ? (zh ? '已结束' : 'Ended') : side?.runId ? (zh ? '运行中' : 'Running') : side?.unread ? (zh ? '未读' : 'Unread') : fileStatus[tab.id] ? (zh ? '未保存' : 'Unsaved') : '';
-          return <div key={tab.id} className={cn('group flex h-9 shrink-0 items-center rounded-xl border transition-colors', tab.id === pane.activeId ? 'border-edge-subtle bg-surface-panel text-fg shadow-sm' : 'border-transparent text-fg-muted hover:bg-surface-hover')}>
+          return <div key={tab.id} className={cn('group flex h-9 shrink-0 items-center rounded-md border transition-colors', tab.id === pane.activeId ? 'border-edge bg-surface-panel text-fg' : 'border-transparent text-fg-muted hover:bg-surface-hover')}>
             <button role="tab" id={`workspace-tab-${tab.id}`} aria-controls="workspace-content" aria-selected={tab.id === pane.activeId} tabIndex={tab.id === pane.activeId ? 0 : -1}
-              title={tab.kind === 'file' ? tab.path || title : title} className="flex max-w-56 items-center gap-1.5 rounded-md px-2 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent" onClick={() => select(tab.id)}>
+              title={tab.kind === 'file' ? tab.path || title : title} className="flex max-w-56 items-center gap-1.5 rounded-md px-2 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent" onClick={() => select(tab.id)} onDoubleClick={() => { if (tab.kind === 'file') store.keepFileOpen(tab.id); }}>
               {tab.kind === 'browser' ? <Globe className="size-4 shrink-0" aria-hidden /> : tab.kind === 'sidechat' ? <MessageSquare className="size-4 shrink-0" aria-hidden /> : tab.kind === 'files' ? <FolderOpen className="size-4 shrink-0" aria-hidden /> : <FileText className="size-4 shrink-0" aria-hidden />}
-              <span className="truncate">{title}</span>{stateLabel ? <span className="shrink-0 text-xs text-fg-muted">{stateLabel}</span> : null}
+              <span className={cn("truncate", tab.kind === 'file' && tab.preview && "italic")}>{title}</span>{stateLabel ? <span className="shrink-0 text-xs text-fg-muted">{stateLabel}</span> : null}
             </button>
             <button className={cn(buttonClass, 'size-7')} tabIndex={tab.id === pane.activeId ? 0 : -1} aria-label={`${zh ? '关闭' : 'Close'} ${title}`} disabled={closing === tab.id} onClick={() => {
               if (tab.kind === 'file') void closeFile(tab.id);
@@ -305,7 +305,7 @@ export function RightWorkspace({ scope, enabled = true, elevated = false }: { sc
         <div className="mt-2 flex gap-3"><button className="text-accent" onClick={() => setDiscardRequested(false)}>{zh ? '保留草稿' : 'Keep draft'}</button><button onClick={() => void closeFile(saveFailed, true)}>{zh ? '确认放弃' : 'Confirm discard'}</button></div>
       </div> : null}
     </div> : null}
-    <WorkspaceTreeControlContext.Provider value={treeControl}>
+    <WorkspaceTreeControlContext.Provider value={treeControl ? { button: treeControl, label: zh ? (treeShown ? '隐藏文件树' : '显示文件树') : (treeShown ? 'Hide file tree' : 'Show file tree'), active: treeShown, onToggle: toggleTree } : null}>
     <div id="workspace-content" role="tabpanel" aria-labelledby={active ? `workspace-tab-${active.id}` : undefined} className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden">
       <div className={cn('min-h-0 min-w-0 flex-1 flex-col overflow-hidden', !treeHome ? 'flex' : 'hidden')}>
         {active?.kind === 'home' ? <WorkspaceStartPage tabs={pane.tabs} canCreateSideChat={scope !== 'new'} creating={Boolean(creating)}

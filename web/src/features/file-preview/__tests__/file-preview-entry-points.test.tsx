@@ -82,12 +82,13 @@ describe('common file preview header', () => {
       const row = title!.parentElement!.parentElement!;
       const buttons = [...row.querySelectorAll<HTMLButtonElement>('button')];
       expect(buttons.map((button) => button.getAttribute('aria-label'))).toEqual([
-        labels.edit, labels.expandPreview, labels.editInNewChat, labels.shareLink, labels.moreActions, labels.close,
+        labels.moreActions, labels.close,
       ]);
-      expect(buttons[0].disabled).toBe(!entry.editable);
-      expect(buttons[2].disabled).toBe(!entry.canChat);
-      expect(buttons[3].disabled).toBe(false);
-      await act(async () => buttons[4].click());
+      await act(async () => buttons[0].click());
+      const menuItems = [...document.querySelectorAll<HTMLButtonElement>('button[role="menuitem"]')];
+      expect(menuItems.find((item) => item.textContent === labels.edit)?.disabled).toBe(!entry.editable);
+      expect(menuItems.find((item) => item.textContent === labels.editInNewChat)?.disabled).toBe(!entry.canChat);
+      expect(menuItems.find((item) => item.textContent === labels.shareLink)?.disabled).toBe(false);
       expect([...document.querySelectorAll('[role="menuitem"]')].filter((item) => item.textContent === labels.download)).toHaveLength(1);
       if (entry.name === 'share') {
         expect(document.querySelector('a[role="menuitem"]')?.getAttribute('href')).toContain('/s/token-a?inline=1');
@@ -110,7 +111,9 @@ describe('common file preview header', () => {
       />
       <LocationProbe />
     </MemoryRouter>));
-    await act(async () => document.querySelector<HTMLButtonElement>(`[aria-label="${messages('en').workspace.editInNewChat}"]`)?.click());
+    await act(async () => document.querySelector<HTMLButtonElement>(`[aria-label="${messages('en').workspace.moreActions}"]`)?.click());
+    await act(async () => [...document.querySelectorAll<HTMLButtonElement>('button[role="menuitem"]')]
+      .find((item) => item.textContent === messages('en').workspace.editInNewChat)?.click());
     const location = JSON.parse(container.querySelector('[data-location]')!.textContent) as { pathname: string; search: string; state: { agentId: string } };
     expect(location.pathname).toBe('/chat/new');
     const params = new URLSearchParams(location.search);

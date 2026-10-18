@@ -187,7 +187,6 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
           >
             {chatHeadline}
           </h1>
-          {showChatAgentSelector ? <ChatAgentSelector items={chatAgents} value={chatAgentId} disabled={chatAgentDisabled} placeholder={m.chat.agentPlaceholder} searchPlaceholder={m.chat.agentSearchPlaceholder} noMatches={m.chat.agentNoMatches} compact contentSide="bottom" contentAlign="end" onChange={onChatAgentChange} /> : null}
         </div>
       ),
       end: (
@@ -197,6 +196,7 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
             APP_CHROME_NO_DRAG_CLASS,
           )}
         >
+          {showChatAgentSelector ? <ChatAgentSelector items={chatAgents} value={chatAgentId} disabled={chatAgentDisabled} placeholder={m.chat.agentPlaceholder} searchPlaceholder={m.chat.agentSearchPlaceholder} noMatches={m.chat.agentNoMatches} compact contentSide="bottom" contentAlign="end" onChange={onChatAgentChange} /> : null}
           <DropdownMenu.Root modal={false}>
             <DropdownMenu.Trigger asChild>
               <button type="button" data-chat-menu-trigger aria-label={language === 'zh' ? '聊天菜单' : 'Chat menu'} title={language === 'zh' ? '聊天菜单' : 'Chat menu'} className="inline-flex size-8 shrink-0 items-center justify-center rounded-lg text-fg-muted transition-colors hover:bg-surface-hover data-[state=open]:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">

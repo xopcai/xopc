@@ -71,7 +71,7 @@ export function BrowserTabView({ tab, scope, active }: { tab: Tab; scope: string
       <button type="button" className={control} aria-label={zh ? '网页前进' : 'Browser forward'} disabled={!state?.canGoForward} onClick={() => command('forward')}><ArrowRight className="size-4" /></button>
       <button type="button" className={control} aria-label={state?.loading ? (zh ? '停止加载网页' : 'Stop loading page') : (zh ? '刷新网页' : 'Reload page')} disabled={!state?.url && !state?.loading} onClick={() => command(state?.loading ? 'stop' : 'reload')}>{state?.loading ? <X className="size-4" /> : <RotateCw className="size-4" />}</button>
       <input ref={input} aria-label={zh ? '搜索或输入网址' : 'Search or enter a URL'} autoComplete="off" spellCheck={false} value={address} onFocus={() => setEditing(true)} onBlur={() => setEditing(false)} onChange={event => setAddress(event.target.value)} placeholder={zh ? '搜索或输入网址' : 'Search or enter a URL'} className="h-9 min-w-0 flex-1 rounded-full border border-edge-subtle bg-surface-base px-3 text-sm text-fg outline-none focus:border-accent" />
-      {treeControl}
+      {treeControl?.button}
       <button type="button" className={control} aria-label={zh ? '在系统浏览器打开' : 'Open in system browser'} disabled={!state?.url} onClick={() => { if (state?.url) void window.electronAPI?.shell?.openExternalUrl(state.url).catch(e => setError(e instanceof Error ? e.message : String(e))); }}><ExternalLink className="size-4" /></button>
     </form>
     {error ? <p role="alert" className="border-b border-edge px-3 py-2 text-sm text-fg-muted">{error}</p> : null}
