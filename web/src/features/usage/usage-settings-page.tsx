@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import useSWR from 'swr';
 import { useSearchParams } from 'react-router-dom';
 
+import { SlidingTabList } from '@/components/ui/sliding-tab-list';
 import { PopoverSelect } from '@/components/ui/popover-select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
@@ -209,12 +210,12 @@ export function UsageSettingsPage() {
             <h2 className="text-sm font-semibold text-fg">{t.distribution}</h2>
             <p className="mt-1 text-xs text-fg-subtle">{t.distributionHint}</p>
           </div>
-          <div className="flex gap-1" role="group" aria-label={t.distribution}>
+          <SlidingTabList className="flex gap-1" role="group" aria-label={t.distribution}>
             {(['scenario', 'model'] as const).map(value => <Button key={value} variant={grouping === value ? 'secondary' : 'ghost'} aria-pressed={grouping === value}
               onClick={() => updateParams(next => { next.set('group', value); next.delete('groupPage'); })}>
               {value === 'scenario' ? t.byScenario : t.byModel}
             </Button>)}
-          </div>
+          </SlidingTabList>
         </div>
         <div className="divide-y divide-edge-subtle px-4">
           {visibleGroups?.length ? visibleGroups.map(item => {

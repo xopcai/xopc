@@ -3,6 +3,7 @@ import { CircleStop, ExternalLink, GitBranch, ListChecks, ScrollText, X } from '
 import { memo, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 
+import { SlidingTabList } from '@/components/ui/sliding-tab-list';
 import { Button } from '@/components/ui/button';
 import { workflowCardLabels } from '@/features/chat/workflow/workflow-card-labels';
 import { ProgressTree } from '@/features/chat/workflow/workflow-progress-display';
@@ -154,7 +155,7 @@ export const WorkflowSessionBanner = memo(function WorkflowSessionBanner({
               </div>
             </div>
 
-            <div className="flex shrink-0 gap-1 border-b border-edge px-4 py-2" role="tablist" aria-label={live.title}>
+            <SlidingTabList className="flex shrink-0 gap-1 border-b border-edge px-4 py-2" role="tablist" aria-label={live.title} indicatorClassName="rounded-md bg-surface-panel shadow-sm">
               {tabs.map((tab) => (
                 <button
                   key={tab.id}
@@ -170,7 +171,7 @@ export const WorkflowSessionBanner = memo(function WorkflowSessionBanner({
                   {tab.label}
                 </button>
               ))}
-            </div>
+            </SlidingTabList>
 
             <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
               {activeTab === 'overview' ? (
