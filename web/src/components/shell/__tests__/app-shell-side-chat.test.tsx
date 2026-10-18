@@ -9,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AppShell } from '@/components/shell/app-shell';
 import { ChatPageHeaderRegistration } from '@/features/chat/chat-page-header-registration';
 import { TaskChatPage } from '@/features/chat/task/task-chat-page';
+import { RightWorkspace } from '@/features/right-workspace/right-workspace';
 import { fetchTask, type TaskDetail } from '@/features/tasks/home-api';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
@@ -194,6 +195,36 @@ describe('AppShell task Sidechat', () => {
     await act(async () => useRightWorkspaceStore.getState().setOpen(false, 'ordinary'));
     expect(useRightWorkspaceStore.getState().panes.ordinary.open).toBe(false);
     expect(draft.value).toBe('unsent main draft');
+  });
+
+  it('reserves modal space only for a visible docked workspace at its rendered width', async () => {
+    const onDockedWidthChange = vi.fn();
+    useRightWorkspaceStore.getState().openFiles('ordinary');
+    useRightWorkspaceStore.getState().setWidth(900);
+    vi.spyOn(window, 'innerWidth', 'get').mockReturnValue(1200);
+    const renderWorkspace = async (enabled: boolean) => {
+      await act(async () => root.render(
+        <MemoryRouter><RightWorkspace scope="ordinary" enabled={enabled} onDockedWidthChange={onDockedWidthChange} /></MemoryRouter>,
+      ));
+    };
+    await renderWorkspace(false);
+    expect(onDockedWidthChange).toHaveBeenLastCalledWith(0);
+    await renderWorkspace(true);
+    expect(onDockedWidthChange).toHaveBeenLastCalledWith(820);
+    expect(container.querySelector<HTMLElement>('[data-right-workspace]')?.style.width).toBe('820px');
+    await act(async () => useRightWorkspaceStore.getState().setWidth(500));
+    expect(onDockedWidthChange).toHaveBeenLastCalledWith(500);
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Expand workspace"]')!.click());
+    expect(onDockedWidthChange).toHaveBeenLastCalledWith(0);
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Restore workspace"]')!.click());
+    expect(onDockedWidthChange).toHaveBeenLastCalledWith(500);
+    await act(async () => useRightWorkspaceStore.getState().setOpen(false, 'ordinary'));
+    expect(onDockedWidthChange).toHaveBeenLastCalledWith(0);
+    await act(async () => useRightWorkspaceStore.getState().setOpen(true, 'ordinary'));
+    expect(onDockedWidthChange).toHaveBeenLastCalledWith(500);
+    vi.spyOn(window, 'innerWidth', 'get').mockReturnValue(700);
+    await act(async () => window.dispatchEvent(new Event('resize')));
+    expect(onDockedWidthChange).toHaveBeenLastCalledWith(0);
   });
 
   it('creates a side chat from selected task text using the real parent conversation', async () => {

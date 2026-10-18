@@ -41,7 +41,7 @@ function navigateMenu(event: ReactKeyboardEvent<HTMLDivElement>) {
   items[index]?.focus();
 }
 
-export function RightWorkspace({ scope, enabled = true, elevated = false }: { scope: string; enabled?: boolean; elevated?: boolean }) {
+export function RightWorkspace({ scope, enabled = true, elevated = false, onDockedWidthChange }: { scope: string; enabled?: boolean; elevated?: boolean; onDockedWidthChange?: (width: number) => void }) {
   const zh = useLocaleStore((s) => s.language) === 'zh';
   const panes = useRightWorkspaceStore((s) => s.panes);
   const pane = panes[scope] ?? EMPTY_WORKSPACE_PANE;
@@ -85,6 +85,9 @@ export function RightWorkspace({ scope, enabled = true, elevated = false }: { sc
   const single = available < 840;
   const treePreference = active?.kind === 'browser' ? browserTreeOpen : active?.kind === 'sidechat' ? sideTreeOpen : fileTreeOpen;
   const panelWidth = active ? Math.max(460, Math.min(width || available * 0.6, available - 380)) : 320;
+  useLayoutEffect(() => {
+    onDockedWidthChange?.(visible && !single && !expanded ? panelWidth : 0);
+  }, [expanded, onDockedWidthChange, panelWidth, single, visible]);
   const treeHome = !active || active.kind === 'files';
   const treeVisible = treeHome || ((active.kind === 'file' || active.kind === 'sidechat' || active.kind === 'browser') && treePreference && ((single || expanded) ? available : panelWidth) >= 460 + treeWidth);
   const treeShown = treeVisible || treeOverlay;
