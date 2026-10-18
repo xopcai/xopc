@@ -21,15 +21,17 @@ export type TabCompletionTextareaProps = Omit<TextareaHTMLAttributes<HTMLTextAre
 
 function ariaKeyShortcuts(existing: string | undefined, suggestion: string | null | undefined): string | undefined {
   if (!suggestion?.trim()) return existing;
-  if (!existing) return 'Tab';
-  return existing.split(/\s+/).includes('Tab') ? existing : `${existing} Tab`;
+  const shortcuts = new Set(existing?.split(/\s+/).filter(Boolean));
+  shortcuts.add('Tab');
+  shortcuts.add('Enter');
+  return [...shortcuts].join(' ');
 }
 
 function shouldAcceptSuggestion<Element extends HTMLInputElement | HTMLTextAreaElement>(
   event: KeyboardEvent<Element>,
   suggestion: string | null | undefined,
 ): suggestion is string {
-  return event.key === 'Tab'
+  return (event.key === 'Tab' || event.key === 'Enter')
     && !event.shiftKey
     && !event.metaKey
     && !event.ctrlKey
@@ -54,7 +56,7 @@ function handleTabCompletion<Element extends HTMLInputElement | HTMLTextAreaElem
   onAcceptSuggestion(suggestion);
 }
 
-/** Controlled input that accepts its visible recommendation with Tab while empty. */
+/** Controlled input that accepts its visible recommendation with Tab or Enter while empty. */
 export const TabCompletionInput = forwardRef<HTMLInputElement, TabCompletionInputProps>(
   function TabCompletionInput({ suggestion, onAcceptSuggestion, onKeyDown, 'aria-keyshortcuts': shortcuts, ...props }, ref) {
     return (
@@ -68,7 +70,7 @@ export const TabCompletionInput = forwardRef<HTMLInputElement, TabCompletionInpu
   },
 );
 
-/** Controlled textarea that accepts its visible recommendation with Tab while empty. */
+/** Controlled textarea that accepts its visible recommendation with Tab or Enter while empty. */
 export const TabCompletionTextarea = forwardRef<HTMLTextAreaElement, TabCompletionTextareaProps>(
   function TabCompletionTextarea({ suggestion, onAcceptSuggestion, onKeyDown, 'aria-keyshortcuts': shortcuts, ...props }, ref) {
     return (
