@@ -1,3 +1,4 @@
+import { SlidingTabList } from '@/components/ui/sliding-tab-list';
 import { MeetingImportButton } from '@/features/discussions/meeting-import-button';
 import { ArrowUp, AudioLines, CalendarDays, ChevronDown, FileText, Folder, Loader2, Paperclip, ScanSearch, Sparkles, X } from 'lucide-react';
 import { useRef, useState } from 'react';
@@ -140,7 +141,7 @@ export function NotesHomeComposer({ projects, projectId, onProjectChange, onCrea
         </button>
 
       </div>
-      <div id="notes-home-templates" hidden={!templatesOpen} className={cn('mt-1 flex-wrap items-center gap-1 text-xs text-fg-muted', templatesOpen ? 'flex' : 'hidden')}>
+      <SlidingTabList id="notes-home-templates" hidden={!templatesOpen} className={cn('mt-1 flex-wrap items-center gap-1 text-xs text-fg-muted', templatesOpen ? 'flex' : 'hidden')} role="group" aria-label={h.templates} indicatorClassName="rounded-md bg-accent-soft">
         {(Object.keys(templateIcons) as TemplateId[]).map((id) => {
           const Icon = templateIcons[id];
           return <button key={id} type="button" disabled={locked} aria-pressed={template === id}
@@ -151,7 +152,7 @@ export function NotesHomeComposer({ projects, projectId, onProjectChange, onCrea
         })}
         <button type="button" className="text-xs text-fg-muted" onClick={() => window.dispatchEvent(new CustomEvent('open-recording-recoveries'))}>{labels.discussionCapture.recoveredTitle}</button>
         <MeetingImportButton />
-      </div>
+      </SlidingTabList>
     </section>
   );
 }

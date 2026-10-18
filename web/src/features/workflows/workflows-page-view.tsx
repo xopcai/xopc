@@ -1,7 +1,9 @@
-import { useLayoutEffect, type KeyboardEvent } from 'react';
+import { useLayoutEffect } from 'react';
 import { AlertTriangle, GitBranch, LayoutGrid, Library, List, ListChecks, Search, X } from 'lucide-react';
 
+import { SlidingTabList } from '@/components/ui/sliding-tab-list';
 import { Button } from '@/components/ui/button';
+import { PageTabs } from '@/components/ui/page-tabs';
 import { Select, SelectOption } from '@/components/ui/popover-select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/cn';
@@ -27,7 +29,6 @@ const PAGE_TABS = [
   { id: 'runs', icon: ListChecks },
   { id: 'library', icon: Library },
 ] as const;
-type PageTab = (typeof PAGE_TABS)[number]['id'];
 
 const RUN_PRIORITY: Record<string, number> = {
   failed: 0,
@@ -57,15 +58,6 @@ function sortRuns(runs: WorkflowRunSummary[]): WorkflowRunSummary[] {
     const bTime = b.completedAtMs ?? b.startedAtMs ?? b.createdAtMs;
     return bTime - aTime;
   });
-}
-
-function getPageTabFromKey(key: string, currentTab: PageTab): PageTab | null {
-  if (key === 'Home') return 'runs';
-  if (key === 'End') return 'library';
-  if (key === 'ArrowLeft' || key === 'ArrowRight') {
-    return currentTab === 'runs' ? 'library' : 'runs';
-  }
-  return null;
 }
 
 function WorkflowRunRowSkeleton() {
@@ -154,50 +146,21 @@ export function WorkflowsPageView({ vm }: { vm: WorkflowsPageVm }) {
   return (
     <main className="min-h-0 flex-1 overflow-y-auto bg-surface-panel">
       <div className="mx-auto flex min-h-full w-full max-w-[96rem] flex-col px-3 pb-5 pt-3 sm:px-5 lg:pt-4 xl:px-6">
-        <nav
-          className="-mx-1 flex gap-1 overflow-x-auto px-1 pb-1"
-          aria-label={labels.pageTabsAria}
-          role="tablist"
-        >
-          {PAGE_TABS.map(({ id: tab, icon: Icon }) => (
-            <button
-              key={tab}
-              id={`workflow-tab-${tab}`}
-              type="button"
-              role="tab"
-              aria-selected={pageTab === tab}
-              aria-controls={`workflow-panel-${tab}`}
-              tabIndex={pageTab === tab ? 0 : -1}
-              draggable={false}
-              className={cn(
-                'relative inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium',
-                'transition-transform duration-150 ease-out active:scale-[0.98] motion-reduce:transition-none motion-reduce:active:scale-100',
-                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
-                pageTab === tab
-                  ? 'bg-accent-soft text-accent-fg'
-                  : 'text-fg-muted hover:bg-surface-hover hover:text-fg',
-              )}
-              onClick={() => setPageTab(tab)}
-              onKeyDown={(event: KeyboardEvent<HTMLButtonElement>) => {
-                const nextTab = getPageTabFromKey(event.key, tab);
-                if (!nextTab) return;
-                event.preventDefault();
-                setPageTab(nextTab);
-                window.requestAnimationFrame(() => {
-                  document.getElementById(`workflow-tab-${nextTab}`)?.focus();
-                });
-              }}
-            >
-              <Icon className="size-3.5 shrink-0" strokeWidth={1.75} aria-hidden />
-              <span>{labels.pageTabs[tab]}</span>
-              {tab === 'runs' && attentionRuns.length > 0 ? (
-                <span className="rounded-full bg-red-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-red-700 dark:text-red-300">
-                  {attentionRuns.length}
-                </span>
-              ) : null}
-            </button>
-          ))}
-        </nav>
+        <PageTabs
+          items={PAGE_TABS.map(({ id, icon }) => ({
+            id,
+            icon,
+            label: labels.pageTabs[id],
+            count: id === 'runs' && attentionRuns.length > 0 ? attentionRuns.length : undefined,
+          }))}
+          activeTab={pageTab}
+          onChange={setPageTab}
+          ariaLabel={labels.pageTabsAria}
+          tabIdPrefix="workflow-tab"
+          panelIdPrefix="workflow-panel"
+          selectedClassName="bg-accent-soft text-accent-fg"
+          countClassName="bg-red-500/15 text-[10px] font-semibold text-red-700 dark:text-red-300"
+        />
 
         {(actionError ?? error) ? (
           <div className="mt-4 rounded-lg border border-red-500/25 bg-red-500/10 px-3 py-2 text-sm text-red-700 dark:text-red-300" role="alert">
@@ -295,7 +258,7 @@ export function WorkflowsPageView({ vm }: { vm: WorkflowsPageVm }) {
                     {labels.clearFilters}
                   </Button>
                 ) : null}
-                <div className="ml-auto flex rounded-lg bg-surface-inset p-0.5" role="group" aria-label={labels.layoutAria}>
+                <SlidingTabList className="ml-auto flex rounded-lg bg-surface-inset p-0.5" role="group" aria-label={labels.layoutAria} indicatorClassName="rounded-md bg-surface-active">
                   <button
                     type="button"
                     className={cn(
@@ -322,7 +285,7 @@ export function WorkflowsPageView({ vm }: { vm: WorkflowsPageVm }) {
                     <LayoutGrid className="size-3.5" aria-hidden />
                     {labels.runLayouts.board}
                   </button>
-                </div>
+                </SlidingTabList>
               </div>
             </section>
 

@@ -1,6 +1,8 @@
 import type { LucideIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
+
+import { SlidingIndicator, useSlidingIndicator } from '@/components/ui/sliding-indicator';
 
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
@@ -45,6 +47,8 @@ export function PageTabs<T extends string>({
   countClassName?: string;
   onReorder?: (draggedId: T, targetId: T, position: PageTabsDropPosition) => void;
 }) {
+  const trackRef = useRef<HTMLElement>(null);
+  const indicator = useSlidingIndicator(trackRef, '[role="tab"]', '[role="tab"][aria-selected="true"]');
   const [draggedId, setDraggedId] = useState<T | null>(null);
   const [dropTarget, setDropTarget] = useState<{ id: T; position: PageTabsDropPosition } | null>(null);
 
@@ -55,8 +59,9 @@ export function PageTabs<T extends string>({
 
   return (
     <nav
+      ref={trackRef}
       aria-label={ariaLabel}
-      className={cn('-mx-1 flex gap-1 overflow-x-auto overscroll-x-contain px-1 pb-1', className)}
+      className={cn('relative isolate -mx-1 flex gap-1 overflow-x-auto overscroll-x-contain px-1 pb-1', className)}
       role="tablist"
       aria-orientation={orientation}
       onDragLeave={(event) => {
@@ -80,6 +85,7 @@ export function PageTabs<T extends string>({
         next?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
       }}
     >
+      <SlidingIndicator bounds={indicator} className={cn('rounded-lg', buttonClassName, selectedClassName)} />
       {items.map(({ id, icon: Icon, label, count, suffix, title }) => {
         const selected = id === activeTab;
         const dragging = draggedId === id;
@@ -98,7 +104,7 @@ export function PageTabs<T extends string>({
             draggable={Boolean(onReorder)}
             title={title}
             className={cn(
-              'touch-target relative inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
+              'touch-target relative z-[1] inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent',
               interaction.press,
               selected ? selectedClassName : unselectedClassName,
@@ -107,6 +113,7 @@ export function PageTabs<T extends string>({
               (dropBefore || dropAfter) && !dragging && 'bg-surface-hover text-fg',
               buttonClassName,
             )}
+            style={selected && indicator ? { backgroundColor: 'transparent', borderColor: 'transparent', boxShadow: 'none' } : undefined}
             onClick={() => onChange(id)}
             onDragStart={(event) => {
               if (!onReorder) return;

@@ -4,6 +4,7 @@ import '@xterm/xterm/css/xterm.css';
 import { Plus, SquareTerminal, X } from 'lucide-react';
 import { type CSSProperties, useCallback, useEffect, useRef, useState } from 'react';
 
+import { SlidingTabList } from '@/components/ui/sliding-tab-list';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { SessionManager } from '@/features/chat/session/session-manager';
@@ -270,12 +271,13 @@ export function ChatTerminalDock({ conversationId }: { conversationId: string })
         }}
       />
       <header className="flex h-11 shrink-0 items-center gap-1 px-3">
-        <div ref={tabListRef} className="flex min-w-0 items-center gap-1 overflow-x-auto" role="tablist" aria-label={m.title}>
+        <SlidingTabList ref={tabListRef} className="flex min-w-0 items-center gap-1 overflow-x-auto" role="tablist" aria-label={m.title} indicatorClassName="rounded-lg bg-fg/5">
           {tabs.map((tab, index) => {
             const active = tab.key === terminalKey;
             return (
               <div
                 key={tab.key}
+                data-sliding-active={active}
                 className={active
                   ? 'flex h-8 shrink-0 items-center rounded-lg bg-fg/5 text-fg'
                   : 'flex h-8 shrink-0 items-center rounded-lg text-fg-muted hover:bg-fg/5 hover:text-fg'}
@@ -302,7 +304,7 @@ export function ChatTerminalDock({ conversationId }: { conversationId: string })
               </div>
             );
           })}
-        </div>
+        </SlidingTabList>
         <button
           type="button"
           className="shrink-0 rounded p-1.5 text-fg-muted hover:bg-fg/5 hover:text-fg disabled:opacity-40"

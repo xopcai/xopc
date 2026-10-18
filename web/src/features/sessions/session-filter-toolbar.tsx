@@ -4,6 +4,7 @@ import { ArrowLeft, Check, ChevronRight, MoreHorizontal, Search, Trash2, X } fro
 import { useId, useLayoutEffect, useRef, useState } from 'react';
 import useSWR from 'swr';
 
+import { SlidingTabList } from '@/components/ui/sliding-tab-list';
 import { SelectOptionList, type PopoverSelectOption } from '@/components/ui/popover-select';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { MessageBundle } from '@/i18n/messages';
@@ -143,9 +144,9 @@ export function SessionFilterToolbar({ filters, onChange, search, onSearch, labe
             </div> : null}
             <div key={page} className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain p-2" data-session-filter-scroll>
               {page === 'home' ? <>
-                <div className="mb-2 flex gap-1 rounded-md bg-surface-base p-1" role="group" aria-label={labels.filters}>
+                <SlidingTabList className="mb-2 flex gap-1 rounded-md bg-surface-base p-1" role="group" aria-label={labels.filters} indicatorClassName="rounded-md bg-surface-active">
                   {(['', 'manual', 'automatic'] as const).map((activity) => <button key={activity} type="button" data-page-autofocus={activity === '' ? '' : undefined} className={cn(quietButton, 'min-w-0 flex-1 px-1', !custom && filters.activity === activity && 'bg-surface-active text-fg')} aria-pressed={!custom && filters.activity === activity} onClick={() => { onChange({ ...DEFAULT_SESSION_FILTERS, details: filters.details, activity }); setOpen(false); }}>{activity ? labels[activity] : labels.all}</button>)}
-                </div>
+                </SlidingTabList>
                 <FilterRow label={labels.sourcesLabel} summary={sourceSummary} onClick={() => go('sources')} />
                 <FilterRow label={labels.project} summary={projectSummary || labels.allProjects} onClick={() => go('project')} />
                 <FilterRow label={labels.time} summary={timeSummary} onClick={() => go('time')} />

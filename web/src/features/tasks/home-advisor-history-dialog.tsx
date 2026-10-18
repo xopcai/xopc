@@ -4,6 +4,7 @@ import { ChevronDown, Clock3, ExternalLink, History, RefreshCw, X } from 'lucide
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+import { SlidingTabList } from '@/components/ui/sliding-tab-list';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { fetchHomeAdvisorHistory } from '@/features/tasks/home-api';
@@ -141,7 +142,7 @@ export function HomeAdvisorHistoryDialog({
           </div>
 
           <div className="shrink-0 border-b border-edge-subtle px-5 py-3">
-            <div className="inline-flex rounded-lg bg-surface-inset p-1" role="group" aria-label={copy.advisorHistoryFilterLabel}>
+            <SlidingTabList className="inline-flex rounded-lg bg-surface-inset p-1" role="group" aria-label={copy.advisorHistoryFilterLabel} indicatorClassName="rounded-md bg-surface-panel shadow-surface">
               {([
                 ['all', copy.advisorHistoryFilterAll],
                 ['adopted', copy.advisorHistoryFilterAdopted],
@@ -157,7 +158,7 @@ export function HomeAdvisorHistoryDialog({
                   {label}
                 </button>
               ))}
-            </div>
+            </SlidingTabList>
           </div>
 
           <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">

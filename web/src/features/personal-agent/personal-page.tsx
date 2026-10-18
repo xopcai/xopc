@@ -1,3 +1,4 @@
+import { SlidingTabList } from '@/components/ui/sliding-tab-list';
 import { PersonalProactivitySetting } from './personal-proactivity-setting';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import * as Popover from '@radix-ui/react-popover';
@@ -448,17 +449,17 @@ export function PersonalPage() {
               </section>}
               <section>
                 <h3 className="mb-3 text-sm font-medium text-fg">{zh ? '语气' : 'Tone'}</h3>
-                <div className="grid grid-cols-3 gap-2">
+                <SlidingTabList className="grid grid-cols-3 gap-2" role="group" aria-label={zh ? "语气" : "Tone"} indicatorClassName="rounded-xl bg-accent/10 ring-1 ring-accent/40">
                   {STYLE_OPTIONS.map(option => <button key={option.id} type="button" onClick={() => { setSelectedStyle(option.id); void queueProfileUpdate({ preferences: { warmth: option.warmth } }); }} aria-pressed={selectedStyle === option.id} className={`min-h-10 rounded-xl px-2 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${selectedStyle === option.id ? 'bg-accent/10 font-medium text-fg ring-1 ring-accent/40' : 'bg-surface-panel text-fg-muted hover:bg-surface-hover'}`}>{zh ? option.zh : option.en}</button>)}
-                </div>
+                </SlidingTabList>
               </section>
               <section>
                 <h3 className="mb-3 text-sm font-medium text-fg">{zh ? '棘手时' : 'When things get tricky'}</h3>
-                <div className="flex flex-wrap gap-2">{([
+                <SlidingTabList className="flex flex-wrap gap-2" role="group" aria-label={zh ? "棘手时" : "When things get tricky"} indicatorClassName="rounded-full bg-accent/10 ring-1 ring-accent/40">{([
                   ['listen', zh ? '先听' : 'Listen'],
                   ['untangle', zh ? '理清' : 'Untangle'],
                   ['solutions', zh ? '给办法' : 'Suggest'],
-                ] as const).map(([value, label]) => <button key={value} type="button" aria-pressed={supportMode === value} onClick={() => { setSupportMode(value); void queueProfileUpdate({ preferences: { supportMode: value } }); }} className={`min-h-9 rounded-full px-3 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${supportMode === value ? 'bg-accent/10 text-fg ring-1 ring-accent/40' : 'bg-surface-panel text-fg-muted hover:bg-surface-hover'}`}>{label}</button>)}</div>
+                ] as const).map(([value, label]) => <button key={value} type="button" aria-pressed={supportMode === value} onClick={() => { setSupportMode(value); void queueProfileUpdate({ preferences: { supportMode: value } }); }} className={`min-h-9 rounded-full px-3 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${supportMode === value ? 'bg-accent/10 text-fg ring-1 ring-accent/40' : 'bg-surface-panel text-fg-muted hover:bg-surface-hover'}`}>{label}</button>)}</SlidingTabList>
               </section>
               <div className="grid grid-cols-2 gap-3">
                 <div><p className="mb-2 text-sm font-medium text-fg">{zh ? '回答长度' : 'Length'}</p><PopoverSelect value={detailLevel ?? 'balanced'} options={[

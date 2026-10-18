@@ -29,6 +29,7 @@ import {
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import useSWR from 'swr';
 
+import { SlidingTabList } from '@/components/ui/sliding-tab-list';
 import { Button } from '@/components/ui/button';
 import { MarkdownView } from '@/components/markdown/markdown-view';
 import { RefreshButton } from '@/components/ui/refresh-button';
@@ -1225,7 +1226,7 @@ export function AutomationsWorkspace({
                         className="z-[90] w-[min(22rem,calc(100vw-2rem))] rounded-xl border border-edge bg-surface-overlay p-3 shadow-popover outline-none"
                       >
                         <div className="text-xs font-medium text-fg-muted">{labels.filters.status}</div>
-                        <div className="mt-2 flex flex-wrap gap-1" role="group" aria-label={labels.filters.status}>
+                        <SlidingTabList className="mt-2 flex flex-wrap gap-1" role="group" aria-label={labels.filters.status} indicatorClassName="rounded-md bg-surface-active">
                           {([
                             { id: 'all' as const, label: labels.filters.all },
                             { id: 'active' as const, label: labels.filters.active },
@@ -1246,10 +1247,10 @@ export function AutomationsWorkspace({
                               {item.label}
                             </button>
                           ))}
-                        </div>
+                        </SlidingTabList>
                         <div className="mt-3 border-t border-edge-subtle pt-3">
                           <div className="text-xs font-medium text-fg-muted">{labels.filters.executor}</div>
-                          <div className="mt-2 flex flex-wrap gap-1" role="group" aria-label={labels.filters.executor}>
+                          <SlidingTabList className="mt-2 flex flex-wrap gap-1" role="group" aria-label={labels.filters.executor} indicatorClassName="rounded-md border border-edge bg-surface-active">
                             {([
                               { id: 'all' as const, label: labels.filters.allSources, icon: Zap },
                               { id: 'agent' as const, label: labels.sources.agent, icon: Sparkles },
@@ -1272,7 +1273,7 @@ export function AutomationsWorkspace({
                                 <span className="text-fg-subtle">{sourceCounts[item.id]}</span>
                               </button>
                             ))}
-                          </div>
+                          </SlidingTabList>
                         </div>
                         {appliedFilterCount > 0 ? (
                           <div className="mt-3 flex justify-end border-t border-edge-subtle pt-3">
@@ -1287,7 +1288,7 @@ export function AutomationsWorkspace({
                 </div>
                 <div className="mt-3 flex items-center justify-between gap-3">
                   <span className="text-xs font-medium text-fg-muted">{labels.filters.ownership}</span>
-                  <div className="flex rounded-lg bg-surface-panel p-0.5" role="group" aria-label={labels.filters.ownership}>
+                  <SlidingTabList className="flex rounded-lg bg-surface-panel p-0.5" role="group" aria-label={labels.filters.ownership} indicatorClassName="rounded-md bg-surface-base shadow-sm">
                     <button
                       type="button"
                       className={cn('rounded-md px-2.5 py-1.5 text-xs font-medium text-fg-muted hover:text-fg', ownership === 'user' && 'bg-surface-base text-fg shadow-sm')}
@@ -1304,7 +1305,7 @@ export function AutomationsWorkspace({
                     >
                       {labels.system.title} · {systemAutomations.length}
                     </button>
-                  </div>
+                  </SlidingTabList>
                 </div>
                 {unreadRuns.length > 0 && ownership === 'user' ? (
                   <div className="mt-2 flex items-center justify-between gap-2 rounded-md bg-accent/8 px-2.5 py-1.5 text-xs text-accent-fg">
@@ -1894,7 +1895,7 @@ function AutomationActivityView({
           <p className="mt-1 text-sm leading-6 text-fg-muted">{labels.dashboard.activityDescription}</p>
         </div>
         <div className="flex items-center gap-2">
-          <div className="flex rounded-lg bg-surface-panel p-0.5" role="group" aria-label={labels.filters.ownership}>
+          <SlidingTabList className="flex rounded-lg bg-surface-panel p-0.5" role="group" aria-label={labels.filters.ownership} indicatorClassName="rounded-md bg-surface-base shadow-sm">
             <button
               type="button"
               className={cn('rounded-md px-2.5 py-1.5 text-xs font-medium text-fg-muted hover:text-fg', ownership === 'user' && 'bg-surface-base text-fg shadow-sm')}
@@ -1911,7 +1912,7 @@ function AutomationActivityView({
             >
               {labels.system.title}
             </button>
-          </div>
+          </SlidingTabList>
           <RefreshButton className="size-9 shrink-0 p-0" loading={loading} label={labels.refresh} onClick={onRefresh} />
         </div>
       </div>
