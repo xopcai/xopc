@@ -92,9 +92,12 @@ const PREVIOUS_RESULT_DELIVERY_RULE = 'For image generation, find a specialist w
 const PREVIOUS_ROUTED_RESULT_RULE = 'For image generation, find a specialist with image_generate. For user-facing files, require the specialist to publish completed files with publish_artifacts (image_generate already publishes its images). Put expected deliverables, input artifact references, and acceptance requirements in the Task brief. Once creation is confirmed, finish your turn without repeating the earlier acknowledgement; do not poll or wait for the worker. Published results are delivered automatically to this chat. Never recreate an artifact just to deliver it, and do not repeat its attachments in a later summary. For edits, include the selected previous artifact URI and requested changes in the new brief.';
 const RESULT_DELIVERY_RULE = 'For images and user-facing files, submit a Task describing the required outputs and publication expectations. Include input artifact references and acceptance criteria; for edits include the previous artifact URI and requested changes. Published results return automatically to this chat. Finish after confirmed submission without polling or waiting. Never regenerate an artifact merely to deliver it or repeat its attachments in a later summary.';
 
+const PREVIOUS_PERSONAL_LANGUAGE_RULE = 'You are the user’s personal AI: capable, clear, attentive, and responsive. Use the ongoing conversation language and style until the user explicitly changes or revokes them; a question in another language is not a preference change. Let the user’s stated preferences and current situation shape how you speak; do not impose a cute or affectionate persona.';
+const PERSONAL_LANGUAGE_RULE = 'You are the user’s personal AI: capable, clear, attentive, and responsive. Use the ongoing conversation language and style until the user explicitly changes or revokes them; a question in another language is not a preference change while that preference is active. After revocation, discard the revoked preference and its earlier versions; the revocation message does not set a new language. With no active preference, follow the current user request language. Let the user’s stated preferences and current situation shape how you speak; do not impose a cute or affectionate persona.';
+
 export function personalInstructions(preferences: PersonalPreferences): string {
   const rules = [
-    'You are the user’s personal AI: capable, clear, attentive, and responsive. Match the user’s language. Let the user’s stated preferences and current situation shape how you speak; do not impose a cute or affectionate persona.',
+    PERSONAL_LANGUAGE_RULE,
     ...DELEGATION_RULES,
     TASK_BRIEF_RULE,
     TASK_CONTROL_RULE,
@@ -125,6 +128,33 @@ export function personalInstructions(preferences: PersonalPreferences): string {
   return rules.join('\n');
 }
 
+/** Project only complete product-owned rules; custom prose and stored instructions stay intact. */
+export function projectPersonalInstructions(instructions: string, toolNames: readonly string[]): string {
+  if (!instructions.startsWith('You are the user’s personal AI:')
+    || !instructions.includes(DELEGATION_RULES[0]) || !instructions.includes(USER_NAME_RULE)
+    || !instructions.includes(PERSONAL_IDENTITY_CONTINUITY_RULE)) return instructions;
+  const tools = new Set(toolNames.map(name => name.trim().toLowerCase()));
+  const groups: Array<{ requires: string[]; rules: string[] }> = [
+    { requires: ['personal_task'], rules: [...DELEGATION_RULES, TASK_BRIEF_RULE, TASK_CONTROL_RULE,
+      TOOL_BOUNDARY_RULE, LARGE_READ_RULE, EXPLICIT_DELEGATION_RULE, RESULT_DELIVERY_RULE] },
+    { requires: ['personal_result'], rules: [LOCAL_READ_RULE] },
+    { requires: ['personal_request', 'personal_capability'], rules: [CONNECTED_APP_RULE, READ_AUTONOMY_RULE] },
+    { requires: ['personal_capability'], rules: [PERSONAL_RELIABILITY_RULES[0]] },
+    { requires: ['personal_preference'], rules: [PERSONAL_RELIABILITY_RULES[2]] },
+    { requires: ['personal_attention'], rules: [PERSONAL_ATTENTION_RULE, PERSONAL_ATTENTION_VERIFICATION_RULE, PERSONAL_GROWTH_RULE] },
+  ];
+  let projected = instructions;
+  for (const group of groups) {
+    if (group.requires.every(tool => tools.has(tool))) continue;
+    for (const rule of group.rules) projected = removeGeneratedBlock(projected, rule);
+  }
+  if (!tools.has('personal_preference')) projected = projected.replace(
+    PERSONAL_IDENTITY_CONTINUITY_RULE,
+    'Follow explicit language and style preferences at their stated scope. Keep conversation-only preferences here; a single-turn exception does not erase an ongoing preference. Never claim a lasting preference was saved without an available tool confirming the write. Do not infer lasting traits from a passing mood or fabricate human experience.',
+  );
+  return projected;
+}
+
 const PREVIOUS_PERSONAL_ATTENTION_RULE = 'Use personal_attention to persist explicitly requested follow-up, inspect existing attention, or pause/end/resume it when the user asks. A saved topic is not an action authorization or a delivery guarantee: checks require a running Gateway and enabled policies. Do not duplicate an existing scheduled automation, promise an exact reminder for a vague date, or create attention from your own suggestions. For feedback on an identifiable proactive message, respect the smallest stated scope; silence is not rejection.';
 
 const PERSONAL_ATTENTION_RULE = 'Use personal_attention to save explicit requests to check again later and proactively tell the user about useful developments, including requests phrased without the word follow-up. The running Gateway checks saved attention automatically while the user is away and can post in this chat; do not ask the user to return or create a separate scheduler. Prefer nextCheckLocal in the configured timezone; for a vague tomorrow afternoon, use 15:00 and state that check time. A check is not a guaranteed notification or action authorization. Only claim follow-up saved after a successful tool result, and only claim memory written after a successful write; user_context_read is read-only. If a tool fails, explain the actual failure without inventing missing product capabilities. When there is no useful development, stay silent rather than posting no progress. Do not duplicate an existing scheduled automation or create attention from your own suggestions. For feedback, respect the smallest stated scope; silence is not rejection.';
@@ -149,6 +179,7 @@ function removeGeneratedBlock(instructions: string, block: string): string {
 
 /** Refresh known generated rules without replacing custom instructions. */
 export function upgradePersonalInstructions(instructions: string, legacyName?: string): string {
+  instructions = instructions.split('\n').map(line => line === PREVIOUS_PERSONAL_LANGUAGE_RULE ? PERSONAL_LANGUAGE_RULE : line).join('\n');
   const oldRule = [[PREVIOUS_ROUTER_SUBMISSION_RULE, ...PREVIOUS_FAST_DELEGATION_RULES.slice(1)].join('\n'), [PREVIOUS_ASYNC_DELEGATION_RULE, ...PREVIOUS_FAST_DELEGATION_RULES.slice(1)].join('\n'), [PREVIOUS_STRUCTURED_DELEGATION_RULE, ...PREVIOUS_FAST_DELEGATION_RULES.slice(1)].join('\n'), [PREVIOUS_SNAPSHOT_DELEGATION_RULE, ...PREVIOUS_FAST_DELEGATION_RULES.slice(1)].join('\n'), PREVIOUS_FAST_DELEGATION_RULES.join('\n'), PREVIOUS_MAIN_DELEGATION_RULES, PRIOR_DELEGATION_RULES, PREVIOUS_DELEGATION_RULES, LEGACY_DELEGATION_RULE]
     .find((rule) => instructions.includes(rule));
   const legacyNameRule = legacyName === undefined ? undefined

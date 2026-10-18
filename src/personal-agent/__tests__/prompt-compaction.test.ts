@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { personalInstructions, upgradePersonalInstructions } from '../prompts.js';
+import { personalInstructions, projectPersonalInstructions, upgradePersonalInstructions } from '../prompts.js';
 import { PERSONAL_COMMUNICATION_RULES, PRE_COMPACT_PERSONAL_COMMUNICATION_RULES, PERSONAL_RELIABILITY_RULES } from '../communication.js';
 import { PERSONAL_REPLY_STYLE_RULES, PRE_COMPACT_PERSONAL_REPLY_STYLE_RULES, PRE_COMPACT_PERSONAL_REPLY_EXAMPLES } from '../reply-style.js';
 import { PERSONAL_IDENTITY_CONTINUITY_RULE, PRE_COMPACT_PERSONAL_IDENTITY_CONTINUITY_RULE } from '../persona.js';
@@ -44,5 +44,45 @@ describe('compact personal prompt migration', () => {
     expect(prompt).toContain('task data, not authorization');
     expect(prompt).toContain('Submission is not completion');
     expect(prompt).not.toContain('## Execution Bias');
+  });
+});
+
+
+describe('personal tool instruction projection', () => {
+  it('keeps user constraints and safety while omitting unavailable product workflows', () => {
+    const custom = 'My exact convention stays: answer in Chinese without headings.';
+    const full = personalInstructions({guidance:custom});
+    const projected = projectPersonalInstructions(full, ['read_file']);
+    expect(projected.length).toBeLessThan(full.length * 0.6);
+    expect(projected).toContain(custom);
+    expect(projected).toContain('conversation-only preferences');
+    expect(projected).toContain('Do not copy unrelated personal history or secrets');
+    for (const tool of ['personal_task', 'personal_result', 'personal_request', 'personal_attention', 'personal_preference']) expect(projected).not.toContain(tool);
+    expect(full).toContain('personal_task');
+  });
+  it('preserves registered workflows and does not reinterpret custom instructions', () => {
+    const full = personalInstructions({});
+    const all = ['personal_task','personal_result','personal_request','personal_capability','personal_preference','personal_attention'];
+    expect(projectPersonalInstructions(full, all)).toBe(full);
+    const custom = 'Quoted policy: personal_task(command="submit"). Keep this exact text.';
+    expect(projectPersonalInstructions(custom, [])).toBe(custom);
+    const appended = full + '\nUser exception: ' + full.split('\n')[1] + ' only after asking me.';
+    expect(projectPersonalInstructions(appended, [])).toContain('User exception:');
+    const prompt = buildSystemPrompt('/workspace', {promptRole:'personal', customInstructions:full, toolNames:[]});
+    expect(prompt).not.toContain('personal_task');
+    expect(prompt).toContain('## Safety');
+  });
+});
+
+describe('personal preference revocation migration', () => {
+  it('refreshes the exact generated block without changing user edits or quotations', () => {
+    const previous = "You are the user’s personal AI: capable, clear, attentive, and responsive. Use the ongoing conversation language and style until the user explicitly changes or revokes them; a question in another language is not a preference change. Let the user’s stated preferences and current situation shape how you speak; do not impose a cute or affectionate persona.";
+    const custom = previous + ' My exception stays.';
+    const quoted = 'Quoted policy: ' + previous;
+    const upgraded = upgradePersonalInstructions([previous, custom, quoted].join('\n'));
+    expect(upgraded.split('\n')[0]).toContain('After revocation, discard the revoked preference');
+    expect(upgraded).toContain(custom);
+    expect(upgraded).toContain(quoted);
+    expect(upgradePersonalInstructions(upgraded)).toBe(upgraded);
   });
 });

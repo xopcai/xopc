@@ -13,6 +13,16 @@ describe('loop guard', () => {
   it('compares complete arguments and output instead of a shared prefix', () => {
     expect(detectToolLoops([call('a', 'x'.repeat(500) + 'a'), call('a', 'x'.repeat(500) + 'b')]).injection).toBeNull();
   });
+  it('ignores receipt paths and timing but preserves substantive output', () => {
+    expect(detectToolLoops([call('a', 'pass\nℹ duration_ms 12.5\nLog: /tmp/one.log'),
+      call('a', 'pass\nℹ duration_ms 31.7\nLog: /tmp/two.log')]).injection).toContain('2 identical');
+    expect(detectToolLoops([call('a', 'pass\nLog: /tmp/one.log'), call('a', 'fail\nLog: /tmp/two.log')]).injection).toBeNull();
+  });
+  it('detects a stalled two-call cycle without treating an edit as a duplicate', () => {
+    expect(detectToolLoops([call('a'), {name:'review_workspace',params:{},revision:'a'},
+      call('a'), {name:'review_workspace',params:{},revision:'a'}]).injection).toContain('repeated cycle');
+    expect(detectToolLoops([call('a'), call('b')]).injection).toBeNull();
+  });
   it('warns about a repeated three-call cycle', () => {
     expect(detectToolLoops([call('a'), call('b'), call('c'), call('a'), call('b'), call('c')]).injection).toContain('repeated cycle');
   });
