@@ -46,7 +46,7 @@ extension AssistantState {
             }
             guard !text.isEmpty || !attachments.isEmpty || !references.isEmpty || !receipts.isEmpty
                 || !resultLinks.isEmpty || !unavailableOutputs.isEmpty,
-                  message.role == "user" || message.role == "assistant"
+                message.role == "user" || message.role == "assistant"
             else {
                 return nil
             }
