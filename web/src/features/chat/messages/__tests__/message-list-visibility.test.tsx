@@ -98,7 +98,7 @@ describe('MessageList visible rows', () => {
     render([{ ...empty, taskResultDelivery: { version: 1, deliveryId: 'delivery-1', taskId: 'task-1',
       taskRunId: 'run-1', taskTitle: 'Research result', conversationId: 'visibility-test', originTranscriptId: 'transcript-1',
       assignmentEpoch: 0, resultRevision: 1, outcome, createdAt: 1 } },
-    { ...empty, outcome: { ...outcome, status: 'succeeded' } }]);
+    { ...empty, outcome: { ...outcome, status: 'succeeded' } }], { personal: false });
     expect(rows()).toHaveLength(1);
     expect(container.querySelector('[data-result-follow-up]')?.textContent).toContain('Research result');
   });

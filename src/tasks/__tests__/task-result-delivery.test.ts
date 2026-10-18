@@ -332,8 +332,8 @@ describe('background task result delivery', () => {
       expect(prompt).toContain('gentle');
       expect(prompt).toContain('Draw sunset');
       expect(prompt).toContain(PERSONAL_PERSONA_GUIDANCE);
-      expect(prompt).toContain('Answer the question directly by default without appending a source list.');
-      expect(prompt).toContain('Begin with a natural sentence suited to the exchange');
+      expect(prompt).toContain('Give sources when requested or needed to use the answer');
+      expect(prompt).toContain('Respond naturally to the current exchange');
       expect(prompt).toContain('User: 这些新闻什么时候的？');
       expect(prompt).toContain('User: K.');
       expect(prompt).not.toContain('lead with the answer or the most relevant judgment');

@@ -46,7 +46,7 @@ export const ROOT_HELP_COMMANDS: RootHelpCommand[] = [
   { name: 'models [options]', description: 'List and manage models and model auth' },
   { name: 'providers', description: 'Manage LLM provider credentials (user-friendly hub over `xopc auth`)' },
   { name: 'voice', description: 'Configure text-to-speech (TTS) output' },
-  { name: 'search', description: 'Manage web-search providers (brave / tavily / bing / searxng)' },
+  { name: 'search', description: 'Manage web-search providers (brave / tavily / bing / searxng / deepseek)' },
   { name: 'import [options] [source]', description: 'Select skills, context and projects to import from another AI app' },
   { name: 'skills', description: 'Manage skills' },
   { name: 'connectors', description: 'Browse and install verified connector capabilities from xopc-store' },
