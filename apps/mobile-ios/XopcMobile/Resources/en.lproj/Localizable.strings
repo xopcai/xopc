@@ -952,3 +952,6 @@
 "输入你的回答" = "Type your answer";
 "提交回答" = "Submit answer";
 "正在提交" = "Submitting";
+
+"已转入任务，可在进展中查看" = "Task created. View it in Progress.";
+"查看任务" = "View task";

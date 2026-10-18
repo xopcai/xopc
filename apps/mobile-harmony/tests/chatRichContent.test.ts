@@ -98,7 +98,7 @@ describe('rich live event reducer', () => {
       { id: 'pending', kind: 'text', text: 'checking', presentation: 'pending', active: true },
       { id: 'narration', kind: 'text', text: 'reading files', presentation: 'narration' },
       { id: 'answer', kind: 'text', text: 'answer', presentation: 'answer' }] };
-    expect(chatAnswerText(row)).toBe('checking\nanswer');
+    expect(chatAnswerText(row)).toBe('answer');
     expect(chatAnswerStarted(row)).toBe(true);
     expect(chatActivities(row, 'on').map(block => block.id)).toEqual(['pending', 'narration']);
     expect(chatActivities(row, 'off')).toEqual([]);

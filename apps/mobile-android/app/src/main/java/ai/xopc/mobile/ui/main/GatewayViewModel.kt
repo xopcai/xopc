@@ -2594,7 +2594,13 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
           liveNarration = state.liveMessages.firstOrNull { it.id == id }?.text?.replace(Regex("\\s+"), " ")?.trim()?.take(160),
           liveMessages = state.liveMessages.filterNot { it.id == id }) }
       }
-      "error" -> mutableState.update { it.copy(runError = true) }
+      else {
+        val id = event.messageId ?: "live:${event.runId}"
+        mutableState.update { state -> state.copy(liveMessages = state.liveMessages.map { message ->
+          if (message.id == id) message.copy(answerConfirmed = true) else message
+        }) }
+      }
+      "error" -> mutableState.update { it.copy(runError = true, activeRunId = null, liveNarration = null) }
     }
   }
 
