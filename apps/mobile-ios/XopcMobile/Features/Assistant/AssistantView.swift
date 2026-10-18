@@ -376,13 +376,14 @@ struct AssistantView<Dock: View>: View {
                             }
                         }
                         if state.isRunActive, state.errorMessage == nil, state.clarification == nil,
-                           !state.messages.contains(where: { $0.role == "assistant" && $0.turnId == state.runID && $0.answerConfirmed && !$0.text.isEmpty }) {
+                           !state.messages.contains(where: { $0.role == "assistant" && $0.turnId == state.runID && $0.answerConfirmed && !$0.text.isEmpty })
+                        {
                             AssistantActivityView(narration: state.executionActivity.last(where: { $0.id.hasPrefix("narration:") })?.title)
                                 .id(state.runID ?? "sending")
-                            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
-                                activityHeight = height
-                                updateReplySpace()
-                            }
+                                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
+                                    activityHeight = height
+                                    updateReplySpace()
+                                }
                         }
                         Color.clear.frame(height: 1)
                             .id("chat-bottom")
