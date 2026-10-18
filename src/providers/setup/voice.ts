@@ -5,6 +5,7 @@ import { voiceSupportsMode } from '@xopcai/realtime-protocol/voice';
 import { listSttProvidersForApi } from '../../voice/stt/list-providers.js';
 import { listTtsProvidersForApi } from '../../voice/tts/list-providers.js';
 import { ConfigSchema, type Config } from '../../config/schema.js';
+import { compareCatalogModels } from '../model-catalog-ranking.js';
 import { getModelCatalogStore } from '../model-catalog-store.js';
 import { selectPlatformVoice } from '../../voice/platform-settings.js';
 import { BAILIAN_PLAN_HOST, BAILIAN_PLAN_PROVIDER, BAILIAN_PLAN_TTS_MODEL, BAILIAN_PLAN_TTS_VOICE,
@@ -37,6 +38,16 @@ export function readSetupVoiceState(provider: string, config: Config): SetupVoic
           recommended: source?.recommended?.[model.kind] === model.id });
       }
     }
+    for (const use of voiceSetupUses) {
+      const candidates = choices[use];
+      const recommendation = use === 'conversation' ? undefined : source?.recommended?.[use === 'speech' ? 'tts' : 'stt'];
+      candidates.sort((left, right) => {
+        const a = source!.models.find(entry => entry.id === left.model)!;
+        const b = source!.models.find(entry => entry.id === right.model)!;
+        return compareCatalogModels(a, b, recommendation);
+      });
+      if (candidates[0]) candidates[0].recommended = true;
+    }
   }
   if (provider !== BAILIAN_PLAN_PROVIDER && provider !== 'xopc-cloud') {
     for (const [use, entries] of [
@@ -65,7 +76,17 @@ export function readSetupVoiceState(provider: string, config: Config): SetupVoic
 export function applySetupVoice(config: Config, assignments: Array<{ use: VoiceSetupUse; model: SetupVoiceModel }>): Config {
   let next = structuredClone(config);
   for (const { use, model } of assignments) {
-    if (model.provider === 'xopc-cloud') next = selectPlatformVoice(next, { mode: use, model: model.model, ...(model.voice ? { voice: model.voice } : {}) });
+    if (model.provider === 'xopc-cloud') {
+      next = selectPlatformVoice(next, { mode: use, model: model.model, ...(model.voice ? { voice: model.voice } : {}) });
+      const streamMode = use === 'speech' ? 'speech.stream' : use === 'transcription' ? 'transcription.stream' : undefined;
+      if (streamMode) {
+        const source = getModelCatalogStore().getSource('xopc-cloud');
+        const stream = source?.models.filter(entry => entry.availability === 'available' && entry.voice?.modes.includes(streamMode)
+          && (use === 'transcription' || entry.voice.voices.some(voice => voiceSupportsMode(voice, streamMode))))
+          .sort((left, right) => compareCatalogModels(left, right, model.model))[0];
+        if (stream) next = selectPlatformVoice(next, { mode: streamMode, model: stream.id });
+      }
+    }
     else if (model.provider === BAILIAN_PLAN_PROVIDER) {
       if (use === 'speech') {
         const current = next.messages?.tts;

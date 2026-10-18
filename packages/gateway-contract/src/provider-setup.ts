@@ -29,5 +29,5 @@ export type ModelSetupPreview = {
     selected: boolean;
     reason?: 'not_supported' | 'interactive_only' | 'no_recommendation';
   }>;
-  taskModels: Partial<Record<'fast' | 'reasoning' | 'coding' | 'review' | 'vision', string>>;
+  taskModels: Partial<Record<'fast' | 'reasoning' | 'coding' | 'review' | 'vision' | 'understanding', string>>;
 };

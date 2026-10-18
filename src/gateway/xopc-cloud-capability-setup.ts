@@ -1,5 +1,6 @@
-import type { VoiceModeCapability } from '@xopcai/realtime-protocol/voice';
+import { voiceSupportsMode, type VoiceModeCapability } from '@xopcai/realtime-protocol/voice';
 
+import { isComputerModel, isDedicatedComputerProfile } from '../computer/model-policy.js';
 import { ConfigSchema, type Config } from '../config/schema.js';
 import { DEFAULT_AGENT_MODEL_REF, type AgentDefaults } from '../agent-config/index.js';
 import { AgentCatalogRepository } from '../agent-catalog/repository.js';
@@ -32,7 +33,7 @@ export type ApplyXopcCloudCapabilitySetupResult =
   | { configured: false; error: string; missing?: CloudCapability[] };
 
 function supportsCapability(model: CatalogModel, capability: CloudCapability): boolean {
-  if (model.availability !== 'available') return false;
+  if (model.availability !== 'available' || isDedicatedComputerProfile(model.computerUse?.profile)) return false;
   if (capability === 'chat') {
     return model.kind === 'language'
       && (model.operations.includes('chat.completions') || model.operations.includes('responses'));
@@ -73,12 +74,12 @@ function recommendedVoiceModel(
   return source.models
     .filter((model) => model.availability === 'available'
       && model.voice?.modes.includes(mode)
-      && (mode === 'transcription.stream' || Boolean(model.voice.voices.length)))
+      && (mode === 'transcription.stream' || model.voice.voices.some(voice => voiceSupportsMode(voice, mode))))
     .sort((left, right) => compareCatalogModels(left, right, recommendation))[0];
 }
 
-function selectedVoice(model: CatalogModel): string {
-  const voices = model.voice?.voices ?? [];
+function selectedVoice(model: CatalogModel, mode: VoiceModeCapability): string {
+  const voices = model.voice?.voices.filter(voice => voiceSupportsMode(voice, mode)) ?? [];
   return voices.find((voice) => voice.id === 'Cherry')?.id
     ?? voices.find((voice) => voice.id === model.voice?.defaultVoice)?.id
     ?? voices[0].id;
@@ -114,10 +115,34 @@ export function selectXopcCloudCapabilities(
       tts: tts.id,
       ttsVoice: tts.tts.defaultVoice,
       ...(realtimeStt ? { realtimeStt: realtimeStt.id } : {}),
-      ...(realtimeTts ? { realtimeTts: { model: realtimeTts.id, voice: selectedVoice(realtimeTts) } } : {}),
-      ...(realtimeOmni ? { realtimeOmni: { model: realtimeOmni.id, voice: selectedVoice(realtimeOmni) } } : {}),
+      ...(realtimeTts ? { realtimeTts: { model: realtimeTts.id, voice: selectedVoice(realtimeTts, 'speech.stream') } } : {}),
+      ...(realtimeOmni ? { realtimeOmni: { model: realtimeOmni.id, voice: selectedVoice(realtimeOmni, 'conversation') } } : {}),
     },
   };
+}
+
+/** Fill model uses without enabling desktop control or replacing explicit routes. */
+export function completeXopcCloudModelRoutes(models: AgentDefaults['models'], source: CatalogSource): AgentDefaults['models'] {
+  const next = structuredClone(models);
+  const chat = recommendedModel(source, 'chat');
+  const vision = recommendedModel(source, 'vision');
+  const reasoning = source.models.filter(model => supportsCapability(model, 'chat') && model.reasoning)
+    .sort((left, right) => compareCatalogModels(left, right, 'advanced'))[0] ?? chat;
+  const route = (model: CatalogModel) => ({ primary: `xopc-cloud/${model.id}`, fallbacks: [] });
+  if (chat) {
+    next.background ??= route(chat);
+    next.intents.fast ??= route(chat);
+    next.intents.understanding ??= structuredClone(next.background);
+  }
+  if (reasoning) {
+    for (const intent of ['reasoning', 'coding', 'review'] as const) next.intents[intent] ??= route(reasoning);
+  }
+  if (vision) next.intents.vision ??= route(vision);
+  const computer = source.models.filter(model => model.availability === 'available'
+    && isComputerModel({ ...model, provider: source.providerId, api: source.api }))
+    .sort((left, right) => compareCatalogModels(left, right))[0];
+  if (computer) next.computerUse ??= route(computer);
+  return next;
 }
 
 /** Build one atomic config update for the managed XOPC Cloud chat and media capabilities. */
@@ -140,7 +165,7 @@ export function prepareXopcCloudCapabilitySetup(
   const defaultsUpdate = prepareUpdateGlobalDefaults({
     defaults: {
       ...currentDefaults,
-      models: {
+      models: completeXopcCloudModelRoutes({
         ...currentModels,
         chat: { primary: `xopc-cloud/${selection.chat}`, fallbacks: [] },
         imageUnderstanding: {
@@ -153,7 +178,7 @@ export function prepareXopcCloudCapabilitySetup(
           primary: `xopc-cloud/${selection.imageGeneration}`,
           fallbacks: currentModels.imageGeneration?.fallbacks ?? [],
         },
-      },
+      }, source),
     },
   });
   if (defaultsUpdate.ok === false) {
@@ -232,7 +257,7 @@ export function prepareXopcCloudCapabilitySetup(
 export async function applyXopcCloudCapabilitySetup(service: {
   currentConfig: Config;
   saveConfig(config: Config): Promise<{ saved: boolean; error?: string }>;
-}): Promise<ApplyXopcCloudCapabilitySetupResult> {
+}, options: { enableAvailable?: boolean } = {}): Promise<ApplyXopcCloudCapabilitySetupResult> {
   const source = getModelCatalogStore().getSource('xopc-cloud');
   if (!source) {
     return { configured: false, error: 'XOPC Cloud model catalog is unavailable' };
@@ -261,38 +286,44 @@ export async function applyXopcCloudCapabilitySetup(service: {
   if (imageGeneration && !currentDefaults.models.imageGeneration) {
     nextDefaults.models.imageGeneration = { primary: `xopc-cloud/${imageGeneration.id}`, fallbacks: [], autoProviderFallback: false };
   }
-  if (stt && !nextConfig.tools?.media?.audio) {
+  if (stt && (options.enableAvailable || !nextConfig.tools?.media?.audio)) {
     nextConfig.tools ??= {};
     nextConfig.tools.media ??= {};
+    const current = nextConfig.tools.media.audio;
     nextConfig.tools.media.audio = {
+      ...current,
       enabled: true,
       provider: 'xopc-cloud',
       fallback: { enabled: false, order: ['xopc-cloud'] },
-      providers: { 'xopc-cloud': { model: stt.id } },
+      models: [{ provider: 'xopc-cloud', model: stt.id, capabilities: ['audio'] }],
+      providers: { ...current?.providers, 'xopc-cloud': { ...current?.providers?.['xopc-cloud'], model: stt.id } },
     };
   }
-  if (tts && tts.tts?.defaultVoice && !nextConfig.messages?.tts) {
+  if (tts && tts.tts?.defaultVoice && (options.enableAvailable || !nextConfig.messages?.tts)) {
     nextConfig.messages ??= {};
+    const current = nextConfig.messages.tts;
     nextConfig.messages.tts = {
+      ...current,
       enabled: true,
       provider: 'xopc-cloud',
-      trigger: 'off',
+      trigger: current?.trigger ?? 'off',
+      fallback: { enabled: false, order: [] },
       maxTextLength: 512,
       timeoutMs: 60_000,
-      providers: { 'xopc-cloud': { model: tts.id, voice: tts.tts.defaultVoice } },
+      providers: { ...current?.providers, 'xopc-cloud': { ...current?.providers?.['xopc-cloud'], model: tts.id, voice: tts.tts.defaultVoice } },
     };
   }
   // A missing voice section is a fresh setup; an existing disabled section is a user choice.
-  if (!nextConfig.voice && (realtimeStt || realtimeTts || realtimeOmni)) {
-    nextConfig.voice = ConfigSchema.parse({ voice: { realtime: { enabled: true } } }).voice;
+  if ((options.enableAvailable || !nextConfig.voice) && (realtimeStt || realtimeTts || realtimeOmni)) {
+    nextConfig.voice = ConfigSchema.parse({ voice: { ...nextConfig.voice, realtime: { ...nextConfig.voice?.realtime, enabled: true } } }).voice;
   }
   const realtime = nextConfig.voice?.realtime;
   if (realtime?.enabled) {
     // Existing voice settings are user choices; fill only a missing mode on an enabled setup.
-    if (realtimeStt && !realtime.stt) realtime.stt = { provider: 'xopc-cloud', model: realtimeStt.id };
-    if (realtimeTts && !realtime.tts) realtime.tts = { provider: 'xopc-cloud', model: realtimeTts.id, voice: selectedVoice(realtimeTts) };
-    if (realtimeOmni && !realtime.omni) realtime.omni = {
-      provider: 'xopc-cloud', model: realtimeOmni.id, voice: selectedVoice(realtimeOmni),
+    if (realtimeStt && (options.enableAvailable || !realtime.stt)) realtime.stt = { provider: 'xopc-cloud', model: realtimeStt.id };
+    if (realtimeTts && (options.enableAvailable || !realtime.tts)) realtime.tts = { provider: 'xopc-cloud', model: realtimeTts.id, voice: selectedVoice(realtimeTts, 'speech.stream') };
+    if (realtimeOmni && (options.enableAvailable || !realtime.omni)) realtime.omni = {
+      provider: 'xopc-cloud', model: realtimeOmni.id, voice: selectedVoice(realtimeOmni, 'conversation'),
       instructions: 'Keep replies conversational and concise. You cannot execute tools.',
     };
   }
@@ -300,6 +331,7 @@ export async function applyXopcCloudCapabilitySetup(service: {
   if (!chat && !vision && !imageGeneration && !stt && !tts && !realtimeStt && !realtimeTts && !realtimeOmni) {
     return { configured: false, error: 'XOPC Cloud published no usable models', missing: selection.missing };
   }
+  nextDefaults.models = completeXopcCloudModelRoutes(nextDefaults.models, source);
   const defaultsUpdate = prepareUpdateGlobalDefaults({ defaults: nextDefaults });
   if (defaultsUpdate.ok === false) return { configured: false, error: defaultsUpdate.error };
   const saved = await service.saveConfig(nextConfig);
@@ -317,8 +349,8 @@ export async function applyXopcCloudCapabilitySetup(service: {
       ...(stt ? { stt: stt.id } : {}),
       ...(tts ? { tts: tts.id, ttsVoice: tts.tts?.defaultVoice } : {}),
       ...(realtimeStt ? { realtimeStt: realtimeStt.id } : {}),
-      ...(realtimeTts ? { realtimeTts: { model: realtimeTts.id, voice: selectedVoice(realtimeTts) } } : {}),
-      ...(realtimeOmni ? { realtimeOmni: { model: realtimeOmni.id, voice: selectedVoice(realtimeOmni) } } : {}),
+      ...(realtimeTts ? { realtimeTts: { model: realtimeTts.id, voice: selectedVoice(realtimeTts, 'speech.stream') } } : {}),
+      ...(realtimeOmni ? { realtimeOmni: { model: realtimeOmni.id, voice: selectedVoice(realtimeOmni, 'conversation') } } : {}),
     },
   };
 }

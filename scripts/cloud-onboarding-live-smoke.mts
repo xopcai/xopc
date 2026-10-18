@@ -121,6 +121,23 @@ try {
     assert.ok(response.ok, `${path}: ${response.status}: ${response.ok ? '' : await response.text()}`);
     return response;
   }
+  await check('desktop-onboarding-all-uses-over-authenticated-http', async () => {
+    const { payload: preview } = await (await request('/api/models/setup/xopc-cloud/preview', { mode: 'replace' })).json() as any;
+    const selected = preview.uses.filter((use: any) => use.selected && use.recommended).map((use: any) => use.id);
+    assert.deepEqual([...selected].sort(), ['chat', 'vision', 'image', 'background', 'speech', 'transcription', 'conversation'].sort());
+    await request('/api/models/setup/xopc-cloud/apply', { mode: 'replace', selected, revision: preview.revision });
+    const persisted = ConfigSchema.parse(JSON.parse(readFileSync(configPath, 'utf8')));
+    assert.equal(persisted.tools.media?.audio?.enabled, true);
+    assert.equal(persisted.messages?.tts?.enabled, true);
+    assert.equal(persisted.voice?.realtime.enabled, true);
+    assert.ok(persisted.voice?.realtime.stt && persisted.voice.realtime.tts && persisted.voice.realtime.omni);
+    assert.equal(persisted.computer.enabled, false);
+    assert.equal(persisted.browser.enabled, true);
+    const models = repository.getSettings().defaults.models;
+    for (const intent of ['fast', 'reasoning', 'coding', 'review', 'vision', 'understanding'] as const) assert.ok(models.intents[intent], intent);
+    assert.ok(models.background && models.imageUnderstanding && models.imageGeneration);
+    return { selected, models, computerEnabled: persisted.computer.enabled };
+  });
   await check('authenticated-gateway-voice-readiness', async () => {
     assert.equal((await fetch(origin + '/api/voice/realtime/status')).status, 401);
     const { payload } = await (await request('/api/voice/realtime/status')).json() as any;
@@ -201,6 +218,7 @@ try {
   }
   await check('real-stt-agent-tts-websocket-roundtrip', () => probe('scripts/probe-gateway-voice-e2e.ts', [pcmPath, 'main', '1']));
   await check('real-natural-voice-websocket-roundtrip', () => probe('scripts/probe-gateway-voice-e2e.ts', [pcmPath, 'main', '1', 'natural']));
+  await check('real-react-desktop-onboarding-all-capabilities', () => probe('scripts/onboarding-browser-live.mjs', []));
   await check('real-react-browser-capture-and-playback', () => probe('scripts/voice-browser-live.mjs', [pcmPath, 'main']));
 } catch (error) {
   report.fatalError = error instanceof Error ? error.message : String(error);

@@ -67,7 +67,7 @@ export function previewProviderSetup(snapshot: SetupSnapshot, request: ModelSetu
     backgroundRestrictedModels: [...snapshot.backgroundRestrictedModels ?? []].sort() })).digest('hex');
   return {
     providerId: profile.id, profile, revision, configured, mode: request.mode ?? 'fill',
-    taskModels: { ...(fast ? { fast } : {}), ...(complex ? { reasoning: complex, coding: complex, review: complex } : {}), ...(recommended.vision ? { vision: recommended.vision } : {}) },
+    taskModels: { ...(fast ? { fast } : {}), ...(complex ? { reasoning: complex, coding: complex, review: complex } : {}), ...(recommended.vision ? { vision: recommended.vision } : {}), ...(recommended.background ? { understanding: recommended.background } : {}) },
     uses: [...uses, ...(snapshot.voice ? ['transcription', 'speech', 'conversation'] as const : [])].map(id => {
       const options = (choices[id] ?? []).map(model => ({ id: model.ref, name: model.name }));
       const override = request.overrides?.[id];
@@ -99,12 +99,6 @@ export function applyProviderSetup(snapshot: SetupSnapshot, request: ModelSetupR
     if (!use.recommended) throw new Error(`Choose a model for ${use.id}`);
     if (use.id === 'chat') {
       models.chat = route(use.recommended);
-      for (const [intent, ref] of Object.entries(preview.taskModels)) {
-        const key = intent as keyof typeof preview.taskModels;
-        const existing = models.intents[key];
-        const keep = request.mode !== 'replace' && existing && snapshot.configuredProviders.has(existing.primary.split('/')[0]!);
-        if (ref && !keep && (intent !== 'vision' || preview.uses.some(use => use.id === 'vision' && use.selected))) models.intents[key] = route(ref);
-      }
     } else if (use.id === 'vision') models.imageUnderstanding = route(use.recommended);
     else if (use.id === 'image') models.imageGeneration = { ...models.imageGeneration, ...route(use.recommended), autoProviderFallback: false };
     else if (use.id === 'background') models.background = route(use.recommended);
@@ -114,6 +108,14 @@ export function applyProviderSetup(snapshot: SetupSnapshot, request: ModelSetupR
       if (!model) throw new Error(`No voice binding for ${use.id}`);
       voiceAssignments.push({ use: voiceUse, model });
     }
+  }
+  for (const [intent, ref] of Object.entries(preview.taskModels)) {
+    const key = intent as keyof typeof preview.taskModels;
+    const useId = intent === 'vision' ? 'vision' : intent === 'understanding' ? 'background' : 'chat';
+    if (!preview.uses.some(use => use.id === useId && use.selected)) continue;
+    const existing = models.intents[key];
+    const keep = request.mode !== 'replace' && existing && snapshot.configuredProviders.has(existing.primary.split('/')[0]!);
+    if (ref && !keep) models.intents[key] = route(ref);
   }
   return { defaults: { ...snapshot.defaults, models }, preview, voiceAssignments };
 }
