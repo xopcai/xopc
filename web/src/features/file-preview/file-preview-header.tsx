@@ -1,5 +1,5 @@
 import { Check, Copy, Download, ExternalLink, Eye, FolderOpen, Link2, Loader2, Maximize2, MessageSquarePlus, Minimize2, MoreHorizontal, Paperclip, Pencil, RefreshCw, Save, WrapText, X } from 'lucide-react';
-import { useContext, useEffect, useState, type ReactNode } from 'react';
+import { useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 
 import { WorkspaceTreeControlContext } from '@/features/right-workspace/workspace-context';
 import { APP_CHROME_NO_DRAG_CLASS } from '@/components/shell/app-chrome';
@@ -73,24 +73,28 @@ function HeaderButton({ label, active, disabled, onClick, children }: {
 function PreviewMenuItem({
   icon,
   label,
+  active,
   disabled,
   onClick,
 }: {
   icon: ReactNode;
   label: string;
+  active?: boolean;
   disabled?: boolean;
   onClick: () => void;
 }) {
   return (
     <button
       type="button"
-      role="menuitem"
+      role={active === undefined ? "menuitem" : "menuitemcheckbox"}
+      aria-checked={active}
       className="flex h-9 w-full min-w-0 items-center gap-2.5 rounded-md px-2.5 text-left text-sm text-fg hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-not-allowed disabled:opacity-40"
       disabled={disabled}
       onClick={onClick}
     >
-      <span className="flex size-4 shrink-0 items-center justify-center text-fg-muted">{icon}</span>
+      <span className="flex size-4 shrink-0 items-center justify-center text-fg-muted" aria-hidden>{icon}</span>
       <span className="min-w-0 flex-1 truncate">{label}</span>
+      {active ? <Check className="size-4 shrink-0" aria-hidden /> : null}
     </button>
   );
 }
@@ -110,6 +114,8 @@ export function FilePreviewHeader({
         : m.preview;
   const desktop = isElectron();
   const treeControl = useContext(WorkspaceTreeControlContext);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const hasPreviewControls = controller.plugin.capabilities.some((capability) =>
     ['zoom', 'search', 'rotate', 'pageNavigation'].includes(capability),
@@ -117,11 +123,23 @@ export function FilePreviewHeader({
 
   useEffect(() => {
     if (!moreMenuOpen) return;
+    menuRef.current?.querySelector<HTMLButtonElement>('button:not(:disabled), a')?.focus();
     const handleKeyDown = (event: KeyboardEvent) => {
+      if (['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key) && menuRef.current?.contains(document.activeElement)) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        const items = [...menuRef.current.querySelectorAll<HTMLElement>('button:not(:disabled), a')];
+        const index = items.indexOf(document.activeElement as HTMLElement);
+        const next = event.key === 'Home' ? 0 : event.key === 'End' ? items.length - 1
+          : (index + (event.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length;
+        items[next]?.focus();
+        return;
+      }
       if (event.key !== 'Escape') return;
       event.preventDefault();
       event.stopImmediatePropagation();
       setMoreMenuOpen(false);
+      triggerRef.current?.focus();
     };
     window.addEventListener('keydown', handleKeyDown, true);
     return () => window.removeEventListener('keydown', handleKeyDown, true);
@@ -129,6 +147,7 @@ export function FilePreviewHeader({
 
   const runMenuAction = (action: () => void) => {
     setMoreMenuOpen(false);
+    triggerRef.current?.focus();
     action();
   };
 
@@ -140,35 +159,28 @@ export function FilePreviewHeader({
           {subtitle ? <div className="mt-0.5 flex min-w-0 items-center gap-2 text-xs leading-tight text-fg-muted">{subtitle}</div> : null}
         </div>
         <div className="flex shrink-0 items-center gap-1">
-          {treeControl}
-          {referenceActions[0] ? <HeaderButton label={referenceActions[0].label} disabled={referenceActions[0].disabled} onClick={referenceActions[0].onClick}><Paperclip className="size-4" /></HeaderButton> : null}
-          {onRetrySave ? <HeaderButton label={language === 'zh' ? '重试保存' : 'Retry save'} onClick={onRetrySave}><Save className="size-4" /></HeaderButton> : null}
-          {onRefresh ? <HeaderButton label={language === 'zh' ? '刷新文件' : 'Refresh file'} onClick={onRefresh}><RefreshCw className="size-4" /></HeaderButton> : null}
-          {controller.plugin.capabilities.includes('edit') ? <HeaderButton label={edit?.active ? m.preview : m.edit} active={edit?.active ?? false} disabled={!edit} onClick={edit?.onToggle}>
-            {edit?.active ? <Eye className="size-4" /> : <Pencil className="size-4" />}
-          </HeaderButton> : null}
-          {wordWrap ? <HeaderButton label={m.wordWrap} active={wordWrap.active} onClick={wordWrap.onToggle}><WrapText className="size-4" /></HeaderButton> : null}
-          <HeaderButton label={expanded ? m.collapsePreview : m.expandPreview} active={expanded} disabled={!onToggleExpanded} onClick={onToggleExpanded}>
-            {expanded ? <Minimize2 className="size-4" strokeWidth={1.75} /> : <Maximize2 className="size-4" strokeWidth={1.75} />}
-          </HeaderButton>
-          <HeaderButton label={m.editInNewChat} disabled={!editInNewChat || editInNewChat.disabled || editInNewChat.loading} onClick={editInNewChat?.onClick}>
-            {editInNewChat?.loading ? <Loader2 className="size-4 animate-spin" /> : <MessageSquarePlus className="size-4" />}
-          </HeaderButton>
-          <HeaderButton label={m.shareLink} disabled={!share || share.disabled || share.loading} onClick={share?.onClick}>
-            {share?.loading ? <Loader2 className="size-4 animate-spin" /> : <Link2 className="size-4" />}
-          </HeaderButton>
           <div className="relative shrink-0">
             {moreMenuOpen ? <button type="button" className="fixed inset-0 z-40 cursor-default bg-transparent" aria-hidden tabIndex={-1}
               onPointerDown={(event) => { event.preventDefault(); setMoreMenuOpen(false); }} /> : null}
-            <button type="button"
+            <button ref={triggerRef} type="button"
               className={cn('inline-flex size-9 shrink-0 items-center justify-center rounded-md text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg', interaction.focusRingPanel)}
               title={m.moreActions} aria-label={m.moreActions} aria-haspopup="menu" aria-expanded={moreMenuOpen}
               onClick={() => setMoreMenuOpen((value) => !value)}>
               <MoreHorizontal className="size-4" />
             </button>
             {moreMenuOpen ? (
-              <div role="menu" data-file-preview-menu className="absolute right-0 top-full z-50 mt-1 w-60 rounded-lg border border-edge bg-surface-panel p-1 shadow-popover">
-                {referenceActions.slice(1).map((action) => <PreviewMenuItem key={action.label} icon={<Paperclip className="size-4" />} label={action.label} disabled={action.disabled} onClick={() => runMenuAction(action.onClick)} />)}
+              <div ref={menuRef} role="menu" aria-label={m.moreActions} data-file-preview-menu className="absolute right-0 top-full z-50 mt-1 max-h-[min(32rem,calc(100dvh-8rem))] w-60 max-w-[calc(100vw-2rem)] overflow-y-auto overscroll-contain rounded-lg border border-edge bg-surface-panel p-1 shadow-popover">
+                {treeControl ? <PreviewMenuItem icon={<FolderOpen className="size-4" />} label={treeControl.label} onClick={() => runMenuAction(treeControl.onToggle)} /> : null}
+                {referenceActions.map((action) => <PreviewMenuItem key={action.label} icon={<Paperclip className="size-4" />} label={action.label} disabled={action.disabled} onClick={() => runMenuAction(action.onClick)} />)}
+                {onRetrySave ? <PreviewMenuItem icon={<Save className="size-4" />} label={language === 'zh' ? '重试保存' : 'Retry save'} onClick={() => runMenuAction(onRetrySave)} /> : null}
+                {onRefresh ? <PreviewMenuItem icon={<RefreshCw className="size-4" />} label={language === 'zh' ? '刷新文件' : 'Refresh file'} onClick={() => runMenuAction(onRefresh)} /> : null}
+                {controller.plugin.capabilities.includes('edit') ? <PreviewMenuItem icon={edit?.active ? <Eye className="size-4" /> : <Pencil className="size-4" />} label={edit?.active ? m.preview : m.edit} disabled={!edit} onClick={() => runMenuAction(() => edit?.onToggle())} /> : null}
+                {wordWrap ? <PreviewMenuItem icon={<WrapText className="size-4" />} label={m.wordWrap} active={wordWrap.active} onClick={() => runMenuAction(wordWrap.onToggle)} /> : null}
+                <PreviewMenuItem icon={expanded ? <Minimize2 className="size-4" /> : <Maximize2 className="size-4" />} label={expanded ? m.collapsePreview : m.expandPreview} disabled={!onToggleExpanded} onClick={() => runMenuAction(() => onToggleExpanded?.())} />
+                <div className="my-1 border-t border-edge-subtle dark:border-edge" />
+                <PreviewMenuItem icon={editInNewChat?.loading ? <Loader2 className="size-4 animate-spin" /> : <MessageSquarePlus className="size-4" />} label={m.editInNewChat} disabled={!editInNewChat || editInNewChat.disabled || editInNewChat.loading} onClick={() => runMenuAction(() => editInNewChat?.onClick())} />
+                <PreviewMenuItem icon={share?.loading ? <Loader2 className="size-4 animate-spin" /> : <Link2 className="size-4" />} label={m.shareLink} disabled={!share || share.disabled || share.loading} onClick={() => runMenuAction(() => share?.onClick())} />
+                <div className="my-1 border-t border-edge-subtle dark:border-edge" />
                 {openInBrowser ? (
                   <a href={openInBrowser.href} target="_blank" rel="noopener noreferrer" role="menuitem"
                     className="flex h-9 w-full items-center gap-2.5 rounded-md px-2.5 text-sm text-fg hover:bg-surface-hover"

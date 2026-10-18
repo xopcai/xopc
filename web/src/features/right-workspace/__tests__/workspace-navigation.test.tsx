@@ -37,7 +37,7 @@ it('restores selection with browser back without removing either file', async ()
   await act(async () => root.render(<MemoryRouter initialEntries={['/chat/parent']}><Harness /></MemoryRouter>));
   let a = '';
   await act(async () => { a = workspace.getState().openFile({ path: 'a.md' }); });
-  await act(async () => { workspace.getState().openFile({ path: 'b.md' }); });
+  await act(async () => { workspace.getState().keepFileOpen(a); workspace.getState().openFile({ path: 'b.md' }); });
   await act(async () => container.querySelector('button')!.click());
   expect(workspace.getState().panes.parent.activeId).toBe(a);
   expect(workspace.getState().panes.parent.tabs).toHaveLength(2);
