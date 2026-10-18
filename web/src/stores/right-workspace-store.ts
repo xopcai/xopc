@@ -40,7 +40,7 @@ function read(): Stored {
       if (!p || !Array.isArray(p.tabs)) continue;
       const tabs = p.tabs.filter((t) => t && typeof t.id === 'string' && typeof t.title === 'string'
         && ((t.kind === 'file' && typeof t.path === 'string') || (t.kind === 'sidechat' && typeof t.sideChatId === 'string') || t.kind === 'home' || t.kind === 'files'));
-      panes[scope] = { open: p.open === true, tabs, activeId: tabs.some((t) => t.id === p.activeId) ? p.activeId : null };
+      panes[scope] = { open: p.open === true && tabs.length > 0, tabs, activeId: tabs.some((t) => t.id === p.activeId) ? p.activeId : tabs[0]?.id ?? null };
     }
     return { ...defaults, panes };
   } catch { return defaults; }
@@ -168,9 +168,12 @@ export const useRightWorkspaceStore = create<State>((set, get) => {
           : [...pane.tabs, { id, kind: 'files', title: 'Files', visitedAt: Date.now() }],
       }));
     },
-    setOpen: (open, scope = get().scope) => commit(scope, (p) => ({ ...p, open })),
+    setOpen: (open, scope = get().scope) => {
+      if (open && !get().panes[scope]?.tabs.length) { get().openTools(scope); return; }
+      commit(scope, (p) => ({ ...p, open, activeId: p.activeId ?? p.tabs[0]?.id ?? null }));
+    },
     activate: (id, scope = get().scope) => commit(scope, (p) => ({
-      ...p, open: true, activeId: id && p.tabs.some((t) => t.id === id) ? id : null,
+      ...p, open: Boolean(id && p.tabs.some((t) => t.id === id)), activeId: id && p.tabs.some((t) => t.id === id) ? id : p.activeId,
       tabs: p.tabs.map((t) => t.id === id ? { ...t, visitedAt: Date.now() } : t),
     })),
     openFile: (file, scope = get().scope) => {
@@ -218,7 +221,7 @@ export const useRightWorkspaceStore = create<State>((set, get) => {
       const removed = p.tabs.find((t) => t.id === id);
       const tabs = p.tabs.filter((t) => t.id !== id);
       const next = tabs.find((t) => t.id === removed?.returnTo) ?? [...tabs].sort((a, b) => b.visitedAt - a.visitedAt)[0];
-      return { ...p, tabs, activeId: p.activeId === id ? next?.id ?? null : p.activeId };
+      return { ...p, open: p.open && tabs.length > 0, tabs, activeId: p.activeId === id ? next?.id ?? null : p.activeId };
     }),
     setWidth: (width) => { set({ width }); try { localStorage.setItem('xopc:workspace-width', String(width)); } catch { /* Optional preference. */ } },
     setTreeWidth: (treeWidth) => { set({ treeWidth: Math.max(200, Math.min(320, treeWidth)) }); try { localStorage.setItem('xopc:workspace-tree-width', String(get().treeWidth)); } catch { /* Optional preference. */ } },

@@ -56,6 +56,7 @@ export function RightWorkspace({ scope, enabled = true, elevated = false, onDock
   const sideTabs = useSideChatStore((s) => s.tabs);
   const pending = useSideChatStore((s) => s.pendingCreate);
   const creating = useSideChatStore((s) => s.creatingRequests[scope]);
+  const creatingSideChat = Boolean(creating || pending?.parentConversationId === scope);
   const token = useGatewayStore((s) => s.conversationId);
   const { search } = useLocation();
   const panelRef = useRef<HTMLElement>(null);
@@ -88,8 +89,8 @@ export function RightWorkspace({ scope, enabled = true, elevated = false, onDock
   useLayoutEffect(() => {
     onDockedWidthChange?.(visible && !single && !expanded ? panelWidth : 0);
   }, [expanded, onDockedWidthChange, panelWidth, single, visible]);
-  const treeHome = !active || active.kind === 'files';
-  const treeVisible = treeHome || ((active.kind === 'file' || active.kind === 'sidechat' || active.kind === 'browser') && treePreference && ((single || expanded) ? available : panelWidth) >= 460 + treeWidth);
+  const treeHome = active?.kind === 'files';
+  const treeVisible = treeHome || ((active?.kind === 'file' || active?.kind === 'sidechat' || active?.kind === 'browser') && treePreference && ((single || expanded) ? available : panelWidth) >= 460 + treeWidth);
   const treeShown = treeVisible || treeOverlay;
   const file = active?.kind === 'file' ? active : undefined;
   const treeScope = useMemo(() => ({
@@ -131,7 +132,7 @@ export function RightWorkspace({ scope, enabled = true, elevated = false, onDock
   useEffect(() => {
     if (migratedPanel.current) return;
     migratedPanel.current = true;
-    if (!useRightWorkspaceStore.getState().panes[scope] && useWorkspacePanelStore.getState().open) store.setOpen(true, scope);
+    if (!useRightWorkspaceStore.getState().panes[scope] && useWorkspacePanelStore.getState().open) store.openFiles(scope);
   }, [scope, store]);
   useEffect(() => { setTreeOverlay(false); }, [pane.activeId, scope]);
   useEffect(() => { setSaveFailed(null); setDiscardRequested(false); setBrowserError(''); }, [scope]);
@@ -271,7 +272,6 @@ export function RightWorkspace({ scope, enabled = true, elevated = false, onDock
           const next = event.key === 'ArrowRight' ? (index + 1) % tabs.length : event.key === 'ArrowLeft' ? (index - 1 + tabs.length) % tabs.length : event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : -1;
           if (next >= 0) { event.preventDefault(); tabs[next]?.focus(); }
         }} indicatorClassName="rounded-md border border-edge bg-surface-panel">
-        {!pane.tabs.length ? <span className="truncate px-2 text-sm font-medium">{zh ? '项目文件' : 'Project files'}</span> : null}
         {pane.tabs.map((tab) => {
           const side = tab.kind === 'sidechat' ? sideTabs.find((t) => t.id === tab.sideChatId) : undefined;
           const title = tabTitle(tab);
@@ -312,7 +312,7 @@ export function RightWorkspace({ scope, enabled = true, elevated = false, onDock
     <WorkspaceTreeControlContext.Provider value={treeControl ? { button: treeControl, label: zh ? (treeShown ? '隐藏文件树' : '显示文件树') : (treeShown ? 'Hide file tree' : 'Show file tree'), active: treeShown, onToggle: toggleTree } : null}>
     <div id="workspace-content" role="tabpanel" aria-labelledby={active ? `workspace-tab-${active.id}` : undefined} className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden">
       <div className={cn('min-h-0 min-w-0 flex-1 flex-col overflow-hidden', !treeHome ? 'flex' : 'hidden')}>
-        {active?.kind === 'home' ? <WorkspaceStartPage tabs={pane.tabs} canCreateSideChat={scope !== 'new'} creating={Boolean(creating)}
+        {active?.kind === 'home' && !creatingSideChat ? <WorkspaceStartPage tabs={pane.tabs} canCreateSideChat={scope !== 'new'} creating={Boolean(creating)}
           onBrowser={window.electronAPI?.browser ? () => store.openBrowser(undefined, scope) : undefined}
           onFiles={() => store.openFiles(scope)} onSideChat={() => useSideChatStore.getState().requestCreate(scope)} onActivate={select}
           onTerminal={window.electronAPI?.terminal ? () => scope !== 'new' ? useTerminalPanelStore.getState().open(scope) : window.dispatchEvent(new Event('workspace-open-terminal')) : undefined} /> : null}
@@ -329,14 +329,14 @@ export function RightWorkspace({ scope, enabled = true, elevated = false, onDock
           return <WorkspaceFilePreviewPanel key={tab.id} tabId={tab.id} active={isActive} filePath={tab.path ?? null} projectId={tab.projectId} conversationId={tab.conversationId} agentId={tab.agentId} targetLine={tab.line} resultRevision={tab.resultRevision} onClose={() => void closeFile(tab.id)} />;
         })}
         </WorkspaceFileTargetsContext.Provider>
-        {sideParents.map((parent) => <WorkspaceOwnerContext.Provider key={parent} value={parent}><SideChatColumn parentConversationId={parent} embedded visible={present && scope === parent && (active?.kind === 'sidechat' || (!active && Boolean(pending?.parentConversationId === parent || creating)))} /></WorkspaceOwnerContext.Provider>)}
+        {sideParents.map((parent) => <WorkspaceOwnerContext.Provider key={parent} value={parent}><SideChatColumn parentConversationId={parent} embedded visible={present && scope === parent && (active?.kind === 'sidechat' || ((!active || active.kind === 'home') && creatingSideChat))} /></WorkspaceOwnerContext.Provider>)}
       </div>
       {treeVisible && !treeHome && !treeOverlay ? <div role="separator" aria-orientation="vertical" tabIndex={0} aria-label={zh ? '调整文件树宽度' : 'Resize file tree'} aria-valuemin={200} aria-valuemax={320} aria-valuenow={treeWidth}
         className="z-10 w-2 shrink-0 cursor-col-resize touch-none border-l border-edge hover:bg-surface-hover focus-visible:bg-accent/30" onPointerDown={(event) => drag(event, true)}
         onKeyDown={(e) => { if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { e.preventDefault(); store.setTreeWidth(treeWidth + (e.key === 'ArrowLeft' ? 20 : -20)); } }} /> : null}
       {treeOverlay ? <button data-browser-occluder style={{ top: treeOverlayInset }} className="absolute inset-0 z-20 bg-scrim" aria-label={zh ? '关闭文件树' : 'Close file tree'} onClick={() => setTreeOverlay(false)} /> : null}
       <div data-workspace-tree className={cn('min-h-0 min-w-0 flex-col overflow-hidden', treeShown ? 'flex' : 'hidden', treeHome && 'flex-1', treeOverlay && 'absolute inset-y-0 right-0 z-30 border-l border-edge bg-surface-panel')} style={!treeHome ? { width: treeWidth, ...(treeOverlay ? { top: treeOverlayInset } : {}) } : undefined}>
-        {Object.entries(trees).map(([key, root]) => <div key={key} className={cn('h-full min-h-0 flex-col', key === treeKey ? 'flex' : 'hidden')}><WorkspaceColumn embedded scope={root} onCloseTree={() => treeOverlay ? setTreeOverlay(false) : !treeHome ? active?.kind === 'browser' ? setBrowserTreeOpen(false) : store.setTreeOpen(active?.kind === 'sidechat' ? 'sidechat' : 'file', false) : store.setOpen(false, scope)} /></div>)}
+        {Object.entries(trees).map(([key, root]) => <div key={key} className={cn('h-full min-h-0 flex-col', key === treeKey ? 'flex' : 'hidden')}><WorkspaceColumn embedded scope={root} onCloseTree={() => treeOverlay ? setTreeOverlay(false) : !treeHome ? active?.kind === 'browser' ? setBrowserTreeOpen(false) : store.setTreeOpen(active?.kind === 'sidechat' ? 'sidechat' : 'file', false) : active && store.remove(active.id, scope)} /></div>)}
       </div>
     </div>
     </WorkspaceTreeControlContext.Provider>
