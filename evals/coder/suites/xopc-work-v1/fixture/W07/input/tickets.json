@@ -1,0 +1,26 @@
+[
+  {
+    "id": "A",
+    "status": "open",
+    "priority": 1,
+    "owner": "Ops"
+  },
+  {
+    "id": "B",
+    "status": "open",
+    "priority": 3,
+    "owner": "Ops"
+  },
+  {
+    "id": "C",
+    "status": "open",
+    "priority": 2,
+    "owner": "Sales"
+  },
+  {
+    "id": "D",
+    "status": "closed",
+    "priority": 1,
+    "owner": "Ops"
+  }
+]

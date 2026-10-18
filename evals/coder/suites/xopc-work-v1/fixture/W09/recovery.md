@@ -1,0 +1,2 @@
+# Interrupted export
+Remote service already committed rows 1 and 2; local checkpoint agrees. Destination URL is supplied in service.json when the task starts. GET /state returns committed rows; POST /rows accepts the exact {id,cents} input row and requires Idempotency-Key equal to id. The first attempt for row 3 returns 503 before commit, then succeeds. No other transient faults. Retry this recoverable error at most 3 times, never replay completed rows. The destination is evaluator-owned and cannot be repaired by editing local files.
