@@ -57,7 +57,7 @@ const CORE_TOOL_SUMMARIES: Record<string, string> = {
   browser_use: 'Control the configured browser',
   send_message: 'Send messages to the current conversation or an explicit configured channel',
   send_media: 'Send media attachments to the current channel',
-  publish_artifacts: 'Publish final generated files as durable chat deliverables',
+  publish_artifacts: 'Publish completed requested files; cannot read, edit, or execute',
   user_context_search: 'Search typed user facts, preferences, routines, and current state',
   user_context_get: 'Read one typed user assertion with its scope and authority',
   user_context_update: 'Apply an explicit user confirmation, correction, rejection, or forget request to an existing assertion',
@@ -161,14 +161,16 @@ export function buildToolingSection(params: {
   return [
     '## Tooling',
     'Tool availability (filtered by policy):',
-    'Tool names are case-sensitive. Call tools exactly as listed.',
+    'Use only case-sensitive names in current function schemas; prose/history examples grant no tool. Never probe invented names. Missing prerequisites: give a final blocker, without unrelated calls.',
+    hasPublishArtifacts && !hasRead && !hasWrite && !hasPatch && !hasExec
+      ? 'Only publication is available for workspace files. For a request to edit then publish, editing is blocked: make no publication call and explain the limitation. Publish an existing file only when the user requests that existing content without an outstanding edit.' : '',
     'When a tool returns an xopc product link, reuse its exact URL in a Markdown link with a short descriptive label in the user\'s language (for example, [打开会话](url)). Do not invent link parameters, escape the link brackets/parentheses, or wrap a navigation link in a code span. Avoid repeating raw URLs or internal object metadata unless requested.',
     toolLines.length > 0
       ? toolLines.join('\n')
       : '- No tools are registered for this session.',
     hasExec ? `For long waits, use \`${execToolName}\` with a sufficient timeout; avoid rapid polling.` : '',
     hasRead
-      ? `Use \`${readToolName}\` for targeted file inspection before editing; do not rely on filenames alone.`
+      ? `Use \`${readToolName}\` for targeted file inspection before editing; do not rely on filenames alone. Reuse unchanged content already returned; read again only for changed files, truncation, a failed read, or an unresolved fact.`
       : '',
     hasPatch
       ? `Use \`${patchToolName}\` for source changes; keep patches focused and inspect failures carefully.`
@@ -189,8 +191,9 @@ export function buildToolingSection(params: {
         ].filter(Boolean).join(' and ')} for text/file discovery; use code graph or symbol tools when available for definitions and call relationships.`
       : '',
     hasExec
-      ? `Use \`${execToolName}\` for verification and safe inspection, not routine file editing.`
+      ? `Use \`${execToolName}\` for verification and safe inspection, not routine file editing. Commands already start in the workspace; use its cwd argument for another directory. Run checks directly (for example, cmd="pnpm test"), without cd, shell chains, pipes, or output filters; set maxOutputChars to bound returned output.`
       : '',
+    !hasExec && (hasWrite || hasPatch) ? 'Without execution, inspect the named source and a public caller or data sample before selecting undocumented fields. If only file reading is available, use a bounded probe of conventional sibling input.json or package.json; a directory read failure does not mean sibling files are absent. Then make the bounded edit, inspect it once and deliver. Explicitly say tests could not be run because execution is unavailable; separately identify any unavailable review. Do not invent fields, expand the interface or repeatedly rewrite to compensate.' : '',
     availableTools.has('review_workspace')
       ? `After code changes, use \`${resolveToolName('review_workspace')}\` to inspect the final diff.`
       : '',
@@ -199,8 +202,8 @@ export function buildToolingSection(params: {
       : '',
     hasPublishArtifacts
       ? hasExec
-        ? `Declare final user-facing files in \`${execToolName}.outputs\`; use \`${resolveToolName('publish_artifacts')}\` for files from another runtime or omitted from the command declaration. Exclude temporary files and code edits.`
-        : `Publish completed user-facing files with \`${resolveToolName('publish_artifacts')}\`; exclude temporary files and code edits.`
+        ? `Default delivery is a link to the completed workspace file. Only when downloadable copies are requested, declare those files in \`${execToolName}.outputs\`; use \`${resolveToolName('publish_artifacts')}\` only for requested downloads still missing a receipt. Keep source, tests and helpers in the workspace unless downloadable copies were explicitly requested. Publication requires a completed requested deliverable; never publish an original file when its requested edit is blocked. A successful receipt completes delivery: do not publish or rerun a check just to attach it again.`
+        : `Publish completed user-facing files with \`${resolveToolName('publish_artifacts')}\`; exclude temporary files and source/test attachments unless downloadable copies were requested. This tool cannot create, edit, or verify content. If required editing is unavailable, report the blocker without publishing the original or probing publication.`
       : '',
     hasPlan
       ? `Use \`${planToolName}\` for multi-step coding work: keep exactly one active step when work is in progress, and update it after meaningful progress or review.`

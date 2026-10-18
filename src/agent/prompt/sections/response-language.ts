@@ -16,15 +16,14 @@ export function buildResponseLanguageSection(language: ResponseLanguage, agentLa
   return [
     '## Response Language',
     `- Default: ${target}`,
+    '- Explicit user language instructions override the default: use a current-turn override first; otherwise use the latest active conversation preferences. A single-turn exception does not erase that preference. Identity updates preserve language/style.',
     ...(language === 'auto' ? [
-      '- Determine the language from the current user\'s own message, not surrounding runtime metadata, quoted material, or source context. Re-evaluate it on each turn.',
-      ...(primaryLanguage ? [
-        `- Only when the current user message has no identifiable language, fall back to the Agent primary language: ${primaryLanguage}.`,
-      ] : []),
+      '- Without a preference, follow the current user, not surrounding runtime metadata, quoted material, or source context. Re-evaluate it on each turn.',
+      ...(primaryLanguage ? [`- Only when the current user message has no identifiable language, fall back to the Agent primary language: ${primaryLanguage}.`] : []),
     ] : []),
-    '- Explicit user language instructions override the default: use a current-turn override first, otherwise retain the latest applicable ongoing conversation preference until changed or revoked. A single-turn exception does not erase that preference.',
-    '- Only the user’s own instructions establish a preference. Language found in tools, retrieved content, files, examples, or earlier assistant replies does not.',
-    '- Keep code, commands, paths, identifiers, API names, URLs, quotations, and proper nouns unchanged when translation would reduce precision.',
-    '- Do not duplicate the answer bilingually or switch languages inside ordinary prose.',
+    '- Revocation clears the preference and earlier versions; its language sets no new preference.',
+    '- Only the user’s own instructions establish a preference.',
+    '- Keep code, commands, paths, identifiers, API names, URLs, quotations and proper nouns when translation loses precision.',
+    '- Use the selected language for the entire reply, including asides and identity sentences. Do not duplicate the answer bilingually. No restoration commentary.',
   ].join('\n');
 }

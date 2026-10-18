@@ -54,3 +54,63 @@ describe('workspace evidence projection', () => {
     expect(projectWorkEvidence(input).messages).toEqual(input);
   });
 });
+
+it('shares exact file echoes with retained successful write arguments without changing executed calls', () => {
+  const call: AgentMessage = { role: 'assistant', content: [{ type: 'toolCall', id: 'write', name: 'write_file', arguments: { path: 'source.md', content: large } }],
+    api: 'openai-completions', provider: 'openai', model: 'test', stopReason: 'toolUse', timestamp: 0,
+    usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } } };
+  const receipt: AgentMessage = { role: 'toolResult', toolCallId: 'write', toolName: 'write_file', content: [{ type: 'text', text: 'Written' }], isError: false, timestamp: 0, details: { path: '/workspace/source.md' } };
+  const inspection = review('review', `Workspace changes:\n\nUntracked file: source.md\n${large}\nUntracked file: other.md\nDifferent content`);
+  const input = [call, receipt, read('readback'), inspection];
+  const original = structuredClone(input);
+  const projected = projectWorkEvidence(input);
+  expect(projected.sharedReads).toBe(1);
+  expect(projected.sharedReviews).toBe(1);
+  expect(projected.savedChars).toBeGreaterThan(large.length);
+  expect(projected.messages.slice(0, 2)).toEqual(input.slice(0, 2));
+  const alias = { ...read('alias'), details: { path: '/private/workspace/source.md', offset: 1, truncated: false } } as AgentMessage;
+  const aliasProjection = projectWorkEvidence([call, receipt, alias]);
+  expect(aliasProjection.sharedReads).toBe(1);
+  expect((aliasProjection.messages[2] as any).details).toEqual((alias as any).details);
+  expect(JSON.stringify(projected.messages[2])).toContain('successful write_file call write, arguments.content');
+  expect(JSON.stringify(projected.messages[3])).toContain('Different content');
+  expect((projected.messages[3] as any).details).toEqual((inspection as any).details);
+  expect(input).toEqual(original);
+});
+
+it('keeps different content, failed writes, truncated reads and incomplete reviews in full', () => {
+  const call: AgentMessage = { role: 'assistant', content: [{ type: 'toolCall', id: 'write', name: 'write_file', arguments: { path: 'source.md', content: large } }],
+    api: 'openai-completions', provider: 'openai', model: 'test', stopReason: 'toolUse', timestamp: 0,
+    usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } } };
+  const failed: AgentMessage = { role: 'toolResult', toolCallId: 'write', toolName: 'write_file', content: [{ type: 'text', text: 'Blocked' }], isError: false, timestamp: 0, details: { path: '/workspace/source.md', status: 'blocked' } };
+  expect(projectWorkEvidence([call, failed, read('after-failure')]).messages).toEqual([call, failed, read('after-failure')]);
+  const success = { ...failed, details: { path: '/workspace/source.md' } } as AgentMessage;
+  const excerpt = { ...read('excerpt'), details: { path: '/workspace/source.md', offset: 1, truncated: true } } as AgentMessage;
+  const incomplete = { ...review('incomplete', `\nUntracked file: source.md\n${large}`), details: { complete: false } } as AgentMessage;
+  const changed = read('different', large + '\nNew fact');
+  const input = [call, success, excerpt, incomplete, changed];
+  expect(projectWorkEvidence(input).messages).toEqual(input);
+  expect(projectWorkEvidence([success, read('missing-call')]).messages).toEqual([success, read('missing-call')]);
+});
+
+it('losslessly shares historical write arguments with the full latest successful write', () => {
+  const makeCall = (id: string, body: string): AgentMessage => ({ role: 'assistant', content: [{ type: 'toolCall', id, name: 'write_file', arguments: { path: 'source.md', content: body } }],
+    api: 'openai-completions', provider: 'openai', model: 'test', stopReason: 'toolUse', timestamp: 0,
+    usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } } });
+  const receipt = (id: string, isError = false): AgentMessage => ({ role: 'toolResult', toolCallId: id, toolName: 'write_file', content: [{ type: 'text', text: isError ? 'Failed' : 'Written' }], isError, timestamp: 0, details: { path: '/workspace/source.md' } });
+  const older = `${large}\nOriginal requirement 🌲\r\n${large}\n`;
+  const latest = `${large}\nRevised requirement 🌈\r\n${large}\n`;
+  const input = [makeCall('old', older), receipt('old'), { role: 'user', content: 'Narrow the scope.', timestamp: 1 } as AgentMessage, makeCall('new', latest), receipt('new')];
+  const original = structuredClone(input);
+  const result = projectWorkEvidence(input);
+  expect(result.sharedWriteArguments).toBe(1);
+  const encoded = (result.messages[0] as any).content[0].arguments.content as string;
+  const delta = JSON.parse(encoded.slice(encoded.indexOf('\n') + 1));
+  const base = latest.split('\n');
+  expect([...base.slice(0, delta.prefixLines), ...delta.middleLines, ...(delta.suffixLines ? base.slice(-delta.suffixLines) : [])].join('\n')).toBe(older);
+  expect(delta.referenceToolCallId).toBe('new');
+  expect(result.messages.slice(1)).toEqual(input.slice(1));
+  expect(input).toEqual(original);
+  const failed = [makeCall('old', older), receipt('old'), makeCall('failed', latest), receipt('failed', true)];
+  expect(projectWorkEvidence(failed).messages).toEqual(failed);
+});

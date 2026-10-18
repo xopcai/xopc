@@ -559,8 +559,9 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
         effectiveContext = { ...effectiveContext, messages: [...hygienicMessages,
           { role: 'user' as const, content: loopGuard.injection, timestamp: Date.now() }] };
       }
-      if (params.verifyChanges) effectiveContext = { ...effectiveContext, messages: [...effectiveContext.messages,
-        { role: 'system' as const, content: '', sections: { 'xopc.execution-focus': verification.modelGuidance() }, timestamp: 0 }] };
+      const executionGuidance = verification.modelGuidance();
+      if (executionGuidance) effectiveContext = { ...effectiveContext, messages: [...effectiveContext.messages,
+        { role: 'system' as const, content: '', sections: { 'xopc.execution-focus': executionGuidance }, timestamp: 0 }] };
 
       let effectiveSystemPrompt = getCurrentSystemPrompt(effectiveContext.messages);
       let effectiveTools = getCurrentTools(effectiveContext.messages);

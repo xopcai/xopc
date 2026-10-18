@@ -25,6 +25,12 @@ import { readWorkspaceFile } from '../../sandbox/fileAccess.js';
 const readFileMock = vi.mocked(readWorkspaceFile);
 
 describe('publish_artifacts', () => {
+  it('does not advertise unavailable prerequisites in its tool schema', () => {
+    const tool = createPublishArtifactsTool('/workspace');
+    expect(tool.description).not.toContain('exec_command');
+    expect(tool.description).toContain('cannot read, edit, create files, or execute commands');
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(realpath).mockImplementation(async (path) => resolve(String(path)));

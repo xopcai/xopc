@@ -61,8 +61,24 @@ async function requireOk(response: Response, operation: string): Promise<Respons
   throw new Error(`xopc ${operation} returned HTTP ${response.status}: ${await response.text()}`);
 }
 
+export interface XopcAdapterTurnContext {
+  baseUrl: string;
+  headers: Record<string, string>;
+  conversationId: string;
+  transcriptId: string;
+  turnIndex: number;
+  signal: AbortSignal;
+}
+
+export interface XopcAdapterHooks {
+  onSession?(request: RunRequest, context: XopcAdapterTurnContext): Promise<void>;
+  beforeTurn?(request: RunRequest, context: XopcAdapterTurnContext): Promise<void>;
+  afterTurn?(request: RunRequest, context: XopcAdapterTurnContext, finalText: string): Promise<void>;
+}
+
 export class XopcGatewayAdapter implements AgentAdapter {
   readonly id = 'xopc';
+  constructor(private readonly hooks: XopcAdapterHooks = {}) {}
   private readonly activeRuns = new Map<string, ActiveRun>();
 
   async run(
@@ -125,8 +141,11 @@ export class XopcGatewayAdapter implements AgentAdapter {
       },
     ), 'session configuration');
     const configured = record(record(await configResponse.json()).payload);
-    const configVersion = typeof configured.configVersion === 'number' ? configured.configVersion : undefined;
+    let configVersion = typeof configured.configVersion === 'number' ? configured.configVersion : undefined;
     if (configVersion === undefined) throw new Error('xopc session configuration response did not include configVersion');
+
+    const turnContext = { baseUrl, headers: requestHeaders, conversationId, transcriptId, turnIndex: 0, signal };
+    await this.hooks.onSession?.(request, turnContext);
 
     let runtimeIdentity: Record<string, unknown> | undefined;
     const [identityResponse, sessionConfigResponse] = await Promise.all([
@@ -172,6 +191,16 @@ export class XopcGatewayAdapter implements AgentAdapter {
     const turns = [{ message: request.evalCase.task }, ...(request.evalCase.followUps ?? [])];
     for (const [turnIndex, turn] of turns.entries()) {
       if (signal.aborted) throw new Error('Evaluation aborted');
+      const currentTurn = { ...turnContext, turnIndex };
+      await this.hooks.beforeTurn?.(request, currentTurn);
+      if (this.hooks.beforeTurn || this.hooks.onSession) {
+        const selection = record(record(await (await requireOk(await fetch(
+          `${baseUrl}/api/sessions/${encodeURIComponent(conversationId)}/agent-config`,
+          {headers:requestHeaders,signal}), 'refresh configuration')).json()).payload);
+        if (selection.model !== request.variant.model || selection.thinkingLevel !== thinkingLevel) throw new Error('Model or thinking drift before turn');
+        configVersion = Number(selection.configVersion);
+      }
+      if (this.hooks.onSession || this.hooks.beforeTurn || this.hooks.afterTurn) await trace.emit('agent.event', {kind:'harness.input', turnIndex, message:turn.message});
       for (const path of 'removeFiles' in turn ? turn.removeFiles ?? [] : []) {
         const root = await realpath(request.environment.workspace);
         const target = resolve(root, path);
@@ -218,6 +247,8 @@ export class XopcGatewayAdapter implements AgentAdapter {
           });
         },
       });
+      if (this.hooks.onSession || this.hooks.beforeTurn || this.hooks.afterTurn) await trace.emit('agent.event', {kind:'harness.answer', turnIndex, finalText, failure:failure??null});
+      await this.hooks.afterTurn?.(request, currentTurn, finalText);
       if (failure) break;
     }
     return {

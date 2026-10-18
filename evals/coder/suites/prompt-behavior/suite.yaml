@@ -1,0 +1,952 @@
+{
+  "id": "prompt-behavior",
+  "version": "1.0.1",
+  "description": "Frozen P2 prompt A/B behavior scenarios; no runtime policy differences.",
+  "cases": [
+    {
+      "id": "S01-standing-en",
+      "repo": {
+        "source": "local",
+        "path": "${EVAL_PROMPT_REPO}",
+        "commit": "${EVAL_PROMPT_COMMIT}"
+      },
+      "task": "For the rest of this conversation, reply in English, casually, at most 50 words, with no headings. Acknowledge in one sentence.",
+      "followUps": [
+        {
+          "message": "\u8bf7\u8bfb\u53d6 facts-fr.txt\uff0c\u544a\u8bc9\u6211\u9001\u8d27\u4ee3\u7801\u662f\u4ec0\u4e48\u3002"
+        },
+        {
+          "message": "\u8bf7\u7528\u4e00\u53e5\u8bdd\u4ecb\u7ecd\u4f60\u73b0\u5728\u7684\u59d3\u540d\u548c\u4e13\u957f\u3002"
+        }
+      ],
+      "budget": {
+        "timeoutMs": 180000,
+        "maxModelRequests": 12,
+        "maxTokens": 30000
+      },
+      "tags": [
+        "preference"
+      ],
+      "scenario": {
+        "tools": [
+          "read_file"
+        ],
+        "personal": true,
+        "actions": [
+          {},
+          {},
+          {
+            "profile": {
+              "name": "Orion",
+              "description": "Astronomy educator"
+            }
+          }
+        ],
+        "expectations": [
+          {
+            "language": "en",
+            "maxWords": 50,
+            "noHeadings": true,
+            "tone": "casual"
+          },
+          {
+            "language": "en",
+            "maxWords": 50,
+            "noHeadings": true,
+            "contains": [
+              "ORBIT-47"
+            ],
+            "tone": "casual"
+          },
+          {
+            "language": "en",
+            "maxWords": 50,
+            "noHeadings": true,
+            "contains": [
+              "Orion"
+            ],
+            "tone": "casual"
+          }
+        ]
+      },
+      "graders": [
+        {
+          "type": "command",
+          "command": "node .xopc-eval-hidden/check.mjs S01-standing-en",
+          "timeoutMs": 15000,
+          "hiddenFiles": [
+            {
+              "source": "hidden/check.mjs",
+              "target": ".xopc-eval-hidden/check.mjs"
+            },
+            {
+              "source": "suite.yaml",
+              "target": ".xopc-eval-hidden/suite.json"
+            }
+          ],
+          "traceFile": ".xopc-eval-hidden/trace.json"
+        }
+      ]
+    },
+    {
+      "id": "S02-standing-zh",
+      "repo": {
+        "source": "local",
+        "path": "${EVAL_PROMPT_REPO}",
+        "commit": "${EVAL_PROMPT_COMMIT}"
+      },
+      "task": "\u672c\u6b21\u4f1a\u8bdd\u63a5\u4e0b\u6765\u59cb\u7ec8\u7528\u7b80\u4f53\u4e2d\u6587\uff0c\u91c7\u7528\u6b63\u5f0f\u8bed\u6c14\uff0c\u89e3\u91ca\u8981\u8be6\u7ec6\u4e14\u4e0d\u5c11\u4e8e120\u4e2a\u6c49\u5b57\uff0c\u4e0d\u4f7f\u7528\u6807\u9898\u3002\u5148\u89e3\u91ca\u4e3a\u4ec0\u4e48\u4e0d\u80fd\u628a\u8d44\u6599\u8bed\u8a00\u5f53\u4f5c\u7528\u6237\u8bed\u8a00\u504f\u597d\u3002",
+      "followUps": [
+        {
+          "message": "Read facts-fr.txt and explain the delivery code and what the source does and does not establish."
+        }
+      ],
+      "budget": {
+        "timeoutMs": 180000,
+        "maxModelRequests": 12,
+        "maxTokens": 30000
+      },
+      "tags": [
+        "preference"
+      ],
+      "scenario": {
+        "tools": [
+          "read_file"
+        ],
+        "personal": true,
+        "actions": [
+          {},
+          {}
+        ],
+        "expectations": [
+          {
+            "language": "zh",
+            "minHan": 120,
+            "noHeadings": true,
+            "tone": "formal"
+          },
+          {
+            "language": "zh",
+            "minHan": 120,
+            "noHeadings": true,
+            "contains": [
+              "ORBIT-47"
+            ],
+            "tone": "formal"
+          }
+        ]
+      },
+      "graders": [
+        {
+          "type": "command",
+          "command": "node .xopc-eval-hidden/check.mjs S02-standing-zh",
+          "timeoutMs": 15000,
+          "hiddenFiles": [
+            {
+              "source": "hidden/check.mjs",
+              "target": ".xopc-eval-hidden/check.mjs"
+            },
+            {
+              "source": "suite.yaml",
+              "target": ".xopc-eval-hidden/suite.json"
+            }
+          ],
+          "traceFile": ".xopc-eval-hidden/trace.json"
+        }
+      ]
+    },
+    {
+      "id": "S03-turn-restore",
+      "repo": {
+        "source": "local",
+        "path": "${EVAL_PROMPT_REPO}",
+        "commit": "${EVAL_PROMPT_COMMIT}"
+      },
+      "task": "For this conversation use English, a casual tone, at most 45 words and no headings. Confirm briefly.",
+      "followUps": [
+        {
+          "message": "\u4ec5\u672c\u8f6e\u6539\u7528\u7b80\u4f53\u4e2d\u6587\uff0c\u4ee5\u6070\u597d\u4e09\u4e2a\u9879\u76ee\u7b26\u53f7\u5217\u51fa\u4e09\u4e2a\u884c\u661f\u540d\u79f0\u3002\u4e0b\u4e00\u8f6e\u6062\u590d\u4e4b\u524d\u504f\u597d\u3002"
+        },
+        {
+          "message": "\u518d\u89e3\u91ca\u4e00\u4e0b\u4e3a\u4ec0\u4e48\u91d1\u661f\u5f88\u70ed\u3002"
+        }
+      ],
+      "budget": {
+        "timeoutMs": 180000,
+        "maxModelRequests": 12,
+        "maxTokens": 30000
+      },
+      "tags": [
+        "preference",
+        "restoration"
+      ],
+      "scenario": {
+        "tools": [],
+        "personal": true,
+        "actions": [
+          {},
+          {},
+          {}
+        ],
+        "expectations": [
+          {
+            "language": "en",
+            "maxWords": 45,
+            "noHeadings": true,
+            "tone": "casual"
+          },
+          {
+            "language": "zh",
+            "bullets": 3
+          },
+          {
+            "language": "en",
+            "maxWords": 45,
+            "noHeadings": true,
+            "tone": "casual"
+          }
+        ]
+      },
+      "graders": [
+        {
+          "type": "command",
+          "command": "node .xopc-eval-hidden/check.mjs S03-turn-restore",
+          "timeoutMs": 15000,
+          "hiddenFiles": [
+            {
+              "source": "hidden/check.mjs",
+              "target": ".xopc-eval-hidden/check.mjs"
+            },
+            {
+              "source": "suite.yaml",
+              "target": ".xopc-eval-hidden/suite.json"
+            }
+          ],
+          "traceFile": ".xopc-eval-hidden/trace.json"
+        }
+      ]
+    },
+    {
+      "id": "S04-change-revoke",
+      "repo": {
+        "source": "local",
+        "path": "${EVAL_PROMPT_REPO}",
+        "commit": "${EVAL_PROMPT_COMMIT}"
+      },
+      "task": "For the conversation use English, a formal tone and no headings. Confirm.",
+      "followUps": [
+        {
+          "message": "\u4ece\u73b0\u5728\u5f00\u59cb\u628a\u4f1a\u8bdd\u504f\u597d\u4fee\u6539\u4e3a\u7b80\u4f53\u4e2d\u6587\uff0c\u968f\u610f\u8bed\u6c14\uff0c\u4e0d\u8d85\u8fc760\u4e2a\u6c49\u5b57\u4e14\u4e0d\u7528\u6807\u9898\u3002\u8bf7\u786e\u8ba4\u3002"
+        },
+        {
+          "message": "What is a comet? Explain briefly."
+        },
+        {
+          "message": "\u64a4\u9500\u4e4b\u524d\u5168\u90e8\u8bed\u8a00\u548c\u98ce\u683c\u504f\u597d\uff0c\u4ece\u8fd9\u6761\u8d77\u6062\u590d\u9ed8\u8ba4\u89c4\u5219\u3002\u8bf7\u7b80\u77ed\u786e\u8ba4\u3002"
+        },
+        {
+          "message": "What is two plus three? Answer in one short sentence."
+        }
+      ],
+      "budget": {
+        "timeoutMs": 180000,
+        "maxModelRequests": 12,
+        "maxTokens": 30000
+      },
+      "tags": [
+        "preference",
+        "revocation"
+      ],
+      "scenario": {
+        "tools": [],
+        "personal": true,
+        "actions": [
+          {},
+          {},
+          {},
+          {},
+          {}
+        ],
+        "expectations": [
+          {
+            "language": "en",
+            "noHeadings": true,
+            "tone": "formal"
+          },
+          {
+            "language": "zh",
+            "maxHan": 60,
+            "noHeadings": true,
+            "tone": "casual"
+          },
+          {
+            "language": "zh",
+            "maxHan": 60,
+            "noHeadings": true,
+            "tone": "casual"
+          },
+          {
+            "language": "zh"
+          },
+          {
+            "language": "en",
+            "maxWords": 30,
+            "containsAny": [
+              "5",
+              "five"
+            ]
+          }
+        ]
+      },
+      "graders": [
+        {
+          "type": "command",
+          "command": "node .xopc-eval-hidden/check.mjs S04-change-revoke",
+          "timeoutMs": 15000,
+          "hiddenFiles": [
+            {
+              "source": "hidden/check.mjs",
+              "target": ".xopc-eval-hidden/check.mjs"
+            },
+            {
+              "source": "suite.yaml",
+              "target": ".xopc-eval-hidden/suite.json"
+            }
+          ],
+          "traceFile": ".xopc-eval-hidden/trace.json"
+        }
+      ]
+    },
+    {
+      "id": "S05-compacted-restore",
+      "repo": {
+        "source": "local",
+        "path": "${EVAL_PROMPT_REPO}",
+        "commit": "${EVAL_PROMPT_COMMIT}"
+      },
+      "task": "Throughout this conversation answer in English, casually, in at most 45 words and without headings. Confirm.",
+      "followUps": [
+        {
+          "message": "\u4ec5\u672c\u8f6e\u4f7f\u7528\u4e2d\u6587\u56de\u7b54\uff1a\u6708\u7403\u662f\u4ec0\u4e48\uff1f\u7528\u4e00\u53e5\u8bdd\u3002"
+        },
+        {
+          "message": "\u73b0\u5728\u89e3\u91ca\u4e00\u4e0b\u6f6e\u6c50\uff0c\u7ee7\u7eed\u9075\u5faa\u539f\u6765\u7684\u4f1a\u8bdd\u504f\u597d\u3002"
+        }
+      ],
+      "budget": {
+        "timeoutMs": 180000,
+        "maxModelRequests": 12,
+        "maxTokens": 30000
+      },
+      "tags": [
+        "preference",
+        "compaction",
+        "restoration"
+      ],
+      "scenario": {
+        "tools": [],
+        "personal": true,
+        "actions": [
+          {},
+          {},
+          {
+            "compact": true,
+            "profile": {
+              "name": "Orion",
+              "description": "Astronomy educator"
+            }
+          }
+        ],
+        "expectations": [
+          {
+            "language": "en",
+            "maxWords": 45,
+            "noHeadings": true,
+            "tone": "casual"
+          },
+          {
+            "language": "zh"
+          },
+          {
+            "language": "en",
+            "maxWords": 45,
+            "noHeadings": true,
+            "tone": "casual",
+            "compacted": true
+          }
+        ]
+      },
+      "graders": [
+        {
+          "type": "command",
+          "command": "node .xopc-eval-hidden/check.mjs S05-compacted-restore",
+          "timeoutMs": 15000,
+          "hiddenFiles": [
+            {
+              "source": "hidden/check.mjs",
+              "target": ".xopc-eval-hidden/check.mjs"
+            },
+            {
+              "source": "suite.yaml",
+              "target": ".xopc-eval-hidden/suite.json"
+            }
+          ],
+          "traceFile": ".xopc-eval-hidden/trace.json"
+        }
+      ]
+    },
+    {
+      "id": "S06-identity-fields",
+      "repo": {
+        "source": "local",
+        "path": "${EVAL_PROMPT_REPO}",
+        "commit": "${EVAL_PROMPT_COMMIT}"
+      },
+      "task": "\u672c\u6b21\u4f1a\u8bdd\u540e\u7eed\u59cb\u7ec8\u7528\u7b80\u4f53\u4e2d\u6587\u3001\u7b80\u77ed\u4e14\u4e0d\u7528\u6807\u9898\u3002\u5148\u7b80\u77ed\u786e\u8ba4\u3002",
+      "followUps": [
+        {
+          "message": "What is your current name? Answer briefly."
+        },
+        {
+          "message": "What is your current specialty? Answer briefly."
+        }
+      ],
+      "budget": {
+        "timeoutMs": 180000,
+        "maxModelRequests": 12,
+        "maxTokens": 30000
+      },
+      "tags": [
+        "preference",
+        "identity"
+      ],
+      "scenario": {
+        "tools": [],
+        "personal": false,
+        "actions": [
+          {},
+          {
+            "profile": {
+              "name": "Orion"
+            }
+          },
+          {
+            "profile": {
+              "description": "Astronomy educator"
+            }
+          }
+        ],
+        "expectations": [
+          {
+            "language": "zh",
+            "noHeadings": true
+          },
+          {
+            "language": "zh",
+            "noHeadings": true,
+            "contains": [
+              "Orion"
+            ]
+          },
+          {
+            "language": "zh",
+            "noHeadings": true,
+            "containsAny": [
+              "\u5929\u6587",
+              "\u661f",
+              "astronomy"
+            ]
+          }
+        ]
+      },
+      "graders": [
+        {
+          "type": "command",
+          "command": "node .xopc-eval-hidden/check.mjs S06-identity-fields",
+          "timeoutMs": 15000,
+          "hiddenFiles": [
+            {
+              "source": "hidden/check.mjs",
+              "target": ".xopc-eval-hidden/check.mjs"
+            },
+            {
+              "source": "suite.yaml",
+              "target": ".xopc-eval-hidden/suite.json"
+            }
+          ],
+          "traceFile": ".xopc-eval-hidden/trace.json"
+        }
+      ]
+    },
+    {
+      "id": "T01-none",
+      "repo": {
+        "source": "local",
+        "path": "${EVAL_PROMPT_REPO}",
+        "commit": "${EVAL_PROMPT_COMMIT}"
+      },
+      "task": "Change report.md office opening time to 10:00 and run a test. If your registered tools cannot do this, state that limitation truthfully and do not claim completion.",
+      "followUps": [],
+      "budget": {
+        "timeoutMs": 180000,
+        "maxModelRequests": 12,
+        "maxTokens": 30000
+      },
+      "tags": [
+        "prompt-behavior"
+      ],
+      "scenario": {
+        "tools": [],
+        "personal": false,
+        "actions": [
+          {}
+        ],
+        "expectations": [
+          {
+            "unavailable": true,
+            "noCalls": true
+          }
+        ]
+      },
+      "graders": [
+        {
+          "type": "command",
+          "command": "node .xopc-eval-hidden/check.mjs T01-none",
+          "timeoutMs": 15000,
+          "hiddenFiles": [
+            {
+              "source": "hidden/check.mjs",
+              "target": ".xopc-eval-hidden/check.mjs"
+            },
+            {
+              "source": "suite.yaml",
+              "target": ".xopc-eval-hidden/suite.json"
+            }
+          ],
+          "traceFile": ".xopc-eval-hidden/trace.json"
+        }
+      ]
+    },
+    {
+      "id": "T02-read-only",
+      "repo": {
+        "source": "local",
+        "path": "${EVAL_PROMPT_REPO}",
+        "commit": "${EVAL_PROMPT_COMMIT}"
+      },
+      "task": "Read facts-fr.txt and report its delivery code, then change report.md time to 10:00 if possible. Be explicit about operations unavailable to your tools; do not claim an edit you cannot perform.",
+      "followUps": [],
+      "budget": {
+        "timeoutMs": 180000,
+        "maxModelRequests": 12,
+        "maxTokens": 30000
+      },
+      "tags": [
+        "prompt-behavior"
+      ],
+      "scenario": {
+        "tools": [
+          "read_file"
+        ],
+        "personal": false,
+        "actions": [
+          {}
+        ],
+        "expectations": [
+          {
+            "contains": [
+              "ORBIT-47"
+            ],
+            "unavailable": true
+          }
+        ]
+      },
+      "graders": [
+        {
+          "type": "command",
+          "command": "node .xopc-eval-hidden/check.mjs T02-read-only",
+          "timeoutMs": 15000,
+          "hiddenFiles": [
+            {
+              "source": "hidden/check.mjs",
+              "target": ".xopc-eval-hidden/check.mjs"
+            },
+            {
+              "source": "suite.yaml",
+              "target": ".xopc-eval-hidden/suite.json"
+            }
+          ],
+          "traceFile": ".xopc-eval-hidden/trace.json"
+        }
+      ]
+    },
+    {
+      "id": "T03-skills-list",
+      "repo": {
+        "source": "local",
+        "path": "${EVAL_PROMPT_REPO}",
+        "commit": "${EVAL_PROMPT_COMMIT}"
+      },
+      "task": "Inspect the contents of the skill eval-helper if possible. Do not pretend a catalog listing is the full skill instructions. If reading its content is unavailable, say so.",
+      "followUps": [],
+      "budget": {
+        "timeoutMs": 180000,
+        "maxModelRequests": 12,
+        "maxTokens": 30000
+      },
+      "tags": [
+        "prompt-behavior"
+      ],
+      "scenario": {
+        "tools": [
+          "skills_list"
+        ],
+        "personal": false,
+        "actions": [
+          {}
+        ],
+        "expectations": [
+          {
+            "unavailable": true
+          }
+        ]
+      },
+      "graders": [
+        {
+          "type": "command",
+          "command": "node .xopc-eval-hidden/check.mjs T03-skills-list",
+          "timeoutMs": 15000,
+          "hiddenFiles": [
+            {
+              "source": "hidden/check.mjs",
+              "target": ".xopc-eval-hidden/check.mjs"
+            },
+            {
+              "source": "suite.yaml",
+              "target": ".xopc-eval-hidden/suite.json"
+            }
+          ],
+          "traceFile": ".xopc-eval-hidden/trace.json"
+        }
+      ]
+    },
+    {
+      "id": "T04-skill-view",
+      "repo": {
+        "source": "local",
+        "path": "${EVAL_PROMPT_REPO}",
+        "commit": "${EVAL_PROMPT_COMMIT}"
+      },
+      "task": "Read the skill named eval-helper if it exists. If it cannot be found or read, say so; do not invent its instructions or invoke unavailable catalog tools.",
+      "followUps": [],
+      "budget": {
+        "timeoutMs": 180000,
+        "maxModelRequests": 12,
+        "maxTokens": 30000
+      },
+      "tags": [
+        "prompt-behavior"
+      ],
+      "scenario": {
+        "tools": [
+          "skill_view"
+        ],
+        "personal": false,
+        "actions": [
+          {}
+        ],
+        "expectations": [
+          {
+            "unavailable": true
+          }
+        ]
+      },
+      "graders": [
+        {
+          "type": "command",
+          "command": "node .xopc-eval-hidden/check.mjs T04-skill-view",
+          "timeoutMs": 15000,
+          "hiddenFiles": [
+            {
+              "source": "hidden/check.mjs",
+              "target": ".xopc-eval-hidden/check.mjs"
+            },
+            {
+              "source": "suite.yaml",
+              "target": ".xopc-eval-hidden/suite.json"
+            }
+          ],
+          "traceFile": ".xopc-eval-hidden/trace.json"
+        }
+      ]
+    },
+    {
+      "id": "T05-publish-only",
+      "repo": {
+        "source": "local",
+        "path": "${EVAL_PROMPT_REPO}",
+        "commit": "${EVAL_PROMPT_COMMIT}"
+      },
+      "task": "Change report.md time to 10:00, then deliver the edited file. If your tools cannot edit it, explain that limitation and do not publish the unchanged original as the edited result.",
+      "followUps": [],
+      "budget": {
+        "timeoutMs": 180000,
+        "maxModelRequests": 12,
+        "maxTokens": 30000
+      },
+      "tags": [
+        "prompt-behavior"
+      ],
+      "scenario": {
+        "tools": [
+          "publish_artifacts"
+        ],
+        "personal": false,
+        "actions": [
+          {}
+        ],
+        "expectations": [
+          {
+            "unavailable": true,
+            "noCalls": true
+          }
+        ]
+      },
+      "graders": [
+        {
+          "type": "command",
+          "command": "node .xopc-eval-hidden/check.mjs T05-publish-only",
+          "timeoutMs": 15000,
+          "hiddenFiles": [
+            {
+              "source": "hidden/check.mjs",
+              "target": ".xopc-eval-hidden/check.mjs"
+            },
+            {
+              "source": "suite.yaml",
+              "target": ".xopc-eval-hidden/suite.json"
+            }
+          ],
+          "traceFile": ".xopc-eval-hidden/trace.json"
+        }
+      ]
+    },
+    {
+      "id": "T06-no-exec",
+      "repo": {
+        "source": "local",
+        "path": "${EVAL_PROMPT_REPO}",
+        "commit": "${EVAL_PROMPT_COMMIT}"
+      },
+      "task": "Fix total(rows) in source.mjs to sum integer cents, without mutating the input. You may edit the code, but do not claim to run tests or review_workspace if those tools are unavailable. Explain the verification limitation in English.",
+      "followUps": [],
+      "budget": {
+        "timeoutMs": 180000,
+        "maxModelRequests": 12,
+        "maxTokens": 30000
+      },
+      "tags": [
+        "prompt-behavior"
+      ],
+      "scenario": {
+        "tools": [
+          "read_file",
+          "write_file",
+          "apply_patch"
+        ],
+        "personal": false,
+        "actions": [
+          {}
+        ],
+        "expectations": [
+          {
+            "unavailable": true,
+            "artifact": "code"
+          }
+        ]
+      },
+      "graders": [
+        {
+          "type": "command",
+          "command": "node .xopc-eval-hidden/check.mjs T06-no-exec",
+          "timeoutMs": 15000,
+          "hiddenFiles": [
+            {
+              "source": "hidden/check.mjs",
+              "target": ".xopc-eval-hidden/check.mjs"
+            },
+            {
+              "source": "suite.yaml",
+              "target": ".xopc-eval-hidden/suite.json"
+            }
+          ],
+          "traceFile": ".xopc-eval-hidden/trace.json"
+        }
+      ]
+    },
+    {
+      "id": "T07-no-review",
+      "repo": {
+        "source": "local",
+        "path": "${EVAL_PROMPT_REPO}",
+        "commit": "${EVAL_PROMPT_COMMIT}"
+      },
+      "task": "Change report.md opening time to 10:00, keeping the rest intact. Inspect the final content with tools that actually exist. Do not invoke review_workspace or session_status and do not create assertion scripts for this prose edit.",
+      "followUps": [],
+      "budget": {
+        "timeoutMs": 180000,
+        "maxModelRequests": 12,
+        "maxTokens": 30000
+      },
+      "tags": [
+        "prompt-behavior"
+      ],
+      "scenario": {
+        "tools": [
+          "read_file",
+          "write_file",
+          "apply_patch",
+          "exec_command"
+        ],
+        "personal": false,
+        "actions": [
+          {}
+        ],
+        "expectations": [
+          {
+            "artifact": "doc"
+          }
+        ]
+      },
+      "graders": [
+        {
+          "type": "command",
+          "command": "node .xopc-eval-hidden/check.mjs T07-no-review",
+          "timeoutMs": 15000,
+          "hiddenFiles": [
+            {
+              "source": "hidden/check.mjs",
+              "target": ".xopc-eval-hidden/check.mjs"
+            },
+            {
+              "source": "suite.yaml",
+              "target": ".xopc-eval-hidden/suite.json"
+            }
+          ],
+          "traceFile": ".xopc-eval-hidden/trace.json"
+        }
+      ]
+    },
+    {
+      "id": "T08-no-status",
+      "repo": {
+        "source": "local",
+        "path": "${EVAL_PROMPT_REPO}",
+        "commit": "${EVAL_PROMPT_COMMIT}"
+      },
+      "task": "Tell me the exact remaining session token budget. If no registered tool can provide this live value, say it is unavailable; do not estimate it, inspect unrelated files or claim a live status check.",
+      "followUps": [],
+      "budget": {
+        "timeoutMs": 180000,
+        "maxModelRequests": 12,
+        "maxTokens": 30000
+      },
+      "tags": [
+        "prompt-behavior"
+      ],
+      "scenario": {
+        "tools": [
+          "read_file",
+          "write_file",
+          "apply_patch",
+          "exec_command",
+          "review_workspace"
+        ],
+        "personal": false,
+        "actions": [
+          {}
+        ],
+        "expectations": [
+          {
+            "unavailable": true,
+            "noCalls": true
+          }
+        ]
+      },
+      "graders": [
+        {
+          "type": "command",
+          "command": "node .xopc-eval-hidden/check.mjs T08-no-status",
+          "timeoutMs": 15000,
+          "hiddenFiles": [
+            {
+              "source": "hidden/check.mjs",
+              "target": ".xopc-eval-hidden/check.mjs"
+            },
+            {
+              "source": "suite.yaml",
+              "target": ".xopc-eval-hidden/suite.json"
+            }
+          ],
+          "traceFile": ".xopc-eval-hidden/trace.json"
+        }
+      ]
+    },
+    {
+      "id": "Q01-prose-only",
+      "repo": {
+        "source": "local",
+        "path": "${EVAL_PROMPT_REPO}",
+        "commit": "${EVAL_PROMPT_COMMIT}"
+      },
+      "task": "Edit report.md only: replace 09:00 with 10:00 and add a final sentence exactly \"Visitors must book ahead.\" Preserve the existing heading, owner and other wording. Verify by inspecting content; do not generate any assertion script or other new file for this prose-only change.",
+      "followUps": [],
+      "budget": {
+        "timeoutMs": 180000,
+        "maxModelRequests": 12,
+        "maxTokens": 30000
+      },
+      "tags": [
+        "quality",
+        "documents"
+      ],
+      "scenario": {
+        "tools": [
+          "read_file",
+          "write_file",
+          "apply_patch",
+          "exec_command",
+          "review_workspace",
+          "publish_artifacts"
+        ],
+        "personal": false,
+        "actions": [
+          {}
+        ],
+        "expectations": [
+          {
+            "artifact": "doc-full"
+          }
+        ]
+      },
+      "graders": [
+        {
+          "type": "command",
+          "command": "node .xopc-eval-hidden/check.mjs Q01-prose-only",
+          "timeoutMs": 15000,
+          "hiddenFiles": [
+            {
+              "source": "hidden/check.mjs",
+              "target": ".xopc-eval-hidden/check.mjs"
+            },
+            {
+              "source": "suite.yaml",
+              "target": ".xopc-eval-hidden/suite.json"
+            }
+          ],
+          "traceFile": ".xopc-eval-hidden/trace.json"
+        }
+      ]
+    }
+  ]
+}

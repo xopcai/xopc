@@ -100,14 +100,40 @@ describe('proportionate runtime verification', () => {
     return { run, execute };
   }
 
-  it('does not add coding instructions to passive evidence collection', async () => {
+  it('keeps passive prose guidance separate from verification evidence', async () => {
     const { run, execute } = fixture({ required: false });
     const changed = await execute('write_file', { path: 'report.md' }, true);
     expect(changed.result.content).toEqual([]);
     expect(changed.result.details).not.toHaveProperty('verificationPending');
-    expect(run.modelGuidance()).toBe('');
+    expect(run.modelGuidance()).toContain('prose-only edit');
+    expect(run.modelGuidance()).not.toContain('standalone assertion test');
     expect(await run.pendingContext()).toBe('');
     expect(await run.summary()).toMatchObject({ changed: true });
+  });
+
+  it('guides prose closeout only after a full successful read at the final revision', async () => {
+    const { run, execute } = fixture({ required: false, workspace: '/workspace' });
+    await execute('write_file', { path: 'report.md' }, true);
+    const read = async (offset: number, truncated: boolean, isError = false) => {
+      await run.beforeTool('read', 'read_file');
+      return run.afterTool({ toolCall: { id: 'read', name: 'read_file' }, args: { path: '/workspace/report.md' }, isError,
+        result: { content: [], details: { offset, truncated } },
+      } as unknown as AfterToolCallContext);
+    };
+    await read(1, true);
+    expect(run.modelGuidance()).not.toContain('have been read back in full');
+    await read(2, false);
+    expect(run.modelGuidance()).not.toContain('have been read back in full');
+    await read(1, false, true);
+    expect(run.modelGuidance()).not.toContain('have been read back in full');
+    await read(1, false);
+    expect(run.modelGuidance()).toContain('have been read back in full');
+    expect((await run.summary()).evidence).toEqual([]);
+    expect(await run.pendingContext()).toBe('');
+    await execute('write_file', { path: 'report.md' }, true);
+    expect(run.modelGuidance()).not.toContain('have been read back in full');
+    await execute('write_file', { path: 'code.ts' }, true);
+    expect(run.modelGuidance()).toBe('');
   });
 
   it('requires content review for prose without inventing assertion scripts', async () => {
@@ -141,6 +167,36 @@ describe('proportionate runtime verification', () => {
     expect(guidance).toContain('content inspection');
     expect(guidance).not.toContain('exec_command');
     expect(guidance).not.toContain('review_workspace');
+  });
+
+  it('does not spend a continuation requesting capabilities that are absent', async () => {
+    const {run, execute} = fixture({toolNames:['write_file']});
+    await execute('write_file', {path:'source.ts'}, true);
+    expect(await run.pendingContext()).toBe('');
+    expect((await run.summary()).evidence).toEqual([]);
+    expect(run.modelGuidance()).toContain('report unavailable verification');
+  });
+
+  it('keeps unavailable checks pending without treating another read as attainable evidence', async () => {
+    const { run, execute } = fixture({ toolNames: ['read_file', 'write_file'] });
+    await execute('write_file', { path: 'source.ts' }, true);
+    await execute('read_file', { path: 'source.ts' });
+    expect(await run.pendingContext()).toBe('');
+    expect(run.modelGuidance()).toContain('Still missing:');
+    expect((await run.summary()).evidence).toEqual([]);
+  });
+
+  it('warns about successful unrecognized repeats without upgrading their evidence', async () => {
+    const { run, execute } = fixture();
+    await execute('write_file', { path: 'logic.ts' }, true);
+    await execute('exec_command', { cmd: 'node check.mjs' });
+    const repeated = await execute('exec_command', { cmd: 'node check.mjs' });
+    expect(JSON.stringify(repeated.result.content)).toContain('already succeeded on the same workspace revision');
+    expect(repeated.result.details).toMatchObject({ verificationPending: ['check', 'diff-review'] });
+    expect((await run.summary()).evidence).toEqual([]);
+    await execute('write_file', { path: 'logic.ts' }, true);
+    const changed = await execute('exec_command', { cmd: 'node check.mjs' });
+    expect(JSON.stringify(changed.result.content)).not.toContain('already succeeded on the same workspace revision');
   });
 
   it('preserves prose scope on resume but treats unknown changes conservatively', async () => {
