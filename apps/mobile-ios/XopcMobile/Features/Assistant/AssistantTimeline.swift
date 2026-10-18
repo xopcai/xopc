@@ -39,11 +39,7 @@ extension AssistantState {
             let resultLinks = message.metadata?.turnOutcome?.deliverables.compactMap(\.link) ?? []
             let unavailableOutputs = message.metadata?.turnOutcome?.deliverables
                 .filter { $0.availability != "available" }.map(\.title) ?? []
-            let receipts = (message.deliveries ?? []).compactMap { delivery -> HistoryTaskReceipt? in
-                guard let product = delivery.primary, product.kind == "task" else { return nil }
-                return HistoryTaskReceipt(id: product.id, title: product.title, operation: delivery.operation,
-                                          canOpen: product.capabilities?.contains("open") == true)
-            }
+            let receipts = taskReceipts(from: message.deliveries)
             guard !text.isEmpty || !attachments.isEmpty || !references.isEmpty || !receipts.isEmpty
                 || !resultLinks.isEmpty || !unavailableOutputs.isEmpty,
                 message.role == "user" || message.role == "assistant"
@@ -68,6 +64,14 @@ extension AssistantState {
                 unavailableOutputs: unavailableOutputs,
                 taskReceipts: receipts
             )
+        }
+    }
+
+    private nonisolated static func taskReceipts(from deliveries: [HistoryProductDelivery]?) -> [HistoryTaskReceipt] {
+        (deliveries ?? []).compactMap { delivery -> HistoryTaskReceipt? in
+            guard let product = delivery.primary, product.kind == "task" else { return nil }
+            return HistoryTaskReceipt(id: product.id, title: product.title, operation: delivery.operation,
+                                      canOpen: product.capabilities?.contains("open") == true)
         }
     }
 
