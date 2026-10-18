@@ -63,7 +63,12 @@ export function RightWorkspace({ scope, enabled = true, elevated = false, onDock
   const present = useWorkspaceMotion(panelRef, visible, pane.activeId);
   useLayoutEffect(() => {
     if (!visible && panelRef.current?.contains(document.activeElement)) {
-      document.querySelector<HTMLElement>('[data-workspace-trigger]')?.focus();
+      const trigger = document.querySelector<HTMLElement>('[data-workspace-trigger]');
+      if (trigger) trigger.focus();
+      else {
+        const frame = requestAnimationFrame(() => document.querySelector<HTMLElement>('[data-workspace-trigger]')?.focus());
+        return () => cancelAnimationFrame(frame);
+      }
     }
   }, [visible]);
   const single = available < 840;
