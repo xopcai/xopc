@@ -73,7 +73,7 @@ describe('SystemPromptBuilder runtime responsibility', () => {
     expect(prompt).not.toContain('## Problem Solving');
     expect(prompt).not.toContain('### Task Contract');
     expect(prompt).not.toContain('## Work Continuity');
-    expect(prompt).not.toContain('When the request names an input path, read it directly');
+    expect(prompt).not.toContain('Read named inputs directly. Search only if missing');
     expect(prompt).not.toContain('Continue until done or genuinely blocked');
 
     const workerPrompt = builder.build([], { conversationId: worker, registeredToolNames: ['read_file'] });
@@ -82,7 +82,7 @@ describe('SystemPromptBuilder runtime responsibility', () => {
     expect(fullWorkerPrompt).toContain('## Execution Bias');
     expect(fullWorkerPrompt).toContain('## Problem Solving');
     expect(fullWorkerPrompt).toContain('### Task Contract');
-    expect(fullWorkerPrompt).toContain('When the request names an input path, read it directly');
+    expect(fullWorkerPrompt).toContain('Read named inputs directly. Search only if missing');
     expect(fullWorkerPrompt).not.toContain('## Personal Coordination');
   });
 });
