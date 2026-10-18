@@ -2774,26 +2774,13 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
           Box(Modifier.then(if (connection.liveMessages.any { it.id in message.sourceIds })
             Modifier.testTag("assistant-live-output") else Modifier)
             .onSizeChanged { replyRowHeights[message.renderId] = it.height }) {
-          ChatMessageCard(message, onReading = { followBottom = false }, streaming = followBottom && !messageListState.isScrollInProgress && connection.activeRunId != null && connection.liveMessages.any { it.id in message.sourceIds }, showMore = connection.messages.any { it.id == message.id }, onMore = { messageActionsId = message.id },
+          ChatMessageCard(message, onReading = { followBottom = false }, streaming = followBottom && !messageListState.isScrollInProgress && connection.activeRunId != null && connection.liveMessages.any { it.id in message.sourceIds }, actionsEnabled = connection.messages.any { it.id == message.id }, onMore = { messageActionsId = message.id },
             onOpenTarget = onOpenMessageTarget,
             onOpenPreview = { media, gallery ->
               previewRequest = MessagePreviewRequest(connection.selectedConversationId, media, gallery)
             }, onOpenLink = openLink, onCopy = onCopyMessageText,
             previewEligible = message.id != latestMessageId && connection.messages.any { it.id == message.id },
             onViewMore = { messageDetailId = message.id },
-            onSaveNote = if (message.role == "assistant" && message.text.isNotBlank() && connection.messages.any { it.id == message.id })
-              ({ onSaveMessageAsNote(message.id) }) else null,
-            savingNote = connection.savingMessageNoteId != null,
-            readAloudPhase = if (reader.state.sourceId == message.id) reader.state.phase else "idle",
-            onReadAloud = if (message.role == "assistant" && message.text.isNotBlank()) ({
-              if (reader.state.sourceId == message.id && reader.state.phase in listOf("playing", "paused"))
-                reader.toggle()
-              else reader.speak(message.text, message.id, Locale.getDefault().toLanguageTag())
-            }) else null,
-            onOpenExecution = if (message.role == "assistant" &&
-              (message.turnId != null || message.hasNonTextContent)) {
-              { onOpenExecution(message.id) }
-            } else null,
             revealAnswer = connection.liveMessages.any { it.answerConfirmed && it.id in message.sourceIds },
             loadMedia = { media -> onLoadMessageMedia(selectedMessageConversationId, media) })
           }
@@ -3177,11 +3164,30 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
     }
   }
   val actionsMessage = connection.messages.firstOrNull { it.id == messageActionsId }
-  if (actionsMessage != null) ModalBottomSheet(onDismissRequest = { messageActionsId = null }) {
+  if (actionsMessage != null) ModalBottomSheet(onDismissRequest = { messageActionsId = null },
+    sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
     val codeText = extractMarkdownCodeBlocks(actionsMessage.text)
-    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp),
-      verticalArrangement = Arrangement.spacedBy(8.dp)) {
-      Text(stringResource(R.string.assistant_message_more), style = MaterialTheme.typography.titleMedium)
+    Column(modifier = Modifier.fillMaxWidth().fillMaxHeight(0.5f)
+      .padding(horizontal = 20.dp, vertical = 12.dp)) {
+      Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(stringResource(R.string.assistant_message_more), style = MaterialTheme.typography.titleMedium,
+          modifier = Modifier.weight(1f))
+        TextButton(onClick = { messageActionsId = null }) { Text(stringResource(R.string.assistant_close)) }
+      }
+      Column(Modifier.weight(1f).verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(8.dp)) {
+      if (actionsMessage.text.isNotBlank()) TextButton(onClick = {
+        messageActionsId = null
+        onCopyMessageText(actionsMessage.text)
+      }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("message-copy-action")) {
+        Text(stringResource(R.string.assistant_copy), modifier = Modifier.fillMaxWidth())
+      }
+      if (actionsMessage.text.isNotBlank()) TextButton(onClick = {
+        messageActionsId = null
+        messageDetailId = actionsMessage.id
+      }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("message-select-text-action")) {
+        Text(stringResource(R.string.assistant_select_text), modifier = Modifier.fillMaxWidth())
+      }
       if (actionsMessage.role == "assistant") TextButton(onClick = {
         messageActionsId = null
         messageDetailId = actionsMessage.id
@@ -3194,18 +3200,21 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
       }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("message-execution-action")) {
         Text(stringResource(R.string.assistant_execution), modifier = Modifier.fillMaxWidth())
       }
-      if (actionsMessage.role == "assistant" && actionsMessage.text.isNotBlank()) TextButton(onClick = {
-        messageActionsId = null
-        reader.speak(actionsMessage.text, actionsMessage.id, Locale.getDefault().toLanguageTag())
-      }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
-        .testTag("message-read-aloud-action")) {
-        Text(stringResource(R.string.assistant_read_aloud), modifier = Modifier.fillMaxWidth())
-      }
-      if (actionsMessage.text.isNotBlank()) TextButton(onClick = {
-        messageActionsId = null
-        onCopyMessageText(actionsMessage.text)
-      }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("message-copy-action")) {
-        Text(stringResource(R.string.assistant_copy), modifier = Modifier.fillMaxWidth())
+      if (actionsMessage.role == "assistant" && actionsMessage.text.isNotBlank() &&
+        actionsMessage.media.none { it.mimeType.startsWith("audio/") }) {
+        val phase = if (reader.state.sourceId == actionsMessage.id) reader.state.phase else "idle"
+        TextButton(onClick = {
+          messageActionsId = null
+          if (phase == "playing" || phase == "paused") reader.toggle()
+          else reader.speak(actionsMessage.text, actionsMessage.id, Locale.getDefault().toLanguageTag())
+        }, enabled = phase != "loading", modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+          .testTag("message-read-aloud-action")) {
+          Text(stringResource(when (phase) {
+            "playing" -> R.string.assistant_pause
+            "paused" -> R.string.assistant_resume
+            else -> R.string.assistant_read_aloud
+          }), modifier = Modifier.fillMaxWidth())
+        }
       }
       if (actionsMessage.role == "assistant" && actionsMessage.text.isNotBlank()) TextButton(onClick = {
         messageActionsId = null
@@ -3244,8 +3253,6 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
         modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("message-reuse-action")) {
         Text(stringResource(R.string.assistant_reuse), modifier = Modifier.fillMaxWidth())
       }
-      TextButton(onClick = { messageActionsId = null }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
-        Text(stringResource(R.string.assistant_close))
       }
     }
   }
@@ -3259,7 +3266,7 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
         ChatMessageCard(detailMessage, onMore = {}, onOpenTarget = onOpenMessageTarget,
           onOpenPreview = { media, gallery -> connection.selectedConversationId?.let {
             previewRequest = MessagePreviewRequest(it, media, gallery)
-          } }, onOpenLink = openLink, onCopy = onCopyMessageText, showMore = false,
+          } }, onOpenLink = openLink, onCopy = onCopyMessageText, actionsEnabled = false, textSelectable = true,
           previewEligible = false,
           loadMedia = { media -> onLoadMessageMedia(requireNotNull(connection.selectedConversationId), media) })
       }

@@ -84,6 +84,8 @@ private val markdownParser = Parser.builder().extensions(listOf(
   .customBlockParserFactory(MathBlockParser.Factory())
   .includeSourceSpans(IncludeSourceSpans.BLOCKS_AND_INLINES).build()
 
+internal val LocalMarkdownSelection = androidx.compose.runtime.compositionLocalOf { true }
+
 private val LocalMarkdownSource = androidx.compose.runtime.compositionLocalOf { "" }
 private val LocalStreamingMarkdown = androidx.compose.runtime.compositionLocalOf { false }
 private val LocalMathEnabled = androidx.compose.runtime.compositionLocalOf { true }
@@ -124,7 +126,25 @@ private fun StringBuilder.appendMarkdownFingerprint(node: Node) {
 @Composable
 internal fun MarkdownContent(markdown: String, modifier: Modifier = Modifier,
   maxLines: Int? = null, onOpenLink: ((String) -> Unit)? = null,
-  onCopyCode: ((String) -> Unit)? = null, streaming: Boolean = false) {
+  onCopyCode: ((String) -> Unit)? = null, streaming: Boolean = false, selectable: Boolean = true) {
+  androidx.compose.runtime.CompositionLocalProvider(LocalMarkdownSelection provides selectable) {
+    MarkdownDocument(markdown, modifier, maxLines, onOpenLink, onCopyCode, streaming)
+  }
+}
+
+@Composable
+internal fun ChatTextSelection(enabled: Boolean, content: @Composable () -> Unit) {
+  if (enabled) SelectionContainer(content = content) else content()
+}
+
+@Composable
+private fun MarkdownSelection(content: @Composable () -> Unit) {
+  ChatTextSelection(LocalMarkdownSelection.current, content)
+}
+
+@Composable
+private fun MarkdownDocument(markdown: String, modifier: Modifier, maxLines: Int?,
+  onOpenLink: ((String) -> Unit)?, onCopyCode: ((String) -> Unit)?, streaming: Boolean) {
   val document by produceState<List<MarkdownRenderBlock>>(emptyList(), markdown) {
     val previous = value
     value = withContext(Dispatchers.Default) { projectMarkdown(markdown, previous) }
@@ -135,7 +155,7 @@ internal fun MarkdownContent(markdown: String, modifier: Modifier = Modifier,
     val preview = remember(document, linkColor, onOpenLink) {
       buildAnnotatedString { document.forEach { appendPreview(it.node, linkColor, onOpenLink) } }
     }
-    SelectionContainer {
+    MarkdownSelection {
       Text(preview, modifier = modifier,
         style = MaterialTheme.typography.bodyLarge, maxLines = maxLines,
         overflow = TextOverflow.Ellipsis)
@@ -188,7 +208,7 @@ private fun MarkdownBlock(node: Node, linkColor: Color,
     }
     is TableBlock -> MarkdownTable(node, linkColor, onOpenLink)
     is ThematicBreak -> HorizontalDivider()
-    is HtmlBlock -> SelectionContainer { Text(node.literal) }
+    is HtmlBlock -> MarkdownSelection { Text(node.literal) }
     else -> Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
       node.children().forEach { MarkdownBlock(it, linkColor, onOpenLink, onCopyCode) }
     }
@@ -221,7 +241,7 @@ private fun MarkdownInlineText(node: Node, linkColor: Color,
     }
     style.copy(textIndent = TextIndent(firstLine = 0.sp, restLine = markerWidth))
   } else style
-  SelectionContainer {
+  MarkdownSelection {
     StreamingMarkdownText(content, LocalStreamingMarkdown.current, modifier, readingStyle,
       if (bold) FontWeight.SemiBold else null)
   }
@@ -244,7 +264,7 @@ private fun MarkdownCodeBlock(code: String, info: String, onCopyCode: ((String) 
           Text(stringResource(R.string.assistant_copy_code))
         }
       }
-      SelectionContainer {
+      MarkdownSelection {
         Text(if (expanded) raw else preview, modifier = Modifier.horizontalScroll(rememberScrollState())
           .testTag("markdown-code-text"), fontFamily = FontFamily.Monospace,
           style = MaterialTheme.typography.bodySmall, softWrap = false)
@@ -298,7 +318,7 @@ private fun MarkdownTable(node: TableBlock, linkColor: Color,
           val content = remember(cell, linkColor, onOpenLink) {
             buildAnnotatedString { cell.children().forEach { appendInline(it, linkColor, onOpenLink) } }
           }
-          SelectionContainer {
+          MarkdownSelection {
             Text(content, modifier = Modifier.widthIn(min = 168.dp, max = 168.dp)
               .border(1.dp, MaterialTheme.colorScheme.outlineVariant)
               .padding(8.dp), style = MaterialTheme.typography.bodySmall,

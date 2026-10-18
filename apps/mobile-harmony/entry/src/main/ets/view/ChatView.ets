@@ -63,6 +63,13 @@ interface XopcSendFlightRect {
   height: number;
 }
 
+interface XopcChatMessageMenuAction {
+  id: string;
+  label: Resource;
+  symbol: Resource;
+  enabled: boolean;
+}
+
 @ComponentV2
 export struct XopcChatView {
   @Local colors: XopcThemeColors = appThemeColors;
@@ -163,8 +170,24 @@ export struct XopcChatView {
   @Computed get assistantMenuHasCode(): boolean {
     return !!extractMarkdownCodeBlocks(chatAnswerText(this.assistantMenuRow));
   }
-  @Computed get assistantMenuActionCount(): number {
-    return 2 + (!this.chat.runId && !this.chat.sending ? 1 : 0) + (this.assistantMenuHasCode ? 1 : 0);
+  @Computed get assistantMenuActions(): XopcChatMessageMenuAction[] {
+    const actions: XopcChatMessageMenuAction[] = [];
+    if (chatAnswerText(this.assistantMenuRow)) {
+      actions.push({ id: 'copy', label: $r('app.string.chat_copy'), symbol: $r('sys.symbol.doc_plaintext'), enabled: true });
+      actions.push({ id: 'select', label: $r('app.string.chat_select_text'), symbol: $r('sys.symbol.doc_text'), enabled: true });
+      actions.push({ id: 'save', label: $r('app.string.chat_save_note'), symbol: $r('sys.symbol.bookmark'), enabled: !this.savingNote });
+      if (!(this.assistantMenuRow.media || []).some((file: XopcHistoryMedia): boolean => file.mimeType.startsWith('audio/'))) {
+        actions.push({ id: 'read', label: this.reader.sourceId === this.assistantMenuRow.id && this.reader.state === 'playing'
+          ? $r('app.string.pause') : this.reader.sourceId === this.assistantMenuRow.id && this.reader.state === 'paused'
+          ? $r('app.string.resume') : $r('app.string.chat_read_aloud'), symbol: $r('sys.symbol.speaker_wave_2'),
+          enabled: this.reader.state !== 'loading' });
+      }
+    }
+    actions.push({ id: 'detail', label: $r('app.string.chat_message_detail'), symbol: $r('sys.symbol.doc_text'), enabled: true });
+    actions.push({ id: 'execution', label: $r('app.string.chat_steps'), symbol: $r('sys.symbol.list_bullet'), enabled: true });
+    if (!this.chat.runId && !this.chat.sending) actions.push({ id: 'regenerate', label: $r('app.string.chat_regenerate'), symbol: $r('sys.symbol.arrow_clockwise'), enabled: true });
+    if (this.assistantMenuHasCode) actions.push({ id: 'copy-code', label: $r('app.string.chat_copy_code'), symbol: $r('sys.symbol.doc_plaintext'), enabled: true });
+    return actions;
   }
   @Local executionOpen: boolean = false;
   @Local executionRow: XopcChatRow = { id: '', role: 'assistant', text: '' };
@@ -1175,7 +1198,7 @@ export struct XopcChatView {
   private finishAssistantMenu(): void {
     const action = this.pendingAssistantMenuAction;
     this.pendingAssistantMenuAction = '';
-    if (action === 'detail') this.openMessageDetail(this.assistantMenuRow);
+    if (action === 'detail' || action === 'select') this.openMessageDetail(this.assistantMenuRow);
     else if (action === 'execution') this.openExecutionDetail(this.assistantMenuRow);
     else if (action) void this.messageAction(action, this.assistantMenuRow);
   }
@@ -1192,82 +1215,21 @@ export struct XopcChatView {
           .accessibilityText($r('app.string.chat_close'))
           .onClick((): void => { this.assistantMenuOpen = false; })
       }.width('100%').height(44).alignItems(VerticalAlign.Center).margin({ bottom: 4 })
-      Button({ type: ButtonType.Normal }) {
-        Row({ space: 14 }) {
-          SymbolGlyph($r('sys.symbol.doc_text')).fontSize(21).fontColor([this.colors.accent])
-          Text($r('app.string.chat_message_detail')).fontSize(16).fontColor(this.colors.foreground).layoutWeight(1)
-          SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(14).fontColor([this.colors.tertiary])
-        }.width('100%').padding({ left: 16, right: 16 })
-      }.id('chat-assistant-menu-detail').width('100%').height(56).padding(0)
-        .borderRadius(14).backgroundColor(this.colors.input)
-        .onClick((): void => { this.chooseAssistantMenuAction('detail'); })
-      Button({ type: ButtonType.Normal }) {
-        Row({ space: 14 }) {
-          SymbolGlyph($r('sys.symbol.list_bullet')).fontSize(21).fontColor([this.colors.accent])
-          Text($r('app.string.chat_steps')).fontSize(16).fontColor(this.colors.foreground).layoutWeight(1)
-          SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(14).fontColor([this.colors.tertiary])
-        }.width('100%').padding({ left: 16, right: 16 })
-      }.id('chat-assistant-menu-execution').width('100%').height(56).padding(0)
-        .borderRadius(14).backgroundColor(this.colors.input)
-        .onClick((): void => { this.chooseAssistantMenuAction('execution'); })
-      if (!this.chat.runId && !this.chat.sending) {
-        Button({ type: ButtonType.Normal }) {
-          Row({ space: 14 }) {
-            SymbolGlyph($r('sys.symbol.arrow_clockwise')).fontSize(21).fontColor([this.colors.accent])
-            Text($r('app.string.chat_regenerate')).fontSize(16).fontColor(this.colors.foreground).layoutWeight(1)
-            SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(14).fontColor([this.colors.tertiary])
-          }.width('100%').padding({ left: 16, right: 16 })
-        }.id('chat-assistant-menu-regenerate').width('100%').height(56).padding(0)
-          .borderRadius(14).backgroundColor(this.colors.input)
-          .onClick((): void => { this.chooseAssistantMenuAction('regenerate'); })
-      }
-      if (this.assistantMenuHasCode) {
-        Button({ type: ButtonType.Normal }) {
-          Row({ space: 14 }) {
-            SymbolGlyph($r('sys.symbol.doc_plaintext')).fontSize(21).fontColor([this.colors.accent])
-            Text($r('app.string.chat_copy_code')).fontSize(16).fontColor(this.colors.foreground).layoutWeight(1)
-            SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(14).fontColor([this.colors.tertiary])
-          }.width('100%').padding({ left: 16, right: 16 })
-        }.id('chat-assistant-menu-copy-code').width('100%').height(56).padding(0)
-          .borderRadius(14).backgroundColor(this.colors.input)
-          .onClick((): void => { this.chooseAssistantMenuAction('copy-code'); })
-      }
-    }.id('chat-assistant-menu').width('100%').padding({ left: 20, right: 20, top: 8, bottom: 16 })
-  }
-
-  @Builder
-  assistantMessageActions(row: XopcChatRow) {
-    Row({ space: 2 }) {
-      Button({ type: ButtonType.Circle }) {
-        SymbolGlyph($r('sys.symbol.doc_plaintext')).fontSize(18).fontColor([this.colors.tertiary])
-      }.width(40).height(40).padding(0).backgroundColor(Color.Transparent)
-        .accessibilityText($r('app.string.chat_copy'))
-        .onClick((): void => { this.messageAction('copy', row); })
-      Button({ type: ButtonType.Circle }) {
-        SymbolGlyph($r('sys.symbol.bookmark')).fontSize(18).fontColor([this.colors.tertiary])
-      }.width(40).height(40).padding(0).backgroundColor(Color.Transparent)
-        .accessibilityText($r('app.string.chat_save_note')).enabled(!this.savingNote)
-        .onClick((): void => { this.messageAction('save', row); })
-      if (!(row.media || []).some((file: XopcHistoryMedia): boolean => file.mimeType.startsWith('audio/'))) {
-        Button({ type: ButtonType.Circle }) {
-          if (this.reader.sourceId === row.id && this.reader.state === 'loading') {
-            LoadingProgress().width(18).height(18).color(this.colors.secondary)
-          } else if (this.reader.sourceId === row.id && this.reader.state === 'playing') {
-            Text('Ⅱ').fontSize(18).fontColor(this.colors.secondary)
-          } else {
-            SymbolGlyph($r('sys.symbol.speaker_wave_2')).fontSize(18).fontColor([this.colors.tertiary])
-          }
-        }.width(40).height(40).padding(0).backgroundColor(Color.Transparent)
-          .accessibilityText(this.reader.sourceId === row.id && this.reader.state === 'playing' ? $r('app.string.pause')
-            : this.reader.sourceId === row.id && this.reader.state === 'paused' ? $r('app.string.resume') : $r('app.string.chat_read_aloud'))
-          .enabled(!!chatAnswerText(row))
-          .onClick((): void => { this.messageAction('read', row); })
-      }
-      Button({ type: ButtonType.Circle }) {
-        SymbolGlyph($r('sys.symbol.ellipsis_circle')).fontSize(19).fontColor([this.colors.tertiary])
-      }.id('chat-assistant-more-' + row.id).width(40).height(40).padding(0).backgroundColor(Color.Transparent)
-        .accessibilityText($r('app.string.more')).onClick((): void => { this.assistantMessageMore(row); })
-    }.width('100%').padding({ left: 8 }).justifyContent(FlexAlign.Start)
+      Scroll() {
+        Column({ space: 8 }) {
+          ForEach(this.assistantMenuActions, (action: XopcChatMessageMenuAction) => {
+            Button({ type: ButtonType.Normal }) {
+              Row({ space: 14 }) {
+                SymbolGlyph(action.symbol).fontSize(21).fontColor([this.colors.accent])
+                Text(action.label).fontSize(16).fontColor(this.colors.foreground).layoutWeight(1)
+              }.width('100%').padding({ left: 16, right: 16 })
+            }.id('chat-assistant-menu-' + action.id).width('100%').height(56).padding(0)
+              .borderRadius(14).backgroundColor(this.colors.input).enabled(action.enabled)
+              .onClick((): void => { this.chooseAssistantMenuAction(action.id); })
+          }, (action: XopcChatMessageMenuAction): string => action.id)
+        }.width('100%')
+      }.layoutWeight(1).width('100%').scrollBar(BarState.Auto)
+    }.id('chat-assistant-menu').width('100%').height('100%').padding({ left: 20, right: 20, top: 8, bottom: 16 })
   }
 
   @Builder
@@ -1359,8 +1321,14 @@ export struct XopcChatView {
                 .onClick((): void => {
                   if (item.item.id !== this.latestMessageId && chatMessageNeedsPreview(item.item)) this.openMessageDetail(item.item);
                 })
+                .gesture(LongPressGesture({ repeat: false, duration: 500 }).onAction((): void => {
+                  if (!item.item.live) {
+                    this.atBottom = false;
+                    this.assistantMessageMore(item.item);
+                  }
+                }))
               }
-              if (!item.item.live && chatAnswerText(item.item)) { this.assistantMessageActions(item.item) }
+
             }.width('100%').alignItems(HorizontalAlign.Start)
           } else {
             Column({ space: 2 }) {
@@ -1771,7 +1739,7 @@ export struct XopcChatView {
           } })
       Column().id('chat-assistant-menu-sheet-host').width('100%').height(0)
         .bindSheet($$this.assistantMenuOpen, this.assistantMessageMenuSheet, {
-          height: 112 + this.assistantMenuActionCount * 56,
+          height: '50%',
           dragBar: true, showClose: false, backgroundColor: this.colors.panel,
           onDisappear: (): void => { this.finishAssistantMenu(); }
         })
@@ -1869,7 +1837,7 @@ export struct XopcChatView {
         Column() {
           if (this.messageDetailContentReady) {
             XopcChatMessageContent({ row: this.messageDetailRow, conversationId: this.chat.selectedId,
-              disclosure: this.disclosure, reasoning: this.context.config?.reasoningLevel || 'on',
+              disclosure: this.disclosure, textSelectable: true, reasoning: this.context.config?.reasoningLevel || 'on',
               onShowExecution: (row: XopcChatRow): void => { this.messageDetailOpen = false; this.openExecutionDetail(row); },
               onNavigate: (route: XopcMobileRoute): void => { this.navigateFromMessageDetail(route); },
               onFillDraft: (text: string): void => { this.fillDraftFromMessageDetail(text); } })

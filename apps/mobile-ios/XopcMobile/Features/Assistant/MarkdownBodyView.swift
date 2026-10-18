@@ -6,6 +6,7 @@ struct MarkdownBodyView: View {
     let conversationID: String?
     var markdown: String?
     var streaming = false
+    @Environment(\.chatTextSelectionEnabled) private var textSelectable
     @State private var projectedParts: [MarkdownPart] = []
 
     var body: some View {
@@ -18,7 +19,7 @@ struct MarkdownBodyView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .textSelection(.enabled)
+        .chatTextSelection(textSelectable)
         .task(id: markdown) {
             guard let markdown else { return }
             let previous = projectedParts
@@ -34,6 +35,7 @@ struct MarkdownBodyView: View {
 }
 
 private struct MarkdownPartView: View {
+    @Environment(\.chatTextSelectionEnabled) private var textSelectable
     let block: MarkdownBlock
     let configuration: GatewayConfiguration
     let conversationID: String?
@@ -83,7 +85,7 @@ private struct MarkdownPartView: View {
                 ScrollView(.horizontal) {
                     Text(expanded ? text : codePreview(text))
                         .font(.system(.footnote, design: .monospaced))
-                        .textSelection(.enabled)
+                        .chatTextSelection(textSelectable)
                         .padding(12)
                 }
                 .background(Color.secondary.opacity(0.09), in: .rect(cornerRadius: 10))
@@ -170,5 +172,23 @@ private struct MarkdownPartView: View {
         case .center: .center
         case .trailing: .trailing
         }
+    }
+}
+
+private struct ChatTextSelectionKey: EnvironmentKey {
+    static let defaultValue = true
+}
+
+extension EnvironmentValues {
+    var chatTextSelectionEnabled: Bool {
+        get { self[ChatTextSelectionKey.self] }
+        set { self[ChatTextSelectionKey.self] = newValue }
+    }
+}
+
+extension View {
+    @ViewBuilder
+    func chatTextSelection(_ enabled: Bool) -> some View {
+        if enabled { textSelection(.enabled) } else { textSelection(.disabled) }
     }
 }

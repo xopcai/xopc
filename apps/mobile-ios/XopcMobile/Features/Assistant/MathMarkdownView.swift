@@ -7,6 +7,7 @@ struct MathMarkdownView: View {
     var display = false
     var fontSize = 16.0
     var enabled = true
+    @Environment(\.chatTextSelectionEnabled) private var textSelectable
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.openURL) private var openURL
     @ScaledMetric private var fontScale = 1.0
@@ -16,11 +17,11 @@ struct MathMarkdownView: View {
         VStack(alignment: .leading, spacing: 4) {
             if enabled {
                 MathWebContent(markdown: markdown, streaming: streaming, dark: colorScheme == .dark,
-                               fontSize: fontSize * fontScale, height: $height, onOpenLink: { url in openURL(url) })
+                               fontSize: fontSize * fontScale, textSelectable: textSelectable, height: $height, onOpenLink: { url in openURL(url) })
                     .frame(height: height)
                     .accessibilityIdentifier("markdown-math")
             } else {
-                Text(markdown).textSelection(.enabled)
+                Text(markdown).chatTextSelection(textSelectable)
             }
             if display {
                 Button("复制公式源码") { UIPasteboard.general.string = markdown }
@@ -35,6 +36,7 @@ private struct MathWebContent: UIViewRepresentable {
     let streaming: Bool
     let dark: Bool
     let fontSize: Double
+    let textSelectable: Bool
     @Binding var height: Double
     let onOpenLink: (URL) -> Void
 
@@ -86,7 +88,7 @@ private struct MathWebContent: UIViewRepresentable {
         func update(_ view: WKWebView) {
             guard loaded else { return }
             let payload: [String: Any] = ["markdown": parent.markdown, "streaming": parent.streaming,
-                                          "dark": parent.dark, "fontSize": parent.fontSize]
+                                          "dark": parent.dark, "fontSize": parent.fontSize, "textSelectable": parent.textSelectable]
             guard let data = try? JSONSerialization.data(withJSONObject: payload, options: [.sortedKeys]),
                   let key = String(data: data, encoding: .utf8), key != lastPayload else { return }
             lastPayload = key
@@ -94,7 +96,7 @@ private struct MathWebContent: UIViewRepresentable {
             var next = payload
             next["revision"] = revision
             // Arguments are transferred by WebKit, never interpolated as JavaScript source.
-            view.callAsyncJavaScript("window.xopcMath.update(payload)", arguments: ["payload": next], in: nil, in: .page, completionHandler: { _ in })
+            view.callAsyncJavaScript("document.documentElement.style.webkitUserSelect = payload.textSelectable ? 'text' : 'none'; window.xopcMath.update(payload)", arguments: ["payload": next], in: nil, in: .page, completionHandler: { _ in })
         }
 
         func webView(_ webView: WKWebView, didFinish _: WKNavigation!) {
