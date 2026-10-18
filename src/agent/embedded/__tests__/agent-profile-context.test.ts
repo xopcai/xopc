@@ -94,7 +94,7 @@ describe('Agent profile runtime context', () => {
       expect(continued).toContain(standingPreference);
       expect(continued).toContain(exception);
       expect(getCurrentSystemPrompt(captured as never)).toContain('A single-turn exception does not erase that preference');
-      expect(continued).toContain('agent_configuration_current');
+      expect((captured as { role: string; content: unknown }[]).filter(message => message.role === 'custom')).toHaveLength(0);
       expect((captured as { content: unknown }[]).at(-1)).toMatchObject({ content: [{ type: 'text', text: '继续解释。' }] });
 
     } finally {
@@ -132,10 +132,10 @@ describe('Agent profile runtime context', () => {
     expect(entries[0].customType).toBe(AGENT_PROFILE_CONTEXT_STATE);
     expect(Object.keys(entries[0].data)).toEqual(['fingerprint', 'configuration']);
     expect(entries[0].data.configuration).toMatchObject({ name: 'Mira', role: 'Botany educator', primaryLanguage: 'en' });
-    expect(JSON.parse(handler(event, context).message.content).event).toBe('agent_configuration_current');
+    expect(handler(event, context).message).toBeUndefined();
     expect(entries).toHaveLength(1);
     createAgentProfileContextExtension(conversationId)(pi as never);
-    expect(JSON.parse(handler(event, context).message.content).event).toBe('agent_configuration_current');
+    expect(handler(event, context).message).toBeUndefined();
     expect(entries).toHaveLength(1);
     const agent = catalog.get('identity-test')!;
     catalog.update(agent.id, agent.revision, { id: agent.id, profile: { name: 'Orion', description: 'Astronomy educator', language: 'fr' } });
@@ -145,13 +145,22 @@ describe('Agent profile runtime context', () => {
       updates: { name: { previous: 'Mira', current: 'Orion' } } });
     expect(updated.message.display).toBe(false);
     expect(entries).toHaveLength(2);
+    const renamed = catalog.get(agent.id)!;
+    catalog.update(agent.id, renamed.revision, { id: agent.id, profile: { ...renamed.profile, name: 'Nova' } });
+    const identityOnly = JSON.parse(handler(event, context).message.content);
+    expect(identityOnly.changedFields).toEqual(['name']);
+    expect(identityOnly.current).not.toHaveProperty('primaryLanguage');
+    expect(identityOnly.current).not.toHaveProperty('style');
+    expect(identityOnly.current).not.toHaveProperty('responseLanguageOverride');
+    expect(entries.at(-1).data.configuration.primaryLanguage).toBe('fr');
     setSessionConfig(conversationId, { responseLanguage: 'zh-CN' });
     expect(JSON.parse(handler(event, context).message.content).changedFields).toEqual(['responseLanguageOverride']);
-    expect(entries).toHaveLength(3);
+    expect(entries).toHaveLength(4);
     const current = catalog.get(agent.id)!;
     catalog.update(agent.id, current.revision, { id: agent.id, profile: { name: 'Orion' } });
     const cleared = JSON.parse(handler(event, context).message.content);
-    expect(cleared.current).toMatchObject({ role: null, style: null, primaryLanguage: null });
+    expect(cleared.current).toMatchObject({ role: null, primaryLanguage: null });
+    expect(cleared.current).not.toHaveProperty('style');
     expect(cleared.updates.role).toEqual({ previous: 'Astronomy educator', current: null });
     expect(event.systemPrompt).toBe('CURRENT SYSTEM PROFILE AND TOOL GUIDANCE');
   });
