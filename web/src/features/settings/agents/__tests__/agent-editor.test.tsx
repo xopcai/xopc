@@ -58,6 +58,15 @@ beforeEach(async () => {
 });
 afterEach(() => { act(() => root.unmount()); container.remove(); });
 
+it('localizes the built-in overview while retaining the stored name in the editor', async () => {
+  const overview = container.querySelector('#agent-panel-overview');
+  expect(overview?.textContent).toContain('编程专家');
+  expect(overview?.textContent).toContain('编写、调试、重构和测试软件。');
+  await click(tab('个性'));
+  expect(container.querySelector<HTMLInputElement>('input[placeholder="例如：小助"]')?.value).toBe('Coder');
+  expect(api.update).not.toHaveBeenCalled();
+});
+
 it('groups settings into four outer tabs and links summaries to capability subpanels', async () => {
   expect([...container.querySelectorAll('[role="tab"]')].map(node => node.textContent)).toEqual(['概览', '个性', '能力', '工作设置']);
   await click(button('对话模型test/model继承全局'));
