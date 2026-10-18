@@ -180,7 +180,7 @@ describe('personal delivery benchmark v1', () => {
   it('H03-policy: concise default and artifact fallback preserve explicit detail requests', async () => {
     const instructions = personalInstructions({});
     expect(instructions).toContain('Be concise by default');
-    expect(instructions).toContain('one to three sentences');
+    expect(instructions).toContain('one short paragraph or a few useful items');
     expect(instructions).toContain('Explicit requests for detail');
     expect(instructions).toContain('never omit required facts or uncertainty');
     const { main, coordinator, outcome } = execution();
