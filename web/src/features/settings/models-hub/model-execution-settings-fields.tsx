@@ -1,5 +1,6 @@
 import useSWR from 'swr';
 
+import { SlidingTabList } from '@/components/ui/sliding-tab-list';
 import { SettingsAdvancedSection } from '@/features/settings/settings-advanced-section';
 import { NumberInput } from '@/components/ui/number-input';
 import { Button } from '@/components/ui/button';
@@ -83,7 +84,7 @@ export function ModelExecutionSettingsFields({
 
             <div className="mt-5 grid gap-4 rounded-xl bg-surface-base/45 p-4 sm:grid-cols-2">
               <label className="block text-xs font-medium text-fg-muted">{zh ? '生成超时（毫秒）' : 'Generation timeout (ms)'}<NumberInput allowEmpty type="number" min={1} className={`${inputClass} mt-2`} value={draft.models.imageGeneration.timeoutMs ?? ''} onChange={(event) => setDraft({ ...draft, models: { ...draft.models, imageGeneration: { ...draft.models.imageGeneration!, timeoutMs: event.target.value ? Number(event.target.value) : undefined } } })} /></label>
-              <div className="text-xs font-medium text-fg-muted"><span>{zh ? '服务商自动回退' : 'Automatic provider fallback'}</span><div className="mt-1.5 flex rounded-lg bg-surface-panel p-1">{([true, false] as const).map((enabled) => <Button key={String(enabled)} variant={draft.models.imageGeneration?.autoProviderFallback === enabled ? 'secondary' : 'ghost'} className="flex-1 py-1.5 text-xs" onClick={() => setDraft({ ...draft, models: { ...draft.models, imageGeneration: { ...draft.models.imageGeneration!, autoProviderFallback: enabled } } })}>{enabled ? (zh ? '开启' : 'On') : (zh ? '关闭' : 'Off')}</Button>)}</div></div>
+              <div className="text-xs font-medium text-fg-muted"><span>{zh ? '服务商自动回退' : 'Automatic provider fallback'}</span><SlidingTabList className="mt-1.5 flex rounded-lg bg-surface-panel p-1" role="group" aria-label={zh ? "服务商自动回退" : "Automatic provider fallback"}>{([true, false] as const).map((enabled) => <Button aria-pressed={draft.models.imageGeneration?.autoProviderFallback === enabled} key={String(enabled)} variant={draft.models.imageGeneration?.autoProviderFallback === enabled ? 'secondary' : 'ghost'} className="flex-1 py-1.5 text-xs" onClick={() => setDraft({ ...draft, models: { ...draft.models, imageGeneration: { ...draft.models.imageGeneration!, autoProviderFallback: enabled } } })}>{enabled ? (zh ? '开启' : 'On') : (zh ? '关闭' : 'Off')}</Button>)}</SlidingTabList></div>
             </div>
 
           </SettingsAdvancedSection>

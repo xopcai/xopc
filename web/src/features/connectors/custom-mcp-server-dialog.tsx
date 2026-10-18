@@ -2,6 +2,7 @@ import * as Dialog from '@radix-ui/react-dialog';
 import { CheckCircle2, ExternalLink, Loader2, X } from 'lucide-react';
 import { useEffect, useId, useRef, useState } from 'react';
 
+import { SlidingTabList } from '@/components/ui/sliding-tab-list';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Select, SelectOption } from '@/components/ui/popover-select';
@@ -308,10 +309,10 @@ export function CustomMcpServerDialog(props: { open: boolean; mode: 'add' | 'edi
         }} onSubmit={event => { event.preventDefault(); void connect(); }}>
           <fieldset disabled={busy || reloadRequired} className="min-w-0 space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="flex gap-1" role="group" aria-label={t.transportLabel}>
+              <SlidingTabList className="flex gap-1" role="group" aria-label={t.transportLabel}>
                 {(['streamable-http', 'stdio'] as const).map(transport => <Button key={transport} type="button" variant={row.transport === transport ? 'secondary' : 'ghost'} aria-pressed={row.transport === transport}
                   onClick={() => update({ transport })}>{transport === 'stdio' ? t.setupUseCommand : t.setupUseUrl}</Button>)}
-              </div>
+              </SlidingTabList>
               <Button type="button" variant="ghost" onClick={() => setImporting(true)}>{t.setupImport}</Button>
             </div>
             <div><McpServerFormFields key={`${row.transport}-${formRevision}`} row={row} t={t} variant="basic" onUpdate={update} /></div>

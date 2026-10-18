@@ -8,6 +8,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import useSWR from 'swr';
 
+import { SlidingTabList } from '@/components/ui/sliding-tab-list';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { taskDetailHref } from '@/features/tasks/task-detail-route';
@@ -144,9 +145,9 @@ export function DiscussionNoteSections({ noteId, onPersonalNotes, noteActions }:
         onOrganize={() => void operation(() => fetchJson(apiUrl(`${base}/organize`),{ method: 'POST',body: JSON.stringify({ template }) }))}
         onRegenerate={() => void operation(() => retryDiscussion(discussion.id,'from_audio'))} />
     </header>
-    <nav aria-label={zh ? '笔记内容' : 'Note content'} className="mx-5 mb-2 flex shrink-0 gap-1 rounded-xl bg-surface-inset p-1 sm:mx-7">
+    <SlidingTabList as="nav" aria-label={zh ? '笔记内容' : 'Note content'} className="mx-5 mb-2 flex shrink-0 gap-1 rounded-xl bg-surface-inset p-1 sm:mx-7" indicatorClassName="rounded-lg bg-surface-panel shadow-sm">
       {(['summary','transcript','marks'] as const).map(value => <button key={value} aria-pressed={tab === value} className={`min-h-11 min-w-0 flex-1 rounded-lg px-2 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${tab === value ? 'bg-surface-panel font-medium text-fg shadow-sm' : 'text-fg-muted hover:text-fg'}`} onClick={() => setTab(value)}>{value === 'summary' ? (zh ? '概览' : 'Overview') : value === 'marks' ? (zh ? '标记' : 'Highlights') : (zh ? '原文' : 'Transcript')}</button>)}
-    </nav>
+    </SlidingTabList>
     {error ? <details role="alert" className="px-4 py-2 text-sm text-danger"><summary>{zh ? '操作未完成，可以稍后重试' : 'Action incomplete. Try again later'}</summary><p className="mt-2 break-words text-xs text-fg-muted">{error}</p></details> : null}
 
     {searchOpen || query ? <label className="mx-5 mb-2 flex shrink-0 items-center gap-2 rounded-xl bg-surface-inset px-3 sm:mx-7"><Search className="size-4 text-fg-muted" /><input ref={searchInput} aria-label={zh ? '搜索此 Note' : 'Search this Note'} className="min-h-11 min-w-0 w-full bg-transparent text-sm outline-none" maxLength={200} placeholder={zh ? '搜索这篇笔记' : 'Search this note'} value={query} onChange={event => { setQuery(event.target.value); setPage(1); }} /><button className="inline-flex size-11 shrink-0 items-center justify-center rounded-lg focus-visible:ring-2 focus-visible:ring-accent" aria-label={zh ? '关闭搜索' : 'Close search'} onClick={() => { setQuery(''); setSearchOpen(false); }}><X className="size-4" /></button></label> : null}

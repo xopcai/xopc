@@ -3,6 +3,7 @@ import { PanelRight, Copy, Globe, FileText, FolderOpen, ListTree, Maximize2, Mes
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react';
 import { useLocation } from 'react-router-dom';
 
+import { SlidingTabList } from '@/components/ui/sliding-tab-list';
 import { BrowserTabView, useBrowserEvents } from '@/features/browser/browser-tab';
 import { closeEmbeddedBrowser, useEmbeddedBrowserStore } from '@/features/browser/browser-store';
 import { WorkspaceColumn } from '@/components/shell/workspace-column';
@@ -260,19 +261,19 @@ export function RightWorkspace({ scope, enabled = true, elevated = false }: { sc
       </Popover.Root>
 
       <span className="mx-1 h-6 w-px shrink-0 bg-edge-subtle" aria-hidden />
-      <div ref={tabListRef} role="tablist" aria-label={zh ? '工作区标签' : 'Workspace tabs'} className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      <SlidingTabList ref={tabListRef} role="tablist" aria-label={zh ? '工作区标签' : 'Workspace tabs'} className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         onKeyDown={(event) => {
           const tabs = [...event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]')];
           const index = tabs.indexOf(document.activeElement as HTMLButtonElement);
           const next = event.key === 'ArrowRight' ? (index + 1) % tabs.length : event.key === 'ArrowLeft' ? (index - 1 + tabs.length) % tabs.length : event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : -1;
           if (next >= 0) { event.preventDefault(); tabs[next]?.focus(); }
-        }}>
+        }} indicatorClassName="rounded-md border border-edge bg-surface-panel">
         {!pane.tabs.length ? <span className="truncate px-2 text-sm font-medium">{zh ? '项目文件' : 'Project files'}</span> : null}
         {pane.tabs.map((tab) => {
           const side = tab.kind === 'sidechat' ? sideTabs.find((t) => t.id === tab.sideChatId) : undefined;
           const title = tabTitle(tab);
           const stateLabel = side?.waiting ? (zh ? '待处理' : 'Needs attention') : side?.disconnected ? (zh ? '连接中断' : 'Disconnected') : side?.ended ? (zh ? '已结束' : 'Ended') : side?.runId ? (zh ? '运行中' : 'Running') : side?.unread ? (zh ? '未读' : 'Unread') : fileStatus[tab.id] ? (zh ? '未保存' : 'Unsaved') : '';
-          return <div key={tab.id} className={cn('group flex h-9 shrink-0 items-center rounded-md border transition-colors', tab.id === pane.activeId ? 'border-edge bg-surface-panel text-fg' : 'border-transparent text-fg-muted hover:bg-surface-hover')}>
+          return <div key={tab.id} data-sliding-active={tab.id === pane.activeId} className={cn('group flex h-9 shrink-0 items-center rounded-md border transition-colors', tab.id === pane.activeId ? 'border-edge bg-surface-panel text-fg' : 'border-transparent text-fg-muted hover:bg-surface-hover')}>
             <button role="tab" id={`workspace-tab-${tab.id}`} aria-controls="workspace-content" aria-selected={tab.id === pane.activeId} tabIndex={tab.id === pane.activeId ? 0 : -1}
               title={tab.kind === 'file' ? tab.path || title : title} className="flex max-w-56 items-center gap-1.5 rounded-md px-2 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent" onClick={() => select(tab.id)} onDoubleClick={() => { if (tab.kind === 'file') store.keepFileOpen(tab.id); }}>
               {tab.kind === 'browser' ? <Globe className="size-4 shrink-0" aria-hidden /> : tab.kind === 'sidechat' ? <MessageSquare className="size-4 shrink-0" aria-hidden /> : tab.kind === 'files' ? <FolderOpen className="size-4 shrink-0" aria-hidden /> : <FileText className="size-4 shrink-0" aria-hidden />}
@@ -286,7 +287,7 @@ export function RightWorkspace({ scope, enabled = true, elevated = false }: { sc
             }}><X className="size-3.5" aria-hidden /></button>
           </div>;
         })}
-      </div>
+      </SlidingTabList>
       <button className={buttonClass} aria-label={zh ? '新建标签' : 'New tab'} title={zh ? '新建标签' : 'New tab'} onClick={() => store.openTools(scope)}><Plus className="size-5" aria-hidden /></button>
 
       <button className={buttonClass} aria-label={expanded ? (zh ? '还原工作区' : 'Restore workspace') : (zh ? '放大工作区' : 'Expand workspace')} onClick={() => setExpanded(!expanded)}>{expanded ? <Minimize2 className="size-4" aria-hidden /> : <Maximize2 className="size-4" aria-hidden />}</button>

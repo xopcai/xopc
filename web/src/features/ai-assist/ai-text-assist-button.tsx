@@ -10,6 +10,7 @@ import {
   useState,
 } from 'react';
 
+import { SlidingTabList } from '@/components/ui/sliding-tab-list';
 import { MarkdownView } from '@/components/markdown/markdown-view';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/cn';
@@ -268,8 +269,8 @@ export function AiTextAssistButton({
                 <div className="flex min-h-0 flex-col overflow-hidden">
                   <div className="mb-2 flex items-center justify-between gap-2">
                     <div className="min-w-0 text-xs font-medium text-fg-muted">{labels.current}</div>
-                    <div className="flex shrink-0 items-center gap-1 rounded-lg border border-edge bg-surface-inset p-0.5">
-                      <button
+                    <SlidingTabList className="flex shrink-0 items-center gap-1 rounded-lg border border-edge bg-surface-inset p-0.5" role="group" aria-label={labels.current} indicatorClassName="rounded-md bg-surface-panel shadow-surface">
+                      <button aria-pressed={currentMode === 'edit'}
                         type="button"
                         className={cn(
                           'inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-xs font-medium',
@@ -282,7 +283,7 @@ export function AiTextAssistButton({
                         <SquarePen className="size-3.5 shrink-0" strokeWidth={1.75} aria-hidden />
                         {labels.edit}
                       </button>
-                      <button
+                      <button aria-pressed={currentMode === 'preview'}
                         type="button"
                         className={cn(
                           'inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-xs font-medium',
@@ -295,7 +296,7 @@ export function AiTextAssistButton({
                         <Eye className="size-3.5 shrink-0" strokeWidth={1.75} aria-hidden />
                         {labels.preview}
                       </button>
-                    </div>
+                    </SlidingTabList>
                   </div>
                   {currentMode === 'preview' ? (
                     <div className="min-h-0 flex-1 overflow-auto rounded-lg border border-edge bg-surface-base p-3 text-sm leading-6 text-fg">
@@ -321,7 +322,7 @@ export function AiTextAssistButton({
                       <span>{labels.editedSuggestion}</span>
                       {loading ? <span className="ml-2 font-normal">{labels.loading}</span> : null}
                     </div>
-                    <div className="flex shrink-0 items-center gap-1 rounded-lg border border-edge bg-surface-inset p-0.5">
+                    <SlidingTabList className="flex shrink-0 items-center gap-1 rounded-lg border border-edge bg-surface-inset p-0.5" role="group" aria-label={labels.editedSuggestion} indicatorClassName="rounded-md bg-surface-panel shadow-surface">
                       <button
                         type="button"
                         className={cn(
@@ -330,6 +331,7 @@ export function AiTextAssistButton({
                             ? 'bg-surface-panel text-fg shadow-surface'
                             : 'text-fg-muted hover:bg-surface-hover',
                         )}
+                        aria-pressed={mode === 'edit'}
                         onClick={() => setMode('edit')}
                       >
                         <SquarePen className="size-3.5 shrink-0" strokeWidth={1.75} aria-hidden />
@@ -343,12 +345,13 @@ export function AiTextAssistButton({
                             ? 'bg-surface-panel text-fg shadow-surface'
                             : 'text-fg-muted hover:bg-surface-hover',
                         )}
+                        aria-pressed={mode === 'preview'}
                         onClick={() => setMode('preview')}
                       >
                         <Eye className="size-3.5 shrink-0" strokeWidth={1.75} aria-hidden />
                         {labels.preview}
                       </button>
-                    </div>
+                    </SlidingTabList>
                   </div>
                   <div className="relative min-h-0 flex-1 overflow-hidden">
                     <div

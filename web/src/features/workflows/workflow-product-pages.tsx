@@ -3,6 +3,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import useSWR from 'swr';
 
+import { SlidingTabList } from '@/components/ui/sliding-tab-list';
 import { Button } from '@/components/ui/button';
 import { Select, SelectOption } from '@/components/ui/popover-select';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -271,7 +272,7 @@ export function WorkflowDetailPage() {
       <div className="mx-auto w-full max-w-6xl px-4 pb-5 pt-3 sm:px-6 lg:pt-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <p className="max-w-3xl text-sm leading-6 text-fg-muted">{localized.description}</p>
-          <div className="flex rounded-lg bg-surface-base p-1" role="tablist" aria-label={language === 'zh' ? '工作流视图' : 'Workflow view'}>
+          <SlidingTabList className="flex rounded-lg bg-surface-base p-1" role="tablist" aria-label={language === 'zh' ? '工作流视图' : 'Workflow view'} indicatorClassName="rounded-md bg-surface-panel shadow-sm">
             {(['canvas', 'source'] as const).map((view) => (
               <button
                 key={view}
@@ -284,7 +285,7 @@ export function WorkflowDetailPage() {
                 {view === 'canvas' ? (language === 'zh' ? '画布' : 'Canvas') : (language === 'zh' ? '源码' : 'Source')}
               </button>
             ))}
-          </div>
+          </SlidingTabList>
         </div>
 
         <div className="mt-5 grid gap-5 xl:grid-cols-[minmax(0,1fr)_22rem]">

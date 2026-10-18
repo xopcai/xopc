@@ -3,6 +3,7 @@ import { useCallback, useState } from 'react';
 import useSWR from 'swr';
 import { useSearchParams } from 'react-router-dom';
 
+import { SlidingTabList } from '@/components/ui/sliding-tab-list';
 import { Button } from '@/components/ui/button';
 import { AutosaveStatus } from '@/components/ui/autosave-status';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -86,14 +87,14 @@ function AgentDefaultsEditor({
         </div>
       ) : null}
 
-      <nav className="grid grid-cols-3 gap-1 rounded-xl bg-surface-hover/20 p-1" aria-label={zh ? '默认配置分区' : 'Default configuration sections'}>
+      <SlidingTabList as="nav" className="grid grid-cols-3 gap-1 rounded-xl bg-surface-hover/20 p-1" aria-label={zh ? '默认配置分区' : 'Default configuration sections'} indicatorClassName="rounded-lg bg-surface-base shadow-surface">
         {tabs.map(({ id, label, icon: Icon }) => (
           <button key={id} type="button" aria-pressed={activePanel === id} onClick={() => setActivePanel(id)} className={cn('flex min-w-0 items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent', activePanel === id ? 'bg-surface-base text-fg shadow-surface' : 'text-fg-muted hover:bg-surface-hover hover:text-fg')}>
             <Icon className={cn('size-4 shrink-0', activePanel === id ? 'text-accent' : 'text-fg-subtle')} />
             <span className="text-sm font-medium">{label}</span>
           </button>
         ))}
-      </nav>
+      </SlidingTabList>
 
       {activePanel === 'skills' ? <AgentDefaultsSkillsPanel draft={draft} setDraft={setDraft} zh={zh} /> : null}
       {activePanel === 'tools' ? <AgentDefaultsToolsPanel draft={draft} setDraft={setDraft} builtinTools={builtinTools} zh={zh} /> : null}

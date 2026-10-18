@@ -5,6 +5,7 @@ import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import useSWR from 'swr';
 import { useDebounce } from 'use-debounce';
 
+import { SlidingTabList } from '@/components/ui/sliding-tab-list';
 import { APP_CHROME_NO_DRAG_CLASS } from '@/components/shell/app-chrome';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { PopoverSelect } from '@/components/ui/popover-select';
@@ -271,7 +272,7 @@ export function NotesHomePage() {
                 </div>
               </div>
             </div>
-            <div className="flex flex-wrap items-center gap-x-5 border-b border-edge xl:hidden" aria-label={n.libraryTitle}>
+            <SlidingTabList className="flex flex-wrap items-center gap-x-5 border-b border-edge xl:hidden" aria-label={n.libraryTitle} role="group">
               {[{ id: 'all', label: n.filterAll }, { id: 'favorites', label: h.favorites }, { id: 'archived', label: n.filterArchived }].map(({ id, label }) => (
                 <button type="button" key={id} aria-pressed={view === id || (id === 'all' && view === 'unassigned')}
                   onClick={() => chooseView(id)}
@@ -280,7 +281,7 @@ export function NotesHomePage() {
                 </button>
               ))}
               <span className="ml-auto py-3 text-xs text-fg-muted">{h.sortUpdated}</span>
-            </div>
+            </SlidingTabList>
             {error ? <div className="py-10 text-center" role="alert"><p className="text-sm text-danger">{h.loadFailed}</p><button type="button" onClick={() => void mutate().catch(() => undefined)} className={cn(quietButton, 'mt-2')}>{h.retry}</button></div> : loading ? (
               <div aria-busy="true" className="divide-y divide-edge">{[0, 1, 2, 3].map((i) => <div key={i} className="flex items-center gap-3 py-4"><Skeleton className="h-10 w-8 shrink-0" /><div className="flex-1 space-y-2"><Skeleton className="h-4 w-2/3" /><Skeleton className="h-3 w-1/2" /></div></div>)}</div>
             ) : notes.length === 0 ? (

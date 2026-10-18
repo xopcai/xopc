@@ -1652,25 +1652,18 @@ export function ProjectDetailPage() {
     <main className="flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden p-3 sm:px-5 sm:py-4 xl:px-6">
       <div className="flex shrink-0 items-start justify-between gap-3">
         <PageTabs
-          items={primaryTabItems}
+          items={[...primaryTabItems, {
+            id: 'settings',
+            icon: Settings,
+            label: pm.tabs.settings,
+            suffix: projectConfigDirty ? <span className="size-1.5 rounded-full bg-amber-500" aria-label={pm.settings.unsavedChanges} /> : undefined,
+          }]}
           activeTab={tab}
           onChange={navigateProjectTab}
           ariaLabel={pm.navAria}
           tabIdPrefix="project-primary-tab"
           className="min-w-0 flex-1"
         />
-        <Button
-          id="project-primary-tab-settings"
-          type="button"
-          variant={tab === 'settings' ? 'secondary' : 'ghost'}
-          className="h-9 shrink-0 rounded-lg px-3"
-          aria-current={tab === 'settings' ? 'page' : undefined}
-          onClick={() => navigateProjectTab('settings')}
-        >
-          <Settings className="size-4" aria-hidden />
-          {pm.tabs.settings}
-          {projectConfigDirty ? <span className="size-1.5 rounded-full bg-amber-500" aria-label={pm.settings.unsavedChanges} /> : null}
-        </Button>
       </div>
 
       {error ? <p className="mt-3 shrink-0 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-700 dark:text-red-300">{error}</p> : null}

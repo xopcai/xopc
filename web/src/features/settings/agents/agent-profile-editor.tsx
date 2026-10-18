@@ -16,6 +16,7 @@ import {
   useState,
 } from 'react';
 
+import { SlidingTabList } from '@/components/ui/sliding-tab-list';
 import { MarkdownView } from '@/components/markdown/markdown-view';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
@@ -152,13 +153,13 @@ export const AgentProfileEditor = forwardRef<AgentProfileEditorHandle, Props>(fu
         <div className="p-4 sm:p-5">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div><h4 className="text-sm font-semibold text-fg">{fileInfo[activeFile].label}</h4><p className="mt-1 text-xs leading-5 text-fg-muted">{fileInfo[activeFile].description}</p></div>
-            <div className="flex rounded-lg bg-surface-hover p-1" role="group" aria-label={zh ? '编辑模式' : 'Editor mode'}>
+            <SlidingTabList className="flex rounded-lg bg-surface-hover p-1" role="group" aria-label={zh ? '编辑模式' : 'Editor mode'} indicatorClassName="rounded-md bg-surface-panel shadow-surface">
               {([
                 ['direct', Pencil, zh ? '直接编辑' : 'Visual'],
                 ['source', Code2, 'Markdown'],
                 ['preview', Eye, zh ? '预览' : 'Preview'],
               ] as const).map(([value, Icon, label]) => <button key={value} type="button" onClick={() => setMode(value)} aria-pressed={mode === value} className={cn('inline-flex min-h-9 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium transition-colors', mode === value ? 'bg-surface-panel text-fg shadow-surface' : 'text-fg-muted hover:text-fg')}><Icon className="size-3.5" aria-hidden />{label}</button>)}
-            </div>
+            </SlidingTabList>
           </div>
 
           {activeFile === 'SOUL.md' && !loading ? (

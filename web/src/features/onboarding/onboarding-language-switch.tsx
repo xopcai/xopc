@@ -1,3 +1,4 @@
+import { SlidingTabList } from '@/components/ui/sliding-tab-list';
 import {
   segmentedThumbActiveClassName,
   segmentedThumbBaseClassName,
@@ -19,7 +20,7 @@ export function OnboardingLanguageSwitch({
   onChange: (language: StoredLanguage) => void;
 }) {
   return (
-    <div className={segmentedTrackClassName} role="group" aria-label="Language / 语言">
+    <SlidingTabList className={segmentedTrackClassName} role="group" aria-label="Language / 语言" indicatorClassName="rounded-pill bg-surface-panel shadow-sm dark:ring-1 dark:ring-edge-strong/40">
       {LANGUAGES.map((language) => {
         const selected = language.value === value;
         return (
@@ -38,6 +39,6 @@ export function OnboardingLanguageSwitch({
           </button>
         );
       })}
-    </div>
+    </SlidingTabList>
   );
 }

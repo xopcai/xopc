@@ -1,6 +1,7 @@
 import { Check, Copy, Download, ExternalLink, Eye, FolderOpen, Link2, Loader2, Maximize2, MessageSquarePlus, Minimize2, MoreHorizontal, Paperclip, Pencil, RefreshCw, Save, WrapText, X } from 'lucide-react';
 import { useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 
+import { SlidingTabList } from '@/components/ui/sliding-tab-list';
 import { WorkspaceTreeControlContext } from '@/features/right-workspace/workspace-context';
 import { APP_CHROME_NO_DRAG_CLASS } from '@/components/shell/app-chrome';
 import { PreviewRuntimeToolbar, type PreviewRuntimeController } from '@/features/preview-runtime/preview-runtime';
@@ -220,7 +221,7 @@ export function FilePreviewHeader({
       </div>
       {hasPreviewControls || textView ? <div className="mt-2 flex items-center gap-2 overflow-x-auto pb-0.5">
         {textView ? (
-          <div className="mr-2 flex shrink-0 rounded-lg bg-surface-hover p-0.5" role="group" aria-label={labels.chat.attachmentPreviewText}>
+          <SlidingTabList className="mr-2 flex shrink-0 rounded-lg bg-surface-hover p-0.5" role="group" aria-label={labels.chat.attachmentPreviewText}>
             {[{ active: false, label: previewLabel }, { active: true, label: labels.chat.attachmentPreviewText }].map((option) => (
               <button key={option.label} type="button" aria-pressed={textView.active === option.active}
                 className={cn('rounded-md px-2.5 py-1 text-xs font-medium', textView.active === option.active ? 'bg-surface-hover text-fg' : 'text-fg-muted hover:text-fg')}
@@ -228,7 +229,7 @@ export function FilePreviewHeader({
                 {option.label}
               </button>
             ))}
-          </div>
+          </SlidingTabList>
         ) : null}
         {hasPreviewControls ? <PreviewRuntimeToolbar controller={controller} /> : null}
       </div> : null}

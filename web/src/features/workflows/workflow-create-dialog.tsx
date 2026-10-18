@@ -20,6 +20,7 @@ import { ArrowLeft, Bot, GitBranch, History, Inbox, Layers3, Play, RotateCcw, Sa
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link, useBeforeUnload, useBlocker } from 'react-router-dom';
 
+import { SlidingTabList } from '@/components/ui/sliding-tab-list';
 import { Button } from '@/components/ui/button';
 import { PopoverSelect } from '@/components/ui/popover-select';
 import { TabCompletionInput } from '@/components/ui/tab-completion-input';
@@ -470,7 +471,7 @@ export function WorkflowEditor({
               <h1 className="text-base font-semibold text-fg">{initialDraft?.mode === 'edit' ? copy.editTitle : copy.createTitle}</h1>
               <p className="mt-0.5 text-xs text-fg-muted">{copy.subtitle}</p>
             </div>
-            <div className="flex rounded-lg bg-surface-base p-1" role="tablist" aria-label={language === 'zh' ? '工作流编辑视图' : 'Workflow editor view'}>
+            <SlidingTabList className="flex rounded-lg bg-surface-base p-1" role="tablist" aria-label={language === 'zh' ? '工作流编辑视图' : 'Workflow editor view'} indicatorClassName="rounded-md bg-surface-panel shadow-sm">
               {(['canvas', 'source'] as const).map((view) => (
                 <button
                   key={view}
@@ -487,7 +488,7 @@ export function WorkflowEditor({
                   {view === 'canvas' ? (language === 'zh' ? '画布' : 'Canvas') : (language === 'zh' ? '源码' : 'Source')}
                 </button>
               ))}
-            </div>
+            </SlidingTabList>
             <span className={cn('text-xs', draftStatus === 'error' ? 'text-danger' : 'text-fg-subtle')}>
               {draftStatus === 'saving' ? copy.savingDraft : draftStatus === 'saved' ? copy.savedDraft : draftStatus === 'error' ? copy.draftError : ''}
             </span>

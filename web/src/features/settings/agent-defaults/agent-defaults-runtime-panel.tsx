@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { creditDecimal, parseCreditDecimal } from '@xopcai/gateway-contract';
 import useSWR from 'swr';
 
+import { SlidingTabList } from '@/components/ui/sliding-tab-list';
 import { SettingsAdvancedSection } from '@/features/settings/settings-advanced-section';
 import { NumberInput } from '@/components/ui/number-input';
 import { Button } from '@/components/ui/button';
@@ -99,8 +100,8 @@ export function AgentDefaultsRuntimePanel({
           <h2 className="text-base font-semibold text-fg">{zh ? '提示词缓存' : 'Prompt cache'}</h2>
           <p className="mt-1 text-sm text-fg-muted">{zh ? '复用稳定的上下文以降低响应延迟和模型费用。' : 'Reuse stable context to reduce latency and model cost.'}</p>
           <div className="mt-5 grid gap-4 sm:grid-cols-2">
-            <div className="text-xs font-medium text-fg-muted"><span>{zh ? '缓存模式' : 'Cache mode'}</span><div className="mt-1.5 flex rounded-lg bg-surface-panel p-1">{(['auto', 'off'] as const).map((mode) => <Button key={mode} variant={draft.runtime.promptCache?.mode === mode ? 'secondary' : 'ghost'} className="flex-1 py-1.5 text-xs" onClick={() => setDraft({ ...draft, runtime: { ...draft.runtime, promptCache: { mode, lifetime: draft.runtime.promptCache?.lifetime ?? 'short' } } })}>{mode === 'auto' ? (zh ? '自动' : 'Automatic') : (zh ? '关闭' : 'Off')}</Button>)}</div></div>
-            {draft.runtime.promptCache?.mode === 'auto' ? <div className="text-xs font-medium text-fg-muted"><span>{zh ? '缓存周期' : 'Cache lifetime'}</span><div className="mt-1.5 flex rounded-lg bg-surface-panel p-1">{(['short', 'long'] as const).map((lifetime) => <Button key={lifetime} variant={draft.runtime.promptCache?.lifetime === lifetime ? 'secondary' : 'ghost'} className="flex-1 py-1.5 text-xs" onClick={() => setDraft({ ...draft, runtime: { ...draft.runtime, promptCache: { mode: 'auto', lifetime } } })}>{lifetime === 'short' ? (zh ? '短期' : 'Short') : (zh ? '长期' : 'Long')}</Button>)}</div></div> : null}
+            <div className="text-xs font-medium text-fg-muted"><span>{zh ? '缓存模式' : 'Cache mode'}</span><SlidingTabList className="mt-1.5 flex rounded-lg bg-surface-panel p-1" role="group" aria-label={zh ? "缓存模式" : "Cache mode"}>{(['auto', 'off'] as const).map((mode) => <Button aria-pressed={draft.runtime.promptCache?.mode === mode} key={mode} variant={draft.runtime.promptCache?.mode === mode ? 'secondary' : 'ghost'} className="flex-1 py-1.5 text-xs" onClick={() => setDraft({ ...draft, runtime: { ...draft.runtime, promptCache: { mode, lifetime: draft.runtime.promptCache?.lifetime ?? 'short' } } })}>{mode === 'auto' ? (zh ? '自动' : 'Automatic') : (zh ? '关闭' : 'Off')}</Button>)}</SlidingTabList></div>
+            {draft.runtime.promptCache?.mode === 'auto' ? <div className="text-xs font-medium text-fg-muted"><span>{zh ? '缓存周期' : 'Cache lifetime'}</span><SlidingTabList className="mt-1.5 flex rounded-lg bg-surface-panel p-1" role="group" aria-label={zh ? "缓存周期" : "Cache lifetime"}>{(['short', 'long'] as const).map((lifetime) => <Button aria-pressed={draft.runtime.promptCache?.lifetime === lifetime} key={lifetime} variant={draft.runtime.promptCache?.lifetime === lifetime ? 'secondary' : 'ghost'} className="flex-1 py-1.5 text-xs" onClick={() => setDraft({ ...draft, runtime: { ...draft.runtime, promptCache: { mode: 'auto', lifetime } } })}>{lifetime === 'short' ? (zh ? '短期' : 'Short') : (zh ? '长期' : 'Long')}</Button>)}</SlidingTabList></div> : null}
           </div>
         </section>
 

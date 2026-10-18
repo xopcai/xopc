@@ -326,7 +326,7 @@ Gateway 控制台等工作台界面采用 **左侧导航 + 右侧主内容** 结
 | 小型标签、Badge | `rounded-sm` / `rounded-md` | 6–8px | 微小元素 |
 | 头像、图标容器 | `rounded-full` | 50% | 完全圆形，用于人物和品牌标识 |
 
-**分段控件实现约定（Gateway / Web）**：轨道与每项使用同一套 class，避免顶栏各开关风格漂移。共享常量见 分段控件共享样式常量（网关 Web 源码中的 `segmented-styles` 模块）（`segmentedTrackClassName`、`segmentedThumbBaseClassName`、`segmentedThumbActiveClassName`）。选中项需要强调色时在外层追加 `text-accent-fg`（如主题、图标型分段）。
+**分段控件实现约定（Gateway / Web）**：轨道与每项使用同一套 class，避免顶栏各开关风格漂移。共享常量见 分段控件共享样式常量（网关 Web 源码中的 `segmented-styles` 模块）（`segmentedTrackClassName`、`segmentedThumbBaseClassName`、`segmentedThumbActiveClassName`）。**Tab 与单选分段切换必须复用公共滑块组件**：普通页面使用 `PageTabs`，标准胶囊分段使用 `SlidingSegmented`；需要路由链接、自定义标签或独立关闭按钮时使用 `SlidingTabList`。三者共用 `SlidingIndicator` 的位置测量、滑动过渡及减少动态效果适配，禁止再单独实现选中背景切换。自定义容器通过 `aria-selected`、`aria-pressed`、`aria-current` 标记选中项；带关闭按钮的整项使用 `data-sliding-active`，让滑块覆盖整个标签。选中项需要强调色时在外层追加 `text-accent-fg`（如主题、图标型分段）。
 
 > **克制原则**：同一页面最多出现三档圆角。只有标签、状态和头像使用全圆角，普通导航行不做胶囊。
 

@@ -2,6 +2,7 @@ import * as Dialog from '@radix-ui/react-dialog';
 import { useMemo, useState } from 'react';
 import useSWR from 'swr';
 
+import { SlidingTabList } from '@/components/ui/sliding-tab-list';
 import { NumberInput } from '@/components/ui/number-input';
 import { AutosaveStatus } from '@/components/ui/autosave-status';
 import { Button } from '@/components/ui/button';
@@ -120,10 +121,10 @@ export function TracingSettingsPage() {
     <SettingsPageHeader title={t('Runtime tracing', '运行追踪')} subtitle={t('Local diagnostics with bounded retention. Enable Langfuse to also export new traces.', '默认保留有界本地记录；启用 Langfuse 后同时导出新采集的追踪。')} actions={view === 'settings' ? <div className="flex flex-wrap items-center gap-3"><span className="text-xs text-fg-muted">{t('Changes save automatically', '修改后自动保存')}</span><AutosaveStatus status={configAutosave.status} error={configAutosave.error} /></div> : <Button disabled={list.isValidating} onClick={resetPages}>{t('Refresh records', '刷新记录')}</Button>} />
     {notice && <p role={failed ? 'alert' : 'status'} className="text-sm text-fg-muted">{notice}</p>}
     {settings.error && <p role="alert">{String(settings.error.message)}</p>}
-    <nav aria-label={t('Tracing sections', '追踪页面分区')} className="flex gap-2 border-b border-edge pb-3">
-      <Button aria-pressed={view === 'records'} variant={view === 'records' ? 'primary' : 'ghost'} onClick={() => setView('records')}>{t('Execution records', '执行记录')}</Button>
-      <Button aria-pressed={view === 'settings'} variant={view === 'settings' ? 'primary' : 'ghost'} onClick={() => setView('settings')}>{t('Capture settings', '采集设置')}</Button>
-    </nav>
+    <SlidingTabList as="nav" aria-label={t('Tracing sections', '追踪页面分区')} className="flex gap-2 border-b border-edge pb-3">
+      <Button aria-pressed={view === 'records'} variant="ghost" onClick={() => setView('records')}>{t('Execution records', '执行记录')}</Button>
+      <Button aria-pressed={view === 'settings'} variant="ghost" onClick={() => setView('settings')}>{t('Capture settings', '采集设置')}</Button>
+    </SlidingTabList>
     {view === 'settings' && (!cfg ? <TracingSkeleton /> : <>
       <section className={panelClass} onBlurCapture={configAutosave.onBlurCapture}>
         <h2 className="font-medium">{t('Local recording', '本地记录')}</h2>

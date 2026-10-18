@@ -2548,3 +2548,18 @@ html[data-desktop-pet="true"] body {
 @media (prefers-reduced-motion: reduce) {
   .workspace-menu[data-state="open"] { animation: none; }
 }
+
+/* Custom tab structures share the same sliding surface as PageTabs. */
+.sliding-tab-list > :not([data-sliding-indicator]) {
+  position: relative;
+  z-index: 1;
+}
+
+.sliding-tab-list[data-sliding-ready="true"] :is([data-sliding-active="true"], [role="tab"][aria-selected="true"], button[aria-pressed="true"], a[aria-current="page"]) {
+  background-color: transparent !important;
+  border-color: transparent !important;
+}
+
+.sliding-tab-list[data-sliding-ready="true"] :is([data-sliding-active="true"], [role="tab"][aria-selected="true"], button[aria-pressed="true"], a[aria-current="page"]):not(:focus-visible) {
+  box-shadow: none !important;
+}

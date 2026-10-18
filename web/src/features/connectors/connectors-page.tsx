@@ -2,6 +2,7 @@ import { Loader2 } from 'lucide-react';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 
+import { SlidingTabList } from '@/components/ui/sliding-tab-list';
 import { Button } from '@/components/ui/button';
 import { PageTabs } from '@/components/ui/page-tabs';
 import { PopoverSelect } from '@/components/ui/popover-select';
@@ -692,7 +693,7 @@ export function ConnectorsPage({ embedded = false, onHeaderActionChange }: { emb
           {tab === 'discover' && hasToken ? (
             <div className="flex flex-col gap-5">
               <div className="flex flex-wrap items-start justify-between gap-3">
-                {!understandingIntent ? <div className="flex min-w-0 flex-1 basis-80 flex-wrap gap-2" role="group" aria-label={cs.taskFilterAria}>
+                {!understandingIntent ? <SlidingTabList className="flex min-w-0 flex-1 basis-80 flex-wrap gap-2" role="group" aria-label={cs.taskFilterAria} indicatorClassName="rounded-lg bg-surface-active">
                   {(['all', ...availableTasks] as DiscoveryTask[]).map((task) => (
                     <button
                       key={task}
@@ -709,7 +710,7 @@ export function ConnectorsPage({ embedded = false, onHeaderActionChange }: { emb
                       {task === 'all' ? cs.taskAll : cs.connectorBenefitHeadings[task]}
                     </button>
                   ))}
-                </div> : null}
+                </SlidingTabList> : null}
 
                 <div className={cn(
                   'ml-auto grid w-full gap-2 sm:flex sm:w-auto sm:justify-end',

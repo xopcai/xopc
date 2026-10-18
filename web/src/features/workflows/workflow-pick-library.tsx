@@ -1,6 +1,7 @@
 import { BookmarkCheck, Braces, CopyPlus, Layers3, Pencil, Play, Search, UsersRound } from 'lucide-react';
 import { useMemo, useState } from 'react';
 
+import { SlidingTabList } from '@/components/ui/sliding-tab-list';
 import { Button } from '@/components/ui/button';
 import { Select, SelectOption } from '@/components/ui/popover-select';
 import { cn } from '@/lib/cn';
@@ -205,7 +206,7 @@ export function WorkflowPickLibrary({
               <p className="mt-1 text-xs text-fg-muted">{interpolate(labels.workflowCount, { count: filtered.length })}</p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <div className="flex rounded-lg bg-surface-inset p-0.5" role="group" aria-label={labels.sourceFilterAria}>
+              <SlidingTabList className="flex rounded-lg bg-surface-inset p-0.5" role="group" aria-label={labels.sourceFilterAria} indicatorClassName="rounded-md bg-surface-base shadow-surface">
                 {WORKFLOW_SOURCE_FILTERS.map((source) => (
                   <button
                     key={source}
@@ -221,7 +222,7 @@ export function WorkflowPickLibrary({
                     {labels.sources[source]}
                   </button>
                 ))}
-              </div>
+              </SlidingTabList>
               <Select
                 value={categoryFilter}
                 aria-label={labels.categoryFilterAria}

@@ -3,6 +3,7 @@ import { CheckCircle2, ChevronLeft, Loader2, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import type { ModelSetupPreview, ModelSetupRequest, ModelSetupUse } from '@xopcai/gateway-contract';
 
+import { SlidingTabList } from '@/components/ui/sliding-tab-list';
 import { Button } from '@/components/ui/button';
 import { Select, SelectOption } from '@/components/ui/popover-select';
 import { SecretInput } from '@/components/ui/secret-input';
@@ -140,9 +141,9 @@ export function ProviderSetupPanel({ providerId, row, modelIds, existingConnecti
             <SecretInput id="provider-setup-key" disabled={busy} value={apiKey} onChange={setApiKey} placeholder={connected ? (zh ? '留空使用已保存的凭据' : 'Leave empty to use saved credentials') : 'API Key'} labels={secretInputLabelsFromChannels(messages(language).providersSettings)} />
             {keyUrl ? <a className="inline-flex min-h-8 items-center text-sm text-accent-fg hover:underline" href={keyUrl} target="_blank" rel="noopener noreferrer">{zh ? '获取对应接入方式的 Key' : 'Get a key for this access method'}</a> : null}
           </div> : null}
-          {!connectOnly && !inline ? <div className="flex flex-wrap items-center justify-between gap-2"><span className="text-sm font-medium text-fg">{zh ? '模型用途' : 'Model uses'}</span><div className="flex gap-2">
+          {!connectOnly && !inline ? <div className="flex flex-wrap items-center justify-between gap-2"><span className="text-sm font-medium text-fg">{zh ? '模型用途' : 'Model uses'}</span><SlidingTabList className="flex gap-2" indicatorClassName="rounded-lg bg-surface-active">
             {(['fill', 'replace'] as const).map(mode => <Button key={mode} variant={request.mode === mode ? 'secondary' : 'ghost'} disabled={busy} aria-pressed={request.mode === mode} onClick={() => changeMode(mode)}>{mode === 'fill' ? (zh ? '补齐未配置' : 'Fill missing') : (zh ? '改用此服务' : 'Switch to this service')}</Button>)}
-          </div></div> : <p className="text-sm text-fg-muted">{inline ? (zh ? '仅更新当前能力，其他模型和参数保持原设置。' : 'Only this capability changes; other settings are preserved.') : (zh ? '保存连接后返回能力设置，再选择要使用的模型。' : 'Save the connection, then choose a model in capability settings.')}</p>}
+          </SlidingTabList></div> : <p className="text-sm text-fg-muted">{inline ? (zh ? '仅更新当前能力，其他模型和参数保持原设置。' : 'Only this capability changes; other settings are preserved.') : (zh ? '保存连接后返回能力设置，再选择要使用的模型。' : 'Save the connection, then choose a model in capability settings.')}</p>}
         </>}
         {connectOnly ? <p className="text-xs text-fg-muted">{zh ? '支持用途：' : 'Supported uses: '}{preview.uses.filter(use => use.choices.length && (!targetUse || use.id === targetUse)).map(use => labels[use.id][zh ? 0 : 1]).join('、')}</p> : null}
         {!connectOnly ? <div className="divide-y divide-edge rounded-xl border border-edge bg-surface-inset px-4">
