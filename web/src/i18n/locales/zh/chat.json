@@ -158,7 +158,7 @@
     "welcomeSpotlight": {
       "headline": "今天想推进什么？",
       "projectHeadline": "想在「{{projectName}}」里做什么？",
-      "acceptSuggestionHint": "按 Tab 填入建议",
+      "acceptSuggestionHint": "按 Tab 或 Enter 填入建议",
       "recommendations": {
         "projectBlocked": {
           "title": "解除当前阻塞：{{blockedReason}}",

@@ -25,7 +25,7 @@ describe('ChatComposerInput contextual suggestion', () => {
     container.remove();
   });
 
-  it('accepts the suggestion with Tab only while the editor is empty', () => {
+  it.each(['Tab', 'Enter'])('accepts the suggestion with %s only while the editor is empty', (key) => {
     const acceptEmptySuggestion = vi.fn(() => true);
     const onWireInput = vi.fn();
     const valueRef = { current: '' };
@@ -53,7 +53,7 @@ describe('ChatComposerInput contextual suggestion', () => {
         <ChatComposerInput
           editorRef={editorRef}
           disabled={false}
-          placeholder="理解当前目录 · 按 Tab 填入建议"
+          placeholder="理解当前目录 · 按 Tab 或 Enter 填入建议"
           ariaLabel="输入消息"
           onWireInput={onWireInput}
           adjustHeight={() => {}}
@@ -67,9 +67,10 @@ describe('ChatComposerInput contextual suggestion', () => {
     });
 
     const editor = container.querySelector('[role="textbox"]');
-    const firstTab = new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true });
+    const firstTab = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true });
     act(() => editor?.dispatchEvent(firstTab));
     expect(firstTab.defaultPrevented).toBe(true);
+    expect(kbdRef.current.send).not.toHaveBeenCalled();
     expect(acceptEmptySuggestion).toHaveBeenCalledTimes(1);
 
     valueRef.current = '';
@@ -79,15 +80,15 @@ describe('ChatComposerInput contextual suggestion', () => {
     ]) {
       const previous = { ...kbdRef.current };
       Object.assign(kbdRef.current, change);
-      act(() => editor?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true })));
+      act(() => editor?.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true })));
       expect(acceptEmptySuggestion).toHaveBeenCalledTimes(1);
       kbdRef.current = previous;
     }
     valueRef.current = ' ';
-    act(() => editor?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true })));
+    act(() => editor?.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true })));
     expect(acceptEmptySuggestion).toHaveBeenCalledTimes(1);
     valueRef.current = '';
-    act(() => editor?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, isComposing: true })));
+    act(() => editor?.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, isComposing: true })));
     expect(acceptEmptySuggestion).toHaveBeenCalledTimes(1);
     expect(editor?.getAttribute('aria-label')).toBe('输入消息');
 
@@ -102,10 +103,12 @@ describe('ChatComposerInput contextual suggestion', () => {
       expect(editor.childNodes).toHaveLength(0);
     }
 
+    vi.mocked(kbdRef.current.send).mockClear();
     valueRef.current = '已经输入内容';
-    const secondTab = new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true });
+    const secondTab = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true });
     act(() => editor?.dispatchEvent(secondTab));
-    expect(secondTab.defaultPrevented).toBe(false);
+    expect(secondTab.defaultPrevented).toBe(key === 'Enter');
+    expect(kbdRef.current.send).toHaveBeenCalledTimes(key === 'Enter' ? 1 : 0);
     expect(acceptEmptySuggestion).toHaveBeenCalledTimes(1);
   });
 

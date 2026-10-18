@@ -155,9 +155,9 @@ export const ChatComposerInput = memo(function ChatComposerInput({
           return;
         }
 
-        // 3. Accept the contextual empty-state suggestion without interfering with picker Tab handling.
+        // 3. Accept the contextual empty-state suggestion after picker key handling.
         if (
-          e.key === 'Tab' &&
+          (e.key === 'Tab' || e.key === 'Enter') &&
           !e.shiftKey &&
           !e.metaKey &&
           !e.ctrlKey &&
