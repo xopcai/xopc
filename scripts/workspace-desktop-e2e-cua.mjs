@@ -35,9 +35,9 @@ export async function* runNativeWorkspaceExtras(app, { motion = true } = {}) {
   await app.pressKey('Escape'); await snapshot();
   state = await click('toggle button Description: Open workspace tools');
   check('Desktop Tools exposes files sidechat browser terminal', ['button Files', 'button Side chat', 'button Browser', 'button Terminal'].every(t => state.includes(t)));
-  const count = Number(state.match(/Tab list \((\d+)\)/)?.[1]);
+  const count = (state.match(/ tab (?:\(selected\)|\(settable, integer\))/g) ?? []).length;
   state = await click('toggle button Description: Open workspace tools');
-  check('Repeated outer Plus reuses Tools', Number(state.match(/Tab list \((\d+)\)/)?.[1]) === count);
+  check('Repeated outer Plus reuses Tools', (state.match(/ tab (?:\(selected\)|\(settable, integer\))/g) ?? []).length === count);
   yield [...checks];
 
   state = await click('button Terminal,');
@@ -146,7 +146,7 @@ export async function runNativeNewSessionTerminal(app) {
   let state = await click('link Description: New chat,');
   check('New draft hides previous browser', !state.includes('HTML content Page Two'));
   state = await click('toggle button Description: Open workspace tools');
-  check('New draft owns separate tabs', state.includes('Tab list (1)') && !state.includes('Close Page Two'));
+  check('New draft owns separate tabs', (state.match(/ tab (?:\(selected\)|\(settable, integer\))/g) ?? []).length === 1 && !state.includes('Close Page Two'));
   state = await click('button Terminal,');
   if (state.includes('Choose a configured model')) {
     check('Unconfigured draft gets actionable error and Retry', state.includes('button Retry terminal') && !state.includes('Invalid session command'));

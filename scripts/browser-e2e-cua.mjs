@@ -31,7 +31,7 @@ export async function* runNativeBrowserE2e(app, site) {
   state = await click('link Description: Open page two in a new tab,');
   check('Popup becomes a new workspace tab', state.includes('tab (selected) Page Two') && state.includes('tab (settable, integer) Page One'));
   state = await click('tab (settable, integer) Page One,'); check('Independent tab form state', state.includes('Value: Keep across tool tabs'));
-  state = await click('pop up button Tab list'); check('DOM menu occludes native guest', state.includes('Open tabs') && !state.includes('HTML content Page One'));
+  state = await click('pop up button Chat menu'); check('DOM menu occludes native guest', state.includes('menu Chat menu') && !state.includes('HTML content Page One'));
   await app.pressKey('Escape'); await snapshot();
   yield [...checks];
   await click('tab (settable, integer) Files,'); state = await click('button report.md');

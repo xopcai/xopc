@@ -1,18 +1,16 @@
-import * as Popover from '@radix-ui/react-popover';
-import { PanelRight, Copy, Globe, FileText, FolderOpen, ListTree, Maximize2, MessageSquare, Minimize2, MoreHorizontal, Plus, X } from 'lucide-react';
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react';
+import { PanelRight, Globe, FileText, FolderOpen, Maximize2, MessageSquare, Minimize2, Plus, X } from 'lucide-react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { useLocation } from 'react-router-dom';
 
 import { SlidingTabList } from '@/components/ui/sliding-tab-list';
 import { BrowserTabView, useBrowserEvents } from '@/features/browser/browser-tab';
-import { closeEmbeddedBrowser, useEmbeddedBrowserStore } from '@/features/browser/browser-store';
+import { closeEmbeddedBrowser } from '@/features/browser/browser-store';
 import { WorkspaceColumn } from '@/components/shell/workspace-column';
 import { AttachmentPreviewDialog } from '@/features/chat/attachments/attachment-preview-dialog';
 import { SideChatColumn } from '@/features/side-chat/side-chat-column';
 import { WorkspaceFilePreviewPanel } from '@/features/workspace/workspace-file-preview-dialog';
 import { detectPreviewFileType } from '@/features/preview-runtime/detect-preview-file';
 import { electronPreviewViewportClass } from '@/lib/electron-window-chrome';
-import { copyTextToClipboard } from '@/lib/copy-to-clipboard';
 import { cn } from '@/lib/cn';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
@@ -30,23 +28,11 @@ import { WorkspaceFileTargetsContext, WorkspaceOwnerContext, WorkspaceTreeContro
 
 const buttonClass = 'inline-flex size-9 shrink-0 items-center justify-center rounded-md text-fg-muted hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent';
 
-function navigateMenu(event: ReactKeyboardEvent<HTMLDivElement>) {
-  if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
-  const items = [...event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="menuitem"]:not(:disabled)')];
-  if (!items.length) return;
-  event.preventDefault();
-  const current = items.indexOf(document.activeElement as HTMLButtonElement);
-  const index = event.key === 'Home' ? 0 : event.key === 'End' ? items.length - 1
-    : (current + (event.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length;
-  items[index]?.focus();
-}
-
 export function RightWorkspace({ scope, enabled = true, elevated = false, onDockedWidthChange }: { scope: string; enabled?: boolean; elevated?: boolean; onDockedWidthChange?: (width: number) => void }) {
   const zh = useLocaleStore((s) => s.language) === 'zh';
   const panes = useRightWorkspaceStore((s) => s.panes);
   const pane = panes[scope] ?? EMPTY_WORKSPACE_PANE;
   const active = pane.tabs.find((tab) => tab.id === pane.activeId);
-  const browserUrl = useEmbeddedBrowserStore((s) => active?.kind === 'browser' ? s.tabs[active.id]?.url : undefined);
   const width = useRightWorkspaceStore((s) => s.width);
   const treeWidth = useRightWorkspaceStore((s) => s.treeWidth);
   const fileTreeOpen = useRightWorkspaceStore((s) => s.fileTreeOpen);
@@ -68,8 +54,6 @@ export function RightWorkspace({ scope, enabled = true, elevated = false, onDock
   const [treeOverlay, setTreeOverlay] = useState(false);
   const treeOverlayInset = useWorkspaceTreeInset(panelRef, treeOverlay, pane.activeId);
   const [browserTreeOpen, setBrowserTreeOpen] = useState(false);
-  const [menu, setMenu] = useState(false);
-  const [moreOpen, setMoreOpen] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [closing, setClosing] = useState<string | null>(null);
   const [browserError, setBrowserError] = useState('');
@@ -90,7 +74,13 @@ export function RightWorkspace({ scope, enabled = true, elevated = false, onDock
     onDockedWidthChange?.(visible && !single && !expanded ? panelWidth : 0);
   }, [expanded, onDockedWidthChange, panelWidth, single, visible]);
   const treeHome = active?.kind === 'files';
-  const treeVisible = treeHome || ((active?.kind === 'file' || active?.kind === 'sidechat' || active?.kind === 'browser') && treePreference && ((single || expanded) ? available : panelWidth) >= 460 + treeWidth);
+  const fileLayout = treeHome || active?.kind === 'file';
+  const contentWidth = single || expanded ? available : panelWidth;
+  const minimumPreviewWidth = fileLayout ? 240 : 460;
+  const inlineTreeWidth = Math.min(treeWidth, Math.max(200, contentWidth - minimumPreviewWidth - 8));
+  const canSplitTree = contentWidth >= minimumPreviewWidth + inlineTreeWidth + 8;
+  const treeVisible = treeHome || ((active?.kind === 'file' || active?.kind === 'sidechat' || active?.kind === 'browser') && treePreference && canSplitTree);
+  const treeOnly = treeHome && !canSplitTree;
   const treeShown = treeVisible || treeOverlay;
   const file = active?.kind === 'file' ? active : undefined;
   const treeScope = useMemo(() => ({
@@ -135,6 +125,7 @@ export function RightWorkspace({ scope, enabled = true, elevated = false, onDock
     if (!useRightWorkspaceStore.getState().panes[scope] && useWorkspacePanelStore.getState().open) store.openFiles(scope);
   }, [scope, store]);
   useEffect(() => { setTreeOverlay(false); }, [pane.activeId, scope]);
+  useEffect(() => { if (canSplitTree) setTreeOverlay(false); }, [canSplitTree]);
   useEffect(() => { setSaveFailed(null); setDiscardRequested(false); setBrowserError(''); }, [scope]);
   useEffect(() => {
     const node = tabListRef.current?.querySelector<HTMLElement>('[aria-selected="true"]');
@@ -144,10 +135,10 @@ export function RightWorkspace({ scope, enabled = true, elevated = false, onDock
     useWorkspacePreviewStore.setState({ path: file?.path ?? null, projectId: file?.projectId ?? null, conversationId: file?.conversationId ?? null, line: file?.line ?? null });
   }, [file]);
   useEffect(() => {
-    const closeMenu = (event: KeyboardEvent) => { if (event.key === 'Escape' && !event.defaultPrevented) { if (menu || moreOpen) return; if (discardRequested) { event.preventDefault(); setDiscardRequested(false); return; } if (expanded || treeOverlay) { event.preventDefault(); setExpanded(false); setTreeOverlay(false); } } };
+    const closeMenu = (event: KeyboardEvent) => { if (event.key === 'Escape' && !event.defaultPrevented) { if (discardRequested) { event.preventDefault(); setDiscardRequested(false); return; } if (expanded || treeOverlay) { event.preventDefault(); setExpanded(false); setTreeOverlay(false); } } };
     window.addEventListener('keydown', closeMenu);
     return () => window.removeEventListener('keydown', closeMenu);
-  }, [discardRequested, expanded, menu, moreOpen, treeOverlay]);
+  }, [discardRequested, expanded, treeOverlay]);
 
   useWorkspaceNavigation(scope, pane, enabled);
   useBrowserEvents();
@@ -182,29 +173,22 @@ export function RightWorkspace({ scope, enabled = true, elevated = false, onDock
   function toggleTree() {
     if (!active) return;
     if (treeOverlay) setTreeOverlay(false);
-    else if (!treeVisible && (single || (!expanded && panelWidth < 460 + treeWidth))) setTreeOverlay(true);
+    else if (!treeVisible && !canSplitTree) setTreeOverlay(true);
     else if (active.kind === 'browser') setBrowserTreeOpen(!browserTreeOpen);
     else store.setTreeOpen(active.kind === 'sidechat' ? 'sidechat' : 'file', !treePreference);
   }
   const treeControl = active && !treeHome && active.kind !== 'home' ? <button type="button" className={buttonClass} aria-label={zh ? '切换文件树' : 'Toggle file tree'} aria-pressed={treeShown} onClick={toggleTree}><FolderOpen className="size-4" aria-hidden /></button> : null;
-  function closeCurrent() {
-    if (!active) return;
-    if (active.kind === 'file') void closeFile(active.id);
-    else if (active.kind === 'browser') void closeBrowser(active.id);
-    else if (active.kind === 'sidechat') window.dispatchEvent(new CustomEvent('workspace-close-sidechat', { detail: active.sideChatId }));
-    else store.remove(active.id, scope);
-  }
   function drag(event: ReactPointerEvent<HTMLDivElement>, tree = false) {
     event.preventDefault();
     const startX = event.clientX;
-    const startWidth = tree ? treeWidth : panelWidth;
+    const startWidth = tree ? inlineTreeWidth : panelWidth;
     const target = event.currentTarget;
     target.setPointerCapture?.(event.pointerId);
     setResizing(true);
     let committed = startWidth;
     const move = (e: PointerEvent) => {
       const value = startWidth + startX - e.clientX;
-      committed = tree ? Math.max(200, Math.min(320, panelWidth - 460, value)) : Math.max(460, Math.min(available - 380, value));
+      committed = tree ? Math.max(200, Math.min(320, contentWidth - minimumPreviewWidth - 8, value)) : Math.max(460, Math.min(available - 380, value));
       const node = tree ? panelRef.current?.querySelector<HTMLElement>('[data-workspace-tree]') : panelRef.current;
       if (node) node.style.width = `${committed}px`;
     };
@@ -236,35 +220,6 @@ export function RightWorkspace({ scope, enabled = true, elevated = false, onDock
       onKeyDown={(e) => { if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { e.preventDefault(); store.setWidth(Math.max(460, Math.min(available - 380, panelWidth + (e.key === 'ArrowLeft' ? 20 : -20)))); } if (e.key === 'Home') store.setWidth(0); }} /> : null}
     {resizing ? <div data-browser-occluder className="fixed inset-0 z-[120] cursor-col-resize" /> : null}
     <div data-workspace-tab-bar className="flex h-14 shrink-0 items-center gap-1 border-b border-edge-subtle bg-surface-base/80 px-2">
-      <Popover.Root open={moreOpen} onOpenChange={setMoreOpen}>
-        <Popover.Trigger asChild><button className={buttonClass} aria-label={zh ? '工作区更多操作' : 'Workspace actions'}><MoreHorizontal className="size-4" aria-hidden /></button></Popover.Trigger>
-        <Popover.Portal><Popover.Content align="start" sideOffset={8} role="menu" onKeyDown={navigateMenu} aria-label={zh ? '工作区操作' : 'Workspace operations'} className="workspace-menu z-[125] w-64 rounded-xl border border-edge bg-surface-panel p-1.5 text-sm shadow-popover">
-          {window.electronAPI?.browser ? <button role="menuitem" className="w-full rounded-lg px-3 py-2 text-left hover:bg-surface-hover" onClick={() => { setMoreOpen(false); store.openBrowser(undefined, scope); }}>{zh ? '新建浏览器标签' : 'New browser tab'}</button> : null}
-          <button role="menuitem" className="w-full rounded-lg px-3 py-2 text-left hover:bg-surface-hover" onClick={() => { setMoreOpen(false); store.openFiles(scope); }}>{zh ? '打开文件' : 'Open files'}</button>
-          <button role="menuitem" className="w-full rounded-lg px-3 py-2 text-left hover:bg-surface-hover disabled:opacity-40" disabled={scope === 'new' || Boolean(creating)} onClick={() => { setMoreOpen(false); useSideChatStore.getState().requestCreate(scope); }}>{zh ? '新建侧聊' : 'New side chat'}</button>
-          <div role="separator" className="my-1.5 h-px bg-edge-subtle" />
-          {treeControl ? <button role="menuitem" className="w-full rounded-lg px-3 py-2 text-left hover:bg-surface-hover" onClick={() => { setMoreOpen(false); toggleTree(); }}>{zh ? (treeShown ? '隐藏文件树' : '显示文件树') : (treeShown ? 'Hide file tree' : 'Show file tree')}</button> : null}
-          {active && active.kind !== 'home' ? <button role="menuitem" disabled={active.kind === 'browser' && !browserUrl} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left hover:bg-surface-hover disabled:opacity-40" onClick={() => {
-            setMoreOpen(false);
-            const text = active.kind === 'file' ? active.path ?? active.title : active.kind === 'browser' ? useEmbeddedBrowserStore.getState().tabs[active.id]?.url : active.title;
-            if (text) void copyTextToClipboard(text);
-          }}><Copy className="size-4 text-fg-muted" aria-hidden />{active.kind === 'file' ? (active.path ? (zh ? '复制文件路径' : 'Copy file path') : (zh ? '复制文件名称' : 'Copy file name')) : active.kind === 'browser' ? (zh ? '复制网址' : 'Copy URL') : (zh ? '复制标签名称' : 'Copy tab name')}</button> : null}
-          <div role="separator" className="my-1.5 h-px bg-edge-subtle" />
-          <button role="menuitem" className="w-full rounded-lg px-3 py-2 text-left hover:bg-surface-hover" onClick={() => { setMoreOpen(false); store.setWidth(0); }}>{zh ? '恢复默认宽度' : 'Reset width'}</button>
-          {active ? <button role="menuitem" className="w-full rounded-lg px-3 py-2 text-left hover:bg-surface-hover disabled:opacity-40" disabled={Boolean(closing)} onClick={() => { setMoreOpen(false); closeCurrent(); }}>{zh ? '关闭当前标签' : 'Close current tab'}</button> : null}
-          <button role="menuitem" className="w-full rounded-lg px-3 py-2 text-left hover:bg-surface-hover" onClick={() => { setMoreOpen(false); store.setOpen(false, scope); }}>{zh ? '收起工作区' : 'Collapse workspace'}</button>
-        </Popover.Content></Popover.Portal>
-      </Popover.Root>
-      <Popover.Root open={menu} onOpenChange={setMenu}>
-        <Popover.Trigger asChild><button className={cn(buttonClass, menu && 'bg-surface-active')} aria-label={`${zh ? '标签列表' : 'Tab list'} (${pane.tabs.length})`}><ListTree className="size-4" aria-hidden /><span className="sr-only">{pane.tabs.length}</span></button></Popover.Trigger>
-        <Popover.Portal><Popover.Content align="start" sideOffset={8} role="menu" onKeyDown={navigateMenu} aria-label={zh ? '打开的标签' : 'Open tabs'} className="workspace-menu z-[125] max-h-80 w-72 overflow-y-auto rounded-xl border border-edge bg-surface-panel p-1.5 shadow-popover">
-          <p className="px-3 py-2 text-xs text-fg-muted">{zh ? '打开的标签' : 'Open tabs'} · {pane.tabs.length}</p>
-          {pane.tabs.map((tab) => <button role="menuitem" key={tab.id} className={cn('flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-surface-hover', pane.activeId === tab.id && 'bg-surface-active')} onClick={() => { select(tab.id); setMenu(false); }}><span className="min-w-0 flex-1 truncate">{tabTitle(tab)}</span>{pane.activeId === tab.id ? <span className="text-xs text-fg-muted">{zh ? '当前' : 'Current'}</span> : null}</button>)}
-          {!pane.tabs.length ? <p className="px-3 py-2 text-sm text-fg-muted">{zh ? '尚未打开标签' : 'No open tabs'}</p> : null}
-        </Popover.Content></Popover.Portal>
-      </Popover.Root>
-
-      <span className="mx-1 h-6 w-px shrink-0 bg-edge-subtle" aria-hidden />
       <SlidingTabList ref={tabListRef} role="tablist" aria-label={zh ? '工作区标签' : 'Workspace tabs'} className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         onKeyDown={(event) => {
           const tabs = [...event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]')];
@@ -311,7 +266,12 @@ export function RightWorkspace({ scope, enabled = true, elevated = false, onDock
     </div> : null}
     <WorkspaceTreeControlContext.Provider value={treeControl ? { button: treeControl, label: zh ? (treeShown ? '隐藏文件树' : '显示文件树') : (treeShown ? 'Hide file tree' : 'Show file tree'), active: treeShown, onToggle: toggleTree } : null}>
     <div id="workspace-content" role="tabpanel" aria-labelledby={active ? `workspace-tab-${active.id}` : undefined} className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden">
-      <div className={cn('min-h-0 min-w-0 flex-1 flex-col overflow-hidden', !treeHome ? 'flex' : 'hidden')}>
+      <div className={cn('min-h-0 min-w-0 flex-1 flex-col overflow-hidden', !treeOnly ? 'flex' : 'hidden')}>
+        {treeHome && !treeOnly ? <div data-workspace-file-placeholder className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
+          <FileText className="size-9 text-fg-muted" strokeWidth={1.25} aria-hidden />
+          <p className="text-sm font-medium text-fg">{zh ? '选择文件预览' : 'Select a file to preview'}</p>
+          <p className="max-w-64 text-sm text-fg-muted">{zh ? '从右侧文件列表打开文件，在这里查看内容。' : 'Open a file from the list on the right to view its contents here.'}</p>
+        </div> : null}
         {active?.kind === 'home' && !creatingSideChat ? <WorkspaceStartPage tabs={pane.tabs} canCreateSideChat={scope !== 'new'} creating={Boolean(creating)}
           onBrowser={window.electronAPI?.browser ? () => store.openBrowser(undefined, scope) : undefined}
           onFiles={() => store.openFiles(scope)} onSideChat={() => useSideChatStore.getState().requestCreate(scope)} onActivate={select}
@@ -331,11 +291,11 @@ export function RightWorkspace({ scope, enabled = true, elevated = false, onDock
         </WorkspaceFileTargetsContext.Provider>
         {sideParents.map((parent) => <WorkspaceOwnerContext.Provider key={parent} value={parent}><SideChatColumn parentConversationId={parent} embedded visible={present && scope === parent && (active?.kind === 'sidechat' || ((!active || active.kind === 'home') && creatingSideChat))} /></WorkspaceOwnerContext.Provider>)}
       </div>
-      {treeVisible && !treeHome && !treeOverlay ? <div role="separator" aria-orientation="vertical" tabIndex={0} aria-label={zh ? '调整文件树宽度' : 'Resize file tree'} aria-valuemin={200} aria-valuemax={320} aria-valuenow={treeWidth}
+      {treeVisible && !treeOnly && !treeOverlay ? <div role="separator" aria-orientation="vertical" tabIndex={0} aria-label={zh ? '调整文件树宽度' : 'Resize file tree'} aria-valuemin={200} aria-valuemax={Math.min(320, contentWidth - minimumPreviewWidth - 8)} aria-valuenow={inlineTreeWidth}
         className="z-10 w-2 shrink-0 cursor-col-resize touch-none border-l border-edge hover:bg-surface-hover focus-visible:bg-accent/30" onPointerDown={(event) => drag(event, true)}
-        onKeyDown={(e) => { if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { e.preventDefault(); store.setTreeWidth(treeWidth + (e.key === 'ArrowLeft' ? 20 : -20)); } }} /> : null}
+        onKeyDown={(e) => { if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { e.preventDefault(); store.setTreeWidth(Math.min(contentWidth - minimumPreviewWidth - 8, inlineTreeWidth + (e.key === 'ArrowLeft' ? 20 : -20))); } }} /> : null}
       {treeOverlay ? <button data-browser-occluder style={{ top: treeOverlayInset }} className="absolute inset-0 z-20 bg-scrim" aria-label={zh ? '关闭文件树' : 'Close file tree'} onClick={() => setTreeOverlay(false)} /> : null}
-      <div data-workspace-tree className={cn('min-h-0 min-w-0 flex-col overflow-hidden', treeShown ? 'flex' : 'hidden', treeHome && 'flex-1', treeOverlay && 'absolute inset-y-0 right-0 z-30 border-l border-edge bg-surface-panel')} style={!treeHome ? { width: treeWidth, ...(treeOverlay ? { top: treeOverlayInset } : {}) } : undefined}>
+      <div data-workspace-tree className={cn('min-h-0 min-w-0 flex-col overflow-hidden', treeShown ? 'flex' : 'hidden', treeOnly && 'flex-1', treeOverlay && 'absolute inset-y-0 right-0 z-30 border-l border-edge bg-surface-panel')} style={!treeOnly ? { width: treeOverlay ? treeWidth : inlineTreeWidth, ...(treeOverlay ? { top: treeOverlayInset } : {}) } : undefined}>
         {Object.entries(trees).map(([key, root]) => <div key={key} className={cn('h-full min-h-0 flex-col', key === treeKey ? 'flex' : 'hidden')}><WorkspaceColumn embedded scope={root} onCloseTree={() => treeOverlay ? setTreeOverlay(false) : !treeHome ? active?.kind === 'browser' ? setBrowserTreeOpen(false) : store.setTreeOpen(active?.kind === 'sidechat' ? 'sidechat' : 'file', false) : active && store.remove(active.id, scope)} /></div>)}
       </div>
     </div>
