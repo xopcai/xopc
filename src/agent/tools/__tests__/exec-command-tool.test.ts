@@ -1,5 +1,6 @@
 import { access, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
+import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 
 import { describe, expect, it } from 'vitest';
@@ -199,5 +200,41 @@ describe('exec_command tool', () => {
     } finally {
       await rm(workspace, { recursive: true, force: true });
     }
+  });
+});
+
+
+describe('explicit verification reuse for requested outputs', () => {
+  it('publishes from identical successful evidence without executing again, and rejects stale or failed evidence', async () => {
+    const workspace = await mkdtemp(join(tmpdir(), 'xopc-check-reuse-'));
+    const counter = join(tmpdir(), `xopc-check-counter-${Date.now()}`);
+    try {
+      execFileSync('git', ['init', '-q'], { cwd: workspace });
+      await writeFile(join(workspace, 'result.json'), '{"ok":true}');
+      await writeFile(join(workspace, 'check.test.mjs'), `import { test } from 'node:test';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+const counter=${JSON.stringify(counter)};
+const count=existsSync(counter)?Number(readFileSync(counter,'utf8')):0;
+writeFileSync(counter,String(count+1));
+test('ok',()=>{if(existsSync('fail'))throw Error('expected failure');});
+`);
+      const tool = createExecCommandTool(workspace);
+      const first = await tool.execute('first-check', { cmd: 'node --test check.test.mjs' });
+      expect(first.details.exitCode).toBe(0);
+      const reuse = await tool.execute('capture', { cmd: 'node --test check.test.mjs', outputs: ['result.json'], reuseVerification: true });
+      expect(reuse.details).toMatchObject({ executionPerformed: false, reusedFromToolCallId: 'first-check', exitCode: 0 });
+      expect(JSON.stringify(reuse.content)).toContain('No command executed');
+      expect(await readFile(counter,'utf8')).toBe('1');
+      await writeFile(join(workspace, 'result.json'), '{"ok":false}');
+      await expect(tool.execute('stale', { cmd: 'node --test check.test.mjs', outputs: ['result.json'], reuseVerification: true })).rejects.toThrow('no reusable');
+      expect(await readFile(counter,'utf8')).toBe('1');
+      await tool.execute('fresh', { cmd: 'node --test check.test.mjs' });
+      expect(await readFile(counter,'utf8')).toBe('2');
+      await writeFile(join(workspace, 'fail'), '1');
+      const failed = await tool.execute('failed', { cmd: 'node --test check.test.mjs' });
+      expect(failed.details.exitCode).not.toBe(0);
+      await rm(join(workspace, 'fail'));
+      await expect(tool.execute('after-failure', { cmd: 'node --test check.test.mjs', outputs: ['result.json'], reuseVerification: true })).rejects.toThrow('no reusable');
+    } finally { await rm(workspace, { recursive:true,force:true }); await rm(counter,{force:true}); }
   });
 });

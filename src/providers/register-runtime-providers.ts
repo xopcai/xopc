@@ -1,3 +1,4 @@
+import { cloudThinkingOverrides } from './cloud-thinking.js';
 import type { ModelRuntime } from '@earendil-works/pi-coding-agent';
 
 import { getOAuthProviderDefinition } from '../auth/oauth/registry.js';
@@ -38,6 +39,7 @@ function registerRuntimeProvider(
       id: model.id,
       name: model.name,
       reasoning: model.reasoning,
+      ...cloudThinkingOverrides(source.providerId, model.id),
       input: model.input.filter((value): value is 'text' | 'image' => value === 'text' || value === 'image'),
       cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
       contextWindow: model.contextWindow,

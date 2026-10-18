@@ -43,11 +43,14 @@ export function createAgentProfileContextExtension(conversationId: string): Exte
         previous: data?.configuration?.[key as keyof typeof configuration] ?? null,
         current: configuration[key as keyof typeof configuration] ?? null,
       }]));
+      if (!changed) return;
+      const projected = Object.fromEntries(Object.entries(configuration).filter(([key]) =>
+        ['agentId', 'name', 'role'].includes(key) || changedFields.includes(key)));
       return { role: 'custom' as const, timestamp: Date.now(),
         customType: AGENT_PROFILE_UPDATE_EVENT,
-        content: JSON.stringify({ event: changed ? 'agent_configuration_updated' : 'agent_configuration_current', source: 'xopc-runtime',
+        content: JSON.stringify({ event: 'agent_configuration_updated', source: 'xopc-runtime',
           ...(changed ? { changedFields: changedFields.length ? changedFields : ['instructions'], updates } : {}),
-          current: configuration }),
+          scope: 'agent_defaults', current: projected }),
         display: false,
       };
     };
@@ -55,11 +58,10 @@ export function createAgentProfileContextExtension(conversationId: string): Exte
     pi.on('before_agent_start', (_event, context) => { snapshot = snapshotForTurn(context); });
     pi.on('context_with_system', (event, context) => {
       snapshot ??= snapshotForTurn(context);
-      if (!snapshot) return;
       const messages = event.messages.filter(message => message.role !== 'system'
         && !(message.role === 'custom' && (message as { customType?: string }).customType === AGENT_PROFILE_UPDATE_EVENT));
       const inputIndex = messages.findLastIndex(message => message.role === 'user' || message.role === 'custom');
-      messages.splice(inputIndex < 0 ? messages.length : inputIndex, 0, snapshot);
+      if (snapshot) messages.splice(inputIndex < 0 ? messages.length : inputIndex, 0, snapshot);
       // Rebuild from pi's current options on every request so tools activated
       // within a turn retain their latest guidelines and declarations.
       return { messages: [{ role: 'system', content: context.getSystemPrompt(),
