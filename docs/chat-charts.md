@@ -74,6 +74,10 @@ The script verifies real Canvas rendering, copying, PNG bytes, source switching,
 
 For the note Markdown integration, start a Vite server on port 5188 and run `node scripts/verify-note-charts.mjs`. The `/src/visual-tests/note-charts/` fixture uses the actual `NoteMarkdownView` and checks both chart types, data edits, source switching, copy, preview, PNG export, formula/Mermaid coexistence, narrow/dark layout, and invalid or incomplete source fallback. Note preview and detail views both use this renderer; persisted Markdown stays unchanged.
 
+Public Note and conversation previews (`SharePreviewPage`) also enable the same chart renderer and share one inline-preview scheduler across the public page. Remote-image blocking remains enabled. Regression coverage is in `web/src/features/shares/__tests__/share-preview-charts.test.tsx`.
+
+Hosted links at `share.xopc.ai` use the independently deployed `xopc-platform/apps/share/server`, rather than this React page. That service mirrors ChartSpec v1 and its option compiler and bundles its own lazy ECharts runtime. Its `pnpm --filter @xopc/share-server test:viewer` command checks actual Note/conversation publications under the public CSP. The platform's `docs/design/share-charts.md` records its implementation and acceptance. Deploying the Share service enables charts in existing snapshots without republishing them; updating only this Gateway console does not update the hosted viewer.
+
 To verify actual skill selection and generation with a configured model, run:
 
 ```bash
