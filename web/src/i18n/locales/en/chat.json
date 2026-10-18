@@ -158,7 +158,7 @@
     "welcomeSpotlight": {
       "headline": "What do you want to move forward?",
       "projectHeadline": "What should we work on in {{projectName}}?",
-      "acceptSuggestionHint": "Press Tab to use suggestion",
+      "acceptSuggestionHint": "Press Tab or Enter to use suggestion",
       "recommendations": {
         "projectBlocked": {
           "title": "Unblock this work: {{blockedReason}}",
