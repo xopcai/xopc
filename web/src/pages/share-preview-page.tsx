@@ -19,6 +19,9 @@ import {
 } from '@/features/preview-runtime';
 import { Skeleton } from '@/components/ui/skeleton';
 import { MarkdownView } from '@/components/markdown/markdown-view';
+import type { MarkdownChartBlock } from '@/components/markdown/parse-markdown';
+import { ChatChartBlock } from '@/features/chat/rendering/markdown/chat-chart-block';
+import { InlinePreviewSchedulerProvider } from '@/features/chat/product-delivery/inline-preview-scheduler';
 import { blockRemoteMarkdownImages } from '@/features/shares/public-markdown';
 import { apiUrl } from '@/lib/url';
 import { useLocaleStore } from '@/stores/locale-store';
@@ -64,6 +67,10 @@ type SharePreviewLoad = {
   extractedText: string | null;
   extractedTextTruncated: boolean;
 };
+
+function renderSharedChart(block: MarkdownChartBlock) {
+  return <ChatChartBlock source={block.source} incomplete={!block.closed} streaming={false} copy />;
+}
 
 function emptyLoad(): SharePreviewLoad {
   return { textContent: null, binaryBuffer: null, extractedText: null, extractedTextTruncated: false };
@@ -251,7 +258,7 @@ export function SharePreviewPage() {
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-surface-base">
+    <InlinePreviewSchedulerProvider><div className="flex h-full min-h-0 flex-col overflow-hidden bg-surface-base">
       <header className="flex h-12 shrink-0 items-center gap-3 border-b border-edge px-4">
         <span className="text-lg" aria-hidden>
           #
@@ -306,7 +313,7 @@ export function SharePreviewPage() {
             {noteView.description ? (
               <p className="mt-5 rounded-lg bg-surface-inset px-4 py-3 text-sm leading-6 text-fg-muted">{noteView.description}</p>
             ) : null}
-            <MarkdownView content={blockRemoteMarkdownImages(noteView.markdown, t.remoteImageBlocked)} className="mt-8" />
+            <MarkdownView content={blockRemoteMarkdownImages(noteView.markdown, t.remoteImageBlocked)} className="mt-8" renderChart={renderSharedChart} />
             <footer className="mt-10 border-t border-edge-subtle pt-4 text-center text-xs text-fg-subtle">{t.sharedVia}</footer>
           </article>
         ) : meta?.kind === 'session' && sessionView ? (
@@ -324,7 +331,7 @@ export function SharePreviewPage() {
                 <section key={message.id} className={message.role === 'user' ? 'ml-auto max-w-[85%]' : 'mr-auto max-w-full'}>
                   <div className="mb-1 text-xs font-medium text-fg-subtle">{message.role === 'user' ? t.you : t.assistant}</div>
                   <div className={message.role === 'user' ? 'rounded-2xl bg-surface-inset px-4 py-3' : 'px-1 py-1'}>
-                    <MarkdownView content={blockRemoteMarkdownImages(message.markdown, t.remoteImageBlocked)} />
+                    <MarkdownView content={blockRemoteMarkdownImages(message.markdown, t.remoteImageBlocked)} renderChart={renderSharedChart} />
                     {sessionView.attachments.filter((attachment) => message.attachmentIds.includes(attachment.id)).map((attachment) => (
                       <SharedSessionAttachment key={attachment.id} attachment={attachment} />
                     ))}
@@ -348,7 +355,7 @@ export function SharePreviewPage() {
           </article>
         ) : null}
       </main>
-    </div>
+    </div></InlinePreviewSchedulerProvider>
   );
 }
 
