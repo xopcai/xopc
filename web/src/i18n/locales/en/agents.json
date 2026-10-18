@@ -376,11 +376,12 @@
     "listChatWithAgent": "Chat with this agent",
     "listConfigureAgent": "Configure {{name}}",
     "listDefaultBadge": "Default",
+    "listPersonalDefaultBadge": "Personal default",
     "listCustomBadge": "Custom",
     "listUsesGlobalSettings": "Uses global settings",
     "listNoDescription": "No description yet.",
     "listModelLabel": "Model",
-    "listCurrentModelLabel": "Current model",
+    "listPersonalAgentDescription": "A personal AI that adapts its responses to the user and coordinates work.",
     "editorChatModel": "Chat",
     "editorIntentFast": "Fast",
     "editorIntentReasoning": "Reasoning",
@@ -414,6 +415,10 @@
       "conductor": {
         "name": "Conductor",
         "description": "Coordinates specialist agents and keeps you updated as work progresses."
+      },
+      "taskRouter": {
+        "name": "Task Router",
+        "description": "Selects one suitable specialist for a delegated task."
       },
       "coding": {
         "name": "Coding Expert",

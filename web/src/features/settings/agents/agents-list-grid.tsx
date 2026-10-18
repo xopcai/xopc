@@ -1,6 +1,7 @@
 import { MessageSquarePlus } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
+import { AgentStatusBadges } from '@/features/settings/agents/agent-status-badges';
 import { AgentAvatarDisplay } from '@/features/settings/agents/agent-avatar-display';
 import {
   agentListDisplayDescription,
@@ -12,12 +13,14 @@ import { cn } from '@/lib/cn';
 
 export function AgentsListGrid({
   agents,
+  tuiDefaultAgentId,
   busy,
   messages,
   onOpen,
   onChat,
 }: {
   agents: GatewayAgentRow[];
+  tuiDefaultAgentId?: string;
   busy: boolean;
   messages: AgentsSettingsMessages;
   onOpen: (agentId: string) => void;
@@ -51,22 +54,12 @@ export function AgentsListGrid({
                     <h2 className="truncate text-base font-semibold text-fg">{displayName}</h2>
                   </div>
                 </div>
-                <span className={cn(
-                  'rounded-full px-2 py-0.5 text-[11px] font-medium',
-                  agent.isDefault ? 'bg-accent-soft text-accent' : 'bg-surface-hover text-fg-muted',
-                )}>
-                  {agent.isDefault ? messages.listDefaultBadge : messages.listCustomBadge}
-                </span>
+                <AgentStatusBadges agent={agent} tuiDefaultAgentId={tuiDefaultAgentId} messages={messages} />
               </div>
 
               <p className="pointer-events-none relative z-10 mt-5 line-clamp-2 min-h-10 text-sm leading-5 text-fg-muted">
                 {displayDescription || agent.override.profile?.instructions || messages.listUsesGlobalSettings}
               </p>
-
-              <div className="pointer-events-none relative z-10 mt-4 rounded-xl bg-surface-base px-3 py-2.5">
-                <p className="text-[11px] font-medium uppercase tracking-wide text-fg-subtle">{messages.listCurrentModelLabel}</p>
-                <p className="mt-1 truncate font-mono text-xs text-fg">{agent.effective.models.chat.primary}</p>
-              </div>
 
               <div className="relative z-10 mt-auto pt-4">
                 <Button

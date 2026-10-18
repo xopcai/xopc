@@ -376,11 +376,12 @@
     "listChatWithAgent": "与这个智能体对话",
     "listConfigureAgent": "配置 {{name}}",
     "listDefaultBadge": "默认",
+    "listPersonalDefaultBadge": "个人默认",
     "listCustomBadge": "自定义",
     "listUsesGlobalSettings": "使用全局配置",
     "listNoDescription": "暂无描述。",
     "listModelLabel": "模型",
-    "listCurrentModelLabel": "当前模型",
+    "listPersonalAgentDescription": "了解你的交流偏好，为你提供贴合需求的回应，并协调各项工作。",
     "editorChatModel": "对话",
     "editorIntentFast": "快速",
     "editorIntentReasoning": "推理",
@@ -414,6 +415,10 @@
       "conductor": {
         "name": "指挥家",
         "description": "与你保持对话，安排专长智能体协作，并在有进展时告诉你。"
+      },
+      "taskRouter": {
+        "name": "任务调度员",
+        "description": "为委派的任务选择合适的专长智能体。"
       },
       "coding": {
         "name": "编程专家",

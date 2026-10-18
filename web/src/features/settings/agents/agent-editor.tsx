@@ -14,6 +14,7 @@ import {
   AgentProfileEditor,
   type AgentProfileEditorHandle,
 } from '@/features/settings/agents/agent-profile-editor';
+import { agentListDisplayName, agentListDisplayDescription } from '@/features/settings/agents/agent-display-names';
 import { ModelRouteEditor } from '@/features/settings/agents/agent-model-route-editor';
 import { updateGatewayAgent, uploadGatewayAgentAvatar } from '@/features/settings/agents-admin-api';
 import { CREATURE_PRESETS } from '@/features/settings/agents/agent-profile-markdown';
@@ -314,12 +315,12 @@ export function AgentEditor({
           {panel === 'overview' ? (
             <div className="space-y-6">
               <SectionTitle
-                title={profileName}
+                title={agentListDisplayName({ id: agent.id, name: profileName }, messages)}
                 description={zh ? '查看当前真正生效的配置。未覆盖的部分会持续跟随全局默认值。' : 'Review what actually takes effect. Anything not overridden keeps following global defaults.'}
                 action={<Button onClick={onChat}><MessageSquarePlus className="size-4" />{zh ? '开始对话' : 'Start chat'}</Button>}
               />
               <section className="space-y-3 rounded-2xl border border-edge bg-surface-base p-4">
-                <p className="text-sm leading-6 text-fg-muted">{draft.profile?.description || (zh ? '添加介绍，让这个智能体的定位更清晰。' : 'Add a description to explain this agent’s role.')}</p>
+                <p className="text-sm leading-6 text-fg-muted">{agentListDisplayDescription({ id: agent.id, description: draft.profile?.description }, messages) || (zh ? '添加介绍，让这个智能体的定位更清晰。' : 'Add a description to explain this agent’s role.')}</p>
                 <div className="flex flex-wrap items-center gap-2">
                   {(draft.specialistProfile?.specialties ?? []).map(item => <span key={item} className="rounded-lg bg-surface-hover px-2 py-1 text-xs text-fg-muted">{item}</span>)}
                   <Button variant="ghost" onClick={() => switchPanel('capabilities', 'specialties')}>{zh ? '查看专长' : 'View specialties'}</Button>

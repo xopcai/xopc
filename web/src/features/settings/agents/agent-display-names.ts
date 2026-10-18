@@ -32,6 +32,11 @@ const BUILT_IN_AGENT_PRESENTATIONS: Readonly<Record<string, BuiltInAgentPresenta
       'User-facing coordination Agent for task planning, delegation, progress, verification, and reporting to the user.',
     ],
   },
+  'task-router': {
+    key: 'taskRouter',
+    defaultNames: ['task-router', 'Task Router'],
+    defaultDescriptions: ['Selects one suitable specialist for a delegated task.'],
+  },
   coder: {
     key: 'coding',
     defaultNames: ['coder', 'Coder', 'Coding Expert'],
@@ -75,6 +80,10 @@ function presentationFor(agentId: string): BuiltInAgentPresentation | undefined 
   return BUILT_IN_AGENT_PRESENTATIONS[normalized(agentId)];
 }
 
+export function isPersonalAgentId(agentId: string): boolean {
+  return /^personal-[a-f0-9]{12}$/.test(normalized(agentId));
+}
+
 export function agentListDisplayName(
   ag: { id: string; name?: string | undefined },
   agentsMessages: AgentsSettingsMessages,
@@ -92,6 +101,11 @@ export function agentListDisplayDescription(
   agentsMessages: AgentsSettingsMessages,
 ): string {
   const d = ag.description?.trim();
+  if (isPersonalAgentId(ag.id) && (!d || isDefaultValue(d, [
+    'A personal AI that adapts its responses to the user and coordinates work.',
+  ]))) {
+    return agentsMessages.listPersonalAgentDescription;
+  }
   const presentation = presentationFor(ag.id);
   if (presentation && (!d || isDefaultValue(d, presentation.defaultDescriptions))) {
     return agentsMessages.builtInAgents[presentation.key].description;

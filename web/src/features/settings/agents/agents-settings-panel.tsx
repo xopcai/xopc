@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { CapabilityHeaderActionChange } from '@/features/capabilities/capability-header-actions';
+import { useGatewayConfigSwr } from '@/features/gateway/gateway-config-swr';
 import { rememberSelectedAgent } from '@/features/chat/session/new-session-preferences';
 import { AgentEditor } from '@/features/settings/agents/agent-editor';
 import { AGENTS_APP_LIST_PATH, agentsAppDetailPath } from '@/features/settings/agents/agents-app-path';
@@ -62,6 +63,9 @@ export function AgentsSettingsPanel({
   const agentsMessages = messageBundle.agentsSettings;
   const navigate = useNavigate();
   const { data, error, isLoading, mutate } = useSWR(token ? 'settings-gateway-agents' : null, fetchGatewayAgents);
+  const { data: gatewayConfigData } = useGatewayConfigSwr(Boolean(token));
+  const config = gatewayConfigData?.payload?.config as { tui?: { defaultAgent?: string } } | undefined;
+  const tuiDefaultAgentId = config?.tui?.defaultAgent?.trim();
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [manualError, setManualError] = useState<string | null>(null);
@@ -234,6 +238,7 @@ export function AgentsSettingsPanel({
 
       <AgentsListGrid
         agents={data.agents}
+        tuiDefaultAgentId={tuiDefaultAgentId}
         busy={busy}
         messages={agentsMessages}
         onOpen={openAgent}
@@ -243,6 +248,7 @@ export function AgentsSettingsPanel({
       {selected ? (
         <AgentsEditorModal
           agent={selected}
+          tuiDefaultAgentId={tuiDefaultAgentId}
           messages={agentsMessages}
           open
           onOpenChange={(open) => { if (!open) closeAgent(); }}
