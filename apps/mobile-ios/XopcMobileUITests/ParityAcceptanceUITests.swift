@@ -92,9 +92,18 @@ final class ParityAcceptanceUITests: XCTestCase {
         XCTAssertTrue((composer.value as? String)?.hasPrefix("/") == true)
     }
 
+    private func openAssistantMessageActions() {
+        let message = app.descendants(matching: .any).matching(
+            NSPredicate(format: "identifier BEGINSWITH %@", "chat-message-assistant-")
+        ).firstMatch
+        XCTAssertTrue(message.waitForExistence(timeout: 8))
+        message.press(forDuration: 0.6)
+    }
+
     func testAssistantMessageReadAloudControls() {
         openTab("对话")
         XCTAssertTrue(openCell(at: 3))
+        openAssistantMessageActions()
         let readButton = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "chat-read-aloud-")).firstMatch
         XCTAssertTrue(readButton.waitForExistence(timeout: 8))
         readButton.tap()
@@ -195,6 +204,7 @@ final class ParityAcceptanceUITests: XCTestCase {
         let row = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", title)).firstMatch
         XCTAssertTrue(row.waitForExistence(timeout: 15))
         row.tap()
+        openAssistantMessageActions()
         let read = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "chat-read-aloud-")).firstMatch
         XCTAssertTrue(read.waitForExistence(timeout: 8))
         read.tap()
@@ -243,6 +253,7 @@ final class ParityAcceptanceUITests: XCTestCase {
         let before = try await noteIDs(token: token)
         openTab("对话")
         XCTAssertTrue(openCell(at: 3))
+        openAssistantMessageActions()
         let save = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "chat-save-note-")).firstMatch
         XCTAssertTrue(save.waitForExistence(timeout: 5))
         save.tap()

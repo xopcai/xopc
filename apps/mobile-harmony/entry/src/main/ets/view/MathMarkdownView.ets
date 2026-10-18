@@ -21,6 +21,7 @@ class MathHeightBridge {
 @ComponentV2
 export struct XopcMathMarkdownView {
   @Param content: string = '';
+  @Param textSelectable: boolean = true;
   @Param streaming: boolean = false;
   @Param fontSize: number = 16;
   @Param mathRenderingAllowed: boolean = true;
@@ -62,6 +63,7 @@ export struct XopcMathMarkdownView {
     if (this.mathRenderingAllowed) {
     Web({ src: $rawfile('math/index.html'), controller: this.controller })
       .width('100%').height(this.mathHeight).backgroundColor(Color.Transparent).javaScriptAccess(true).domStorageAccess(false)
+      .copyOptions(this.textSelectable ? CopyOptions.InApp : CopyOptions.None)
       .fileAccess(true).imageAccess(false).mixedMode(MixedMode.None)
       .horizontalScrollBarAccess(false).verticalScrollBarAccess(false)
       .javaScriptProxy({ object: this.bridge, name: 'XopcMathBridge', methodList: ['postMessage'], controller: this.controller })
@@ -71,7 +73,7 @@ export struct XopcMathMarkdownView {
         return event.data.isMainFrame() && !!url && !url.includes('/math/') && url !== 'about:blank';
       })
     } else {
-      Text(this.content).fontSize(this.fontSize).fontColor(this.colors.foreground).width('100%').copyOption(CopyOptions.InApp)
+      Text(this.content).fontSize(this.fontSize).fontColor(this.colors.foreground).width('100%').copyOption(this.textSelectable ? CopyOptions.InApp : CopyOptions.None)
     }
   }
 }

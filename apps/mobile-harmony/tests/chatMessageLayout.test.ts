@@ -127,14 +127,11 @@ describe('chat message layout parity', () => {
     expect(chat).toContain(".id('chat-message-detail-scroll')");
   });
 
-  it('keeps common assistant actions visible and opens secondary actions on tap', () => {
-    expect(chat).toContain('assistantMessageActions(row: XopcChatRow)');
-    expect(chat).toContain('if (!item.item.live && chatAnswerText(item.item)) { this.assistantMessageActions(item.item) }');
+  it('keeps assistant actions out of the reading flow and opens them on long press', () => {
+    expect(chat).not.toContain('assistantMessageActions(row: XopcChatRow)');
     expect(chat).toContain('assistantMessageMore(row: XopcChatRow)');
-    expect(chat).toContain(".id('chat-assistant-more-' + row.id)");
-    expect(chat).toContain('.onClick((): void => { this.assistantMessageMore(row); })');
-    expect(chat).not.toContain('assistantMessageMenu(row: XopcChatRow)');
-    expect(chat).not.toContain('.bindContextMenu(chatAnswerText(item.item)');
+    expect(chat).toContain('LongPressGesture({ repeat: false, duration: 500 })');
+    expect(chat).toContain('if (!item.item.live)');
   });
 
 });

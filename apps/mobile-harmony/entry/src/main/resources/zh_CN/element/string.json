@@ -354,6 +354,7 @@
     { "name": "chat_queue_rich_hint", "value": "附件和引用将在下一条发送" },
     { "name": "chat_steer", "value": "立即介入" },
     { "name": "chat_send_next", "value": "排队发送" },
+    { "name": "chat_select_text", "value": "选择文本" },
     { "name": "chat_copy", "value": "复制" },
     { "name": "chat_edit", "value": "编辑后重发" },
     { "name": "chat_edit_latest", "value": "编辑最新消息" },

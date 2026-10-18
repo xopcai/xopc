@@ -955,3 +955,6 @@
 
 "已转入任务，可在进展中查看" = "Task created. View it in Progress.";
 "查看任务" = "View task";
+
+"选择文本" = "Select text";
+"长按显示消息操作" = "Touch and hold for message actions";

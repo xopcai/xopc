@@ -58,12 +58,14 @@ struct MessageBubble: View {
             .padding(.vertical, isUserAudioBubble ? 0 : 10)
             .background(message.role == "user" ? Color.blue.opacity(0.12) : Color.secondary.opacity(0.1))
             .clipShape(.rect(cornerRadius: 18))
-            if message.role == "assistant", !message.text.isEmpty {
-                assistantActions
-            }
+            .environment(\.chatTextSelectionEnabled, false)
         }
         .frame(maxWidth: .infinity, alignment: message.role == "user" ? .trailing : .leading)
+        .contentShape(.rect)
         .contextMenu {
+            if message.role == "assistant", !message.isPending {
+                assistantMenuActions
+            }
             if message.role == "user", !message.text.isEmpty {
                 Button("复制", systemImage: "doc.plaintext") { UIPasteboard.general.string = message.text }
                     .accessibilityIdentifier("chat-user-copy-\(message.id)")
@@ -74,7 +76,12 @@ struct MessageBubble: View {
             }
         }
         .simultaneousGesture(LongPressGesture(minimumDuration: 0.3).onEnded { _ in onReading() })
+        .accessibilityIdentifier("chat-message-\(message.role)-\(message.id)")
         .accessibilityElement(children: .contain)
+        .accessibilityHint("长按显示消息操作")
+        .accessibilityAction(named: Text("消息操作")) {
+            if message.role == "assistant", !message.isPending { isActionsPresented = true }
+        }
         .sheet(isPresented: $isDetailPresented) {
             MessageDetailView(
                 message: message,
@@ -101,15 +108,7 @@ struct MessageBubble: View {
             }
         }
         .confirmationDialog("消息操作", isPresented: $isActionsPresented, titleVisibility: .visible) {
-            Button("消息详情", systemImage: "info.circle") { isDetailPresented = true }
-            if conversationID != nil {
-                Button("执行过程", systemImage: "list.bullet.rectangle") { isExecutionPresented = true }
-            }
-            if !codeBlocks.isEmpty {
-                Button("复制代码", systemImage: "chevron.left.forwardslash.chevron.right") {
-                    UIPasteboard.general.string = codeBlocks
-                }
-            }
+            assistantMenuActions
             Button("取消", role: .cancel) {}
         }
         .alert(saveFeedback, isPresented: $isSaveFeedbackPresented) {
@@ -137,57 +136,43 @@ struct MessageBubble: View {
         message.role == "user" && message.text.isEmpty && message.attachments.contains(where: \.isAudio)
     }
 
-    private var assistantActions: some View {
-        HStack(spacing: 2) {
-            Button("复制", systemImage: "doc.plaintext") {
-                UIPasteboard.general.string = message.text
-            }
-            .frame(width: 44, height: 44)
-            .contentShape(.rect)
-            .accessibilityIdentifier("chat-copy-\(message.id)")
-            Button("保存到笔记", systemImage: "bookmark") {
-                Task { await saveAsNote() }
-            }
-            .disabled(isSavingNote)
-            .frame(width: 44, height: 44)
-            .contentShape(.rect)
-            .accessibilityIdentifier("chat-save-note-\(message.id)")
-            if !message.isPending, !message.attachments.contains(where: \.isAudio), !ChatSpeechText.chunks(from: message.text).isEmpty {
+    @ViewBuilder
+    private var assistantMenuActions: some View {
+        if !message.text.isEmpty {
+            Button("复制", systemImage: "doc.on.doc") { UIPasteboard.general.string = message.text }
+                .accessibilityIdentifier("chat-copy-\(message.id)")
+            Button("选择文本", systemImage: "text.cursor") { isDetailPresented = true }
+                .accessibilityIdentifier("chat-select-text-\(message.id)")
+            Button("保存到笔记", systemImage: "bookmark") { Task { await saveAsNote() } }
+                .disabled(isSavingNote)
+                .accessibilityIdentifier("chat-save-note-\(message.id)")
+            if !message.attachments.contains(where: \.isAudio), !ChatSpeechText.chunks(from: message.text).isEmpty {
                 Button {
-                    readAloud.toggle(id: message.id, text: message.text, locale: locale, gateway: GatewayClient(configuration: configuration))
+                    readAloud.toggle(id: message.id, text: message.text, locale: locale,
+                                     gateway: GatewayClient(configuration: configuration))
                 } label: {
                     Label {
                         Text(readAloud.sourceID == message.id && readAloud.state == .playing
-                            ? LocalizedStringResource("暂停朗读")
-                            : readAloud.sourceID == message.id && readAloud.state == .paused
-                            ? LocalizedStringResource("继续朗读") : LocalizedStringResource("朗读"))
+                             ? LocalizedStringResource("暂停朗读")
+                             : readAloud.sourceID == message.id && readAloud.state == .paused
+                             ? LocalizedStringResource("继续朗读") : LocalizedStringResource("朗读"))
                     } icon: {
-                        if readAloud.sourceID == message.id, readAloud.state == .loading {
-                            ProgressView().controlSize(.mini)
-                        } else {
-                            Image(systemName: readAloud.sourceID == message.id && readAloud.state == .playing
-                                ? "pause" : "speaker.wave.2")
-                        }
+                        Image(systemName: readAloud.sourceID == message.id && readAloud.state == .playing ? "pause" : "speaker.wave.2")
                     }
                 }
-                .frame(width: 44, height: 44)
-                .contentShape(.rect)
-                .accessibilityIdentifier("chat-read-aloud-\(message.id)")
                 .disabled(!canReadAloud || (readAloud.sourceID == message.id && readAloud.state == .loading))
+                .accessibilityIdentifier("chat-read-aloud-\(message.id)")
             }
-            Button("更多", systemImage: "ellipsis.circle") {
-                isActionsPresented = true
-            }
-            .frame(width: 44, height: 44)
-            .contentShape(.rect)
-            .accessibilityHint("查看消息详情和执行过程")
-            .accessibilityIdentifier("chat-more-\(message.id)")
         }
-        .labelStyle(.iconOnly)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .font(.system(size: 18))
-        .buttonStyle(.plain)
-        .foregroundStyle(.secondary)
+        Button("消息详情", systemImage: "info.circle") { isDetailPresented = true }
+        if conversationID != nil {
+            Button("执行过程", systemImage: "list.bullet.rectangle") { isExecutionPresented = true }
+        }
+        if !codeBlocks.isEmpty {
+            Button("复制代码", systemImage: "chevron.left.forwardslash.chevron.right") {
+                UIPasteboard.general.string = codeBlocks
+            }
+        }
     }
 
     @ViewBuilder

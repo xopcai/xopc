@@ -87,13 +87,8 @@ internal data class MessagePreviewRequest(val conversationId: String, val media:
 internal fun ChatMessageCard(message: ConversationMessage, onMore: () -> Unit,
   onOpenTarget: (ConversationTarget) -> Unit,
   onOpenPreview: (ConversationMedia, List<ConversationMedia>) -> Unit,
-  onOpenLink: (String) -> Unit, onCopy: (String) -> Unit, showMore: Boolean = true,
+  onOpenLink: (String) -> Unit, onCopy: (String) -> Unit, actionsEnabled: Boolean = true, textSelectable: Boolean = false,
   previewEligible: Boolean = false, onViewMore: () -> Unit = onMore,
-  onOpenExecution: (() -> Unit)? = null,
-  onSaveNote: (() -> Unit)? = null,
-  savingNote: Boolean = false,
-  onReadAloud: (() -> Unit)? = null,
-  readAloudPhase: String = "idle",
   revealAnswer: Boolean = false,
   loadMedia: (suspend (ConversationMedia) -> ByteArray)? = null, streaming: Boolean = false,
   onReading: () -> Unit = {}) {
@@ -113,7 +108,7 @@ internal fun ChatMessageCard(message: ConversationMessage, onMore: () -> Unit,
     val maxBubbleWidth = if (isUser) maxWidth * 0.9f else maxWidth
     val contentCount = message.media.size + message.references.size + message.targets.size +
       message.outcome?.artifacts.orEmpty().size
-    val wideAssistant = !isUser && (message.text.length > 30 || contentCount > 0 || onOpenExecution != null)
+    val wideAssistant = !isUser && (message.text.length > 30 || contentCount > 0 || message.turnId != null || message.hasNonTextContent)
     val minimumWidth = if (isUser) when {
       voiceOnly -> 132.dp
       message.media.size == 1 && mediaPreviewKind(message.media.first()) == "audio" -> 180.dp
@@ -134,13 +129,11 @@ internal fun ChatMessageCard(message: ConversationMessage, onMore: () -> Unit,
       .clip(RoundedCornerShape(18.dp))
       .background(if (isUser) MaterialTheme.colorScheme.primaryContainer
         else MaterialTheme.colorScheme.surface)
-      .then(when {
-        isUser -> Modifier.combinedClickable(
-          onClick = { if (showPreview) onViewMore() }, onLongClick = onMore)
-          .testTag("message-more-${message.id}")
-        showPreview -> Modifier.combinedClickable(onClick = onViewMore, onLongClick = onMore)
-        else -> Modifier
-      })
+      .then(if (actionsEnabled) Modifier.combinedClickable(
+        onClick = { if (showPreview) onViewMore() }, onLongClick = onMore,
+        onLongClickLabel = stringResource(R.string.assistant_message_more))
+        .then(if (isUser) Modifier.testTag("message-more-${message.id}") else Modifier)
+        else Modifier)
       .padding(horizontal = if (voiceOnly) 4.dp else if (isUser) 14.dp else 12.dp,
         vertical = if (voiceOnly) 0.dp else if (isUser) 10.dp else 14.dp)
       .then(if (isUser) Modifier else Modifier.testTag("message-assistant-card-${message.id}")),
@@ -148,15 +141,17 @@ internal fun ChatMessageCard(message: ConversationMessage, onMore: () -> Unit,
       if (!isUser) MessageReferences(message.references, onOpenTarget)
       if (message.text.isNotBlank()) {
         if (isUser) {
+          ChatTextSelection(textSelectable) {
           Text(message.text, style = MaterialTheme.typography.bodyLarge.copy(lineHeight = 25.sp),
             modifier = Modifier.fillMaxWidth().then(if (showPreview)
               Modifier.messagePreviewFade(MaterialTheme.colorScheme.primaryContainer) else Modifier),
             maxLines = if (showPreview) messagePreviewLineLimit(message.role) else Int.MAX_VALUE,
             overflow = TextOverflow.Ellipsis)
+          }
         } else if (showPreview) MessageTextPreview(message.id, message.text,
           messagePreviewLineLimit(message.role))
         else MarkdownContent(rememberAnswerText(message.text, revealAnswer), modifier = Modifier.fillMaxWidth(),
-          onOpenLink = onOpenLink, onCopyCode = onCopy, streaming = streaming)
+          onOpenLink = onOpenLink, onCopyCode = onCopy, streaming = streaming, selectable = textSelectable)
       }
       if (isUser) MessageReferences(message.references, onOpenTarget)
       if (message.media.isNotEmpty()) MessageMedia(message.id, message.media, isUser,
@@ -174,42 +169,7 @@ internal fun ChatMessageCard(message: ConversationMessage, onMore: () -> Unit,
         MessageTargets(message.targets, onOpenTarget)
       }
     }
-    if (!isUser && showMore && (message.text.isNotBlank() || contentCount > 0 ||
-      message.outcome != null || onOpenExecution != null)) Row(
-      modifier = Modifier.padding(start = 8.dp, top = 2.dp),
-      horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-      IconButton(onClick = { onCopy(message.text) }, enabled = message.text.isNotBlank(), modifier = Modifier.size(44.dp)
-        .testTag("message-copy-${message.id}")) {
-        Icon(painterResource(R.drawable.message_copy), stringResource(R.string.assistant_copy),
-          tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(21.dp))
-      }
-      if (onSaveNote != null) IconButton(onClick = onSaveNote, enabled = !savingNote, modifier = Modifier.size(44.dp)
-        .testTag("message-save-note-${message.id}")) {
-        Icon(painterResource(R.drawable.message_bookmark),
-          stringResource(R.string.assistant_save_note), tint = MaterialTheme.colorScheme.onSurfaceVariant,
-          modifier = Modifier.size(21.dp))
-      }
-      if (onReadAloud != null && message.media.none { it.mimeType.startsWith("audio/") }) {
-        val readLabel = stringResource(when (readAloudPhase) {
-          "playing" -> R.string.assistant_pause
-          "paused" -> R.string.assistant_resume
-          else -> R.string.assistant_read_aloud
-        })
-        IconButton(onClick = onReadAloud, enabled = message.text.isNotBlank() && readAloudPhase != "loading",
-          modifier = Modifier.size(44.dp).testTag("message-read-aloud-${message.id}")
-            .semantics { contentDescription = readLabel }) {
-          if (readAloudPhase == "loading") BrandLoadingIndicator(extent = 18.dp)
-          else Icon(painterResource(if (readAloudPhase == "playing") R.drawable.message_pause
-            else R.drawable.action_speaker),
-            contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(21.dp))
-        }
-      }
-      IconButton(onClick = onMore, modifier = Modifier.size(44.dp)
-        .testTag("message-more-${message.id}")) {
-        ActionIcon(R.drawable.message_more, color = MaterialTheme.colorScheme.onSurfaceVariant, size = 21.dp,
-          contentDescription = stringResource(R.string.conversations_more_actions))
-      }
-    }
+
     }
   }
 }
@@ -218,7 +178,7 @@ internal fun ChatMessageCard(message: ConversationMessage, onMore: () -> Unit,
 private fun MessageTextPreview(messageId: String, text: String, lineLimit: Int) {
   MarkdownContent(text, modifier = Modifier.testTag("message-preview-$messageId")
     .messagePreviewFade(MaterialTheme.colorScheme.surface),
-    maxLines = lineLimit)
+    maxLines = lineLimit, selectable = false)
 }
 
 private fun Modifier.messagePreviewFade(background: Color): Modifier = drawWithCache {
