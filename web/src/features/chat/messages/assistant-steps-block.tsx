@@ -20,6 +20,7 @@ import type {
 import { MarkdownView } from '@/features/chat/markdown/markdown-view';
 import { knownPartRenderKey } from '@/features/chat/rendering/part-identity';
 import { useChatContentPart } from '@/features/chat/rendering/use-chat-render-state';
+import { routeWheelThroughVerticalScrollChain } from '@/features/chat/scroll/wheel-scroll-chain';
 import { formatParamsJson, getKeyDetailLine } from '@/features/chat/messages/tool-input-preview';
 import {
   getPublicToolExecutionTitle,
@@ -186,6 +187,13 @@ export function AssistantStepsBlock({
 
   const expanded = !workLog.compact && visibleItems.length > 0 && (userExpanded ?? (autoExpanded || readingSelection));
   useEffect(() => {
+    const element = processRef.current;
+    if (!expanded || !element) return;
+    const onWheel = (event: WheelEvent) => routeWheelThroughVerticalScrollChain(event, element);
+    element.addEventListener('wheel', onWheel, { passive: false });
+    return () => element.removeEventListener('wheel', onWheel);
+  }, [expanded]);
+  useEffect(() => {
     if (expanded) { setHasOpened(true); return; }
     if (!hasOpened) return;
     const timer = window.setTimeout(() => setHasOpened(false), 200);
@@ -347,7 +355,7 @@ export function AssistantStepsBlock({
       {expanded || hasOpened ? (
         <div className="assistant-activity-disclosure" data-open={expanded} aria-hidden={!expanded} inert={!expanded}>
           <div className="min-h-0 overflow-hidden">
-            <div ref={processRef} className="assistant-activity-flow mt-1 w-full min-w-0 pb-1 pl-1" data-assistant-activity-flow
+            <div ref={processRef} className="assistant-activity-flow mt-1 max-h-[min(32rem,50dvh)] w-full min-w-0 overflow-x-hidden overflow-y-auto pb-1 pl-1 pr-2 [scrollbar-gutter:stable]" data-assistant-activity-flow
               onFocusCapture={() => setUserExpanded(true)}>
               {recentStart > 0 ? <button type="button" className="mb-3 text-xs text-fg-muted hover:text-fg"
                 onClick={() => setShowEarlier(true)}>{chatLabels.activityEarlier}</button> : null}

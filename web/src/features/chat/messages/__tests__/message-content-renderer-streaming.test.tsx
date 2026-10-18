@@ -647,7 +647,7 @@ describe('streaming assistant Markdown rendering', () => {
     expect(container.textContent).toContain('Updated note');
   });
 
-  it('lets the chat viewport own scrolling through the lightweight process', () => {
+  it('bounds the expanded process with a viewport-aware internal scroll area', () => {
     useDevViewStore.setState({ showRawToolData: true });
     const thinking = { type: 'thinking', text: 'Long reasoning', streaming: false } as const;
 
@@ -665,11 +665,44 @@ describe('streaming assistant Markdown rendering', () => {
 
     const flow = container.querySelector<HTMLElement>('[data-assistant-activity-flow]');
     expect(flow).not.toBeNull();
+    expect(flow?.classList.contains('max-h-[min(32rem,50dvh)]')).toBe(true);
+    expect(flow?.classList.contains('overflow-y-auto')).toBe(true);
+    expect(flow?.classList.contains('overscroll-y-contain')).toBe(false);
     expect(container.querySelector('.assistant-steps-scroll')).toBeNull();
     const wheel = new WheelEvent('wheel', { bubbles: true, cancelable: true, deltaY: 40 });
     act(() => flow?.dispatchEvent(wheel));
     expect(wheel.defaultPrevented).toBe(false);
 
+  });
+
+  it.each([
+    { innerTop: 100, deltaY: 40, expectedInner: 140, expectedOuter: 200 },
+    { innerTop: 180, deltaY: 60, expectedInner: 200, expectedOuter: 240 },
+    { innerTop: 200, deltaY: 40, expectedInner: 200, expectedOuter: 240 },
+    { innerTop: 20, deltaY: -60, expectedInner: 0, expectedOuter: 160 },
+    { innerTop: 0, deltaY: -40, expectedInner: 0, expectedOuter: 160 },
+  ])('hands remaining wheel distance to chat at process boundaries: %j', ({ innerTop, deltaY, expectedInner, expectedOuter }) => {
+    container.classList.add('chat-messages');
+    Object.defineProperties(container, {
+      clientHeight: { configurable: true, value: 500 },
+      scrollHeight: { configurable: true, value: 1500 },
+    });
+    container.scrollTop = 200;
+    render([], true, false, {
+      items: [{ type: 'tool_use', id: 'scroll-step', name: 'read_file', status: 'running' }],
+      active: true, status: 'running', expandedByDefault: true, compact: false,
+    });
+    const flow = container.querySelector<HTMLElement>('[data-assistant-activity-flow]')!;
+    Object.defineProperties(flow, {
+      clientHeight: { configurable: true, value: 200 },
+      scrollHeight: { configurable: true, value: 400 },
+    });
+    flow.scrollTop = innerTop;
+    const wheel = new WheelEvent('wheel', { bubbles: true, cancelable: true, deltaY });
+    act(() => flow.dispatchEvent(wheel));
+    expect(wheel.defaultPrevented).toBe(true);
+    expect(flow.scrollTop).toBe(expectedInner);
+    expect(container.scrollTop).toBe(expectedOuter);
   });
 
   it('renders punctuation-bound strong text after progressive streaming completes', () => {
