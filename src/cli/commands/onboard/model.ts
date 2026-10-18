@@ -88,7 +88,7 @@ async function setupCloudCapabilities(config: Config): Promise<Config> {
   const result = await applyXopcCloudCapabilitySetup({
     currentConfig: nextConfig,
     saveConfig: async (next) => { nextConfig = next; return { saved: true }; },
-  });
+  }, { enableAvailable: true });
   if (result.configured === false) throw new Error(result.error);
   return nextConfig;
 }

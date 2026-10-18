@@ -19,7 +19,7 @@ let container: HTMLDivElement;
 let root: ReturnType<typeof createRoot>;
 beforeEach(async () => {
   vi.clearAllMocks(); api.desktop = true; api.connected = false;
-  api.preview.mockResolvedValue({ configured: true, revision: 'fresh', uses: [{ id: 'chat', recommended: 'xopc-cloud/auto' }] });
+  api.preview.mockResolvedValue({ configured: true, revision: 'fresh', uses: ['chat', 'vision', 'image', 'background', 'transcription', 'speech', 'conversation'].map(id => ({ id, recommended: `xopc-cloud/${id}`, selected: true })) });
   api.apply.mockResolvedValue(undefined); api.profile.mockResolvedValue(undefined);
   useLocaleStore.setState({ language: 'zh' });
   container = document.createElement('div'); document.body.append(container); root = createRoot(container);
@@ -34,8 +34,8 @@ it('takes Electron directly to Cloud authorization and applies its default witho
   expect(container.textContent).not.toContain('Choose provider');
   expect(container.querySelector('[role="dialog"]')).toBeNull();
   await click('Authorize Cloud');
-  expect(api.preview).toHaveBeenCalledExactlyOnceWith('xopc-cloud', { mode: 'replace', selected: ['chat'] });
-  expect(api.apply).toHaveBeenCalledExactlyOnceWith('xopc-cloud', { mode: 'replace', selected: ['chat'] }, 'fresh');
+  expect(api.preview).toHaveBeenCalledExactlyOnceWith('xopc-cloud', { mode: 'replace' });
+  expect(api.apply).toHaveBeenCalledExactlyOnceWith('xopc-cloud', { mode: 'replace', selected: ['chat', 'vision', 'image', 'background', 'transcription', 'speech', 'conversation'] }, 'fresh');
   expect(container.textContent).toContain('一切准备好了');
   await click('开始使用 XOPC'); expect(api.complete).toHaveBeenCalledOnce();
 });
@@ -96,4 +96,14 @@ it('shows completion errors and lets the user retry without applying the default
   await click('开始使用 XOPC');
   expect(api.complete).toHaveBeenCalledTimes(2);
   expect(api.apply).toHaveBeenCalledOnce();
+});
+
+it('finishes with partial capabilities and reports unsupported uses without submitting them', async () => {
+  api.preview.mockResolvedValue({ configured: true, revision: 'partial', uses: [
+    { id: 'chat', selected: true, recommended: 'xopc-cloud/auto' },
+    { id: 'image', selected: false, choices: [], reason: 'not_supported' },
+  ] });
+  await click('继续'); await click('Authorize Cloud');
+  expect(api.apply).toHaveBeenCalledExactlyOnceWith('xopc-cloud', { mode: 'replace', selected: ['chat'] }, 'partial');
+  expect(container.textContent).toContain('部分能力暂无可用模型');
 });

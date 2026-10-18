@@ -111,13 +111,14 @@ describe('XOPC Cloud onboard defaults', () => {
     expect(updated.messages?.tts).toBeUndefined();
   });
 
-  it('preserves existing explicit modality settings', async () => {
+  it('reconfigures available modalities while preserving unsupported settings', async () => {
     const config = ConfigSchema.parse({
       tools: { media: { audio: { enabled: true, provider: 'custom-stt' } } },
       messages: { tts: { enabled: true, provider: 'edge', trigger: 'inbound' } },
     });
     const updated = await setPrimaryModel(config, '/tmp/xopc-main', 'xopc-cloud/chat-model');
-    expect(updated.tools.media?.audio?.provider).toBe('custom-stt');
+    expect(updated.tools.media?.audio).toMatchObject({ enabled: true, provider: 'xopc-cloud' });
+    expect(updated.computer.enabled).toBe(false);
     expect(updated.messages?.tts?.provider).toBe('edge');
   });
 });

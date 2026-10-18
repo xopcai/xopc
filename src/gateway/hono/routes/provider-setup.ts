@@ -7,6 +7,8 @@ import { loadProviderSetupSnapshot } from '../../provider-model-setup.js';
 import { updateGlobalDefaults, prepareUpdateGlobalDefaults, listGlobalDefaults } from '../../global-defaults-admin.js';
 import { applyProviderSetup, previewProviderSetup, SetupConflictError } from '../../../providers/setup/engine.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
+import { completeXopcCloudModelRoutes } from '../../xopc-cloud-capability-setup.js';
+import { getModelCatalogStore } from '../../../providers/model-catalog-store.js';
 import { applySetupVoice } from '../../../providers/setup/voice.js';
 import { withGatewayConfigWriteLock } from '../lib/config-write-lock.js';
 
@@ -41,6 +43,12 @@ export function registerProviderSetupRoutes(app: Hono, deps: AuthenticatedRouteD
       const snapshot = await loadProviderSetupSnapshot(c.req.param('providerId'), expectedConfig);
       if (!isDeepStrictEqual(deps.service.currentConfig, expectedConfig)) throw new SetupConflictError('Configuration changed while preparing setup. Review and retry.');
       const applied = applyProviderSetup(snapshot, parsed.data, parsed.data.revision);
+      if (snapshot.profile.id === 'xopc-cloud'
+        && applied.preview.uses.some(use => use.id === 'chat' && use.selected)
+        && applied.preview.uses.every(use => !use.recommended || use.selected)) {
+        const source = getModelCatalogStore().getSource('xopc-cloud');
+        if (source) applied.defaults.models = completeXopcCloudModelRoutes(applied.defaults.models, source);
+      }
       const prepared = prepareUpdateGlobalDefaults({ defaults: applied.defaults });
       if (prepared.ok === false) return c.json({ ok: false, error: { message: prepared.error } }, prepared.status ?? 400);
       if (applied.voiceAssignments.length) {
