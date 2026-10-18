@@ -249,7 +249,7 @@ export function WorkspaceFilePreviewPanel({
         extractedTextTruncated={state.extractedTextTruncated}
         workspaceEditing={{
           sourceEditMode: state.sourceEditMode,
-          onSourceChange: state.onSourceChange,
+          onSourceChange: (value) => { if (tabId) useRightWorkspaceStore.getState().keepFileOpen(tabId); state.onSourceChange(value); },
           sourceWordWrap: markdownWordWrap,
           isDark: resolvedTheme === 'dark',
         }}

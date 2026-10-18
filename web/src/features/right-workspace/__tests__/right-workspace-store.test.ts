@@ -7,6 +7,52 @@ import { useRightWorkspaceStore as workspace } from '@/stores/right-workspace-st
 beforeEach(() => { workspace.getState().reset(); workspace.getState().setScope('parent'); });
 
 describe('right workspace transitions', () => {
+  it('replaces an unedited preview in place and preserves its return destination', () => {
+    const s = workspace.getState();
+    s.addSideChat('source', 'Source', 'parent');
+    const first = s.openFile({ path: 'a.md' });
+    const next = s.openFile({ path: 'b.md' });
+    expect(next).not.toBe(first);
+    expect(workspace.getState().panes.parent.tabs.map((t) => t.id)).toEqual(['side:source', next]);
+    expect(workspace.getState().panes.parent.tabs[1]).toMatchObject({ preview: true, returnTo: 'side:source' });
+    s.remove(next);
+    expect(workspace.getState().panes.parent.activeId).toBe('side:source');
+  });
+
+  it('keeps edited files after saving and replaces only the remaining preview', () => {
+    const s = workspace.getState();
+    const edited = s.openFile({ path: 'edited.md' });
+    s.setFileStatus(edited, 'dirty');
+    s.setFileStatus(edited, null);
+    const preview = s.openFile({ path: 'preview.md' });
+    expect(s.openFile({ path: 'edited.md' })).toBe(edited);
+    const next = s.openFile({ path: 'next.md' });
+    const pane = workspace.getState().panes.parent;
+    expect(pane.tabs.map((t) => t.id)).toEqual([edited, next]);
+    expect(pane.tabs[0]).toMatchObject({ preview: false });
+    expect(pane.tabs.some((t) => t.id === preview)).toBe(false);
+    expect(pane.activeId).toBe(next);
+  });
+
+  it('retains a manually kept file and isolates previews between workspaces', () => {
+    const s = workspace.getState();
+    const kept = s.openFile({ path: 'kept.md' });
+    s.keepFileOpen(kept);
+    const parentPreview = s.openFile({ path: 'parent.md' });
+    s.openFile({ path: 'other.md' }, 'other');
+    s.openFile({ path: 'replacement.md' }, 'other');
+    expect(workspace.getState().panes.parent.tabs.map((t) => t.id)).toEqual([kept, parentPreview]);
+    expect(workspace.getState().panes.other.tabs).toHaveLength(1);
+  });
+
+  it('reuses the preview for attachments without retaining the previous payload', () => {
+    const s = workspace.getState();
+    s.openFile({ attachment: { name: 'first.txt', content: 'first' } });
+    const next = s.openFile({ attachment: { name: 'second.txt', content: 'second' } });
+    expect(workspace.getState().panes.parent.tabs).toHaveLength(1);
+    expect(workspace.getState().panes.parent.tabs[0]).toMatchObject({ id: next, title: 'second.txt', preview: true });
+  });
+
   it('mixes files and side chats, deduplicates files, and returns to the source on close', () => {
     const s = workspace.getState();
     s.addSideChat('s1', 'Analysis', 'parent');
@@ -24,6 +70,7 @@ describe('right workspace transitions', () => {
   it('isolates same-named files by root and each parent conversation', () => {
     const s = workspace.getState();
     const a = s.openFile({ path: 'report.md', projectId: 'a' });
+    s.keepFileOpen(a);
     const b = s.openFile({ path: 'report.md', projectId: 'b' });
     s.setScope('other');
     s.openFile({ path: 'report.md', projectId: 'a' });
@@ -36,6 +83,7 @@ describe('right workspace transitions', () => {
     const s = workspace.getState();
     const a = s.openFile({ path: 'report.md', conversationId: 'parent' });
     s.resolveFileIdentity(a, 'resource');
+    s.keepFileOpen(a);
     const b = s.openFile({ path: '/project/report.md', conversationId: 'parent', line: 9 });
     s.resolveFileIdentity(b, 'resource');
     expect(workspace.getState().panes.parent.tabs).toHaveLength(1);
@@ -47,6 +95,7 @@ describe('right workspace transitions', () => {
     const s = workspace.getState();
     const a = s.openFile({ path: 'report.md' });
     s.resolveFileIdentity(a, 'resource');
+    s.keepFileOpen(a);
     const b = s.openFile({ path: '/project/report.md' });
     s.setFileStatus(b, 'dirty');
     s.resolveFileIdentity(b, 'resource');

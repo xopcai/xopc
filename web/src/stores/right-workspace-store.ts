@@ -8,6 +8,7 @@ export const EMPTY_WORKSPACE_SCOPE = 'new';
 export type FileTab = {
   id: string;
   kind: 'file';
+  preview?: boolean;
   title: string;
   resourceId?: string;
   aliases?: string[];
@@ -75,6 +76,7 @@ type State = Stored & {
   setNotice: (scope: string, message: string) => void;
   fileStatus: Record<string, string>;
   setFileStatus: (id: string, status: string | null) => void;
+  keepFileOpen: (id: string) => void;
   scope: string;
   migrateScope: (from: string, to: string) => void;
   openTools: (scope?: string) => string;
@@ -105,7 +107,17 @@ export const useRightWorkspaceStore = create<State>((set, get) => {
     notices: {},
     setNotice: (scope, message) => set((s) => ({ notices: { ...s.notices, [scope]: message } })),
     fileStatus: {},
-    setFileStatus: (id, status) => set((s) => ({ fileStatus: { ...s.fileStatus, [id]: status ?? '' } })),
+    setFileStatus: (id, status) => {
+      if (status) get().keepFileOpen(id);
+      set((s) => ({ fileStatus: { ...s.fileStatus, [id]: status ?? '' } }));
+    },
+    keepFileOpen: (id) => {
+      for (const [scope, pane] of Object.entries(get().panes)) {
+        if (pane.tabs.some((t) => t.id === id && t.kind === 'file' && t.preview)) {
+          commit(scope, (p) => ({ ...p, tabs: p.tabs.map((t) => t.id === id ? { ...t, preview: false } : t) }));
+        }
+      }
+    },
     scope: EMPTY_WORKSPACE_SCOPE,
     setScope: (scope) => set({ scope }),
     migrateScope: (from, to) => {
@@ -164,12 +176,14 @@ export const useRightWorkspaceStore = create<State>((set, get) => {
     openFile: (file, scope = get().scope) => {
       const pane = get().panes[scope] ?? EMPTY_WORKSPACE_PANE;
       const existing = pane.tabs.find((t) => t.kind === 'file' && (fileTabKey(t) === fileTabKey(file) || t.aliases?.includes(fileTabKey(file))));
+      const preview = !existing && file.preview !== false ? pane.tabs.find((t) => t.kind === 'file' && t.preview && !get().fileStatus[t.id]) : undefined;
       const id = existing?.id ?? crypto.randomUUID();
-      const tab: FileTab = { ...(existing?.kind === 'file' ? existing : {}), ...file, id, kind: 'file', title: file.path?.replace(/\\/g, '/').split('/').pop() || file.attachment?.name || 'File', visitedAt: Date.now(), returnTo: existing?.returnTo ?? pane.activeId ?? undefined };
+      const tab: FileTab = { ...(existing?.kind === 'file' ? existing : {}), ...file, preview: existing?.kind === 'file' ? existing.preview === true : file.preview !== false, id, kind: 'file', title: file.path?.replace(/\\/g, '/').split('/').pop() || file.attachment?.name || 'File', visitedAt: Date.now(), returnTo: existing?.returnTo ?? (preview ? preview.returnTo : pane.activeId ?? undefined) };
       commit(scope, (p) => {
         const tabs = [...p.tabs];
         const index = tabs.findIndex((t) => t.id === id);
         if (index >= 0) tabs[index] = tab;
+        else if (preview) tabs[tabs.findIndex((t) => t.id === preview.id)] = tab;
         else tabs.splice(Math.max(0, tabs.findIndex((t) => t.id === p.activeId) + 1), 0, tab);
         return { open: true, tabs, activeId: id };
       });
@@ -192,7 +206,7 @@ export const useRightWorkspaceStore = create<State>((set, get) => {
         commit(scope, (p) => {
           if (!duplicate || get().fileStatus[id]) return { ...p, tabs: p.tabs.map((t) => t.id === id ? { ...t, resourceId } : t) };
           return { ...p, activeId: p.activeId === id ? duplicate.id : p.activeId,
-            tabs: p.tabs.filter((t) => t.id !== id).map((t) => t.id === duplicate.id ? { ...duplicate, aliases: [...new Set([...(duplicate.aliases ?? []), fileTabKey(tab)])], line: tab.line ?? duplicate.line } : t) };
+            tabs: p.tabs.filter((t) => t.id !== id).map((t) => t.id === duplicate.id ? { ...duplicate, preview: duplicate.preview === true && tab.preview === true, aliases: [...new Set([...(duplicate.aliases ?? []), fileTabKey(tab)])], line: tab.line ?? duplicate.line } : t) };
         });
       }
     },
