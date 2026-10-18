@@ -66,7 +66,7 @@ export function BrowserTabView({ tab, scope, active }: { tab: Tab; scope: string
   const control = 'inline-flex size-8 shrink-0 items-center justify-center rounded-lg text-fg-muted transition-colors hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-30';
   if (!active) return <div ref={content} hidden />;
   return <div className="flex min-h-0 flex-1 flex-col" data-browser-tab>
-    <form data-workspace-toolbar className="flex h-14 shrink-0 items-center gap-1 border-b border-edge-subtle px-2" onSubmit={event => { event.preventDefault(); void navigate(); }}>
+    <form data-workspace-toolbar className="flex h-14 shrink-0 items-center gap-1 bg-surface-inset px-2" onSubmit={event => { event.preventDefault(); void navigate(); }}>
       <button type="button" className={control} aria-label={zh ? '网页后退' : 'Browser back'} disabled={!state?.canGoBack} onClick={() => command('back')}><ArrowLeft className="size-4" /></button>
       <button type="button" className={control} aria-label={zh ? '网页前进' : 'Browser forward'} disabled={!state?.canGoForward} onClick={() => command('forward')}><ArrowRight className="size-4" /></button>
       <button type="button" className={control} aria-label={state?.loading ? (zh ? '停止加载网页' : 'Stop loading page') : (zh ? '刷新网页' : 'Reload page')} disabled={!state?.url && !state?.loading} onClick={() => command(state?.loading ? 'stop' : 'reload')}>{state?.loading ? <X className="size-4" /> : <RotateCw className="size-4" />}</button>

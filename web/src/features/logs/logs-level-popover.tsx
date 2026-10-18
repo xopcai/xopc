@@ -63,7 +63,7 @@ export function LogsLevelPopover({ L }: Props) {
           align="end"
           sideOffset={6}
           className={cn(
-            'w-56 rounded-xl border border-edge bg-surface-panel p-3 shadow-popover outline-none',
+            'w-56 rounded-xl border border-edge bg-surface-overlay p-3 shadow-popover outline-none',
             SETTINGS_SHELL_POPOVER_Z,
             'dark:border-edge',
           )}

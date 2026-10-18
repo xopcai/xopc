@@ -140,7 +140,7 @@ function ActionMenu({
         {menuOpen ? (
           <div
             role="menu"
-            className="absolute right-0 top-full z-50 mt-0.5 min-w-[9rem] rounded-md border border-edge bg-surface-panel py-1 shadow-popover"
+            className="absolute right-0 top-full z-50 mt-0.5 min-w-[9rem] rounded-md border border-edge bg-surface-overlay py-1 shadow-popover"
             onPointerDown={(e) => e.stopPropagation()}
           >
             {isElectron() && entry.fileId && !shell?.openFileResource && labels.desktopUpdateRequired ? (
