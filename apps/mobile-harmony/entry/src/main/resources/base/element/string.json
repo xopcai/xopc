@@ -355,6 +355,7 @@
     { "name": "chat_queue_rich_hint", "value": "Attachments and references will be sent next" },
     { "name": "chat_steer", "value": "Steer now" },
     { "name": "chat_send_next", "value": "Send next" },
+    { "name": "chat_select_text", "value": "Select text" },
     { "name": "chat_copy", "value": "Copy" },
     { "name": "chat_edit", "value": "Edit and resend" },
     { "name": "chat_edit_latest", "value": "Edit latest message" },

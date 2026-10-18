@@ -24,6 +24,7 @@ struct XopcMarkdownInline {
   @Param strong: boolean = false;
   @Param alignment: string = 'left';
   @Param compactReading: boolean = false;
+  @Param textSelectable: boolean = true;
   @Param lineLimit: number = Infinity;
   @Param streaming: boolean = false;
   @Param allowMath: boolean = true;
@@ -98,7 +99,7 @@ struct XopcMarkdownInline {
   build() {
     Column() {
       if (mayContainMath(this.content) && (!Number.isFinite(this.lineLimit) || this.lineLimit <= 0)) {
-        XopcMathMarkdownView({ content: this.content, streaming: this.streaming, fontSize: this.textSize, mathRenderingAllowed: this.allowMath,
+        XopcMathMarkdownView({ textSelectable: this.textSelectable, content: this.content, streaming: this.streaming, fontSize: this.textSize, mathRenderingAllowed: this.allowMath,
           onOpenLink: (href: string): void => { this.openTarget(href); } })
       } else {
         Text() {
@@ -126,7 +127,7 @@ struct XopcMarkdownInline {
         }.fontSize(this.textSize)
           .lineHeight(this.textLineHeight)
           .maxLines(this.lineLimit).textOverflow({ overflow: TextOverflow.Ellipsis })
-          .copyOption(CopyOptions.InApp).width('100%')
+          .copyOption(this.textSelectable ? CopyOptions.InApp : CopyOptions.None).width('100%')
           .onTextSelectionChange((start: number, end: number): void => {
             this.selecting = start >= 0 && end > start;
             if (this.selecting) {
@@ -148,6 +149,7 @@ export struct XopcMarkdownView {
   @Param content: string = '';
   @Param conversationId: string = '';
   @Param compactReading: boolean = false;
+  @Param textSelectable: boolean = true;
   @Param previewLineLimit: number = 0;
   @Param inlineNoteImages: boolean = false;
   @Param streaming: boolean = false;
@@ -205,11 +207,11 @@ export struct XopcMarkdownView {
       Repeat<XopcMarkdownBlock>(this.blocks).each((item: RepeatItem<XopcMarkdownBlock>) => {
         Column() {
         if (item.item.kind === 'math' && this.previewLineLimit <= 0) {
-          XopcMathMarkdownView({ content: item.item.text, streaming: this.streaming, mathRenderingAllowed: this.mathAllowed,
+          XopcMathMarkdownView({ textSelectable: this.textSelectable, content: item.item.text, streaming: this.streaming, mathRenderingAllowed: this.mathAllowed,
             onOpenLink: (href: string): void => { this.openInternalLink(href); } })
           Button('复制公式源码').onClick((): void => { this.copyCode(item.item.text); })
         } else if (this.previewLineLimit > 0) {
-          XopcMarkdownInline({ allowMath: this.mathAllowed, content: item.item.text, headingLevel: item.item.kind === 'heading' ? item.item.level : 0,
+          XopcMarkdownInline({ textSelectable: this.textSelectable, allowMath: this.mathAllowed, content: item.item.text, headingLevel: item.item.kind === 'heading' ? item.item.level : 0,
             muted: item.item.kind === 'quote', compactReading: this.compactReading, lineLimit: this.blockLines(item.index),
             onOpenLink: (href: string): void => { this.openInternalLink(href); },
             onPreviewTap: (): void => { this.onPreviewTap(); } })
@@ -233,7 +235,7 @@ export struct XopcMarkdownView {
             }.width('100%')
             Scroll() {
               Text(this.codeText(item.item)).fontFamily('monospace').fontSize(14).lineHeight(22)
-                .fontColor(this.colors.foreground).copyOption(CopyOptions.InApp)
+                .fontColor(this.colors.foreground).copyOption(this.textSelectable ? CopyOptions.InApp : CopyOptions.None)
             }.width('100%').scrollable(ScrollDirection.Horizontal).scrollBar(BarState.Auto)
             if (markdownCodePreview(item.item.text).length < item.item.text.length) {
               Button(this.expandedBlocks.has(item.item.id) ? $r('app.string.chat_collapse_content') : $r('app.string.chat_view_more'))
@@ -248,7 +250,7 @@ export struct XopcMarkdownView {
               Repeat<XopcMarkdownTableRow>(this.tableRows(item.item)).each((row: RepeatItem<XopcMarkdownTableRow>) => {
                 Row() {
                   Repeat<XopcMarkdownCell>(row.item.cells).each((cell: RepeatItem<XopcMarkdownCell>) => {
-                    XopcMarkdownInline({ allowMath: this.mathAllowed, content: cell.item.text, strong: row.item.header, alignment: cell.item.align,
+                    XopcMarkdownInline({ textSelectable: this.textSelectable, allowMath: this.mathAllowed, content: cell.item.text, strong: row.item.header, alignment: cell.item.align,
                       compactReading: this.compactReading,
                       onReading: this.onReading,
                       onOpenLink: (href: string): void => { this.openInternalLink(href); } })
@@ -269,13 +271,13 @@ export struct XopcMarkdownView {
           Row() {
             Text(this.listMarker(item.item)).fontSize(16).lineHeight(this.compactReading ? 23 : 25)
               .fontColor(this.colors.foreground)
-            XopcMarkdownInline({ allowMath: this.mathAllowed, content: item.item.text.slice(this.listMarker(item.item).length),
+            XopcMarkdownInline({ textSelectable: this.textSelectable, allowMath: this.mathAllowed, content: item.item.text.slice(this.listMarker(item.item).length),
               compactReading: this.compactReading,
               streaming: this.streaming && item.index === this.blocks.length - 1,
               onReading: this.onReading,
               onOpenLink: (href: string): void => { this.openInternalLink(href); } }).layoutWeight(1)
           }.width('100%').alignItems(VerticalAlign.Top).padding({ left: Math.min(item.item.level, 6) * 12 })
-        } else { XopcMarkdownInline({ allowMath: this.mathAllowed, content: item.item.text, headingLevel: item.item.kind === 'heading' ? item.item.level : 0, muted: item.item.kind === 'quote',
+        } else { XopcMarkdownInline({ textSelectable: this.textSelectable, allowMath: this.mathAllowed, content: item.item.text, headingLevel: item.item.kind === 'heading' ? item.item.level : 0, muted: item.item.kind === 'quote',
           compactReading: this.compactReading,
           streaming: this.streaming && item.index === this.blocks.length - 1,
           onReading: this.onReading,

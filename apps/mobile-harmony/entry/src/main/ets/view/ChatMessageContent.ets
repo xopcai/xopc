@@ -21,6 +21,7 @@ export struct XopcChatMessageContent {
   @Param runStartedAtMs: number = 0;
   @Param connection: string = 'connected';
   @Param showWaiting: boolean = true;
+  @Param textSelectable: boolean = false;
   @Param previewEligible: boolean = false;
   @Param disclosure: XopcChatDisclosure = new XopcChatDisclosure();
   @Event onNavigate: (route: XopcMobileRoute) => void = (_route: XopcMobileRoute): void => {};
@@ -100,7 +101,7 @@ export struct XopcChatMessageContent {
       if (this.showPreview) {
         Stack({ alignContent: Alignment.Bottom }) {
           if (this.row.role === 'assistant') {
-            XopcMarkdownView({ content: this.previewMarkdown, conversationId: this.conversationId, compactReading: true,
+            XopcMarkdownView({ textSelectable: this.textSelectable, content: this.previewMarkdown, conversationId: this.conversationId, compactReading: true,
               previewLineLimit: this.previewLines, onNavigate: this.onNavigate,
               onPreviewTap: (): void => { this.onShowMore(this.row); } })
           } else {
@@ -124,7 +125,7 @@ export struct XopcChatMessageContent {
         if (this.row.role === 'assistant') {
           Repeat<XopcChatBlock>(this.body).each((item: RepeatItem<XopcChatBlock>) => {
             if (item.item.kind === 'text' && item.item.text) {
-              XopcChatAnswerView({ content: item.item.text, conversationId: this.conversationId,
+              XopcChatAnswerView({ textSelectable: this.textSelectable, content: item.item.text, conversationId: this.conversationId,
                 reveal: this.animateStreaming,
                 onReading: this.onReading,
                 onNavigate: this.onNavigate })
@@ -134,36 +135,37 @@ export struct XopcChatMessageContent {
                 Text(item.item.review.overallCorrectness === 'patch is incorrect' ? $r('app.string.chat_review_incorrect')
                   : item.item.review.overallCorrectness === 'patch is correct' ? $r('app.string.chat_review_correct') : $r('app.string.chat_review_unknown'))
                   .fontSize(12).fontColor(this.colors.secondary)
-                if (item.item.review.summary) { XopcMarkdownView({ content: item.item.review.summary, conversationId: this.conversationId,
+                if (item.item.review.summary) { XopcMarkdownView({ textSelectable: this.textSelectable, content: item.item.review.summary, conversationId: this.conversationId,
                   compactReading: true, onNavigate: this.onNavigate }) }
                 ForEach(item.item.review.findings || [], (finding: XopcReviewFinding, index: number) => {
                   Column({ space: 6 }) {
                     Text('P' + finding.priority + ' · ' + finding.title).fontSize(15).fontWeight(FontWeight.Medium).fontColor(this.colors.foreground)
-                    if (finding.filePath) { Text(finding.filePath + (finding.lineStart ? ':' + finding.lineStart : '')).fontSize(12).fontFamily('monospace').fontColor(this.colors.secondary).copyOption(CopyOptions.InApp) }
-                    XopcMarkdownView({ content: finding.body, conversationId: this.conversationId, compactReading: true,
+                    if (finding.filePath) { Text(finding.filePath + (finding.lineStart ? ':' + finding.lineStart : '')).fontSize(12).fontFamily('monospace').fontColor(this.colors.secondary).copyOption(this.textSelectable ? CopyOptions.InApp : CopyOptions.None) }
+                    XopcMarkdownView({ textSelectable: this.textSelectable, content: finding.body, conversationId: this.conversationId, compactReading: true,
                       onNavigate: this.onNavigate })
                   }.width('100%').padding(10).borderRadius(8).backgroundColor(this.colors.grouped).alignItems(HorizontalAlign.Start)
                 }, (finding: XopcReviewFinding, index: number): string => index + ':' + finding.title)
-                if (item.item.review.overallExplanation) { XopcMarkdownView({ content: item.item.review.overallExplanation,
+                if (item.item.review.overallExplanation) { XopcMarkdownView({ textSelectable: this.textSelectable, content: item.item.review.overallExplanation,
                   conversationId: this.conversationId, compactReading: true, onNavigate: this.onNavigate }) }
               }.id('chat-review-' + item.item.id).width('100%').padding(12).borderRadius(12)
                 .backgroundColor(this.colors.grouped).alignItems(HorizontalAlign.Start)
             }
           }).key((block: XopcChatBlock): string => block.id)
-          if (!this.body.length && !this.row.blocks && this.row.text) { XopcMarkdownView({ content: this.row.text,
+          if (!this.body.length && !this.row.blocks && this.row.text) { XopcMarkdownView({ textSelectable: this.textSelectable, content: this.row.text,
             streaming: this.animateStreaming,
             onReading: this.onReading,
             conversationId: this.conversationId, compactReading: true, onNavigate: this.onNavigate }) }
         } else if (this.row.role === 'user') {
           if (this.row.text) {
             Text(this.row.text).fontSize(16).lineHeight(25).fontColor(this.colors.foreground)
+              .copyOption(this.textSelectable ? CopyOptions.InApp : CopyOptions.None)
               .width('100%').textAlign(TextAlign.Start)
           }
           ForEach(this.row.refs || [], (ref: XopcContextRef) => {
             this.reference(ref)
           }, (ref: XopcContextRef): string => ref.kind + ':' + ref.sourceId)
         } else {
-          Text(this.row.text).fontSize(13).fontColor(this.colors.secondary).copyOption(CopyOptions.InApp)
+          Text(this.row.text).fontSize(13).fontColor(this.colors.secondary).copyOption(this.textSelectable ? CopyOptions.InApp : CopyOptions.None)
         }
         Repeat<XopcHistoryMedia>(this.audioMedia).each((item: RepeatItem<XopcHistoryMedia>) => {
           if (this.row.role === 'user') {
@@ -219,6 +221,7 @@ struct XopcChatAnswerView {
   @Param content: string = '';
   @Param conversationId: string = '';
   @Param reveal: boolean = false;
+  @Param textSelectable: boolean = false;
   @Event onReading: () => void = (): void => {};
   @Event onNavigate: (route: XopcMobileRoute) => void = (_route: XopcMobileRoute): void => {};
   @Local displayedText: string = '';
@@ -244,7 +247,7 @@ struct XopcChatAnswerView {
     }, 24);
   }
   build() {
-    XopcMarkdownView({ content: this.displayedText, conversationId: this.conversationId, compactReading: true,
+    XopcMarkdownView({ textSelectable: this.textSelectable, content: this.displayedText, conversationId: this.conversationId, compactReading: true,
       streaming: this.reveal, onReading: this.onReading, onNavigate: this.onNavigate })
   }
 }

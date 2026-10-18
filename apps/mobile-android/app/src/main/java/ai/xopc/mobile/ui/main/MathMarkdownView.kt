@@ -89,6 +89,7 @@ private class MathBridge(val receive: (String) -> Unit) {
 internal fun MathMarkdownView(source: String, streaming: Boolean, modifier: Modifier = Modifier,
   display: Boolean = false, fontSize: Float = 16f, enabled: Boolean = true, onOpenLink: ((String) -> Unit)? = null,
   onCopy: ((String) -> Unit)? = null) {
+  val selectable = LocalMarkdownSelection.current
   val context = LocalContext.current
   val density = LocalDensity.current
   val latestLink by rememberUpdatedState(onOpenLink)
@@ -132,6 +133,8 @@ internal fun MathMarkdownView(source: String, streaming: Boolean, modifier: Modi
         }
       },
       update = { view ->
+        view.setOnLongClickListener { !selectable }
+        view.isLongClickable = selectable
         val previous = view.tag as? JSONObject
         val next = JSONObject().put("markdown", source).put("streaming", streaming).put("dark", dark)
           .put("fontSize", fontSize * density.fontScale)
