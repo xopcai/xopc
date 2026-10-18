@@ -5,7 +5,6 @@ import { useLocation } from 'react-router-dom';
 import { messages as getMessages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
 import { useSideChatStore } from '@/stores/side-chat-store';
-import { useWorkspacePanelStore } from '@/stores/workspace-panel-store';
 import { addSelectionToMainChat } from './side-chat-selection-actions';
 
 const MAX_SELECTION_CHARS = 32_000;
@@ -26,7 +25,6 @@ export function SideChatSelectionLauncher({ conversationId }: { conversationId: 
   const m = getMessages(language).sideChat;
   const requestCreate = useSideChatStore((state) => state.requestCreate);
   const pendingCreate = useSideChatStore((state) => state.pendingCreate);
-  const setWorkspaceOpen = useWorkspacePanelStore((state) => state.setOpen);
   const [popup, setPopup] = useState<SelectionPopup | null>(null);
   const inspectSelection = useCallback(() => {
     if (!conversationId || conversationId === 'new' || pendingCreate) {
@@ -114,7 +112,6 @@ export function SideChatSelectionLauncher({ conversationId }: { conversationId: 
         type="button"
         className="inline-flex flex-1 items-center justify-center gap-1.5 border-l border-edge px-3 transition-colors hover:bg-surface-hover focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent"
         onClick={() => {
-          setWorkspaceOpen(false);
           requestCreate(conversationId, [{
             id: crypto.randomUUID(),
             type: 'text',

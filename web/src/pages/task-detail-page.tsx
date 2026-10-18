@@ -28,7 +28,7 @@ import { taskCopy } from '@/features/tasks/task-copy';
 import { summarizeTaskCriteria } from '@/features/tasks/task-detail-summary';
 import { hasTaskEditConflict, optimisticallyPatchTask, type TaskEditBase } from '@/features/tasks/task-detail-sync';
 import { useTaskDetail } from '@/features/tasks/use-task-detail';
-import { WorkspacePreviewPane } from '@/features/workspace/workspace-preview-pane';
+import { useRightWorkspaceStore } from '@/stores/right-workspace-store';
 import { formatMediumDateTime } from '@/lib/date-formatters';
 import { cn } from '@/lib/cn';
 import { safeInternalReturnPath, withReturnTo } from '@/lib/navigation-return';
@@ -36,7 +36,6 @@ import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
 import { usePageHeaderStore } from '@/stores/page-header-store';
 import { PageContextCaptureButton } from '@/features/chat/context/page-context-capture-button';
-import { useSideChatStore } from '@/stores/side-chat-store';
 import { useWorkspacePanelStore } from '@/stores/workspace-panel-store';
 import { useWorkspacePreviewStore } from '@/stores/workspace-preview-store';
 
@@ -241,10 +240,8 @@ function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted }: {
   const copy = useMemo(() => taskCopy(language), [language]);
   const setPageHeader = usePageHeaderStore((state) => state.setPageHeader);
   const clearPageHeader = usePageHeaderStore((state) => state.clearPageHeader);
-  const workspacePanelOpen = useWorkspacePanelStore((state) => state.open);
-  const workspacePanelConversationId = useWorkspacePanelStore((state) => state.conversationIdOverride);
+  const workspacePanes = useRightWorkspaceStore((state) => state.panes);
   const openWorkspacePanelForSession = useWorkspacePanelStore((state) => state.openForSession);
-  const setSideChatOpen = useSideChatStore((state) => state.setOpen);
   const {
     data: detail,
     error: loadError,
@@ -642,8 +639,7 @@ function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted }: {
   const conversationAgent = agents.find((agent) => agent.id === conversationAgentId);
   const taskWorkspaceOpen = Boolean(
     conversationConversationId
-    && workspacePanelOpen
-    && workspacePanelConversationId === conversationConversationId,
+    && workspacePanes[conversationConversationId]?.open,
   );
   const needsUserAttention = detail.attention.some((item) => item.kind === 'input_required' || item.kind === 'approval_required');
   const verifiedCriteriaCount = criterionSummaries.filter((criterion) => criterion.status === 'passed').length;
@@ -966,7 +962,7 @@ function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted }: {
             </DropdownMenu.Content></DropdownMenu.Portal>
           </DropdownMenu.Root> : null}
           {conversationConversationId ? <>
-            <Button type="button" variant="ghost" className={cn('size-8 p-0', taskWorkspaceOpen && 'bg-surface-hover text-fg')} aria-label={language === 'zh' ? '项目文件' : 'Project files'} aria-pressed={taskWorkspaceOpen} onClick={() => { setSideChatOpen(conversationConversationId, false); openWorkspacePanelForSession(conversationConversationId); }}><FolderOpen className="size-4" aria-hidden /></Button>
+            <Button type="button" variant="ghost" className={cn('size-8 p-0', taskWorkspaceOpen && 'bg-surface-hover text-fg')} aria-label={language === 'zh' ? '项目文件' : 'Project files'} aria-pressed={taskWorkspaceOpen} onClick={() => { useRightWorkspaceStore.getState().openFiles(conversationConversationId); openWorkspacePanelForSession(conversationConversationId); }}><FolderOpen className="size-4" aria-hidden /></Button>
             <Button asChild variant="ghost" className="size-8 p-0"><Link to={taskChatHref(taskId)} aria-label={language === 'zh' ? '全屏打开对话' : 'Open chat full screen'}><ExternalLink className="size-4" aria-hidden /></Link></Button>
           </> : null}
           </div>
@@ -1016,10 +1012,8 @@ export function TaskDetailModal({ taskId, backgroundPath, onClose }: {
   onClose: () => void;
 }) {
   const language = useLocaleStore((state) => state.language);
-  const workspacePanelOpen = useWorkspacePanelStore((state) => state.open);
-  const workspacePanelWidth = useWorkspacePanelStore((state) => state.widthPx);
-  const workspaceConversationId = useWorkspacePanelStore((state) => state.conversationIdOverride);
-  const previewPath = useWorkspacePreviewStore((state) => state.path);
+  const workspacePanelOpen = useRightWorkspaceStore((state) => state.panes[state.scope]?.open === true);
+  const workspacePanelWidth = useRightWorkspaceStore((state) => state.width || 640);
   const setPreviewPath = useWorkspacePreviewStore((state) => state.setPath);
   const workspacePanelOffset = workspacePanelOpen ? workspacePanelWidth : 0;
 
@@ -1078,17 +1072,7 @@ export function TaskDetailModal({ taskId, backgroundPath, onClose }: {
             }} />
           </div>
         </Dialog.Content>
-        {previewPath ? (
-          <div
-            className="fixed inset-y-0 left-0 z-[100] flex min-h-0 min-w-0 overflow-hidden bg-surface-panel transition-[right] duration-200 ease-out motion-reduce:transition-none"
-            style={{ right: workspacePanelOpen ? workspacePanelWidth : 0 }}
-          >
-            <WorkspacePreviewPane
-              allowOutsideChat
-              conversationId={workspaceConversationId ?? undefined}
-            />
-          </div>
-        ) : null}
+
       </Dialog.Portal>
     </Dialog.Root>
   );

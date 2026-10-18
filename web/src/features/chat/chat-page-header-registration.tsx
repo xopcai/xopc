@@ -1,5 +1,6 @@
-import { Loader2, PanelRight, Plus, Search, SquareTerminal } from 'lucide-react';
-import { memo, useCallback, useEffect, useLayoutEffect, useState } from 'react';
+import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
+import { MoreHorizontal, Plus, Search, Share2 } from 'lucide-react';
+import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 
 import { APP_CHROME_NO_DRAG_CLASS } from '@/components/shell/app-chrome';
@@ -9,11 +10,9 @@ import type { ChatAgentOption } from '@/features/chat/agent-selection/chat-agent
 import { SessionContextPanel, type SessionContextPanelProps } from '@/features/chat/context/session-context-panel';
 import { useSessionContext } from '@/features/chat/context/use-session-context';
 import { ChatWorkspaceControl } from '@/features/chat/workspace/chat-workspace-control';
-import { matchesTerminalShortcut, terminalShortcutLabel } from '@/features/chat/terminal/terminal-shortcut';
+import { matchesTerminalShortcut } from '@/features/chat/terminal/terminal-shortcut';
 import {
   matchesSideChatShortcut,
-  sideChatAriaKeyShortcut,
-  sideChatShortcutLabel,
 } from '@/features/side-chat/side-chat-shortcut';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
@@ -21,6 +20,7 @@ import { useAppShellStore } from '@/stores/app-shell-store';
 import { usePageHeaderStore } from '@/stores/page-header-store';
 import { useLocaleStore } from '@/stores/locale-store';
 import { useSidebarStore } from '@/stores/sidebar-store';
+import { useRightWorkspaceStore } from '@/stores/right-workspace-store';
 import { useSideChatStore } from '@/stores/side-chat-store';
 import { useMediaQuery } from '@/lib/use-media-query';
 import { useTerminalPanelStore } from '@/stores/terminal-panel-store';
@@ -85,21 +85,16 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
   const workspaceAvailable = !contextError && (!contextSummary || Boolean(contextSummary.environment?.available));
   const m = messages(language);
   const sidebarCollapsed = useSidebarStore((s) => s.collapsed);
-  const sideChatOpen = useSideChatStore((s) => (
-    activeConversationId ? s.panes[activeConversationId]?.open === true : false
-  ));
   const setSideChatOpen = useSideChatStore((s) => s.setOpen);
-  const terminalPanelOpen = useTerminalPanelStore((s) => activeConversationId ? Boolean(s.openByConversationId[activeConversationId]) : false);
   const toggleTerminalPanel = useTerminalPanelStore((s) => s.toggle);
   const openTerminalPanel = useTerminalPanelStore((s) => s.open);
+  const [shareOpen, setShareOpen] = useState(false);
+  const findRequested = useRef(false);
   const [terminalPreparing, setTerminalPreparing] = useState(false);
   const mobileNavOpen = useAppShellStore((s) => s.mobileNavOpen);
   const setPageHeader = usePageHeaderStore((s) => s.setPageHeader);
   const clearPageHeader = usePageHeaderStore((s) => s.clearPageHeader);
   const terminalPlatform = window.electronAPI?.platform;
-  const terminalShortcut = terminalShortcutLabel(terminalPlatform);
-  const sideChatShortcut = sideChatShortcutLabel(terminalPlatform);
-  const sideChatAriaShortcut = sideChatAriaKeyShortcut(terminalPlatform);
   const terminalAvailable = Boolean(showContextControls && window.electronAPI?.terminal && (activeConversationId || prepareTerminalSession));
 
   const handleTerminalToggle = useCallback(() => {
@@ -119,7 +114,9 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
 
   const handleSideChatToggle = useCallback(() => {
     if (!activeConversationId || !hasMessages) return;
-    const open = useSideChatStore.getState().panes[activeConversationId]?.open === true;
+    const pane = useRightWorkspaceStore.getState().panes[activeConversationId];
+    const requested = useSideChatStore.getState().pendingCreate?.parentConversationId === activeConversationId || Boolean(useSideChatStore.getState().creatingRequests[activeConversationId]);
+    const open = pane?.open === true && (pane.activeId?.startsWith('side:') === true || requested);
     setSideChatOpen(activeConversationId, !open);
   }, [activeConversationId, hasMessages, setSideChatOpen]);
 
@@ -147,7 +144,8 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
       handleTerminalToggle();
     };
     window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
+    window.addEventListener('workspace-open-terminal', handleTerminalToggle);
+    return () => { window.removeEventListener('keydown', onKeyDown); window.removeEventListener('workspace-open-terminal', handleTerminalToggle); };
   }, [handleTerminalToggle, terminalAvailable, terminalPlatform]);
 
   useEffect(() => {
@@ -179,16 +177,17 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
         </Link>
       ) : null,
       main: (
-        <div className="w-full min-w-0 max-w-(--max-width-chat-frame) px-3 sm:px-5 xl:px-6">
+        <div className="flex w-full min-w-0 max-w-(--max-width-chat-frame) items-center gap-3 px-3 sm:px-5 xl:px-6">
           <h1
             className={cn(
-              'min-w-0 truncate text-[0.9375rem] font-semibold leading-5 tracking-tight text-fg',
+              'min-w-0 flex-1 truncate text-[0.9375rem] font-semibold leading-5 tracking-tight text-fg',
               showNewChatLink ? 'text-left md:text-center' : 'text-left',
             )}
             title={chatHeadline}
           >
             {chatHeadline}
           </h1>
+          {showChatAgentSelector ? <ChatAgentSelector items={chatAgents} value={chatAgentId} disabled={chatAgentDisabled} placeholder={m.chat.agentPlaceholder} searchPlaceholder={m.chat.agentSearchPlaceholder} noMatches={m.chat.agentNoMatches} compact contentSide="bottom" contentAlign="end" onChange={onChatAgentChange} /> : null}
         </div>
       ),
       end: (
@@ -198,93 +197,65 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
             APP_CHROME_NO_DRAG_CLASS,
           )}
         >
-          {showChatAgentSelector ? (
-            <div className="min-w-0 w-fit shrink-0">
-              <ChatAgentSelector
-                items={chatAgents}
-                value={chatAgentId}
-                disabled={chatAgentDisabled}
-                placeholder={m.chat.agentPlaceholder}
-                searchPlaceholder={m.chat.agentSearchPlaceholder}
-                noMatches={m.chat.agentNoMatches}
-                compact
-                contentSide="bottom"
-                contentAlign="end"
-                onChange={onChatAgentChange}
-              />
-            </div>
-          ) : null}
-          {hasMessages && onFindOpen ? (
-            <button
-              type="button"
-              className="rounded-md p-2 text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-              title={`${m.chat.find.input} (${terminalPlatform === 'darwin' ? '⌘F' : 'Ctrl+F'})`}
-              aria-label={m.chat.find.input}
-              aria-keyshortcuts="Meta+F Control+F"
-              onClick={onFindOpen}
-            >
-              <Search className="size-4" strokeWidth={1.75} aria-hidden />
-            </button>
-          ) : null}
-          {activeConversationId && hasMessages ? <SessionShareButton key={`share:${activeConversationId}`} conversationId={activeConversationId} /> : null}
-          {terminalAvailable ? (
-            <button
-              type="button"
-              className={cn(
-                'rounded-md p-2 text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg',
-                terminalPanelOpen && 'bg-surface-hover text-fg',
-              )}
-              title={`${m.chat.terminal.open} (${terminalShortcut})`}
-              aria-label={m.chat.terminal.open}
-              aria-pressed={terminalPanelOpen}
-              disabled={terminalDisabled || terminalPreparing}
-              onClick={handleTerminalToggle}
-            >
-              {terminalPreparing ? <Loader2 className="size-4 animate-spin" /> : <SquareTerminal className="size-4" />}
-            </button>
-          ) : null}
+          <DropdownMenu.Root modal={false}>
+            <DropdownMenu.Trigger asChild>
+              <button type="button" data-chat-menu-trigger aria-label={language === 'zh' ? '聊天菜单' : 'Chat menu'} title={language === 'zh' ? '聊天菜单' : 'Chat menu'} className="inline-flex size-8 shrink-0 items-center justify-center rounded-lg text-fg-muted transition-colors hover:bg-surface-hover data-[state=open]:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
+                <MoreHorizontal className="size-4" aria-hidden />
+              </button>
+            </DropdownMenu.Trigger>
+            <DropdownMenu.Portal>
+              <DropdownMenu.Content onCloseAutoFocus={(event) => {
+                if (!findRequested.current) return;
+                event.preventDefault();
+                findRequested.current = false;
+                document.querySelector<HTMLElement>('[data-chat-menu-trigger]')?.focus();
+                onFindOpen?.();
+              }} align="end" sideOffset={8} className="workspace-menu z-[125] min-w-60 rounded-xl border border-edge bg-surface-panel p-1.5 text-sm shadow-popover outline-none">
+                <DropdownMenu.Item disabled={!hasMessages || !onFindOpen} onSelect={() => { findRequested.current = true; }} className="flex cursor-default items-center gap-3 rounded-lg px-3 py-2 text-fg outline-none data-[highlighted]:bg-surface-hover data-[disabled]:opacity-40">
+                  <Search className="size-4 text-fg-muted" aria-hidden /><span className="flex-1">{m.chat.find.input}</span><span className="text-xs text-fg-muted">{terminalPlatform === 'darwin' ? '⌘F' : 'Ctrl+F'}</span>
+                </DropdownMenu.Item>
+                <DropdownMenu.Item disabled={!activeConversationId || !hasMessages} onSelect={() => setShareOpen(true)} className="flex cursor-default items-center gap-3 rounded-lg px-3 py-2 text-fg outline-none data-[highlighted]:bg-surface-hover data-[disabled]:opacity-40">
+                  <Share2 className="size-4 text-fg-muted" aria-hidden /><span>{language === 'zh' ? '分享对话' : 'Share conversation'}</span>
+                </DropdownMenu.Item>
+              </DropdownMenu.Content>
+            </DropdownMenu.Portal>
+          </DropdownMenu.Root>
+          {activeConversationId && hasMessages ? <SessionShareButton key={`share:${activeConversationId}`} conversationId={activeConversationId} hideTrigger dialogOpen={shareOpen} onDialogOpenChange={setShareOpen} /> : null}
           {showContextControls ? <SessionContextPanel
             key={`context:${activeConversationId ?? context?.project?.id ?? 'new'}`}
             {...context}
             agentId={chatAgentId}
+            environmentAction={canChangeWorkspace && onWorkspaceChange ? <ChatWorkspaceControl
+              directoryOnly conversationId={activeConversationId} workspacePath={activeConversationId ? workspacePath : context?.project?.workspaceRoot}
+              available={workspaceAvailable} canChangeWorkspace disabled={workspaceDisabled}
+              onWorkspaceChange={async (path) => { await onWorkspaceChange(path); await refreshContext(); }}
+            /> : null}
             temporary={userContextMode === 'temporary'}
             conversationId={activeConversationId ?? null}
           /> : null}
-          {showContextControls && (activeConversationId || projectId) && onWorkspaceChange ? (
+          {showContextControls ? <span aria-hidden className="mx-0.5 h-6 w-px shrink-0 bg-edge-subtle" /> : null}
+          {showContextControls ? (
             <ChatWorkspaceControl
               key={`workspace:${activeConversationId ?? projectId}`}
               conversationId={activeConversationId}
               workspacePath={activeConversationId ? workspacePath : context?.project?.workspaceRoot}
               available={workspaceAvailable}
-              canChangeWorkspace={canChangeWorkspace}
+              canChangeWorkspace={false}
               disabled={workspaceDisabled}
               onWorkspaceChange={async (path) => {
-                await onWorkspaceChange(path);
+                await onWorkspaceChange?.(path);
                 await refreshContext();
               }}
             />
           ) : null}
-          {activeConversationId && hasMessages ? (
-            <button
-              type="button"
-              className={cn(
-                'rounded-md p-2 text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg',
-                sideChatOpen && 'bg-surface-hover text-fg',
-              )}
-              title={`${sideChatOpen ? m.sideChat.closePaneAria : m.sideChat.openPaneAria} (${sideChatShortcut})`}
-              aria-label={sideChatOpen ? m.sideChat.closePaneAria : m.sideChat.openPaneAria}
-              aria-keyshortcuts={sideChatAriaShortcut}
-              aria-controls="app-side-chat-panel"
-              aria-expanded={sideChatOpen}
-              onClick={handleSideChatToggle}
-            >
-              <PanelRight className="size-4" strokeWidth={1.5} aria-hidden />
-            </button>
-          ) : null}
+
         </div>
       ),
     });
   }, [
+    shareOpen,
+    language,
+    terminalPlatform,
     chatHeadline,
     chatAgents,
     showChatAgentSelector,
@@ -297,13 +268,9 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
     m.chat.agentNoMatches,
     m.chat.find.input,
     m.chat.terminal.open,
-    terminalShortcut,
-    sideChatShortcut,
-    sideChatAriaShortcut,
     m.sidebar.newTask,
     projectId,
     context,
-    terminalPanelOpen,
     terminalAvailable,
     terminalDisabled,
     showContextControls,
@@ -311,7 +278,6 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
     activeConversationId,
     hasMessages,
     onFindOpen,
-    sideChatOpen,
     setSideChatOpen,
     workspacePath,
     workspaceAvailable,

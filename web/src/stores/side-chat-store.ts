@@ -1,5 +1,7 @@
 import { create } from 'zustand';
 
+import { useRightWorkspaceStore } from '@/stores/right-workspace-store';
+
 import type { SideChatSelection, SideChatTab } from '@/features/side-chat/side-chat.types';
 import type { Message } from '@/features/chat/messages/messages.types';
 import type { Attachment } from '@/features/chat/attachments/attachment-utils';
@@ -32,6 +34,8 @@ function emptyState(): StoredState {
 function readState(): StoredState {
   try {
     const parsed = JSON.parse(sessionStorage.getItem(STORAGE_KEY) || '{}') as Partial<StoredState>;
+    const identity = (parsed as Partial<StoredState> & { identity?: string }).identity;
+    if (identity && identity !== useGatewayStore.getState().conversationId) return emptyState();
     const tabs = Array.isArray(parsed.tabs)
       ? parsed.tabs.filter((tab): tab is SideChatTab => Boolean(tab?.id && tab.parentConversationId))
       : [];
@@ -57,7 +61,7 @@ function readState(): StoredState {
 }
 
 function persist(state: StoredState): void {
-  try { sessionStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch { /* ignore */ }
+  try { sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ ...state, identity: useGatewayStore.getState().conversationId })); } catch { /* ignore */ }
 }
 
 type SideChatPaneState = StoredState & {
@@ -75,9 +79,10 @@ type SideChatPaneState = StoredState & {
   requestCreate: (parentConversationId: string, selections?: SideChatSelection[]) => void;
   claimPendingCreate: (parentConversationId: string, requestId: string) => PendingCreate | null;
   finishCreate: (parentConversationId: string, requestId: string) => void;
-  addTab: (tab: SideChatTab) => void;
+  addTab: (tab: SideChatTab, activate?: boolean) => void;
   removeTab: (id: string) => void;
   setActive: (id: string) => void;
+  setTabStatus: (id: string, status: { waiting: boolean; disconnected: boolean; unread: boolean }) => void;
   setTabRunId: (id: string, runId?: string) => void;
   setOpen: (parentConversationId: string, open: boolean) => void;
   setWidthPx: (width: number) => void;
@@ -134,6 +139,7 @@ export const useSideChatStore = create<SideChatPaneState>((set, get) => {
         : tab),
     }),
     replaceTab: (oldId, tab) => {
+      useRightWorkspaceStore.getState().replaceSideChat(oldId, tab.id, tab.parentConversationId);
       const state = get();
       if (!state.tabs.some((existing) => existing.id === oldId)) return;
       const drafts = { ...state.drafts, [tab.id]: state.drafts[oldId] ?? EMPTY_DRAFT };
@@ -153,12 +159,14 @@ export const useSideChatStore = create<SideChatPaneState>((set, get) => {
       });
     },
     reset: () => {
+      useRightWorkspaceStore.getState().reset();
       set({ drafts: {}, readings: {}, pendingCreate: null, creatingRequests: {} });
       commit({ panes: {}, tabs: [] });
     },
     pendingCreate: null,
     creatingRequests: {},
     requestCreate: (parentConversationId, selections = []) => {
+      useRightWorkspaceStore.getState().setOpen(true, parentConversationId);
       if (get().creatingRequests[parentConversationId] || get().pendingCreate?.parentConversationId === parentConversationId) return;
       set({ pendingCreate: { requestId: crypto.randomUUID(), parentConversationId, selections } });
       updatePane(parentConversationId, { open: true });
@@ -177,7 +185,8 @@ export const useSideChatStore = create<SideChatPaneState>((set, get) => {
       delete creatingRequests[parentConversationId];
       set({ creatingRequests });
     },
-    addTab: (tab) => {
+    addTab: (tab, activate = true) => {
+      useRightWorkspaceStore.getState().addSideChat(tab.id, tab.title, tab.parentConversationId, activate);
       const tabs = [...get().tabs.filter((existing) => existing.id !== tab.id), { ...tab, lastSelectedAt: Date.now() }];
       const current = get().panes[tab.parentConversationId] ?? { open: false, activeId: null };
       commit({
@@ -191,6 +200,7 @@ export const useSideChatStore = create<SideChatPaneState>((set, get) => {
     removeTab: (id) => {
       const removed = get().tabs.find((tab) => tab.id === id);
       if (!removed) return;
+      useRightWorkspaceStore.getState().remove(`side:${id}`, removed.parentConversationId);
       const drafts = { ...get().drafts };
       const readings = { ...get().readings };
       delete drafts[id];
@@ -211,14 +221,20 @@ export const useSideChatStore = create<SideChatPaneState>((set, get) => {
     setActive: (id) => {
       const tab = get().tabs.find((candidate) => candidate.id === id);
       if (tab) {
+        useRightWorkspaceStore.getState().activate(`side:${id}`, tab.parentConversationId);
         commit({ tabs: get().tabs.map((candidate) => candidate.id === id ? { ...candidate, lastSelectedAt: Date.now() } : candidate) });
         updatePane(tab.parentConversationId, { activeId: id, open: true });
       }
+    },
+    setTabStatus: (id, status) => {
+      const tab = get().tabs.find((t) => t.id === id);
+      if (tab && (tab.waiting !== status.waiting || tab.disconnected !== status.disconnected || tab.unread !== status.unread)) set({ tabs: get().tabs.map((t) => t.id === id ? { ...t, ...status } : t) });
     },
     setTabRunId: (id, runId) => commit({
       tabs: get().tabs.map((tab) => tab.id === id ? { ...tab, runId } : tab),
     }),
     setOpen: (parentConversationId, open) => {
+      useRightWorkspaceStore.getState().setOpen(open, parentConversationId);
       if (!open) {
         updatePane(parentConversationId, { open });
         return;
@@ -230,6 +246,7 @@ export const useSideChatStore = create<SideChatPaneState>((set, get) => {
           !latest || (tab.lastSelectedAt ?? 0) >= (latest.lastSelectedAt ?? 0) ? tab : latest
         ), undefined);
       updatePane(parentConversationId, { open, activeId: active?.id ?? null });
+      if (active) useRightWorkspaceStore.getState().activate(`side:${active.id}`, parentConversationId);
       if (!active) state.requestCreate(parentConversationId);
     },
     setWidthPx: (widthPx) => commit({ widthPx: clampWidth(widthPx) }),
@@ -237,6 +254,10 @@ export const useSideChatStore = create<SideChatPaneState>((set, get) => {
 });
 
 useGatewayStore.subscribe((state, previous) => {
+  if (state.conversationId && !previous.conversationId && state.baseUrl === previous.baseUrl) {
+    const restored = readState();
+    useSideChatStore.setState(restored);
+  }
   if (state.baseUrl !== previous.baseUrl || (previous.conversationId !== undefined && state.conversationId !== previous.conversationId)) {
     useSideChatStore.getState().reset();
     try { sessionStorage.removeItem('xopc:side-chat-client-id'); } catch { /* Storage may be disabled. */ }
