@@ -47,7 +47,7 @@ vi.mock('@/features/voice/realtime/voice-call-provider', () => ({ VoiceCallProvi
 vi.mock('@/features/voice/read-aloud-dock', () => ({ ReadAloudDockProvider: ({ children }: { children: ReactNode }) => children }));
 vi.mock('@/features/updater/use-update-reminder', () => ({ useUpdateReminder: () => null }));
 vi.mock('@/features/workspace/workspace-file-preview-dialog', () => ({ WorkspaceFilePreviewPanel: ({ active, filePath }: { active: boolean; filePath: string }) => active ? <div data-file-preview>{filePath}</div> : null }));
-vi.mock('@/components/shell/workspace-column', () => ({ WorkspaceColumn: () => <aside data-workspace /> }));
+vi.mock('@/components/shell/workspace-column', () => ({ WorkspaceColumn: ({ onCloseTree }: { onCloseTree?: () => void }) => <aside data-workspace><button aria-label="Close file tree" onClick={onCloseTree} /></aside> }));
 vi.mock('@/components/shell/mobile-primary-nav', () => ({ MobilePrimaryNav: () => null }));
 vi.mock('@/components/shell/sidebar-column', () => ({ SidebarColumn: () => null }));
 vi.mock('@/components/shell/token-dialog', () => ({ TokenDialog: () => null }));
@@ -195,6 +195,38 @@ describe('AppShell task Sidechat', () => {
     await act(async () => useRightWorkspaceStore.getState().setOpen(false, 'ordinary'));
     expect(useRightWorkspaceStore.getState().panes.ordinary.open).toBe(false);
     expect(draft.value).toBe('unsent main draft');
+  });
+
+  it('closes the last tool tab without revealing project files and can reopen tools', async () => {
+    await render('/chat/ordinary');
+    const draft = container.querySelector<HTMLInputElement>('[data-main-draft]')!;
+    draft.value = 'keep my draft';
+    await act(async () => useRightWorkspaceStore.getState().openTools('ordinary'));
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Close New tab"]')!.click());
+    const panel = container.querySelector<HTMLElement>('[data-right-workspace]')!;
+    expect(panel.getAttribute('aria-hidden')).toBe('true');
+    expect(panel.querySelector('[data-workspace-tree]')?.classList.contains('hidden')).toBe(true);
+    expect(panel.textContent).not.toContain('Project files');
+    expect(container.querySelector('[data-main-draft]')).toBe(draft);
+    expect(draft.value).toBe('keep my draft');
+    await act(async () => useRightWorkspaceStore.getState().setOpen(true, 'ordinary'));
+    expect(panel.getAttribute('aria-hidden')).toBe('false');
+    expect(panel.querySelector('[aria-label="Close New tab"]')).not.toBeNull();
+  });
+
+  it('closes the files tab from its tree toolbar and returns to another open tab', async () => {
+    await render('/chat/ordinary');
+    let home = '';
+    await act(async () => {
+      const s = useRightWorkspaceStore.getState();
+      home = s.openTools('ordinary');
+      s.openTools('ordinary');
+      s.openFiles('ordinary');
+    });
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Close file tree"]')!.click());
+    expect(useRightWorkspaceStore.getState().panes.ordinary).toMatchObject({ open: true, activeId: home, tabs: [{ id: home, kind: 'home' }] });
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Close New tab"]')!.click());
+    expect(container.querySelector('[data-right-workspace]')?.getAttribute('aria-hidden')).toBe('true');
   });
 
   it('reserves modal space only for a visible docked workspace at its rendered width', async () => {

@@ -7,6 +7,29 @@ import { useRightWorkspaceStore as workspace } from '@/stores/right-workspace-st
 beforeEach(() => { workspace.getState().reset(); workspace.getState().setScope('parent'); });
 
 describe('right workspace transitions', () => {
+  it.each(['home', 'files', 'file', 'browser', 'sidechat'] as const)('closes the workspace when its last %s tab is removed', (kind) => {
+    const s = workspace.getState();
+    if (kind === 'home') s.openTools();
+    else if (kind === 'files') s.openFiles();
+    else if (kind === 'file') s.openFile({ path: 'report.md' });
+    else if (kind === 'browser') s.openBrowser();
+    else s.addSideChat('last', 'Side chat', 'parent');
+    s.remove(workspace.getState().panes.parent.activeId!);
+    expect(workspace.getState().panes.parent).toEqual({ open: false, tabs: [], activeId: null });
+    expect(JSON.parse(sessionStorage.getItem('xopc:right-workspace:v1')!).panes.parent.open).toBe(false);
+    s.setOpen(true);
+    expect(workspace.getState().panes.parent).toMatchObject({ open: true, tabs: [{ kind: 'home' }] });
+  });
+
+  it('returns to an existing tab when the files tab closes', () => {
+    const s = workspace.getState();
+    const home = s.openTools();
+    s.openTools();
+    s.openFiles();
+    s.remove(workspace.getState().panes.parent.activeId!);
+    expect(workspace.getState().panes.parent).toMatchObject({ open: true, activeId: home, tabs: [{ id: home }] });
+  });
+
   it('replaces an unedited preview in place and preserves its return destination', () => {
     const s = workspace.getState();
     s.addSideChat('source', 'Source', 'parent');
@@ -64,7 +87,7 @@ describe('right workspace transitions', () => {
     s.remove(id);
     expect(workspace.getState().panes.parent.activeId).toBe('side:s1');
     s.remove('side:s1');
-    expect(workspace.getState().panes.parent).toEqual({ open: true, tabs: [], activeId: null });
+    expect(workspace.getState().panes.parent).toEqual({ open: false, tabs: [], activeId: null });
   });
 
   it('isolates same-named files by root and each parent conversation', () => {

@@ -42,3 +42,19 @@ it('restores selection with browser back without removing either file', async ()
   expect(workspace.getState().panes.parent.activeId).toBe(a);
   expect(workspace.getState().panes.parent.tabs).toHaveLength(2);
 });
+
+it('returns to the closed workspace before its first tab without showing files', async () => {
+  await act(async () => root.render(<MemoryRouter initialEntries={['/chat/parent']}><Harness /></MemoryRouter>));
+  let id = '';
+  await act(async () => { id = workspace.getState().openTools(); });
+  await act(async () => container.querySelector('button')!.click());
+  expect(workspace.getState().panes.parent).toMatchObject({ open: false, activeId: id, tabs: [{ id, kind: 'home' }] });
+});
+
+it('keeps the last tab closed when navigating back to its stale URL', async () => {
+  await act(async () => root.render(<MemoryRouter initialEntries={['/chat/parent']}><Harness /></MemoryRouter>));
+  await act(async () => workspace.getState().openTools());
+  await act(async () => workspace.getState().remove(workspace.getState().panes.parent.activeId!));
+  await act(async () => container.querySelector('button')!.click());
+  expect(workspace.getState().panes.parent).toEqual({ open: false, activeId: null, tabs: [] });
+});
