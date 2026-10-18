@@ -4,6 +4,7 @@ import { AlertCircle, ArrowRight, CalendarClock, CheckCircle2, Circle, CircleChe
 import { type FormEvent, type PointerEvent, type Ref, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 
+import { SlidingTabList } from '@/components/ui/sliding-tab-list';
 import { Button } from '@/components/ui/button';
 import { DatePicker } from '@/components/ui/date-picker';
 import { Select, SelectOption } from '@/components/ui/popover-select';
@@ -407,7 +408,7 @@ export function ProjectTaskBoard({ tasks, dependencyEdges, returnTo, copy, onAct
           <p className="mt-1 text-sm leading-6 text-fg-muted">{copy.description}</p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          <div className="flex rounded-lg border border-edge bg-surface-panel p-0.5">
+          <SlidingTabList className="flex rounded-lg border border-edge bg-surface-panel p-0.5">
           <button type="button" aria-pressed={viewMode === 'board'} onClick={() => setViewMode('board')} className={cn('inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium', viewMode === 'board' ? 'bg-surface-hover text-fg' : 'text-fg-muted hover:text-fg')}>
             <LayoutGrid className="size-3.5" aria-hidden />
             {copy.views.board}
@@ -416,7 +417,7 @@ export function ProjectTaskBoard({ tasks, dependencyEdges, returnTo, copy, onAct
             <GitBranch className="size-3.5" aria-hidden />
             {copy.views.graph}
           </button>
-          </div>
+          </SlidingTabList>
         </div>
       </div>
       {viewMode === 'board' ? <div

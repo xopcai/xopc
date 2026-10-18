@@ -32,6 +32,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type
 import { Link, useSearchParams } from 'react-router-dom';
 import useSWR from 'swr';
 
+import { SlidingTabList } from '@/components/ui/sliding-tab-list';
 import { Loopi } from '@/components/brand/loopi';
 import { Button } from '@/components/ui/button';
 import { DatePicker } from '@/components/ui/date-picker';
@@ -1304,7 +1305,7 @@ export function UserModelPage() {
 
       {view === 'understanding' ? (
         <div id="understanding-panel-understanding" role="tabpanel" aria-labelledby="understanding-tab-understanding" className="space-y-10">
-          <div className="flex w-full gap-1 rounded-xl bg-surface-panel p-1 sm:w-fit" role="group" aria-label={language === 'zh' ? '记忆分类' : 'Memory category'}>
+          <SlidingTabList className="flex w-full gap-1 rounded-xl bg-surface-panel p-1 sm:w-fit" role="group" aria-label={language === 'zh' ? '记忆分类' : 'Memory category'}>
             {([
               { id: 'personal', label: language === 'zh' ? '关于我' : 'About me', icon: UserRound, count: assertions.length },
               { id: 'work', label: language === 'zh' ? '工作记忆' : 'Work memory', icon: BriefcaseBusiness, count: visibleKnowledge.length },
@@ -1313,14 +1314,14 @@ export function UserModelPage() {
                 <Icon className="size-4" aria-hidden="true" />{label}<span className="text-xs tabular-nums text-fg-subtle">{count}</span>
               </button>
             ))}
-          </div>
+          </SlidingTabList>
           {memorySection === 'personal' ? <>
           <div className="px-1 pt-1">
             <div className="flex items-start gap-3">
               <Brain className="mt-0.5 size-5 shrink-0 text-accent-fg" aria-hidden="true" />
               <div><h2 className="font-semibold text-fg">{t.aboutYouTitle}</h2><p className="mt-1 max-w-3xl text-sm leading-6 text-fg-muted">{t.aboutYouHint}</p></div>
             </div>
-            <div className="mt-4 flex flex-wrap gap-2" role="group" aria-label={t.understandingFilterHint}>
+            <SlidingTabList className="mt-4 flex flex-wrap gap-2" role="group" aria-label={t.understandingFilterHint} indicatorClassName="rounded-full bg-surface-active">
               {understandingFilterOptions.map((option) => (
                 <button
                   key={option.id}
@@ -1332,7 +1333,7 @@ export function UserModelPage() {
                   {option.label}<span className="tabular-nums text-fg-subtle">{option.count}</span>
                 </button>
               ))}
-            </div>
+            </SlidingTabList>
           </div>
           {visibleAssertionGroups.length ? visibleAssertionGroups.map(({ key, title, icon: Icon, items }) => (
             <Section key={key} title={title} action={<Icon className="size-4 text-fg-subtle" aria-hidden="true" />}>
@@ -1362,7 +1363,7 @@ export function UserModelPage() {
                 />
               </label>
             </div>
-            <div className="mt-4 flex flex-wrap gap-2" role="group" aria-label={t.memoryFilterHint}>
+            <SlidingTabList className="mt-4 flex flex-wrap gap-2" role="group" aria-label={t.memoryFilterHint} indicatorClassName="rounded-full bg-surface-active">
               <button
                 type="button"
                 aria-pressed={knowledgeKindFilter === 'all'}
@@ -1382,7 +1383,7 @@ export function UserModelPage() {
                   {knowledgeKindLabel(kind, language)}<span className="tabular-nums text-fg-subtle">{count}</span>
                 </button>
               ))}
-            </div>
+            </SlidingTabList>
           </div>
           {searchedKnowledge.length ? (
             <>

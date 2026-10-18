@@ -1,6 +1,7 @@
 import { Search, SlidersHorizontal } from 'lucide-react';
 import { useMemo, useState } from 'react';
 
+import { SlidingTabList } from '@/components/ui/sliding-tab-list';
 import { SettingsAdvancedSection } from '@/features/settings/settings-advanced-section';
 import { NumberInput } from '@/components/ui/number-input';
 import { Button } from '@/components/ui/button';
@@ -79,9 +80,9 @@ export function AgentDefaultsToolsPanel({
       </div>
 
       <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap gap-1 rounded-xl bg-surface-panel p-1">
-          {filterOptions.map((option) => <button key={option.id} type="button" onClick={() => setFilter(option.id)} className={cn('rounded-lg px-3 py-1.5 text-xs font-medium', filter === option.id ? 'bg-surface-base text-fg shadow-surface' : 'text-fg-muted hover:text-fg')}>{option.label}</button>)}
-        </div>
+        <SlidingTabList className="flex flex-wrap gap-1 rounded-xl bg-surface-panel p-1" role="group" aria-label={zh ? "工具筛选" : "Tool filter"} indicatorClassName="rounded-lg bg-surface-base shadow-surface">
+          {filterOptions.map((option) => <button aria-pressed={filter === option.id} key={option.id} type="button" onClick={() => setFilter(option.id)} className={cn('rounded-lg px-3 py-1.5 text-xs font-medium', filter === option.id ? 'bg-surface-base text-fg shadow-surface' : 'text-fg-muted hover:text-fg')}>{option.label}</button>)}
+        </SlidingTabList>
         <label className="relative block w-full sm:w-72"><span className="sr-only">{zh ? '搜索工具' : 'Search tools'}</span><Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-fg-subtle" /><input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder={zh ? '搜索工具' : 'Search tools'} className="w-full rounded-lg border border-edge bg-surface-panel py-2 pl-9 pr-3 text-sm text-fg outline-none focus:border-accent" /></label>
       </div>
 
@@ -103,9 +104,9 @@ export function AgentDefaultsToolsPanel({
                   ) : null}
                 </div>
                 <div className="flex items-center gap-2">
-                  <div className="flex rounded-lg bg-surface-base p-1">
-                    {(['allow', 'ask', 'deny'] as const).map((mode) => <button key={mode} type="button" onClick={() => updateTool(id, { mode })} className={cn('rounded-md px-2.5 py-1 text-xs font-medium capitalize', policy.mode === mode ? 'bg-accent text-on-accent' : 'text-fg-muted hover:text-fg')}>{mode === 'allow' ? (zh ? '允许' : 'Allow') : mode === 'ask' ? (zh ? '询问' : 'Ask') : (zh ? '禁用' : 'Deny')}</button>)}
-                  </div>
+                  <SlidingTabList className="flex rounded-lg bg-surface-base p-1" role="group" aria-label={id} indicatorClassName="rounded-md bg-accent">
+                    {(['allow', 'ask', 'deny'] as const).map((mode) => <button aria-pressed={policy.mode === mode} key={mode} type="button" onClick={() => updateTool(id, { mode })} className={cn('rounded-md px-2.5 py-1 text-xs font-medium capitalize', policy.mode === mode ? 'bg-accent text-on-accent' : 'text-fg-muted hover:text-fg')}>{mode === 'allow' ? (zh ? '允许' : 'Allow') : mode === 'ask' ? (zh ? '询问' : 'Ask') : (zh ? '禁用' : 'Deny')}</button>)}
+                  </SlidingTabList>
                   {showAdvanced ? <Button variant="ghost" className="px-2 py-1" aria-label={zh ? `${id} 调用限制` : `${id} call limits`} onClick={() => setExpandedTool(expanded ? undefined : id)}><SlidersHorizontal className="size-4" /></Button> : null}
                 </div>
               </div>

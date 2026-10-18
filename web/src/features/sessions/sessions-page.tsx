@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { type ReactNode, useCallback, useEffect, useReducer, useRef } from 'react';
 
+import { SlidingTabList } from '@/components/ui/sliding-tab-list';
 import { uiPatchReducer } from '@/lib/settings-form-draft';
 import { useSearchParams } from 'react-router-dom';
 import useSWR from 'swr';
@@ -557,7 +558,7 @@ export function SessionsPage() {
 
         <SessionsTabPanel s={s} id="sessions" activeTab={activeTab} plain>
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex flex-wrap gap-2">
+          <SlidingTabList className="flex flex-wrap gap-2" role="group" aria-label={s.tabsSessions} indicatorClassName="rounded-xl bg-accent-soft">
             {filters.map(({ key, label, icon: Icon }) => (
               <button
                 key={key}
@@ -578,7 +579,7 @@ export function SessionsPage() {
                 {label}
               </button>
             ))}
-          </div>
+          </SlidingTabList>
 
           <div className="flex min-h-11 w-full min-w-0 items-center gap-2 rounded-xl bg-surface-base focus-within:ring-2 focus-within:ring-accent px-3 py-2 transition-colors lg:max-w-md dark:bg-surface-hover/40">
             <Search className="size-4 shrink-0 text-fg-disabled" strokeWidth={1.75} aria-hidden />
@@ -594,7 +595,7 @@ export function SessionsPage() {
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
+        <SlidingTabList className="flex flex-wrap items-center gap-2" role="group" aria-label={s.filterChannelLabel} indicatorClassName="rounded-xl bg-accent-soft">
           <span className="text-xs font-medium text-fg-subtle">{s.filterChannelLabel}</span>
           <button
             type="button"
@@ -634,7 +635,7 @@ export function SessionsPage() {
               ) : null}
             </button>
           ))}
-        </div>
+        </SlidingTabList>
 
         {stats ? (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -663,7 +664,7 @@ export function SessionsPage() {
 
         <div className="flex items-center justify-between gap-2">
           <p className="text-xs text-fg-muted">{interpolate(s.sessionCount, { count: sessions.length })}</p>
-          <div className={segmentedTrackClassName} role="group" aria-label={s.layoutToggleGroup}>
+          <SlidingTabList className={segmentedTrackClassName} role="group" aria-label={s.layoutToggleGroup} indicatorClassName="rounded-pill bg-surface-panel shadow-sm dark:ring-1 dark:ring-edge-strong/40">
             <Button
               type="button"
               variant="segmented"
@@ -694,7 +695,7 @@ export function SessionsPage() {
             >
               <LayoutList className="size-3.5" strokeWidth={1.5} />
             </Button>
-          </div>
+          </SlidingTabList>
         </div>
 
         {loading && sessions.length === 0 ? (

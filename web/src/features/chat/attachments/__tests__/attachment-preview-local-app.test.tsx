@@ -161,9 +161,12 @@ describe('AttachmentPreviewDialog shared header', () => {
     vi.mocked(createShare).mockRejectedValue(new Error('Test response'));
     await act(async () => root.render(<AttachmentPreviewDialog open authToken="token" conversationId="session-a"
       attachment={{ name: 'index.html', uri, mimeType: 'text/html' }} onClose={vi.fn()} />));
-    const button = document.querySelector<HTMLButtonElement>(`[aria-label="${labels.shareLink}"]`);
-    expect(button).not.toBeNull();
-    await act(async () => button?.click());
+    openMenu();
+    const button = menuItem(labels.shareLink);
+    expect(button).toBeDefined();
+    expect(button?.disabled).toBe(false);
+    await act(async () => button!.click());
+    expect(document.querySelector('[role="menu"]')).toBeNull();
     expect(createShare).not.toHaveBeenCalled();
     expect(document.body.textContent).toContain(messages('en').sharesSettings.shareConfirmTitle);
     await act(async () => document.querySelector<HTMLButtonElement>('button[type="submit"]')?.click());
@@ -202,15 +205,26 @@ describe('AttachmentPreviewDialog shared header', () => {
     const onClose = vi.fn();
     await act(async () => root.render(<AttachmentPreviewDialog open
       attachment={{ name: 'report.xlsx', data: 'AQID' }} onClose={onClose} />));
-    act(() => document.querySelector<HTMLButtonElement>(`[aria-label="${labels.expandPreview}"]`)?.click());
-    expect(document.querySelector(`[aria-label="${labels.collapsePreview}"]`)).not.toBeNull();
     openMenu();
+    const expand = menuItem(labels.expandPreview);
+    expect(expand).toBeDefined();
+    expect(expand?.disabled).toBe(false);
+    act(() => expand!.click());
+    expect(document.querySelector('[role="menu"]')).toBeNull();
+
+    openMenu();
+    expect(menuItem(labels.collapsePreview)).toBeDefined();
     act(() => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })));
     expect(document.querySelector('[role="menu"]')).toBeNull();
-    expect(document.querySelector(`[aria-label="${labels.collapsePreview}"]`)).not.toBeNull();
-    act(() => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })));
-    expect(document.querySelector(`[aria-label="${labels.expandPreview}"]`)).not.toBeNull();
+    expect(document.activeElement?.getAttribute('aria-label')).toBe(labels.moreActions);
     expect(onClose).not.toHaveBeenCalled();
+
+    act(() => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })));
+    expect(onClose).not.toHaveBeenCalled();
+    openMenu();
+    expect(menuItem(labels.expandPreview)).toBeDefined();
+    expect(menuItem(labels.collapsePreview)).toBeUndefined();
+    act(() => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })));
     act(() => document.querySelector<HTMLButtonElement>(`[aria-label="${labels.close}"]`)?.click());
     expect(onClose).toHaveBeenCalledOnce();
   });
