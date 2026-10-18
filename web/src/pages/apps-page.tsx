@@ -7,6 +7,7 @@ import { useSWRConfig } from 'swr';
 
 import { Button } from '@/components/ui/button';
 import { PageTabs } from '@/components/ui/page-tabs';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   CapabilityHeaderActions,
   CapabilityHeaderSearch,
@@ -185,14 +186,10 @@ export function ExtensionsPage({ embedded = false, onHeaderActionChange }: { emb
     return () => clearPageHeader();
   }, [clearPageHeader, embedded, headerContribution, m.extensionsPage.title, onHeaderActionChange, setPageHeader]);
 
-  if (loading && mainTab !== 'marketplace') {
-    return <ExtensionsPageSkeleton />;
-  }
-
   const tabItems = [
     { id: 'marketplace' as const, label: m.extensionsPage.tabMarketplace },
-    { id: 'builtin' as const, label: m.extensionsPage.tabBuiltin, count: bundledExtensions.length },
-    { id: 'user' as const, label: m.extensionsPage.tabUser, count: userExtensions.length },
+    { id: 'builtin' as const, label: m.extensionsPage.tabBuiltin, count: loading ? undefined : bundledExtensions.length },
+    { id: 'user' as const, label: m.extensionsPage.tabUser, count: loading ? undefined : userExtensions.length },
   ];
 
   return (
@@ -215,6 +212,8 @@ export function ExtensionsPage({ embedded = false, onHeaderActionChange }: { emb
 
         {mainTab === 'marketplace' ? (
           <ExtensionMarketplacePanel query={search} />
+        ) : loading ? (
+          <ExtensionsPageSkeleton />
         ) : mainTab === 'builtin' && bundledExtensions.length === 0 ? (
           <EmptyExtensionsState message={m.extensionsPage.emptyBuiltin} />
         ) : mainTab === 'user' && userExtensions.length === 0 ? (
@@ -618,17 +617,10 @@ function ContributionBadge({
 
 function ExtensionsPageSkeleton() {
   return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-surface-panel">
-      <div className="w-full px-3 pb-8 pt-3 sm:px-5 lg:pt-4 xl:px-6">
-        <div className="mb-6 h-8 w-40 max-w-full animate-pulse rounded-md bg-surface-hover" />
-        <div className="mb-2 h-4 w-full max-w-md animate-pulse rounded bg-surface-hover" />
-        <div className="mb-5 h-9 w-full max-w-lg animate-pulse rounded-full bg-surface-hover" />
-        <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {(['ap0', 'ap1', 'ap2', 'ap3', 'ap4', 'ap5'] as const).map((k) => (
-            <div key={k} className="h-36 animate-pulse rounded-xl border border-edge-subtle bg-surface-base shadow-surface" />
-          ))}
-        </div>
-      </div>
+    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3" aria-busy="true">
+      {Array.from({ length: 6 }, (_, index) => (
+        <Skeleton key={index} className="h-36 rounded-xl" />
+      ))}
     </div>
   );
 }

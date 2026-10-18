@@ -62,7 +62,8 @@ export function CapabilitiesPage() {
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-surface-panel">
-      <Suspense fallback={<CapabilityContentFallback label={copy.discoverLoading} />}>
+      {/* Reset the boundary so route transitions show the new section's skeleton immediately. */}
+      <Suspense key={section} fallback={<CapabilityContentFallback label={copy.discoverLoading} />}>
         {section === 'agents' ? <AgentsPage agentId={detailId} onHeaderActionChange={onHeaderActionChange} /> : null}
         {section === 'skills' ? <SkillsPage embedded onHeaderActionChange={onHeaderActionChange} /> : null}
         {section === 'connectors' ? <ConnectorsPage embedded onHeaderActionChange={onHeaderActionChange} /> : null}
