@@ -57,9 +57,8 @@ export async function runWorkspaceE2e(tab, viewport) {
   await button('Open workspace tools').click();
   await button('Files').click();
   assert('Collapse retains all content tabs plus tools', await p.getByRole('tab').count() === 5);
-  await button('Tab list (5)').click();
-  await p.getByRole('menu').getByRole('menuitem', { name: 'report.md', exact: true }).click();
-  assert('Overflow list selects file', await select('report.md').getAttribute('aria-selected') === 'true');
+  await select('report.md').click();
+  assert('Tab strip selects file', await select('report.md').getAttribute('aria-selected') === 'true');
   await select('report.md').press('Home');
   await select('Files').press('Enter');
   assert('Keyboard tab navigation', await select('Files').getAttribute('aria-selected') === 'true');

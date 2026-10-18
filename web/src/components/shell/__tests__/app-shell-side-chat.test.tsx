@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { act, type ReactNode } from 'react';
+import { act, useContext, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Link, MemoryRouter, Route, Routes } from 'react-router-dom';
 import { SWRConfig } from 'swr';
@@ -10,6 +10,7 @@ import { AppShell } from '@/components/shell/app-shell';
 import { ChatPageHeaderRegistration } from '@/features/chat/chat-page-header-registration';
 import { TaskChatPage } from '@/features/chat/task/task-chat-page';
 import { RightWorkspace } from '@/features/right-workspace/right-workspace';
+import { WorkspaceTreeControlContext } from '@/features/right-workspace/workspace-context';
 import { fetchTask, type TaskDetail } from '@/features/tasks/home-api';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
@@ -46,7 +47,10 @@ vi.mock('@/features/shares/session-share-button', () => ({ SessionShareButton: (
 vi.mock('@/features/voice/realtime/voice-call-provider', () => ({ VoiceCallProvider: ({ children }: { children: ReactNode }) => children }));
 vi.mock('@/features/voice/read-aloud-dock', () => ({ ReadAloudDockProvider: ({ children }: { children: ReactNode }) => children }));
 vi.mock('@/features/updater/use-update-reminder', () => ({ useUpdateReminder: () => null }));
-vi.mock('@/features/workspace/workspace-file-preview-dialog', () => ({ WorkspaceFilePreviewPanel: ({ active, filePath }: { active: boolean; filePath: string }) => active ? <div data-file-preview>{filePath}</div> : null }));
+vi.mock('@/features/workspace/workspace-file-preview-dialog', () => ({ WorkspaceFilePreviewPanel: function Preview({ active, filePath }: { active: boolean; filePath: string }) {
+  const tree = useContext(WorkspaceTreeControlContext);
+  return active ? <div data-file-preview>{filePath}<button aria-label="Toggle file tree" onClick={tree?.onToggle} /></div> : null;
+} }));
 vi.mock('@/components/shell/workspace-column', () => ({ WorkspaceColumn: ({ onCloseTree }: { onCloseTree?: () => void }) => <aside data-workspace><button aria-label="Close file tree" onClick={onCloseTree} /></aside> }));
 vi.mock('@/components/shell/mobile-primary-nav', () => ({ MobilePrimaryNav: () => null }));
 vi.mock('@/components/shell/sidebar-column', () => ({ SidebarColumn: () => null }));
@@ -227,6 +231,53 @@ describe('AppShell task Sidechat', () => {
     expect(useRightWorkspaceStore.getState().panes.ordinary).toMatchObject({ open: true, activeId: home, tabs: [{ id: home, kind: 'home' }] });
     await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Close New tab"]')!.click());
     expect(container.querySelector('[data-right-workspace]')?.getAttribute('aria-hidden')).toBe('true');
+  });
+
+  it('keeps files on the right of the preview at the minimum desktop pane width', async () => {
+    useRightWorkspaceStore.getState().reset();
+    useRightWorkspaceStore.setState({ width: 460, treeWidth: 320, fileTreeOpen: true });
+    vi.spyOn(window, 'innerWidth', 'get').mockReturnValue(1200);
+    useRightWorkspaceStore.getState().openFiles('ordinary');
+    await act(async () => root.render(<MemoryRouter><RightWorkspace scope="ordinary" /></MemoryRouter>));
+    const tree = container.querySelector<HTMLElement>('[data-workspace-tree]')!;
+    const placeholder = container.querySelector('[data-workspace-file-placeholder]')!;
+    expect(placeholder.textContent).toContain('Select a file to preview');
+    expect(container.querySelector('[aria-label="Workspace actions"]')).toBeNull();
+    expect(container.querySelector('[aria-label^="Tab list"]')).toBeNull();
+    expect(placeholder.compareDocumentPosition(tree) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(tree.style.width).toBe('212px');
+    expect(tree.classList.contains('hidden')).toBe(false);
+    const originalTree = tree.firstElementChild;
+    await act(async () => useRightWorkspaceStore.getState().openFile({ path: 'report.md', conversationId: 'ordinary' }, 'ordinary'));
+    const preview = container.querySelector('[data-file-preview]')!;
+    expect(preview.textContent).toBe('report.md');
+    expect(preview.compareDocumentPosition(tree) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(tree.firstElementChild).toBe(originalTree);
+    expect(tree.classList.contains('hidden')).toBe(false);
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Close file tree"]')!.click());
+    expect(tree.classList.contains('hidden')).toBe(true);
+    expect(container.querySelector('[data-file-preview]')).not.toBeNull();
+  });
+
+  it('uses a tree overlay on narrow screens and restores the inline tree on widening', async () => {
+    useRightWorkspaceStore.getState().reset();
+    useRightWorkspaceStore.setState({ width: 460, treeWidth: 240, fileTreeOpen: true });
+    let available = 375;
+    vi.spyOn(window, 'innerWidth', 'get').mockImplementation(() => available);
+    useRightWorkspaceStore.getState().openFile({ path: 'report.md', conversationId: 'ordinary' }, 'ordinary');
+    await act(async () => root.render(<MemoryRouter><RightWorkspace scope="ordinary" /></MemoryRouter>));
+    const tree = container.querySelector<HTMLElement>('[data-workspace-tree]')!;
+    expect(tree.classList.contains('hidden')).toBe(true);
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Toggle file tree"]')!.click());
+    expect(container.querySelector('[aria-label="Close file tree"]')).not.toBeNull();
+    expect(tree.classList.contains('absolute')).toBe(true);
+    await act(async () => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })));
+    expect(tree.classList.contains('hidden')).toBe(true);
+    available = 1200;
+    await act(async () => window.dispatchEvent(new Event('resize')));
+    expect(tree.classList.contains('hidden')).toBe(false);
+    expect(tree.classList.contains('absolute')).toBe(false);
+    expect(container.querySelector('[data-file-preview]')?.textContent).toBe('report.md');
   });
 
   it('reserves modal space only for a visible docked workspace at its rendered width', async () => {

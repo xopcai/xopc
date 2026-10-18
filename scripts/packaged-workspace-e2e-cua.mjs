@@ -45,12 +45,8 @@ export async function runPackagedWorkspaceMotion(app) {
   state = await click('toggle button Description: Toggle file tree,');
   check('Installed preview tree toggle remains reachable', !state.includes('button Close file tree'));
   await click('tab (settable, integer) Page Two,');
-  await click('pop up button Tab list'); await app.pressKey('Home'); await app.pressKey('End');
   state = await snapshot();
-  check('Installed tab list keyboard navigation', state.includes('Open tabs'));
-  await app.pressKey('Escape');
-  state = await snapshot();
-  check('Installed menu dismissal restores guest', state.includes('HTML content Page Two'));
+  check('Installed workspace omits redundant menus', !state.includes('pop up button Tab list') && !state.includes('pop up button Workspace actions'));
   for (const label of ['Installed native window zoom', 'Installed native window restore']) {
     const zoom = (await snapshot()).split('\n').find(line => /^\s*\d+ full screen button.*Secondary Actions: zoom the window/.test(line));
     if (!zoom) throw new Error('Native window zoom action unavailable');
