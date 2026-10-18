@@ -69,7 +69,7 @@ struct AssistantRecoveryTests {
         state.pauseConversation()
         gateway.activeRun = ActiveRun(active: false, runId: nil)
         gateway.historyMessages = [WireMessage(id: "answer", messageId: nil, turnId: "run", role: "assistant",
-                                               content: .text("Complete"), rawContent: nil, toolCalls: nil, attachments: nil, media: nil, metadata: nil)]
+                                               content: .text("Complete"), deliveries: nil, rawContent: nil, toolCalls: nil, attachments: nil, media: nil, metadata: nil)]
         await state.resumeConversation(conversation, using: gateway)
         #expect(state.runID == nil)
         #expect(state.messages.map(\.text) == ["Complete"])

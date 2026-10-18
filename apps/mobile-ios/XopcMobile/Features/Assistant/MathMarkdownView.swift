@@ -96,7 +96,8 @@ private struct MathWebContent: UIViewRepresentable {
             var next = payload
             next["revision"] = revision
             // Arguments are transferred by WebKit, never interpolated as JavaScript source.
-            view.callAsyncJavaScript("document.documentElement.style.webkitUserSelect = payload.textSelectable ? 'text' : 'none'; window.xopcMath.update(payload)", arguments: ["payload": next], in: nil, in: .page, completionHandler: { _ in })
+            let script = "document.documentElement.style.webkitUserSelect = payload.textSelectable ? 'text' : 'none'; window.xopcMath.update(payload)"
+            view.callAsyncJavaScript(script, arguments: ["payload": next], in: nil, in: .page, completionHandler: { _ in })
         }
 
         func webView(_ webView: WKWebView, didFinish _: WKNavigation!) {

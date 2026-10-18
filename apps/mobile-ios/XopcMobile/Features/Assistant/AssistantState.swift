@@ -339,21 +339,7 @@ final class AssistantState {
             return
         }
         updateActivity(with: event)
-        if event.name == "assistant_message_end", event.presentation == "narration" {
-            let id = event.messageId ?? runID
-            if let narration = messages.first(where: { $0.id == id }) {
-                appendActivity(id: "narration:\(id)", title: String(narration.text.prefix(160)), status: "done")
-            }
-            streamBuffer.closeNarration(id)
-            messages.removeAll { $0.id == id }
-        }
-        if event.name == "assistant_message_end", event.presentation == "answer" {
-            let id = event.messageId ?? runID
-            if let index = messages.firstIndex(where: { $0.id == id }) {
-                messages[index].answerConfirmed = true
-                messages[index].revealAnswer = true
-            }
-        }
+        handleMessageEnd(event, runID: runID)
         guard event.name == "assistant_delta" else { return }
         let result = streamBuffer.append(event, runID: runID, visible: messages)
         if result == "gap" {
@@ -366,6 +352,21 @@ final class AssistantState {
                 do { try await Task.sleep(for: .milliseconds(32)) } catch { return }
                 self?.flushStream()
             }
+        }
+    }
+
+    private func handleMessageEnd(_ event: RunStreamEvent, runID: String) {
+        guard event.name == "assistant_message_end" else { return }
+        let id = event.messageId ?? runID
+        if event.presentation == "narration" {
+            if let narration = messages.first(where: { $0.id == id }) {
+                appendActivity(id: "narration:\(id)", title: String(narration.text.prefix(160)), status: "done")
+            }
+            streamBuffer.closeNarration(id)
+            messages.removeAll { $0.id == id }
+        } else if event.presentation == "answer", let index = messages.firstIndex(where: { $0.id == id }) {
+            messages[index].answerConfirmed = true
+            messages[index].revealAnswer = true
         }
     }
 

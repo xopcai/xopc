@@ -14,7 +14,15 @@ struct ChatRenderingTests {
     }
 
     @Test func historySeparatesPublicNarrationFromAnswersAndPreservesTaskReceipts() throws {
-        let source = #"{"id":"a","role":"assistant","content":[{"type":"text","text":"Checking","presentation":"narration"},{"type":"text","text":"Draft","presentation":"pending"},{"type":"text","text":"Result","presentation":"answer"}],"deliveries":[{"operation":"started","primary":{"kind":"task","id":"t","title":"Research","capabilities":["open"]}}]}"#
+        let source = #"""
+        {"id":"a","role":"assistant","content":[
+          {"type":"text","text":"Checking","presentation":"narration"},
+          {"type":"text","text":"Draft","presentation":"pending"},
+          {"type":"text","text":"Result","presentation":"answer"}
+        ],"deliveries":[{"operation":"started","primary":{
+          "kind":"task","id":"t","title":"Research","capabilities":["open"]
+        }}]}
+        """#
         let wire = try JSONDecoder().decode(WireMessage.self, from: Data(source.utf8))
         #expect(wire.content.text == "Result")
         #expect(wire.deliveries?.first?.primary?.id == "t")
