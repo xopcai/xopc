@@ -1,0 +1,12 @@
+--- a/src/agent/tools/factory.ts
++++ b/src/agent/tools/factory.ts
+@@ -825,5 +825,8 @@
+       .map(tool => personalToolsConfigured && !tool.name.startsWith('personal_') && PERSONAL_TOOL_DESCRIPTIONS[tool.name]
+         ? { ...tool, description: PERSONAL_TOOL_DESCRIPTIONS[tool.name] } : tool);
+     return filterExecutionTools(executionToolPolicy, selected)
+-      .map(tool => executionToolPolicy.discovery ? withCoreToolExposure(tool) : tool);
++      .map(tool => executionToolPolicy.discovery
++        && !(process.env.XOPC_EVAL_INLINE_SINGLE_SKILL_TOOLS === '1' && selected.length === 1
++          && ['skills_list', 'skill_view'].includes(tool.name))
++        ? withCoreToolExposure(tool) : tool);
+   }

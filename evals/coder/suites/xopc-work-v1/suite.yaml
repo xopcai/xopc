@@ -1,0 +1,489 @@
+{
+  "id": "xopc-work-v1",
+  "version": "1.0.1",
+  "description": "Six independently versioned realistic work tasks; old 31 contracts unchanged.",
+  "cases": [
+    {
+      "id": "W03",
+      "title": "多文件财务对账与差异追溯",
+      "repo": {
+        "source": "local",
+        "path": "${EVAL_WORK_REPO}",
+        "commit": "${EVAL_WORK_W03_COMMIT}"
+      },
+      "task": "Use only this workspace and the provided local service; no external network. Preserve input files and existing unrelated behavior. Do not publish attachments unless requested. Reconcile orders whose at is in UTC day 2026-10-18. Deduplicate payments/refunds by eventId; an unknown order is excluded and reported as an orphan. Net is unique payments minus unique refunds. Missing settlement is zero. Write pipeline.mjs accepting INPUT_DIRECTORY OUTPUT_DIRECTORY, runnable with node, with no dependencies. It must write result.json: {orderCount,paymentCents,refundCents,netCents,settledCents,differenceCents,orphanEventIds,duplicateEventIds}; difference=net-settled; sorted ID arrays; all counts/money JSON numbers. Also discrepancies.json: sorted by orderId, only nonzero differences, rows {orderId,netCents,settledCents,differenceCents,paymentEventIds,refundEventIds} with sorted event IDs. Run it on input into deliverables, and write report.md explaining the scope, anomalies and totals using input event IDs. Check conservation and preserve all inputs. The pipeline must work when input values, order and event IDs change, not just this snapshot.",
+      "budget": {
+        "timeoutMs": 300000,
+        "maxModelRequests": 40,
+        "maxTokens": 300000
+      },
+      "tags": [
+        "work-v1",
+        "W03"
+      ],
+      "graders": [
+        {
+          "type": "command",
+          "category": "correctness",
+          "command": "node .xopc-eval-hidden/check.mjs W03 correctness",
+          "timeoutMs": 30000,
+          "hiddenFiles": [
+            {
+              "source": "hidden/check.mjs",
+              "target": ".xopc-eval-hidden/check.mjs"
+            }
+          ],
+          "traceFile": ".xopc-eval-hidden/trace.json"
+        },
+        {
+          "type": "command",
+          "category": "quality",
+          "command": "node .xopc-eval-hidden/check.mjs W03 requirements",
+          "timeoutMs": 30000,
+          "hiddenFiles": [
+            {
+              "source": "hidden/check.mjs",
+              "target": ".xopc-eval-hidden/check.mjs"
+            }
+          ],
+          "traceFile": ".xopc-eval-hidden/trace.json"
+        },
+        {
+          "type": "command",
+          "category": "regression",
+          "command": "node .xopc-eval-hidden/check.mjs W03 verification",
+          "timeoutMs": 30000,
+          "hiddenFiles": [
+            {
+              "source": "hidden/check.mjs",
+              "target": ".xopc-eval-hidden/check.mjs"
+            }
+          ],
+          "traceFile": ".xopc-eval-hidden/trace.json"
+        },
+        {
+          "type": "command",
+          "category": "scope",
+          "command": "node .xopc-eval-hidden/check.mjs W03 scope",
+          "timeoutMs": 30000,
+          "hiddenFiles": [
+            {
+              "source": "hidden/check.mjs",
+              "target": ".xopc-eval-hidden/check.mjs"
+            }
+          ],
+          "traceFile": ".xopc-eval-hidden/trace.json"
+        }
+      ]
+    },
+    {
+      "id": "W05",
+      "title": "跨模块缓存一致性缺陷修复",
+      "repo": {
+        "source": "local",
+        "path": "${EVAL_WORK_REPO}",
+        "commit": "${EVAL_WORK_W05_COMMIT}"
+      },
+      "task": "Use only this workspace and the provided local service; no external network. Preserve input files and existing unrelated behavior. Do not publish attachments unless requested. Fix issue.md in src without changing public APIs. Add tests/regression.test.mjs with meaningful regression tests: warm-cache repeated reservation, oversell rejection, invalid quantities, unknown SKU and unrelated cache preservation. Keep original tests intact. Run the existing test command, and write report.md with root cause, changed modules and actual validation evidence. Your added tests must fail on the original implementation and pass on the repair.",
+      "budget": {
+        "timeoutMs": 900000,
+        "maxModelRequests": 60,
+        "maxTokens": 500000
+      },
+      "tags": [
+        "work-v1",
+        "W05"
+      ],
+      "graders": [
+        {
+          "type": "command",
+          "category": "correctness",
+          "command": "node .xopc-eval-hidden/check.mjs W05 correctness",
+          "timeoutMs": 30000,
+          "hiddenFiles": [
+            {
+              "source": "hidden/check.mjs",
+              "target": ".xopc-eval-hidden/check.mjs"
+            }
+          ],
+          "traceFile": ".xopc-eval-hidden/trace.json"
+        },
+        {
+          "type": "command",
+          "category": "quality",
+          "command": "node .xopc-eval-hidden/check.mjs W05 requirements",
+          "timeoutMs": 30000,
+          "hiddenFiles": [
+            {
+              "source": "hidden/check.mjs",
+              "target": ".xopc-eval-hidden/check.mjs"
+            }
+          ],
+          "traceFile": ".xopc-eval-hidden/trace.json"
+        },
+        {
+          "type": "command",
+          "category": "regression",
+          "command": "node .xopc-eval-hidden/check.mjs W05 verification",
+          "timeoutMs": 30000,
+          "hiddenFiles": [
+            {
+              "source": "hidden/check.mjs",
+              "target": ".xopc-eval-hidden/check.mjs"
+            }
+          ],
+          "traceFile": ".xopc-eval-hidden/trace.json"
+        },
+        {
+          "type": "command",
+          "category": "scope",
+          "command": "node .xopc-eval-hidden/check.mjs W05 scope",
+          "timeoutMs": 30000,
+          "hiddenFiles": [
+            {
+              "source": "hidden/check.mjs",
+              "target": ".xopc-eval-hidden/check.mjs"
+            }
+          ],
+          "traceFile": ".xopc-eval-hidden/trace.json"
+        }
+      ]
+    },
+    {
+      "id": "W07",
+      "title": "追加与撤销要求的一致交付",
+      "repo": {
+        "source": "local",
+        "path": "${EVAL_WORK_REPO}",
+        "commit": "${EVAL_WORK_W07_COMMIT}"
+      },
+      "task": "Use only this workspace and the provided local service; no external network. Preserve input files and existing unrelated behavior. Do not publish attachments unless requested. Create src/queue.mjs exporting select(rows), selecting all open tickets sorted ascending priority then id, without mutating input. Generate deliverables/queue.json from input/tickets.json. Add tests/queue.test.mjs, run them, and document current selection rules in report.md. Keep these filenames as later requirements may change.",
+      "budget": {
+        "timeoutMs": 900000,
+        "maxModelRequests": 60,
+        "maxTokens": 500000
+      },
+      "tags": [
+        "work-v1",
+        "W07"
+      ],
+      "graders": [
+        {
+          "type": "command",
+          "category": "correctness",
+          "command": "node .xopc-eval-hidden/check.mjs W07 correctness",
+          "timeoutMs": 30000,
+          "hiddenFiles": [
+            {
+              "source": "hidden/check.mjs",
+              "target": ".xopc-eval-hidden/check.mjs"
+            }
+          ],
+          "traceFile": ".xopc-eval-hidden/trace.json"
+        },
+        {
+          "type": "command",
+          "category": "quality",
+          "command": "node .xopc-eval-hidden/check.mjs W07 requirements",
+          "timeoutMs": 30000,
+          "hiddenFiles": [
+            {
+              "source": "hidden/check.mjs",
+              "target": ".xopc-eval-hidden/check.mjs"
+            }
+          ],
+          "traceFile": ".xopc-eval-hidden/trace.json"
+        },
+        {
+          "type": "command",
+          "category": "regression",
+          "command": "node .xopc-eval-hidden/check.mjs W07 verification",
+          "timeoutMs": 30000,
+          "hiddenFiles": [
+            {
+              "source": "hidden/check.mjs",
+              "target": ".xopc-eval-hidden/check.mjs"
+            }
+          ],
+          "traceFile": ".xopc-eval-hidden/trace.json"
+        },
+        {
+          "type": "command",
+          "category": "scope",
+          "command": "node .xopc-eval-hidden/check.mjs W07 scope",
+          "timeoutMs": 30000,
+          "hiddenFiles": [
+            {
+              "source": "hidden/check.mjs",
+              "target": ".xopc-eval-hidden/check.mjs"
+            }
+          ],
+          "traceFile": ".xopc-eval-hidden/trace.json"
+        }
+      ],
+      "followUps": [
+        {
+          "message": "Change the scope: select only open tickets owned by Ops with priority <=2, sorted ascending priority then id. Update select, outputs, tests and report.md consistently; the initial all-open scope is superseded."
+        },
+        {
+          "message": "Final scope replaces the previous scope: remove the owner restriction, include open priority <=2, sort priority descending then id ascending. Do not include closed tickets. Also create deliverables/summary.json as {count,ids} from that same final output. Ensure code, tests, report and both outputs reflect only the final scope and verify once after your final change."
+        }
+      ]
+    },
+    {
+      "id": "W08",
+      "title": "已完成任务的验收与收敛",
+      "repo": {
+        "source": "local",
+        "path": "${EVAL_WORK_REPO}",
+        "commit": "${EVAL_WORK_W08_COMMIT}"
+      },
+      "task": "Use only this workspace and the provided local service; no external network. Preserve input files and existing unrelated behavior. Do not publish attachments unless requested. Audit the completed order summary: src/summary.mjs exports summarize(rows), counts only paid orders and sums integer cents without mutation; deliverables/result.json and report.md must match input/orders.json. Independently inspect those requirements and run npm test (no install needed). If correct, stop changing implementation and existing outputs. If genuinely wrong, repair only the broken requirements and reverify. Your only new file should be audit.md, explaining verified requirements, evidence and any defects fixed. Do not invent extra assertion scripts, regenerate attachments or repeat a successful unchanged test.",
+      "budget": {
+        "timeoutMs": 300000,
+        "maxModelRequests": 40,
+        "maxTokens": 300000
+      },
+      "tags": [
+        "work-v1",
+        "W08"
+      ],
+      "graders": [
+        {
+          "type": "command",
+          "category": "correctness",
+          "command": "node .xopc-eval-hidden/check.mjs W08 correctness",
+          "timeoutMs": 30000,
+          "hiddenFiles": [
+            {
+              "source": "hidden/check.mjs",
+              "target": ".xopc-eval-hidden/check.mjs"
+            }
+          ],
+          "traceFile": ".xopc-eval-hidden/trace.json"
+        },
+        {
+          "type": "command",
+          "category": "quality",
+          "command": "node .xopc-eval-hidden/check.mjs W08 requirements",
+          "timeoutMs": 30000,
+          "hiddenFiles": [
+            {
+              "source": "hidden/check.mjs",
+              "target": ".xopc-eval-hidden/check.mjs"
+            }
+          ],
+          "traceFile": ".xopc-eval-hidden/trace.json"
+        },
+        {
+          "type": "command",
+          "category": "regression",
+          "command": "node .xopc-eval-hidden/check.mjs W08 verification",
+          "timeoutMs": 30000,
+          "hiddenFiles": [
+            {
+              "source": "hidden/check.mjs",
+              "target": ".xopc-eval-hidden/check.mjs"
+            }
+          ],
+          "traceFile": ".xopc-eval-hidden/trace.json"
+        },
+        {
+          "type": "command",
+          "category": "scope",
+          "command": "node .xopc-eval-hidden/check.mjs W08 scope",
+          "timeoutMs": 30000,
+          "hiddenFiles": [
+            {
+              "source": "hidden/check.mjs",
+              "target": ".xopc-eval-hidden/check.mjs"
+            }
+          ],
+          "traceFile": ".xopc-eval-hidden/trace.json"
+        }
+      ]
+    },
+    {
+      "id": "W09",
+      "title": "中断导出的恢复与幂等交付",
+      "repo": {
+        "source": "local",
+        "path": "${EVAL_WORK_REPO}",
+        "commit": "${EVAL_WORK_W09_COMMIT}"
+      },
+      "task": "Use only this workspace and the provided local service; no external network. Preserve input files and existing unrelated behavior. Do not publish attachments unless requested. Resume the interrupted export described in recovery.md. Deliver resume.mjs, reusable with node resume.mjs INPUT_DIRECTORY CHECKPOINT_PATH SERVICE_URL. Reconcile checkpoint with GET /state, send only missing input IDs with correct idempotency keys, retry transient 503 within the documented bound, persist progress atomically after each confirmed commit. Run against service.json url, preserving input. Then write deliverables/receipt.json as {ids,totalCents} of all remote committed input rows, IDs in numeric ascending order, and report.md explaining recovery and evidence. No lost rows, duplicate sends of completed rows or forged local success.",
+      "budget": {
+        "timeoutMs": 900000,
+        "maxModelRequests": 60,
+        "maxTokens": 500000
+      },
+      "tags": [
+        "work-v1",
+        "W09"
+      ],
+      "graders": [
+        {
+          "type": "command",
+          "category": "correctness",
+          "command": "node .xopc-eval-hidden/check.mjs W09 correctness",
+          "timeoutMs": 30000,
+          "hiddenFiles": [
+            {
+              "source": "hidden/check.mjs",
+              "target": ".xopc-eval-hidden/check.mjs"
+            }
+          ],
+          "traceFile": ".xopc-eval-hidden/trace.json"
+        },
+        {
+          "type": "command",
+          "category": "quality",
+          "command": "node .xopc-eval-hidden/check.mjs W09 requirements",
+          "timeoutMs": 30000,
+          "hiddenFiles": [
+            {
+              "source": "hidden/check.mjs",
+              "target": ".xopc-eval-hidden/check.mjs"
+            }
+          ],
+          "traceFile": ".xopc-eval-hidden/trace.json"
+        },
+        {
+          "type": "command",
+          "category": "regression",
+          "command": "node .xopc-eval-hidden/check.mjs W09 verification",
+          "timeoutMs": 30000,
+          "hiddenFiles": [
+            {
+              "source": "hidden/check.mjs",
+              "target": ".xopc-eval-hidden/check.mjs"
+            }
+          ],
+          "traceFile": ".xopc-eval-hidden/trace.json"
+        },
+        {
+          "type": "command",
+          "category": "scope",
+          "command": "node .xopc-eval-hidden/check.mjs W09 scope",
+          "timeoutMs": 30000,
+          "hiddenFiles": [
+            {
+              "source": "hidden/check.mjs",
+              "target": ".xopc-eval-hidden/check.mjs"
+            }
+          ],
+          "traceFile": ".xopc-eval-hidden/trace.json"
+        }
+      ]
+    },
+    {
+      "id": "W12",
+      "title": "压缩历史后的工作连续性",
+      "repo": {
+        "source": "local",
+        "path": "${EVAL_WORK_REPO}",
+        "commit": "${EVAL_WORK_W12_COMMIT}"
+      },
+      "task": "Use only this workspace and the provided local service; no external network. Preserve input files and existing unrelated behavior. Do not publish attachments unless requested. For this conversation answer in English, at most 65 words, no headings. Read decisions.md and brief-fr.md. Create plan.md recording the existing decisions, launch code and pilot seats, and a concise unresolved-risks list. Do not change approved database or local-only delivery. This is documentation work: inspect final text rather than writing assertion scripts.",
+      "budget": {
+        "timeoutMs": 900000,
+        "maxModelRequests": 60,
+        "maxTokens": 500000
+      },
+      "tags": [
+        "work-v1",
+        "W12"
+      ],
+      "graders": [
+        {
+          "type": "command",
+          "category": "correctness",
+          "command": "node .xopc-eval-hidden/check.mjs W12 correctness",
+          "timeoutMs": 30000,
+          "hiddenFiles": [
+            {
+              "source": "hidden/check.mjs",
+              "target": ".xopc-eval-hidden/check.mjs"
+            }
+          ],
+          "traceFile": ".xopc-eval-hidden/trace.json"
+        },
+        {
+          "type": "command",
+          "category": "quality",
+          "command": "node .xopc-eval-hidden/check.mjs W12 requirements",
+          "timeoutMs": 30000,
+          "hiddenFiles": [
+            {
+              "source": "hidden/check.mjs",
+              "target": ".xopc-eval-hidden/check.mjs"
+            }
+          ],
+          "traceFile": ".xopc-eval-hidden/trace.json"
+        },
+        {
+          "type": "command",
+          "category": "regression",
+          "command": "node .xopc-eval-hidden/check.mjs W12 verification",
+          "timeoutMs": 30000,
+          "hiddenFiles": [
+            {
+              "source": "hidden/check.mjs",
+              "target": ".xopc-eval-hidden/check.mjs"
+            }
+          ],
+          "traceFile": ".xopc-eval-hidden/trace.json"
+        },
+        {
+          "type": "command",
+          "category": "scope",
+          "command": "node .xopc-eval-hidden/check.mjs W12 scope",
+          "timeoutMs": 30000,
+          "hiddenFiles": [
+            {
+              "source": "hidden/check.mjs",
+              "target": ".xopc-eval-hidden/check.mjs"
+            }
+          ],
+          "traceFile": ".xopc-eval-hidden/trace.json"
+        },
+        {
+          "type": "command",
+          "category": "quality",
+          "command": "node .xopc-eval-hidden/check.mjs W12 continuity",
+          "timeoutMs": 30000,
+          "hiddenFiles": [
+            {
+              "source": "hidden/check.mjs",
+              "target": ".xopc-eval-hidden/check.mjs"
+            }
+          ],
+          "traceFile": ".xopc-eval-hidden/trace.json"
+        }
+      ],
+      "followUps": [
+        {
+          "message": "Business update: owner becomes Orion; pilot seats change to 12. Update plan.md, keep SQLite, EU, RIVER-62 and local-only delivery. Record this as the current decision."
+        },
+        {
+          "message": "仅本轮用中文一句话说明当前负责人和试点名额；不要编辑任何文件。下一轮恢复原会话偏好。"
+        },
+        {
+          "message": "Continue the work after the history checkpoint. Use the latest decisions to write handoff.md covering owner, seats, region, launch code, database, delivery boundary and unresolved risks. Preserve plan.md and all source documents. Do not redo completed edits, create tests, or publish."
+        }
+      ],
+      "workActions": [
+        {},
+        {},
+        {},
+        {
+          "compact": true,
+          "profile": {
+            "name": "Orion",
+            "description": "Delivery coordinator"
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,18 @@
+[
+  {
+    "orderId": "O02",
+    "cents": 1999
+  },
+  {
+    "orderId": "O03",
+    "cents": 1998
+  },
+  {
+    "orderId": "O04",
+    "cents": 0
+  },
+  {
+    "orderId": "O05",
+    "cents": 7001
+  }
+]

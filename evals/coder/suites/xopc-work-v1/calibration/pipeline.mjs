@@ -1,0 +1,7 @@
+import fs from 'node:fs';import path from 'node:path';
+const [indir,outdir]=process.argv.slice(2),load=n=>JSON.parse(fs.readFileSync(path.join(indir,n+'.json')));
+const all=load('orders'),orders=all.filter(o=>o.at.startsWith('2026-10-18')),known=new Set(all.map(r=>r.orderId)),dups=[],orphans=[];
+function dedup(rows){const seen=new Map();for(const row of rows){if(seen.has(row.eventId))dups.push(row.eventId);else seen.set(row.eventId,row)}return [...seen.values()].filter(r=>{if(!known.has(r.orderId)){orphans.push(r.eventId);return false}return true})}
+const p=dedup(load('payments')),r=dedup(load('refunds')),s=load('settlements');let pc=0,rc=0,sc=0;const differences=[];
+for(const o of orders){const ps=p.filter(x=>x.orderId===o.orderId),rs=r.filter(x=>x.orderId===o.orderId),pv=ps.reduce((a,b)=>a+b.cents,0),rv=rs.reduce((a,b)=>a+b.cents,0),sv=s.filter(x=>x.orderId===o.orderId).reduce((a,b)=>a+b.cents,0);pc+=pv;rc+=rv;sc+=sv;if(pv-rv!==sv)differences.push({orderId:o.orderId,netCents:pv-rv,settledCents:sv,differenceCents:pv-rv-sv,paymentEventIds:ps.map(x=>x.eventId).sort(),refundEventIds:rs.map(x=>x.eventId).sort()})}
+fs.mkdirSync(outdir,{recursive:true});fs.writeFileSync(path.join(outdir,'result.json'),JSON.stringify({orderCount:orders.length,paymentCents:pc,refundCents:rc,netCents:pc-rc,settledCents:sc,differenceCents:pc-rc-sc,orphanEventIds:[...new Set(orphans)].sort(),duplicateEventIds:[...new Set(dups)].sort()}));fs.writeFileSync(path.join(outdir,'discrepancies.json'),JSON.stringify(differences.sort((a,b)=>a.orderId.localeCompare(b.orderId))));

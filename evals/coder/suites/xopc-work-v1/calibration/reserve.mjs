@@ -1,0 +1,1 @@
+export function reserve(store,catalog,sku,quantity){if(!Number.isInteger(quantity)||quantity<=0||!store.get(sku))throw new Error('invalid');const product=catalog.get(sku);if(product.available<quantity)throw new Error('stock');store.save(sku,product.available-quantity);catalog.cache.invalidate(sku);return {sku,remaining:product.available-quantity}}

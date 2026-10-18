@@ -1,0 +1,12 @@
+[
+  {
+    "eventId": "R1",
+    "orderId": "O02",
+    "cents": 501
+  },
+  {
+    "eventId": "R2",
+    "orderId": "O05",
+    "cents": 300
+  }
+]

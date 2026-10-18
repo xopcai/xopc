@@ -1,0 +1,17 @@
+[
+  {
+    "id": "A",
+    "status": "paid",
+    "cents": 101
+  },
+  {
+    "id": "B",
+    "status": "cancelled",
+    "cents": 400
+  },
+  {
+    "id": "C",
+    "status": "paid",
+    "cents": 299
+  }
+]
