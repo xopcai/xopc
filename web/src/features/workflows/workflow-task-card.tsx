@@ -187,7 +187,7 @@ export const WorkflowTaskCard = memo(function WorkflowTaskCard({
               aria-label={labels.taskCloseMenu}
               onClick={() => setMenuOpen(false)}
             />
-            <div className="absolute right-0 z-20 mt-1 min-w-36 rounded-lg border border-edge bg-surface-panel py-1 shadow-surface">
+            <div className="absolute right-0 z-20 mt-1 min-w-36 rounded-lg border border-edge bg-surface-overlay py-1 shadow-surface">
               {active ? (
                 <TaskMenuItem
                   label={labels.cancel}

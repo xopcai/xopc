@@ -47,7 +47,7 @@ export function LogsStatsPopover({ L, stats }: Props) {
             align="start"
             sideOffset={6}
             className={cn(
-              'w-[min(calc(100vw-2rem),20rem)] rounded-xl border border-edge bg-surface-panel p-3 shadow-popover outline-none',
+              'w-[min(calc(100vw-2rem),20rem)] rounded-xl border border-edge bg-surface-overlay p-3 shadow-popover outline-none',
               SETTINGS_SHELL_POPOVER_Z,
               'dark:border-edge',
             )}

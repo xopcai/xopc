@@ -299,6 +299,9 @@ describe('AppShell task Sidechat', () => {
     expect(onDockedWidthChange).toHaveBeenLastCalledWith(500);
     await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Expand workspace"]')!.click());
     expect(onDockedWidthChange).toHaveBeenLastCalledWith(0);
+    const expandedPanel = container.querySelector<HTMLElement>('[data-right-workspace]')!;
+    expect(expandedPanel.classList.contains('absolute')).toBe(true);
+    expect(expandedPanel.classList.contains('fixed')).toBe(false);
     await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Restore workspace"]')!.click());
     expect(onDockedWidthChange).toHaveBeenLastCalledWith(500);
     await act(async () => useRightWorkspaceStore.getState().setOpen(false, 'ordinary'));

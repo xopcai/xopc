@@ -104,7 +104,7 @@ export function NoteCard({ note, selected = false, onPress, onPin, onArchive, on
           </DropdownMenu.Trigger>
           <DropdownMenu.Portal>
             <DropdownMenu.Content
-              className="z-50 min-w-[140px] rounded-xl border border-edge bg-surface-panel p-1 shadow-lg"
+              className="z-50 min-w-[140px] rounded-xl border border-edge bg-surface-overlay p-1 shadow-lg"
               sideOffset={4}
               align="end"
               onClick={(e) => e.stopPropagation()}

@@ -682,7 +682,7 @@ function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted }: {
           <Button type="button" variant="ghost" className="size-9 p-0" disabled={commandPending || deletePending} aria-label={copy.moreActions}><MoreHorizontal className="size-4" aria-hidden /></Button>
         </DropdownMenu.Trigger>
         <DropdownMenu.Portal>
-          <DropdownMenu.Content align="end" sideOffset={6} className="z-[100] min-w-44 rounded-lg border border-edge bg-surface-panel p-1 shadow-popover">
+          <DropdownMenu.Content align="end" sideOffset={6} className="z-[100] min-w-44 rounded-lg border border-edge bg-surface-overlay p-1 shadow-popover">
             {activeRun ? (
               <DropdownMenu.Item className="cursor-pointer rounded-md px-3 py-2 text-sm text-danger outline-none hover:bg-surface-hover focus:bg-surface-hover" onSelect={() => {
                 setOperationPending('command', true);
@@ -818,7 +818,7 @@ function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted }: {
               </div>
               {detail.task.phase !== 'closed' && detail.task.contract?.acceptancePolicy !== 'verified_auto' ? <DropdownMenu.Root>
                 <DropdownMenu.Trigger asChild><Button type="button" variant="ghost" className="h-7 shrink-0 px-2 text-xs" disabled={pendingOperations.has('acceptance')}>{language === 'zh' ? '判定' : 'Review'}</Button></DropdownMenu.Trigger>
-                <DropdownMenu.Portal><DropdownMenu.Content align="end" sideOffset={4} className="z-[100] min-w-32 rounded-lg border border-edge bg-surface-panel p-1 shadow-popover">
+                <DropdownMenu.Portal><DropdownMenu.Content align="end" sideOffset={4} className="z-[100] min-w-32 rounded-lg border border-edge bg-surface-overlay p-1 shadow-popover">
                   <DropdownMenu.Item className="cursor-pointer rounded-md px-3 py-2 text-sm text-fg outline-none hover:bg-surface-hover focus:bg-surface-hover" onSelect={() => void reviewCriterion(index, 'passed')}>{language === 'zh' ? '确认通过' : 'Mark passed'}</DropdownMenu.Item>
                   <DropdownMenu.Item className="cursor-pointer rounded-md px-3 py-2 text-sm text-fg outline-none hover:bg-surface-hover focus:bg-surface-hover" onSelect={() => void reviewCriterion(index, 'failed')}>{language === 'zh' ? '标记未通过' : 'Mark failed'}</DropdownMenu.Item>
                 </DropdownMenu.Content></DropdownMenu.Portal>
@@ -957,7 +957,7 @@ function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted }: {
           <div className="flex items-center gap-1">
           {linkedSessions.length > 1 ? <DropdownMenu.Root>
             <DropdownMenu.Trigger asChild><Button type="button" variant="ghost" className="h-8 px-2 text-xs">{language === 'zh' ? `${linkedSessions.length} 段对话` : `${linkedSessions.length} conversations`}</Button></DropdownMenu.Trigger>
-            <DropdownMenu.Portal><DropdownMenu.Content align="end" sideOffset={6} className="z-[100] min-w-52 rounded-lg border border-edge bg-surface-panel p-1 shadow-popover">
+            <DropdownMenu.Portal><DropdownMenu.Content align="end" sideOffset={6} className="z-[100] min-w-52 rounded-lg border border-edge bg-surface-overlay p-1 shadow-popover">
               {linkedSessions.map((session) => <DropdownMenu.Item key={session.id} asChild><Link className="block rounded-md px-3 py-2 text-sm text-fg outline-none hover:bg-surface-hover focus:bg-surface-hover" to={session.conversationId === conversationConversationId ? taskChatHref(taskId) : `/chat/${encodeURIComponent(session.conversationId)}`}>{session.conversationId === conversationConversationId ? (language === 'zh' ? '当前执行对话' : 'Current execution chat') : session.role === 'discussion' ? (language === 'zh' ? '关联讨论' : 'Linked discussion') : (language === 'zh' ? '历史执行对话' : 'Earlier execution chat')}</Link></DropdownMenu.Item>)}
             </DropdownMenu.Content></DropdownMenu.Portal>
           </DropdownMenu.Root> : null}

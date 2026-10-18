@@ -470,7 +470,7 @@ const SidebarTaskRow = memo(function SidebarTaskRow({
           </Popover.Trigger>
           <Popover.Portal>
             <Popover.Content
-              className="z-50 w-[9.25rem] rounded-lg border border-edge bg-surface-panel p-1 shadow-elevated dark:border-edge"
+              className="z-50 w-[9.25rem] rounded-lg border border-edge bg-surface-overlay p-1 shadow-elevated dark:border-edge"
               side="bottom"
               align="end"
               sideOffset={4}
@@ -578,7 +578,7 @@ function SidebarProjectMenu({
       </Popover.Trigger>
       <Popover.Portal>
         <Popover.Content
-          className="z-50 w-[12rem] rounded-lg border border-edge bg-surface-panel p-1 shadow-elevated dark:border-edge"
+          className="z-50 w-[12rem] rounded-lg border border-edge bg-surface-overlay p-1 shadow-elevated dark:border-edge"
           side="bottom"
           align="end"
           sideOffset={4}

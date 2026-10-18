@@ -127,7 +127,7 @@ export function SessionFilterToolbar({ filters, onChange, search, onSearch, labe
           <Popover.Content
             ref={panelRef} side="bottom" align="start" sideOffset={8} collisionPadding={12} sticky="always"
             aria-labelledby={headingId}
-            className="z-50 flex h-[min(26rem,calc(100dvh-1.5rem))] max-h-[var(--radix-popover-content-available-height)] w-[min(20rem,calc(100vw-1.5rem))] max-w-[var(--radix-popover-content-available-width)] flex-col overflow-hidden rounded-xl border border-edge bg-surface-panel text-sm text-fg shadow-popover"
+            className="z-50 flex h-[min(26rem,calc(100dvh-1.5rem))] max-h-[var(--radix-popover-content-available-height)] w-[min(20rem,calc(100vw-1.5rem))] max-w-[var(--radix-popover-content-available-width)] flex-col overflow-hidden rounded-xl border border-edge bg-surface-overlay text-sm text-fg shadow-popover"
             onEscapeKeyDown={(event) => { if (page !== 'home') { event.preventDefault(); back(); } }}
           >
             <div className="flex shrink-0 items-center gap-1 border-b border-edge px-2 py-2">

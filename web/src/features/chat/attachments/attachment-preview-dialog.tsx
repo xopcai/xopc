@@ -3,7 +3,6 @@ import * as Dialog from '@radix-ui/react-dialog';
 import { useEffect, useState } from 'react';
 import { useWorkspaceOwner } from '@/features/right-workspace/workspace-context';
 import { useRightWorkspaceStore } from '@/stores/right-workspace-store';
-import { createPortal } from 'react-dom';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 import { ShareLinkDialog } from '@/features/shares/share-link-dialog';
@@ -14,6 +13,7 @@ import type { MessageAttachment } from '@/features/chat/messages/messages.types'
 import {
   useAttachmentPreviewResolved,
 } from '@/features/preview-runtime';
+import { FilePreviewSurface } from '@/features/file-preview/file-preview-surface';
 import { useFilePreviewExpanded } from '@/features/file-preview/use-file-preview-expanded';
 import { cn } from '@/lib/cn';
 import { isElectron } from '@/lib/electron-env';
@@ -207,8 +207,8 @@ function AttachmentPreviewContent({
             ) : null}
   </>;
   if (embedded) {
-    const panel = <div className={cn('flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-surface-panel', expanded && 'fixed inset-0 z-[85] h-[100dvh] w-screen', expanded && electronPreviewViewportClass())}>{fileContent}</div>;
-    return <>{expanded ? createPortal(panel, document.body) : panel}
+    const panel = <FilePreviewSurface expanded={expanded}>{fileContent}</FilePreviewSurface>;
+    return <>{panel}
     <ShareLinkDialog
       open={share.dialogOpen}
       onOpenChange={share.handleOpenChange}

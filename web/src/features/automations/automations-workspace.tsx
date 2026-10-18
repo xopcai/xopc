@@ -1043,7 +1043,7 @@ export function AutomationsWorkspace({
               <DropdownMenu.Content
                 align="end"
                 sideOffset={6}
-                className="z-70 min-w-52 rounded-xl border border-edge bg-surface-panel p-1 shadow-popover"
+                className="z-70 min-w-52 rounded-xl border border-edge bg-surface-overlay p-1 shadow-popover"
               >
                 <DropdownMenu.Item
                   className="touch-target flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm text-fg outline-none data-[highlighted]:bg-surface-hover"
@@ -2436,7 +2436,7 @@ function AutomationDetails({
                 </Button>
               </DropdownMenu.Trigger>
               <DropdownMenu.Portal>
-                <DropdownMenu.Content align="end" className="z-70 min-w-40 rounded-lg border border-edge bg-surface-panel p-1 shadow-popover">
+                <DropdownMenu.Content align="end" className="z-70 min-w-40 rounded-lg border border-edge bg-surface-overlay p-1 shadow-popover">
                   {canEdit ? <DropdownMenu.Item className="flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm text-fg outline-none hover:bg-surface-hover" onSelect={() => onEdit(automation)}>
                     <Pencil className="size-4" />{labels.edit}
                   </DropdownMenu.Item> : null}

@@ -208,7 +208,7 @@ export function SidebarNavItems({
             align="start"
             sideOffset={8}
             collisionPadding={8}
-            className="z-50 max-h-[min(32rem,var(--radix-popover-content-available-height))] min-w-[14rem] max-w-[20rem] overflow-y-auto rounded-lg border border-edge bg-surface-panel p-1 shadow-popover"
+            className="z-50 max-h-[min(32rem,var(--radix-popover-content-available-height))] min-w-[14rem] max-w-[20rem] overflow-y-auto rounded-lg border border-edge bg-surface-overlay p-1 shadow-popover"
             onOpenAutoFocus={(event) => event.preventDefault()}
           >
             <nav className="flex flex-col gap-1" aria-label={m.sidebar.moreAppsAria}>

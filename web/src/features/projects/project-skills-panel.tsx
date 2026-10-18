@@ -244,7 +244,7 @@ export function ProjectSkillsPanel({ projectId, copy }: { projectId: string; cop
               </Button>
             </Popover.Trigger>
             <Popover.Portal>
-              <Popover.Content align="end" sideOffset={8} className="z-50 w-72 rounded-lg border border-edge bg-surface-panel p-1.5 shadow-xl">
+              <Popover.Content align="end" sideOffset={8} className="z-50 w-72 rounded-lg border border-edge bg-surface-overlay p-1.5 shadow-xl">
                 <InstallEntry icon={Store} title={copy.marketplace} hint={copy.marketplaceHint} onClick={() => setInstallMode('marketplace')} />
                 <InstallEntry icon={GitBranch} title={copy.source} hint={copy.sourceHint} onClick={() => setInstallMode('source')} />
                 <InstallEntry icon={Upload} title={copy.upload} hint={copy.uploadHint} onClick={() => fileRef.current?.click()} />

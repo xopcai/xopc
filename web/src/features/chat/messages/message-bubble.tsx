@@ -937,7 +937,7 @@ export const MessageBubble = memo(function MessageBubble({
                   side="bottom"
                   align="start"
                   sideOffset={6}
-                  className="z-[70] w-56 rounded-xl border border-edge bg-surface-panel p-1.5 shadow-popover outline-none"
+                  className="z-[70] w-56 rounded-xl border border-edge bg-surface-overlay p-1.5 shadow-popover outline-none"
                 >
                   <Popover.Close asChild>
                     <button

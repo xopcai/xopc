@@ -145,7 +145,7 @@ export function HomeAdvisorStatusControl({
           side="bottom"
           align="end"
           sideOffset={6}
-          className="z-[70] w-[min(21rem,calc(100vw-1.5rem))] rounded-xl border border-edge bg-surface-panel p-4 text-sm text-fg shadow-popover outline-none"
+          className="z-[70] w-[min(21rem,calc(100vw-1.5rem))] rounded-xl border border-edge bg-surface-overlay p-4 text-sm text-fg shadow-popover outline-none"
           onOpenAutoFocus={(event) => event.preventDefault()}
         >
           <div className="flex items-start gap-3">

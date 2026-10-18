@@ -138,7 +138,7 @@ export function ExtensionsPage({ embedded = false, onHeaderActionChange }: { emb
           </Button>
         </DropdownMenu.Trigger>
         <DropdownMenu.Portal>
-          <DropdownMenu.Content align="end" sideOffset={6} className="z-50 min-w-48 rounded-xl border border-edge bg-surface-panel p-1 shadow-popover">
+          <DropdownMenu.Content align="end" sideOffset={6} className="z-50 min-w-48 rounded-xl border border-edge bg-surface-overlay p-1 shadow-popover">
             <DropdownMenu.Item
               className={cn('touch-target flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm text-fg outline-none data-[highlighted]:bg-surface-hover', interaction.transition)}
               onSelect={() => setInstallPlugin(true)}

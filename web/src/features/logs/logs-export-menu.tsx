@@ -35,7 +35,7 @@ export function LogsExportMenu({ L, logs, disabled }: Props) {
           align="end"
           sideOffset={6}
           className={cn(
-            'w-52 rounded-xl border border-edge bg-surface-panel p-2 shadow-popover outline-none',
+            'w-52 rounded-xl border border-edge bg-surface-overlay p-2 shadow-popover outline-none',
             SETTINGS_SHELL_POPOVER_Z,
             'dark:border-edge',
           )}

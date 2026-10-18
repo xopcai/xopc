@@ -375,7 +375,7 @@ export function PersonalPage() {
               <button type="button" aria-pressed={showActivity} className="touch-target rounded-lg p-2 text-fg-muted hover:bg-surface-hover hover:text-fg" aria-label={zh ? '正在做的事' : 'Activity'}><ListTodo className="size-5" /></button>
             </Popover.Trigger>
             <Popover.Portal>
-              <Popover.Content side="bottom" align="end" sideOffset={8} collisionPadding={8} aria-label={zh ? '派发的任务' : 'Delegated tasks'} className="z-50 flex h-[min(34rem,calc(100dvh-6rem))] w-[min(25rem,calc(100vw-1rem))] min-h-0 flex-col overflow-hidden rounded-2xl border border-edge bg-surface-inset shadow-xl focus:outline-none">
+              <Popover.Content side="bottom" align="end" sideOffset={8} collisionPadding={8} aria-label={zh ? '派发的任务' : 'Delegated tasks'} className="z-50 flex h-[min(34rem,calc(100dvh-6rem))] w-[min(25rem,calc(100vw-1rem))] min-h-0 flex-col overflow-hidden rounded-2xl border border-edge bg-surface-overlay shadow-xl focus:outline-none">
                 <div className="flex shrink-0 items-start justify-between gap-3 px-6 pb-3 pt-6">
                   <div className="min-w-0"><h2 className="text-base font-semibold tracking-tight text-fg">{zh ? '交给我推进的事' : 'Delegated work'}</h2><p className="mt-1 text-xs text-fg-muted">{activity ? (zh ? `最近更新 · 共 ${activity.total} 项` : `Recently updated · ${activity.total} total`) : (zh ? '查看任务进展与结果' : 'Follow progress and results')}</p></div>
                   <Popover.Close className="touch-target -mr-2 -mt-1 rounded-lg p-2 text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent" aria-label={zh ? '关闭活动' : 'Close activity'}><X className="size-4" /></Popover.Close>

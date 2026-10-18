@@ -476,7 +476,7 @@ function ProjectSwitcher({
             side="bottom"
             align="start"
             sideOffset={6}
-            className="z-[70] w-[min(26rem,calc(100vw-2rem))] overflow-hidden rounded-xl border border-edge bg-surface-panel p-1.5 shadow-popover outline-none"
+            className="z-[70] w-[min(26rem,calc(100vw-2rem))] overflow-hidden rounded-xl border border-edge bg-surface-overlay p-1.5 shadow-popover outline-none"
             onOpenAutoFocus={(event) => event.preventDefault()}
           >
             <label className="relative block">

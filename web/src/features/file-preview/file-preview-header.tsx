@@ -153,13 +153,16 @@ export function FilePreviewHeader({
   };
 
   return (
-    <div data-workspace-toolbar className={cn('shrink-0 bg-surface-hover/20 px-3 py-2 sm:px-4', APP_CHROME_NO_DRAG_CLASS)}>
+    <div data-workspace-toolbar className={cn('shrink-0 bg-surface-base px-3 py-2 sm:px-4', APP_CHROME_NO_DRAG_CLASS)}>
       <div className="flex min-w-0 items-start gap-2">
         <div className="min-w-0 flex-1 py-0.5">
           <h2 className="truncate text-base font-semibold leading-tight tracking-tight text-fg" title={name}>{name}</h2>
           {subtitle ? <div className="mt-0.5 flex min-w-0 items-center gap-2 text-xs leading-tight text-fg-muted">{subtitle}</div> : null}
         </div>
         <div className="flex shrink-0 items-center gap-1">
+          <HeaderButton label={expanded ? m.collapsePreview : m.expandPreview} active={expanded} disabled={!onToggleExpanded} onClick={onToggleExpanded}>
+            {expanded ? <Minimize2 className="size-4" aria-hidden /> : <Maximize2 className="size-4" aria-hidden />}
+          </HeaderButton>
           <div className="relative shrink-0">
             {moreMenuOpen ? <button type="button" className="fixed inset-0 z-40 cursor-default bg-transparent" aria-hidden tabIndex={-1}
               onPointerDown={(event) => { event.preventDefault(); setMoreMenuOpen(false); }} /> : null}
@@ -170,14 +173,13 @@ export function FilePreviewHeader({
               <MoreHorizontal className="size-4" />
             </button>
             {moreMenuOpen ? (
-              <div ref={menuRef} role="menu" aria-label={m.moreActions} data-file-preview-menu className="absolute right-0 top-full z-50 mt-1 max-h-[min(32rem,calc(100dvh-8rem))] w-60 max-w-[calc(100vw-2rem)] overflow-y-auto overscroll-contain rounded-lg border border-edge bg-surface-panel p-1 shadow-popover">
+              <div ref={menuRef} role="menu" aria-label={m.moreActions} data-file-preview-menu className="absolute right-0 top-full z-50 mt-1 max-h-[min(32rem,calc(100dvh-8rem))] w-60 max-w-[calc(100vw-2rem)] overflow-y-auto overscroll-contain rounded-lg border border-edge bg-surface-overlay p-1 shadow-popover">
                 {treeControl ? <PreviewMenuItem icon={<FolderOpen className="size-4" />} label={treeControl.label} onClick={() => runMenuAction(treeControl.onToggle)} /> : null}
                 {referenceActions.map((action) => <PreviewMenuItem key={action.label} icon={<Paperclip className="size-4" />} label={action.label} disabled={action.disabled} onClick={() => runMenuAction(action.onClick)} />)}
                 {onRetrySave ? <PreviewMenuItem icon={<Save className="size-4" />} label={language === 'zh' ? '重试保存' : 'Retry save'} onClick={() => runMenuAction(onRetrySave)} /> : null}
                 {onRefresh ? <PreviewMenuItem icon={<RefreshCw className="size-4" />} label={language === 'zh' ? '刷新文件' : 'Refresh file'} onClick={() => runMenuAction(onRefresh)} /> : null}
                 {controller.plugin.capabilities.includes('edit') ? <PreviewMenuItem icon={edit?.active ? <Eye className="size-4" /> : <Pencil className="size-4" />} label={edit?.active ? m.preview : m.edit} disabled={!edit} onClick={() => runMenuAction(() => edit?.onToggle())} /> : null}
                 {wordWrap ? <PreviewMenuItem icon={<WrapText className="size-4" />} label={m.wordWrap} active={wordWrap.active} onClick={() => runMenuAction(wordWrap.onToggle)} /> : null}
-                <PreviewMenuItem icon={expanded ? <Minimize2 className="size-4" /> : <Maximize2 className="size-4" />} label={expanded ? m.collapsePreview : m.expandPreview} disabled={!onToggleExpanded} onClick={() => runMenuAction(() => onToggleExpanded?.())} />
                 <div className="my-1 border-t border-edge-subtle dark:border-edge" />
                 <PreviewMenuItem icon={editInNewChat?.loading ? <Loader2 className="size-4 animate-spin" /> : <MessageSquarePlus className="size-4" />} label={m.editInNewChat} disabled={!editInNewChat || editInNewChat.disabled || editInNewChat.loading} onClick={() => runMenuAction(() => editInNewChat?.onClick())} />
                 <PreviewMenuItem icon={share?.loading ? <Loader2 className="size-4 animate-spin" /> : <Link2 className="size-4" />} label={m.shareLink} disabled={!share || share.disabled || share.loading} onClick={() => runMenuAction(() => share?.onClick())} />

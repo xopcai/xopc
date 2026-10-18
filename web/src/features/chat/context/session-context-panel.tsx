@@ -82,7 +82,7 @@ export function SessionContextPanel({ conversationId, draftRefs = [], draftAttac
       </Popover.Trigger>
       <Popover.Portal>
         <Popover.Content align="end" sideOffset={8} collisionPadding={12} aria-label={copy.title}
-          className="xopc-session-context-popover z-50 max-h-[min(30rem,var(--radix-popover-content-available-height))] w-[min(23rem,calc(100vw-1.5rem))] overflow-y-auto rounded-xl border border-edge bg-surface-panel p-3 shadow-popover">
+          className="xopc-session-context-popover z-50 max-h-[min(30rem,var(--radix-popover-content-available-height))] w-[min(23rem,calc(100vw-1.5rem))] overflow-y-auto rounded-xl border border-edge bg-surface-overlay p-3 shadow-popover">
           <h2 className="mb-2 px-2 text-sm font-medium text-fg">{copy.title}</h2>
           {isLoading ? <div className="space-y-2 px-2" aria-busy="true">{[0, 1, 2].map((n) => <Skeleton key={n} className="h-8 w-full" />)}</div> : error ? (
             <div className="flex items-center justify-between px-2 py-2 text-sm text-fg-muted"><span>{copy.unavailable}</span>{retry()}</div>
