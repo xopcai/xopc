@@ -141,6 +141,8 @@ describe('XOPC Cloud capability setup', () => {
       chat: { primary: 'xopc-cloud/chat' },
       imageUnderstanding: { primary: 'xopc-cloud/vision-recommended' },
       imageGeneration: { primary: 'xopc-cloud/image-recommended' },
+      background: { primary: 'xopc-cloud/chat' },
+      intents: { fast: { primary: 'xopc-cloud/chat' }, understanding: { primary: 'xopc-cloud/chat' }, coding: { primary: 'xopc-cloud/chat' } },
     });
     expect(config.tools.media?.audio).toMatchObject({ enabled: true, provider: 'xopc-cloud', providers: { 'xopc-cloud': { model: 'stt-recommended' } } });
     expect(config.messages?.tts).toMatchObject({ enabled: true, provider: 'xopc-cloud', trigger: 'off', providers: { 'xopc-cloud': { model: 'tts-recommended', voice: 'Chelsie' } } });
@@ -171,8 +173,21 @@ describe('XOPC Cloud capability setup', () => {
     const config = ConfigSchema.parse({ voice: { realtime: { enabled: false } } });
     let saved = config;
     await applyXopcCloudCapabilitySetup({ currentConfig: config, saveConfig: async (next) => { saved = next; return { saved: true }; } });
-    expect(new AgentCatalogRepository().getSettings().defaults).toEqual(defaults);
+    expect(new AgentCatalogRepository().getSettings().defaults).toMatchObject(defaults);
     expect(saved.voice).toEqual(config.voice);
+  });
+
+  it('enables available capabilities on explicit onboarding with pre-existing disabled configuration', async () => {
+    initializeTestAgentCatalog();
+    getModelCatalogStore().saveSource('xopc-cloud', completeCatalog);
+    let saved = ConfigSchema.parse({ voice: { realtime: { enabled: false } },
+      tools: { media: { audio: { enabled: false, provider: 'openai' } } }, messages: { tts: { enabled: false, provider: 'edge' } },
+    });
+    await applyXopcCloudCapabilitySetup({ currentConfig: saved, saveConfig: async next => { saved = ConfigSchema.parse(next); return { saved: true }; } }, { enableAvailable: true });
+    expect(saved.tools.media?.audio).toMatchObject({ enabled: true, provider: 'xopc-cloud' });
+    expect(saved.messages?.tts).toMatchObject({ enabled: true, provider: 'xopc-cloud' });
+    expect(saved.voice?.realtime).toMatchObject({ enabled: true, stt: { model: 'stt-live' }, tts: { model: 'tts-recommended' }, omni: { model: 'omni-live' } });
+    expect(saved.computer.enabled).toBe(false);
   });
 
   it('keeps explicit voice choices while filling missing modes on enabled realtime', async () => {

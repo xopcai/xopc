@@ -1,3 +1,5 @@
+import type { ModelSetupPreview } from '@xopcai/gateway-contract';
+
 import { CheckCircle2, ChevronRight, LoaderCircle, X } from 'lucide-react';
 import { useEffect, useMemo, useReducer, useRef, useState } from 'react';
 
@@ -91,6 +93,7 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true, onPen
   const desktop = isElectron();
   const applyingCloud = useRef(false);
   const [cloudAuthorized, setCloudAuthorized] = useState(false);
+  const [cloudSetup, setCloudSetup] = useState<ModelSetupPreview | null>(null);
   const cloudConnected = cloudAuthorized || providerData.cards.some(provider => provider.id === 'xopc-cloud' && provider.configured);
   const {
     step, selectedProvider, busy, error, callName,
@@ -156,12 +159,14 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true, onPen
     applyingCloud.current = true;
     dispatch({ type: 'patch', patch: { busy: true, error: null } });
     try {
-      const request = { mode: 'replace' as const, selected: ['chat' as const] };
+      const request = { mode: 'replace' as const };
       const preview = await previewModelSetup('xopc-cloud', request);
       if (!preview.configured || !preview.uses.find(use => use.id === 'chat')?.recommended) {
         throw new Error(language === 'zh' ? 'XOPC Cloud 尚未就绪，请稍后重试。' : 'XOPC Cloud is not ready yet. Please retry.');
       }
-      await applyModelSetup('xopc-cloud', request, preview.revision);
+      const selected = preview.uses.filter(use => use.selected && use.recommended).map(use => use.id);
+      await applyModelSetup('xopc-cloud', { ...request, selected }, preview.revision);
+      setCloudSetup(preview);
       dispatch({ type: 'patch', patch: { step: 'success' } });
     } catch (cause) {
       dispatch({ type: 'patch', patch: { error: cause instanceof Error ? cause.message : String(cause) } });
@@ -248,7 +253,7 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true, onPen
               <div className="flex min-h-[30rem] flex-col">
                 <p className="text-xs font-medium tracking-wide text-accent-fg">{desktop ? 'XOPC Cloud' : language === 'zh' ? '模型设置' : 'Model setup'}</p>
                 <h1 className="mt-3 text-[2rem] font-semibold leading-tight tracking-[-0.035em] text-fg sm:text-4xl">{desktop ? (language === 'zh' ? '连接 XOPC Cloud' : 'Connect XOPC Cloud') : o.step1Title}</h1>
-                <p className="mt-3 max-w-md text-sm leading-6 text-fg-muted">{desktop ? (language === 'zh' ? '登录后自动配置默认模型，无需 API Key。' : 'Sign in to set up your default model automatically. No API key required.') : o.step1Subtitle}</p>
+                <p className="mt-3 max-w-md text-sm leading-6 text-fg-muted">{desktop ? (language === 'zh' ? '登录后自动配置聊天、图片、语音和任务模型，开启可用能力。电脑操作默认关闭，无需 API Key。' : 'Sign in to set up chat, image, voice, and task models and enable available capabilities. Computer control stays off by default. No API key required.') : o.step1Subtitle}</p>
                 <div className="mt-8">
                   {desktop ? <fieldset disabled={busy} className="min-w-0"><OAuthProviderConnect providerId="xopc-cloud" displayName="XOPC Cloud" connected={cloudConnected} onConnected={() => { setCloudAuthorized(true); void finishCloudSetup(); }} /></fieldset> : <OnboardingProviderGrid
                     onSelect={(id) => {
@@ -281,7 +286,10 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true, onPen
                   {language === 'zh' ? '一切准备好了' : 'You’re ready to go'}
                 </h1>
                 <p className="mt-3 max-w-md text-sm leading-6 text-fg-muted">
-                  {language === 'zh' ? '模型服务配置已保存。可以开始对话，其他用途可随时在模型设置中调整。' : 'Model service settings are saved. Start a conversation and adjust other uses in Model settings whenever needed.'}
+                  {cloudSetup
+                    ? (language === 'zh' ? '已配置并开启账号可用的模型能力，电脑操作默认关闭。' : 'Available model capabilities are configured and enabled. Computer control stays off by default.')
+                    : (language === 'zh' ? '模型服务配置已保存，可以开始对话。' : 'Model service settings are saved. You can start a conversation.')}
+                  {cloudSetup?.uses.some(use => !use.selected) ? (language === 'zh' ? ' 部分能力暂无可用模型，可稍后在模型设置中查看。' : ' Some capabilities have no available model. Review them in Model settings.') : null}
                 </p>
                 <div className="mt-3 min-h-5">{error ? <p className="text-sm text-danger" role="alert">{error}</p> : null}</div>
                 <div className="mt-auto grid grid-cols-[1fr_auto_1fr] items-center gap-3 pt-10">
@@ -306,7 +314,12 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true, onPen
         customConfig={providerData.customConfig}
         labels={messages(language).capabilitiesSettings.addProviderDialog}
         language={language}
-        onSaved={() => {
+        onSaved={(providerId) => {
+          if (providerId === 'xopc-cloud') {
+            setProviderDialogOpen(false);
+            void finishCloudSetup();
+            return;
+          }
           void updateUserProfile({ ...(callName.trim() ? { callName: callName.trim() } : {}), timezone: detectBrowserTimezone(), locale: language === 'zh' ? 'zh-CN' : 'en-US' })
             .then(() => { setProviderDialogOpen(false); dispatch({ type: 'patch', patch: { step: 'success', error: null } }); })
             .catch(cause => dispatch({ type: 'patch', patch: { error: cause instanceof Error ? cause.message : String(cause) } }));

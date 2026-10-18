@@ -59,6 +59,19 @@ describe('shared voice setup', () => {
     expect(next.messages?.tts?.provider).toBe('xopc-cloud');
     expect(next.voice?.realtime.omni).toMatchObject({provider:'xopc-cloud',model:'voice-omni',voice:'voice-a'});
   });
+  it('recommends a stable available Cloud voice when several models have no explicit recommendation', () => {
+    getModelCatalogStore().replaceSourceModels('xopc-cloud', { providerId: 'xopc-cloud', baseUrl: 'https://test/v1', api: 'openai-completions', etag: null, recommendedModel: null, lastSuccessAt: 1 },
+      ['preview', 'stable'].map(id => ({ id, name: id, kind: 'tts', input: ['text'], output: ['audio'], operations: ['audio.speech'], reasoning: false,
+        contextWindow: 0, maxOutputTokens: null, stability: id === 'preview' ? 'preview' : 'stable', voice: voiceFixture(['speech', 'speech.stream']) })));
+    const config = ConfigSchema.parse({});
+    const data = snapshot(config); data.profile = getProviderSetupProfile('xopc-cloud'); data.voice = readSetupVoiceState('xopc-cloud', config);
+    const preview = previewProviderSetup(data, { mode: 'replace' });
+    expect(preview.uses.find(use => use.id === 'speech')).toMatchObject({ recommended: 'xopc-cloud/stable', selected: true });
+    const next = applySetupVoice(config, applyProviderSetup(data, { mode: 'replace' }, preview.revision).voiceAssignments);
+    expect(next.messages?.tts?.providers?.['xopc-cloud']?.model).toBe('stable');
+    expect(next.voice?.realtime.tts?.model).toBe('stable');
+  });
+
   it('previews three supported subscription voice uses and applies them with one shared credential binding', () => {
     const config = ConfigSchema.parse({}); const data = snapshot(config);
     const request = { selected: ['speech','transcription','conversation'] as const };

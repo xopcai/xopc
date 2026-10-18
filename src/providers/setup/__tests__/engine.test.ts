@@ -23,7 +23,7 @@ describe('shared model setup', () => {
     const result = applyProviderSetup(data, { mode: 'replace', selected: preview.uses.filter(use => use.selected).map(use => use.id) }, preview.revision);
     expect(result.defaults.models.chat.primary).toMatch(new RegExp(`^${provider}/`));
     expect(result.defaults.models.chat.fallbacks).toEqual([]);
-    expect(result.defaults.models.intents.understanding).toEqual(data.defaults.models.intents.understanding);
+    expect(result.defaults.models.intents.understanding).toEqual(result.defaults.models.background);
     if (data.profile.interactiveOnly) expect(result.defaults.models.background).toBeUndefined();
   });
   it('fills missing uses and retains an existing usable chat and vision route', () => {

@@ -1,3 +1,4 @@
+import { voiceFixture } from '../../../../voice/__tests__/voice-fixture.js';
 import type { AddressInfo } from 'node:net';
 import { serve } from '@hono/node-server';
 import { Hono } from 'hono';
@@ -57,8 +58,43 @@ describe('model setup authenticated Gateway HTTP', () => {
     const result = await request(provider, '/apply', { mode: 'replace', selected: ['chat'], revision: payload.revision });
     expect(await result.json()).toMatchObject({ ok: true });
     expect(listGlobalDefaults().defaults.models.chat.primary).toMatch(new RegExp(`^${provider}/`));
+    expect(listGlobalDefaults().defaults.models.background).toBeUndefined();
     const stale = await request(provider, '/apply', { mode: 'replace', selected: ['chat'], revision: payload.revision });
     expect(stale.status).toBe(409);
+  });
+  it('repairs initialized but disabled media and configures every Cloud use while keeping desktop control off', async () => {
+    const store = getModelCatalogStore();
+    const source = store.getSource('xopc-cloud')!;
+    const template = source.models[0]!;
+    store.saveSource('xopc-cloud', { ...source, models: [
+      ...source.models,
+      { ...template, id: 'gui', computerUse: { profile: 'gui-plus-2026-02-26' }, priority: 1000 },
+      { ...template, id: 'image', kind: 'image', output: ['image'], operations: ['images.generate'], imageGeneration: { generate: { maxCount: 1 }, edit: { enabled: false } } },
+      { ...template, id: 'stt', kind: 'stt', input: ['audio'], operations: ['audio.transcription'], voice: voiceFixture(['transcription', 'transcription.stream']) },
+      { ...template, id: 'tts', kind: 'tts', output: ['audio'], operations: ['audio.speech'], voice: voiceFixture(['speech', 'speech.stream']) },
+      { ...template, id: 'omni', kind: 'omni', input: ['audio'], output: ['audio'], operations: ['audio.conversation'], voice: voiceFixture(['conversation']) },
+    ] });
+    reloadImageGenerationProviders({ providers: {} });
+    resetModelRegistry();
+    service.currentConfig = ConfigSchema.parse({
+      tools: { media: { audio: { enabled: false, provider: 'openai' } } },
+      messages: { tts: { enabled: false, provider: 'edge' } }, voice: { realtime: { enabled: false } },
+    });
+    const { payload } = await (await request('xopc-cloud', '/preview', { mode: 'replace' })).json() as { payload: ModelSetupPreview };
+    const selected = payload.uses.filter(use => use.selected).map(use => use.id);
+    expect(selected.sort()).toEqual(['background', 'chat', 'conversation', 'image', 'speech', 'transcription', 'vision']);
+    expect((await request('xopc-cloud', '/apply', { mode: 'replace', selected, revision: payload.revision })).status).toBe(200);
+    const config = ConfigSchema.parse(service.currentConfig);
+    expect(config.tools.media?.audio).toMatchObject({ enabled: true, provider: 'xopc-cloud', models: [{ model: 'stt' }] });
+    expect(config.messages?.tts).toMatchObject({ enabled: true, provider: 'xopc-cloud' });
+    expect(config.voice?.realtime).toMatchObject({ enabled: true, stt: { model: 'stt' }, tts: { model: 'tts' }, omni: { model: 'omni' } });
+    expect(config.computer.enabled).toBe(false);
+    expect(config.browser.enabled).toBe(true);
+    const models = listGlobalDefaults().defaults.models;
+    expect(models.computerUse?.primary).toBe('xopc-cloud/gui');
+    expect(models.chat.primary).toBe('xopc-cloud/auto');
+    expect(models.imageUnderstanding?.primary).toBe('xopc-cloud/auto');
+    for (const intent of ['fast', 'reasoning', 'coding', 'review', 'vision', 'understanding'] as const) expect(models.intents[intent]?.primary).toMatch(/^xopc-cloud\//);
   });
   it('supports image-only custom sources without adding chat or background choices', async () => {
     reloadImageGenerationProviders({ providers: { 'local-image-fixture': {
