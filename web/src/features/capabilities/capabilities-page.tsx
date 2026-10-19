@@ -17,6 +17,7 @@ import { usePageHeaderStore } from '@/stores/page-header-store';
 
 const SkillsPage = lazy(() => import('@/features/skills/skills-page').then(module => ({ default: module.SkillsPage })));
 const ConnectorsPage = lazy(() => import('@/features/connectors/connectors-page').then(module => ({ default: module.ConnectorsPage })));
+const PluginDetailsPage = lazy(() => import('@/features/extensions/plugin-details-page').then(module => ({ default: module.PluginDetailsPage })));
 const ExtensionsPage = lazy(() => import('@/pages/apps-page').then(module => ({ default: module.ExtensionsPage })));
 const AgentsPage = lazy(() => import('@/features/settings/agents').then(module => ({ default: module.AgentsSettingsPanel })));
 const ChannelsPage = lazy(() => import('@/features/settings/channels').then(module => ({ default: module.ChannelsSettingsPanel })));
@@ -44,7 +45,7 @@ export function CapabilitiesPage() {
   const setPageHeader = usePageHeaderStore(state => state.setPageHeader);
   const clearPageHeader = usePageHeaderStore(state => state.clearPageHeader);
   const [headerContribution, setHeaderContribution] = useState<{ section: CapabilitySection; value: CapabilityHeaderContribution | null }>({ section, value: null });
-  const currentContribution = headerContribution.section === section ? headerContribution.value : null;
+  const currentContribution = section === 'extensions' && detailId ? null : headerContribution.section === section ? headerContribution.value : null;
   const onHeaderActionChange = useCallback<CapabilityHeaderActionChange>((value) => {
     setHeaderContribution({ section, value });
   }, [section]);
@@ -68,7 +69,7 @@ export function CapabilitiesPage() {
         {section === 'skills' ? <SkillsPage embedded onHeaderActionChange={onHeaderActionChange} /> : null}
         {section === 'connectors' ? <ConnectorsPage embedded onHeaderActionChange={onHeaderActionChange} /> : null}
         {section === 'channels' ? <ChannelsPage channelId={detailId} onHeaderActionChange={onHeaderActionChange} /> : null}
-        {section === 'extensions' ? <ExtensionsPage embedded onHeaderActionChange={onHeaderActionChange} /> : null}
+        {section === 'extensions' ? detailId ? <PluginDetailsPage pluginId={detailId} /> : <ExtensionsPage embedded onHeaderActionChange={onHeaderActionChange} /> : null}
       </Suspense>
     </div>
   );

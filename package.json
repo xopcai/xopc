@@ -75,6 +75,11 @@
     "test:extensions": "cross-env XOPC_LOG_LEVEL=fatal vitest run --project=extensions",
     "test:web": "cross-env XOPC_LOG_LEVEL=fatal vitest run --project=web",
     "test:packages": "cross-env XOPC_LOG_LEVEL=fatal vitest run --project=packages",
+    "test:plugins:e2e": "pnpm run build:node && pnpm run build:web && pnpm run test:plugins:store:e2e && pnpm run test:plugins:app:e2e && pnpm run test:plugins:authorization:e2e && pnpm run test:plugins:browser",
+    "test:plugins:app:e2e": "cross-env XOPC_LOG_LEVEL=fatal tsx scripts/verify-plugin-app-e2e.mts",
+    "test:plugins:store:e2e": "cross-env XOPC_LOG_LEVEL=fatal tsx scripts/verify-store-plugin-e2e.mts",
+    "test:plugins:fixtures": "tsx scripts/build-store-plugin-lab.mts",
+    "test:plugins:browser": "cross-env XOPC_LOG_LEVEL=fatal tsx scripts/verify-plugin-setup-browser.mts",
     "test:web:onboarding-visual": "node scripts/test-onboarding-visual.mjs",
     "test:web:onboarding-visual:update": "node scripts/test-onboarding-visual.mjs --update",
     "test:quick-understanding": "XOPC_LOG_LEVEL=fatal vitest run src/work-discovery/__tests__/evaluation.test.ts src/user-context/sources/__tests__/activity-clustering.test.ts src/knowledge/__tests__/quick-understanding.e2e.test.ts src/connectors/__tests__/content-enrichment.test.ts src/connectors/__tests__/connected-source-ingestion.test.ts",
@@ -139,7 +144,10 @@
     "eval:benchmark": "tsx evals/coder/apps/cli/src/benchmark.ts",
     "eval:benchmark:check": "pnpm -C evals/coder run typecheck && pnpm -C evals/coder exec vitest run --configLoader native tests/benchmark-v1.test.ts tests/xopc-adapter.test.ts tests/suite-loader.test.ts",
     "eval:benchmark:live": "node --import tsx evals/coder/scripts/run-benchmark-live.mjs",
-    "eval:benchmark:regrade": "tsx evals/coder/apps/cli/src/benchmark-regrade.ts"
+    "eval:benchmark:regrade": "tsx evals/coder/apps/cli/src/benchmark-regrade.ts",
+    "test:plugins:authorization:e2e": "cross-env XOPC_LOG_LEVEL=fatal tsx scripts/verify-plugin-authorization-e2e.mts",
+    "test:plugins:production:e2e": "cross-env XOPC_LOG_LEVEL=fatal tsx scripts/verify-production-plugin-catalog.mts && cross-env XOPC_LOG_LEVEL=fatal tsx scripts/verify-production-plugin-browser.mts",
+    "test:plugins:dingtalk:live": "tsx scripts/verify-dingtalk-live-e2e.mts"
   },
   "keywords": [
     "agentic-ai",

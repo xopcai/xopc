@@ -50,3 +50,19 @@ it('refuses to overwrite a user-managed pi configuration', async () => {
   expect(readFileSync(path, 'utf8')).toBe(original);
   expect(mocks.main).not.toHaveBeenCalled();
 });
+
+it('logs in to a plugin revision credential identity while keeping the public tool ID stable', async () => {
+  const { mkdirSync } = await import('node:fs');
+  const { AgentPluginStore } = await import('../../extensions/agent-plugins/store.js');
+  const { pluginServerId } = await import('../../extensions/agent-plugins/validation.js');
+  const { pluginOAuthCredentialId } = await import('../../extensions/agent-plugins/mcp-adapter.js');
+  const source = join(state, 'plugin-source'); mkdirSync(join(source, '.codex-plugin'), { recursive: true });
+  writeFileSync(join(source, '.codex-plugin/plugin.json'), '{"name":"login-fixture"}');
+  writeFileSync(join(source, '.mcp.json'), JSON.stringify({ mcpServers: { notes: { type: 'http', url: 'https://notes.example/mcp' } } }));
+  const store = new AgentPluginStore(), plugin = store.install(source, { reviewHash: store.inspect(source).reviewHash });
+  const publicId = pluginServerId(plugin.id, 'notes'), credentialId = pluginOAuthCredentialId(plugin.id, plugin.receipt.revision, 'notes');
+  await command().parseAsync(['login', publicId], { from: 'user' });
+  expect(mocks.main).toHaveBeenLastCalledWith(['mcp', 'login', credentialId]);
+  expect(JSON.parse(readFileSync(join(state, 'mcp.json'), 'utf8')).mcpServers).toHaveProperty(credentialId);
+  expect(store.get(plugin.id)?.receipt.enabled).toBe(false);
+});

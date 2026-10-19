@@ -284,11 +284,11 @@ async function installExtensionFromStoreWithLock(params: {
 export function createExtensionInstallCommand(): Command {
   return new Command('install')
     .description(
-      'Install a native extension or portable Agent Plugin from an explicit source',
+      'Install a native extension or Codex, Claude or portable Agent Plugin',
     )
     .argument(
       '<target>',
-      'store:<id>, npm:<package>, local directory, or Agent Plugin ZIP / HTTPS ZIP URL',
+      'store:<id>, npm:<package>, Git / marketplace source, directory or plugin ZIP',
     )
     .option(
       '-f, --force',

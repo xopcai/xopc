@@ -2,9 +2,10 @@ import * as Dialog from '@radix-ui/react-dialog';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { ArrowLeft, Box, Check, ExternalLink, Loader2, MoreHorizontal, Plus, Settings, Trash2, X } from 'lucide-react';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useSWRConfig } from 'swr';
 
+import { CapabilityIcon } from '@/features/capabilities/capability-icon';
 import { Button } from '@/components/ui/button';
 import { PageTabs } from '@/components/ui/page-tabs';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -38,6 +39,7 @@ import { useLocaleStore } from '@/stores/locale-store';
 type ExtensionsPageCopy = MessageBundle['extensionsPage'];
 
 export function ExtensionsPage({ embedded = false, onHeaderActionChange }: { embedded?: boolean; onHeaderActionChange?: CapabilityHeaderActionChange }) {
+  const navigate = useNavigate();
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
   const setPageHeader = usePageHeaderStore((s) => s.setPageHeader);
@@ -230,7 +232,7 @@ export function ExtensionsPage({ embedded = false, onHeaderActionChange }: { emb
                 extension={ext}
                 copy={m.extensionsPage}
                 showSourceBadge={mainTab === 'user'}
-                onOpen={() => setDetail(ext)}
+                onOpen={() => ext.pluginId ? navigate(`/capabilities/extensions/${encodeURIComponent(ext.pluginId)}`) : setDetail(ext)}
               />
             ))}
           </div>
@@ -282,6 +284,7 @@ function ExtensionAppCard({
   showSourceBadge: boolean;
   onOpen: () => void;
 }) {
+  const zh = useLocaleStore(state => state.language).startsWith('zh');
   const eligible = activationEligibleFor(ext);
   const uiTitle = ext.hasUi ? copy.cardTooltipHasUi : copy.cardTooltipNoUi;
 
@@ -296,12 +299,12 @@ function ExtensionAppCard({
       )}
     >
       <div className="flex gap-3">
-        <div
+        {ext.format === 'agent-plugin' ? <CapabilityIcon iconUrl={ext.branding?.iconUrl} fallback={Box} className="size-12 [&_img]:size-10" /> : <div
           className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-accent-soft text-base font-semibold text-accent-fg"
           aria-hidden
         >
           {(ext.name || ext.id).charAt(0).toUpperCase()}
-        </div>
+        </div>}
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
@@ -310,7 +313,7 @@ function ExtensionAppCard({
                 <span className="text-[11px] text-fg-muted">v{ext.version}</span>
               ) : null}
             </div>
-            {eligible ? (
+            {ext.authorizationStatus === 'required' ? <span className="rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-xs font-medium text-amber-700 dark:text-amber-300">{zh ? '需要授权' : 'Authorization required'}</span> : eligible ? (
               <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-surface-hover px-2 py-0.5 text-[11px] font-medium text-fg-muted">
                 <Check className="size-3" strokeWidth={2.5} aria-hidden />
                 {copy.statusEnabled}

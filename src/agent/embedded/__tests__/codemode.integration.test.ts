@@ -1,3 +1,4 @@
+import { createServer } from 'node:http';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -465,3 +466,36 @@ it('discovers an optional core tool without a namespace and restores its unchang
   expect(execute).toHaveBeenCalledOnce();
   expect(JSON.stringify(loaded.calls[0])).toContain('image_generate');
 });
+
+it('retains native MCP readiness hooks through real turns and pooled reuse', async () => {
+  const { params } = await fixture();
+  let calls = 0;
+  const server = createServer(async (req, res) => {
+    if (req.method !== 'POST') { res.writeHead(req.method === 'DELETE' ? 200 : 405).end(); return; }
+    let body = ''; for await (const chunk of req) body += chunk;
+    const request = JSON.parse(body);
+    if (request.id === undefined) { res.writeHead(202).end(); return; }
+    if (request.method === 'tools/list') await new Promise(resolve => setTimeout(resolve, 700));
+    if (request.method === 'tools/call') calls++;
+    const result = request.method === 'initialize'
+      ? { protocolVersion: '2025-03-26', serverInfo: { name: 'late', version: '1' }, capabilities: { tools: {} } }
+      : request.method === 'tools/list' ? { tools: [{ name: 'lookup', description: 'Delayed MCP fixture', inputSchema: { type: 'object', properties: {} } }] }
+      : { content: [{ type: 'text', text: 'delayed MCP evidence' }] };
+    res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify({ jsonrpc: '2.0', id: request.id, result }));
+  });
+  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+  const address = server.address(); if (!address || typeof address === 'string') throw new Error('Missing listener');
+  params.mcp = { servers: [{ name: 'late', config: { url: `http://127.0.0.1:${address.port}`, exposure: 'codemode' }, source: 'fixture' }], errors: [] };
+  try {
+    for (let turn = 0; turn < 2; turn++) {
+      const result = await runScript({ ...params, runId: crypto.randomUUID() },
+        "const found = await searchTools('lookup', {namespace:'mcp__late'}); if (!found[0]) throw new Error('Native tools not ready'); text(await tools[found[0].name]({}));");
+      expect(result.result.isError).not.toBe(true);
+      expect(JSON.stringify(result.result)).toContain('delayed MCP evidence');
+    }
+    expect(calls).toBe(2);
+  } finally {
+    evictAllEmbeddedSessionRunners(); server.closeAllConnections();
+    await new Promise<void>(resolve => server.close(() => resolve()));
+  }
+}, 20000);
