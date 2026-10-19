@@ -52,7 +52,7 @@ describe('product primary navigation', () => {
     expect(links.map((link) => link.getAttribute('href'))).toEqual([
       '/personal',
       '/',
-      '/capabilities/skills',
+      '/capabilities/extensions',
       '/automations',
     ]);
     expect(container.textContent).not.toContain('Workflows');
@@ -61,15 +61,15 @@ describe('product primary navigation', () => {
     openMore();
     expect(document.body.textContent).toContain('Apps');
     expect(document.body.querySelector('a[href="/local-apps"]')).not.toBeNull();
-    for (const path of ['/projects', '/notes', '/workflows', '/browser-automations', '/capabilities/connectors', '/capabilities/extensions']) {
+    for (const path of ['/projects', '/notes', '/workflows', '/browser-automations', '/capabilities/connectors', '/capabilities/skills']) {
       expect(document.body.querySelector(`a[href="${path}"]`)).toBeNull();
     }
   });
 
   it.each(['/capabilities/connectors/service', '/capabilities/agents/main', '/capabilities/channels/telegram', '/capabilities/extensions'])('keeps Capabilities active for %s', (path) => {
     renderAt(path, <SidebarNavItems />);
-    expect(container.querySelector('a[href="/capabilities/skills"]')?.getAttribute('aria-current')).toBe('page');
-    expect(container.querySelector('a[href="/capabilities/skills"]')?.textContent).toBe('Capabilities');
+    expect(container.querySelector('a[href="/capabilities/extensions"]')?.getAttribute('aria-current')).toBe('page');
+    expect(container.querySelector('a[href="/capabilities/extensions"]')?.textContent).toBe('Capabilities');
   });
 
   it.each(['/workflows/example/edit', '/browser-automations/example'])('keeps Automations active for %s', (path) => {
@@ -105,7 +105,7 @@ describe('product primary navigation', () => {
     expect([...container.querySelectorAll('a')].map((link) => link.getAttribute('href'))).toEqual([
       '/personal',
       '/',
-      '/capabilities/skills',
+      '/capabilities/extensions',
       '/automations',
       '/local-apps',
     ]);
