@@ -37,7 +37,7 @@ export function ConnectorCard({
   const renderInstallButton = (className?: string) => (
     <Button
       type="button"
-      variant="primary"
+      variant="secondary"
       className={cn('h-8 justify-center px-2.5 text-xs font-medium', className)}
       onClick={() => onInstall(connector)}
     >
