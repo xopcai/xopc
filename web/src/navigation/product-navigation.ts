@@ -39,7 +39,7 @@ const automationSections = [
   { id: 'automation-browser', domain: 'automation', path: '/browser-automations' },
 ] as const satisfies readonly ProductSectionDefinition[];
 
-export const CAPABILITY_SECTIONS = ['skills', 'connectors', 'agents', 'channels', 'extensions'] as const;
+export const CAPABILITY_SECTIONS = ['extensions', 'skills', 'connectors', 'agents', 'channels'] as const;
 export type CapabilitySection = typeof CAPABILITY_SECTIONS[number];
 
 const capabilitySections = CAPABILITY_SECTIONS.map((section) => ({
@@ -63,7 +63,7 @@ const meSections = [
 export const PRODUCT_DOMAINS = [
   { id: 'work', path: '/', sections: workSections },
   { id: 'automation', path: '/automations', sections: automationSections },
-  { id: 'capabilities', path: '/capabilities/skills', sections: capabilitySections },
+  { id: 'capabilities', path: capabilityPath(CAPABILITY_SECTIONS[0]), sections: capabilitySections },
   { id: 'apps', path: '/local-apps', sections: appSections },
   { id: 'me', path: '/user-model', sections: meSections },
 ] as const satisfies readonly ProductDomainDefinition[];
@@ -102,10 +102,10 @@ export function productSectionAtLocation(pathname: string, _search = ''): Produc
   if (isPath(pathname, '/user-model')) return 'me-overview';
   if (isPath(pathname, '/capabilities')) {
     const section = pathname.split('/')[2];
-    const candidate = `capabilities-${section || 'skills'}` as ProductSectionId;
+    const candidate = `capabilities-${section || CAPABILITY_SECTIONS[0]}` as ProductSectionId;
     return capabilitySections.some((item) => item.id === candidate)
       ? candidate
-      : 'capabilities-skills';
+      : capabilitySections[0].id;
   }
   return null;
 }
