@@ -82,3 +82,14 @@ describe('computer tool error signaling', () => {
     expect(JSON.parse(error.message)).toMatchObject({ status: 'error', ...diagnostic, nextAction: expect.stringContaining('input/output limits') });
   });
 });
+
+it('passes a bounded run and its completion condition through a single tool execution', async () => {
+  const execute = vi.fn().mockResolvedValue({ status: 'goal_satisfied', sessionId: 's', verified: true,
+    run: { actionsExecuted: 3, observationsReused: 2, stopReason: 'condition_satisfied' } });
+  const tool = createComputerUseTool({ runtime: { execute, getReport: vi.fn() } as any,
+    context: () => ({ conversationId: 'owner', runId: 'run' }) });
+  const input = { op: 'run', goal: 'Finish fixture', expect: { kind: 'text', text: 'Complete' }, maxActions: 4 };
+  const result = await tool.execute('call', input, undefined, undefined);
+  expect(execute).toHaveBeenCalledExactlyOnceWith('owner', input, undefined);
+  expect(result.details).toMatchObject({ status: 'goal_satisfied', run: { actionsExecuted: 3 } });
+});

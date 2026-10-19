@@ -705,3 +705,172 @@ describe('verified flow lifecycle through the desktop broker', () => {
     expect(isComputerControlActive('owner')).toBe(false);
   });
 });
+
+describe('bounded small-goal execution', () => {
+  function goalFixture(steps = 3) {
+    const f = fixture();
+    f.config.computer.maxActionsPerSession = 80;
+    let stage = 0;
+    const observe = f.driver.observe.getMockImplementation()!;
+    f.driver.perform.mockImplementation(async () => { stage++; });
+    f.driver.observe.mockImplementation(async () => ({ ...await observe(), stateDigest: `stage-${stage}`,
+      summary: JSON.stringify({ text: stage >= steps ? 'Workflow complete' : `Stage ${stage}`, elements: [{ role: 'AXWindow' }] }) }));
+    return f;
+  }
+  const goal = { op: 'run' as const, goal: 'Complete the fixture workflow', expect: { kind: 'text' as const, text: 'Workflow complete' } };
+
+  it('finishes three guarded actions in one invocation, reusing two frames and zeroing all pixels', async () => {
+    const f = goalFixture(); await f.open(await f.discover());
+    const result = await f.runtime.execute('owner', goal);
+    expect(result).toMatchObject({ status: 'goal_satisfied', verified: true,
+      run: { actionsExecuted: 3, modelRequests: 3, observationsReused: 2, stopReason: 'condition_satisfied' } });
+    expect(f.invoke.mock.calls.filter(([call]) => call.arguments.op === 'observe')).toHaveLength(1);
+    // One initial observation plus a fresh pre-dispatch check and post-action observation per input.
+    expect(f.driver.observe).toHaveBeenCalledTimes(7);
+    expect(f.driver.perform).toHaveBeenCalledTimes(3);
+    expect(f.images.every(image => image.every(byte => byte === 0))).toBe(true);
+    expect(JSON.stringify(result)).not.toMatch(/base64|mimeType|stateDigest/);
+  });
+  it('keeps legacy step single-action and fresh across Agent turns', async () => {
+    const f = goalFixture(); await f.open(await f.discover());
+    for (let i = 0; i < 3; i++) await f.runtime.execute('owner', { ...goal, op: 'step' });
+    expect(f.driver.perform).toHaveBeenCalledTimes(3);
+    expect(f.driver.observe).toHaveBeenCalledTimes(9);
+    expect(f.images.every(image => image.every(byte => byte === 0))).toBe(true);
+  });
+  it('yields at the action limit without claiming completion or retaining a screenshot', async () => {
+    const f = goalFixture(); await f.open(await f.discover());
+    expect(await f.runtime.execute('owner', { ...goal, maxActions: 2 })).toMatchObject({ status: 'goal_limit', verified: false,
+      run: { actionsExecuted: 2, observationsReused: 1, stopReason: 'action_limit' } });
+    expect(f.driver.perform).toHaveBeenCalledTimes(2);
+    expect(f.images.every(image => image.every(byte => byte === 0))).toBe(true);
+    await f.runtime.execute('owner', { op: 'step', goal: 'Continue' });
+    expect(f.invoke.mock.calls.filter(([call]) => call.arguments.op === 'observe')).toHaveLength(2);
+  });
+  it('does not treat text present before the run as proof of the requested action', async () => {
+    const f = goalFixture(0); await f.open(await f.discover());
+    expect(await f.runtime.execute('owner', goal)).toMatchObject({ status: 'condition_present', verified: false,
+      run: { actionsExecuted: 0, stopReason: 'condition_present' } });
+    expect(f.fetch).not.toHaveBeenCalled(); expect(f.driver.perform).not.toHaveBeenCalled();
+  });
+  it('retains the native guard and replans if a reused observation changes before dispatch', async () => {
+    const f = goalFixture(); await f.open(await f.discover());
+    const observe = f.driver.observe.getMockImplementation()!;
+    let changed = false;
+    f.driver.observe.mockImplementation(async () => ({ ...await observe(), ...(changed ? { stateDigest: 'externally-changed' } : {}) }));
+    const fetch = f.fetch.getMockImplementation()!;
+    f.fetch.mockImplementation(async () => {
+      if (f.fetch.mock.calls.length === 2) changed = true;
+      return fetch();
+    });
+    const result = await f.runtime.execute('owner', goal);
+    expect(result).toMatchObject({ status: 'goal_satisfied', run: { actionsExecuted: 3, modelRequests: 4 } });
+    expect(f.driver.perform).toHaveBeenCalledTimes(3);
+    expect(f.runtime.getReport('owner')?.counters).toMatchObject({ observationChanges: 1, rescueAttempts: 1, unknownDispatches: 0 });
+    expect(f.images.every(image => image.every(byte => byte === 0))).toBe(true);
+  });
+  it('expires cached observations before predicting the next action', async () => {
+    const f = goalFixture(2); await f.open(await f.discover());
+    const invoke = f.invoke.getMockImplementation()!;
+    let now = Date.now(); const clock = vi.spyOn(Date, 'now').mockImplementation(() => now);
+    f.invoke.mockImplementation(async (args: any) => {
+      if (args.arguments.op === 'status' && f.driver.perform.mock.calls.length) now += 6000;
+      return invoke(args);
+    });
+    try {
+      expect(await f.runtime.execute('owner', goal)).toMatchObject({ status: 'goal_satisfied', run: { observationsReused: 0 } });
+      expect(f.driver.observe).toHaveBeenCalledTimes(6);
+      expect(f.images.every(image => image.every(byte => byte === 0))).toBe(true);
+    } finally { clock.mockRestore(); }
+  });
+  it('honors session action budgets inside the goal', async () => {
+    const f = goalFixture(); f.config.computer.maxActionsPerSession = 1; await f.open(await f.discover());
+    await expect(f.runtime.execute('owner', goal)).rejects.toThrow('COMPUTER_ACTION_BUDGET');
+    expect(f.driver.perform).toHaveBeenCalledOnce();
+    expect(f.images.every(image => image.every(byte => byte === 0))).toBe(true);
+  });
+  it('stops on a model success claim without upgrading it to verification', async () => {
+    const f = goalFixture(); await f.open(await f.discover());
+    f.fetch.mockResolvedValueOnce(Response.json({ choices: [{ message: { content: '<tool_call>{"name":"computer_use","arguments":{"action":"terminate","status":"success"}}</tool_call>' } }] }));
+    expect(await f.runtime.execute('owner', goal)).toMatchObject({ status: 'model_finished', verified: false, run: { actionsExecuted: 0, stopReason: 'handoff' } });
+    expect(f.driver.perform).not.toHaveBeenCalled();
+  });
+  it('never replays uncertain dispatch and clears all frames on failure', async () => {
+    const f = goalFixture(); await f.open(await f.discover());
+    const invoke = f.invoke.getMockImplementation()!;
+    f.invoke.mockImplementation(async (args: any) => { const result = await invoke(args); if (args.arguments.op === 'act') throw new Error('Lost reply'); return result; });
+    await expect(f.runtime.execute('owner', goal)).rejects.toThrow();
+    expect(f.driver.perform).toHaveBeenCalledOnce();
+    // A lost endpoint reply can retain its upload until endpoint cleanup; runtime never takes or reuses it.
+    expect(f.fetch).toHaveBeenCalledOnce();
+  });
+  it('keeps the original goal and resumes held approvals inside the same call', async () => {
+    const f = fixture(false); f.config.computer.maxActionsPerSession = 80;
+    const app = await f.discover(); await f.open(app); f.approve();
+    await vi.waitFor(() => expect(f.broker.snapshot().status).toBe('ready'));
+    let stage = 0; const observe = f.driver.observe.getMockImplementation()!;
+    f.driver.perform.mockImplementation(async () => { stage++; });
+    f.driver.observe.mockImplementation(async () => ({ ...await observe(), stateDigest: String(stage),
+      summary: JSON.stringify({ text: stage === 2 ? 'Workflow complete' : 'In progress', elements: [{ role: 'AXWindow' }] }) }));
+    const running = f.runtime.execute('owner', goal);
+    await vi.waitFor(() => expect(f.broker.snapshot().status).toBe('pending_action'));
+    expect(f.driver.perform).not.toHaveBeenCalled(); f.approve();
+    await vi.waitFor(() => expect(f.driver.perform).toHaveBeenCalledTimes(1));
+    await vi.waitFor(() => expect(f.broker.snapshot().status).toBe('pending_action'));
+    f.approve();
+    expect(await running).toMatchObject({ status: 'goal_satisfied', run: { actionsExecuted: 2, observationsReused: 1 } });
+    expect(f.fetch).toHaveBeenCalledTimes(2);
+    expect(f.images.every(image => image.every(byte => byte === 0))).toBe(true);
+  });
+  it('prevents concurrent inputs and responds to cancellation without a second action', async () => {
+    const f = goalFixture(); await f.open(await f.discover());
+    const fetch = f.fetch.getMockImplementation()!;
+    let entered!: () => void; const waiting = new Promise<void>(resolve => { entered = resolve; });
+    f.fetch.mockImplementation(async (...args: any[]) => {
+      if (f.fetch.mock.calls.length === 1) return fetch();
+      entered(); const signal = args[1].signal as AbortSignal;
+      return new Promise((_resolve, reject) => signal.addEventListener('abort', () => reject(signal.reason), { once: true }));
+    });
+    const controller = new AbortController();
+    const running = f.runtime.execute('owner', goal, controller.signal);
+    const rejected = expect(running).rejects.toThrow();
+    await waiting;
+    await expect(f.runtime.execute('owner', { op: 'step', goal: 'Concurrent' })).rejects.toThrow('COMPUTER_BUSY');
+    controller.abort(); await rejected;
+    expect(f.driver.perform).toHaveBeenCalledOnce();
+    expect(f.images.every(image => image.every(byte => byte === 0))).toBe(true);
+    expect(f.broker.snapshot().status).toBe('stopped');
+  });
+  it('yields at the time boundary without starting another prediction', async () => {
+    const f = goalFixture(); await f.open(await f.discover());
+    let now = Date.now(); const clock = vi.spyOn(Date, 'now').mockImplementation(() => now);
+    f.driver.perform.mockImplementation(async () => { now += 120001; });
+    try {
+      expect(await f.runtime.execute('owner', goal)).toMatchObject({ status: 'goal_limit', verified: false,
+        run: { actionsExecuted: 1, stopReason: 'time_limit' } });
+      expect(f.fetch).toHaveBeenCalledOnce();
+      expect(f.images.every(image => image.every(byte => byte === 0))).toBe(true);
+    } finally { clock.mockRestore(); }
+  });
+  it('uses the default six-action ceiling even when the session has a larger budget', async () => {
+    const f = goalFixture(8); await f.open(await f.discover());
+    expect(await f.runtime.execute('owner', goal)).toMatchObject({ status: 'goal_limit', verified: false,
+      run: { actionsExecuted: 6, modelRequests: 6, observationsReused: 5, stopReason: 'action_limit' } });
+    expect(f.driver.perform).toHaveBeenCalledTimes(6);
+    expect(f.images.every(image => image.every(byte => byte === 0))).toBe(true);
+  });
+  it('retains native already-satisfied selected-state completion without input', async () => {
+    const f = goalFixture(); await f.open(await f.discover());
+    const observe = f.driver.observe.getMockImplementation()!;
+    f.driver.observe.mockImplementation(async () => ({ ...await observe(), summary: JSON.stringify({ text: 'Destination',
+      elements: [{ role: 'AXWindow' }, { role: 'AXTab', label: 'Destination', selected: true }] }) }));
+    expect(await f.runtime.execute('owner', { ...goal, expect: { kind: 'selected', label: 'Destination' } })).toMatchObject({ status: 'goal_satisfied', verified: true, run: { actionsExecuted: 0, modelRequests: 0 } });
+    expect(f.driver.perform).not.toHaveBeenCalled();
+  });
+  it('rejects run in read-only sessions and validates bounds and required expectations', async () => {
+    const f = goalFixture(); await f.open(await f.discover(), 'observe');
+    await expect(f.runtime.execute('owner', goal)).rejects.toThrow('COMPUTER_READ_ONLY');
+    expect(f.fetch).not.toHaveBeenCalled();
+    for (const raw of [{ op: 'run', goal: 'Continue' }, { ...goal, maxActions: 0 }, { ...goal, maxActions: 13 }]) expect(ComputerUseInputSchema.safeParse(raw).success).toBe(false);
+  });
+});
