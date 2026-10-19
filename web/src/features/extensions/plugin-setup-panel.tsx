@@ -89,7 +89,8 @@ export function PluginSetupPanel({ extension, zh, onChanged, onStart, onInstalle
     setBusy(true); setError('');
     try {
       let next = await request<PluginSetupJob>(`${base}/setup`, 'POST', { action, expectedRevision, ...(action !== 'start' ? { idempotencyKey: crypto.randomUUID() } : {}), ...values });
-      if (['configure', 'reuse', 'start'].includes(action)) {
+      const cliConfiguration = action === 'configure' && declared.find(account => account.id === values.authorization)?.methods.some(method => method.id === values.method && method.type === 'cli');
+      if (['reuse', 'start'].includes(action) || action === 'configure' && !cliConfiguration) {
         setConfig({}); setEditConfig(false);
         next = await request<PluginSetupJob>(`${base}/setup`, 'POST', { action: 'prepare', expectedRevision: next.revision, idempotencyKey: crypto.randomUUID() });
       }
