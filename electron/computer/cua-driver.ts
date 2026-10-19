@@ -244,17 +244,22 @@ export class CuaComputerDriver implements ComputerDriver {
     }
     const ref = (window: typeof windows[number]) => hash(`${this.referenceSalt}:${appId}:${processIdentity}:${window.windowId}`);
     const candidates = windows.slice(0, 100).map(window => ({ windowRef: ref(window), title: (window.title || 'Untitled window').slice(0, 300), visible: window.isOnScreen }));
-    // WindowServer also lists menu/proxy surfaces. Prefer actual AXWindow roots,
-    // without capturing pixels or reading child content during target selection.
-    let selectable = windows;
+    // Probe roots and the first control only to exclude system sharing
+    // accessories on drivers without layer metadata. Never capture pixels or
+    // expose child content from these selection probes.
+    // WindowServer accessory surfaces (including sharing controls) can expose
+    // AXWindow roots and rank above the document. Require an explicit choice
+    // for nonstandard layers instead of silently steering input into them.
+    let selectable = windows.filter(window => window.layer === undefined || window.layer === 0);
     if (!options.windowRef && selectable.length > 1) {
       if (selectable.length > 12 && selectable.some(window => window.isOnScreen)) selectable = selectable.filter(window => window.isOnScreen);
       if (selectable.length > 12) throw new ComputerTargetError('COMPUTER_WINDOW_AMBIGUOUS', candidates);
       const checks = await Promise.all(selectable.map(async window => {
         try {
-          const state = await this.getWindowState(pid, window.windowId, { includeScreenshot: false, maxElements: 1, maxDepth: 1 },
+          const state = await this.getWindowState(pid, window.windowId, { includeScreenshot: false, maxElements: 2, maxDepth: 2 },
             AbortSignal.any([signal, AbortSignal.timeout(2000)]));
           if (state.pid !== pid || state.windowId !== window.windowId || !Array.isArray(state.elements)) return undefined;
+          if (state.elements.some(element => element.role === 'AXButton' && element.label === 'WindowSharingSessionButton')) return false;
           if (state.elements.some(element => element.role === 'AXWindow' && element.depth === 0)) return true;
           return state.degraded === true ? undefined : false;
         } catch { signal.throwIfAborted(); return undefined; }
@@ -285,7 +290,7 @@ export class CuaComputerDriver implements ComputerDriver {
       const restored = await this.listWindows(pid, signal);
       window = restored.find(item => item.pid === pid && item.windowId === window!.windowId);
     }
-    if (!window?.isOnScreen) throw new ComputerTargetError('COMPUTER_WINDOW_REQUIRED', candidates);
+    if (!window?.isOnScreen) throw new ComputerTargetError(window?.onCurrentSpace === false ? 'COMPUTER_WINDOW_OTHER_SPACE' : 'COMPUTER_WINDOW_REQUIRED', candidates);
     if (await this.processIdentity(pid) !== processIdentity) throw new Error('COMPUTER_PROCESS_CHANGED');
     return { appId, pid, processIdentity, windowId: window.windowId.toString(), width: Math.round(window.bounds.width), height: Math.round(window.bounds.height), geometryRevision: hash(JSON.stringify(window.bounds)) };
   }
@@ -294,6 +299,7 @@ export class CuaComputerDriver implements ComputerDriver {
     if (await this.processIdentity(target.pid) !== target.processIdentity) throw new Error('COMPUTER_PROCESS_CHANGED');
     const windowId = BigInt(target.windowId);
     const state = await this.getWindowState(target.pid, windowId, { includeScreenshot: true, maxElements: 180, maxDepth: 12, maxDimension: 1600 }, signal);
+    if (state.elements?.some(element => element.role === 'AXButton' && element.label === 'WindowSharingSessionButton')) throw new Error('COMPUTER_WINDOW_CHANGED');
     // Some platforms cannot produce an affirmative frame-validity bit. An explicit
     // negative is fatal; exact pid/window identity and the image envelope remain required.
     if (state.pid !== target.pid || state.windowId !== windowId || state.screenshotFrameValid === false) throw new Error('COMPUTER_CAPTURE_TARGET_MISMATCH');
@@ -380,6 +386,14 @@ export class CuaComputerDriver implements ComputerDriver {
     if (action.kind === 'drag' && action.from.x === action.to.x && action.from.y === action.to.y) throw new Error('COMPUTER_DRAG_REQUIRES_MOVEMENT');
   }
   async perform(target: ComputerTarget, action: ComputerAction, signal: AbortSignal): Promise<void> {
+    await this.performInput(target, action, signal);
+    // AX/input acknowledgement can precede the window's render commit. Let
+    // short button/display animations settle before the broker captures the
+    // post-action frame that the next decision may reuse. This is not proof
+    // of stability: the fresh pre-dispatch target/state check remains mandatory.
+    if (action.kind !== 'wait') await delay(200, undefined, { signal });
+  }
+  private async performInput(target: ComputerTarget, action: ComputerAction, signal: AbortSignal): Promise<void> {
     signal.throwIfAborted();
     if (await this.processIdentity(target.pid) !== target.processIdentity) throw new Error('COMPUTER_PROCESS_CHANGED');
     signal.throwIfAborted();
