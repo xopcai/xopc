@@ -1,8 +1,9 @@
+import { extensionCardClass, extensionCardGridClass, extensionCardTriggerClass } from '@/features/extensions/extension-card-styles';
 import { pluginDisplayName } from '@/features/extensions/plugin-presentation';
 import { pluginDetailPath } from '@/features/capabilities/capability-links';
 import * as Dialog from '@radix-ui/react-dialog';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
-import { ArrowLeft, Box, Check, ExternalLink, Loader2, MoreHorizontal, Plus, Settings, Trash2, X } from 'lucide-react';
+import { ArrowLeft, Box, CheckCircle, ExternalLink, Loader2, MoreHorizontal, Plus, Settings, Trash2, X } from 'lucide-react';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useSWRConfig } from 'swr';
@@ -235,14 +236,13 @@ export function ExtensionsPage({ embedded = false, onHeaderActionChange }: { emb
             {m.extensionsPage.noSearchResults}
           </p>
         ) : (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className={extensionCardGridClass}>
             {filtered.map((ext) => (
               <ExtensionAppCard
                 key={ext.id}
                 extension={ext}
                 copy={m.extensionsPage}
-                showSourceBadge={mainTab === 'user'}
-                onOpen={() => ext.pluginId ? navigate(pluginDetailPath(ext.pluginId, 'installed', false, location.pathname + location.search)) : setDetail(ext)}
+                onOpen={() => ext.pluginId ? navigate(pluginDetailPath(ext.pluginId, 'installed', ext.authorizationStatus === 'required', location.pathname + location.search)) : setDetail(ext)}
               />
             ))}
           </div>
@@ -268,12 +268,6 @@ function providerLabel(ext: ExtensionApiRow, copy: ExtensionsPageCopy): string {
   return copy.providerOther;
 }
 
-function installSourceBadgeLabel(ext: ExtensionApiRow, copy: ExtensionsPageCopy): string {
-  if (ext.source === 'global') return copy.badgeSourceGlobal;
-  if (ext.source === 'workspace') return copy.badgeSourceWorkspace;
-  return copy.badgeSourceOther;
-}
-
 function bundledRunCaption(ext: ExtensionApiRow, copy: ExtensionsPageCopy): string {
   const eligible = activationEligibleFor(ext);
   if (eligible && ext.active) return copy.runStateLive;
@@ -285,84 +279,39 @@ function bundledRunCaption(ext: ExtensionApiRow, copy: ExtensionsPageCopy): stri
 function ExtensionAppCard({
   extension: ext,
   copy,
-  showSourceBadge,
   onOpen,
 }: {
   extension: ExtensionApiRow;
   copy: ExtensionsPageCopy;
-  /** When true, show a short global/workspace/other pill (user-installed tab). */
-  showSourceBadge: boolean;
   onOpen: () => void;
 }) {
   const zh = useLocaleStore(state => state.language).startsWith('zh');
-  const eligible = activationEligibleFor(ext);
-  const uiTitle = ext.hasUi ? copy.cardTooltipHasUi : copy.cardTooltipNoUi;
+  const name = pluginDisplayName(ext, zh);
+  const needsAuth = ext.authorizationStatus === 'required';
+  const description = ext.localizations?.[zh ? 'zh-CN' : 'en']?.description ?? ext.description;
+  const action = needsAuth ? (zh ? '去授权' : 'Connect account') : (zh ? '查看详情' : 'View details');
 
   return (
-    <button
-      type="button"
-      onClick={onOpen}
-      className={cn(
-        'group flex w-full flex-col rounded-xl border border-edge-subtle bg-surface-base p-4 text-left shadow-surface transition-colors',
-        'hover:bg-surface-hover/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
-        'dark:hover:bg-surface-hover/25',
-      )}
-    >
-      <div className="flex gap-3">
-        {ext.format === 'agent-plugin' ? <CapabilityIcon iconUrl={ext.branding?.iconUrl} fallback={Box} className="size-12 [&_img]:size-10" /> : <div
-          className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-accent-soft text-base font-semibold text-accent-fg"
-          aria-hidden
-        >
-          {(ext.name || ext.id).charAt(0).toUpperCase()}
-        </div>}
+    <article className={extensionCardClass}>
+      <button type="button" aria-label={`${name}, ${copy.marketplaceDetailTitle}`} onClick={onOpen} className={extensionCardTriggerClass} />
+      <div className="pointer-events-none relative flex items-start gap-3">
+        <CapabilityIcon iconUrl={ext.branding?.iconUrl} fallback={Box} />
         <div className="min-w-0 flex-1">
-          <div className="flex items-start justify-between gap-2">
-            <div className="min-w-0">
-              <h2 className="truncate text-sm font-semibold text-fg">{pluginDisplayName(ext, zh)}</h2>
-              {ext.version ? (
-                <span className="text-[11px] text-fg-muted">v{ext.version}</span>
-              ) : null}
-            </div>
-            {ext.authorizationStatus === 'required' ? <span className="rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-xs font-medium text-amber-700 dark:text-amber-300">{zh ? '需要授权' : 'Authorization required'}</span> : eligible ? (
-              <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-surface-hover px-2 py-0.5 text-[11px] font-medium text-fg-muted">
-                <Check className="size-3" strokeWidth={2.5} aria-hidden />
-                {copy.statusEnabled}
-              </span>
-            ) : (
-              <span
-                className="flex size-8 shrink-0 items-center justify-center rounded-full border-2 border-accent text-accent"
-                aria-hidden
-              >
-                <Plus className="size-4" strokeWidth={2.5} />
-              </span>
-            )}
+          <div className="flex min-w-0 items-start gap-1.5">
+            <h2 className="line-clamp-2 break-words font-semibold leading-snug text-fg" title={name}>{name}</h2>
+            {ext.provenance?.publisherVerification === 'verified' ? <CheckCircle className="mt-0.5 size-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" strokeWidth={1.75} aria-label="Verified" /> : null}
           </div>
-          <p className="mt-2 line-clamp-2 text-xs leading-relaxed text-fg-muted">
-            {ext.description?.trim() || copy.cardNoDescription}
-          </p>
-          <div className="mt-2 flex flex-wrap gap-1.5">
-            <span
-              title={uiTitle}
-              className="rounded-md bg-surface-hover px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-fg-muted"
-            >
-              {ext.format === 'agent-plugin' ? 'Agent Plugin' : ext.hasUi ? copy.badgeKindUi : copy.badgeKindBackend}
-            </span>
-            {ext.source === 'bundled' ? (
-              <span className="rounded-md bg-surface-hover px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-fg-muted">
-                {copy.badgeBundled}
-              </span>
-            ) : showSourceBadge ? (
-              <span
-                title={providerLabel(ext, copy)}
-                className="rounded-md bg-surface-hover px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-fg-muted"
-              >
-                {installSourceBadgeLabel(ext, copy)}
-              </span>
-            ) : null}
+          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-fg-subtle">
+            {ext.version ? <span>v{ext.version}</span> : null}
+            <span className={needsAuth ? 'text-amber-700 dark:text-amber-400' : 'text-fg-muted'}>{needsAuth ? (zh ? '需要授权' : 'Authorization required') : activationEligibleFor(ext) ? copy.statusEnabled : copy.runStateOff}</span>
           </div>
         </div>
+        <div className="pointer-events-auto relative z-10 flex max-w-[45%] shrink-0 items-start">
+          <button type="button" onClick={onOpen} className="inline-flex items-center justify-center rounded-lg border border-edge px-3 py-2 text-xs font-medium text-fg transition-colors hover:bg-surface-hover active:scale-[0.98] active:bg-surface-hover/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">{action}</button>
+        </div>
       </div>
-    </button>
+      <p className="pointer-events-none relative mt-3 line-clamp-3 text-sm leading-relaxed text-fg-muted">{description?.trim() || copy.cardNoDescription}</p>
+    </article>
   );
 }
 
@@ -630,9 +579,9 @@ function ContributionBadge({
 
 function ExtensionsPageSkeleton() {
   return (
-    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3" aria-busy="true">
+    <div className={extensionCardGridClass} aria-busy="true">
       {Array.from({ length: 6 }, (_, index) => (
-        <Skeleton key={index} className="h-36 rounded-xl" />
+        <Skeleton key={index} className="h-32 rounded-xl" />
       ))}
     </div>
   );

@@ -1,3 +1,4 @@
+import { extensionCardClass, extensionCardGridClass, extensionCardTriggerClass } from './extension-card-styles';
 import { pluginDetailPath } from '@/features/capabilities/capability-links';
 import * as Dialog from '@radix-ui/react-dialog';
 import { AlertTriangle, ArrowLeft, CheckCircle, Loader2, Package, ShieldCheck, Trash2, X } from 'lucide-react';
@@ -44,8 +45,6 @@ type MarketplaceUi = {
   actionError: string | null;
   restartHint: string | null;
 };
-
-const marketplaceGridClass = 'grid grid-cols-[repeat(auto-fill,minmax(min(100%,18rem),1fr))] items-start gap-4';
 
 const initialMarketplaceUi: MarketplaceUi = {
   debounced: '',
@@ -148,7 +147,7 @@ export function ExtensionMarketplacePanel({
       {restartHint ? <p className="text-sm text-fg-muted">{restartHint}</p> : null}
 
       {isLoading && !data ? (
-        <ul className={marketplaceGridClass} aria-label={copy.marketplaceLoading}>
+        <ul className={extensionCardGridClass} aria-label={copy.marketplaceLoading}>
           {[0, 1, 2, 3, 4, 5].map((index) => (
             <li key={index} className="rounded-xl border border-edge bg-surface-panel p-4">
               <div className="flex items-start gap-3">
@@ -168,7 +167,7 @@ export function ExtensionMarketplacePanel({
           ))}
         </ul>
       ) : (
-        <ul className={marketplaceGridClass}>
+        <ul className={extensionCardGridClass}>
           {extensionsList.length === 0 ? (
             <li className="col-span-full text-sm text-fg-muted">{copy.marketplaceEmpty}</li>
           ) : (
@@ -180,12 +179,12 @@ export function ExtensionMarketplacePanel({
               const displayName = localized?.displayName ?? e.name;
               const description = localized?.description ?? e.description;
               return (
-                <li key={e.id} className="relative min-w-0 rounded-xl border border-edge bg-surface-panel p-4 transition-colors hover:border-edge-strong hover:bg-surface-hover/30">
+                <li key={e.id} className={extensionCardClass}>
                   <button
                     type="button"
                     aria-label={`${displayName}, ${copy.marketplaceDetailTitle}`}
                     onClick={() => installed?.pluginId ? navigate(pluginDetailPath(installed.pluginId, 'installed', installed.authorizationStatus === 'required', location.pathname + location.search)) : dispatch({ type: 'patch', patch: { detailPkg: e.id } })}
-                    className="absolute inset-0 cursor-pointer rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent"
+                    className={extensionCardTriggerClass}
                   />
                   <div className="pointer-events-none relative flex items-start gap-3">
                     <CapabilityIcon iconUrl={e.branding?.iconUrl} fallback={Package} />
