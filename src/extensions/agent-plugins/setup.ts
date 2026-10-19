@@ -27,7 +27,7 @@ const schema = z.object({
   state: z.enum(['pending', 'running', 'action_required', 'completed', 'cancelled', 'interrupted', 'failed']),
   resources: z.enum(['pending', 'running', 'ready', 'error']), connections: z.array(connection),
   installed: z.boolean().default(false), deferred: z.boolean().default(false),
-  authorizations: z.array(z.object({ id: z.string(), state: z.enum(['pending', 'connected', 'skipped', 'error']), issues: z.array(pluginPermissionIssueSchema).max(20).default([]), method: z.string().optional(), attemptId: z.string().optional() })).default([]),
+  authorizations: z.array(z.object({ id: z.string(), expiresAt: z.number().finite().optional(), state: z.enum(['pending', 'connected', 'skipped', 'error']), issues: z.array(pluginPermissionIssueSchema).max(20).default([]), method: z.string().optional(), attemptId: z.string().optional() })).default([]),
   operations: z.array(z.object({ key: z.string().uuid(), action: z.string() })).max(100).default([]),
   missingConfig: z.array(z.string()).default([]), partial: z.boolean(), updatedAt: z.string(), error: z.string().optional(),
 });
@@ -129,6 +129,17 @@ export class PluginSetupService {
     });
     return this.get(id, owner)!;
   }
+  /** Recheck an installed revision without login prompts or resource downloads. */
+  async refreshRuntime(id: string, config: Config, workspace: string): Promise<void> {
+    if (!existsSync(this.path(id)) || this.store.pending(id)) return;
+    const saved = schema.parse(JSON.parse(readFileSync(this.path(id), 'utf8')));
+    if (saved.packageRevision !== this.store.receipt(id)?.revision || !saved.installed || saved.resources !== 'ready'
+      || !saved.connections.some(value => value.state === 'connected') && !saved.authorizations.some(value => value.state === 'connected')
+      || saved.state === 'cancelled' || running.has(this.key(id)) || lockfile.checkSync(this.path(id), { realpath: false })) return;
+    const release = lockfile.lockSync(this.path(id), { realpath: false });
+    try { await this.perform(id, saved.owner, { action: 'prepare', expectedRevision: saved.revision }, config, workspace, true); }
+    finally { release(); }
+  }
   async act(id: string, owner: string, input: z.infer<typeof setupActionSchema>, config: Config, workspace: string): Promise<PluginSetupJob> {
     const current = this.get(id, owner);
     const previous = input.idempotencyKey && current?.operations.find(op => op.key === input.idempotencyKey);
@@ -147,7 +158,7 @@ export class PluginSetupService {
     try { return remember(await this.perform(id, owner, input, config, workspace)); }
     finally { release(); }
   }
-  private async perform(id: string, owner: string, input: z.infer<typeof setupActionSchema>, config: Config, workspace: string): Promise<PluginSetupJob> {
+  private async perform(id: string, owner: string, input: z.infer<typeof setupActionSchema>, config: Config, workspace: string, refreshOnly = false): Promise<PluginSetupJob> {
     const job = this.get(id, owner); if (!job) throw new Error('Setup not found');
     if (job.revision !== input.expectedRevision) throw new Error('Setup changed. Refresh and retry.');
     if (input.action === 'cancel') {
@@ -235,17 +246,18 @@ export class PluginSetupService {
     cancellationPoll.unref();
     job.state = 'running'; job.resources = 'running'; delete job.error; this.write(job);
     try {
-      await preparePluginResources(this.store, plugin, controller.signal);
+      if (!refreshOnly) await preparePluginResources(this.store, plugin, controller.signal);
       job.resources = 'ready';
       job.missingConfig = pluginConfigMissing(this.store, plugin);
       if (job.missingConfig.length) { job.state = 'action_required'; job.error = 'Complete the required configuration fields.'; }
-      else {
+      {
         for (const target of job.authorizations) {
           const declaration = declarations.find(value => value.id === target.id)!;
           const method = declaration.methods.find(value => value.id === target.method);
+          if (method?.type === 'cli' && method.fields.some(key => job.missingConfig.includes(key))) { target.state = 'pending'; continue; }
           if (method?.type === 'cli') {
             const check = await inspectPluginCliAuthorization(this.store, plugin, target.id, method, controller.signal);
-            target.state = check.authenticated ? 'connected' : 'pending'; target.issues = check.issues;
+            target.state = check.authenticated && (check.expiresAt === undefined || check.expiresAt > Date.now()) ? 'connected' : 'pending'; target.issues = check.issues; target.expiresAt = check.expiresAt;
           }
           else if (method?.type === 'form') {
             const values = readPluginUserConfig(this.store, id, plugin.receipt.revision);
@@ -256,7 +268,8 @@ export class PluginSetupService {
           controller.signal.throwIfAborted();
           const gates = declarations.filter(value => value.servers.includes(server.name));
           const unavailable = gates.some(gate => { const target = job.authorizations.find(value => value.id === gate.id)!; const method = gate.methods.find(value => value.id === target.method); return !method || method.type !== 'oauth' && target.state !== 'connected'; });
-          if (unavailable) { server.state = 'skipped'; delete server.toolCount; continue; }
+          const missingServerConfig = job.missingConfig.some(key => JSON.stringify(plugin.servers[server.name]).includes(`\${user_config.${key}}`));
+          if (unavailable || missingServerConfig) { server.state = 'skipped'; delete server.toolCount; continue; }
           const result = await probeMcpConnection(effective, workspace, pluginServerId(id, server.name), { signal: controller.signal });
           controller.signal.throwIfAborted();
           server.state = result.state; server.toolCount = result.toolCount;
@@ -266,7 +279,8 @@ export class PluginSetupService {
         }
         for (const target of job.authorizations) {
           const declaration = declarations.find(value => value.id === target.id)!;
-          target.state = declaration.servers.every(name => job.connections.find(value => value.name === name)?.state === 'connected') ? 'connected' : 'pending';
+          const method = declaration.methods.find(value => value.id === target.method);
+          target.state = (method?.type === 'oauth' || target.state === 'connected') && declaration.servers.every(name => job.connections.find(value => value.name === name)?.state === 'connected') ? 'connected' : 'pending';
         }
         job.partial = plugin.diagnostics.length > 0;
         if (job.connections.some(value => value.state === 'error')) job.error = 'Connection verification failed. Check the credentials or login status and try again.';
@@ -278,7 +292,16 @@ export class PluginSetupService {
       this.write(job);
     } catch {
       const current = this.get(id, owner);
-      if (!controller.signal.aborted && current?.id === job.id && current.revision === job.revision && current.state !== 'cancelled' && (this.store.pending(id) ?? this.store.get(id))?.receipt.revision === job.packageRevision) { job.state = 'failed'; if (job.resources !== 'ready') job.resources = 'error'; job.error = 'Preparation failed. Retry after checking resources and connections.'; this.write(job); }
+      if (!controller.signal.aborted && current?.id === job.id && current.revision === job.revision && current.state !== 'cancelled' && (this.store.pending(id) ?? this.store.get(id))?.receipt.revision === job.packageRevision) {
+        for (const target of job.authorizations) target.state = 'pending';
+        for (const connection of job.connections) {
+          const server = plugin.servers[connection.name];
+          const privateServer = server && (server.type !== 'stdio' ? server.connectionAuth?.mode !== 'none'
+            : Object.values(server.env ?? {}).some(value => Object.entries(plugin.layout?.userConfig ?? {}).some(([key, field]) => field.sensitive && value.includes(`\${user_config.${key}}`))));
+          if (privateServer) { connection.state = 'error'; delete connection.toolCount; }
+        }
+        job.state = 'failed'; if (job.resources !== 'ready') job.resources = 'error'; job.error = 'Preparation failed. Retry after checking resources and connections.'; this.write(job);
+      }
     } finally { clearInterval(cancellationPoll); running.delete(this.key(id)); }
     const latest = this.get(id, owner);
     if (!latest) throw new Error('Setup was removed');

@@ -41,7 +41,7 @@ export const pluginPermissionIssueSchema = z.strictObject({
 });
 export type PluginPermissionIssue = z.infer<typeof pluginPermissionIssueSchema>;
 export function parsePluginAuthorizationCheck(output: string, methodIds: string[]) {
-  const result = z.object({ authenticated: z.boolean(), issues: z.array(pluginPermissionIssueSchema).max(20).default([]) }).parse(JSON.parse(output.trim().split('\n').at(-1)!));
+  const result = z.object({ authenticated: z.boolean(), expiresAt: z.number().finite().optional(), issues: z.array(pluginPermissionIssueSchema).max(20).default([]) }).parse(JSON.parse(output.trim().split('\n').at(-1)!));
   for (const issue of result.issues) {
     if (issue.method && !methodIds.includes(issue.method)) throw new Error('Unknown permission recovery method');
     if (issue.helpUrl) safeAuthorizationUrl(issue.helpUrl);

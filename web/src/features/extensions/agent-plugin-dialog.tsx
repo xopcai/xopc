@@ -32,6 +32,7 @@ function capabilityLabel(capability: string, zh: boolean): string {
     const name = capability.slice('network.mcp:'.length).split(':', 1)[0];
     return zh ? `连接外部工具服务：${name}` : `Connect to an external tool service: ${name}`;
   }
+  if (capability.startsWith('runtime.capability-access:')) return zh ? '按账号授权启用相关技能和工具' : 'Enable skills and tools according to account authorization';
   if (capability.startsWith('runtime.authorization:')) return zh ? `在本机运行账号登录程序：${capability.split(':')[1]}` : `Run account sign-in locally: ${capability.split(':')[1]}`;
   if (capability.startsWith('runtime.resource:')) return zh ? `下载可执行资源：${capability.split(':')[1]}` : `Download executable resource: ${capability.split(':')[1]}`;
   if (capability.startsWith('network.resource:')) return zh ? `下载并校验资源：${capability.split(':')[1]}` : `Download and verify resource: ${capability.split(':')[1]}`;

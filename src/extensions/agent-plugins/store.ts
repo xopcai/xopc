@@ -54,7 +54,11 @@ export class AgentPluginStore {
   revisionKey(): string {
     if (!existsSync(this.receiptsDir())) return '';
     return readdirSync(this.receiptsDir()).filter(name => name.endsWith('.json')).sort()
-      .map(name => { try { const setupPath = join(this.stateDir, 'plugin-setup', name); return createHash('sha256').update(readFileSync(join(this.receiptsDir(), name))).update(existsSync(setupPath) ? readFileSync(setupPath) : '').digest('hex'); } catch { return ''; } }).join('|');
+      .map(name => { try { const setupPath = join(this.stateDir, 'plugin-setup', name); return createHash('sha256').update(readFileSync(join(this.receiptsDir(), name))).update(existsSync(setupPath) ? readFileSync(setupPath) : '').update(JSON.stringify(this.authorizationExpiryState(setupPath))).digest('hex'); } catch { return ''; } }).join('|');
+  }
+  private authorizationExpiryState(path: string): boolean[] {
+    try { return (JSON.parse(readFileSync(path, 'utf8')).authorizations ?? []).map((value: { expiresAt?: number }) => value.expiresAt !== undefined && value.expiresAt <= Date.now()); }
+    catch { return []; }
   }
   dataDir(id: string) { return containedPath(this.stateDir, join(this.stateDir, 'plugin-data', pluginName.parse(id))); }
   private revisionDir(id: string, revision: string) { return join(this.stateDir, 'plugins', pluginName.parse(id), z.string().uuid().parse(revision)); }
@@ -90,7 +94,7 @@ export class AgentPluginStore {
       if (adapterChanged || capabilityChanged) inspection.diagnostics.push({ component: 'review', message: 'Adapter interpretation changed capabilities. Inspect and review this package again.' });
       const setupPath = join(this.stateDir, 'plugin-setup', `${id}.json`);
       const setup = existsSync(setupPath) ? JSON.parse(readFileSync(setupPath, 'utf8')) : undefined;
-      const readiness = !valid || adapterChanged || capabilityChanged || inspection.layout?.compatibility.some(item => item.component === 'hooks' || item.component === 'authorizations' && item.support === 'invalid') ? 'blocked' : setup?.packageRevision === receipt.revision && setup.state !== 'completed' && !setup.installed ? 'setup_required' : inspection.diagnostics.length || setup?.packageRevision === receipt.revision && (setup.partial || setup.installed && (setup.missingConfig?.length || setup.connections?.some((value: { state: string }) => value.state !== 'connected') || setup.authorizations?.some((value: { state: string; issues?: unknown[] }) => value.state !== 'connected' || !!value.issues?.length))) ? 'degraded' : 'ready';
+      const readiness = !valid || adapterChanged || capabilityChanged || inspection.layout?.compatibility.some(item => item.component === 'hooks' || ['authorizations', 'capability-access'].includes(item.component) && item.support === 'invalid') ? 'blocked' : setup?.packageRevision === receipt.revision && setup.state !== 'completed' && !setup.installed ? 'setup_required' : inspection.diagnostics.length || setup?.packageRevision === receipt.revision && (setup.partial || setup.installed && (setup.missingConfig?.length || setup.connections?.some((value: { state: string }) => value.state !== 'connected') || setup.authorizations?.some((value: { state: string; issues?: unknown[] }) => value.state !== 'connected' || !!value.issues?.length))) ? 'degraded' : 'ready';
       return { ...inspection, id, receipt, format: 'agent-plugin', readiness };
     } catch (error) {
       return { id, receipt, format: 'agent-plugin', readiness: 'blocked', rootDir,

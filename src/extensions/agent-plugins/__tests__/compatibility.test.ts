@@ -27,7 +27,7 @@ it.each(['codex', 'claude'] as const)('imports %s skills and HTTP MCP without re
   const root = temp(), state = temp(); vi.stubEnv('XOPC_STATE_DIR', state);
   file(root, `.${dialect}-plugin/plugin.json`, { name: 'sample', skills: './custom-skills', mcpServers: './.mcp.json', apps: './.app.json' });
   file(root, 'custom-skills/group/read/SKILL.md', '---\nname: read\ndescription: Read a note\n---\nOriginal');
-  file(root, '.mcp.json', { mcpServers: { notes: { type: 'http', url: 'https://example.com/mcp' } } });
+  file(root, '.mcp.json', { mcpServers: { notes: { type: 'http', url: 'https://example.com/mcp', connectionAuth: { mode: 'none' } } } });
   const store = new AgentPluginStore(state), plan = store.inspect(root);
   expect(plan.layout?.dialect).toBe(dialect); expect(plan.skills.map(s => s.name)).toEqual(['read']);
   expect(plan.servers.notes.type).toBe('streamable-http');
@@ -89,7 +89,7 @@ it('supports Claude variable aliases and stores sensitive configuration as refer
   const installed = store.install(root, { reviewHash: store.inspect(root).reviewHash });
   expect(materializePluginServers(installed, store)).toEqual({});
   await savePluginUserConfig(store, installed, { TOKEN: 'fixture-secret' });
-  const result = materializePluginServers(installed, store)[pluginServerId(installed.id, 'docs')];
+  const result = materializePluginServers(installed, store, [], true)[pluginServerId(installed.id, 'docs')];
   expect((result.env as Record<string, unknown>).API_KEY).toHaveProperty('xopcSecretRef');
   expect((result.env as Record<string, unknown>).ROOT).toBe(installed.rootDir);
   expect(await resolveConnectorSecretReferences(result, new CredentialResolver({ stateDir: store.stateDir }))).toMatchObject({ env: { API_KEY: 'fixture-secret' } });

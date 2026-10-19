@@ -93,7 +93,7 @@ it('saves method-scoped CLI credentials as references and completes the subseque
   expect(service.get(plugin.id, 'owner')?.authorizations[0].state).toBe('connected');
 });
 
-it('keeps authenticated tools usable while reporting and recovering missing business permissions', async () => {
+it('gates unscoped tools until missing business permissions are recovered', async () => {
   const { store, plugin, service, act } = fixture(false, true);
   await act({ action: 'prepare' });
   await act({ action: 'configure', authorization: 'account', method: 'cli', values: {} });
@@ -103,7 +103,7 @@ it('keeps authenticated tools usable while reporting and recovering missing busi
   expect(job.authorizations[0]).toMatchObject({ state: 'connected', issues: [{ id: 'calendar', scopes: ['calendar:calendar.event:read'] }] });
   await act({ action: 'complete' });
   expect(agentPluginInventoryRow(store.get(plugin.id)!, store)).toMatchObject({ active: true, authorizationStatus: 'required', readiness: 'degraded' });
-  expect(Object.keys(materializePluginServers(store.get(plugin.id)!, store))).toHaveLength(1);
+  expect(Object.keys(materializePluginServers(store.get(plugin.id)!, store))).toHaveLength(0);
   writeFileSync(join(home, 'calendar-granted'), 'yes');
   job = await act({ action: 'prepare' });
   expect(job.authorizations[0].issues).toEqual([]);
@@ -118,4 +118,30 @@ it('validates permission-check output before exposing guidance or recovery actio
   expect(() => parsePluginAuthorizationCheck(JSON.stringify({ authenticated: true, issues: [{ ...issue, helpUrl: 'javascript:alert(1)' }] }), ['cli'])).toThrow();
   expect(() => parsePluginAuthorizationCheck(JSON.stringify({ authenticated: true, issues: [issue] }), ['different'])).toThrow();
   expect(() => parsePluginAuthorizationCheck(JSON.stringify({ authenticated: true, issues: [{ ...issue, token: 'secret' }] }), ['cli'])).toThrow();
+});
+
+it('rechecks a previously connected CLI account without login and removes revoked runtime access', async () => {
+  const { root, store, plugin, service, act } = fixture();
+  await act({ action: 'prepare' });
+  await act({ action: 'configure', authorization: 'account', method: 'cli', values: {} });
+  const marker = join(store.dataDir(plugin.id), 'accounts', plugin.receipt.revision, 'account', 'approved');
+  mkdirSync(join(marker, '..'), { recursive: true }); writeFileSync(marker, 'yes');
+  await act({ action: 'prepare' }); await act({ action: 'complete' });
+  expect(Object.keys(materializePluginServers(store.get(plugin.id)!, store))).toHaveLength(1);
+  rmSync(marker);
+  await service.refreshRuntime(plugin.id, config, root);
+  expect(service.get(plugin.id, 'owner')?.authorizations[0].state).toBe('pending');
+  expect(materializePluginServers(store.get(plugin.id)!, store)).toEqual({});
+  expect(agentPluginInventoryRow(store.get(plugin.id)!, store).authorizationStatus).toBe('required');
+});
+
+it('does not reuse connected account evidence when runtime revalidation throws', async () => {
+  const { root, store, plugin, service, act } = fixture();
+  await act({ action: 'configure', authorization: 'account', method: 'manual', values: { clientId: 'id', clientSecret: 'secret' } });
+  await act({ action: 'prepare' }); await act({ action: 'complete' });
+  expect(Object.keys(materializePluginServers(store.get(plugin.id)!, store))).toHaveLength(1);
+  probe.mockRejectedValueOnce(new Error('Provider unavailable'));
+  await service.refreshRuntime(plugin.id, config, root);
+  expect(service.get(plugin.id, 'owner')?.authorizations[0].state).toBe('pending');
+  expect(materializePluginServers(store.get(plugin.id)!, store)).toEqual({});
 });
