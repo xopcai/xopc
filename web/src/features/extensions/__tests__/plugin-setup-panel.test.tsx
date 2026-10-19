@@ -75,3 +75,24 @@ it('opens the declared token form from a connection link without starting author
   expect(host.querySelector('input[type=password]')).not.toBeNull();
   expect(mocks.request.mock.calls.some(([, options]) => options.body && JSON.parse(options.body).action === 'authorize')).toBe(false);
 });
+it('starts CLI login after saving its fields without racing a preparation job', async () => {
+  job = { revision: 8, state: 'completed', resources: 'ready', connections: [{ name: 'provider', state: 'skipped' }], partial: true, missingConfig: [] };
+  const owned: ExtensionApiRow = { ...extension, setup: { tasks: [], userConfig: {
+    profile: { type: 'string', title: 'Profile', required: true, sensitive: false },
+  }, authorizations: [{ id: 'account', title: 'Provider', servers: ['provider'], methods: [{ id: 'existing', title: 'Existing account', type: 'cli', fields: ['profile'] }] }] } };
+  mocks.request.mockImplementation(async (path: string, options: { method: string; body?: string }) => {
+    if (options.method === 'GET') return { ok: true, payload: path.includes('/auth/') ? null : job };
+    const input = JSON.parse(options.body!);
+    job = { ...job!, revision: job!.revision + 1, state: input.action === 'prepare' ? 'running' : 'action_required' };
+    return { ok: true, payload: job };
+  });
+  await act(async () => root.render(<MemoryRouter><PluginSetupPanel extension={owned} initialConnect zh={false} onChanged={onChanged} /></MemoryRouter>));
+  const input = host.querySelector('input')!;
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, 'qmdemo');
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  await click('Save and connect');
+  const actions = mocks.request.mock.calls.filter(([, options]) => options.body).map(([, options]) => JSON.parse(options.body).action);
+  expect(actions).toEqual(['configure', 'authorize']);
+});

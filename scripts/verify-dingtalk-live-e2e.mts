@@ -39,9 +39,16 @@ try{
  }
  const session=await api(`/api/sessions/${conversationId}?include=transcriptRows`);const messages=session.messages??session.session?.messages??[];
  const calls=messages.filter((m:any)=>m.role==='assistant').flatMap((m:any)=>Array.isArray(m.content)?m.content.filter((v:any)=>v.type==='toolCall'):[]);
- const business=calls.filter((v:any)=>v.name.includes('plugin_dingtalk')&&v.name.endsWith('cli_run'));
+ const nested=messages.filter((m:any)=>m.role==='toolResult').flatMap((m:any)=>m.nestedCalls?.calls??[]);
+ const business=[...calls,...nested].filter((v:any)=>v.name.includes('plugin_dingtalk')&&v.name.endsWith('cli_run'));
  report.businessCommands=business.map((v:any)=>v.arguments?.argv?.slice(0,3));
  assert(report.businessCommands.some((v:any)=>v?.join(' ')==='contact user get-self'),'Agent must really read via installed plugin');
+ const self=business.find((v:any)=>v.arguments?.argv?.slice(0,3).join(' ')==='contact user get-self');
+ const selfResult=messages.find((m:any)=>m.role==='toolResult'&&(m.tool_call_id===self.id||m.toolCallId===self.id||m.nestedCalls?.calls?.some((n:any)=>n.id===self.id)));
+ assert(selfResult&&!selfResult.isError,'Current-user tool result must succeed');
+ const successfulPayload=(value:any,depth=0):boolean=>{if(depth>12||value==null)return false;if(typeof value==='string'){try{return successfulPayload(JSON.parse(value),depth+1);}catch{return false;}}if(typeof value!=='object')return false;if(value.success===true)return true;return Object.entries(value).some(([key,nested])=>!['data','details'].includes(key)&&successfulPayload(nested,depth+1));};
+ assert(successfulPayload(selfResult.content),'Current-user read must return a successful business payload');
+ report.userReadToolResultVerified=true;
  if(report.liveWrites){
   for(const verb of ['create','get','update'])assert(report.businessCommands.some((v:any)=>v?.join(' ')===`todo task ${verb}`),`Missing real Agent operation: ${verb}`);
   assert(business.some((v:any)=>v.arguments?.argv?.slice(0,3).join(' ')==='todo task done'||v.arguments?.argv?.slice(0,3).join(' ')==='todo task update'&&v.arguments.argv.includes('--done')&&v.arguments.argv[v.arguments.argv.indexOf('--done')+1]==='true'),'Missing actual completion operation');
