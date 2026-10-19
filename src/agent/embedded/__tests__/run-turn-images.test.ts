@@ -255,8 +255,15 @@ describe('runXopcEmbeddedTurn image input', () => {
       afterToolCall: vi.fn(),
       shouldStopAfterTurn: vi.fn(),
     };
+    const context = {
+      toolCall: { id: 'check', name: 'exec_command' }, args: { cmd: 'pnpm test' },
+      isError: false, result: { content: [], details: { command: 'pnpm test', exitCode: 1 } },
+    };
+    let normalized: any;
     const finishDecisions: unknown[] = [];
     mocks.prompt.mockImplementationOnce(async () => {
+      await mocks.session.agent.beforeToolCall(context);
+      normalized = await mocks.session.agent.afterToolCall(context);
       turnPolicy.shouldStopAfterTurn.mockReturnValueOnce(true);
       finishDecisions.push(await mocks.session.agent.finishTurn({}));
       finishDecisions.push(await mocks.session.agent.finishTurn({}));
@@ -277,15 +284,11 @@ describe('runXopcEmbeddedTurn image input', () => {
     });
 
     expect(turnPolicy.reset).toHaveBeenCalledOnce();
-    const context = {
-      toolCall: { id: 'check', name: 'exec_command' }, args: { cmd: 'pnpm test' },
-      isError: false, result: { content: [], details: { command: 'pnpm test', exitCode: 1 } },
-    };
-    await mocks.session.agent.beforeToolCall(context);
-    const normalized = await mocks.session.agent.afterToolCall(context);
     expect(turnPolicy.beforeToolCall).toHaveBeenCalledWith(context, undefined);
     expect(normalized.isError).toBe(true);
     expect(turnPolicy.afterToolCall).toHaveBeenCalledWith(expect.objectContaining({ isError: true }));
+    expect(mocks.session.agent.beforeToolCall).toBeUndefined();
+    expect(mocks.session.agent.afterToolCall).toBeUndefined();
     expect(finishDecisions).toEqual([{ action: 'end' }, { action: 'end' }]);
   });
 

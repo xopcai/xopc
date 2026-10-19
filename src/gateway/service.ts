@@ -1736,6 +1736,8 @@ export class GatewayService {
     await flushTracing();
     if (!this.running) return;
     this.stopping = true;
+    const { cancelAllPluginCliAuthorizations } = await import('../extensions/agent-plugins/cli-authorization.js');
+    cancelAllPluginCliAuthorizations();
     this.taskAllocationDispatcher?.stop();
     this.taskRunDispatcher?.stop();
     if (this.taskRunDispatchTimer) {

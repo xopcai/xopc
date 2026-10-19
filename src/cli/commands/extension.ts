@@ -106,7 +106,7 @@ export function createExtensionInspectCommand(): Command {
         if (extensionId.startsWith('plugin:') || extensionId.startsWith('store:') || isAgentPluginSource(extensionId)) {
           const store = new AgentPluginStore();
           const result = extensionId.startsWith('plugin:') ? store.get(extensionId.slice(7))
-            : await withAgentPluginSource(extensionId, loadConfig(getContextWithOpts().configPath), source => store.inspect(source));
+            : await withAgentPluginSource(extensionId, loadConfig(getContextWithOpts().configPath), (source, _p, _commit, importManifest) => store.inspect(source, extensionId, importManifest));
           if (!result) throw new Error('Plugin not installed');
           console.log(JSON.stringify(result, null, 2));
           return;

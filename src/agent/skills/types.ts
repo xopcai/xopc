@@ -134,6 +134,7 @@ export interface SkillSourceDescriptor {
   writable: boolean;
   /** Validated portable plugin files; bypass recursive discovery. */
   skillFiles?: string[];
+  skillAliases?: Record<string, string>;
 }
 
 export type SkillOrigin = SkillSourceDescriptor;

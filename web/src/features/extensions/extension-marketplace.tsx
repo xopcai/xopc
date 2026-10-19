@@ -3,7 +3,7 @@ import { AlertTriangle, ArrowLeft, CheckCircle, Loader2, Package, ShieldCheck, T
 import { useCallback, useEffect, useReducer, useState } from 'react';
 
 import { uiPatchReducer } from '@/lib/settings-form-draft';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import useSWR, { useSWRConfig } from 'swr';
 
 import { MarkdownView } from '@/components/markdown/markdown-view';
@@ -29,7 +29,7 @@ function extensionInstallKind(
   extensions: ExtensionApiRow[],
   catalogId: string,
 ): 'absent' | 'bundled' | 'user' {
-  const row = extensions.find((x) => x.id === catalogId || x.pluginId === catalogId);
+  const row = extensions.find((x) => x.id === catalogId || x.pluginId === catalogId || x.provenance?.packageName === catalogId);
   if (!row) return 'absent';
   if (row.source === 'bundled') return 'bundled';
   return 'user';
@@ -60,6 +60,7 @@ export function ExtensionMarketplacePanel({
   className?: string;
   query: string;
 }) {
+  const navigate = useNavigate();
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
   const copy = m.extensionsPage;
@@ -165,6 +166,7 @@ export function ExtensionMarketplacePanel({
             extensionsList.map((e) => {
               const kind = extensionInstallKind(extensions, e.id);
               const busy = rowBusy === e.id;
+              const installed = extensions.find(value => value.pluginId === e.id || value.provenance?.packageName === e.id);
               const localized = e.localizations?.[language.startsWith('zh') ? 'zh-CN' : 'en'];
               const displayName = localized?.displayName ?? e.name;
               const description = localized?.description ?? e.description;
@@ -174,11 +176,12 @@ export function ExtensionMarketplacePanel({
                     role="button"
                     tabIndex={0}
                     aria-label={`${displayName}, ${copy.marketplaceDetailTitle}`}
-                    onClick={() => dispatch({ type: 'patch', patch: { detailPkg: e.id } })}
+                    onClick={() => installed?.pluginId ? navigate(`/capabilities/extensions/${encodeURIComponent(installed.pluginId)}`) : dispatch({ type: 'patch', patch: { detailPkg: e.id } })}
                     onKeyDown={(ev) => {
                       if (ev.key === 'Enter' || ev.key === ' ') {
                         ev.preventDefault();
-                        dispatch({ type: 'patch', patch: { detailPkg: e.id } });
+                        if (installed?.pluginId) navigate(`/capabilities/extensions/${encodeURIComponent(installed.pluginId)}`);
+                        else dispatch({ type: 'patch', patch: { detailPkg: e.id } });
                       }
                     }}
                     className={cn(
@@ -236,11 +239,11 @@ export function ExtensionMarketplacePanel({
                       ) : kind === 'user' ? (
                         <>
                           <span className="text-[11px] font-medium text-fg-muted">
-                            {copy.marketplaceInstalled}
+                            {installed?.authorizationStatus === 'required' ? (language.startsWith('zh') ? '需要授权' : 'Authorization required') : copy.marketplaceInstalled}
                           </span>
                           {e.packageType === 'plugin' ? <button
                             type="button"
-                            onClick={() => dispatch({ type: 'patch', patch: { detailPkg: e.id, quickInstallPkg: null } })}
+                            onClick={() => installed?.pluginId ? navigate(`/capabilities/extensions/${encodeURIComponent(installed.pluginId)}`) : dispatch({ type: 'patch', patch: { detailPkg: e.id, quickInstallPkg: null } })}
                             className={cn(
                               'inline-flex items-center justify-center rounded-lg border border-edge px-3 py-2 text-xs font-medium text-fg',
                               'transition-colors active:scale-[0.98] active:bg-surface-hover/80',
@@ -355,7 +358,7 @@ function ExtensionMarketplaceDetailDialog({
     (data?.description?.trim() ? `### ${data.name}\n\n${data.description}` : `*${copy.marketplaceNoReadme}*`);
 
   if (data?.format === 'agent-plugin') return <AgentPluginDialog
-    extension={extensions.find(extension => extension.pluginId === data.manifest?.name)}
+    extension={extensions.find(extension => extension.provenance?.packageName === packageName || extension.pluginId === data.manifest?.name)}
     initialSource={`store:${packageName}`}
     marketplace={data}
     autoInstall={autoInstall}

@@ -15,6 +15,8 @@ export type MergedMcpConfig = {
 
 export function loadMergedMcpConfig(params: {
   workspaceDir: string;
+  agentId?: string;
+  scope?: 'runtime' | 'management';
   cfg?: Config;
 }): MergedMcpConfig {
   const configured = Object.fromEntries(Object.entries(normalizeConfiguredMcpServers(params.cfg?.mcp?.servers))
@@ -22,10 +24,10 @@ export function loadMergedMcpConfig(params: {
   const diagnostics = inspectExtensionConnectorDependencies({ cfg: params.cfg });
   const store = new AgentPluginStore();
   const plugins: Record<string, HostMcpServerConfig> = Object.create(null);
-  for (const plugin of store.active()) {
+  for (const plugin of params.scope === 'management' ? store.list().filter(plugin => plugin.readiness !== 'blocked') : store.active(params.agentId, params.workspaceDir)) {
     try {
       const componentDiagnostics = [...plugin.diagnostics];
-      for (const [id, server] of Object.entries(materializePluginServers(plugin, store, componentDiagnostics))) {
+      for (const [id, server] of Object.entries(materializePluginServers(plugin, store, componentDiagnostics, params.scope === 'management'))) {
         if (configured[id]) throw new Error(`MCP server ID conflicts with plugin: ${id}`);
         plugins[id] = server;
       }

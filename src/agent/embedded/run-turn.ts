@@ -1,3 +1,4 @@
+import { isNestedCodemodePolicy } from './codemode-extension.js';
 import { ProviderUsageScopeError } from '../../providers/model-usage.js';
 import { traceRun, traceTools, traceOperation, setTraceIdentity } from '../../observability/runtime.js';
 import { getConnectionResumeInput, isConnectionSuspended } from '../../storage/sqlite/connection-wait-repository.js';
@@ -415,6 +416,7 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
   let restorePrepareNextTurn: (() => void) | undefined;
   let restorePrepareRequest: (() => void) | undefined;
   let restoreTransformContext: (() => void) | undefined;
+  let restoreToolHooks: (() => void) | undefined;
 
   try {
     runLease = acquireEmbeddedRunLease({
@@ -698,7 +700,9 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
     let clarificationStopped = false;
     let sentVisibleMessage = false;
     params.turnPolicy?.reset();
-    session.agent.beforeToolCall = async (context, signal) => {
+    const nativeBeforeTool = session.agent.beforeToolCall;
+    const nativeAfterTool = session.agent.afterToolCall;
+    const hostBeforeTool: NonNullable<typeof nativeBeforeTool> = async (context, signal) => {
       if (!allowsExecutionTool(executionToolPolicy, context.toolCall.name)) {
         return { block: true, reason: 'Tool is outside this execution scope.' };
       }
@@ -745,7 +749,7 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
       await verification.beforeTool(context.toolCall.id, context.toolCall.name);
       return decision;
     };
-    session.agent.afterToolCall = async (context) => {
+    const hostAfterTool: NonNullable<typeof nativeAfterTool> = async (context) => {
       connectionStopped ||= isConnectionSuspended(conversationId, runId);
       clarificationStopped ||= isClarificationSuspended(conversationId, runId);
       const scoped = context.toolCall.name === 'read_file' ? await instructions.forTool(context.toolCall.name, context.args)
@@ -756,6 +760,26 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
       } else if (scoped) checked.result.content.unshift({ type: 'text', text: scoped });
       await params.turnPolicy?.afterToolCall({ ...externalPolicyContext(context, tools), ...checked });
       return { ...checked.result, isError: checked.isError };
+    };
+    // Keep pi's MCP readiness and result hooks alongside the per-turn host policy.
+    const beforeTool: NonNullable<typeof nativeBeforeTool> = async (context, signal) => {
+      const decision = await hostBeforeTool(context, signal);
+      if (decision?.block || isNestedCodemodePolicy(context)) return decision;
+      return await nativeBeforeTool?.(context, signal) ?? decision;
+    };
+    const afterTool: NonNullable<typeof nativeAfterTool> = async (context, signal) => {
+      const checked = await hostAfterTool(context, signal);
+      if (isNestedCodemodePolicy(context)) return checked;
+      const native = await nativeAfterTool?.({ ...context,
+        result: { ...context.result, ...checked }, isError: checked?.isError ?? context.isError,
+      }, signal);
+      return native ? { ...checked, ...native } : checked;
+    };
+    session.agent.beforeToolCall = beforeTool;
+    session.agent.afterToolCall = afterTool;
+    restoreToolHooks = () => {
+      if (session.agent.beforeToolCall === beforeTool) session.agent.beforeToolCall = nativeBeforeTool;
+      if (session.agent.afterToolCall === afterTool) session.agent.afterToolCall = nativeAfterTool;
     };
     const baseFinishTurn = session.agent.finishTurn;
     session.agent.finishTurn = async (context, signal): Promise<AgentTurnDecision | undefined> => {
@@ -968,6 +992,7 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
     restorePrepareNextTurn?.();
     restorePrepareRequest?.();
     restoreTransformContext?.();
+    restoreToolHooks?.();
     runLease?.release();
     unsubscribe?.();
     try {

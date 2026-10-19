@@ -216,7 +216,7 @@ function discoverAndMergeSkills(
       skills: source.skillFiles.slice(0, limits.maxSkillsLoadedPerSource).flatMap(path => {
         const result = loadSkillFromFile(path, source, source.rootDir, maxSkillFileBytes);
         if (result.diagnostic) diagnostics.push(result.diagnostic);
-        return result.skill ? [result.skill] : [];
+        return result.skill ? [{ ...result.skill, name: source.skillAliases?.[path] ?? result.skill.name }] : [];
       }), diagnostics: [],
     } : discoverSkills(
       source,
@@ -473,6 +473,7 @@ export interface SkillLoader {
 }
 
 export interface SkillLoaderOptions {
+  agentId?: string;
   /** Re-evaluated on every load so trust changes take effect without recreating the runtime. */
   isWorkspaceTrusted?: (workspaceDir: string) => boolean;
 }
@@ -498,7 +499,7 @@ export function createSkillLoader(options: SkillLoaderOptions = {}): SkillLoader
       workspaceDir && options.isWorkspaceTrusted?.(workspaceDir) === true
         ? 'trusted'
         : 'untrusted';
-    return loadSkills({ workspaceDir, builtinDir, workspaceTrust });
+    return loadSkills({ workspaceDir, builtinDir, workspaceTrust, agentId: options.agentId });
   }
 
   return {

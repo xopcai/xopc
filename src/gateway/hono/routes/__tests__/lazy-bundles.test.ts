@@ -68,7 +68,7 @@ describe('lazy route bundles', () => {
   it('maps Agent Plugin lifecycle before the native extension bundle', () => {
     expect(findAuthenticatedLazyRouteBundle('/api/mcp/servers/plugin_demo/oauth/callback')).toBeUndefined();
     expect(findAuthenticatedLazyRouteBundle('/api/extensions/agent-plugins/demo/rollback')?.id).toBe('agent-plugins');
-    for (const path of ['/api/extensions/inspect', '/api/extensions/install', '/api/extensions/agent-plugins/demo', '/api/extensions/agent-plugins/demo/activation', '/api/extensions/agent-plugins/demo/update', '/api/extensions/agent-plugins/demo/mcp/main/auth']) {
+    for (const path of ['/api/extensions/agent-plugins/demo/setup/reusable', '/api/extensions/agent-plugins/demo/setup/auth/main/redirect', '/api/extensions/agent-plugins/demo/setup', '/api/extensions/agent-plugins/demo/setup/auth/main', '/api/extensions/agent-plugins/demo/bindings', '/api/extensions/inspect', '/api/extensions/install', '/api/extensions/agent-plugins/demo', '/api/extensions/agent-plugins/demo/activation', '/api/extensions/agent-plugins/demo/update', '/api/extensions/agent-plugins/demo/mcp/main/auth']) {
       expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('agent-plugins');
     }
     for (const path of ['/api/extensions/native/config', '/api/extensions/native/activation']) {

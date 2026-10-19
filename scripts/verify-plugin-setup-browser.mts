@@ -1,0 +1,92 @@
+import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
+import { once } from 'node:events';
+import { mkdir, mkdtemp, readFile, rm } from 'node:fs/promises';
+import { createRequire } from 'node:module';
+import { tmpdir } from 'node:os';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { invokePreparedTool } from './lib/plugin-lab-runtime.mts';
+import { pluginServerId } from '../src/extensions/agent-plugins/validation.js';
+import { serve } from '@hono/node-server';
+import tailwindcss from '@tailwindcss/vite';
+import { createServer as createViteServer } from 'vite';
+import { ConfigSchema } from '../src/config/schema.js';
+import { seedTestAgentCatalog } from '../src/agent-catalog/test-support.js';
+import { closeXopcDatabase, openXopcDatabase } from '../src/storage/sqlite/connection.js';
+import { AgentPluginStore } from '../src/extensions/agent-plugins/store.js';
+import { prepareNativeMcpConfig } from '../src/agent/mcp/native-mcp.js';
+import { createHonoApp } from '../src/gateway/hono/app.js';
+import type { GatewayService } from '../src/gateway/service.js';
+
+process.on('uncaughtException', error => { console.error(error); process.exit(1); });
+process.on('unhandledRejection', error => { console.error(error); process.exit(1); });
+
+const root = await mkdtemp(join(tmpdir(), 'xopc-plugin-browser-'));
+const evidence = resolve(process.env.XOPC_PLUGIN_SMOKE_EVIDENCE ?? '/tmp/xopc-plugin-browser-evidence');
+const web = resolve(dirname(fileURLToPath(import.meta.url)), '../web');
+const { chromium } = createRequire(import.meta.url)('playwright-core') as typeof import('playwright-core');
+const webRequire = createRequire(join(web, 'package.json'));
+const { default: react } = await import(webRequire.resolve('@vitejs/plugin-react'));
+process.env.XOPC_STATE_DIR = root; process.env.PI_CODING_AGENT_DIR = join(root, 'pi');
+process.env.XOPC_LOG_LEVEL = 'fatal';
+openXopcDatabase({ path: join(root, 'state.db') });
+seedTestAgentCatalog({ agents: [{ id: 'main', enabled: true, workspace: root, profile: { name: 'Main' } }, { id: 'other', enabled: true, workspace: root, profile: { name: 'Other' } }] });
+await mkdir(evidence, { recursive: true });
+const source = process.env.XOPC_PLUGIN_SMOKE_SOURCE || 'store:xopc-plugin-lab-codex@1.0.0';
+const auth = { mode: 'token' as const, token: randomUUID() }, config = ConfigSchema.parse({ gateway: { auth } });
+const service = { currentConfig: config, getResolvedAuth: () => auth, getAuthToken: () => auth.token, getEffectiveListenPort: () => 18790, isGatewayReady: () => true, getExtensionLoader: () => null, marketplace: { reloadSkills() {} } } as unknown as GatewayService;
+const app = createHonoApp({ service }), gateway = serve({ fetch: app.fetch, hostname: '127.0.0.1', port: 0 });
+if (!gateway.listening) await once(gateway, 'listening');
+const bound = gateway.address(); assert(bound && typeof bound !== 'string');
+const entry = `import React, {useEffect,useState} from 'react'; import {createRoot} from 'react-dom/client'; import {MemoryRouter} from 'react-router-dom'; import {AgentPluginDialog} from '/src/features/extensions/agent-plugin-dialog.tsx'; import '/src/styles/globals.css'; function Smoke(){const [extension,setExtension]=useState(null);const id=new URLSearchParams(location.search).get('plugin');const [ready,setReady]=useState(!id);useEffect(()=>{if(id)fetch('/api/extensions/agent-plugins/'+id).then(r=>r.json()).then(r=>{setExtension(r.payload);setReady(true);});},[]);return ready?React.createElement(MemoryRouter,null,React.createElement(AgentPluginDialog,{extension:extension??undefined,initialSource:${JSON.stringify(source)},onClose:()=>{}})):null;}createRoot(document.getElementById('root')).render(React.createElement(Smoke));`;
+
+const vite = await createViteServer({ root: web, configFile: false, plugins: [react(), tailwindcss(), { name: 'plugin-smoke', resolveId(id) { if (id === '/plugin-smoke.js') return '\0plugin-smoke'; }, load(id) { if (id === '\0plugin-smoke') return entry; }, configureServer(server) { server.middlewares.use(async (req, res, next) => { if (req.url?.split('?')[0] !== '/plugin-smoke.html') return next(); res.setHeader('Content-Type', 'text/html'); res.end(await server.transformIndexHtml('/plugin-smoke.html', '<html lang="en"><div id="root"></div><script type="module" src="/plugin-smoke.js"></script></html>')); }); } }], resolve: { alias: { '@': join(web, 'src') } }, server: { host: '127.0.0.1', port: 0, proxy: { '/api': { target: `http://127.0.0.1:${bound.port}`, changeOrigin: true } } } });
+let browser;
+try {
+  await vite.listen(); const url = vite.resolvedUrls!.local[0];
+  config.gateway.corsOrigins = [new URL(url).origin];
+  browser = await chromium.launch({ headless: true, channel: process.env.XOPC_PLUGIN_SMOKE_BROWSER_CHANNEL || 'chrome' });
+  const context = await browser.newContext({ viewport: { width: 1280, height: 900 }, locale: 'en-US' });
+  await context.route('**/*', route => { const request = route.request(); return route.continue({ headers: { ...request.headers(), ...(new URL(request.url()).origin === new URL(url).origin ? { Authorization: `Bearer ${auth.token}` } : {}) } }); });
+  const page = await context.newPage(); const errors: string[] = []; page.on('pageerror', error => errors.push(error.message));
+  await page.goto(`${url}plugin-smoke.html`);
+  await page.getByRole('button', { name: 'Install', exact: true }).click();
+  await page.getByRole('button', { name: 'Authorize and install', exact: true }).click();
+  await page.getByLabel('Sandbox access key (any test value)', { exact: false }).fill('browser-test-only');
+  await page.getByRole('button', { name: 'Continue', exact: true }).click();
+  await page.getByRole('button', { name: 'Connect account', exact: true }).waitFor();
+  const plugin = new AgentPluginStore().list()[0]; assert(plugin);
+  assert.equal(JSON.parse(await readFile(join(new AgentPluginStore().dataDir(plugin.id), 'resources', plugin.receipt.revision, 'dataset'), 'utf8')).id, 'local-note-001');
+  assert.equal(plugin.receipt.provenance?.kind, 'store');
+  await page.goto(`${url}plugin-smoke.html?plugin=${plugin.id}`);
+  const popupPromise = page.waitForEvent('popup');
+  await page.getByRole('button', { name: 'Connect account', exact: true }).click();
+  const popup = await popupPromise;
+  await popup.getByRole('link', { name: 'Authorize sandbox account', exact: true }).click();
+  await page.getByText('Available to all agents. Customize individual agents in Agent settings.', { exact: true }).waitFor();
+  const runtime = await prepareNativeMcpConfig(config, root, 'main');
+  assert.equal(runtime.servers.length, 2);
+  await invokePreparedTool(runtime, root, pluginServerId(plugin.id, 'notes'), 'sandbox-note-001');
+  await invokePreparedTool(runtime, root, pluginServerId(plugin.id, 'local'), 'local-note-001');
+  assert.equal((await prepareNativeMcpConfig(config, root, 'other')).servers.length, 2);
+  await page.getByRole('heading', { name: 'Installation complete', exact: true }).scrollIntoViewIfNeeded();
+  await page.screenshot({ path: join(evidence, 'plugin-setup-desktop.png') });
+  await page.setViewportSize({ width: 375, height: 812 });
+  const dialog = page.getByRole('dialog'); const box = await dialog.boundingBox(); assert(box && box.x >= 0 && box.x + box.width <= 375);
+  await page.screenshot({ path: join(evidence, 'plugin-setup-mobile.png') });
+  await page.setViewportSize({ width: 812, height: 375 });
+  await page.emulateMedia({ colorScheme: 'dark', reducedMotion: 'reduce' });
+  await page.evaluate(() => document.documentElement.classList.add('dark'));
+  const landscape = await dialog.boundingBox(); assert(landscape && landscape.y >= 0 && landscape.y + landscape.height <= 375);
+  await page.screenshot({ path: join(evidence, 'plugin-setup-dark-landscape.png') });
+  assert.deepEqual(errors, []);
+  console.log(JSON.stringify({ ok: true, checks: [source, 'Store resource checksum', 'secret configuration', 'resume after reload', 'public browser OAuth PKCE', 'tool discovery', 'actual Agent HTTP and stdio calls', 'globally available to all agents', 'desktop/mobile/dark landscape layout'], evidence }));
+} finally {
+  if ('closeAllConnections' in gateway) gateway.closeAllConnections();
+  await Promise.all([browser?.close(), vite.close(), new Promise<void>(resolve => gateway.close(() => resolve()))]);
+  closeXopcDatabase(); await rm(root, { recursive: true, force: true });
+}
+
+// Native SDK helpers may keep worker ports alive after all test servers close.
+process.exit(0);

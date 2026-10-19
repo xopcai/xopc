@@ -14,6 +14,11 @@ import { getXopcToolMetadata } from './tool-metadata.js';
 import { retainCodemodeOutput } from './codemode-output.js';
 
 export type CodemodePolicy = NonNullable<EffectiveAgentConfig['runtime']['codemode']>;
+// Nested calls already entered pi's native hooks; the bridge only reapplies host policy.
+const nestedCodemodePolicy = Symbol('nestedCodemodePolicy');
+export function isNestedCodemodePolicy(context: unknown): boolean {
+  return (context as { [nestedCodemodePolicy]?: boolean })[nestedCodemodePolicy] === true;
+}
 const MAX_STORE_BYTES = 64 * 1024;
 const MAX_SOURCE_BYTES = 64 * 1024;
 
@@ -38,9 +43,10 @@ export function createXopcCodemodeExtension(
     const assistantMessage = session?.agent.state.messages.findLast(message => message.role === 'assistant');
     if (!session || assistantMessage?.role !== 'assistant') throw new Error('Codemode needs an active xopc turn');
     return {
+      [nestedCodemodePolicy]: true,
       assistantMessage, toolCall: { type: 'toolCall', id, name, arguments: args as BeforeToolCallContext['toolCall']['arguments'] }, args,
       context: { messages: session.agent.state.messages, tools: session.agent.state.tools },
-    };
+    } as BeforeToolCallContext & { [nestedCodemodePolicy]: boolean };
   };
 
   return pi => {

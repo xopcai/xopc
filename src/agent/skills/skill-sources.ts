@@ -24,6 +24,7 @@ const PRIORITY = {
 
 export interface ResolveSkillSourcesOptions {
   workspaceDir?: string;
+  agentId?: string;
   globalDir?: string;
   builtinDir?: string;
   agentsDir?: string;
@@ -93,11 +94,12 @@ export function resolveSkillSources(
   const sources: SkillSourceDescriptor[] = [];
   const diagnostics: SkillDiagnostic[] = [];
 
-  for (const plugin of new AgentPluginStore().active()) {
+  for (const plugin of new AgentPluginStore().active(options.agentId, options.workspaceDir)) {
     sources.push({
-      id: `plugin:${plugin.id}`, rootDir: join(plugin.rootDir, 'skills'), priority: 150,
+      id: `plugin:${plugin.id}`, rootDir: plugin.rootDir, priority: 150,
       scope: 'global', managed: false, writable: false,
       skillFiles: plugin.skills.map(skill => skill.filePath),
+      skillAliases: plugin.layout?.dialect !== 'portable' ? Object.fromEntries(plugin.skills.map(skill => [skill.filePath, `${plugin.id}.${skill.name}`])) : undefined,
     });
     diagnostics.push(...plugin.diagnostics.map(diagnostic => ({
       type: 'warning' as const, path: plugin.rootDir,

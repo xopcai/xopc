@@ -1,7 +1,7 @@
+import { useNavigate } from 'react-router-dom';
 import * as Dialog from '@radix-ui/react-dialog';
-import { CheckCircle2, ChevronDown, FileArchive, FolderOpen, Loader2, ShieldCheck, Upload } from 'lucide-react';
+import { CheckCircle2, ChevronDown, FileArchive, FolderOpen, Loader2, Package, ShieldCheck, Upload } from 'lucide-react';
 import { useEffect, useId, useRef, useState, type DragEvent as ReactDragEvent } from 'react';
-import { Link } from 'react-router-dom';
 import { useSWRConfig } from 'swr';
 import { Button } from '@/components/ui/button';
 import { WorkingDirectoryPickerModal } from '@/features/fs/working-directory-picker-modal';
@@ -10,11 +10,13 @@ import { cn } from '@/lib/cn';
 import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 import { useLocaleStore } from '@/stores/locale-store';
+import { PluginSetupPanel } from './plugin-setup-panel';
 import type { ExtensionApiRow } from './types';
+import { CapabilityIcon } from '@/features/capabilities/capability-icon';
 import type { ExtensionMarketplacePackageDetail } from './extension-marketplace-api';
 
 const fieldClass = 'w-full rounded-lg border border-edge bg-surface-inset px-3 py-2 text-sm text-fg';
-type Plan = { manifest: { name: string; version?: string }; reviewHash: string; capabilities: string[]; addedCapabilities: string[]; diagnostics: Array<{ component: string; message: string }>; installed: boolean };
+type Plan = { layout?: { dialect: string }; installId?: string; candidates?: Array<{ name: string; source: string; description?: string }>; manifest: { name: string; version?: string }; reviewHash: string; capabilities: string[]; addedCapabilities: string[]; diagnostics: Array<{ component: string; message: string }>; installed: boolean };
 
 function capabilityLabel(capability: string, zh: boolean): string {
   if (capability.startsWith('content.skills:')) {
@@ -23,12 +25,15 @@ function capabilityLabel(capability: string, zh: boolean): string {
   }
   if (capability.startsWith('runtime.mcp.stdio:')) {
     const name = capability.slice('runtime.mcp.stdio:'.length).split(':', 1)[0];
-    return zh ? `在本机运行工具服务：${name}` : `Run a local tool service: ${name}`;
+    return zh ? `在 Gateway 上运行工具服务：${name}` : `Run a tool service on the Gateway: ${name}`;
   }
   if (capability.startsWith('network.mcp:')) {
     const name = capability.slice('network.mcp:'.length).split(':', 1)[0];
     return zh ? `连接外部工具服务：${name}` : `Connect to an external tool service: ${name}`;
   }
+  if (capability.startsWith('runtime.authorization:')) return zh ? `在本机运行账号登录程序：${capability.split(':')[1]}` : `Run account sign-in locally: ${capability.split(':')[1]}`;
+  if (capability.startsWith('runtime.resource:')) return zh ? `下载可执行资源：${capability.split(':')[1]}` : `Download executable resource: ${capability.split(':')[1]}`;
+  if (capability.startsWith('network.resource:')) return zh ? `下载并校验资源：${capability.split(':')[1]}` : `Download and verify resource: ${capability.split(':')[1]}`;
   return capability;
 }
 
@@ -43,11 +48,11 @@ async function request<T>(path: string, method: string, body?: unknown): Promise
   return result.payload;
 }
 
-export function PluginMcpConnection({ pluginId, server, enabled }: { pluginId: string; server: { id: string; name: string; type: string }; enabled: boolean }) {
+export function PluginMcpConnection({ pluginId, server, enabled }: { pluginId: string; server: { id: string; name: string; type: string; connectionAuth?: { mode: string; headerName?: string; prefix?: string } }; enabled: boolean }) {
   const zh = useLocaleStore(s => s.language).startsWith('zh');
   const [secret, setSecret] = useState(''); const [busy, setBusy] = useState(false); const [message, setMessage] = useState('');
-  const [key, setKey] = useState(server.type === 'stdio' ? 'API_KEY' : 'Authorization');
-  const [prefix, setPrefix] = useState(server.type === 'stdio' ? '' : 'Bearer ');
+  const [key, setKey] = useState(server.connectionAuth?.headerName ?? (server.type === 'stdio' ? 'API_KEY' : 'Authorization'));
+  const [prefix, setPrefix] = useState(server.connectionAuth?.prefix ?? (server.type === 'stdio' ? '' : 'Bearer '));
   return <div className="rounded-lg border border-edge p-3 text-sm"><p className="font-medium">{server.name} · {server.type}</p>
     <p className="mt-2 break-all font-mono text-xs text-fg-muted">{server.type === 'stdio' ? 'xopc mcp list' : `xopc mcp login ${server.id}`}</p>
     <form className="mt-3 space-y-2" onSubmit={event => { event.preventDefault(); setBusy(true); setMessage('');
@@ -84,8 +89,9 @@ export function AgentPluginDialog({
   const sourceInputId = useId();
   const { mutate } = useSWRConfig();
   const [currentExtension, setCurrentExtension] = useState(extension);
-  const [source, setSource] = useState(initialSource);
+  const [source, setSource] = useState(initialSource || extension?.installationSource || '');
   const [plan, setPlan] = useState<Plan | null>(null);
+  const [candidates, setCandidates] = useState<NonNullable<Plan['candidates']>>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [removeData, setRemoveData] = useState(false);
@@ -94,6 +100,7 @@ export function AgentPluginDialog({
   const [dragActive, setDragActive] = useState(false);
   const [sourcePickerOpen, setSourcePickerOpen] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
+  const navigate = useNavigate();
   const [installComplete, setInstallComplete] = useState(false);
   const autoInstallStarted = useRef(false);
   const base = `/api/extensions/agent-plugins/${encodeURIComponent(currentExtension?.pluginId ?? '')}`;
@@ -103,6 +110,7 @@ export function AgentPluginDialog({
   function updateSource(next: string) {
     setSource(next);
     setPlan(null);
+    setCandidates([]);
     setError('');
   }
   const desktopFileApi = typeof window !== 'undefined' ? window.electronAPI?.file : undefined;
@@ -157,16 +165,17 @@ export function AgentPluginDialog({
     let next = await request<ExtensionApiRow>(installing ? '/api/extensions/install' : `${base}/update`, 'POST', {
       source,
       reviewHash: reviewedPlan.reviewHash,
+      ...(reviewedPlan.layout ? { setup: true } : {}),
     });
     setCurrentExtension(next);
     await refresh();
-    if (installing && !next.activationEligible && next.readiness !== 'blocked' && next.pluginId) {
+    if (!reviewedPlan.layout && installing && !next.activationEligible && next.readiness !== 'blocked' && next.pluginId) {
       next = await request<ExtensionApiRow>(`/api/extensions/agent-plugins/${encodeURIComponent(next.pluginId)}/activation`, 'POST', { enabled: true });
       setCurrentExtension(next);
       await refresh();
     }
     setPlan(null);
-    setInstallComplete(installing && next.activationEligible === true);
+    setInstallComplete(!reviewedPlan.layout && installing && next.activationEligible === true);
   }
   async function beginStoreInstall() {
     const inspected = await request<Plan>('/api/extensions/inspect', 'POST', { source });
@@ -177,19 +186,24 @@ export function AgentPluginDialog({
     await installPlan(inspected);
   }
   useEffect(() => {
-    if (extension) setCurrentExtension(extension);
+    if (extension && !extension.setup) setCurrentExtension(extension);
   }, [extension]);
+  useEffect(() => {
+    if (!extension?.setup || !extension.pluginId) return;
+    let cancelled = false;
+    void request<ExtensionApiRow>(`/api/extensions/agent-plugins/${encodeURIComponent(extension.pluginId)}`, 'GET').then(value => { if (!cancelled) setCurrentExtension(value); }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [extension?.pluginId]);
   useEffect(() => {
     if (!autoInstall || currentExtension || !storeSource || autoInstallStarted.current) return;
     autoInstallStarted.current = true;
     void run(beginStoreInstall);
   }, [autoInstall, currentExtension, storeSource]);
   const startingAutomatically = autoInstall && !currentExtension && storeSource && !autoInstallStarted.current;
-  const components = currentExtension?.components;
   return <Dialog.Root defaultOpen onOpenChange={open => !open && onClose()}><Dialog.Portal>
     <Dialog.Overlay className="fixed inset-0 z-[130] bg-scrim" />
-    <Dialog.Content className="fixed left-1/2 top-1/2 z-[131] flex h-[min(76vh,30rem)] w-[min(34rem,calc(100vw-1.5rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-edge bg-surface-overlay shadow-popover">
-      <div className="flex shrink-0 items-center justify-between border-b border-edge p-4"><Dialog.Title className="font-semibold">{currentExtension?.name ?? marketplaceName ?? (zh ? '安装 Agent Plugin' : 'Install Agent Plugin')}</Dialog.Title><Button variant="ghost" onClick={onClose}>{zh ? '关闭' : 'Close'}</Button></div>
+    <Dialog.Content className="fixed left-1/2 top-1/2 z-[131] flex h-[min(82vh,42rem)] w-[min(38rem,calc(100vw-1.5rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-edge bg-surface-overlay shadow-popover">
+      <div className="flex shrink-0 items-center justify-between border-b border-edge p-4"><div className="flex min-w-0 items-center gap-3"><CapabilityIcon iconUrl={currentExtension?.branding?.iconUrl ?? marketplace?.branding?.iconUrl} fallback={Package} /><Dialog.Title className="font-semibold">{currentExtension?.name ?? marketplaceName ?? (zh ? '安装 Agent Plugin' : 'Install Agent Plugin')}</Dialog.Title></div><Button variant="ghost" onClick={onClose}>{zh ? '关闭' : 'Close'}</Button></div>
       <Dialog.Description className="sr-only">{zh ? '安装、组件、账号连接和权限' : 'Installation, components, connections and permissions'}</Dialog.Description>
       <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
         {!currentExtension && storeSource ? <section className="space-y-4">
@@ -200,7 +214,7 @@ export function AgentPluginDialog({
               {marketplaceDescription ? <p className="mt-1 text-sm leading-relaxed text-fg-muted">{marketplaceDescription}</p> : null}
               <p className="mt-2 text-xs text-fg-muted">
                 {marketplace?.publisher?.verification === 'verified'
-                  ? (zh ? '已认证发布者 · 安装后自动启用' : 'Verified publisher · enabled automatically after installation')
+                  ? (zh ? '已认证发布者 · 安装后所有 Agent 均可使用' : 'Verified publisher · available to all agents after installation')
                   : (zh ? '安装前会检查来源和所需权限' : 'Source and required permissions are checked before installation')}
               </p>
             </div>
@@ -219,10 +233,14 @@ export function AgentPluginDialog({
             <CheckCircle2 className="mt-0.5 size-5 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden />
             <div><p className="font-medium text-fg">{zh ? '插件已安装并启用' : 'Plugin installed and enabled'}</p><p className="mt-1 text-sm text-fg-muted">{zh ? '现在可以直接在对话中使用它。' : 'It is ready to use in your conversations.'}</p></div>
           </div> : null}
-          {!currentExtension.activationEligible ? <div role="status" className="space-y-3 rounded-lg border border-accent/25 bg-accent-soft p-4">
+          {(!currentExtension.setup || currentExtension.readiness !== 'setup_required') && !currentExtension.activationEligible ? <div role="status" className="space-y-3 rounded-lg border border-accent/25 bg-accent-soft p-4">
             <div><p className="font-medium text-accent-fg">{zh ? '插件已安装，当前尚未启用' : 'Plugin installed. It is not enabled yet.'}</p><p className="mt-1 text-sm text-fg-muted">{zh ? '启用后，Skills 和 MCP 才会加入 Agent 运行时。' : 'Enable it to make its skills and MCP servers available to the Agent runtime.'}</p></div>
             <Button disabled={busy || currentExtension.readiness === 'blocked'} onClick={() => void run(() => setActivation(true))}>{zh ? '启用插件' : 'Enable plugin'}</Button>
           </div> : null}
+          {currentExtension.setup ? <PluginSetupPanel extension={currentExtension} zh={zh} onStart={onClose} onInstalled={() => { onClose(); navigate(`/capabilities/extensions/${encodeURIComponent(currentExtension.pluginId!)}`); }} onChanged={async () => { const next = await request<ExtensionApiRow>(`${base}`, 'GET'); setCurrentExtension(next); await refresh(); }} /> : null}
+          <details className="rounded-lg border border-edge p-3">
+            <summary className="cursor-pointer text-sm font-medium">{zh ? '插件详情' : 'Plugin details'}</summary>
+            <div className="mt-3 space-y-3">
           <p className="text-sm text-fg-muted">Agent Plugin · {currentExtension.version} · {currentExtension.readiness && ({ ready: zh ? '已就绪' : 'Ready', setup_required: zh ? '待连接' : 'Setup required', degraded: zh ? '部分不可用' : 'Partially available', blocked: zh ? '已阻止' : 'Blocked' })[currentExtension.readiness]}</p>
           {currentExtension.provenance ? <p className="break-words text-xs text-fg-muted">
             {currentExtension.provenance.publisherVerification === 'verified' ? (zh ? '已认证发布者' : 'Verified publisher') : (zh ? '社区发布者' : 'Community publisher')}
@@ -231,34 +249,26 @@ export function AgentPluginDialog({
             {currentExtension.provenance.riskTier ? ` · ${currentExtension.provenance.riskTier}` : ''}
           </p> : null}
           <p className="text-sm">{currentExtension.description}</p>
+          {currentExtension.installationSource ? <p className="break-all text-xs text-fg-muted">{zh ? '来源：' : 'Source: '}{currentExtension.installationSource}{currentExtension.resolvedCommit ? ` · ${currentExtension.resolvedCommit.slice(0, 12)}` : ''}</p> : null}
           {currentExtension.activationEligible ? <Button disabled={busy} variant="secondary" onClick={() => void run(() => setActivation(false))}>{zh ? '停用' : 'Disable'}</Button> : null}
           {currentExtension.canRollback ? <Button disabled={busy} variant="secondary" onClick={() => void run(async () => { setCurrentExtension(await request<ExtensionApiRow>(`${base}/rollback`, 'POST')); await refresh(); })}>{zh ? '回滚上一版本' : 'Roll back'}</Button> : null}
-          {components?.skills.length || components?.mcp.length ? <div className="space-y-3 rounded-lg border border-edge p-3">
-            <div>
-              <p className="text-sm font-medium">{zh ? '此插件提供的能力' : 'Capabilities from this plugin'}</p>
-              {components.skills.length ? <p className="mt-1 text-sm text-fg-muted">Skills: {components.skills.map(s => s.name).join(', ')}</p> : null}
-              {components.mcp.length ? <p className="mt-1 text-sm text-fg-muted">MCP: {components.mcp.map(server => server.name).join(', ')}</p> : null}
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {components.skills.length ? <Button asChild variant="secondary"><Link to="/capabilities/skills?source=plugin">{zh ? '管理技能' : 'Manage skills'}</Link></Button> : null}
-              {components.mcp.length ? <Button asChild variant="secondary"><Link to="/capabilities/connectors?tab=connected">{zh ? '管理连接' : 'Manage connections'}</Link></Button> : null}
-            </div>
-          </div> : null}
           {currentExtension.components?.mcp.length ? <details className="group rounded-lg border border-edge p-3">
             <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-sm font-medium text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
               <span>{zh ? '连接与密钥（按需）' : 'Connections and API keys (as needed)'}</span>
               <ChevronDown className="size-4 text-fg-muted transition-transform group-open:rotate-180 motion-reduce:transition-none" aria-hidden />
             </summary>
             <p className="mt-2 text-xs text-fg-muted">{zh ? '仅当工具服务提示登录或缺少密钥时设置。' : 'Only configure this when a tool service asks you to sign in or provide a key.'}</p>
-            <div className="mt-3 space-y-3">{currentExtension.components.mcp.map(server => <PluginMcpConnection key={server.id} pluginId={currentExtension.pluginId!} server={server} enabled={currentExtension.active} />)}</div>
+            <div className="mt-3 space-y-3">{currentExtension.components.mcp.map(server => <PluginMcpConnection key={server.id} pluginId={currentExtension.pluginId!} server={server} enabled={currentExtension.readiness !== 'blocked'} />)}</div>
           </details> : null}
+            </div>
+          </details>
           {currentExtension.diagnostics?.map((d, i) => <p key={i} className="text-sm text-fg-muted">{d.component}: {d.message}</p>)}
         </> : null}
-        {storeSource && currentExtension ? <Button variant="ghost" className="px-0" aria-expanded={advancedOpen} onClick={() => setAdvancedOpen(open => !open)}>
+        {currentExtension ? <Button variant="ghost" className="px-0" aria-expanded={advancedOpen} onClick={() => setAdvancedOpen(open => !open)}>
           <ChevronDown className={cn('size-4 transition-transform motion-reduce:transition-none', advancedOpen && 'rotate-180')} aria-hidden />
           {zh ? '高级操作' : 'Advanced actions'}
         </Button> : null}
-        {(!storeSource || advancedOpen) ? <form className={cn('space-y-3', currentExtension && 'border-t border-edge pt-4')} onSubmit={event => { event.preventDefault(); void run(async () => { setPlan(await request<Plan>('/api/extensions/inspect', 'POST', { source })); }); }}>
+        {((!currentExtension && !storeSource) || advancedOpen) ? <form className={cn('space-y-3', currentExtension && 'border-t border-edge pt-4')} onSubmit={event => { event.preventDefault(); void run(async () => { const result = await request<Plan>('/api/extensions/inspect', 'POST', { source }); if (result.candidates) { setCandidates(result.candidates); setPlan(null); } else { setCandidates([]); setPlan(result); } }); }}>
           <div
             data-testid="plugin-source-dropzone"
             className={cn(
@@ -288,7 +298,7 @@ export function AgentPluginDialog({
                   {currentExtension ? (zh ? '更新包来源' : 'Update package source') : (zh ? '安装包来源' : 'Package source')}
                 </label>
                 <p className="mt-0.5 text-xs text-fg-muted">
-                  {zh ? '拖入插件目录或 ZIP，也可输入 HTTPS ZIP 或 store:包名' : 'Drop a plugin directory or ZIP, or enter an HTTPS ZIP or store:package'}
+                  {zh ? '输入 github:组织/仓库、Git / ZIP 地址或宿主目录；marketplace 可选择插件。' : 'Enter github:owner/repo, a Git / ZIP URL or a Gateway directory. Marketplaces let you choose a plugin.'}
                 </p>
               </div>
             </div>
@@ -317,25 +327,27 @@ export function AgentPluginDialog({
           </div>
           <Button type="submit" variant="secondary" disabled={busy || !source}>{zh ? '检查安装包' : 'Inspect package'}</Button>
         </form> : null}
+        {candidates.length ? <div className="space-y-2" aria-label={zh ? '选择插件' : 'Choose a plugin'}>{candidates.map(candidate => <Button key={candidate.source} variant="secondary" className="w-full justify-start" onClick={() => { updateSource(candidate.source); void run(async () => setPlan(await request<Plan>('/api/extensions/inspect', 'POST', { source: candidate.source }))); }}>{candidate.name}</Button>)}</div> : null}
         {plan ? <div role="region" aria-labelledby="plugin-authorization-title" className="space-y-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm">
           <div className="flex items-start gap-3">
             <ShieldCheck className="mt-0.5 size-5 shrink-0 text-amber-700 dark:text-amber-300" aria-hidden />
             <div>
               <p id="plugin-authorization-title" className="font-medium text-fg">{zh ? '需要你的授权' : 'Your authorization is required'}</p>
-              <p className="mt-1 text-fg-muted">{zh ? '此插件需要以下新增能力。确认后会自动完成安装并启用。' : 'This plugin requests the capabilities below. After approval, installation and activation continue automatically.'}</p>
+              <p className="mt-1 text-fg-muted">{zh ? '此插件需要以下新增能力。确认后自动准备资源，按需登录账号，所有 Agent 均可使用。' : 'Review these capabilities. Resources are prepared automatically; sign in if needed. Available to all agents.'}</p>
             </div>
           </div>
           <ul className="space-y-2 rounded-lg border border-edge bg-surface-panel p-3 break-words">{plan.addedCapabilities.map(c => <li key={c} className="flex gap-2"><span aria-hidden>•</span><span>{capabilityLabel(c, zh)}</span></li>)}</ul>
+          {plan.capabilities.some(capability => capability.startsWith('runtime.')) ? <details><summary className="cursor-pointer text-fg-muted">{zh ? '查看执行内容' : 'View execution details'}</summary><ul className="mt-2 space-y-2 break-all font-mono text-xs">{plan.capabilities.filter(capability => capability.startsWith('runtime.')).map(capability => <li key={capability}>{capability}</li>)}</ul></details> : null}
           {plan.diagnostics.map((d, i) => <p key={i}>{d.component}: {d.message}</p>)}
           <div className="flex flex-wrap gap-2">
-            <Button disabled={busy || !!currentExtension && plan.manifest.name !== currentExtension.pluginId} onClick={() => void run(() => installPlan(plan))}>
+            <Button disabled={busy || !!currentExtension && plan.manifest.name !== currentExtension.name} onClick={() => void run(() => installPlan(plan))}>
               {busy ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
               {zh ? '授权并安装' : 'Authorize and install'}
             </Button>
             <Button variant="ghost" disabled={busy} onClick={() => setPlan(null)}>{zh ? '取消' : 'Cancel'}</Button>
           </div>
         </div> : null}
-        {currentExtension && (!storeSource || advancedOpen) ? <div className="border-t border-edge pt-4">
+        {currentExtension && advancedOpen ? <div className="border-t border-edge pt-4">
           {!confirmRemove ? <Button variant="ghost" disabled={busy} onClick={() => setConfirmRemove(true)}>{zh ? '卸载插件' : 'Uninstall'}</Button> : <div className="space-y-3 text-sm">
             <p>{zh ? '卸载保留账号凭据；服务端授权需到相应服务撤销。' : 'Credentials are retained. Revoke provider authorization in the service itself.'}</p>
             <label className="flex gap-2"><input type="checkbox" checked={removeData} onChange={e => setRemoveData(e.target.checked)} />{zh ? '同时删除插件数据' : 'Also delete plugin data'}</label>

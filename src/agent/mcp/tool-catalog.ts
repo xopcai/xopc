@@ -1,3 +1,4 @@
+import { resolveMcpSetupConfig } from './effective-server.js';
 import { join } from 'node:path';
 
 import { InMemoryCredentialStore, InMemoryModelsStore } from '@earendil-works/pi-ai';
@@ -43,7 +44,7 @@ async function runNativeMcpSession(config: Config, workspaceDir: string, serverI
   interaction?: McpLoginInteraction, options?: McpSessionOptions): Promise<McpCatalogTool[]> {
   const signal = interaction?.signal ?? options?.signal;
   signal?.throwIfAborted();
-  const loaded = await prepareNativeMcpConfig(config, workspaceDir);
+  const loaded = await prepareNativeMcpConfig(resolveMcpSetupConfig(config, serverId), workspaceDir);
   signal?.throwIfAborted();
   const entry = loaded.servers.find(server => server.name === serverId);
   if (!entry) throw new Error(`MCP server "${serverId}" is not configured or has invalid configuration.`);

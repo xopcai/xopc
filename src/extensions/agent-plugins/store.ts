@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import AdmZip from 'adm-zip';
@@ -10,6 +10,9 @@ import { writeTextAtomicSync } from '../../infra/write-file-atomic.js';
 import { createLogger } from '../../utils/logger.js';
 import { computeExtensionDirectoryIntegrity } from '../lockfile.js';
 import { containedPath, inspectAgentPlugin, pluginName, type PluginInspection } from './validation.js';
+import { prunePluginResourceCache } from './resources.js';
+import { PLUGIN_MANIFEST_PATHS } from './formats.js';
+import { pluginSourceKey } from './source-catalog.js';
 import type { AgentPluginSourceProvenance } from './sources.js';
 
 const provenanceSchema = z.strictObject({
@@ -24,6 +27,15 @@ const receiptFields = z.object({
   id: pluginName, revision: z.string().uuid(), source: z.string(), installedAt: z.string(),
   enabled: z.boolean(), integrity: z.string(), capabilities: z.array(z.string()),
   provenance: provenanceSchema.optional(),
+  adapterVersion: z.string().min(1).max(64).optional(),
+  credentialScope: z.literal('revision').optional(),
+  workspacePaths: z.array(z.string()).max(100).optional(),
+  resourceHashes: z.array(z.string()).optional(),
+  oauthServers: z.record(z.string(), z.string()).optional(),
+  importManifest: z.record(z.string(), z.unknown()).optional(),
+  resolvedCommit: z.string().regex(/^[a-f0-9]{40,64}$/).optional(),
+  declaredName: pluginName.optional(),
+
 });
 const receiptSchema = receiptFields.extend({ previous: receiptFields.optional() });
 const log = createLogger('AgentPlugins');
@@ -33,7 +45,7 @@ export interface InstalledAgentPlugin extends PluginInspection {
   readiness: 'ready' | 'setup_required' | 'degraded' | 'blocked';
 }
 export interface PluginInstallPlan extends PluginInspection {
-  integrity: string; reviewHash: string; addedCapabilities: string[]; installed: boolean;
+  installId: string; integrity: string; reviewHash: string; addedCapabilities: string[]; installed: boolean;
 }
 
 export class AgentPluginStore {
@@ -42,7 +54,7 @@ export class AgentPluginStore {
   revisionKey(): string {
     if (!existsSync(this.receiptsDir())) return '';
     return readdirSync(this.receiptsDir()).filter(name => name.endsWith('.json')).sort()
-      .map(name => { try { return `${name}:${statSync(join(this.receiptsDir(), name)).mtimeMs}`; } catch { return ''; } }).join('|');
+      .map(name => { try { const setupPath = join(this.stateDir, 'plugin-setup', name); return createHash('sha256').update(readFileSync(join(this.receiptsDir(), name))).update(existsSync(setupPath) ? readFileSync(setupPath) : '').digest('hex'); } catch { return ''; } }).join('|');
   }
   dataDir(id: string) { return containedPath(this.stateDir, join(this.stateDir, 'plugin-data', pluginName.parse(id))); }
   private revisionDir(id: string, revision: string) { return join(this.stateDir, 'plugins', pluginName.parse(id), z.string().uuid().parse(revision)); }
@@ -62,14 +74,23 @@ export class AgentPluginStore {
   }
   get(id: string): InstalledAgentPlugin | undefined {
     const receipt = this.receipt(id);
-    if (!receipt) return undefined;
+    return receipt ? this.fromReceipt(receipt) : undefined;
+  }
+  private fromReceipt(receipt: PluginReceipt): InstalledAgentPlugin {
+    const id = receipt.id;
     const rootDir = this.revisionDir(id, receipt.revision);
     try {
       validatePackageTree(rootDir);
-      const inspection = inspectAgentPlugin(rootDir, this.dataDir(id));
+      const inspection = inspectAgentPlugin(rootDir, this.dataDir(id), receipt.importManifest);
       const valid = computeExtensionDirectoryIntegrity(rootDir) === receipt.integrity;
       if (!valid) inspection.diagnostics.push({ component: 'package', message: 'Installed files differ from the reviewed package' });
-      const readiness = !valid ? 'blocked' : inspection.diagnostics.length ? 'degraded' : 'ready';
+      const previouslyReviewed = new Set(receipt.capabilities);
+      const adapterChanged = receipt.adapterVersion !== undefined && receipt.adapterVersion !== inspection.layout?.adapterVersion;
+      const capabilityChanged = inspection.capabilities.some(capability => !previouslyReviewed.has(capability) && !(receipt.adapterVersion === undefined && previouslyReviewed.has(capability.replace(/:\{\}:\{\}$/, ''))));
+      if (adapterChanged || capabilityChanged) inspection.diagnostics.push({ component: 'review', message: 'Adapter interpretation changed capabilities. Inspect and review this package again.' });
+      const setupPath = join(this.stateDir, 'plugin-setup', `${id}.json`);
+      const setup = existsSync(setupPath) ? JSON.parse(readFileSync(setupPath, 'utf8')) : undefined;
+      const readiness = !valid || adapterChanged || capabilityChanged || inspection.layout?.compatibility.some(item => item.component === 'hooks' || item.component === 'authorizations' && item.support === 'invalid') ? 'blocked' : setup?.packageRevision === receipt.revision && setup.state !== 'completed' && !setup.installed ? 'setup_required' : inspection.diagnostics.length || setup?.packageRevision === receipt.revision && (setup.partial || setup.installed && (setup.missingConfig?.length || setup.connections?.some((value: { state: string }) => value.state !== 'connected') || setup.authorizations?.some((value: { state: string }) => value.state !== 'connected'))) ? 'degraded' : 'ready';
       return { ...inspection, id, receipt, format: 'agent-plugin', readiness };
     } catch (error) {
       return { id, receipt, format: 'agent-plugin', readiness: 'blocked', rootDir,
@@ -91,31 +112,43 @@ export class AgentPluginStore {
       }
     });
   }
-  active(): InstalledAgentPlugin[] {
+  active(_agentId?: string, workspaceDir?: string): InstalledAgentPlugin[] {
     if (['1', 'true'].includes(process.env.XOPC_SKIP_EXTENSIONS ?? '')) return [];
-    return this.list().filter(p => p.receipt.enabled && p.readiness !== 'blocked');
+    return this.list().filter(p => p.receipt.enabled && p.readiness !== 'blocked' && (p.receipt.workspacePaths === undefined || workspaceDir !== undefined && p.receipt.workspacePaths.includes(existsSync(workspaceDir) ? realpathSync(workspaceDir) : resolve(workspaceDir))) && this.setupReady(p));
   }
-  inspect(source: string): PluginInstallPlan {
-    return this.withSource(source, root => this.plan(root));
+  private setupReady(plugin: InstalledAgentPlugin): boolean {
+    const path = join(this.stateDir, 'plugin-setup', `${plugin.id}.json`);
+    if (!existsSync(path)) return true;
+    try { const job = JSON.parse(readFileSync(path, 'utf8')); return job.packageRevision !== plugin.receipt.revision || (job.state === 'completed' || job.installed === true); }
+    catch { return false; }
   }
-  private plan(root: string): PluginInstallPlan {
+  inspect(source: string, sourceLabel = source, importManifest?: Record<string, unknown>): PluginInstallPlan {
+    return this.withSource(source, root => this.plan(root, sourceLabel, importManifest));
+  }
+  private plan(root: string, sourceLabel: string, importManifest?: Record<string, unknown>): PluginInstallPlan {
     validatePackageTree(root);
-    const initial = inspectAgentPlugin(root);
-    const inspection = inspectAgentPlugin(root, this.dataDir(initial.manifest.name));
+    const initial = inspectAgentPlugin(root, undefined, importManifest);
+    const existing = this.list().find(p => p.receipt.source === sourceLabel && p.manifest.name === initial.manifest.name);
+    const scoped = initial.layout?.dialect !== 'portable' || /^(?:git\+|github:|https:\/\/github\.com\/)/.test(sourceLabel) || sourceLabel.includes('#plugin=');
+    const installId = existing?.id ?? (scoped ? `${initial.manifest.name.slice(0, 48).replace(/[.-]+$/, '')}-${pluginSourceKey(sourceLabel)}` : initial.manifest.name);
+    const inspection = inspectAgentPlugin(root, this.dataDir(installId), importManifest);
     const integrity = computeExtensionDirectoryIntegrity(root)!;
-    const current = this.receipt(inspection.manifest.name);
+    const current = this.receipt(installId);
     const addedCapabilities = inspection.capabilities.filter(c => !current?.capabilities.includes(c));
-    const reviewHash = createHash('sha256').update(JSON.stringify([integrity, inspection.capabilities])).digest('hex');
-    return { ...inspection, integrity, reviewHash, addedCapabilities, installed: !!current };
+    const reviewHash = createHash('sha256').update(JSON.stringify(['plugin-adapter-v1', integrity, inspection.capabilities, installId, importManifest])).digest('hex');
+    return { ...inspection, installId, integrity, reviewHash, addedCapabilities, installed: !!current };
   }
-  install(source: string, options: { reviewHash?: string; replace?: boolean; expectedId?: string; sourceLabel?: string; provenance?: AgentPluginSourceProvenance } = {}): InstalledAgentPlugin {
+  install(source: string, options: { reviewHash?: string; replace?: boolean; expectedId?: string; sourceLabel?: string; provenance?: AgentPluginSourceProvenance; stage?: boolean; resolvedCommit?: string; importManifest?: Record<string, unknown> } = {}): InstalledAgentPlugin {
     return this.mutate(() => this.withSource(source, root => {
-      const plan = this.plan(root);
-      const id = plan.manifest.name;
-      if (options.expectedId && options.expectedId !== id) throw new Error('Update package identity does not match installed plugin');
+      const plan = this.plan(root, options.sourceLabel ?? source, options.importManifest);
+      const id = options.expectedId ?? plan.installId;
+      const expected = this.receipt(id);
+      if (expected && (expected.declaredName ?? expected.id) !== plan.manifest.name) throw new Error('Update package identity does not match installed plugin');
+      if (options.expectedId && !expected) throw new Error('Update package identity does not match installed plugin');
       const current = this.receipt(id);
       if (current && !options.replace) throw new Error('Plugin already installed; use update');
-      if ((!current || plan.addedCapabilities.length > 0) && options.reviewHash !== plan.reviewHash) throw new Error('Package capability review is required');
+      const changedExecutable = current && current.integrity !== plan.integrity && (plan.capabilities.some(capability => capability.startsWith('runtime.')) || current.capabilities.some(capability => capability.startsWith('runtime.')));
+      if ((!current || plan.addedCapabilities.length > 0 || changedExecutable) && options.reviewHash !== plan.reviewHash) throw new Error('Package capability review is required');
       if (options.reviewHash && options.reviewHash !== plan.reviewHash) throw new Error('Package changed after review; inspect again');
       validatePackageTree(root);
       const revision = randomUUID();
@@ -125,27 +158,92 @@ export class AgentPluginStore {
         cpSync(root, target, { recursive: true, dereference: false, verbatimSymlinks: true });
         // Reject links whose meaning changed after relocation before accepting the snapshot.
         validatePackageTree(target);
-        const installed = inspectAgentPlugin(target, this.dataDir(id));
+        const installed = inspectAgentPlugin(target, this.dataDir(id), options.importManifest);
         const integrity = computeExtensionDirectoryIntegrity(target)!;
         if (integrity !== plan.integrity) throw new Error('Package changed during installation');
         const label = options.sourceLabel ?? source;
-        this.write({ id, revision, source: /^(https:\/\/|store:)/.test(label) ? label : resolve(label), installedAt: new Date().toISOString(),
-          enabled: current?.enabled ?? false, integrity, capabilities: installed.capabilities,
+        const receipt: PluginReceipt = { id, revision, source: /^(https:\/\/|store:|git\+|github:)/.test(label) ? label : resolve(label), installedAt: new Date().toISOString(),
+          declaredName: installed.manifest.name, adapterVersion: installed.layout?.adapterVersion, credentialScope: 'revision', oauthServers: Object.fromEntries(Object.entries(installed.servers).filter(([, server]) => server.type !== 'stdio').map(([name, server]) => [name, server.type !== 'stdio' ? server.url : ''])), importManifest: options.importManifest, resolvedCommit: options.resolvedCommit, workspacePaths: current?.workspacePaths, resourceHashes: plan.resources?.map(resource => resource.sha256), enabled: current?.enabled ?? false, integrity, capabilities: installed.capabilities,
           ...(options.provenance ? { provenance: provenanceSchema.parse(options.provenance) } : {}),
-          previous: current ? receiptFields.parse(current) : undefined });
+          previous: current ? receiptFields.parse(current) : undefined };
+        writeTextAtomicSync(join(this.stateDir, 'plugin-revisions', id, `${revision}.json`), JSON.stringify(receiptFields.parse(receipt)));
+        if (options.stage && current) writeTextAtomicSync(this.pendingPath(id), JSON.stringify(receipt));
+        else this.write(receipt);
       } catch (error) {
         rmSync(target, { recursive: true, force: true });
+        rmSync(join(this.stateDir, 'plugin-revisions', id, `${revision}.json`), { force: true });
         throw error;
       }
-      return this.get(id)!;
+      return options.stage && current ? this.pending(id)! : this.get(id)!;
     }));
+  }
+  history(id: string): InstalledAgentPlugin[] {
+    const current = this.receipt(id), pending = this.pending(id);
+    const receipts = new Map<string, PluginReceipt>();
+    for (const receipt of [current, current?.previous, pending?.receipt]) if (receipt) receipts.set(receipt.revision, receipt);
+    const directory = join(this.stateDir, 'plugin-revisions', pluginName.parse(id));
+    if (existsSync(directory)) for (const name of readdirSync(directory)) {
+      if (!name.endsWith('.json')) continue;
+      const receipt = receiptFields.parse(JSON.parse(readFileSync(join(directory, name), 'utf8')));
+      if (receipt.id !== id) throw new Error('Plugin history identity mismatch');
+      receipts.set(receipt.revision, receipt);
+    }
+    return [...receipts.values()].map(receipt => this.fromReceipt(receipt));
+  }
+  /** Publish synchronous resource changes while the package lifecycle lock is held. */
+  withRevision<T>(id: string, revision: string, fn: () => T): T {
+    return this.mutate(() => {
+      if (this.receipt(id)?.revision !== revision && this.pending(id)?.receipt.revision !== revision) throw new Error('Plugin revision changed or was removed');
+      return fn();
+    });
+  }
+  private pendingPath(id: string) { return join(this.stateDir, 'plugin-pending', `${pluginName.parse(id)}.json`); }
+  pendingReceipt(id: string): PluginReceipt | undefined {
+    const path = this.pendingPath(id);
+    if (!existsSync(path)) return undefined;
+    const receipt = receiptSchema.parse(JSON.parse(readFileSync(path, 'utf8')));
+    if (receipt.id !== id) throw new Error('Staged plugin identity mismatch');
+    return receipt;
+  }
+  pending(id: string): InstalledAgentPlugin | undefined {
+    const receipt = this.pendingReceipt(id);
+    return receipt ? this.fromReceipt(receipt) : undefined;
+  }
+  commitPending(id: string): void {
+    this.mutate(() => {
+      const pending = this.pending(id);
+      if (!pending) return;
+      if (pending.readiness === 'blocked' || pending.receipt.previous?.revision !== this.receipt(id)?.revision) throw new Error('Staged update changed; inspect again');
+      this.write(pending.receipt);
+      rmSync(this.pendingPath(id), { force: true });
+    });
+  }
+  discardPending(id: string): void {
+    this.mutate(() => {
+      const pending = this.pending(id);
+      if (!pending) return;
+      rmSync(this.pendingPath(id), { force: true });
+      rmSync(pending.rootDir, { recursive: true, force: true });
+      try { const data = this.dataDir(id); rmSync(containedPath(data, join(data, 'resources', pending.receipt.revision)), { recursive: true, force: true }); }
+      catch (err) { log.warn({ err, pluginId: id }, 'Could not clean staged plugin resources'); }
+      prunePluginResourceCache(this);
+    });
   }
   setEnabled(id: string, enabled: boolean): InstalledAgentPlugin {
     return this.mutate(() => {
       const plugin = this.get(id);
       if (!plugin) throw new Error('Plugin not installed');
+      if (enabled && plugin.layout?.compatibility.some(item => item.component === 'hooks')) throw new Error('This plugin requires unsupported lifecycle hooks and cannot be enabled by this compatibility version');
       if (enabled && plugin.readiness === 'blocked') throw new Error('Repair the plugin before enabling it');
       this.write({ ...plugin.receipt, enabled });
+      return this.get(id)!;
+    });
+  }
+  setWorkspaceScope(id: string, workspacePaths?: string[] | null): InstalledAgentPlugin {
+    return this.mutate(() => {
+      const plugin = this.get(id);
+      if (!plugin) throw new Error('Plugin not installed');
+      this.write({ ...plugin.receipt, workspacePaths: workspacePaths === undefined ? plugin.receipt.workspacePaths : workspacePaths === null ? undefined : [...new Set(workspacePaths.map(path => existsSync(path) ? realpathSync(path) : resolve(path)))] });
       return this.get(id)!;
     });
   }
@@ -155,7 +253,7 @@ export class AgentPluginStore {
       const previous = receipt?.previous;
       if (!receipt || !previous || previous.id !== id) throw new Error('No rollback revision available');
       if (computeExtensionDirectoryIntegrity(this.revisionDir(id, previous.revision)) !== previous.integrity) throw new Error('Rollback revision integrity failed');
-      this.write({ ...previous, enabled: receipt.enabled, previous: receiptFields.parse(receipt) });
+      this.write({ ...previous, enabled: receipt.enabled, workspacePaths: receipt.workspacePaths, previous: receiptFields.parse(receipt) });
       return this.get(id)!;
     });
   }
@@ -166,8 +264,12 @@ export class AgentPluginStore {
       // Stop future discovery before deleting this package's revisions.
       rmSync(this.receiptPath(id));
       rmSync(join(this.stateDir, 'plugins', pluginName.parse(id)), { recursive: true, force: true });
+      rmSync(join(this.stateDir, 'plugin-revisions', id), { recursive: true, force: true });
       rmSync(join(this.stateDir, 'plugin-health', id), { recursive: true, force: true });
+      rmSync(this.pendingPath(id), { force: true });
+      rmSync(join(this.stateDir, 'plugin-setup', `${id}.json`), { force: true });
       if (removeData) rmSync(this.dataDir(id), { recursive: true, force: true });
+      prunePluginResourceCache(this);
     });
   }
   private withSource<T>(source: string, fn: (root: string) => T): T {
@@ -199,7 +301,7 @@ export class AgentPluginStore {
         }
       }
       const children = readdirSync(temp);
-      const root = existsSync(join(temp, 'plugin.json')) ? temp : children.length === 1 ? join(temp, children[0]) : temp;
+      const root = PLUGIN_MANIFEST_PATHS.some(path => existsSync(join(temp, path))) ? temp : children.length === 1 ? join(temp, children[0]) : temp;
       return fn(root);
     } finally { rmSync(temp, { recursive: true, force: true }); }
   }

@@ -27,6 +27,7 @@ export interface SkillLoadResult {
 }
 
 export interface SkillManagerOptions {
+  agentId?: string;
   isWorkspaceTrusted?: (workspaceDir: string) => boolean;
 }
 
@@ -50,7 +51,7 @@ export class SkillManager {
   constructor(workspace: string, bundledSkillsDir?: string, options: SkillManagerOptions = {}) {
     this.workspace = workspace;
     this.bundledSkillsDir = bundledSkillsDir || resolveBundledSkillsDir();
-    this.skillLoader = createSkillLoader({ isWorkspaceTrusted: options.isWorkspaceTrusted });
+    this.skillLoader = createSkillLoader({ agentId: options.agentId, isWorkspaceTrusted: options.isWorkspaceTrusted });
     this.initialize();
   }
 
@@ -263,6 +264,7 @@ export class SkillManager {
    * Find a skill by name
    */
   findSkill(name: string): Skill | undefined {
+    this.refreshPlugins();
     return this.skills.find(s => s.name === name);
   }
 
@@ -270,6 +272,7 @@ export class SkillManager {
    * Check if a skill exists
    */
   hasSkill(name: string): boolean {
+    this.refreshPlugins();
     return this.skills.some(s => s.name === name);
   }
 

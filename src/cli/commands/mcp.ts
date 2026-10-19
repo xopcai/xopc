@@ -1,6 +1,7 @@
 import { existsSync, readFileSync, writeFileSync, chmodSync } from 'node:fs';
 import { join } from 'node:path';
 import { main as piMain } from '@earendil-works/pi-coding-agent';
+import { resolveMcpSetupConfig } from '../../agent/mcp/effective-server.js';
 import { getNativePiAgentDir, prepareNativeMcpConfig } from '../../agent/mcp/native-mcp.js';
 import { Command } from 'commander';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
@@ -15,13 +16,13 @@ function createMcpCommand(ctx: CLIContext): Command {
   for (const action of ['list', 'login', 'logout'] as const) {
     const native = command.command(action).description(`Use pi's native MCP ${action}`);
     if (action !== 'list') native.argument('<server>', 'Configured MCP server ID');
-    if (action === 'list') native.option('--json', 'Print pi MCP diagnostics as JSON');
+    if (action === 'list') native.option('--json', 'Print pi MCP diagnostics as JSON').option('--agent <id>', 'Include plugins bound to this agent');
     if (action === 'login') native.option('--timeout <seconds>', 'Browser sign-in timeout in seconds');
-    native.action(async (serverOrOptions: string | { json?: boolean }, loginOptions?: { timeout?: string }) => {
+    native.action(async (serverOrOptions: string | { json?: boolean; agent?: string }, loginOptions?: { timeout?: string }) => {
       const server = typeof serverOrOptions === 'string' ? serverOrOptions : undefined;
       const options = typeof serverOrOptions === 'string' ? loginOptions : serverOrOptions;
       const config = loadConfig(ctx.configPath);
-      const mcp = await prepareNativeMcpConfig(config, ctx.workspacePath || process.cwd());
+      const mcp = await prepareNativeMcpConfig(server ? resolveMcpSetupConfig(config, server) : config, ctx.workspacePath || process.cwd(), (options as { agent?: string })?.agent);
       if (mcp.errors.length) throw new Error(mcp.errors.join('\n'));
       const path = join(getNativePiAgentDir(), 'mcp.json');
       if (existsSync(path) && JSON.parse(readFileSync(path, 'utf8')).xopcGenerated !== true) {
@@ -30,9 +31,9 @@ function createMcpCommand(ctx: CLIContext): Command {
       // A private generated view for the upstream CLI, never an independent configuration authority.
       if (existsSync(path)) chmodSync(path, 0o600);
       writeFileSync(path, JSON.stringify({ xopcGenerated: true,
-        mcpServers: Object.fromEntries(mcp.servers.map(entry => [entry.name, entry.config])),
+        mcpServers: Object.fromEntries(mcp.servers.filter(entry => !server || entry.name === server).map(entry => [mcp.credentialAliases?.[entry.name] ?? entry.name, entry.config])),
       }), { mode: 0o600 });
-      await piMain(['mcp', action, ...(server ? [server] : []),
+      await piMain(['mcp', action, ...(server ? [mcp.credentialAliases?.[server] ?? server] : []),
         ...(action === 'list' && (options as { json?: boolean })?.json ? ['--json'] : []),
         ...(action === 'login' && loginOptions?.timeout ? ['--timeout', loginOptions.timeout] : []),
       ]);

@@ -51,7 +51,8 @@ it('installs and enables a reviewed local plugin in one continuation', async () 
   expect(mocks.request).toHaveBeenNthCalledWith(3, '/api/extensions/agent-plugins/sample/activation', { method: 'POST', body: JSON.stringify({ enabled: true }) });
   expect(onClose).not.toHaveBeenCalled();
   expect(document.body.textContent).toContain('Plugin installed and enabled');
-  expect(document.querySelector('a[href="/capabilities/skills?source=plugin"]')).not.toBeNull();
+  expect(document.querySelector('a[href="/capabilities/skills?source=plugin"]')).toBeNull();
+  expect(document.body.textContent).toContain('Plugin details');
   expect(document.body.textContent).toContain('Disable');
   expect(document.body.textContent).not.toContain('Plugin installed. It is not enabled yet.');
 });
@@ -118,7 +119,7 @@ it('pauses one-click installation for authorization when a Store plugin can run 
   await act(async () => {});
 
   expect(document.body.textContent).toContain('Your authorization is required');
-  expect(document.body.textContent).toContain('Run a local tool service: data');
+  expect(document.body.textContent).toContain('Run a tool service on the Gateway: data');
   expect(mocks.request).toHaveBeenCalledTimes(1);
   await click('Authorize and install');
   expect(mocks.request).toHaveBeenCalledTimes(3);

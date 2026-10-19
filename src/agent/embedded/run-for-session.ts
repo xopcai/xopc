@@ -226,7 +226,7 @@ async function runEmbeddedTurnForSessionInner(params: RunEmbeddedForSessionParam
     if (executionToolPolicy.externalMaterialization) {
       tools.push(...await materializeNativeExternalTools({ conversationId, tools }));
     }
-    const mcp = config && executionToolPolicy.nativeMcp ? await prepareNativeMcpConfig(config, workspaceDir) : undefined;
+    const mcp = config && executionToolPolicy.nativeMcp ? await prepareNativeMcpConfig(config, workspaceDir, resolveEffectiveAgentProfileForSession(conversationId).agentId) : undefined;
     const promptCachePolicy = resolvePromptCachePolicy(
       config
         ? resolveEffectiveAgentProfileForSession(conversationId).config.runtime.promptCache

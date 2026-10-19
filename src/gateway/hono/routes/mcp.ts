@@ -1,3 +1,4 @@
+import { resolveMcpSetupConfig } from '../../../agent/mcp/effective-server.js';
 import type { Context, Hono } from 'hono';
 import { McpConnectionDrafts, McpDraftError, mcpConfigRevision } from '../../../agent/mcp/connection-drafts.js';
 import { withGatewayConfigWriteLock } from '../lib/config-write-lock.js';
@@ -55,15 +56,15 @@ export function registerMcpRoutes(app: Hono, deps: AuthenticatedRouteDeps): void
     });
   }));
   app.post('/api/mcp/servers/:id/probe', deps.strictRateLimitMiddleware, async c => {
-    const config = deps.service.currentConfig;
     const id = c.req.param('id');
+    const config = resolveMcpSetupConfig(deps.service.currentConfig, id);
     if (!Object.hasOwn(config.mcp?.servers ?? {}, id)) return c.json({ ok: false, error: 'MCP server not found.' }, 404);
     const result = await probeMcpConnection(config, getWorkspacePath(config) || process.cwd(), id);
     return c.json({ ok: true, payload: result });
   });
   app.post('/api/mcp/servers/:id/auth', deps.strictRateLimitMiddleware, async c => {
-    const config = deps.service.currentConfig;
     const id = c.req.param('id');
+    const config = resolveMcpSetupConfig(deps.service.currentConfig, id);
     if (!Object.hasOwn(config.mcp?.servers ?? {}, id)) return c.json({ ok: false, error: 'MCP server not found.' }, 404);
     try {
       const attempt = startMcpAuthorization(config, getWorkspacePath(config) || process.cwd(), id, getGatewayPrincipal(c).principalId);
@@ -91,8 +92,8 @@ export function registerMcpRoutes(app: Hono, deps: AuthenticatedRouteDeps): void
     return cancelled ? c.json({ ok: true }) : c.json({ ok: false, error: 'Sign-in not found.' }, 404);
   });
   app.post('/api/mcp/servers/:id/tools', deps.strictRateLimitMiddleware, async c => {
-    const cfg = deps.service.currentConfig;
     const id = c.req.param('id');
+    const cfg = resolveMcpSetupConfig(deps.service.currentConfig, id);
     if (!Object.hasOwn(cfg.mcp?.servers ?? {}, id)) {
       return c.json({ ok: false, error: 'MCP server not found.' }, 404);
     }
@@ -105,7 +106,7 @@ export function registerMcpRoutes(app: Hono, deps: AuthenticatedRouteDeps): void
   });
   app.get('/api/mcp/servers', c => {
     const cfg = deps.service.currentConfig;
-    const merged = loadMergedMcpConfig({ workspaceDir: getWorkspacePath(cfg) || './workspace', cfg });
+    const merged = loadMergedMcpConfig({ workspaceDir: getWorkspacePath(cfg) || './workspace', cfg, scope: 'management' });
     return c.json({ ok: true, payload: {
       servers: Object.entries(merged.config.mcpServers).map(([id, server]) => {
         const { xopcConnectionCheck, ...configuration } = server;
