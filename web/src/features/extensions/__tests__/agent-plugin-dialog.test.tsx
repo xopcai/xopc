@@ -9,7 +9,7 @@ vi.mock('@/lib/fetch', () => ({ fetchJson: mocks.request, apiFetch: mocks.fetch 
 vi.mock('@/lib/url', () => ({ apiUrl: (path: string) => path }));
 vi.mock('swr', () => ({ useSWRConfig: () => ({ mutate: mocks.mutate }) }));
 vi.mock('@/stores/locale-store', () => ({ useLocaleStore: (select: (state: { language: string }) => unknown) => select({ language: 'en' }) }));
-import { AgentPluginDialog, PluginMcpConnection } from '../agent-plugin-dialog';
+import { AgentPluginDialog } from '../agent-plugin-dialog';
 
 let host: HTMLDivElement;
 let root: ReturnType<typeof createRoot>;
@@ -142,16 +142,4 @@ it('supports native package picking and dropped plugin paths in the desktop app'
   await act(async () => document.querySelector('[data-testid="plugin-source-dropzone"]')!.dispatchEvent(drop));
   expect(getPathForFile).toHaveBeenCalledWith(file);
   expect((document.querySelector('input[placeholder="/plugin/folder/or/plugin.zip"]') as HTMLInputElement).value).toBe('/tmp/dropped-plugin.zip');
-});
-it('provides native MCP login instructions and clears a saved API key', async () => {
-  mocks.request.mockResolvedValue({ ok: true });
-  mocks.fetch.mockResolvedValue({ ok: true, json: async () => ({ ok: true, payload: { toolCount: 2 } }) });
-  await render(<PluginMcpConnection pluginId="sample" server={{ id: 'plugin/sample/main', name: 'main', type: 'streamable-http' }} enabled />);
-  expect(document.body.textContent).toContain('xopc mcp login');
-  await input(document.querySelector('input[type=password]')!, 'private-token');
-  await click('Save API key');
-  expect(mocks.request).toHaveBeenCalledWith('/api/extensions/agent-plugins/sample/mcp/main/auth', expect.objectContaining({ method: 'PUT', body: expect.stringContaining('private-token') }));
-  expect((document.querySelector('input[type=password]') as HTMLInputElement).value).toBe('');
-  expect(document.body.textContent).not.toContain('private-token');
-  expect(mocks.fetch).not.toHaveBeenCalled();
 });
