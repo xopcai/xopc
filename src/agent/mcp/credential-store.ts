@@ -1,14 +1,13 @@
 import type { McpExtensionOptions } from '@earendil-works/pi-coding-agent';
 
+import { loadNativeMcpCredentialModules } from './credential-store-modules.js';
+
 export type NativeMcpCredentials = NonNullable<McpExtensionOptions['credentials']>;
 
 /** Use pi's own stores; never change PI_CODING_AGENT_DIR for an individual connection. */
 export async function createNativeMcpCredentials(memory = false): Promise<NativeMcpCredentials> {
-  // pi 1.1 exposes the injection contract, but its store constructors are internal modules.
-  const root = import.meta.resolve('@earendil-works/pi-coding-agent');
-  const { McpOAuthCredentialStore } = await import(new URL('./extensions/mcp/oauth.js', root).href);
+  const { McpOAuthCredentialStore, InMemoryAuthStorageBackend } = await loadNativeMcpCredentialModules();
   if (!memory) return new McpOAuthCredentialStore() as NativeMcpCredentials;
-  const { InMemoryAuthStorageBackend } = await import(new URL('./core/auth-storage.js', root).href);
   return new McpOAuthCredentialStore(new InMemoryAuthStorageBackend()) as NativeMcpCredentials;
 }
 

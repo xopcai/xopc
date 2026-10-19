@@ -13,6 +13,7 @@ import { copySqliteAssets } from './sqlite-assets.mjs';
 import { buildPersonalResultWorker } from './build-personal-result-worker.mjs';
 
 import { ELECTRON_GATEWAY_EXTERNALS } from './electron-runtime-externals.mjs';
+import { electronPiCredentialsPlugin } from './electron-pi-credentials.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const entry = join(root, 'src/cli/bin.ts');
@@ -42,6 +43,7 @@ const gatewayBuild = await esbuild.build({
   target: 'node22',
   outfile,
   external,
+  plugins: [electronPiCredentialsPlugin()],
   format: 'esm',
   define: { PI_BUNDLED_NODE: 'true' },
   // ESM bundle: dependents (e.g. @larksuiteoapi/node-sdk) use `__dirname` / CJS `require`.
@@ -59,6 +61,13 @@ const gatewayBuild = await esbuild.build({
   sourcemap: false,
   metafile: true,
 });
+
+for (const module of ['extensions/mcp/oauth.js', 'core/auth-storage.js']) {
+  if (!Object.keys(gatewayBuild.metafile.inputs).some(input =>
+    input.endsWith(`/@earendil-works/pi-coding-agent/dist/${module}`))) {
+    throw new Error(`[build-electron-server] Native MCP credential module was not bundled: ${module}`);
+  }
+}
 
 // The result parser must remain outside the gateway event loop in packaged builds too.
 await buildPersonalResultWorker(root, join(root, 'out/server/result-extraction.js'), minify);
