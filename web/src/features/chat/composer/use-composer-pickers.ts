@@ -38,7 +38,7 @@ export interface UseComposerPickersOptions {
   clearAttachments: () => void;
 
   onSend: ComposerSendHandler;
-  onUserTextCommitted?: (text: string) => void;
+  onUserTextCommitted?: (text: string, conversationId?: string) => void;
   /** Optional: when set, palette can offer agent rows that switch the active session agent. */
   onChatAgentChange?: (agentId: string) => void;
   /** Active session agent id; used to resolve skill availability in `/` palette. */

@@ -43,6 +43,8 @@ export function useProjectSessionComposer({ preparation, conversationId, ready, 
   const projectSendPendingRef = useRef(false);
   const onSendRef = useRef(onSend);
   onSendRef.current = onSend;
+  const boundConversationRef = useRef(conversationId);
+  boundConversationRef.current = conversationId;
   const { data: options, error, isValidating, mutate } = useSWR(
     preparation ? ['project-environment-options', baseUrl, token, preparation.project.id] : null,
     async () => (await fetchJson<{ options: ProjectEnvironmentOptions }>(apiUrl(`/api/projects/${encodeURIComponent(preparation!.project.id)}/environment-options`))).options,
@@ -121,12 +123,14 @@ export function useProjectSessionComposer({ preparation, conversationId, ready, 
   }, [allowed, baseUrl, finish, isValidating, mode, mutate, preparation, conversationId, token]);
 
   const send: ComposerSendHandler = async (...args) => {
+    let targetConversationId = conversationId;
     if (preparation) {
       if (projectSendPendingRef.current) return false;
       projectSendPendingRef.current = true;
       try {
         const preparedConversationId = await prepareSession();
         if (!preparedConversationId) return false;
+        targetConversationId = preparedConversationId;
         // Use the newly hydrated session's effort instead of the unbound composer's placeholder.
         args[2] = undefined;
       } finally {
@@ -134,7 +138,9 @@ export function useProjectSessionComposer({ preparation, conversationId, ready, 
       }
     }
     // The session-bound callback changes after navigation; never send through the old one.
-    return onSendRef.current(...args);
+    if (!targetConversationId || boundConversationRef.current !== targetConversationId) return false;
+    const accepted = await onSendRef.current(...args);
+    return accepted === false ? false : { conversationId: targetConversationId };
   };
 
   return {
