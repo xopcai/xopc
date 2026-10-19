@@ -1,5 +1,6 @@
+import { pluginCanStart, pluginNeedsAuthorization } from './plugin-presentation';
 import { extensionCardClass, extensionCardGridClass, extensionCardTriggerClass } from './extension-card-styles';
-import { pluginDetailPath } from '@/features/capabilities/capability-links';
+import { pluginDetailPath, pluginStartPath } from '@/features/capabilities/capability-links';
 import * as Dialog from '@radix-ui/react-dialog';
 import { AlertTriangle, ArrowLeft, CheckCircle, Loader2, Package, ShieldCheck, Trash2, X } from 'lucide-react';
 import { useCallback, useEffect, useReducer, useState } from 'react';
@@ -183,7 +184,7 @@ export function ExtensionMarketplacePanel({
                   <button
                     type="button"
                     aria-label={`${displayName}, ${copy.marketplaceDetailTitle}`}
-                    onClick={() => installed?.pluginId ? navigate(pluginDetailPath(installed.pluginId, 'installed', installed.authorizationStatus === 'required', location.pathname + location.search)) : dispatch({ type: 'patch', patch: { detailPkg: e.id } })}
+                    onClick={() => installed?.pluginId ? navigate(pluginDetailPath(installed.pluginId, 'installed', false, location.pathname + location.search)) : dispatch({ type: 'patch', patch: { detailPkg: e.id } })}
                     className={extensionCardTriggerClass}
                   />
                   <div className="pointer-events-none relative flex items-start gap-3">
@@ -195,7 +196,7 @@ export function ExtensionMarketplacePanel({
                       </div>
                       <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-fg-subtle">
                         {e.version ? <span>v{e.version}</span> : null}
-                        {kind === 'user' ? <span className={installed?.authorizationStatus === 'required' ? 'text-amber-700 dark:text-amber-400' : 'text-fg-muted'}>{installed?.authorizationStatus === 'required' ? (language.startsWith('zh') ? '需要授权' : 'Authorization required') : copy.marketplaceInstalled}</span> : null}
+                        {kind === 'user' ? <span className={!!installed && pluginNeedsAuthorization(installed) ? 'text-amber-700 dark:text-amber-400' : 'text-fg-muted'}>{!!installed && pluginNeedsAuthorization(installed) ? (language.startsWith('zh') ? '需要授权' : 'Authorization required') : copy.marketplaceInstalled}</span> : null}
                       </div>
                     </div>
                     <div role="group" className="pointer-events-auto relative z-10 flex max-w-[45%] shrink-0 items-start">
@@ -207,14 +208,14 @@ export function ExtensionMarketplacePanel({
                         <>
                           {e.packageType === 'plugin' ? <button
                             type="button"
-                            onClick={() => installed?.pluginId ? navigate(pluginDetailPath(installed.pluginId, 'installed', installed.authorizationStatus === 'required', location.pathname + location.search)) : dispatch({ type: 'patch', patch: { detailPkg: e.id, quickInstallPkg: null } })}
+                            onClick={() => installed?.pluginId && pluginCanStart(installed) ? navigate(pluginStartPath(displayName, language.startsWith('zh'))) : installed?.pluginId ? navigate(pluginDetailPath(installed.pluginId, 'installed', pluginNeedsAuthorization(installed), location.pathname + location.search)) : dispatch({ type: 'patch', patch: { detailPkg: e.id, quickInstallPkg: null } })}
                             className={cn(
                               'inline-flex items-center justify-center rounded-lg border border-edge px-3 py-2 text-xs font-medium text-fg',
                               'transition-colors active:scale-[0.98] active:bg-surface-hover/80',
                               'hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
                             )}
                           >
-                            {installed?.authorizationStatus === 'required' ? (language.startsWith('zh') ? '去授权' : 'Connect account') : (language.startsWith('zh') ? '查看详情' : 'View details')}
+                            {!!installed && pluginNeedsAuthorization(installed) ? (language.startsWith('zh') ? '去授权' : 'Connect account') : installed && pluginCanStart(installed) ? (language.startsWith('zh') ? '开始使用' : 'Start using') : (language.startsWith('zh') ? '管理插件' : 'Manage plugin')}
                           </button> : <button
                             type="button"
                             disabled={busy}

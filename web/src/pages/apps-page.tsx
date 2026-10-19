@@ -1,6 +1,6 @@
 import { extensionCardClass, extensionCardGridClass, extensionCardTriggerClass } from '@/features/extensions/extension-card-styles';
-import { pluginDisplayName } from '@/features/extensions/plugin-presentation';
-import { pluginDetailPath } from '@/features/capabilities/capability-links';
+import { pluginCanStart, pluginDisplayName, pluginNeedsAuthorization } from '@/features/extensions/plugin-presentation';
+import { pluginDetailPath, pluginStartPath } from '@/features/capabilities/capability-links';
 import * as Dialog from '@radix-ui/react-dialog';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { ArrowLeft, Box, CheckCircle, ExternalLink, Loader2, MoreHorizontal, Plus, Settings, Trash2, X } from 'lucide-react';
@@ -200,9 +200,9 @@ export function ExtensionsPage({ embedded = false, onHeaderActionChange }: { emb
   }, [clearPageHeader, embedded, headerContribution, m.extensionsPage.title, onHeaderActionChange, setPageHeader]);
 
   const tabItems = [
+    { id: 'user' as const, label: m.extensionsPage.tabUser, count: loading ? undefined : userExtensions.length },
     { id: 'marketplace' as const, label: m.extensionsPage.tabMarketplace },
     { id: 'builtin' as const, label: m.extensionsPage.tabBuiltin, count: loading ? undefined : bundledExtensions.length },
-    { id: 'user' as const, label: m.extensionsPage.tabUser, count: loading ? undefined : userExtensions.length },
   ];
 
   return (
@@ -242,7 +242,7 @@ export function ExtensionsPage({ embedded = false, onHeaderActionChange }: { emb
                 key={ext.id}
                 extension={ext}
                 copy={m.extensionsPage}
-                onOpen={() => ext.pluginId ? navigate(pluginDetailPath(ext.pluginId, 'installed', ext.authorizationStatus === 'required', location.pathname + location.search)) : setDetail(ext)}
+                onOpen={() => ext.pluginId ? navigate(pluginDetailPath(ext.pluginId, 'installed', false, location.pathname + location.search)) : setDetail(ext)}
               />
             ))}
           </div>
@@ -287,9 +287,17 @@ function ExtensionAppCard({
 }) {
   const zh = useLocaleStore(state => state.language).startsWith('zh');
   const name = pluginDisplayName(ext, zh);
-  const needsAuth = ext.authorizationStatus === 'required';
+  const needsAuth = pluginNeedsAuthorization(ext);
   const description = ext.localizations?.[zh ? 'zh-CN' : 'en']?.description ?? ext.description;
-  const action = needsAuth ? (zh ? '去授权' : 'Connect account') : (zh ? '查看详情' : 'View details');
+  const navigate = useNavigate();
+  const location = useLocation();
+  const canStart = !!ext.pluginId && pluginCanStart(ext);
+  const action = needsAuth ? (zh ? '去授权' : 'Connect account') : canStart ? (zh ? '开始使用' : 'Start using') : (zh ? '管理插件' : 'Manage plugin');
+  const onAction = () => {
+    if (canStart) navigate(pluginStartPath(name, zh));
+    else if (needsAuth && ext.pluginId) navigate(pluginDetailPath(ext.pluginId, 'installed', true, location.pathname + location.search));
+    else onOpen();
+  };
 
   return (
     <article className={extensionCardClass}>
@@ -307,7 +315,7 @@ function ExtensionAppCard({
           </div>
         </div>
         <div className="pointer-events-auto relative z-10 flex max-w-[45%] shrink-0 items-start">
-          <button type="button" onClick={onOpen} className="inline-flex items-center justify-center rounded-lg border border-edge px-3 py-2 text-xs font-medium text-fg transition-colors hover:bg-surface-hover active:scale-[0.98] active:bg-surface-hover/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">{action}</button>
+          <button type="button" onClick={onAction} className="inline-flex items-center justify-center rounded-lg border border-edge px-3 py-2 text-xs font-medium text-fg transition-colors hover:bg-surface-hover active:scale-[0.98] active:bg-surface-hover/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">{action}</button>
         </div>
       </div>
       <p className="pointer-events-none relative mt-3 line-clamp-3 text-sm leading-relaxed text-fg-muted">{description?.trim() || copy.cardNoDescription}</p>

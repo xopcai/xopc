@@ -1,3 +1,4 @@
+import { pluginStartPath } from '@/features/capabilities/capability-links';
 import * as Dialog from '@radix-ui/react-dialog';
 import { Package, X } from 'lucide-react';
 import { useRef, useState } from 'react';
@@ -11,7 +12,7 @@ import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 import { useLocaleStore } from '@/stores/locale-store';
 import { AgentPluginDialog } from './agent-plugin-dialog';
-import { pluginDisplayName } from './plugin-presentation';
+import { pluginCanStart, pluginDisplayName } from './plugin-presentation';
 import { PluginSetupPanel } from './plugin-setup-panel';
 import type { ExtensionApiRow } from './types';
 
@@ -55,7 +56,7 @@ export function PluginDetailsDialog({ pluginId, initialConnect = false, onClose 
       </div>
       <footer className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-edge px-5 py-4">
         {data ? <Button variant="ghost" onClick={() => setManage(true)}>{zh ? '管理插件' : 'Manage plugin'}</Button> : <span />}
-        {data?.active && data.authorizationStatus !== 'required' ? <Button asChild><Link to={`/chat/new?${new URLSearchParams({ draft: zh ? `请帮我使用${name}插件。` : `Help me use the ${name} plugin.`, projectScope: 'none' })}`}>{zh ? '开始使用' : 'Start using'}</Link></Button> : <Dialog.Close asChild><Button variant="secondary">{zh ? '完成' : 'Done'}</Button></Dialog.Close>}
+        {data && pluginCanStart(data) ? <Button asChild><Link to={pluginStartPath(name, zh)}>{zh ? '开始使用' : 'Start using'}</Link></Button> : <Dialog.Close asChild><Button variant="secondary">{zh ? '完成' : 'Done'}</Button></Dialog.Close>}
       </footer>
     </Dialog.Content>
   </Dialog.Portal></Dialog.Root>;
