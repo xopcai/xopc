@@ -23,14 +23,14 @@ export function ExtensionSettingsPage() {
   const extensions = useExtensions();
 
   if (!extensionId) {
-    return <SettingsPanelNotFound message="No extension ID provided." />;
+    return <SettingsPanelNotFound message="No plugin ID provided." />;
   }
 
   const extension = extensions.find((ext) => ext.id === extensionId);
   if (!extension) {
     return (
       <SettingsPanelNotFound
-        message={`Extension "${extensionId}" not found or is not available in this workspace.`}
+        message={`Plugin "${extensionId}" not found or is not available in this workspace.`}
       />
     );
   }
@@ -48,7 +48,7 @@ export function ExtensionSettingsPage() {
   if (!hasAutoForm && !hasIframe && !hasProviderCredentialsUi) {
     return (
       <SettingsPanelNotFound
-        message={`Extension "${extensionId}" has no settings panels or config schema.`}
+        message={`Plugin "${extensionId}" has no settings panels or config schema.`}
       />
     );
   }

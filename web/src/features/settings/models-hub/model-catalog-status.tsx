@@ -90,7 +90,7 @@ function capabilityAction(capability: CapabilityId, zh: boolean) {
       };
     case 'stt':
       return {
-        guidance: zh ? '选择语音识别服务，或安装自管 STT 扩展' : 'Choose a speech-to-text service or install a self-managed STT extension',
+        guidance: zh ? '选择语音识别服务，或安装自管 STT 插件' : 'Choose a speech-to-text service or install a self-managed STT plugin',
         action: zh ? '去配置语音识别' : 'Configure speech-to-text',
       };
     case 'tts':
