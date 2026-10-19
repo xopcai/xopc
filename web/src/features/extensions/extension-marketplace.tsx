@@ -4,7 +4,7 @@ import { AlertTriangle, ArrowLeft, CheckCircle, Loader2, Package, ShieldCheck, T
 import { useCallback, useEffect, useReducer, useState } from 'react';
 
 import { uiPatchReducer } from '@/lib/settings-form-draft';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import useSWR, { useSWRConfig } from 'swr';
 
 import { MarkdownView } from '@/components/markdown/markdown-view';
@@ -64,6 +64,7 @@ export function ExtensionMarketplacePanel({
   query: string;
 }) {
   const navigate = useNavigate();
+  const location = useLocation();
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
   const copy = m.extensionsPage;
@@ -185,7 +186,7 @@ export function ExtensionMarketplacePanel({
                   <button
                     type="button"
                     aria-label={`${displayName}, ${copy.marketplaceDetailTitle}`}
-                    onClick={() => installed?.pluginId ? navigate(pluginDetailPath(installed.pluginId, 'installed', installed.authorizationStatus === 'required')) : dispatch({ type: 'patch', patch: { detailPkg: e.id } })}
+                    onClick={() => installed?.pluginId ? navigate(pluginDetailPath(installed.pluginId, 'installed', installed.authorizationStatus === 'required', location.pathname + location.search)) : dispatch({ type: 'patch', patch: { detailPkg: e.id } })}
                     className="flex min-w-0 flex-1 cursor-pointer flex-col gap-4 rounded-t-xl p-5 text-left transition-colors hover:bg-surface-hover/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent"
                   >
                     <div className="flex w-full min-w-0 items-center gap-3">
@@ -229,7 +230,7 @@ export function ExtensionMarketplacePanel({
                           </span>
                           {e.packageType === 'plugin' ? <button
                             type="button"
-                            onClick={() => installed?.pluginId ? navigate(pluginDetailPath(installed.pluginId, 'installed', installed.authorizationStatus === 'required')) : dispatch({ type: 'patch', patch: { detailPkg: e.id, quickInstallPkg: null } })}
+                            onClick={() => installed?.pluginId ? navigate(pluginDetailPath(installed.pluginId, 'installed', installed.authorizationStatus === 'required', location.pathname + location.search)) : dispatch({ type: 'patch', patch: { detailPkg: e.id, quickInstallPkg: null } })}
                             className={cn(
                               'inline-flex items-center justify-center rounded-lg border border-edge px-3 py-2 text-xs font-medium text-fg',
                               'transition-colors active:scale-[0.98] active:bg-surface-hover/80',

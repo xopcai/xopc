@@ -1,4 +1,5 @@
-import { useNavigate } from 'react-router-dom';
+import { pluginDetailPath } from '@/features/capabilities/capability-links';
+import { useLocation, useNavigate } from 'react-router-dom';
 import * as Dialog from '@radix-ui/react-dialog';
 import { CheckCircle2, ChevronDown, FileArchive, FolderOpen, Loader2, Package, ShieldCheck, Upload } from 'lucide-react';
 import { useEffect, useId, useRef, useState, type DragEvent as ReactDragEvent } from 'react';
@@ -81,6 +82,7 @@ export function AgentPluginDialog({
   const [sourcePickerOpen, setSourcePickerOpen] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
   const [installComplete, setInstallComplete] = useState(false);
   const autoInstallStarted = useRef(false);
   const base = `/api/extensions/agent-plugins/${encodeURIComponent(currentExtension?.pluginId ?? '')}`;
@@ -217,7 +219,7 @@ export function AgentPluginDialog({
             <div><p className="font-medium text-accent-fg">{zh ? '插件已安装，当前尚未启用' : 'Plugin installed. It is not enabled yet.'}</p><p className="mt-1 text-sm text-fg-muted">{zh ? '启用后，Skills 和 MCP 才会加入 Agent 运行时。' : 'Enable it to make its skills and MCP servers available to the Agent runtime.'}</p></div>
             <Button disabled={busy || currentExtension.readiness === 'blocked'} onClick={() => void run(() => setActivation(true))}>{zh ? '启用插件' : 'Enable plugin'}</Button>
           </div> : null}
-          {currentExtension.setup ? <PluginSetupPanel extension={currentExtension} zh={zh} onStart={onClose} onInstalled={() => { onClose(); navigate(`/capabilities/extensions/${encodeURIComponent(currentExtension.pluginId!)}`); }} onChanged={async () => { const next = await request<ExtensionApiRow>(`${base}`, 'GET'); setCurrentExtension(next); await refresh(); }} /> : null}
+          {currentExtension.setup ? <PluginSetupPanel extension={currentExtension} zh={zh} onStart={onClose} onInstalled={() => { onClose(); navigate(pluginDetailPath(currentExtension.pluginId!, 'installed', false, location.pathname + location.search)); }} onChanged={async () => { const next = await request<ExtensionApiRow>(`${base}`, 'GET'); setCurrentExtension(next); await refresh(); }} /> : null}
           <details className="rounded-lg border border-edge p-3">
             <summary className="cursor-pointer text-sm font-medium">{zh ? '插件详情' : 'Plugin details'}</summary>
             <div className="mt-3 space-y-3">

@@ -16,7 +16,7 @@ it('links unavailable skills to owner authorization and explains package managem
   try {
     await act(async () => root.render(<MemoryRouter initialEntries={['/capabilities/skills?source=plugin&q=Demo']}><PluginSkillOwner skill={skill} detail /></MemoryRouter>));
     expect(host.textContent).toContain('统一更新和卸载');
-    expect(host.querySelector('a')?.getAttribute('href')).toBe('/capabilities/extensions/demo?from=skills&connect=1&returnTo=%2Fcapabilities%2Fskills%3Fsource%3Dplugin%26q%3DDemo');
+    expect(host.querySelector('a')?.getAttribute('href')).toBe('/capabilities/skills?source=plugin&q=Demo&plugin=demo&connect=1');
     expect(host.querySelector('button')).toBeNull();
   } finally { await act(async () => root.unmount()); }
 });

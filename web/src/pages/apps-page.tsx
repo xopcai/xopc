@@ -4,7 +4,7 @@ import * as Dialog from '@radix-ui/react-dialog';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { ArrowLeft, Box, Check, ExternalLink, Loader2, MoreHorizontal, Plus, Settings, Trash2, X } from 'lucide-react';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useSWRConfig } from 'swr';
 
 import { CapabilityIcon } from '@/features/capabilities/capability-icon';
@@ -42,6 +42,7 @@ type ExtensionsPageCopy = MessageBundle['extensionsPage'];
 
 export function ExtensionsPage({ embedded = false, onHeaderActionChange }: { embedded?: boolean; onHeaderActionChange?: CapabilityHeaderActionChange }) {
   const navigate = useNavigate();
+  const location = useLocation();
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
   const setPageHeader = usePageHeaderStore((s) => s.setPageHeader);
@@ -241,7 +242,7 @@ export function ExtensionsPage({ embedded = false, onHeaderActionChange }: { emb
                 extension={ext}
                 copy={m.extensionsPage}
                 showSourceBadge={mainTab === 'user'}
-                onOpen={() => ext.pluginId ? navigate(pluginDetailPath(ext.pluginId, 'installed')) : setDetail(ext)}
+                onOpen={() => ext.pluginId ? navigate(pluginDetailPath(ext.pluginId, 'installed', false, location.pathname + location.search)) : setDetail(ext)}
               />
             ))}
           </div>

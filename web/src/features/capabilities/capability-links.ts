@@ -1,7 +1,12 @@
 export type PluginEntryPoint = 'connections' | 'skills' | 'installed';
 
 export function pluginDetailPath(id: string, from: PluginEntryPoint, connect = false, returnTo?: string) {
-  return `/capabilities/extensions/${encodeURIComponent(id)}?${new URLSearchParams({ from, ...(connect ? { connect: '1' } : {}), ...(returnTo ? { returnTo } : {}) })}`;
+  const [path, query] = pluginReturnPath(from, returnTo).split('?');
+  const params = new URLSearchParams(query);
+  params.set('plugin', id);
+  if (connect) params.set('connect', '1');
+  else params.delete('connect');
+  return `${path}?${params}`;
 }
 
 export function pluginReturnPath(from: string | null, returnTo?: string | null) {

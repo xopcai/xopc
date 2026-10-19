@@ -1,6 +1,7 @@
+import { pluginDetailPath } from './capability-links';
 import { CapabilitySectionIntro } from './capability-section-intro';
 import { lazy, Suspense, useCallback, useLayoutEffect, useState } from 'react';
-import { Navigate, useParams } from 'react-router-dom';
+import { Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
 import { Skeleton } from '@/components/ui/skeleton';
 import {
@@ -18,7 +19,7 @@ import { usePageHeaderStore } from '@/stores/page-header-store';
 
 const SkillsPage = lazy(() => import('@/features/skills/skills-page').then(module => ({ default: module.SkillsPage })));
 const ConnectorsPage = lazy(() => import('@/features/connectors/connectors-page').then(module => ({ default: module.ConnectorsPage })));
-const PluginDetailsPage = lazy(() => import('@/features/extensions/plugin-details-page').then(module => ({ default: module.PluginDetailsPage })));
+const PluginDetailsDialog = lazy(() => import('@/features/extensions/plugin-details-dialog').then(module => ({ default: module.PluginDetailsDialog })));
 const ExtensionsPage = lazy(() => import('@/pages/apps-page').then(module => ({ default: module.ExtensionsPage })));
 const AgentsPage = lazy(() => import('@/features/settings/agents').then(module => ({ default: module.AgentsSettingsPanel })));
 const ChannelsPage = lazy(() => import('@/features/settings/channels').then(module => ({ default: module.ChannelsSettingsPanel })));
@@ -40,6 +41,15 @@ export function CapabilitiesPage() {
   const messageBundle = messages(language);
   const copy = messageBundle.capabilitiesHub;
   const { section: sectionParam, detailId } = useParams<{ section?: string; detailId?: string }>();
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const pluginId = searchParams.get('plugin');
+  const closePlugin = () => {
+    const next = new URLSearchParams(searchParams);
+    next.delete('plugin');
+    next.delete('connect');
+    navigate({ search: next.toString() }, { replace: true, preventScrollReset: true });
+  };
   const parsedSection = parseCapabilitySection(sectionParam);
   const section = parsedSection ?? 'skills';
   const sectionTitle = messageBundle.productNavigation.sections[`capabilities-${section}`];
@@ -60,6 +70,7 @@ export function CapabilitiesPage() {
     return () => clearPageHeader();
   }, [clearPageHeader, currentContribution, sectionTitle, setPageHeader]);
 
+  if (section === 'extensions' && detailId) return <Navigate replace to={pluginDetailPath(detailId, searchParams.get('from') === 'connections' ? 'connections' : searchParams.get('from') === 'skills' ? 'skills' : 'installed', searchParams.get('connect') === '1', searchParams.get('returnTo') ?? undefined)} />;
   if (!parsedSection) return <Navigate to="/capabilities/skills" replace />;
 
   return (
@@ -71,8 +82,9 @@ export function CapabilitiesPage() {
         {section === 'skills' ? <SkillsPage embedded onHeaderActionChange={onHeaderActionChange} /> : null}
         {section === 'connectors' ? <ConnectorsPage embedded onHeaderActionChange={onHeaderActionChange} /> : null}
         {section === 'channels' ? <ChannelsPage channelId={detailId} onHeaderActionChange={onHeaderActionChange} /> : null}
-        {section === 'extensions' ? detailId ? <PluginDetailsPage pluginId={detailId} /> : <ExtensionsPage embedded onHeaderActionChange={onHeaderActionChange} /> : null}
+        {section === 'extensions' ? <ExtensionsPage embedded onHeaderActionChange={onHeaderActionChange} /> : null}
       </Suspense>
+      {pluginId ? <Suspense fallback={null}><PluginDetailsDialog key={pluginId} pluginId={pluginId} initialConnect={searchParams.get('connect') === '1'} onClose={closePlugin} /></Suspense> : null}
     </div>
   );
 }
