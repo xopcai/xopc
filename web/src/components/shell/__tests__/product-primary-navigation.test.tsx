@@ -164,7 +164,7 @@ describe('product primary navigation', () => {
     const extensionLink = document.body.querySelector<HTMLAnchorElement>('a[href="/extensions/sample-extension/dashboard"]');
     expect(extensionLink?.getAttribute('aria-current')).toBe('page');
     expect(extensionLink?.textContent).toBe('Sample dashboard');
-    expect(document.body.textContent).toContain('Extension apps');
+    expect(document.body.textContent).toContain('Plugin apps');
     expect(document.body.textContent).not.toContain('Hidden page');
   });
 
