@@ -15,3 +15,7 @@ export function pluginReturnPath(from: string | null, returnTo?: string | null) 
   if (from === 'skills') return '/capabilities/skills?tab=installed&source=plugin';
   return '/capabilities/extensions?tab=user';
 }
+
+export function pluginStartPath(name: string, zh: boolean) {
+  return `/chat/new?${new URLSearchParams({ draft: zh ? `请帮我使用${name}插件。` : `Help me use the ${name} plugin.`, projectScope: 'none' })}`;
+}
