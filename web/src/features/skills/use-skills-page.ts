@@ -1,3 +1,5 @@
+import { pluginSkillUnavailable } from './plugin-skill-owner';
+import { pluginDetailPath } from '@/features/capabilities/capability-links';
 import {
   useCallback,
   useEffect,
@@ -65,6 +67,7 @@ export function useSkillsPage() {
   const token = useGatewayStore((st) => st.conversationId);
   const hasToken = Boolean(token);
   const navigate = useNavigate();
+  const skillLocation = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const recoveryReturnPath = (() => {
     const value = searchParams.get('returnTo');
@@ -764,6 +767,7 @@ export function useSkillsPage() {
       const blob = [
         row.name,
         row.description,
+        row.plugin?.name,
         ...Object.values(row.localizations ?? {}).flatMap((entry) => entry ? [entry.displayName, entry.description] : []),
         row.directoryId,
         row.path,
@@ -809,7 +813,7 @@ export function useSkillsPage() {
       ? true
       : (enabledOverride[detailTitle] ?? detailFromCatalog.enabled);
   const detailDirectoryId = detailFromCatalog?.directoryId ?? null;
-  const detailManaged = detailFromCatalog?.managed ?? false;
+  const detailManaged = !detailFromCatalog?.origin.startsWith('plugin:') && (detailFromCatalog?.managed ?? false);
   const detailExternalUrl = useMemo(() => {
     if (detailSource !== 'store' || !detailTitle) return null;
     const provider = marketplaceDetailProviderRef.current ?? marketBrowseProvider;
@@ -953,7 +957,7 @@ export function useSkillsPage() {
   };
 
   const sourceLabel = (skill: SkillCatalogEntry): string => {
-    if (skill.origin.startsWith('plugin:')) return sk.source.plugin;
+    if (skill.origin.startsWith('plugin:')) return `${sk.source.plugin} · ${skill.plugin?.title ?? skill.plugin?.name ?? skill.origin.slice(7)}`;
     if (skill.origin === 'agents-global') return sk.source.agentsGlobal;
     if (skill.origin === 'agents-workspace') return sk.source.agentsWorkspace;
     switch (skill.source) {
@@ -1039,6 +1043,7 @@ export function useSkillsPage() {
       const source = opts?.source ?? detailSource;
       if (source === 'catalog') {
         const row = catalog.find((r) => r.name === name);
+        if (row?.plugin && pluginSkillUnavailable(row)) { setDetailOpen(false); navigate(pluginDetailPath(row.plugin.id, 'skills', row.plugin.authorizationStatus === 'required', skillLocation.pathname + skillLocation.search)); return; }
         if (row && !(enabledOverride[row.name] ?? row.enabled)) return;
       }
       setActionFeedback(null);
@@ -1069,6 +1074,8 @@ export function useSkillsPage() {
     [
       catalog,
       detailTitle,
+      skillLocation.pathname,
+      skillLocation.search,
       detailSource,
       enabledOverride,
       isSkillInstalledByName,
@@ -1215,6 +1222,7 @@ export function useSkillsPage() {
     detailPresentation,
     detailDirectoryId,
     detailManaged,
+    detailFromCatalog,
     detailExternalUrl,
     filteredCatalog,
     builtinCategories,

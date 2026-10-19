@@ -1,3 +1,5 @@
+import { useLocaleStore } from '@/stores/locale-store';
+import { PluginSkillOwner, pluginSkillUnavailable } from './plugin-skill-owner';
 import * as Dialog from '@radix-ui/react-dialog';
 import { AlertTriangle, ExternalLink, Trash2, X } from 'lucide-react';
 
@@ -41,6 +43,7 @@ type Props = Pick<
   | 'detailPresentation'
   | 'detailDirectoryId'
   | 'detailManaged'
+  | 'detailFromCatalog'
   | 'detailExternalUrl'
   | 'usingSkillInChatName'
   | 'installingMarketName'
@@ -54,6 +57,9 @@ type Props = Pick<
 >;
 
 export function SkillsPageDetailDialog(p: Props) {
+  const zh = useLocaleStore(state => state.language).startsWith('zh');
+  const unavailable = p.detailFromCatalog && pluginSkillUnavailable(p.detailFromCatalog);
+  const actionLabel = unavailable ? (p.detailFromCatalog?.plugin?.authorizationStatus === 'required' ? (zh ? '去授权' : 'Connect account') : (zh ? '管理插件' : 'Manage plugin')) : p.sk.previewUseInChat;
   const {
     sk,
     detailOpen,
@@ -73,6 +79,7 @@ export function SkillsPageDetailDialog(p: Props) {
     detailPresentation,
     detailDirectoryId,
     detailManaged,
+    detailFromCatalog,
     detailExternalUrl,
     usingSkillInChatName,
     installingMarketName,
@@ -126,6 +133,7 @@ export function SkillsPageDetailDialog(p: Props) {
             </Dialog.Close>
           </div>
           <div className="min-h-0 min-w-0 flex-1 overflow-auto p-4">
+            {detailFromCatalog ? <PluginSkillOwner skill={detailFromCatalog} detail /> : null}
             {detailLoading ? (
               <div className="flex h-full min-h-[14rem] flex-col gap-2.5 py-1" aria-busy="true" aria-label={sk.loading}>
                 {SKELETON_LINE_WIDTHS.map((entry) => (
@@ -142,7 +150,7 @@ export function SkillsPageDetailDialog(p: Props) {
               <p className="text-sm text-red-600 dark:text-red-400">{detailError}</p>
             ) : detailSource === 'catalog' && detailCatalogPreview ? (
               <>
-                {!detailEnabled ? (
+                {!detailEnabled && !unavailable ? (
                   <div className="mb-4 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-100">
                     <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-300" strokeWidth={1.75} aria-hidden />
                     <p className="leading-relaxed">{sk.detailDisabledNotice}</p>
@@ -211,7 +219,7 @@ export function SkillsPageDetailDialog(p: Props) {
                     }
                     onClick={() => void onUseSkillInChat()}
                   >
-                    {usingSkillInChatName === detailTitle ? sk.previewUseInChatBusy : sk.previewUseInChat}
+                    {usingSkillInChatName === detailTitle ? sk.previewUseInChatBusy : actionLabel}
                   </Button>
                   <Button
                     type="button"
@@ -269,7 +277,7 @@ export function SkillsPageDetailDialog(p: Props) {
                     title={!detailEnabled ? sk.useRequiresEnabled : undefined}
                     onClick={() => void onUseSkillInChat()}
                   >
-                    {usingSkillInChatName === detailTitle ? sk.previewUseInChatBusy : sk.previewUseInChat}
+                    {usingSkillInChatName === detailTitle ? sk.previewUseInChatBusy : actionLabel}
                   </Button>
                 </>
               )}
