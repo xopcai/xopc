@@ -143,3 +143,15 @@ it('supports native package picking and dropped plugin paths in the desktop app'
   expect(getPathForFile).toHaveBeenCalledWith(file);
   expect((document.querySelector('input[placeholder="/plugin/folder/or/plugin.zip"]') as HTMLInputElement).value).toBe('/tmp/dropped-plugin.zip');
 });
+
+it('dismisses the owning details modal after uninstall instead of reopening missing details', async () => {
+  const onClose = vi.fn(), onUninstalled = vi.fn();
+  mocks.request.mockResolvedValue({ ok: true, payload: {} });
+  await render(<AgentPluginDialog extension={{ id: 'plugin:sample', pluginId: 'sample', name: 'Sample', source: 'agent-plugin', active: true, hasUi: false }} onClose={onClose} onUninstalled={onUninstalled} />);
+  await click('Advanced actions');
+  await click('Uninstall');
+  await click('Confirm uninstall');
+  expect(mocks.request).toHaveBeenCalledWith('/api/extensions/agent-plugins/sample', expect.objectContaining({ method: 'DELETE', body: JSON.stringify({ removeData: false, removeCredentials: false }) }));
+  expect(onUninstalled).toHaveBeenCalledOnce();
+  expect(onClose).not.toHaveBeenCalled();
+});
