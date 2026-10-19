@@ -11,9 +11,9 @@ const PERMISSION_LABELS_EN: Record<string, string> = {
   'agent.send': 'Send messages to the assistant',
   'agent.subscribe': 'Receive live agent stream events for a chat',
   'session.read': 'List and open chat sessions',
-  'config.read': 'Read extension configuration',
-  'config.write': 'Write extension configuration',
-  storage: 'Read and write extension storage',
+  'config.read': 'Read plugin configuration',
+  'config.write': 'Write plugin configuration',
+  storage: 'Read and write plugin storage',
   notification: 'Show in-app notifications',
 };
 
@@ -29,9 +29,9 @@ const PERMISSION_LABELS_ZH: Record<string, string> = {
   'agent.send': '向助手发送消息',
   'agent.subscribe': '接收会话的实时助手流式事件',
   'session.read': '列出并打开聊天会话',
-  'config.read': '读取扩展配置',
-  'config.write': '写入扩展配置',
-  storage: '读写扩展存储',
+  'config.read': '读取插件配置',
+  'config.write': '写入插件配置',
+  storage: '读写插件存储',
   notification: '显示应用内通知',
 };
 

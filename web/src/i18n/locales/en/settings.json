@@ -374,14 +374,14 @@
         "specialty": "Other providers",
         "enterprise": "Enterprise",
         "oauth": "OAuth",
-        "extension": "Extension"
+        "extension": "Plugin"
       }
     },
     "manageProviderDialog": {
       "apiKeyLabel": "API Key",
       "apiKeyPlaceholder": "Enter new API key…",
       "apiUrlLabel": "API URL",
-      "apiUrlExtensionHint": "Requests are routed through the extension plugin (no fixed public API URL).",
+      "apiUrlExtensionHint": "Requests are routed through the plugin (no fixed public API URL).",
       "baseUrlLabel": "Base URL",
       "modelsLabel": "Available models",
       "noModels": "No models for this provider",
@@ -405,9 +405,9 @@
       "copied": "Copied",
       "maskedHelp": "Saved keys are hidden. Use the eye to load the key from the gateway store or models.json (not from environment variables).",
       "notInConfigFile": "No key stored in the gateway or models.json — this provider may be using an environment variable or OAuth.",
-      "extensionKeyHint": "This extension provider manages its own credentials. No gateway API key is required — configure optional keys in extension settings or environment variables if needed.",
-      "openExtensionSettings": "Open extension settings",
-      "extensionSettingsLinkTitle": "Configure optional credentials in the extension settings page",
+      "extensionKeyHint": "This plugin provider manages its own credentials. No gateway API key is required — configure optional keys in plugin settings or environment variables if needed.",
+      "openExtensionSettings": "Open plugin settings",
+      "extensionSettingsLinkTitle": "Configure optional credentials in the plugin settings page",
       "loadFailed": "Could not load the API key.",
       "custom": "Custom"
     }
@@ -1039,7 +1039,7 @@
     "connection": "Devices & connections",
     "automation": "Automation",
     "diagnostics": "Diagnostics",
-    "extensions": "Extensions"
+    "extensions": "Plugins"
   },
   "cronSettingsPage": {
     "title": "Scheduled tasks",
@@ -1190,7 +1190,7 @@
     "idleTtlHint": "Default is 10 minutes when unset. Set 0 to disable idle eviction.",
     "idleTtlPlaceholder": "10",
     "serversTitle": "Servers",
-    "serversHint": "Each server id becomes the prefix in tool names (server__tool). Installed connections create managed servers; extensions declare connector dependencies separately.",
+    "serversHint": "Each server id becomes the prefix in tool names (server__tool). Installed connections create managed servers; plugins declare connector dependencies separately.",
     "customServersTitle": "Custom MCP servers",
     "customServersHint": "Add stdio subprocesses or remote HTTP/SSE endpoints. Installed catalog connectors are managed separately above.",
     "reservedServerId": "This id is reserved by an installed connector. Choose a different server name.",

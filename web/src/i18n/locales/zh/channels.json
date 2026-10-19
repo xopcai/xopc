@@ -304,7 +304,7 @@
         "openai": "低延迟、音色选择多；需要 OpenAI Key。",
         "alibaba": "中文语音效果好；需要 DASHSCOPE_API_KEY。",
         "minimax": "高质量音色；异步生成可能较慢。",
-        "generic": "扩展语音服务商，请在下方配置所需字段。"
+        "generic": "插件语音服务商，请在下方配置所需字段。"
       },
       "test": {
         "title": "试听音色",

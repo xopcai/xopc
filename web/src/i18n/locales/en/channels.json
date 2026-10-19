@@ -304,7 +304,7 @@
         "openai": "Low latency and broad voice selection; requires an OpenAI key.",
         "alibaba": "Strong Chinese voices through DashScope; requires DASHSCOPE_API_KEY.",
         "minimax": "High quality voices; async generation can be slower.",
-        "generic": "Extension speech provider. Configure the required fields below."
+        "generic": "Plugin speech provider. Configure the required fields below."
       },
       "test": {
         "title": "Test voice",

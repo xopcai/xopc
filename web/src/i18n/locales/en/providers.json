@@ -33,7 +33,7 @@
     "sourceOauth": "OAuth token",
     "sourceEnv": "environment variable",
     "sourceModelsJson": "models.json",
-    "sourceExtension": "extension provider",
+    "sourceExtension": "plugin provider",
     "sourceNone": "none",
     "testKey": "Test value",
     "testingKey": "Testing…",
@@ -49,7 +49,7 @@
       "specialty": "Other providers",
       "enterprise": "Enterprise / cloud",
       "oauth": "OAuth only",
-      "extension": "Extensions"
+      "extension": "Plugins"
     },
     "configuredCount": "{{count}} configured",
     "metaMasked": "Credential on file — enter a new key to replace.",

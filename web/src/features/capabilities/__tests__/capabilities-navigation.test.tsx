@@ -43,7 +43,7 @@ it('commits the target section and skeleton while its module is still loading', 
     expect(container.textContent).toContain('Skills content');
 
     await act(async () => { await router.navigate('/capabilities/extensions'); });
-    expect(container.querySelector('header h1')?.textContent).toBe('Extensions');
+    expect(container.querySelector('header h1')?.textContent).toBe('Plugins');
     expect(container.querySelector('[aria-busy="true"]')).not.toBeNull();
     expect(container.textContent).not.toContain('Skills content');
     expect(container.textContent).not.toContain('Extensions content');

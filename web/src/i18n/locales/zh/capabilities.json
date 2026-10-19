@@ -2,10 +2,10 @@
   "capabilitiesHub": {
     "tabSkills": "技能",
     "tabConnectors": "连接",
-    "tabExtensions": "扩展",
+    "tabExtensions": "插件",
     "moreActions": "更多操作",
     "discoverLoading": "正在加载能力",
-    "searchPlaceholder": "搜索技能、连接和扩展",
+    "searchPlaceholder": "搜索技能、连接和插件",
     "searchLabel": "搜索能力",
     "filterAria": "按能力类型筛选",
     "filterAll": "全部",
@@ -18,7 +18,7 @@
     "statusAttention": "需处理",
     "kindSkill": "技能",
     "kindConnector": "连接",
-    "kindExtension": "扩展",
+    "kindExtension": "插件",
     "viewAction": "查看",
     "manageAction": "管理",
     "noDescription": "暂无说明"
