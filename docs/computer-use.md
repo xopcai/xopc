@@ -12,6 +12,27 @@ Use the macOS desktop app to ask xopc to read or operate one application window.
 
 Verify that the answer matches the intended application and window before authorizing changes. If several windows or processes match, select the intended one rather than guessing.
 
+If the desktop returns `COMPUTER_WINDOW_OTHER_SPACE`, the target is on a different macOS desktop/Space. Leave full screen or place the chat and target window on the same desktop with both visible. Clicking the target and then returning to a full-screen chat on another Space makes it unavailable again; repeated foreground requests do not fix that layout.
+
+## Small goals in one call
+
+Use `computer_use` with `op: "run"`, one authorized goal, and a native `expect` condition to perform several guarded inputs without returning to the main Agent after each one:
+
+```json
+{
+  "op": "run",
+  "goal": "Complete the Start → Continue → Finish workflow in this test window",
+  "expect": { "kind": "text", "text": "PASS: Small goal complete" },
+  "maxActions": 6
+}
+```
+
+The loop stops on verified condition evidence, a model handoff, a refusal, or a budget boundary. `maxActions` defaults to 6 and accepts 1–12, including waits. It yields after 120 seconds between completed actions; existing session, model and rescue budgets still apply. `goal_limit` is unfinished, and a model success claim remains unverified. Already-visible text returns `condition_present` without input; use a page-specific result, exact field value, or selected state instead of a navigation label.
+
+Only fresh post-action frames are reused, for up to five seconds and only inside this invocation. Each next action still passes local authorization and a fresh native target/state check. Cached frames are zeroed on consumption or exit and never retained across Agent turns. Actions on one window remain sequential. The existing `step` operation still performs at most one input; `observe` remains a fresh independent read.
+
+`run` results include `actionsExecuted`, `modelRequests`, `observationsReused`, `elapsedMs`, and `stopReason`. These describe the narrow goal, not proof of unrelated business outcomes. See the [live Calculator validation](./design/technical/computer-small-goal-validation.md) for measured results and scope.
+
 ## Custom OpenAI-compatible models
 
 Models using `openai-completions` or `openai-responses` with `input: ["text", "image"]` automatically appear in the Computer Use picker, regardless of provider name or model ID. They use standard function tools to propose actions for the local broker to validate and execute, and remain available for ordinary chat and vision.

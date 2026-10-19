@@ -1,5 +1,6 @@
 import { rejectUnbudgetedCloudTransport } from '../providers/xopc-cloud-credit-budget.js';
 import { randomUUID } from 'node:crypto';
+import { setTimeout as delay } from 'node:timers/promises';
 import { z } from 'zod';
 import {
   COMPUTER_CONTROL_TOOL, ComputerAppSchema, ComputerWindowSchema, ComputerObservationSchema,
@@ -31,6 +32,8 @@ const Reply = z.object({
   apps: z.array(ComputerAppSchema).max(100).optional(), windows: z.array(ComputerWindowSchema).max(100).optional(),
   receipt: z.object({ actionId: z.string(), dispatch: z.enum(['notStarted', 'started', 'completed', 'unknown']), outcome: z.enum(['applied', 'notApplied', 'unknown']), verification: z.enum(['semantic', 'artifact', 'visual', 'none']), errorCode: z.string().optional() }).optional(),
 }).strict();
+type ObservationReply = { value: z.infer<typeof Reply>; frame?: Uint8Array; mimeType?: 'image/png' | 'image/jpeg' };
+type GoalContext = { observation?: ObservationReply; observationsReused: number };
 type Session = {
   id: string; owner: string; endpointId: string; appRef: string; mode: 'observe' | 'control'; prepare: boolean; windowRef?: string; binding: ComputerModelBinding;
   adapter: ComputerStepAdapter; createdAt: number; modelRequests: number; actions: number;
@@ -48,6 +51,8 @@ export const ComputerUseInputSchema = z.discriminatedUnion('op', [
     mode: z.enum(['observe', 'control']), prepare: z.boolean() }).strict(),
   z.object({ op: z.literal('observe'), question: z.string().min(1).max(4000).optional(), expect: ComputerExpectationSchema.optional() }).strict(),
   z.object({ op: z.literal('step'), goal: z.string().min(1).max(4000), expect: ComputerExpectationSchema.optional(), flowId: z.uuid().optional() }).strict(),
+  z.object({ op: z.literal('run'), goal: z.string().min(1).max(4000), expect: ComputerExpectationSchema,
+    maxActions: z.number().int().min(1).max(12).optional() }).strict(),
   z.object({ op: z.literal('close'), saveFlowAs: z.string().trim().min(1).max(160).optional() }).strict(),
   z.object({ op: z.literal('flows') }).strict(),
   z.object({ op: z.literal('forget_flow'), flowId: z.uuid() }).strict(),
@@ -70,6 +75,8 @@ export interface ComputerPublicResult {
   report?: ComputerSessionReport;
   flows?: ReturnType<typeof computerFlowMetadata>[];
   savedFlow?: ReturnType<typeof computerFlowMetadata>;
+  run?: { actionsExecuted: number; modelRequests: number; observationsReused: number; elapsedMs: number;
+    stopReason: 'condition_satisfied' | 'condition_present' | 'action_limit' | 'time_limit' | 'handoff' };
 }
 
 export class ComputerRuntime {
@@ -126,7 +133,9 @@ export class ComputerRuntime {
     const diagnostics = this.sessions.get(owner)?.diagnostics ?? (input.op === 'open' ? new ComputerSessionDiagnostics() : undefined);
     if (diagnostics) this.openingReports.set(owner, diagnostics);
     try {
-      const result = await this.executeInput(owner, input, signal ? AbortSignal.any([signal, operation.signal]) : operation.signal, diagnostics);
+      const operationSignal = signal ? AbortSignal.any([signal, operation.signal]) : operation.signal;
+      const result = input.op === 'run' ? await this.executeGoal(owner, input, operationSignal, diagnostics)
+        : await this.executeInput(owner, input, operationSignal, diagnostics);
       if (result.errorCode) diagnostics?.fail(new Error(result.errorCode), diagnostics.phase, result.receipt?.dispatch ?? 'notStarted');
       if (diagnostics && !this.sessions.has(owner)) this.retainReport(owner, diagnostics);
       return { ...result, ...(diagnostics ? { reportId: diagnostics.snapshot().reportId,
@@ -149,8 +158,46 @@ export class ComputerRuntime {
     const effective = resolveEffectiveAgentConfigForSession(owner).config;
     return JSON.stringify([effective.id, effective.workspace]);
   }
-  private async executeInput(owner: string, input: Exclude<ComputerUseInput, { op: 'close' | 'report' | 'flows' | 'forget_flow' }>, signal: AbortSignal,
+  private async executeGoal(owner: string, input: Extract<ComputerUseInput, { op: 'run' }>, signal: AbortSignal,
     diagnostics?: ComputerSessionDiagnostics): Promise<ComputerPublicResult> {
+    const startedAt = Date.now();
+    const requestsBefore = diagnostics?.snapshot().counters.modelRequests ?? 0;
+    const context: GoalContext = { observationsReused: 0 };
+    let actionsExecuted = 0;
+    const finish = (result: ComputerPublicResult, stopReason: NonNullable<ComputerPublicResult['run']>['stopReason']) => ({
+      ...result, run: { actionsExecuted, modelRequests: (diagnostics?.snapshot().counters.modelRequests ?? 0) - requestsBefore,
+        observationsReused: context.observationsReused, elapsedMs: Math.max(0, Date.now() - startedAt), stopReason },
+    });
+    const step = { op: 'step' as const, goal: input.goal, expect: input.expect };
+    try {
+      while (true) {
+        signal.throwIfAborted();
+        let result = await this.executeInput(owner, step, signal, diagnostics, context);
+        const authorizationDeadline = Date.now() + 60_000;
+        while (result.status === 'pending_authorization' || result.status === 'pending_action') {
+          const authorizingSession = result.status === 'pending_authorization';
+          if (Date.now() >= authorizationDeadline) { await this.close(owner); throw new Error('COMPUTER_AUTHORIZATION_TIMEOUT'); }
+          await delay(250, undefined, { signal });
+          result = await this.executeInput(owner, authorizingSession ? { op: 'observe' } : step, signal, diagnostics, context);
+          if (authorizingSession && result.status === 'ready' && !result.errorCode) result = await this.executeInput(owner, step, signal, diagnostics, context);
+        }
+        if (result.receipt?.dispatch === 'completed') actionsExecuted++;
+        if (result.errorCode || result.pending || result.receipt && result.receipt.dispatch !== 'completed') return finish(result, 'handoff');
+        if (result.verified) return finish({ ...result, status: 'goal_satisfied' }, 'condition_satisfied');
+        if (result.status === 'condition_present') return finish(result, 'condition_present');
+        if (!result.receipt || result.status !== 'ready') return finish(result, 'handoff');
+        const stopReason = actionsExecuted >= (input.maxActions ?? 6) ? 'action_limit' : Date.now() - startedAt >= 120_000 ? 'time_limit' : undefined;
+        if (stopReason) return finish({ ...result, status: 'goal_limit', verified: false,
+          nextAction: 'The small-goal budget ended without verifying the condition. Inspect the result and remaining requirements before continuing; do not claim success.' }, stopReason);
+      }
+    } finally {
+      // Pixels live only inside this call, never in session history or across Agent turns.
+      context.observation?.frame?.fill(0);
+      context.observation = undefined;
+    }
+  }
+  private async executeInput(owner: string, input: Exclude<ComputerUseInput, { op: 'close' | 'report' | 'flows' | 'forget_flow' | 'run' }>, signal: AbortSignal,
+    diagnostics?: ComputerSessionDiagnostics, goalContext?: GoalContext): Promise<ComputerPublicResult> {
     signal.throwIfAborted();
     const config = this.getConfig();
     if (!config.computer.enabled) { await this.close(owner); throw new Error('COMPUTER_DISABLED'); }
@@ -228,7 +275,7 @@ export class ComputerRuntime {
         if (input.op === 'observe') return this.present(status.value);
         const context = s.pendingContext;
         phase = 'dispatch';
-        const result = await this.dispatchAction(s, s.pending, signal);
+        const result = await this.dispatchAction(s, s.pending, signal, goalContext);
         if (!this.isUndispatchedChange(result) || !context) return result;
         // Approval resumes the original goal, never a replacement supplied while waiting.
         input = { op: 'step', goal: context.goal, expect: context.expectation, flowId: context.flowId };
@@ -243,11 +290,24 @@ export class ComputerRuntime {
         signal.throwIfAborted();
         if (Date.now() - s.createdAt >= config.computer.maxSessionDurationMs) throw new Error('COMPUTER_SESSION_BUDGET');
         phase = 'observe';
-        const observed = await this.send(s, { op: 'observe', sessionId: s.id, owner }, signal);
+        const cached = goalContext?.observation;
+        if (goalContext) goalContext.observation = undefined;
+        const reuse = cached && status.value.status === 'ready' && cached.value.brokerEpoch === status.value.brokerEpoch
+          && cached.value.generation === status.value.generation && cached.value.grantId === status.value.grantId
+          && cached.value.observation && Date.now() - cached.value.observation.capturedAt >= 0
+          && Date.now() - cached.value.observation.capturedAt <= 5000;
+        if (cached && !reuse) cached.frame?.fill(0);
+        if (reuse) goalContext!.observationsReused++;
+        const observed = reuse ? cached : await this.send(s, { op: 'observe', sessionId: s.id, owner }, signal);
         try {
           const verification = verifyComputerExpectation(input.expect, observed.value.observation);
           if (input.op === 'observe') s.diagnostics.verify(verification);
           if (input.op === 'observe' && !input.question) return { ...this.present(observed.value), verification, verified: verification?.status === 'satisfied', budget: this.budget(s) };
+          if (goalContext && input.op === 'step' && input.expect?.kind === 'text' && verification?.status === 'satisfied') {
+            return { ...this.present(observed.value), status: 'condition_present', verified: false,
+              verification: { ...verification, preexisting: true }, budget: this.budget(s),
+              nextAction: 'This text was already visible before input. Choose a page-specific or selected-state condition; no action was dispatched.' };
+          }
           if (input.op === 'step' && input.expect?.kind !== 'text' && verification?.status === 'satisfied') {
             s.diagnostics.verify(verification);
             s.adapter.reset?.();
@@ -285,7 +345,7 @@ export class ComputerRuntime {
           s.diagnostics.phase = 'dispatch'; s.task.assertProgress(action, o);
           s.pendingContext = { goal: input.goal, before: o, expectation: input.expect, flowId: input.flowId };
           phase = 'dispatch';
-          const result = await this.dispatchAction(s, e, signal);
+          const result = await this.dispatchAction(s, e, signal, goalContext);
           if (!this.isUndispatchedChange(result)) return result;
           this.reserveRescue(s, signal);
         } finally { observed.frame?.fill(0); }
@@ -315,7 +375,7 @@ export class ComputerRuntime {
     // Drop queued native batches and continuation state before using a fresh screenshot.
     s.adapter.reset?.();
   }
-  private async dispatchAction(s: Session, envelope: ActionEnvelope, signal?: AbortSignal): Promise<ComputerPublicResult> {
+  private async dispatchAction(s: Session, envelope: ActionEnvelope, signal?: AbortSignal, goalContext?: GoalContext): Promise<ComputerPublicResult> {
     if (!s.pending) {
       if (s.actions >= this.getConfig().computer.maxActionsPerSession) throw new Error('COMPUTER_ACTION_BUDGET');
       // Reserve once before delivery; resuming the held envelope consumes no extra slot.
@@ -329,7 +389,11 @@ export class ComputerRuntime {
       throw new Error('COMPUTER_RECEIPT_MISMATCH');
     }
     if (reply.value.status !== 'pending_action') s.pending = undefined;
-    reply.frame?.fill(0);
+    if (goalContext && reply.value.status === 'ready' && !reply.value.errorCode && reply.value.receipt?.dispatch === 'completed'
+      && reply.frame && reply.mimeType && reply.value.observation) {
+      goalContext.observation?.frame?.fill(0);
+      goalContext.observation = reply;
+    } else reply.frame?.fill(0);
     if (reply.value.status === 'ready' && reply.value.errorCode === 'COMPUTER_OBSERVATION_CHANGED' && !reply.value.receipt) {
       s.diagnostics.discard();
       s.actions--; s.pendingContext = undefined;
