@@ -6,7 +6,7 @@
 
 ## 使用流程
 
-在能力中心的扩展安装入口输入来源，检查兼容情况和新增能力，确认安装。随后完成资源准备、配置或登录、工具检查，并选择允许使用的 Agent。准备状态由 Gateway 保存，关闭窗口后可以继续。
+在能力中心的插件安装入口输入来源，检查兼容情况和新增能力，确认安装。随后自动准备资源，按需登录账号并检查工具。安装默认对所有 Agent 可用，特殊配置在 Agent 设置中调整。准备状态由 Gateway 保存，关闭窗口后可以继续。
 
 同一 Gateway owner 的 CLI 与浏览器入口共享准备进度；浏览器重新登录后可以继续，设备身份仍相互隔离。Store 中的已安装包通过“管理”入口继续配置。
 
@@ -169,3 +169,35 @@ XOPC_PLUGIN_SMOKE_BROWSER_CHANNEL=chrome pnpm run test:plugins:browser
 完整多场景命令：`XOPC_PLUGIN_SMOKE_BROWSER_CHANNEL=chrome pnpm run test:plugins:e2e`。它先构建 Node / Web，再验证两种 Plugin 的 Store 安装 / 升级 / 回滚 / 凭据清理、原生 Extension、真实 Gateway 进程和完整 Web 页面。详见 [Store E2E 验收记录](./design/plugin-store-e2e-2026-10-19.md)。
 
 固定 OpenAI 本地样本与真实 Superpowers Git 来源的静态检查，用于识别格式和兼容边界，不作为这些插件已通过真实业务场景验收的证据。
+
+
+## 按授权启用 Skill 和 MCP
+
+宿主在 Skill 来源合并、MCP 配置投影处使用同一份能力访问决策。插件已安装不代表需要账号的能力可用。账号待登录、跳过授权、过期、撤销、权限不足或检查失败时，对应 Skill 和 MCP 不进入 Agent；无需授权的本地能力仍可用。管理页面继续展示安装内容和补授权入口。
+
+插件在 `extensions["ai.xopc"].setup.capabilityAccess` 声明依赖，宿主不识别厂商名称或业务权限：
+
+```json
+{
+  "skills": {
+    "local-analysis": {},
+    "notes": { "authorizations": ["office"] },
+    "calendar": { "authorizations": [{ "id": "office", "scopes": ["calendar:read"] }] }
+  },
+  "mcp": {
+    "local": {},
+    "office": { "authorizations": [{ "id": "office", "scopes": [] }] }
+  }
+}
+```
+
+- Skill 键使用包内原始名称，MCP 键使用清单中的服务名称。未知账号、Skill 或服务引用阻止插件启用；依赖声明进入安装审核指纹。
+- `authorizations` 引用 `setup.authorizations`；`servers` 可声明连接依赖，例如无独立账号声明的原生 OAuth MCP。多个依赖均须满足。
+- 空规则 `{}` 表示无需账号依赖。MCP 仍须通过自身连接检查，不会因为空规则而跳过检查。
+- 字符串账号引用要求该账号无未解决权限问题。对象引用只检查列出的权限；`scopes: []` 要求身份有效，但允许与此能力无关的已知权限问题。没有具体 scopes 的未知权限问题仍阻止能力。
+- 未声明规则的 Skill 默认依赖所有声明的账号；没有账号声明时依赖所有需要授权的 MCP。未声明规则的 MCP 默认依赖管理它的账号，否则依赖插件内全部账号。混合本地/远程插件应显式为本地能力写 `{}`。
+- 没有账号声明的 HTTP MCP 默认需要授权；公开服务需声明 `connectionAuth.mode: "none"`。stdio 服务引用 sensitive user config 时按私有连接处理。
+
+账号检查命令可返回可选的 `expiresAt`（Unix 毫秒）；宿主不添加厂商专属有效期。凭据实际是否有效、缺少哪些 scopes 由插件检查命令或原生 MCP 探测判定。每轮对话创建运行环境前，复查已安装插件的已连接账号和连接，不自动发起登录，也不重新下载资源；授权变化后重建 Agent 能力配置。检查失败不会保留此前的私有访问证据。
+
+时间过期也会使 Skill 缓存和 Agent 缓存失效。撤销在下一轮检查时生效，不删除历史对话中已出现的文本，也不承诺中断已在执行中的外部调用。准备状态损坏或属于其他安装版本时不能授予私有能力。配置/登录使用的管理通道可探测尚未授权的服务，但不暴露为 Agent 工具。

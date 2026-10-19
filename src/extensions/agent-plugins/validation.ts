@@ -1,3 +1,4 @@
+import { pluginCapabilityAccess } from './capability-access.js';
 import { pluginAuthorizations, safeAuthorizationUrl } from './setup-contract.js';
 import { createHash } from 'node:crypto';
 import { existsSync, lstatSync, readFileSync, readdirSync, realpathSync, statSync } from 'node:fs';
@@ -217,6 +218,15 @@ export function inspectAgentPlugin(rootDir: string, dataDir = join(rootDir, '.in
         }
       }
     }
+  });
+  attempt('capability-access', () => {
+    const access = pluginCapabilityAccess(manifest);
+    const accounts = new Set(pluginAuthorizations(manifest).map(value => value.id));
+    for (const [kind, rules] of Object.entries(access)) for (const [name, rule] of Object.entries(rules)) {
+      if (kind === 'skills' ? !result.skills.some(skill => skill.name === name) : !result.servers[name]) throw new Error(`Unknown ${kind} capability: ${name}`);
+      if (rule.servers.some(server => !result.servers[server]) || rule.authorizations.some(value => !accounts.has(typeof value === 'string' ? value : value.id))) throw new Error(`Unknown capability dependency: ${name}`);
+    }
+    if (Object.keys(access.skills).length || Object.keys(access.mcp).length) result.capabilities.push(`runtime.capability-access:${JSON.stringify(access)}`);
   });
   result.capabilities.sort();
   return result;

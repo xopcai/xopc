@@ -3,6 +3,7 @@ import { homedir } from 'node:os';
 import { isAbsolute, join, relative, resolve } from 'node:path';
 
 import { resolveSkillsDir } from '../../config/paths.js';
+import { resolvePluginCapabilityAccess } from '../../extensions/agent-plugins/capability-access.js';
 import { AgentPluginStore } from '../../extensions/agent-plugins/store.js';
 import { resolveWorkspaceSkillsDir } from './workspace-skills-dir.js';
 import type {
@@ -94,12 +95,16 @@ export function resolveSkillSources(
   const sources: SkillSourceDescriptor[] = [];
   const diagnostics: SkillDiagnostic[] = [];
 
-  for (const plugin of new AgentPluginStore().active(options.agentId, options.workspaceDir)) {
+  const pluginStore = new AgentPluginStore();
+  for (const plugin of pluginStore.active(options.agentId, options.workspaceDir)) {
+    const access = resolvePluginCapabilityAccess(plugin, pluginStore);
+    const skills = plugin.skills.filter(skill => access.skill(skill.name));
+    if (!skills.length) continue;
     sources.push({
       id: `plugin:${plugin.id}`, rootDir: plugin.rootDir, priority: 150,
       scope: 'global', managed: false, writable: false,
-      skillFiles: plugin.skills.map(skill => skill.filePath),
-      skillAliases: plugin.layout?.dialect !== 'portable' ? Object.fromEntries(plugin.skills.map(skill => [skill.filePath, `${plugin.id}.${skill.name}`])) : undefined,
+      skillFiles: skills.map(skill => skill.filePath),
+      skillAliases: plugin.layout?.dialect !== 'portable' ? Object.fromEntries(skills.map(skill => [skill.filePath, `${plugin.id}.${skill.name}`])) : undefined,
     });
     diagnostics.push(...plugin.diagnostics.map(diagnostic => ({
       type: 'warning' as const, path: plugin.rootDir,

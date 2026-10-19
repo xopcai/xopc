@@ -181,6 +181,7 @@ export class SkillManager {
   }
 
   getVersion(): string {
+    this.refreshPlugins();
     return String(this.version);
   }
 
