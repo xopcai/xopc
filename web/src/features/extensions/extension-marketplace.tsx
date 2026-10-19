@@ -45,7 +45,7 @@ type MarketplaceUi = {
   restartHint: string | null;
 };
 
-const marketplaceGridClass = 'grid grid-cols-[repeat(auto-fill,minmax(min(100%,18rem),1fr))] gap-4';
+const marketplaceGridClass = 'grid grid-cols-[repeat(auto-fill,minmax(min(100%,18rem),1fr))] items-start gap-4';
 
 const initialMarketplaceUi: MarketplaceUi = {
   debounced: '',
@@ -150,7 +150,7 @@ export function ExtensionMarketplacePanel({
       {isLoading && !data ? (
         <ul className={marketplaceGridClass} aria-label={copy.marketplaceLoading}>
           {[0, 1, 2, 3, 4, 5].map((index) => (
-            <li key={index} className="min-h-44 rounded-xl border border-edge bg-surface-panel p-4">
+            <li key={index} className="rounded-xl border border-edge bg-surface-panel p-4">
               <div className="flex items-start gap-3">
                 <Skeleton className="size-10 shrink-0 rounded-xl" />
                 <div className="min-w-0 flex-1 space-y-2">
@@ -180,7 +180,7 @@ export function ExtensionMarketplacePanel({
               const displayName = localized?.displayName ?? e.name;
               const description = localized?.description ?? e.description;
               return (
-                <li key={e.id} className="relative min-h-44 min-w-0 rounded-xl border border-edge bg-surface-panel p-4 transition-colors hover:border-edge-strong hover:bg-surface-hover/30">
+                <li key={e.id} className="relative min-w-0 rounded-xl border border-edge bg-surface-panel p-4 transition-colors hover:border-edge-strong hover:bg-surface-hover/30">
                   <button
                     type="button"
                     aria-label={`${displayName}, ${copy.marketplaceDetailTitle}`}
