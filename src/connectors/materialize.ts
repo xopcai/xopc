@@ -1,5 +1,7 @@
 import { McpServerSchema } from '../config/schema.js';
 import { createConnectorSecretReference } from './secret-store.js';
+import { assertConnectorEndpoint } from './endpoint-policy.js';
+import { isConnectorSecretReference } from './secret-store.js';
 import type { ConnectorDefinition, ConnectorInstallInput, ManagedConnectorMarker } from './types.js';
 
 const SERVER_ID_PATTERN = /^[a-z][a-z0-9_-]{0,63}$/;
@@ -101,6 +103,22 @@ export function materializeConnectorMcpServer(
   const rawServer = materializeTemplate(definition.runtime.serverTemplate, definition, input);
   if (!rawServer || typeof rawServer !== 'object' || Array.isArray(rawServer)) {
     throw new Error('Connector MCP server template must resolve to a JSON object.');
+  }
+  const remote = rawServer as Record<string, unknown>;
+  if (isConnectorSecretReference(remote.url)) {
+    const templateUrl = definition.runtime.serverTemplate.url;
+    if (typeof templateUrl !== 'string') throw new Error('Connector endpoint template is missing.');
+    const embedded = !TEMPLATE_PATTERN.test(templateUrl);
+    const policy = definition.runtime.endpointPolicy ?? {
+      domains: [new URL(templateUrl.replace(EMBEDDED_SECRET_PATTERN, 'credential')).hostname],
+    };
+    remote.url.xopcSecretRef.urlPolicy = { ...policy, ...(embedded ? { encodeValue: true } : {}) };
+    const key = remote.url.xopcSecretRef.fieldKey;
+    const rawInput = input.secrets?.[key];
+    if (typeof rawInput === 'string' && !rawInput.startsWith('secret://')) {
+      const resolved = `${remote.url.xopcSecretRef.prefix ?? ''}${embedded ? encodeURIComponent(rawInput) : rawInput}${remote.url.xopcSecretRef.suffix ?? ''}`;
+      assertConnectorEndpoint(resolved, policy);
+    }
   }
 
   const marker: ManagedConnectorMarker = {

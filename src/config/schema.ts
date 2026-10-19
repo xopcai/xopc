@@ -1059,6 +1059,7 @@ const ConnectorSecretReferenceSchema = z.object({
     fieldKey: z.string().min(1),
     prefix: z.string().optional(),
     suffix: z.string().optional(),
+    urlPolicy: z.object({ domains: z.array(z.string()).min(1), pathPrefixes: z.array(z.string()).optional(), encodeValue: z.boolean().optional() }).strict().optional(),
   }),
 });
 
@@ -1076,7 +1077,7 @@ export const McpServerSchema = z.object({
   type: z.enum(['stdio', 'http', 'streamable-http']).optional(),
   command: z.string().min(1).optional(), args: z.array(z.string()).optional(),
   env: z.record(z.string(), McpConfigScalarSchema).optional(), cwd: z.string().optional(),
-  url: McpHttpUrlSchema.optional(), headers: z.record(z.string(), McpConfigScalarSchema).optional(),
+  url: z.union([McpHttpUrlSchema, ConnectorSecretReferenceSchema]).optional(), headers: z.record(z.string(), McpConfigScalarSchema).optional(),
   oauth: McpOAuthConfigSchema.optional(), auth: z.object({ provider: z.string().min(1) }).strict().optional(),
   timeout: z.number().finite().positive().optional(), enabled: z.boolean().optional(),
   exposure: McpExposureSchema.optional(), toolExposure: z.record(z.string(), McpExposureSchema).optional(),

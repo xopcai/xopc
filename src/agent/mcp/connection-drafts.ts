@@ -140,7 +140,7 @@ export class McpConnectionDrafts {
     try {
       const server = structuredClone(draft.server);
       if (enable) server.enabled = true;
-      if (server.url) {
+      if (typeof server.url === 'string') {
         const state = await draft.credentials.forServer(draft.serverId, server.url).load();
         // An empty native state is intentional: without it pi could adopt historical
         // credentials by server name or the legacy URL key after a public/static-auth test.
@@ -173,7 +173,7 @@ export class McpConnectionDrafts {
     } finally {
       draft.committing = false;
       if (alias && this.options.readConfig().mcp?.servers?.[draft.serverId]?.xopcOAuthCredentialId === alias) published = true;
-      if (!published && alias && durable && draft.server.url) durable.remove(alias, draft.server.url);
+      if (!published && alias && durable && typeof draft.server.url === 'string') durable.remove(alias, draft.server.url);
       if (this.drafts.has(id) && draft.expiresAt <= Date.now()) this.dispose(draft);
     }
   }

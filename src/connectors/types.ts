@@ -62,6 +62,7 @@ export type ConnectorSecretReference = {
     fieldKey: string;
     prefix?: string;
     suffix?: string;
+    urlPolicy?: import('./endpoint-policy.js').ConnectorEndpointPolicy;
   };
 };
 
@@ -94,6 +95,7 @@ export type ConnectorRuntimeDefinition =
       type: 'mcp';
       serverId: string;
       serverTemplate: Record<string, unknown>;
+      endpointPolicy?: import('./endpoint-policy.js').ConnectorEndpointPolicy;
       localPackage?: {
         registry: 'npm';
         name: string;
