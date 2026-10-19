@@ -49,6 +49,9 @@ export function classifyComputerFailure(error: unknown, phase: ComputerFailurePh
 }
 
 const Count = z.number().int().nonnegative();
+export const ComputerNativeTimingSchema = z.object({ precheckMs: Count, inputMs: Count, postObserveMs: Count }).strict();
+export type ComputerNativeTiming = z.infer<typeof ComputerNativeTimingSchema>;
+
 const CountersSchema = z.object({
   observations: Count, predictionAttempts: Count, modelRequests: Count, proposedInputs: Count, completedInputs: Count,
   unknownDispatches: Count, unchangedInputs: Count, observationChanges: Count,

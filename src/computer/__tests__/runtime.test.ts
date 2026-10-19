@@ -731,6 +731,62 @@ describe('bounded small-goal execution', () => {
     expect(f.images.every(image => image.every(byte => byte === 0))).toBe(true);
     expect(JSON.stringify(result)).not.toMatch(/base64|mimeType|stateDigest/);
   });
+  it('executes a conditional button plan with one model request while checking every dispatch', async () => {
+    const f = fixture();
+    f.config.computer.maxActionsPerSession = 80;
+    f.config.computer.maxModelRequests = 1;
+    vi.mocked(resolveModel).mockReturnValueOnce({ id: 'custom-vision', provider: 'custom', api: 'openai-completions',
+      input: ['text', 'image'], baseUrl: 'https://proxy.test/v1' } as any);
+    let stage = 0;
+    const observe = f.driver.observe.getMockImplementation()!;
+    f.driver.perform.mockImplementation(async () => { stage++; });
+    f.driver.observe.mockImplementation(async () => ({ ...await observe(), stateDigest: `stage-${stage}`,
+      summary: JSON.stringify({ text: stage >= 3 ? 'Workflow complete' : `- AXStaticText = "Stage ${stage}"`,
+        elements: [{ role: 'AXWindow' }, { role: 'AXButton', label: 'Continue', ref: `e${stage}`, semanticActions: ['activate'] }] }) }));
+    const proposal = { kind: 'button_plan', steps: [0, 1, 2].map(i => ({ label: 'Continue', when: { text: `Stage ${i}` } })) };
+    f.fetch.mockResolvedValue(Response.json({ choices: [{ message: { tool_calls: [{ function: {
+      name: 'computer_proposal', arguments: JSON.stringify({ proposal }),
+    } }] } }] }));
+    await f.open(await f.discover());
+    const result = await f.runtime.execute('owner', goal);
+    expect(result).toMatchObject({ status: 'goal_satisfied', verified: true,
+      run: { actionsExecuted: 3, modelRequests: 1, observationsReused: 2 }, budget: { modelRequestsRemaining: 0 } });
+    expect(f.fetch).toHaveBeenCalledTimes(1);
+    expect(f.driver.observe).toHaveBeenCalledTimes(9);
+    expect(f.driver.perform.mock.calls.map(([, action]) => action)).toEqual([0, 1, 2].map(i => ({ kind: 'activate', ref: `e${i}` })));
+    expect(f.images.every(image => image.every(byte => byte === 0))).toBe(true);
+  });
+  it.each(['settles', 'unstable', 'capture_failure'] as const)('bounds fast-plan post-action stability checks: %s', async mode => {
+    const f = fixture(); f.config.computer.maxActionsPerSession = 80;
+    vi.mocked(resolveModel).mockReturnValueOnce({ id: 'custom-vision', provider: 'custom', api: 'openai-completions',
+      input: ['text', 'image'], baseUrl: 'https://proxy.test/v1' } as any);
+    let stage = 0, postReads = 0;
+    const observe = f.driver.observe.getMockImplementation()!;
+    f.driver.perform.mockImplementation(async () => { stage++; postReads = 0; });
+    f.driver.observe.mockImplementation(async () => {
+      const read = stage ? ++postReads : 0;
+      if (mode === 'capture_failure' && read === 2) throw new Error('COMPUTER_CAPTURE_REQUIRED');
+      return { ...await observe(), stateDigest: stage && (mode === 'unstable' || read === 1) ? `${stage}-animation-${read}` : `stage-${stage}`,
+        summary: JSON.stringify({ text: stage >= 3 ? 'Workflow complete' : `- AXStaticText = "Stage ${stage}"`,
+          elements: [{ role: 'AXWindow' }, { role: 'AXButton', label: 'Continue', ref: `e${stage}`, semanticActions: ['activate'] }] }) };
+    });
+    const proposal = { kind: 'button_plan', steps: [0, 1, 2].map(i => ({ label: 'Continue', when: { text: `Stage ${i}` } })) };
+    f.fetch.mockResolvedValue(Response.json({ choices: [{ message: { tool_calls: [{ function: {
+      name: 'computer_proposal', arguments: JSON.stringify({ proposal }),
+    } }] } }] }));
+    await f.open(await f.discover());
+    const result = await f.runtime.execute('owner', goal);
+    if (mode === 'settles') {
+      expect(result).toMatchObject({ status: 'goal_satisfied', run: { modelRequests: 1, actionsExecuted: 3 } });
+      expect(f.driver.observe).toHaveBeenCalledTimes(11);
+    } else {
+      expect(result).toMatchObject({ errorCode: mode === 'unstable' ? 'COMPUTER_UI_UNSTABLE' : 'COMPUTER_POST_ACTION_OBSERVATION_FAILED',
+        receipt: { dispatch: 'completed' }, run: { actionsExecuted: 1, stopReason: 'handoff' } });
+      expect(f.driver.perform).toHaveBeenCalledTimes(1);
+      expect(f.runtime.getReport('owner')?.counters).toMatchObject({ completedInputs: 1, unknownDispatches: 0 });
+    }
+    expect(f.images.every(image => image.every(byte => byte === 0))).toBe(true);
+  });
   it('keeps legacy step single-action and fresh across Agent turns', async () => {
     const f = goalFixture(); await f.open(await f.discover());
     for (let i = 0; i < 3; i++) await f.runtime.execute('owner', { ...goal, op: 'step' });

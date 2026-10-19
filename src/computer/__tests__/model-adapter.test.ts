@@ -459,3 +459,35 @@ describe('Responses stream completion boundary', () => {
     await expect(readComputerResponsesStream(new Response('data: private vendor prose\n\n'), 4096)).rejects.toThrow(/^COMPUTER_MODEL_INVALID_JSON$/);
   });
 });
+
+describe('structured conditional plans', () => {
+  const plan = { kind: 'button_plan', steps: [
+    { label: '1', when: { role: 'AXStaticText', label: '0' } },
+    { label: '2', when: { role: 'AXStaticText', label: '1' } },
+  ] };
+  const summary = (label: string, ref = 'e2') => JSON.stringify({ elements: [{ role: 'AXWindow' },
+    { role: 'AXStaticText', label }, { role: 'AXButton', label: '1', ref: 'e1', semanticActions: ['activate'] },
+    { role: 'AXButton', label: '2', ref, semanticActions: ['activate'] }] });
+  const input = { goal: 'Enter 12', image: new Uint8Array([1]), mimeType: 'image/png' as const,
+    width: 800, height: 600, summary: summary('0'), stateDigest: 'before', maxPlanActions: 2 };
+  it.each(['openai-completions', 'openai-responses'])('uses one request for two guarded decisions on %s', async api => {
+    const args = JSON.stringify({ proposal: plan });
+    const fetch = vi.fn().mockImplementation(async () => Response.json(api === 'openai-responses'
+      ? { status: 'completed', output: [{ type: 'function_call', name: 'computer_proposal', arguments: args }] }
+      : { choices: [{ message: { tool_calls: [{ function: { name: 'computer_proposal', arguments: args } }] } }] }));
+    const adapter = new ChatCompletionsComputerAdapter({ api, modelId: 'custom-vision', baseUrl: 'https://example.com/v1', apiKey: 'test', profile: 'structured-tools-v1' }, fetch);
+    const first = await adapter.predict(input);
+    expect(first).toEqual({ kind: 'action', action: { kind: 'activate', ref: 'e1' } });
+    const history = [{ goal: input.goal, action: 'activate' as const, actionPreview: JSON.stringify((first as any).action), dispatch: 'completed' as const,
+      outcome: 'unknown' as const, after: '', afterStateDigest: 'after' }];
+    expect(await adapter.predict({ ...input, summary: summary('1', 'current'), stateDigest: 'after', history, maxPlanActions: 1 }))
+      .toEqual({ kind: 'action', action: { kind: 'activate', ref: 'current' } });
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+  it('does not expose plans outside run or in read-only requests', async () => {
+    const fetch = vi.fn().mockImplementation(async () => Response.json({ choices: [{ message: { tool_calls: [{ function: { name: 'computer_proposal', arguments: JSON.stringify({ proposal: plan }) } }] } }] }));
+    const adapter = new ChatCompletionsComputerAdapter({ modelId: 'custom', baseUrl: 'https://example.com/v1', apiKey: 'test', profile: 'structured-tools-v1' }, fetch);
+    await expect(adapter.predict({ ...input, maxPlanActions: undefined })).rejects.toThrow();
+    expect(fetch.mock.calls[0][1].body).not.toContain('button_plan');
+  });
+});
