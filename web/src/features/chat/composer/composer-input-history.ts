@@ -3,98 +3,115 @@ import { fetchJson } from '@/lib/fetch';
 export const COMPOSER_INPUT_HISTORY_MAX = 100;
 
 export type ComposerInputHistoryItem = {
+  conversationId: string;
   id: number;
   text: string;
   createdAt: number;
 };
 
-let items: ComposerInputHistoryItem[] = [];
-let loadPromise: Promise<void> | null = null;
-let loaded = false;
-let writeQueue = Promise.resolve();
-let mutationVersion = 0;
+type HistoryState = {
+  items: ComposerInputHistoryItem[];
+  loadPromise: Promise<void> | null;
+  loaded: boolean;
+  writeQueue: Promise<void>;
+  mutationVersion: number;
+  clearVersion: number;
+};
+const histories = new Map<string, HistoryState>();
 
-function prepend(item: ComposerInputHistoryItem): void {
-  if (items[0]?.text === item.text) {
-    if (item.id > 0) items[0] = item;
-    return;
+function stateFor(conversationId: string): HistoryState {
+  let state = histories.get(conversationId);
+  if (!state) {
+    state = { items: [], loadPromise: null, loaded: false, writeQueue: Promise.resolve(), mutationVersion: 0, clearVersion: 0 };
+    histories.set(conversationId, state);
   }
-  items = [item, ...items].slice(0, COMPOSER_INPUT_HISTORY_MAX);
+  return state;
 }
 
-function reconcileServerItem(item: ComposerInputHistoryItem): void {
-  const optimisticIndex = items.findIndex((entry) => entry.id === 0 && entry.text === item.text);
+function prepend(state: HistoryState, item: ComposerInputHistoryItem): void {
+  if (state.items[0]?.text === item.text) {
+    if (item.id > 0) state.items[0] = item;
+    return;
+  }
+  state.items = [item, ...state.items].slice(0, COMPOSER_INPUT_HISTORY_MAX);
+}
+
+function reconcileServerItem(state: HistoryState, item: ComposerInputHistoryItem): void {
+  if (state.items.some(entry => entry.id === item.id)) return;
+  const optimisticIndex = state.items.findIndex(entry => entry.id === 0 && entry.text === item.text);
   if (optimisticIndex >= 0) {
-    items[optimisticIndex] = item;
+    state.items[optimisticIndex] = item;
     return;
   }
-  prepend(item);
+  prepend(state, item);
 }
 
-export function getComposerInputHistory(): string[] {
-  return items.map((item) => item.text);
+export function getComposerInputHistory(conversationId: string): string[] {
+  return stateFor(conversationId).items.map(item => item.text);
 }
 
-export function loadComposerInputHistory(force = false): Promise<void> {
-  if (loaded && !force) return Promise.resolve();
-  if (loadPromise) return loadPromise;
-  const versionAtStart = mutationVersion;
+export function loadComposerInputHistory(conversationId: string, force = false): Promise<void> {
+  const state = stateFor(conversationId);
+  if (state.loaded && !force) return Promise.resolve();
+  if (state.loadPromise) return state.loadPromise;
+  const versionAtStart = state.mutationVersion;
   let retryAfterMutation = false;
-  loadPromise = fetchJson<{ items: ComposerInputHistoryItem[] }>('/api/composer-history')
-    .then((response) => {
-      if (mutationVersion === versionAtStart) {
-        items = response.items.slice(0, COMPOSER_INPUT_HISTORY_MAX);
-        loaded = true;
+  state.loadPromise = state.writeQueue.then(() => fetchJson<{ items: ComposerInputHistoryItem[] }>(`/api/composer-history?conversationId=${encodeURIComponent(conversationId)}`))
+    .then(response => {
+      if (state.mutationVersion === versionAtStart) {
+        state.items = response.items.filter(item => item.conversationId === conversationId).slice(0, COMPOSER_INPUT_HISTORY_MAX);
+        state.loaded = true;
       } else {
         retryAfterMutation = true;
       }
     })
     .catch(() => {})
     .finally(() => {
-      loadPromise = null;
-      if (retryAfterMutation) {
-        void writeQueue.then(() => loadComposerInputHistory(true));
-      }
+      state.loadPromise = null;
+      if (retryAfterMutation) void state.writeQueue.then(() => loadComposerInputHistory(conversationId, true));
     });
-  return loadPromise;
+  return state.loadPromise;
 }
 
-/** Update the keypress cache immediately, then persist without blocking the composer. */
-export function recordComposerInputHistory(text: string): void {
+/** Update the session's keypress cache immediately, then persist without blocking the composer. */
+export function recordComposerInputHistory(conversationId: string, text: string): void {
   const normalized = text.trim();
   if (!normalized) return;
-  mutationVersion += 1;
-  prepend({ id: 0, text: normalized, createdAt: Date.now() });
-  writeQueue = writeQueue
+  const state = stateFor(conversationId);
+  const clearVersion = state.clearVersion;
+  state.mutationVersion += 1;
+  prepend(state, { conversationId, id: 0, text: normalized, createdAt: Date.now() });
+  state.writeQueue = state.writeQueue
     .then(async () => {
       const response = await fetchJson<{ item: ComposerInputHistoryItem }>('/api/composer-history', {
         method: 'POST',
-        body: JSON.stringify({ text: normalized }),
+        body: JSON.stringify({ conversationId, text: normalized }),
       });
-      reconcileServerItem(response.item);
+      if (state.clearVersion === clearVersion && response.item.conversationId === conversationId) reconcileServerItem(state, response.item);
     })
     .catch(() => {});
 }
 
-export function applyComposerHistoryAppended(detail: unknown): void {
-  if (!detail || typeof detail !== 'object') return;
-  const candidate = detail as Partial<ComposerInputHistoryItem>;
-  if (typeof candidate.id !== 'number' || typeof candidate.text !== 'string' || typeof candidate.createdAt !== 'number') {
-    return;
-  }
-  mutationVersion += 1;
-  reconcileServerItem({ id: candidate.id, text: candidate.text, createdAt: candidate.createdAt });
+export function applyComposerHistoryAppended(detail: unknown): string | null {
+  if (!detail || typeof detail !== 'object') return null;
+  const item = detail as ComposerInputHistoryItem;
+  if (typeof item.conversationId !== 'string' || !item.conversationId || typeof item.id !== 'number'
+    || typeof item.text !== 'string' || typeof item.createdAt !== 'number') return null;
+  const state = stateFor(item.conversationId);
+  state.mutationVersion += 1;
+  reconcileServerItem(state, item);
+  return item.conversationId;
 }
 
-export function applyComposerHistoryCleared(): void {
-  mutationVersion += 1;
-  items = [];
+export function applyComposerHistoryCleared(detail: unknown): string | null {
+  if (!detail || typeof detail !== 'object' || !('conversationId' in detail) || typeof detail.conversationId !== 'string') return null;
+  const state = stateFor(detail.conversationId);
+  state.mutationVersion += 1;
+  state.clearVersion += 1;
+  state.items = [];
+  return detail.conversationId;
 }
 
 export function __resetComposerInputHistoryForTests(): void {
-  items = [];
-  loadPromise = null;
-  loaded = false;
-  writeQueue = Promise.resolve();
-  mutationVersion = 0;
+  histories.clear();
 }

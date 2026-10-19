@@ -75,7 +75,7 @@ export interface UseComposerActionsOptions {
   clearContextRefs: () => void;
   clearEditFollowUpRef: () => void;
   /** After a draft is committed (send, queue, interrupt); used for input history. */
-  onUserTextCommitted?: (text: string) => void;
+  onUserTextCommitted?: (text: string, conversationId?: string) => void;
 }
 
 export interface UseComposerActionsReturn {
@@ -137,8 +137,8 @@ export function useComposerActions(options: UseComposerActionsOptions): UseCompo
       { onDispatched: (receipt) => onDispatched?.(receipt, draft) },
     ];
     const result = onSend(...sendArgs);
-    commitAcceptedSend(result, () => {
-      onUserTextCommitted?.(draft.text);
+    commitAcceptedSend(result, (conversationId) => {
+      onUserTextCommitted?.(draft.text, conversationId);
       const latest = latestOptions.current;
       if (latest.getTextValue() !== draft.text
         || JSON.stringify(latest.wireAttachmentsPayload()) !== JSON.stringify(draft.attachments)

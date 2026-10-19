@@ -131,15 +131,15 @@ export class EmbeddedBackend implements TuiBackend {
     return 'local embedded';
   }
 
-  async getComposerInputHistory(): Promise<TuiComposerHistoryItem[]> {
-    return listComposerInputHistory();
+  async getComposerInputHistory(conversationId: string): Promise<TuiComposerHistoryItem[]> {
+    return listComposerInputHistory(conversationId);
   }
   async getComposerDraftDirectory(): Promise<string> {
     return join(resolveStateDir(), 'client-drafts', 'embedded', 'composers');
   }
 
-  async recordComposerInputHistory(text: string): Promise<TuiComposerHistoryItem> {
-    return appendComposerInputHistory(text).item;
+  async recordComposerInputHistory(conversationId: string, text: string): Promise<TuiComposerHistoryItem> {
+    return appendComposerInputHistory(conversationId, text).item;
   }
 
   start(): void {

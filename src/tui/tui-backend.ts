@@ -35,6 +35,7 @@ export interface TuiEvent {
 }
 
 export interface TuiComposerHistoryItem {
+  conversationId: string;
   id: number;
   text: string;
   createdAt: number;
@@ -216,12 +217,12 @@ export interface TuiBackend {
   /** Current active chat abort signal, if a run is in progress. */
   getActiveSignal?(): AbortSignal | undefined;
 
-  /** Global composer history, shared across sessions and clients. */
-  getComposerInputHistory(): Promise<TuiComposerHistoryItem[]>;
+  /** Composer history for one conversation, shared across its clients. */
+  getComposerInputHistory(conversationId: string): Promise<TuiComposerHistoryItem[]>;
   getComposerDraftDirectory(): Promise<string>;
 
   /** Persist one submitted chat input. */
-  recordComposerInputHistory(text: string): Promise<TuiComposerHistoryItem>;
+  recordComposerInputHistory(conversationId: string, text: string): Promise<TuiComposerHistoryItem>;
 
   /** Send a chat message, returns the run id. */
   sendChat(opts: ChatSendOptions): Promise<{ runId: string }>;

@@ -116,6 +116,7 @@ import {
 } from './tui-new-session-preferences.js';
 import { resolveFdPath } from './tui-fd-path.js';
 import packageJson from '../../package.json' with { type: 'json' };
+import { createTuiComposerHistory } from './composer-history.js';
 import { createSessionActions } from './tui-session-actions.js';
 import { createInitialState, type TuiOptions, type TuiResult, type TuiState } from './tui-types.js';
 import { createXopcTuiKeybindingsManager } from './tui-keybindings-file.js';
@@ -2320,25 +2321,21 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     tui.requestRender();
   };
 
-  let composerHistory: TuiComposerHistoryItem[] = [];
-  let composerHistoryWriteQueue = Promise.resolve();
-  const applyComposerHistory = (next: TuiComposerHistoryItem[]) => {
-    composerHistory = next.slice(0, 100);
-    composerHistoryTexts = composerHistory.map((item) => item.text);
-    if (editor === defaultEditor) {
-      defaultEditor.replaceHistory(composerHistory.map((item) => item.text));
-      return;
-    }
-    for (const item of composerHistory.slice().reverse()) editor.addToHistory?.(item.text);
-  };
-  const refreshComposerHistory = async () => {
-    try {
-      await composerHistoryWriteQueue;
-      applyComposerHistory(await client.getComposerInputHistory());
-    } catch {
-      // History is an optional convenience; keep the editor responsive when unavailable.
-    }
-  };
+  const composerHistory = createTuiComposerHistory({
+    currentConversationId: () => state.currentConversationId,
+    load: (id) => client.getComposerInputHistory(id),
+    persist: (id, text) => client.recordComposerInputHistory(id, text),
+    replace: (texts) => {
+      composerHistoryTexts = texts;
+      defaultEditor.replaceHistory(texts);
+      if (editor !== defaultEditor) {
+        // Recreate extension editors that do not expose a history replacement API.
+        setEditorComponent(editorComponentFactory);
+      }
+      tui.requestRender();
+    },
+  });
+  const refreshComposerHistory = () => composerHistory.refresh();
   const refreshChatInputState = async (conversationId = state.currentConversationId) => {
     try {
       applyChatInputState(await client.getChatInputState(conversationId));
@@ -2346,23 +2343,8 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
       // Keep the last revision during transient reconnect failures.
     }
   };
-  const recordChatHistory = (value: string) => {
-    const text = value.trim();
-    if (!text) return;
-    editor.addToHistory?.(text);
-    if (composerHistory[0]?.text !== text) {
-      composerHistory = [{ id: 0, text, createdAt: Date.now() }, ...composerHistory].slice(0, 100);
-      composerHistoryTexts = composerHistory.map((item) => item.text);
-    }
-    composerHistoryWriteQueue = composerHistoryWriteQueue
-      .then(async () => {
-        const item = await client.recordComposerInputHistory(text);
-        const optimisticIndex = composerHistory.findIndex(
-          (entry) => entry.id === 0 && entry.text === item.text,
-        );
-        if (optimisticIndex >= 0) composerHistory[optimisticIndex] = item;
-      })
-      .catch(() => {});
+  const recordChatHistory = (value: string, conversationId = state.currentConversationId) => {
+    composerHistory.record(value, conversationId);
   };
 
   const submitCore = createEditorSubmitHandler({
@@ -2399,7 +2381,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
         if (!ok) throw new Error('Queued input changed; refreshed latest state');
         editingQueuedInput = undefined;
         if (state.currentConversationId === conversationId && editor.getText().trim() === content) editor.setText('');
-        recordChatHistory(content);
+        recordChatHistory(content, conversationId);
         tui.requestRender();
       })
       .catch((error: unknown) => {
@@ -2431,7 +2413,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
       void client.submitChatInput({ conversationId, message: text, delivery: 'next' })
         .then(({ ok, state: inputState }) => {
           if (!ok) throw new Error('Gateway did not accept the message');
-          recordChatHistory(text);
+          recordChatHistory(text, conversationId);
           if (state.currentConversationId === conversationId && editor.getText().trim() === text) editor.setText('');
           if (inputState) applyChatInputState(inputState);
           else void refreshChatInputState(conversationId);
@@ -2448,6 +2430,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
 
   const setConversationId = (key: string) => {
     state.currentConversationId = resolveConversationId(key);
+    composerHistory.switchSession();
     state.chatInputState = createEmptyChatInputState(state.currentConversationId);
     editingQueuedInput = undefined;
     void refreshChatInputState(state.currentConversationId);
@@ -2757,25 +2740,11 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
       return;
     }
     if (evt.event === 'composer-history.appended') {
-      const item = data as unknown as TuiComposerHistoryItem;
-      if (typeof item.text === 'string' && typeof item.id === 'number') {
-        const optimisticIndex = composerHistory.findIndex(
-          (entry) => entry.id === 0 && entry.text === item.text,
-        );
-        if (optimisticIndex >= 0) {
-          composerHistory[optimisticIndex] = item;
-        } else if (composerHistory[0]?.text !== item.text) {
-          composerHistory = [item, ...composerHistory].slice(0, 100);
-          composerHistoryTexts = composerHistory.map((entry) => entry.text);
-          editor.addToHistory?.(item.text);
-        } else {
-          composerHistory[0] = item;
-        }
-      }
+      composerHistory.append(data as unknown as TuiComposerHistoryItem);
       return;
     }
     if (evt.event === 'composer-history.cleared') {
-      applyComposerHistory([]);
+      if (typeof data.conversationId === 'string') composerHistory.clear(data.conversationId);
       return;
     }
     if (evt.event === 'workflow.run.updated' && handleWorkflowRunUpdated(data)) {
