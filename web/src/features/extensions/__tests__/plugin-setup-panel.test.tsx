@@ -96,3 +96,16 @@ it('starts CLI login after saving its fields without racing a preparation job', 
   const actions = mocks.request.mock.calls.filter(([, options]) => options.body).map(([, options]) => JSON.parse(options.body).action);
   expect(actions).toEqual(['configure', 'authorize']);
 });
+
+it('shows missing business scopes on a connected account and starts targeted recovery', async () => {
+  job = { revision: 8, state: 'completed', resources: 'ready', connections: [{ name: 'provider', state: 'connected' }], partial: false, missingConfig: [] };
+  Object.assign(job, { installed: true, authorizations: [{ id: 'account', state: 'connected', issues: [{ id: 'calendar', title: 'Calendar permission required', scopes: ['calendar:calendar.event:read'], instructions: ['Enable application access first'], method: 'calendar', helpUrl: 'https://example.com/permissions' }] }] });
+  const owned: ExtensionApiRow = { ...extension, setup: { tasks: [], userConfig: {}, authorizations: [{ id: 'account', title: 'Provider', servers: ['provider'], methods: [{ id: 'calendar', title: 'Calendar', type: 'cli', fields: [] }] }] } };
+  await act(async () => root.render(<MemoryRouter><PluginSetupPanel extension={owned} zh={false} onChanged={onChanged} /></MemoryRouter>));
+  expect(host.textContent).toContain('Calendar permission required');
+  expect(host.textContent).toContain('calendar:calendar.event:read');
+  expect(host.querySelector('a[href="https://example.com/permissions"]')).not.toBeNull();
+  await click('Grant missing permissions');
+  const request = mocks.request.mock.calls.find(([, options]) => options.body && JSON.parse(options.body).action === 'authorize');
+  expect(JSON.parse(request![1].body)).toMatchObject({ action: 'authorize', server: 'account', method: 'calendar' });
+});

@@ -10,12 +10,12 @@ type Fields = NonNullable<ExtensionApiRow['setup']>['userConfig'];
 export function PluginCredentialFields({ fields, values, onChange }: { fields: Fields; values: Record<string, unknown>; onChange: (values: Record<string, unknown>) => void }) {
   return <>{Object.entries(fields).map(([key, field]) => <label key={key} className="block space-y-1.5 text-sm"><span>{field.title}{field.required ? ' *' : ''}</span>{field.type === 'boolean' ? <input type="checkbox" checked={values[key] === true} onChange={event => onChange({ ...values, [key]: event.target.checked })} /> : <input className="w-full rounded-lg border border-edge bg-surface-inset px-3 py-2.5" type={field.sensitive ? 'password' : field.type === 'number' ? 'number' : 'text'} required={field.required} autoComplete="off" value={String(values[key] ?? '')} onChange={event => onChange({ ...values, [key]: field.type === 'number' ? Number(event.target.value) : event.target.value })} />}</label>)}</>;
 }
-export function PluginAccountEditor({ account, fields, zh, busy, attempt, onBack, onConnect, onSave, onRedirect, onSkip }: {
-  account: PluginAccount; fields: Fields; zh: boolean; busy: boolean; attempt: PluginAuthorizationAttempt | null;
+export function PluginAccountEditor({ account, fields, zh, busy, attempt, initialMethod, onBack, onConnect, onSave, onRedirect, onSkip }: {
+  account: PluginAccount; fields: Fields; zh: boolean; busy: boolean; initialMethod?: string; attempt: PluginAuthorizationAttempt | null;
   onBack: () => void; onConnect: (method: string) => void; onSave: (method: string, values: Record<string, unknown>) => void;
   onRedirect: (url: string) => void; onSkip: () => void;
 }) {
-  const [selected, setSelected] = useState(account.methods[0]?.id ?? '');
+  const [selected, setSelected] = useState(initialMethod && account.methods.some(method => method.id === initialMethod) ? initialMethod : account.methods[0]?.id ?? '');
   const [values, setValues] = useState<Record<string, unknown>>({});
   const [callback, setCallback] = useState('');
   const [image, setImage] = useState<string>();

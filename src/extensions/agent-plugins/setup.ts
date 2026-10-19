@@ -1,5 +1,5 @@
-import { pluginAuthorizations } from './setup-contract.js';
-import { cancelPluginCliAuthorizations, checkPluginCliAuthorization, getPluginCliAuthorization, startPluginCliAuthorization } from './cli-authorization.js';
+import { pluginAuthorizations, pluginPermissionIssueSchema } from './setup-contract.js';
+import { cancelPluginCliAuthorizations, inspectPluginCliAuthorization, getPluginCliAuthorization, startPluginCliAuthorization } from './cli-authorization.js';
 import { readPluginUserConfig } from './user-config.js';
 import { randomUUID } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
@@ -27,7 +27,7 @@ const schema = z.object({
   state: z.enum(['pending', 'running', 'action_required', 'completed', 'cancelled', 'interrupted', 'failed']),
   resources: z.enum(['pending', 'running', 'ready', 'error']), connections: z.array(connection),
   installed: z.boolean().default(false), deferred: z.boolean().default(false),
-  authorizations: z.array(z.object({ id: z.string(), state: z.enum(['pending', 'connected', 'skipped', 'error']), method: z.string().optional(), attemptId: z.string().optional() })).default([]),
+  authorizations: z.array(z.object({ id: z.string(), state: z.enum(['pending', 'connected', 'skipped', 'error']), issues: z.array(pluginPermissionIssueSchema).max(20).default([]), method: z.string().optional(), attemptId: z.string().optional() })).default([]),
   operations: z.array(z.object({ key: z.string().uuid(), action: z.string() })).max(100).default([]),
   missingConfig: z.array(z.string()).default([]), partial: z.boolean(), updatedAt: z.string(), error: z.string().optional(),
 });
@@ -67,7 +67,7 @@ export class PluginSetupService {
     if (running.has(this.key(id)) || lockfile.checkSync(this.path(id), { realpath: false })) throw new Error('Preparation is already running');
     const job: PluginSetupJob = { id: randomUUID(), pluginId: id, owner, packageRevision: plugin.receipt.revision, revision: 0,
       state: 'pending', resources: 'pending', connections: Object.keys(plugin.servers).map(name => ({ name, state: 'pending' })),
-      installed: false, deferred: false, authorizations: pluginAuthorizations(plugin.manifest).map(value => ({ id: value.id, state: 'pending' as const })),
+      installed: false, deferred: false, authorizations: pluginAuthorizations(plugin.manifest).map(value => ({ id: value.id, state: 'pending' as const, issues: [] })),
       operations: [], missingConfig: pluginConfigMissing(this.store, plugin), partial: plugin.diagnostics.length > 0, updatedAt: new Date().toISOString() };
     this.write(job); return job;
   }
@@ -243,7 +243,10 @@ export class PluginSetupService {
         for (const target of job.authorizations) {
           const declaration = declarations.find(value => value.id === target.id)!;
           const method = declaration.methods.find(value => value.id === target.method);
-          if (method?.type === 'cli') target.state = await checkPluginCliAuthorization(this.store, plugin, target.id, method, controller.signal) ? 'connected' : 'pending';
+          if (method?.type === 'cli') {
+            const check = await inspectPluginCliAuthorization(this.store, plugin, target.id, method, controller.signal);
+            target.state = check.authenticated ? 'connected' : 'pending'; target.issues = check.issues;
+          }
           else if (method?.type === 'form') {
             const values = readPluginUserConfig(this.store, id, plugin.receipt.revision);
             target.state = method.fields.every(key => values[key] !== undefined && values[key] !== '') ? 'connected' : 'pending';
