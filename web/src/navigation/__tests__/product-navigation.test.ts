@@ -25,16 +25,17 @@ describe('product navigation', () => {
     ]);
   });
 
-  it('removes capability discovery and falls back to skills', () => {
+  it('puts extensions first and uses it as the default capability destination', () => {
     expect(PRODUCT_DOMAINS.find((domain) => domain.id === 'capabilities')?.sections.map((section) => section.id)).toEqual([
+      'capabilities-extensions',
       'capabilities-skills',
       'capabilities-connectors',
       'capabilities-agents',
       'capabilities-channels',
-      'capabilities-extensions',
     ]);
-    expect(productSectionAtLocation('/capabilities')).toBe('capabilities-skills');
-    expect(productSectionAtLocation('/capabilities/discover')).toBe('capabilities-skills');
+    expect(PRODUCT_DOMAINS.find(domain => domain.id === 'capabilities')?.path).toBe('/capabilities/extensions');
+    expect(productSectionAtLocation('/capabilities')).toBe('capabilities-extensions');
+    expect(productSectionAtLocation('/capabilities/discover')).toBe('capabilities-extensions');
   });
 
   it.each([

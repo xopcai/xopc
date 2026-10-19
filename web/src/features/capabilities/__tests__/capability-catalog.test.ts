@@ -15,11 +15,11 @@ import type { SkillCatalogEntry } from '@/features/skills/skill.types';
 describe('capability catalog', () => {
   it('owns agent and channel management routes', () => {
     expect(CAPABILITY_SECTIONS).toEqual([
+      'extensions',
       'skills',
       'connectors',
       'agents',
       'channels',
-      'extensions',
     ]);
     expect(capabilityPath('agents')).toBe('/capabilities/agents');
     expect(capabilityPath('channels')).toBe('/capabilities/channels');

@@ -12,6 +12,7 @@ import {
 import { messages } from '@/i18n/messages';
 import {
   CAPABILITY_SECTIONS,
+  capabilityPath,
   type CapabilitySection,
 } from '@/navigation/product-navigation';
 import { useLocaleStore } from '@/stores/locale-store';
@@ -51,7 +52,7 @@ export function CapabilitiesPage() {
     navigate({ search: next.toString() }, { replace: true, preventScrollReset: true });
   };
   const parsedSection = parseCapabilitySection(sectionParam);
-  const section = parsedSection ?? 'skills';
+  const section = parsedSection ?? CAPABILITY_SECTIONS[0];
   const sectionTitle = messageBundle.productNavigation.sections[`capabilities-${section}`];
   const setPageHeader = usePageHeaderStore(state => state.setPageHeader);
   const clearPageHeader = usePageHeaderStore(state => state.clearPageHeader);
@@ -71,7 +72,7 @@ export function CapabilitiesPage() {
   }, [clearPageHeader, currentContribution, sectionTitle, setPageHeader]);
 
   if (section === 'extensions' && detailId) return <Navigate replace to={pluginDetailPath(detailId, searchParams.get('from') === 'connections' ? 'connections' : searchParams.get('from') === 'skills' ? 'skills' : 'installed', searchParams.get('connect') === '1', searchParams.get('returnTo') ?? undefined)} />;
-  if (!parsedSection) return <Navigate to="/capabilities/skills" replace />;
+  if (!parsedSection) return <Navigate to={capabilityPath(CAPABILITY_SECTIONS[0])} replace />;
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-surface-panel">
