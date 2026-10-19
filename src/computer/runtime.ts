@@ -15,7 +15,7 @@ import { enterComputerControl, leaveComputerControl } from './control-guard.js';
 import { computerModelProfile, ComputerServiceLimitsSchema, type ComputerServiceLimits } from './model-policy.js';
 import { groundComputerAction } from './semantic-actions.js';
 import { ComputerFlowCapture, ComputerFlowStore, computerFlowMetadata, computerFlowHint, type ComputerFlowRepository } from './flows.js';
-import { ComputerSessionDiagnostics, type ComputerSessionReport } from './diagnostics.js';
+import { ComputerSessionDiagnostics, ComputerNativeTimingSchema, type ComputerNativeTiming, type ComputerSessionReport } from './diagnostics.js';
 import { ComputerDiagnosticSchema, ComputerOperationError, computerDiagnostic, computerRecovery } from './errors.js';
 import { createLogger } from '../utils/logger.js';
 import { ComputerExpectationSchema, ComputerTaskState, verifyComputerExpectation,
@@ -27,13 +27,14 @@ const Reply = z.object({
   status: z.enum(['pending_authorization', 'ready', 'running', 'pending_action', 'paused', 'stopped']),
   sessionId: z.string(), brokerEpoch: z.string(), generation: z.number().int().nonnegative(),
   grantId: z.string().optional(), observation: ComputerObservationSchema.optional(),
+  nativeMs: ComputerNativeTimingSchema.optional(),
   errorCode: z.string().optional(),
   diagnostic: ComputerDiagnosticSchema.optional(),
   apps: z.array(ComputerAppSchema).max(100).optional(), windows: z.array(ComputerWindowSchema).max(100).optional(),
   receipt: z.object({ actionId: z.string(), dispatch: z.enum(['notStarted', 'started', 'completed', 'unknown']), outcome: z.enum(['applied', 'notApplied', 'unknown']), verification: z.enum(['semantic', 'artifact', 'visual', 'none']), errorCode: z.string().optional() }).optional(),
 }).strict();
 type ObservationReply = { value: z.infer<typeof Reply>; frame?: Uint8Array; mimeType?: 'image/png' | 'image/jpeg' };
-type GoalContext = { observation?: ObservationReply; observationsReused: number };
+type GoalContext = { observation?: ObservationReply; observationsReused: number; stabilityObservations: number; actionsRemaining: number; nativeMs: ComputerNativeTiming };
 type Session = {
   id: string; owner: string; endpointId: string; appRef: string; mode: 'observe' | 'control'; prepare: boolean; windowRef?: string; binding: ComputerModelBinding;
   adapter: ComputerStepAdapter; createdAt: number; modelRequests: number; actions: number;
@@ -75,7 +76,7 @@ export interface ComputerPublicResult {
   report?: ComputerSessionReport;
   flows?: ReturnType<typeof computerFlowMetadata>[];
   savedFlow?: ReturnType<typeof computerFlowMetadata>;
-  run?: { actionsExecuted: number; modelRequests: number; observationsReused: number; elapsedMs: number;
+  run?: { actionsExecuted: number; modelRequests: number; observationsReused: number; stabilityObservations: number; elapsedMs: number; phaseMs: ComputerSessionReport['phaseMs']; nativeMs: ComputerNativeTiming;
     stopReason: 'condition_satisfied' | 'condition_present' | 'action_limit' | 'time_limit' | 'handoff' };
 }
 
@@ -161,17 +162,21 @@ export class ComputerRuntime {
   private async executeGoal(owner: string, input: Extract<ComputerUseInput, { op: 'run' }>, signal: AbortSignal,
     diagnostics?: ComputerSessionDiagnostics): Promise<ComputerPublicResult> {
     const startedAt = Date.now();
+    const phasesBefore = diagnostics?.snapshot().phaseMs;
     const requestsBefore = diagnostics?.snapshot().counters.modelRequests ?? 0;
-    const context: GoalContext = { observationsReused: 0 };
+    const context: GoalContext = { observationsReused: 0, stabilityObservations: 0, actionsRemaining: input.maxActions ?? 6, nativeMs: { precheckMs: 0, inputMs: 0, postObserveMs: 0 } };
     let actionsExecuted = 0;
     const finish = (result: ComputerPublicResult, stopReason: NonNullable<ComputerPublicResult['run']>['stopReason']) => ({
       ...result, run: { actionsExecuted, modelRequests: (diagnostics?.snapshot().counters.modelRequests ?? 0) - requestsBefore,
-        observationsReused: context.observationsReused, elapsedMs: Math.max(0, Date.now() - startedAt), stopReason },
+        observationsReused: context.observationsReused, stabilityObservations: context.stabilityObservations, nativeMs: context.nativeMs,
+        phaseMs: Object.fromEntries(Object.entries(diagnostics?.snapshot().phaseMs ?? {}).map(([key, value]) =>
+          [key, value - (phasesBefore?.[key as keyof typeof phasesBefore] ?? 0)])) as ComputerSessionReport['phaseMs'], elapsedMs: Math.max(0, Date.now() - startedAt), stopReason },
     });
     const step = { op: 'step' as const, goal: input.goal, expect: input.expect };
     try {
       while (true) {
         signal.throwIfAborted();
+        context.actionsRemaining = (input.maxActions ?? 6) - actionsExecuted;
         let result = await this.executeInput(owner, step, signal, diagnostics, context);
         const authorizationDeadline = Date.now() + 60_000;
         while (result.status === 'pending_authorization' || result.status === 'pending_action') {
@@ -194,6 +199,7 @@ export class ComputerRuntime {
       // Pixels live only inside this call, never in session history or across Agent turns.
       context.observation?.frame?.fill(0);
       context.observation = undefined;
+      this.sessions.get(owner)?.adapter.reset?.();
     }
   }
   private async executeInput(owner: string, input: Exclude<ComputerUseInput, { op: 'close' | 'report' | 'flows' | 'forget_flow' | 'run' }>, signal: AbortSignal,
@@ -329,8 +335,10 @@ export class ComputerRuntime {
           const predictionInput = input;
           const proposal = await s.diagnostics.measure('model', () => predictComputerStep(s.adapter, { goal: predictionInput.op === 'observe' ? predictionInput.question! : predictionInput.goal, readOnly: predictionInput.op === 'observe', image: observed.frame, mimeType: observed.mimeType,
             width: o.imageWidth, height: o.imageHeight, summary: o.summary, stateDigest: o.stateDigest,
-            history: s.task.history, expectation: predictionInput.expect, flowHint, onModelRequest: () => s!.diagnostics.count('modelRequests') }, () => {
-            if (++s!.modelRequests > config.computer.maxModelRequests) throw new Error('COMPUTER_MODEL_BUDGET');
+            maxPlanActions: goalContext?.actionsRemaining, history: s.task.history, expectation: predictionInput.expect, flowHint, onModelRequest: () => {
+              if (++s!.modelRequests > config.computer.maxModelRequests) throw new Error('COMPUTER_MODEL_BUDGET');
+              s!.diagnostics.count('modelRequests');
+            } }, () => {
             s!.diagnostics.count('predictionAttempts');
           }, signal));
           if (proposal.kind === 'answer') return { ...this.present(observed.value), summary: proposal.text, verified: false, verification, budget: this.budget(s) };
@@ -383,10 +391,45 @@ export class ComputerRuntime {
       s.pending = envelope;
       s.diagnostics.propose(envelope.actionId, envelope.action.kind);
     }
-    const reply = await this.send(s, { op: 'act', sessionId: s.id, owner: s.owner, envelope }, signal);
+    let reply: ObservationReply = await this.send(s, { op: 'act', sessionId: s.id, owner: s.owner, envelope }, signal);
     if (reply.value.receipt && reply.value.receipt.actionId !== envelope.actionId) {
       reply.frame?.fill(0);
       throw new Error('COMPUTER_RECEIPT_MISMATCH');
+    }
+    if (goalContext && s.adapter.hasPendingPlan && reply.value.status === 'ready' && !reply.value.errorCode
+      && reply.value.receipt?.dispatch === 'completed' && reply.value.observation) {
+      // Fast local continuations lack the incidental settling time of a model
+      // round trip. Require two equal native snapshots before recording the
+      // post-action state used by the remaining conditional plan.
+      const receipt = reply.value.receipt;
+      const nativeMs = reply.value.nativeMs;
+      let stable = false;
+      try {
+        for (let sample = 0; sample < 3; sample++) {
+          const next = await this.send(s, { op: 'observe', sessionId: s.id, owner: s.owner }, signal);
+          goalContext.stabilityObservations++;
+          const previous = reply;
+          reply = { ...next, value: { ...next.value, receipt, nativeMs } };
+          previous.frame?.fill(0);
+          if (previous.value.brokerEpoch !== next.value.brokerEpoch || previous.value.generation !== next.value.generation
+            || previous.value.grantId !== next.value.grantId) { reply.value.errorCode = 'COMPUTER_GRANT_REVOKED'; break; }
+          const a = previous.value.observation, b = next.value.observation;
+          stable = next.value.status === 'ready' && !next.value.errorCode && !!a && !!b
+            && previous.value.brokerEpoch === next.value.brokerEpoch && previous.value.generation === next.value.generation
+            && previous.value.grantId === next.value.grantId && a.stateDigest === b.stateDigest
+            && JSON.stringify(a.target) === JSON.stringify(b.target);
+          if (stable || next.value.status !== 'ready' || next.value.errorCode) break;
+        }
+        if (!stable && !reply.value.errorCode) reply.value.errorCode = 'COMPUTER_UI_UNSTABLE';
+      } catch (error) {
+        // The input is known completed even if subsequent observation fails.
+        // Keep its receipt; never turn a failed capture into a replay request.
+        reply.frame?.fill(0);
+        reply = { value: { ...reply.value, receipt, errorCode: signal?.aborted ? 'COMPUTER_OPERATION_ABORTED' : 'COMPUTER_POST_ACTION_OBSERVATION_FAILED' } };
+      }
+    }
+    if (goalContext && reply.value.receipt?.dispatch === 'completed' && reply.value.nativeMs) {
+      for (const key of ['precheckMs', 'inputMs', 'postObserveMs'] as const) goalContext.nativeMs[key] += reply.value.nativeMs[key];
     }
     if (reply.value.status !== 'pending_action') s.pending = undefined;
     if (goalContext && reply.value.status === 'ready' && !reply.value.errorCode && reply.value.receipt?.dispatch === 'completed'
@@ -409,6 +452,7 @@ export class ComputerRuntime {
       s.task.record(context.goal, envelope.action, context.before, reply.value.receipt, reply.value.observation, verification);
       s.flowCapture.record(envelope.action, context.before, reply.value.receipt, reply.value.observation, context.expectation, verification);
     }
+    if (signal?.aborted) { reply.frame?.fill(0); signal.throwIfAborted(); }
     if (!s.pending) s.pendingContext = undefined;
     if (reply.value.status === 'stopped') this.forget(s);
     return { ...this.present(reply.value), verification, verified: verification?.status === 'satisfied' && !verification.preexisting,
