@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { pluginAuthorizations } from './setup-contract.js';
 import { AgentPluginStore, type InstalledAgentPlugin } from './store.js';
 import { pluginServerId } from './validation.js';
-import { pluginBranding } from './branding.js';
+import { pluginBranding, pluginLocalizations } from './branding.js';
 
 export function agentPluginInventoryRow(plugin: InstalledAgentPlugin, store = new AgentPluginStore()) {
   const setupPath = join(store.stateDir, 'plugin-setup', `${plugin.id}.json`);
@@ -17,6 +17,7 @@ export function agentPluginInventoryRow(plugin: InstalledAgentPlugin, store = ne
     id: `plugin:${plugin.id}`, pluginId: plugin.id, format: plugin.format,
     name: plugin.manifest.name, version: plugin.manifest.version ?? plugin.receipt.provenance?.version,
     description: plugin.manifest.description, source: 'agent-plugin',
+    localizations: pluginLocalizations(plugin.manifest),
     branding: pluginBranding(plugin.rootDir, plugin.manifest),
     active: plugin.receipt.enabled && plugin.readiness !== 'blocked' && plugin.readiness !== 'setup_required', activationEligible: plugin.receipt.enabled,
     installationState: job?.installed || job?.state === 'completed' ? 'installed' : job ? 'preparing' : 'installed',

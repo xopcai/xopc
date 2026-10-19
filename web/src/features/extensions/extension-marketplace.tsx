@@ -1,3 +1,4 @@
+import { pluginDetailPath } from '@/features/capabilities/capability-links';
 import * as Dialog from '@radix-ui/react-dialog';
 import { AlertTriangle, ArrowLeft, CheckCircle, Loader2, Package, ShieldCheck, Trash2, X } from 'lucide-react';
 import { useCallback, useEffect, useReducer, useState } from 'react';
@@ -176,11 +177,11 @@ export function ExtensionMarketplacePanel({
                     role="button"
                     tabIndex={0}
                     aria-label={`${displayName}, ${copy.marketplaceDetailTitle}`}
-                    onClick={() => installed?.pluginId ? navigate(`/capabilities/extensions/${encodeURIComponent(installed.pluginId)}`) : dispatch({ type: 'patch', patch: { detailPkg: e.id } })}
+                    onClick={() => installed?.pluginId ? navigate(pluginDetailPath(installed.pluginId, 'installed', installed.authorizationStatus === 'required')) : dispatch({ type: 'patch', patch: { detailPkg: e.id } })}
                     onKeyDown={(ev) => {
                       if (ev.key === 'Enter' || ev.key === ' ') {
                         ev.preventDefault();
-                        if (installed?.pluginId) navigate(`/capabilities/extensions/${encodeURIComponent(installed.pluginId)}`);
+                        if (installed?.pluginId) navigate(pluginDetailPath(installed.pluginId, 'installed', installed.authorizationStatus === 'required'));
                         else dispatch({ type: 'patch', patch: { detailPkg: e.id } });
                       }
                     }}
@@ -243,14 +244,14 @@ export function ExtensionMarketplacePanel({
                           </span>
                           {e.packageType === 'plugin' ? <button
                             type="button"
-                            onClick={() => installed?.pluginId ? navigate(`/capabilities/extensions/${encodeURIComponent(installed.pluginId)}`) : dispatch({ type: 'patch', patch: { detailPkg: e.id, quickInstallPkg: null } })}
+                            onClick={() => installed?.pluginId ? navigate(pluginDetailPath(installed.pluginId, 'installed', installed.authorizationStatus === 'required')) : dispatch({ type: 'patch', patch: { detailPkg: e.id, quickInstallPkg: null } })}
                             className={cn(
                               'inline-flex items-center justify-center rounded-lg border border-edge px-3 py-2 text-xs font-medium text-fg',
                               'transition-colors active:scale-[0.98] active:bg-surface-hover/80',
                               'hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
                             )}
                           >
-                            {language.startsWith('zh') ? '管理' : 'Manage'}
+                            {installed?.authorizationStatus === 'required' ? (language.startsWith('zh') ? '去授权' : 'Connect account') : (language.startsWith('zh') ? '查看详情' : 'View details')}
                           </button> : <button
                             type="button"
                             disabled={busy}

@@ -1,3 +1,4 @@
+import { pluginDetailPath } from '@/features/capabilities/capability-links';
 import { Loader2 } from 'lucide-react';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -651,7 +652,7 @@ export function ConnectorsPage({ embedded = false, onHeaderActionChange }: { emb
                   ) : null}
 
                   {visiblePluginConnections.length ? <section className="divide-y divide-edge-subtle overflow-hidden rounded-xl border border-edge bg-surface-base">
-                    {visiblePluginConnections.map(extension => <InstalledPluginConnectionRow key={extension.id} extension={extension} language={language} onOpen={() => navigate(`/capabilities/extensions/${encodeURIComponent(extension.pluginId!)}`)} />)}
+                    {visiblePluginConnections.map(extension => <InstalledPluginConnectionRow key={extension.id} extension={extension} language={language} onOpen={() => navigate(pluginDetailPath(extension.pluginId!, 'connections', extension.authorizationStatus === 'required'))} />)}
                   </section> : null}
                   {visibleCustomServers.length || !connectedSearchQuery.trim() ? (
                     <section aria-label={cs.customIntegrationsTitle} className="rounded-xl border border-edge bg-surface-base">

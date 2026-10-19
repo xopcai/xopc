@@ -4,6 +4,15 @@ import { extname, resolve } from 'node:path';
 
 import { containedPath, type PluginManifest } from './validation.js';
 
+export function pluginLocalizations(manifest: PluginManifest) {
+  const extension = manifest.extensions?.['ai.xopc'] as { localizations?: Record<string, { displayName?: unknown; description?: unknown }> } | undefined;
+  return Object.fromEntries(['en', 'zh-CN'].flatMap(locale => {
+    const value = extension?.localizations?.[locale];
+    return typeof value?.displayName === 'string' && value.displayName.trim()
+      ? [[locale, { displayName: value.displayName, ...(typeof value.description === 'string' ? { description: value.description } : {}) }]] : [];
+  }));
+}
+
 /** Inline bounded package assets so authenticated and offline inventories need no extra fetch. */
 export function pluginBranding(root: string, manifest: PluginManifest) {
   const extension = manifest.extensions?.['ai.xopc'] as { branding?: { icon?: unknown } } | undefined;

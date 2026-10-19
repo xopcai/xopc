@@ -65,3 +65,13 @@ it('does not autoenable when required configuration is missing', async () => {
   await render(); expect(host.textContent).not.toContain('Installation complete');
   expect(mocks.request.mock.calls.some(([, o]) => o.body && JSON.parse(o.body).action === 'complete')).toBe(false);
 });
+it('opens the declared token form from a connection link without starting authorization', async () => {
+  job = { revision: 3, state: 'completed', resources: 'ready', connections: [{ name: 'provider', state: 'token_required' }], partial: true, missingConfig: ['accessKey'] };
+  const owned: ExtensionApiRow = { ...extension, setup: { tasks: [], userConfig: {
+    accessKey: { type: 'string', title: 'Access token', required: true, sensitive: true },
+  }, authorizations: [{ id: 'account', title: 'Provider', servers: ['provider'], methods: [{ id: 'token', title: 'Access token', type: 'form', fields: ['accessKey'] }] }] } };
+  await act(async () => root.render(<MemoryRouter><PluginSetupPanel extension={owned} initialConnect zh={false} onChanged={onChanged} /></MemoryRouter>));
+  expect(host.textContent).toContain('Connect Provider');
+  expect(host.querySelector('input[type=password]')).not.toBeNull();
+  expect(mocks.request.mock.calls.some(([, options]) => options.body && JSON.parse(options.body).action === 'authorize')).toBe(false);
+});

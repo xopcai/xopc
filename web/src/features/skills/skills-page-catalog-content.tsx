@@ -1,3 +1,5 @@
+import { useLocaleStore } from '@/stores/locale-store';
+import { PluginSkillOwner, pluginSkillUnavailable } from './plugin-skill-owner';
 import { CheckCircle2, CircleAlert } from 'lucide-react';
 
 import { FindSkillsButton } from '@/features/skills/find-skills-button';
@@ -34,6 +36,7 @@ type Props = Pick<
 >;
 
 export function SkillsPageCatalogContent(p: Props) {
+  const zh = useLocaleStore(state => state.language).startsWith('zh');
   const {
     sk,
     loading,
@@ -111,13 +114,14 @@ export function SkillsPageCatalogContent(p: Props) {
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {catalogDisplayRows.map((row) => {
             const enabled = resolveSkillEnabled(row);
+            const unavailable = pluginSkillUnavailable(row);
             const presentation = skillPresentation(row);
             return (
             <article
               key={`${row.directoryId}-${row.path}`}
               className={cn(
                 'group flex h-full flex-col rounded-xl bg-surface-panel p-4 shadow-surface transition-colors',
-                enabled
+                enabled && !unavailable
                   ? 'hover:bg-surface-hover'
                   : 'bg-amber-50/30 hover:bg-amber-50/50 dark:bg-amber-950/20',
               )}
@@ -139,7 +143,7 @@ export function SkillsPageCatalogContent(p: Props) {
                     {presentation.displayName}
                   </h3>
                 </button>
-                {!enabled ? (
+                {!enabled && !unavailable ? (
                   <Button
                     type="button"
                     variant="primary"
@@ -157,7 +161,7 @@ export function SkillsPageCatalogContent(p: Props) {
                     disabled={usingSkillInChatName === row.name || togglingSkillName === row.name}
                     onClick={() => void onUseSkillInChat({ name: row.name, source: 'catalog' })}
                   >
-                    {usingSkillInChatName === row.name ? sk.previewUseInChatBusy : sk.previewUseInChat}
+                    {unavailable ? (row.plugin?.authorizationStatus === 'required' ? (zh ? '去授权' : 'Connect account') : (zh ? '管理插件' : 'Manage plugin')) : usingSkillInChatName === row.name ? sk.previewUseInChatBusy : sk.previewUseInChat}
                   </Button>
                 )}
               </div>
@@ -185,17 +189,17 @@ export function SkillsPageCatalogContent(p: Props) {
                       <span
                         className={cn(
                           'inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 font-medium',
-                          enabled
+                          enabled && !unavailable
                             ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
                             : 'border-amber-500/30 bg-amber-500/10 text-amber-800 dark:text-amber-200',
                         )}
                       >
-                        {enabled ? (
+                        {enabled && !unavailable ? (
                           <CheckCircle2 className="size-3" aria-hidden />
                         ) : (
                           <CircleAlert className="size-3" aria-hidden />
                         )}
-                        {enabled ? sk.statusEnabled : sk.statusDisabled}
+                        {unavailable ? (row.plugin?.authorizationStatus === 'required' ? (zh ? '需要授权' : 'Authorization required') : (zh ? '插件未就绪' : 'Plugin not ready')) : enabled ? sk.statusEnabled : sk.statusDisabled}
                       </span>
                       {row.managed ? (
                         <span className="rounded-md bg-surface-hover/60 px-2 py-0.5 dark:bg-surface-active/50">
@@ -218,6 +222,7 @@ export function SkillsPageCatalogContent(p: Props) {
                   </div>
                 </div>
               </button>
+              <PluginSkillOwner skill={row} />
             </article>
             );
           })}
