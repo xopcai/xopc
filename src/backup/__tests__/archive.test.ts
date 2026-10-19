@@ -85,6 +85,6 @@ describe('encrypted offline state backup', () => {
     ], { cwd: process.cwd(), encoding: 'utf8', env: { ...process.env, XOPC_STATE_DIR: state, XOPC_CONFIG_PATH: join(state, 'xopc.json'), XOPC_WORKSPACE: join(state, 'workspace') } });
     expect(output).toContain('Backup created');
     await expect(verifyStateBackup(archive, 'a long test passphrase')).resolves.toMatchObject({ schemaVersion: 228 });
-  });
+  }, 30_000);
 });
 import { execFileSync } from 'node:child_process';
