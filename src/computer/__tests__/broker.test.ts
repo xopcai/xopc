@@ -57,6 +57,20 @@ describe('desktop computer authority', () => {
     await f.broker.command(command);
     expect(f.driver.perform).toHaveBeenCalledOnce();
   });
+  it('measures fresh precheck, acknowledged input and post-action capture separately', async () => {
+    const f = fixture(true); await f.open();
+    const obs = await f.broker.command({ op: 'observe', sessionId: 's', owner: 'o' });
+    const original = vi.mocked(f.driver.observe).getMockImplementation()!;
+    vi.mocked(f.driver.observe).mockImplementation(async (...args) => { f.advance(11); return original(...args); });
+    vi.mocked(f.driver.perform).mockImplementation(async () => { f.advance(23); });
+    const command = { op: 'act' as const, owner: 'o', sessionId: 's', envelope: envelope(obs) };
+    expect((await f.broker.command(command)).status).toBe('pending_action');
+    await Promise.resolve();
+    expect(await f.broker.command(command)).toMatchObject({
+      receipt: { dispatch: 'completed' }, nativeMs: { precheckMs: 11, inputMs: 23, postObserveMs: 11 },
+    });
+    expect(f.driver.observe).toHaveBeenCalledTimes(3);
+  });
   it.each(['activate', 'showMenu'] as const)('refuses %s in read-only sessions and after a window change', async kind => {
     const f = fixture(true); await f.open('observe');
     const obs = await f.broker.command({ op: 'observe', owner: 'o', sessionId: 's' });

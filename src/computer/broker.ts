@@ -5,6 +5,7 @@ import {
   type ComputerObservation, type ComputerReceipt, type ComputerTarget, type ComputerApp, type ComputerWindow,
 } from '@xopcai/computer-control-contract';
 import { ComputerConfigSchema, type ComputerConfig } from './config.js';
+import type { ComputerNativeTiming } from './diagnostics.js';
 import { ComputerTargetError } from './errors.js';
 import { createLogger } from '../utils/logger.js';
 
@@ -57,6 +58,7 @@ export interface BrokerResult {
   grantId?: string;
   observation?: ComputerObservation;
   receipt?: ComputerReceipt;
+  nativeMs?: ComputerNativeTiming;
   errorCode?: string;
   apps?: ComputerApp[];
   windows?: ComputerWindow[];
@@ -222,6 +224,7 @@ export class ComputerBroker {
       if (s.pending.approved === undefined) return this.result(s);
       if (!s.pending.approved) { await this.stop(); return this.result(s); }
     }
+    const precheckStarted = this.now();
     const current = await this.driver.observe(s.target!, s.controller.signal);
     try {
       this.active(s);
@@ -231,17 +234,22 @@ export class ComputerBroker {
       }
       this.driver.validateAction?.(e.action);
     } finally { current.image.fill(0); }
+    const nativeMs: ComputerNativeTiming = { precheckMs: Math.max(0, this.now() - precheckStarted), inputMs: 0, postObserveMs: 0 };
     const receipt: ComputerReceipt = { actionId: e.actionId, dispatch: 'started', outcome: 'unknown', verification: 'none' };
     s.receipts.set(e.actionId, { digest, receipt }); s.actions++; s.pending = undefined; s.status = 'running';
     try {
+      const inputStarted = this.now();
       await this.driver.perform(s.target!, e.action, s.controller.signal);
+      nativeMs.inputMs = Math.max(0, this.now() - inputStarted);
       this.active(s);
       receipt.dispatch = 'completed';
       s.status = 'ready';
+      const observationStarted = this.now();
       const after = await this.observe(s);
+      nativeMs.postObserveMs = Math.max(0, this.now() - observationStarted);
       // A changed screenshot is observation evidence, not proof of business success.
       receipt.verification = after.observation ? 'visual' : 'none';
-      return { ...after, receipt };
+      return { ...after, receipt, nativeMs };
     } catch (error) {
       if (receipt.dispatch === 'started') receipt.dispatch = 'unknown';
       receipt.errorCode = error instanceof Error && /^COMPUTER_[A-Z_0-9]+$/.test(error.message)
