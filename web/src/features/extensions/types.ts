@@ -50,6 +50,7 @@ export type ExtensionUiContributions = {
 
 /** Serialized extension list row from `GET /api/extensions`. */
 export type ExtensionApiRow = {
+  localizations?: Partial<Record<'en' | 'zh-CN', { displayName: string; description?: string }>>;
   branding?: { iconUrl: string; iconSha256: string };
   format?: 'native-extension' | 'agent-plugin';
   pluginId?: string;

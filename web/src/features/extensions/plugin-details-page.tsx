@@ -1,4 +1,6 @@
-import { Link } from 'react-router-dom';
+import { pluginDisplayName } from './plugin-presentation';
+import { pluginReturnPath } from '@/features/capabilities/capability-links';
+import { Link, useSearchParams } from 'react-router-dom';
 import useSWR, { useSWRConfig } from 'swr';
 import { Package } from 'lucide-react';
 import { CapabilityIcon } from '@/features/capabilities/capability-icon';
@@ -15,6 +17,9 @@ import type { ExtensionApiRow } from './types';
 export function PluginDetailsPage({ pluginId }: { pluginId: string }) {
   const zh = useLocaleStore(state => state.language).startsWith('zh');
   const { mutate } = useSWRConfig();
+  const [searchParams] = useSearchParams();
+  const returnPath = pluginReturnPath(searchParams.get('from'), searchParams.get('returnTo'));
+  const displayName = (data: ExtensionApiRow) => pluginDisplayName(data, zh);
   const [manage, setManage] = useState(false);
   const { data, error, mutate: refresh } = useSWR(`plugin-details:${pluginId}`, async () => {
     const result = await fetchJson<{ ok: boolean; payload: ExtensionApiRow; error?: string }>(apiUrl(`/api/extensions/agent-plugins/${encodeURIComponent(pluginId)}`));
@@ -22,11 +27,12 @@ export function PluginDetailsPage({ pluginId }: { pluginId: string }) {
     return result.payload;
   }, { revalidateOnFocus: true });
   return <div className="min-h-0 flex-1 overflow-y-auto"><div className="mx-auto w-full max-w-4xl space-y-6 px-4 py-6 sm:px-6">
-    <nav aria-label={zh ? '面包屑' : 'Breadcrumb'} className="flex gap-2 text-sm text-fg-muted"><Link to="/capabilities/extensions" className="hover:text-accent">{zh ? '扩展' : 'Extensions'}</Link><span aria-hidden>/</span><span>{data?.name ?? pluginId}</span></nav>
+    <nav aria-label={zh ? '面包屑' : 'Breadcrumb'} className="flex gap-2 text-sm text-fg-muted"><Link to={returnPath} className="hover:text-accent">{searchParams.get('from') === 'connections' ? (zh ? '我的连接' : 'My connections') : searchParams.get('from') === 'skills' ? (zh ? '插件技能' : 'Plugin skills') : (zh ? '已安装插件' : 'Installed plugins')}</Link><span aria-hidden>/</span><span>{data?.name ?? pluginId}</span></nav>
     {error ? <p role="alert" className="text-sm text-fg-muted">{String(error)}</p> : !data ? <div className="space-y-4"><Skeleton className="h-12 w-72" /><Skeleton className="h-28 w-full" /><Skeleton className="h-72 w-full" /></div> : <>
-      <header className="flex items-start justify-between gap-4"><div className="min-w-0"><div className="flex items-center gap-3"><CapabilityIcon iconUrl={data.branding?.iconUrl} fallback={Package} className="size-14 [&_img]:size-11" /><h2 className="break-words text-xl font-semibold">{data.name}</h2></div><p className="mt-3 text-sm leading-relaxed text-fg-muted">{data.description}</p><p className="mt-2 text-xs text-fg-muted">{data.version} · {data.dialect ?? 'portable'}</p></div><Button variant="ghost" onClick={() => setManage(true)}>{zh ? '管理插件' : 'Manage plugin'}</Button></header>
-      <PluginSetupPanel extension={data} zh={zh} onChanged={async () => { await refresh(); await mutate('gateway-extensions-list'); }} />
-      {data.components?.skills.length ? <section className="space-y-3 border-t border-edge pt-5"><h3 className="text-sm font-medium">{zh ? `技能（${data.components.skills.length}）` : `Skills (${data.components.skills.length})`}</h3><div className="flex flex-wrap gap-2">{data.components.skills.map(skill => <span key={skill.name} className="rounded-lg border border-edge px-3 py-2 text-sm">{skill.name}</span>)}</div></section> : null}
+      <header className="flex items-start justify-between gap-4"><div className="min-w-0"><div className="flex items-center gap-3"><CapabilityIcon iconUrl={data.branding?.iconUrl} fallback={Package} className="size-14 [&_img]:size-11" /><h2 className="break-words text-xl font-semibold">{displayName(data)}</h2></div><p className="mt-3 text-sm leading-relaxed text-fg-muted">{data.description}</p><p className="mt-2 text-xs text-fg-muted">{data.version} · {data.dialect ?? 'portable'}</p></div><Button variant="ghost" onClick={() => setManage(true)}>{zh ? '管理插件' : 'Manage plugin'}</Button></header>
+      {data.active && data.authorizationStatus !== 'required' ? <Button asChild><Link to={`/chat/new?${new URLSearchParams({ draft: zh ? `请帮我使用${displayName(data)}插件。` : `Help me use the ${displayName(data)} plugin.`, projectScope: 'none' })}`}>{zh ? '开始使用' : 'Start using'}</Link></Button> : null}
+      <PluginSetupPanel key={pluginId} initialConnect={searchParams.get('connect') === '1'} extension={data} zh={zh} onChanged={async () => { await refresh(); await mutate('gateway-extensions-list'); }} />
+      {data.components?.skills.length ? <section className="space-y-3 border-t border-edge pt-5"><h3 className="text-sm font-medium">{zh ? `技能（${data.components.skills.length}）` : `Skills (${data.components.skills.length})`}</h3><div className="flex flex-wrap gap-2">{data.components.skills.map(skill => <Link key={skill.name} to={`/capabilities/skills?${new URLSearchParams({ tab: 'installed', source: 'plugin', q: data.dialect === 'portable' ? skill.name : `${pluginId}.${skill.name}` })}`} className="rounded-lg border border-edge px-3 py-2 text-sm text-accent hover:bg-surface-hover">{skill.name}</Link>)}</div></section> : null}
       <p className="text-xs text-fg-muted">{zh ? '默认对所有 Agent 可用，特殊配置请在 Agent 设置中调整。' : 'Available to all agents by default. Adjust individual preferences in Agent settings.'}</p>
     </>}
     {manage && data ? <AgentPluginDialog extension={data} onClose={() => { setManage(false); void refresh(); }} /> : null}

@@ -14,7 +14,7 @@ async function request<T>(path: string, method = 'GET', body?: unknown): Promise
   if (!result.ok) throw new Error(result.error ?? 'Request failed');
   return result.payload;
 }
-export function PluginSetupPanel({ extension, zh, onChanged, onStart, onInstalled }: { extension: ExtensionApiRow; zh: boolean; onChanged: () => Promise<unknown>; onStart?: () => void; onInstalled?: () => void }) {
+export function PluginSetupPanel({ extension, zh, onChanged, onStart, onInstalled, initialConnect = false }: { extension: ExtensionApiRow; zh: boolean; onChanged: () => Promise<unknown>; onStart?: () => void; onInstalled?: () => void; initialConnect?: boolean }) {
   const base = `/api/extensions/agent-plugins/${encodeURIComponent(extension.pluginId!)}`;
   const [job, setJob] = useState<PluginSetupJob | null>();
   const [config, setConfig] = useState<Record<string, unknown>>({});
@@ -117,8 +117,8 @@ export function PluginSetupPanel({ extension, zh, onChanged, onStart, onInstalle
   useEffect(() => {
     if (preparing || !job || job.state === 'cancelled') return;
     if (currentAccount && job.revision !== accountOpeningRevision.current && connected(currentAccount)) { setActiveAccount(null); setAuth(null); setAuthServer(''); }
-    else if (!installed && job.resources === 'ready' && !job.missingConfig?.length && !activeAccount && unresolved[0] && !openedAccounts.current.has(unresolved[0].id)) { openedAccounts.current.add(unresolved[0].id); accountOpeningRevision.current = job.revision; setActiveAccount(unresolved[0].id); }
-  }, [job, preparing, installed, activeAccount]);
+    else if ((!installed || initialConnect) && job.resources === 'ready' && (!job.missingConfig?.length || initialConnect && !job.missingConfig.some(key => key in globalFields)) && !activeAccount && unresolved[0] && !openedAccounts.current.has(unresolved[0].id)) { openedAccounts.current.add(unresolved[0].id); accountOpeningRevision.current = job.revision; setActiveAccount(unresolved[0].id); }
+  }, [job, preparing, installed, activeAccount, initialConnect]);
   function connect(account: PluginAccount, method: string) {
     const selected = account.methods.find(value => value.id === method);
     const popup = selected?.type === 'oauth' ? window.open('about:blank', '_blank') : null;

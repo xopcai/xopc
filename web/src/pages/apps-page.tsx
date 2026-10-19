@@ -1,3 +1,5 @@
+import { pluginDisplayName } from '@/features/extensions/plugin-presentation';
+import { pluginDetailPath } from '@/features/capabilities/capability-links';
 import * as Dialog from '@radix-ui/react-dialog';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { ArrowLeft, Box, Check, ExternalLink, Loader2, MoreHorizontal, Plus, Settings, Trash2, X } from 'lucide-react';
@@ -48,7 +50,8 @@ export function ExtensionsPage({ embedded = false, onHeaderActionChange }: { emb
   const loading = useExtensionsLoading();
   const [searchParams, setSearchParams] = useSearchParams();
 
-  const initialTab = parseAppsMainTab(searchParams.get('tab'));
+  const initialTab = parseAppsMainTab(searchParams.get('tab') ?? (extensions.some(e => e.source !== 'bundled') ? 'user' : null));
+  const resolvedDefaultTab = useRef(false);
   const initialQ = searchParams.get('q') ?? '';
   const [mainTab, setMainTab] = useState<AppsMainTab>(initialTab);
   const [search, setSearch] = useState(initialQ);
@@ -90,6 +93,12 @@ export function ExtensionsPage({ embedded = false, onHeaderActionChange }: { emb
     () => extensions.filter((e) => e.source !== 'bundled'),
     [extensions],
   );
+
+  useEffect(() => {
+    if (loading || resolvedDefaultTab.current) return;
+    resolvedDefaultTab.current = true;
+    if (!searchParams.has('tab') && userExtensions.length) setMainTab('user');
+  }, [loading, searchParams, userExtensions.length]);
 
   const listForTab = mainTab === 'builtin' ? bundledExtensions : userExtensions;
 
@@ -232,7 +241,7 @@ export function ExtensionsPage({ embedded = false, onHeaderActionChange }: { emb
                 extension={ext}
                 copy={m.extensionsPage}
                 showSourceBadge={mainTab === 'user'}
-                onOpen={() => ext.pluginId ? navigate(`/capabilities/extensions/${encodeURIComponent(ext.pluginId)}`) : setDetail(ext)}
+                onOpen={() => ext.pluginId ? navigate(pluginDetailPath(ext.pluginId, 'installed')) : setDetail(ext)}
               />
             ))}
           </div>
@@ -308,7 +317,7 @@ function ExtensionAppCard({
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
-              <h2 className="truncate text-sm font-semibold text-fg">{ext.name}</h2>
+              <h2 className="truncate text-sm font-semibold text-fg">{pluginDisplayName(ext, zh)}</h2>
               {ext.version ? (
                 <span className="text-[11px] text-fg-muted">v{ext.version}</span>
               ) : null}

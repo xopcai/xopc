@@ -109,6 +109,7 @@ import {
 const log = createLogger('AgentManager');
 
 export interface SkillCatalogEntry {
+  plugin?: { id: string; name: string; title?: string; authorizationStatus: string; active: boolean; readiness: string };
   directoryId: string;
   name: string;
   description: string;

@@ -1,3 +1,4 @@
+import { withPluginSkillCatalog, pluginSkillPreview } from '../../extensions/agent-plugins/skill-catalog.js';
 /**
  * GatewayMarketplaceService — install / browse / remove for the two marketplaces
  * the gateway exposes:
@@ -154,7 +155,7 @@ export class GatewayMarketplaceService {
   } & SkillCatalogRuntimeMeta {
     const snapshot = this.opts.getAgentService().getSkillCatalogSnapshot();
     return {
-      catalog: snapshot.catalog,
+      catalog: withPluginSkillCatalog(snapshot.catalog),
       managed: listManagedSkillDirs(),
       version: snapshot.version,
       loadedAt: snapshot.loadedAt,
@@ -190,10 +191,12 @@ export class GatewayMarketplaceService {
   }
 
   getSkillMarkdownSource(skillName: string): SkillMarkdownPreviewPayload | null {
-    return this.opts.getAgentService().getSkillMarkdownSource(skillName);
+    return this.opts.getAgentService().getSkillMarkdownSource(skillName) ?? pluginSkillPreview(skillName);
   }
 
   deleteSkill(skillId: string, target?: SkillInstallTarget): void {
+    const row = this.getSkillsApi().catalog.find(row => row.name === skillId);
+    if (row?.origin.startsWith('plugin:')) throw new Error('This skill belongs to a plugin. Manage or uninstall the owning plugin instead.');
     const requestedTarget = target ? this.resolveInstallTarget(target) : undefined;
     const workspaceTarget = requestedTarget ?? this.resolveInstallTarget('workspace');
     try {
