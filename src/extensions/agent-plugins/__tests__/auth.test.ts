@@ -21,7 +21,7 @@ it('stores references, resolves only in transport, and detaches credentials when
   mcp('https://one.example/mcp');
   store.install(source, { reviewHash: store.inspect(source).reviewHash });
   await savePluginAuthBinding(store, 'auth-test', 'main', { mode: 'api-key', secrets: [{ target: 'headers', key: 'Authorization', value: 'private-token', prefix: 'Bearer ' }] });
-  const materialized = materializePluginServers(store.get('auth-test')!, store)[pluginServerId('auth-test', 'main')];
+  const materialized = materializePluginServers(store.get('auth-test')!, store, [], true)[pluginServerId('auth-test', 'main')];
   expect(JSON.stringify(materialized)).not.toContain('private-token');
   expect(materialized.auth).toBeUndefined();
   expect(await resolveConnectorSecretReferences(materialized, new CredentialResolver({ stateDir: state }))).toMatchObject({ headers: { Authorization: 'Bearer private-token' } });
@@ -29,7 +29,7 @@ it('stores references, resolves only in transport, and detaches credentials when
   expect(readFileSync(join(state, 'plugin-auth/auth-test', file), 'utf8')).not.toContain('private-token');
   mcp('https://two.example/mcp');
   store.install(source, { replace: true, reviewHash: store.inspect(source).reviewHash });
-  expect(materializePluginServers(store.get('auth-test')!, store)[pluginServerId('auth-test', 'main')].headers).toBeUndefined();
+  expect(materializePluginServers(store.get('auth-test')!, store, [], true)[pluginServerId('auth-test', 'main')].headers).toBeUndefined();
 });
 
 it('keeps staged credentials separate and carries compatible grant references through updates', async () => {
@@ -39,7 +39,7 @@ it('keeps staged credentials separate and carries compatible grant references th
   store.install(source, { reviewHash: store.inspect(source).reviewHash });
   const id = 'staged-auth', serverId = pluginServerId(id, 'main');
   const save = (value: string) => savePluginAuthBinding(store, id, 'main', { mode: 'api-key', secrets: [{ target: 'headers', key: 'Authorization', value, prefix: 'Bearer ' }] });
-  const value = async (plugin = store.get(id)!) => (await resolveConnectorSecretReferences(materializePluginServers(plugin, store)[serverId], new CredentialResolver({ stateDir: state }))).headers;
+  const value = async (plugin = store.get(id)!) => (await resolveConnectorSecretReferences(materializePluginServers(plugin, store, [], true)[serverId], new CredentialResolver({ stateDir: state }))).headers;
   await save('old-token');
   writeFileSync(join(source, 'change'), 'v2');
   const candidate = store.install(source, { replace: true, stage: true, reviewHash: store.inspect(source).reviewHash });

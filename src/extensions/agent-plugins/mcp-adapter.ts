@@ -1,5 +1,6 @@
+import { resolvePluginCapabilityAccess } from './capability-access.js';
 import { createHash } from 'node:crypto';
-import { mkdirSync, existsSync, readFileSync } from 'node:fs';
+import { mkdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { homedir } from 'node:os';
 import { readPluginUserConfig, expandUserConfig } from './user-config.js';
@@ -18,11 +19,10 @@ export function materializePluginServers(plugin: InstalledAgentPlugin, store = n
   const values = { ...Object.fromEntries(Object.entries(plugin.layout?.userConfig ?? {}).filter(([, field]) => field.default !== undefined).map(([key, field]) => [key, field.default])), ...readPluginUserConfig(store, plugin.id, plugin.receipt.revision) };
   const expand = (value: string) => expandUserConfig(expandPluginVariables(value.replace(/\$\{PLUGIN_ACCOUNTS\}/g, join(data, 'accounts', plugin.receipt.revision)).replace(/\$\{PLUGIN_RESOURCES\}/g, join(data, 'resources', plugin.receipt.revision)), root, data), values);
   const servers: Record<string, Record<string, unknown>> = Object.create(null);
-  const setupPath = join(store.stateDir, 'plugin-setup', `${plugin.id}.json`);
-  const job = !setup && existsSync(setupPath) ? JSON.parse(readFileSync(setupPath, 'utf8')) as { packageRevision: string; state: string; installed?: boolean; connections: Array<{ name: string; state: string }> } : undefined;
+  const access = setup ? undefined : resolvePluginCapabilityAccess(plugin, store);
   for (const [name, server] of Object.entries(plugin.servers)) {
     try {
-      if (job?.packageRevision === plugin.receipt.revision && (job.state !== 'completed' && !job.installed || job.connections.find(c => c.name === name)?.state !== 'connected')) continue;
+      if (access && !access.server(name)) continue;
       const origin = { id: plugin.id, serverName: name, rootDir: root, dataDir: data, revision: plugin.receipt.revision };
       const raw = server.type !== 'stdio' ? {
         ...server, ...(plugin.receipt.credentialScope === 'revision' ? { xopcOAuthCredentialId: pluginOAuthCredentialId(plugin.id, plugin.receipt.revision, name) } : {}), ...(server.headers ? { headers: Object.fromEntries(Object.entries(server.headers).map(([key, value]) => [key, expand(value)])) } : {}), xopcPlugin: origin,

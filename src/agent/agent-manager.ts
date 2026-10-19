@@ -1,3 +1,5 @@
+import { AgentPluginStore } from '../extensions/agent-plugins/store.js';
+import { pluginRuntimeAccessKey } from '../extensions/agent-plugins/capability-access.js';
 import { connectorArgumentsPreview } from '../connectors/approval.js';
 import { MemoryLearningService } from '../memory-learning/service.js';
 import { enqueueConversationLearning } from '../memory-learning/repository.js';
@@ -233,6 +235,7 @@ export interface AgentInstance {
   interactionStateVersion?: number;
   userContextAccessVersion: string;
   executionToolPolicyVersion: string;
+  pluginRuntimeAccessVersion?: string;
 
   /** Declared env var names from skill_view; exec_command reads values from process.env at spawn time. */
   skillEnvPassthroughKeys: Set<string>;
@@ -1128,11 +1131,13 @@ export class AgentManager implements AgentInstanceGateway {
   getOrCreateAgent(conversationId: string): Agent {
     const targetPath = this.getResolvedWorkspaceForSession(conversationId);
     const existing = this.agents.get(conversationId);
+    const pluginRuntimeAccessVersion = pluginRuntimeAccessKey(new AgentPluginStore(), targetPath, resolveEffectiveAgentProfileForSession(conversationId).agentId);
     const executionToolPolicyVersion = JSON.stringify(resolveExecutionToolPolicy(conversationId));
     if (existing) {
       const currentConfig = resolveEffectiveAgentProfileForSession(conversationId).config;
       if (!existing.agent.state.isStreaming && (
         existing.executionToolPolicyVersion !== executionToolPolicyVersion
+        || existing.pluginRuntimeAccessVersion !== pluginRuntimeAccessVersion
         || existing.resolvedWorkspacePath !== targetPath
         || JSON.stringify(existing.effectiveProfile.config) !== JSON.stringify(currentConfig)
       )) {
@@ -1188,6 +1193,7 @@ export class AgentManager implements AgentInstanceGateway {
       interactionStateVersion: this.getInteractionStateVersion(conversationId),
       userContextAccessVersion: this.getUserContextAccessVersion(conversationId),
       executionToolPolicyVersion,
+      pluginRuntimeAccessVersion,
       skillEnvPassthroughKeys: new Set<string>(),
     });
 

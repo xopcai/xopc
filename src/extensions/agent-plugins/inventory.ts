@@ -12,7 +12,7 @@ export function agentPluginInventoryRow(plugin: InstalledAgentPlugin, store = ne
   const job = saved?.packageRevision === plugin.receipt.revision ? saved : undefined;
   let authorizations: ReturnType<typeof pluginAuthorizations> = [];
   try { authorizations = pluginAuthorizations(plugin.manifest); } catch { /* The package carries an invalid authorization diagnostic. */ }
-  const needsAuthorization = !!job && ((job.missingConfig?.length ?? 0) > 0 || job.connections?.some((value: { state: string }) => value.state !== 'connected') || job.authorizations?.some((value: { state: string; issues?: unknown[] }) => value.state !== 'connected' || !!value.issues?.length));
+  const needsAuthorization = (!job && (authorizations.length > 0 || Object.values(plugin.servers).some(server => server.type !== 'stdio' && server.connectionAuth?.mode !== 'none'))) || !!job && ((job.missingConfig?.length ?? 0) > 0 || job.connections?.some((value: { state: string }) => value.state !== 'connected') || job.authorizations?.some((value: { state: string; issues?: unknown[]; expiresAt?: number }) => value.state !== 'connected' || !!value.issues?.length || value.expiresAt !== undefined && value.expiresAt <= Date.now()));
   return {
     id: `plugin:${plugin.id}`, pluginId: plugin.id, format: plugin.format,
     name: plugin.manifest.name, version: plugin.manifest.version ?? plugin.receipt.provenance?.version,
