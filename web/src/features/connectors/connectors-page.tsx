@@ -19,7 +19,7 @@ import { ConnectorDetailDialog } from '@/features/connectors/components/connecto
 import { ConnectorsPageHeaderEnd } from '@/features/connectors/components/connectors-page-header-end';
 import { CustomMcpServerRow } from '@/features/connectors/components/custom-mcp-server-row';
 import { useExtensions } from '@/features/extensions/extension-provider';
-import { PluginMcpConnection } from '@/features/extensions/agent-plugin-dialog';
+import { InstalledPluginConnectionRow, pluginHasConnection } from './components/installed-plugin-connection-row';
 import { InstalledConnectorDetailDialog } from '@/features/connectors/components/installed-connector-detail-dialog';
 import { InstalledConnectorRow } from '@/features/connectors/components/installed-connector-row';
 import { InstallConnectorDialog } from '@/features/connectors/components/install-connector-dialog';
@@ -139,7 +139,7 @@ function safeReturnPath(value: string | null): string {
 }
 
 export function ConnectorsPage({ embedded = false, onHeaderActionChange }: { embedded?: boolean; onHeaderActionChange?: CapabilityHeaderActionChange }) {
-  const pluginExtensions = useExtensions().filter(extension => extension.format === 'agent-plugin');
+  const pluginExtensions = useExtensions().filter(pluginHasConnection);
   const language = useLocaleStore((state) => state.language);
   const m = messages(language);
   const cs = m.connectorsSettings;
@@ -190,7 +190,7 @@ export function ConnectorsPage({ embedded = false, onHeaderActionChange }: { emb
     [config],
   );
   const customServers = mcpSettings?.servers ?? [];
-  const installedCount = state.instances.length + customServers.length + pluginExtensions.reduce((n, extension) => n + (extension.components?.mcp.length ?? 0), 0);
+  const installedCount = state.instances.length + customServers.length + pluginExtensions.length;
 
   const [lastChecks, setLastChecks] = useState<Record<string, McpLastCheck>>({});
   useEffect(() => {
@@ -482,13 +482,11 @@ export function ConnectorsPage({ embedded = false, onHeaderActionChange }: { emb
     () => customServers.filter((row) => customServerMatchesQuery(row, connectedSearchQuery)),
     [connectedSearchQuery, customServers],
   );
-  const visiblePluginServers = useMemo(() => {
+  const visiblePluginConnections = useMemo(() => {
     const query = connectedSearchQuery.trim().toLowerCase();
-    return pluginExtensions.flatMap(extension => (extension.components?.mcp ?? [])
-      .filter(server => `${extension.name} ${server.name}`.toLowerCase().includes(query))
-      .map(server => ({ extension, server })));
+    return pluginExtensions.filter(extension => [extension.name, extension.description, ...(extension.setup?.authorizations ?? []).map(account => account.title), ...(extension.components?.mcp ?? []).map(server => server.name)].filter(Boolean).join(' ').toLowerCase().includes(query));
   }, [connectedSearchQuery, pluginExtensions]);
-  const visibleInstalledCount = visibleInstances.length + visibleCustomServers.length + visiblePluginServers.length;
+  const visibleInstalledCount = visibleInstances.length + visibleCustomServers.length + visiblePluginConnections.length;
 
   const builtinCatalog = useMemo(
     () => state.catalog.filter((connector) => (
@@ -652,9 +650,9 @@ export function ConnectorsPage({ embedded = false, onHeaderActionChange }: { emb
                     </section>
                   ) : null}
 
-                  {visiblePluginServers.map(({ extension, server }) => (
-                    <PluginMcpConnection key={server.id} pluginId={extension.pluginId!} server={server} enabled={extension.active} />
-                  ))}
+                  {visiblePluginConnections.length ? <section className="divide-y divide-edge-subtle overflow-hidden rounded-xl border border-edge bg-surface-base">
+                    {visiblePluginConnections.map(extension => <InstalledPluginConnectionRow key={extension.id} extension={extension} language={language} onOpen={() => navigate(`/capabilities/extensions/${encodeURIComponent(extension.pluginId!)}`)} />)}
+                  </section> : null}
                   {visibleCustomServers.length || !connectedSearchQuery.trim() ? (
                     <section aria-label={cs.customIntegrationsTitle} className="rounded-xl border border-edge bg-surface-base">
                       <div className="px-4 py-3">

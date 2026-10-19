@@ -48,26 +48,6 @@ async function request<T>(path: string, method: string, body?: unknown): Promise
   return result.payload;
 }
 
-export function PluginMcpConnection({ pluginId, server, enabled }: { pluginId: string; server: { id: string; name: string; type: string; connectionAuth?: { mode: string; headerName?: string; prefix?: string } }; enabled: boolean }) {
-  const zh = useLocaleStore(s => s.language).startsWith('zh');
-  const [secret, setSecret] = useState(''); const [busy, setBusy] = useState(false); const [message, setMessage] = useState('');
-  const [key, setKey] = useState(server.connectionAuth?.headerName ?? (server.type === 'stdio' ? 'API_KEY' : 'Authorization'));
-  const [prefix, setPrefix] = useState(server.connectionAuth?.prefix ?? (server.type === 'stdio' ? '' : 'Bearer '));
-  return <div className="rounded-lg border border-edge p-3 text-sm"><p className="font-medium">{server.name} · {server.type}</p>
-    <p className="mt-2 break-all font-mono text-xs text-fg-muted">{server.type === 'stdio' ? 'xopc mcp list' : `xopc mcp login ${server.id}`}</p>
-    <form className="mt-3 space-y-2" onSubmit={event => { event.preventDefault(); setBusy(true); setMessage('');
-      void request(`/api/extensions/agent-plugins/${encodeURIComponent(pluginId)}/mcp/${encodeURIComponent(server.name)}/auth`, 'PUT', {
-        mode: 'api-key', secrets: [{ target: server.type === 'stdio' ? 'env' : 'headers', key, value: secret, prefix }],
-      }).then(() => { setSecret(''); setMessage(zh ? '已保存' : 'Saved'); }).catch(error => setMessage(String(error))).finally(() => setBusy(false));
-    }}>
-      <label className="block">{zh ? '字段名' : 'Field name'}<input className={fieldClass} value={key} onChange={e => setKey(e.target.value)} required /></label>
-      <label className="block">{zh ? '前缀' : 'Prefix'}<input className={fieldClass} value={prefix} onChange={e => setPrefix(e.target.value)} /></label>
-      <label className="block">{zh ? '密钥' : 'Secret'}<input type="password" autoComplete="off" className={fieldClass} value={secret} onChange={e => setSecret(e.target.value)} required /></label>
-      <Button type="submit" disabled={!enabled || busy || !secret}>{zh ? '保存密钥' : 'Save API key'}</Button>
-    </form>{message ? <p className="mt-2 text-fg-muted">{message}</p> : null}
-  </div>;
-}
-
 export function AgentPluginDialog({
   extension,
   onClose,
@@ -252,14 +232,6 @@ export function AgentPluginDialog({
           {currentExtension.installationSource ? <p className="break-all text-xs text-fg-muted">{zh ? '来源：' : 'Source: '}{currentExtension.installationSource}{currentExtension.resolvedCommit ? ` · ${currentExtension.resolvedCommit.slice(0, 12)}` : ''}</p> : null}
           {currentExtension.activationEligible ? <Button disabled={busy} variant="secondary" onClick={() => void run(() => setActivation(false))}>{zh ? '停用' : 'Disable'}</Button> : null}
           {currentExtension.canRollback ? <Button disabled={busy} variant="secondary" onClick={() => void run(async () => { setCurrentExtension(await request<ExtensionApiRow>(`${base}/rollback`, 'POST')); await refresh(); })}>{zh ? '回滚上一版本' : 'Roll back'}</Button> : null}
-          {currentExtension.components?.mcp.length ? <details className="group rounded-lg border border-edge p-3">
-            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-sm font-medium text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
-              <span>{zh ? '连接与密钥（按需）' : 'Connections and API keys (as needed)'}</span>
-              <ChevronDown className="size-4 text-fg-muted transition-transform group-open:rotate-180 motion-reduce:transition-none" aria-hidden />
-            </summary>
-            <p className="mt-2 text-xs text-fg-muted">{zh ? '仅当工具服务提示登录或缺少密钥时设置。' : 'Only configure this when a tool service asks you to sign in or provide a key.'}</p>
-            <div className="mt-3 space-y-3">{currentExtension.components.mcp.map(server => <PluginMcpConnection key={server.id} pluginId={currentExtension.pluginId!} server={server} enabled={currentExtension.readiness !== 'blocked'} />)}</div>
-          </details> : null}
             </div>
           </details>
           {currentExtension.diagnostics?.map((d, i) => <p key={i} className="text-sm text-fg-muted">{d.component}: {d.message}</p>)}
