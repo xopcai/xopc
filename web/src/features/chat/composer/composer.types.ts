@@ -49,6 +49,11 @@ export interface ComposerSendOptions {
   onDispatched?: (receipt: ComposerDispatchReceipt) => void;
 }
 
+/** Identifies the accepted target when sending first creates a conversation. */
+export interface ComposerSendAccepted {
+  conversationId: string;
+}
+
 /** False rejects a submission without consuming the current composer draft. */
 export type ComposerSendHandler = (
   text: string,
@@ -56,7 +61,7 @@ export type ComposerSendHandler = (
   thinkingLevel?: string,
   contextRefs?: ComposerContextRef[],
   options?: ComposerSendOptions,
-) => void | boolean | Promise<void | boolean>;
+) => void | boolean | ComposerSendAccepted | Promise<void | boolean | ComposerSendAccepted>;
 
 export const MAX_COMPOSER_CONTEXT_REFS = 5;
 

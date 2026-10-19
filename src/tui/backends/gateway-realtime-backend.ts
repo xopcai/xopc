@@ -160,17 +160,17 @@ export class GatewayRealtimeBackend implements TuiBackend {
     return signal && !signal.aborted ? signal : undefined;
   }
 
-  async getComposerInputHistory(): Promise<TuiComposerHistoryItem[]> {
-    const res = await gatewayFetch(this.baseUrl, '/api/composer-history', this.credential);
+  async getComposerInputHistory(conversationId: string): Promise<TuiComposerHistoryItem[]> {
+    const res = await gatewayFetch(this.baseUrl, `/api/composer-history?conversationId=${encodeURIComponent(conversationId)}`, this.credential);
     if (!res.ok) throw new Error(`Failed to load composer history (${res.status})`);
     const body = await res.json() as { items?: TuiComposerHistoryItem[] };
     return body.items ?? [];
   }
 
-  async recordComposerInputHistory(text: string): Promise<TuiComposerHistoryItem> {
+  async recordComposerInputHistory(conversationId: string, text: string): Promise<TuiComposerHistoryItem> {
     const res = await gatewayFetch(this.baseUrl, '/api/composer-history', this.credential, {
       method: 'POST',
-      body: JSON.stringify({ text }),
+      body: JSON.stringify({ conversationId, text }),
     });
     if (!res.ok) throw new Error(`Failed to save composer history (${res.status})`);
     const body = await res.json() as { item: TuiComposerHistoryItem };

@@ -19,6 +19,7 @@ import { useLocaleStore } from '@/stores/locale-store';
 import { ProjectEnvironmentPicker } from '../project-environment-picker';
 import { useProjectSessionComposer, type ProjectSessionComposer } from '../use-project-session-composer';
 import { commitAcceptedSend } from '../commit-accepted-send';
+import { __resetComposerInputHistoryForTests, getComposerInputHistory, recordComposerInputHistory } from '../composer-input-history';
 
 vi.mock('@/lib/fetch', () => ({ fetchJson: vi.fn() }));
 
@@ -57,6 +58,7 @@ describe('composer project environment selection and first send', () => {
     create.mockReset().mockResolvedValue('created');
     onSend.mockReset();
     commit.mockReset();
+    __resetComposerInputHistoryForTests();
     vi.mocked(fetchJson).mockReset().mockResolvedValue({ options: { localAvailable: true } });
     localStorage.clear();
     useGatewayStore.setState({ conversationId: undefined });
@@ -114,6 +116,32 @@ describe('composer project environment selection and first send', () => {
     expect(currentSender).toHaveBeenCalledExactlyOnceWith('Keep draft', attachments, undefined, refs);
     expect(onSend).not.toHaveBeenCalled();
     expect(commit).toHaveBeenCalledOnce();
+  });
+
+  it('records the first message under the created session, including after navigating away during acceptance', async () => {
+    let accept!: (value: boolean) => void;
+    const createdSender = vi.fn(() => new Promise<boolean>(resolve => { accept = resolve; }));
+    commit.mockImplementation((id: string) => recordComposerInputHistory(id, 'Keep draft'));
+    await render();
+    await act(async () => submit().click());
+    await render({ prepared: null, conversationId: 'created', ready: true, sender: createdSender });
+    expect(createdSender).toHaveBeenCalledOnce();
+    await render({ prepared: null, conversationId: 'other', ready: true });
+    await act(async () => accept(true));
+    expect(commit).toHaveBeenCalledExactlyOnceWith('created');
+    expect(getComposerInputHistory('created')).toEqual(['Keep draft']);
+    expect(getComposerInputHistory('other')).toEqual([]);
+    expect(getComposerInputHistory('new')).toEqual([]);
+  });
+
+  it('keeps an existing session submission attached to its original session after switching', async () => {
+    let accept!: (value: boolean) => void;
+    onSend.mockImplementation(() => new Promise<boolean>(resolve => { accept = resolve; }));
+    await render({ prepared: null, conversationId: 'existing', ready: true });
+    await act(async () => submit().click());
+    await render({ prepared: null, conversationId: 'other', ready: true });
+    await act(async () => accept(true));
+    expect(commit).toHaveBeenCalledExactlyOnceWith('existing');
   });
 
   it('prepares the selected project environment from the terminal action without sending a draft', async () => {

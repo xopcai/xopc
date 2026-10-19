@@ -46,6 +46,19 @@ describe('SQLite migrations', () => {
     rmSync(migrationsDir, { recursive: true, force: true });
   });
 
+  it('preserves legacy global composer rows without assigning them to a session', () => {
+    const db = openEmptyDb();
+    try {
+      installBaseline(db);
+      applyPendingMigrations(db, { targetVersion: 256 });
+      db.prepare('INSERT INTO composer_input_history(text, created_at) VALUES (?, ?)').run('old global input', 1);
+      applyPendingMigrations(db);
+      expect(db.prepare('SELECT text FROM composer_input_history_legacy').all()).toEqual([{ text: 'old global input' }]);
+      expect(db.prepare('SELECT COUNT(*) n FROM composer_input_history').get()).toEqual({ n: 0 });
+      expect(db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
+    } finally { db.close(); }
+  });
+
   it('adds restartable discussion processing without changing existing audio and cascades checkpoint cleanup', () => {
     const db = openEmptyDb();
     try {

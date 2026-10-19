@@ -46,7 +46,7 @@ export interface PaletteApplyContext {
   };
   callbacks: {
     onSend: ComposerSendHandler;
-    onUserTextCommitted?: (text: string) => void;
+    onUserTextCommitted?: (text: string, conversationId?: string) => void;
     /** Agent switch handler — wired by chat-page (writes localStorage + navigates to /chat/new). */
     onChatAgentChange?: (agentId: string) => void;
     /** Used when runBusy and command is `acceptsArgs=false` non-abort: queue as follow-up. */
@@ -144,8 +144,8 @@ const applyCommandItem = (
   const result = ctx.contextRefs.current.length
     ? ctx.callbacks.onSend(cmd, undefined, ctx.thinkingLevel, ctx.contextRefs.current)
     : ctx.callbacks.onSend(cmd, undefined, ctx.thinkingLevel);
-  commitAcceptedSend(result, () => {
-    ctx.callbacks.onUserTextCommitted?.(cmd);
+  commitAcceptedSend(result, (conversationId) => {
+    ctx.callbacks.onUserTextCommitted?.(cmd, conversationId);
     ctx.attachments.clearAttachments();
     ctx.contextRefs.clear();
     ctx.editor.resetEditor();

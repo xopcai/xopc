@@ -422,8 +422,8 @@ export const ChatComposer = memo(function ChatComposer({
 
   const sendReviewCommand = useCallback(
     (command: string) => {
-      commitAcceptedSend(onSendRef.current(command, undefined, thinkingLevelRef.current, contextRefs), () => {
-        onUserTextCommitted?.(command);
+      commitAcceptedSend(onSendRef.current(command, undefined, thinkingLevelRef.current, contextRefs), (targetConversationId) => {
+        onUserTextCommitted?.(command, targetConversationId);
         setContextRefs([]);
       });
     },

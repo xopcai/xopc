@@ -23,12 +23,14 @@ export function useComposerInputHistoryWalk(opts: {
   resetEditor: (opts?: ResetEditorOptions) => void;
   onWireInput: (wire: string, caret: number) => void;
 }): {
-  onUserTextCommitted: (text: string) => void;
+  onUserTextCommitted: (text: string, targetConversationId?: string) => void;
   onWireInputClearWalk: (wire: string, caret: number) => void;
   tryInputHistoryArrow: (dir: 'up' | 'down') => boolean;
 } {
   const { conversationId, editorRef, valueRef, resetEditor, onWireInput } = opts;
 
+  const activeConversationRef = useRef(conversationId);
+  activeConversationRef.current = conversationId;
   const walkRef = useRef<{ index: number; stash: string } | null>(null);
 
   const clearWalk = useCallback(() => {
@@ -40,16 +42,14 @@ export function useComposerInputHistoryWalk(opts: {
   }, [conversationId, clearWalk]);
 
   useEffect(() => {
-    void loadComposerInputHistory();
+    if (conversationId) void loadComposerInputHistory(conversationId, true);
     const onAppend = (event: Event) => {
-      applyComposerHistoryAppended((event as CustomEvent).detail);
-      clearWalk();
+      if (applyComposerHistoryAppended((event as CustomEvent).detail) === conversationId) clearWalk();
     };
-    const onClear = () => {
-      applyComposerHistoryCleared();
-      clearWalk();
+    const onClear = (event: Event) => {
+      if (applyComposerHistoryCleared((event as CustomEvent).detail) === conversationId) clearWalk();
     };
-    const onReconnect = () => void loadComposerInputHistory(true);
+    const onReconnect = () => { if (conversationId) void loadComposerInputHistory(conversationId, true); };
     window.addEventListener('composer-history-appended', onAppend);
     window.addEventListener('composer-history-cleared', onClear);
     window.addEventListener('gateway-realtime-connected', onReconnect);
@@ -58,14 +58,14 @@ export function useComposerInputHistoryWalk(opts: {
       window.removeEventListener('composer-history-cleared', onClear);
       window.removeEventListener('gateway-realtime-connected', onReconnect);
     };
-  }, [clearWalk]);
+  }, [conversationId, clearWalk]);
 
   const onUserTextCommitted = useCallback(
-    (text: string) => {
-      if (!parseUserTurnDocument(text)) recordComposerInputHistory(text);
-      clearWalk();
+    (text: string, targetConversationId = conversationId) => {
+      if (targetConversationId && !parseUserTurnDocument(text)) recordComposerInputHistory(targetConversationId, text);
+      if (targetConversationId === activeConversationRef.current) clearWalk();
     },
-    [clearWalk],
+    [conversationId, clearWalk],
   );
 
   const onWireInputClearWalk = useCallback(
@@ -78,7 +78,8 @@ export function useComposerInputHistoryWalk(opts: {
 
   const tryInputHistoryArrow = useCallback(
     (dir: 'up' | 'down'): boolean => {
-      const history = getComposerInputHistory();
+      if (!conversationId) return false;
+      const history = getComposerInputHistory(conversationId);
       if (history.length === 0) return false;
 
       const walk = walkRef.current;
@@ -116,7 +117,7 @@ export function useComposerInputHistoryWalk(opts: {
       resetEditor({ nextText: line, caretOffset: line.length, focus: true });
       return true;
     },
-    [editorRef, valueRef, resetEditor],
+    [conversationId, editorRef, valueRef, resetEditor],
   );
 
   return { onUserTextCommitted, onWireInputClearWalk, tryInputHistoryArrow };
