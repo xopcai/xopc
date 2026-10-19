@@ -312,16 +312,9 @@ export function AgentPluginDialog({
               <p className="mt-1 text-fg-muted">{zh ? '此插件需要以下新增能力。确认后自动准备资源，按需登录账号，所有 Agent 均可使用。' : 'Review these capabilities. Resources are prepared automatically; sign in if needed. Available to all agents.'}</p>
             </div>
           </div>
-          <ul className="space-y-2 rounded-lg border border-edge bg-surface-panel p-3 break-words">{plan.addedCapabilities.map(c => <li key={c} className="flex gap-2"><span aria-hidden>•</span><span>{capabilityLabel(c, zh)}</span></li>)}</ul>
-          {plan.capabilities.some(capability => capability.startsWith('runtime.')) ? <details><summary className="cursor-pointer text-fg-muted">{zh ? '查看执行内容' : 'View execution details'}</summary><ul className="mt-2 space-y-2 break-all font-mono text-xs">{plan.capabilities.filter(capability => capability.startsWith('runtime.')).map(capability => <li key={capability}>{capability}</li>)}</ul></details> : null}
+          <ul tabIndex={0} aria-label={zh ? '插件新增能力' : 'Added plugin capabilities'} className="max-h-[min(28vh,14rem)] space-y-2 overflow-y-auto overscroll-contain rounded-lg border border-edge bg-surface-panel p-3 break-words focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">{plan.addedCapabilities.map(c => <li key={c} className="flex gap-2"><span aria-hidden>•</span><span>{capabilityLabel(c, zh)}</span></li>)}</ul>
+          {plan.capabilities.some(capability => capability.startsWith('runtime.')) ? <details><summary className="cursor-pointer text-fg-muted">{zh ? '查看执行内容' : 'View execution details'}</summary><ul tabIndex={0} aria-label={zh ? '插件执行内容' : 'Plugin execution details'} className="mt-2 max-h-40 space-y-2 overflow-y-auto overscroll-contain break-all font-mono text-xs">{plan.capabilities.filter(capability => capability.startsWith('runtime.')).map(capability => <li key={capability}>{capability}</li>)}</ul></details> : null}
           {plan.diagnostics.map((d, i) => <p key={i}>{d.component}: {d.message}</p>)}
-          <div className="flex flex-wrap gap-2">
-            <Button disabled={busy || !!currentExtension && plan.manifest.name !== currentExtension.name} onClick={() => void run(() => installPlan(plan))}>
-              {busy ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
-              {zh ? '授权并安装' : 'Authorize and install'}
-            </Button>
-            <Button variant="ghost" disabled={busy} onClick={() => setPlan(null)}>{zh ? '取消' : 'Cancel'}</Button>
-          </div>
         </div> : null}
         {currentExtension && advancedOpen ? <div className="border-t border-edge pt-4">
           {!confirmRemove ? <Button variant="ghost" disabled={busy} onClick={() => setConfirmRemove(true)}>{zh ? '卸载插件' : 'Uninstall'}</Button> : <div className="space-y-3 text-sm">
@@ -333,6 +326,13 @@ export function AgentPluginDialog({
         </div> : null}
         {error ? <p role="alert" className="break-words text-sm text-fg-muted">{error}</p> : null}
       </div>
+      {plan ? <div className="flex shrink-0 flex-wrap justify-end gap-2 border-t border-edge p-4">
+        <Button variant="ghost" disabled={busy} onClick={() => setPlan(null)}>{zh ? '取消' : 'Cancel'}</Button>
+        <Button disabled={busy || !!currentExtension && plan.manifest.name !== currentExtension.name} onClick={() => void run(() => installPlan(plan))}>
+          {busy ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
+          {zh ? '授权并安装' : 'Authorize and install'}
+        </Button>
+      </div> : null}
     </Dialog.Content>
     {!desktopFileApi ? <WorkingDirectoryPickerModal
       open={sourcePickerOpen}
