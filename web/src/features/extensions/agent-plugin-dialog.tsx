@@ -52,12 +52,14 @@ async function request<T>(path: string, method: string, body?: unknown): Promise
 export function AgentPluginDialog({
   extension,
   onClose,
+  onUninstalled,
   initialSource = '',
   marketplace,
   autoInstall = false,
 }: {
   extension?: ExtensionApiRow;
   onClose: () => void;
+  onUninstalled?: () => void;
   initialSource?: string;
   marketplace?: ExtensionMarketplacePackageDetail;
   autoInstall?: boolean;
@@ -326,7 +328,7 @@ export function AgentPluginDialog({
             <p>{zh ? '卸载保留账号凭据；服务端授权需到相应服务撤销。' : 'Credentials are retained. Revoke provider authorization in the service itself.'}</p>
             <label className="flex gap-2"><input type="checkbox" checked={removeData} onChange={e => setRemoveData(e.target.checked)} />{zh ? '同时删除插件数据' : 'Also delete plugin data'}</label>
             <label className="flex gap-2"><input type="checkbox" checked={removeCredentials} onChange={e => setRemoveCredentials(e.target.checked)} />{zh ? '同时删除本地凭据' : 'Also delete local credentials'}</label>
-            <Button disabled={busy} onClick={() => void run(async () => { await request(base, 'DELETE', { removeData, removeCredentials }); await refresh(); onClose(); })}>{zh ? '确认卸载' : 'Confirm uninstall'}</Button>
+            <Button disabled={busy} onClick={() => void run(async () => { await request(base, 'DELETE', { removeData, removeCredentials }); await refresh(); (onUninstalled ?? onClose)(); })}>{zh ? '确认卸载' : 'Confirm uninstall'}</Button>
           </div>}
         </div> : null}
         {error ? <p role="alert" className="break-words text-sm text-fg-muted">{error}</p> : null}
