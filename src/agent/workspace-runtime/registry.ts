@@ -70,6 +70,7 @@ export class WorkspaceRuntimeRegistry {
 
     const { memoryManager } = this.userContextRuntimes.getOrCreate(cfg);
     const skillManager = new SkillManager(resolvedPath, this.bundledSkillsDir, {
+      agentId,
       isWorkspaceTrusted: () => this.isWorkspaceTrusted?.(resolvedPath) === true,
     });
     const systemPromptBuilder = new SystemPromptBuilder({

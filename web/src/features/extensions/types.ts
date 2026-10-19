@@ -1,3 +1,4 @@
+import type { PluginAccount } from './plugin-setup-types';
 /** Page contribution (manifest `ui.contributions.pages`). */
 export type PageContribution = {
   id: string;
@@ -49,11 +50,19 @@ export type ExtensionUiContributions = {
 
 /** Serialized extension list row from `GET /api/extensions`. */
 export type ExtensionApiRow = {
+  branding?: { iconUrl: string; iconSha256: string };
   format?: 'native-extension' | 'agent-plugin';
   pluginId?: string;
+  installationSource?: string;
+  resolvedCommit?: string;
+  workspacePaths?: string[] | null;
+  dialect?: 'portable' | 'codex' | 'claude';
+  installationState?: 'preparing' | 'installed';
+  authorizationStatus?: 'required' | 'connected' | 'not_required';
+  setup?: { authorizations?: PluginAccount[]; userConfig: Record<string, { type: string; title: string; required: boolean; sensitive: boolean; default?: string | number | boolean }>; tasks: string[] };
   canRollback?: boolean;
   readiness?: 'ready' | 'setup_required' | 'degraded' | 'blocked';
-  components?: { skills: Array<{ name: string }>; mcp: Array<{ name: string; id: string; type: string }> };
+  components?: { skills: Array<{ name: string }>; mcp: Array<{ name: string; id: string; type: string; connectionAuth?: { mode: string; headerName?: string; prefix?: string } }> };
   diagnostics?: Array<{ component: string; message: string }>;
   provenance?: {
     kind: 'store'; packageName: string; packageType: 'plugin' | 'extension'; version: string; sha256: string;

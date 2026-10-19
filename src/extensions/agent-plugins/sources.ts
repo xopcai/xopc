@@ -1,6 +1,8 @@
 import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { PLUGIN_MANIFEST_PATHS } from './formats.js';
+import { isGitPluginSource, withCatalogSource, PluginSourceRedirect } from './source-catalog.js';
 import type { Config } from '../../config/schema.js';
 import { createPluginSourceFetch } from './source-http-fetch.js';
 import AdmZip from 'adm-zip';
@@ -28,11 +30,11 @@ export function isAgentPluginArchive(buffer: Buffer): boolean {
     return Boolean(JSON.parse(entry.getData().toString('utf8'))?.xopc?.extension);
   };
   if (paths.includes('xopc.extension.json')) return false;
-  if (paths.includes('plugin.json')) return !nativeMetadata('package.json');
+  if (PLUGIN_MANIFEST_PATHS.some(path => paths.includes(path))) return !nativeMetadata('package.json');
   const first = new Set(paths.map(path => path.split('/')[0]));
   if (first.size !== 1) return false;
   const root = [...first][0];
-  return paths.includes(`${root}/plugin.json`) && !paths.includes(`${root}/xopc.extension.json`) && !nativeMetadata(`${root}/package.json`);
+  return PLUGIN_MANIFEST_PATHS.some(path => paths.includes(`${root}/${path}`)) && !paths.includes(`${root}/xopc.extension.json`) && !nativeMetadata(`${root}/package.json`);
 }
 export function withAgentPluginArchive<T>(buffer: Buffer, fn: (local: string) => T): T {
   const dir = mkdtempSync(join(tmpdir(), 'xopc-plugin-download-'));
@@ -41,7 +43,12 @@ export function withAgentPluginArchive<T>(buffer: Buffer, fn: (local: string) =>
 }
 
 /** Resolve remote artifacts only for explicit inspect/install requests, never during discovery. */
-export async function withAgentPluginSource<T>(source: string, config: Config | undefined, fn: (local: string, provenance?: AgentPluginSourceProvenance) => T): Promise<T> {
+export async function withAgentPluginSource<T>(source: string, config: Config | undefined, fn: (local: string, provenance?: AgentPluginSourceProvenance, resolvedCommit?: string, importManifest?: Record<string, unknown>) => T, depth = 0): Promise<T> {
+  if (depth > 4) throw new Error('Marketplace source nesting exceeds limits');
+  if (isGitPluginSource(source) || !source.startsWith('https://') && !source.startsWith('store:') && (!source.toLowerCase().endsWith('.zip') || source.includes('#'))) {
+    try { return await withCatalogSource(source, (local, metadata) => fn(local, undefined, metadata.commit, metadata.importManifest)); }
+    catch (error) { if (error instanceof PluginSourceRedirect) return withAgentPluginSource(error.source, config, fn, depth + 1); throw error; }
+  }
   if (!source.startsWith('https://') && !source.startsWith('store:')) return fn(source);
   let buffer: Buffer;
   let provenance: AgentPluginSourceProvenance | undefined;

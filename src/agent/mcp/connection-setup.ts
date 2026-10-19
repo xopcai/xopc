@@ -1,3 +1,4 @@
+import { resolveMcpSetupConfig } from './effective-server.js';
 import { createHash, randomUUID } from 'node:crypto';
 
 import type { Config } from '../../config/schema.js';
@@ -76,6 +77,7 @@ async function advertisesOAuth(config: Config, workspace: string, serverId: stri
 }
 
 export async function probeMcpConnection(config: Config, workspace: string, serverId: string, options?: McpSessionOptions): Promise<McpConnectionProbe> {
+  config = resolveMcpSetupConfig(config, serverId);
   try {
     const tools = await discoverMcpTools(config, workspace, serverId, options);
     return { state: 'connected', toolCount: tools.length };
@@ -119,6 +121,7 @@ type Attempt = {
 };
 const attempts = new Map<string, Attempt>();
 function fingerprint(config: Config, serverId: string): string {
+  config = resolveMcpSetupConfig(config, serverId);
   const server = config.mcp?.servers?.[serverId];
   return createHash('sha256').update(JSON.stringify(server ? { ...server, xopcConnector: undefined } : null)).digest('hex');
 }
@@ -139,6 +142,7 @@ function cancel(attempt: Attempt): void {
 
 /** A UI bridge to native pi's login command; no host-owned OAuth client or token store. */
 export function startMcpAuthorization(config: Config, workspace: string, serverId: string, owner: string, options?: McpSessionOptions & { authorizationScope?: string }): McpAuthorization {
+  config = resolveMcpSetupConfig(config, serverId);
   const server = config.mcp?.servers?.[serverId];
   if (!server?.url || server.enabled === false || (isManagedConnectorServer(server) && server.xopcConnector.enabled === false)) throw new Error('An enabled HTTP MCP server is required.');
   httpUrl(server.url);
@@ -214,7 +218,15 @@ export function submitMcpRedirect(id: string, owner: string, redirectUrl: string
   const target = new URL(expected);
   const actual = httpUrl(redirectUrl);
   if (actual.origin !== target.origin || actual.pathname !== target.pathname
-    || actual.searchParams.get('state') !== authorization.searchParams.get('state') || !actual.searchParams.get('code')) return false;
+    || actual.searchParams.get('state') !== authorization.searchParams.get('state')) return false;
+  if (actual.searchParams.has('error')) {
+    cancel(attempt);
+    attempt.result.state = 'error';
+    attempt.result.error = 'Sign-in was declined or could not be completed. Try again.';
+    delete attempt.result.authorizationUrl;
+    return true;
+  }
+  if (!actual.searchParams.get('code')) return false;
   attempt.redirect(actual.href);
   attempt.redirect = undefined;
   return true;

@@ -56,6 +56,17 @@ it('installs, activates, updates and removes through real authenticated HTTP and
       });
       expect(response.status).toBe(404);
     }
+    const setup = await request(`${path}/setup`, 'POST', { action: 'start' });
+    expect(setup.payload.owner).toBe('gateway-owner');
+    for (let i = 0; i < 2; i++) {
+      const session = await fetch(base + '/api/browser-session', { method: 'POST', headers: { authorization: `Bearer ${token}`, origin: base } });
+      expect(session.status, await session.clone().text()).toBe(200);
+      const cookie = session.headers.getSetCookie().map(value => value.split(';')[0]).join('; ');
+      expect(cookie).toBeTruthy();
+      const continued = await fetch(base + path + '/setup', { headers: { cookie, origin: base } });
+      expect(continued.status, await continued.clone().text()).toBe(200);
+      expect((await continued.json()).payload.id).toBe(setup.payload.id);
+    }
     writeFileSync(join(source, 'note.txt'), 'new revision');
     await request(`${path}/update`, 'POST', { source });
     await request(`${path}/rollback`, 'POST');
