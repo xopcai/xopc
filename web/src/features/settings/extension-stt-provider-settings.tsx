@@ -271,8 +271,8 @@ export function ExtensionSttProviderSettings({ extensionId }: { extensionId: str
     return (
       <p className="text-sm text-fg-muted">
         {language === 'zh'
-          ? '该扩展未声明 mediaUnderstandingProviders。'
-          : 'This extension does not declare mediaUnderstandingProviders.'}
+          ? '该插件未声明 mediaUnderstandingProviders。'
+          : 'This plugin does not declare mediaUnderstandingProviders.'}
       </p>
     );
   }

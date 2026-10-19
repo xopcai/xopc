@@ -94,7 +94,7 @@ export function ExtensionIframeHost({
     dispatch({ type: 'patch', patch: { allowed: false, dialogOpen: false, grantResolved: false, grantError: null, manifestDigest: null, grantedPermissions: [] } });
     void resolveExtensionUiGrant(extensionId).then((grant) => {
       if (!active) return;
-      if (grant.extensionId !== extensionId || !grant.manifestDigest) throw new Error('Could not verify extension permissions');
+      if (grant.extensionId !== extensionId || !grant.manifestDigest) throw new Error('Could not verify plugin permissions');
       dispatch({
         type: 'patch',
         patch: {

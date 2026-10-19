@@ -20,7 +20,7 @@
     "connectors": "Connections",
     "channels": "Channels",
     "agents": "Agents",
-    "extensions": "Extensions",
+    "extensions": "Plugins",
     "logs": "Diagnostic logs",
     "settingsAppearance": "Preferences",
     "settingsOverview": "Overview",
@@ -63,7 +63,7 @@
       "capabilities-skills": "Skills",
       "capabilities-connectors": "Connections",
       "capabilities-channels": "Channels",
-      "capabilities-extensions": "Extensions",
+      "capabilities-extensions": "Plugins",
       "apps-library": "App Studio",
       "me-overview": "Me"
     }
@@ -121,7 +121,7 @@
   },
   "sidebar": {
     "newTask": "New chat",
-    "extensionAppsHeading": "Extension apps",
+    "extensionAppsHeading": "Plugin apps",
     "tasksHeading": "Tasks",
     "projectsHeading": "Recent work",
     "inboxHeading": "Chats",
@@ -176,7 +176,7 @@
     "moreApps": "More",
     "moreAppsAria": "More navigation items",
     "moreGroupProducts": "Core",
-    "moreGroupExtensions": "Apps & Extensions",
+    "moreGroupExtensions": "Apps & Plugins",
     "resizeApps": "Adjust visible navigation items",
     "resizeHandleAria": "Resize sidebar",
     "timelinePinned": "Pinned",
@@ -302,7 +302,7 @@
       "projects": "Projects",
       "connectors": "Connections",
       "quickSettings": "Quick Settings",
-      "extensions": "Extensions",
+      "extensions": "Plugins",
       "sessions": "Sessions",
       "files": "Files",
       "commands": "Commands",
@@ -319,7 +319,7 @@
     "routes": {
       "chatSubtitle": "Open chat",
       "agentsSubtitle": "Manage agents",
-      "extensionsSubtitle": "Discover and manage extensions",
+      "extensionsSubtitle": "Discover and manage plugins",
       "localAppsSubtitle": "Build and manage your own XOPC apps",
       "sessionsSubtitle": "Manage and search sessions",
       "usageSubtitle": "Review AI calls, tokens, and estimated cost",

@@ -47,7 +47,7 @@ describe('CapabilitiesPage header', () => {
     ['agents', 'Agents'],
     ['connectors', 'Connections'],
     ['channels', 'Channels'],
-    ['extensions', 'Extensions'],
+    ['extensions', 'Plugins'],
   ])('shows the %s section title in the app header', async (section, title) => {
     await act(async () => root.render(
       <MemoryRouter initialEntries={[`/capabilities/${section}`]}>

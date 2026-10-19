@@ -185,7 +185,7 @@ export function AgentPluginDialog({
   return <Dialog.Root defaultOpen onOpenChange={open => !open && onClose()}><Dialog.Portal>
     <Dialog.Overlay className="fixed inset-0 z-[130] bg-scrim" />
     <Dialog.Content className="fixed left-1/2 top-1/2 z-[131] flex h-[min(82vh,42rem)] w-[min(38rem,calc(100vw-1.5rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-edge bg-surface-overlay shadow-popover">
-      <div className="flex shrink-0 items-center justify-between border-b border-edge p-4"><div className="flex min-w-0 items-center gap-3"><CapabilityIcon iconUrl={currentExtension?.branding?.iconUrl ?? marketplace?.branding?.iconUrl} fallback={Package} /><Dialog.Title className="font-semibold">{currentExtension?.name ?? marketplaceName ?? (zh ? '安装 Agent Plugin' : 'Install Agent Plugin')}</Dialog.Title></div><Button variant="ghost" onClick={onClose}>{zh ? '关闭' : 'Close'}</Button></div>
+      <div className="flex shrink-0 items-center justify-between border-b border-edge p-4"><div className="flex min-w-0 items-center gap-3"><CapabilityIcon iconUrl={currentExtension?.branding?.iconUrl ?? marketplace?.branding?.iconUrl} fallback={Package} /><Dialog.Title className="font-semibold">{currentExtension?.name ?? marketplaceName ?? (zh ? '安装插件' : 'Install plugin')}</Dialog.Title></div><Button variant="ghost" onClick={onClose}>{zh ? '关闭' : 'Close'}</Button></div>
       <Dialog.Description className="sr-only">{zh ? '安装、组件、账号连接和权限' : 'Installation, components, connections and permissions'}</Dialog.Description>
       <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
         {!currentExtension && storeSource ? <section className="space-y-4">
@@ -223,7 +223,7 @@ export function AgentPluginDialog({
           <details className="rounded-lg border border-edge p-3">
             <summary className="cursor-pointer text-sm font-medium">{zh ? '插件详情' : 'Plugin details'}</summary>
             <div className="mt-3 space-y-3">
-          <p className="text-sm text-fg-muted">Agent Plugin · {currentExtension.version} · {currentExtension.readiness && ({ ready: zh ? '已就绪' : 'Ready', setup_required: zh ? '待连接' : 'Setup required', degraded: zh ? '部分不可用' : 'Partially available', blocked: zh ? '已阻止' : 'Blocked' })[currentExtension.readiness]}</p>
+          <p className="text-sm text-fg-muted">{zh ? '插件' : 'Plugin'} · {currentExtension.version} · {currentExtension.readiness && ({ ready: zh ? '已就绪' : 'Ready', setup_required: zh ? '待连接' : 'Setup required', degraded: zh ? '部分不可用' : 'Partially available', blocked: zh ? '已阻止' : 'Blocked' })[currentExtension.readiness]}</p>
           {currentExtension.provenance ? <p className="break-words text-xs text-fg-muted">
             {currentExtension.provenance.publisherVerification === 'verified' ? (zh ? '已认证发布者' : 'Verified publisher') : (zh ? '社区发布者' : 'Community publisher')}
             {' · '}{currentExtension.provenance.packageName}@{currentExtension.provenance.version}

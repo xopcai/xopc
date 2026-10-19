@@ -2,10 +2,10 @@
   "capabilitiesHub": {
     "tabSkills": "Skills",
     "tabConnectors": "Connections",
-    "tabExtensions": "Extensions",
+    "tabExtensions": "Plugins",
     "moreActions": "More actions",
     "discoverLoading": "Loading capabilities",
-    "searchPlaceholder": "Search skills, connections, and extensions",
+    "searchPlaceholder": "Search skills, connections, and plugins",
     "searchLabel": "Search capabilities",
     "filterAria": "Filter by capability type",
     "filterAll": "All",
@@ -18,7 +18,7 @@
     "statusAttention": "Needs attention",
     "kindSkill": "Skill",
     "kindConnector": "Connection",
-    "kindExtension": "Extension",
+    "kindExtension": "Plugin",
     "viewAction": "View",
     "manageAction": "Manage",
     "noDescription": "No description"

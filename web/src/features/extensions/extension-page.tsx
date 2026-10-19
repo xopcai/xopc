@@ -54,24 +54,24 @@ export function ExtensionPage() {
   }, [clearPageHeader, extension, extensionId, page, setPageHeader]);
 
   if (!extensionId) {
-    return <ExtensionPageNotFound message="No extension ID provided." />;
+    return <ExtensionPageNotFound message="No plugin ID provided." />;
   }
 
   if (!extension) {
     return (
-      <ExtensionPageNotFound message={`Extension "${extensionId}" not found or has no UI.`} />
+      <ExtensionPageNotFound message={`Plugin "${extensionId}" not found or has no UI.`} />
     );
   }
 
   if (!pages?.length) {
     return (
-      <ExtensionPageNotFound message={`Extension "${extensionId}" has no page contributions.`} />
+      <ExtensionPageNotFound message={`Plugin "${extensionId}" has no page contributions.`} />
     );
   }
 
   if (!page) {
     return (
-      <ExtensionPageNotFound message={`Page "${pageId}" not found in extension "${extensionId}".`} />
+      <ExtensionPageNotFound message={`Page "${pageId}" not found in plugin "${extensionId}".`} />
     );
   }
 

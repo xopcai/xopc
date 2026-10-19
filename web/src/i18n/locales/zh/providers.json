@@ -33,7 +33,7 @@
     "sourceOauth": "OAuth 授权",
     "sourceEnv": "环境变量",
     "sourceModelsJson": "models.json",
-    "sourceExtension": "扩展提供方",
+    "sourceExtension": "插件提供方",
     "sourceNone": "无",
     "testKey": "测试输入值",
     "testingKey": "测试中…",
@@ -49,7 +49,7 @@
       "specialty": "其他服务商",
       "enterprise": "企业 / 云端",
       "oauth": "仅 OAuth",
-      "extension": "扩展"
+      "extension": "插件"
     },
     "configuredCount": "已配置 {{count}} 个",
     "metaMasked": "已保存密钥，输入新 Key 可覆盖。",
