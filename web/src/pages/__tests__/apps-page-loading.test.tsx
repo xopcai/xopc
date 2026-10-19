@@ -32,15 +32,15 @@ it('keeps tabs usable while installed extensions load', async () => {
     ));
     const tabs = () => [...container.querySelectorAll<HTMLButtonElement>('[role="tab"]')];
     expect(tabs()).toHaveLength(3);
-    expect(tabs()[1].getAttribute('aria-selected')).toBe('true');
-    expect(container.querySelector('[aria-busy="true"]')).not.toBeNull();
-
-    await act(async () => tabs()[2].click());
     expect(tabs()[2].getAttribute('aria-selected')).toBe('true');
     expect(container.querySelector('[aria-busy="true"]')).not.toBeNull();
 
     await act(async () => tabs()[0].click());
     expect(tabs()[0].getAttribute('aria-selected')).toBe('true');
+    expect(container.querySelector('[aria-busy="true"]')).not.toBeNull();
+
+    await act(async () => tabs()[1].click());
+    expect(tabs()[1].getAttribute('aria-selected')).toBe('true');
     expect(container.textContent).toContain('Marketplace content');
     expect(container.querySelector('[aria-busy="true"]')).toBeNull();
   } finally {
