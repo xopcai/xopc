@@ -3,7 +3,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const { complete } = vi.hoisted(() => ({ complete: vi.fn() }));
 vi.mock('../../providers/model-call.js', () => ({ completeWithResolvedCredentials: complete }));
 vi.mock('../../providers/index.js', () => ({ resolveModel: (ref: string) => ({ id: ref }) }));
-vi.mock('../../config/schema.js', () => ({ getAgentDefaultChatModelConfig: () => ({ primary: 'primary', fallbacks: ['backup'] }) }));
+vi.mock('../../config/schema.js', async (importOriginal) => ({
+  ...await importOriginal<typeof import('../../config/schema.js')>(),
+  getAgentDefaultChatModelConfig: () => ({ primary: 'primary', fallbacks: ['backup'] }),
+}));
 import { completeTaskModelCall } from '../task-model-call.js';
 import { ModelTaskContractPlanner } from '../task-contract-planner.js';
 

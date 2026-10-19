@@ -1,13 +1,11 @@
-import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { promisify } from 'node:util';
+import { runExec } from '../../infra/exec.js';
 import { PLUGIN_MANIFEST_PATHS } from './formats.js';
 import { containedPath } from './validation.js';
 
-const exec = promisify(execFile);
 export interface PluginCandidate { name: string; source: string; description?: string }
 export class PluginSourceRedirect extends Error { constructor(readonly source: string) { super('Resolve marketplace plugin source'); } }
 export class PluginSelectionRequired extends Error {
@@ -34,7 +32,7 @@ export async function withCatalogSource<T>(source: string, fn: (local: string, m
       const ref = options.get('ref') ?? 'HEAD';
       if (!/^[A-Za-z0-9][A-Za-z0-9_./-]{0,199}$/.test(ref) || ref.includes('..')) throw new Error('Invalid Git reference');
       const env = { ...Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith('GIT_'))), GIT_CONFIG_NOSYSTEM: '1', GIT_TERMINAL_PROMPT: '0', GIT_CONFIG_GLOBAL: '/dev/null' };
-      const run = (args: string[]) => exec('git', ['-c', 'core.hooksPath=/dev/null', '-c', 'protocol.file.allow=never', ...args], { cwd: temp, env, timeout: 30_000, maxBuffer: 1024 * 1024 });
+      const run = (args: string[]) => runExec('git', ['-c', 'core.hooksPath=/dev/null', '-c', 'protocol.file.allow=never', ...args], { cwd: temp, env, timeoutMs: 30_000, maxBuffer: 1024 * 1024 });
       await run(['init', '--quiet']);
       await run(['fetch', '--depth=1', '--no-tags', '--', url, ref]);
       commit = (await run(['rev-parse', '--verify', 'FETCH_HEAD^{commit}'])).stdout.trim();
