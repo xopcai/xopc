@@ -4,6 +4,9 @@ import AdmZip from 'adm-zip';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { Config } from '../../config/schema.js';
+import { McpServerSchema } from '../../config/schema.js';
+import { materializeConnectorMcpServer } from '../../connectors/materialize.js';
+import { resolveConnectorSecretReferences } from '../../connectors/secret-store.js';
 import {
   getStoreConnectorInstallPlan,
   parseStoreConnectorCandidateRef,
@@ -172,9 +175,53 @@ describe('store connector install plans', () => {
     await expect(getStoreConnectorInstallPlan(config(), 'demo-connector')).resolves.toMatchObject({
       definition: {
         auth: { mode: 'oauth', clientId: 'public-client-id' },
-        runtime: { serverTemplate: { auth: { type: 'oauth', clientId: 'public-client-id' } } },
+        runtime: { serverTemplate: { type: 'http', oauth: { clientId: 'public-client-id' } } },
       },
     });
+  });
+
+  it('installs marketplace categories as valid native MCP configuration', async () => {
+    const value = { ...manifest, category: 'projects', capabilities: [...manifest.capabilities, 'auth.oauth'], auth: { mode: 'oauth' },
+      runtime: { ...manifest.runtime, serverTemplate: { ...manifest.runtime.serverTemplate, connectionTimeoutMs: 15000 } } };
+    mockStore(archiveForManifest(value), undefined, value);
+    const plan = await getStoreConnectorInstallPlan(config(), 'demo-connector');
+    const { server } = materializeConnectorMcpServer(plan.definition, {});
+    expect(plan.definition.category).toBe('automation');
+    expect(McpServerSchema.safeParse(server).success).toBe(true);
+    expect(server).toMatchObject({ type: 'http', oauth: {}, timeout: 15000 });
+    expect(server).not.toHaveProperty('transport');
+    expect(server).not.toHaveProperty('auth');
+  });
+
+  it('keeps a user MCP URL in the credential store and constrains the resolved provider URL', async () => {
+    const value = { ...manifest, capabilities: [...manifest.capabilities, 'auth.apiKey'], auth: { mode: 'apiKey' },
+      setup: { secrets: [{ key: 'endpoint', label: 'Personal MCP URL', required: true }] },
+      runtime: { ...manifest.runtime, endpointPolicy: { domains: ['mcp.example.com'], pathPrefixes: ['/mcp'] },
+        serverTemplate: { ...manifest.runtime.serverTemplate, url: '{{secrets.endpoint}}' } } } as unknown as typeof manifest;
+    mockStore(archiveForManifest(value), undefined, value);
+    const plan = await getStoreConnectorInstallPlan(config(), 'demo-connector');
+    const secretUrl = 'https://mcp.example.com/mcp/user-private-token';
+    const { server } = materializeConnectorMcpServer(plan.definition, { secrets: { endpoint: secretUrl } });
+    expect(McpServerSchema.safeParse(server).success).toBe(true);
+    expect(JSON.stringify(server)).not.toContain('user-private-token');
+    const resolver = { resolveApiKey: vi.fn().mockResolvedValue(secretUrl) };
+    expect(await resolveConnectorSecretReferences(server.url, resolver as never)).toBe(secretUrl);
+    resolver.resolveApiKey.mockResolvedValue('https://evil.example/mcp/private');
+    await expect(resolveConnectorSecretReferences(server.url, resolver as never)).rejects.toThrow('declared provider domain');
+    resolver.resolveApiKey.mockResolvedValue('https://mcp.example.com/admin/private');
+    await expect(resolveConnectorSecretReferences(server.url, resolver as never)).rejects.toThrow('declared MCP path');
+    expect(() => materializeConnectorMcpServer(plan.definition, { secrets: { endpoint: 'http://127.0.0.1/mcp' } })).toThrow();
+  });
+
+  it('preserves and encodes one URL-bound token without writing it into configuration', async () => {
+    const value = { ...manifest, capabilities: [...manifest.capabilities, 'auth.apiKey'], auth: { mode: 'apiKey' },
+      setup: { secrets: [{ key: 'token', label: 'Token', required: true }] },
+      runtime: { ...manifest.runtime, serverTemplate: { ...manifest.runtime.serverTemplate, url: 'https://mcp.example.com/mcp?token={{secrets.token}}' } } } as unknown as typeof manifest;
+    mockStore(archiveForManifest(value), undefined, value);
+    const plan = await getStoreConnectorInstallPlan(config(), 'demo-connector');
+    const { server } = materializeConnectorMcpServer(plan.definition, { secrets: { token: 'private&other=value' } });
+    expect(JSON.stringify(server)).not.toContain('private&other=value');
+    expect(await resolveConnectorSecretReferences(server.url, { resolveApiKey: async () => 'private&other=value' } as never)).toBe('https://mcp.example.com/mcp?token=private%26other%3Dvalue');
   });
 
   it('accepts only the pinned npx form for reviewed local Store connectors', async () => {

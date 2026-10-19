@@ -7,6 +7,7 @@ import AdmZip from 'adm-zip';
 import type { Config } from '../config/schema.js';
 import { installConnectorDefinition } from '../connectors/install.js';
 import { listConnectorInstances } from '../connectors/instances.js';
+import { validEndpointDomain, type ConnectorEndpointPolicy } from '../connectors/endpoint-policy.js';
 import type {
   ConnectorDefinition,
   ConnectorInstallInput,
@@ -167,9 +168,10 @@ function readSetup(value: unknown): { setup: ConnectorDefinition['setup']; keys:
 
 function assertDeclaredTemplateReferences(value: unknown, setupKeys: Set<string>): void {
   if (typeof value === 'string') {
-    const match = TEMPLATE_PATTERN.exec(value.trim());
-    if (match && !setupKeys.has(`${match[1]}:${match[2]}`)) {
-      throw new Error(`Connector template references undeclared ${match[1]} field "${match[2]}".`);
+    for (const match of value.matchAll(/\{\{(secrets|config)\.([A-Za-z0-9_.-]+)\}\}/g)) {
+      if (!setupKeys.has(`${match[1]}:${match[2]}`)) {
+        throw new Error(`Connector template references undeclared ${match[1]} field "${match[2]}".`);
+      }
     }
     return;
   }
@@ -203,6 +205,11 @@ function assertSafeRemoteUrl(value: unknown): string {
     isIP(hostname)
   ) {
     throw new Error('Store connectors must use a public HTTPS MCP endpoint.');
+  }
+  if (/\{\{/.test(urlString)) {
+    const refs = [...urlString.matchAll(/\{\{secrets\.([A-Za-z0-9_.-]+)\}\}/g)];
+    if (refs.length !== 1 || /^https:\/\/[^/?#]*\{\{/.test(urlString) || url.hash) throw new Error('Connector URL may contain one secret in its path or query only.');
+    return urlString;
   }
   return url.toString();
 }
@@ -314,9 +321,15 @@ function readConnectorManifest(
   const normalizedAuth: ConnectorDefinition['auth'] = authMode === 'oauth'
     ? { mode: 'oauth', ...(clientId ? { clientId } : {}) }
     : { mode: authMode };
-  const category = asString(manifest.category, 'Connector category');
+  const marketCategory = asString(manifest.category, 'Connector category');
+  const categoryAliases: Record<string, ConnectorDefinition['category']> = {
+    logistics: 'data', commerce: 'data', analytics: 'data', projects: 'automation', design: 'docs',
+    productivity: 'automation', industry: 'data', sales: 'automation', marketing: 'automation',
+    finance: 'data', hr: 'automation', legal: 'docs',
+  };
+  const category = categoryAliases[marketCategory] ?? marketCategory;
   if (!['code', 'docs', 'browser', 'data', 'automation', 'custom'].includes(category)) {
-    throw new Error(`Unsupported connector category: ${category}`);
+    throw new Error(`Unsupported connector category: ${marketCategory}`);
   }
   const capabilities = asStringArray(manifest.capabilities, 'Connector capabilities');
   const allowedCapabilities = new Set([
@@ -334,8 +347,19 @@ function readConnectorManifest(
   const { setup, keys: setupKeys } = readSetup(manifest.setup);
   assertDeclaredTemplateReferences(serverTemplate, setupKeys);
   const permissions = readPermissions(manifest.permissions, Boolean(localPackage));
-  const endpoint = localPackage ? undefined : assertSafeRemoteUrl(serverTemplate.url);
-  const hostname = endpoint ? new URL(endpoint).hostname : undefined;
+  const endpointReference = typeof serverTemplate.url === 'string' ? TEMPLATE_PATTERN.exec(serverTemplate.url) : null;
+  let endpointPolicy: ConnectorEndpointPolicy | undefined;
+  if (!localPackage && endpointReference) {
+    const policy = asRecord(runtime.endpointPolicy, 'Connector endpoint policy');
+    const domains = asStringArray(policy.domains, 'Connector endpoint domains');
+    const pathPrefixes = asStringArray(policy.pathPrefixes, 'Connector endpoint paths');
+    if (endpointReference[1] !== 'secrets' || !domains.length || domains.some(domain => !validEndpointDomain(domain)) ||
+      !pathPrefixes.length || pathPrefixes.some(path => !path.startsWith('/') || /[?#]|\.\./.test(path)) ||
+      domains.some(domain => !permissions.networkDomains?.includes(domain))) throw new Error('Connector endpoint policy must constrain a secret URL to declared provider domains and MCP paths.');
+    endpointPolicy = { domains, pathPrefixes };
+  }
+  const endpoint = localPackage ? undefined : endpointReference ? serverTemplate.url as string : assertSafeRemoteUrl(serverTemplate.url);
+  const hostname = endpoint && !endpointReference ? new URL(endpoint).hostname : undefined;
   if (hostname && permissions.networkDomains?.length && !permissions.networkDomains.some((domain) => domain.toLowerCase() === hostname.toLowerCase())) {
     throw new Error('Connector network permissions must include the MCP endpoint host.');
   }
@@ -358,11 +382,15 @@ function readConnectorManifest(
       serverTemplate: localPackage
         ? serverTemplate
         : {
-            ...serverTemplate,
+            ...Object.fromEntries(Object.entries(serverTemplate).filter(([key]) => !['transport', 'connectionTimeoutMs', 'requestTimeoutMs', 'oauth'].includes(key))),
             url: endpoint,
-            ...(authMode === 'oauth' ? { auth: { type: 'oauth', ...(clientId ? { clientId } : {}) } } : {}),
+            type: 'http',
+            ...(typeof serverTemplate.requestTimeoutMs === 'number' || typeof serverTemplate.connectionTimeoutMs === 'number'
+              ? { timeout: serverTemplate.requestTimeoutMs ?? serverTemplate.connectionTimeoutMs } : {}),
+            ...(authMode === 'oauth' ? { oauth: { ...(clientId ? { clientId } : {}) } } : {}),
           },
       ...(localPackage ? { localPackage } : {}),
+      ...(endpointPolicy ? { endpointPolicy } : {}),
     },
     permissions,
     provenance: { packageName, sha256 },

@@ -145,7 +145,7 @@ export function startMcpAuthorization(config: Config, workspace: string, serverI
   config = resolveMcpSetupConfig(config, serverId);
   const server = config.mcp?.servers?.[serverId];
   if (!server?.url || server.enabled === false || (isManagedConnectorServer(server) && server.xopcConnector.enabled === false)) throw new Error('An enabled HTTP MCP server is required.');
-  httpUrl(server.url);
+  if (typeof server.url === 'string') httpUrl(server.url);
   if (server.auth || Object.keys(server.headers ?? {}).some(name => name.toLowerCase() === 'authorization')) {
     throw new Error('This server uses configured credentials. Remove Authorization before using OAuth.');
   }

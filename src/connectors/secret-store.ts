@@ -1,6 +1,7 @@
 import { CredentialResolver } from '../auth/credentials.js';
 import { consumeConnectorSetupSecretRef } from './setup-secrets.js';
 import type { ConnectorDefinition, ConnectorInstallInput, ConnectorSecretReference } from './types.js';
+import { assertConnectorEndpoint } from './endpoint-policy.js';
 
 function normalizeSecretSegment(value: string): string {
   return value.trim().toLowerCase().replace(/[^a-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '');
@@ -66,7 +67,9 @@ async function resolveSecretReference(
 ): Promise<string | undefined> {
   const value = await resolver.resolveApiKey(reference.xopcSecretRef.provider);
   if (!value) return undefined;
-  return `${reference.xopcSecretRef.prefix ?? ''}${value}${reference.xopcSecretRef.suffix ?? ''}`;
+  const policy = reference.xopcSecretRef.urlPolicy;
+  const resolved = `${reference.xopcSecretRef.prefix ?? ''}${policy?.encodeValue ? encodeURIComponent(value) : value}${reference.xopcSecretRef.suffix ?? ''}`;
+  return policy ? assertConnectorEndpoint(resolved, policy) : resolved;
 }
 
 export async function resolveConnectorSecretReferences(

@@ -87,7 +87,7 @@ export class PluginSetupService {
     for (const [name, target] of Object.entries(plugin.servers)) {
       result[name] = [];
       for (const [sourceId, source] of Object.entries(config.mcp?.servers ?? {})) {
-        if (!matchingReusableConnection(target, source) || !source.url || !source.xopcOAuthCredentialId) continue;
+        if (!matchingReusableConnection(target, source) || typeof source.url !== 'string' || !source.xopcOAuthCredentialId) continue;
         if (await credentials.tokens(source.xopcOAuthCredentialId, source.url)) result[name].push({ id: sourceId, name: source.displayName ?? sourceId });
       }
     }
