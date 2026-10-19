@@ -32,7 +32,7 @@ export function PluginDetailsDialog({ pluginId, initialConnect = false, onClose 
   const name = data ? pluginDisplayName(data, zh) : (zh ? '插件详情' : 'Plugin details');
   const description = data?.localizations?.[zh ? 'zh-CN' : 'en']?.description ?? data?.description;
 
-  if (manage && data) return <AgentPluginDialog extension={data} onClose={() => { setManage(false); void refresh(); }} />;
+  if (manage && data) return <AgentPluginDialog extension={data} onUninstalled={onClose} onClose={() => { setManage(false); void refresh(); }} />;
 
   return <Dialog.Root open onOpenChange={open => { if (!open) onClose(); }}><Dialog.Portal>
     <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-[130] bg-scrim" />
