@@ -145,7 +145,8 @@ const applyCommandItem = (
     ? ctx.callbacks.onSend(cmd, undefined, ctx.thinkingLevel, ctx.contextRefs.current)
     : ctx.callbacks.onSend(cmd, undefined, ctx.thinkingLevel);
   commitAcceptedSend(result, (conversationId) => {
-    ctx.callbacks.onUserTextCommitted?.(cmd, conversationId);
+    if (conversationId === undefined) ctx.callbacks.onUserTextCommitted?.(cmd);
+    else ctx.callbacks.onUserTextCommitted?.(cmd, conversationId);
     ctx.attachments.clearAttachments();
     ctx.contextRefs.clear();
     ctx.editor.resetEditor();
