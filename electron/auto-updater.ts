@@ -1,4 +1,4 @@
-import { app, type BrowserWindow } from 'electron';
+import { app, autoUpdater as nativeAutoUpdater, type BrowserWindow } from 'electron';
 import type { NsisUpdater } from 'electron-updater';
 import electronUpdater from 'electron-updater';
 import type { UpdateInfo, ProgressInfo } from 'electron-updater';
@@ -36,6 +36,7 @@ let lastCheckWasManual = false;
  * racing Squirrel.Mac (proxy + native autoUpdater) and to prevent `update-not-available` from clearing UI state.
  */
 let updateDownloadedPendingInstall = false;
+let pendingMacVersion: string | null = null;
 
 const CHECK_DELAY_MS = 30_000;
 const CHECK_INTERVAL_MS = 4 * 3600_000;
@@ -100,6 +101,15 @@ export function initAutoUpdater(mainWindow: BrowserWindow): void {
     debug: (message: string) => log.debug(message),
   } as typeof autoUpdater.logger;
 
+  if (process.platform === 'darwin') {
+    nativeAutoUpdater.on('update-downloaded', () => {
+      if (!pendingMacVersion) return;
+      log.info({ version: pendingMacVersion }, 'macOS update validated and ready to install');
+      setStatus({ state: 'downloaded', version: pendingMacVersion });
+      pendingMacVersion = null;
+    });
+  }
+
   autoUpdater.on('checking-for-update', () => {
     if (updateDownloadedPendingInstall) {
       return;
@@ -162,22 +172,31 @@ export function initAutoUpdater(mainWindow: BrowserWindow): void {
 
   autoUpdater.on('update-downloaded', (info: UpdateInfo) => {
     updateDownloadedPendingInstall = true;
+    // MacUpdater emits before Squirrel has fetched and validated the signed app.
+    // Keep the progress UI until the native updater confirms installation readiness.
+    if (process.platform === 'darwin') {
+      pendingMacVersion = info.version;
+      const progress = currentStatus.state === 'downloading' ? currentStatus : null;
+      setStatus({
+        state: 'downloading',
+        percent: 100,
+        bytesPerSecond: 0,
+        transferred: progress?.total ?? 0,
+        total: progress?.total ?? 0,
+      });
+      log.info({ version: info.version }, 'Update downloaded; waiting for macOS validation');
+      return;
+    }
     log.info({ version: info.version }, `Update downloaded: v${info.version}. Ready to install.`);
     setStatus({ state: 'downloaded', version: info.version });
   });
 
   autoUpdater.on('error', (err: Error) => {
-    if (updateDownloadedPendingInstall) {
-      log.warn({ err }, `Auto-updater error while install pending: ${err.message}`);
-      return;
-    }
+    updateDownloadedPendingInstall = false;
+    pendingMacVersion = null;
     log.error({ err }, `Auto-updater error: ${err.message}`);
+    // Keep failures visible until a recheck, including duplicate native error events.
     setStatus({ state: 'error', message: err.message });
-    setTimeout(() => {
-      if (currentStatus.state === 'error') {
-        setStatus({ state: 'idle' });
-      }
-    }, 30_000);
   });
 
   setTimeout(() => {
@@ -222,8 +241,8 @@ export function checkForUpdates(manual = false): void {
 }
 
 export function quitAndInstall(): void {
-  if (!updateDownloadedPendingInstall) {
-    log.warn({ state: currentStatus.state }, 'quitAndInstall called but no update is downloaded');
+  if (!updateDownloadedPendingInstall || currentStatus.state !== 'downloaded') {
+    log.warn({ state: currentStatus.state }, 'quitAndInstall called but no update is ready to install');
     return;
   }
   log.info('Quitting and installing update...');
