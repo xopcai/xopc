@@ -45,6 +45,8 @@ type MarketplaceUi = {
   restartHint: string | null;
 };
 
+const marketplaceGridClass = 'grid grid-cols-[repeat(auto-fill,minmax(min(100%,18rem),1fr))] gap-4';
+
 const initialMarketplaceUi: MarketplaceUi = {
   debounced: '',
   detailPkg: null,
@@ -145,24 +147,31 @@ export function ExtensionMarketplacePanel({
       {restartHint ? <p className="text-sm text-fg-muted">{restartHint}</p> : null}
 
       {isLoading && !data ? (
-        <ul className="flex flex-col gap-3" aria-label={copy.marketplaceLoading}>
-          {[0, 1, 2].map((index) => (
-            <li key={index} className="rounded-xl bg-surface-panel p-4 shadow-surface">
-              <div className="flex items-start justify-between gap-4">
-                <div className="min-w-0 flex-1 space-y-2.5">
-                  <Skeleton className="h-5 w-40" />
-                  <Skeleton className="h-4 w-full max-w-xl" />
-                  <Skeleton className="h-4 w-2/3 max-w-md" />
+        <ul className={marketplaceGridClass} aria-label={copy.marketplaceLoading}>
+          {[0, 1, 2, 3, 4, 5].map((index) => (
+            <li key={index} className="flex min-h-60 flex-col rounded-xl border border-edge bg-surface-panel p-5">
+              <div className="flex items-center gap-3">
+                <Skeleton className="size-10 shrink-0 rounded-xl" />
+                <div className="min-w-0 flex-1 space-y-2">
+                  <Skeleton className="h-5 w-3/4" />
+                  <Skeleton className="h-3 w-1/2" />
                 </div>
-                <Skeleton className="h-8 w-20" />
+              </div>
+              <div className="mt-4 space-y-2">
+                <Skeleton className="h-4 w-full" />
+                <Skeleton className="h-4 w-2/3" />
+              </div>
+              <div className="mt-auto flex items-center justify-between pt-5">
+                <Skeleton className="h-3 w-12" />
+                <Skeleton className="h-9 w-20 rounded-lg" />
               </div>
             </li>
           ))}
         </ul>
       ) : (
-        <ul className="flex flex-col gap-3">
+        <ul className={marketplaceGridClass}>
           {extensionsList.length === 0 ? (
-            <li className="text-sm text-fg-muted">{copy.marketplaceEmpty}</li>
+            <li className="col-span-full text-sm text-fg-muted">{copy.marketplaceEmpty}</li>
           ) : (
             extensionsList.map((e) => {
               const kind = extensionInstallKind(extensions, e.id);
@@ -172,67 +181,43 @@ export function ExtensionMarketplacePanel({
               const displayName = localized?.displayName ?? e.name;
               const description = localized?.description ?? e.description;
               return (
-                <li key={e.id} className="list-none">
-                  <div
-                    role="button"
-                    tabIndex={0}
+                <li key={e.id} className="flex min-h-60 min-w-0 flex-col rounded-xl border border-edge bg-surface-panel transition-colors hover:border-edge-strong">
+                  <button
+                    type="button"
                     aria-label={`${displayName}, ${copy.marketplaceDetailTitle}`}
                     onClick={() => installed?.pluginId ? navigate(pluginDetailPath(installed.pluginId, 'installed', installed.authorizationStatus === 'required')) : dispatch({ type: 'patch', patch: { detailPkg: e.id } })}
-                    onKeyDown={(ev) => {
-                      if (ev.key === 'Enter' || ev.key === ' ') {
-                        ev.preventDefault();
-                        if (installed?.pluginId) navigate(pluginDetailPath(installed.pluginId, 'installed', installed.authorizationStatus === 'required'));
-                        else dispatch({ type: 'patch', patch: { detailPkg: e.id } });
-                      }
-                    }}
-                    className={cn(
-                      'flex w-full cursor-pointer flex-wrap items-start gap-3 rounded-xl bg-surface-panel p-4 text-left shadow-surface',
-                      'transition-[transform,background-color,box-shadow] duration-150 ease-out',
-                      'hover:bg-surface-hover/40',
-                      'active:scale-[0.992] active:bg-surface-hover/55',
-                      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-panel',
-                      'dark:hover:bg-surface-hover/25 dark:active:bg-surface-hover/35',
-                    )}
+                    className="flex min-w-0 flex-1 cursor-pointer flex-col gap-4 rounded-t-xl p-5 text-left transition-colors hover:bg-surface-hover/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent"
                   >
-                    <CapabilityIcon iconUrl={e.branding?.iconUrl} fallback={Package} />
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <div className="min-w-0"><h3 className="truncate font-semibold text-fg">{displayName}</h3>{displayName !== e.id ? <p className="truncate font-mono text-[10px] text-fg-subtle">{e.id}</p> : null}</div>
-                        {e.verified ? (
-                          <CheckCircle
-                            className="size-4 shrink-0 text-emerald-600 dark:text-emerald-400"
-                            strokeWidth={1.75}
-                            aria-label="Verified"
-                          />
-                        ) : null}
-                        {e.version ? (
-                          <span className="text-xs text-fg-muted">{e.version}</span>
-                        ) : null}
+                    <div className="flex w-full min-w-0 items-center gap-3">
+                      <CapabilityIcon iconUrl={e.branding?.iconUrl} fallback={Package} />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex min-w-0 items-center gap-2">
+                          <h3 className="truncate font-semibold text-fg" title={displayName}>{displayName}</h3>
+                          {e.verified ? (
+                            <CheckCircle
+                              className="size-4 shrink-0 text-emerald-600 dark:text-emerald-400"
+                              strokeWidth={1.75}
+                              aria-label="Verified"
+                            />
+                          ) : null}
+                        </div>
+                        {displayName !== e.id ? <p className="mt-0.5 truncate font-mono text-xs text-fg-subtle">{e.id}</p> : null}
                       </div>
-                      {description ? (
-                        <p className="mt-1 line-clamp-2 text-sm text-fg-muted">{description}</p>
-                      ) : null}
-                      <div className="mt-2 flex flex-wrap gap-1.5">
-                        {(e.categories ?? []).map((c) => (
-                          <span
-                            key={c}
-                            className="rounded-md border border-edge bg-surface-panel px-2 py-0.5 text-[11px] text-fg-muted"
-                          >
-                            {c}
-                          </span>
+                    </div>
+                    {description ? (
+                      <p className="line-clamp-3 text-sm leading-relaxed text-fg-muted">{description}</p>
+                    ) : null}
+                    {(e.categories?.length ?? 0) > 0 ? (
+                      <div className="mt-auto flex flex-wrap gap-1.5">
+                        {e.categories?.map((c) => (
+                          <span key={c} className="max-w-full truncate rounded-md border border-edge px-2 py-0.5 text-xs text-fg-muted">{c}</span>
                         ))}
                       </div>
-                      <p className="mt-2 flex items-center gap-1.5 text-xs text-fg-muted">
-                        <Package className="size-3.5 shrink-0" strokeWidth={1.75} aria-hidden />
-                        <code className="rounded bg-surface-panel px-1 py-0.5">{e.npmPackage}</code>
-                      </p>
-                    </div>
-                    <div
-                      role="group"
-                      className="flex shrink-0 flex-col items-end gap-2 sm:min-w-[9rem]"
-                      onClick={(ev) => ev.stopPropagation()}
-                      onKeyDown={(ev) => ev.stopPropagation()}
-                    >
+                    ) : null}
+                  </button>
+                  <div className="flex min-w-0 flex-wrap items-center justify-between gap-3 border-t border-edge-subtle px-5 py-3">
+                    <span className="text-xs text-fg-subtle">{e.version ? `v${e.version}` : e.npmPackage}</span>
+                    <div role="group" className="ml-auto flex flex-wrap items-center justify-end gap-2">
                       {kind === 'bundled' ? (
                         <span className="rounded-md bg-surface-hover px-2 py-1 text-[11px] font-medium text-fg-muted">
                           {copy.marketplaceBuiltin}
@@ -286,7 +271,7 @@ export function ExtensionMarketplacePanel({
                               : { detailPkg: e.id, quickInstallPkg: null },
                           })}
                           className={cn(
-                            'inline-flex w-full items-center justify-center rounded-lg border border-edge px-3 py-2 text-xs font-medium text-fg',
+                            'inline-flex min-w-20 items-center justify-center rounded-lg border border-edge px-3 py-2 text-xs font-medium text-fg',
                             'transition-[transform,background-color] active:scale-[0.98]',
                             'hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
                           )}
