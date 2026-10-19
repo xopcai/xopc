@@ -8,18 +8,18 @@ import { PluginSetupService, setupActionSchema } from '../setup.js';
 import { materializePluginServers } from '../mcp-adapter.js';
 import { agentPluginInventoryRow } from '../inventory.js';
 import { getPluginCliAuthorization } from '../cli-authorization.js';
-import { safeAuthorizationUrl } from '../setup-contract.js';
+import { safeAuthorizationUrl, parsePluginAuthorizationCheck } from '../setup-contract.js';
 const probe = vi.hoisted(() => vi.fn());
 vi.mock('../../../agent/mcp/connection-setup.js', () => ({ probeMcpConnection: probe, startMcpAuthorization: vi.fn(), getMcpAuthorization: vi.fn(), cancelMcpAuthorization: vi.fn(), submitMcpRedirect: vi.fn() }));
 const roots: string[] = [];
 const config = ConfigSchema.parse({});
-function fixture(withCliCredentials = false) {
+function fixture(withCliCredentials = false, permissionIssue = false) {
   const root = mkdtempSync(join(tmpdir(), 'xopc-auth-lifecycle-')); roots.push(root);
   const source = join(root, 'source'); mkdirSync(join(source, '.codex-plugin'), { recursive: true });
   const process = { command: 'node', args: ['${PLUGIN_ROOT}/login.mjs', 'login'], ...(withCliCredentials ? { env: { CLIENT_SECRET: '${user_config.clientSecret}' } } : {}) };
   writeFileSync(join(source, '.codex-plugin/plugin.json'), JSON.stringify({ name: 'accounts', userConfig: { clientId: { type: 'string', title: 'Client ID', required: true }, clientSecret: { type: 'string', title: 'Client Secret', required: true, sensitive: true } }, extensions: { 'ai.xopc': { setup: { version: 1, authorizations: [{ id: 'account', title: 'Test account', servers: ['notes'], methods: [{ id: 'manual', type: 'form', title: 'Client credentials', fields: ['clientId', 'clientSecret'] }, { id: 'cli', type: 'cli', title: 'CLI', fields: withCliCredentials ? ['clientSecret'] : [], login: process, check: { ...process, args: ['${PLUGIN_ROOT}/login.mjs', 'check'] } }] }] } } } }));
   writeFileSync(join(source, '.mcp.json'), JSON.stringify({ mcpServers: { notes: { command: 'node' } } }));
-  writeFileSync(join(source, 'login.mjs'), `import {existsSync,writeFileSync} from 'node:fs';import {join} from 'node:path';const path=join(process.env.PLUGIN_ACCOUNT_HOME,'approved');if(${withCliCredentials}&&process.env.CLIENT_SECRET!=='secret-cli-vault')throw new Error('Missing CLI credential');if(process.argv[2]==='check'){console.log(JSON.stringify({authenticated:existsSync(path)}));}else{console.log(JSON.stringify({type:'challenge',kind:'qr',url:'https://example.com/authorize',message:'Step 2: authorize user'}));while(!existsSync(path))await new Promise(r=>setTimeout(r,30));writeFileSync(join(process.env.PLUGIN_ACCOUNT_HOME,'env-check'),String(process.env.XOPC_TEST_HOST_SECRET));}`);
+  writeFileSync(join(source, 'login.mjs'), `import {existsSync,writeFileSync} from 'node:fs';import {join} from 'node:path';const path=join(process.env.PLUGIN_ACCOUNT_HOME,'approved');if(${withCliCredentials}&&process.env.CLIENT_SECRET!=='secret-cli-vault')throw new Error('Missing CLI credential');if(process.argv[2]==='check'){console.log(JSON.stringify({authenticated:existsSync(path),issues:${permissionIssue}&&!existsSync(join(process.env.PLUGIN_ACCOUNT_HOME,'calendar-granted'))?[{id:'calendar',title:'Calendar permission required',scopes:['calendar:calendar.event:read'],instructions:['Enable application access, then reconnect'],method:'cli',helpUrl:'https://example.com/permissions'}]:[]}));}else{console.log(JSON.stringify({type:'challenge',kind:'qr',url:'https://example.com/authorize',message:'Step 2: authorize user'}));while(!existsSync(path))await new Promise(r=>setTimeout(r,30));writeFileSync(join(process.env.PLUGIN_ACCOUNT_HOME,'env-check'),String(process.env.XOPC_TEST_HOST_SECRET));}`);
   const store = new AgentPluginStore(join(root, 'state')); const plan = store.inspect(source); expect(plan.diagnostics).toEqual([]);
   const plugin = store.install(source, { reviewHash: plan.reviewHash });
   const service = new PluginSetupService(store); service.create(plugin.id, 'owner');
@@ -91,4 +91,31 @@ it('saves method-scoped CLI credentials as references and completes the subseque
   await vi.waitFor(() => expect(getPluginCliAuthorization(job.authorizations[0].attemptId!, 'owner', plugin.receipt.revision)?.state).toBe('connected'));
   await act({ action: 'prepare' }); await act({ action: 'complete' });
   expect(service.get(plugin.id, 'owner')?.authorizations[0].state).toBe('connected');
+});
+
+it('keeps authenticated tools usable while reporting and recovering missing business permissions', async () => {
+  const { store, plugin, service, act } = fixture(false, true);
+  await act({ action: 'prepare' });
+  await act({ action: 'configure', authorization: 'account', method: 'cli', values: {} });
+  const home = join(store.dataDir(plugin.id), 'accounts', plugin.receipt.revision, 'account');
+  mkdirSync(home, { recursive: true }); writeFileSync(join(home, 'approved'), 'yes');
+  let job = await act({ action: 'prepare' });
+  expect(job.authorizations[0]).toMatchObject({ state: 'connected', issues: [{ id: 'calendar', scopes: ['calendar:calendar.event:read'] }] });
+  await act({ action: 'complete' });
+  expect(agentPluginInventoryRow(store.get(plugin.id)!, store)).toMatchObject({ active: true, authorizationStatus: 'required', readiness: 'degraded' });
+  expect(Object.keys(materializePluginServers(store.get(plugin.id)!, store))).toHaveLength(1);
+  writeFileSync(join(home, 'calendar-granted'), 'yes');
+  job = await act({ action: 'prepare' });
+  expect(job.authorizations[0].issues).toEqual([]);
+  await act({ action: 'complete' });
+  expect(service.get(plugin.id, 'owner')?.authorizations[0].issues).toEqual([]);
+  expect(agentPluginInventoryRow(store.get(plugin.id)!, store)).toMatchObject({ authorizationStatus: 'connected', readiness: 'ready' });
+});
+
+it('validates permission-check output before exposing guidance or recovery actions', () => {
+  const issue = { id: 'calendar', title: 'Calendar', scopes: ['calendar:calendar.event:read'], method: 'cli', helpUrl: 'https://example.com/permissions' };
+  expect(parsePluginAuthorizationCheck(JSON.stringify({ authenticated: true, issues: [issue] }), ['cli']).issues).toHaveLength(1);
+  expect(() => parsePluginAuthorizationCheck(JSON.stringify({ authenticated: true, issues: [{ ...issue, helpUrl: 'javascript:alert(1)' }] }), ['cli'])).toThrow();
+  expect(() => parsePluginAuthorizationCheck(JSON.stringify({ authenticated: true, issues: [issue] }), ['different'])).toThrow();
+  expect(() => parsePluginAuthorizationCheck(JSON.stringify({ authenticated: true, issues: [{ ...issue, token: 'secret' }] }), ['cli'])).toThrow();
 });

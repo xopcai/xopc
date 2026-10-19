@@ -32,3 +32,19 @@ export function safeAuthorizationUrl(value: string): string {
   if (url.username || url.password || !(url.protocol === 'https:' || url.protocol === 'http:' && ['127.0.0.1', '[::1]', 'localhost'].includes(url.hostname))) throw new Error('Authorization requires an HTTPS or loopback URL');
   return url.href;
 }
+
+export const pluginPermissionIssueSchema = z.strictObject({
+  id, title: z.string().min(1).max(100),
+  scopes: z.array(z.string().min(1).max(200).regex(/^[a-zA-Z0-9_.:-]+$/)).max(30).default([]),
+  instructions: z.array(z.string().min(1).max(1000)).max(6).default([]),
+  method: id.optional(), helpUrl: z.string().url().optional(),
+});
+export type PluginPermissionIssue = z.infer<typeof pluginPermissionIssueSchema>;
+export function parsePluginAuthorizationCheck(output: string, methodIds: string[]) {
+  const result = z.object({ authenticated: z.boolean(), issues: z.array(pluginPermissionIssueSchema).max(20).default([]) }).parse(JSON.parse(output.trim().split('\n').at(-1)!));
+  for (const issue of result.issues) {
+    if (issue.method && !methodIds.includes(issue.method)) throw new Error('Unknown permission recovery method');
+    if (issue.helpUrl) safeAuthorizationUrl(issue.helpUrl);
+  }
+  return result;
+}

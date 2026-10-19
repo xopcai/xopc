@@ -6,7 +6,7 @@ export type PluginAccount = { id: string; title: string; description?: string; s
 export type PluginSetupJob = {
   revision: number; state: string; resources: string; installed?: boolean; deferred?: boolean;
   partial: boolean; missingConfig?: string[]; error?: string;
-  authorizations?: Array<{ id: string; state: string; method?: string }>;
+  authorizations?: Array<{ id: string; state: string; method?: string; issues?: Array<{ id: string; title: string; scopes: string[]; instructions: string[]; method?: string; helpUrl?: string }> }>;
   connections: Array<{ name: string; state: string; toolCount?: number }>;
 };
 export type PluginAuthorizationAttempt = {

@@ -1,3 +1,4 @@
+import { parsePluginAuthorizationCheck, pluginAuthorizations } from './setup-contract.js';
 import { randomUUID } from 'node:crypto';
 import { mkdirSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
@@ -52,12 +53,14 @@ async function execute(store: AgentPluginStore, plugin: InstalledAgentPlugin, au
   if (result.exitCode !== 0 || result.timedOut || result.aborted || result.outputTruncated) throw new Error('CLI login or account check failed. Retry authorization.');
   return result.stdout;
 }
-export async function checkPluginCliAuthorization(store: AgentPluginStore, plugin: InstalledAgentPlugin, authorization: string, method: CliMethod, signal: AbortSignal): Promise<boolean> {
+export async function inspectPluginCliAuthorization(store: AgentPluginStore, plugin: InstalledAgentPlugin, authorization: string, method: CliMethod, signal: AbortSignal) {
   try {
     const output = await execute(store, plugin, authorization, method.check, signal, 15000);
-    const last = output.trim().split('\n').at(-1);
-    return !!last && JSON.parse(last).authenticated === true;
-  } catch { signal.throwIfAborted(); return false; }
+    return parsePluginAuthorizationCheck(output, pluginAuthorizations(plugin.manifest).find(value => value.id === authorization)?.methods.map(value => value.id) ?? []);
+  } catch { signal.throwIfAborted(); return { authenticated: false, issues: [] }; }
+}
+export async function checkPluginCliAuthorization(store: AgentPluginStore, plugin: InstalledAgentPlugin, authorization: string, method: CliMethod, signal: AbortSignal): Promise<boolean> {
+  return (await inspectPluginCliAuthorization(store, plugin, authorization, method, signal)).authenticated;
 }
 export function startPluginCliAuthorization(store: AgentPluginStore, plugin: InstalledAgentPlugin, authorization: string, method: CliMethod, owner: string): PluginCliAuthorization {
   for (const [key, attempt] of attempts) {
