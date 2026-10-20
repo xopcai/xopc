@@ -7,6 +7,7 @@ on:
   pull_request:
     paths:
       - 'evals/coder/**'
+      - 'evals/personal/style/**'
       - 'src/gateway/hono/routes/status.ts'
       - 'package.json'
       - 'pnpm-workspace.yaml'
@@ -17,6 +18,7 @@ on:
     branches: [main, master]
     paths:
       - 'evals/coder/**'
+      - 'evals/personal/style/**'
       - 'src/gateway/hono/routes/status.ts'
       - 'package.json'
       - 'pnpm-workspace.yaml'
@@ -56,6 +58,8 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm run eval:coder:smoke
+      - name: Check Personal style adapter (no model calls)
+        run: pnpm run eval:personal:style:check
       - name: Calibrate xopc benchmark v1 (no model calls)
         run: pnpm run eval:benchmark --output .xopc-evals/ci-core-v1
       - name: Upload xopc benchmark calibration evidence

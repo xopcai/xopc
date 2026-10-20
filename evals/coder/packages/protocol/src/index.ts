@@ -208,7 +208,7 @@ export interface AgentRunResult {
 
 export interface GradeResult {
   graderIndex: number;
-  graderType: GraderSpec['type'];
+  graderType: GraderSpec['type'] | 'external_model_judge';
   category: GraderCategory;
   required: boolean;
   weight: number;

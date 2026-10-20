@@ -1,5 +1,10 @@
 # Personal delivery benchmarks
 
+For Chinese style adherence and eight-turn conversational style profiles, see
+[Personal dialogue style evaluation](style/README.md). It integrates FollowBench's
+Chinese style subset and a pinned EQ-Bench 4 runner with existing eval storage,
+artifacts and realtime input. These scores are separate from delivery invariants.
+
 The first suite protects P0 invariants across submission, completion, result delivery and reply composition. It does not grade general research ability or conversational naturalness.
 
 ## Deterministic baseline

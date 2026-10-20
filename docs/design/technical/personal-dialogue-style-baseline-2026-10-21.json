@@ -1,0 +1,1719 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-21",
+  "manifest": {
+    "sourceOrigin": {
+      "origin": "/Users/micjoyce/develop/github/xopc",
+      "commit": "c4e754d329ae733c28a4a68f20c0f49be2af3e9c",
+      "dirty": true,
+      "sourceHash": "7beaa7e1ceb204d8cca28526c60de0d776be0abc3e5781ed91e75237b6d2e204",
+      "copiedFiles": 7715
+    },
+    "schemaVersion": 1,
+    "suite": "personal-dialogue-style",
+    "version": "1.0.0",
+    "createdAt": "2026-10-21T00:28:29.715Z",
+    "commit": "87140bfd64ee52e2e6e5536df530f614edf67609",
+    "workingTreeDirty": false,
+    "sourceHash": "c8756ca14c542375dcf1d532f4b1f9d3bb699359b99376fc8dfa39862c497f1b",
+    "upstreams": {
+      "followbench": {
+        "url": "https://github.com/YJiangcm/FollowBench.git",
+        "commit": "6278f4c1377b4eafab737267b8b21acd52ea0e52",
+        "license": "Apache-2.0"
+      },
+      "eqbench4": {
+        "url": "https://github.com/EQ-bench/eqbench4.git",
+        "commit": "93dcb7f5d430433ad49d501e672a98bcff2c9678",
+        "license": "BSD-3-Clause with Commons Clause; downloaded separately, not redistributed"
+      }
+    },
+    "model": "xopc-cloud/openai-codex/gpt-5.6-sol",
+    "judge": "xopc-cloud/openai-codex/gpt-6.1-sol",
+    "persona": "xopc-cloud/openai-codex/gpt-6.1-sol",
+    "eqCases": 12,
+    "followCases": 150,
+    "concurrency": 2,
+    "eqTurns": 8,
+    "repetitions": 1,
+    "reasoning": "off",
+    "evaluatorReasoning": "low",
+    "personalProfile": "fresh-production-default",
+    "protocol": "production Personal prompt; EQ evaluator system context delivered as labeled user-message context on each turn; no persona cards or judge data exposed",
+    "limitations": [
+      "EQ sampled pointwise trait profile, not official pairwise leaderboard rating",
+      "One judge and one simulated-user model; results depend on both",
+      "FollowBench style adherence is not conversational naturalness",
+      "No production history, user memory, connectors or external side effects",
+      "Model-catalog cost estimates are not billing receipts"
+    ]
+  },
+  "completion": {
+    "exitCode": 0,
+    "sourceHashEnd": "c8756ca14c542375dcf1d532f4b1f9d3bb699359b99376fc8dfa39862c497f1b",
+    "sourceChanged": false,
+    "experiments": {
+      "style-preflight": "f343f09e-af80-4f79-b981-a61fd6c788c0",
+      "followbench-zh-style": "4f4ed51e-e632-484e-aae2-551eee9d6691",
+      "eqbench4-personal-profile": "8b6c89e1-e851-4a46-9a76-bfc4cde89a40"
+    },
+    "costUsd": null
+  },
+  "selection": {
+    "follow": [
+      {
+        "caseId": "FB-ZH-S01-L1",
+        "example_id": 1,
+        "level": 1
+      },
+      {
+        "caseId": "FB-ZH-S01-L2",
+        "example_id": 1,
+        "level": 2
+      },
+      {
+        "caseId": "FB-ZH-S01-L3",
+        "example_id": 1,
+        "level": 3
+      },
+      {
+        "caseId": "FB-ZH-S01-L4",
+        "example_id": 1,
+        "level": 4
+      },
+      {
+        "caseId": "FB-ZH-S01-L5",
+        "example_id": 1,
+        "level": 5
+      },
+      {
+        "caseId": "FB-ZH-S02-L1",
+        "example_id": 2,
+        "level": 1
+      },
+      {
+        "caseId": "FB-ZH-S02-L2",
+        "example_id": 2,
+        "level": 2
+      },
+      {
+        "caseId": "FB-ZH-S02-L3",
+        "example_id": 2,
+        "level": 3
+      },
+      {
+        "caseId": "FB-ZH-S02-L4",
+        "example_id": 2,
+        "level": 4
+      },
+      {
+        "caseId": "FB-ZH-S02-L5",
+        "example_id": 2,
+        "level": 5
+      },
+      {
+        "caseId": "FB-ZH-S03-L1",
+        "example_id": 3,
+        "level": 1
+      },
+      {
+        "caseId": "FB-ZH-S03-L2",
+        "example_id": 3,
+        "level": 2
+      },
+      {
+        "caseId": "FB-ZH-S03-L3",
+        "example_id": 3,
+        "level": 3
+      },
+      {
+        "caseId": "FB-ZH-S03-L4",
+        "example_id": 3,
+        "level": 4
+      },
+      {
+        "caseId": "FB-ZH-S03-L5",
+        "example_id": 3,
+        "level": 5
+      },
+      {
+        "caseId": "FB-ZH-S04-L1",
+        "example_id": 4,
+        "level": 1
+      },
+      {
+        "caseId": "FB-ZH-S04-L2",
+        "example_id": 4,
+        "level": 2
+      },
+      {
+        "caseId": "FB-ZH-S04-L3",
+        "example_id": 4,
+        "level": 3
+      },
+      {
+        "caseId": "FB-ZH-S04-L4",
+        "example_id": 4,
+        "level": 4
+      },
+      {
+        "caseId": "FB-ZH-S04-L5",
+        "example_id": 4,
+        "level": 5
+      },
+      {
+        "caseId": "FB-ZH-S05-L1",
+        "example_id": 5,
+        "level": 1
+      },
+      {
+        "caseId": "FB-ZH-S05-L2",
+        "example_id": 5,
+        "level": 2
+      },
+      {
+        "caseId": "FB-ZH-S05-L3",
+        "example_id": 5,
+        "level": 3
+      },
+      {
+        "caseId": "FB-ZH-S05-L4",
+        "example_id": 5,
+        "level": 4
+      },
+      {
+        "caseId": "FB-ZH-S05-L5",
+        "example_id": 5,
+        "level": 5
+      },
+      {
+        "caseId": "FB-ZH-S06-L1",
+        "example_id": 6,
+        "level": 1
+      },
+      {
+        "caseId": "FB-ZH-S06-L2",
+        "example_id": 6,
+        "level": 2
+      },
+      {
+        "caseId": "FB-ZH-S06-L3",
+        "example_id": 6,
+        "level": 3
+      },
+      {
+        "caseId": "FB-ZH-S06-L4",
+        "example_id": 6,
+        "level": 4
+      },
+      {
+        "caseId": "FB-ZH-S06-L5",
+        "example_id": 6,
+        "level": 5
+      },
+      {
+        "caseId": "FB-ZH-S07-L1",
+        "example_id": 7,
+        "level": 1
+      },
+      {
+        "caseId": "FB-ZH-S07-L2",
+        "example_id": 7,
+        "level": 2
+      },
+      {
+        "caseId": "FB-ZH-S07-L3",
+        "example_id": 7,
+        "level": 3
+      },
+      {
+        "caseId": "FB-ZH-S07-L4",
+        "example_id": 7,
+        "level": 4
+      },
+      {
+        "caseId": "FB-ZH-S07-L5",
+        "example_id": 7,
+        "level": 5
+      },
+      {
+        "caseId": "FB-ZH-S08-L1",
+        "example_id": 8,
+        "level": 1
+      },
+      {
+        "caseId": "FB-ZH-S08-L2",
+        "example_id": 8,
+        "level": 2
+      },
+      {
+        "caseId": "FB-ZH-S08-L3",
+        "example_id": 8,
+        "level": 3
+      },
+      {
+        "caseId": "FB-ZH-S08-L4",
+        "example_id": 8,
+        "level": 4
+      },
+      {
+        "caseId": "FB-ZH-S08-L5",
+        "example_id": 8,
+        "level": 5
+      },
+      {
+        "caseId": "FB-ZH-S09-L1",
+        "example_id": 9,
+        "level": 1
+      },
+      {
+        "caseId": "FB-ZH-S09-L2",
+        "example_id": 9,
+        "level": 2
+      },
+      {
+        "caseId": "FB-ZH-S09-L3",
+        "example_id": 9,
+        "level": 3
+      },
+      {
+        "caseId": "FB-ZH-S09-L4",
+        "example_id": 9,
+        "level": 4
+      },
+      {
+        "caseId": "FB-ZH-S09-L5",
+        "example_id": 9,
+        "level": 5
+      },
+      {
+        "caseId": "FB-ZH-S10-L1",
+        "example_id": 10,
+        "level": 1
+      },
+      {
+        "caseId": "FB-ZH-S10-L2",
+        "example_id": 10,
+        "level": 2
+      },
+      {
+        "caseId": "FB-ZH-S10-L3",
+        "example_id": 10,
+        "level": 3
+      },
+      {
+        "caseId": "FB-ZH-S10-L4",
+        "example_id": 10,
+        "level": 4
+      },
+      {
+        "caseId": "FB-ZH-S10-L5",
+        "example_id": 10,
+        "level": 5
+      },
+      {
+        "caseId": "FB-ZH-S11-L1",
+        "example_id": 11,
+        "level": 1
+      },
+      {
+        "caseId": "FB-ZH-S11-L2",
+        "example_id": 11,
+        "level": 2
+      },
+      {
+        "caseId": "FB-ZH-S11-L3",
+        "example_id": 11,
+        "level": 3
+      },
+      {
+        "caseId": "FB-ZH-S11-L4",
+        "example_id": 11,
+        "level": 4
+      },
+      {
+        "caseId": "FB-ZH-S11-L5",
+        "example_id": 11,
+        "level": 5
+      },
+      {
+        "caseId": "FB-ZH-S12-L1",
+        "example_id": 12,
+        "level": 1
+      },
+      {
+        "caseId": "FB-ZH-S12-L2",
+        "example_id": 12,
+        "level": 2
+      },
+      {
+        "caseId": "FB-ZH-S12-L3",
+        "example_id": 12,
+        "level": 3
+      },
+      {
+        "caseId": "FB-ZH-S12-L4",
+        "example_id": 12,
+        "level": 4
+      },
+      {
+        "caseId": "FB-ZH-S12-L5",
+        "example_id": 12,
+        "level": 5
+      },
+      {
+        "caseId": "FB-ZH-S13-L1",
+        "example_id": 13,
+        "level": 1
+      },
+      {
+        "caseId": "FB-ZH-S13-L2",
+        "example_id": 13,
+        "level": 2
+      },
+      {
+        "caseId": "FB-ZH-S13-L3",
+        "example_id": 13,
+        "level": 3
+      },
+      {
+        "caseId": "FB-ZH-S13-L4",
+        "example_id": 13,
+        "level": 4
+      },
+      {
+        "caseId": "FB-ZH-S13-L5",
+        "example_id": 13,
+        "level": 5
+      },
+      {
+        "caseId": "FB-ZH-S14-L1",
+        "example_id": 14,
+        "level": 1
+      },
+      {
+        "caseId": "FB-ZH-S14-L2",
+        "example_id": 14,
+        "level": 2
+      },
+      {
+        "caseId": "FB-ZH-S14-L3",
+        "example_id": 14,
+        "level": 3
+      },
+      {
+        "caseId": "FB-ZH-S14-L4",
+        "example_id": 14,
+        "level": 4
+      },
+      {
+        "caseId": "FB-ZH-S14-L5",
+        "example_id": 14,
+        "level": 5
+      },
+      {
+        "caseId": "FB-ZH-S15-L1",
+        "example_id": 15,
+        "level": 1
+      },
+      {
+        "caseId": "FB-ZH-S15-L2",
+        "example_id": 15,
+        "level": 2
+      },
+      {
+        "caseId": "FB-ZH-S15-L3",
+        "example_id": 15,
+        "level": 3
+      },
+      {
+        "caseId": "FB-ZH-S15-L4",
+        "example_id": 15,
+        "level": 4
+      },
+      {
+        "caseId": "FB-ZH-S15-L5",
+        "example_id": 15,
+        "level": 5
+      },
+      {
+        "caseId": "FB-ZH-S16-L1",
+        "example_id": 16,
+        "level": 1
+      },
+      {
+        "caseId": "FB-ZH-S16-L2",
+        "example_id": 16,
+        "level": 2
+      },
+      {
+        "caseId": "FB-ZH-S16-L3",
+        "example_id": 16,
+        "level": 3
+      },
+      {
+        "caseId": "FB-ZH-S16-L4",
+        "example_id": 16,
+        "level": 4
+      },
+      {
+        "caseId": "FB-ZH-S16-L5",
+        "example_id": 16,
+        "level": 5
+      },
+      {
+        "caseId": "FB-ZH-S17-L1",
+        "example_id": 17,
+        "level": 1
+      },
+      {
+        "caseId": "FB-ZH-S17-L2",
+        "example_id": 17,
+        "level": 2
+      },
+      {
+        "caseId": "FB-ZH-S17-L3",
+        "example_id": 17,
+        "level": 3
+      },
+      {
+        "caseId": "FB-ZH-S17-L4",
+        "example_id": 17,
+        "level": 4
+      },
+      {
+        "caseId": "FB-ZH-S17-L5",
+        "example_id": 17,
+        "level": 5
+      },
+      {
+        "caseId": "FB-ZH-S18-L1",
+        "example_id": 18,
+        "level": 1
+      },
+      {
+        "caseId": "FB-ZH-S18-L2",
+        "example_id": 18,
+        "level": 2
+      },
+      {
+        "caseId": "FB-ZH-S18-L3",
+        "example_id": 18,
+        "level": 3
+      },
+      {
+        "caseId": "FB-ZH-S18-L4",
+        "example_id": 18,
+        "level": 4
+      },
+      {
+        "caseId": "FB-ZH-S18-L5",
+        "example_id": 18,
+        "level": 5
+      },
+      {
+        "caseId": "FB-ZH-S19-L1",
+        "example_id": 19,
+        "level": 1
+      },
+      {
+        "caseId": "FB-ZH-S19-L2",
+        "example_id": 19,
+        "level": 2
+      },
+      {
+        "caseId": "FB-ZH-S19-L3",
+        "example_id": 19,
+        "level": 3
+      },
+      {
+        "caseId": "FB-ZH-S19-L4",
+        "example_id": 19,
+        "level": 4
+      },
+      {
+        "caseId": "FB-ZH-S19-L5",
+        "example_id": 19,
+        "level": 5
+      },
+      {
+        "caseId": "FB-ZH-S20-L1",
+        "example_id": 20,
+        "level": 1
+      },
+      {
+        "caseId": "FB-ZH-S20-L2",
+        "example_id": 20,
+        "level": 2
+      },
+      {
+        "caseId": "FB-ZH-S20-L3",
+        "example_id": 20,
+        "level": 3
+      },
+      {
+        "caseId": "FB-ZH-S20-L4",
+        "example_id": 20,
+        "level": 4
+      },
+      {
+        "caseId": "FB-ZH-S20-L5",
+        "example_id": 20,
+        "level": 5
+      },
+      {
+        "caseId": "FB-ZH-S21-L1",
+        "example_id": 21,
+        "level": 1
+      },
+      {
+        "caseId": "FB-ZH-S21-L2",
+        "example_id": 21,
+        "level": 2
+      },
+      {
+        "caseId": "FB-ZH-S21-L3",
+        "example_id": 21,
+        "level": 3
+      },
+      {
+        "caseId": "FB-ZH-S21-L4",
+        "example_id": 21,
+        "level": 4
+      },
+      {
+        "caseId": "FB-ZH-S21-L5",
+        "example_id": 21,
+        "level": 5
+      },
+      {
+        "caseId": "FB-ZH-S22-L1",
+        "example_id": 22,
+        "level": 1
+      },
+      {
+        "caseId": "FB-ZH-S22-L2",
+        "example_id": 22,
+        "level": 2
+      },
+      {
+        "caseId": "FB-ZH-S22-L3",
+        "example_id": 22,
+        "level": 3
+      },
+      {
+        "caseId": "FB-ZH-S22-L4",
+        "example_id": 22,
+        "level": 4
+      },
+      {
+        "caseId": "FB-ZH-S22-L5",
+        "example_id": 22,
+        "level": 5
+      },
+      {
+        "caseId": "FB-ZH-S23-L1",
+        "example_id": 23,
+        "level": 1
+      },
+      {
+        "caseId": "FB-ZH-S23-L2",
+        "example_id": 23,
+        "level": 2
+      },
+      {
+        "caseId": "FB-ZH-S23-L3",
+        "example_id": 23,
+        "level": 3
+      },
+      {
+        "caseId": "FB-ZH-S23-L4",
+        "example_id": 23,
+        "level": 4
+      },
+      {
+        "caseId": "FB-ZH-S23-L5",
+        "example_id": 23,
+        "level": 5
+      },
+      {
+        "caseId": "FB-ZH-S24-L1",
+        "example_id": 24,
+        "level": 1
+      },
+      {
+        "caseId": "FB-ZH-S24-L2",
+        "example_id": 24,
+        "level": 2
+      },
+      {
+        "caseId": "FB-ZH-S24-L3",
+        "example_id": 24,
+        "level": 3
+      },
+      {
+        "caseId": "FB-ZH-S24-L4",
+        "example_id": 24,
+        "level": 4
+      },
+      {
+        "caseId": "FB-ZH-S24-L5",
+        "example_id": 24,
+        "level": 5
+      },
+      {
+        "caseId": "FB-ZH-S25-L1",
+        "example_id": 25,
+        "level": 1
+      },
+      {
+        "caseId": "FB-ZH-S25-L2",
+        "example_id": 25,
+        "level": 2
+      },
+      {
+        "caseId": "FB-ZH-S25-L3",
+        "example_id": 25,
+        "level": 3
+      },
+      {
+        "caseId": "FB-ZH-S25-L4",
+        "example_id": 25,
+        "level": 4
+      },
+      {
+        "caseId": "FB-ZH-S25-L5",
+        "example_id": 25,
+        "level": 5
+      },
+      {
+        "caseId": "FB-ZH-S26-L1",
+        "example_id": 26,
+        "level": 1
+      },
+      {
+        "caseId": "FB-ZH-S26-L2",
+        "example_id": 26,
+        "level": 2
+      },
+      {
+        "caseId": "FB-ZH-S26-L3",
+        "example_id": 26,
+        "level": 3
+      },
+      {
+        "caseId": "FB-ZH-S26-L4",
+        "example_id": 26,
+        "level": 4
+      },
+      {
+        "caseId": "FB-ZH-S26-L5",
+        "example_id": 26,
+        "level": 5
+      },
+      {
+        "caseId": "FB-ZH-S27-L1",
+        "example_id": 27,
+        "level": 1
+      },
+      {
+        "caseId": "FB-ZH-S27-L2",
+        "example_id": 27,
+        "level": 2
+      },
+      {
+        "caseId": "FB-ZH-S27-L3",
+        "example_id": 27,
+        "level": 3
+      },
+      {
+        "caseId": "FB-ZH-S27-L4",
+        "example_id": 27,
+        "level": 4
+      },
+      {
+        "caseId": "FB-ZH-S27-L5",
+        "example_id": 27,
+        "level": 5
+      },
+      {
+        "caseId": "FB-ZH-S28-L1",
+        "example_id": 28,
+        "level": 1
+      },
+      {
+        "caseId": "FB-ZH-S28-L2",
+        "example_id": 28,
+        "level": 2
+      },
+      {
+        "caseId": "FB-ZH-S28-L3",
+        "example_id": 28,
+        "level": 3
+      },
+      {
+        "caseId": "FB-ZH-S28-L4",
+        "example_id": 28,
+        "level": 4
+      },
+      {
+        "caseId": "FB-ZH-S28-L5",
+        "example_id": 28,
+        "level": 5
+      },
+      {
+        "caseId": "FB-ZH-S29-L1",
+        "example_id": 29,
+        "level": 1
+      },
+      {
+        "caseId": "FB-ZH-S29-L2",
+        "example_id": 29,
+        "level": 2
+      },
+      {
+        "caseId": "FB-ZH-S29-L3",
+        "example_id": 29,
+        "level": 3
+      },
+      {
+        "caseId": "FB-ZH-S29-L4",
+        "example_id": 29,
+        "level": 4
+      },
+      {
+        "caseId": "FB-ZH-S29-L5",
+        "example_id": 29,
+        "level": 5
+      },
+      {
+        "caseId": "FB-ZH-S30-L1",
+        "example_id": 30,
+        "level": 1
+      },
+      {
+        "caseId": "FB-ZH-S30-L2",
+        "example_id": 30,
+        "level": 2
+      },
+      {
+        "caseId": "FB-ZH-S30-L3",
+        "example_id": 30,
+        "level": 3
+      },
+      {
+        "caseId": "FB-ZH-S30-L4",
+        "example_id": 30,
+        "level": 4
+      },
+      {
+        "caseId": "FB-ZH-S30-L5",
+        "example_id": 30,
+        "level": 5
+      }
+    ],
+    "eq": [
+      {
+        "caseId": "EQ4-hand_pin_005_care_home_administrator_c4f5cf98",
+        "id": "hand_pin_005_care_home_administrator_c4f5cf98",
+        "category": "adult_child",
+        "relationship": "adult_child"
+      },
+      {
+        "caseId": "EQ4-hand_pin_012_benefits_officer_forms_0df65c56",
+        "id": "hand_pin_012_benefits_officer_forms_0df65c56",
+        "category": "applicant",
+        "relationship": "applicant"
+      },
+      {
+        "caseId": "EQ4-hand_pin_019_condo_board_delay_6a5013fa",
+        "id": "hand_pin_019_condo_board_delay_6a5013fa",
+        "category": "board_member",
+        "relationship": "board_member"
+      },
+      {
+        "caseId": "EQ4-hand_eta_009_transactional_realist_1f56dc76",
+        "id": "hand_eta_009_transactional_realist_1f56dc76",
+        "category": "chatbot",
+        "relationship": "chatbot"
+      },
+      {
+        "caseId": "EQ4-6fa2dff8-42f5-4444-a701-07f2d0482d0c",
+        "id": "6fa2dff8-42f5-4444-a701-07f2d0482d0c",
+        "category": "crisis_line_volunteer",
+        "relationship": "crisis_line_volunteer"
+      },
+      {
+        "caseId": "EQ4-hand_pin_002_manager_performance_concern_7c6f1379",
+        "id": "hand_pin_002_manager_performance_concern_7c6f1379",
+        "category": "direct_report",
+        "relationship": "direct_report"
+      },
+      {
+        "caseId": "EQ4-hand_se_005_mentor_new_favorite_3d312f77",
+        "id": "hand_se_005_mentor_new_favorite_3d312f77",
+        "category": "employee",
+        "relationship": "employee"
+      },
+      {
+        "caseId": "EQ4-hand_pin_018_family_patron_jokes_6f98eca8",
+        "id": "hand_pin_018_family_patron_jokes_6f98eca8",
+        "category": "family_member",
+        "relationship": "family_member"
+      },
+      {
+        "caseId": "EQ4-hand_pin_015_consulting_client_tone_1692a961",
+        "id": "hand_pin_015_consulting_client_tone_1692a961",
+        "category": "freelancer",
+        "relationship": "freelancer"
+      },
+      {
+        "caseId": "EQ4-hand_se_014_backup_invite_after_cancel_fd168118",
+        "id": "hand_se_014_backup_invite_after_cancel_fd168118",
+        "category": "friend",
+        "relationship": "friend"
+      },
+      {
+        "caseId": "EQ4-hand_pin_011_senior_engineer_credit_2ca06e1b",
+        "id": "hand_pin_011_senior_engineer_credit_2ca06e1b",
+        "category": "junior_colleague",
+        "relationship": "junior_colleague"
+      },
+      {
+        "caseId": "EQ4-1de8c7d5-00b8-48c1-841c-896e43de4771",
+        "id": "1de8c7d5-00b8-48c1-841c-896e43de4771",
+        "category": "parent",
+        "relationship": "parent"
+      }
+    ],
+    "selectionRule": "FollowBench all levels 1–5, ordered by example_id/level; EQ relationship/category round-robin, SHA-256(id) within category"
+  },
+  "summary": {
+    "followbench": {
+      "expected": 150,
+      "attempted": 150,
+      "scored": 150,
+      "errors": 0,
+      "complete": true,
+      "HSR": 0.7333333333333333,
+      "SSR": 0.8791111111111112,
+      "CSL": 3.033333333333333,
+      "CSLGroups": 30,
+      "byLevel": {
+        "1": {
+          "total": 30,
+          "errors": 0,
+          "HSR": 0.9,
+          "SSR": 0.9
+        },
+        "2": {
+          "total": 30,
+          "errors": 0,
+          "HSR": 0.8333333333333334,
+          "SSR": 0.9
+        },
+        "3": {
+          "total": 30,
+          "errors": 0,
+          "HSR": 0.7333333333333333,
+          "SSR": 0.888888888888889
+        },
+        "4": {
+          "total": 30,
+          "errors": 0,
+          "HSR": 0.5,
+          "SSR": 0.8333333333333334
+        },
+        "5": {
+          "total": 30,
+          "errors": 0,
+          "HSR": 0.7,
+          "SSR": 0.8733333333333333
+        }
+      }
+    },
+    "eqbench4": {
+      "expected": 12,
+      "attempted": 12,
+      "scored": 12,
+      "errors": 0,
+      "complete": true,
+      "traits": {
+        "boundary_setting": 7.0,
+        "analytical": 6.916666666666667,
+        "validation_propensity": 5.5,
+        "challenge_propensity": 5.083333333333333,
+        "interpretive_boldness": 3.5,
+        "clinical_register_propensity": 4.416666666666667,
+        "directive_advice_orientation": 7.5,
+        "frame_capture": 3.0833333333333335,
+        "escalation_containment": 8.333333333333334,
+        "yielding_propensity": 4.583333333333333,
+        "native_frame_adaptation": 8.583333333333334,
+        "naturalness_authenticity": 6.583333333333333
+      },
+      "officialLeaderboardScore": null,
+      "qualityPassRate": null,
+      "note": "Neutral style tendencies, not quality scores; a higher score is not always better."
+    },
+    "errors": 0,
+    "officialLeaderboardComparable": false
+  },
+  "usage": {
+    "evaluated.inputTokens": 2153964,
+    "evaluated.outputTokens": 123454,
+    "evaluated.cacheReadTokens": 0,
+    "evaluated.cacheWriteTokens": 0,
+    "evaluated.totalTokens": 2277418,
+    "evaluated.cost": 0,
+    "judge.input": 245565,
+    "judge.output": 39217,
+    "judge.cacheRead": 0,
+    "judge.cacheWrite": 0,
+    "judge.reasoning": 0,
+    "judge.totalTokens": 284782,
+    "persona.input": 288205,
+    "persona.output": 13374,
+    "persona.cacheRead": 0,
+    "persona.cacheWrite": 0,
+    "persona.reasoning": 0,
+    "persona.totalTokens": 301579
+  },
+  "costUsd": null,
+  "tests": {
+    "styleProtocol": 5,
+    "existingXopcAdapter": 9,
+    "styleTypecheck": true,
+    "coderFrameworkTypecheck": true,
+    "scope": "frozen-source-snapshot"
+  },
+  "eqTurnCounts": [
+    {
+      "caseId": "EQ4-hand_eta_009_transactional_realist_1f56dc76",
+      "assistantTurns": 8,
+      "userTurns": 8,
+      "finalStatus": "persona_ended"
+    },
+    {
+      "caseId": "EQ4-hand_pin_011_senior_engineer_credit_2ca06e1b",
+      "assistantTurns": 4,
+      "userTurns": 4,
+      "finalStatus": "persona_ended"
+    },
+    {
+      "caseId": "EQ4-6fa2dff8-42f5-4444-a701-07f2d0482d0c",
+      "assistantTurns": 8,
+      "userTurns": 8,
+      "finalStatus": "active"
+    },
+    {
+      "caseId": "EQ4-hand_pin_012_benefits_officer_forms_0df65c56",
+      "assistantTurns": 8,
+      "userTurns": 8,
+      "finalStatus": "persona_ended"
+    },
+    {
+      "caseId": "EQ4-hand_pin_018_family_patron_jokes_6f98eca8",
+      "assistantTurns": 4,
+      "userTurns": 4,
+      "finalStatus": "persona_ended"
+    },
+    {
+      "caseId": "EQ4-hand_pin_019_condo_board_delay_6a5013fa",
+      "assistantTurns": 8,
+      "userTurns": 8,
+      "finalStatus": "persona_ended"
+    },
+    {
+      "caseId": "EQ4-1de8c7d5-00b8-48c1-841c-896e43de4771",
+      "assistantTurns": 8,
+      "userTurns": 8,
+      "finalStatus": "active"
+    },
+    {
+      "caseId": "EQ4-hand_se_014_backup_invite_after_cancel_fd168118",
+      "assistantTurns": 8,
+      "userTurns": 8,
+      "finalStatus": "persona_ended"
+    },
+    {
+      "caseId": "EQ4-hand_pin_005_care_home_administrator_c4f5cf98",
+      "assistantTurns": 8,
+      "userTurns": 8,
+      "finalStatus": "persona_ended"
+    },
+    {
+      "caseId": "EQ4-hand_pin_015_consulting_client_tone_1692a961",
+      "assistantTurns": 8,
+      "userTurns": 8,
+      "finalStatus": "persona_ended"
+    },
+    {
+      "caseId": "EQ4-hand_se_005_mentor_new_favorite_3d312f77",
+      "assistantTurns": 8,
+      "userTurns": 8,
+      "finalStatus": "persona_ended"
+    },
+    {
+      "caseId": "EQ4-hand_pin_002_manager_performance_concern_7c6f1379",
+      "assistantTurns": 7,
+      "userTurns": 7,
+      "finalStatus": "persona_ended"
+    }
+  ],
+  "rawResultsDirectory": "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/baseline-gpt56-gpt61-2026-10-21-v1",
+  "failedFollowCases": [
+    {
+      "caseId": "FB-ZH-S03-L5",
+      "level": 5,
+      "verdicts": [
+        "NO",
+        "YES",
+        "NO",
+        "YES",
+        "YES"
+      ],
+      "error": null
+    },
+    {
+      "caseId": "FB-ZH-S13-L5",
+      "level": 5,
+      "verdicts": [
+        "YES",
+        "YES",
+        "NO",
+        "NO",
+        "NO"
+      ],
+      "error": null
+    },
+    {
+      "caseId": "FB-ZH-S14-L1",
+      "level": 1,
+      "verdicts": [
+        "NO"
+      ],
+      "error": null
+    },
+    {
+      "caseId": "FB-ZH-S01-L2",
+      "level": 2,
+      "verdicts": [
+        "NO",
+        "YES"
+      ],
+      "error": null
+    },
+    {
+      "caseId": "FB-ZH-S02-L4",
+      "level": 4,
+      "verdicts": [
+        "YES",
+        "YES",
+        "YES",
+        "NO"
+      ],
+      "error": null
+    },
+    {
+      "caseId": "FB-ZH-S24-L4",
+      "level": 4,
+      "verdicts": [
+        "NO",
+        "YES",
+        "NO",
+        "YES"
+      ],
+      "error": null
+    },
+    {
+      "caseId": "FB-ZH-S25-L4",
+      "level": 4,
+      "verdicts": [
+        "YES",
+        "NO",
+        "YES",
+        "YES"
+      ],
+      "error": null
+    },
+    {
+      "caseId": "FB-ZH-S09-L2",
+      "level": 2,
+      "verdicts": [
+        "YES",
+        "NO"
+      ],
+      "error": null
+    },
+    {
+      "caseId": "FB-ZH-S02-L5",
+      "level": 5,
+      "verdicts": [
+        "YES",
+        "NO",
+        "YES",
+        "NO",
+        "YES"
+      ],
+      "error": null
+    },
+    {
+      "caseId": "FB-ZH-S11-L3",
+      "level": 3,
+      "verdicts": [
+        "YES",
+        "YES",
+        "NO"
+      ],
+      "error": null
+    },
+    {
+      "caseId": "FB-ZH-S13-L4",
+      "level": 4,
+      "verdicts": [
+        "YES",
+        "YES",
+        "NO",
+        "YES"
+      ],
+      "error": null
+    },
+    {
+      "caseId": "FB-ZH-S27-L4",
+      "level": 4,
+      "verdicts": [
+        "YES",
+        "YES",
+        "NO",
+        "YES"
+      ],
+      "error": null
+    },
+    {
+      "caseId": "FB-ZH-S25-L3",
+      "level": 3,
+      "verdicts": [
+        "NO",
+        "NO",
+        "YES"
+      ],
+      "error": null
+    },
+    {
+      "caseId": "FB-ZH-S11-L4",
+      "level": 4,
+      "verdicts": [
+        "YES",
+        "YES",
+        "NO",
+        "YES"
+      ],
+      "error": null
+    },
+    {
+      "caseId": "FB-ZH-S01-L4",
+      "level": 4,
+      "verdicts": [
+        "NO",
+        "YES",
+        "NO",
+        "YES"
+      ],
+      "error": null
+    },
+    {
+      "caseId": "FB-ZH-S11-L5",
+      "level": 5,
+      "verdicts": [
+        "NO",
+        "NO",
+        "NO",
+        "NO",
+        "NO"
+      ],
+      "error": null
+    },
+    {
+      "caseId": "FB-ZH-S25-L2",
+      "level": 2,
+      "verdicts": [
+        "YES",
+        "NO"
+      ],
+      "error": null
+    },
+    {
+      "caseId": "FB-ZH-S20-L1",
+      "level": 1,
+      "verdicts": [
+        "NO"
+      ],
+      "error": null
+    },
+    {
+      "caseId": "FB-ZH-S27-L5",
+      "level": 5,
+      "verdicts": [
+        "YES",
+        "YES",
+        "YES",
+        "NO",
+        "YES"
+      ],
+      "error": null
+    },
+    {
+      "caseId": "FB-ZH-S09-L4",
+      "level": 4,
+      "verdicts": [
+        "NO",
+        "YES",
+        "YES",
+        "YES"
+      ],
+      "error": null
+    },
+    {
+      "caseId": "FB-ZH-S25-L1",
+      "level": 1,
+      "verdicts": [
+        "NO"
+      ],
+      "error": null
+    },
+    {
+      "caseId": "FB-ZH-S21-L3",
+      "level": 3,
+      "verdicts": [
+        "YES",
+        "YES",
+        "NO"
+      ],
+      "error": null
+    },
+    {
+      "caseId": "FB-ZH-S23-L4",
+      "level": 4,
+      "verdicts": [
+        "NO",
+        "YES",
+        "YES",
+        "YES"
+      ],
+      "error": null
+    },
+    {
+      "caseId": "FB-ZH-S15-L4",
+      "level": 4,
+      "verdicts": [
+        "YES",
+        "YES",
+        "NO",
+        "YES"
+      ],
+      "error": null
+    },
+    {
+      "caseId": "FB-ZH-S05-L4",
+      "level": 4,
+      "verdicts": [
+        "YES",
+        "YES",
+        "NO",
+        "NO"
+      ],
+      "error": null
+    },
+    {
+      "caseId": "FB-ZH-S17-L3",
+      "level": 3,
+      "verdicts": [
+        "YES",
+        "YES",
+        "NO"
+      ],
+      "error": null
+    },
+    {
+      "caseId": "FB-ZH-S07-L3",
+      "level": 3,
+      "verdicts": [
+        "YES",
+        "NO",
+        "YES"
+      ],
+      "error": null
+    },
+    {
+      "caseId": "FB-ZH-S14-L4",
+      "level": 4,
+      "verdicts": [
+        "NO",
+        "NO",
+        "YES",
+        "YES"
+      ],
+      "error": null
+    },
+    {
+      "caseId": "FB-ZH-S29-L3",
+      "level": 3,
+      "verdicts": [
+        "YES",
+        "YES",
+        "NO"
+      ],
+      "error": null
+    },
+    {
+      "caseId": "FB-ZH-S07-L2",
+      "level": 2,
+      "verdicts": [
+        "YES",
+        "NO"
+      ],
+      "error": null
+    },
+    {
+      "caseId": "FB-ZH-S05-L5",
+      "level": 5,
+      "verdicts": [
+        "YES",
+        "YES",
+        "YES",
+        "NO",
+        "YES"
+      ],
+      "error": null
+    },
+    {
+      "caseId": "FB-ZH-S22-L4",
+      "level": 4,
+      "verdicts": [
+        "YES",
+        "YES",
+        "NO",
+        "NO"
+      ],
+      "error": null
+    },
+    {
+      "caseId": "FB-ZH-S28-L5",
+      "level": 5,
+      "verdicts": [
+        "YES",
+        "NO",
+        "YES",
+        "YES",
+        "NO"
+      ],
+      "error": null
+    },
+    {
+      "caseId": "FB-ZH-S29-L4",
+      "level": 4,
+      "verdicts": [
+        "YES",
+        "YES",
+        "NO",
+        "YES"
+      ],
+      "error": null
+    },
+    {
+      "caseId": "FB-ZH-S14-L3",
+      "level": 3,
+      "verdicts": [
+        "NO",
+        "NO",
+        "YES"
+      ],
+      "error": null
+    },
+    {
+      "caseId": "FB-ZH-S30-L5",
+      "level": 5,
+      "verdicts": [
+        "YES",
+        "YES",
+        "YES",
+        "YES",
+        "NO"
+      ],
+      "error": null
+    },
+    {
+      "caseId": "FB-ZH-S21-L4",
+      "level": 4,
+      "verdicts": [
+        "YES",
+        "YES",
+        "NO",
+        "YES"
+      ],
+      "error": null
+    },
+    {
+      "caseId": "FB-ZH-S14-L2",
+      "level": 2,
+      "verdicts": [
+        "NO",
+        "NO"
+      ],
+      "error": null
+    },
+    {
+      "caseId": "FB-ZH-S29-L5",
+      "level": 5,
+      "verdicts": [
+        "YES",
+        "YES",
+        "NO",
+        "NO",
+        "YES"
+      ],
+      "error": null
+    },
+    {
+      "caseId": "FB-ZH-S15-L3",
+      "level": 3,
+      "verdicts": [
+        "YES",
+        "YES",
+        "NO"
+      ],
+      "error": null
+    }
+  ],
+  "eqCaseTraits": [
+    {
+      "caseId": "EQ4-hand_eta_009_transactional_realist_1f56dc76",
+      "relationship": "chatbot",
+      "traits": {
+        "analytical": 8.0,
+        "boundary_setting": 8.0,
+        "challenge_propensity": 6.0,
+        "clinical_register_propensity": 6.0,
+        "directive_advice_orientation": 9.0,
+        "escalation_containment": 8.0,
+        "frame_capture": 3.0,
+        "interpretive_boldness": 4.0,
+        "native_frame_adaptation": 8.0,
+        "naturalness_authenticity": 6.0,
+        "validation_propensity": 4.0,
+        "yielding_propensity": 4.0
+      },
+      "error": null
+    },
+    {
+      "caseId": "EQ4-hand_pin_011_senior_engineer_credit_2ca06e1b",
+      "relationship": "junior_colleague",
+      "traits": {
+        "analytical": 5.0,
+        "boundary_setting": 7.0,
+        "challenge_propensity": 4.0,
+        "clinical_register_propensity": 4.0,
+        "directive_advice_orientation": 8.0,
+        "escalation_containment": 9.0,
+        "frame_capture": 4.0,
+        "interpretive_boldness": 2.0,
+        "native_frame_adaptation": 9.0,
+        "naturalness_authenticity": 7.0,
+        "validation_propensity": 6.0,
+        "yielding_propensity": 5.0
+      },
+      "error": null
+    },
+    {
+      "caseId": "EQ4-6fa2dff8-42f5-4444-a701-07f2d0482d0c",
+      "relationship": "crisis_line_volunteer",
+      "traits": {
+        "analytical": 4.0,
+        "boundary_setting": 4.0,
+        "challenge_propensity": 2.0,
+        "clinical_register_propensity": 4.0,
+        "directive_advice_orientation": 8.0,
+        "escalation_containment": 8.0,
+        "frame_capture": 2.0,
+        "interpretive_boldness": 3.0,
+        "native_frame_adaptation": 8.0,
+        "naturalness_authenticity": 7.0,
+        "validation_propensity": 5.0,
+        "yielding_propensity": 6.0
+      },
+      "error": null
+    },
+    {
+      "caseId": "EQ4-hand_pin_012_benefits_officer_forms_0df65c56",
+      "relationship": "applicant",
+      "traits": {
+        "analytical": 7.0,
+        "boundary_setting": 6.0,
+        "challenge_propensity": 4.0,
+        "clinical_register_propensity": 4.0,
+        "directive_advice_orientation": 8.0,
+        "escalation_containment": 9.0,
+        "frame_capture": 3.0,
+        "interpretive_boldness": 1.0,
+        "native_frame_adaptation": 9.0,
+        "naturalness_authenticity": 7.0,
+        "validation_propensity": 4.0,
+        "yielding_propensity": 4.0
+      },
+      "error": null
+    },
+    {
+      "caseId": "EQ4-hand_pin_018_family_patron_jokes_6f98eca8",
+      "relationship": "family_member",
+      "traits": {
+        "analytical": 4.0,
+        "boundary_setting": 8.0,
+        "challenge_propensity": 6.0,
+        "clinical_register_propensity": 4.0,
+        "directive_advice_orientation": 5.0,
+        "escalation_containment": 8.0,
+        "frame_capture": 3.0,
+        "interpretive_boldness": 5.0,
+        "native_frame_adaptation": 8.0,
+        "naturalness_authenticity": 7.0,
+        "validation_propensity": 7.0,
+        "yielding_propensity": 6.0
+      },
+      "error": null
+    },
+    {
+      "caseId": "EQ4-hand_pin_019_condo_board_delay_6a5013fa",
+      "relationship": "board_member",
+      "traits": {
+        "analytical": 7.0,
+        "boundary_setting": 7.0,
+        "challenge_propensity": 4.0,
+        "clinical_register_propensity": 3.0,
+        "directive_advice_orientation": 7.0,
+        "escalation_containment": 9.0,
+        "frame_capture": 4.0,
+        "interpretive_boldness": 2.0,
+        "native_frame_adaptation": 9.0,
+        "naturalness_authenticity": 6.0,
+        "validation_propensity": 8.0,
+        "yielding_propensity": 4.0
+      },
+      "error": null
+    },
+    {
+      "caseId": "EQ4-1de8c7d5-00b8-48c1-841c-896e43de4771",
+      "relationship": "parent",
+      "traits": {
+        "analytical": 8.0,
+        "boundary_setting": 9.0,
+        "challenge_propensity": 8.0,
+        "clinical_register_propensity": 6.0,
+        "directive_advice_orientation": 8.0,
+        "escalation_containment": 7.0,
+        "frame_capture": 2.0,
+        "interpretive_boldness": 7.0,
+        "native_frame_adaptation": 7.0,
+        "naturalness_authenticity": 6.0,
+        "validation_propensity": 5.0,
+        "yielding_propensity": 4.0
+      },
+      "error": null
+    },
+    {
+      "caseId": "EQ4-hand_se_014_backup_invite_after_cancel_fd168118",
+      "relationship": "friend",
+      "traits": {
+        "analytical": 7.0,
+        "boundary_setting": 9.0,
+        "challenge_propensity": 8.0,
+        "clinical_register_propensity": 4.0,
+        "directive_advice_orientation": 5.0,
+        "escalation_containment": 9.0,
+        "frame_capture": 1.0,
+        "interpretive_boldness": 7.0,
+        "native_frame_adaptation": 9.0,
+        "naturalness_authenticity": 7.0,
+        "validation_propensity": 7.0,
+        "yielding_propensity": 3.0
+      },
+      "error": null
+    },
+    {
+      "caseId": "EQ4-hand_pin_005_care_home_administrator_c4f5cf98",
+      "relationship": "adult_child",
+      "traits": {
+        "analytical": 7.0,
+        "boundary_setting": 6.0,
+        "challenge_propensity": 3.0,
+        "clinical_register_propensity": 5.0,
+        "directive_advice_orientation": 7.0,
+        "escalation_containment": 9.0,
+        "frame_capture": 3.0,
+        "interpretive_boldness": 1.0,
+        "native_frame_adaptation": 9.0,
+        "naturalness_authenticity": 6.0,
+        "validation_propensity": 8.0,
+        "yielding_propensity": 5.0
+      },
+      "error": null
+    },
+    {
+      "caseId": "EQ4-hand_pin_015_consulting_client_tone_1692a961",
+      "relationship": "freelancer",
+      "traits": {
+        "analytical": 9.0,
+        "boundary_setting": 8.0,
+        "challenge_propensity": 6.0,
+        "clinical_register_propensity": 3.0,
+        "directive_advice_orientation": 9.0,
+        "escalation_containment": 8.0,
+        "frame_capture": 3.0,
+        "interpretive_boldness": 3.0,
+        "native_frame_adaptation": 9.0,
+        "naturalness_authenticity": 7.0,
+        "validation_propensity": 3.0,
+        "yielding_propensity": 4.0
+      },
+      "error": null
+    },
+    {
+      "caseId": "EQ4-hand_se_005_mentor_new_favorite_3d312f77",
+      "relationship": "employee",
+      "traits": {
+        "analytical": 9.0,
+        "boundary_setting": 9.0,
+        "challenge_propensity": 7.0,
+        "clinical_register_propensity": 5.0,
+        "directive_advice_orientation": 8.0,
+        "escalation_containment": 8.0,
+        "frame_capture": 2.0,
+        "interpretive_boldness": 5.0,
+        "native_frame_adaptation": 9.0,
+        "naturalness_authenticity": 7.0,
+        "validation_propensity": 5.0,
+        "yielding_propensity": 2.0
+      },
+      "error": null
+    },
+    {
+      "caseId": "EQ4-hand_pin_002_manager_performance_concern_7c6f1379",
+      "relationship": "direct_report",
+      "traits": {
+        "analytical": 8.0,
+        "boundary_setting": 3.0,
+        "challenge_propensity": 3.0,
+        "clinical_register_propensity": 5.0,
+        "directive_advice_orientation": 8.0,
+        "escalation_containment": 8.0,
+        "frame_capture": 7.0,
+        "interpretive_boldness": 2.0,
+        "native_frame_adaptation": 9.0,
+        "naturalness_authenticity": 6.0,
+        "validation_propensity": 4.0,
+        "yielding_propensity": 8.0
+      },
+      "error": null
+    }
+  ]
+}

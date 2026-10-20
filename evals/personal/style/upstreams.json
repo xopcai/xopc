@@ -1,0 +1,12 @@
+{
+  "followbench": {
+    "url": "https://github.com/YJiangcm/FollowBench.git",
+    "commit": "6278f4c1377b4eafab737267b8b21acd52ea0e52",
+    "license": "Apache-2.0"
+  },
+  "eqbench4": {
+    "url": "https://github.com/EQ-bench/eqbench4.git",
+    "commit": "93dcb7f5d430433ad49d501e672a98bcff2c9678",
+    "license": "BSD-3-Clause with Commons Clause; downloaded separately, not redistributed"
+  }
+}
