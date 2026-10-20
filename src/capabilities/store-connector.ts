@@ -7,6 +7,7 @@ import AdmZip from 'adm-zip';
 import type { Config } from '../config/schema.js';
 import { installConnectorDefinition } from '../connectors/install.js';
 import { listConnectorInstances } from '../connectors/instances.js';
+import { assertStoreConnectorAvailable, isExcludedStoreConnector } from '../connectors/excluded-connectors.js';
 import { validEndpointDomain, type ConnectorEndpointPolicy } from '../connectors/endpoint-policy.js';
 import type {
   ConnectorDefinition,
@@ -419,7 +420,19 @@ function readConnectorManifestFromArchive(buffer: Buffer): unknown {
 }
 
 export async function listStoreConnectors(config: Config, params: SkillsStoreListParams) {
-  return listConnectorPackages(resolveSkillsStoreBaseUrl(config), params);
+  const base = resolveSkillsStoreBaseUrl(config);
+  const first = await listConnectorPackages(base, { ...params, page: 1, pageSize: 50 });
+  const items = [...first.items];
+  // Exclude duplicates before pagination to keep page contents and totals consistent.
+  for (let page = 2; page <= first.meta.totalPages; page++) {
+    const next = await listConnectorPackages(base, { ...params, page, pageSize: 50 });
+    items.push(...next.items);
+  }
+  const visible = items.filter((item) => !isExcludedStoreConnector(item.name));
+  const pageSize = Math.max(1, Math.min(params.pageSize ?? 20, 50));
+  const totalPages = Math.max(1, Math.ceil(visible.length / pageSize));
+  const page = Math.max(1, Math.min(params.page ?? 1, totalPages));
+  return { items: visible.slice((page - 1) * pageSize, page * pageSize), meta: { page, pageSize, total: visible.length, totalPages } };
 }
 
 export async function getStoreConnectorInstallPlan(
@@ -427,6 +440,7 @@ export async function getStoreConnectorInstallPlan(
   packageName: string,
   version?: string,
 ): Promise<StoreConnectorInstallPlan> {
+  assertStoreConnectorAvailable(packageName);
   const storeBaseUrl = resolveSkillsStoreBaseUrl(config);
   const detail = await fetchStoreConnectorPackageDetail(storeBaseUrl, packageName, version);
   const sha256 = detail.latestVersion.sha256;

@@ -6,13 +6,13 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
 import { prepareCliAssets } from '../assets.js';
-import { wps365Adapter } from '../adapters/wps365.js';
+import { fixtureAdapter } from './fixture-adapter.js';
 import { cliEnvironment, startCliProcess } from '../process.js';
 
 let root: string;
 const content = 'pinned';
 const asset = { path: 'spec/api.yaml', content, sha256: createHash('sha256').update(content).digest('hex') };
-const adapter = { ...wps365Adapter, configAssets: [asset] };
+const adapter = { ...fixtureAdapter, configAssets: [asset], environment: { FIXTURE_BACKEND: 'file' } };
 beforeEach(async () => { root = await mkdtemp(join(tmpdir(), 'cli-assets-')); });
 afterEach(async () => { vi.unstubAllEnvs(); await rm(root, { recursive: true, force: true }); });
 
@@ -43,8 +43,8 @@ it('publishes large assets atomically and refuses file symlinks', async () => {
 });
 it('prepares packaged assets before the subprocess and isolates provider environment', async () => {
   vi.stubEnv('XOPC_STATE_DIR', root);
-  vi.stubEnv('WPS365_ACCESS_TOKEN', 'unrelated-token');
-  const handle = await startCliProcess({ adapter, executable: process.execPath, contextId: 'test', args: ['-e', 'console.log(JSON.stringify({asset:require("fs").readFileSync(process.env.WPS365_CONFIG_DIR+"/spec/api.yaml","utf8"),backend:process.env.WPS365_KEYRING_BACKEND,token:process.env.WPS365_ACCESS_TOKEN}))'] });
+  vi.stubEnv('FIXTURE_ACCESS_TOKEN', 'unrelated-token');
+  const handle = await startCliProcess({ adapter, executable: process.execPath, contextId: 'test', args: ['-e', 'console.log(JSON.stringify({asset:require("fs").readFileSync(process.env.FIXTURE_CLI_CONFIG_DIR+"/spec/api.yaml","utf8"),backend:process.env.FIXTURE_BACKEND,token:process.env.FIXTURE_ACCESS_TOKEN}))'] });
   expect(JSON.parse((await handle.completion).stdout)).toEqual({ asset: 'pinned', backend: 'file' });
   expect(() => cliEnvironment({ ...adapter, environment: { HOME: '/escape' } }, root)).toThrow('Reserved');
 });

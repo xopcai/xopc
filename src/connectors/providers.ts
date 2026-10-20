@@ -1,5 +1,4 @@
 import { BUILTIN_CONNECTORS } from './builtin-catalog.js';
-import { CHINA_CONNECTORS } from './china-catalog.js';
 import { COMPOSIO_CONNECTORS } from './composio.js';
 import type { ConnectorDefinition } from './types.js';
 
@@ -25,17 +24,8 @@ export const composioConnectorProvider: ConnectorProvider = {
   },
 };
 
-export const chinaConnectorProvider: ConnectorProvider = {
-  id: 'china',
-  displayName: 'China connectors',
-  listConnectors() {
-    return CHINA_CONNECTORS;
-  },
-};
-
 const CONNECTOR_PROVIDERS: readonly ConnectorProvider[] = [
   builtinConnectorProvider,
-  chinaConnectorProvider,
   composioConnectorProvider,
 ];
 

@@ -52,7 +52,7 @@ describe('capability catalog', () => {
     const instance = { instanceId: 'gmail-main', connectorId: 'gmail', status: 'unauthorized' } as ConnectorInstance;
     const items = connectorCapabilityItems(
       [definition],
-      [{ id: 'gmail', name: 'Gmail Store', type: 'connector', category: 'docs', description: '', downloads: 1, author: { username: 'xopc', avatarUrl: null }, updatedAt: 1 }],
+      [{ id: 'gmail', name: 'gmail', type: 'connector', category: 'docs', description: '', downloads: 1, author: { username: 'xopc', avatarUrl: null }, updatedAt: 1 }],
       [instance],
     );
 

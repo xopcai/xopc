@@ -9,7 +9,7 @@ import { CliToolProvider } from '../../../agent/external-tools/cliProvider.js';
 import { externalToolRef } from '../../../agent/external-tools/refs.js';
 import { closeXopcDatabase, decideConnectorApproval, getConnectorAccount, openXopcDatabase, resetXopcDatabaseSingletonForTest, upsertConnectorInstallation } from '../../../storage/sqlite/index.js';
 import { getSqliteDatabase } from '../../../storage/sqlite/transaction.js';
-import { getConnectorDefinition } from '../../catalog.js';
+import { fixtureDefinition } from './fixture-adapter.js';
 import { registerCliAdapter } from '../adapterRegistry.js';
 import { commitCliIdentity, createCliAuthorization, updateCliAuthorization } from '../store.js';
 import type { CliAdapter } from '../types.js';
@@ -39,7 +39,7 @@ const parse = (result: Awaited<ReturnType<CliToolProvider['execute']>>) => JSON.
 beforeEach(() => {
   directory = mkdtempSync(join(tmpdir(), 'cli-execution-')); vi.stubEnv('XOPC_STATE_DIR', directory);
   resetXopcDatabaseSingletonForTest(); openXopcDatabase({ path: join(directory, 'test.db') });
-  const definition = { ...getConnectorDefinition('feishu-workspace')!, id: 'contract-test', runtime: { type: 'cli' as const, adapterId: adapter.id, adapterVersion: '1', binaryVersion: '1.0.0' } };
+  const definition = { ...fixtureDefinition, id: 'contract-test', runtime: { type: 'cli' as const, adapterId: adapter.id, adapterVersion: '1', binaryVersion: '1.0.0' } };
   config = { connectors: { instances: { 'contract-test': { runtime: definition.runtime, xopcConnector: { managed: true, connectorId: definition.id, definition, enabled: true } } } } } as unknown as Config;
   upsertConnectorInstallation({ id: 'contract-test-local-owner', connectorId: 'contract-test', principalId: 'local-owner', enabled: true, allowedAgentIds: [], maxScope: 'write', confirmationPolicy: 'writes', selectedAccountIds: null });
   const attempt = createCliAuthorization('contract-test', 'contract-test'); updateCliAuthorization(attempt.id, { phase: 'verifying' });

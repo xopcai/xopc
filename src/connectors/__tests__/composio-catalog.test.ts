@@ -17,8 +17,8 @@ afterEach(() => {
 });
 
 describe('Composio agent-ready catalog', () => {
-  it('ships 31 verified toolkit contracts with stable logos', () => {
-    expect(COMPOSIO_AGENT_READY_TOOLKITS).toHaveLength(31);
+  it('ships 29 verified toolkit contracts with stable logos', () => {
+    expect(COMPOSIO_AGENT_READY_TOOLKITS).toHaveLength(29);
     for (const slug of COMPOSIO_AGENT_READY_TOOLKITS) {
       const definition = connectorDefinitionFromComposioToolkit({
         slug,
@@ -46,7 +46,8 @@ describe('Composio agent-ready catalog', () => {
     expect(logoById.get('composio-gmail')).toBe('/connector-icons/gmail.svg');
     expect(logoById.get('composio-googlecalendar')).toBe('/connector-icons/google-calendar.svg');
     expect(logoById.get('composio-googledrive')).toBe('/connector-icons/google-drive.svg');
-    expect(logoById.get('composio-notion')).toBe('/connector-icons/notion.svg');
+    expect(logoById.has('composio-notion')).toBe(false);
+    expect(logoById.has('composio-todoist')).toBe(false);
   });
 
   it('keeps native channels separate and uses Composio for GitHub', () => {
@@ -63,11 +64,7 @@ describe('Composio agent-ready catalog', () => {
       workload: 'core',
       preferred: true,
     });
-    expect(strategyById.get('composio-notion')).toEqual({
-      lane: 'composio',
-      workload: 'core',
-      preferred: true,
-    });
+
   });
 
   it('marks only connectors with implemented learning plans as personal context', () => {

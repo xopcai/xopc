@@ -142,12 +142,6 @@ const COMPOSIO_CURATED_ACTIONS: Record<string, Record<string, ComposioScope>> = 
     GOOGLEDRIVE_UPDATE_FILE: 'write',
     GOOGLEDRIVE_DELETE_FILE: 'admin',
   },
-  notion: {
-    NOTION_SEARCH: 'read',
-    NOTION_FETCH_PAGE: 'read',
-    NOTION_CREATE_PAGE: 'write',
-    NOTION_UPDATE_PAGE: 'write',
-  },
   slack: {
     SLACK_TEST_AUTH: 'read',
     SLACK_LIST_CHANNELS: 'read',

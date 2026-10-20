@@ -6,6 +6,8 @@ import type {
 import type { ExtensionMarketplaceItem } from '@/features/extensions/extension-marketplace-api';
 import type { MarketplacePackageItem, SkillCatalogEntry } from '@/features/skills/skill.types';
 
+import { recommendServices, type ServiceIdentity } from './service-recommendations';
+
 export type CapabilityKind = 'skill' | 'connector' | 'extension';
 export type CapabilityStatus = 'available' | 'installed' | 'attention';
 
@@ -19,6 +21,7 @@ export type CapabilityCatalogItem = {
   tags: string[];
   href: string;
   iconUrl?: string;
+  service?: ServiceIdentity;
 };
 
 function includesQuery(item: CapabilityCatalogItem, query: string): boolean {
@@ -39,8 +42,9 @@ export function filterCapabilityCatalog(
   items: CapabilityCatalogItem[],
   kind: CapabilityKind | 'all',
   query: string,
+  language = 'en',
 ): CapabilityCatalogItem[] {
-  return items.filter(item => (kind === 'all' || item.kind === kind) && includesQuery(item, query));
+  return recommendServices(items, language).filter(item => (kind === 'all' || item.kind === kind) && includesQuery(item, query));
 }
 
 export function skillCapabilityItems(
@@ -65,6 +69,7 @@ export function connectorCapabilityItems(
   definitions: ConnectorDefinition[],
   marketplace: StoreConnectorCatalogItem[],
   instances: ConnectorInstance[],
+  language = 'en',
 ): CapabilityCatalogItem[] {
   const instanceByConnector = new Map(instances.map(instance => [instance.connectorId, instance]));
   const items = new Map<string, CapabilityCatalogItem>();
@@ -73,6 +78,7 @@ export function connectorCapabilityItems(
     const instance = instanceByConnector.get(connector.id);
     items.set(connector.id, {
       id: connector.id,
+      service: { id: connector.id, source: connector.source === 'builtin' ? 'builtin-connector' : connector.source === 'store' ? 'store-connector' : 'registry-connector' },
       kind: 'connector',
       name: connector.displayName,
       description: connector.description,
@@ -85,36 +91,40 @@ export function connectorCapabilityItems(
   }
 
   for (const connector of marketplace) {
-    if (items.has(connector.id)) continue;
-    const instance = instanceByConnector.get(connector.id);
-    items.set(connector.id, {
-      id: connector.id,
+    const id = connector.name;
+    const localization = connector.localizations?.[language.startsWith('zh') ? 'zh-CN' : 'en'];
+    const instance = instanceByConnector.get(id);
+    items.set(`store:${id}`, {
+      id,
+      service: { id, source: 'store-connector', regions: connector.regions },
       kind: 'connector',
-      name: connector.name,
-      description: connector.description,
+      name: localization?.displayName ?? connector.name,
+      description: localization?.description ?? connector.description,
       source: connector.author.username || 'XOPC Store',
       status: connectorStatus(instance),
-      tags: [connector.category].filter((tag): tag is string => Boolean(tag)),
-      href: `/capabilities/connectors?tab=discover&connector=${encodeURIComponent(connector.id)}`,
+      tags: [connector.name, connector.category, ...(connector.tags ?? [])].filter((tag): tag is string => Boolean(tag)),
+      href: instance ? `/capabilities/connectors?tab=connected&instance=${encodeURIComponent(instance.instanceId)}` : `/capabilities/connectors?tab=discover&storeConnector=${encodeURIComponent(id)}`,
       iconUrl: connector.branding?.iconUrl,
     });
   }
 
-  return [...items.values()];
+  return recommendServices([...items.values()], language);
 }
 
 export function extensionCapabilityItems(
   marketplace: ExtensionMarketplaceItem[],
   installedIds: Set<string>,
+  language = 'en',
 ): CapabilityCatalogItem[] {
   return marketplace.map(extension => ({
     id: extension.id,
     kind: 'extension',
-    name: extension.name,
-    description: extension.description ?? '',
+    ...(extension.packageType === 'plugin' ? { service: { id: extension.id, source: 'store-plugin' as const } } : {}),
+    name: extension.localizations?.[language.startsWith('zh') ? 'zh-CN' : 'en']?.displayName ?? extension.name,
+    description: extension.localizations?.[language.startsWith('zh') ? 'zh-CN' : 'en']?.description ?? extension.description ?? '',
     source: extension.author || extension.npmPackage,
     status: installedIds.has(extension.id) ? 'installed' : 'available',
-    tags: [...(extension.categories ?? []), ...(extension.tags ?? [])],
+    tags: [extension.id, ...(extension.categories ?? []), ...(extension.tags ?? [])],
     href: `/capabilities/extensions?tab=marketplace&q=${encodeURIComponent(extension.name)}`,
     iconUrl: extension.branding?.iconUrl,
   }));

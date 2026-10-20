@@ -7,7 +7,6 @@ const CAPABILITY_PROFILES = [
   { toolkit: 'googlecalendar', pattern: /google.*calendar|calendar|日历|日程/i, capabilities: ['calendar.read'] },
   { toolkit: 'googledrive', pattern: /google.*drive|云盘|谷歌.*文档/i, capabilities: ['files.search', 'files.read'] },
   { toolkit: 'slack', pattern: /slack/i, capabilities: ['messages.search'] },
-  { toolkit: 'notion', pattern: /notion/i, capabilities: ['pages.search', 'pages.read'] },
 ];
 
 function normalizedIdentity(value: string): string {
