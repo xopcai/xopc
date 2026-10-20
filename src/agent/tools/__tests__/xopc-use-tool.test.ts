@@ -109,6 +109,54 @@ describe('xopc_use tool', () => {
     expect(updated).toMatchObject({ ok: true, agent: { profile: { name: 'Code Reviewer' } } });
   });
 
+  it('patches a non-main profile atomically and replays without losing concurrent fields', async () => {
+    const catalog = new AgentCatalogRepository();
+    catalog.create({ id: 'researcher', enabled: true, profile: { name: 'Researcher', description: 'Keep', language: 'zh-CN' } }, { ready: true });
+    const tool = createXopcUseTool({ getCurrentAgentId: () => 'researcher' });
+    const before = catalog.get('researcher')!;
+    const input = { mode: 'agent' as const, command: 'patch_profile', args: {
+      id: 'researcher', expectedRevision: before.revision, patch: { name: '小舟' }, idempotencyKey: 'rename-researcher',
+    } };
+    const first = parseToolJson(await tool.execute('patch', input));
+    expect(first.agent.profile).toMatchObject({ name: '小舟', description: 'Keep', language: 'zh-CN' });
+    const latest = catalog.get('researcher')!;
+    const { revision: _revision, provisioningState: _state, createdAt: _created, updatedAt: _updated, ...entry } = latest;
+    catalog.update('researcher', latest.revision, { ...entry, profile: { ...latest.profile, description: 'Concurrent' } });
+    expect(parseToolJson(await tool.execute('replay', input))).toEqual(first);
+    expect(catalog.get('researcher')!.profile.description).toBe('Concurrent');
+    expect(catalog.get('main')!.profile.name).not.toBe('小舟');
+    const stale = await tool.execute('stale', { ...input, args: { ...input.args, idempotencyKey: 'new-intent' } });
+    expect(stale.content[0]).toMatchObject({ type: 'text', text: expect.stringMatching(/conflict|changed/i) });
+  });
+
+  it('enforces resource authorization for profile patches, including dry run and replay', async () => {
+    const catalog = new AgentCatalogRepository();
+    const main = catalog.get('main')!;
+    let allowed = true;
+    const authorizeCapability = vi.fn(() => allowed);
+    const tool = createXopcUseTool({ getCurrentAgentId: () => 'coder', authorizeCapability });
+    const input = { mode: 'agent' as const, command: 'patch_profile', args: {
+      id: 'main', expectedRevision: main.revision, patch: { name: 'Owner' }, idempotencyKey: 'authorized-patch',
+    } };
+    parseToolJson(await tool.execute('allowed', input));
+    allowed = false;
+    for (const dryRun of [false, true]) {
+      const result = await tool.execute('denied', { ...input, dryRun });
+      expect(result.content[0]).toMatchObject({ type: 'text', text: expect.stringContaining('denied') });
+    }
+    expect(authorizeCapability).toHaveBeenCalledWith('xopc.agents.patch_profile', expect.objectContaining({ id: 'main' }));
+    expect(catalog.get('main')!.profile.name).toBe('Owner');
+  });
+
+  it('rejects invented settings sections without returning a product link', async () => {
+    const tool = createXopcUseTool({});
+    const invalid = await tool.execute('invalid-settings', { mode: 'settings', command: 'open', args: { section: 'connected-apps' } });
+    expect(invalid.content[0]).toMatchObject({ type: 'text', text: expect.stringContaining('Invalid settings target') });
+    expect(invalid.details.delivery).toBeUndefined();
+    const result = parseToolJson(await tool.execute('voice-settings', { mode: 'settings', command: 'open', args: { section: 'capabilities/voice' } }));
+    expect(result.settings.section).toBe('capabilities/voice');
+  });
+
   it('validates Agent dry runs with the real capability contract without mutating', async () => {
     const onAgentCatalogMutate = vi.fn();
     const tool = createXopcUseTool({ getCurrentAgentId: () => 'main', onAgentCatalogMutate });
@@ -1081,7 +1129,7 @@ describe('xopc_use tool', () => {
       mode: 'settings',
       command: 'open',
       args: {
-        section: 'credentials',
+        section: 'capabilities/models',
         title: 'Provider credentials',
         summary: 'Add the required API key.',
       },
@@ -1091,7 +1139,7 @@ describe('xopc_use tool', () => {
       operation: 'opened',
       primary: {
         kind: 'settings',
-        id: 'credentials',
+        id: 'capabilities/models',
         title: 'Provider credentials',
       },
     });

@@ -7,6 +7,12 @@ function textOf(result: Awaited<ReturnType<ReturnType<typeof createToolManualToo
 }
 
 describe('tool_manual tool', () => {
+  it.each(['agent', 'settings', 'automation', 'connections'] as const)('loads a focused %s topic without the full manual', async topic => {
+    const result = await createToolManualTool().execute('topic', { tool: 'xopc_use', topic });
+    expect(textOf(result)).toContain('# xopc');
+    expect(textOf(result)).not.toContain('# XOPC Use Tool Manual');
+  });
+
   it('returns the browser_use manual', async () => {
     const tool = createToolManualTool();
     const result = await tool.execute('call-1', { tool: 'browser_use' }, new AbortController().signal, undefined as never);

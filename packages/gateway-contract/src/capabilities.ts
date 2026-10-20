@@ -19,6 +19,14 @@ export {
 
 export const CapabilitySurfaceSchema = z.enum(['http', 'agent', 'cli', 'automation', 'mcp', 'extension']);
 export type CapabilitySurface = z.infer<typeof CapabilitySurfaceSchema>;
+export const SettingsSectionSchema = z.union([
+  z.enum(['overview', 'imports', 'sessions', 'tracing', 'usage', 'logs', 'computer-use',
+    'agent-browser', 'extensions/debug', 'connector-service', 'appearance', 'keyboard-shortcuts',
+    'system', 'desktop-pet', 'desktop-app', 'agent-defaults', 'gateway', 'runtimes', 'devices',
+    'remote-access', 'shares', 'capabilities/models', 'capabilities/image', 'capabilities/voice',
+    'capabilities/search']),
+  z.string().regex(/^ext\/[a-z0-9_-]+(?:\/[a-z0-9_-]+)?$/i).max(512),
+]);
 export const CapabilityErrorCodeSchema = z.enum([
   'INVALID_INPUT', 'FORBIDDEN', 'NOT_FOUND', 'REVISION_CONFLICT', 'CONTRACT_CHANGED',
   'APPROVAL_REQUIRED', 'IN_PROGRESS', 'UNAVAILABLE', 'OUTCOME_UNKNOWN', 'CANCELLED', 'INTERNAL',
@@ -306,7 +314,7 @@ export const ProductReadContracts = {
     projectId: z.string().trim().min(1).optional(), limit: z.number().int().min(1).max(200).default(50) }),
     output: z.object({ ok: z.literal(true), items: z.array(AutomationRunSchema.loose()), projectId: z.string().optional() }) },
   'xopc.settings.open': { input: z.strictObject({
-    section: z.string().trim().regex(/^[a-z0-9][a-z0-9/_-]*$/i).max(512).default('overview'),
+    section: z.string().trim().pipe(SettingsSectionSchema).default('overview'),
     title: z.string().trim().min(1).max(512).default('Settings'), summary: z.string().trim().max(4096).optional(),
   }), output: z.object({ ok: z.literal(true), settings: z.object({ section: z.string(), title: z.string(), summary: z.string().optional() }) }) },
   'xopc.local_apps.list': { input: z.strictObject({}), output: z.object({ apps: z.array(LocalAppRecordSchema) }) },
