@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { createCipheriv, createHash, randomBytes } from 'node:crypto';
+import { createCipheriv, createHash, randomBytes, X509Certificate } from 'node:crypto';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -40,6 +40,14 @@ try {
   const provision = JSON.parse(run('openssl', ['cms', '-verify', '-noverify', '-inform', 'DER', '-in', material.profile], 'Profile inspection'));
   if (provision.type !== 'debug' || provision['bundle-info']?.['bundle-name'] !== 'ai.xopc.xopc') {
     throw new Error('Only ai.xopc.xopc debug profiles are permitted by this testing workflow.');
+  }
+  const profileCertificate = provision['bundle-info']?.['distribution-certificate'];
+  const certificateData = readFileSync(material.certpath);
+  const pemCertificates = certificateData.toString('utf8').match(/-----BEGIN CERTIFICATE-----[\s\S]*?-----END CERTIFICATE-----/g);
+  const signingCertificates = (pemCertificates ?? [certificateData]).map((cert) => new X509Certificate(cert));
+  if (!profileCertificate || !signingCertificates.some((cert) =>
+    cert.fingerprint256 === new X509Certificate(profileCertificate).fingerprint256)) {
+    throw new Error('Signing certificate does not match the certificate bound to the profile.');
   }
   const now = Math.floor(Date.now() / 1000);
   if (provision.validity['not-before'] > now || provision.validity['not-after'] <= now) throw new Error('Profile is not currently valid.');
