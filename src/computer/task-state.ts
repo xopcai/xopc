@@ -18,8 +18,14 @@ export function verifyComputerExpectation(expectation: ComputerExpectation | und
     const data = JSON.parse(observation.summary);
     if (!Array.isArray(data.elements) || !data.elements.some((e: Record<string, unknown>) => e.role === 'AXWindow')) return result('unavailable');
     if (expectation.kind === 'text') {
-      if (typeof data.text !== 'string' || !data.text) return result('unavailable');
-      const verification = result(data.text.includes(expectation.text) ? 'satisfied' : data.truncated ? 'unavailable' : 'not_met');
+      // Scoped native field values retain multiline content even when the
+      // markdown renderer omits continuation lines. Partial coverage supports
+      // positive evidence only, never absence or uniqueness.
+      const evidence = [data.text, ...data.elements.filter((e: Record<string, unknown>) =>
+        ['AXTextField', 'AXTextArea'].includes(String(e.role)) && e.in_web_content !== true).map((e: Record<string, unknown>) => e.value)]
+        .filter((text): text is string => typeof text === 'string' && text.length > 0);
+      if (!evidence.length) return result('unavailable');
+      const verification = result(evidence.some(text => text.includes(expectation.text)) ? 'satisfied' : data.truncated ? 'unavailable' : 'not_met');
       if (verification.status === 'satisfied' && before && verifyComputerExpectation(expectation, before)?.status === 'satisfied') verification.preexisting = true;
       return verification;
     }

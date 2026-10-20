@@ -86,6 +86,86 @@ describe('desktop computer authority', () => {
     expect(await control.broker.command(changed)).toMatchObject({ errorCode: 'COMPUTER_OBSERVATION_CHANGED' });
     expect(control.driver.perform).not.toHaveBeenCalled();
   });
+  it('resamples a transient pixel change but still requires the exact original state before one dispatch', async () => {
+    const f = fixture(true); await f.open();
+    const obs = await f.broker.command({ op: 'observe', owner: 'o', sessionId: 's' });
+    const original = vi.mocked(f.driver.observe).getMockImplementation()!;
+    const checks: Uint8Array[] = []; let reads = 0;
+    vi.mocked(f.driver.observe).mockImplementation(async (...args) => {
+      const frame = await original(...args);
+      if (++reads <= 2) checks.push(frame.image);
+      return { ...frame, stateDigest: reads === 1 ? 'caret-blink' : 'a' };
+    });
+    const command = { op: 'act' as const, owner: 'o', sessionId: 's', envelope: envelope(obs) };
+    await f.broker.command(command); await Promise.resolve();
+    expect(await f.broker.command(command)).toMatchObject({ receipt: { dispatch: 'completed' } });
+    expect(f.driver.perform).toHaveBeenCalledTimes(1);
+    expect(checks).toHaveLength(2);
+    expect(checks.every(image => image.every(byte => byte === 0))).toBe(true);
+  });
+  it('bounds pre-dispatch resampling and never accepts a persistent state change', async () => {
+    const f = fixture(true); await f.open();
+    const obs = await f.broker.command({ op: 'observe', owner: 'o', sessionId: 's' });
+    const command = { op: 'act' as const, owner: 'o', sessionId: 's', envelope: envelope(obs) };
+    await f.broker.command(command); await Promise.resolve(); f.move();
+    expect(await f.broker.command(command)).toMatchObject({ errorCode: 'COMPUTER_OBSERVATION_CHANGED' });
+    expect(f.driver.observe).toHaveBeenCalledTimes(5);
+    expect(f.driver.perform).not.toHaveBeenCalled();
+  });
+  it.each([true, false])('requires bounded stable native-editor observations (settles=%s)', async settles => {
+    const f = fixture(true); await f.open();
+    const original = vi.mocked(f.driver.observe).getMockImplementation()!;
+    const images: Uint8Array[] = []; let reads = 0;
+    vi.mocked(f.driver.observe).mockImplementation(async (...args) => {
+      const frame = await original(...args); images.push(frame.image);
+      reads++;
+      return { ...frame, summary: JSON.stringify({ elements: [{ role: 'AXWindow' }, { role: 'AXTextArea', value: 'test' }] }),
+        stateDigest: settles && reads > 1 ? 'steady' : 'fade-' + reads };
+    });
+    const capture = f.broker.command({ op: 'observe', owner: 'o', sessionId: 's' });
+    if (settles) {
+      expect(await capture).toMatchObject({ observation: { stateDigest: 'steady' } });
+      expect(images.slice(0, -1).every(image => image.every(byte => byte === 0))).toBe(true);
+    } else {
+      await expect(capture).rejects.toThrow('COMPUTER_UI_UNSTABLE');
+      expect(f.driver.observe).toHaveBeenCalledTimes(6);
+      expect(images.every(image => image.every(byte => byte === 0))).toBe(true);
+    }
+    expect(f.driver.perform).not.toHaveBeenCalled();
+  });
+  it('refuses a target change during native-editor stable capture and clears both frames', async () => {
+    const f = fixture(true); await f.open();
+    const original = vi.mocked(f.driver.observe).getMockImplementation()!;
+    const images: Uint8Array[] = [];
+    vi.mocked(f.driver.observe).mockImplementation(async (...args) => {
+      const frame = await original(...args); images.push(frame.image);
+      return { ...frame, target: images.length === 1 ? target : { ...target, windowId: 'other' },
+        summary: JSON.stringify({ elements: [{ role: 'AXWindow' }, { role: 'AXTextArea', value: 'test' }] }) };
+    });
+    await expect(f.broker.command({ op: 'observe', owner: 'o', sessionId: 's' })).rejects.toThrow('COMPUTER_TARGET_CHANGED');
+    expect(f.driver.observe).toHaveBeenCalledTimes(2);
+    expect(f.driver.perform).not.toHaveBeenCalled();
+    expect(images.every(image => image.every(byte => byte === 0))).toBe(true);
+  });
+  it('recognizes a recurring caret phase while preserving an exact fresh dispatch check', async () => {
+    const f = fixture(true); await f.open();
+    const original = vi.mocked(f.driver.observe).getMockImplementation()!;
+    const images: Uint8Array[] = []; let reads = 0;
+    vi.mocked(f.driver.observe).mockImplementation(async (...args) => {
+      const frame = await original(...args); images.push(frame.image);
+      return { ...frame, summary: JSON.stringify({ elements: [{ role: 'AXWindow' }, { role: 'AXTextArea' }] }),
+        stateDigest: ++reads % 2 ? 'caret-on' : 'caret-off' };
+    });
+    const observed = await f.broker.command({ op: 'observe', owner: 'o', sessionId: 's' });
+    expect(observed.observation?.stateDigest).toBe('caret-on');
+    expect(images).toHaveLength(3);
+    expect(images.slice(0, -1).every(image => image.every(byte => byte === 0))).toBe(true);
+    vi.mocked(f.driver.observe).mockImplementation(async (...args) => ({ ...await original(...args), stateDigest: 'changed-after-prediction' }));
+    const command = { op: 'act' as const, owner: 'o', sessionId: 's', envelope: envelope(observed) };
+    await f.broker.command(command); await Promise.resolve();
+    expect(await f.broker.command(command)).toMatchObject({ errorCode: 'COMPUTER_OBSERVATION_CHANGED' });
+    expect(f.driver.perform).not.toHaveBeenCalled();
+  });
   it('binds discovery references to the requesting task and expires them', async () => {
     const f = fixture(true);
     const appRef = (await f.broker.command({ op: 'discover', owner: 'o', sessionId: 'd', query: 'Fixture' })).apps![0].appRef;

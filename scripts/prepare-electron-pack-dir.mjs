@@ -126,7 +126,7 @@ export function stageComputerDriver(repoRoot, packDirPath, target, thinBinary = 
   const computerDriverDir = join(packDirPath, '_pack-resources', 'computer-driver');
   mkdirSync(computerDriverDir, { recursive: true });
   if (target.platform !== 'darwin') return;
-  const driver = join(repoRoot, '.cache', 'computer-driver', '0.28.2', 'cua-driver');
+  const driver = join(repoRoot, '.cache', 'computer-driver', '0.36.0', 'cua-driver');
   if (!existsSync(driver)) throw new Error('Run node scripts/setup-computer-driver.mjs before packaging macOS Computer Use.');
   thinBinary(driver, join(computerDriverDir, 'cua-driver'), target.arch);
   cpSync(join(repoRoot, 'electron/resources/computer-driver-LICENSE.txt'), join(computerDriverDir, 'computer-driver-LICENSE.txt'));

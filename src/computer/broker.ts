@@ -177,11 +177,41 @@ export class ComputerBroker {
     return this.result(s);
   }
   private async observe(s: Session): Promise<BrokerResult> {
-    const frame = await this.driver.observe(s.target!, s.controller.signal);
+    let frame = await this.driver.observe(s.target!, s.controller.signal);
     try {
-    this.active(s);
-    if (frame.target.appId !== s.appId || frame.target.processIdentity !== s.target!.processIdentity || frame.target.windowId !== s.target!.windowId) throw new Error('COMPUTER_TARGET_CHANGED');
-    if (frame.image.byteLength > COMPUTER_FRAME_MAX_BYTES || frame.imageWidth * frame.imageHeight > COMPUTER_FRAME_MAX_PIXELS) throw new Error('COMPUTER_FRAME_LIMIT');
+    const validateFrame = () => {
+      this.active(s);
+      if (frame.target.appId !== s.appId || frame.target.processIdentity !== s.target!.processIdentity || frame.target.windowId !== s.target!.windowId) throw new Error('COMPUTER_TARGET_CHANGED');
+      if (frame.image.byteLength > COMPUTER_FRAME_MAX_BYTES || frame.imageWidth * frame.imageHeight > COMPUTER_FRAME_MAX_PIXELS) throw new Error('COMPUTER_FRAME_LIMIT');
+    };
+    validateFrame();
+    // Avoid giving the model an intermediate caret-fade frame that may never
+    // recur exactly. Native editors need a repeated identical full snapshot;
+    // the later pre-dispatch comparison still uses the full unmasked digest.
+    let editable = false;
+    try {
+      const data = JSON.parse(frame.summary);
+      editable = Array.isArray(data.elements) && data.elements.some((e: Record<string, unknown>) =>
+        ['AXTextField', 'AXTextArea'].includes(String(e.role)) && e.in_web_content !== true);
+    } catch { /* Missing structured context keeps the ordinary capture path. */ }
+    if (editable) {
+      let stable = false;
+      const fingerprint = () => JSON.stringify([frame.stateDigest, frame.target]);
+      const seen = new Set([fingerprint()]);
+      for (let sample = 0; sample < 5; sample++) {
+        this.active(s);
+        const next = await this.driver.observe(s.target!, s.controller.signal);
+        const previous = frame; frame = next;
+        previous.image.fill(0);
+        validateFrame();
+        const current = fingerprint();
+        stable = seen.has(current);
+        if (stable) break;
+        seen.add(current);
+      }
+      if (!stable) throw new Error('COMPUTER_UI_UNSTABLE');
+    }
+    validateFrame();
     s.target = frame.target;
     s.observation = { id: randomUUID(), sessionId: s.id, brokerEpoch: this.epoch, generation: s.generation,
       target: frame.target, capturedAt: this.now(), imageWidth: frame.imageWidth, imageHeight: frame.imageHeight,
@@ -225,15 +255,27 @@ export class ComputerBroker {
       if (!s.pending.approved) { await this.stop(); return this.result(s); }
     }
     const precheckStarted = this.now();
-    const current = await this.driver.observe(s.target!, s.controller.signal);
-    try {
-      this.active(s);
-      if (JSON.stringify(current.target) !== JSON.stringify(observed.target) || current.stateDigest !== observed.stateDigest || e.deadlineAt <= this.now()) {
-        s.pending = undefined; s.observation = undefined; s.status = 'ready';
-        return { ...this.result(s), errorCode: 'COMPUTER_OBSERVATION_CHANGED' };
-      }
-      this.driver.validateAction?.(e.action);
-    } finally { current.image.fill(0); }
+    let matched = false;
+    // A blinking insertion caret can change pixels while the application is
+    // otherwise unchanged. Resample before any dispatch, without masking pixels
+    // or weakening the original full target/digest comparison. A persistent
+    // change still refuses the envelope and uses the existing bounded rescue.
+    for (let sample = 0; sample < 4; sample++) {
+      const current = await this.driver.observe(s.target!, s.controller.signal);
+      try {
+        this.active(s);
+        const sameTarget = JSON.stringify(current.target) === JSON.stringify(observed.target);
+        if (!sameTarget || e.deadlineAt <= this.now()) break;
+        if (current.stateDigest !== observed.stateDigest) continue;
+        this.driver.validateAction?.(e.action);
+        matched = true;
+        break;
+      } finally { current.image.fill(0); }
+    }
+    if (!matched) {
+      s.pending = undefined; s.observation = undefined; s.status = 'ready';
+      return { ...this.result(s), errorCode: 'COMPUTER_OBSERVATION_CHANGED' };
+    }
     const nativeMs: ComputerNativeTiming = { precheckMs: Math.max(0, this.now() - precheckStarted), inputMs: 0, postObserveMs: 0 };
     const receipt: ComputerReceipt = { actionId: e.actionId, dispatch: 'started', outcome: 'unknown', verification: 'none' };
     s.receipts.set(e.actionId, { digest, receipt }); s.actions++; s.pending = undefined; s.status = 'running';

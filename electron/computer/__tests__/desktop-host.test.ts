@@ -50,7 +50,7 @@ import { RealtimeConnectionError } from '@xopcai/realtime-client';
 describe('computer driver paths', () => {
   it('resolves development cache relative to the bundled main entry, not app.getAppPath or cwd', () => {
     expect(resolveComputerDriverPath({ packaged: false, resourcesPath: '/electron/Resources', mainDir: '/workspace/out/main' }))
-      .toBe('/workspace/.cache/computer-driver/0.28.2/cua-driver');
+      .toBe('/workspace/.cache/computer-driver/0.36.0/cua-driver');
   });
 
   it('resolves packaged resources outside app.asar, independent of the development cache', () => {

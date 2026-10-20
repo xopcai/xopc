@@ -40,7 +40,7 @@ export function classifyComputerFailure(error: unknown, phase: ComputerFailurePh
   let category = categories[errorCode];
   if (/^COMPUTER_MODEL_HTTP_[1-5]\d\d$/.test(errorCode)) category = 'model';
   if (/^COMPUTER_FRAME_UPLOAD_(HTTP_[1-5]\d\d|INVALID_GRANT|TOO_LARGE|TIMEOUT|NETWORK|INVALID_IMAGE|BUSY|INVALID_RESPONSE)$/.test(errorCode)) category = 'transport';
-  if (/^COMPUTER_DRIVER_(CLICK|SET_VALUE|TYPE_TEXT|DRAG|BRING_TO_FRONT|LAUNCH_APP)_REFUSED$/.test(errorCode)
+  if (/^COMPUTER_DRIVER_(CLICK|SET_VALUE|TYPE_TEXT|DRAG|KEY|SCROLL|BRING_TO_FRONT|LAUNCH_APP)_REFUSED$/.test(errorCode)
     || /^COMPUTER_DRIVER_SETUP_(START|BINARY|SDK|IDENTITY|PERMISSIONS)_FAILED$/.test(errorCode)) category = 'native';
   if (!category) { category = 'unknown'; errorCode = 'COMPUTER_OPERATION_FAILED'; }
   return { category, errorCode, phase: diagnostic?.phase === 'frame_upload' ? 'frame_upload' : phase, dispatch,

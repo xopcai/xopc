@@ -42,7 +42,7 @@ describe('packaged computer driver', () => {
     ['x64', 'x64'],
   ])('stages only the target macOS binary slice and license for %s', (arch, expectedArch) => {
     const { root, pack } = fixture();
-    const source = join(root, '.cache/computer-driver/0.28.2/cua-driver');
+    const source = join(root, '.cache/computer-driver/0.36.0/cua-driver');
     mkdirSync(join(source, '..'), { recursive: true });
     mkdirSync(join(root, 'electron/resources'), { recursive: true });
     writeFileSync(source, 'driver fixture');
