@@ -10,6 +10,21 @@ function hasSameTurnBoundaries(local: Message[], canonical: Message[]): boolean 
   });
 }
 
+function mergeConversationOrigins(local: Message[], server: Message[], aligned = false): Message[] {
+  const byTurn = new Map(server.filter(message => isUiUserMessage(message.role) && message.turnId)
+    .map(message => [message.turnId, message]));
+  let changed = false;
+  const merged = local.map((message, index) => {
+    if (!isUiUserMessage(message.role)) return message;
+    const canonical = message.turnId ? byTurn.get(message.turnId) : aligned ? server[index] : undefined;
+    const origin = canonical?.conversationOrigin;
+    if (!origin || JSON.stringify(message.conversationOrigin) === JSON.stringify(origin)) return message;
+    changed = true;
+    return { ...message, conversationOrigin: origin };
+  });
+  return changed ? merged : local;
+}
+
 /**
  * When another device sends a user turn, the passive client may be mid-realtime resume with a
  * stale committed prefix. Prefer the canonical prefix through the active user turn when available;
@@ -36,13 +51,13 @@ export function mergeMissingUserMessagesFromServer(
       if (!hasSameTurnBoundaries(local, canonicalPrefix)) {
         return mergeConsecutiveAssistantMessages(canonicalPrefix);
       }
-      return local;
+      return mergeConversationOrigins(local, canonicalPrefix, true);
     }
   }
   const localUserCount = local.filter(isUser).length;
   const serverUserCount = server.filter(isUser).length;
   if (serverUserCount <= localUserCount) {
-    return local;
+    return mergeConversationOrigins(local, server);
   }
 
   const extraUsers = server.filter(isUser).slice(localUserCount);
@@ -50,5 +65,5 @@ export function mergeMissingUserMessagesFromServer(
     return local;
   }
 
-  return mergeConsecutiveAssistantMessages([...local, ...extraUsers]);
+  return mergeConsecutiveAssistantMessages([...mergeConversationOrigins(local, server), ...extraUsers]);
 }

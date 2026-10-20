@@ -1,3 +1,4 @@
+import { ConversationOriginLabel } from './conversation-origin';
 import { PersonalProvenanceTail } from './personal-provenance-tail';
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import * as Popover from '@radix-ui/react-popover';
@@ -586,6 +587,8 @@ export const MessageBubble = memo(function MessageBubble({
         )}
       >
         <span className="sr-only">{roleLabel}</span>
+
+        {isUser && message.conversationOrigin && conversationId ? <ConversationOriginLabel origin={message.conversationOrigin} conversationId={conversationId} /> : null}
 
         {followUpTrigger ? <TaskTriggerCard trigger={followUpTrigger} /> : null}
 

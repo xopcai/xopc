@@ -299,6 +299,7 @@ export class AgentService {
       getProjectService: config.getProjectService,
       getWorkDiscovery: config.getWorkDiscovery,
       getLocalAppService: config.getLocalAppService,
+      launchConversation: config.launchConversation,
       getChatPreviewService: config.getChatPreviewService,
       dispatchTaskEvents: config.dispatchTaskEvents,
       dispatchTaskRuns: config.dispatchTaskRuns,

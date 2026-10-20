@@ -66,4 +66,26 @@ describe('mergeMissingUserMessagesFromServer', () => {
     expect(mergeMissingUserMessagesFromServer(local, [activeUser], 'run-2')).toBe(local);
   });
 
+  it('hydrates the source of an already visible user row while its reply is running', () => {
+    const activeUser: Message = { ...u2, turnId: 'run-2', renderKey: 'stable-user' };
+    const origin = { launchId: '988853d5-d93c-4bc7-a060-cd921b56bb0d',
+      conversationId: 'e078f1fa-481b-4aa3-a69a-c33f1ecb3604', agentId: 'main' };
+    const local = [u1, a1, activeUser];
+    const server = [u1, a1, { ...u2, turnId: 'run-2', conversationOrigin: origin }];
+    const merged = mergeMissingUserMessagesFromServer(local, server, 'run-2');
+    expect(merged[2]).toEqual({ ...activeUser, conversationOrigin: origin });
+    expect(merged[0]).toBe(u1);
+    expect(merged[1]).toBe(a1);
+    expect(mergeMissingUserMessagesFromServer(merged, server, 'run-2')).toBe(merged);
+  });
+
+  it('hydrates provenance without a live assistant id and never copies it between different turns', () => {
+    const origin = { launchId: '988853d5-d93c-4bc7-a060-cd921b56bb0d',
+      conversationId: 'e078f1fa-481b-4aa3-a69a-c33f1ecb3604', agentId: 'main' };
+    const local = [{ ...u2, turnId: 'run-2' }];
+    const server = [{ ...u2, turnId: 'run-2', conversationOrigin: origin }];
+    expect(mergeMissingUserMessagesFromServer(local, server)[0]?.conversationOrigin).toEqual(origin);
+    expect(mergeMissingUserMessagesFromServer(local, [{ ...server[0], turnId: 'other' }])).toBe(local);
+  });
+
 });

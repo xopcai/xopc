@@ -1,3 +1,4 @@
+import { ConversationOriginSchema, type ConversationOrigin } from '@xopcai/gateway-contract';
 import { PERSONAL_PROACTIVE_MESSAGE_TYPE, PersonalProvenanceSchema, parsePersonalProactiveMessage, type PersonalProvenance } from '@xopcai/gateway-contract';
 import { isUserTurnDocument, parseTurnOutcome, parseTaskResultDelivery, TASK_RESULT_DELIVERY_TYPE,
   type TaskResultDelivery, type TurnOutcome, type UserTurnDocument } from '@xopcai/gateway-contract';
@@ -27,6 +28,7 @@ export interface ClientHistoryMessage {
   metadata?: {
     /** Stable client-generated id used to reconcile optimistic sends exactly. */
     clientMessageId?: string;
+    conversationOrigin?: ConversationOrigin;
     sourceContexts?: Array<{
       refId?: string;
       kind: 'result' | 'note' | 'task' | 'file' | 'session' | 'browser_tab' | 'browser_page' | 'mcp_resource';
@@ -95,13 +97,15 @@ function sourceContextDisplayMetadata(metadata: unknown): ClientHistoryMessage['
   const clientMessageId = typeof record.clientMessageId === 'string' && record.clientMessageId.trim()
     ? record.clientMessageId
     : undefined;
+  const origin = ConversationOriginSchema.safeParse(record.conversationOrigin);
+  const conversationOrigin = origin.success ? origin.data : undefined;
   const rows = record.sourceContexts;
   const userTurnDocument = isUserTurnDocument(record.userTurnDocument)
     ? record.userTurnDocument
     : undefined;
   if (!Array.isArray(rows)) {
-    return clientMessageId || userTurnDocument
-      ? { ...(clientMessageId ? { clientMessageId } : {}), ...(userTurnDocument ? { userTurnDocument } : {}) }
+    return clientMessageId || userTurnDocument || conversationOrigin
+      ? { ...(conversationOrigin ? { conversationOrigin } : {}), ...(clientMessageId ? { clientMessageId } : {}), ...(userTurnDocument ? { userTurnDocument } : {}) }
       : undefined;
   }
   const sourceContexts = rows.flatMap((value): NonNullable<NonNullable<ClientHistoryMessage['metadata']>['sourceContexts']>[number][] => {
@@ -131,8 +135,8 @@ function sourceContextDisplayMetadata(metadata: unknown): ClientHistoryMessage['
         : {}),
     }];
   });
-  return clientMessageId || sourceContexts.length || userTurnDocument
-    ? { ...(clientMessageId ? { clientMessageId } : {}), ...(sourceContexts.length ? { sourceContexts } : {}), ...(userTurnDocument ? { userTurnDocument } : {}) }
+  return clientMessageId || sourceContexts.length || userTurnDocument || conversationOrigin
+    ? { ...(conversationOrigin ? { conversationOrigin } : {}), ...(clientMessageId ? { clientMessageId } : {}), ...(sourceContexts.length ? { sourceContexts } : {}), ...(userTurnDocument ? { userTurnDocument } : {}) }
     : undefined;
 }
 

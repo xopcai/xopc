@@ -172,6 +172,7 @@ export interface ToolFactoryDeps {
   getProjectService?: () => ProjectService | undefined;
   getWorkDiscovery?: () => import('../../work-discovery/service.js').WorkDiscoveryService | undefined;
   getLocalAppService?: () => LocalAppService | undefined;
+  launchConversation?: (input: import('@xopcai/gateway-contract').ConversationLaunchInput, context: import('@xopcai/gateway-contract').ConversationLaunchContext) => Promise<Record<string, unknown>>;
   getChatPreviewService?: () => import('../../chat-previews/index.js').ChatPreviewService | undefined;
   /** Gateway: publishes durable Task change notifications. */
   dispatchTaskEvents?: () => void;
@@ -462,12 +463,14 @@ export class AgentToolsFactory {
       getWorkspace: () => this.deps.workspace,
       getConfig: () => this.deps.getConfig?.(),
       getCurrentAgentId: () => options?.agentId,
-      getCurrentConversationId: () => this.deps.getCurrentContext()?.conversationId,
+      getCurrentConversationId: () => getEmbeddedExecutionSession() ?? currentConversationId(),
+      getCurrentRunId: getEmbeddedExecutionRunId,
       getAutomationService: this.deps.getAutomationService,
       getNotesService: this.deps.getNotesService,
       getProjectService: this.deps.getProjectService,
       getWorkDiscovery: this.deps.getWorkDiscovery,
       getLocalAppService: this.deps.getLocalAppService,
+      launchConversation: this.deps.launchConversation,
       getChatPreviewService: this.deps.getChatPreviewService,
       dispatchTaskEvents: this.deps.dispatchTaskEvents,
       dispatchTaskRuns: this.deps.dispatchTaskRuns,
@@ -696,6 +699,7 @@ export class AgentToolsFactory {
         || this.deps.getProjectService
         || this.deps.getNotesService
         || this.deps.getLocalAppService
+        || this.deps.launchConversation
         || this.deps.getChatPreviewService
         || this.deps.dispatchTaskEvents
         || this.deps.dispatchTaskRuns

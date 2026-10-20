@@ -1,4 +1,4 @@
-import { PersonalProvenanceSchema } from '@xopcai/gateway-contract';
+import { ConversationOriginSchema, PersonalProvenanceSchema } from '@xopcai/gateway-contract';
 import { isUserTurnDocument, parseTaskResultDelivery, parseTurnOutcome, resolveToolActivity } from '@xopcai/gateway-contract';
 
 import type {
@@ -342,6 +342,7 @@ function buildUserMessage(m: WireMessage): Message {
     attachments: wireAttachmentsFromMessage(m),
     contextRefs: normalizeMessageContextRefs(m.metadata),
     sourceDevice: normalizeSourceDevice(m.metadata),
+    conversationOrigin: ConversationOriginSchema.safeParse(asRecord(m.metadata)?.conversationOrigin).data,
     userTurnDocument: normalizeUserTurnDocument(m.metadata),
     timestamp: typeof m.timestamp === 'number' ? m.timestamp : parseTs(m.timestamp),
     usage: m.usage as Message['usage'],

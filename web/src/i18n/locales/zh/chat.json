@@ -24,6 +24,23 @@
       "save": "无法保存反馈",
       "undo": "无法撤销跟进调整"
     },
+    "conversationLaunch": {
+      "origin": "由 {{agent}} 从另一对话发送",
+      "openSource": "返回来源对话",
+      "sourceUnavailable": "来源对话不可用",
+      "refreshFailed": "暂时无法获取状态",
+      "states": {
+        "preparing": "准备环境中",
+        "preparation_failed": "环境准备失败",
+        "queued": "排队中",
+        "running": "运行中",
+        "waiting": "等待处理",
+        "completed": "已回复",
+        "failed": "执行失败",
+        "cancelled": "已取消",
+        "unavailable": "对话不可用"
+      }
+    },
     "productDelivery": {
     "heading": "本轮交付结果",
     "partialResults": "仅显示部分结果",

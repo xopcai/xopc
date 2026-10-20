@@ -50,6 +50,7 @@ export const sessionInputContentSchema = z.strictObject({
 });
 
 const originSchema = z.discriminatedUnion('type', [
+  z.strictObject({ type: z.literal('conversation'), launchId: z.string().uuid() }),
   z.strictObject({ type: z.literal('endpoint'), endpointId: z.string().min(1), token: z.string().min(1) }),
   z.strictObject({ type: z.literal('system'), source: z.literal('cli') }),
 ]);

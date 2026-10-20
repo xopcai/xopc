@@ -51,3 +51,5 @@ export * from './result-reference.js';
 export * from './provider-setup.js';
 
 export * from './recording-outcome.js';
+
+export * from './conversation-launch.js';

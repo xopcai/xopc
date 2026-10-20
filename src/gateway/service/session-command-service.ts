@@ -1,5 +1,8 @@
 import type { SessionCreation, SessionInputCommand, SessionMaterializeCommand, ModelThinkingValue } from '@xopcai/gateway-contract';
 
+import { runSqliteWriteTransaction } from '../../storage/sqlite/transaction.js';
+import { createLogger } from '../../utils/logger.js';
+
 import type { AgentSourceContext } from '../../agent/source-context/types.js';
 import { resolveProjectAgentId } from '../../projects/index.js';
 import { resolveModel } from '../../providers/index.js';
@@ -9,12 +12,12 @@ import {
   acceptSessionCommand, getSessionPreparation, matchSessionInputReceipt, sessionCommandHash,
   SessionCommandError, type SessionInputReceipt,
 } from '../../storage/sqlite/session-creation-repository.js';
-import type { GatewayService } from '../service.js';
+import type { SessionCommandHost } from './session-command-host.js';
 import { getSessionMetadata } from '../../storage/sqlite/session-repository.js';
 import { getPersonalAgentByConversation } from '../../personal-agent/repository.js';
 import { resolveEffectiveAgentConfigForAgent, resolveEffectiveAgentConfigForSession } from '../../config/agent-profile.js';
 
-function validateCreation(service: GatewayService, creation: SessionCreation): void {
+function validateCreation(service: SessionCommandHost, creation: SessionCreation): void {
   const project = creation.projectId ? service.projects.get(creation.projectId) : null;
   if (creation.projectId && !project) throw new Error('Project not found');
   const agentId = resolveProjectAgentId({ config: service.currentConfig, projects: service.projects,
@@ -26,9 +29,10 @@ function validateCreation(service: GatewayService, creation: SessionCreation): v
   if (!getModelThinking(model).options.includes(creation.thinkingLevel as ModelThinkingValue)) throw new Error('Unsupported model thinking level');
 }
 
-export async function receiveSessionCommand(service: GatewayService, conversationId: string, principalId: string,
+export async function receiveSessionCommand(service: SessionCommandHost, conversationId: string, principalId: string,
   command: SessionInputCommand | SessionMaterializeCommand,
-  prepareSourceContexts: () => Promise<AgentSourceContext[]> = async () => []) {
+  prepareSourceContexts: () => Promise<AgentSourceContext[]> = async () => [],
+  onAccepted?: (receipt: SessionInputReceipt) => void) {
   const receive = () => withModelConfigLock(conversationId, async () => {
     const personal = getPersonalAgentByConversation(conversationId);
     if (personal && 'creation' in command && command.creation.agentId !== personal.agentId) {
@@ -61,8 +65,13 @@ export async function receiveSessionCommand(service: GatewayService, conversatio
       thinking: configuredThinking ?? (command.kind === 'start' ? command.creation.thinkingLevel : (await service.sessions.getAgentConfig(conversationId)).thinkingLevel),
       origin: command.origin.type === 'endpoint' ? { type: 'endpoint', endpointId: command.origin.endpointId } : command.origin,
     }) : undefined;
-    const receipt = acceptSessionCommand({ conversationId, principalId, command, preparedInput,
-      attachProject: (id, projectId) => service.projects.attachSession(id, projectId) });
+    if (preparedInput && 'input' in command && command.origin.type === 'conversation') preparedInput.content = command.input.content;
+    const receipt = runSqliteWriteTransaction(() => {
+      const accepted = acceptSessionCommand({ conversationId, principalId, command, preparedInput,
+        attachProject: (id, projectId) => service.projects.attachSession(id, projectId) });
+      onAccepted?.(accepted);
+      return accepted;
+    });
     if ('kind' in command && command.kind === 'append' && receipt.inputId) {
       await service.dispatchAcceptedSessionInput(conversationId, receipt.inputId);
     }
@@ -71,7 +80,7 @@ export async function receiveSessionCommand(service: GatewayService, conversatio
   return service.withSessionInputSubmission(conversationId, receive);
 }
 
-export async function sessionCommandSnapshot(service: GatewayService, receipt: SessionInputReceipt) {
+export async function sessionCommandSnapshot(service: SessionCommandHost, receipt: SessionInputReceipt) {
   const { principalId: _principal, requestHash: _hash, ...identity } = receipt;
   const inputState = service.getSessionInputState(receipt.conversationId);
   return {
@@ -82,4 +91,19 @@ export async function sessionCommandSnapshot(service: GatewayService, receipt: S
     effectiveDelivery: inputState.inputs.find(input => input.id === receipt.inputId)?.effectiveDelivery ?? 'next',
     preparation: getSessionPreparation(receipt.conversationId),
   };
+}
+
+
+const commandLog = createLogger('Gateway:SessionCommand');
+
+/** Shared post-commit dispatch for browser commands and Agent launches. Safe to repeat. */
+export function dispatchSessionCommand(service: SessionCommandHost,
+  payload: Awaited<ReturnType<typeof sessionCommandSnapshot>>, created: boolean): void {
+  const id = payload.receipt.conversationId;
+  service.emit('session.input-state', payload.inputState);
+  if (created) service.emit('session.updated', { key: id });
+  if (payload.receipt.lifecycle === 'preparing') service.sessionPreparations.wake(id);
+  else if (payload.receipt.lifecycle === 'ready') void service.drainSessionInputs(id).catch(err => {
+    commandLog.error({ err, conversationId: id }, 'Accepted session input drain failed');
+  });
 }

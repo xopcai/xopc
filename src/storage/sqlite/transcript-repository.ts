@@ -18,6 +18,7 @@ import {
   transcriptEntryRowToStoredRow,
   type TranscriptEntryRow,
 } from './row-mappers.js';
+import { conversationOriginForInput } from './conversation-launch-repository.js';
 import { getCurrentTranscriptId, readCurrentTranscriptId } from './session-repository.js';
 import { escapeFts5Query } from './fts.js';
 import { getSqliteDatabase, runSqliteWriteTransaction } from './transaction.js';
@@ -122,12 +123,13 @@ function withSessionInputContextMetadata(
     ? message.metadata as Record<string, unknown>
     : {};
   const input = db.prepare(
-    `SELECT client_message_id, context_refs_json FROM session_inputs
+    `SELECT id, client_message_id, context_refs_json FROM session_inputs
      WHERE conversation_id = ? AND run_id = ?
      LIMIT 1`,
-  ).get(conversationId, turnId) as { client_message_id: string; context_refs_json: string | null } | undefined;
+  ).get(conversationId, turnId) as { id: string; client_message_id: string; context_refs_json: string | null } | undefined;
   if (!input) return row;
 
+  const conversationOrigin = conversationOriginForInput(input.id);
   let sourceContexts = metadata.sourceContexts;
   try {
     if ((!Array.isArray(sourceContexts) || sourceContexts.length === 0) && input.context_refs_json) {
@@ -142,6 +144,7 @@ function withSessionInputContextMetadata(
     metadata: {
       ...metadata,
       clientMessageId: input.client_message_id,
+      ...(conversationOrigin ? { conversationOrigin } : {}),
       ...(Array.isArray(sourceContexts) && sourceContexts.length > 0 ? { sourceContexts } : {}),
     },
   } as unknown as TranscriptStoredRow;

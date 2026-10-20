@@ -1,4 +1,7 @@
+import { Skeleton } from '@/components/ui/skeleton';
+import { useConversationLaunches } from './use-conversation-launches';
 import type {
+  ConversationLaunchView,
   ProductDeliveryEnvelope,
   ProductReference,
   ProductReferenceKind,
@@ -119,7 +122,13 @@ function DeliveryRow({
   language,
   conversationId,
   projectId,
+  launch,
+  launchLoading,
+  launchError,
 }: {
+  launch?: ConversationLaunchView;
+  launchLoading?: boolean;
+  launchError?: boolean;
   delivery: ProductDeliveryEnvelope;
   reference: ProductReference;
   language: 'en' | 'zh';
@@ -134,10 +143,11 @@ function DeliveryRow({
   const filePath = reference.kind === 'file' && reference.capabilities.includes('preview')
     ? workspacePathFromFileResourceId(reference.id) : null;
   const canPreviewFile = Boolean(filePath && (conversationId?.trim() || projectId?.trim()));
-  const canOpen = canPreviewFile || Boolean(route && reference.capabilities.includes('open'));
+  const canOpen = launch?.status !== 'unavailable' && (canPreviewFile || Boolean(route && reference.capabilities.includes('open')));
   const canContinue = reference.kind !== 'note' && reference.kind !== 'task'
     && reference.capabilities.includes('continue_in_chat');
-  const isFailure = delivery.operation === 'failed';
+  const isFailure = delivery.operation === 'failed' || launch?.status === 'failed' || launch?.status === 'preparation_failed';
+  const unavailable = launch?.status === 'unavailable';
   const token = useGatewayStore((state) => state.conversationId);
   const taskDetail = useSWR(reference.kind === 'task' ? ['task-delivery', reference.id, token] : null,
     () => fetchTask(reference.id), { revalidateOnFocus: true });
@@ -154,7 +164,11 @@ function DeliveryRow({
       window.removeEventListener('gateway-realtime-connected', refresh);
     };
   }, [reference.kind, reference.id, taskDetail.mutate]);
-  const description = reference.kind === 'task'
+  const launchLabels = messages(language).chat.conversationLaunch;
+  const description = reference.kind === 'session' && launch
+    ? [launchLabels.states[launch.status], launch.summary].filter(Boolean).join(' · ')
+    : reference.kind === 'session' && launchError ? launchLabels.refreshFailed
+    : reference.kind === 'task'
     ? taskDeliveryMeta(delivery, {
       phase: taskDetail.data?.task.phase,
       resolution: taskDetail.data?.task.resolution,
@@ -176,6 +190,7 @@ function DeliveryRow({
       navigate(noteDetailHref(`${location.pathname}${location.search}`, reference.id));
       return;
     }
+    if (route && reference.kind === 'session') { navigate(route); return; }
     if (route) {
       const target = new URL(route, 'https://xopc.local');
       if (reference.projectId) target.searchParams.set('projectId', reference.projectId);
@@ -210,13 +225,13 @@ function DeliveryRow({
           <Icon className="size-4" strokeWidth={1.75} />
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-sm font-medium text-fg" title={reference.title}>{reference.title}</span>
-          <span
-            className="mt-0.5 block truncate text-xs leading-5 text-fg-muted"
-            title={description}
-          >
-            {description}
-          </span>
+          <span className="block truncate text-sm font-medium text-fg" title={reference.title}>{launch?.title ?? reference.title}</span>
+          {reference.kind === 'session' && launchLoading ? <Skeleton className="mt-1 h-4 w-40" /> : (
+            <span className="mt-0.5 block truncate text-xs leading-5 text-fg-muted" title={description}
+              aria-label={unavailable ? launchLabels.states.unavailable : undefined}>
+              {description}
+            </span>
+          )}
         </span>
         {canOpen ? <ChevronRight className="size-4 shrink-0 text-fg-subtle" strokeWidth={1.75} aria-hidden /> : null}
       </button>
@@ -309,6 +324,8 @@ export function ProductDeliveryRows({
   projectId?: string | null;
 }) {
   const references = productDeliveryReferences(deliveries, excludedReferenceKeys);
+  const launches = useConversationLaunches(conversationId, references.filter(entry => entry.reference.kind === 'session').map(entry => entry.reference.id));
+  const launchById = new Map(launches.data?.items.map(item => [item.conversationId, item]));
   const fileReferences = references.filter(({ reference }) => reference.kind === 'file');
   const firstFileIndex = references.findIndex(({ reference }) => reference.kind === 'file');
 
@@ -316,6 +333,9 @@ export function ProductDeliveryRows({
 
   return (
     <>
+      {launches.data?.items.length ? <li className="sr-only" role="status" aria-atomic="true">
+        {launches.data.items.map(item => `${item.title}: ${messages(language).chat.conversationLaunch.states[item.status]}`).join('; ')}
+      </li> : null}
       {references.map(({ key, delivery, reference }, index) => {
         if (reference.kind !== 'file' || fileReferences.length === 1) {
           return (
@@ -323,6 +343,9 @@ export function ProductDeliveryRows({
               key={key}
               delivery={delivery}
               reference={reference}
+              launch={launchById.get(reference.id)}
+              launchLoading={Boolean(conversationId && launches.isLoading)}
+              launchError={Boolean(launches.error)}
               language={language}
               conversationId={conversationId}
               projectId={projectId}

@@ -1,4 +1,4 @@
-import type { PersonalProvenance } from '@xopcai/gateway-contract';
+import type { ConversationOrigin, PersonalProvenance } from '@xopcai/gateway-contract';
 import type { AppContextEnvelope, TaskResultDelivery, ToolActivity, TurnOutcome, UserTurnDocument } from '@xopcai/gateway-contract';
 
 /** Canonical chat message model for the web UI (gateway chat + embedded agent chat). */
@@ -157,6 +157,7 @@ export interface Message {
   personalProvenance?: PersonalProvenance;
   contextRefs?: MessageContextRef[];
   sourceDevice?: { endpointId: string; name: string };
+  conversationOrigin?: ConversationOrigin;
   /** Authored ordering of explicit @ references within the user message. */
   userTurnDocument?: UserTurnDocument;
   usage?: {

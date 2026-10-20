@@ -6,15 +6,12 @@ import { deviceTurnSourceContext, endpointClaimBelongsToPrincipal } from '../../
 import { browserPageContextToAgentContext } from '../../../agent/source-context/browser-page.js';
 import { validateWebchatAttachments, validateWebchatContent } from '../../chat-limits.js';
 import { getGatewayPrincipal } from '../../security/gateway-principal.js';
-import { receiveSessionCommand, sessionCommandSnapshot } from '../../service/session-command-service.js';
+import { receiveSessionCommand, sessionCommandSnapshot, dispatchSessionCommand } from '../../service/session-command-service.js';
 import { getSessionInputReceipt, isConversationDeleted, SessionCommandError, retrySessionPreparation } from '../../../storage/sqlite/session-creation-repository.js';
 import { z } from 'zod';
 import type { AuthenticatedRouteDeps } from './deps.js';
 import { parseSlashCommand, commandRegistry } from '../../../chat-commands/index.js';
 import { isVoiceLikeAttachment } from '../../../channels/attachments/voice-stt-webchat.js';
-import { createLogger } from '../../../utils/logger.js';
-
-const log = createLogger('Gateway:SessionCommand');
 
 function commandError(c: Context, error: unknown): Response {
   if (error instanceof SessionCommandError) {
@@ -32,6 +29,7 @@ export async function handleSessionCommand(c: Context, deps: AuthenticatedRouteD
   const command = parsed.data;
   const principal = getGatewayPrincipal(c);
   if ('input' in command) {
+    if (command.origin.type === 'conversation') return c.json({ ok: false, error: { code: 'FORBIDDEN', message: 'Conversation origin is internal only' } }, 403);
     const origin = command.origin.type === 'endpoint' ? endpointTurnClaimSchema.safeParse(command.origin) : null;
     if (origin && (!origin.success || !deps.service.endpointTools.registry.verifyTurnClaim(origin.data.endpointId, origin.data.token))) {
       return c.json({ ok: false, error: { code: 'INVALID_ENDPOINT', message: 'Endpoint connection is not active' } }, 401);
@@ -67,12 +65,7 @@ export async function handleSessionCommand(c: Context, deps: AuthenticatedRouteD
       if (command.input.appContext) contexts.push(await deps.service.prepareSessionAppContext(command.input.appContext, principal, id.data, command.clientMessageId));
       return contexts;
     });
-    deps.service.emit('session.input-state', payload.inputState);
-    if ('kind' in command && command.kind === 'start') deps.service.emit('session.updated', { key: id.data });
-    if (payload.receipt.lifecycle === 'preparing') deps.service.sessionPreparations.wake(id.data);
-    else if (payload.receipt.lifecycle === 'ready') void deps.service.drainSessionInputs(id.data).catch(err => {
-      log.error({ err, conversationId: id.data }, 'Accepted session input drain failed');
-    });
+    dispatchSessionCommand(deps.service, payload, 'kind' in command && command.kind === 'start');
     return c.json({ ok: true, payload }, 202);
   } catch (error) { return commandError(c, error); }
 }

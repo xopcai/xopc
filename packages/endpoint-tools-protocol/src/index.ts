@@ -20,6 +20,7 @@ const turnTokenSchema = z.string().min(32).max(160).regex(/^[A-Za-z0-9_-]+$/);
 
 export const turnOriginSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('endpoint'), endpointId: identifierSchema }),
+  z.strictObject({ type: z.literal('conversation'), launchId: z.string().uuid() }),
   z.strictObject({ type: z.literal('channel'), channel: z.string().min(1).max(64) }),
   z.strictObject({
     type: z.literal('system'),

@@ -75,6 +75,8 @@
     "test:extensions": "cross-env XOPC_LOG_LEVEL=fatal vitest run --project=extensions",
     "test:web": "cross-env XOPC_LOG_LEVEL=fatal vitest run --project=web",
     "test:packages": "cross-env XOPC_LOG_LEVEL=fatal vitest run --project=packages",
+    "test:conversation-launch:e2e": "pnpm run build && tsx scripts/verify-conversation-launch-e2e.mts",
+    "test:conversation-launch:live": "tsx scripts/verify-conversation-launch-live.mts",
     "test:plugins:e2e": "pnpm run build:node && pnpm run build:web && pnpm run test:plugins:store:e2e && pnpm run test:plugins:app:e2e && pnpm run test:plugins:authorization:e2e && pnpm run test:plugins:browser",
     "test:plugins:app:e2e": "cross-env XOPC_LOG_LEVEL=fatal tsx scripts/verify-plugin-app-e2e.mts",
     "test:plugins:store:e2e": "cross-env XOPC_LOG_LEVEL=fatal tsx scripts/verify-store-plugin-e2e.mts",

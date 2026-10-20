@@ -6,6 +6,13 @@ import {
 } from '../lazy-bundles.js';
 
 describe('lazy route bundles', () => {
+  it('maps conversation launch reads without capturing input or adjacent routes', () => {
+    for (const path of ['/api/sessions/id/launched-conversations', '/api/sessions/id/launch-origin']) {
+      expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('conversation-launches');
+    }
+    expect(findAuthenticatedLazyRouteBundle('/api/sessions/id/launched-conversations-other')).toBeUndefined();
+    expect(findAuthenticatedLazyRouteBundle('/api/sessions/id/inputs')?.id).not.toBe('conversation-launches');
+  });
   it('maps provider setup preview and apply through the models bundle', () => {
     for (const path of ['/api/models/setup/qwen-token-plan-cn', '/api/models/setup/xopc-cloud/preview', '/api/models/setup/xiaomi-token-plan-cn/apply']) expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('models');
     expect(findAuthenticatedLazyRouteBundle('/api/models-setup/xopc-cloud')).toBeUndefined();

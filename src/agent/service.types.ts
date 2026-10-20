@@ -38,6 +38,7 @@ export interface AgentServiceConfig {
   getProjectService?: () => ProjectService | undefined;
   getWorkDiscovery?: () => import('../work-discovery/service.js').WorkDiscoveryService | undefined;
   getLocalAppService?: () => LocalAppService | undefined;
+  launchConversation?: (input: import('@xopcai/gateway-contract').ConversationLaunchInput, context: import('@xopcai/gateway-contract').ConversationLaunchContext) => Promise<Record<string, unknown>>;
   getChatPreviewService?: () => ChatPreviewService | undefined;
   dispatchTaskEvents?: () => void;
   dispatchTaskRuns?: () => void;

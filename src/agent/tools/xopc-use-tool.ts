@@ -11,6 +11,7 @@ import { Type } from '@sinclair/typebox';
 import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
 import {
   appendProductDeliveryText,
+  ConversationLaunchInputSchema,
   ChatPreviewCreateInputSchema,
   ChatPreviewReviseInputSchema,
   PRODUCT_DELIVERY_VERSION,
@@ -69,6 +70,7 @@ import { TaskCollaborationRepository, type TaskCollaborationKind } from '../../t
 
 const XopcUseToolSchema = Type.Object({
   mode: Type.Union([
+    Type.Literal('conversation'),
     Type.Literal('context'),
     Type.Literal('project'),
     Type.Literal('automation'),
@@ -82,6 +84,7 @@ const XopcUseToolSchema = Type.Object({
   ]),
   command: Type.String({
     description:
+      'Conversation create accepts {prompt, title?, project?:{kind:current|project|none, projectId?}, agentId?, execution?, idempotencyKey?}; omitted project inherits the current project, or creates a projectless chat if there is none. kind none always creates a projectless chat. Creates an independent chat and submits its first message. Use only when the user asks for a new conversation. Accepted does not mean completed. Never change the key after an uncertain write. ' +
       'Context resolve takes an explicit AppContextEnvelope; never guess a current page. Automation draft/repair_draft accept prompt/id, agentId?, language?, idempotencyKey?; simulate explains an automation without running it. Local_app record_acceptance records supplied checks and sourceHash, not proof that checks were executed. ' +
       'Agent commands: list, get {id}, create {id, profile, workspace?, models?, skills?, tools?, workflows?, runtime?, idempotencyKey?}, update {id, expectedRevision, patch, idempotencyKey?}, set_default {id, expectedRevision, idempotencyKey?}, disable/delete/purge {id, expectedRevision, idempotencyKey?}. Purge also removes on-disk data. ' +
       'Project create accepts idempotencyKey; update/pin/unpin/delete accepts {projectId, expectedVersion?, idempotencyKey?}; stable retries require the original expectedVersion. Delete preserves workspace files and does not confirm external execution stopped. ' +
@@ -96,7 +99,7 @@ const XopcUseToolSchema = Type.Object({
   })),
 });
 
-export type XopcUseMode = 'context' | 'project' | 'automation' | 'note' | 'task' | 'task_run' | 'chat_preview' | 'local_app' | 'agent' | 'settings';
+export type XopcUseMode = 'conversation' | 'context' | 'project' | 'automation' | 'note' | 'task' | 'task_run' | 'chat_preview' | 'local_app' | 'agent' | 'settings';
 
 export interface XopcUseToolInput {
   mode: XopcUseMode;
@@ -109,6 +112,7 @@ export interface XopcUseToolDeps {
   authorizeCapability?: CapabilityContext['authorize'];
   getWorkspace?: () => string;
   getConfig?: () => Config | undefined;
+  getCurrentRunId?: () => string | undefined;
   getCurrentAgentId?: () => string | undefined;
   getCurrentConversationId?: () => string | undefined;
   getAutomationService?: () => AutomationService | undefined;
@@ -116,6 +120,7 @@ export interface XopcUseToolDeps {
   getProjectService?: () => ProjectService | undefined;
   getWorkDiscovery?: () => import('../../work-discovery/service.js').WorkDiscoveryService | undefined;
   getLocalAppService?: () => LocalAppService | undefined;
+  launchConversation?: (input: import('@xopcai/gateway-contract').ConversationLaunchInput, context: import('@xopcai/gateway-contract').ConversationLaunchContext) => Promise<Record<string, unknown>>;
   getChatPreviewService?: () => ChatPreviewService | undefined;
   dispatchTaskEvents?: () => void;
   createTask?: TaskApplicationService['create'];
@@ -1278,6 +1283,7 @@ export function createXopcUseTool(deps: XopcUseToolDeps): AgentTool<typeof XopcU
     name: 'xopc_use',
     label: 'XOPC Use',
     description:
+      'To create a new independent conversation and send its first message: mode conversation, command create, args {prompt:"Exact first message", title:"Short title", project:{kind:"current"}}. Omitted project inherits the source project or creates a projectless chat; project {kind:"none"} always creates a projectless chat; {kind:"project",projectId:"id"} selects a project. Only do this when the user asks for a new conversation. Acceptance means queued, not completed. ' +
       'Operate first-class xopc objects through one safe entry point. To delegate work for immediate execution: mode task, command create, args {title:"Short task name", objective:"One-sentence outcome", body:"Full Markdown task brief", createMode:"start", agentId:"researcher"}; omitting createMode creates a backlog task only. To start an existing Task: mode task, command command, args {taskId, type:"start", expectedVersion, commandArgs:{executor:{kind:"agent",agentId:"main"}}}. Inspect an existing Task and its run before creating another Task for the same objective. For delegated work, task delegated_tasks lists this conversation\'s tasks; task collaboration reads the shared board; task collaboration_post writes {taskId, kind, body, causationId?, idempotencyKey?}. Workers report progress or questions; the main Agent writes instructions and answers. Use chat_preview for lightweight UI mockups in the current conversation; do not create a Local App unless the user asks for a durable app. Local App capabilities takes extensionId and discovers already granted bindings. Local App invoke requires extensionId, the discovered manifestDigest, capabilityId and a pinned call {majorVersion, descriptorDigest, input, idempotencyKey for writes}. Never manufacture grants or change a retry key after an uncertain write. Use for Agents, projects, automations, notes, tasks, TaskRuns, chat previews, local apps, and exact settings jump targets instead of editing storage files directly. For non-trivial object changes, load the built-in manual first with tool_manual({ tool: "xopc_use" }).',
     parameters: XopcUseToolSchema,
     mutatesWorkspace: true,
@@ -1291,6 +1297,29 @@ export function createXopcUseTool(deps: XopcUseToolDeps): AgentTool<typeof XopcU
       const args = ensureArgs(input);
       const details: XopcUseDetails = { mode, command, dryRun };
       if (!command) return errorText('command is required', details);
+      if (mode === 'conversation') {
+        try {
+          if (command !== 'create') return errorText('Only conversation create is supported', details);
+          const sourceConversationId = deps.getCurrentConversationId?.();
+          if (!sourceConversationId || !deps.launchConversation) return errorText('Conversation launch requires an active Gateway conversation', details);
+          const { idempotencyKey, ...raw } = args;
+          if (idempotencyKey !== undefined && (typeof idempotencyKey !== 'string' || !idempotencyKey.trim())) return errorText('Invalid idempotency key', details);
+          const parsed = ConversationLaunchInputSchema.parse(raw);
+          if (deps.authorizeCapability && !await deps.authorizeCapability('xopc.conversations.create', parsed)) return errorText('Conversation creation is not authorized', details);
+          if (signal?.aborted) return errorText('Conversation creation was cancelled', details);
+          const result = await deps.launchConversation(parsed, { sourceConversationId, sourceRunId: deps.getCurrentRunId?.(), toolCallId,
+            idempotencyKey: typeof idempotencyKey === 'string' ? idempotencyKey : toolCallId, dryRun });
+          const id = deliveryText(result.conversationId);
+          const delivery: ProductDeliveryEnvelope | undefined = id && !dryRun ? {
+            version: PRODUCT_DELIVERY_VERSION, operation: 'created', primary: {
+              kind: 'session', id, title: deliveryText(result.title) ?? parsed.title ?? 'Conversation',
+              projectId: deliveryText(result.projectId), capabilities: ['open'],
+            },
+          } : undefined;
+          return okText({ ...details, result, delivery });
+        } catch (err) { return errorText(err instanceof Error ? err.message : String(err), details); }
+      }
+
       if (mode === 'local_app' && (command === 'capabilities' || command === 'invoke')) {
         const apps = deps.getLocalAppService?.();
         if (!apps) return errorText('Local app service is unavailable', details);

@@ -189,6 +189,7 @@ function preserveLocalUserDisplayPayload(existing: Message, incoming: Message): 
   const contextRefs = incoming.contextRefs?.length ? incoming.contextRefs : existing.contextRefs;
   const userTurnDocument = incoming.userTurnDocument ?? existing.userTurnDocument;
   return { ...incoming, attachments, contextRefs, userTurnDocument,
+    conversationOrigin: incoming.conversationOrigin ?? existing.conversationOrigin,
     renderKey: existing.renderKey, clientSubmissionId: existing.clientSubmissionId };
 }
 

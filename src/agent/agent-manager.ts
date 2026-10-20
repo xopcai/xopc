@@ -200,6 +200,7 @@ export interface AgentManagerConfig {
   getProjectService?: () => ProjectService | undefined;
   getWorkDiscovery?: () => import('../work-discovery/service.js').WorkDiscoveryService | undefined;
   getLocalAppService?: () => import('../local-apps/index.js').LocalAppService | undefined;
+  launchConversation?: (input: import('@xopcai/gateway-contract').ConversationLaunchInput, context: import('@xopcai/gateway-contract').ConversationLaunchContext) => Promise<Record<string, unknown>>;
   getChatPreviewService?: () => import('../chat-previews/index.js').ChatPreviewService | undefined;
   dispatchTaskEvents?: () => void;
   dispatchTaskRuns?: () => void;
@@ -496,6 +497,7 @@ export class AgentManager implements AgentInstanceGateway {
       getProjectService: this.config.getProjectService,
       getWorkDiscovery: this.config.getWorkDiscovery,
       getLocalAppService: this.config.getLocalAppService,
+      launchConversation: this.config.launchConversation,
       getChatPreviewService: this.config.getChatPreviewService,
       dispatchTaskEvents: this.config.dispatchTaskEvents,
       dispatchTaskRuns: this.config.dispatchTaskRuns,

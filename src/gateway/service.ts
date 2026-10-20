@@ -126,6 +126,7 @@ import { GatewaySessionsApi } from './service/sessions-api.js';
 import { GatewayMarketplaceService } from './service/marketplace-service.js';
 import { GatewayConfigCoordinator } from './service/config-coordinator.js';
 import { GatewayAgentRunner } from './service/agent-runner.js';
+import { launchConversation } from './service/conversation-launch-service.js';
 import { SessionPreparationWorker } from './service/session-preparation-worker.js';
 import { isBrowserSessionActive } from '../storage/sqlite/browser-session-repository.js';
 import { RealtimeRuntime } from '../realtime/runtime.js';
@@ -749,6 +750,7 @@ export class GatewayService {
       getProjectService: () => this.projects,
       getWorkDiscovery: () => this._workDiscovery ?? undefined,
       getLocalAppService: () => this.localApps,
+      launchConversation: (input, context) => launchConversation(this, input, context),
       getChatPreviewService: () => this.chatPreviews,
       dispatchTaskEvents: () => this.dispatchTaskEvents(),
       dispatchTaskRuns: () => this.dispatchTaskRuns(),
@@ -1530,6 +1532,8 @@ export class GatewayService {
 
     await trace.measure('workflows.reconcile', () => this.reconcileInterruptedWorkflowRuns());
 
+    this.sessionIndex.onSessionDeleted(({ key }) => this.emit('session.updated', { key, deleted: true }));
+
     this.sessionIndex.on('sessionUpdated', (data: { key: string; name?: string; tags?: string[] }) => {
       this.emit('session.updated', { key: data.key, name: data.name, tags: data.tags });
     });
@@ -2241,6 +2245,10 @@ export class GatewayService {
   }
 
   emit(type: string, payload: unknown): void {
+    if ((type === 'session.input-state' || type === 'session.updated') && payload && typeof payload === 'object') {
+      const conversationId = 'conversationId' in payload ? payload.conversationId : 'key' in payload ? payload.key : undefined;
+      if (typeof conversationId === 'string') this.realtime.broker.publish('sessions', 'session.launch.changed', { conversationId });
+    }
     if (type === 'config.reload') notifyUserContextChange({ kind: 'policy' });
     if (type === 'connector.learning.updated' && payload && typeof payload === 'object') {
       const job = payload as Record<string, unknown>;

@@ -24,6 +24,23 @@
       "save": "Unable to save feedback",
       "undo": "Unable to undo strategy"
     },
+    "conversationLaunch": {
+      "origin": "Sent by {{agent}} from another conversation",
+      "openSource": "Open source conversation",
+      "sourceUnavailable": "Source conversation unavailable",
+      "refreshFailed": "Status temporarily unavailable",
+      "states": {
+        "preparing": "Preparing environment",
+        "preparation_failed": "Environment preparation failed",
+        "queued": "Queued",
+        "running": "Running",
+        "waiting": "Waiting for action",
+        "completed": "Replied",
+        "failed": "Failed",
+        "cancelled": "Cancelled",
+        "unavailable": "Conversation unavailable"
+      }
+    },
     "productDelivery": {
     "heading": "Turn deliverables",
     "partialResults": "Showing partial results",

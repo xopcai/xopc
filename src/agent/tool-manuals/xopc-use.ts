@@ -1,5 +1,16 @@
 export const xopcUseManual = `# XOPC Use Tool Manual
 
+## Conversation creation
+
+Conversation creation: use xopc_use mode conversation, command create,
+args {prompt, title?, project:{kind:"current"}|{kind:"project",projectId}|{kind:"none"}, agentId?, execution?:{mode:"local_checkout"|"managed_worktree",baseRef?}, idempotencyKey?}.
+Only create a new conversation when the user asks for one. Use the exact requested first message.
+This creates independent history; do not copy the current transcript or permissions.
+Omitted project inherits the current conversation's project; if it has no project, create a projectless conversation.
+Use project kind none to create a projectless conversation even when the current conversation belongs to a project.
+A workspace project uses its configured execution mode by default. Retain an explicit idempotencyKey on retries.
+Acceptance means durably queued, not completed. Return the structured session card; do not claim a reply was received.
+
 ## Purpose
 
 \`xopc_use\` operates first-class XOPC product objects without editing SQLite or product files directly.
@@ -7,7 +18,7 @@ Load this manual before a non-trivial mutation.
 
 \`\`\`json
 {
-  "mode": "agent | project | automation | note | task | task_run | chat_preview | local_app | settings",
+  "mode": "conversation | agent | project | automation | note | task | task_run | chat_preview | local_app | settings",
   "command": "...",
   "args": {},
   "dryRun": false
