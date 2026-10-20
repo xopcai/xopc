@@ -95,15 +95,13 @@ describe('useProgressiveStreamingMarkdown', () => {
     expect(container.textContent).toBe('abcdefghijkl');
   });
 
-  it('smoothly drains pending text when the realtime stream ends', () => {
+  it('commits pending text atomically when the realtime stream ends', () => {
     act(() => root.render(<Harness content="abcdef" streaming />));
     act(() => root.render(<Harness content="abcdefghijklmnopqr" streaming />));
     act(() => root.render(<Harness content="abcdefghijklmnopqr" streaming={false} />));
-    expect(container.textContent).toBe('abcdef');
-    act(() => vi.advanceTimersByTime(64));
-    expect((container.textContent ?? '').length).toBeGreaterThan(6);
-    expect((container.textContent ?? '').length).toBeLessThan(18);
-    act(() => vi.advanceTimersByTime(256));
+    expect(container.textContent).toBe('abcdefghijklmnopqr');
+    expect(vi.getTimerCount()).toBe(0);
+    act(() => vi.runAllTimers());
     expect(container.textContent).toBe('abcdefghijklmnopqr');
   });
 
@@ -141,7 +139,7 @@ describe('useProgressiveStreamingMarkdown', () => {
     expect(container.textContent).toBe('Start. revised');
   });
 
-  it('keeps draining after completion and notifies only when all text is visible', () => {
+  it('exposes the complete terminal burst to layout effects and notifies once', () => {
     const commits: Array<{ streaming: boolean; text: string }> = [];
     const onComplete = vi.fn();
     function Probe({ content, streaming }: { content: string; streaming: boolean }) {
@@ -153,11 +151,9 @@ describe('useProgressiveStreamingMarkdown', () => {
     act(() => root.render(<Probe content="Short answer with a final burst." streaming />));
     expect(container.textContent).toBe('Short');
     act(() => root.render(<Probe content="Short answer with a final burst." streaming={false} />));
-    expect(commits.at(-1)).toEqual({ streaming: false, text: 'Short' });
-    expect(onComplete).not.toHaveBeenCalled();
-    act(() => vi.advanceTimersByTime(128));
-    expect((container.textContent ?? '').length).toBeGreaterThan(5);
-    expect((container.textContent ?? '').length).toBeLessThan('Short answer with a final burst.'.length);
+    expect(commits.at(-1)).toEqual({ streaming: false, text: 'Short answer with a final burst.' });
+    expect(onComplete).toHaveBeenCalledTimes(1);
+    expect(vi.getTimerCount()).toBe(0);
     act(() => vi.runAllTimers());
     expect(container.textContent).toBe('Short answer with a final burst.');
     expect(onComplete).toHaveBeenCalledTimes(1);

@@ -1,4 +1,4 @@
-import { memo, useRef, useState, type ReactNode, type RefObject } from 'react';
+import { memo, useState, type ReactNode, type RefObject } from 'react';
 
 import { ChatWelcomeSpotlight } from '@/features/chat/chat-welcome-spotlight';
 import { ConnectedMessageBubble } from '@/features/chat/rendering/connected-message-bubble';
@@ -97,7 +97,6 @@ export const MessageList = memo(function MessageList({
   const m = messages(language);
 
   const [virtualized] = useState(Boolean(scrollRef && list.length >= 300));
-  const footerRef = useRef<HTMLDivElement>(null);
 
   const showWelcome = list.length === 0 && !streaming && !sending;
 
@@ -217,18 +216,20 @@ export const MessageList = memo(function MessageList({
       </div>
     );
   };
+  const footer = (
+    <div className={cn(virtualized ? 'pt-8' : 'contents')}>
+      {trailingContent}
+      {/* Reduced-motion duration overrides must not animate the spacer's height. */}
+      {replySpaceRef && <div ref={replySpaceRef} className={cn(!virtualized && '-mt-8', 'shrink-0 transition-none')}
+        aria-hidden data-chat-reply-space />}
+    </div>
+  );
   return (
     <InlinePreviewSchedulerProvider>
       <div ref={registerListContentRef} className={cn('w-full min-w-0 pb-8', !virtualized && 'flex flex-col gap-8')}
         data-chat-virtualized={virtualized || undefined}>
         {virtualized && scrollRef ? <VirtualMessageRows rows={rows} scrollRef={scrollRef}
-          renderRow={renderRow} footerRef={footerRef} /> : rows.map(row => renderRow(row.index))}
-        <div ref={footerRef} className={cn(virtualized ? 'pt-8' : 'contents')}>
-          {trailingContent}
-          {/* Reduced-motion duration overrides must not animate the spacer's height. */}
-          {replySpaceRef && <div ref={replySpaceRef} className={cn(!virtualized && '-mt-8', 'shrink-0 transition-none')}
-            aria-hidden data-chat-reply-space />}
-        </div>
+          renderRow={renderRow} footer={footer} /> : <>{rows.map(row => renderRow(row.index))}{footer}</>}
       </div>
     </InlinePreviewSchedulerProvider>
   );

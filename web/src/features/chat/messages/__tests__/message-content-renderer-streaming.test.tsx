@@ -391,11 +391,8 @@ describe('streaming assistant Markdown rendering', () => {
 
     answer(content, 'answer', false);
     expect(container.querySelector('.xopc-chat-markdown')).toBe(tree);
-    expect(tree?.textContent).toBe(partial);
-    act(() => vi.advanceTimersByTime(128));
-    expect((tree?.textContent ?? '').length).toBeGreaterThan(partial.length);
-    expect((tree?.textContent ?? '').length).toBeLessThan(content.length);
-    act(() => vi.advanceTimersByTime(192));
+    expect(tree?.textContent).toBe(content);
+    act(() => vi.advanceTimersByTime(320));
     expect(tree?.textContent).toBe(content);
   });
 

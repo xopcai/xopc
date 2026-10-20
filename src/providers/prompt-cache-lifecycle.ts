@@ -19,10 +19,11 @@ export function resolvePromptCacheTtlMs(model: Model<Api>, policy: PromptCachePo
 export function recordPromptCacheTouch(
   conversationId: string,
   model: Model<Api>,
-  usage: { cacheRead?: number; cacheWrite?: number },
+  usage: { cacheRead?: number; cacheWrite?: number } | null | undefined,
   now = Date.now(),
 ): void {
-  if ((usage.cacheRead ?? 0) <= 0 && (usage.cacheWrite ?? 0) <= 0) return;
+  // Usage may be absent on extension messages; cache bookkeeping must not block their append.
+  if ((usage?.cacheRead ?? 0) <= 0 && (usage?.cacheWrite ?? 0) <= 0) return;
   const key = scopeKey(conversationId, model);
   cacheTouchByScope.delete(key);
   cacheTouchByScope.set(key, now);

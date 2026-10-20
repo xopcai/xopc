@@ -20,6 +20,11 @@ describe('prompt cache lifecycle', () => {
     expect(resolvePromptCacheTtlMs(openai, { mode: 'auto', lifetime: 'short' })).toBe(30 * 60_000);
   });
 
+  it.each([undefined, null, {}])('ignores missing cache usage without interrupting message persistence: %s', usage => {
+    expect(() => recordPromptCacheTouch('session', anthropic, usage)).not.toThrow();
+    expect(isPromptCacheExpired('session', anthropic, { mode: 'auto', lifetime: 'short' }, 10_000_000)).toBe(false);
+  });
+
   it('expires only after a real cache read or write', () => {
     const policy = { mode: 'auto' as const, lifetime: 'short' as const };
     expect(isPromptCacheExpired('session', anthropic, policy, 10_000_000)).toBe(false);

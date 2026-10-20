@@ -345,18 +345,26 @@ export class SessionManager {
       // The history endpoint pages raw transcript rows, while the UI merges many assistant/tool
       // rows into one visible turn. A long tool-heavy tail can make the first page start with an
       // orphan assistant bubble. For the initial tail load, pull older raw pages until the visible
-      // slice starts at a user row or history is exhausted.
+      // slice starts at a user row or history is exhausted. Invisible pages and sparse user-only
+      // tails can hide every saved reply; cross them until a reply or a visible page is found.
+      // The raw-row budget is soft when diagnostics leave less than a page of visible history.
       while (
         offset === 0 &&
         !beforeCursor &&
         hasMore &&
         nextBeforeCursor &&
-        raw.length < INITIAL_HISTORY_MAX_RAW_ROWS &&
-        messages[0]?.role === 'assistant'
+        (raw.length < INITIAL_HISTORY_MAX_RAW_ROWS || messages.length < INITIAL_HISTORY_PAGE_LIMIT
+          || !messages.some(message => message.role === 'user')) &&
+        (messages[0]?.role === 'assistant' || (messages.length < INITIAL_HISTORY_PAGE_LIMIT
+          && !messages.some(message => message.role === 'assistant')))
       ) {
-        data = await loadPage(0, nextBeforeCursor);
+        const previousCursor = nextBeforeCursor;
+        data = await loadPage(0, previousCursor);
+        if (data.pagination.hasMore && (!data.pagination.nextBeforeCursor
+          || Number(data.pagination.nextBeforeCursor) >= Number(previousCursor))) {
+          throw new Error('History pagination did not advance');
+        }
         const olderRaw = data.session.messages;
-        if (olderRaw.length === 0) break;
         raw = [...olderRaw, ...raw];
         messages = sessionWireToUiMessages(raw);
         hasMore = data.pagination.hasMore;

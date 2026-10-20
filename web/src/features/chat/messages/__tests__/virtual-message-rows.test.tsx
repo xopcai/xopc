@@ -20,7 +20,7 @@ describe('virtual history interaction window', () => {
     root = createRoot(container);
     const scrollRef = createRef<HTMLDivElement>(); scrollRef.current = container;
     act(() => root.render(<VirtualMessageRows rows={[{ key: 'row', index: 0, aliases: [] }]}
-      scrollRef={scrollRef} footerRef={createRef()} renderRow={() => null} />));
+      scrollRef={scrollRef} footer={null} renderRow={() => null} />));
   });
   afterEach(() => { act(() => root.unmount()); window.getSelection()?.removeAllRanges(); container.remove(); });
 

@@ -4,6 +4,8 @@ import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { registerChatVirtualScroll } from '@/features/chat/scroll/chat-virtual-scroll';
+
 import type { Message } from '@/features/chat/messages/messages.types';
 import {
   useChatScrollViewport,
@@ -86,6 +88,70 @@ describe('useChatScrollViewport', () => {
       </div>
     );
   }
+
+  it('follows committed virtual measurements before another frame without moving history readers', async () => {
+    act(() => root.render(<Harness />));
+    const el = container.firstElementChild as HTMLDivElement;
+    let height = 1000;
+    let top = 600;
+    Object.defineProperties(el, {
+      clientHeight: { value: 400 },
+      scrollHeight: { get: () => height },
+      scrollTop: { get: () => top, set: (value: number) => { top = Math.min(value, height - 400); } },
+    });
+    const seek = vi.fn();
+    const unregister = registerChatVirtualScroll(el, { end: seek, reveal: () => false });
+    const measured = document.createElement('div');
+    measured.dataset.virtuosoScroller = 'true';
+    el.firstElementChild!.append(measured);
+    await act(async () => {
+      height = 1050;
+      measured.style.height = '1050px';
+      await Promise.resolve();
+    });
+    expect(top).toBe(650);
+    expect(seek).not.toHaveBeenCalled();
+    act(() => { top = 100; viewport?.onScroll(); });
+    await act(async () => {
+      height = 1100;
+      measured.style.height = '1100px';
+      await Promise.resolve();
+    });
+    expect(top).toBe(100);
+    unregister();
+  });
+
+  it('consumes reply space on a virtual text commit before measured list growth', async () => {
+    act(() => root.render(<Harness />));
+    const el = container.firstElementChild as HTMLDivElement;
+    const spacer = el.querySelector<HTMLDivElement>('[data-chat-reply-space]')!;
+    let replyHeight = 0;
+    let top = 400;
+    Object.defineProperties(el, {
+      clientHeight: { value: 600 },
+      scrollHeight: { get: () => 1000 + replyHeight + (parseFloat(spacer.style.height) || 0) },
+      scrollTop: { get: () => top, set: (value: number) => { top = Math.min(value, el.scrollHeight - 600); } },
+    });
+    spacer.getBoundingClientRect = () => ({ top: 1000 + replyHeight } as DOMRect);
+    const original = HTMLElement.prototype.getBoundingClientRect;
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      return this.dataset.messageRenderKey === 'sent-user' ? { bottom: 1000 } as DOMRect : original.call(this);
+    });
+    act(() => viewport?.reserveReplySpace('sent-user'));
+    act(() => root.render(<Harness messages={[...chatMessages, { role: 'user', renderKey: 'sent-user', content: [] }]} />));
+    const unregister = registerChatVirtualScroll(el, { end: vi.fn(), reveal: () => false });
+    const text = document.createTextNode('Short reply');
+    el.firstElementChild!.append(text);
+    await act(async () => {
+      replyHeight = 27;
+      text.data = 'The complete terminal reply';
+      await Promise.resolve();
+    });
+    expect(spacer.style.height).toBe('33px');
+    expect(top).toBe(460);
+    unregister();
+    vi.restoreAllMocks();
+  });
 
   it.each([[600, 60], [800, 64], [200, 20]])('bounds reply space for a %ipx viewport to %ipx and preserves history', (height, budget) => {
     act(() => root.render(<Harness />));
