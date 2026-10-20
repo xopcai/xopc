@@ -565,7 +565,7 @@ export function LocalAppWorkbenchPage() {
   if (isNew) {
     return (
       <div className="flex min-h-0 flex-1 bg-surface-panel p-3 sm:p-5 xl:p-6">
-        <div className="mx-auto grid w-full max-w-6xl overflow-hidden rounded-2xl border border-edge-subtle bg-surface-base shadow-surface lg:grid-cols-[minmax(280px,0.8fr)_minmax(0,1.5fr)]">
+        <div className="grid w-full min-w-0 overflow-hidden rounded-2xl border border-edge-subtle bg-surface-base shadow-surface lg:grid-cols-[minmax(280px,0.8fr)_minmax(0,1.5fr)]">
           <form onSubmit={onCreate} className="flex flex-col border-b border-edge-subtle p-5 lg:border-b-0 lg:border-r">
             <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-accent"><Sparkles className="size-4" />{zh ? '告诉 Coder 你的想法' : 'Tell Coder your idea'}</div>
             <h2 className="mt-4 text-xl font-semibold tracking-tight text-fg">{zh ? '你想创建什么？' : 'What do you want to create?'}</h2>

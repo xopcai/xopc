@@ -39,7 +39,7 @@ import { useChatSessionWindowEvents } from '@/features/chat/session/use-chat-ses
 import type { AppContextEnvelope } from '@xopcai/gateway-contract';
 
 /** @see docs/design/technical/new-session-preferences.md */
-export function useChatSession(options?: { fixedConversationId?: string; taskId?: string }) {
+export function useChatSession(options?: { fixedConversationId?: string; taskId?: string; personal?: boolean }) {
   const navigate = useNavigate();
   const {
     isNewRoute,
@@ -136,6 +136,7 @@ export function useChatSession(options?: { fixedConversationId?: string; taskId?
     currentSessionProjectId,
   } = useChatSessionAgents({
     navigate,
+    personal: options?.personal,
     conversationIdRef: focusedConversationIdRef,
     conversationId: focusedConversationId,
     isNewRoute,

@@ -15,7 +15,7 @@ const base = '/api/extensions/agent-plugins/sample';
 let job: { revision: number; state: string; resources: string; partial: boolean; missingConfig: string[]; connections: Array<{ name: string; state: string }> } | null;
 beforeEach(() => {
   (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
-  vi.clearAllMocks(); job = null;
+  vi.clearAllMocks(); vi.spyOn(window, 'open').mockReturnValue(null); job = null;
   host = document.createElement('div'); document.body.append(host); root = createRoot(host);
   mocks.request.mockImplementation(async (path: string, options: { method: string; body?: string }) => {
     if (options.method === 'GET') return { ok: true, payload: path.endsWith('/reusable') ? {} : job };
@@ -28,7 +28,7 @@ beforeEach(() => {
     return { ok: true, payload: job };
   });
 });
-afterEach(async () => { await act(async () => root.unmount()); host.remove(); });
+afterEach(async () => { await act(async () => root.unmount()); host.remove(); vi.restoreAllMocks(); });
 async function render() { await act(async () => root.render(<MemoryRouter><PluginSetupPanel extension={extension} zh={false} onChanged={onChanged} /></MemoryRouter>)); }
 async function click(label: string) {
   const button = [...host.querySelectorAll('button')].find(b => b.textContent === label); expect(button).toBeDefined();
@@ -108,4 +108,39 @@ it('shows missing business scopes on a connected account and starts targeted rec
   await click('Grant missing permissions');
   const request = mocks.request.mock.calls.find(([, options]) => options.body && JSON.parse(options.body).action === 'authorize');
   expect(JSON.parse(request![1].body)).toMatchObject({ action: 'authorize', server: 'account', method: 'calendar' });
+});
+
+for (const type of ['oauth', 'cli'] as const) {
+  it(`automatically opens ${type} browser authorization once while polling`, async () => {
+    vi.useFakeTimers();
+    const popup = { closed: false, opener: window, location: { replace: vi.fn() }, close: vi.fn() };
+    vi.mocked(window.open).mockReturnValue(popup as unknown as Window);
+    job = { revision: 8, state: 'action_required', resources: 'ready', connections: [{ name: 'provider', state: 'oauth_required' }], partial: true, missingConfig: [] };
+    const owned: ExtensionApiRow = { ...extension, setup: { tasks: [], userConfig: {}, authorizations: [{ id: 'account', title: 'Provider', servers: ['provider'], methods: [{ id: 'login', title: 'Login', type }] }] } };
+    mocks.request.mockImplementation(async (path: string) => ({ ok: true, payload: path.includes('/auth/') ? { id: 'attempt', state: 'awaiting_user', ...(type === 'oauth' ? { authorizationUrl: 'https://example.com/login' } : { challenge: { type: 'url', url: 'https://example.com/login' } }) } : path.endsWith('/reusable') ? {} : job }));
+    try {
+      await act(async () => root.render(<MemoryRouter><PluginSetupPanel extension={owned} zh={false} onChanged={onChanged} /></MemoryRouter>));
+      await click('Connect account');
+      expect(window.open).toHaveBeenCalledWith('about:blank', '_blank');
+      expect(popup.opener).toBeNull();
+      expect(popup.location.replace).toHaveBeenCalledWith('https://example.com/login');
+      await act(async () => { await vi.advanceTimersByTimeAsync(3000); });
+      expect(window.open).toHaveBeenCalledTimes(1);
+      expect(popup.location.replace).toHaveBeenCalledTimes(1);
+      expect(host.querySelector('a[href="https://example.com/login"]')).not.toBeNull();
+    } finally { vi.useRealTimers(); }
+  });
+}
+
+it('attempts to open the URL once when a popup is blocked and keeps the manual link', async () => {
+  vi.useFakeTimers();
+  job = { revision: 8, state: 'action_required', resources: 'ready', connections: [{ name: 'provider', state: 'oauth_required' }], partial: true, missingConfig: [] };
+  mocks.request.mockImplementation(async (path: string) => ({ ok: true, payload: path.includes('/auth/') ? { id: 'attempt', state: 'awaiting_user', authorizationUrl: 'https://example.com/login' } : path.endsWith('/reusable') ? {} : job }));
+  try {
+    await render(); await click('Connect account');
+    expect(window.open).toHaveBeenLastCalledWith('https://example.com/login', '_blank', 'noopener,noreferrer');
+    await act(async () => { await vi.advanceTimersByTimeAsync(3000); });
+    expect(window.open).toHaveBeenCalledTimes(2);
+    expect(host.querySelector('a[href="https://example.com/login"]')).not.toBeNull();
+  } finally { vi.useRealTimers(); }
 });

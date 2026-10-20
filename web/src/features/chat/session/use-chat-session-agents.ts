@@ -28,8 +28,9 @@ export function useChatSessionAgents(opts: {
   isNewRoute: boolean;
   locationState: unknown;
   locationSearch: string;
+  personal?: boolean;
 }) {
-  const { navigate, conversationIdRef, conversationId, isNewRoute, locationState, locationSearch } = opts;
+  const { navigate, conversationIdRef, conversationId, isNewRoute, locationState, locationSearch, personal = false } = opts;
   const token = useGatewayStore((s) => s.conversationId);
   const sessionAgentKey = conversationId?.trim() ?? '';
 
@@ -125,13 +126,14 @@ export function useChatSessionAgents(opts: {
   }, [onChatAgentChange]);
 
   useLayoutEffect(() => {
-    if (!conversationId) return;
+    // Personal conversations keep their own agent without changing ordinary chat preferences.
+    if (!conversationId || personal) return;
     const agentFromSession = currentSessionAgentId;
     if (!agentFromSession || preferredAgentIdRef.current === agentFromSession) return;
     preferredAgentIdRef.current = agentFromSession;
     setPreferredAgentId(agentFromSession);
     rememberSelectedAgent(agentFromSession);
-  }, [currentSessionAgentId, conversationId]);
+  }, [currentSessionAgentId, conversationId, personal]);
 
   useLayoutEffect(() => {
     if (!conversationId || !currentSessionContext) return;
