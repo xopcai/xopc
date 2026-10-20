@@ -6,11 +6,11 @@ import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
 
 // Upgrade only with reviewed protocol fixtures and a new release digest.
-const version = '0.28.2';
+const version = '0.36.0';
 if (process.platform !== 'darwin') { console.log('Skipping macOS-only Computer Use driver.'); process.exit(0); }
-const sha256 = '386db225a3080714a0f9f935525e61efaf46709587ef8b94dd2df81aeb2f6daa';
-const binarySha256 = 'af30d29cf33bd3bbda1330be7225b18881ea4c5af6df374e08627914b5ac334d';
-const downloadUrl = 'https://api.github.com/repos/trycua/cua/releases/assets/566587560';
+const sha256 = '584e44435a26f5aa90c2f0097242307efbd63e843fc3f61072147c1963b0e592';
+const binarySha256 = '87c7e782e69703d95524e4ceb7ceba03c8a159caabf1f1ce2c118eade7d2a5ec';
+const downloadUrl = 'https://api.github.com/repos/trycua/cua/releases/assets/646667377';
 const maxDownloadAttempts = 4;
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const output = join(root, '.cache', 'computer-driver', version);

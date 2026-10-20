@@ -15,8 +15,11 @@ import { z } from 'zod';
 import type { ComputerAction, ComputerTarget } from '@xopcai/computer-control-contract';
 import type { ComputerDriver, DriverObservation } from '../../src/computer/broker.js';
 import { ComputerTargetError } from '../../src/computer/errors.js';
+import { normalizeComputerKeys as nativeKeys } from '../../src/computer/keyboard.js';
+import { createLogger } from '../../src/utils/logger.js';
 
 const exec = promisify(execFile);
+const log = createLogger('ComputerDriver');
 type CuaSdkModule = typeof import('@trycua/cua-driver');
 type CuaSdkLoader = () => Promise<CuaSdkModule>;
 const Bounds = z.object({ x: z.number(), y: z.number(), width: z.number().positive(), height: z.number().positive() });
@@ -80,11 +83,6 @@ export function summarizeWindowAccessibility(elements: Array<Record<string, unkn
     if (JSON.stringify(summary).length > 12_000) { summary.elements.pop(); summary.truncated = true; }
   }
   return JSON.stringify(summary);
-}
-
-function nativeKeys(keys: string[]): string[] {
-  const aliases: Record<string, string> = { enter: 'return', esc: 'escape', backspace: 'delete', arrowup: 'up', arrowdown: 'down', arrowleft: 'left', arrowright: 'right' };
-  return keys.map(key => aliases[key.toLowerCase()] ?? key.toLowerCase());
 }
 
 /** Private app-owned daemon. No shell, raw tool exposure, global daemon or foreground fallback. */
@@ -184,7 +182,7 @@ export class CuaComputerDriver implements ComputerDriver {
   }, signal?: AbortSignal): Promise<WindowStateOutput> {
     signal?.throwIfAborted();
     if (!this.client) throw new Error('COMPUTER_DRIVER_OFFLINE');
-    const result = await this.client.getWindowState({ pid, windowId, includeAccessibilityTree: true, ...options }, signal ? { signal } : undefined);
+    const result = await this.client.getWindowState({ pid, windowId, includeAccessibilityTree: true, treeFormat: 'both', ...options }, signal ? { signal } : undefined);
     signal?.throwIfAborted();
     return result;
   }
@@ -273,11 +271,8 @@ export class CuaComputerDriver implements ComputerDriver {
     if (!options.windowRef) {
       if (visible.length === 1) window = visible[0];
       else if (!visible.length && selectable.length === 1) window = selectable[0];
-      else {
-        // Native stacking metadata is authoritative; never infer focus from size or array order.
-        const ranked = visible.filter(item => item.zIndex != null).sort((a, b) => a.zIndex! === b.zIndex! ? 0 : a.zIndex! > b.zIndex! ? -1 : 1);
-        if (ranked.length === visible.length && ranked.length > 1 && ranked[0].zIndex !== ranked[1].zIndex) window = ranked[0];
-      }
+      // Multiple documents require an explicit snapshot-scoped selection. Stacking
+      // order cannot establish which document the user's task authorized.
     }
     if (!window && windows.length > 1) throw new ComputerTargetError('COMPUTER_WINDOW_AMBIGUOUS', candidates);
     // A user may already have brought the sole visible window forward. Avoid a
@@ -298,11 +293,27 @@ export class CuaComputerDriver implements ComputerDriver {
     this.elements = []; this.frame = undefined; this.observedTarget = undefined;
     if (await this.processIdentity(target.pid) !== target.processIdentity) throw new Error('COMPUTER_PROCESS_CHANGED');
     const windowId = BigInt(target.windowId);
-    const state = await this.getWindowState(target.pid, windowId, { includeScreenshot: true, maxElements: 180, maxDepth: 12, maxDimension: 1600 }, signal);
+    let state: WindowStateOutput;
+    for (let attempt = 0; ; attempt++) {
+      signal.throwIfAborted();
+      if (await this.processIdentity(target.pid) !== target.processIdentity) throw new Error('COMPUTER_PROCESS_CHANGED');
+      state = await this.getWindowState(target.pid, windowId, { includeScreenshot: true, maxElements: 180, maxDepth: 12, maxDimension: 1600 }, signal);
+      // A resize/render transition can invalidate the optional pixel frame while
+      // retaining the exact AX window. Re-capture only that window; never accept
+      // invalid pixels, follow another window or replay the preceding input.
+      if (state.pid !== target.pid || state.windowId !== windowId || state.screenshotFrameValid !== false || attempt >= 2) break;
+      state.images.length = 0;
+      await delay(100, undefined, { signal });
+    }
     if (state.elements?.some(element => element.role === 'AXButton' && element.label === 'WindowSharingSessionButton')) throw new Error('COMPUTER_WINDOW_CHANGED');
     // Some platforms cannot produce an affirmative frame-validity bit. An explicit
     // negative is fatal; exact pid/window identity and the image envelope remain required.
-    if (state.pid !== target.pid || state.windowId !== windowId || state.screenshotFrameValid === false) throw new Error('COMPUTER_CAPTURE_TARGET_MISMATCH');
+    if (state.pid !== target.pid || state.windowId !== windowId || state.screenshotFrameValid === false) {
+      log.warn({ phase: 'capture', expectedPid: target.pid, actualPid: state.pid, expectedWindowId: String(windowId),
+        actualWindowId: String(state.windowId), frameValid: state.screenshotFrameValid, degraded: state.degraded,
+        imageCount: state.images?.length, width: state.screenshotWidth, height: state.screenshotHeight }, 'Native window capture rejected');
+      throw new Error('COMPUTER_CAPTURE_TARGET_MISMATCH');
+    }
     const bounds = Bounds.parse(state.windowBounds);
     const screenshot = state.images[0];
     if (!screenshot?.dataBase64 || !['image/png', 'image/jpeg'].includes(screenshot.mimeType) || screenshot.dataBase64.length > 7 * 1024 * 1024) throw new Error('COMPUTER_CAPTURE_REQUIRED');
@@ -376,9 +387,7 @@ export class CuaComputerDriver implements ComputerDriver {
     if (action.kind === 'typeText' || action.kind === 'setValue') this.editable(action);
     if (action.kind === 'pressKeys') {
       const keys = nativeKeys(action.keys);
-      const modifiers = new Set(['cmd', 'command', 'ctrl', 'control', 'alt', 'option', 'shift', 'fn']);
       const main = keys.at(-1)!;
-      if (!keys.slice(0, -1).every(key => modifiers.has(key)) || !/^(return|tab|escape|up|down|left|right|space|delete|home|end|pageup|pagedown|f[1-9]|f1[0-2]|[a-z0-9])$/.test(main)) throw new Error('COMPUTER_KEY_NOT_SUPPORTED');
       // Global/app escape shortcuts are not scoped to the authorized window.
       if (keys.slice(0, -1).some(key => key !== 'shift') && ['q', 'w', 'h', 'm', 'space', 'tab', 'escape'].includes(main)) throw new Error('COMPUTER_KEY_SCOPE_UNSAFE');
     }
@@ -437,8 +446,12 @@ export class CuaComputerDriver implements ComputerDriver {
         await this.callUntyped('set_value', { pid: target.pid, window_id: this.jsonWindowId(windowId), element_token: this.editable(action).element_token, value: action.text }, signal); return;
       case 'pressKeys': {
         const keys = nativeKeys(action.keys);
-        if (keys.length === 1) await this.client.pressKey({ key: keys[0], target: actionTarget }, { signal });
-        else await this.client.hotkey({ keys, target: actionTarget }, { signal });
+        const result = keys.length === 1 ? await this.client.pressKey({ key: keys[0], target: actionTarget }, { signal })
+          : await this.client.hotkey({ keys, target: actionTarget }, { signal });
+        if (result.isError) {
+          log.warn({ phase: 'key', nativeErrorCode: /^[a-z_0-9]{1,80}$/i.test(result.errorCode ?? '') ? result.errorCode : undefined }, 'Native window key refused');
+          throw new Error('COMPUTER_DRIVER_KEY_REFUSED');
+        }
         return;
       }
       case 'scroll': {
@@ -447,8 +460,9 @@ export class CuaComputerDriver implements ComputerDriver {
         const direction = action.deltaY
           ? (delta > 0 ? this.sdk.ScrollDirection.Down : this.sdk.ScrollDirection.Up)
           : (delta > 0 ? this.sdk.ScrollDirection.Right : this.sdk.ScrollDirection.Left);
-        await this.client.scroll({ target: actionTarget, ...action.point, by: this.sdk.ScrollBy.Line,
+        const result = await this.client.scroll({ target: actionTarget, ...action.point, by: this.sdk.ScrollBy.Line,
           amount: BigInt(Math.min(5, Math.max(1, Math.ceil(Math.abs(delta) / 100)))), direction }, { signal });
+        if (result.isError) throw new Error('COMPUTER_DRIVER_SCROLL_REFUSED');
         return;
       }
     }

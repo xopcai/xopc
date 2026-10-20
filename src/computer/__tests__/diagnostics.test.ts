@@ -51,6 +51,7 @@ describe('private computer session diagnostics', () => {
     ['COMPUTER_READ_ONLY', 'permission'], ['COMPUTER_WINDOW_CHANGED', 'target'], ['COMPUTER_UI_UNSTABLE', 'observation'],
     ['COMPUTER_MODEL_HTTP_429', 'model'], ['COMPUTER_NO_PROGRESS', 'no_progress'], ['COMPUTER_ACTION_BUDGET', 'budget'],
     ['COMPUTER_SEMANTIC_ACTION_UNCONFIRMED', 'native'], ['COMPUTER_EVALUATION_TIMEOUT', 'harness'],
+    ['COMPUTER_DRIVER_KEY_REFUSED', 'native'], ['COMPUTER_DRIVER_SCROLL_REFUSED', 'native'],
     ['COMPUTER_PRIVATE_SECRET', 'unknown'], ['constructor', 'unknown'],
   ])('classifies %s without copying arbitrary errors', (code, category) => {
     const failure = classifyComputerFailure(new Error(code), 'dispatch');

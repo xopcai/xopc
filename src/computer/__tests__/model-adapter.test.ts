@@ -491,3 +491,44 @@ describe('structured conditional plans', () => {
     expect(fetch.mock.calls[0][1].body).not.toContain('button_plan');
   });
 });
+
+describe('generic typing target preflight', () => {
+  const field = { role: 'AXTextArea', label: 'Document', bounds: { x: 10, y: 20, width: 100, height: 80 } };
+  const input = { goal: 'Append test text', image: new Uint8Array([1]), mimeType: 'image/png' as const,
+    width: 800, height: 600, summary: JSON.stringify({ elements: [{ role: 'AXWindow' }, field] }) };
+  const response = (action: unknown) => Response.json({ choices: [{ message: { tool_calls: [{ function: {
+    name: 'computer_proposal', arguments: JSON.stringify({ proposal: { kind: 'action', action } }),
+  } }] } }] });
+  it('corrects a malformed shortcut before returning any desktop action', async () => {
+    const fetch = vi.fn().mockResolvedValueOnce(response({ kind: 'pressKeys', keys: ['cmd+alt+f'] }))
+      .mockResolvedValueOnce(response({ kind: 'pressKeys', keys: ['Meta', 'Option', 'F'] }));
+    const adapter = new ChatCompletionsComputerAdapter({ modelId: 'custom', baseUrl: 'https://example.com/v1', apiKey: 'test', profile: 'structured-tools-v1' }, fetch);
+    const reserve = vi.fn();
+    expect(await predictComputerStep(adapter, input, reserve)).toEqual({ kind: 'action', action: { kind: 'pressKeys', keys: ['cmd', 'alt', 'f'] } });
+    expect(fetch).toHaveBeenCalledTimes(2); expect(reserve).toHaveBeenCalledTimes(2);
+  });
+  it('advertises a required point and corrects an omitted target before dispatch', async () => {
+    const fetch = vi.fn().mockResolvedValueOnce(response({ kind: 'typeText', text: 'test' }))
+      .mockResolvedValueOnce(response({ kind: 'typeText', text: 'test', point: { x: 50, y: 50 } }));
+    const adapter = new ChatCompletionsComputerAdapter({ modelId: 'custom', baseUrl: 'https://example.com/v1', apiKey: 'test', profile: 'structured-tools-v1' }, fetch);
+    const reserve = vi.fn();
+    expect(await predictComputerStep(adapter, input, reserve)).toEqual({ kind: 'action', action: { kind: 'typeText', text: 'test', point: { x: 50, y: 50 } } });
+    expect(fetch).toHaveBeenCalledTimes(2); expect(reserve).toHaveBeenCalledTimes(2);
+    const request = JSON.parse(fetch.mock.calls[0][1].body);
+    const nodes: any[] = []; const visit = (value: any) => { if (!value || typeof value !== 'object') return; nodes.push(value); Object.values(value).forEach(visit); };
+    visit(request.tools[0].function.parameters);
+    expect(nodes.find(node => node.properties?.kind?.const === 'typeText').required).toContain('point');
+    expect(JSON.parse(fetch.mock.calls[1][1].body).messages[0].content).toContain('No input from that proposal executed');
+  });
+  it.each([
+    { point: { x: 300, y: 300 }, fields: [field] },
+    { point: { x: 50, y: 50 }, fields: [] },
+    { point: { x: 50, y: 50 }, fields: [field, field] },
+    { point: { x: 50, y: 50 }, fields: [{ ...field, enabled: false }] },
+    { point: { x: 50, y: 50 }, fields: [{ ...field, label: 'Password' }] },
+  ])('rejects an ungrounded typing proposal before returning it: %j', async ({ point, fields }) => {
+    const fetch = vi.fn().mockResolvedValue(response({ kind: 'typeText', text: 'test', point }));
+    const adapter = new ChatCompletionsComputerAdapter({ modelId: 'custom', baseUrl: 'https://example.com/v1', apiKey: 'test', profile: 'structured-tools-v1' }, fetch);
+    await expect(adapter.predict({ ...input, summary: JSON.stringify({ elements: [{ role: 'AXWindow' }, ...fields] }) })).rejects.toThrow('COMPUTER_INVALID_MODEL_OUTPUT');
+  });
+});
