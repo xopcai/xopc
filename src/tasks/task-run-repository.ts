@@ -235,6 +235,10 @@ export class TaskRunRepository {
         JSON.stringify(input.retryPolicy ?? {}),
         input.retryOfRunId ?? null,
       );
+      db.prepare(`UPDATE task_runs SET manual_phase_revision = COALESCE(
+        (SELECT manual_phase_revision FROM task_runs WHERE run_id = ?),
+        (SELECT manual_phase_revision FROM tasks WHERE task_id = ?)) WHERE run_id = ?`)
+        .run(input.retryOfRunId ?? input.parentRunId ?? null, input.taskId, id);
       this.appendEvent(db, id, 'task_run.created', {
         executorKind: input.executorKind,
         scheduledAt: input.scheduledAt,
@@ -303,7 +307,7 @@ export class TaskRunRepository {
              WHERE wait.task_run_id = task_runs.run_id AND wait.status = 'active'
            ))
          )
-           AND EXISTS (SELECT 1 FROM tasks task WHERE task.task_id = task_runs.task_id AND task.phase != 'closed')
+           AND EXISTS (SELECT 1 FROM tasks task WHERE task.task_id = task_runs.task_id AND (task.phase != 'closed' OR task.resolution = 'done'))
            AND NOT EXISTS (SELECT 1 FROM task_waits wait WHERE wait.task_id = task_runs.task_id AND wait.status = 'active')
            AND NOT EXISTS (SELECT 1 FROM session_inputs input WHERE input.task_run_id = task_runs.run_id AND input.status IN ('queued','running'))
            AND (? IS NULL OR executor_kind = ?)
@@ -428,7 +432,7 @@ export class TaskRunRepository {
         .get(run.taskId) as { active_conversation_id: string | null } | undefined;
       if (execution?.active_conversation_id && execution.active_conversation_id !== run.conversationId) return false;
       const task = new TaskRepository().require(run.taskId);
-      if (task.phase !== 'active' || run.contractVersion !== task.latestContractVersion) return false;
+      if ((task.phase === 'closed' && task.resolution !== 'done') || run.contractVersion !== task.latestContractVersion) return false;
       const attempts = Number(run.policySnapshot.continuationAttempts ?? 0);
       const maxAttempts = Math.max(1, Math.min(3, Number(run.retryPolicy.maxAttempts ?? 1)));
       if (!Number.isFinite(attempts) || !Number.isFinite(maxAttempts) || attempts >= maxAttempts - 1) return false;

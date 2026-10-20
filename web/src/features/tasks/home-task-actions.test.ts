@@ -18,6 +18,7 @@ function taskRun(overrides: Partial<TaskDetail['runs'][number]> = {}): TaskDetai
 function taskDetail(overrides: Partial<TaskDetail> = {}): TaskDetail {
   return {
     ok: true,
+    phaseChanges: [],
     task: {
       id: 'task-1', title: 'Chart', phase: 'active', priority: 'normal', source: 'user',
       latestContractVersion: 1, boardRank: 0, version: 7, createdAt: 0, updatedAt: 4,

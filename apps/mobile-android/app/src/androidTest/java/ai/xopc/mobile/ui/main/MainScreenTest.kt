@@ -1661,9 +1661,9 @@ class MainScreenTest {
     assertEquals("auto-1", openedAutomation)
   }
 
-  @Test fun progressTaskCloseRequiresConfirmationAndUsesAllowedCommandsOnly() {
+  @Test fun progressTaskAllowsDirectManualCompletionWithoutConfirmation() {
     val task = ProgressTask("task-ready", "Ready work", "", "ready", null, 10, null, null,
-      version = 2, allowedCommands = listOf("close", "mark_ready"),
+      version = 2, allowedCommands = listOf("move", "close", "mark_ready"),
       criteria = listOf(ai.xopc.mobile.gateway.TaskCriterion("Works", "passed", true)))
     val state = mutableStateOf(ProgressUiState(tasks = listOf(task), taskTotal = 1))
     var command = ""
@@ -1676,13 +1676,9 @@ class MainScreenTest {
     composeTestRule.onNodeWithTag("progress-all-work").performClick()
     composeTestRule.onNodeWithTag("progress-task-task-ready").performClick()
     composeTestRule.onNodeWithTag("progress-task-status").performClick()
-    composeTestRule.onNodeWithTag("progress-command-close").performScrollTo().performClick()
-    assert(command.isEmpty())
-    composeTestRule.onNodeWithText(composeTestRule.activity.getString(R.string.progress_cancel)).performClick()
-    assert(command.isEmpty())
-    composeTestRule.onNodeWithTag("progress-command-close").performScrollTo().performClick()
-    composeTestRule.onNodeWithTag("progress-command-confirm").performClick()
-    assert(command == "close")
+    composeTestRule.onNodeWithTag("progress-phase-closed").performScrollTo().performClick()
+    assertEquals("move:closed", command)
+    composeTestRule.onNodeWithTag("progress-command-confirm").assertDoesNotExist()
     composeTestRule.onNodeWithTag("progress-command-reopen").assertDoesNotExist()
   }
 
@@ -1755,7 +1751,7 @@ class MainScreenTest {
     assertEquals(false, mutated)
   }
 
-  @Test fun progressTaskStatusChangesPhaseAndExplainsCompletionRestrictions() {
+  @Test fun progressTaskStatusAllowsCompletionWithoutChangingAcceptance() {
     val task = ProgressTask("task-status", "Status work", "", "ready", null, 1, null, null,
       version = 3, allowedCommands = listOf("move", "close"))
     val state = mutableStateOf(ProgressUiState(tasks = listOf(task), taskTotal = 1))
@@ -1772,9 +1768,9 @@ class MainScreenTest {
     composeTestRule.onNodeWithTag("progress-phase-active").performScrollTo().performClick()
     assertEquals("move:active", command)
     assertEquals(false, started)
-    composeTestRule.onNodeWithTag("progress-command-close").performScrollTo().assertIsNotEnabled()
-    composeTestRule.onNodeWithText(composeTestRule.activity.getString(R.string.progress_complete_criteria))
-      .performScrollTo().assertExists()
+    composeTestRule.onNodeWithTag("progress-phase-closed").performScrollTo().performClick()
+    assertEquals("move:closed", command)
+    assertEquals(false, started)
     composeTestRule.onNodeWithTag("progress-command-cancel").performScrollTo().performClick()
     composeTestRule.onNodeWithTag("progress-command-confirm").performClick()
     assertEquals("cancel_task", command)

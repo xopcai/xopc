@@ -22,10 +22,11 @@ data class ProgressTask(val id: String, val title: String, val body: String, val
   val allowedCommands: List<String> = emptyList(),
   val objective: String = "", val criteria: List<TaskCriterion> = emptyList(),
   val dueAt: Long? = null, val operationalState: String = "idle", val hasActiveExecution: Boolean = false,
-  val activeWaitCount: Int = 0, val latestResult: String = "", val remainingWork: List<String> = emptyList()) {
+  val activeWaitCount: Int = 0, val latestResult: String = "", val remainingWork: List<String> = emptyList(),
+  val phaseChanges: List<TaskPhaseChange> = emptyList()) {
   fun phaseAction(target: String): String? {
-    if (target == phase || target !in setOf("backlog", "ready", "active", "review")) return null
-    val action = if (phase == "closed") "reopen" else "move"
+    if (target == phase || target !in setOf("backlog", "ready", "active", "review", "closed")) return null
+    val action = "move"
     return "$action:$target".takeIf { action in allowedCommands }
   }
   val completionBlock: String? get() = when {
@@ -35,6 +36,9 @@ data class ProgressTask(val id: String, val title: String, val body: String, val
     else -> null
   }
 }
+data class TaskPhaseChange(val id: String, val fromPhase: String, val toPhase: String,
+  val actor: String, val source: String, val createdAt: Long, val resolution: String?, val fromResolution: String? = null)
+
 data class ProgressTaskEdit(val title: String, val body: String, val projectId: String,
   val priority: String, val dueAt: Long?)
 data class TaskCriterion(val text: String, val status: String, val humanReviewed: Boolean)
@@ -129,7 +133,6 @@ class ProgressRepository(private val gateway: GatewaySession) {
     require(kind != "start" || selectedAgent.isNotEmpty() && selectedAgent.length <= 128) { "INVALID_TASK_AGENT" }
     val command = JSONObject().put("type", kind)
     if (kind == "close") {
-      require(action == "cancel_task" || task.completionBlock == null) { "TASK_ACCEPTANCE_REQUIRED" }
       command.put("resolution", if (action == "cancel_task") "cancelled" else "done")
     }
     if (kind == "move" || kind == "reopen") {
@@ -139,9 +142,10 @@ class ProgressRepository(private val gateway: GatewaySession) {
     }
     if (kind == "start") command.put("executor", JSONObject().put("kind", "agent").put("agentId", selectedAgent))
     val body = JSONObject().put("idempotencyKey", idempotencyKey)
-      .put("expectedVersion", task.version).put("command", command)
-    return parseTaskDetail(task.id, gateway.request("/api/tasks/${task.id}/commands", "POST", body.toString()),
-      minimumVersion = task.version + 1)
+      .put("expectedVersion", task.version).put("source", "mobile").put("command", command)
+    return commandAndReloadTask(task.id, task.version, body.toString()) { path, method, payload ->
+      gateway.request(path, method, payload)
+    }
   }
 
   fun updateTask(task: ProgressTask, title: String, body: String, projectId: String,
@@ -159,6 +163,17 @@ class ProgressRepository(private val gateway: GatewaySession) {
   }
 
   companion object {
+    /** A command acknowledgement is partial; replace detail state only with the subsequent full read. */
+    internal fun commandAndReloadTask(taskId: String, expectedVersion: Int, body: String,
+      request: (String, String, String) -> String): ProgressTask {
+      val acknowledgement = JSONObject(request("/api/tasks/$taskId/commands", "POST", body))
+      require(acknowledgement.getBoolean("ok")) { "INVALID_TASK_COMMAND_RESPONSE" }
+      val task = acknowledgement.getJSONObject("task")
+      require(task.getString("id") == taskId && task.getInt("version") >= expectedVersion) { "MISMATCHED_PROGRESS_TASK" }
+      return parseTaskDetail(taskId, request("/api/tasks/$taskId", "GET", ""),
+        minimumVersion = task.getInt("version"))
+    }
+
     fun parseProjects(raw: String): List<ProgressProject> {
       val root = JSONObject(raw)
       require(root.getBoolean("ok")) { "INVALID_PROGRESS_PROJECTS" }
@@ -298,9 +313,18 @@ class ProgressRepository(private val gateway: GatewaySession) {
       val receipts = root.optJSONArray("receipts")
       val latest = (0 until (receipts?.length() ?: 0)).map { receipts!!.getJSONObject(it) }
         .maxByOrNull { it.optLong("finalizedAt") }
+      val changes = root.optJSONArray("phaseChanges")
+      val history = (0 until (changes?.length() ?: 0)).map { index ->
+        val entry = changes!!.getJSONObject(index)
+        val actor = entry.getJSONObject("actor")
+        TaskPhaseChange(entry.getString("id"), entry.getString("fromPhase"), entry.getString("toPhase"),
+          listOf(actor.getString("kind"), actor.optString("id")).filter { it.isNotEmpty() }.joinToString(" · "),
+          entry.getString("source"), entry.getLong("createdAt"), entry.optString("toResolution").takeIf { it.isNotEmpty() },
+          entry.optString("fromResolution").takeIf { it.isNotEmpty() })
+      }
       val remaining = latest?.optJSONArray("remainingWork")
       return base.copy(operationalState = root.optString("operationalState", "idle"),
-        hasActiveExecution = hasActiveRun,
+        hasActiveExecution = hasActiveRun, phaseChanges = history,
         activeWaitCount = (0 until (waits?.length() ?: 0)).count { waits!!.getJSONObject(it).optString("status") == "active" },
         latestResult = latest?.optString("summary").orEmpty(),
         remainingWork = (0 until (remaining?.length() ?: 0)).map { remaining!!.getString(it) },

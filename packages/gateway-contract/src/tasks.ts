@@ -317,7 +317,7 @@ const TaskWaitInputSchema = z.object({
 
 export const TaskCommandSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('retry_allocation') }),
-  z.object({ type: z.literal('move'), phase: z.enum(['backlog', 'ready', 'active', 'review']) }),
+  z.object({ type: z.literal('move'), phase: TaskPhaseSchema, resolution: TaskResolutionSchema.optional() }),
   z.object({ type: z.literal('mark_ready') }),
   z.object({
     type: z.literal('start'),
@@ -332,7 +332,19 @@ export const TaskCommandSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('revise_contract'), contract: TaskContractInputSchema }),
 ]);
 
+export const TaskChangeSourceSchema = z.enum(['board', 'mobile', 'api', 'runtime', 'undo']);
+
+export const TaskPhaseChangeSchema = z.object({
+  id: z.string(), taskId: z.string(), fromPhase: TaskPhaseSchema, toPhase: TaskPhaseSchema,
+  fromResolution: TaskResolutionSchema.optional(), toResolution: TaskResolutionSchema.optional(),
+  actor: ActorRefSchema, source: TaskChangeSourceSchema, operationId: z.string().optional(),
+  runId: z.string().optional(), taskVersion: z.number().int().positive(), createdAt: z.number(),
+});
+export type TaskPhaseChange = z.infer<typeof TaskPhaseChangeSchema>;
+export type TaskChangeSource = z.infer<typeof TaskChangeSourceSchema>;
+
 export const TaskCommandRequestSchema = z.object({
+  source: TaskChangeSourceSchema.optional(),
   idempotencyKey: z.string().trim().min(1).max(200),
   expectedVersion: z.number().int().positive(),
   command: TaskCommandSchema,
@@ -406,6 +418,7 @@ export const TaskHandoffResponseSchema = z.object({
 });
 
 export const TaskDetailResponseSchema = z.object({
+  phaseChanges: z.array(TaskPhaseChangeSchema).default([]),
   ok: z.literal(true),
   task: TaskSchema,
   allocation: TaskAllocationSchema.optional(),

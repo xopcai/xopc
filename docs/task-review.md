@@ -2,6 +2,16 @@
 
 An execution can stop before its result is acceptable. Review the artifacts and evidence, then decide whether the Task meets its completion criteria.
 
+## Move tasks freely
+
+Drag a task between Backlog, Ready, Active, Review, and Closed, or use the phase selector in task details. Android, iOS, and HarmonyOS offer the same five phases under **Change status**. Runs, waits, dependencies, and unverified criteria do not prevent a manual phase change.
+
+Moving to Closed records a manual completion; moving out clears the closure reason. This does not change acceptance evidence or start/stop execution. Use the execution controls to start, pause, or cancel work explicitly. A closed task can still have an active run, which remains visible.
+
+The **Change log** records each phase and closure-reason change with its actor, source, and time. Undo adds a reverse change rather than deleting history. Logs start when this feature is installed; older changes are not reconstructed.
+
+After a manual phase change, old runs can save results but cannot overwrite the chosen phase, even if the task is moved away and back. Starting a new execution or explicitly requesting a work revision enables automatic progression for that new work. Background allocation and signals cannot clear this protection.
+
 ## Before you begin
 
 Open an existing Task with acceptance criteria and a result to inspect. Use [task delegation](./task-delegation.md) or [Projects, Tasks, and Notes](./projects-tasks-notes.md) to establish a clear result first.

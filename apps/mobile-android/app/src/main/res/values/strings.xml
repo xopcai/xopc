@@ -788,7 +788,7 @@
     <string name="personal_agent_opening_greeting">Greet me when connected</string>
 
     <string name="progress_adjust_status">Change status</string>
-    <string name="progress_phase_help">Changing phase does not start an Agent run.</string>
+    <string name="progress_phase_help">Changing phase does not start or stop a run. Every change is recorded.</string>
     <string name="progress_phase_blocked">A run or wait is active. Handle it before changing phase.</string>
     <string name="progress_cancel_task">Cancel task</string>
     <string name="progress_cancel_task_help">End this task without marking it complete. You can reopen it later.</string>
@@ -827,4 +827,5 @@
     <string name="clarify_cancel">Cancel task</string>
     <string name="assistant_connection_interrupted">Connection interrupted · Reconnecting…</string>
     <string name="assistant_select_text">Select text</string>
+    <string name="progress_change_log">Change log</string>
 </resources>

@@ -5,6 +5,7 @@ import { TaskExecutorSelectionSchema, verifiedTaskCriteria, resultReferenceId, r
 import type {
   ActorRef,
   TaskCommand,
+  TaskChangeSource,
   TaskChangedField,
   TaskCreateRequest,
   TaskExecutorSelection,
@@ -238,7 +239,7 @@ export class TaskApplicationService {
       const actor: ActorRef = { kind: 'user' };
       const entry = board.append({ taskId: task.id, authorKind: 'main_agent', authorId: input.conversationId,
         kind: 'instruction', body: instruction, deliverToWorker: true, idempotencyKey: `revision:${input.idempotencyKey}` });
-      let current = task.phase === 'closed' ? this.#tasks.setLifecycle({ taskId: task.id, expectedVersion: task.version, phase: 'ready' })! : task;
+      let current = task.phase === 'closed' ? this.#tasks.setLifecycle({ taskId: task.id, expectedVersion: task.version, phase: 'ready', actor, source: 'api', operationId: input.idempotencyKey })! : task;
       const contract = task.contract!;
       const originalBody = db.prepare('SELECT original_body FROM task_work_revisions WHERE task_id = ? AND original_body IS NOT NULL ORDER BY contract_version LIMIT 1').get(task.id) as { original_body: string } | undefined;
       const originalObjective = String(db.prepare('SELECT objective FROM task_contracts WHERE task_id = ? ORDER BY version LIMIT 1').get(task.id)?.objective ?? contract.objective);
@@ -263,6 +264,7 @@ export class TaskApplicationService {
           input.idempotencyKey, hash, JSON.stringify(input.supersedesEntryIds ?? []), originalBody ? null : task.body ?? contract.objective, Date.now());
       db.prepare("UPDATE task_sessions SET status = 'superseded', ended_at = ? WHERE task_id = ? AND role = 'execution' AND status = 'active'").run(Date.now(), task.id);
       db.prepare("UPDATE task_conversation_state SET active_conversation_id = NULL, current_executor_agent_id = NULL, status = 'idle', updated_at = ? WHERE task_id = ?").run(Date.now(), task.id);
+      this.#tasks.authorizeAutomaticPhase(task.id);
       const allocation = new TaskAllocationRepository();
       const previous = allocation.get(task.id);
       if (previous) db.prepare(`UPDATE task_allocations SET id = ?, status = 'pending', attempts = 0, selected_agent_id = NULL,
@@ -284,30 +286,42 @@ export class TaskApplicationService {
     command: TaskCommand;
     actor?: ActorRef;
     triggerContext?: Record<string, unknown>;
+    source?: TaskChangeSource;
   }): TaskApplicationResult {
     const actor = input.actor ?? { kind: 'user' };
     const task = this.#tasks.get(input.taskId);
     if (!task) return { ok: false, reason: 'not_found' };
     const model = this.#projector.project(task);
     if (task.version !== input.expectedVersion) return { ok: false, reason: 'conflict', model };
-
     const duplicate = this.readCommand(input.idempotencyKey, requestHash(input.command));
     if (duplicate) return { ok: true, model };
+    if (actor.kind !== 'user' && ['move', 'mark_ready', 'request_review', 'close', 'reopen'].includes(input.command.type)
+      && !this.#tasks.automaticStartAllowed(task.id)) return { ok: false, reason: 'blocked', model };
 
     return runSqliteWriteTransaction((db) => {
+      const lifecycle = (phase: Parameters<TaskRepository['setLifecycle']>[0]['phase'],
+        resolution?: Parameters<TaskRepository['setLifecycle']>[0]['resolution']) =>
+        this.lifecycle(task.id, task.version, phase, resolution, {
+          actor, source: input.source ?? (actor.kind === 'user' ? 'api' : 'runtime'), operationId: input.idempotencyKey, manual: actor.kind === 'user',
+          runId: this.#runs.getActiveRoot(task.id)?.id,
+        });
       let result: TaskApplicationResult;
       switch (input.command.type) {
         case 'move':
-          result = task.phase !== 'closed'
-            && task.phase !== input.command.phase
-            && !this.#runs.getActiveRoot(task.id)
-            && this.#runs.listActiveWaits(task.id).length === 0
-            ? this.lifecycle(task.id, task.version, input.command.phase)
+          if (actor.kind !== 'user' && input.command.phase === 'closed'
+            && (input.command.resolution ?? 'done') === 'done'
+            && (!new TaskCriterionReviewRepository().allPassed(task)
+              || this.#runs.getActiveRoot(task.id) || this.#runs.listActiveWaits(task.id).length)) {
+            result = { ok: false, reason: 'blocked', model };
+            break;
+          }
+          result = task.phase !== input.command.phase
+            ? lifecycle(input.command.phase, input.command.phase === 'closed' ? input.command.resolution ?? 'done' : undefined)
             : { ok: false, reason: 'invalid_transition', model };
           break;
         case 'mark_ready':
           result = task.phase === 'backlog'
-            ? this.lifecycle(task.id, task.version, 'ready')
+            ? lifecycle('ready')
             : { ok: false, reason: 'invalid_transition', model };
           break;
         case 'retry_allocation': {
@@ -338,20 +352,20 @@ export class TaskApplicationService {
           result = task.phase === 'active'
             && !this.#runs.getActiveRoot(task.id)
             && this.#runs.listActiveWaits(task.id).length === 0
-            ? this.lifecycle(task.id, task.version, 'review')
+            ? lifecycle('review')
             : { ok: false, reason: 'invalid_transition', model };
           break;
         case 'close':
-          result = input.command.resolution === 'done'
+          result = actor.kind !== 'user' && input.command.resolution === 'done'
             && (!new TaskCriterionReviewRepository().allPassed(task)
               || this.#runs.getActiveRoot(task.id) !== undefined
               || this.#runs.listActiveWaits(task.id).length > 0)
             ? { ok: false, reason: 'blocked', model }
-            : this.lifecycle(task.id, task.version, 'closed', input.command.resolution);
+            : lifecycle('closed', input.command.resolution);
           break;
         case 'reopen':
           result = task.phase === 'closed'
-            ? this.lifecycle(task.id, task.version, input.command.phase)
+            ? lifecycle(input.command.phase)
             : { ok: false, reason: 'invalid_transition', model };
           break;
         case 'add_wait': {
@@ -386,10 +400,15 @@ export class TaskApplicationService {
           const wait = this.#runs.getWait(input.command.waitId);
           if (!wait || wait.taskId !== task.id) {
             result = { ok: false, reason: 'not_found', model };
-          } else if (wait.status !== 'active' || task.phase === 'closed' || wait.condition.type === 'connection') {
+          } else if (wait.status !== 'active' || (task.phase === 'closed' && task.resolution !== 'done') || wait.condition.type === 'connection') {
             result = { ok: false, reason: 'invalid_transition', model };
           } else {
             const response = input.command.resolution as { kind?: string; answer?: unknown; decision?: unknown } | undefined;
+            if ((wait.kind === 'approval' && response?.kind !== 'task_approval')
+              || (wait.kind === 'user_input' && response?.kind !== 'user_answer')) {
+              result = { ok: false, reason: 'invalid_transition', model };
+              break;
+            }
             if (response?.kind === 'task_approval') {
               if (actor.kind !== 'user' || wait.kind !== 'approval' || typeof wait.condition.capability !== 'string'
                 || (response.decision !== 'approve' && response.decision !== 'deny')) {
@@ -425,7 +444,7 @@ export class TaskApplicationService {
               resolution: input.command.resolution,
             });
             const executor = TaskExecutorSelectionSchema.safeParse(wait.condition.executor);
-            result = response?.kind === 'task_approval' && executor.success
+            result = task.phase !== 'closed' && response?.kind === 'task_approval' && executor.success
               && !this.#runs.getActiveRoot(task.id) && this.#runs.listActiveWaits(task.id).length === 0
               ? this.start(task.id, task.version, executor.data, {
                 idempotencyKey: input.idempotencyKey, actor, correlationId: input.idempotencyKey,
@@ -482,6 +501,7 @@ export class TaskApplicationService {
         this.enqueueEvent(db, 'task.phase_changed.v2', task.id, input.idempotencyKey, {
           task: { id: result.model.task.id, title: result.model.task.title },
           taskId: task.id,
+          actor, source: input.source ?? (actor.kind === 'user' ? 'api' : 'runtime'),
           from: task.phase,
           to: result.model.task.phase,
           resolution: result.model.task.resolution,
@@ -530,7 +550,7 @@ export class TaskApplicationService {
       const activeConversationId = new TaskConversationRepository().getState(task.id)?.activeConversationId;
       // Late and child receipts cannot override a user's pause/close decision
       // or certify a newer contract.
-      if (run.parentRunId || task.phase === 'closed'
+      if (run.parentRunId || (task.phase === 'closed' && task.resolution !== 'done')
         || this.#runs.listActiveWaits(task.id).length > 0
         || (run.conversationId && activeConversationId && run.conversationId !== activeConversationId)
         || run.contractVersion !== task.latestContractVersion) {
@@ -551,6 +571,11 @@ export class TaskApplicationService {
       });
       if (input.receipt.status === 'succeeded' || input.receipt.status === 'failed') {
         new TaskResultDeliveryRepository().enqueue(run.id, input.receipt.summary, input.receipt.status, input.resultText);
+      }
+      if (!this.#tasks.runPhaseUnchanged(task.id, run.id) || task.phase === 'closed') {
+        enqueueTaskChangedEvent(db, { taskId: task.id, projectId: task.projectId, version: task.version,
+          changedFields: ['runs', 'receipts'], source: 'runtime' });
+        return { ok: true, model: this.#projector.project(task) };
       }
       if (input.receipt.status !== 'succeeded') {
         const model = this.#projector.project(task);
@@ -585,6 +610,7 @@ export class TaskApplicationService {
       const updated = this.#tasks.setLifecycle({
         taskId: task.id,
         expectedVersion: task.version,
+        actor: input.actor ?? { kind: 'system' }, source: 'runtime', runId: run.id,
         phase,
         ...(phase === 'closed' ? { resolution: 'done' as const } : {}),
       });
@@ -592,6 +618,7 @@ export class TaskApplicationService {
       this.enqueueEvent(db, 'task.phase_changed.v2', updated.id, run.id, {
         task: { id: updated.id, title: updated.title },
         taskId: updated.id,
+        actor: input.actor ?? { kind: 'system' }, source: 'runtime',
         from: task.phase,
         to: updated.phase,
         resolution: updated.resolution,
@@ -626,6 +653,9 @@ export class TaskApplicationService {
       return task
         ? { ok: false, reason: 'conflict', model: this.#projector.project(task) }
         : { ok: false, reason: 'not_found' };
+    }
+    if (options.actor.kind !== 'user' && !this.#tasks.automaticStartAllowed(taskId)) {
+      return { ok: false, reason: 'blocked', model: this.#projector.project(task) };
     }
     const allocation = new TaskAllocationRepository().get(taskId);
     if (allocation && allocation.status !== 'assigned' && !(options.actor.kind === 'system' && options.actor.id === 'task-router')) {
@@ -669,6 +699,7 @@ export class TaskApplicationService {
       return { ok: false, reason: 'blocked', model: this.#projector.get(taskId)! };
     }
 
+    if (options.actor.kind === 'user') this.#tasks.authorizeAutomaticPhase(taskId);
     const run = this.#runs.create({
       taskId,
       executorKind: executor.kind,
@@ -693,7 +724,7 @@ export class TaskApplicationService {
       : this.#tasks.setLifecycle({
         taskId,
         expectedVersion: task.version,
-        phase: 'active',
+        phase: 'active', actor: options.actor, source: 'runtime', runId: run.id,
       });
     if (!active) throw new Error('Task changed while its run was being created');
     return { ok: true, model: this.#projector.project(active), runId: run.id };
@@ -704,8 +735,9 @@ export class TaskApplicationService {
     expectedVersion: number,
     phase: Parameters<TaskRepository['setLifecycle']>[0]['phase'],
     resolution?: Parameters<TaskRepository['setLifecycle']>[0]['resolution'],
+    metadata: Partial<Parameters<TaskRepository['setLifecycle']>[0]> = {},
   ): TaskApplicationResult {
-    const updated = this.#tasks.setLifecycle({ taskId, expectedVersion, phase, resolution });
+    const updated = this.#tasks.setLifecycle({ ...metadata, taskId, expectedVersion, phase, resolution });
     return updated
       ? { ok: true, model: this.#projector.project(updated) }
       : { ok: false, reason: 'conflict', model: this.#projector.get(taskId) };

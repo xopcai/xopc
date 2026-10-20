@@ -34,8 +34,7 @@ export function taskCompletionBlock(item: XopcWorkspaceItem): string {
 }
 
 export function taskPhaseAction(item: XopcWorkspaceItem, phase: string): string {
-  if (phase === item.status || !['backlog', 'ready', 'active', 'review'].includes(phase)) return '';
-  if (item.status === 'closed') return item.actions.includes('reopen') ? 'reopen:' + phase : '';
+  if (phase === item.status || !['backlog', 'ready', 'active', 'review', 'closed'].includes(phase)) return '';
   return item.actions.includes('move') ? 'move:' + phase : '';
 }
 
@@ -46,13 +45,13 @@ export function taskCommand(item: XopcWorkspaceItem, action: string, agentId: st
   const command: XopcTaskCommand = { type: kind };
   if (kind === 'move' || kind === 'reopen') {
     const phase = parts[1] || (kind === 'reopen' ? 'backlog' : '');
-    if (!taskPhaseAction(item, phase)) throw new Error('INVALID_ACTION');
+    if (kind === 'move' ? !taskPhaseAction(item, phase)
+      : item.status !== 'closed' || !['backlog', 'ready', 'active', 'review'].includes(phase)) throw new Error('INVALID_ACTION');
     command.phase = phase;
   } else if (kind === 'start') {
     if (!agentId.trim()) throw new Error('AGENT_REQUIRED');
     command.executor = { kind: 'agent', agentId: agentId.trim() };
   } else if (kind === 'close') {
-    if (action !== 'cancel_task' && taskCompletionBlock(item)) throw new Error('TASK_ACCEPTANCE_REQUIRED');
     command.resolution = action === 'cancel_task' ? 'cancelled' : 'done';
   } else if (!['mark_ready', 'request_review'].includes(kind)) throw new Error('INVALID_ACTION');
   return command;

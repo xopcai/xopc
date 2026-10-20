@@ -879,7 +879,7 @@ export function ProjectDetailPage() {
     try {
       const detail = await fetchTask(task.id);
       const command: TaskCommand = action.startsWith('move_')
-        ? { type: 'move', phase: action.slice('move_'.length) as 'backlog' | 'ready' | 'active' | 'review' }
+        ? { type: 'move', phase: action.slice('move_'.length) as TaskPhase }
         : action.startsWith('reopen_')
           ? { type: 'reopen', phase: action.slice('reopen_'.length) as 'backlog' | 'ready' | 'active' | 'review' }
         : action === 'ready'
@@ -903,7 +903,7 @@ export function ProjectDetailPage() {
                   ? { type: 'reopen', phase: 'ready' }
                   : { type: 'resolve_wait', waitId: detail.waits[0]?.id ?? '' };
       if (command.type === 'resolve_wait' && !command.waitId) throw new Error('No active wait to resolve');
-      await commandTask(task.id, command, detail.task.version);
+      await commandTask(task.id, command, detail.task.version, undefined, 'board');
       await refreshOperatingView();
       return true;
     } catch (err) {
@@ -977,18 +977,14 @@ export function ProjectDetailPage() {
     taskId: string,
     phase: TaskPhase,
     beforeTaskId: string | null,
+    resolution?: ProjectTaskCard['resolution'],
   ): Promise<boolean> => {
     setTaskActionBusyId(taskId);
     setError(null);
     try {
       let detail = await fetchTask(taskId);
       if (detail.task.phase !== phase) {
-        const command: TaskCommand = detail.task.phase === 'closed'
-          ? { type: 'reopen', phase: phase === 'closed' ? 'ready' : phase }
-          : phase === 'closed'
-            ? { type: 'close', resolution: 'done' }
-            : { type: 'move', phase };
-        detail = await commandTask(taskId, command, detail.task.version);
+        detail = await commandTask(taskId, { type: 'move', phase, ...(phase === 'closed' && resolution ? { resolution } : {}) }, detail.task.version, undefined, 'undo');
       }
       await updateTaskBoardPosition(taskId, beforeTaskId, detail.task.version);
       await refreshOperatingView();

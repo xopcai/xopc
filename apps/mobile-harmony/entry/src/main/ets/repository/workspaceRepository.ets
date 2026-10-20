@@ -60,7 +60,7 @@ export class XopcWorkspaceRepository {
     const path = '/api/' + section + '/' + encodeURIComponent(item.id);
     if (section === 'tasks') {
       const command = taskCommand(item, action, agentId);
-      const body: XopcTaskCommandBody = { idempotencyKey, expectedVersion: item.version, command };
+      const body: XopcTaskCommandBody = { idempotencyKey, expectedVersion: item.version, command, source: 'mobile' };
       await gatewaySession.request(path + '/commands', 'POST', JSON.stringify(body));
     } else if (section === 'projects') {
       if (action === 'archive' || action === 'activate') {

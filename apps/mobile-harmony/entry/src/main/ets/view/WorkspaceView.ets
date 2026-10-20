@@ -5,7 +5,8 @@ import {
   XopcMobileTaskReview, XopcMobileTaskContext, XopcMobileTaskSession, XopcMobileTaskDependency,
   XopcMobileTaskAttention
 } from '../model/workspace';
-import { taskCriterionState, taskCompletionBlock, taskPhaseAction } from '../common/taskManagement';
+import type { XopcTaskPhaseChange } from '../model/workspace';
+import { taskCriterionState, taskPhaseAction } from '../common/taskManagement';
 import { XopcWorkspaceRepository } from '../repository/workspaceRepository';
 import { XopcWorkspaceViewModel } from '../viewmodel/workspaceViewModel';
 import { XopcMarkdownView } from './MarkdownView';
@@ -284,7 +285,6 @@ export struct XopcWorkspaceView {
   private primaryTaskAction(item: XopcWorkspaceItem): string {
     for (const action of ['start', 'mark_ready', 'request_review', 'close', 'reopen']) {
       if (item.actions.includes(action)) {
-        if (action === 'close' && taskCompletionBlock(item)) continue;
         return action;
       }
     }
@@ -293,7 +293,7 @@ export struct XopcWorkspaceView {
 
   private async action(action: string): Promise<void> {
     if (this.model.busy || !action) return;
-    if (['delete', 'archive', 'close', 'cancel_task', 'run', 'start'].includes(action)) {
+    if (['delete', 'archive', 'cancel_task', 'run', 'start'].includes(action)) {
       try {
         const result = await this.getUIContext().getPromptAction().showDialog({
           title: this.label(action), message: action === 'cancel_task' ? $r('app.string.task_cancel_help') : $r('app.string.confirm_action_help'),
@@ -348,12 +348,6 @@ export struct XopcWorkspaceView {
       } });
   }
 
-  private completionHint(item: XopcWorkspaceItem): ResourceStr {
-    const reason = taskCompletionBlock(item);
-    if (reason === 'execution') return $r('app.string.task_completion_execution');
-    if (reason === 'criteria') return $r('app.string.task_completion_criteria');
-    return $r('app.string.task_completion_acceptance');
-  }
 
   private async applySheetAction(action: string): Promise<void> {
     await this.action(action);
@@ -397,7 +391,7 @@ export struct XopcWorkspaceView {
           .fontColor(this.colors.foreground).enabled(!this.model.busy).onClick((): void => { this.model.refreshDetail(); })
       }
       List({ space: 8 }) {
-        ForEach(['backlog', 'ready', 'active', 'review'], (phase: string) => {
+        ForEach(['backlog', 'ready', 'active', 'review', 'closed'], (phase: string) => {
           ListItem() {
             Button({ type: ButtonType.Normal }) {
               Row({ space: 8 }) {
@@ -444,11 +438,9 @@ export struct XopcWorkspaceView {
           ListItem() {
             Column({ space: 8 }) {
               Button(this.label('close')).width('100%').height(48).backgroundColor(this.colors.input)
-                .fontColor(this.colors.foreground).enabled(!this.model.busy && !taskCompletionBlock(item))
+                .fontColor(this.colors.foreground).enabled(!this.model.busy)
                 .onClick((): void => { this.applySheetAction('close'); })
-              if (taskCompletionBlock(item)) {
-                Text(this.completionHint(item)).fontSize(13).lineHeight(20).fontColor(this.colors.secondary).width('100%')
-              }
+
               Button($r('app.string.task_cancel')).width('100%').height(48).backgroundColor(Color.Transparent)
                 .fontColor(this.colors.danger).enabled(!this.model.busy)
                 .onClick((): void => { this.applySheetAction('cancel_task'); })
@@ -751,6 +743,24 @@ export struct XopcWorkspaceView {
           }
         }.width('100%').padding(18).alignItems(HorizontalAlign.Start)
           .borderRadius(20).backgroundColor(this.colors.panel)
+      }
+      if ((info.phaseChanges?.length ?? 0) > 0) {
+        ForEach(info.phaseChanges ?? [], (change: XopcTaskPhaseChange) => {
+          ListItem() {
+            Column({ space: 8 }) {
+              Text($r('app.string.task_change_log')).fontSize(14).fontWeight(FontWeight.Medium).fontColor(this.colors.foreground)
+              Row({ space: 6 }) {
+                Text(this.statusLabel(change.fromPhase)).fontColor(this.colors.foreground)
+                if (change.fromResolution) { Text(change.fromResolution).fontSize(12).fontColor(this.colors.secondary) }
+                Text('→').fontColor(this.colors.secondary)
+                Text(this.statusLabel(change.toPhase)).fontColor(this.colors.foreground)
+              }
+              Text(change.actor.kind + ' · ' + (change.actor.id ?? '') + ' · ' + change.source + ' · ' + this.formatTime(change.createdAt))
+                .fontSize(12).fontColor(this.colors.secondary)
+              if (change.toResolution) { Text(change.toResolution).fontSize(12).fontColor(this.colors.secondary) }
+            }.width('100%').padding(16).alignItems(HorizontalAlign.Start).borderRadius(16).backgroundColor(this.colors.panel)
+          }
+        }, (change: XopcTaskPhaseChange): string => change.id)
       }
       if (info.attention.length > 0) {
         ListItem() {

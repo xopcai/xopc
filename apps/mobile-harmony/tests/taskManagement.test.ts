@@ -42,16 +42,16 @@ describe('Harmony task management', () => {
     expect(() => taskCommand({ ...item, actions: ['close'] }, 'move:active', '')).toThrow('INVALID_ACTION');
     expect(taskCommand({ ...item, status: 'closed', actions: ['reopen'] }, 'reopen:review', ''))
       .toEqual({ type: 'reopen', phase: 'review' });
-    expect(() => taskCommand(item, 'move:closed', '')).toThrow('INVALID_ACTION');
+    expect(taskCommand(item, 'move:closed', '')).toEqual({ type: 'move', phase: 'closed' });
   });
 
-  it('keeps completion gated by current contract reviews, root runs and waits while allowing cancellation', () => {
+  it('keeps verification separate from manual completion and cancellation', () => {
     const item = taskDetailItem(detail());
     expect(taskCompletionBlock(item)).toBe('');
     expect(taskCommand(item, 'close', '')).toEqual({ type: 'close', resolution: 'done' });
     item.taskDetail!.criterionReviews[0].contractVersion = 1;
     expect(taskCompletionBlock(item)).toBe('acceptance');
-    expect(() => taskCommand(item, 'close', '')).toThrow('TASK_ACCEPTANCE_REQUIRED');
+    expect(taskCommand(item, 'close', '')).toEqual({ type: 'close', resolution: 'done' });
     expect(taskCommand(item, 'cancel_task', '')).toEqual({ type: 'close', resolution: 'cancelled' });
     item.taskDetail!.criterionReviews[0].contractVersion = 2;
     item.taskDetail!.runs = [{ id: 'run', contractVersion: 2, status: 'running' }];
@@ -90,7 +90,7 @@ describe('Harmony task management', () => {
       body: '', projectId: null, priority: 'critical', dueAt: null });
     await repository.action('tasks', item, 'move:active', '', 'key');
     expect(TaskCommandRequestSchema.parse(JSON.parse(mocks.request.mock.calls[1][2])))
-      .toEqual({ expectedVersion: 3, idempotencyKey: 'key', command: { type: 'move', phase: 'active' } });
+      .toEqual({ expectedVersion: 3, idempotencyKey: 'key', source: 'mobile', command: { type: 'move', phase: 'active' } });
     expect(() => taskCommand(item, 'start', '')).toThrow('AGENT_REQUIRED');
   });
 

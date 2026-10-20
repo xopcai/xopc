@@ -1350,7 +1350,7 @@
     { "name": "discussion_no_speech", "value": "No recognizable speech was found in this recording." },
     { "name": "calendar_reason", "value": "仅在允许本次查询时读取 xopc 可访问的日历事件。" },
     {"name": "task_adjust_status", "value": "Change status"},
-    {"name": "task_phase_help", "value": "Change the task phase here. This does not start an Agent run."},
+    {"name": "task_phase_help", "value": "Changing phase does not start or stop a run. Every change is recorded."},
     {"name": "task_phase_blocked", "value": "A run or wait is active. Handle it in the task conversation before changing phase."},
     {"name": "task_execution_help", "value": "Choose an Agent to begin execution. This will create a task run."},
     {"name": "task_completion_execution", "value": "Finish the current run or resolve waits in the task conversation before completing."},
@@ -1389,6 +1389,7 @@
     { "name": "clarify_custom", "value": "Your answer" },
     { "name": "clarify_supplement", "value": "Additional information (optional)" },
     { "name": "clarify_cancel", "value": "Cancel task" },
-    { "name": "clarify_submitting", "value": "Submitting…" }
+    { "name": "clarify_submitting", "value": "Submitting…" },
+    { "name": "task_change_log", "value": "Change log" }
   ]
 }

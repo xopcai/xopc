@@ -63,8 +63,8 @@ enum TaskAcceptanceStatus: String {
 
 extension TaskDetailEnvelope {
     func phaseCommand(for phase: String) -> String? {
-        guard phase != task.phase, ["backlog", "ready", "active", "review"].contains(phase) else { return nil }
-        let command = task.phase == "closed" ? "reopen" : "move"
+        guard phase != task.phase, ["backlog", "ready", "active", "review", "closed"].contains(phase) else { return nil }
+        let command = "move"
         return allowedCommands?.contains(command) == true ? command : nil
     }
 }

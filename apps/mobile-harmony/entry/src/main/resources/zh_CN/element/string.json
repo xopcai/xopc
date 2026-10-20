@@ -1348,7 +1348,7 @@
     { "name": "discussion_transcript_pending", "value": "等待转写" },
     { "name": "discussion_no_speech", "value": "这段录音中没有识别到可用的语音内容。" },
     {"name": "task_adjust_status", "value": "调整状态"},
-    {"name": "task_phase_help", "value": "在这里调整任务阶段。改为进行中不会自动启动 Agent。"},
+    {"name": "task_phase_help", "value": "调整阶段不会启动或停止执行，每次变更都会记录。"},
     {"name": "task_phase_blocked", "value": "任务正在执行或等待条件满足。请先在任务对话中处理，再调整阶段。"},
     {"name": "task_execution_help", "value": "选择 Agent 后开始执行，将创建一次任务运行。"},
     {"name": "task_completion_execution", "value": "请先在任务对话中处理当前执行或等待事项，再完成任务。"},
@@ -1387,6 +1387,7 @@
     { "name": "clarify_custom", "value": "自定义回答" },
     { "name": "clarify_supplement", "value": "补充说明（可选）" },
     { "name": "clarify_cancel", "value": "取消任务" },
-    { "name": "clarify_submitting", "value": "正在提交…" }
+    { "name": "clarify_submitting", "value": "正在提交…" },
+    { "name": "task_change_log", "value": "变更记录" }
   ]
 }

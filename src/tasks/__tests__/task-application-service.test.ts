@@ -79,6 +79,232 @@ describe('TaskApplicationService', () => {
     needsUser: false, completionVerdict: 'achieved' as const,
   };
 
+  it('allows every phase pair and atomically records actor, source, and resolutions', () => {
+    const tasks = new TaskRepository();
+    const phases = ['backlog', 'ready', 'active', 'review', 'closed'] as const;
+    for (const from of phases) for (const to of phases) {
+      if (from === to) continue;
+      const { service, task, run, runs } = createRunningTask(`move-${from}-${to}`);
+      if (from !== 'active') tasks.setLifecycle({ taskId: task.id, expectedVersion: task.version,
+        phase: from, ...(from === 'closed' ? { resolution: 'cancelled' as const } : {}) });
+      runs.createWait({ taskId: task.id, kind: 'user_input', reason: 'Await answer', condition: {} });
+      const before = tasks.require(task.id);
+      const result = service.execute({ taskId: task.id, expectedVersion: before.version,
+        idempotencyKey: `drag-${from}-${to}`, source: 'board', actor: { kind: 'user', id: 'owner' },
+        command: { type: 'move', phase: to } });
+      expect(result).toMatchObject({ ok: true, model: { task: { phase: to } } });
+      const change = tasks.phaseChanges(task.id).at(-1)!;
+      expect(change).toMatchObject({ fromPhase: from, toPhase: to, source: 'board',
+        actor: { kind: 'user', id: 'owner' }, operationId: `drag-${from}-${to}` });
+      expect(change.toResolution).toBe(to === 'closed' ? 'done' : undefined);
+      expect(tasks.require(task.id).resolution).toBe(to === 'closed' ? 'done' : undefined);
+      expect(runs.require(run.id).status).toBe('running');
+      const count = tasks.phaseChanges(task.id).length;
+      expect(service.execute({ taskId: task.id, expectedVersion: before.version,
+        idempotencyKey: 'stale-command', command: { type: 'move', phase: from } }).ok).toBe(false);
+      expect(tasks.phaseChanges(task.id)).toHaveLength(count);
+    }
+  });
+
+  it.each(['backlog', 'ready', 'review', 'closed', 'active'] as const)(
+    'preserves manual %s after a late successful run, including moving away and back', phase => {
+      const { service, task, run, runs } = createRunningTask(`manual-${phase}`);
+      const tasks = new TaskRepository();
+      for (const target of phase === 'active' ? ['ready', 'active'] as const : [phase]) {
+        const current = tasks.require(task.id);
+        expect(service.execute({ taskId: task.id, expectedVersion: current.version,
+          idempotencyKey: `manual-${phase}-${target}`, command: { type: 'move', phase: target } }).ok).toBe(true);
+      }
+      const count = tasks.phaseChanges(task.id).length;
+      expect(service.completeRun({ runId: run.id, expectedRunVersion: run.version, receipt }))
+        .toMatchObject({ ok: true, model: { task: { phase } } });
+      expect(tasks.phaseChanges(task.id)).toHaveLength(count);
+      expect(runs.getReceipt(run.id)?.status).toBe('succeeded');
+      expect(new TaskCollaborationRepository().recent(task.id).some(entry => entry.taskRunId === run.id && entry.kind === 'result')).toBe(true);
+    });
+
+  it('retains the manual phase fence after reopening the database', () => {
+    const { service, task, run } = createRunningTask('durable-phase');
+    service.execute({ taskId: task.id, expectedVersion: task.version, idempotencyKey: 'durable-move',
+      source: 'mobile', command: { type: 'move', phase: 'ready' } });
+    closeXopcDatabase();
+    resetXopcDatabaseSingletonForTest();
+    openXopcDatabase({ path: join(stateDir, 'xopc.db') });
+    expect(new TaskApplicationService().completeRun({ runId: run.id, expectedRunVersion: run.version, receipt }))
+      .toMatchObject({ ok: true, model: { task: { phase: 'ready' } } });
+    expect(new TaskRepository().phaseChanges(task.id).at(-1)).toMatchObject({ source: 'mobile', toPhase: 'ready' });
+  });
+
+  it('resumes automatic completion only for a new explicit execution', () => {
+    const { service, task, run } = createRunningTask('explicit-restart');
+    const tasks = new TaskRepository();
+    service.execute({ taskId: task.id, expectedVersion: task.version, idempotencyKey: 'manual-ready',
+      command: { type: 'move', phase: 'ready' } });
+    service.completeRun({ runId: run.id, expectedRunVersion: run.version, receipt });
+    const current = tasks.require(task.id);
+    expect(service.execute({ taskId: task.id, expectedVersion: current.version, idempotencyKey: 'background-restart',
+      actor: { kind: 'system', id: 'task-signal' }, command: { type: 'start', executor: { kind: 'agent', agentId: 'main' } } }))
+      .toMatchObject({ ok: false, reason: 'blocked' });
+    const next = service.execute({ taskId: task.id, expectedVersion: current.version, idempotencyKey: 'explicit-restart-2',
+      command: { type: 'start', executor: { kind: 'agent', agentId: 'main' } } });
+    expect(next.ok).toBe(true);
+    if (!next.ok || !next.runId) throw new Error('Expected explicit run');
+    const newRun = new TaskRunRepository().require(next.runId);
+    expect(service.completeRun({ runId: newRun.id, expectedRunVersion: newRun.version, receipt }))
+      .toMatchObject({ ok: true, model: { task: { phase: 'closed', resolution: 'done' } } });
+  });
+
+  it('keeps no duplicate log for an idempotent replay and rolls back failed log writes', () => {
+    const { service, task } = createRunningTask('audit-atomic');
+    const tasks = new TaskRepository();
+    const command = { type: 'move', phase: 'closed' } as const;
+    service.execute({ taskId: task.id, expectedVersion: task.version, idempotencyKey: 'audit-close', command });
+    const current = tasks.require(task.id);
+    const count = tasks.phaseChanges(task.id).length;
+    expect(service.execute({ taskId: task.id, expectedVersion: current.version, idempotencyKey: 'audit-close', command }).ok).toBe(true);
+    expect(tasks.phaseChanges(task.id)).toHaveLength(count);
+    getSqliteDatabase().exec(`CREATE TRIGGER reject_phase_audit BEFORE INSERT ON task_phase_changes
+      BEGIN SELECT RAISE(ABORT, 'audit write failed'); END`);
+    expect(() => service.execute({ taskId: task.id, expectedVersion: current.version, idempotencyKey: 'audit-failure',
+      command: { type: 'move', phase: 'ready' } })).toThrow('audit write failed');
+    expect(tasks.require(task.id)).toEqual(current);
+  });
+
+  it.each(['heartbeat', 'automation', 'workflow', 'internal', 'task_update', undefined] as const)(
+    'does not let a %s input clear manual phase protection even when session metadata says user', source => {
+      const service = new TaskApplicationService();
+      const created = service.create({ idempotencyKey: 'origin-fence', title: 'Origin fence', priority: 'normal',
+        contract, dependencies: [], context: [], authorityGrants: [], activation: { mode: 'capture', phase: 'ready' } });
+      if (!created.ok) throw new Error('Expected Task');
+      const taskId = created.model.task.id;
+      service.execute({ taskId, expectedVersion: created.model.task.version, idempotencyKey: 'origin-move',
+        command: { type: 'move', phase: 'backlog' } });
+      const tasks = new TaskRepository();
+      const before = tasks.require(taskId);
+      const changes = tasks.phaseChanges(taskId);
+      expect(TaskRunCoordinator.start({ runId: 'background-origin', fallbackObjective: contract.objective,
+        ...(source ? { inputOrigin: { type: 'system' as const, source } } : {}),
+        context: { runId: 'background-origin', taskId, conversationId: createConversation({ agentId: 'main' }).key,
+          agentId: 'main', channel: 'webchat', origin: 'task', triggerKind: 'user' } })).toBeUndefined();
+      expect(tasks.require(taskId)).toEqual(before);
+      expect(tasks.automaticStartAllowed(taskId)).toBe(false);
+      expect(tasks.phaseChanges(taskId)).toEqual(changes);
+      expect(new TaskRunRepository().listByTask(taskId)).toEqual([]);
+    });
+
+  it.each([
+    { type: 'endpoint', endpointId: 'mobile' }, { type: 'channel', channel: 'webchat' },
+    { type: 'system', source: 'cli' },
+  ] as const)('allows an explicit user input through $type to start new work after a manual move', inputOrigin => {
+    const service = new TaskApplicationService();
+    const created = service.create({ idempotencyKey: 'user-origin', title: 'User origin', priority: 'normal', contract,
+      dependencies: [], context: [], authorityGrants: [], activation: { mode: 'capture', phase: 'ready' } });
+    if (!created.ok) throw new Error('Expected Task');
+    const taskId = created.model.task.id;
+    service.execute({ taskId, expectedVersion: created.model.task.version, idempotencyKey: 'user-origin-move',
+      command: { type: 'move', phase: 'backlog' } });
+    const coordinator = TaskRunCoordinator.start({ runId: 'explicit-origin', fallbackObjective: contract.objective,
+      inputOrigin, context: { runId: 'explicit-origin', taskId, channel: 'webchat', origin: 'task',
+        conversationId: createConversation({ agentId: 'main' }).key, agentId: 'main', triggerKind: 'heartbeat' } });
+    expect(coordinator).toBeDefined();
+    const tasks = new TaskRepository();
+    expect(tasks.require(taskId).phase).toBe('active');
+    expect(tasks.automaticStartAllowed(taskId)).toBe(true);
+    const run = new TaskRunRepository().require('explicit-origin');
+    expect(service.completeRun({ runId: run.id, expectedRunVersion: run.version, receipt }))
+      .toMatchObject({ ok: true, model: { task: { phase: 'closed', resolution: 'done' } } });
+  });
+
+  it.each(['ready', 'closed'] as const)('continues an existing queued run on a manually chosen %s phase', phase => {
+    const service = new TaskApplicationService();
+    const created = service.create({ idempotencyKey: 'queued-origin', title: 'Queued work', priority: 'normal', contract,
+      dependencies: [], context: [], authorityGrants: [], activation: { mode: 'start', executor: { kind: 'agent', agentId: 'main' } } });
+    if (!created.ok || !created.runId) throw new Error('Expected queued run');
+    const taskId = created.model.task.id;
+    service.execute({ taskId, expectedVersion: created.model.task.version, idempotencyKey: 'queued-origin-move',
+      command: { type: 'move', phase } });
+    const tasks = new TaskRepository();
+    const before = tasks.require(taskId);
+    const coordinator = TaskRunCoordinator.start({ runId: created.runId, fallbackObjective: contract.objective,
+      inputOrigin: { type: 'system', source: 'workflow' }, context: { runId: created.runId, taskId,
+        conversationId: createConversation({ agentId: 'main' }).key, agentId: 'main', channel: 'webchat',
+        origin: 'task', triggerKind: 'user' } });
+    expect(coordinator).toBeDefined();
+    expect(tasks.require(taskId)).toEqual(before);
+    expect(tasks.automaticStartAllowed(taskId)).toBe(false);
+    expect(new TaskRunRepository().require(created.runId).status).toBe('running');
+  });
+
+  it.each(['paused', 'user_input', 'approval'] as const)(
+    'resolves an existing %s wait on a manually completed task without reopening it', kind => {
+      const { service, task, run, runs } = createRunningTask(`closed-${kind}`);
+      const waiting = service.execute({ taskId: task.id, expectedVersion: task.version, idempotencyKey: 'add-closed-wait',
+        command: { type: 'add_wait', wait: { kind, reason: 'Wait', condition: kind === 'approval' ? { capability: 'publish' } : {} } } });
+      if (!waiting.ok) throw new Error('Expected wait');
+      const closed = service.execute({ taskId: task.id, expectedVersion: waiting.model.task.version,
+        idempotencyKey: 'close-with-wait', command: { type: 'move', phase: 'closed' } });
+      if (!closed.ok) throw new Error('Expected closed task');
+      expect(closed.model.allowedCommands).toContain('resolve_wait');
+      expect(closed.model.operationalState).toBe('waiting');
+      const tasks = new TaskRepository();
+      const count = tasks.phaseChanges(task.id).length;
+      const wait = runs.listActiveWaits(task.id)[0];
+      const resolution = kind === 'user_input' ? { kind: 'user_answer', answer: 'Continue with source A' }
+        : kind === 'approval' ? { kind: 'task_approval', decision: 'approve' } : undefined;
+      if (resolution) {
+        for (const malformed of [undefined, kind === 'approval'
+          ? { kind: 'task_approval', decision: 'maybe' } : { kind: 'user_answer', answer: ' ' }]) {
+          expect(service.execute({ taskId: task.id, expectedVersion: closed.model.task.version,
+            idempotencyKey: `invalid-response-${JSON.stringify(malformed)}`,
+            command: { type: 'resolve_wait', waitId: wait.id, resolution: malformed } }))
+            .toMatchObject({ ok: false, reason: 'invalid_transition' });
+          expect(runs.requireWait(wait.id).status).toBe('active');
+        }
+        expect(service.execute({ taskId: task.id, expectedVersion: closed.model.task.version,
+          idempotencyKey: 'invalid-responder', actor: { kind: 'agent', id: 'worker' },
+          command: { type: 'resolve_wait', waitId: wait.id, resolution } }))
+          .toMatchObject({ ok: false, reason: 'invalid_transition' });
+        expect(runs.requireWait(wait.id).status).toBe('active');
+      }
+      expect(service.execute({ taskId: task.id, expectedVersion: closed.model.task.version,
+        idempotencyKey: 'resolve-closed-wait', command: { type: 'resolve_wait', waitId: wait.id, resolution } }))
+        .toMatchObject({ ok: true, model: { task: { phase: 'closed', resolution: 'done' } } });
+      expect(runs.requireWait(wait.id).status).toBe('resolved');
+      expect(runs.listByTask(task.id)).toHaveLength(1);
+      expect(runs.claimNext({ owner: 'worker', leaseMs: 1000 })?.id).toBe(run.id);
+      expect(tasks.phaseChanges(task.id)).toHaveLength(count);
+      expect(tasks.automaticStartAllowed(task.id)).toBe(false);
+      const currentRun = runs.require(run.id);
+      expect(service.completeRun({ runId: run.id, expectedRunVersion: currentRun.version, receipt }))
+        .toMatchObject({ ok: true, model: { task: { phase: 'closed', resolution: 'done' } } });
+    });
+
+  it('resolves a completed task approval without creating a new execution', () => {
+    const tasks = new TaskRepository(), runs = new TaskRunRepository(), service = new TaskApplicationService();
+    const task = tasks.create({ title: 'Not started', objective: 'Wait for approval' });
+    const wait = runs.createWait({ taskId: task.id, kind: 'approval', reason: 'Publish',
+      condition: { capability: 'publish', executor: { kind: 'agent', agentId: 'main' } } });
+    const closed = service.execute({ taskId: task.id, expectedVersion: task.version, idempotencyKey: 'closed-before-start',
+      command: { type: 'move', phase: 'closed' } });
+    if (!closed.ok) throw new Error('Expected closed Task');
+    expect(service.execute({ taskId: task.id, expectedVersion: closed.model.task.version, idempotencyKey: 'approve-no-start',
+      command: { type: 'resolve_wait', waitId: wait.id, resolution: { kind: 'task_approval', decision: 'approve' } } }))
+      .toMatchObject({ ok: true, model: { task: { phase: 'closed', resolution: 'done' }, operationalState: 'idle' } });
+    expect(runs.listByTask(task.id)).toEqual([]);
+  });
+
+  it.each(['cancelled', 'duplicate', 'wont_do'] as const)('does not resume waits on a task closed as %s', resolution => {
+    const { service, task, runs } = createRunningTask(`closed-${resolution}`);
+    const wait = runs.createWait({ taskId: task.id, kind: 'paused', reason: 'Pause', condition: {} });
+    const closed = service.execute({ taskId: task.id, expectedVersion: task.version, idempotencyKey: 'cancel-wait',
+      command: { type: 'close', resolution } });
+    if (!closed.ok) throw new Error('Expected closed Task');
+    expect(closed.model.allowedCommands).not.toContain('resolve_wait');
+    expect(service.execute({ taskId: task.id, expectedVersion: closed.model.task.version, idempotencyKey: 'refuse-resume',
+      command: { type: 'resolve_wait', waitId: wait.id } })).toMatchObject({ ok: false, reason: 'invalid_transition' });
+    expect(runs.requireWait(wait.id).status).toBe('active');
+  });
+
   it('finalizes a long result without truncating its receipt or rolling back completion', () => {
     const { service, run, runs } = createRunningTask('long-result');
     const summary = `# Report\n${'Evidence '.repeat(1200)}\nFinal conclusion`;
@@ -89,7 +315,7 @@ describe('TaskApplicationService', () => {
     expect(new TaskCollaborationRepository().recent(run.taskId)[0].body.length).toBeLessThanOrEqual(8000);
   });
 
-  it('requires current criterion reviews before manually completing a task', () => {
+  it('requires current criterion reviews before an agent completes a task', () => {
     const service = new TaskApplicationService();
     const created = service.create({
       idempotencyKey: 'manual-acceptance', title: 'Review work', priority: 'normal',
@@ -102,7 +328,7 @@ describe('TaskApplicationService', () => {
     const taskId = created.model.task.id;
     const close = (key: string) => service.execute({ taskId,
       expectedVersion: new TaskRepository().require(taskId).version,
-      idempotencyKey: key, command: { type: 'close', resolution: 'done' } });
+      idempotencyKey: key, actor: { kind: 'agent', id: 'reviewer' }, command: { type: 'close', resolution: 'done' } });
     expect(close('close-before-review')).toMatchObject({ ok: false, reason: 'blocked' });
     const reviews = new TaskCriterionReviewRepository();
     const failedTask = new TaskRepository().require(taskId);

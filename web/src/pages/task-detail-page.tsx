@@ -1,3 +1,4 @@
+import { TaskPhaseHistory } from '@/features/tasks/task-phase-history';
 import { TaskInputCard } from '@/features/tasks/task-input-card';
 import type { TaskChangedEvent, TaskCommand, TaskPatchRequest, TaskPhase, TaskPriority } from '@xopcai/gateway-contract';
 import * as Dialog from '@radix-ui/react-dialog';
@@ -41,8 +42,8 @@ import { useWorkspacePreviewStore } from '@/stores/workspace-preview-store';
 
 function phaseLabel(phase: TaskPhase, language: 'en' | 'zh'): string {
   const labels = language === 'zh'
-    ? { backlog: '待规划', ready: '就绪', active: '进行中', review: '待验收', closed: '已完成' }
-    : { backlog: 'Backlog', ready: 'Ready', active: 'Active', review: 'Review', closed: 'Completed' };
+    ? { backlog: '待规划', ready: '就绪', active: '进行中', review: '待验收', closed: '已关闭' }
+    : { backlog: 'Backlog', ready: 'Ready', active: 'Active', review: 'Review', closed: 'Closed' };
   return labels[phase];
 }
 
@@ -84,7 +85,7 @@ const TaskPhaseField = memo(function TaskPhaseField({
   onChange: (phase: TaskPhase) => void;
 }) {
   const optionDisabled = (phase: TaskPhase) => phase !== value && (
-    phase === 'closed' ? !canApprove : value === 'closed' ? !canReopen : !canMove
+    !canMove && !(phase === 'closed' ? canApprove : value === 'closed' && canReopen)
   );
   return <label className="grid gap-1.5 text-xs text-fg-muted"><span>{label}</span><Select triggerClassName="border-0 bg-surface-hover shadow-none focus-visible:ring-2 focus-visible:ring-accent/30" contentClassName="border-0" value={value} disabled={disabled} onChange={(event) => onChange(event.target.value as TaskPhase)}>{TASK_PHASES.map((phase) => <SelectOption key={phase} value={phase} disabled={optionDisabled(phase)}>{phaseLabel(phase, language)}</SelectOption>)}</Select></label>;
 });
@@ -470,14 +471,6 @@ function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted }: {
   const changePhase = useCallback(async (phase: TaskPhase) => {
     const currentDetail = detailRef.current;
     if (!currentDetail || phase === currentDetail.task.phase) return;
-    if (currentDetail.task.phase === 'closed') {
-      await execute({ type: 'reopen', phase: phase === 'closed' ? 'ready' : phase }, 'phase');
-      return;
-    }
-    if (phase === 'closed') {
-      await execute({ type: 'close', resolution: 'done' }, 'phase');
-      return;
-    }
     await execute({ type: 'move', phase }, 'phase');
   }, [execute]);
 
@@ -830,8 +823,9 @@ function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted }: {
 
       {detail.attention.length > 0 ? <section className={cn('mb-4 rounded-xl border border-warning/20 bg-warning/10 p-4', recentlyChanged('attention') && 'task-detail-live-update')}><h2 className="text-sm font-semibold text-fg">{needsUserAttention ? copy.needsAttention : copy.waitingStatus}</h2><ul className="mt-2 space-y-1.5 text-sm leading-6 text-fg-muted">{detail.attention.map((item, index) => <li key={`${item.kind}-${index}`} className="flex flex-wrap items-start justify-between gap-2"><TaskExpandableContent content={item.summary} contentKey={`${taskId}:attention:${item.kind}:${index}`} language={language} markdown={false} previewHeight={72} className="min-w-0 flex-1" />{item.kind === 'input_required' || item.kind === 'approval_required' ? <Link className="inline-flex min-h-11 items-center rounded-lg bg-surface-panel px-3 text-sm font-medium text-accent" to={taskChatHref(taskId)}>{language === 'zh' ? (item.kind === 'approval_required' ? '查看并决定' : '补充信息') : (item.kind === 'approval_required' ? 'Review decision' : 'Provide information')}</Link> : null}</li>)}</ul></section> : null}
 
-      {detail.task.phase !== 'closed' && !pausedWait && detail.waits.filter(wait => (wait.kind === 'user_input' || (wait.kind === 'approval' && typeof wait.condition.capability === 'string')) && wait.condition.type !== 'connection').map(wait => <TaskInputCard key={wait.id} wait={wait} detail={detail} zh={language === 'zh'} onUpdated={updated => { void mutateDetail(updated, { revalidate: false }); }} />)}
+      {detail.allowedCommands.includes('resolve_wait') && !pausedWait && detail.waits.filter(wait => (wait.kind === 'user_input' || (wait.kind === 'approval' && typeof wait.condition.capability === 'string')) && wait.condition.type !== 'connection').map(wait => <TaskInputCard key={wait.id} wait={wait} detail={detail} zh={language === 'zh'} onUpdated={updated => { void mutateDetail(updated, { revalidate: false }); }} />)}
 
+      <div className="mb-4"><TaskPhaseHistory changes={detail.phaseChanges} language={language} /></div>
       <div className="mb-4"><TaskCollaborationPanel key={taskId} taskId={taskId} /></div>
 
       {(deliverables.length > 0 || artifactEvidence.length > 0 || expectedOutputs.length > 0) ? <section className="mb-4 rounded-xl border border-edge-subtle bg-surface-panel p-5 shadow-surface">

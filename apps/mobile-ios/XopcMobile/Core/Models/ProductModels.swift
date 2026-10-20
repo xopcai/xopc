@@ -256,6 +256,23 @@ struct TaskDetailEnvelope: Decodable, Sendable {
     let attention: [TaskAttention]?
     let criterionReviews: [TaskCriterionReview]?
     let waits: [TaskWait]?
+    var phaseChanges: [TaskPhaseChange]? = nil
+}
+
+struct TaskPhaseChange: Decodable, Sendable, Identifiable {
+    let id: String
+    let fromPhase: String
+    let toPhase: String
+    let fromResolution: String?
+    let toResolution: String?
+    let actor: Actor
+    let source: String
+    let createdAt: Int64
+
+    struct Actor: Decodable, Sendable {
+        let kind: String
+        let id: String?
+    }
 }
 
 struct TaskWait: Decodable, Sendable {

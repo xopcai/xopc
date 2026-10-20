@@ -12,6 +12,7 @@ export type TaskBoardAction =
   | 'move_ready'
   | 'move_active'
   | 'move_review'
+  | 'move_closed'
   | 'reopen_backlog'
   | 'reopen_ready'
   | 'reopen_active'
@@ -38,11 +39,7 @@ export function taskActionForPhase(
   targetPhase: TaskPhase,
 ): TaskBoardAction | undefined {
   if (task.phase === targetPhase) return undefined;
-  if (task.phase === 'closed' && targetPhase !== 'closed' && task.allowedCommands.includes('reopen')) {
-    return `reopen_${targetPhase}`;
-  }
-  if (targetPhase === 'closed' && task.phase === 'review' && task.allowedCommands.includes('close')) return 'complete';
-  if (targetPhase !== 'closed' && task.allowedCommands.includes('move')) return `move_${targetPhase}`;
+  if (task.allowedCommands.includes('move')) return `move_${targetPhase}`;
   return undefined;
 }
 

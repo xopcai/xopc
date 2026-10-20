@@ -51,8 +51,9 @@ function taskIdForSession(conversationId: string): string | undefined {
 export function getTaskExecutionBrief(taskId: string): TaskExecutionBrief | undefined {
   if (!isXopcDatabaseOpen()) return undefined;
   const task = new TaskRepository().get(taskId);
-  if (!task?.contract || task.phase === 'closed') return undefined;
+  if (!task?.contract) return undefined;
   const runs = new TaskRunRepository();
+  if (task.phase === 'closed' && (task.resolution !== 'done' || !runs.getActiveRoot(taskId))) return undefined;
   if (runs.listActiveWaits(taskId).some((wait) => wait.kind === 'paused')) return undefined;
   const latestRun = runs.getLatestRoot(taskId);
   const latestReceipt = latestRun?.contractVersion === task.latestContractVersion ? runs.getReceipt(latestRun.id) : undefined;

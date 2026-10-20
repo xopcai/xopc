@@ -183,7 +183,9 @@ export function registerTaskRoutes(authenticated: Hono, deps: AuthenticatedRoute
     try {
       const task = tasks.get(c.req.param('id'));
       if (!task) return c.json({ ok: false, error: 'Task not found' }, 404);
-      if (task.phase === 'closed') {
+      const answersExistingWait = kind === 'answer' && causationId
+        && runs.listActiveWaits(task.id).some(wait => wait.condition.collaborationEntryId === causationId);
+      if (task.phase === 'closed' && (task.resolution !== 'done' || !answersExistingWait)) {
         return c.json({ ok: false, error: 'Task is closed' }, 409);
       }
       const entry = collaboration.append({ taskId: c.req.param('id'), authorKind: 'user',
