@@ -2,7 +2,7 @@
  * Cursor / VS Code chat–style scroll geometry.
  * One threshold: near-bottom = auto-follow the transcript tail.
  */
-export const CHAT_SCROLL_NEAR_BOTTOM_PX = 48;
+export const CHAT_SCROLL_NEAR_BOTTOM_PX = 96;
 
 export function chatScrollDistanceFromBottom(el: HTMLElement): number {
   return el.scrollHeight - el.scrollTop - el.clientHeight;

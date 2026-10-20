@@ -29,6 +29,7 @@ export function PluginSetupPanel({ extension, zh, onChanged, onStart, onInstalle
   const openedAccounts = useRef(new Set<string>());
   const accountOpeningRevision = useRef<number | undefined>(undefined);
   const signInWindow = useRef<Window | null>(null);
+  const openedSignInUrls = useRef(new Set<string>());
   const t = (cn: string, en: string) => zh ? cn : en;
   const declared = extension.setup?.authorizations ?? [];
   const covered = new Set(declared.flatMap(value => value.servers));
@@ -82,9 +83,21 @@ export function PluginSetupPanel({ extension, zh, onChanged, onStart, onInstalle
   }, [base, authServer, job?.state]);
   useEffect(() => {
     const url = auth?.authorizationUrl ?? (auth?.challenge?.type === 'url' ? auth.challenge.url : undefined);
-    if (!url || auth?.error || !signInWindow.current) return;
+    if (!auth) return;
+    if (auth.error || ['cancelled', 'error', 'connected'].includes(auth.state)) {
+      signInWindow.current?.close(); signInWindow.current = null;
+      return;
+    }
+    if (!url) {
+      if (auth.challenge?.type === 'qr') { signInWindow.current?.close(); signInWindow.current = null; }
+      return;
+    }
+    const key = `${auth.id}:${url}`;
+    if (openedSignInUrls.current.has(key)) return;
+    openedSignInUrls.current.add(key);
     const popup = signInWindow.current; signInWindow.current = null;
-    if (!popup.closed) popup.location.replace(url);
+    if (popup && !popup.closed) popup.location.replace(url);
+    else window.open(url, '_blank', 'noopener,noreferrer');
   }, [auth]);
   async function act(action: string, values: Record<string, unknown> = {}, expectedRevision = job?.revision) {
     setBusy(true); setError('');
@@ -123,7 +136,7 @@ export function PluginSetupPanel({ extension, zh, onChanged, onStart, onInstalle
   }, [job, preparing, installed, activeAccount, initialConnect]);
   function connect(account: PluginAccount, method: string) {
     const selected = account.methods.find(value => value.id === method);
-    const popup = selected?.type === 'oauth' ? window.open('about:blank', '_blank') : null;
+    const popup = selected?.type === 'oauth' || selected?.type === 'cli' ? window.open('about:blank', '_blank') : null;
     if (popup) popup.opener = null;
     signInWindow.current = popup; setAuth(null);
     void act('authorize', { server: account.id, ...(declared.some(value => value.id === account.id) ? { method } : {}) }).then(next => {
@@ -142,8 +155,13 @@ export function PluginSetupPanel({ extension, zh, onChanged, onStart, onInstalle
     } else {
       const selected = account.methods.find(value => value.id === method);
       if (selected?.type === 'cli') {
+        const popup = window.open('about:blank', '_blank');
+        if (popup) popup.opener = null;
+        signInWindow.current = popup; setAuth(null);
         const next = await act('configure', { authorization: account.id, method, values }, job?.revision);
-        if (next) { const authorized = await act('authorize', { server: account.id, method }, next.revision); if (authorized) setAuthServer(account.id); }
+        const authorized = next && await act('authorize', { server: account.id, method }, next.revision);
+        if (authorized) setAuthServer(account.id);
+        else { popup?.close(); signInWindow.current = null; }
       } else await act('configure', { authorization: account.id, method, values });
     }
   }

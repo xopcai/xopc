@@ -140,6 +140,7 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
   const { auth, session, messages: msgSlice, timeline, stream, followUp, clarify, agents } = useChatSession({
     fixedConversationId: conversationId,
     taskId: taskId ?? undefined,
+    personal,
   });
 
   const skillDiscovery = !personal && !embedded && !taskId && searchParams.get('scene') === 'find-skills';
