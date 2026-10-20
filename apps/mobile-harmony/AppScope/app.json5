@@ -2,8 +2,8 @@
   "app": {
     "bundleName": "ai.xopc.xopc",
     "vendor": "xopcai",
-    "versionCode": 9,
-    "versionName": "0.1.8",
+    "versionCode": 10,
+    "versionName": "0.1.9",
     "icon": "$media:app_icon",
     "label": "$string:app_name"
   }
