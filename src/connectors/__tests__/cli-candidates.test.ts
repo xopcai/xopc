@@ -4,15 +4,14 @@ import { COMPOSIO_CONNECTORS } from '../composio.js';
 import { connectionCandidates, resolveConnectionCandidate } from '../connection-candidates.js';
 
 describe('connection discovery', () => {
-  it.each(['Feishu Lark docs list documents drive files', 'lark feishu drive file list', 'Lark', 'Feishu'])('discovers Feishu from English query %s', query => {
-    expect(connectionCandidates(query)).toEqual(expect.arrayContaining([expect.objectContaining({ candidateRef: 'feishu-workspace' })]));
-  });
-  it('discovers authorization candidates without an existing account', () => {
-    expect(connectionCandidates('使用飞书读取文档')).toEqual(expect.arrayContaining([expect.objectContaining({ candidateRef: 'feishu-workspace' })]));
-    expect(connectionCandidates('wecom')).toEqual(expect.arrayContaining([expect.objectContaining({ candidateRef: 'wecom-workspace' })]));
-    const candidate = resolveConnectionCandidate('feishu-workspace');
-    expect(candidate.capabilities).toContain('docs.fetch');
-    expect(candidate.capabilities).not.toContain('calendar.events.create');
+  it('uses Store plugins instead of duplicate built-in connection candidates', () => {
+    for (const query of ['Feishu', '飞书', '钉钉', '语雀', 'Notion', 'Todoist']) {
+      expect(connectionCandidates(query)).toEqual([]);
+    }
+    expect(() => resolveConnectionCandidate('feishu-workspace')).toThrow();
+    expect(connectionCandidates('wecom')).toEqual([]);
+    expect(connectionCandidates('WPS 365')).toEqual([]);
+    expect(() => resolveConnectionCandidate('wecom-workspace')).toThrow();
   });
 
   it('discovers every agent-ready Composio connector from the shared catalog', () => {

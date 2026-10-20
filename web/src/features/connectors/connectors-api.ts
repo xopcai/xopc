@@ -113,6 +113,9 @@ export type StoreConnectorCatalogItem = {
   updatedAt: number;
   branding?: { iconUrl: string; iconSha256: string };
   connectorManifest?: unknown;
+  regions?: string[];
+  tags?: string[];
+  localizations?: Partial<Record<'en' | 'zh-CN', { displayName: string; description?: string }>>;
 };
 
 export type StoreConnectorPermissions = {

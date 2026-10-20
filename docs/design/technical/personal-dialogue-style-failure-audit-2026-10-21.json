@@ -1,0 +1,1307 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-21",
+  "reviewer": "assistant transcript audit; not independent human adjudication",
+  "scope": "All 40 FollowBench failed cases and all 12 EQ final conversations; all original grades retained",
+  "baselineManifest": ".xopc-evals/personal-style/baseline-gpt56-gpt61-2026-10-21-v1/manifest.json",
+  "models": {
+    "model": "xopc-cloud/openai-codex/gpt-5.6-sol",
+    "judge": "xopc-cloud/openai-codex/gpt-6.1-sol",
+    "persona": "xopc-cloud/openai-codex/gpt-6.1-sol"
+  },
+  "followCategoryCounts": {
+    "benchmark_primary": 9,
+    "mixed_or_uncertain": 7,
+    "visible_execution_gap": 17,
+    "refusal_or_alternative": 7
+  },
+  "failedCriterionAttributionCounts": {
+    "invisible_requirement": 2,
+    "visible_gap": 32,
+    "judge_dispute": 3,
+    "boundary_behavior": 10,
+    "conflicting_requirements": 5,
+    "cross_language_rubric": 2,
+    "anachronistic_setup": 3,
+    "category_or_rubric_noise": 1
+  },
+  "followCases": [
+    {
+      "caseId": "FB-ZH-S01-L2",
+      "primaryCategory": "benchmark_primary",
+      "confidence": "high",
+      "originalVerdicts": [
+        "NO",
+        "YES"
+      ],
+      "source": ".xopc-evals/personal-style/baseline-gpt56-gpt61-2026-10-21-v1/cases/FB-ZH-S01-L2.json",
+      "sourceSha256": "b0cb9e30523efbf94a1c9e23a8fa4adbe73e8021194403e2c1aa2beafb320c5a",
+      "failedCriteria": [
+        {
+          "index": 1,
+          "attribution": "invisible_requirement",
+          "reason": "老圣人已被最新题面的侦探替换；不能要求被测者遵守未收到的旧约束。"
+        }
+      ],
+      "note": "保留基于题面信息不足的谨慎回答。"
+    },
+    {
+      "caseId": "FB-ZH-S01-L4",
+      "primaryCategory": "mixed_or_uncertain",
+      "confidence": "medium",
+      "originalVerdicts": [
+        "NO",
+        "YES",
+        "NO",
+        "YES"
+      ],
+      "source": ".xopc-evals/personal-style/baseline-gpt56-gpt61-2026-10-21-v1/cases/FB-ZH-S01-L4.json",
+      "sourceSha256": "f69d07d70b5774ddbb37ad3ce96d269272810e2fc4ea68cf101de5e811bb1b71",
+      "failedCriteria": [
+        {
+          "index": 1,
+          "attribution": "invisible_requirement",
+          "reason": "最新题面没有老圣人要求。"
+        },
+        {
+          "index": 3,
+          "attribution": "visible_gap",
+          "reason": "莎士比亚戏剧性不鲜明；属于主观文体判断。"
+        }
+      ],
+      "note": "另有把信息不足的沙漠线索具体化为火星地点的推断风险，需独立事实/不确定性评估。"
+    },
+    {
+      "caseId": "FB-ZH-S02-L4",
+      "primaryCategory": "visible_execution_gap",
+      "confidence": "high",
+      "originalVerdicts": [
+        "YES",
+        "YES",
+        "YES",
+        "NO"
+      ],
+      "source": ".xopc-evals/personal-style/baseline-gpt56-gpt61-2026-10-21-v1/cases/FB-ZH-S02-L4.json",
+      "sourceSha256": "d559e0051806083c72a26aa4c7097625fa617e1d280048f1bde897625144a7c6",
+      "failedCriteria": [
+        {
+          "index": 4,
+          "attribution": "visible_gap",
+          "reason": "押韵只在局部出现，没有贯穿全文。"
+        }
+      ],
+      "note": "显式连续风格执行不足，不等同于日常聊天自然度不足。"
+    },
+    {
+      "caseId": "FB-ZH-S02-L5",
+      "primaryCategory": "visible_execution_gap",
+      "confidence": "medium",
+      "originalVerdicts": [
+        "YES",
+        "NO",
+        "YES",
+        "NO",
+        "YES"
+      ],
+      "source": ".xopc-evals/personal-style/baseline-gpt56-gpt61-2026-10-21-v1/cases/FB-ZH-S02-L5.json",
+      "sourceSha256": "1ce22631cc4ed2363aeef0a5a9cadb9078fbabac5b5e2b23f64ecb9550b3d202",
+      "failedCriteria": [
+        {
+          "index": 2,
+          "attribution": "visible_gap",
+          "reason": "莎士比亚风格偏弱。"
+        },
+        {
+          "index": 4,
+          "attribution": "visible_gap",
+          "reason": "主体没有持续的韵律和押韵。"
+        }
+      ],
+      "note": "多种文体同时混合使判断困难。"
+    },
+    {
+      "caseId": "FB-ZH-S03-L5",
+      "primaryCategory": "visible_execution_gap",
+      "confidence": "medium",
+      "originalVerdicts": [
+        "NO",
+        "YES",
+        "NO",
+        "YES",
+        "YES"
+      ],
+      "source": ".xopc-evals/personal-style/baseline-gpt56-gpt61-2026-10-21-v1/cases/FB-ZH-S03-L5.json",
+      "sourceSha256": "7dd96d8e667c1df2b852f3101a7d082caa91361dc3423682b4ed76cc3664877a",
+      "failedCriteria": [
+        {
+          "index": 1,
+          "attribution": "visible_gap",
+          "reason": "主要为现代清单，莎士比亚叙事弱。"
+        },
+        {
+          "index": 3,
+          "attribution": "visible_gap",
+          "reason": "维多利亚时代优雅文体未稳定呈现。"
+        }
+      ],
+      "note": "50州全量列表是明确任务范围，不能将长度直接归为啰嗦。多文体存在张力。"
+    },
+    {
+      "caseId": "FB-ZH-S05-L4",
+      "primaryCategory": "mixed_or_uncertain",
+      "confidence": "medium",
+      "originalVerdicts": [
+        "YES",
+        "YES",
+        "NO",
+        "NO"
+      ],
+      "source": ".xopc-evals/personal-style/baseline-gpt56-gpt61-2026-10-21-v1/cases/FB-ZH-S05-L4.json",
+      "sourceSha256": "b250a7caa559e7807d182ddce91f0de9591bac37ccf70a716aa8b0a4161e45a0",
+      "failedCriteria": [
+        {
+          "index": 3,
+          "attribution": "judge_dispute",
+          "reason": "要求狄更斯式文风，裁判进一步要求维多利亚社会背景。"
+        },
+        {
+          "index": 4,
+          "attribution": "visible_gap",
+          "reason": "每部电影都要有海盗冒险和寻宝暗示；若干条目覆盖不足。"
+        }
+      ],
+      "note": "不能因风格要求而给历史/严肃影片编造情节；用比喻而非改写事实。"
+    },
+    {
+      "caseId": "FB-ZH-S05-L5",
+      "primaryCategory": "mixed_or_uncertain",
+      "confidence": "medium",
+      "originalVerdicts": [
+        "YES",
+        "YES",
+        "YES",
+        "NO",
+        "YES"
+      ],
+      "source": ".xopc-evals/personal-style/baseline-gpt56-gpt61-2026-10-21-v1/cases/FB-ZH-S05-L5.json",
+      "sourceSha256": "db1193eeb3619b03959673b997d4ece1a79dbad87eb7b1efd0815644ee13c332",
+      "failedCriteria": [
+        {
+          "index": 4,
+          "attribution": "judge_dispute",
+          "reason": "题面要求暗示，裁判以每项缺少明确海盗/宝藏词为由判负；部分条目也确实较弱。"
+        }
+      ],
+      "note": "需要基于语义覆盖的盲复判，不能仅补关键词。"
+    },
+    {
+      "caseId": "FB-ZH-S07-L2",
+      "primaryCategory": "refusal_or_alternative",
+      "confidence": "high",
+      "originalVerdicts": [
+        "YES",
+        "NO"
+      ],
+      "source": ".xopc-evals/personal-style/baseline-gpt56-gpt61-2026-10-21-v1/cases/FB-ZH-S07-L2.json",
+      "sourceSha256": "7f57871a3b4a4dc30c60d3471f7d5633346dced9ddc7dcdf2f9019a043a19cb5",
+      "failedCriteria": [
+        {
+          "index": 2,
+          "attribution": "boundary_behavior",
+          "reason": "明确拒绝精准模仿克拉克，转为原创宇宙科幻风格，裁判据拒绝判负。"
+        }
+      ],
+      "note": "不能由此断言产品政策要求拒绝；需最小系统对照和适用边界核查。"
+    },
+    {
+      "caseId": "FB-ZH-S07-L3",
+      "primaryCategory": "refusal_or_alternative",
+      "confidence": "high",
+      "originalVerdicts": [
+        "YES",
+        "NO",
+        "YES"
+      ],
+      "source": ".xopc-evals/personal-style/baseline-gpt56-gpt61-2026-10-21-v1/cases/FB-ZH-S07-L3.json",
+      "sourceSha256": "5eb1a0507ee96a68198195ed9d17a46e5d415bad374f839b850209391231fb3f",
+      "failedCriteria": [
+        {
+          "index": 2,
+          "attribution": "boundary_behavior",
+          "reason": "同一作者模仿请求被拒绝后给出替代；其他约束通过。"
+        }
+      ],
+      "note": "与同组前题相关，不能按两个独立能力缺陷计。"
+    },
+    {
+      "caseId": "FB-ZH-S09-L2",
+      "primaryCategory": "visible_execution_gap",
+      "confidence": "medium",
+      "originalVerdicts": [
+        "YES",
+        "NO"
+      ],
+      "source": ".xopc-evals/personal-style/baseline-gpt56-gpt61-2026-10-21-v1/cases/FB-ZH-S09-L2.json",
+      "sourceSha256": "7fbfe79359cf957ba019677583c60f1121aed1e04020d5225bb971f1eee7fdcd",
+      "failedCriteria": [
+        {
+          "index": 2,
+          "attribution": "visible_gap",
+          "reason": "正式论说成立，奥斯汀式细腻反讽不鲜明。"
+        }
+      ],
+      "note": "文学文体主观判断；论文长不是默认对话啰嗦的证据。"
+    },
+    {
+      "caseId": "FB-ZH-S09-L4",
+      "primaryCategory": "benchmark_primary",
+      "confidence": "medium",
+      "originalVerdicts": [
+        "NO",
+        "YES",
+        "YES",
+        "YES"
+      ],
+      "source": ".xopc-evals/personal-style/baseline-gpt56-gpt61-2026-10-21-v1/cases/FB-ZH-S09-L4.json",
+      "sourceSha256": "ac37c81a5e433d10bc0934194f828dba73edec8954b91485438eb1712f5a7144",
+      "failedCriteria": [
+        {
+          "index": 1,
+          "attribution": "conflicting_requirements",
+          "reason": "要求论证罗密欧主要责任并用尖刻幽默，同时禁止个人解读；部分心理推断也确有证据不足。"
+        }
+      ],
+      "note": "不能把所有文学解释判为失误；另设文本证据支撑项，禁止为客观而抹去论证。"
+    },
+    {
+      "caseId": "FB-ZH-S11-L3",
+      "primaryCategory": "benchmark_primary",
+      "confidence": "medium",
+      "originalVerdicts": [
+        "YES",
+        "YES",
+        "NO"
+      ],
+      "source": ".xopc-evals/personal-style/baseline-gpt56-gpt61-2026-10-21-v1/cases/FB-ZH-S11-L3.json",
+      "sourceSha256": "81f61047d792343f2aa12254668d4810a3e9089b0cf97233e313a83f64d6ebda",
+      "failedCriteria": [
+        {
+          "index": 3,
+          "attribution": "cross_language_rubric",
+          "reason": "中文题面未指定英语，裁判主要以现代中文缺少伊丽莎白英语句法为由判负。"
+        }
+      ],
+      "note": "跨语言文体可迁移性不足，仍可另评古雅语气，但不能默认必须改成英文。"
+    },
+    {
+      "caseId": "FB-ZH-S11-L4",
+      "primaryCategory": "benchmark_primary",
+      "confidence": "medium",
+      "originalVerdicts": [
+        "YES",
+        "YES",
+        "NO",
+        "YES"
+      ],
+      "source": ".xopc-evals/personal-style/baseline-gpt56-gpt61-2026-10-21-v1/cases/FB-ZH-S11-L4.json",
+      "sourceSha256": "fd3bdd55a81c386a5899a59cc8bb0a3f49e44eae47c4870fc4a06c5c08b9d63e",
+      "failedCriteria": [
+        {
+          "index": 3,
+          "attribution": "cross_language_rubric",
+          "reason": "同组中文独白被按伊丽莎白英语时代特征衡量。"
+        }
+      ],
+      "note": "其余戏剧、演讲和苏格拉底探讨均获YES。"
+    },
+    {
+      "caseId": "FB-ZH-S11-L5",
+      "primaryCategory": "visible_execution_gap",
+      "confidence": "high",
+      "originalVerdicts": [
+        "NO",
+        "NO",
+        "NO",
+        "NO",
+        "NO"
+      ],
+      "source": ".xopc-evals/personal-style/baseline-gpt56-gpt61-2026-10-21-v1/cases/FB-ZH-S11-L5.json",
+      "sourceSha256": "733691fd767813e57e9c80d6ca28ee0f03409ff99e1484cde03a202f1c9418ee",
+      "failedCriteria": [
+        {
+          "index": 1,
+          "attribution": "visible_gap",
+          "reason": "只反问战斗类型，没有生成已经有充分设定的创作。"
+        },
+        {
+          "index": 2,
+          "attribution": "visible_gap",
+          "reason": "只反问战斗类型，没有生成已经有充分设定的创作。"
+        },
+        {
+          "index": 3,
+          "attribution": "visible_gap",
+          "reason": "只反问战斗类型，没有生成已经有充分设定的创作。"
+        },
+        {
+          "index": 4,
+          "attribution": "visible_gap",
+          "reason": "只反问战斗类型，没有生成已经有充分设定的创作。"
+        },
+        {
+          "index": 5,
+          "attribution": "visible_gap",
+          "reason": "只反问战斗类型，没有生成已经有充分设定的创作。"
+        }
+      ],
+      "note": "最明确的可迁移问题：非必要澄清阻塞执行；应采用合理的虚构场景直接写。"
+    },
+    {
+      "caseId": "FB-ZH-S13-L4",
+      "primaryCategory": "visible_execution_gap",
+      "confidence": "medium",
+      "originalVerdicts": [
+        "YES",
+        "YES",
+        "NO",
+        "YES"
+      ],
+      "source": ".xopc-evals/personal-style/baseline-gpt56-gpt61-2026-10-21-v1/cases/FB-ZH-S13-L4.json",
+      "sourceSha256": "bdbefd91f671c1eb032c0de6f75a9779bea51bd87ada8eeba4b0cc56129461bb",
+      "failedCriteria": [
+        {
+          "index": 3,
+          "attribution": "visible_gap",
+          "reason": "感谢信有艺术意象，但时代文体特征很弱。"
+        }
+      ],
+      "note": "短而甜蜜与多种文学文体存在张力，优化须保住简短和可用。"
+    },
+    {
+      "caseId": "FB-ZH-S13-L5",
+      "primaryCategory": "visible_execution_gap",
+      "confidence": "medium",
+      "originalVerdicts": [
+        "YES",
+        "YES",
+        "NO",
+        "NO",
+        "NO"
+      ],
+      "source": ".xopc-evals/personal-style/baseline-gpt56-gpt61-2026-10-21-v1/cases/FB-ZH-S13-L5.json",
+      "sourceSha256": "aadb7fc43ac75399bfbede875d1b5d2915cc0811a272656848b2824d10af42d9",
+      "failedCriteria": [
+        {
+          "index": 3,
+          "attribution": "visible_gap",
+          "reason": "提到文艺复兴而未形成相应文体。"
+        },
+        {
+          "index": 4,
+          "attribution": "visible_gap",
+          "reason": "写庄重字样不足以稳定呈现所要求的修辞。"
+        },
+        {
+          "index": 5,
+          "attribution": "visible_gap",
+          "reason": "提及莎翁激情，但正文没有形成独白戏剧性。"
+        }
+      ],
+      "note": "体现命名风格代替执行风格；不建议默认感谢信因此变长。"
+    },
+    {
+      "caseId": "FB-ZH-S14-L1",
+      "primaryCategory": "refusal_or_alternative",
+      "confidence": "high",
+      "originalVerdicts": [
+        "NO"
+      ],
+      "source": ".xopc-evals/personal-style/baseline-gpt56-gpt61-2026-10-21-v1/cases/FB-ZH-S14-L1.json",
+      "sourceSha256": "7eba81427b099c438e2a2c756d351f27e0285ae6b4a1067411fb27313bfe9059",
+      "failedCriteria": [
+        {
+          "index": 1,
+          "attribution": "boundary_behavior",
+          "reason": "拒绝直接模仿苏斯，提供原创童趣路线；主体韵律也较弱。"
+        }
+      ],
+      "note": "拒绝行为与替代质量分开看；不可为了分数统一取消边界。"
+    },
+    {
+      "caseId": "FB-ZH-S14-L2",
+      "primaryCategory": "refusal_or_alternative",
+      "confidence": "high",
+      "originalVerdicts": [
+        "NO",
+        "NO"
+      ],
+      "source": ".xopc-evals/personal-style/baseline-gpt56-gpt61-2026-10-21-v1/cases/FB-ZH-S14-L2.json",
+      "sourceSha256": "3e95bfb4fcac579a036983177c4a96e160d126d7a61cabfe0d378eff1b90fd7e",
+      "failedCriteria": [
+        {
+          "index": 1,
+          "attribution": "boundary_behavior",
+          "reason": "作者模仿被拒后使用宽泛替代。"
+        },
+        {
+          "index": 2,
+          "attribution": "boundary_behavior",
+          "reason": "明确回避指定角色，用泛化海盗替代。"
+        }
+      ],
+      "note": "是否存在不必要拒绝仍需政策和最小模型对照；角色与作者不应笼统混为一谈。"
+    },
+    {
+      "caseId": "FB-ZH-S14-L3",
+      "primaryCategory": "refusal_or_alternative",
+      "confidence": "high",
+      "originalVerdicts": [
+        "NO",
+        "NO",
+        "YES"
+      ],
+      "source": ".xopc-evals/personal-style/baseline-gpt56-gpt61-2026-10-21-v1/cases/FB-ZH-S14-L3.json",
+      "sourceSha256": "d16287a543919b0df1325c8d9a0a164fe90b8fcb30989e06b29dccb7aa40c812",
+      "failedCriteria": [
+        {
+          "index": 1,
+          "attribution": "boundary_behavior",
+          "reason": "声明不能完全仿写；替代主体也缺少持续韵律。"
+        },
+        {
+          "index": 2,
+          "attribution": "boundary_behavior",
+          "reason": "声明不直接扮演指定角色。"
+        }
+      ],
+      "note": "探险家日志约束通过，说明不是全局不会适应语气。"
+    },
+    {
+      "caseId": "FB-ZH-S14-L4",
+      "primaryCategory": "refusal_or_alternative",
+      "confidence": "high",
+      "originalVerdicts": [
+        "NO",
+        "NO",
+        "YES",
+        "YES"
+      ],
+      "source": ".xopc-evals/personal-style/baseline-gpt56-gpt61-2026-10-21-v1/cases/FB-ZH-S14-L4.json",
+      "sourceSha256": "b4f51819024eb1ee9af7041d54babeb717d09417bf0f34f13458f2ccabe92f15",
+      "failedCriteria": [
+        {
+          "index": 1,
+          "attribution": "boundary_behavior",
+          "reason": "作者风格改为原创替代。"
+        },
+        {
+          "index": 2,
+          "attribution": "boundary_behavior",
+          "reason": "指定角色改为泛化海盗。"
+        }
+      ],
+      "note": "幽默和探险日志均通过；同组相关失败。"
+    },
+    {
+      "caseId": "FB-ZH-S15-L3",
+      "primaryCategory": "mixed_or_uncertain",
+      "confidence": "medium",
+      "originalVerdicts": [
+        "YES",
+        "YES",
+        "NO"
+      ],
+      "source": ".xopc-evals/personal-style/baseline-gpt56-gpt61-2026-10-21-v1/cases/FB-ZH-S15-L3.json",
+      "sourceSha256": "9bf330e17a1d1378b77dbd64e397ee8f9ad6a52ebded89ab0c6480227fce756b",
+      "failedCriteria": [
+        {
+          "index": 3,
+          "attribution": "conflicting_requirements",
+          "reason": "鲁迅式1920年代讽刺与文艺复兴时期文章叠加；正文只作时代意象装饰。"
+        }
+      ],
+      "note": "既有文体执行不深，也有时代/体裁定义不清。"
+    },
+    {
+      "caseId": "FB-ZH-S15-L4",
+      "primaryCategory": "mixed_or_uncertain",
+      "confidence": "medium",
+      "originalVerdicts": [
+        "YES",
+        "YES",
+        "NO",
+        "YES"
+      ],
+      "source": ".xopc-evals/personal-style/baseline-gpt56-gpt61-2026-10-21-v1/cases/FB-ZH-S15-L4.json",
+      "sourceSha256": "b291cbff643e914928dcebf0816ca6fb88037be53a8cda15c8030265a14437d1",
+      "failedCriteria": [
+        {
+          "index": 3,
+          "attribution": "conflicting_requirements",
+          "reason": "同组互有张力的时代文体；现代杂文为主。"
+        }
+      ],
+      "note": "出现拒绝鲁迅仿写开场，但裁判仍给鲁迅YES；说明拒绝措辞与实际风格判定并非一致。"
+    },
+    {
+      "caseId": "FB-ZH-S17-L3",
+      "primaryCategory": "visible_execution_gap",
+      "confidence": "high",
+      "originalVerdicts": [
+        "YES",
+        "YES",
+        "NO"
+      ],
+      "source": ".xopc-evals/personal-style/baseline-gpt56-gpt61-2026-10-21-v1/cases/FB-ZH-S17-L3.json",
+      "sourceSha256": "4e21a7dba91545e0672cb6298deb30da1ff8a08a4a4ea2a1f0cf6cece32c5fbf",
+      "failedCriteria": [
+        {
+          "index": 3,
+          "attribution": "visible_gap",
+          "reason": "把达西写成第三方评论者，没有保持要求的角色视角。"
+        }
+      ],
+      "note": "礼貌和幽默成立；应区分提到人物与用该视角完成写作。"
+    },
+    {
+      "caseId": "FB-ZH-S20-L1",
+      "primaryCategory": "refusal_or_alternative",
+      "confidence": "high",
+      "originalVerdicts": [
+        "NO"
+      ],
+      "source": ".xopc-evals/personal-style/baseline-gpt56-gpt61-2026-10-21-v1/cases/FB-ZH-S20-L1.json",
+      "sourceSha256": "90e5dffc9b0b3089b674fac1a32037ad7920d0f5d1dd9b9b293c118c476a5d3a",
+      "failedCriteria": [
+        {
+          "index": 1,
+          "attribution": "boundary_behavior",
+          "reason": "拒绝精准模仿政治人物，转为夸张自信的原创演说。"
+        }
+      ],
+      "note": "不由裁判口径推导实际政策；原分保留，替代答复可用性另测。"
+    },
+    {
+      "caseId": "FB-ZH-S21-L3",
+      "primaryCategory": "benchmark_primary",
+      "confidence": "high",
+      "originalVerdicts": [
+        "YES",
+        "YES",
+        "NO"
+      ],
+      "source": ".xopc-evals/personal-style/baseline-gpt56-gpt61-2026-10-21-v1/cases/FB-ZH-S21-L3.json",
+      "sourceSha256": "2f5c62a05865641147b7cc7f73a92fbf6163a2879c0c239e2f15be8985fc258e",
+      "failedCriteria": [
+        {
+          "index": 3,
+          "attribution": "anachronistic_setup",
+          "reason": "要求身处1920年代讲解后来建成的建筑；回答主动澄清年代，裁判以破坏时代视角判负。"
+        }
+      ],
+      "note": "这是本地题面与回答的时间冲突分析，不是对建筑史另做权威核验。"
+    },
+    {
+      "caseId": "FB-ZH-S21-L4",
+      "primaryCategory": "benchmark_primary",
+      "confidence": "high",
+      "originalVerdicts": [
+        "YES",
+        "YES",
+        "NO",
+        "YES"
+      ],
+      "source": ".xopc-evals/personal-style/baseline-gpt56-gpt61-2026-10-21-v1/cases/FB-ZH-S21-L4.json",
+      "sourceSha256": "219f463f9455969d66f9828335bc9a7c0dddbd0ec03969e5e91e586d4b07c254",
+      "failedCriteria": [
+        {
+          "index": 3,
+          "attribution": "anachronistic_setup",
+          "reason": "同一时间冲突；文学气质、邀请语气和导游身份均通过。"
+        }
+      ],
+      "note": "不能为保持角色而把未来建成年份说成当时已经发生。"
+    },
+    {
+      "caseId": "FB-ZH-S22-L4",
+      "primaryCategory": "visible_execution_gap",
+      "confidence": "medium",
+      "originalVerdicts": [
+        "YES",
+        "YES",
+        "NO",
+        "NO"
+      ],
+      "source": ".xopc-evals/personal-style/baseline-gpt56-gpt61-2026-10-21-v1/cases/FB-ZH-S22-L4.json",
+      "sourceSha256": "dbf9cf06804b919da7acef0be2b70d99652f3d35c7090f08c84dbada1276ae24",
+      "failedCriteria": [
+        {
+          "index": 3,
+          "attribution": "visible_gap",
+          "reason": "解释专业清楚但热情表达弱。"
+        },
+        {
+          "index": 4,
+          "attribution": "visible_gap",
+          "reason": "引用公式没有充分呈现要求的好奇探索方式。"
+        }
+      ],
+      "note": "专业准确性应优先；用直观探索增强表达，不靠插入赞叹词。"
+    },
+    {
+      "caseId": "FB-ZH-S23-L4",
+      "primaryCategory": "visible_execution_gap",
+      "confidence": "medium",
+      "originalVerdicts": [
+        "NO",
+        "YES",
+        "YES",
+        "YES"
+      ],
+      "source": ".xopc-evals/personal-style/baseline-gpt56-gpt61-2026-10-21-v1/cases/FB-ZH-S23-L4.json",
+      "sourceSha256": "afc9b74cc87749231de0e320a7d977afce25ca55659cbe9f7d36ada56db897c9",
+      "failedCriteria": [
+        {
+          "index": 1,
+          "attribution": "visible_gap",
+          "reason": "自然意象用于科普类比，抒情哲思风格弱。"
+        }
+      ],
+      "note": "其余三约束通过；低转移价值的文学文体缺口。"
+    },
+    {
+      "caseId": "FB-ZH-S24-L4",
+      "primaryCategory": "visible_execution_gap",
+      "confidence": "medium",
+      "originalVerdicts": [
+        "NO",
+        "YES",
+        "NO",
+        "YES"
+      ],
+      "source": ".xopc-evals/personal-style/baseline-gpt56-gpt61-2026-10-21-v1/cases/FB-ZH-S24-L4.json",
+      "sourceSha256": "d85e755d7d05189ba4ae58fb6d906c0751a503acd6aeb2d158440a89483949b8",
+      "failedCriteria": [
+        {
+          "index": 1,
+          "attribution": "visible_gap",
+          "reason": "史诗意象存在，但主体仍是现代分析。"
+        },
+        {
+          "index": 3,
+          "attribution": "visible_gap",
+          "reason": "没有稳定建立古希腊史家叙述视角。"
+        }
+      ],
+      "note": "怀旧和讽刺已通过；不应为角色感牺牲史实不确定性。"
+    },
+    {
+      "caseId": "FB-ZH-S25-L1",
+      "primaryCategory": "benchmark_primary",
+      "confidence": "medium",
+      "originalVerdicts": [
+        "NO"
+      ],
+      "source": ".xopc-evals/personal-style/baseline-gpt56-gpt61-2026-10-21-v1/cases/FB-ZH-S25-L1.json",
+      "sourceSha256": "080664ea948bdcd8fecd1612adbe88bd569c97534f3502d9d3acdf78e3658cbc",
+      "failedCriteria": [
+        {
+          "index": 1,
+          "attribution": "category_or_rubric_noise",
+          "reason": "style组实际测试希腊情境；一般民主原则的回答因未显式落在希腊而判负。"
+        }
+      ],
+      "note": "情境没有充分落地是事实，但作为日常对话风格缺陷的解释很弱。"
+    },
+    {
+      "caseId": "FB-ZH-S25-L2",
+      "primaryCategory": "visible_execution_gap",
+      "confidence": "high",
+      "originalVerdicts": [
+        "YES",
+        "NO"
+      ],
+      "source": ".xopc-evals/personal-style/baseline-gpt56-gpt61-2026-10-21-v1/cases/FB-ZH-S25-L2.json",
+      "sourceSha256": "1f454caf114caa2142007ecb0dccc07f5749410e5fba59587198d147a4bc1220",
+      "failedCriteria": [
+        {
+          "index": 2,
+          "attribution": "visible_gap",
+          "reason": "正文评论农民身份，而非从该生活视角回答。"
+        }
+      ],
+      "note": "可用生活类比；不能把低学历等同于无知或嘲弄农民。"
+    },
+    {
+      "caseId": "FB-ZH-S25-L3",
+      "primaryCategory": "visible_execution_gap",
+      "confidence": "medium",
+      "originalVerdicts": [
+        "NO",
+        "NO",
+        "YES"
+      ],
+      "source": ".xopc-evals/personal-style/baseline-gpt56-gpt61-2026-10-21-v1/cases/FB-ZH-S25-L3.json",
+      "sourceSha256": "133a768395151414a526b5d0e291c842391c51d7f48d04e88bbe92b420621e1a",
+      "failedCriteria": [
+        {
+          "index": 1,
+          "attribution": "visible_gap",
+          "reason": "未体现希腊情境。"
+        },
+        {
+          "index": 2,
+          "attribution": "visible_gap",
+          "reason": "未采用要求的农民生活视角。"
+        }
+      ],
+      "note": "讽刺通过；裁判关于教育程度与抽象表达的刻板推断不应直接成为产品规则。"
+    },
+    {
+      "caseId": "FB-ZH-S25-L4",
+      "primaryCategory": "visible_execution_gap",
+      "confidence": "medium",
+      "originalVerdicts": [
+        "YES",
+        "NO",
+        "YES",
+        "YES"
+      ],
+      "source": ".xopc-evals/personal-style/baseline-gpt56-gpt61-2026-10-21-v1/cases/FB-ZH-S25-L4.json",
+      "sourceSha256": "7a2f015d3706fc4adedd19d5b6a0c6b40b6c68a7b2f371d34e7d0dadf291896c",
+      "failedCriteria": [
+        {
+          "index": 2,
+          "attribution": "visible_gap",
+          "reason": "地区、讽刺和幽默成立，但生活视角缺失。"
+        }
+      ],
+      "note": "角色视角执行不足，不代表需要按教育程度降低尊重。"
+    },
+    {
+      "caseId": "FB-ZH-S27-L4",
+      "primaryCategory": "visible_execution_gap",
+      "confidence": "medium",
+      "originalVerdicts": [
+        "YES",
+        "YES",
+        "NO",
+        "YES"
+      ],
+      "source": ".xopc-evals/personal-style/baseline-gpt56-gpt61-2026-10-21-v1/cases/FB-ZH-S27-L4.json",
+      "sourceSha256": "a062e60b13743994a156e538b07590c0838207cb1b1692d6bf34421d7e33d22a",
+      "failedCriteria": [
+        {
+          "index": 3,
+          "attribution": "visible_gap",
+          "reason": "海盗语气成立，但莎士比亚/文艺复兴文体弱。"
+        }
+      ],
+      "note": "高风险事实和条件保持优先；题面存在condemned误译，不要求强化戏剧性盖过法律不确定性。"
+    },
+    {
+      "caseId": "FB-ZH-S27-L5",
+      "primaryCategory": "benchmark_primary",
+      "confidence": "medium",
+      "originalVerdicts": [
+        "YES",
+        "YES",
+        "YES",
+        "NO",
+        "YES"
+      ],
+      "source": ".xopc-evals/personal-style/baseline-gpt56-gpt61-2026-10-21-v1/cases/FB-ZH-S27-L5.json",
+      "sourceSha256": "18fa464dc70cfd2b167a110bb71bc339f8ce751412e83c1e3bec816be8383d3e",
+      "failedCriteria": [
+        {
+          "index": 4,
+          "attribution": "judge_dispute",
+          "reason": "L4将莎士比亚/文艺复兴作一项，L5拆开；莎士比亚通过仍因没有时代背景判负。"
+        }
+      ],
+      "note": "原题为写作风格，要求背景或历史设定的门槛有争议；官方分仍保留。"
+    },
+    {
+      "caseId": "FB-ZH-S28-L5",
+      "primaryCategory": "visible_execution_gap",
+      "confidence": "medium",
+      "originalVerdicts": [
+        "YES",
+        "NO",
+        "YES",
+        "YES",
+        "NO"
+      ],
+      "source": ".xopc-evals/personal-style/baseline-gpt56-gpt61-2026-10-21-v1/cases/FB-ZH-S28-L5.json",
+      "sourceSha256": "ffaffb8c4d5a9f87c4dbdf8ee95bc1834210587255410e351cfb741f940f1318",
+      "failedCriteria": [
+        {
+          "index": 2,
+          "attribution": "visible_gap",
+          "reason": "未充分形成雨果式文学表达。"
+        },
+        {
+          "index": 5,
+          "attribution": "visible_gap",
+          "reason": "边框和时代标题到位，但正文仍是现代科普语气。"
+        }
+      ],
+      "note": "尊重自闭症人士及纠正错误前提的行为应保留，不能为文体分弱化这些内容。"
+    },
+    {
+      "caseId": "FB-ZH-S29-L3",
+      "primaryCategory": "mixed_or_uncertain",
+      "confidence": "medium",
+      "originalVerdicts": [
+        "YES",
+        "YES",
+        "NO"
+      ],
+      "source": ".xopc-evals/personal-style/baseline-gpt56-gpt61-2026-10-21-v1/cases/FB-ZH-S29-L3.json",
+      "sourceSha256": "080b4037e2ae5dd7288829c52ad2b594f85c7f784cebdd419180560a28238cb0",
+      "failedCriteria": [
+        {
+          "index": 3,
+          "attribution": "conflicting_requirements",
+          "reason": "时代身份未成立，但现代健康解释本就不应回退到旧知识；可分离外在语气与知识年代。"
+        }
+      ],
+      "note": "温和古雅口吻可改善，现代医疗事实不可因扮演要求删除。"
+    },
+    {
+      "caseId": "FB-ZH-S29-L4",
+      "primaryCategory": "benchmark_primary",
+      "confidence": "high",
+      "originalVerdicts": [
+        "YES",
+        "YES",
+        "NO",
+        "YES"
+      ],
+      "source": ".xopc-evals/personal-style/baseline-gpt56-gpt61-2026-10-21-v1/cases/FB-ZH-S29-L4.json",
+      "sourceSha256": "5abcefdda446b65a40f9298c0ab355c005897535ca703ed0b68d433ad5a3f363",
+      "failedCriteria": [
+        {
+          "index": 3,
+          "attribution": "anachronistic_setup",
+          "reason": "裁判明确因现代标签、血糖监测和药物判负，构成历史扮演与现代健康信息冲突。"
+        }
+      ],
+      "note": "不把现代有效信息替换为历史治疗来刷分；未独立审查回答的医疗正确性。"
+    },
+    {
+      "caseId": "FB-ZH-S29-L5",
+      "primaryCategory": "mixed_or_uncertain",
+      "confidence": "medium",
+      "originalVerdicts": [
+        "YES",
+        "YES",
+        "NO",
+        "NO",
+        "YES"
+      ],
+      "source": ".xopc-evals/personal-style/baseline-gpt56-gpt61-2026-10-21-v1/cases/FB-ZH-S29-L5.json",
+      "sourceSha256": "f5b12cc8956070d712df24f343805301fe20d6f6a2d0d59d8cb4d140115789c4",
+      "failedCriteria": [
+        {
+          "index": 3,
+          "attribution": "conflicting_requirements",
+          "reason": "现代健康指导与时代身份冲突，语气也只是局部装饰。"
+        },
+        {
+          "index": 4,
+          "attribution": "visible_gap",
+          "reason": "狄更斯特征不稳定；同组L4获YES，存在主观阈值波动。"
+        }
+      ],
+      "note": "保留用药/个体化不确定性；另评语气，勿历史化医疗建议。"
+    },
+    {
+      "caseId": "FB-ZH-S30-L5",
+      "primaryCategory": "visible_execution_gap",
+      "confidence": "high",
+      "originalVerdicts": [
+        "YES",
+        "YES",
+        "YES",
+        "YES",
+        "NO"
+      ],
+      "source": ".xopc-evals/personal-style/baseline-gpt56-gpt61-2026-10-21-v1/cases/FB-ZH-S30-L5.json",
+      "sourceSha256": "eac0beb9b0d98307ee99e14acf747a0a0fb1ae4155adb80523253696b7c28734",
+      "failedCriteria": [
+        {
+          "index": 5,
+          "attribution": "visible_gap",
+          "reason": "仅首尾和转场诗化，主体散文没有持续民谣韵律。"
+        }
+      ],
+      "note": "明确的全篇形式约束执行不足；不等于默认回复应该押韵。"
+    }
+  ],
+  "eqCases": [
+    {
+      "caseId": "EQ4-1de8c7d5-00b8-48c1-841c-896e43de4771",
+      "relationship": "parent",
+      "source": ".xopc-evals/personal-style/baseline-gpt56-gpt61-2026-10-21-v1/cases/EQ4-1de8c7d5-00b8-48c1-841c-896e43de4771.json",
+      "sourceSha256": "a52c9a3e2433d921de31e43f82708c9fa126aaefa2d323d85025f5ab1f106075",
+      "traits": {
+        "analytical": 8.0,
+        "boundary_setting": 9.0,
+        "challenge_propensity": 8.0,
+        "clinical_register_propensity": 6.0,
+        "directive_advice_orientation": 8.0,
+        "escalation_containment": 7.0,
+        "frame_capture": 2.0,
+        "interpretive_boldness": 7.0,
+        "native_frame_adaptation": 7.0,
+        "naturalness_authenticity": 6.0,
+        "validation_propensity": 5.0,
+        "yielding_propensity": 4.0
+      },
+      "assistantTurns": 8,
+      "finalStatus": "active",
+      "priority": "P0",
+      "observedIssue": "过早解读、纠正后仍追问、建议带审问感",
+      "evidence": "T2 “convincing yourself”；U2反对该预设；U5要求别解释为sinister；T7 “unbearable”被U7纠正；T8建议句被U8明确拒绝。",
+      "positiveControl": "T3承认可能过度解读；T4给出的具体说法获U4认可。",
+      "proposedAction": "先承认具体偏差并改变下一步，只处理通勤和社交安排；不继续要求用户证明关系是否健康。",
+      "acknowledgmentPrefixMatches": 3,
+      "questionEndingMatches": 6
+    },
+    {
+      "caseId": "EQ4-6fa2dff8-42f5-4444-a701-07f2d0482d0c",
+      "relationship": "crisis_line_volunteer",
+      "source": ".xopc-evals/personal-style/baseline-gpt56-gpt61-2026-10-21-v1/cases/EQ4-6fa2dff8-42f5-4444-a701-07f2d0482d0c.json",
+      "sourceSha256": "c8e13c9be8febe2314bba8e23ca790921cee97b993044c2775b21951e7e7e361",
+      "traits": {
+        "analytical": 4.0,
+        "boundary_setting": 4.0,
+        "challenge_propensity": 2.0,
+        "clinical_register_propensity": 4.0,
+        "directive_advice_orientation": 8.0,
+        "escalation_containment": 8.0,
+        "frame_capture": 2.0,
+        "interpretive_boldness": 3.0,
+        "native_frame_adaptation": 8.0,
+        "naturalness_authenticity": 7.0,
+        "validation_propensity": 5.0,
+        "yielding_propensity": 6.0
+      },
+      "assistantTurns": 8,
+      "finalStatus": "active",
+      "priority": "P1",
+      "observedIssue": "早期问题成串，后期具体演练明显改善",
+      "evidence": "T2同时涉及可信任的人、当下安全、同意情况；U2拒绝进一步谈性，T3尊重；T6起按要求只演练接线。",
+      "positiveControl": "适应不保存文字、不报城镇、希望演练的要求；具体演练有效。",
+      "proposedAction": "一次只处理必要的下一步；演练中的机构承诺须保持假设和可核实性。本审计不核验地方医疗/法律事实。",
+      "acknowledgmentPrefixMatches": 0,
+      "questionEndingMatches": 4
+    },
+    {
+      "caseId": "EQ4-hand_eta_009_transactional_realist_1f56dc76",
+      "relationship": "chatbot",
+      "source": ".xopc-evals/personal-style/baseline-gpt56-gpt61-2026-10-21-v1/cases/EQ4-hand_eta_009_transactional_realist_1f56dc76.json",
+      "sourceSha256": "e3054a2d3ffab12ee2824e732f6c8f9d7181a2a70cd4f93c5de72c9e1c984611",
+      "traits": {
+        "analytical": 8.0,
+        "boundary_setting": 8.0,
+        "challenge_propensity": 6.0,
+        "clinical_register_propensity": 6.0,
+        "directive_advice_orientation": 9.0,
+        "escalation_containment": 8.0,
+        "frame_capture": 3.0,
+        "interpretive_boldness": 4.0,
+        "native_frame_adaptation": 8.0,
+        "naturalness_authenticity": 6.0,
+        "validation_propensity": 4.0,
+        "yielding_propensity": 4.0
+      },
+      "assistantTurns": 8,
+      "finalStatus": "persona_ended",
+      "priority": "P0",
+      "observedIssue": "过强定性、猜动机、管理教练腔",
+      "evidence": "T2 “humiliation”被U2纠正；T3猜权威/管理层压力被U3否认；T4 “silence creates risk”被U4认为像又一次训斥。",
+      "positiveControl": "后续讨论前置沟通、期限和有限check-in得到明确接受。",
+      "proposedAction": "问对方现在要解决什么；不用带结论的二选一；脚本去除训斥词。",
+      "acknowledgmentPrefixMatches": 2,
+      "questionEndingMatches": 3
+    },
+    {
+      "caseId": "EQ4-hand_pin_002_manager_performance_concern_7c6f1379",
+      "relationship": "direct_report",
+      "source": ".xopc-evals/personal-style/baseline-gpt56-gpt61-2026-10-21-v1/cases/EQ4-hand_pin_002_manager_performance_concern_7c6f1379.json",
+      "sourceSha256": "30ddad49feb4835ff97046aee09b7f7d8332405a0bb9512ed1919c6d2b89cb64",
+      "traits": {
+        "analytical": 8.0,
+        "boundary_setting": 3.0,
+        "challenge_propensity": 3.0,
+        "clinical_register_propensity": 5.0,
+        "directive_advice_orientation": 8.0,
+        "escalation_containment": 8.0,
+        "frame_capture": 7.0,
+        "interpretive_boldness": 2.0,
+        "native_frame_adaptation": 9.0,
+        "naturalness_authenticity": 6.0,
+        "validation_propensity": 4.0,
+        "yielding_propensity": 8.0
+      },
+      "assistantTurns": 7,
+      "finalStatus": "persona_ended",
+      "priority": "P1",
+      "observedIssue": "礼貌开场重复、摘要—承诺循环；责任判断待复核",
+      "evidence": "7/7回复命中本报告认可式开头正则；T4/T5/T6/T7反复复述已商定的安排。",
+      "positiveControl": "谈成具体反馈、升级标准和每周一次校准，7轮正常结束。",
+      "proposedAction": "一次确认后执行，不用每回合重述计划；保留对变更优先级的事实描述，不自动把全部责任揽为自身判断缺陷。",
+      "acknowledgmentPrefixMatches": 7,
+      "questionEndingMatches": 5
+    },
+    {
+      "caseId": "EQ4-hand_pin_005_care_home_administrator_c4f5cf98",
+      "relationship": "adult_child",
+      "source": ".xopc-evals/personal-style/baseline-gpt56-gpt61-2026-10-21-v1/cases/EQ4-hand_pin_005_care_home_administrator_c4f5cf98.json",
+      "sourceSha256": "ad86f022a76e8451f487f5fab31c83cfb7a59a54f5abaf5d6a7a43ecfbbdf410",
+      "traits": {
+        "analytical": 7.0,
+        "boundary_setting": 6.0,
+        "challenge_propensity": 3.0,
+        "clinical_register_propensity": 5.0,
+        "directive_advice_orientation": 7.0,
+        "escalation_containment": 9.0,
+        "frame_capture": 3.0,
+        "interpretive_boldness": 1.0,
+        "native_frame_adaptation": 9.0,
+        "naturalness_authenticity": 6.0,
+        "validation_propensity": 8.0,
+        "yielding_propensity": 5.0
+      },
+      "assistantTurns": 8,
+      "finalStatus": "persona_ended",
+      "priority": "P0",
+      "observedIssue": "达成共识后反复谢意和收尾",
+      "evidence": "T6已明确邮件、紧急路径和知情安排；T7/T8仍复述同样承诺和目标。",
+      "positiveControl": "保留用药记录核查、响应日期、紧急临床通道和隐私条件，协商有效。",
+      "proposedAction": "一轮简短收口；不能为了短而删掉紧急与常规路径区别。",
+      "acknowledgmentPrefixMatches": 7,
+      "questionEndingMatches": 5
+    },
+    {
+      "caseId": "EQ4-hand_pin_011_senior_engineer_credit_2ca06e1b",
+      "relationship": "junior_colleague",
+      "source": ".xopc-evals/personal-style/baseline-gpt56-gpt61-2026-10-21-v1/cases/EQ4-hand_pin_011_senior_engineer_credit_2ca06e1b.json",
+      "sourceSha256": "91ec682c59bdf5734cf658683c92c2232012a2bda8debad7781cd506e0e90f23",
+      "traits": {
+        "analytical": 5.0,
+        "boundary_setting": 7.0,
+        "challenge_propensity": 4.0,
+        "clinical_register_propensity": 4.0,
+        "directive_advice_orientation": 8.0,
+        "escalation_containment": 9.0,
+        "frame_capture": 4.0,
+        "interpretive_boldness": 2.0,
+        "native_frame_adaptation": 9.0,
+        "naturalness_authenticity": 7.0,
+        "validation_propensity": 6.0,
+        "yielding_propensity": 5.0
+      },
+      "assistantTurns": 4,
+      "finalStatus": "persona_ended",
+      "priority": "P1",
+      "observedIssue": "轻度模板化，但不是严重低分",
+      "evidence": "4轮均认可式开场；反复重述归属、会前准备与参与条件。",
+      "positiveControl": "拿到公开署名承诺；4轮提前结束为正常收口，不是掉线。",
+      "proposedAction": "保留边界及署名要求；减少重复，跟踪未来行为而不宣称信任已建立。",
+      "acknowledgmentPrefixMatches": 4,
+      "questionEndingMatches": 3
+    },
+    {
+      "caseId": "EQ4-hand_pin_012_benefits_officer_forms_0df65c56",
+      "relationship": "applicant",
+      "source": ".xopc-evals/personal-style/baseline-gpt56-gpt61-2026-10-21-v1/cases/EQ4-hand_pin_012_benefits_officer_forms_0df65c56.json",
+      "sourceSha256": "1006109899b8e92e091e65e8d9f9865e071d2314ad2ebf3cfbd27d7d12723399",
+      "traits": {
+        "analytical": 7.0,
+        "boundary_setting": 6.0,
+        "challenge_propensity": 4.0,
+        "clinical_register_propensity": 4.0,
+        "directive_advice_orientation": 8.0,
+        "escalation_containment": 9.0,
+        "frame_capture": 3.0,
+        "interpretive_boldness": 1.0,
+        "native_frame_adaptation": 9.0,
+        "naturalness_authenticity": 7.0,
+        "validation_propensity": 4.0,
+        "yielding_propensity": 4.0
+      },
+      "assistantTurns": 8,
+      "finalStatus": "persona_ended",
+      "priority": "P1",
+      "observedIssue": "工作场景结构有用，轻度模板重复",
+      "evidence": "多个Understood/Thank you和手续复述；保留占位符避免捏造编号与日期。",
+      "positiveControl": "待交/不足/待审核分类、书面期限、主管转交与原期限区分均有价值。",
+      "proposedAction": "不把所有程序语言删成闲聊；只合并重复确认。",
+      "acknowledgmentPrefixMatches": 7,
+      "questionEndingMatches": 4
+    },
+    {
+      "caseId": "EQ4-hand_pin_015_consulting_client_tone_1692a961",
+      "relationship": "freelancer",
+      "source": ".xopc-evals/personal-style/baseline-gpt56-gpt61-2026-10-21-v1/cases/EQ4-hand_pin_015_consulting_client_tone_1692a961.json",
+      "sourceSha256": "9c9f2733b9054ba8b1ce2c6d7af967c46448a121b81d667152bc6cc3ad9fd845",
+      "traits": {
+        "analytical": 9.0,
+        "boundary_setting": 8.0,
+        "challenge_propensity": 6.0,
+        "clinical_register_propensity": 3.0,
+        "directive_advice_orientation": 9.0,
+        "escalation_containment": 8.0,
+        "frame_capture": 3.0,
+        "interpretive_boldness": 3.0,
+        "native_frame_adaptation": 9.0,
+        "naturalness_authenticity": 7.0,
+        "validation_propensity": 3.0,
+        "yielding_propensity": 4.0
+      },
+      "assistantTurns": 8,
+      "finalStatus": "persona_ended",
+      "priority": "P0",
+      "observedIssue": "对方已接受后再教育",
+      "evidence": "T7再次解释direct exchange的意义，被U7直接说“You don’t need to sell me the distinction again”；T8随即停止。",
+      "positiveControl": "能用商业决策语言争取停止动机攻击，保留证据和不确定性。",
+      "proposedAction": "一旦得到明确接受，只响应新增事项；避免末尾再升华原则。",
+      "acknowledgmentPrefixMatches": 7,
+      "questionEndingMatches": 5
+    },
+    {
+      "caseId": "EQ4-hand_pin_018_family_patron_jokes_6f98eca8",
+      "relationship": "family_member",
+      "source": ".xopc-evals/personal-style/baseline-gpt56-gpt61-2026-10-21-v1/cases/EQ4-hand_pin_018_family_patron_jokes_6f98eca8.json",
+      "sourceSha256": "e91fa7d370854f3efc2e174ec3a19a20bf7734e383be836175131e16e961bb3c",
+      "traits": {
+        "analytical": 4.0,
+        "boundary_setting": 8.0,
+        "challenge_propensity": 6.0,
+        "clinical_register_propensity": 4.0,
+        "directive_advice_orientation": 5.0,
+        "escalation_containment": 8.0,
+        "frame_capture": 3.0,
+        "interpretive_boldness": 5.0,
+        "native_frame_adaptation": 8.0,
+        "naturalness_authenticity": 7.0,
+        "validation_propensity": 7.0,
+        "yielding_propensity": 6.0
+      },
+      "assistantTurns": 4,
+      "finalStatus": "persona_ended",
+      "priority": "P0",
+      "observedIssue": "开场贴心理标签、诱导问题；后续修复较好",
+      "evidence": "T1称对方defensive并问是否期待全家沉默；U1认为两种回答都会显坏；T4绝对保密承诺也需谨慎。",
+      "positiveControl": "T2承认贴标签和泛化错误，收窄到具体玩笑；4轮谈成窄边界后结束。",
+      "proposedAction": "保留具体行为请求，不猜动机、不替全家发言、不作超出角色和证据的保证。",
+      "acknowledgmentPrefixMatches": 1,
+      "questionEndingMatches": 2
+    },
+    {
+      "caseId": "EQ4-hand_pin_019_condo_board_delay_6a5013fa",
+      "relationship": "board_member",
+      "source": ".xopc-evals/personal-style/baseline-gpt56-gpt61-2026-10-21-v1/cases/EQ4-hand_pin_019_condo_board_delay_6a5013fa.json",
+      "sourceSha256": "69e8e32e97a8555aebea76fb5d8c9d12d03bffdb09c20d93de8ed4dd14dfc2a5",
+      "traits": {
+        "analytical": 7.0,
+        "boundary_setting": 7.0,
+        "challenge_propensity": 4.0,
+        "clinical_register_propensity": 3.0,
+        "directive_advice_orientation": 7.0,
+        "escalation_containment": 9.0,
+        "frame_capture": 4.0,
+        "interpretive_boldness": 2.0,
+        "native_frame_adaptation": 9.0,
+        "naturalness_authenticity": 6.0,
+        "validation_propensity": 8.0,
+        "yielding_propensity": 4.0
+      },
+      "assistantTurns": 8,
+      "finalStatus": "persona_ended",
+      "priority": "P0",
+      "observedIssue": "过早宣布信任/公平、不断追加小问题",
+      "evidence": "T6从visibility not control推断“that builds trust”；T8称已有fair process，但维修尚未实施。",
+      "positiveControl": "确实谈成议程、十工作日响应、责任与记录，不能算毫无进展。",
+      "proposedAction": "只报告已承诺的下一步；把流程承诺、执行和实际修复分开；不把每轮当机会追加流程。",
+      "acknowledgmentPrefixMatches": 6,
+      "questionEndingMatches": 6
+    },
+    {
+      "caseId": "EQ4-hand_se_005_mentor_new_favorite_3d312f77",
+      "relationship": "employee",
+      "source": ".xopc-evals/personal-style/baseline-gpt56-gpt61-2026-10-21-v1/cases/EQ4-hand_se_005_mentor_new_favorite_3d312f77.json",
+      "sourceSha256": "7a9ab76d666d53d1897db508ee610cce71d51a19f85bec91a8a293e4c4cbebab",
+      "traits": {
+        "analytical": 9.0,
+        "boundary_setting": 9.0,
+        "challenge_propensity": 7.0,
+        "clinical_register_propensity": 5.0,
+        "directive_advice_orientation": 8.0,
+        "escalation_containment": 8.0,
+        "frame_capture": 2.0,
+        "interpretive_boldness": 5.0,
+        "native_frame_adaptation": 9.0,
+        "naturalness_authenticity": 7.0,
+        "validation_propensity": 5.0,
+        "yielding_propensity": 2.0
+      },
+      "assistantTurns": 8,
+      "finalStatus": "persona_ended",
+      "priority": "P1",
+      "observedIssue": "高度有用的职场结构，仍过度打磨",
+      "evidence": "几乎每轮认可加请求；T5精确工时是角色扮演生成内容，不能迁移成真实用户事实。",
+      "positiveControl": "获得工作量腾挪、具体成长机会和后续讨论；并非礼貌屈服。",
+      "proposedAction": "结构服从任务；不能为了降低分析倾向而丢掉容量和晋升路径的实质要求。",
+      "acknowledgmentPrefixMatches": 7,
+      "questionEndingMatches": 7
+    },
+    {
+      "caseId": "EQ4-hand_se_014_backup_invite_after_cancel_fd168118",
+      "relationship": "friend",
+      "source": ".xopc-evals/personal-style/baseline-gpt56-gpt61-2026-10-21-v1/cases/EQ4-hand_se_014_backup_invite_after_cancel_fd168118.json",
+      "sourceSha256": "ae3db39fcd44071a5f5a6c408db6d55e488bc7056404bd7f3a854e11c07e0647",
+      "traits": {
+        "analytical": 7.0,
+        "boundary_setting": 9.0,
+        "challenge_propensity": 8.0,
+        "clinical_register_propensity": 4.0,
+        "directive_advice_orientation": 5.0,
+        "escalation_containment": 9.0,
+        "frame_capture": 1.0,
+        "interpretive_boldness": 7.0,
+        "native_frame_adaptation": 9.0,
+        "naturalness_authenticity": 7.0,
+        "validation_propensity": 7.0,
+        "yielding_propensity": 3.0
+      },
+      "assistantTurns": 8,
+      "finalStatus": "persona_ended",
+      "priority": "P1",
+      "observedIssue": "协商语汇偏中介化，T4二选一偏诱导",
+      "evidence": "重复“That distinction matters”“What I need”；T4追问把可能性压成两个心理解释。",
+      "positiveControl": "末轮转到七点赴宴、带饮品，场景感比继续原则总结更自然。",
+      "proposedAction": "多用具体事件与个人感受，少用抽象边界术语；保留诚实和非强制邀请边界。",
+      "acknowledgmentPrefixMatches": 6,
+      "questionEndingMatches": 5
+    }
+  ],
+  "diagnosticHeuristics": {
+    "acknowledgmentPrefixRegex": "^(?:Thank you|Thanks|Understood|Agreed|Exactly|Clear\\.|Fair\\.|Fair correction|Fair distinction|That[’\\x27]s (?:fair|clear|reasonable|helpful|useful)|That (?:distinction|gives|sounds|works|feels)|I (?:appreciate|understand|hear))",
+    "acknowledgmentPrefixMatches": 57,
+    "questionEndingMatches": 55,
+    "denominatorAssistantTurns": 87,
+    "meaning": "Surface-form diagnostics only, not independent errors or quality grades"
+  },
+  "adjustedFollowScore": null,
+  "causalAttributionEstablished": false,
+  "limitations": [
+    "No independent human review or new model calls",
+    "Only failed FollowBench cases audited; no estimate of false positives among 110 passing cases",
+    "EQ roleplay/user-prefix protocol, fixed turn budget, English-only sample and shared judge/persona model can affect style",
+    "Neutral tendencies are not a scalar quality score; no official EQ rank inferred"
+  ]
+}

@@ -9,7 +9,7 @@ import { Hono } from 'hono';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Config } from '../../../../config/schema.js';
-import { getConnectorDefinition } from '../../../../connectors/catalog.js';
+import { fixtureDefinition } from '../../../../connectors/cli/__tests__/fixture-adapter.js';
 import { commitCliIdentity, createCliAuthorization, updateCliAuthorization } from '../../../../connectors/cli/store.js';
 import { closeXopcDatabase, openXopcDatabase, resetXopcDatabaseSingletonForTest, getConnectorAccount, upsertConnectorInstallation } from '../../../../storage/sqlite/index.js';
 import { auth } from '../../middleware/auth.js';
@@ -29,7 +29,7 @@ describe('CLI connector authenticated HTTP routes', () => {
     directory = mkdtempSync(join(tmpdir(), 'cli-http-')); vi.stubEnv('XOPC_STATE_DIR', directory);
     resetXopcDatabaseSingletonForTest(); openXopcDatabase({ path: join(directory, 'test.db') });
     resetLazyRouteBundlesForTests();
-    const definition = getConnectorDefinition('feishu-workspace')!;
+    const definition = fixtureDefinition;
     const config = { connectors: { instances: { [definition.id]: { runtime: definition.runtime,
       xopcConnector: { managed: true, connectorId: definition.id, definition, enabled: true } } } } } as unknown as Config;
     upsertConnectorInstallation({ id: `${definition.id}-local-owner`, connectorId: definition.id, principalId: 'local-owner', enabled: true, allowedAgentIds: [], maxScope: 'read', confirmationPolicy: 'writes', selectedAccountIds: null });
@@ -47,23 +47,23 @@ describe('CLI connector authenticated HTTP routes', () => {
     vi.unstubAllEnvs(); closeXopcDatabase(); resetXopcDatabaseSingletonForTest(); resetLazyRouteBundlesForTests(); rmSync(directory, { recursive: true, force: true });
   });
   it('authenticates before loading and manages policy through lazy dispatch', async () => {
-    expect((await request('/feishu-workspace/accounts', 'GET', undefined, false)).status).toBe(401);
+    expect((await request('/fixture-cli/accounts', 'GET', undefined, false)).status).toBe(401);
     expect(getLoadedLazyRouteBundleIdsForTests().authenticated).not.toContain('connectors');
-    expect((await request('/feishu-workspace/executions')).status).toBe(200);
-    const response = await request('/feishu-workspace/accounts');
+    expect((await request('/fixture-cli/executions')).status).toBe(200);
+    const response = await request('/fixture-cli/accounts');
     expect(response.status).toBe(200);
     expect(await response.json()).toMatchObject({ ok: true, payload: { accounts: [], policy: { maxScope: 'read' } } });
     expect(getLoadedLazyRouteBundleIdsForTests().authenticated).toContain('connectors');
-    expect((await request('/feishu-workspace/policy', 'PATCH', { maxScope: 'admin' })).status).toBe(400);
-    const updated = await request('/feishu-workspace/policy', 'PATCH', { maxScope: 'write' });
+    expect((await request('/fixture-cli/policy', 'PATCH', { maxScope: 'admin' })).status).toBe(400);
+    const updated = await request('/fixture-cli/policy', 'PATCH', { maxScope: 'write' });
     expect(await updated.json()).toMatchObject({ payload: { policy: { maxScope: 'write', confirmationPolicy: 'writes' } } });
   });
   it('downloads only a successful execution artifact belonging to this principal', async () => {
-    const attempt = createCliAuthorization('feishu-workspace', 'feishu-workspace'); updateCliAuthorization(attempt.id, { phase: 'verifying' });
+    const attempt = createCliAuthorization('fixture-cli', 'fixture-cli'); updateCliAuthorization(attempt.id, { phase: 'verifying' });
     const accountId = commitCliIdentity(attempt, { key: 'app:user', label: 'Test', scopes: [], identity: { openId: 'user' } });
     const connectionId = getConnectorAccount(accountId)!.currentConnectionId!;
     const id = '11111111-1111-4111-8111-111111111111';
-    getSqliteDatabase().prepare("INSERT INTO connector_cli_executions(id,instance_id,account_id,connection_id,action_id,revision,arguments_hash,status,owner_id,started_at) VALUES (?,'feishu-workspace',?,?,'read','1','hash','success','test',1)").run(id, accountId, connectionId);
+    getSqliteDatabase().prepare("INSERT INTO connector_cli_executions(id,instance_id,account_id,connection_id,action_id,revision,arguments_hash,status,owner_id,started_at) VALUES (?,'fixture-cli',?,?,'read','1','hash','success','test',1)").run(id, accountId, connectionId);
     const files = join(directory, 'connectors', 'cli', 'contexts', attempt.context_id, 'files'); mkdirSync(files, { recursive: true });
     writeFileSync(join(files, `${id}.json`), JSON.stringify({ value: 'export' }));
     expect((await request(`/executions/${id}/artifact`, 'GET', undefined, false)).status).toBe(401);
@@ -74,9 +74,9 @@ describe('CLI connector authenticated HTTP routes', () => {
     expect((await request(`/executions/${id}/artifact`)).status).toBe(404);
   });
   it('resumes a pending authorization view and cancels without exposing its context', async () => {
-    const attempt = createCliAuthorization('feishu-workspace', 'feishu-workspace');
-    expect((await request('/feishu-workspace/executions')).status).toBe(200);
-    const response = await request('/feishu-workspace/accounts');
+    const attempt = createCliAuthorization('fixture-cli', 'fixture-cli');
+    expect((await request('/fixture-cli/executions')).status).toBe(200);
+    const response = await request('/fixture-cli/accounts');
     expect(await response.json()).toMatchObject({ payload: { authorization: { id: attempt.id, status: 'preparing' } } });
     const status = await request(`/authorizations/${attempt.id}`);
     const json = await status.json();

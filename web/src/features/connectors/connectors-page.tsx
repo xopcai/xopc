@@ -1,8 +1,14 @@
-import { pluginDetailPath } from '@/features/capabilities/capability-links';
 import { Loader2 } from 'lucide-react';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import useSWR from 'swr';
 
+import { fetchServiceRecommendations } from '@/features/capabilities/service-recommendation-api';
+import { canonicalServiceId, recommendServices } from '@/features/capabilities/service-recommendations';
+
+import { ServiceRecommendationList } from '@/features/capabilities/service-recommendation-list';
+
+import { pluginDetailPath } from '@/features/capabilities/capability-links';
 import { SlidingTabList } from '@/components/ui/sliding-tab-list';
 import { Button } from '@/components/ui/button';
 import { PageTabs } from '@/components/ui/page-tabs';
@@ -61,6 +67,7 @@ import {
   COMPOSIO_CONNECTOR_SOURCE,
   connectorDiscoverySourceForEntry,
   DISCOVERY_SOURCE_ALL,
+  DISCOVERY_SOURCE_RECOMMENDED,
   DISCOVERY_SOURCE_BUILTIN,
   STORE_CONNECTOR_SOURCE,
 } from './utils/connector-discovery-source';
@@ -88,7 +95,7 @@ type CustomDialogState =
   | { mode: 'edit'; row: McpServerRow }
   | null;
 
-function connectorFromStoreItem(item: StoreConnectorCatalogItem): ConnectorDefinition | null {
+function connectorFromStoreItem(item: StoreConnectorCatalogItem, language: string): ConnectorDefinition | null {
   const manifest = item.connectorManifest;
   if (!manifest || typeof manifest !== 'object' || Array.isArray(manifest)) return null;
   const record = manifest as Record<string, unknown>;
@@ -106,11 +113,12 @@ function connectorFromStoreItem(item: StoreConnectorCatalogItem): ConnectorDefin
   const authDefinition: ConnectorDefinition['auth'] = authRecord.mode === 'oauth'
     ? { mode: 'oauth', ...(typeof authRecord.clientId === 'string' ? { clientId: authRecord.clientId } : {}) }
     : authRecord.mode === 'apiKey' ? { mode: 'apiKey' } : { mode: 'none' };
+  const localization = item.localizations?.[language === 'zh' ? 'zh-CN' : 'en'];
   return {
     id: item.name,
     version: item.latestVersion ?? 'store',
-    displayName: typeof record.displayName === 'string' ? record.displayName : item.name,
-    description: typeof record.description === 'string' ? record.description : item.description,
+    displayName: localization?.displayName ?? (typeof record.displayName === 'string' ? record.displayName : item.name),
+    description: localization?.description ?? (typeof record.description === 'string' ? record.description : item.description),
     category,
     kind: 'mcp',
     source: 'store',
@@ -130,9 +138,14 @@ function connectorFromStoreItem(item: StoreConnectorCatalogItem): ConnectorDefin
 }
 
 function uniqueConnectors(connectors: ConnectorDefinition[]): ConnectorDefinition[] {
-  return connectors.filter((connector, index, all) => (
-    all.findIndex((candidate) => candidate.id === connector.id) === index
-  ));
+  return recommendServices(connectors.map(connector => ({
+    connector,
+    service: {
+      id: connector.id,
+      source: connector.source === 'builtin' ? 'builtin-connector' as const
+        : connector.source === 'store' ? 'store-connector' as const : 'registry-connector' as const,
+    },
+  })), 'en').map(item => item.connector);
 }
 
 function safeReturnPath(value: string | null): string {
@@ -156,6 +169,14 @@ export function ConnectorsPage({ embedded = false, onHeaderActionChange }: { emb
   const [tab, setTab] = useState<TabId>(
     !understandingIntent && requestedTab === 'connected' ? 'connected' : 'discover',
   );
+  const { data: recommendations } = useSWR(
+    hasToken && tab === 'discover' && !understandingIntent ? ['service-recommendations', language] : null,
+    () => fetchServiceRecommendations(language),
+    { revalidateOnFocus: false },
+  );
+  const preferredPluginServices = useMemo(() => new Set(recommendations?.items
+    .filter(item => item.service?.source === 'store-plugin')
+    .map(item => canonicalServiceId(item.id)) ?? []), [recommendations]);
   const initialTabResolvedRef = useRef(false);
   const [state, setState] = useState<LoadState>({
     catalog: [],
@@ -173,7 +194,7 @@ export function ConnectorsPage({ embedded = false, onHeaderActionChange }: { emb
     understandingIntent || recoveryIntent ? searchParams.get('connector') ?? '' : '',
   );
   const [discoverSource, setDiscoverSource] = useState<string>(
-    connectorDiscoverySourceForEntry(understandingIntent ? 'understanding' : 'default'),
+    connectorDiscoverySourceForEntry(understandingIntent ? 'understanding' : 'default', language),
   );
   const [connectorSort, setConnectorSort] = useState<ConnectorSort>('name');
   const [selectedTask, setSelectedTask] = useState<DiscoveryTask>(understandingIntent ? 'understand' : 'all');
@@ -241,6 +262,12 @@ export function ConnectorsPage({ embedded = false, onHeaderActionChange }: { emb
     initialTabResolvedRef.current = true;
   }, [hasToken, installedCount, mcpSettings, understandingIntent, state.loading]);
 
+  useEffect(() => {
+    setDiscoverSource(current => current === DISCOVERY_SOURCE_BUILTIN || current === DISCOVERY_SOURCE_RECOMMENDED
+      ? connectorDiscoverySourceForEntry(understandingIntent ? 'understanding' : 'default', language)
+      : current);
+  }, [language, understandingIntent]);
+
   const selectTab = useCallback((nextTab: TabId) => {
     initialTabResolvedRef.current = true;
     setTab(nextTab);
@@ -255,7 +282,7 @@ export function ConnectorsPage({ embedded = false, onHeaderActionChange }: { emb
   );
 
   const searchRegistry = useCallback(async (options?: { page?: number; append?: boolean }) => {
-    if (!hasToken || discoverSource === DISCOVERY_SOURCE_BUILTIN) {
+    if (!hasToken || (discoverSource === DISCOVERY_SOURCE_BUILTIN || discoverSource === DISCOVERY_SOURCE_RECOMMENDED)) {
       setState((previous) => ({ ...previous, registryCatalog: [] }));
       setRegistryPage(1);
       setRegistryTotalPages(undefined);
@@ -296,7 +323,7 @@ export function ConnectorsPage({ embedded = false, onHeaderActionChange }: { emb
         });
         return {
           connectors: catalog.items.flatMap((item) => {
-            const connector = connectorFromStoreItem(item);
+            const connector = connectorFromStoreItem(item, language);
             return connector ? [connector] : [];
           }),
           totalPages: catalog.meta.totalPages,
@@ -320,11 +347,11 @@ export function ConnectorsPage({ embedded = false, onHeaderActionChange }: { emb
     } finally {
       setRegistryLoading(false);
     }
-  }, [connectorSort, discoverSearchQuery, discoverSource, hasToken, marketplaceSources]);
+  }, [connectorSort, discoverSearchQuery, discoverSource, hasToken, marketplaceSources, language]);
 
   useEffect(() => {
     if (tab !== 'discover' || state.loading) return;
-    if (discoverSource === DISCOVERY_SOURCE_BUILTIN) {
+    if (discoverSource === DISCOVERY_SOURCE_BUILTIN || discoverSource === DISCOVERY_SOURCE_RECOMMENDED) {
       setState((previous) => ({ ...previous, registryCatalog: [] }));
       setRegistryPage(1);
       setRegistryTotalPages(undefined);
@@ -365,7 +392,7 @@ export function ConnectorsPage({ embedded = false, onHeaderActionChange }: { emb
       const definition = connectorDefinitionsById.get(connectorId);
       if (!definition) return;
       initialTabResolvedRef.current = true;
-      setDiscoverSource(connectorDiscoverySourceForEntry(understandingIntent ? 'understanding' : 'default'));
+      setDiscoverSource(connectorDiscoverySourceForEntry(understandingIntent ? 'understanding' : 'default', language));
       setDiscoverSearchQuery('');
       setDetailConnector(definition);
       setTab('discover');
@@ -376,7 +403,7 @@ export function ConnectorsPage({ embedded = false, onHeaderActionChange }: { emb
     nextParams.delete('instance');
     nextParams.set('tab', instance ? 'connected' : 'discover');
     setSearchParams(nextParams, { replace: true });
-  }, [connectorDefinitionsById, understandingIntent, searchParams, setSearchParams, state.instances, state.loading]);
+  }, [connectorDefinitionsById, understandingIntent, language, searchParams, setSearchParams, state.instances, state.loading]);
 
   const openStoreInstall = useCallback(async (packageName: string) => {
     setStorePlanLoading(true);
@@ -395,6 +422,15 @@ export function ConnectorsPage({ embedded = false, onHeaderActionChange }: { emb
       setStorePlanLoading(false);
     }
   }, []);
+
+  useEffect(() => {
+    const packageName = searchParams.get('storeConnector');
+    if (!hasToken || !packageName) return;
+    const next = new URLSearchParams(searchParams);
+    next.delete('storeConnector');
+    setSearchParams(next, { replace: true });
+    void openStoreInstall(packageName);
+  }, [hasToken, searchParams, setSearchParams, openStoreInstall]);
 
   const managedServerIds = useMemo(
     () => new Set(state.instances.flatMap((instance) => instance.materialized.type === 'mcp' ? [instance.materialized.serverId] : [])),
@@ -498,7 +534,9 @@ export function ConnectorsPage({ embedded = false, onHeaderActionChange }: { emb
     [state.catalog],
   );
   const discoverySourceCatalog = useMemo(() => (
-    discoverSource === DISCOVERY_SOURCE_BUILTIN
+    discoverSource === DISCOVERY_SOURCE_RECOMMENDED
+      ? []
+      : discoverSource === DISCOVERY_SOURCE_BUILTIN
       ? builtinCatalog
       : discoverSource === DISCOVERY_SOURCE_ALL
         ? uniqueConnectors([...builtinCatalog, ...state.registryCatalog])
@@ -507,12 +545,12 @@ export function ConnectorsPage({ embedded = false, onHeaderActionChange }: { emb
   const discoveryCatalog = useMemo(() => {
     const sourceCatalog = understandingIntent
       ? discoverySourceCatalog.filter((connector) => connector.understanding?.mode === 'activity')
-      : discoverySourceCatalog;
+      : uniqueConnectors(discoverySourceCatalog).filter(connector => !preferredPluginServices.has(canonicalServiceId(connector.id)));
     const filtered = selectedTask === 'all'
       ? sourceCatalog
       : sourceCatalog.filter((connector) => connectorBenefitsFor(connector).includes(selectedTask));
     return filterAndSortConnectors(filtered, discoverSearchQuery, connectorSort);
-  }, [connectorSort, discoverSearchQuery, discoverySourceCatalog, understandingIntent, selectedTask]);
+  }, [connectorSort, discoverSearchQuery, discoverySourceCatalog, understandingIntent, selectedTask, preferredPluginServices]);
   const availableTasks = useMemo(() => CONNECTOR_BENEFIT_ORDER.filter((benefit) => (
     discoverySourceCatalog.some((connector) => connectorBenefitsFor(connector).includes(benefit))
   )), [discoverySourceCatalog]);
@@ -528,10 +566,11 @@ export function ConnectorsPage({ embedded = false, onHeaderActionChange }: { emb
     [detailInstanceId, detailInstanceSnapshot, state.instances],
   );
   const sourceOptions = useMemo(() => [
+    { value: DISCOVERY_SOURCE_RECOMMENDED, label: language === 'zh' ? '推荐服务' : 'Recommended services' },
     { value: DISCOVERY_SOURCE_ALL, label: cs.discoverSourceAll },
     { value: DISCOVERY_SOURCE_BUILTIN, label: cs.discoverSourceBuiltin },
     ...marketplaceSources.map((source) => ({ value: source.id, label: source.displayName })),
-  ], [cs.discoverSourceAll, cs.discoverSourceBuiltin, marketplaceSources]);
+  ], [cs.discoverSourceAll, cs.discoverSourceBuiltin, marketplaceSources, language]);
   const tabItems = [
     { id: 'connected' as const, label: cs.tabConnected, count: installedCount },
     { id: 'discover' as const, label: cs.tabDiscover },
@@ -726,7 +765,7 @@ export function ConnectorsPage({ embedded = false, onHeaderActionChange }: { emb
                       onChange={setDiscoverSource}
                     />
                   </div> : null}
-                  <div className="min-w-0 sm:w-40">
+                  {discoverSource !== DISCOVERY_SOURCE_RECOMMENDED ? <div className="min-w-0 sm:w-40">
                     <PopoverSelect
                       value={connectorSort}
                       options={[
@@ -739,11 +778,13 @@ export function ConnectorsPage({ embedded = false, onHeaderActionChange }: { emb
                       triggerClassName="h-9 bg-surface-panel text-xs"
                       onChange={(value) => setConnectorSort(value as ConnectorSort)}
                     />
-                  </div>
+                  </div> : null}
                 </div>
               </div>
 
-              {(state.loading || registryLoading) && discoveryCatalog.length === 0 ? (
+              {discoverSource === DISCOVERY_SOURCE_RECOMMENDED ? (
+                <ServiceRecommendationList layout="cards" initialCount={6} query={discoverSearchQuery} onChanged={async () => { await load(); await mutateConfig(); }} />
+              ) : (state.loading || registryLoading) && discoveryCatalog.length === 0 ? (
                 <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3" aria-busy="true" aria-label={cs.loading}>
                   {CONNECTOR_SKELETON_KEYS.map((key) => <ConnectorCardSkeleton key={key} />)}
                 </div>

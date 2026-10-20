@@ -4,7 +4,6 @@ const COMPOSIO_STRATEGY_OVERRIDES: Readonly<Record<string, ConnectorIntegrationS
   gmail: { lane: 'composio', workload: 'core', preferred: true },
   googlecalendar: { lane: 'composio', workload: 'core', preferred: true },
   googledrive: { lane: 'composio', workload: 'core', preferred: true },
-  notion: { lane: 'composio', workload: 'core', preferred: true },
   slack: { lane: 'composio', workload: 'core', preferred: true },
   github: { lane: 'composio', workload: 'core', preferred: true },
   linear: { lane: 'composio', workload: 'core', preferred: true },

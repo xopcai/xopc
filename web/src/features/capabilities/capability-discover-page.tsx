@@ -22,7 +22,6 @@ import {
 import {
   fetchConnectorCatalog,
   fetchConnectorInstances,
-  fetchStoreConnectorCatalog,
 } from '@/features/connectors/connectors-api';
 import { getExtensionMarketplaceItems } from '@/features/extensions/extension-marketplace-api';
 import { useExtensions } from '@/features/extensions/extension-provider';
@@ -32,15 +31,17 @@ import { cn } from '@/lib/cn';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
 
+import { fetchRecommendationStoreConnectors } from './service-recommendation-api';
+
 type CatalogResult = { items: CapabilityCatalogItem[]; failedSources: number };
 type Filter = CapabilityKind | 'all';
 
-async function loadCapabilityCatalog(query: string, installedExtensionIds: Set<string>): Promise<CatalogResult> {
+async function loadCapabilityCatalog(query: string, installedExtensionIds: Set<string>, language: string): Promise<CatalogResult> {
   const [skills, installedSkills, connectors, storeConnectors, instances, extensions] = await Promise.allSettled([
     getMarketplaceSkills({ q: query, page: 1, pageSize: 18, sort: 'downloads' }),
     getSkills(),
     fetchConnectorCatalog(),
-    fetchStoreConnectorCatalog({ q: query, page: 1, pageSize: 18, sort: 'downloads' }),
+    fetchRecommendationStoreConnectors(query),
     fetchConnectorInstances(),
     getExtensionMarketplaceItems(query),
   ]);
@@ -52,12 +53,13 @@ async function loadCapabilityCatalog(query: string, installedExtensionIds: Set<s
   if (connectors.status === 'fulfilled' || storeConnectors.status === 'fulfilled') {
     items.push(...connectorCapabilityItems(
       connectors.status === 'fulfilled' ? connectors.value : [],
-      storeConnectors.status === 'fulfilled' ? storeConnectors.value.items : [],
+      storeConnectors.status === 'fulfilled' ? storeConnectors.value : [],
       instances.status === 'fulfilled' ? instances.value : [],
+      language,
     ));
   }
   if (extensions.status === 'fulfilled') {
-    items.push(...extensionCapabilityItems(extensions.value, installedExtensionIds));
+    items.push(...extensionCapabilityItems(extensions.value, installedExtensionIds, language));
   }
 
   const failedSources = [skills, connectors, storeConnectors, extensions].filter(result => result.status === 'rejected').length;
@@ -73,7 +75,7 @@ export function CapabilityDiscoverPage({ onHeaderActionChange }: { onHeaderActio
   const hasToken = useGatewayStore(state => Boolean(state.conversationId));
   const installedExtensions = useExtensions();
   const installedExtensionIds = useMemo(
-    () => new Set(installedExtensions.flatMap(extension => [extension.id, extension.pluginId].filter((id): id is string => Boolean(id)))),
+    () => new Set(installedExtensions.flatMap(extension => [extension.id, extension.pluginId, extension.provenance?.packageName].filter((id): id is string => Boolean(id)))),
     [installedExtensions],
   );
   const installedExtensionKey = [...installedExtensionIds].sort().join('|');
@@ -87,13 +89,13 @@ export function CapabilityDiscoverPage({ onHeaderActionChange }: { onHeaderActio
   }, [query]);
 
   const { data, error, isLoading } = useSWR(
-    hasToken ? ['capability-catalog', debouncedQuery, installedExtensionKey] : null,
-    () => loadCapabilityCatalog(debouncedQuery, installedExtensionIds),
+    hasToken ? ['capability-catalog', debouncedQuery, installedExtensionKey, language] : null,
+    () => loadCapabilityCatalog(debouncedQuery, installedExtensionIds, language),
     { keepPreviousData: true, revalidateOnFocus: false },
   );
   const visibleItems = useMemo(
-    () => filterCapabilityCatalog(data?.items ?? [], filter, query),
-    [data?.items, filter, query],
+    () => filterCapabilityCatalog(data?.items ?? [], filter, query, language),
+    [data?.items, filter, query, language],
   );
   const filters = useMemo<Array<{ id: Filter; label: string }>>(() => [
     { id: 'all', label: copy.filterAll },

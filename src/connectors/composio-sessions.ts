@@ -24,6 +24,7 @@ import type {
 } from './composio-session-types.js';
 import { evaluateConnectorExecutionPolicy } from './policy.js';
 import { canAccessConnectorAccount } from './account-access.js';
+import { assertComposioToolkitAvailable } from './excluded-connectors.js';
 import type {
   ConnectorActionMetadata,
   ConnectorConnection,
@@ -292,6 +293,7 @@ export class ComposioSessionsAdapter {
   async authorize(
     context: ComposioSessionContext & { toolkit: string; authConfigId?: string; installationId?: string; alias?: string; expectedAccountId?: string },
   ): Promise<ComposioAuthorizeResult> {
+    assertComposioToolkitAvailable(context.toolkit);
     const client = await this.createClient(context.backendId);
     const backendId = client.backendId;
     const providerPrincipalId = createComposioPrincipalId(context.principalId, context.installationScope);

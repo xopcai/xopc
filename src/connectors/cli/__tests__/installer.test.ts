@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { runProcess } from '../../../process/run-process.js';
-import { larkAdapter } from '../adapters/lark.js';
+import { fixtureAdapter } from './fixture-adapter.js';
 import { cliExecutablePath, installCli, verifyInstalledCli } from '../installer.js';
 import type { CliAdapter } from '../types.js';
 
@@ -22,7 +22,7 @@ beforeEach(async () => {
   expect(compressed.exitCode).toBe(0);
   const bytes = await readFile(archive);
   vi.spyOn(globalThis, 'fetch').mockImplementation(async () => new Response(bytes));
-  adapter = { ...larkAdapter, id: 'install-test', executable: 'fixture-cli', binaryVersion: '1.0.0', distributions: {
+  adapter = { ...fixtureAdapter, id: 'install-test', executable: 'fixture-cli', binaryVersion: '1.0.0', distributions: {
     [`${process.platform}-${process.arch}`]: { url: 'https://registry.npmjs.org/fixture.tgz', integrity: `sha256-${createHash('sha256').update(bytes).digest('hex')}`, archiveEntry: 'fixture-cli' },
   } };
 });

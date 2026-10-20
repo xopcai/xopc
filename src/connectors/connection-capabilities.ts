@@ -14,7 +14,6 @@ const CAPABILITY_ACTIONS: Record<string, Record<string, string[]>> = {
     'files.search': ['GOOGLEDRIVE_FIND_FILE', 'GOOGLEDRIVE_LIST_FILES'],
     'files.read': ['GOOGLEDRIVE_DOWNLOAD_FILE', 'GOOGLEDRIVE_GET_FILE', 'GOOGLEDRIVE_GET_FILE_METADATA'],
   },
-  'composio-notion': { 'pages.search': ['NOTION_SEARCH'], 'pages.read': ['NOTION_FETCH_PAGE'] },
 };
 
 export function isToolInputSchema(value: unknown): value is Record<string, unknown> {

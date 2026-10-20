@@ -5,6 +5,7 @@ import {
 import { ComposioSessionsAdapter, type ComposioToolkitCatalogItem } from './composio-sessions.js';
 import { composioIntegrationStrategy } from './integration-strategy.js';
 import { connectorUnderstandingCapability } from './learning-recipes.js';
+import { isExcludedComposioToolkit } from './excluded-connectors.js';
 import type { ConnectorBenefit, ConnectorCategory, ConnectorDefinition, ConnectorVerificationLevel } from './types.js';
 
 const CATALOG_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
@@ -13,7 +14,6 @@ export const COMPOSIO_RECOMMENDED_TOOLKITS = [
   'gmail',
   'googlecalendar',
   'googledrive',
-  'notion',
   'slack',
   'github',
   'linear',
@@ -21,7 +21,6 @@ export const COMPOSIO_RECOMMENDED_TOOLKITS = [
   'microsoft_teams',
   'jira',
   'dropbox',
-  'todoist',
 ] as const;
 
 export const COMPOSIO_AGENT_READY_TOOLKITS = [
@@ -53,7 +52,6 @@ export const COMPOSIO_TOOLKIT_DISPLAY_NAMES: Record<ComposioAgentReadyToolkit, s
   gmail: 'Gmail',
   googlecalendar: 'Google Calendar',
   googledrive: 'Google Drive',
-  notion: 'Notion',
   slack: 'Slack',
   github: 'GitHub',
   linear: 'Linear via Composio',
@@ -61,7 +59,6 @@ export const COMPOSIO_TOOLKIT_DISPLAY_NAMES: Record<ComposioAgentReadyToolkit, s
   microsoft_teams: 'Microsoft Teams',
   jira: 'Jira',
   dropbox: 'Dropbox',
-  todoist: 'Todoist',
   discord: 'Discord',
   googledocs: 'Google Docs',
   googlesheets: 'Google Sheets',
@@ -106,7 +103,6 @@ const CONNECTOR_DESCRIPTIONS: Record<string, string> = {
   gmail: 'Find, draft, and send Gmail messages with explicit write confirmation.',
   googlecalendar: 'Find and manage Google Calendar events from conversations and workflows.',
   googledrive: 'Search and work with approved files in Google Drive.',
-  notion: 'Search and update approved Notion pages and databases.',
   slack: 'Read conversations and send approved messages in Slack.',
   github: 'Work with repositories, issues, pull requests, and reviews on GitHub.',
   linear: 'Find and manage Linear issues and projects.',
@@ -114,7 +110,6 @@ const CONNECTOR_DESCRIPTIONS: Record<string, string> = {
   microsoft_teams: 'Read conversations and send approved Microsoft Teams messages.',
   jira: 'Find and manage Jira issues for an approved site.',
   dropbox: 'Search and work with approved Dropbox files.',
-  todoist: 'Create and manage personal or team tasks in Todoist.',
   discord: 'Read conversations and send approved messages in Discord.',
   googledocs: 'Find, read, and update approved documents in Google Docs.',
   googlesheets: 'Read and update approved spreadsheets in Google Sheets.',
@@ -220,6 +215,7 @@ function projectComposioCatalog(
   const query = options.query?.trim().toLocaleLowerCase() ?? '';
   const verification = options.verification ?? 'all';
   const filtered = connectors
+    .filter((connector) => connector.runtime.type !== 'composio' || !isExcludedComposioToolkit(connector.runtime.toolkit))
     .map((connector) => ({ ...connector, source: 'registry' as const }))
     .filter((connector) => {
       if (verification !== 'all' && connector.verificationLevel !== verification) return false;

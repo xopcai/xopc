@@ -1,6 +1,8 @@
 import { CheckCircle2, ChevronDown, ChevronUp, Loader2, Plus } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
+import { ServiceRecommendationList } from '@/features/capabilities/service-recommendation-list';
+
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
@@ -141,6 +143,7 @@ export function WorkDiscoveryConnectorsStep({
           ) : null}
         </div>
 
+        {language === 'zh' ? <ServiceRecommendationList onChanged={async () => { await loadInstances(); }} /> : <>
         {visibleCatalog.length ? (
           <div className="divide-y divide-edge-subtle overflow-hidden rounded-xl border border-edge-subtle bg-surface-base/55">
             {visibleCatalog.map((connector) => {
@@ -176,6 +179,7 @@ export function WorkDiscoveryConnectorsStep({
             {expanded ? copy.showFewerServices : copy.showMoreServices}
           </button>
         ) : null}
+        </>}
         {error ? <p className="mt-3 text-center text-xs text-danger" role="alert">{copy.connectorLoadFailed}: {error}</p> : null}
       </div>
 

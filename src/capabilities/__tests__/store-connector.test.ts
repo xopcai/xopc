@@ -4,11 +4,13 @@ import AdmZip from 'adm-zip';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { Config } from '../../config/schema.js';
+import { fixtureAdapter } from '../../connectors/cli/__tests__/fixture-adapter.js';
 import { McpServerSchema } from '../../config/schema.js';
 import { materializeConnectorMcpServer } from '../../connectors/materialize.js';
 import { resolveConnectorSecretReferences } from '../../connectors/secret-store.js';
 import {
   getStoreConnectorInstallPlan,
+  listStoreConnectors,
   parseStoreConnectorCandidateRef,
   searchStoreConnectorInstallCandidates,
 } from '../store-connector.js';
@@ -97,10 +99,32 @@ function mockStore(archive: Buffer, sha256 = createHash('sha256').update(archive
 afterEach(() => vi.restoreAllMocks());
 
 describe('store connector install plans', () => {
+  it.each(['notion', 'todoist-mcp'])('rejects duplicate Store connector %s before downloading artifacts', async (name) => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+    await expect(getStoreConnectorInstallPlan(config(), name)).rejects.toThrow('instead of the duplicate Store connector');
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('filters duplicates across pages while retaining Supabase read-only and correct pagination', async () => {
+    const names = [['notion', 'todoist-mcp', 'supabase-readonly'], ['amap', 'linear', 'context7']];
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const page = Number(new URL(String(input)).searchParams.get('page'));
+      return new Response(JSON.stringify({
+        items: names[page - 1]!.map((name) => ({ name, type: 'connector' })),
+        meta: { page, pageSize: 3, total: 6, totalPages: 2 },
+      }), { headers: { 'Content-Type': 'application/json' } });
+    });
+    const first = await listStoreConnectors(config(), { page: 1, pageSize: 2 });
+    expect(first.items.map((item) => item.name)).toEqual(['supabase-readonly', 'amap']);
+    expect(first.meta).toEqual({ page: 1, pageSize: 2, total: 4, totalPages: 2 });
+    const second = await listStoreConnectors(config(), { page: 2, pageSize: 2 });
+    expect(second.items.map((item) => item.name)).toEqual(['linear', 'context7']);
+  });
+
   it('accepts a pinned registered CLI adapter and rejects command injection', async () => {
-    const cli = { ...manifest, capabilities: ['tools'], auth: { mode: 'cli' }, permissions: { ...manifest.permissions, localExec: true }, runtime: { type: 'cli', adapterId: 'lark', adapterVersion: '1', binaryVersion: '1.0.96' } } as unknown as typeof manifest;
+    const cli = { ...manifest, capabilities: ['tools'], auth: { mode: 'cli' }, permissions: { ...manifest.permissions, localExec: true }, runtime: { type: 'cli', adapterId: fixtureAdapter.id, adapterVersion: '1', binaryVersion: fixtureAdapter.binaryVersion } } as unknown as typeof manifest;
     mockStore(archiveForManifest(cli), undefined, cli);
-    expect(await getStoreConnectorInstallPlan(config(), 'demo-connector')).toMatchObject({ definition: { runtime: { type: 'cli', adapterId: 'lark' } } });
+    expect(await getStoreConnectorInstallPlan(config(), 'demo-connector')).toMatchObject({ definition: { runtime: { type: 'cli', adapterId: fixtureAdapter.id } } });
     vi.restoreAllMocks();
     const unsafe = { ...cli, runtime: { ...cli.runtime, command: 'sh' } };
     mockStore(archiveForManifest(unsafe), undefined, unsafe);
