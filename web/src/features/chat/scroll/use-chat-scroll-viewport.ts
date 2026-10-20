@@ -83,6 +83,7 @@ export function useChatScrollViewport({
   const pendingReplyAnchorRef = useRef<string | null>(null);
   const replyBudgetRef = useRef(0);
   const replyExtentRef = useRef(0);
+  const virtualMeasurementObserverRef = useRef<MutationObserver | null>(null);
   const resizeObserverRef = useRef<ResizeObserver | null>(null);
   const readingAnchorRef = useRef<ChatScrollAnchor | null>(null);
   const resizeFrameRef = useRef<number | null>(null);
@@ -130,7 +131,9 @@ export function useChatScrollViewport({
       replyBudgetRef.current = Math.min(64, Math.max(0, el.clientHeight) * 0.1);
       replyExtentRef.current = replyBudgetRef.current;
     }
-    const replyHeight = Math.max(0, spacer.getBoundingClientRect().top - row.getBoundingClientRect().bottom);
+    // Virtual row offsets can settle after the footer mounts; its fixed gap is already occupied.
+    const footerGap = parseFloat(getComputedStyle(spacer.parentElement!).paddingTop) || 0;
+    const replyHeight = Math.max(footerGap, spacer.getBoundingClientRect().top - row.getBoundingClientRect().bottom);
     // Absorb small contractions, including transient status UI, within the original budget.
     const extent = Math.max(replyExtentRef.current, replyHeight);
     const budget = Math.min(replyBudgetRef.current, Math.min(64, Math.max(0, el.clientHeight) * 0.1));
@@ -198,9 +201,10 @@ export function useChatScrollViewport({
 
   const scheduleResize = useCallback(() => {
     const el = scrollRef.current;
-    // Virtual rows publish their measured extent before paint; follow it in that same cycle.
-    if (el && chatVirtualScroll(el) && followingRef.current && el.scrollHeight > measuredScrollHeightRef.current) {
-      scrollToEnd();
+    if (el && followingRef.current) {
+      if (chatVirtualScroll(el)) {
+        scrollChatToEnd(el);
+      } else if (el.scrollHeight > measuredScrollHeightRef.current) scrollToEnd();
     }
     if (resizeFrameRef.current !== null) return;
     // Updating an observed column's spacer inside ResizeObserver causes a feedback warning.
@@ -215,6 +219,8 @@ export function useChatScrollViewport({
       if (listContentRef.current === el) return;
 
       resizeObserverRef.current?.disconnect();
+      virtualMeasurementObserverRef.current?.disconnect();
+      virtualMeasurementObserverRef.current = null;
       resizeObserverRef.current = null;
       listContentRef.current = el;
 
@@ -224,13 +230,28 @@ export function useChatScrollViewport({
       const ro = new ResizeObserver(scheduleResize);
       ro.observe(el);
       resizeObserverRef.current = ro;
+      // Consume reply space on text commits before Virtuoso measures the combined extent.
+      // Follow its resulting height commit before paint without starting another index seek.
+      const measurements = new MutationObserver(records => {
+        const viewport = scrollRef.current;
+        if (!viewport || !followingRef.current || !chatVirtualScroll(viewport)) return;
+        const replySpaceChanged = updateReplySpace();
+        if (replySpaceChanged || records.some(record => record.target instanceof HTMLElement
+          && record.target.hasAttribute('data-virtuoso-scroller'))) {
+          scrollChatToEnd(viewport);
+        }
+      });
+      measurements.observe(el, { subtree: true, childList: true, characterData: true,
+        attributes: true, attributeFilter: ['style'] });
+      virtualMeasurementObserverRef.current = measurements;
     },
-    [scheduleResize],
+    [scheduleResize, updateReplySpace],
   );
 
   useEffect(() => {
     return () => {
       resizeObserverRef.current?.disconnect();
+      virtualMeasurementObserverRef.current?.disconnect();
       if (resizeFrameRef.current !== null) {
         cancelAnimationFrame(resizeFrameRef.current);
         resizeFrameRef.current = null;

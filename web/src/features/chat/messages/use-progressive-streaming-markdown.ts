@@ -10,9 +10,6 @@ import {
   recordStreamingCommit,
   recordStreamingDelta,
 } from '@/components/markdown/streaming-render-metrics';
-import { graphemeCommitBoundary } from '@/features/chat/rendering/markdown/text-segments';
-
-const TERMINAL_DRAIN_MS = 240;
 
 export function useProgressiveStreamingMarkdown(
   content: string,
@@ -32,7 +29,6 @@ export function useProgressiveStreamingMarkdown(
   const intervalRef = useRef(50);
   const hasStreamedRef = useRef(streaming || animateInitialContent);
   const completedRef = useRef(false);
-  const terminalDrainRef = useRef<{ startedAt: number; fromLength: number } | null>(null);
   const onCompleteRef = useRef(onComplete);
   onCompleteRef.current = onComplete;
 
@@ -59,7 +55,6 @@ export function useProgressiveStreamingMarkdown(
       }
     };
     if (streaming) {
-      terminalDrainRef.current = null;
       hasStreamedRef.current = true;
       completedRef.current = false;
       recordStreamingDelta(metricsKey, content.length);
@@ -67,15 +62,10 @@ export function useProgressiveStreamingMarkdown(
     const immediate = replacing || !content.startsWith(visibleContentRef.current)
       || document.visibilityState === 'hidden'
       || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-    if (immediate || (!streaming && (!hasStreamedRef.current || content === visibleContentRef.current))) {
-      terminalDrainRef.current = null;
+    if (immediate || !streaming) {
       showImmediately();
       if (!streaming) complete();
       return;
-    }
-    if (!streaming && !terminalDrainRef.current) {
-      cancel();
-      terminalDrainRef.current = { startedAt: performance.now(), fromLength: visibleContentRef.current.length };
     }
     if (streaming && immediateFirstCommit && visibleContentRef.current.length === 0) {
       recordStreamingCommit(metricsKey, content.length);
@@ -95,24 +85,15 @@ export function useProgressiveStreamingMarkdown(
         const commit = () => {
           frameRef.current = null;
           const pending = pendingContentRef.current;
-          const drain = terminalDrainRef.current;
-          const terminalLength = drain ? graphemeCommitBoundary(pending, Math.min(pending.length,
-            drain.fromLength + Math.ceil((pending.length - drain.fromLength)
-              * Math.min(1, (performance.now() - drain.startedAt) / TERMINAL_DRAIN_MS)))) : null;
           const length = document.visibilityState === 'hidden' ? pending.length
-            : terminalLength ?? pacer.nextLength(visibleContentRef.current.length, pending, performance.now());
+            : pacer.nextLength(visibleContentRef.current.length, pending, performance.now());
           const next = pending.slice(0, length);
           if (next !== visibleContentRef.current) {
             visibleContentRef.current = next;
             recordStreamingCommit(metricsKey, next.length);
             setVisibleContent(next);
           }
-          // Keep draining even when fractional progress has not produced a character yet.
           if (next !== pending) schedule();
-          else if (drain) {
-            terminalDrainRef.current = null;
-            complete();
-          }
         };
         if (document.visibilityState === 'hidden') commit();
         else frameRef.current = window.requestAnimationFrame(commit);
@@ -128,7 +109,7 @@ export function useProgressiveStreamingMarkdown(
     frameRef.current = null;
   }, []);
 
-  // History and replacement snapshots are immediate; a live response keeps its paced tail.
-  if (!content.startsWith(visibleContent) || (!streaming && !hasStreamedRef.current)) return content;
+  // Commit the terminal snapshot in the same layout as completion, before the parent measures it.
+  if (!streaming || !content.startsWith(visibleContent)) return content;
   return streaming && immediateFirstCommit && !visibleContent ? content : visibleContent;
 }
