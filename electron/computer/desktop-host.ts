@@ -28,7 +28,7 @@ type Identity = { principalId: string; publicKey: string; encryptedPrivateKey: s
 export function resolveComputerDriverPath(options: { packaged: boolean; resourcesPath: string; mainDir: string }): string {
   return options.packaged
     ? join(options.resourcesPath, 'bin', 'cua-driver')
-    : join(options.mainDir, '..', '..', '.cache', 'computer-driver', '0.28.2', 'cua-driver');
+    : join(options.mainDir, '..', '..', '.cache', 'computer-driver', '0.36.0', 'cua-driver');
 }
 
 export function resolveComputerDriverSdkUrl(options: { packaged: boolean; resourcesPath: string }): string | undefined {

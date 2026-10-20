@@ -13,6 +13,18 @@ describe('bounded desktop task state', () => {
     expect(verifyComputerExpectation({ kind: 'text', text: 'Saved' }, { summary: 'Saved' } as any)?.status).toBe('unavailable');
     expect(verifyComputerExpectation({ kind: 'text', text: 'Saved' }, { summary: '{"text":"Saved","elements":[]}' } as any)?.status).toBe('unavailable');
   });
+  it('verifies positive multiline native field content without treating partial coverage as absence', () => {
+    const condition = { kind: 'text', text: 'PASS: TEXTEDIT VERIFIED' } as const;
+    const observation = (role = 'AXTextArea', web = false) => ({ summary: JSON.stringify({
+      text: '- [0] AXWindow\n  - AXTextArea = "XOPC Verified', truncated: true,
+      elements: [{ role: 'AXWindow' }, { role, in_web_content: web, value: 'XOPC Verified\nTask A\nPASS: TEXTEDIT VERIFIED' }],
+    }) } as any);
+    expect(verifyComputerExpectation(condition, observation())?.status).toBe('satisfied');
+    expect(verifyComputerExpectation(condition, observation(), observation())).toMatchObject({ status: 'satisfied', preexisting: true });
+    expect(verifyComputerExpectation({ kind: 'text', text: 'absent' }, observation())?.status).toBe('unavailable');
+    expect(verifyComputerExpectation(condition, observation('AXTextArea', true))?.status).toBe('unavailable');
+    expect(verifyComputerExpectation(condition, observation('AXButton'))?.status).toBe('unavailable');
+  });
   it('stops a third identical no-change input without preventing a changed-state attempt', () => {
     const state = new ComputerTaskState();
     state.record('Click', action, obs, receipt, obs);
