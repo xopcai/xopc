@@ -144,10 +144,14 @@ struct TaskDetailView: View {
                                 VStack(alignment: .leading, spacing: 6) {
                                     HStack {
                                         Text(LocalizedStringKey(change.fromPhase))
-                                        if let resolution = change.fromResolution { Text(LocalizedStringKey(resolution)) }
+                                        if let resolution = change.fromResolution {
+                                            Text(LocalizedStringKey(resolution))
+                                        }
                                         Text("→")
                                         Text(LocalizedStringKey(change.toPhase))
-                                        if let resolution = change.toResolution { Text(LocalizedStringKey(resolution)) }
+                                        if let resolution = change.toResolution {
+                                            Text(LocalizedStringKey(resolution))
+                                        }
                                     }
                                     Text("\(change.actor.kind) · \(change.actor.id ?? "") · \(change.source)")
                                         .font(.caption).foregroundStyle(.secondary)
