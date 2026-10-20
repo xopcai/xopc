@@ -13,6 +13,7 @@ export interface ChatCompletionOptions {
   personal: boolean;
   burst: boolean;
   reading: boolean;
+  longQuestion?: boolean;
 }
 
 interface CompletionFrame {
@@ -34,6 +35,7 @@ export interface ChatCompletionReport {
   lateScrollDrift: number;
   heightDrift: number;
   readingDrift: number;
+  sendScrollDrift: number;
   frames: CompletionFrame[];
 }
 
@@ -83,7 +85,7 @@ export async function runChatCompletionFixture(root: Root, options: ChatCompleti
     content: [{ type: 'text', text: '已有历史内容。我们检查短回复结束时的滚动行为。'.repeat(3) }],
   }));
   const question: Message = { role: 'user', renderKey: 'sent-user', timestamp,
-    content: [{ type: 'text', text: '请简短回答。' }] };
+    content: [{ type: 'text', text: options.longQuestion ? '长用户输入。'.repeat(3_334) : '请简短回答。' }] };
   const opening: Message = { role: 'assistant', renderKey: 'answer', turnId: 'fixture-run',
     textSurface: 'conversation', timestamp: timestamp + 1, content: [] };
   const answer: Message = { ...opening, content: [{ type: 'text', text: shortAnswer, segmentId: 'answer', presentation: 'pending' }] };
@@ -96,7 +98,15 @@ export async function runChatCompletionFixture(root: Root, options: ChatCompleti
   await sleep(150);
   controller!.reserveReplySpace('sent-user');
   render([...history, question], false);
-  await sleep(80);
+  const sendPositions: number[] = [];
+  if (options.longQuestion) {
+    for (let frame = 0; frame < 12; frame++) {
+      // Sample after ResizeObserver so this measures painted positions.
+      await new Promise<void>(resolve => requestAnimationFrame(() => setTimeout(resolve, 0)));
+      sendPositions.push(controller!.scrollRef.current!.scrollTop);
+    }
+  } else await sleep(80);
+  const sendScrollDrift = sendPositions.length ? Math.max(...sendPositions) - Math.min(...sendPositions) : 0;
   render([...history, question, opening], true);
   await sleep(100);
   render([...history, question, answer], true);
@@ -144,7 +154,8 @@ export async function runChatCompletionFixture(root: Root, options: ChatCompleti
   const lateScrollDrift = Math.max(...all.map(value => value.scrollTop)) - Math.min(...all.map(value => value.scrollTop));
   const heightDrift = after.rowHeight - before.rowHeight;
   const readingDrift = options.reading ? Math.abs(after.scrollTop - before.scrollTop) : 0;
-  const report = { options, before, committed, after, lateScrollDrift, heightDrift, readingDrift, frames };
+  const report = { options, before, committed, after, lateScrollDrift, heightDrift, readingDrift, sendScrollDrift, frames };
+  if (sendScrollDrift > 1) throw new Error(`Sending a long question moved after its first paint: ${JSON.stringify({ sendPositions, options })}`);
   if (committed.text !== finalText || after.text !== finalText) throw new Error(`Terminal text was not atomic: ${JSON.stringify(report)}`);
   if (!options.burst && Math.abs(heightDrift) > 1) throw new Error(`Completed short reply changed height: ${JSON.stringify(report)}`);
   if (!options.burst && Math.abs(after.scrollTop - before.scrollTop) > 1) throw new Error(`Completed short reply changed scroll position: ${JSON.stringify(report)}`);

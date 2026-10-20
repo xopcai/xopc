@@ -35,12 +35,19 @@ try {
         cases.push({ reducedMotion, ...result });
       }
     }
+    for (const count of [12, 300]) for (const burst of [false, true]) for (const reading of [false, true]) {
+      const longQuestion = await page.evaluate(options => window.runChatCompletionFixture(options), {
+        count, personal: true, burst, reading, longQuestion: true,
+      });
+      cases.push({ reducedMotion, ...longQuestion });
+    }
   }
   await page.screenshot({ path: path.join(reports, 'completed-reply.png') });
   const report = { browser: browser.version(), cases, errors };
   await writeFile(path.join(reports, 'completion.json'), `${JSON.stringify(report, null, 2)}\n`);
   if (errors.length) throw new Error(`Browser errors: ${errors.join('; ')}`);
   console.log(JSON.stringify({ cases: cases.length,
+    maxSendScrollDrift: Math.max(...cases.map(result => result.sendScrollDrift)),
     maxLateScrollDrift: Math.max(...cases.map(result => result.lateScrollDrift)),
     maxReadingDrift: Math.max(...cases.map(result => result.readingDrift)), reports }, null, 2));
 } finally {
