@@ -96,7 +96,7 @@ export async function runRealtimeInput(input: {
     client.connect();
     const origin = await ready;
     const clientMessageId = randomUUID();
-    const response = await json(`/api/sessions/${encodeURIComponent(input.conversationId)}/inputs`, {
+    const response = await json<{ inputState: Record<string, any> }>(`/api/sessions/${encodeURIComponent(input.conversationId)}/inputs`, {
       kind: 'append', clientMessageId, expectedTranscriptId: input.transcriptId,
       configVersion: input.configVersion, delivery: 'next', input: { content: input.message }, origin,
     });
@@ -113,7 +113,7 @@ export async function runRealtimeInput(input: {
         headers: input.headers, signal: input.signal,
       });
       if (!status.ok) throw new Error(`xopc session input state returned HTTP ${status.status}`);
-      state = (await status.json()).payload;
+      state = (await status.json() as { payload: typeof state }).payload;
       runId = startedRunId(state);
       const ownInput = state?.inputs?.find((row: { clientMessageId: string }) => row.clientMessageId === clientMessageId);
       if (!runId && ownInput?.status === 'interrupted') throw new Error('Evaluation input was interrupted before starting a run');
