@@ -256,7 +256,7 @@ struct TaskDetailEnvelope: Decodable, Sendable {
     let attention: [TaskAttention]?
     let criterionReviews: [TaskCriterionReview]?
     let waits: [TaskWait]?
-    var phaseChanges: [TaskPhaseChange]? = nil
+    var phaseChanges: [TaskPhaseChange]?
 }
 
 struct TaskPhaseChange: Decodable, Sendable, Identifiable {
