@@ -138,6 +138,25 @@ struct TaskDetailView: View {
                             }
                         }
                     }
+                    if let changes = detail.phaseChanges, !changes.isEmpty {
+                        Section("变更记录") {
+                            ForEach(changes.reversed()) { change in
+                                VStack(alignment: .leading, spacing: 6) {
+                                    HStack {
+                                        Text(LocalizedStringKey(change.fromPhase))
+                                        if let resolution = change.fromResolution { Text(LocalizedStringKey(resolution)) }
+                                        Text("→")
+                                        Text(LocalizedStringKey(change.toPhase))
+                                        if let resolution = change.toResolution { Text(LocalizedStringKey(resolution)) }
+                                    }
+                                    Text("\(change.actor.kind) · \(change.actor.id ?? "") · \(change.source)")
+                                        .font(.caption).foregroundStyle(.secondary)
+                                    Text(change.createdAt.millisecondsDate, format: .dateTime.year().month().day().hour().minute())
+                                        .font(.caption).foregroundStyle(.secondary)
+                                }
+                            }
+                        }
+                    }
                     if let runs = detail.runs, !runs.isEmpty {
                         Section("运行记录") {
                             ForEach(runs) { run in
@@ -267,7 +286,7 @@ private struct TaskStatusView: View {
         NavigationStack {
             Form {
                 Section {
-                    ForEach(["backlog", "ready", "active", "review"], id: \.self) { phase in
+                    ForEach(["backlog", "ready", "active", "review", "closed"], id: \.self) { phase in
                         Button {
                             if let command = detail.phaseCommand(for: phase) {
                                 Task { await apply(command, phase: phase) }
@@ -289,7 +308,7 @@ private struct TaskStatusView: View {
                             .foregroundStyle(.secondary)
                     }
                 } header: { Text("阶段") } footer: {
-                    Text("调整阶段不会自动启动 Agent。")
+                    Text("调整阶段不会启动或停止执行，每次变更都会记录。")
                 }
                 if allowed.contains("mark_ready"), !allowed.contains("move") {
                     Section {
@@ -315,11 +334,7 @@ private struct TaskStatusView: View {
                 if allowed.contains("close") {
                     Section {
                         Button("完成任务") { Task { await apply("close") } }
-                            .disabled(TaskAcceptanceStatus.completionBlock(in: detail) != nil)
                             .accessibilityIdentifier("task-complete")
-                        if let reason = TaskAcceptanceStatus.completionBlock(in: detail) {
-                            Text(completionHint(reason)).foregroundStyle(.secondary)
-                        }
                         Button("取消任务", role: .destructive) { confirmsCancel = true }
                             .accessibilityIdentifier("task-cancel")
                     }
@@ -355,14 +370,6 @@ private struct TaskStatusView: View {
         .interactiveDismissDisabled(isWorking)
     }
 
-    private func completionHint(_ reason: String) -> LocalizedStringKey {
-        switch reason {
-        case "execution": "请先处理当前执行或等待事项，再完成任务。"
-        case "criteria": "请先在桌面端补充验收标准并完成验收，再标记完成。"
-        default: "所有验收标准通过后才能完成，请在桌面端核对验收。"
-        }
-    }
-
     @MainActor private func loadAgents() async {
         do {
             let catalog = try await GatewayClient(configuration: configuration).fetchAgents()
@@ -377,9 +384,6 @@ private struct TaskStatusView: View {
                                   resolution: String = "done", agentID: String? = nil) async
     {
         guard !isWorking, allowed.contains(command) else { return }
-        if command == "close", resolution == "done", TaskAcceptanceStatus.completionBlock(in: detail) != nil {
-            return
-        }
         isWorking = true
         defer { isWorking = false }
         do {

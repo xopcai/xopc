@@ -274,7 +274,7 @@ export function ProjectTaskBoard({ tasks, dependencyEdges, returnTo, copy, onAct
   copy: BoardCopy;
   onAction: (task: ProjectTaskCard, action: TaskBoardAction) => Promise<boolean>;
   onReorder: (taskId: string, beforeTaskId: string | null) => Promise<boolean>;
-  onUndoMove: (taskId: string, phase: TaskPhase, beforeTaskId: string | null) => Promise<boolean>;
+  onUndoMove: (taskId: string, phase: TaskPhase, beforeTaskId: string | null, resolution?: ProjectTaskCard['resolution']) => Promise<boolean>;
   onDependenciesChange: (taskId: string, dependencyTaskIds: string[]) => Promise<void>;
   onCreate: (input: CreateProjectTaskInput) => Promise<void>;
   actionBusyId?: string | null;
@@ -284,7 +284,7 @@ export function ProjectTaskBoard({ tasks, dependencyEdges, returnTo, copy, onAct
   const boardPanRef = useRef<BoardPanState | null>(null);
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [isPanningBoard, setIsPanningBoard] = useState(false);
-  const [undoMove, setUndoMove] = useState<{ taskId: string; phase: TaskPhase; beforeTaskId: string | null } | null>(null);
+  const [undoMove, setUndoMove] = useState<{ taskId: string; phase: TaskPhase; beforeTaskId: string | null; resolution?: ProjectTaskCard['resolution'] } | null>(null);
   const [viewMode, setViewMode] = useState<'board' | 'graph'>('board');
   const [createOpen, setCreateOpen] = useState(false);
   const [createRequestId, setCreateRequestId] = useState(() => crypto.randomUUID());
@@ -311,7 +311,7 @@ export function ProjectTaskBoard({ tasks, dependencyEdges, returnTo, copy, onAct
     if (task.phase !== targetPhase && !action) return;
     if (action && !await onAction(task, action)) return;
     if (!await onReorder(task.id, beforeTaskId)) return;
-    setUndoMove({ taskId: task.id, phase: task.phase, beforeTaskId: previousBeforeTaskId });
+    setUndoMove({ taskId: task.id, phase: task.phase, beforeTaskId: previousBeforeTaskId, resolution: task.resolution });
   };
 
   const submitCreate = async (event: FormEvent<HTMLFormElement>) => {
@@ -628,7 +628,7 @@ export function ProjectTaskBoard({ tasks, dependencyEdges, returnTo, copy, onAct
             onClick={() => {
               const pending = undoMove;
               setUndoMove(null);
-              void onUndoMove(pending.taskId, pending.phase, pending.beforeTaskId).then((ok) => {
+              void onUndoMove(pending.taskId, pending.phase, pending.beforeTaskId, pending.resolution).then((ok) => {
                 if (!ok) setUndoMove(pending);
               });
             }}

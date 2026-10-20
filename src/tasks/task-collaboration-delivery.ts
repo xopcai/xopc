@@ -24,7 +24,9 @@ export class TaskCollaborationDelivery {
     for (const pending of this.#entries.pendingDeliveries(limit)) {
       const { entry, clientMessageId } = pending;
       const task = this.#tasks.get(entry.taskId);
-      if (!task || task.phase === 'closed') {
+      const answersExistingWait = entry.kind === 'answer' && entry.causationId
+        && this.#runs.listActiveWaits(entry.taskId).some(wait => wait.condition.collaborationEntryId === entry.causationId);
+      if (!task || (task.phase === 'closed' && (task.resolution !== 'done' || !answersExistingWait))) {
         this.#entries.markStale(entry.id);
         continue;
       }

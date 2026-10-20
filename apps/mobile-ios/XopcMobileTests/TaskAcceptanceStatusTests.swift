@@ -50,7 +50,7 @@ struct TaskAcceptanceStatusTests {
         #expect(TaskAcceptanceStatus.completionBlock(in: ready) == nil)
         #expect(ready.phaseCommand(for: "active") == "move")
         #expect(ready.phaseCommand(for: "review") == nil)
-        #expect(ready.phaseCommand(for: "closed") == nil)
+        #expect(ready.phaseCommand(for: "closed") == "move")
         let stale = try decode(raw.replacingOccurrences(of: #""contractVersion":2"#, with: #""contractVersion":1"#))
         #expect(TaskAcceptanceStatus.completionBlock(in: stale) == "acceptance")
         let run = try decode(raw.replacingOccurrences(of: #""runs":[]"#,
@@ -60,7 +60,7 @@ struct TaskAcceptanceStatusTests {
                                                        with: #""waits":[{"id":"w","status":"active"}]"#))
         #expect(TaskAcceptanceStatus.completionBlock(in: wait) == "execution")
         let closed = try decode(raw.replacingOccurrences(of: #""phase":"review""#, with: #""phase":"closed""#)
-            .replacingOccurrences(of: #"["move","close"]"#, with: #"["reopen"]"#))
-        #expect(closed.phaseCommand(for: "ready") == "reopen")
+            .replacingOccurrences(of: #"["move","close"]"#, with: #"["move","reopen"]"#))
+        #expect(closed.phaseCommand(for: "ready") == "move")
     }
 }

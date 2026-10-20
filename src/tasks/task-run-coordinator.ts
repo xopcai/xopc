@@ -1,3 +1,4 @@
+import type { TurnOrigin } from '@xopcai/endpoint-tools-protocol';
 import type { TaskEvidence, TaskRunReceipt, TurnOutcome } from '@xopcai/gateway-contract';
 
 import { AgentCatalogRepository } from '../agent-catalog/repository.js';
@@ -35,37 +36,48 @@ export class TaskRunCoordinator {
   static start(input: {
     runId: string;
     context: ExecutionContext;
+    inputOrigin?: TurnOrigin;
     fallbackObjective: string;
     timeoutMs?: number;
   }): TaskRunCoordinator | undefined {
     if (!input.context.taskId) return undefined;
     const tasks = new TaskRepository();
     const task = tasks.get(input.context.taskId);
-    if (!task || task.phase === 'closed') return undefined;
+    if (!task || (task.phase === 'closed' && task.resolution !== 'done')) return undefined;
     const runs = new TaskRunRepository();
     if (runs.listActiveWaits(task.id).length > 0) return undefined;
     let run = runs.get(input.runId);
     if (run && (run.taskId !== task.id || run.parentRunId
       || (run.conversationId && run.conversationId !== input.context.conversationId))) return undefined;
     if (!run) {
+      if (task.phase === 'closed') return undefined;
       if (runs.getActiveRoot(task.id)) return undefined;
       const agentId = task.delegateAgentId ?? input.context.agentId;
       if (!agentId) return undefined;
-      run = runs.create({
-        id: input.runId,
-        taskId: task.id,
-        executorKind: 'agent',
-        executorRef: { agentId },
-        trigger: { kind: input.context.triggerKind },
-        correlationId: input.runId,
-        idempotencyKey: input.runId,
-        contractVersion: task.latestContractVersion,
-        conversationId: input.context.conversationId,
-        retryPolicy: { maxAttempts: 3 },
+      run = runSqliteWriteTransaction(() => {
+        if (tasks.require(task.id).version !== task.version) return undefined;
+        const userInitiated = input.inputOrigin?.type === 'endpoint' || input.inputOrigin?.type === 'channel'
+          || (input.inputOrigin?.type === 'system' && input.inputOrigin.source === 'cli');
+        if (userInitiated) tasks.authorizeAutomaticPhase(task.id);
+        else if (!tasks.automaticStartAllowed(task.id)) return undefined;
+        const created = runs.create({
+          id: input.runId,
+          taskId: task.id,
+          executorKind: 'agent',
+          executorRef: { agentId },
+          trigger: { kind: input.context.triggerKind },
+          correlationId: input.runId,
+          idempotencyKey: input.runId,
+          contractVersion: task.latestContractVersion,
+          conversationId: input.context.conversationId,
+          retryPolicy: { maxAttempts: 3 },
+        });
+        if (task.phase !== 'active') {
+          tasks.setLifecycle({ taskId: task.id, expectedVersion: task.version, phase: 'active', runId: created.id });
+        }
+        return created;
       });
-      if (task.phase !== 'active') {
-        tasks.setLifecycle({ taskId: task.id, expectedVersion: task.version, phase: 'active' });
-      }
+      if (!run) return undefined;
     }
     const startingQueuedRun = run.status === 'queued';
     if (startingQueuedRun) {

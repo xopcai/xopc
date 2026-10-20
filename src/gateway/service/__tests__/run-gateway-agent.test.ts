@@ -27,6 +27,9 @@ import { GatewayAgentRunner } from '../agent-runner.js';
 import { TaskCreateRequestSchema } from '@xopcai/gateway-contract';
 import { TaskApplicationService } from '../../../tasks/task-application-service.js';
 import { defineTaskContract } from '../../../tasks/task-contract-definition.js';
+import { TaskRepository } from '../../../tasks/task-repository.js';
+import { TaskRunCoordinator } from '../../../tasks/task-run-coordinator.js';
+import { TaskConversationRepository } from '../../../tasks/task-conversation-repository.js';
 import { TaskRunRepository } from '../../../tasks/task-run-repository.js';
 import { insertSessionInput, claimNextSessionInput, finishSessionInputRun, getSessionInputState } from '../../../storage/sqlite/session-input-repository.js';
 import { requireSessionConnection, getConnectionWait, updateConnectionWait, queueConnectionResolution } from '../../../storage/sqlite/connection-wait-repository.js';
@@ -49,6 +52,48 @@ describe('runGatewayAgent', () => {
     resetXopcDatabaseSingletonForTest();
     rmSync(stateDir, { recursive: true, force: true });
   });
+
+  it.each(['heartbeat', 'automation', 'workflow', 'internal', 'task_update'] as const)(
+    'uses the actual %s input origin instead of user-like session metadata when starting a task turn', async source => {
+      const conversationId = 'd3dcfc3b-3238-4056-8feb-c95014705996';
+      const catalog = new AgentCatalogRepository();
+      catalog.ensureInitialized();
+      if (!catalog.get('main')) catalog.create({ id: 'main', profile: { name: 'Main' } }, { ready: true });
+      catalog.markProvisioned('main');
+      const created = new TaskApplicationService().create(TaskCreateRequestSchema.parse({
+        idempotencyKey: 'gateway-origin-task', title: 'Origin task', contract: { ...defineTaskContract('Work'), acceptancePolicy: 'manual', outputDestinations: [] },
+        activation: { mode: 'capture', phase: 'ready' } }));
+      if (!created.ok) throw new Error('Expected task');
+      const taskId = created.model.task.id;
+      new TaskConversationRepository().activateExecutionSession({ taskId, conversationId, agentId: 'main' });
+      new TaskApplicationService().execute({ taskId, expectedVersion: created.model.task.version,
+        idempotencyKey: 'gateway-origin-move', command: { type: 'move', phase: 'backlog' } });
+      const tasks = new TaskRepository();
+      const before = tasks.require(taskId);
+      const start = vi.spyOn(TaskRunCoordinator, 'start');
+      try {
+        const deps = {
+          config: {}, agentService: {
+            resolveUserTimezoneForSession: () => 'UTC', prepareInboundAttachments: async () => undefined,
+            beginInboundTurn: () => {}, endInboundTurn: () => {},
+            turnDispatcher: { processDirectStreaming: async function* () {} },
+            getLastAssistantPlainText: () => '', takeTaskReviewStreamHint: () => undefined,
+            outboundCoordinator: { emitSessionTurnComplete: async () => {} },
+          }, bus: { publishInbound: async () => {} }, runAbortControllers: new Map(),
+          activeWebchatRunBySession: new Map(), activeExecutionBySession: new Map(),
+          sessionIndex: { getSessionMetadata: async () => ({ transcriptId: 'origin-transcript', customData: { triggerKind: 'user' } }),
+            updateSessionMetadata: async () => {}, appendTranscriptCustomEntry: async () => {} },
+          emit: () => {}, publishRealtime: () => {}, completeRealtimeTopic: () => {},
+        } as unknown as RunGatewayAgentDeps;
+        for await (const _event of runGatewayAgent(deps, 'Background update', 'webchat', conversationId,
+          { type: 'system', source }, undefined, undefined, { runId: `gateway-${source}` })) { /* Drain the turn. */ }
+        expect(start).toHaveBeenCalledWith(expect.objectContaining({ inputOrigin: { type: 'system', source },
+          context: expect.objectContaining({ taskId, triggerKind: 'user' }) }));
+        expect(tasks.require(taskId)).toEqual(before);
+        expect(tasks.automaticStartAllowed(taskId)).toBe(false);
+        expect(new TaskRunRepository().listByTask(taskId)).toEqual([]);
+      } finally { start.mockRestore(); }
+    });
 
   it('honors Task cancellation during metadata startup and runs the next message only once', async () => {
     const conversationId = 'd3dcfc3b-3238-4056-8feb-c95014705996';

@@ -157,6 +157,7 @@ export async function *runGatewayAgent(
     taskRun = TaskRunCoordinator.start({
       runId: runOptions?.taskRunId ?? runId,
       context: executionContext,
+      inputOrigin: origin,
       fallbackObjective: message,
       timeoutMs: executionContext.taskId ? resolveAgentTurnTimeoutMs(deps.config, webchatConversationId) : undefined,
     });

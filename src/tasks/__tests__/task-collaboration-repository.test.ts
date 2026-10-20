@@ -109,7 +109,7 @@ describe('TaskCollaborationRepository', () => {
     expect(board.pendingDeliveries()).toEqual([]);
   });
 
-  it('resumes a waiting TaskRun from a board answer without submitting a second Agent turn', async () => {
+  it.each([false, true])('resumes a waiting TaskRun from a board answer without submitting a second Agent turn (closed: %s)', async closed => {
     const contract = { objective: 'Research', expectedOutputs: [], acceptanceCriteria: [], constraints: [],
       approvalRequired: [], assumptions: [], risks: [], acceptancePolicy: 'verified_auto' as const,
       outputDestinations: [] };
@@ -126,6 +126,11 @@ describe('TaskCollaborationRepository', () => {
       body: 'Which source?', idempotencyKey: 'question' });
     const wait = runs.createWait({ taskId: created.model.task.id, taskRunId: created.runId,
       kind: 'external_event', reason: 'Which source?', condition: { collaborationEntryId: question.id } });
+    if (closed) {
+      const task = new TaskRepository().require(created.model.task.id);
+      new TaskApplicationService().execute({ taskId: task.id, expectedVersion: task.version, idempotencyKey: 'close-answer-task',
+        command: { type: 'move', phase: 'closed' } });
+    }
     const answer = new TaskCollaborationRepository().append({ taskId: created.model.task.id,
       authorKind: 'main_agent', authorId: 'main', kind: 'answer', body: 'Use source A',
       causationId: question.id, idempotencyKey: 'answer', deliverToWorker: true });
@@ -146,6 +151,7 @@ describe('TaskCollaborationRepository', () => {
     expect(submit).not.toHaveBeenCalled();
     expect(runs.requireWait(wait.id).status).toBe('resolved');
     expect(new TaskCollaborationRepository().get(answer.id)?.deliveryStatus).toBe('delivered');
+    if (closed) expect(new TaskRepository().require(created.model.task.id)).toMatchObject({ phase: 'closed', resolution: 'done' });
   });
 
   it('always routes worker questions to the task owner', async () => {

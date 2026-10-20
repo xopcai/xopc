@@ -65,7 +65,7 @@ export function registerTaskWriteCapabilities(dispatcher: CapabilityDispatcher, 
     execute(input, context) {
       if (input.command.type === 'start' && !deps.wake) throw new CapabilityError('UNAVAILABLE', 'Task execution service is unavailable');
       const result = new TaskApplicationService().execute({ ...input, command: input.command!, idempotencyKey: context.idempotencyKey, actor: context.actor });
-      if (result.ok && input.command.type === 'close' && input.command.resolution === 'done') {
+      if (result.ok && result.model.task.phase === 'closed' && result.model.task.resolution === 'done') {
         new TaskSignalService().dependencyClosed(input.taskId);
       }
       return result;
@@ -75,7 +75,7 @@ export function registerTaskWriteCapabilities(dispatcher: CapabilityDispatcher, 
       const command = input.command;
       const denied = command.type === 'resolve_wait' && (command.resolution as { kind?: string; decision?: string } | undefined)?.kind === 'task_approval'
         && (command.resolution as { decision?: string }).decision === 'deny';
-      if ((command.type === 'add_wait' && command.wait.kind === 'paused') || command.type === 'close' || denied) {
+      if ((command.type === 'add_wait' && command.wait.kind === 'paused') || (command.type === 'close' && command.resolution !== 'done') || denied) {
         const activeRun = new TaskRunRepository().getActiveRoot(input.taskId);
         // Replaying an old pause must not abort a newer execution of the same task.
         if (activeRun?.conversationId && new TaskRepository().get(input.taskId)?.version === result.model.task.version) {

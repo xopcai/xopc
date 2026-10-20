@@ -703,6 +703,7 @@ struct TaskCommandMutation: Encodable {
     let idempotencyKey: String
     let expectedVersion: Int
     let command: Command
+    let source = "mobile"
 
     struct Command: Encodable {
         let type: String
@@ -716,7 +717,7 @@ struct TaskCommandMutation: Encodable {
             }
             let target = phase ?? (type == "reopen" ? "backlog" : "")
             if type == "move" || type == "reopen" {
-                guard ["backlog", "ready", "active", "review"].contains(target) else {
+                guard (type == "move" ? ["backlog", "ready", "active", "review", "closed"] : ["backlog", "ready", "active", "review"]).contains(target) else {
                     throw GatewayClientError.invalidResponse
                 }
             }
