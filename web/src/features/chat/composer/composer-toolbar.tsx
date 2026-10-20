@@ -1,5 +1,3 @@
-import { FollowUpQueueModeControl } from '@/features/chat/follow-up/follow-up-queue-mode-control';
-
 import { AudioLines, ListPlus, Plus, Send, Square } from 'lucide-react';
 import { memo, type HTMLAttributes } from 'react';
 
@@ -37,8 +35,6 @@ export interface ComposerToolbarProps {
 
   onSend: () => void;
   onQueue?: () => void | Promise<void>;
-  queueingEnabled?: boolean;
-  onToggleQueueing?: () => void;
   onAbort: () => void;
   onInterrupt?: () => void;
 
@@ -90,16 +86,13 @@ export function ComposerRunControl({
   chat: m,
   onSend,
   onQueue,
-  queueingEnabled = true,
-  onToggleQueueing,
   onAbort,
   onInterrupt,
-}: Pick<ComposerToolbarProps, 'disabled' | 'voiceActive' | 'runBusy' | 'hasDraft' | 'showSteeringInterrupt' | 'chat' | 'onSend' | 'onQueue' | 'onAbort' | 'onInterrupt' | 'queueingEnabled' | 'onToggleQueueing'>) {
+}: Pick<ComposerToolbarProps, 'disabled' | 'voiceActive' | 'runBusy' | 'hasDraft' | 'showSteeringInterrupt' | 'chat' | 'onSend' | 'onQueue' | 'onAbort' | 'onInterrupt'>) {
   return (
     <div className="flex shrink-0 items-center gap-1">
       {runBusy ? (
         <>
-          {onToggleQueueing && <FollowUpQueueModeControl enabled={queueingEnabled} onToggle={onToggleQueueing} disabled={disabled} chat={m} />}
           {hasDraft && onQueue ? (
             <button
               type="button"
@@ -110,14 +103,14 @@ export function ComposerRunControl({
                 interaction.focusRingPanel,
               )}
               disabled={disabled || voiceActive}
-              title={queueingEnabled ? m.followUpQueueAdd : m.steeringInterruptSend}
-              aria-label={queueingEnabled ? m.followUpQueueAdd : m.steeringInterruptSend}
+              title={m.followUpQueueAdd}
+              aria-label={m.followUpQueueAdd}
               onClick={() => void onQueue()}
             >
-              {queueingEnabled ? <ListPlus className="size-4 stroke-[1.75]" aria-hidden /> : <Send className="size-4 stroke-[1.75]" aria-hidden />}
+              <ListPlus className="size-4 stroke-[1.75]" aria-hidden />
             </button>
           ) : null}
-          {queueingEnabled && showSteeringInterrupt && onInterrupt ? (
+          {showSteeringInterrupt && onInterrupt ? (
             <button
               type="button"
               className={cn(
@@ -198,8 +191,6 @@ export const ComposerToolbar = memo(function ComposerToolbar({
   onStartVoiceConversation,
   onSend,
   onQueue,
-  queueingEnabled = true,
-  onToggleQueueing,
   onAbort,
   onInterrupt,
   sessionModel,
@@ -267,8 +258,6 @@ export const ComposerToolbar = memo(function ComposerToolbar({
             chat={m}
             onSend={onSend}
             onQueue={onQueue}
-            queueingEnabled={queueingEnabled}
-            onToggleQueueing={onToggleQueueing}
             onAbort={onAbort}
             onInterrupt={onInterrupt}
           />

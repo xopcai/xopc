@@ -1,5 +1,5 @@
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
-import { CornerDownRight, ChevronDown, ChevronUp, Ellipsis, FileIcon, GripVertical, ListEnd, MessageCirclePlus, NotebookPen, Pencil, Trash2 } from 'lucide-react';
+import { CornerDownRight, ChevronDown, ChevronUp, Ellipsis, FileIcon, GripVertical, MessageCirclePlus, NotebookPen, Pencil, Trash2 } from 'lucide-react';
 import { memo, useRef } from 'react';
 import { parseUserTurnDocument, renderUserTurnDocument, userTurnDocumentRefIds } from '@xopcai/gateway-contract';
 
@@ -21,8 +21,6 @@ export const ChatPendingFollowUpStack = memo(function ChatPendingFollowUpStack({
   onReorder,
   onSteer,
   steeringBusyId,
-  queueingEnabled = true,
-  onToggleQueueing,
   onOpenSideChat,
 }: {
   items: PendingFollowUp[];
@@ -34,8 +32,6 @@ export const ChatPendingFollowUpStack = memo(function ChatPendingFollowUpStack({
   onReorder: (fromIndex: number, toIndex: number) => void;
   onSteer: (id: string) => void;
   steeringBusyId?: string | null;
-  queueingEnabled?: boolean;
-  onToggleQueueing?: () => void;
   onOpenSideChat?: (item: PendingFollowUp, preview: string) => void;
 }) {
   const language = useLocaleStore((s) => s.language);
@@ -195,13 +191,6 @@ export const ChatPendingFollowUpStack = memo(function ChatPendingFollowUpStack({
                       <DropdownMenu.Item className={menuItemClass} disabled={!mutable || queuedIndex >= queuedItems.length - 1}
                         onSelect={() => onMove(item.id, 'down')}>
                         <ChevronDown className="size-4" aria-hidden />{m.chat.followUpQueueMoveDown}
-                      </DropdownMenu.Item>
-                    </> : null}
-                    {onToggleQueueing ? <>
-                      <DropdownMenu.Separator className="my-1 h-px bg-edge-subtle" />
-                      <DropdownMenu.Item className={menuItemClass} onSelect={onToggleQueueing}>
-                        <ListEnd className="size-4" aria-hidden />
-                        {queueingEnabled ? m.chat.followUpQueueTurnOff : m.chat.followUpQueueTurnOn}
                       </DropdownMenu.Item>
                     </> : null}
                   </DropdownMenu.Content>

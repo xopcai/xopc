@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { Config } from '../../config/schema.js';
 import {
@@ -20,6 +20,32 @@ function baseConfig(overrides: Partial<Config['gateway']> = {}): Config {
 }
 
 describe('collectGatewaySecurityFindings', () => {
+  afterEach(() => vi.unstubAllEnvs());
+
+  it('does not report a persisted desktop token as temporary without an environment token', () => {
+    vi.stubEnv('XOPC_GATEWAY_TOKEN', '');
+    const findings = collectGatewaySecurityFindings(baseConfig(), {});
+    expect(findings.some((f) => f.checkId === 'gateway.auth.auto_generated_token')).toBe(false);
+  });
+
+  it('does not report an environment token as temporary', () => {
+    vi.stubEnv('XOPC_GATEWAY_TOKEN', '');
+    const findings = collectGatewaySecurityFindings(baseConfig({ auth: { mode: 'token' } }), {
+      XOPC_GATEWAY_TOKEN: 'stable-environment-token-123456789',
+    });
+    expect(findings.some((f) => f.checkId === 'gateway.auth.auto_generated_token')).toBe(false);
+  });
+
+  it('reports a temporary token using the supplied environment instead of process.env', () => {
+    vi.stubEnv('XOPC_GATEWAY_TOKEN', 'unrelated-process-token-123456789');
+    const findings = collectGatewaySecurityFindings(baseConfig({ auth: { mode: 'token' } }), {});
+    expect(findings.find((f) => f.checkId === 'gateway.auth.auto_generated_token')).toMatchObject({
+      severity: 'info',
+      detail: expect.stringContaining('change on each restart'),
+      remediation: expect.stringContaining('gateway.auth.token'),
+    });
+  });
+
   it('passes loopback token config without startup guard failure', () => {
     const findings = collectGatewaySecurityFindings(baseConfig());
     expect(findings.some((f) => f.checkId === 'gateway.runtime_config.blocked')).toBe(false);

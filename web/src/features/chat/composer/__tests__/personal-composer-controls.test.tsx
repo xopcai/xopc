@@ -4,6 +4,7 @@ import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { ComposerRunControl } from '@/features/chat/composer/composer-toolbar';
 import { PersonalComposerActions, PersonalComposerAttachButton } from '@/features/chat/composer/personal-composer-controls';
 import { messages } from '@/i18n/messages';
 
@@ -42,20 +43,23 @@ describe('Personal composer controls', () => {
     act(() => root.render(<PersonalComposerActions {...common} runBusy hasDraft={false} />));
     act(() => container.querySelector<HTMLButtonElement>(`button[aria-label="${chat.abort}"]`)?.click());
     expect(onAbort).toHaveBeenCalledOnce();
+    expect(container.querySelector(`button[aria-label="${chat.followUpQueueTurnOff}"]`)).toBeNull();
+    expect(container.querySelector(`button[aria-label="${chat.followUpQueueTurnOn}"]`)).toBeNull();
   });
 
-  it('exposes the mode without a draft and labels immediate delivery when queueing is off', () => {
-    const onToggleQueueing = vi.fn();
+  it('keeps queue, immediate send, and stop as explicit actions in the standard composer', () => {
     const onQueue = vi.fn();
-    const common = { disabled: false, voiceActive: false, runBusy: true, chat, onStartVoiceInput: vi.fn(), onSend: vi.fn(), onQueue, onAbort: vi.fn(), onToggleQueueing };
-    act(() => root.render(<PersonalComposerActions {...common} hasDraft={false} queueingEnabled />));
-    const toggle = container.querySelector<HTMLButtonElement>(`button[aria-label="${chat.followUpQueueTurnOff}"]`)!;
-    expect(toggle.getAttribute('aria-pressed')).toBe('true');
-    act(() => toggle.click());
-    expect(onToggleQueueing).toHaveBeenCalledOnce();
-    act(() => root.render(<PersonalComposerActions {...common} hasDraft queueingEnabled={false} />));
-    act(() => container.querySelector<HTMLButtonElement>(`button[aria-label="${chat.steeringInterruptSend}"]`)!.click());
+    const onInterrupt = vi.fn();
+    const onAbort = vi.fn();
+    act(() => root.render(<ComposerRunControl disabled={false} voiceActive={false} runBusy hasDraft
+      showSteeringInterrupt chat={chat} onSend={vi.fn()} onQueue={onQueue} onInterrupt={onInterrupt} onAbort={onAbort} />));
+    for (const label of [chat.followUpQueueAdd, chat.steeringInterruptSend, chat.abort]) {
+      act(() => container.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`)!.click());
+    }
     expect(onQueue).toHaveBeenCalledOnce();
+    expect(onInterrupt).toHaveBeenCalledOnce();
+    expect(onAbort).toHaveBeenCalledOnce();
+    expect(container.querySelector('button[aria-pressed]')).toBeNull();
   });
 
   it('keeps attachment availability independent of an active run', () => {

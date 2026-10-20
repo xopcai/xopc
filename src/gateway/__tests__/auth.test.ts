@@ -10,18 +10,21 @@ import { safeEqualSecret } from '../security/secret-equal.js';
 describe('Gateway Auth', () => {
   describe('resolveGatewayAuth', () => {
     it('should use default token mode with auto-generated token', () => {
-      const result = resolveGatewayAuth({ authConfig: null });
+      const result = resolveGatewayAuth({ authConfig: null, env: {} });
       expect(result.mode).toBe('token');
       expect(result.token).toBeDefined();
+      expect(result.tokenSource).toBe('generated');
       expect(result.token?.length).toBe(48); // 24 bytes hex = 48 chars
     });
 
     it('should use token from config', () => {
       const result = resolveGatewayAuth({
         authConfig: { mode: 'token', token: 'test-token-123' },
+        env: {},
       });
       expect(result.mode).toBe('token');
       expect(result.token).toBe('test-token-123');
+      expect(result.tokenSource).toBe('config');
     });
 
     it('should use token from environment variable', () => {
@@ -31,6 +34,7 @@ describe('Gateway Auth', () => {
       });
       expect(result.mode).toBe('token');
       expect(result.token).toBe('env-token');
+      expect(result.tokenSource).toBe('environment');
     });
 
     it('should use none mode from config', () => {
