@@ -24,6 +24,56 @@ describe('React chat Markdown', () => {
     <StrictMode><MemoryRouter><ChatMarkdownRenderer content={content} streaming={streaming} /></MemoryRouter></StrictMode>,
   ));
 
+  it('previews a remote Markdown image without fetching it through the gateway', async () => {
+    const src = 'https://mdn.alipayobjects.com/one_clip/afts/img/o3DCToU2f2UAAAAAQ_AAAAgAoEACAQFr/original';
+    render(`![1—3月销售额折线图](${src})\n\n2 月销售额最高，为 **18 万元**。`);
+    const image = container.querySelector<HTMLImageElement>('img')!;
+    expect(image.getAttribute('role')).toBe('button');
+    expect(image.tabIndex).toBe(0);
+    await act(async () => image.click());
+    const dialog = document.querySelector('[role="dialog"]');
+    expect(dialog).not.toBeNull();
+    expect(dialog?.querySelector('img')?.getAttribute('src')).toBe(src);
+    expect(dialog?.querySelector('img')?.alt).toBe('1—3月销售额折线图');
+    expect(container.querySelector('strong')?.textContent).toBe('18 万元');
+    await act(async () => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })));
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+  });
+
+  it.each(['Enter', ' '])('opens linked images with %s without following their enclosing link', async key => {
+    const open = vi.fn(async () => ({ ok: true }));
+    Object.defineProperty(window, 'electronAPI', { configurable: true, value: { shell: { openExternalUrl: open } } });
+    render('[![Chart](https://example.com/chart.png)](https://example.com/report)');
+    const image = container.querySelector('img')!;
+    await act(async () => image.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true })));
+    expect(document.querySelector('[role="dialog"] img')?.getAttribute('src')).toBe('https://example.com/chart.png');
+    expect(open).not.toHaveBeenCalled();
+    await act(async () => document.querySelector<HTMLButtonElement>('[role="dialog"] button')?.click());
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    await act(async () => image.click());
+    expect(document.querySelector('[role="dialog"]')).not.toBeNull();
+    expect(open).not.toHaveBeenCalled();
+  });
+
+  it('previews authenticated workspace images using their already loaded blob URL', async () => {
+    const create = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:workspace-chart');
+    const revoke = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+    const load = vi.fn(async () => new Blob(['image'], { type: 'image/png' }));
+    let resolveImage!: (blob: Blob) => void;
+    load.mockImplementationOnce(() => new Promise(resolve => { resolveImage = resolve; }));
+    await act(async () => root.render(<MemoryRouter><ChatMarkdownRenderer
+      content="![Chart](file:///workspace/chart.png)" onWorkspaceImageLoad={load}
+    /></MemoryRouter>));
+    expect(container.querySelector('img')?.hasAttribute('tabindex')).toBe(false);
+    await act(async () => resolveImage(new Blob(['image'], { type: 'image/png' })));
+    await act(async () => container.querySelector<HTMLImageElement>('img')?.click());
+    expect(document.querySelector('[role="dialog"] img')?.getAttribute('src')).toBe('blob:workspace-chart');
+    expect(load).toHaveBeenCalledTimes(1);
+    expect(create).toHaveBeenCalledTimes(1);
+    act(() => root.render(null));
+    expect(revoke).toHaveBeenCalledWith('blob:workspace-chart');
+  });
+
   it('keeps complete paragraphs and the renderer mounted through tail growth and completion', () => {
     render('Stable.\n\nGrowing', true);
     const renderer = container.querySelector('.xopc-chat-markdown');

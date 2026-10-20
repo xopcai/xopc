@@ -6,6 +6,7 @@ import { createContext, createElement, memo, useCallback, useContext, useEffect,
 import rehypeSanitize, { defaultSchema } from 'rehype-sanitize';
 import { Block, Streamdown, defaultRemarkPlugins, defaultUrlTransform, useIsCodeFenceIncomplete, type BlockProps, type Components } from 'streamdown';
 
+import { ImageLightboxProvider, useImageLightbox } from '@/components/ui/image-lightbox';
 import type { MarkdownViewProps } from '@/components/markdown/markdown-view';
 import { parseWorkspaceFileLinkTarget, type WorkspaceFileLinkTarget } from '@/components/markdown/internal-links';
 import { recordStreamingParse, recordStreamingShape } from '@/components/markdown/streaming-render-metrics';
@@ -76,8 +77,10 @@ function ChatLink({ node, href = '', children, className, ...props }: ComponentP
     }}>{visibleLabel}</a>;
 }
 
-function ChatImage({ node: _node, src = '', alt, ...props }: ComponentProps<'img'> & { node?: Element }) {
+function ChatImage({ node: _node, src = '', alt, className, ...props }: ComponentProps<'img'> & { node?: Element }) {
   const environment = useContext(EnvironmentContext)!;
+  const { openImage } = useImageLightbox();
+  const locale = useLocaleStore(s => s.language);
   const [loaded, setLoaded] = useState<{ source: string; url: string } | null>(null);
   const target = parseWorkspaceFileLinkTarget(src);
   const path = target?.path;
@@ -95,7 +98,22 @@ function ChatImage({ node: _node, src = '', alt, ...props }: ComponentProps<'img
     return () => { current = false; if (url) URL.revokeObjectURL(url); };
   }, [environment.loadImage, path, line, kind, src]);
   const finalSrc = target ? loaded?.source === src ? loaded.url : undefined : src;
-  return <img {...props} src={finalSrc} alt={alt} loading="lazy" decoding="async" />;
+  return <img {...props} src={finalSrc} alt={alt} loading="lazy" decoding="async"
+    className={[className, finalSrc ? 'cursor-zoom-in focus-visible:outline-2 focus-visible:outline-accent' : ''].filter(Boolean).join(' ') || undefined}
+    role={finalSrc ? 'button' : undefined} tabIndex={finalSrc ? 0 : undefined}
+    aria-label={finalSrc ? `${messages(locale).chat.attachmentPreviewOpen}${alt ? `: ${alt}` : ''}` : undefined}
+    onClick={event => {
+      if (!finalSrc) return;
+      event.preventDefault();
+      event.stopPropagation();
+      openImage(finalSrc, alt);
+    }}
+    onKeyDown={event => {
+      if (!finalSrc || (event.key !== 'Enter' && event.key !== ' ')) return;
+      event.preventDefault();
+      event.stopPropagation();
+      openImage(finalSrc, alt);
+    }} />;
 }
 
 function textIn(node: Element): string {
@@ -257,7 +275,7 @@ export const ChatMarkdownRenderer = memo(function ChatMarkdownRenderer({
     const blocks = host.current?.querySelectorAll('.markdown-stream-block');
     recordStreamingShape(streamingMetricsKey, Math.max(0, (blocks?.length ?? 0) - 1), blocks?.item((blocks.length ?? 1) - 1)?.textContent?.length ?? 0);
   }, [content, streamingMetricsKey]);
-  return <EnvironmentContext.Provider value={environment}><BlockSourceContext.Provider value={content}><RevealBudgetContext.Provider value={budget}>
+  return <ImageLightboxProvider closeLabel={messages(locale).chat.attachmentPreviewClose}><EnvironmentContext.Provider value={environment}><BlockSourceContext.Provider value={content}><RevealBudgetContext.Provider value={budget}>
     <div ref={host} className="markdown-render-boundary" data-chat-markdown={id}>
       <PartErrorBoundary content={content}>
         <Streamdown className={['markdown-body xopc-chat-markdown', compact ? 'markdown-compact' : '',
@@ -271,5 +289,5 @@ export const ChatMarkdownRenderer = memo(function ChatMarkdownRenderer({
       </PartErrorBoundary>
       {linkError ? <p role="alert" className="mt-2 text-sm text-danger">{messages(locale).chat.contentLinks.failed}</p> : null}
     </div>
-  </RevealBudgetContext.Provider></BlockSourceContext.Provider></EnvironmentContext.Provider>;
+  </RevealBudgetContext.Provider></BlockSourceContext.Provider></EnvironmentContext.Provider></ImageLightboxProvider>;
 });
