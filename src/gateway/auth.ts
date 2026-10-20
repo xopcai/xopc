@@ -14,6 +14,8 @@ import { safeEqualSecret } from './security/secret-equal.js';
 export interface ResolvedGatewayAuth {
   mode: 'none' | 'token' | 'password' | 'trusted-proxy';
   token?: string;
+  /** Origin of the resolved token; generated tokens only live for this process. */
+  tokenSource?: 'environment' | 'config' | 'generated';
   password?: string;
   trustedProxy?: GatewayAuthConfig['trustedProxy'];
 }
@@ -73,13 +75,17 @@ export function resolveGatewayAuth(params: {
   }
 
   let token: string | undefined;
+  let tokenSource: ResolvedGatewayAuth['tokenSource'];
   if (mode === 'token') {
     if (envToken) {
       token = envToken;
+      tokenSource = 'environment';
     } else if (config.token) {
       token = config.token;
+      tokenSource = 'config';
     } else {
       token = crypto.randomBytes(24).toString('hex');
+      tokenSource = 'generated';
     }
   }
 
@@ -92,7 +98,7 @@ export function resolveGatewayAuth(params: {
     }
   }
 
-  return { mode, token, password };
+  return { mode, token, password, ...(tokenSource ? { tokenSource } : {}) };
 }
 
 /**

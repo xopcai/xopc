@@ -169,15 +169,14 @@ export function collectGatewayConfigFindings(params: {
       });
     }
 
-    const envToken = process.env.XOPC_GATEWAY_TOKEN;
-    if (!envToken) {
+    if (params.auth.tokenSource === 'generated') {
       findings.push({
         checkId: 'gateway.auth.auto_generated_token',
         severity: 'info',
         title: 'Gateway token was auto-generated',
-        detail: 'No explicit XOPC_GATEWAY_TOKEN set. The token was auto-generated and will ' +
+        detail: 'Neither gateway.auth.token nor XOPC_GATEWAY_TOKEN is set. The token was auto-generated and will ' +
           'change on each restart.',
-        remediation: 'Set XOPC_GATEWAY_TOKEN environment variable for a stable token.',
+        remediation: 'Save gateway.auth.token in the configuration or set XOPC_GATEWAY_TOKEN for a stable token.',
       });
     }
   }

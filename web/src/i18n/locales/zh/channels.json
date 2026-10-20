@@ -492,7 +492,7 @@
     "validationErrorCustomBind": "自定义绑定模式必须填写绑定地址。",
     "securityAuditTitle": "安全审计",
     "securityAuditSubtitle": "对当前已保存的网关配置进行实时检查（等同 xopc doctor --security）。",
-    "securityAuditSavedConfigHint": "反映磁盘上的配置文件。保存表单更改并重启网关后结果才会更新。",
+    "securityAuditSavedConfigHint": "检查已保存的配置，不包含未保存的表单更改。保存后可刷新检查；需要重启的更改将在重启网关后生效。",
     "securityAuditRefresh": "刷新",
     "securityAuditLoading": "正在运行安全审计…",
     "securityAuditLoadError": "安全审计失败",

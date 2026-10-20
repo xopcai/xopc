@@ -1,9 +1,9 @@
-import { GatewayOutboundProxySettings } from './gateway-outbound-proxy-settings';
 import {
   AlertCircle,
   KeyRound,
   Loader2,
   Network,
+  Route,
   RefreshCw,
   RotateCw,
   Shield,
@@ -32,6 +32,7 @@ import {
   validateGatewaySettings,
   type GatewaySettingsState,
 } from '@/features/settings/gateway-config-api';
+import { GatewayOutboundProxySettings } from '@/features/settings/gateway-outbound-proxy-settings';
 import { GatewaySecurityAuditCard } from '@/features/settings/gateway-security-audit-card';
 import { MAX_CHANNEL_DEFER_LIST_SIZE } from '@/features/settings/gateway-settings.types';
 import { SettingsAdvancedGate } from '@/features/settings/settings-advanced-gate';
@@ -72,6 +73,7 @@ const GATEWAY_SETTINGS_TABS: readonly GatewaySettingsTabId[] = [
   'access',
   'updates',
   'security',
+  'proxy',
   'advanced',
 ];
 
@@ -80,6 +82,7 @@ const GATEWAY_SETTINGS_TAB_ICONS: Record<GatewaySettingsTabId, LucideIcon> = {
   access: KeyRound,
   updates: RefreshCw,
   security: Shield,
+  proxy: Route,
   advanced: SlidersHorizontal,
 };
 
@@ -95,6 +98,7 @@ function gatewaySettingsTabLabel(g: GatewaySettingsMessages, tab: GatewaySetting
   if (tab === 'access') return g.tabAccess;
   if (tab === 'updates') return g.tabUpdates;
   if (tab === 'security') return g.tabSecurity;
+  if (tab === 'proxy') return g.outboundProxyTitle;
   return g.tabAdvanced;
 }
 
@@ -103,6 +107,7 @@ function gatewaySettingsTabHint(g: GatewaySettingsMessages, tab: GatewaySettings
   if (tab === 'access') return g.accessTabHint;
   if (tab === 'updates') return g.updatesTabHint;
   if (tab === 'security') return g.securitySectionHint;
+  if (tab === 'proxy') return g.outboundProxyHint;
   return g.advancedSectionHint;
 }
 
@@ -512,10 +517,6 @@ export function GatewaySettingsPanel() {
             <Button type="button" variant="secondary" onClick={() => dispatchUi({ type: 'patch', patch: { restartConfirmOpen: true } })}>{g.restartGatewayButton}</Button>
           </div>
         </section>
-        <GatewayOutboundProxySettings value={form.outboundProxy} g={g} onChange={outboundProxy => {
-          dirtyRef.current = true;
-          dispatchForm({ type: 'set-form', updater: current => ({ ...current, outboundProxy }) });
-        }} />
         <SettingsAdvancedSection title={language === "zh" ? "服务监听配置" : "Service listener configuration"} summary={`${form.bind} · ${form.port}`}>
           <div className="grid gap-3 sm:grid-cols-2">
             <div>
@@ -802,6 +803,13 @@ export function GatewaySettingsPanel() {
           onSecurityStrictChange={updateSecurityStrict}
           onDangerouslyAllowHostHeaderOriginFallbackChange={updateDangerouslyAllowHostHeaderOriginFallback}
         />
+      </GatewayTabPanel>
+
+      <GatewayTabPanel g={g} id="proxy" activeTab={activeTab}>
+        <GatewayOutboundProxySettings value={form.outboundProxy} g={g} onChange={outboundProxy => {
+          dirtyRef.current = true;
+          dispatchForm({ type: 'set-form', updater: current => ({ ...current, outboundProxy }) });
+        }} />
       </GatewayTabPanel>
 
       <GatewayTabPanel g={g} id="advanced" activeTab={activeTab}>

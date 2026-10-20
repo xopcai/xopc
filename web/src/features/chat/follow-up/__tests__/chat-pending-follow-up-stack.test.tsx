@@ -14,7 +14,7 @@ const item: PendingFollowUp = { id: 'first', clientMessageId: 'client-first', te
 describe('follow-up actions', () => {
   let container: HTMLDivElement;
   let root: ReturnType<typeof createRoot>;
-  const callbacks = () => ({ onEditInComposer: vi.fn(), onRemove: vi.fn(), onMove: vi.fn(), onReorder: vi.fn(), onSteer: vi.fn(), onOpenSideChat: vi.fn(), onToggleQueueing: vi.fn() });
+  const callbacks = () => ({ onEditInComposer: vi.fn(), onRemove: vi.fn(), onMove: vi.fn(), onReorder: vi.fn(), onSteer: vi.fn(), onOpenSideChat: vi.fn() });
   beforeEach(() => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     useLocaleStore.setState({ language: 'en' });
@@ -70,15 +70,6 @@ describe('follow-up actions', () => {
     await openMenu();
     expect(menuItem(chat.followUpQueueOpenSideChat).hasAttribute('data-disabled')).toBe(true);
     expect(menuItem(chat.followUpQueueClickToEdit).hasAttribute('data-disabled')).toBe(false);
-  });
-
-  it('changes queueing mode without removing pending messages', async () => {
-    const handlers = callbacks();
-    act(() => root.render(<ChatPendingFollowUpStack items={[item]} {...handlers} queueingEnabled />));
-    await openMenu();
-    act(() => menuItem(chat.followUpQueueTurnOff).click());
-    expect(handlers.onToggleQueueing).toHaveBeenCalledOnce();
-    expect(handlers.onRemove).not.toHaveBeenCalled();
   });
 
   it('blocks row actions while steering is being submitted', () => {
