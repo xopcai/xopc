@@ -66,4 +66,18 @@ describe('mergeMissingUserMessagesFromServer', () => {
     expect(mergeMissingUserMessagesFromServer(local, [activeUser], 'run-2')).toBe(local);
   });
 
+  it('keeps saved replies before an optimistic input receives its run id', () => {
+    const pendingUser: Message = { ...u2, clientSubmissionId: 'hello-input', deliveryStatus: 'accepted' };
+    const local = [u1, a1, pendingUser];
+    const activeUser = { ...u2, turnId: 'run-2' };
+    expect(mergeMissingUserMessagesFromServer(local, [u1, activeUser], 'run-2')).toBe(local);
+  });
+
+  it('keeps saved replies when a live page only echoes the optimistic input', () => {
+    const oldUser = { ...u1, turnId: 'old-run' };
+    const pendingUser: Message = { ...u2, clientSubmissionId: 'hello-input', deliveryStatus: 'sending' };
+    const local = [oldUser, a1, pendingUser];
+    expect(mergeMissingUserMessagesFromServer(local, [{ ...u2, turnId: 'run-2' }], 'run-2')).toBe(local);
+  });
+
 });

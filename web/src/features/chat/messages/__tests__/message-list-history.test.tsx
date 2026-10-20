@@ -127,6 +127,28 @@ describe('MessageList history identity', () => {
     expect(store().sessions[conversationId].messages[1].content).toHaveLength(2);
   });
 
+  it('never unmounts saved replies while a new input awaits its canonical run id', () => {
+    const history = [message(10), message(20, 'assistant'), message(30), message(40, 'assistant')];
+    const pending: Message = { ...message(50), clientSubmissionId: 'hello-input', deliveryStatus: 'accepted' };
+    const active: Message = { ...message(51), turnId: 'hello-run' };
+    store().setCommittedSnapshot(conversationId, { messages: history, hasMore: false });
+    store().updateSessionMessages(conversationId, rows => [...rows, pending]);
+    store().setSessionFlags(conversationId, { sending: true, streaming: true });
+    store().mutateSessionStreaming(conversationId, row => { row.turnId = 'hello-run'; }, 52);
+    act(() => root.render(<Harness />));
+    const first = bubble(20);
+    const second = bubble(40);
+    act(() => first.click());
+
+    act(() => store().mergeCommittedFromServer(conversationId, [history[0], history[2], active], true));
+    expect(bubble(20)).toBe(first);
+    expect(bubble(40)).toBe(second);
+    act(() => store().mergeCommittedFromServer(conversationId, [...history, active], false));
+    expect(bubble(20)).toBe(first);
+    expect(bubble(40)).toBe(second);
+    expect(first.textContent).toBe('expanded');
+  });
+
   it('assigns distinct identities even for matching or absent timestamps', () => {
     const missing: Message = { role: 'user', content: [] };
     store().setCommittedSnapshot(conversationId, {
