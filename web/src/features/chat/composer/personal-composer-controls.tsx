@@ -1,8 +1,6 @@
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { Ellipsis, Mic, Plus, Square, ArrowUp } from 'lucide-react';
 
-import { FollowUpQueueModeControl } from '@/features/chat/follow-up/follow-up-queue-mode-control';
-
 import { cn } from '@/lib/cn';
 import type { ChatMessages } from '@/i18n/messages';
 import { interpolate } from '@/features/chat/composer/composer.types';
@@ -25,7 +23,7 @@ export function PersonalComposerAttachButton({ disabled, attachmentCount, maxAtt
 }
 
 export function PersonalComposerActions({ disabled, voiceActive, runBusy, hasDraft, chat, onStartVoiceInput,
-  onSend, onQueue, onDefer, onAbort, onInterrupt, queueingEnabled = true, onToggleQueueing }: {
+  onSend, onQueue, onDefer, onAbort, onInterrupt }: {
   disabled: boolean;
   voiceActive: boolean;
   runBusy: boolean;
@@ -34,8 +32,6 @@ export function PersonalComposerActions({ disabled, voiceActive, runBusy, hasDra
   onStartVoiceInput: () => void;
   onSend: () => void;
   onQueue?: () => void | Promise<void>;
-  queueingEnabled?: boolean;
-  onToggleQueueing?: () => void;
   onDefer?: () => void | Promise<void>;
   onAbort: () => void;
   onInterrupt?: () => void;
@@ -43,13 +39,12 @@ export function PersonalComposerActions({ disabled, voiceActive, runBusy, hasDra
   if (voiceActive) return null;
   const canQueue = runBusy && hasDraft && Boolean(onQueue);
   const stop = runBusy && !hasDraft;
-  const actionLabel = stop ? chat.abort : canQueue ? (queueingEnabled ? chat.followUpQueueAdd : chat.steeringInterruptSend) : chat.sendMessage;
+  const actionLabel = stop ? chat.abort : canQueue ? chat.followUpQueueAdd : chat.sendMessage;
   return <div className="flex shrink-0 items-center gap-0.5">
     <button type="button" className={controlClass} disabled={disabled} title={chat.voiceInput}
       aria-label={chat.voiceInput} onClick={onStartVoiceInput}>
       <Mic className="size-[1.125rem]" aria-hidden />
     </button>
-    {runBusy && onToggleQueueing && <FollowUpQueueModeControl enabled={queueingEnabled} onToggle={onToggleQueueing} disabled={disabled} chat={chat} />}
     {canQueue && <DropdownMenu.Root modal={false}>
       <DropdownMenu.Trigger asChild><button type="button" className={controlClass} disabled={disabled} aria-label={chat.followUpQueueMore} title={chat.followUpQueueMore}>
         <Ellipsis className="size-5" aria-hidden />

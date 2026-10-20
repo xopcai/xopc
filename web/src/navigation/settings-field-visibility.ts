@@ -5,6 +5,7 @@ export type GatewaySettingsTabId =
   | 'access'
   | 'updates'
   | 'security'
+  | 'proxy'
   | 'advanced';
 
 /** Gateway settings tabs hidden in simple mode. */

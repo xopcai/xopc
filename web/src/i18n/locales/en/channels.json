@@ -492,7 +492,7 @@
     "validationErrorCustomBind": "Custom bind mode requires a bind address.",
     "securityAuditTitle": "Security audit",
     "securityAuditSubtitle": "Live check of saved gateway configuration (same as xopc doctor --security).",
-    "securityAuditSavedConfigHint": "Reflects the config file on disk. Save form changes and restart the gateway to update results.",
+    "securityAuditSavedConfigHint": "Checks saved configuration, excluding unsaved form changes. Refresh after saving to audit it; restart the gateway to apply changes that require a restart.",
     "securityAuditRefresh": "Refresh",
     "securityAuditLoading": "Running security audit…",
     "securityAuditLoadError": "Security audit failed",
