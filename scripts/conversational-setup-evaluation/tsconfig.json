@@ -1,0 +1,6 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": { "noEmit": true },
+  "include": ["../evaluate-conversational-setup.mts", "../evaluate-compact-configuration.mts", "../verify-conversational-main-gateway.mts", "../audit-conversational-setup.mts", "../summarize-compact-configuration.mts", "./*.ts"],
+  "exclude": ["../../node_modules", "../../dist"]
+}

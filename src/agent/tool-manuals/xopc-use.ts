@@ -3,7 +3,10 @@ export const xopcUseManual = `# XOPC Use Tool Manual
 ## Purpose
 
 \`xopc_use\` operates first-class XOPC product objects without editing SQLite or product files directly.
-Load this manual before a non-trivial mutation.
+Load this manual before a non-trivial mutation. For focused configuration workflows use
+\`tool_manual({tool:"xopc_use",topic:"agent|settings|automation|connections"})\`.
+For identity-only changes prefer \`agent patch_profile {id,expectedRevision,patch,idempotencyKey?}\`,
+which preserves omitted profile fields. Existing update keeps replacement semantics for profile.
 
 \`\`\`json
 {

@@ -83,7 +83,7 @@ const XopcUseToolSchema = Type.Object({
   command: Type.String({
     description:
       'Context resolve takes an explicit AppContextEnvelope; never guess a current page. Automation draft/repair_draft accept prompt/id, agentId?, language?, idempotencyKey?; simulate explains an automation without running it. Local_app record_acceptance records supplied checks and sourceHash, not proof that checks were executed. ' +
-      'Agent commands: list, get {id}, create {id, profile, workspace?, models?, skills?, tools?, workflows?, runtime?, idempotencyKey?}, update {id, expectedRevision, patch, idempotencyKey?}, set_default {id, expectedRevision, idempotencyKey?}, disable/delete/purge {id, expectedRevision, idempotencyKey?}. Purge also removes on-disk data. ' +
+      'Agent profile-only changes: patch_profile {id, expectedRevision, patch:{name?,description?,style?,language?,...}, idempotencyKey?} preserves omitted fields. Agent commands: list, get {id}, create {id, profile, workspace?, models?, skills?, tools?, workflows?, runtime?, idempotencyKey?}, update {id, expectedRevision, patch, idempotencyKey?}, set_default {id, expectedRevision, idempotencyKey?}, disable/delete/purge {id, expectedRevision, idempotencyKey?}. Purge also removes on-disk data. ' +
       'Project create accepts idempotencyKey; update/pin/unpin/delete accepts {projectId, expectedVersion?, idempotencyKey?}; stable retries require the original expectedVersion. Delete preserves workspace files and does not confirm external execution stopped. ' +
       'Project milestone writes support idempotencyKey; update_milestone/delete_milestone require original expectedRevision for stable retries, and create_update requires original expectedVersion. TaskRun cancel accepts idempotencyKey and expectedVersion, and does not confirm external execution stopped. ' +
       'Automation diagnostics: get_run/run_events {runId}, metrics {}, events {eventType?, source?, limit?}, deliveries {runId?, limit?}, product_events {eventType, source?, payloadKey?, payloadValue?, limit?}; payload filters require both key and value. Recovery commands: replay_event {eventId, reason, idempotencyKey}, retry_delivery {runId, destinationKey, reason, idempotencyKey}. ' +
@@ -474,7 +474,7 @@ async function handleAgent(
   signal: AbortSignal,
 ): Promise<unknown> {
   const readCommands = new Set(['list', 'get']);
-  const writeCommands = new Set(['create', 'update', 'set_default', 'disable', 'delete', 'purge']);
+  const writeCommands = new Set(['create', 'update', 'patch_profile', 'set_default', 'disable', 'delete', 'purge']);
   if (!readCommands.has(command) && !writeCommands.has(command)) {
     return { ok: false, error: `Unsupported agent command: ${command}` };
   }
@@ -1314,8 +1314,15 @@ export function createXopcUseTool(deps: XopcUseToolDeps): AgentTool<typeof XopcU
       if (mode === 'settings' && command === 'open') {
         const caller: CapabilityContext = { principalId: `agent:${deps.getCurrentAgentId?.() ?? 'main'}`,
           surface: 'agent', scopes: ['gateway.status'], authorize: deps.authorizeCapability ?? (() => true), signal };
-        const result = await capabilities.call('xopc.settings.open', args, caller);
-        return okText({ ...details, result, delivery: deliveryForXopcResult(mode, command, result, dryRun) });
+        try {
+          const result = await capabilities.call('xopc.settings.open', args, caller);
+          return okText({ ...details, result, delivery: deliveryForXopcResult(mode, command, result, dryRun) });
+        } catch (error) {
+          const message = error instanceof CapabilityError && error.code === 'INVALID_INPUT'
+            ? 'Invalid settings target. Read tool_manual({tool:"xopc_use",topic:"settings"}); never invent a settings section.'
+            : error instanceof Error ? error.message : String(error);
+          return errorText(message, details);
+        }
       }
       if (mode === 'local_app' && (command === 'get' || command === 'list' || command === 'validate')) {
         const caller: CapabilityContext = { principalId: `agent:${deps.getCurrentAgentId?.() ?? 'main'}`,

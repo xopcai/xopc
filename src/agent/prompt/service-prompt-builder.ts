@@ -25,6 +25,7 @@ import { mergeTtsConfigFromAppConfig } from '../../voice/tts/merge-config.js';
 import { buildTtsSystemPromptHint } from '../../voice/tts/directives.js';
 import { createLogger } from '../../utils/logger.js';
 import { appendStablePromptSection } from './cache-boundary.js';
+import { getConversationalConfigurationGuide } from './conversational-configuration-guide.js';
 
 const log = createLogger('SystemPromptBuilder');
 
@@ -98,6 +99,7 @@ export class SystemPromptBuilder {
       ttsSystemHint,
       extraSystemPrompt: [
         options.extraSystemPrompt,
+        getConversationalConfigurationGuide(reg),
         interactionPrompt,
       ].filter(Boolean).join('\n\n'),
       activeProjectContext: options.activeProjectContext,

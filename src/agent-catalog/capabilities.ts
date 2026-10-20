@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 import {
   AgentEntrySchema,
+  AgentProfileSchema,
   EffectiveAgentConfigSchema,
   resolveEffectiveAgentConfig,
   type AgentEntry,
@@ -159,6 +160,28 @@ export function registerAgentCapabilities(dispatcher: CapabilityDispatcher): voi
         expectedRevision,
         { ...entry, ...patch, id },
         { reprovision: true },
+      ));
+      return { ok: true as const, ...view(repository, agent) };
+    },
+    afterCommit: () => service.resumePendingProvisioning(),
+  }));
+  dispatcher.register(defineAtomicCapability({
+    ...writePolicy,
+    id: 'xopc.agents.patch_profile',
+    description: 'Patch selected profile fields at an exact revision, preserving omitted fields.',
+    input: z.strictObject({
+      id: AgentEntrySchema.shape.id,
+      expectedRevision: z.number().int().positive(),
+      patch: AgentProfileSchema.partial().refine(value => Object.keys(value).length > 0, 'Provide at least one profile field'),
+    }),
+    output: AgentMutationOutputSchema,
+    execute({ id, expectedRevision, patch }) {
+      const current = requireAgent(repository, id);
+      const { revision: _revision, provisioningState: _state, provisioningError: _error,
+        createdAt: _created, updatedAt: _updated, deletedAt: _deleted, ...entry } = current;
+      const profile = AgentProfileSchema.parse({ ...entry.profile, ...patch });
+      const agent = translateMutationError(() => repository.update(
+        id, expectedRevision, { ...entry, profile }, { reprovision: true },
       ));
       return { ok: true as const, ...view(repository, agent) };
     },
