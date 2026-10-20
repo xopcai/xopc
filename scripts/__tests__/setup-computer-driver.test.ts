@@ -24,7 +24,7 @@ describe('computer driver download', () => {
       import assert from 'node:assert/strict';
       Object.defineProperty(process, 'platform', { value: 'darwin' });
       globalThis.fetch = async (url, options) => {
-        assert.equal(url, 'https://api.github.com/repos/trycua/cua/releases/assets/566587560');
+        assert.equal(url, 'https://api.github.com/repos/trycua/cua/releases/assets/646667377');
         assert.equal(options.headers.Accept, 'application/octet-stream');
         assert.equal(options.headers.Authorization, ${JSON.stringify(authorization)});
         console.log('Download request verified');
