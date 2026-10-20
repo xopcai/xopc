@@ -41,6 +41,8 @@ export function ComposerModelConfigControl({ chat: m, sessionModel, modelDisable
   const unavailable = Boolean(sessionModel && registry.data && !selected);
   const modelLabel = selected ? modelDisplayName(selected, language) : sessionModel.slice(sessionModel.indexOf('/') + 1) || m.modelConfigure;
   const title = modelLabel.split('/').at(-1) || modelLabel;
+  const provider = selected?.provider || (sessionModel.includes('/') ? sessionModel.slice(0, sessionModel.indexOf('/')) : '');
+  const modelIdentity = provider ? `${title} · ${provider}` : title;
   const thinking = selected?.thinking;
   const adjustable = thinking?.mode === 'levels' || thinking?.mode === 'toggle';
   const effectiveThinkingLevel = thinking
@@ -68,13 +70,13 @@ export function ComposerModelConfigControl({ chat: m, sessionModel, modelDisable
 
   const modelControl = <button ref={modelButtonRef} type="button" disabled={busy || !models.length} onClick={() => setView('models')}
     title={sessionModel} className={cn('mx-auto flex min-h-8 max-w-full items-center justify-center gap-1 rounded-lg px-2 text-sm text-fg-muted hover:bg-surface-hover hover:text-fg', interaction.focusRingPanel)}>
-    <span className="truncate">{title}</span><ChevronRight className="size-3.5 shrink-0" aria-hidden />
+    <span className="min-w-0 truncate">{title}{provider && <span className="text-fg-subtle"> · {provider}</span>}</span><ChevronRight className="size-3.5 shrink-0" aria-hidden />
   </button>;
 
   return (
     <Popover.Root onOpenChange={(open) => { if (!open) { setView('config'); setError(''); } }}>
       <Popover.Trigger asChild>
-        <button type="button" aria-label={`${m.modelConfigLabel}: ${title}${effort ? ` · ${effort}` : ''}`} title={title}
+        <button type="button" aria-label={`${m.modelConfigLabel}: ${modelIdentity}${effort ? ` · ${effort}` : ''}`} title={modelIdentity}
           className={cn('inline-flex h-8 min-w-0 max-w-[min(18rem,calc(100vw-10rem))] items-center gap-1.5 rounded-lg bg-surface-hover/70 px-2.5 text-[13px] text-fg hover:bg-surface-hover', interaction.focusRingPanel, interaction.transition)}>
           {registry.isLoading || (!sessionModel && models.length > 0) ? <Skeleton className="h-4 w-28" /> : <>
             <span className="min-w-0 truncate font-medium">{title}</span>

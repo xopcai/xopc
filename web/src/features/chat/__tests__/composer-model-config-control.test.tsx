@@ -58,13 +58,15 @@ describe('composer model configuration', () => {
     expect(change).toHaveBeenCalledWith('xopc-cloud/auto', 'off');
   });
 
-  it('shows only the model name for a provider-routed model and retains its identity in the picker', async () => {
+  it('shows the actual provider beside a routed model and retains its identity in the picker', async () => {
     await render({ sessionModel: 'xopc-cloud/openai/gpt-6-luna', thinkingLevel: 'low' });
     const trigger = container.querySelector('button')!;
     expect(trigger.textContent).toBe('gpt-6-luna· Low');
-    expect(trigger.title).toBe('gpt-6-luna');
+    expect(trigger.title).toBe('gpt-6-luna · xopc-cloud');
+    expect(trigger.getAttribute('aria-label')).toContain('xopc-cloud');
     expect(trigger.getAttribute('aria-label')).not.toContain('openai');
-    await click(button('gpt-6-luna'));
+    expect(button('gpt-6-luna · xopc-cloud')).toBeTruthy();
+    await click(button('gpt-6-luna · xopc-cloud'));
     expect(button('openai/gpt-6-luna').getAttribute('aria-pressed')).toBe('true');
     const cloudGroup = document.querySelector('[role="group"][aria-label="xopc-cloud"]')!;
     expect(cloudGroup.querySelectorAll('button')).toHaveLength(2);
@@ -80,10 +82,10 @@ describe('composer model configuration', () => {
     expect(slider.getAttribute('aria-valuetext')).toBe('High');
     expect(document.body.textContent).not.toContain('Thinking effort');
     expect(document.body.textContent).not.toContain('Manage models');
-    expect(document.body.textContent).not.toContain('test');
+    expect(button('Model One · test')).toBeTruthy();
     expect(document.body.textContent).not.toContain('Default');
     expect(document.querySelector('input[type=range]')).toBeTruthy();
-    await click([...document.querySelectorAll('button')].find((item) => item.textContent === 'Model One')!);
+    await click(button('Model One · test'));
     expect(document.querySelectorAll('[role="dialog"]')).toHaveLength(1);
     expect(document.body.textContent).toContain('Model Two');
   });
@@ -168,6 +170,7 @@ describe('composer model configuration', () => {
     await render({ sessionModel: 'removed/original' });
     expect(container.textContent).toContain('original');
     expect(container.textContent).toContain('Unavailable');
+    expect(button('original · removed')).toBeTruthy();
     expect(document.querySelector('input[type=range]')).toBeNull();
   });
 
