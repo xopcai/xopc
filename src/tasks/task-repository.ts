@@ -9,6 +9,8 @@ import type {
   TaskPhase,
   TaskPriority,
   TaskResolution,
+  TaskPhaseChange,
+  TaskChangeSource,
 } from '@xopcai/gateway-contract';
 
 import { getSqliteDatabase, runSqliteWriteTransaction } from '../storage/sqlite/transaction.js';
@@ -307,32 +309,69 @@ export class TaskRepository {
     phase: TaskPhase;
     resolution?: TaskResolution;
     now?: number;
+    actor?: ActorRef;
+    source?: TaskChangeSource;
+    operationId?: string;
+    runId?: string;
+    manual?: boolean;
   }): TaskAggregate | undefined {
     if ((input.phase === 'closed') !== Boolean(input.resolution)) {
       throw new Error('Closed tasks require a resolution and open tasks cannot have one');
     }
-    const current = this.get(input.taskId);
-    if (!current || current.version !== input.expectedVersion) return undefined;
-    const now = Math.max(input.now ?? Date.now(), current.updatedAt + 1);
-    const boardRank = current.phase === input.phase
-      ? current.boardRank
-      : Number((getSqliteDatabase().prepare(
-        'SELECT COALESCE(MAX(board_rank), 0) + 1024 AS board_rank FROM tasks WHERE project_id IS ? AND phase = ?',
-      ).get(current.projectId ?? null, input.phase) as { board_rank: number }).board_rank);
-    const result = getSqliteDatabase().prepare(
-      `UPDATE tasks SET phase = ?, resolution = ?, closed_at = ?,
-       board_rank = ?, version = version + 1, updated_at = ?
-       WHERE task_id = ? AND version = ?`,
-    ).run(
-      input.phase,
-      input.resolution ?? null,
-      input.phase === 'closed' ? now : null,
-      boardRank,
-      now,
-      input.taskId,
-      input.expectedVersion,
-    );
-    return result.changes === 0 ? undefined : this.get(input.taskId);
+    return runSqliteWriteTransaction((db) => {
+      const current = this.get(input.taskId);
+      if (!current || current.version !== input.expectedVersion) return undefined;
+      if (current.phase === input.phase && current.resolution === input.resolution) return current;
+      const now = Math.max(input.now ?? Date.now(), current.updatedAt + 1);
+      const boardRank = current.phase === input.phase
+        ? current.boardRank
+        : Number((db.prepare(
+          'SELECT COALESCE(MAX(board_rank), 0) + 1024 AS board_rank FROM tasks WHERE project_id IS ? AND phase = ?',
+        ).get(current.projectId ?? null, input.phase) as { board_rank: number }).board_rank);
+      const result = db.prepare(
+        `UPDATE tasks SET phase = ?, resolution = ?, closed_at = ?, board_rank = ?,
+         version = version + 1, updated_at = ?, manual_phase_revision = manual_phase_revision + ?
+         WHERE task_id = ? AND version = ?`,
+      ).run(input.phase, input.resolution ?? null, input.phase === 'closed' ? now : null,
+        boardRank, now, input.manual ? 1 : 0, input.taskId, input.expectedVersion);
+      if (result.changes === 0) return undefined;
+      db.prepare(`INSERT INTO task_phase_changes (id, task_id, from_phase, to_phase,
+        from_resolution, to_resolution, actor_json, source, operation_id, run_id, task_version, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+        .run(randomUUID(), current.id, current.phase, input.phase, current.resolution ?? null,
+          input.resolution ?? null, JSON.stringify(input.actor ?? { kind: 'system' }), input.source ?? 'runtime',
+          input.operationId ?? currentOperationId() ?? null, input.runId ?? null, current.version + 1, now);
+      return this.get(input.taskId);
+    });
+  }
+
+  phaseChanges(taskId: string): TaskPhaseChange[] {
+    return getSqliteDatabase().prepare(`SELECT * FROM task_phase_changes WHERE task_id = ? ORDER BY task_version`)
+      .all(taskId).map(row => ({
+        id: String(row.id), taskId: String(row.task_id), fromPhase: row.from_phase as TaskPhase,
+        toPhase: row.to_phase as TaskPhase,
+        ...(row.from_resolution ? { fromResolution: row.from_resolution as TaskResolution } : {}),
+        ...(row.to_resolution ? { toResolution: row.to_resolution as TaskResolution } : {}),
+        actor: JSON.parse(String(row.actor_json)) as ActorRef, source: row.source as TaskChangeSource,
+        ...(row.operation_id ? { operationId: String(row.operation_id) } : {}),
+        ...(row.run_id ? { runId: String(row.run_id) } : {}),
+        taskVersion: Number(row.task_version), createdAt: Number(row.created_at),
+      }));
+  }
+
+  /** A new explicit execution authorizes automation for the current manual revision. */
+  authorizeAutomaticPhase(taskId: string): void {
+    getSqliteDatabase().prepare('UPDATE tasks SET automatic_phase_revision = manual_phase_revision WHERE task_id = ?').run(taskId);
+  }
+
+  automaticStartAllowed(taskId: string): boolean {
+    return Boolean(getSqliteDatabase().prepare(`SELECT 1 FROM tasks
+      WHERE task_id = ? AND manual_phase_revision = automatic_phase_revision`).get(taskId));
+  }
+
+  runPhaseUnchanged(taskId: string, runId: string): boolean {
+    return Boolean(getSqliteDatabase().prepare(`SELECT 1 FROM tasks t JOIN task_runs r ON r.task_id = t.task_id
+      WHERE t.task_id = ? AND r.run_id = ? AND t.manual_phase_revision = r.manual_phase_revision`).get(taskId, runId));
   }
 
   reorder(input: {

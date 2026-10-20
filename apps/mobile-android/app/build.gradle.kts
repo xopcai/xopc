@@ -104,6 +104,7 @@ dependencies {
   debugImplementation(libs.androidx.compose.ui.test.manifest)
 
   // Local tests: jUnit, coroutines, Android runner
+  testImplementation("org.json:json:20240303")
   testImplementation(libs.junit)
   testImplementation(libs.kotlinx.coroutines.test)
 

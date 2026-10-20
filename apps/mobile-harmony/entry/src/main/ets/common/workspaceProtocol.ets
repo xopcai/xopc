@@ -14,7 +14,7 @@ export function taskDetailItem(result: XopcMobileTaskDetailResult): XopcWorkspac
   const item = taskItem(result);
   item.taskDetail = {
     contract: result.task.contract, latestContractVersion: result.task.latestContractVersion ?? 0,
-    operationalState: result.operationalState, waits: result.waits ?? [],
+    phaseChanges: result.phaseChanges ?? [], operationalState: result.operationalState, waits: result.waits ?? [],
     attention: result.attention ?? [], criterionReviews: result.criterionReviews ?? [],
     receipts: result.receipts ?? [], context: result.context ?? [], sessions: result.sessions ?? [],
     dependencies: result.dependencies ?? [], dependents: result.dependents ?? [], runs: result.runs ?? [],

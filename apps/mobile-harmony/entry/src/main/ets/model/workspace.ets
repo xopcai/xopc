@@ -32,7 +32,13 @@ export interface XopcMobileTaskDependency { id: string; title: string; phase: st
 export interface XopcMobileTaskRun { id: string; contractVersion: number; status?: string; parentRunId?: string; }
 export interface XopcMobileTaskWait { id: string; kind: string; status: string; reason: string; }
 export interface XopcMobileTaskConversation { activeConversationId?: string; }
+export interface XopcTaskChangeActor { kind: string; id?: string; }
+export interface XopcTaskPhaseChange {
+  id: string; fromPhase: string; toPhase: string; fromResolution?: string; toResolution?: string;
+  actor: XopcTaskChangeActor; source: string; createdAt: number;
+}
 export interface XopcMobileTaskDetail {
+  phaseChanges?: XopcTaskPhaseChange[];
   contract?: XopcTaskContract; latestContractVersion: number; operationalState?: string; waits?: XopcMobileTaskWait[];
   attention: XopcMobileTaskAttention[]; criterionReviews: XopcMobileTaskReview[];
   receipts: XopcMobileTaskReceipt[]; context: XopcMobileTaskContext[];
@@ -40,6 +46,7 @@ export interface XopcMobileTaskDetail {
   dependents: XopcMobileTaskDependency[]; runs: XopcMobileTaskRun[]; activeConversationId?: string;
 }
 export interface XopcMobileTaskDetailResult extends XopcTaskResult {
+  phaseChanges?: XopcTaskPhaseChange[];
   operationalState?: string; waits?: XopcMobileTaskWait[];
   attention: XopcMobileTaskAttention[]; criterionReviews: XopcMobileTaskReview[];
   receipts: XopcMobileTaskReceipt[]; context: XopcMobileTaskContext[];
@@ -54,7 +61,7 @@ export interface XopcTaskCreate {
 export interface XopcTaskPatch { expectedVersion: number; title: string; body: string; projectId: string | null; priority: string; dueAt: number | null; }
 export interface XopcTaskCommand { type: string; phase?: string; resolution?: string; executor?: XopcExecutor; }
 export interface XopcExecutor { kind: string; agentId: string; }
-export interface XopcTaskCommandBody { idempotencyKey: string; expectedVersion: number; command: XopcTaskCommand; }
+export interface XopcTaskCommandBody { source?: string; idempotencyKey: string; expectedVersion: number; command: XopcTaskCommand; }
 export interface XopcProject {
   id: string; name: string; description?: string; status: string; brief?: string; outcome?: string;
   defaultAgentId?: string; workspaceRoot?: string; executionMode?: string;

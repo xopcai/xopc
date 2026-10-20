@@ -1944,7 +1944,7 @@ final class MobileLayoutParityUITests: XCTestCase {
         XCTAssertTrue(app.buttons["home-tab-assistant"].waitForExistence(timeout: 10))
     }
 
-    func testProgressTaskReviewOpensDetailsAndShowsCompletionRestrictions() {
+    func testProgressTaskReviewAllowsManualCompletionWithUnverifiedCriteria() {
         tab("progress")
         let review = app.buttons["查看结果并验收"]
         XCTAssertTrue(review.waitForExistence(timeout: 10))
@@ -1958,8 +1958,8 @@ final class MobileLayoutParityUITests: XCTestCase {
         XCTAssertTrue(app.buttons["task-phase-active"].isEnabled)
         let complete = app.buttons["task-complete"]
         XCTAssertTrue(complete.exists)
-        XCTAssertFalse(complete.isEnabled)
-        XCTAssertTrue(app.staticTexts["请先在桌面端补充验收标准并完成验收，再标记完成。"].exists)
+        XCTAssertTrue(complete.isEnabled)
+        XCTAssertTrue(app.buttons["task-phase-closed"].isEnabled)
         XCTAssertTrue(app.buttons["task-cancel"].exists)
     }
 

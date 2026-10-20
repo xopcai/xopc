@@ -56,9 +56,9 @@ struct ProjectCreationTests {
         #expect(reopen.phase == "review")
         let start = try TaskCommandMutation.Command.make(type: "start", phase: nil, resolution: "done", agentID: " research ")
         #expect(start.executor?.agentId == "research")
-        #expect(throws: GatewayClientError.self) {
-            try TaskCommandMutation.Command.make(type: "move", phase: "closed", resolution: "done", agentID: nil)
-        }
+        let closed = try TaskCommandMutation.Command.make(type: "move", phase: "closed", resolution: "done", agentID: nil)
+        #expect(closed.phase == "closed")
+        #expect(closed.executor == nil)
         #expect(throws: GatewayClientError.self) {
             try TaskCommandMutation.Command.make(type: "start", phase: nil, resolution: "done", agentID: " ")
         }

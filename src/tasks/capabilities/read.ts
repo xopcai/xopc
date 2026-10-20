@@ -55,7 +55,7 @@ export function registerTaskReadCapabilities(dispatcher: CapabilityDispatcher): 
       if (!task) throw new CapabilityError('NOT_FOUND', `Task not found: ${id}`);
       const model = projector.project(task);
       return {
-        ok: true as const, ...model,
+        ok: true as const, ...model, phaseChanges: tasks.phaseChanges(id),
         waits: runs.listActiveWaits(id), runs: runs.listByTask(id), receipts: runs.listReceipts(id),
         criterionReviews: criterionReviews.list(id, task.latestContractVersion),
         context: context.list(id), conversation: conversations.requireState(id), sessions: conversations.listSessions(id),

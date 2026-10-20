@@ -12,6 +12,7 @@ import {
   resetXopcDatabaseSingletonForTest,
 } from '../../../../storage/sqlite/index.js';
 import { TaskConversationRepository } from '../../../../tasks/task-conversation-repository.js';
+import { TaskApplicationService } from '../../../../tasks/task-application-service.js';
 import { TaskRepository } from '../../../../tasks/task-repository.js';
 import { TaskRunRepository } from '../../../../tasks/task-run-repository.js';
 import { TaskCollaborationRepository } from '../../../../tasks/task-collaboration-repository.js';
@@ -56,6 +57,34 @@ describe('task routes', () => {
     rmSync(stateDir, { recursive: true, force: true });
   });
 
+  it('moves a running task freely without aborting it and exposes its durable change log', async () => {
+    const tasks = new TaskRepository();
+    const created = new TaskApplicationService().create({ idempotencyKey: 'manual-board-task',
+      title: 'Manual board move', priority: 'normal', activation: { mode: 'capture', phase: 'backlog' },
+      dependencies: [], context: [], authorityGrants: [], contract: { objective: 'Work', expectedOutputs: [],
+        acceptanceCriteria: [], constraints: [], approvalRequired: [], assumptions: [], risks: [],
+        acceptancePolicy: 'manual', outputDestinations: [] } });
+    if (!created.ok) throw new Error('Expected task');
+    const task = tasks.require(created.model.task.id);
+    const run = new TaskRunRepository().create({ taskId: task.id,
+      executorKind: 'agent', executorRef: { agentId: 'main' }, trigger: {},
+      correlationId: 'manual-route', idempotencyKey: 'manual-route', contractVersion: 1 });
+    const response = await app.request(`/api/tasks/${task.id}/commands`, { method: 'POST',
+      headers: { 'content-type': 'application/json' }, body: JSON.stringify({
+        expectedVersion: task.version, idempotencyKey: 'manual-route-close', source: 'mobile',
+        command: { type: 'move', phase: 'closed' },
+      }) });
+    expect(response.status).toBe(200);
+    expect(abortAgentRun).not.toHaveBeenCalled();
+    expect(new TaskRunRepository().require(run.id).status).toBe('queued');
+    const detail = await app.request(`/api/tasks/${task.id}`);
+    expect(detail.status).toBe(200);
+    expect(await detail.json()).toMatchObject({ task: { phase: 'closed', resolution: 'done' },
+      operationalState: 'queued', phaseChanges: [{ fromPhase: 'backlog', toPhase: 'closed',
+        toResolution: 'done', source: 'mobile', actor: { kind: 'user', id: 'test-owner' }, runId: run.id }] });
+    expect(new TaskRunRepository().claimNext({ owner: 'worker', leaseMs: 1000 })?.id).toBe(run.id);
+  });
+
   it('aborts the live conversation after persisting a pause', async () => {
     const task = new TaskRepository().create({ title: 'Pause route', objective: 'Wait' });
     ensureSessionRecord('5c2dd4d5-11cb-4b7d-91c3-ceba1691edfa', stateDir, { agentId: "main" });
@@ -91,6 +120,25 @@ describe('task routes', () => {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ kind: 'answer', body: 'Yes', causationId: 'unknown' }) });
     expect(unrelatedAnswer.status).toBe(400);
+  });
+
+  it.each(['done', 'cancelled'] as const)('handles an answer to an existing wait on a task closed as %s', async resolution => {
+    const tasks = new TaskRepository(), runs = new TaskRunRepository(), board = new TaskCollaborationRepository();
+    const task = tasks.create({ title: 'Worker question', objective: 'Answer a question' });
+    const question = board.append({ taskId: task.id, authorKind: 'worker_agent', authorId: 'main',
+      kind: 'question', body: 'Which source?', idempotencyKey: 'closed-question' });
+    runs.createWait({ taskId: task.id, kind: 'external_event', reason: 'Which source?',
+      condition: { collaborationEntryId: question.id } });
+    new TaskApplicationService().execute({ taskId: task.id, expectedVersion: task.version,
+      idempotencyKey: 'close-question', command: { type: 'close', resolution } });
+    const request = (kind: string, causationId?: string) => app.request(`/api/tasks/${task.id}/collaboration`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ kind, body: 'Use source A', causationId }),
+    });
+    expect((await request('answer', question.id)).status).toBe(resolution === 'done' ? 201 : 409);
+    expect((await request('instruction')).status).toBe(409);
+    expect((await request('answer', 'unknown')).status).toBe(400);
+    expect(tasks.require(task.id)).toMatchObject({ phase: 'closed', resolution });
   });
 
   it('reports orchestration metrics on the authenticated task route', async () => {

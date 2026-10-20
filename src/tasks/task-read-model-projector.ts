@@ -99,7 +99,7 @@ export class TaskReadModelProjector {
       task,
       allocation,
       operationalState,
-      attention: task.phase === 'closed' || paused ? [] : attention,
+      attention: (task.phase === 'closed' && (task.resolution !== 'done' || waits.length === 0)) || paused ? [] : attention,
       allowedCommands,
       ...(revisionBaseline ? { revisionBaseline } : {}),
     };
@@ -124,7 +124,8 @@ export class TaskReadModelProjector {
     waits: ReturnType<TaskRunRepository['listActiveWaits']>;
     hasIncompleteDependency: boolean;
   }): TaskOperationalState {
-    if (input.task.phase === 'closed') return 'idle';
+    if (input.task.phase === 'closed' && (input.task.resolution !== 'done'
+      || (!input.activeRun && input.waits.length === 0))) return 'idle';
     if (input.waits.some((wait) => wait.kind === 'paused')) return 'waiting';
     if (input.activeRun?.status === 'running') return 'running';
     if (input.activeRun?.status === 'verifying') return 'verifying';
@@ -144,10 +145,10 @@ export class TaskReadModelProjector {
     hasWaits: boolean,
     paused: boolean,
   ): string[] {
-    if (task.phase === 'closed') return ['reopen'];
-    const commands = ['revise_contract', 'close'];
+    if (task.phase === 'closed') return ['move', 'reopen', ...(activeRunStatus ? ['close'] : []),
+      ...(task.resolution === 'done' && hasWaits ? ['resolve_wait'] : [])];
+    const commands = ['move', 'revise_contract', 'close'];
     if (!paused) commands.push('add_wait');
-    if (!activeRunStatus && !hasWaits) commands.unshift('move');
     if (hasWaits) commands.unshift('resolve_wait');
     if (task.phase === 'backlog') commands.unshift('mark_ready');
     if (!activeRunStatus && !hasWaits && task.phase !== 'backlog') commands.unshift('start');

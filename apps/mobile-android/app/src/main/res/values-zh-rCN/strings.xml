@@ -788,7 +788,7 @@
     <string name="personal_agent_opening_greeting">连接时打招呼</string>
 
     <string name="progress_adjust_status">调整状态</string>
-    <string name="progress_phase_help">调整阶段不会自动启动 Agent。</string>
+    <string name="progress_phase_help">调整阶段不会启动或停止执行，每次变更都会记录。</string>
     <string name="progress_phase_blocked">任务正在执行或等待条件满足，请先处理当前执行或等待事项。</string>
     <string name="progress_cancel_task">取消任务</string>
     <string name="progress_cancel_task_help">结束此任务，不标记为完成。之后可以重新打开。</string>
@@ -827,4 +827,5 @@
     <string name="clarify_cancel">取消任务</string>
     <string name="assistant_connection_interrupted">连接中断 · 正在恢复…</string>
     <string name="assistant_select_text">选择文本</string>
+    <string name="progress_change_log">变更记录</string>
 </resources>

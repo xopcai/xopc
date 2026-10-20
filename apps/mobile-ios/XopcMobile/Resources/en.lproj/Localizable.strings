@@ -958,3 +958,6 @@
 
 "选择文本" = "Select text";
 "长按显示消息操作" = "Touch and hold for message actions";
+
+"变更记录" = "Change log";
+"调整阶段不会启动或停止执行，每次变更都会记录。" = "Changing phase does not start or stop a run. Every change is recorded.";

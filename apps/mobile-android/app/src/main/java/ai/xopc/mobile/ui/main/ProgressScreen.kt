@@ -864,6 +864,22 @@ private fun ProgressTaskDetail(task: ProgressTask, busy: Boolean, commandError: 
         }
       }
     }
+    if (task.phaseChanges.isNotEmpty()) {
+      ProgressSectionTitle(R.string.progress_change_log)
+      Card {
+        Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+          task.phaseChanges.asReversed().forEach { change ->
+            Column {
+              Text(progressPhaseLabel(change.fromPhase) + (change.fromResolution?.let { " · $it" } ?: "") +
+                " → ${progressPhaseLabel(change.toPhase)}" +
+                (change.resolution?.let { " · $it" } ?: ""))
+              Text("${change.actor} · ${change.source} · ${java.text.DateFormat.getDateTimeInstance().format(java.util.Date(change.createdAt))}",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+          }
+        }
+      }
+    }
     ProgressSectionTitle(R.string.progress_description)
     Card {
       if (task.body.isBlank()) Text(stringResource(R.string.progress_no_description),
@@ -943,7 +959,7 @@ private fun ProgressTaskDetail(task: ProgressTask, busy: Boolean, commandError: 
         Text(stringResource(R.string.progress_command_error), color = MaterialTheme.colorScheme.error)
         OutlinedButton(onClick = onRefresh, enabled = !busy) { Text(stringResource(R.string.progress_refresh)) }
       }
-      listOf("backlog", "ready", "active", "review").forEach { phase ->
+      listOf("backlog", "ready", "active", "review", "closed").forEach { phase ->
         OutlinedButton(onClick = { task.phaseAction(phase)?.let(onCommand) },
           enabled = !busy && task.phaseAction(phase) != null,
           modifier = Modifier.fillMaxWidth().testTag("progress-phase-$phase")) { Text(progressPhaseLabel(phase)) }
@@ -960,32 +976,13 @@ private fun ProgressTaskDetail(task: ProgressTask, busy: Boolean, commandError: 
           agents.firstOrNull { it.id == agentId }?.name ?: stringResource(R.string.progress_choose_agent),
           agents.map { it.id to it.name }, !busy && !agentsLoading, "progress-start-agent") { agentId = it }
       }
-      task.allowedCommands.filter { it in setOf("mark_ready", "request_review", "close", "reopen", "start") }
-        .forEach { action ->
-          Button(onClick = { when (action) {
-            "close" -> confirmAction = "close"
-            "start" -> confirmStart = true
-            else -> onCommand(action)
-          } }, enabled = !busy && (action != "start" || agents.any { it.id == agentId }) &&
-            (action != "close" || task.completionBlock == null),
-            modifier = Modifier.fillMaxWidth().testTag("progress-command-$action")) {
-            Text(stringResource(when (action) {
-              "mark_ready" -> R.string.progress_command_mark_ready
-              "request_review" -> R.string.progress_command_request_review
-              "close" -> R.string.progress_command_close
-              "reopen" -> R.string.progress_command_reopen
-              else -> R.string.progress_command_start
-            }))
-          }
+      if ("start" in task.allowedCommands) {
+        Button(onClick = { confirmStart = true }, enabled = !busy && agents.any { it.id == agentId },
+          modifier = Modifier.fillMaxWidth().testTag("progress-command-start")) {
+          Text(stringResource(R.string.progress_command_start))
         }
+      }
       if ("close" in task.allowedCommands) {
-        task.completionBlock?.let { reason ->
-          Text(stringResource(when (reason) {
-            "execution" -> R.string.progress_complete_execution
-            "criteria" -> R.string.progress_complete_criteria
-            else -> R.string.progress_complete_acceptance
-          }), color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
         TextButton(onClick = { confirmAction = "cancel_task" }, enabled = !busy,
           modifier = Modifier.fillMaxWidth().testTag("progress-command-cancel")) {
           Text(stringResource(R.string.progress_cancel_task), color = MaterialTheme.colorScheme.error)
