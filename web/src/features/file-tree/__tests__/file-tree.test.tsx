@@ -56,6 +56,70 @@ describe('FileTree managed desktop actions', () => {
     return onAction;
   }
 
+  const nestedTree = [{
+    fileId: 'project', name: 'project', path: 'project', isDirectory: true, children: [{
+      fileId: 'public', name: 'public', path: 'project/public', isDirectory: true, children: [
+        { fileId: 'first', name: 'first.txt', path: 'project/public/first.txt', isDirectory: false },
+        { fileId: 'second', name: 'second.txt', path: 'project/public/second.txt', isDirectory: false },
+      ],
+    }],
+  }];
+
+  function renderSelection(selectedPath: string | null, onExpandDir = vi.fn()) {
+    act(() => root.render(
+      <FileTree tree={nestedTree} selectedPath={selectedPath} onSelectFile={() => {}}
+        onExpandDir={onExpandDir} emptyHint="Empty" />,
+    ));
+  }
+
+  function directory(path: string) {
+    return container.querySelector<HTMLButtonElement>(`button[data-file-drop-directory="${path}"]`)!;
+  }
+
+  it('collapses the last expanded project while its file remains selected', () => {
+    renderSelection('project/public/first.txt');
+    expect(directory('project').getAttribute('aria-expanded')).toBe('true');
+
+    act(() => directory('project').click());
+    expect(directory('project').getAttribute('aria-expanded')).toBe('false');
+    expect(container.textContent).not.toContain('first.txt');
+
+    renderSelection('project/public/first.txt');
+    expect(directory('project').getAttribute('aria-expanded')).toBe('false');
+
+    act(() => directory('project').click());
+    expect(directory('project/public').getAttribute('aria-expanded')).toBe('true');
+    expect(container.textContent).toContain('first.txt');
+  });
+
+  it('allows a selected file ancestor to collapse and reveals a newly selected file', () => {
+    renderSelection('project/public/first.txt');
+    act(() => directory('project/public').click());
+    expect(directory('project/public').getAttribute('aria-expanded')).toBe('false');
+    expect(container.textContent).not.toContain('first.txt');
+
+    renderSelection('project/public/first.txt');
+    expect(directory('project/public').getAttribute('aria-expanded')).toBe('false');
+
+    renderSelection('project/public/second.txt');
+    expect(directory('project/public').getAttribute('aria-expanded')).toBe('true');
+    expect(container.textContent).toContain('second.txt');
+  });
+
+  it('loads selected ancestors and keeps manual expansion after selection changes', () => {
+    const onExpandDir = vi.fn();
+    renderSelection('project/public/first.txt', onExpandDir);
+    expect(onExpandDir).toHaveBeenCalledWith('project');
+    expect(onExpandDir).toHaveBeenCalledWith('project/public');
+
+    renderSelection(null, onExpandDir);
+    expect(directory('project').getAttribute('aria-expanded')).toBe('true');
+    act(() => directory('project/public').click());
+    act(() => directory('project/public').click());
+    renderSelection('elsewhere.txt', onExpandDir);
+    expect(directory('project/public').getAttribute('aria-expanded')).toBe('true');
+  });
+
   it('offers the system file manager for managed directories', () => {
     Object.defineProperty(window, 'electronAPI', {
       configurable: true,

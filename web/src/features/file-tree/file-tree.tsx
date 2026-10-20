@@ -252,11 +252,16 @@ function TreeRow({
   onUploadFiles?: (files: File[], directory: string) => void;
   onUploadTargetEnter?: () => void;
 }) {
-  /** Collapsed by default; chevron must match visibility of children (incl. lazy-loaded empty → []). */
-  const [open, setOpen] = useState(false);
-  const [dropActive, setDropActive] = useState(false);
   const containsSelection = Boolean(selectedPath && entry.isDirectory && selectedPath.startsWith(`${entry.path}/`));
-  const visibleOpen = forceOpen || open || containsSelection;
+  const [expansion, setExpansion] = useState({ selectedPath, open: containsSelection });
+  const [dropActive, setDropActive] = useState(false);
+  // Reveal a new selection once, then let manual toggles control its ancestors.
+  let open = expansion.open;
+  if (expansion.selectedPath !== selectedPath) {
+    open = open || containsSelection;
+    setExpansion({ selectedPath, open });
+  }
+  const visibleOpen = Boolean(forceOpen || open);
   useEffect(() => {
     if (containsSelection) onExpandDir?.(entry.path);
   }, [containsSelection, entry.path, onExpandDir]);
@@ -279,7 +284,7 @@ function TreeRow({
             style={{ paddingLeft: 8 + depth * 12 }}
             onClick={() => {
               const next = !visibleOpen;
-              setOpen(next);
+              setExpansion({ selectedPath, open: next });
               if (next) onExpandDir?.(entry.path);
               onSelect(entry.path, true);
             }}
