@@ -2,7 +2,7 @@ import type { z } from 'zod';
 
 import type { ResponsePreferencesSchema } from '../agent-config/index.js';
 import { PERSONAL_COMMUNICATION_RULES, PERSONAL_RELIABILITY_RULES, PERSONAL_PREVIOUS_DELEGATION_COMMUNICATION, PERSONAL_PREVIOUS_RESULT_COMMUNICATION, PRE_COMPACT_PERSONAL_COMMUNICATION_RULES } from './communication.js';
-import { PERSONAL_REPLY_EXAMPLES, PERSONAL_REPLY_STYLE_RULES, PREVIOUS_PERSONAL_REPLY_EXAMPLES, PREVIOUS_PERSONAL_REPLY_STYLE_RULES, PRE_COMPACT_PERSONAL_REPLY_STYLE_RULES, PRE_COMPACT_PERSONAL_REPLY_EXAMPLES } from './reply-style.js';
+import { PERSONAL_REPLY_EXAMPLES, PERSONAL_REPLY_STYLE_RULES, PREVIOUS_PERSONAL_REPLY_EXAMPLES, PREVIOUS_PERSONAL_REPLY_STYLE_RULES, PRE_COMPACT_PERSONAL_REPLY_STYLE_RULES, PRE_COMPACT_PERSONAL_REPLY_EXAMPLES, PRE_P0_PERSONAL_REPLY_STYLE_RULES, PRE_P0_PERSONAL_REPLY_EXAMPLES, PRE_EQ_REFINEMENT_PERSONAL_REPLY_STYLE_RULES, PRE_EQ_REFINEMENT_PERSONAL_REPLY_EXAMPLES, PRE_EQ_RESIDUAL_PERSONAL_REPLY_STYLE_RULES, PRE_EQ_RESIDUAL_PERSONAL_REPLY_EXAMPLES, PRE_STYLE_ROUND3_PERSONAL_REPLY_STYLE_RULES, PRE_STYLE_ROUND3_PERSONAL_REPLY_EXAMPLES } from './reply-style.js';
 import {
   PERSONAL_PERSONA_GUIDANCE, PREVIOUS_PERSONAL_PERSONA_GUIDANCE,
   PERSONAL_EMOTIONAL_STYLE_RULE, PREVIOUS_PERSONAL_EMOTIONAL_STYLE_RULE,
@@ -74,7 +74,8 @@ const PREVIOUS_BRIEF_REPLY_RULE = 'Keep replies short and lead with the answer.'
 const BRIEF_REPLY_RULE = 'Keep replies short and respond to the current request in a natural sentence.';
 
 const PRE_COMPACT_FAST_CONVERSATION_RULE = 'Keep ordinary conversation flowing. For missing information, ask one short question directly in your reply and finish the turn; accept the next typed or spoken answer normally. Never use clarify or a blocking form for ordinary questions. Formal authorization for consequential actions still uses the host approval flow. Before tool discovery or delegation for lengthy work, immediately say one brief sentence describing your intent, then call the tools. Do not claim work has started or succeeded until confirmed. After successful delegation, finish without repeating an acknowledgement already given; report any failure or required action.';
-const FAST_CONVERSATION_RULE = 'For missing information, ask one short question directly in your reply and finish; accept the next typed or spoken answer normally. Never use clarify or a blocking form for ordinary conversation. Consequential actions still use the host approval flow.';
+const PRE_P0_FAST_CONVERSATION_RULE = 'For missing information, ask one short question directly in your reply and finish; accept the next typed or spoken answer normally. Never use clarify or a blocking form for ordinary conversation. Consequential actions still use the host approval flow.';
+const FAST_CONVERSATION_RULE = 'Only for unresolved ambiguity that materially changes the answer, action, or authorization, ask one short question directly in your reply and finish; accept the next typed or spoken answer normally. Otherwise use context or a reasonable low-risk assumption and complete the request. Never guess consequential authorization. Never use clarify or a blocking form for ordinary conversation. Consequential actions still use the host approval flow.';
 
 const USER_NAME_RULE = "Use the user's preferred name from their shared user profile when a name fits naturally.";
 const PREVIOUS_EXPLICIT_DELEGATION_RULE = 'When the user names a specialist Agent, preserve that choice and verify its availability before creating the Task; explain any blocker instead of silently substituting another Agent. When the user explicitly requests a Skill, call personal_task(command="agents", requiredSkills=[canonicalName]) to verify specialist access, then pass the same requiredSkills to create with the full objective and original materials. If verification is unavailable or no Agent can use it, explain the specific blocker. Never claim a Skill was used merely because the Task was created.';
@@ -185,7 +186,11 @@ export function upgradePersonalInstructions(instructions: string, legacyName?: s
   const legacyNameRule = legacyName === undefined ? undefined
     : `Address the user as ${JSON.stringify(legacyName)} when a name fits naturally.`;
   for (const block of [...PRE_COMPACT_PERSONAL_COMMUNICATION_RULES.slice(1), ...PRE_COMPACT_PERSONAL_REPLY_STYLE_RULES,
-    PRE_COMPACT_PERSONAL_REPLY_EXAMPLES, PRE_COMPACT_FAST_CONVERSATION_RULE, PREVIOUS_TASK_TITLE_RULE, PRE_COMPACT_PERSONAL_IDENTITY_CONTINUITY_RULE]) {
+    PRE_COMPACT_PERSONAL_REPLY_EXAMPLES, PRE_COMPACT_FAST_CONVERSATION_RULE, PREVIOUS_TASK_TITLE_RULE, PRE_COMPACT_PERSONAL_IDENTITY_CONTINUITY_RULE,
+    ...PRE_P0_PERSONAL_REPLY_STYLE_RULES.filter(rule => !(PERSONAL_REPLY_STYLE_RULES as readonly string[]).includes(rule)),
+    PRE_P0_PERSONAL_REPLY_EXAMPLES, PRE_P0_FAST_CONVERSATION_RULE,
+    ...PRE_EQ_REFINEMENT_PERSONAL_REPLY_STYLE_RULES.filter(rule => !(PERSONAL_REPLY_STYLE_RULES as readonly string[]).includes(rule)),
+    PRE_EQ_REFINEMENT_PERSONAL_REPLY_EXAMPLES, ...PRE_EQ_RESIDUAL_PERSONAL_REPLY_STYLE_RULES.filter(rule => !(PERSONAL_REPLY_STYLE_RULES as readonly string[]).includes(rule)), PRE_EQ_RESIDUAL_PERSONAL_REPLY_EXAMPLES, ...PRE_STYLE_ROUND3_PERSONAL_REPLY_STYLE_RULES.filter(rule => !(PERSONAL_REPLY_STYLE_RULES as readonly string[]).includes(rule)), ...(PRE_STYLE_ROUND3_PERSONAL_REPLY_EXAMPLES === PERSONAL_REPLY_EXAMPLES ? [] : [PRE_STYLE_ROUND3_PERSONAL_REPLY_EXAMPLES])]) {
     instructions = removeGeneratedBlock(instructions, block);
   }
   instructions = removeGeneratedBlock(instructions, PREVIOUS_TASK_COORDINATION_RULE);
@@ -225,9 +230,20 @@ export function upgradePersonalInstructions(instructions: string, legacyName?: s
   if (!nextInstructions.includes(RESULT_DELIVERY_RULE)) nextInstructions += `\n${RESULT_DELIVERY_RULE}`;
   if (!nextInstructions.includes(CONNECTED_APP_RULE)) nextInstructions += `\n${CONNECTED_APP_RULE}`;
   if (!nextInstructions.includes(EXPLICIT_DELEGATION_RULE)) nextInstructions += `\n${EXPLICIT_DELEGATION_RULE}`;
-  for (const rule of [...PERSONAL_COMMUNICATION_RULES, ...PERSONAL_RELIABILITY_RULES, ...PERSONAL_REPLY_STYLE_RULES, PERSONAL_REPLY_EXAMPLES,
+  for (const rule of [...PERSONAL_COMMUNICATION_RULES, ...PERSONAL_RELIABILITY_RULES, PERSONAL_REPLY_EXAMPLES,
     PERSONAL_IDENTITY_CONTINUITY_RULE, PERSONAL_EMOTIONAL_STYLE_RULE, PERSONAL_ATTENTION_RULE, PERSONAL_ATTENTION_VERIFICATION_RULE, PERSONAL_GROWTH_RULE]) {
     if (!nextInstructions.includes(rule)) nextInstructions += `\n${rule}`;
+  }
+  const currentStyleRules = new Set<string>(PERSONAL_REPLY_STYLE_RULES);
+  const seenStyleRules = new Set<string>();
+  nextInstructions = nextInstructions.split('\n').filter(line => {
+    if (!currentStyleRules.has(line)) return true;
+    if (seenStyleRules.has(line)) return false;
+    seenStyleRules.add(line);
+    return true;
+  }).join('\n');
+  for (const rule of PERSONAL_REPLY_STYLE_RULES) {
+    if (!seenStyleRules.has(rule)) nextInstructions += `\n${rule}`;
   }
   return nextInstructions;
 }

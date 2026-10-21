@@ -2,11 +2,63 @@ import { describe, expect, it } from 'vitest';
 
 import { personalInstructions, projectPersonalInstructions, upgradePersonalInstructions } from '../prompts.js';
 import { PERSONAL_COMMUNICATION_RULES, PRE_COMPACT_PERSONAL_COMMUNICATION_RULES, PERSONAL_RELIABILITY_RULES } from '../communication.js';
-import { PERSONAL_REPLY_STYLE_RULES, PRE_COMPACT_PERSONAL_REPLY_STYLE_RULES, PRE_COMPACT_PERSONAL_REPLY_EXAMPLES } from '../reply-style.js';
+import { PERSONAL_REPLY_STYLE_RULES, PERSONAL_REPLY_EXAMPLES, PRE_COMPACT_PERSONAL_REPLY_STYLE_RULES, PRE_COMPACT_PERSONAL_REPLY_EXAMPLES, PRE_P0_PERSONAL_REPLY_STYLE_RULES, PRE_P0_PERSONAL_REPLY_EXAMPLES, PRE_EQ_REFINEMENT_PERSONAL_REPLY_STYLE_RULES, PRE_EQ_REFINEMENT_PERSONAL_REPLY_EXAMPLES, PRE_EQ_RESIDUAL_PERSONAL_REPLY_STYLE_RULES, PRE_EQ_RESIDUAL_PERSONAL_REPLY_EXAMPLES, PRE_STYLE_ROUND3_PERSONAL_REPLY_STYLE_RULES, PRE_STYLE_ROUND3_PERSONAL_REPLY_EXAMPLES } from '../reply-style.js';
 import { PERSONAL_IDENTITY_CONTINUITY_RULE, PRE_COMPACT_PERSONAL_IDENTITY_CONTINUITY_RULE } from '../persona.js';
 import { buildSystemPrompt } from '../../agent/prompt/system-prompt.js';
 
 describe('compact personal prompt migration', () => {
+  it('migrates round2 rules while retaining shared examples and custom edits', () => {
+    const old = [...PRE_STYLE_ROUND3_PERSONAL_REPLY_STYLE_RULES, PRE_STYLE_ROUND3_PERSONAL_REPLY_EXAMPLES].join('\n');
+    const custom = PRE_STYLE_ROUND3_PERSONAL_REPLY_STYLE_RULES[5] + ' My exception stays.';
+    const upgraded = upgradePersonalInstructions([old, old, custom].join('\n'));
+    expect(upgraded).toContain(custom);
+    expect(upgraded).toContain(PERSONAL_REPLY_EXAMPLES);
+    for (const rule of PERSONAL_REPLY_STYLE_RULES) expect(upgraded.split('\n').filter(line => line === rule)).toHaveLength(1);
+    expect(upgradePersonalInstructions(upgraded)).toBe(upgraded);
+    expect(upgradePersonalInstructions(personalInstructions({ warmth: 'reserved', humor: 'none', guidance: 'Use concise English.' }))).toBe(personalInstructions({ warmth: 'reserved', humor: 'none', guidance: 'Use concise English.' }));
+  });
+
+  it('upgrades the previous EQ candidate without retaining its old examples or modifying custom text', () => {
+    const old = [...PRE_EQ_RESIDUAL_PERSONAL_REPLY_STYLE_RULES, PRE_EQ_RESIDUAL_PERSONAL_REPLY_EXAMPLES].join('\n');
+    const custom = PRE_EQ_RESIDUAL_PERSONAL_REPLY_STYLE_RULES[4] + ' My exception stays.';
+    const quoted = 'Quoted: ' + PRE_EQ_RESIDUAL_PERSONAL_REPLY_STYLE_RULES[6];
+    const upgraded = upgradePersonalInstructions([old, old, custom, quoted].join('\n'));
+    expect(upgraded).toContain(custom);
+    expect(upgraded).toContain(quoted);
+    expect(upgraded).not.toContain(PRE_EQ_RESIDUAL_PERSONAL_REPLY_EXAMPLES);
+    for (const rule of PERSONAL_REPLY_STYLE_RULES) expect(upgraded.split('\n').filter(line => line === rule)).toHaveLength(1);
+    expect(upgradePersonalInstructions(upgraded)).toBe(upgraded);
+  });
+
+  it('migrates the evaluated P0 guidance while preserving edited and quoted rules', () => {
+    const old = PRE_EQ_REFINEMENT_PERSONAL_REPLY_STYLE_RULES.join('\n') + '\n' + PRE_EQ_REFINEMENT_PERSONAL_REPLY_EXAMPLES;
+    const custom = PRE_EQ_REFINEMENT_PERSONAL_REPLY_STYLE_RULES[5] + ' Keep my custom exception.';
+    const quoted = 'Quoted: ' + PRE_EQ_REFINEMENT_PERSONAL_REPLY_STYLE_RULES[3];
+    const upgraded = upgradePersonalInstructions([old, old, custom, quoted].join('\n'));
+    expect(upgraded).toContain(custom);
+    expect(upgraded).toContain(quoted);
+    expect(upgraded).not.toContain(PRE_EQ_REFINEMENT_PERSONAL_REPLY_EXAMPLES);
+    for (const rule of PERSONAL_REPLY_STYLE_RULES) expect(upgraded.split('\n').filter(line => line === rule)).toHaveLength(1);
+    expect(upgradePersonalInstructions(upgraded)).toBe(upgraded);
+  });
+
+  it('replaces pre-P0 generated guidance without retaining conflicting clarification rules or touching user edits', () => {
+    const oldFast = 'For missing information, ask one short question directly in your reply and finish; accept the next typed or spoken answer normally. Never use clarify or a blocking form for ordinary conversation. Consequential actions still use the host approval flow.';
+    const custom = PRE_P0_PERSONAL_REPLY_STYLE_RULES[1] + ' My custom exception stays.';
+    const quoted = `Quoted rule: ${oldFast}`;
+    const saved = [...PRE_P0_PERSONAL_REPLY_STYLE_RULES, PRE_P0_PERSONAL_REPLY_EXAMPLES, oldFast,
+      ...PRE_P0_PERSONAL_REPLY_STYLE_RULES, oldFast, custom, quoted].join('\n');
+    const upgraded = upgradePersonalInstructions(saved);
+    expect(upgraded).toContain(custom);
+    expect(upgraded).toContain(quoted);
+    expect(upgraded.split('\n').filter(line => line === oldFast)).toHaveLength(0);
+    for (const rule of PERSONAL_REPLY_STYLE_RULES) expect(upgraded.split('\n').filter(line => line === rule)).toHaveLength(1);
+    expect(upgraded).toContain(PERSONAL_REPLY_EXAMPLES);
+    expect(upgraded).not.toContain(PRE_P0_PERSONAL_REPLY_EXAMPLES);
+    expect(upgradePersonalInstructions(upgraded)).toBe(upgraded);
+    expect(upgradePersonalInstructions(personalInstructions({}))).toBe(personalInstructions({}));
+  });
+
   it('upgrades only complete generated blocks and preserves custom or quoted text', () => {
     const custom = 'Keep my exact convention: use short English paragraphs for this conversation.';
     const quoted = `Quoted policy under review: ${PRE_COMPACT_PERSONAL_REPLY_STYLE_RULES[0]}`;
