@@ -68,7 +68,7 @@ describe('useChatScrollViewport', () => {
     vi.unstubAllGlobals();
   });
 
-  function Harness({ messages = chatMessages, conversationId = 'session-1', streaming = false }: { messages?: Message[]; conversationId?: string; streaming?: boolean }) {
+  function Harness({ messages = chatMessages, conversationId = 'session-1', streaming = false, withComposer = false }: { messages?: Message[]; conversationId?: string; streaming?: boolean; withComposer?: boolean }) {
     viewport = useChatScrollViewport({
       hasToken: true,
       showSessionLoading: false,
@@ -80,14 +80,52 @@ describe('useChatScrollViewport', () => {
       loadMoreMessages: () => {},
     });
     return (
+      <>
       <div ref={viewport.scrollRef} onScroll={viewport.onScroll}>
         <div ref={viewport.registerListContentRef}>
           {messages.map((message, index) => <div key={index} data-chat-message-row data-message-render-key={message.renderKey} />)}
           <div ref={viewport.replySpaceRef} data-chat-reply-space />
         </div>
       </div>
+      {withComposer ? <div ref={viewport.composerDockRef} data-test-composer-dock /> : null}
+      </>
     );
   }
+
+  it('reserves space for the floating dock as it grows without moving a history reader', () => {
+    let dockHeight = 120;
+    const original = HTMLElement.prototype.getBoundingClientRect;
+    const measure = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      return this.hasAttribute('data-test-composer-dock') ? { height: dockHeight } as DOMRect : original.call(this);
+    });
+    act(() => root.render(<Harness withComposer />));
+    const el = container.firstElementChild as HTMLDivElement;
+    const dock = container.querySelector('[data-test-composer-dock]')!;
+    expect(el.style.paddingBottom).toBe('136px');
+    expect(el.style.scrollPaddingBottom).toBe('136px');
+
+    let top = 100;
+    Object.defineProperties(el, {
+      clientHeight: { value: 400 },
+      scrollHeight: { get: () => 1000 + parseFloat(el.style.paddingBottom) },
+      scrollTop: { get: () => top, set: (value: number) => { top = value; } },
+    });
+    act(() => viewport?.onScroll());
+    act(() => {
+      dockHeight = 240;
+      observers.get(dock)?.();
+    });
+    expect(el.style.paddingBottom).toBe('256px');
+    expect(el.style.scrollPaddingBottom).toBe('256px');
+    expect(top).toBe(100);
+    act(() => {
+      dockHeight = 120;
+      observers.get(dock)?.();
+    });
+    expect(el.style.paddingBottom).toBe('136px');
+    expect(top).toBe(100);
+    measure.mockRestore();
+  });
 
   it('follows committed virtual measurements before another frame without moving history readers', async () => {
     act(() => root.render(<Harness />));

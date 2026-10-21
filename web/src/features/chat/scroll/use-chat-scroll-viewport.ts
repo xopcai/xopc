@@ -46,6 +46,7 @@ export interface UseChatScrollViewportArgs {
 
 export interface UseChatScrollViewportResult {
   scrollRef: RefObject<HTMLDivElement | null>;
+  composerDockRef: RefObject<HTMLDivElement | null>;
   /** True when the viewport is within the near-bottom threshold, including non-overflowing content. */
   atBottom: boolean;
   registerListContentRef: (el: HTMLDivElement | null) => void;
@@ -75,6 +76,7 @@ export function useChatScrollViewport({
   loadMoreMessages,
 }: UseChatScrollViewportArgs): UseChatScrollViewportResult {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const composerDockRef = useRef<HTMLDivElement>(null);
   const listContentRef = useRef<HTMLDivElement | null>(null);
   const followingRef = useRef(true);
   const replySpaceRef = useRef<HTMLDivElement>(null);
@@ -430,8 +432,32 @@ export function useChatScrollViewport({
     };
   }, [hasToken, showSessionLoading, stopFollowing, scheduleResize]);
 
+  useLayoutEffect(() => {
+    if (!hasToken) return;
+    const viewport = scrollRef.current;
+    const dock = composerDockRef.current;
+    if (!viewport || !dock) return;
+
+    // Reserve the full dock height, including attachments, plans and safe-area spacing.
+    const measure = () => {
+      const inset = `${dock.getBoundingClientRect().height + 16}px`;
+      viewport.style.paddingBottom = inset;
+      viewport.style.scrollPaddingBottom = inset;
+      scheduleResize();
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(dock);
+    return () => {
+      observer.disconnect();
+      viewport.style.removeProperty('padding-bottom');
+      viewport.style.removeProperty('scroll-padding-bottom');
+    };
+  }, [hasToken, showSessionLoading, scheduleResize]);
+
   return {
     scrollRef,
+    composerDockRef,
     atBottom,
     registerListContentRef,
     scrollToBottom,
