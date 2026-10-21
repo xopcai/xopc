@@ -348,6 +348,7 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
 
   const {
     scrollRef,
+    composerDockRef,
     atBottom,
     registerListContentRef,
     scrollToBottom,
@@ -1280,14 +1281,23 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
             </div>
           </div>
 
-          <div className="sticky bottom-0 z-10 shrink-0 bg-surface-panel">
+          <div
+            ref={composerDockRef}
+            className={cn(
+              'chat-composer-dock pointer-events-none absolute inset-x-0 bottom-0 z-10',
+              personal ? '[--chat-composer-bottom-radius:1.65rem]' : '[--chat-composer-bottom-radius:1rem]',
+              compactWelcomeLayout
+                ? '[--chat-composer-bottom-space:max(0.625rem,env(safe-area-inset-bottom))]'
+                : '[--chat-composer-bottom-space:max(0.5rem,env(safe-area-inset-bottom))] sm:[--chat-composer-bottom-space:max(1rem,env(safe-area-inset-bottom))]',
+            )}
+          >
             <div className={embedded && !personal ? 'px-3' : 'px-3 sm:px-5 xl:px-6'}>
               <div
                 data-chat-composer-frame
                 className={cn(
-                  'relative mx-auto w-full min-w-0',
+                  'pointer-events-auto relative mx-auto w-full min-w-0 pb-[var(--chat-composer-bottom-space)]',
                   (!embedded || personal) && 'max-w-[var(--max-width-chat-frame)]',
-                  compactWelcomeLayout ? 'py-2.5' : 'py-2 sm:py-4',
+                  compactWelcomeLayout ? 'pt-2.5' : 'pt-2 sm:pt-4',
                 )}
               >
               <ScrollToBottomDock

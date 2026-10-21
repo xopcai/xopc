@@ -1643,6 +1643,21 @@ html.dark[data-color-scheme="porcelain"] {
   padding-inline-end: 0;
 }
 
+/* Cover the bottom gap and corner cutouts without covering the top corners. */
+.chat-composer-dock {
+  isolation: isolate;
+}
+
+.chat-composer-dock::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: auto 0 0;
+  height: calc(var(--chat-composer-bottom-space) + var(--chat-composer-bottom-radius, 1rem));
+  pointer-events: none;
+  background: var(--color-surface-panel);
+}
+
 @keyframes xopc-chat-user-message-enter {
   from {
     opacity: 0;

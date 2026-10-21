@@ -699,7 +699,7 @@ export const ChatComposer = memo(function ChatComposer({
       {conversationId ? <ConnectionActionBar key={conversationId} conversationId={conversationId} /> : null}
       {composerContext ? <ComposerContextBar {...composerContext} conversationId={conversationId} disabled={(composerContext.disabled ?? disabled) || sending || streaming} /> : null}
     <ComposerFrame
-      className={personal ? 'rounded-[1.65rem] shadow-surface dark:bg-surface-panel/90' : undefined}
+      className={personal ? 'rounded-[1.65rem]' : undefined}
       dragging={att.isDragging}
       onDragOver={(e) => {
         if (e.dataTransfer?.types.includes('Files') || hasWorkspaceFileDrag(e.dataTransfer)) {
