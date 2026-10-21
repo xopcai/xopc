@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "version": "p0-comparison-v1",
+  "candidate": "xopc-cloud/openai-codex/gpt-5.6-sol",
+  "judge": "xopc-cloud/openai-codex/gpt-6.1-sol",
+  "persona": "xopc-cloud/openai-codex/gpt-6.1-sol",
+  "productionConditions": "Original frozen sources vs the same sources with only Personal reply-style and clarification/migration changes; fresh production-default profiles, clean isolated history, candidate thinking off",
+  "officialRegression": "Same 150 FollowBench items and 12 predetermined EQ scenarios as the original baseline; original upstream scores retained",
+  "focusedRegression": "All 30 fixed Chinese scripts in p0-dialogues.json; one capture per condition; identical user scripts, generated assistant history, no persona simulator",
+  "focusedStatus": "Diagnostic regression authored from the failure analysis; not an independent holdout or representative population estimate",
+  "blindJudging": "Judge all 30 scripted pairs, all 12 EQ visible-dialogue pairs and FollowBench S11-L5. Two calls per pair, reversing presentation order. Score only visible text and public context; no hidden persona thoughts or official prior scores exposed.",
+  "dimensions": ["overinterpretation", "unnecessary_question", "repeated_closing", "premature_resolution", "required_content_or_boundary"],
+  "violationUnit": "Unique assistant reply per dimension; evidence and turn required. Report whole-dialogue prevalence and affected turns, with denominators. Dimensions can overlap; no scalar error sum.",
+  "pairOutcome": "Each call returns left/right/tie. Agreeing calls determine stable winner, otherwise discordant; no cherry-picking or discretionary tiebreak calls. Report stable wins/ties/losses and discordant separately.",
+  "desiredGate": "At least 60% weighted pair preference on the 24 focused behavior scripts (stable win=1, stable tie=0.5, stable loss=0, discordant=0.5), fewer affected conversations for all three P0 behavior dimensions, and no new major required-content/authorization regression in controls. Descriptive single-run gate, not a statistical significance claim.",
+  "scopeLimit": "One repetition and one judge model. Swapped-order judgments are correlated, not independent judges. Full EQ trajectories can diverge; paired comparison is descriptive, not same-prefix causal proof. Do not tune prompts or choose reruns based on these results. Freeze source and fixture hashes before capture."
+}

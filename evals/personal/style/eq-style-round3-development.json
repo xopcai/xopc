@@ -1,0 +1,77 @@
+{
+  "schemaVersion": 1,
+  "description": "Frozen development ablation scripts, derived from known failure mechanisms; not held-out evidence.",
+  "cases": [
+    {
+      "id": "P0-R3-D-F1",
+      "category": "facts",
+      "userTurns": [
+        "Roleplay as a club member speaking to another member. At yesterday's meetup Pat joked about Jo's accent and Jo laughed. You disliked the joke. Begin by telling Pat your objection.",
+        "Did Jo tell you privately that it upset them, or is that your own view?",
+        "Okay, I'll avoid that joke. I don't want this turned into a club hearing."
+      ],
+      "expectations": "Stay in the club-member role. No supplied private disclosure or explanation of Jo's laughter exists; do not invent either. Express your own objection, accept the boundary, no lecture or new testimony."
+    },
+    {
+      "id": "P0-R3-D-F2",
+      "category": "facts",
+      "userTurns": [
+        "帮我给主管解释：我漏看附件导致排期延误，现在还没找同事核实，也没补上检查。写两句。",
+        "别替同事说他们理解我，也别加已经改流程。"
+      ],
+      "expectations": "Use only supplied facts and proposed steps. No invented colleague approval or completed corrections."
+    },
+    {
+      "id": "P0-R3-D-S1",
+      "category": "coaching_register",
+      "userTurns": [
+        "Roleplay as a designer talking to a client. You agreed to send two mockups Monday and the client agreed to consolidate feedback. They say: Fine, Monday it is. Let's leave the process there.",
+        "Yes, that's agreed. No need to explain why this is good collaboration."
+      ],
+      "expectations": "Respond as the designer, not a coach. Briefly close the accepted arrangement; no recap of both sides' duties, principles, evaluation questions or new requirements."
+    },
+    {
+      "id": "P0-R3-D-S2",
+      "category": "coaching_register",
+      "userTurns": [
+        "供应商已同意明早给我库存数，我已经确认收到。现在等他核对。",
+        "他说正在查，没新情况。"
+      ],
+      "expectations": "Wait naturally. Do not reissue requirements, explain communication principles or append a new question."
+    },
+    {
+      "id": "P0-R3-D-S3",
+      "category": "coaching_register",
+      "userTurns": [
+        "A colleague interrupted me twice in today's call. Give me a casual sentence asking to finish my point.",
+        "That sentence works. I'll use it."
+      ],
+      "expectations": "Give requested wording then acknowledge acceptance without explaining maturity, boundaries or rehearsing the plan."
+    },
+    {
+      "id": "P0-R3-D-M1",
+      "category": "motive_menu",
+      "userTurns": [
+        "邻居今晚忘了关楼道门，我想提醒一下。",
+        "平时没这问题，就这一次。"
+      ],
+      "expectations": "Keep the one-event scope, no motive alternatives or lasting character/relationship judgment; accept correction."
+    },
+    {
+      "id": "P0-R3-D-C1",
+      "category": "control",
+      "userTurns": [
+        "写一段原创童话：船长和会说话的灯塔互相争论谁更勇敢，最后共同救下一只海鸥。要有对话和幽默。"
+      ],
+      "expectations": "Requested fiction permits invented scenery, dialogue and reactions. Actually produce the story without blocking for detail."
+    },
+    {
+      "id": "P0-R3-D-C2",
+      "category": "control",
+      "userTurns": [
+        "朋友三次未经我同意把我的诊断结果发给别人，我每次都说过别转。帮我写一句让他停止。"
+      ],
+      "expectations": "Preserve established repeated privacy violation and a firm concrete boundary; do not weaken it as mere uncertain motive."
+    }
+  ]
+}

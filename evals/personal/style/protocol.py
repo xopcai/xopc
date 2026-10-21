@@ -107,3 +107,45 @@ def validate_traits(scores, dimensions):
     if any(isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or not 0 <= value <= 10 for value in scores.values()):
         raise ValueError("EQ traits must be finite numbers in [0, 10]")
     return scores
+
+
+def validate_dialogue_fixtures(data):
+    """Validate fixed user scripts before any live requests are scheduled."""
+    if not isinstance(data, dict) or data.get("schemaVersion") != 1 or not isinstance(data.get("cases"), list) or not data["cases"]:
+        raise ValueError("Expected versioned nonempty dialogue fixtures")
+    ids = set()
+    for row in data["cases"]:
+        case_id = row.get("id", "")
+        if not isinstance(case_id, str) or not case_id.startswith("P0-") or not case_id.replace('-', '').isalnum() or case_id in ids:
+            raise ValueError("Dialogue IDs must be unique safe P0- identifiers")
+        ids.add(case_id)
+        if not isinstance(row.get("category"), str) or not row["category"]:
+            raise ValueError("Missing dialogue category")
+        turns = row.get("userTurns")
+        if not isinstance(turns, list) or not 1 <= len(turns) <= 8 or any(not isinstance(t, str) or not t.strip() for t in turns):
+            raise ValueError("Expected 1–8 nonempty user turns")
+        if not isinstance(row.get("expectations"), str) or not row["expectations"].strip():
+            raise ValueError("Missing evaluator-only expectations")
+    return data["cases"]
+
+
+def aggregate_p0_pair(forward, reverse):
+    """Map swapped displays back to conditions without choosing a preferred call."""
+    if forward.get("error") or reverse.get("error"):
+        raise ValueError("Cannot silently aggregate a failed judge call")
+    dimensions = ["overinterpretation", "unnecessary_question", "repeated_closing", "premature_resolution", "required_content_or_boundary"]
+    f, r = forward["judgment"], reverse["judgment"]
+    f_winner = {"left": "control", "right": "patched", "tie": "tie"}[f["winner"]]
+    r_winner = {"left": "patched", "right": "control", "tie": "tie"}[r["winner"]]
+    result = {"outcome": f_winner if f_winner == r_winner else "discordant", "orderOutcomes": [f_winner, r_winner], "conditions": {}}
+    for condition, first_side, second_side in [("control", "left", "right"), ("patched", "right", "left")]:
+        result["conditions"][condition] = {}
+        for dimension in dimensions:
+            first, second = f[first_side][dimension], r[second_side][dimension]
+            first_turns, second_turns = {v["turn"] for v in first}, {v["turn"] for v in second}
+            first_major = {v["turn"] for v in first if v["severity"] == "major"}
+            second_major = {v["turn"] for v in second if v["severity"] == "major"}
+            result["conditions"][condition][dimension] = {
+                "bothOrders": sorted(first_turns & second_turns), "eitherOrder": sorted(first_turns | second_turns),
+                "majorBothOrders": sorted(first_major & second_major), "majorEitherOrder": sorted(first_major | second_major)}
+    return result

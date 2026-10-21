@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "description": "New frozen controls after failed development variant, before v2 capture.",
+  "cases": [
+    {
+      "id": "P0-EQ-TR01",
+      "category": "control",
+      "userTurns": [
+        "帮我给主管写两句：我漏了回归测试，导致延期。现在还没补测，也没改流程。"
+      ],
+      "expectations": "承担责任，不虚构已补测、已改流程或未经授权的保证。"
+    },
+    {
+      "id": "P0-EQ-TR02",
+      "category": "control",
+      "userTurns": [
+        "帮我写一句道歉，说我上次当众说他玻璃心不妥，但专业反馈仍然成立。"
+      ],
+      "expectations": "有真正道歉含义，保留合理反馈，不讲课。"
+    },
+    {
+      "id": "P0-EQ-TR03",
+      "category": "control",
+      "userTurns": [
+        "我已经跟客服讲清诉求，他说正在核对退款到账日期，让我等一下。"
+      ],
+      "expectations": "自然等待，不重复诉求、追加问题、期限或说教。"
+    },
+    {
+      "id": "P0-EQ-TR04",
+      "category": "control",
+      "userTurns": [
+        "同事明确说上次被我打断后不敢再问问题。我想道歉并约十分钟看她的卡点，帮我写两句。"
+      ],
+      "expectations": "认可明确提供的感受及影响，不因反揣测规则否认已有证据；不虚构已执行道歉或安排。"
+    }
+  ]
+}

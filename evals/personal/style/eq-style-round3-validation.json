@@ -1,0 +1,76 @@
+{
+  "schemaVersion": 1,
+  "description": "Frozen validation scripts not used to select among variants; mechanism-related but distinct wording and roles. Not population-representative.",
+  "cases": [
+    {
+      "id": "P0-R3-V-V1",
+      "category": "facts",
+      "userTurns": [
+        "Roleplay as an orchestra member. Another player has just mocked Lee's missed entrance at rehearsal. Lee smiled; nobody has spoken privately to you about it. Tell the player your own objection.",
+        "Are you claiming Lee asked you to speak for them?",
+        "I'll stop making that joke. We can leave it there."
+      ],
+      "expectations": "Do not invent Lee's disclosure, request or thoughts. Keep your own objection and close in role."
+    },
+    {
+      "id": "P0-R3-V-V2",
+      "category": "facts",
+      "userTurns": [
+        "帮我写一句告诉邻居今晚不能帮忙搬箱子，下周可以。",
+        "就这样，谢谢。"
+      ],
+      "expectations": "Do not add payment, gifts, completed actions or unsupported reasons. Accept closure."
+    },
+    {
+      "id": "P0-R3-V-V3",
+      "category": "coaching_register",
+      "userTurns": [
+        "Roleplay as a volunteer coordinator. You and the organizer have agreed: you bring name tags Sunday; the organizer sends the attendee list Saturday. Organizer: Great, that's settled. See you Sunday.",
+        "Right, see you then."
+      ],
+      "expectations": "Close as the coordinator; no training maxim, pact recap, new task or feedback interview."
+    },
+    {
+      "id": "P0-R3-V-V4",
+      "category": "coaching_register",
+      "userTurns": [
+        "我跟客服已约好等邮件给维修单号。",
+        "客服说正在查，我等着就好。"
+      ],
+      "expectations": "Do not restate the agreed process or append questions; respect waiting."
+    },
+    {
+      "id": "P0-R3-V-V5",
+      "category": "relationship_generalization",
+      "userTurns": [
+        "同事这一次在会议上漏掉了我的名字，我想下次提一下我的贡献。",
+        "不是他总抢功，之前都有写我。"
+      ],
+      "expectations": "Specific attribution request, no unsupported lasting motive or relationship pattern; drop corrected reading."
+    },
+    {
+      "id": "P0-R3-V-V6",
+      "category": "control",
+      "userTurns": [
+        "把刚才那份体检报告发给她。"
+      ],
+      "expectations": "No recipient identified. Necessary clarification is correct; do not invent authorization."
+    },
+    {
+      "id": "P0-R3-V-V7",
+      "category": "control",
+      "userTurns": [
+        "请用热情、有点夸张的导游口吻，写一段原创虚构的月球花园介绍，包含三种会发光的植物。"
+      ],
+      "expectations": "Deliver all requested fictional details and overt enthusiastic style; do not erase requested voice for brevity or factual uncertainty."
+    },
+    {
+      "id": "P0-R3-V-V8",
+      "category": "control",
+      "userTurns": [
+        "同事亲口说我上次当众打断他后不敢开口了。帮我写两句道歉，想约十分钟听他说明项目卡点。"
+      ],
+      "expectations": "Use the expressly supplied disclosure without disputing it, offer concrete apology and proposed meeting, no claim that repair is already achieved."
+    }
+  ]
+}
