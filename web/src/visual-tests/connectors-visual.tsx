@@ -5,6 +5,11 @@ import { InstallConnectorDialog } from '@/features/connectors/components/install
 import { buildInitialDraft } from '@/features/connectors/components/install-connector-draft';
 import { ConnectorServicePage } from '@/features/connectors/connector-service-page';
 import { InstalledConnectorDetailDialog } from '@/features/connectors/components/installed-connector-detail-dialog';
+import { CustomMcpServersSection } from '@/features/connectors/components/custom-mcp-servers-section';
+import { InstalledConnectorRow } from '@/features/connectors/components/installed-connector-row';
+import { InstalledPluginConnectionRow } from '@/features/connectors/components/installed-plugin-connection-row';
+import type { ExtensionApiRow } from '@/features/extensions/types';
+import { normalizeMcpSettingsFromConfig } from '@/features/connectors/mcp/mcp-config-api';
 import type { ConnectorDefinition, ConnectorInstance } from '@/features/connectors/connectors-api';
 import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
@@ -37,6 +42,33 @@ const connector: ConnectorDefinition = {
 };
 export function Fixture() {
   const [draft, setDraft] = useState(buildInitialDraft(connector));
+  if (params.get('stage') === 'connected') {
+    const extension: ExtensionApiRow = {
+      id: 'plugin:dingtalk', pluginId: 'dingtalk', format: 'agent-plugin', name: 'dingtalk', source: 'agent-plugin',
+      active: false, activationEligible: false, hasUi: false, installationState: 'preparing', authorizationStatus: 'not_required',
+      branding: { iconUrl: '/connector-icons/dingtalk-mark.svg', iconSha256: 'fixture' },
+      setup: { authorizations: [{ id: 'account', title: '钉钉', servers: ['dingtalk'], methods: [] }], userConfig: {}, tasks: [] },
+      components: { skills: [], mcp: [] },
+    };
+    return <main className="min-h-screen bg-surface-base p-4 sm:p-8"><div className="mx-auto grid max-w-6xl gap-4 sm:grid-cols-2 xl:grid-cols-3">
+      <InstalledConnectorRow instance={{ instanceId: 'deepwiki', displayName: 'DeepWiki', connectionStatus: 'connected', usage: {} } as ConnectorInstance}
+        onOpenDetails={() => {}} t={messages('zh').connectorsSettings} />
+      <InstalledPluginConnectionRow extension={extension} language="zh" onOpen={() => {}} />
+    </div></main>;
+  }
+  if (params.get('stage') === 'custom') {
+    const servers = normalizeMcpSettingsFromConfig({ mcp: { servers: {
+      payment: { displayName: 'chuxingpay', url: 'https://mcp-sandbox.example.com/mcp' },
+      knowledge: { displayName: '团队知识库', url: 'https://mcp.example.com/mcp/api' },
+      coffee: { displayName: 'my-coffee', url: 'https://coffee.example.com/order/user/mcp' },
+      local: { displayName: '本地文件服务', command: 'node', args: ['server.js'], enabled: false },
+    } } }).servers;
+    const m = messages('zh');
+    return <main className="min-h-screen bg-surface-base p-4 sm:p-8"><div className="mx-auto max-w-6xl">
+      <CustomMcpServersSection servers={servers} lastChecks={{ knowledge: { toolCount: 3, checkedAt: '2026-10-21T06:50:00Z' }, coffee: { toolCount: 8, checkedAt: '2026-10-20T06:14:00Z' } }}
+        t={m.mcpSettings} cs={m.connectorsSettings} onAdd={() => {}} onEdit={() => {}} onRemove={async () => {}} />
+    </div></main>;
+  }
   return <MemoryRouter>{params.get('stage') === 'service' ? <ConnectorServicePage />
     : params.get('stage')?.startsWith('detail') ? <InstalledConnectorDetailDialog instance={{ instanceId: 'gmail', connectorId: connector.id, displayName: 'Gmail', materialized: connector.runtime, usage: {}, config: {}, secretStatus: {} } as ConnectorInstance}
       definition={connector} onClose={() => {}} onChanged={async () => {}} t={messages('zh').connectorsSettings} mcp={messages('zh').mcpSettings} />

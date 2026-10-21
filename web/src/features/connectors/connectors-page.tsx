@@ -24,7 +24,7 @@ import { ConnectorCardSkeleton } from '@/features/connectors/components/connecto
 import { InstalledConnectorRowSkeleton } from '@/features/connectors/components/installed-connector-row-skeleton';
 import { ConnectorDetailDialog } from '@/features/connectors/components/connector-detail-dialog';
 import { ConnectorsPageHeaderEnd } from '@/features/connectors/components/connectors-page-header-end';
-import { CustomMcpServerRow } from '@/features/connectors/components/custom-mcp-server-row';
+import { CustomMcpServersSection } from '@/features/connectors/components/custom-mcp-servers-section';
 import { useExtensions } from '@/features/extensions/extension-provider';
 import { InstalledPluginConnectionRow, pluginHasConnection } from './components/installed-plugin-connection-row';
 import { InstalledConnectorDetailDialog } from '@/features/connectors/components/installed-connector-detail-dialog';
@@ -632,7 +632,7 @@ export function ConnectorsPage({ embedded = false, onHeaderActionChange }: { emb
           {tab === 'connected' && hasToken ? (
             <div className="flex flex-col gap-6">
               {state.loading ? (
-                <div className="grid gap-3" aria-busy="true" aria-label={cs.loading}>
+                <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3" aria-busy="true" aria-label={cs.loading}>
                   {CONNECTOR_SKELETON_KEYS.slice(0, 3).map((key) => <InstalledConnectorRowSkeleton key={key} />)}
                 </div>
               ) : installedCount === 0 ? (
@@ -650,7 +650,7 @@ export function ConnectorsPage({ embedded = false, onHeaderActionChange }: { emb
                         <h2 className="text-sm font-semibold text-fg">{cs.needsAttentionTitle}</h2>
                         <span className="text-xs tabular-nums text-amber-700 dark:text-amber-300">{attentionInstances.length}</span>
                       </div>
-                      <div className="divide-y divide-edge-subtle overflow-hidden rounded-xl border border-amber-500/25 bg-amber-500/5">
+                      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
                         {attentionInstances.map((instance) => (
                           <InstalledConnectorRow
                             key={instance.instanceId}
@@ -669,9 +669,9 @@ export function ConnectorsPage({ embedded = false, onHeaderActionChange }: { emb
                     </section>
                   ) : null}
 
-                  {availableInstances.length ? (
+                  {availableInstances.length || visiblePluginConnections.length ? (
                     <section>
-                      <div className="divide-y divide-edge-subtle overflow-hidden rounded-xl border border-edge bg-surface-base">
+                      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
                         {availableInstances.map((instance) => (
                           <InstalledConnectorRow
                             key={instance.instanceId}
@@ -686,42 +686,20 @@ export function ConnectorsPage({ embedded = false, onHeaderActionChange }: { emb
                             t={cs}
                           />
                         ))}
+                        {visiblePluginConnections.map(extension => <InstalledPluginConnectionRow key={extension.id} extension={extension} language={language} onOpen={() => navigate(pluginDetailPath(extension.pluginId!, 'connections', extension.authorizationStatus === 'required'))} />)}
                       </div>
                     </section>
                   ) : null}
-
-                  {visiblePluginConnections.length ? <section className="divide-y divide-edge-subtle overflow-hidden rounded-xl border border-edge bg-surface-base">
-                    {visiblePluginConnections.map(extension => <InstalledPluginConnectionRow key={extension.id} extension={extension} language={language} onOpen={() => navigate(pluginDetailPath(extension.pluginId!, 'connections', extension.authorizationStatus === 'required'))} />)}
-                  </section> : null}
                   {visibleCustomServers.length || !connectedSearchQuery.trim() ? (
-                    <section aria-label={cs.customIntegrationsTitle} className="rounded-xl border border-edge bg-surface-base">
-                      <div className="px-4 py-3">
-                        <h2 className="inline text-sm font-medium text-fg">{cs.customIntegrationsTitle}</h2>
-                        <span className="ml-2 text-xs tabular-nums text-fg-subtle">{visibleCustomServers.length}</span>
-                        <span className="mt-1 block text-xs text-fg-muted">{cs.customIntegrationsHint}</span>
-                      </div>
-                      <div className="border-t border-edge-subtle">
-                        <div className="flex flex-wrap gap-2 px-4 py-3">
-                          <Button type="button" variant="secondary" className="h-8 text-xs" onClick={openAddCustomServer}>
-                            {cs.addCustomServerAdvanced}
-                          </Button>
-
-                        </div>
-                        <div className="divide-y divide-edge-subtle">
-                          {visibleCustomServers.map((row) => (
-                            <CustomMcpServerRow
-                              key={row.clientKey}
-                              row={row}
-                              lastCheck={lastChecks[row.id]}
-                              t={mcp}
-                              cs={cs}
-                              onEdit={() => setCustomDialog({ mode: 'edit', row: structuredClone(row) })}
-                              onRemove={async () => removeCustomServer(row)}
-                            />
-                          ))}
-                        </div>
-                      </div>
-                    </section>
+                    <CustomMcpServersSection
+                      servers={visibleCustomServers}
+                      lastChecks={lastChecks}
+                      t={mcp}
+                      cs={cs}
+                      onAdd={openAddCustomServer}
+                      onEdit={row => setCustomDialog({ mode: 'edit', row: structuredClone(row) })}
+                      onRemove={removeCustomServer}
+                    />
                   ) : null}
                 </div>
               )}
