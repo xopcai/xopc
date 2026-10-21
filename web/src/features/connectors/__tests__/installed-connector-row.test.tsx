@@ -10,7 +10,7 @@ Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 let root: ReturnType<typeof createRoot> | undefined;
 afterEach(async () => { await act(async () => root?.unmount()); root = undefined; });
 
-it('uses background-only highlighting and an inset keyboard focus ring for grouped rows', async () => {
+it('uses background-only highlighting and an inset keyboard focus ring for connection cards', async () => {
   const container = document.createElement('div');
   root = createRoot(container);
   const instance = { instanceId: 'github', displayName: 'GitHub', connectionStatus: 'connected', usage: {} } as ConnectorInstance;
@@ -21,8 +21,8 @@ it('uses background-only highlighting and an inset keyboard focus ring for group
   expect(button.classList.contains('ring-2')).toBe(false);
   expect(button.classList.contains('focus-visible:ring-inset')).toBe(true);
   expect(button.className).not.toContain('ring-offset');
-  expect(button.classList.contains('first:rounded-t-[calc(var(--radius-xl)-1px)]')).toBe(true);
-  expect(button.classList.contains('last:rounded-b-[calc(var(--radius-xl)-1px)]')).toBe(true);
+  expect(button.classList.contains('rounded-xl')).toBe(true);
+  expect(button.textContent).toContain('查看详情');
   await act(async () => button.click());
   expect(onOpenDetails).toHaveBeenCalledWith(instance);
 });

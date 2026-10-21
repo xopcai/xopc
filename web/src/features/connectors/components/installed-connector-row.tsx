@@ -34,28 +34,29 @@ export function InstalledConnectorRow({
     <button
       type="button"
       className={cn(
-        'flex w-full items-center gap-3 px-4 py-3.5 text-left hover:bg-surface-hover/60',
-        'rounded-none first:rounded-t-[calc(var(--radius-xl)-1px)] last:rounded-b-[calc(var(--radius-xl)-1px)]',
+        'flex min-h-[8.75rem] w-full min-w-0 flex-col rounded-xl border border-edge bg-surface-panel p-4 text-left hover:bg-surface-hover/45',
         interaction.transition,
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent',
+        connectionState === 'needs_setup' && 'border-amber-500/25',
         highlighted && 'bg-accent-soft',
       )}
       onClick={() => onOpenDetails(instance)}
     >
-      <ConnectorLogo connector={definition} />
-      <div className="min-w-0 flex-1">
-        <div className="flex min-w-0 items-center gap-2">
-          <h3 className="truncate text-sm font-medium text-fg">{instance.displayName}</h3>
-          <span className={cn('inline-flex shrink-0 items-center gap-1 text-xs font-medium', connectionStatus.className)}>
+      <div className="flex w-full min-w-0 items-start gap-3">
+        <ConnectorLogo connector={definition} size="sm" />
+        <div className="min-w-0 flex-1">
+          <h3 className="truncate text-sm font-semibold text-fg" title={instance.displayName}>{instance.displayName}</h3>
+          <span className={cn('mt-1 inline-flex items-center gap-1 text-[11px]', connectionStatus.className)}>
             <connectionStatus.Icon className="size-3.5" aria-hidden />
             {connectionStatus.label}
           </span>
         </div>
-        {description ? (
-          <p className="mt-1 truncate text-xs text-fg-muted">{description}</p>
-        ) : null}
       </div>
-      <ChevronRight className="size-4 shrink-0 text-fg-disabled" aria-hidden />
+      {description ? <p className="mt-2 w-full line-clamp-2 text-xs leading-5 text-fg-muted" title={description}>{description}</p> : null}
+      <span className="mt-auto flex w-full items-center justify-end gap-1 pt-2 text-xs text-fg-muted">
+        {t.installedDetails}
+        <ChevronRight className="size-3.5 shrink-0" aria-hidden />
+      </span>
     </button>
   );
 }

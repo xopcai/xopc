@@ -1,7 +1,8 @@
-import { ChevronRight, Plug } from 'lucide-react';
+import { AlertCircle, CheckCircle2, ChevronRight, Clock3, PauseCircle, Plug } from 'lucide-react';
 
 import { CapabilityIcon } from '@/features/capabilities/capability-icon';
 import type { ExtensionApiRow } from '@/features/extensions/types';
+import { cn } from '@/lib/cn';
 
 /** Plugin-owned accounts are managed by the plugin's declared setup flow. */
 export function pluginHasConnection(extension: ExtensionApiRow): boolean {
@@ -30,16 +31,25 @@ export function InstalledPluginConnectionRow({ extension, language, onOpen }: {
     ? t('去授权', 'Connect account') : t('查看详情', 'View details');
   const accounts = extension.setup?.authorizations ?? [];
   const title = accounts.length === 1 ? accounts[0].title : extension.name;
+  const needsAttention = preparing || (!disabled && (needsAuthorization || extension.readiness === 'blocked' || extension.readiness === 'degraded'));
+  const StatusIcon = preparing ? Clock3 : disabled ? PauseCircle : needsAttention ? AlertCircle : CheckCircle2;
 
   return <button type="button" onClick={onOpen}
-    className="flex w-full items-center gap-3 px-4 py-3.5 text-left hover:bg-surface-hover/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent">
-    <CapabilityIcon iconUrl={extension.branding?.iconUrl} fallback={Plug} />
-    <span className="min-w-0 flex-1">
-      <span className="block text-sm font-semibold text-fg">{title}</span>
-      <span className="mt-1 block text-xs text-fg-muted">{t('由插件提供', 'Provided by plugin')} · {extension.name}</span>
+    className={cn('flex min-h-[8.75rem] w-full min-w-0 flex-col rounded-xl border border-edge bg-surface-panel p-4 text-left transition-colors hover:bg-surface-hover/45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent', needsAttention && 'border-amber-500/25')}>
+    <span className="flex w-full min-w-0 items-start gap-3">
+      <CapabilityIcon iconUrl={extension.branding?.iconUrl} fallback={Plug} className="size-9" />
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-sm font-semibold text-fg" title={title}>{title}</span>
+        <span className={cn('mt-1 inline-flex items-center gap-1 text-[11px]', needsAttention ? 'text-amber-700 dark:text-amber-300' : disabled ? 'text-fg-muted' : 'text-emerald-700 dark:text-emerald-300')}>
+          <StatusIcon className="size-3.5" aria-hidden />
+          {status}
+        </span>
+      </span>
     </span>
-    <span className={`shrink-0 text-xs ${needsAuthorization && !disabled ? 'text-amber-700 dark:text-amber-300' : 'text-fg-muted'}`}>{status}</span>
-    <span className="shrink-0 text-xs text-accent">{action}</span>
-    <ChevronRight className="size-4 shrink-0 text-fg-muted" aria-hidden />
+    <span className="mt-2 block w-full truncate text-xs leading-5 text-fg-muted" title={extension.name}>{t('由插件提供', 'Provided by plugin')} · {extension.name}</span>
+    <span className={cn('mt-auto flex w-full items-center justify-end gap-1 pt-2 text-xs', needsAttention ? 'text-accent-fg' : 'text-fg-muted')}>
+      {action}
+      <ChevronRight className="size-3.5 shrink-0" aria-hidden />
+    </span>
   </button>;
 }
