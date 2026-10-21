@@ -6,6 +6,7 @@ import type { Message } from './types.js';
 import type { TaskUpdateTrigger } from '../storage/sqlite/session-input-repository.js';
 import { stripRuntimeContextFromUserMessage } from './user-message-display.js';
 import type { TranscriptStoredRow } from './session-context-for-llm.js';
+import { isRoutineTaskAllocationStatus } from './task-allocation-status.js';
 import { buildTranscriptOutline } from './transcript-outline.js';
 
 /** Transcript row for TUI and HTTP clients (flattened from persisted session messages). */
@@ -516,6 +517,7 @@ function customRowToClientHistory(row: TranscriptStoredRow): ClientHistoryMessag
 
   const customType = optionalString(r.customType)?.trim();
   if (!customType) return null;
+  if (customType === 'task_allocation_status' && (r.display === false || isRoutineTaskAllocationStatus(r.details))) return null;
   if (customType === 'personal_request_status' || customType === 'task_allocation_status') {
     const content = typeof r.content === 'string' ? r.content : '';
     return { role: 'assistant', kind: 'message', startsNewBubble: true,

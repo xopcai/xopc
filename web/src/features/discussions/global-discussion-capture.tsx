@@ -449,7 +449,7 @@ export function GlobalDiscussionCaptureHost() {
     return () => window.removeEventListener('open-recording-recoveries', open);
   }, [recorder.refreshRecoverableDrafts]);
   if (showRecoveries) return <div className="fixed inset-0 z-[135] flex items-center justify-center bg-black/45 p-4" role="dialog" aria-modal="true" aria-label={copy.recoveredTitle}>
-    <section className="flex h-[min(40rem,85vh)] w-[min(40rem,95vw)] flex-col overflow-hidden rounded-xl border border-edge bg-surface-panel">
+    <section className="flex h-[min(40rem,85vh)] w-[min(40rem,95vw)] flex-col overflow-hidden rounded-xl border border-edge bg-surface-overlay">
       <header className="flex items-center justify-between border-b border-edge p-4"><h2>{copy.recoveredTitle}</h2><Button onClick={() => setShowRecoveries(false)}>{copy.close}</Button></header>
       <div className="min-h-0 flex-1 overflow-y-auto p-4">
         {operationError ? <p role="alert" className="mb-3 text-danger">{operationError}</p> : null}
@@ -475,7 +475,7 @@ export function GlobalDiscussionCaptureHost() {
     const candidate = recorder.recoverableDrafts[0];
     if (!candidate) return null;
     return (
-      <aside className="fixed bottom-5 right-5 z-[125] w-[min(24rem,calc(100vw-2rem))] rounded-xl border border-edge bg-surface-panel p-4 shadow-elevated">
+      <aside className="fixed bottom-5 right-5 z-[125] w-[min(24rem,calc(100vw-2rem))] rounded-xl border border-edge bg-surface-overlay p-4 shadow-elevated">
         <button className="text-sm font-medium text-fg" onClick={() => setShowRecoveries(true)}>{copy.recoveredTitle} ({recorder.recoverableDrafts.length})</button>
         <p className="mt-1 text-xs leading-5 text-fg-muted">{copy.recoveredDescription}</p>
         <div className="mt-3 flex justify-end gap-2">
@@ -493,7 +493,7 @@ export function GlobalDiscussionCaptureHost() {
   if (consentVersion != null) {
     return (
       <div className="fixed inset-0 z-[130] flex items-center justify-center bg-black/45 p-4" role="dialog" aria-modal="true">
-        <div className="w-[min(28rem,calc(100vw-2rem))] rounded-xl border border-edge bg-surface-panel p-5 shadow-elevated">
+        <div className="w-[min(28rem,calc(100vw-2rem))] rounded-xl border border-edge bg-surface-overlay p-5 shadow-elevated">
           <div className="flex items-start justify-between gap-4">
             <div>
               <h2 className="text-base font-semibold text-fg">{copy.consentTitle}</h2>

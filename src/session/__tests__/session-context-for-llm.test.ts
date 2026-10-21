@@ -20,6 +20,21 @@ import {
 import { storedRowsToFileEntries } from '../stored-rows-to-file-entries.js';
 
 describe('session-context-for-llm', () => {
+  it('keeps routine allocation receipts out of display and model context while preserving blockers', () => {
+    const rows = ['pending', 'selecting', 'assigned', 'blocked', 'failed', 'cancelled'].map(status => ({
+      role: 'custom' as const, customType: 'task_allocation_status', display: true,
+      content: status, details: { taskId: 'task', allocation: { status } },
+    }));
+    for (const project of [buildSessionDisplayMessages, buildSessionContextForLlm]) {
+      const messages = project(rows);
+      expect(messages).toHaveLength(3);
+      expect(JSON.stringify(messages)).not.toContain('assigned');
+      expect(JSON.stringify(messages)).toContain('blocked');
+      expect(JSON.stringify(messages)).toContain('failed');
+      expect(JSON.stringify(messages)).toContain('cancelled');
+    }
+  });
+
   it('excludes persisted call metadata from conversation display and model hydration', () => {
     const rows = [{ role: 'custom' as const, customType: 'voice_call', details: { callId: 'call', startedAt: 100 } }];
     expect(buildSessionContextForLlm(rows)).toEqual([]);

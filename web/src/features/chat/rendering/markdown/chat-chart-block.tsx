@@ -46,7 +46,7 @@ function ChartPresentation({ spec, source, copy }: { spec: ChartSpec; source: st
       : lease.active && !expanded ? <ChartCanvas spec={spec} onError={fail} />
         : <div className="relative h-[280px] p-4 sm:h-[360px]">
           <Skeleton className="h-full w-full" />
-          <button type="button" className={`${actionClass} absolute inset-0 m-auto h-10 w-fit bg-surface-panel`} onClick={lease.activate}>{labels.activate}</button>
+          <button type="button" className={`${actionClass} absolute inset-0 m-auto h-10 w-fit bg-surface-overlay`} onClick={lease.activate}>{labels.activate}</button>
         </div>}
     <p className="px-3 pb-2 text-xs text-fg-muted">{spec.summary}</p>
     {spec.sources && <p className="px-3 pb-2 text-xs text-fg-muted">{labels.sources}: {spec.sources.join(' · ')}</p>}

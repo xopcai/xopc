@@ -126,6 +126,10 @@ describe('background task allocation', () => {
       JOIN transcripts t ON t.transcript_id = e.transcript_id WHERE t.conversation_id = ?`).all(conversationId);
     const transcript = JSON.stringify(rows);
     expect(transcript).toContain('任务已提交，正在分配执行者。');
+    expect(rows).toHaveLength(3);
+    for (const row of rows as Array<{ payload_json: string }>) {
+      expect(JSON.parse(row.payload_json)).toMatchObject({ display: false });
+    }
     expect(transcript).toContain('已分配给 Data Analyst');
     expect(transcript).toContain('已进入执行队列。');
     expect(transcript).toContain('由 Data Analyst 开始执行。');
@@ -503,6 +507,8 @@ describe('background task allocation', () => {
     await dispatcher().drain();
     expect(new TaskAllocationRepository().summary(result.model.task.id)).toMatchObject({ status: 'blocked', reasonCode: 'no_eligible_candidate' });
     expect(new TaskRunRepository().listByTask(result.model.task.id)).toHaveLength(0);
+    const history = await new SessionStore(stateDirectory).getMessagePage(conversationId);
+    expect(JSON.stringify(history)).toContain('Task allocation needs attention:');
   });
 
   it('resolves an explicitly requested display name in the background', async () => {
@@ -563,7 +569,9 @@ describe('background task allocation', () => {
       const detail = await (await fetch(`${base}/api/tasks/${accepted.task.id}`, { headers })).json();
       expect(detail).toMatchObject({ allocation: { status: 'assigned', selectedAgentId: 'analyst' }, operationalState: 'queued' });
       const history = await (await fetch(`${base}/api/sessions/${conversationId}/history?view=compact`, { headers })).json();
-      expect(JSON.stringify(history)).toContain('Sales expertise');
+      expect(JSON.stringify(history)).not.toContain('Sales expertise');
+      expect(JSON.stringify(history)).not.toContain('Task submitted;');
+      expect(detail.allocation.selectionReason).toBe('Sales expertise and verified tools');
     } finally {
       server.closeAllConnections();
       await new Promise<void>(resolve => server.close(() => resolve()));

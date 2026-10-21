@@ -9,6 +9,7 @@ import { PERSONAL_PROACTIVE_MESSAGE_TYPE, parsePersonalProactiveMessage } from '
 
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
 import { TASK_RESULT_DELIVERY_TYPE, parseTaskResultDelivery } from '@xopcai/gateway-contract';
+import { isRoutineTaskAllocationStatus } from './task-allocation-status.js';
 import { VOICE_CALL_TYPE, VOICE_TRANSCRIPT_TYPE, voiceTranscriptMessage } from './voice-transcript.js';
 
 import {
@@ -564,6 +565,7 @@ export function buildSessionContextForLlm(rows: TranscriptStoredRow[]): AgentMes
       continue;
     }
     if (isTranscriptCustomMessageEntry(r)) {
+      if (r.customType === 'task_allocation_status' && isRoutineTaskAllocationStatus(r.details)) continue;
       if (r.customType === 'personal_request_status' || r.customType === 'connection_control_status') continue;
       if (r.customType === PERSONAL_PROACTIVE_MESSAGE_TYPE) {
         const message = parsePersonalProactiveMessage(r.details);
@@ -605,6 +607,7 @@ export function buildSessionDisplayMessages(rows: TranscriptStoredRow[]): AgentM
   const out: AgentMessage[] = [];
   for (const r of rows) {
     if (isTranscriptCustomMessageEntry(r)) {
+      if (r.customType === 'task_allocation_status' && isRoutineTaskAllocationStatus(r.details)) continue;
       if (r.customType === 'personal_request_status' || r.customType === 'connection_control_status') {
         out.push({ role: 'assistant', content: [{ type: 'text', text: typeof r.content === 'string' ? r.content : '' }],
           timestamp: typeof r.timestamp === 'number' ? r.timestamp : 0 } as AgentMessage);

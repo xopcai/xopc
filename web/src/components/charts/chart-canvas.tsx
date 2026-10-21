@@ -102,7 +102,7 @@ export function ChartCanvas({ spec, onError, expanded = false }: {
   return <div className={expanded ? 'relative h-full min-h-0' : 'relative h-[280px] sm:h-[360px]'}>
     <div ref={host} className="h-full w-full" role="img" aria-label={`${spec.title}. ${spec.summary}`} />
     {!ready && <div className="absolute inset-0 p-4" role="status" aria-label={labels.loading}><Skeleton className="h-full w-full" /></div>}
-    {ready && <button type="button" className="absolute bottom-1 right-1 flex min-h-9 items-center gap-1 rounded-md bg-surface-panel px-2 text-xs text-fg-muted hover:bg-surface-hover focus-visible:outline-2 focus-visible:outline-accent" onClick={download} aria-label={labels.download}><Download className="size-4" aria-hidden />PNG</button>}
-    {downloadFailed && <p role="status" className="absolute bottom-10 right-2 bg-surface-panel p-2 text-xs text-fg-muted">{labels.downloadFailed}</p>}
+    {ready && <button type="button" className="absolute bottom-1 right-1 flex min-h-9 items-center gap-1 rounded-md bg-surface-overlay px-2 text-xs text-fg-muted hover:text-fg focus-visible:outline-2 focus-visible:outline-accent" onClick={download} aria-label={labels.download}><Download className="size-4" aria-hidden />PNG</button>}
+    {downloadFailed && <p role="status" className="absolute bottom-10 right-2 bg-surface-overlay p-2 text-xs text-fg-muted">{labels.downloadFailed}</p>}
   </div>;
 }

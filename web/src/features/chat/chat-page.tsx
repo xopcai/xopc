@@ -1295,7 +1295,7 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
                 running={stream.streaming || stream.sending}
               />
               <div
-                className="absolute bottom-full right-0 z-20 mb-2 flex items-center rounded-full border border-edge-subtle bg-surface-panel/95 p-1 shadow-elevated backdrop-blur-sm empty:hidden xl:hidden"
+                className="absolute bottom-full right-0 z-20 mb-2 flex items-center rounded-full border border-edge-subtle bg-surface-overlay p-1 shadow-elevated backdrop-blur-sm empty:hidden xl:hidden"
               >
                 {!embedded ? <ChatTimelinePanel
                   items={timeline.items}

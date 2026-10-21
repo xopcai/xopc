@@ -7,6 +7,7 @@ import { readPluginUserConfig, expandUserConfig } from './user-config.js';
 import { AgentPluginStore, type InstalledAgentPlugin } from './store.js';
 import { containedPath, expandPluginVariables, pluginServerId, resolvePluginCwd, type PluginDiagnostic } from './validation.js';
 import { applyPluginAuthBinding, readPluginAuthBinding } from './auth.js';
+import { pluginNodeRuntime } from './node-runtime.js';
 
 export function pluginOAuthCredentialId(pluginId: string, revision: string, serverName: string): string {
   return `mcp_draft_${createHash('sha256').update(JSON.stringify(['plugin', pluginId, revision, serverName])).digest('hex').slice(0, 32)}`;
@@ -28,9 +29,9 @@ export function materializePluginServers(plugin: InstalledAgentPlugin, store = n
         ...server, ...(plugin.receipt.credentialScope === 'revision' ? { xopcOAuthCredentialId: pluginOAuthCredentialId(plugin.id, plugin.receipt.revision, name) } : {}), ...(server.headers ? { headers: Object.fromEntries(Object.entries(server.headers).map(([key, value]) => [key, expand(value)])) } : {}), xopcPlugin: origin,
       } : {
         type: 'stdio', xopcPlugin: origin,
-        command: server.command.startsWith('./') ? containedPath(root, resolve(root, server.command)) : server.command.startsWith('${PLUGIN_RESOURCES}/') ? containedPath(data, join(data, 'resources', plugin.receipt.revision, server.command.slice('${PLUGIN_RESOURCES}/'.length))) : server.command,
+        command: server.command.startsWith('./') ? containedPath(root, resolve(root, server.command)) : server.command.startsWith('${PLUGIN_RESOURCES}/') ? containedPath(data, join(data, 'resources', plugin.receipt.revision, server.command.slice('${PLUGIN_RESOURCES}/'.length))) : pluginNodeRuntime(server.command).command,
         args: server.args?.map(value => { const expanded = expand(value); if (typeof expanded !== 'string') throw new Error('Sensitive arguments are not supported; use environment variables'); return expanded; }),
-        env: { ...Object.fromEntries(Object.entries(server.env ?? {}).map(([key, value]) => [key, expand(value)])), PLUGIN_HOST_HOME: homedir(), PLUGIN_ROOT: root, PLUGIN_DATA: data, PLUGIN_RESOURCES: join(data, 'resources', plugin.receipt.revision), CLAUDE_PLUGIN_ROOT: root, CLAUDE_PLUGIN_DATA: data },
+        env: { ...Object.fromEntries(Object.entries(server.env ?? {}).map(([key, value]) => [key, expand(value)])), ...pluginNodeRuntime(server.command).env, PLUGIN_HOST_HOME: homedir(), PLUGIN_ROOT: root, PLUGIN_DATA: data, PLUGIN_RESOURCES: join(data, 'resources', plugin.receipt.revision), CLAUDE_PLUGIN_ROOT: root, CLAUDE_PLUGIN_DATA: data },
         cwd: resolvePluginCwd(server.cwd, root, data),
       };
       servers[pluginServerId(plugin.id, name)] = applyPluginAuthBinding(raw, readPluginAuthBinding(store, plugin.id, name, server, plugin.receipt.revision));

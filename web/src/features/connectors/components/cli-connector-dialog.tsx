@@ -103,7 +103,7 @@ export function CliConnectorDialog({ definition, instance: initialInstance, onCl
   const close = () => { if (instance) void onChanged(instance); onClose(); };
   return <Dialog.Root open onOpenChange={open => { if (!open) close(); }}><Dialog.Portal>
     <Dialog.Overlay className="fixed inset-0 z-50 bg-black/40" />
-    <Dialog.Content className="fixed left-1/2 top-1/2 z-50 flex h-[min(38rem,calc(100dvh-2rem))] w-[min(36rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-edge bg-surface-panel text-fg">
+    <Dialog.Content className="fixed left-1/2 top-1/2 z-50 flex h-[min(38rem,calc(100dvh-2rem))] w-[min(36rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-edge bg-surface-overlay text-fg">
       <div className="flex items-center justify-between border-b border-edge p-5"><div><Dialog.Title className="font-semibold">{definition.displayName}</Dialog.Title>
         <Dialog.Description className="mt-1 text-sm text-fg-muted">{zh ? '连接账号并设置允许的操作。' : 'Connect an account and choose allowed actions.'}</Dialog.Description></div>
         <Button variant="ghost" onClick={close} aria-label={zh ? '关闭' : 'Close'}><X className="size-4" /></Button></div>

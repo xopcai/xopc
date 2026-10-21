@@ -491,7 +491,7 @@ export function FileTree({
       } : undefined}
     >
       {rootDropActive && uploadDropHint ? (
-        <div className="pointer-events-none sticky top-0 z-20 mx-2 mb-1 rounded-md border border-accent bg-surface-panel/95 px-3 py-2 text-center text-xs font-medium text-accent-fg shadow-sm">
+        <div className="pointer-events-none sticky top-0 z-20 mx-2 mb-1 rounded-md border border-accent bg-surface-overlay px-3 py-2 text-center text-xs font-medium text-accent-fg shadow-sm">
           {uploadDropHint}
         </div>
       ) : null}

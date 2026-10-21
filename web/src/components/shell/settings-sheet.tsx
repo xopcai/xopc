@@ -63,7 +63,7 @@ export const SettingsSheet = memo(function SettingsSheet({ children }: SettingsS
   const panel = (
     <div
       className={cn(
-        'relative z-50 flex min-h-0 flex-1 flex-col overflow-hidden bg-surface-panel',
+        'relative z-50 flex min-h-0 flex-1 flex-col overflow-hidden bg-surface-overlay',
         'max-md:shadow-elevated',
         'md:m-3 md:max-h-[calc(100dvh-1.5rem)] md:rounded-2xl md:border md:border-edge md:shadow-elevated',
         'settings-sheet-enter',

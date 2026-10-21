@@ -5,6 +5,15 @@ import type { TranscriptStoredRow } from '../session-context-for-llm.js';
 import type { Message } from '../types.js';
 
 describe('messagesToClientHistory', () => {
+  it('hides routine allocation receipts, including old visible rows, while retaining actionable updates', () => {
+    const rows = ['pending', 'selecting', 'assigned', 'blocked', 'failed', 'cancelled'].map(status => ({
+      role: 'custom' as const, customType: 'task_allocation_status', display: true,
+      content: status, details: { taskId: 'task', allocation: { status } },
+    }));
+    rows.push({ ...rows[3]!, content: 'hidden blocker', display: false });
+    expect(transcriptRowsToClientHistory(rows).map(message => message.content)).toEqual(['blocked', 'failed', 'cancelled']);
+  });
+
   it('preserves assistant audio media in live and persisted history', () => {
     const media = [{ id: 'audio-1', type: 'audio', name: 'reply.m4a', mimeType: 'audio/mp4',
       size: 128, uri: 'media://assistant/reply.m4a' }];

@@ -14,7 +14,7 @@ export function ChatActionTooltip({ label, children }: { label: string; children
           side="top"
           sideOffset={7}
           collisionPadding={12}
-          className="z-[100] max-w-[min(18rem,90vw)] rounded-md border border-edge bg-surface-panel px-2.5 py-1.5 text-xs text-fg shadow-popover"
+          className="z-[100] max-w-[min(18rem,90vw)] rounded-md border border-edge bg-surface-overlay px-2.5 py-1.5 text-xs text-fg shadow-popover"
         >
           {label}
         </Tooltip.Content>

@@ -706,7 +706,7 @@ export function HomePage() {
         </div>
       ) : null}
       {advisorUndo ? (
-        <div role="status" className="fixed bottom-5 left-1/2 z-[100] flex -translate-x-1/2 items-center gap-4 rounded-lg border border-edge bg-surface-panel px-4 py-3 text-sm text-fg shadow-float">
+        <div role="status" className="fixed bottom-5 left-1/2 z-[100] flex -translate-x-1/2 items-center gap-4 rounded-lg border border-edge bg-surface-overlay px-4 py-3 text-sm text-fg shadow-float">
           <span>{t.home.advisorFeedbackSaved}</span>
           <button type="button" className="font-medium text-accent-fg hover:underline" onClick={undoAdvisorFeedback}>
             {t.home.advisorUndo}

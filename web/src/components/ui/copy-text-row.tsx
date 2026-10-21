@@ -13,7 +13,7 @@ import { copyTextToClipboard, selectInputText } from '@/lib/copy-to-clipboard';
 import { cn } from '@/lib/cn';
 
 const copyTooltipClass =
-  '!z-[10000] max-w-[min(28rem,90vw)] rounded-md border border-edge bg-surface-panel px-2.5 py-2 text-left text-xs leading-snug text-fg shadow-lg';
+  '!z-[10000] max-w-[min(28rem,90vw)] rounded-md border border-edge bg-surface-overlay px-2.5 py-2 text-left text-xs leading-snug text-fg shadow-lg';
 
 const copyInputClass =
   'block w-full min-w-0 truncate rounded border border-transparent bg-surface-hover px-2 py-1.5 font-mono text-xs text-fg focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent';

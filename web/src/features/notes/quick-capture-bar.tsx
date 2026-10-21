@@ -179,7 +179,7 @@ export function QuickCaptureBar({
   return (
     <div
       className={cn(
-        'flex items-center gap-1.5 rounded-2xl border border-edge bg-surface-panel p-2 shadow-float dark:shadow-elevated',
+        'flex items-center gap-1.5 rounded-2xl border border-edge bg-surface-overlay p-2 shadow-float dark:shadow-elevated',
         'focus-within:border-accent focus-within:ring-1 focus-within:ring-accent',
         recording && 'border-danger ring-1 ring-danger/40',
       )}

@@ -117,7 +117,7 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
 
   return <VoiceCallContext.Provider value={context}>
     {children}
-    {target && !expanded ? <div ref={miniCardRef} style={miniPosition ? { left: miniPosition.left, top: miniPosition.top, right: 'auto' } : undefined} className="fixed right-5 top-[calc(5rem+env(safe-area-inset-top))] z-50 flex max-w-[calc(100vw-2.5rem)] items-center gap-3 rounded-xl border border-edge bg-surface-panel p-3 shadow-float" role="region" aria-label={m.voiceConversation}>
+    {target && !expanded ? <div ref={miniCardRef} style={miniPosition ? { left: miniPosition.left, top: miniPosition.top, right: 'auto' } : undefined} className="fixed right-5 top-[calc(5rem+env(safe-area-inset-top))] z-50 flex max-w-[calc(100vw-2.5rem)] items-center gap-3 rounded-xl border border-edge bg-surface-overlay p-3 shadow-float" role="region" aria-label={m.voiceConversation}>
       <button type="button" aria-label={language === 'zh' ? '展开通话' : 'Expand call'} onClick={() => { if (suppressMiniClick.current) { suppressMiniClick.current = false; return; } setExpanded(true); }} onPointerDown={startMiniDrag} onPointerMove={moveMiniDrag} onPointerUp={endMiniDrag} onPointerCancel={cancelMiniDrag} className="min-w-0 touch-none select-none rounded-lg text-left cursor-grab active:cursor-grabbing focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
         <span className="block truncate text-sm font-medium text-fg">{target.name}</span>
         <span className="block text-xs text-fg-muted">{status}{connected ? ` · ${voice.elapsedLabel}` : ''}</span>

@@ -19,7 +19,7 @@ export function ChannelsSettingsDialogFooter({
   showCancel?: boolean;
 }) {
   return (
-    <div className="sticky bottom-0 shrink-0 border-t border-edge-subtle bg-surface-panel px-6 py-4 dark:border-edge-subtle">
+    <div className="sticky bottom-0 shrink-0 border-t border-edge-subtle bg-surface-overlay px-6 py-4 dark:border-edge-subtle">
       {dirty ? (
         <p className="mb-3 text-xs text-amber-800 dark:text-amber-200">{ch.unsavedHint}</p>
       ) : null}

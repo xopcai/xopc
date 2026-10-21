@@ -34,8 +34,8 @@ export const ScrollToBottomDock = memo(function ScrollToBottomDock({
       <button
         type="button"
         className={cn(
-          'group relative pointer-events-auto flex size-11 sm:size-8 shrink-0 items-center justify-center rounded-full border border-edge-subtle bg-surface-panel text-fg-muted shadow-surface',
-          'hover:bg-surface-hover hover:text-fg',
+          'group relative pointer-events-auto flex size-11 sm:size-8 shrink-0 items-center justify-center rounded-full border border-edge-subtle bg-surface-overlay text-fg-muted shadow-surface',
+          'hover:border-edge-strong hover:text-fg',
           interaction.transition,
           interaction.press,
           interaction.focusRingPanel,
