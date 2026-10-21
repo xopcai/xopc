@@ -44,8 +44,8 @@ it('checks a managed MCP through authenticated Gateway routes and persists super
   if (!address || typeof address === 'string') throw new Error('Expected MCP listener');
   const auth = { mode: 'token' as const, token: 'connector-health-test-token' };
   const config = ConfigSchema.parse({ gateway: { auth } });
-  await installConnector(config, 'railway-12306', {});
-  const server = config.mcp!.servers!.railway_12306!;
+  await installConnector(config, 'filesystem', { config: { rootPath: root } });
+  const server = config.mcp!.servers!.filesystem!;
   delete server.command; delete server.args;
   server.url = `http://127.0.0.1:${address.port}/mcp`;
   const saveConfig = vi.fn(async () => ({ saved: true }));
@@ -62,13 +62,13 @@ it('checks a managed MCP through authenticated Gateway routes and persists super
     if (!bound || typeof bound === 'string') throw new Error('Expected Gateway listener');
     const base = `http://127.0.0.1:${bound.port}/api/connectors`;
     const headers = { Authorization: `Bearer ${auth.token}` };
-    expect((await fetch(`${base}/railway_12306/test`, { method: 'POST' })).status).toBe(401);
+    expect((await fetch(`${base}/filesystem/test`, { method: 'POST' })).status).toBe(401);
     expect(methods).toEqual([]);
-    const response = await fetch(`${base}/railway_12306/test`, { method: 'POST', headers });
+    const response = await fetch(`${base}/filesystem/test`, { method: 'POST', headers });
     const data = await response.json();
     expect(response.status, JSON.stringify(data)).toBe(200);
     expect(data.payload).toMatchObject({ ok: true, status: 'ok', toolCount: 1 });
-    expect(data.payload.tools[0].name).toBe('mcp__railway_12306__query');
+    expect(data.payload.tools[0].name).toBe('mcp__filesystem__query');
     expect(saveConfig).toHaveBeenCalled();
     const installed = await (await fetch(`${base}/installed`, { headers })).json();
     expect(installed.payload.instances[0]).toMatchObject({ connectionStatus: 'connected', usage: { lastHealthStatus: 'ok' } });
