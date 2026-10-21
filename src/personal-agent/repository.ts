@@ -20,14 +20,9 @@ export interface PersonalAgentRecord {
   appearance: PersonalAppearance;
   voicePreference: { provider: string; model: string; voice: string } | null;
   voiceCallPreferences: { openingGreetingEnabled: boolean };
-  preferences: Record<string, unknown>;
   revision: number;
   errorMessage: string | null;
 }
-
-export const DEFAULT_PERSONAL_PREFERENCES = {
-  warmth: 'balanced', humor: 'occasional', supportMode: 'untangle', detailLevel: 'brief', proactivity: 'decisions',
-} as const;
 
 export function personalAgentId(ownerId: string): string {
   return `personal-${createHash('sha256').update(ownerId).digest('hex').slice(0, 12)}`;
@@ -69,7 +64,6 @@ function toRecord(ownerId: string, agent: StoredAgent, session: PersonalSession 
     appearance: appearanceFrom(agent),
     voicePreference: agent.profile?.voicePreference ?? null,
     voiceCallPreferences: agent.profile?.voiceCallPreferences ?? { openingGreetingEnabled: true },
-    preferences: agent.profile?.responsePreferences ?? DEFAULT_PERSONAL_PREFERENCES,
     revision: agent.revision,
     errorMessage: agent.provisioningError ?? null,
   };

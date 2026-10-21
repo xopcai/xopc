@@ -88,7 +88,6 @@ import { createTaskCollaborationTool } from './task-collaboration-tool.js';
 import { createPersonalRequestTools } from './personal-request-tool.js';
 import { createPersonalRequestConnectionTool, createPersonalRequestResultTool } from './personal-request-result-tool.js';
 import { personalRequestForExecution } from '../../personal-agent/request-repository.js';
-import { createPersonalPreferenceTool } from './personal-preference-tool.js';
 import { getPendingTranscriptUserText } from '../inbound/attachment-pipeline.js';
 import type { MemoryManager } from '../memory/manager.js';
 import { resolveUserContextSessionAccess } from '../../user-context/access-policy.js';
@@ -707,10 +706,6 @@ export class AgentToolsFactory {
               createPersonalResultTool(currentConversationId),
               ...createPersonalRequestTools(productToolDeps),
               createPersonalAttentionTool({ getConversationId: () => this.deps.getCurrentContext()?.conversationId, getConfig: () => this.deps.getConfig?.() }),
-              createPersonalPreferenceTool({
-                getCurrentConversationId: () => this.deps.getCurrentContext()?.conversationId,
-                onAgentCatalogMutate: this.deps.onAgentCatalogMutate,
-              }),
             ] : []),
           ]
         : []),

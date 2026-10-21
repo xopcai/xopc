@@ -1,4 +1,4 @@
-import { XopcPersonalAgentRecord, XopcPersonalAgentResponse, XopcPersonalPreferences,
+import { XopcPersonalAgentRecord, XopcPersonalAgentResponse,
   XopcPersonalVoicePreference,
   XopcPersonalVoiceOption, XopcPersonalVoiceStatus, XopcPersonalVoicesResponse, XopcPersonalProfilePatch } from '../model/personalAgent';
 import { XopcHttpError } from '../service/transport';
@@ -49,30 +49,24 @@ export class XopcPersonalAgentSettingsViewModel {
     patch: XopcPersonalProfilePatch): XopcPersonalProfilePatch {
     const nameChanged = patch.displayName !== original.displayName;
     const appearanceChanged = patch.appearance !== original.appearance;
-    const detailChanged = patch.preferences.detailLevel !== original.preferences?.detailLevel;
     const greetingChanged = patch.voiceCallPreferences?.openingGreetingEnabled !== (original.voiceCallPreferences?.openingGreetingEnabled ?? true);
     const voiceChanged = JSON.stringify(patch.voicePreference ?? null) !== JSON.stringify(original.voicePreference ?? null);
     if (latest.agentId !== original.agentId || latest.state !== 'ready' || !latest.revision ||
       (nameChanged && latest.displayName !== original.displayName && latest.displayName !== patch.displayName) ||
       (appearanceChanged && latest.appearance !== original.appearance && latest.appearance !== patch.appearance) ||
-      (detailChanged && latest.preferences?.detailLevel !== original.preferences?.detailLevel && latest.preferences?.detailLevel !== patch.preferences.detailLevel) ||
       (greetingChanged && (latest.voiceCallPreferences?.openingGreetingEnabled ?? true) !== (original.voiceCallPreferences?.openingGreetingEnabled ?? true) &&
         (latest.voiceCallPreferences?.openingGreetingEnabled ?? true) !== patch.voiceCallPreferences?.openingGreetingEnabled) ||
       (voiceChanged && JSON.stringify(latest.voicePreference ?? null) !== JSON.stringify(original.voicePreference ?? null) &&
         JSON.stringify(latest.voicePreference ?? null) !== JSON.stringify(patch.voicePreference ?? null))) {
       throw new Error('PERSONAL_PROFILE_CONFLICT');
     }
-    const prefs = latest.preferences;
-    const merged: XopcPersonalPreferences = { addressAs: prefs?.addressAs, warmth: prefs?.warmth,
-      supportMode: prefs?.supportMode, detailLevel: detailChanged ? patch.preferences.detailLevel : prefs?.detailLevel,
-      proactivity: prefs?.proactivity, humor: prefs?.humor, guidance: prefs?.guidance };
     return { revision: latest.revision, displayName: nameChanged ? patch.displayName : latest.displayName,
-      appearance: appearanceChanged ? patch.appearance : latest.appearance, preferences: merged,
+      appearance: appearanceChanged ? patch.appearance : latest.appearance,
       voiceCallPreferences: greetingChanged ? patch.voiceCallPreferences : latest.voiceCallPreferences,
       voicePreference: voiceChanged ? patch.voicePreference : latest.voicePreference };
   }
 
-  async saveProfile(name: string, appearance: string, preferences: XopcPersonalPreferences,
+  async saveProfile(name: string, appearance: string,
     voiceId: string, greetingEnabled?: boolean): Promise<XopcPersonalAgentRecord | null> {
     const record = this.record;
     if (this.saving || this.loading || !record?.revision || !name.trim() || name.trim().length > 60) return null;
@@ -80,7 +74,7 @@ export class XopcPersonalAgentSettingsViewModel {
     const connection = gatewaySession.connectionRevision();
     const patch: XopcPersonalProfilePatch = { revision: record.revision, displayName: name.trim(), appearance: appearance,
       voiceCallPreferences: record.voiceCallPreferences ? { openingGreetingEnabled: greetingEnabled ?? record.voiceCallPreferences.openingGreetingEnabled } : undefined,
-      preferences: preferences, voicePreference: voiceId === record.voicePreference?.voice || (!voiceId && record.voicePreference?.voice === 'default') ? record.voicePreference : this.voiceRoute ? (voiceId ? { provider: this.voiceRoute.provider,
+      voicePreference: voiceId === record.voicePreference?.voice || (!voiceId && record.voicePreference?.voice === 'default') ? record.voicePreference : this.voiceRoute ? (voiceId ? { provider: this.voiceRoute.provider,
         model: this.voiceRoute.model, voice: voiceId } : null) : record.voicePreference };
     this.saving = true; this.error = '';
     try {

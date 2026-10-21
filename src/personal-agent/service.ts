@@ -1,6 +1,5 @@
 import { z } from 'zod';
 
-import { ResponsePreferencesSchema } from '../agent-config/index.js';
 import { AgentCatalogRepository } from '../agent-catalog/repository.js';
 import { AgentCatalogService } from '../agent-catalog/service.js';
 import { getAvailableModels } from '../providers/index.js';
@@ -9,18 +8,15 @@ import { createConversation } from '../storage/sqlite/conversation-repository.js
 import { getSessionMetadata, patchSessionMetadata } from '../storage/sqlite/session-repository.js';
 import { setSessionConfig } from '../storage/sqlite/config-repository.js';
 import { PERSONAL_MAIN_TOOL_IDS, PERSONAL_READ_TOOL_ALIASES } from './policy.js';
-import { personalInstructions, upgradePersonalInstructions } from './prompts.js';
+import { personalInstructions } from './prompts.js';
 import { completePersonalOnboarding } from './onboarding.js';
 import {
-  DEFAULT_PERSONAL_PREFERENCES, getPersonalAgent, personalAgentId,
+  getPersonalAgent, personalAgentId,
   type PersonalAgentRecord,
 } from './repository.js';
 
 export { personalInstructions } from './prompts.js';
 
-export const PersonalPreferencesSchema = ResponsePreferencesSchema;
-
-export type PersonalPreferences = z.infer<typeof PersonalPreferencesSchema>;
 export const PersonalAppearanceSchema = z.enum(['loopi', 'loopi-curious', 'loopi-care', 'custom']);
 export type PersonalAppearance = z.infer<typeof PersonalAppearanceSchema>;
 
@@ -41,11 +37,11 @@ export async function refreshPersonalDelegationGuidance(service: PersonalAgentHo
   const repository = new AgentCatalogRepository();
   const agent = repository.get(personalAgentId(ownerId));
   const instructions = agent?.profile?.instructions;
-  if (!agent || !instructions) return;
-  const nextInstructions = upgradePersonalInstructions(instructions, agent.profile?.responsePreferences?.addressAs);
+  if (!agent) return;
+  const nextInstructions = personalInstructions();
   const toolAllowlist = [...new Set([...(agent.toolAllowlist ?? PERSONAL_MAIN_TOOL_IDS),
     ...(agent.toolAllowlist?.includes('personal_task') ? PERSONAL_MAIN_TOOL_IDS : [])]
-    .filter(name => name !== 'clarify').map(name => PERSONAL_READ_TOOL_ALIASES[name] ?? name))];
+    .filter(name => name !== 'clarify' && name !== 'personal_preference').map(name => PERSONAL_READ_TOOL_ALIASES[name] ?? name))];
   if (nextInstructions === instructions && JSON.stringify(toolAllowlist) === JSON.stringify(agent.toolAllowlist)) return;
   try {
     await new AgentCatalogService().update(agent.id, {
@@ -132,8 +128,7 @@ async function provisionPersonalAgent(
         emoji: appearanceEmoji(initial?.appearance ?? 'loopi'),
         avatar: appearanceAvatar(initial?.appearance ?? 'loopi'),
         ...(initial?.voicePreference ? { voicePreference: initial.voicePreference } : {}),
-        responsePreferences: DEFAULT_PERSONAL_PREFERENCES,
-        instructions: personalInstructions(DEFAULT_PERSONAL_PREFERENCES),
+        instructions: personalInstructions(),
       },
       toolAllowlist: [...PERSONAL_MAIN_TOOL_IDS],
       skills: { mode: 'replace', include: [] },
@@ -166,12 +161,11 @@ export async function patchPersonalProfile(
   ownerId: string,
   revision: number,
   displayName: string,
-  preferences: PersonalPreferences,
   appearance: PersonalAppearance,
   voicePreference?: { provider: string; model: string; voice: string } | null,
   voiceCallPreferences?: { openingGreetingEnabled: boolean },
 ): Promise<PersonalAgentRecord | null> {
-  const updated = await updatePersonalProfileRecord(ownerId, revision, displayName, preferences, appearance, voicePreference, voiceCallPreferences);
+  const updated = await updatePersonalProfileRecord(ownerId, revision, displayName, appearance, voicePreference, voiceCallPreferences);
   if (!updated) return null;
   service.refreshAgentCatalog();
   service.agentService.evictSessionAgent(updated.conversationId);
@@ -182,7 +176,6 @@ export async function updatePersonalProfileRecord(
   ownerId: string,
   revision: number,
   displayName: string,
-  preferences: PersonalPreferences,
   appearance: PersonalAppearance,
   voicePreference?: { provider: string; model: string; voice: string } | null,
   voiceCallPreferences?: { openingGreetingEnabled: boolean },
@@ -197,8 +190,7 @@ export async function updatePersonalProfileRecord(
     avatar: appearanceAvatar(appearance),
     ...(voicePreference !== undefined ? { voicePreference: voicePreference ?? undefined } : {}),
     ...(voiceCallPreferences ? { voiceCallPreferences } : {}),
-    responsePreferences: preferences,
-    instructions: personalInstructions(preferences),
+    instructions: personalInstructions(),
   };
   try {
     await new AgentCatalogService().update(current.id, { profile }, revision);

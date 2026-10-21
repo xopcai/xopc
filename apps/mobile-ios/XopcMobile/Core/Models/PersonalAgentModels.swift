@@ -8,7 +8,6 @@ struct PersonalAgentRecord: Decodable, Equatable, Sendable {
     let appearance: String
     let revision: Int?
     let userCallName: String?
-    let preferences: [String: String]?
     var voiceCallPreferences: PersonalVoiceCallPreferences?
     let voicePreference: PersonalVoicePreference?
     let errorMessage: String?
@@ -32,13 +31,12 @@ private struct PersonalProfileUpdate: Encodable {
     let revision: Int
     let displayName: String
     let appearance: String
-    let preferences: [String: String]
     let voicePreference: PersonalVoicePreference?
 
     let voiceCallPreferences: PersonalVoiceCallPreferences?
 
     enum CodingKeys: String, CodingKey {
-        case revision, displayName, appearance, preferences, voicePreference, voiceCallPreferences
+        case revision, displayName, appearance, voicePreference, voiceCallPreferences
     }
 
     func encode(to encoder: Encoder) throws {
@@ -47,7 +45,6 @@ private struct PersonalProfileUpdate: Encodable {
         try container.encode(revision, forKey: .revision)
         try container.encode(displayName, forKey: .displayName)
         try container.encode(appearance, forKey: .appearance)
-        try container.encode(preferences, forKey: .preferences)
         if let voicePreference {
             try container.encode(voicePreference, forKey: .voicePreference)
         } else {
@@ -97,7 +94,6 @@ extension GatewayClient {
         record: PersonalAgentRecord,
         displayName: String,
         appearance: String,
-        preferences: [String: String],
         voicePreference: PersonalVoicePreference?,
         openingGreetingEnabled: Bool? = nil
     ) async throws -> PersonalAgentRecord {
@@ -106,7 +102,6 @@ extension GatewayClient {
             revision: revision,
             displayName: displayName,
             appearance: appearance,
-            preferences: preferences,
             voicePreference: voicePreference,
             voiceCallPreferences: (record.voiceCallPreferences == nil ? nil : openingGreetingEnabled).map { PersonalVoiceCallPreferences(openingGreetingEnabled: $0) }
         ))

@@ -112,7 +112,7 @@ internal fun PersonalScreen(state: PersonalUiState, insets: PaddingValues, conne
   onOpenAssertion: (String) -> Unit = {},
   onOpenAgent: () -> Unit = {},
   onLoadAgentVoices: () -> Unit = {},
-  onUpdateAgentProfile: (String, String, Map<String, String>, String?, Boolean) -> Unit = { _, _, _, _, _ -> },
+  onUpdateAgentProfile: (String, String, String?, Boolean) -> Unit = { _, _, _, _ -> },
   onLoadProactivity: suspend () -> ai.xopc.mobile.gateway.PersonalProactivitySettings = { error("UNAVAILABLE") },
   onSaveProactivity: suspend (ai.xopc.mobile.gateway.PersonalProactivitySettings) -> ai.xopc.mobile.gateway.PersonalProactivitySettings = { error("UNAVAILABLE") },
   onUploadAvatar: suspend (ByteArray) -> Unit = {}, onModel: () -> Unit = {},

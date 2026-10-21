@@ -10,7 +10,7 @@ import { XopcHttpError } from '../entry/src/main/ets/service/transport.ets';
 import { XopcPersonalAgentSettingsViewModel } from '../entry/src/main/ets/viewmodel/personalAgentSettingsViewModel.ets';
 
 const record = { agentId: 'personal', conversationId: 'fixed', state: 'ready' as const, displayName: 'Ada',
-  appearance: 'loopi', errorMessage: null, revision: 7, preferences: { warmth: 'gentle', guidance: 'Keep context' },
+  appearance: 'loopi', errorMessage: null, revision: 7,
   voiceCallPreferences: { openingGreetingEnabled: true },
   voicePreference: { provider: 'old', model: 'old-tts', voice: 'existing' } };
 const outreach = { revision: 3, mode: 'balanced', timezone: 'Asia/Shanghai', quietStart: 22, quietEnd: 8,
@@ -32,9 +32,9 @@ describe('Personal AI settings on HarmonyOS', () => {
     await model.load(record);
     expect(model.voices).toEqual([{ id: 'other', name: 'Other', displayNames: { 'zh-CN': '温暖', en: 'Other' } }]);
     mocks.request.mockResolvedValueOnce(JSON.stringify({ ok: true, payload: { ...record, revision: 8 } }));
-    await model.saveProfile('Ada', 'loopi', record.preferences, 'existing');
+    await model.saveProfile('Ada', 'loopi', 'existing');
     const patch = JSON.parse(mocks.request.mock.calls.at(-1)![2]);
-    expect(patch).toMatchObject({ revision: 7, voicePreference: record.voicePreference, preferences: record.preferences });
+    expect(patch).toMatchObject({ revision: 7, voicePreference: record.voicePreference });
     expect(model.record?.revision).toBe(8);
   });
 
@@ -42,17 +42,17 @@ describe('Personal AI settings on HarmonyOS', () => {
     const model = new XopcPersonalAgentSettingsViewModel(); await model.load(record);
     mocks.request.mockResolvedValueOnce(JSON.stringify({ ok: true, payload: { ...record,
       voiceCallPreferences: { openingGreetingEnabled: false } } }));
-    await model.saveProfile('Ada', 'loopi', record.preferences, 'existing', false);
+    await model.saveProfile('Ada', 'loopi', 'existing', false);
     const patch = JSON.parse(mocks.request.mock.calls.at(-1)![2]);
     expect(patch.voiceCallPreferences).toEqual({ openingGreetingEnabled: false });
-    expect(patch.preferences).toEqual(record.preferences);
+    expect(patch).not.toHaveProperty('preferences');
   });
 
   it('does not load or write advanced outreach settings while editing a profile', async () => {
     const model = new XopcPersonalAgentSettingsViewModel();
     await model.load(record);
     mocks.request.mockResolvedValueOnce(JSON.stringify({ ok: true, payload: record }));
-    await model.saveProfile('Ada', 'loopi', record.preferences, 'existing');
+    await model.saveProfile('Ada', 'loopi', 'existing');
     expect(mocks.request.mock.calls.some(([path]) => path.includes('/proactivity'))).toBe(false);
   });
 
@@ -60,23 +60,23 @@ describe('Personal AI settings on HarmonyOS', () => {
     const model = new XopcPersonalAgentSettingsViewModel();
     await model.load(record);
     mocks.request.mockRejectedValueOnce(new Error('Settings changed; reload before saving'));
-    expect(await model.saveProfile('Changed', 'loopi', {}, '')).toBeNull();
+    expect(await model.saveProfile('Changed', 'loopi', '')).toBeNull();
     expect(model.record).toEqual(record);
     expect(model.error).toContain('reload');
     expect(model.saving).toBe(false);
   });
 
-  it('rebases a stale save once while preserving remote advanced preferences and unchanged fields', async () => {
+  it('rebases a stale save once while preserving unchanged remote fields', async () => {
     const model = new XopcPersonalAgentSettingsViewModel();
     await model.load(record);
-    const latest = { ...record, revision: 8, appearance: 'loopi-care', preferences: { ...record.preferences, humor: 'playful', guidance: 'Updated on web' } };
+    const latest = { ...record, revision: 8, appearance: 'loopi-care' };
     mocks.request.mockRejectedValueOnce(new XopcHttpError(409))
       .mockResolvedValueOnce(JSON.stringify({ ok: true, payload: latest }))
       .mockResolvedValueOnce(JSON.stringify({ ok: true, payload: { ...latest, revision: 9, displayName: 'Nova' } }));
-    expect((await model.saveProfile('Nova', 'loopi', record.preferences, 'existing'))?.revision).toBe(9);
+    expect((await model.saveProfile('Nova', 'loopi', 'existing'))?.revision).toBe(9);
     const patch = JSON.parse(mocks.request.mock.calls.at(-1)![2]);
     expect(patch).toMatchObject({ revision: 8, displayName: 'Nova', appearance: 'loopi-care',
-      preferences: latest.preferences, voicePreference: record.voicePreference });
+      voicePreference: record.voicePreference });
     expect(model.error).toBe('');
     expect(model.saving).toBe(false);
   });
@@ -87,7 +87,7 @@ describe('Personal AI settings on HarmonyOS', () => {
     mocks.request.mockRejectedValueOnce(new XopcHttpError(409))
       .mockResolvedValueOnce(JSON.stringify({ ok: true, payload: { ...record, revision: 8, displayName: 'Web name' } }));
     const before = mocks.request.mock.calls.length;
-    expect(await model.saveProfile('Phone name', 'loopi', record.preferences, 'existing')).toBeNull();
+    expect(await model.saveProfile('Phone name', 'loopi', 'existing')).toBeNull();
     expect(mocks.request.mock.calls.length - before).toBe(2);
     expect(model.error).toBe('PERSONAL_PROFILE_CONFLICT');
     expect(model.record?.displayName).toBe('Ada');
@@ -100,7 +100,7 @@ describe('Personal AI settings on HarmonyOS', () => {
     mocks.request.mockRejectedValueOnce(new XopcHttpError(409))
       .mockResolvedValueOnce(JSON.stringify({ ok: true, payload: { ...record, revision: 8 } }))
       .mockRejectedValueOnce(new XopcHttpError(409));
-    expect(await model.saveProfile('Nova', 'loopi', record.preferences, 'existing')).toBeNull();
+    expect(await model.saveProfile('Nova', 'loopi', 'existing')).toBeNull();
     expect(model.error).toBe('HTTP_409');
     expect(model.saving).toBe(false);
   });

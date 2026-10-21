@@ -15,8 +15,9 @@ describe('compact personal prompt migration', () => {
     expect(upgraded).toContain(PERSONAL_REPLY_EXAMPLES);
     for (const rule of PERSONAL_REPLY_STYLE_RULES) expect(upgraded.split('\n').filter(line => line === rule)).toHaveLength(1);
     expect(upgradePersonalInstructions(upgraded)).toBe(upgraded);
-    expect(upgradePersonalInstructions(personalInstructions({ warmth: 'reserved', humor: 'none', guidance: 'Use concise English.' }))).toBe(personalInstructions({ warmth: 'reserved', humor: 'none', guidance: 'Use concise English.' }));
+    expect(upgradePersonalInstructions(personalInstructions())).toBe(personalInstructions());
   });
+
 
   it('upgrades the previous EQ candidate without retaining its old examples or modifying custom text', () => {
     const old = [...PRE_EQ_RESIDUAL_PERSONAL_REPLY_STYLE_RULES, PRE_EQ_RESIDUAL_PERSONAL_REPLY_EXAMPLES].join('\n');
@@ -56,7 +57,7 @@ describe('compact personal prompt migration', () => {
     expect(upgraded).toContain(PERSONAL_REPLY_EXAMPLES);
     expect(upgraded).not.toContain(PRE_P0_PERSONAL_REPLY_EXAMPLES);
     expect(upgradePersonalInstructions(upgraded)).toBe(upgraded);
-    expect(upgradePersonalInstructions(personalInstructions({}))).toBe(personalInstructions({}));
+    expect(upgradePersonalInstructions(personalInstructions())).toBe(personalInstructions());
   });
 
   it('upgrades only complete generated blocks and preserves custom or quoted text', () => {
@@ -82,12 +83,12 @@ describe('compact personal prompt migration', () => {
   });
 
   it('keeps fresh guidance compact and preserves safety and scoped preferences', () => {
-    const instructions = personalInstructions({ warmth: 'reserved', humor: 'none', guidance: 'Use concise English.' });
+    const instructions = personalInstructions();
     expect(instructions.length).toBeLessThan(20_000);
     expect(upgradePersonalInstructions(instructions)).toBe(instructions);
-    expect(instructions).toContain('Keep conversation-only preferences in this conversation');
-    expect(instructions).toContain('Do not add jokes');
-    expect(instructions).toContain('Use concise English.');
+    expect(instructions).toContain('Keep reply preferences in the current conversation');
+    expect(instructions).toContain('Use an occasional light touch');
+    expect(instructions).not.toContain('personal_preference');
     for (const rule of PERSONAL_RELIABILITY_RULES) expect(instructions).toContain(rule);
     const prompt = buildSystemPrompt('/workspace', { promptRole: 'personal', customInstructions: instructions,
       toolNames: ['personal_task', 'personal_request', 'personal_attention', 'read_file', 'personal_result'], actionTrustLevel: 'confirm' });
@@ -103,17 +104,17 @@ describe('compact personal prompt migration', () => {
 describe('personal tool instruction projection', () => {
   it('keeps user constraints and safety while omitting unavailable product workflows', () => {
     const custom = 'My exact convention stays: answer in Chinese without headings.';
-    const full = personalInstructions({guidance:custom});
+    const full = personalInstructions() + '\n' + custom;
     const projected = projectPersonalInstructions(full, ['read_file']);
     expect(projected.length).toBeLessThan(full.length * 0.6);
     expect(projected).toContain(custom);
-    expect(projected).toContain('conversation-only preferences');
+    expect(projected).toContain('Keep reply preferences in the current conversation');
     expect(projected).toContain('Do not copy unrelated personal history or secrets');
     for (const tool of ['personal_task', 'personal_result', 'personal_request', 'personal_attention', 'personal_preference']) expect(projected).not.toContain(tool);
     expect(full).toContain('personal_task');
   });
   it('preserves registered workflows and does not reinterpret custom instructions', () => {
-    const full = personalInstructions({});
+    const full = personalInstructions();
     const all = ['personal_task','personal_result','personal_request','personal_capability','personal_preference','personal_attention'];
     expect(projectPersonalInstructions(full, all)).toBe(full);
     const custom = 'Quoted policy: personal_task(command="submit"). Keep this exact text.';

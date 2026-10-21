@@ -12,8 +12,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.selection.selectable
-import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
@@ -25,7 +23,6 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SheetValue
 import androidx.compose.material3.rememberModalBottomSheetState
-import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -57,11 +54,10 @@ import ai.xopc.mobile.R
 @Composable
 internal fun PersonalAgentProfileSheet(state: PersonalUiState, onDismiss: () -> Unit,
   onLoadAgentVoices: () -> Unit,
-  onUpdateAgentProfile: (String, String, Map<String, String>, String?, Boolean) -> Unit,
+  onUpdateAgentProfile: (String, String, String?, Boolean) -> Unit,
   onUploadAvatar: suspend (ByteArray) -> Unit) {
   var agentName by rememberSaveable(state.gatewayId) { mutableStateOf("") }
   var agentAppearance by rememberSaveable(state.gatewayId) { mutableStateOf("loopi") }
-  var agentDetail by rememberSaveable(state.gatewayId) { mutableStateOf("balanced") }
   var greetingEnabled by rememberSaveable(state.gatewayId) { mutableStateOf(true) }
   var agentVoice by rememberSaveable(state.gatewayId) { mutableStateOf("") }
   var uploading by remember(state.gatewayId) { mutableStateOf(false) }
@@ -75,7 +71,6 @@ internal fun PersonalAgentProfileSheet(state: PersonalUiState, onDismiss: () -> 
     greetingEnabled = agent.openingGreetingEnabled
     agentName = agent.displayName
     agentAppearance = agent.appearance
-    agentDetail = agent.preferences["detailLevel"] ?: "balanced"
     agentVoice = agent.voicePreference?.voice?.takeUnless { it == "default" }.orEmpty()
   }
   LaunchedEffect(state.gatewayId) { onLoadAgentVoices() }
@@ -96,10 +91,6 @@ internal fun PersonalAgentProfileSheet(state: PersonalUiState, onDismiss: () -> 
         PersonalAvatarUpload(state, onUploadAvatar, { agentAppearance = "custom" }, busy || state.agentLoading, { uploading = it })
         OutlinedTextField(agentName, { agentName = it.take(60) }, Modifier.fillMaxWidth(),
           label = { Text(stringResource(R.string.personal_agent_name)) }, singleLine = true, enabled = !busy && !state.agentLoading)
-        PersonalSettingsChoice(stringResource(R.string.personal_agent_detail), agentDetail,
-          listOf("brief" to stringResource(R.string.personal_agent_brief),
-            "balanced" to stringResource(R.string.personal_agent_balanced),
-            "detailed" to stringResource(R.string.personal_agent_detailed)), !busy, { agentDetail = it })
         state.agentVoiceChoices?.takeIf { it.voices.isNotEmpty() }?.let { choices ->
           HorizontalDivider()
           var expanded by remember { mutableStateOf(false) }
@@ -139,31 +130,12 @@ internal fun PersonalAgentProfileSheet(state: PersonalUiState, onDismiss: () -> 
           Text(stringResource(R.string.personal_agent_save_error), color = MaterialTheme.colorScheme.error)
         }
         Button(onClick = {
-          val preferences = state.agent?.preferences.orEmpty().toMutableMap().apply {
-            put("detailLevel", agentDetail)
-          }
-          onUpdateAgentProfile(agentName.trim(), agentAppearance, preferences,
+          onUpdateAgentProfile(agentName.trim(), agentAppearance,
             agentVoice.takeIf { state.agentVoiceChoices?.voices?.isNotEmpty() == true }, greetingEnabled)
         }, enabled = !busy && !state.agentLoading && state.agent != null && agentName.isNotBlank(),
           modifier = Modifier.fillMaxWidth().testTag("personal-agent-profile-save")) {
           Text(stringResource(if (state.agentProfileSaving) R.string.personal_agent_saving else R.string.personal_agent_save))
         }
-      }
-    }
-  }
-}
-
-@Composable
-private fun PersonalSettingsChoice(label: String?, value: String, options: List<Pair<String, String>>,
-  enabled: Boolean, onSelect: (String) -> Unit, modifier: Modifier = Modifier) {
-  Column(modifier.selectableGroup()) {
-    if (label != null) Text(label, style = MaterialTheme.typography.titleSmall)
-    options.forEach { (id, title) ->
-      Row(Modifier.fillMaxWidth().selectable(selected = value == id, enabled = enabled,
-        role = Role.RadioButton, onClick = { onSelect(id) }).padding(vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        RadioButton(selected = value == id, onClick = null, enabled = enabled)
-        Text(title, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(vertical = 8.dp))
       }
     }
   }

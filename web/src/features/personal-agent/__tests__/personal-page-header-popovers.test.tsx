@@ -41,7 +41,6 @@ describe('Personal AI editor', () => {
         displayName: body?.displayName ?? 'Ada',
         userCallName: 'Shared name',
         appearance: body?.appearance ?? 'loopi',
-        preferences: body?.preferences ?? {},
         revision: body ? ++revision : revision,
         errorMessage: null,
       } };
@@ -75,7 +74,7 @@ describe('Personal AI editor', () => {
 
     const editor = document.querySelector('[data-radix-popper-content-wrapper] [aria-label="Edit Personal AI"]');
     expect(editor).not.toBeNull();
-    expect(editor?.querySelector('[data-testid="personal-avatar"].size-20')).not.toBeNull();
+    expect(editor?.querySelector('[data-testid="personal-avatar"].size-16')).not.toBeNull();
     const avatarButton = editor?.querySelector<HTMLButtonElement>('button[aria-label="Choose avatar"]');
     expect(avatarButton?.parentElement?.className).toContain('items-center');
     expect(avatarButton?.parentElement?.className).not.toContain('border-b');
@@ -97,30 +96,23 @@ describe('Personal AI editor', () => {
     expect(document.querySelector('[aria-label="Edit Personal AI"]')?.textContent).not.toContain('Choose a starting point');
     expect(container.querySelector('[data-testid="personal-chat"]')).toBe(chat);
 
-    act(() => headerContainer.querySelector<HTMLButtonElement>('button[aria-label="Response preferences"]')?.click());
+    act(() => headerContainer.querySelector<HTMLButtonElement>('button[aria-label="Edit profile"]')?.click());
     expect(document.querySelector('[data-radix-popper-content-wrapper] [aria-label="Edit Personal AI"]')).toBeNull();
     expect(container.querySelector('[data-testid="personal-chat"]')).toBe(chat);
   });
 
-  it('automatically saves selected preferences in order', async () => {
-    await act(async () => {
-      root.render(<MemoryRouter><PersonalPage /></MemoryRouter>);
-    });
-    act(() => headerRoot.render(<>{usePageHeaderStore.getState().main}{usePageHeaderStore.getState().end}</>));
-
-    act(() => headerContainer.querySelector<HTMLButtonElement>('button[aria-label="Response preferences"]')?.click());
+  it('keeps identity, voice and model controls without response or proactivity settings', async () => {
+    await act(async () => root.render(<MemoryRouter><PersonalPage /></MemoryRouter>));
+    act(() => headerRoot.render(usePageHeaderStore.getState().end));
+    await act(async () => headerContainer.querySelector<HTMLButtonElement>('button[aria-label="Edit profile"]')?.click());
     const editor = document.querySelector('[aria-label="Edit Personal AI"]');
-    expect(editor).not.toBeNull();
-    await act(async () => {
-      [...(editor?.querySelectorAll('button') ?? [])].find(button => button.textContent === 'Direct')?.click();
-      [...(editor?.querySelectorAll('button') ?? [])].find(button => button.textContent === 'Suggest')?.click();
-    });
-    const patches = vi.mocked(fetchJson).mock.calls.filter(([url, options]) => String(url).includes('/profile') && options?.method === 'PATCH');
-    expect(patches).toHaveLength(2);
-    expect(JSON.parse(String(patches[0]?.[1]?.body)).revision).toBe(1);
-    expect(JSON.parse(String(patches[1]?.[1]?.body)).revision).toBe(2);
-    expect(JSON.parse(String(patches[1]?.[1]?.body)).preferences).toMatchObject({ warmth: 'reserved', supportMode: 'solutions' });
-    expect(document.querySelector('[aria-label="Edit Personal AI"]')).not.toBeNull();
+    expect(editor?.querySelector('#personal-name')).not.toBeNull();
+    expect(editor?.querySelector('[aria-label="Choose avatar"]')).not.toBeNull();
+    expect(editor?.textContent).toContain('Call voice');
+    for (const label of ['Tone', 'When things get tricky', 'More preferences', 'Proactive messages', 'Quiet from', 'Length', 'Updates']) {
+      expect(editor?.textContent).not.toContain(label);
+    }
+    expect(vi.mocked(fetchJson).mock.calls.some(([url]) => String(url).includes('/proactivity'))).toBe(false);
   });
 
   it('saves the assistant name when the input loses focus', async () => {
@@ -128,7 +120,7 @@ describe('Personal AI editor', () => {
       root.render(<MemoryRouter><PersonalPage /></MemoryRouter>);
     });
     act(() => headerRoot.render(usePageHeaderStore.getState().end));
-    act(() => headerContainer.querySelector<HTMLButtonElement>('button[aria-label="Response preferences"]')?.click());
+    act(() => headerContainer.querySelector<HTMLButtonElement>('button[aria-label="Edit profile"]')?.click());
 
     const name = document.querySelector<HTMLInputElement>('#personal-name');
     expect(name).not.toBeNull();
@@ -172,7 +164,7 @@ describe('Personal AI editor', () => {
       : String(url).includes('/models')
         ? { ok: true, payload: [] }
         : { ok: true, payload: { agentId: 'personal', conversationId: 'conversation-1',
-          state: 'ready', displayName: 'Ada', appearance: 'loopi', preferences: {}, revision: 1 } });
+          state: 'ready', displayName: 'Ada', appearance: 'loopi', revision: 1 } });
     await act(async () => root.render(<MemoryRouter><PersonalPage /></MemoryRouter>));
     act(() => headerRoot.render(<MemoryRouter>{usePageHeaderStore.getState().end}</MemoryRouter>));
     await act(async () => headerContainer.querySelector<HTMLButtonElement>('button[aria-label="Activity"]')?.click());

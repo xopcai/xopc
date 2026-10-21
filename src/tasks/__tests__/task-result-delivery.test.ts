@@ -93,8 +93,7 @@ describe('background task result delivery', () => {
     const repository = new AgentCatalogRepository();
     repository.ensureInitialized();
     const agentId = personalAgentId('local-owner');
-    repository.create({ id: agentId, models: { chat: { primary: 'test/personal', fallbacks: [] } }, profile: { name: 'Ada', style: 'Natural and clear',
-      responsePreferences: { warmth: 'gentle', detailLevel: 'brief' } } }, { ready: true });
+    repository.create({ id: agentId, models: { chat: { primary: 'test/personal', fallbacks: [] } }, profile: { name: 'Ada', style: 'Natural and clear' } }, { ready: true });
     getSqliteDatabase().prepare("UPDATE sessions SET agent_id = ?, custom_data_json = json_set(COALESCE(custom_data_json, '{}'), '$.personalAgent', 1) WHERE conversation_id = ?")
       .run(agentId, conversationId);
   }
@@ -329,13 +328,9 @@ describe('background task result delivery', () => {
     const compose = vi.fn(async (packet: PersonalReplyPacket) => {
       const prompt = buildPersonalReplyPrompt(packet);
       expect(prompt).toContain('Ada');
-      expect(prompt).toContain('gentle');
+      expect(prompt).toContain('Tone: friendly and natural.');
       expect(prompt).toContain('Draw sunset');
       expect(prompt).toContain(PERSONAL_PERSONA_GUIDANCE);
-      expect(prompt).toContain('Give sources when requested or needed to use the answer');
-      expect(prompt).toContain('Respond naturally to the current exchange');
-      expect(prompt).toContain('User: 这些新闻什么时候的？');
-      expect(prompt).toContain('User: K.');
       expect(prompt).not.toContain('lead with the answer or the most relevant judgment');
       expect(prompt).toContain('CUSTOM_PERSONAL_SOUL');
       expect(prompt).not.toContain('OTHER_AGENT_SOUL');

@@ -146,16 +146,6 @@ export const AgentDefaultsSchema = z.object({
   runtime: RuntimePolicySchema.default({}),
 }).strict();
 
-export const ResponsePreferencesSchema = z.object({
-  addressAs: z.string().trim().max(60).optional(),
-  guidance: z.string().trim().max(500).optional(),
-  warmth: z.enum(['reserved', 'balanced', 'gentle']).optional(),
-  humor: z.enum(['none', 'occasional', 'playful']).optional(),
-  supportMode: z.enum(['listen', 'untangle', 'solutions']).optional(),
-  detailLevel: z.enum(['brief', 'balanced', 'detailed']).optional(),
-  proactivity: z.enum(['decisions', 'important', 'open']).optional(),
-}).strict();
-
 export const AgentProfileSchema = z.object({
   name: z.string().trim().min(1),
   description: z.string().trim().optional(),
@@ -170,7 +160,6 @@ export const AgentProfileSchema = z.object({
     voice: z.string().trim().min(1).max(200),
   }).strict().optional(),
   voiceCallPreferences: z.object({ openingGreetingEnabled: z.boolean() }).strict().optional(),
-  responsePreferences: ResponsePreferencesSchema.optional(),
   instructions: z.string().trim().min(1).optional(),
 }).strict();
 

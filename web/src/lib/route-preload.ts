@@ -26,6 +26,7 @@ export const loadWorkDiscoveryOverlay = () => import('@/features/work-discovery/
 export const loadSetupStatusPanel = () => import('@/features/settings/setup-checklist/setup-status-panel');
 export const loadAppearanceSettingsPanel = () => import('@/features/settings/appearance-settings');
 export const loadKeyboardShortcutsSettingsPanel = () => import('@/features/settings/keyboard-shortcuts-settings');
+export const loadPersonalSettingsPanel = () => import('@/features/settings/personal-settings-panel');
 export const loadSystemSettingsPanel = () => import('@/features/settings/system-settings-panel');
 export const loadDesktopPetSettingsPanel = () => import('@/features/desktop-pet/desktop-pet-settings');
 export const loadAppManagementSettingsPanel = () => import('@/features/settings/app-management-settings-panel');
@@ -64,6 +65,7 @@ function preloadSettingsSection(path: string) {
   if (section === 'overview') return preload(loadSetupStatusPanel);
   if (section === 'appearance') return preload(loadAppearanceSettingsPanel);
   if (section === 'keyboard-shortcuts') return preload(loadKeyboardShortcutsSettingsPanel);
+  if (section === 'personal') return preload(loadPersonalSettingsPanel);
   if (section === 'system') return preload(loadSystemSettingsPanel);
   if (section === 'desktop-pet') return preload(loadDesktopPetSettingsPanel);
   if (section === 'desktop-app') return preload(loadAppManagementSettingsPanel);
