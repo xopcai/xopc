@@ -21,6 +21,7 @@ export type Tab =
   | 'settingsComputerUse'
   | 'settingsAgentDefaults'
   | 'settingsKeyboardShortcuts'
+  | 'settingsPersonal'
   | 'settingsSystem'
   | 'settingsDesktopPet'
   | 'settingsDesktopApp';
@@ -40,6 +41,7 @@ export type SettingsSectionId =
   | 'remote-access'
   | 'shares'
   | 'keyboard-shortcuts'
+  | 'personal'
   | 'system'
   | 'desktop-pet'
   | 'desktop-app';

@@ -4,7 +4,7 @@ import { userErrorMessage } from '../common/userError';
 import { appSettings } from '../service/settings';
 import { gatewaySession } from '../service/gatewaySession';
 import { pickChatPhoto } from '../service/chatPhotoPicker';
-import { XopcPersonalAgentRecord, XopcPersonalPreferences, XopcPersonalVoiceOption } from '../model/personalAgent';
+import { XopcPersonalAgentRecord, XopcPersonalVoiceOption } from '../model/personalAgent';
 import { XopcPersonalAgentSettingsViewModel } from '../viewmodel/personalAgentSettingsViewModel';
 import { XopcPersonalAgentAvatar } from './PersonalAgentAvatar';
 import { XopcListSkeleton } from './MobileComponents';
@@ -27,7 +27,6 @@ export struct XopcPersonalAgentSettings {
   @Local model: XopcPersonalAgentSettingsViewModel = new XopcPersonalAgentSettingsViewModel();
   @Local assistantName: string = '';
   @Local appearance: string = 'loopi';
-  @Local detailLevel: string = 'balanced';
   @Local greetingEnabled: boolean = true;
   @Local voiceId: string = '';
   @Local uploading: boolean = false;
@@ -43,15 +42,10 @@ export struct XopcPersonalAgentSettings {
     if (!current) return;
     this.assistantName = current.displayName; this.appearance = current.appearance;
     this.greetingEnabled = current.voiceCallPreferences?.openingGreetingEnabled ?? true;
-    this.detailLevel = current.preferences?.detailLevel ?? 'balanced';
     this.voiceId = current.voicePreference?.voice === 'default' ? '' : current.voicePreference?.voice ?? '';
   }
   private async save(): Promise<void> {
-    const current = this.model.record?.preferences;
-    const prefs: XopcPersonalPreferences = { addressAs: current?.addressAs, detailLevel: this.detailLevel,
-      warmth: current?.warmth, supportMode: current?.supportMode, proactivity: current?.proactivity,
-      humor: current?.humor, guidance: current?.guidance };
-    const updated = await this.model.saveProfile(this.assistantName, this.appearance, prefs, this.voiceId, this.greetingEnabled);
+    const updated = await this.model.saveProfile(this.assistantName, this.appearance, this.voiceId, this.greetingEnabled);
     if (updated) { this.onSaved(updated); this.onClose(); }
   }
   private async uploadAvatar(): Promise<void> {
@@ -127,10 +121,6 @@ export struct XopcPersonalAgentSettings {
             TextInput({ text: this.assistantName, placeholder: this.label('助手名称', 'Assistant name') }).maxLength(60)
               .id('personal-setting-name').width('100%').height(44).fontSize(15).fontColor(this.colors.foreground).backgroundColor(this.colors.input)
               .onChange((text: string): void => { this.assistantName = text; })
-            this.settingChoice({ heading: this.label('回答长度', 'Length'),
-              options: [{ value: this.label('简短', 'Brief') }, { value: this.label('适中', 'Balanced') }, { value: this.label('详细', 'Detailed') }], selectedIndex: ['brief', 'balanced', 'detailed'].indexOf(this.detailLevel),
-              controlId: 'personal-setting-detail', available: true,
-              onSelect: (index: number): void => { this.detailLevel = ['brief', 'balanced', 'detailed'][index]; } })
             if (this.model.record?.voiceCallPreferences) {
               Row() {
                 Text(this.label('连接时打招呼', 'Greet me when connected')).fontSize(14).fontColor(this.colors.foreground).layoutWeight(1)

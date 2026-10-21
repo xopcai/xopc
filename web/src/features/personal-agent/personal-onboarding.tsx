@@ -165,7 +165,7 @@ export function PersonalOnboarding({ modelsAvailable, onCreated }: {
         try {
           await uploadAvatar(record.agentId, avatarFile);
           const updated = await fetchJson<{ payload: PersonalAgent }>(apiUrl('/api/personal-agent/profile'), {
-            method: 'PATCH', body: JSON.stringify({ revision: record.revision, displayName: record.displayName, appearance: 'custom', preferences: record.preferences }),
+            method: 'PATCH', body: JSON.stringify({ revision: record.revision, displayName: record.displayName, appearance: 'custom' }),
           });
           record = updated.payload;
         } catch { avatarUploadFailed = true; }

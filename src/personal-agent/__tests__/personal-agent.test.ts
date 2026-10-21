@@ -13,7 +13,6 @@ import { AgentCatalogRepository } from '../../agent-catalog/repository.js';
 import { AgentCatalogService } from '../../agent-catalog/service.js';
 import { AgentToolsFactory } from '../../agent/tools/factory.js';
 import { createPersonalTaskTool } from '../../agent/tools/personal-task-tool.js';
-import { createPersonalPreferenceTool } from '../../agent/tools/personal-preference-tool.js';
 import { applyUserProfilePatch, getUserProfileSnapshot } from '../../user-model/profile.js';
 import { SessionConfigService } from '../../agent/session/session-config-service.js';
 import { SessionConfigStore } from '../../session/config-store.js';
@@ -125,11 +124,6 @@ describe('personal Agent identity', () => {
       expect(second.agentId).toBe(first.agentId);
       applyUserProfilePatch({ callName: 'Joyce' });
       expect(getPersonalAgent('local-owner')?.userCallName).toBe('Joyce');
-      await createPersonalPreferenceTool({ getCurrentConversationId: () => conversationId })
-        .execute('set-name', { field: 'addressAs', value: 'Nova' }, undefined, undefined as never);
-      expect(getUserProfileSnapshot().callName).toBe('Nova');
-      expect(getPersonalAgent('local-owner')?.preferences.addressAs).toBeUndefined();
-      expect(getPersonalAgent('local-owner')?.revision).toBe(first.revision);
       applyUserProfilePatch({ callName: '' });
       expect(getPersonalAgent('local-owner')?.userCallName).toBeNull();
       expect(isPersonalConversation(first.conversationId)).toBe(true);
@@ -139,7 +133,7 @@ describe('personal Agent identity', () => {
           toolAllowlist: ['xopc_use', 'exec_command', 'personal_task', 'personal_preference'] })
         .map(tool => tool.name);
       expect(tools).toContain('personal_task');
-      expect(tools).toContain('personal_preference');
+      expect(tools).not.toContain('personal_preference');
       expect(tools).not.toContain('xopc_use');
       expect(tools).not.toContain('exec_command');
       const ordinary = createConversation({ agentId: first.agentId }, dir).key;
@@ -166,26 +160,29 @@ describe('personal Agent identity', () => {
       const codeCandidates = JSON.parse(filtered.content[0]!.text as string) as Array<{ id: string }>;
       expect(codeCandidates.map(candidate => candidate.id)).toContain('coder');
       expect(codeCandidates.map(candidate => candidate.id)).not.toContain('researcher');
-      expect(await updatePersonalProfileRecord('local-owner', 999, '阿沐', {}, 'spark')).toBeNull();
+      expect(await updatePersonalProfileRecord('local-owner', 999, '阿沐', 'spark')).toBeNull();
       const updated = await updatePersonalProfileRecord('local-owner', first.revision, '阿沐',
-        { warmth: 'gentle', guidance: 'When I am anxious, offer one concrete step before asking questions.' }, 'cloud', undefined, { openingGreetingEnabled: false });
+        'cloud', undefined, { openingGreetingEnabled: false });
       expect(updated?.revision).toBe(first.revision + 1);
       expect(updated?.voiceCallPreferences.openingGreetingEnabled).toBe(false);
       const preserved = await updatePersonalProfileRecord('local-owner', updated!.revision, '阿沐',
-        { warmth: 'gentle', guidance: 'When I am anxious, offer one concrete step before asking questions.' }, 'cloud');
+        'cloud');
       expect(preserved?.voiceCallPreferences.openingGreetingEnabled).toBe(false);
       expect(getPersonalAgent('local-owner')?.displayName).toBe('阿沐');
-      expect(repository.get(agentId)?.profile?.responsePreferences).toMatchObject({ warmth: 'gentle',
-        guidance: 'When I am anxious, offer one concrete step before asking questions.' });
-      expect(repository.get(agentId)?.profile?.instructions).toContain('offer one concrete step before asking questions');
+      expect(repository.get(agentId)?.profile?.instructions).toBe(personalInstructions());
       expect(getSqliteDatabase().prepare("SELECT name FROM sqlite_master WHERE name = 'personal_agents'").get()).toBeUndefined();
 
       const beforeProfile = getPersonalAgent('local-owner')!;
       const profileResponse = await fetch(`${url}/profile`, { method: 'PATCH', headers,
         body: JSON.stringify({ revision: beforeProfile.revision, displayName: beforeProfile.displayName,
-          appearance: beforeProfile.appearance, preferences: beforeProfile.preferences,
+          appearance: beforeProfile.appearance,
           voiceCallPreferences: { openingGreetingEnabled: true } }) });
       expect(profileResponse.status).toBe(200);
+      const obsoleteResponse = await fetch(`${url}/profile`, { method: 'PATCH', headers,
+        body: JSON.stringify({ revision: getPersonalAgent('local-owner')!.revision, displayName: 'Ada',
+          appearance: 'loopi', preferences: { warmth: 'gentle' } }) });
+      expect(obsoleteResponse.status).toBe(400);
+
       expect(await profileResponse.json()).toMatchObject({ payload: { voiceCallPreferences: { openingGreetingEnabled: true } } });
       expect((await fetch(url)).status).toBe(401);
       const response = await fetch(url, { headers: { authorization: `Bearer ${token}` } });
@@ -238,13 +235,13 @@ describe('personal Agent identity', () => {
     }
   }, 30_000);
 
-  it('builds a distinct short speaking style from explicit preferences', () => {
-    const gentle = personalInstructions({ addressAs: 'Joyce', warmth: 'gentle', supportMode: 'listen' });
-    const direct = personalInstructions({ warmth: 'reserved', supportMode: 'solutions', humor: 'none' });
+  it('uses the same product default style for every Personal AI', () => {
+    const gentle = personalInstructions();
+    const direct = personalInstructions();
     expect(gentle).not.toContain('Joyce');
     expect(gentle).toContain('shared user profile');
-    expect(gentle).toContain('listen and reflect');
-    expect(direct).toContain('concrete next step');
+    expect(gentle).toBe(direct);
+    expect(direct).toContain('help name the core problem');
     expect(direct).not.toContain('Joyce');
     expect(direct).toContain('personal_task(command="submit")');
     expect(direct).toContain('requiredSkills=[canonicalName]');
@@ -404,7 +401,7 @@ describe('personal Agent identity', () => {
     }
   }, 30_000);
 
-  it('refreshes existing generated delegation guidance without changing custom instructions twice', async () => {
+  it('replaces existing Personal guidance with defaults and refreshes idempotently', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'xopc-personal-guidance-'));
     const previousStateDir = process.env.XOPC_STATE_DIR;
     process.env.XOPC_STATE_DIR = dir;
@@ -418,7 +415,7 @@ describe('personal Agent identity', () => {
       mkdirSync(profileDir, { recursive: true });
       const customSoul = '# My Soul\n\nKeep a quiet voice and use my own metaphors.';
       writeFileSync(join(profileDir, 'SOUL.md'), customSoul);
-      repository.create({ id: agentId, toolAllowlist: ['personal_task', 'clarify', 'user_context_get', 'knowledge_search'], profile: { name: 'Personal AI', responsePreferences: { addressAs: 'Legacy name', humor: 'none', warmth: 'reserved' }, instructions: [
+      repository.create({ id: agentId, toolAllowlist: ['personal_task', 'clarify', 'user_context_get', 'knowledge_search'], profile: { name: 'Personal AI', instructions: [
         'Answer simple requests directly. For complex work, use personal_task agents to find a suitable specialist, then create a Task and remain available to talk. Never claim a task was created before the tool confirms it.',
         'Keep my custom instruction.',
         ...PREVIOUS_PERSONAL_REPLY_STYLE_RULES,
@@ -443,7 +440,7 @@ describe('personal Agent identity', () => {
       expect(refreshed.profile?.instructions).toContain('personal_result');
       expect(refreshed.profile?.instructions).toContain('bounded ranges even when the complete file is large');
       expect(refreshed.profile?.instructions).toContain('For current news or other live facts');
-      expect(refreshed.profile?.instructions).toContain('Keep my custom instruction.');
+      expect(refreshed.profile?.instructions).not.toContain('Keep my custom instruction.');
       expect(refreshed.profile?.instructions).toContain('MCP, Codemode and dynamic tool discovery belong to specialist execution');
       expect(refreshed.profile?.instructions).not.toContain('Legacy name');
       expect(refreshed.profile?.instructions).toContain('shared user profile');
@@ -454,7 +451,7 @@ describe('personal Agent identity', () => {
       expect(refreshed.profile?.instructions).not.toContain(PREVIOUS_PERSONAL_PERSONA_GUIDANCE);
       expect(refreshed.profile?.instructions).not.toContain(PREVIOUS_PERSONAL_EMOTIONAL_STYLE_RULE);
       expect(refreshed.profile?.instructions).not.toContain(PREVIOUS_PERSONAL_IDENTITY_CONTINUITY_RULE);
-      expect(refreshed.profile?.responsePreferences).toEqual({ addressAs: 'Legacy name', humor: 'none', warmth: 'reserved' });
+      expect(refreshed.profile?.instructions).toBe(personalInstructions());
       expect(readFileSync(join(profileDir, 'SOUL.md'), 'utf-8')).toBe(customSoul);
       for (const rule of PERSONAL_RELIABILITY_RULES) {
         expect(refreshed.profile?.instructions?.split('\n').filter(line => line === rule)).toHaveLength(1);
@@ -477,7 +474,7 @@ describe('personal Agent identity', () => {
       await refreshPersonalDelegationGuidance(gateway, 'local-owner');
       const repaired = repository.get(agentId)!;
       expect(repaired.profile?.instructions?.split('\n').filter(line => line === PERSONAL_RELIABILITY_RULES[0])).toHaveLength(1);
-      expect(repaired.profile?.instructions).toContain('Keep my custom instruction.');
+      expect(repaired.profile?.instructions).toBe(personalInstructions());
       await refreshPersonalDelegationGuidance(gateway, 'local-owner');
       expect(repository.get(agentId)?.revision).toBe(repaired.revision);
       const previousGuidance = [
@@ -491,7 +488,7 @@ describe('personal Agent identity', () => {
       }, repaired.revision);
       await refreshPersonalDelegationGuidance(gateway, 'local-owner');
       expect(repository.get(agentId)?.profile?.instructions).toContain('Reuse the existing Task');
-      expect(repository.get(agentId)?.profile?.instructions).toContain('Keep my custom instruction.');
+      expect(repository.get(agentId)?.profile?.instructions).toBe(personalInstructions());
       const prior = repository.get(agentId)!;
       const priorInstructions = prior.profile!.instructions!.split('\n').filter((_, index) => index !== 2).join('\n');
       await new AgentCatalogService().update(agentId, {
@@ -499,7 +496,7 @@ describe('personal Agent identity', () => {
       }, prior.revision);
       await refreshPersonalDelegationGuidance(gateway, 'local-owner');
       expect(repository.get(agentId)?.profile?.instructions).toContain('For current news or other live facts');
-      expect(repository.get(agentId)?.profile?.instructions).toContain('Keep my custom instruction.');
+      expect(repository.get(agentId)?.profile?.instructions).toBe(personalInstructions());
     } finally {
       closeXopcDatabase();
       resetXopcDatabaseSingletonForTest();

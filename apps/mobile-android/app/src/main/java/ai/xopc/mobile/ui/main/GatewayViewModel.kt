@@ -624,7 +624,7 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
     }
   }
 
-  fun updatePersonalAgentProfile(name: String, appearance: String, preferences: Map<String, String>,
+  fun updatePersonalAgentProfile(name: String, appearance: String,
     voiceId: String?, openingGreetingEnabled: Boolean) {
     val gatewayId = mutableState.value.profile?.gatewayId ?: return
     val agent = mutableState.value.personal.agent?.takeIf { it.state == "ready" } ?: return
@@ -639,7 +639,7 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
           else if (voiceId.isEmpty()) null
           else PersonalVoicePreference(route.provider, route.model, voiceId)
         val updated = runInterruptible(Dispatchers.IO) {
-          personalAgentRepository.updateProfile(agent, name, appearance, preferences, voice, openingGreetingEnabled)
+          personalAgentRepository.updateProfile(agent, name, appearance, voice, openingGreetingEnabled)
         }
         if (mutableState.value.profile?.gatewayId != gatewayId) return@launch
         mutableState.update { it.copy(personal = it.personal.copy(agent = updated,

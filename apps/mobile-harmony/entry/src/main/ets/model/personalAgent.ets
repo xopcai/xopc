@@ -10,7 +10,6 @@ export interface XopcPersonalAgentRecord {
   errorMessage: string | null;
   revision?: number;
   userCallName?: string | null;
-  preferences?: XopcPersonalPreferences;
   voicePreference?: XopcPersonalVoicePreference | null;
 }
 
@@ -20,15 +19,6 @@ export interface XopcPersonalAgentResponse {
   error?: string;
 }
 
-export interface XopcPersonalPreferences {
-  addressAs?: string;
-  guidance?: string;
-  warmth?: string;
-  supportMode?: string;
-  detailLevel?: string;
-  proactivity?: string;
-  humor?: string;
-}
 export interface XopcPersonalVoicePreference { provider: string; model: string; voice: string; }
 export interface XopcPersonalVoiceOption { id: string; name: string; displayNames?: Record<string, string>; }
 export interface XopcPersonalProactivity {
@@ -42,6 +32,6 @@ export interface XopcPersonalVoicesResponse { ok: boolean; payload: XopcPersonal
 export interface XopcPersonalVoices { voices: XopcPersonalVoiceOption[]; }
 export interface XopcPersonalProfilePatch {
   voiceCallPreferences?: XopcPersonalVoiceCallPreferences;
-  revision: number; displayName: string; appearance: string; preferences: XopcPersonalPreferences;
+  revision: number; displayName: string; appearance: string;
   voicePreference?: XopcPersonalVoicePreference | null;
 }

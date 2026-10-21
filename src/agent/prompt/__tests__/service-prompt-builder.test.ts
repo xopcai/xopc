@@ -4,7 +4,6 @@ import { SystemPromptBuilder } from '../service-prompt-builder.js';
 import { createConversation } from '../../../storage/sqlite/conversation-repository.js';
 import { requireXopcDatabase } from '../../../storage/sqlite/connection.js';
 import { personalAgentId } from '../../../personal-agent/repository.js';
-import { personalInstructions } from '../../../personal-agent/prompts.js';
 import { PROMPT_CACHE_BOUNDARY } from '../cache-boundary.js';
 
 describe('SystemPromptBuilder project scope', () => {
@@ -58,10 +57,12 @@ describe('SystemPromptBuilder runtime responsibility', () => {
       routing: { agentId, source: 'subagent', accountId: 'default', peerKind: 'direct', peerId: 'worker' } }).key;
     const builder = new SystemPromptBuilder({ workspace: '/workspace', config: {} as never,
       skillManager: { getPromptForSkillAllowlist: () => '' } as never });
-    const prompt = builder.build([], { conversationId: personal, customInstructions: personalInstructions({}),
+    const prompt = builder.build([], { conversationId: personal, customInstructions: 'OBSOLETE_PERSONAL_STYLE',
       registeredToolNames: ['personal_task', 'personal_request', 'read_file', 'personal_result'],
       agentProfile: { name: 'Coordinator' } });
     expect(prompt).toContain('## Personal Coordination');
+    expect(prompt).not.toContain('OBSOLETE_PERSONAL_STYLE');
+    expect(prompt).toContain('Tone: friendly and natural.');
     expect(prompt).toContain('Submit before reading materials');
     expect(prompt).toContain('Do not wait, poll, or continue executing the delegated work');
     expect(prompt).toContain('Submission is not completion');

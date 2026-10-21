@@ -7,7 +7,7 @@
  */
 
 import type { EmbeddedContextFile } from '../bootstrap/types.js';
-import { projectPersonalInstructions } from '../../personal-agent/prompts.js';
+import { personalInstructions, projectPersonalInstructions } from '../../personal-agent/prompts.js';
 import type { AgentProfile } from '../../agent-config/index.js';
 import type { ResponseLanguage } from '../../i18n/response-language.js';
 import { buildActionTrustPrompt, type UserTrustLevel } from '../../user-context/trust-policy.js';
@@ -118,8 +118,8 @@ export function buildSystemPrompt(workspaceDir: string, options: SystemPromptOpt
     agentProfile,
   } = options;
 
-  const customInstructions = promptRole === 'personal' && storedCustomInstructions
-    ? projectPersonalInstructions(storedCustomInstructions, toolNames) : storedCustomInstructions;
+  const customInstructions = promptRole === 'personal'
+    ? projectPersonalInstructions(personalInstructions(), toolNames) : storedCustomInstructions;
 
   if (promptMode === 'none') {
     return joinSections([

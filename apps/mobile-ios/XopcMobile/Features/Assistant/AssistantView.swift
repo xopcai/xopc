@@ -772,7 +772,6 @@ struct PersonalAgentProfileView: View {
     @State private var record: PersonalAgentRecord
     @State private var name: String
     @State private var appearance: String
-    @State private var detailLevel: String
     @State private var greetingEnabled: Bool
     @State private var selectedVoice: String
     @State private var voiceProvider: String?
@@ -795,8 +794,6 @@ struct PersonalAgentProfileView: View {
         _record = State(initialValue: record)
         _name = State(initialValue: record.displayName)
         _appearance = State(initialValue: record.appearance)
-        let preferences = record.preferences ?? [:]
-        _detailLevel = State(initialValue: preferences["detailLevel"] ?? "balanced")
         _greetingEnabled = State(initialValue: record.voiceCallPreferences?.openingGreetingEnabled ?? true)
         _selectedVoice = State(initialValue: record.voicePreference?.voice == "default" ? "" : record.voicePreference?.voice ?? "")
     }
@@ -820,13 +817,6 @@ struct PersonalAgentProfileView: View {
                         .disabled(uploadingAvatar || saving || loadingProfile)
                     TextField("名称", text: $name)
                         .textInputAutocapitalization(.words)
-                }
-                Section("对话风格") {
-                    Picker("回答长度", selection: $detailLevel) {
-                        Text("简短").tag("brief")
-                        Text("平衡").tag("balanced")
-                        Text("详细").tag("detailed")
-                    }
                 }
                 Section("通话声音") {
                     if loadingVoices {
@@ -905,7 +895,6 @@ struct PersonalAgentProfileView: View {
                 record = updated
                 name = updated.displayName
                 appearance = updated.appearance
-                detailLevel = updated.preferences?["detailLevel"] ?? "balanced"
                 greetingEnabled = updated.voiceCallPreferences?.openingGreetingEnabled ?? true
                 selectedVoice = updated.voicePreference?.voice == "default" ? "" : updated.voicePreference?.voice ?? ""
                 onSaved(updated)
@@ -931,8 +920,6 @@ struct PersonalAgentProfileView: View {
         guard !saving else { return }
         saving = true
         defer { saving = false }
-        var preferences = record.preferences ?? [:]
-        preferences["detailLevel"] = detailLevel
         let voicePreference: PersonalVoicePreference? = if selectedVoice == record.voicePreference?.voice
             || (selectedVoice.isEmpty && record.voicePreference?.voice == "default")
         {
@@ -949,7 +936,6 @@ struct PersonalAgentProfileView: View {
                 record: record,
                 displayName: String(name.trimmingCharacters(in: .whitespacesAndNewlines).prefix(60)),
                 appearance: appearance,
-                preferences: preferences,
                 voicePreference: voicePreference,
                 openingGreetingEnabled: greetingEnabled
             )

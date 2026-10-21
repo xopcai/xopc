@@ -13,7 +13,7 @@ import { getPersonalRequest, listPersonalRequests } from '../../../personal-agen
 import { cancelPersonalRequest, personalRequestSnapshot, publishPersonalRequest } from '../../../personal-agent/request-service.js';
 import {
   createOrResumePersonalAgent, ensurePersonalConversationVisibility, listPersonalModels, patchPersonalProfile, refreshPersonalDelegationGuidance,
-  PersonalAppearanceSchema, PersonalPreferencesSchema,
+  PersonalAppearanceSchema,
 } from '../../../personal-agent/service.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 
@@ -37,7 +37,6 @@ const ProfileSchema = z.object({
   revision: z.number().int().positive(),
   displayName: z.string().trim().min(1).max(60),
   appearance: PersonalAppearanceSchema,
-  preferences: PersonalPreferencesSchema,
   voicePreference: z.object({ provider: z.string().trim().min(1).max(100), model: z.string().trim().min(1).max(200), voice: z.string().trim().min(1).max(200) }).strict().nullable().optional(),
 }).strict();
 const ActivityQuerySchema = z.object({
@@ -195,7 +194,7 @@ export function registerPersonalAgentRoutes(authenticated: Hono, deps: Authentic
     if (!ownerId) return c.json({ ok: false, error: 'Owner access is required' }, 403);
     const parsed = ProfileSchema.safeParse(await c.req.json().catch(() => ({})));
     if (!parsed.success) return c.json({ ok: false, error: 'Invalid profile' }, 400);
-    const { revision, displayName, appearance, preferences, voicePreference, voiceCallPreferences } = parsed.data;
+    const { revision, displayName, appearance, voicePreference, voiceCallPreferences } = parsed.data;
     if (voicePreference) {
       const { resolveStreamingTts } = await import('../../../voice/realtime/runtime.js');
       const route = resolveStreamingTts(deps.service.currentConfig);
@@ -203,7 +202,7 @@ export function registerPersonalAgentRoutes(authenticated: Hono, deps: Authentic
       const voices = await route.provider.plugin.listVoices({ cfg: deps.service.currentConfig, providerConfig: route.provider.providerConfig, mode: 'speech.stream' });
       if (!voices.some(voice => voice.id === voicePreference.voice)) return c.json({ ok: false, error: 'Selected voice is unavailable' }, 400);
     }
-    const updated = await patchPersonalProfile(deps.service, ownerId, revision, displayName, preferences, appearance, voicePreference, voiceCallPreferences);
+    const updated = await patchPersonalProfile(deps.service, ownerId, revision, displayName, appearance, voicePreference, voiceCallPreferences);
     return updated
       ? c.json({ ok: true, payload: updated })
       : c.json({ ok: false, error: 'Profile changed or personal Agent is unavailable' }, 409);

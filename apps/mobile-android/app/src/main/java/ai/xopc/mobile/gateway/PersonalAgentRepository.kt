@@ -4,7 +4,7 @@ import org.json.JSONObject
 
 data class PersonalAgentRecord(val agentId: String, val conversationId: String,
   val state: String, val displayName: String, val appearance: String, val errorMessage: String?,
-  val revision: Int = 0, val preferences: Map<String, String> = emptyMap(),
+  val revision: Int = 0,
   val voicePreference: PersonalVoicePreference? = null, val userCallName: String? = null, val openingGreetingEnabled: Boolean = true, val supportsOpeningGreeting: Boolean = false)
 
 data class PersonalVoicePreference(val provider: String, val model: String, val voice: String)
@@ -45,11 +45,11 @@ class PersonalAgentRepository(private val gateway: GatewaySession) {
   }
 
   fun updateProfile(record: PersonalAgentRecord, name: String, appearance: String,
-    preferences: Map<String, String>, voice: PersonalVoicePreference? = record.voicePreference, openingGreetingEnabled: Boolean = record.openingGreetingEnabled): PersonalAgentRecord {
+    voice: PersonalVoicePreference? = record.voicePreference, openingGreetingEnabled: Boolean = record.openingGreetingEnabled): PersonalAgentRecord {
     require(record.revision > 0 && name.isNotBlank() && name.length <= 60) { "INVALID_PERSONAL_PROFILE" }
     val body = JSONObject().put("revision", record.revision).put("displayName", name)
       .apply { if (record.supportsOpeningGreeting) put("voiceCallPreferences", JSONObject().put("openingGreetingEnabled", openingGreetingEnabled)) }
-      .put("appearance", appearance).put("preferences", JSONObject(preferences))
+      .put("appearance", appearance)
       .put("voicePreference", voice?.let {
         JSONObject().put("provider", it.provider).put("model", it.model).put("voice", it.voice)
       } ?: JSONObject.NULL)
@@ -114,9 +114,6 @@ class PersonalAgentRepository(private val gateway: GatewaySession) {
       val conversationId = payload.getString("conversationId")
       require(state in setOf("provisioning", "ready", "error") && agentId.isNotBlank() &&
         conversationId.matches(Regex("[0-9a-fA-F-]{36}"))) { "INVALID_PERSONAL_AGENT" }
-      val preferences = payload.optJSONObject("preferences")?.let { values ->
-        values.keys().asSequence().associateWith { values.optString(it) }
-      } ?: emptyMap()
       val voice = payload.optJSONObject("voicePreference")?.let {
         PersonalVoicePreference(it.optString("provider"), it.optString("model"), it.optString("voice"))
       }
@@ -124,7 +121,7 @@ class PersonalAgentRepository(private val gateway: GatewaySession) {
         payload.optString("displayName").ifBlank { "Ada" },
         payload.optString("appearance").ifBlank { "loopi" },
         payload.optString("errorMessage").takeIf { !payload.isNull("errorMessage") && it.isNotBlank() },
-        payload.optInt("revision"), preferences, voice, payload.optString("userCallName").takeIf { !payload.isNull("userCallName") && it.isNotBlank() },
+        payload.optInt("revision"), voice, payload.optString("userCallName").takeIf { !payload.isNull("userCallName") && it.isNotBlank() },
         payload.optJSONObject("voiceCallPreferences")?.optBoolean("openingGreetingEnabled", true) ?: true, payload.optJSONObject("voiceCallPreferences") != null)
     }
   }

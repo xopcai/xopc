@@ -32,6 +32,7 @@ const TAB_ICONS: Record<Tab, LucideIcon> = {
   settingsSearch: Search,
   settingsAppearance: Palette,
   settingsKeyboardShortcuts: Keyboard,
+  settingsPersonal: Radio,
   settingsSystem: Shield,
   settingsDesktopPet: PawPrint,
   settingsDesktopApp: Package,

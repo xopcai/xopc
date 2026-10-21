@@ -8,6 +8,7 @@ const TAB_TO_SETTINGS_SECTION: Record<
   | 'settingsImports'
   | 'settingsOverview'
   | 'settingsAppearance'
+  | 'settingsPersonal'
   | 'settingsSystem'
   | 'settingsDesktopPet'
   | 'settingsDesktopApp'
@@ -24,6 +25,7 @@ const TAB_TO_SETTINGS_SECTION: Record<
   settingsOverview: 'overview',
   settingsAppearance: 'appearance',
   settingsKeyboardShortcuts: 'keyboard-shortcuts',
+  settingsPersonal: 'personal',
   settingsSystem: 'system',
   settingsDesktopPet: 'desktop-pet',
   settingsDesktopApp: 'desktop-app',
@@ -78,7 +80,7 @@ export const ELECTRON_SYSTEM_NAV_GROUP: SettingsShellNavGroup = {
  * retains dependency repair. Electron-only rows are merged by the layout.
  */
 export const SETTINGS_SHELL_NAV_GROUPS: readonly SettingsShellNavGroup[] = [
-  { id: 'general', tabs: ['settingsOverview', 'settingsAppearance', 'settingsKeyboardShortcuts'] },
+  { id: 'general', tabs: ['settingsOverview', 'settingsAppearance', 'settingsPersonal', 'settingsKeyboardShortcuts'] },
   {
     id: 'capabilities',
     tabs: [

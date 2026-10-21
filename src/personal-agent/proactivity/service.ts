@@ -295,7 +295,7 @@ export class PersonalProactivityService {
         'contact requires a grounded result, material change, relevant new insight or necessary user decision. text must contain that value, in the user language.',
         'prepare means a later bounded synthesis from supplied material, not permission to use tools. Respect recorded preparation depth: brief means concise, thorough means a complete grounded synthesis before contact.',
         'Return JSON {decision:"silent"|"defer"|"prepare"|"contact",reason,sourceIds,text?,nextCheckAt?}. sourceIds must reference supplied evidence.',
-        JSON.stringify({ now, identity: { name: profile?.name, preferences: profile?.responsePreferences }, history, thread: { subject: thread.subject, summary: thread.summary, authority: thread.authority },
+        JSON.stringify({ now, identity: { name: profile?.name }, history, thread: { subject: thread.subject, summary: thread.summary, authority: thread.authority },
           sources: sources.map(({ processingPolicy: _policy, ...source }) => source), trigger: wakeup.trigger_kind, events: events ? JSON.stringify(events).slice(0, 2000) : undefined, recent, strategy }),
       ].join('\n')))));
       if (getAttention(thread.id)?.revision !== thread.revision) return;

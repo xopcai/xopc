@@ -15,6 +15,7 @@ import {
   loadSetupStatusPanel,
   loadSharesSettingsPanel,
   loadSystemSettingsPanel,
+  loadPersonalSettingsPanel,
 } from '@/lib/route-preload';
 import type { SettingsSectionId } from '@/navigation';
 import { useLocaleStore } from '@/stores/locale-store';
@@ -23,6 +24,7 @@ const SECTIONS: SettingsSectionId[] = [
   'overview',
   'appearance',
   'keyboard-shortcuts',
+  'personal',
   'system',
   'desktop-pet',
   'desktop-app',
@@ -41,6 +43,7 @@ const AppearanceSettingsPanel = lazy(() =>
 const KeyboardShortcutsSettingsPanel = lazy(() =>
   loadKeyboardShortcutsSettingsPanel().then((m) => ({ default: m.KeyboardShortcutsSettingsPanel })),
 );
+const PersonalSettingsPanel = lazy(() => loadPersonalSettingsPanel().then(m => ({ default: m.PersonalSettingsPanel })));
 const SystemSettingsPanel = lazy(() => loadSystemSettingsPanel().then((m) => ({ default: m.SystemSettingsPanel })));
 const DesktopPetSettings = lazy(() => loadDesktopPetSettingsPanel().then((m) => ({ default: m.DesktopPetSettings })));
 const AppManagementSettingsPanel = lazy(() =>
@@ -102,6 +105,10 @@ export function SettingsPage() {
 
   if (id === 'keyboard-shortcuts') {
     return renderLazySection(KeyboardShortcutsSettingsPanel);
+  }
+
+  if (id === 'personal') {
+    return renderLazySection(PersonalSettingsPanel);
   }
 
   if (id === 'system') {
