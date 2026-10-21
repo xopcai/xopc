@@ -20,6 +20,9 @@ const { values } = parseArgs({ options: {
   persona: { type: 'string' },
   'eq-cases': { type: 'string', default: '12' }, 'follow-cases': { type: 'string', default: '150' },
   concurrency: { type: 'string', default: '2' }, 'dry-run': { type: 'boolean' },
+  'dialogue-fixtures': { type: 'string' },
+  'fresh-profile': { type: 'boolean' },
+  'eq-case-id': { type: 'string' },
 } });
 for (const key of ['eq-cases', 'follow-cases', 'concurrency'] as const) {
   if (!/^\d+$/.test(values[key]!) || Number(values[key]) < 1) throw new Error(`Invalid --${key}`);
@@ -33,7 +36,7 @@ const pins = JSON.parse(readFileSync(new URL('./upstreams.json', import.meta.url
 const hash = (bytes: string | Buffer) => createHash('sha256').update(bytes).digest('hex');
 const fingerprint = () => {
   const paths = execFileSync('git', ['ls-files', '--cached', '--others', '--exclude-standard', 'src', 'packages', 'evals/personal/style', 'pnpm-lock.yaml'], { encoding: 'utf8' }).trim().split('\n');
-  paths.push('evals/personal/style/run.mts', 'evals/personal/style/driver.py', 'evals/personal/style/protocol.py', 'evals/personal/style/upstreams.json');
+  paths.push('evals/personal/style/request_pools.py', 'evals/personal/style/request-pools.mts', 'evals/personal/style/run.mts', 'evals/personal/style/driver.py', 'evals/personal/style/protocol.py', 'evals/personal/style/upstreams.json');
   return hash(JSON.stringify([...new Set(paths)].sort().map(path => [path, hash(readFileSync(path))])));
 };
 for (const [name, pin] of Object.entries(pins) as Array<[string, { commit: string }]>) {
@@ -47,13 +50,16 @@ const sourceRoot = process.env.XOPC_STATE_DIR ?? join(homedir(), '.xopc');
 const credentials = process.env.XOPC_CREDENTIALS_DIR ?? join(sourceRoot, 'credentials');
 const configSource = process.env.XOPC_CONFIG_PATH ?? join(sourceRoot, 'xopc.json');
 const sourceDb = new DatabaseSync(join(sourceRoot, 'xopc.db'), { readOnly: true });
+sourceDb.exec('PRAGMA busy_timeout=5000');
 const defaults = JSON.parse(String(sourceDb.prepare('SELECT defaults_json FROM agent_catalog_settings LIMIT 1').get()!.defaults_json));
-const personalSource = sourceDb.prepare("SELECT a.profile_json,a.overrides_json,s.conversation_id FROM agents a JOIN sessions s ON a.id=s.agent_id WHERE json_extract(s.custom_data_json,'$.personalAgent')=1 AND a.deleted_at IS NULL LIMIT 1").get();
+const personalSource = values['fresh-profile'] ? undefined : sourceDb.prepare("SELECT a.profile_json,a.overrides_json,s.conversation_id FROM agents a JOIN sessions s ON a.id=s.agent_id WHERE json_extract(s.custom_data_json,'$.personalAgent')=1 AND a.deleted_at IS NULL LIMIT 1").get();
 const selection = personalSource ? sourceDb.prepare('SELECT model_override FROM session_config WHERE conversation_id=?').get(String(personalSource.conversation_id)) : undefined;
 sourceDb.close();
 const model = values.model ?? (selection?.model_override as string | undefined) ?? defaults.models.intents.fast?.primary ?? defaults.models.chat.primary;
 const judge = values.judge ?? defaults.models.intents.review?.primary ?? defaults.models.chat.primary;
 const personaModel = values.persona ?? defaults.models.intents.reasoning?.primary ?? defaults.models.chat.primary;
+const dialogueFixtures = values['dialogue-fixtures'] ? resolve(values['dialogue-fixtures']) : undefined;
+const dialogueFixtureHash = dialogueFixtures ? hash(readFileSync(dialogueFixtures)) : undefined;
 const manifest = {
   sourceOrigin: existsSync('.xopc-source-origin.json') ? JSON.parse(readFileSync('.xopc-source-origin.json', 'utf8')) : null,
   schemaVersion: 1, suite: 'personal-dialogue-style', version: '1.0.0', createdAt: new Date().toISOString(),
@@ -62,9 +68,13 @@ const manifest = {
   sourceHash: fingerprint(), upstreams: pins, model, judge, persona: personaModel,
   eqCases: Number(values['eq-cases']), followCases: Number(values['follow-cases']), concurrency: Number(values.concurrency),
   eqTurns: 8, repetitions: 1, reasoning: 'off', evaluatorReasoning: 'low',
+  ...(process.env.XOPC_STYLE_POOL_URL ? { requestPools: { generation: 4, judge: 4, scenes: 3, sharedAcrossProcesses: true, adaptiveDownshift: true } } : {}),
   personalProfile: personalSource ? 'existing-profile-isolated-state' : 'fresh-production-default',
   protocol: 'production Personal prompt; EQ evaluator system context delivered as labeled user-message context on each turn; no persona cards or judge data exposed',
   limitations: ['EQ sampled pointwise trait profile, not official pairwise leaderboard rating', 'One judge and one simulated-user model; results depend on both', 'FollowBench style adherence is not conversational naturalness', 'No production history, user memory, connectors or external side effects', 'Model-catalog cost estimates are not billing receipts'],
+  ...(dialogueFixtures ? { mode: 'scripted-dialogue', dialogueFixtureHash, eqCases: 0, followCases: 0,
+    protocol: 'production Personal prompt; fixed scripted user turns; expectations remain evaluator-side; separately judged after capture' } : {}),
+  ...(values['eq-case-id'] ? { mode: 'single-eq-capture', eqCaseId: values['eq-case-id'], eqCases: 1, followCases: 0 } : {}),
 };
 writeFileSync(join(out, 'manifest.json'), JSON.stringify(manifest, null, 2));
 if (values['dry-run']) { console.log(JSON.stringify(manifest, null, 2)); process.exit(0); }
@@ -140,7 +150,7 @@ try {
       customData: { personalAgent: true, keepHiddenFromSessionList: true } }, caseWorkspace, conversationId);
     setSessionConfig(conversationId, { modelOverride: model, fixedModel: true, thinkingLevel: 'off', workingDirectoryOverride: caseWorkspace }, caseWorkspace);
     const evalCase: EvalCase = { id: caseId, task: 'Dialogue style evaluation; private fixtures remain evaluator-side', repo: { source: 'local', path: caseWorkspace, commit: manifest.commit }, budget: { timeoutMs: 1_800_000 }, graders: [], tags: ['dialogue', suite] };
-    store.createRun({ id: runId, experimentId, evalCase, variantId: 'personal', adapter: 'personal-dialogue', sourceCommit: manifest.commit, fixtureCommit: pins[suite === 'followbench-zh-style' ? 'followbench' : 'eqbench4'].commit });
+    store.createRun({ id: runId, experimentId, evalCase, variantId: 'personal', adapter: 'personal-dialogue', sourceCommit: manifest.commit, fixtureCommit: dialogueFixtureHash ?? pins[suite === 'followbench-zh-style' ? 'followbench' : 'eqbench4'].commit });
     const trace = new TraceEmitter(runId, event => store.appendEvent(event));
     const runtimeIdentity = await api(`/api/eval/runtime-identity?agentId=${encodeURIComponent(personal.agentId)}`);
     const run = { runId, conversationId, trace, usage: {} as Record<string, number>, runtimeIdentity, done: false, startedAt: Date.now(), calls: 0 };
@@ -175,10 +185,10 @@ try {
         const follow = body.suite === 'followbench-zh-style';
         const grade = { graderIndex: 0, graderType: 'external_model_judge' as const, category: 'quality' as const, required: follow, weight: 1,
           passed: !error && (follow ? Boolean(body.result.hardSatisfied) : false), score: error ? 0 : follow ? body.result.softScore : 0,
-          summary: error ?? (follow ? JSON.stringify(body.result.verdicts) : 'EQ neutral trait profile; no quality threshold or official rank'), artifactRefs: [artifact.id], durationMs: body.result.durationMs ?? 0 };
+          summary: error ?? (follow ? JSON.stringify(body.result.verdicts) : dialogueFixtures ? 'Scripted dialogue capture; judging is separate' : 'EQ neutral trait profile; no quality threshold or official rank'), artifactRefs: [artifact.id], durationMs: body.result.durationMs ?? 0 };
         if (follow) store.recordGrade(run.runId, grade);
         await run.trace.emit(error ? 'run.failed' : 'run.completed', { error: error ?? null, profileOnly: !follow });
-        store.completeRun(run.runId, { status: error ? 'error' : follow ? grade.passed ? 'passed' : 'failed' : 'completed', finalText: body.result.answer ?? JSON.stringify(body.result.traits ?? {}),
+        store.completeRun(run.runId, { status: error ? 'error' : follow ? grade.passed ? 'passed' : 'failed' : 'completed', finalText: body.result.answer ?? JSON.stringify(body.result.transcript ?? body.result.traits ?? {}),
           conversationId: run.conversationId, usage: run.usage, runtimeIdentity: run.runtimeIdentity, ...(error ? { error } : {}), score: grade.score });
         run.done = true; console.log(`${body.caseId}: ${error ? 'ERROR' : follow ? grade.passed ? 'PASS' : 'FAIL' : 'PROFILE'}`);
         res.writeHead(200, { 'Content-Type': 'application/json' }).end('{}'); return;
@@ -220,7 +230,9 @@ try {
   bridge.listen(0, '127.0.0.1'); await once(bridge, 'listening');
   const bridgeUrl = `http://127.0.0.1:${(bridge.address() as { port: number }).port}`;
   const child = spawn(join(upstream, 'eqbench4/.venv/bin/python'), [resolve('evals/personal/style/driver.py'), '--out', out, '--upstream', upstream,
-    '--eq-cases', values['eq-cases']!, '--follow-cases', values['follow-cases']!, '--concurrency', values.concurrency!],
+    '--eq-cases', values['eq-cases']!, '--follow-cases', values['follow-cases']!, '--concurrency', values.concurrency!,
+    ...(dialogueFixtures ? ['--dialogue-fixtures', dialogueFixtures] : []),
+    ...(values['eq-case-id'] ? ['--eq-case-id', values['eq-case-id']] : [])],
     { stdio: 'inherit', env: { ...process.env, XOPC_STYLE_BRIDGE: bridgeUrl, XOPC_STYLE_TOKEN: token, PYTHONPATH: join(upstream, 'eqbench4/src') } });
   const [code] = await once(child, 'exit');
   const sourceHashEnd = fingerprint();

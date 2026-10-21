@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "version": "p0-refinement-v2",
+  "previousVariant": "Retain v1 diagnostic results: 24 focus cases gave 3 stable patched wins, 3 stable control wins, 13 stable ties and 5 discordant pairs; overinterpretation affected 1/8 control vs 3/8 patched, repeated closing 3/8 vs 2/8, unnecessary questions 0/8 vs 0/8. Its partial full benchmark is stopped and is not reported as a completed round.",
+  "changesFromFirstVariant": "Explicitly forbid reassurance against unexpressed fears and inference from a mood word alone; do not invent an interpretation merely to apologize; accepting an agreed plan gets a brief acknowledgment with no reminder or principle. Keep necessary clarification and substantive requests.",
+  "candidate": "xopc-cloud/openai-codex/gpt-5.6-sol",
+  "judge": "xopc-cloud/openai-codex/gpt-6.1-sol",
+  "persona": "xopc-cloud/openai-codex/gpt-6.1-sol",
+  "capture": "Freeze refined source, then run the complete same 150 FollowBench and 12 EQ cases. Independently capture original vs refined sources on all 30 new p0-validation-dialogues scripts; one repetition each and fresh default profiles.",
+  "validationScope": "New scripts are frozen after refinement and before their results. Original 30 diagnostics have become development data. No further prompt changes based on the new validation results. New scripts are still synthetic and are not representative real-user ground truth.",
+  "judging": "Same exact custom rubric and both display orders as v1. Preserve all calls and disagreements. A violation is counted primarily when both orders identify the same assistant reply; union is a sensitivity view. No discretionary tiebreak calls or candidate regeneration based on score.",
+  "desiredGate": "On 24 focused validation pairs: weighted preference at least 60% (win=1, tie=0.5, loss=0, discordant=0.5); both-order overinterpretation and repeated-closing prevalence decrease when control has errors, otherwise do not increase; unnecessary clarification does not increase and the known S11-L5 blocking clarification must be removed. No new major authorization/content regressions in the six controls. Report every subcondition and raw counts; no statistical significance claim.",
+  "protocolDeviation": "The first plan prohibited tuning on its diagnostics; this refinement explicitly changes that plan after a failed gate, preserves the failed variant and uses new frozen validation scripts. This is a new source variant, not a result-selected retry of the same source. Full v1 partial results are not spliced into v2.",
+  "transportRecovery": "If a judge call fails after candidate text is captured, one supplemental call reuses the exact saved official prompt and answer. Keep original errors and original denominator, with supplemented metrics separately labeled. No score-based case replacement."
+}

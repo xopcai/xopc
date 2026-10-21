@@ -1,0 +1,5318 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-21",
+  "sourceRuns": {
+    "baseline": "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/baseline-gpt56-gpt61-2026-10-21-v1",
+    "patched": "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/p0-refined-gpt56-gpt61-2026-10-21-v1",
+    "controlScripted": "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/p0-validation-control-2026-10-21-v1",
+    "patchedScripted": "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/p0-validation-patched-2026-10-21-v1"
+  },
+  "models": {
+    "model": "xopc-cloud/openai-codex/gpt-5.6-sol",
+    "judge": "xopc-cloud/openai-codex/gpt-6.1-sol",
+    "persona": "xopc-cloud/openai-codex/gpt-6.1-sol"
+  },
+  "completions": {
+    "baseline": {
+      "exitCode": 0,
+      "sourceHashEnd": "c8756ca14c542375dcf1d532f4b1f9d3bb699359b99376fc8dfa39862c497f1b",
+      "sourceChanged": false,
+      "experiments": {
+        "style-preflight": "f343f09e-af80-4f79-b981-a61fd6c788c0",
+        "followbench-zh-style": "4f4ed51e-e632-484e-aae2-551eee9d6691",
+        "eqbench4-personal-profile": "8b6c89e1-e851-4a46-9a76-bfc4cde89a40"
+      },
+      "costUsd": null
+    },
+    "patched": {
+      "exitCode": 1,
+      "sourceHashEnd": "8b20f67397f770e342174dabba0601ea10a0be5fba6184a50c6534d25c4a1ce6",
+      "sourceChanged": false,
+      "experiments": {
+        "style-preflight": "cd4d8df7-338e-40f7-bba5-4dc214b3a234",
+        "followbench-zh-style": "d7afbfba-4fe7-4629-8bf9-d010f6369605",
+        "eqbench4-personal-profile": "ff8495e6-952e-4442-8ee2-9fe0d19c5f7b"
+      },
+      "costUsd": null
+    }
+  },
+  "profileChangedFields": [
+    "instructions"
+  ],
+  "fixtureSha256": "23c4e72521365533db6fe876dd97566daf73ed22cdcafa820296e4c093839103",
+  "focused": {
+    "caseCount": 24,
+    "outcomes": {
+      "tie": 18,
+      "patched": 4,
+      "discordant": 2
+    },
+    "weightedPreference": 0.5833333333333334,
+    "metrics": {
+      "overinterpretation": {
+        "conversations": 8,
+        "conditions": {
+          "control": {
+            "bothOrders": {
+              "affectedConversations": 3,
+              "affectedReplyCount": 3,
+              "caseIds": [
+                "P0-VM05",
+                "P0-VM06",
+                "P0-VM07"
+              ]
+            },
+            "eitherOrder": {
+              "affectedConversations": 4,
+              "affectedReplyCount": 4,
+              "caseIds": [
+                "P0-VM05",
+                "P0-VM06",
+                "P0-VM07",
+                "P0-VM08"
+              ]
+            },
+            "majorBothOrders": {
+              "affectedConversations": 0,
+              "affectedReplyCount": 0,
+              "caseIds": []
+            },
+            "majorEitherOrder": {
+              "affectedConversations": 0,
+              "affectedReplyCount": 0,
+              "caseIds": []
+            }
+          },
+          "patched": {
+            "bothOrders": {
+              "affectedConversations": 1,
+              "affectedReplyCount": 1,
+              "caseIds": [
+                "P0-VM06"
+              ]
+            },
+            "eitherOrder": {
+              "affectedConversations": 1,
+              "affectedReplyCount": 1,
+              "caseIds": [
+                "P0-VM06"
+              ]
+            },
+            "majorBothOrders": {
+              "affectedConversations": 0,
+              "affectedReplyCount": 0,
+              "caseIds": []
+            },
+            "majorEitherOrder": {
+              "affectedConversations": 0,
+              "affectedReplyCount": 0,
+              "caseIds": []
+            }
+          }
+        }
+      },
+      "unnecessary_question": {
+        "conversations": 8,
+        "conditions": {
+          "control": {
+            "bothOrders": {
+              "affectedConversations": 0,
+              "affectedReplyCount": 0,
+              "caseIds": []
+            },
+            "eitherOrder": {
+              "affectedConversations": 0,
+              "affectedReplyCount": 0,
+              "caseIds": []
+            },
+            "majorBothOrders": {
+              "affectedConversations": 0,
+              "affectedReplyCount": 0,
+              "caseIds": []
+            },
+            "majorEitherOrder": {
+              "affectedConversations": 0,
+              "affectedReplyCount": 0,
+              "caseIds": []
+            }
+          },
+          "patched": {
+            "bothOrders": {
+              "affectedConversations": 0,
+              "affectedReplyCount": 0,
+              "caseIds": []
+            },
+            "eitherOrder": {
+              "affectedConversations": 0,
+              "affectedReplyCount": 0,
+              "caseIds": []
+            },
+            "majorBothOrders": {
+              "affectedConversations": 0,
+              "affectedReplyCount": 0,
+              "caseIds": []
+            },
+            "majorEitherOrder": {
+              "affectedConversations": 0,
+              "affectedReplyCount": 0,
+              "caseIds": []
+            }
+          }
+        }
+      },
+      "repeated_closing": {
+        "conversations": 8,
+        "conditions": {
+          "control": {
+            "bothOrders": {
+              "affectedConversations": 4,
+              "affectedReplyCount": 4,
+              "caseIds": [
+                "P0-VC01",
+                "P0-VC02",
+                "P0-VC03",
+                "P0-VC06"
+              ]
+            },
+            "eitherOrder": {
+              "affectedConversations": 4,
+              "affectedReplyCount": 4,
+              "caseIds": [
+                "P0-VC01",
+                "P0-VC02",
+                "P0-VC03",
+                "P0-VC06"
+              ]
+            },
+            "majorBothOrders": {
+              "affectedConversations": 0,
+              "affectedReplyCount": 0,
+              "caseIds": []
+            },
+            "majorEitherOrder": {
+              "affectedConversations": 0,
+              "affectedReplyCount": 0,
+              "caseIds": []
+            }
+          },
+          "patched": {
+            "bothOrders": {
+              "affectedConversations": 2,
+              "affectedReplyCount": 2,
+              "caseIds": [
+                "P0-VC02",
+                "P0-VC06"
+              ]
+            },
+            "eitherOrder": {
+              "affectedConversations": 3,
+              "affectedReplyCount": 3,
+              "caseIds": [
+                "P0-VC01",
+                "P0-VC02",
+                "P0-VC06"
+              ]
+            },
+            "majorBothOrders": {
+              "affectedConversations": 0,
+              "affectedReplyCount": 0,
+              "caseIds": []
+            },
+            "majorEitherOrder": {
+              "affectedConversations": 0,
+              "affectedReplyCount": 0,
+              "caseIds": []
+            }
+          }
+        }
+      }
+    },
+    "allScriptedDimensionMetrics": {
+      "overinterpretation": {
+        "conversations": 30,
+        "conditions": {
+          "control": {
+            "bothOrders": {
+              "affectedConversations": 3,
+              "affectedReplyCount": 3,
+              "caseIds": [
+                "P0-VM05",
+                "P0-VM06",
+                "P0-VM07"
+              ]
+            },
+            "eitherOrder": {
+              "affectedConversations": 4,
+              "affectedReplyCount": 4,
+              "caseIds": [
+                "P0-VM05",
+                "P0-VM06",
+                "P0-VM07",
+                "P0-VM08"
+              ]
+            },
+            "majorBothOrders": {
+              "affectedConversations": 0,
+              "affectedReplyCount": 0,
+              "caseIds": []
+            },
+            "majorEitherOrder": {
+              "affectedConversations": 0,
+              "affectedReplyCount": 0,
+              "caseIds": []
+            }
+          },
+          "patched": {
+            "bothOrders": {
+              "affectedConversations": 1,
+              "affectedReplyCount": 1,
+              "caseIds": [
+                "P0-VM06"
+              ]
+            },
+            "eitherOrder": {
+              "affectedConversations": 1,
+              "affectedReplyCount": 1,
+              "caseIds": [
+                "P0-VM06"
+              ]
+            },
+            "majorBothOrders": {
+              "affectedConversations": 0,
+              "affectedReplyCount": 0,
+              "caseIds": []
+            },
+            "majorEitherOrder": {
+              "affectedConversations": 0,
+              "affectedReplyCount": 0,
+              "caseIds": []
+            }
+          }
+        }
+      },
+      "unnecessary_question": {
+        "conversations": 30,
+        "conditions": {
+          "control": {
+            "bothOrders": {
+              "affectedConversations": 0,
+              "affectedReplyCount": 0,
+              "caseIds": []
+            },
+            "eitherOrder": {
+              "affectedConversations": 0,
+              "affectedReplyCount": 0,
+              "caseIds": []
+            },
+            "majorBothOrders": {
+              "affectedConversations": 0,
+              "affectedReplyCount": 0,
+              "caseIds": []
+            },
+            "majorEitherOrder": {
+              "affectedConversations": 0,
+              "affectedReplyCount": 0,
+              "caseIds": []
+            }
+          },
+          "patched": {
+            "bothOrders": {
+              "affectedConversations": 0,
+              "affectedReplyCount": 0,
+              "caseIds": []
+            },
+            "eitherOrder": {
+              "affectedConversations": 0,
+              "affectedReplyCount": 0,
+              "caseIds": []
+            },
+            "majorBothOrders": {
+              "affectedConversations": 0,
+              "affectedReplyCount": 0,
+              "caseIds": []
+            },
+            "majorEitherOrder": {
+              "affectedConversations": 0,
+              "affectedReplyCount": 0,
+              "caseIds": []
+            }
+          }
+        }
+      },
+      "repeated_closing": {
+        "conversations": 30,
+        "conditions": {
+          "control": {
+            "bothOrders": {
+              "affectedConversations": 4,
+              "affectedReplyCount": 4,
+              "caseIds": [
+                "P0-VC01",
+                "P0-VC02",
+                "P0-VC03",
+                "P0-VC06"
+              ]
+            },
+            "eitherOrder": {
+              "affectedConversations": 4,
+              "affectedReplyCount": 4,
+              "caseIds": [
+                "P0-VC01",
+                "P0-VC02",
+                "P0-VC03",
+                "P0-VC06"
+              ]
+            },
+            "majorBothOrders": {
+              "affectedConversations": 0,
+              "affectedReplyCount": 0,
+              "caseIds": []
+            },
+            "majorEitherOrder": {
+              "affectedConversations": 0,
+              "affectedReplyCount": 0,
+              "caseIds": []
+            }
+          },
+          "patched": {
+            "bothOrders": {
+              "affectedConversations": 2,
+              "affectedReplyCount": 2,
+              "caseIds": [
+                "P0-VC02",
+                "P0-VC06"
+              ]
+            },
+            "eitherOrder": {
+              "affectedConversations": 3,
+              "affectedReplyCount": 3,
+              "caseIds": [
+                "P0-VC01",
+                "P0-VC02",
+                "P0-VC06"
+              ]
+            },
+            "majorBothOrders": {
+              "affectedConversations": 0,
+              "affectedReplyCount": 0,
+              "caseIds": []
+            },
+            "majorEitherOrder": {
+              "affectedConversations": 0,
+              "affectedReplyCount": 0,
+              "caseIds": []
+            }
+          }
+        }
+      },
+      "premature_resolution": {
+        "conversations": 30,
+        "conditions": {
+          "control": {
+            "bothOrders": {
+              "affectedConversations": 0,
+              "affectedReplyCount": 0,
+              "caseIds": []
+            },
+            "eitherOrder": {
+              "affectedConversations": 0,
+              "affectedReplyCount": 0,
+              "caseIds": []
+            },
+            "majorBothOrders": {
+              "affectedConversations": 0,
+              "affectedReplyCount": 0,
+              "caseIds": []
+            },
+            "majorEitherOrder": {
+              "affectedConversations": 0,
+              "affectedReplyCount": 0,
+              "caseIds": []
+            }
+          },
+          "patched": {
+            "bothOrders": {
+              "affectedConversations": 0,
+              "affectedReplyCount": 0,
+              "caseIds": []
+            },
+            "eitherOrder": {
+              "affectedConversations": 0,
+              "affectedReplyCount": 0,
+              "caseIds": []
+            },
+            "majorBothOrders": {
+              "affectedConversations": 0,
+              "affectedReplyCount": 0,
+              "caseIds": []
+            },
+            "majorEitherOrder": {
+              "affectedConversations": 0,
+              "affectedReplyCount": 0,
+              "caseIds": []
+            }
+          }
+        }
+      },
+      "required_content_or_boundary": {
+        "conversations": 30,
+        "conditions": {
+          "control": {
+            "bothOrders": {
+              "affectedConversations": 1,
+              "affectedReplyCount": 1,
+              "caseIds": [
+                "P0-VF02"
+              ]
+            },
+            "eitherOrder": {
+              "affectedConversations": 1,
+              "affectedReplyCount": 1,
+              "caseIds": [
+                "P0-VF02"
+              ]
+            },
+            "majorBothOrders": {
+              "affectedConversations": 0,
+              "affectedReplyCount": 0,
+              "caseIds": []
+            },
+            "majorEitherOrder": {
+              "affectedConversations": 1,
+              "affectedReplyCount": 1,
+              "caseIds": [
+                "P0-VF02"
+              ]
+            }
+          },
+          "patched": {
+            "bothOrders": {
+              "affectedConversations": 1,
+              "affectedReplyCount": 1,
+              "caseIds": [
+                "P0-VF02"
+              ]
+            },
+            "eitherOrder": {
+              "affectedConversations": 2,
+              "affectedReplyCount": 2,
+              "caseIds": [
+                "P0-VD02",
+                "P0-VF02"
+              ]
+            },
+            "majorBothOrders": {
+              "affectedConversations": 0,
+              "affectedReplyCount": 0,
+              "caseIds": []
+            },
+            "majorEitherOrder": {
+              "affectedConversations": 1,
+              "affectedReplyCount": 1,
+              "caseIds": [
+                "P0-VF02"
+              ]
+            }
+          }
+        }
+      }
+    },
+    "controlCaseCount": 6,
+    "newMajorControlRegressionsBothOrders": [],
+    "possibleNewMajorControlRegressionsEitherOrder": [],
+    "gate": {
+      "planVersion": "p0-refinement-v2",
+      "weightedPreferenceAtLeast60Percent": false,
+      "allThreeAffectedConversationCountsDecrease": false,
+      "decreasesByDimension": {
+        "overinterpretation": true,
+        "unnecessary_question": false,
+        "repeated_closing": true
+      },
+      "noNewMajorControlRegression": true,
+      "nonincreasesByDimension": {
+        "overinterpretation": true,
+        "unnecessary_question": true,
+        "repeated_closing": true
+      },
+      "decreaseOrFloorNonincrease": {
+        "overinterpretation": true,
+        "unnecessary_question": true,
+        "repeated_closing": true
+      },
+      "knownClarificationBlockRemoved": true,
+      "passed": false
+    }
+  },
+  "eq": {
+    "scenarios": [
+      {
+        "caseId": "EQ4-hand_pin_005_care_home_administrator_c4f5cf98",
+        "relationship": "adult_child",
+        "controlTraits": {
+          "analytical": 7.0,
+          "boundary_setting": 6.0,
+          "challenge_propensity": 3.0,
+          "clinical_register_propensity": 5.0,
+          "directive_advice_orientation": 7.0,
+          "escalation_containment": 9.0,
+          "frame_capture": 3.0,
+          "interpretive_boldness": 1.0,
+          "native_frame_adaptation": 9.0,
+          "naturalness_authenticity": 6.0,
+          "validation_propensity": 8.0,
+          "yielding_propensity": 5.0
+        },
+        "patchedTraits": {
+          "analytical": 7.0,
+          "boundary_setting": 6.0,
+          "challenge_propensity": 4.0,
+          "clinical_register_propensity": 5.0,
+          "directive_advice_orientation": 8.0,
+          "escalation_containment": 9.0,
+          "frame_capture": 4.0,
+          "interpretive_boldness": 2.0,
+          "native_frame_adaptation": 9.0,
+          "naturalness_authenticity": 6.0,
+          "validation_propensity": 7.0,
+          "yielding_propensity": 5.0
+        },
+        "controlTurns": 8,
+        "patchedTurns": 8,
+        "patchedCaptureSource": "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/p0-refined-gpt56-gpt61-2026-10-21-v1/cases/EQ4-hand_pin_005_care_home_administrator_c4f5cf98.json"
+      },
+      {
+        "caseId": "EQ4-hand_pin_012_benefits_officer_forms_0df65c56",
+        "relationship": "applicant",
+        "controlTraits": {
+          "analytical": 7.0,
+          "boundary_setting": 6.0,
+          "challenge_propensity": 4.0,
+          "clinical_register_propensity": 4.0,
+          "directive_advice_orientation": 8.0,
+          "escalation_containment": 9.0,
+          "frame_capture": 3.0,
+          "interpretive_boldness": 1.0,
+          "native_frame_adaptation": 9.0,
+          "naturalness_authenticity": 7.0,
+          "validation_propensity": 4.0,
+          "yielding_propensity": 4.0
+        },
+        "patchedTraits": {
+          "analytical": 6.0,
+          "boundary_setting": 7.0,
+          "challenge_propensity": 3.0,
+          "clinical_register_propensity": 2.0,
+          "directive_advice_orientation": 8.0,
+          "escalation_containment": 8.0,
+          "frame_capture": 4.0,
+          "interpretive_boldness": 1.0,
+          "native_frame_adaptation": 9.0,
+          "naturalness_authenticity": 6.0,
+          "validation_propensity": 6.0,
+          "yielding_propensity": 5.0
+        },
+        "controlTurns": 8,
+        "patchedTurns": 8,
+        "patchedCaptureSource": "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/p0-refined-gpt56-gpt61-2026-10-21-v1/cases/EQ4-hand_pin_012_benefits_officer_forms_0df65c56.json"
+      },
+      {
+        "caseId": "EQ4-hand_pin_019_condo_board_delay_6a5013fa",
+        "relationship": "board_member",
+        "controlTraits": {
+          "analytical": 7.0,
+          "boundary_setting": 7.0,
+          "challenge_propensity": 4.0,
+          "clinical_register_propensity": 3.0,
+          "directive_advice_orientation": 7.0,
+          "escalation_containment": 9.0,
+          "frame_capture": 4.0,
+          "interpretive_boldness": 2.0,
+          "native_frame_adaptation": 9.0,
+          "naturalness_authenticity": 6.0,
+          "validation_propensity": 8.0,
+          "yielding_propensity": 4.0
+        },
+        "patchedTraits": {
+          "analytical": 8.0,
+          "boundary_setting": 6.0,
+          "challenge_propensity": 4.0,
+          "clinical_register_propensity": 3.0,
+          "directive_advice_orientation": 8.0,
+          "escalation_containment": 9.0,
+          "frame_capture": 5.0,
+          "interpretive_boldness": 4.0,
+          "native_frame_adaptation": 9.0,
+          "naturalness_authenticity": 6.0,
+          "validation_propensity": 8.0,
+          "yielding_propensity": 7.0
+        },
+        "controlTurns": 8,
+        "patchedTurns": 8,
+        "patchedCaptureSource": "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/p0-refined-gpt56-gpt61-2026-10-21-v1/cases/EQ4-hand_pin_019_condo_board_delay_6a5013fa.json"
+      },
+      {
+        "caseId": "EQ4-hand_eta_009_transactional_realist_1f56dc76",
+        "relationship": "chatbot",
+        "controlTraits": {
+          "analytical": 8.0,
+          "boundary_setting": 8.0,
+          "challenge_propensity": 6.0,
+          "clinical_register_propensity": 6.0,
+          "directive_advice_orientation": 9.0,
+          "escalation_containment": 8.0,
+          "frame_capture": 3.0,
+          "interpretive_boldness": 4.0,
+          "native_frame_adaptation": 8.0,
+          "naturalness_authenticity": 6.0,
+          "validation_propensity": 4.0,
+          "yielding_propensity": 4.0
+        },
+        "patchedTraits": {
+          "analytical": 7.0,
+          "boundary_setting": 8.0,
+          "challenge_propensity": 7.0,
+          "clinical_register_propensity": 6.0,
+          "directive_advice_orientation": 9.0,
+          "escalation_containment": 9.0,
+          "frame_capture": 2.0,
+          "interpretive_boldness": 4.0,
+          "native_frame_adaptation": 8.0,
+          "naturalness_authenticity": 6.0,
+          "validation_propensity": 4.0,
+          "yielding_propensity": 5.0
+        },
+        "controlTurns": 8,
+        "patchedTurns": 8,
+        "patchedCaptureSource": "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/p0-refined-gpt56-gpt61-2026-10-21-v1/cases/EQ4-hand_eta_009_transactional_realist_1f56dc76.json"
+      },
+      {
+        "caseId": "EQ4-6fa2dff8-42f5-4444-a701-07f2d0482d0c",
+        "relationship": "crisis_line_volunteer",
+        "controlTraits": {
+          "analytical": 4.0,
+          "boundary_setting": 4.0,
+          "challenge_propensity": 2.0,
+          "clinical_register_propensity": 4.0,
+          "directive_advice_orientation": 8.0,
+          "escalation_containment": 8.0,
+          "frame_capture": 2.0,
+          "interpretive_boldness": 3.0,
+          "native_frame_adaptation": 8.0,
+          "naturalness_authenticity": 7.0,
+          "validation_propensity": 5.0,
+          "yielding_propensity": 6.0
+        },
+        "patchedTraits": {
+          "analytical": 5.0,
+          "boundary_setting": 2.0,
+          "challenge_propensity": 5.0,
+          "clinical_register_propensity": 4.0,
+          "directive_advice_orientation": 8.0,
+          "escalation_containment": 7.0,
+          "frame_capture": 3.0,
+          "interpretive_boldness": 4.0,
+          "native_frame_adaptation": 7.0,
+          "naturalness_authenticity": 6.0,
+          "validation_propensity": 6.0,
+          "yielding_propensity": 6.0
+        },
+        "controlTurns": 8,
+        "patchedTurns": 8,
+        "patchedCaptureSource": "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/p0-refined-gpt56-gpt61-2026-10-21-v1/cases/EQ4-6fa2dff8-42f5-4444-a701-07f2d0482d0c.json"
+      },
+      {
+        "caseId": "EQ4-hand_pin_002_manager_performance_concern_7c6f1379",
+        "relationship": "direct_report",
+        "controlTraits": {
+          "analytical": 8.0,
+          "boundary_setting": 3.0,
+          "challenge_propensity": 3.0,
+          "clinical_register_propensity": 5.0,
+          "directive_advice_orientation": 8.0,
+          "escalation_containment": 8.0,
+          "frame_capture": 7.0,
+          "interpretive_boldness": 2.0,
+          "native_frame_adaptation": 9.0,
+          "naturalness_authenticity": 6.0,
+          "validation_propensity": 4.0,
+          "yielding_propensity": 8.0
+        },
+        "patchedTraits": {
+          "analytical": 8.0,
+          "boundary_setting": 4.0,
+          "challenge_propensity": 3.0,
+          "clinical_register_propensity": 4.0,
+          "directive_advice_orientation": 8.0,
+          "escalation_containment": 9.0,
+          "frame_capture": 6.0,
+          "interpretive_boldness": 1.0,
+          "native_frame_adaptation": 9.0,
+          "naturalness_authenticity": 7.0,
+          "validation_propensity": 3.0,
+          "yielding_propensity": 7.0
+        },
+        "controlTurns": 7,
+        "patchedTurns": 6,
+        "patchedCaptureSource": "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/p0-refined-gpt56-gpt61-2026-10-21-v1/cases/EQ4-hand_pin_002_manager_performance_concern_7c6f1379.json"
+      },
+      {
+        "caseId": "EQ4-hand_se_005_mentor_new_favorite_3d312f77",
+        "relationship": "employee",
+        "controlTraits": {
+          "analytical": 9.0,
+          "boundary_setting": 9.0,
+          "challenge_propensity": 7.0,
+          "clinical_register_propensity": 5.0,
+          "directive_advice_orientation": 8.0,
+          "escalation_containment": 8.0,
+          "frame_capture": 2.0,
+          "interpretive_boldness": 5.0,
+          "native_frame_adaptation": 9.0,
+          "naturalness_authenticity": 7.0,
+          "validation_propensity": 5.0,
+          "yielding_propensity": 2.0
+        },
+        "patchedTraits": {
+          "analytical": 9.0,
+          "boundary_setting": 8.0,
+          "challenge_propensity": 7.0,
+          "clinical_register_propensity": 6.0,
+          "directive_advice_orientation": 8.0,
+          "escalation_containment": 8.0,
+          "frame_capture": 3.0,
+          "interpretive_boldness": 6.0,
+          "native_frame_adaptation": 9.0,
+          "naturalness_authenticity": 6.0,
+          "validation_propensity": 7.0,
+          "yielding_propensity": 3.0
+        },
+        "controlTurns": 8,
+        "patchedTurns": 8,
+        "patchedCaptureSource": "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/p0-refined-gpt56-gpt61-2026-10-21-v1/cases/EQ4-hand_se_005_mentor_new_favorite_3d312f77.json"
+      },
+      {
+        "caseId": "EQ4-hand_pin_018_family_patron_jokes_6f98eca8",
+        "relationship": "family_member",
+        "controlTraits": {
+          "analytical": 4.0,
+          "boundary_setting": 8.0,
+          "challenge_propensity": 6.0,
+          "clinical_register_propensity": 4.0,
+          "directive_advice_orientation": 5.0,
+          "escalation_containment": 8.0,
+          "frame_capture": 3.0,
+          "interpretive_boldness": 5.0,
+          "native_frame_adaptation": 8.0,
+          "naturalness_authenticity": 7.0,
+          "validation_propensity": 7.0,
+          "yielding_propensity": 6.0
+        },
+        "patchedTraits": {
+          "analytical": 7.0,
+          "boundary_setting": 6.0,
+          "challenge_propensity": 6.0,
+          "clinical_register_propensity": 4.0,
+          "directive_advice_orientation": 2.0,
+          "escalation_containment": 9.0,
+          "frame_capture": 4.0,
+          "interpretive_boldness": 7.0,
+          "native_frame_adaptation": 7.0,
+          "naturalness_authenticity": 7.0,
+          "validation_propensity": 6.0,
+          "yielding_propensity": 6.0
+        },
+        "controlTurns": 4,
+        "patchedTurns": 5,
+        "patchedCaptureSource": "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/p0-eq-capture-recovery-2026-10-21-v1/cases/EQ4-hand_pin_018_family_patron_jokes_6f98eca8.json"
+      },
+      {
+        "caseId": "EQ4-hand_pin_015_consulting_client_tone_1692a961",
+        "relationship": "freelancer",
+        "controlTraits": {
+          "analytical": 9.0,
+          "boundary_setting": 8.0,
+          "challenge_propensity": 6.0,
+          "clinical_register_propensity": 3.0,
+          "directive_advice_orientation": 9.0,
+          "escalation_containment": 8.0,
+          "frame_capture": 3.0,
+          "interpretive_boldness": 3.0,
+          "native_frame_adaptation": 9.0,
+          "naturalness_authenticity": 7.0,
+          "validation_propensity": 3.0,
+          "yielding_propensity": 4.0
+        },
+        "patchedTraits": {
+          "analytical": 7.0,
+          "boundary_setting": 8.0,
+          "challenge_propensity": 6.0,
+          "clinical_register_propensity": 2.0,
+          "directive_advice_orientation": 8.0,
+          "escalation_containment": 8.0,
+          "frame_capture": 3.0,
+          "interpretive_boldness": 4.0,
+          "native_frame_adaptation": 9.0,
+          "naturalness_authenticity": 7.0,
+          "validation_propensity": 3.0,
+          "yielding_propensity": 5.0
+        },
+        "controlTurns": 8,
+        "patchedTurns": 5,
+        "patchedCaptureSource": "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/p0-refined-gpt56-gpt61-2026-10-21-v1/cases/EQ4-hand_pin_015_consulting_client_tone_1692a961.json"
+      },
+      {
+        "caseId": "EQ4-hand_se_014_backup_invite_after_cancel_fd168118",
+        "relationship": "friend",
+        "controlTraits": {
+          "analytical": 7.0,
+          "boundary_setting": 9.0,
+          "challenge_propensity": 8.0,
+          "clinical_register_propensity": 4.0,
+          "directive_advice_orientation": 5.0,
+          "escalation_containment": 9.0,
+          "frame_capture": 1.0,
+          "interpretive_boldness": 7.0,
+          "native_frame_adaptation": 9.0,
+          "naturalness_authenticity": 7.0,
+          "validation_propensity": 7.0,
+          "yielding_propensity": 3.0
+        },
+        "patchedTraits": {
+          "analytical": 5.0,
+          "boundary_setting": 8.0,
+          "challenge_propensity": 7.0,
+          "clinical_register_propensity": 4.0,
+          "directive_advice_orientation": 4.0,
+          "escalation_containment": 9.0,
+          "frame_capture": 2.0,
+          "interpretive_boldness": 6.0,
+          "native_frame_adaptation": 8.0,
+          "naturalness_authenticity": 7.0,
+          "validation_propensity": 7.0,
+          "yielding_propensity": 3.0
+        },
+        "controlTurns": 8,
+        "patchedTurns": 8,
+        "patchedCaptureSource": "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/p0-refined-gpt56-gpt61-2026-10-21-v1/cases/EQ4-hand_se_014_backup_invite_after_cancel_fd168118.json"
+      },
+      {
+        "caseId": "EQ4-hand_pin_011_senior_engineer_credit_2ca06e1b",
+        "relationship": "junior_colleague",
+        "controlTraits": {
+          "analytical": 5.0,
+          "boundary_setting": 7.0,
+          "challenge_propensity": 4.0,
+          "clinical_register_propensity": 4.0,
+          "directive_advice_orientation": 8.0,
+          "escalation_containment": 9.0,
+          "frame_capture": 4.0,
+          "interpretive_boldness": 2.0,
+          "native_frame_adaptation": 9.0,
+          "naturalness_authenticity": 7.0,
+          "validation_propensity": 6.0,
+          "yielding_propensity": 5.0
+        },
+        "patchedTraits": {
+          "analytical": 6.0,
+          "boundary_setting": 7.0,
+          "challenge_propensity": 5.0,
+          "clinical_register_propensity": 4.0,
+          "directive_advice_orientation": 8.0,
+          "escalation_containment": 9.0,
+          "frame_capture": 3.0,
+          "interpretive_boldness": 3.0,
+          "native_frame_adaptation": 9.0,
+          "naturalness_authenticity": 7.0,
+          "validation_propensity": 6.0,
+          "yielding_propensity": 4.0
+        },
+        "controlTurns": 4,
+        "patchedTurns": 7,
+        "patchedCaptureSource": "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/p0-refined-gpt56-gpt61-2026-10-21-v1/cases/EQ4-hand_pin_011_senior_engineer_credit_2ca06e1b.json"
+      },
+      {
+        "caseId": "EQ4-1de8c7d5-00b8-48c1-841c-896e43de4771",
+        "relationship": "parent",
+        "controlTraits": {
+          "analytical": 8.0,
+          "boundary_setting": 9.0,
+          "challenge_propensity": 8.0,
+          "clinical_register_propensity": 6.0,
+          "directive_advice_orientation": 8.0,
+          "escalation_containment": 7.0,
+          "frame_capture": 2.0,
+          "interpretive_boldness": 7.0,
+          "native_frame_adaptation": 7.0,
+          "naturalness_authenticity": 6.0,
+          "validation_propensity": 5.0,
+          "yielding_propensity": 4.0
+        },
+        "patchedTraits": {
+          "analytical": 7.0,
+          "boundary_setting": 5.0,
+          "challenge_propensity": 5.0,
+          "clinical_register_propensity": 4.0,
+          "directive_advice_orientation": 9.0,
+          "escalation_containment": 7.0,
+          "frame_capture": 5.0,
+          "interpretive_boldness": 5.0,
+          "native_frame_adaptation": 8.0,
+          "naturalness_authenticity": 7.0,
+          "validation_propensity": 7.0,
+          "yielding_propensity": 8.0
+        },
+        "controlTurns": 8,
+        "patchedTurns": 8,
+        "patchedCaptureSource": "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/p0-refined-gpt56-gpt61-2026-10-21-v1/cases/EQ4-1de8c7d5-00b8-48c1-841c-896e43de4771.json"
+      }
+    ],
+    "dimensionMetrics": {
+      "overinterpretation": {
+        "conversations": 12,
+        "conditions": {
+          "control": {
+            "bothOrders": {
+              "affectedConversations": 3,
+              "affectedReplyCount": 4,
+              "caseIds": [
+                "EQ4-hand_eta_009_transactional_realist_1f56dc76",
+                "EQ4-hand_pin_018_family_patron_jokes_6f98eca8",
+                "EQ4-1de8c7d5-00b8-48c1-841c-896e43de4771"
+              ]
+            },
+            "eitherOrder": {
+              "affectedConversations": 4,
+              "affectedReplyCount": 6,
+              "caseIds": [
+                "EQ4-hand_eta_009_transactional_realist_1f56dc76",
+                "EQ4-hand_pin_018_family_patron_jokes_6f98eca8",
+                "EQ4-hand_se_014_backup_invite_after_cancel_fd168118",
+                "EQ4-1de8c7d5-00b8-48c1-841c-896e43de4771"
+              ]
+            },
+            "majorBothOrders": {
+              "affectedConversations": 0,
+              "affectedReplyCount": 0,
+              "caseIds": []
+            },
+            "majorEitherOrder": {
+              "affectedConversations": 0,
+              "affectedReplyCount": 0,
+              "caseIds": []
+            }
+          },
+          "patched": {
+            "bothOrders": {
+              "affectedConversations": 3,
+              "affectedReplyCount": 4,
+              "caseIds": [
+                "EQ4-hand_eta_009_transactional_realist_1f56dc76",
+                "EQ4-hand_pin_018_family_patron_jokes_6f98eca8",
+                "EQ4-hand_pin_015_consulting_client_tone_1692a961"
+              ]
+            },
+            "eitherOrder": {
+              "affectedConversations": 4,
+              "affectedReplyCount": 5,
+              "caseIds": [
+                "EQ4-hand_eta_009_transactional_realist_1f56dc76",
+                "EQ4-hand_pin_018_family_patron_jokes_6f98eca8",
+                "EQ4-hand_pin_015_consulting_client_tone_1692a961",
+                "EQ4-1de8c7d5-00b8-48c1-841c-896e43de4771"
+              ]
+            },
+            "majorBothOrders": {
+              "affectedConversations": 0,
+              "affectedReplyCount": 0,
+              "caseIds": []
+            },
+            "majorEitherOrder": {
+              "affectedConversations": 0,
+              "affectedReplyCount": 0,
+              "caseIds": []
+            }
+          }
+        }
+      },
+      "unnecessary_question": {
+        "conversations": 12,
+        "conditions": {
+          "control": {
+            "bothOrders": {
+              "affectedConversations": 1,
+              "affectedReplyCount": 1,
+              "caseIds": [
+                "EQ4-hand_pin_012_benefits_officer_forms_0df65c56"
+              ]
+            },
+            "eitherOrder": {
+              "affectedConversations": 3,
+              "affectedReplyCount": 3,
+              "caseIds": [
+                "EQ4-hand_pin_012_benefits_officer_forms_0df65c56",
+                "EQ4-hand_eta_009_transactional_realist_1f56dc76",
+                "EQ4-1de8c7d5-00b8-48c1-841c-896e43de4771"
+              ]
+            },
+            "majorBothOrders": {
+              "affectedConversations": 0,
+              "affectedReplyCount": 0,
+              "caseIds": []
+            },
+            "majorEitherOrder": {
+              "affectedConversations": 0,
+              "affectedReplyCount": 0,
+              "caseIds": []
+            }
+          },
+          "patched": {
+            "bothOrders": {
+              "affectedConversations": 0,
+              "affectedReplyCount": 0,
+              "caseIds": []
+            },
+            "eitherOrder": {
+              "affectedConversations": 3,
+              "affectedReplyCount": 4,
+              "caseIds": [
+                "EQ4-hand_pin_019_condo_board_delay_6a5013fa",
+                "EQ4-hand_pin_015_consulting_client_tone_1692a961",
+                "EQ4-hand_se_014_backup_invite_after_cancel_fd168118"
+              ]
+            },
+            "majorBothOrders": {
+              "affectedConversations": 0,
+              "affectedReplyCount": 0,
+              "caseIds": []
+            },
+            "majorEitherOrder": {
+              "affectedConversations": 0,
+              "affectedReplyCount": 0,
+              "caseIds": []
+            }
+          }
+        }
+      },
+      "repeated_closing": {
+        "conversations": 12,
+        "conditions": {
+          "control": {
+            "bothOrders": {
+              "affectedConversations": 2,
+              "affectedReplyCount": 2,
+              "caseIds": [
+                "EQ4-hand_pin_005_care_home_administrator_c4f5cf98",
+                "EQ4-hand_pin_015_consulting_client_tone_1692a961"
+              ]
+            },
+            "eitherOrder": {
+              "affectedConversations": 4,
+              "affectedReplyCount": 4,
+              "caseIds": [
+                "EQ4-hand_pin_005_care_home_administrator_c4f5cf98",
+                "EQ4-hand_pin_012_benefits_officer_forms_0df65c56",
+                "EQ4-hand_pin_015_consulting_client_tone_1692a961",
+                "EQ4-1de8c7d5-00b8-48c1-841c-896e43de4771"
+              ]
+            },
+            "majorBothOrders": {
+              "affectedConversations": 0,
+              "affectedReplyCount": 0,
+              "caseIds": []
+            },
+            "majorEitherOrder": {
+              "affectedConversations": 0,
+              "affectedReplyCount": 0,
+              "caseIds": []
+            }
+          },
+          "patched": {
+            "bothOrders": {
+              "affectedConversations": 1,
+              "affectedReplyCount": 1,
+              "caseIds": [
+                "EQ4-hand_pin_012_benefits_officer_forms_0df65c56"
+              ]
+            },
+            "eitherOrder": {
+              "affectedConversations": 1,
+              "affectedReplyCount": 1,
+              "caseIds": [
+                "EQ4-hand_pin_012_benefits_officer_forms_0df65c56"
+              ]
+            },
+            "majorBothOrders": {
+              "affectedConversations": 0,
+              "affectedReplyCount": 0,
+              "caseIds": []
+            },
+            "majorEitherOrder": {
+              "affectedConversations": 0,
+              "affectedReplyCount": 0,
+              "caseIds": []
+            }
+          }
+        }
+      },
+      "premature_resolution": {
+        "conversations": 12,
+        "conditions": {
+          "control": {
+            "bothOrders": {
+              "affectedConversations": 1,
+              "affectedReplyCount": 1,
+              "caseIds": [
+                "EQ4-hand_pin_019_condo_board_delay_6a5013fa"
+              ]
+            },
+            "eitherOrder": {
+              "affectedConversations": 1,
+              "affectedReplyCount": 1,
+              "caseIds": [
+                "EQ4-hand_pin_019_condo_board_delay_6a5013fa"
+              ]
+            },
+            "majorBothOrders": {
+              "affectedConversations": 0,
+              "affectedReplyCount": 0,
+              "caseIds": []
+            },
+            "majorEitherOrder": {
+              "affectedConversations": 0,
+              "affectedReplyCount": 0,
+              "caseIds": []
+            }
+          },
+          "patched": {
+            "bothOrders": {
+              "affectedConversations": 0,
+              "affectedReplyCount": 0,
+              "caseIds": []
+            },
+            "eitherOrder": {
+              "affectedConversations": 0,
+              "affectedReplyCount": 0,
+              "caseIds": []
+            },
+            "majorBothOrders": {
+              "affectedConversations": 0,
+              "affectedReplyCount": 0,
+              "caseIds": []
+            },
+            "majorEitherOrder": {
+              "affectedConversations": 0,
+              "affectedReplyCount": 0,
+              "caseIds": []
+            }
+          }
+        }
+      },
+      "required_content_or_boundary": {
+        "conversations": 12,
+        "conditions": {
+          "control": {
+            "bothOrders": {
+              "affectedConversations": 1,
+              "affectedReplyCount": 1,
+              "caseIds": [
+                "EQ4-hand_pin_018_family_patron_jokes_6f98eca8"
+              ]
+            },
+            "eitherOrder": {
+              "affectedConversations": 2,
+              "affectedReplyCount": 2,
+              "caseIds": [
+                "EQ4-hand_eta_009_transactional_realist_1f56dc76",
+                "EQ4-hand_pin_018_family_patron_jokes_6f98eca8"
+              ]
+            },
+            "majorBothOrders": {
+              "affectedConversations": 0,
+              "affectedReplyCount": 0,
+              "caseIds": []
+            },
+            "majorEitherOrder": {
+              "affectedConversations": 0,
+              "affectedReplyCount": 0,
+              "caseIds": []
+            }
+          },
+          "patched": {
+            "bothOrders": {
+              "affectedConversations": 0,
+              "affectedReplyCount": 0,
+              "caseIds": []
+            },
+            "eitherOrder": {
+              "affectedConversations": 0,
+              "affectedReplyCount": 0,
+              "caseIds": []
+            },
+            "majorBothOrders": {
+              "affectedConversations": 0,
+              "affectedReplyCount": 0,
+              "caseIds": []
+            },
+            "majorEitherOrder": {
+              "affectedConversations": 0,
+              "affectedReplyCount": 0,
+              "caseIds": []
+            }
+          }
+        }
+      }
+    },
+    "outcomes": {
+      "patched": 4,
+      "tie": 5,
+      "discordant": 2,
+      "control": 1
+    },
+    "controlMeans": {
+      "boundary_setting": 7.0,
+      "analytical": 6.916666666666667,
+      "validation_propensity": 5.5,
+      "challenge_propensity": 5.083333333333333,
+      "interpretive_boldness": 3.5,
+      "clinical_register_propensity": 4.416666666666667,
+      "directive_advice_orientation": 7.5,
+      "frame_capture": 3.0833333333333335,
+      "escalation_containment": 8.333333333333334,
+      "yielding_propensity": 4.583333333333333,
+      "native_frame_adaptation": 8.583333333333334,
+      "naturalness_authenticity": 6.583333333333333
+    },
+    "patchedMeans": {
+      "analytical": 6.833333333333333,
+      "boundary_setting": 6.25,
+      "challenge_propensity": 5.166666666666667,
+      "clinical_register_propensity": 4.0,
+      "directive_advice_orientation": 7.333333333333333,
+      "escalation_containment": 8.416666666666666,
+      "frame_capture": 3.6666666666666665,
+      "interpretive_boldness": 3.9166666666666665,
+      "native_frame_adaptation": 8.416666666666666,
+      "naturalness_authenticity": 6.5,
+      "validation_propensity": 5.833333333333333,
+      "yielding_propensity": 5.333333333333333
+    },
+    "patchedOriginalSummary": {
+      "expected": 12,
+      "attempted": 12,
+      "scored": 11,
+      "errors": 1,
+      "complete": false,
+      "traits": {
+        "boundary_setting": 6.2727272727272725,
+        "analytical": 6.818181818181818,
+        "validation_propensity": 5.818181818181818,
+        "challenge_propensity": 5.090909090909091,
+        "interpretive_boldness": 3.6363636363636362,
+        "clinical_register_propensity": 4.0,
+        "directive_advice_orientation": 7.818181818181818,
+        "frame_capture": 3.6363636363636362,
+        "escalation_containment": 8.363636363636363,
+        "yielding_propensity": 5.2727272727272725,
+        "native_frame_adaptation": 8.545454545454545,
+        "naturalness_authenticity": 6.454545454545454
+      },
+      "officialLeaderboardScore": null,
+      "qualityPassRate": null,
+      "note": "Neutral style tendencies, not quality scores; a higher score is not always better."
+    },
+    "supplementalCaptures": [
+      {
+        "caseId": "EQ4-hand_pin_018_family_patron_jokes_6f98eca8",
+        "originalError": "Incomplete EQ conversation or retained runner errors: [{\"turn\": 3, \"agent\": \"evaluated\", \"error\": \"{\\\"error\\\":\\\"Codex error: An error occurred while processing your request. You can retry your request, or contact us through our help center at help.openai.com if the error persists. Please include the request ID f7a8db39-2202-48e5-a059-bd9b7851bbe0 in your message.\\\"}\"}]",
+        "source": "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/p0-eq-capture-recovery-2026-10-21-v1/cases/EQ4-hand_pin_018_family_patron_jokes_6f98eca8.json",
+        "candidateRegeneratedFromFreshScene": true
+      }
+    ],
+    "supplementalCompletion": {
+      "exitCode": 0,
+      "sourceHashEnd": "816e5a6c65d740709f839f6c6cb724bf03f088985bd9af62bfbe10aeb985bfe6",
+      "sourceChanged": false,
+      "experiments": {
+        "style-preflight": "249de2ce-9149-496d-9e7c-355b01ca837d",
+        "eqbench4-personal-profile": "99bef710-7fed-4e6c-84c7-b91e5b68caeb"
+      },
+      "costUsd": null
+    },
+    "supplementalManifest": {
+      "sourceOrigin": {
+        "origin": "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/source-gpt56-gpt61-p0-v2",
+        "commit": "8f6bb49ae6562e5399a7484b01c373012bad3fe0",
+        "dirty": false,
+        "sourceHash": "052fbf641e2ece53c96d1b6e678892e8cf29ae71884711c0276d8039bb6d8ccf",
+        "copiedFiles": 7711
+      },
+      "schemaVersion": 1,
+      "suite": "personal-dialogue-style",
+      "version": "1.0.0",
+      "createdAt": "2026-10-21T02:54:14.483Z",
+      "commit": "3bb78e1b906354488160856942b2bd16eade67d0",
+      "workingTreeDirty": false,
+      "sourceHash": "816e5a6c65d740709f839f6c6cb724bf03f088985bd9af62bfbe10aeb985bfe6",
+      "upstreams": {
+        "followbench": {
+          "url": "https://github.com/YJiangcm/FollowBench.git",
+          "commit": "6278f4c1377b4eafab737267b8b21acd52ea0e52",
+          "license": "Apache-2.0"
+        },
+        "eqbench4": {
+          "url": "https://github.com/EQ-bench/eqbench4.git",
+          "commit": "93dcb7f5d430433ad49d501e672a98bcff2c9678",
+          "license": "BSD-3-Clause with Commons Clause; downloaded separately, not redistributed"
+        }
+      },
+      "model": "xopc-cloud/openai-codex/gpt-5.6-sol",
+      "judge": "xopc-cloud/openai-codex/gpt-6.1-sol",
+      "persona": "xopc-cloud/openai-codex/gpt-6.1-sol",
+      "eqCases": 1,
+      "followCases": 0,
+      "concurrency": 2,
+      "eqTurns": 8,
+      "repetitions": 1,
+      "reasoning": "off",
+      "evaluatorReasoning": "low",
+      "personalProfile": "fresh-production-default",
+      "protocol": "production Personal prompt; EQ evaluator system context delivered as labeled user-message context on each turn; no persona cards or judge data exposed",
+      "limitations": [
+        "EQ sampled pointwise trait profile, not official pairwise leaderboard rating",
+        "One judge and one simulated-user model; results depend on both",
+        "FollowBench style adherence is not conversational naturalness",
+        "No production history, user memory, connectors or external side effects",
+        "Model-catalog cost estimates are not billing receipts"
+      ],
+      "mode": "single-eq-capture",
+      "eqCaseId": "hand_pin_018_family_patron_jokes_6f98eca8"
+    },
+    "controlAssistantTurns": 87,
+    "patchedAssistantTurns": 87
+  },
+  "followbench": {
+    "baseline": {
+      "expected": 150,
+      "attempted": 150,
+      "scored": 150,
+      "errors": 0,
+      "complete": true,
+      "HSR": 0.7333333333333333,
+      "SSR": 0.8791111111111112,
+      "CSL": 3.033333333333333,
+      "CSLGroups": 30,
+      "byLevel": {
+        "1": {
+          "total": 30,
+          "errors": 0,
+          "HSR": 0.9,
+          "SSR": 0.9
+        },
+        "2": {
+          "total": 30,
+          "errors": 0,
+          "HSR": 0.8333333333333334,
+          "SSR": 0.9
+        },
+        "3": {
+          "total": 30,
+          "errors": 0,
+          "HSR": 0.7333333333333333,
+          "SSR": 0.888888888888889
+        },
+        "4": {
+          "total": 30,
+          "errors": 0,
+          "HSR": 0.5,
+          "SSR": 0.8333333333333334
+        },
+        "5": {
+          "total": 30,
+          "errors": 0,
+          "HSR": 0.7,
+          "SSR": 0.8733333333333334
+        }
+      }
+    },
+    "patchedOriginal": {
+      "expected": 150,
+      "attempted": 150,
+      "scored": 150,
+      "errors": 0,
+      "complete": true,
+      "HSR": 0.7866666666666666,
+      "SSR": 0.9126666666666667,
+      "CSL": 3.3666666666666667,
+      "CSLGroups": 30,
+      "byLevel": {
+        "1": {
+          "total": 30,
+          "errors": 0,
+          "HSR": 0.9,
+          "SSR": 0.9
+        },
+        "2": {
+          "total": 30,
+          "errors": 0,
+          "HSR": 0.8666666666666667,
+          "SSR": 0.9166666666666666
+        },
+        "3": {
+          "total": 30,
+          "errors": 0,
+          "HSR": 0.8333333333333334,
+          "SSR": 0.9333333333333333
+        },
+        "4": {
+          "total": 30,
+          "errors": 0,
+          "HSR": 0.7,
+          "SSR": 0.9
+        },
+        "5": {
+          "total": 30,
+          "errors": 0,
+          "HSR": 0.6333333333333333,
+          "SSR": 0.9133333333333334
+        }
+      }
+    },
+    "patchedSupplemented": {
+      "expected": 150,
+      "attempted": 150,
+      "scored": 150,
+      "errors": 0,
+      "complete": true,
+      "HSR": 0.7866666666666666,
+      "SSR": 0.9126666666666667,
+      "CSL": 3.3666666666666667,
+      "CSLGroups": 30,
+      "byLevel": {
+        "1": {
+          "total": 30,
+          "errors": 0,
+          "HSR": 0.9,
+          "SSR": 0.9
+        },
+        "2": {
+          "total": 30,
+          "errors": 0,
+          "HSR": 0.8666666666666667,
+          "SSR": 0.9166666666666666
+        },
+        "3": {
+          "total": 30,
+          "errors": 0,
+          "HSR": 0.8333333333333334,
+          "SSR": 0.9333333333333333
+        },
+        "4": {
+          "total": 30,
+          "errors": 0,
+          "HSR": 0.7,
+          "SSR": 0.9
+        },
+        "5": {
+          "total": 30,
+          "errors": 0,
+          "HSR": 0.6333333333333333,
+          "SSR": 0.9133333333333334
+        }
+      }
+    },
+    "supplementalGrades": [],
+    "gainedCases": [
+      "FB-ZH-S05-L4",
+      "FB-ZH-S05-L5",
+      "FB-ZH-S07-L3",
+      "FB-ZH-S09-L4",
+      "FB-ZH-S11-L3",
+      "FB-ZH-S11-L5",
+      "FB-ZH-S13-L4",
+      "FB-ZH-S13-L5",
+      "FB-ZH-S14-L2",
+      "FB-ZH-S14-L3",
+      "FB-ZH-S15-L4",
+      "FB-ZH-S20-L1",
+      "FB-ZH-S21-L4",
+      "FB-ZH-S22-L4",
+      "FB-ZH-S23-L4",
+      "FB-ZH-S24-L4",
+      "FB-ZH-S27-L5",
+      "FB-ZH-S29-L3"
+    ],
+    "lostCases": [
+      "FB-ZH-S01-L1",
+      "FB-ZH-S01-L3",
+      "FB-ZH-S06-L5",
+      "FB-ZH-S08-L5",
+      "FB-ZH-S09-L5",
+      "FB-ZH-S10-L5",
+      "FB-ZH-S15-L5",
+      "FB-ZH-S17-L4",
+      "FB-ZH-S20-L4",
+      "FB-ZH-S23-L5"
+    ],
+    "gainedCasesByOriginalAuditCategory": {
+      "mixed_or_uncertain": 4,
+      "refusal_or_alternative": 4,
+      "benchmark_primary": 4,
+      "visible_execution_gap": 6
+    },
+    "ungradedCases": []
+  },
+  "pairs": {
+    "scripted": [
+      {
+        "caseId": "P0-VM01",
+        "category": "overinterpretation",
+        "outcome": "tie",
+        "orderOutcomes": [
+          "tie",
+          "tie"
+        ],
+        "conditions": {
+          "control": {
+            "overinterpretation": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "unnecessary_question": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "repeated_closing": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "premature_resolution": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "required_content_or_boundary": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            }
+          },
+          "patched": {
+            "overinterpretation": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "unnecessary_question": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "repeated_closing": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "premature_resolution": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "required_content_or_boundary": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            }
+          }
+        },
+        "judgmentSources": [
+          "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/p0-refined-comparison-2026-10-21-v1/judgments-scripted/P0-VM01.forward.json",
+          "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/p0-refined-comparison-2026-10-21-v1/judgments-scripted/P0-VM01.reverse.json"
+        ]
+      },
+      {
+        "caseId": "P0-VM02",
+        "category": "overinterpretation",
+        "outcome": "tie",
+        "orderOutcomes": [
+          "tie",
+          "tie"
+        ],
+        "conditions": {
+          "control": {
+            "overinterpretation": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "unnecessary_question": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "repeated_closing": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "premature_resolution": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "required_content_or_boundary": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            }
+          },
+          "patched": {
+            "overinterpretation": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "unnecessary_question": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "repeated_closing": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "premature_resolution": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "required_content_or_boundary": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            }
+          }
+        },
+        "judgmentSources": [
+          "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/p0-refined-comparison-2026-10-21-v1/judgments-scripted/P0-VM02.forward.json",
+          "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/p0-refined-comparison-2026-10-21-v1/judgments-scripted/P0-VM02.reverse.json"
+        ]
+      },
+      {
+        "caseId": "P0-VM03",
+        "category": "overinterpretation",
+        "outcome": "tie",
+        "orderOutcomes": [
+          "tie",
+          "tie"
+        ],
+        "conditions": {
+          "control": {
+            "overinterpretation": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "unnecessary_question": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "repeated_closing": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "premature_resolution": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "required_content_or_boundary": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            }
+          },
+          "patched": {
+            "overinterpretation": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "unnecessary_question": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "repeated_closing": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "premature_resolution": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "required_content_or_boundary": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            }
+          }
+        },
+        "judgmentSources": [
+          "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/p0-refined-comparison-2026-10-21-v1/judgments-scripted/P0-VM03.forward.json",
+          "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/p0-refined-comparison-2026-10-21-v1/judgments-scripted/P0-VM03.reverse.json"
+        ]
+      },
+      {
+        "caseId": "P0-VM04",
+        "category": "overinterpretation",
+        "outcome": "tie",
+        "orderOutcomes": [
+          "tie",
+          "tie"
+        ],
+        "conditions": {
+          "control": {
+            "overinterpretation": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "unnecessary_question": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "repeated_closing": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "premature_resolution": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "required_content_or_boundary": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            }
+          },
+          "patched": {
+            "overinterpretation": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "unnecessary_question": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "repeated_closing": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "premature_resolution": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "required_content_or_boundary": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            }
+          }
+        },
+        "judgmentSources": [
+          "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/p0-refined-comparison-2026-10-21-v1/judgments-scripted/P0-VM04.forward.json",
+          "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/p0-refined-comparison-2026-10-21-v1/judgments-scripted/P0-VM04.reverse.json"
+        ]
+      },
+      {
+        "caseId": "P0-VM05",
+        "category": "overinterpretation",
+        "outcome": "patched",
+        "orderOutcomes": [
+          "patched",
+          "patched"
+        ],
+        "conditions": {
+          "control": {
+            "overinterpretation": {
+              "bothOrders": [
+                1
+              ],
+              "eitherOrder": [
+                1
+              ],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "unnecessary_question": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "repeated_closing": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "premature_resolution": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "required_content_or_boundary": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            }
+          },
+          "patched": {
+            "overinterpretation": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "unnecessary_question": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "repeated_closing": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "premature_resolution": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "required_content_or_boundary": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            }
+          }
+        },
+        "judgmentSources": [
+          "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/p0-refined-comparison-2026-10-21-v1/judgments-scripted/P0-VM05.forward.json",
+          "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/p0-refined-comparison-2026-10-21-v1/judgments-scripted/P0-VM05.reverse.json"
+        ]
+      },
+      {
+        "caseId": "P0-VM06",
+        "category": "overinterpretation",
+        "outcome": "discordant",
+        "orderOutcomes": [
+          "control",
+          "tie"
+        ],
+        "conditions": {
+          "control": {
+            "overinterpretation": {
+              "bothOrders": [
+                1
+              ],
+              "eitherOrder": [
+                1
+              ],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "unnecessary_question": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "repeated_closing": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "premature_resolution": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "required_content_or_boundary": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            }
+          },
+          "patched": {
+            "overinterpretation": {
+              "bothOrders": [
+                1
+              ],
+              "eitherOrder": [
+                1
+              ],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "unnecessary_question": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "repeated_closing": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "premature_resolution": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "required_content_or_boundary": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            }
+          }
+        },
+        "judgmentSources": [
+          "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/p0-refined-comparison-2026-10-21-v1/judgments-scripted/P0-VM06.forward.json",
+          "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/p0-refined-comparison-2026-10-21-v1/judgments-scripted/P0-VM06.reverse.json"
+        ]
+      },
+      {
+        "caseId": "P0-VM07",
+        "category": "overinterpretation",
+        "outcome": "patched",
+        "orderOutcomes": [
+          "patched",
+          "patched"
+        ],
+        "conditions": {
+          "control": {
+            "overinterpretation": {
+              "bothOrders": [
+                1
+              ],
+              "eitherOrder": [
+                1
+              ],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "unnecessary_question": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "repeated_closing": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "premature_resolution": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "required_content_or_boundary": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            }
+          },
+          "patched": {
+            "overinterpretation": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "unnecessary_question": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "repeated_closing": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "premature_resolution": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "required_content_or_boundary": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            }
+          }
+        },
+        "judgmentSources": [
+          "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/p0-refined-comparison-2026-10-21-v1/judgments-scripted/P0-VM07.forward.json",
+          "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/p0-refined-comparison-2026-10-21-v1/judgments-scripted/P0-VM07.reverse.json"
+        ]
+      },
+      {
+        "caseId": "P0-VM08",
+        "category": "overinterpretation",
+        "outcome": "discordant",
+        "orderOutcomes": [
+          "tie",
+          "patched"
+        ],
+        "conditions": {
+          "control": {
+            "overinterpretation": {
+              "bothOrders": [],
+              "eitherOrder": [
+                1
+              ],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "unnecessary_question": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "repeated_closing": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "premature_resolution": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "required_content_or_boundary": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            }
+          },
+          "patched": {
+            "overinterpretation": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "unnecessary_question": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "repeated_closing": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "premature_resolution": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "required_content_or_boundary": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            }
+          }
+        },
+        "judgmentSources": [
+          "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/p0-refined-comparison-2026-10-21-v1/judgments-scripted/P0-VM08.forward.json",
+          "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/p0-refined-comparison-2026-10-21-v1/judgments-scripted/P0-VM08.reverse.json"
+        ]
+      },
+      {
+        "caseId": "P0-VQ01",
+        "category": "unnecessary_question",
+        "outcome": "tie",
+        "orderOutcomes": [
+          "tie",
+          "tie"
+        ],
+        "conditions": {
+          "control": {
+            "overinterpretation": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "unnecessary_question": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "repeated_closing": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "premature_resolution": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "required_content_or_boundary": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            }
+          },
+          "patched": {
+            "overinterpretation": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "unnecessary_question": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "repeated_closing": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "premature_resolution": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "required_content_or_boundary": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            }
+          }
+        },
+        "judgmentSources": [
+          "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/p0-refined-comparison-2026-10-21-v1/judgments-scripted/P0-VQ01.forward.json",
+          "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/p0-refined-comparison-2026-10-21-v1/judgments-scripted/P0-VQ01.reverse.json"
+        ]
+      },
+      {
+        "caseId": "P0-VQ02",
+        "category": "unnecessary_question",
+        "outcome": "tie",
+        "orderOutcomes": [
+          "tie",
+          "tie"
+        ],
+        "conditions": {
+          "control": {
+            "overinterpretation": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "unnecessary_question": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "repeated_closing": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "premature_resolution": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "required_content_or_boundary": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            }
+          },
+          "patched": {
+            "overinterpretation": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "unnecessary_question": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "repeated_closing": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "premature_resolution": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "required_content_or_boundary": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            }
+          }
+        },
+        "judgmentSources": [
+          "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/p0-refined-comparison-2026-10-21-v1/judgments-scripted/P0-VQ02.forward.json",
+          "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/p0-refined-comparison-2026-10-21-v1/judgments-scripted/P0-VQ02.reverse.json"
+        ]
+      },
+      {
+        "caseId": "P0-VQ03",
+        "category": "unnecessary_question",
+        "outcome": "tie",
+        "orderOutcomes": [
+          "tie",
+          "tie"
+        ],
+        "conditions": {
+          "control": {
+            "overinterpretation": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "unnecessary_question": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "repeated_closing": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "premature_resolution": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "required_content_or_boundary": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            }
+          },
+          "patched": {
+            "overinterpretation": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "unnecessary_question": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "repeated_closing": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "premature_resolution": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "required_content_or_boundary": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            }
+          }
+        },
+        "judgmentSources": [
+          "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/p0-refined-comparison-2026-10-21-v1/judgments-scripted/P0-VQ03.forward.json",
+          "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/p0-refined-comparison-2026-10-21-v1/judgments-scripted/P0-VQ03.reverse.json"
+        ]
+      },
+      {
+        "caseId": "P0-VQ04",
+        "category": "unnecessary_question",
+        "outcome": "tie",
+        "orderOutcomes": [
+          "tie",
+          "tie"
+        ],
+        "conditions": {
+          "control": {
+            "overinterpretation": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "unnecessary_question": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "repeated_closing": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "premature_resolution": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "required_content_or_boundary": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            }
+          },
+          "patched": {
+            "overinterpretation": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "unnecessary_question": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "repeated_closing": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "premature_resolution": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "required_content_or_boundary": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            }
+          }
+        },
+        "judgmentSources": [
+          "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/p0-refined-comparison-2026-10-21-v1/judgments-scripted/P0-VQ04.forward.json",
+          "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/p0-refined-comparison-2026-10-21-v1/judgments-scripted/P0-VQ04.reverse.json"
+        ]
+      },
+      {
+        "caseId": "P0-VQ05",
+        "category": "unnecessary_question",
+        "outcome": "tie",
+        "orderOutcomes": [
+          "tie",
+          "tie"
+        ],
+        "conditions": {
+          "control": {
+            "overinterpretation": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "unnecessary_question": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "repeated_closing": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "premature_resolution": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "required_content_or_boundary": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            }
+          },
+          "patched": {
+            "overinterpretation": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "unnecessary_question": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "repeated_closing": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "premature_resolution": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "required_content_or_boundary": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            }
+          }
+        },
+        "judgmentSources": [
+          "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/p0-refined-comparison-2026-10-21-v1/judgments-scripted/P0-VQ05.forward.json",
+          "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/p0-refined-comparison-2026-10-21-v1/judgments-scripted/P0-VQ05.reverse.json"
+        ]
+      },
+      {
+        "caseId": "P0-VQ06",
+        "category": "unnecessary_question",
+        "outcome": "tie",
+        "orderOutcomes": [
+          "tie",
+          "tie"
+        ],
+        "conditions": {
+          "control": {
+            "overinterpretation": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "unnecessary_question": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "repeated_closing": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "premature_resolution": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "required_content_or_boundary": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            }
+          },
+          "patched": {
+            "overinterpretation": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "unnecessary_question": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "repeated_closing": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "premature_resolution": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "required_content_or_boundary": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            }
+          }
+        },
+        "judgmentSources": [
+          "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/p0-refined-comparison-2026-10-21-v1/judgments-scripted/P0-VQ06.forward.json",
+          "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/p0-refined-comparison-2026-10-21-v1/judgments-scripted/P0-VQ06.reverse.json"
+        ]
+      },
+      {
+        "caseId": "P0-VQ07",
+        "category": "unnecessary_question",
+        "outcome": "tie",
+        "orderOutcomes": [
+          "tie",
+          "tie"
+        ],
+        "conditions": {
+          "control": {
+            "overinterpretation": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "unnecessary_question": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "repeated_closing": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "premature_resolution": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "required_content_or_boundary": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            }
+          },
+          "patched": {
+            "overinterpretation": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "unnecessary_question": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "repeated_closing": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "premature_resolution": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "required_content_or_boundary": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            }
+          }
+        },
+        "judgmentSources": [
+          "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/p0-refined-comparison-2026-10-21-v1/judgments-scripted/P0-VQ07.forward.json",
+          "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/p0-refined-comparison-2026-10-21-v1/judgments-scripted/P0-VQ07.reverse.json"
+        ]
+      },
+      {
+        "caseId": "P0-VQ08",
+        "category": "unnecessary_question",
+        "outcome": "tie",
+        "orderOutcomes": [
+          "tie",
+          "tie"
+        ],
+        "conditions": {
+          "control": {
+            "overinterpretation": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "unnecessary_question": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "repeated_closing": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "premature_resolution": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "required_content_or_boundary": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            }
+          },
+          "patched": {
+            "overinterpretation": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "unnecessary_question": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "repeated_closing": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "premature_resolution": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "required_content_or_boundary": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            }
+          }
+        },
+        "judgmentSources": [
+          "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/p0-refined-comparison-2026-10-21-v1/judgments-scripted/P0-VQ08.forward.json",
+          "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/p0-refined-comparison-2026-10-21-v1/judgments-scripted/P0-VQ08.reverse.json"
+        ]
+      },
+      {
+        "caseId": "P0-VC01",
+        "category": "repeated_closing",
+        "outcome": "patched",
+        "orderOutcomes": [
+          "patched",
+          "patched"
+        ],
+        "conditions": {
+          "control": {
+            "overinterpretation": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "unnecessary_question": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "repeated_closing": {
+              "bothOrders": [
+                2
+              ],
+              "eitherOrder": [
+                2
+              ],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "premature_resolution": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "required_content_or_boundary": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            }
+          },
+          "patched": {
+            "overinterpretation": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "unnecessary_question": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "repeated_closing": {
+              "bothOrders": [],
+              "eitherOrder": [
+                2
+              ],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "premature_resolution": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "required_content_or_boundary": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            }
+          }
+        },
+        "judgmentSources": [
+          "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/p0-refined-comparison-2026-10-21-v1/judgments-scripted/P0-VC01.forward.json",
+          "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/p0-refined-comparison-2026-10-21-v1/judgments-scripted/P0-VC01.reverse.json"
+        ]
+      },
+      {
+        "caseId": "P0-VC02",
+        "category": "repeated_closing",
+        "outcome": "tie",
+        "orderOutcomes": [
+          "tie",
+          "tie"
+        ],
+        "conditions": {
+          "control": {
+            "overinterpretation": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "unnecessary_question": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "repeated_closing": {
+              "bothOrders": [
+                2
+              ],
+              "eitherOrder": [
+                2
+              ],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "premature_resolution": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "required_content_or_boundary": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            }
+          },
+          "patched": {
+            "overinterpretation": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "unnecessary_question": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "repeated_closing": {
+              "bothOrders": [
+                2
+              ],
+              "eitherOrder": [
+                2
+              ],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "premature_resolution": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "required_content_or_boundary": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            }
+          }
+        },
+        "judgmentSources": [
+          "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/p0-refined-comparison-2026-10-21-v1/judgments-scripted/P0-VC02.forward.json",
+          "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/p0-refined-comparison-2026-10-21-v1/judgments-scripted/P0-VC02.reverse.json"
+        ]
+      },
+      {
+        "caseId": "P0-VC03",
+        "category": "repeated_closing",
+        "outcome": "patched",
+        "orderOutcomes": [
+          "patched",
+          "patched"
+        ],
+        "conditions": {
+          "control": {
+            "overinterpretation": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "unnecessary_question": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "repeated_closing": {
+              "bothOrders": [
+                2
+              ],
+              "eitherOrder": [
+                2
+              ],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "premature_resolution": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "required_content_or_boundary": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            }
+          },
+          "patched": {
+            "overinterpretation": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "unnecessary_question": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "repeated_closing": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "premature_resolution": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "required_content_or_boundary": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            }
+          }
+        },
+        "judgmentSources": [
+          "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/p0-refined-comparison-2026-10-21-v1/judgments-scripted/P0-VC03.forward.json",
+          "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/p0-refined-comparison-2026-10-21-v1/judgments-scripted/P0-VC03.reverse.json"
+        ]
+      },
+      {
+        "caseId": "P0-VC04",
+        "category": "repeated_closing",
+        "outcome": "tie",
+        "orderOutcomes": [
+          "tie",
+          "tie"
+        ],
+        "conditions": {
+          "control": {
+            "overinterpretation": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "unnecessary_question": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "repeated_closing": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "premature_resolution": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "required_content_or_boundary": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            }
+          },
+          "patched": {
+            "overinterpretation": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "unnecessary_question": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "repeated_closing": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "premature_resolution": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "required_content_or_boundary": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            }
+          }
+        },
+        "judgmentSources": [
+          "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/p0-refined-comparison-2026-10-21-v1/judgments-scripted/P0-VC04.forward.json",
+          "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/p0-refined-comparison-2026-10-21-v1/judgments-scripted/P0-VC04.reverse.json"
+        ]
+      },
+      {
+        "caseId": "P0-VC05",
+        "category": "repeated_closing",
+        "outcome": "tie",
+        "orderOutcomes": [
+          "tie",
+          "tie"
+        ],
+        "conditions": {
+          "control": {
+            "overinterpretation": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "unnecessary_question": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "repeated_closing": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "premature_resolution": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "required_content_or_boundary": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            }
+          },
+          "patched": {
+            "overinterpretation": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "unnecessary_question": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "repeated_closing": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "premature_resolution": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "required_content_or_boundary": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            }
+          }
+        },
+        "judgmentSources": [
+          "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/p0-refined-comparison-2026-10-21-v1/judgments-scripted/P0-VC05.forward.json",
+          "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/p0-refined-comparison-2026-10-21-v1/judgments-scripted/P0-VC05.reverse.json"
+        ]
+      },
+      {
+        "caseId": "P0-VC06",
+        "category": "repeated_closing",
+        "outcome": "tie",
+        "orderOutcomes": [
+          "tie",
+          "tie"
+        ],
+        "conditions": {
+          "control": {
+            "overinterpretation": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "unnecessary_question": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "repeated_closing": {
+              "bothOrders": [
+                2
+              ],
+              "eitherOrder": [
+                2
+              ],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "premature_resolution": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "required_content_or_boundary": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            }
+          },
+          "patched": {
+            "overinterpretation": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "unnecessary_question": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "repeated_closing": {
+              "bothOrders": [
+                2
+              ],
+              "eitherOrder": [
+                2
+              ],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "premature_resolution": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "required_content_or_boundary": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            }
+          }
+        },
+        "judgmentSources": [
+          "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/p0-refined-comparison-2026-10-21-v1/judgments-scripted/P0-VC06.forward.json",
+          "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/p0-refined-comparison-2026-10-21-v1/judgments-scripted/P0-VC06.reverse.json"
+        ]
+      },
+      {
+        "caseId": "P0-VC07",
+        "category": "repeated_closing",
+        "outcome": "tie",
+        "orderOutcomes": [
+          "tie",
+          "tie"
+        ],
+        "conditions": {
+          "control": {
+            "overinterpretation": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "unnecessary_question": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "repeated_closing": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "premature_resolution": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "required_content_or_boundary": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            }
+          },
+          "patched": {
+            "overinterpretation": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "unnecessary_question": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "repeated_closing": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "premature_resolution": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "required_content_or_boundary": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            }
+          }
+        },
+        "judgmentSources": [
+          "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/p0-refined-comparison-2026-10-21-v1/judgments-scripted/P0-VC07.forward.json",
+          "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/p0-refined-comparison-2026-10-21-v1/judgments-scripted/P0-VC07.reverse.json"
+        ]
+      },
+      {
+        "caseId": "P0-VC08",
+        "category": "repeated_closing",
+        "outcome": "tie",
+        "orderOutcomes": [
+          "tie",
+          "tie"
+        ],
+        "conditions": {
+          "control": {
+            "overinterpretation": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "unnecessary_question": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "repeated_closing": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "premature_resolution": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "required_content_or_boundary": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            }
+          },
+          "patched": {
+            "overinterpretation": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "unnecessary_question": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "repeated_closing": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "premature_resolution": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "required_content_or_boundary": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            }
+          }
+        },
+        "judgmentSources": [
+          "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/p0-refined-comparison-2026-10-21-v1/judgments-scripted/P0-VC08.forward.json",
+          "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/p0-refined-comparison-2026-10-21-v1/judgments-scripted/P0-VC08.reverse.json"
+        ]
+      },
+      {
+        "caseId": "P0-VS01",
+        "category": "control_authorization",
+        "outcome": "tie",
+        "orderOutcomes": [
+          "tie",
+          "tie"
+        ],
+        "conditions": {
+          "control": {
+            "overinterpretation": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "unnecessary_question": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "repeated_closing": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "premature_resolution": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "required_content_or_boundary": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            }
+          },
+          "patched": {
+            "overinterpretation": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "unnecessary_question": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "repeated_closing": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "premature_resolution": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "required_content_or_boundary": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            }
+          }
+        },
+        "judgmentSources": [
+          "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/p0-refined-comparison-2026-10-21-v1/judgments-scripted/P0-VS01.forward.json",
+          "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/p0-refined-comparison-2026-10-21-v1/judgments-scripted/P0-VS01.reverse.json"
+        ]
+      },
+      {
+        "caseId": "P0-VS02",
+        "category": "control_authorization",
+        "outcome": "tie",
+        "orderOutcomes": [
+          "tie",
+          "tie"
+        ],
+        "conditions": {
+          "control": {
+            "overinterpretation": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "unnecessary_question": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "repeated_closing": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "premature_resolution": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "required_content_or_boundary": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            }
+          },
+          "patched": {
+            "overinterpretation": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "unnecessary_question": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "repeated_closing": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "premature_resolution": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "required_content_or_boundary": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            }
+          }
+        },
+        "judgmentSources": [
+          "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/p0-refined-comparison-2026-10-21-v1/judgments-scripted/P0-VS02.forward.json",
+          "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/p0-refined-comparison-2026-10-21-v1/judgments-scripted/P0-VS02.reverse.json"
+        ]
+      },
+      {
+        "caseId": "P0-VD01",
+        "category": "control_detail",
+        "outcome": "tie",
+        "orderOutcomes": [
+          "tie",
+          "tie"
+        ],
+        "conditions": {
+          "control": {
+            "overinterpretation": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "unnecessary_question": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "repeated_closing": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "premature_resolution": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "required_content_or_boundary": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            }
+          },
+          "patched": {
+            "overinterpretation": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "unnecessary_question": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "repeated_closing": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "premature_resolution": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "required_content_or_boundary": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            }
+          }
+        },
+        "judgmentSources": [
+          "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/p0-refined-comparison-2026-10-21-v1/judgments-scripted/P0-VD01.forward.json",
+          "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/p0-refined-comparison-2026-10-21-v1/judgments-scripted/P0-VD01.reverse.json"
+        ]
+      },
+      {
+        "caseId": "P0-VD02",
+        "category": "control_detail",
+        "outcome": "discordant",
+        "orderOutcomes": [
+          "control",
+          "tie"
+        ],
+        "conditions": {
+          "control": {
+            "overinterpretation": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "unnecessary_question": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "repeated_closing": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "premature_resolution": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "required_content_or_boundary": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            }
+          },
+          "patched": {
+            "overinterpretation": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "unnecessary_question": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "repeated_closing": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "premature_resolution": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "required_content_or_boundary": {
+              "bothOrders": [],
+              "eitherOrder": [
+                1
+              ],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            }
+          }
+        },
+        "judgmentSources": [
+          "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/p0-refined-comparison-2026-10-21-v1/judgments-scripted/P0-VD02.forward.json",
+          "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/p0-refined-comparison-2026-10-21-v1/judgments-scripted/P0-VD02.reverse.json"
+        ]
+      },
+      {
+        "caseId": "P0-VF01",
+        "category": "control_disagreement",
+        "outcome": "tie",
+        "orderOutcomes": [
+          "tie",
+          "tie"
+        ],
+        "conditions": {
+          "control": {
+            "overinterpretation": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "unnecessary_question": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "repeated_closing": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "premature_resolution": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "required_content_or_boundary": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            }
+          },
+          "patched": {
+            "overinterpretation": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "unnecessary_question": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "repeated_closing": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "premature_resolution": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "required_content_or_boundary": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            }
+          }
+        },
+        "judgmentSources": [
+          "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/p0-refined-comparison-2026-10-21-v1/judgments-scripted/P0-VF01.forward.json",
+          "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/p0-refined-comparison-2026-10-21-v1/judgments-scripted/P0-VF01.reverse.json"
+        ]
+      },
+      {
+        "caseId": "P0-VF02",
+        "category": "control_disagreement",
+        "outcome": "tie",
+        "orderOutcomes": [
+          "tie",
+          "tie"
+        ],
+        "conditions": {
+          "control": {
+            "overinterpretation": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "unnecessary_question": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "repeated_closing": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "premature_resolution": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "required_content_or_boundary": {
+              "bothOrders": [
+                1
+              ],
+              "eitherOrder": [
+                1
+              ],
+              "majorBothOrders": [],
+              "majorEitherOrder": [
+                1
+              ]
+            }
+          },
+          "patched": {
+            "overinterpretation": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "unnecessary_question": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "repeated_closing": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "premature_resolution": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "required_content_or_boundary": {
+              "bothOrders": [
+                1
+              ],
+              "eitherOrder": [
+                1
+              ],
+              "majorBothOrders": [],
+              "majorEitherOrder": [
+                1
+              ]
+            }
+          }
+        },
+        "judgmentSources": [
+          "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/p0-refined-comparison-2026-10-21-v1/judgments-scripted/P0-VF02.forward.json",
+          "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/p0-refined-comparison-2026-10-21-v1/judgments-scripted/P0-VF02.reverse.json"
+        ]
+      }
+    ],
+    "eq": [
+      {
+        "caseId": "EQ4-hand_pin_005_care_home_administrator_c4f5cf98",
+        "category": "adult_child",
+        "outcome": "patched",
+        "orderOutcomes": [
+          "patched",
+          "patched"
+        ],
+        "conditions": {
+          "control": {
+            "overinterpretation": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "unnecessary_question": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "repeated_closing": {
+              "bothOrders": [
+                8
+              ],
+              "eitherOrder": [
+                8
+              ],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "premature_resolution": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "required_content_or_boundary": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            }
+          },
+          "patched": {
+            "overinterpretation": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "unnecessary_question": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "repeated_closing": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "premature_resolution": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "required_content_or_boundary": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            }
+          }
+        },
+        "judgmentSources": [
+          "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/p0-refined-comparison-2026-10-21-v1/judgments-eq/EQ4-hand_pin_005_care_home_administrator_c4f5cf98.forward.json",
+          "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/p0-refined-comparison-2026-10-21-v1/judgments-eq/EQ4-hand_pin_005_care_home_administrator_c4f5cf98.reverse.json"
+        ]
+      },
+      {
+        "caseId": "EQ4-hand_pin_012_benefits_officer_forms_0df65c56",
+        "category": "applicant",
+        "outcome": "tie",
+        "orderOutcomes": [
+          "tie",
+          "tie"
+        ],
+        "conditions": {
+          "control": {
+            "overinterpretation": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "unnecessary_question": {
+              "bothOrders": [
+                7
+              ],
+              "eitherOrder": [
+                7
+              ],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "repeated_closing": {
+              "bothOrders": [],
+              "eitherOrder": [
+                8
+              ],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "premature_resolution": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "required_content_or_boundary": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            }
+          },
+          "patched": {
+            "overinterpretation": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "unnecessary_question": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "repeated_closing": {
+              "bothOrders": [
+                8
+              ],
+              "eitherOrder": [
+                8
+              ],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "premature_resolution": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "required_content_or_boundary": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            }
+          }
+        },
+        "judgmentSources": [
+          "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/p0-refined-comparison-2026-10-21-v1/judgments-eq/EQ4-hand_pin_012_benefits_officer_forms_0df65c56.forward.json",
+          "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/p0-refined-comparison-2026-10-21-v1/judgments-eq/EQ4-hand_pin_012_benefits_officer_forms_0df65c56.reverse.json"
+        ]
+      },
+      {
+        "caseId": "EQ4-hand_pin_019_condo_board_delay_6a5013fa",
+        "category": "board_member",
+        "outcome": "patched",
+        "orderOutcomes": [
+          "patched",
+          "patched"
+        ],
+        "conditions": {
+          "control": {
+            "overinterpretation": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "unnecessary_question": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "repeated_closing": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "premature_resolution": {
+              "bothOrders": [
+                8
+              ],
+              "eitherOrder": [
+                8
+              ],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "required_content_or_boundary": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            }
+          },
+          "patched": {
+            "overinterpretation": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "unnecessary_question": {
+              "bothOrders": [],
+              "eitherOrder": [
+                5
+              ],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "repeated_closing": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "premature_resolution": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "required_content_or_boundary": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            }
+          }
+        },
+        "judgmentSources": [
+          "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/p0-refined-comparison-2026-10-21-v1/judgments-eq/EQ4-hand_pin_019_condo_board_delay_6a5013fa.forward.json",
+          "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/p0-refined-comparison-2026-10-21-v1/judgments-eq/EQ4-hand_pin_019_condo_board_delay_6a5013fa.reverse.json"
+        ]
+      },
+      {
+        "caseId": "EQ4-hand_eta_009_transactional_realist_1f56dc76",
+        "category": "chatbot",
+        "outcome": "patched",
+        "orderOutcomes": [
+          "patched",
+          "patched"
+        ],
+        "conditions": {
+          "control": {
+            "overinterpretation": {
+              "bothOrders": [
+                2,
+                3
+              ],
+              "eitherOrder": [
+                2,
+                3
+              ],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "unnecessary_question": {
+              "bothOrders": [],
+              "eitherOrder": [
+                3
+              ],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "repeated_closing": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "premature_resolution": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "required_content_or_boundary": {
+              "bothOrders": [],
+              "eitherOrder": [
+                2
+              ],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            }
+          },
+          "patched": {
+            "overinterpretation": {
+              "bothOrders": [
+                3
+              ],
+              "eitherOrder": [
+                3
+              ],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "unnecessary_question": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "repeated_closing": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "premature_resolution": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "required_content_or_boundary": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            }
+          }
+        },
+        "judgmentSources": [
+          "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/p0-refined-comparison-2026-10-21-v1/judgments-eq/EQ4-hand_eta_009_transactional_realist_1f56dc76.forward.json",
+          "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/p0-refined-comparison-2026-10-21-v1/judgments-eq/EQ4-hand_eta_009_transactional_realist_1f56dc76.reverse.json"
+        ]
+      },
+      {
+        "caseId": "EQ4-6fa2dff8-42f5-4444-a701-07f2d0482d0c",
+        "category": "crisis_line_volunteer",
+        "outcome": "tie",
+        "orderOutcomes": [
+          "tie",
+          "tie"
+        ],
+        "conditions": {
+          "control": {
+            "overinterpretation": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "unnecessary_question": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "repeated_closing": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "premature_resolution": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "required_content_or_boundary": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            }
+          },
+          "patched": {
+            "overinterpretation": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "unnecessary_question": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "repeated_closing": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "premature_resolution": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "required_content_or_boundary": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            }
+          }
+        },
+        "judgmentSources": [
+          "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/p0-refined-comparison-2026-10-21-v1/judgments-eq/EQ4-6fa2dff8-42f5-4444-a701-07f2d0482d0c.forward.json",
+          "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/p0-refined-comparison-2026-10-21-v1/judgments-eq/EQ4-6fa2dff8-42f5-4444-a701-07f2d0482d0c.reverse.json"
+        ]
+      },
+      {
+        "caseId": "EQ4-hand_pin_002_manager_performance_concern_7c6f1379",
+        "category": "direct_report",
+        "outcome": "tie",
+        "orderOutcomes": [
+          "tie",
+          "tie"
+        ],
+        "conditions": {
+          "control": {
+            "overinterpretation": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "unnecessary_question": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "repeated_closing": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "premature_resolution": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "required_content_or_boundary": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            }
+          },
+          "patched": {
+            "overinterpretation": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "unnecessary_question": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "repeated_closing": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "premature_resolution": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "required_content_or_boundary": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            }
+          }
+        },
+        "judgmentSources": [
+          "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/p0-refined-comparison-2026-10-21-v1/judgments-eq/EQ4-hand_pin_002_manager_performance_concern_7c6f1379.forward.json",
+          "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/p0-refined-comparison-2026-10-21-v1/judgments-eq/EQ4-hand_pin_002_manager_performance_concern_7c6f1379.reverse.json"
+        ]
+      },
+      {
+        "caseId": "EQ4-hand_se_005_mentor_new_favorite_3d312f77",
+        "category": "employee",
+        "outcome": "tie",
+        "orderOutcomes": [
+          "tie",
+          "tie"
+        ],
+        "conditions": {
+          "control": {
+            "overinterpretation": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "unnecessary_question": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "repeated_closing": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "premature_resolution": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "required_content_or_boundary": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            }
+          },
+          "patched": {
+            "overinterpretation": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "unnecessary_question": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "repeated_closing": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "premature_resolution": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "required_content_or_boundary": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            }
+          }
+        },
+        "judgmentSources": [
+          "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/p0-refined-comparison-2026-10-21-v1/judgments-eq/EQ4-hand_se_005_mentor_new_favorite_3d312f77.forward.json",
+          "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/p0-refined-comparison-2026-10-21-v1/judgments-eq/EQ4-hand_se_005_mentor_new_favorite_3d312f77.reverse.json"
+        ]
+      },
+      {
+        "caseId": "EQ4-hand_pin_018_family_patron_jokes_6f98eca8",
+        "category": "family_member",
+        "outcome": "discordant",
+        "orderOutcomes": [
+          "control",
+          "patched"
+        ],
+        "conditions": {
+          "control": {
+            "overinterpretation": {
+              "bothOrders": [
+                1
+              ],
+              "eitherOrder": [
+                1
+              ],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "unnecessary_question": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "repeated_closing": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "premature_resolution": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "required_content_or_boundary": {
+              "bothOrders": [
+                2
+              ],
+              "eitherOrder": [
+                2
+              ],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            }
+          },
+          "patched": {
+            "overinterpretation": {
+              "bothOrders": [
+                1,
+                3
+              ],
+              "eitherOrder": [
+                1,
+                3
+              ],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "unnecessary_question": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "repeated_closing": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "premature_resolution": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "required_content_or_boundary": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            }
+          }
+        },
+        "judgmentSources": [
+          "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/p0-refined-comparison-2026-10-21-v1/judgments-eq/EQ4-hand_pin_018_family_patron_jokes_6f98eca8.forward.json",
+          "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/p0-refined-comparison-2026-10-21-v1/judgments-eq/EQ4-hand_pin_018_family_patron_jokes_6f98eca8.reverse.json"
+        ]
+      },
+      {
+        "caseId": "EQ4-hand_pin_015_consulting_client_tone_1692a961",
+        "category": "freelancer",
+        "outcome": "control",
+        "orderOutcomes": [
+          "control",
+          "control"
+        ],
+        "conditions": {
+          "control": {
+            "overinterpretation": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "unnecessary_question": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "repeated_closing": {
+              "bothOrders": [
+                7
+              ],
+              "eitherOrder": [
+                7
+              ],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "premature_resolution": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "required_content_or_boundary": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            }
+          },
+          "patched": {
+            "overinterpretation": {
+              "bothOrders": [
+                2
+              ],
+              "eitherOrder": [
+                2
+              ],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "unnecessary_question": {
+              "bothOrders": [],
+              "eitherOrder": [
+                4
+              ],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "repeated_closing": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "premature_resolution": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "required_content_or_boundary": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            }
+          }
+        },
+        "judgmentSources": [
+          "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/p0-refined-comparison-2026-10-21-v1/judgments-eq/EQ4-hand_pin_015_consulting_client_tone_1692a961.forward.json",
+          "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/p0-refined-comparison-2026-10-21-v1/judgments-eq/EQ4-hand_pin_015_consulting_client_tone_1692a961.reverse.json"
+        ]
+      },
+      {
+        "caseId": "EQ4-hand_se_014_backup_invite_after_cancel_fd168118",
+        "category": "friend",
+        "outcome": "discordant",
+        "orderOutcomes": [
+          "control",
+          "tie"
+        ],
+        "conditions": {
+          "control": {
+            "overinterpretation": {
+              "bothOrders": [],
+              "eitherOrder": [
+                4
+              ],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "unnecessary_question": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "repeated_closing": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "premature_resolution": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "required_content_or_boundary": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            }
+          },
+          "patched": {
+            "overinterpretation": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "unnecessary_question": {
+              "bothOrders": [],
+              "eitherOrder": [
+                5,
+                6
+              ],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "repeated_closing": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "premature_resolution": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "required_content_or_boundary": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            }
+          }
+        },
+        "judgmentSources": [
+          "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/p0-refined-comparison-2026-10-21-v1/judgments-eq/EQ4-hand_se_014_backup_invite_after_cancel_fd168118.forward.json",
+          "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/p0-refined-comparison-2026-10-21-v1/judgments-eq/EQ4-hand_se_014_backup_invite_after_cancel_fd168118.reverse.json"
+        ]
+      },
+      {
+        "caseId": "EQ4-hand_pin_011_senior_engineer_credit_2ca06e1b",
+        "category": "junior_colleague",
+        "outcome": "tie",
+        "orderOutcomes": [
+          "tie",
+          "tie"
+        ],
+        "conditions": {
+          "control": {
+            "overinterpretation": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "unnecessary_question": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "repeated_closing": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "premature_resolution": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "required_content_or_boundary": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            }
+          },
+          "patched": {
+            "overinterpretation": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "unnecessary_question": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "repeated_closing": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "premature_resolution": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "required_content_or_boundary": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            }
+          }
+        },
+        "judgmentSources": [
+          "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/p0-refined-comparison-2026-10-21-v1/judgments-eq/EQ4-hand_pin_011_senior_engineer_credit_2ca06e1b.forward.json",
+          "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/p0-refined-comparison-2026-10-21-v1/judgments-eq/EQ4-hand_pin_011_senior_engineer_credit_2ca06e1b.reverse.json"
+        ]
+      },
+      {
+        "caseId": "EQ4-1de8c7d5-00b8-48c1-841c-896e43de4771",
+        "category": "parent",
+        "outcome": "patched",
+        "orderOutcomes": [
+          "patched",
+          "patched"
+        ],
+        "conditions": {
+          "control": {
+            "overinterpretation": {
+              "bothOrders": [
+                7
+              ],
+              "eitherOrder": [
+                2,
+                7
+              ],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "unnecessary_question": {
+              "bothOrders": [],
+              "eitherOrder": [
+                5
+              ],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "repeated_closing": {
+              "bothOrders": [],
+              "eitherOrder": [
+                8
+              ],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "premature_resolution": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "required_content_or_boundary": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            }
+          },
+          "patched": {
+            "overinterpretation": {
+              "bothOrders": [],
+              "eitherOrder": [
+                6
+              ],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "unnecessary_question": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "repeated_closing": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "premature_resolution": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "required_content_or_boundary": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            }
+          }
+        },
+        "judgmentSources": [
+          "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/p0-refined-comparison-2026-10-21-v1/judgments-eq/EQ4-1de8c7d5-00b8-48c1-841c-896e43de4771.forward.json",
+          "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/p0-refined-comparison-2026-10-21-v1/judgments-eq/EQ4-1de8c7d5-00b8-48c1-841c-896e43de4771.reverse.json"
+        ]
+      }
+    ],
+    "follow": [
+      {
+        "caseId": "FB-ZH-S11-L5",
+        "category": "unnecessary_question",
+        "outcome": "patched",
+        "orderOutcomes": [
+          "patched",
+          "patched"
+        ],
+        "conditions": {
+          "control": {
+            "overinterpretation": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "unnecessary_question": {
+              "bothOrders": [
+                1
+              ],
+              "eitherOrder": [
+                1
+              ],
+              "majorBothOrders": [
+                1
+              ],
+              "majorEitherOrder": [
+                1
+              ]
+            },
+            "repeated_closing": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "premature_resolution": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "required_content_or_boundary": {
+              "bothOrders": [
+                1
+              ],
+              "eitherOrder": [
+                1
+              ],
+              "majorBothOrders": [
+                1
+              ],
+              "majorEitherOrder": [
+                1
+              ]
+            }
+          },
+          "patched": {
+            "overinterpretation": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "unnecessary_question": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "repeated_closing": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "premature_resolution": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            },
+            "required_content_or_boundary": {
+              "bothOrders": [],
+              "eitherOrder": [],
+              "majorBothOrders": [],
+              "majorEitherOrder": []
+            }
+          }
+        },
+        "judgmentSources": [
+          "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/p0-refined-comparison-2026-10-21-v1/judgments-follow/FB-ZH-S11-L5.forward.json",
+          "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/p0-refined-comparison-2026-10-21-v1/judgments-follow/FB-ZH-S11-L5.reverse.json"
+        ]
+      }
+    ]
+  },
+  "limitations": [
+    "One capture per condition; no statistical significance or real-user satisfaction claim",
+    "Diagnostic scripts are not an independent holdout; original EQ scenes were used in prior analysis",
+    "Two display orders use the same judge model; neither independent judges nor human ground truth",
+    "EQ whole-dialogue trajectories can diverge; fixed Chinese scripts are not adaptive user simulations",
+    "Neutral EQ trait means are not a scalar quality grade or official leaderboard result",
+    "Original transport errors remain immutable; supplemental grades reuse captured answers",
+    "Cloud aliases do not pin underlying backend weights; billing cost unavailable"
+  ],
+  "costUsd": null,
+  "firstVariantDevelopmentDiagnostics": {
+    "outcomes": {
+      "discordant": 5,
+      "tie": 13,
+      "patched": 3,
+      "control": 3
+    },
+    "metrics": {
+      "overinterpretation": {
+        "conversations": 8,
+        "conditions": {
+          "control": {
+            "bothOrders": {
+              "affectedConversations": 1,
+              "affectedReplyCount": 1,
+              "caseIds": [
+                "P0-M05"
+              ]
+            },
+            "eitherOrder": {
+              "affectedConversations": 3,
+              "affectedReplyCount": 3,
+              "caseIds": [
+                "P0-M01",
+                "P0-M04",
+                "P0-M05"
+              ]
+            },
+            "majorBothOrders": {
+              "affectedConversations": 0,
+              "affectedReplyCount": 0,
+              "caseIds": []
+            },
+            "majorEitherOrder": {
+              "affectedConversations": 0,
+              "affectedReplyCount": 0,
+              "caseIds": []
+            }
+          },
+          "patched": {
+            "bothOrders": {
+              "affectedConversations": 3,
+              "affectedReplyCount": 3,
+              "caseIds": [
+                "P0-M05",
+                "P0-M06",
+                "P0-M07"
+              ]
+            },
+            "eitherOrder": {
+              "affectedConversations": 3,
+              "affectedReplyCount": 3,
+              "caseIds": [
+                "P0-M05",
+                "P0-M06",
+                "P0-M07"
+              ]
+            },
+            "majorBothOrders": {
+              "affectedConversations": 0,
+              "affectedReplyCount": 0,
+              "caseIds": []
+            },
+            "majorEitherOrder": {
+              "affectedConversations": 0,
+              "affectedReplyCount": 0,
+              "caseIds": []
+            }
+          }
+        }
+      },
+      "unnecessary_question": {
+        "conversations": 8,
+        "conditions": {
+          "control": {
+            "bothOrders": {
+              "affectedConversations": 0,
+              "affectedReplyCount": 0,
+              "caseIds": []
+            },
+            "eitherOrder": {
+              "affectedConversations": 0,
+              "affectedReplyCount": 0,
+              "caseIds": []
+            },
+            "majorBothOrders": {
+              "affectedConversations": 0,
+              "affectedReplyCount": 0,
+              "caseIds": []
+            },
+            "majorEitherOrder": {
+              "affectedConversations": 0,
+              "affectedReplyCount": 0,
+              "caseIds": []
+            }
+          },
+          "patched": {
+            "bothOrders": {
+              "affectedConversations": 0,
+              "affectedReplyCount": 0,
+              "caseIds": []
+            },
+            "eitherOrder": {
+              "affectedConversations": 0,
+              "affectedReplyCount": 0,
+              "caseIds": []
+            },
+            "majorBothOrders": {
+              "affectedConversations": 0,
+              "affectedReplyCount": 0,
+              "caseIds": []
+            },
+            "majorEitherOrder": {
+              "affectedConversations": 0,
+              "affectedReplyCount": 0,
+              "caseIds": []
+            }
+          }
+        }
+      },
+      "repeated_closing": {
+        "conversations": 8,
+        "conditions": {
+          "control": {
+            "bothOrders": {
+              "affectedConversations": 3,
+              "affectedReplyCount": 3,
+              "caseIds": [
+                "P0-C03",
+                "P0-C04",
+                "P0-C07"
+              ]
+            },
+            "eitherOrder": {
+              "affectedConversations": 4,
+              "affectedReplyCount": 4,
+              "caseIds": [
+                "P0-C03",
+                "P0-C04",
+                "P0-C06",
+                "P0-C07"
+              ]
+            },
+            "majorBothOrders": {
+              "affectedConversations": 0,
+              "affectedReplyCount": 0,
+              "caseIds": []
+            },
+            "majorEitherOrder": {
+              "affectedConversations": 0,
+              "affectedReplyCount": 0,
+              "caseIds": []
+            }
+          },
+          "patched": {
+            "bothOrders": {
+              "affectedConversations": 2,
+              "affectedReplyCount": 2,
+              "caseIds": [
+                "P0-C03",
+                "P0-C07"
+              ]
+            },
+            "eitherOrder": {
+              "affectedConversations": 3,
+              "affectedReplyCount": 3,
+              "caseIds": [
+                "P0-C03",
+                "P0-C06",
+                "P0-C07"
+              ]
+            },
+            "majorBothOrders": {
+              "affectedConversations": 0,
+              "affectedReplyCount": 0,
+              "caseIds": []
+            },
+            "majorEitherOrder": {
+              "affectedConversations": 0,
+              "affectedReplyCount": 0,
+              "caseIds": []
+            }
+          }
+        }
+      }
+    },
+    "partialFullRun": "/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/p0-gpt56-gpt61-2026-10-21-v2",
+    "includedInFinalScores": false,
+    "protocolChangeDisclosed": "The first plan prohibited tuning on its diagnostics; this refinement explicitly changes that plan after a failed gate, preserves the failed variant and uses new frozen validation scripts. This is a new source variant, not a result-selected retry of the same source. Full v1 partial results are not spliced into v2."
+  }
+}

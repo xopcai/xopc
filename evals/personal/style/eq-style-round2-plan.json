@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "version": "eq-style-round2-v1",
+  "candidate": "xopc-cloud/openai-codex/gpt-5.6-sol",
+  "judge": "xopc-cloud/openai-codex/gpt-6.1-sol",
+  "persona": "xopc-cloud/openai-codex/gpt-6.1-sol",
+  "controlSource": "source-eq-refinement-isolated-v1 (73b3be0ec80e2aec606f12aeefe286c17d516b15)",
+  "controlEQ": "eq-refinement-isolated-eq-v1 (previous final candidate; naturalness6.9167)",
+  "isolation": "Derive from previous clean source, alter only reply-style.ts, prompts.ts migration and prompt-compaction.test.ts. Freeze and audit before calls. Keep actual profile identical except instructions; exclude concurrent default-style changes.",
+  "capture": "Final unchanged source runs complete150 FollowBench +same12 EQ, concurrency2, fresh default profile, one candidate sample. Both sources also capture the same13 fixed user scripts, concurrency1 each. Do not stop the full round for disappointing scores or tune on outputs.",
+  "judging": "Both display orders using same judge, visible-only context, exact-quote validation. Existing six violations retained with assistant-turn intersections and unions. Add separately reported anchored0–4 motive_menu, relationship_generalization, coaching_register scores before new captures. Means across orders are descriptive; retain both scores, evidence and disagreement. Same new rubric for both sources, not spliced into old-rubric counts.",
+  "toneAnchors": {
+    "motive_menu": {
+      "0": "No unexpressed-motive menu; factual/task choices or requested grounded analysis are allowed.",
+      "1": "A tentative relevant interpretation with observable support, no imposed choice.",
+      "2": "One loaded choice introducing an unexpressed motive/feeling.",
+      "3": "Repeated or confident ungrounded motive framing.",
+      "4": "Persists after correction or materially derails the request."
+    },
+    "relationship_generalization": {
+      "0": "Stays with supported facts and scope, or a pattern explicitly evidenced.",
+      "1": "A bounded concern about recurrence without asserting a broad pattern.",
+      "2": "One incident is generalized to character, a lasting pattern or an entire relationship.",
+      "3": "Broad framing dominates advice or repeats.",
+      "4": "Persists after correction or materially derails the request."
+    },
+    "coaching_register": {
+      "0": "Role-appropriate concrete language; requested explanation/structure does not count.",
+      "1": "One polished reflective or explanatory closing with little new value.",
+      "2": "Repeated acknowledgment-summary-principle wrappers or generic maxims.",
+      "3": "Training/therapy-style voice dominates or the user visibly objects.",
+      "4": "Continues despite correction or materially obstructs the practical conversation."
+    }
+  },
+  "desiredGate": "For EQ and focused scripts separately: compare new-vs-control tone means, report decrease/nonincrease/floor; no significance claim. Seek coaching drop>=0.25 on EQ, motive_menu and relationship_generalization do not increase, primary overinterpretation does not increase, naturalness/overall stable wins>=losses, no new major boundary/content failures. Full Follow must have150 valid grades; report HSR against historical P0 full run (not previous final, which lacks150); require S11-L5 produces work with all five constraints for the stated strict gate. Report every failed condition; no reruns to pass.",
+  "recovery": "One separately retained supplemental judge call for a protocol/service failure, identical input/rubric/parameters. Candidate capture transport failure may receive at most one same-source fresh-scene retry with original error preserved. No low-score or disagreement retries.",
+  "limitations": "Thirteen scripts derived from known residuals are development regressions. EQ trajectories differ; pointwise sees hidden simulated thoughts, blind rubric does not. Continuous scores are model judgments, not calibrated human labels."
+}

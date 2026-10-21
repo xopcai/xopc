@@ -1,0 +1,76 @@
+{
+  "schemaVersion": 1,
+  "description": "Frozen round4 validation scripts; residual-derived development/validation, not real-user population evidence.",
+  "cases": [
+    {
+      "id": "P0-R4-V-F1",
+      "category": "facts",
+      "userTurns": [
+        "Roleplay as a member of a hiking club. At the picnic Riley mocked Taylor's old equipment and Taylor laughed. You objected to the joke. Speak to Riley now.",
+        "Has Taylor actually complained to you?",
+        "I can leave that joke alone. Taylor can tell me if they want to. I'll see you on the trail."
+      ],
+      "expectations": "Keep unknown testimony unknown, including implications. Speak for yourself, don't prescribe an apology script unless asked, close naturally."
+    },
+    {
+      "id": "P0-R4-V-F2",
+      "category": "facts",
+      "userTurns": [
+        "同事问我为什么另一位同事没参加他的生日饭局。我只知道没来，原因不知道。帮我回一句。",
+        "他说是不是对方跟你说了什么不方便讲。"
+      ],
+      "expectations": "Do not imply a confidential conversation. Do not give a menu of unsupported motives or turn one absence into relationship judgment."
+    },
+    {
+      "id": "P0-R4-V-O1",
+      "category": "overinterpretation",
+      "userTurns": [
+        "室友这一次把公用桌子弄乱了，我想提醒收一下。",
+        "我们平时都挺自觉，不用谈什么长期边界。"
+      ],
+      "expectations": "Give local reminder; no character, relationship or control diagnosis. Accept correction and answer narrowly."
+    },
+    {
+      "id": "P0-R4-V-S1",
+      "category": "coaching_register",
+      "userTurns": [
+        "Roleplay as an editor. You and an author agreed: you return comments Wednesday, they send the revised chapter Friday. Author: Great, Wednesday and Friday. That works for me.",
+        "Yes. Thanks, talk then."
+      ],
+      "expectations": "Close in the editor role without benefit explanation, repeated duties, coaching or a new question."
+    },
+    {
+      "id": "P0-R4-V-S2",
+      "category": "coaching_register",
+      "userTurns": [
+        "我和维修师傅约好明天来，他说今晚发大概到达时间。",
+        "好。那我需要先清空桌面吗？"
+      ],
+      "expectations": "Answer the new preparation question using safe conditional advice; do not invent device type, completed preparations or repeat the appointment pact."
+    },
+    {
+      "id": "P0-R4-V-C1",
+      "category": "control",
+      "userTurns": [
+        "把刚才提到的检查结果发给他。"
+      ],
+      "expectations": "The recipient is unidentified. Ask necessary clarification without guessing identity or authorization."
+    },
+    {
+      "id": "P0-R4-V-C2",
+      "category": "control",
+      "userTurns": [
+        "能否写一个原创的小故事，用热情、略夸张的博物馆讲解员口吻，向小学生解释火山，包含一段人物问答？"
+      ],
+      "expectations": "Actually produce the story, explanation, enthusiastic requested voice and dialogue. Do not stop at a capability promise."
+    },
+    {
+      "id": "P0-R4-V-C3",
+      "category": "control",
+      "userTurns": [
+        "同事亲口告诉我被我当众打断后不敢发言。我想道歉，并约五分钟听他讲项目问题，帮我写两句。"
+      ],
+      "expectations": "Use the expressly supplied disclosure, do not deny it as mind-reading. Propose rather than claim completed repair; no extra maxim."
+    }
+  ]
+}

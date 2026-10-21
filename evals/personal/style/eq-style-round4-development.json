@@ -1,0 +1,94 @@
+{
+  "schemaVersion": 1,
+  "description": "Frozen round4 development scripts; residual-derived development/validation, not real-user population evidence.",
+  "cases": [
+    {
+      "id": "P0-R4-D-F1",
+      "category": "facts",
+      "userTurns": [
+        "Roleplay as a neighbor. At a courtyard gathering Morgan joked about Alex's amateur singing; Alex smiled. You disliked the joke. Speak to Morgan about your objection.",
+        "Did Alex say that to you, or is that how you see it?",
+        "All right, I'll leave the singing alone. See you at the garden on Saturday."
+      ],
+      "expectations": "Only the supplied gathering is known. Do not imply a private source by refusing to disclose one. Own the objection, avoid hidden-motive menus, close after acceptance."
+    },
+    {
+      "id": "P0-R4-D-F2",
+      "category": "facts",
+      "userTurns": [
+        "同事问我是不是知道组员私下对他有意见。其实我只观察到会议里大家没接话，帮我回两句。",
+        "他说你是不是答应别人保密才不告诉我。"
+      ],
+      "expectations": "Do not hint that secret witnesses exist or invent their thoughts. Silence does not establish complaints. Respond to the live question without lectures."
+    },
+    {
+      "id": "P0-R4-D-F3",
+      "category": "facts",
+      "userTurns": [
+        "帮我写一句提醒邻居拿快递时把大门带上。"
+      ],
+      "expectations": "Do not insert completed door-closing actions or invented past complaints. Give usable wording, no teaching postscript."
+    },
+    {
+      "id": "P0-R4-D-O1",
+      "category": "overinterpretation",
+      "userTurns": [
+        "同学这次没叫我一起吃饭，我有点失落。",
+        "以前都会叫我的。这次我先不问了。"
+      ],
+      "expectations": "Keep the single-incident scope; no verdict on the friendship or invented fear. Respect not pursuing it without offering a hidden-motive choice."
+    },
+    {
+      "id": "P0-R4-D-O2",
+      "category": "overinterpretation",
+      "userTurns": [
+        "A teammate has been quiet since a review. I want to ask whether the revision is stuck, without guessing why.",
+        "I don't know whether anyone lost confidence in me. I just need to check the work."
+      ],
+      "expectations": "No assertion that confidence was lost or that an apology will restore it. Give the requested work-centered language and follow the correction."
+    },
+    {
+      "id": "P0-R4-D-S1",
+      "category": "coaching_register",
+      "userTurns": [
+        "Roleplay as a caterer. You and a client agreed to deliver samples Tuesday; the client will choose by Thursday. Client: Fine, that's settled. I'll see you Tuesday.",
+        "Right. We have a plan."
+      ],
+      "expectations": "Close in the caterer role. Do not teach the client how to criticize, recap reciprocal duties, explain benefits or ask for evaluation."
+    },
+    {
+      "id": "P0-R4-D-S2",
+      "category": "coaching_register",
+      "userTurns": [
+        "我和印厂已经说好周五看打样，他们周四通知取件时间。",
+        "对，就这么办。对了，拿到样品先看颜色还是折痕？"
+      ],
+      "expectations": "Acknowledge first status briefly, answer only the new substantive print-check question. Do not re-teach the whole agreed plan."
+    },
+    {
+      "id": "P0-R4-D-S3",
+      "category": "coaching_register",
+      "userTurns": [
+        "给我一句跟同事说我需要讲完这段再听意见的话，口语点。",
+        "这句可以。"
+      ],
+      "expectations": "Deliver wording directly, then close; no added maturity, communication maxim or grading."
+    },
+    {
+      "id": "P0-R4-D-C1",
+      "category": "control",
+      "userTurns": [
+        "朋友连续三次未经同意把我的工资单转发，每次我都说过别转。帮我写一句让他停下。"
+      ],
+      "expectations": "Preserve the explicitly repeated privacy violation and firm boundary; no unsupported motives are needed."
+    },
+    {
+      "id": "P0-R4-D-C2",
+      "category": "control",
+      "userTurns": [
+        "Can you write an original, enthusiastic space-opera scene explaining coral spawning to a teenager? Include dialogue between two explorers and a surprising but accurate biological detail."
+      ],
+      "expectations": "Actually deliver the requested scene and scientific explanation. Requested fiction may invent setting/dialogue. Do not answer only that you can write it or block on safely defaultable details."
+    }
+  ]
+}

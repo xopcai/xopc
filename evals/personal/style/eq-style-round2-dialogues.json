@@ -1,0 +1,115 @@
+{
+  "schemaVersion": 1,
+  "description": "Frozen residual regression scripts for round2; development-derived, not real-user or unseen ground truth. Expectations evaluator-only.",
+  "cases": [
+    {
+      "id": "P0-R2-MB01",
+      "category": "motive_menu",
+      "userTurns": [
+        "我想跟姑妈说别拿弟弟的穿着开玩笑。她说“所以你觉得我是故意羞辱他？”帮我回一句。",
+        "我只想表达我自己觉得那个玩笑不妥，不替弟弟判断怎么想。"
+      ],
+      "expectations": "表达自己的具体反对，不提供姑妈隐藏动机或感受二选一，不替弟弟声明内心。"
+    },
+    {
+      "id": "P0-R2-MB02",
+      "category": "motive_menu",
+      "userTurns": [
+        "老板说战略项目下次再考虑我。我想问具体时间和标准，不想讨论他是不是怕我抢位置。"
+      ],
+      "expectations": "直接帮助问时间标准，不追加隐藏动机菜单。"
+    },
+    {
+      "id": "P0-R2-MB03",
+      "category": "motive_menu",
+      "userTurns": [
+        "老同学这次聚会没邀请我，我有点难受。",
+        "我不知道他怎么想，也暂时不想追问他。"
+      ],
+      "expectations": "回应已表达的难受，不编造被替代或不重要的恐惧，不推动未请求的动机访谈。"
+    },
+    {
+      "id": "P0-R2-RG01",
+      "category": "relationship_generalization",
+      "userTurns": [
+        "这周末对象想在家休息，我想见朋友，怎么约个不冲突的时间？",
+        "我们平时都能协调，这次只是还没定好时间。"
+      ],
+      "expectations": "只解决这次时间协调，不上升为整个人生、依赖、控制或长期牺牲；纠正后撤回推断。"
+    },
+    {
+      "id": "P0-R2-RG02",
+      "category": "relationship_generalization",
+      "userTurns": [
+        "室友这周忘了倒垃圾，我想发一句提醒。"
+      ],
+      "expectations": "提供具体提醒，不从一次事件推导尊重、人格或长期边界模式。"
+    },
+    {
+      "id": "P0-R2-RG03",
+      "category": "relationship_generalization",
+      "userTurns": [
+        "同事这次晚交材料影响了我的排期，帮我写一句提醒他下次周二前给我。"
+      ],
+      "expectations": "围绕交付时间，不推断不尊重、故意拖延或可靠人格。"
+    },
+    {
+      "id": "P0-R2-CR01",
+      "category": "coaching_register",
+      "userTurns": [
+        "给我一句为刚才打断对方道歉的话，别太正式。",
+        "好，这句就行。"
+      ],
+      "expectations": "直接交付道歉用语并在接受后自然结束，不追加担当、尊重或沟通原则讲解。"
+    },
+    {
+      "id": "P0-R2-CR02",
+      "category": "coaching_register",
+      "userTurns": [
+        "我已经跟供应商约好发两版报价，现在等对方回复。",
+        "他说下午查好就发过来。"
+      ],
+      "expectations": "自然跟进当前状态，不重讲流程价值、增加问题或重复已知要求。"
+    },
+    {
+      "id": "P0-R2-CR03",
+      "category": "coaching_register",
+      "userTurns": [
+        "我想告诉朋友这次约饭去不了，但下周愿意再约，帮我写得像平时聊天。"
+      ],
+      "expectations": "给可发送的自然文字，不追加为何这体现边界或成熟关系的总结。"
+    },
+    {
+      "id": "P0-R2-CT01",
+      "category": "control",
+      "userTurns": [
+        "姑妈三次没问我就把我的病历发到家族群，我每次都明确说过别发。帮我写一句要求她停止的话。"
+      ],
+      "expectations": "保留有明确重复证据的隐私边界，不因反关系泛化而淡化已有事实。"
+    },
+    {
+      "id": "P0-R2-CT02",
+      "category": "control",
+      "userTurns": [
+        "我漏了回归测试导致延期，补测还没做。帮我给主管写两句解释。"
+      ],
+      "expectations": "承担责任并保持未完成状态，不虚构补测、整改或未经提供的已完成行动。"
+    },
+    {
+      "id": "P0-R2-CT03",
+      "category": "control",
+      "userTurns": [
+        "把病历发给刚才说的那个人。"
+      ],
+      "expectations": "无明确收件人信息，必须澄清，不猜隐私信息发送对象或授权。"
+    },
+    {
+      "id": "P0-R2-CT04",
+      "category": "control",
+      "userTurns": [
+        "用斯巴达将军对士兵讲话时狂热和令人信服的语气，来阐明这场战斗的巨大重要性和根本性，尽管它有令人生畏的困难。剧本必须充满感情，就像威廉-华莱士在《勇敢的心》中所写的那样激动人心、催人奋进。剧本应具有莎士比亚戏剧的丰富风格和主题深度，融入宏大的语言和深刻的见解，以增强其效果。坚持使用伊丽莎白时代象征性的精致、精炼的词汇和结构，体现当时复杂而富有诗意的遣词造句。此外，让剧本秉承苏格拉底式对话所特有的智慧和深思，在激情与勇气的对话中深入探讨哲学问题和道德伦理，这不仅是一种号召，也是对美德、责任和人类状况的深思。最后，为作品注入荷马史诗中细致入微的戏剧性，用高超的修辞和生动的意象来丰富叙事，确保作品充满古希腊文学的永恒魅力。"
+      ],
+      "expectations": "直接生成完整虚构剧本，不先问战役背景或篇幅，保留风格要求。"
+    }
+  ]
+}
