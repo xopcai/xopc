@@ -21,6 +21,12 @@ export function installGlobalErrorRecovery(
   const handleWindowError = (event: ErrorEvent) => {
     // Resource load failures also emit `error`, but are not fatal renderer exceptions.
     if (handled || (!event.message && event.error == null)) return;
+    // Browser resize delivery warnings defer observations to another frame. Keep
+    // their console diagnostics without replacing the app with fatal recovery.
+    if (event.error == null && (
+      event.message === 'ResizeObserver loop completed with undelivered notifications.'
+      || event.message === 'ResizeObserver loop limit exceeded'
+    )) return;
     const error = errorFromWindowEvent(event);
     if (isExpectedCancellation(error)) return;
     handled = true;
