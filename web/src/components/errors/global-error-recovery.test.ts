@@ -38,4 +38,41 @@ describe('installGlobalErrorRecovery', () => {
     expect(onFatalError).toHaveBeenCalledTimes(1);
     expect(onFatalError).toHaveBeenCalledWith(expect.objectContaining({ message: 'async failed' }), 'unhandledrejection');
   });
+
+  it.each([
+    'ResizeObserver loop completed with undelivered notifications.',
+    'ResizeObserver loop limit exceeded',
+  ])('keeps the app running after browser warning: %s', (message) => {
+    const onFatalError = vi.fn();
+    cleanup = installGlobalErrorRecovery(onFatalError);
+
+    const warning = new ErrorEvent('error', {
+      message,
+      filename: 'http://localhost:3000/#/chat/conversation?workspaceTab=tab',
+      cancelable: true,
+    });
+    window.dispatchEvent(warning);
+    window.dispatchEvent(new ErrorEvent('error', { message }));
+
+    expect(onFatalError).not.toHaveBeenCalled();
+    expect(warning.defaultPrevented).toBe(false);
+
+    window.dispatchEvent(new ErrorEvent('error', { message: 'Uncaught TypeError: render failed' }));
+
+    expect(onFatalError).toHaveBeenCalledTimes(1);
+    expect(onFatalError).toHaveBeenCalledWith(
+      expect.objectContaining({ message: 'Uncaught TypeError: render failed' }),
+      'window.error',
+    );
+  });
+
+  it('captures exceptions thrown by resize callbacks even with a matching warning message', () => {
+    const onFatalError = vi.fn();
+    cleanup = installGlobalErrorRecovery(onFatalError);
+
+    const error = new Error('ResizeObserver loop completed with undelivered notifications.');
+    window.dispatchEvent(new ErrorEvent('error', { error, message: error.message }));
+
+    expect(onFatalError).toHaveBeenCalledWith(error, 'window.error');
+  });
 });
