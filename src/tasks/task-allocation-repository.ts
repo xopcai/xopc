@@ -5,6 +5,7 @@ import type { TaskAllocation, SpecialistTaskRequirements } from '@xopcai/gateway
 import { getSqliteDatabase, runSqliteWriteTransaction, afterSqliteCommit } from '../storage/sqlite/transaction.js';
 import { appendTranscriptEntry } from '../storage/sqlite/transcript-repository.js';
 import { emitSessionTranscriptUpdate } from '../session/transcript-events.js';
+import { isRoutineTaskAllocationStatus } from '../session/task-allocation-status.js';
 import { resolveTaskLocale } from './task-language.js';
 import { enqueueTaskChangedEvent } from './task-change-events.js';
 
@@ -63,8 +64,9 @@ export class TaskAllocationRepository {
     if (!row) return;
     const db = getSqliteDatabase();
     const task = db.prepare('SELECT version, project_id FROM tasks WHERE task_id = ?').get(taskId) as { version: number; project_id: string | null };
+    const details = { taskId, allocation: this.summary(taskId) };
     appendTranscriptEntry(row.origin_conversation_id, { role: 'custom', customType: 'task_allocation_status',
-      content, display: true, details: { taskId, allocation: this.summary(taskId) }, timestamp: Date.now() });
+      content, display: !isRoutineTaskAllocationStatus(details), details, timestamp: Date.now() });
     enqueueTaskChangedEvent(db, { taskId, version: task.version, projectId: task.project_id ?? undefined,
       changedFields: ['delegateAgentId', 'attention'], source: 'runtime' });
     afterSqliteCommit(() => emitSessionTranscriptUpdate({ conversationId: row.origin_conversation_id }));

@@ -97,9 +97,9 @@ export function ConversationPlanDock({
           <button
             type="button"
             className={cn(
-              'inline-flex min-h-9 min-w-0 max-w-full items-center gap-2 rounded-pill border border-edge-subtle bg-surface-panel px-3 py-1.5 text-sm text-fg shadow-surface',
+              'inline-flex min-h-9 min-w-0 max-w-full items-center gap-2 rounded-pill border border-edge-subtle bg-surface-overlay px-3 py-1.5 text-sm text-fg shadow-surface',
               interaction.transition,
-              'hover:border-edge hover:bg-surface-hover/60',
+              'hover:border-edge hover:text-accent-fg',
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-panel',
             )}
             aria-label={`${labels.heading}: ${triggerLabel}`}

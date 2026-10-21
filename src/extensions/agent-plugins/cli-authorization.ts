@@ -10,6 +10,7 @@ import { containedPath, expandPluginVariables, resolvePluginCwd, validatePluginS
 import { expandUserConfig, readPluginUserConfig } from './user-config.js';
 import { safeAuthorizationUrl, type PluginAuthorization, type SetupCommand } from './setup-contract.js';
 import type { AgentPluginStore, InstalledAgentPlugin } from './store.js';
+import { pluginNodeRuntime } from './node-runtime.js';
 
 type CliMethod = Extract<PluginAuthorization['methods'][number], { type: 'cli' }>;
 export type PluginCliAuthorization = {
@@ -39,9 +40,10 @@ async function execute(store: AgentPluginStore, plugin: InstalledAgentPlugin, au
     }
   }
   const program = command.command.startsWith('./') ? containedPath(plugin.rootDir, resolve(plugin.rootDir, command.command)) : command.command.startsWith('${PLUGIN_RESOURCES}/') ? containedPath(data, join(data, 'resources', plugin.receipt.revision, command.command.slice('${PLUGIN_RESOURCES}/'.length))) : command.command;
+  const runtime = pluginNodeRuntime(program);
   let pending = '';
-  const handle = spawnProcess({ program, args: command.args.map(arg => { const value = expand(arg); if (typeof value !== 'string') throw new Error('Use environment variables for login secrets'); return value; }),
-    cwd: resolvePluginCwd(command.cwd, plugin.rootDir, data), env: environment, signal, timeoutMs, maxOutputBytes: 65536, terminationPolicy: 'tree', shell: false,
+  const handle = spawnProcess({ program: runtime.command, args: command.args.map(arg => { const value = expand(arg); if (typeof value !== 'string') throw new Error('Use environment variables for login secrets'); return value; }),
+    cwd: resolvePluginCwd(command.cwd, plugin.rootDir, data), env: { ...environment, ...runtime.env }, signal, timeoutMs, maxOutputBytes: 65536, terminationPolicy: 'tree', shell: false,
     onOutput(stream, chunk) {
       if (stream !== 'stdout' || !onLine) return;
       pending = (pending + chunk.toString('utf8')).slice(-65536);

@@ -1643,6 +1643,13 @@ html.dark[data-color-scheme="porcelain"] {
   padding-inline-end: 0;
 }
 
+/* Composite translucent theme panels over a solid base so history never shows through. */
+.chat-composer-surface,
+.chat-composer-dock::before {
+  background-color: var(--color-surface-base);
+  background-image: linear-gradient(var(--color-surface-panel), var(--color-surface-panel));
+}
+
 /* Cover the bottom gap and corner cutouts without covering the top corners. */
 .chat-composer-dock {
   isolation: isolate;
@@ -1655,7 +1662,6 @@ html.dark[data-color-scheme="porcelain"] {
   inset: auto 0 0;
   height: calc(var(--chat-composer-bottom-space) + var(--chat-composer-bottom-radius, 1rem));
   pointer-events: none;
-  background: var(--color-surface-panel);
 }
 
 @keyframes xopc-chat-user-message-enter {
@@ -2294,7 +2300,7 @@ html[data-desktop-pet="true"] body {
   padding: 6px;
   border: 1px solid var(--color-edge);
   border-radius: var(--radius-md);
-  background: color-mix(in srgb, var(--color-surface-panel) 94%, transparent);
+  background: var(--color-surface-overlay);
 }
 
 .desktop-pet-session {
@@ -2364,7 +2370,7 @@ html[data-desktop-pet="true"] body {
   color: var(--color-danger);
 }
 .desktop-pet-idle-tip {
-  background: color-mix(in srgb, var(--color-surface-panel) 90%, transparent);
+  background: var(--color-surface-overlay);
 }
 
 .desktop-pet-sprite {

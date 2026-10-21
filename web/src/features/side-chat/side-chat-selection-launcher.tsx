@@ -92,7 +92,7 @@ export function SideChatSelectionLauncher({ conversationId }: { conversationId: 
     <div
       role="group"
       aria-label={m.selectedTextActionsAria}
-      className="fixed z-[70] flex h-9 overflow-hidden rounded-lg border border-edge bg-surface-panel text-xs font-medium text-fg shadow-popover"
+      className="fixed z-[70] flex h-9 overflow-hidden rounded-lg border border-edge bg-surface-overlay text-xs font-medium text-fg shadow-popover"
       style={{ left: popup.left, top: popup.top, width: popup.fromSide ? POPOVER_WIDTH / 2 : POPOVER_WIDTH }}
       onPointerDown={(event) => event.preventDefault()}
     >

@@ -108,7 +108,7 @@ export function OnboardingDialog() {
           className={cn(
             'app-chrome-shell fixed z-[56] outline-none',
             experience.stage === 'cloud'
-              ? 'bottom-4 right-4 max-h-[calc(100vh-2rem)] w-[min(32rem,calc(100vw-2rem))] overflow-y-auto rounded-2xl border border-edge bg-surface-panel shadow-xl'
+              ? 'bottom-4 right-4 max-h-[calc(100vh-2rem)] w-[min(32rem,calc(100vw-2rem))] overflow-y-auto rounded-2xl border border-edge bg-surface-overlay shadow-xl'
               : 'xopc-onboarding-dialog inset-0 overflow-hidden',
           )}
           onEscapeKeyDown={event => { if (experience.stage === 'setup' && setupPending) event.preventDefault(); }}

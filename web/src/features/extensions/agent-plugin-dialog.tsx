@@ -187,10 +187,10 @@ export function AgentPluginDialog({
   const startingAutomatically = autoInstall && !currentExtension && storeSource && !autoInstallStarted.current;
   return <Dialog.Root defaultOpen onOpenChange={open => !open && onClose()}><Dialog.Portal>
     <Dialog.Overlay className="fixed inset-0 z-[130] bg-scrim" />
-    <Dialog.Content className="fixed left-1/2 top-1/2 z-[131] flex h-[min(82vh,42rem)] w-[min(38rem,calc(100vw-1.5rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-edge bg-surface-overlay shadow-popover">
+    <Dialog.Content className="fixed left-1/2 top-1/2 z-[131] flex max-h-[min(42rem,calc(100dvh-2rem))] w-[min(38rem,calc(100vw-1.5rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-edge bg-surface-overlay shadow-popover">
       <div className="flex shrink-0 items-center justify-between border-b border-edge p-4"><div className="flex min-w-0 items-center gap-3"><CapabilityIcon iconUrl={currentExtension?.branding?.iconUrl ?? marketplace?.branding?.iconUrl} fallback={Package} /><Dialog.Title className="font-semibold">{currentExtension?.name ?? marketplaceName ?? (zh ? '安装插件' : 'Install plugin')}</Dialog.Title></div><Button variant="ghost" onClick={onClose}>{zh ? '关闭' : 'Close'}</Button></div>
       <Dialog.Description className="sr-only">{zh ? '安装、组件、账号连接和权限' : 'Installation, components, connections and permissions'}</Dialog.Description>
-      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
+      <div className="min-h-0 flex-auto space-y-4 overflow-y-auto overscroll-contain p-4">
         {!currentExtension && storeSource ? <section className="space-y-4">
           <div className="flex items-start gap-3 rounded-xl border border-edge bg-surface-base p-4">
             <ShieldCheck className="mt-0.5 size-5 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden />
@@ -314,7 +314,6 @@ export function AgentPluginDialog({
             </div>
           </div>
           <ul tabIndex={0} aria-label={zh ? '插件新增能力' : 'Added plugin capabilities'} className="max-h-[min(28vh,14rem)] space-y-2 overflow-y-auto overscroll-contain rounded-lg border border-edge bg-surface-panel p-3 break-words focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">{plan.addedCapabilities.map(c => <li key={c} className="flex gap-2"><span aria-hidden>•</span><span>{capabilityLabel(c, zh)}</span></li>)}</ul>
-          {plan.capabilities.some(capability => capability.startsWith('runtime.')) ? <details><summary className="cursor-pointer text-fg-muted">{zh ? '查看执行内容' : 'View execution details'}</summary><ul tabIndex={0} aria-label={zh ? '插件执行内容' : 'Plugin execution details'} className="mt-2 max-h-40 space-y-2 overflow-y-auto overscroll-contain break-all font-mono text-xs">{plan.capabilities.filter(capability => capability.startsWith('runtime.')).map(capability => <li key={capability}>{capability}</li>)}</ul></details> : null}
           {plan.diagnostics.map((d, i) => <p key={i}>{d.component}: {d.message}</p>)}
         </div> : null}
         {currentExtension && advancedOpen ? <div className="border-t border-edge pt-4">

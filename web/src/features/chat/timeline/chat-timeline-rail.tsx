@@ -51,7 +51,7 @@ function TimelinePreviewCard({
     <div
       className={cn(
         'pointer-events-auto absolute right-12 top-1/2 z-[100] w-[min(25rem,calc(100vw-8rem))] -translate-y-1/2',
-        'rounded-2xl border border-edge bg-surface-panel/95 p-3 text-left shadow-popover backdrop-blur',
+        'rounded-2xl border border-edge bg-surface-overlay p-3 text-left shadow-popover backdrop-blur',
       )}
     >
       {turn.timestamp ? (

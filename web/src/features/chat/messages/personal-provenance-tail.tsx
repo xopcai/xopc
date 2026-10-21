@@ -67,7 +67,7 @@ export function PersonalProvenanceTail({ provenance }: { provenance: PersonalPro
       <span className="truncate">{labels[provenance.reasonKind]}</span><ChevronRight className="size-3.5 shrink-0" aria-hidden />
     </button></Dialog.Trigger>
     <Dialog.Portal><Dialog.Overlay className="fixed inset-0 z-50 bg-black/20" />
-      <Dialog.Content className="fixed inset-x-0 bottom-0 z-50 flex h-[min(28rem,75dvh)] flex-col overflow-hidden rounded-t-2xl border border-edge bg-surface-panel sm:inset-x-auto sm:bottom-auto sm:left-1/2 sm:top-1/2 sm:w-[min(25rem,calc(100vw-2rem))] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-xl">
+      <Dialog.Content className="fixed inset-x-0 bottom-0 z-50 flex h-[min(28rem,75dvh)] flex-col overflow-hidden rounded-t-2xl border border-edge bg-surface-overlay sm:inset-x-auto sm:bottom-auto sm:left-1/2 sm:top-1/2 sm:w-[min(25rem,calc(100vw-2rem))] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-xl">
         <div className="flex items-center justify-between border-b border-edge px-5 py-4">
           <Dialog.Title className="text-sm font-medium text-fg">{zh ? '为什么联系你' : 'Why I reached out'}</Dialog.Title>
           <Dialog.Close className="rounded p-1 text-fg-muted hover:text-fg" aria-label={zh ? '关闭' : 'Close'}><X className="size-4" /></Dialog.Close>

@@ -112,7 +112,7 @@ function ClarifyPromptBody({ prompt, submitting, submitError, labels, onSubmit, 
   return <section ref={region} tabIndex={-1} data-clarification-id={prompt.requestId}
     aria-label={approval ? labels.clarifyApprovalTitle : labels.clarifyRegionAria}
     aria-busy={submitting || busy}
-    className={cn('mb-4 rounded-lg border border-edge bg-surface-panel px-4 py-3 text-sm text-fg outline-none', interaction.focusRingPanel)}>
+    className={cn('mb-4 rounded-lg border border-edge bg-surface-overlay px-4 py-3 text-sm text-fg outline-none', interaction.focusRingPanel)}>
     <p className="mb-2 font-medium">{approval ? labels.clarifyApprovalTitle : labels.clarifyResumeHint}</p>
     <MarkdownView content={prompt.question} compact className="mb-3" />
     {approval && prompt.approval ? <dl className="mb-3 space-y-2">

@@ -28,6 +28,7 @@ export const PERSONAL_COMMUNICATION_RULES = [
   'Do not include task progress links by default. Offer verified Task detail links only when requested or useful for debugging; deliver results here. Preserve links to requested artifacts and apply the reply style source rules.',
   'Distinguish submitted, queued, running, waiting, failed, and completed using tool receipts. Submission is receipt; it does not prove execution has started. Completion does not prove delivery; neither authorizes broader action. Never invent completion times.',
   'Keep routine progress private. Resolve worker questions from existing context first; surface meaningful outcomes, failures affecting the result, or decisions only the user can make.',
+  'Hide submission, routing, and queue/start narration. Use the task card for routine status.',
   'Deliver requested content in the ongoing conversation’s style, including material uncertainty, data cutoffs, verification gaps, and partial failures. Do not repeat delivered attachments, acknowledgements, or execution recaps.',
 ] as const;
 

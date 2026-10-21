@@ -55,6 +55,19 @@ it('runs reviewed CLI login, validates QR challenges, verifies identity and isol
   expect(readFileSync(join(home, 'env-check'), 'utf8')).toBe('undefined');
   await act({ action: 'prepare' }); await act({ action: 'complete' }); expect(service.get(plugin.id, 'owner')?.authorizations[0].state).toBe('connected');
 });
+it('authorizes and materializes Node plugins without Node on PATH', async () => {
+  const { root, store, plugin, act } = fixture();
+  vi.stubEnv('PATH', root);
+  await act({ action: 'prepare' });
+  const job = await act({ action: 'authorize', server: 'account', method: 'cli' });
+  const id = job.authorizations[0].attemptId!;
+  await vi.waitFor(() => expect(getPluginCliAuthorization(id, 'owner', plugin.receipt.revision)?.state).toBe('awaiting_user'));
+  writeFileSync(join(store.dataDir(plugin.id), 'accounts', plugin.receipt.revision, 'account', 'approved'), 'yes');
+  await vi.waitFor(() => expect(getPluginCliAuthorization(id, 'owner', plugin.receipt.revision)?.state).toBe('connected'));
+  await act({ action: 'prepare' });
+  await act({ action: 'complete' });
+  expect(Object.values(materializePluginServers(store.get(plugin.id)!, store))[0].command).toBe(process.execPath);
+});
 it('skipping an active CLI cancels it and never loads unauthenticated servers', async () => {
   const { store, plugin, act } = fixture(); await act({ action: 'prepare' });
   const job = await act({ action: 'authorize', server: 'account', method: 'cli' }); const id = job.authorizations[0].attemptId!;

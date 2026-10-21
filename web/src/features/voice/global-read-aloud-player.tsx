@@ -41,7 +41,7 @@ export function GlobalReadAloudPlayer() {
   };
   const player = visible ? (
     <section aria-label={zh ? '语音播报' : 'Read aloud'} className={cn('shrink-0', dock ? 'pb-2' : 'px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2')}>
-      <div className="mx-auto w-full max-w-3xl overflow-hidden rounded-xl border border-edge bg-surface-panel">
+      <div className="mx-auto w-full max-w-3xl overflow-hidden rounded-xl border border-edge bg-surface-overlay">
         <div className="flex min-h-16 items-center gap-1 p-2">
           <button type="button" onClick={() => setExpanded(!expanded)} aria-expanded={expanded} aria-controls={detailsId}
             className="flex min-h-11 min-w-0 flex-1 items-center gap-2 rounded-lg px-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
