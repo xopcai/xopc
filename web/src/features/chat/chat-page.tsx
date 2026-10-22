@@ -1285,7 +1285,7 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
                 data-chat-composer-frame
                 className={cn(
                   'pointer-events-auto relative mx-auto w-full min-w-0 pb-[var(--chat-composer-bottom-space)]',
-                  (!embedded || personal) && 'max-w-[calc(var(--max-width-chat-frame)+0.5rem)]',
+                  (!embedded || personal) && 'max-w-[calc(var(--max-width-chat-frame)+14px)]',
                   compactWelcomeLayout ? 'pt-2.5' : 'pt-2 sm:pt-4',
                 )}
               >
