@@ -61,7 +61,7 @@ export function RightWorkspace({ scope, enabled = true, elevated = false, onDock
   const [discardRequested, setDiscardRequested] = useState(false);
   const store = useRightWorkspaceStore.getState();
   const visible = enabled && pane.open;
-  const present = useWorkspaceMotion(panelRef, visible, pane.activeId);
+  const present = useWorkspaceMotion(panelRef, visible);
   useLayoutEffect(() => {
     if (!visible && panelRef.current?.contains(document.activeElement)) {
       const trigger = document.querySelector<HTMLElement>('[data-workspace-trigger]');

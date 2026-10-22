@@ -16,6 +16,7 @@ import { ShareLinkDialog } from '@/features/shares/share-link-dialog';
 import { useShareLink } from '@/features/shares/use-share-link';
 import { runFileShellAction } from '@/features/workspace/run-file-shell-action';
 import { cn } from '@/lib/cn';
+import { isElectron } from '@/lib/electron-env';
 import { copyTextToClipboard } from '@/lib/copy-to-clipboard';
 import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
@@ -225,7 +226,8 @@ export function WorkspaceFilePreviewPanel({
             onToggle: () => setMarkdownWordWrap((value) => !value),
           } : undefined,
           share: { onClick: handleShare, loading, disabled: !state.fileResourceId || state.loading || Boolean(state.loadError) },
-          openWithSystemApp: state.canOpenWithSystemApp ? { onClick: () => void handleOpenWithSystemApp() } : undefined,
+          openWithSystemApp: state.canOpenWithSystemApp || (isElectron() && Boolean(window.electronAPI?.shell?.openFileResource))
+            ? { onClick: () => void handleOpenWithSystemApp(), disabled: state.loading || !state.canOpenWithSystemApp } : undefined,
           chooseApp: state.canChooseOpenWithApp ? { onClick: handleChooseOpenWithApp } : undefined,
           recommendedApps: state.recommendedOpenWithApps,
           recentApps: state.recentOpenWithApps,

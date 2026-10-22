@@ -10,8 +10,9 @@ function MessageFooter({ context }: { context?: { footer: ReactNode } }) {
   return context?.footer;
 }
 const virtualComponents = { Footer: MessageFooter };
+const HISTORY_OVERSCAN = { top: 800, bottom: 800 };
 
-/** Keep the mode fixed for the mounted session; selection temporarily widens its window. */
+/** Keep selected history mounted as the user scrolls through the virtual window. */
 export function VirtualMessageRows({ rows, scrollRef, renderRow, footer }: {
   rows: MessageRowDescriptor[];
   scrollRef: RefObject<HTMLDivElement | null>;
@@ -20,7 +21,7 @@ export function VirtualMessageRows({ rows, scrollRef, renderRow, footer }: {
 }) {
   const handle = useRef<VirtuosoHandle>(null);
   const [parent, setParent] = useState<HTMLElement | undefined>();
-  const [retainRows, setRetainRows] = useState(false);
+  const [selectionViewport, setSelectionViewport] = useState(HISTORY_OVERSCAN);
   const [position, setPosition] = useState({ rows, first: 1_000_000_000 });
   if (position.rows !== rows) {
     const previousFirst = position.rows[0]?.key;
@@ -48,14 +49,29 @@ export function VirtualMessageRows({ rows, scrollRef, renderRow, footer }: {
   }, [parent, rows, position.first]);
   useLayoutEffect(() => {
     if (!parent) return;
+    let selectionWindow: { start: number; end: number } | null = null;
     const update = () => {
       const selection = window.getSelection();
       const selected = Boolean(selection && !selection.isCollapsed && parent.contains(selection.anchorNode));
-      setRetainRows(selected);
+      if (!selected) selectionWindow = null;
+      else {
+        selectionWindow ??= { start: parent.scrollTop, end: parent.scrollTop };
+        selectionWindow.start = Math.min(selectionWindow.start, parent.scrollTop);
+        selectionWindow.end = Math.max(selectionWindow.end, parent.scrollTop);
+      }
+      // Retain the traversed window instead of mounting all unmeasured history.
+      // Measuring the entire transcript on selection changes shifts disclosure controls.
+      const top = HISTORY_OVERSCAN.top + (selectionWindow ? parent.scrollTop - selectionWindow.start : 0);
+      const bottom = HISTORY_OVERSCAN.bottom + (selectionWindow ? selectionWindow.end - parent.scrollTop : 0);
+      setSelectionViewport(previous => previous.top === top && previous.bottom === bottom
+        ? previous : { top, bottom });
     };
+    const onScroll = () => { if (selectionWindow !== null) update(); };
     document.addEventListener('selectionchange', update);
+    parent.addEventListener('scroll', onScroll, { passive: true });
     return () => {
       document.removeEventListener('selectionchange', update);
+      parent.removeEventListener('scroll', onScroll);
     };
   }, [parent]);
 
@@ -63,7 +79,7 @@ export function VirtualMessageRows({ rows, scrollRef, renderRow, footer }: {
   return <Virtuoso ref={handle} customScrollParent={parent} data={rows}
     skipAnimationFrameInResizeObserver components={virtualComponents} context={{ footer }}
     firstItemIndex={position.first} initialTopMostItemIndex={{ index: rows.length - 1, align: 'end' }}
-    defaultItemHeight={160} increaseViewportBy={retainRows ? 100_000_000 : { top: 800, bottom: 800 }}
+    defaultItemHeight={160} increaseViewportBy={selectionViewport}
     computeItemKey={(_index, row) => row.key}
     itemContent={(_index, row) => <div className={row === rows[0] ? undefined : 'pt-8'}>{renderRow(row.index)}</div>}
   />;

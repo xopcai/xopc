@@ -217,7 +217,7 @@ export function FilePreviewHeader({
           {!hideClose ? <><div className="mx-0.5 h-5 w-px bg-edge-subtle" aria-hidden /><HeaderButton label={m.close} onClick={onClose}><X className="size-4" strokeWidth={1.75} /></HeaderButton></> : null}
         </div>
       </div>
-      {subtitle ? <div className="mt-1.5 flex min-w-0 items-center gap-2 px-3 text-xs leading-tight text-fg-muted">{subtitle}</div> : null}
+      {subtitle ? <div className="mt-1.5 flex min-h-4 min-w-0 items-center gap-2 px-3 text-xs leading-4 text-fg-muted">{subtitle}</div> : null}
       {hasPreviewControls || textView ? <div className="mt-2 flex items-center gap-2 overflow-x-auto pb-0.5">
         {textView ? (
           <SlidingTabList className="mr-2 flex shrink-0 rounded-lg bg-surface-hover p-0.5" role="group" aria-label={labels.chat.attachmentPreviewText}>
