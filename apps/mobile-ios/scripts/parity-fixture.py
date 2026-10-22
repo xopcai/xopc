@@ -12,6 +12,8 @@ messages = [{'id':'long-ai','turnId':'turn-1','role':'assistant','content':long_
  {'id':'user-1','role':'user','content':'请整理移动端布局'},
  {'id':'voice-1','role':'user','content':'','attachments':[{'id':'voice','type':'audio','name':'语音','mimeType':'audio/wav','uri':'media://outbound/voice.wav','durationSeconds':3}]},
  {'id':'ai-1','turnId':'turn-1','role':'assistant','content':'## 检查结果\n\n1. **消息布局**\n   - 收紧列表缩进，换行保留阅读宽度。\n2. **交互**\n   - 长按显示用户消息操作。\n\n所有改动均已记录。'}]
+keyboard_messages = [{'id':'keyboard-user','role':'user','content':'Explain the result.'},
+ {'id':'keyboard-answer','role':'assistant','content':'\n\n'.join(f'Paragraph {i}: a long answer spanning several screens.' for i in range(40))}]
 row={'key':parent,'agentId':'main','name':'移动端布局检查','status':'active','updatedAt':'2026-10-09T08:00:00Z','messageCount':4}
 record={'agentId':'personal','conversationId':personal,'state':'ready','displayName':'Ada','appearance':'loopi','revision':1,'preferences':{}}
 model={'id':'test/model','name':'Fixture Model','provider':'test','reasoning':True,'vision':False,'thinking':{'options':['off','low','medium','high'],'initialValue':'medium'}}
@@ -30,6 +32,8 @@ class Handler(BaseHTTPRequestHandler):
  def do_PATCH(self): self.do_GET()
  def do_GET(self):
   path=urlparse(self.path).path; query=parse_qs(urlparse(self.path).query)
+  keyboard_fixture = path.startswith('/keyboard/')
+  if keyboard_fixture: path = path.removeprefix('/keyboard')
   length=int(self.headers.get('Content-Length','0')); body=self.rfile.read(length) if length else b''
   data=None; status=200
   if path=='/api/agents': data=envelope({'defaultId':'main','agents':[{'id':'main','name':'Main','isDefault':True},{'id':'other','name':'Research'}]})
@@ -51,7 +55,7 @@ class Handler(BaseHTTPRequestHandler):
   elif path=='/api/sessions':
    items=[dict(row,key='draft',name='新对话',messageCount=0),row]
    data={'items':items,'total':2,'hasMore':False,'childrenByConversationId':{parent:{'total':1,'activeCount':0,'items':[{'taskId':'task-child','title':'移动端子任务','phase':'closed','activeConversationId':child}]}}}
-  elif path.endswith('/history'): data={'session':{'key':path.split('/')[3],'agentId':'main','messages':messages},'pagination':{'hasMore':False}}
+  elif path.endswith('/history'): data={'session':{'key':path.split('/')[3],'agentId':'main','messages':keyboard_messages if keyboard_fixture else messages},'pagination':{'hasMore':False}}
   elif path.endswith('/context-summary'): data={'summary':{'conversationId':path.split('/')[3],'work':{},'sources':[],'sourcesHasMore':False,'unavailableSections':[],'environment':{'kind':'local_checkout','rootPath':'/fixture','available':True}}}
   elif path.endswith('/agent-config'):
    if body:

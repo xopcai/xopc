@@ -17,7 +17,6 @@ struct AppRootView: View {
     @State private var settingsPresented = false
     @State private var quickDraft = ""
     @State private var keyboardVisible = false
-    @State private var assistantInputFocused = false
     @State private var secondaryDockHeight: CGFloat = 0
     @State private var messageLinks = ChatMessageLinkRouter()
     @FocusState private var quickInputFocused: Bool
@@ -97,26 +96,15 @@ struct AppRootView: View {
                   raw == AVAudioSession.InterruptionType.ended.rawValue else { return }
             Task { await realtimeVoiceCall.resumeAfterInterruption() }
         }
-        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in
-            keyboardVisible = true
-        }
-        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardDidShowNotification)) { _ in
-            keyboardVisible = true
-        }
-        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
-            keyboardVisible = false
-            assistantInputFocused = false
-            quickInputFocused = false
-        }
+        // Keep dock visibility in the same layout transaction as keyboard avoidance.
+        .onGeometryChange(for: Bool.self) { $0.safeAreaInsets.bottom > 100 } action: { keyboardVisible = $0 }
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardDidHideNotification)) { _ in
-            keyboardVisible = false
-            assistantInputFocused = false
             quickInputFocused = false
         }
     }
 
     private var sceneAnimation: Animation? {
-        reduceMotion ? nil : .spring(response: 0.54, dampingFraction: 0.92)
+        reduceMotion ? nil : .easeOut(duration: 0.26)
     }
 
     private var sceneShell: some View {
@@ -190,7 +178,7 @@ struct AppRootView: View {
                     onQuickChatHandled: appState.consumeQuickChatHandoff,
                     onPersonalAgentUpdated: personalAgent.applyProfile,
                     onOpenSettings: { settingsPresented = true },
-                    onInputFocusChanged: { assistantInputFocused = $0 },
+                    onInputFocusChanged: { _ in },
                     scene: assistantScene, sceneOpening: sceneOpening || personalAgent.isOpening, onSelectScene: selectScene
                 ) { composer, isActionPanelExpanded in
                     bottomDock(showTabs: !isActionPanelExpanded) { composer }
@@ -301,7 +289,7 @@ struct AppRootView: View {
     ) -> some View {
         VStack(spacing: 0) {
             composer()
-            if showTabs, assistantScene == .work, !keyboardVisible, !assistantInputFocused, !quickInputFocused {
+            if showTabs, assistantScene == .work, !keyboardVisible {
                 HStack(spacing: 0) {
                     dockTab(.assistant, "助手", icon: "bubble.left")
                     dockTab(.conversations, "对话", icon: "bubble.left.and.bubble.right")

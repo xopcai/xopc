@@ -309,7 +309,7 @@ export struct XopcHomeView {
 
   private setLifeMode(life: boolean): void {
     this.getUIContext().getFocusController().clearFocus();
-    this.getUIContext().animateTo({ duration: this.layout.reduceMotion ? 0 : 540, curve: Curve.EaseOut }, (): void => {
+    this.getUIContext().animateTo({ duration: this.layout.reduceMotion ? 0 : 260, curve: Curve.LinearOutSlowIn }, (): void => {
       this.lifeMode = life;
     });
   }
@@ -666,7 +666,7 @@ export struct XopcHomeView {
         this.dockItems()
       }.id('main-tab-dock').width('100%')
         .transition(TransitionEffect.OPACITY.combine(TransitionEffect.translate({ y: 36 }))
-          .animation({ duration: this.layout.reduceMotion ? 0 : 540, curve: Curve.EaseOut }))
+          .animation({ duration: this.layout.reduceMotion ? 0 : 260, curve: Curve.LinearOutSlowIn }))
     }
   }
 

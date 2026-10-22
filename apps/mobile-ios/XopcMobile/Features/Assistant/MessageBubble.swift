@@ -53,6 +53,7 @@ struct MessageBubble: View {
                         .font(.caption).foregroundStyle(.secondary)
                 }
             }
+            .fixedSize(horizontal: false, vertical: true)
             .frame(maxWidth: message.role == "assistant" ? .infinity : nil, alignment: .leading)
             .padding(.horizontal, message.role == "assistant" ? 12 : isUserAudioBubble ? 4 : 14)
             .padding(.vertical, isUserAudioBubble ? 0 : 10)
@@ -60,29 +61,16 @@ struct MessageBubble: View {
             .clipShape(.rect(cornerRadius: 18))
             .environment(\.chatTextSelectionEnabled, false)
         }
-        .frame(maxWidth: .infinity, alignment: message.role == "user" ? .trailing : .leading)
-        .contentShape(.rect)
-        .contextMenu {
-            if message.role == "assistant", !message.isPending {
-                assistantMenuActions
-            }
-            if message.role == "user", !message.text.isEmpty {
-                Button("复制", systemImage: "doc.plaintext") { UIPasteboard.general.string = message.text }
-                    .accessibilityIdentifier("chat-user-copy-\(message.id)")
-                if message.attachments.isEmpty, message.references.isEmpty {
-                    Button("再次编辑", systemImage: "pencil") { onReuseUserText(message.text) }
-                        .accessibilityIdentifier("chat-user-reuse-\(message.id)")
-                }
-            }
-        }
-        .simultaneousGesture(LongPressGesture(minimumDuration: 0.3).onEnded { _ in onReading() })
-        .accessibilityIdentifier("chat-message-\(message.role)-\(message.id)")
+        // Keep accessibility bounds on the bubble before expanding its alignment frame.
         .accessibilityElement(children: .contain)
-        .accessibilityHint("长按显示消息操作")
-        .accessibilityAction(named: Text("消息操作")) {
-            if message.role == "assistant", !message.isPending {
-                isActionsPresented = true
-            }
+        .accessibilityIdentifier("chat-message-\(message.role)-\(message.id)")
+        .frame(maxWidth: .infinity, alignment: message.role == "user" ? .trailing : .leading)
+        .modifier(MessageContextMenu(enabled: hasMessageActions, onOpen: { isActionsPresented = true }) {
+            messageMenuActions
+        })
+        // Leave long-press recognition to the system context menu.
+        .onChange(of: isDetailPresented || isExecutionPresented || isActionsPresented) { _, presented in
+            if presented { onReading() }
         }
         .sheet(isPresented: $isDetailPresented) {
             MessageDetailView(
@@ -110,11 +98,30 @@ struct MessageBubble: View {
             }
         }
         .confirmationDialog("消息操作", isPresented: $isActionsPresented, titleVisibility: .visible) {
-            assistantMenuActions
+            messageMenuActions
             Button("取消", role: .cancel) {}
         }
         .alert(saveFeedback, isPresented: $isSaveFeedbackPresented) {
             Button("好", role: .cancel) {}
+        }
+    }
+
+    private var hasMessageActions: Bool {
+        (message.role == "assistant" && !message.isPending) || (message.role == "user" && !message.text.isEmpty)
+    }
+
+    @ViewBuilder
+    private var messageMenuActions: some View {
+        if message.role == "assistant", !message.isPending {
+            assistantMenuActions
+        }
+        if message.role == "user", !message.text.isEmpty {
+            Button("复制", systemImage: "doc.plaintext") { UIPasteboard.general.string = message.text }
+                .accessibilityIdentifier("chat-user-copy-\(message.id)")
+            if message.attachments.isEmpty, message.references.isEmpty {
+                Button("再次编辑", systemImage: "pencil") { onReuseUserText(message.text) }
+                    .accessibilityIdentifier("chat-user-reuse-\(message.id)")
+            }
         }
     }
 
@@ -333,6 +340,25 @@ private extension MessageBubble {
             saveFeedback = String(format: String(localized: "保存失败：%@"), error.localizedDescription)
         }
         isSaveFeedbackPresented = true
+    }
+}
+
+private struct MessageContextMenu<Items: View>: ViewModifier {
+    let enabled: Bool
+    let onOpen: () -> Void
+    @ViewBuilder let items: () -> Items
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if enabled {
+            content
+                .contentShape(.rect)
+                .contextMenu(menuItems: items)
+                .accessibilityHint("长按显示消息操作")
+                .accessibilityAction(named: Text("消息操作"), onOpen)
+        } else {
+            content
+        }
     }
 }
 

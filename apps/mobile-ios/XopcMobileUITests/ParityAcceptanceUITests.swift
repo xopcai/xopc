@@ -2031,8 +2031,8 @@ final class MobileLayoutParityUITests: XCTestCase {
         app.swipeUp()
         XCTAssertTrue(app.buttons["personal-agent-voice-choice"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.staticTexts["Gateway 请求失败（404）"].exists)
-        XCTAssertTrue(app.staticTexts["主动联系"].waitForExistence(timeout: 5))
-        capture("personal-ai-proactive-settings")
+        XCTAssertTrue(app.staticTexts["更多设置请前往 PC 或 Web 端。"].waitForExistence(timeout: 5))
+        capture("personal-ai-mobile-settings")
         app.buttons["取消"].firstMatch.tap()
     }
 
@@ -2092,9 +2092,9 @@ final class MobileLayoutParityUITests: XCTestCase {
         capture("message-long-press")
         app.buttons.matching(NSPredicate(format: "label == %@", "再次编辑")).firstMatch.tap()
         XCTAssertEqual(app.textFields["assistant-chat-composer"].value as? String, "请整理移动端布局")
-        let more = app.buttons["chat-more-ai-1"]
-        XCTAssertTrue(more.waitForExistence(timeout: 5))
-        more.tap()
+        let answer = app.descendants(matching: .any)["chat-message-assistant-ai-1"].firstMatch
+        XCTAssertTrue(answer.waitForExistence(timeout: 5))
+        answer.press(forDuration: 1)
         app.buttons.matching(NSPredicate(format: "label == %@", "消息详情")).firstMatch.tap()
         XCTAssertTrue(app.descendants(matching: .any)["message-detail-content"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.navigationBars["消息详情"].exists)
