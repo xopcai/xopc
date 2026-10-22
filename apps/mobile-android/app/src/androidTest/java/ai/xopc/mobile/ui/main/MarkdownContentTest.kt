@@ -80,12 +80,12 @@ class MarkdownContentTest {
         onMore = {}, onOpenTarget = {}, onOpenPreview = { _, _ -> },
         onOpenLink = {}, onCopy = {})
     }
-    composeTestRule.onNodeWithTag("markdown-content").assertExists()
-    composeTestRule.onNodeWithTag("markdown-heading").assertTextEquals("Result")
-    composeTestRule.onNodeWithText("Done").assertExists()
+    composeTestRule.onNodeWithTag("markdown-content", useUnmergedTree = true).assertExists()
+    composeTestRule.onNodeWithTag("markdown-heading", useUnmergedTree = true).assertTextEquals("Result")
+    composeTestRule.onNodeWithText("Done", useUnmergedTree = true).assertExists()
   }
 
-  @Test fun longAssistantAnswerUsesAvailableReadingWidth() {
+  @Test fun longAssistantAnswerLeavesSpaceBesideBubble() {
     composeTestRule.setContent {
       Box(Modifier.width(320.dp)) {
         ChatMessageCard(ConversationMessage("wide", "assistant",
@@ -94,7 +94,20 @@ class MarkdownContentTest {
           onOpenLink = {}, onCopy = {}, actionsEnabled = false)
       }
     }
-    composeTestRule.onNodeWithTag("markdown-content").assertWidthIsEqualTo(296.dp)
+    // The card tag is inside its 12dp horizontal content padding.
+    composeTestRule.onNodeWithTag("message-assistant-card-wide").assertWidthIsEqualTo(264.dp)
+    composeTestRule.onNodeWithTag("markdown-content").assertWidthIsEqualTo(264.dp)
+  }
+
+  @Test fun longUserMessageHasNarrowerWidthThanAssistant() {
+    composeTestRule.setContent {
+      Box(Modifier.width(320.dp)) {
+        ChatMessageCard(ConversationMessage("user-wide", "user", "较长的用户消息".repeat(12)),
+          onMore = {}, onOpenTarget = {}, onOpenPreview = { _, _ -> },
+          onOpenLink = {}, onCopy = {})
+      }
+    }
+    composeTestRule.onNodeWithTag("message-more-user-wide").assertWidthIsEqualTo(268.8.dp)
   }
 
   @Test fun nestedListsUseSmallIndentationIndependentOfMarkerWidth() {

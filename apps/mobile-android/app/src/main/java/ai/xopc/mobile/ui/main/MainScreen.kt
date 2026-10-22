@@ -110,7 +110,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.pager.HorizontalPager
@@ -119,7 +118,6 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.withFrameNanos
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
@@ -1432,8 +1430,6 @@ internal fun MainContent(
   }
   val imeVisible = WindowInsets.isImeVisible
   val layoutDirection = LocalLayoutDirection.current
-  var bottomChromeHeightPx by remember { mutableIntStateOf(0) }
-  val bottomChromeHeight = with(LocalDensity.current) { bottomChromeHeightPx.toDp() }
   val tabStateHolder = rememberSaveableStateHolder()
   BackHandler(enabled = assistantActionsOpen) { assistantActionsOpen = false }
   BackHandler(enabled = quickActionsOpen) { quickActionsOpen = false }
@@ -1442,9 +1438,7 @@ internal fun MainContent(
     modifier = modifier.imePadding(),
     containerColor = MaterialTheme.colorScheme.background,
     bottomBar = {
-      if (showBottomChrome) Column(modifier = Modifier.fillMaxWidth()
-        .onSizeChanged { bottomChromeHeightPx = it.height }
-        .padding(top = 8.dp)) {
+      if (showBottomChrome) Column(modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
         val attentionCount = connection.progress.needsUser.size.takeIf {
           connection.progress.gatewayId == connection.profile.gatewayId
         } ?: 0
@@ -1489,12 +1483,14 @@ internal fun MainContent(
                   onCreateConversation()
                 })
             }
-            AnimatedVisibility(visible = !connection.lifeMode && !assistantActionsOpen && !imeVisible,
-              enter = expandVertically(tween(540), expandFrom = Alignment.Bottom) + fadeIn(tween(360)),
-              exit = shrinkVertically(tween(540), shrinkTowards = Alignment.Bottom) + fadeOut(tween(300)),
+            AnimatedVisibility(visible = !connection.lifeMode && !assistantActionsOpen,
+              enter = expandVertically(tween(260), expandFrom = Alignment.Bottom) + fadeIn(tween(260)),
+              exit = shrinkVertically(tween(260), shrinkTowards = Alignment.Bottom) + fadeOut(tween(260)),
               label = "scene-work-dock") {
-              XopcTabDock(selectedTab, onSelectTab, grouped = true, attentionCount = attentionCount,
-                personalAgent = connection.personal.takeIf { it.agent?.conversationId == connection.selectedConversationId })
+              ChatImeDock {
+                XopcTabDock(selectedTab, onSelectTab, grouped = true, attentionCount = attentionCount,
+                  personalAgent = connection.personal.takeIf { it.agent?.conversationId == connection.selectedConversationId })
+              }
             }
           }
         } else if (showQuick) {
@@ -1555,6 +1551,7 @@ internal fun MainContent(
       }
     },
   ) { insets ->
+    val bottomChromeHeight = if (showBottomChrome) insets.calculateBottomPadding() else 0.dp
     val rootInsets = if (showBottomChrome) PaddingValues(
       start = insets.calculateLeftPadding(layoutDirection),
       top = if (selectedTab == HomeTab.Assistant) 0.dp else insets.calculateTopPadding(),
@@ -1575,7 +1572,7 @@ internal fun MainContent(
           onScanPairing,
           pairingScanning, pairingScanError, insets)
         else if (selectedTab == HomeTab.Assistant) AssistantScreen(connection,
-          rootInsets, bottomChromeHeight, onSelectConversation,
+          rootInsets, insets, onSelectConversation,
           onCreateConversation, onLoadOlderHistory, onLoadReferences, onAddDraftRef,
           onNoteFileContent,
           onRetryPendingInput,
@@ -2455,7 +2452,7 @@ private fun AssistantComposerButtons(connection: ConnectionUiState, actionsOpen:
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues,
-  bottomChromeHeight: androidx.compose.ui.unit.Dp,
+  bottomChromeInsets: PaddingValues,
   onSelectConversation: (String) -> Unit, onCreateConversation: () -> Unit,
   onLoadOlderHistory: () -> Unit,
   onLoadReferences: (String, String) -> Unit,
@@ -2497,6 +2494,7 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
   onUploadAvatar: suspend (ByteArray) -> Unit = {}, personalModelRequestRevision: Int = 0, onPersonalModelRequestHandled: () -> Unit = {}, onSwitchLifeMode: (Boolean) -> Unit = {}) {
   val focusManager = LocalFocusManager.current
   val keyboardController = LocalSoftwareKeyboardController.current
+  val bottomChromeHeight = bottomChromeInsets.calculateBottomPadding()
   val uriHandler = LocalUriHandler.current
   val context = LocalContext.current
   val speechScope = rememberCoroutineScope()
@@ -2517,7 +2515,8 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
   LaunchedEffect(connection.lifeMode) {
     if (previousScene == connection.lifeMode) return@LaunchedEffect
     previousScene = connection.lifeMode
-    if (motionAllowed) { sceneEntrance.snapTo(1f); sceneEntrance.animateTo(0f, tween(540)) }
+    if (motionAllowed) { sceneEntrance.snapTo(1f); sceneEntrance.animateTo(0f, tween(260,
+      easing = androidx.compose.animation.core.LinearOutSlowInEasing)) }
     else sceneEntrance.snapTo(0f)
   }
   val selected = connection.conversations.firstOrNull { it.id == connection.selectedConversationId }
@@ -2566,7 +2565,6 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
     chatPresentationMessages(connection.messages, connection.liveMessages)
   }
   val latestConnection by rememberUpdatedState(connection)
-  val latestDisplayMessages by rememberUpdatedState(displayMessages)
   val selectedMessageConversationId = connection.selectedConversationId
   val externalLinkFailure = stringResource(R.string.message_open_link_failed)
   var messageActionsId by remember(connection.selectedConversationId) { mutableStateOf<String?>(null) }
@@ -2590,7 +2588,6 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
     connection.connectionWait.conversationId == connection.selectedConversationId &&
     connection.connectionWait.snapshot?.wait?.phase?.let { it != "ready" } == true
   val messageListState = remember(connection.selectedConversationId) { LazyListState() }
-  val messageScrollScope = rememberCoroutineScope()
   val messageDragged by messageListState.interactionSource.collectIsDraggedAsState()
   var positionedAtLatest by remember(connection.selectedConversationId) { mutableStateOf(false) }
   var followBottom by remember(connection.selectedConversationId) { mutableStateOf(true) }
@@ -2636,40 +2633,32 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
         (messageViewportHeight - bottomChromePx - replyGapPx) / density.density, followBottom)
     }
   }
-  var programmaticMessageScroll by remember(connection.selectedConversationId) { mutableStateOf(false) }
   var olderAnchor by remember(connection.selectedConversationId) { mutableStateOf<Pair<String, Int>?>(null) }
-  suspend fun scrollMessagesToBottom() {
-    withFrameNanos { }
+  fun scrollMessagesToBottom() {
     if (messageDragged || olderAnchor != null || (positionedAtLatest && !followBottom)) return
-    val lastIndex = messageListState.layoutInfo.totalItemsCount - 1
-    if (lastIndex < 0) return
-    programmaticMessageScroll = true
-    try {
-      messageListState.scrollToItem(lastIndex)
-      withFrameNanos { }
-      val layout = messageListState.layoutInfo
-      val last = layout.visibleItemsInfo.firstOrNull { it.index == lastIndex }
-      if (last != null) messageListState.scrollBy(
-        (last.size + layout.viewportEndOffset - layout.viewportStartOffset).toFloat())
-      if (!messageDragged) { positionedAtLatest = true; followBottom = true }
-    } finally {
-      programmaticMessageScroll = false
+    if (messageListState.layoutInfo.totalItemsCount == 0) return
+    // Schedule the bottom anchor for the next measure instead of forcing a reentrant layout.
+    if (messageListState.firstVisibleItemIndex != 0 || messageListState.firstVisibleItemScrollOffset != 0) {
+      messageListState.requestScrollToItem(0)
     }
+    positionedAtLatest = true
+    followBottom = true
   }
   LaunchedEffect(messageListState, connection.historyLoadingOlder) {
-    snapshotFlow { messageListState.isScrollInProgress to messageListState.canScrollForward }
-      .collect { (scrolling, canScrollForward) ->
-        if (scrolling && positionedAtLatest && !programmaticMessageScroll &&
-          !connection.historyLoadingOlder && olderAnchor == null) followBottom = !canScrollForward
+    snapshotFlow { messageListState.isScrollInProgress to messageListState.canScrollBackward }
+      .collect { (scrolling, canScrollToLatest) ->
+        if (scrolling && positionedAtLatest &&
+          !connection.historyLoadingOlder && olderAnchor == null) followBottom = !canScrollToLatest
       }
   }
   LaunchedEffect(connection.selectedConversationId, messageListState) {
     snapshotFlow {
       val latest = latestConnection
+      val layout = messageListState.layoutInfo
       listOf(latest.messages.lastOrNull()?.id, latest.liveText.length, latest.activeRunId,
         latest.historyLoading, latest.historyLoadingOlder, latest.optimisticText,
-        replyRowHeights[latestDisplayMessages.lastOrNull()?.renderId],
-        replySpace.remaining, messageViewportHeight, bottomChromeHeight)
+        layout.totalItemsCount, layout.viewportSize.height, layout.beforeContentPadding,
+        layout.afterContentPadding, layout.visibleItemsInfo.firstOrNull()?.size)
     }.conflate().collect {
       val latest = latestConnection
       if (!latest.historyLoading && !latest.historyLoadingOlder &&
@@ -2678,20 +2667,8 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
     }
   }
   LaunchedEffect(displayMessages.firstOrNull()?.id, connection.historyLoadingOlder) {
-    val anchor = olderAnchor
-    if (!connection.historyLoadingOlder && anchor != null) {
-      val index = displayMessages.indexOfFirst { it.renderId == anchor.first }
-      if (index >= 0) {
-        programmaticMessageScroll = true
-        try {
-          withFrameNanos { }
-          val headerCount = (if (connection.historyBefore != null) 1 else 0) +
-            (if (connection.activeRunId != null && connection.liveNarration != null && connection.liveMessages.isEmpty()) 1 else 0)
-          messageListState.scrollToItem(index + headerCount, anchor.second)
-        } finally { programmaticMessageScroll = false }
-      }
-      olderAnchor = null
-    }
+    // Older rows append after the reversed timeline; stable keys preserve the reading anchor.
+    if (!connection.historyLoadingOlder) olderAnchor = null
   }
   val statusIssue = when {
     connection.chatError -> R.string.chat_load_error
@@ -2721,11 +2698,11 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
         }
       }
     }.testTag("assistant-content-area")) {
-  Column(modifier = Modifier.fillMaxSize().graphicsLayer {
-    alpha = 1f - sceneEntrance.value * 0.7f
-    translationY = sceneEntrance.value * 16.dp.toPx()
-    scaleX = 1f - sceneEntrance.value * 0.02f
-    scaleY = scaleX
+  Column(modifier = Modifier.fillMaxSize()
+    .chatSceneSwipe(connection.lifeMode, !connection.personal.agentCreating, onSwitchLifeMode)
+    .graphicsLayer {
+    alpha = 1f - sceneEntrance.value * 0.15f
+    translationX = sceneEntrance.value * (if (connection.lifeMode) -32.dp else 32.dp).toPx()
   }.padding(start = 12.dp, end = 12.dp, bottom = 16.dp),
     verticalArrangement = Arrangement.spacedBy(12.dp)) {
     if (connection.selectedConversationId == null) {
@@ -2783,30 +2760,32 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
         }
       } else LazyColumn(modifier = Modifier.weight(1f).testTag("assistant-message-list")
         .onSizeChanged { messageViewportHeight = it.height },
-        state = messageListState,
-        contentPadding = PaddingValues(top = chatTopInset + 88.dp,
-          bottom = bottomChromeHeight + replySpaceHeight + if (showConnectionWait) 104.dp else 12.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        if (connection.historyBefore != null) item(key = "assistant-older") {
-          Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-            if (connection.historyLoadingOlder) BrandLoadingIndicator(extent = 20.dp)
-            else TextButton(onClick = {
-              val visible = messageListState.layoutInfo.visibleItemsInfo.firstOrNull { item ->
-                displayMessages.any { it.renderId == item.key }
+        state = messageListState, reverseLayout = true,
+        contentPadding = ChatMessagePadding(bottomChromeInsets, chatTopInset + 88.dp,
+          replySpaceHeight + if (showConnectionWait) 104.dp else 12.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.Top)) {
+        if (connection.optimisticText.isNotBlank()) item(key = "send-flight") {
+          AnimatedVisibility(visible = sendFlightVisible && connection.optimisticText.isNotBlank(),
+            enter = slideInVertically(initialOffsetY = { it * 5 }) + fadeIn()) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+              Card(modifier = Modifier.fillMaxWidth(0.82f).testTag("assistant-send-flight")) {
+                Text(connection.optimisticText, modifier = Modifier.padding(12.dp),
+                  style = MaterialTheme.typography.bodyMedium)
               }
-              followBottom = false
-              olderAnchor = (visible?.key as? String)?.let { it to -visible.offset }
-              onLoadOlderHistory()
-            }, modifier = Modifier.testTag("assistant-load-older")) {
-              Text(stringResource(if (connection.historyOlderError) R.string.assistant_older_retry
-                else R.string.assistant_older_messages))
             }
+          }
+        }
+        if ((connection.sending || connection.activeRunId != null) && !connection.runError &&
+          connection.clarification == null && !connection.liveMessages.any { it.answerConfirmed && it.text.isNotBlank() }) {
+          item(key = "assistant-waiting") {
+            AssistantWaitingBubble(runId = connection.activeRunId ?: "sending", narration = connection.liveNarration,
+              connected = connection.realtimeStatus == "connected")
           }
         }
         val latestMessageId = displayMessages.lastOrNull {
           it.role == "user" || it.role == "assistant"
         }?.id
-        items(displayMessages, key = { it.renderId }) { message ->
+        items(displayMessages.asReversed(), key = { it.renderId }) { message ->
           Box(Modifier.then(if (connection.liveMessages.any { it.id in message.sourceIds })
             Modifier.testTag("assistant-live-output") else Modifier)
             .onSizeChanged { replyRowHeights[message.renderId] = it.height }) {
@@ -2821,21 +2800,19 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
             loadMedia = { media -> onLoadMessageMedia(selectedMessageConversationId, media) })
           }
         }
-        if ((connection.sending || connection.activeRunId != null) && !connection.runError &&
-          connection.clarification == null && !connection.liveMessages.any { it.answerConfirmed && it.text.isNotBlank() }) {
-          item(key = "assistant-waiting") {
-            AssistantWaitingBubble(runId = connection.activeRunId ?: "sending", narration = connection.liveNarration,
-              connected = connection.realtimeStatus == "connected")
-          }
-        }
-        if (connection.optimisticText.isNotBlank()) item(key = "send-flight") {
-          AnimatedVisibility(visible = sendFlightVisible && connection.optimisticText.isNotBlank(),
-            enter = slideInVertically(initialOffsetY = { it * 5 }) + fadeIn()) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-              Card(modifier = Modifier.fillMaxWidth(0.82f).testTag("assistant-send-flight")) {
-                Text(connection.optimisticText, modifier = Modifier.padding(12.dp),
-                  style = MaterialTheme.typography.bodyMedium)
+        if (connection.historyBefore != null) item(key = "assistant-older") {
+          Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+            if (connection.historyLoadingOlder) BrandLoadingIndicator(extent = 20.dp)
+            else TextButton(onClick = {
+              val visible = messageListState.layoutInfo.visibleItemsInfo.firstOrNull { item ->
+                displayMessages.any { it.renderId == item.key }
               }
+              followBottom = false
+              olderAnchor = (visible?.key as? String)?.let { it to -visible.offset }
+              onLoadOlderHistory()
+            }, modifier = Modifier.testTag("assistant-load-older")) {
+              Text(stringResource(if (connection.historyOlderError) R.string.assistant_older_retry
+                else R.string.assistant_older_messages))
             }
           }
         }
@@ -2908,11 +2885,11 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
     .padding(start = 16.dp, end = 16.dp, bottom = bottomChromeHeight + 8.dp)) {
     ConnectionWaitCard(connection.connectionWait, onRefreshConnectionWait)
   }
-  if (positionedAtLatest && !followBottom && messageListState.canScrollForward) {
+  if (positionedAtLatest && !followBottom && messageListState.canScrollBackward) {
     val jumpLabel = stringResource(R.string.assistant_jump_bottom)
     IconButton(onClick = {
       followBottom = true
-      messageScrollScope.launch { scrollMessagesToBottom() }
+      scrollMessagesToBottom()
     }, modifier = Modifier.align(Alignment.BottomCenter)
       .padding(bottom = bottomChromeHeight + if (showConnectionWait) 108.dp else 4.dp)
       .size(44.dp)

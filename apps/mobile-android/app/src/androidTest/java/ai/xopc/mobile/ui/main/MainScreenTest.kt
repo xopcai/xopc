@@ -70,6 +70,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToIndex
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTextClearance
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.click
@@ -169,7 +170,6 @@ class MainScreenTest {
       }
     }
 
-    composeTestRule.onNodeWithTag("assistant-message-list").performScrollToIndex(19)
     composeTestRule.waitForIdle()
 
     val composerBounds = composeTestRule.onAllNodesWithTag("assistant-bottom-surface")
@@ -208,7 +208,7 @@ class MainScreenTest {
     composeTestRule.runOnIdle { state.value = state.value.copy(historyLoading = false, messages = messages) }
     composeTestRule.onNodeWithText("Reply 29").assertIsDisplayed()
 
-    composeTestRule.onNodeWithTag("assistant-message-list").performScrollToIndex(1)
+    composeTestRule.onNodeWithTag("assistant-message-list").performScrollToNode(hasText("Reply 1"))
     composeTestRule.onNodeWithTag("assistant-message-list").performTouchInput { swipeDown() }
     composeTestRule.onNodeWithText("Reply 0").assertIsDisplayed()
     composeTestRule.runOnIdle {
@@ -238,7 +238,7 @@ class MainScreenTest {
     }
     composeTestRule.onNodeWithText("Reply 30").assertIsDisplayed()
 
-    composeTestRule.onNodeWithTag("assistant-message-list").performScrollToIndex(1)
+    composeTestRule.onNodeWithTag("assistant-message-list").performScrollToNode(hasText("Reply 1"))
     composeTestRule.onNodeWithTag("assistant-message-list").performTouchInput { swipeDown() }
     composeTestRule.onNodeWithText("Reply 0").assertIsDisplayed()
     composeTestRule.onNodeWithTag("assistant-jump-bottom").assertIsDisplayed()
@@ -276,7 +276,7 @@ class MainScreenTest {
     composeTestRule.runOnIdle { state.value = state.value.copy(liveMessages = listOf(ConversationMessage("live:run-1", "assistant", stream, "run-1"))) }
     composeTestRule.onNodeWithText("Tail marker").assertIsDisplayed()
 
-    composeTestRule.onNodeWithTag("assistant-message-list").performScrollToIndex(1)
+    composeTestRule.onNodeWithTag("assistant-message-list").performScrollToNode(hasText("Reply 1"))
     composeTestRule.onNodeWithTag("assistant-message-list").performTouchInput { swipeDown() }
     composeTestRule.onNodeWithText("Reply 0").assertIsDisplayed()
     composeTestRule.runOnIdle { state.value = state.value.copy(liveMessages = listOf(ConversationMessage("live:run-1", "assistant", stream + "\n\nMore output", "run-1"))) }
@@ -307,7 +307,7 @@ class MainScreenTest {
           })
       }
     }
-    composeTestRule.onNodeWithTag("assistant-message-list").performScrollToIndex(0)
+    composeTestRule.onNodeWithTag("assistant-message-list").performScrollToNode(hasTestTag("assistant-load-older"))
     composeTestRule.onNodeWithTag("assistant-load-older").performClick()
     assertEquals(1, requests)
     composeTestRule.runOnIdle {

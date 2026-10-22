@@ -49,6 +49,20 @@ final class LifeWorkModesUITests: XCTestCase {
         XCTAssertTrue(app.buttons["home-tab-conversations"].exists)
     }
 
+    func testChatSwipeSwitchesScenesAndIgnoresVerticalAndShortDrags() {
+        let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.25, dy: 0.42))
+        let end = app.coordinate(withNormalizedOffset: CGVector(dx: 0.75, dy: 0.42))
+        start.press(forDuration: 0.05, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.25, dy: 0.3)))
+        XCTAssertTrue(app.buttons["home-tab-assistant"].exists)
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.45, dy: 0.42))
+            .press(forDuration: 0.05, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.55, dy: 0.42)))
+        XCTAssertTrue(app.buttons["home-tab-assistant"].exists)
+        start.press(forDuration: 0.05, thenDragTo: end)
+        XCTAssertTrue(app.buttons["home-tab-assistant"].waitForNonExistence(timeout: 10))
+        end.press(forDuration: 0.05, thenDragTo: start)
+        XCTAssertTrue(app.buttons["home-tab-assistant"].waitForExistence(timeout: 10))
+    }
+
     private func capture(_ name: String) {
         let attachment = XCTAttachment(screenshot: app.screenshot())
         attachment.name = name

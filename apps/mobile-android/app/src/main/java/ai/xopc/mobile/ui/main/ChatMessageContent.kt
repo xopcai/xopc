@@ -105,7 +105,7 @@ internal fun ChatMessageCard(message: ConversationMessage, onMore: () -> Unit,
       }
     }
   }) {
-    val maxBubbleWidth = if (isUser) maxWidth * 0.9f else maxWidth
+    val maxBubbleWidth = maxWidth * if (isUser) 0.84f else 0.9f
     val contentCount = message.media.size + message.references.size + message.targets.size +
       message.outcome?.artifacts.orEmpty().size
     val wideAssistant = !isUser && (message.text.length > 30 || contentCount > 0 || message.turnId != null || message.hasNonTextContent)

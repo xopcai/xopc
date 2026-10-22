@@ -12,7 +12,7 @@ export struct XopcSceneSwitch {
     Stack({ alignContent: Alignment.Start }) {
       Column().width(64).height(36).borderRadius(20).backgroundColor(this.colors.panel)
         .translate({ x: this.lifeMode ? 4 : 68 })
-        .animation({ duration: this.reduceMotion ? 0 : 540, curve: Curve.EaseOut })
+        .animation({ duration: this.reduceMotion ? 0 : 260, curve: Curve.LinearOutSlowIn })
       Row() {
         Button($r('app.string.home_mode_life')).width(64).height(44).padding(0)
           .fontSize(14).fontWeight(this.lifeMode ? FontWeight.Medium : FontWeight.Regular)

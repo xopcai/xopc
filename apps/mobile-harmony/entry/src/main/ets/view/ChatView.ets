@@ -91,6 +91,9 @@ export struct XopcChatView {
   @Event onSwitchScene: (life: boolean) => void = (_life: boolean): void => {};
   @Local sceneReady: boolean = true;
   private sceneTimer: number = -1;
+  @Local sceneDrag: number = 0;
+  private sceneSwiping: boolean = false;
+  private sceneGestureWidth: number = 0;
   @Event onPersonalAgentSaved: (record: XopcPersonalAgentRecord) => void = (_record: XopcPersonalAgentRecord): void => {};
   @Local personalSettingsOpen: boolean = false;
   @Local searchOpen: boolean = false;
@@ -257,7 +260,6 @@ export struct XopcChatView {
   private renderKeys: XopcChatRenderKeys = new XopcChatRenderKeys();
   private messagesScroller: Scroller = new Scroller();
   private scrollTimer: number = -1;
-  private layoutScrollAnimating: boolean = false;
   private messageScrollFromUser: boolean = false;
   private firstVisible: number = 0;
   @Local loadingOlder: boolean = false;
@@ -384,7 +386,7 @@ export struct XopcChatView {
   onMessageChange(): void {
     this.renderKeys.update(this.chat.selectedId, this.chat.rows, this.chat.liveRow);
     this.updateReplySpace();
-    if (this.layoutScrollAnimating || !this.visible || (!this.atBottom && !this.initialScrollPending) || this.loadingOlder || (this.chat.loading && !this.chat.cachedHistory)) return;
+    if (!this.visible || (!this.atBottom && !this.initialScrollPending) || this.loadingOlder || (this.chat.loading && !this.chat.cachedHistory)) return;
     if (this.scrollTimer !== -1) return;
     const conversationId = this.chat.selectedId;
     this.scrollTimer = setTimeout((): void => {
@@ -402,7 +404,7 @@ export struct XopcChatView {
     }, 50);
   }
   private resetMessagePosition(): void {
-    clearTimeout(this.scrollTimer); this.scrollTimer = -1; this.layoutScrollAnimating = false; this.messageScrollFromUser = false;
+    clearTimeout(this.scrollTimer); this.scrollTimer = -1; this.messageScrollFromUser = false;
     this.initialScrollPending = true; this.initialScrollAttempts = 0;
     this.atBottom = true; this.showJumpBottom = false;
     // A pending prepend may still update rows, but must not restore an obsolete reading anchor.
@@ -412,22 +414,17 @@ export struct XopcChatView {
   onMessageLayoutChange(): void {
     this.updateReplySpace();
     if (!this.visible || !this.atBottom || this.loadingOlder || this.chat.loading) return;
-    if (this.initialScrollPending || this.layout.reduceMotion) { this.onMessageChange(); return; }
-    clearTimeout(this.scrollTimer); this.scrollTimer = -1;
-    this.layoutScrollAnimating = true;
+    if (this.initialScrollPending) { this.onMessageChange(); return; }
+    clearTimeout(this.scrollTimer);
+    const conversationId = this.chat.selectedId;
     this.scrollTimer = setTimeout((): void => {
       this.scrollTimer = -1;
-      if (!this.visible || !this.atBottom || this.loadingOlder) { this.layoutScrollAnimating = false; return; }
+      if (!this.visible || !this.atBottom || this.loadingOlder || conversationId !== this.chat.selectedId) return;
+      if (this.messagesScroller.isAtEnd()) return;
       const last = this.presentationRows.length + (this.chat.hasOlder ? 1 : 0);
-      if (last < 0 || this.messagesScroller.isAtEnd()) { this.layoutScrollAnimating = false; return; }
-      // Align the trailing spacer so the composer clearance is included in the scroll target.
-      this.messagesScroller.scrollToIndex(last, true, ScrollAlign.END);
-    }, 16);
-  }
-  private finishLayoutScroll(): void {
-    if (!this.layoutScrollAnimating) return;
-    this.layoutScrollAnimating = false;
-    this.onMessageChange();
+      // Keyboard avoidance already animates the viewport; do not launch a competing scroll animation.
+      this.messagesScroller.scrollToIndex(last, false, ScrollAlign.END);
+    }, 0);
   }
   private onMessageViewportChange(previous: Area, current: Area): void {
     this.messageViewportHeight = Number(current.height);
@@ -461,7 +458,7 @@ export struct XopcChatView {
     if (this.messageScrollFromUser && offset < 0) {
       clearTimeout(this.scrollTimer); this.scrollTimer = -1; this.initialScrollPending = false;
     }
-    if (!this.messageScrollFromUser || this.layoutScrollAnimating
+    if (!this.messageScrollFromUser
       || this.loadingOlder || (this.chat.loading && !this.chat.cachedHistory) || state === ScrollState.Idle) return;
     this.atBottom = this.messagesScroller.isAtEnd();
     if (this.atBottom) { this.showJumpBottom = false; this.updateReplySpace(); }
@@ -853,20 +850,45 @@ export struct XopcChatView {
   onActivityChange(): void {
     this.visible = this.activePage;
     if (!this.activePage) this.clearSendFlight();
-    if (!this.activePage) { clearTimeout(this.scrollTimer); this.scrollTimer = -1; this.layoutScrollAnimating = false; }
+    if (!this.activePage) { clearTimeout(this.scrollTimer); this.scrollTimer = -1; }
     if (!this.activePage) { clearTimeout(this.composerFocusTimer); this.focusComposerOnMount = false; this.saveDraft(); this.palette.close(); this.voiceHeld = false; this.voiceDestination = 'send'; this.voice.cancel(); this.reader.leaveForeground(); this.setPanel(false); this.sheetOpen = false; this.options.pause(); this.prompt.pause(); this.connectionWait.pause(); this.chat.deactivate(); }
     else { this.bindBack(); this.chat.activate(); this.onHistoryReady(); this.onMessageChange(); this.options.resume(); this.prompt.resume(); if (this.layout.foreground) this.connectionWait.onReturn(); }
   }
   @Monitor('lifeMode')
   onSceneChange(): void {
     clearTimeout(this.sceneTimer);
+    this.sceneDrag = 0;
+    this.sceneSwiping = false;
     this.sceneReady = this.layout.reduceMotion;
     this.sceneTimer = setTimeout((): void => {
       if (this.disposed) return;
-      this.getUIContext().animateTo({ duration: this.layout.reduceMotion ? 0 : 540, curve: Curve.EaseOut }, (): void => {
+      this.getUIContext().animateTo({ duration: this.layout.reduceMotion ? 0 : 260, curve: Curve.LinearOutSlowIn }, (): void => {
         this.sceneReady = true;
       });
     }, 16);
+  }
+
+  private startSceneSwipe(event: GestureEvent): void {
+    const startX = (event.fingerList[0]?.localX ?? 0) - event.offsetX;
+    this.sceneSwiping = this.showSceneSwitch && this.activePage && !this.sceneOpening &&
+      startX >= 24 && startX <= this.sceneGestureWidth - 24 &&
+      Math.abs(event.offsetX) > Math.abs(event.offsetY) * 1.5 && (event.offsetX > 0) !== this.lifeMode;
+  }
+
+  private updateSceneSwipe(event: GestureEvent): void {
+    if (!this.sceneSwiping || this.layout.reduceMotion) return;
+    this.sceneDrag = Math.max(-48, Math.min(48, event.offsetX * 0.22));
+  }
+
+  private finishSceneSwipe(event?: GestureEvent): void {
+    const switchScene = this.sceneSwiping && event !== undefined && Math.abs(event.offsetX) >= 64 &&
+      Math.abs(event.offsetX) > Math.abs(event.offsetY) * 1.5 && (event.offsetX > 0) !== this.lifeMode &&
+      this.activePage && !this.sceneOpening;
+    this.sceneSwiping = false;
+    this.getUIContext().animateTo({ duration: this.layout.reduceMotion ? 0 : 260, curve: Curve.LinearOutSlowIn }, (): void => {
+      this.sceneDrag = 0;
+    });
+    if (switchScene) this.onSwitchScene(!this.lifeMode);
   }
   @Monitor('requestRevision', 'chat.sending')
   onTargetChange(): void {
@@ -1370,6 +1392,7 @@ export struct XopcChatView {
         if (Number(previous.height) !== Number(current.height)) this.onMessageChange();
       })
     }.id('chat-message-list').height('100%').width('100%').padding({ left: 20, right: 20 }).cachedCount(3)
+      .stackFromEnd(true)
       .contentStartOffset(this.embedded ? 0 : 72 + this.chatTopInset)
       .onAreaChange((previous: Area, current: Area): void => { this.onMessageViewportChange(previous, current); })
       .onScrollIndex((start: number, end: number): void => {
@@ -1379,11 +1402,10 @@ export struct XopcChatView {
         this.onMessageScrollSource(source);
       })
       .onDidScroll((offset: number, state: ScrollState): void => { this.onMessageScroll(offset, state); })
-      .onScrollStop((): void => { this.finishLayoutScroll(); })
       .onTouch((event: TouchEvent): void => {
         if (event.type === TouchType.Down) {
           if (this.sendFlightRowId) this.clearSendFlight();
-          this.layoutScrollAnimating = false; clearTimeout(this.scrollTimer); this.scrollTimer = -1; this.dismissComposer();
+          clearTimeout(this.scrollTimer); this.scrollTimer = -1; this.dismissComposer();
         } else if (event.type === TouchType.Up && this.initialScrollPending) this.onMessageChange();
       })
     if (!this.atBottom && this.showJumpBottom) {
@@ -1747,10 +1769,14 @@ export struct XopcChatView {
       Column() {
         this.conversation()
       }.layoutWeight(1).width('100%')
-        .opacity(this.sceneReady ? 1 : 0.3)
-        .translate({ y: this.sceneReady || this.layout.reduceMotion ? 0 : 16 })
-        .scale({ x: this.sceneReady || this.layout.reduceMotion ? 1 : 0.98,
-          y: this.sceneReady || this.layout.reduceMotion ? 1 : 0.98 })
+        .onAreaChange((_previous: Area, current: Area): void => { this.sceneGestureWidth = Number(current.width); })
+        .opacity(this.sceneReady ? 1 : 0.85)
+        .translate({ x: this.layout.reduceMotion ? 0 : this.sceneDrag + (this.sceneReady ? 0 : this.lifeMode ? -32 : 32) })
+        .gesture(PanGesture({ direction: PanDirection.Horizontal, fingers: 1, distance: 18 })
+          .onActionStart((event: GestureEvent): void => { this.startSceneSwipe(event); })
+          .onActionUpdate((event: GestureEvent): void => { this.updateSceneSwipe(event); })
+          .onActionEnd((event: GestureEvent): void => { this.finishSceneSwipe(event); })
+          .onActionCancel((): void => { this.finishSceneSwipe(); }))
       Column().width('100%').height(0)
         .bindSheet($$this.personalSettingsOpen, this.personalSettingsSheet, { height: '65%', dragBar: false,
           keyboardAvoidMode: SheetKeyboardAvoidMode.RESIZE_ONLY, showClose: false, backgroundColor: this.colors.panel })

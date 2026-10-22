@@ -63,12 +63,16 @@ struct AssistantView<Dock: View>: View {
     @State private var bottomScrollTask: Task<Void, Never>?
 
     var body: some View {
-        ZStack(alignment: .bottom) {
+        VStack(spacing: 0) {
             content
                 .accessibilityHidden(!isActive)
                 .id(scene)
-                .transition(reduceMotion ? .opacity : .opacity.combined(with: .scale(scale: 0.98)).combined(with: .offset(y: 16)))
-                .animation(reduceMotion ? nil : .spring(response: 0.54, dampingFraction: 0.92), value: scene)
+                .transition(reduceMotion ? .opacity : .asymmetric(
+                    insertion: .opacity.combined(with: .offset(x: scene == .life ? -32 : 32)),
+                    removal: .opacity))
+                .animation(reduceMotion ? nil : .easeOut(duration: 0.26), value: scene)
+                .modifier(ChatSceneSwipe(scene: scene, enabled: isActive && !sceneOpening && !isActionPanelExpanded,
+                    topInset: chatTopInset + 72, bottomInset: 24, onSelect: onSelectScene))
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .clipped()
                 .ignoresSafeArea(.container, edges: .top)
@@ -329,10 +333,10 @@ struct AssistantView<Dock: View>: View {
                     .padding()
                     .frame(maxWidth: 720)
                     .frame(maxWidth: .infinity)
-                    .frame(minHeight: max(0, viewport.size.height - bottomDockHeight - 24))
+                    .frame(minHeight: max(0, viewport.size.height - 24))
                 }
                 .contentMargins(.top, chatTopInset + 72, for: .scrollContent)
-                .contentMargins(.bottom, bottomDockHeight + 24, for: .scrollContent)
+                .contentMargins(.bottom, 24, for: .scrollContent)
             }
         } else {
             messageTimeline
@@ -345,7 +349,9 @@ struct AssistantView<Dock: View>: View {
             do { try await Task.sleep(for: .milliseconds(16)) } catch { return }
             bottomScrollTask = nil
             guard followingBottom, !userScrollingMessages else { return }
-            scroller.scrollTo("chat-bottom", anchor: .bottom)
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            withTransaction(transaction) { scroller.scrollTo("chat-bottom", anchor: .bottom) }
         }
     }
 
@@ -353,7 +359,8 @@ struct AssistantView<Dock: View>: View {
         GeometryReader { viewport in
             ScrollViewReader { scroller in
                 ScrollView {
-                    LazyVStack(spacing: 14) {
+                    // Exact row heights keep long replies anchored during keyboard resize.
+                    VStack(spacing: 14) {
                         if showsConversationTitleInTimeline, let conversation {
                             Text(verbatim: conversation.title)
                                 .mobileTextStyle(.rowTitle)
@@ -406,7 +413,7 @@ struct AssistantView<Dock: View>: View {
                             .onGeometryChange(for: CGFloat.self) { proxy in
                                 proxy.frame(in: .named("chat-scroll")).maxY
                             } action: { bottom in
-                                isAtBottom = bottom <= viewport.size.height - bottomDockHeight - replySpace.remaining + 32
+                                isAtBottom = bottom <= viewport.size.height - replySpace.remaining + 32
                                 if userScrollingMessages {
                                     followingBottom = isAtBottom
                                 }
@@ -419,7 +426,7 @@ struct AssistantView<Dock: View>: View {
                 }
                 .defaultScrollAnchor(.bottom)
                 .contentMargins(.top, chatTopInset + 72, for: .scrollContent)
-                .contentMargins(.bottom, bottomDockHeight + 24 + replySpace.remaining, for: .scrollContent)
+                .contentMargins(.bottom, 24 + replySpace.remaining, for: .scrollContent)
                 .coordinateSpace(name: "chat-scroll")
                 .onDisappear { bottomScrollTask?.cancel(); bottomScrollTask = nil }
                 .onChange(of: conversation?.id) { bottomScrollTask?.cancel(); bottomScrollTask = nil }
@@ -429,21 +436,13 @@ struct AssistantView<Dock: View>: View {
                         scheduleBottomScroll(scroller)
                     }
                 }
-                .onChange(of: replySpace.remaining) {
-                    if followingBottom {
-                        scheduleBottomScroll(scroller)
-                    }
-                }
                 .onChange(of: bottomDockHeight) {
                     updateReplySpace()
-                    if followingBottom {
-                        scheduleBottomScroll(scroller)
-                    }
                 }
                 .onChange(of: viewport.size.height) {
                     updateReplySpace()
-                    if followingBottom {
-                        scheduleBottomScroll(scroller)
+                    if followingBottom, !userScrollingMessages {
+                        scroller.scrollTo("chat-bottom", anchor: .bottom)
                     }
                 }
                 .modifier(ChatScrollInteraction(onStart: {
@@ -451,6 +450,7 @@ struct AssistantView<Dock: View>: View {
                     followingBottom = false
                     bottomScrollTask?.cancel(); bottomScrollTask = nil
                 }, onEnd: {
+                    guard userScrollingMessages else { return }
                     followingBottom = isAtBottom
                     userScrollingMessages = false
                     updateReplySpace()
@@ -480,7 +480,7 @@ struct AssistantView<Dock: View>: View {
                         .accessibilityLabel("回到最新消息")
                         .accessibilityValue(AppLocalization.string(state.isRunActive ? "正在回答" : "最新消息", locale: locale))
                         .accessibilityIdentifier("chat-jump-bottom")
-                        .padding(.bottom, bottomDockHeight + 8)
+                        .padding(.bottom, 8)
                     }
                 }
             }
@@ -777,7 +777,7 @@ struct AssistantView<Dock: View>: View {
             HStack(spacing: 0) {
                 Button {
                     showingMessageSearch = true
-                } label: { Image(systemName: "magnifyingglass").font(.system(size: 22)).frame(width: 44, height: 44) }
+                } label: { Image(systemName: "magnifyingglass").font(.system(size: 22)).frame(width: 44, height: 44).contentShape(.rect) }
                     .accessibilityLabel("搜索消息").accessibilityIdentifier("chat-header-search")
                 Button {
                     if isPersonalConversation {
@@ -785,7 +785,7 @@ struct AssistantView<Dock: View>: View {
                     } else {
                         showingSessionActions = true
                     }
-                } label: { Image(systemName: "gearshape").font(.system(size: 22)).frame(width: 44, height: 44) }
+                } label: { Image(systemName: "gearshape").font(.system(size: 22)).frame(width: 44, height: 44).contentShape(.rect) }
                     .accessibilityLabel(isPersonalConversation ? "配置助手" : "会话选项")
                     .accessibilityIdentifier("assistant-options")
             }.buttonStyle(.plain).padding(.horizontal, 4).frame(height: 48)

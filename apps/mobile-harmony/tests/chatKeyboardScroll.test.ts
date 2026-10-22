@@ -21,7 +21,7 @@ function setup() {
     visible: true, atBottom: true, initialScrollPending: false, loadingOlder: false,
     renderKeys: { update() {} }, chat: { selectedId: 'one', loading: false, cachedHistory: false }, scrollTimer: -1,
     olderGeneration: 0, initialScrollAttempts: 0,
-    layoutScrollAnimating: false, layout: { reduceMotion: false }, presentationRows: [{ id: 'last' }],
+    layout: { reduceMotion: false }, presentationRows: [{ id: 'last' }],
     messagesScroller: { scrollEdge: vi.fn(), scrollToIndex: vi.fn(), isAtEnd: vi.fn(() => false), currentOffset: () => ({ yOffset: 2000 }) },
     replyAnchorId: '', replySpaceHeight: 0, replyBudget: 0, messageViewportHeight: 720,
     bottomRegionHeight: 96, chatTopInset: 0, replyRowHeights: new Map(),
@@ -160,7 +160,7 @@ describe('chat keyboard viewport following', () => {
     view.onMessageViewportChange({ width: 375, height: 700 }, { width: 375, height: 420 });
     expect(view.messagesScroller.scrollEdge).not.toHaveBeenCalled();
     vi.runAllTimers();
-    expect(view.messagesScroller.scrollToIndex).toHaveBeenCalledExactlyOnceWith(1, true, 'end');
+    expect(view.messagesScroller.scrollToIndex).toHaveBeenCalledExactlyOnceWith(1, false, 'end');
   });
 
   it('coalesces viewport and composer changes and follows keyboard dismissal', () => {
@@ -203,22 +203,26 @@ describe('chat keyboard viewport following', () => {
     expect(source).toContain(".id('chat-reply-clearance')");
   });
 
-  it('does not interrupt a keyboard animation for every streaming token', () => {
+  it('never animates viewport corrections or holds back streaming behind a keyboard animation', () => {
     const view = setup();
     view.onMessageLayoutChange(); vi.runAllTimers();
+    expect(view.messagesScroller.scrollToIndex).toHaveBeenCalledExactlyOnceWith(1, false, 'end');
     view.onMessageChange(); vi.runAllTimers();
-    expect(view.messagesScroller.scrollEdge).not.toHaveBeenCalled();
-    view.finishLayoutScroll(); vi.runAllTimers();
     expect(view.messagesScroller.scrollEdge).toHaveBeenCalledOnce();
+  });
+
+  it('ignores a deferred keyboard correction after changing conversations', () => {
+    const view = setup();
+    view.onMessageLayoutChange(); view.chat.selectedId = 'two'; vi.runAllTimers();
+    expect(view.messagesScroller.scrollToIndex).not.toHaveBeenCalled();
   });
 
   it('respects reduced motion and includes the older-history header in the target', () => {
     const view = setup(); view.layout.reduceMotion = true;
     view.onMessageLayoutChange(); vi.runAllTimers();
-    expect(view.messagesScroller.scrollEdge).toHaveBeenCalledOnce();
-    expect(view.messagesScroller.scrollToIndex).not.toHaveBeenCalled();
+    expect(view.messagesScroller.scrollToIndex).toHaveBeenCalledExactlyOnceWith(1, false, 'end');
     view.layout.reduceMotion = false; view.chat.hasOlder = true;
     view.onMessageLayoutChange(); vi.runAllTimers();
-    expect(view.messagesScroller.scrollToIndex).toHaveBeenCalledWith(2, true, 'end');
+    expect(view.messagesScroller.scrollToIndex).toHaveBeenCalledWith(2, false, 'end');
   });
 });
