@@ -4,6 +4,13 @@ import SwiftUI
 // swiftlint:disable:next type_body_length
 struct AppRootView: View {
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var assistantScene: AssistantScene = .work
+    @State private var workConversation: ConversationSelection?
+    @State private var workTab: AppTab = .assistant
+    @State private var sceneOpening = false
+    @State private var sceneRequest = 0
+    @State private var sceneError: String?
     @State private var appState = AppState()
     @State private var realtimeVoiceCall = RealtimeVoiceCall()
     @State private var personalAgent = PersonalAgentState()
@@ -26,7 +33,7 @@ struct AppRootView: View {
                     onManage: appState.gatewayProfiles.isEmpty ? nil : { settingsPresented = true }
                 )
             } else {
-                tabShell
+                sceneShell
             }
         }
         .mobileTextStyle(.body)
@@ -108,6 +115,57 @@ struct AppRootView: View {
         }
     }
 
+    private var sceneAnimation: Animation? {
+        reduceMotion ? nil : .spring(response: 0.54, dampingFraction: 0.92)
+    }
+
+    private var sceneShell: some View {
+        tabShell
+            .alert("无法打开生活模式", isPresented: Binding(get: { sceneError != nil }, set: { if !$0 { sceneError = nil } })) {
+                Button("关闭", role: .cancel) { sceneError = nil }
+            } message: { Text(verbatim: sceneError ?? "") }
+            .onChange(of: appState.gatewayConfiguration) {
+                sceneRequest += 1
+                assistantScene = .work
+                workConversation = nil
+                sceneOpening = false
+            }
+    }
+
+    private func selectScene(_ scene: AssistantScene) {
+        sceneRequest += 1
+        let request = sceneRequest
+        guard scene == .life else {
+            sceneOpening = false
+            guard assistantScene == .life else { return }
+            withAnimation(sceneAnimation) {
+                appState.restoreConversation(workConversation)
+                appState.selectedTab = workTab
+                assistantScene = .work
+            }
+            return
+        }
+        guard assistantScene != .life, !sceneOpening, !personalAgent.isOpening else { return }
+        sceneOpening = true
+        sceneError = nil
+        let configuration = appState.gatewayConfiguration
+        let selection = appState.selectedConversation
+        let tab = appState.selectedTab
+        Task {
+            defer { if sceneRequest == request { sceneOpening = false } }
+            let record = await personalAgent.open(using: configuration)
+            guard sceneRequest == request, configuration == appState.gatewayConfiguration,
+                  selection == appState.selectedConversation, tab == appState.selectedTab else { return }
+            guard let record, record.isReady else { sceneError = personalAgent.errorMessage ?? "暂时无法打开生活模式，请重试。"; return }
+            workConversation = selection
+            workTab = tab
+            withAnimation(sceneAnimation) {
+                appState.openConversation(id: record.conversationId, title: record.displayName, agentId: record.agentId)
+                assistantScene = .life
+            }
+        }
+    }
+
     private var tabShell: some View {
         TabView(selection: $appState.selectedTab) {
             NavigationStack {
@@ -124,7 +182,8 @@ struct AppRootView: View {
                     onQuickChatHandled: appState.consumeQuickChatHandoff,
                     onPersonalAgentUpdated: personalAgent.applyProfile,
                     onOpenSettings: { settingsPresented = true },
-                    onInputFocusChanged: { assistantInputFocused = $0 }
+                    onInputFocusChanged: { assistantInputFocused = $0 },
+                    scene: assistantScene, sceneOpening: sceneOpening || personalAgent.isOpening, onSelectScene: selectScene
                 ) { composer, isActionPanelExpanded in
                     bottomDock(showTabs: !isActionPanelExpanded) { composer }
                 }
@@ -208,12 +267,7 @@ struct AppRootView: View {
     }
 
     private func openPersonalAgent() {
-        Task {
-            let configuration = appState.gatewayConfiguration
-            guard let record = await personalAgent.open(using: configuration),
-                  configuration == appState.gatewayConfiguration else { return }
-            appState.openConversation(id: record.conversationId, title: record.displayName, agentId: record.agentId)
-        }
+        selectScene(.life)
     }
 
     private func secondaryTab(@ViewBuilder content: () -> some View) -> some View {
@@ -239,7 +293,7 @@ struct AppRootView: View {
     ) -> some View {
         VStack(spacing: 0) {
             composer()
-            if showTabs, !keyboardVisible, !assistantInputFocused, !quickInputFocused {
+            if showTabs, assistantScene == .work, !keyboardVisible, !assistantInputFocused, !quickInputFocused {
                 HStack(spacing: 0) {
                     dockTab(.assistant, "助手", icon: "bubble.left")
                     dockTab(.conversations, "对话", icon: "bubble.left.and.bubble.right")
@@ -250,8 +304,10 @@ struct AppRootView: View {
                 .padding(.horizontal, 4)
                 .padding(.top, 8)
                 .padding(.bottom, 6)
+                .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
             }
         }
+        .animation(sceneAnimation, value: assistantScene)
         .frame(maxWidth: 720)
         .background(Color(uiColor: .systemBackground), in: .rect(cornerRadius: 24))
         .clipShape(.rect(cornerRadius: 24))

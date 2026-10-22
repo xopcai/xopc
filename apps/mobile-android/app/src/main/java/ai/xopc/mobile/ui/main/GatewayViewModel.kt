@@ -252,6 +252,9 @@ data class PersonalUiState(val gatewayId: String? = null, val summary: PersonalS
   val assertionDeletedRevision: Int = 0, val understandingChatError: Boolean = false)
 
 data class ConnectionUiState(
+  val lifeMode: Boolean = false,
+  val lifeModeError: Boolean = false,
+  val workConversationId: String? = null,
   val clarification: ClarificationRequest? = null,
   val clarificationBusy: Boolean = false,
   val clarificationError: String? = null,
@@ -561,16 +564,21 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
 
   fun openPersonalAgent() {
     val gatewayId = mutableState.value.profile?.gatewayId ?: return
-    if (mutableState.value.personal.agentCreating) return
+    if (mutableState.value.personal.agentCreating || mutableState.value.lifeMode) return
+    val workConversationId = mutableState.value.selectedConversationId
     personalAgentJob?.cancel()
-    mutableState.update { it.copy(personal = it.personal.copy(agentCreating = true,
+    mutableState.update { it.copy(lifeModeError = false, personal = it.personal.copy(gatewayId = gatewayId, agentCreating = true,
       agentLoading = false, agentError = false)) }
     personalAgentJob = viewModelScope.launch {
       try {
         val agent = runInterruptible(Dispatchers.IO) { personalAgentRepository.openOrCreate() }
         if (mutableState.value.profile?.gatewayId != gatewayId) return@launch
+        if (mutableState.value.selectedConversationId != workConversationId) {
+          mutableState.update { it.copy(personal = it.personal.copy(agentCreating = false)) }
+          return@launch
+        }
         mutableState.update { it.copy(personal = it.personal.copy(agent = agent, agentAvatar = null,
-          agentCreating = false, agentError = false)) }
+          agentCreating = false, agentError = false), lifeMode = true, workConversationId = workConversationId) }
         selectConversation(agent.conversationId)
         mutableState.update { it.copy(quickOpenedConversationId = agent.conversationId) }
         loadConversations()
@@ -584,10 +592,20 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
       } catch (error: CancellationException) { throw error }
       catch (_: Exception) {
         if (mutableState.value.profile?.gatewayId == gatewayId) mutableState.update {
-          it.copy(personal = it.personal.copy(agentCreating = false, agentError = true))
+          it.copy(lifeModeError = true, personal = it.personal.copy(agentCreating = false, agentError = true))
         }
       }
     }
+  }
+
+  fun switchLifeMode(life: Boolean) {
+    if (life) { openPersonalAgent(); return }
+    personalAgentJob?.cancel()
+    val current = mutableState.value
+    mutableState.update { it.copy(lifeMode = false, lifeModeError = false, workConversationId = null,
+      personal = it.personal.copy(agentCreating = false, agentLoading = false)) }
+    if (!current.lifeMode) return
+    current.workConversationId?.let(::selectConversation) ?: createConversation()
   }
 
   suspend fun loadPersonalProactivity(): ai.xopc.mobile.gateway.PersonalProactivitySettings {
