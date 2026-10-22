@@ -90,10 +90,7 @@ final class ChatKeyboardLayoutTests: XCTestCase {
         try await Task.sleep(for: .milliseconds(1200))
         let opening = recorder.frames
 
-        let image = XCTAttachment(image: UIGraphicsImageRenderer(bounds: controller.view.bounds).image { _ in
-            controller.view.drawHierarchy(in: controller.view.bounds, afterScreenUpdates: true)
-        })
-        image.name = "Chat with keyboard open"; image.lifetime = .keepAlways; add(image)
+        attachScreenshot(of: controller.view)
         recorder.frames = []
         window.endEditing(true)
         try await Task.sleep(for: .milliseconds(1200))
@@ -109,6 +106,15 @@ final class ChatKeyboardLayoutTests: XCTestCase {
         XCTAssertLessThanOrEqual(rebound(opening, increasing: true), 8, "Open frames: \(opening)")
         XCTAssertLessThanOrEqual(rebound(closing, increasing: false), 8, "Close frames: \(closing)")
         XCTAssertEqual(closing.last?.endGap ?? 999, initialEndGap, accuracy: 4)
+    }
+
+    private func attachScreenshot(of view: UIView) {
+        let image = XCTAttachment(image: UIGraphicsImageRenderer(bounds: view.bounds).image { _ in
+            view.drawHierarchy(in: view.bounds, afterScreenUpdates: true)
+        })
+        image.name = "Chat with keyboard open"
+        image.lifetime = .keepAlways
+        add(image)
     }
 
     private func descendants(_ view: UIView) -> [UIView] {
