@@ -1,6 +1,6 @@
 # Meet Ada, your personal Agent
 
-Ada is the personal Agent inside xopc. Start with a conversation, clarify a goal, or delegate something to do while you keep talking. You can also go directly to the workspace to handle files and projects. Both use the same xopc installation.
+Ada is the personal Agent inside xopc, helping across work and everyday life. Start with a conversation, clarify a goal, or delegate something to do while you keep talking. You can also go directly to the workspace to handle files and projects. Both use the same xopc, with more time to create and enjoy life.
 
 ## Before you begin
 

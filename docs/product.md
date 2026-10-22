@@ -1,14 +1,24 @@
 # Product philosophy
 
-> **Open-source, local-first personal AI. Chat with Ada, delegate tasks, and work with files and projects.**
+> **A better life, with AI.**
 
-xopc is personal AI for the one-person company. It runs in your environment, remembers your goals and context, and helps move work forward across conversations, tools, and time. Instead of starting over every time, xopc picks up where you left off—so it becomes more useful the longer you work together.
+xopc is an open-source, local-first personal AI assistant. It learns your habits and goals over time, remembers relevant context, and works with the tools you authorize to help across work and everyday life. Start with a conversation or hand over something to do, then pick up where you left off when you return.
 
-Working independently should not mean working alone. xopc brings memory, context, and intelligence into everything you do while keeping direction, judgment, creativity, and final decisions with you.
+## Our vision
 
-It is not an AI employee waiting for a job description, a coding agent confined to one repository, or a task manager that expects you to organize everything first. Models, Agents, Tasks, Projects, Workflows, and Automations are supporting capabilities. The product is the long-term relationship they make possible.
+A future where everyone has their own AI assistant—helping across work and everyday life, making more time to create, be with the people who matter, and enjoy the world around them.
 
-Ada is the personal Agent included in xopc: a conversation for goals, preferences, delegation, and returned results. The workspace is the direct path for files and projects. Both support independent work in the same installation.
+## Our mission
+
+To build AI that learns each person’s habits, goals, and circumstances, takes on tedious and time-consuming tasks, and helps turn ideas into action—leaving more time and energy for what matters to them.
+
+## One assistant across work and life
+
+Work and life are connected parts of being human. A personal assistant should understand you across both, combining the ability to get things done with an awareness of your habits, preferences, and what you need at the moment. The value of greater efficiency should be felt in everyday life: fewer repetitive steps, more opportunities to bring ideas to life, and more time of your own. How you spend that time is up to you.
+
+Ada is the personal Agent in xopc for ideas, preferences, delegation, and returned results. The workspace is the direct path for files and projects. Both belong to the same xopc and support the same person across work and life. Models, Agents, Tasks, Projects, Workflows, and Automations support this ongoing collaboration.
+
+xopc can run on a computer you choose, including a local computer or self-hosted server; mobile access connects to a running gateway. Multiple Agents and devices support different contexts without automatically sharing memory or permissions between computers.
 
 ## Let AI carry the execution. Keep the direction human.
 
@@ -31,7 +41,7 @@ xopc should not pretend to know someone on the day it is installed. Understandin
 Meet
 → explore authorized sources
 → form an initial understanding
-→ help with real work
+→ help with real tasks
 → earn trust
 → become gradually proactive
 ```
@@ -138,7 +148,7 @@ Message volume and automatic task count are not the north-star measure. The more
 
 Equally important: did xopc reduce the repeatable work the person had to carry without weakening their sense of control, and return meaningful time and attention to them?
 
-> **One person. One AI. A new kind of company.**
+> **More time to create and enjoy life.**
 
 ## Start from the current experience
 

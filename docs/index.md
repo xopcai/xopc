@@ -3,8 +3,8 @@ layout: home
 
 hero:
   name: xopc
-  text: Start here. Keep what matters moving.
-  tagline: "The xopc docs. Set up your assistant, start a conversation with Ada, then explore files, tasks, and automations at your own pace."
+  text: A better life, with AI.
+  tagline: "Your personal AI assistant for work and everyday life, with more time to create and enjoy life. Set up xopc, then explore conversations, files, tasks, and automations."
   image:
     src: /loopi.svg
     alt: Loopi, your friendly xopc companion
