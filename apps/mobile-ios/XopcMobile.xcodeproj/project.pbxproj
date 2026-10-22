@@ -37,6 +37,7 @@
 		2632753B8167A5E5D4DA6125 /* FileTransferViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32742BE06CC1325A893917D1 /* FileTransferViews.swift */; };
 		2A855B7F7DB0CD1387C96F8C /* DeviceToolCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F84248ED419B36DD8608455 /* DeviceToolCatalog.swift */; };
 		2CFC93707DB58FC6F2A706B4 /* ChatReadAloud.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4DCA230B1EC5EF582311498C /* ChatReadAloud.swift */; };
+		32E71E12C7270DDB4D3E43EA /* SceneSwitch.swift in Sources */ = {isa = PBXBuildFile; fileRef = C89C5E088928B1DCE8655F5A /* SceneSwitch.swift */; };
 		32FA57C62239FDD4B0942546 /* WorkflowRunsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 49D3FFDC5EC9808562E37CD0 /* WorkflowRunsView.swift */; };
 		33C2311208481B3D941883C1 /* AssistantActivityView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1FC117EC86A36C635A1735DC /* AssistantActivityView.swift */; };
 		35492C7001E41295356CEABB /* GatewayClient+Messaging.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC3AE6C51A0F9DED9CB7E227 /* GatewayClient+Messaging.swift */; };
@@ -73,6 +74,7 @@
 		68C7453B70AE2FC7001BF4BF /* MathMarkdownSyntax.swift in Sources */ = {isa = PBXBuildFile; fileRef = 057D67784AC965DF09436DF4 /* MathMarkdownSyntax.swift */; };
 		699CC30DBBE7B4F2147710D9 /* GatewayModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 365D817669F3BB7FB0BBC518 /* GatewayModels.swift */; };
 		6AB7335B00A8B68423B65D37 /* NoteDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82A4C345FC38C417144E0473 /* NoteDetailView.swift */; };
+		6FAF7F5E21E6300FBFC25523 /* LifeWorkModesUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C6BB940D8BFC8A678D756B5 /* LifeWorkModesUITests.swift */; };
 		7075EF115AFDDAC151413954 /* ProductModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = A335E20823371133F7733755 /* ProductModels.swift */; };
 		70A51C553D3BD1A9B6328751 /* ProgressRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2450CD82796FD3FEBDC2B244 /* ProgressRow.swift */; };
 		70E6F5D91CA3E55C8E0CF4C6 /* DeviceEndpointHost.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A268D1282EB841BE5D3ABED /* DeviceEndpointHost.swift */; };
@@ -215,6 +217,7 @@
 		390E698F139D6E95B996C88A /* FeatureStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeatureStateTests.swift; sourceTree = "<group>"; };
 		3A2DFD3FEE245285A0EB8A7E /* XopcMobile.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = XopcMobile.entitlements; sourceTree = "<group>"; };
 		3B5399156DB80FDFA0CC9CDF /* AssistantView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AssistantView.swift; sourceTree = "<group>"; };
+		3C6BB940D8BFC8A678D756B5 /* LifeWorkModesUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LifeWorkModesUITests.swift; sourceTree = "<group>"; };
 		3CD13446795B87ABD58F6150 /* RealtimeVoiceModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RealtimeVoiceModels.swift; sourceTree = "<group>"; };
 		3D00F5B1AC3954D6C80EB6A9 /* XopcMobileTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = XopcMobileTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		3E0EBB6C3755BDF0256201CB /* RealtimeVoiceAudio.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RealtimeVoiceAudio.swift; sourceTree = "<group>"; };
@@ -291,6 +294,7 @@
 		C51D60DE900F36685B391F3C /* AppState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppState.swift; sourceTree = "<group>"; };
 		C5A904020C27A972B2AB0E31 /* ProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileView.swift; sourceTree = "<group>"; };
 		C758AF7E274851B8EC276221 /* ChatAttachmentPreview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatAttachmentPreview.swift; sourceTree = "<group>"; };
+		C89C5E088928B1DCE8655F5A /* SceneSwitch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneSwitch.swift; sourceTree = "<group>"; };
 		C8F3C4A9808977FAC0A3DC5B /* GatewayModelsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GatewayModelsTests.swift; sourceTree = "<group>"; };
 		C9329B786AE1D1FD018CE9DE /* MessageBubble.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageBubble.swift; sourceTree = "<group>"; };
 		CB60309C971BEA5992A11DCA /* WorkflowModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowModels.swift; sourceTree = "<group>"; };
@@ -365,6 +369,7 @@
 				011E551E82084F5A029CEABC /* RealtimeVoiceCall.swift */,
 				2C60A2CB1866CC9F7F23E108 /* RealtimeVoiceCallView.swift */,
 				042BA7E2BDA922C2BFBC0686 /* ReferencePickerView.swift */,
+				C89C5E088928B1DCE8655F5A /* SceneSwitch.swift */,
 				DAD77AAEC5143C8A797A7321 /* StreamingMarkdownText.swift */,
 				875A5594A4C2C741BA3F20BB /* VoiceAttachmentRecorderView.swift */,
 			);
@@ -471,6 +476,7 @@
 		5DF46241615F105BC1CDAF72 /* XopcMobileUITests */ = {
 			isa = PBXGroup;
 			children = (
+				3C6BB940D8BFC8A678D756B5 /* LifeWorkModesUITests.swift */,
 				32D0A6A8ABC0CC160CB69A4E /* LiveExecutionUITests.swift */,
 				8D6F01B616406DFB58C80DA4 /* NoteEditorDiscardUITests.swift */,
 				07951C88BA92367C46247DD4 /* ParityAcceptanceUITests.swift */,
@@ -830,6 +836,7 @@
 				3A25E4796A05A1313991EDB5 /* RealtimeVoiceProtocol.swift in Sources */,
 				B9D5750B52B4DF56F06A1DE3 /* RealtimeVoiceTransport.swift in Sources */,
 				4B3E964A3F57C79C6706660F /* ReferencePickerView.swift in Sources */,
+				32E71E12C7270DDB4D3E43EA /* SceneSwitch.swift in Sources */,
 				4D5C1569A81D02F4CDB087C4 /* StreamingMarkdownText.swift in Sources */,
 				99DB6CB0AE86D341228B6BA3 /* TaskAcceptanceStatus.swift in Sources */,
 				AEE638D3156A5A8F43AB689B /* TaskDetailView.swift in Sources */,
@@ -847,6 +854,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				6FAF7F5E21E6300FBFC25523 /* LifeWorkModesUITests.swift in Sources */,
 				22746CB1D5B3B9671EACDF05 /* LiveExecutionUITests.swift in Sources */,
 				118AA826F5939736ADFE54B0 /* NoteEditorDiscardUITests.swift in Sources */,
 				2173016DCD4D634A7750BB32 /* ParityAcceptanceUITests.swift in Sources */,

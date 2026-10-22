@@ -828,4 +828,6 @@
     <string name="assistant_connection_interrupted">连接中断 · 正在恢复…</string>
     <string name="assistant_select_text">选择文本</string>
     <string name="progress_change_log">变更记录</string>
+    <string name="home_mode_life">生活</string>
+    <string name="home_mode_work">工作</string>
 </resources>

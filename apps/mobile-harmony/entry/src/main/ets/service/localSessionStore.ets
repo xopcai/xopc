@@ -70,7 +70,7 @@ export class XopcLocalSessionStore {
       await this.required().delete(new relationalStore.RdbPredicates('composers').equalTo('scope', scope));
     } else {
       const row: relationalStore.ValuesBucket = { scope, payload };
-      this.required().insert('composers', row, relationalStore.ConflictResolution.ON_CONFLICT_REPLACE);
+      await this.required().insert('composers', row, relationalStore.ConflictResolution.ON_CONFLICT_REPLACE);
     }
   }
 }

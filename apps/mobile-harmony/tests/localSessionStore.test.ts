@@ -48,4 +48,20 @@ describe('local session store', () => {
     await pending;
     expect(saved).toBe(true);
   });
+
+  it('keeps composer saves pending until SQLite commits so a mode switch can restore them', async () => {
+    let finishInsert!: (rowId: number) => void;
+    mocks.insert.mockImplementationOnce(() => new Promise<number>((resolve) => { finishInsert = resolve; }));
+    const store = new XopcLocalSessionStore();
+    await store.initialize({} as never);
+    let saved = false;
+    const pending = store.writeComposer('gateway:device:work', '{"text":"unfinished"}')
+      .then(() => { saved = true; });
+
+    await Promise.resolve();
+    expect(saved).toBe(false);
+    finishInsert(1);
+    await pending;
+    expect(saved).toBe(true);
+  });
 });

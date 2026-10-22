@@ -1,5 +1,7 @@
 {
   "string": [
+    { "name": "home_mode_life", "value": "生活" },
+    { "name": "home_mode_work", "value": "工作" },
     {"name":"recording_outcome_save_failed_title","value":"录音未能保存"},
     {"name":"recording_outcome_save_failed_body","value":"尚未确认可恢复的原音。请检查麦克风权限和可用存储空间后重新录制。"},
     {"name":"recording_outcome_cancelled_title","value":"已停止整理"},

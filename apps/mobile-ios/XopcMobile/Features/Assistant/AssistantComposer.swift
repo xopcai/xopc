@@ -23,6 +23,8 @@ struct AssistantComposer: View {
     let canReferenceFiles: Bool
     let canStartRealtimeVoice: Bool
     let isRunActive: Bool
+    var isSceneActive = true
+    var scene: AssistantScene? = nil
     let onInputFocusChanged: (Bool) -> Void
     let onStop: () -> Void
     let onSend: () -> Void
@@ -73,6 +75,7 @@ struct AssistantComposer: View {
                 AssistantActionPanel(
                     canReferenceFiles: canReferenceFiles,
                     canStartRealtimeVoice: canStartRealtimeVoice,
+                    canCreateConversation: scene != .life,
                     onSelect: selectAction,
                     onRealtimeVoice: { mode in
                         isActionPanelExpanded = false
@@ -84,6 +87,13 @@ struct AssistantComposer: View {
         }
         .padding(.horizontal, 8)
         .padding(.top, 8)
+        .onChange(of: isSceneActive) {
+            if !isSceneActive { isComposerFocused = false; isActionPanelExpanded = false }
+        }
+        .onChange(of: scene) {
+            isComposerFocused = false
+            isActionPanelExpanded = false
+        }
         .onChange(of: isComposerFocused) {
             onInputFocusChanged(isComposerFocused)
             if isComposerFocused {

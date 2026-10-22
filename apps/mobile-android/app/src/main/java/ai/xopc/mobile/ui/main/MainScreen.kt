@@ -135,6 +135,8 @@ import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.animation.core.Animatable
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.layout.onSizeChanged
@@ -536,6 +538,7 @@ fun MainScreen(
   onLoadPersonal: () -> Unit = {},
   onLoadPersonalAgent: () -> Unit = {},
   onOpenPersonalAgent: () -> Unit = {},
+  onSwitchLifeMode: (Boolean) -> Unit = {},
   onLoadPersonalVoiceChoices: () -> Unit = {},
   onUpdatePersonalAgentProfile: (String, String, String?, Boolean) -> Unit = { _, _, _, _ -> },
   onLoadPersonalProactivity: suspend () -> ai.xopc.mobile.gateway.PersonalProactivitySettings = { error("UNAVAILABLE") },
@@ -659,6 +662,16 @@ fun MainScreen(
     }
   }
   var selectedTab by rememberSaveable { mutableStateOf(HomeTab.Assistant) }
+  var workTab by rememberSaveable(connection.profile?.gatewayId) { mutableStateOf(HomeTab.Assistant) }
+  var wasLifeMode by rememberSaveable(connection.profile?.gatewayId) { mutableStateOf(false) }
+  LaunchedEffect(connection.lifeMode) {
+    if (connection.lifeMode && !wasLifeMode) { workTab = selectedTab; selectedTab = HomeTab.Assistant }
+    else if (!connection.lifeMode && wasLifeMode) selectedTab = workTab
+    wasLifeMode = connection.lifeMode
+  }
+  LaunchedEffect(connection.lifeModeError) {
+    if (connection.lifeModeError) Toast.makeText(context, R.string.personal_agent_error, Toast.LENGTH_SHORT).show()
+  }
   var wasUnpaired by remember { mutableStateOf(connection.profile == null) }
   LaunchedEffect(connection.profile?.gatewayId) {
     if (connection.profile == null) wasUnpaired = true
@@ -680,7 +693,11 @@ fun MainScreen(
       else R.string.assistant_save_note_error, Toast.LENGTH_SHORT).show()
     onMessageNoteFeedbackHandled(feedback)
   }
-  MainContent(selectedTab = selectedTab, onSelectTab = { selectedTab = it }, connection = connection,
+  MainContent(selectedTab = selectedTab, onSelectTab = {
+    if (connection.lifeMode) { workTab = it; onSwitchLifeMode(false) }
+    else if (connection.personal.agentCreating) onSwitchLifeMode(false)
+    selectedTab = it
+  }, connection = connection,
     onPair = onPair, onCancelPairing = onCancelPairing, onScanPairing = scanPairingCode,
     pairingScanning = pairingScannerOpen || pairingPermissionRequesting,
     pairingScanError = pairingScanError, onConversationSearchChange = onConversationSearchChange,
@@ -819,7 +836,7 @@ fun MainScreen(
     onRevokeShare = onRevokeShare, onExtendShare = onExtendShare,
     onLoadPersonal = onLoadPersonal,
     onLoadPersonalAgent = onLoadPersonalAgent,
-    onOpenPersonalAgent = onOpenPersonalAgent,
+    onOpenPersonalAgent = onOpenPersonalAgent, onSwitchLifeMode = onSwitchLifeMode,
     onLoadPersonalVoiceChoices = onLoadPersonalVoiceChoices,
     onUpdatePersonalAgentProfile = onUpdatePersonalAgentProfile,
     onLoadPersonalProactivity = onLoadPersonalProactivity,
@@ -1043,6 +1060,7 @@ internal fun MainContent(
   onLoadPersonal: () -> Unit = {},
   onLoadPersonalAgent: () -> Unit = {},
   onOpenPersonalAgent: () -> Unit = {},
+  onSwitchLifeMode: (Boolean) -> Unit = {},
   onLoadPersonalVoiceChoices: () -> Unit = {},
   onUpdatePersonalAgentProfile: (String, String, String?, Boolean) -> Unit = { _, _, _, _ -> },
   onLoadPersonalProactivity: suspend () -> ai.xopc.mobile.gateway.PersonalProactivitySettings = { error("UNAVAILABLE") },
@@ -1452,7 +1470,7 @@ internal fun MainContent(
               exit = shrinkVertically(animationSpec = tween(180), shrinkTowards = Alignment.Bottom) +
                 fadeOut(animationSpec = tween(180)), label = "assistant-actions") {
               AssistantActionPanel(
-                canCreate = !connection.creatingConversation && !connection.sending,
+                canCreate = !connection.lifeMode && !connection.creatingConversation && !connection.sending,
                 canReference = !connection.sending && connection.pendingInput == null,
                 canPick = !connection.sending && !connection.attachmentLoading &&
                   connection.pendingInput == null && connection.draftAttachments.size < 10,
@@ -1471,10 +1489,13 @@ internal fun MainContent(
                   onCreateConversation()
                 })
             }
-            if (!assistantActionsOpen && !imeVisible) XopcTabDock(selectedTab, onSelectTab,
-              grouped = true, attentionCount = attentionCount,
-              personalAgent = connection.personal.takeIf {
-                it.agent?.conversationId == connection.selectedConversationId })
+            AnimatedVisibility(visible = !connection.lifeMode && !assistantActionsOpen && !imeVisible,
+              enter = expandVertically(tween(540), expandFrom = Alignment.Bottom) + fadeIn(tween(360)),
+              exit = shrinkVertically(tween(540), shrinkTowards = Alignment.Bottom) + fadeOut(tween(300)),
+              label = "scene-work-dock") {
+              XopcTabDock(selectedTab, onSelectTab, grouped = true, attentionCount = attentionCount,
+                personalAgent = connection.personal.takeIf { it.agent?.conversationId == connection.selectedConversationId })
+            }
           }
         } else if (showQuick) {
           MainBottomSurface("secondary-bottom-surface") {
@@ -1566,6 +1587,7 @@ internal fun MainContent(
           onOpenExecution, onRetryExecution, onCloseExecution,
           onCopyMessageText, onSaveMessageAsNote, onReuseMessage, onRegenerateMessage,
           onLoadMessageMedia, onSpeechChunk, onOpenMessageTarget = { target ->
+            if (connection.lifeMode) onSwitchLifeMode(false)
             when (target.kind) {
               "note" -> { onOpenNote(target.id); onSelectTab(HomeTab.Notes) }
               "task" -> { onOpenProgressTask(target.id); onSelectTab(HomeTab.Progress) }
@@ -1587,7 +1609,7 @@ internal fun MainContent(
           assistantReferenceKind, { assistantReferenceKind = it },
           assistantReferenceQuery, { assistantReferenceQuery = it },
           { assistantActionsOpen = it }, onLoadPersonalVoiceChoices, onUpdatePersonalAgentProfile,
-          onLoadPersonalProactivity, onSavePersonalProactivity, onUploadPersonalAvatar, personalModelRequestRevision, { personalModelRequestRevision = 0 })
+          onLoadPersonalProactivity, onSavePersonalProactivity, onUploadPersonalAvatar, personalModelRequestRevision, { personalModelRequestRevision = 0 }, onSwitchLifeMode = onSwitchLifeMode)
         else ConversationsScreen(connection, rootInsets, bottomChromeHeight,
           onConversationSearchChange,
           onRefreshConversations, onLoadMoreConversations, {
@@ -2472,7 +2494,7 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
   onUpdateAgentProfile: (String, String, String?, Boolean) -> Unit = { _, _, _, _ -> },
   onLoadProactivity: suspend () -> ai.xopc.mobile.gateway.PersonalProactivitySettings = { error("UNAVAILABLE") },
   onSaveProactivity: suspend (ai.xopc.mobile.gateway.PersonalProactivitySettings) -> ai.xopc.mobile.gateway.PersonalProactivitySettings = { error("UNAVAILABLE") },
-  onUploadAvatar: suspend (ByteArray) -> Unit = {}, personalModelRequestRevision: Int = 0, onPersonalModelRequestHandled: () -> Unit = {}) {
+  onUploadAvatar: suspend (ByteArray) -> Unit = {}, personalModelRequestRevision: Int = 0, onPersonalModelRequestHandled: () -> Unit = {}, onSwitchLifeMode: (Boolean) -> Unit = {}) {
   val focusManager = LocalFocusManager.current
   val keyboardController = LocalSoftwareKeyboardController.current
   val uriHandler = LocalUriHandler.current
@@ -2488,6 +2510,15 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
   LaunchedEffect(connection.selectedConversationId, connection.historyLoading) {
     if (connection.selectedConversationId != null && !connection.historyLoading && !connection.chatError &&
       connection.messages.isEmpty() && connection.context == null && !connection.contextError) onReloadContext()
+  }
+  val sceneEntrance = remember { Animatable(0f) }
+  var previousScene by remember { mutableStateOf(connection.lifeMode) }
+  val motionAllowed = rememberMotionAllowed()
+  LaunchedEffect(connection.lifeMode) {
+    if (previousScene == connection.lifeMode) return@LaunchedEffect
+    previousScene = connection.lifeMode
+    if (motionAllowed) { sceneEntrance.snapTo(1f); sceneEntrance.animateTo(0f, tween(540)) }
+    else sceneEntrance.snapTo(0f)
   }
   val selected = connection.conversations.firstOrNull { it.id == connection.selectedConversationId }
   var personalSettingsOpen by remember(connection.selectedConversationId) { mutableStateOf(false) }
@@ -2690,7 +2721,12 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
         }
       }
     }.testTag("assistant-content-area")) {
-  Column(modifier = Modifier.fillMaxSize().padding(start = 12.dp, end = 12.dp, bottom = 16.dp),
+  Column(modifier = Modifier.fillMaxSize().graphicsLayer {
+    alpha = 1f - sceneEntrance.value * 0.7f
+    translationY = sceneEntrance.value * 16.dp.toPx()
+    scaleX = 1f - sceneEntrance.value * 0.02f
+    scaleY = scaleX
+  }.padding(start = 12.dp, end = 12.dp, bottom = 16.dp),
     verticalArrangement = Arrangement.spacedBy(12.dp)) {
     if (connection.selectedConversationId == null) {
       Spacer(Modifier.height(chatTopInset + 76.dp))
@@ -2828,29 +2864,27 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
       .background(MaterialTheme.colorScheme.background).testTag("chat-status-bar-background"))
     Row(modifier = Modifier.align(Alignment.TopCenter).fillMaxWidth()
       .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top))
-      .padding(horizontal = 20.dp, vertical = 16.dp).testTag("chat-floating-header"), horizontalArrangement = Arrangement.SpaceBetween,
+      .padding(horizontal = 12.dp, vertical = 16.dp).testTag("chat-floating-header"), horizontalArrangement = Arrangement.SpaceBetween,
       verticalAlignment = Alignment.CenterVertically) {
       val personalAgent = connection.personal.agent?.takeIf { it.state == "ready" &&
         it.conversationId == connection.selectedConversationId }
-      Box(Modifier.weight(1f)) {
+      Box {
       Row(Modifier.height(48.dp).clip(CircleShape)
         .background(MaterialTheme.colorScheme.surfaceContainer)
         .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), CircleShape)
-        .clickable { if (personalAgent != null) personalSettingsOpen = true else agentPickerOpen = true }
-        .padding(start = 6.dp, end = 14.dp), verticalAlignment = Alignment.CenterVertically,
+        .clickable(enabled = !connection.lifeMode) { if (personalAgent != null) personalSettingsOpen = true else agentPickerOpen = true }
+        .testTag("chat-agent-switch")
+        .padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         if (personalAgent != null) PersonalAgentAvatar(connection.personal.agentAvatar,
           personalAgent.appearance, 36.dp, active = true)
         else AgentAvatar(connection.agentAvatars[connection.selectedAgentId],
           connection.agents.firstOrNull { it.id == connection.selectedAgentId }?.avatar.orEmpty(),
           connection.selectedAgentId, 36.dp, true, Modifier.testTag("chat-agent-avatar"))
-        Text(personalAgent?.displayName ?: selected?.takeUnless { it.isLocalDraft }?.title
-          ?: stringResource(R.string.assistant_new_conversation),
-          style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Medium,
-          maxLines = 1, overflow = TextOverflow.Ellipsis)
+
       }
       }
-      Spacer(Modifier.width(12.dp))
+      SceneSwitch(connection.lifeMode, connection.personal.agentCreating, onSwitchLifeMode)
       Row(Modifier.height(48.dp).clip(CircleShape)
         .background(MaterialTheme.colorScheme.surfaceContainer)
         .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), CircleShape)
