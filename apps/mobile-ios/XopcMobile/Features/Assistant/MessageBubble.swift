@@ -70,7 +70,9 @@ struct MessageBubble: View {
         })
         // Leave long-press recognition to the system context menu.
         .onChange(of: isDetailPresented || isExecutionPresented || isActionsPresented) { _, presented in
-            if presented { onReading() }
+            if presented {
+                onReading()
+            }
         }
         .sheet(isPresented: $isDetailPresented) {
             MessageDetailView(
@@ -348,7 +350,6 @@ private struct MessageContextMenu<Items: View>: ViewModifier {
     let onOpen: () -> Void
     @ViewBuilder let items: () -> Items
 
-    @ViewBuilder
     func body(content: Content) -> some View {
         if enabled {
             content

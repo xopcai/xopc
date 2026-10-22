@@ -76,7 +76,7 @@ struct ChatSceneSwipe: ViewModifier {
     }
 }
 
-// UIKit provides directional arbitration with nested ScrollViews and WebKit content.
+/// UIKit provides directional arbitration with nested ScrollViews and WebKit content.
 private struct SceneSwipeSurface: UIViewRepresentable {
     let scene: AssistantScene?
     let enabled: Bool
@@ -84,19 +84,30 @@ private struct SceneSwipeSurface: UIViewRepresentable {
     let bottomInset: CGFloat
     let onDrag: (CGFloat, Bool) -> Void
 
-    func makeCoordinator() -> Coordinator { Coordinator(self) }
+    func makeCoordinator() -> Coordinator {
+        Coordinator(self)
+    }
+
     func makeUIView(context: Context) -> Surface {
         let surface = Surface()
         surface.isUserInteractionEnabled = false
         surface.onWindowChange = { [weak coordinator = context.coordinator] surface in coordinator?.attach(surface) }
         return surface
     }
-    func updateUIView(_ view: Surface, context: Context) { context.coordinator.parent = self }
-    static func dismantleUIView(_ view: Surface, coordinator: Coordinator) { coordinator.detach() }
+
+    func updateUIView(_: Surface, context: Context) {
+        context.coordinator.parent = self
+    }
+
+    static func dismantleUIView(_: Surface, coordinator: Coordinator) {
+        coordinator.detach()
+    }
 
     final class Surface: UIView {
         var onWindowChange: ((Surface) -> Void)?
-        override func didMoveToWindow() { super.didMoveToWindow(); onWindowChange?(self) }
+        override func didMoveToWindow() {
+            super.didMoveToWindow(); onWindowChange?(self)
+        }
     }
 
     final class Coordinator: NSObject, UIGestureRecognizerDelegate {
@@ -104,7 +115,10 @@ private struct SceneSwipeSurface: UIViewRepresentable {
         weak var surface: Surface?
         private var startingScene: AssistantScene?
         private lazy var pan = UIPanGestureRecognizer(target: self, action: #selector(handlePan))
-        init(_ parent: SceneSwipeSurface) { self.parent = parent }
+        init(_ parent: SceneSwipeSurface) {
+            self.parent = parent
+        }
+
         func attach(_ surface: Surface) {
             detach()
             self.surface = surface
@@ -113,9 +127,12 @@ private struct SceneSwipeSurface: UIViewRepresentable {
             pan.delegate = self
             surface.window?.addGestureRecognizer(pan)
         }
-        func detach() { pan.view?.removeGestureRecognizer(pan) }
 
-        func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+        func detach() {
+            pan.view?.removeGestureRecognizer(pan)
+        }
+
+        func gestureRecognizerShouldBegin(_: UIGestureRecognizer) -> Bool {
             guard parent.enabled, let scene = parent.scene, let surface, let window = surface.window,
                   window.rootViewController?.presentedViewController == nil else { return false }
             let translation = pan.translation(in: surface)
@@ -128,9 +145,12 @@ private struct SceneSwipeSurface: UIViewRepresentable {
                   (velocity.x > 0) == (scene == .work) else { return false }
             var target = window.hitTest(pan.location(in: window), with: nil)
             while let view = target {
-                if view is WKWebView || view is UITextView || view is UITextField || view is UIControl { return false }
+                if view is WKWebView || view is UITextView || view is UITextField || view is UIControl {
+                    return false
+                }
                 if let scroll = view as? UIScrollView,
-                   scroll.contentSize.width + scroll.adjustedContentInset.left + scroll.adjustedContentInset.right > scroll.bounds.width + 1 {
+                   scroll.contentSize.width + scroll.adjustedContentInset.left + scroll.adjustedContentInset.right > scroll.bounds.width + 1
+                {
                     return false
                 }
                 target = view.superview
@@ -138,10 +158,13 @@ private struct SceneSwipeSurface: UIViewRepresentable {
             startingScene = scene
             return true
         }
-        func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer,
-                               shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
+
+        func gestureRecognizer(_: UIGestureRecognizer,
+                               shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool
+        {
             otherGestureRecognizer is UIPanGestureRecognizer
         }
+
         @objc private func handlePan() {
             let distance = pan.translation(in: surface)
             switch pan.state {

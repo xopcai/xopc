@@ -1,6 +1,6 @@
 import Foundation
-import Testing
 import SwiftUI
+import Testing
 import UIKit
 import XCTest
 @testable import XopcMobile
@@ -47,8 +47,13 @@ struct ChatReplySpaceTests {
 
 @MainActor
 final class ChatKeyboardLayoutTests: XCTestCase {
-    func testWorkKeyboardDoesNotReverseTailFollowing() async throws { try await verifyKeyboard(scene: .work) }
-    func testLifeKeyboardDoesNotReverseTailFollowing() async throws { try await verifyKeyboard(scene: .life) }
+    func testWorkKeyboardDoesNotReverseTailFollowing() async throws {
+        try await verifyKeyboard(scene: .work)
+    }
+
+    func testLifeKeyboardDoesNotReverseTailFollowing() async throws {
+        try await verifyKeyboard(scene: .life)
+    }
 
     private func verifyKeyboard(scene mode: AssistantScene) async throws {
         let configuration = GatewayConfiguration(baseURL: URL(string: "http://127.0.0.1:18791/keyboard")!, token: "synthetic-keyboard-fixture")
@@ -70,17 +75,19 @@ final class ChatKeyboardLayoutTests: XCTestCase {
             scroll = views.compactMap { $0 as? UIScrollView }.filter { $0.contentSize.height > $0.bounds.height + 500 }
                 .max { $0.bounds.width * $0.bounds.height < $1.bounds.width * $1.bounds.height }
             editor = views.first { ($0 as? UITextView)?.isEditable == true || $0 is UITextField }
-            if let scroll, editor != nil, scroll.contentOffset.y > 100 { break }
+            if let scroll, editor != nil, scroll.contentOffset.y > 100 {
+                break
+            }
             try await Task.sleep(for: .milliseconds(50))
         }
         let timeline = try XCTUnwrap(scroll)
         let input = try XCTUnwrap(editor)
-        try await Task.sleep(for: .milliseconds(2_000))
+        try await Task.sleep(for: .milliseconds(2000))
         let initialEndGap = timeline.contentSize.height + timeline.adjustedContentInset.bottom - timeline.bounds.maxY
         let recorder = KeyboardFrameRecorder(scroll: timeline)
         recorder.start()
         XCTAssertTrue(input.becomeFirstResponder())
-        try await Task.sleep(for: .milliseconds(1_200))
+        try await Task.sleep(for: .milliseconds(1200))
         let opening = recorder.frames
 
         let image = XCTAttachment(image: UIGraphicsImageRenderer(bounds: controller.view.bounds).image { _ in
@@ -89,7 +96,7 @@ final class ChatKeyboardLayoutTests: XCTestCase {
         image.name = "Chat with keyboard open"; image.lifetime = .keepAlways; add(image)
         recorder.frames = []
         window.endEditing(true)
-        try await Task.sleep(for: .milliseconds(1_200))
+        try await Task.sleep(for: .milliseconds(1200))
         recorder.stop()
         let closing = recorder.frames
         let trace = XCTAttachment(string: "opening=\(opening)\nclosing=\(closing)")
@@ -104,7 +111,10 @@ final class ChatKeyboardLayoutTests: XCTestCase {
         XCTAssertEqual(closing.last?.endGap ?? 999, initialEndGap, accuracy: 4)
     }
 
-    private func descendants(_ view: UIView) -> [UIView] { [view] + view.subviews.flatMap(descendants) }
+    private func descendants(_ view: UIView) -> [UIView] {
+        [view] + view.subviews.flatMap(descendants)
+    }
+
     private func rebound(_ frames: [KeyboardFrameRecorder.Frame], increasing: Bool) -> CGFloat {
         var furthest = frames.first?.offset ?? 0
         var result: CGFloat = 0
@@ -124,14 +134,17 @@ private struct KeyboardChatFixture: View {
     var body: some View {
         NavigationStack {
             AssistantView(configuration: configuration, isActive: true, realtimeVoiceCall: call,
-                conversation: .existing(id: "11111111-1111-4111-8111-111111111111", title: "Keyboard fixture", agentId: "main"),
-                personalAgent: nil, quickChatHandoff: nil, onStartConversation: { _ in },
-                onStartScopedConversation: { _, _, _ in }, onConversationUpdated: { _ in },
-                onQuickChatHandled: { _ in }, onPersonalAgentUpdated: { _ in }, onOpenSettings: {},
-                onInputFocusChanged: { _ in }, scene: scene) { composer, _ in
+                          conversation: .existing(id: "11111111-1111-4111-8111-111111111111", title: "Keyboard fixture", agentId: "main"),
+                          personalAgent: nil, quickChatHandoff: nil, onStartConversation: { _ in },
+                          onStartScopedConversation: { _, _, _ in }, onConversationUpdated: { _ in },
+                          onQuickChatHandled: { _ in }, onPersonalAgentUpdated: { _ in }, onOpenSettings: {},
+                          onInputFocusChanged: { _ in }, scene: scene)
+            { composer, _ in
                 VStack(spacing: 0) {
                     composer
-                    if scene == .work, !keyboardVisible { Color.clear.frame(height: 66) }
+                    if scene == .work, !keyboardVisible {
+                        Color.clear.frame(height: 66)
+                    }
                 }.background(Color(uiColor: .systemBackground))
             }
         }
@@ -145,21 +158,31 @@ private final class KeyboardFrameRecorder: NSObject {
         let offset: CGFloat
         let endGap: CGFloat
         let height: CGFloat
-        var description: String { "(offset:\(offset.rounded()), gap:\(endGap.rounded()), height:\(height.rounded()))" }
+        var description: String {
+            "(offset:\(offset.rounded()), gap:\(endGap.rounded()), height:\(height.rounded()))"
+        }
     }
+
     let scroll: UIScrollView
     var frames: [Frame] = []
     private var link: CADisplayLink?
-    init(scroll: UIScrollView) { self.scroll = scroll }
+    init(scroll: UIScrollView) {
+        self.scroll = scroll
+    }
+
     func start() {
         let link = CADisplayLink(target: self, selector: #selector(sample))
         link.add(to: .main, forMode: .common); self.link = link
         sample()
     }
-    func stop() { link?.invalidate(); link = nil }
+
+    func stop() {
+        link?.invalidate(); link = nil
+    }
+
     @objc private func sample() {
         let bounds = scroll.layer.presentation()?.bounds ?? scroll.bounds
         frames.append(Frame(offset: bounds.minY, endGap: scroll.contentSize.height + scroll.adjustedContentInset.bottom - bounds.maxY,
-            height: bounds.height))
+                            height: bounds.height))
     }
 }
