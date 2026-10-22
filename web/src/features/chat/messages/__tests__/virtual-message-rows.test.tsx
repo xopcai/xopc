@@ -32,10 +32,14 @@ describe('virtual history interaction window', () => {
     expect(state.viewport).toEqual({ top: 800, bottom: 800 });
   });
 
-  it('retains selected text until the selection is cleared', () => {
+  it('retains the traversed selection window without measuring the whole history', () => {
     const range = document.createRange(); range.selectNodeContents(container.querySelector('p')!);
     act(() => { window.getSelection()?.addRange(range); document.dispatchEvent(new Event('selectionchange')); });
-    expect(state.viewport).toBe(100_000_000);
+    expect(state.viewport).toEqual({ top: 800, bottom: 800 });
+    act(() => { container.scrollTop = 1200; container.dispatchEvent(new Event('scroll')); });
+    expect(state.viewport).toEqual({ top: 2000, bottom: 800 });
+    act(() => { container.scrollTop = 400; container.dispatchEvent(new Event('scroll')); });
+    expect(state.viewport).toEqual({ top: 1200, bottom: 1600 });
     act(() => { window.getSelection()?.removeAllRanges(); document.dispatchEvent(new Event('selectionchange')); });
     expect(state.viewport).toEqual({ top: 800, bottom: 800 });
   });

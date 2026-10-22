@@ -1,3 +1,4 @@
+import { mountChatFileDisclosureFixture } from './file-disclosure-fixture';
 import { useRef } from 'react';
 import { runChatRevealFixture, type ChatRevealOptions, type ChatRevealReport } from './reveal-fixture';
 import { flushSync } from 'react-dom';
@@ -28,6 +29,7 @@ const fixtures = {
 
 declare global {
   interface Window {
+    mountChatFileDisclosureFixture: (count: number) => void;
     runChatRevealFixture: (options: ChatRevealOptions) => Promise<ChatRevealReport>;
     runChatCompletionFixture: (options: ChatCompletionOptions) => Promise<ChatCompletionReport>;
     runChatRenderingFixture: (name: keyof typeof fixtures) => Promise<{
@@ -37,6 +39,7 @@ declare global {
   }
 }
 
+window.mountChatFileDisclosureFixture = count => mountChatFileDisclosureFixture(root, count);
 const registerContent = () => {};
 window.runChatRevealFixture = options => runChatRevealFixture(root, options);
 window.runChatCompletionFixture = options => runChatCompletionFixture(root, options);
