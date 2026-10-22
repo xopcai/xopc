@@ -207,7 +207,7 @@ describe('chat bottom region composition', () => {
     expect(personal).not.toContain("padding({ left: 20, right: 20, bottom: 28 })");
   });
 
-  it('uses a dedicated conversation tab and leaves the system back edge unobstructed', () => {
+  it('uses a dedicated conversation tab and reserves the system back edge for navigation', () => {
     expect(home).toContain('XopcSessionsView({ embedded: true');
     expect(home).toContain('this.openConversationFromList(id, false)');
     expect(home).toContain('this.openConversationFromList(id, true)');
@@ -215,7 +215,7 @@ describe('chat bottom region composition', () => {
     expect(sessions).toContain('.virtualScroll({ totalCount: this.rows.length })');
     expect(sessions).toContain('.cachedCount(5)');
     expect(chat).not.toContain('chat-drawer');
-    expect(chat).not.toContain('PanGesture({ direction: PanDirection.Horizontal');
+    expect(chat).toContain('startX >= 24 && startX <= this.sceneGestureWidth - 24');
   });
 
   it('centers the conversation create icon without relying on a clipped text glyph', () => {
