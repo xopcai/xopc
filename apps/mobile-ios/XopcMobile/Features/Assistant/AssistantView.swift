@@ -69,10 +69,11 @@ struct AssistantView<Dock: View>: View {
                 .id(scene)
                 .transition(reduceMotion ? .opacity : .asymmetric(
                     insertion: .opacity.combined(with: .offset(x: scene == .life ? -32 : 32)),
-                    removal: .opacity))
+                    removal: .opacity
+                ))
                 .animation(reduceMotion ? nil : .easeOut(duration: 0.26), value: scene)
                 .modifier(ChatSceneSwipe(scene: scene, enabled: isActive && !sceneOpening && !isActionPanelExpanded,
-                    topInset: chatTopInset + 72, bottomInset: 24, onSelect: onSelectScene))
+                                         topInset: chatTopInset + 72, bottomInset: 24, onSelect: onSelectScene))
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .clipped()
                 .ignoresSafeArea(.container, edges: .top)
