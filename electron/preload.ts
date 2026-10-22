@@ -93,7 +93,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
       >,
     chooseAppAndOpenFileResource: (fileResourceId: string) =>
       ipcRenderer.invoke("shell:choose-app-and-open-file-resource", fileResourceId) as Promise<
-        { ok: true } | { ok: false; error: string; code?: string }
+        { ok: true; app?: { name: string; path: string; iconDataUrl?: string } } | { ok: false; error: string; code?: string }
       >,
     openPathWithApp: (filePath: string, appPath: string) =>
       ipcRenderer.invoke(
@@ -122,12 +122,14 @@ contextBridge.exposeInMainWorld("electronAPI", {
         filePath,
       ) as Promise<{
         recommended: Array<{
+          iconDataUrl?: string;
           name: string;
           path: string;
           platform: string;
           source: "known";
         }>;
         recent: Array<{
+          iconDataUrl?: string;
           name: string;
           path: string;
           platform: string;
@@ -140,12 +142,14 @@ contextBridge.exposeInMainWorld("electronAPI", {
         fileResourceId,
       ) as Promise<{
         recommended: Array<{
+          iconDataUrl?: string;
           name: string;
           path: string;
           platform: string;
           source: "known";
         }>;
         recent: Array<{
+          iconDataUrl?: string;
           name: string;
           path: string;
           platform: string;

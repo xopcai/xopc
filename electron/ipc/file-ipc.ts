@@ -61,10 +61,11 @@ export type ShellOpenErrorCode =
   | 'OPEN_FAILED';
 
 export type ShellOpenResult =
-  | { ok: true }
+  | { ok: true; app?: { name: string; path: string; iconDataUrl?: string } }
   | { ok: false; error: string; code: ShellOpenErrorCode };
 
 export type RecentOpenWithApp = {
+  iconDataUrl?: string;
   name: string;
   path: string;
   platform: NodeJS.Platform;
@@ -72,6 +73,7 @@ export type RecentOpenWithApp = {
 };
 
 export type RecommendedOpenWithApp = {
+  iconDataUrl?: string;
   name: string;
   path: string;
   platform: NodeJS.Platform;
@@ -549,6 +551,18 @@ async function getRecommendedOpenWithAppsForPath(filePath: string): Promise<Reco
   return out.slice(0, 8);
 }
 
+/** Application icons are presentation data; icon failures must not hide open actions. */
+async function withApplicationIcons<T extends { path: string }>(apps: T[]): Promise<Array<T & { iconDataUrl?: string }>> {
+  return Promise.all(apps.map(async (entry) => {
+    try {
+      const icon = await app.getFileIcon(entry.path, { size: 'small' });
+      return icon.isEmpty() ? entry : { ...entry, iconDataUrl: icon.toDataURL() };
+    } catch {
+      return entry;
+    }
+  }));
+}
+
 /** Validate a workspace file or directory before passing it to an external application. */
 async function validateOpenWithTargetPath(targetPath: string): Promise<ShellOpenResult> {
   if (typeof targetPath !== 'string' || !isAbsolute(targetPath)) {
@@ -625,9 +639,9 @@ async function spawnOpenWithApp(filePath: string, appPath: string): Promise<Shel
     child.once('error', (err) => {
       resolve({ ok: false, code: 'OPEN_FAILED', error: err.message });
     });
-    child.once('spawn', () => {
+    child.once('spawn', async () => {
       child.unref();
-      void recordRecentOpenWithApp(appPath).catch(() => undefined);
+      await recordRecentOpenWithApp(appPath).catch(() => undefined);
       resolve({ ok: true });
     });
   });
@@ -897,7 +911,10 @@ export function registerFileIpc(ipcMain: IpcMain, options: FileIpcOptions = {}):
     });
     const appPath = res.filePaths[0];
     if (res.canceled || !appPath) return { ok: false, code: 'CANCELED', error: 'Application selection canceled.' };
-    return spawnOpenWithApp(resolved.path, appPath);
+    const result = await spawnOpenWithApp(resolved.path, appPath);
+    if (!result.ok) return result;
+    const [selectedApp] = await withApplicationIcons([{ name: appNameFromPath(appPath), path: appPath }]);
+    return { ok: true, app: selectedApp };
   });
 
   ipcMain.handle(
@@ -933,8 +950,8 @@ export function registerFileIpc(ipcMain: IpcMain, options: FileIpcOptions = {}):
     ]);
     const recommendedPaths = new Set(recommended.map((app) => app.path));
     return {
-      recommended,
-      recent: recent.filter((app) => !recommendedPaths.has(app.path)),
+      recommended: await withApplicationIcons(recommended),
+      recent: await withApplicationIcons(recent.filter((app) => !recommendedPaths.has(app.path))),
     };
   });
 
@@ -949,7 +966,11 @@ export function registerFileIpc(ipcMain: IpcMain, options: FileIpcOptions = {}):
       readRecentOpenWithApps(),
     ]);
     const recommendedPaths = new Set(recommended.map((app) => app.path));
-    return { recommended, recent: recent.filter((app) => !recommendedPaths.has(app.path)) };
+    const [recommendedWithIcons, recentWithIcons] = await Promise.all([
+      withApplicationIcons(recommended),
+      withApplicationIcons(recent.filter((app) => !recommendedPaths.has(app.path))),
+    ]);
+    return { recommended: recommendedWithIcons, recent: recentWithIcons };
   });
 
   ipcMain.handle('shell:clear-recent-open-with-apps', async (event) => {

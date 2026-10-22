@@ -85,6 +85,7 @@ export function FilePreview({ header, chat, ...source }: FilePreviewProps) {
         key={source.descriptor.id}
         {...header}
         name={source.descriptor.fileName}
+        filePath={source.descriptor.source.kind === 'workspace' ? source.descriptor.source.path : undefined}
         controller={controller}
         actions={source.actions}
         referenceActions={chat ? targets.map((target) => ({ label: target.label, disabled: referencing || source.loading || Boolean(source.loadError) || chat.disabled,

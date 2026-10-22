@@ -131,10 +131,16 @@ export function WorkspaceFilePreviewPanel({
   }, [m.chat.attachmentPreviewOpenLocalFailed, state.onOpenWithSystemApp]);
 
   const handleChooseOpenWithApp = useCallback(async () => {
+    let selectedApp: { name: string; path: string; iconDataUrl?: string } | undefined;
     await runFileShellAction(
-      () => state.onChooseOpenWithApp(),
+      async () => {
+        const result = await state.onChooseOpenWithApp();
+        if (result?.ok) selectedApp = result.app;
+        return result;
+      },
       m.workspace.openFileFailed,
     );
+    return selectedApp;
   }, [m.workspace.openFileFailed, state.onChooseOpenWithApp]);
 
   const handleOpenWithRecentApp = useCallback(async (appPath: string) => {
@@ -220,7 +226,7 @@ export function WorkspaceFilePreviewPanel({
           } : undefined,
           share: { onClick: handleShare, loading, disabled: !state.fileResourceId || state.loading || Boolean(state.loadError) },
           openWithSystemApp: state.canOpenWithSystemApp ? { onClick: () => void handleOpenWithSystemApp() } : undefined,
-          chooseApp: state.canChooseOpenWithApp ? { onClick: () => void handleChooseOpenWithApp() } : undefined,
+          chooseApp: state.canChooseOpenWithApp ? { onClick: handleChooseOpenWithApp } : undefined,
           recommendedApps: state.recommendedOpenWithApps,
           recentApps: state.recentOpenWithApps,
           onOpenWithApp: (path) => void handleOpenWithRecentApp(path),

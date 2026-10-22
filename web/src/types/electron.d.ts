@@ -103,7 +103,7 @@ export interface ElectronGatewayShellAPI {
 }
 
 export type ElectronShellOpenResult =
-  | { ok: true; error?: undefined; code?: undefined }
+  | { ok: true; app?: { name: string; path: string; iconDataUrl?: string }; error?: undefined; code?: undefined }
   | {
       ok: false;
       error: string;
@@ -121,6 +121,7 @@ export type ElectronShellOpenResult =
     };
 
 export type ElectronRecentOpenWithApp = {
+  iconDataUrl?: string;
   name: string;
   path: string;
   platform: "darwin" | "win32" | "linux" | string;
@@ -128,6 +129,7 @@ export type ElectronRecentOpenWithApp = {
 };
 
 export type ElectronRecommendedOpenWithApp = {
+  iconDataUrl?: string;
   name: string;
   path: string;
   platform: "darwin" | "win32" | "linux" | string;

@@ -1,4 +1,4 @@
-import { FileText, Folder, Search, X } from 'lucide-react';
+import { Folder, Search, X } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent } from 'react';
 import { useLocation, useParams } from 'react-router-dom';
 
@@ -10,6 +10,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import {
   FileTree,
 } from '@/features/file-tree/file-tree';
+import { FileIcon } from '@/features/file-tree/file-icon';
 import type { FileTreeAction, TreeEntry } from '@/features/file-tree/file-tree-types';
 import { inferMimeTypeFromFileName } from '@/features/chat/attachments/attachment-utils-core';
 import {
@@ -211,7 +212,7 @@ export const WorkspaceColumn = memo(function WorkspaceColumn({ elevated = false,
   }, [embedded, fileSearchOpen, open, setOpen]);
 
   useEffect(() => {
-    if (!open || !fileSearchOpen || !normalizedFileSearchQuery) {
+    if (!open || (!embedded && !fileSearchOpen) || !normalizedFileSearchQuery) {
       setFileSearchResults([]);
       setFileSearchLoading(false);
       setFileSearchError(null);
@@ -237,7 +238,7 @@ export const WorkspaceColumn = memo(function WorkspaceColumn({ elevated = false,
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [fileSearchOpen, normalizedFileSearchQuery, open, workspaceReadOpts]);
+  }, [embedded, fileSearchOpen, normalizedFileSearchQuery, open, workspaceReadOpts]);
 
   useEffect(() => {
     if (!open || embedded) return;
@@ -464,7 +465,7 @@ export const WorkspaceColumn = memo(function WorkspaceColumn({ elevated = false,
                 />
               ) : null}
               <div className="ml-auto flex shrink-0 items-center gap-1">
-                <Button
+                {!embedded ? <Button
                   type="button"
                   variant="ghost"
                   className={cn('size-9 shrink-0 rounded-md p-0', fileSearchOpen && 'bg-surface-hover text-fg')}
@@ -474,7 +475,7 @@ export const WorkspaceColumn = memo(function WorkspaceColumn({ elevated = false,
                   onClick={() => setFileSearchOpen(true)}
                 >
                   <Search className="size-4" strokeWidth={1.75} />
-                </Button>
+                </Button> : null}
                 <RefreshButton
                   className="size-9 shrink-0 rounded-md p-0"
                   loading={loading}
@@ -494,9 +495,9 @@ export const WorkspaceColumn = memo(function WorkspaceColumn({ elevated = false,
               </div>
             </div>
 
-            {fileSearchOpen ? (
-              <div className={cn("shrink-0 bg-surface-inset/40 px-3 py-2", !embedded && "border-b border-edge")}>
-                <div className="flex h-9 items-center gap-2 rounded-md border border-edge bg-surface-panel px-2 focus-within:border-accent focus-within:ring-2 focus-within:ring-accent/20">
+            {embedded || fileSearchOpen ? (
+              <div className={cn("shrink-0 px-3 pb-2 pt-1", !embedded && "border-b border-edge")}>
+                <div className="flex h-10 items-center gap-2 rounded-xl border border-edge bg-surface-panel px-3 focus-within:border-accent focus-within:ring-2 focus-within:ring-accent/20">
                   <Search className="size-4 shrink-0 text-fg-subtle" strokeWidth={1.75} aria-hidden />
                   <input
                     type="text"
@@ -507,7 +508,7 @@ export const WorkspaceColumn = memo(function WorkspaceColumn({ elevated = false,
                     aria-label={m.workspace.searchPlaceholder}
                     className="min-w-0 flex-1 bg-transparent text-sm text-fg outline-none placeholder:text-fg-subtle"
                   />
-                  <button
+                  {!embedded || fileSearchQuery ? <button
                     type="button"
                     className="flex size-7 shrink-0 items-center justify-center rounded-md text-fg-muted hover:bg-surface-hover hover:text-fg"
                     aria-label={m.workspace.clearSearch}
@@ -518,7 +519,7 @@ export const WorkspaceColumn = memo(function WorkspaceColumn({ elevated = false,
                     }}
                   >
                     <X className="size-4" strokeWidth={1.75} aria-hidden />
-                  </button>
+                  </button> : null}
                 </div>
               </div>
             ) : null}
@@ -557,7 +558,7 @@ export const WorkspaceColumn = memo(function WorkspaceColumn({ elevated = false,
                       onDragStart={(event) => handleFileDragStart(event, entry)}
                       title={entry.path}
                     >
-                      <FileText className="size-4 shrink-0 text-fg-muted" aria-hidden />
+                      <FileIcon name={entry.name} />
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-sm text-fg">{entry.name}</span>
                         <span className="block truncate text-xs text-fg-subtle">{entry.path}</span>
