@@ -1,7 +1,8 @@
-import { PanelRight, Globe, FileText, FolderOpen, Maximize2, MessageSquare, Minimize2, Plus, X } from 'lucide-react';
+import { PanelRight, Globe, FileText, Folders, FolderOpen, Maximize2, MessageSquare, Minimize2, Plus, X } from 'lucide-react';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { useLocation } from 'react-router-dom';
 
+import { FileIcon } from '@/features/file-tree/file-icon';
 import { SlidingTabList } from '@/components/ui/sliding-tab-list';
 import { BrowserTabView, useBrowserEvents } from '@/features/browser/browser-tab';
 import { closeEmbeddedBrowser } from '@/features/browser/browser-store';
@@ -181,7 +182,7 @@ export function RightWorkspace({ scope, enabled = true, elevated = false, onDock
     else if (active.kind === 'browser') setBrowserTreeOpen(!browserTreeOpen);
     else store.setTreeOpen(active.kind === 'sidechat' ? 'sidechat' : 'file', !treePreference);
   }
-  const treeControl = active && !treeHome && active.kind !== 'home' ? <button type="button" className={buttonClass} aria-label={zh ? '切换文件树' : 'Toggle file tree'} aria-pressed={treeShown} onClick={toggleTree}><FolderOpen className="size-4" aria-hidden /></button> : null;
+  const treeControl = active && !treeHome && active.kind !== 'home' ? <button type="button" className={cn(buttonClass, 'rounded-full border border-edge-subtle', treeShown && 'border-accent/20 bg-accent-soft text-accent-fg')} aria-label={zh ? '切换文件树' : 'Toggle file tree'} aria-pressed={treeShown} onClick={toggleTree}><Folders className="size-4" strokeWidth={1.75} aria-hidden /></button> : null;
   function drag(event: ReactPointerEvent<HTMLDivElement>, tree = false) {
     event.preventDefault();
     const startX = event.clientX;
@@ -238,7 +239,7 @@ export function RightWorkspace({ scope, enabled = true, elevated = false, onDock
           return <div key={tab.id} data-sliding-active={tab.id === pane.activeId} className={cn('group flex h-9 shrink-0 items-center rounded-md transition-colors', tab.id === pane.activeId ? 'bg-surface-panel text-fg' : 'text-fg-muted hover:bg-surface-hover')}>
             <button role="tab" id={`workspace-tab-${tab.id}`} aria-controls="workspace-content" aria-selected={tab.id === pane.activeId} tabIndex={tab.id === pane.activeId ? 0 : -1}
               title={tab.kind === 'file' ? tab.path || title : title} className="flex max-w-56 items-center gap-1.5 rounded-md px-2 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent" onClick={() => select(tab.id)} onDoubleClick={() => { if (tab.kind === 'file') store.keepFileOpen(tab.id); }}>
-              {tab.kind === 'browser' ? <Globe className="size-4 shrink-0" aria-hidden /> : tab.kind === 'sidechat' ? <MessageSquare className="size-4 shrink-0" aria-hidden /> : tab.kind === 'files' ? <FolderOpen className="size-4 shrink-0" aria-hidden /> : <FileText className="size-4 shrink-0" aria-hidden />}
+              {tab.kind === 'browser' ? <Globe className="size-4 shrink-0" aria-hidden /> : tab.kind === 'sidechat' ? <MessageSquare className="size-4 shrink-0" aria-hidden /> : tab.kind === 'files' ? <FolderOpen className="size-4 shrink-0" aria-hidden /> : <FileIcon name={tab.title} />}
               <span className={cn("truncate", tab.kind === 'file' && tab.preview && "italic")}>{title}</span>{stateLabel ? <span className="shrink-0 text-xs text-fg-muted">{stateLabel}</span> : null}
             </button>
             <button className={cn(buttonClass, 'size-7')} tabIndex={tab.id === pane.activeId ? 0 : -1} aria-label={`${zh ? '关闭' : 'Close'} ${title}`} disabled={closing === tab.id} onClick={() => {
@@ -299,7 +300,7 @@ export function RightWorkspace({ scope, enabled = true, elevated = false, onDock
         className="z-10 w-2 shrink-0 cursor-col-resize touch-none bg-surface-base transition-colors duration-150 hover:bg-accent/20 focus-visible:bg-accent/30" onPointerDown={(event) => drag(event, true)}
         onKeyDown={(e) => { if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { e.preventDefault(); store.setTreeWidth(Math.min(contentWidth - minimumPreviewWidth - 8, inlineTreeWidth + (e.key === 'ArrowLeft' ? 20 : -20))); } }} /> : null}
       {treeOverlay ? <button data-browser-occluder style={{ top: treeOverlayInset }} className="absolute inset-0 z-20 bg-scrim" aria-label={zh ? '关闭文件树' : 'Close file tree'} onClick={() => setTreeOverlay(false)} /> : null}
-      <div data-workspace-tree className={cn('min-h-0 min-w-0 flex-col overflow-hidden bg-surface-base', treeShown ? 'flex' : 'hidden', treeOnly && 'flex-1', treeOverlay && 'absolute inset-y-0 right-0 z-30 bg-surface-base shadow-popover')} style={!treeOnly ? { width: treeOverlay ? treeWidth : inlineTreeWidth, ...(treeOverlay ? { top: treeOverlayInset } : {}) } : undefined}>
+      <div data-workspace-tree className={cn('min-h-0 min-w-0 flex-col overflow-hidden border-l border-edge-subtle bg-surface-base', treeShown ? 'flex' : 'hidden', treeOnly && 'flex-1', treeOverlay && 'absolute inset-y-0 right-0 z-30 bg-surface-base shadow-popover')} style={!treeOnly ? { width: treeOverlay ? treeWidth : inlineTreeWidth, ...(treeOverlay ? { top: treeOverlayInset } : {}) } : undefined}>
         {Object.entries(trees).map(([key, root]) => <div key={key} className={cn('h-full min-h-0 flex-col', key === treeKey ? 'flex' : 'hidden')}><WorkspaceColumn embedded scope={root} onCloseTree={() => treeOverlay ? setTreeOverlay(false) : !treeHome ? active?.kind === 'browser' ? setBrowserTreeOpen(false) : store.setTreeOpen(active?.kind === 'sidechat' ? 'sidechat' : 'file', false) : active && store.remove(active.id, scope)} /></div>)}
       </div>
     </div>

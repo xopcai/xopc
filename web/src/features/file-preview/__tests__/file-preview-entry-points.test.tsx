@@ -30,6 +30,7 @@ vi.mock('@/features/preview-runtime/use-workspace-preview-state', () => ({
 import { AttachmentPreviewDialog } from '@/features/chat/attachments/attachment-preview-dialog';
 import { takeComposerAttachmentHandoff, resetComposerAttachmentHandoffsForTests } from '@/features/chat/composer/composer-attachment-handoff';
 import { FilePreview } from '@/features/file-preview/file-preview';
+import { WorkspaceTreeControlContext } from '@/features/right-workspace/workspace-context';
 import { getSessionDetail } from '@/features/sessions/session-api';
 import { WorkspaceFilePreviewPanel } from '@/features/workspace/workspace-file-preview-dialog';
 import { SharePreviewPage } from '@/pages/share-preview-page';
@@ -129,6 +130,30 @@ describe('common file preview header', () => {
     await act(async () => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', cancelable: true })));
     expect(container.querySelector('[data-file-preview-expanded]')).toBeNull();
     expect(container.querySelector('h2[title="report.html"]')).not.toBeNull();
+  });
+
+  it('shows the workspace path and exposes the tree and system open actions directly', async () => {
+    useLocaleStore.setState({ language: 'en' });
+    const toggleTree = vi.fn();
+    const openFile = vi.fn();
+    await act(async () => root.render(<MemoryRouter>
+      <WorkspaceTreeControlContext.Provider value={{ button: null, label: 'Hide file tree', active: true, onToggle: toggleTree }}>
+        <FilePreview language="en"
+          descriptor={{ id: 'nested-file', context: 'workspace', fileName: 'browser.ts', mimeType: 'text/typescript', type: 'code', source: { kind: 'workspace', path: 'project/src/browser.ts' } }}
+          loading={false} loadError={null} textContent="export {};" binaryBuffer={null}
+          actions={{ canDownload: true, onDownload: vi.fn() }}
+          header={{ expanded: false, onClose: vi.fn(), openWithSystemApp: { onClick: openFile } }}
+        />
+      </WorkspaceTreeControlContext.Provider>
+    </MemoryRouter>));
+    expect(container.querySelector('[title="project/src/browser.ts"]')?.textContent).toBe('projectsrcbrowser.ts');
+    const toggle = container.querySelector<HTMLButtonElement>('button[aria-label="Hide file tree"]')!;
+    expect(toggle.getAttribute('aria-pressed')).toBe('true');
+    expect(container.querySelector('[role="menu"]')).toBeNull();
+    await act(async () => toggle.click());
+    await act(async () => container.querySelector<HTMLButtonElement>(`button[aria-label="${messages('en').workspace.openSystemApp}"]`)!.click());
+    expect(toggleTree).toHaveBeenCalledOnce();
+    expect(openFile).toHaveBeenCalledOnce();
   });
 
   it('uses the common chat action to hand off the file and its source project', async () => {

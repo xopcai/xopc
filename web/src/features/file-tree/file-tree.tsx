@@ -1,8 +1,9 @@
-import { ChevronRight, FileText, Folder, MoreHorizontal } from 'lucide-react';
+import { ChevronRight, Folder, FolderOpen, MoreHorizontal } from 'lucide-react';
 import { useEffect, useMemo, useState, type DragEvent } from 'react';
 
 import type { FileTreeAction, TreeEntry } from '@/features/file-tree/file-tree-types';
-import { fileExtColor } from '@/features/file-tree/file-tree-utils';
+import { FileIcon } from '@/features/file-tree/file-icon';
+import { interaction } from '@/lib/interaction';
 import { cn } from '@/lib/cn';
 import { isElectron } from '@/lib/electron-env';
 
@@ -123,7 +124,8 @@ function ActionMenu({
           type="button"
           className={cn(
             'rounded-md p-1 text-fg-muted opacity-0 transition-opacity hover:bg-surface-hover hover:text-fg',
-            'group-hover:opacity-100',
+            'group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100',
+            interaction.focusRingPanel,
             menuOpen && 'opacity-100',
           )}
           aria-haspopup="menu"
@@ -270,18 +272,19 @@ function TreeRow({
   if (entry.isDirectory) {
     return (
       <div className="select-none">
-        <div className="group flex w-full items-stretch gap-0.5 [content-visibility:auto] has-[[aria-expanded=true]]:[content-visibility:visible]" style={{ containIntrinsicSize: '32px' }}>
+        <div className="group mx-1 flex items-stretch gap-0.5 [content-visibility:auto] has-[[aria-expanded=true]]:[content-visibility:visible]" style={{ containIntrinsicSize: '32px' }}>
           <button
             type="button"
             aria-expanded={visibleOpen}
             data-file-drop-directory={entry.path}
             className={cn(
-              'flex min-w-0 flex-1 items-center gap-1 rounded-md py-1 pr-2 text-left text-sm',
+              'flex min-w-0 flex-1 min-h-8 items-center gap-2 rounded-lg py-1.5 pr-2 text-left text-sm transition-colors',
               'hover:bg-surface-hover',
+              interaction.focusRingPanel,
               isSel && 'bg-accent-soft text-accent-fg',
               dropActive && 'bg-accent-soft text-accent-fg ring-1 ring-inset ring-accent',
             )}
-            style={{ paddingLeft: 8 + depth * 12 }}
+            style={{ paddingLeft: 8 + depth * 16 }}
             onClick={() => {
               const next = !visibleOpen;
               setExpansion({ selectedPath, open: next });
@@ -316,10 +319,10 @@ function TreeRow({
             } : undefined}
           >
             <ChevronRight
-              className={cn('size-3.5 shrink-0 transition-transform', visibleOpen && 'rotate-90')}
+              className={cn('size-3.5 shrink-0 text-fg-subtle transition-transform motion-reduce:transition-none', visibleOpen && 'rotate-90')}
               aria-hidden
             />
-            <Folder className="size-3.5 shrink-0 text-fg-muted" aria-hidden />
+            <span className="shrink-0 text-fg-muted">{visibleOpen ? <FolderOpen className="size-4" strokeWidth={1.75} aria-hidden /> : <Folder className="size-4" strokeWidth={1.75} aria-hidden />}</span>
             <span className="truncate">{entry.name}</span>
           </button>
           {onAction && actionLabels ? (
@@ -351,18 +354,19 @@ function TreeRow({
   }
 
   return (
-    <div className="group flex w-full items-stretch gap-0.5 [content-visibility:auto] has-[[aria-expanded=true]]:[content-visibility:visible]" style={{ containIntrinsicSize: '32px' }}>
+    <div className="group mx-1 flex items-stretch gap-0.5 [content-visibility:auto] has-[[aria-expanded=true]]:[content-visibility:visible]" style={{ containIntrinsicSize: '32px' }}>
       <button
         type="button"
         draggable={Boolean(onFileDragStart)}
         className={cn(
-          'flex min-w-0 flex-1 items-center gap-1.5 rounded-md py-1 pr-2 text-left text-sm',
+          'flex min-w-0 flex-1 min-h-8 items-center gap-2 rounded-lg py-1.5 pr-2 text-left text-sm transition-colors',
           'hover:bg-surface-hover',
+          interaction.focusRingPanel,
           onFileDragStart && 'cursor-grab active:cursor-grabbing',
           isSel && 'bg-accent-soft text-accent-fg',
           dropActive && 'bg-accent-soft text-accent-fg ring-1 ring-inset ring-accent',
         )}
-        style={{ paddingLeft: 8 + depth * 12 }}
+        style={{ paddingLeft: 8 + depth * 16 }}
         onClick={() => onSelect(entry.path, false)}
         onDragStart={onFileDragStart ? (event) => onFileDragStart(event, entry) : undefined}
         onDragEnter={onUploadFiles ? (event) => {
@@ -392,7 +396,7 @@ function TreeRow({
           if (files.length) onUploadFiles(files, parentDirectory(entry.path));
         } : undefined}
       >
-        <FileText className={cn('size-3.5 shrink-0', fileExtColor(entry.name))} aria-hidden />
+        <span className="size-3.5 shrink-0" aria-hidden /><FileIcon name={entry.name} />
         <span className="truncate">{entry.name}</span>
       </button>
       {onAction && actionLabels ? (

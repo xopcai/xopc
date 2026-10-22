@@ -165,8 +165,8 @@ export function useWorkspacePreviewState({
     sourceEditMode: initialEditMode,
     saveStatus: 'idle',
   });
-  const [recentOpenWithApps, setRecentOpenWithApps] = useState<Array<{ name: string; path: string; lastUsedAt: number }>>([]);
-  const [recommendedOpenWithApps, setRecommendedOpenWithApps] = useState<Array<{ name: string; path: string }>>([]);
+  const [recentOpenWithApps, setRecentOpenWithApps] = useState<Array<{ name: string; path: string; lastUsedAt: number; iconDataUrl?: string }>>([]);
+  const [recommendedOpenWithApps, setRecommendedOpenWithApps] = useState<Array<{ name: string; path: string; iconDataUrl?: string }>>([]);
   const trackedFilePathRef = useRef(filePath);
   const revisionRef = useRef<string | undefined>(undefined);
   const draftRef = useRef<string | null>(null);
@@ -446,8 +446,8 @@ export function useWorkspacePreviewState({
     }
     try {
       const apps = await window.electronAPI.shell.getOpenWithAppsForFileResource(fileResourceId);
-      setRecommendedOpenWithApps(apps.recommended.map((app) => ({ name: app.name, path: app.path })));
-      setRecentOpenWithApps(apps.recent.map((app) => ({ name: app.name, path: app.path, lastUsedAt: app.lastUsedAt })));
+      setRecommendedOpenWithApps(apps.recommended.map((app) => ({ name: app.name, path: app.path, iconDataUrl: app.iconDataUrl })));
+      setRecentOpenWithApps(apps.recent.map((app) => ({ name: app.name, path: app.path, iconDataUrl: app.iconDataUrl, lastUsedAt: app.lastUsedAt })));
     } catch {
       setRecommendedOpenWithApps([]);
       setRecentOpenWithApps([]);

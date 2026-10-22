@@ -1,6 +1,8 @@
-import { Check, Copy, Download, ExternalLink, Eye, FolderOpen, Link2, Loader2, Maximize2, MessageSquarePlus, Minimize2, MoreHorizontal, Paperclip, Pencil, RefreshCw, Save, WrapText, X } from 'lucide-react';
+import { Check, ChevronRight, Copy, Download, ExternalLink, Eye, Folders, FolderOpen, Link2, Loader2, Maximize2, MessageSquarePlus, Minimize2, MoreHorizontal, Paperclip, Pencil, RefreshCw, Save, WrapText, X } from 'lucide-react';
 import { useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 
+import { FileOpenMenu, type ChooseAppAction, type OpenWithApp } from '@/features/file-preview/file-open-menu';
+import { FileIcon } from '@/features/file-tree/file-icon';
 import { SlidingTabList } from '@/components/ui/sliding-tab-list';
 import { WorkspaceTreeControlContext } from '@/features/right-workspace/workspace-context';
 import { APP_CHROME_NO_DRAG_CLASS } from '@/components/shell/app-chrome';
@@ -23,6 +25,7 @@ export type FilePreviewHeaderProps = {
   onRefresh?: () => void;
   onRetrySave?: () => void;
   name: string;
+  filePath?: string;
   subtitle?: ReactNode;
   controller: PreviewRuntimeController;
   actions: PreviewActions;
@@ -35,9 +38,9 @@ export type FilePreviewHeaderProps = {
   editInNewChat?: HeaderAction;
   share?: HeaderAction;
   openWithSystemApp?: HeaderAction;
-  chooseApp?: HeaderAction;
-  recommendedApps?: { name: string; path: string }[];
-  recentApps?: { name: string; path: string }[];
+  chooseApp?: ChooseAppAction;
+  recommendedApps?: OpenWithApp[];
+  recentApps?: OpenWithApp[];
   onOpenWithApp?: (path: string) => void;
   onRevealInFolder?: () => void;
   copyPath?: { copied: boolean; onClick: () => void };
@@ -56,8 +59,8 @@ function HeaderButton({ label, active, disabled, onClick, children }: {
     <button
       type="button"
       className={cn(
-        'inline-flex size-9 shrink-0 items-center justify-center rounded-md text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg disabled:cursor-not-allowed disabled:opacity-40',
-        active && 'bg-surface-active text-fg',
+        'inline-flex size-9 shrink-0 items-center justify-center rounded-full border border-edge-subtle bg-surface-panel text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg disabled:cursor-not-allowed disabled:opacity-40',
+        active && 'border-accent/20 bg-accent-soft text-accent-fg',
         interaction.focusRingPanel,
       )}
       title={label}
@@ -102,7 +105,7 @@ function PreviewMenuItem({
 
 /** Shared file header, using the workspace preview's existing layout and actions. */
 export function FilePreviewHeader({
-  referenceActions = [], onRefresh, onRetrySave, name, subtitle, controller, actions, expanded, onToggleExpanded, onClose,
+  referenceActions = [], onRefresh, onRetrySave, name, filePath, subtitle, controller, actions, expanded, onToggleExpanded, onClose,
   hideClose, edit, wordWrap, editInNewChat, share, openWithSystemApp, chooseApp,
   recommendedApps = [], recentApps = [], onOpenWithApp, onRevealInFolder, copyPath, textView, openInBrowser,
 }: FilePreviewHeaderProps) {
@@ -113,6 +116,7 @@ export function FilePreviewHeader({
     : controller.plugin.id === 'docx' ? labels.chat.attachmentPreviewDocument
       : controller.plugin.id === 'spreadsheet' ? labels.chat.attachmentPreviewSpreadsheet
         : m.preview;
+  const parentSegments = (filePath ?? '').replace(/\\/g, '/').split('/').filter(Boolean).slice(0, -1);
   const desktop = isElectron();
   const treeControl = useContext(WorkspaceTreeControlContext);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -154,12 +158,22 @@ export function FilePreviewHeader({
 
   return (
     <div data-workspace-toolbar className={cn('shrink-0 bg-surface-base px-3 py-2 sm:px-4', APP_CHROME_NO_DRAG_CLASS)}>
-      <div className="flex min-w-0 items-start gap-2">
-        <div className="min-w-0 flex-1 py-0.5">
-          <h2 className="truncate text-base font-semibold leading-tight tracking-tight text-fg" title={name}>{name}</h2>
-          {subtitle ? <div className="mt-0.5 flex min-w-0 items-center gap-2 text-xs leading-tight text-fg-muted">{subtitle}</div> : null}
+      <div className="flex min-w-0 flex-wrap items-center gap-2">
+        <div className="flex h-10 min-w-0 flex-[1_1_12rem] items-center gap-2 overflow-hidden rounded-full border border-edge-subtle bg-surface-panel px-3" title={filePath ?? name}>
+          <FileIcon name={name} />
+          {parentSegments.length ? <span className="flex min-w-0 shrink-[100] items-center gap-1.5 overflow-hidden text-sm text-fg-muted">
+            {parentSegments.map((segment, index) => <span key={index} className="flex shrink-0 items-center gap-1.5">
+              <span>{segment}</span><ChevronRight className="size-3.5 text-fg-subtle" aria-hidden />
+            </span>)}
+          </span> : null}
+          <h2 className="min-w-0 max-w-full truncate text-sm font-semibold text-fg" title={name}>{name}</h2>
         </div>
-        <div className="flex shrink-0 items-center gap-1">
+        <div className="ml-auto flex shrink-0 items-center gap-1.5">
+          {treeControl ? <HeaderButton label={treeControl.label} active={treeControl.active} onClick={treeControl.onToggle}>
+            <Folders className="size-4" strokeWidth={1.75} aria-hidden />
+          </HeaderButton> : null}
+          <FileOpenMenu systemApp={openWithSystemApp} chooseApp={chooseApp} recommendedApps={recommendedApps}
+            recentApps={recentApps} onOpenWithApp={onOpenWithApp} />
           <HeaderButton label={expanded ? m.collapsePreview : m.expandPreview} active={expanded} disabled={!onToggleExpanded} onClick={onToggleExpanded}>
             {expanded ? <Minimize2 className="size-4" aria-hidden /> : <Maximize2 className="size-4" aria-hidden />}
           </HeaderButton>
@@ -167,14 +181,13 @@ export function FilePreviewHeader({
             {moreMenuOpen ? <button type="button" className="fixed inset-0 z-40 cursor-default bg-transparent" aria-hidden tabIndex={-1}
               onPointerDown={(event) => { event.preventDefault(); setMoreMenuOpen(false); }} /> : null}
             <button ref={triggerRef} type="button"
-              className={cn('inline-flex size-9 shrink-0 items-center justify-center rounded-md text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg', interaction.focusRingPanel)}
+              className={cn('inline-flex size-9 shrink-0 items-center justify-center rounded-full border border-edge-subtle bg-surface-panel text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg', interaction.focusRingPanel)}
               title={m.moreActions} aria-label={m.moreActions} aria-haspopup="menu" aria-expanded={moreMenuOpen}
               onClick={() => setMoreMenuOpen((value) => !value)}>
               <MoreHorizontal className="size-4" />
             </button>
             {moreMenuOpen ? (
               <div ref={menuRef} role="menu" aria-label={m.moreActions} data-file-preview-menu className="absolute right-0 top-full z-50 mt-1 max-h-[min(32rem,calc(100dvh-8rem))] w-60 max-w-[calc(100vw-2rem)] overflow-y-auto overscroll-contain rounded-lg border border-edge bg-surface-overlay p-1 shadow-popover">
-                {treeControl ? <PreviewMenuItem icon={<FolderOpen className="size-4" />} label={treeControl.label} onClick={() => runMenuAction(treeControl.onToggle)} /> : null}
                 {referenceActions.map((action) => <PreviewMenuItem key={action.label} icon={<Paperclip className="size-4" />} label={action.label} disabled={action.disabled} onClick={() => runMenuAction(action.onClick)} />)}
                 {onRetrySave ? <PreviewMenuItem icon={<Save className="size-4" />} label={language === 'zh' ? '重试保存' : 'Retry save'} onClick={() => runMenuAction(onRetrySave)} /> : null}
                 {onRefresh ? <PreviewMenuItem icon={<RefreshCw className="size-4" />} label={language === 'zh' ? '刷新文件' : 'Refresh file'} onClick={() => runMenuAction(onRefresh)} /> : null}
@@ -192,25 +205,8 @@ export function FilePreviewHeader({
                     {m.openInBrowser}
                   </a>
                 ) : null}
-                {openWithSystemApp ? <PreviewMenuItem icon={<ExternalLink className="size-4" />} label={m.openSystemApp}
-                  disabled={openWithSystemApp.disabled || openWithSystemApp.loading} onClick={() => runMenuAction(openWithSystemApp.onClick)} /> : null}
-                {chooseApp ? <PreviewMenuItem icon={<MoreHorizontal className="size-4" />} label={m.chooseApp}
-                  disabled={chooseApp.disabled} onClick={() => runMenuAction(chooseApp.onClick)} /> : null}
-                {onOpenWithApp ? [
-                  { label: m.recommendedApps, apps: recommendedApps },
-                  { label: m.recentApps, apps: recentApps },
-                ].map(({ label, apps }) => apps.length > 0 ? (
-                  <div key={label} className="mt-1 border-t border-edge-subtle pt-1 dark:border-edge">
-                    <p className="px-3 pb-1 pt-0.5 text-[11px] font-medium uppercase tracking-normal text-fg-subtle">{label}</p>
-                    {apps.map((app) => <button key={app.path} type="button" role="menuitem"
-                      className="flex h-9 w-full min-w-0 items-center rounded-md px-2.5 text-left text-sm text-fg hover:bg-surface-hover"
-                      title={app.path} onClick={() => runMenuAction(() => onOpenWithApp(app.path))}>
-                      <span className="block truncate">{app.name}</span>
-                    </button>)}
-                  </div>
-                ) : null) : null}
                 {onRevealInFolder ? <PreviewMenuItem icon={<FolderOpen className="size-4" />} label={m.revealInFolder} onClick={() => runMenuAction(onRevealInFolder)} /> : null}
-                {openWithSystemApp || chooseApp || onRevealInFolder ? <div className="my-1 border-t border-edge-subtle dark:border-edge" /> : null}
+                {onRevealInFolder ? <div className="my-1 border-t border-edge-subtle dark:border-edge" /> : null}
                 <PreviewMenuItem icon={<Download className="size-4" />} label={desktop ? m.saveCopy : m.download} disabled={!actions.canDownload}
                   onClick={() => runMenuAction(() => void actions.onDownload())} />
                 {copyPath ? <PreviewMenuItem icon={copyPath.copied ? <Check className="size-4 text-emerald-500" /> : <Copy className="size-4" />}
@@ -221,6 +217,7 @@ export function FilePreviewHeader({
           {!hideClose ? <><div className="mx-0.5 h-5 w-px bg-edge-subtle" aria-hidden /><HeaderButton label={m.close} onClick={onClose}><X className="size-4" strokeWidth={1.75} /></HeaderButton></> : null}
         </div>
       </div>
+      {subtitle ? <div className="mt-1.5 flex min-w-0 items-center gap-2 px-3 text-xs leading-tight text-fg-muted">{subtitle}</div> : null}
       {hasPreviewControls || textView ? <div className="mt-2 flex items-center gap-2 overflow-x-auto pb-0.5">
         {textView ? (
           <SlidingTabList className="mr-2 flex shrink-0 rounded-lg bg-surface-hover p-0.5" role="group" aria-label={labels.chat.attachmentPreviewText}>
