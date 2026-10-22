@@ -1,5 +1,11 @@
 # xopc brand assets
 
+Brand slogan: **AI，让生活更美好。** / **A better life, with AI.**
+
+xopc is a personal AI assistant for work and everyday life. Its vision is to give
+people more time to create, be with the people who matter, and enjoy life.
+See [Product philosophy](../../docs/product.md) for the vision and mission.
+
 `xopc-mark.svg` is the canonical Human–AI Loop mark. Its two segments share one
 circle, radius, and stroke width. The arc centre lines use an exact 80:20 ratio:
 AI handles the larger execution segment while the blue human segment represents

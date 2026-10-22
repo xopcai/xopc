@@ -1,6 +1,6 @@
 # Get started with xopc
 
-xopc is open-source, local-first personal AI. Start with the desktop app, connect one model, then chat with Ada or work directly with files and projects.
+xopc is an open-source, local-first personal AI assistant for work and everyday life, with more time to create and enjoy life. Start with the desktop app, connect one model, then chat with Ada or work directly with files and projects.
 
 ## Choose a model and a starting point
 
