@@ -81,10 +81,8 @@ describe('AttachmentPreviewDialog shared header', () => {
       );
     });
 
-    expect(menuItem(labels.openSystemApp)).toBeUndefined();
-    openMenu();
-    const button = menuItem(labels.openSystemApp);
-    expect(button).toBeDefined();
+    const button = document.querySelector<HTMLButtonElement>(`button[aria-label="${labels.openSystemApp}"]`);
+    expect(button).toBeTruthy();
 
     await act(async () => button?.click());
 
