@@ -88,7 +88,7 @@ import { createTaskCollaborationTool } from './task-collaboration-tool.js';
 import { createPersonalRequestTools } from './personal-request-tool.js';
 import { createPersonalRequestConnectionTool, createPersonalRequestResultTool } from './personal-request-result-tool.js';
 import { personalRequestForExecution } from '../../personal-agent/request-repository.js';
-import { getPendingTranscriptUserText } from '../inbound/attachment-pipeline.js';
+import { getPendingTranscriptUserText, getActiveTranscriptUserText } from '../inbound/attachment-pipeline.js';
 import type { MemoryManager } from '../memory/manager.js';
 import { resolveUserContextSessionAccess } from '../../user-context/access-policy.js';
 import type { SessionStore } from '../../session/store.js';
@@ -664,6 +664,8 @@ export class AgentToolsFactory {
             createSessionRecallTool({
               getSessionStore: this.deps.getSessionStore,
               getCurrentConversationId: currentConversationId,
+              getHistoryContext: () => ({ agentId: resolvedAgentId, workspaceId: workspace, conversationId: currentConversationId() ?? '', projectId: currentProjectId() }),
+              getCurrentUserText: () => currentConversationId() ? getActiveTranscriptUserText(currentConversationId()!) : undefined,
               ...(personalToolsConfigured ? { maxOutputChars: LOCAL_READ_MAX_CHARS } : {}),
             }),
           ]
@@ -672,6 +674,8 @@ export class AgentToolsFactory {
         ? [
             createSessionSearchTool({
               localOnly: personalToolsConfigured,
+              getHistoryContext: () => ({ agentId: resolvedAgentId, workspaceId: workspace, conversationId: currentConversationId() ?? '', projectId: currentProjectId() }),
+              getCurrentUserText: () => currentConversationId() ? getActiveTranscriptUserText(currentConversationId()!) : undefined,
               getSessionStore: this.deps.getSessionStore,
               getPrimaryModel: getPrimary,
               getCurrentConversationId: () => this.deps.getCurrentContext()?.conversationId,

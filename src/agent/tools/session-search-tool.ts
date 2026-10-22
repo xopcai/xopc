@@ -8,6 +8,9 @@ import { completeWithResolvedCredentials } from '../../providers/model-call.js';
 import type { SessionStore } from '../../session/store.js';
 import { createLogger } from '../../utils/logger.js';
 import { readAgentMessageContent } from '../memory/agent-message-access.js';
+import { forgottenHistoryEntries, FORGOTTEN_HISTORY_EXCERPT } from '../../memory-learning/forgotten-history.js';
+import type { CaptureScopeContext } from '../../user-model/capture/executor.js';
+import { sessionSearchTerms } from '../../storage/sqlite/fts.js';
 import { LOCAL_READ_MAX_CHARS } from './local-read-budget.js';
 
 const log = createLogger('Agent:SessionSearch');
@@ -142,6 +145,8 @@ export interface SessionSearchToolDeps {
   getCurrentConversationId?: () => string | undefined;
   canAccess?: () => boolean;
   localOnly?: boolean;
+  getHistoryContext?: () => CaptureScopeContext;
+  getCurrentUserText?: () => string | undefined;
 }
 
 type SessionSearchParams = {
@@ -228,19 +233,22 @@ export function createSessionSearchTool(deps: SessionSearchToolDeps): AgentTool 
         }
 
         const top = matches.slice(0, limit);
+        const protectedEntries = deps.getHistoryContext ? forgottenHistoryEntries(deps.getHistoryContext(), deps.getCurrentUserText?.()) : new Set<string>();
 
         if (deps.localOnly) {
           const results = top.map(({ key }) => ({
             conversationId: key,
             name: listed.items.find(item => item.key === key)?.name?.slice(0, 200),
-            excerpts: store.recallSession(key, query, { limit: 2 })
+            excerpts: store.recallSession(key, query, { limit: 2, matchMode: 'keyword' })
               .filter(match => !p.roleFilter || match.role === p.roleFilter)
               .map(match => {
-                const at = match.content.toLowerCase().indexOf(query.toLowerCase());
+                const content = (protectedEntries.has(`${key}:*`) || protectedEntries.has(`${key}:${match.entryId}`)) ? FORGOTTEN_HISTORY_EXCERPT : match.content;
+                const positions = sessionSearchTerms(query).map(term => content.toLowerCase().indexOf(term.toLowerCase())).filter(at => at >= 0);
+                const at = positions.length ? Math.min(...positions) : 0;
                 const start = Math.max(0, at - 200);
-                return { seq: match.seq, role: match.role,
-                  content: match.content.slice(start, start + 800),
-                  truncated: start > 0 || match.content.length > start + 800 };
+                return { entryId: match.entryId, createdAt: match.createdAt, seq: match.seq, role: match.role,
+                  content: content.slice(start, start + 800),
+                  truncated: start > 0 || content.length > start + 800 };
               }),
           }));
           const payload = { success: true, mode: 'keyword', query, results, truncated: false };
@@ -261,6 +269,9 @@ export function createSessionSearchTool(deps: SessionSearchToolDeps): AgentTool 
 
         const summaries = await Promise.all(
           top.map(async ({ key, score }) => {
+            if ([...protectedEntries].some(entry => entry.startsWith(`${key}:`))) {
+              return { conversationId: key, score, summary: FORGOTTEN_HISTORY_EXCERPT };
+            }
             let messages = await store.load(key);
 
             if (p.roleFilter) {

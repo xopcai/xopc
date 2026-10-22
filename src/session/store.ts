@@ -1051,7 +1051,7 @@ export class SessionStore {
     return findSessionMessages(messages, query, limit);
   }
 
-  recallSession(key: string, query: string, options?: { limit?: number; beforeSeq?: number; orderBySeq?: boolean }) {
+  recallSession(key: string, query: string, options?: { limit?: number; beforeSeq?: number; orderBySeq?: boolean; matchMode?: 'keyword' | 'phrase' }) {
     requireXopcDatabase();
     return searchSessionTranscript(key, query, options);
   }

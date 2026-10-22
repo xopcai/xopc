@@ -60,12 +60,12 @@ describe('session_search summary model', () => {
   });
 
   it('returns bounded local excerpts without loading conversations or calling a model', async () => {
-    const store = { ...createStore(), recallSession: vi.fn(() => [{ seq: 9, role: 'assistant', content: 'Friday ' + 'x'.repeat(5000) }]) };
+    const store = { ...createStore(), recallSession: vi.fn(() => [{ entryId: 'entry-9', createdAt: 1700000000000, seq: 9, role: 'assistant', content: 'Friday ' + 'x'.repeat(5000) }]) };
     const getPrimaryModel = vi.fn(() => model('test', 'fast'));
     const tool = createSessionSearchTool({ getSessionStore: () => store as never, getPrimaryModel, localOnly: true });
     const result = await tool.execute('local', { query: 'Friday', limit: 15 });
     const payload = JSON.parse((result.content[0] as { text: string }).text);
-    expect(payload.results[0].excerpts[0]).toMatchObject({ seq: 9, truncated: true });
+    expect(payload.results[0].excerpts[0]).toMatchObject({ entryId: 'entry-9', createdAt: 1700000000000, role: 'assistant', seq: 9, truncated: true });
     expect(payload.results[0].excerpts[0].content).toHaveLength(800);
     expect(store.load).not.toHaveBeenCalled();
     expect(getPrimaryModel).not.toHaveBeenCalled();

@@ -1,8 +1,9 @@
 # Personal memory benchmark
 
 This evaluation-only adapter imports timestamped histories into isolated SQLite transcripts,
-uses the unchanged production `runPersistentLearningJob`, and asks a fresh Personal session
-through the authenticated Gateway/realtime interface. No production source files are modified.
+uses the checked-out production `runPersistentLearningJob`, and asks a fresh Personal session
+through the authenticated Gateway/realtime interface. The adapter does not patch product behavior;
+product changes under evaluation must be frozen with their source fingerprint and lockfile.
 No existing history, memory, project files or connected-source business data are copied. Shared credentials
 and OAuth refresh locks are reused; copied configuration is temporary and removed at shutdown.
 
@@ -75,6 +76,10 @@ captures are judged immediately while other captures continue. Transport overloa
 affected shared pool's target, with a floor of one. A single case's history remains sequential.
 Production schema-format correction calls remain inside its generation lease. Other auxiliary
 calls during a Personal turn share its lease; no detached evaluator requests bypass the pools.
+This caps outer leases, not each physical RPC launched by production tools. Audit auxiliary
+operations, background model aliases, and calls that outlive the turn separately; canceled
+requests with zero reported tokens do not prove zero server-side cost. An asynchronous task
+handoff is not a completed recommendation in this single-turn QA protocol.
 
 ## Results and attribution
 
@@ -153,9 +158,10 @@ suppression rows; absence may mean the original write never succeeded. This firs
 background historical ingestion and does not execute old foreground tool actions. It cannot prove
 that live chat forgetting or UI deletion has the same behavior.
 
-Source-list order is preserved. The selected temporal/update LongMemEval cases have shuffled
-dated histories; the other four types and Chinese worlds are chronological. Results measure bulk
-historical ingestion, not natural arrival or eventual background backoff/retry convergence.
+The worker sorts every fixture’s sessions by source timestamp before import, including the
+temporal/update cases whose upstream lists may be shuffled. Both original and P0 captures use
+this ordering. Results measure chronological historical ingestion, not natural arrival or eventual
+background backoff/retry convergence.
 Only production internal schema-format correction is retained in the original capture.
 
 ## Chinese versions and independent development diagnostics
@@ -180,3 +186,41 @@ a disposable database with single-quote and distinct-source controls, without mo
 `reproduce-search.mts --db CAPTURE_DB --conversation ID --query QUERY --out NEW_JSON`
 works on an isolated copy of a closed/checkpointed capture. Optional `--term`, `--han-term` and
 `--whole-token` expose phrase/keyword and Chinese substring differences. Neither changes product data.
+
+
+## P0 development controls
+
+```sh
+python3 evals/personal/memory/prepare-p0-controls.py --out .xopc-evals/memory-p0-controls
+pnpm exec tsx evals/personal/memory/run.mts \
+  --fixtures .xopc-evals/memory-p0-controls --out .xopc-evals/memory-p0-controls-run \
+  --model xopc-cloud/openai-codex/gpt-5.6-sol \
+  --judge xopc-cloud/openai-codex/gpt-6.1-sol
+```
+
+These four public synthetic controls cover imported forgetting, a live foreground forget request,
+an explicit original-record reread, and quoted deletion text that is not a user command. Their
+historical IDs retain the original naming for byte reproducibility; they are development regressions,
+not unseen validation. The optional fixture `liveTurns` path submits real Gateway/realtime turns,
+then forces a completed learning checkpoint, restarts the isolated Gateway/database, and performs
+fresh QA with memory writes denied. It does not measure immediate deletion or natural scheduler
+latency. It reuses the same generation/judge pools and copies no connected business data.
+
+For a paired product comparison, reuse frozen fixture bytes and selection hash, model refs, semantic
+learning policy, Agent defaults and dependency lockfile. Keep a changed-SDK compatibility run
+separate. Do not count a connector waiting-for-connection outcome as an LLM transport outage or
+silently remove it from the denominator. Unknown usage cost remains null.
+
+The write-enabled reread control is generated separately, with no change to the four original
+control bytes:
+
+```sh
+python3 evals/personal/memory/prepare-p0-controls.py --write-reread \
+  --out .xopc-evals/memory-p0-write-reread-controls
+```
+
+It performs both forgetting and source rereading as real foreground turns under ordinary
+write policy, drains learning after each, then asks fresh QA under the standard write-denied
+protocol. Inspect each `live-control.json` knowledge/suppression receipt and the actual live
+answer; unchanged state during write-denied QA alone cannot establish non-restoration in
+ordinary chat. This is a public development control, not an unseen acceptance set.

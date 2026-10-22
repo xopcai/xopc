@@ -47,6 +47,7 @@ export interface ParsedCollaborationRuleCandidate {
 
 export interface UserModelInterpretation {
   knowledge?: WorkCandidate[];
+  knowledgeDeletions?: Array<{ targetKnowledgeIds: string[]; boundary: string; reread?: { subject: string; property: 'date_time' | 'price' }; evidenceRefs: string[]; evidence: Array<{ ref: string; quote: string }>; retained?: Array<{ targetKnowledgeId: string; spans: string[] }> }>;
   intent: UserModelCaptureIntent;
   assertions: ParsedAssertionOperation[];
   goals?: ParsedGoalCandidate[];
@@ -133,6 +134,13 @@ const CollaborationRuleSchema = z.object({
 
 const InterpretationSchema = z.object({
   knowledge: z.array(WorkCandidateSchema).max(8).default([]),
+  knowledgeDeletions: z.array(z.object({
+    targetKnowledgeIds: z.array(z.string().min(1)).min(1).max(16),
+    boundary: z.string().min(4).max(600),
+    reread: z.object({ subject: z.string().min(1).max(160), property: z.enum(['date_time', 'price']) }).strict().optional(),
+    retained: z.array(z.object({ targetKnowledgeId: z.string().min(1),
+      spans: z.array(z.string().min(1).max(600)).min(1).max(8) }).strict()).max(8).default([]),
+  }).merge(GroundingSchema).strict()).max(4).default([]),
   intent: z.enum(USER_MODEL_CAPTURE_INTENTS),
   assertions: z.array(AssertionOperationSchema).max(8),
   goals: z.array(GoalSchema).max(4).default([]),
@@ -183,6 +191,7 @@ export function parseUserModelInterpretation(
   evidence: CaptureEvidence[],
   allowedTargetIds: string[] = [],
   onInvalid?: (failure: InterpretationParseFailure) => void,
+  allowedKnowledgeIds: string[] = [],
 ): UserModelInterpretation | null {
   if (!raw.trim()) {
     onInvalid?.({ reason: 'empty_output', issues: [] });
@@ -278,6 +287,14 @@ export function parseUserModelInterpretation(
       });
   return {
     knowledge: parsed.knowledge,
+    knowledgeDeletions: parsed.knowledgeDeletions.flatMap(item => {
+      const evidenceRefs = groundedEvidenceRefs(item, evidenceByRef);
+      if (!evidenceRefs || (item.intent ?? parsed.intent) !== 'forget') return [];
+      const targetKnowledgeIds = [...new Set(item.targetKnowledgeIds.filter(id => allowedKnowledgeIds.includes(id)))];
+      return targetKnowledgeIds.length ? [{ targetKnowledgeIds, boundary: item.boundary, evidenceRefs, evidence: item.evidence,
+        retained: item.retained.filter(retained => targetKnowledgeIds.includes(retained.targetKnowledgeId)),
+        ...(item.reread && item.evidence.some(claim => claim.quote.includes(item.reread!.subject)) ? { reread: item.reread } : {}) }] : [];
+    }),
     intent: parsed.intent,
     assertions,
     goals,

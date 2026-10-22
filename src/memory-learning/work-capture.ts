@@ -60,7 +60,7 @@ export function applyWorkCandidates(input: {
       status: independentSupport && candidate.confidence >= 0.7 ? 'active' : 'candidate',
       sensitivity, claimMode: input.source ? 'reported' : 'observed', originClass: input.source ? 'untrusted' : 'agent', sourceAgentId: input.agentId,
       sourceConversationId: input.conversationId || undefined, evidence, replaceExisting: true,
-      source: { extractor: 'work-synthesis', evidenceRefs: candidate.evidence.map(claim => claim.ref),
+      source: { extractor: 'work-synthesis', evidenceRefs: [...new Set(candidate.evidence.map(claim => claim.ref))], evidenceQuotes: candidate.evidence,
         ...(input.source ? { sourceInstanceId: input.source.instanceId, sourceItemId: input.source.itemId,
           consentReceiptId: input.source.consentReceiptId } : {}) },
       reviewAt: ['commitment', 'open_question', 'episode', 'work_thread'].includes(candidate.kind)

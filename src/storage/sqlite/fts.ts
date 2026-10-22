@@ -14,17 +14,26 @@ const FTS_SEARCH_STOP_WORDS = new Set([
 ]);
 
 /** Build a syntax-safe, recall-oriented query for natural-language memory search. */
-export function buildFts5SearchQuery(raw: string): string {
+export function sessionSearchTerms(raw: string): string[] {
   const terms = raw
     .normalize('NFKC')
     .match(/[\p{L}\p{N}_]+/gu)
     ?.map((term) => term.toLowerCase())
     .filter((term) => term.length > 1 && !FTS_SEARCH_STOP_WORDS.has(term));
-  if (!terms?.length) return escapeFts5Query(raw);
-  return [...new Set(terms)]
-    .slice(0, 12)
-    .map((term) => escapeFts5Query(term))
-    .join(' OR ');
+  return [...new Set(terms?.length ? terms : [raw.trim()])].slice(0, 12);
+}
+
+export function buildFts5SearchQuery(raw: string): string {
+  return sessionSearchTerms(raw).map(escapeFts5Query).join(' OR ');
+}
+
+/** unicode61 does not split Han words; use literal substrings for those terms. */
+export function sessionHanSearchTerms(raw: string): string[] {
+  return sessionSearchTerms(raw).filter(term => /\p{Script=Han}/u.test(term));
+}
+
+export function escapeSqlLike(raw: string): string {
+  return raw.replaceAll('\\', '\\\\').replaceAll('%', '\\%').replaceAll('_', '\\_');
 }
 
 /** Normalize FTS5 BM25 ranks, where a more-negative rank is a better match. */

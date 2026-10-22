@@ -102,6 +102,20 @@ describe('persistent memory learning', () => {
     expect(applyWorkCandidates(input)[0]?.outcome).toBe('rejected');
   });
 
+  it('idempotently links multiple valid quotes from one source on create and update', () => {
+    const input = { candidates: [{ ...candidate, evidence: [
+      { ref: 'user-1', quote: '使用 SQLite' }, { ref: 'user-1', quote: '本地部署' }] }],
+      evidence: [{ ref: 'user-1', role: 'user' as const, text: 'Atlas 使用 SQLite，因为需要本地部署。', createdAt: Date.now() }],
+      conversationId: id, agentId: 'main', workspaceId: '/workspace', processingPolicy: 'remote_allowed' as const, runId: 'test' };
+    expect(applyWorkCandidates(input)[0].outcome).toBe('created');
+    expect(applyWorkCandidates(input)[0].outcome).toBe('deduplicated');
+    expect(getSqliteDatabase().prepare('SELECT COUNT(*) AS n FROM knowledge_evidence_links').get()).toEqual({ n: 1 });
+    expect(listKnowledgeItems()[0].source.evidenceQuotes).toEqual(input.candidates[0].evidence);
+    expect(applyWorkCandidates({ ...input, candidates: [{ ...input.candidates[0], topicKey: 'different', evidence: [
+      ...input.candidates[0].evidence, { ref: 'user-1', quote: 'invented' }] }] })[0].outcome).toBe('rejected');
+    expect(listKnowledgeItems()).toHaveLength(1);
+  });
+
   it('keeps assistant-only claims tentative and rejects invented quotes', () => {
     const input = { candidates: [candidate], evidence: [{ ref: 'user-1', role: 'assistant' as const,
       text: '使用 SQLite', createdAt: Date.now() }], conversationId: id, agentId: 'main', workspaceId: '/workspace',
