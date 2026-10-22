@@ -25,7 +25,7 @@ struct AssistantSceneSwitch: View {
                         onSelect(item)
                     } label: {
                         Text(verbatim: locale.language.languageCode?.identifier == "zh"
-                             ? (item == .life ? "生活" : "工作") : (item == .life ? "Life" : "Work"))
+                            ? (item == .life ? "生活" : "工作") : (item == .life ? "Life" : "Work"))
                             .font(.system(size: 14, weight: scene == item ? .medium : .regular))
                             .foregroundStyle(scene == item ? .primary : .secondary)
                             .frame(width: 64, height: 44)

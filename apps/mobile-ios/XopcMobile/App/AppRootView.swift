@@ -121,7 +121,11 @@ struct AppRootView: View {
 
     private var sceneShell: some View {
         tabShell
-            .alert("无法打开生活模式", isPresented: Binding(get: { sceneError != nil }, set: { if !$0 { sceneError = nil } })) {
+            .alert("无法打开生活模式", isPresented: Binding(get: { sceneError != nil }, set: {
+                if !$0 {
+                    sceneError = nil
+                }
+            })) {
                 Button("关闭", role: .cancel) { sceneError = nil }
             } message: { Text(verbatim: sceneError ?? "") }
             .onChange(of: appState.gatewayConfiguration) {
@@ -152,7 +156,11 @@ struct AppRootView: View {
         let selection = appState.selectedConversation
         let tab = appState.selectedTab
         Task {
-            defer { if sceneRequest == request { sceneOpening = false } }
+            defer {
+                if sceneRequest == request {
+                    sceneOpening = false
+                }
+            }
             let record = await personalAgent.open(using: configuration)
             guard sceneRequest == request, configuration == appState.gatewayConfiguration,
                   selection == appState.selectedConversation, tab == appState.selectedTab else { return }
