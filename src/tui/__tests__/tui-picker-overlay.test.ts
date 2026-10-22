@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Component } from '@earendil-works/pi-tui';
-import { setKeybindings } from '@earendil-works/pi-tui';
+import { setKeybindings, stripTerminalSequences } from '@earendil-works/pi-tui';
 
 import { SearchableSelectList } from '../components/searchable-select-list.js';
 import { XopcKeybindingsManager } from '../tui-keybindings-file.js';
@@ -49,7 +49,7 @@ it('prefilters searchable picker rows from an initial query', () => {
       { initialQuery: 'sonnet' },
     );
 
-    const searchLine = list.render(80)[0]?.replace(/\x1b\[[0-9;]*m/g, '');
+    const searchLine = stripTerminalSequences(list.render(80)[0] ?? '');
 
     expect(list.getSelectedItem()?.value).toBe('anthropic/claude-sonnet-4');
     expect(searchLine).toContain('search:');
