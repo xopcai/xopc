@@ -17,7 +17,7 @@ struct AssistantView<Dock: View>: View {
     let onPersonalAgentUpdated: (PersonalAgentRecord) -> Void
     let onOpenSettings: () -> Void
     let onInputFocusChanged: (Bool) -> Void
-    var scene: AssistantScene? = nil
+    var scene: AssistantScene?
     var sceneOpening = false
     var onSelectScene: (AssistantScene) -> Void = { _ in }
     let bottomDock: (AssistantComposer, Bool) -> Dock

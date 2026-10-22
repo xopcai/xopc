@@ -287,7 +287,7 @@ struct AssistantActionPanel: View {
                     }
                     .buttonStyle(.plain)
                     .disabled((action == .fileReference && !canReferenceFiles)
-                              || (action == .newConversation && !canCreateConversation))
+                        || (action == .newConversation && !canCreateConversation))
                     .accessibilityLabel(action.title)
                     .accessibilityHint(action == .fileReference && !canReferenceFiles
                         ? AppLocalization.string("发送第一条消息后可引用文件", locale: AppLocalization.selectedLocale)
