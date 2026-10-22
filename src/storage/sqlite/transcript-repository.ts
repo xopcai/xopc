@@ -19,7 +19,7 @@ import {
   type TranscriptEntryRow,
 } from './row-mappers.js';
 import { getCurrentTranscriptId, readCurrentTranscriptId } from './session-repository.js';
-import { escapeFts5Query } from './fts.js';
+import { escapeFts5Query, buildFts5SearchQuery, sessionHanSearchTerms, escapeSqlLike } from './fts.js';
 import { getSqliteDatabase, runSqliteWriteTransaction } from './transaction.js';
 
 export interface TranscriptSourceEntry {
@@ -251,7 +251,7 @@ export function loadCompactionSourceSnapshot(conversationId: string): Compaction
 export function searchSessionTranscript(
   conversationId: string,
   query: string,
-  options: { limit?: number; beforeSeq?: number; orderBySeq?: boolean } = {},
+  options: { limit?: number; beforeSeq?: number; orderBySeq?: boolean; matchMode?: 'keyword' | 'phrase' } = {},
 ): SessionTranscriptRecallMatch[] {
   const transcriptId = getCurrentTranscriptId(conversationId);
   const normalized = query.trim();
@@ -259,33 +259,34 @@ export function searchSessionTranscript(
   const limit = Math.min(20, Math.max(1, options.limit ?? 8));
   const beforeSeq = options.beforeSeq ?? Number.MAX_SAFE_INTEGER;
   const db = getSqliteDatabase();
+  const phrase = options.matchMode !== 'keyword';
+  const hanTerms = phrase ? [] : sessionHanSearchTerms(normalized);
   const ftsRows = db
     .prepare(
       `SELECT e.entry_id, e.seq, e.role, e.created_at, f.content
        FROM transcript_fts f
        JOIN transcript_entries e
          ON e.transcript_id = f.transcript_id AND e.entry_id = f.entry_id
-       WHERE transcript_fts MATCH ?
+       WHERE (transcript_fts MATCH ?)
          AND f.transcript_id = ?
          AND e.entry_kind <> 'compaction'
          AND e.seq < ?
        ORDER BY ${options.orderBySeq ? 'e.seq DESC' : 'bm25(transcript_fts), e.seq DESC'}
        LIMIT ?`,
     )
-    .all(escapeFts5Query(normalized), transcriptId, beforeSeq, limit);
-  const escapedLike = normalized.replaceAll('\\', '\\\\').replaceAll('%', '\\%').replaceAll('_', '\\_');
-  const literalRows = db
-    .prepare(
-      `SELECT entry_id, seq, role, created_at, payload_json AS content
-       FROM transcript_entries
-       WHERE transcript_id = ?
-         AND entry_kind <> 'compaction'
-         AND seq < ?
-         AND payload_json LIKE ? ESCAPE '\\'
-       ORDER BY seq DESC
-       LIMIT ?`,
-    )
-    .all(transcriptId, beforeSeq, `%${escapedLike}%`, limit);
+    .all(phrase ? escapeFts5Query(normalized) : buildFts5SearchQuery(normalized), transcriptId, beforeSeq, limit);
+  const literalTerms = [normalized, ...hanTerms];
+  const literalRows = phrase ? db.prepare(`SELECT entry_id, seq, role, created_at, payload_json AS content
+    FROM transcript_entries WHERE transcript_id = ? AND entry_kind <> 'compaction' AND seq < ?
+      AND payload_json LIKE ? ESCAPE '\\' ORDER BY seq DESC LIMIT ?`)
+    .all(transcriptId, beforeSeq, `%${escapeSqlLike(normalized)}%`, limit)
+    : db.prepare(`SELECT e.entry_id, e.seq, e.role, e.created_at, f.content
+    FROM transcript_fts f JOIN transcript_entries e
+      ON e.transcript_id = f.transcript_id AND e.entry_id = f.entry_id
+    WHERE f.transcript_id = ? AND e.entry_kind <> 'compaction' AND e.seq < ?
+      AND (${literalTerms.map(() => "f.content LIKE ? ESCAPE '\\'").join(' OR ')})
+    ORDER BY e.seq DESC LIMIT ?`)
+    .all(transcriptId, beforeSeq, ...literalTerms.map(term => `%${escapeSqlLike(term)}%`), limit);
   const seen = new Set<string>();
   const matches = [...ftsRows, ...literalRows]
     .flatMap((row) => {

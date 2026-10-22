@@ -475,7 +475,7 @@ function knowledgeFingerprints(input: Pick<WriteKnowledgeInput, 'principalId' | 
   ];
 }
 
-export function deleteKnowledgeItem(id: string, now = Date.now()): boolean {
+export function deleteKnowledgeItem(id: string, now = Date.now(), options: { includeRelated?: boolean } = {}): boolean {
   return runSqliteWriteTransaction((db) => {
     const rows = db.prepare(`WITH RECURSIVE deleted(id) AS (
       SELECT knowledge_id FROM knowledge_items WHERE knowledge_id = ?
@@ -483,7 +483,8 @@ export function deleteKnowledgeItem(id: string, now = Date.now()): boolean {
         ON json_extract(k.source_json, '$.episodeKnowledgeId') = d.id
         OR k.knowledge_id = (SELECT json_extract(source_json, '$.episodeKnowledgeId')
           FROM knowledge_items WHERE knowledge_id = d.id)
-    ) SELECT * FROM knowledge_items WHERE knowledge_id IN (SELECT id FROM deleted)`).all(id) as KnowledgeRow[];
+      WHERE ?
+    ) SELECT * FROM knowledge_items WHERE knowledge_id IN (SELECT id FROM deleted)`).all(id, options.includeRelated === false ? 0 : 1) as KnowledgeRow[];
     for (const row of rows) {
       const item = fromRow(row);
       suppressMemory(db, knowledgeFingerprints(item), now);
@@ -511,7 +512,15 @@ function writeEvidence(db: DatabaseSync, id: string, input: WriteKnowledgeInput)
       input.verification ?? (input.originClass === 'untrusted' && (input.recordClass ?? 'memory') === 'memory' ? 'tentative' : 'supported'),
       input.sensitivity ?? inferMemorySensitivity(input.content), id);
   db.prepare('DELETE FROM knowledge_evidence_links WHERE knowledge_id = ?').run(id);
+  const links = new Map<string, NonNullable<WriteKnowledgeInput['evidence']>[number]>();
   for (const evidence of input.evidence ?? []) {
+    const existing = links.get(evidence.id);
+    if (existing && (existing.contentHash !== evidence.contentHash || existing.consentReceiptId !== evidence.consentReceiptId)) {
+      throw new Error('Conflicting provenance for the same knowledge evidence.');
+    }
+    links.set(evidence.id, evidence);
+  }
+  for (const evidence of links.values()) {
     db.prepare('INSERT INTO knowledge_evidence_links(knowledge_id, evidence_id, content_hash, consent_receipt_id) VALUES (?, ?, ?, ?)')
       .run(id, evidence.id, evidence.contentHash ?? null, evidence.consentReceiptId ?? null);
   }

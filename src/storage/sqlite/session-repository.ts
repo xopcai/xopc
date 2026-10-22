@@ -18,7 +18,7 @@ import { optionalTimestampToMs } from './timestamps.js';
 import { getSqliteDatabase, runSqliteWriteTransaction } from './transaction.js';
 import { SESSION_PURPOSE_SQL, SESSION_SOURCE_SQL } from './session-identity-sql.js';
 
-import { buildFts5SearchQuery } from './fts.js';
+import { buildFts5SearchQuery, sessionHanSearchTerms, escapeSqlLike } from './fts.js';
 import { getSessionMetadata, readSessionRow, SESSION_COLUMNS, SESSION_FROM_JOIN } from './session-read-repository.js';
 
 export { getSessionMetadata } from './session-read-repository.js';
@@ -264,14 +264,17 @@ export function listSessionMetadata(query: SessionListQuery = {}): PaginatedResu
     const like = `%${rawSearch.toLowerCase()}%`;
     // Keep FTS selection inside SQLite so filtering/counting covers all matches,
     // without a pre-pagination cap or SQLite's bound-parameter limit.
+    const hanTerms = sessionHanSearchTerms(rawSearch);
     conditions.push(`(s.conversation_id IN (
       SELECT conversation_id FROM transcript_fts WHERE transcript_fts MATCH ?
-    ) OR LOWER(s.conversation_id) LIKE ?
+    ) ${hanTerms.length ? `OR s.conversation_id IN (
+      SELECT conversation_id FROM transcript_fts WHERE ${hanTerms.map(() => "content LIKE ? ESCAPE '\\'").join(' OR ')}
+    )` : ''} OR LOWER(s.conversation_id) LIKE ?
       OR LOWER(COALESCE(s.name, '')) LIKE ?
       OR LOWER(s.source_channel) LIKE ?
       OR LOWER(s.source_chat_id) LIKE ?
       OR LOWER(s.tags_json) LIKE ?)`);
-    params.push(buildFts5SearchQuery(rawSearch), like, like, like, like, like);
+    params.push(buildFts5SearchQuery(rawSearch), ...hanTerms.map(term => `%${escapeSqlLike(term)}%`), like, like, like, like, like);
   }
 
   const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';

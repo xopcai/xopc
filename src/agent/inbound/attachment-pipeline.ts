@@ -248,6 +248,7 @@ export async function hydrateUserTurnForLlm(opts: {
 }
 
 const pendingTranscriptBySession = new Map<string, TranscriptUserMessage>();
+const activeTranscriptUserBySession = new Map<string, TranscriptUserMessage>();
 
 function messageTextForPendingCompare(message: AgentMessage): string {
   return joinTextBlocks(textBlocksFromContent(readAgentMessageContent(message)));
@@ -276,12 +277,19 @@ function pendingMatchesMessage(pending: TranscriptUserMessage, message: AgentMes
 export function setPendingTranscriptUserMessage(conversationId: string, message: TranscriptUserMessage): void {
   assertTranscriptUserMessage(message);
   pendingTranscriptBySession.set(conversationId, message);
+  activeTranscriptUserBySession.set(conversationId, message);
 }
 
 export function getPendingTranscriptUserText(conversationId: string): string | undefined {
   const message = pendingTranscriptBySession.get(conversationId);
   if (!message) return undefined;
   return stripRuntimeUserMessageEnvelope(messageTextForPendingCompare(message)).trim();
+}
+
+/** The active owner's utterance remains available after its persistence receipt is consumed. */
+export function getActiveTranscriptUserText(conversationId: string): string | undefined {
+  const message = activeTranscriptUserBySession.get(conversationId);
+  return message ? stripRuntimeUserMessageEnvelope(messageTextForPendingCompare(message)).trim() : undefined;
 }
 
 export function takePendingTranscriptUserMessage(conversationId: string): TranscriptUserMessage | undefined {
@@ -291,14 +299,12 @@ export function takePendingTranscriptUserMessage(conversationId: string): Transc
 }
 
 export function clearPendingTranscriptUserMessage(conversationId: string, message?: TranscriptUserMessage): void {
-  const existing = pendingTranscriptBySession.get(conversationId);
-  if (!existing) {
-    return;
+  if (!message || pendingTranscriptBySession.get(conversationId) === message) {
+    pendingTranscriptBySession.delete(conversationId);
   }
-  if (message && existing !== message) {
-    return;
+  if (!message || activeTranscriptUserBySession.get(conversationId) === message) {
+    activeTranscriptUserBySession.delete(conversationId);
   }
-  pendingTranscriptBySession.delete(conversationId);
 }
 
 export function pendingTranscriptReferencesMediaUri(conversationId: string, uri: string): boolean {

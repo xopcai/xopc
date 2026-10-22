@@ -47,7 +47,7 @@ const { AgentCatalogRepository } = await import('../../../src/agent-catalog/repo
 const { resolveModel, getApiKey } = await import('../../../src/providers/index.js');
 const { completeWithResolvedCredentials } = await import('../../../src/providers/model-call.js');
 openXopcDatabase({ path: join(out, 'state.sqlite') });
-const db = getSqliteDatabase();
+let db = getSqliteDatabase();
 const catalog = new AgentCatalogRepository(); catalog.ensureInitialized(defaults);
 // The production timeout resolver consults the catalog default even for background review.
 // A new isolated database needs the ordinary default Agent as well as Personal.
@@ -130,6 +130,47 @@ For each sufficient=true provide one exact contiguous quote from the correspondi
       enqueueConversationLearning(parsedConfig, cid, workspace, true);
       // Finish every batch of this session before admitting the next event/session.
       await learnPending();
+    }
+    // Separate live-path controls: real foreground inputs, then an explicit learning checkpoint.
+    // Stop the autonomous scheduler so every model request still uses the shared generation pool.
+    if (input.liveTurns?.length) {
+      service = new GatewayService({ configPath, enableHotReload: false, listenPort: 0 });
+      await service.start();
+      service.agentService.agentManager.memoryLearning.stop();
+      gateway = serve({ fetch: createHonoApp({ service }).fetch, hostname: '127.0.0.1', port: 0 });
+      if (!gateway.listening) await once(gateway, 'listening');
+      gateway.on('upgrade', (req, socket, head) => { if (!service.realtime.handleUpgrade(req, socket, head)) socket.destroy(); });
+      const baseUrl = `http://127.0.0.1:${(gateway.address() as any).port}`;
+      const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
+      const liveId = randomUUID();
+      createConversation({ agentId, sourceChannel: 'webchat', name: 'Live memory control',
+        customData: { personalAgent: true, keepHiddenFromSessionList: true },
+        routing: { agentId, source: 'webchat', accountId: 'default', peerKind: 'direct', peerId: 'owner' } }, workspace, liveId);
+      setSessionConfig(liveId, { modelOverride: model, fixedModel: true, thinkingLevel: 'off', workingDirectoryOverride: workspace }, workspace);
+      const liveReceipts: unknown[] = [];
+      for (const message of input.liveTurns) {
+        const response = await fetch(baseUrl+`/api/sessions/${liveId}/agent-config`, { headers });
+        if (!response.ok) throw new Error(`live agent-config ${response.status}`);
+        const selected = (await response.json() as any).payload;
+        const meta = db.prepare('SELECT active_transcript_id FROM sessions WHERE conversation_id=?').get(liveId)!;
+        await withSharedPool('generation', { caseId: input.id, phase: 'live-control' }, () => runRealtimeInput({
+          baseUrl, headers, conversationId: liveId, transcriptId: String(meta.active_transcript_id), configVersion: selected.configVersion,
+          message, thinking: 'off', signal: AbortSignal.timeout(240_000), onRunId: () => {}, onEvent: async (event, data) => {
+            appendFileSync(join(out, 'live-events.jsonl'), JSON.stringify({ event, data })+'\n');
+          } }));
+        enqueueConversationLearning(parsedConfig, liveId, workspace, true);
+        await learnPending();
+        liveReceipts.push({ message, knowledge: db.prepare('SELECT * FROM knowledge_items').all(),
+          suppressions: db.prepare('SELECT * FROM memory_suppressions').all(),
+          rules: db.prepare('SELECT * FROM collaboration_rule_revisions').all() });
+      }
+      write('live-control.json', { actualForeground: true, forcedLearningCheckpoint: true,
+        naturalSchedulingLatencyMeasured: false, liveReceipts });
+      service.realtime.close();
+      gateway.close();
+      await service.stop();
+      service = undefined; gateway = undefined;
+      openXopcDatabase({ path: join(out, 'state.sqlite') }); db = getSqliteDatabase();
     }
     const before = {
       assertions: db.prepare('SELECT * FROM user_assertions').all(),

@@ -1,6 +1,8 @@
 import type { AgentTool } from '@earendil-works/pi-agent-core';
 import { Type } from '@sinclair/typebox';
 
+import { forgottenHistoryEntries, FORGOTTEN_HISTORY_EXCERPT } from '../../memory-learning/forgotten-history.js';
+import type { CaptureScopeContext } from '../../user-model/capture/executor.js';
 import type { SessionStore } from '../../session/store.js';
 
 const SessionRecallSchema = Type.Object({
@@ -28,6 +30,8 @@ export interface SessionRecallToolDeps {
   getSessionStore: () => SessionStore;
   getCurrentConversationId: () => string | undefined;
   maxOutputChars?: number;
+  getHistoryContext?: () => CaptureScopeContext;
+  getCurrentUserText?: () => string | undefined;
 }
 
 function excerpt(content: string, query: string, maxChars: number): string {
@@ -66,6 +70,10 @@ export function createSessionRecallTool(deps: SessionRecallToolDeps): AgentTool 
         ...(input.beforeSeq ? { beforeSeq: input.beforeSeq } : {}),
         ...(deps.maxOutputChars ? { orderBySeq: true } : {}),
       });
+      const protectedEntries = deps.getHistoryContext ? forgottenHistoryEntries(deps.getHistoryContext(), deps.getCurrentUserText?.()) : new Set<string>();
+      for (const match of matches) {
+        if (protectedEntries.has(`${conversationId}:*`) || protectedEntries.has(`${conversationId}:${match.entryId}`)) match.content = FORGOTTEN_HISTORY_EXCERPT;
+      }
       if (deps.maxOutputChars) matches.sort((a, b) => b.seq - a.seq);
       const results = matches.map((match) => ({
         seq: match.seq,

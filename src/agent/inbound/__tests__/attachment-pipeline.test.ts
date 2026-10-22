@@ -12,11 +12,27 @@ import {
   buildTranscriptUserMessage,
   hydrateUserTurnForLlm,
   setPendingTranscriptUserMessage,
+  getActiveTranscriptUserText,
+  clearPendingTranscriptUserMessage,
   transformUserMessageForPersistence,
 } from '../attachment-pipeline.js';
 import type { AgentInstanceGateway } from '../../agent-instance-gateway.js';
 
 describe('attachment-pipeline', () => {
+  it('retains only the current author turn after persistence and clears its read authorization at turn end', () => {
+    const id = 'history-read-authorization';
+    const first = { role: 'user' as const, content: '请从旧记录里恢复项目日期。', timestamp: Date.now() };
+    setPendingTranscriptUserMessage(id, first);
+    transformUserMessageForPersistence(id, first);
+    expect(getActiveTranscriptUserText(id)).toBe(first.content);
+    const second = { role: 'user' as const, content: '现在只总结负责人。', timestamp: Date.now() };
+    setPendingTranscriptUserMessage(id, second);
+    clearPendingTranscriptUserMessage(id, first);
+    expect(getActiveTranscriptUserText(id)).toBe(second.content);
+    clearPendingTranscriptUserMessage(id, second);
+    expect(getActiveTranscriptUserText(id)).toBeUndefined();
+  });
+
   let workDir = '';
   let prevStateDir: string | undefined;
 

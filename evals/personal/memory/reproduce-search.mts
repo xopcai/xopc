@@ -22,7 +22,8 @@ try{
  const sourceFound=(query:string)=>listSessionMetadata({search:query,limit:100}).items.some((r:any)=>r.key===values.conversation);
  const result:any={modelCalls:0,isolatedCopy:true,sourceDatabaseHash:createHash('sha256').update(readFileSync(source)).digest('hex'),
   conversationId:values.conversation,query:values.query,listedSourceFound:sourceFound(values.query),
-  phraseRecall:searchSessionTranscript(values.conversation,values.query,{limit:2})};
+  phraseRecall:searchSessionTranscript(values.conversation,values.query,{limit:2,matchMode:'phrase'}),
+  keywordRecall:searchSessionTranscript(values.conversation,values.query,{limit:2,matchMode:'keyword'})};
  if(values.term)result.singleTermRecall=searchSessionTranscript(values.conversation,values.term,{limit:2});
  if(values['han-term']){
   result.hanSubstringListingSourceFound=sourceFound(values['han-term']);
