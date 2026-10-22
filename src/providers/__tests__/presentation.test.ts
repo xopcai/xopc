@@ -2,8 +2,19 @@ import { describe, expect, it } from 'vitest';
 
 import { getAllProviders, getModelsByProvider, PROVIDER_META } from '../index.js';
 import { getOnboardingFeaturedProviders, getRecommendedModelsForProvider, modelToCatalogView } from '../presentation.js';
+import { getDomesticProviderPreset } from '../domestic-presets.js';
 
 describe('provider presentation catalog', () => {
+  it.each(['xiaomi', 'xiaomi-token-plan-cn', 'xiaomi-token-plan-ams', 'xiaomi-token-plan-sgp'])('keeps %s presets and recommendations in the current catalog', provider => {
+    const ids = new Set(getModelsByProvider(provider).map(model => model.id));
+    const preset = getDomesticProviderPreset(provider)!;
+    expect(ids.has(preset.defaultModel)).toBe(true);
+    for (const model of preset.models) expect(ids.has(model.id), `${provider}/${model.id}`).toBe(true);
+    const recommendations = getRecommendedModelsForProvider(provider);
+    expect(recommendations.length).toBeGreaterThan(0);
+    expect(recommendations[0]).toMatchObject({ id: 'mimo-v2.6-pro', vision: true });
+  });
+
   it('exposes the pi China subscription provider and recommends its vision models', () => {
     const provider = 'qwen-token-plan-cn';
     expect(getAllProviders()).toContain(provider);

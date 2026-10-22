@@ -50,9 +50,8 @@ const STEPFUN_MODELS: DomesticProviderModelPreset[] = [
 ];
 
 const MIMO_MODELS: DomesticProviderModelPreset[] = [
-  { id: 'mimo-v2.5-pro', name: 'MiMo V2.5 Pro', contextWindow: 1000000, reasoning: true, input: ['text'] },
-  { id: 'mimo-v2.5-pro-ultraspeed', name: 'MiMo V2.5 Pro UltraSpeed', contextWindow: 1000000, reasoning: true, input: ['text'] },
-  { id: 'mimo-v2.5', name: 'MiMo V2.5', contextWindow: 1000000, reasoning: true, input: ['text', 'image'] },
+  { id: 'mimo-v2.6-pro', name: 'MiMo V2.6 Pro', contextWindow: 1048576, maxTokens: 131072, reasoning: true, input: ['text', 'image'] },
+  { id: 'mimo-v2.6-flash', name: 'MiMo V2.6 Flash', contextWindow: 1048576, maxTokens: 131072, reasoning: true, input: ['text', 'image'] },
 ];
 
 const MINIMAX_MODELS: DomesticProviderModelPreset[] = [
@@ -313,8 +312,11 @@ export const DOMESTIC_PROVIDER_PRESETS = [
     api: 'openai-completions',
     baseUrlPresets: [{ id: 'api', label: 'API billing', baseUrl: 'https://api.xiaomimimo.com/v1' }],
     defaultBaseUrlPreset: 'api',
-    defaultModel: 'mimo-v2.5-pro',
-    models: MIMO_MODELS,
+    defaultModel: 'mimo-v2.6-pro',
+    models: [
+      ...MIMO_MODELS,
+      { id: 'mimo-v2.6-pro-ultraspeed', name: 'MiMo V2.6 Pro UltraSpeed', contextWindow: 1048576, maxTokens: 131072, reasoning: true, input: ['text', 'image'] },
+    ],
     aliases: ['xiaomi', 'mimo', 'xiaomimimo'],
     quirks: ['Some MiMo plans document api-key style auth; keep auth header behavior configurable if needed.'],
   },
@@ -329,7 +331,7 @@ export const DOMESTIC_PROVIDER_PRESETS = [
     api: 'openai-completions',
     baseUrlPresets: [{ id: 'cn', label: 'China', baseUrl: 'https://token-plan-cn.xiaomimimo.com/v1' }],
     defaultBaseUrlPreset: 'cn',
-    defaultModel: 'mimo-v2.5-pro',
+    defaultModel: 'mimo-v2.6-pro',
     models: MIMO_MODELS,
     aliases: ['xiaomi token plan cn', 'mimo token plan cn'],
   },
@@ -344,7 +346,7 @@ export const DOMESTIC_PROVIDER_PRESETS = [
     api: 'openai-completions',
     baseUrlPresets: [{ id: 'ams', label: 'Amsterdam', baseUrl: 'https://token-plan-ams.xiaomimimo.com/v1' }],
     defaultBaseUrlPreset: 'ams',
-    defaultModel: 'mimo-v2.5-pro',
+    defaultModel: 'mimo-v2.6-pro',
     models: MIMO_MODELS,
     aliases: ['xiaomi token plan ams', 'mimo token plan ams'],
   },
@@ -359,7 +361,7 @@ export const DOMESTIC_PROVIDER_PRESETS = [
     api: 'openai-completions',
     baseUrlPresets: [{ id: 'sgp', label: 'Singapore', baseUrl: 'https://token-plan-sgp.xiaomimimo.com/v1' }],
     defaultBaseUrlPreset: 'sgp',
-    defaultModel: 'mimo-v2.5-pro',
+    defaultModel: 'mimo-v2.6-pro',
     models: MIMO_MODELS,
     aliases: ['xiaomi token plan sgp', 'mimo token plan sgp'],
   },

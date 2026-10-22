@@ -19,7 +19,7 @@ export type SetupSnapshot = {
 const preferred: Record<string, { fast: string[]; reasoning: string[] }> = {
   'qwen-token-plan-cn': { fast: ['qwen3.8-flash', 'qwen3.7-plus', 'qwen3.6-flash'], reasoning: ['qwen3.8-max', 'deepseek-v4-pro-0813', 'deepseek-v4-pro'] },
   'xopc-cloud': { fast: ['auto'], reasoning: ['advanced', 'auto'] },
-  'xiaomi-token-plan-cn': { fast: ['mimo-v2.5', 'mimo-v2.5-pro'], reasoning: ['mimo-v2.5-pro', 'mimo-v2.5'] },
+  'xiaomi-token-plan-cn': { fast: ['mimo-v2.6-flash', 'mimo-v2.6-pro'], reasoning: ['mimo-v2.6-pro', 'mimo-v2.6-flash'] },
 };
 const uses: ModelSetupUse[] = ['chat', 'vision', 'image', 'background'];
 export class SetupConflictError extends Error {}
