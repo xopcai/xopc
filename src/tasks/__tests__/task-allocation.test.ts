@@ -157,7 +157,7 @@ describe('background task allocation', () => {
   it('advertises submission and coordination without foreground executor-selection commands', () => {
     const tool = createPersonalTaskTool({ getCurrentConversationId: () => conversationId,
       getCurrentAgentId: () => personalAgentId('local-owner'), dispatchTaskRuns: vi.fn() });
-    expect(tool.parameters.properties.command.anyOf.map(command => command.const)).toEqual([
+    expect(tool.parameters.properties.command.enum).toEqual([
       'revise', 'submit', 'list', 'get', 'collaboration', 'entry', 'instruct', 'answer', 'retry_allocation', 'selection', 'cancel',
     ]);
     expect(tool.parameters.properties).not.toHaveProperty('agentId');
