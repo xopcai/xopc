@@ -5,7 +5,7 @@ import useSWR from 'swr';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useLocaleStore } from '@/stores/locale-store';
-import { installPhoneDependency, loadPhoneDependencies, phoneDependenciesKey, useExistingPhoneAdb, type PhoneDependencyKind, type PhoneDependencyProgress } from './phone-dependencies-api';
+import { installPhoneDependency, loadPhoneDependencies, phoneDependenciesKey, selectExistingPhoneAdb, type PhoneDependencyKind, type PhoneDependencyProgress } from './phone-dependencies-api';
 
 export function PhoneDependenciesCard({ cloudOnly = false, onChanged }: { cloudOnly?: boolean; onChanged?(): void }) {
   const zh = useLocaleStore(s => s.language) === 'zh';
@@ -23,8 +23,8 @@ export function PhoneDependenciesCard({ cloudOnly = false, onChanged }: { cloudO
   async function perform(kind: PhoneDependencyKind, action: 'install' | 'repair' | 'existing' | 'detect') {
     setBusy(kind); setFailed(false); setFeedback(''); setProgress(undefined);
     try {
-      if (action === 'detect') await useExistingPhoneAdb('');
-      else if (action === 'existing' && kind === 'adb') await useExistingPhoneAdb(paths.adb.trim());
+      if (action === 'detect') await selectExistingPhoneAdb('');
+      else if (action === 'existing' && kind === 'adb') await selectExistingPhoneAdb(paths.adb.trim());
       else await installPhoneDependency(kind, action === 'existing' ? 'import' : action, setProgress, action === 'existing' ? paths.scrcpy.trim() : undefined);
       await mutate(); onChanged?.();
       setFeedback(zh ? '依赖已就绪。' : 'Dependency is ready.');

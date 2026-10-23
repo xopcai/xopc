@@ -12,7 +12,7 @@ export const phoneDependenciesKey = () => apiUrl('/api/runtime-tools/phone-depen
 export async function loadPhoneDependencies() {
   return (await fetchJson<{ payload: { location: 'gateway'; installationEnabled: boolean; statuses: PhoneDependencyStatus[] } }>(phoneDependenciesKey())).payload;
 }
-export async function useExistingPhoneAdb(path: string) {
+export async function selectExistingPhoneAdb(path: string) {
   await fetchJson(apiUrl('/api/runtime-tools/phone-dependencies/adb/path'), { method: 'POST', body: JSON.stringify({ path }) });
 }
 export async function installPhoneDependency(kind: PhoneDependencyKind, action: 'install' | 'repair' | 'import', onProgress: (event: PhoneDependencyProgress) => void, path?: string) {
