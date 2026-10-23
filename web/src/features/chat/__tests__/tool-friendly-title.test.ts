@@ -67,7 +67,7 @@ describe('getToolExecutionTitle', () => {
   it('uses dedicated wording for built-in tools', () => {
     expect(title('en', 'image_generate', {}, 'running')).toBe('Generating image…');
     expect(title('zh', 'delegate_task', {}, 'completed')).toBe('已安排相关工作');
-    expect(title('en', 'mcp__server__workflow', {}, 'completed')).toBe('Ran workflow');
+    expect(title('en', 'mcp__server__inspect', {}, 'completed')).toBe('Processed related information');
     expect(hasSpecificToolExecutionTitle('xopc_use')).toBe(true);
   });
 

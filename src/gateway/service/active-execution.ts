@@ -1,6 +1,6 @@
 import type { TurnOrigin } from '@xopcai/endpoint-tools-protocol';
 
-export type ActiveExecutionKind = 'chat' | 'side-chat' | 'task' | 'workflow' | 'automation';
+export type ActiveExecutionKind = 'chat' | 'side-chat' | 'task' | 'automation';
 export type ActiveExecutionInitiator = 'user' | 'background';
 
 export type ActiveExecution = {
@@ -27,8 +27,8 @@ export function describeActiveExecution(input: {
   const kind = input.kind
     ?? (origin.type === 'system' && origin.source === 'automation'
       ? 'automation'
-      : origin.type === 'system' && origin.source === 'workflow'
-        ? 'workflow'
+      : origin.type === 'system' && origin.source === 'task'
+        ? 'task'
         : input.taskRunId
           ? 'task'
           : 'chat');

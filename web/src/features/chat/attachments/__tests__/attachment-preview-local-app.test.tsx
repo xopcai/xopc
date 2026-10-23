@@ -81,10 +81,13 @@ describe('AttachmentPreviewDialog shared header', () => {
       );
     });
 
-    const button = document.querySelector<HTMLButtonElement>(`button[aria-label="${labels.openSystemApp}"]`);
-    expect(button).toBeTruthy();
+    openMenu();
+    const button = menuItem(labels.openSystemApp);
+    expect(button).toBeDefined();
+    expect(button?.disabled).toBe(false);
 
-    await act(async () => button?.click());
+    await act(async () => button!.click());
+    expect(document.querySelector('[role="menu"]')).toBeNull();
 
     expect(openTemporaryFile).toHaveBeenCalledTimes(1);
     const input = openTemporaryFile.mock.calls[0]?.[0];

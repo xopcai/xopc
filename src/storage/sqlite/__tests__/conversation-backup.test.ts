@@ -7,9 +7,9 @@ import { expect, it, vi } from 'vitest';
 
 import { requireNodeSqlite } from '../../../infra/node-sqlite.js';
 import {
-  backupDatabaseBeforeCutover,
+  assertDatabaseOffline,
   flushBackupFile,
-} from '../migrations/conversation-backup.js';
+} from '../offline-access.js';
 
 it('flushes the backup through a writable, non-truncating handle', () => {
   const operations = {
@@ -36,8 +36,8 @@ it('closes the backup handle when flushing fails', () => {
   expect(operations.close).toHaveBeenCalledWith(42);
 });
 
-it('refuses the cutover while another process holds the database and succeeds after it exits', async () => {
-  const directory = mkdtempSync(join(tmpdir(), 'xopc-cutover-owner-'));
+it('refuses offline backup while another process holds the database and succeeds after it exits', async () => {
+  const directory = mkdtempSync(join(tmpdir(), 'xopc-backup-owner-'));
   const databasePath = join(directory, 'xopc.db');
   const { DatabaseSync } = requireNodeSqlite();
   const db = new DatabaseSync(databasePath);
@@ -48,14 +48,12 @@ it('refuses the cutover while another process holds the database and succeeds af
   const exited = once(child, 'exit');
   try {
     await Promise.race([once(child.stdout, 'data'), once(child, 'error').then(([error]) => { throw error; })]);
-    expect(() => backupDatabaseBeforeCutover(db, databasePath, 'test')).toThrow('Stop other xopc database processes');
+    expect(() => assertDatabaseOffline(databasePath)).toThrow('Stop other xopc database processes');
     expect(readdirSync(directory).some(name => name.endsWith('.bak'))).toBe(false);
     expect(db.prepare('SELECT value FROM sentinel').get()?.value).toBe('preserved');
     child.kill();
     await exited;
-    const backup = new DatabaseSync(backupDatabaseBeforeCutover(db, databasePath, 'test'), { readOnly: true });
-    try { expect(backup.prepare('SELECT value FROM sentinel').get()?.value).toBe('preserved'); }
-    finally { backup.close(); }
+    expect(() => assertDatabaseOffline(databasePath)).not.toThrow();
   } finally {
     if (child.exitCode === null && child.signalCode === null) child.kill();
     await exited;

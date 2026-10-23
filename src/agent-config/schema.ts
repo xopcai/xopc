@@ -110,11 +110,6 @@ export const SkillOverrideSchema = z.discriminatedUnion('mode', [
   }).strict(),
 ]);
 
-export const WorkflowPolicySchema = z.object({
-  default: z.string().min(1).optional(),
-  allowed: z.array(z.string().min(1)).optional(),
-}).strict();
-
 export const RuntimePolicySchema = z.object({
   codemode: z.object({
     enabled: z.boolean().default(false),
@@ -142,7 +137,6 @@ export const AgentDefaultsSchema = z.object({
   models: AgentModelsDefaultsSchema,
   skills: SkillDefaultsSchema.default(DEFAULT_SKILL_POLICY),
   tools: ToolPoliciesSchema.default({}),
-  workflows: WorkflowPolicySchema.default({}),
   runtime: RuntimePolicySchema.default({}),
 }).strict();
 
@@ -174,7 +168,6 @@ export const AgentEntrySchema = z.object({
   skills: SkillOverrideSchema.optional(),
   tools: ToolPoliciesSchema.optional(),
   toolAllowlist: z.array(z.string().min(1)).optional(),
-  workflows: WorkflowPolicySchema.optional(),
   runtime: RuntimePolicySchema.optional(),
 }).strict();
 
@@ -189,7 +182,6 @@ export const EffectiveAgentConfigSchema = z.object({
   skills: SkillDefaultsSchema,
   tools: ToolPoliciesSchema,
   toolAllowlist: z.array(z.string().min(1)).optional(),
-  workflows: WorkflowPolicySchema,
   runtime: RuntimePolicySchema,
 }).strict();
 

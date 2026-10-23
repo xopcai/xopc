@@ -78,4 +78,4 @@ export function ProviderSetupRequiredCard({ payload }: { payload: ProviderSetupP
   );
 }
 
-export { AgentRunErrorBanner, ProviderSetupRequiredBanner } from '@/features/chat/messages/agent-run-error-banner';
+export { AgentRunErrorBanner } from '@/features/chat/messages/agent-run-error-banner';

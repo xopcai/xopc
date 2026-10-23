@@ -32,7 +32,7 @@ describe('tool_manual tool', () => {
     expect(text).toContain('XOPC Use Tool Manual');
     expect(text).toContain('preview_edit');
     expect(text).toContain('project');
-    expect(text).toContain('TaskRuns');
+    expect(text).toContain('TaskRun');
     expect(text).toContain('expectedVersion');
     expect(text).toContain('update_dependencies');
     expect(text).toContain('Object routing');
@@ -42,8 +42,6 @@ describe('tool_manual tool', () => {
     expect(text).toContain('create_milestone');
     expect(text).toContain('create_update');
     expect(text).toContain('`automation`');
-    expect(text).toContain('`workflow`');
-    expect(text).toContain('`task`');
     expect(text).not.toContain('`scene`');
     expect(text).not.toContain('Scene delegation');
     expect(text).not.toContain('mode `proactive`');

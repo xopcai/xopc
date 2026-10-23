@@ -3,7 +3,7 @@
  */
 
 import { mkdir, readFile, realpath, stat, unlink, writeFile } from 'node:fs/promises';
-import { join, resolve as pathResolve } from 'node:path';
+import { resolve as pathResolve } from 'node:path';
 
 import {
   listAgentEntries,
@@ -174,7 +174,6 @@ export type UpdateAgentBody = {
   skills?: SkillOverride | null;
   tools?: AgentEntry['tools'] | null;
   toolAllowlist?: AgentEntry['toolAllowlist'] | null;
-  workflows?: AgentEntry['workflows'] | null;
   runtime?: AgentEntry['runtime'] | null;
 };
 
@@ -194,7 +193,7 @@ export async function updateGatewayAgent(
   if (body.skills !== undefined) patch.skills = body.skills ?? undefined;
   if (body.tools !== undefined) patch.tools = body.tools ?? undefined;
   if (body.toolAllowlist !== undefined) patch.toolAllowlist = body.toolAllowlist ?? undefined;
-  if (body.workflows !== undefined) patch.workflows = body.workflows ?? undefined;
+
   if (body.runtime !== undefined) patch.runtime = body.runtime ?? undefined;
   try {
     const service = new AgentCatalogService();

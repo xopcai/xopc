@@ -6,7 +6,7 @@ import path from 'node:path';
 import { PACKAGE_VERSION } from '../package-version.js';
 import { readPackageName, readPackageVersion } from './package-json.js';
 import { runGlobalPackageUpdateSteps, type PackageUpdateStepResult } from './package-update-steps.js';
-import { createDefaultCommandRunner, runCommandWithTimeout } from './run-command.js';
+import { runCommandWithTimeout } from './run-command.js';
 import { resolveStableNodePath } from './stable-node-path.js';
 import { trimLogTail } from './update-log.js';
 import { DEFAULT_PACKAGE_CHANNEL, type UpdateChannel } from './update-channels.js';
@@ -795,6 +795,3 @@ export async function runAutoUpdateCommandWithProgress(params: {
     result,
   };
 }
-
-// Legacy export for tests that import createDefaultCommandRunner path
-export { createDefaultCommandRunner };

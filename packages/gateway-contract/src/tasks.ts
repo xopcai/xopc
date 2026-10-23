@@ -236,12 +236,6 @@ export const TaskCriterionReviewInputSchema = z.object({
 
 export const TaskExecutorSelectionSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('agent'), agentId: z.string().min(1) }),
-  z.object({
-    kind: z.literal('workflow'),
-    workflowId: z.string().min(1),
-    workflowVersion: z.string().min(1).optional(),
-    input: z.unknown().optional(),
-  }),
   z.object({ kind: z.literal('human'), actorId: z.string().min(1) }),
   z.object({ kind: z.literal('external'), provider: z.string().min(1), config: z.unknown() }),
 ]);

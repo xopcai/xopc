@@ -27,8 +27,8 @@ describe('Personal task explicit Skills', () => {
 
   it('discovers only specialists that can use all requested Skills', async () => {
     const lookup = vi.fn((id: string) => id === 'researcher' ? available() : { skills: [] });
-    const result = await createPersonalTaskTool(deps(lookup)).execute('find', { command: 'agents', requiredSkills: ['Research'] });
-    const agents = JSON.parse((result.content[0] as { text: string }).text);
+    const result = await createPersonalTaskTool(deps(lookup)).execute('find', { command: 'match', requiredSkills: ['Research'] });
+    const agents = JSON.parse((result.content[0] as { text: string }).text).candidates.filter((candidate: { eligibility: string }) => candidate.eligibility === 'eligible');
     expect(agents).toEqual([expect.objectContaining({ id: 'researcher', verifiedSkills: ['research'] })]);
     expect(execute).not.toHaveBeenCalled();
   });
@@ -51,14 +51,15 @@ describe('Personal task explicit Skills', () => {
   it.each(['agent-denied', 'requirements-unmet', 'tool-gated', 'disabled'])('rejects creation when Skill access changes: %s', async reason => {
     const lookup = vi.fn(available);
     const tool = createPersonalTaskTool(deps(lookup));
-    await tool.execute('find', { command: 'agents', requiredSkills: ['research'] });
+    await tool.execute('find', { command: 'match', requiredSkills: ['research'] });
     lookup.mockReturnValue({ skills: [{ name: 'research', availableForCurrentAgent: false, unavailableReason: reason }] } as ReturnType<typeof available>);
     await expect(tool.execute('create', { command: 'create', agentId: 'researcher', objective: 'Compare', requiredSkills: ['research'] })).rejects.toThrow(reason);
     expect(execute).not.toHaveBeenCalled();
   });
 
   it('reports unverifiable or missing Skills without creating a substitute task', async () => {
-    await expect(createPersonalTaskTool(deps()).execute('find', { command: 'agents', requiredSkills: ['research'] })).rejects.toThrow('cannot be verified');
+    const result = await createPersonalTaskTool(deps()).execute('find', { command: 'match', requiredSkills: ['research'] });
+    expect(JSON.parse((result.content[0] as { text: string }).text).candidates.some((candidate: { eligibility: string }) => candidate.eligibility === 'needs_verification')).toBe(true);
     await expect(createPersonalTaskTool(deps(() => ({ skills: [] }))).execute('create', { command: 'create', agentId: 'researcher', objective: 'Compare', requiredSkills: ['missing'] })).rejects.toThrow('not-installed');
     await expect(createPersonalTaskTool(deps(available)).execute('create', { command: 'create', agentId: 'disabled', objective: 'Compare' })).rejects.toThrow('unavailable');
     expect(execute).not.toHaveBeenCalled();

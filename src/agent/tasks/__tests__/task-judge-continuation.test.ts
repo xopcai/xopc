@@ -80,7 +80,7 @@ describe('task acceptance continuation', () => {
     const waiting = runs.require(runId);runs.setStatus({ runId, expectedVersion: waiting.version, from: ['waiting'], to: 'running' });
     const executionId = crypto.randomUUID();
     insertSessionInput({ id: crypto.randomUUID(), conversationId, clientMessageId: 'recovery', taskRunId: runId,
-      requestedDelivery: 'next', effectiveDelivery: 'next', status: 'queued', content: 'Continue', origin: { type: 'system', source: 'workflow' } });
+      requestedDelivery: 'next', effectiveDelivery: 'next', status: 'queued', content: 'Continue', origin: { type: 'system', source: 'task' } });
     claimNextSessionInput(conversationId, executionId);
     expect(getTaskContinuation(conversationId, executionId)?.message).toContain('Remaining acceptance criteria');
     resetSessionRecord(conversationId, root);

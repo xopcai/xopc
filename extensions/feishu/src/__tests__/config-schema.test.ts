@@ -13,19 +13,19 @@ describe('FeishuConfigSchema', () => {
     expect(r.success).toBe(false);
   });
 
-  it('accepts enabled config with top-level credentials', () => {
+  it('rejects retired top-level credentials', () => {
     const r = FeishuConfigSchema.safeParse({ enabled: true, appId: 'a', appSecret: 'b' });
-    expect(r.success).toBe(true);
+    expect(r.success).toBe(false);
   });
 
-  it('accepts enabled multi-account config when account inherits top-level credentials', () => {
+  it('rejects accounts that rely on retired top-level credentials', () => {
     const r = FeishuConfigSchema.safeParse({
       enabled: true,
       appId: 'a',
       appSecret: 'b',
       accounts: { work: { enabled: true } },
     });
-    expect(r.success).toBe(true);
+    expect(r.success).toBe(false);
   });
 });
 

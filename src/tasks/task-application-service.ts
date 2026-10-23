@@ -45,11 +45,6 @@ function requestHash(value: unknown): string {
 function executorRef(executor: TaskExecutorSelection): Record<string, unknown> {
   switch (executor.kind) {
     case 'agent': return { agentId: executor.agentId };
-    case 'workflow': return {
-      workflowId: executor.workflowId,
-      ...(executor.workflowVersion ? { workflowVersion: executor.workflowVersion } : {}),
-      ...(executor.input === undefined ? {} : { input: executor.input }),
-    };
     case 'human': return { actorId: executor.actorId };
     case 'external': return { provider: executor.provider, config: executor.config };
   }

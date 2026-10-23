@@ -11,7 +11,6 @@ describe('project operating summary', () => {
       tasks,
       dependencyEdges: [],
       blockers: [],
-      running: [],
       recentResults: [],
       digest: { health: 'attention', summary: 'Needs attention', recommendedAction: 'Approve' },
     });

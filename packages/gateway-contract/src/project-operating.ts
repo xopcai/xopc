@@ -68,12 +68,6 @@ export const ProjectOperatingViewSchema = z.object({
     href: z.string().optional(),
     updatedAt: z.number().optional(),
   })),
-  running: z.array(z.object({
-    runId: z.string(),
-    definitionId: z.string(),
-    status: z.string(),
-    createdAt: z.number(),
-  })),
   recentResults: z.array(z.object({
     taskId: z.string(),
     taskTitle: z.string(),

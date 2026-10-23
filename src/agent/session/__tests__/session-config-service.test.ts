@@ -119,7 +119,6 @@ describe('SessionConfigService project workspace', () => {
 
     const result = await service.patch(CONVERSATION_ID, {
       activityDetailLevel: 'off',
-      reasoningLevel: 'stream',
     });
 
     expect(result).toEqual({ ok: true });

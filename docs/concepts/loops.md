@@ -24,17 +24,15 @@ The Task Loop is therefore the work layer of the broader [product relationship](
 | **Conversation** | The natural-language interface and execution history. It is where the user asks, decides, and receives results. |
 | **Task** | The single unit of commitment. It owns objective, success criteria, state, next action, blockers, execution runtime, evidence, and receipts. |
 | **Project** | Optional context for related tasks, conversations, files, and activity. It does not own a second task state. |
-| **Workflow** | An execution strategy for repeatable or inspectable multi-step work. It is not a user task container. |
-| **Automation** | A trigger that starts an agent or workflow on a schedule or event. It is not a user task container. |
+| **Automation** | A trigger that starts an agent on a schedule or event. It is not a user task container. |
 | **Note / Workspace** | Durable source material and produced artifacts. |
 
-The default experience exposes only Home, Conversation, Task, and optional Project context. Workflow and Automation appear when their execution behavior is useful, not as setup the user must understand first.
+The default experience exposes only Home, Conversation, Task, and optional Project context. Automation appear when their execution behavior is useful, not as setup the user must understand first.
 
 ## One loop
 
 1. **Capture and understand** — accept the user's current request or incomplete input, then assemble relevant preferences, Project material, conversation context, and authorized source evidence.
 2. **Contract** — express the objective, acceptance criteria, deliverables, boundaries, authority, and verification plan as one Task Contract.
-3. **Execute** — use direct tools by default; select a Workflow only for repeatable or visible multi-step execution; select an Automation only for recurring or event-driven execution.
 4. **Verify** — judge acceptance criteria using evidence and write an execution receipt. Activity alone is never treated as completion.
 5. **Continue** — proceed autonomously while authority and evidence allow it. Ask the user only for a specific decision, permission, credential, or missing fact.
 6. **Resurface** — when work cannot or should not continue now, preserve its blocker and smallest next action so it can return at a useful time.
@@ -56,7 +54,7 @@ Sending, deleting, purchasing, publishing, or changing an external system requir
 
 ## State ownership
 
-Task is the only authoritative state machine for user work. Conversation, Project, Workflow, and Automation link to a Task but do not mirror its status. The UI derives the user-facing states `running`, `needs_user`, and `completed` from the Task aggregate.
+Task is the only authoritative state machine for user work. Conversation, Project, and Automation link to a Task but do not mirror its status. The UI derives the user-facing states `running`, `needs_user`, and `completed` from the Task aggregate.
 
 Home is a projection, not another store. It shows:
 
@@ -73,7 +71,6 @@ Home is a projection, not another store. It shows:
 | Ask or complete a one-off task | Conversation; a Task is created when durable execution is needed |
 | Keep a result moving across sessions | Task + Conversation |
 | Group related results and material | Project + Tasks |
-| Run repeatable multi-step work | Task + Workflow |
 | React to a schedule or event | Task + Automation |
 
 Users should never have to choose among competing task containers. They state the task; xopc chooses the execution capability.

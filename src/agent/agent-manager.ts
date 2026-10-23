@@ -204,8 +204,6 @@ export interface AgentManagerConfig {
   dispatchTaskEvents?: () => void;
   dispatchTaskRuns?: () => void;
   onAgentCatalogMutate?: () => void;
-  /** Gateway: starts persisted workflow runs (dedicated chat session per run). */
-  getWorkflowRunService?: () => import('../workflows/service/workflow-run-service.types.js').WorkflowRunServiceLike | undefined;
   /** Runtime notification for UI/CLI shells that cache skill catalogs. */
   onSkillsUpdated?: (payload: { reason: 'disk' | 'config' }) => void;
   /** Install a managed skill from an explicit source and refresh runtime state. */
@@ -500,7 +498,6 @@ export class AgentManager implements AgentInstanceGateway {
       dispatchTaskEvents: this.config.dispatchTaskEvents,
       dispatchTaskRuns: this.config.dispatchTaskRuns,
       onAgentCatalogMutate: this.config.onAgentCatalogMutate,
-      getWorkflowRunService: this.config.getWorkflowRunService,
       getSkillIndexingContext: () => {
         const ctx = this.config.getCurrentContext?.();
         if (!ctx?.conversationId) return undefined;
@@ -916,30 +913,6 @@ export class AgentManager implements AgentInstanceGateway {
   getAgentSkillAvailability(agentId: string): AgentSkillAvailabilityPayload {
     const profile = resolveEffectiveAgentProfile(agentId);
     return this.buildAgentSkillAvailability(profile, profile.resolvedWorkspacePath, undefined, '');
-  }
-
-  getWorkflowSkillInstructions(agentId: string, names: readonly string[]): string | undefined {
-    const requested = [...new Set(names.map((name) => name.trim()).filter(Boolean))];
-    if (requested.length === 0) return undefined;
-    const profile = resolveEffectiveAgentProfile(agentId);
-    const workspaceDir = profile.resolvedWorkspacePath;
-    const runtime = this.workspaceRuntimes.getOrCreate(workspaceDir, profile.agentId);
-    const materialized = this.materializeSkillAllowlist(profile, runtime);
-    const available = new Map(runtime.skillManager.getEnabledSkillsForAgentSession({
-      skillAllowlist: materialized.skillsAllowlist,
-    }).map((skill) => [skill.name.toLowerCase(), skill]));
-    const missing = requested.filter((name) => !available.has(name.toLowerCase()));
-    if (missing.length > 0) {
-      throw new Error(`Workflow requires unavailable skills: ${missing.join(', ')}`);
-    }
-    const blocks = requested.map((name) => {
-      const skill = available.get(name.toLowerCase())!;
-      return `## Workflow skill: ${skill.name}\n\n${skill.content.trim()}`;
-    });
-    return [
-      'Follow these workflow-bound skills for this run. They are part of the saved workflow contract.',
-      ...blocks,
-    ].join('\n\n');
   }
 
   getSessionSkillAvailability(conversationId: string): AgentSkillAvailabilityPayload {
@@ -1572,21 +1545,6 @@ export class AgentManager implements AgentInstanceGateway {
     args: unknown,
   ): ({ id: string; mode: 'allow' | 'ask' | 'deny'; maxCallsPerTurn?: number; timeoutMs?: number }) | undefined {
     const gatewayPolicy = profile.config.tools[toolName];
-    if (toolName === 'user_context_read' || toolName === 'knowledge_read') {
-      const command = (args as { command?: unknown })?.command;
-      if (command === 'search' || command === 'get') {
-        const legacyId = `${toolName.slice(0, -5)}_${command}`;
-        const legacyPolicy = profile.config.tools[legacyId];
-        const policies = [gatewayPolicy && { id: toolName, ...gatewayPolicy }, legacyPolicy && { id: legacyId, ...legacyPolicy }]
-          .filter((policy): policy is NonNullable<typeof policy> => Boolean(policy));
-        const rank = { allow: 0, ask: 1, deny: 2 };
-        policies.sort((a, b) => rank[b.mode] - rank[a.mode]);
-        const selected = policies[0];
-        if (!selected) return undefined;
-        const limits = policies.flatMap(policy => policy.maxCallsPerTurn ? [policy.maxCallsPerTurn] : []);
-        return { ...selected, ...(limits.length ? { maxCallsPerTurn: Math.min(...limits) } : {}) };
-      }
-    }
     if (gatewayPolicy && gatewayPolicy.mode !== 'allow') return { id: toolName, ...gatewayPolicy };
     if (toolName !== 'xopc_tool_execute') {
       const policy = profile.config.tools[toolName];

@@ -42,7 +42,6 @@ export const GATEWAY_BUILTIN_TOOLS = [
   { id: 'knowledge_write', description: { en: 'Store a reviewable knowledge candidate.', zh: '保存一条可审查的知识候选。' } },
   { id: 'session_search', description: { en: 'Search previous conversation sessions.', zh: '搜索过去的对话会话。' } },
   { id: 'automation', description: { en: 'Create and manage scheduled or recurring automations.', zh: '创建和管理定时或重复执行的自动化。' } },
-  { id: 'workflow', description: { en: 'Start and interact with configured workflows.', zh: '启动并操作已配置的工作流。' } },
   { id: 'delegate_task', description: { en: 'Delegate a focused subtask to another agent.', zh: '将明确的子任务委派给其他 Agent。' } },
   { id: 'execute_code', description: { en: 'Run code in a managed execution environment.', zh: '在托管的运行环境中执行代码。' } },
   { id: 'image', description: { en: 'Analyze images with a vision-capable model.', zh: '使用视觉模型分析图片。' } },

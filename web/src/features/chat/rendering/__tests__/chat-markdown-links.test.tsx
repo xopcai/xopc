@@ -134,7 +134,6 @@ describe('chat Markdown links', () => {
   it.each([
     ['xopc://open?kind=project&id=p1', '/projects/p1'],
     ['xopc://open?kind=automation&id=a1', '/automations?automation=a1'],
-    ['/workflows?run=r1&agent=coder', '/workflows/runs/r1?agentId=coder'],
     ['xopc://open?kind=local_app&id=app1', '/local-apps/app1'],
   ])('opens a product preview from chat: %s', (href, preview) => {
     const container = renderMarkdown(`[Open](${href})`, undefined, '/chat/c1');
@@ -144,7 +143,7 @@ describe('chat Markdown links', () => {
     expect(location.searchParams.get('preview')).toBe(preview);
   });
 
-  it.each(['/settings/agent-browser', '/capabilities/skills', '/user-model', '/workflows/research/edit'])('keeps intentional page navigation from chat: %s', (href) => {
+  it.each(['/settings/agent-browser', '/capabilities/skills', '/user-model'])('keeps intentional page navigation from chat: %s', (href) => {
     const container = renderMarkdown(`[Open](${href})`, undefined, '/chat/c1');
     act(() => container.querySelector('a')?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true })));
     expect(container.querySelector('[data-location]')?.textContent).toBe(href);

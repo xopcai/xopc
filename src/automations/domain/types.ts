@@ -1,9 +1,6 @@
-import type { WorkflowRunInputEnvelope } from '../../workflows/domain/index.js';
+
 import type { TaskCommand } from '@xopcai/gateway-contract';
 import type { TurnOrigin } from '@xopcai/endpoint-tools-protocol';
-import type {
-  WorkflowRunServiceLike,
-} from '../../workflows/service/workflow-run-service.types.js';
 
 export type AutomationSchedule =
   | { kind: 'once'; at: string }
@@ -22,38 +19,24 @@ export type AutomationTrigger =
     };
 
 export type AutomationAction =
-  | {
+  {
       kind: 'agent';
       agentId?: string;
       instruction: string;
       workingDirectory?: string;
       model?: string;
       timeoutSeconds?: number;
-    }
-  | {
-      kind: 'workflow';
-      workflowId: string;
-      agentId?: string;
-      input?: unknown;
-      inputEnvelope?: WorkflowRunInputEnvelope;
-      goal?: string;
-      concurrency?: number;
-      maxSubagents?: number;
-      timeoutSeconds?: number;
-    }
-  | {
+    } | {
       kind: 'browser_automation';
       automationId: string;
       revision?: number;
       inputs?: Record<string, unknown>;
       timeoutSeconds?: number;
-    }
-  | {
+    } | {
       kind: 'task_command';
       taskId: string;
       command: TaskCommand;
-    }
-  | {
+    } | {
       kind: 'system';
       capability:
         | 'home.advisor.refresh'
@@ -166,7 +149,6 @@ export interface AutomationRun {
   summary?: string;
   error?: string;
   conversationId?: string;
-  workflowRunId?: string;
   model?: string;
   deadlineAtMs?: number;
   currentPhase?: AutomationRunPhase;
@@ -360,7 +342,6 @@ export interface AutomationDeps {
   };
   getDefaultAgentId?: () => string;
   prepareAgentSession?: (input: PrepareAutomationAgentSessionInput) => Promise<void>;
-  workflowRunService?: WorkflowRunServiceLike;
   browserAutomationService?: {
     get(id: string): { revision: number; verified: boolean } | null;
     versions(id: string): { revision: number; verified: boolean }[];
@@ -404,7 +385,6 @@ export interface AutomationActionTask {
   summary?: string;
   error?: string;
   conversationId?: string;
-  workflowRunId?: string;
   model?: string;
   deadlineAtMs?: number;
   termination?: AutomationRunTermination;

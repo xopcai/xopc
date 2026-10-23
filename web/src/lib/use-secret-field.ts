@@ -197,6 +197,3 @@ export function useSecretField(options: {
     eyeDisabled,
   };
 }
-
-/** @deprecated Use {@link useSecretField}. */
-export const useMaskedApiKeyField = useSecretField;

@@ -25,7 +25,7 @@ describe('mobile destination loading experience', () => {
     const components = read('../entry/src/main/ets/view/MobileComponents.ets');
     expect(components).toContain('export struct XopcBrandLoading');
     expect(components).toContain('XopcLoopi({ extent: this.compact ? 20 : 42');
-    for (const file of ['NotesView.ets', 'WorkspaceView.ets', 'AboutYouView.ets', 'FilesView.ets', 'WorkflowView.ets']) {
+    for (const file of ['NotesView.ets', 'WorkspaceView.ets', 'AboutYouView.ets', 'FilesView.ets']) {
       expect(read(`../entry/src/main/ets/view/${file}`)).toContain('XopcBrandLoading');
     }
   });

@@ -65,13 +65,6 @@ export const AutomationTriggerSchema = z.discriminatedUnion('kind', [
   }).strict(),
 ]);
 
-const WorkflowRunInputEnvelopeSchema = z.object({
-  payload: z.unknown(),
-  goal: optionalTrimmedString(5000),
-  variables: z.record(z.string(), z.unknown()).optional(),
-  context: z.record(z.string(), z.unknown()).optional(),
-}).strict();
-
 export const AutomationActionSchema = z.discriminatedUnion('kind', [
   z.object({
     kind: z.literal('agent'),
@@ -81,17 +74,7 @@ export const AutomationActionSchema = z.discriminatedUnion('kind', [
     model: optionalTrimmedString(100),
     timeoutSeconds: z.number().int().min(1).max(86400).optional(),
   }).strict(),
-  z.object({
-    kind: z.literal('workflow'),
-    workflowId: nonEmptyString.max(200),
-    agentId: optionalTrimmedString(64),
-    input: z.unknown().optional(),
-    inputEnvelope: WorkflowRunInputEnvelopeSchema.optional(),
-    goal: optionalTrimmedString(5000),
-    concurrency: z.number().int().min(1).max(50).optional(),
-    maxSubagents: z.number().int().min(1).max(100).optional(),
-    timeoutSeconds: z.number().int().min(1).max(86400).optional(),
-  }).strict(),
+
   z.object({
     kind: z.literal('browser_automation'),
     automationId: nonEmptyString.max(100),

@@ -70,7 +70,6 @@ flowchart TD
 | 已认证本机 Web/CLI | 由宿主认证上下文绑定主人，不能由模型指定 | 显式用户事实、目标、规则，以及工作知识 |
 | 渠道私聊 | channel + accountId + peerId 匹配 owner binding | 绑定主人后才进入共享学习；未绑定时仅会话上下文 |
 | 渠道群聊 | 不因群内某条发言自动学习共享画像 | 首期保持不进入共享记忆 |
-| 任务/工作流 | actor=agent/system，携带来源任务与源会话 | 已验证成果和经验；不得自动成为主人事实 |
 | 已授权工作文件 | 属于主人的授权工作范围，不代表每句话由主人写作 | 项目事实、决策、进度；作者未知不直接生成个人特征 |
 | 连接器 | 连接账号与内容作者分别识别；owner/other/shared/unknown | 工作知识可以来自其他作者；个人画像只用可归属主人的证据 |
 
@@ -250,7 +249,6 @@ UI 复用现有理解/知识页面，只增加覆盖与处理状态、来源定�
 | src/knowledge/ | chunks、source versions、增量清单、原文索引 |
 | src/knowledge-memory/ | revisions、evidence links、统一 reconciliation/usage policy/retrieval |
 | src/connectors/ | 语义结果接统一准入；changed IDs 全量分批入队；保留 consent/actor attribution |
-| src/tasks/、src/workflows/、src/session/ | 结构化结果事件、压缩产物去重接入 |
 | src/agent/context/、src/voice/realtime/ | 统一检索与预算渲染 |
 | src/storage/sqlite/ | schema、outbox/queue、repository 与事务恢复 |
 | src/gateway/、web/ | Gateway worker 生命周期、路由、来源覆盖诊断 |
@@ -267,7 +265,6 @@ voice 等其他在途修改不属于本设计实施范围；落地时先核对�
 
 ### P1：持续学习
 
-上线持久化 jobs/cursors 与 work-synthesis，覆盖短聊、任务/工作流结果和来源变化。修复 stuck extraction 和重启恢复。既有压缩学习改用统一准入，避免重复。
 
 历史补处理默认选近期有权限的私聊与来源，范围由现有授权/处理政策限定；预算内分批，显示进度。过往未知主人身份的渠道不纳入共享补学习。
 

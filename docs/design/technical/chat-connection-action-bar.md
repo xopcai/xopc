@@ -319,7 +319,7 @@ type ConnectionCandidate = {
 - TaskRun 领取增加“此恢复已有 queued/running input”的过滤，避免 lease 到期重新直启；输入真正被领取时才更新实际执行状态。
 - gateway runId 是执行尝试标识，taskRunId 是领域运行标识；二者分开传递。TaskRunCoordinator 使用已有 taskRunId，不为续接新建第二个 root run。
 - readiness、wait resolution 与 continuation 入队的关系要通过同一仓储事务完成，或保持 TaskWait active 直到幂等入队成功；不能先解锁 task wait 再异步创建输入而留下竞态。
-- 第一版不同时让 connector callback 和 TaskRunDispatcher 各自启动一次执行。现有定时任务、workflow 的认证恢复不作为首发渠道，沿用已有失败/人工处理提示，后续接入同一协调器。
+- 第一版不同时让 connector callback 和 TaskRunDispatcher 各自启动一次执行。现有定时任务的认证恢复不作为首发渠道，沿用已有失败/人工处理提示，后续接入同一协调器。
 
 通用任务 `resolve_wait` 对 `condition.type='connection'` 必须委派此协调服务，不得绕过连接验证直接解锁。TaskWait 的人工取消仍映射为取消原目标的继续意图。
 

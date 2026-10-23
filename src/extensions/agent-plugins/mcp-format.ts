@@ -12,7 +12,7 @@ const authSchema = z.discriminatedUnion('type', [
 ]);
 
 /** Only map authentication settings that native pi can represent without semantic loss. */
-export function normalizePluginMcpServer(input: unknown, legacy: boolean, warn: (message: string) => void): unknown {
+export function normalizePluginMcpServer(input: unknown, externalDialect: boolean, warn: (message: string) => void): unknown {
   const value = { ...z.record(z.string(), z.unknown()).parse(input) };
   const extensions = value.extensions;
   if (extensions !== undefined) {
@@ -36,7 +36,7 @@ export function normalizePluginMcpServer(input: unknown, legacy: boolean, warn: 
     }
     delete value.extensions;
   }
-  if (legacy) {
+  if (externalDialect) {
     const allowed = new Set(['type', 'command', 'args', 'env', 'cwd', 'url', 'headers', 'oauth_resource', 'oauth', 'connectionAuth']);
     for (const key of Object.keys(value)) if (!allowed.has(key)) { warn(`Unsupported MCP field: ${key}`); delete value[key]; }
     if (value.oauth_resource !== undefined && value.oauth_resource !== value.url) throw new Error('A distinct OAuth resource requires an adapter');

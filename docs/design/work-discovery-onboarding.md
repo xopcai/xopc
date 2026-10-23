@@ -806,7 +806,7 @@ The discovery analyzer cannot:
 - install dependencies;
 - access the network except through the configured model call;
 - call channels or external connectors;
-- create Tasks, automations, or workflows;
+- create Tasks, automations;
 - continue acting after the result is produced.
 
 ## Activity and Audit

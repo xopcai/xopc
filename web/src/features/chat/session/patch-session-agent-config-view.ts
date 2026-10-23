@@ -7,7 +7,6 @@ export type SessionAgentConfigView = {
   configVersion?: number;
   localDraft?: boolean;
   thinkingLevel?: string | null;
-  reasoningLevel?: string | null;
   activityDetail?: {
     default: string;
     override: string | null;
@@ -31,7 +30,7 @@ export function patchSessionAgentConfigView(conversationId: string, cfg: Session
     configVersion: cfg.configVersion,
     localDraft: cfg.localDraft === true,
     thinkingLevel: cfg.thinkingLevel || DEFAULT_THINKING,
-    reasoningLevel: coerceReasoningLevel(cfg.activityDetail?.default ?? cfg.reasoningLevel ?? undefined),
+    reasoningLevel: coerceReasoningLevel(cfg.activityDetail?.default ?? undefined),
     effectiveWorkspacePath: cfg.effectiveWorkspacePath ?? '',
     workspaceSource: cfg.workspaceSource ?? 'agent_default_root',
     userContextMode: cfg.userContextMode ?? 'enabled',

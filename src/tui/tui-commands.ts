@@ -27,7 +27,6 @@ import {
 } from './format-tui-hotkeys.js';
 import { getTuiKeybindingsPath } from './tui-keybindings-file.js';
 import type { TuiState } from './tui-types.js';
-import { createWorkflowCatalog } from '../agent/workflow/catalog.js';
 import {
   isValidAgentId,
   normalizeAgentId,
@@ -67,8 +66,6 @@ import {
   isXopcDatabaseOpen,
   openXopcDatabase,
 } from '../storage/sqlite/index.js';
-
-import { rewriteUnknownSlashAsWorkflow } from './tui-workflow-slash.js';
 import { formatTuiStartupText } from './tui-startup-text.js';
 import { theme } from './theme.js';
 
@@ -152,7 +149,6 @@ export function getSlashCommands(
     { name: 'start', description: 'Show welcome message' },
     { name: 'hotkeys', description: 'Show resolved keyboard shortcuts (pi-style)' },
     { name: 'changelog', description: 'Show version history' },
-    { name: 'workflow', description: 'Workflow subcommands: list, view <name>' },
   ];
 }
 
@@ -173,7 +169,6 @@ export function formatTuiHelpText(
   keybindings?: KeybindingsManager,
   extraSlashCommands: SlashCommandDef[] = [],
   skillSlashCommands: SlashCommandDef[] = [],
-  workflowSlashCommands: SlashCommandDef[] = [],
 ): string {
   const commands = getSlashCommands(isLocal, keybindings);
   const interrupt = keyLabel(keybindings, 'app.interrupt', 'Escape');
@@ -202,11 +197,7 @@ export function formatTuiHelpText(
     lines.push('', 'Skill commands:');
     lines.push(...skillCommandLines);
   }
-  const workflowCommandLines = formatExtraSlashCommands(workflowSlashCommands, seenCommands);
-  if (workflowCommandLines.length > 0) {
-    lines.push('', 'Workflow commands:');
-    lines.push(...workflowCommandLines);
-  }
+
   const extraCommandLines = formatExtraSlashCommands(extraSlashCommands, seenCommands);
   if (extraCommandLines.length > 0) {
     lines.push('', 'Extension commands:');
@@ -264,8 +255,6 @@ import {
   formatTuiTranscriptTreeInfo,
   formatTuiTrustInfo,
   formatTuiUsageInfo,
-  formatTuiWorkflowDetail,
-  formatTuiWorkflowsInfo,
   loadTuiChangelogInfo,
   nextVerboseLevel,
   parseTuiExportRequest,
@@ -326,15 +315,6 @@ export type CommandHandlerDeps = {
   exportSession?: (request: TuiExportRequest) => void | Promise<void>;
   importSession?: (request: TuiImportRequest) => void | Promise<void>;
   createShare?: (request: TuiShareRequest) => void | Promise<void>;
-  startWorkflowRun?: (request: { definitionId: string; goal?: string }) => {
-    runId: string;
-    conversationId: string;
-    definitionId: string;
-  } | Promise<{
-    runId: string;
-    conversationId: string;
-    definitionId: string;
-  }>;
   authProfiles?: {
     listAll: () => AuthProfileEntry[] | Promise<AuthProfileEntry[]>;
     listProvider: (provider: string) => AuthProfileEntry[] | Promise<AuthProfileEntry[]>;
@@ -352,7 +332,6 @@ export type CommandHandlerDeps = {
   runBtwQuery?: (question: string) => void | Promise<void>;
   forkSession?: (rawKey?: string) => void | Promise<void>;
   skillSlashCommands?: SlashCommandDef[];
-  workflowSlashCommands?: SlashCommandDef[];
   extensionSlashCommands?: TuiExtensionSlashCommandEntry[];
   extensionShortcuts?: TuiHotkeyExtensionShortcut[];
   currentAgentId?: string;
@@ -723,6 +702,7 @@ function runTuiProjectCommand(state: TuiState, args: string): string {
 }
 
 export function createTuiCommandHandler(deps: CommandHandlerDeps): (input: string) => void {
+
   const {
     state,
     chatLog,
@@ -735,7 +715,6 @@ export function createTuiCommandHandler(deps: CommandHandlerDeps): (input: strin
     keybindings,
     uiOverlays,
     skillSlashCommands = [],
-    workflowSlashCommands = [],
     extensionSlashCommands = [],
     extensionShortcuts = [],
     setSession,
@@ -767,7 +746,6 @@ export function createTuiCommandHandler(deps: CommandHandlerDeps): (input: strin
           keybindings,
           extensionSlashCommands,
           skillSlashCommands,
-          workflowSlashCommands,
         ));
         tui.requestRender();
         return;
@@ -1018,44 +996,6 @@ export function createTuiCommandHandler(deps: CommandHandlerDeps): (input: strin
         void Promise.resolve(deps.runBtwQuery(question)).then(() => {
           tui.requestRender();
         });
-        return;
-      }
-      case 'workflow': {
-        const [subcommandRaw, ...workflowRest] = commandArgs.trim().split(/\s+/);
-        const subcommand = (subcommandRaw || 'list').toLowerCase();
-        if (subcommand === 'list' || subcommand === 'ls') {
-          try {
-            chatLog.addSystem(formatTuiWorkflowsInfo(createWorkflowCatalog().list()));
-          } catch (err) {
-            const errorMessage = err instanceof Error ? err.message : String(err);
-            chatLog.addSystem(`Workflow list failed: ${errorMessage}`);
-          }
-          tui.requestRender();
-          return;
-        }
-        if (subcommand === 'view' || subcommand === 'show') {
-          const name = workflowRest[0]?.trim();
-          if (!name) {
-            chatLog.addSystem('Usage: /workflow view <name>');
-            tui.requestRender();
-            return;
-          }
-          try {
-            chatLog.addSystem(formatTuiWorkflowDetail(name));
-          } catch (err) {
-            const errorMessage = err instanceof Error ? err.message : String(err);
-            chatLog.addSystem(`Workflow view failed: ${errorMessage}`);
-          }
-          tui.requestRender();
-          return;
-        }
-        if (subcommand === 'save') {
-          chatLog.addSystem('/workflow save is not a TUI command. Save generated workflows through the workflow tool.');
-          tui.requestRender();
-          return;
-        }
-        chatLog.addSystem('Usage: /workflow list | /workflow view <name>');
-        tui.requestRender();
         return;
       }
       case 'models':
@@ -1473,48 +1413,8 @@ export function createTuiCommandHandler(deps: CommandHandlerDeps): (input: strin
       return;
     }
 
-    if (normalizedCommand.startsWith('workflow:')) {
-      const workflowName = normalizedCommand.slice('workflow:'.length).trim();
-      if (!workflowName) {
-        chatLog.addSystem('Usage: /workflow:<name> [goal]');
-        tui.requestRender();
-        return;
-      }
-      if (!deps.startWorkflowRun) {
-        chatLog.addSystem('Workflow runs are not available in this mode.');
-        tui.requestRender();
-        return;
-      }
-      chatLog.addSystem(`▶ Starting workflow: ${workflowName}`);
-      tui.requestRender();
-      void Promise.resolve(deps.startWorkflowRun({
-        definitionId: workflowName,
-        goal: commandArgs.trim() || undefined,
-      })).then((result) => {
-        chatLog.addSystem(
-          `Workflow started: ${result.definitionId}\nrunId: ${result.runId}\nconversationId: ${result.conversationId}`,
-        );
-        tui.requestRender();
-      }).catch((err: unknown) => {
-        const errorMessage = err instanceof Error ? err.message : String(err);
-        chatLog.addSystem(`Workflow start failed: ${errorMessage}`);
-        tui.requestRender();
-      });
-      return;
-    }
 
-    // Unknown slash that names a known workflow → rewrite into a natural prompt
-    // so the assistant deterministically calls workflow({name}) instead of
-    // depending on the model to puzzle out "/audit_repo".
-    if (input.trimStart().startsWith('/')) {
-      const rewritten = rewriteUnknownSlashAsWorkflow(normalizedCommand, commandArgs);
-      if (rewritten) {
-        chatLog.addSystem(`▶ Running workflow: ${normalizedCommand}`);
-        tui.requestRender();
-        sendMessage(rewritten);
-        return;
-      }
-    }
+
 
     sendMessage(input);
   };

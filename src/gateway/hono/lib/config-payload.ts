@@ -137,7 +137,6 @@ export async function buildSafeWebConfigPayload(service: GatewayService, options
           models: e.models,
           tools: e.tools,
           skills: e.skills,
-          workflows: e.workflows,
         })),
       defaults: agentCatalog.defaults,
     },

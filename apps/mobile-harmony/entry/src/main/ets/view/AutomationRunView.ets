@@ -7,7 +7,7 @@ import { userErrorMessage } from '../common/userError';
 
 interface XopcRunDetail {
   id: string; automationId: string; automationName: string; status: string;
-  summary?: string; error?: string; conversationId?: string; workflowRunId?: string;
+  summary?: string; error?: string; conversationId?: string;
   createdAtMs?: number; startedAtMs?: number; durationMs?: number;
 }
 interface XopcRunEnvelope { run: XopcRunDetail; }
@@ -122,11 +122,6 @@ export struct XopcAutomationRunView {
               if (this.run.conversationId) {
                 XopcHubRow({ heading: $r('app.string.open_chat'), symbol: $r('sys.symbol.message'), onOpen: (): void => {
                   if (this.run?.conversationId) this.onNavigate({ page: 'chat', itemId: this.run.conversationId });
-                } })
-              }
-              if (this.run.workflowRunId) {
-                XopcHubRow({ heading: $r('app.string.open_workflow'), symbol: $r('sys.symbol.arrow_clockwise'), onOpen: (): void => {
-                  if (this.run?.workflowRunId) this.onNavigate({ page: 'workflows', itemId: this.run.workflowRunId });
                 } })
               }
               XopcHubRow({ heading: $r('app.string.view_automation'), symbol: $r('sys.symbol.clock'), onOpen: (): void => {

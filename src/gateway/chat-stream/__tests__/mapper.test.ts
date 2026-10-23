@@ -515,15 +515,15 @@ describe('ChatStreamMapper', () => {
   it('maps tool lifecycle', () => {
     const m = mapper();
     m.map({ type: 'message_start', message: { role: 'assistant', content: [] } });
-    const [start] = m.map({ type: 'tool_execution_start', toolCallId: 'tc1', toolName: 'workflow', args: { step: 1 } });
-    const [update] = m.map({ type: 'tool_execution_update', toolCallId: 'tc1', toolName: 'workflow', partialResult: { details: { phase: 'run' } } });
-    const [end] = m.map({ type: 'tool_execution_end', toolCallId: 'tc1', toolName: 'workflow', isError: false, result: { content: [{ type: 'text', text: 'done' }], details: { phase: 'done' } } });
+    const [start] = m.map({ type: 'tool_execution_start', toolCallId: 'tc1', toolName: 'custom_tool', args: { step: 1 } });
+    const [update] = m.map({ type: 'tool_execution_update', toolCallId: 'tc1', toolName: 'custom_tool', partialResult: { details: { phase: 'run' } } });
+    const [end] = m.map({ type: 'tool_execution_end', toolCallId: 'tc1', toolName: 'custom_tool', isError: false, result: { content: [{ type: 'text', text: 'done' }], details: { phase: 'done' } } });
 
     expect(start).toMatchObject({
       type: 'tool_start',
       payload: {
         toolCallId: 'tc1',
-        toolName: 'workflow',
+        toolName: 'custom_tool',
         args: { step: 1 },
         activity: { category: 'other', action: 'use', status: 'running', source: 'unknown' },
       },

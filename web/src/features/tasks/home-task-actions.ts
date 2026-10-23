@@ -18,9 +18,7 @@ export function homeTaskExecutor(detail: TaskDetail) {
   const latest = detail.runs.filter((run) => !run.parentRunId)
     .sort((left, right) => right.queuedAt - left.queuedAt)[0];
   const agentId = detail.conversation?.currentExecutorAgentId ?? detail.task.delegateAgentId;
-  const candidate = latest?.executorKind === 'workflow'
-    ? { ...latest.executorRef, kind: latest.executorKind }
-    : agentId ? { kind: 'agent', agentId }
+  const candidate = agentId ? { kind: 'agent', agentId }
       : latest ? { ...latest.executorRef, kind: latest.executorKind } : undefined;
   const parsed = TaskExecutorSelectionSchema.safeParse(candidate);
   return parsed.success ? parsed.data : undefined;

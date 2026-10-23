@@ -26,7 +26,6 @@ const CORE_TOOL_ORDER = [
   'session_status',
   'tool_manual',
   'delegate_task',
-  'workflow',
   'automation',
   'skills_list',
   'skill_view',
@@ -69,7 +68,6 @@ const CORE_TOOL_SUMMARIES: Record<string, string> = {
   session_status: 'Show session usage/time/model state',
   tool_manual: 'Load built-in usage manuals for complex tools',
   delegate_task: 'Spawn an isolated sub-agent for a delegated task',
-  workflow: 'Start a persisted multi-phase workflow run',
   automation: 'Manage product automations',
   skills_list: 'List available skills',
   skill_view: 'Load a skill SKILL.md or sub-documents',
@@ -134,7 +132,6 @@ export function buildToolingSection(params: {
   const grepToolName = resolveToolName('grep');
   const findToolName = resolveToolName('find');
   const hasDelegate = availableTools.has('delegate_task');
-  const hasWorkflow = availableTools.has('workflow');
   const hasToolManual = availableTools.has('tool_manual');
   const hasRead = availableTools.has('read_file');
   const hasPatch = availableTools.has('apply_patch');
@@ -152,11 +149,7 @@ export function buildToolingSection(params: {
       '- Sub-agent delegation → use `delegate_task(goal, context?, mode?, capabilities?, toolset?, budgetTier?, maxIterations?)`. Choose light for narrow lookups, standard for bounded research, and deep for broader investigations. Supply relevant facts and a clear stopping condition; search before reading targeted chunks. Default research inherits available read capabilities. Use implement for isolated worktree changes. Inspect stopReason, budget usage, handoff and rejectedTools; resume incomplete work from the handoff rather than repeating the investigation.',
     );
   }
-  if (hasWorkflow) {
-    orchestrationLines.push(
-      '- Multi-phase workflows → use `workflow` to start persisted runs with subagents when a script defines phases.',
-    );
-  }
+
 
   return [
     '## Tooling',
@@ -212,7 +205,7 @@ export function buildToolingSection(params: {
       ? 'Some complex tools have built-in manuals. Use `tool_manual(tool)` before non-trivial use.'
       : '',
     ...orchestrationLines,
-    hasDelegate || hasWorkflow ? 'Do not poll delegate/workflow status in a tight loop; check on-demand or wait for completion.' : '',
+    hasDelegate ? 'Do not poll delegate status in a tight loop; check on-demand or wait for completion.' : '',
   ]
     .filter(Boolean)
     .join('\n');

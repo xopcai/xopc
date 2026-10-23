@@ -65,7 +65,7 @@ struct ChatImageSourceTests {
         #expect(timeline[1].attachments.first?.duration == 4.2)
     }
 
-    @Test func legacyStringRawContentDoesNotDiscardHistory() throws {
+    @Test func textualMessageContentDoesNotDiscardHistory() throws {
         let data = Data(#"{"id":"legacy","role":"assistant","content":"Done","rawContent":"Done"}"#.utf8)
         let message = try JSONDecoder().decode(WireMessage.self, from: data)
         #expect(message.content.text == "Done")

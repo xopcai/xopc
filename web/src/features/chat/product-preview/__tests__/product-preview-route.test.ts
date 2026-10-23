@@ -10,10 +10,6 @@ const background = '/chat/session-1?view=full';
 describe('chat product preview navigation', () => {
   it.each([
     ['/projects/project-1', 'project'],
-    ['/workflows/runs/run-1?agentId=coder', 'workflow_run'],
-    ['/workflows?run=run-1&agent=coder', 'workflow_run'],
-    ['/workflows?def=research', 'workflow_definition'],
-    ['/workflows/research', 'workflow_definition'],
     ['/automations?automation=automation-1', 'automation'],
     ['/local-apps/app-1', 'local_app'],
     ['/open?kind=local_app&id=app-1', 'local_app'],
@@ -25,11 +21,6 @@ describe('chat product preview navigation', () => {
     expect(closeProductPreviewHref(opened.pathname, opened.search)).toBe(background);
   });
 
-  it('preserves run ownership and project scope when normalizing older links', () => {
-    expect(resolveProductPreviewTarget('/workflows?run=run%2F1&agent=coder&projectId=p1')).toMatchObject({
-      id: 'run/1', ownerAgentId: 'coder', href: '/workflows/runs/run%2F1?projectId=p1&agentId=coder',
-    });
-  });
 
   it.each([
     '/settings/capabilities/models', '/settings/agent-browser', '/capabilities/skills', '/capabilities/agents/coder',

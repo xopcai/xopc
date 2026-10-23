@@ -170,7 +170,7 @@ describe('TaskApplicationService', () => {
     expect(tasks.require(task.id)).toEqual(current);
   });
 
-  it.each(['heartbeat', 'automation', 'workflow', 'internal', 'task_update', undefined] as const)(
+  it.each(['heartbeat', 'automation', 'internal', 'task_update', undefined] as const)(
     'does not let a %s input clear manual phase protection even when session metadata says user', source => {
       const service = new TaskApplicationService();
       const created = service.create({ idempotencyKey: 'origin-fence', title: 'Origin fence', priority: 'normal',
@@ -226,7 +226,7 @@ describe('TaskApplicationService', () => {
     const tasks = new TaskRepository();
     const before = tasks.require(taskId);
     const coordinator = TaskRunCoordinator.start({ runId: created.runId, fallbackObjective: contract.objective,
-      inputOrigin: { type: 'system', source: 'workflow' }, context: { runId: created.runId, taskId,
+      inputOrigin: { type: 'system', source: 'task' }, context: { runId: created.runId, taskId,
         conversationId: createConversation({ agentId: 'main' }).key, agentId: 'main', channel: 'webchat',
         origin: 'task', triggerKind: 'user' } });
     expect(coordinator).toBeDefined();

@@ -10,26 +10,18 @@ import type { KnowledgeReadPolicy } from '../../knowledge-memory/index.js';
 const MAX_OBJECTIVE_TEXT = 1200;
 const MAX_CRITERIA = 12;
 
-export type ExecutionObjective =
-  | {
-      kind: 'task';
-      id: string;
-      title: string;
-      objective: string;
-      status: string;
-      scopeBoundary?: string;
-      acceptanceCriteria: string[];
-      expectedOutputs: string[];
-      nextAction?: string;
-      blockedReason?: string;
-    }
-  | {
-      kind: 'workflow';
-      id?: string;
-      title: string;
-      objective: string;
-      status: 'running';
-    };
+export interface ExecutionObjective {
+  kind: 'task';
+  id: string;
+  title: string;
+  objective: string;
+  status: string;
+  scopeBoundary?: string;
+  acceptanceCriteria: string[];
+  expectedOutputs: string[];
+  nextAction?: string;
+  blockedReason?: string;
+}
 
 export interface ExecutionScope {
   conversationId: string;
@@ -60,38 +52,13 @@ function taskObjective(conversationId: string): ExecutionObjective | undefined {
   };
 }
 
-function workflowObjective(conversationId: string): ExecutionObjective | undefined {
-  const metadata = getSessionMetadata(conversationId);
-  if (!metadata) return undefined;
-  if (metadata.sessionType === 'workflow-subagent' && metadata.parentConversationId) {
-    return workflowObjective(metadata.parentConversationId);
-  }
-  if (metadata.sessionType !== 'workflow-run') return undefined;
-  const objective = bounded(
-    typeof metadata.customData?.workflowGoal === 'string'
-      ? metadata.customData.workflowGoal
-      : undefined,
-  );
-  const definitionId = metadata.workflowDefinitionId?.trim()
-    || (typeof metadata.customData?.workflowDefinitionId === 'string'
-      ? metadata.customData.workflowDefinitionId.trim()
-      : 'workflow');
-  return {
-    kind: 'workflow',
-    id: metadata.workflowRunId,
-    title: definitionId,
-    objective: objective || definitionId,
-    status: 'running',
-  };
-}
-
 export function resolveExecutionScope(conversationId: string): ExecutionScope {
   if (!isXopcDatabaseOpen()) return { conversationId };
   const metadata = getSessionMetadata(conversationId);
   return {
     conversationId,
     projectId: metadata?.projectId,
-    objective: taskObjective(conversationId) ?? workflowObjective(conversationId),
+    objective: taskObjective(conversationId),
   };
 }
 
@@ -109,22 +76,20 @@ export function formatCurrentWorkForPrompt(scope: ExecutionScope): string | unde
     '## Objective',
     sanitizeForPromptLiteral(objective.objective),
   ];
-  if (objective.kind === 'task') {
-    if (objective.scopeBoundary) {
-      lines.push('', '## Scope Boundary', sanitizeForPromptLiteral(objective.scopeBoundary));
-    }
-    if (objective.acceptanceCriteria.length > 0) {
-      lines.push('', '## Acceptance Criteria', ...objective.acceptanceCriteria.map((item) => `- ${sanitizeForPromptLiteral(item)}`));
-    }
-    if (objective.expectedOutputs.length > 0) {
-      lines.push('', '## Expected outputs', ...objective.expectedOutputs.map((item) => `- ${sanitizeForPromptLiteral(item)}`));
-    }
-    if (objective.nextAction) {
-      lines.push('', 'Next action:', sanitizeForPromptLiteral(objective.nextAction));
-    }
-    if (objective.blockedReason) {
-      lines.push('', 'Blocked reason:', sanitizeForPromptLiteral(objective.blockedReason));
-    }
+  if (objective.scopeBoundary) {
+    lines.push('', '## Scope Boundary', sanitizeForPromptLiteral(objective.scopeBoundary));
+  }
+  if (objective.acceptanceCriteria.length > 0) {
+    lines.push('', '## Acceptance Criteria', ...objective.acceptanceCriteria.map((item) => `- ${sanitizeForPromptLiteral(item)}`));
+  }
+  if (objective.expectedOutputs.length > 0) {
+    lines.push('', '## Expected outputs', ...objective.expectedOutputs.map((item) => `- ${sanitizeForPromptLiteral(item)}`));
+  }
+  if (objective.nextAction) {
+    lines.push('', 'Next action:', sanitizeForPromptLiteral(objective.nextAction));
+  }
+  if (objective.blockedReason) {
+    lines.push('', 'Blocked reason:', sanitizeForPromptLiteral(objective.blockedReason));
   }
   lines.push(
     '',

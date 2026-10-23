@@ -80,7 +80,7 @@ export function isCronConversationId(id: string | null | undefined): boolean {
 }
 
 export function isSubagentConversationId(id: string | null | undefined): boolean {
-  return !!id && requireConversation(id).sessionType === 'workflow-subagent';
+  return !!id && requireConversation(id).sessionType === 'subagent';
 }
 
 export function assertAgentConversationId(id: string): void {

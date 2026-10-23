@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export const TaskExecutorKindSchema = z.enum(['agent', 'workflow', 'human', 'external']);
+export const TaskExecutorKindSchema = z.enum(['agent', 'human', 'external']);
 export const TaskRunStatusSchema = z.enum([
   'queued',
   'running',

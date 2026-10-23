@@ -268,20 +268,7 @@ describe('sqlite repositories', () => {
     expect(listSessionMetadata({ limit: 10 }).items.map((item) => item.key)).not.toContain(CONVERSATION_ID);
   });
 
-  it('filters legacy automation shells without output from visible session lists', () => {
-    ensureSessionRecord(CONVERSATION_ID, CWD, {
-      ...METADATA,
-      sourceChannel: 'automation',
-      hiddenFromSessionList: false,
-    });
-    appendTranscriptEntry(CONVERSATION_ID, userMessage('internal automation instruction'));
 
-    expect(getSessionMetadata(CONVERSATION_ID)?.hiddenFromSessionList).toBe(false);
-    expect(listSessionMetadata({ limit: 10 }).items.map((item) => item.key)).not.toContain(CONVERSATION_ID);
-
-    appendTranscriptEntry(CONVERSATION_ID, assistantMessage('automation output'));
-    expect(listSessionMetadata({ limit: 10 }).items.map((item) => item.key)).toContain(CONVERSATION_ID);
-  });
 
   it('always hides system memory maintenance sessions from default lists', () => {
     ensureSessionRecord(CONVERSATION_ID, CWD, {

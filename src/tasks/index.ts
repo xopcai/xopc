@@ -2,7 +2,6 @@ export * from './execution-context.js';
 export * from './attention-governor.js';
 export * from './home-query-service.js';
 export * from './task-repository.js';
-export * from './task-workflow-coordinator.js';
 export * from './task-contract-definition.js';
 export * from './task-contract-planner.js';
 export * from './task-context-assembler.js';

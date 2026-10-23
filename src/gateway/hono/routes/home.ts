@@ -9,7 +9,7 @@ import {
 } from '@xopcai/gateway-contract';
 import { resumeApprovedConnectorAction } from '../../../connectors/approval-resume.js';
 
-import { listGatewayAgents } from '../../agents-admin.js';
+
 import {
   acknowledgeHomeAttention,
   decideConnectorApproval,
@@ -114,7 +114,7 @@ export function registerHomeRoutes(authenticated: Hono, deps: AuthenticatedRoute
 
   authenticated.post('/api/home/attention/acknowledge', deps.strictRateLimitMiddleware, async (c) => {
     const body = await c.req.json().catch(() => ({})) as Record<string, unknown>;
-    const kind = body.kind === 'automation_run' || body.kind === 'workflow_run' ? body.kind : undefined;
+    const kind = body.kind === 'automation_run' ? body.kind : undefined;
     const runId = typeof body.runId === 'string' ? body.runId.trim() : '';
     if (!kind || !runId) return c.json({ ok: false, error: 'kind and runId are required' }, 400);
     acknowledgeHomeAttention(kind, runId);
@@ -123,7 +123,7 @@ export function registerHomeRoutes(authenticated: Hono, deps: AuthenticatedRoute
 
   authenticated.post('/api/home/attention/retry', deps.strictRateLimitMiddleware, async (c) => {
     const body = await c.req.json().catch(() => ({})) as Record<string, unknown>;
-    const kind = body.kind === 'automation_run' || body.kind === 'workflow_run' ? body.kind : undefined;
+    const kind = body.kind === 'automation_run' ? body.kind : undefined;
     const runId = typeof body.runId === 'string' ? body.runId.trim() : '';
     if (!kind || !runId) return c.json({ ok: false, error: 'kind and runId are required' }, 400);
 
@@ -137,10 +137,5 @@ export function registerHomeRoutes(authenticated: Hono, deps: AuthenticatedRoute
       }
     }
 
-    const agents = await listGatewayAgents();
-    const result = await service.createWorkflowRunService().retryWorkflowRun({ agentId: agents.defaultId, runId });
-    if (result.ok === false) return c.json({ ok: false, error: result.message, code: result.code }, result.httpStatus);
-    acknowledgeHomeAttention(kind, runId);
-    return c.json({ ok: true, runId: result.runId, conversationId: result.conversationId }, 202);
   });
 }

@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { windowsDatabaseOwners } from '../migrations/conversation-windows-owners.js';
+import { windowsDatabaseOwners } from '../windows-database-owners.js';
 
 describe('windowsDatabaseOwners', () => {
   const directories: string[] = [];
@@ -31,7 +31,7 @@ describe('windowsDatabaseOwners', () => {
     expect(script).toContain('public NativeFileTime StartedAt;');
     expect(script).not.toContain('using System.Runtime.InteropServices.ComTypes;');
     expect(script).not.toContain('public FILETIME StartedAt;');
-    expect(JSON.parse(String(options?.env?.XOPC_CUTOVER_DATABASE_FILES))).toEqual([
+    expect(JSON.parse(String(options?.env?.XOPC_DATABASE_FILES))).toEqual([
       resolve(databasePath),
     ]);
   });

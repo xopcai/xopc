@@ -245,7 +245,7 @@ function sessionRecord(session: XopcHistorySession): JsonRecord {
       ? {}
       : { ended_at: timestamp(session.archivedAt, `session end timestamp for ${session.transcriptId}`) }),
     status: active ? 'active' : 'completed',
-    agent_scope: session.sessionType === 'workflow-subagent' ? 'subagent' : 'primary',
+    agent_scope: session.sessionType === 'subagent' ? 'subagent' : 'primary',
   };
 }
 

@@ -69,9 +69,9 @@ describe('computer-approved device pairing', () => {
     const nextRefreshToken = refreshToken();
     const refresh = { refreshToken: initialRefreshToken, nextRefreshToken, requestId: crypto.randomUUID(), timestamp: now,
       nonce: crypto.randomBytes(24).toString('base64url') };
-    const message = buildRefreshProofMessage({ ...refresh, credentialId: initialRefreshToken.slice(8).split('_')[0] });
+    const message = buildRefreshProofMessage({ ...refresh, requestProofVersion: 1, credentialId: initialRefreshToken.slice(8).split('_')[0] });
     const signature = crypto.sign('sha256', Buffer.from(message), { key: keys.privateKey, dsaEncoding: 'ieee-p1363' }).toString('base64url');
-    const tokens = rotateDeviceRefreshToken({ ...refresh, signature, now });
+    const tokens = rotateDeviceRefreshToken({ ...refresh, requestProofVersion: 1, signature, now });
     expect(tokens.refreshToken).toBe(nextRefreshToken);
     expect(operateDevicePairingRequest('status', signed('status'), now).request.connectedAt).toBeUndefined();
     expect(authenticateDeviceAccessToken(tokens.accessToken, now + 1)?.deviceId).toBe(result.request.deviceId);

@@ -3,7 +3,7 @@ import { isXopcDatabaseOpen } from '../storage/sqlite/index.js';
 import { getExecutionEnvironmentForSession } from '../execution-environments/subject.js';
 import type { ExecutionEnvironmentKind } from '../execution-environments/types.js';
 import { TaskConversationRepository } from './task-conversation-repository.js';
-export type ExecutionOrigin = 'chat' | 'task' | 'workflow' | 'automation' | 'browser' | 'heartbeat';
+export type ExecutionOrigin = 'chat' | 'task' | 'automation' | 'browser' | 'heartbeat';
 export type ExecutionTrigger = 'user' | 'schedule' | 'webhook' | 'heartbeat' | 'retry';
 
 export interface ExecutionContext {
@@ -21,7 +21,7 @@ export interface ExecutionContext {
   contextTraceId?: string;
 }
 
-const ORIGINS = new Set<ExecutionOrigin>(['chat', 'task', 'workflow', 'automation', 'browser', 'heartbeat']);
+const ORIGINS = new Set<ExecutionOrigin>(['chat', 'task', 'automation', 'browser', 'heartbeat']);
 const TRIGGERS = new Set<ExecutionTrigger>(['user', 'schedule', 'webhook', 'heartbeat', 'retry']);
 
 function optionalString(value: unknown): string | undefined {
@@ -32,7 +32,7 @@ function metadataOrigin(metadata: SessionMetadata, taskId?: string): ExecutionOr
   const explicit = optionalString(metadata.customData?.origin);
   if (explicit && ORIGINS.has(explicit as ExecutionOrigin)) return explicit as ExecutionOrigin;
   if (taskId) return 'task';
-  if (metadata.sessionType === 'workflow-run' || metadata.sessionType === 'workflow-subagent') return 'workflow';
+
   if (metadata.sessionType === 'cron') return 'automation';
   if (metadata.sessionType === 'heartbeat') return 'heartbeat';
   if (optionalString(metadata.customData?.browserRecipeId)) return 'browser';

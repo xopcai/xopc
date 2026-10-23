@@ -35,9 +35,7 @@ export function readPluginAuthBinding(store: AgentPluginStore, id: string, name:
     if (!existsSync(candidate)) continue;
     const binding = bindingSchema.parse(JSON.parse(readFileSync(candidate, 'utf8')));
     const fingerprint = pluginEndpointFingerprint(server);
-    const legacy = server.type !== 'stdio' && !server.oauth && !server.connectionAuth && binding.endpointFingerprint === hash(new URL(server.url).toString());
-    if (binding.endpointFingerprint !== fingerprint && !legacy) continue;
-    if (legacy) binding.endpointFingerprint = fingerprint;
+    if (binding.endpointFingerprint !== fingerprint) continue;
     // Carry forward only credential references for the same plugin and endpoint.
     if (targetRevision && candidate !== bindingPath(store, id, name, targetRevision)) writeTextAtomicSync(bindingPath(store, id, name, targetRevision), JSON.stringify(binding));
     return binding;

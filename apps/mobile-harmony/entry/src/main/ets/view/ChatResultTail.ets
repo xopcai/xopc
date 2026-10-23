@@ -38,7 +38,6 @@ export struct XopcChatResultTail {
       case 'session': return 'chat';
       case 'settings': return 'settings';
       case 'file': return 'files';
-      case 'workflow_run': return 'workflows';
       default: return '';
     }
   }

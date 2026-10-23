@@ -61,7 +61,9 @@ internal fun UserVoiceMessage(media: ConversationMedia,
       throw error
     } catch (error: Exception) {
       value = Result.failure(error)
-      Toast.makeText(context, unavailable, Toast.LENGTH_SHORT).show()
+      withContext(Dispatchers.Main.immediate) {
+        Toast.makeText(context, unavailable, Toast.LENGTH_SHORT).show()
+      }
       return@produceState
     }
     // Keep ownership through cancellation so an off-thread prepare cannot leak resources.
@@ -99,7 +101,9 @@ internal fun UserVoiceMessage(media: ConversationMedia,
         playback
       }
       value = started
-      if (started.isFailure) Toast.makeText(context, unavailable, Toast.LENGTH_SHORT).show()
+      if (started.isFailure) withContext(Dispatchers.Main.immediate) {
+        Toast.makeText(context, unavailable, Toast.LENGTH_SHORT).show()
+      }
       awaitCancellation()
     } finally {
       prepared.getOrNull()?.let {

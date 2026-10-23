@@ -429,7 +429,7 @@ describe('Personal connected-app requests', () => {
       emit: () => {}, publishRealtime: () => {}, completeRealtimeTopic: () => {}, bus: { publishInbound: async () => {} },
     } as never);
     insertSessionInput({ id: 'prelease-worker', conversationId: chat.key, clientMessageId: 'prelease-worker', taskRunId: root.id,
-      content: 'Read mail', requestedDelivery: 'next', effectiveDelivery: 'next', status: 'queued', origin: { type: 'system', source: 'workflow' } });
+      content: 'Read mail', requestedDelivery: 'next', effectiveDelivery: 'next', status: 'queued', origin: { type: 'system', source: 'task' } });
     const draining = runner.inputs.drain(chat.key);
     finishSessionInputRun(conversationId, 'main-run', 'completed');
     const taskTool = createPersonalTaskTool({ getCurrentConversationId: () => conversationId, getCurrentAgentId: () => agentId });
@@ -482,7 +482,7 @@ describe('Personal connected-app requests', () => {
     const { request, worker: chat } = worker();
     const root = new TaskRunRepository().getActiveRoot(request.taskId!)!;
     insertSessionInput({ id: 'task-stop-input', conversationId: chat.key, clientMessageId: 'task-stop-input', taskRunId: root.id,
-      content: 'Read mail', requestedDelivery: 'next', effectiveDelivery: 'next', status: 'queued', origin: { type: 'system', source: 'workflow' } });
+      content: 'Read mail', requestedDelivery: 'next', effectiveDelivery: 'next', status: 'queued', origin: { type: 'system', source: 'task' } });
     claimNextSessionInput(chat.key, 'task-stop-execution');
     const lease = acquireEmbeddedRunLease({ conversationId: chat.key, transcriptId: getSessionMetadata(chat.key)!.transcriptId!, runId: 'task-stop-execution' });
     let release!: () => void;
@@ -524,7 +524,7 @@ describe('Personal connected-app requests', () => {
     const { request, worker: chat } = worker();
     const oldRun = new TaskRunRepository().getActiveRoot(request.taskId!)!;
     insertSessionInput({ id: 'old-worker-input', conversationId: chat.key, clientMessageId: 'old-worker-input', taskRunId: oldRun.id,
-      content: 'Read mail', requestedDelivery: 'next', effectiveDelivery: 'next', status: 'queued', origin: { type: 'system', source: 'workflow' } });
+      content: 'Read mail', requestedDelivery: 'next', effectiveDelivery: 'next', status: 'queued', origin: { type: 'system', source: 'task' } });
     claimNextSessionInput(chat.key, 'old-worker-execution');
     const old = acquireEmbeddedRunLease({ conversationId: chat.key, transcriptId: getSessionMetadata(chat.key)!.transcriptId!, runId: 'old-worker-execution' });
     let releaseAck!: () => void;
@@ -553,7 +553,7 @@ describe('Personal connected-app requests', () => {
         actor: { kind: 'user' }, idempotencyKey: 'late-stop-start', command: { type: 'start', executor: { kind: 'agent', agentId: 'mail-worker' } } }).ok).toBe(true);
       const newRun = new TaskRunRepository().getActiveRoot(request.taskId!)!;
       insertSessionInput({ id: 'new-worker-input', conversationId: chat.key, clientMessageId: 'new-worker-input', taskRunId: newRun.id,
-        content: 'New work', requestedDelivery: 'next', effectiveDelivery: 'next', status: 'queued', origin: { type: 'system', source: 'workflow' } });
+        content: 'New work', requestedDelivery: 'next', effectiveDelivery: 'next', status: 'queued', origin: { type: 'system', source: 'task' } });
       claimNextSessionInput(chat.key, 'new-worker-execution');
       next = acquireEmbeddedRunLease({ conversationId: chat.key, transcriptId: getSessionMetadata(chat.key)!.transcriptId!, runId: 'new-worker-execution' });
       releaseAck();

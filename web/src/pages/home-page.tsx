@@ -409,7 +409,7 @@ export function HomePage() {
           setActionReceipt({ message: language === 'zh' ? (action.decision === 'approve' ? '已批准授权，任务状态将自动更新。' : '已拒绝授权。') : (action.decision === 'approve' ? 'Permission approved. Task status will update.' : 'Permission denied.') });
         } else if (action.type === 'retry_run') {
           const result = await retryWorkAttention({ kind: action.subjectKind, runId: action.runId });
-          setActionReceipt({ message: language === 'zh' ? '已发起重试，可查看新的执行结果。' : 'Retry started. Follow the new execution.', href: result.conversationId ? `/chat/${encodeURIComponent(result.conversationId)}` : action.subjectKind === 'workflow_run' ? `/workflows?runId=${encodeURIComponent(result.runId)}` : `/automations?run=${encodeURIComponent(result.runId)}` });
+          setActionReceipt({ message: language === 'zh' ? '已发起重试，可查看新的执行结果。' : 'Retry started. Follow the new execution.', href: result.conversationId ? `/chat/${encodeURIComponent(result.conversationId)}` : `/automations?run=${encodeURIComponent(result.runId)}` });
         } else if (action.type === 'acknowledge_run') {
           await acknowledgeWorkAttention({ kind: action.subjectKind, runId: action.runId });
           setActionReceipt({ message: language === 'zh' ? '已确认此异常，已从待处理事项移除。' : 'Issue acknowledged and removed from pending items.' });

@@ -36,7 +36,6 @@ function baseConfig(models: AgentModelsDefaults): Config {
       models,
       skills: { mode: 'all-enabled', exclude: [] },
       tools: {},
-      workflows: {},
       runtime: {},
     },
     agents: [{ id: 'main', enabled: true, workspace: '/tmp' }],

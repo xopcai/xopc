@@ -41,7 +41,6 @@ function ShortcutEditor({
   otherShortcut,
   defaultShortcut,
   setShortcut,
-  legacyRecordingEvent,
   notice,
 }: {
   title: string;
@@ -50,7 +49,6 @@ function ShortcutEditor({
   otherShortcut: string;
   defaultShortcut: () => string;
   setShortcut: (shortcut: string) => void;
-  legacyRecordingEvent?: string;
   notice?: ReactNode;
 }) {
   const language = useLocaleStore((s) => s.language);
@@ -61,13 +59,11 @@ function ShortcutEditor({
   useEffect(() => {
     const detail = { active: recording };
     window.dispatchEvent(new CustomEvent(APP_SHORTCUT_RECORDING_EVENT, { detail }));
-    if (legacyRecordingEvent) window.dispatchEvent(new CustomEvent(legacyRecordingEvent, { detail }));
     return () => {
       const inactive = { active: false };
       window.dispatchEvent(new CustomEvent(APP_SHORTCUT_RECORDING_EVENT, { detail: inactive }));
-      if (legacyRecordingEvent) window.dispatchEvent(new CustomEvent(legacyRecordingEvent, { detail: inactive }));
     };
-  }, [legacyRecordingEvent, recording]);
+  }, [recording]);
 
   const onKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
     if (!recording) return;
@@ -169,7 +165,6 @@ function QuickCaptureShortcutEditor() {
       otherShortcut={voiceShortcut}
       defaultShortcut={defaultQuickCaptureShortcut}
       setShortcut={setShortcut}
-      legacyRecordingEvent="quick-capture-shortcut-recording"
     />
   );
 }

@@ -276,8 +276,6 @@ export type MessagingCallbacks = {
   ) => void;
   /**
    * Mid-execution structured update for a tool whose `partialResult` carried
-   * `details`. Only emitted today by the `workflow` tool — feeds the
-   * WorkflowCard's live progress tree.
    */
   onToolUpdate?: (toolName: string, toolCallId: string | undefined, details: unknown) => void;
   onProgress: (progress: ProgressState) => void;
@@ -316,13 +314,6 @@ export type MessagingCallbacks = {
   }) => void;
   /** User turn from another device or early in the POST stream (before assistant tokens). */
   onUserMessage?: (message: Message) => void;
-  /** Slash command or tool path started a persisted workflow run. */
-  onWorkflowRunStarted?: (payload: {
-    runId: string;
-    conversationId: string;
-    definitionId: string;
-    parentConversationId?: string;
-  }) => void;
   /** A slash command changed persisted model/thinking/session settings. */
   onSessionConfigUpdated?: () => void;
   onResult: (payload: AgentStreamRunEndPayload) => void;
@@ -909,19 +900,6 @@ export class MessageSender {
             createdAt: typeof payload.createdAt === 'number' ? payload.createdAt : Date.now(),
             expiresAt: typeof payload.expiresAt === 'number' ? payload.expiresAt : undefined,
           });
-        }
-        break;
-      }
-      case 'workflow_run_started': {
-        const workflowRun = payload.workflowRun as Record<string, unknown> | undefined;
-        if (workflowRun?.ok === true) {
-          const runId = typeof workflowRun.runId === 'string' ? workflowRun.runId : '';
-          const conversationId = typeof workflowRun.conversationId === 'string' ? workflowRun.conversationId : '';
-          const definitionId = typeof workflowRun.definitionId === 'string' ? workflowRun.definitionId : '';
-          const parentConversationId = typeof workflowRun.parentConversationId === 'string' ? workflowRun.parentConversationId : undefined;
-          if (runId && conversationId && definitionId) {
-            cb?.onWorkflowRunStarted?.({ runId, conversationId, definitionId, parentConversationId });
-          }
         }
         break;
       }

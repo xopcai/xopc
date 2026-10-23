@@ -147,7 +147,7 @@ function normalizeAiCatalysisReport(note: Note, data: Record<string, unknown>): 
     ? data.nextActions.map((item): NoteCatalysisAction | null => {
       if (!item || typeof item !== 'object') return null;
       const row = item as { kind?: unknown; text?: unknown };
-      const kind = row.kind === 'task' || row.kind === 'workflow' || row.kind === 'research' || row.kind === 'share' || row.kind === 'chat' ? row.kind : 'task';
+      const kind = row.kind === 'task' || row.kind === 'research' || row.kind === 'share' || row.kind === 'chat' ? row.kind : 'task';
       return typeof row.text === 'string' && row.text.trim() ? { kind, text: row.text.trim() } : null;
     }).filter((item): item is NoteCatalysisAction => Boolean(item)).slice(0, 12)
     : fallback.nextActions;
@@ -168,7 +168,7 @@ function normalizeAiCatalysisReport(note: Note, data: Record<string, unknown>): 
 function buildCatalysisPrompt(note: Note): string {
   const title = note.title?.trim() || '未命名笔记';
   const markdown = note.markdown.trim() || '(无正文)';
-  return `请把下面的 Markdown 笔记催化成可执行的想法报告，输出 JSON：\n{\n  "title": string,\n  "valueHypothesis": string,\n  "targetUsers": string[],\n  "keyQuestions": string[],\n  "mvpPath": string[],\n  "risks": string[],\n  "nextActions": [{"text": string, "kind": "task"|"workflow"|"research"|"share"|"chat"}],\n  "confidence": number\n}\n\n标题：${title}\n\nMarkdown：\n${markdown}`;
+  return `请把下面的 Markdown 笔记催化成可执行的想法报告，输出 JSON：\n{\n  "title": string,\n  "valueHypothesis": string,\n  "targetUsers": string[],\n  "keyQuestions": string[],\n  "mvpPath": string[],\n  "risks": string[],\n  "nextActions": [{"text": string, "kind": "task"|"research"|"share"|"chat"}],\n  "confidence": number\n}\n\n标题：${title}\n\nMarkdown：\n${markdown}`;
 }
 
 async function buildAiCatalysisReport(note: Note, config?: Config): Promise<NoteCatalysisReport> {

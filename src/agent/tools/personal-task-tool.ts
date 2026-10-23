@@ -26,7 +26,7 @@ import { TaskOriginRepository } from '../../tasks/task-origin-repository.js';
 import { createXopcUseTool, type XopcUseToolDeps } from './xopc-use-tool.js';
 
 const PersonalTaskSchema = Type.Object({
-  command: Type.Union([Type.Literal('revise'), Type.Literal('retry_allocation'), Type.Literal('submit'), Type.Literal('agents'), Type.Literal('match'), Type.Literal('selection'), Type.Literal('create'), Type.Literal('list'), Type.Literal('get'), Type.Literal('collaboration'), Type.Literal('entry'), Type.Literal('instruct'), Type.Literal('answer'), Type.Literal('cancel')]),
+  command: Type.Union([Type.Literal('revise'), Type.Literal('retry_allocation'), Type.Literal('submit'), Type.Literal('match'), Type.Literal('selection'), Type.Literal('create'), Type.Literal('list'), Type.Literal('get'), Type.Literal('collaboration'), Type.Literal('entry'), Type.Literal('instruct'), Type.Literal('answer'), Type.Literal('cancel')]),
   requirements: Type.Optional(Type.Object({
     version: Type.Optional(Type.Literal(1)), summary: Type.String({ maxLength: 300 }),
     domain: Type.Optional(Type.String()), taskType: Type.Optional(Type.String()),
@@ -145,30 +145,15 @@ export function createPersonalTaskTool(deps: PersonalTaskToolDeps): AgentTool<ty
       const context: MatchingContext = {
         ownAgentId, getConfig: deps.getConfig, getAgentSkillAvailability: deps.getAgentSkillAvailability,
         getAgentToolAvailability: deps.getAgentToolAvailability,
-        legacyToolPolicyOnly: !input.requirements,
       };
-      if (input.command === 'match' || input.command === 'agents') {
-        if (input.command === 'agents' && requirements.requiredSkills?.length && !deps.getAgentSkillAvailability)
-          throw new Error('Specialist Skill availability cannot be verified');
-        const result = matchSpecialists(requirements, context, { cursor: input.cursor, limit: input.command === 'agents' ? 50 : 10 });
-        if (input.command === 'agents') {
-          let cursor = result.nextCursor;
-          while (cursor) {
-            const page = matchSpecialists(requirements, context, { cursor, limit: 50 });
-            result.candidates.push(...page.candidates);
-            cursor = page.nextCursor;
-          }
-        }
-        const matchId = input.command === 'match' ? randomUUID() : undefined;
+      if (input.command === 'match') {
+        const result = matchSpecialists(requirements, context, { cursor: input.cursor, limit: 10 });
+        const matchId = randomUUID();
         if (matchId) {
           if (matches.size >= 20) matches.delete(matches.keys().next().value!);
           matches.set(matchId, { conversationId, requirements, result });
         }
-        // Keep the legacy array response while match exposes evidence and pagination.
-        const payload = input.command === 'agents' ? result.candidates.filter(agent =>
-          !agent.checks.some(check => check.condition === 'identity' && check.state === 'blocked')
-          && (requirements.requiredTools ?? []).every(tool => agent.availableTools.includes(tool))
-          && (requirements.requiredSkills?.length ?? 0) === agent.verifiedSkills.length) : { ...result, matchId };
+        const payload = { ...result, matchId };
         return { content: [{ type: 'text', text: JSON.stringify(payload) }], details: {} };
       }
       if (input.command === 'selection') {
@@ -225,21 +210,21 @@ export function createPersonalTaskTool(deps: PersonalTaskToolDeps): AgentTool<ty
           if (assessment.eligibility !== 'eligible' && getSessionMetadata(conversationId)) {
             new AgentSelectionRepository().create({ conversationId, key,
               requestHash, requirements, assessment,
-              source: input.selectionSource ?? 'legacy', reason: input.selectionReason,
+              source: input.selectionSource ?? 'snapshot', reason: input.selectionReason,
               previousSelectionId: input.previousSelectionId, status: 'rejected' });
           }
           assertSpecialistEligible(assessment);
         }
         const requiredSkills = assessment.verifiedSkills;
         if (!previous) pendingSelection = { conversationId, key, requestHash, requirements, assessment,
-          source: requirements.requestedAgentId ? 'explicit' : matched ? 'match' : input.selectionSource === 'match' ? 'snapshot' : input.selectionSource ?? 'legacy',
+          source: requirements.requestedAgentId ? 'explicit' : matched ? 'match' : input.selectionSource === 'match' ? 'snapshot' : input.selectionSource ?? 'snapshot',
           reason: input.selectionReason, previousSelectionId: input.previousSelectionId, status: 'start_failed' };
         selectedProductTool = createXopcUseTool({ ...deps,
           createTask: (taskInput, actor) => createSelectedTask(taskInput, actor, {
             conversationId, requirements, context, requestHash,
             candidates: matched?.result.candidates.map(({ id, revision, eligibility, checks, matched: tags, missing }) =>
               ({ id, revision, eligibility, checks, matched: tags, missing })), reason: input.selectionReason,
-            source: requirements.requestedAgentId ? 'explicit' : matched ? 'match' : input.selectionSource === 'match' ? 'snapshot' : input.selectionSource ?? (input.requirements ? 'snapshot' : 'legacy'),
+            source: requirements.requestedAgentId ? 'explicit' : matched ? 'match' : input.selectionSource === 'match' ? 'snapshot' : input.selectionSource ?? (input.requirements ? 'snapshot' : 'snapshot'),
             previousSelectionId: input.previousSelectionId,
           }),
         });

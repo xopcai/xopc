@@ -23,7 +23,6 @@ enum AutomationRunEventCopy {
     private static let actionLabels = [
         ("system", "系统操作"),
         ("agent", "助手操作"),
-        ("workflow", "工作流"),
         ("browser_automation", "浏览器自动化"),
         ("task_command", "任务操作")
     ]

@@ -4,19 +4,7 @@ import { apiUrl } from '@/lib/url';
 
 export type ConnectorCategory = 'code' | 'docs' | 'browser' | 'data' | 'automation' | 'custom';
 export type ConnectorCapability =
-  | 'tools'
-  | 'resources'
-  | 'prompts'
-  | 'context'
-  | 'channel'
-  | 'events'
-  | 'ui'
-  | 'memory_source'
-  | 'workflows'
-  | 'auth.apiKey'
-  | 'auth.oauth'
-  | 'runtime.mcp.stdio'
-  | 'runtime.mcp.streamableHttp';
+  'tools' | 'resources' | 'prompts' | 'context' | 'channel' | 'events' | 'ui' | 'memory_source' | 'auth.apiKey' | 'auth.oauth' | 'runtime.mcp.stdio' | 'runtime.mcp.streamableHttp';
 
 export type ConnectorSecretField = {
   key: string;

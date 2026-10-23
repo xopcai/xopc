@@ -13,7 +13,7 @@
 5. 票据装订完成后重新生成 DMG/ZIP 的 blockmap 与 `latest-mac.yml` 的哈希/大小，避免更新元数据引用装订前的字节。
 6. 从本地验收页通过 Chrome 正常下载最终 DMG，检查系统写入的 quarantine 标记。验证 Gatekeeper 和安装应用；通过 LaunchServices 在全新数据目录首次启动，保留隔离标记。
 
-流程参考 Apple 官方 [自定义公证工作流](https://developer.apple.com/documentation/security/customizing-the-notarization-workflow) 与 [软件分发打包说明](https://developer.apple.com/documentation/xcode/packaging-mac-software-for-distribution)。
+流程参考 Apple 官方 与 [软件分发打包说明](https://developer.apple.com/documentation/xcode/packaging-mac-software-for-distribution)。
 
 ## 最终结果
 

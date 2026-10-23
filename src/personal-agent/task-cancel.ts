@@ -34,11 +34,11 @@ export async function cancelPersonalTask(taskId: string, conversationId: string,
       WHERE idempotency_key = ?`).get(`personal-cancel:${key}`) as { subject_id: string; result_json: string } | undefined;
     if (previous) {
       if (previous.subject_id !== taskId) throw new Error('Cancellation key belongs to another Task');
-      const saved = JSON.parse(previous.result_json) as { cancellationRunId?: string | null };
-      // Legacy receipts cannot safely identify an execution; never adopt the current Run on replay.
+      const saved = JSON.parse(previous.result_json) as { cancellationRunId: string | null };
+      if (!Object.hasOwn(saved, 'cancellationRunId')) throw new Error('Invalid cancellation receipt');
       const active = saved.cancellationRunId ? runs.get(saved.cancellationRunId) : undefined;
       finalizeCancellation(active?.id);
-      return { active, changed: false, targetKnown: Object.hasOwn(saved, 'cancellationRunId') };
+      return { active, changed: false, targetKnown: true };
     }
     const task = new TaskRepository().require(taskId);
     if (task.phase === 'closed' && task.resolution !== 'cancelled') throw new Error('Task is already closed');

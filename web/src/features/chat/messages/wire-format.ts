@@ -35,7 +35,7 @@ export interface WireMessage {
   }>;
   /** Persisted media refs (`media://…`) on user/assistant turns. */
   media?: unknown;
-  /** Inline / legacy attachment payloads on user/assistant turns. */
+  /** Inline media and attachment payloads on user/assistant turns. */
   attachments?: unknown;
   usage?: unknown;
   metadata?: unknown;

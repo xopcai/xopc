@@ -16,7 +16,6 @@ const defaults: AgentDefaults = {
     exec_command: { mode: 'deny' },
     web_search: { mode: 'allow' },
   },
-  workflows: { default: 'general' },
   runtime: { timeoutMs: 60_000, maxTurns: 20 },
 };
 

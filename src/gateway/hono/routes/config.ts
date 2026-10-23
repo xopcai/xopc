@@ -98,7 +98,8 @@ export function registerConfigRoutes(authenticated: Hono, deps: AuthenticatedRou
   }));
 
   const revealGatewayAuthSecretHandler = async (c: Context) => {
-    const field = await resolveRevealGatewayAuthField(c);
+    const value = c.req.param('field');
+    const field = value === 'token' || value === 'password' ? value : null;
     if (!field) {
       return c.json({ ok: false, error: { message: 'field must be token or password' } }, 400);
     }
@@ -113,16 +114,11 @@ export function registerConfigRoutes(authenticated: Hono, deps: AuthenticatedRou
     });
   };
 
-  /**
-   * POST /api/gateway/reveal-auth-secret/:field — preferred; no JSON body required.
-   * POST /api/gateway/reveal-auth-secret — legacy JSON body `{ field: "token" | "password" }`.
-   */
   authenticated.post(
     '/api/gateway/reveal-auth-secret/:field',
     strictRateLimitMiddleware,
     revealGatewayAuthSecretHandler,
   );
-  authenticated.post('/api/gateway/reveal-auth-secret', strictRateLimitMiddleware, revealGatewayAuthSecretHandler);
 
   /** POST /api/tools/web/reveal-search-api-key — plaintext search provider apiKey by index. */
   authenticated.post('/api/tools/web/reveal-search-api-key', strictRateLimitMiddleware, async (c) => {
@@ -145,27 +141,4 @@ export function registerConfigRoutes(authenticated: Hono, deps: AuthenticatedRou
       payload: { index, apiKey, source: apiKey ? ('config' as const) : ('none' as const) },
     });
   });
-}
-
-function normalizeRevealGatewayAuthField(raw: unknown): 'token' | 'password' | null {
-  return raw === 'token' || raw === 'password' ? raw : null;
-}
-
-async function resolveRevealGatewayAuthField(c: Context): Promise<'token' | 'password' | null> {
-  const fromPath = normalizeRevealGatewayAuthField(c.req.param('field'));
-  if (fromPath) return fromPath;
-
-  const fromQuery = normalizeRevealGatewayAuthField(c.req.query('field'));
-  if (fromQuery) return fromQuery;
-
-  try {
-    const body = await c.req.json();
-    return normalizeRevealGatewayAuthField(
-      body && typeof body === 'object' && !Array.isArray(body)
-        ? (body as { field?: unknown }).field
-        : undefined,
-    );
-  } catch {
-    return null;
-  }
 }

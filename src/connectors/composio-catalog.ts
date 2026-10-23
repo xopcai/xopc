@@ -101,7 +101,7 @@ function composioLogoUrl(slug: string): string {
 
 const CONNECTOR_DESCRIPTIONS: Record<string, string> = {
   gmail: 'Find, draft, and send Gmail messages with explicit write confirmation.',
-  googlecalendar: 'Find and manage Google Calendar events from conversations and workflows.',
+  googlecalendar: 'Find and manage Google Calendar events from conversations.',
   googledrive: 'Search and work with approved files in Google Drive.',
   slack: 'Read conversations and send approved messages in Slack.',
   github: 'Work with repositories, issues, pull requests, and reviews on GitHub.',
@@ -173,8 +173,8 @@ export function connectorDefinitionFromComposioToolkit(item: ComposioToolkitCata
     kind: 'composio',
     source: 'registry',
     capabilities: item.isNoAuth
-      ? ['tools', 'events', 'workflows', ...knowledgeCapabilities]
-      : ['tools', 'auth.oauth', 'events', 'workflows', ...knowledgeCapabilities],
+      ? ['tools', 'events', ...knowledgeCapabilities]
+      : ['tools', 'auth.oauth', 'events', ...knowledgeCapabilities],
     benefits: benefitsForToolkit(slug, Boolean(understanding)),
     understanding,
     tags: ['composio', slug, verificationForToolkit(slug)],

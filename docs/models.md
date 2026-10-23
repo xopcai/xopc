@@ -83,7 +83,7 @@ The generic engine, authenticated HTTP routes and browser setup flows are covere
 
 Use `openai` for both API keys and **Sign in with ChatGPT**. Subscription users must sign in again with `xopc models auth login --provider openai`; old `openai-codex` credentials are not reused. A stored API key profile takes precedence over OAuth; remove that profile when choosing subscription access. An environment key is used when no stored profile or OAuth credential exists.
 
-Use `azure` as the Azure provider ID. The `azure-openai-responses` API protocol and `AZURE_OPENAI_*` environment variables remain valid. Update Agent defaults, model intents, Workflows and session overrides that reference the old provider ID. Removed provider identities fail explicitly and do not select another model.
+Use `azure` as the Azure provider ID. The `azure-openai-responses` API protocol and `AZURE_OPENAI_*` environment variables remain valid. Update Agent defaults, model intents, session overrides that reference the old provider ID. Removed provider identities fail explicitly and do not select another model.
 
 Model IDs come from the current catalog. The local `gpt-5.6` alias has been removed; select an actual listed ID, such as `openai/gpt-6-sol`. Historical conversations remain stored. Codemode and pi's built-in MCP extensions are not enabled by this dependency upgrade.
 
@@ -107,7 +107,6 @@ The global chat model is used when an Agent does not specify another model. Set 
 xopc models set <provider>/<model>
 ```
 
-Advanced Agents and Workflows can use six fixed intents: `fast`, `reasoning`, `coding`, `review`, `vision`, and `understanding`. Configure them globally, then override only an Agent that genuinely needs a different route.
 
 ## Verify and troubleshoot
 

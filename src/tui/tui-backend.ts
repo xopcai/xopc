@@ -138,7 +138,6 @@ export interface TuiShareResult {
 export interface TuiStartupResources {
   context: string[];
   skills: string[];
-  workflows: string[];
   connectors: string[];
 }
 
@@ -146,20 +145,6 @@ export interface TuiWorkspaceFileSearchEntry {
   name: string;
   path: string;
   isDirectory: boolean;
-}
-
-export interface TuiWorkflowRunStartRequest {
-  conversationId: string;
-  definitionId: string;
-  agentId?: string;
-  goal?: string;
-  input?: unknown;
-}
-
-export interface TuiWorkflowRunStartResult {
-  runId: string;
-  conversationId: string;
-  definitionId: string;
 }
 
 export interface TuiStartupProjectResult {
@@ -251,9 +236,6 @@ export interface TuiBackend {
     inputId: string;
     version: number;
   }): Promise<{ ok: boolean; state?: TuiChatInputState }>;
-
-  /** Start a workflow run directly, without routing through the LLM. */
-  startWorkflowRun?(opts: TuiWorkflowRunStartRequest): Promise<TuiWorkflowRunStartResult>;
 
   /** Resolve or create the project implied by the TUI launch workspace. */
   resolveStartupProject?(opts: {

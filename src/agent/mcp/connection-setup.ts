@@ -71,9 +71,9 @@ async function advertisesOAuth(config: Config, workspace: string, serverId: stri
   }
   // Older MCP services publish authorization-server metadata at the origin.
   if (!/\bBearer\b/i.test(challenge)) return false;
-  const legacy = await metadata(new URL('/.well-known/oauth-authorization-server', url), signal);
-  return Boolean(legacy && legacy.issuer === url.origin && typeof legacy.authorization_endpoint === 'string'
-    && typeof legacy.token_endpoint === 'string');
+  const authorizationServer = await metadata(new URL('/.well-known/oauth-authorization-server', url), signal);
+  return Boolean(authorizationServer && authorizationServer.issuer === url.origin && typeof authorizationServer.authorization_endpoint === 'string'
+    && typeof authorizationServer.token_endpoint === 'string');
 }
 
 export async function probeMcpConnection(config: Config, workspace: string, serverId: string, options?: McpSessionOptions): Promise<McpConnectionProbe> {

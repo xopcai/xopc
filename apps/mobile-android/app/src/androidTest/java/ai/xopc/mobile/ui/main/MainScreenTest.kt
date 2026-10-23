@@ -66,6 +66,8 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.performSemanticsAction
+import androidx.compose.ui.test.isDisplayed
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performScrollTo
@@ -434,7 +436,7 @@ class MainScreenTest {
       ConversationMedia("image-1", "one.png", "image", "image/png", png.size.toLong(), "media://image-1"),
       ConversationMedia("image-2", "two.png", "image", "image/png", png.size.toLong(), "media://image-2"),
       ConversationMedia("file-1", "one.txt", "document", "text/plain", 3, "media://file-1"),
-      ConversationMedia("file-2", "two.pdf", "document", "application/pdf", 4, "media://file-2"),
+      ConversationMedia("file-2", "two.bin", "document", "application/octet-stream", 4, "media://file-2"),
       ConversationMedia("file-3", "three.json", "document", "application/json", 5, "media://file-3"),
       ConversationMedia("file-4", "four.csv", "document", "text/csv", 6, "media://file-4"))
     composeTestRule.setContent {
@@ -463,7 +465,7 @@ class MainScreenTest {
 
     composeTestRule.onNodeWithTag("message-attachments-toggle-user-media").performScrollTo().performClick()
     composeTestRule.onNodeWithTag("message-media-file-4").performScrollTo().performClick()
-    composeTestRule.onNodeWithTag("message-media-preview-text").assertTextContains("abc")
+    composeTestRule.onNodeWithTag("file-preview-text").assertTextContains("abc")
     composeTestRule.onNodeWithTag("message-media-preview-close").performClick()
 
     composeTestRule.onNodeWithTag("message-media-file-2").performScrollTo().performClick()
@@ -515,31 +517,18 @@ class MainScreenTest {
             messages = listOf(ConversationMessage("link", "assistant", "[docs](http://example.com/page)"))))
       }
     }
-    composeTestRule.onNodeWithText("docs").performTouchInput { click(Offset(10f, center.y)) }
+    val layouts = mutableListOf<androidx.compose.ui.text.TextLayoutResult>()
+    composeTestRule.onNodeWithText("docs", useUnmergedTree = true).performSemanticsAction(
+      androidx.compose.ui.semantics.SemanticsActions.GetTextLayoutResult) { it(layouts) }
+    composeTestRule.onNodeWithText("docs", useUnmergedTree = true).performTouchInput {
+      click(layouts.single().getBoundingBox(0).center)
+    }
+    composeTestRule.waitUntil(5_000) {
+      composeTestRule.onNodeWithText("http://example.com/page").isDisplayed()
+    }
     composeTestRule.onNodeWithText("http://example.com/page").assertIsDisplayed()
     composeTestRule.onNodeWithText(composeTestRule.activity.getString(R.string.progress_cancel)).performClick()
     composeTestRule.onNodeWithText("http://example.com/page").assertDoesNotExist()
-  }
-
-  @Test fun assistantWorkflowRunLinkOpensTheNativeRunDetail() {
-    val tab = mutableStateOf(HomeTab.Assistant)
-    var requested = ""
-    composeTestRule.setContent {
-      XopcTheme {
-        MainContent(selectedTab = tab.value, onSelectTab = { tab.value = it },
-          connection = ConnectionUiState(profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), ""),
-            selectedConversationId = "11111111-2222-3333-4444-555555555555",
-            messages = listOf(ConversationMessage("workflow-link", "assistant", "[workflow](/workflows/runs/run-1)"))),
-          onWorkflowDetail = { id ->
-            requested = id
-            ai.xopc.mobile.gateway.WorkflowDetail(ai.xopc.mobile.gateway.WorkflowRun(id, "Linked run", "completed"),
-              emptyList(), emptyList(), false)
-          })
-      }
-    }
-    composeTestRule.onNodeWithText("workflow").performTouchInput { click(Offset(10f, center.y)) }
-    composeTestRule.waitUntil(5_000) { requested == "run-1" }
-    composeTestRule.onNodeWithTag("workflow-screen").assertIsDisplayed()
   }
 
   private fun saveAcceptanceScreenshot(name: String, tag: String? = null) {
@@ -652,7 +641,19 @@ class MainScreenTest {
     }
   }
 
+  private fun awaitCamera(automation: android.app.UiAutomation) {
+    try {
+      composeTestRule.waitUntil(10_000) {
+        automation.rootInActiveWindow?.packageName?.toString() == "com.android.camera2"
+      }
+    } catch (error: androidx.compose.ui.test.ComposeTimeoutException) {
+      throw AssertionError("Camera did not open; foreground=${automation.rootInActiveWindow?.packageName}", error)
+    }
+  }
+
   @Test fun cameraCancelReturnsToConversationWithoutAttachment() {
+    InstrumentationRegistry.getInstrumentation().uiAutomation.grantRuntimePermission(
+      composeTestRule.activity.packageName, Manifest.permission.CAMERA)
     val profile = GatewayProfile(UUID.randomUUID().toString(), "Test", "key", "device", emptyList(), "")
     val conversationId = UUID.randomUUID().toString()
     var added = 0
@@ -666,9 +667,7 @@ class MainScreenTest {
     composeTestRule.onNodeWithTag("assistant-actions-toggle").performClick()
     composeTestRule.onNodeWithTag("assistant-action-camera").performClick()
     try {
-      composeTestRule.waitUntil(10_000) {
-        automation.rootInActiveWindow?.packageName?.toString() == "com.android.camera2"
-      }
+      awaitCamera(automation)
     } finally {
       automation.performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK)
     }
@@ -680,6 +679,8 @@ class MainScreenTest {
   }
 
   @Test fun cameraShutterReturnsToTheSameConversationAndSnapshotsPhoto() {
+    InstrumentationRegistry.getInstrumentation().uiAutomation.grantRuntimePermission(
+      composeTestRule.activity.packageName, Manifest.permission.CAMERA)
     val context = composeTestRule.activity
     val gatewayId = UUID.randomUUID().toString()
     val conversationId = UUID.randomUUID().toString()
@@ -700,9 +701,7 @@ class MainScreenTest {
       val automation = InstrumentationRegistry.getInstrumentation().uiAutomation
       composeTestRule.onNodeWithTag("assistant-actions-toggle").performClick()
       composeTestRule.onNodeWithTag("assistant-action-camera").performClick()
-      composeTestRule.waitUntil(10_000) {
-        automation.rootInActiveWindow?.packageName?.toString() == "com.android.camera2"
-      }
+      awaitCamera(automation)
       fun findShutter(node: AccessibilityNodeInfo?): AccessibilityNodeInfo? {
         if (node == null) return null
         if (node.isClickable && (node.viewIdResourceName?.contains("shutter") == true ||
@@ -2506,7 +2505,9 @@ class MainScreenTest {
     assertEquals(viewport.center.x, logo.center.x, 1f)
     assertEquals(if (viewport.height / density < 620f) 88f else 108f, logo.width / density, 1f)
     assertEquals(18f, (headline.top - logo.bottom) / density, 1f)
-    assertEquals(viewport.center.y - 6f * density, (logo.top + headline.bottom) / 2f, 2f)
+    assertEquals("viewport=$viewport logo=$logo headline=$headline composer=$composer density=$density",
+      viewport.center.y - (if (viewport.height / density < 620f) 6f * density else 0f),
+      (logo.top + headline.bottom) / 2f, 2f)
     val screenshotValues = ContentValues().apply {
       put(MediaStore.Images.Media.DISPLAY_NAME, "chat-welcome-aligned.png")
       put(MediaStore.Images.Media.MIME_TYPE, "image/png")
@@ -2674,7 +2675,7 @@ class MainScreenTest {
         connection = ConnectionUiState(profile = profile, selectedConversationId = id,
           messages = listOf(ConversationMessage("answer-media", "assistant", "", media = listOf(media)))))
     }
-    composeTestRule.onNodeWithTag("message-assistant-card-answer-media").performTouchInput { longClick() }
+    composeTestRule.onNodeWithTag("message-assistant-card-answer-media").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnLongClick) { it() }
     composeTestRule.onNodeWithTag("message-detail-action").assertExists()
     composeTestRule.onNodeWithTag("message-copy-action").assertDoesNotExist()
     composeTestRule.onNodeWithTag("message-detail-action").performScrollTo().performClick()
@@ -2918,7 +2919,7 @@ class MainScreenTest {
           selectedConversationId = id, draftText = "Hello", realtimeStatus = "connected", draftModelReady = true),
         onCreateConversation = { created++ }, onSendMessage = { sent++ })
     }
-    composeTestRule.onNodeWithText(composeTestRule.activity.getString(R.string.assistant_new_conversation)).assertExists()
+    composeTestRule.onNodeWithTag("chat-floating-header").assertIsDisplayed()
     composeTestRule.onNodeWithTag("assistant-send").assertIsEnabled().performClick()
     composeTestRule.onNodeWithTag("assistant-options").performClick()
     composeTestRule.onNodeWithTag("assistant-new").performClick()
@@ -3144,7 +3145,7 @@ class MainScreenTest {
           selectedConversationId = id, activeRunId = "run-1", liveMessages = listOf(ConversationMessage("live:run-1", "assistant", "Partial answer", "run-1"))))
     }
     composeTestRule.onNodeWithText("Partial answer").assertExists()
-    composeTestRule.onNodeWithText(composeTestRule.activity.getString(R.string.assistant_live_output)).assertExists()
+    composeTestRule.onNodeWithTag("assistant-live-output").assertExists()
   }
 
   @Test

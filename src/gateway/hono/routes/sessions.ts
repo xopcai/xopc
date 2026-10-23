@@ -32,7 +32,7 @@ const log = createGatewayRouteLogger('Sessions');
 
 type SessionsStartupMethod = StartupUnavailableGatewayMethod;
 
-const SESSION_TYPES = new Set<SessionType>(['chat', 'workflow-run', 'workflow-subagent', 'cron', 'heartbeat']);
+const SESSION_TYPES = new Set<SessionType>(['chat', 'cron', 'heartbeat']);
 const DEFAULT_SIDEBAR_STALE_DAYS = 60;
 
 function isSessionType(value: string): value is SessionType {
@@ -1027,9 +1027,7 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
   authenticated.get('/api/subagents/:key', async (c) => {
     const key = c.req.param('key');
     // Verify it's a subagent session
-    if ((await service.sessions.getSession(key))?.sessionType !== 'workflow-subagent') {
-      return c.json({ error: 'Not a subagent session' }, 400);
-    }
+
     const includeRaw = c.req.query('include') ?? '';
     const includeSet = new Set(
       includeRaw

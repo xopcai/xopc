@@ -46,7 +46,7 @@ const refreshRequestSchema = z.strictObject({
   requestId: z.string().uuid(),
   nextRefreshToken: z.string().min(80).max(256),
   signature: z.string().min(1).max(256),
-  requestProofVersion: z.literal(1).optional(),
+  requestProofVersion: z.literal(1),
 });
 
 const pairingProbeSchema = z.strictObject({
@@ -82,7 +82,7 @@ export function registerDeviceAuthPublicRoutes(app: Hono, options?: PairingPubli
       const tokens = rotateDeviceRefreshToken(parsed.data);
       const signedPayload = Buffer.from(JSON.stringify({ purpose: 'device-refresh-v3',
         gatewayId: getOrCreateGatewayIdentity().id, requestId: parsed.data.requestId, nonce: parsed.data.nonce,
-        expiresAt: Date.now() + 30_000, requestProofVersion: parsed.data.requestProofVersion ?? 0, tokens })).toString('base64url');
+        expiresAt: Date.now() + 30_000, requestProofVersion: parsed.data.requestProofVersion, tokens })).toString('base64url');
       return c.json({ ok: true, signedPayload, signature: signGatewayPayload(signedPayload) });
     } catch (error) {
       if (error instanceof DeviceRefreshRateLimitError) {

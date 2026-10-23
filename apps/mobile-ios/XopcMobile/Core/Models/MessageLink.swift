@@ -33,7 +33,7 @@ enum ChatMessageLink: Equatable, Identifiable {
         }
         if components.scheme == "xopc", components.host == "open" {
             let pages = ["note": "notes", "task": "tasks", "project": "projects", "session": "chat",
-                         "automation": "automations", "workflow_run": "workflows", "file": "files"]
+                         "automation": "automations", "file": "files"]
             guard let page = pages[query["kind"] ?? ""], let id = query["id"] ?? query["key"], validID(id) else { return nil }
             return .route(page: page, itemID: id)
         }
@@ -46,13 +46,8 @@ enum ChatMessageLink: Equatable, Identifiable {
         if path == "/automations", let id = query["automation"], validID(id) {
             return .route(page: "automations", itemID: id)
         }
-        if path.hasPrefix("/workflows/runs/"),
-           let id = String(path.dropFirst("/workflows/runs/".count)).removingPercentEncoding, validID(id)
-        {
-            return .route(page: "workflows", itemID: id)
-        }
         let pieces = path.split(separator: "/", omittingEmptySubsequences: false)
-        guard pieces.count >= 3, ["notes", "tasks", "projects", "chat", "sessions", "automations", "workflows", "files"].contains(String(pieces[1])),
+        guard pieces.count >= 3, ["notes", "tasks", "projects", "chat", "sessions", "automations", "files"].contains(String(pieces[1])),
               let id = pieces.dropFirst(2).joined(separator: "/").removingPercentEncoding, validID(id) else { return nil }
         return .route(page: pieces[1] == "sessions" ? "chat" : String(pieces[1]), itemID: id)
     }

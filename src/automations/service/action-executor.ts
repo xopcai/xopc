@@ -126,9 +126,6 @@ export class AutomationActionExecutor {
     this.register('agent', { mode: 'never' }, (input, action) => this.executeAgent(
       input.automation, action, input.run, input.signal, input.hooks, input.deadlineAtMs, input.context,
     ));
-    this.register('workflow', { mode: 'idempotent', key: 'run_id' }, (input, action) => this.executeWorkflow(
-      input.automation, action, input.run, input.signal, input.hooks, input.context,
-    ));
     this.register('browser_automation', { mode: 'never' }, (input, action) => this.executeBrowserAutomation(
       input.automation, action, input.signal, input.hooks, input.context, input.run.id,
     ));
@@ -370,110 +367,6 @@ export class AutomationActionExecutor {
       model,
     };
   }
-
-  private async executeWorkflow(
-    automation: Automation,
-    action: Extract<AutomationAction, { kind: 'workflow' }>,
-    run: AutomationRun,
-    signal: AbortSignal,
-    hooks: AutomationActionExecutionHooks,
-    context: AutomationActionExecutionContext,
-  ): Promise<AutomationActionTask> {
-    const safetyMode = automation.safety?.mode ?? 'auto_apply';
-    if (safetyMode === 'suggest_only') {
-      return {
-        status: 'succeeded',
-        summary: `Suggest only: workflow ${action.workflowId} was not started. Review the automation and upgrade safety mode to run it automatically.`,
-      };
-    }
-    if (safetyMode === 'ask_before_apply') {
-      return {
-        status: 'succeeded',
-        summary: `Ask before applying: workflow ${action.workflowId} is ready, but was not started automatically. Upgrade to Auto apply when you trust this automation.`,
-      };
-    }
-    const workflowRunService = this.deps.workflowRunService;
-    if (!workflowRunService) {
-      return { status: 'failed', error: 'Workflow service is not available' };
-    }
-    const agentId = normalizeAgentId(
-      action.agentId || this.deps.getDefaultAgentId?.() || DEFAULT_AGENT_ID,
-    );
-    const idempotencyKey = `automation:${automation.id}:${run.id}`;
-    const inputEnvelope = context.triggerEvent
-      ? {
-          ...(action.inputEnvelope ?? { payload: action.input ?? {}, goal: action.goal }),
-          context: {
-            ...(action.inputEnvelope?.context ?? {}),
-            automationTrigger: context.triggerEvent,
-          },
-        }
-      : action.inputEnvelope;
-    const result = await workflowRunService.startWorkflowRun({
-      agentId,
-      definitionId: action.workflowId,
-      input: action.input,
-      inputEnvelope,
-      goal: action.goal,
-      projectId: automation.projectId,
-      concurrency: action.concurrency,
-      maxSubagents: action.maxSubagents,
-      source: { kind: 'automation', automationId: automation.id, runId: run.id },
-      idempotencyKey,
-    });
-    if (result.ok === false) {
-      return { status: 'failed', error: result.message };
-    }
-    await hooks.onRunPatch?.({
-      conversationId: result.conversationId,
-      workflowRunId: result.runId,
-      currentPhase: 'action',
-    });
-    if (!workflowRunService.readWorkflowRunView) {
-      return {
-        status: 'succeeded',
-        summary: `Started workflow run ${result.runId}`,
-        conversationId: result.conversationId,
-        workflowRunId: result.runId,
-      };
-    }
-
-    while (!signal.aborted) {
-      const view = await workflowRunService.readWorkflowRunView(agentId, result.runId);
-      if (!view) {
-        return { status: 'failed', error: `Workflow run ${result.runId} disappeared` };
-      }
-      const workflowStatus = view.run.status;
-      if (workflowStatus === 'succeeded') {
-        return {
-          status: 'succeeded',
-          summary: `Workflow run ${result.runId} completed`,
-          conversationId: result.conversationId,
-          workflowRunId: result.runId,
-        };
-      }
-      if (workflowStatus === 'failed' || workflowStatus === 'cancelled' || workflowStatus === 'timeout') {
-        return {
-          status: workflowStatus,
-          error: view.run.error?.message ?? `Workflow run ${result.runId} ${workflowStatus}`,
-          conversationId: result.conversationId,
-          workflowRunId: result.runId,
-        };
-      }
-      await waitForSignalOrDelay(signal, 500);
-    }
-    await workflowRunService.cancelWorkflowRun?.({
-      agentId,
-      runId: result.runId,
-      reason: 'Parent automation was cancelled or reached its deadline',
-    });
-    return {
-      status: 'cancelled',
-      error: 'Parent automation stopped while the workflow was running',
-      conversationId: result.conversationId,
-      workflowRunId: result.runId,
-    };
-  }
 }
 
 function appendTriggerContext(instruction: string, event: AutomationActionExecutionContext['triggerEvent']): string {
@@ -490,28 +383,13 @@ function appendTriggerContext(instruction: string, event: AutomationActionExecut
   ].join('\n');
 }
 
-function waitForSignalOrDelay(signal: AbortSignal, delayMs: number): Promise<void> {
-  return new Promise((resolve) => {
-    const timer = setTimeout(() => {
-      signal.removeEventListener('abort', onAbort);
-      resolve();
-    }, delayMs);
-    const onAbort = () => {
-      clearTimeout(timer);
-      resolve();
-    };
-    if (signal.aborted) onAbort();
-    else signal.addEventListener('abort', onAbort, { once: true });
-  });
-}
-
 function buildSafetyInstruction(automation: Automation, instruction: string): string {
   const mode = automation.safety?.mode ?? 'auto_apply';
   if (mode === 'suggest_only') {
     return [
       'Automation safety mode: Suggest only.',
       'Only analyze the situation and produce a concise recommendation.',
-      'Do not modify files, notes, Tasks, workflows, external systems, or persistent state.',
+      'Do not modify files, notes, Tasks, external systems, or persistent state.',
       'If a change seems useful, describe the exact change for the user to review.',
       '',
       instruction,

@@ -1,9 +1,4 @@
-import type { WorkflowDefinition } from '@/features/workflows/workflow-api';
-import {
-  resolveWorkflowInputPayload,
-} from '@/features/workflows/workflow-input-editor.utils';
-import { workflowInputToArgValues } from '@/features/workflows/workflow-input.utils';
-import type { WorkflowRunSetupValue } from '@/features/workflows/workflow-run-setup-panel';
+
 
 import {
   type Automation,
@@ -20,20 +15,9 @@ import {
 } from './automation-display';
 
 export type TriggerMode =
-  | 'manual'
-  | 'once'
-  | 'daily'
-  | 'weekly'
-  | 'interval'
-  | 'cron'
-  | 'webhook'
-  | 'taskBlocked'
-  | 'noteCreated'
-  | 'workflowFailed'
-  | 'sessionUpdated'
-  | 'event';
+  'manual' | 'once' | 'daily' | 'weekly' | 'interval' | 'cron' | 'webhook' | 'taskBlocked' | 'noteCreated' | 'sessionUpdated' | 'event';
 
-export type ActionMode = 'agent' | 'workflow' | 'browser_automation' | 'task_command';
+export type ActionMode = 'agent' | 'browser_automation' | 'task_command';
 
 export interface FormState {
   name: string;
@@ -55,10 +39,6 @@ export interface FormState {
   model: string;
   instruction: string;
   taskId: string;
-  workflowId: string;
-  workflowGoal: string;
-  workflowInput: WorkflowRunSetupValue;
-  workflowInputValid: boolean;
   browserAutomationId: string;
   browserAutomationInputs: Record<string, unknown>;
   safetyMode: AutomationSafetyMode;
@@ -90,16 +70,6 @@ export const initialForm: FormState = {
   model: '',
   instruction: '',
   taskId: '',
-  workflowId: '',
-  workflowGoal: '',
-  workflowInput: {
-    goal: '',
-    argValues: {},
-    schemaInput: {},
-    concurrency: '',
-    maxSubagents: '',
-  },
-  workflowInputValid: true,
   browserAutomationId: '',
   browserAutomationInputs: {},
   safetyMode: 'suggest_only',
@@ -124,7 +94,6 @@ export const INTERVAL_PRESETS: Array<{
 
 export function buildInput(
   form: FormState,
-  selectedWorkflow: WorkflowDefinition | null,
 ): AutomationInput {
   const [hourRaw, minuteRaw] = form.time.split(':');
   const hour = Number.parseInt(hourRaw || '9', 10);
@@ -153,13 +122,6 @@ export function buildInput(
     };
   } else if (form.triggerMode === 'noteCreated') {
     trigger = { kind: 'event', eventType: 'note.created', source: 'notes' };
-  } else if (form.triggerMode === 'workflowFailed') {
-    trigger = {
-      kind: 'event',
-      eventType: 'workflow.run.completed',
-      source: 'workflows',
-      payloadMatch: { status: 'failed' },
-    };
   } else if (form.triggerMode === 'sessionUpdated') {
     trigger = {
       kind: 'event',
@@ -206,41 +168,11 @@ export function buildInput(
       schedule: { kind: 'cron', expr: `${minute} ${hour} * * *` },
     };
   }
-
-  const workflowInput = resolveWorkflowInputPayload(
-    selectedWorkflow,
-    form.workflowInput,
-  );
-  const workflowGoal = form.workflowInput.goal.trim() || form.workflowGoal.trim();
   const safetyMode = form.actionMode === 'browser_automation' || form.actionMode === 'task_command'
     ? 'auto_apply'
     : form.safetyMode;
   let action: AutomationAction;
-  if (form.actionMode === 'workflow') {
-    action = {
-      kind: 'workflow',
-          workflowId: form.workflowId.trim(),
-          ...(form.agentId.trim() ? { agentId: form.agentId.trim() } : {}),
-          ...(workflowInput !== undefined ? { input: workflowInput } : {}),
-          ...(workflowGoal ? { goal: workflowGoal } : {}),
-          ...(form.workflowInput.concurrency.trim()
-            ? {
-                concurrency: Math.max(
-                  1,
-                  Number.parseInt(form.workflowInput.concurrency, 10) || 1,
-                ),
-              }
-            : {}),
-          ...(form.workflowInput.maxSubagents.trim()
-            ? {
-                maxSubagents: Math.max(
-                  1,
-                  Number.parseInt(form.workflowInput.maxSubagents, 10) || 1,
-                ),
-              }
-            : {}),
-    };
-  } else if (form.actionMode === 'browser_automation') {
+  if (form.actionMode === 'browser_automation') {
     action = {
       kind: 'browser_automation',
       automationId: form.browserAutomationId.trim(),
@@ -371,13 +303,7 @@ function eventFormState(
   ) {
     return { triggerMode: 'noteCreated' };
   }
-  if (
-    trigger.eventType === 'workflow.run.completed' &&
-    trigger.source === 'workflows' &&
-    payload?.status === 'failed'
-  ) {
-    return { triggerMode: 'workflowFailed' };
-  }
+
   if (
     trigger.eventType === 'session.transcript.updated' &&
     trigger.source === 'sessions' &&
@@ -391,12 +317,6 @@ function eventFormState(
     eventSource: trigger.source ?? '',
     eventPayloadMatch: payload ? JSON.stringify(payload, null, 2) : '',
   };
-}
-
-function workflowInputRecord(input: unknown): Record<string, unknown> {
-  return input && typeof input === 'object' && !Array.isArray(input)
-    ? (input as Record<string, unknown>)
-    : {};
 }
 
 export function payloadMatchIsValid(value: string): boolean {
@@ -420,7 +340,6 @@ export function payloadMatchIsValid(value: string): boolean {
 
 export function formFromAutomation(
   automation: AutomationInput,
-  workflowDefinitions: WorkflowDefinition[] = [],
 ): FormState {
   let triggerState: Partial<FormState> = { triggerMode: 'manual' };
   if (automation.trigger.kind === 'webhook') {
@@ -450,13 +369,6 @@ export function formFromAutomation(
   }
 
   const action = automation.action;
-  const definition =
-    action.kind === 'workflow'
-      ? (workflowDefinitions.find((item) => item.id === action.workflowId) ??
-        null)
-      : null;
-  const workflowInput =
-    action.kind === 'workflow' ? workflowInputRecord(action.input) : {};
   const timeoutSeconds =
     automation.reliability?.executionTimeoutSeconds
     ?? ('timeoutSeconds' in action ? action.timeoutSeconds : undefined)
@@ -469,34 +381,14 @@ export function formFromAutomation(
     description: automation.description ?? '',
     projectId: automation.projectId ?? '',
     actionMode: action.kind === 'system' ? 'agent' : action.kind,
-    agentId: action.kind === 'agent' || action.kind === 'workflow'
-      ? (action.agentId ?? '')
-      : action.kind === 'task_command' && action.command.type === 'start' && action.command.executor.kind === 'agent'
+    agentId: action.kind === 'agent' ? (action.agentId ?? '') : action.kind === 'task_command' && action.command.type === 'start' && action.command.executor.kind === 'agent'
         ? action.command.executor.agentId
         : '',
     model: action.kind === 'agent' ? (action.model ?? '') : '',
     instruction: action.kind === 'agent' ? action.instruction : '',
     taskId: action.kind === 'task_command' ? action.taskId : '',
-    workflowId: action.kind === 'workflow' ? action.workflowId : '',
-    workflowGoal: action.kind === 'workflow' ? (action.goal ?? '') : '',
     browserAutomationId: action.kind === 'browser_automation' ? action.automationId : '',
     browserAutomationInputs: action.kind === 'browser_automation' ? action.inputs ?? {} : {},
-    workflowInput: {
-      goal: action.kind === 'workflow' ? (action.goal ?? '') : '',
-      argValues: definition
-        ? workflowInputToArgValues(definition.name, workflowInput)
-        : {},
-      schemaInput: workflowInput,
-      concurrency:
-        action.kind === 'workflow' && action.concurrency
-          ? String(action.concurrency)
-          : '',
-      maxSubagents:
-        action.kind === 'workflow' && action.maxSubagents
-          ? String(action.maxSubagents)
-          : '',
-    },
-    workflowInputValid: true,
     safetyMode: automation.safety?.mode ?? 'auto_apply',
     timeoutSeconds: String(timeoutSeconds),
     conversationMode: automation.conversationMode ?? 'new_session',
@@ -512,9 +404,8 @@ export function formFromAutomation(
 export function buildAutomationEditInput(
   automation: Automation,
   form: FormState,
-  selectedWorkflow: WorkflowDefinition | null,
 ): AutomationInput {
-  const input = buildInput(form, selectedWorkflow);
+  const input = buildInput(form);
   const trigger =
     automation.trigger.kind === 'schedule' &&
     input.trigger.kind === 'schedule' &&
@@ -537,19 +428,6 @@ export function buildAutomationEditInput(
       ...input.action,
       agentId: input.action.agentId,
       model: input.action.model,
-    };
-  } else if (
-    automation.action.kind === 'workflow' &&
-    input.action.kind === 'workflow'
-  ) {
-    action = {
-      ...automation.action,
-      ...input.action,
-      agentId: input.action.agentId,
-      input: input.action.input,
-      goal: input.action.goal,
-      concurrency: input.action.concurrency,
-      maxSubagents: input.action.maxSubagents,
     };
   } else if (
     automation.action.kind === 'browser_automation' &&

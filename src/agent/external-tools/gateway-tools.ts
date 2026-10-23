@@ -73,14 +73,14 @@ export function createExternalToolGatewayTools(
   executorConfig?: Partial<import('../tools/executor.js').ToolExecutorConfig>,
 ): AgentTool[] {
   const service = new ExternalToolService(providers);
-  const legacySources = EXTERNAL_TOOL_SOURCES.filter(source => !nativeSources.includes(source));
-  const assertLegacyRef = (ref: string) => {
+  const gatewaySources = EXTERNAL_TOOL_SOURCES.filter(source => !nativeSources.includes(source));
+  const assertGatewayRef = (ref: string) => {
     if (nativeSources.some(source => ref.startsWith(`${source}:`))) throw new Error('Use tool_search to load this native tool, then call it directly.');
   };
   const searchTool: AgentTool<typeof ToolSearchSchema, Record<string, unknown>> = {
     name: EXTERNAL_TOOL_NAMES.search,
     label: '🔎 External Tool Search',
-    description: `Search external tools from these sources: ${legacySources.join(', ')}.${nativeSources.length ? ` Use tool_search for native ${nativeSources.join(', ')} tools.` : ''} CLI connectors include Feishu/Lark, WeCom and WPS 365. Omit sources unless intentionally restricting the search; do not guess a source list. Use concise English capability keywords, e.g. "wecom doc.search". Returns executable tools, connection candidates, or reviewed Store install candidates. Call xopc_tool_describe before executing a tool. When no executable tool exists but a connection or install candidate is returned, use xopc_require_connection instead of falling back to browser automation. If a source-filtered search finds no relevant tools, retry without sources before concluding a capability is unavailable.`,
+    description: `Search external tools from these sources: ${gatewaySources.join(', ')}.${nativeSources.length ? ` Use tool_search for native ${nativeSources.join(', ')} tools.` : ''} CLI connectors include Feishu/Lark, WeCom and WPS 365. Omit sources unless intentionally restricting the search; do not guess a source list. Use concise English capability keywords, e.g. "wecom doc.search". Returns executable tools, connection candidates, or reviewed Store install candidates. Call xopc_tool_describe before executing a tool. When no executable tool exists but a connection or install candidate is returned, use xopc_require_connection instead of falling back to browser automation. If a source-filtered search finds no relevant tools, retry without sources before concluding a capability is unavailable.`,
     parameters: ToolSearchSchema,
     async execute(_toolCallId, params) {
       const selectedSources = new Set<string>(params.sources ?? []);
@@ -88,7 +88,7 @@ export function createExternalToolGatewayTools(
       if (params.sources?.length && params.sources.every(source => nativeSources.includes(source))) {
         return textResult({ tools: [], instruction: 'Use tool_search for native tools.' });
       }
-      const result = await service.search({ ...params, sources: (params.sources?.length ? params.sources : legacySources)
+      const result = await service.search({ ...params, sources: (params.sources?.length ? params.sources : gatewaySources)
         .filter(source => !nativeSources.includes(source)) });
       const candidates = [...result.connectionCandidates, ...connectionCandidates(params.query)]
         .filter((candidate, index, all) => all.findIndex(item => item.candidateRef === candidate.candidateRef) === index);
@@ -123,7 +123,7 @@ export function createExternalToolGatewayTools(
     description: 'Load exact contracts for up to three external tools returned by xopc_tool_search.',
     parameters: ToolDescribeSchema,
     async execute(_toolCallId, params) {
-      params.toolRefs.forEach(assertLegacyRef);
+      params.toolRefs.forEach(assertGatewayRef);
       const result = await service.describe(params.toolRefs);
       return textResult({ ...result, ...(result.notFound.length ? { instruction: 'These exact tool contracts are unavailable. Do not execute them, invent revisions, or reconnect the account. Use a different available tool or explain the capability failure.' } : {}) });
     },
@@ -178,7 +178,7 @@ export function createExternalToolGatewayTools(
   };
   const nativeExecute = executeTool.execute.bind(executeTool);
   executeTool.execute = async (id, params, signal, update) => {
-    assertLegacyRef(params.toolRef);
+    assertGatewayRef(params.toolRef);
     return nativeExecute(id, params, signal, update);
   };
   bindExternalToolRegistry(executeTool, { service, nativeSources, execute: nativeExecute, executorConfig });

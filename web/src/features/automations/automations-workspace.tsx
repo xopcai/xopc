@@ -45,16 +45,12 @@ import { cn } from '@/lib/cn';
 import type { StoredLanguage } from '@/lib/storage';
 import { useLocaleStore } from '@/stores/locale-store';
 import { usePageHeaderStore } from '@/stores/page-header-store';
-import { listWorkflowDefinitions, type WorkflowDefinition } from '@/features/workflows/workflow-api';
-import { resolveWorkflowLocalizedCopy } from '@/features/workflows/workflow-meta-locale';
 import { browserAutomationApi, type BrowserAutomation } from '@/features/browser-automations/browser-automation-api';
 import {
   browserAutomationInputsComplete,
   defaultBrowserAutomationInputs,
 } from '@/features/browser-automations/browser-automation-input-utils';
 import { BrowserAutomationInputFields } from '@/features/browser-automations/browser-automation-inputs';
-import { validateWorkflowInputEditorValue } from '@/features/workflows/workflow-input-editor.utils';
-import { WorkflowRunSetupPanel } from '@/features/workflows/workflow-run-setup-panel';
 import {
   automationApi,
   type Automation,
@@ -138,7 +134,7 @@ function actionLabel(action: AutomationAction, labels: AutomationsMessages): str
     if (action.capability === 'memory.daily_reconciliation') return 'Memory daily reconciliation';
     return 'Memory weekly knowledge maintenance';
   }
-  if (action.kind === 'workflow') return labels.action.workflowWithId.replace('{id}', action.workflowId);
+
   if (action.kind === 'browser_automation') return `Browser automation: ${action.automationId}`;
   if (action.kind === 'task_command') return labels.action.taskWithId.replace('{id}', action.taskId);
   return action.agentId ? labels.action.agentWithId.replace('{id}', action.agentId) : labels.action.agent;
@@ -146,14 +142,14 @@ function actionLabel(action: AutomationAction, labels: AutomationsMessages): str
 
 function actionKindLabel(action: AutomationAction, labels: AutomationsMessages): string {
   if (action.kind === 'system') return 'System';
-  if (action.kind === 'workflow') return labels.sources.workflow;
+
   if (action.kind === 'browser_automation') return labels.sources.browser;
   if (action.kind === 'task_command') return labels.sources.task;
   return labels.sources.agent;
 }
 
 function actionModeLabel(mode: ActionMode, labels: AutomationsMessages): string {
-  if (mode === 'workflow') return labels.action.runWorkflow;
+
   if (mode === 'browser_automation') return labels.sources.browser;
   if (mode === 'task_command') return labels.action.runTask;
   return labels.action.runAgent;
@@ -167,7 +163,7 @@ function triggerModeLabel(mode: TriggerMode, labels: AutomationsMessages): strin
 
 function AutomationSourceIcon({ kind, className }: { kind: AutomationAction['kind']; className?: string }) {
   if (kind === 'system') return <Zap className={className} aria-hidden />;
-  if (kind === 'workflow') return <GitBranch className={className} aria-hidden />;
+
   if (kind === 'browser_automation') return <ListTree className={className} aria-hidden />;
   if (kind === 'task_command') return <CheckCircle2 className={className} aria-hidden />;
   return <Sparkles className={className} aria-hidden />;
@@ -204,9 +200,7 @@ function needsAttention(run: AutomationRun): boolean {
 function automationTaskSummary(automation: Automation, labels: AutomationsMessages): string {
   if (automation.action.kind === 'system') return actionLabel(automation.action, labels);
   if (automation.action.kind === 'agent') return automation.action.instruction;
-  if (automation.action.kind === 'workflow') {
-    return automation.action.goal?.trim() || actionLabel(automation.action, labels);
-  }
+
   if (automation.action.kind === 'task_command') return actionLabel(automation.action, labels);
   return actionLabel(automation.action, labels);
 }
@@ -321,7 +315,7 @@ export function AutomationsWorkspace({
   const filter: AutomationFilter = filterParam === 'active' || filterParam === 'paused' || filterParam === 'running' || filterParam === 'attention' ? filterParam : 'all';
   const ownership: AutomationOwnership = searchParams.get('ownership') === 'system' ? 'system' : 'user';
   const sourceParam = searchParams.get('source');
-  const sourceFilter: AutomationSourceFilter = sourceParam === 'agent' || sourceParam === 'workflow' || sourceParam === 'task_command' || sourceParam === 'browser_automation' ? sourceParam : 'all';
+  const sourceFilter: AutomationSourceFilter = sourceParam === 'agent' || sourceParam === 'task_command' || sourceParam === 'browser_automation' ? sourceParam : 'all';
   const searchQuery = searchParams.get('q') ?? '';
   const setFilter = (value: AutomationFilter) => setSearchParams((previous) => {
     const next = new URLSearchParams(previous);
@@ -409,7 +403,6 @@ export function AutomationsWorkspace({
     () => automationApi.runEvents(selectedRunId!),
     { refreshInterval: 5_000 },
   );
-  const workflowDefinitionsSwr = useSWR('automation-workflow-definitions', listWorkflowDefinitions);
   const browserAutomationsSwr = useSWR('automation-browser-automations', () => browserAutomationApi.list());
   const chatAgentsSwr = useSWR('automation-chat-agents', fetchChatAgents);
   const tasksSwr = useSWR('automation-tasks', automationApi.tasks);
@@ -509,7 +502,6 @@ export function AutomationsWorkspace({
       automationTriggerLabel(automation.trigger, labels, cronLabels, language),
     ].some((value) => value.toLocaleLowerCase().includes(normalizedSearch));
   }), [cronLabels, filter, labels, language, normalizedSearch, ownershipAutomations, ownershipRuns, runningAutomationIds, sourceFilter]);
-  const workflowDefinitions = useMemo(() => workflowDefinitionsSwr.data ?? [], [workflowDefinitionsSwr.data]);
   const browserAutomations = useMemo(
     () => (browserAutomationsSwr.data?.automations ?? []).filter((automation) => automation.enabled),
     [browserAutomationsSwr.data],
@@ -520,22 +512,10 @@ export function AutomationsWorkspace({
     [tasksSwr.data],
   );
   const projects = projectsSwr.data?.items ?? [];
-  const selectedWorkflow = useMemo(
-    () => workflowDefinitions.find((workflow) => workflow.id === form.workflowId.trim()) ?? null,
-    [form.workflowId, workflowDefinitions],
-  );
   const selectedBrowserAutomation = useMemo(
     () => browserAutomations.find((automation) => automation.id === form.browserAutomationId.trim()) ?? null,
     [browserAutomations, form.browserAutomationId],
   );
-  const workflowSelectionInvalid =
-    form.actionMode === 'workflow' &&
-    (!form.workflowId.trim() ||
-      (workflowDefinitions.length > 0 && !workflowDefinitions.some((workflow) => workflow.id === form.workflowId)));
-  const workflowInputInvalid =
-    form.actionMode === 'workflow' && selectedWorkflow
-      ? !validateWorkflowInputEditorValue(selectedWorkflow, form.workflowInput, form.workflowInputValid).valid
-      : false;
   const managedTriggerEdit = Boolean(editingAutomation?.management?.editable.includes('trigger'));
   const managedTriggerValid = ['daily', 'weekly', 'interval', 'cron'].includes(form.triggerMode)
     && (!['daily', 'weekly'].includes(form.triggerMode) || /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(form.time))
@@ -547,9 +527,7 @@ export function AutomationsWorkspace({
     (form.triggerMode !== 'once' || (Number.isFinite(new Date(form.onceAt).getTime()) && (Boolean(editingAutomation) || new Date(form.onceAt).getTime() > Date.now()))) &&
     (!['daily', 'weekly'].includes(form.triggerMode) || /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(form.time)) &&
     (form.triggerMode !== 'event' || (Boolean(form.eventType.trim()) && payloadMatchIsValid(form.eventPayloadMatch))) &&
-    (form.actionMode === 'workflow'
-      ? !workflowSelectionInvalid && !workflowInputInvalid
-      : form.actionMode === 'browser_automation'
+    (form.actionMode === 'browser_automation'
         ? selectedBrowserAutomation !== null && browserAutomationInputsComplete(selectedBrowserAutomation, form.browserAutomationInputs)
         : form.actionMode === 'task_command'
           ? Boolean(form.taskId.trim() && form.agentId.trim())
@@ -574,7 +552,6 @@ export function AutomationsWorkspace({
   const sourceCounts = useMemo(() => ({
     all: ownershipAutomations.length,
     agent: ownershipAutomations.filter((automation) => automation.action.kind === 'agent').length,
-    workflow: ownershipAutomations.filter((automation) => automation.action.kind === 'workflow').length,
     task_command: ownershipAutomations.filter((automation) => automation.action.kind === 'task_command').length,
     browser_automation: ownershipAutomations.filter((automation) => automation.action.kind === 'browser_automation').length,
   }), [ownershipAutomations]);
@@ -680,18 +657,18 @@ export function AutomationsWorkspace({
   };
 
   const openAutomationEditor = useCallback((automation: Automation) => {
-    setForm(formFromAutomation(automation, workflowDefinitions));
+    setForm(formFromAutomation(automation));
     setEditingAutomationId(automation.id);
     setEditingDraft(false);
     setSelectedAutomationId(null);
     setCreateMode('blank');
     setCreateOpen(true);
-  }, [workflowDefinitions]);
+  }, []);
 
   const openDraftEditor = useCallback(() => {
     if (!draft) return;
     setForm({
-      ...formFromAutomation(draft.automation, workflowDefinitions),
+      ...formFromAutomation(draft.automation),
       projectId: draftProjectId,
       conversationMode: draftConversationMode,
       notificationPolicy: draftNotificationPolicy,
@@ -699,7 +676,7 @@ export function AutomationsWorkspace({
     setEditingAutomationId(null);
     setEditingDraft(true);
     setCreateMode('blank');
-  }, [draft, draftConversationMode, draftNotificationPolicy, draftProjectId, workflowDefinitions]);
+  }, [draft, draftConversationMode, draftNotificationPolicy, draftProjectId]);
 
   const refreshNow = useCallback(async () => {
     setRefreshBusy(true);
@@ -844,7 +821,7 @@ export function AutomationsWorkspace({
     if (editingDraft && draft) {
       setBusyAction('draft:edit');
       try {
-        const automation = buildInput(form, selectedWorkflow);
+        const automation = buildInput(form);
         const { simulation } = await automationApi.simulate(automation);
         setDraft({ ...draft, automation, simulation });
         setDraftProjectId(form.projectId);
@@ -865,8 +842,8 @@ export function AutomationsWorkspace({
       const automationId = editingAutomation.id;
       const updated = await mutateAutomation(`automation:${automationId}:edit`, () => (
         automationApi.update(automationId, managedTriggerEdit
-          ? { trigger: buildAutomationEditInput(editingAutomation, { ...form, instruction: 'managed' }, null).trigger }
-          : buildAutomationEditInput(editingAutomation, form, selectedWorkflow))
+          ? { trigger: buildAutomationEditInput(editingAutomation, { ...form, instruction: 'managed' }).trigger }
+          : buildAutomationEditInput(editingAutomation, form))
       ));
       if (updated) {
         setCreateOpen(false);
@@ -877,7 +854,7 @@ export function AutomationsWorkspace({
     }
     setBusyAction('automation:create');
     try {
-      const input = buildInput(form, selectedWorkflow);
+      const input = buildInput(form);
       const { automation } = await automationApi.create(input);
       setForm(initialForm);
       setCreateOpen(false);
@@ -1254,7 +1231,6 @@ export function AutomationsWorkspace({
                             {([
                               { id: 'all' as const, label: labels.filters.allSources, icon: Zap },
                               { id: 'agent' as const, label: labels.sources.agent, icon: Sparkles },
-                              { id: 'workflow' as const, label: labels.sources.workflow, icon: GitBranch },
                               { id: 'task_command' as const, label: labels.sources.task, icon: CheckCircle2 },
                               { id: 'browser_automation' as const, label: labels.sources.browser, icon: ListTree },
                             ]).map((item) => (
@@ -1475,9 +1451,6 @@ export function AutomationsWorkspace({
                   labels={labels}
                   setForm={setForm}
                   projects={projects}
-                  workflowDefinitions={workflowDefinitions}
-                  selectedWorkflow={selectedWorkflow}
-                  workflowsLoading={workflowDefinitionsSwr.isLoading}
                   browserAutomations={browserAutomations}
                   selectedBrowserAutomation={selectedBrowserAutomation}
                   browserAutomationsLoading={browserAutomationsSwr.isLoading}
@@ -2169,10 +2142,8 @@ function RunDiagnosticsPanel({
   const result = run.error || run.summary;
   const processLink = run.conversationId
     ? `/chat/${encodeURIComponent(run.conversationId)}`
-    : run.workflowRunId
-      ? `/workflows?run=${encodeURIComponent(run.workflowRunId)}`
-      : null;
-  const processLabel = run.conversationId ? labels.runDetail.openConversation : labels.runDetail.openWorkflow;
+    : null;
+  const processLabel = run.conversationId ? labels.runDetail.openConversation : labels.runDetail.openConversation;
   const ProcessIcon = run.conversationId ? MessageCircle : GitBranch;
   const ResultIcon = isActiveRun(run) ? Activity : run.status === 'succeeded' ? CheckCircle2 : CircleAlert;
 
@@ -2579,9 +2550,7 @@ function AutomationOverview({
           descriptionTitle={nextRunExact}
         />
         <OverviewItem
-          icon={automation.action.kind === 'workflow'
-            ? <GitBranch className="size-4" aria-hidden />
-            : automation.action.kind === 'browser_automation'
+          icon={automation.action.kind === 'browser_automation'
               ? <ListTree className="size-4" aria-hidden />
               : automation.action.kind === 'task_command'
                 ? <CheckCircle2 className="size-4" aria-hidden />
@@ -2737,9 +2706,6 @@ function AutomationForm({
   labels,
   setForm,
   projects,
-  workflowDefinitions,
-  selectedWorkflow,
-  workflowsLoading,
   browserAutomations,
   selectedBrowserAutomation,
   browserAutomationsLoading,
@@ -2755,9 +2721,6 @@ function AutomationForm({
   labels: AutomationsMessages;
   setForm: React.Dispatch<React.SetStateAction<FormState>>;
   projects: Project[];
-  workflowDefinitions: WorkflowDefinition[];
-  selectedWorkflow: WorkflowDefinition | null;
-  workflowsLoading: boolean;
   browserAutomations: BrowserAutomation[];
   selectedBrowserAutomation: BrowserAutomation | null;
   browserAutomationsLoading: boolean;
@@ -2788,19 +2751,7 @@ function AutomationForm({
     setForm((prev) => ({ ...prev, agentId: defaultAgentId }));
   }, [defaultAgentId, form.actionMode, form.agentId, setForm]);
 
-  useEffect(() => {
-    if (form.actionMode !== 'workflow') return;
-    if (form.workflowId.trim()) return;
-    const firstWorkflowId = workflowDefinitions[0]?.id;
-    if (!firstWorkflowId) return;
-    setForm((prev) => ({
-      ...prev,
-      workflowId: firstWorkflowId,
-      workflowGoal: '',
-      workflowInput: { goal: '', argValues: {}, schemaInput: {}, concurrency: '', maxSubagents: '' },
-      workflowInputValid: true,
-    }));
-  }, [form.actionMode, form.workflowId, setForm, workflowDefinitions]);
+
 
   useEffect(() => {
     if (form.actionMode !== 'browser_automation') return;
@@ -2852,7 +2803,6 @@ function AutomationForm({
           <SelectOption value="webhook">{labels.trigger.webhook}</SelectOption>
           <SelectOption value="taskBlocked">{labels.trigger.taskBlocked}</SelectOption>
           <SelectOption value="noteCreated">{labels.trigger.noteCreated}</SelectOption>
-          <SelectOption value="workflowFailed">{labels.trigger.workflowFailed}</SelectOption>
           <SelectOption value="sessionUpdated">{labels.trigger.sessionUpdated}</SelectOption>
           <SelectOption value="event">{labels.trigger.customEvent}</SelectOption>
         </Select>
@@ -2999,19 +2949,11 @@ function AutomationForm({
               ...(actionMode === 'browser_automation' || actionMode === 'task_command'
                 ? { safetyMode: 'auto_apply' as const }
                 : {}),
-              ...(actionMode === 'workflow' && !form.workflowId.trim() && workflowDefinitions[0]
-                ? {
-                    workflowId: workflowDefinitions[0].id,
-                    workflowGoal: '',
-                    workflowInput: { goal: '', argValues: {}, schemaInput: {}, concurrency: '', maxSubagents: '' },
-                    workflowInputValid: true,
-                  }
-                : {}),
+              ...({}),
             });
           }}
         >
           <SelectOption value="agent">{labels.action.runAgent}</SelectOption>
-          <SelectOption value="workflow">{labels.action.runWorkflow}</SelectOption>
           <SelectOption value="task_command">{labels.action.runTask}</SelectOption>
           <SelectOption value="browser_automation">{language === 'zh' ? '浏览器自动化' : 'Browser automation'}</SelectOption>
         </Select>
@@ -3069,58 +3011,6 @@ function AutomationForm({
               <textarea className={cn(inputClass, 'min-h-32 resize-y')} value={form.instruction} onChange={(e) => update({ instruction: e.target.value })} />
             </Field>
           </>
-        ) : form.actionMode === 'workflow' ? (
-          <>
-            <Field label={labels.form.workflow}>
-              <Select
-                className={inputClass}
-                value={form.workflowId}
-                onChange={(e) => update({
-                  workflowId: e.target.value,
-                  workflowGoal: '',
-                  workflowInput: { goal: '', argValues: {}, schemaInput: {}, concurrency: '', maxSubagents: '' },
-                  workflowInputValid: true,
-                })}
-                disabled={workflowsLoading || workflowDefinitions.length === 0}
-              >
-                {workflowsLoading ? <SelectOption value="">{labels.form.loadingWorkflows}</SelectOption> : null}
-                {!workflowsLoading && workflowDefinitions.length === 0 ? <SelectOption value="">{labels.form.noWorkflows}</SelectOption> : null}
-                {workflowDefinitions.map((workflow) => (
-                  <SelectOption key={workflow.id} value={workflow.id}>
-                    {resolveWorkflowLocalizedCopy(workflow, language).title}
-                  </SelectOption>
-                ))}
-              </Select>
-            </Field>
-            {selectedWorkflow ? (
-              <WorkflowRunSetupPanel
-                definition={selectedWorkflow}
-                language={language}
-                value={form.workflowInput}
-                onChange={(workflowInput) => update({
-                  workflowInput,
-                  workflowGoal: workflowInput.goal,
-                  workflowInputValid: true,
-                })}
-                mode="automation"
-                badgeLabel={labels.form.triggeredRun}
-                onValidityChange={(validity) => update({ workflowInputValid: validity.valid })}
-                aiAssist={{
-                  inputScenario: 'automation.workflowInput',
-                  goalScenario: 'automation.workflowGoal',
-                  context: {
-                    automationName: form.name,
-                    automationDescription: form.description,
-                    triggerMode: form.triggerMode,
-                    workflowId: selectedWorkflow.id,
-                    workflowTitle: resolveWorkflowLocalizedCopy(selectedWorkflow, language).title,
-                    workflowDescription: resolveWorkflowLocalizedCopy(selectedWorkflow, language).description,
-                  },
-                }}
-                inputClassName="rounded-lg"
-              />
-            ) : null}
-          </>
         ) : form.actionMode === 'task_command' ? (
           <>
             <Field label={labels.form.task}>
@@ -3150,16 +3040,16 @@ function AutomationForm({
                 className={inputClass}
                 value={form.browserAutomationId}
                 onChange={(event) => {
-                  const workflow = browserAutomations.find((item) => item.id === event.target.value);
+                  const selected = browserAutomations.find((item) => item.id === event.target.value);
                   update({
                     browserAutomationId: event.target.value,
-                    browserAutomationInputs: workflow ? defaultBrowserAutomationInputs(workflow) : {},
+                    browserAutomationInputs: selected ? defaultBrowserAutomationInputs(selected) : {},
                   });
                 }}
                 disabled={browserAutomationsLoading || browserAutomations.length === 0}
               >
                 {browserAutomations.length === 0 ? <SelectOption value="">{language === 'zh' ? '没有已启用的浏览器自动化' : 'No enabled browser automations'}</SelectOption> : null}
-                {browserAutomations.map((workflow) => <SelectOption key={workflow.id} value={workflow.id}>{workflow.name}</SelectOption>)}
+                {browserAutomations.map((automation) => <SelectOption key={automation.id} value={automation.id}>{automation.name}</SelectOption>)}
               </Select>
             </Field>
             {selectedBrowserAutomation && Object.keys(selectedBrowserAutomation.inputs).length > 0 ? <Field label={language === 'zh' ? '运行时填写' : 'Run inputs'}><BrowserAutomationInputFields automation={selectedBrowserAutomation} values={form.browserAutomationInputs} language={language} onChange={(browserAutomationInputs) => update({ browserAutomationInputs })} /></Field> : null}

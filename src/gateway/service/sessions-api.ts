@@ -60,7 +60,7 @@ export class GatewaySessionsApi {
     return this.opts.sessionIndex.listSessions(query);
   }
 
-  /** List conversations whose stored type is workflow-subagent. */
+  /** List active executions. */
   listSubagents(query?: SessionListQuery) {
     return this.opts.sessionIndex.listSubagents(query);
   }
@@ -243,7 +243,6 @@ export class GatewaySessionsApi {
       configVersion?: number;
       model?: string | null;
       activityDetailLevel?: string | null;
-      reasoningLevel?: string | null;
       verboseLevel?: string;
       workingDirectory?: string;
       responseLanguage?: string | null;

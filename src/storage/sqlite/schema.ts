@@ -1,57 +1,36 @@
 import type { DatabaseSync } from 'node:sqlite';
 
+import { memorySearchText } from '../../knowledge-memory/search-text.js';
+import { currentOperationId } from '../../infra/operation-context.js';
 import { readSqliteAsset } from './sql-assets.js';
+import { readSchemaVersion, setSchemaVersion } from './schema-version.js';
+import { DatabaseSchemaTooNewError, DatabaseSchemaTooOldError } from './schema-errors.js';
 
-import {
-  applyPendingMigrations,
-  XOPC_DB_BASELINE_SCHEMA_VERSION,
-  XOPC_DB_SCHEMA_VERSION,
-} from './migrations/runner.js';
-import {
-  ensureSchemaMetaTable,
-  readSchemaVersion,
-  setSchemaVersion,
-} from './schema-version.js';
+export { SCHEMA_META_SCHEMA_VERSION_KEY, readSchemaVersionForTest, readSchemaVersion, setSchemaVersion, ensureSchemaMetaTable } from './schema-version.js';
 
-export {
-  SCHEMA_META_SCHEMA_VERSION_KEY,
-  readSchemaVersionForTest,
-  readSchemaVersion,
-  setSchemaVersion,
-  ensureSchemaMetaTable,
-} from './schema-version.js';
-export {
-  XOPC_DB_BASELINE_SCHEMA_VERSION,
-  XOPC_DB_SCHEMA_VERSION,
-} from './migrations/runner.js';
+export const XOPC_DB_SCHEMA_VERSION = 259;
+export const XOPC_DB_BASELINE_SCHEMA_VERSION = XOPC_DB_SCHEMA_VERSION;
 
-function bootstrapFreshDatabase(db: DatabaseSync): void {
+/** Open only the current schema; older databases are never upgraded or interpreted. */
+export function ensureXopcDatabaseSchema(db: DatabaseSync): void {
+  db.function('xopc_memory_search_text', { deterministic: true }, value => memorySearchText(String(value ?? '')));
+  db.function('xopc_operation_id', () => currentOperationId() ?? null);
+  const tables = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'").all();
+  const hasMetadata = tables.some(row => row.name === 'schema_meta');
+  if (!hasMetadata && tables.length) throw new Error('An unversioned database cannot be initialized');
+  const version = hasMetadata ? readSchemaVersion(db) : 0;
+  if (version > XOPC_DB_SCHEMA_VERSION) throw new DatabaseSchemaTooNewError(version, XOPC_DB_SCHEMA_VERSION);
+  if (version > 0 && version < XOPC_DB_SCHEMA_VERSION) throw new DatabaseSchemaTooOldError(version, XOPC_DB_SCHEMA_VERSION);
+  if (version === XOPC_DB_SCHEMA_VERSION) return;
+  const existing = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name != 'schema_meta' AND name NOT LIKE 'sqlite_%' LIMIT 1").get();
+  if (existing) throw new Error('An unversioned database cannot be initialized');
   db.exec('BEGIN IMMEDIATE');
   try {
     db.exec(readSqliteAsset('schema.sql'));
-    setSchemaVersion(db, XOPC_DB_BASELINE_SCHEMA_VERSION);
+    setSchemaVersion(db, XOPC_DB_SCHEMA_VERSION);
     db.exec('COMMIT');
   } catch (error) {
-    try {
-      db.exec('ROLLBACK');
-    } catch {
-      /* preserve original error */
-    }
+    db.exec('ROLLBACK');
     throw error;
   }
-}
-
-/**
- * Ensure schema_meta exists, apply baseline schema.sql on first open, then run pending migrations.
- */
-export function ensureXopcDatabaseSchema(db: DatabaseSync): void {
-  ensureSchemaMetaTable(db);
-
-  let currentVersion = readSchemaVersion(db);
-  if (currentVersion === 0) {
-    bootstrapFreshDatabase(db);
-    currentVersion = XOPC_DB_BASELINE_SCHEMA_VERSION;
-  }
-
-  applyPendingMigrations(db, { targetVersion: XOPC_DB_SCHEMA_VERSION });
 }

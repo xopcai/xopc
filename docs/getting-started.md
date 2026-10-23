@@ -63,11 +63,9 @@ Some desktop releases also offer experimental **Connect recent work** onboarding
 | Session | A conversation you can return to from any connected client | [Chat and sessions](./session.md) |
 | Agent | A named assistant with its own role, model choices, tools, and workspace | [Agents](./routing-system.md) |
 | Project and Task | Long-running work with an explicit result, status, and next action | [Projects, Tasks, and Notes](./projects-tasks-notes.md) |
-| Workflow | A reusable sequence for multi-step work | [Workflows](./workflows.md) |
 | Automation | A schedule, webhook, or manual trigger that starts work | [Automations](./automations.md) |
 | Channel | Telegram, Weixin, or Feishu access to the same assistant | [Channels](./channels/index.md) |
 
-You can use xopc as a normal chat assistant without creating Projects, Workflows, or Automations. Add them only when work needs to continue or repeat.
 
 ## Recommended next steps
 

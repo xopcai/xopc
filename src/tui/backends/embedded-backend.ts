@@ -8,7 +8,7 @@ import type { ExtensionRegistryImpl } from '../../extensions/extension-registry-
 import { isAbsolute, join, relative, resolve } from 'node:path';
 import type { AgentService } from '../../agent/service.js';
 import { listAgentEntries, normalizeAgentId } from '../../agent/agent-scope.js';
-import { resolveAgentIdFromConversationId } from '../../routing/agent-session-key.js';
+
 import { parseModelRef } from '../../agent/models/selection.js';
 import { createCreateShareTool, isShareToolAvailable } from '../../agent/tools/create-share-tool.js';
 import { transcriptRowsToClientHistory } from '../../session/client-history.js';
@@ -29,10 +29,6 @@ import {
   listComposerInputHistory,
   openXopcDatabase,
 } from '../../storage/sqlite/index.js';
-import { buildWorkflowChildTools } from '../../agent/workflow/workflow-child-tools.js';
-import type { GatewayWorkflowHost } from '../../gateway/gateway-workflow-host.types.js';
-import { WorkflowRunService } from '../../workflows/service/workflow-run-service.js';
-import { WorkflowSessionBridge } from '../../workflows/service/workflow-session-bridge.js';
 import { createLogger } from '../../utils/logger.js';
 import type {
   ChatSendOptions,
@@ -49,8 +45,6 @@ import type {
   TuiTranscriptTreeEntry,
   TuiAgentInfo,
   TuiWorkspaceFileSearchEntry,
-  TuiWorkflowRunStartRequest,
-  TuiWorkflowRunStartResult,
   TuiStartupProjectResult,
   TuiChatInputState,
 } from '../tui-backend.js';
@@ -112,7 +106,6 @@ export class EmbeddedBackend implements TuiBackend {
   private workspace = '';
   private sessionIndex: SessionIndex | null = null;
   private sessionIndexReady: Promise<void> | null = null;
-  private workflowRunService: WorkflowRunService | null = null;
   private running = false;
   private chatAbort: AbortController | null = null;
   private readonly chatInputStates = new Map<string, TuiChatInputState>();
@@ -205,7 +198,6 @@ export class EmbeddedBackend implements TuiBackend {
       model: modelId,
       config,
       sessionStore: sessionIndex.getStore(),
-      getWorkflowRunService: () => this.getWorkflowRunService(),
       extensionRegistry: this.opts?.extensionRegistry,
       isWorkspaceTrusted: (workspaceDir) => this.isWorkspaceTrusted(workspaceDir),
     });
@@ -249,39 +241,6 @@ export class EmbeddedBackend implements TuiBackend {
     return signal && !signal.aborted ? signal : undefined;
   }
 
-  private getWorkflowRunService(): WorkflowRunService {
-    if (this.workflowRunService) return this.workflowRunService;
-    if (!this.config || !this.sessionIndex || !this.agent) {
-      throw new Error('Embedded workflow runtime is not ready.');
-    }
-
-    const host: GatewayWorkflowHost = {
-      currentConfig: this.config,
-      currentWorkspacePath: this.workspace,
-      messageBusInstance: this.bus,
-      agentService: {
-        getModelForSession: (conversationId) => this.agent!.getModelForSession(conversationId),
-        getWorkflowSkillInstructions: (agentId, names) =>
-          this.agent!.getWorkflowSkillInstructions(agentId, names),
-      },
-      sessionIndexInstance: this.sessionIndex,
-      emit: (event, payload) => {
-        this.onEvent?.({
-          event,
-          data: payload,
-          source: 'embedded',
-        });
-      },
-    };
-
-    this.workflowRunService = new WorkflowRunService({
-      service: host,
-      sessionBridge: new WorkflowSessionBridge(host),
-      buildChildTools: buildWorkflowChildTools,
-    });
-    return this.workflowRunService;
-  }
-
   private activeConfig(): Config {
     return this.config ?? this.opts?.config ?? loadConfig();
   }
@@ -305,28 +264,6 @@ export class EmbeddedBackend implements TuiBackend {
 
   refreshWorkspaceTrust(): void {
     this.agent?.refreshSkillsAfterTrustChange();
-  }
-
-  async startWorkflowRun(opts: TuiWorkflowRunStartRequest): Promise<TuiWorkflowRunStartResult> {
-    await this.materializeDraft(opts.conversationId);
-    await this.sessionIndexReady;
-    const agentId = opts.agentId?.trim() || resolveAgentIdFromConversationId(opts.conversationId);
-    const result = await this.getWorkflowRunService().startWorkflowRun({
-      agentId,
-      definitionId: opts.definitionId,
-      parentConversationId: opts.conversationId,
-      source: { kind: 'chat', conversationId: opts.conversationId },
-      goal: opts.goal,
-      input: opts.input,
-    });
-    if (result.ok === false) {
-      throw new Error(result.message);
-    }
-    return {
-      runId: result.runId,
-      conversationId: result.conversationId,
-      definitionId: opts.definitionId,
-    };
   }
 
   async resolveStartupProject(opts: {
@@ -891,7 +828,7 @@ export class EmbeddedBackend implements TuiBackend {
         model: parsed?.model ?? cfg.model,
         modelProvider: parsed?.provider,
         thinkingLevel: cfg.thinkingLevel,
-        reasoningLevel: cfg.reasoningLevel,
+        reasoningLevel: cfg.activityDetail.effective,
         verboseLevel: cfg.verboseLevel,
         totalTokens: usage.estimatedTokens,
         contextWindow: usage.contextWindow,
@@ -938,7 +875,7 @@ export class EmbeddedBackend implements TuiBackend {
       if (typeof patch.model === 'string') draft.creation.model = patch.model;
       if (typeof patch.thinkingLevel === 'string') draft.creation.thinkingLevel = patch.thinkingLevel;
       if (typeof patch.workingDirectory === 'string') draft.config.workingDirectoryOverride = resolve(patch.workingDirectory);
-      if (patch.reasoningLevel === 'off' || patch.reasoningLevel === 'on' || patch.reasoningLevel === 'stream') draft.config.reasoningLevel = patch.reasoningLevel;
+      if (patch.activityDetailLevel === 'off' || patch.activityDetailLevel === 'on' || patch.activityDetailLevel === 'stream') draft.config.reasoningLevel = patch.activityDetailLevel;
       if (patch.verboseLevel === 'off' || patch.verboseLevel === 'on' || patch.verboseLevel === 'full') draft.config.verboseLevel = patch.verboseLevel;
       if (patch.projectId === null || typeof patch.projectId === 'string') draft.creation.projectId = typeof patch.projectId === 'string' ? patch.projectId : null;
       this.drafts.save(conversationId, draft);
@@ -950,7 +887,7 @@ export class EmbeddedBackend implements TuiBackend {
     const result = await agent.sessionConfig.patch(conversationId, {
       model: typeof patch.model === 'string' ? patch.model : undefined,
       thinkingLevel: typeof patch.thinkingLevel === 'string' ? patch.thinkingLevel : undefined,
-      reasoningLevel: typeof patch.reasoningLevel === 'string' ? patch.reasoningLevel : undefined,
+      activityDetailLevel: typeof patch.activityDetailLevel === 'string' ? patch.activityDetailLevel : undefined,
       verboseLevel: typeof patch.verboseLevel === 'string' ? patch.verboseLevel : undefined,
       workingDirectory: typeof patch.workingDirectory === 'string' ? patch.workingDirectory : undefined,
     });

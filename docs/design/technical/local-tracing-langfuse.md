@@ -55,7 +55,7 @@ Gateway / CLI / Channel / Automation
 
 - 每次 run 创建独立根 span，sessionId 使用 conversationId。
 - traceId 使用 OTel 标准 32 位小写十六进制；spanId 使用 16 位。业务 runId 独立保存。
-- 新增 `otelTraceId` 关联，不无条件重解释已有 usage/context/workflow 的 traceId 字段。
+- 新增 `otelTraceId` 关联，不无条件重解释已有 usage/context 的 traceId 字段。
 - usage 记录新增可空 `otel_trace_id`、`otel_span_id`，将调用次数和成本关联到 generation；历史数据不回填虚构 span。
 - 根 span 覆盖准备、模型尝试、fallback、工具循环和验证。暂停等待连接或澄清时结束本次执行并标记 suspended；恢复执行使用新 trace，并以业务 runId 和 span link 关联，避免维持数小时的活动 span。
 - 正常、异常、取消都通过 finally 结束；工具业务错误与抛出异常都设置错误状态，取消单独标记。

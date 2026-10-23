@@ -18,7 +18,6 @@ export interface MatchingContext {
   getAgentSkillAvailability?: (agentId: string) => {
     skills: Array<{ name: string; availableForCurrentAgent: boolean; unavailableReason?: string | null }>;
   };
-  legacyToolPolicyOnly?: boolean;
   getAgentToolAvailability?: (agentId: string, tool: string) => AvailabilityCheck;
   checkConnector?: (agentId: string, connector: NonNullable<SpecialistTaskRequirements['connector']>) => AvailabilityCheck;
 }
@@ -27,7 +26,7 @@ export interface SpecialistAssessment {
   revision?: number;
   name: string;
   description: string;
-  profileSource: 'declared' | 'legacy';
+  profileSource: 'declared' | 'absent';
   specialistProfile?: EffectiveAgentConfig['specialistProfile'];
   availableTools: string[];
   model: { available: boolean; reason?: string };
@@ -67,9 +66,7 @@ export function assessSpecialist(agentId: string, input: SpecialistTaskRequireme
       let check: AvailabilityCheck | undefined;
       try { check = context.getAgentToolAvailability?.(agentId, tool); }
       catch { check = { condition: `tool:${tool}`, state: 'unknown', reasonCode: 'tool_verification_failed' }; }
-      check ??= context.legacyToolPolicyOnly
-        ? { condition: `tool:${tool}`, state: availableTools.includes(tool) ? 'configured' : 'blocked', reasonCode: 'legacy_tool_policy_only' }
-        : { condition: `tool:${tool}`, state: 'unknown', reasonCode: 'tool_configured_registration_unverified' };
+      check ??= { condition: `tool:${tool}`, state: 'unknown', reasonCode: 'tool_configured_registration_unverified' };
       checks.push(check);
       if (check.state === 'verified' && !availableTools.includes(tool)) availableTools.push(tool);
     }
@@ -105,7 +102,7 @@ export function assessSpecialist(agentId: string, input: SpecialistTaskRequireme
   for (const [kind, value, declared] of tags) (declared?.includes(value) ? matched : missing).push(`${kind}:${value}`);
   return {
     id: agentId, revision: agent?.revision, name: agent?.profile?.name ?? agentId,
-    description: (agent?.profile?.description ?? '').slice(0, 300), profileSource: profile ? 'declared' : 'legacy',
+    description: (agent?.profile?.description ?? '').slice(0, 300), profileSource: profile ? 'declared' : 'absent',
     ...(profile ? { specialistProfile: profile } : {}), availableTools, model, verifiedSkills,
     eligibility: checks.some(check => check.state === 'blocked') ? 'blocked'
       : checks.some(check => check.state === 'unknown') ? 'needs_verification' : 'eligible',
@@ -149,6 +146,6 @@ export function summarizeSpecialist(config: EffectiveAgentConfig, context: Pick<
     available: personalAgentModelAvailability(config).available,
     toolEvidence: 'configured',
     ...(config.specialistProfile ? { domains: config.specialistProfile.domains, taskTypes: config.specialistProfile.taskTypes,
-      outputKinds: config.specialistProfile.outputKinds, specialties: config.specialistProfile.specialties.slice(0, 2) } : { profileSource: 'legacy' }),
+      outputKinds: config.specialistProfile.outputKinds, specialties: config.specialistProfile.specialties.slice(0, 2) } : { profileSource: 'absent' }),
   };
 }

@@ -121,8 +121,7 @@ function mergeSemanticDuplicate(
   const latest = incomingIsNewer ? incoming : previous;
   return {
     ...latest,
-    // Keep the first durable id so future model updates remain valid even when
-    // this merges a legacy source-sequence-based id with the stable id format.
+    // Keep the first durable id when the model repeats the same semantic item.
     id: previous.id,
     sources: mergeSources(previous.sources, incoming.sources),
     identifiers: normalizeIdentifiers([...previous.identifiers, ...incoming.identifiers]).slice(0, 20),
@@ -185,7 +184,7 @@ function consolidateItems(items: readonly CompactionHandoverItem[]): CompactionH
   return perKindBounded.filter((item) => retainedIds.has(item.id));
 }
 
-/** Normalize legacy or model-produced ledgers into the bounded durable form. */
+/** Normalize model-produced ledgers into the bounded durable form. */
 export function consolidateCompactionHandover(handover: CompactionHandover): CompactionHandover {
   return { ...handover, items: consolidateItems(handover.items) };
 }

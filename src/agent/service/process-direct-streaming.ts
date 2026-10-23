@@ -480,14 +480,7 @@ async function* runProcessDirectStreamingInner(
             'Command finished with no assistant text. A task continuation may still be scheduled automatically.';
           pushAssistantReceipt(queue, webchatSlashReceipt, input.runId);
         }
-        const workflowRun = slash.metadata?.workflowRun;
-        if (workflowRun && typeof workflowRun === 'object') {
-          queue.push({
-            type: 'workflow_run_started',
-            runId: input.runId,
-            payload: { workflowRun },
-          });
-        }
+
         return;
       }
 

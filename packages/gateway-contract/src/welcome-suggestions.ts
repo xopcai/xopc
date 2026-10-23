@@ -1,29 +1,20 @@
 import type { TaskOperationalState } from './task-lifecycle.js';
 
 export type WelcomeSuggestionContext =
-  | { kind: 'empty' }
-  | {
+  { kind: 'empty' } | {
       kind: 'project';
       projectId: string;
       projectName: string;
       recommendedAction?: string;
       blockedReason?: string;
       recentFailure?: string;
-    }
-  | {
+    } | {
       kind: 'task';
       taskId: string;
       taskTitle: string;
       phase: 'backlog' | 'ready' | 'active' | 'review' | 'closed';
       operationalState: TaskOperationalState;
       attentionSummary?: string;
-      nextAction?: string;
-      recentFailure?: string;
-    }
-  | {
-      kind: 'workflow';
-      workflowName: string;
-      status?: string;
       nextAction?: string;
       recentFailure?: string;
     };
@@ -69,9 +60,6 @@ export type WelcomeSpotlightCopy = {
     taskReview: WelcomeRecommendationTemplate;
     taskClosed: WelcomeRecommendationTemplate;
     taskNextAction: WelcomeRecommendationTemplate;
-    workflowFailure: WelcomeRecommendationTemplate;
-    workflowNextAction: WelcomeRecommendationTemplate;
-    workflowReview: WelcomeRecommendationTemplate;
   };
 };
 
@@ -149,27 +137,6 @@ function taskRecommendation(
   return undefined;
 }
 
-function workflowRecommendation(
-  context: Extract<WelcomeSuggestionContext, { kind: 'workflow' }>,
-  copy: WelcomeSpotlightCopy,
-): WelcomeRecommendation | undefined {
-  const vars = {
-    workflowName: context.workflowName,
-    recentFailure: context.recentFailure,
-    nextAction: context.nextAction,
-  };
-  if (context.recentFailure?.trim()) {
-    return recommendation('workflow-failure', copy.recommendations.workflowFailure, vars);
-  }
-  if (context.nextAction?.trim()) {
-    return recommendation('workflow-next-action', copy.recommendations.workflowNextAction, vars);
-  }
-  if (context.status === 'succeeded') {
-    return recommendation('workflow-review', copy.recommendations.workflowReview, vars);
-  }
-  return undefined;
-}
-
 function buildRecommendation(
   context: WelcomeSuggestionContext,
   copy: WelcomeSpotlightCopy,
@@ -179,8 +146,6 @@ function buildRecommendation(
       return projectRecommendation(context, copy);
     case 'task':
       return taskRecommendation(context, copy);
-    case 'workflow':
-      return workflowRecommendation(context, copy);
     case 'empty':
     default:
       return undefined;

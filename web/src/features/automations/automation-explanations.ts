@@ -92,9 +92,7 @@ function payloadExplanation(
 }
 
 function actionExplanation(action: AutomationAction, labels: AutomationsMessages): string {
-  if (action.kind === 'workflow') {
-    return formatAutomationMessage(labels.explain.actionWorkflow, { workflowId: action.workflowId });
-  }
+
   if (action.kind === 'browser_automation') return `Runs browser automation ${action.automationId}.`;
   if (action.kind === 'task_command') return `Starts task ${action.taskId}.`;
   if (action.kind === 'system') return `Runs system capability ${action.capability}.`;

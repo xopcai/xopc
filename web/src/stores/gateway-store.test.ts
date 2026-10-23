@@ -20,13 +20,12 @@ describe('HttpOnly browser session bootstrap', () => {
     expect(localStorage.getItem('xopc.token')).toBeNull();
     expect(fetch.mock.calls[1][1].headers.Authorization).toBe('Bearer embedded-secret');
   });
-  it('removes the old stored credential only after a successful exchange', async () => {
+  it('does not exchange a retired LocalStorage credential', async () => {
     localStorage.setItem('xopc.token', 'stored-secret');
-    const fetch = vi.fn().mockResolvedValueOnce(new Response('', { status: 401 })).mockRejectedValueOnce(new Error('offline'));
+    const fetch = vi.fn().mockResolvedValue(new Response('', { status: 401 }));
     vi.stubGlobal('fetch', fetch); await initGatewayFromWindow();
-    expect(localStorage.getItem('xopc.token')).toBe('stored-secret');
-    fetch.mockResolvedValueOnce(new Response('', { status: 401 })).mockResolvedValueOnce(Response.json({ conversationId: 'browser:session' }));
-    await initGatewayFromWindow(); expect(localStorage.getItem('xopc.token')).toBeNull();
+    expect(fetch).toHaveBeenCalledOnce();
+    expect(useGatewayStore.getState().conversationId).toBeUndefined();
     expect(JSON.stringify(useGatewayStore.getState())).not.toContain('stored-secret');
   });
 });

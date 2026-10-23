@@ -48,7 +48,7 @@ export function parseMessageSegments(text: string): MessageSegment[] {
   return out;
 }
 
-/** Maps non-skill segments to plain text for legacy callers. */
+/** Maps non-skill segments to plain text for plain-text consumers. */
 export function parseSkillWireSegments(text: string): SkillWireSegment[] {
   const merged: SkillWireSegment[] = [];
   for (const p of parseMessageSegments(text)) {

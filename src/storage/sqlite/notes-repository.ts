@@ -99,7 +99,7 @@ function rowMatchesPlainSearch(row: NoteRow, search: string): boolean {
   try {
     chunks.push(noteSearchContent(JSON.parse(row.payload_json) as Note));
   } catch {
-    // Keep search usable even if a legacy row has malformed payload JSON.
+    // Keep search usable even if a row has malformed payload JSON.
   }
 
   return chunks.join('\n').toLocaleLowerCase().includes(needle);

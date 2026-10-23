@@ -1,6 +1,6 @@
 # xopc 智能工作台：场景建议技术设计
 
-日期：2026-09-23  
+日期：2026-09-23
 状态：P3 工程实现完成，真实样本发布验证待执行
 
 
@@ -24,7 +24,6 @@
 | 首页契约 | `packages/gateway-contract/src/home.ts` | 增加 `advisor`、建议动作和反馈契约，不把建议塞入 `HomeDecision` |
 | 工作理解 | `src/work-discovery/` | 读取已经持久化的 Project Understanding、Work Threads 和证据；首页打开不触发目录扫描 |
 | 用户理解 | `src/agent/context/execution-context.ts`、`src/user-model/` | 读取有作用域、有效且获准使用的目标、优先级、规则和断言 |
-| Connector | `src/connectors/` | 复用安装、账号、scope、Agent allowlist 和连接状态；抽取通用预检而非复制 Workflow 规则 |
 | Skill | `src/agent/skills/skill-manager.ts` | 只选择已加载、已启用、对目标 Agent 可见且工具门禁满足的 Skill |
 | 执行 | Session、Task / TaskRun、Scene、Automation | 建议被采纳后交接；Home Intelligence 不执行用户工作 |
 | Realtime | Gateway `gateway` topic | 只发布版本变化提示，客户端收到后重新读取 `/api/home` |
@@ -126,7 +125,6 @@ src/home-intelligence/
 | `web/src/features/tasks/home-api.ts` | 增加建议动作 API；后续可迁至 `features/home/` |
 | `web/src/i18n/locales/{zh,en}/projects.json` | 增加建议、证据、能力补齐、反馈和过期文案 |
 
-Connector 预检应从 `preflightWorkflowConnectors` 抽取共享内核，例如 `preflightConnectorRequirements`，再由 Workflow 和 Home Intelligence 分别适配自己的输入契约。不得复制 account selection、scope 和 allowlist 判断。
 
 ## 4. 公共契约
 
@@ -397,7 +395,6 @@ valueScore =
 
 ### 8.1 Connector
 
-复用或抽取现有 Workflow Connector preflight 的判断顺序：
 
 1. Connector definition 存在；
 2. instance 已安装且 enabled；
@@ -662,7 +659,6 @@ POST /api/home/clarifications/:id/respond
 - `successCriteria` 来自 verification；
 - `context` 只存稳定 source refs 和 `home_opportunity` 引用；
 - `authorityGrants` 只包含用户本次明确同意且宿主允许的最小范围；
-- executor 使用确定性解析后的 Agent / Workflow，不使用模型自由文本；
 - 任务状态、执行重试、等待、验收和完成全部由现有 Task / TaskRun 承担。
 
 首页建议在 Task 创建后即退出 advisor 层，后续由现有 `needsUser` / `background` 展示运行状态。
@@ -740,7 +736,7 @@ realtime.publish('gateway', 'home.advisor.updated', {
 
 缓存与降级规则：
 
-- 页面加载只请求一次 `/api/home`；现有 session / workflow 事件仍可触发合并刷新；
+- 页面加载只请求一次 `/api/home`；现有 session 事件仍可触发合并刷新；
 - 建议刷新事件 debounce 100–300ms；
 - 有效旧投影可以 stale-while-revalidate；
 - 过期、撤权或 necessary evidence 改变时不得展示 stale；
@@ -900,7 +896,6 @@ durationMs, outcomeReason, errorCode
 - degraded start；
 - 一次成功后建议开启 Scene。
 
-状态：已完成。Connector 与 Workflow 共用 `preflightConnectorRequirements`；Skill readiness 保留具体不可用原因；开始动作返回结构化恢复路径，支持安装后返回原建议以及模型明确给出的降级执行；同类 automation candidate 的关联 Task 成功关闭后才显示 Scene 建议。
 
 ### P2：跨来源时刻
 

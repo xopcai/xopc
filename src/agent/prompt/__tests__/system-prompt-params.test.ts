@@ -2,7 +2,7 @@ import { requireXopcDatabase as openFixtureDatabase } from '../../../storage/sql
 import { ensureSessionRecord as ensureFixtureConversation } from '../../../storage/sqlite/session-repository.js';
 function seedConversationFixtures(): void {
   openFixtureDatabase();
-  ensureFixtureConversation("85608543-581f-433f-8d90-f87cfa56371f", '', {"agentId":"main","sourceChannel":"subagent","sourceChatId":"task-1","sessionType":"workflow-subagent","routing":{"agentId":"main","source":"subagent","accountId":"default","peerKind":"direct","peerId":"task-1"}});
+  ensureFixtureConversation("85608543-581f-433f-8d90-f87cfa56371f", '', {"agentId":"main","sourceChannel":"subagent","sourceChatId":"task-1","sessionType":"subagent","routing":{"agentId":"main","source":"subagent","accountId":"default","peerKind":"direct","peerId":"task-1"}});
   ensureFixtureConversation("c07099de-c459-4f99-8d37-4e2838b5515c", '', {"agentId":"main","sourceChannel":"cron","sourceChatId":"job-1","sessionType":"cron","routing":{"agentId":"main","source":"cron","accountId":"default","peerKind":"direct","peerId":"job-1"}});
   ensureFixtureConversation("37479220-112e-434d-8844-19497d4f3280", '', {"agentId":"main","sourceChannel":"telegram","sourceChatId":"123","sessionType":"chat","routing":{"agentId":"main","source":"telegram","accountId":"default","peerKind":"direct","peerId":"123"}});
   ensureFixtureConversation("6d9217fe-77c7-411d-8cc9-92aabe81a2d0", '', {"agentId":"main","sourceChannel":"cli","sourceChatId":"","sessionType":"chat","routing":{"agentId":"main","source":"cli","accountId":"default","peerKind":"direct","peerId":""}});

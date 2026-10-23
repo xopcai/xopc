@@ -1,4 +1,3 @@
-import { repairLegacyKnowledgeEvidence } from '../knowledge-memory/repair-evidence.js';
 import type { Config } from '../config/schema.js';
 import { isXopcDatabaseOpen } from '../storage/sqlite/index.js';
 import { getSqliteDatabase } from '../storage/sqlite/transaction.js';
@@ -32,7 +31,6 @@ export class MemoryLearningService {
     if (this.stopped || this.running || !config || !isXopcDatabaseOpen()) return;
     this.running = true;
     try {
-      repairLegacyKnowledgeEvidence();
       if (Date.now() - this.lastRetentionSweep >= 3_600_000) {
         pruneSourceRetention(config);
         this.lastRetentionSweep = Date.now();

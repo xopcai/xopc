@@ -43,7 +43,7 @@ class TaskChatHeaderTest {
     }
     compose.onNodeWithTag("tab-Progress").performClick()
     compose.onNodeWithTag("progress-item-header-task").performScrollTo().performClick()
-    compose.onNodeWithTag("progress-task-chat").performScrollTo().performClick()
+    compose.onNodeWithTag("progress-task-chat").assertIsDisplayed().performClick()
     compose.runOnIdle { assertEquals(task.id, openedTask) }
     compose.onNodeWithTag("chat-floating-header").assertIsDisplayed()
     compose.onNodeWithTag("chat-header-search").assertIsDisplayed()

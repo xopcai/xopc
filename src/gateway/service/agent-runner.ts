@@ -438,7 +438,7 @@ export class GatewayAgentRunner {
       delivery: 'next',
       content: userTurn.text,
       attachments: userTurn.attachments,
-      origin: { type: 'system', source: 'workflow' },
+      origin: { type: 'system', source: 'task' },
     });
     if (accepted.ok === false) throw new Error(`Scheduled session input was rejected: ${accepted.code}`);
     await this.inputs.waitForCompletion(conversationId, clientMessageId);

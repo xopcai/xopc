@@ -92,7 +92,7 @@ describe('XOPC Cloud capability setup', () => {
     try {
       initializeTestAgentCatalog({ defaults: {
         models: { chat: { primary: 'openai/gpt-5', fallbacks: [] }, intents: {} },
-        skills: { mode: 'selected', include: [] }, tools: {}, workflows: {}, runtime: {},
+        skills: { mode: 'selected', include: [] }, tools: {}, runtime: {},
       } });
       getModelCatalogStore().saveSource('xopc-cloud', completeCatalog);
       const config = ConfigSchema.parse({
@@ -116,7 +116,7 @@ describe('XOPC Cloud capability setup', () => {
   it('sets up published chat capabilities even if image and speech models are missing', async () => {
     initializeTestAgentCatalog({ defaults: {
       models: { chat: { primary: 'xopc-cloud/auto', fallbacks: [] }, intents: {} },
-      skills: { mode: 'selected', include: [] }, tools: {}, workflows: {}, runtime: {},
+      skills: { mode: 'selected', include: [] }, tools: {}, runtime: {},
     } });
     getModelCatalogStore().saveSource('xopc-cloud', source([model({ id: 'chat', kind: 'language' })]));
     const saved: Array<ReturnType<typeof ConfigSchema.parse>> = [];
@@ -166,7 +166,7 @@ describe('XOPC Cloud capability setup', () => {
         imageUnderstanding: { primary: 'custom/vision', fallbacks: [] },
         imageGeneration: { primary: 'custom/image', fallbacks: [], autoProviderFallback: false },
       },
-      skills: { mode: 'selected', include: [] }, tools: {}, workflows: {}, runtime: {},
+      skills: { mode: 'selected', include: [] }, tools: {}, runtime: {},
     } });
     const defaults = new AgentCatalogRepository().getSettings().defaults;
     getModelCatalogStore().saveSource('xopc-cloud', completeCatalog);

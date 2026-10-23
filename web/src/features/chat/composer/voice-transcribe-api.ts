@@ -59,8 +59,8 @@ export async function transcribeVoiceBlob(blob: Blob, mimeType: string, signal?:
 
 export async function fetchDictationRoute(signal: AbortSignal): Promise<{ mode: 'recorded' | 'streaming' | 'unavailable'; provider?: string }> {
   const status = await fetchJson<{ voice?: { dictation?: { mode: 'recorded' | 'streaming' | 'unavailable'; provider?: string } } }>(apiUrl('/api/status'), { signal });
-  // Older gateways keep their existing streaming path.
-  return status.voice?.dictation ?? { mode: 'streaming' };
+  if (!status.voice?.dictation) throw new Error('Missing dictation status');
+  return status.voice.dictation;
 }
 
 const STT_AVAILABILITY_TTL_MS = 10_000;

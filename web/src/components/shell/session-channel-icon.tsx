@@ -1,4 +1,4 @@
-import { Clock3, GitBranch, MessageCircle, MessageSquare, PanelsTopLeft, Plug, Settings2, Terminal, Workflow } from 'lucide-react';
+import { Clock3, GitBranch, MessageCircle, MessageSquare, PanelsTopLeft, Plug, Settings2, Terminal} from 'lucide-react';
 import { resolveSessionIdentity, type SessionIdentityInput } from '@xopcai/gateway-contract';
 
 import { cn } from '@/lib/cn';
@@ -23,7 +23,7 @@ export function SessionChannelIcon({
   session?: SessionIdentityInput;
 }) {
   const identity = resolveSessionIdentity(session ?? { sourceChannel });
-  const taskIcon = { automation: Clock3, workflow: Workflow, subagent: GitBranch, system: Settings2 };
+  const taskIcon = { automation: Clock3, subagent: GitBranch, system: Settings2 };
   const TaskIcon = identity.purpose === 'chat' ? undefined : taskIcon[identity.purpose];
   if (TaskIcon) return <TaskIcon className={cn('shrink-0', className)} strokeWidth={1.75} aria-hidden />;
   const key = sourceChannel.trim().toLowerCase();

@@ -2,7 +2,7 @@
 
 ## Goal
 
-Activity events provide a product-facing history of meaningful changes across XOPC objects. They are not debug logs and they are not the canonical state store. Object stores such as projects, notes, tasks, sessions, workflows, and automations remain authoritative for current state.
+Activity events provide a product-facing history of meaningful changes across XOPC objects. They are not debug logs and they are not the canonical state store. Object stores such as projects, notes, tasks, sessions, and automations remain authoritative for current state.
 
 The system should answer:
 
@@ -20,7 +20,7 @@ Shows all timeline-worthy activity across the workspace. Useful for recent chang
 
 ### Object Activity
 
-Shows activity for a single object, such as a note, project, task, session, workflow run, or automation.
+Shows activity for a single object, such as a note, project, task, session, or automation.
 
 ### Project Activity
 
@@ -80,7 +80,7 @@ Examples:
 
 ```ts
 interface ActivityPrincipal {
-  kind: 'user' | 'agent' | 'system' | 'automation' | 'workflow';
+  kind: 'user' | 'agent' | 'system' | 'automation';
   id?: string;
   name?: string;
   sessionKey?: string;
@@ -94,7 +94,7 @@ The technical surface that emitted the event.
 
 ```ts
 interface ActivitySource {
-  kind: 'xopc_use' | 'gateway_api' | 'automation' | 'workflow' | 'system';
+  kind: 'xopc_use' | 'gateway_api' | 'automation' | 'system';
   requestId?: string;
   toolCallId?: string;
   runId?: string;
@@ -110,7 +110,6 @@ interface ActivityObjectRef {
     | 'note'
     | 'task'
     | 'session'
-    | 'workflow_run'
     | 'automation';
   id: string;
   title?: string;
@@ -221,15 +220,6 @@ Avoid weak relations such as `mentions` until the UI can explain them well.
 | `session.attached_to_project` | timeline | `sessionKey`, `projectId` |
 | `session.detached_from_project` | timeline | `sessionKey`, `projectId` |
 | `session.renamed` | audit | `from`, `to` |
-
-### Workflow and Automation
-
-| Type | Visibility | Payload |
-|------|------------|---------|
-| `workflow_run.started` | timeline | `definitionId`, `runId` |
-| `workflow_run.completed` | timeline | `runId`, `status` |
-| `automation.run_started` | timeline | `automationId`, `trigger` |
-| `automation.run_completed` | timeline | `automationId`, `status` |
 
 ## Payload Rules
 
@@ -425,5 +415,5 @@ This keeps i18n and future UI changes possible.
 2. Implement `ActivityService`, `ObjectLinkService`, and summary formatter.
 3. Add read APIs for global, object, and project activity.
 4. Add ActivityContext plumbing to ProjectService, NotesService, and TaskService.
-5. Pass context from `xopc_use`, gateway routes, automations, and workflows.
+5. Pass context from `xopc_use`, gateway routes, automations.
 6. Add project Activity UI.

@@ -21,8 +21,7 @@ describe('voice-config-api', () => {
     fetchJson.mockResolvedValue({ ok: true });
     await patchVoiceSettings(normalizeVoiceSettings({}), capability);
     const payload = JSON.parse(fetchJson.mock.calls[0][1].body);
-    expect(Object.keys(payload).sort()).toEqual(capability === 'transcription' ? ['stt', 'voice', 'voicePatchMode'] : capability === 'speech' ? ['tts'] : ['voice', 'voicePatchMode']);
-    if (capability !== 'speech') expect(payload.voicePatchMode).toBe('merge');
+    expect(Object.keys(payload).sort()).toEqual(capability === 'transcription' ? ['stt', 'voice'] : capability === 'speech' ? ['tts'] : ['voice']);
     if (capability === 'conversation') expect(Object.keys(payload.voice)).toEqual(['realtime']);
     if (capability === 'transcription') expect(Object.keys(payload.voice).sort()).toEqual(['input', 'language', 'languageMode']);
   });

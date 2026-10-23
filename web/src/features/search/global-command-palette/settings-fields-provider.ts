@@ -80,9 +80,9 @@ function buildFieldSeeds(language: StoredLanguage): FieldSeed[] {
       advanced: true,
       id: 'field:agent-defaults:runtime',
       title: isZh ? 'Agent 全局运行限制' : 'Global agent runtime limits',
-      subtitle: isZh ? '设置继承的轮次、超时和默认工作流' : 'Set inherited turn, timeout, and workflow limits',
+      subtitle: isZh ? '设置继承的轮次和超时' : 'Set inherited turn and timeout limits',
       path: '/settings/agent-defaults?panel=runtime',
-      keywords: ['agent defaults', 'runtime', 'turns', 'timeout', 'workflow', '运行限制'],
+      keywords: ['agent defaults', 'runtime', 'turns', 'timeout', '运行限制'],
     },
 
     // --- Agent-specific profile ---

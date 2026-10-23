@@ -282,13 +282,6 @@ export class XopcDiscussionCapture implements XopcRecordingPanelActions {
 
   private async syncSessionAnnotations(session: XopcLocalRecording,context: common.UIAbilityContext): Promise<void> {
     this.assertGateway(session); await this.annotationStore.initialize(context); this.assertGateway(session);
-    const existing = await this.annotationStore.list(session.id);
-    for (let index: number = 0; index < session.markers.length; index++) {
-      const markerId = 'legacy-' + session.id + '-' + index; const position = Math.max(0,session.markers[index] - 1);
-      if (existing.some((row: XopcLocalAnnotation): boolean => row.annotation.id === markerId || row.annotation.anchor.positionMs === position)) continue;
-      const annotation: XopcDiscussionAnnotation = { id: markerId,kind: 'highlight',text: '',anchor: { type: 'time',capturedAt: session.recordedAt,positionMs: position },revision: 0,deleted: false,createdAt: session.recordedAt,updatedAt: Date.now() };
-      await this.annotationStore.save(session.id,annotation);
-    }
     if (session.discussionId) await this.annotationSync.sync(session.id,session.discussionId);
   }
 

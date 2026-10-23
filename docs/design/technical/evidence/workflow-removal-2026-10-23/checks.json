@@ -1,0 +1,208 @@
+{
+  "vitest": {
+    "filesPassed": 1656,
+    "filesFailed": 1,
+    "filesSkipped": 3,
+    "testsPassed": 10718,
+    "testsFailed": 1,
+    "testsSkipped": 14,
+    "baselineFailure": "attachment-preview-local-app: opens the already-loaded workbook through the Electron bridge"
+  },
+  "androidInstrumentation": {
+    "total": 308,
+    "passed": 283,
+    "failed": 25,
+    "failures": [
+      {
+        "class": "ai.xopc.mobile.gateway.GatewaySessionTest",
+        "test": "conversationShareRequiresPreviewAndSendsHarmonySnapshotFingerprint",
+        "reason": "java.lang.IllegalStateException: NO_VERIFIED_ROUTE"
+      },
+      {
+        "class": "ai.xopc.mobile.gateway.GatewaySessionTest",
+        "test": "contextActionsUseGatewayEnvironmentAndDirectoryApis",
+        "reason": "java.lang.IllegalStateException: NO_VERIFIED_ROUTE"
+      },
+      {
+        "class": "ai.xopc.mobile.gateway.GatewaySessionTest",
+        "test": "assistantMessageQuickCaptureUsesHarmonyNoteContractAndStableMutationKey",
+        "reason": "java.lang.IllegalStateException: NO_VERIFIED_ROUTE"
+      },
+      {
+        "class": "ai.xopc.mobile.gateway.GatewaySessionTest",
+        "test": "olderHistoryUsesValidatedGatewayCursor",
+        "reason": "java.lang.IllegalStateException: NO_VERIFIED_ROUTE"
+      },
+      {
+        "class": "ai.xopc.mobile.gateway.GatewaySessionTest",
+        "test": "understandingChatKeepsVersionedReferenceAcrossStoreRecreationAndSendsOnlyProtocolFields",
+        "reason": "java.lang.IllegalStateException: NO_VERIFIED_ROUTE"
+      },
+      {
+        "class": "ai.xopc.mobile.gateway.GatewaySessionTest",
+        "test": "projectDraftUsesGatewayExecutionModeAndRepairsOlderDraftBeforeSend",
+        "reason": "java.lang.IllegalStateException: NO_VERIFIED_ROUTE"
+      },
+      {
+        "class": "ai.xopc.mobile.gateway.GatewaySessionTest",
+        "test": "personalGoalWritesFollowHarmonyRequestShapeAndConfirmIdentity",
+        "reason": "java.lang.IllegalStateException: NO_VERIFIED_ROUTE"
+      },
+      {
+        "class": "ai.xopc.mobile.gateway.GatewaySessionTest",
+        "test": "shareCenterReadsAndConfirmsExtendAndRevokeWithGatewayShape",
+        "reason": "java.lang.IllegalStateException: NO_VERIFIED_ROUTE"
+      },
+      {
+        "class": "ai.xopc.mobile.gateway.GatewaySessionTest",
+        "test": "attachmentOnlyInputSurvivesRecreationAndReceiptRetryDoesNotRepost",
+        "reason": "java.lang.IllegalStateException: NO_VERIFIED_ROUTE"
+      },
+      {
+        "class": "ai.xopc.mobile.gateway.GatewaySessionTest",
+        "test": "noteAndTaskReferencesSurviveRecreationAndSendWithVersions",
+        "reason": "java.lang.IllegalStateException: NO_VERIFIED_ROUTE"
+      },
+      {
+        "class": "ai.xopc.mobile.gateway.GatewaySessionTest",
+        "test": "pairsAfterApprovalAndRestoresRotatingCredential",
+        "reason": "java.lang.IllegalStateException: NO_VERIFIED_ROUTE"
+      },
+      {
+        "class": "ai.xopc.mobile.gateway.GatewaySessionTest",
+        "test": "understandingReadsUseMobileFilterSearchCursorAndVerifiedDetail",
+        "reason": "java.lang.IllegalStateException: NO_VERIFIED_ROUTE"
+      },
+      {
+        "class": "ai.xopc.mobile.gateway.GatewaySessionTest",
+        "test": "projectDraftKeepsScopeAfterRestartAndFirstSend",
+        "reason": "java.lang.IllegalStateException: NO_VERIFIED_ROUTE"
+      },
+      {
+        "class": "ai.xopc.mobile.gateway.GatewaySessionTest",
+        "test": "savedGatewaysProbeAndSwitchWithoutPublishingAFailedCandidate",
+        "reason": "java.lang.IllegalStateException: NO_VERIFIED_ROUTE"
+      },
+      {
+        "class": "ai.xopc.mobile.ui.main.MainScreenTest",
+        "test": "userImageVoiceAndFileAttachmentsMatchTheHarmonyDisclosureLayout",
+        "reason": "java.lang.AssertionError: Failed to assert the following: (Text + InputText + EditableText contains 'abc' (ignoreCase: false))"
+      },
+      {
+        "class": "ai.xopc.mobile.ui.main.MainScreenTest",
+        "test": "restoredPendingInputBlocksNewSendAndOffersExplicitRetry",
+        "reason": "java.lang.AssertionError: Assertion failed"
+      },
+      {
+        "class": "ai.xopc.mobile.ui.main.MainScreenTest",
+        "test": "localDraftCanOpenBeforeGatewayHasListedIt",
+        "reason": "java.lang.AssertionError: Failed: assertExists."
+      },
+      {
+        "class": "ai.xopc.mobile.ui.main.MainScreenTest",
+        "test": "cameraCancelReturnsToConversationWithoutAttachment",
+        "reason": "androidx.compose.ui.test.ComposeTimeoutException: Condition still not satisfied after 10000 ms"
+      },
+      {
+        "class": "ai.xopc.mobile.ui.main.MainScreenTest",
+        "test": "emptyAssistantShowsWelcomeButNeverTreatsItAsAChatMessage",
+        "reason": "java.lang.AssertionError: expected:<1031.25> but was:<1047.5>"
+      },
+      {
+        "class": "ai.xopc.mobile.ui.main.MainScreenTest",
+        "test": "assistantHttpLinkRequestsExternalConfirmation",
+        "reason": "java.lang.AssertionError: Assert failed: The component with Text + InputText + EditableText contains 'http://example.com/page' (ignoreCase: false) is not displayed!"
+      },
+      {
+        "class": "ai.xopc.mobile.ui.main.MainScreenTest",
+        "test": "activeRunRendersLiveOutputWithoutChangingSavedMessages",
+        "reason": "java.lang.AssertionError: Failed: assertExists."
+      },
+      {
+        "class": "ai.xopc.mobile.ui.main.MainScreenTest",
+        "test": "cameraShutterReturnsToTheSameConversationAndSnapshotsPhoto",
+        "reason": "androidx.compose.ui.test.ComposeTimeoutException: Condition still not satisfied after 10000 ms"
+      },
+      {
+        "class": "ai.xopc.mobile.ui.main.MainScreenTest",
+        "test": "unpairedGatewayUsesQrScanAsThePrimaryAction",
+        "reason": "org.junit.ComparisonFailure: expected:<[test-link]> but was:<[]>"
+      },
+      {
+        "class": "ai.xopc.mobile.ui.main.MainScreenTest",
+        "test": "mediaOnlyAssistantAnswerStillExposesDetailWithoutEmptyCopy",
+        "reason": "java.lang.AssertionError: Failed: assertExists."
+      },
+      {
+        "class": "ai.xopc.mobile.ui.main.TaskChatHeaderTest",
+        "test": "taskConversationKeepsSearchAndSettingsAccessible",
+        "reason": "java.lang.AssertionError: Semantic Node has no parent layout with a Scroll SemanticsAction"
+      }
+    ]
+  },
+  "ios": {
+    "testsPassed": 104,
+    "suites": 17
+  },
+  "harmony": {
+    "hostFiles": 122,
+    "hostTests": 807,
+    "additionalFiles": 8,
+    "additionalTests": 59,
+    "codeLinterIssues": 0
+  },
+  "sourceLint": {
+    "errors": 0,
+    "warnings": 7
+  },
+  "webLint": {
+    "errors": 4,
+    "reproducedAtHEAD": true
+  },
+  "depcheck": {
+    "cycles": 8,
+    "cyclesAtHEAD": 8
+  },
+  "docs": {
+    "check": "passed",
+    "build": "failed: 7 excluded-design-document links"
+  },
+  "androidHeadComparison": {
+    "selected": 4,
+    "failedAtHEAD": 4,
+    "tests": [
+      {
+        "test": "contextActionsUseGatewayEnvironmentAndDirectoryApis",
+        "reason": "java.lang.IllegalStateException: NO_VERIFIED_ROUTE"
+      },
+      {
+        "test": "emptyAssistantShowsWelcomeButNeverTreatsItAsAChatMessage",
+        "reason": "java.lang.AssertionError: expected:<1031.25> but was:<1047.5>"
+      },
+      {
+        "test": "assistantHttpLinkRequestsExternalConfirmation",
+        "reason": "java.lang.AssertionError: Assert failed: The component with Text + InputText + EditableText contains 'http://example.com/page' (ignoreCase: false) is not displayed!"
+      },
+      {
+        "test": "taskConversationKeepsSearchAndSettingsAccessible",
+        "reason": "java.lang.AssertionError: Semantic Node has no parent layout with a Scroll SemanticsAction"
+      }
+    ],
+    "scope": "Representative failures only; not all 25 proven baseline."
+  },
+  "desktop": {
+    "localPackage": "passed",
+    "notarization": false,
+    "asarDependencies": "passed",
+    "workflowArtifactScan": "no matches",
+    "installed": false
+  },
+  "cleanup": {
+    "gradleRunFinished": true,
+    "onlyWrapperOwnedLogsRemoved": true,
+    "headSourceReplicaRemoved": true,
+    "temporaryDatabaseCleanerRemoved": true,
+    "isolatedGatewayStopped": true,
+    "testEmulatorStopped": true
+  }
+}

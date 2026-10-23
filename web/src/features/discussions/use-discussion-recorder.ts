@@ -285,7 +285,7 @@ export function useDiscussionRecorder() {
       if (input.continuation) recordingLease.current = await acquireRecordingLease(input.continuation.id);
       const previous = input.continuation ? await loadDiscussionDraftForRecovery(input.continuation.id) : null;
       if (previous?.sealRequested) throw new Error('Recording has already been submitted. Recover and sync it first.');
-      if (previous?.gatewayUrl && previous.gatewayUrl !== input.gatewayUrl) throw new Error('Return to the original Gateway before continuing this recording.');
+      if (previous && previous.gatewayUrl !== input.gatewayUrl) throw new Error('Return to the original Gateway before continuing this recording.');
       const estimate = await navigator.storage?.estimate?.();
       if (estimate?.quota != null && estimate.usage != null && estimate.quota - estimate.usage < MIN_AVAILABLE_BYTES) {
         throw new Error('Not enough local storage for a discussion recording.');
@@ -308,7 +308,7 @@ export function useDiscussionRecorder() {
       const nextDraft: DiscussionDraft = {
         id: previous?.id ?? crypto.randomUUID(),
         ...previous,
-        gatewayUrl: input.gatewayUrl ?? previous?.gatewayUrl,
+        gatewayUrl: input.gatewayUrl,
         epochs,
         mediaCoverage: undefined,
         endedAt: undefined,

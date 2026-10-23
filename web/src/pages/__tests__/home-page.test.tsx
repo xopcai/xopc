@@ -55,11 +55,11 @@ describe('home card actions', () => {
   });
 
   it('shows a retry receipt and follows the new run conversation', async () => {
-    mocks.home.needsUser = [{ id: 'failed-1', kind: 'failure', title: 'Daily report failed', summary: 'Timed out', updatedAt: 1, secondaryActions: [], primaryAction: { type: 'retry_run', label: 'Retry', subjectKind: 'workflow_run', runId: 'old-run' }, openAction: { type: 'open', label: 'Details', href: '/workflows?runId=old-run' } }];
+    mocks.home.needsUser = [{ id: 'failed-1', kind: 'failure', title: 'Daily report failed', summary: 'Timed out', updatedAt: 1, secondaryActions: [], primaryAction: { type: 'retry_run', label: 'Retry', subjectKind: 'automation_run', runId: 'old-run' }, openAction: { type: 'open', label: 'Details', href: '/automations?run=old-run' } }];
     mocks.retry.mockResolvedValue({ ok: true, runId: 'new-run', conversationId: 'new-conversation' });
     await render();
     await act(async () => button('Retry').click());
-    expect(mocks.retry).toHaveBeenCalledWith({ kind: 'workflow_run', runId: 'old-run' });
+    expect(mocks.retry).toHaveBeenCalledWith({ kind: 'automation_run', runId: 'old-run' });
     expect(mocks.load).toHaveBeenCalledOnce();
     expect(container.querySelector('[role="status"]')?.textContent).toContain('Retry started');
     await act(async () => button('View progress and result').click());

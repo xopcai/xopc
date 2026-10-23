@@ -33,12 +33,10 @@
 		21AEBE74506B6151051F3386 /* MarkdownImageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3A989628A0B383E59C7ED1E /* MarkdownImageView.swift */; };
 		22746CB1D5B3B9671EACDF05 /* LiveExecutionUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32D0A6A8ABC0CC160CB69A4E /* LiveExecutionUITests.swift */; };
 		23F0CAF9E03C1A0DB6E38E09 /* AppLocalization.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0262BCB6E3F7B79845B4FBB1 /* AppLocalization.swift */; };
-		25A6441888C887642D0CAE38 /* GatewayClient+Workflows.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6FDD6132B9280A0096D4018A /* GatewayClient+Workflows.swift */; };
 		2632753B8167A5E5D4DA6125 /* FileTransferViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32742BE06CC1325A893917D1 /* FileTransferViews.swift */; };
 		2A855B7F7DB0CD1387C96F8C /* DeviceToolCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F84248ED419B36DD8608455 /* DeviceToolCatalog.swift */; };
 		2CFC93707DB58FC6F2A706B4 /* ChatReadAloud.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4DCA230B1EC5EF582311498C /* ChatReadAloud.swift */; };
 		32E71E12C7270DDB4D3E43EA /* SceneSwitch.swift in Sources */ = {isa = PBXBuildFile; fileRef = C89C5E088928B1DCE8655F5A /* SceneSwitch.swift */; };
-		32FA57C62239FDD4B0942546 /* WorkflowRunsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 49D3FFDC5EC9808562E37CD0 /* WorkflowRunsView.swift */; };
 		33C2311208481B3D941883C1 /* AssistantActivityView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1FC117EC86A36C635A1735DC /* AssistantActivityView.swift */; };
 		35492C7001E41295356CEABB /* GatewayClient+Messaging.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC3AE6C51A0F9DED9CB7E227 /* GatewayClient+Messaging.swift */; };
 		36E60BBBBB090ECEECFCB145 /* Charts in Resources */ = {isa = PBXBuildFile; fileRef = D0734E344B4CC50EC75726F4 /* Charts */; };
@@ -118,7 +116,6 @@
 		AF20A7AD80F58974B5B82CEA /* RealtimeVoiceModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3CD13446795B87ABD58F6150 /* RealtimeVoiceModels.swift */; };
 		B3158C82ED24CA1B9FD56E1F /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 522631A59FE71F4BD8629CB2 /* PrivacyInfo.xcprivacy */; };
 		B52B3A0A6DDB742874936DEF /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 2E483924E1299ADE5E857534 /* LaunchScreen.storyboard */; };
-		B53AA6103EC7F9BD4E3072DD /* WorkflowModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB60309C971BEA5992A11DCA /* WorkflowModels.swift */; };
 		B658A434395174633E571E78 /* ChartMarkdownView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00C897ADD980B1BE67B5C8D2 /* ChartMarkdownView.swift */; };
 		B6C27DE51E933C5FD7B7AF32 /* DiscussionStatusTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 457889229CBE48819BBACCCB /* DiscussionStatusTests.swift */; };
 		B9D5750B52B4DF56F06A1DE3 /* RealtimeVoiceTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F40686B6F16566758ACD236 /* RealtimeVoiceTransport.swift */; };
@@ -227,7 +224,6 @@
 		457889229CBE48819BBACCCB /* DiscussionStatusTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiscussionStatusTests.swift; sourceTree = "<group>"; };
 		45EC092975CF5102AC5ED508 /* AutomationRunEventCopy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutomationRunEventCopy.swift; sourceTree = "<group>"; };
 		486026F4BCD826EBF74D01A3 /* GatewayConfigurationStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GatewayConfigurationStore.swift; sourceTree = "<group>"; };
-		49D3FFDC5EC9808562E37CD0 /* WorkflowRunsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowRunsView.swift; sourceTree = "<group>"; };
 		4DCA230B1EC5EF582311498C /* ChatReadAloud.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatReadAloud.swift; sourceTree = "<group>"; };
 		522631A59FE71F4BD8629CB2 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		52BAE7D015632E4519B92D8D /* QueuedInputsCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QueuedInputsCard.swift; sourceTree = "<group>"; };
@@ -250,7 +246,6 @@
 		6BAD58F85656FE5DF99FAF9F /* PersonalAgentTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonalAgentTests.swift; sourceTree = "<group>"; };
 		6C6E75BB052D95075AC66B64 /* GatewayClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GatewayClient.swift; sourceTree = "<group>"; };
 		6D825661BEBDD6B5A541C267 /* ProjectCreationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectCreationTests.swift; sourceTree = "<group>"; };
-		6FDD6132B9280A0096D4018A /* GatewayClient+Workflows.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "GatewayClient+Workflows.swift"; sourceTree = "<group>"; };
 		70704AB00AC699933B3594B2 /* AssistantState+RunLookup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AssistantState+RunLookup.swift"; sourceTree = "<group>"; };
 		74B5BF8D4118453BB4A02656 /* TaskEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskEditorView.swift; sourceTree = "<group>"; };
 		7636CD1ED5D767EF95BA7686 /* GatewayClient+ComposerPalette.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "GatewayClient+ComposerPalette.swift"; sourceTree = "<group>"; };
@@ -298,7 +293,6 @@
 		C89C5E088928B1DCE8655F5A /* SceneSwitch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneSwitch.swift; sourceTree = "<group>"; };
 		C8F3C4A9808977FAC0A3DC5B /* GatewayModelsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GatewayModelsTests.swift; sourceTree = "<group>"; };
 		C9329B786AE1D1FD018CE9DE /* MessageBubble.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageBubble.swift; sourceTree = "<group>"; };
-		CB60309C971BEA5992A11DCA /* WorkflowModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowModels.swift; sourceTree = "<group>"; };
 		CC3AE6C51A0F9DED9CB7E227 /* GatewayClient+Messaging.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "GatewayClient+Messaging.swift"; sourceTree = "<group>"; };
 		CE238ED507FD6D2A48AC3CD7 /* ChatReplySpace.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatReplySpace.swift; sourceTree = "<group>"; };
 		D04AB488F9AD240DC800C567 /* AutomationRunDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutomationRunDetailView.swift; sourceTree = "<group>"; };
@@ -435,7 +429,6 @@
 				DF04AD3268C6808CA568CBAB /* GatewayClient+Products.swift */,
 				3485BBEEAD9F312B96496FCD /* GatewayClient+TaskEditing.swift */,
 				41B4EF63C8712AA9EE957726 /* GatewayClient+Voice.swift */,
-				6FDD6132B9280A0096D4018A /* GatewayClient+Workflows.swift */,
 				AB3272B6C344527204C77174 /* GatewayCommands.swift */,
 				0E928EFA202655C95A0A39C2 /* GatewayPairing.swift */,
 				F0AF08714DC275A149E76AB4 /* NoteMutation.swift */,
@@ -507,7 +500,6 @@
 				076122C9C3F415A2B074DFDF /* PersonalAgentModels.swift */,
 				A335E20823371133F7733755 /* ProductModels.swift */,
 				3CD13446795B87ABD58F6150 /* RealtimeVoiceModels.swift */,
-				CB60309C971BEA5992A11DCA /* WorkflowModels.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -587,7 +579,6 @@
 				08A5419BADAFF8F860132C87 /* TaskAcceptanceStatus.swift */,
 				F829805607352507D86D54CC /* TaskDetailView.swift */,
 				74B5BF8D4118453BB4A02656 /* TaskEditorView.swift */,
-				49D3FFDC5EC9808562E37CD0 /* WorkflowRunsView.swift */,
 			);
 			path = Progress;
 			sourceTree = "<group>";
@@ -794,7 +785,6 @@
 				AA0A94A5BE96374D7301CAC0 /* GatewayClient+Products.swift in Sources */,
 				49A8FAF15003050B34221780 /* GatewayClient+TaskEditing.swift in Sources */,
 				9BC3836E08B47060F01E9735 /* GatewayClient+Voice.swift in Sources */,
-				25A6441888C887642D0CAE38 /* GatewayClient+Workflows.swift in Sources */,
 				18B2209050FDA67F7596E881 /* GatewayClient.swift in Sources */,
 				F10B6CDD8CB6BB6A7395DFDC /* GatewayCommands.swift in Sources */,
 				0302993FD1FDB80B9B34E311 /* GatewayConfigurationStore.swift in Sources */,
@@ -848,8 +838,6 @@
 				BE7C835C7C838F30507150BF /* VoiceAttachmentRecorderView.swift in Sources */,
 				A7CFEC867F093436CF828A56 /* VoiceNoteFlowView.swift in Sources */,
 				583C391F9A424C0309F8DB45 /* VoiceNoteSubmission.swift in Sources */,
-				B53AA6103EC7F9BD4E3072DD /* WorkflowModels.swift in Sources */,
-				32FA57C62239FDD4B0942546 /* WorkflowRunsView.swift in Sources */,
 				F326396C31D71504BB2D4B3E /* XopcMobileApp.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

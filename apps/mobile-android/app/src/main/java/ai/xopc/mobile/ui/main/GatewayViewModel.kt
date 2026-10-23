@@ -47,9 +47,6 @@ import ai.xopc.mobile.gateway.AutomationMetrics
 import ai.xopc.mobile.gateway.AutomationSummary
 import ai.xopc.mobile.gateway.AutomationRunSummary
 import ai.xopc.mobile.gateway.AutomationRunEvent
-import ai.xopc.mobile.gateway.WorkflowRepository
-import ai.xopc.mobile.gateway.WorkflowRun
-import ai.xopc.mobile.gateway.WorkflowDetail
 import ai.xopc.mobile.gateway.NoteRepository
 import ai.xopc.mobile.gateway.FileRepository
 import ai.xopc.mobile.gateway.ManagedFile
@@ -421,7 +418,6 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
   private val connectionWaitRepository = ConnectionWaitRepository(session)
   private val progressRepository = ProgressRepository(session)
   private val automationRepository = AutomationRepository(session)
-  private val workflowRepository = WorkflowRepository(session)
   private val noteRepository = NoteRepository(session)
   private val fileRepository = FileRepository(session)
   private val shareRepository = ShareRepository(session)
@@ -1849,14 +1845,8 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
     }
   }
 
-  suspend fun workflowRuns(): List<WorkflowRun> =
-    runInterruptible(Dispatchers.IO) { workflowRepository.list() }
 
-  suspend fun workflowDetail(id: String): WorkflowDetail =
-    runInterruptible(Dispatchers.IO) { workflowRepository.detail(id) }
 
-  suspend fun cancelWorkflow(id: String) =
-    runInterruptible(Dispatchers.IO) { workflowRepository.cancel(id) }
 
   fun loadAutomations() {
     val gatewayId = mutableState.value.profile?.gatewayId ?: return

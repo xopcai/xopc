@@ -58,7 +58,6 @@
       "work-projects": "项目",
       "work-notes": "笔记",
       "automation-triggers": "自动化",
-      "automation-workflows": "工作流",
       "automation-browser": "浏览器自动化",
       "capabilities-agents": "智能体",
       "capabilities-skills": "技能",
@@ -232,7 +231,6 @@
       "purposes": {
         "chat": "普通对话",
         "automation": "自动化执行",
-        "workflow": "工作流",
         "subagent": "子任务",
         "system": "系统任务"
       },

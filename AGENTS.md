@@ -219,7 +219,7 @@ import { DraftStreamManager } from '@xopcai/xopc/channels/telegram/draft-stream.
 |---------|---------|
 | `providers` | LLM API keys |
 | `agents.default` | Default agent id for routing/session creation |
-| `agents.defaults` | One global model, skill, tool, workflow, and runtime policy inherited by every agent |
+| `agents.defaults` | One global model, skill, tool, and runtime policy inherited by every agent |
 | `userContext` | Global user understanding, memory, privacy, provider routing, and dreaming settings shared by every agent |
 | `agents.list` | Agent ids, personality, workspace, and optional capability overrides |
 | `channels` | Telegram and other channel configs |
@@ -231,7 +231,6 @@ import { DraftStreamManager } from '@xopcai/xopc/channels/telegram/draft-stream.
 
 Runtime configuration has exactly two layers: **`agents.defaults`**, then the matching entry in **`agents.list`**. The selected conversation metadata agent id resolves to one enabled entry; its explicitly configured fields override or merge with the global defaults according to that field's schema. There is no preset graph, generic recursive merge, lock, or compatibility layer. Default agent id: **`agents.default`**, else the first enabled entry, else **`main`**. On-disk paths (`~/.xopc/agents/<id>/` including profile Markdown and Markdown workspace roots) resolve via **`src/agent/agent-scope.ts`**.
 
-Model selection uses fixed intents under `models.intents`: `fast`, `reasoning`, `coding`, `review`, `vision`, and `understanding`. Workflows may reference one of these intents or a direct `provider/model` ref. Resolution: `src/config/agent-model-intents.ts`.
 
 Use **`xopc agents list`**, **`xopc agents add`**, **`xopc agents delete`** to manage `agents.list` and initialize directories — there is no separate agent registry outside config.
 
@@ -334,7 +333,6 @@ cd web && pnpm run build                  # → ../dist/gateway/static/root (gat
 | i18n | `web/src/i18n/messages.ts` (`en` / `zh`) |
 | Global styles + tokens | `web/src/styles/globals.css` (`@theme { … }` for semantic colors) |
 
-**Routing (hash):** `/` → `/chat`; chat `/chat`, `/chat/new`, `/chat/:conversationId`. The capability center owns discovery, Agent profiles, skills, connectors, messaging channels, and extensions under `/capabilities/{discover|agents|skills|connectors|channels|extensions}`; Agent and channel details append `/:detailId`. Global inherited Agent capabilities remain at `/settings/agent-defaults`; browser setup lives at `/settings/agent-browser`. Other full-screen settings include `/settings/gateway`, `/settings/appearance`, `/settings/capabilities/{models|image|voice|search}`, `/settings/heartbeat`, `/settings/sessions`, and `/settings/logs`, plus top-level `/tasks`, `/projects`, `/automations`, and `/workflows`.
 
 **Gateway integration:**
 
@@ -357,7 +355,7 @@ cd web && pnpm run build                  # → ../dist/gateway/static/root (gat
 ## Debugging
 
 - **Level:** `XOPC_LOG_LEVEL=debug` (or `trace`).
-- **CLI:** `pnpm run dev -- config show` · `config validate` · (`config --show` / `config --validate` legacy aliases).
+- **CLI:** `pnpm run dev -- config show` · `config validate`.
 - **Code:** `runWithLogContext` / `updateAsyncLogContext` in `src/utils/logger/context.ts`; `queryLogs` / `getFileLogStats` in `src/utils/logger/log-store.ts`; `getRuntimeLogStats` in `src/utils/logger/stats.ts`.
 - **Console logs:** gateway + Log Manager tab (default dev URL is project-specific—use your configured gateway port).
 - **New logs:** follow [Logging conventions](#logging-conventions).
@@ -394,7 +392,7 @@ cd web && pnpm run build                  # → ../dist/gateway/static/root (gat
 
 ### Session transcript (LLM vs on-disk rows)
 
-- **Conversation identity:** Stable UUID `conversationId`; Agent and channel routing come from stored metadata, never ID parsing. `sessions.active_transcript_id` points to the current `transcriptId`; reset preserves the conversation UUID. Create through `src/storage/sqlite/conversation-repository.ts`. The retained database baseline is v217; historical key conversion and pre-v217 upgrades are not supported.
+- **Conversation identity:** Stable UUID `conversationId`; Agent and channel routing come from stored metadata, never ID parsing. `sessions.active_transcript_id` points to the current `transcriptId`; reset preserves the conversation UUID. Create through `src/storage/sqlite/conversation-repository.ts`. The database uses the current v259 schema directly; historical schema upgrades and key conversion are not supported.
 - **Authoritative storage:** `~/.xopc/xopc.db` (SQLite). Session metadata, transcripts, per-session config, compaction checkpoints, and FTS5 search all live in `src/storage/sqlite/`. Gateway opens the DB on start via `openXopcDatabase()`.
 - **Runtime write path:** Gateway, channels, and CLI turns use `runXopcEmbeddedTurn` → `openSqliteHydratingSessionManager` (in-memory pi `SessionManager` hydrated from SQLite) → `guardSessionManager` appends → `emitSessionTranscriptUpdate` → `SessionStore.syncEmbeddedTranscriptUpdate` → `appendTranscriptEntry` (SQLite). Do **not** add turn-end `SessionStore.save` / `saveMessages` on agent paths.
 - **Index:** `SessionIndex` (`src/session/manager.ts`) delegates to `SessionStore`; `onSessionTranscriptUpdate` bumps counts after appends.

@@ -301,7 +301,7 @@
     "skillsCustomize": "选择技能",
     "skillsSave": "保存技能",
     "modelsTabTitle": "模型覆盖",
-    "modelsTabHint": "为当前智能体配置 Workflow 命名模型用途，或使用共享模型用途。",
+    "modelsTabHint": "为当前智能体配置 命名模型用途，或使用共享模型用途。",
     "channelsTitle": "路由绑定",
     "channelsHint": "指向本智能体的 config.bindings。删除规则会更新网关上的完整 bindings 数组。",
     "channelsLoading": "正在加载绑定…",

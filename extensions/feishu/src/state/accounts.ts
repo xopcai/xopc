@@ -49,19 +49,13 @@ function asFeishuSection(cfg: Config): FeishuConfig | undefined {
 export function listFeishuAccountIds(cfg: Config): string[] {
   const section = asFeishuSection(cfg);
   if (!section) return [];
-  const accounts = section.accounts ?? {};
-  const keys = Object.keys(accounts);
-  if (keys.length > 0) return keys;
-  // Single-account layout
-  return ['default'];
+  return Object.keys(section.accounts ?? {});
 }
 
 function resolveRootAccount(section: FeishuConfig): FeishuAccountConfig {
   return {
     enabled: section.enabled,
     name: 'Default Account',
-    appId: section.appId,
-    appSecret: section.appSecret,
     domain: section.domain,
     connectionMode: section.connectionMode,
     webhookHost: (section as any).webhookHost,
@@ -107,7 +101,7 @@ export function resolveFeishuAccount(cfg: Config, accountId?: string | null): Re
   const hasNamedAccounts = Object.keys(accounts).length > 0;
   const effectiveAccountId = requested || section.defaultAccount || (hasNamedAccounts ? Object.keys(accounts)[0] : 'default');
 
-  const raw = hasNamedAccounts ? accounts[effectiveAccountId] : resolveRootAccount(section);
+  const raw = accounts[effectiveAccountId];
   const merged = mergeAccount(section, raw);
 
   const enabled = merged.enabled !== false && section.enabled !== false;

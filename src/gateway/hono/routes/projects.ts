@@ -16,7 +16,6 @@ import {
   ProjectWorkspaceMissingError,
   type Project,
   resolveProjectAgentId,
-  type ProjectWorkflowRunBrief,
 } from '../../../projects/index.js';
 import {
   TaskApplicationService,
@@ -26,11 +25,7 @@ import {
   TaskReadModelProjector,
   TaskRepository,
 } from '../../../tasks/index.js';
-import {
-  getSqliteDatabase,
-  getSessionMetadata,
-  loadTranscriptRowsForSession,
-} from '../../../storage/sqlite/index.js';
+import { getSessionMetadata, loadTranscriptRowsForSession } from '../../../storage/sqlite/index.js';
 import { listKnowledgeItems, writeKnowledgeItem } from '../../../knowledge-memory/index.js';
 import { parseActivityIncludeRelated, parseActivityQuery } from './activity.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
@@ -128,32 +123,6 @@ function buildSessionSummaryKnowledgeContent(conversationId: string, explicitSum
   return lines.length > 0
     ? [`Session summary for ${conversationId}:`, ...lines].join('\n')
     : `Session summary for ${conversationId}: no transcript content available.`;
-}
-
-
-function listFailedProjectWorkflowRuns(projectId: string, limit = 5): ProjectWorkflowRunBrief[] {
-  const rows = getSqliteDatabase()
-    .prepare(
-      `SELECT run_id, definition_id, status, created_at_ms, error_message
-       FROM workflow_runs
-       WHERE project_id = ? AND status IN ('failed', 'timeout', 'cancelled')
-       ORDER BY created_at_ms DESC
-       LIMIT ?`,
-    )
-    .all(projectId, Math.max(1, Math.min(20, Math.floor(limit)))) as Array<{
-      run_id: string;
-      definition_id: string;
-      status: string;
-      created_at_ms: number;
-      error_message: string | null;
-    }>;
-  return rows.map((row) => ({
-    runId: row.run_id,
-    definitionId: row.definition_id,
-    status: row.status,
-    createdAt: row.created_at_ms,
-    errorMessage: row.error_message ?? undefined,
-  }));
 }
 
 function buildProjectDigestKnowledgeContent(input: ReturnType<typeof buildProjectLoopOverview> & { projectName: string }): string {
@@ -298,8 +267,6 @@ export function registerProjectsRoutes(authenticated: Hono, deps: AuthenticatedR
     const loop = buildProjectLoopOverview({
       project,
       tasks: projectTasks,
-      recentWorkflowRuns: project.recentWorkflowRuns,
-      failedWorkflowRuns: listFailedProjectWorkflowRuns(project.id),
       knowledgeItems: listKnowledgeItems({ statuses: ['active'], limit: 500 })
         .filter((item) => item.scope.type === 'project' && item.scope.id === project.id)
         .slice(0, 5),

@@ -123,7 +123,7 @@ describe('personal delivery benchmark v1', () => {
 
   it('S02-reference: rejects an invented host download link', () => {
     const packet = { report: '结论未附文件。' } as PersonalReplyPacket;
-    expect(() => parsePersonalReplyDraft(JSON.stringify({ text: '[报告](/Users/worker/report.md)' }), packet))
+    expect(() => parsePersonalReplyDraft('[报告](/Users/worker/report.md)', packet))
       .toThrow(/file reference/);
   });
 

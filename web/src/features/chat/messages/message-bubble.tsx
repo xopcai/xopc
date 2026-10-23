@@ -27,7 +27,6 @@ import {
 import { ChunkedContent } from '@/features/chat/messages/message-content-renderer';
 import { AssistantStepsBlock } from '@/features/chat/messages/assistant-steps-block';
 import { ChatActionTooltip, ChatActionTooltipProvider } from '@/features/chat/messages/chat-action-tooltip';
-import { workflowCardLabels } from '@/features/chat/workflow/workflow-card-labels';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { cn } from '@/lib/cn';
 import { copyTextToClipboard } from '@/lib/copy-to-clipboard';
@@ -566,7 +565,6 @@ export const MessageBubble = memo(function MessageBubble({
         clusterLabels={clusterLabels}
         cardLabels={cardLabels}
         conversationId={conversationId}
-        workflowOptions={{ labels: workflowCardLabels(language) }}
       />
     : null;
 

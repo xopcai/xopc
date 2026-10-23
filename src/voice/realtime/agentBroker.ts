@@ -99,7 +99,7 @@ export class DurableVoiceAgentBroker implements VoiceAgentBroker {
     try {
       if (ended && !subscription.initial.some((delivery) => {
         const event = eventData(delivery);
-        return event?.type === 'run_end' || event?.type === 'stream_end';
+        return event?.type === 'run_end';
       })) throw new Error('Completed voice task event history is unavailable');
       while (!signal.aborted) {
         if (!queued.length) await new Promise<void>(resolve => { wake = resolve; });
@@ -110,9 +110,7 @@ export class DurableVoiceAgentBroker implements VoiceAgentBroker {
         const event = eventData(delivery);
         if (!event) continue;
         yield event;
-        // `run_end` is the current chat stream terminal event. Keep accepting the
-        // legacy name so voice sessions remain compatible during rolling updates.
-        if (event.type === 'run_end' || event.type === 'stream_end') {
+        if (event.type === 'run_end') {
           this.runByTask.delete(taskId);
           return;
         }

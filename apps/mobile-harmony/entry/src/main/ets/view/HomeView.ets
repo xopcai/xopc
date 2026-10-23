@@ -14,7 +14,6 @@ import { XopcProgressView } from './HomeHubs';
 import { XopcPersonalView } from './PersonalView';
 import { XopcPersonalAgentAvatar } from './PersonalAgentAvatar';
 import { XopcLoopi } from './Loopi';
-import { XopcWorkflowView } from './WorkflowView';
 import { XopcAutomationRunView } from './AutomationRunView';
 import { XopcShareCenterView } from './ShareCenterView';
 import { XopcAboutYouView } from './AboutYouView';
@@ -196,7 +195,6 @@ export struct XopcHomeView {
   private creationPrompt(kind: string): string {
     const resource: Resource = kind === 'automations' ? $r('app.string.create_automation_chat_prompt')
       : kind === 'projects' ? $r('app.string.create_project_chat_prompt')
-      : kind === 'workflows' ? $r('app.string.create_workflow_chat_prompt')
       : $r('app.string.create_task_chat_prompt');
     return this.getUIContext().getHostContext()?.resourceManager.getStringSync(resource.id) ?? '';
   }
@@ -496,9 +494,6 @@ export struct XopcHomeView {
     } else if (page === 'files' || page === 'session-files') {
       XopcFilesView({ initialId: page === 'files' ? (param as XopcMobileRoute).itemId : '',
         conversationId: page === 'session-files' ? (param as XopcMobileRoute).itemId : '', onExit: (): void => { this.pathStack.pop(); } })
-    } else if (page === 'workflows') {
-      XopcWorkflowView({ initialId: (param as XopcMobileRoute).itemId,
-        onCreateWithChat: async (): Promise<void> => { await this.openCreationChat('workflows'); } })
     } else if (page === 'automation-run') {
       XopcAutomationRunView({ runId: (param as XopcMobileRoute).itemId,
         onNavigate: (route: XopcMobileRoute): void => { this.navigate(route); } })

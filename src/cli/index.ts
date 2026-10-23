@@ -18,9 +18,6 @@ async function flushLoggerAndExit(code: number): Promise<never> {
   process.exit(code);
 }
 
-// Re-exported from `./context.js` for backward compat. Command modules should
-// import from `./context.js` directly to avoid the CLI barrel cycle.
-export { parsedOpts, getContextWithOpts } from './context.js';
 import { parsedOpts, getContextWithOpts } from './context.js';
 
 // Commands whose action never resolves until an external shutdown signal.
@@ -58,9 +55,9 @@ function buildProgram(ctx: CLIContext): Command {
       delete (parsedOpts as Record<string, unknown>)[k];
     }
     Object.assign(parsedOpts, next);
-    // Backup must inspect the database before any startup migration or write.
+    // Backup must inspect the database before any startup initialization or write.
     if (actionCommand?.name() === 'backup' || actionCommand?.parent?.name() === 'backup') return;
-    bootstrapApplicationStateSync(ctx.configPath);
+    bootstrapApplicationStateSync();
   });
 
   // Hook to ensure process exits after command completion.

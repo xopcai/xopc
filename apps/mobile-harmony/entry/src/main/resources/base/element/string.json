@@ -926,11 +926,9 @@
     { "name": "workspace_description", "value": "Description" },
     { "name": "workspace_no_description", "value": "No description yet" },
     { "name": "workspace_no_matches", "value": "Nothing matches this filter" },
-    { "name": "new_workflow", "value": "New workflow" },
     { "name": "create_task_chat_prompt", "value": "Create a task in “Project name”: task details" },
     { "name": "create_project_chat_prompt", "value": "Create a project called “Project name” for: project goal" },
     { "name": "create_automation_chat_prompt", "value": "Every day at 9:00 AM, find the latest AI news and send me a summary" },
-    { "name": "create_workflow_chat_prompt", "value": "Create a workflow for: what it should accomplish" },
     { "name": "quick_chat_conversations_placeholder", "value": "Start a new conversation" },
     { "name": "quick_chat_progress_placeholder", "value": "Ask about progress or move work forward" },
     { "name": "quick_chat_library_placeholder", "value": "Find, organize, or reference your library" },
@@ -963,14 +961,10 @@
     { "name": "rerun", "value": "Run again" },
     { "name": "result", "value": "Result" },
     { "name": "open_chat", "value": "Open conversation" },
-    { "name": "open_workflow", "value": "Open workflow" },
     { "name": "view_automation", "value": "View automation" },
     { "name": "timeline", "value": "Timeline" },
     { "name": "no_events", "value": "No events recorded yet." },
     { "name": "automation_run", "value": "Automation run" },
-    { "name": "workflow_overview", "value": "Run overview" },
-    { "name": "workflow_run_unavailable", "value": "This run is no longer available. Refresh the list to continue." },
-    { "name": "workflow_progress", "value": "%d of %d agents completed" },
     { "name": "goal", "value": "Goal" },
     { "name": "phases", "value": "Phases" },
     { "name": "agent_work", "value": "Agent work" },
@@ -1005,10 +999,6 @@
     {
       "name": "all_work",
       "value": "All work"
-    },
-    {
-      "name": "workflows",
-      "value": "Workflows"
     },
     {
       "name": "inbox",

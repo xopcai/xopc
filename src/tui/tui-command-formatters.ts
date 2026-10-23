@@ -20,7 +20,6 @@ import type { TuiState } from './tui-types.js';
 import { countPendingChatInputs } from './tui-chat-input-state.js';
 import { formatSessionPickerDescription } from './tui-session-format.js';
 import { formatTuiTranscriptTreeEntryDisplayText } from './tui-transcript-tree.js';
-import { createWorkflowCatalog, type CatalogEntry } from '../agent/workflow/catalog.js';
 import { normalizeVerboseLevel, type VerboseLevel } from '../agent/transcript/thinking-types.js';
 import type { AuthProfileEntry } from '../auth/profiles/index.js';
 import type { Config } from '../config/schema.js';
@@ -539,45 +538,6 @@ function hasTranscriptTreeInfoFollowingSibling(
 ): boolean {
   const siblings = childrenByParentId.get(parentId) ?? [];
   return siblings.indexOf(entryId) < siblings.length - 1;
-}
-
-export function formatTuiWorkflowsInfo(entries: CatalogEntry[]): string {
-  if (entries.length === 0) {
-    return 'Workflows\n\nNo workflows found.';
-  }
-  const lines = ['Workflows', ''];
-  for (const entry of entries) {
-    const tags = entry.tags?.length ? ` [${entry.tags.join(', ')}]` : '';
-    lines.push(`  ${entry.name} (${entry.source})${tags}`);
-    if (entry.description) {
-      lines.push(`    ${entry.description}`);
-    }
-  }
-  lines.push('', 'Run a workflow with /<name>, or inspect one with /workflow view <name>.');
-  return lines.join('\n');
-}
-
-export function formatTuiWorkflowDetail(name: string): string {
-  const catalog = createWorkflowCatalog();
-  const loaded = catalog.load(name);
-  const lines = [
-    `Workflow: ${loaded.name}`,
-    '',
-    `Source: ${loaded.metadata.source}`,
-    `Description: ${loaded.description}`,
-    `Revision: ${loaded.revision}`,
-  ];
-  if (loaded.metadata.whenToUse) {
-    lines.push(`When to use: ${loaded.metadata.whenToUse}`);
-  }
-  if (loaded.metadata.tags.length) {
-    lines.push(`Tags: ${loaded.metadata.tags.join(', ')}`);
-  }
-  if (loaded.metadata.estimatedAgents) {
-    lines.push(`Agents: ${loaded.metadata.estimatedAgents.min}-${loaded.metadata.estimatedAgents.max}`);
-  }
-  lines.push('', 'Flow:', loaded.graph.nodes.map((node) => `- ${node.title} (${node.kind})`).join('\n'));
-  return lines.join('\n');
 }
 
 function formatTuiSessionStatsBlock(stats?: TuiSessionStats): string[] {

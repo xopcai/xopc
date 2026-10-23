@@ -33,7 +33,6 @@ xopc config validate
 | `heartbeat` | 启用后的周期性 Agent 检查 |
 | `platform` | 独立或平台连接模式、平台 URL、可选工作区和已校验的 Discovery 快照 |
 
-Workflow 和 Automation 通常在对应 Gateway 页面管理，不直接写入 `xopc.json`。
 
 Agent 定义、继承默认、路由绑定和界面默认值保存在 `~/.xopc/xopc.db`。请通过 **Agent** 页面、`xopc agents` 或 Agent 对话管理；这些数据不会出现在 `xopc.json` 中。
 

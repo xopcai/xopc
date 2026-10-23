@@ -31,8 +31,6 @@ import type {
   TuiTranscriptTreeEntry,
   TuiAgentInfo,
   TuiWorkspaceFileSearchEntry,
-  TuiWorkflowRunStartRequest,
-  TuiWorkflowRunStartResult,
   TuiStartupProjectResult,
 } from '../tui-backend.js';
 import type { SessionInfo } from '../tui-types.js';
@@ -325,35 +323,6 @@ export class GatewayRealtimeBackend implements TuiBackend {
     return json.payload;
   }
 
-  async startWorkflowRun(opts: TuiWorkflowRunStartRequest): Promise<TuiWorkflowRunStartResult> {
-    const goal = opts.goal?.trim();
-    const res = await gatewayFetch(this.baseUrl, '/api/workflows/runs', this.credential, {
-      method: 'POST',
-      body: JSON.stringify({
-        definitionId: opts.definitionId,
-        agentId: opts.agentId,
-        parentConversationId: opts.conversationId,
-        source: { kind: 'chat', conversationId: opts.conversationId },
-        ...(goal ? { goal } : {}),
-        ...(opts.input !== undefined ? { input: opts.input } : {}),
-      }),
-    });
-    const json = (await res.json().catch(() => ({}))) as {
-      runId?: string;
-      conversationId?: string;
-      error?: string;
-      code?: string;
-    };
-    if (!res.ok || !json.runId || !json.conversationId) {
-      throw new Error(json.error ?? `Workflow start failed (${res.status})`);
-    }
-    return {
-      runId: json.runId,
-      conversationId: json.conversationId,
-      definitionId: opts.definitionId,
-    };
-  }
-
   async resolveStartupProject(opts: {
     workspacePath: string;
     conversationId: string;
@@ -483,7 +452,6 @@ export class GatewayRealtimeBackend implements TuiBackend {
     const empty: TuiStartupResources = {
       context: [],
       skills: [],
-      workflows: [],
       connectors: [],
     };
     try {
@@ -499,7 +467,6 @@ export class GatewayRealtimeBackend implements TuiBackend {
       return {
         context: Array.isArray(json.payload?.context) ? json.payload.context : [],
         skills: Array.isArray(json.payload?.skills) ? json.payload.skills : [],
-        workflows: Array.isArray(json.payload?.workflows) ? json.payload.workflows : [],
         connectors: Array.isArray(json.payload?.connectors) ? json.payload.connectors : [],
       };
     } catch (error) {
@@ -777,7 +744,7 @@ export class GatewayRealtimeBackend implements TuiBackend {
           payload?: {
             model?: string;
             thinkingLevel?: string;
-            reasoningLevel?: string;
+            activityDetail?: { effective: string };
             verboseLevel?: string;
             effectiveWorkspacePath?: string;
             workingDirectoryLocked?: boolean;
@@ -796,8 +763,8 @@ export class GatewayRealtimeBackend implements TuiBackend {
         if (p?.thinkingLevel && typeof p.thinkingLevel === 'string') {
           out.thinkingLevel = p.thinkingLevel;
         }
-        if (p?.reasoningLevel && typeof p.reasoningLevel === 'string') {
-          out.reasoningLevel = p.reasoningLevel;
+        if (p?.activityDetail?.effective) {
+          out.reasoningLevel = p.activityDetail.effective;
         }
         if (p?.verboseLevel && typeof p.verboseLevel === 'string') {
           out.verboseLevel = p.verboseLevel;

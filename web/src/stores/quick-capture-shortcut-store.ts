@@ -61,18 +61,7 @@ export const useQuickCaptureShortcutStore = create(
     {
       name: 'xopc-quick-capture-shortcut',
       version: 2,
-      migrate: (persistedState) => {
-        const state = persistedState as Partial<QuickCaptureShortcutState>;
-        // v1 used `meta+.` on every platform. It was never configurable in the UI,
-        // so safely repair Windows/Linux users to the advertised Ctrl+. default.
-        if (!isMacPlatform() && state.shortcut === 'meta+.') {
-          return { ...state, shortcut: defaultQuickCaptureShortcut(false) } as QuickCaptureShortcutState;
-        }
-        return {
-          ...state,
-          shortcut: normalizeShortcut(state.shortcut ?? '') || defaultQuickCaptureShortcut(),
-        } as QuickCaptureShortcutState;
-      },
+
     },
   ),
 );

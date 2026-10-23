@@ -51,10 +51,10 @@ describe('specialist matching', () => {
     expect(() => z.toJSONSchema(SpecialistProfileSchema)).not.toThrow();
   });
 
-  it('orders by declared task fit while keeping legacy and blocked candidates explicit', () => {
+  it('orders by declared task fit while keeping absent-profile and blocked candidates explicit', () => {
     const result = matchSpecialists(requirements, context);
     expect(result.candidates[0]?.id).toBe('data-analyst');
-    expect(result.candidates.find(agent => agent.id === 'coder')?.profileSource).toBe('legacy');
+    expect(result.candidates.find(agent => agent.id === 'coder')?.profileSource).toBe('absent');
     expect(result.candidates.find(agent => agent.id === 'disabled')?.eligibility).toBe('blocked');
     expect(result.candidates.some(agent => agent.id.startsWith('personal-'))).toBe(false);
     expect(result.candidates[0]?.checks.find(check => check.condition === 'model')?.state).toBe('configured');

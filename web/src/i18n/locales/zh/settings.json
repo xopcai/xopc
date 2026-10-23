@@ -1464,7 +1464,6 @@
       "events": "事件",
       "ui": "界面",
       "memory_source": "记忆来源",
-      "workflows": "工作流",
       "auth.apiKey": "API key 认证",
       "auth.oauth": "OAuth",
       "runtime.mcp.stdio": "MCP stdio",

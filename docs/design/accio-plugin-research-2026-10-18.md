@@ -6,13 +6,12 @@
 
 Accio 最值得借鉴的是把 Plugin 做成可交付的业务能力：用户选择一个任务领域，宿主完成资源准备、账号连接、工具可用性验证、Agent 绑定，再把用户带到可开始工作的入口。
 
-xopc 已经有 Store、Portable Agent Plugin、Native Extension、Connector、托管 CLI、Skills、Workflow 和 Agent 权限体系。建议在这些能力之上增加统一的 **Plugin Setup 与运行时投影层**，沿用现有 Store 分发，不再建设另一套市场、OAuth 或通用 Agent Runtime。
+xopc 已经有 Store、Portable Agent Plugin、Native Extension、Connector、托管 CLI、Skills 和 Agent 权限体系。建议在这些能力之上增加统一的 **Plugin Setup 与运行时投影层**，沿用现有 Store 分发，不再建设另一套市场、OAuth 或通用 Agent Runtime。
 
 建议优先级：
 
 1. **P0：安装到可用的完整流程。** 声明依赖、下载资源、复用连接、授权、检查工具、选择使用的 Agent、第一条任务入口，支持失败后继续。
 2. **P1：插件作为业务能力包。** 增加任务入口、轻量编排上下文、组件清单、按功能计算的就绪状态；让用户不必自己理解 Skill/MCP/CLI 的区别。
-3. **P2：声明式执行能力。** 引入受控任务脚本、执行者配置、输入输出契约和产物校验，复用现有 Workflow、delegation、process 与 Connector policy。
 4. **P3：开发者交付工具。** authoring schema、预检、离线 fixtures、失败恢复测试、发布契约和端到端业务样例。
 
 不建议第一版直接兼容 Accio 全量格式，也不建议直接给 Portable Plugin 增加任意宿主内 JavaScript Hook。Accio 的业务包与其宿主工具、账号中心、运行环境有深度耦合；借鉴产品与契约设计的收益高于兼容原包。
@@ -243,7 +242,6 @@ templates/、schemas/、tests/（按需）
 
 Shopify 插件将商品/集合写入、主题装修、店铺验收、单页面审计分别交给专门执行者。声明包含 tools、skills、加载模式、timeout、model、systemPromptFile 等。
 
-`indexed` 与 `systemPrompt` 区分“只加入可发现索引”和“预加载完整规则”。这种声明适合复用 xopc 的 Workflow 与 delegation，但有效权限必须取宿主、父 Agent、插件授权与执行者声明的交集。插件作者不能通过 `tools: inherit` 扩张父权限。
 
 也有刻意不使用 SubAgent 的轻量插件，说明“更丰富”不等于“所有业务必须多 Agent”。
 
@@ -285,7 +283,6 @@ xopc Store 已经有 branding/localizations，因此需要补充任务入口与�
 | 托管 CLI 下载 | `src/connectors/cli/installer.ts` 有平台分发、校验与版本探测 | 扩展为可复用 provisioner，不另写 npm 安装器 |
 | 按 Agent 技能选择 | Skill allowlist/denylist、tool gating | 增加 pluginId 级绑定并映射至现有策略 |
 | 按需能力 | `metadata.xopc.activates_capabilities` | 增加声明到现有 catalog 的映射 |
-| 子任务执行 | Workflow runner、structured_output、delegation policy | 用插件执行者配置复用 |
 | 插件资源/授权安装向导 | 当前 Portable Plugin 对话框未统一编排 | P0 主要增量 |
 | 安装后第一条任务 | 组件管理与就绪提示已有，缺少通用 starter 声明 | P0/P1 补齐 |
 
@@ -345,7 +342,7 @@ ResolvedPluginDescriptor
   identity / artifactRevision / provenance
   skills / entrySkill / taskStarters
   connectorRequirements / resourceRequirements
-  executorProfiles / workflows / outputContracts
+  executorProfiles / outputContracts
   bindingDefaults / compatibilityRequirements
   diagnostics / requestedCapabilities
 ```
@@ -439,16 +436,6 @@ UI 关闭与 Job 取消应有明确差别。恢复只继续缺失步骤；重试
 
 绑定记录放宿主配置/存储，插件只建议默认值；用户选择优先。投影缓存应包含包 revision、绑定 revision、授权状态 revision 和资源状态，变化时使受影响 Agent 的现有运行环境刷新。
 
-### 10.6 执行者、脚本和工作流复用现有运行时
-
-执行者声明建议只包含：用途、关联 Skills、允许工具/Connector 动作、模型 intent、预算/超时、输入输出 schema。优先 `models.intents`，避免包内硬编码具体商业模型和地区路由。
-
-执行脚本分两种：本地确定性处理与外部业务动作。前者有明确 cwd、输入文件、输出目录、资源限制；后者通过 Connector broker 访问已授权动作，不给脚本任意导出整套 tokens。
-
-UI Action/业务授权应由宿主保存实际用户输入与目标，绑定 payload hash、账号、权限和有效期，再由执行层校验。脚本生成的状态只是业务数据，不能替代宿主授权。
-
-含任意 JS Hook 的高级业务应继续走 Native Extension。声明式规则先覆盖常见需要：required capability、输入校验、输出校验、工具调用约束、任务交付校验。
-
 ### 10.7 插件就绪应按任务呈现
 
 例如 Gmail 助手：
@@ -493,7 +480,6 @@ UI Action/业务授权应由宿主保存实际用户输入与目标，绑定 pay
 
 ### P2：可执行的业务任务契约
 
-范围：executor profile、Workflow 模板、受控任务脚本、输入输出 schema、统一运行产物/执行回执。
 
 建议用“小型询盘分析 → 圈选 → 草稿”或“文件分析 → 校验报告”做首个端到端样例。先证明语义与确定性处理可协作，再扩到真实发送、店铺写入等操作。
 
@@ -514,7 +500,6 @@ UI Action/业务授权应由宿主保存实际用户输入与目标，绑定 pay
 | 新的 plugin setup service/repository | Job、步骤、幂等、等待用户、恢复与资源 ownership |
 | `src/connectors/`、`src/connectors/cli/` | 账号与资源服务，复用原有 policy 与凭据边界 |
 | `src/agent/skills/skill-sources.ts` | Plugin binding、公开组件投影，保留原有来源优先级 |
-| `src/agent/agent-manager.ts`、Workflow/delegation | 投影刷新、懒加载能力与执行者运行 |
 | `src/gateway/hono/routes/agent-plugins.ts` | Setup 查询/动作接口与更新广播 |
 | `src/gateway/hono/routes/lazy-bundles.ts` | 新路由映射与正负断言，真实鉴权 Gateway 验证 |
 | `web/src/features/extensions/agent-plugin-dialog.tsx` | 安装向导和功能就绪展示；复用 Connector 交互组件 |

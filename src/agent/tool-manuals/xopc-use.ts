@@ -33,12 +33,9 @@ complete successfully while the product command returns \`ok: false\`.
 | Lightweight UI preview | \`xopc_use\` mode \`chat_preview\` |
 | Local app | \`xopc_use\` mode \`local_app\` |
 | Settings jump target | \`xopc_use\` mode \`settings\` |
-| Workflow run | dedicated \`workflow\` tool; pass \`taskId\` to link it to a Task |
 | Session, memory, skill, connected app or workspace file | its dedicated tool |
 
-Do not emulate Workflow APIs through \`xopc_use\`. A Task is durable intent;
-a TaskRun is one execution attempt; a WorkflowRun is a procedure execution and may belong
-to a TaskRun. Never treat these three objects as interchangeable.
+A Task is durable intent; a TaskRun is one execution attempt.
 
 ## Agents
 
@@ -462,6 +459,6 @@ Settings supports only \`open\` and returns an exact product jump target without
 - Project deletion and milestone deletion are not Agent APIs.
 - TaskRun mutation is internal to execution coordination except for optimistic cancellation.
 - Project updates are immutable.
-- Workflow and Automation operations remain in their dedicated tools.
+- Automation operations remain in their dedicated tools.
 - Only the documented Task and TaskRun commands are valid; do not infer hidden aliases.
 `;

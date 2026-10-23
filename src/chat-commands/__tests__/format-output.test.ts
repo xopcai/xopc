@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { markdownToIR } from '../../markdown/ir.js';
+
 import {
   bulletList,
   code,
@@ -34,32 +34,8 @@ describe('format-output', () => {
   });
 
   it('section, code, and hint helpers', () => {
-    expect(section('Built-in workflows')).toBe('**Built-in workflows**');
-    expect(code('/workflow view audit_repo')).toBe('`/workflow view audit_repo`');
+    expect(section('Available skills')).toBe('**Available skills**');
+    expect(code('/skill:review')).toBe('`/skill:review`');
     expect(hint('Copy the ref, then switch.')).toBe('_Copy the ref, then switch._');
-  });
-
-  it('sample workflow list parses as multi-line GFM (not one collapsed paragraph)', () => {
-    const md = joinBlocks(
-      section('Built-in workflows'),
-      bulletList([
-        { label: 'audit_repo', detail: 'Fan-out repository audit' },
-        { label: 'multi_perspective_review', detail: 'Review from N perspectives' },
-      ]),
-      section('How to run'),
-      bulletList([
-        'Plain language: "run the audit_repo workflow"',
-        `Inspect source: ${code('/workflow view audit_repo')}`,
-      ]),
-    );
-
-    const ir = markdownToIR(md);
-    expect(ir.text).toContain('audit_repo');
-    expect(ir.text).toContain('multi_perspective_review');
-    expect(ir.styles.some((s) => s.style === 'bold')).toBe(true);
-
-    const bulletLines = md.split('\n').filter((line) => line.startsWith('- '));
-    expect(bulletLines.length).toBeGreaterThanOrEqual(4);
-    expect(md).toContain('\n\n');
   });
 });

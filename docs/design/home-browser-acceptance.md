@@ -21,7 +21,6 @@
 | 依赖等待 | 完成被依赖的人工验收任务 → 再次打开依赖任务 | 等待条件自动解除，卡片改为待验收，详情显示 Ready for review |
 | 失败任务 | Retry | 新执行启动，卡片暂时进入后台，完成后自动显示新结果 |
 | 自动化异常 | Dismiss；另一条记录 Retry → View progress and result | 忽略记录从首页移除；重试入口打开新 runId 的详情，显示 succeeded 和实际结果 |
-| 工作流异常 | Retry → 打开新执行会话 | 新工作流运行完成，聊天中的工作流卡显示 Completed |
 | 定时计划 | 展开全部 → 点击第四项 → Pause → Resume | 打开对应计划；暂停/恢复状态正确，首页数据随之更新 |
 | AI 建议启动 | Start with xopc | 建立任务、显示启动回执及任务进展入口 |
 | AI 建议反馈 | Not relevant → Undo | 建议移除后可恢复 |

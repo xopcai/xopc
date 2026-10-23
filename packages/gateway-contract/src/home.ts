@@ -34,7 +34,7 @@ export const HomeDecisionSchema = z.object({
 
 export const HomeAttentionSchema = z.object({
   id: z.string(),
-  kind: z.enum(['automation_run', 'workflow_run']),
+  kind: z.enum(['automation_run']),
   runId: z.string(),
   title: z.string(),
   detail: z.string(),
@@ -61,13 +61,13 @@ export const HomeActionSchema = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('retry_run'),
     label: z.string(),
-    subjectKind: z.enum(['automation_run', 'workflow_run']),
+    subjectKind: z.enum(['automation_run']),
     runId: z.string(),
   }),
   z.object({
     type: z.literal('acknowledge_run'),
     label: z.string(),
-    subjectKind: z.enum(['automation_run', 'workflow_run']),
+    subjectKind: z.enum(['automation_run']),
     runId: z.string(),
   }),
 ]);

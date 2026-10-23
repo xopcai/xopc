@@ -1,4 +1,6 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { generateKeyPairSync } from 'node:crypto';
+import { signedDeviceHeaders } from '../../gateway/security/__tests__/signed-device-headers.js';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { once } from 'node:events';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -13,7 +15,7 @@ import { AgentCatalogRepository } from '../../agent-catalog/repository.js';
 import { AgentCatalogService } from '../../agent-catalog/service.js';
 import { AgentToolsFactory } from '../../agent/tools/factory.js';
 import { createPersonalTaskTool } from '../../agent/tools/personal-task-tool.js';
-import { applyUserProfilePatch, getUserProfileSnapshot } from '../../user-model/profile.js';
+import { applyUserProfilePatch } from '../../user-model/profile.js';
 import { SessionConfigService } from '../../agent/session/session-config-service.js';
 import { SessionConfigStore } from '../../session/config-store.js';
 import type { MessageBus } from '../../infra/bus/index.js';
@@ -29,47 +31,11 @@ import { createConversation } from '../../storage/sqlite/conversation-repository
 import { createDevice, issueDeviceTokenPair } from '../../storage/sqlite/device-access-repository.js';
 import { DEFAULT_MOBILE_SCOPES } from '../../gateway/security/gateway-scopes.js';
 import { getPersonalAgent, isPersonalConversation, personalAgentId, personalConversationId } from '../repository.js';
-import { createOrResumePersonalAgent, ensurePersonalConversationVisibility, personalInstructions, refreshPersonalDelegationGuidance, updatePersonalProfileRecord } from '../service.js';
-import { upgradePersonalInstructions, PREVIOUS_PERSONAL_INTERRUPTION_RULE } from '../prompts.js';
-import { PERSONAL_RELIABILITY_RULES, PERSONAL_PREVIOUS_RESULT_COMMUNICATION } from '../communication.js';
-import { PERSONAL_REPLY_STYLE_RULES, PERSONAL_REPLY_EXAMPLES, PREVIOUS_PERSONAL_REPLY_STYLE_RULES, PREVIOUS_PERSONAL_REPLY_EXAMPLES } from '../reply-style.js';
-import {
-  PERSONAL_PERSONA_GUIDANCE, PREVIOUS_PERSONAL_PERSONA_GUIDANCE,
-  PREVIOUS_PERSONAL_EMOTIONAL_STYLE_RULE, PREVIOUS_PERSONAL_IDENTITY_CONTINUITY_RULE,
-} from '../persona.js';
+import { createOrResumePersonalAgent, ensurePersonalConversationVisibility, personalInstructions, updatePersonalProfileRecord } from '../service.js';
+
+import { PERSONAL_RELIABILITY_RULES } from '../communication.js';
 
 describe('personal Agent identity', () => {
-  it('replaces all known report-first blocks while preserving explicit user preferences', () => {
-    const custom = 'My preference: 对正式报告请先给结论，闲聊不要用固定开场。';
-    const quoted = `Example I am discussing: ${PREVIOUS_PERSONAL_REPLY_STYLE_RULES[0]}`;
-    const saved = [custom, quoted, ...PREVIOUS_PERSONAL_REPLY_STYLE_RULES, PREVIOUS_PERSONAL_REPLY_EXAMPLES,
-      PERSONAL_PREVIOUS_RESULT_COMMUNICATION, PREVIOUS_PERSONAL_INTERRUPTION_RULE,
-      'Keep replies short and lead with the answer.', ...PREVIOUS_PERSONAL_REPLY_STYLE_RULES].join('\n');
-    const upgraded = upgradePersonalInstructions(saved);
-    expect(upgraded).toContain(custom);
-    expect(upgraded).toContain(quoted);
-    for (const rule of PREVIOUS_PERSONAL_REPLY_STYLE_RULES) {
-      expect(upgraded.split('\n').filter(line => line === rule)).toHaveLength(0);
-    }
-    expect(upgraded).not.toContain(PREVIOUS_PERSONAL_REPLY_EXAMPLES);
-    expect(upgraded).not.toContain(PERSONAL_PREVIOUS_RESULT_COMMUNICATION);
-    expect(upgraded).not.toContain(PREVIOUS_PERSONAL_INTERRUPTION_RULE);
-    expect(upgraded).not.toContain('Keep replies short and lead with the answer.');
-    expect(upgraded).toContain('Keep replies short and respond to the current request in a natural sentence.');
-    expect(upgradePersonalInstructions(upgraded)).toBe(upgraded);
-  });
-  it('replaces saved source presentation rules while preserving custom instructions', () => {
-    const previousRules = [
-      'Do not include task progress links by default or ask the user to open a Task page to follow work or collect results. Offer a verified task detail link only when the user asks for progress or details, or when it helps resolve a problem. Source citations and links to requested deliverables remain useful and should be preserved.',
-      'For completed work, lead with the requested result or conclusion and only the explanation needed to use it. Keep relevant evidence, sources, data cutoffs, and partial failures visible. Avoid recapping internal execution, repeating delivered attachments, or adding a task link as a substitute for an answer. Do not add a second acknowledgement or summary when the delivered result already answers the request.',
-      'Synthesis means understanding and organizing, not always shortening. Preserve requested lists, exact text, code, translations, important sources, limitations, and partial failures. Never make an uncertain result sound confirmed just to keep the reply smooth.',
-    ];
-    const upgraded = upgradePersonalInstructions([...previousRules, 'Keep my custom instruction.'].join('\n'));
-    for (const rule of previousRules) expect(upgraded).not.toContain(rule);
-    for (const rule of PERSONAL_REPLY_STYLE_RULES) expect(upgraded).toContain(rule);
-    expect(upgraded).toContain('Keep my custom instruction.');
-    expect(upgradePersonalInstructions(upgraded)).toBe(upgraded);
-  });
 
   it('keeps one identity and conversation and serves it through the authenticated Gateway', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'xopc-personal-agent-'));
@@ -149,17 +115,17 @@ describe('personal Agent identity', () => {
       const agentsResult = await createPersonalTaskTool({
         getCurrentConversationId: () => conversationId,
         getCurrentAgentId: () => agentId,
-      }).execute('list-agents', { command: 'agents' }, undefined, undefined as never);
-      const candidates = JSON.parse(agentsResult.content[0]!.text as string) as Array<{ id: string; availableTools: string[] }>;
+      }).execute('list-agents', { command: 'match' }, undefined, undefined as never);
+      const candidates = JSON.parse(agentsResult.content[0]!.text as string).candidates as Array<{ id: string; availableTools: string[] }>;
       expect(candidates.find(candidate => candidate.id === 'researcher')?.availableTools).toContain('web_search');
       expect(candidates.find(candidate => candidate.id === 'researcher')?.availableTools).not.toContain('web_fetch');
       const filtered = await createPersonalTaskTool({
         getCurrentConversationId: () => conversationId,
         getCurrentAgentId: () => agentId,
-      }).execute('find-code-agent', { command: 'agents', requiredTools: ['exec_command'] }, undefined, undefined as never);
-      const codeCandidates = JSON.parse(filtered.content[0]!.text as string) as Array<{ id: string }>;
+      }).execute('find-code-agent', { command: 'match', requiredTools: ['exec_command'] }, undefined, undefined as never);
+      const codeCandidates = JSON.parse(filtered.content[0]!.text as string).candidates as Array<{ id: string }>;
       expect(codeCandidates.map(candidate => candidate.id)).toContain('coder');
-      expect(codeCandidates.map(candidate => candidate.id)).not.toContain('researcher');
+      expect(codeCandidates.find(candidate => candidate.id === 'researcher')).toMatchObject({ eligibility: 'blocked' });
       expect(await updatePersonalProfileRecord('local-owner', 999, '阿沐', 'spark')).toBeNull();
       const updated = await updatePersonalProfileRecord('local-owner', first.revision, '阿沐',
         'cloud', undefined, { openingGreetingEnabled: false });
@@ -188,14 +154,16 @@ describe('personal Agent identity', () => {
       const response = await fetch(url, { headers: { authorization: `Bearer ${token}` } });
       expect(response.status).toBe(200);
       expect(await response.json()).toMatchObject({ ok: true, payload: { displayName: '阿沐', conversationId: first.conversationId } });
+      const phoneKeys = generateKeyPairSync('ec', { namedCurve: 'P-256' });
       createDevice({ id: 'personal-phone', displayName: 'Phone', platform: 'harmonyos',
-        publicKeyJwk: { kty: 'EC' }, scopes: [...DEFAULT_MOBILE_SCOPES] });
+        publicKeyJwk: phoneKeys.publicKey.export({ format: 'jwk' }), scopes: [...DEFAULT_MOBILE_SCOPES] });
       const phoneToken = issueDeviceTokenPair('personal-phone').accessToken;
-      const phoneResponse = await fetch(url, { headers: { authorization: `Bearer ${phoneToken}` } });
+      const deviceFetch = (target: string, init: RequestInit = {}, credential = phoneToken) => fetch(target, { ...init, headers: signedDeviceHeaders(phoneKeys.privateKey, credential, new URL(target).pathname + new URL(target).search, init.method ?? 'GET', typeof init.body === 'string' ? init.body : '', Object.fromEntries(new Headers(init.headers).entries())) });
+      const phoneResponse = await deviceFetch(url, { headers: signedDeviceHeaders(phoneKeys.privateKey, phoneToken, new URL(url).pathname) });
       expect(phoneResponse.status).toBe(200);
       expect(await phoneResponse.json()).toMatchObject({ ok: true, payload: { conversationId: first.conversationId } });
-      const phoneCreate = await fetch(url, { method: 'POST',
-        headers: { authorization: `Bearer ${phoneToken}`, 'content-type': 'application/json' }, body: '{}' });
+      const phoneCreate = await deviceFetch(url, { method: 'POST',
+    headers: signedDeviceHeaders(phoneKeys.privateKey, phoneToken, new URL(url).pathname, 'POST', '{}', { 'content-type': 'application/json' }), body: '{}' });
       expect(phoneCreate.status).toBe(200);
       expect(await phoneCreate.json()).toMatchObject({ ok: true, payload: { conversationId: first.conversationId } });
       const avatarWriter = vi.spyOn(agentsAdmin, 'writeAgentAvatarFromBase64').mockResolvedValue({ ok: true,
@@ -205,21 +173,21 @@ describe('personal Agent identity', () => {
         const avatarUrl = `${url}/avatar`;
         expect((await fetch(avatarUrl, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: avatarBody })).status).toBe(401);
         const phoneHeaders = { authorization: `Bearer ${phoneToken}`, 'content-type': 'application/json' };
-        const uploaded = await fetch(avatarUrl, { method: 'PUT', headers: phoneHeaders, body: avatarBody });
+        const uploaded = await deviceFetch(avatarUrl, { method: 'PUT', headers: phoneHeaders, body: avatarBody });
         expect(uploaded.status).toBe(200);
         expect(await uploaded.json()).toMatchObject({ ok: true, payload: { agentId: first.agentId } });
         expect(avatarWriter).toHaveBeenCalledWith(first.agentId, 'fixture-base64', 'image/png');
-        expect((await fetch(avatarUrl, { method: 'PUT', headers: phoneHeaders,
-          body: JSON.stringify({ base64: 'fixture-base64', mimeType: 'image/png', agentId: 'other' }) })).status).toBe(400);
-        expect((await fetch(`${url.replace('/personal-agent', '')}/agents/other/avatar`, { method: 'PUT', headers: phoneHeaders, body: avatarBody })).status).toBe(403);
+        expect((await deviceFetch(avatarUrl, { method: 'PUT', headers: phoneHeaders,
+    body: JSON.stringify({ base64: 'fixture-base64', mimeType: 'image/png', agentId: 'other' }) })).status).toBe(400);
+        expect((await deviceFetch(`${url.replace('/personal-agent', '')}/agents/other/avatar`, { method: 'PUT', headers: phoneHeaders, body: avatarBody })).status).toBe(403);
         expect(avatarWriter).toHaveBeenCalledTimes(1);
       } finally { avatarWriter.mockRestore(); }
       createDevice({ id: 'personal-extension', displayName: 'Extension', platform: 'chrome',
-        extensionId: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', publicKeyJwk: { kty: 'EC' }, scopes: [...DEFAULT_MOBILE_SCOPES] });
+        extensionId: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', publicKeyJwk: phoneKeys.publicKey.export({ format: 'jwk' }), scopes: [...DEFAULT_MOBILE_SCOPES] });
       const extensionToken = issueDeviceTokenPair('personal-extension').accessToken;
-      expect((await fetch(url, { headers: { authorization: `Bearer ${extensionToken}` } })).status).toBe(403);
-      expect((await fetch(`${url}/avatar`, { method: 'PUT', headers: { authorization: `Bearer ${extensionToken}`, 'content-type': 'application/json' }, body: JSON.stringify({ base64: 'fixture', mimeType: 'image/png' }) })).status).toBe(403);
-      expect((await fetch(onboardingUrl, { headers: { authorization: `Bearer ${extensionToken}` } })).status).toBe(403);
+      expect((await deviceFetch(url, { headers: { authorization: `Bearer ${extensionToken}` } }, extensionToken)).status).toBe(403);
+      expect((await deviceFetch(`${url}/avatar`, { method: 'PUT', headers: { authorization: `Bearer ${extensionToken}`, 'content-type': 'application/json' }, body: JSON.stringify({ base64: 'fixture', mimeType: 'image/png' }) }, extensionToken)).status).toBe(403);
+      expect((await deviceFetch(onboardingUrl, { headers: { authorization: `Bearer ${extensionToken}` } }, extensionToken)).status).toBe(403);
       expect((await fetch(onboardingUrl, { method: 'PUT', headers,
         body: JSON.stringify({ step: 'voice', draft: { displayName: 'Other' } }) })).status).toBe(409);
       expect((await fetch(`${url}/activity`, { headers })).status).toBe(200);
@@ -392,111 +360,6 @@ describe('personal Agent identity', () => {
       } finally {
         await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
       }
-    } finally {
-      closeXopcDatabase();
-      resetXopcDatabaseSingletonForTest();
-      if (previousStateDir === undefined) delete process.env.XOPC_STATE_DIR;
-      else process.env.XOPC_STATE_DIR = previousStateDir;
-      rmSync(dir, { recursive: true, force: true });
-    }
-  }, 30_000);
-
-  it('replaces existing Personal guidance with defaults and refreshes idempotently', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'xopc-personal-guidance-'));
-    const previousStateDir = process.env.XOPC_STATE_DIR;
-    process.env.XOPC_STATE_DIR = dir;
-    resetXopcDatabaseSingletonForTest();
-    openXopcDatabase({ path: join(dir, 'xopc.db') });
-    try {
-      const repository = new AgentCatalogRepository();
-      repository.ensureInitialized();
-      const agentId = personalAgentId('local-owner');
-      const profileDir = join(dir, 'agents', agentId, 'profile');
-      mkdirSync(profileDir, { recursive: true });
-      const customSoul = '# My Soul\n\nKeep a quiet voice and use my own metaphors.';
-      writeFileSync(join(profileDir, 'SOUL.md'), customSoul);
-      repository.create({ id: agentId, toolAllowlist: ['personal_task', 'clarify', 'user_context_get', 'knowledge_search'], profile: { name: 'Personal AI', instructions: [
-        'Answer simple requests directly. For complex work, use personal_task agents to find a suitable specialist, then create a Task and remain available to talk. Never claim a task was created before the tool confirms it.',
-        'Keep my custom instruction.',
-        ...PREVIOUS_PERSONAL_REPLY_STYLE_RULES,
-        PREVIOUS_PERSONAL_REPLY_EXAMPLES,
-        PERSONAL_PREVIOUS_RESULT_COMMUNICATION,
-        PREVIOUS_PERSONAL_INTERRUPTION_RULE,
-        PREVIOUS_PERSONAL_PERSONA_GUIDANCE,
-        PREVIOUS_PERSONAL_EMOTIONAL_STYLE_RULE,
-        PREVIOUS_PERSONAL_IDENTITY_CONTINUITY_RULE,
-        'Address the user as "Legacy name" when a name fits naturally.',
-      ].join('\n') } }, { ready: true });
-      const gateway = { refreshAgentCatalog: () => {}, agentService: { evictSessionAgent: () => {} } } as unknown as GatewayService;
-      await refreshPersonalDelegationGuidance(gateway, 'local-owner');
-      const refreshed = repository.get(agentId)!;
-      expect(refreshed.toolAllowlist).toEqual(expect.arrayContaining(['read_media', 'read_file', 'session_search', 'personal_read']));
-      expect(refreshed.toolAllowlist).not.toContain('clarify');
-      expect(refreshed.toolAllowlist).toEqual(expect.arrayContaining(['user_context_read', 'knowledge_read']));
-      expect(refreshed.toolAllowlist).not.toEqual(expect.arrayContaining(['user_context_get', 'knowledge_search']));
-      expect(refreshed.profile?.instructions).toContain('accept the next typed or spoken answer normally');
-      expect(refreshed.toolAllowlist).not.toEqual(expect.arrayContaining(['web_search', 'web_fetch', 'exec_command']));
-      expect(refreshed.profile?.instructions).toContain('Answer directly when context is sufficient');
-      expect(refreshed.profile?.instructions).toContain('personal_result');
-      expect(refreshed.profile?.instructions).toContain('bounded ranges even when the complete file is large');
-      expect(refreshed.profile?.instructions).toContain('For current news or other live facts');
-      expect(refreshed.profile?.instructions).not.toContain('Keep my custom instruction.');
-      expect(refreshed.profile?.instructions).toContain('MCP, Codemode and dynamic tool discovery belong to specialist execution');
-      expect(refreshed.profile?.instructions).not.toContain('Legacy name');
-      expect(refreshed.profile?.instructions).toContain('shared user profile');
-      expect(refreshed.profile?.instructions).toContain('Do not include task progress links by default');
-      expect(refreshed.profile?.instructions).toContain('it does not prove execution has started');
-      expect(refreshed.profile?.instructions).toContain('Speak like an attentive, reliable collaborator');
-      expect(refreshed.profile?.instructions).toContain(PERSONAL_PERSONA_GUIDANCE);
-      expect(refreshed.profile?.instructions).not.toContain(PREVIOUS_PERSONAL_PERSONA_GUIDANCE);
-      expect(refreshed.profile?.instructions).not.toContain(PREVIOUS_PERSONAL_EMOTIONAL_STYLE_RULE);
-      expect(refreshed.profile?.instructions).not.toContain(PREVIOUS_PERSONAL_IDENTITY_CONTINUITY_RULE);
-      expect(refreshed.profile?.instructions).toBe(personalInstructions());
-      expect(readFileSync(join(profileDir, 'SOUL.md'), 'utf-8')).toBe(customSoul);
-      for (const rule of PERSONAL_RELIABILITY_RULES) {
-        expect(refreshed.profile?.instructions?.split('\n').filter(line => line === rule)).toHaveLength(1);
-      }
-      for (const rule of PERSONAL_REPLY_STYLE_RULES) {
-        expect(refreshed.profile?.instructions?.split('\n').filter(line => line === rule)).toHaveLength(1);
-      }
-      expect(refreshed.profile?.instructions).toContain(PERSONAL_REPLY_EXAMPLES);
-      for (const oldRule of PREVIOUS_PERSONAL_REPLY_STYLE_RULES) expect(refreshed.profile?.instructions).not.toContain(oldRule);
-      expect(refreshed.profile?.instructions).not.toContain(PREVIOUS_PERSONAL_REPLY_EXAMPLES);
-      expect(refreshed.profile?.instructions).not.toContain(PERSONAL_PREVIOUS_RESULT_COMMUNICATION);
-      expect(refreshed.profile?.instructions).not.toContain(PREVIOUS_PERSONAL_INTERRUPTION_RULE);
-      await refreshPersonalDelegationGuidance(gateway, 'local-owner');
-      expect(repository.get(agentId)?.revision).toBe(refreshed.revision);
-      expect(readFileSync(join(profileDir, 'SOUL.md'), 'utf-8')).toBe(customSoul);
-      await new AgentCatalogService().update(agentId, {
-        profile: { ...refreshed.profile!, instructions: refreshed.profile!.instructions!
-          .split('\n').filter(line => line !== PERSONAL_RELIABILITY_RULES[0]).join('\n') },
-      }, refreshed.revision);
-      await refreshPersonalDelegationGuidance(gateway, 'local-owner');
-      const repaired = repository.get(agentId)!;
-      expect(repaired.profile?.instructions?.split('\n').filter(line => line === PERSONAL_RELIABILITY_RULES[0])).toHaveLength(1);
-      expect(repaired.profile?.instructions).toBe(personalInstructions());
-      await refreshPersonalDelegationGuidance(gateway, 'local-owner');
-      expect(repository.get(agentId)?.revision).toBe(repaired.revision);
-      const previousGuidance = [
-        'Route by required capability, not task length. Answer directly only when your own tools and knowledge are sufficient. For current facts, web pages, or any tool you lack, call personal_task(command="agents"), choose an Agent with the needed availableTools, then create a Task. Your own lack of browsing does not mean xopc cannot browse. Never claim the system cannot help, ask the user to switch models, or ask them to paste sources before checking Agents.',
-        'For current news, delegate to an Agent with web_search. Include the requested date or time window and topic in the brief; require source links, publication dates, and a distinction between confirmed news and uncertain reports. Tell the user briefly that you are checking. Stay available while the Task runs, then summarize verified results in their preferred style.',
-        'If no suitable Agent is available, explain the specific missing capability and offer the next useful option. Never claim a Task was created before the tool confirms it.',
-        'Keep my custom instruction.',
-      ].join('\n');
-      await new AgentCatalogService().update(agentId, {
-        profile: { ...refreshed.profile!, instructions: previousGuidance },
-      }, repaired.revision);
-      await refreshPersonalDelegationGuidance(gateway, 'local-owner');
-      expect(repository.get(agentId)?.profile?.instructions).toContain('Reuse the existing Task');
-      expect(repository.get(agentId)?.profile?.instructions).toBe(personalInstructions());
-      const prior = repository.get(agentId)!;
-      const priorInstructions = prior.profile!.instructions!.split('\n').filter((_, index) => index !== 2).join('\n');
-      await new AgentCatalogService().update(agentId, {
-        profile: { ...prior.profile!, instructions: priorInstructions },
-      }, prior.revision);
-      await refreshPersonalDelegationGuidance(gateway, 'local-owner');
-      expect(repository.get(agentId)?.profile?.instructions).toContain('For current news or other live facts');
-      expect(repository.get(agentId)?.profile?.instructions).toBe(personalInstructions());
     } finally {
       closeXopcDatabase();
       resetXopcDatabaseSingletonForTest();

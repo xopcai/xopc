@@ -64,7 +64,7 @@ class ProgressRepository(private val gateway: GatewaySession) {
         "/api/home/decisions/respond"
       }
       "retry_run", "acknowledge_run" -> {
-        require(action.subjectKind in setOf("automation_run", "workflow_run") &&
+        require(action.subjectKind in setOf("automation_run") &&
           action.runId?.matches(Regex("[A-Za-z0-9_-]{1,200}")) == true) { "INVALID_HOME_ACTION" }
         body.put("kind", action.subjectKind).put("runId", action.runId)
         if (action.type == "retry_run") "/api/home/attention/retry"
@@ -246,7 +246,7 @@ class ProgressRepository(private val gateway: GatewaySession) {
           "connector_decision" -> action.takeIf { it.approvalId?.matches(Regex("[A-Za-z0-9_-]{1,200}")) == true &&
             it.decision in setOf("approve", "deny") && it.label.isNotBlank() }
           "retry_run", "acknowledge_run" -> action.takeIf {
-            it.subjectKind in setOf("automation_run", "workflow_run") &&
+            it.subjectKind in setOf("automation_run") &&
               it.runId?.matches(Regex("[A-Za-z0-9_-]{1,200}")) == true && it.label.isNotBlank() }
           else -> null
         }

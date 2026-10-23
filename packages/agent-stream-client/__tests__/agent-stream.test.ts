@@ -164,12 +164,12 @@ describe('dispatchAgentStreamEvent', () => {
   it('dispatches tool lifecycle with toolCallId', () => {
     const cb = callbacks();
     const result = { content: [{ type: 'text', text: 'done' }], details: { ok: true } };
-    dispatchAgentStreamEvent('tool_start', JSON.stringify(envelope('tool_start', 'run-1', { messageId: 'm1', toolName: 'workflow', toolCallId: 'tc1', args: { step: 1 } })), cb);
-    dispatchAgentStreamEvent('tool_update', JSON.stringify(envelope('tool_update', 'run-1', { messageId: 'm1', toolName: 'workflow', toolCallId: 'tc1', details: { phase: 'run' } })), cb);
-    dispatchAgentStreamEvent('tool_end', JSON.stringify(envelope('tool_end', 'run-1', { messageId: 'm1', toolName: 'workflow', toolCallId: 'tc1', status: 'success', result })), cb);
-    expect(cb.onToolStart).toHaveBeenCalledWith('workflow', { step: 1 }, 'tc1');
-    expect(cb.onToolUpdate).toHaveBeenCalledWith('workflow', 'tc1', { phase: 'run' });
-    expect(cb.onToolEnd).toHaveBeenCalledWith('workflow', false, result, 'tc1');
+    dispatchAgentStreamEvent('tool_start', JSON.stringify(envelope('tool_start', 'run-1', { messageId: 'm1', toolName: 'custom_tool', toolCallId: 'tc1', args: { step: 1 } })), cb);
+    dispatchAgentStreamEvent('tool_update', JSON.stringify(envelope('tool_update', 'run-1', { messageId: 'm1', toolName: 'custom_tool', toolCallId: 'tc1', details: { phase: 'run' } })), cb);
+    dispatchAgentStreamEvent('tool_end', JSON.stringify(envelope('tool_end', 'run-1', { messageId: 'm1', toolName: 'custom_tool', toolCallId: 'tc1', status: 'success', result })), cb);
+    expect(cb.onToolStart).toHaveBeenCalledWith('custom_tool', { step: 1 }, 'tc1');
+    expect(cb.onToolUpdate).toHaveBeenCalledWith('custom_tool', 'tc1', { phase: 'run' });
+    expect(cb.onToolEnd).toHaveBeenCalledWith('custom_tool', false, result, 'tc1');
   });
 
   it('dispatches command lifecycle through command callbacks only', () => {

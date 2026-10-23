@@ -30,7 +30,6 @@ function configWithGlobalModel() {
       models: { chat: { primary: 'anthropic/claude-sonnet-4-5', fallbacks: [] }, intents: {} },
       skills: { mode: 'all-enabled', exclude: [] },
       tools: {},
-      workflows: {},
       runtime: {},
     },
     agents: [{ id: 'main', enabled: true, profile: { name: 'Main' }, workspace: '~/.xopc/workspace/main' }],

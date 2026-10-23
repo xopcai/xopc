@@ -203,8 +203,6 @@ export class WeixinChannelPlugin implements ChannelPlugin<ResolvedWeixinAccount>
   private bus!: ChannelPluginInitOptions['bus'];
   private cfg!: Config;
   private abortControllers = new Map<string, AbortController>();
-  /** Unregister fn for the workflow-progress capability registered against the global broker. */
-  private workflowProgressUnregister: (() => void) | null = null;
 
   config = {
     listAccountIds: (cfg: Config) => listWeixinAccountIds(cfg),
@@ -267,27 +265,12 @@ export class WeixinChannelPlugin implements ChannelPlugin<ResolvedWeixinAccount>
     this.bus = options.bus;
     this.cfg = options.config;
 
-    await this.registerWorkflowProgressCapability();
 
     log.debug('Weixin plugin initialized');
   }
 
-  private async registerWorkflowProgressCapability(): Promise<void> {
-    // Lazy-load workflow progress so Weixin runtime startup does not pull the
-    // agent/workflow/provider graph into Electron's dynamic extension path.
-    const [{ getWorkflowProgressBroker }, { createWeixinWorkflowProgressCapability }] = await Promise.all([
-      import('@xopcai/xopc/agent/workflow/progress-broker.js'),
-      import('./workflow-progress.js'),
-    ]);
-    this.workflowProgressUnregister = getWorkflowProgressBroker().registerChannel(
-      createWeixinWorkflowProgressCapability({ getConfig: () => this.cfg }),
-    );
-  }
-
   async start(options?: ChannelPluginStartOptions): Promise<void> {
-    if (!this.workflowProgressUnregister) {
-      await this.registerWorkflowProgressCapability();
-    }
+
 
     const ids = options?.accountId
       ? [options.accountId]
@@ -333,8 +316,6 @@ export class WeixinChannelPlugin implements ChannelPlugin<ResolvedWeixinAccount>
     // Only unregister the broker capability on a full stop. Per-account stops
     // still leave the cap usable for other accounts.
     if (!accountId) {
-      this.workflowProgressUnregister?.();
-      this.workflowProgressUnregister = null;
     }
   }
 

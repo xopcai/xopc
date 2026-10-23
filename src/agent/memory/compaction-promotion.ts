@@ -188,7 +188,6 @@ export function promoteCompactionLedger(
     if (sensitivity === 'secret' || sensitivity === 'regulated') continue;
     const classified = classifyItemProvenance(item, sourceById, entriesByTurn, entriesByRound);
     const originClass: KnowledgeOriginClass = sessionKind === 'automation'
-      || sessionKind === 'workflow'
       || sessionKind === 'background'
       ? 'system'
       : sessionKind === 'group'

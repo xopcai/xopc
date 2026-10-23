@@ -71,7 +71,6 @@ export interface SessionAgentConfigView {
   model: string;
   configVersion: number;
   fixedModel: boolean;
-  reasoningLevel: ReasoningLevel;
   activityDetail: {
     default: ReasoningLevel;
     override: ReasoningLevel | null;
@@ -254,7 +253,6 @@ export class SessionInspector {
       model: sc?.modelOverride ?? model,
       configVersion: sc?.updatedAt ?? 0,
       fixedModel: sc?.fixedModel === true,
-      reasoningLevel,
       activityDetail: {
         default: defReason,
         override: sc?.reasoningLevel ?? null,

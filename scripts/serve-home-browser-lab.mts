@@ -92,17 +92,6 @@ for (const suffix of ['retry', 'dismiss']) {
   const automation = await service.automationServiceInstance.create({ name: `LAB · Automation ${suffix}`, enabled: true, trigger: { kind: 'manual' }, action: { kind: 'agent', agentId: 'main', instruction: 'Return the local browser lab result.', model: 'home-lab/lab' }, delivery: { notificationPolicy: 'attention', destinations: [{ key: 'gateway_event', kind: 'gateway_event' }] }, conversationMode: 'new_session' });
   saveAutomationRun({ id: randomUUID(), automationId: automation.id, automationName: automation.name, status: 'failed', triggerSnapshot: automation.trigger, actionSnapshot: automation.action, manual: true, createdAtMs: Date.now(), endedAtMs: Date.now(), error: 'Synthetic previous failure' });
 }
-const { createWorkflowCatalog } = await import('../src/agent/workflow/catalog.js');
-const { buildWorkflowRunMetadata } = await import('../src/workflows/service/workflow-run-service.js');
-const { WorkflowEventStore } = await import('../src/workflows/store/event-store.js');
-const workflow = createWorkflowCatalog().save({ name: 'home-browser-lab', manifest: { title: 'LAB · Workflow retry', description: 'Local-only browser acceptance' }, graph: { schemaVersion: 1, nodes: [
-  { id: 'input', kind: 'input', title: 'Input', position: { x: 0, y: 0 }, config: {} },
-  { id: 'output', kind: 'output', title: 'Result', position: { x: 300, y: 0 }, config: {} },
-], edges: [{ id: 'input-output', source: 'input', target: 'output' }] } }).definition;
-const workflowRunId = randomUUID();
-await new WorkflowEventStore(service.currentConfig, 'main').append({ runId: workflowRunId, type: 'run_queued', payload: { run: { id: workflowRunId, definitionId: workflow.id, definitionVersion: workflow.version, title: workflow.title, goal: 'Verify workflow retry', input: { report: 'Local workflow evidence' }, status: 'failed', source: { kind: 'api' }, metadata: buildWorkflowRunMetadata({ definition: workflow, agentId: 'main', conversationId: review.conversationId, source: { kind: 'api' }, input: { payload: {} } }), metrics: { agentCount: 0, doneAgentCount: 0, errorAgentCount: 1, skippedAgentCount: 0, artifactCount: 0 }, createdAtMs: Date.now(), completedAtMs: Date.now() } } });
-await new WorkflowEventStore(service.currentConfig, 'main').append({ runId: workflowRunId, type: 'run_failed', payload: { error: { code: 'execution_error', message: 'Synthetic workflow failure' } } });
-await service.createWorkflowRunService().createRunStore('main').rebuildRunView(workflowRunId);
 const repository = new HomeIntelligenceRepository(getSqliteDatabase());
 const principal = { ownerId: 'local-owner', workspaceId: workspace };
 function advice(id: string, title: string) {

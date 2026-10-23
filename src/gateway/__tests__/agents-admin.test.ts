@@ -28,7 +28,6 @@ describe('agents admin', () => {
         models: { chat: { primary: 'openai/gpt-5', fallbacks: [] }, intents: {} },
         skills: { mode: 'all-enabled', exclude: [] },
         tools: { exec_command: { mode: 'ask' } },
-        workflows: {},
         runtime: {},
       },
       agents: [{ id: 'main', enabled: true, profile: { name: 'Main' } }],
@@ -105,7 +104,6 @@ describe('agents admin', () => {
       workspace: '/tmp/coder',
       models: { chat: { primary: 'anthropic/claude-opus-4-1', fallbacks: [] } },
       tools: { exec_command: { mode: 'allow' } },
-      workflows: { default: 'code-review' },
       runtime: { maxTurns: 12 },
     });
     expect(updated.ok).toBe(true);
@@ -113,19 +111,16 @@ describe('agents admin', () => {
     const stored = new AgentCatalogRepository().get('coder');
     expect(stored?.models?.chat?.primary).toBe('anthropic/claude-opus-4-1');
     expect(new AgentCatalogRepository().getSettings().defaults.models.chat.primary).toBe('openai/gpt-5');
-    expect(stored?.workflows?.default).toBe('code-review');
     expect(stored?.runtime?.maxTurns).toBe(12);
     const reset = await updateGatewayAgent('coder', {
       workspace: null,
       models: null,
       tools: null,
-      workflows: null,
       runtime: null,
     });
     const resetStored = new AgentCatalogRepository().get('coder');
     expect(reset.ok && resetStored?.models).toBeUndefined();
     expect(reset.ok && resetStored?.workspace).toBeUndefined();
-    expect(reset.ok && resetStored?.workflows).toBeUndefined();
     expect(reset.ok && resetStored?.runtime).toBeUndefined();
   });
 

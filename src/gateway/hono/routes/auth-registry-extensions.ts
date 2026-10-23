@@ -273,25 +273,6 @@ export function registerAuthRegistryExtensionsRoutes(authenticated: Hono, deps: 
     return service.setExtensionActivationTarget(extensionId, enabled);
   };
 
-  /** Backward-compatible endpoint used by older gateway consoles. */
-  authenticated.post('/api/extensions/bundled/activation', strictRateLimitMiddleware, async (c) => {
-    const body = (await c.req.json().catch(() => null)) as
-      | { extensionId?: unknown; enabled?: unknown }
-      | null;
-    const extensionId = typeof body?.extensionId === 'string' ? body.extensionId.trim() : '';
-    if (!extensionId) {
-      return c.json({ ok: false, error: { message: 'extensionId is required' } }, 400);
-    }
-    if (typeof body?.enabled !== 'boolean') {
-      return c.json({ ok: false, error: { message: 'enabled must be a boolean' } }, 400);
-    }
-    const result = await updateExtensionActivation(extensionId, body.enabled);
-    if (!result.ok) {
-      return c.json({ ok: false, error: { message: result.error ?? 'Request failed' } }, 400);
-    }
-    return c.json({ ok: true, payload: { requiresGatewayRestart: result.requiresGatewayRestart } });
-  });
-
   /** Enable/disable any discovered native extension. */
   authenticated.post('/api/extensions/:id/activation', strictRateLimitMiddleware, async (c) => {
     const body = (await c.req.json().catch(() => null)) as

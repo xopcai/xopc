@@ -137,7 +137,7 @@ describe('TaskCollaborationRepository', () => {
     insertSessionInput({ id: 'executing-input', conversationId: conversation.key,
       clientMessageId: `task:${created.runId}`, requestedDelivery: 'next', effectiveDelivery: 'next',
       status: 'queued', content: 'Research', taskRunId: created.runId,
-      origin: { type: 'system', source: 'workflow' } });
+      origin: { type: 'system', source: 'task' } });
     expect(runs.nextAgentInputClientMessageId(created.runId)).toBe(`task:${created.runId}`);
     const submit = vi.fn(async () => true);
     expect(await new TaskCollaborationDelivery().drain(submit)).toBe(0);

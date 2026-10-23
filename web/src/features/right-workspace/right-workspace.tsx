@@ -17,7 +17,6 @@ import { useLocaleStore } from '@/stores/locale-store';
 import { EMPTY_WORKSPACE_PANE, useRightWorkspaceStore, type FileTab } from '@/stores/right-workspace-store';
 import { useSideChatStore } from '@/stores/side-chat-store';
 import { useTerminalPanelStore } from '@/stores/terminal-panel-store';
-import { useWorkspacePanelStore } from '@/stores/workspace-panel-store';
 import { useWorkspacePreviewStore } from '@/stores/workspace-preview-store';
 import { useWorkspaceNavigation } from './workspace-navigation';
 import { useWorkspaceMotion } from './use-workspace-motion';
@@ -112,23 +111,12 @@ export function RightWorkspace({ scope, enabled = true, elevated = false, onDock
     return () => { observer?.disconnect(); window.removeEventListener('resize', update); };
   }, []);
   useEffect(() => {
-    const missingScopes = new Set(sideTabs.map((t) => t.parentConversationId).filter((owner) => !useRightWorkspaceStore.getState().panes[owner]));
     for (const tab of sideTabs) {
       if (!useRightWorkspaceStore.getState().panes[tab.parentConversationId]?.tabs.some((t) => t.id === `side:${tab.id}`)) {
         store.addSideChat(tab.id, tab.title, tab.parentConversationId, false);
       }
     }
-    for (const owner of missingScopes) {
-      const legacy = useSideChatStore.getState().panes[owner];
-      if (legacy?.open) store.activate(legacy.activeId ? `side:${legacy.activeId}` : null, owner);
-    }
   }, [sideTabs, store]);
-  const migratedPanel = useRef(false);
-  useEffect(() => {
-    if (migratedPanel.current) return;
-    migratedPanel.current = true;
-    if (!useRightWorkspaceStore.getState().panes[scope] && useWorkspacePanelStore.getState().open) store.openFiles(scope);
-  }, [scope, store]);
   useEffect(() => { setTreeOverlay(false); }, [pane.activeId, scope]);
   useEffect(() => { if (canSplitTree) setTreeOverlay(false); }, [canSplitTree]);
   useEffect(() => { setSaveFailed(null); setDiscardRequested(false); setBrowserError(''); }, [scope]);

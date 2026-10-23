@@ -92,7 +92,7 @@ describe('SessionStore', () => {
       defaults: {
         models: { chat: { primary: 'test/test-model', fallbacks: [] }, intents: {} },
         skills: { mode: 'all-enabled', exclude: [] },
-        tools: {}, workflows: {}, runtime: {},
+        tools: {}, runtime: {},
       },
       agents: [
         { id: 'coder', enabled: true, workspace: join(tempDir, 'coder') },

@@ -8,7 +8,7 @@ Implemented on 2026-09-18. Device acceptance is still pending.
 - Open management from the chat drawer, Personal → Connection, or Settings → Connection.
 - Add through the existing QR/invitation flow, rename locally, switch, or remove a local connection with confirmation.
 - Validate a candidate's identity, credentials and `/api/status` before publishing it. Failure retains the previous active profile.
-- Persist the active selection and automatically migrate the legacy single profile, refresh token and pending refresh journal without re-pairing.
+- Persist the active selection in the current gateway catalog. Retired single-profile records and credentials are not imported.
 - Gateway-scoped credentials and identity pins use the existing encrypted Asset Store. Removing one profile does not clear shared device/endpoint keys or other profiles.
 - Existing main-conversation, model-selection and chat-draft storage is already Gateway-scoped and remains in use.
 - Opening management unmounts the old home; switching resets realtime subscriptions/cursors and push UI state. Returning recreates the home with the current profile.
@@ -17,7 +17,7 @@ Implemented on 2026-09-18. Device acceptance is still pending.
 
 ## Verification
 
-Host tests cover legacy migration, repeated restore, multiple profiles, rename, identity-pin retention, removal/fallback, A/B/A switching, failed candidate verification, concurrent activation, old 401 responses, old authentication in flight, pairing cancellation, realtime orchestration, media resolution and file-picker isolation. Existing real Gateway pairing/auth route tests also run.
+Host tests cover current catalog restore, repeated restore, multiple profiles, rename, identity-pin retention, removal/fallback, A/B/A switching, failed candidate verification, concurrent activation, old 401 responses, old authentication in flight, pairing cancellation, realtime orchestration, media resolution and file-picker isolation. Existing real Gateway pairing/auth route tests also run.
 
 Local Debug/Release compilation and the repository CodeLinter configuration are used. Compiler SDK warnings are not equivalent to CodeLinter diagnostics.
 

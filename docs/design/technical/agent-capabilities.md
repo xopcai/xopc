@@ -14,7 +14,6 @@ This keeps large or sensitive authoring tools out of unrelated conversations whi
 | --- | --- | --- |
 | `desktop-pet-authoring` | Create, repair, and update desktop pet packages. | `until-complete` |
 | `automation-authoring` | Create or update reminders, monitors, and recurring automations. | `until-complete` |
-| `workflow-authoring` | Design, validate, and run workflows. | `until-complete` |
 | `extension-authoring` | Scaffold, inspect, and package plugins or extensions. | `until-complete` |
 | `skill-authoring` | Create, edit, inspect, and maintain skills. | `until-complete` |
 | `visual-asset-authoring` | Generate and inspect images, icons, sprites, and visual assets. | `session` |

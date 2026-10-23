@@ -63,7 +63,7 @@ function isAuthorizedTopic(topic: string, scopes: readonly GatewayScope[]): bool
   }
   if (topic.startsWith('run:')) return hasGatewayScope(scopes, 'agents.run');
   if (topic.startsWith('side-chat:')) return hasGatewayScope(scopes, 'agents.run');
-  if (topic.startsWith('workflow:')) return hasGatewayScope(scopes, 'automations.read');
+
   return false;
 }
 

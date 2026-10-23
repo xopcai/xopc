@@ -42,21 +42,6 @@
         "title": "继续下一步：{{nextAction}}",
         "prompt": "继续任务「{{taskTitle}}」已经明确的下一步：“{{nextAction}}”。请核对任务约束后直接推进。",
         "reason": "{{taskTitle}} · 已明确下一步"
-      },
-      "workflowFailure": {
-        "title": "恢复失败的工作流：{{recentFailure}}",
-        "prompt": "工作流「{{workflowName}}」最近失败：“{{recentFailure}}”。请定位失败环节并给出安全的恢复方案。",
-        "reason": "{{workflowName}} · 运行失败"
-      },
-      "workflowNextAction": {
-        "title": "继续工作流：{{nextAction}}",
-        "prompt": "继续工作流「{{workflowName}}」已经明确的下一步：“{{nextAction}}”，先核对已有产物再推进。",
-        "reason": "{{workflowName}} · 已明确下一步"
-      },
-      "workflowReview": {
-        "title": "总结本次运行结果",
-        "prompt": "检查工作流「{{workflowName}}」本次运行的结果和产物，总结已完成内容、验证证据和需要继续处理的事项。",
-        "reason": "{{workflowName}} · 刚刚完成"
       }
     }
   }

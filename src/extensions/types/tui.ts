@@ -291,10 +291,6 @@ export interface TuiOverlayHandle {
 
 export type TuiCustomFactoryResult = TuiCustomComponent | Promise<TuiCustomComponent>;
 
-export type TuiCustomLegacyFactory<T> = (
-  done: (result: T) => void,
-) => TuiCustomFactoryResult;
-
 export type TuiCustomFullFactory<T> = (
   tui: unknown,
   theme: unknown,
@@ -302,7 +298,7 @@ export type TuiCustomFullFactory<T> = (
   done: (result: T) => void,
 ) => TuiCustomFactoryResult;
 
-export type TuiCustomFactory<T> = TuiCustomLegacyFactory<T> | TuiCustomFullFactory<T>;
+export type TuiCustomFactory<T> = TuiCustomFullFactory<T>;
 
 export interface TuiCustomOptions {
   /** xopc currently renders custom components as overlays. */

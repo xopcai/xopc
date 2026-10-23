@@ -13,7 +13,6 @@ Open the URL printed in the terminal, normally `http://127.0.0.1:18790`. If the 
 ## What you can do
 
 - start and resume Chat Sessions;
-- manage Agents, Projects, Tasks, Workflows, and Automations;
 - configure models, tools, channels, connectors, Skills, MCP, and extensions;
 - inspect health, logs, updates, and remote access.
 

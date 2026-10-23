@@ -1325,7 +1325,7 @@ export struct XopcChatView {
                   XopcChatMessageContent({ row: item.item, onReading: (): void => { this.atBottom = false; this.initialScrollPending = false; clearTimeout(this.scrollTimer); this.scrollTimer = -1; }, animateStreaming: item.item.live === true && this.atBottom && this.activePage && this.layout.foreground && !this.layout.reduceMotion, conversationId: this.chat.selectedId, disclosure: this.disclosure,
                     previewEligible: item.item.id !== this.latestMessageId,
                     onShowMore: (row: XopcChatRow): void => { this.openMessageDetail(row); },
-                    reasoning: this.context.config?.reasoningLevel || 'on', onNavigate: this.onNavigate,
+                    reasoning: this.context.config?.activityDetail?.effective || 'on', onNavigate: this.onNavigate,
                     onFillDraft: (text: string): void => { this.fillProductDraft(text); } })
                 }.id('chat-user-bubble-' + item.item.id).width(this.userBubbleWidth(item.item))
                   .constraintSize({ minWidth: 44, maxWidth: item.item.sendState === 'sending' || item.item.sendState === 'failed' ? '78%' : '84%' })
@@ -1356,7 +1356,7 @@ export struct XopcChatView {
                   onShowMore: (row: XopcChatRow): void => { this.openMessageDetail(row); },
                   onShowExecution: (row: XopcChatRow): void => { this.openExecutionDetail(row); },
                   runStartedAtMs: this.chat.runStartedAtMs, connection: this.chat.connection, showWaiting: false,
-                  reasoning: this.context.config?.reasoningLevel || 'on', onNavigate: this.onNavigate,
+                  reasoning: this.context.config?.activityDetail?.effective || 'on', onNavigate: this.onNavigate,
                   onFillDraft: (text: string): void => { this.fillProductDraft(text); } })
               }.id('chat-assistant-card-' + item.item.id).width(this.assistantBubbleWidth(item.item))
                 .constraintSize({ minWidth: 64, maxWidth: '90%' })
@@ -1377,7 +1377,7 @@ export struct XopcChatView {
           } else {
             Column({ space: 2 }) {
               XopcChatMessageContent({ row: item.item, onReading: (): void => { this.atBottom = false; this.initialScrollPending = false; clearTimeout(this.scrollTimer); this.scrollTimer = -1; }, animateStreaming: item.item.live === true && this.atBottom && this.activePage && this.layout.foreground && !this.layout.reduceMotion, conversationId: this.chat.selectedId, disclosure: this.disclosure,
-                reasoning: this.context.config?.reasoningLevel || 'on', onNavigate: this.onNavigate,
+                reasoning: this.context.config?.activityDetail?.effective || 'on', onNavigate: this.onNavigate,
                 onFillDraft: (text: string): void => { this.fillProductDraft(text); } })
             }.width('100%').alignItems(HorizontalAlign.Start)
           }
@@ -1900,7 +1900,7 @@ export struct XopcChatView {
         Column() {
           if (this.messageDetailContentReady) {
             XopcChatMessageContent({ row: this.messageDetailRow, conversationId: this.chat.selectedId,
-              disclosure: this.disclosure, textSelectable: true, reasoning: this.context.config?.reasoningLevel || 'on',
+              disclosure: this.disclosure, textSelectable: true, reasoning: this.context.config?.activityDetail?.effective || 'on',
               onShowExecution: (row: XopcChatRow): void => { this.messageDetailOpen = false; this.openExecutionDetail(row); },
               onNavigate: (route: XopcMobileRoute): void => { this.navigateFromMessageDetail(route); },
               onFillDraft: (text: string): void => { this.fillDraftFromMessageDetail(text); } })

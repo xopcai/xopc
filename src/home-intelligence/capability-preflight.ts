@@ -1,3 +1,4 @@
+import { preflightConnectorRequirements } from '../connectors/requirements-preflight.js';
 import type {
   HomeCapabilityBlocker,
   HomeCapabilityPreflight,
@@ -5,7 +6,6 @@ import type {
 } from '@xopcai/gateway-contract';
 
 import type { Config } from '../config/schema.js';
-import { preflightConnectorRequirements } from '../connectors/workflow-preflight.js';
 import { listConnectorInstances } from '../connectors/instances.js';
 import type { AgentSkillUnavailableReason } from '../agent/agent-manager.js';
 import type { HomeCapabilityInventory } from './types.js';

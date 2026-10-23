@@ -254,7 +254,6 @@ export async function patchVoiceSettings(state: VoiceSettingsState, capability: 
     method: 'PATCH',
     body: JSON.stringify({
       ...(expectedRevision ? { expectedVoiceRevision: { capability, revision: expectedRevision } } : {}),
-      ...(capability === 'transcription' || capability === 'conversation' ? { voicePatchMode: 'merge' } : {}),
       ...(capability === 'transcription' ? { stt: toSttPayload(state.stt) } : {}),
       ...(capability === 'speech' ? { tts: toTtsPayload(state.tts) } : {}),
       ...(capability === 'conversation' ? { voice: { realtime: state.voice.realtime } } : capability === 'transcription' ? { voice: { language: state.voice.language, languageMode: state.voice.languageMode, input: state.voice.input } } : {}),

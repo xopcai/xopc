@@ -88,7 +88,7 @@ function tryParseStructuredPayload(text: string): AgentRunErrorPayload | null {
 /**
  * Map a raw agent/LLM error into a structured JSON payload the web UI can render
  * as an actionable, i18n-friendly card. Falls back to plain `Error: <raw>` when
- * the input is already a legacy gateway string.
+ * the provider supplied an unstructured error.
  */
 export function formatAgentRunErrorForClient(
   rawError: string,

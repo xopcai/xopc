@@ -91,7 +91,7 @@ export interface GlobalSessionStats {
   byChannel: Record<string, number>;
 }
 
-export type SessionType = 'chat' | 'workflow-run' | 'workflow-subagent' | 'cron' | 'heartbeat';
+export type SessionType = 'subagent' | 'chat' | 'cron' | 'heartbeat';
 
 /** Session metadata (stored in index) */
 export interface SessionMetadata {
@@ -111,7 +111,7 @@ export interface SessionMetadata {
   sourceChannel: string;
   sourceChatId: string;
   customData?: Record<string, unknown>;
-  /** Optional project grouping for sessions, Tasks, workflows, and related context. */
+  /** Optional project grouping for sessions, Tasks, and related context. */
   projectId?: string;
   /** Routing metadata */
   routing?: SessionRoutingMeta;
@@ -124,10 +124,6 @@ export interface SessionMetadata {
   sessionType: SessionType;
   hiddenFromSessionList?: boolean;
   parentConversationId?: string;
-  workflowRunId?: string;
-  workflowDefinitionId?: string;
-  workflowAgentId?: string;
-  workflowAgentLabel?: string;
   /** Active OpenClaw-style session instance id. Rotates on reset while `key` stays stable. */
   transcriptId?: string;
   /** Workspace/cwd recorded for the active transcript. */

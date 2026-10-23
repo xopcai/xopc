@@ -1,0 +1,68 @@
+[
+  {
+    "path": "/health",
+    "status": 200,
+    "contentType": "application/json",
+    "htmlFallback": false
+  },
+  {
+    "path": "/api/sessions",
+    "status": 200,
+    "contentType": "application/json",
+    "htmlFallback": false
+  },
+  {
+    "path": "/api/tasks",
+    "status": 200,
+    "contentType": "application/json",
+    "htmlFallback": false
+  },
+  {
+    "path": "/api/projects",
+    "status": 200,
+    "contentType": "application/json",
+    "htmlFallback": false
+  },
+  {
+    "path": "/api/automations",
+    "status": 200,
+    "contentType": "application/json",
+    "htmlFallback": false
+  },
+  {
+    "path": "/api/home",
+    "status": 200,
+    "contentType": "application/json",
+    "htmlFallback": false
+  },
+  {
+    "path": "/api/workflows/definitions",
+    "status": 404,
+    "contentType": "application/json",
+    "htmlFallback": false
+  },
+  {
+    "path": "/api/workflows/runs",
+    "status": 404,
+    "contentType": "application/json",
+    "htmlFallback": false
+  },
+  {
+    "path": "/api/workflows/drafts",
+    "status": 404,
+    "contentType": "application/json",
+    "htmlFallback": false
+  },
+  {
+    "path": "/api/workflows/project-presets",
+    "status": 404,
+    "contentType": "application/json",
+    "htmlFallback": false
+  },
+  {
+    "path": "/api/workflows/stats",
+    "status": 404,
+    "contentType": "application/json",
+    "htmlFallback": false
+  }
+]

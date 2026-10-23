@@ -11,7 +11,6 @@ export type ConnectorCapability =
   | 'events'
   | 'ui'
   | 'memory_source'
-  | 'workflows'
   | 'auth.apiKey'
   | 'auth.oauth'
   | 'runtime.mcp.stdio'

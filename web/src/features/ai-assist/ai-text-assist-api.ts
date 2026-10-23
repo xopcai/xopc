@@ -4,14 +4,7 @@ import { apiUrl } from '@/lib/url';
 export type TextAssistIntent = 'improve' | 'expand' | 'shorten' | 'fix';
 export type TextAssistFormat = 'markdown' | 'plain';
 export type TextAssistScenario =
-  | 'generic.text'
-  | 'cron.message'
-  | 'cron.workflowGoal'
-  | 'workflow.arg'
-  | 'workflow.goal'
-  | 'automation.instruction'
-  | 'automation.workflowGoal'
-  | 'automation.workflowInput';
+  'generic.text' | 'cron.message' | 'automation.instruction';
 
 export interface TextAssistRequest {
   scenario?: TextAssistScenario;

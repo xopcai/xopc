@@ -21,7 +21,7 @@ describe('agent model intents', () => {
           reasoning: { primary: 'anthropic/claude-sonnet-4', fallbacks: ['openai/gpt-4.1'] },
         },
       },
-      skills: { mode: 'selected', include: [] }, tools: {}, workflows: {}, runtime: {},
+      skills: { mode: 'selected', include: [] }, tools: {}, runtime: {},
     },
     agents: [{
       id: 'research',

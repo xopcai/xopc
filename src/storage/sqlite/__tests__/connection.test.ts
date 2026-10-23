@@ -54,6 +54,9 @@ describe('openXopcDatabase', () => {
     expect(readSchemaVersionForTest(opened.db)).toBe(XOPC_DB_SCHEMA_VERSION);
 
     const tables = listTableNames(dbPath);
+    expect(opened.db.prepare("SELECT name FROM sqlite_master WHERE lower(coalesce(sql, '')) LIKE '%workflow%'").all()).toEqual([]);
+    expect(opened.db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
+    expect(opened.db.prepare('PRAGMA integrity_check').get()).toEqual({ integrity_check: 'ok' });
     expect(tables).toEqual(
       expect.arrayContaining([
         'schema_meta',

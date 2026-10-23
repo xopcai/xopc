@@ -46,7 +46,7 @@ beforeEach(async () => {
     override: { id: 'coder', enabled: true, profile: { name: 'Coder', language: 'custom-language' } },
     effective: { id: 'coder', enabled: true, workspace: '/workspace',
       models: { chat: { primary: 'test/model', fallbacks: [] }, intents: {} },
-      skills: { mode: 'all-enabled', exclude: [] }, tools: {}, workflows: {}, runtime: {} }, sources: {},
+      skills: { mode: 'all-enabled', exclude: [] }, tools: {}, runtime: {} }, sources: {},
   };
   api.listFiles.mockResolvedValue({ files: ['SOUL.md', 'AGENTS.md', 'TOOLS.md'].map(name => ({ name, missing: false })) });
   api.readFile.mockImplementation(async (_id: string, file: string) => `---\nkeep: true\n---\nOriginal ${file}`);

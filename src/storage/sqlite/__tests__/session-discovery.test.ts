@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { resolveSessionIdentity, SESSION_PURPOSES, SESSION_SOURCES } from '@xopcai/gateway-contract';
+
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { SessionStatus } from '../../../session/types.js';
@@ -27,31 +27,6 @@ describe('session discovery across stored history', () => {
   function seed(id: string, metadata: SessionMetadataSeed) {
     return ensureSessionRecord(randomUUID(), dir, { agentId: metadata.routing?.agentId ?? 'main', name: id, sourceChannel: 'webchat', hiddenFromSessionList: false, ...metadata });
   }
-
-  it('uses identical creation identities for icons and SQL filters, including automation workflows', () => {
-    const rows = [
-      seed('web', {}), seed('alias', { sourceChannel: ' UI ' }),
-      seed('extension', { customData: { createdSurface: 'browser_extension' } }),
-      seed('terminal', { sourceChannel: 'tui' }), seed('telegram', { sourceChannel: 'telegram' }),
-      seed('wechat', { sourceChannel: 'weixin' }), seed('feishu', { sourceChannel: 'lark' }),
-      seed('api', { sourceChannel: 'mcp' }), seed('unknown', { sourceChannel: 'custom-channel' }),
-      seed('automation', { sourceChannel: 'automation', sessionType: 'chat' }),
-      seed('workflow', { sourceChannel: 'workflow', sessionType: 'workflow-run', customData: { triggerSource: 'automation' } }),
-      seed('subtask', { sessionType: 'workflow-subagent' }),
-      seed('heartbeat', { sessionType: 'heartbeat' }), seed('legacy-cron', { sessionType: 'cron' }),
-      seed('web-browser-tool', { customData: { tools: ['browser_use'] } }),
-    ];
-    for (const source of SESSION_SOURCES) {
-      expect(listSessionMetadata({ sources: [source], limit: 100 }).items.map((r) => r.key).sort())
-        .toEqual(rows.filter((r) => resolveSessionIdentity(r).source === source).map((r) => r.key).sort());
-    }
-    for (const purpose of SESSION_PURPOSES) {
-      expect(listSessionMetadata({ purposes: [purpose], limit: 100 }).total)
-        .toBe(rows.filter((r) => resolveSessionIdentity(r).purpose === purpose).length);
-    }
-    expect(listSessionMetadata({ activity: 'automatic' }).total).toBe(4);
-    expect(listSessionMetadata({ activity: 'manual', sources: ['workbench'] }).total).toBe(3);
-  });
 
   it('applies OR within a dimension and AND across dimensions before counting and pagination', () => {
     const old = new Date(Date.now() - 90 * 86_400_000).toISOString();

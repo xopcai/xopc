@@ -68,7 +68,7 @@ export class SessionIndex extends EventEmitter {
   async listSubagents(query: SessionListQuery = {}): Promise<PaginatedResult<SessionMetadata>> {
     return this.store.list({
       ...query,
-      sessionTypes: ['workflow-subagent'],
+      sessionTypes: [],
       includeHidden: true,
     });
   }

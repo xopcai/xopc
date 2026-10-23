@@ -75,7 +75,7 @@ export async function runGatewayFromCliOptions(
     import('../../../bootstrap/application-state.js'),
   ]);
   const { checkPortAvailable, forceFreePortAndWait } = gatewayPorts;
-  bootstrap.bootstrapApplicationStateSync(ctx.configPath);
+  bootstrap.bootstrapApplicationStateSync();
   const config = loadConfig(ctx.configPath);
 
   const bindFromFlagRaw =

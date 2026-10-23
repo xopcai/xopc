@@ -12,7 +12,7 @@ import {
 import {
   XOPC_CUSTOM_AVATAR,
   parseXopcDicebearValue,
-  type StoredDicebearStyleId,
+  type DicebearStyleId,
 } from './agent-avatar-dicebear-value';
 
 function hashString(value: string): number {
@@ -34,7 +34,7 @@ type ResolvedAvatar =
   | { kind: 'sync'; src: string }
   | { kind: 'loopi'; mood: LoopiMood }
   | { kind: 'authenticated'; url: string; fallbackSrc: string }
-  | { kind: 'dicebear'; styleId: StoredDicebearStyleId; seed: string; fallbackSrc: string };
+  | { kind: 'dicebear'; styleId: DicebearStyleId; seed: string; fallbackSrc: string };
 
 function resolveAvatar(
   agentId: string,

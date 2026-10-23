@@ -190,7 +190,7 @@ struct HomeAction: Decodable, Identifiable, Sendable {
             return HomeActionCommand(kind: "connector_approval", runId: nil, approvalId: approvalId, decision: decision)
         }
         if type == "retry_run" || type == "acknowledge_run", let runId, let subjectKind,
-           subjectKind == "automation_run" || subjectKind == "workflow_run"
+           subjectKind == "automation_run"
         {
             return HomeActionCommand(kind: subjectKind, runId: runId, approvalId: nil, decision: nil)
         }
@@ -452,7 +452,6 @@ struct AutomationRunRecord: Decodable, Identifiable, Sendable {
     let summary: String?
     let error: String?
     let conversationId: String?
-    let workflowRunId: String?
     let createdAtMs: Int64
     let startedAtMs: Int64?
     let endedAtMs: Int64?

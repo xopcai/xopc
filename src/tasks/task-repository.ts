@@ -15,7 +15,7 @@ import type {
 
 import { getSqliteDatabase, runSqliteWriteTransaction } from '../storage/sqlite/transaction.js';
 
-export type TaskExecutionSource = 'chat' | 'cli' | 'cron' | 'workflow' | 'channel' | 'api';
+export type TaskExecutionSource = 'chat' | 'cli' | 'cron' | 'channel' | 'api';
 export type TaskUiLocale = 'en' | 'zh';
 export type TaskAggregate = Task;
 

@@ -12,7 +12,6 @@ The intended flow is progressive: capture the thought first, clarify its relatio
 | Keep one result moving across time | Task |
 | Share context across several related Tasks | Project |
 | Save source material or an artifact | Note or workspace file |
-| Repeat a defined sequence | Workflow |
 | Start work on a schedule or event | Automation |
 
 ## Create a useful Task
@@ -42,11 +41,9 @@ For a product release:
 1. Create a Project for release context and reference files.
 2. Create Tasks for the distinct verifiable results, such as “publish package” and “send release announcement”.
 3. Define completion checks for each Task.
-4. Use a Workflow only for a sequence you expect to repeat.
 5. Add an Automation only if timing or an external trigger matters.
 6. Close a Task after reviewing the result, not just after an Agent run stops.
 
-Continue with [The Task Loop](./concepts/loops.md), [Workflows](./workflows.md), and [Automations](./automations.md).
 
 ## Review results and retry from the workbench
 

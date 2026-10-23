@@ -17,8 +17,6 @@ import {
   formatTuiTranscriptTreeInfo,
   formatTuiTrustInfo,
   formatTuiUsageInfo,
-  formatTuiWorkflowDetail,
-  formatTuiWorkflowsInfo,
   parseTuiExportRequest,
   parseTuiImportRequest,
 } from '../tui-command-formatters.js';
@@ -38,7 +36,6 @@ it('exposes native usage and context commands', () => {
     expect(commands).toContain('import');
     expect(commands).toContain('btw');
     expect(commands).toContain('review');
-    expect(commands).toContain('workflow');
     expect(commands).not.toContain('workflows');
     expect(commands).toContain('tree');
     expect(commands).toContain('changelog');
@@ -355,7 +352,6 @@ it('exposes native usage and context commands', () => {
       {
         context: ['AGENTS.md'],
         skills: ['find-skills', 'frontend-design'],
-        workflows: ['audit_repo'],
         connectors: ['github'],
       },
     );
@@ -368,8 +364,6 @@ it('exposes native usage and context commands', () => {
     expect(text).toContain('AGENTS.md');
     expect(text).toContain('[Skills]');
     expect(text).toContain('find-skills');
-    expect(text).toContain('[Workflows]');
-    expect(text).toContain('audit_repo');
     expect(text).toContain('[Connectors]');
     expect(text).toContain('github');
     expect(text).toContain('/export');
@@ -383,24 +377,6 @@ it('exposes native usage and context commands', () => {
 
     expect(text).toContain('openai/gpt-5 — GPT-5');
     expect(text).toContain('anthropic/claude-sonnet-4');
-  });
-
-  it('formats workflow lists and details', () => {
-    const list = formatTuiWorkflowsInfo([
-      {
-        name: 'audit_repo',
-        source: 'builtin',
-        path: null,
-        description: 'Audit a repository',
-        tags: ['code'],
-      },
-    ]);
-    expect(list).toContain('audit_repo (builtin) [code]');
-    expect(list).toContain('Audit a repository');
-
-    const detail = formatTuiWorkflowDetail('audit_repo');
-    expect(detail).toContain('Workflow: audit_repo');
-    expect(detail).toContain('Flow:');
   });
 
   it('formats a compact session list with the current session marked', () => {

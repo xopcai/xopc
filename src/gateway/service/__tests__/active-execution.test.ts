@@ -11,9 +11,9 @@ describe('active execution shutdown policy', () => {
       origin: { type: 'endpoint', endpointId: 'desktop' },
     })).toMatchObject({ kind: 'chat', initiator: 'user', phase: 'running' });
     expect(describeActiveExecution({
-      conversationId: 'workflow', runId: 'run-workflow',
-      origin: { type: 'system', source: 'workflow' }, taskRunId: 'task-run',
-    })).toMatchObject({ kind: 'workflow', initiator: 'user' });
+      conversationId: 'task', runId: 'run-task',
+      origin: { type: 'system', source: 'task' }, taskRunId: 'task-run',
+    })).toMatchObject({ kind: 'task', initiator: 'user' });
     expect(describeActiveExecution({
       conversationId: 'automation', runId: 'run-automation',
       origin: { type: 'system', source: 'automation' },
@@ -29,14 +29,14 @@ describe('active execution shutdown policy', () => {
       conversationId: 'automation', runId: 'run-background',
       origin: { type: 'system', source: 'automation' },
     });
-    const automationWorkflowRun = describeActiveExecution({
-      conversationId: 'automation-workflow', runId: 'run-automation-workflow',
-      origin: { type: 'system', source: 'workflow' },
+    const automationTaskRun = describeActiveExecution({
+      conversationId: 'automation-task', runId: 'run-automation-task',
+      origin: { type: 'system', source: 'task' },
     });
     const sessionIndex = {
       getSession: async (conversationId: string) => {
         if (conversationId === 'chat') return { name: 'Active chat' };
-        if (conversationId === 'automation-workflow') return { customData: { triggerSource: 'automation' } };
+        if (conversationId === 'automation-task') return { customData: { triggerSource: 'automation' } };
         return null;
       },
     } as unknown as SessionIndex;
@@ -45,7 +45,7 @@ describe('active execution shutdown policy', () => {
       getAgentService: () => { throw new Error('unused'); },
       getActiveWebchatRunId: () => undefined,
       listActiveWebchatRuns: () => [],
-      listActiveExecutions: () => [userRun, backgroundRun, automationWorkflowRun],
+      listActiveExecutions: () => [userRun, backgroundRun, automationTaskRun],
     });
 
     await expect(api.getQuitImpact()).resolves.toMatchObject({

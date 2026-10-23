@@ -23,7 +23,6 @@ Screenshots are optional support material, not a dependency for completing a gui
 | P1 | Channels overview with one healthy channel | `docs/public/screenshots/channels.png` | Channels → status explanation |
 | P1 | Remote access overview with sensitive values hidden | `docs/public/screenshots/remote-access.png` | Remote access → method selection |
 | P2 | Automation editor showing trigger and target | `docs/public/screenshots/automation-editor.png` | Automations → creation steps |
-| P2 | Workflow editor with a small three-step workflow | `docs/public/screenshots/workflow-editor.png` | Workflows → creation steps |
 | P2 | Logs page with one filtered request | `docs/public/screenshots/logs-filter.png` | Troubleshooting → logs |
 | P2 | Mobile connection form | `docs/public/screenshots/mobile-connect.png` | Mobile app → connect |
 

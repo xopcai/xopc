@@ -71,7 +71,6 @@ export const AgentManifestSchema = z.object({
   }).strict(),
   entry: z.object({
     instructions: z.string().min(1),
-    workflow: z.string().min(1).optional(),
   }).strict(),
   models: z.object({
     intents: z.array(z.enum(['fast', 'reasoning', 'coding', 'review', 'vision', 'understanding'])),

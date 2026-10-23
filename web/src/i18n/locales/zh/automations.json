@@ -21,7 +21,6 @@
     "paused": "已暂停",
     "last": "上次",
     "next": "下次",
-    "workflowPrefix": "工作流",
     "loading": "正在加载...",
     "selectRun": "选择一次运行查看结果。",
     "timeline": "技术记录",
@@ -79,7 +78,6 @@
     },
     "sources": {
       "agent": "智能体",
-      "workflow": "工作流",
       "task": "任务",
       "browser": "浏览器"
     },
@@ -116,7 +114,6 @@
       "resultPending": "正在执行，结果完成后会显示在这里。你也可以进入对话查看实时进度。",
       "noResult": "本次运行没有返回可展示的结果。",
       "openConversation": "查看完整对话",
-      "openWorkflow": "查看工作流运行",
       "runInfo": "运行信息",
       "technicalEvents": "技术记录",
       "technicalEventsDescription": "用于排查问题的系统事件和原始数据，日常使用无需查看。",
@@ -171,10 +168,7 @@
       "noteCreatedPrompt": "当创建新笔记时，运行智能体对笔记分类、识别有用的后续行动，并总结可能的任务。触发条件使用 notes 来源的 note.created 事件。保持安全：默认只输出简短建议，除非用户后续确认，否则不要自动改写笔记。",
       "taskBlockedTitle": "自动诊断阻塞",
       "taskBlockedDescription": "当这个结果被阻塞时，让智能体诊断原因并给出下一步具体行动。",
-      "taskBlockedPrompt": "当任务因阻塞需要关注时，运行智能体诊断原因并给出下一步具体行动。触发条件使用 tasks 来源的 task.attention_required.v2 事件，payloadMatch reason=blocked。参考任务标题：{{title}}。除非用户明确配置，否则不要自动修改任务。",
-      "workflowFailedTitle": "自动处理失败运行",
-      "workflowFailedDescription": "当这个工作流失败时，让 xopc 检查运行记录并起草修复或重试计划。",
-      "workflowFailedPrompt": "当工作流运行以 failed 状态结束时，运行智能体检查工作流运行、总结失败原因，并提出恢复计划。触发条件使用 workflows 来源的 workflow.run.completed 事件，payloadMatch status=failed。参考运行 ID：{{runId}}，工作流定义 ID：{{definitionId}}。除非用户明确配置，否则不要自动重试。"
+      "taskBlockedPrompt": "当任务因阻塞需要关注时，运行智能体诊断原因并给出下一步具体行动。触发条件使用 tasks 来源的 task.attention_required.v2 事件，payloadMatch reason=blocked。参考任务标题：{{title}}。除非用户明确配置，否则不要自动修改任务。"
     },
     "explain": {
       "whyRan": "触发来源",
@@ -184,7 +178,6 @@
       "payloadMatched": "匹配条件：{pairs}",
       "noPayloadFilter": "未限制事件内容",
       "actionAgent": "执行智能体任务",
-      "actionWorkflow": "执行工作流 {workflowId}",
       "safetyMode": "安全模式：{mode}",
       "manual": "手动触发",
       "schedule": "定时触发",
@@ -195,7 +188,6 @@
       "title": "相关自动化运行",
       "open": "打开",
       "chat": "会话",
-      "workflow": "工作流",
       "rerun": "重新运行",
       "pause": "暂停自动化",
       "working": "处理中...",
@@ -234,11 +226,6 @@
         "name": "每日智能体简报",
         "description": "让智能体准备每日摘要。",
         "instruction": "准备我的每日简报。"
-      },
-      "morningWorkflow": {
-        "name": "每天早上运行工作流",
-        "description": "按固定的每日计划启动工作流。",
-        "formName": "晨间工作流"
       },
       "webhookAgent": {
         "name": "Webhook 触发智能体",
@@ -322,7 +309,6 @@
       "webhook": "Webhook",
       "taskBlocked": "结果阻塞",
       "noteCreated": "笔记创建",
-      "workflowFailed": "工作流失败",
       "sessionUpdated": "会话更新",
       "customEvent": "自定义产品事件",
       "eventWithType": "当 {type} 事件发生时运行",
@@ -331,16 +317,13 @@
       "webhookWhen": "收到 Webhook 请求时运行",
       "taskBlockedWhen": "当结果变为「阻塞」时运行",
       "noteCreatedWhen": "创建新笔记时运行",
-      "workflowFailedWhen": "工作流运行失败时触发",
       "sessionUpdatedWhen": "会话内容更新时运行"
     },
     "action": {
       "agent": "智能体",
       "agentWithId": "智能体：{id}",
-      "workflowWithId": "工作流：{id}",
       "taskWithId": "任务：{id}",
       "runAgent": "运行智能体",
-      "runWorkflow": "运行工作流",
       "runTask": "执行任务"
     },
     "status": {
@@ -399,9 +382,6 @@
       "noTasks": "暂无可执行任务",
       "taskClosed": "已完成",
       "taskContextHint": "每次执行都会带上任务定义、约束、验收条件以及任务绑定的上下文。",
-      "workflow": "工作流",
-      "loadingWorkflows": "正在加载工作流...",
-      "noWorkflows": "暂无工作流",
       "triggeredRun": "触发时运行",
       "goal": "目标",
       "safety": "安全模式",

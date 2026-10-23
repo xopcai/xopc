@@ -37,8 +37,6 @@
         "task": "Task",
         "project": "Project",
         "note": "Note",
-        "workflow_definition": "Workflow",
-        "workflow_run": "Workflow run",
         "automation": "Automation",
         "local_app": "App",
         "chat_preview": "Chat preview",
@@ -101,7 +99,6 @@
         "notes": "Open note",
         "tasks": "Open task",
         "projects": "Open project",
-        "workflows": "Open workflow",
         "automations": "Open automation",
         "open": "Open app",
         "local-apps": "Open app",
@@ -200,21 +197,6 @@
           "title": "Continue the next action: {{nextAction}}",
           "prompt": "Continue the defined next action for task {{taskTitle}}: {{nextAction}}. Check the task constraints, then proceed.",
           "reason": "{{taskTitle}} · next action is known"
-        },
-        "workflowFailure": {
-          "title": "Recover the failed workflow: {{recentFailure}}",
-          "prompt": "Workflow {{workflowName}} recently failed: {{recentFailure}}. Locate the failed stage and propose a safe recovery plan.",
-          "reason": "{{workflowName}} · run failed"
-        },
-        "workflowNextAction": {
-          "title": "Continue the workflow: {{nextAction}}",
-          "prompt": "Continue the defined next action for workflow {{workflowName}}: {{nextAction}}. Check existing outputs before proceeding.",
-          "reason": "{{workflowName}} · next action is known"
-        },
-        "workflowReview": {
-          "title": "Summarize this workflow run",
-          "prompt": "Review the result and outputs from workflow {{workflowName}}. Summarize completed work, verification evidence, and anything that still needs attention.",
-          "reason": "{{workflowName}} · just completed"
         }
       }
     },
@@ -329,8 +311,7 @@
         "speech": { "running": "Generating speech…", "completed": "Generated speech" },
         "structuredOutput": { "running": "Preparing results…", "completed": "Prepared results" },
         "todo": { "running": "Updating task list…", "completed": "Updated task list" },
-        "webExtract": { "running": "Extracting webpage…", "completed": "Extracted webpage" },
-        "workflow": { "running": "Running workflow…", "completed": "Ran workflow" }
+        "webExtract": { "running": "Extracting webpage…", "completed": "Extracted webpage" }
       },
       "actions": {
         "inspect": { "running": "Inspecting {{object}}…", "completed": "Inspected {{object}}" },

@@ -13,7 +13,7 @@ describe('message link routing', () => {
     expect(internalMessageLink('xopc://workspace/file?path=100%2525.html')).toMatchObject({ path: '100%25.html' });
   });
   it.each([['session', 'chat'], ['note', 'notes'], ['task', 'tasks'], ['project', 'projects'],
-    ['automation', 'automations'], ['file', 'files'], ['workflow_run', 'workflows']])('routes %s', (kind, page) => {
+    ['automation', 'automations'], ['file', 'files']])('routes %s', (kind, page) => {
     expect(internalMessageLink(`xopc://open?kind=${kind}&id=a%2Fb`)).toMatchObject({ kind: 'route', page, itemId: 'a/b' });
   });
   it('supports legacy session keys and web route links', () => {

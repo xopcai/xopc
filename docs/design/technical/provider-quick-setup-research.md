@@ -71,7 +71,6 @@ OpenAI 常规连接只需 API Key；阿里云需 API Key 与地域，在原生�
 
 区分供应商品牌、运行时 provider ID、具体连接。新增最小 `ProviderConnection` 元信息：`id`、`vendor`、`runtimeProviderId`、`region?`、`workspaceId?`、`billingMode`、`credentialProfileId`、`endpointOverrides?`。密钥仍存 auth profile，元信息不存原始 Key。
 
-第一阶段只允许每个现有 runtime provider 一个活动连接，沿用 `openai/<id>`、`dashscope-cn/<id>`、`dashscope-intl/<id>`，不重写会话或工作流。多账户、多地域连接的同一模型身份在后续单独设计，不能在尚未支持 connection ID 路由时假装已支持。
 
 明确引用同一个 credential profile 共享 Key；不要向 `dashscope`、`alibaba` 等重复写入密钥，也不要根据品牌盲目回退到其他地域 Key。旧配置中不同 Key 保留为独立覆盖。环境变量继承保留，但新连接地域须明确；兼容性处理不扩大跨地域回退。
 
@@ -130,7 +129,7 @@ OpenAI 常规连接只需 API Key；阿里云需 API Key 与地域，在原生�
 
 1. 新用户 OpenAI 常规配置只填 Key；阿里云填 Key、地域，目录需要时填业务空间。无手填协议和模型 ID。
 2. 一次配置显示多个模型；推荐模型能通过真实推理流输出；换模型不再次输入 Key。
-3. 已有默认值、Agent override、intents、工作流及手工模型元数据保留。
+3. 已有默认值、Agent override、intents及手工模型元数据保留。
 4. 403 目录受限、错误地域、模型无权限、限流、离线、分页失败、Key 轮换均有独立状态，失败不留下部分默认配置。
 5. 已知视觉模型刷新后保留 image input；非聊天模型不进入聊天列表；未知上下文与价格显示未知。
 6. 第二阶段同一连接驱动图像/STT/TTS，不重复持久化 Key，地域不串用；现有独立能力覆盖保留。

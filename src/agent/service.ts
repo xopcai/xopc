@@ -62,10 +62,6 @@ import {
 } from './session/index.js';
 import { AgentOrchestrator, AgentEventHandler } from './orchestration/index.js';
 import {
-  getWorkflowProgressBroker,
-  type BrokerListenerHandle,
-} from './workflow/index.js';
-import {
   AgentManager,
   type AgentSkillAvailabilityPayload,
   type SkillCatalogEntry,
@@ -194,7 +190,6 @@ export class AgentService {
   private sessionLifecycleManager: SessionLifecycleManager;
   private agentOrchestrator: AgentOrchestrator;
   private agentEventHandler: AgentEventHandler;
-  private workflowProgressBrokerHandle: BrokerListenerHandle | null = null;
   private agentManager: AgentManager;
 
   /**
@@ -303,7 +298,6 @@ export class AgentService {
       dispatchTaskEvents: config.dispatchTaskEvents,
       dispatchTaskRuns: config.dispatchTaskRuns,
       onAgentCatalogMutate: config.onAgentCatalogMutate,
-      getWorkflowRunService: config.getWorkflowRunService,
       onSkillsUpdated: config.onSkillsUpdated,
       installSkillFromSource: (opts) => this.installSkillFromSource(opts),
       installSkillFromMarketplace: (opts) => this.installSkillFromMarketplace(opts),
@@ -339,14 +333,6 @@ export class AgentService {
         log.warn(fields, 'Assistant response language did not match the active preference');
       }
     });
-
-    // Wire the workflow progress broker into the session event bus. Channel
-    // extensions self-register their capability against the singleton at
-    // boot; the broker only forwards updates to whatever has registered, so
-    // this is safe even when no channel is configured.
-    this.workflowProgressBrokerHandle = getWorkflowProgressBroker().attachTo(
-      this.agentEventHandler,
-    );
 
     // sessionHydrator is constructed early because AgentOrchestrator + InboundLoop +
     // TurnDispatcher all need it; the SessionConfigService instance below also
@@ -396,7 +382,6 @@ export class AgentService {
       bus,
       sessionStore: this.sessionStore,
       sessionConfigStore: this.sessionConfigStore,
-      getWorkflowRunService: config.getWorkflowRunService,
       applySessionThinkingLevel: (conversationId: string, level: ThinkLevel) => {
         this.agentManager.setThinkingLevel(conversationId, level as ThinkingLevel);
       },
@@ -664,10 +649,6 @@ export class AgentService {
 
   getSkillMarkdownSource(skillName: string): SkillMarkdownPreviewPayload | null {
     return this.agentManager.getSkillMarkdownSource(skillName);
-  }
-
-  getWorkflowSkillInstructions(agentId: string, names: readonly string[]): string | undefined {
-    return this.agentManager.getWorkflowSkillInstructions(agentId, names);
   }
 
   refreshSkillsAfterDiskChange(): void {
@@ -1145,7 +1126,5 @@ export class AgentService {
     this.sessionTracker.dispose();
     this.sessionState.disposeAll();
     this.agentManager.dispose();
-    this.workflowProgressBrokerHandle?.dispose();
-    this.workflowProgressBrokerHandle = null;
   }
 }

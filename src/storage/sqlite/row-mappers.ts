@@ -28,10 +28,6 @@ export type SessionRow = {
   session_type: string | null;
   hidden_from_session_list: number | null;
   parent_conversation_id: string | null;
-  workflow_run_id: string | null;
-  workflow_definition_id: string | null;
-  workflow_agent_id: string | null;
-  workflow_agent_label: string | null;
   project_id: string | null;
   routing_json: string | null;
   custom_data_json: string | null;
@@ -112,10 +108,6 @@ export function sessionRowToMetadata(conversationId: string, row: SessionRow): S
     sessionType: (row.session_type ?? defaults.sessionType) as SessionMetadata['sessionType'],
     hiddenFromSessionList: Boolean(row.hidden_from_session_list),
     parentConversationId: row.parent_conversation_id ?? undefined,
-    workflowRunId: row.workflow_run_id ?? undefined,
-    workflowDefinitionId: row.workflow_definition_id ?? undefined,
-    workflowAgentId: row.workflow_agent_id ?? undefined,
-    workflowAgentLabel: row.workflow_agent_label ?? undefined,
     projectId: row.project_id ?? undefined,
     ...(routing ? { routing } : {}),
     ...(customData ? { customData } : {}),
@@ -155,10 +147,6 @@ export function metadataToSessionInsert(
   sessionType: string;
   hiddenFromSessionList: number;
   parentConversationId: string | null;
-  workflowRunId: string | null;
-  workflowDefinitionId: string | null;
-  workflowAgentId: string | null;
-  workflowAgentLabel: string | null;
   projectId: string | null;
   routingJson: string | null;
   customDataJson: string | null;
@@ -188,10 +176,6 @@ export function metadataToSessionInsert(
     sessionType: metadata.sessionType,
     hiddenFromSessionList: metadata.hiddenFromSessionList ? 1 : 0,
     parentConversationId: metadata.parentConversationId ?? null,
-    workflowRunId: metadata.workflowRunId ?? null,
-    workflowDefinitionId: metadata.workflowDefinitionId ?? null,
-    workflowAgentId: metadata.workflowAgentId ?? null,
-    workflowAgentLabel: metadata.workflowAgentLabel ?? null,
     projectId: metadata.projectId ?? null,
     routingJson: metadata.routing ? JSON.stringify(metadata.routing) : null,
     customDataJson: metadata.customData ? JSON.stringify(metadata.customData) : null,

@@ -19,37 +19,23 @@ export type AutomationTrigger =
     };
 
 export type AutomationAction =
-  | {
+  {
       kind: 'agent';
       agentId?: string;
       instruction: string;
       workingDirectory?: string;
       model?: string;
       timeoutSeconds?: number;
-    }
-  | {
-      kind: 'workflow';
-      workflowId: string;
-      agentId?: string;
-      input?: unknown;
-      inputEnvelope?: unknown;
-      goal?: string;
-      concurrency?: number;
-      maxSubagents?: number;
-      timeoutSeconds?: number;
-    }
-  | {
+    } | {
       kind: 'browser_automation';
       automationId: string;
       inputs?: Record<string, unknown>;
       timeoutSeconds?: number;
-    }
-  | {
+    } | {
       kind: 'task_command';
       taskId: string;
       command: TaskCommand;
-    }
-  | {
+    } | {
       kind: 'system';
       capability: 'home.advisor.refresh' | 'memory.temporal_sweep' | 'memory.daily_reconciliation' | 'memory.weekly_knowledge';
     };
@@ -130,7 +116,6 @@ export interface AutomationRun {
   summary?: string;
   error?: string;
   conversationId?: string;
-  workflowRunId?: string;
   model?: string;
   deadlineAtMs?: number;
   currentPhase?: 'queued' | 'action' | 'cancelling' | 'completed';

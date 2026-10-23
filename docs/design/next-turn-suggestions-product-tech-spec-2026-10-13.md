@@ -14,7 +14,7 @@ xopc 源码已核实的基础：
 
 | 已有能力 | 位置与结论 |
 | --- | --- |
-| 空会话建议 | `packages/gateway-contract/src/welcome-suggestions.ts`，基于项目、任务、工作流状态的模板推荐 |
+| 空会话建议 | `packages/gateway-contract/src/welcome-suggestions.ts`，基于项目、任务状态的模板推荐 |
 | 建议上下文 | `web/src/features/chat/welcome/use-welcome-suggestion-context.ts`；`chat-page.tsx` 仅在消息列表为空时启用 |
 | placeholder / Tab | `composer/chat-composer.tsx`、`chat-composer-input.tsx`，已有空输入 Tab 采纳；仍需统一附件、引用、IME 等守卫 |
 | 个人会话覆盖 | `chat-page.tsx` 给个人助理固定 placeholder；composer 的 `placeholder ?? contextualPlaceholder` 会遮住动态建议 |
@@ -70,7 +70,6 @@ UI 状态优先级：特殊页面指引 > 审批/澄清/编辑/语音/运行态 
 
 1. 当前用户目标、最新约束与纠正，最近 2–4 个完整 turn。
 2. 最后一轮最终回复、真实任务结果、未解决点；排除工具全文、推理文本、日志和转录审计行。
-3. 关联项目/任务/工作流的真实状态、可用能力。
 4. 与当前主题相关的已授权用户 assertion、决策与显式跟进，带 evidence ID、有效期和用途。
 5. 明确的交互偏好；当前 supportNeed 作为弱信号，低置信度不决定推荐。
 6. 同主题、同意图的近期建议采纳/拒绝摘要。首版只读取本地聚合统计。

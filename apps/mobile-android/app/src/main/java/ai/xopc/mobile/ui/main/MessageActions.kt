@@ -91,9 +91,6 @@ internal fun messageLinkTarget(raw: String): ConversationTarget? {
     "chat" -> decoded(1)?.let { ConversationTarget("session", it, it, capabilities = listOf("open")) }
     "sessions" -> decoded(1)?.let { ConversationTarget("session", it, it, capabilities = listOf("open")) }
     "files" -> decoded(1)?.let { ConversationTarget("file", it, it, capabilities = listOf("open")) }
-    "workflows" -> if (segments.getOrNull(1) == "runs") decoded(2)?.let {
-      ConversationTarget("workflow_run", it, it, capabilities = listOf("open"))
-    } else decoded(1)?.let { ConversationTarget("workflow_definition", it, it, capabilities = listOf("open")) }
     "automations" -> decoded(1)?.let { ConversationTarget("automation", it, it, capabilities = listOf("open")) }
       ?: runCatching { URI(value.removePrefix("#")).rawQuery?.split('&')?.firstNotNullOfOrNull { part ->
       part.split('=', limit = 2).takeIf { it.firstOrNull() == "automation" }?.getOrNull(1)

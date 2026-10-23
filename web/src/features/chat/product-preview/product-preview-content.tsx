@@ -7,9 +7,6 @@ import { automationTriggerLabel } from '@/features/automations/automation-displa
 import { getLocalApp, getLocalAppSnapshot } from '@/features/local-apps/api';
 import { localAppOpenRoute } from '@/features/local-apps/open-route';
 import { fetchProject } from '@/features/projects/api';
-import { getWorkflowRun, listWorkflowDefinitions } from '@/features/workflows/workflow-api';
-import { resolveWorkflowLocalizedCopy } from '@/features/workflows/workflow-meta-locale';
-import { isWorkflowResultEnvelope, workflowResultToMarkdown } from '@/features/workflows/workflow-page.utils';
 import { messages } from '@/i18n/messages';
 import { apiUrl } from '@/lib/url';
 import { useGatewayStore } from '@/stores/gateway-store';
@@ -21,11 +18,6 @@ import type { ProductPreviewTarget } from './product-preview-route';
 async function loadPreview(target: ProductPreviewTarget) {
   switch (target.kind) {
     case 'project': return { kind: target.kind, value: await fetchProject(target.id) } as const;
-    case 'workflow_run': return { kind: target.kind, value: await getWorkflowRun(target.id, { ownerAgentId: target.ownerAgentId }) } as const;
-    case 'workflow_definition': {
-      const definitions = await listWorkflowDefinitions();
-      return { kind: target.kind, value: definitions.find((item) => item.id === target.id || item.name === target.id) } as const;
-    }
     case 'automation': {
       const [list, history] = await Promise.all([automationApi.list(), automationApi.runs(5, target.id)]);
       return { kind: target.kind, value: list.automations.find((item) => item.id === target.id), runs: history.runs } as const;
@@ -52,8 +44,7 @@ export default function ProductPreviewContent({ target }: { target: ProductPrevi
   const stateLabel = (state: string) => STATES[state]?.[zh ? 0 : 1] || state;
   const { data, error, isLoading } = useSWR(['chat-product-preview', target.href, token], () => loadPreview(target), {
     shouldRetryOnError: false,
-    refreshInterval: (latest) => latest?.kind === 'workflow_run' && ['queued', 'running'].includes(latest.value.run.status) ? 3000
-      : latest?.kind === 'automation' && latest.value?.state.runningRunId ? 3000 : 0,
+    refreshInterval: (latest) => latest?.kind === 'automation' && latest.value?.state.runningRunId ? 3000 : 0,
   });
   if (isLoading) return <ProductPreviewSkeleton />;
   if (error) return <p role="alert" className="text-sm text-fg-muted">{zh ? '无法加载内容，它可能已删除或暂时不可用。' : 'Unable to load this content. It may have been deleted or be temporarily unavailable.'}</p>;
@@ -72,25 +63,11 @@ export default function ProductPreviewContent({ target }: { target: ProductPrevi
       {project.recentUpdates?.[0] && <section className={sectionClass}><h3 className="font-medium text-fg">{zh ? '最近进展' : 'Latest update'}</h3>{markdown(project.recentUpdates[0].summary)}</section>}
     </div>;
   }
-  if (data.kind === 'workflow_run') {
-    const { run, phases } = data.value;
-    return <div className="space-y-6">
-      <div className={sectionClass}><h2 className={headingClass}>{run.title}</h2><p className={metaClass}>{stateLabel(run.status)}{run.metrics ? ` · ${run.metrics.doneAgentCount}/${run.metrics.agentCount} ${zh ? '执行单元完成' : 'agents completed'}` : ''}</p></div>
-      {run.error && <p role="alert" className="rounded-lg border border-edge p-3 text-sm text-danger">{run.error.message}</p>}
-      {isWorkflowResultEnvelope(run.result) ? markdown(workflowResultToMarkdown(run.result)) : <p className={metaClass}>{zh ? '尚无运行结果。' : 'No result yet.'}</p>}
-      {phases.length > 0 && <section className={sectionClass}><h3 className="font-medium text-fg">{zh ? '运行进度' : 'Progress'}</h3>{phases.map((phase) => <p key={phase.id} className={metaClass}>{phase.title} · {stateLabel(phase.status)}</p>)}</section>}
-    </div>;
-  }
-  if (data.kind === 'workflow_definition') {
-    const definition = data.value;
-    const localized = resolveWorkflowLocalizedCopy(definition, language);
-    return <div className="space-y-6"><h2 className={headingClass}>{localized.title}</h2>{markdown(localized.description)}{markdown(localized.whenToUse)}
-      {definition.phases.length > 0 && <section className={sectionClass}><h3 className="font-medium text-fg">{zh ? '执行阶段' : 'Phases'}</h3>{definition.phases.map((phase) => <div key={phase.id}><h4 className="text-sm font-medium text-fg">{phase.title}</h4>{markdown(phase.description)}</div>)}</section>}
-    </div>;
-  }
+
+
   if (data.kind === 'automation') {
     const automation = data.value;
-    const instruction = automation.action.kind === 'agent' ? automation.action.instruction : automation.action.kind === 'workflow' ? automation.action.goal : undefined;
+    const instruction = automation.action.kind === 'agent' ? automation.action.instruction : undefined;
     return <div className="space-y-6"><div className={sectionClass}><h2 className={headingClass}>{automation.name}</h2><p className={metaClass}>{automation.enabled ? (zh ? '已启用' : 'Enabled') : (zh ? '已停用' : 'Disabled')} · {automationTriggerLabel(automation.trigger, labels.automations, labels.cron, language)}</p>{markdown(automation.description)}{markdown(instruction)}
       {automation.state.nextRunAtMs && <p className={metaClass}>{zh ? '下次运行' : 'Next run'} · {new Date(automation.state.nextRunAtMs).toLocaleString(zh ? 'zh-CN' : 'en-US')}</p>}
       {automation.state.lastError && <p role="alert" className="text-sm text-danger">{automation.state.lastError}</p>}</div>

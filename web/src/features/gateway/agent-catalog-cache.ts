@@ -5,8 +5,6 @@ const AGENT_CATALOG_CACHE_KEYS = new Set([
   'picker-agents-list',
   'settings-gateway-agents',
   'setup-checklist-agents',
-  'workflow-agents',
-  'workflow-route-agents',
 ]);
 
 export function isAgentCatalogCacheKey(key: unknown): boolean {

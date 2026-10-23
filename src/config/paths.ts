@@ -199,7 +199,7 @@ export function resolveExtensionsLockPath(): string {
 
 /**
  * Per-agent extensions directory (`…/agents/<id>/agent/extensions/`) — used for discovery of
- * legacy or manually placed copies. CLI, web store, and `extensions dev` symlink installs use
+ * manually placed copies. CLI, web store, and `extensions dev` symlink installs use
  * {@link resolveExtensionsDir} (`~/.xopc/extensions`) only.
  */
 export function resolveWorkspaceExtensionsDir(agentId: string): string {

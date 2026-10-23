@@ -33,7 +33,7 @@
 
 支持结构化工具调用的模型可在 `run` 内生成 2–6 步有条件的原生按钮计划。继续本地计划前，执行器最多追加三次动作后观察，直到连续两次状态一致；仍不稳定或观察失败时交接，保留已完成的回执，不重放输入。随后逐步核对完整的预期原生显示值，重新定位按钮的当前引用，然后执行原有的本地授权与执行前目标/状态校验。只有前一步明确完成、动作后状态与当前观察一致时，才继续下一步。控件缺失、重名、禁用、显示值不符、状态变化、只读或退出本次调用都会丢弃计划。计划不包含坐标、按键序列、任意文本输入或历史引用。部分 AX 文本仅用于完整静态文本值的正向匹配，不用于判断内容不存在或全局唯一。不支持该机制的模型继续逐步决策；模型预算按真实请求扣减，包括格式纠正，不按本地计划步骤扣减。
 
-返回的 `run` 元数据包含执行次数、模型请求数、观察复用次数、`stabilityObservations` 稳定性观察次数、耗时、`phaseMs` 分阶段计时、`nativeMs` 原生校验/输入（含渲染等待）/动作后观察计时，以及停止原因。验证只覆盖指定条件，不证明无关业务结果。实测数据及范围见[计算器验证记录](../design/technical/computer-small-goal-validation.md)。
+返回的 `run` 元数据包含执行次数、模型请求数、观察复用次数、`stabilityObservations` 稳定性观察次数、耗时、`phaseMs` 分阶段计时、`nativeMs` 原生校验/输入（含渲染等待）/动作后观察计时，以及停止原因。验证只覆盖指定条件，不证明无关业务结果。实测数据及范围见[计算器验证记录](https://github.com/xopcai/xopc/blob/main/docs/design/technical/computer-small-goal-validation.md)。
 
 ## 自定义 OpenAI 兼容模型
 
@@ -43,7 +43,7 @@ OpenAI 兼容接口默认按支持函数工具处理；可以在 `models.json` �
 
 `computerUse.profile` 的显式配置仍优先。`openai-responses-computer-v1` 仅用于服务端确实支持原生 `computer` 工具的模型；普通视觉模型自动使用 `structured-tools-v1`，按所配置的 API 调用函数工具，无需原生 `computer` 支持。
 
-在 xopc 的 OpenAI 服务商中通过 ChatGPT OAuth 登录，也可复用该绑定进行电脑控制。已用 `openai/gpt-6.1-sol` 完成真实截图识别和临时原生测试窗口按钮点击；详见[OAuth 实测记录](../design/technical/computer-use-chatgpt-oauth-validation.md)。这不代表目录中每个模型都已经实测。
+在 xopc 的 OpenAI 服务商中通过 ChatGPT OAuth 登录，也可复用该绑定进行电脑控制。已用 `openai/gpt-6.1-sol` 完成真实截图识别和临时原生测试窗口按钮点击；详见[OAuth 实测记录](https://github.com/xopcai/xopc/blob/main/docs/design/technical/computer-use-chatgpt-oauth-validation.md)。这不代表目录中每个模型都已经实测。
 
 ## 描述任务
 

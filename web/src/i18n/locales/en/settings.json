@@ -568,7 +568,7 @@
           "description": "Connect Telegram or another channel so the same assistant can reply from the web console and messaging apps."
         },
         "automation": {
-          "title": "Automation workflow",
+          "title": "Automation procedure",
           "description": "Combine skills and cron jobs for recurring background work."
         }
       }
@@ -1429,7 +1429,7 @@
     "connectorConfigLabel": "Settings",
     "connectorDescriptions": {
       "gmail": "Find, draft, and send Gmail messages with explicit write confirmation.",
-      "googlecalendar": "Find and manage Google Calendar events from conversations and workflows.",
+      "googlecalendar": "Find and manage Google Calendar events from conversations.",
       "googledrive": "Search and work with approved files in Google Drive.",
       "notion": "Search and update approved Notion pages and databases.",
       "slack": "Read conversations and send approved messages in Slack.",
@@ -1464,7 +1464,6 @@
       "events": "Events",
       "ui": "UI",
       "memory_source": "Memory source",
-      "workflows": "Workflows",
       "auth.apiKey": "API key auth",
       "auth.oauth": "OAuth",
       "runtime.mcp.stdio": "MCP stdio",

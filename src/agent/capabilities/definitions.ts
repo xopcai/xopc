@@ -1,10 +1,10 @@
 export type AgentCapabilityCategory = 'authoring' | 'research' | 'analysis' | 'assets';
 
-export type AgentCapabilityActivationMode = 'explicit' | 'ui-entry' | 'workflow-scoped';
+export type AgentCapabilityActivationMode = 'explicit' | 'ui-entry';
 
 export type AgentCapabilityTtl = 'turn' | 'session' | 'until-complete';
 
-export type AgentCapabilityActivationSource = 'skill' | 'ui' | 'workflow';
+export type AgentCapabilityActivationSource = 'skill' | 'ui';
 
 export type AgentCapabilitySessionStatus = 'collecting' | 'running' | 'complete';
 
@@ -65,16 +65,6 @@ export const AGENT_CAPABILITY_DEFINITIONS = [
     tools: ['automation'],
     activation: { mode: 'explicit', ttl: 'until-complete' },
     permissions: { writesFiles: true, requiresConfirm: true },
-  },
-  {
-    id: 'workflow-authoring',
-    label: 'Workflow authoring',
-    description: 'Create, revise, validate, publish, and run xopc workflows in conversation.',
-    category: 'authoring',
-    tools: ['workflow_manage', 'workflow'],
-    requiredSkills: ['workflow-authoring'],
-    activation: { mode: 'explicit', ttl: 'until-complete' },
-    permissions: { writesFiles: true, runsCode: true, requiresConfirm: true },
   },
   {
     id: 'extension-authoring',

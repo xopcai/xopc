@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect } from 'react';
-import { createHashRouter, Navigate, RouterProvider } from 'react-router-dom';
+import { createHashRouter, Link, Navigate, RouterProvider } from 'react-router-dom';
 
 import { AppShell } from '@/components/shell/app-shell';
 import { isComputerUseAvailable } from '@/lib/electron-env';
@@ -32,7 +32,6 @@ import {
   loadSessionsPage,
   loadUsagePage,
   loadUserModelPage,
-  loadWorkflowsPage,
   loadLocalAppsPage,
   loadLocalAppWorkbenchPage,
   loadProductOpenPage,
@@ -41,7 +40,7 @@ import {
 } from '@/lib/route-preload';
 import { SwrProvider } from '@/providers/swr-provider';
 import { syncFontScaleAfterHydration, useFontScaleStore } from '@/stores/font-scale-store';
-import { syncElectronLocaleAfterHydration } from '@/stores/locale-store';
+import { syncElectronLocaleAfterHydration, useLocaleStore } from '@/stores/locale-store';
 import { subscribeSystemTheme, syncThemeAfterHydration, useThemeStore } from '@/stores/theme-store';
 
 const SessionsPage = lazy(() => loadSessionsPage().then((m) => ({ default: m.SessionsPage })));
@@ -54,10 +53,6 @@ const TaskDetailPage = lazy(() => loadTaskDetailPage().then((m) => ({ default: m
 const ProjectsPage = lazy(() => loadProjectsPage().then((m) => ({ default: m.ProjectsPage })));
 const ProjectDetailPage = lazy(() => loadProjectDetailPage().then((m) => ({ default: m.ProjectDetailPage })));
 const NotesPage = lazy(() => loadNotesPage().then((m) => ({ default: m.NotesPage })));
-const WorkflowsPage = lazy(() => loadWorkflowsPage().then((m) => ({ default: m.WorkflowsPage })));
-const WorkflowDetailPage = lazy(() => loadWorkflowsPage().then((m) => ({ default: m.WorkflowDetailPage })));
-const WorkflowEditorPage = lazy(() => loadWorkflowsPage().then((m) => ({ default: m.WorkflowEditorPage })));
-const WorkflowRunPage = lazy(() => loadWorkflowsPage().then((m) => ({ default: m.WorkflowRunPage })));
 const ImportsPage = lazy(() => import('@/features/imports/imports-page').then(m => ({ default: m.ImportsPage })));
 const CapabilitiesPage = lazy(() => import('@/features/capabilities/capabilities-page').then((m) => ({ default: m.CapabilitiesPage })));
 const UserModelPage = lazy(() => loadUserModelPage().then((m) => ({ default: m.UserModelPage })));
@@ -126,6 +121,16 @@ function SettingsRouteFallback() {
           <Skeleton className="h-20 rounded-xl" />
         </div>
       </div>
+    </div>
+  );
+}
+
+function NotFoundRoute() {
+  const zh = useLocaleStore((state) => state.language) === 'zh';
+  return (
+    <div className="flex flex-1 flex-col items-center justify-center gap-4 p-8 text-fg">
+      <h1 className="text-xl font-semibold">{zh ? '页面不存在' : 'Page not found'}</h1>
+      <Link to="/" className="text-accent-fg hover:underline">{zh ? '返回工作台' : 'Back to work'}</Link>
     </div>
   );
 }
@@ -283,51 +288,6 @@ const router = createHashRouter([
         ],
       },
       {
-        path: 'workflows',
-        children: [
-          {
-            index: true,
-            element: (
-              <Suspense fallback={<SecondaryRouteFallback />}>
-                <WorkflowsPage />
-              </Suspense>
-            ),
-          },
-          {
-            path: 'new',
-            element: (
-              <Suspense fallback={<SecondaryRouteFallback />}>
-                <WorkflowEditorPage />
-              </Suspense>
-            ),
-          },
-          {
-            path: 'runs/:runId',
-            element: (
-              <Suspense fallback={<SecondaryRouteFallback />}>
-                <WorkflowRunPage />
-              </Suspense>
-            ),
-          },
-          {
-            path: ':definitionId',
-            element: (
-              <Suspense fallback={<SecondaryRouteFallback />}>
-                <WorkflowDetailPage />
-              </Suspense>
-            ),
-          },
-          {
-            path: ':definitionId/edit',
-            element: (
-              <Suspense fallback={<SecondaryRouteFallback />}>
-                <WorkflowEditorPage />
-              </Suspense>
-            ),
-          },
-        ],
-      },
-      {
         path: 'capabilities/:section?/:detailId?',
         element: (
           <Suspense fallback={<SecondaryRouteFallback />}>
@@ -472,6 +432,7 @@ const router = createHashRouter([
           },
         ],
       },
+      { path: '*', element: <NotFoundRoute /> },
     ],
   },
 ]);

@@ -486,41 +486,6 @@ it('handles thinking command through native TUI controls', async () => {
     expect(questions.at(-1)).toBe('quick check');
   });
 
-  it('handles workflow listing and view locally', () => {
-    const systems: string[] = [];
-    const handler = createTuiCommandHandler({
-      state: {
-        currentConversationId: 'agent:main:main',
-        sessionInfo: {},
-        toolsExpanded: false,
-        showThinking: false,
-      } as never,
-      chatLog: {
-        addSystem: (text: string) => systems.push(text),
-        setToolsExpanded: () => {},
-      } as never,
-      tui: { requestRender: () => {} } as never,
-      isLocalMode: true,
-      abortActive: async () => {},
-      sendMessage: () => {
-        throw new Error('workflow commands should not be sent to the assistant');
-      },
-      requestExit: () => {},
-      updateFooter: () => {},
-      keybindings: createXopcTuiKeybindingsManager(),
-    });
-
-    handler('/workflow list');
-    expect(systems.at(-1)).toContain('Workflows');
-    expect(systems.at(-1)).toContain('audit_repo');
-
-    handler('/workflow view audit_repo');
-    expect(systems.at(-1)).toContain('Workflow: audit_repo');
-
-    handler('/workflow save demo');
-    expect(systems.at(-1)).toContain('/workflow save');
-  });
-
   it('handles start command locally', () => {
     const systems: string[] = [];
     const handler = createTuiCommandHandler({

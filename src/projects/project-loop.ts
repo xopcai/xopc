@@ -3,17 +3,9 @@ import type { TaskOperationalState } from '@xopcai/gateway-contract';
 import type { KnowledgeItem } from '../knowledge-memory/index.js';
 import type { ProjectWithDetails } from './types.js';
 
-export type ProjectWorkflowRunBrief = {
-  runId: string;
-  definitionId: string;
-  status: string;
-  createdAt: number;
-  errorMessage?: string;
-};
-
 export type ProjectAttentionItem = {
   id: string;
-  kind: 'blocked_task' | 'stale_task' | 'failed_workflow';
+  kind: 'blocked_task' | 'stale_task';
   title: string;
   detail?: string;
   status?: string;
@@ -23,7 +15,7 @@ export type ProjectAttentionItem = {
 
 export type ProjectTimelineItem = {
   id: string;
-  kind: 'session' | 'task' | 'workflow' | 'knowledge';
+  kind: 'session' | 'task' | 'knowledge';
   title: string;
   detail?: string;
   timestamp: number;
@@ -59,7 +51,6 @@ export type ProjectLoopOverview = {
     summary: string;
     nextAction?: string;
   };
-  failedWorkflowRuns: ProjectWorkflowRunBrief[];
   recommendedAction?: string;
 };
 
@@ -78,8 +69,6 @@ function compactText(value: string | undefined, max = 180): string | undefined {
 export function buildProjectLoopOverview(input: {
   project: ProjectWithDetails;
   tasks: ProjectTask[];
-  recentWorkflowRuns: ProjectWorkflowRunBrief[];
-  failedWorkflowRuns?: ProjectWorkflowRunBrief[];
   knowledgeItems?: KnowledgeItem[];
   nowMs?: number;
   staleAfterMs?: number;
@@ -103,9 +92,6 @@ export function buildProjectLoopOverview(input: {
       status: `${task.phase}/${task.operationalState}`,
       updatedAt: task.updatedAt,
     }));
-  const failedWorkflowRuns = (input.failedWorkflowRuns ?? input.recentWorkflowRuns.filter((run) => (
-    run.status === 'failed' || run.status === 'timeout' || run.status === 'cancelled'
-  ))).slice(0, 5);
 
   const attentionItems: ProjectAttentionItem[] = [
     ...blockedTasks.map((task) => ({
@@ -126,15 +112,6 @@ export function buildProjectLoopOverview(input: {
       href: `/tasks/${encodeURIComponent(task.id)}`,
       updatedAt: task.updatedAt,
     })),
-    ...failedWorkflowRuns.map((run) => ({
-      id: `workflow:${run.runId}:failed`,
-      kind: 'failed_workflow' as const,
-      title: run.definitionId,
-      detail: compactText(run.errorMessage || run.status),
-      status: run.status,
-      href: `/workflows?run=${encodeURIComponent(run.runId)}`,
-      updatedAt: run.createdAt,
-    })),
   ].slice(0, 8);
 
   const timeline: ProjectTimelineItem[] = [
@@ -154,15 +131,6 @@ export function buildProjectLoopOverview(input: {
       timestamp: task.updatedAt,
       status: `${task.phase}/${task.operationalState}`,
       href: `/tasks/${encodeURIComponent(task.id)}`,
-    })),
-    ...input.recentWorkflowRuns.map((run) => ({
-      id: `workflow:${run.runId}`,
-      kind: 'workflow' as const,
-      title: run.definitionId,
-      detail: run.status,
-      timestamp: run.createdAt,
-      status: run.status,
-      href: `/workflows?run=${encodeURIComponent(run.runId)}`,
     })),
     ...(input.knowledgeItems ?? []).slice(0, 5).map((record) => ({
       id: `knowledge:${record.id}`,
@@ -185,12 +153,12 @@ export function buildProjectLoopOverview(input: {
 
   const digestStatus =
     attentionItems.length > 0 ? 'attention'
-      : activeTasks.length > 0 || input.recentWorkflowRuns.some((run) => run.status === 'running' || run.status === 'queued') ? 'healthy'
+      : activeTasks.length > 0 ? 'healthy'
         : timeline.length > 0 ? 'idle'
           : 'empty';
   const digestSummary =
     digestStatus === 'attention'
-      ? `${attentionItems.length} item(s) need attention: ${blockedTasks.length} blocker(s), ${staleTasks.length} stale task(s), ${failedWorkflowRuns.length} execution issue(s).`
+      ? `${attentionItems.length} item(s) need attention: ${blockedTasks.length} blocker(s), ${staleTasks.length} stale task(s).`
       : digestStatus === 'healthy'
         ? `${activeTasks.length} active task(s) and ${nextActions.length} clear next action(s).`
         : digestStatus === 'idle'
@@ -209,7 +177,6 @@ export function buildProjectLoopOverview(input: {
       summary: digestSummary,
       nextAction: recommendedAction,
     },
-    failedWorkflowRuns,
     recommendedAction,
   };
 }

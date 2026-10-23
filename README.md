@@ -61,7 +61,6 @@ File work requires the relevant access, tools, or skills. Voice, image generatio
 | **Context and memory** | Keep conversations, project background, and understanding you can review, correct, or delete |
 | **Delegation and delivery** | Delegate tasks, answer follow-up questions, receive artifacts, and check acceptance criteria |
 | **Files and projects** | Work with authorized material and retain files, notes, execution records, and next actions |
-| **Follow-ups** | Follow a topic, repeat a process with Workflows, or trigger work with Automations |
 | **Tools and connections** | Enable skills, MCP, connectors, browser automations, images, and voice as needed |
 | **Access across devices** | Desktop, web, terminal, mobile, Telegram, WeChat, and Feishu/Lark |
 

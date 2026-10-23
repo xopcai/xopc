@@ -11,7 +11,7 @@ export interface TuiLaunchOverrides {
 }
 
 export function prepareTuiStartup(configPath: string): void {
-  bootstrapApplicationStateSync(configPath);
+  bootstrapApplicationStateSync();
   const pendingMigrations = detectMigrations(configPath);
   if (pendingMigrations.length > 0) {
     console.warn(

@@ -97,17 +97,6 @@ describe('buildWelcomeSpotlight', () => {
     expect(spotlight.recommendation?.id).toBe('task-review');
   });
 
-  it('recommends reviewing a completed workflow', () => {
-    const spotlight = build({
-      kind: 'workflow',
-      workflowName: '发布流程',
-      status: 'succeeded',
-    });
-
-    expect(spotlight.recommendation?.id).toBe('workflow-review');
-    expect(spotlight.recommendation?.reason).toContain('刚刚完成');
-  });
-
   it.each(['loading', 'degraded'] as const)('suppresses recommendations while context is %s', (status) => {
     const spotlight = build({
       kind: 'project',

@@ -12,8 +12,6 @@ import type { ProductPreviewTarget } from './product-preview-route';
 const PreviewContent = lazy(() => import('./product-preview-content'));
 const LABELS = {
   project: ['项目预览', 'Project preview'],
-  workflow_run: ['工作流运行', 'Workflow run'],
-  workflow_definition: ['工作流预览', 'Workflow preview'],
   automation: ['自动化详情', 'Automation details'],
   local_app: ['应用预览', 'App preview'],
 } as const;

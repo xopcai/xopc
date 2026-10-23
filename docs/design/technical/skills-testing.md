@@ -242,7 +242,7 @@ console.log(`All passed: ${passed}`);
 ### Result Formatting
 
 ```typescript
-import { 
+import {
   formatTestResults,
   formatTestResultsJson,
   formatTestResultsTap,
@@ -273,7 +273,7 @@ describe('My Skill Tests', () => {
   it('should have valid SKILL.md format', () => {
     const framework = new SkillTestFramework();
     const result = framework.testSkillMdFormat('./skills/my-skill/SKILL.md');
-    
+
     expect(result.status).toBe('pass');
   });
 
@@ -286,7 +286,7 @@ describe('My Skill Tests', () => {
         bins: ['node', 'npm'],
       },
     };
-    
+
     const result = await framework.testDependencies(metadata);
     expect(result.status).toBe('pass');
   });
@@ -307,7 +307,7 @@ describe('Skills Integration Tests', () => {
     });
 
     const { reports, passed } = await runner.run();
-    
+
     expect(passed).toBe(true);
     expect(reports.length).toBeGreaterThan(0);
   });
@@ -321,7 +321,6 @@ describe('Skills Integration Tests', () => {
 The project includes a pre-configured GitHub Actions workflow:
 
 ```yaml
-# .github/workflows/skills-test.yml
 name: Skills Test
 
 on:
@@ -356,25 +355,25 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 22
-      
+
       - name: Install dependencies
         run: npm install
-      
+
       - name: Build
         run: npm run build
-      
+
       - name: Run skill tests
         run: |
           xopc skills test \
             --format tap \
             --skip-examples \
             --strict
-      
+
       - name: Security audit
         run: xopc skills test security --deep
 ```

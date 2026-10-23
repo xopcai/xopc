@@ -39,8 +39,9 @@ export type {
   PairingChannelConfigResolver,
   PairingPaths,
   PairingPendingIssue,
-  PairingPendingView,
 } from './pairing-service.js';
 export { setPairingBroadcastSink, broadcastPairingEvent } from './pairing-events.js';
 export type { PairingBroadcastPayload } from './pairing-events.js';
 export { mergeDistinctSenderIds } from './preseed-allow-from.js';
+
+export type { PairingPendingView } from './pairing-types.js';

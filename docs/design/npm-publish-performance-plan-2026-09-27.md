@@ -39,8 +39,6 @@ v332→v333 文件数只从 1,388 增至 1,396，但测试耗时增长约 51%；
 
 ## 原因一：发布没有采用 CI 已有的分片，测试并发也偏保守
 
-- `.github/workflows/npm-publish.yml:51` 在一个 runner 上执行 `pnpm run test:all`。
-- `.github/workflows/ci.yml:107` 已配置四路分片，命令为 `pnpm run test:all --shard=N/4`。
 - `vitest.config.ts` 用 `sequence.groupOrder` 将 unit、component、integration、其他项目分为四个先后执行的阶段。
 - component/Web 等项目的 `maxWorkers` 是 `30%`；标准公开仓库 Ubuntu runner 为 4 CPU，按本地 Vitest 4.1.5 的 `Math.round` 算法只分配 1 个 worker。unit 的 `40%` 对应 2 个。此次日志未打印实际 CPU 数，实施时应补充 `os.availableParallelism()` 和最终 worker 数。
 
@@ -116,7 +114,6 @@ P1 Docker 阶段可先在 npm 发布后并行构建两种原生架构；确认�
 
 ### 阶段一：发布门禁与四路分片
 
-- CI 与 npm 发布共用 `.github/workflows/test-suite.yml`，保留全部七个 Vitest project。
 - preflight 在构建前校验版本/tag 和 npm registry；仅 404 表示尚未发布，网络/认证/服务错误均阻止继续。
 - 根据包版本选择 npm tag，手动从分支发布预发布版本也不会误用 latest。
 - 完整包构建与测试并行；构建含声明文件，生成一次 tarball，通过当前运行的 artifact 与 SHA-256 传给发布 job。
@@ -154,5 +151,3 @@ P1 Docker 阶段可先在 npm 发布后并行构建两种原生架构；确认�
 自查与验证：Linux ARM64 镜像实构建成功，运行时编译约 38.4 秒；源码/文档变化后 `pnpm fetch` 层命中，随后离线安装成功。生产依赖重新安装下载数为 0，确认 Vitest、Electron、tsdown、node-pty 开发包不再残留。镜像中 CLI、Gateway ready、SQLite、Sharp、ripgrep、silk-wasm、FFmpeg 检查全部通过；可选浏览器的 runtime-assets 构建通过，Playwright 模块可导入（未下载或启动 Chromium）。
 
 本机 Docker Hub 元数据请求曾超时，验证使用已拉取的相同官方 Node 22 镜像本地别名，并使用内置 Dockerfile frontend；仓库镜像默认值没有改为本地别名。首次实际构建暴露的 xlsx tarball 遗漏已修复后重跑通过。
-
-待真实发布运行验收：原生 amd64、GHCR digest/manifest 发布、远端 registry cache 冷/热缓存净收益，以及连续三次 Actions 总耗时与峰值内存。工作流已经加入对应镜像门禁、平台校验和资源报告。本次没有推送或触发 npm/GHCR 发布，12–16 分钟仍是待实测目标。

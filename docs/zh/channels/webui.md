@@ -13,7 +13,6 @@ xopc gateway
 ## 可以做什么
 
 - 开始和恢复聊天 Session；
-- 管理 Agent、Project、Task、Workflow 和 Automation；
 - 配置模型、工具、消息通道、连接器、Skill、MCP 和扩展；
 - 查看健康状态、日志、更新和远程访问。
 

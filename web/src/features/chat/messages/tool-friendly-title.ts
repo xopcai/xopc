@@ -22,40 +22,7 @@ type ToolExecutionLabel = Record<ToolExecutionState, string>;
 
 export type ToolExecutionLabels = {
   builtins: Record<
-    | 'automation'
-    | 'browser'
-    | 'clarification'
-    | 'computer'
-    | 'connection'
-    | 'desktopPet'
-    | 'delegation'
-    | 'diagnostics'
-    | 'imageGeneration'
-    | 'imageInspection'
-    | 'job'
-    | 'manual'
-    | 'mediaRead'
-    | 'mediaSend'
-    | 'memoryMaintenance'
-    | 'memoryRead'
-    | 'memoryUpdate'
-    | 'message'
-    | 'publish'
-    | 'planning'
-    | 'review'
-    | 'sessionRecall'
-    | 'sessionSearch'
-    | 'sessionStatus'
-    | 'share'
-    | 'skillInstall'
-    | 'skillManage'
-    | 'skillSearch'
-    | 'skillView'
-    | 'speech'
-    | 'structuredOutput'
-    | 'todo'
-    | 'webExtract'
-    | 'workflow',
+    'automation' | 'browser' | 'clarification' | 'computer' | 'connection' | 'desktopPet' | 'delegation' | 'diagnostics' | 'imageGeneration' | 'imageInspection' | 'job' | 'manual' | 'mediaRead' | 'mediaSend' | 'memoryMaintenance' | 'memoryRead' | 'memoryUpdate' | 'message' | 'publish' | 'planning' | 'review' | 'sessionRecall' | 'sessionSearch' | 'sessionStatus' | 'share' | 'skillInstall' | 'skillManage' | 'skillSearch' | 'skillView' | 'speech' | 'structuredOutput' | 'todo' | 'webExtract',
     ToolExecutionLabel
   >;
   actions: Record<
@@ -147,7 +114,6 @@ const BUILTIN_SEMANTICS: Readonly<Record<string, keyof ToolExecutionLabels['buil
   todo: 'todo',
   tool_manual: 'manual',
   web_extract: 'webExtract',
-  workflow: 'workflow',
   xopc_require_connection: 'connection',
 };
 

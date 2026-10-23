@@ -4,8 +4,6 @@ import type {
   TuiContextUsage,
   TuiCustomComponent,
   TuiCustomFactory,
-  TuiCustomFullFactory,
-  TuiCustomLegacyFactory,
   TuiCustomOptions,
   TuiModelInfo,
   TuiModelRegistry,
@@ -104,10 +102,7 @@ export function invokeCustomFactory<T>(
   keybindings: KeybindingsManager | undefined,
   done: (result: T) => void,
 ): TuiCustomComponent | Promise<TuiCustomComponent> {
-  if (factory.length <= 1) {
-    return (factory as TuiCustomLegacyFactory<T>)(done);
-  }
-  return (factory as TuiCustomFullFactory<T>)(tui, theme, keybindings, done);
+  return factory(tui, theme, keybindings, done);
 }
 
 export function disposeComponent(component: { dispose?(): void } | undefined): void {

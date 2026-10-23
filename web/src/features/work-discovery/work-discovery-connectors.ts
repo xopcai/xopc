@@ -28,7 +28,7 @@ function onboardingConnector({
     category,
     kind: 'composio',
     source: 'registry',
-    capabilities: ['tools', 'auth.oauth', 'events', 'workflows', 'context', 'memory_source'],
+    capabilities: ['tools', 'auth.oauth', 'events', 'context', 'memory_source'],
     benefits: ['understand', 'act'],
     understanding: { mode, bootstrapWindowDays, readOnly: true },
     tags: ['composio', toolkit, 'verified'],

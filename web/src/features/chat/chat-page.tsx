@@ -55,17 +55,12 @@ import { cn } from '@/lib/cn';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
 import { wireTextForSlashCommandEntry } from '@/features/chat/palette/slash-command-wire-text';
-import { WorkflowRunLinkCard } from '@/features/chat/workflow/workflow-run-link-card';
-import { WorkflowSessionBanner } from '@/features/chat/workflow/workflow-session-banner';
 import { useWelcomeSuggestionContext } from '@/features/chat/welcome/use-welcome-suggestion-context';
 import {
   buildWelcomeSpotlight,
   type WelcomeSuggestionSelection,
 } from '@/features/chat/welcome/welcome-suggestions';
 import { ProductAutomationFeedback } from '@/features/automations/product-automation-feedback';
-import { ACTIVE_RUN_STATUSES } from '@/features/workflows/workflow-page.constants';
-import { useSessionWorkflowRunLinks } from '@/features/workflows/use-session-workflow-run-links';
-import { useWorkflowRunLive } from '@/features/workflows/use-workflow-run-live';
 import { appendNoteContent, createTaskNote, getNote, quickCapture } from '@/features/notes/notes-api';
 import { noteDetailHref } from '@/features/notes/note-detail-route';
 import { useWorkspaceEditorAgentStore } from '@/stores/workspace-editor-agent-store';
@@ -198,16 +193,6 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
       throw err;
     }
   }, [chatConversationId, m.chat.messageForkCreated, m.chat.messageForkFailed, navigate, session.sessionManager]);
-  const workflowRunId = sessionMetadata?.workflowRunId ?? null;
-  const workflowOwnerAgentId = sessionMetadata?.ownerAgentId ?? undefined;
-  const { view: workflowRunView } = useWorkflowRunLive(workflowRunId, { ownerAgentId: workflowOwnerAgentId });
-  const { data: workflowRunLinks = [], mutate: refreshWorkflowRunLinks } =
-    useSessionWorkflowRunLinks(chatConversationId);
-  const showWorkflowLiveBanner = Boolean(
-    workflowRunId &&
-      workflowRunView &&
-      ACTIVE_RUN_STATUSES.has(workflowRunView.run.status),
-  );
   const latestMessage = msgSlice.items.at(-1);
   const showPersonalCalibration = personal && !personalCalibrationDismissed && !stream.streaming && !stream.sending
     && latestMessage?.role === 'assistant'
@@ -230,22 +215,7 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
     && !stream.sending
     && latestBrowserSetup !== null;
 
-  useEffect(() => {
-    if (!chatConversationId) return;
-    const handler = (event: Event) => {
-      const detail = (event as CustomEvent<{ key?: string; conversationId?: string }>).detail;
-      const updatedKey = detail?.key ?? detail?.conversationId;
-      if (updatedKey === chatConversationId) {
-        void refreshWorkflowRunLinks();
-      }
-    };
-    window.addEventListener('session-transcript-updated', handler);
-    window.addEventListener('workflow-run-started-from-chat', handler);
-    return () => {
-      window.removeEventListener('session-transcript-updated', handler);
-      window.removeEventListener('workflow-run-started-from-chat', handler);
-    };
-  }, [chatConversationId, refreshWorkflowRunLinks]);
+
 
   useEffect(() => {
     routeComposerSeedMarkerRef.current = null;
@@ -611,7 +581,6 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
     ),
     project: scopedProject,
     task: taskDetail,
-    workflow: workflowRunView,
   });
   const welcomeAgent = useMemo(
     () =>
@@ -1165,20 +1134,8 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
                       <TaskSessionBanner taskId={taskId} />
                     </div>
                   ) : null}
-                  {workflowRunLinks.length > 0 ? (
-                    <div className="mb-6 flex flex-col gap-3">
-                      {workflowRunLinks.map((link) => (
-                        <WorkflowRunLinkCard key={link.id} link={link} />
-                      ))}
-                    </div>
-                  ) : null}
-                  {showWorkflowLiveBanner && workflowRunView ? (
-                    <WorkflowSessionBanner
-                      view={workflowRunView}
-                      conversationId={chatConversationId}
-                      onAbortCurrentTurn={stream.abort}
-                    />
-                  ) : null}
+                  {null}
+                  {null}
                   {!embedded && chatConversationId ? (
                     <ProductAutomationFeedback
                       eventType="session.transcript.updated"
@@ -1343,8 +1300,7 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
               <ReadAloudDock />
               <ChatComposer
                 personal={personal}
-                nextTurnSuggestionsEnabled={!agentSetup && !skillDiscovery && !taskId && !workflowRunView
-                  && msgSlice.items.length > 0 && !showConversationLoading && !clarify.clarifyPrompt}
+                nextTurnSuggestionsEnabled={!stream.streaming}
                 onPersonalSendDispatched={personal ? onPersonalSendDispatched : undefined}
                 placeholder={personal
                   ? stream.streaming || stream.sending

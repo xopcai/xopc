@@ -66,8 +66,7 @@ describe('ProductSectionHeader', () => {
   });
 
   it('offers the same sections in the compact picker', () => {
-    renderAt('/workflows/example/edit');
-    expect(container.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toBe('Workflows');
+    renderAt('/automations');
     const picker = container.querySelector<HTMLButtonElement>('button[aria-label="Page sections"]')!;
     act(() => picker.click());
     const option = [...document.body.querySelectorAll<HTMLButtonElement>('[data-radix-popper-content-wrapper] button')]

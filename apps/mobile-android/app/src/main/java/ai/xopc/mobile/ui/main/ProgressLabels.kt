@@ -30,12 +30,12 @@ internal fun taskPriorityLabel(value: String): String {
 
 @Composable
 internal fun runStatusLabel(value: String): String = stringResource(when (value) {
-  "queued" -> R.string.workflow_status_queued
-  "running" -> R.string.workflow_status_running
+  "queued" -> R.string.execution_status_queued
+  "running" -> R.string.execution_status_running
   "cancelling" -> R.string.progress_status_cancelling
-  "done", "succeeded" -> R.string.workflow_status_done
-  "failed" -> R.string.workflow_status_failed
-  "cancelled" -> R.string.workflow_status_cancelled
+  "done", "succeeded" -> R.string.execution_status_done
+  "failed" -> R.string.execution_status_failed
+  "cancelled" -> R.string.execution_status_cancelled
   "timeout" -> R.string.progress_status_timeout
-  else -> R.string.workflow_status_unknown
+  else -> R.string.execution_status_unknown
 })

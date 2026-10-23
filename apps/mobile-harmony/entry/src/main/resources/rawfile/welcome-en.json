@@ -42,21 +42,6 @@
         "title": "Continue the next action: {{nextAction}}",
         "prompt": "Continue the defined next action for task {{taskTitle}}: {{nextAction}}. Check the task constraints, then proceed.",
         "reason": "{{taskTitle}} · next action is known"
-      },
-      "workflowFailure": {
-        "title": "Recover the failed workflow: {{recentFailure}}",
-        "prompt": "Workflow {{workflowName}} recently failed: {{recentFailure}}. Locate the failed stage and propose a safe recovery plan.",
-        "reason": "{{workflowName}} · run failed"
-      },
-      "workflowNextAction": {
-        "title": "Continue the workflow: {{nextAction}}",
-        "prompt": "Continue the defined next action for workflow {{workflowName}}: {{nextAction}}. Check existing outputs before proceeding.",
-        "reason": "{{workflowName}} · next action is known"
-      },
-      "workflowReview": {
-        "title": "Summarize this workflow run",
-        "prompt": "Review the result and outputs from workflow {{workflowName}}. Summarize completed work, verification evidence, and anything that still needs attention.",
-        "reason": "{{workflowName}} · just completed"
       }
     }
   }

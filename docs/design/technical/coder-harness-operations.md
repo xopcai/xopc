@@ -73,9 +73,8 @@ Git 命令没有专门的拦截或告警；与 Git 拼接的通用危险 shell �
 
 外部执行强制只读，忽略子模型传入的 `readOnly: false` 和 approvalId。宿主已有的 `batchRead` 契约可直接使用；其他 MCP/扩展/连接器操作可在 Agent 默认工具策略或单 Agent 覆盖中声明 `readOnly: true`。远端 `readOnlyHint` 不授予能力。设置 `readOnly: false` 可显式撤回只读声明；工具契约变化需要重新 describe。该配置是宿主对具体操作的信任声明，不会把实际写操作转换成只读。
 
-Workflow 子任务也遵循能力过滤及父代理 deny/ask 策略，默认研究读取；显式 browser_use 可启用浏览器。原先直接在共享目录中执行写入或命令的 workflow toolset 现在会明确失败，需改用独立 worktree 的 implement 委派。无人交互的 workflow 无法满足 ask 策略时会报告需要父代理授权。
 
-子任务最多 60 次工具调用、5 分钟，并在报告的累计 token 使用达到 100k 后停止后续请求。已经发出的模型请求可能越过 token 阈值。子任务不能继续委派、发外部消息或创建后台任务。源码与验证沿用主任务的 embedded harness；持久 workflow 子会话沿用 SQLite 追加写入，删除了原有整段 `saveMessages` 重写路径。
+子任务最多 60 次工具调用、5 分钟，并在报告的累计 token 使用达到 100k 后停止后续请求。已经发出的模型请求可能越过 token 阈值。子任务不能继续委派、发外部消息或创建后台任务。源码与验证沿用主任务的 embedded harness。
 
 运行开始与最终验证记录保存在 transcript 中。中断后恢复时重新比较工作区版本，不因历史记录曾通过就直接继承成功。worktree 清理失败时保留会话绑定；再次连接会校验环境健康，避免丢失恢复入口。
 

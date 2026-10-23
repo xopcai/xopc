@@ -50,7 +50,7 @@ class NoteDraftStoreTest {
     store.remove(gatewayId, draft.id)
   }
 
-  @Test fun v1DraftMigratesOnceWithoutLosingTheOriginalMutationKey() {
+  @Test fun retiredDraftIsNotImported() {
     val context = ApplicationProvider.getApplicationContext<Context>()
     val gatewayId = UUID.randomUUID().toString()
     val draftId = "local-${UUID.randomUUID()}"
@@ -59,12 +59,9 @@ class NoteDraftStoreTest {
     legacy.write("note-draft.$gatewayId", org.json.JSONObject().put("id", draftId)
       .put("title", "Old draft").put("markdown", "Body").put("mutationId", mutationId)
       .put("version", 3).toString())
-    val migrated = NoteDraftStore(context).pending(gatewayId).single()
-    assertEquals(draftId, migrated.id)
-    assertEquals(mutationId, migrated.mutationId)
-    assertNull(legacy.read("note-draft.$gatewayId"))
-    assertEquals(1, NoteDraftStore(context).pending(gatewayId).size)
-    NoteDraftStore(context).remove(gatewayId, draftId)
+    assertEquals(0, NoteDraftStore(context).pending(gatewayId).size)
+    assertEquals(0, NoteDraftStore(context).pending(gatewayId).size)
+    legacy.remove("note-draft.$gatewayId")
   }
 
   @Test fun remoteEditKeepsItsBaseRevisionAcrossStoreRecreation() {

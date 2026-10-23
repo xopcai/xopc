@@ -11,7 +11,7 @@ data class AutomationSummary(val id: String, val name: String, val description: 
   val canDelete: Boolean = false, val triggerJson: String = "", val actionJson: String = "")
 data class AutomationRunSummary(val id: String, val automationId: String, val automationName: String,
   val status: String, val summary: String?, val error: String?, val conversationId: String?,
-  val workflowRunId: String?, val createdAtMs: Long?, val startedAtMs: Long?,
+  val createdAtMs: Long?, val startedAtMs: Long?,
   val durationMs: Long?)
 data class AutomationRunEvent(val id: String, val message: String, val createdAtMs: Long?)
 data class AutomationCancellation(val accepted: Boolean, val confirmed: Boolean)
@@ -275,7 +275,6 @@ class AutomationRepository(private val gateway: GatewaySession) {
         row.optString("summary").takeIf(String::isNotBlank)?.take(8000),
         row.optString("error").takeIf(String::isNotBlank)?.take(4000),
         row.optString("conversationId").takeIf(String::isNotBlank),
-        row.optString("workflowRunId").takeIf(String::isNotBlank),
         row.optLongOrNull("createdAtMs"), row.optLongOrNull("startedAtMs"),
         row.optLongOrNull("durationMs"))
     }
