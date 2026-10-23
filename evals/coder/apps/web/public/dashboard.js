@@ -233,6 +233,35 @@ window.addEventListener('storage', event => {
   if (event.key === 'xopc.evals.theme') applyTheme(['light', 'dark', 'system'].includes(event.newValue) ? event.newValue : 'system');
   if (event.key === 'xopc.evals.locale') { setLocale(event.newValue); updateChrome(); render(); }
 });
+const navigation = document.querySelector('aside nav');
+function syncNavigationIndicator() {
+  const selected = navigation.querySelector('a[aria-current="page"]');
+  if (!selected) return;
+  let indicator = navigation.querySelector('.navigation-indicator');
+  if (!indicator) {
+    indicator = document.createElement('span');
+    indicator.className = 'navigation-indicator';
+    indicator.setAttribute('aria-hidden', 'true');
+    navigation.prepend(indicator);
+  }
+  indicator.style.width = `${selected.offsetWidth}px`;
+  indicator.style.height = `${selected.offsetHeight}px`;
+  indicator.style.transform = `translate3d(${selected.offsetLeft}px, ${selected.offsetTop}px, 0)`;
+  navigation.dataset.slidingReady = 'true';
+}
+const navigationResize = new ResizeObserver(syncNavigationIndicator);
+navigationResize.observe(navigation);
+for (const link of navigation.querySelectorAll('a')) navigationResize.observe(link);
+document.querySelector('aside').addEventListener('click', event => {
+  const link = event.target.closest('a[href]');
+  if (!link || event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || link.target === '_blank') return;
+  const next = new URL(link.href);
+  if (next.origin !== location.origin || next.pathname !== location.pathname || !/^#(?:overview|benchmarks|runs|improvements)$/.test(next.hash)) return;
+  event.preventDefault();
+  if (next.href === location.href) return;
+  history.pushState(null, '', next);
+  render();
+});
 // Keep filter controls mounted, matching Web UI's sliding-tab interaction.
 function syncFilterSelection() {
   const track = view.querySelector('.filter-chips');
@@ -292,12 +321,13 @@ async function render() {
   const [route, id, trial] = location.hash.slice(1).split('/');
   const current = ['overview', 'benchmarks', 'runs', 'evidence', 'compare', 'improvements'].includes(route) ? route : 'overview';
   document.querySelectorAll('nav a').forEach(a => a.setAttribute('aria-current', a.hash === `#${['evidence', 'compare'].includes(current) ? 'benchmarks' : current}` ? 'page' : 'false'));
+  syncNavigationIndicator();
   document.querySelector('#title').textContent = t(current);
   document.querySelector('#page-description').textContent = t(current + 'Description');
   document.title = `${t(current)} · xopc Evals`;
   updateChrome();
   const routeKey = `${current}/${id ?? ''}/${trial ?? ''}`;
-  if (renderedRoute !== routeKey) { window.scrollTo(0, 0); view.innerHTML = '<div class="skeleton"></div><div class="skeleton"></div>'; renderedRoute = routeKey; renderedHTML = undefined; }
+  const routeChanged = renderedRoute !== routeKey;
   syncFilterSelection();
   view.setAttribute('aria-busy', 'true');
   try {
@@ -310,13 +340,23 @@ async function render() {
     else if (current === 'improvements') html = await renderImprovements(id);
     else html = await renderEvidenceLibrary();
     if (version !== rendering) return;
-    if (html === renderedHTML) { updatedAt = new Date(); updateChrome(); return; }
+    if (!routeChanged && html === renderedHTML) { updatedAt = new Date(); updateChrome(); return; }
     renderedHTML = html;
+    renderedRoute = routeKey;
     updateView(html);
+    if (routeChanged) {
+      window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+      view.getAnimations().forEach(animation => animation.cancel());
+      if (!matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        view.animate([{ opacity: .65, transform: 'translateY(4px)' }, { opacity: 1, transform: 'translateY(0)' }],
+          { duration: 200, easing: 'cubic-bezier(.25,.1,.25,1)' });
+      }
+    }
     updatedAt = new Date(); updateChrome();
     const navigate = (data, hash) => { history.pushState(null, '', `?${new URLSearchParams(data)}#${hash}`); return render(); };
     document.querySelector('#search-form')?.addEventListener('submit', e => { e.preventDefault(); navigate(new FormData(e.target), 'evidence'); });
-    document.querySelector('#scene-search')?.addEventListener('submit', event => { event.preventDefault(); const params = new URLSearchParams(new FormData(event.target)); const state = new URLSearchParams(location.search).get('status'); if (state) params.set('status', state); navigate(params, 'benchmarks'); });
+    const sceneSearch = document.querySelector('#scene-search');
+    if (sceneSearch) sceneSearch.onsubmit = event => { event.preventDefault(); const params = new URLSearchParams(new FormData(event.target)); const state = new URLSearchParams(location.search).get('status'); if (state) params.set('status', state); navigate(params, 'benchmarks'); };
     view.querySelectorAll('[data-pick-result]').forEach(input => input.addEventListener('change', async () => {
       const params = new URLSearchParams(location.search); params.set(input.dataset.pickResult, input.value); await navigate(params, 'compare');
       if (params.get('left') && params.get('right')) document.querySelector('#comparison-result')?.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' });

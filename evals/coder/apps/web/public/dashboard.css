@@ -17,3 +17,10 @@ html{scrollbar-gutter:stable}main{min-height:100vh}
 .filter-indicator{position:absolute;left:0;top:0;pointer-events:none;border:1px solid var(--color-edge-strong);border-radius:8px;background:var(--color-surface-panel);transition:transform 250ms cubic-bezier(.32,.72,0,1),width 250ms cubic-bezier(.32,.72,0,1),height 250ms cubic-bezier(.32,.72,0,1)}
 .filter-chips[data-sliding-ready=true] a[aria-current=true]{background:transparent;border-color:transparent}
 @media(prefers-reduced-motion:reduce){.filter-indicator,.filter-chips a{transition:none}}
+
+/* Preserve the rail and slide its selection surface across routes. */
+aside nav{position:relative;isolation:isolate}
+aside nav a{position:relative;z-index:1;transition:color 150ms ease,background-color 150ms ease}
+aside nav[data-sliding-ready=true] a[aria-current=page]{background:transparent}
+.navigation-indicator{position:absolute;left:0;top:0;pointer-events:none;border-radius:8px;background:var(--color-surface-panel);transition:transform 250ms cubic-bezier(.32,.72,0,1),width 250ms cubic-bezier(.32,.72,0,1),height 250ms cubic-bezier(.32,.72,0,1)}
+@media(prefers-reduced-motion:reduce){.navigation-indicator,aside nav a{transition:none}}
