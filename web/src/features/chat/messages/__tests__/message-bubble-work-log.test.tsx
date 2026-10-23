@@ -48,6 +48,24 @@ describe('MessageBubble assistant work log', () => {
 
     expect(container.textContent).toContain('执行过程');
   });
+
+  it.each([true, false])('hides mixed tool activity in Personal throughout streaming=%s', (isStreaming) => {
+    act(() => root.render(<MemoryRouter><MessageBubble personal message={{
+      role: 'assistant', timestamp: 1000, completedAt: 24000,
+      content: [
+        { type: 'tool_use', id: 'failed', name: 'vendor__lookup', status: 'error', result: 'Internal failure' },
+        ...Array.from({ length: 3 }, (_, index) => ({
+          type: 'tool_use' as const, id: `lookup-${index}`, name: 'vendor__lookup',
+          status: isStreaming ? 'running' as const : 'done' as const,
+        })),
+        { type: 'text', text: '已经安排好了。' },
+      ],
+    }} isStreaming={isStreaming} progress={null} responseFeedbackEnabled={false} /></MemoryRouter>));
+
+    expect(container.textContent).toContain('已经安排好了。');
+    expect(container.textContent).not.toMatch(/执行过程|已完成 · 用时|暂时无法完成这一步|已处理相关信息|Internal failure/);
+    expect(container.querySelector('[data-assistant-activity-flow]')).toBeNull();
+  });
 });
 
 // Exercise a complete live-to-final transition through the real message renderer.
