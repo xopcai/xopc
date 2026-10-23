@@ -1,4 +1,4 @@
-import { spawn, type ChildProcess } from 'node:child_process';
+import type { ChildProcess } from 'node:child_process';
 import { createHash, randomBytes } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { connect, type Socket } from 'node:net';
@@ -6,6 +6,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 
 import { h264ParseConfiguration } from '@yume-chan/scrcpy';
 
+import { spawnPhoneCommand } from '../process/phone-process.js';
 import { managedScrcpyServerPath, SCRCPY_SHA256, SCRCPY_VERSION } from '../runtime-tools/phone-dependency-catalog.js';
 import { AdbPhoneDriver, runAdb } from './adb-driver.js';
 import { PhoneError } from './contracts.js';
@@ -135,10 +136,10 @@ export class LocalScrcpyProvider extends ScrcpyProvider {
       this.port = (await runAdb(this.adb, ['-s', this.serial, 'forward', 'tcp:0', `localabstract:${socketName}`])).toString().trim();
       if (!/^\d+$/.test(this.port)) throw new Error('Invalid ADB forwarding port');
       if (this.closing) throw new Error('Video closed');
-      this.process = spawn(this.adb, ['-s', this.serial, 'shell', `CLASSPATH=${this.remote}`, 'app_process', '/', 'com.genymobile.scrcpy.Server', SCRCPY_VERSION,
+      this.process = spawnPhoneCommand(this.adb, ['-s', this.serial, 'shell', `CLASSPATH=${this.remote}`, 'app_process', '/', 'com.genymobile.scrcpy.Server', SCRCPY_VERSION,
         `scid=${scid.toString(16)}`, 'tunnel_forward=true', 'audio=false', 'control=true', 'cleanup=false', `max_size=${this.tuning.maxSize}`,
         'max_fps=30', `video_bit_rate=${this.tuning.bitRate}`, 'video_codec=h264', 'video_codec_options=i-frame-interval=1',
-        'send_dummy_byte=true', 'send_device_meta=false', 'send_codec_meta=true', 'send_frame_meta=true', 'clipboard_autosync=false'], { stdio: ['ignore', 'ignore', 'ignore'], windowsHide: true });
+        'send_dummy_byte=true', 'send_device_meta=false', 'send_codec_meta=true', 'send_frame_meta=true', 'clipboard_autosync=false']);
       this.process.once('error', () => this.fail()); this.process.once('exit', () => this.fail());
       // The first connection has a dummy byte; retry until Android is listening.
       for (let attempt = 0; attempt < 60; attempt++) {

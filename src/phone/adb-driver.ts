@@ -1,4 +1,3 @@
-import { execFile } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { delimiter, join } from 'node:path';
@@ -8,6 +7,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { DOMParser } from 'linkedom';
 import sharp from 'sharp';
 
+import { runPhoneCommandBuffer, runPhoneCommandText } from '../process/phone-process.js';
 import { managedPhoneAdbPath } from '../runtime-tools/phone-dependency-catalog.js';
 import { PhoneError, type DiscoveredPhone, type PhoneAction, type PhoneElement, type PhoneObservation } from './contracts.js';
 
@@ -24,12 +24,9 @@ export function resolveAdbPath(configured?: string, stateDir?: string): string {
 
 export function runAdb(path: string, args: string[], signal?: AbortSignal, timeout = 15_000): Promise<Buffer> {
   signal?.throwIfAborted();
-  return new Promise((resolve, reject) => {
-    execFile(path, args, { encoding: 'buffer', maxBuffer: 16 * 1024 * 1024, timeout, signal, windowsHide: true }, (error, stdout) => {
-      if (error) reject(new PhoneError(signal?.aborted ? 'PHONE_CANCELLED' : 'PHONE_ADB_FAILED',
-        signal?.aborted ? 'Phone operation stopped' : `ADB command failed (${args.includes('screencap') ? 'screenshot' : args.includes('devices') ? 'discovery' : 'device operation'}). Check ADB, device authorization and connection.`));
-      else resolve(stdout);
-    });
+  return runPhoneCommandBuffer(path, args, signal, timeout).catch(() => {
+    throw new PhoneError(signal?.aborted ? 'PHONE_CANCELLED' : 'PHONE_ADB_FAILED',
+      signal?.aborted ? 'Phone operation stopped' : `ADB command failed (${args.includes('screencap') ? 'screenshot' : args.includes('devices') ? 'discovery' : 'device operation'}). Check ADB, device authorization and connection.`);
   });
 }
 
@@ -128,8 +125,7 @@ export class AdbPhoneDriver implements PhoneDriver {
       // Official CLI can capture non-idle layouts (e.g. marquee titles) without waiting for idle.
       for (let attempt = 0; attempt < 3 && !elements.length; attempt++) {
         try {
-          const data = await new Promise<string>((resolve, reject) => execFile(android, ['layout', '--device', serial, '--no-idle', '--flat'],
-            { encoding: 'utf8', timeout: 10_000, maxBuffer: 1024 * 1024, signal }, (error, stdout) => error ? reject(error) : resolve(stdout)));
+          const data = await runPhoneCommandText(android, ['layout', '--device', serial, '--no-idle', '--flat'], signal);
           elements = parseAndroidLayout(data);
         } catch { signal.throwIfAborted(); }
         if (!elements.length) await delay(350, undefined, { signal });
