@@ -14,7 +14,9 @@ test('leases physical streaming requests until EOF and blocks foreign model befo
   const originalFetch = globalThis.fetch;
   const oldUrl = process.env.XOPC_STYLE_POOL_URL, oldToken = process.env.XOPC_STYLE_POOL_TOKEN;
   let live = 0, peak = 0, calls = 0;
-  const server = createServer((_req, response) => {
+  const received: any[] = [];
+  const server = createServer((req, response) => {
+    let body = ''; req.on('data', chunk => { body += chunk; }); req.on('end', () => received.push(JSON.parse(body)));
     calls++; live++; peak = Math.max(peak, live);
     response.writeHead(200, { 'content-type': 'text/plain' }); response.write('first');
     setTimeout(() => { live--; response.end('last'); }, 25);
@@ -29,11 +31,13 @@ test('leases physical streaming requests until EOF and blocks foreign model befo
     process.env.XOPC_STYLE_POOL_URL = endpoint.url; process.env.XOPC_STYLE_POOL_TOKEN = endpoint.token;
     server.listen(0, '127.0.0.1'); await once(server, 'listening');
     const url = `http://127.0.0.1:${(server.address() as any).port}/v1/responses`;
-    protocol = installRequestProtocol({ out, expectedModel: 'test/gpt-5.6-sol', pool: 'generation', caseId: 'physical-cap' });
+    protocol = installRequestProtocol({ out, expectedModel: 'test/gpt-5.6-sol', pool: 'generation', caseId: 'physical-cap', phase: () => 'answer', modelContext: () => 'Historical time only; no source authorization.' });
     await Promise.all(Array.from({ length: 12 }, async () => {
-      const response = await fetch(url, { method: 'POST', body: JSON.stringify({ model: 'gpt-5.6-sol' }) });
+      const response = await fetch(url, { method: 'POST', body: JSON.stringify({ model: 'gpt-5.6-sol', instructions: 'Keep forgetting policy.', input: '请总结冬林论坛的安排。' }) });
       assert.equal(await response.text(), 'firstlast');
     }));
+    assert.equal(received.length, 12);
+    assert.ok(received.every(body => body.instructions === 'Keep forgetting policy.\n\nHistorical time only; no source authorization.' && body.input === '请总结冬林论坛的安排。'));
     assert.equal(peak, 4); assert.equal(calls, 12); assert.equal(live, 0);
     await assert.rejects(fetch(url, { method: 'POST', body: JSON.stringify({ model: 'unexpected' }) }), /unexpected model/);
     assert.equal(calls, 12);

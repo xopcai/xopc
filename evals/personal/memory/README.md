@@ -287,3 +287,29 @@ The next protocol should keep historical question time visible to the model sepa
 retrieval input. The consumed validation worlds are development regressions after diagnosis;
 a revised protocol needs newly sealed validation before full184. No runtime alteration was made
 after opening this holdout to turn the failed case into a pass.
+
+Protocol v3 separates historical question time at the evaluator's physical model adapter:
+`question-context.mts` appends time-only system context without replacing product instructions.
+The authenticated Gateway receives only the original question. Retrieval and current-author
+permission matching retain ordinary production behavior, including the real host timestamp.
+No clock, topK, FTS term limit, source permission or forgetting rule is changed. Saved physical
+payloads include the appended context; payload hashes describe bytes actually sent.
+`time-separation-audit.json` requires the original authored question (after the normal host
+stamp), its matching planner query hash, and time context in every answer-phase model request.
+This is evaluator transport metadata; it is not a product memory-retrieval improvement.
+
+`prepare-time-separation.py --consumed V3_EPISODES --out NEW_ROOT` copies all 16 consumed
+worlds verbatim into development regression and records archival split provenance in selection.
+It seals eight new worlds with different combinations of date/price fields, permissions,
+corrections, repeated reads and quoted non-deletion. Historical `split` values inside old case
+files do not grant unseen status. Run `run-p0-stages.mts` with the new root; it freezes the
+16/8 counts and requires every B QA/checkpoint plus protocol integrity before full184.
+Protocol smoke checks use consumed development cases, stay separate from formal scores and
+are never pooled into the new validation results.
+
+The protocol-v3 run completed development B at QA16/16 and episode16/16, but the new holdout
+was QA8/8 and episode7/8. Full184 was not started. A mixed-source session search exposed an
+original price whose first fact admission had been rejected and whose source was absent from
+the later forgotten target's evidence lineage. Answer omission does not negate input disclosure.
+See [the completed report](../../../docs/design/technical/personal-memory-time-separation-comparison-2026-10-23.md).
+These eight newly used validation worlds are now consumed development regressions.

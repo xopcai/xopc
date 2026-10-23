@@ -1,12 +1,13 @@
 import { randomUUID, createHash } from 'node:crypto';
 import { once } from 'node:events';
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync, appendFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync, appendFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 
 import { serve } from '@hono/node-server';
 import { installRequestProtocol } from './request-protocol.mjs';
+import { historicalQuestionContext } from './question-context.mjs';
 import { freezeMemoryConfig } from './config-snapshot.mjs';
 import { runRealtimeInput } from '../../coder/packages/adapters/xopc/src/realtime-run.js';
 
@@ -19,7 +20,8 @@ const write = (name: string, data: unknown) => writeFileSync(join(out, name), JS
 const started = Date.now();
 let requestPhase = values.mode === 'judge' ? 'grade' : 'learning';
 const requestProtocol = installRequestProtocol({ out, expectedModel: values.mode === 'judge' ? judge : model,
-  pool: values.mode === 'judge' ? 'judge' : 'generation', caseId: input.id, phase: () => requestPhase });
+  pool: values.mode === 'judge' ? 'judge' : 'generation', caseId: input.id, phase: () => requestPhase,
+  modelContext: () => requestPhase === 'answer' ? historicalQuestionContext(input.queryTime) : undefined });
 const sourceRoot = process.env.XOPC_STATE_DIR ?? join(homedir(), '.xopc');
 const credentials = process.env.XOPC_CREDENTIALS_DIR ?? join(sourceRoot, 'credentials');
 const judgeSnapshot = values.mode === 'judge' && !process.env.XOPC_MEMORY_CONFIG_SNAPSHOT ? freezeMemoryConfig() : undefined;
@@ -238,7 +240,7 @@ For each sufficient=true provide one exact contiguous quote from the correspondi
     const selected = (await response.json() as any).payload;
     const meta = db.prepare('SELECT active_transcript_id FROM sessions WHERE conversation_id=?').get(cid)!;
     let answer = '', error = '';
-    const message = `[Memory evaluation question time: ${new Date(input.queryTime).toISOString()}. Use the supplied question time for historical references; do not assume missing personal facts.]\n${input.query}`;
+    const message = input.query;
     requestPhase = 'answer';
     await runRealtimeInput({
       baseUrl, headers, conversationId: cid, transcriptId: String(meta.active_transcript_id), configVersion: selected.configVersion,
@@ -252,6 +254,19 @@ For each sufficient=true provide one exact contiguous quote from the correspondi
     const audits = db.prepare('SELECT * FROM execution_context_runs WHERE conversation_id=?').all(cid);
     const auditItems = db.prepare('SELECT i.* FROM execution_context_items i JOIN execution_context_runs r ON r.run_id=i.run_id WHERE r.conversation_id=?').all(cid);
     const transcript = db.prepare('SELECT * FROM transcript_entries WHERE transcript_id=? ORDER BY seq').all(String(meta.active_transcript_id));
+    const userRow = transcript.find((row: any) => row.role === 'user');
+    const storedUser = userRow ? JSON.parse(String(userRow.payload_json)) : {};
+    const wireText = typeof storedUser.content === 'string' ? storedUser.content : (storedUser.content ?? []).filter((part: any) => part.type === 'text').map((part: any) => part.text).join('\n');
+    const authored = /<user_message>\s*([\s\S]*?)\s*<\/user_message>/u.exec(wireText)?.[1] ?? wireText;
+    const queryHash = createHash('sha256').update(authored).digest('hex');
+    const answerInputs = readdirSync(join(out, 'model-inputs')).map(file => JSON.parse(readFileSync(join(out, 'model-inputs', file), 'utf8'))).filter(row => row.phase === 'answer');
+    const expectedContext = historicalQuestionContext(input.queryTime);
+    const timeSeparation = { queryHash, queryHashMatchesPlanner: audits.some((row: any) => row.query_hash === queryHash),
+      authoredQuestionUnwrapped: authored.replace(/^\[[^\]\n]+\]\s*/u, '') === input.query,
+      allAnswerRequestsHaveTimeContext: answerInputs.length > 0 && answerInputs.every(row => JSON.stringify(row.payload.instructions ?? row.payload.system ?? row.payload.messages?.filter((message: any) => message.role === 'system')).includes(expectedContext.replace(/\n/g, '\\n'))),
+      answerRequests: answerInputs.length, hostClockFrozen: false };
+    write('time-separation-audit.json', timeSeparation);
+    if (!timeSeparation.queryHashMatchesPlanner || !timeSeparation.authoredQuestionUnwrapped || !timeSeparation.allAnswerRequestsHaveTimeContext) throw new Error('Historical time separation audit failed');
     const storedText = [...before.assertions.map((r: any) => `[assertion:${r.assertion_id}] ${r.statement}`),
       ...before.knowledge.map((r: any) => `[knowledge:${r.knowledge_id}] ${r.content}`)].join('\n');
     const ids = new Set(auditItems.filter((r: any) => r.included === 1).map((r: any) => String(r.object_id)));
@@ -261,6 +276,7 @@ For each sufficient=true provide one exact contiguous quote from the correspondi
     write('result.json', { id: input.id, answer, error: error || (!answer.trim() ? 'Empty answer' : null), model,
       conversationId: cid, historySessions, storedText, selectedText, toolText, audits, auditItems,
       learningErrors, batches, query: input.query, queryTime: input.queryTime, durationMs: Date.now()-started,
+      questionContext: { transport: 'provider-system-context-v1', queryUnwrapped: message === input.query, historicalTime: new Date(input.queryTime).toISOString(), hostClockFrozen: false },
       policy: parsedConfig.userContext, sourceRolesPreserved: true, diagnosticsTruncated: false });
   }
 } catch (error) {

@@ -13,15 +13,19 @@ mkdirSync(out, { recursive: true });
 const save = (name: string, data: unknown) => writeFileSync(join(out, name), JSON.stringify(data, null, 2)+'\n');
 const hashFile = (file: string) => createHash('sha256').update(readFileSync(file)).digest('hex');
 if (hashFile(join(a,'pnpm-lock.yaml')) !== hashFile(join(b,'pnpm-lock.yaml'))) throw new Error('A/B lockfiles differ');
+if (hashFile(join(a,'pnpm-lock.yaml')) !== 'a8a79e5cd476d590cedfa55708c722c777f7add84902fac29aa2515f15a58270') throw new Error('Frozen dependency lock changed');
+if (hashFile(join(fixtures,'selection.json')) !== '29b5c620c8ba3b31b298a5aab968b322d7eb353b8ecdb8cf2c92ed8112a42e17') throw new Error('Original184 selection changed');
 const protocolFiles = readdirSync(join(a,'evals/personal/memory')).filter(file => /\.(mts|py)$/.test(file));
 for (const file of protocolFiles) if (hashFile(join(a,'evals/personal/memory',file)) !== hashFile(join(b,'evals/personal/memory',file))) throw new Error(`A/B evaluator differs: ${file}`);
+const episodeCounts = Object.fromEntries(['development','validation'].map(split => [split, JSON.parse(readFileSync(join(episodes,split,'selection.json'),'utf8')).cases.length]));
+if (episodeCounts.development !== 16 || episodeCounts.validation !== 8) throw new Error('Expected predeclared 16 consumed development / 8 new validation worlds');
 const frozen = freezeMemoryConfig();
 const poolPath = join(out, 'pools');
 const pool = spawn('python3', [join(a,'evals/personal/style/request_pools.py'), '--out', poolPath], { stdio: ['ignore','ignore','inherit'] });
 const endpoint = join(poolPath,'endpoint.json');
 const statuses: Record<string, unknown> = {};
-const manifest = { version: 2, orchestratorHash: hashFile(new URL(import.meta.url).pathname),
-  createdAt: new Date().toISOString(), a, b,
+const manifest = { version: 3, orchestratorHash: hashFile(new URL(import.meta.url).pathname),
+  createdAt: new Date().toISOString(), a, b, episodeCounts, questionTimeTransport: 'provider-system-context-v1',
   lockHash: hashFile(join(a,'pnpm-lock.yaml')), configSnapshotHash: frozen.hash,
   selectionHash: hashFile(join(fixtures,'selection.json')),
   episodeSelections: Object.fromEntries(['development','validation'].map(split => [split, hashFile(join(episodes,split,'selection.json'))])),
@@ -32,6 +36,7 @@ const manifest = { version: 2, orchestratorHash: hashFile(new URL(import.meta.ur
   stages: ['development A/B', 'candidate frozen', 'independent validation B', 'full184 A/B only after validation pass', 'native grading same saved answers'],
   repetitions: 1, resultsNeverRegeneratedForScore: true };
 save('manifest.json',manifest);
+save('full-regression-protocol.json', { frozenAt: new Date().toISOString(), nativeNonInferiorityMarginCases: 2, chineseNonInferiorityMarginCases: 1, temporalAndUpdateMarginCases: 1, zeroNewObservedP0LeakRequired: true, importantRegressionsRequireCaseReview: true, generationCombinedBudget: 130_000_000, judgeCombinedBudget: 8_000_000, generationBOverAUpperRatio: 1.20, fullWallClockBudgetHours: 10, billingCostUsd: null, note: 'Engineering resource and promotion criteria; no statistical noninferiority claim. All paired gains/losses and errors retained.' });
 const run = (cwd: string, args: string[], key: string) => new Promise<number>((done,reject) => {
   const child = spawn(process.execPath,['--import','tsx',...args], { cwd, env: { ...process.env,
     XOPC_MEMORY_CONFIG_SNAPSHOT: frozen.path, XOPC_MEMORY_CONFIG_HASH: frozen.hash }, stdio: ['ignore','pipe','pipe'] });
@@ -45,7 +50,7 @@ const capture = (cwd: string, fixture: string, label: string, key: string) => ru
 const accepted = (key: string) => {
   const summary = JSON.parse(readFileSync(join(out,key,'summary.json'),'utf8'));
   const completion = JSON.parse(readFileSync(join(out,key,'completion.json'),'utf8'));
-  return summary.completed === 8 && !completion.sourceChanged && !completion.errors
+  return summary.completed === episodeCounts[key.startsWith('development') ? 'development' : 'validation'] && summary.results.length === summary.completed && !completion.sourceChanged && !completion.errors
     && summary.results.every((row: any) => row.episode?.passed && row.judgment?.correct && !row.error);
 };
 try {
