@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { fetchHome, type HomeResponse } from './home-api';
 
-export function useHomeSnapshot(language: 'en' | 'zh', navigationKey: string) {
+export function useHomeSnapshot(language: 'en' | 'zh', navigationKey: string, includeAll = false) {
   const [home, setHome] = useState<HomeResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -12,7 +12,7 @@ export function useHomeSnapshot(language: 'en' | 'zh', navigationKey: string) {
     const version = ++requestVersion.current;
     setLoadError(null);
     try {
-      const snapshot = await fetchHome(language);
+      const snapshot = await (includeAll ? fetchHome(language, true) : fetchHome(language));
       if (version === requestVersion.current) setHome(snapshot);
     } catch (error) {
       if (version === requestVersion.current) {
@@ -21,7 +21,7 @@ export function useHomeSnapshot(language: 'en' | 'zh', navigationKey: string) {
     } finally {
       if (version === requestVersion.current) setLoading(false);
     }
-  }, [language]);
+  }, [language, includeAll]);
 
   useEffect(() => {
     // Task details are an overlay: returning to the workbench does not remount it.

@@ -78,7 +78,7 @@ describe('home workbench', () => {
     expect(workbench).toEqual({ needsUser: [], background: [], backgroundCount: 0 });
   });
 
-  it('counts all background work while returning only the first three rows', () => {
+  it('returns all background work so the client can expand beyond three rows', () => {
     const workbench = buildHomeWorkbench({
       locale: 'en',
       decisions: [],
@@ -101,8 +101,8 @@ describe('home workbench', () => {
     });
 
     expect(workbench.backgroundCount).toBe(4);
-    expect(workbench.background).toHaveLength(3);
-    expect(workbench.background.map((item) => item.kind)).toEqual(['running', 'scheduled', 'scheduled']);
+    expect(workbench.background).toHaveLength(4);
+    expect(workbench.background.map((item) => item.kind)).toEqual(['running', 'scheduled', 'scheduled', 'scheduled']);
   });
 
   it('localizes known system failures while preserving arbitrary task details', () => {
@@ -148,4 +148,17 @@ describe('home workbench', () => {
       detail: 'The work is complete and ready for your review.',
     });
   });
+  it.each(['input_required', 'approval_required', 'dependency_blocked'] as const)('prioritizes %s over review when a task still has a wait', (kind) => {
+    const model = { task: { id: 'waiting-review', title: 'Waiting review', phase: 'review', updatedAt: 1 }, operationalState: 'waiting', attention: [{ kind, summary: 'Resolve this wait first' }], allowedCommands: ['resolve_wait', 'close'] } as Parameters<typeof decisionFromTask>[0];
+    const decision = decisionFromTask(model, undefined, 'en');
+    expect(decision?.reason).toBe(({ input_required: 'needs_input', approval_required: 'approval_required', dependency_blocked: 'dependency' })[kind]);
+    expect(decision?.detail).toBe('Resolve this wait first');
+  });
+
+  it('retains paused tasks as reachable background items with their wait reason', () => {
+    const task = { id: 'paused-task', title: 'Paused', updatedAt: 1 } as Parameters<typeof buildHomeWorkbench>[0]['runningTasks'][number];
+    const home = buildHomeWorkbench({ locale: 'en', decisions: [], attention: [], activeWorkflowRuns: [], runningTasks: [task], waitingTaskReasons: { 'paused-task': 'Paused by user' }, scheduled: [], nowMs: 1 });
+    expect(home.background[0]).toMatchObject({ summary: 'Paused by user', statusLabel: 'Waiting', openAction: { type: 'open', href: '/tasks/paused-task' } });
+  });
+
 });

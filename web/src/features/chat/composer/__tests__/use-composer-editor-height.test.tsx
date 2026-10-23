@@ -19,9 +19,12 @@ describe('composer height scheduling', () => {
   let reads: number;
   let height: number;
   let width: number;
-  function Harness() {
+  let rendering = false;
+  function Harness({ seed, onReplace }: { seed?: { id: number; text: string }; onReplace?: () => void }) {
+    rendering = true;
     const selection = useRef(false);
-    editor = useComposerEditor({ disabled: false, shouldSyncSelectionRef: selection });
+    editor = useComposerEditor({ disabled: false, shouldSyncSelectionRef: selection, welcomeDraftSeed: seed, onExternalTextReplace: onReplace });
+    rendering = false;
     return <div ref={editor.editorRef} contentEditable suppressContentEditableWarning />;
   }
   const flush = () => act(() => {
@@ -86,4 +89,14 @@ describe('composer height scheduling', () => {
     act(() => root.unmount());
     expect(frames.size).toBe(0);
   });
+  it('applies a discussion draft after render without notifying the parent during render', () => {
+    const callbackPhases: boolean[] = [];
+    const replace = () => callbackPhases.push(rendering);
+    act(() => root.render(<Harness seed={{ id: 1, text: 'Discuss the report evidence' }} onReplace={replace} />));
+    expect(editor.value).toBe('Discuss the report evidence');
+    expect(callbackPhases).toEqual([false]);
+    act(() => root.render(<Harness seed={{ id: 1, text: 'Discuss the report evidence' }} onReplace={replace} />));
+    expect(callbackPhases).toEqual([false]);
+  });
+
 });

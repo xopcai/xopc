@@ -5,8 +5,9 @@ import { ExternalLink, FileText } from 'lucide-react';
 
 import { useWorkspacePreviewStore } from '@/stores/workspace-preview-store';
 
-export function TaskResultEvidence({ evidence, projectId, conversationId, language }: {
+export function TaskResultEvidence({ evidence, projectId, conversationId, language, onOpenFile }: {
   evidence: TaskEvidence[]; projectId?: string; conversationId?: string; language: 'zh' | 'en';
+  onOpenFile?: (path: string) => void;
 }) {
   const setPath = useWorkspacePreviewStore((state) => state.setPath);
   if (!evidence.length) return null;
@@ -20,7 +21,7 @@ export function TaskResultEvidence({ evidence, projectId, conversationId, langua
       return <div key={`${item.title}-${index}`} className="min-w-0 rounded-lg border border-edge-subtle p-3">
         <TaskExpandableContent content={label} contentKey={`${conversationId ?? projectId}:evidence-title:${index}:${item.title}`} language={language} previewHeight={60}>
         {external ? <a className={controlClass} href={uri} target="_blank" rel="noopener noreferrer"><ExternalLink className="size-4 shrink-0" /><span className="min-w-0 break-words">{label}</span></a>
-          : file && (projectId || conversationId) ? <button type="button" className={controlClass} onClick={() => setPath(uri, null, projectId, conversationId)}><FileText className="size-4 shrink-0" />{label}</button>
+          : file && (projectId || conversationId) ? <button type="button" className={controlClass} onClick={() => onOpenFile ? onOpenFile(uri) : setPath(uri, null, projectId, conversationId)}><FileText className="size-4 shrink-0" />{label}</button>
           : <p className="break-words [overflow-wrap:anywhere] text-sm font-medium text-fg">{label}</p>}
         </TaskExpandableContent>
         {external && item.kind === 'artifact' && <ArtifactRecovery key={uri} uri={uri} zh={language === 'zh'} />}

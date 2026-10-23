@@ -10,6 +10,8 @@ import { useEffect, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 
+import { HomeEvidenceLink } from './home-evidence-link';
+
 type FeedbackKind = HomeOpportunityFeedbackRequest['kind'];
 
 interface HomeAdvisorCopy {
@@ -100,7 +102,7 @@ function OpportunityBody({
           ))}
         </div>
       ) : null}
-      <details className="mt-4 group">
+      <details open className="mt-4 group">
         <summary className="flex min-h-9 cursor-pointer list-none items-center gap-1.5 text-xs font-medium text-fg-muted hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
           {copy.evidence}
           <ChevronDown className="size-3.5 transition-transform group-open:rotate-180" aria-hidden />
@@ -108,7 +110,7 @@ function OpportunityBody({
         <ul className="mt-2 space-y-2 border-l border-edge pl-3 text-xs leading-5 text-fg-muted">
           {opportunity.evidence.map((item) => (
             <li key={item.id}>
-              {item.href ? <a href={`#${item.href}`} className="hover:text-accent hover:underline">{item.observation}</a> : item.observation}
+              <HomeEvidenceLink href={item.href}>{item.observation}</HomeEvidenceLink>
             </li>
           ))}
         </ul>
@@ -181,7 +183,7 @@ export function HomeAdvisorCard({
         <h3 id="home-advisor-question" className="mt-3 text-lg font-semibold text-fg">{advisor.question.question}</h3>
         <div className="mt-4 flex flex-wrap gap-2">
           {advisor.question.options.map((option) => (
-            <Button key={option.id} type="button" variant="secondary" className="min-h-11" onClick={() => onClarification(advisor.question.question, option.label)}>{option.label}</Button>
+            <Button key={option.id} type="button" variant="secondary" className="min-h-11" disabled={busy} onClick={() => onClarification(advisor.question.question, option.label)}>{option.label}</Button>
           ))}
         </div>
       </section>
@@ -246,7 +248,7 @@ export function HomeAdvisorCard({
                 ['source_incorrect', copy.sourceIncorrect],
                 ['less_like_this', copy.lessLikeThis],
               ] as Array<[FeedbackKind, string]>).map(([kind, label]) => (
-                <button key={kind} type="button" className="min-h-10 w-full rounded-lg px-3 text-left text-sm text-fg-muted hover:bg-surface-hover hover:text-fg" onClick={() => onFeedback(selected, kind)}>{label}</button>
+                <button key={kind} type="button" disabled={busy} className="min-h-10 w-full rounded-lg px-3 text-left text-sm text-fg-muted hover:bg-surface-hover hover:text-fg" onClick={() => onFeedback(selected, kind)}>{label}</button>
               ))}
             </div>
           </details>
@@ -257,7 +259,7 @@ export function HomeAdvisorCard({
           <p className="text-xs font-medium text-fg-subtle">{copy.alternatives}</p>
           <div className="mt-2 flex flex-wrap gap-2">
             {opportunities.filter((item) => item.id !== selected.id).map((item) => (
-              <button key={item.id} type="button" className="min-h-10 rounded-lg border border-edge px-3 text-left text-sm text-fg-muted hover:bg-surface-hover hover:text-fg" onClick={() => setSelectedId(item.id)}>{item.title}</button>
+              <button key={item.id} type="button" disabled={busy} className="min-h-10 rounded-lg border border-edge px-3 text-left text-sm text-fg-muted hover:bg-surface-hover hover:text-fg" onClick={() => setSelectedId(item.id)}>{item.title}</button>
             ))}
           </div>
         </div>

@@ -24,6 +24,7 @@ import {
 import type { WorkflowRunSummary } from '../workflows/domain/index.js';
 import type { WorkflowRunService } from '../workflows/service/workflow-run-service.js';
 import { TaskRepository, type TaskAggregate } from './task-repository.js';
+import { TaskRunRepository } from './task-run-repository.js';
 import { TaskReadModelProjector, type TaskReadModel } from './task-read-model-projector.js';
 import { AttentionGovernor } from './attention-governor.js';
 
@@ -143,7 +144,8 @@ export function decisionFromTask(
   const task = model.task;
   if (task.phase === 'closed' || (model.operationalState === 'waiting' && model.attention.length === 0)) return null;
   const isChinese = locale?.toLowerCase().startsWith('zh') ?? task.locale === 'zh';
-  if (task.phase === 'review') {
+  const waitingAttention = model.attention.some((item) => ['input_required', 'approval_required', 'dependency_blocked'].includes(item.kind));
+  if (task.phase === 'review' && !waitingAttention) {
     return {
       id: `task:${task.id}:review`,
       response: { kind: 'task', taskId: task.id, canRetry: false },
@@ -163,6 +165,7 @@ export function decisionFromTask(
   const item = model.attention.find((candidate) => [
     'input_required',
     'approval_required',
+    'dependency_blocked',
     'run_failed',
     'verification_failed',
     'overdue',
@@ -172,6 +175,7 @@ export function decisionFromTask(
     ? 'needs_input'
     : item.kind === 'approval_required'
       ? 'approval_required'
+      : item.kind === 'dependency_blocked' ? 'dependency'
       : item.kind === 'run_failed' || item.kind === 'verification_failed'
         ? 'retry'
         : item.kind === 'overdue'
@@ -211,6 +215,8 @@ function homeActionCopy(locale?: string) {
         viewProgress: '查看进度',
         viewSchedule: '查看计划',
         runningTask: '任务正在推进',
+        waitingTask: '等待条件',
+        dependencyRecommendation: '先查看并处理依赖任务，再继续推进。',
         runningWorkflow: '工作流正在推进',
         scheduled: '下一项定时工作',
         inputRecommendation: '建议补充所需信息，让工作继续推进。',
@@ -228,6 +234,8 @@ function homeActionCopy(locale?: string) {
         viewProgress: 'View progress',
         viewSchedule: 'View schedule',
         runningTask: 'Task in progress',
+        waitingTask: 'Waiting',
+        dependencyRecommendation: 'Resolve the dependency before continuing.',
         runningWorkflow: 'Workflow in progress',
         scheduled: 'Next scheduled work',
         inputRecommendation: 'Provide the missing information so the work can continue.',
@@ -250,6 +258,7 @@ function formatScheduleDistance(value: string, nowMs: number, locale?: string): 
 function decisionRecommendation(decision: HomeDecision, copy: ReturnType<typeof homeActionCopy>): string {
   if (decision.reason === 'needs_input' || decision.reason === 'user_input') return copy.inputRecommendation;
   if (decision.reason === 'approval_required' || decision.reason === 'user_approval') return copy.approvalRecommendation;
+  if (decision.reason === 'dependency') return copy.dependencyRecommendation;
   if (decision.reason === 'retry') return copy.retryRecommendation;
   return copy.reviewRecommendation;
 }
@@ -260,6 +269,7 @@ export function buildHomeWorkbench(input: {
   attention: HomeAttention[];
   activeWorkflowRuns: HomeWorkflowRun[];
   runningTasks: TaskAggregate[];
+  waitingTaskReasons?: Record<string, string>;
   scheduled: HomeAutomation[];
   nowMs: number;
 }): Pick<HomeResponse, 'needsUser' | 'background' | 'backgroundCount'> {
@@ -356,7 +366,8 @@ export function buildHomeWorkbench(input: {
       id: `task:${task.id}`,
       kind: 'running',
       title: task.title,
-      summary: copy.runningTask,
+      summary: input.waitingTaskReasons?.[task.id] ?? copy.runningTask,
+      ...(input.waitingTaskReasons?.[task.id] ? { statusLabel: copy.waitingTask } : {}),
       updatedAt: task.updatedAt,
       openAction,
       secondaryActions: [],
@@ -383,7 +394,7 @@ export function buildHomeWorkbench(input: {
   const allBackground = [...workflows, ...tasks, ...scheduled];
   return {
     needsUser,
-    background: allBackground.slice(0, 3),
+    background: allBackground,
     backgroundCount: allBackground.length,
   };
 }
@@ -398,7 +409,7 @@ export class HomeQueryService {
     private readonly getAdvisor: (locale?: string) => HomeAdvisor = () => ({ state: 'quiet', reason: 'no_change' }),
   ) {}
 
-  async getSnapshot(locale?: string): Promise<HomeResponse> {
+  async getSnapshot(locale?: string, includeAll = false): Promise<HomeResponse> {
     const agents = await listGatewayAgents();
     const defaultAgent = agents.agents.find((agent) => agent.id === agents.defaultId) ?? agents.agents[0];
     const workflowRunStore = this.service.createWorkflowRunService()
@@ -509,15 +520,23 @@ export class HomeQueryService {
         })),
     ].sort((left, right) => right.updatedAt - left.updatedAt);
     const governed = this.#attentionGovernor.project({
+      includeAll,
       decisions: decisionCandidates,
       attention: attentionCandidates,
     });
     const decisions = governed.decisions;
     const attention = governed.attention;
 
+    const waitingTaskReasons: Record<string, string> = {};
     const runningTasks = tasks.filter((task) => {
-      const state = this.#projector.project(task).operationalState;
-      return state === 'queued' || state === 'running' || state === 'verifying';
+      if (task.phase === 'closed') return false;
+      const model = this.#projector.project(task);
+      if (model.operationalState === 'waiting' && model.attention.length === 0) {
+        waitingTaskReasons[task.id] = new TaskRunRepository().listActiveWaits(task.id)[0]?.reason
+          ?? homeActionCopy(locale).waitingTask;
+        return true;
+      }
+      return ['queued', 'running', 'verifying'].includes(model.operationalState);
     });
     const workbench = buildHomeWorkbench({
       locale,
@@ -525,6 +544,7 @@ export class HomeQueryService {
       attention,
       activeWorkflowRuns,
       runningTasks,
+      waitingTaskReasons,
       scheduled: upcomingAutomations,
       nowMs,
     });

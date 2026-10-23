@@ -39,6 +39,7 @@ import {
   retryWorkAttention,
   submitHomeOpportunityFeedback,
   undoHomeOpportunityFeedback,
+  type TaskDetail,
 } from '@/features/tasks/home-api';
 import { useHomeSnapshot } from '@/features/tasks/use-home-snapshot';
 import { HomeQuickComposer } from '@/features/tasks/home-quick-composer';
@@ -87,6 +88,7 @@ function DecisionCard({
   locale,
   onAction,
   onComplete,
+  onUpdated,
 }: {
   item: HomeWorkbenchItem;
   busy: boolean;
@@ -96,20 +98,23 @@ function DecisionCard({
   locale: 'en' | 'zh';
   onAction: HomeActionRunner;
   onComplete: () => void;
+  onUpdated: (detail: TaskDetail) => void;
 }) {
   const [searchParams, setSearchParams] = useSearchParams();
-  const reviewAction = item.primaryAction?.type === 'task_review' ? item.primaryAction : undefined;
-  const reviewOpen = Boolean(reviewAction && searchParams.get('reviewTask') === reviewAction.taskId);
+  const taskMatch = item.openAction?.type === 'open' ? /^\/tasks\/([^/?#]+)/.exec(item.openAction.href) : null;
+  const reviewTaskId = item.primaryAction?.type === 'task_review' ? item.primaryAction.taskId
+    : taskMatch ? decodeURIComponent(taskMatch[1]) : undefined;
+  const reviewOpen = Boolean(reviewTaskId && searchParams.get('reviewTask') === reviewTaskId);
   const setReviewOpen = (open: boolean) => {
     const next = new URLSearchParams(searchParams);
-    if (open && reviewAction) next.set('reviewTask', reviewAction.taskId);
+    if (open && reviewTaskId) next.set('reviewTask', reviewTaskId);
     else next.delete('reviewTask');
     setSearchParams(next);
   };
   const due = item.dueAt ? `${dueLabel} ${formatMediumDateTime(new Date(item.dueAt), locale)}` : null;
   const kicker = item.kind === 'failure' ? failureLabel : due;
   return (
-    <article className="px-5 py-5 sm:px-6 sm:py-6">
+    <article className="px-5 py-5 sm:px-6 sm:py-6" aria-busy={busy}>
       {kicker ? (
         <div className="mb-2 flex items-center gap-2 text-xs font-medium text-warning">
           <span className="size-1.5 rounded-full bg-warning" aria-hidden />
@@ -139,8 +144,8 @@ function DecisionCard({
               variant="primary"
               className="h-9 rounded-lg px-3.5 text-xs"
               disabled={busy}
-              aria-expanded={reviewAction ? reviewOpen : undefined}
-              onClick={() => reviewAction ? setReviewOpen(!reviewOpen) : onAction(item.primaryAction!, item.id)}
+              aria-expanded={reviewTaskId && ['task_review', 'open'].includes(item.primaryAction.type) ? reviewOpen : undefined}
+              onClick={() => reviewTaskId && ['task_review', 'open'].includes(item.primaryAction!.type) ? setReviewOpen(!reviewOpen) : onAction(item.primaryAction!, item.id)}
             >
               {item.primaryAction.label}
             </Button>
@@ -159,21 +164,27 @@ function DecisionCard({
           ))}
         </div>
       ) : null}
-      {reviewOpen && reviewAction ? <HomeTaskReview taskId={reviewAction.taskId} language={locale} onComplete={() => { setReviewOpen(false); onComplete(); }} /> : null}
+      {reviewTaskId && item.primaryAction?.type === 'retry_task' ? <Button variant="ghost" className="mt-2" aria-expanded={reviewOpen} onClick={() => setReviewOpen(!reviewOpen)}>{locale === 'zh' ? '查看结果与依据' : 'View result and evidence'}</Button> : null}
+      {reviewOpen && reviewTaskId ? <HomeTaskReview key={reviewTaskId} taskId={reviewTaskId} language={locale} onUpdated={onUpdated} onComplete={() => { setReviewOpen(false); onComplete(); }} /> : null}
     </article>
   );
 }
 
-function BackgroundRow({ item, onAction }: { item: HomeWorkbenchItem; onAction: HomeActionRunner }) {
+function BackgroundRow({ item, onAction, language, onUpdated }: { item: HomeWorkbenchItem; onAction: HomeActionRunner; language: 'zh' | 'en'; onUpdated: (detail: TaskDetail) => void }) {
+  const [expanded, setExpanded] = useState(false);
+  const taskMatch = item.openAction?.type === 'open' ? /^\/tasks\/([^/?#]+)/.exec(item.openAction.href) : null;
+  const taskId = taskMatch ? decodeURIComponent(taskMatch[1]) : undefined;
   const icon = item.kind === 'scheduled'
     ? <CalendarClock className="size-4" aria-hidden />
-    : <span className="size-1.5 rounded-full bg-success" aria-hidden />;
+    : <span className="size-1.5 rounded-full bg-fg-subtle" aria-hidden />;
   return (
+    <div>
     <button
       type="button"
       className="flex min-h-16 w-full items-center gap-3 py-3 text-left outline-none hover:text-fg focus-visible:rounded-md focus-visible:ring-2 focus-visible:ring-accent"
       disabled={!item.openAction}
-      onClick={() => item.openAction && onAction(item.openAction, item.id)}
+      aria-expanded={taskId ? expanded : undefined}
+      onClick={() => taskId ? setExpanded((value) => !value) : item.openAction && onAction(item.openAction, item.id)}
     >
       <span className="flex size-7 shrink-0 items-center justify-center text-fg-subtle">{icon}</span>
       <span className="min-w-0 flex-1">
@@ -183,6 +194,8 @@ function BackgroundRow({ item, onAction }: { item: HomeWorkbenchItem; onAction: 
       {item.statusLabel ? <span className="shrink-0 text-xs text-fg-subtle">{item.statusLabel}</span> : null}
       {item.openAction ? <ChevronRight className="size-4 shrink-0 text-fg-subtle" aria-hidden /> : null}
     </button>
+    {taskId && expanded ? <HomeTaskReview taskId={taskId} language={language} onUpdated={onUpdated} onComplete={() => setExpanded(false)} /> : null}
+    </div>
   );
 }
 
@@ -195,10 +208,13 @@ export function HomePage() {
   const location = useLocation();
   const setPageHeader = usePageHeaderStore((state) => state.setPageHeader);
   const clearPageHeader = usePageHeaderStore((state) => state.clearPageHeader);
-  const { home, loading, loadError, setLoadError, load } = useHomeSnapshot(language, location.key);
+  const [showAllAttention, setShowAllAttention] = useState(false);
+  const { home, loading, loadError, setLoadError, load } = useHomeSnapshot(language, location.key, showAllAttention);
   const [conversationOpen, setConversationOpen] = useState(false);
   const [intent, setIntent] = useState('');
   const actionPendingRef = useRef(false);
+  const [actionReceipt, setActionReceipt] = useState<{ message: string; href?: string }>();
+  const [showAllBackground, setShowAllBackground] = useState(false);
   const [busyItemId, setBusyItemId] = useState<string | null>(null);
   const [advisorBusy, setAdvisorBusy] = useState(false);
   const [advisorReceipt, setAdvisorReceipt] = useState<HomeAdvisorReceipt>();
@@ -381,17 +397,22 @@ export function HomePage() {
     if (action.type === 'task_review' || actionPendingRef.current) return;
     actionPendingRef.current = true;
     setBusyItemId(itemId);
+    setActionReceipt(undefined);
     setLoadError(null);
     void (async () => {
       try {
         if (action.type === 'retry_task') {
           await retryHomeTask(action.taskId, language);
+          setActionReceipt({ message: language === 'zh' ? '任务已重新开始，可查看执行进度。' : 'Task restarted. View progress.', href: modalizeTaskDetailHref('/', `/tasks/${encodeURIComponent(action.taskId)}`) });
         } else if (action.type === 'connector_decision') {
           await respondToWorkDecision({ kind: 'connector_approval', approvalId: action.approvalId }, action.decision);
+          setActionReceipt({ message: language === 'zh' ? (action.decision === 'approve' ? '已批准授权，任务状态将自动更新。' : '已拒绝授权。') : (action.decision === 'approve' ? 'Permission approved. Task status will update.' : 'Permission denied.') });
         } else if (action.type === 'retry_run') {
-          await retryWorkAttention({ kind: action.subjectKind, runId: action.runId });
+          const result = await retryWorkAttention({ kind: action.subjectKind, runId: action.runId });
+          setActionReceipt({ message: language === 'zh' ? '已发起重试，可查看新的执行结果。' : 'Retry started. Follow the new execution.', href: result.conversationId ? `/chat/${encodeURIComponent(result.conversationId)}` : action.subjectKind === 'workflow_run' ? `/workflows?runId=${encodeURIComponent(result.runId)}` : `/automations?run=${encodeURIComponent(result.runId)}` });
         } else if (action.type === 'acknowledge_run') {
           await acknowledgeWorkAttention({ kind: action.subjectKind, runId: action.runId });
+          setActionReceipt({ message: language === 'zh' ? '已确认此异常，已从待处理事项移除。' : 'Issue acknowledged and removed from pending items.' });
         }
         await load();
       } catch (error) {
@@ -402,6 +423,16 @@ export function HomePage() {
       }
     })();
   }, [language, load, navigate]);
+
+  const onTaskUpdated = useCallback((detail: TaskDetail) => {
+    setActionReceipt({
+      message: language === 'zh'
+        ? (detail.task.phase === 'closed' ? '任务已验收完成。' : '操作已保存，任务状态已更新。')
+        : (detail.task.phase === 'closed' ? 'Task accepted.' : 'Action saved. Task status updated.'),
+      href: modalizeTaskDetailHref('/', `/tasks/${encodeURIComponent(detail.task.id)}`),
+    });
+    void load();
+  }, [language, load]);
 
   const refreshAdvisor = useCallback(() => {
     setAdvisorBusy(true);
@@ -588,11 +619,16 @@ export function HomePage() {
       />
 
       {loadError ? (
-        <div className="mb-6 flex items-center justify-between gap-3 rounded-xl border border-danger/25 bg-danger-soft px-4 py-3 text-sm text-danger">
+        <div role="alert" className="mb-6 flex items-center justify-between gap-3 rounded-xl border border-danger/25 bg-danger-soft px-4 py-3 text-sm text-danger">
           <span>{loadError}</span>
           <Button type="button" variant="ghost" className="h-8 px-2" onClick={() => void load()}>{t.home.retry}</Button>
         </div>
       ) : null}
+
+      {actionReceipt ? <div role="status" className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-success/25 bg-success-soft px-4 py-3 text-sm text-fg">
+        <span>{actionReceipt.message}</span>
+        {actionReceipt.href ? <Button variant="ghost" onClick={() => navigate(actionReceipt.href!)}>{language === 'zh' ? '查看进展与结果' : 'View progress and result'}</Button> : null}
+      </div> : null}
 
       {loading ? <HomeSkeleton /> : home ? (
         <div className={isIdle ? 'mx-auto my-auto w-full max-w-[640px]' : 'w-full'}>
@@ -685,9 +721,11 @@ export function HomePage() {
                     locale={language}
                     onAction={runAction}
                     onComplete={() => void load()}
+                    onUpdated={onTaskUpdated}
                   />
                 ))}
               </div>
+              {showAllAttention || (home.attentionPolicy?.suppressedDecisionCount ?? 0) + (home.attentionPolicy?.suppressedAttentionCount ?? 0) > 0 ? <Button variant="ghost" className="mt-2" aria-expanded={showAllAttention} onClick={() => setShowAllAttention((value) => !value)}>{language === 'zh' ? (showAllAttention ? '收起待处理事项' : `查看其余 ${(home.attentionPolicy?.suppressedDecisionCount ?? 0) + (home.attentionPolicy?.suppressedAttentionCount ?? 0)} 项待处理事项`) : (showAllAttention ? 'Show fewer pending items' : `View ${(home.attentionPolicy?.suppressedDecisionCount ?? 0) + (home.attentionPolicy?.suppressedAttentionCount ?? 0)} more pending items`)}</Button> : null}
             </section>
           ) : null}
 
@@ -699,8 +737,9 @@ export function HomePage() {
                 <span className="text-xs text-fg-subtle">{interpolate(t.home.backgroundCount, { count: home.backgroundCount })}</span>
               </div>
               <div className="mt-2 divide-y divide-edge-subtle border-y border-edge-subtle">
-                {home.background.map((item) => <BackgroundRow key={item.id} item={item} onAction={runAction} />)}
+                {(showAllBackground ? home.background : home.background.slice(0, 3)).map((item) => <BackgroundRow key={item.id} item={item} language={language} onAction={runAction} onUpdated={onTaskUpdated} />)}
               </div>
+              {home.background.length > 3 ? <Button variant="ghost" className="mt-2" aria-expanded={showAllBackground} onClick={() => setShowAllBackground((value) => !value)}>{language === 'zh' ? (showAllBackground ? '收起' : `查看全部 ${home.backgroundCount} 项`) : (showAllBackground ? 'Show less' : `View all ${home.backgroundCount} items`)}</Button> : null}
             </section>
           ) : null}
         </div>

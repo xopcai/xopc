@@ -33,8 +33,8 @@ describe('file open menu', () => {
     container.remove();
   });
 
-  function render(disabled = false) {
-    act(() => root.render(<FileOpenMenu systemApp={{ onClick: systemOpen, disabled }}
+  function render(disabled = false, variant: 'split' | 'menu' = 'split') {
+    act(() => root.render(<FileOpenMenu variant={variant} systemApp={{ onClick: systemOpen, disabled }}
       chooseApp={{ onClick: chooseApp }} recommendedApps={recommendedApps}
       recentApps={[...recommendedApps, otherApp]} onOpenWithApp={openWith} />));
   }
@@ -44,6 +44,25 @@ describe('file open menu', () => {
     await act(async () => trigger.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })));
     return document.querySelector<HTMLElement>('[role="menu"]')!;
   }
+
+  it('exposes every open action as menu items without another toolbar button', async () => {
+    render(false, 'menu');
+    const m = messages('en').workspace;
+    expect(container.querySelector('[aria-haspopup]')).toBeNull();
+    const items = [...container.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')];
+    expect(items.map((item) => item.textContent)).toEqual([
+      m.openSystemApp, 'Visual Studio Code', 'TextEdit', m.chooseApp,
+    ]);
+    await act(async () => items[0]!.click());
+    await act(async () => items[1]!.click());
+    await act(async () => items[2]!.click());
+    await act(async () => items[3]!.click());
+    expect(systemOpen).toHaveBeenCalledOnce();
+    expect(openWith.mock.calls).toEqual([[recommendedApps[0].path], [otherApp.path]]);
+    expect(chooseApp).toHaveBeenCalledOnce();
+    render(true, 'menu');
+    expect([...container.querySelectorAll<HTMLButtonElement>('button')].every((button) => button.disabled)).toBe(true);
+  });
 
   it('uses the matching application icon and opens with the displayed app', async () => {
     render();

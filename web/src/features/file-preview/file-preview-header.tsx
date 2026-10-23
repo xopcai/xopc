@@ -1,8 +1,7 @@
-import { Check, ChevronRight, Copy, Download, ExternalLink, Eye, Folders, FolderOpen, Link2, Loader2, Maximize2, MessageSquarePlus, Minimize2, MoreHorizontal, Paperclip, Pencil, RefreshCw, Save, WrapText, X } from 'lucide-react';
+import { Check, Copy, Download, ExternalLink, Eye, Folders, FolderOpen, Link2, Loader2, Maximize2, MessageSquarePlus, Minimize2, MoreHorizontal, Paperclip, Pencil, RefreshCw, Save, WrapText, X } from 'lucide-react';
 import { useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 
 import { FileOpenMenu, type ChooseAppAction, type OpenWithApp } from '@/features/file-preview/file-open-menu';
-import { FileIcon } from '@/features/file-tree/file-icon';
 import { SlidingTabList } from '@/components/ui/sliding-tab-list';
 import { WorkspaceTreeControlContext } from '@/features/right-workspace/workspace-context';
 import { APP_CHROME_NO_DRAG_CLASS } from '@/components/shell/app-chrome';
@@ -105,7 +104,7 @@ function PreviewMenuItem({
 
 /** Shared file header, using the workspace preview's existing layout and actions. */
 export function FilePreviewHeader({
-  referenceActions = [], onRefresh, onRetrySave, name, filePath, subtitle, controller, actions, expanded, onToggleExpanded, onClose,
+  referenceActions = [], onRefresh, onRetrySave, subtitle, controller, actions, expanded, onToggleExpanded, onClose,
   hideClose, edit, wordWrap, editInNewChat, share, openWithSystemApp, chooseApp,
   recommendedApps = [], recentApps = [], onOpenWithApp, onRevealInFolder, copyPath, textView, openInBrowser,
 }: FilePreviewHeaderProps) {
@@ -116,7 +115,6 @@ export function FilePreviewHeader({
     : controller.plugin.id === 'docx' ? labels.chat.attachmentPreviewDocument
       : controller.plugin.id === 'spreadsheet' ? labels.chat.attachmentPreviewSpreadsheet
         : m.preview;
-  const parentSegments = (filePath ?? '').replace(/\\/g, '/').split('/').filter(Boolean).slice(0, -1);
   const desktop = isElectron();
   const treeControl = useContext(WorkspaceTreeControlContext);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -159,21 +157,10 @@ export function FilePreviewHeader({
   return (
     <div data-workspace-toolbar className={cn('shrink-0 bg-surface-base px-3 py-2 sm:px-4', APP_CHROME_NO_DRAG_CLASS)}>
       <div className="flex min-w-0 flex-wrap items-center gap-2">
-        <div className="flex h-10 min-w-0 flex-[1_1_12rem] items-center gap-2 overflow-hidden rounded-full border border-edge-subtle bg-surface-panel px-3" title={filePath ?? name}>
-          <FileIcon name={name} />
-          {parentSegments.length ? <span className="flex min-w-0 shrink-[100] items-center gap-1.5 overflow-hidden text-sm text-fg-muted">
-            {parentSegments.map((segment, index) => <span key={index} className="flex shrink-0 items-center gap-1.5">
-              <span>{segment}</span><ChevronRight className="size-3.5 text-fg-subtle" aria-hidden />
-            </span>)}
-          </span> : null}
-          <h2 className="min-w-0 max-w-full truncate text-sm font-semibold text-fg" title={name}>{name}</h2>
-        </div>
         <div className="ml-auto flex shrink-0 items-center gap-1.5">
           {treeControl ? <HeaderButton label={treeControl.label} active={treeControl.active} onClick={treeControl.onToggle}>
             <Folders className="size-4" strokeWidth={1.75} aria-hidden />
           </HeaderButton> : null}
-          <FileOpenMenu systemApp={openWithSystemApp} chooseApp={chooseApp} recommendedApps={recommendedApps}
-            recentApps={recentApps} onOpenWithApp={onOpenWithApp} />
           <HeaderButton label={expanded ? m.collapsePreview : m.expandPreview} active={expanded} disabled={!onToggleExpanded} onClick={onToggleExpanded}>
             {expanded ? <Minimize2 className="size-4" aria-hidden /> : <Maximize2 className="size-4" aria-hidden />}
           </HeaderButton>
@@ -188,6 +175,8 @@ export function FilePreviewHeader({
             </button>
             {moreMenuOpen ? (
               <div ref={menuRef} role="menu" aria-label={m.moreActions} data-file-preview-menu className="absolute right-0 top-full z-50 mt-1 max-h-[min(32rem,calc(100dvh-8rem))] w-60 max-w-[calc(100vw-2rem)] overflow-y-auto overscroll-contain rounded-lg border border-edge bg-surface-overlay p-1 shadow-popover">
+                <FileOpenMenu variant="menu" onAction={runMenuAction} systemApp={openWithSystemApp} chooseApp={chooseApp}
+                  recommendedApps={recommendedApps} recentApps={recentApps} onOpenWithApp={onOpenWithApp} />
                 {referenceActions.map((action) => <PreviewMenuItem key={action.label} icon={<Paperclip className="size-4" />} label={action.label} disabled={action.disabled} onClick={() => runMenuAction(action.onClick)} />)}
                 {onRetrySave ? <PreviewMenuItem icon={<Save className="size-4" />} label={language === 'zh' ? '重试保存' : 'Retry save'} onClick={() => runMenuAction(onRetrySave)} /> : null}
                 {onRefresh ? <PreviewMenuItem icon={<RefreshCw className="size-4" />} label={language === 'zh' ? '刷新文件' : 'Refresh file'} onClick={() => runMenuAction(onRefresh)} /> : null}

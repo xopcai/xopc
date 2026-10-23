@@ -1,6 +1,6 @@
 import { TaskExecutorSelectionSchema } from '@xopcai/gateway-contract';
 
-import { commandTask, fetchTask } from './home-api';
+import { commandTask, fetchTask, type TaskDetail } from './home-api';
 
 export async function retryHomeTask(taskId: string, language: 'zh' | 'en' = 'en'): Promise<void> {
   const detail = await fetchTask(taskId);
@@ -11,4 +11,17 @@ export async function retryHomeTask(taskId: string, language: 'zh' | 'en' = 'en'
   }
   const executor = TaskExecutorSelectionSchema.parse({ ...latest.executorRef, kind: latest.executorKind });
   await commandTask(taskId, { type: 'start', executor }, detail.task.version);
+}
+
+/** Reuse the current executor without inventing an agent or workflow assignment. */
+export function homeTaskExecutor(detail: TaskDetail) {
+  const latest = detail.runs.filter((run) => !run.parentRunId)
+    .sort((left, right) => right.queuedAt - left.queuedAt)[0];
+  const agentId = detail.conversation?.currentExecutorAgentId ?? detail.task.delegateAgentId;
+  const candidate = latest?.executorKind === 'workflow'
+    ? { ...latest.executorRef, kind: latest.executorKind }
+    : agentId ? { kind: 'agent', agentId }
+      : latest ? { ...latest.executorRef, kind: latest.executorKind } : undefined;
+  const parsed = TaskExecutorSelectionSchema.safeParse(candidate);
+  return parsed.success ? parsed.data : undefined;
 }

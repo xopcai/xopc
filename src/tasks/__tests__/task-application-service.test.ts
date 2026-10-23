@@ -427,6 +427,16 @@ describe('TaskApplicationService', () => {
     expect(runs.getReceipt(run.id)).toMatchObject({ failure: { code: 'empty_agent_run' } });
   });
 
+  it('stores the actual assistant result instead of a transport success summary', () => {
+    const { task, run, runs } = createRunningTask('result-summary');
+    const coordinator = TaskRunCoordinator.start({ runId: run.id,
+      context: { taskId: task.id, conversationId: createConversation({ agentId: 'main' }).key, agentId: 'main', triggerKind: 'user' },
+      fallbackObjective: contract.objective,
+    })!;
+    coordinator.finalize({ status: 'succeeded', summary: 'Message processed successfully', assistantText: 'Report saved to report.html. Two checks remain.' });
+    expect(runs.getReceipt(run.id)?.summary).toBe('Report saved to report.html. Two checks remain.');
+  });
+
   it('localizes system evidence and completion summaries for Chinese tasks', () => {
     const { task, run, runs } = createRunningTask('chinese-evidence', 'zh');
     const coordinator = TaskRunCoordinator.start({ runId: run.id,
@@ -436,7 +446,7 @@ describe('TaskApplicationService', () => {
     coordinator.capturePatch(2, 1);
     coordinator.capturePlan([{ title: 'Review API', status: 'completed' }]);
     coordinator.finalize({ status: 'succeeded', summary: 'Message processed', assistantText: '已完成。' });
-    expect(runs.getReceipt(run.id)).toMatchObject({ summary: '消息已处理', evidence: expect.arrayContaining([
+    expect(runs.getReceipt(run.id)).toMatchObject({ summary: '已完成。', evidence: expect.arrayContaining([
       expect.objectContaining({ title: '已应用变更', summary: '新增 2 处，删除 1 处' }),
       expect.objectContaining({ title: '计划项已完成：Review API', summary: '助手已完成此计划项。' }),
     ]) });

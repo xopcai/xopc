@@ -78,9 +78,8 @@ describe('common file preview header', () => {
     ];
     for (const entry of entries) {
       await act(async () => root.render(<MemoryRouter key={entry.name} initialEntries={['/share/token-a']}>{entry.element}</MemoryRouter>));
-      const title = document.querySelector('h2[title="report.html"]');
-      expect(title).not.toBeNull();
-      const row = title!.parentElement!.parentElement!;
+      expect(document.querySelector('h2[title="report.html"]')).toBeNull();
+      const row = document.querySelector('[data-workspace-toolbar]')!.firstElementChild!;
       const buttons = [...row.querySelectorAll<HTMLButtonElement>('button')];
       expect(buttons.map((button) => button.getAttribute('aria-label'))).toEqual([
         labels.expandPreview, labels.moreActions, labels.close,
@@ -129,10 +128,23 @@ describe('common file preview header', () => {
     await act(async () => container.querySelector<HTMLButtonElement>(`button[aria-label="${labels.expandPreview}"]`)!.click());
     await act(async () => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', cancelable: true })));
     expect(container.querySelector('[data-file-preview-expanded]')).toBeNull();
-    expect(container.querySelector('h2[title="report.html"]')).not.toBeNull();
+    expect(container.querySelector('[data-workspace-toolbar]')).not.toBeNull();
   });
 
-  it('shows the workspace path and exposes the tree and system open actions directly', async () => {
+  it('keeps an expanded artifact preview inside its own modal surface', async () => {
+    useLocaleStore.setState({ language: 'en' });
+    await act(async () => root.render(<MemoryRouter>
+      <div className="app-main-surface" data-shell-surface />
+      <div role="dialog" className="app-main-surface relative" data-dialog-surface>
+        <WorkspaceFilePreviewPanel filePath="report.html" projectId="project-a" onClose={vi.fn()} />
+      </div>
+    </MemoryRouter>));
+    await act(async () => container.querySelector<HTMLButtonElement>(`button[aria-label="${messages('en').workspace.expandPreview}"]`)!.click());
+    expect(container.querySelector('[data-file-preview-expanded]')?.parentElement).toBe(container.querySelector('[data-dialog-surface]'));
+    expect(container.querySelector('[data-shell-surface]')?.querySelector('[data-file-preview-expanded]')).toBeNull();
+  });
+
+  it('keeps only tree, fullscreen and more actions outside the menu', async () => {
     useLocaleStore.setState({ language: 'en' });
     const toggleTree = vi.fn();
     const openFile = vi.fn();
@@ -142,16 +154,24 @@ describe('common file preview header', () => {
           descriptor={{ id: 'nested-file', context: 'workspace', fileName: 'browser.ts', mimeType: 'text/typescript', type: 'code', source: { kind: 'workspace', path: 'project/src/browser.ts' } }}
           loading={false} loadError={null} textContent="export {};" binaryBuffer={null}
           actions={{ canDownload: true, onDownload: vi.fn() }}
-          header={{ expanded: false, onClose: vi.fn(), openWithSystemApp: { onClick: openFile } }}
+          header={{ expanded: false, hideClose: true, onClose: vi.fn(), openWithSystemApp: { onClick: openFile } }}
         />
       </WorkspaceTreeControlContext.Provider>
     </MemoryRouter>));
-    expect(container.querySelector('[title="project/src/browser.ts"]')?.textContent).toBe('projectsrcbrowser.ts');
+    expect(container.querySelector('[title="project/src/browser.ts"]')).toBeNull();
+    const labels = messages('en').workspace;
+    const toolbar = container.querySelector('[data-workspace-toolbar]')!;
+    expect([...toolbar.querySelectorAll('button')].map((button) => button.getAttribute('aria-label')))
+      .toEqual(['Hide file tree', labels.expandPreview, labels.moreActions]);
+    expect(toolbar.textContent).not.toContain('browser.ts');
     const toggle = container.querySelector<HTMLButtonElement>('button[aria-label="Hide file tree"]')!;
     expect(toggle.getAttribute('aria-pressed')).toBe('true');
     expect(container.querySelector('[role="menu"]')).toBeNull();
     await act(async () => toggle.click());
-    await act(async () => container.querySelector<HTMLButtonElement>(`button[aria-label="${messages('en').workspace.openSystemApp}"]`)!.click());
+    await act(async () => container.querySelector<HTMLButtonElement>(`button[aria-label="${labels.moreActions}"]`)!.click());
+    await act(async () => [...container.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')]
+      .find((item) => item.textContent === labels.openSystemApp)!.click());
+    expect(container.querySelector('[role="menu"]')).toBeNull();
     expect(toggleTree).toHaveBeenCalledOnce();
     expect(openFile).toHaveBeenCalledOnce();
   });
