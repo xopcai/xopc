@@ -41,7 +41,6 @@ export type SessionAgentConfig = {
   configVersion?: number;
   fixedModel?: boolean;
   model: string;
-  reasoningLevel: string;
   activityDetail: {
     default: 'off' | 'on' | 'stream';
     override: 'off' | 'on' | 'stream' | null;
@@ -73,7 +72,11 @@ function parseSessionAgentConfigResponse(raw: unknown): SessionAgentConfig {
   if (
     typeof payload.thinkingLevel !== 'string' ||
     typeof payload.model !== 'string' ||
-    typeof payload.reasoningLevel !== 'string' ||
+    !activity ||
+    !isLevel(activity.default) ||
+    (activity.override !== null && !isLevel(activity.override)) ||
+    !isLevel(activity.effective) ||
+    (activity.source !== 'session' && activity.source !== 'default') ||
     typeof payload.effectiveWorkspacePath !== 'string' ||
     typeof payload.workingDirectoryLocked !== 'boolean' ||
     (payload.userContextMode !== 'enabled' && payload.userContextMode !== 'off' && payload.userContextMode !== 'temporary') ||
@@ -90,24 +93,12 @@ function parseSessionAgentConfigResponse(raw: unknown): SessionAgentConfig {
     configVersion: typeof payload.configVersion === 'number' ? payload.configVersion : undefined,
     fixedModel: payload.fixedModel === true,
     model: payload.model,
-    reasoningLevel: payload.reasoningLevel,
-    activityDetail: activity &&
-      isLevel(activity.default) &&
-      (activity.override === null || isLevel(activity.override)) &&
-      isLevel(activity.effective) &&
-      (activity.source === 'session' || activity.source === 'default')
-      ? {
-          default: activity.default,
-          override: activity.override,
-          effective: activity.effective,
-          source: activity.source,
-        }
-      : {
-          default: isLevel(payload.reasoningLevel) ? payload.reasoningLevel : 'on',
-          override: isLevel(payload.reasoningLevel) ? payload.reasoningLevel : null,
-          effective: isLevel(payload.reasoningLevel) ? payload.reasoningLevel : 'on',
-          source: isLevel(payload.reasoningLevel) ? 'session' : 'default',
-        },
+    activityDetail: {
+      default: activity.default,
+      override: activity.override,
+      effective: activity.effective,
+      source: activity.source,
+    },
     effectiveWorkspacePath: payload.effectiveWorkspacePath,
     workingDirectoryLocked: payload.workingDirectoryLocked,
     userContextMode: payload.userContextMode,

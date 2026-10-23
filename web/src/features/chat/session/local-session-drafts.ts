@@ -164,7 +164,7 @@ export function draftAgentConfig(draft: LocalSessionDraft): SessionAgentConfig {
   return {
     localDraft: true,
     model: draft.creation.model, thinkingLevel: draft.creation.thinkingLevel,
-    fixedModel: false, reasoningLevel: 'on',
+    fixedModel: false,
     activityDetail: { default: 'on', override: null, effective: 'on', source: 'default' },
     effectiveWorkspacePath: '', workingDirectoryLocked: Boolean(draft.creation.projectId),
     workspaceSource: draft.creation.projectId ? 'project' : 'agent_default_root',
