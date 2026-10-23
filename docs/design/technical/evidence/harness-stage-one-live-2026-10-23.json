@@ -1,0 +1,531 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-23",
+  "scope": "Configured real-model development and independent cross-suite validation; immutable candidate rejection",
+  "phaseOneComplete": false,
+  "model": "xopc-cloud/openai-codex/gpt-5.6-sol",
+  "reasoning": "low",
+  "physicalRequests": 84,
+  "completedHttpResponses": 82,
+  "unknownTailRequests": 2,
+  "taskResponses": 77,
+  "auxiliaryRequests": 7,
+  "observedProviderTokens": 656438,
+  "completeProviderTokens": null,
+  "actualCharge": null,
+  "preregistration": {
+    "path": "evals/control/plans/convergence-turn-cap-registration.json",
+    "sha256": "4335c2f495f845b4987d738547edba7046be0f73e1278724d72f0afd0051d4fd"
+  },
+  "decision": {
+    "path": ".xopc-evals/control/live-cycle-20261023/decision.json",
+    "sha256": "0187e4ce93992175425a439fda4aff657014ea7454ad37e9328cd36fcb1bf2ba",
+    "schemaVersion": 1,
+    "decidedAt": "2026-10-23T11:36:25.534Z",
+    "promotion": "rejected",
+    "scope": "bounded controlled pilot only",
+    "productionDefaultsChanged": false,
+    "reasons": [
+      "Campaign source or execution validity is not established",
+      "development: candidate incomplete or incorrect (1/2)",
+      "validation: candidate incomplete or incorrect (1/2)",
+      "Physical requests, runtime rows and task plus auxiliary responses do not reconcile",
+      "Provider token totals and runtime/task usage do not reconcile",
+      "Token reduction did not meet the predeclared gate"
+    ],
+    "preregistrationHash": "4335c2f495f845b4987d738547edba7046be0f73e1278724d72f0afd0051d4fd",
+    "campaignId": "convergence-turn-cap-live",
+    "sourceHash": "3e9a489dbc9f27016bcfc75b9c7ada8eb2ad6651d1fad829134811ee794e09ee",
+    "reports": [
+      {
+        "id": "development-baseline",
+        "passed": 2,
+        "expected": 2,
+        "cases": [
+          {
+            "caseId": "E01-verified-stop",
+            "variantId": "candidate",
+            "runId": "10e39d5f-acf6-45fd-bb93-0439200015f3",
+            "status": "passed",
+            "artifactChecksPassed": true,
+            "durationMs": 33893,
+            "observedResponseTokens": 74720,
+            "usageCoverage": "Observed completed responses only; interrupted requests may be unreported.",
+            "diagnostics": {
+              "toolCounts": {
+                "read_file": 8,
+                "list_dir": 2,
+                "find": 2,
+                "exec_command": 4,
+                "apply_patch": 1,
+                "review_workspace": 1
+              },
+              "distinctExplicitReadPaths": [
+                "README.md",
+                "data/month.json",
+                "deliverables/report.md",
+                "deliverables/result.json",
+                "package.json",
+                "scripts/reproduce.mjs",
+                "src/summarize.mjs",
+                "test/summary.test.mjs"
+              ],
+              "toolCompletionCoverage": {
+                "total": 18,
+                "recovered": 18
+              },
+              "repeatedSuccessfulCallsAtObservedRevision": 0,
+              "explicitEditsAfterSuccessfulCheckAtObservedRevision": 1,
+              "explicitReadsAfterSuccessfulCheckAtObservedRevision": 0,
+              "limitations": "Counts model-visible tools only. Identical arguments are compared verbatim; shell I/O and semantic necessity are not inferred. Missing trace payloads yield null diagnostic totals."
+            }
+          },
+          {
+            "caseId": "E02-green-incomplete",
+            "variantId": "candidate",
+            "runId": "fc71d25c-2a68-4934-b299-d3f3dcae67b0",
+            "status": "passed",
+            "artifactChecksPassed": true,
+            "durationMs": 39372,
+            "observedResponseTokens": 70552,
+            "usageCoverage": "Observed completed responses only; interrupted requests may be unreported.",
+            "diagnostics": {
+              "toolCounts": {
+                "read_file": 5,
+                "find": 1,
+                "list_dir": 1,
+                "apply_patch": 2,
+                "exec_command": 2,
+                "review_workspace": 1
+              },
+              "distinctExplicitReadPaths": [
+                "docs/export-contract.md",
+                "package.json",
+                "src/export.mjs",
+                "src/orders.mjs",
+                "test/smoke.test.mjs"
+              ],
+              "toolCompletionCoverage": {
+                "total": 12,
+                "recovered": 12
+              },
+              "repeatedSuccessfulCallsAtObservedRevision": 0,
+              "explicitEditsAfterSuccessfulCheckAtObservedRevision": 1,
+              "explicitReadsAfterSuccessfulCheckAtObservedRevision": 0,
+              "limitations": "Counts model-visible tools only. Identical arguments are compared verbatim; shell I/O and semantic necessity are not inferred. Missing trace payloads yield null diagnostic totals."
+            }
+          }
+        ]
+      },
+      {
+        "id": "development-candidate",
+        "passed": 1,
+        "expected": 2,
+        "cases": [
+          {
+            "caseId": "E01-verified-stop",
+            "variantId": "candidate",
+            "runId": "c75f08b4-bc49-41b3-aa77-d1ced1e7764c",
+            "status": "passed",
+            "artifactChecksPassed": true,
+            "durationMs": 31642,
+            "observedResponseTokens": 43588,
+            "usageCoverage": "Observed completed responses only; interrupted requests may be unreported.",
+            "diagnostics": {
+              "toolCounts": {
+                "read_file": 8,
+                "list_dir": 2,
+                "find": 3,
+                "exec_command": 3,
+                "apply_patch": 1,
+                "review_workspace": 1
+              },
+              "distinctExplicitReadPaths": [
+                "README.md",
+                "data/month.json",
+                "deliverables/report.md",
+                "deliverables/result.json",
+                "package.json",
+                "scripts/reproduce.mjs",
+                "src/summarize.mjs",
+                "test/summary.test.mjs"
+              ],
+              "toolCompletionCoverage": {
+                "total": 18,
+                "recovered": 18
+              },
+              "repeatedSuccessfulCallsAtObservedRevision": 0,
+              "explicitEditsAfterSuccessfulCheckAtObservedRevision": 1,
+              "explicitReadsAfterSuccessfulCheckAtObservedRevision": 0,
+              "limitations": "Counts model-visible tools only. Identical arguments are compared verbatim; shell I/O and semantic necessity are not inferred. Missing trace payloads yield null diagnostic totals."
+            }
+          },
+          {
+            "caseId": "E02-green-incomplete",
+            "variantId": "candidate",
+            "runId": "780412a8-f2ee-4ad6-b09b-71008cbed4b1",
+            "status": "error",
+            "artifactChecksPassed": true,
+            "durationMs": 37108,
+            "observedResponseTokens": 63639,
+            "usageCoverage": "Observed completed responses only; interrupted requests may be unreported.",
+            "diagnostics": {
+              "toolCounts": {
+                "read_file": 5,
+                "find": 1,
+                "list_dir": 1,
+                "apply_patch": 2,
+                "exec_command": 2,
+                "review_workspace": 1
+              },
+              "distinctExplicitReadPaths": [
+                "docs/export-contract.md",
+                "package.json",
+                "src/export.mjs",
+                "src/orders.mjs",
+                "test/smoke.test.mjs"
+              ],
+              "toolCompletionCoverage": {
+                "total": 12,
+                "recovered": 12
+              },
+              "repeatedSuccessfulCallsAtObservedRevision": 0,
+              "explicitEditsAfterSuccessfulCheckAtObservedRevision": 1,
+              "explicitReadsAfterSuccessfulCheckAtObservedRevision": 0,
+              "limitations": "Counts model-visible tools only. Identical arguments are compared verbatim; shell I/O and semantic necessity are not inferred. Missing trace payloads yield null diagnostic totals."
+            }
+          }
+        ]
+      },
+      {
+        "id": "validation-baseline",
+        "passed": 2,
+        "expected": 2,
+        "cases": [
+          {
+            "caseId": "F01-lost-artifact",
+            "variantId": "candidate",
+            "runId": "74f999ac-7228-4230-9ef1-d30e73dc1848",
+            "status": "passed",
+            "artifactChecksPassed": true,
+            "durationMs": 44840,
+            "observedResponseTokens": 84754,
+            "usageCoverage": "Observed completed responses only; interrupted requests may be unreported."
+          },
+          {
+            "caseId": "F02-transient-read",
+            "variantId": "candidate",
+            "runId": "1ee6469a-205d-43c7-9a7b-259cddb0e93a",
+            "status": "passed",
+            "artifactChecksPassed": true,
+            "durationMs": 39943,
+            "observedResponseTokens": 79814,
+            "usageCoverage": "Observed completed responses only; interrupted requests may be unreported."
+          }
+        ]
+      },
+      {
+        "id": "validation-candidate",
+        "passed": 1,
+        "expected": 2,
+        "cases": [
+          {
+            "caseId": "F01-lost-artifact",
+            "variantId": "candidate",
+            "runId": "9b189b08-8f0f-43b1-ae7c-6d3ddc33d317",
+            "status": "passed",
+            "artifactChecksPassed": true,
+            "durationMs": 48867,
+            "observedResponseTokens": 82960,
+            "usageCoverage": "Observed completed responses only; interrupted requests may be unreported."
+          },
+          {
+            "caseId": "F02-transient-read",
+            "variantId": "candidate",
+            "runId": "1d726a1c-6eb3-4305-b09f-a21c30fa4581",
+            "status": "error",
+            "artifactChecksPassed": true,
+            "durationMs": 36783,
+            "observedResponseTokens": 57107,
+            "usageCoverage": "Observed completed responses only; interrupted requests may be unreported."
+          }
+        ]
+      }
+    ],
+    "audit": [
+      {
+        "id": "development-baseline",
+        "physicalRequests": 21,
+        "completedRequests": 20,
+        "runtimeRequests": 21,
+        "taskResponses": 19,
+        "auxiliaryRequests": 2,
+        "auxiliaryOperations": [
+          "session.generate_title"
+        ],
+        "observedRuntimeTokens": 145505,
+        "observedProviderMinusRuntimeTokens": 13312,
+        "unknownRequests": 1,
+        "observedWireTokens": 158817,
+        "wireTokens": null,
+        "runtimeTokens": null,
+        "taskTokens": 145272,
+        "auxiliaryTokens": null,
+        "providerMinusRuntimeTokens": null,
+        "requestCountMatched": false,
+        "usageMatched": false,
+        "requestedModels": [
+          "openai-codex/gpt-5.6-sol"
+        ],
+        "responseModels": [
+          "openai-codex/gpt-5.6-sol"
+        ],
+        "ledgerFinalSnapshotGuaranteed": false,
+        "actualCharge": null,
+        "actualChargeReason": "No authoritative settled per-request billing receipts; local estimates are not charges.",
+        "coverage": "Declared model endpoint fetch transport only; counts cross-checked against isolated runtime ledger and task events.",
+        "files": {
+          "wire": ".xopc-evals/control/live-cycle-20261023/development-baseline-model-requests.jsonl",
+          "ledger": ".xopc-evals/control/live-cycle-20261023/development-baseline-runtime-usage.json"
+        },
+        "hashes": {
+          "wire": "b13c5ed4f40117dbfd261c39949f2763a59018b83a01960b2454d3ce18c72835",
+          "ledger": "65fa8ea59b3c6ceb2f494c9f8a9931daf7206fbce2aa532432917d3089c50ef7"
+        }
+      },
+      {
+        "id": "development-candidate",
+        "physicalRequests": 17,
+        "completedRequests": 16,
+        "runtimeRequests": 17,
+        "taskResponses": 15,
+        "auxiliaryRequests": 2,
+        "auxiliaryOperations": [
+          "session.generate_title"
+        ],
+        "observedRuntimeTokens": 107459,
+        "observedProviderMinusRuntimeTokens": 20736,
+        "unknownRequests": 1,
+        "observedWireTokens": 128195,
+        "wireTokens": null,
+        "runtimeTokens": null,
+        "taskTokens": 107227,
+        "auxiliaryTokens": null,
+        "providerMinusRuntimeTokens": null,
+        "requestCountMatched": false,
+        "usageMatched": false,
+        "requestedModels": [
+          "openai-codex/gpt-5.6-sol"
+        ],
+        "responseModels": [
+          "openai-codex/gpt-5.6-sol"
+        ],
+        "ledgerFinalSnapshotGuaranteed": false,
+        "actualCharge": null,
+        "actualChargeReason": "No authoritative settled per-request billing receipts; local estimates are not charges.",
+        "coverage": "Declared model endpoint fetch transport only; counts cross-checked against isolated runtime ledger and task events.",
+        "files": {
+          "wire": ".xopc-evals/control/live-cycle-20261023/development-candidate-model-requests.jsonl",
+          "ledger": ".xopc-evals/control/live-cycle-20261023/development-candidate-runtime-usage.json"
+        },
+        "hashes": {
+          "wire": "6e24abd583df5975084cc3d1bd078ba36e50e6ccf12eedf52167c93a41fc8c35",
+          "ledger": "f441dd645e6c93b984fdeeb80220e585486af9c8517ce4fa41b376b5ad217897"
+        }
+      },
+      {
+        "id": "validation-baseline",
+        "physicalRequests": 24,
+        "completedRequests": 24,
+        "runtimeRequests": 24,
+        "taskResponses": 22,
+        "auxiliaryRequests": 2,
+        "auxiliaryOperations": [
+          "session.generate_title"
+        ],
+        "observedRuntimeTokens": 164937,
+        "observedProviderMinusRuntimeTokens": 25984,
+        "unknownRequests": 0,
+        "observedWireTokens": 190921,
+        "wireTokens": 190921,
+        "runtimeTokens": 164937,
+        "taskTokens": 164568,
+        "auxiliaryTokens": 369,
+        "providerMinusRuntimeTokens": 25984,
+        "requestCountMatched": true,
+        "usageMatched": false,
+        "requestedModels": [
+          "openai-codex/gpt-5.6-sol"
+        ],
+        "responseModels": [
+          "openai-codex/gpt-5.6-sol"
+        ],
+        "ledgerFinalSnapshotGuaranteed": true,
+        "actualCharge": null,
+        "actualChargeReason": "No authoritative settled per-request billing receipts; local estimates are not charges.",
+        "coverage": "Declared model endpoint fetch transport only; counts cross-checked against isolated runtime ledger and task events.",
+        "files": {
+          "wire": ".xopc-evals/control/live-cycle-validation-20261023/validation-baseline-model-requests.jsonl",
+          "ledger": ".xopc-evals/control/live-cycle-validation-20261023/validation-baseline/runtime-usage.json"
+        },
+        "hashes": {
+          "wire": "c53432f9293dbb21ab4d66d7c54c06700a6aeff9dd79d18d73835a8523c6abf0",
+          "ledger": "7e779db5e091f854355b896b9cb2ded9714f831feb10de34878c63915de90150"
+        }
+      },
+      {
+        "id": "validation-candidate",
+        "physicalRequests": 22,
+        "completedRequests": 22,
+        "runtimeRequests": 22,
+        "taskResponses": 21,
+        "auxiliaryRequests": 1,
+        "auxiliaryOperations": [
+          "session.generate_title"
+        ],
+        "observedRuntimeTokens": 140233,
+        "observedProviderMinusRuntimeTokens": 38272,
+        "unknownRequests": 0,
+        "observedWireTokens": 178505,
+        "wireTokens": 178505,
+        "runtimeTokens": 140233,
+        "taskTokens": 140067,
+        "auxiliaryTokens": 166,
+        "providerMinusRuntimeTokens": 38272,
+        "requestCountMatched": true,
+        "usageMatched": false,
+        "requestedModels": [
+          "openai-codex/gpt-5.6-sol"
+        ],
+        "responseModels": [
+          "openai-codex/gpt-5.6-sol"
+        ],
+        "ledgerFinalSnapshotGuaranteed": true,
+        "actualCharge": null,
+        "actualChargeReason": "No authoritative settled per-request billing receipts; local estimates are not charges.",
+        "coverage": "Declared model endpoint fetch transport only; counts cross-checked against isolated runtime ledger and task events.",
+        "files": {
+          "wire": ".xopc-evals/control/live-cycle-validation-20261023/validation-candidate-model-requests.jsonl",
+          "ledger": ".xopc-evals/control/live-cycle-validation-20261023/validation-candidate/runtime-usage.json"
+        },
+        "hashes": {
+          "wire": "0a4a8fc119eeab0cc03b652e6f6a2733fd2edfb64fda2c763001d4d378dd3c1b",
+          "ledger": "302abc6887f1084e3db987c4fcf3f133b572c27cf0afcf5537d333d981cf6d47"
+        }
+      }
+    ],
+    "baselineTokens": null,
+    "candidateTokens": null,
+    "tokenReduction": null,
+    "independentValidation": "Disjoint cross-suite cases; hidden deterministic graders execute after agent completion outside model workspace visibility. No model judge. Existing synthetic cases, not newly authored blind generalization.",
+    "limitations": [
+      "One repetition per case; no statistical/general production improvement claim.",
+      "Financial settlement remains unknown without authoritative receipts.",
+      "Live sidecar ledger snapshots may precede final cleanup; incomplete observations block promotion."
+    ],
+    "evidenceIds": [
+      "6b4816477b430b90536e49604bef26a8e03ce0cebe586464335609e1353f77df",
+      "4fdd744a32df7bcd1165c8788a5f34617f576a1e0f70249c3ebe8c1f02c73fd9",
+      "05edf987304a92cc148ec5976bcfe0710202aed262f6910c75c350525ccb4a95",
+      "ca68fd907d5fc959774b7a7a683b3c5a5904fd398ff027748d267750c39ceb74",
+      "1e8f530e7bcc9579c55aa3047e7066c904d1a43da73ff6517677c7b58f47c099",
+      "75b0b619acfbbc0995e0129579111106c084ba2ba3e84d0ca959ae30ce1b85ed"
+    ]
+  },
+  "campaigns": [
+    {
+      "path": ".xopc-evals/control/live-cycle-20261023/campaign.json",
+      "sha256": "e563bcbfcba124356fdbe93c192451e9581dc57c575b69367da1d336ecd591b2",
+      "status": "interrupted",
+      "validity": "invalid",
+      "sourceHash": "3e9a489dbc9f27016bcfc75b9c7ada8eb2ad6651d1fad829134811ee794e09ee",
+      "sourceChanged": false,
+      "elapsedMs": 226044,
+      "admittedRequests": 38,
+      "pool": {
+        "parent": 2,
+        "limits": {
+          "generation": 2,
+          "judge": 1
+        },
+        "targets": {
+          "generation": 2,
+          "judge": 1
+        },
+        "active": 2,
+        "queued": 0,
+        "admitted": 38,
+        "maxRequests": 160,
+        "byRole": {
+          "generation": 2,
+          "judge": 0
+        },
+        "peaks": {
+          "total": 2,
+          "generation": 2
+        },
+        "closed": true
+      }
+    },
+    {
+      "path": ".xopc-evals/control/live-cycle-validation-20261023/campaign.json",
+      "sha256": "90ae63f7a6ec55002ce350f6a0a21d1319810e38d392b59eb5cfed64ead27ffb",
+      "status": "failed",
+      "validity": "valid",
+      "sourceHash": "76a4d024948f1ee7384bbd6a383e56a7ce0b32af03e5f60f10fcee6946361f70",
+      "sourceChanged": false,
+      "elapsedMs": 118647,
+      "admittedRequests": 46,
+      "pool": {
+        "parent": 2,
+        "limits": {
+          "generation": 2,
+          "judge": 1
+        },
+        "targets": {
+          "generation": 2,
+          "judge": 1
+        },
+        "active": 0,
+        "queued": 0,
+        "admitted": 46,
+        "maxRequests": 122,
+        "byRole": {
+          "generation": 0,
+          "judge": 0
+        },
+        "peaks": {
+          "total": 2,
+          "generation": 2
+        },
+        "closed": true
+      }
+    }
+  ],
+  "validation": {
+    "typecheck": "passed",
+    "files": 21,
+    "tests": 63,
+    "status": "passed",
+    "additionalTargetedRegression": {
+      "file": "evals/coder/tests/control-reconciliation.test.ts",
+      "tests": 4,
+      "status": "passed",
+      "covers": "auxiliary counts, token mismatch, incomplete EOF totals, immutable rejection"
+    },
+    "browser": [
+      "immutable rejection visible",
+      "development and validation results visible",
+      "per-job HTTP/runtime/task/auxiliary counts and token deltas visible",
+      "narrow viewport table horizontal overflow supported"
+    ],
+    "diffCheck": "passed"
+  },
+  "remaining": [
+    "Provider/runtime total-token discrepancy; no equality certification",
+    "Two original auxiliary requests have unknown final usage",
+    "Authoritative billing receipt association",
+    "New sealed structural holdout family / isolated evaluator service",
+    "Broad native transport coverage and distributed owner takeover"
+  ]
+}

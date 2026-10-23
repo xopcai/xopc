@@ -23,6 +23,10 @@ import { GitCloneSandbox } from '@agent-evals/sandbox';
 import { ArtifactStore, EvalStore } from '@agent-evals/storage';
 import { parse } from 'yaml';
 
+import { TaskScheduler, type ScheduleSnapshot } from './scheduler.js';
+export { TaskScheduler } from './scheduler.js';
+export type { ScheduleSnapshot } from './scheduler.js';
+
 interface RawSuite extends Omit<EvalSuite, 'sourcePath' | 'contentHash' | 'cases'> {
   cases: Array<Omit<EvalCase, 'repo'> & { repo: RepoSpec }>;
 }
@@ -200,6 +204,8 @@ export interface EvalRunnerOptions {
   artifactStore: ArtifactStore;
   adapters: Iterable<AgentAdapter>;
   keepWorkspaces?: boolean;
+  onSchedule?: (state: ScheduleSnapshot) => void;
+  signal?: AbortSignal;
 }
 
 export class EvalRunner {
@@ -208,18 +214,23 @@ export class EvalRunner {
   private readonly adapters: Map<string, AgentAdapter>;
   private readonly sandbox = new GitCloneSandbox();
   private readonly keepWorkspaces: boolean;
+  private readonly onSchedule: EvalRunnerOptions['onSchedule'];
+  private readonly signal: AbortSignal | undefined;
 
   constructor(options: EvalRunnerOptions) {
     this.store = options.store;
     this.artifactStore = options.artifactStore;
     this.adapters = new Map([...options.adapters].map((adapter) => [adapter.id, adapter]));
     this.keepWorkspaces = options.keepWorkspaces ?? false;
+    this.onSchedule = options.onSchedule;
+    this.signal = options.signal;
   }
 
   async runExperiment(suite: EvalSuite, spec: ExperimentSpec): Promise<{
     experimentId: string;
     runs: EvalRunResult[];
   }> {
+    const scheduler = new TaskScheduler(spec.concurrency ?? 1);
     const experimentId = randomUUID();
     const effectiveSpec: ExperimentSpec = {
       ...spec,
@@ -235,6 +246,10 @@ export class EvalRunner {
       spec: effectiveSpec,
     });
     const runs: EvalRunResult[] = [];
+    const tasks: Array<{ id: string; run: (signal: AbortSignal) => Promise<EvalRunResult> }> = [];
+    const cancel = () => scheduler.cancel();
+    this.signal?.addEventListener('abort', cancel, { once: true });
+    if (this.signal?.aborted) cancel();
     let experimentFailed = false;
     try {
       for (let repetition = 0; repetition < (spec.repetitions ?? 1); repetition += 1) {
@@ -247,21 +262,25 @@ export class EvalRunner {
             effectiveSpec.randomizeVariantOrder!,
           );
           for (const variant of variants) {
-            const run = await this.runOne(experimentId, evalCase, variant, repetition);
-            runs.push(run);
-            if (
-              run.status === 'error' ||
-              run.status === 'timed_out' ||
-              run.status === 'budget_exceeded'
-            ) experimentFailed = true;
+            tasks.push({ id: `${repetition}/${evalCase.id}/${variant.id}`,
+              run: signal => this.runOne(experimentId, evalCase, variant, repetition, signal) });
           }
         }
       }
+      const outcomes = await scheduler.run(tasks, this.onSchedule);
+      for (const outcome of outcomes) {
+        if (outcome.status === 'rejected') { experimentFailed = true; continue; }
+        runs.push(outcome.value);
+        if (['error', 'timed_out', 'budget_exceeded'].includes(outcome.value.status)) experimentFailed = true;
+      }
+      if (this.signal?.aborted) experimentFailed = true;
       this.store.completeExperiment(experimentId, experimentFailed ? 'failed' : 'completed');
       return { experimentId, runs };
     } catch (error) {
       this.store.completeExperiment(experimentId, 'failed');
       throw error;
+    } finally {
+      this.signal?.removeEventListener('abort', cancel);
     }
   }
 
@@ -270,6 +289,7 @@ export class EvalRunner {
     evalCase: EvalCase,
     variant: AgentVariant,
     repetition: number,
+    signal?: AbortSignal,
   ): Promise<EvalRunResult> {
     const runId = randomUUID();
     const adapter = this.adapters.get(variant.adapter);
@@ -301,6 +321,9 @@ export class EvalRunner {
 
     const artifactRefs: string[] = [];
     const controller = new AbortController();
+    const cancel = () => controller.abort();
+    signal?.addEventListener('abort', cancel, { once: true });
+    if (signal?.aborted) cancel();
     let abortReason: 'timeout' | 'model_requests' | 'tokens' | undefined;
     let modelRequests = 0;
     let observedTokens = 0;
@@ -367,6 +390,7 @@ export class EvalRunner {
     let agent: AgentRunResult = { status: 'failed', finalText: '', error: 'Run did not start' };
 
     try {
+      controller.signal.throwIfAborted();
       await adapter.prepare?.(request);
       agent = await adapter.run(
         request,
@@ -428,12 +452,13 @@ export class EvalRunner {
       const score = totalWeight === 0
         ? 0
         : grades.reduce((sum, grade) => sum + grade.score * grade.weight, 0) / totalWeight;
-      const passed = agent.status === 'completed' &&
+      const passed = !controller.signal.aborted && agent.status === 'completed' &&
         grades.filter((grade) => grade.required).every((grade) => grade.passed);
       const status = abortReason === 'timeout'
         ? 'timed_out'
         : abortReason
           ? 'budget_exceeded'
+          : signal?.aborted ? 'error'
           : passed
             ? 'passed'
             : agent.status === 'failed'
@@ -478,6 +503,7 @@ export class EvalRunner {
         artifactRefs,
       };
     } finally {
+      signal?.removeEventListener('abort', cancel);
       await adapter.cleanup?.(runId).catch(() => {});
       if (!this.keepWorkspaces) this.sandbox.cleanup(environment);
     }

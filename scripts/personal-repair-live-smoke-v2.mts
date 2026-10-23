@@ -1,5 +1,6 @@
 /** Opt-in real-model Gateway verification using current model configuration and isolated synthetic data. */
 import assert from 'node:assert/strict';
+import { readRuntimeUsage } from '../evals/control/runtime-usage.mjs';
 import { createHash, randomUUID } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { once } from 'node:events';
@@ -457,7 +458,22 @@ try {
   writeFileSync(reportPath, JSON.stringify(report, null, 2) + '\n');
   console.log(JSON.stringify({ reportPath, success: !failure }));
   if (server) { server.closeAllConnections(); await new Promise<void>(resolve => server!.close(() => resolve())); }
+  const drainDeadline = Date.now() + 60_000;
+  let idleSince: number | undefined;
+  let drainComplete = false;
+  while (Date.now() < drainDeadline) {
+    const pending = Number(db.prepare("SELECT COUNT(*) AS n FROM ai_usage_events WHERE status='running'").get()!.n);
+    const path = process.env.XOPC_EVAL_AUDIT_PATH;
+    const events = path && existsSync(path) ? readFileSync(path,'utf8').trim().split('\n').filter(Boolean).map(line => JSON.parse(line)) : [];
+    const ends = new Set(events.filter(e => e.event === 'end').map(e => e.requestId));
+    const tails = events.filter(e => e.event === 'start' && !ends.has(e.requestId)).length;
+    if (!pending && !tails) { idleSince ??= Date.now(); if (Date.now() - idleSince >= 750) { drainComplete = true; break; } }
+    else idleSince = undefined;
+    await new Promise(resolve => setTimeout(resolve, 200));
+  }
   await service.stop();
+  const rows = readRuntimeUsage(join(directory, 'xopc.db'));
+  writeFileSync(join(reportPath, '..', 'runtime-usage.json'), JSON.stringify({mode:'post-service-stop',finalSnapshotGuaranteed:true,drainComplete,rows},null,2));
   closeXopcDatabase();
   // The credential directory is shared; never delete it during isolated-state cleanup.
   rmSync(configPath, { force: true });

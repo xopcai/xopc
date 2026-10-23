@@ -1,0 +1,114 @@
+{
+  "id": "stage-one-pilot",
+  "concurrency": 3,
+  "maxWallMs": 300000,
+  "jobs": [
+    {
+      "id": "convergence-core",
+      "timeoutMs": 90000,
+      "args": [
+        "--import",
+        "tsx",
+        "evals/coder/apps/cli/src/benchmark.ts",
+        "--mode",
+        "calibration",
+        "--cases",
+        "C01-add-deliverable,C02-replace-scope",
+        "--concurrency",
+        "2",
+        "--output",
+        "{output}/convergence-core"
+      ],
+      "evidence": [
+        {
+          "path": "{output}/convergence-core/evals.db",
+          "manifest": "{output}/convergence-core/manifest.json",
+          "kind": "coder-db",
+          "benchmark": "xopc-core",
+          "evidenceClass": "harness_calibration",
+          "expected": 4
+        }
+      ],
+      "replaySafe": true
+    },
+    {
+      "id": "convergence-growth",
+      "timeoutMs": 90000,
+      "args": [
+        "--import",
+        "tsx",
+        "evals/coder/apps/cli/src/benchmark.ts",
+        "--suite",
+        "xopc-agent-growth",
+        "--mode",
+        "calibration",
+        "--cases",
+        "E01-verified-stop,E02-green-incomplete,P01-inventory-cache",
+        "--concurrency",
+        "2",
+        "--output",
+        "{output}/convergence-growth"
+      ],
+      "evidence": [
+        {
+          "path": "{output}/convergence-growth/evals.db",
+          "manifest": "{output}/convergence-growth/manifest.json",
+          "kind": "coder-db",
+          "benchmark": "xopc-agent-growth",
+          "evidenceClass": "harness_calibration",
+          "expected": 6
+        }
+      ],
+      "replaySafe": true
+    },
+    {
+      "id": "delivery-core",
+      "timeoutMs": 90000,
+      "args": [
+        "--import",
+        "tsx",
+        "evals/coder/apps/cli/src/benchmark.ts",
+        "--mode",
+        "calibration",
+        "--cases",
+        "F01-lost-artifact,F02-transient-read",
+        "--concurrency",
+        "2",
+        "--output",
+        "{output}/delivery-core"
+      ],
+      "evidence": [
+        {
+          "path": "{output}/delivery-core/evals.db",
+          "manifest": "{output}/delivery-core/manifest.json",
+          "kind": "coder-db",
+          "benchmark": "xopc-core",
+          "evidenceClass": "harness_calibration",
+          "expected": 4
+        }
+      ],
+      "replaySafe": true
+    },
+    {
+      "id": "delivery-p0",
+      "timeoutMs": 120000,
+      "args": [
+        "--import",
+        "tsx",
+        "scripts/personal-delivery-benchmark.mts",
+        "--output",
+        "{output}/personal-p0.json"
+      ],
+      "evidence": [
+        {
+          "path": "{output}/personal-p0.json",
+          "kind": "delivery",
+          "benchmark": "personal-delivery",
+          "evidenceClass": "deterministic",
+          "expected": 8
+        }
+      ],
+      "replaySafe": true
+    }
+  ]
+}

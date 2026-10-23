@@ -150,7 +150,9 @@
     "eval:benchmark:regrade": "tsx evals/coder/apps/cli/src/benchmark-regrade.ts",
     "test:plugins:authorization:e2e": "cross-env XOPC_LOG_LEVEL=fatal tsx scripts/verify-plugin-authorization-e2e.mts",
     "test:plugins:production:e2e": "cross-env XOPC_LOG_LEVEL=fatal tsx scripts/verify-production-plugin-catalog.mts && cross-env XOPC_LOG_LEVEL=fatal tsx scripts/verify-production-plugin-browser.mts",
-    "test:plugins:dingtalk:live": "tsx scripts/verify-dingtalk-live-e2e.mts"
+    "test:plugins:dingtalk:live": "tsx scripts/verify-dingtalk-live-e2e.mts",
+    "eval:control": "tsx evals/control/cli.ts",
+    "eval:control:check": "pnpm -C evals/coder run typecheck && pnpm -C evals/coder exec vitest run --configLoader native tests/control- tests/runner.test.ts"
   },
   "keywords": [
     "agentic-ai",

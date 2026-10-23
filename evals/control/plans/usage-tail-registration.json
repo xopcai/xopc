@@ -1,0 +1,50 @@
+{
+  "schemaVersion": 1,
+  "registeredAt": "2026-10-23T11:55:44.222Z",
+  "problem": "Cloud total_tokens was recomputed from incomplete components; auxiliary HTTP tails could be lost at shutdown.",
+  "hypothesis": "Preserve authoritative totals before terminal events and wait for ledger plus HTTP stable idle; every physical request links to an isolated ledger row with identical totals.",
+  "budget": {
+    "maxRequests": 240,
+    "maxWallMs": 1500000
+  },
+  "protection": [
+    "Original rejected candidate and all failed evidence remain immutable",
+    "No production turn-limit changes",
+    "All task and protected-file checks must pass",
+    "No fabricated cache components or billing"
+  ],
+  "candidateSourceHashes": {
+    "src/usage/cloud-wire.ts": "a3a1b0636e57bc8045c17286b5ca6ce15f66ec29d2da8725fd5cd0d94c7cb248",
+    "src/usage/cloud-receipts.ts": "ddf6070356993fdb9802bbb814864f71e9cd9b251b39c021878db86694a2cc3d",
+    "src/usage/recorder.ts": "13aebd13e035c9aadb8c6d4c22c6faea97afba25442a86b2944020e2394448e9",
+    "src/providers/model-call.ts": "161050e944219a00aa302503047959030ddcfac89a5a3ef76eaf2cd4a11c5e07",
+    "src/providers/extension-stream-bridge.ts": "d80042843fd2c14508205a690e8c1adc3b98c982f55eb97bfdc9c312e2780efe",
+    "src/agent/embedded/xopc-stream-bridge.ts": "18c272dad0996028648d2a618fc7098c92c8d0f8b4747ae17312502b309981c9"
+  },
+  "model": "xopc-cloud/openai-codex/gpt-5.6-sol",
+  "reasoning": "low",
+  "jobs": [
+    {
+      "id": "convergence",
+      "expected": 2
+    },
+    {
+      "id": "delivery",
+      "expected": 2
+    },
+    {
+      "id": "sealed-release",
+      "expected": 3,
+      "sealed": true
+    },
+    {
+      "id": "personal",
+      "kind": "personal",
+      "expected": 1
+    }
+  ],
+  "gate": "All predeclared task assertions and per-request identity/usage/tail gates; no failed trials replaced",
+  "independence": "New content-addressed release recovery family, three frozen repetitions. Gateway and subprocesses denied access to grader/suite source by OS sandbox; host graders operate after completed turns. Personal uses existing configured router/worker/reviewer models and authenticated download checks.",
+  "supersedes": null,
+  "previousRejectedImprovement": "ffe5f466-bd4b-44eb-b2e6-f3e7336fa513"
+}

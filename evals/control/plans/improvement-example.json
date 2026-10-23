@@ -1,0 +1,9 @@
+{
+  "problem": "验证通过后的重复检查导致收尾开销",
+  "hypothesis": "对未变化工作区复用有效验证回执，可以减少请求而不影响结果正确性",
+  "protection": ["工作区变化必须重新验证", "失败不能发布", "当前要求全部交付", "必要澄清保留"],
+  "budget": {"candidateLimit": 2, "maxWallMs": 300000, "liveModelBudget": "must be declared before execution"},
+  "evidence": [],
+  "status": "hypothesis_only",
+  "note": "模板，不代表产品已经修改或候选已经晋级"
+}

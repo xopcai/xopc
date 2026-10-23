@@ -81,6 +81,16 @@ export class GitCloneSandbox {
   async prepare(evalCase: EvalCase): Promise<PreparedEnvironment> {
     const root = mkdtempSync(join(tmpdir(), `agent-eval-${evalCase.id}-`));
     this.roots.add(root);
+    try {
+      return await this.prepareWorkspace(evalCase, root);
+    } catch (error) {
+      this.roots.delete(root);
+      rmSync(root, { recursive: true, force: true });
+      throw error;
+    }
+  }
+
+  private async prepareWorkspace(evalCase: EvalCase, root: string): Promise<PreparedEnvironment> {
     const workspace = join(root, 'workspace');
     const source = evalCase.repo.source === 'local'
       ? evalCase.repo.path ? resolve(evalCase.repo.path) : undefined

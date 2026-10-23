@@ -1,9 +1,10 @@
 import { execFileSync, spawn } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
-import { appendFileSync, closeSync, existsSync, lstatSync, mkdirSync, mkdtempSync, openSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { appendFileSync, closeSync, cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, openSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:net';
-import { tmpdir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 import { setTimeout as delay } from 'node:timers/promises';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -43,26 +44,25 @@ export function gatewayConfig(model, workspace, port, token) {
   };
 }
 
-export function evalAgentCatalogSeed(model, workspace) {
+export function evalAgentCatalogSeed(model, workspace, maxTurns = 40) {
   return {
     defaultAgentId: 'coder',
     defaults: {
       models: { chat: { primary: model, fallbacks: [] }, intents: {} },
       skills: { mode: 'selected', include: [] },
       tools: {},
-      workflows: {},
-      runtime: { maxTurns: 40, timeoutMs: 300_000 },
+      runtime: { maxTurns, timeoutMs: 300_000 },
     },
     agent: { id: 'coder', enabled: true, workspace },
   };
 }
 
-export async function prepareEvalAgentCatalog(state, model, workspace) {
+export async function prepareEvalAgentCatalog(state, model, workspace, maxTurns = 40) {
   const [{ AgentCatalogRepository }, { closeXopcDatabase, openXopcDatabase }] = await Promise.all([
     import('../../../src/agent-catalog/repository.ts'),
     import('../../../src/storage/sqlite/connection.ts'),
   ]);
-  const seed = evalAgentCatalogSeed(model, workspace);
+  const seed = evalAgentCatalogSeed(model, workspace, maxTurns);
   openXopcDatabase({ path: join(state, 'xopc.db') });
   try {
     const repository = new AgentCatalogRepository();
@@ -154,22 +154,42 @@ export async function main(options = {}) {
   let gateway;
   let store;
   let failed = false;
-  const onSignal = () => { stopGateway(gateway, 'SIGKILL'); process.exit(130); };
+  let interrupted = false;
+  const onSignal = () => { interrupted = true; failed = true; process.exitCode = 130; };
   process.once('SIGINT', onSignal);
   process.once('SIGTERM', onSignal);
   try {
     const { ConfigSchema } = await import('../../../src/config/schema.ts');
     const config = ConfigSchema.parse(gatewayConfig(settings.model, workspace, port, token));
     writeFileSync(configPath, JSON.stringify(config), { mode: 0o600 });
-    await prepareEvalAgentCatalog(state, settings.model, workspace);
+    await prepareEvalAgentCatalog(state, settings.model, workspace, options.maxTurns ?? 40);
+    const sharedRoot = process.env.XOPC_STATE_DIR ?? join(homedir(), '.xopc');
+    if (settings.provider === 'xopc-cloud' && existsSync(join(sharedRoot, 'cache/model-catalog'))) {
+      cpSync(join(sharedRoot, 'cache/model-catalog'), join(state, 'cache/model-catalog'), { recursive: true });
+    }
     const runtimeEnv = {
       ...process.env,
       XOPC_CONFIG: configPath, XOPC_CONFIG_PATH: configPath, XOPC_STATE_DIR: state,
       XOPC_WORKSPACE: workspace, XOPC_HOME: state, XOPC_SKIP_CHANNELS: '1',
       XOPC_NO_RESPAWN: '1', XOPC_LOG_LEVEL: 'info', XOPC_LOG_FILE: 'false',
-      [`${settings.provider.toUpperCase().replaceAll('-', '_')}_API_KEY`]: settings.apiKey,
+      ...(settings.provider === 'xopc-cloud'
+        ? { XOPC_CREDENTIALS_DIR: process.env.XOPC_CREDENTIALS_DIR ?? join(sharedRoot, 'credentials') }
+        : { [`${settings.provider.toUpperCase().replaceAll('-', '_')}_API_KEY`]: settings.apiKey }),
     };
-    gateway = spawn(process.execPath, ['--import', 'tsx', 'src/cli/bin.ts', 'gateway', '--port', String(port), '--bind', 'loopback', '--no-hot-reload'], {
+    let executable = process.execPath, prefix = [];
+    if (options.sealGrader) {
+      if (process.platform !== 'darwin') throw new Error('Sealed local grader requires the macOS OS sandbox; no permissive fallback');
+      const relativeRoot = `evals/coder/suites/${options.benchmarkSuite}`;
+      const originFile = join(repository, '.xopc-source-origin.json');
+      const origin = existsSync(originFile) ? JSON.parse(readFileSync(originFile, 'utf8')).origin : repository;
+      const roots = [...new Set([join(repository, relativeRoot), join(origin, relativeRoot)])];
+      const profile = '(version 1)(allow default)' + roots.map(path => `(deny file-read* file-write* (subpath ${JSON.stringify(path)}))`).join('');
+      const probe = 'try{require("node:fs").readFileSync(process.argv[1]);process.exit(2)}catch(e){if(!["EPERM","EACCES"].includes(e.code))throw e}';
+      for (const root of roots) execFileSync('/usr/bin/sandbox-exec', ['-p', profile, process.execPath, '-e', probe, join(root,'hidden/check.mjs')]);
+      writeFileSync(join(output, 'sealed-boundary.json'), JSON.stringify({ mechanism:'macOS sandbox-exec', deniedRoots:roots, readAndWriteDenied:true, denialProbePassed:true, appliesToGatewayAndDescendants:true },null,2));
+      executable = '/usr/bin/sandbox-exec'; prefix = ['-p', profile, process.execPath];
+    }
+    gateway = spawn(executable, [...prefix, '--import', 'tsx', 'src/cli/bin.ts', 'gateway', '--port', String(port), '--bind', 'loopback', '--no-hot-reload'], {
       cwd: repository, env: runtimeEnv, detached: true, stdio: ['ignore', logFd, logFd],
     });
     gateway.on('error', () => { failed = true; });
@@ -187,6 +207,7 @@ export async function main(options = {}) {
           '--suite', options.benchmarkSuite ?? 'xopc-core',
           '--mode', 'live', '--base-url', baseUrl, '--model', settings.model,
           '--reasoning', settings.reasoning, '--repetitions', String(settings.repetitions),
+          ...(options.benchmarkCases ? ['--cases', options.benchmarkCases] : []),
           '--output', benchmarkOutput], {
           cwd: repository, stdio: 'inherit', timeout: 120 * 60_000,
           env: { ...process.env, XOPC_EVAL_TOKEN: token },
@@ -244,11 +265,39 @@ export async function main(options = {}) {
     writeFileSync(join(output, 'error.txt'), message);
   } finally {
     store?.close();
+    // Let bounded auxiliary calls finish so their usage is part of the same evidence bundle.
+    const drainDeadline = Date.now() + (interrupted ? 1500 : 60_000);
+    let idleSince = null;
+    let drainComplete = false;
+    while (gateway?.exitCode === null && Date.now() < drainDeadline) {
+      let usage;
+      try {
+        usage = new DatabaseSync(join(state, 'xopc.db'), { readOnly: true });
+        const pending = Number(usage.prepare("SELECT COUNT(*) AS n FROM ai_usage_events WHERE status='running'").get().n);
+        const journal = process.env.XOPC_EVAL_AUDIT_PATH;
+        const events = journal && existsSync(journal) ? readFileSync(journal, 'utf8').trim().split('\n').filter(Boolean).map(line => JSON.parse(line)) : [];
+        const started = events.filter(e => e.event === 'start'), ended = new Set(events.filter(e => e.event === 'end').map(e => e.requestId));
+        const tails = started.filter(e => !ended.has(e.requestId)).length;
+        if (!pending && !tails) {
+          idleSince ??= Date.now();
+          if (Date.now() - idleSince >= 750) { drainComplete = true; break; }
+        } else idleSince = null;
+      } catch { break; }
+      finally { usage?.close(); }
+      await delay(200);
+    }
     stopGateway(gateway, 'SIGTERM');
     if (gateway?.exitCode === null && gateway.signalCode === null) {
       await Promise.race([new Promise(done => gateway.once('exit', done)), delay(5000)]);
     }
     stopGateway(gateway, 'SIGKILL');
+    if (existsSync(join(state, 'xopc.db'))) {
+    const usageDb = new DatabaseSync(join(state, 'xopc.db'), { readOnly: true });
+    try {
+      const rows = usageDb.prepare('SELECT id,provider,model,operation,status,started_at,finished_at,input_tokens,output_tokens,cache_read_tokens,cache_write_tokens,total_tokens,cloud_request_id,cloud_billing_json FROM ai_usage_events ORDER BY started_at,id').all();
+      writeFileSync(join(output, 'runtime-usage.json'), JSON.stringify({ mode: 'post-gateway-stop', drainComplete, interrupted, finalSnapshotGuaranteed: gateway?.exitCode !== null || gateway?.signalCode !== null, rows }, null, 2));
+    } finally { usageDb.close(); }
+    }
     closeSync(logFd);
     writeFileSync(join(output, 'gateway.log'), scrub(readFileSync(rawLog, 'utf8'), secrets));
     process.removeListener('SIGINT', onSignal);

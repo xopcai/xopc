@@ -6,12 +6,14 @@ import { XopcCloudAccountService } from '../providers/xopc-cloud-account-service
 import { isXopcDatabaseOpen } from '../storage/sqlite/connection.js';
 import { getAiUsageEvent, setAiUsageCloudRequest, setAiUsageCloudReceipt, markAiUsageCloudReceiptAttempt } from '../storage/sqlite/ai-usage-repository.js';
 
-const calls = new AsyncLocalStorage<{ id: string }>();
+const calls = new AsyncLocalStorage<{ id: string; operation?: string }>();
 const active = new Map<string, Promise<void>>();
 
-export function withUsageReceiptContext<T>(id: string, action: () => T): T {
-  return calls.run({ id }, action);
+export function withUsageReceiptContext<T>(id: string, action: () => T, operation?: string): T {
+  return calls.run({ id, operation }, action);
 }
+
+export function currentUsageRequestContext() { return calls.getStore(); }
 
 export function captureCloudUsageResponse(response: { status: number; headers: Headers | Record<string, string> }): void {
   if (response.status < 200 || response.status >= 300) return;

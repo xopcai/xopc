@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process';
 import { mkdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 
+if (process.argv.includes('--configured-models')) process.env.XOPC_ALLOCATION_LIVE = '1';
 if (process.env.XOPC_ALLOCATION_LIVE !== '1') throw new Error('Set XOPC_ALLOCATION_LIVE=1 to authorize configured real models');
 const args = process.argv.slice(2);
 const option = (key: string, fallback: string) => { const index = args.indexOf(key); return index < 0 ? fallback : args[index + 1] ?? fallback; };

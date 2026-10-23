@@ -1,0 +1,54 @@
+{
+  "id": "xopc-ledger-holdout",
+  "version": "1.0.0",
+  "description": "Fresh structural holdout: idempotent replay of a truncated append-only ledger. Explicit output contract.",
+  "cases": [
+    {
+      "id": "H02-idempotent-ledger-recovery",
+      "repo": {
+        "source": "local",
+        "path": "${EVAL_FIXTURE_REPO}",
+        "commit": "${EVAL_FIXTURE_COMMIT}"
+      },
+      "task": "Read contract.md and ledger.jsonl. Produce the exact outputs specified by the contract, including its explicit directory scope and report length requirements. Verify first-occurrence idempotency and incomplete-tail handling yourself. Do not use the network, install dependencies, or modify inputs.",
+      "followUps": [
+        {
+          "message": "A fault deleted out/checkpoint.json after your completed turn. Recover it from the original log and verify it agrees with out/totals.json. Preserve the explicit output-directory contract and update report.md with recovery evidence.",
+          "removeFiles": [
+            "out/checkpoint.json"
+          ]
+        }
+      ],
+      "budget": {
+        "timeoutMs": 300000,
+        "maxModelRequests": 40,
+        "maxTokens": 300000
+      },
+      "tags": [
+        "recovery",
+        "independent-holdout",
+        "idempotency",
+        "truncated-log"
+      ],
+      "graders": [
+        {
+          "type": "command",
+          "command": "node .xopc-eval-hidden/check.mjs",
+          "hiddenFiles": [
+            {
+              "source": "hidden/check.mjs",
+              "target": ".xopc-eval-hidden/check.mjs"
+            }
+          ]
+        },
+        {
+          "type": "unchanged",
+          "paths": [
+            "ledger.jsonl",
+            "contract.md"
+          ]
+        }
+      ]
+    }
+  ]
+}
