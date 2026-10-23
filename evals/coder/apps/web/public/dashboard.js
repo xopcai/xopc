@@ -107,7 +107,7 @@ async function renderBenchmarks(id) {
   }
   const params = new URLSearchParams(location.search), status = params.get('status') ?? '', q = params.get('q') ?? '';
   const filtered = data.benchmarks.filter(b => (!status || (status === 'liveCovered' ? Boolean(b.latestLiveCompleteValid) : status === 'noResults' ? !b.latestAttempt : sceneState(b) === status)) && `${t(b.id)} ${b.id} ${b.capabilities.map(key => t(key)).join(' ')}`.toLowerCase().includes(q.toLowerCase()));
-  return `<form id="scene-search" class="filters scene-search"><label>${tx('searchScenes')}<input name="q" value="${esc(q)}" placeholder="${tx('searchScenes')}"></label><button>${tx('filter')}</button></form>${chips('benchmarks', [['', 'allScenes'], ['needsAttention', 'needsAttention'], ['liveCovered', 'liveCovered'], ['noResults', 'noResults'], ['calibrationOnly', 'calibrationOnly']], status, { q })}<div class="section-heading"><h2>${tx('capabilityCoverage')}</h2><span>${tx('resultsFound', { count: filtered.length })}</span></div>${filtered.length ? `<div class="grid">${filtered.map(sceneCard).join('')}</div>` : empty(t('noMatchingScenes'))}${status || q ? action('benchmarks', 'clearFilters') : ''}`;
+  return `<form id="scene-search" class="filters scene-search"><label>${tx('searchScenes')}<input name="q" value="${esc(q)}" placeholder="${tx('searchScenes')}"></label><button>${tx('filter')}</button></form>${chips('benchmarks', [['', 'allScenes'], ['needsAttention', 'needsAttention'], ['liveCovered', 'liveCovered'], ['noResults', 'noResults'], ['calibrationOnly', 'calibrationOnly']], status, { q })}<div class="filter-results"><div class="section-heading"><h2>${tx('capabilityCoverage')}</h2><span>${tx('resultsFound', { count: filtered.length })}</span></div>${filtered.length ? `<div class="grid">${filtered.map(sceneCard).join('')}</div>` : empty(t('noMatchingScenes'))}${status || q ? action('benchmarks', 'clearFilters') : ''}</div>`;
 }
 function resultRecords(items) {
   return `<div class="result-records">${items.map(e => `<article class="card result-record"><div><h3><a href="#evidence/${e.id}">${tx(e.benchmark)}</a></h3><p class="muted small-copy">${esc(modelName(e))} · ${esc(formatDate(e.createdAt ?? e.importedAt))}</p><div>${badge(e.evidenceClass)}${badge(e.validity)}${badge(e.complete ? 'complete' : 'incomplete')}</div></div><div class="result-record-score"><strong>${resultScore(e)}</strong>${action(`evidence/${e.id}`, 'seeResult')}</div></article>`).join('')}</div>`;
@@ -233,6 +233,59 @@ window.addEventListener('storage', event => {
   if (event.key === 'xopc.evals.theme') applyTheme(['light', 'dark', 'system'].includes(event.newValue) ? event.newValue : 'system');
   if (event.key === 'xopc.evals.locale') { setLocale(event.newValue); updateChrome(); render(); }
 });
+// Keep filter controls mounted, matching Web UI's sliding-tab interaction.
+function syncFilterSelection() {
+  const track = view.querySelector('.filter-chips');
+  if (!track) return;
+  const status = new URLSearchParams(location.search).get('status') ?? '';
+  for (const link of track.querySelectorAll('a')) {
+    if ((new URL(link.href).searchParams.get('status') ?? '') === status) link.setAttribute('aria-current', 'true');
+    else link.removeAttribute('aria-current');
+  }
+  const selected = track.querySelector('[aria-current="true"]');
+  if (!selected) return;
+  let indicator = track.querySelector('.filter-indicator');
+  if (!indicator) {
+    indicator = document.createElement('span');
+    indicator.className = 'filter-indicator';
+    indicator.setAttribute('aria-hidden', 'true');
+    track.prepend(indicator);
+  }
+  indicator.style.width = `${selected.offsetWidth}px`;
+  indicator.style.height = `${selected.offsetHeight}px`;
+  indicator.style.transform = `translate3d(${selected.offsetLeft}px, ${selected.offsetTop}px, 0)`;
+  track.dataset.slidingReady = 'true';
+}
+const filterResize = new ResizeObserver(syncFilterSelection);
+function updateView(html) {
+  const next = document.createElement('template');
+  next.innerHTML = html;
+  const currentResults = view.querySelector('.filter-results');
+  const nextResults = next.content.querySelector('.filter-results');
+  const currentSearch = view.querySelector('#scene-search');
+  const nextSearch = next.content.querySelector('#scene-search');
+  if (currentResults && nextResults && currentSearch?.outerHTML === nextSearch?.outerHTML) {
+    currentResults.replaceChildren(...nextResults.childNodes);
+    if (!matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      currentResults.getAnimations().forEach(animation => animation.cancel());
+      currentResults.animate([{ opacity: .65 }, { opacity: 1 }], { duration: 150, easing: 'ease-out' });
+    }
+  } else view.replaceChildren(next.content);
+  filterResize.disconnect();
+  const track = view.querySelector('.filter-chips');
+  if (track) { syncFilterSelection(); filterResize.observe(track); }
+}
+view.addEventListener('click', event => {
+  const link = event.target.closest('.filter-chips a');
+  if (!link || event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+  const next = new URL(link.href);
+  if (next.origin !== location.origin || next.pathname !== location.pathname || next.hash !== location.hash) return;
+  event.preventDefault();
+  if (next.href === location.href) return;
+  history.pushState(null, '', next);
+  syncFilterSelection();
+  render();
+});
 async function render() {
   const version = ++rendering;
   error.hidden = true;
@@ -245,6 +298,7 @@ async function render() {
   updateChrome();
   const routeKey = `${current}/${id ?? ''}/${trial ?? ''}`;
   if (renderedRoute !== routeKey) { window.scrollTo(0, 0); view.innerHTML = '<div class="skeleton"></div><div class="skeleton"></div>'; renderedRoute = routeKey; renderedHTML = undefined; }
+  syncFilterSelection();
   view.setAttribute('aria-busy', 'true');
   try {
     let html;
@@ -258,7 +312,7 @@ async function render() {
     if (version !== rendering) return;
     if (html === renderedHTML) { updatedAt = new Date(); updateChrome(); return; }
     renderedHTML = html;
-    view.innerHTML = html;
+    updateView(html);
     updatedAt = new Date(); updateChrome();
     const navigate = (data, hash) => { history.pushState(null, '', `?${new URLSearchParams(data)}#${hash}`); return render(); };
     document.querySelector('#search-form')?.addEventListener('submit', e => { e.preventDefault(); navigate(new FormData(e.target), 'evidence'); });
