@@ -30,7 +30,7 @@ describe('developer HTTP surface', () => {
     store.event('checkpoint', { sequence: 1 });
     store.event('checkpoint', { sequence: 2 });
     const dashboard = createDashboard(store); const url = await listen(dashboard.server); cleanups.push(dashboard.disconnect);
-    const html = await fetch(url); expect(await html.text()).toContain('运行中心');
+    const html = await fetch(url); expect(await html.text()).toContain('场景评测');
     expect(html.headers.get('content-security-policy')).toContain("script-src 'self'");
     expect((await fetch(url + '/api/overview')).status).toBe(200);
     expect((await fetch(url + '/api/evidence', { method: 'POST' })).status).toBe(405);
