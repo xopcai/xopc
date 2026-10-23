@@ -43,7 +43,7 @@ const manifest = { version: 2, variant: values.label, suite: 'personal-memory-ba
   protocol: 'Full history imported through SQLite transcript API; production runPersistentLearningJob; complete-state QA through authenticated Personal Gateway/realtime. No gold in candidate worker. Fresh isolated DB per question.',
   limitations: ['Paired source-frozen product comparison when labels A/B are supplied; no no-memory/oracle condition',
     'Forced learning flush measures completed-state quality, not natural learning latency',
-    'Historical question timestamp is explicit user context; host wall clock stays real',
+    'Historical question timestamp is separate provider system context; retrieval and current author see the plain question; host wall clock stays real',
     'Imported history rows keep original roles/dates; live controls generate and learn actual foreground replies',
     'Inference errors are retained; internal production schema correction remains enabled',
     'Model routing aliases do not pin underlying provider weights',
@@ -53,7 +53,7 @@ save('manifest.json', manifest);
 if (values['dry-run']) { console.log(JSON.stringify({ out, cases: cases.length, ...manifest.models })); process.exit(0); }
 
 const frozenConfig = freezeMemoryConfig(values['config-snapshot']);
-Object.assign(manifest, { protocolVersion: 2, configSnapshotHash: frozenConfig.hash, physicalRequestPools: true, liveEvidenceIncluded: true, autonomousBackground: 'task dispatch disabled by host option; home disabled; memory scheduler stopped', isolatedDefaultWorkspace: true, judgeServiceRetries: { maximum: 2, onlyEmptyTransportErrors: true, candidateRegeneration: false } });
+Object.assign(manifest, { protocolVersion: 3, questionTimeTransport: 'provider-system-context-v1', configSnapshotHash: frozenConfig.hash, physicalRequestPools: true, liveEvidenceIncluded: true, autonomousBackground: 'task dispatch disabled by host option; home disabled; memory scheduler stopped', isolatedDefaultWorkspace: true, judgeServiceRetries: { maximum: 2, onlyEmptyTransportErrors: true, candidateRegeneration: false } });
 save('manifest.json', manifest);
 const poolDir = join(out, 'pools');
 const pool = values.endpoint ? undefined : spawn('python3', ['evals/personal/style/request_pools.py', '--out', poolDir], { stdio: ['ignore', 'ignore', 'inherit'] });

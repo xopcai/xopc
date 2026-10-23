@@ -1,11 +1,12 @@
 import { randomUUID, createHash } from 'node:crypto';
 import { appendFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
+import { appendModelContext } from './question-context.mjs';
 
 /** Evaluation-only HTTP boundary: each physical model request holds one shared lease. */
 export function installRequestProtocol(input: {
   out: string; expectedModel: string; pool: 'generation' | 'judge'; caseId: string;
-  phase?: () => string; fetch?: typeof globalThis.fetch;
+  phase?: () => string; modelContext?: () => string | undefined; fetch?: typeof globalThis.fetch;
 }) {
   const transport = input.fetch ?? globalThis.fetch;
   const endpoint = process.env.XOPC_STYLE_POOL_URL;
@@ -27,9 +28,12 @@ export function installRequestProtocol(input: {
     if (method.toUpperCase() !== 'POST' || !/\/(responses(?:\/compact)?|chat\/completions|messages)\/?$/.test(url.pathname)) {
       return transport(resource, options);
     }
-    const body = typeof options?.body === 'string' ? options.body
+    const originalBody = typeof options?.body === 'string' ? options.body
       : resource instanceof Request ? await resource.clone().text() : '';
-    const payload = JSON.parse(body);
+    const payload = JSON.parse(originalBody);
+    const context = input.modelContext?.();
+    if (context) appendModelContext(payload, url.pathname, context);
+    const body = context ? JSON.stringify(payload) : originalBody;
     const actualModel = String(payload.model ?? '');
     const id = randomUUID(), phase = input.phase?.() ?? 'judge';
     if (actualModel.split('/').at(-1) !== modelId) {
@@ -60,7 +64,7 @@ export function installRequestProtocol(input: {
     const aborted = () => { void release('Request aborted').catch(() => {}); };
     signal?.addEventListener('abort', aborted, { once: true });
     try {
-      const response = await transport(resource, { ...options, signal });
+      const response = await transport(resource, { ...options, ...(context ? { body } : {}), signal });
       if (!response.body || !response.ok) {
         signal?.removeEventListener('abort', aborted);
         await release(response.ok ? null : `HTTP ${response.status}`);
