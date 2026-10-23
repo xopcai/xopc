@@ -36,7 +36,7 @@ export const ROOT_HELP_COMMANDS: RootHelpCommand[] = [
   { name: 'project', description: 'Manage long-running projects' },
   { name: 'doctor [options]', description: 'Check xopc installation health and diagnose common issues' },
   { name: 'support', description: 'Create a redacted diagnostic report for an xopc problem' },
-  { name: 'runtime', description: 'Manage Node.js and Python tool runtimes used by agents' },
+  { name: 'runtime', description: 'Manage agent runtimes and phone dependencies' },
   { name: 'mcp', description: 'Manage native pi MCP servers and expose Gateway capabilities' },
   { name: 'platform', description: 'Connect to XOPC Cloud or an enterprise platform' },
   { name: 'update [options]', description: 'Check for and install xopc updates' },
