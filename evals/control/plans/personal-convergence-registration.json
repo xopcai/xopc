@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "registeredAt": "2026-10-23T12:45:42.757590+00:00",
+  "scope": "Personal convergence and bounded canceled-stream accounting",
+  "hypothesis": "Host-observed submission/source binding removes self-referential review loops; a bounded accounting drain retains final usage after logical cancellation.",
+  "jobs": [
+    {
+      "id": "personal",
+      "kind": "personal",
+      "expected": 1
+    },
+    {
+      "id": "cancellation",
+      "kind": "cancellation",
+      "expected": 2
+    }
+  ],
+  "budget": {
+    "maxRequests": 110,
+    "maxWallMs": 900000
+  },
+  "gate": [
+    "Original full mixed trial assertions unchanged, including 10min execution and latency gates",
+    "Two actual first-delta cancellations remain aborted with final wire and runtime total equal, drain <=17s",
+    "No quality failure replaced; no historical unknown token filled with estimates"
+  ],
+  "candidateSourceHashes": {
+    "src/tasks/task-research-result.ts": "d2f6055f9ab2eee3e62bd075cbbac99622622bb9d4d1aea90419f3fc3c4b935a",
+    "src/usage/cloud-wire.ts": "4aa85f339195f15f7e5eb277feef3286c9e64674f65e4bff526ba3fe11054c42",
+    "src/usage/recorder.ts": "2b565502a38e39bd191a8a1b6afed463a798e3b561c65f7e810b3424108b788b",
+    "src/providers/model-call.ts": "15160060ce1700c8733cded818c8251d9b7fe9a07ddbfbf18a2ea02bb42e299c",
+    "scripts/verify-cloud-cancellation-live.mts": "fc88689f7a425df092c199ea916313ab5336f692c425886bc3749b60a3372988",
+    "scripts/personal-repair-live-smoke-v2.mts": "7e08ee45ee113124df6fae4d07c5e2a08ea51262fe1044491491bbf9af489416"
+  },
+  "independence": "Same disclosed mixed regression; cancellation is separate from task output. Not an unseen quality holdout.",
+  "priorEvidence": ".xopc-evals/control/usage-tail-verification-20261023/personal",
+  "historicalUnknown": "Remains unknown unless provider receipt supplies the original usage."
+}

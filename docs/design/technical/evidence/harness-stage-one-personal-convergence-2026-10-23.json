@@ -1,0 +1,355 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-23",
+  "scope": "Personal timeout convergence and bounded cancellation accounting",
+  "phaseOneComplete": false,
+  "personalFullAcceptance": false,
+  "cancellationAccountingAccepted": true,
+  "improvements": {
+    "personal": "1f7404fc-bfb3-40c3-8ad7-ef0034987cee",
+    "cancellation": "8efaa3dc-f9a6-46f5-9b27-3c0c27b1e0f9"
+  },
+  "requests": {
+    "instrumented": 44,
+    "knownFinalUsage": 43,
+    "interruptedUnknown": 1,
+    "knownProviderTokens": 786898,
+    "completeProviderTokens": null,
+    "actualCharge": null,
+    "diagnosticOnly": 1,
+    "diagnosticTokens": 1023,
+    "historicalUnknownsRetained": 2
+  },
+  "personalAcceptance": {
+    "deliveryCompleted": true,
+    "deliveredInMs": 421191,
+    "qualityChecks": 15,
+    "qualityPassed": true,
+    "latency": {
+      "requestToSubmit": 25167,
+      "initialReplyAfterSubmit": 9992,
+      "pingResponse": 5666,
+      "total": 421191
+    },
+    "latencyFailures": [
+      {
+        "key": "requestToSubmit",
+        "limit": 20000,
+        "actual": 25167
+      },
+      {
+        "key": "initialReplyAfterSubmit",
+        "limit": 5000,
+        "actual": 9992
+      },
+      {
+        "key": "pingResponse",
+        "limit": 5000,
+        "actual": 5666
+      }
+    ],
+    "originalGradeRetained": true,
+    "overallAccepted": false,
+    "settledChargeCreditMicro": "2447160"
+  },
+  "cancellation": {
+    "trials": [
+      {
+        "index": 0,
+        "scenario": "first-delta-cancellation",
+        "repetition": 1,
+        "success": true,
+        "stopReason": "aborted",
+        "canceledAt": 1792759986396,
+        "startedAt": 1792759983470,
+        "finishedAt": 1792759987889,
+        "totalTokens": 237,
+        "inputTokens": 34,
+        "outputTokens": 203
+      },
+      {
+        "index": 1,
+        "scenario": "first-delta-cancellation",
+        "repetition": 2,
+        "success": true,
+        "stopReason": "aborted",
+        "canceledAt": 1792759989675,
+        "startedAt": 1792759987889,
+        "finishedAt": 1792759991225,
+        "totalTokens": 237,
+        "inputTokens": 34,
+        "outputTokens": 203
+      }
+    ],
+    "componentMatched": true,
+    "perRequestMatched": true,
+    "providerMinusRuntimeTokens": 0
+  },
+  "independentInspection": {
+    "schemaVersion": 1,
+    "manifest": {
+      "sourceHashes": {
+        "src/tasks/task-research-result.ts": "d2f6055f9ab2eee3e62bd075cbbac99622622bb9d4d1aea90419f3fc3c4b935a",
+        "src/usage/cloud-wire.ts": "e1400c34529bad5781463872841c6aa485a7796d98493ea04ffaf2eec14bfec3",
+        "src/usage/recorder.ts": "2b565502a38e39bd191a8a1b6afed463a798e3b561c65f7e810b3424108b788b",
+        "scripts/verify-personal-delivery-evidence.mts": "ddc29dd5f4343a1a49868ec080bd6f84f1abbef3889bf1ec5be84056dfb4ba1f"
+      },
+      "sourceChangedDuringRun": false
+    },
+    "createdAt": "2026-10-23T12:57:36.532Z",
+    "qualityPassed": true,
+    "originalTrialUnchanged": true,
+    "originalTrialSuccess": false,
+    "originalFailure": "Execution status must identify the assigned Agent",
+    "sourceReport": "/Users/micjoyce/develop/github/xopc/.xopc-evals/control/personal-convergence-20261023/personal/mixed-round-1.json",
+    "originalHashes": {
+      "report": "e2d10a528972e0657d28c713ccb3fcd2200339de02dd683fcdcec7294a1ee2cb",
+      "db": "5137c30d26a424aa8af44cd7dead392952156653655ffb7bfde3f4d13fa94c8b"
+    },
+    "checks": [
+      {
+        "name": "structured_executor_identity",
+        "passed": true
+      },
+      {
+        "name": "delivered_before_10min",
+        "passed": true
+      },
+      {
+        "name": "all_current_criteria_and_directions",
+        "passed": true
+      },
+      {
+        "name": "same_task_single_allocation",
+        "passed": true
+      },
+      {
+        "name": "all_four_final_artifacts",
+        "passed": true
+      },
+      {
+        "name": "independent_sales_totals",
+        "passed": true
+      },
+      {
+        "name": "direction_marker",
+        "passed": true
+      },
+      {
+        "name": "file_loss_recovered",
+        "passed": true
+      },
+      {
+        "name": "factual_limits",
+        "passed": true
+      },
+      {
+        "name": "sandboxed_independent_reproduction",
+        "passed": true
+      },
+      {
+        "name": "real_wrong_price_rejected",
+        "passed": true
+      },
+      {
+        "name": "authenticated_download:monthly_summary.csv",
+        "passed": true
+      },
+      {
+        "name": "authenticated_download:report.md",
+        "passed": true
+      },
+      {
+        "name": "authenticated_download:reproduce.mjs",
+        "passed": true
+      },
+      {
+        "name": "authenticated_download:change_notes.md",
+        "passed": true
+      }
+    ],
+    "latency": {
+      "requestToSubmit": 25167,
+      "initialReplyAfterSubmit": 9992,
+      "pingResponse": 5666,
+      "total": 421191
+    },
+    "latencyGates": {
+      "requestToSubmit": 20000,
+      "initialReplyAfterSubmit": 5000,
+      "pingResponse": 5000
+    },
+    "latencyFailures": [
+      {
+        "key": "requestToSubmit",
+        "limit": 20000,
+        "actual": 25167
+      },
+      {
+        "key": "initialReplyAfterSubmit",
+        "limit": 5000,
+        "actual": 9992
+      },
+      {
+        "key": "pingResponse",
+        "limit": 5000,
+        "actual": 5666
+      }
+    ],
+    "repairCount": 1,
+    "artifacts": [
+      {
+        "title": "monthly_summary.csv",
+        "sha256": "38f79e51c378430804e76da1083d5b6bdea69aa72b25ce361fcae1fa3b868acd",
+        "bytes": 57
+      },
+      {
+        "title": "report.md",
+        "sha256": "624e2d25a5a6ba3e9db33277b03d513b2a923c32d51a89361934d28f41cb65c7",
+        "bytes": 4382
+      },
+      {
+        "title": "reproduce.mjs",
+        "sha256": "1c95f61498e01173cb5a262c5fbd0fca3c3d6358341993ee8eeb109c51e25dd5",
+        "bytes": 2215
+      },
+      {
+        "title": "change_notes.md",
+        "sha256": "4c7b77373f8992b9b77c6b1f9916f37ec32935b591ff6e8b70ec45b245e19599",
+        "bytes": 747
+      }
+    ],
+    "overallAcceptance": false,
+    "limitation": "Post-hoc independent supplement, not preregistered unseen quality validation; original grade is retained. Authenticated file downloads were verified through a new isolated Gateway using a clone; no rewrite of the original failed trial."
+  },
+  "batches": [
+    {
+      "name": "personal",
+      "physicalRequests": 38,
+      "knownUsageRequests": 38,
+      "unknownRequests": 0,
+      "providerTokens": 784950,
+      "observedProviderTokens": 784950,
+      "runtimeTokens": 784950,
+      "perRequestMatched": true,
+      "providerMinusRuntimeTokens": 0,
+      "hashes": {
+        "wire": "2d166abbb364041aa2d7a0fd187b2a2ecca8abd56df5265b4f385a0506474819",
+        "ledger": "7816bbd2f5f9d4e3320e3c93e656ea5a178c9ee32864b23168f6f92482f1648d"
+      }
+    },
+    {
+      "name": "initialCancellation",
+      "physicalRequests": 1,
+      "knownUsageRequests": 0,
+      "unknownRequests": 1,
+      "providerTokens": null,
+      "observedProviderTokens": null,
+      "runtimeTokens": null,
+      "perRequestMatched": false,
+      "providerMinusRuntimeTokens": null,
+      "hashes": {
+        "wire": "4069d82a079aec049a8b92a9de7c8794e1c4162deab8d0b05a28894f10dad8fa",
+        "ledger": "ea9927a5769b33729999927c5726fb54fcabcfbcd59926931b70822edb6e41cd"
+      }
+    },
+    {
+      "name": "totalCancellation",
+      "physicalRequests": 2,
+      "knownUsageRequests": 2,
+      "unknownRequests": 0,
+      "providerTokens": 474,
+      "observedProviderTokens": 474,
+      "runtimeTokens": 474,
+      "perRequestMatched": true,
+      "providerMinusRuntimeTokens": 0,
+      "hashes": {
+        "wire": "4d6c0eda1be3abd7d7a4f69118caf5a8509aae2fa121b1fa547986fb62e2dcf2",
+        "ledger": "f6cc284f68997d64bb54a6cbb30084ae56c334fc2b68ff9a03719f8c55afbb1a"
+      }
+    },
+    {
+      "name": "componentCancellation",
+      "physicalRequests": 2,
+      "knownUsageRequests": 2,
+      "unknownRequests": 0,
+      "providerTokens": 474,
+      "observedProviderTokens": 474,
+      "runtimeTokens": 474,
+      "perRequestMatched": true,
+      "providerMinusRuntimeTokens": 0,
+      "hashes": {
+        "wire": "58fc44c6faa9008e1f11ac2abf2b8bb741d97a7d0205a60761e0ed48e80d81f1",
+        "ledger": "8bb118ae85305fae4da9b4cef1038cba7f969245e1f2428caf3e8e5a2bcc0cd7"
+      }
+    },
+    {
+      "name": "inspection",
+      "physicalRequests": 1,
+      "knownUsageRequests": 1,
+      "unknownRequests": 0,
+      "providerTokens": 1000,
+      "observedProviderTokens": 1000,
+      "runtimeTokens": 1000,
+      "perRequestMatched": true,
+      "providerMinusRuntimeTokens": 0,
+      "hashes": {
+        "wire": "89dc4012b92e051ec652ab999debc58e27c055ab938ed52f73c47ec921fedd52",
+        "ledger": "5e9663e19e78b708d463649319f5cbf6ec346f1dcd8ff374ba373f5a03d10e84"
+      }
+    }
+  ],
+  "originalEvidencePreserved": true,
+  "limitations": [
+    "Old Personal timeout and unknown provider usage retained",
+    "This round initial cancellation race remains a failed trial",
+    "Original v6 grade remains failed; v7 protocol update is prospective",
+    "Personal latency failures block overall promotion",
+    "Independent inspection is post-hoc; no unseen quality holdout claim"
+  ],
+  "historicalReceiptRecheck": {
+    "probedAt": "2026-10-23T12:59:23.388Z",
+    "results": [
+      {
+        "requestId": "f9fd7375-05ba-4b33-836f-7263ac22ffad",
+        "available": true,
+        "state": "settled",
+        "chargedCreditMicro": "0",
+        "releasedCreditMicro": "2819472",
+        "status": null,
+        "code": null,
+        "tokenUsageRecovered": false
+      },
+      {
+        "requestId": "8d4c05bb-eada-4cec-9e63-0d18ebe40a48",
+        "available": false,
+        "state": null,
+        "chargedCreditMicro": null,
+        "releasedCreditMicro": null,
+        "status": 404,
+        "code": "not_found",
+        "tokenUsageRecovered": false
+      }
+    ],
+    "limitation": "Settled zero charge is not proof of zero consumed tokens; receipts contain no token usage."
+  },
+  "validation": {
+    "runtimeAndResearch": {
+      "files": 6,
+      "passed": 35
+    },
+    "control": {
+      "files": 12,
+      "passed": 40
+    },
+    "coderFull": {
+      "files": 26,
+      "passed": 80
+    },
+    "workspaceTypecheck": "passed",
+    "dashboard": "Browser verified Personal15/15 and three failed latency gates, cancellation2/2, original rejections and SSE recovery",
+    "priorEvidenceIntegrity": ".xopc-evals/control/personal-convergence-prior-integrity-20261023.json",
+    "allPriorHashesUnchanged": true,
+    "screenshot": ".xopc-evals/control/personal-convergence-dashboard-20261023.png"
+  }
+}

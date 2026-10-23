@@ -168,3 +168,15 @@ An evidence source can declare `review: "/absolute/path/protocol-review.json"`. 
 Supplements append evidence outside the immutable decision and retain its hash. The Dashboard labels the original decision and shows the latest supplementary audit without rewriting source databases, original scores or decision files. Exports contain normalized metadata and source references, not raw transcripts/credentials; they are local files and do not publish anything. For revised grading, freeze a new suite/grader version and a new output directory, retain the original experiment and review lineage, then import the new result; there is no overwrite-style regrading command.
 
 The sealed local family uses macOS `sandbox-exec` to deny the evaluated Gateway and descendants access to the suite/grader directories in both checkouts. Host grading is outside that sandbox. This is a local evaluated-process boundary, not a remote evaluator account or a generally hostile optimizer isolation service. Other platforms fail closed until an equivalent boundary is implemented.
+
+
+### Personal convergence and cancellation acceptance
+
+The 2026-10-23 follow-up is recorded in [the stage-one acceptance ledger](../../docs/design/benchmark-driven-harness-evolution-stage-one.md#8-personal-超时与取消请求分项用量复验2026-10-23). Keep cancellation telemetry in `cloud-cancellation-accounting`; it cannot qualify as Personal task-quality evidence.
+
+- `scripts/verify-cloud-cancellation-live.mts --configured-models --output <fresh-directory>` intentionally cancels after the first real text delta. Both trials must remain aborted and collect final total/input/output within the bounded drain. Run through an instrumented campaign; retain every failed trial.
+- `scripts/verify-personal-delivery-evidence.mts --configured-models --report <retained-trial.json> --output <fresh-directory>` inspects the original database read-only, reproduces downloaded outputs in a sandbox, runs a real wrong-price negative review and tests authenticated downloads through a cloned Gateway. It appends inspection evidence; it never replaces the original grade. It currently requires macOS sandbox-exec and has no unsandboxed fallback.
+- `personal-convergence-live.json`, `cancellation-components-live.json` and their preregistrations are frozen historical plans. Use a new ID/output/registration for the next candidate. The original cancellation-components plan misclassified its imported source as Personal; an append-only normalization correction assigns it to `cloud-cancellation-accounting` while keeping the frozen plan unchanged.
+- `assess-verification` accepts `kind: "cancellation"` jobs and validates aborted status, response timings, source hashes, HTTP/runtime identity and observed usage components. Review the original decision and the later supplements separately.
+
+A settled receipt with zero charge does not establish zero consumed tokens. Missing final usage stays unknown, even after the platform releases its reservation.

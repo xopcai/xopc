@@ -27,7 +27,7 @@ const fingerprintPaths = ['src/agent/tools/personal-task-tool.ts', 'src/personal
   'src/tasks/task-result-delivery-repository.ts', 'src/tasks/task-result-delivery-service.ts',
   'src/tasks/task-allocation-service.ts', 'src/tasks/task-research-result.ts', 'src/tasks/task-run-coordinator.ts',
   'src/tasks/task-contract-planner.ts', 'src/agent/tools/task-result-tool.ts', 'src/agent/tools/factory.ts',
-  'packages/gateway-contract/src/task-research-result.ts', 'scripts/personal-repair-live-smoke-v2.mts', 'src/tasks/task-research-repair.ts', 'src/tasks/task-run-repository.ts', 'src/agent/tasks/task-judge-service.ts', 'src/tasks/task-continuation.ts', 'src/agent/orchestration/turn-recovery.ts', 'src/agent/embedded/run-for-session.ts', 'src/agent/embedded/run-turn.ts', 'src/agent/embedded/types.ts', 'src/agent/tools/web.ts', 'pnpm-lock.yaml'];
+  'packages/gateway-contract/src/task-research-result.ts', 'scripts/personal-repair-live-smoke-v2.mts', 'src/tasks/task-research-repair.ts', 'src/tasks/task-run-repository.ts', 'src/agent/tasks/task-judge-service.ts', 'src/tasks/task-continuation.ts', 'src/agent/orchestration/turn-recovery.ts', 'src/agent/embedded/run-for-session.ts', 'src/agent/embedded/run-turn.ts', 'src/agent/embedded/types.ts', 'src/agent/tools/web.ts', 'src/usage/cloud-wire.ts', 'src/usage/recorder.ts', 'src/providers/model-call.ts', 'src/providers/extension-stream-bridge.ts', 'pnpm-lock.yaml'];
 const sourceFingerprint = () => Object.fromEntries(fingerprintPaths
   .map(path => [path, createHash('sha256').update(readFileSync(path)).digest('hex')]));
 const initialSourceHashes = sourceFingerprint();
@@ -277,7 +277,13 @@ try {
   assert.ok(timings.pingSent >= timings.runStarted && timings.pingCompleted && timings.pingCompleted < timings.runCompleted, 'The main conversation must answer the ping before execution finishes');
   const assistantMessages = history.session.messages.filter((message: { role: string }) => message.role === 'assistant');
   assert.ok(assistantMessages.some((message: { content: string }) => message.content === `${marker}-READY`), 'The actual assistant ping answer must appear in main history');
-  assert.ok(assistantMessages.some((message: { content: string }) => /data-analyst.*(开始执行|started)|started.*data-analyst/.test(message.content)), 'Execution status must identify the assigned Agent');
+  const executionStatuses = db.prepare(`SELECT e.payload_json FROM transcript_entries e JOIN transcripts t ON t.transcript_id = e.transcript_id
+    WHERE t.conversation_id = ? AND json_extract(e.payload_json, '$.customType') = 'task_allocation_status'`).all(personal.conversation_id)
+    .map(row => JSON.parse((row as { payload_json: string }).payload_json));
+  assert.ok(executionStatuses.some(row => row.details?.taskId === taskId
+    && row.details?.allocation?.selectedAgentId === allocation.selected_agent_id && /开始执行|started/i.test(row.content)),
+  'Structured execution status must retain the assigned Agent identity');
+  report.executionIdentityProtocol = 'structured-task-allocation-status-v7';
   assert.ok(!assistantMessages.some((message: { content: string }) => /undefined.*开始执行|started by undefined/.test(message.content)), 'Execution status must not lose the executor identity');
   const delivery = db.prepare('SELECT reply_text, payload_json FROM task_result_deliveries WHERE task_run_id IN (SELECT run_id FROM task_runs WHERE task_id = ?) ORDER BY delivered_at DESC LIMIT 1')
     .get(taskId!) as { reply_text: string | null; payload_json: string };
@@ -446,13 +452,17 @@ try {
     compositionFallbackEvents: fallbackEvents,
     repairEvents: taskId ? db.prepare("SELECT type,payload_json,occurred_at FROM task_run_events WHERE run_id IN (SELECT run_id FROM task_runs WHERE task_id = ?) AND type = 'task_run.continuation_scheduled'").all(taskId) : [],
     injections, scenario,
-    benchmark: { suite: 'personal-delivery-live-repair', version: 6, mode: 'real-model-isolated-gateway',
+    benchmark: { suite: 'personal-delivery-live-repair', version: 7, mode: 'real-model-isolated-gateway',
       sourceCommit: execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(),
       nodeVersion: process.version, fixtureSha256: createHash('sha256').update(fixtureContent + (researchLive ? priceFixture : '')).digest('hex'),
       sourceHashes: initialSourceHashes,
       sourceChangedDuringRun: JSON.stringify(initialSourceHashes) !== JSON.stringify(sourceFingerprint()),
       limitation: 'Synthetic sales/prices plus actual MDN retrieval; file deletion is a disclosed isolated fault injection. Length proxy is not naturalness. Every failed round is retained.' },
     models: { personal: selection.model_override, global: JSON.parse(settings.defaults_json).models.chat.primary },
+    durationMs: report.durationMs ?? { requestToSubmit: timings.taskPersisted - timings.requestSent,
+      initialReplyAfterSubmit: timings.personalInitialCompleted - timings.submitToolReturned,
+      allocation: timings.assigned - timings.taskPersisted, pingResponse: timings.pingCompleted - timings.pingSent,
+      total: timings.personalResultDelivered - timings.requestSent },
     timeline, rawTimings: timings, toolCalls, usage, inputs, isolatedStateDirectory: directory };
   mkdirSync(join(reportPath, '..'), { recursive: true });
   writeFileSync(reportPath, JSON.stringify(report, null, 2) + '\n');

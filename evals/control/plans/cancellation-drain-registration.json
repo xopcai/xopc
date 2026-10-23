@@ -1,0 +1,10 @@
+{
+  "registeredAt": "2026-10-23T12:48:18.960052+00:00",
+  "hypothesis": "Do not close accounting when an in-flight prefetch tries enqueue after SDK cancellation; drain physical stream to EOF within15s.",
+  "expected": 2,
+  "gate": "Two intentional cancellations; aborted status; final authoritative wire/runtime total match; <=17s graceful return; active/queued0.",
+  "priorFailure": "personal-convergence-20261023/cancellation",
+  "sourceHashes": {
+    "src/usage/cloud-wire.ts": "eedd071ddd51adfb1f99a097fcff09d05250ffbb001f9452481c034735d93860"
+  }
+}

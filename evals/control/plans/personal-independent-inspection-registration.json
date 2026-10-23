@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "registeredAt": "2026-10-23T12:57:19.830700+00:00",
+  "scope": "Read-only source preservation and independent inspection supplement; original trial grade and latency gates unchanged",
+  "gate": [
+    "15 content, provenance, reproduction, real negative review and authenticated download checks pass",
+    "Original source report and database unchanged",
+    "All new model calls independently instrumented and reconcile to clone-only runtime rows",
+    "Latency failures remain visible and block overall Personal promotion"
+  ],
+  "candidateSourceHashes": {
+    "src/tasks/task-research-result.ts": "d2f6055f9ab2eee3e62bd075cbbac99622622bb9d4d1aea90419f3fc3c4b935a",
+    "src/usage/cloud-wire.ts": "e1400c34529bad5781463872841c6aa485a7796d98493ea04ffaf2eec14bfec3",
+    "src/usage/recorder.ts": "2b565502a38e39bd191a8a1b6afed463a798e3b561c65f7e810b3424108b788b",
+    "scripts/verify-personal-delivery-evidence.mts": "ddc29dd5f4343a1a49868ec080bd6f84f1abbef3889bf1ec5be84056dfb4ba1f"
+  },
+  "budget": {
+    "maxWallMs": 180000,
+    "maxRequests": 8
+  },
+  "diagnosticPredecessor": "personal-independent-inspection-20261023 (one non-instrumented model review, tracked separately, not acceptance)"
+}

@@ -1,0 +1,30 @@
+{
+  "id": "personal-independent-inspection-v1",
+  "concurrency": 1,
+  "maxWallMs": 180000,
+  "maxRequests": 8,
+  "modelOrigins": [
+    "https://router.xopc.ai"
+  ],
+  "pool": {
+    "generation": 1,
+    "judge": 1,
+    "parent": 1
+  },
+  "jobs": [
+    {
+      "id": "inspection",
+      "timeoutMs": 150000,
+      "args": [
+        "--import",
+        "tsx",
+        "scripts/verify-personal-delivery-evidence.mts",
+        "--configured-models",
+        "--report",
+        "/Users/micjoyce/develop/github/xopc/.xopc-evals/control/personal-convergence-20261023/personal/mixed-round-1.json",
+        "--output",
+        "{output}/inspection"
+      ]
+    }
+  ]
+}

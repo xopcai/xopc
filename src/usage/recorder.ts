@@ -9,6 +9,7 @@ import { createLogger } from '../utils/logger.js';
 import { classifyCostSource, dollarsToMicrousd, pricingSnapshot } from './cost.js';
 import { resolveAiUsageScenario } from './scenario-registry.js';
 import type { AiUsageContext, AiUsageFinish, AiUsageModel } from './types.js';
+import { hasAuthoritativeCloudUsage } from './cloud-wire.js';
 import { withUsageReceiptContext, reconcileCloudUsageReceipt } from './cloud-receipts.js';
 
 const log = createLogger('AiUsage');
@@ -103,7 +104,7 @@ function finishFromMessage(call: AiUsageCall | undefined, message: AssistantMess
   const status = message.stopReason === 'aborted'
     ? 'aborted'
     : message.stopReason === 'error' ? 'failed' : 'succeeded';
-  call.finish({ status, usage: message.usage, errorSummary: message.errorMessage, output: message.content });
+  call.finish({ status, usage: status !== 'succeeded' && hasAuthoritativeCloudUsage(message) === false ? undefined : message.usage, errorSummary: message.errorMessage, output: message.content });
 }
 
 export function observeAiUsageStream(
