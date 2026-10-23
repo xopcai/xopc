@@ -24,7 +24,6 @@ const project: ProjectWithDetails = {
       updatedAt: '2026-07-05T00:00:00.000Z',
     },
   ],
-  recentWorkflowRuns: [],
 };
 
 function task(patch: Partial<ProjectTask>): ProjectTask {
@@ -40,49 +39,21 @@ function task(patch: Partial<ProjectTask>): ProjectTask {
 }
 
 describe('buildProjectLoopOverview', () => {
-  it('summarizes next actions, stale Tasks, failed workflows, and timeline', () => {
-    const overview = buildProjectLoopOverview({
-      project,
-      nowMs: now,
-      staleAfterMs: 24 * 60 * 60 * 1000,
-      tasks: [
-        task({ id: 'fresh', title: 'Fresh task', attention: ['Keep shipping.'], updatedAt: now }),
-        task({
-          id: 'stale',
-          title: 'Stale task',
-          attention: ['Needs review.'],
-          updatedAt: now - 3 * 24 * 60 * 60 * 1000,
-        }),
-        task({
-          id: 'blocked',
-          title: 'Blocked task',
-          operationalState: 'blocked',
-          attention: ['Waiting for credentials.'],
-          updatedAt: now - 60 * 1000,
-        }),
-      ],
-      recentWorkflowRuns: [
-        {
-          runId: 'run-1',
-          definitionId: 'repo-audit',
-          status: 'failed',
-          createdAt: now - 2 * 60 * 1000,
-          errorMessage: 'test failed',
-        },
-      ],
-    });
-
-    expect(overview.nextActions[0]?.taskId).toBe('fresh');
-    expect(overview.staleTasks.map((item) => item.id)).toContain('stale');
-    expect(overview.failedWorkflowRuns[0]?.runId).toBe('run-1');
-    expect(overview.attentionItems.map((item) => item.kind)).toEqual(
-      expect.arrayContaining(['blocked_task', 'stale_task', 'failed_workflow']),
-    );
-    expect(overview.attentionItems.find((item) => item.kind === 'blocked_task')?.href).toBe('/tasks/blocked');
-    expect(overview.timeline.find((item) => item.kind === 'task')?.href).toBe('/tasks/fresh');
-    expect(overview.digest.status).toBe('attention');
-    expect(overview.timeline.map((item) => item.kind)).toEqual(
-      expect.arrayContaining(['session', 'task', 'workflow']),
-    );
+  it('keeps blocked and stale tasks actionable without an extra execution catalog', () => {
+    const view = buildProjectLoopOverview({ project, nowMs: now, tasks: [
+      task({ id: 'blocked', operationalState: 'blocked', attention: ['Missing source access'] }),
+      task({ id: 'stale', updatedAt: now - 10 * 86_400_000 }),
+    ] });
+    expect(view.blockedTasks.map(item => item.id)).toEqual(['blocked']);
+    expect(view.staleTasks.map(item => item.id)).toEqual(['stale']);
+    expect(view.attentionItems.map(item => item.kind)).toEqual(['blocked_task', 'stale_task']);
+    expect(view.timeline.some(item => item.kind === 'session')).toBe(true);
+    expect(view.digest.status).toBe('attention');
+  });
+  it('reports empty work when a project has no tasks or sessions', () => {
+    const view = buildProjectLoopOverview({ project: { ...project, recentSessions: [] }, tasks: [], nowMs: now });
+    expect(view.activeTasks).toEqual([]);
+    expect(view.timeline).toEqual([]);
+    expect(view.digest.status).toBe('empty');
   });
 });

@@ -215,13 +215,13 @@ describe('tui tool renderers', () => {
 
   it('passes structured tool result fields to extension renderers', () => {
     clearTuiToolRenderers();
-    registerTuiToolRenderer('workflow', (ctx) => [
+    registerTuiToolRenderer('custom_tool', (ctx) => [
       `partial:${ctx.isPartial === true}`,
       `details:${JSON.stringify(ctx.details)}`,
       `content:${ctx.content?.[0]?.text ?? ''}`,
     ]);
 
-    const component = tool('workflow', {});
+    const component = tool('custom_tool', {});
     component.setPartialDetails({ phase: 'build', status: 'running' });
     expect(component.render(80).join('\n')).toContain(
       'details:{"phase":"build","status":"running"}',
@@ -243,7 +243,7 @@ describe('tui tool renderers', () => {
 
   it('passes pi-style per-row tool renderer context fields', () => {
     clearTuiToolRenderers();
-    registerTuiToolRenderer('workflow', (ctx) => {
+    registerTuiToolRenderer('custom_tool', (ctx) => {
       const count = Number(ctx.state.count ?? 0) + 1;
       ctx.state.count = count;
       const last = Array.isArray(ctx.lastComponent) ? ctx.lastComponent[0] : 'none';
@@ -259,7 +259,7 @@ describe('tui tool renderers', () => {
     });
 
     const component = tool(
-      'workflow',
+      'custom_tool',
       { step: 'build' },
       { cwd: '/repo', showImages: false },
       'tc-42',
@@ -282,14 +282,14 @@ describe('tui tool renderers', () => {
   it('supports component-returning tool renderers and tracks the last component', () => {
     clearTuiToolRenderers();
     const seenLastComponents: unknown[] = [];
-    registerTuiToolRenderer('workflow', (ctx) => {
+    registerTuiToolRenderer('custom_tool', (ctx) => {
       seenLastComponents.push(ctx.lastComponent);
       const count = Number(ctx.state.count ?? 0) + 1;
       ctx.state.count = count;
       return new Text(`component:${ctx.toolCallId}:${count}`, 0, 0);
     });
 
-    const component = tool('workflow', {}, undefined, 'tc-component');
+    const component = tool('custom_tool', {}, undefined, 'tc-component');
     expect(stripAnsi(component.render(100).join('\n'))).toContain('component:tc-component:1');
 
     component.updateResult('done', false);
@@ -305,7 +305,7 @@ describe('tui tool renderers', () => {
     clearTuiToolRenderers();
     const callLastComponents: unknown[] = [];
     const resultLastComponents: unknown[] = [];
-    registerTuiToolRenderer('workflow', {
+    registerTuiToolRenderer('custom_tool', {
       renderCall(args, _theme, ctx) {
         callLastComponents.push(ctx.lastComponent);
         return new Text(`call:${ctx.toolCallId}:${JSON.stringify(args)}`, 0, 0);
@@ -322,7 +322,7 @@ describe('tui tool renderers', () => {
     });
 
     const component = tool(
-      'workflow',
+      'custom_tool',
       { step: 'build' },
       undefined,
       'tc-structured',
@@ -355,7 +355,7 @@ describe('tui tool renderers', () => {
 
   it('lets tool renderers invalidate their own row', async () => {
     clearTuiToolRenderers();
-    registerTuiToolRenderer('workflow', (ctx) => {
+    registerTuiToolRenderer('custom_tool', (ctx) => {
       if (!ctx.state.ready) {
         ctx.state.ready = true;
         ctx.invalidate();
@@ -364,7 +364,7 @@ describe('tui tool renderers', () => {
       return ['ready'];
     });
 
-    const component = tool('workflow', {}, undefined, 'tc-1');
+    const component = tool('custom_tool', {}, undefined, 'tc-1');
     expect(stripAnsi(component.render(80).join('\n'))).toContain('pending');
     await vi.waitFor(() => {
       expect(stripAnsi(component.render(80).join('\n'))).toContain('ready');
@@ -374,15 +374,15 @@ describe('tui tool renderers', () => {
 
   it('falls back to the default tool view when an extension renderer throws', () => {
     clearTuiToolRenderers();
-    registerTuiToolRenderer('workflow', () => {
+    registerTuiToolRenderer('custom_tool', () => {
       throw new Error('renderer failed');
     });
 
-    const component = tool('workflow', { step: 'build' });
+    const component = tool('custom_tool', { step: 'build' });
     component.updateResult('completed', false);
 
     const rendered = stripAnsi(component.render(100).join('\n'));
-    expect(rendered).toContain('workflow');
+    expect(rendered).toContain('custom_tool');
     expect(rendered).toContain('step=build');
     expect(rendered).toContain('preview');
     expect(rendered).not.toContain('renderer failed');

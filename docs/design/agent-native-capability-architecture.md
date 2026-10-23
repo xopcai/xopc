@@ -8,7 +8,6 @@
 
 目标是让同一业务操作被用户界面、Agent、CLI、自动化、渠道和 MCP 安全、一致地调用，并让 Agent 理解用户当前正在处理的对象。交付价值通过接入成本、跨入口一致性、上下文准确率和副作用恢复质量衡量。
 
-保留 Node.js、pi-agent、Hono、SQLite、React、SWR、现有 WebSocket realtime，以及现有 Session／Task／TaskRun／Workflow 的领域职责。新增统一能力执行边界，不引入第二套 Agent Runtime、任务编排器或数据真相源。
 
 最终范围包括：能力契约与执行器、调用身份与授权、审批绑定、持久执行记录、业务变更事件、页面上下文、结构化结果、显式 MCP 暴露、Local App 能力包。A2A、跨主机联邦、多人组织、云端数据库和任意生成代码执行不是本轮完成条件；契约为后续适配保留版本边界。
 
@@ -117,7 +116,6 @@ HTTP／Agent／MCP 等 adapter 不包含业务分支。`execute` 仅由 dispatch
 
 ### 4.4 结果和错误
 
-调用结果区分 `succeeded / pending / waiting-approval / failed / unknown / cancelled`，携带 invocationId、operationId、能力版本、结构化 data、已有 ProductDeliveryEnvelope、变更引用和必要恢复提示。业务异步任务接纳成功只代表已派发，任务是否完成仍由 TaskRun／Workflow 状态决定。
 
 错误码至少包括 `INVALID_INPUT / FORBIDDEN / NOT_FOUND / REVISION_CONFLICT / APPROVAL_REQUIRED / CONTRACT_CHANGED / IN_PROGRESS / RATE_LIMITED / UNAVAILABLE / OUTCOME_UNKNOWN / CANCELLED / INTERNAL`。HTTP 依次映射合适的 400/403/404/409/202/429/503/500；Agent adapter 按 pi 契约抛出真实失败，等待审批作为明确控制结果处理，不能把失败包装为普通成功文本。CLI 使用非零退出码表达失败，MCP 使用协议错误标记及结构化结果。
 

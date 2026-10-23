@@ -1,8 +1,8 @@
 # 自动化可靠性与业务接入契约
 
-日期：2026-09-26  
-状态：已实现  
-优先级：P0  
+日期：2026-09-26
+状态：已实现
+优先级：P0
 关联：[Automations](../automations.md)
 
 实现范围：R0–R4 已落地。Event、Run、Result 与每个 Destination 均使用独立持久状态；Executor 明确声明重试安全性；DLQ、授权恢复、指标、Doctor 检查和生命周期清理已接入。`gateway_event` 与 `webhook` 为内建 Adapter，File/Card 契约已冻结并可通过 Router 注册，不在核心调度器中增加业务分支。
@@ -55,10 +55,8 @@ Business mutation / User request / Schedule / Webhook
 
 ### 2.2 非目标
 
-- 不引入 Kafka、Redis、Temporal 或第二套工作流 DSL。
 - 不承诺外部系统 exactly-once；采用持久状态、幂等键和 at-least-once Delivery。
 - 不在本阶段实现所有 Card、File、Email、IM 适配器，只冻结 Artifact 和 Destination 契约。
-- 不允许业务上传任意可执行 DAG；复杂流程继续由已发布 Workflow 承担。
 - 不保留旧内存事件总线、旧 completion hook 或旧字段兼容分支。
 
 ## 3. 平台不变量
@@ -147,7 +145,6 @@ export interface BusinessEventDefinition<TPayload> {
 
 Catalog 的职责只有校验、文档和 UI 发现，不承担派发。未知的自定义事件仍可进入 Event Hub，但不能伪装成内建 `system` 事件。
 
-首批 Catalog 覆盖现有 Task、Project、Note、Scene、Workflow、Discussion、Session 和 Connector 事件。迁移采用一次性更新生产者与消费者，不增加事件别名或双写。
 
 ### 4.3 Action Executor
 
@@ -183,11 +180,9 @@ export interface AutomationExecutionContext {
 |---|---|---|
 | Agent | never | 通用 Agent 可能已经产生不可逆副作用 |
 | Browser | never | 除非目标自动化声明并验证稳定幂等键 |
-| Workflow | idempotent | 使用 `automation:{automationId}:{runId}` |
 | Task command | idempotent | 使用现有 command idempotency key |
 | System capability | transient_only | 每个 capability 单独注册错误分类 |
 
-业务能力优先注册为 Capability 或 Workflow。只有执行生命周期、取消或结果形态确实不同，才新增 Action Executor。
 
 ### 4.4 Result 与 Artifact
 
@@ -387,7 +382,6 @@ AutomationService 停止顺序固定为：
 
 ### 10.2 新增可执行业务能力
 
-1. 优先提供 Capability 或 Workflow。
 2. 明确输入 Schema、权限、取消、幂等键和 retry safety。
 3. 仅在生命周期明显不同的情况下注册新 Executor。
 4. 输出标准 Result 和 Artifact，不直接发送通知或写 Delivery 表。
@@ -461,7 +455,6 @@ AutomationService 停止顺序固定为：
 | 两个 Router 同时扫描 | 只有 lease owner 执行副作用 |
 | Gateway 在 delivering 时退出 | 重启后从过期 lease 恢复 |
 | Agent 失败且 retryCount > 0 | retry safety 为 never 时不重复执行 |
-| Workflow 瞬时失败 | 相同 run idempotency key 安全重试 |
 | 删除 Automation 后处理结果 | 仍使用结果快照完成 Gateway Delivery |
 | 裁剪 2000+ runs | 无悬空 Event/Result Delivery |
 | 新增测试 Card Adapter | 不修改 AutomationService/Event Dispatcher |

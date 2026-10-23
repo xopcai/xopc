@@ -4,7 +4,7 @@ import { dirname } from 'node:path';
 
 import type { Config } from '../../config/schema.js';
 import { ConfigSchema } from '../../config/schema.js';
-import { assertConfigRewriteSafeForRunningGateway, saveConfig } from '../../config/loader.js';
+import { saveConfig } from '../../config/loader.js';
 import { ensureStarterAgentsInitialized } from '../../agent/starter-agents.js';
 import { AgentCatalogRepository } from '../../agent-catalog/repository.js';
 import { AgentCatalogService } from '../../agent-catalog/service.js';
@@ -69,7 +69,7 @@ export async function initWorkspaceCore(options: InitWorkspaceCoreOptions): Prom
   mkdirSync(dirname(configPath), { recursive: true });
 
   const configExisted = existsSync(configPath);
-  bootstrapApplicationStateSync(configPath);
+  bootstrapApplicationStateSync();
   const workspaceExisted = existsSync(workspacePath);
 
   let config: Config;
@@ -136,7 +136,6 @@ export async function initWorkspaceCore(options: InitWorkspaceCoreOptions): Prom
     if (assertChannelPlugins) {
       await saveConfig(nextFinal, configPath);
     } else {
-      assertConfigRewriteSafeForRunningGateway(configPath);
       writeFileSync(configPath, `${JSON.stringify(nextFinal, null, 2)}\n`, 'utf8');
     }
   }

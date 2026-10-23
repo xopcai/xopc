@@ -6,7 +6,7 @@ import { z } from 'zod';
 
 import { completeWithResolvedCredentials } from '../providers/model-call.js';
 import { resolveModel } from '../providers/index.js';
-import { extractAssistantText, getAssistantMessageErrorReason, stripCodeFences } from '../providers/model-response.js';
+import { extractAssistantText, getAssistantMessageErrorReason } from '../providers/model-response.js';
 import { AgentCatalogRepository } from '../agent-catalog/repository.js';
 import { getSessionConfig } from '../storage/sqlite/config-repository.js';
 import { appendTranscriptEntry, loadLlmMessagesForSession } from '../storage/sqlite/transcript-repository.js';
@@ -119,10 +119,8 @@ function validateAcceptanceCounts(text: string, packet: PersonalReplyPacket): vo
 }
 
 export function parsePersonalReplyDraft(raw: string, packet: PersonalReplyPacket): string {
-  const cleaned = stripCodeFences(raw);
-  // The result is prose. Keep legacy JSON support without treating malformed JSON as user-facing text.
-  const draft = DraftSchema.parse(/^[{\[]/.test(cleaned)
-    ? JSON.parse(cleaned) : { text: raw.trim() });
+  if (raw.trimStart().startsWith('{')) throw new Error('Reply must be plain text');
+  const draft = DraftSchema.parse({ text: raw.trim() });
   if (!draft.sourceIds.includes('result') || !draft.limitationIds.includes('status') || draft.text === 'NO_REPLY') {
     throw new Error('Reply omitted its result or status contract');
   }

@@ -26,7 +26,7 @@ class AutomationScreensTest {
   private val paused = AutomationSummary("auto-2", "Weekly review", "", false,
     "manual", "", "Review the week", null, null, null, null, null)
   private val run = AutomationRunSummary("run-1", "auto-1", "Morning brief", "succeeded",
-    "Done", null, "chat-1", null, 1000L, 1100L, 100L)
+    "Done", null, "chat-1", 1000L, 1100L, 100L)
 
   @Test fun automationListFiltersAndOpensDetail() {
     var opened = ""

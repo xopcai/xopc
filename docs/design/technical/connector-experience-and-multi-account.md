@@ -151,7 +151,6 @@ mic@gmail.com                             重新连接
 
 延续现有输入队列、ConnectionWait 和恢复机制，增加独立持久化的 objective-account binding，避免仅在 connection_resume 输入存在时才能取到绑定。连接等待仍只负责等待和恢复，不再充当所有账号绑定的唯一存储。
 
-工作流/定时任务保存稳定 accountId 引用，每次运行验证。工作流明确配置的跨应用步骤分别绑定各自账号。账号重连不要求用户重配工作流。
 
 ### 4.3 Agent 工具契约
 
@@ -215,7 +214,7 @@ currentConnectionId 只作可用授权缓存，解析时检查后端、active �
 - ConnectorAccountService：账号聚合、身份同步、名称、启停与账号断开。
 - ConnectorAuthorizationService：统一设置页和聊天的 OAuth attempt、轮询、验证与状态更新。
 - ConnectorAccountResolver：候选过滤、目标绑定、确定账号及授权。
-- ConnectorExecutionService：统一策略、审批、执行与审计，供 Agent、手动执行、工作流、扫描调用。
+- ConnectorExecutionService：统一策略、审批、执行与审计，供 Agent、手动执行、扫描调用。
 
 扫描服务使用明确 accountId 和独立学习授权，不走“只有一个账号所以自动开始扫描”的逻辑。请求关联记录 requestId、objectiveId、accountId、connectionId、backendId 和阶段，遵循对象在前、消息在后的日志约定。
 
@@ -254,7 +253,7 @@ currentConnectionId 只作可用授权缓存，解析时检查后端、active �
 3. selectedConnectionIds 按存储映射转换为 selected accountIds 并去重。空旧列表保留“所有”语义；非空列表全部失效时迁移为明确“无可用账号”，不能误转为所有。
 4. 无法判断旧“默认”是偏好还是限制时保留限制，避免迁移自动放宽权限。提示用户到高级设置检查，不自动解除 selected 策略。
 5. 根据当前凭证和可验证远端归属创建后端；历史无法归属的连接标记为待验证，不能直接归入当前项目。保留原 providerPrincipalId。
-6. 所有有效工作流、等待、审批和审计引用检查兼容性。历史审计保留 connectionId，新增 accountId/backendId；待执行审批无法完整证明账号绑定时要求重新批准。
+6. 所有有效等待、审批和审计引用检查兼容性。历史审计保留 connectionId，新增 accountId/backendId；待执行审批无法完整证明账号绑定时要求重新批准。
 7. 工具契约新增 accountId 后，旧 connection 参数只在边界做受控解析：两者同时出现且冲突则拒绝；旧缓存契约失效并重新发现。迁移稳定后移除旧参数，避免长期双写。
 8. 同步策略优先保留明确已有同意；缺少可证明同意的账号不新增扫描授权。关闭学习停止后续采集，已有内容按独立管理策略保留。
 
@@ -276,21 +275,9 @@ currentConnectionId 只作可用授权缓存，解析时检查后端、active �
 
 - 持久化显式 mode/backend，实现凭证验证、轮换、后端归属及切换。
 - 完成稳定 accountId 策略、授权 attempt 和身份归一化迁移。
-- 同一账号重连保留名称、权限、扫描设置和工作流引用。
 - Cloud 合约核实/补齐：归属、认证状态、多个账号、显式执行账号、错误码及限制。
 
 验收：同项目轮换不丢账号；换项目不误用旧授权；重连不改变业务账号；Cloud/BYOK 两条链路分别验证。
-
-### 阶段 C：Agent 与工作流一致使用
-
-- 接入统一账号解析、目标绑定和执行服务。
-- 明确 accountId 工具契约、单/多选聊天交互、账号绑定审批。
-- Agent、手动执行、工作流、扫描统一权限判断。
-- 跨账号读取保留来源、部分失败可解释，目标变更使旧批准失效。
-
-验收：单账号无多余提问；多账号不猜测；当前目标持续使用所选账号；后台任务可确定账号；发送确认显示且绑定正确账号。
-
-阶段 A 可先发布体验改善；完整多账号方案须在 B+C 验收后才能宣称完成。账号级 Agent 权限随 C 的统一策略一起交付，普通页面仍保持继承默认值。
 
 ## 9. 验证矩阵与发布判定
 
@@ -350,17 +337,9 @@ currentConnectionId 只作可用授权缓存，解析时检查后端、active �
 - 支持 Gmail、Drive、GitHub、Slack 的强身份归一化。其他 toolkit 保留独立账号，不猜测同一身份。展示身份采用字段白名单，不透传 provider token。
 - 自查修复：账号分页完整读取、重复 cursor 拒绝、网络失败不批量撤销、授权记录级联删除、旧账号 auth config 不受当前项目配置覆盖。
 
-### C：Agent、审批与工作流
-
-- 工具统一使用 `xopcAccountId`；每次操作解析当前授权并检查应用策略、账号状态和 Agent 限制。无歧义单账号直接使用，多账号不依赖排序或默认标志。
-- 目标绑定复用既有会话输入与 connection wait；独立新输入是新目标，不让旧账号选择变成永久隐含权限。多账号任务逐账号调用并在结果中携带来源。
-- 审批绑定账号、参数、Agent、会话和目标；通过已有暂停/恢复机制继续原目标，不创建丢失批准的新目标。账号/参数/目标变化不能复用旧批准。
-- 工作流要求可声明 `connectors[].accountIds`。预检结果固化到本次 workflow-run 元数据，子工作流继承；指定账号失效阻止执行，不替换成其他账号。
-- 复用现有 service、adapter 和 repository；没有按草案额外建立平行解析/执行框架。历史数据库字段只为一次性迁移及已有存储结构保留，不恢复默认账号路由。
-
 ### 验证与边界
 
-- 相关自动测试覆盖 connectors、workflows、tasks、迁移、Gateway 路由和前端账号分组；真实本地 HTTP 测试经过鉴权及 lazy bundle 加载。
+- 相关自动测试覆盖 connectors、tasks、迁移、Gateway 路由和前端账号分组；真实本地 HTTP 测试经过鉴权及 lazy bundle 加载。
 - `node scripts/test-connectors-visual.mjs` 验证 Gmail、Airtable、连接服务页 × 桌面/窄屏 × 深浅色，共 12 组。可用 `CHROME_EXECUTABLE_PATH` 指定本机 Chrome；截图写入临时目录，不覆盖用户数据。
 - root TypeScript、Web TypeScript/生产构建、修改范围 ESLint 和 diff whitespace 检查均纳入最终验证。构建仍有既有 bundle 大小/混合动态导入提示。
 - 未使用真实用户密钥测试写操作，未改动用户运行数据库。Cloud 服务端不在此仓库，其多账号限额、项目身份及远端所有权校验仍需部署环境联调；客户端测试不等于该外部验收通过。

@@ -19,8 +19,6 @@
 | 任务验收标准与证据 | `WorkspaceView.ets` | 本轮按合同版本及证据区分通过/失败/待核对，增加产出与注意事项；真实任务数据待验 |
 | 任务对话入口和消息 | `POST /api/tasks/:id/conversation`、`POST /api/tasks/:id/inputs` | 本轮新增创建/复用入口；iOS 发送前读取会话任务归属，拦截重置、清空、归档等命令。新版 iOS session command 与鸿蒙任务专用输入端点的凭证/消息契约不同，iOS 仍从普通 session command 端点发送，**服务端保护范围差异 P1**；正常 AI 回复未实测 |
 | 项目列表、详情、任务编辑 | `ProjectSpaceView.ets` | iOS 已有主要页面，任务/项目状态联动待验 |
-| 自动化列表、创建、运行、取消、重跑 | `AutomationRunView.ets` | iOS 已有；本轮加入关联工作流入口 |
-| 工作流列表、详情、阶段、Agent 工作、取消 | `WorkflowView.ets` | 本轮新增完整页面/API；本地 Gateway 空列表可见，实际运行态待验 |
 | 文件空间、最近文件、目录、搜索、上传、预览/编辑 | `FilesView.ets` | 本轮补“最近文件”入口；其余主要路径已有。`/api/files/resolve` 的路径解析入口未对齐，**P2** |
 | 分享中心与文件分享 | `ShareCenterView.ets`、`chatMediaShare.ets` | iOS 有列表、撤销、延期和系统分享；对话产出的一键服务端分享 `/api/shares/auto`、结果页缺失，**P2** |
 | Gateway 多配置、探测与切换 | `GatewayProfilesView.ets` | iOS 已有，本地 Gateway 直连可用；配对流程待验 |
@@ -32,9 +30,7 @@
 ## 本轮验证
 
 1. `xcodebuild` iPhone 17 Pro 模拟器编译通过，`XopcMobileTests` 的 Swift Testing **69 项通过**；文件传输集成测试在无 token 的单测执行中跳过。
-2. `simctl launch` 向 App 注入本地 Gateway 测试变量后，已看到主界面及“进展 → 工作流”空状态。截图见 `workflows-empty.png`。当前 Gateway 工作流运行数为 0，阶段、取消与结果未实测。
 3. `xcodebuild` 不会把 shell 环境的 `XOPC_E2E_GATEWAY_TOKEN` 自动传进模拟器 UI runner。使用模拟器 `launchctl` 设置测试环境后，“进展”、“我的/设置/Gateway/文件”与新增的 `/` 联想 UI 旅程通过；最近文件改动后，“我的/设置/Gateway/文件”再次通过。进展用例已改为只点击真实任务、项目和自动化行，避免空状态被误当详情。
-4. 使用本地 Gateway 创建并清理隔离测试任务，验证了任务会话创建、`context-summary` 归属，以及鸿蒙任务专用输入对 `/new` 的保护性拒绝。工作流运行数为 0，运行态无法实测。
 
 ## 后续优先级
 

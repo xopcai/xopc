@@ -1,36 +1,7 @@
--- Baseline schema v217.
-
-CREATE TABLE sessions (
-  "conversation_id"              TEXT PRIMARY KEY,
-  agent_id                 TEXT NOT NULL,
-  "active_transcript_id"                TEXT NOT NULL UNIQUE,
-  status                   TEXT NOT NULL DEFAULT 'active',
-  name                     TEXT,
-  tags_json                TEXT NOT NULL DEFAULT '[]',
-  created_at               INTEGER NOT NULL,
-  updated_at               INTEGER NOT NULL,
-  last_accessed_at         INTEGER NOT NULL,
-  session_started_at       INTEGER,
-  last_interaction_at      INTEGER,
-  source_channel           TEXT NOT NULL DEFAULT '',
-  source_chat_id           TEXT NOT NULL DEFAULT '',
-  session_type             TEXT,
-  hidden_from_session_list INTEGER NOT NULL DEFAULT 0,
-  "parent_conversation_id"       TEXT,
-  workflow_run_id          TEXT,
-  workflow_definition_id   TEXT,
-  workflow_agent_id        TEXT,
-  workflow_agent_label     TEXT,
-  routing_json             TEXT,
-  custom_data_json         TEXT,
-  message_count            INTEGER NOT NULL DEFAULT 0,
-  estimated_tokens         INTEGER NOT NULL DEFAULT 0,
-  compacted_count          INTEGER NOT NULL DEFAULT 0,
-  last_flushed_at          TEXT,
-  flush_count              INTEGER NOT NULL DEFAULT 0,
-  thinking_level           TEXT,
-  verbose_level            TEXT
-, project_id TEXT);
+CREATE TABLE IF NOT EXISTS schema_meta (
+      key   TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    );
 
 CREATE TABLE transcripts (
   "transcript_id"        TEXT PRIMARY KEY,
@@ -54,21 +25,6 @@ CREATE TABLE transcript_entries (
   FOREIGN KEY ("transcript_id") REFERENCES transcripts("transcript_id")
 );
 
-CREATE TABLE automations (
-  automation_id     TEXT PRIMARY KEY,
-  name              TEXT NOT NULL,
-  description       TEXT,
-  enabled           INTEGER NOT NULL,
-  trigger_json      TEXT NOT NULL,
-  action_json       TEXT NOT NULL,
-  reliability_json  TEXT,
-  state_json        TEXT NOT NULL DEFAULT '{}',
-  created_at_ms     INTEGER NOT NULL,
-  updated_at_ms     INTEGER NOT NULL
-, safety_json TEXT, project_id TEXT, conversation_mode TEXT NOT NULL DEFAULT 'new_session'
-  CHECK (conversation_mode IN ('new_session', 'continuous')), management_json TEXT
-  CHECK(management_json IS NULL OR json_valid(management_json)), delivery_json TEXT);
-
 CREATE TABLE automation_runs (
   run_id                 TEXT PRIMARY KEY,
   automation_id          TEXT NOT NULL,
@@ -84,7 +40,6 @@ CREATE TABLE automation_runs (
   summary                TEXT,
   error                  TEXT,
   "conversation_id"            TEXT,
-  workflow_run_id        TEXT,
   model                  TEXT
 , deadline_at_ms INTEGER, current_phase TEXT, cancel_requested_at_ms INTEGER, cancel_confirmed_at_ms INTEGER, termination_json TEXT, heartbeat_at_ms INTEGER, lease_owner TEXT, lease_expires_at_ms INTEGER, attempt_number INTEGER NOT NULL DEFAULT 1, root_run_id TEXT, read_at_ms INTEGER);
 
@@ -99,7 +54,7 @@ CREATE TABLE automation_run_events (
 );
 
 CREATE TABLE home_attention_acknowledgements (
-  subject_kind TEXT NOT NULL CHECK (subject_kind IN ('automation_run', 'workflow_run')),
+  subject_kind TEXT NOT NULL CHECK (subject_kind IN ('automation_run')),
   subject_id TEXT NOT NULL,
   acknowledged_at INTEGER NOT NULL,
   PRIMARY KEY (subject_kind, subject_id)
@@ -210,7 +165,7 @@ CREATE TABLE browser_automation_runs (
   created_at_ms INTEGER NOT NULL,
   started_at_ms INTEGER,
   ended_at_ms INTEGER,
-  duration_ms INTEGER,
+  duration_ms INTEGER, client_request_id TEXT, business_outcome TEXT,
   FOREIGN KEY (automation_id) REFERENCES browser_automations(automation_id) ON DELETE CASCADE
 );
 
@@ -261,97 +216,6 @@ CREATE TABLE knowledge_sync_runs (
   started_at          INTEGER NOT NULL,
   finished_at         INTEGER
 , collection_scope TEXT);
-
-CREATE TABLE connector_catalog_entries (
-  connector_id TEXT PRIMARY KEY,
-  provider TEXT NOT NULL,
-  definition_json TEXT NOT NULL,
-  fetched_at TEXT NOT NULL,
-  expires_at TEXT
-);
-
-CREATE TABLE connector_installations (
-  id TEXT PRIMARY KEY,
-  connector_id TEXT NOT NULL,
-  principal_id TEXT NOT NULL,
-  enabled INTEGER NOT NULL DEFAULT 1 CHECK (enabled IN (0, 1)),
-  allowed_agent_ids_json TEXT NOT NULL DEFAULT '[]',
-  max_scope TEXT NOT NULL DEFAULT 'read' CHECK (max_scope IN ('read', 'write', 'admin')),
-  confirmation_policy TEXT NOT NULL DEFAULT 'writes'
-    CHECK (confirmation_policy IN ('always', 'writes', 'admin', 'never')),
-  selected_account_ids_json TEXT NOT NULL DEFAULT '[]',
-  created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL,
-  UNIQUE(connector_id, principal_id)
-);
-
-CREATE TABLE connector_action_metadata (
-  connector_id TEXT NOT NULL,
-  action_id TEXT NOT NULL,
-  toolkit TEXT,
-  scope TEXT NOT NULL DEFAULT 'write' CHECK (scope IN ('read', 'write', 'admin')),
-  curated INTEGER NOT NULL DEFAULT 0 CHECK (curated IN (0, 1)),
-  input_schema_json TEXT,
-  schema_version TEXT,
-  cached_at TEXT NOT NULL,
-  PRIMARY KEY(connector_id, action_id)
-);
-
-CREATE TABLE connector_execution_audit (
-  id TEXT PRIMARY KEY,
-  installation_id TEXT REFERENCES connector_installations(id) ON DELETE SET NULL,
-  connection_id TEXT REFERENCES connector_connections(id) ON DELETE SET NULL,
-  connector_id TEXT NOT NULL,
-  principal_id TEXT NOT NULL,
-  agent_id TEXT,
-  "conversation_id" TEXT,
-  action_id TEXT NOT NULL,
-  scope TEXT NOT NULL CHECK (scope IN ('read', 'write', 'admin')),
-  decision TEXT NOT NULL CHECK (decision IN ('allowed', 'denied', 'confirmation_required')),
-  result_status TEXT NOT NULL CHECK (result_status IN ('success', 'error', 'not_executed')),
-  duration_ms INTEGER,
-  error_code TEXT,
-  created_at TEXT NOT NULL
-);
-
-CREATE TABLE connector_approvals (
-  id TEXT PRIMARY KEY,
-  principal_id TEXT NOT NULL,
-  connector_id TEXT NOT NULL,
-  connection_id TEXT REFERENCES connector_connections(id) ON DELETE SET NULL,
-  agent_id TEXT,
-  "conversation_id" TEXT,
-  action_id TEXT NOT NULL,
-  scope TEXT NOT NULL CHECK (scope IN ('read', 'write', 'admin')),
-  arguments_hash TEXT NOT NULL,
-  arguments_preview_json TEXT NOT NULL DEFAULT '{}',
-  status TEXT NOT NULL DEFAULT 'pending'
-    CHECK (status IN ('pending', 'approved', 'denied', 'expired', 'consumed')),
-  expires_at TEXT NOT NULL,
-  created_at TEXT NOT NULL,
-  decided_at TEXT,
-  consumed_at TEXT
-, wait_id TEXT);
-
-CREATE TABLE connector_webhook_deliveries (
-  id TEXT PRIMARY KEY,
-  provider TEXT NOT NULL,
-  payload_hash TEXT NOT NULL,
-  status TEXT NOT NULL DEFAULT 'processing'
-    CHECK (status IN ('pending', 'processing', 'processed')),
-  attempts INTEGER NOT NULL DEFAULT 1,
-  received_at TEXT NOT NULL,
-  processing_at TEXT,
-  processed_at TEXT,
-  last_error TEXT
-);
-
-CREATE TABLE "user_trust_policies" (
-  principal_id TEXT PRIMARY KEY,
-  default_action_level TEXT NOT NULL DEFAULT 'confirm'
-    CHECK (default_action_level IN ('observe', 'suggest', 'confirm', 'auto')),
-  updated_at TEXT NOT NULL
-);
 
 CREATE TABLE knowledge_consumer_watermarks (
   consumer_id         TEXT NOT NULL,
@@ -484,12 +348,6 @@ CREATE TABLE interaction_states (
   repair_reason TEXT,
   expires_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL
-);
-
-CREATE TABLE composer_input_history (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  text TEXT NOT NULL,
-  created_at INTEGER NOT NULL
 );
 
 CREATE TABLE connector_learning_jobs (
@@ -720,7 +578,7 @@ CREATE TABLE tasks (
   version INTEGER NOT NULL DEFAULT 1,
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL,
-  closed_at INTEGER, board_rank INTEGER NOT NULL DEFAULT 0,
+  closed_at INTEGER, board_rank INTEGER NOT NULL DEFAULT 0, manual_phase_revision INTEGER NOT NULL DEFAULT 0, automatic_phase_revision INTEGER NOT NULL DEFAULT 0,
   CHECK ((phase = 'closed' AND resolution IS NOT NULL) OR (phase <> 'closed' AND resolution IS NULL)),
   CHECK (parent_task_id IS NULL OR parent_task_id <> task_id),
   FOREIGN KEY (project_id) REFERENCES projects(project_id) ON DELETE SET NULL,
@@ -839,7 +697,7 @@ CREATE TABLE task_runs (
   status TEXT NOT NULL CHECK (status IN (
     'queued', 'running', 'waiting', 'verifying', 'succeeded', 'failed', 'cancelled'
   )),
-  executor_kind TEXT NOT NULL CHECK (executor_kind IN ('agent', 'workflow', 'human', 'external')),
+  executor_kind TEXT NOT NULL CHECK (executor_kind IN ('agent', 'human', 'external')),
   executor_ref_json TEXT NOT NULL,
   trigger_json TEXT NOT NULL,
   correlation_id TEXT NOT NULL,
@@ -861,7 +719,7 @@ CREATE TABLE task_runs (
   retry_of_run_id TEXT,
   terminal_code TEXT,
   terminal_message TEXT,
-  version INTEGER NOT NULL DEFAULT 1,
+  version INTEGER NOT NULL DEFAULT 1, manual_phase_revision INTEGER NOT NULL DEFAULT 0,
   FOREIGN KEY (task_id) REFERENCES tasks(task_id) ON DELETE CASCADE,
   FOREIGN KEY (root_run_id) REFERENCES task_runs(run_id) DEFERRABLE INITIALLY DEFERRED,
   FOREIGN KEY (parent_run_id) REFERENCES task_runs(run_id) ON DELETE CASCADE,
@@ -934,40 +792,6 @@ CREATE TABLE domain_outbox (
   published_at INTEGER,
   attempts INTEGER NOT NULL DEFAULT 0
 , operation_id TEXT);
-
-CREATE TABLE workflow_runs (
-  run_id TEXT PRIMARY KEY,
-  agent_id TEXT NOT NULL,
-  definition_id TEXT NOT NULL,
-  definition_version TEXT NOT NULL,
-  task_run_id TEXT,
-  "conversation_id" TEXT NOT NULL,
-  "parent_conversation_id" TEXT,
-  status TEXT NOT NULL,
-  source_kind TEXT NOT NULL,
-  source_json TEXT NOT NULL,
-  metadata_json TEXT,
-  title TEXT NOT NULL,
-  created_at_ms INTEGER NOT NULL,
-  started_at_ms INTEGER,
-  completed_at_ms INTEGER,
-  metrics_json TEXT NOT NULL,
-  result_preview TEXT,
-  error_message TEXT,
-  project_id TEXT,
-  FOREIGN KEY (task_run_id) REFERENCES task_runs(run_id) ON DELETE SET NULL
-);
-
-CREATE TABLE connector_accounts (
-  id                     TEXT PRIMARY KEY,
-  connector_id           TEXT NOT NULL,
-  principal_id           TEXT NOT NULL,
-  identity_key           TEXT,
-  identity_json          TEXT NOT NULL DEFAULT '{}',
-  current_connection_id  TEXT,
-  created_at             TEXT NOT NULL,
-  updated_at             TEXT NOT NULL
-, label TEXT, enabled INTEGER NOT NULL DEFAULT 1, allowed_agent_ids_json TEXT, backend_id TEXT, runtime_instance_id TEXT);
 
 CREATE TABLE connector_sync_policies (
   account_id                  TEXT PRIMARY KEY REFERENCES connector_accounts(id) ON DELETE CASCADE,
@@ -1093,27 +917,6 @@ CREATE TABLE task_handoff_snapshots (
   FOREIGN KEY (task_id) REFERENCES tasks(task_id) ON DELETE CASCADE,
   FOREIGN KEY ("from_conversation_id") REFERENCES sessions("conversation_id") ON DELETE SET NULL,
   FOREIGN KEY ("to_conversation_id") REFERENCES sessions("conversation_id") ON DELETE CASCADE
-);
-
-CREATE TABLE workflow_context_snapshots (
-  snapshot_id TEXT PRIMARY KEY,
-  trace_id TEXT NOT NULL UNIQUE,
-  run_id TEXT NOT NULL,
-  project_id TEXT,
-  selected_items_json TEXT NOT NULL,
-  estimated_tokens INTEGER NOT NULL DEFAULT 0,
-  content_hash TEXT NOT NULL,
-  created_at INTEGER NOT NULL
-);
-
-CREATE TABLE project_workflow_presets (
-  project_id TEXT NOT NULL,
-  definition_id TEXT NOT NULL,
-  context_refs_json TEXT NOT NULL DEFAULT '[]',
-  created_at INTEGER NOT NULL,
-  updated_at INTEGER NOT NULL,
-  PRIMARY KEY (project_id, definition_id),
-  FOREIGN KEY (project_id) REFERENCES projects(project_id) ON DELETE CASCADE
 );
 
 CREATE TABLE "session_config" (
@@ -1279,15 +1082,6 @@ CREATE TABLE durable_state (
   UNIQUE(namespace, scope, key)
 );
 
-CREATE TABLE workflow_events (
-  agent_id TEXT NOT NULL,
-  run_id TEXT NOT NULL,
-  sequence INTEGER NOT NULL CHECK(sequence > 0),
-  id TEXT NOT NULL UNIQUE,
-  payload TEXT NOT NULL CHECK(json_valid(payload)),
-  PRIMARY KEY(agent_id, run_id, sequence)
-);
-
 CREATE TABLE note_snapshots (
   note_id TEXT NOT NULL REFERENCES notes(note_id) ON DELETE CASCADE,
   timestamp INTEGER NOT NULL,
@@ -1377,7 +1171,7 @@ CREATE TABLE user_assertion_evidence (
   evidence_id TEXT NOT NULL REFERENCES context_evidence(evidence_id) ON DELETE CASCADE,
   relation TEXT NOT NULL CHECK(relation IN ('supports', 'contradicts', 'supersedes')),
   confidence REAL NOT NULL CHECK(confidence >= 0 AND confidence <= 1),
-  created_at INTEGER NOT NULL,
+  created_at INTEGER NOT NULL, content_hash TEXT,
   PRIMARY KEY(assertion_id, evidence_id, relation)
 );
 
@@ -1441,12 +1235,6 @@ CREATE TABLE user_priority_windows (
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL,
   CHECK(valid_to >= valid_from)
-);
-
-CREATE VIRTUAL TABLE knowledge_items_fts USING fts5(
-  content,
-  knowledge_id UNINDEXED,
-  tokenize='unicode61'
 );
 
 CREATE TABLE memory_maintenance_runs (
@@ -1560,7 +1348,7 @@ CREATE TABLE "session_inputs" (
     kind IN ('message', 'connection_resume', 'clarification_resume')
   ),
   payload_json TEXT,
-  task_run_id TEXT,
+  task_run_id TEXT, interrupt_requested INTEGER NOT NULL DEFAULT 0 CHECK(interrupt_requested IN (0, 1)),
   UNIQUE("conversation_id", client_message_id)
 );
 
@@ -1583,20 +1371,6 @@ CREATE TABLE device_access_sessions (
   expires_at INTEGER NOT NULL,
   created_at INTEGER NOT NULL,
   revoked_at INTEGER
-);
-
-CREATE TABLE notification_deliveries (
-  event_id TEXT NOT NULL,
-  device_id TEXT NOT NULL,
-  status TEXT NOT NULL CHECK (status IN ('pending', 'accepted', 'delivered', 'dead')),
-  attempts INTEGER NOT NULL DEFAULT 0,
-  next_attempt_at INTEGER NOT NULL,
-  provider_ticket_id TEXT,
-  last_error TEXT,
-  updated_at INTEGER NOT NULL,
-  PRIMARY KEY (event_id, device_id),
-  FOREIGN KEY (event_id) REFERENCES notification_events(event_id) ON DELETE CASCADE,
-  FOREIGN KEY (device_id) REFERENCES device_push_endpoints(device_id) ON DELETE CASCADE
 );
 
 CREATE TABLE browser_tab_bindings (
@@ -1758,7 +1532,7 @@ CREATE TABLE "devices" (
   scopes_json TEXT NOT NULL,
   created_at INTEGER NOT NULL,
   last_seen_at INTEGER,
-  revoked_at INTEGER,
+  revoked_at INTEGER, request_proof_version INTEGER NOT NULL DEFAULT 1 CHECK(request_proof_version = 1),
   CHECK ((platform = 'chrome') = (extension_id IS NOT NULL))
 );
 
@@ -1777,17 +1551,6 @@ CREATE TABLE "device_push_endpoints" (
   updated_at INTEGER NOT NULL
 );
 
-CREATE TABLE connector_backends (
-  id TEXT PRIMARY KEY,
-  mode TEXT NOT NULL CHECK(mode IN ('managed', 'byok')),
-  label TEXT NOT NULL,
-  credential_ref TEXT,
-  credential_source TEXT NOT NULL DEFAULT 'stored' CHECK(credential_source IN ('stored','environment')),
-  verified_at TEXT,
-  active INTEGER NOT NULL DEFAULT 0,
-  created_at TEXT NOT NULL
-);
-
 CREATE TABLE connector_objective_accounts (
   conversation_id TEXT NOT NULL,
   transcript_id TEXT NOT NULL,
@@ -1795,26 +1558,6 @@ CREATE TABLE connector_objective_accounts (
   connector_id TEXT NOT NULL,
   account_id TEXT NOT NULL REFERENCES connector_accounts(id) ON DELETE CASCADE,
   PRIMARY KEY(conversation_id, transcript_id, objective_id, connector_id, account_id)
-);
-
-CREATE TABLE "connector_connections" (
-  id TEXT PRIMARY KEY,
-  installation_id TEXT REFERENCES connector_installations(id) ON DELETE SET NULL,
-  connector_id TEXT NOT NULL,
-  provider TEXT NOT NULL,
-  principal_id TEXT NOT NULL,
-  provider_connection_id TEXT NOT NULL,
-  alias TEXT,
-  identity_json TEXT NOT NULL DEFAULT '{}',
-  status TEXT NOT NULL DEFAULT 'unknown' CHECK(status IN ('pending','active','expired','failed','revoked','disabled','unknown')),
-  is_default INTEGER NOT NULL DEFAULT 0 CHECK(is_default IN (0,1)),
-  connected_at TEXT,
-  expires_at TEXT,
-  last_error TEXT,
-  metadata_json TEXT NOT NULL DEFAULT '{}',
-  created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL,
-  account_id TEXT REFERENCES connector_accounts(id) ON DELETE CASCADE
 );
 
 CREATE TABLE connector_authorization_attempts (
@@ -1973,7 +1716,10 @@ CREATE TABLE knowledge_items (
   source_json TEXT NOT NULL DEFAULT '{}' CHECK(json_valid(source_json)),
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL,
-  record_class TEXT NOT NULL DEFAULT 'memory' CHECK(record_class IN ('memory', 'source_index')),
+  record_class TEXT NOT NULL DEFAULT 'memory' CHECK(record_class IN ('memory', 'source_index')), claim_mode TEXT NOT NULL DEFAULT 'observed'
+  CHECK (claim_mode IN ('explicit', 'observed', 'inferred', 'reported')), verification TEXT NOT NULL DEFAULT 'supported'
+  CHECK (verification IN ('supported', 'tentative', 'conflicted')), sensitivity TEXT NOT NULL DEFAULT 'normal'
+  CHECK (sensitivity IN ('normal', 'personal', 'secret', 'regulated')),
   CHECK(valid_to IS NULL OR valid_from IS NULL OR valid_to >= valid_from)
 );
 
@@ -2166,18 +1912,6 @@ CREATE TABLE agent_provisioning_jobs (
   updated_at INTEGER NOT NULL
 );
 
-CREATE TABLE application_migrations (
-  id TEXT PRIMARY KEY,
-  state TEXT NOT NULL,
-  source_digest TEXT,
-  source_backup_path TEXT,
-  database_backup_path TEXT,
-  error_json TEXT CHECK(error_json IS NULL OR json_valid(error_json)),
-  started_at INTEGER NOT NULL,
-  completed_at INTEGER,
-  updated_at INTEGER NOT NULL
-);
-
 CREATE TABLE understanding_consent_receipts (
   receipt_id TEXT PRIMARY KEY,
   grant_id TEXT NOT NULL REFERENCES understanding_source_grants(grant_id) ON DELETE CASCADE,
@@ -2231,32 +1965,6 @@ CREATE TABLE user_assertion_edges (
   CHECK(from_assertion_id <> to_assertion_id)
 );
 
-CREATE TABLE automation_events (
-  event_id TEXT PRIMARY KEY,
-  event_type TEXT NOT NULL,
-  schema_version INTEGER NOT NULL DEFAULT 1,
-  source TEXT NOT NULL,
-  subject_kind TEXT,
-  subject_id TEXT,
-  occurred_at_ms INTEGER NOT NULL,
-  ingested_at_ms INTEGER NOT NULL,
-  correlation_id TEXT NOT NULL,
-  causation_id TEXT,
-  root_event_id TEXT NOT NULL,
-  chain_depth INTEGER NOT NULL DEFAULT 0 CHECK(chain_depth BETWEEN 0 AND 32),
-  dedupe_key TEXT,
-  trust TEXT NOT NULL CHECK(trust IN ('system', 'user', 'connector', 'untrusted_webhook')),
-  payload_json TEXT NOT NULL,
-  projection_status TEXT NOT NULL DEFAULT 'pending'
-    CHECK(projection_status IN ('pending', 'projecting', 'retrying', 'projected', 'dead_letter')),
-  projected_at_ms INTEGER,
-  projection_attempts INTEGER NOT NULL DEFAULT 0,
-  projection_next_attempt_at_ms INTEGER NOT NULL DEFAULT 0,
-  projection_error TEXT,
-  projection_owner TEXT,
-  projection_lease_until_ms INTEGER
-);
-
 CREATE TABLE automation_event_deliveries (
   event_id TEXT NOT NULL,
   automation_id TEXT NOT NULL,
@@ -2281,13 +1989,58 @@ CREATE TABLE automation_results (
   FOREIGN KEY(run_id) REFERENCES automation_runs(run_id) ON DELETE CASCADE
 );
 
-CREATE TABLE automation_result_deliveries (
+CREATE TABLE "automations" (
+  automation_id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  description TEXT,
+  enabled INTEGER NOT NULL,
+  trigger_json TEXT NOT NULL CHECK(json_valid(trigger_json)),
+  action_json TEXT NOT NULL CHECK(json_valid(action_json)),
+  reliability_json TEXT CHECK(reliability_json IS NULL OR json_valid(reliability_json)),
+  state_json TEXT NOT NULL DEFAULT '{}' CHECK(json_valid(state_json)),
+  created_at_ms INTEGER NOT NULL,
+  updated_at_ms INTEGER NOT NULL,
+  safety_json TEXT CHECK(safety_json IS NULL OR json_valid(safety_json)),
+  project_id TEXT,
+  conversation_mode TEXT NOT NULL DEFAULT 'new_session'
+    CHECK(conversation_mode IN ('new_session', 'continuous')),
+  management_json TEXT CHECK(management_json IS NULL OR json_valid(management_json)),
+  delivery_json TEXT NOT NULL CHECK(json_valid(delivery_json))
+);
+
+CREATE TABLE "automation_events" (
+  event_id TEXT PRIMARY KEY,
+  event_type TEXT NOT NULL,
+  schema_version INTEGER NOT NULL DEFAULT 1,
+  source TEXT NOT NULL,
+  subject_kind TEXT,
+  subject_id TEXT,
+  occurred_at_ms INTEGER NOT NULL,
+  ingested_at_ms INTEGER NOT NULL,
+  correlation_id TEXT NOT NULL,
+  causation_id TEXT,
+  root_event_id TEXT NOT NULL,
+  chain_depth INTEGER NOT NULL DEFAULT 0 CHECK(chain_depth BETWEEN 0 AND 32),
+  dedupe_key TEXT,
+  trust TEXT NOT NULL CHECK(trust IN ('system', 'user', 'connector', 'untrusted_webhook')),
+  payload_json TEXT NOT NULL CHECK(json_valid(payload_json)),
+  projection_status TEXT NOT NULL DEFAULT 'pending'
+    CHECK(projection_status IN ('pending', 'projecting', 'retrying', 'projected', 'dead_letter')),
+  projected_at_ms INTEGER,
+  projection_attempts INTEGER NOT NULL DEFAULT 0,
+  projection_next_attempt_at_ms INTEGER NOT NULL DEFAULT 0,
+  projection_error TEXT,
+  projection_owner TEXT,
+  projection_lease_until_ms INTEGER
+);
+
+CREATE TABLE "automation_result_deliveries" (
   delivery_id TEXT NOT NULL UNIQUE,
   run_id TEXT NOT NULL,
   destination_key TEXT NOT NULL,
   kind TEXT NOT NULL,
   status TEXT NOT NULL CHECK(status IN ('pending', 'delivering', 'retrying', 'delivered', 'dead_letter')),
-  config_json TEXT NOT NULL,
+  config_json TEXT NOT NULL CHECK(json_valid(config_json)),
   attempts INTEGER NOT NULL DEFAULT 0,
   next_attempt_at_ms INTEGER NOT NULL,
   last_error TEXT,
@@ -2299,7 +2052,7 @@ CREATE TABLE automation_result_deliveries (
   FOREIGN KEY(run_id) REFERENCES automation_results(run_id) ON DELETE CASCADE
 );
 
-CREATE TABLE ai_usage_events (
+CREATE TABLE "ai_usage_events" (
   id TEXT PRIMARY KEY,
   trace_id TEXT NOT NULL,
   parent_event_id TEXT,
@@ -2324,38 +2077,816 @@ CREATE TABLE ai_usage_events (
   total_tokens INTEGER,
   estimated_cost_microusd INTEGER,
   cost_source TEXT NOT NULL CHECK(cost_source IN ('model_catalog', 'local', 'unknown')),
-  pricing_snapshot_json TEXT,
+  pricing_snapshot_json TEXT CHECK(pricing_snapshot_json IS NULL OR json_valid(pricing_snapshot_json)),
   error_summary TEXT,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+, otel_trace_id TEXT, otel_span_id TEXT, cloud_request_id TEXT, cloud_billing_json TEXT
+  CHECK(cloud_billing_json IS NULL OR json_valid(cloud_billing_json)));
+
+CREATE TABLE "sessions" (
+  conversation_id TEXT PRIMARY KEY,
+  agent_id TEXT NOT NULL,
+  active_transcript_id TEXT NOT NULL UNIQUE,
+  status TEXT NOT NULL DEFAULT 'active',
+  name TEXT,
+  tags_json TEXT NOT NULL DEFAULT '[]',
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  last_accessed_at INTEGER NOT NULL,
+  session_started_at INTEGER,
+  last_interaction_at INTEGER,
+  source_channel TEXT NOT NULL DEFAULT '',
+  source_chat_id TEXT NOT NULL DEFAULT '',
+  session_type TEXT,
+  hidden_from_session_list INTEGER NOT NULL DEFAULT 0,
+  parent_conversation_id TEXT,
+  routing_json TEXT,
+  custom_data_json TEXT,
+  message_count INTEGER NOT NULL DEFAULT 0,
+  estimated_tokens INTEGER NOT NULL DEFAULT 0,
+  compacted_count INTEGER NOT NULL DEFAULT 0,
+  last_flushed_at INTEGER,
+  flush_count INTEGER NOT NULL DEFAULT 0,
+  project_id TEXT
+);
+
+CREATE TABLE "connector_catalog_entries" (
+  connector_id TEXT PRIMARY KEY,
+  provider TEXT NOT NULL,
+  definition_json TEXT NOT NULL,
+  fetched_at INTEGER NOT NULL,
+  expires_at INTEGER
+);
+
+CREATE TABLE "connector_installations" (
+  id TEXT PRIMARY KEY,
+  connector_id TEXT NOT NULL,
+  principal_id TEXT NOT NULL,
+  enabled INTEGER NOT NULL DEFAULT 1 CHECK(enabled IN (0, 1)),
+  allowed_agent_ids_json TEXT NOT NULL DEFAULT '[]',
+  max_scope TEXT NOT NULL DEFAULT 'read' CHECK(max_scope IN ('read', 'write', 'admin')),
+  confirmation_policy TEXT NOT NULL DEFAULT 'writes'
+    CHECK(confirmation_policy IN ('always', 'writes', 'admin', 'never')),
+  selected_account_ids_json TEXT NOT NULL DEFAULT '[]',
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  UNIQUE(connector_id, principal_id)
+);
+
+CREATE TABLE "connector_accounts" (
+  id TEXT PRIMARY KEY,
+  connector_id TEXT NOT NULL,
+  principal_id TEXT NOT NULL,
+  identity_key TEXT,
+  identity_json TEXT NOT NULL DEFAULT '{}',
+  current_connection_id TEXT,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  label TEXT,
+  enabled INTEGER NOT NULL DEFAULT 1,
+  allowed_agent_ids_json TEXT,
+  backend_id TEXT,
+  runtime_instance_id TEXT
+);
+
+CREATE TABLE "connector_connections" (
+  id TEXT PRIMARY KEY,
+  installation_id TEXT REFERENCES connector_installations(id) ON DELETE SET NULL,
+  connector_id TEXT NOT NULL,
+  provider TEXT NOT NULL,
+  principal_id TEXT NOT NULL,
+  provider_connection_id TEXT NOT NULL,
+  alias TEXT,
+  identity_json TEXT NOT NULL DEFAULT '{}',
+  status TEXT NOT NULL DEFAULT 'unknown'
+    CHECK(status IN ('pending', 'active', 'expired', 'failed', 'revoked', 'disabled', 'unknown')),
+  is_default INTEGER NOT NULL DEFAULT 0 CHECK(is_default IN (0, 1)),
+  connected_at INTEGER,
+  expires_at INTEGER,
+  last_error TEXT,
+  metadata_json TEXT NOT NULL DEFAULT '{}',
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  account_id TEXT REFERENCES connector_accounts(id) ON DELETE CASCADE
+);
+
+CREATE TABLE "connector_action_metadata" (
+  connector_id TEXT NOT NULL,
+  action_id TEXT NOT NULL,
+  toolkit TEXT,
+  scope TEXT NOT NULL DEFAULT 'write' CHECK(scope IN ('read', 'write', 'admin')),
+  curated INTEGER NOT NULL DEFAULT 0 CHECK(curated IN (0, 1)),
+  input_schema_json TEXT,
+  schema_version TEXT,
+  cached_at INTEGER NOT NULL,
+  PRIMARY KEY(connector_id, action_id)
+);
+
+CREATE TABLE "connector_execution_audit" (
+  id TEXT PRIMARY KEY,
+  installation_id TEXT REFERENCES connector_installations(id) ON DELETE SET NULL,
+  connection_id TEXT REFERENCES connector_connections(id) ON DELETE SET NULL,
+  connector_id TEXT NOT NULL,
+  principal_id TEXT NOT NULL,
+  agent_id TEXT,
+  conversation_id TEXT,
+  action_id TEXT NOT NULL,
+  scope TEXT NOT NULL CHECK(scope IN ('read', 'write', 'admin')),
+  decision TEXT NOT NULL CHECK(decision IN ('allowed', 'denied', 'confirmation_required')),
+  result_status TEXT NOT NULL CHECK(result_status IN ('success', 'error', 'not_executed')),
+  duration_ms INTEGER,
+  error_code TEXT,
+  created_at INTEGER NOT NULL
+);
+
+CREATE TABLE "connector_approvals" (
+  id TEXT PRIMARY KEY,
+  principal_id TEXT NOT NULL,
+  connector_id TEXT NOT NULL,
+  connection_id TEXT REFERENCES connector_connections(id) ON DELETE SET NULL,
+  agent_id TEXT,
+  conversation_id TEXT,
+  action_id TEXT NOT NULL,
+  scope TEXT NOT NULL CHECK(scope IN ('read', 'write', 'admin')),
+  arguments_hash TEXT NOT NULL,
+  arguments_preview_json TEXT NOT NULL DEFAULT '{}',
+  status TEXT NOT NULL DEFAULT 'pending'
+    CHECK(status IN ('pending', 'approved', 'denied', 'expired', 'consumed')),
+  expires_at INTEGER NOT NULL,
+  created_at INTEGER NOT NULL,
+  decided_at INTEGER,
+  consumed_at INTEGER,
+  wait_id TEXT
+);
+
+CREATE TABLE "connector_webhook_deliveries" (
+  id TEXT PRIMARY KEY,
+  provider TEXT NOT NULL,
+  payload_hash TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'processing'
+    CHECK(status IN ('pending', 'processing', 'processed')),
+  attempts INTEGER NOT NULL DEFAULT 1,
+  received_at INTEGER NOT NULL,
+  processing_at INTEGER,
+  processed_at INTEGER,
+  last_error TEXT
+);
+
+CREATE TABLE "user_trust_policies" (
+  principal_id TEXT PRIMARY KEY,
+  default_action_level TEXT NOT NULL DEFAULT 'confirm'
+    CHECK(default_action_level IN ('observe', 'suggest', 'confirm', 'auto')),
+  updated_at INTEGER NOT NULL
+);
+
+CREATE TABLE "connector_backends" (
+  id TEXT PRIMARY KEY,
+  mode TEXT NOT NULL CHECK(mode IN ('managed', 'byok')),
+  label TEXT NOT NULL,
+  credential_ref TEXT,
+  credential_source TEXT NOT NULL DEFAULT 'stored'
+    CHECK(credential_source IN ('stored', 'environment')),
+  verified_at INTEGER,
+  active INTEGER NOT NULL DEFAULT 0,
+  created_at INTEGER NOT NULL
+);
+
+CREATE TABLE session_input_receipts (
+  conversation_id TEXT NOT NULL,
+  client_message_id TEXT NOT NULL,
+  principal_id TEXT NOT NULL,
+  request_hash TEXT NOT NULL,
+  input_id TEXT,
+  transcript_id TEXT NOT NULL,
+  accepted_at INTEGER NOT NULL,
+  PRIMARY KEY (conversation_id, client_message_id)
+);
+
+CREATE TABLE session_tombstones (
+  conversation_id TEXT PRIMARY KEY,
+  deleted_at INTEGER NOT NULL
+);
+
+CREATE TABLE session_preparation_retries (
+  conversation_id TEXT NOT NULL,
+  idempotency_key TEXT NOT NULL,
+  operation_id TEXT NOT NULL,
+  expected_revision INTEGER NOT NULL,
+  principal_id TEXT NOT NULL,
+  PRIMARY KEY (conversation_id, idempotency_key)
+);
+
+CREATE TABLE session_preparations (
+  conversation_id TEXT PRIMARY KEY REFERENCES sessions(conversation_id) ON DELETE CASCADE,
+  operation_id TEXT NOT NULL UNIQUE,
+  creation_json TEXT NOT NULL CHECK(json_valid(creation_json)),
+  state TEXT NOT NULL CHECK(state IN ('preparing', 'ready', 'preparation_failed')),
+  environment_id TEXT NOT NULL,
+  base_commit TEXT,
+  revision INTEGER NOT NULL DEFAULT 1,
+  lease_until INTEGER NOT NULL DEFAULT 0,
+  last_error TEXT,
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL
 );
 
-INSERT INTO "work_discovery_onboarding" VALUES (1,'not_started',NULL,NULL,NULL,0);
+CREATE TABLE session_preparation_cleanup (
+  environment_id TEXT PRIMARY KEY,
+  conversation_id TEXT NOT NULL,
+  not_before INTEGER NOT NULL,
+  last_error TEXT
+);
 
-INSERT INTO "discussion_capture_settings" VALUES ('default',1,NULL,1789567824603);
+CREATE TABLE task_origin_links (
+  task_id TEXT PRIMARY KEY REFERENCES tasks(task_id) ON DELETE CASCADE,
+  conversation_id TEXT NOT NULL REFERENCES sessions(conversation_id) ON DELETE CASCADE,
+  created_at INTEGER NOT NULL
+, origin_transcript_id TEXT, request_input_id TEXT);
 
-INSERT INTO "connector_runtime_identity" VALUES (1,'cf78f03b31a9f8df6becbbe12c9af630');
+CREATE TABLE task_collaboration_entries (
+  entry_id TEXT PRIMARY KEY,
+  task_id TEXT NOT NULL REFERENCES tasks(task_id) ON DELETE CASCADE,
+  task_run_id TEXT REFERENCES task_runs(run_id) ON DELETE SET NULL,
+  assignment_epoch INTEGER,
+  sequence INTEGER NOT NULL,
+  author_kind TEXT NOT NULL CHECK (author_kind IN ('main_agent', 'worker_agent', 'user', 'system')),
+  author_id TEXT NOT NULL,
+  kind TEXT NOT NULL CHECK (kind IN ('progress', 'question', 'answer', 'instruction', 'ack', 'result', 'failure')),
+  body TEXT NOT NULL CHECK (length(body) BETWEEN 1 AND 8000),
+  causation_id TEXT,
+  idempotency_key TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  UNIQUE (task_id, sequence),
+  UNIQUE (task_id, idempotency_key)
+);
 
-CREATE INDEX idx_sessions_agent_updated
-  ON sessions(agent_id, updated_at DESC);
+CREATE TABLE task_collaboration_deliveries (
+  entry_id TEXT PRIMARY KEY REFERENCES task_collaboration_entries(entry_id) ON DELETE CASCADE,
+  status TEXT NOT NULL CHECK (status IN ('pending', 'delivered', 'confirmed', 'stale')),
+  conversation_id TEXT,
+  assignment_epoch INTEGER,
+  client_message_id TEXT NOT NULL UNIQUE,
+  attempts INTEGER NOT NULL DEFAULT 0,
+  updated_at INTEGER NOT NULL
+);
 
-CREATE INDEX idx_sessions_status
-  ON sessions(status);
+CREATE TABLE task_main_agent_links (
+  task_id TEXT PRIMARY KEY REFERENCES tasks(task_id) ON DELETE CASCADE,
+  agent_id TEXT NOT NULL,
+  origin_conversation_id TEXT,
+  created_at INTEGER NOT NULL
+);
 
-CREATE INDEX idx_sessions_source_channel
-  ON sessions(source_channel);
+CREATE TABLE personal_agent_onboarding (
+  owner_id TEXT PRIMARY KEY,
+  step TEXT NOT NULL,
+  draft_json TEXT NOT NULL DEFAULT '{}',
+  completed_at INTEGER,
+  welcome_finished_at INTEGER,
+  updated_at INTEGER NOT NULL
+);
 
-CREATE INDEX idx_sessions_last_interaction
-  ON sessions(last_interaction_at DESC);
+CREATE TABLE task_run_outcomes (
+  task_run_id TEXT NOT NULL REFERENCES task_runs(run_id) ON DELETE CASCADE,
+  outcome_id TEXT NOT NULL,
+  assignment_epoch INTEGER NOT NULL,
+  outcome_json TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  PRIMARY KEY(task_run_id, outcome_id)
+);
 
-CREATE INDEX idx_sessions_type
-  ON sessions(session_type);
+CREATE TABLE task_result_deliveries (
+  delivery_id TEXT PRIMARY KEY,
+  task_run_id TEXT NOT NULL REFERENCES task_runs(run_id) ON DELETE CASCADE,
+  conversation_id TEXT NOT NULL REFERENCES sessions(conversation_id) ON DELETE CASCADE,
+  payload_json TEXT NOT NULL,
+  status TEXT NOT NULL CHECK(status IN ('pending', 'delivered', 'stale', 'failed')),
+  message_entry_id TEXT,
+  attempts INTEGER NOT NULL DEFAULT 0,
+  next_attempt_at INTEGER NOT NULL,
+  last_error TEXT,
+  created_at INTEGER NOT NULL,
+  delivered_at INTEGER,
+  notified_at INTEGER, reply_payload_json TEXT, reply_status TEXT CHECK(reply_status IN ('pending','generating','ready','delivered','stale')), reply_lease_token TEXT, reply_lease_until INTEGER NOT NULL DEFAULT 0, reply_text TEXT, reply_draft_transcript_id TEXT, reply_message_entry_id TEXT, reply_notified_at INTEGER, reply_attempts INTEGER NOT NULL DEFAULT 0, reply_next_attempt_at INTEGER NOT NULL DEFAULT 0, reply_last_error TEXT, reply_context_revision INTEGER,
+  UNIQUE(task_run_id, conversation_id)
+);
 
-CREATE INDEX idx_sessions_workflow_run
-  ON sessions(workflow_run_id);
+CREATE TABLE personal_requests (
+  request_id TEXT PRIMARY KEY,
+  conversation_id TEXT NOT NULL REFERENCES sessions(conversation_id) ON DELETE CASCADE,
+  transcript_id TEXT NOT NULL,
+  input_id TEXT NOT NULL,
+  idempotency_key TEXT NOT NULL,
+  request_hash TEXT NOT NULL,
+  objective TEXT NOT NULL,
+  connector_id TEXT NOT NULL,
+  executor_agent_id TEXT NOT NULL,
+  account_id TEXT,
+  parameters_json TEXT NOT NULL,
+  state TEXT NOT NULL CHECK(state IN ('preflighting','waiting_connection','queued','running','completed','failed','cancelled')),
+  connection_wait_id TEXT UNIQUE,
+  task_id TEXT UNIQUE REFERENCES tasks(task_id) ON DELETE SET NULL,
+  result_json TEXT,
+  result_run_id TEXT,
+  delivery_entry_id TEXT,
+  notified_at INTEGER,
+  delivery_attempts INTEGER NOT NULL DEFAULT 0,
+  delivery_next_attempt_at INTEGER NOT NULL DEFAULT 0,
+  delivery_error TEXT,
+  version INTEGER NOT NULL DEFAULT 1,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  UNIQUE(conversation_id, transcript_id, idempotency_key)
+);
 
-CREATE INDEX idx_sessions_parent
-  ON sessions("parent_conversation_id");
+CREATE TABLE personal_attention_threads (
+  id TEXT PRIMARY KEY, owner_id TEXT NOT NULL, agent_id TEXT NOT NULL,
+  conversation_id TEXT NOT NULL REFERENCES sessions(conversation_id) ON DELETE CASCADE,
+  subject TEXT NOT NULL, summary TEXT NOT NULL, kind TEXT NOT NULL CHECK(kind IN ('outcome','discussion','interest')),
+  status TEXT NOT NULL CHECK(status IN ('candidate','active','paused','completed','expired')),
+  authority TEXT NOT NULL CHECK(authority IN ('user_explicit','inferred')),
+  task_id TEXT, project_id TEXT, next_check_at INTEGER, pause_until INTEGER, expires_at INTEGER NOT NULL,
+  last_meaningful_at INTEGER NOT NULL, revision INTEGER NOT NULL DEFAULT 1,
+  created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+);
+
+CREATE TABLE personal_attention_sources (
+  thread_id TEXT NOT NULL REFERENCES personal_attention_threads(id) ON DELETE CASCADE,
+  evidence_id TEXT REFERENCES context_evidence(evidence_id) ON DELETE CASCADE,
+  entry_id TEXT NOT NULL REFERENCES transcript_entries(entry_id) ON DELETE CASCADE,
+  transcript_id TEXT NOT NULL, conversation_id TEXT NOT NULL,
+  PRIMARY KEY(thread_id, entry_id)
+);
+
+CREATE TABLE personal_wakeups (
+  id TEXT PRIMARY KEY, thread_id TEXT NOT NULL REFERENCES personal_attention_threads(id) ON DELETE CASCADE,
+  dedupe_key TEXT NOT NULL UNIQUE, trigger_kind TEXT NOT NULL, source_event_id TEXT,
+  thread_revision INTEGER NOT NULL, not_before INTEGER NOT NULL, expires_at INTEGER NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','evaluating','done','cancelled','dead_letter')),
+  lease_token TEXT, lease_until INTEGER NOT NULL DEFAULT 0, attempts INTEGER NOT NULL DEFAULT 0,
+  next_attempt_at INTEGER NOT NULL DEFAULT 0, last_error TEXT, created_at INTEGER NOT NULL
+);
+
+CREATE TABLE personal_outreach (
+  id TEXT PRIMARY KEY, wakeup_id TEXT NOT NULL UNIQUE REFERENCES personal_wakeups(id) ON DELETE CASCADE,
+  thread_id TEXT NOT NULL REFERENCES personal_attention_threads(id) ON DELETE CASCADE,
+  conversation_id TEXT NOT NULL REFERENCES sessions(conversation_id) ON DELETE CASCADE,
+  origin_transcript_id TEXT NOT NULL, thread_revision INTEGER NOT NULL, context_revision INTEGER NOT NULL,
+  policy_revision INTEGER NOT NULL, decision TEXT NOT NULL, reason TEXT NOT NULL,
+  state TEXT NOT NULL CHECK(state IN ('decided','ready','published','stale','cancelled')),
+  text TEXT, provenance_json TEXT NOT NULL CHECK(json_valid(provenance_json)),
+  valid_until INTEGER NOT NULL, message_entry_id TEXT, notified_at INTEGER,
+  created_at INTEGER NOT NULL, published_at INTEGER
+);
+
+CREATE TABLE personal_feedback (
+  id TEXT PRIMARY KEY, outreach_id TEXT NOT NULL REFERENCES personal_outreach(id) ON DELETE CASCADE,
+  thread_id TEXT NOT NULL REFERENCES personal_attention_threads(id) ON DELETE CASCADE,
+  owner_id TEXT NOT NULL, kind TEXT NOT NULL, scope TEXT NOT NULL,
+  payload_json TEXT NOT NULL CHECK(json_valid(payload_json)), created_at INTEGER NOT NULL,
+  dedupe_key TEXT NOT NULL, UNIQUE(owner_id, dedupe_key)
+);
+
+CREATE TABLE personal_adaptive_strategies (
+  id TEXT PRIMARY KEY, thread_id TEXT NOT NULL REFERENCES personal_attention_threads(id) ON DELETE CASCADE,
+  feedback_id TEXT NOT NULL UNIQUE REFERENCES personal_feedback(id) ON DELETE CASCADE,
+  dimension TEXT NOT NULL CHECK(dimension = 'preparation'), value TEXT NOT NULL,
+  authority TEXT NOT NULL CHECK(authority = 'explicit'), revision INTEGER NOT NULL,
+  created_at INTEGER NOT NULL, review_at INTEGER NOT NULL
+);
+
+CREATE TABLE personal_strategy_versions (
+  id TEXT PRIMARY KEY,
+  owner_id TEXT NOT NULL,
+  thread_id TEXT NOT NULL REFERENCES personal_attention_threads(id) ON DELETE CASCADE,
+  revision INTEGER NOT NULL,
+  kind TEXT NOT NULL CHECK(kind IN ('stop', 'defer', 'adjust', 'rollback')),
+  before_json TEXT NOT NULL CHECK(json_valid(before_json)),
+  after_json TEXT NOT NULL CHECK(json_valid(after_json)),
+  input_json TEXT NOT NULL CHECK(json_valid(input_json)),
+  source_entry_id TEXT REFERENCES transcript_entries(entry_id) ON DELETE SET NULL,
+  feedback_id TEXT REFERENCES personal_feedback(id) ON DELETE SET NULL,
+  restored_version_id TEXT REFERENCES personal_strategy_versions(id),
+  dedupe_key TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  UNIQUE(owner_id, dedupe_key),
+  UNIQUE(thread_id, revision)
+);
+
+CREATE TABLE browser_automation_versions (
+  automation_id TEXT NOT NULL REFERENCES browser_automations(automation_id) ON DELETE CASCADE,
+  revision INTEGER NOT NULL,
+  definition_json TEXT NOT NULL,
+  created_at_ms INTEGER NOT NULL,
+  PRIMARY KEY (automation_id, revision)
+);
+
+CREATE TABLE browser_automation_verifications (
+  automation_id TEXT NOT NULL,
+  revision INTEGER NOT NULL,
+  run_id TEXT NOT NULL REFERENCES browser_automation_runs(run_id) ON DELETE CASCADE,
+  verified_at_ms INTEGER NOT NULL,
+  PRIMARY KEY (automation_id, revision),
+  FOREIGN KEY (automation_id, revision) REFERENCES browser_automation_versions(automation_id, revision) ON DELETE CASCADE
+);
+
+CREATE TABLE browser_recordings (
+  recording_id TEXT PRIMARY KEY,
+  principal_id TEXT NOT NULL,
+  state TEXT NOT NULL,
+  ack_seq INTEGER NOT NULL DEFAULT 0,
+  final_seq INTEGER,
+  automation_id TEXT REFERENCES browser_automations(automation_id) ON DELETE CASCADE,
+  error TEXT,
+  created_at_ms INTEGER NOT NULL,
+  updated_at_ms INTEGER NOT NULL
+);
+
+CREATE TABLE browser_recording_events (
+  recording_id TEXT NOT NULL REFERENCES browser_recordings(recording_id) ON DELETE CASCADE,
+  seq INTEGER NOT NULL,
+  event_id TEXT NOT NULL UNIQUE,
+  payload_json TEXT NOT NULL,
+  PRIMARY KEY (recording_id, seq)
+);
+
+CREATE TABLE clarification_notification_outbox (
+  wait_id TEXT PRIMARY KEY REFERENCES session_clarification_waits(id) ON DELETE CASCADE,
+  status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'settled')),
+  created_at INTEGER NOT NULL
+);
+
+CREATE TABLE notification_deliveries (
+  event_id TEXT NOT NULL REFERENCES notification_events(event_id) ON DELETE CASCADE,
+  device_id TEXT NOT NULL REFERENCES device_push_endpoints(device_id) ON DELETE CASCADE,
+  status TEXT NOT NULL CHECK(status IN ('pending', 'accepted', 'delivered', 'dead', 'cancelled')),
+  attempts INTEGER NOT NULL DEFAULT 0,
+  next_attempt_at INTEGER NOT NULL,
+  provider_ticket_id TEXT,
+  last_error TEXT,
+  updated_at INTEGER NOT NULL,
+  PRIMARY KEY(event_id, device_id)
+);
+
+CREATE TABLE endpoint_device_settings (
+  principal_id TEXT PRIMARY KEY REFERENCES endpoint_principals(id) ON DELETE CASCADE,
+  nickname TEXT NOT NULL CHECK(length(nickname) BETWEEN 1 AND 80),
+  revision INTEGER NOT NULL DEFAULT 1 CHECK(revision > 0)
+);
+
+CREATE TABLE device_grant_events (
+  id TEXT PRIMARY KEY,
+  grant_id TEXT NOT NULL,
+  conversation_id TEXT NOT NULL,
+  requestor_principal_id TEXT NOT NULL,
+  target_principal_id TEXT NOT NULL,
+  target_endpoint_id TEXT NOT NULL,
+  tool_name TEXT NOT NULL,
+  arguments_sha256 TEXT NOT NULL,
+  event TEXT NOT NULL CHECK(event IN ('issued','reserved','consumed','revoked','expired')),
+  created_at_ms INTEGER NOT NULL
+);
+
+CREATE TABLE voice_opening_greetings (
+  principal_id TEXT NOT NULL,
+  conversation_id TEXT NOT NULL,
+  logical_call_id TEXT NOT NULL,
+  response_id TEXT NOT NULL,
+  state TEXT NOT NULL CHECK(state IN ('claimed', 'completed', 'skipped', 'interrupted', 'failed', 'expired')),
+  reason TEXT,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  PRIMARY KEY (principal_id, conversation_id, logical_call_id)
+);
+
+CREATE TABLE device_request_nonces (
+  device_id TEXT NOT NULL REFERENCES devices(device_id) ON DELETE CASCADE,
+  nonce TEXT NOT NULL,
+  expires_at INTEGER NOT NULL,
+  PRIMARY KEY (device_id, nonce)
+) WITHOUT ROWID;
+
+CREATE TABLE knowledge_revisions (
+  revision_id TEXT PRIMARY KEY,
+  knowledge_id TEXT NOT NULL REFERENCES knowledge_items(knowledge_id) ON DELETE CASCADE,
+  content TEXT NOT NULL,
+  source_json TEXT NOT NULL,
+  created_at INTEGER NOT NULL
+);
+
+CREATE TABLE knowledge_evidence_links (
+  knowledge_id TEXT NOT NULL REFERENCES knowledge_items(knowledge_id) ON DELETE CASCADE,
+  evidence_id TEXT NOT NULL REFERENCES context_evidence(evidence_id) ON DELETE CASCADE,
+  content_hash TEXT,
+  consent_receipt_id TEXT REFERENCES understanding_consent_receipts(receipt_id),
+  PRIMARY KEY (knowledge_id, evidence_id)
+);
+
+CREATE TABLE owner_identity_bindings (
+  principal_id TEXT NOT NULL,
+  channel TEXT NOT NULL,
+  account_id TEXT NOT NULL,
+  peer_id TEXT NOT NULL,
+  verified_at INTEGER NOT NULL,
+  revoked_at INTEGER,
+  PRIMARY KEY (channel, account_id, peer_id)
+);
+
+CREATE TABLE memory_learning_jobs (
+  job_id TEXT PRIMARY KEY,
+  principal_id TEXT NOT NULL DEFAULT 'local-owner',
+  conversation_id TEXT NOT NULL REFERENCES sessions(conversation_id) ON DELETE CASCADE,
+  transcript_id TEXT NOT NULL,
+  through_seq INTEGER NOT NULL,
+  start_seq INTEGER,
+  extractor_version TEXT NOT NULL,
+  policy_hash TEXT NOT NULL,
+  workspace_id TEXT NOT NULL,
+  state TEXT NOT NULL CHECK (state IN ('queued','running','succeeded','retry_wait','failed','canceled')),
+  lease_token TEXT,
+  lease_until INTEGER,
+  attempts INTEGER NOT NULL DEFAULT 0,
+  next_attempt_at INTEGER NOT NULL,
+  error_code TEXT,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  UNIQUE(conversation_id, transcript_id, through_seq, extractor_version, policy_hash)
+);
+
+CREATE TABLE memory_source_learning_jobs (
+  job_id TEXT PRIMARY KEY,
+  chunk_id TEXT NOT NULL REFERENCES knowledge_source_chunks(chunk_id) ON DELETE CASCADE,
+  agent_id TEXT NOT NULL,
+  workspace_id TEXT NOT NULL,
+  consent_receipt_id TEXT NOT NULL REFERENCES understanding_consent_receipts(receipt_id),
+  policy_hash TEXT NOT NULL,
+  state TEXT NOT NULL CHECK(state IN ('queued','running','succeeded','retry_wait','failed','canceled')),
+  lease_token TEXT,
+  lease_until INTEGER,
+  attempts INTEGER NOT NULL DEFAULT 0,
+  next_attempt_at INTEGER NOT NULL,
+  error_code TEXT,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  UNIQUE(chunk_id, agent_id, consent_receipt_id, policy_hash)
+);
+
+CREATE TABLE memory_learning_receipts (
+  run_id TEXT PRIMARY KEY REFERENCES task_run_receipts(run_id) ON DELETE CASCADE,
+  learned_at INTEGER NOT NULL,
+  knowledge_id TEXT
+);
+
+CREATE TABLE memory_learning_cursors (
+  conversation_id TEXT NOT NULL REFERENCES sessions(conversation_id) ON DELETE CASCADE,
+  transcript_id TEXT NOT NULL,
+  processed_seq INTEGER NOT NULL DEFAULT 0,
+  observed_seq INTEGER NOT NULL DEFAULT 0,
+  updated_at INTEGER NOT NULL,
+  PRIMARY KEY (conversation_id, transcript_id)
+);
+
+CREATE TABLE knowledge_source_chunks (
+  chunk_id TEXT PRIMARY KEY,
+  source_item_id TEXT NOT NULL REFERENCES knowledge_source_items(item_id) ON DELETE CASCADE,
+  source_version TEXT NOT NULL,
+  consent_receipt_id TEXT REFERENCES understanding_consent_receipts(receipt_id),
+  ordinal INTEGER NOT NULL,
+  locator TEXT NOT NULL,
+  text TEXT NOT NULL,
+  UNIQUE(source_item_id, ordinal)
+);
+
+CREATE VIRTUAL TABLE knowledge_chunks_fts USING fts5(search_text, chunk_id UNINDEXED, tokenize='unicode61');
+
+CREATE VIRTUAL TABLE knowledge_search_fts USING fts5(search_text, knowledge_id UNINDEXED, tokenize='unicode61');
+
+CREATE TABLE agent_selection_records (
+  id TEXT PRIMARY KEY,
+  conversation_id TEXT NOT NULL REFERENCES sessions(conversation_id) ON DELETE CASCADE,
+  transcript_id TEXT,
+  input_id TEXT,
+  personal_request_id TEXT REFERENCES personal_requests(request_id) ON DELETE CASCADE,
+  task_id TEXT REFERENCES tasks(task_id) ON DELETE CASCADE,
+  task_run_id TEXT REFERENCES task_runs(run_id) ON DELETE SET NULL,
+  decision_group_id TEXT NOT NULL,
+  previous_selection_id TEXT REFERENCES agent_selection_records(id) ON DELETE SET NULL,
+  idempotency_key TEXT NOT NULL,
+  request_hash TEXT NOT NULL,
+  selected_agent_id TEXT NOT NULL,
+  selected_agent_revision INTEGER,
+  matcher_version INTEGER NOT NULL,
+  catalog_revision INTEGER NOT NULL,
+  requirements_json TEXT NOT NULL,
+  selected_profile_json TEXT,
+  assessment_json TEXT NOT NULL,
+  candidates_json TEXT,
+  selection_source TEXT NOT NULL CHECK(selection_source IN ('snapshot','match','explicit')),
+  reason_source TEXT NOT NULL CHECK(reason_source IN ('model','system')),
+  selection_reason TEXT NOT NULL,
+  status TEXT NOT NULL CHECK(status IN ('pending_connection','rejected','task_linked','start_blocked','start_failed')),
+  reason_code TEXT,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  UNIQUE(conversation_id, idempotency_key)
+);
+
+CREATE TABLE next_turn_suggestions (
+  conversation_id TEXT NOT NULL REFERENCES sessions(conversation_id) ON DELETE CASCADE,
+  locale TEXT NOT NULL CHECK (locale IN ('zh', 'en')),
+  suggestion_id TEXT NOT NULL UNIQUE,
+  snapshot_key TEXT NOT NULL,
+  state TEXT NOT NULL CHECK (state IN ('ready', 'none')),
+  payload_json TEXT,
+  expires_at INTEGER NOT NULL,
+  PRIMARY KEY (conversation_id, locale)
+);
+
+CREATE TABLE next_turn_suggestion_feedback (
+  conversation_id TEXT NOT NULL REFERENCES sessions(conversation_id) ON DELETE CASCADE,
+  suggestion_id TEXT NOT NULL,
+  impression_id TEXT NOT NULL,
+  event TEXT NOT NULL CHECK (event IN ('shown', 'accepted', 'dismissed', 'submitted')),
+  edited INTEGER NOT NULL DEFAULT 0,
+  created_at INTEGER NOT NULL,
+  PRIMARY KEY (suggestion_id, impression_id, event)
+);
+
+CREATE TABLE task_allocations (
+  id TEXT PRIMARY KEY,
+  task_id TEXT NOT NULL UNIQUE REFERENCES tasks(task_id) ON DELETE CASCADE,
+  origin_conversation_id TEXT NOT NULL REFERENCES sessions(conversation_id) ON DELETE CASCADE,
+  requirements_json TEXT NOT NULL,
+  task_version INTEGER NOT NULL,
+  status TEXT NOT NULL CHECK(status IN ('pending','selecting','assigned','blocked','failed','cancelled')),
+  selected_agent_id TEXT,
+  selection_reason TEXT,
+  reason_code TEXT,
+  attempts INTEGER NOT NULL DEFAULT 0,
+  lease_token TEXT,
+  lease_expires_at INTEGER,
+  next_attempt_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+
+CREATE TABLE research_checkpoints (
+  id TEXT PRIMARY KEY,
+  conversation_id TEXT NOT NULL REFERENCES sessions(conversation_id) ON DELETE CASCADE,
+  workspace TEXT NOT NULL,
+  goal TEXT NOT NULL,
+  checkpoint_json TEXT NOT NULL CHECK(json_valid(checkpoint_json)),
+  status TEXT NOT NULL CHECK(status IN ('running','partial','completed','failed','cancelled')),
+  attempts INTEGER NOT NULL DEFAULT 0,
+  stop_reason TEXT,
+  summary TEXT NOT NULL DEFAULT '',
+  lease_token TEXT,
+  lease_expires_at INTEGER,
+  updated_at INTEGER NOT NULL
+);
+
+CREATE TABLE personal_result_documents (
+  document_id TEXT PRIMARY KEY,
+  delivery_id TEXT NOT NULL REFERENCES task_result_deliveries(delivery_id) ON DELETE CASCADE,
+  source_id TEXT NOT NULL,
+  status TEXT NOT NULL CHECK(status IN ('pending', 'ready', 'unsupported', 'failed')),
+  lease_token TEXT,
+  lease_until INTEGER NOT NULL DEFAULT 0,
+  parser_version INTEGER NOT NULL,
+  content_revision TEXT,
+  content TEXT,
+  sections_json TEXT NOT NULL DEFAULT '[]',
+  limitations_json TEXT NOT NULL DEFAULT '[]',
+  fingerprint TEXT,
+  error TEXT,
+  UNIQUE(delivery_id, source_id)
+);
+
+CREATE VIRTUAL TABLE personal_result_search USING fts5(
+  document_id UNINDEXED, start_offset UNINDEXED, text, tokenize='trigram'
+);
+
+CREATE TABLE personal_result_sections (
+  document_id TEXT NOT NULL REFERENCES personal_result_documents(document_id) ON DELETE CASCADE,
+  section_id TEXT NOT NULL,
+  ordinal INTEGER NOT NULL,
+  title TEXT NOT NULL,
+  start_offset INTEGER NOT NULL,
+  char_length INTEGER NOT NULL,
+  locator_json TEXT NOT NULL,
+  PRIMARY KEY(document_id, section_id)
+);
+
+CREATE TABLE personal_result_read_waits (
+  input_id TEXT PRIMARY KEY REFERENCES session_inputs(id) ON DELETE CASCADE,
+  conversation_id TEXT NOT NULL REFERENCES sessions(conversation_id) ON DELETE CASCADE,
+  transcript_id TEXT NOT NULL,
+  requests_json TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','queued','done','stale'))
+);
+
+CREATE TABLE task_work_revisions (
+  revision_id TEXT PRIMARY KEY,
+  task_id TEXT NOT NULL REFERENCES tasks(task_id) ON DELETE CASCADE,
+  contract_version INTEGER NOT NULL,
+  baseline_delivery_id TEXT NOT NULL,
+  baseline_version TEXT NOT NULL,
+  instruction_entry_id TEXT NOT NULL,
+  input_id TEXT,
+  idempotency_key TEXT NOT NULL UNIQUE,
+  request_hash TEXT NOT NULL,
+  supersedes_json TEXT NOT NULL DEFAULT '[]',
+  original_body TEXT,
+  created_at INTEGER NOT NULL,
+  UNIQUE(task_id, contract_version)
+);
+
+CREATE TABLE discussion_processing (
+  discussion_id TEXT PRIMARY KEY REFERENCES discussion_captures(id) ON DELETE CASCADE,
+  run_id TEXT NOT NULL UNIQUE,
+  audio_sha256 TEXT,
+  base_transcript_revision INTEGER NOT NULL,
+  force_audio INTEGER NOT NULL DEFAULT 0 CHECK(force_audio IN (0,1)),
+  retry_stage TEXT,
+  attempt_count INTEGER NOT NULL DEFAULT 0,
+  next_attempt_at INTEGER,
+  lease_owner TEXT,
+  lease_until INTEGER
+);
+
+CREATE TABLE discussion_transcription_checkpoints (
+  run_id TEXT NOT NULL REFERENCES discussion_processing(run_id) ON DELETE CASCADE,
+  started_at_ms REAL NOT NULL,
+  ended_at_ms REAL NOT NULL,
+  result_json TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  PRIMARY KEY(run_id, started_at_ms, ended_at_ms)
+);
+
+CREATE TABLE discussion_annotations (
+  discussion_id TEXT NOT NULL REFERENCES discussion_captures(id) ON DELETE CASCADE,
+  id TEXT NOT NULL,
+  kind TEXT NOT NULL CHECK(kind IN ('highlight','question','note')),
+  text TEXT NOT NULL,
+  anchor_json TEXT NOT NULL,
+  revision INTEGER NOT NULL,
+  deleted INTEGER NOT NULL DEFAULT 0,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  PRIMARY KEY(discussion_id,id)
+);
+
+CREATE TABLE discussion_media_timeline (
+  discussion_id TEXT PRIMARY KEY REFERENCES discussion_captures(id) ON DELETE CASCADE,
+  audio_sha256 TEXT NOT NULL,
+  timeline_json TEXT NOT NULL
+);
+
+CREATE TABLE discussion_chapter_progress (
+  discussion_id TEXT NOT NULL REFERENCES discussion_captures(id) ON DELETE CASCADE,
+  source_sha256 TEXT NOT NULL,
+  transcript_revision INTEGER NOT NULL,
+  transcript_sha256 TEXT NOT NULL,
+  input_hash TEXT NOT NULL,
+  position INTEGER NOT NULL,
+  chapter_json TEXT NOT NULL,
+  PRIMARY KEY(discussion_id, source_sha256, transcript_revision, transcript_sha256, input_hash)
+);
+
+CREATE TABLE "task_main_update_deliveries" (
+  entry_id TEXT PRIMARY KEY REFERENCES task_collaboration_entries(entry_id) ON DELETE CASCADE,
+  conversation_id TEXT NOT NULL REFERENCES sessions(conversation_id) ON DELETE CASCADE,
+  status TEXT NOT NULL CHECK (status IN ('pending', 'delivered', 'failed')),
+  updated_at INTEGER NOT NULL,
+  decision TEXT CHECK (decision IN ('notify', 'silent')),
+  decision_reason TEXT,
+  decided_at INTEGER,
+  failure_count INTEGER NOT NULL DEFAULT 0,
+  last_error TEXT
+);
+
+CREATE TABLE composer_input_history (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  conversation_id TEXT NOT NULL REFERENCES sessions(conversation_id) ON DELETE CASCADE,
+  text TEXT NOT NULL,
+  created_at INTEGER NOT NULL
+);
+
+CREATE TABLE task_phase_changes (
+  id TEXT PRIMARY KEY,
+  task_id TEXT NOT NULL REFERENCES tasks(task_id) ON DELETE CASCADE,
+  from_phase TEXT NOT NULL,
+  to_phase TEXT NOT NULL,
+  from_resolution TEXT,
+  to_resolution TEXT,
+  actor_json TEXT NOT NULL,
+  source TEXT NOT NULL,
+  operation_id TEXT,
+  run_id TEXT,
+  task_version INTEGER NOT NULL,
+  created_at INTEGER NOT NULL,
+  UNIQUE(task_id, task_version)
+);
 
 CREATE INDEX idx_transcripts_session
   ON transcripts("conversation_id", status);
@@ -2365,12 +2896,6 @@ CREATE INDEX idx_entries_session_seq
 
 CREATE INDEX idx_entries_kind
   ON transcript_entries("transcript_id", entry_kind);
-
-CREATE INDEX idx_automations_enabled
-  ON automations(enabled, updated_at_ms DESC);
-
-CREATE INDEX idx_automations_updated
-  ON automations(updated_at_ms DESC);
 
 CREATE INDEX idx_automation_runs_automation_created
   ON automation_runs(automation_id, created_at_ms DESC);
@@ -2435,12 +2960,6 @@ CREATE INDEX idx_projects_slug
 CREATE INDEX idx_projects_updated
   ON projects(updated_at DESC);
 
-CREATE INDEX idx_sessions_project
-  ON sessions(project_id, updated_at DESC);
-
-CREATE INDEX idx_automations_project
-  ON automations(project_id, updated_at_ms DESC);
-
 CREATE INDEX idx_projects_pinned
   ON projects(pinned_at DESC)
   WHERE pinned_at IS NOT NULL;
@@ -2450,30 +2969,6 @@ CREATE INDEX idx_knowledge_sync_runs_source_started
 
 CREATE INDEX idx_knowledge_sync_runs_status_started
   ON knowledge_sync_runs(status, started_at DESC);
-
-CREATE INDEX idx_connector_catalog_provider
-  ON connector_catalog_entries(provider, fetched_at DESC);
-
-CREATE INDEX idx_connector_installations_principal
-  ON connector_installations(principal_id, enabled, connector_id);
-
-CREATE INDEX idx_connector_action_scope
-  ON connector_action_metadata(connector_id, scope, curated);
-
-CREATE INDEX idx_connector_audit_principal_time
-  ON connector_execution_audit(principal_id, created_at DESC);
-
-CREATE INDEX idx_connector_audit_connector_time
-  ON connector_execution_audit(connector_id, created_at DESC);
-
-CREATE INDEX idx_connector_approvals_pending
-  ON connector_approvals(principal_id, status, expires_at, created_at DESC);
-
-CREATE INDEX idx_connector_approvals_session
-  ON connector_approvals("conversation_id", status, created_at DESC);
-
-CREATE INDEX idx_connector_webhook_deliveries_status
-  ON connector_webhook_deliveries(provider, status, received_at DESC);
 
 CREATE INDEX idx_local_apps_updated_at ON local_apps(updated_at DESC);
 
@@ -2501,9 +2996,6 @@ CREATE INDEX idx_extension_ui_grants_app_granted
 
 CREATE INDEX idx_work_discovery_feedback_updated
   ON work_discovery_feedback(updated_at DESC);
-
-CREATE INDEX idx_composer_input_history_recent
-  ON composer_input_history(id DESC);
 
 CREATE INDEX idx_connector_learning_jobs_due
   ON connector_learning_jobs(status, next_run_at, created_at);
@@ -2603,16 +3095,6 @@ CREATE INDEX idx_task_run_events_run_sequence ON task_run_events(run_id, sequenc
 
 CREATE INDEX idx_domain_outbox_pending ON domain_outbox(published_at, created_at);
 
-CREATE INDEX idx_workflow_runs_created ON workflow_runs(agent_id, created_at_ms DESC);
-
-CREATE INDEX idx_workflow_runs_status_created ON workflow_runs(agent_id, status, created_at_ms DESC);
-
-CREATE INDEX idx_workflow_runs_definition_created ON workflow_runs(definition_id, created_at_ms DESC);
-
-CREATE INDEX idx_workflow_runs_project ON workflow_runs(project_id, created_at_ms DESC);
-
-CREATE INDEX idx_workflow_runs_task_run ON workflow_runs(task_run_id, created_at_ms DESC);
-
 CREATE INDEX idx_connector_learning_jobs_account
   ON connector_learning_jobs(account_id, created_at DESC);
 
@@ -2653,15 +3135,6 @@ CREATE INDEX idx_task_handoffs_task
 
 CREATE INDEX idx_automation_runs_unread_created
   ON automation_runs(read_at_ms, created_at_ms DESC);
-
-CREATE INDEX idx_workflow_context_snapshots_run
-  ON workflow_context_snapshots(run_id, created_at DESC);
-
-CREATE INDEX idx_workflow_context_snapshots_project
-  ON workflow_context_snapshots(project_id, created_at DESC);
-
-CREATE INDEX idx_project_workflow_presets_updated
-  ON project_workflow_presets(project_id, updated_at DESC);
 
 CREATE INDEX idx_context_extraction_runs_lookup
   ON context_extraction_runs(extractor_id, status, started_at DESC);
@@ -2775,9 +3248,6 @@ CREATE INDEX idx_clarification_wait_session
 CREATE INDEX idx_session_inputs_pending
   ON session_inputs("conversation_id",status,position,created_at_ms);
 
-CREATE INDEX idx_notification_deliveries_due
-  ON notification_deliveries(status, next_attempt_at);
-
 CREATE INDEX idx_device_refresh_credentials_device
   ON device_refresh_credentials(device_id, expires_at);
 
@@ -2815,28 +3285,12 @@ CREATE INDEX import_selections_owner_kind ON import_selections(owner, kind, crea
 
 CREATE INDEX knowledge_sync_source_scope ON knowledge_sync_runs(source_instance_id, collection_scope, started_at DESC);
 
-CREATE UNIQUE INDEX idx_connector_backend_active ON connector_backends(active) WHERE active = 1;
-
-CREATE UNIQUE INDEX idx_connector_accounts_identity
-  ON connector_accounts(principal_id, backend_id, connector_id, identity_key)
-  WHERE identity_key IS NOT NULL;
-
-CREATE INDEX idx_connector_connections_principal ON connector_connections(principal_id, connector_id, status);
-
-CREATE INDEX idx_connector_connections_account ON connector_connections(account_id);
-
-CREATE UNIQUE INDEX idx_connector_connections_provider_backend
-  ON connector_connections(provider, COALESCE(json_extract(metadata_json, '$.backendId'), ''), provider_connection_id);
-
 CREATE INDEX idx_connector_authorization_attempt_scope ON connector_authorization_attempts(principal_id,connector_id,created_at);
 
 CREATE INDEX idx_understanding_refresh_batches_created ON understanding_refresh_batches(created_at DESC);
 
 CREATE INDEX idx_sidebar_positions_order
   ON sidebar_positions(container_id, position);
-
-CREATE UNIQUE INDEX idx_cli_account_identity ON connector_accounts(principal_id, runtime_instance_id, identity_key)
-  WHERE runtime_instance_id IS NOT NULL AND identity_key IS NOT NULL;
 
 CREATE UNIQUE INDEX idx_cli_active_authorization ON connector_cli_authorizations(instance_id, principal_id)
   WHERE phase IN ('preparing','awaiting_user','verifying');
@@ -2929,13 +3383,6 @@ CREATE INDEX idx_user_model_observations_source
 CREATE INDEX idx_user_assertion_edges_to
   ON user_assertion_edges(to_assertion_id, relation);
 
-CREATE UNIQUE INDEX idx_automation_events_source_dedupe
-  ON automation_events(source, dedupe_key)
-  WHERE dedupe_key IS NOT NULL;
-
-CREATE INDEX idx_automation_events_projection
-  ON automation_events(projection_status, projection_next_attempt_at_ms, ingested_at_ms);
-
 CREATE UNIQUE INDEX idx_automation_event_deliveries_run
   ON automation_event_deliveries(run_id)
   WHERE run_id IS NOT NULL;
@@ -2943,20 +3390,245 @@ CREATE UNIQUE INDEX idx_automation_event_deliveries_run
 CREATE INDEX idx_automation_event_deliveries_pending
   ON automation_event_deliveries(status, next_attempt_at_ms, created_at_ms);
 
+CREATE INDEX idx_task_runs_contract
+  ON task_runs(task_id, contract_version);
+
+CREATE INDEX idx_task_runs_conversation
+  ON task_runs(conversation_id);
+
+CREATE INDEX idx_task_runs_parent
+  ON task_runs(parent_run_id);
+
+CREATE INDEX idx_task_runs_retry
+  ON task_runs(retry_of_run_id);
+
+CREATE INDEX idx_task_runs_context_snapshot
+  ON task_runs(context_snapshot_id);
+
+CREATE INDEX idx_task_run_feedback_run
+  ON task_run_feedback(run_id);
+
+CREATE INDEX idx_work_discovery_runs_conversation
+  ON work_discovery_runs(conversation_id);
+
+CREATE INDEX idx_connector_learning_jobs_connection
+  ON connector_learning_jobs(connection_id);
+
+CREATE INDEX idx_knowledge_source_changes_item
+  ON knowledge_source_changes(source_item_id);
+
+CREATE INDEX idx_automations_enabled ON automations(enabled, updated_at_ms DESC);
+
+CREATE INDEX idx_automations_updated ON automations(updated_at_ms DESC);
+
+CREATE INDEX idx_automations_project ON automations(project_id, updated_at_ms DESC);
+
+CREATE UNIQUE INDEX idx_automation_events_source_dedupe
+  ON automation_events(source, dedupe_key) WHERE dedupe_key IS NOT NULL;
+
+CREATE INDEX idx_automation_events_projection
+  ON automation_events(projection_status, projection_next_attempt_at_ms, ingested_at_ms);
+
 CREATE INDEX idx_automation_result_deliveries_pending
   ON automation_result_deliveries(status, next_attempt_at_ms, created_at_ms);
 
-CREATE INDEX idx_ai_usage_events_started
-  ON ai_usage_events(started_at DESC, id DESC);
+CREATE INDEX idx_ai_usage_events_started ON ai_usage_events(started_at DESC, id DESC);
 
-CREATE INDEX idx_ai_usage_events_conversation
-  ON ai_usage_events(conversation_id, started_at DESC);
+CREATE INDEX idx_ai_usage_events_conversation ON ai_usage_events(conversation_id, started_at DESC);
 
-CREATE INDEX idx_ai_usage_events_trace
-  ON ai_usage_events(trace_id, started_at ASC);
+CREATE INDEX idx_ai_usage_events_trace ON ai_usage_events(trace_id, started_at ASC);
 
-CREATE INDEX idx_ai_usage_events_agent
-  ON ai_usage_events(agent_id, started_at DESC);
+CREATE INDEX idx_ai_usage_events_agent ON ai_usage_events(agent_id, started_at DESC);
 
-CREATE INDEX idx_ai_usage_events_category
-  ON ai_usage_events(category, started_at DESC);
+CREATE INDEX idx_ai_usage_events_category ON ai_usage_events(category, started_at DESC);
+
+CREATE INDEX idx_sessions_agent_updated ON sessions(agent_id, updated_at DESC);
+
+CREATE INDEX idx_sessions_last_interaction ON sessions(last_interaction_at DESC);
+
+CREATE INDEX idx_sessions_parent ON sessions(parent_conversation_id);
+
+CREATE INDEX idx_sessions_project ON sessions(project_id, updated_at DESC);
+
+CREATE INDEX idx_sessions_source_channel ON sessions(source_channel);
+
+CREATE INDEX idx_sessions_status ON sessions(status);
+
+CREATE INDEX idx_sessions_type ON sessions(session_type);
+
+CREATE INDEX idx_connector_catalog_provider ON connector_catalog_entries(provider, fetched_at DESC);
+
+CREATE INDEX idx_connector_installations_principal
+  ON connector_installations(principal_id, enabled, connector_id);
+
+CREATE UNIQUE INDEX idx_cli_account_identity
+  ON connector_accounts(principal_id, runtime_instance_id, identity_key)
+  WHERE runtime_instance_id IS NOT NULL AND identity_key IS NOT NULL;
+
+CREATE UNIQUE INDEX idx_connector_accounts_identity
+  ON connector_accounts(principal_id, backend_id, connector_id, identity_key)
+  WHERE identity_key IS NOT NULL;
+
+CREATE INDEX idx_connector_connections_account ON connector_connections(account_id);
+
+CREATE INDEX idx_connector_connections_principal
+  ON connector_connections(principal_id, connector_id, status);
+
+CREATE UNIQUE INDEX idx_connector_connections_provider_backend
+  ON connector_connections(provider, COALESCE(json_extract(metadata_json, '$.backendId'), ''), provider_connection_id);
+
+CREATE INDEX idx_connector_action_scope
+  ON connector_action_metadata(connector_id, scope, curated);
+
+CREATE INDEX idx_connector_audit_connector_time
+  ON connector_execution_audit(connector_id, created_at DESC);
+
+CREATE INDEX idx_connector_audit_principal_time
+  ON connector_execution_audit(principal_id, created_at DESC);
+
+CREATE INDEX idx_connector_execution_audit_connection
+  ON connector_execution_audit(connection_id);
+
+CREATE INDEX idx_connector_execution_audit_installation
+  ON connector_execution_audit(installation_id);
+
+CREATE INDEX idx_connector_approvals_connection ON connector_approvals(connection_id);
+
+CREATE INDEX idx_connector_approvals_pending
+  ON connector_approvals(principal_id, status, expires_at, created_at DESC);
+
+CREATE INDEX idx_connector_approvals_session
+  ON connector_approvals(conversation_id, status, created_at DESC);
+
+CREATE INDEX idx_connector_webhook_deliveries_status
+  ON connector_webhook_deliveries(provider, status, received_at DESC);
+
+CREATE UNIQUE INDEX idx_connector_backend_active
+  ON connector_backends(active) WHERE active = 1;
+
+CREATE INDEX idx_ai_usage_events_provider_model
+  ON ai_usage_events(provider, model, started_at DESC);
+
+CREATE INDEX idx_task_origin_links_conversation
+  ON task_origin_links(conversation_id, created_at DESC);
+
+CREATE INDEX idx_task_collaboration_task_sequence
+  ON task_collaboration_entries(task_id, sequence);
+
+CREATE INDEX idx_task_collaboration_deliveries_pending
+  ON task_collaboration_deliveries(status, updated_at);
+
+CREATE INDEX idx_task_main_agent_links_agent_created
+  ON task_main_agent_links(agent_id, created_at DESC);
+
+CREATE INDEX idx_task_result_deliveries_pending
+  ON task_result_deliveries(status, next_attempt_at);
+
+CREATE INDEX idx_personal_requests_conversation ON personal_requests(conversation_id, created_at);
+
+CREATE INDEX idx_ai_usage_events_otel_trace ON ai_usage_events(otel_trace_id) WHERE otel_trace_id IS NOT NULL;
+
+CREATE INDEX idx_task_result_reply_pending ON task_result_deliveries(reply_status, reply_next_attempt_at, reply_lease_until);
+
+CREATE INDEX personal_attention_due ON personal_attention_threads(status, next_check_at);
+
+CREATE INDEX personal_wakeups_due ON personal_wakeups(status, next_attempt_at, not_before);
+
+CREATE INDEX personal_outreach_pending ON personal_outreach(state, created_at);
+
+CREATE INDEX personal_strategy_versions_thread ON personal_strategy_versions(thread_id, revision DESC);
+
+CREATE UNIQUE INDEX idx_browser_run_request ON browser_automation_runs(client_request_id) WHERE client_request_id IS NOT NULL;
+
+CREATE INDEX idx_clarification_notification_pending ON clarification_notification_outbox(status, created_at);
+
+CREATE INDEX idx_notification_deliveries_due ON notification_deliveries(status, next_attempt_at);
+
+CREATE INDEX idx_notification_deliveries_device ON notification_deliveries(device_id);
+
+CREATE INDEX device_grant_events_conversation ON device_grant_events(conversation_id, created_at_ms);
+
+CREATE UNIQUE INDEX idx_ai_usage_cloud_request
+  ON ai_usage_events(cloud_request_id) WHERE cloud_request_id IS NOT NULL;
+
+CREATE INDEX idx_voice_opening_greetings_created ON voice_opening_greetings(created_at);
+
+CREATE INDEX device_request_nonces_expiry ON device_request_nonces(expires_at);
+
+CREATE INDEX knowledge_revisions_item ON knowledge_revisions(knowledge_id, created_at);
+
+CREATE INDEX memory_learning_jobs_due ON memory_learning_jobs(state, next_attempt_at, lease_until);
+
+CREATE INDEX memory_source_learning_due ON memory_source_learning_jobs(state, next_attempt_at, lease_until);
+
+CREATE INDEX agent_selection_task ON agent_selection_records(task_id, created_at);
+
+CREATE INDEX agent_selection_request ON agent_selection_records(personal_request_id);
+
+CREATE INDEX agent_selection_origin ON agent_selection_records(conversation_id, created_at);
+
+CREATE INDEX idx_next_turn_feedback_created ON next_turn_suggestion_feedback(created_at);
+
+CREATE INDEX task_allocations_pending ON task_allocations(status, next_attempt_at, lease_expires_at);
+
+CREATE INDEX research_checkpoints_conversation ON research_checkpoints(conversation_id, updated_at);
+
+CREATE INDEX idx_personal_result_sections_order ON personal_result_sections(document_id, ordinal);
+
+CREATE INDEX idx_task_main_update_deliveries_pending
+  ON task_main_update_deliveries(status, updated_at);
+
+CREATE INDEX idx_composer_input_history_recent
+  ON composer_input_history(conversation_id, id DESC);
+
+CREATE INDEX idx_task_phase_changes_task ON task_phase_changes(task_id, task_version);
+
+CREATE TRIGGER session_creation_tombstone BEFORE DELETE ON sessions BEGIN
+  INSERT INTO session_tombstones(conversation_id, deleted_at)
+  VALUES (OLD.conversation_id, CAST(unixepoch('subsec') * 1000 AS INTEGER))
+  ON CONFLICT(conversation_id) DO NOTHING;
+  INSERT INTO session_preparation_cleanup(environment_id, conversation_id, not_before)
+  SELECT environment_id, conversation_id, max(lease_until, CAST(unixepoch('subsec') * 1000 AS INTEGER)) + 5000
+  FROM session_preparations WHERE conversation_id=OLD.conversation_id
+    AND json_extract(creation_json, '$.execution.mode')='managed_worktree'
+  ON CONFLICT(environment_id) DO NOTHING;
+END;
+
+CREATE TRIGGER assertion_evidence_snapshot_insert AFTER INSERT ON user_assertion_evidence BEGIN
+  UPDATE user_assertion_evidence SET content_hash = (SELECT content_hash FROM context_evidence WHERE evidence_id = NEW.evidence_id)
+    WHERE assertion_id = NEW.assertion_id AND evidence_id = NEW.evidence_id AND relation = NEW.relation;
+END;
+
+CREATE TRIGGER assertion_evidence_snapshot_update AFTER UPDATE OF confidence ON user_assertion_evidence BEGIN
+  UPDATE user_assertion_evidence SET content_hash = (SELECT content_hash FROM context_evidence WHERE evidence_id = NEW.evidence_id)
+    WHERE assertion_id = NEW.assertion_id AND evidence_id = NEW.evidence_id AND relation = NEW.relation;
+END;
+
+CREATE TRIGGER knowledge_chunk_insert AFTER INSERT ON knowledge_source_chunks BEGIN
+  INSERT INTO knowledge_chunks_fts(search_text, chunk_id) VALUES (xopc_memory_search_text(NEW.text), NEW.chunk_id);
+END;
+
+CREATE TRIGGER knowledge_chunk_delete AFTER DELETE ON knowledge_source_chunks BEGIN
+  DELETE FROM knowledge_chunks_fts WHERE chunk_id = OLD.chunk_id;
+END;
+
+CREATE TRIGGER knowledge_search_insert AFTER INSERT ON knowledge_items BEGIN
+  INSERT INTO knowledge_search_fts VALUES (xopc_memory_search_text(NEW.content), NEW.knowledge_id);
+END;
+
+CREATE TRIGGER knowledge_search_update AFTER UPDATE OF content ON knowledge_items BEGIN
+  DELETE FROM knowledge_search_fts WHERE knowledge_id = OLD.knowledge_id;
+  INSERT INTO knowledge_search_fts VALUES (xopc_memory_search_text(NEW.content), NEW.knowledge_id);
+END;
+
+CREATE TRIGGER knowledge_search_delete AFTER DELETE ON knowledge_items BEGIN
+  DELETE FROM knowledge_search_fts WHERE knowledge_id = OLD.knowledge_id;
+END;
+
+CREATE TRIGGER personal_result_documents_delete AFTER DELETE ON personal_result_documents BEGIN
+  DELETE FROM personal_result_search WHERE document_id = old.document_id;
+END;
+
+INSERT INTO work_discovery_onboarding VALUES (1,'not_started',NULL,NULL,NULL,0);
+INSERT INTO discussion_capture_settings VALUES ('default',1,NULL,CAST(unixepoch('subsec') * 1000 AS INTEGER));
+INSERT INTO connector_runtime_identity VALUES (1,lower(hex(randomblob(16))));

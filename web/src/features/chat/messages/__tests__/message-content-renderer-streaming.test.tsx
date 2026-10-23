@@ -136,7 +136,6 @@ describe('streaming assistant Markdown rendering', () => {
                 clusterLabels={clusterLabels}
                 cardLabels={cardLabels}
                 conversationId="side-chat-id"
-                workflowOptions={{ labels: {} as never }}
               />
             ) : null}
             <ChunkedContent

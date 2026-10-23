@@ -713,7 +713,6 @@ export class AutomationService {
           summary: task.summary,
           error: task.error,
           conversationId: task.conversationId ?? run.conversationId,
-          workflowRunId: task.workflowRunId,
           model: task.model,
         },
       );
@@ -723,7 +722,6 @@ export class AutomationService {
         summary: task.summary,
         error,
         conversationId: task.conversationId ?? run.conversationId,
-        workflowRunId: task.workflowRunId,
         model: task.model,
         deadlineAtMs: task.deadlineAtMs ?? run.deadlineAtMs,
         termination: task.termination ?? (status === 'succeeded'

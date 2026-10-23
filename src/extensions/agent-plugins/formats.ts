@@ -60,8 +60,8 @@ export function readPluginLayout(root: string, read: (path: string) => string, s
   const skillRoots = [...new Set(dialect === 'portable' ? defaults : dialect === 'claude' ? [...defaults, ...declared] : overlay.skills === undefined ? defaults : declared)];
   const mcpConfigs: unknown[] = [];
   if (dialect === 'portable' && has('mcp.json')) { const config = guarded('mcp', () => json('mcp.json'), undefined); if (config) mcpConfigs.push(config); }
-  const legacyDefault = has('.mcp.json');
-  if (dialect !== 'portable' && legacyDefault && (dialect === 'claude' || overlay.mcpServers === undefined)) { const config = guarded('mcp', () => json('.mcp.json'), undefined); if (config) mcpConfigs.push(config); }
+  const externalMcpConfig = has('.mcp.json');
+  if (dialect !== 'portable' && externalMcpConfig && (dialect === 'claude' || overlay.mcpServers === undefined)) { const config = guarded('mcp', () => json('.mcp.json'), undefined); if (config) mcpConfigs.push(config); }
   if (dialect !== 'portable' || !has('mcp.json')) {
     if (overlay.mcpServers !== undefined) {
       for (const item of Array.isArray(overlay.mcpServers) ? overlay.mcpServers : [overlay.mcpServers]) {
@@ -71,7 +71,7 @@ export function readPluginLayout(root: string, read: (path: string) => string, s
       }
     }
   }
-  for (const [key, conventional] of Object.entries({ apps: '.app.json', hooks: 'hooks/hooks.json', agents: 'agents', commands: 'commands', lspServers: '.lsp.json', outputStyles: 'output-styles', settings: 'settings.json', workflows: 'workflows', monitors: 'monitors', channels: 'channels', themes: 'themes' })) {
+  for (const [key, conventional] of Object.entries({ apps: '.app.json', hooks: 'hooks/hooks.json', agents: 'agents', commands: 'commands', lspServers: '.lsp.json', outputStyles: 'output-styles', settings: 'settings.json', monitors: 'monitors', channels: 'channels', themes: 'themes' })) {
     if (overlay[key] !== undefined || has(conventional)) compatibility.push({ component: key, support: key === 'apps' ? 'needs_adapter' : 'unsupported',
       message: key === 'apps' ? 'Platform application tools require a host capability adapter; accounts are not inherited.' : `${key} is not executed by this compatibility version.` });
   }
@@ -89,7 +89,7 @@ export function readPluginLayout(root: string, read: (path: string) => string, s
   const tasks = [ui.defaultPrompt].flat().filter((v): v is string => typeof v === 'string');
   if (overlay.onboardingSkill !== undefined) compatibility.push({ component: 'onboardingSkill', support: 'unsupported', message: 'Automatic onboarding skill execution is not supported; use the host setup flow.' });
   // Enumerate unknown declarations rather than silently claiming full compatibility.
-  const known = new Set(['$schema', 'name', 'version', 'description', 'author', 'homepage', 'repository', 'license', 'keywords', 'extensions', 'displayName', 'skills', 'mcpServers', 'interface', 'userConfig', 'onboardingSkill', 'apps', 'hooks', 'agents', 'commands', 'lspServers', 'outputStyles', 'settings', 'workflows', 'monitors', 'channels', 'themes']);
+  const known = new Set(['$schema', 'name', 'version', 'description', 'author', 'homepage', 'repository', 'license', 'keywords', 'extensions', 'displayName', 'skills', 'mcpServers', 'interface', 'userConfig', 'onboardingSkill', 'apps', 'hooks', 'agents', 'commands', 'lspServers', 'outputStyles', 'settings', 'monitors', 'channels', 'themes']);
   for (const key of Object.keys(overlay)) if (!known.has(key)) compatibility.push({ component: key, support: 'unsupported', message: 'Unrecognized platform declaration.' });
   return { descriptorVersion: 1, adapterVersion: 'xopc-plugin-v1', dialect, manifest, skillRoots, mcpConfigs, compatibility, userConfig, tasks };
 }

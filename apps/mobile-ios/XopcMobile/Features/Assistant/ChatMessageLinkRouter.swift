@@ -55,7 +55,6 @@ struct ChatMessageLinkDestination: View {
                                                })
             case "automations": AutomationDetailView(configuration: appState.gatewayConfiguration, automationID: id,
                                                      onOpenConversation: openConversation)
-            case "workflows": WorkflowRunDetailView(configuration: appState.gatewayConfiguration, runID: id)
             default: ChatLinkedFileView(link: link, configuration: appState.gatewayConfiguration, conversationID: appState.selectedConversation?.id)
             }
         case .workspaceFile, .managedFile:

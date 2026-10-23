@@ -15,38 +15,6 @@ import { bumpSessionInputRevision, getSessionInputById, getSessionInputState, in
 const log = createLogger('Connectors:Wait');
 const events = new EventEmitter();
 
-type ConnectionSessionContext = {
-  sessionType: string | null;
-  parentConversationId: string | null;
-  customData: Record<string, unknown>;
-};
-
-function getConnectionSessionContext(conversationId: string): ConnectionSessionContext | undefined {
-  const row = getSqliteDatabase().prepare(`SELECT session_type, parent_conversation_id, custom_data_json
-    FROM sessions WHERE conversation_id = ?`).get(conversationId) as {
-      session_type: string | null;
-      parent_conversation_id: string | null;
-      custom_data_json: string | null;
-    } | undefined;
-  if (!row) return undefined;
-  let customData: Record<string, unknown> = {};
-  if (row.custom_data_json) {
-    try {
-      const parsed = JSON.parse(row.custom_data_json) as unknown;
-      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-        customData = parsed as Record<string, unknown>;
-      }
-    } catch {
-      // Invalid metadata is treated as absent, matching the session row mapper.
-    }
-  }
-  return {
-    sessionType: row.session_type,
-    parentConversationId: row.parent_conversation_id,
-    customData,
-  };
-}
-
 export function onConnectionWaitChanged(listener: (conversationId: string) => void): () => void {
   events.on('changed', listener);
   return () => { events.off('changed', listener); };
@@ -211,19 +179,8 @@ export function connectionBindings(conversationId: string): ConnectionNeed[] {
       label: personalRequest.connectorId, capabilities: [], accountId: personalRequest.accountId,
       connectionId: account?.currentConnectionId }];
   }
-  let sessionContext = getConnectionSessionContext(conversationId);
-  if (sessionContext?.sessionType === 'workflow-subagent' && sessionContext.parentConversationId) {
-    sessionContext = getConnectionSessionContext(sessionContext.parentConversationId);
-  }
-  const workflowAccounts = sessionContext?.sessionType === 'workflow-run' ? sessionContext.customData.connectorAccounts : undefined;
-  if (workflowAccounts && typeof workflowAccounts === 'object' && !Array.isArray(workflowAccounts)) {
-    return Object.entries(workflowAccounts).flatMap(([connectorId, ids]) => Array.isArray(ids) ? ids.flatMap(id => {
-      if (typeof id !== 'string') return [];
-      const account = getConnectorAccount(id);
-      return [{ key: `${connectorId}:${id}`, target: { type: 'connector' as const, connectorId }, accountId: id, connectionId: account?.currentConnectionId,
-        label: account?.label ?? connectorId, capabilities: [] }];
-    }) : []);
-  }
+
+
   const state = getSessionInputState(conversationId);
   const input = state.activeInputId ? getSessionInputById(conversationId, state.activeInputId) : undefined;
   if (!input) return [];

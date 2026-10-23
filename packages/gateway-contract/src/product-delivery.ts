@@ -8,8 +8,6 @@ export const ProductReferenceKindSchema = z.enum([
   'task',
   'project',
   'note',
-  'workflow_definition',
-  'workflow_run',
   'automation',
   'local_app',
   'chat_preview',
@@ -145,10 +143,6 @@ export function productReferenceRoute(reference: ProductReference): string | nul
       return `/projects/${id}`;
     case 'note':
       return `/notes/${id}`;
-    case 'workflow_definition':
-      return `/workflows/${id}`;
-    case 'workflow_run':
-      return `/workflows/runs/${id}`;
     case 'automation':
       return `/automations?automation=${id}`;
     case 'local_app':

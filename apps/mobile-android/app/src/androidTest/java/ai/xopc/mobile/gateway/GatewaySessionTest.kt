@@ -559,7 +559,7 @@ class GatewaySessionTest {
         }
         progress.act(ProgressHomeAction("connector_decision", "Approve", "approval-1", "approve"))
         progress.act(ProgressHomeAction("retry_run", "Retry", subjectKind = "automation_run", runId = "run-1"))
-        progress.act(ProgressHomeAction("acknowledge_run", "Ignore", subjectKind = "workflow_run", runId = "run-2"))
+        progress.act(ProgressHomeAction("acknowledge_run", "Ignore", subjectKind = "automation_run", runId = "run-2"))
         assertEquals(listOf("/api/home/decisions/respond", "/api/home/attention/retry",
           "/api/home/attention/acknowledge"), fake.progressHomeActionPaths)
         assertEquals("task-2", progress.tasks().items.single().id)
@@ -577,7 +577,8 @@ class GatewaySessionTest {
         assertEquals("active", progress.command(startTask, "start", "fixed-start-command-key", " research ").phase)
         assertEquals(listOf("/api/tasks/task-2/commands", "/api/tasks/task-start/commands"), fake.progressCommandPaths)
         assertEquals(listOf("/api/home?locale=en", "/api/tasks?limit=50&offset=0",
-          "/api/tasks?limit=50&offset=0&search=alpha+beta", "/api/tasks/task-2", "/api/tasks/task-start"),
+          "/api/tasks?limit=50&offset=0&search=alpha+beta", "/api/tasks/task-2", "/api/tasks/task-2",
+          "/api/tasks/task-start", "/api/tasks/task-start"),
           fake.progressReadPaths)
         val automations = AutomationRepository(restored)
         assertEquals("Morning brief", automations.list().single().name)
@@ -639,7 +640,7 @@ class GatewaySessionTest {
         notes.delete(noteForMetadata, "55555555-6666-7777-8888-999999999999")
         assertEquals(listOf("/api/notes/note-1"), fake.noteDeletePaths)
         val activeRun = AutomationRunSummary("run-active", "auto-1", "Morning brief", "running",
-          null, null, null, null, 1000L, 1100L, null)
+          null, null, null, 1000L, 1100L, null)
         val cancellation = automations.cancelRun(activeRun)
         assertEquals(true, cancellation.accepted)
         assertEquals(false, cancellation.confirmed)
@@ -969,7 +970,7 @@ class GatewaySessionTest {
         path == "/api/gateway-identity/challenge" -> signed(JSONObject().put("purpose", "gateway-route-v1")
           .put("gatewayId", fakeId.toString()).put("nonce", input.getString("nonce"))
           .put("expiresAt", System.currentTimeMillis() + 30_000))
-        path == "/api/device-auth/refresh" -> signed(JSONObject().put("purpose", "device-refresh-v3")
+        path == "/api/device-auth/refresh" -> signed(JSONObject().put("purpose", "device-refresh-v3").put("requestProofVersion", 1)
           .put("gatewayId", fakeId.toString()).put("nonce", input.getString("nonce"))
           .put("requestId", input.getString("requestId")).put("expiresAt", System.currentTimeMillis() + 30_000)
           .put("tokens", JSONObject().put("accessToken", "access-test")
@@ -1259,7 +1260,7 @@ class GatewaySessionTest {
               assertEquals("run-1", input.getString("runId"))
             }
             else -> {
-              assertEquals("workflow_run", input.getString("kind"))
+              assertEquals("automation_run", input.getString("kind"))
               assertEquals("run-2", input.getString("runId"))
             }
           }
@@ -1297,8 +1298,14 @@ class GatewaySessionTest {
         }
         path == "/api/tasks/task-2" && method == "GET" -> {
           progressReadPaths += path
-          """{"ok":true,"task":{"id":"task-2","title":"Review task","phase":"review",
-            "priority":"high","updatedAt":43,"version":2},"allowedCommands":["close"]}"""
+          if ("/api/tasks/task-2/commands" in progressCommandPaths) {
+            """{"ok":true,"task":{"id":"task-2","title":"Review task","phase":"closed",
+              "resolution":"done","priority":"high","updatedAt":44,"closedAt":44,"version":3},
+              "allowedCommands":["reopen"]}"""
+          } else {
+            """{"ok":true,"task":{"id":"task-2","title":"Review task","phase":"review",
+              "priority":"high","updatedAt":43,"version":2},"allowedCommands":["close"]}"""
+          }
         }
         path == "/api/tasks/task-2/conversation" && method == "POST" ->
           """{"ok":true,"conversationId":"bbbbbbbb-cccc-dddd-eeee-ffffffffffff","created":false}"""
@@ -1349,8 +1356,13 @@ class GatewaySessionTest {
         }
         path == "/api/tasks/task-start" && method == "GET" -> {
           progressReadPaths += path
-          """{"ok":true,"task":{"id":"task-start","title":"Start task","phase":"ready",
-            "updatedAt":43,"version":5},"allowedCommands":["start"]}"""
+          if ("/api/tasks/task-start/commands" in progressCommandPaths) {
+            """{"ok":true,"task":{"id":"task-start","title":"Start task","phase":"active",
+              "updatedAt":44,"version":6},"allowedCommands":[]}"""
+          } else {
+            """{"ok":true,"task":{"id":"task-start","title":"Start task","phase":"ready",
+              "updatedAt":43,"version":5},"allowedCommands":["start"]}"""
+          }
         }
         path == "/api/tasks/task-2" && method == "PATCH" -> {
           progressEditPaths += path

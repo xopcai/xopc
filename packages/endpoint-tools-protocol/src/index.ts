@@ -23,7 +23,7 @@ export const turnOriginSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('channel'), channel: z.string().min(1).max(64) }),
   z.strictObject({
     type: z.literal('system'),
-    source: z.enum(['cli', 'automation', 'heartbeat', 'workflow', 'internal', 'task_update']),
+    source: z.enum(['cli', 'automation', 'heartbeat', 'task', 'internal', 'task_update']),
   }),
 ]);
 

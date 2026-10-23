@@ -62,10 +62,10 @@ describe('browser chat stream reducer', () => {
 
   it('keeps structured updates and their text delta', () => {
     let message = createStreamingMessage('run-1');
-    message = reduceRunEvent(message, event('tool_start', { toolCallId: 'one', toolName: 'workflow' }));
+    message = reduceRunEvent(message, event('tool_start', { toolCallId: 'one', toolName: 'custom_tool' }));
     message = reduceRunEvent(message, event('tool_update', {
       toolCallId: 'one',
-      toolName: 'workflow',
+      toolName: 'custom_tool',
       details: { phase: 'run' },
       textDelta: 'hello',
     }));

@@ -279,24 +279,18 @@ describe('buildAssistantTurnViewModel', () => {
       version: 2,
       operation: 'completed',
       primary: {
-        kind: 'workflow_run',
+        kind: 'task',
         id: 'run-1',
         title: 'Publish report',
         capabilities: ['open'],
       },
     };
     const view = buildAssistantTurnViewModel({
-      message: assistantMessage([{
-        type: 'tool_use',
-        id: 'workflow-1',
-        name: 'workflow',
-        status: 'done',
-        details: { delivery },
-      }]),
+      message: assistantMessage([{ type: 'tool_use', id: 'task-1', name: 'personal_task', status: 'done', result: JSON.stringify({ delivery }) }]),
       isStreaming: false,
       reasoningLevel: 'stream',
     });
 
-    expect(view.deliveries).toEqual([{ key: 'workflow-1', delivery }]);
+    expect(view.deliveries).toEqual([{ key: 'task-1', delivery }]);
   });
 });

@@ -2,7 +2,6 @@ import { describe, it, expect, vi } from 'vitest';
 import { SessionManager } from '@earendil-works/pi-coding-agent';
 
 import { guardSessionManager } from '../session-tool-result-guard.js';
-import { repairAssistantUsageInSessionManager } from '../session-manager-init.js';
 import { onSessionTranscriptUpdate } from '../../../session/transcript-events.js';
 import { transcriptRowsToClientHistory } from '../../../session/client-history.js';
 
@@ -76,20 +75,7 @@ describe('session-tool-result-guard', () => {
     unsubscribe();
   });
 
-  it('repairAssistantUsageInSessionManager fills missing usage on assistant rows', () => {
-    const sm = SessionManager.inMemory(process.cwd());
-    sm.appendMessage({
-      role: 'assistant',
-      content: [{ type: 'text', text: 'legacy' }],
-      timestamp: Date.now(),
-      stopReason: 'stop',
-    } as never);
-    repairAssistantUsageInSessionManager(sm);
-    const ctx = sm.buildSessionContext();
-    const assistant = ctx.messages.find((m) => m.role === 'assistant');
-    expect(assistant).toBeDefined();
-    expect((assistant as { usage?: { totalTokens?: number } }).usage?.totalTokens).toBe(0);
-  });
+
 
   it('keeps structured media when oversized tool details are sanitized', () => {
     const listener = vi.fn();

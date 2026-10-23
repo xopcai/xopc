@@ -97,7 +97,7 @@ describe('EndpointToolPolicy', () => {
     })).not.toThrow();
   });
 
-  it('keeps older, more restrictive mobile descriptors valid during gateway-first rollout', () => {
+  it('rejects retired mobile policy identifiers', () => {
     expect(() => policy.validateDescriptor('mobile', {
       name: 'mobile.contacts.pick', title: 'Pick', description: 'Pick a contact.',
       inputSchema: { type: 'object' }, outputSchema: ENDPOINT_CONTACT_OUTPUT_SCHEMA,
@@ -105,7 +105,7 @@ describe('EndpointToolPolicy', () => {
       confirmation: 'always', requiresForeground: true, requiredPermissions: ['contacts-read-selected'],
       timeoutMs: 1_000, maxConcurrency: 1, supportsCancellation: false, idempotent: false,
       resultKinds: ['json'],
-    })).not.toThrow();
+    })).toThrow();
   });
 
   it('rejects a known personal tool claiming a weaker policy', () => {

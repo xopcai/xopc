@@ -173,9 +173,7 @@ function eventTriggerLabel(trigger: Extract<AutomationTrigger, { kind: 'event' }
     return labels.trigger.taskBlockedWhen;
   }
   if (trigger.eventType === 'note.created') return labels.trigger.noteCreatedWhen;
-  if (trigger.eventType === 'workflow.run.completed' && trigger.payloadMatch?.status === 'failed') {
-    return labels.trigger.workflowFailedWhen;
-  }
+
   if (trigger.eventType === 'session.transcript.updated') return labels.trigger.sessionUpdatedWhen;
   return labels.trigger.eventWithType.replace('{type}', trigger.eventType);
 }

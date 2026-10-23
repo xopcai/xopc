@@ -84,11 +84,6 @@ struct AutomationRunDetailView: View {
                     .padding(.vertical, 8)
                 }
                 Section("执行结果") {
-                    if let workflowRunID = displayedRun.workflowRunId {
-                        NavigationLink(destination: WorkflowRunDetailView(configuration: configuration, runID: workflowRunID)) {
-                            Label("查看工作流", systemImage: "arrow.triangle.branch")
-                        }
-                    }
                     if let conversationID = displayedRun.conversationId {
                         Button("打开会话", systemImage: "bubble.left.and.bubble.right") {
                             Task { await openConversation(conversationID) }

@@ -217,7 +217,7 @@ it('exposes async select, confirm, and input dialogs to TUI extensions', async (
 
     registry.addTuiRegistration('demo', (host) => {
       host.registerShortcut('c', 'Custom overlay', async () => {
-        const result = await host.custom<string>((finish) => {
+        const result = await host.custom<string>((_tui, _theme, _keybindings, finish) => {
           done = finish;
           return {
             dispose,

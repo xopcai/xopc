@@ -5,8 +5,8 @@ import { safeInternalReturnPath, withDetailReturnTo, withReturnTo } from '../nav
 describe('navigation return paths', () => {
   it('accepts only the configured internal route families', () => {
     expect(safeInternalReturnPath('/chat/session-1', '/projects', ['/chat'])).toBe('/chat/session-1');
-    expect(safeInternalReturnPath('/projects/p-1/workflows?returnTo=%2Fchat%2Fs-1', '/', ['/projects', '/chat']))
-      .toBe('/projects/p-1/workflows?returnTo=%2Fchat%2Fs-1');
+    expect(safeInternalReturnPath('/projects/p-1/tasks?returnTo=%2Fchat%2Fs-1', '/', ['/projects', '/chat']))
+      .toBe('/projects/p-1/tasks?returnTo=%2Fchat%2Fs-1');
     expect(safeInternalReturnPath('/projects-old/p-1', '/', ['/projects'])).toBe('/');
   });
 
@@ -18,8 +18,8 @@ describe('navigation return paths', () => {
 
   it('appends an encoded return path while preserving query and hash segments', () => {
     expect(withReturnTo('/tasks/g-1', '/chat/s-1')).toBe('/tasks/g-1?returnTo=%2Fchat%2Fs-1');
-    expect(withReturnTo('/workflows?run=r-1#result', '/chat/s-1'))
-      .toBe('/workflows?run=r-1&returnTo=%2Fchat%2Fs-1#result');
+    expect(withReturnTo('/automations?automation=a-1#result', '/chat/s-1'))
+      .toBe('/automations?automation=a-1&returnTo=%2Fchat%2Fs-1#result');
   });
 
   it('preserves a project task-board origin', () => {

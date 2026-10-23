@@ -381,13 +381,6 @@ private struct TasksView: View {
                 }
             }
         }
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                NavigationLink { WorkflowRunsView(configuration: configuration) } label: {
-                    Image(systemName: "arrow.triangle.branch").frame(width: 44, height: 44)
-                }.accessibilityLabel("工作流")
-            }
-        }
         .refreshable { await load() }
         .task { await load() }
         .alert("无法读取任务", isPresented: errorBinding) {

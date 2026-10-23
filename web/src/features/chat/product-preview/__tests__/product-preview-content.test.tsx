@@ -8,7 +8,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({ project: vi.fn(), run: vi.fn(), definitions: vi.fn(), automations: vi.fn(), runs: vi.fn(), app: vi.fn(), snapshot: vi.fn() }));
 vi.mock('@/features/projects/api', () => ({ fetchProject: mocks.project }));
-vi.mock('@/features/workflows/workflow-api', () => ({ getWorkflowRun: mocks.run, listWorkflowDefinitions: mocks.definitions }));
 vi.mock('@/features/automations/automation-api', () => ({ automationApi: { list: mocks.automations, runs: mocks.runs } }));
 vi.mock('@/features/local-apps/api', () => ({ getLocalApp: mocks.app, getLocalAppSnapshot: mocks.snapshot }));
 
@@ -23,8 +22,6 @@ beforeEach(() => {
   useLocaleStore.setState({ language: 'en' });
   container = document.createElement('div'); document.body.append(container); root = createRoot(container);
   mocks.project.mockResolvedValue({ name: 'Project plan', status: 'active', health: 'on_track', brief: 'Build a calendar', successCriteria: ['Ship it'], milestones: [], recentUpdates: [{ summary: 'Design complete' }] });
-  mocks.run.mockResolvedValue({ run: { title: 'Research run', status: 'failed', error: { message: 'Provider offline' }, metrics: { doneAgentCount: 1, agentCount: 2 }, result: { summary: 'Findings ready' } }, phases: [{ id: 'p1', title: 'Research', status: 'completed' }] });
-  mocks.definitions.mockResolvedValue([{ id: 'research', title: 'Research workflow', description: 'Investigate a topic', metadata: {}, phases: [{ id: 'p1', title: 'Collect evidence' }] }]);
   mocks.automations.mockResolvedValue({ automations: [{ id: 'a1', name: 'Morning digest', enabled: true, trigger: { kind: 'manual' }, action: { kind: 'agent', instruction: 'Summarize updates' }, state: {} }] });
   mocks.runs.mockResolvedValue({ runs: [{ id: 'r1', status: 'succeeded', createdAtMs: 1, summary: 'Digest delivered' }] });
   mocks.app.mockResolvedValue({ id: 'app1', name: 'Calendar', idea: 'Plan a week', draftPreviewUrl: '/api/local-apps/preview/token/ui/index.html', installationState: 'installed', enabled: true, status: 'installed', extensionId: 'calendar' });
@@ -48,17 +45,8 @@ describe('chat product previews', () => {
     expect(container.textContent).toContain('Design complete');
     expect(container.querySelector('button, input, textarea')).toBeNull();
   });
-  it('shows run results, failure reason, and preserves the owner', async () => {
-    await render('/workflows/runs/r1?agentId=coder');
-    expect(container.textContent).toContain('Findings ready');
-    expect(container.querySelector('[role="alert"]')?.textContent).toBe('Provider offline');
-    expect(mocks.run).toHaveBeenCalledWith('r1', { ownerAgentId: 'coder' });
-  });
-  it('previews a definition without exposing editing controls', async () => {
-    await render('/workflows/research');
-    expect(container.textContent).toContain('Collect evidence');
-    expect(container.querySelector('textarea, [contenteditable="true"]')).toBeNull();
-  });
+
+
   it('shows automation instructions and recent execution results', async () => {
     await render('/automations?automation=a1');
     expect(container.textContent).toContain('Summarize updates');
@@ -83,8 +71,8 @@ describe('chat product previews', () => {
     expect(container.querySelector('[aria-busy="true"]')).not.toBeNull();
   });
   it('handles unavailable content', async () => {
-    mocks.definitions.mockResolvedValueOnce([]);
-    await render('/workflows/missing');
+    mocks.project.mockResolvedValueOnce(null);
+    await render('/projects/missing');
     expect(container.textContent).toContain('unavailable');
   });
   it('surfaces fetching errors', async () => {
@@ -93,10 +81,10 @@ describe('chat product previews', () => {
     expect(container.querySelector('[role="alert"]')?.textContent).toContain('Unable to load');
   });
   it('provides a full page link and closes on Escape', async () => {
-    const onClose = await render('/workflows/runs/r1?agentId=coder', true);
+    const onClose = await render('/projects/p1?agentId=coder', true);
     const dialog = document.querySelector('[role="dialog"]')!;
     const href = dialog.querySelector('a')?.getAttribute('href');
-    expect(href).toBe('/workflows/runs/r1?agentId=coder&returnTo=%2Fchat%2Fc1%3Fview%3Dfull');
+    expect(href).toBe('/projects/p1?agentId=coder&returnTo=%2Fchat%2Fc1%3Fview%3Dfull');
     act(() => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })));
     expect(onClose).toHaveBeenCalledOnce();
   });

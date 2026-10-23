@@ -12,7 +12,7 @@ Tools let an Agent do more than produce text: read files, search the web, run co
 | Browser | Interact with websites | Acting in signed-in accounts |
 | Memory | Find user-owned context and past information | Revealing private context to a model |
 | Messaging and media | Send messages, files, speech, or images | External side effects and cost |
-| Automation and workflows | Start repeatable or scheduled work | Unattended actions |
+| Automation | Start repeatable or scheduled work | Unattended actions |
 | Delegation or code runtime | Split work or execute generated code | Broader compute and access |
 
 Actual availability depends on the installation, Agent policy, credentials, and optional dependencies.
@@ -33,7 +33,7 @@ If a tool is installed but not available, the Agent policy may deny it. If the A
 - Restrict file tools to the intended workspace.
 - Require confirmation before irreversible or externally visible actions.
 - Use a separate Agent for high-trust capabilities rather than enabling everything on the default Agent.
-- Review unattended Workflow and Automation tool access separately.
+- Review unattended Automation tool access separately.
 
 ## Optional setup
 

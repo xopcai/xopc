@@ -89,7 +89,6 @@ describe('image_generate tool — Step 2 input wiring', () => {
         },
         skills: { mode: 'all-enabled', exclude: [] },
         tools: {},
-        workflows: {},
         runtime: {},
       },
       agents: [{ id: 'main', enabled: true }, { id: 'studio', enabled: true }],

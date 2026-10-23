@@ -142,9 +142,6 @@ export function createAgentStreamMessagingCallbacks(opts: {
       if (!shouldApplyStreamUpdate(chatId)) return;
       store().appendUserMessageIfMissing(chatId, message);
     },
-    onWorkflowRunStarted: () => {
-      window.dispatchEvent(new CustomEvent('workflow-run-started-from-chat', { detail: { conversationId: chatId } }));
-    },
     onStreamStart: (turnId, startsNewBubble, taskTrigger) => {
       markChatRunRunning(chatId);
       beforeAssistantDelta();
@@ -206,9 +203,6 @@ export function createAgentStreamMessagingCallbacks(opts: {
       });
     },
     onToolUpdate: (toolName, toolCallId, details) => {
-      // Mid-run structured update — currently only the `workflow` tool emits
-      // these; the WorkflowCard reads `block.details` first and falls back to
-      // `block.result` once `tool_end` arrives.
       beforeAssistantDelta();
       store().mutateSessionStreaming(chatId, (msg) => {
         updateToolDetails(msg.content, toolName, toolCallId, details);

@@ -35,7 +35,7 @@
 | [MemoryAgentBench](https://github.com/HUST-AI-HYZ/MemoryAgentBench) | 增量多轮：准确检索、测试时学习、长程理解、选择性遗忘 | P1/P2 补充纠错与增量学习 | 部分任务来自通用长上下文材料，不直接对应个人记忆；选择性遗忘不等于产品删除/撤权 |
 | [BEAM](https://github.com/mohammadtavakoli78/BEAM) | 100 段对话、2,000 个问题，多种记忆能力；官方列出 128K/500K/1M/10M 档 | P2 测历史规模增长、干扰和成本曲线 | 首期不跑 10M；合成材料与现实数据分布仍有距离 |
 | [MemoryArena](https://memoryarena.github.io/) | 多会话、互相依赖的任务，早期行动经验影响后续行动 | P2，检验记忆是否提高任务成功，而非只提高 QA | 需要环境与工具适配，行动失败要与记忆失败分开 |
-| [LongMemEval-V2](https://github.com/xiaowu0162/LongMemEval-V2) | 环境状态、变化追踪、工作流经验、陷阱和前提意识 | P2，面向 specialist 经验复用 | 是 web-agent 经验评测，不是 V1 个人聊天数据的扩容版 |
+| [LongMemEval-V2](https://github.com/xiaowu0162/LongMemEval-V2) | 环境状态、变化追踪经验、陷阱和前提意识 | P2，面向 specialist 经验复用 | 是 web-agent 经验评测，不是 V1 个人聊天数据的扩容版 |
 
 ### 数据与许可落地
 

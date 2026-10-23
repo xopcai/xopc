@@ -159,16 +159,3 @@ export interface GatewayService {
   /** Read command configuration */
   readCommand: (env?: GatewayServiceEnv) => Promise<GatewayServiceCommandConfig | null>;
 }
-
-// ─── Legacy Compat ───
-
-export interface DaemonInstallResult {
-  success: boolean;
-  serviceName?: string;
-  error?: string;
-}
-
-export interface DaemonActionResult {
-  success: boolean;
-  detail?: string;
-}

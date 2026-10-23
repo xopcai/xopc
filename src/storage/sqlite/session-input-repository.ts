@@ -417,7 +417,7 @@ export function recoverSessionInputState(): string[] {
     const keys = db.prepare(`SELECT DISTINCT conversation_id FROM session_inputs WHERE status IN ('queued','running','injecting')`)
       .all() as Array<{ conversation_id: string }>;
     const now = Date.now();
-    // Adopt legacy messages and refresh in-flight bindings saved by older gateways.
+    // Rebind interrupted current inputs to their active connection barrier.
     db.prepare(`UPDATE session_inputs SET payload_json = (
       SELECT json_object('waitId', wait.id, 'objectiveRevision', json_extract(wait.data_json, '$.objectiveRevision'), 'connectionBarrier', json('true'))
       FROM session_connection_waits wait JOIN sessions session ON session.active_transcript_id = wait.transcript_id

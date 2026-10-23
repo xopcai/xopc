@@ -31,13 +31,6 @@ describe('provider usage scope', () => {
     expect(withModelUsageOrigin('interactive', () => modelUsageOriginForCall({ operation: 'session.generate_title' }))).toBe('background');
   });
 
-  it('lets synchronous workflow children inherit the user scope, while an independent workflow is background', () => {
-    const origin = { type: 'system', source: 'workflow' } as const;
-    expect(modelUsageOriginFromTurn(origin)).toBe('background');
-    expect(withModelUsageOrigin('interactive', () => modelUsageOriginFromTurn(origin))).toBe('interactive');
-    expect(withModelUsageOrigin('background', () => modelUsageOriginFromTurn(origin))).toBe('background');
-  });
-
   it('classifies host origins, including user CLI and scheduled automation', () => {
     expect(modelUsageOriginFromTurn({ type: 'system', source: 'cli' })).toBe('interactive');
     expect(modelUsageOriginFromTurn({ type: 'system', source: 'automation' })).toBe('background');

@@ -38,7 +38,6 @@ export class EndpointToolPolicyError extends Error {}
 
 interface TrustedToolContract {
   policyId: string;
-  legacyPolicyIds: string[];
   inputSchema?: Record<string, unknown>;
   outputSchema: Record<string, unknown>;
   resultKinds: EndpointResultKind[];
@@ -50,22 +49,21 @@ function contract(
   outputSchema: Record<string, unknown>,
   resultKinds: EndpointResultKind[],
   permissions: string[],
-  legacyPolicyIds: string[] = [],
   inputSchema?: Record<string, unknown>,
 ): TrustedToolContract {
-  return { policyId, legacyPolicyIds, inputSchema, outputSchema, resultKinds, permissions };
+  return { policyId, inputSchema, outputSchema, resultKinds, permissions };
 }
 
 const POLICY_BY_TOOL: Readonly<Record<string, TrustedToolContract>> = {
   ...Object.fromEntries(['mobile', 'desktop', 'web', 'browser'].flatMap(kind => [
-    [`${kind}.device.get_state`, contract('public.background-read', DEVICE_STATE_OUTPUT_SCHEMA, ['json'], [], [], DEVICE_EMPTY_INPUT_SCHEMA)],
-    [`${kind}.device.get_power`, contract('public.background-read', DEVICE_POWER_OUTPUT_SCHEMA, ['json'], [], [], DEVICE_EMPTY_INPUT_SCHEMA)],
+    [`${kind}.device.get_state`, contract('public.background-read', DEVICE_STATE_OUTPUT_SCHEMA, ['json'], [], DEVICE_EMPTY_INPUT_SCHEMA)],
+    [`${kind}.device.get_power`, contract('public.background-read', DEVICE_POWER_OUTPUT_SCHEMA, ['json'], [], DEVICE_EMPTY_INPUT_SCHEMA)],
   ])),
   ...Object.fromEntries(['mobile', 'desktop', 'web'].map(kind =>
-    [`${kind}.device.get_location`, contract('personal.foreground-read', LOCATION_OUTPUT_SCHEMA, ['json'], ['location-read-once'], [], LOCATION_INPUT_SCHEMA)])),
-  'desktop.bridge.list_resources': contract('public.background-read', BRIDGE_LIST_OUTPUT_SCHEMA, ['json'], [], [], DEVICE_EMPTY_INPUT_SCHEMA),
-  'desktop.bridge.read_sensor': contract('public.background-read', BRIDGE_READ_OUTPUT_SCHEMA, ['json'], [], [], BRIDGE_READ_INPUT_SCHEMA),
-  'desktop.computer.control': contract('computer.session-scoped', COMPUTER_OUTPUT_SCHEMA, ['json', 'file'], ['computer-control'], [], COMPUTER_INPUT_SCHEMA),
+    [`${kind}.device.get_location`, contract('personal.foreground-read', LOCATION_OUTPUT_SCHEMA, ['json'], ['location-read-once'], LOCATION_INPUT_SCHEMA)])),
+  'desktop.bridge.list_resources': contract('public.background-read', BRIDGE_LIST_OUTPUT_SCHEMA, ['json'], [], DEVICE_EMPTY_INPUT_SCHEMA),
+  'desktop.bridge.read_sensor': contract('public.background-read', BRIDGE_READ_OUTPUT_SCHEMA, ['json'], [], BRIDGE_READ_INPUT_SCHEMA),
+  'desktop.computer.control': contract('computer.session-scoped', COMPUTER_OUTPUT_SCHEMA, ['json', 'file'], ['computer-control'], COMPUTER_INPUT_SCHEMA),
   'web.file.pick': contract('personal.foreground-read', ENDPOINT_FILE_OUTPUT_SCHEMA, ['file'], ['file-read']),
   'web.file.download': contract('user.foreground-write', ENDPOINT_TEXT_OUTPUT_SCHEMA, ['text'], ['file-download']),
   'web.page.get_selection': contract('public.foreground-read', ENDPOINT_TEXT_OUTPUT_SCHEMA, ['text'], []),
@@ -77,46 +75,21 @@ const POLICY_BY_TOOL: Readonly<Record<string, TrustedToolContract>> = {
   'desktop.clipboard.read': contract('personal.foreground-read', ENDPOINT_TEXT_OUTPUT_SCHEMA, ['text'], ['clipboard-read']),
   'desktop.clipboard.write': contract('user.foreground-write', ENDPOINT_TEXT_OUTPUT_SCHEMA, ['text'], ['clipboard-write']),
   'desktop.app.open_external': contract('user.foreground-write', ENDPOINT_TEXT_OUTPUT_SCHEMA, ['text'], ['open-external-url']),
-  'mobile.contacts.pick': contract(
-    'personal.foreground-mediated-read',
-    ENDPOINT_CONTACT_OUTPUT_SCHEMA,
-    ['json'],
-    ['contacts-read-selected'],
-    ['personal.foreground-read'],
-  ),
+  'mobile.contacts.pick': contract('personal.foreground-mediated-read', ENDPOINT_CONTACT_OUTPUT_SCHEMA, ['json'], ['contacts-read-selected']),
   'mobile.contacts.search': contract('personal.foreground-read', ENDPOINT_CONTACT_LIST_OUTPUT_SCHEMA, ['json'], ['contacts-read']),
   'mobile.contacts.get': contract('personal.foreground-read', ENDPOINT_CONTACT_OUTPUT_SCHEMA, ['json'], ['contacts-read']),
-  'mobile.file.pick': contract(
-    'personal.foreground-mediated-read',
-    ENDPOINT_FILE_OUTPUT_SCHEMA,
-    ['file'],
-    ['file-read'],
-    ['personal.foreground-read'],
-  ),
+  'mobile.file.pick': contract('personal.foreground-mediated-read', ENDPOINT_FILE_OUTPUT_SCHEMA, ['file'], ['file-read']),
   ...Object.fromEntries(PERSONAL_TOOL_NAMES.map(name => {
     const descriptor = personalDescriptor(name);
-    return [name, contract(descriptor.policyId, descriptor.outputSchema, descriptor.resultKinds, descriptor.requiredPermissions, ['mobile.file.pick', 'mobile.contacts.pick'].includes(name) ? ['personal.foreground-read'] : [], ['mobile.file.pick', 'mobile.contacts.pick'].includes(name) ? undefined : descriptor.inputSchema)];
+    return [name, contract(descriptor.policyId, descriptor.outputSchema, descriptor.resultKinds, descriptor.requiredPermissions, ['mobile.file.pick', 'mobile.contacts.pick'].includes(name) ? undefined : descriptor.inputSchema)];
   })),
-  'mobile.file.share': contract(
-    'user.foreground-mediated-write',
-    ENDPOINT_TEXT_OUTPUT_SCHEMA,
-    ['text'],
-    ['file-share'],
-    ['user.foreground-write'],
-  ),
+  'mobile.file.share': contract('user.foreground-mediated-write', ENDPOINT_TEXT_OUTPUT_SCHEMA, ['text'], ['file-share']),
   'mobile.notification.show': contract('user.foreground-write', ENDPOINT_TEXT_OUTPUT_SCHEMA, ['text'], ['notifications']),
   'mobile.device.get_info': contract('public.background-read', ENDPOINT_TEXT_OUTPUT_SCHEMA, ['text'], []),
   'mobile.clipboard.write': contract('user.foreground-write', ENDPOINT_TEXT_OUTPUT_SCHEMA, ['text'], ['clipboard-write']),
   'mobile.app.open_url': contract('user.foreground-write', ENDPOINT_TEXT_OUTPUT_SCHEMA, ['text'], ['open-external-url']),
-  'browser.control': contract(
-    'browser.control',
-    BROWSER_CONTROL_ENDPOINT_OUTPUT_SCHEMA,
-    ['json'],
-    ['browser-control'],
-    [],
-    BROWSER_CONTROL_ENDPOINT_INPUT_SCHEMA,
-  ),
-  'browser.recording': contract('browser.control', BROWSER_CONTROL_ENDPOINT_OUTPUT_SCHEMA, ['json'], ['browser-control'], [], BROWSER_RECORDING_ENDPOINT_INPUT_SCHEMA),
+  'browser.control': contract('browser.control', BROWSER_CONTROL_ENDPOINT_OUTPUT_SCHEMA, ['json'], ['browser-control'], BROWSER_CONTROL_ENDPOINT_INPUT_SCHEMA),
+  'browser.recording': contract('browser.control', BROWSER_CONTROL_ENDPOINT_OUTPUT_SCHEMA, ['json'], ['browser-control'], BROWSER_RECORDING_ENDPOINT_INPUT_SCHEMA),
 };
 
 export class EndpointToolPolicy {
@@ -128,7 +101,7 @@ export class EndpointToolPolicy {
     }
     const contract = POLICY_BY_TOOL[descriptor.name];
     if (!contract) throw new EndpointToolPolicyError(`Tool ${descriptor.name} has no trusted server policy`);
-    if (descriptor.policyId !== contract.policyId && !contract.legacyPolicyIds.includes(descriptor.policyId)) {
+    if (descriptor.policyId !== contract.policyId) {
       throw new EndpointToolPolicyError(`Tool ${descriptor.name} does not match its trusted server policy`);
     }
     if (

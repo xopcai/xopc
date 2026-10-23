@@ -14,10 +14,8 @@ import {
   MessageSquareText,
   LayoutTemplate,
   NotebookPen,
-  Play,
   Settings,
   Target,
-  Workflow,
 } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useEffect } from 'react';
@@ -44,8 +42,6 @@ const KIND_ICON = {
   task: Target,
   project: FolderKanban,
   note: NotebookPen,
-  workflow_definition: Workflow,
-  workflow_run: Play,
   automation: Bot,
   local_app: AppWindow,
   chat_preview: LayoutTemplate,
@@ -106,7 +102,7 @@ function taskDeliveryMeta(
 
 function continuePrompt(reference: ProductReference, language: 'en' | 'zh'): string {
   const labels = messages(language).chat.productDelivery;
-  return labels.continuePrompt.replace(/\{\{(kind|title|id)\}\}/g, (_match, key: 'kind' | 'title' | 'id') => ({
+  return labels.continuePrompt.replace(/\{\{(kind|title|id)\}\}/g, (_match: string, key: 'kind' | 'title' | 'id') => ({
     kind: language === 'en' ? labels.kinds[reference.kind].toLowerCase() : labels.kinds[reference.kind],
     title: reference.title,
     id: reference.id,

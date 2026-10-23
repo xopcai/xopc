@@ -57,7 +57,6 @@ Open **You** to inspect automatically maintained understanding, edit it, or dele
 | Create and edit assistants | **Agents** |
 | Organize ongoing work | **Projects** or **Tasks** |
 | Connect Telegram, Weixin, or Feishu | **Channels** |
-| Create repeated work | **Workflows** or **Automations** |
 | Inspect a problem | **Settings → Logs** |
 | Pair another device | **Settings → Remote access** |
 | Check for updates | **Settings → Gateway** |

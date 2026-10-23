@@ -23,7 +23,7 @@ export async function registerExtensionCliCommands(program: Command): Promise<vo
   const ctx = createDefaultContext(process.argv, {});
   // Command discovery runs before Commander's preAction hook. Initialize the
   // Agent catalog before config validation discovers channel extensions.
-  bootstrapApplicationStateSync(ctx.configPath);
+  bootstrapApplicationStateSync();
   const config = loadConfig(ctx.configPath);
   const workspace = getWorkspacePath(config) || ctx.workspacePath;
 

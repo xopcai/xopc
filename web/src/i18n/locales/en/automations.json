@@ -21,7 +21,6 @@
     "paused": "Paused",
     "last": "Last",
     "next": "Next",
-    "workflowPrefix": "workflow",
     "loading": "Loading...",
     "selectRun": "Select a run to view its result.",
     "timeline": "Technical log",
@@ -79,7 +78,6 @@
     },
     "sources": {
       "agent": "Agent",
-      "workflow": "Workflow",
       "task": "Task",
       "browser": "Browser"
     },
@@ -95,7 +93,7 @@
       "latestResult": "Latest result",
       "result": "Result",
       "runHistory": "Run history",
-      "runHistoryDescription": "Review previous runs and open the session or workflow behind each result.",
+      "runHistoryDescription": "Review previous runs and open the session behind each result.",
       "allRuns": "Run history",
       "backToAutomations": "Back to automations",
       "runCenterDescription": "Review execution across automations, then open a run for results and diagnostics.",
@@ -116,7 +114,6 @@
       "resultPending": "This run is in progress. The result will appear here, or you can open the conversation to follow along.",
       "noResult": "This run did not return a displayable result.",
       "openConversation": "View full conversation",
-      "openWorkflow": "View workflow run",
       "runInfo": "Run info",
       "technicalEvents": "Technical log",
       "technicalEventsDescription": "System events and raw data for troubleshooting. You normally do not need these.",
@@ -171,10 +168,7 @@
       "noteCreatedPrompt": "When a note is created, run an agent to classify the note, identify useful follow-up actions, and summarize any tasks. Trigger on note.created from notes. Keep it safe: only write a short recommendation unless the user later approves edits.",
       "taskBlockedTitle": "Automate blocker diagnosis",
       "taskBlockedDescription": "When this task gets blocked, ask an agent to diagnose why and propose the next concrete step.",
-      "taskBlockedPrompt": "When a task requires attention because it is blocked, run an agent to diagnose the blocker and suggest the next concrete step. Trigger on task.attention_required.v2 from tasks with payloadMatch reason=blocked. Use the task title: {{title}}. Do not change the task automatically unless the user configures that explicitly.",
-      "workflowFailedTitle": "Automate failed-run recovery",
-      "workflowFailedDescription": "When this workflow fails, let xopc inspect the run and draft a repair or retry plan.",
-      "workflowFailedPrompt": "When a workflow run completes with status failed, run an agent to inspect the workflow run, summarize the failure, and propose a recovery plan. Trigger on workflow.run.completed from workflows with payloadMatch status=failed. Use the run id: {{runId}} and definition id: {{definitionId}}. Do not retry automatically unless the user explicitly configures it."
+      "taskBlockedPrompt": "When a task requires attention because it is blocked, run an agent to diagnose the blocker and suggest the next concrete step. Trigger on task.attention_required.v2 from tasks with payloadMatch reason=blocked. Use the task title: {{title}}. Do not change the task automatically unless the user configures that explicitly."
     },
     "explain": {
       "whyRan": "Why it ran",
@@ -184,7 +178,6 @@
       "payloadMatched": "Matched {pairs}",
       "noPayloadFilter": "No payload filter",
       "actionAgent": "Runs agent action",
-      "actionWorkflow": "Runs workflow {workflowId}",
       "safetyMode": "Safety: {mode}",
       "manual": "Manual trigger",
       "schedule": "Scheduled trigger",
@@ -195,7 +188,6 @@
       "title": "Triggered automations",
       "open": "Open",
       "chat": "Chat",
-      "workflow": "Workflow",
       "rerun": "Run again",
       "pause": "Pause rule",
       "working": "Working...",
@@ -234,11 +226,6 @@
         "name": "Daily agent briefing",
         "description": "Ask an agent to prepare a daily summary.",
         "instruction": "Prepare my daily briefing."
-      },
-      "morningWorkflow": {
-        "name": "Run workflow every morning",
-        "description": "Start a workflow on a fixed daily schedule.",
-        "formName": "Morning workflow"
       },
       "webhookAgent": {
         "name": "Webhook to agent",
@@ -322,7 +309,6 @@
       "webhook": "Webhook",
       "taskBlocked": "Task blocked",
       "noteCreated": "Note created",
-      "workflowFailed": "Workflow failed",
       "sessionUpdated": "Session updated",
       "customEvent": "Custom product event",
       "eventWithType": "Runs when the {type} event occurs",
@@ -331,16 +317,13 @@
       "webhookWhen": "Runs when a webhook request arrives",
       "taskBlockedWhen": "Runs when an task becomes blocked",
       "noteCreatedWhen": "Runs when a note is created",
-      "workflowFailedWhen": "Runs when a workflow fails",
       "sessionUpdatedWhen": "Runs when session content changes"
     },
     "action": {
       "agent": "Agent",
       "agentWithId": "Agent: {id}",
-      "workflowWithId": "Workflow: {id}",
       "taskWithId": "Task: {id}",
       "runAgent": "Run Agent",
-      "runWorkflow": "Run Workflow",
       "runTask": "Run Task"
     },
     "status": {
@@ -359,7 +342,7 @@
       "createFlowHint": "Complete the rule in three steps: trigger, action, then safety and results.",
       "rulePreview": "Current rule",
       "triggerStepDescription": "Choose when this automation starts: on a schedule, event, webhook, or manually.",
-      "actionStepDescription": "Choose what an agent, workflow, task, or browser automation does after the trigger.",
+      "actionStepDescription": "Choose what an agent, task, or browser automation does after the trigger.",
       "name": "Name",
       "description": "Description",
       "project": "Project",
@@ -399,9 +382,6 @@
       "noTasks": "No runnable tasks",
       "taskClosed": "completed",
       "taskContextHint": "Each run uses the task definition, constraints, acceptance criteria, and attached context.",
-      "workflow": "Workflow",
-      "loadingWorkflows": "Loading workflows...",
-      "noWorkflows": "No workflows",
       "triggeredRun": "Runs on trigger",
       "goal": "Goal",
       "safety": "Safety mode",

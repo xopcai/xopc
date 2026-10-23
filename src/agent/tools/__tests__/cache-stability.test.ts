@@ -17,14 +17,4 @@ describe('sortToolsForPromptCache', () => {
     ]);
     expect(input[0]?.name).toBe('write');
   });
-
-  it('preserves the gateway discovery workflow order', () => {
-    const tools = ['xopc_tool_execute', 'xopc_tool_search', 'xopc_tool_describe']
-      .map((name) => ({ name, description: name }));
-    expect(sortToolsForPromptCache(tools).map((tool) => tool.name)).toEqual([
-      'xopc_tool_search',
-      'xopc_tool_describe',
-      'xopc_tool_execute',
-    ]);
-  });
 });

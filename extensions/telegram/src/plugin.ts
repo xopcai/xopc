@@ -170,8 +170,6 @@ export class TelegramChannelPlugin implements ChannelPlugin<TelegramResolvedAcco
   private commandHandler!: ReturnType<typeof createTelegramCommandHandler>;
   private inboundProcessor!: ReturnType<typeof createInboundProcessor>;
   private sessionModelHooks?: ChannelPluginSessionModelHooks;
-  /** Unregister fn for the workflow-progress capability registered against the global broker. */
-  private workflowProgressUnregister: (() => void) | null = null;
   private inboundCoalescer = createTelegramInboundCoalescer();
   private execApprovalUnregister: (() => void) | null = null;
 
@@ -209,7 +207,6 @@ export class TelegramChannelPlugin implements ChannelPlugin<TelegramResolvedAcco
       }),
     );
 
-    await this.registerWorkflowProgressCapability();
 
     const debounceMs =
       this.defaults.queue?.debounceMs ?? TELEGRAM_CHANNEL_DEFAULTS.queue.debounceMs;
@@ -226,18 +223,6 @@ export class TelegramChannelPlugin implements ChannelPlugin<TelegramResolvedAcco
     });
 
     log.debug('Telegram plugin initialized');
-  }
-
-  private async registerWorkflowProgressCapability(): Promise<void> {
-    // Lazy-load workflow progress so channel runtime startup does not pull the
-    // whole workflow/agent/provider graph into Electron's dynamic extension path.
-    const [{ getWorkflowProgressBroker }, { createTelegramWorkflowProgressCapability }] = await Promise.all([
-      import('@xopcai/xopc/agent/workflow/progress-broker.js'),
-      import('./workflow-progress.js'),
-    ]);
-    this.workflowProgressUnregister = getWorkflowProgressBroker().registerChannel(
-      createTelegramWorkflowProgressCapability(this.accountManager),
-    );
   }
 
   private bindOutboundComponents(): void {
@@ -452,8 +437,6 @@ export class TelegramChannelPlugin implements ChannelPlugin<TelegramResolvedAcco
     // account). A per-account stop still leaves other accounts capable of
     // sending progress through the same registered cap.
     if (!accountId) {
-      this.workflowProgressUnregister?.();
-      this.workflowProgressUnregister = null;
       this.execApprovalUnregister?.();
       this.execApprovalUnregister = null;
     }

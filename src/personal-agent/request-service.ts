@@ -113,7 +113,7 @@ export function submitPersonalRequest(input: {
       const selection = requestAssessment(request, selected);
       new AgentSelectionRepository().create({ conversationId: request.conversationId, key: `personal-request:${requestId}`,
         requestHash: selectionRequestHash({ requestId, agentId: request.executorAgentId }), ...selection,
-        source: input.selectionReason ? 'snapshot' : 'legacy', reasonSource: input.selectionReason ? 'model' : 'system',
+        source: input.selectionReason ? 'snapshot' : 'snapshot', reasonSource: input.selectionReason ? 'model' : 'system',
         reason: input.selectionReason ?? 'Connected-app executor selected; account authorization is managed by Personal Request',
         requestId, status: 'pending_connection' });
     }
@@ -173,7 +173,7 @@ function startPersonalRequest(request: PersonalRequest, accountId: string): Pers
   const submitted = selections.find(request.conversationId, `personal-request:${request.requestId}`);
   const record = selections.create({ conversationId: request.conversationId, key: `personal-request-start:${request.requestId}`,
     requestHash: selectionRequestHash({ requestId: request.requestId, accountId }), ...selection,
-    source: 'legacy', reasonSource: 'system', reason: 'Selected executor and account revalidated after authorization',
+    source: 'snapshot', reasonSource: 'system', reason: 'Selected executor and account revalidated after authorization',
     previousSelectionId: submitted?.id, requestId: request.requestId, status: 'task_linked' });
   const contract = defineTaskContract(request.objective, locale);
   contract.constraints = constraints;

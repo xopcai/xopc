@@ -15,7 +15,7 @@ export const SESSION_SOURCE_CHANNELS = {
 
 export const SESSION_SOURCES = [...Object.keys(SESSION_SOURCE_CHANNELS), 'other'] as SessionSource[];
 export type SessionSource = keyof typeof SESSION_SOURCE_CHANNELS | 'other';
-export const SESSION_PURPOSES = ['chat', 'automation', 'workflow', 'subagent', 'system'] as const;
+export const SESSION_PURPOSES = ['chat', 'automation', 'subagent', 'system'] as const;
 export type SessionPurpose = typeof SESSION_PURPOSES[number];
 
 export interface SessionIdentityInput {
@@ -55,8 +55,7 @@ export function resolveSessionIdentity(session: SessionIdentityInput): {
   if (custom.origin === 'automation' || custom.triggerSource === 'automation' || session.sessionType === 'cron') source = 'automation';
   if (session.sessionType === 'heartbeat') source = 'system';
   const purpose: SessionPurpose = source === 'system' ? 'system'
-    : session.sessionType === 'workflow-subagent' ? 'subagent'
-    : session.sessionType === 'workflow-run' ? 'workflow'
+    : session.sessionType === 'subagent' ? 'subagent'
     : source === 'automation' ? 'automation' : 'chat';
   return { source, purpose, automatic: source === 'automation' || source === 'system' };
 }

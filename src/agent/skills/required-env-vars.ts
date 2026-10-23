@@ -1,5 +1,5 @@
 /**
- * Parse Hermes-style `required_environment_variables` and legacy / xopc `requires.env` into a deduped name list.
+ * Parse Hermes-style `required_environment_variables` and xopc `requires.env` into a deduped name list.
  */
 
 import { normalizeStringList } from './skill-tool-gating.js';

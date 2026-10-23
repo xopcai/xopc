@@ -7,7 +7,7 @@ import type {
   HomeWorkbenchItem,
 } from '@xopcai/gateway-contract';
 
-import { listGatewayAgents } from '../gateway/agents-admin.js';
+
 import {
   DEFAULT_AUTOMATION_TIMEOUT_SECONDS,
   type Automation,
@@ -21,24 +21,10 @@ import {
   listConnectorApprovals,
   type HomeAttentionSubjectKind,
 } from '../storage/sqlite/index.js';
-import type { WorkflowRunSummary } from '../workflows/domain/index.js';
-import type { WorkflowRunService } from '../workflows/service/workflow-run-service.js';
 import { TaskRepository, type TaskAggregate } from './task-repository.js';
 import { TaskRunRepository } from './task-run-repository.js';
 import { TaskReadModelProjector, type TaskReadModel } from './task-read-model-projector.js';
 import { AttentionGovernor } from './attention-governor.js';
-
-type HomeWorkflowRun = {
-  id: string;
-  definitionId: string;
-  title: string;
-  status: WorkflowRunSummary['status'];
-  conversationId?: string;
-  createdAtMs: number;
-  startedAtMs?: number;
-  completedAtMs?: number;
-  metrics: WorkflowRunSummary['metrics'];
-};
 
 type HomeAutomation = {
   id: string;
@@ -61,21 +47,6 @@ interface HomeGatewayPort {
       routing?: { agentId?: string };
     } | null>;
   };
-  createWorkflowRunService(): WorkflowRunService;
-}
-
-function toHomeWorkflowRun(run: WorkflowRunSummary): HomeWorkflowRun {
-  return {
-    id: run.id,
-    definitionId: run.definitionId,
-    title: run.title,
-    status: run.status,
-    conversationId: run.metadata?.conversationId,
-    createdAtMs: run.createdAtMs,
-    startedAtMs: run.startedAtMs,
-    completedAtMs: run.completedAtMs,
-    metrics: run.metrics,
-  };
 }
 
 function triggerLabel(automation: Automation): string {
@@ -90,7 +61,7 @@ function triggerLabel(automation: Automation): string {
 }
 
 function actionLabel(automation: Automation): string {
-  if (automation.action.kind === 'workflow') return `workflow:${automation.action.workflowId}`;
+
   if (automation.action.kind === 'browser_automation') return `browser-automation:${automation.action.automationId}`;
   if (automation.action.kind === 'task_command') return `task:${automation.action.command.type}`;
   if (automation.action.kind === 'system') return `system:${automation.action.capability}`;
@@ -130,10 +101,7 @@ function attentionDetail(
       ? `运行超过 ${duration}，系统已停止本次执行。`
       : `The run exceeded ${duration} and was stopped.`;
   }
-  if (isChinese) return kind === 'automation_run' ? '自动化未能完成，请查看详情后重试。' : '工作流未能完成，请查看详情后重试。';
-  return kind === 'automation_run'
-    ? 'The automation did not complete. Review the details and retry.'
-    : 'The workflow did not complete. Review the details and retry.';
+  return isChinese ? '自动化未能完成，请查看详情后重试。' : 'The automation did not complete. Review the details and retry.';
 }
 
 export function decisionFromTask(
@@ -217,7 +185,6 @@ function homeActionCopy(locale?: string) {
         runningTask: '任务正在推进',
         waitingTask: '等待条件',
         dependencyRecommendation: '先查看并处理依赖任务，再继续推进。',
-        runningWorkflow: '工作流正在推进',
         scheduled: '下一项定时工作',
         inputRecommendation: '建议补充所需信息，让工作继续推进。',
         approvalRecommendation: '建议先确认操作范围；符合预期后允许本次操作。',
@@ -236,7 +203,6 @@ function homeActionCopy(locale?: string) {
         runningTask: 'Task in progress',
         waitingTask: 'Waiting',
         dependencyRecommendation: 'Resolve the dependency before continuing.',
-        runningWorkflow: 'Workflow in progress',
         scheduled: 'Next scheduled work',
         inputRecommendation: 'Provide the missing information so the work can continue.',
         approvalRecommendation: 'Confirm the operation scope, then allow it if it matches your intent.',
@@ -267,7 +233,6 @@ export function buildHomeWorkbench(input: {
   locale?: string;
   decisions: HomeDecision[];
   attention: HomeAttention[];
-  activeWorkflowRuns: HomeWorkflowRun[];
   runningTasks: TaskAggregate[];
   waitingTaskReasons?: Record<string, string>;
   scheduled: HomeAutomation[];
@@ -335,27 +300,6 @@ export function buildHomeWorkbench(input: {
       runId: item.runId,
     }],
   }));
-  const workflows = input.activeWorkflowRuns.map((run): HomeWorkbenchItem => {
-    const openAction: HomeAction = {
-      type: 'open',
-      label: copy.viewProgress,
-      href: run.conversationId
-        ? `/chat/${encodeURIComponent(run.conversationId)}`
-        : `/workflows?runId=${encodeURIComponent(run.id)}`,
-    };
-    return {
-      id: `workflow:${run.id}`,
-      kind: 'running',
-      title: run.title,
-      summary: copy.runningWorkflow,
-      statusLabel: run.metrics.agentCount > 0
-        ? `${run.metrics.doneAgentCount}/${run.metrics.agentCount}`
-        : undefined,
-      updatedAt: run.startedAtMs ?? run.createdAtMs,
-      openAction,
-      secondaryActions: [],
-    };
-  });
   const tasks = input.runningTasks.map((task): HomeWorkbenchItem => {
     const openAction: HomeAction = {
       type: 'open',
@@ -391,7 +335,7 @@ export function buildHomeWorkbench(input: {
   });
   failures.sort((left, right) => right.updatedAt - left.updatedAt);
   const needsUser = [...decisions, ...failures];
-  const allBackground = [...workflows, ...tasks, ...scheduled];
+  const allBackground = [...tasks, ...scheduled];
   return {
     needsUser,
     background: allBackground,
@@ -410,16 +354,10 @@ export class HomeQueryService {
   ) {}
 
   async getSnapshot(locale?: string, includeAll = false): Promise<HomeResponse> {
-    const agents = await listGatewayAgents();
-    const defaultAgent = agents.agents.find((agent) => agent.id === agents.defaultId) ?? agents.agents[0];
-    const workflowRunStore = this.service.createWorkflowRunService()
-      .createRunStore(defaultAgent?.id ?? agents.defaultId);
     const nowMs = Date.now();
     const tasks = this.#tasks.list({ limit: 60 });
     const activeRuns = this.service.sessions.listActiveRuns();
-
-    const [workflowRuns, automations, automationRuns, projects, connectorApprovals, activeRunSessions] = await Promise.all([
-      workflowRunStore.listRunSummaries(20),
+    const [automations, automationRuns, projects, connectorApprovals, activeRunSessions] = await Promise.all([
       this.service.automationServiceInstance.list(),
       this.service.automationServiceInstance.listRuns({ limit: 10 }),
       this.service.projects.list({ limit: 500 }),
@@ -445,13 +383,6 @@ export class HomeQueryService {
       .sort((left, right) => right.updatedAt - left.updatedAt);
     const activeTasks = tasks.filter((task) => task.phase !== 'closed');
     const projectsById = new Map(projects.items.map((project) => [project.id, project]));
-    const activeWorkflowRuns = workflowRuns
-      .filter((run) => run.status === 'queued' || run.status === 'running')
-      .map(toHomeWorkflowRun);
-    const failedWorkflowRuns = workflowRuns
-      .filter((run) => run.status === 'failed' || run.status === 'timeout')
-      .slice(0, 5)
-      .map(toHomeWorkflowRun);
     const upcomingAutomations = automations
       .filter((automation) => automation.delivery.notificationPolicy !== 'none')
       .map(toHomeAutomation)
@@ -485,19 +416,6 @@ export class HomeQueryService {
     ];
 
     const attentionCandidates: HomeAttention[] = [
-      ...failedWorkflowRuns
-        .filter((run) => !isHomeAttentionAcknowledged('workflow_run', run.id))
-        .map((run): HomeAttention => ({
-          id: `workflow_run:${run.id}`,
-          kind: 'workflow_run',
-          runId: run.id,
-          title: run.title,
-          detail: attentionDetail('workflow_run', run.status === 'timeout' ? 'timeout' : 'failed', locale),
-          reason: run.status === 'timeout' ? 'run_timeout' : 'run_failed',
-          href: `/workflows?runId=${encodeURIComponent(run.id)}`,
-          updatedAt: run.completedAtMs ?? run.startedAtMs ?? run.createdAtMs,
-          conversationId: run.conversationId,
-        })),
       ...latestAutomationRuns
         .filter((run) => run.status === 'failed' || run.status === 'timeout')
         .filter((run) => automationsById.get(run.automationId)?.delivery.notificationPolicy !== 'none')
@@ -542,7 +460,6 @@ export class HomeQueryService {
       locale,
       decisions,
       attention,
-      activeWorkflowRuns,
       runningTasks,
       waitingTaskReasons,
       scheduled: upcomingAutomations,

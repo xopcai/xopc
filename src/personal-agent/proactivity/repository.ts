@@ -301,9 +301,7 @@ export function preparationStrategy(threadId: string, now = Date.now()): 'brief'
     const preparation = (JSON.parse(latest.after_json) as StrategySnapshot).preparation;
     return preparation && preparation.reviewAt > now ? preparation.value : null;
   }
-  const legacy = getSqliteDatabase().prepare('SELECT value FROM personal_adaptive_strategies WHERE thread_id = ? AND review_at > ? ORDER BY created_at DESC, rowid DESC LIMIT 1')
-    .get(threadId, now);
-  return legacy?.value as 'brief' | 'thorough' | undefined ?? null;
+  return null;
 }
 export function strategyState(threadId: string, now = Date.now()) {
   const versions = getSqliteDatabase().prepare('SELECT * FROM personal_strategy_versions WHERE thread_id = ? ORDER BY revision DESC LIMIT 5')
@@ -315,9 +313,7 @@ export function strategyState(threadId: string, now = Date.now()) {
 }
 function strategySnapshot(thread: AttentionThread, now: number): StrategySnapshot {
   const latest = latestStrategy(thread.id);
-  const legacy = getSqliteDatabase().prepare('SELECT value,review_at FROM personal_adaptive_strategies WHERE thread_id = ? AND review_at > ? ORDER BY created_at DESC, rowid DESC LIMIT 1').get(thread.id, now);
-  const preparation = latest ? (JSON.parse(latest.after_json) as StrategySnapshot).preparation
-    : legacy ? { value: legacy.value as 'brief' | 'thorough', reviewAt: Number(legacy.review_at) } : null;
+  const preparation = latest ? (JSON.parse(latest.after_json) as StrategySnapshot).preparation : null;
   return { status: thread.status, nextCheckAt: thread.next_check_at, pauseUntil: thread.pause_until,
     preparation: preparation && preparation.reviewAt > now ? preparation : null };
 }

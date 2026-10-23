@@ -53,7 +53,7 @@ describe('runGatewayAgent', () => {
     rmSync(stateDir, { recursive: true, force: true });
   });
 
-  it.each(['heartbeat', 'automation', 'workflow', 'internal', 'task_update'] as const)(
+  it.each(['heartbeat', 'automation', 'internal', 'task_update'] as const)(
     'uses the actual %s input origin instead of user-like session metadata when starting a task turn', async source => {
       const conversationId = 'd3dcfc3b-3238-4056-8feb-c95014705996';
       const catalog = new AgentCatalogRepository();

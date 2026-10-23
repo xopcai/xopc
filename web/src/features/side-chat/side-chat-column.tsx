@@ -148,8 +148,8 @@ export function SideChatColumn({ parentConversationId, embedded = false, visible
     () => allTabs.filter((tab) => tab.parentConversationId === parentConversationId),
     [allTabs, parentConversationId],
   );
-  const legacyActiveId = useSideChatStore((state) => state.panes[parentConversationId]?.activeId ?? null);
-  const activeId = embedded ? workspace?.activeId?.replace(/^side:/, '') : legacyActiveId;
+  const standaloneActiveId = useSideChatStore((state) => state.panes[parentConversationId]?.activeId ?? null);
+  const activeId = embedded ? workspace?.activeId?.replace(/^side:/, '') : standaloneActiveId;
   const pendingCreate = useSideChatStore((state) => state.pendingCreate);
   const requestCreate = useSideChatStore((state) => state.requestCreate);
   const claimPendingCreate = useSideChatStore((state) => state.claimPendingCreate);

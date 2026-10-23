@@ -23,7 +23,6 @@ describe('agent profile', () => {
         },
         skills: { mode: 'selected', include: ['research', 'writing'] },
         tools: { exec_command: { mode: 'ask', timeoutMs: 10_000 } },
-        workflows: {},
         runtime: { maxTurns: 8 },
       },
       agents: [

@@ -22,12 +22,7 @@ export type TextAssistFormat = 'markdown' | 'plain';
 export type TextAssistScenario =
   | 'generic.text'
   | 'cron.message'
-  | 'cron.workflowGoal'
-  | 'workflow.arg'
-  | 'workflow.goal'
-  | 'automation.instruction'
-  | 'automation.workflowGoal'
-  | 'automation.workflowInput';
+  | 'automation.instruction';
 
 export interface TextAssistRequest {
   scenario?: TextAssistScenario | string;
@@ -105,51 +100,6 @@ const SCENARIOS: Record<TextAssistScenario, TextAssistScenarioDefinition> = {
       'Do not add unsupported delivery channels, tools, or external facts.',
     ],
   },
-  'cron.workflowGoal': {
-    id: 'cron.workflowGoal',
-    system:
-      'You rewrite goals for workflow runs triggered by cron jobs. The workflow already defines the procedure; the field should define the desired task.',
-    userGuidance: [
-      'Make the goal concrete, bounded, and easy to verify.',
-      'Include success criteria and important constraints when they are implied by the input or context.',
-      'Avoid detailed step-by-step instructions unless the user already provided them as constraints.',
-    ],
-    outputRules: [
-      'Preserve workflow names, IDs, argument values, links, file paths, variables, and factual constraints.',
-      'Do not invent business goals, external facts, or workflow capabilities.',
-      'If the input is empty, draft a goal from the workflow description and cron context.',
-    ],
-  },
-  'workflow.arg': {
-    id: 'workflow.arg',
-    system:
-      'You improve a single workflow argument value. The argument is one input field, not the whole workflow goal.',
-    userGuidance: [
-      'Improve only this argument value according to its label and workflow context.',
-      'Make the value clearer, better structured, and easier for the workflow to consume.',
-      'Do not rewrite it as an overall goal unless the field label says it is a goal.',
-    ],
-    outputRules: [
-      'Preserve names, IDs, links, file paths, variables, placeholders, and factual constraints.',
-      'Do not alter other workflow arguments.',
-      'If the input is empty, draft a concise value only when the context gives enough signal.',
-    ],
-  },
-  'workflow.goal': {
-    id: 'workflow.goal',
-    system:
-      'You rewrite goals for workflow runs started manually by a user. The workflow already defines the procedure; the goal defines the desired task for this run.',
-    userGuidance: [
-      'Make the goal concrete, bounded, and easy to verify.',
-      'Include success criteria and important constraints when implied by the input or workflow context.',
-      'Avoid step-by-step instructions unless the user already provided them as constraints.',
-    ],
-    outputRules: [
-      'Preserve workflow names, IDs, argument values, links, file paths, variables, and factual constraints.',
-      'Do not invent workflow capabilities, external facts, or hidden state.',
-      'If the input is empty, draft a goal from the workflow description and current inputs.',
-    ],
-  },
   'automation.instruction': {
     id: 'automation.instruction',
     system:
@@ -163,36 +113,6 @@ const SCENARIOS: Record<TextAssistScenario, TextAssistScenarioDefinition> = {
       'Preserve names, IDs, links, file paths, variables, placeholders, and factual constraints.',
       'Do not invent tools, credentials, channels, or external facts.',
       'If the input is empty, draft an instruction only from the provided automation context.',
-    ],
-  },
-  'automation.workflowGoal': {
-    id: 'automation.workflowGoal',
-    system:
-      'You rewrite goals for workflow runs triggered by automations. The workflow defines the procedure; the goal defines the desired task.',
-    userGuidance: [
-      'Make the goal concrete, bounded, and easy to verify after the run.',
-      'Include success criteria and important constraints when implied by the input or context.',
-      'Respect the automation trigger; do not restate it unless it changes what the workflow should produce.',
-    ],
-    outputRules: [
-      'Preserve workflow names, IDs, argument values, links, file paths, variables, and factual constraints.',
-      'Do not invent workflow capabilities, business goals, external facts, or hidden state.',
-      'If the input is empty, draft a goal from the workflow description and automation context.',
-    ],
-  },
-  'automation.workflowInput': {
-    id: 'automation.workflowInput',
-    system:
-      'You improve one structured workflow input field for an automation-triggered workflow run.',
-    userGuidance: [
-      'Improve only this field value according to its schema, label, and workflow context.',
-      'Make the value clear, structured, and easy for the workflow to consume.',
-      'Avoid turning a field value into an overall goal unless the schema says the field is a goal.',
-    ],
-    outputRules: [
-      'Preserve names, IDs, links, file paths, variables, placeholders, and factual constraints.',
-      'Return only the field value, not JSON, commentary, or surrounding labels.',
-      'Do not alter other workflow inputs.',
     ],
   },
 };
@@ -263,8 +183,8 @@ function scenarioFromRequest(request: TextAssistRequest): TextAssistScenarioDefi
 
   const fieldId = request.field?.id;
   if (fieldId === 'cron.message') return SCENARIOS['cron.message'];
-  if (fieldId === 'workflow.goal') return SCENARIOS['cron.workflowGoal'];
-  if (fieldId?.startsWith('workflow.arg.')) return SCENARIOS['workflow.arg'];
+
+
 
   if (requested) {
     log.warn({ scenario: requested, fieldId }, 'Unknown AI text assist scenario; using generic prompt');

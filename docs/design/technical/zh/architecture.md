@@ -25,7 +25,7 @@ Gateway；Web 控制台和移动端通过 HTTP 与统一实时 WebSocket API 和
 |------|----------|------|
 | CLI 与服务启动 | `src/cli/`、`src/daemon/`、`electron/` | 启动前台 Gateway，安装或控制后台服务，运行 CLI/TUI 回合，并承载 Electron shell。 |
 | HTTP 与实时 Gateway | `src/gateway/server.ts`、`src/gateway/hono/`、`src/realtime/` | Hono REST 服务、认证、CORS/CSRF 检查、限流、统一实时 WebSocket，以及静态 Web 控制台。 |
-| Gateway 组合根 | `src/gateway/service.ts` | 持有 `MessageBus`、`ChannelManager`、`AgentService`、`SessionIndex`、Task、自动化、笔记、项目、工作流、扩展加载、实时 broker 与配置热重载。 |
+| Gateway 组合根 | `src/gateway/service.ts` | 持有 `MessageBus`、`ChannelManager`、`AgentService`、`SessionIndex`、Task、自动化、笔记、项目、扩展加载、实时 broker 与配置热重载。 |
 | 智能体运行时 | `src/agent/service.ts`、`src/agent/embedded/`、`src/agent/orchestration/` | 构建按会话划分的智能体、Prompt、工具、记忆、技能、MCP 工具、模型选择、流事件、压缩与直接/Webchat 回合调度。 |
 | 频道 | `src/channels/`、`extensions/telegram`、`extensions/weixin`、`extensions/feishu` | 频道插件接收外部消息，规范化路由与 session key，发布入站总线消息，并发送出站回复。 |
 | 扩展运行时 | `src/extensions/`、`extensions/*` | 按激活计划加载扩展 manifest 与代码，并注册 hooks、tools、channel plugins、gateway methods 与扩展 UI assets。 |
@@ -58,13 +58,6 @@ Gateway；Web 控制台和移动端通过 HTTP 与统一实时 WebSocket API 和
 CLI 命令通过 `src/cli/registry.ts` 注册。`agent` 和 `tui` 命令可以不经过
 HTTP 服务直接运行回合；`gateway` 命令启动的则是与 Web 控制台、移动端共用的
 `GatewayService`/Hono 栈。
-
-### Task、自动化、心跳与工作流
-
-`GatewayService` 将 Task 聚合与执行协调器、`AutomationService`、
-`HeartbeatService` 和 `WorkflowRunService` 连接到同一套 `AgentService` 与
-`SessionStore`。Task 持有工作状态，Workflow 与 Automation 只是关联的执行能力。
-定时或事件触发的工作作为普通智能体回合执行，持久化 transcript，并发送实时事件。
 
 ## 智能体运行时
 
@@ -136,7 +129,7 @@ xopc 有两个 MCP 方向：
 
 其它路由组通过 lazy route bundles 挂载，包括 agents、automations、browser、
 channels、connectors/MCP、config、home、tasks、logs、models、notes、projects、shares、skills、
-update、voice、workflows、workspace 以及相关设置页面。
+update、voice、workspace 以及相关设置页面。
 
 持久消息通过 `src/realtime/` 的 broker 和 `/api/realtime/v1/ws` 传递。
 

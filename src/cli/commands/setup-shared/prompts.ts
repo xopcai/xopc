@@ -24,8 +24,8 @@ export function isInteractive(): boolean {
 }
 
 /**
- * Detect `@inquirer/prompts` Ctrl+C cancellation. Matches both the modern
- * `ExitPromptError` name and the legacy `prompt was cancelled` message.
+ * Detect `@inquirer/prompts` Ctrl+C cancellation. Recognizes the external
+ * library error name and cancellation message.
  */
 export function isPromptCancelled(error: unknown): boolean {
   if (!error || typeof error !== 'object') return false;

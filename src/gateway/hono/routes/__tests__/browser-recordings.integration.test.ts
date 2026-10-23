@@ -1,3 +1,4 @@
+import { signedDeviceHeaders } from '../../../security/__tests__/signed-device-headers.js';
 import { generateKeyPairSync, randomUUID } from 'node:crypto';
 import type { AddressInfo } from 'node:net';
 import { Hono } from 'hono';
@@ -16,8 +17,9 @@ useTestDatabase();
 it('serves recording ingestion, verification and runs over authenticated HTTP through lazy bundles', async () => {
   resetLazyRouteBundlesForTests();
   const browser = new BrowserAutomationService(async () => ({ ok: true, result: { url: 'https://example.com' }, businessOutcome: 'completed' }));
+  const keys = generateKeyPairSync('ec', { namedCurve: 'P-256' });
   createDevice({ id: 'chrome-device', displayName: 'Chrome', platform: 'chrome', extensionId: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', scopes: ['device.self'],
-    publicKeyJwk: generateKeyPairSync('ec', { namedCurve: 'P-256' }).publicKey.export({ format: 'jwk' }) });
+    publicKeyJwk: keys.publicKey.export({ format: 'jwk' }) });
   const tokens = issueDeviceTokenPair('chrome-device');
   const app = new Hono();
   let endpoints: Array<{ endpointId: string; displayName: string; principalId: string; kind: string; tools: Array<{ descriptor: { name: string } }> }> = [];
@@ -35,10 +37,14 @@ it('serves recording ingestion, verification and runs over authenticated HTTP th
   const server = serve({ fetch: app.fetch, hostname: '127.0.0.1', port: 0 });
   if (!server.listening) await new Promise<void>((resolve) => server.once('listening', resolve));
   const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
-  const post = (path: string, body: unknown, token?: string, claim = 'current-claim') => fetch(base + path, { method: 'POST',
+  const fetchAuthenticated = (target: string, init: RequestInit = {}) => {
+    const headers = Object.fromEntries(new Headers(init.headers).entries());
+    return fetch(target, { ...init, headers: headers.authorization === `Bearer ${tokens.accessToken}` ? signedDeviceHeaders(keys.privateKey, tokens.accessToken, new URL(target).pathname + new URL(target).search, init.method ?? 'GET', typeof init.body === 'string' ? init.body : '', headers) : headers });
+  };
+  const post = (path: string, body: unknown, token?: string, claim = 'current-claim') => fetchAuthenticated(base + path, { method: 'POST',
     headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}), 'x-endpoint-id': 'chrome', 'x-endpoint-claim': claim }, body: JSON.stringify(body) });
   try {
-    const availability = async (token = 'test-owner') => (await fetch(`${base}/api/browser/recordings/availability`, { headers: { Authorization: `Bearer ${token}` } })).json();
+    const availability = async (token = 'test-owner') => (await fetchAuthenticated(`${base}/api/browser/recordings/availability`, { headers: { Authorization: `Bearer ${token}` } })).json();
     expect(await availability()).toEqual({ state: 'connect_required', endpoints: [] });
     const disconnected = await post('/api/browser/recordings/control', { operation: 'start' }, 'test-owner');
     expect(disconnected.status).toBe(409);
@@ -68,7 +74,7 @@ it('serves recording ingestion, verification and runs over authenticated HTTP th
     const run = (await running.json()).run;
     const retry = await (await post(`/api/browser/automations/${saved.automation.id}/run`, { inputs: {}, clientRequestId: 'run-once' }, 'test-owner')).json();
     expect(retry.run.id).toBe(run.id);
-    const versions = await fetch(`${base}/api/browser/automations/${saved.automation.id}/versions`, { headers: { Authorization: 'Bearer test-owner' } });
+    const versions = await fetchAuthenticated(`${base}/api/browser/automations/${saved.automation.id}/versions`, { headers: { Authorization: 'Bearer test-owner' } });
     expect(versions.status).toBe(200);
     expect((await versions.json()).versions).toHaveLength(1);
   } finally { await browser.shutdown(); await new Promise<void>((resolve) => server.close(() => resolve())); resetLazyRouteBundlesForTests(); }

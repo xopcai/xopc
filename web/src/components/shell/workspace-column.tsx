@@ -77,10 +77,10 @@ export const WorkspaceColumn = memo(function WorkspaceColumn({ elevated = false,
   const [pendingTrash, setPendingTrash] = useState<TreeEntry | null>(null);
   const [pendingDelete, setPendingDelete] = useState<TreeEntry | null>(null);
   const previewPath = useWorkspacePreviewStore((s) => s.path);
-  const legacySetPreviewPath = useWorkspacePreviewStore((s) => s.setPath);
+  const setWorkspacePreviewPath = useWorkspacePreviewStore((s) => s.setPath);
   const setPreviewPath = useCallback((path: string | null) => {
-    legacySetPreviewPath(path, null, projectId, chatConversationId);
-  }, [chatConversationId, legacySetPreviewPath, projectId]);
+    setWorkspacePreviewPath(path, null, projectId, chatConversationId);
+  }, [chatConversationId, setWorkspacePreviewPath, projectId]);
   const selectedAgentId = useWorkspaceEditorAgentStore((s) => s.agentId);
   const workspaceAgentId = scope?.agentId ?? selectedAgentId;
 

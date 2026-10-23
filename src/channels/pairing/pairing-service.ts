@@ -19,11 +19,6 @@ import {
   resolveStandardPairingPath,
 } from './paths.js';
 
-// `PairingPendingView` moved to `./pairing-types.js` (leaf) so
-// `plugins/types.adapters.ts` and other lower-level callers can reference it
-// without forming a `types.adapters → pairing-service → security → plugin-types
-// → types.adapters` cycle. Re-exported here for backward-compat.
-export { type PairingPendingView } from './pairing-types.js';
 import type { PairingPendingView } from './pairing-types.js';
 
 export type ChannelPairingState = {

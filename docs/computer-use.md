@@ -33,7 +33,7 @@ Only fresh post-action frames are reused, for up to five seconds and only inside
 
 For structured function-tool models, `run` can request a conditional plan of two to six native button presses. Before consuming a queued continuation, the executor takes up to three additional post-action observations until two consecutive snapshots agree. Unstable or failed capture hands off with the completed receipt; it never replays that input. These extra checks avoid mistaking an unfinished render for the next step's state. Before each press, the executor checks an exact expected native display value, resolves the button's current ref, and uses the ordinary broker authorization and fresh target/state check. It proceeds only after the previous dispatch completed and its post-action state matches the current observation. Ambiguous/missing/disabled targets, unexpected display values, changed state, read-only mode or a new call discard the plan. Coordinates, key sequences, arbitrary text entry and saved historical refs are excluded. Partial AX text can supply an exact positive static-text guard; it never proves absence or global uniqueness. Unsupported models continue using one decision per action. Model budgets count actual outbound requests, including corrections, rather than locally consumed plan steps.
 
-`run` results include `actionsExecuted`, `modelRequests`, `observationsReused`, `stabilityObservations`, `elapsedMs`, `phaseMs`, `nativeMs` (fresh check, input including render grace, and post-action capture), and `stopReason`. These describe the narrow goal, not proof of unrelated business outcomes. See the [live Calculator validation](./design/technical/computer-small-goal-validation.md) for measured results and scope.
+`run` results include `actionsExecuted`, `modelRequests`, `observationsReused`, `stabilityObservations`, `elapsedMs`, `phaseMs`, `nativeMs` (fresh check, input including render grace, and post-action capture), and `stopReason`. These describe the narrow goal, not proof of unrelated business outcomes. See the [live Calculator validation](https://github.com/xopcai/xopc/blob/main/docs/design/technical/computer-small-goal-validation.md) for measured results and scope.
 
 ## Custom OpenAI-compatible models
 
@@ -43,7 +43,7 @@ OpenAI-compatible APIs are assumed to support function tools unless the model de
 
 An explicit `computerUse.profile` takes precedence. Use `openai-responses-computer-v1` only for endpoints supporting the native `computer` tool. Other compatible visual models automatically use `structured-tools-v1` with function tools on their configured API.
 
-The OpenAI provider can reuse its ChatGPT OAuth binding for Computer Use. `openai/gpt-6.1-sol` has passed real visual recognition and a native disposable-window button press; see [OAuth validation evidence](./design/technical/computer-use-chatgpt-oauth-validation.md) for scope and reproduction.
+The OpenAI provider can reuse its ChatGPT OAuth binding for Computer Use. `openai/gpt-6.1-sol` has passed real visual recognition and a native disposable-window button press; see [OAuth validation evidence](https://github.com/xopcai/xopc/blob/main/docs/design/technical/computer-use-chatgpt-oauth-validation.md) for scope and reproduction.
 
 ## XOPC Cloud service
 

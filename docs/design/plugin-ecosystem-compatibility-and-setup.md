@@ -10,7 +10,6 @@
 
 1. 用户可以从 Git 仓库、第三方 marketplace、ZIP、本地目录自行安装插件，不要求先进入 xopc Store。
 2. 官方 Store 只推荐经过实际任务验收的精品；少量 Skill、纯文本或未经官方认证，不构成阻止用户自行安装的理由。
-3. Codex / Claude 的包由格式适配器转换成内部组件描述，继续使用现有 Plugin Store、Skill、pi MCP、Workflow、Connector 和权限体系。
 4. Native Extension 保留宿主级工具、服务、UI 等扩展能力；第三方 Plugin 中的脚本、Hook 不自动成为 Native Extension。
 5. 安装结果区分“文件已安装”“能力可用”“场景已验证”。每项声明都有兼容结果，不能静默忽略组件后宣称完整兼容。
 6. 持久化 Setup Job 串联资源准备、账号连接、工具检查、Agent 绑定和首次任务入口。弹窗是 Job 的视图，后台是状态权威。
@@ -37,7 +36,6 @@
 | `src/extensions/agent-plugins/mcp-adapter.ts` | 稳定 MCP 命名空间、根目录 / 数据目录变量投影 | 多方言 MCP、连接配置、按 Agent 投影 |
 | `src/agent/mcp/` | 配置合并、pi MCP 执行与凭据、工具发现、网页登录桥接 | 接受 Plugin 的有效连接描述，复用现有授权能力 |
 | `src/connectors/` | 托管分发、连接恢复、账号与 Agent 策略 | 准备资源与复用连接 |
-| Skill / Agent / Workflow | 渐进加载、Agent 策略、委派及结构化执行 | 插件组件绑定、命令与子 Agent 适配 |
 | Native Extension | 工具、Hook、服务、配置、UI 贡献 | 精品宿主能力的独立运行边界 |
 | Gateway / Web 安装界面 | 检查、权限审阅、安装、激活、更新、回滚 | 安装 Job、兼容预览、继续配置与任务入口 |
 
@@ -81,7 +79,6 @@ flowchart TD
   I --> V[Scoped Runtime Projection]
   B --> V
   C --> V
-  V --> K[Skills / Commands / Workflow delegates]
   V --> M[Existing pi MCP runtime]
   V --> H[Explicit Hook + host capability adapters]
   N --> U[Existing Extension runtime / UI]
@@ -137,7 +134,6 @@ Claude 使用单独的解析配置，保留默认发现、显式组件路径和�
 | MCP stdio / HTTP | 转成已有 pi 配置，变量与凭据由宿主解析 | 优先支持；旧 SSE 等以实际 pi 能力为准 |
 | user config / 环境变量 | 类型化表单，敏感值为凭据引用 | 可识别变量与安全上下文优先 |
 | commands | 转成用户显式调用入口，保留名称空间与参数语义 | 后续阶段，不伪装成自动执行 Skill |
-| agents | 转成隔离的执行者描述，映射现有 Workflow / delegate | 后续阶段，不自动创建永久业务 Agent |
 | hooks | 逐事件、逐输入输出协议适配 | 后续阶段；不支持时明确停用 |
 | OpenAI `.app.json` | 平台应用依赖，由有认证记录的连接适配器承接 | 不因存在 app ID 就算可用 |
 | LSP、输出样式及其他平台组件 | 识别并列入报告，按组件添加适配 | 未实现则明确不支持 |
@@ -245,7 +241,6 @@ inspect -> review -> commit_package
 对每个组件计算：`ready | setup_required | degraded | blocked | disabled`。插件汇总状态由选中能力及依赖决定，另外保存 `verification: unverified | contract_checked | scenario_verified`。
 
 - 包校验完成：仅代表安装成功。
-- MCP 连接和工具发现完成：代表工具可连接，不代表工作流通过。
 - 契约检查完成：代表必需工具及参数满足已知适配契约。
 - 场景验证完成：代表指定版本、平台、账号权限范围中的验收任务通过。
 
@@ -341,7 +336,6 @@ Onboarding Skill 作为用户进入配置引导的内容入口，所有授权、
 ### P3：Commands、Agents 与宿主工具契约（约 2～3 人周，依赖 P1，发布依赖 P2）
 
 - 命令入口、参数语义、名称空间和包内引用。
-- 执行者配置投影到已有 Workflow / delegate；模型选择和权限交集。
 - 针对真实高频包添加有限、经过契约测试的宿主工具适配。
 
 验收：代表性 Claude 包的用户命令和委派任务可完成；参数、模型缺失、权限不足有确定结果；无法映射的调用不会被猜测执行。
@@ -374,7 +368,6 @@ Onboarding Skill 作为用户进入配置引导的内容入口，所有授权、
 | Setup 与资源计划 | `src/extensions/agent-plugins/setup/`，复用 `src/connectors/` |
 | 连接桥接 | `src/agent/mcp/{config,native-mcp,connection-setup,credential-store}.ts` 及 Gateway MCP routes |
 | 绑定和运行投影 | `mcp-adapter.ts`、Skill sources、Agent manager、现有策略入口 |
-| 命令与执行者 | 现有 chat commands / Workflow / delegate，新增薄适配层 |
 | HTTP / CLI | 现有 Agent Plugin routes、CLI 扩展管理入口 |
 | UI | `web/src/features/extensions/`、能力中心、现有连接配置组件 |
 | 精品内容 | 独立 `xopc-plugins` 仓库；宿主能力放 Native Extension |

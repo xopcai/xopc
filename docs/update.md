@@ -1,6 +1,5 @@
 # Update xopc
 
-Update through the same installation method you originally used. Back up local state before a major update or when important Agents, Workflows, channels, or extensions are configured. For a verified offline backup, stop the Gateway and follow [Back up and restore xopc](./backup.md).
 
 ## Check the current version
 

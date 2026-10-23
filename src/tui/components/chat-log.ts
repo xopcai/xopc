@@ -61,7 +61,6 @@ export class ChatLog extends Container {
   private lastAssistantText = '';
   private lastStatusEntry: Container | null = null;
   private lastStatusText: Text | null = null;
-  private workflowStatusByRunId = new Map<string, { entry: Container; text: Text }>();
   private entryRecords: ChatLogEntryRecord[] = [];
   private viewportRowsProvider: (() => number) | undefined;
   private historyViewDisplayIndex: number | null = null;
@@ -101,7 +100,6 @@ export class ChatLog extends Container {
     this.lastAssistantText = '';
     this.lastStatusEntry = null;
     this.lastStatusText = null;
-    this.workflowStatusByRunId.clear();
     this.entryRecords = [];
     this.historyViewDisplayIndex = null;
     this.activeCells.clear();
@@ -140,21 +138,6 @@ export class ChatLog extends Container {
     entry.addChild(statusText);
     this.lastStatusEntry = entry;
     this.lastStatusText = statusText;
-    this.append(entry);
-  }
-
-  updateWorkflowRun(runId: string, text: string): void {
-    const existing = this.workflowStatusByRunId.get(runId);
-    if (existing) {
-      existing.text.setText(theme.system(text));
-      return;
-    }
-
-    const entry = new Container();
-    const statusText = new Text(theme.system(text), 1, 0);
-    entry.addChild(new Spacer(1));
-    entry.addChild(statusText);
-    this.workflowStatusByRunId.set(runId, { entry, text: statusText });
     this.append(entry);
   }
 

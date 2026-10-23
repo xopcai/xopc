@@ -23,6 +23,7 @@ beforeEach(() => {
   resetXopcDatabaseSingletonForTest();
   openXopcDatabase({ path: join(directory, 'xopc.db') });
   service = new AutomationService();
+  service.setDeps({ agentService: { turnDispatcher: { processDirect: async () => 'Suggest only: task inspected' } } });
 });
 afterEach(async () => {
   await service.stop();
@@ -34,7 +35,7 @@ afterEach(async () => {
 });
 async function fixture() {
   const automation = await service.create({ name: 'Safe fixture', trigger: { kind: 'manual' },
-    action: { kind: 'workflow', workflowId: 'not-executed' }, safety: { mode: 'suggest_only' },
+    action: { kind: 'agent', instruction: 'Inspect the task result'}, safety: { mode: 'suggest_only' },
     delivery: { notificationPolicy: 'none', destinations: [{ key: 'gateway', kind: 'gateway_event' }] } });
   const dispatcher = createProductDispatcher(undefined, { getAutomations: () => service });
   const invoke = (id: string, key: string, command = 'run', context = caller) => {
@@ -245,7 +246,7 @@ describe('automation execution capabilities', () => {
     await service.initialize();
     const backgroundTimers = vi.getTimerCount();
     const automation = await service.create({ name: 'Scheduled', trigger: { kind: 'schedule', schedule: { kind: 'interval', everyMs: 1000 } },
-      action: { kind: 'workflow', workflowId: 'not-executed' }, safety: { mode: 'suggest_only' } });
+      action: { kind: 'agent', instruction: 'Inspect the task result'}, safety: { mode: 'suggest_only' } });
     expect(vi.getTimerCount()).toBe(backgroundTimers + 1);
     service.queueRunAtomically(automation.id);
     service.refreshSchedule();
@@ -291,16 +292,15 @@ describe('automation execution capabilities', () => {
     const receipt = AutomationRunMutationOutputSchema.parse(await invoke(automation.id, 'queued'));
     await service.update(automation.id, { safety: { mode: 'auto_apply' }, name: 'Later config' });
     expect(getAutomationRunRequest(receipt.run.id)).toMatchObject({ safety: { mode: 'suggest_only' }, name: 'Safe fixture' });
-    const startWorkflowRun = vi.fn();
     await service.stop();
     closeXopcDatabase();
     resetXopcDatabaseSingletonForTest();
     openXopcDatabase({ path: join(directory, 'xopc.db') });
     service = new AutomationService();
-    service.setDeps({ workflowRunService: { startWorkflowRun } as never });
+  service.setDeps({ agentService: { turnDispatcher: { processDirect: async () => 'Suggest only: task inspected' } } });
+    service.setDeps({});
     await service.initialize();
     expect(await completed(receipt.run.id)).toMatchObject({ status: 'succeeded', summary: expect.stringContaining('Suggest only') });
-    expect(startWorkflowRun).not.toHaveBeenCalled();
   });
 
   it('never automatically repeats a claimed run after a crash', async () => {

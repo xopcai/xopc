@@ -335,7 +335,7 @@ describe('background task result delivery', () => {
       expect(prompt).toContain('CUSTOM_PERSONAL_SOUL');
       expect(prompt).not.toContain('OTHER_AGENT_SOUL');
       expect(prompt).not.toContain('UNTRUSTED_LONG_WORKER_INSTRUCTIONS');
-      return parsePersonalReplyDraft(JSON.stringify({ text: 'The sunset finding is ready.', sourceIds: ['result'], limitationIds: ['status'] }), packet);
+      return parsePersonalReplyDraft('The sunset finding is ready.', packet);
     });
     await new PersonalReplyComposer(compose).drain(async () => { throw new Error('Disconnected'); });
     expect(loadTranscriptRowsForSession(main.key)).toHaveLength(1);
@@ -594,22 +594,22 @@ describe('background task result delivery', () => {
 
   it('accepts omitted acknowledgement fields without appending report URLs', () => {
     const packet = { report: Array.from({ length: 12 }, (_, index) => `https://example.test/source-${index}`).join('\n') } as PersonalReplyPacket;
-    expect(parsePersonalReplyDraft(JSON.stringify({ text: 'Done' }), packet)).toBe('Done');
-    expect(() => parsePersonalReplyDraft(JSON.stringify({ text: 'https://invented.test' }), packet)).toThrow('invented');
-    expect(() => parsePersonalReplyDraft(JSON.stringify({ text: 'Done', limitationIds: [] }), packet)).toThrow('contract');
+    expect(parsePersonalReplyDraft('Done', packet)).toBe('Done');
+    expect(() => parsePersonalReplyDraft('https://invented.test', packet)).toThrow('invented');
+    expect(() => parsePersonalReplyDraft(JSON.stringify({ text: 'Done', limitationIds: [] }), packet)).toThrow('plain text');
   });
 
   it('preserves selected source and deliverable links without adding unused sources', () => {
     const packet = { report: '[Paper](https://example.test/paper) https://example.test/unused',
       preservedText: '[Download](https://example.test/download)' } as PersonalReplyPacket;
     const text = 'Finding remains uncertain. [Paper](https://example.test/paper) [Download](https://example.test/download)';
-    expect(parsePersonalReplyDraft(JSON.stringify({ text }), packet)).toBe(text);
+    expect(parsePersonalReplyDraft(text, packet)).toBe(text);
   });
 
   it('rejects fabricated links and drafts that omit the result contract', () => {
     const packet = { report: 'https://example.test/source' } as PersonalReplyPacket;
-    expect(() => parsePersonalReplyDraft(JSON.stringify({ text: 'https://invented.test', sourceIds: ['result'], limitationIds: ['status'] }), packet)).toThrow('invented');
-    expect(() => parsePersonalReplyDraft(JSON.stringify({ text: 'Done', sourceIds: [], limitationIds: ['status'] }), packet)).toThrow('contract');
+    expect(() => parsePersonalReplyDraft('https://invented.test', packet)).toThrow('invented');
+    expect(() => parsePersonalReplyDraft(JSON.stringify({ text: 'Done', sourceIds: [], limitationIds: ['status'] }), packet)).toThrow('plain text');
   });
 
   it('uses the personal model in one tool-free call and falls back on an invalid model draft', async () => {

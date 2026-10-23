@@ -4,21 +4,14 @@ import { dirname, join } from 'node:path';
 import { ConfigSchema, type Config } from '../config/schema.js';
 import { createLogger } from '../utils/logger.js';
 import { listRegisteredMigrations } from './registry.js';
-import { memoryConfigMigration } from './memory-config.js';
-import { retiredLocalSttMigration } from './retired-local-stt.js';
 import type { Migration, MigrationContext, MigrationLedger, MigrationPlanItem } from './types.js';
 
 const log = createLogger('Migrations');
 const MIGRATION_LEDGER_FILENAME = 'migrations.json';
 const CONFIG_BACKUP_COUNT = 10;
 
-export const CORE_MIGRATIONS: readonly Migration[] = [
-  memoryConfigMigration,
-  retiredLocalSttMigration,
-];
-
 function listAllMigrations(): Migration[] {
-  return [...CORE_MIGRATIONS, ...listRegisteredMigrations().map((entry) => entry.migration)];
+  return listRegisteredMigrations().map((entry) => entry.migration);
 }
 
 export type MigrationApplyMode = 'auto-safe' | 'doctor-fix' | 'manual';

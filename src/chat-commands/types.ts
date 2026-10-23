@@ -1,6 +1,6 @@
 /**
  * Unified Command System - Core Types
- * 
+ *
  * Provides a platform-agnostic command system that works across
  * Telegram, Feishu, Web UI, CLI, and other channel surfaces.
  */
@@ -13,11 +13,6 @@ import type {
   VerboseLevel,
 } from '../agent/transcript/thinking-types.js';
 import type { SessionConfigStore } from '../session/index.js';
-import type {
-  StartWorkflowRunServiceParams,
-  WorkflowRunServiceLike,
-  WorkflowRunServiceResult,
-} from '../workflows/service/workflow-run-service.types.js';
 import type { AgentSourceContext } from '../agent/source-context/types.js';
 
 // ============================================================================
@@ -181,12 +176,12 @@ export interface CommandContext {
   accountId?: string;
   /** Thread/topic ID for threaded channels, when supplied by routing metadata. */
   threadId?: string;
-  
+
   // === Configuration ===
   /** Bot configuration */
   config: Config;
   sourceContexts?: AgentSourceContext[];
-  
+
   // === Reply API ===
   /** Send a text reply */
   reply(text: string, options?: ReplyOptions): Promise<void>;
@@ -194,7 +189,7 @@ export interface CommandContext {
   replyComponent(component: UIComponent): Promise<void>;
   /** Show typing indicator */
   setTyping(typing: boolean): Promise<void>;
-  
+
   // === Session Management ===
   /** Get current session messages */
   getSession(): Promise<AgentMessage[]>;
@@ -208,7 +203,7 @@ export interface CommandContext {
   listSessions(): Promise<SessionInfo[]>;
   /** Switch to a different session */
   switchSession(conversationId: string): Promise<void>;
-  
+
   // === Model Management ===
   /** Get current model ID */
   getCurrentModel(): string;
@@ -218,7 +213,7 @@ export interface CommandContext {
   switchModel(modelId: string): Promise<boolean>;
   /** Get token usage stats */
   getUsage(): Promise<UsageStats>;
-  
+
   // === Platform Features ===
   /** Check if platform supports a feature */
   supports(feature: PlatformFeature): boolean;
@@ -282,14 +277,9 @@ export interface CommandContext {
 
   /** Abort in-flight assistant generation and channel streaming for this session (e.g. /abort) */
   abortCurrentTurn?(): Promise<void>;
-
-  workflowRunApis?: {
-    startWorkflowRun(params: StartWorkflowRunServiceParams): Promise<WorkflowRunServiceResult>;
-    service: WorkflowRunServiceLike;
-  };
 }
 
-export type PlatformFeature = 
+export type PlatformFeature =
   | 'buttons'      // Inline keyboards/buttons
   | 'markdown'     // Markdown formatting
   | 'html'         // HTML formatting
@@ -413,22 +403,22 @@ export interface ChannelAdapter {
   readonly name: string;
   /** Supported features */
   readonly features: PlatformFeature[];
-  
+
   /** Initialize adapter */
   init(config: Config): Promise<void>;
-  
+
   /** Start receiving messages */
   start(): Promise<void>;
-  
+
   /** Stop receiving messages */
   stop(): Promise<void>;
-  
+
   /** Convert platform message to unified format */
   normalizeMessage(platformMsg: unknown): Promise<UnifiedMessage | null>;
-  
+
   /** Send a reply */
   sendReply(chatId: string, reply: ReplyPayload): Promise<void>;
-  
+
   /** Set typing indicator */
   setTyping(chatId: string, typing: boolean): Promise<void>;
 }

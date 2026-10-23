@@ -79,7 +79,6 @@
 
 ```mermaid
 flowchart TD
-  Agent[Agent / Workflow / 手动操作] --> Tools[现有 ExternalToolService]
   Tools --> Provider[CliToolProvider]
   Provider --> Gate[账号解析 / Action 校验 / 权限 / 审批]
   Gate --> Runtime[CliConnectorRuntime]
@@ -174,7 +173,6 @@ interface CliConnectorAdapter {
 
 其中 `CliInvocation` 只引用 manifest 声明的 executable、argv、受控 input 和受限环境绑定，不接受 Agent 指定的 executable、cwd、env。`CliAdapterContext` 由服务端构造，包含固定账号身份和受控路径，不把整个 `process.env` 暴露给适配器。
 
-普通业务 Action 第一版对应一个进程调用。授权可执行多个受控步骤；复合业务任务由现有 Workflow 编排，以免一个 Action 隐藏不可分别审计的写操作。
 
 ### 4.4 归一化执行结果
 
@@ -399,7 +397,6 @@ src/agent/external-tools/cliProvider.ts
 | --- | --- | --- |
 | A：版本与协议验证 | 固定两个 CLI 版本，采集脱敏 schema/成功/失败 fixtures，核实身份和存储 | 明确多账号、远端 Gateway、撤销和文件能力边界 |
 | B：平台基础 | CLI manifest、安装、执行、结果、SQLite 记录与通用授权状态机 | fake CLI 测试通过，无厂商分支进入核心执行器 |
-| C：发现与策略 | CliToolProvider、缓存、账号绑定、审批、审计、Workflow 预检 | 所有入口执行同一账号和权限检查，写入未知结果可恢复 |
 | D：两家适配与界面 | 飞书替换、企业微信接入、统一授权/账号 UI、Gateway API | 同一套组件完成两种授权，两个真实账号环境分别联调 |
 | E：发行与泛化验收 | 商店校验、版本升级回退、契约文档、第三个测试适配包 | 新适配包不改核心 runtime/provider/UI/policy |
 

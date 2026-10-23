@@ -7,7 +7,6 @@ import {
   RuntimePolicySchema,
   SkillOverrideSchema,
   ToolPoliciesSchema,
-  WorkflowPolicySchema,
   type AgentEntry,
 } from '../../../agent-config/index.js';
 import { getVoiceModelsConfig } from '../../../config/voice.js';
@@ -139,7 +138,6 @@ export function registerAgentsRoutes(authenticated: Hono, deps: AuthenticatedRou
       'skills',
       'tools',
       'toolAllowlist',
-      'workflows',
       'runtime',
       'setDefault',
     ]);
@@ -191,14 +189,7 @@ export function registerAgentsRoutes(authenticated: Hono, deps: AuthenticatedRou
     if (profilePatch && profilePatch !== null && !profilePatch.success) {
       return c.json({ ok: false, error: { message: `profile ${profilePatch.error.issues[0]?.message ?? 'is invalid'}` } }, 400);
     }
-    const workflowsPatch = body.workflows === null
-      ? null
-      : Object.hasOwn(body, 'workflows')
-        ? WorkflowPolicySchema.safeParse(body.workflows)
-        : undefined;
-    if (workflowsPatch && workflowsPatch !== null && !workflowsPatch.success) {
-      return c.json({ ok: false, error: { message: `workflows ${workflowsPatch.error.issues[0]?.message ?? 'is invalid'}` } }, 400);
-    }
+
     const runtimePatch = body.runtime === null
       ? null
       : Object.hasOwn(body, 'runtime')
@@ -228,7 +219,6 @@ export function registerAgentsRoutes(authenticated: Hono, deps: AuthenticatedRou
       ...(skillsPatch !== undefined ? { skills: skillsPatch === null ? null : skillsPatch.data } : {}),
       ...(toolsPatch !== undefined ? { tools: toolsPatch } : {}),
       ...(toolAllowlistPatch !== undefined ? { toolAllowlist: toolAllowlistPatch === null ? null : toolAllowlistPatch.data } : {}),
-      ...(workflowsPatch !== undefined ? { workflows: workflowsPatch === null ? null : workflowsPatch.data } : {}),
       ...(runtimePatch !== undefined ? { runtime: runtimePatch === null ? null : runtimePatch.data } : {}),
     });
     if (prep.ok === false) {

@@ -167,7 +167,7 @@
 
 迁移规则随新版内置，覆盖现网全部旧云端产品 ID、已退场历史 ID 和旧音色映射；云端发布预检导出清单，用于确认客户端映射完整。依据明确旧 ID 到能力的映射替换：普通云端聊天 -> auto，图片 -> image，STT -> stt，TTS -> tts，实时语音 -> realtime。auto/advanced/Codex/第三方供应商引用保留。未知引用结合能力字段识别并记录；不能因请求失败或目录缺项猜测迁移，也不能把未识别引用默默计为迁移成功。
 
-覆盖 AgentCatalog 全局默认和独立覆盖、chat/intents/imageUnderstanding/imageGeneration、session_config.model_override、语音设置、工作流直接引用和自动化覆盖。fallback 去重并去除与 primary 相同的引用，保留顺序。电脑操作按专用策略单独处理。
+覆盖 AgentCatalog 全局默认和独立覆盖、chat/intents/imageUnderstanding/imageGeneration、session_config.model_override、语音设置直接引用和自动化覆盖。fallback 去重并去除与 primary 相同的引用，保留顺序。电脑操作按专用策略单独处理。
 
 DB 修改在事务中完成并更新 revision。xopc.json 等文件使用备份与原子写，跨 DB/文件迁移通过 application_migrations 阶段状态恢复，不能假设二者同一事务。迁移记录旧值与新值，重启恢复必须防止覆盖用户迁移后修改。
 
@@ -206,7 +206,7 @@ Gateway 语音目录保留翻译字段，界面在渲染时按当前语言选取
 - 各 HTTP/SSE/WS 响应无真实模型或供应商元数据；运营诊断仍能追溯实际目标。
 - realtime 实际上游接到原模型，协议分支和音频转换正确，公共 ID 不影响 ticket 与结算。
 - TTS 公共音色在首选/备用目标可解析；音频输出后不切换目标。
-- 升级覆盖旧 Agent、固定会话、语音设置、工作流与自动化；重复执行、离线、授权失效、各阶段崩溃可恢复。
+- 升级覆盖旧 Agent、固定会话、语音设置与自动化；重复执行、离线、授权失效、各阶段崩溃可恢复。
 - 工作区模型限制不因公共别名迁移而扩大权限；未发布草稿归档可追溯。
 - 旧目录和旧 ID 在云端切换后不再可用；HTTP、ticket 和 WebSocket 路径均无兼容绕过，错误提示指向升级。
 - 最新版首次启动无须用户手动改配置、重选模型或刷新缓存；联网后首轮聊天与各能力可用。
@@ -228,7 +228,6 @@ Gateway 语音目录保留翻译字段，界面在渲染时按当前语言选取
 - 公网目录仅返回 7 个公共服务及原有 Codex，默认 chat/vision=auto、image-generation=image、stt=stt、tts=tts。
 - 旧聊天模型调用返回 410；TTS HTTP 生成成功；STT、TTS、实时对话公共 WebSocket 均完成会话配置。实时对话服务返回的 model/voice 已转换为 realtime/default。
 - 阿里云首选：STT HTTP `qwen-audio-3.1-asr-flash`、WS `qwen-audio-3.1-asr-flash-streaming`；TTS HTTP `qwen-audio-3.0-tts-plus`、WS `qwen3-tts-instruct-flash-realtime`；实时对话 `qwen3.8-omni-flash-realtime`。现有密钥连接验证通过。
-- 客户端新增 `src/migrations/cloud-public-models.ts`，在应用启动、严格加载配置之前运行，备份 JSON/SQLite、转换旧引用、清除旧目录缓存并写入一次性完成标记。工作流通过现有 Catalog 保存为新修订；历史修订与会话正文保持原样。
 - 客户端专项测试 29 项通过，TypeScript 检查通过。云端专项测试、控制台测试通过；全量测试中的 2 个并行超时用单 worker 重跑通过。
 - i18n 补充：云端提交 `68a5e30`，公共能力名称通过 `xopc.displayNames` 返回 `zh-CN`/`en`，音色通过 `displayNames` 返回“默认音色 / Default voice”。客户端透传元数据，按界面语言在渲染时选择名称，缺少翻译时回退 `name`，调用 ID 不变。线上目录和音色接口验证通过。
 - Computer Use 修复：云端提交 `3b046d3` 已部署，目录返回不透明部署 revision；客户端允许不返回上游 origin。真实认证接口验证：缺失 revision 返回 409，带正确 revision 的 `computer` 请求返回 200，GUI-Plus 正确识别合成图片中的蓝色矩形，响应 model 为 `computer`。客户端专项测试、云端 Gateway 请求测试、类型检查与客户端构建通过。

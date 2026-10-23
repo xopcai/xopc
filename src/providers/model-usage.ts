@@ -24,7 +24,7 @@ export function withModelUsageOrigin<T>(origin: ModelUsageOrigin, run: () => T):
 export function modelUsageOriginFromTurn(origin?: TurnOrigin): ModelUsageOrigin {
   if (!origin) return 'unknown';
   if (origin.type !== 'system' || origin.source === 'cli') return 'interactive';
-  if (['workflow', 'internal', 'task_update'].includes(origin.source)) return scopes.getStore() ?? 'background';
+
   return 'background';
 }
 export class ProviderUsageScopeError extends Error {

@@ -16,9 +16,6 @@ const IMPLICIT_RELATION_CHECKS = [
   ['discussion action task', `SELECT COUNT(*) AS count FROM discussion_action_tasks a
     LEFT JOIN tasks t ON t.task_id = a.task_id
     WHERE t.task_id IS NULL`],
-  ['workflow event run', `SELECT COUNT(*) AS count FROM workflow_events e
-    LEFT JOIN workflow_runs r ON r.run_id = e.run_id
-    WHERE r.run_id IS NULL`],
   ['local app active release', `SELECT COUNT(*) AS count FROM local_apps a
     LEFT JOIN local_app_releases r ON r.release_id = a.active_release_id
     WHERE a.active_release_id IS NOT NULL AND r.release_id IS NULL`],

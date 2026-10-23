@@ -51,7 +51,7 @@ export function useHomeSnapshot(language: 'en' | 'zh', navigationKey: string, in
     const immediateEvents = [
       'task-changed-v2', 'task-updated',
       'session-created', 'agent-run-started', 'agent-run-ended',
-      'automation-run-completed', 'workflow-run-updated', 'workflow-run-error',
+      'automation-run-completed',
       'home-advisor-updated', 'gateway-realtime-connected', 'realtime-gap', 'focus',
     ];
     const noisySessionEvents = ['session-updated', 'session-transcript-updated'];

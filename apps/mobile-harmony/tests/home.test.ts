@@ -14,7 +14,6 @@ describe('mobile home protocol', () => {
   it('maps only recognized internal destinations', () => {
     expect(mobileRoute('/notes?status=inbox')).toEqual({ page: 'inbox', itemId: '' });
     expect(mobileRoute('/notes?status=inbox&item=decision-1')).toEqual({ page: 'inbox', itemId: 'decision-1' });
-    expect(mobileRoute('/workflows?runId=run%201')).toEqual({ page: 'workflows', itemId: 'run 1' });
     expect(mobileRoute('/automations?run=a')).toEqual({ page: 'automation-run', itemId: 'a' });
     expect(mobileRoute('/automations?automation=a')).toEqual({ page: 'automations', itemId: 'a' });
     expect(mobileRoute('/chat/conversation')).toEqual({ page: 'chat', itemId: 'conversation' });
@@ -25,8 +24,8 @@ describe('mobile home protocol', () => {
   it('validates mutation types and shapes', () => {
     expect(homeCommand({ type: 'connector_decision', label: 'Approve', approvalId: 'a', decision: 'approve' }))
       .toEqual({ kind: 'connector_approval', approvalId: 'a', decision: 'approve' });
-    expect(homeCommand({ type: 'retry_run', label: 'Retry', subjectKind: 'workflow_run', runId: 'r' }))
-      .toEqual({ kind: 'workflow_run', runId: 'r' });
+    expect(homeCommand({ type: 'retry_run', label: 'Retry', subjectKind: 'automation_run', runId: 'r' }))
+      .toEqual({ kind: 'automation_run', runId: 'r' });
     expect(() => homeCommand({ type: 'open', label: 'Open', href: '/tasks' })).toThrow('INVALID_HOME_ACTION');
     expect(() => homeCommand({ type: 'retry_run', label: 'Retry', subjectKind: 'arbitrary', runId: 'r' })).toThrow();
   });
@@ -122,7 +121,7 @@ describe('progress action dispatch', () => {
   it('propagates dispatch failures for visible feedback', async () => {
     const handlers = { navigate: vi.fn(), confirm: vi.fn().mockResolvedValue(true),
       mutate: vi.fn().mockRejectedValue(new Error('HTTP_403')) };
-    await expect(dispatchHomeAction({ type: 'retry_run', label: 'Retry', subjectKind: 'workflow_run', runId: 'run' }, handlers))
+    await expect(dispatchHomeAction({ type: 'retry_run', label: 'Retry', subjectKind: 'automation_run', runId: 'run' }, handlers))
       .rejects.toThrow('HTTP_403');
   });
 });

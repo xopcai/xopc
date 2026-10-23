@@ -10,7 +10,6 @@
 - Android、HarmonyOS、iOS 提供状态和电量工具。Web 和 Electron 提供基础环境读取。所有状态工具使用固定有界 schema；未知电量为 null，0 是有效读数。
 - 基础读数由 Gateway 检查时间，包装 endpoint/principal、capturedAt、receivedAt、validUntil 和 cached 字段。读数有效期 30 秒；超出未来时钟容差 60 秒或已过期的数据报错。
 - Web 设备详情支持昵称编辑、能力及授权/前台说明；历史聊天消息显示当时的来源名称。
-- 提供 Node 通用 Bridge 驱动接口、签名连接 host，以及温湿度模拟器。真实驱动替换 adapter.read，无需修改 Agent 工作流。
 
 ## Bridge 接入
 
@@ -56,7 +55,6 @@ Android 使用 gradle-run wrapper：
 - “Do Android device tools compile and existing unit tests pass?”：通过。
 - “Do Android device tools and negotiated message context compile and pass unit tests?”：通过。
 
-工作流结束后只清理 wrapper 自有日志。HarmonyOS debug HAP 构建及本次能力相关测试通过；iOS 模拟器构建和单元测试通过。尚未完成三端真机验收。HarmonyOS 全量测试 684 项通过、2 项失败：`chatOptimisticComposer` 测试夹具未提供 `reserveReplySpace`，`colorLayerHierarchy` 的禁止边框断言与已有 ChatView 不符。相关源码和测试文件与 HEAD 相同，确认为基线问题；本次变更相关测试全部通过。
 
 本次交付覆盖 M1 通用来源/状态链路、M2 的单次位置任务与跨设备授权，以及 M3 的 Bridge 接入示例。日历等其他个人资源、位置附件共享、通用临时资源引用，以及 M4 的持久订阅/自动化授权尚未实施。配对移动端不能绑定其他设备；跨设备授权由 Gateway owner 在设备管理页批准。离线能力历史目录、全端来源气泡和统一结果卡片仍需后续完善。
 
@@ -85,5 +83,4 @@ SQLite v241 只记录 issued/reserved/consumed/revoked/expired、设备/会话�
 - 核心类型检查、Web 类型检查/生产构建及新增代码 ESLint 通过。
 - 核心、真实 HTTP lazy route、授权、位置处理、浏览器相关回归 8 文件 67 项通过。覆盖扩大精度拒绝、单次消费、撤销、到期、同名重连，以及摘要写入 SessionStore 后的模型历史、FTS、JSON 导出检查。外部查询使用受控响应。
 - HarmonyOS 4 文件 19 项通过，覆盖本地拒绝、取消后不申请权限、OS 拒绝、前台限制、样本量化、传感器停止和 realtime 包裹；debug HAP 构建通过（无发布签名）。
-- iOS 模拟器构建及 83 项现有单元测试通过。Android 使用 gradle-run wrapper 执行 `:app:compileDebugKotlin :app:testDebugUnitTest`，问题“Do Android single-use location consent and realtime envelopes compile and pass unit tests?”，结果通过。wrapper 工作流结束，只清理自有日志。
 - HarmonyOS Mate 60 真机已验证权限弹窗、大致定位、Open-Meteo 公网查询、拒绝、取消及等待确认时转后台；详情见 [真机验收记录](../../apps/mobile-harmony/docs/mate60-device-tools-acceptance-20261011.md)。Android/iOS 真机联调尚未完成。Open-Meteo/Overpass 使用公开服务；上线前需确定服务容量、商业使用条件和提供方配置，不把受控响应测试视为公网服务验收。

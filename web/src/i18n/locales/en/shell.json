@@ -58,7 +58,6 @@
       "work-projects": "Projects",
       "work-notes": "Notes",
       "automation-triggers": "Automations",
-      "automation-workflows": "Workflows",
       "automation-browser": "Browser automation",
       "capabilities-agents": "Agents",
       "capabilities-skills": "Skills",
@@ -140,7 +139,7 @@
     "projectArchive": "Archive project",
     "projectRemove": "Remove",
     "projectRemoveTitle": "Remove project",
-    "projectRemoveMessage": "Remove \"{{name}}\" from projects? Local files will stay on disk, but linked chats, tasks, workflows, automations, and memories will be ungrouped.",
+    "projectRemoveMessage": "Remove \"{{name}}\" from projects? Local files will stay on disk, but linked chats, tasks, automations, and memories will be ungrouped.",
     "projectShowMore": "Show more",
     "projectShowLess": "Collapse",
     "viewAllSessions": "All sessions",
@@ -232,7 +231,6 @@
       "purposes": {
         "chat": "Conversation",
         "automation": "Automation",
-        "workflow": "Workflow",
         "subagent": "Subtask",
         "system": "System task"
       },

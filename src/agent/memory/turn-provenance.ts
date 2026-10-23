@@ -29,9 +29,10 @@ export function resolveMemorySessionKind(conversationId: string): MemorySessionK
   const parsed = getConversationRouting(conversationId);
   if (!parsed) return 'unknown';
   const kind = getSessionMetadata(conversationId)?.sessionType;
-  if (kind === 'workflow-subagent') return 'subagent';
+  if (kind === 'subagent') return 'subagent';
+
   if (parsed.source === 'cron') return 'automation';
-  if (kind === 'workflow-run') return 'workflow';
+
   if (parsed.peerKind === 'group' || parsed.peerKind === 'channel') return 'group';
   return 'interactive';
 }

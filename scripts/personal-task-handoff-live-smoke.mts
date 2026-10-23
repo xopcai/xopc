@@ -14,7 +14,7 @@ const fingerprintPaths = ['src/personal-agent/result-reader.ts', 'src/personal-a
   'src/personal-agent/result-read-continuations.ts', 'src/agent/tools/personal-result-tool.ts',
   'src/agent/source-context/result-context.ts', 'src/personal-agent/prompts.ts', 'src/personal-agent/policy.ts',
   'src/personal-agent/request-delivery.ts', 'src/session/session-context-for-llm.ts', 'src/gateway/service.ts',
-  'src/storage/sqlite/migrations/251_personal_result_reads.sql', 'src/agent/tools/factory.ts',
+  'src/storage/sqlite/schema.sql', 'src/agent/tools/factory.ts',
   'web/src/features/chat/messages/message-bubble.tsx', 'web/src/features/chat/composer/chat-composer.tsx',
   'web/src/features/chat/messages/message-context-attachments.tsx', 'scripts/build-personal-result-worker.mjs',
   'scripts/build-electron-server.mjs', 'scripts/tsdown-build.mjs', 'tsdown.config.ts',

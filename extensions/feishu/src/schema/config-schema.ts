@@ -91,9 +91,6 @@ export const FeishuConfigSchema = z
 
   defaultAccount: z.string().optional(),
 
-  /** Single-account shorthand (backward compatible in our own schema) */
-  appId: z.string().optional(),
-  appSecret: z.string().optional(),
   domain: z.union([z.enum(['feishu', 'lark']), z.string().url()]).default('feishu').optional(),
   connectionMode: z.enum(['websocket', 'webhook']).default('websocket').optional(),
 
@@ -158,46 +155,26 @@ export const FeishuConfigSchema = z
   accounts: z.record(z.string(), FeishuAccountConfigSchema).optional(),
 })
   .superRefine((value, ctx) => {
-    // Single-account layout required fields when enabled.
-    if (value.enabled) {
-      const hasNamed = value.accounts && Object.keys(value.accounts).length > 0;
-      if (!hasNamed) {
-        if (!value.appId?.trim()) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            path: ['appId'],
-            message: 'channels.feishu.enabled=true requires channels.feishu.appId (or configure channels.feishu.accounts)',
-          });
-        }
-        if (!value.appSecret?.trim()) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            path: ['appSecret'],
-            message:
-              'channels.feishu.enabled=true requires channels.feishu.appSecret (or configure channels.feishu.accounts)',
-          });
-        }
-      }
-    }
+    if (value.enabled && !Object.keys(value.accounts ?? {}).length) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['accounts'], message: 'An enabled Feishu channel requires accounts' });
 
     // Multi-account required fields when account is enabled.
     for (const [id, acc] of Object.entries(value.accounts ?? {})) {
       if (!acc) continue;
       if (acc.enabled === false) continue;
-      const effectiveAppId = acc.appId?.trim() || value.appId?.trim() || '';
-      const effectiveAppSecret = acc.appSecret?.trim() || value.appSecret?.trim() || '';
+      const effectiveAppId = acc.appId?.trim() || '';
+      const effectiveAppSecret = acc.appSecret?.trim() || '';
       if (!effectiveAppId) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           path: ['accounts', id, 'appId'],
-          message: `channels.feishu.accounts.${id} requires appId (or top-level channels.feishu.appId)`,
+          message: `channels.feishu.accounts.${id} requires appId`,
         });
       }
       if (!effectiveAppSecret) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           path: ['accounts', id, 'appSecret'],
-          message: `channels.feishu.accounts.${id} requires appSecret (or top-level channels.feishu.appSecret)`,
+          message: `channels.feishu.accounts.${id} requires appSecret`,
         });
       }
 

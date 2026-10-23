@@ -17,7 +17,7 @@ The public site now has one purpose: help a user install, configure, use, and ma
 | Section | User question | Typical content |
 | --- | --- | --- |
 | Start | How do I get a working assistant? | installation, first model, first message, diagnostics |
-| Daily use | How do I complete work? | sessions, agents, tasks, workflows, automations, media |
+| Daily use | How do I complete work? | sessions, agents, tasks, automations, media |
 | Channels | How do I use xopc from another app? | Telegram, Weixin, Feishu, web console |
 | Configure and extend | How do I change capabilities? | models, tools, skills, MCP, extensions, connectors |
 | Access and maintenance | How do I operate it safely? | gateway, remote access, heartbeat, updates |
@@ -70,7 +70,6 @@ The public guides replace the former `*-legacy.md` reference snapshots. Those ob
 The first implementation pass covers both English and Simplified Chinese across these modules:
 
 - homepage, installation, first model, and troubleshooting;
-- Chat, Sessions, Agents, Projects, Tasks, Notes, Workflows, and Automations;
 - Telegram, Weixin, Feishu/Lark, and web console channels;
 - voice, images, progress, personalization, and desktop pet use;
 - models, tools, Skills, MCP, extensions, and connectors;
@@ -106,7 +105,6 @@ Already task-oriented guides such as Docker installation and browser automation 
 - Explain defaults before listing every possible value.
 - Never place secrets in examples; use placeholders and say where the real value is stored.
 - Include a verification step for every setup guide.
-- Use consistent product terms: **xopc**, **Agent**, **Session**, **Project**, **Task**, **Workflow**, **Automation**, and **Gateway**.
 - Keep English and Chinese pages structurally equivalent; translate for clarity rather than word-for-word symmetry.
 
 ## Maintenance checks

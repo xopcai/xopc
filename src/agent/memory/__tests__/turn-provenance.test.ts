@@ -4,7 +4,7 @@ function seedConversationFixtures(): void {
   openFixtureDatabase();
   ensureFixtureConversation("6d9217fe-77c7-411d-8cc9-92aabe81a2d0", '', {"agentId":"main","sourceChannel":"main","sourceChatId":"","sessionType":"chat","routing":{"agentId":"main","source":"main","accountId":"default","peerKind":"direct","peerId":""}});
   ensureFixtureConversation("78198daf-8200-4ee5-891a-cc6c3c7c078c", '', {"agentId":"main","sourceChannel":"cron","sourceChatId":"daily-review","sessionType":"cron","routing":{"agentId":"main","source":"cron","accountId":"default","peerKind":"direct","peerId":"daily-review"}});
-  ensureFixtureConversation("b46b6ae8-d3ae-47f1-818b-93034675181d", '', {"agentId":"main","sourceChannel":"subagent","sourceChatId":"main","sessionType":"workflow-subagent","routing":{"agentId":"main","source":"subagent","accountId":"default","peerKind":"direct","peerId":"main"}});
+  ensureFixtureConversation("b46b6ae8-d3ae-47f1-818b-93034675181d", '', {"agentId":"main","sourceChannel":"subagent","sourceChatId":"main","sessionType":"subagent","routing":{"agentId":"main","source":"subagent","accountId":"default","peerKind":"direct","peerId":"main"}});
   ensureFixtureConversation("bb151cc5-73d2-441c-8f60-ef3984388677", '', {"agentId":"main","sourceChannel":"telegram","sourceChatId":"team","sessionType":"chat","routing":{"agentId":"main","source":"telegram","accountId":"default","peerKind":"group","peerId":"team"}});
 }
 import { describe, expect, it } from 'vitest';

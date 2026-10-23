@@ -272,79 +272,6 @@ describe('AutomationService', () => {
     }
   });
 
-  it('passes workflow run limits to workflow automations', async () => {
-    const workflowCalls: unknown[] = [];
-    service.setDeps({
-      workflowRunService: {
-        startWorkflowRun: async (params) => {
-          workflowCalls.push(params);
-          return { ok: true, runId: 'workflow-run-1', conversationId: "42620690-2638-43a2-868f-3128fc4005f5" };
-        },
-      },
-    });
-
-    const automation = await service.create({
-      name: 'Workflow review',
-      trigger: { kind: 'manual' },
-      action: {
-        kind: 'workflow',
-        workflowId: 'review',
-        input: { target: 'current branch' },
-        goal: 'Find merge blockers.',
-        concurrency: 3,
-        maxSubagents: 5,
-      },
-    });
-
-    const queued = await service.runNow(automation.id);
-    const runs = await waitFor(
-      () => service.listRuns({ automationId: automation.id, limit: 5 }),
-      (items) => items.some((item) => item.id === queued.id && item.status === 'succeeded'),
-    );
-
-    expect(runs.find((item) => item.id === queued.id)?.workflowRunId).toBe('workflow-run-1');
-    expect(workflowCalls[0]).toMatchObject({
-      definitionId: 'review',
-      input: { target: 'current branch' },
-      goal: 'Find merge blockers.',
-      concurrency: 3,
-      maxSubagents: 5,
-    });
-  });
-
-  it('waits for the linked workflow terminal status', async () => {
-    let reads = 0;
-    service.setDeps({
-      workflowRunService: {
-        startWorkflowRun: async () => ({
-          ok: true,
-          runId: 'workflow-run-wait',
-          conversationId: "9a9db6c1-d104-47c6-818f-f9c22339585f",
-        }),
-        readWorkflowRunView: async () => ({
-          run: {
-            id: 'workflow-run-wait',
-            status: ++reads >= 2 ? 'succeeded' : 'running',
-          },
-        } as never),
-      },
-    });
-    const automation = await service.create({
-      name: 'Wait for workflow',
-      trigger: { kind: 'manual' },
-      action: { kind: 'workflow', workflowId: 'review' },
-    });
-
-    const queued = await service.runNow(automation.id);
-    const completed = await waitFor(
-      () => service.getRun(queued.id),
-      (run) => run?.status === 'succeeded',
-    );
-
-    expect(reads).toBeGreaterThanOrEqual(2);
-    expect(completed?.summary).toBe('Workflow run workflow-run-wait completed');
-  });
-
   it('does not retry an agent action with unknown side effects', async () => {
     let calls = 0;
     const conversationIds: string[] = [];
@@ -426,7 +353,6 @@ describe('AutomationService', () => {
   it('prepares project-bound agent sessions before applying session overrides', async () => {
     const applyAutomationWorkingDirectory = vi.fn(async () => undefined);
     const prepareAgentSession = vi.fn(async () => undefined);
-    const workflowCalls: unknown[] = [];
     service.setDeps({
       prepareAgentSession,
       agentService: {
@@ -435,12 +361,6 @@ describe('AutomationService', () => {
         },
         turnDispatcher: {
           processDirect: async (message) => `done: ${message}`,
-        },
-      },
-      workflowRunService: {
-        startWorkflowRun: async (params) => {
-          workflowCalls.push(params);
-          return { ok: true, runId: 'workflow-run-1', conversationId: "42620690-2638-43a2-868f-3128fc4005f5" };
         },
       },
     });
@@ -466,26 +386,12 @@ describe('AutomationService', () => {
       applyAutomationWorkingDirectory.mock.invocationCallOrder[0]!,
     );
 
-    const workflowAutomation = await service.create({
-      name: 'Project workflow',
-      projectId: 'project-a',
-      safety: { mode: 'auto_apply' },
-      trigger: { kind: 'manual' },
-      action: { kind: 'workflow', workflowId: 'review' },
-    });
-    const workflowRun = await service.runNow(workflowAutomation.id);
-    await waitFor(
-      () => service.listRuns({ automationId: workflowAutomation.id, limit: 5 }),
-      (items) => items.some((item) => item.id === workflowRun.id && item.status === 'succeeded'),
-    );
-    expect(workflowCalls[0]).toMatchObject({ projectId: 'project-a' });
 
     const projectAutomations = await service.list({ projectId: 'project-a' });
     expect(projectAutomations.map((automation) => automation.id).sort()).toEqual([
       agentAutomation.id,
-      workflowAutomation.id,
     ].sort());
-    expect(await service.listRuns({ projectId: 'project-a', limit: 10 })).toHaveLength(2);
+    expect(await service.listRuns({ projectId: 'project-a', limit: 10 })).toHaveLength(1);
   });
 
   it('tracks read results and marks them within the selected project', async () => {
@@ -530,38 +436,7 @@ describe('AutomationService', () => {
 
     const completed = runs.find((item) => item.id === queued.id);
     expect(completed?.summary).toContain('Automation safety mode: Suggest only.');
-    expect(completed?.summary).toContain('Do not modify files, notes, Tasks, workflows, external systems, or persistent state.');
-  });
-
-  it('does not start workflows in suggest-only safety mode', async () => {
-    const workflowCalls: unknown[] = [];
-    service.setDeps({
-      workflowRunService: {
-        startWorkflowRun: async (params) => {
-          workflowCalls.push(params);
-          return { ok: true, runId: 'workflow-run-1', conversationId: "42620690-2638-43a2-868f-3128fc4005f5" };
-        },
-      },
-    });
-
-    const automation = await service.create({
-      name: 'Safe workflow',
-      trigger: { kind: 'manual' },
-      safety: { mode: 'suggest_only' },
-      action: {
-        kind: 'workflow',
-        workflowId: 'review',
-      },
-    });
-
-    const queued = await service.runNow(automation.id);
-    const runs = await waitFor(
-      () => service.listRuns({ automationId: automation.id, limit: 5 }),
-      (items) => items.some((item) => item.id === queued.id && item.status === 'succeeded'),
-    );
-
-    expect(workflowCalls).toHaveLength(0);
-    expect(runs.find((item) => item.id === queued.id)?.summary).toContain('Suggest only: workflow review was not started.');
+    expect(completed?.summary).toContain('Do not modify files, notes, Tasks, external systems, or persistent state.');
   });
 
   it('runs automations from matching product events', async () => {
@@ -645,66 +520,6 @@ describe('AutomationService', () => {
     expect(service.listEventRecords({ type: 'automation.rerun.requested' })[0]).toMatchObject({
       deliveries: [expect.objectContaining({ runId: rerun.id })],
     });
-  });
-
-  it('passes event context to workflow and task actions', async () => {
-    const workflowCalls: Array<Record<string, unknown>> = [];
-    const executeTaskCommand = vi.fn(() => ({ ok: true as const, runId: 'task-run-event' }));
-    service.setDeps({
-      workflowRunService: {
-        startWorkflowRun: async (params) => {
-          workflowCalls.push(params as unknown as Record<string, unknown>);
-          return { ok: true, runId: 'workflow-run-event', conversationId: 'workflow-session-event' };
-        },
-      },
-      executeTaskCommand,
-    });
-    const trigger = {
-      kind: 'event' as const,
-      eventType: 'note.created.v1',
-      source: 'notes',
-    };
-    const workflow = await service.create({
-      name: 'Review new note',
-      trigger,
-      action: { kind: 'workflow', workflowId: 'review-note', input: { strict: true } },
-    });
-    const task = await service.create({
-      name: 'Start note task',
-      trigger,
-      action: {
-        kind: 'task_command',
-        taskId: 'task-note',
-        command: { type: 'start', executor: { kind: 'agent', agentId: 'main' } },
-      },
-    });
-    const event = {
-      type: 'note.created.v1',
-      source: 'notes',
-      payload: { noteId: 'note-1', projectId: 'project-1' },
-      occurredAtMs: 1234,
-    };
-
-    ingestAutomationEvent(event);
-    const dispatcher = new AutomationEventDispatcher(service);
-    expect(await dispatcher.dispatch()).toBe(2);
-    const runs = await service.listRuns({ limit: 10 });
-    await waitFor(
-      () => service.listRuns({ limit: 10 }),
-      (items) => runs.every((run) => items.some((item) => item.id === run.id && item.status === 'succeeded')),
-    );
-
-    expect(workflowCalls[0]).toMatchObject({
-      inputEnvelope: {
-        payload: { strict: true },
-        context: { automationTrigger: expect.objectContaining(event) },
-      },
-    });
-    expect(executeTaskCommand).toHaveBeenCalledWith(expect.objectContaining({
-      taskId: 'task-note',
-      triggerEvent: expect.objectContaining(event),
-    }));
-    expect(runs.map((run) => run.automationId).sort()).toEqual([task.id, workflow.id].sort());
   });
 
   it('runs an enabled browser automation action and records its task', async () => {

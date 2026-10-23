@@ -33,19 +33,7 @@ export class XopcGatewayProfiles {
       this.catalog = catalog;
       return;
     }
-    const legacy = await this.store.read('profile');
-    if (!legacy) return;
-    const profile = JSON.parse(legacy) as XopcProfile;
-    this.validate(profile);
-    // Commit the catalog last. A crash before this point can safely repeat migration.
-    for (const kind of ['refresh', 'refresh-attempt']) {
-      const credential = await this.store.read(kind);
-      if (credential) await this.store.write(gatewayCredentialKey(profile.gatewayId, kind), credential);
-    }
-    await this.save(profile);
-    await this.store.remove('profile');
-    await this.store.remove('refresh');
-    await this.store.remove('refresh-attempt');
+
   }
 
   private validate(profile: XopcProfile): void {

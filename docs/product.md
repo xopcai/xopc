@@ -16,7 +16,6 @@ To build AI that learns each person’s habits, goals, and circumstances, takes 
 
 Work and life are connected parts of being human. A personal assistant should understand you across both, combining the ability to get things done with an awareness of your habits, preferences, and what you need at the moment. The value of greater efficiency should be felt in everyday life: fewer repetitive steps, more opportunities to bring ideas to life, and more time of your own. How you spend that time is up to you.
 
-Ada is the personal Agent in xopc for ideas, preferences, delegation, and returned results. The workspace is the direct path for files and projects. Both belong to the same xopc and support the same person across work and life. Models, Agents, Tasks, Projects, Workflows, and Automations support this ongoing collaboration.
 
 xopc can run on a computer you choose, including a local computer or self-hosted server; mobile access connects to a running gateway. Multiple Agents and devices support different contexts without automatically sharing memory or permissions between computers.
 
@@ -129,7 +128,6 @@ The current product includes the foundations of this experience:
 | Automatic understanding | Source-backed personalization, explicit collaboration rules, user edits and deletion, quiet stale/conflict handling |
 | Visible work discovery | Bounded, read-only analysis of explicitly selected folders with evidence-backed next steps; optional native context on macOS |
 | Durable work | Conversations, Tasks, Projects, Notes, workspaces, evidence, and run history |
-| Execution and follow-up | Tools, Skills, Workflows, Automations, and proactive suggestion infrastructure |
 | Access surfaces | Desktop, web, CLI, TUI, mobile, Telegram, Weixin, Feishu/Lark, and APIs |
 
 On macOS, the experimental Work Discovery onboarding can request separate operating-system access to Apple Notes, Calendar, and Reminders. It uses bounded, read-only scans and does not store raw native-source content in the xopc database. Availability and exact behavior may vary by release.

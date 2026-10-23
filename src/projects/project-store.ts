@@ -493,7 +493,6 @@ export class ProjectStore {
     runSqliteWriteTransaction((db) => {
       db.prepare(`UPDATE sessions SET project_id = NULL WHERE project_id = ?`).run(id);
       db.prepare(`UPDATE tasks SET project_id = NULL WHERE project_id = ?`).run(id);
-      db.prepare(`UPDATE workflow_runs SET project_id = NULL WHERE project_id = ?`).run(id);
       db.prepare(`UPDATE automations SET project_id = NULL WHERE project_id = ?`).run(id);
       db.prepare(`UPDATE knowledge_items SET status = 'archived', updated_at = ?
         WHERE scope_type = 'project' AND scope_id = ?`).run(Date.now(), id);
@@ -534,16 +533,6 @@ export class ProjectStore {
     }));
   }
 
-  getRecentWorkflowRuns(id: string, limit = 5): ProjectWithDetails['recentWorkflowRuns'] {
-    const rows = getSqliteDatabase()
-      .prepare(
-        `SELECT run_id, definition_id, status, created_at_ms FROM workflow_runs
-         WHERE project_id = ? ORDER BY created_at_ms DESC LIMIT ?`,
-      )
-      .all(id, clampLimit(limit, 5)) as Array<{ run_id: string; definition_id: string; status: string; created_at_ms: number }>;
-    return rows.map((row) => ({ runId: row.run_id, definitionId: row.definition_id, status: row.status, createdAt: row.created_at_ms }));
-  }
-
   getWithDetails(id: string): ProjectWithDetails | null {
     const project = this.get(id);
     if (!project) return null;
@@ -553,7 +542,6 @@ export class ProjectStore {
       taskCount: this.getTaskCount(id),
       activeTaskCount: this.getActiveTaskCount(id),
       recentSessions: this.getRecentSessions(id),
-      recentWorkflowRuns: this.getRecentWorkflowRuns(id),
       milestones: this.listMilestones(id),
       recentUpdates: this.listUpdates(id),
     };

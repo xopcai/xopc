@@ -55,13 +55,12 @@ describe('product primary navigation', () => {
       '/capabilities/extensions',
       '/automations',
     ]);
-    expect(container.textContent).not.toContain('Workflows');
     expect(container.querySelector('a[href="/"]')?.getAttribute('aria-current')).toBe('page');
     expect(container.querySelector('button[aria-label="More navigation items"]')?.className).not.toContain('bg-surface-active');
     openMore();
     expect(document.body.textContent).toContain('Apps');
     expect(document.body.querySelector('a[href="/local-apps"]')).not.toBeNull();
-    for (const path of ['/projects', '/notes', '/workflows', '/browser-automations', '/capabilities/connectors', '/capabilities/skills']) {
+    for (const path of ['/projects', '/notes', '/browser-automations', '/capabilities/connectors', '/capabilities/skills']) {
       expect(document.body.querySelector(`a[href="${path}"]`)).toBeNull();
     }
   });
@@ -72,7 +71,7 @@ describe('product primary navigation', () => {
     expect(container.querySelector('a[href="/capabilities/extensions"]')?.textContent).toBe('Capabilities');
   });
 
-  it.each(['/workflows/example/edit', '/browser-automations/example'])('keeps Automations active for %s', (path) => {
+  it.each([ '/browser-automations/example'])('keeps Automations active for %s', (path) => {
     renderAt(path, <SidebarNavItems />);
     expect(container.querySelector('a[href="/automations"]')?.getAttribute('aria-current')).toBe('page');
   });

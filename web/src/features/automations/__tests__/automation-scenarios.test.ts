@@ -10,8 +10,8 @@ describe('scenario creation', () => {
     const [reminder, brief, review, followUp] = automationScenarios(messages(language).automations);
     expect(reminder.form.instruction).toBe('');
     expect(reminder.form.triggerMode).toBe('once');
-    expect(buildInput(brief.form, null).trigger).toEqual({ kind: 'schedule', schedule: { kind: 'cron', expr: '30 8 * * *' } });
-    expect(buildInput(review.form, null).trigger).toEqual({ kind: 'schedule', schedule: { kind: 'cron', expr: '0 17 * * 5' } });
+    expect(buildInput(brief.form).trigger).toEqual({ kind: 'schedule', schedule: { kind: 'cron', expr: '30 8 * * *' } });
+    expect(buildInput(review.form).trigger).toEqual({ kind: 'schedule', schedule: { kind: 'cron', expr: '0 17 * * 5' } });
     expect(followUp.requiresProject).toBe(true);
     for (const scene of [brief, review, followUp]) {
       expect(scene.form.notificationPolicy).toBe('all');

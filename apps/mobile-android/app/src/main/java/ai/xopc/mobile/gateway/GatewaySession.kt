@@ -484,10 +484,7 @@ class GatewaySession(
     } })
 
   private fun readCatalog(): GatewayCatalog {
-    val raw = store.read("gateway-catalog") ?: return store.read("profile")?.let { legacy ->
-      val parsed = parseProfile(JSONObject(legacy))
-      GatewayCatalog(listOf(parsed), parsed.gatewayId)
-    } ?: GatewayCatalog(emptyList(), "")
+    val raw = store.read("gateway-catalog") ?: return GatewayCatalog(emptyList(), "")
     val json = JSONObject(raw)
     val items = json.getJSONArray("profiles")
     require(items.length() <= 20) { "INVALID_PROFILE" }

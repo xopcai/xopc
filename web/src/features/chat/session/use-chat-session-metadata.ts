@@ -8,7 +8,6 @@ import { useGatewayStore } from '@/stores/gateway-store';
 
 export interface ChatSessionMetadata {
   identity?: SessionIdentityInput;
-  workflowRunId: string | null;
   ownerAgentId: string | null;
   sessionType: string | null;
   sourceNoteId: string | null;
@@ -28,9 +27,6 @@ export function useChatSessionMetadata(conversationId: string | null | undefined
     async (): Promise<ChatSessionMetadata | undefined> => {
       if (await readLocalSessionDraft(trimmedKey!)) return undefined;
       const detail = await getSessionDetail(trimmedKey!);
-      const rawRunId = detail.customData?.workflowRunId;
-      const workflowRunId =
-        typeof rawRunId === 'string' && rawRunId.trim() ? rawRunId.trim() : null;
       const sessionType =
         typeof detail.sessionType === 'string' && detail.sessionType.trim()
           ? detail.sessionType.trim()
@@ -54,7 +50,6 @@ export function useChatSessionMetadata(conversationId: string | null | undefined
       const rawForkedFromSessionName = detail.customData?.forkedFromSessionName;
       return {
         identity: { sourceChannel: detail.sourceChannel, sessionType: detail.sessionType, customData: detail.customData },
-        workflowRunId,
         ownerAgentId,
         sessionType,
         sourceNoteId,

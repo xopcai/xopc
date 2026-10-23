@@ -26,7 +26,7 @@ describe('Harmony workspace contracts', () => {
   it('only offers editing for scheduled agent automations', () => {
     const base = { id: 'automation', name: 'Daily', enabled: true, trigger: { kind: 'schedule', schedule: { kind: 'cron', expr: '0 9 * * *' } }, action: { kind: 'agent', instruction: 'Summarize' } };
     expect(automationItem(base).editable).toBe(true);
-    expect(automationItem({ ...base, action: { kind: 'workflow' } }).editable).toBe(false);
+    expect(automationItem({ ...base, action: { kind: 'system' } }).editable).toBe(false);
     expect(automationItem({ ...base, trigger: { kind: 'webhook' } }).editable).toBe(false);
   });
   it('preserves existing enabled/conversation/notification settings on automation edits', () => {

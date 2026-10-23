@@ -32,7 +32,6 @@ const componentTests = [
   'src/storage/**/*.{test,spec}.{ts,tsx}',
   'src/tasks/**/*.{test,spec}.{ts,tsx}',
   'src/work-discovery/**/*.{test,spec}.{ts,tsx}',
-  'src/workflows/**/*.{test,spec}.{ts,tsx}',
 ];
 
 export default defineConfig({

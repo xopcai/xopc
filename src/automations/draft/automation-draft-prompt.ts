@@ -41,12 +41,10 @@ Useful product events:
 - note.updated
 - task.created
 - task.attention_required.v2
-- workflow.run.completed
 - channel.message.received
 
 Allowed actions:
 - Agent: { "kind": "agent", "agentId": "optional", "instruction": "what to do", "timeoutSeconds": 300 }
-- Workflow: { "kind": "workflow", "workflowId": "known_workflow_id", "input": {}, "goal": "optional", "timeoutSeconds": 300 }
 
 Safety modes:
 - { "mode": "suggest_only" }: safest default, generate recommendations only.
@@ -54,7 +52,6 @@ Safety modes:
 - { "mode": "auto_apply" }: trusted automation may act automatically.
 
 Rules:
-- Prefer agent actions unless the user names a specific existing workflow id.
 - Default to safety { "mode": "suggest_only" } unless the user explicitly asks for fully automatic execution.
 - Do not invent destructive actions. For deletion, external sending, or irreversible changes, include a risk and make the instruction ask for confirmation.
 - Use cron for daily/weekly schedules. Use standard 5-field cron.

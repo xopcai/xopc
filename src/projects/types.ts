@@ -41,12 +41,6 @@ export interface ProjectWithDetails extends Project {
     updatedAt: string;
     agentId: string;
   }>;
-  recentWorkflowRuns: Array<{
-    runId: string;
-    definitionId: string;
-    status: string;
-    createdAt: number;
-  }>;
   milestones: ProjectMilestone[];
   recentUpdates: ProjectUpdate[];
 }

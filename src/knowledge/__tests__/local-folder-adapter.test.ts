@@ -38,7 +38,7 @@ describe('LocalFolderKnowledgeSourceAdapter', () => {
     expect(result.snapshotExternalIds).toEqual(['notes/plan.md']);
   });
 
-  it('rechecks content even when an incremental cursor is newer than mtime', async () => {
+  it('rechecks content from a completed scan checkpoint regardless of mtime', async () => {
     const root = mkdtempSync(join(tmpdir(), 'xopc-local-source-'));
     roots.push(root);
     writeFileSync(join(root, 'old.md'), 'already synced');
@@ -46,7 +46,7 @@ describe('LocalFolderKnowledgeSourceAdapter', () => {
 
     const result = await adapter.pull({
       instanceId: 'local-folder:local-files',
-      cursor: new Date(Date.now() + 1_000).toISOString(),
+      cursor: JSON.stringify({ capturedAt: new Date(Date.now() + 1_000).toISOString() }),
       signal: new AbortController().signal,
     });
 

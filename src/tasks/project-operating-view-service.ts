@@ -100,7 +100,6 @@ export class ProjectOperatingViewService {
         href: `/tasks/${encodeURIComponent(card.id)}`,
         updatedAt: card.updatedAt,
       }))),
-      running: project.recentWorkflowRuns.filter((run) => run.status === 'queued' || run.status === 'running'),
       recentResults,
       digest: {
         health: cards.length === 0 ? 'empty' : attentionCount > 0 ? 'attention' : 'healthy',

@@ -9,11 +9,9 @@ import { DurableState } from '../durable-state.js';
 import { DurableQueue } from '../durable-queue.js';
 import { AgentInbox } from '../../../agent/ipc/inbox.js';
 import { NotesStore } from '../../../notes/store.js';
-import { createWorkflowCatalog, WorkflowRevisionConflictError } from '../../../agent/workflow/catalog.js';
 import { loadExtensionStore, saveExtensionStore } from '../../../gateway/hono/lib/extension-store.js';
 import { appendComposioTriggerEvent } from '../../../connectors/composio-triggers.js';
 import { ShareStore } from '../../../share/share-store.js';
-import { WorkflowEventStore } from '../../../workflows/store/event-store.js';
 import type { Config } from '../../../config/schema.js';
 import type { AgentIPCMessage } from '../../../agent/ipc/types.js';
 import type { Note } from '../../../notes/types.js';
@@ -27,14 +25,6 @@ beforeEach(() => {
 });
 afterEach(() => { vi.restoreAllMocks(); closeXopcDatabase(); rmSync(dir, { recursive: true, force: true }); });
 
-const graph = {
-  schemaVersion: 1 as const,
-  nodes: [
-    { id: 'input', kind: 'input' as const, title: 'Input', position: { x: 0, y: 0 }, config: {} },
-    { id: 'output', kind: 'output' as const, title: 'Output', position: { x: 100, y: 0 }, config: {} },
-  ],
-  edges: [{ id: 'edge', source: 'input', target: 'output' }],
-};
 
 describe('durable application storage', () => {
   it('isolates exact namespaces and scopes and rolls back failed mutations', () => {
@@ -49,25 +39,7 @@ describe('durable application storage', () => {
     expect(new DurableState('a/b', 'two').get('key')).toBeUndefined();
   });
 
-  it('saves workflow current revision and history atomically and rejects stale writers', () => {
-    const a = createWorkflowCatalog();
-    const b = createWorkflowCatalog();
-    a.save({ name: 'demo', graph, expectedRevision: 0 });
-    b.save({ name: 'demo', graph, expectedRevision: 1 });
-    expect(() => a.save({ name: 'demo', graph, expectedRevision: 1 })).toThrow(WorkflowRevisionConflictError);
-    closeXopcDatabase(); openXopcDatabase({ path: dbPath });
-    expect(a.load('demo').revision).toBe(2);
-    expect(a.listRevisions('demo').map(row => row.revision)).toEqual([2, 1]);
-  });
 
-  it('allocates unique event sequences across concurrent store instances', async () => {
-    const stores = [new WorkflowEventStore({} as Config, 'main'), new WorkflowEventStore({} as Config, 'main')];
-    await Promise.all(Array.from({ length: 20 }, (_, i) => stores[i % 2].append({
-      runId: 'run', type: 'run_started', payload: { startedAtMs: i },
-    })));
-    expect((await stores[0].readRunEvents('run')).map(row => row.sequence)).toEqual(Array.from({ length: 20 }, (_, i) => i + 1));
-    expect(await new WorkflowEventStore({} as Config, 'other').readRunEvents('run')).toEqual([]);
-  });
 
   it('does not overwrite same-millisecond snapshots and cascades note deletion', async () => {
     const store = new NotesStore();

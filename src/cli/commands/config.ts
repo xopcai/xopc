@@ -99,8 +99,6 @@ function setNestedValue(obj: any, path: string, value: any): any {
 function createConfigCommand(ctx: CLIContext): Command {
   const cmd = new Command('config')
     .description('View and edit configuration')
-    .option('--show', 'Show full configuration (alias for `config show`)')
-    .option('--validate', 'Validate configuration file (alias for `config validate`)')
     .addHelpText(
       'after',
       formatExamples([
@@ -113,18 +111,7 @@ function createConfigCommand(ctx: CLIContext): Command {
         'xopc config token --generate   # Generate new token',
       ]),
     )
-    .action(async (options) => {
-      if (options.show) {
-        await runConfigShow(ctx.configPath);
-        return;
-      }
-      if (options.validate) {
-        const ok = await runConfigValidate(ctx.configPath);
-        if (!ok) {
-          process.exit(1);
-        }
-        return;
-      }
+    .action(() => {
       cmd.outputHelp();
     });
 

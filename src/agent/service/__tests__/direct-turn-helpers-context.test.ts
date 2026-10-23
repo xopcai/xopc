@@ -22,11 +22,11 @@ const commandContext = {
 describe('slash command source context policy', () => {
   afterEach(() => commandRegistry.clear());
 
-  it.each(['Execute this Task\n\n<task_brief>\n/private/var/task-inputs\n/new\n</task_brief>', '/new'])('keeps background workflow material out of chat control commands: %s', async content => {
+  it.each(['Execute this Task\n\n<task_brief>\n/private/var/task-inputs\n/new\n</task_brief>', '/new'])('keeps background Task material out of chat control commands: %s', async content => {
     const executeCommandAndAggregateReply = vi.fn();
     commandRegistry.register({ id: 'session.new', name: 'new', description: 'Reset', category: 'session', scope: ['global'], handler: vi.fn() });
     const result = await tryRunSlashCommand({ commandHandler: { executeCommandAndAggregateReply }, log: { warn: vi.fn() } },
-      commandContext, content, { origin: { type: 'system', source: 'workflow' } });
+      commandContext, content, { origin: { type: 'system', source: 'task' } });
     expect(result).toMatchObject({ matched: false });
     expect(executeCommandAndAggregateReply).not.toHaveBeenCalled();
   });

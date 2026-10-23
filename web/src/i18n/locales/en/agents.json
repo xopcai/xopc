@@ -65,7 +65,7 @@
     "desc": {
       "model": "Default model for new sessions.",
       "modelFallbacks": "Tried in order when the primary model returns an error after transient retries. Requires API keys for each provider.",
-      "smallModel": "Optional cheaper/faster tier for lightweight workflow steps. Leave blank to fall back to the primary model.",
+      "smallModel": "Optional cheaper/faster tier for lightweight tasks. Leave blank to fall back to the primary model.",
       "smallModelFallbacks": "Tried in order when the small primary fails. Requires API keys for each provider.",
       "imageModel": "Optional. Used for image understanding / vision. Only models the gateway marks as accepting image input are listed.",
       "imageModelFallbacks": "Tried in order when the primary vision model fails. Only models flagged as image-capable are listed.",

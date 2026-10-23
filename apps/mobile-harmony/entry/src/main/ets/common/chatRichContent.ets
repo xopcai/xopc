@@ -119,7 +119,7 @@ export function artifactMedia(artifact: XopcArtifact): XopcHistoryMedia {
 interface XopcToolOutputEnvelope { text?: string; content?: XopcContentBlock[]; details?: Object; delivery?: XopcProductDelivery; }
 function validProductReference(reference?: XopcProductReference): boolean {
   return !!reference && typeof reference.id === 'string' && typeof reference.title === 'string'
-    && ['task', 'project', 'note', 'automation', 'session', 'file', 'settings', 'workflow_run', 'workflow_definition', 'local_app'].includes(reference.kind);
+    && ['task', 'project', 'note', 'automation', 'session', 'file', 'settings', 'local_app'].includes(reference.kind);
 }
 function deliveryRecord(raw?: Object): XopcProductDelivery | undefined {
   if (!raw || typeof raw !== 'object') return undefined;

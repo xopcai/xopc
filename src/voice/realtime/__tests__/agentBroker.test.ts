@@ -50,13 +50,13 @@ describe('DurableVoiceAgentBroker', () => {
     await expect(broker.cancel(task.taskId)).resolves.toBe(false);
   });
 
-  it('accepts the legacy stream terminal event during rolling updates', async () => {
+  it('finishes on the current run terminal event', async () => {
     const { broker, deps } = setup();
-    deps.subscribe.mockReturnValue({ initial: [event('stream_end')], cursor: 1, unsubscribe: vi.fn() });
+    deps.subscribe.mockReturnValue({ initial: [event('run_end')], cursor: 1, unsubscribe: vi.fn() });
     const task = await broker.delegate({ conversationId: 'chat', expectedTranscriptId: 'session', turnId: 'turn', text: 'hello', signal: new AbortController().signal });
     const types: string[] = [];
     for await (const value of task.events) types.push(value.type);
-    expect(types).toEqual(['stream_end']);
+    expect(types).toEqual(['run_end']);
   });
 
   it('keeps a task update hidden from user input and refuses to steer an active run', async () => {

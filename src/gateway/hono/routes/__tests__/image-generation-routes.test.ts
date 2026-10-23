@@ -30,7 +30,7 @@ describe('image generation routes', () => {
         chat: { primary: 'openai/gpt-5', fallbacks: [] }, intents: {},
         imageGeneration: { primary: 'google/gemini-3.1-flash-image', fallbacks: [], autoProviderFallback: false },
       },
-      skills: { mode: 'selected', include: [] }, tools: {}, workflows: {}, runtime: {},
+      skills: { mode: 'selected', include: [] }, tools: {}, runtime: {},
     } });
     const currentConfig = ConfigSchema.parse({});
     const app = new Hono();

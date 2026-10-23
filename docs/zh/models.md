@@ -50,7 +50,7 @@ xopc models auth login --provider <provider>
 
 API key 和 **使用 ChatGPT 登录**统一使用 `openai`。订阅用户需要执行 `xopc models auth login --provider openai` 重新登录，旧 `openai-codex` 凭据不再复用。已保存的 API key 配置优先于 OAuth；选择订阅访问时先移除该密钥配置。没有已保存的密钥或 OAuth 凭据时才使用环境变量密钥。
 
-Azure 的服务商 ID 使用 `azure`，`azure-openai-responses` API 协议类型和 `AZURE_OPENAI_*` 环境变量仍然有效。Agent 默认模型、模型意图、工作流和会话覆盖中的旧服务商 ID 需要手动更新。已移除的服务商会明确报错，不会自动改用其他模型。
+Azure 的服务商 ID 使用 `azure`，`azure-openai-responses` API 协议类型和 `AZURE_OPENAI_*` 环境变量仍然有效。Agent 默认模型、模型意图和会话覆盖中的旧服务商 ID 需要手动更新。已移除的服务商会明确报错，不会自动改用其他模型。
 
 模型 ID 使用当前目录中的实际名称。本地 `gpt-5.6` 别名已删除，可选择目录中的 `openai/gpt-6-sol` 等型号。历史会话保留。本次依赖升级不启用 Codemode 或 pi 内置 MCP 扩展。
 

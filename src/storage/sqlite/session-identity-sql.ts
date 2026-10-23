@@ -15,7 +15,6 @@ export const SESSION_SOURCE_SQL = `(CASE
 
 export const SESSION_PURPOSE_SQL = `(CASE
   WHEN ${SESSION_SOURCE_SQL} = 'system' THEN 'system'
-  WHEN s.session_type = 'workflow-subagent' THEN 'subagent'
-  WHEN s.session_type = 'workflow-run' THEN 'workflow'
+  WHEN s.session_type = 'subagent' THEN 'subagent'
   WHEN ${SESSION_SOURCE_SQL} = 'automation' THEN 'automation'
   ELSE 'chat' END)`;

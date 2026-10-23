@@ -57,7 +57,6 @@ export function useChatSessionInit(opts: {
     cfg: {
       model: string;
       thinkingLevel?: string | null;
-      reasoningLevel?: string | null;
       activityDetail?: {
         default: string;
         override: string | null;

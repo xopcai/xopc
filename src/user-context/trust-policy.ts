@@ -30,7 +30,7 @@ export function buildActionTrustPrompt(level: UserTrustLevel): string {
     '## Action Trust Boundary',
     `Current default: ${level}.`,
     '- This controls agent-initiated or proactive actions. A direct user request in the current turn is explicit approval to carry out that request within existing safety and permission boundaries.',
-    '- Never expand connector permissions, workflow scope, credentials, or access because of this setting.',
+    '- Never expand connector permissions, execution scope, credentials, or access because of this setting.',
     '- Irreversible, destructive, financial, permission-expanding, or public external actions still require explicit confirmation.',
   ];
   const instruction = level === 'observe'

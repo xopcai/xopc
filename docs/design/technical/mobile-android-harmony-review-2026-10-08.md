@@ -15,7 +15,6 @@
 | 实时语音页面 | `VoiceCallView.ets` 全屏/迷你窗 | 未验 | Android 原为阻塞弹窗；本轮增加可拖动迷你窗。展开态仍是 Material 弹窗，与鸿蒙全屏布局不同，**P2**；迷你窗手势和后台页面操作待设备验收。 |
 | 语音输入、朗读、语音笔记 | 图 07–10；`voiceCapture.ets`、`chatReadAloud.ets` | 未验 | 录音/暂停/试听/转写、回复朗读、笔记录音均有代码；真机录音质量、音频焦点、后台处理/恢复未验。 |
 | 进展、任务与项目 | 图 15–21；`WorkspaceView.ets`、`ProjectSpaceView.ets` | 未验 | 任务/项目列表与详情、项目会话、项目内笔记/自动化正在当前工作区完善；已连接项目归属及完整返回链未验。 |
-| 工作流 | `WorkflowView.ets` | 未验 | 本轮增加“进展 → 工作流”列表、运行详情、阶段/Agent/结果、4 秒轮询与确认取消。Android 编译通过，Gateway 列表接口返回空列表；有运行数据的设备旅程未验。 |
 | 自动化 | 图 22、23；`AutomationRunView.ets` | 未验 | 列表/详情/运行、创建编辑和结果页面已有；真实 Gateway 运行/取消及项目内入口未验。 |
 | 笔记、文件与分享 | 图 04–10、31–35；`NotesView.ets`、`FilesView.ets` | 未验 | 笔记列表/编辑/语音、文件空间/预览与分享入口已有；录完笔记落地、复杂文件预览和跨端同步冲突需设备验收。 |
 | 我的、Gateway 和设置 | 图 24–29；`PersonalView.ets`、`GatewayProfilesView.ets` | 未验 | 个人首页、连接探测、语言/主题/配色与分享中心已有；真实候选 Gateway 切换失败保留及同状态视觉未验。 |
@@ -26,7 +25,6 @@
 
 | 差异与进入步骤 | 鸿蒙参考 | Android 证据 | 预期 / 实际 | 严重度 |
 | --- | --- | --- | --- | --- |
-| 进展 → 工作流 → 运行详情 | `WorkflowView.ets` | Android 本轮增加 `ProgressScreen.kt` 入口、`WorkflowScreen.kt` 与 `WorkflowRepository.kt` | 代码和编译已对齐；需使用含运行数据的 Gateway 在设备上验收列表、详情、取消与返回 | P1 验收 |
 | 系统推送 → 打开通知 | 鸿蒙 `pushNotifications.ets`、`notificationNavigation.ets`；Gateway `device-push.ts` 仅支持 `harmonyos` | Android 仅设置通知项，未找到 token 注册和通知路由 | 通知可注册、确认并跳到对应对象；目前链路缺失，Gateway 也尚不接受 Android 注册 | P1 |
 | 助手 → 实时语音 → 收起 | 鸿蒙 `VoiceCallView.ets` 全屏/迷你窗 | Android `MainScreen.kt` 本轮增加 `voice-call-mini`，设备交互未验 | 迷你窗可拖动且页面仍可操作；展开态仍是弹窗 | P2 |
 
@@ -40,7 +38,6 @@
 
 ## 待处理优先级
 
-1. **P1**：工作流页面/运行详情设备验收；推送注册与通知跳转；真实语音通话设备验收若发现断流或丢回复须阻止发布。
 2. **P2**：语音展开态全屏布局；项目归属与多媒体真实 Gateway 旅程；深浅色、大字号、TalkBack、弱网/进程恢复。
 
 本报告随本轮复测更新；历史实现记录见 `docs/design/technical/mobile-android-native-parity.md`，不能将旧的受控状态测试写成当前版本的完整端到端通过。
@@ -48,6 +45,4 @@
 ## 本轮验证记录
 
 - 托管 Gradle `:app:compileDebugKotlin` 与定向 `:app:testDebugUnitTest`（`VoiceReplyHandoffTest`、`VoiceUplinkCongestionTest`、`VoiceProtocolTest`）通过；这些覆盖连续回复缓冲、拥塞阈值和协议数据，未覆盖真实音频硬件。
-- 托管 Gradle `:app:assembleDebug` 通过，工作流入口和语音界面已进入 Debug APK；尚无有效设备端断言可宣告交互通过。
-- 本地 Gateway 的 `/api/voice/realtime/status` 返回可用状态，`/api/workflows/runs?limit=50` 返回空列表。Android 测试模拟器未与 HTTPS 语音 Gateway 配对，无法由此证明通话稳定性。
 - 五入口滚动仪器测试与另一个并行仪器测试在同一模拟器安装/执行时冲突，测试进程崩溃，未得到有效断言结果；需独占模拟器复测。

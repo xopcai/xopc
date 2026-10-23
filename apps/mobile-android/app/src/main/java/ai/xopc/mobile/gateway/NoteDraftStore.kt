@@ -20,11 +20,9 @@ data class NoteDraft(val id: String, val title: String, val markdown: String,
 /** Gateway-scoped encrypted SQLite drafts; only opaque IDs and update times are indexed in cleartext. */
 class NoteDraftStore(context: Context) {
   private val database = DraftDatabase(context.applicationContext)
-  private val legacy = AndroidSecureStore(context, "note_drafts_v1", "xopc.note.drafts.v1")
 
   @Synchronized
   fun pending(gatewayId: String): List<NoteDraft> {
-    migrate(gatewayId)
     database.readableDatabase.query(TABLE, arrayOf("note_id", "payload"), "gateway_id=?",
       arrayOf(gatewayId), null, null, "updated_at DESC").use { rows ->
       val drafts = ArrayList<NoteDraft>()
@@ -35,7 +33,6 @@ class NoteDraftStore(context: Context) {
 
   @Synchronized
   fun load(gatewayId: String, id: String): NoteDraft? {
-    migrate(gatewayId)
     database.readableDatabase.query(TABLE, arrayOf("payload"), "gateway_id=? AND note_id=?",
       arrayOf(gatewayId, id), null, null, null).use { rows ->
       return if (rows.moveToFirst()) decode(gatewayId, id, rows.getBlob(0)) else null
@@ -80,19 +77,8 @@ class NoteDraftStore(context: Context) {
   fun removeGateway(gatewayId: String) {
     checkGatewayId(gatewayId)
     database.writableDatabase.delete(TABLE, "gateway_id=?", arrayOf(gatewayId))
-    legacy.remove("note-draft.$gatewayId")
   }
 
-  private fun migrate(gatewayId: String) {
-    checkGatewayId(gatewayId)
-    val key = "note-draft.$gatewayId"
-    val raw = legacy.read(key) ?: return
-    val draft = JSONObject(raw).let { row -> NoteDraft(row.getString("id"), row.getString("title"),
-      row.getString("markdown"), row.getString("mutationId"), row.getLong("version")) }
-    validate(draft)
-    if (loadWithoutMigration(gatewayId, draft.id) == null) save(gatewayId, draft)
-    legacy.remove(key)
-  }
 
   private fun values(gatewayId: String, draft: NoteDraft): ContentValues {
     validate(draft)
@@ -104,13 +90,6 @@ class NoteDraftStore(context: Context) {
       put("note_id", draft.id)
       put("payload", encrypt(gatewayId, draft.id, json.toByteArray(Charsets.UTF_8)))
       put("updated_at", System.currentTimeMillis())
-    }
-  }
-
-  private fun loadWithoutMigration(gatewayId: String, id: String): NoteDraft? {
-    database.readableDatabase.query(TABLE, arrayOf("payload"), "gateway_id=? AND note_id=?",
-      arrayOf(gatewayId, id), null, null, null).use { rows ->
-      return if (rows.moveToFirst()) decode(gatewayId, id, rows.getBlob(0)) else null
     }
   }
 

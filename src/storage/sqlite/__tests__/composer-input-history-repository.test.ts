@@ -70,11 +70,7 @@ describe('composer input history repository', () => {
     expect(listComposerInputHistory(B)).toEqual([]);
   });
 
-  it('never recalls retained legacy global entries', () => {
-    getSqliteDatabase().prepare('INSERT INTO composer_input_history_legacy(text, created_at) VALUES (?, ?)').run('legacy', 1);
-    expect(listComposerInputHistory(A)).toEqual([]);
-    expect(listComposerInputHistory(B)).toEqual([]);
-  });
+
 
   it('clears session entries' , () => {
     appendComposerInputHistory(A, 'a');

@@ -82,7 +82,7 @@ struct ChatRenderingTests {
         #expect(ChatMessageLink.resolve("/notes/report.md") == .route(page: "notes", itemID: "report.md"))
         #expect(ChatMessageLink.resolve("xopc://open?kind=task&id=t") == .route(page: "tasks", itemID: "t"))
         #expect(ChatMessageLink.resolve("#/projects/p") == .route(page: "projects", itemID: "p"))
-        #expect(ChatMessageLink.resolve("/workflows/runs/r") == .route(page: "workflows", itemID: "r"))
+        #expect(ChatMessageLink.resolve("/workflows/runs/r") == nil)
         #expect(ChatMessageLink.resolve("/automations?automation=a") == .route(page: "automations", itemID: "a"))
         #expect(ChatMessageLink.resolve("#/automations?automation=a") == .route(page: "automations", itemID: "a"))
         #expect(ChatMessageLink.resolve("xopc://workspace/file?path=docs%2F%E4%B8%AD%E6%96%87.md") == .workspaceFile(path: "docs/中文.md"))

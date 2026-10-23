@@ -38,13 +38,7 @@ export type MemoryDisclosurePolicy = 'silent' | 'referenceable' | 'ask_before_re
 export type MemoryOriginClass = 'owner' | 'agent' | 'untrusted' | 'system';
 
 export type MemorySessionKind =
-  | 'interactive'
-  | 'group'
-  | 'automation'
-  | 'workflow'
-  | 'subagent'
-  | 'background'
-  | 'unknown';
+  'interactive' | 'group' | 'automation' | 'subagent' | 'background' | 'unknown';
 
 export interface MemoryProvenance {
   sourceAgentId: string;

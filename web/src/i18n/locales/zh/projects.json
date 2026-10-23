@@ -271,7 +271,6 @@
       "delete": "删除",
       "continue": "继续推进",
       "newChat": "新建会话",
-      "runWorkflow": "运行工作流",
       "viewAll": "查看全部",
       "agent": "agent",
       "defaultAgent": "默认 agent",
@@ -319,8 +318,7 @@
       "attention": "需关注",
       "attentionKinds": {
         "blocked_task": "受阻任务",
-        "stale_task": "停滞任务",
-        "failed_workflow": "执行受阻"
+        "stale_task": "停滞任务"
       },
       "noBlockedTasks": "暂无受阻任务。",
       "blockerTitlePlaceholder": "新增 blocker",
@@ -444,8 +442,6 @@
         "session.detached_from_project": "会话已解绑",
         "task.created": "任务已创建",
         "task.phase_changed": "任务阶段已变更",
-        "workflow_run.started": "系统推进已启动",
-        "workflow_run.completed": "系统推进已完成",
         "automation.run_started": "自动化运行已启动",
         "automation.run_completed": "自动化运行已完成"
       },
@@ -454,7 +450,6 @@
         "note": "笔记",
         "session": "会话",
         "task": "任务",
-        "workflow_run": "执行记录",
         "automation": "自动化"
       }
     },

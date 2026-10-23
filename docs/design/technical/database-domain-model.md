@@ -1,20 +1,20 @@
 # xopc 数据库业务域、表模型与关系审计
 
-> 审计日期：2026-09-26<br>
-> 代码版本：数据库 schema v256（基线 v217 + 218–256 迁移）<br>
-> 范围：`src/storage/sqlite/schema.sql`、`src/storage/sqlite/schemas/*.sql`、`src/storage/sqlite/migrations/*.sql` 以及生产代码中的 SQL 读写点。
+> 原始审计日期：2026-09-26；当前版本说明更新：2026-10-23<br>
+> 当前数据库 schema：v259，直接初始化，无历史升级链。下文域级审计保留原始审计时点的统计，非当前表数验收。<br>
+> 范围：`src/storage/sqlite/schema.sql`、`src/storage/sqlite/schemas/*.sql`、生产代码中的 SQL 读写点。历史迁移目录已删除。
 
 ## 1. 结论摘要
 
 - 当前最终结构包含 **203 张普通业务/支撑表**、**5 张 FTS5 虚拟表**，另有 **1 张 `schema_meta`**。SQLite 自动生成的 25 张 FTS shadow table 不属于业务模型，不在下文单独列出。
-- 数据模型已经形成 16 个主要业务域：会话、Agent、项目任务、工作流与执行环境、自动化、笔记与讨论、知识与记忆、用户理解、连接器、场景、通知与首页、设备与端点、本地应用、活动关系、工作发现、AI 用量账本。
+- 数据模型已经形成 16 个主要业务域：会话、Agent、项目任务与执行环境、自动化、笔记与讨论、知识与记忆、用户理解、连接器、场景、通知与首页、设备与端点、本地应用、活动关系、工作发现、AI 用量账本。
 - 关系既有数据库外键，也有依赖应用层维护的隐式 ID、JSON 快照和多态引用。最终 schema 中共有 **157 条显式外键边**。
 - 旧文件记忆索引 `memory_files`、`memory_chunks`、`memory_fts`、`memory_relations` 已由 v217 删除；悬空到不存在 `memory_records` 的外键缺陷随之消除。
 - v218–v222 已完成核心关系索引、关键 JSON 约束、时间字段归一化、AI 用量保留策略，以及 session 配置单一权威源。剩余重点是 compact baseline、更多 JSON 约束和多态关系治理。
 
 ## 2. 口径与关系标记
 
-本报告以“对空数据库执行完整迁移后的 `sqlite_master`”为准，而不是直接照抄基线文件。这样会正确排除已被迁移删除、重命名或重建的旧表。
+原始审计统计以当时空库初始化后的 `sqlite_master` 为准。当前 v259 直接执行规范 schema，不再运行历史迁移；当前清理验收见同目录的全仓兼容清理报告。
 
 关系标记：
 
@@ -30,8 +30,6 @@
 flowchart LR
   Agent[Agent 与协作] --> Session[会话与消息]
   Project[项目与任务] --> Session
-  Project --> Workflow[工作流与执行环境]
-  Workflow --> Session
   Automation[自动化] --> Session
   Automation --> Usage[AI 用量账本]
   Connector[连接器] --> Knowledge[知识采集]
@@ -106,7 +104,6 @@ erDiagram
 | `projects_fts` | 项目全文检索虚拟表 | 隐式 → `projects` |
 | `project_milestones` | 项目里程碑 | FK → `projects` |
 | `project_updates` | 项目健康度、进展、风险与下一步的时间线 | FK → `projects` |
-| `project_workflow_presets` | 项目到 workflow definition 的预设上下文 | FK → `projects`；definition 为隐式关系 |
 | `project_workspace_creation` | 项目工作区创建重试队列 | FK → `projects` |
 | `tasks` | 任务树、看板排序、委派、优先级和生命周期 | FK → `projects`、`project_milestones`、父 `tasks` |
 | `task_dependencies` | 任务 DAG 的依赖边 | 双 FK → `tasks` |
@@ -138,29 +135,12 @@ erDiagram
 
 主要 TypeScript 模型：`src/tasks/`、`src/projects/project-service.ts`、`src/storage/sqlite/session-task-plan-repository.ts`。
 
-### 4.4 工作流、执行环境与运行上下文
-
-| 表 | 职责 | 主要关系 |
-|---|---|---|
-| `workflow_runs` | workflow 运行索引、来源、结果和指标 | FK → `task_runs`；conversation/project/parent conversation 为隐式关系 |
-| `workflow_events` | workflow 的 agent/run 有序事件流 | `run_id` 为隐式关系 |
-| `workflow_context_snapshots` | workflow 选中的上下文与 token 估算 | run/project 为隐式关系 |
-| `execution_environments` | local/worktree 等执行环境及 Git 状态 | FK → `projects` |
-| `execution_environment_bindings` | conversation 到执行环境的占用历史 | FK → `execution_environments`；conversation 为隐式关系 |
-| `execution_environment_events` | 环境状态转换审计 | FK → `execution_environments` |
-| `execution_context_runs` | 一次上下文选择运行及指标 | conversation/turn 为隐式关系 |
-| `execution_context_items` | 候选对象评分、入选原因 | FK → `execution_context_runs`；object 为多态关系 |
-| `execution_context_feedback` | turn 对上下文选择的反馈 | FK → `execution_context_runs.turn_id` |
-| `context_snapshots` | 任务或会话实际注入 LLM 的授权上下文快照 | FK → `sessions`；owner 为多态关系 |
-
-主要 TypeScript 模型：`src/workflows/domain/run.ts`、`src/workflows/store/`、`src/execution-environments/`、`src/agent/context/`、`src/workflows/context/`。
-
 ### 4.5 通用自动化与浏览器自动化
 
 | 表 | 职责 | 主要关系 |
 |---|---|---|
 | `automations` | 定时/事件自动化定义、动作、安全、管理、可靠性和结果投递策略 | project 为隐式关系；关键 JSON 列均有数据库校验 |
-| `automation_runs` | 自动化运行快照、租约、取消和结果 | automation/conversation/workflow/root run 均为隐式关系，以保留运行历史 |
+| `automation_runs` | 自动化运行快照、租约、取消和结果 | automation/conversation/root run 均为隐式关系，以保留运行历史 |
 | `automation_run_events` | 自动化运行事件 | run/automation 为隐式关系 |
 | `automation_run_requests` | 启动 run 时的完整 automation 快照 | run 为隐式关系、快照语义 |
 | `automation_deleted_revisions` | 已删除自动化的最后 revision，防止旧写覆盖 | automation 为逻辑墓碑 |
@@ -386,8 +366,6 @@ erDiagram
 | 会话 | Agent | `sessions.agent_id` | 隐式；允许历史 Agent 被移除后仍保留会话 |
 | 会话 | 项目 | `sessions.project_id` | 隐式；存在孤儿风险 |
 | 任务 | 会话 | `task_runs`、`task_sessions`、handoff | 多数有 FK |
-| 工作流 | 任务 | `workflow_runs.task_run_id` | FK + `ON DELETE SET NULL` |
-| 自动化 | 会话/工作流/项目 | run 和 automation 上的 ID | 隐式/快照语义 |
 | 自动化事件 | 自动化/运行 | event delivery → automation/run；result → run | event 有 FK；automation/run 部分为隐式，并由 doctor 检查孤儿 |
 | 讨论 | 笔记/项目/任务 | capture → note/project；action → task | 前两者 FK，task 为隐式 |
 | 连接器 | 知识 | learning job → source run/item | 一部分隐式，便于跨来源保留审计 |
@@ -435,7 +413,6 @@ v217 已删除 `memory_relations` 及其旧文件记忆依赖。新知识关系�
 - `automation_event_deliveries.automation_id` → `automations.automation_id`
 - `automation_event_deliveries.run_id` → `automation_runs.run_id`
 - `discussion_action_tasks.task_id` → `tasks.task_id`
-- `workflow_events.run_id` → `workflow_runs.run_id`
 - `local_apps.active_release_id` → `local_app_releases.release_id`
 
 深度 doctor 已覆盖外键目标、`foreign_key_check` 和 9 组关键隐式关系孤儿检查。没有把会话归档、自动化历史等保留语义强行改成级联外键；剩余隐式关系应逐项记录删除语义后再决定是否建 FK。
@@ -519,7 +496,7 @@ principal（用户/信任主体） -> device/endpoint instance（具体安装）
 
 ### 已完成：精简数据库基线
 
-`schema.sql` 已合并为 v217 基线，不包含已删除功能的表；仅保留 v218 起的迁移，不再支持更旧版本的升级路径。
+`schema.sql` 已合并为 v259 当前基线；历史迁移及其加载器已删除，旧版本数据库拒绝打开，不做升级。
 
 ## 8. 分阶段实施结果与后续顺序
 
@@ -529,11 +506,11 @@ principal（用户/信任主体） -> device/endpoint instance（具体安装）
 4. **完成（v219–v220）**：关键 JSON 约束与时间整数化。
 5. **完成（v221）**：AI 用量 180 天保留与 provider/model 索引。
 6. **完成（v222）**：session 配置单一权威源。
-7. **完成**：生成 v217 基线，删除旧功能表和对应升级代码。
+7. **完成（2026-10-23）**：生成 v259 当前基线，删除旧功能表、历史迁移和对应加载代码。
 8. **按证据推进**：继续补关键 JSON 校验、多态引用 doctor 与 AI 用量隐私删除/体积报告。
 
 ## 9. 审计限制
 
 - “是否不用”基于当前仓库生产代码的静态表名引用与 schema trigger 检查，不包含用户本地数据库的实际行数，也不包含外部工具直接查询数据库的情况。
 - 动态 SQL、通用 repository、SQLite trigger、FTS shadow table 会降低单纯文本引用统计的可靠性；后续废弃判断仍需结合生产数据库行数与调用路径。
-- 后续删除任何表之前仍需：备份数据库、统计真实数据、运行 `PRAGMA foreign_key_check` 和 `PRAGMA integrity_check`，并验证旧版本升级与全新建库两条路径。
+- 后续删除任何表之前仍需：备份数据库、统计真实数据、运行 `PRAGMA foreign_key_check` 和 `PRAGMA integrity_check`，并验证全新建库及旧版本拒绝且不写入两种行为。

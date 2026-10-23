@@ -33,12 +33,12 @@ describe('AttentionGovernor', () => {
     ];
     const attention: HomeAttention[] = Array.from({ length: 4 }, (_, index) => ({
       id: `attention-${index}`,
-      kind: 'workflow_run',
+      kind: 'automation_run',
       runId: `run-${index}`,
       title: `Run ${index}`,
       detail: 'Failed',
       reason: 'run_failed',
-      href: '/workflows',
+      href: '/automations',
       updatedAt: index,
     }));
 

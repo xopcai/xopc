@@ -7,7 +7,6 @@ export const loadTaskDetailPage = () => import('@/pages/task-detail-page');
 export const loadProjectsPage = () => import('@/pages/projects-page');
 export const loadProjectDetailPage = () => import('@/pages/project-detail-page');
 export const loadNotesPage = () => import('@/pages/notes-page');
-export const loadWorkflowsPage = () => import('@/pages/workflows-page');
 export const loadCapabilitiesPage = () => import('@/features/capabilities/capabilities-page');
 export const loadUserModelPage = () => import('@/features/user-model/user-model-page');
 export const loadLogsPage = () => import('@/pages/logs-page');
@@ -95,7 +94,7 @@ export function preloadRouteForPath(to: string) {
   if (path.startsWith('/projects/')) return preload(loadProjectDetailPage);
   if (path === '/notes') return preload(loadNotesPage);
   if (path.startsWith('/notes/')) return preload(loadNotesPage);
-  if (path === '/workflows' || path.startsWith('/workflows/')) return preload(loadWorkflowsPage);
+
   if (path.startsWith('/extensions/')) return preload(loadExtensionPage);
   if (path === '/local-apps') return preload(loadLocalAppsPage);
   if (path.startsWith('/local-apps/')) return preload(loadLocalAppWorkbenchPage);

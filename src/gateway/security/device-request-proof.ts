@@ -87,7 +87,7 @@ export function verifyDeviceConnectionProof(principalId: string, ticket: string,
   try { device = getDevice(principalId); } catch { return false; }
   if (!device) return !header;
   if (device.revokedAt !== undefined) return false;
-  if (!device.requestProofVersion && !header) return true;
+  if (device.requestProofVersion !== 1) return false;
   const proof = parseRequestProof(header);
   if (!proof || Math.abs(Date.now() - proof.timestamp) > REQUEST_PROOF_WINDOW_MS || proof.digest !== proofDigest('')) return false;
   const message = requestProofMessage({ gatewayId: getOrCreateGatewayIdentity().id, credential: ticket,

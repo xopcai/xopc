@@ -50,18 +50,12 @@ import { cn } from '@/lib/cn';
 import type { StoredLanguage } from '@/lib/storage';
 import { useLocaleStore } from '@/stores/locale-store';
 import { messages } from '@/i18n/messages';
-import { WorkflowCard, type WorkflowCardLabels } from '@/features/chat/workflow/workflow-card';
-import { isWorkflowToolBlock } from '@/features/chat/workflow/workflow.utils';
 import { CodemodeOutputLink } from './codemode-output-link';
 import { codemodeOutputPath } from './codemode-output-path';
 
 function activityItemKey(block: AssistantWorkLogItem, index = 0): string {
   return knownPartRenderKey(block) ?? (block.type === 'tool_use' ? block.id
     : block.type === 'text' ? block.segmentId ?? `narration-${index}` : `thinking-${index}`);
-}
-
-export interface AssistantActivityWorkflowOptions {
-  labels: WorkflowCardLabels;
 }
 
 /**
@@ -108,7 +102,6 @@ export function AssistantStepsBlock({
   clusterLabels,
   cardLabels,
   conversationId,
-  workflowOptions,
 }: {
   workLog: AssistantTurnWorkLogPresentation;
   pendingStatus?: 'sending' | 'waiting';
@@ -144,7 +137,6 @@ export function AssistantStepsBlock({
   };
   cardLabels: ToolCardLabels;
   conversationId?: string | null;
-  workflowOptions: AssistantActivityWorkflowOptions;
 }) {
   const language = useLocaleStore((s) => s.language);
   const [waitingLong, setWaitingLong] = useState(false);
@@ -350,7 +342,7 @@ export function AssistantStepsBlock({
       </button> : null}
       {workLog.items.filter((item): item is ToolUseContent => item.type === 'tool_use').map((block) => (
         <StepRow key={block.id} block={block} toolLabels={toolLabels} stepLabels={timelineLabels}
-          cardLabels={cardLabels} conversationId={conversationId} workflowOptions={workflowOptions} surfaceOnly runActive={anyActive} />
+          cardLabels={cardLabels} conversationId={conversationId}surfaceOnly runActive={anyActive} />
       ))}
       {expanded || hasOpened ? (
         <div className="assistant-activity-disclosure" data-open={expanded} aria-hidden={!expanded} inert={!expanded}>
@@ -365,7 +357,6 @@ export function AssistantStepsBlock({
                 stepLabels={timelineLabels}
                 cardLabels={cardLabels}
                 conversationId={conversationId}
-                workflowOptions={workflowOptions}
                 animateNew={anyActive && expanded && !showEarlier}
                 runActive={anyActive}
               />
@@ -384,7 +375,6 @@ export function AssistantStepsTimeline({
   cardLabels,
   className,
   conversationId,
-  workflowOptions,
   animateNew = false,
   runActive,
 }: {
@@ -417,7 +407,6 @@ export function AssistantStepsTimeline({
   cardLabels: ToolCardLabels;
   className?: string;
   conversationId?: string | null;
-  workflowOptions: AssistantActivityWorkflowOptions;
 }) {
   const initialKeys = useRef(new Set(blocks.map(activityItemKey)));
   const hasBlocks = blocks.length > 0;
@@ -439,7 +428,6 @@ export function AssistantStepsTimeline({
               stepLabels={stepLabels}
               cardLabels={cardLabels}
               conversationId={conversationId}
-              workflowOptions={workflowOptions}
               runActive={runActive}
             />
           </div>
@@ -524,7 +512,6 @@ function StepRow({
   stepLabels,
   cardLabels,
   conversationId,
-  workflowOptions,
   surfaceOnly = false,
   runActive = true,
 }: {
@@ -556,7 +543,6 @@ function StepRow({
   };
   cardLabels: ToolCardLabels;
   conversationId?: string | null;
-  workflowOptions: AssistantActivityWorkflowOptions;
 }) {
   const currentPart = useChatContentPart(conversationId, knownPartRenderKey(snapshotBlock));
   const block = currentPart?.type === snapshotBlock.type ? currentPart : snapshotBlock;
@@ -621,17 +607,7 @@ function StepRow({
     );
   }
 
-  if (isWorkflowToolBlock(block)) {
-    if (!surfaceOnly) return null;
-    return (
-      <WorkflowCard
-        block={block}
-        startedAt={block.startedAt}
-        conversationId={conversationId}
-        labels={workflowOptions.labels}
-      />
-    );
-  }
+
 
   const isStreaming = runActive && (block.status === 'running' || block.activity?.status === 'running');
   const isError = block.status === 'error' || block.activity?.status === 'failed';

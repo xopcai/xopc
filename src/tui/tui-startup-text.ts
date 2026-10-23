@@ -75,10 +75,9 @@ export function formatTuiStartupText(input: {
   if (expanded) {
     lines.push(
       '',
-      'xopc can use skills, workflows, connectors, and project context. Ask it how to automate or connect services.',
+      'xopc can use skills, connectors, and project context. Ask it how to automate or connect services.',
       '',
       'Ask xopc:',
-      '  "what workflows are available?"',
       '  "use a connector to check issues or docs"',
       '  "what skills can help with this task?"',
     );
@@ -90,7 +89,6 @@ export function formatTuiStartupText(input: {
     lines.push('');
     lines.push(...formatResourceSection('Skills', input.resources?.skills, { expanded }));
     lines.push('');
-    lines.push(...formatResourceSection('Workflows', input.resources?.workflows, { expanded }));
     lines.push('');
     lines.push(...formatResourceSection('Connectors', input.resources?.connectors, { expanded }));
   }
@@ -100,7 +98,6 @@ export function formatTuiStartupText(input: {
       '',
       'Useful commands:',
       '  /help — Show all commands and shortcuts',
-      '  /workflow list — List saved workflows',
       '  /models — List available models',
       '  /settings — Open TUI settings',
       '  /export — Export current session',

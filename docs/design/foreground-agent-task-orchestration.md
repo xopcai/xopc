@@ -156,7 +156,6 @@ Task contract 和 TaskRun receipt 仍分别是任务书与最终执行结论的�
 
 ## Personal 单层后台分配：现行契约与设计差异
 
-更新：2026-10-17，合并 2026-10-14 后台分配方案并按当前 `src/tasks/task-allocation-service.ts` 与实现记录核对。上文早期“主 Agent 选择执行者并创建 TaskRun”的流程，对普通 Personal 委派由本节异步分配替代；直接指定执行者的既有 Task、Workflow 和 Automation 沿各自入口处理。
 
 ### 提交、身份与执行所有权
 

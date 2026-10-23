@@ -37,8 +37,7 @@ export class LocalFolderKnowledgeSourceAdapter implements KnowledgeSourceAdapter
     };
     await walk(root);
     paths.sort((left, right) => left.localeCompare(right));
-    let after: string | undefined;
-    try { after = (JSON.parse(input.cursor ?? '{}') as { after?: string }).after; } catch { /* Legacy timestamp checkpoint. */ }
+    const after = (JSON.parse(input.cursor ?? '{}') as { after?: string }).after;
     const remaining = after ? paths.filter(path => relative(root, path).localeCompare(after) > 0) : paths;
     const page = remaining.slice(0, this.pageSize);
     const hasMore = remaining.length > page.length;
@@ -73,7 +72,7 @@ export class LocalFolderKnowledgeSourceAdapter implements KnowledgeSourceAdapter
 
     return {
       items,
-      nextCursor: hasMore ? JSON.stringify({ after: relative(root, page.at(-1)!).split(sep).join('/') }) : scanStartedAt,
+      nextCursor: hasMore ? JSON.stringify({ after: relative(root, page.at(-1)!).split(sep).join('/') }) : JSON.stringify({ capturedAt: scanStartedAt }),
       hasMore,
       warnings,
       snapshotExternalIds: warnings.length ? undefined : paths.map(path => relative(root, path).split(sep).join('/')),

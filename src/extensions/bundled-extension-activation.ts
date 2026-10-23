@@ -115,6 +115,3 @@ export function computeExtensionActivationPatch(
   const candidate = buildExtensionsRecord(base, enabled, disabled);
   return { ok: true, extensions: candidate };
 }
-
-/** @deprecated Use {@link computeExtensionActivationPatch}. */
-export const computeBundledExtensionExtensionsPatch = computeExtensionActivationPatch;

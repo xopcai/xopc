@@ -188,7 +188,6 @@ const COMPOSIO_CURATED_ACTIONS: Record<string, Record<string, ComposioScope>> = 
     GITHUB_DELETE_A_REFERENCE: 'admin',
     GITHUB_DELETE_A_FILE: 'admin',
     GITHUB_ADD_A_REPOSITORY_COLLABORATOR: 'admin',
-    GITHUB_CANCEL_A_WORKFLOW_RUN: 'admin',
   },
   linear: {
     LINEAR_LIST_ISSUES: 'read',

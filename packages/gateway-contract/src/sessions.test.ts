@@ -31,13 +31,13 @@ describe('sessions contract', () => {
         search: 'hello',
         channel: 'webchat',
         includePinned: true,
-        sessionTypes: ['chat', 'workflow'],
+        sessionTypes: ['chat'],
         sortBy: 'updatedAt',
         sortOrder: 'desc',
         limit: 20,
         offset: 40,
       }),
-    ).toBe('/api/sessions?search=hello&channel=webchat&includePinned=true&types=chat%2Cworkflow&sortBy=updatedAt&sortOrder=desc&limit=20&offset=40');
+    ).toBe('/api/sessions?search=hello&channel=webchat&includePinned=true&types=chat&sortBy=updatedAt&sortOrder=desc&limit=20&offset=40');
   });
 
   it('omits null channels for callers that intentionally request all channels', () => {

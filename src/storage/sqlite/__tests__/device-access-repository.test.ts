@@ -61,13 +61,14 @@ describe('device access repository', () => {
     const requestId = replay?.requestId ?? crypto.randomUUID();
     const nextRefreshToken = replay?.nextRefreshToken
       ?? `xopc_rt_${crypto.randomUUID()}_${crypto.randomBytes(32).toString('base64url')}`;
-    const message = buildRefreshProofMessage({ credentialId, timestamp, nonce, requestId, nextRefreshToken });
+    const message = buildRefreshProofMessage({ requestProofVersion: 1, credentialId, timestamp, nonce, requestId, nextRefreshToken });
     const signature = crypto.sign(
       'sha256',
       Buffer.from(message),
       { key: privateKey, dsaEncoding: 'ieee-p1363' },
     ).toString('base64url');
     return rotateDeviceRefreshToken({
+      requestProofVersion: 1,
       refreshToken: tokens.refreshToken,
       timestamp,
       nonce,

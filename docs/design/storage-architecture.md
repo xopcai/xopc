@@ -13,10 +13,6 @@ Existing file records are not imported. There is no dual-write, fallback read, f
 | Data | Authority | Reason |
 | --- | --- | --- |
 | Sessions, transcripts, current notes, tasks, automation and understanding records | Existing SQLite repositories | Existing business state |
-| Workflow events | `workflow_events` | Ordered durable event history |
-| Workflow current definitions, immutable revisions, drafts | SQLite `durable_state`, separate namespaces | Small versioned documents; transactional revision checks |
-| Workflow list/index | Existing `workflow_runs` | Query projection; rebuildable from events |
-| Workflow full view | Computed from SQLite events | No separate JSON snapshot to become stale |
 | Note history | `note_snapshots` | Parent linkage, stable version identity, retention and deletion |
 | Channel outbound messages | `durable_messages`, queue `outbound` | Durable enqueue and acknowledgement |
 | Agent IPC | `durable_messages`, queue `agent-ipc` | Atomic claims, lease recovery and acknowledgement |
@@ -41,7 +37,6 @@ Security stores are intentionally not folded into the general-purpose document t
 
 ### Domain tables
 
-- `workflow_events`: `(agent_id, run_id, sequence)` primary key; unique event UUID; JSON envelope. Allocate the next sequence and append inside `BEGIN IMMEDIATE`. Readers order by sequence. Agent/run identities do not contain host paths.
 - `note_snapshots`: `(note_id, timestamp)` primary key; foreign key to `notes(note_id)` with `ON DELETE CASCADE`. Allocate `max(clock, previous + 1)` inside a transaction so two snapshots in the same millisecond cannot overwrite each other.
 - `durable_messages`: stable sequence, queue, logical scope, message ID, envelope, enqueue time, processed time and lease identity/expiry. `(queue, scope, id)` is unique. Duplicate enqueue does not overwrite an existing message or requeue one already processed.
 
@@ -51,7 +46,6 @@ Security stores are intentionally not folded into the general-purpose document t
 
 The current namespaces are:
 
-- `workflow-definitions`, `workflow-revisions`, `workflow-drafts`
 - `shares`, `site-shares`, `hosted-share-bindings`
 - `extension-ui`
 - `composio-events`
@@ -62,8 +56,6 @@ Do not use the table as an unbounded replacement for domain indexes. Large event
 
 ### Transactions
 
-- Workflow save checks the expected revision, inserts its historical revision, and updates the current definition in one transaction. Stale writers receive a conflict.
-- Workflow draft compare-and-save is transactional.
 - Note snapshot timestamp allocation and insertion are transactional; parent deletion removes snapshots.
 - Share view consumption validates the current persisted record and increments the counter in one transaction. Counters no longer wait for a debounce timer.
 - Hosted binding reconciliation runs in a transaction.
@@ -102,13 +94,12 @@ Multi-device online access uses one authoritative Gateway. Offline editing needs
 
 ## Removed file-store behavior
 
-The changed modules no longer read or write Workflow JSON/JSONL, note-history JSON, outbound queue JSON, IPC inbox files, share registry JSON, hosted binding JSON, extension `storage.json`, Composio JSONL, cursor JSON or command receipt JSON. Obsolete Workflow/notes file-path helpers and the no-op notes `flush` API are removed. Current files are not deleted from the user's machine.
 
 The extension namespace sanitizer previously merged different names and wrote under a hard-coded home directory; exact SQLite namespaces remove both problems. TUI scoped-model settings still belong to the device/config plane, but resolve the active state directory at access time.
 
 ## Validation
 
-Behavior tests cover database reopen, transaction rollback, separate scopes, concurrent Workflow sequence allocation, stale revision conflicts, same-millisecond note versions, cascade deletion, detached extension values, connector deduplication beyond 500 events, share view limits across store instances, expired lease replacement, failed IPC retries, cursor monotonicity and network filesystem rejection. Existing Workflow, notes, share, command and public-route regression suites remain part of validation.
+Behavior tests cover database reopen, transaction rollback, separate scopes, same-millisecond note versions, cascade deletion, detached extension values, connector deduplication beyond 500 events, share view limits across store instances, expired lease replacement, failed IPC retries, cursor monotonicity and network filesystem rejection. Existing notes, share, command and public-route regression suites remain part of validation.
 
 ## Conversation identity and transcript boundaries
 
@@ -130,6 +121,6 @@ Route lookup uses an explicit eight-field tuple (Agent, scope, channel, account,
 
 Because route resolution can create the conversation before initialization, callers explicitly populate project, source and visibility metadata rather than assuming an existing row is initialized. Imported/forked external origin references need not resolve locally and must not create fictitious conversations; local parent references remain strict.
 
-The retained database baseline is v217. The historical v177→v178 UUID conversion and its old-key decoder are not a supported current upgrade path. Historical conversion logs remain in Git history; do not restore alias tables, legacy ID parsing or runtime dual writes. Database recovery requires stopped processes, a consistent snapshot and matching software; do not mix an old database with new WAL/SHM files or automatically overwrite post-upgrade writes with an older backup.
+The current database baseline is v259; fresh databases are initialized directly from the canonical schema. Older versions are rejected without conversion. The historical v177→v178 UUID conversion and its old-key decoder are not a supported current upgrade path. Historical conversion logs remain in Git history; do not restore alias tables, legacy ID parsing or runtime dual writes. Database recovery requires stopped processes, a consistent snapshot and matching software; do not mix an old database with new WAL/SHM files or automatically overwrite post-upgrade writes with an older backup.
 
 Identity validation should cover authenticated creation, route reuse, reset, fork, restart, external-source references, transcript/FTS preservation and linkage checks through `xopc doctor --deep`. Historical migration tests and local simulated-model runs are not evidence of current production or native-client upgrade acceptance.

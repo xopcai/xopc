@@ -69,12 +69,6 @@ export type Project = {
 export type ProjectWithDetails = Project & {
   sessionCount: number;
   recentSessions: ProjectSession[];
-  recentWorkflowRuns: Array<{
-    runId: string;
-    definitionId: string;
-    status: string;
-    createdAt: number;
-  }>;
   milestones: ProjectMilestone[];
   recentUpdates: ProjectUpdate[];
 };
@@ -134,12 +128,7 @@ export type ProjectFileSearchEntry = {
 };
 
 export type ProjectActivityObjectKind =
-  | 'project'
-  | 'note'
-  | 'session'
-  | 'task'
-  | 'workflow_run'
-  | 'automation';
+  'project' | 'note' | 'session' | 'task' | 'automation';
 
 export type ProjectActivityEvent = {
   id: string;

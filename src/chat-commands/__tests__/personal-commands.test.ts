@@ -13,7 +13,7 @@ describe('Personal AI commands', () => {
   let registry: CommandRegistry;
   beforeEach(() => { registry = new CommandRegistry(); });
 
-  it.each(['new', 'clear', 'archive', 'model', 'skill', 'workflow'])('blocks /%s before its handler runs, including aliases', async name => {
+  it.each(['new', 'clear', 'archive', 'model', 'skill'])('blocks /%s before its handler runs, including aliases', async name => {
     const handler = vi.fn();
     registry.register({ id: `test.${name}`, name, aliases: ['alias'], category: 'system', scope: ['global'], description: name, handler });
     for (const command of [name, 'alias']) {

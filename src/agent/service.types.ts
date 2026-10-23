@@ -58,8 +58,6 @@ export interface AgentServiceConfig {
    * without persisting a trust entry; gateway mode leaves trust fully persistent.
    */
   isWorkspaceTrusted?: (workspaceDir: string) => boolean | null | undefined;
-  /** Gateway: persisted workflow runs. */
-  getWorkflowRunService?: () => import('../workflows/service/workflow-run-service.types.js').WorkflowRunServiceLike;
   /** Gateway: resolves bound source context (e.g. Note-grounded chat) before each turn. */
   sourceContextResolver?: AgentSourceContextResolver;
 }

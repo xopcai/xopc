@@ -271,7 +271,6 @@
       "delete": "Delete",
       "continue": "Continue",
       "newChat": "New chat",
-      "runWorkflow": "Run workflow",
       "viewAll": "View all",
       "agent": "agent",
       "defaultAgent": "Default agent",
@@ -319,8 +318,7 @@
       "attention": "Attention",
       "attentionKinds": {
         "blocked_task": "Blocked task",
-        "stale_task": "Stale task",
-        "failed_workflow": "Execution issue"
+        "stale_task": "Stale task"
       },
       "noBlockedTasks": "No blocked tasks.",
       "blockerTitlePlaceholder": "New blocker",
@@ -444,8 +442,6 @@
         "session.detached_from_project": "Session detached",
         "task.created": "Task created",
         "task.phase_changed": "Task phase changed",
-        "workflow_run.started": "System advancement started",
-        "workflow_run.completed": "System advancement completed",
         "automation.run_started": "Automation run started",
         "automation.run_completed": "Automation run completed"
       },
@@ -454,7 +450,6 @@
         "note": "Note",
         "session": "Session",
         "task": "Task",
-        "workflow_run": "Execution record",
         "automation": "Automation"
       }
     },

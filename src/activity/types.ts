@@ -3,13 +3,12 @@ export type ActivityObjectKind =
   | 'note'
   | 'session'
   | 'task'
-  | 'workflow_run'
   | 'automation';
 
 export type ActivityVisibility = 'timeline' | 'audit' | 'debug';
 export type ActivityImportance = 'low' | 'normal' | 'high';
-export type ActivityPrincipalKind = 'user' | 'agent' | 'system' | 'automation' | 'workflow';
-export type ActivitySourceKind = 'xopc_use' | 'gateway_api' | 'automation' | 'workflow' | 'system';
+export type ActivityPrincipalKind = 'user' | 'agent' | 'system' | 'automation';
+export type ActivitySourceKind = 'xopc_use' | 'gateway_api' | 'automation' | 'system';
 export type ActivityScopeKind = 'project' | 'session' | 'workspace' | 'channel';
 export type ActivityScopeReason = 'explicit' | 'object_owner' | 'inherited_session' | 'runtime_context';
 export type ActivityRelatedProjectReason = 'object_link' | 'session_link' | 'derived_context';
@@ -34,8 +33,6 @@ export type ActivityEventType =
   | 'task.commanded.v2'
   | 'task.phase_changed.v2'
   | 'task.attention_required.v2'
-  | 'workflow_run.started'
-  | 'workflow_run.completed'
   | 'automation.run_started'
   | 'automation.run_completed'
   | 'work_discovery.started'

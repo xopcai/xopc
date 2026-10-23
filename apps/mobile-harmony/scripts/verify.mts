@@ -17,8 +17,7 @@ run('node', [join(repo, 'scripts/generate-brand-assets.mjs'), '--target=harmony'
 run('pnpm', ['exec', 'tsx', join(project, 'scripts/export-contracts.mts'), '--check']);
 run('pnpm', ['exec', 'vitest', 'run', '--config', join(project, 'vitest.config.ts'), '--root', project]);
 run('pnpm', ['exec', 'vitest', 'run',
-  'src/storage/sqlite/migrations/__tests__/harmonyos-devices.test.ts',
-  'src/storage/sqlite/__tests__/migrations.test.ts',
+  'src/storage/sqlite/__tests__/schema.test.ts',
   'src/storage/sqlite/__tests__/device-pairing-approval.test.ts',
   'src/gateway/hono/routes/__tests__/device-pairing-routes.test.ts',
   'src/gateway/hono/routes/__tests__/device-push-routes.test.ts',

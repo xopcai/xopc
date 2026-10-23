@@ -52,11 +52,9 @@
 
 ## 4. 链接与排版核对
 
-鸿蒙保留原有内部路由、工作区文件、外链确认和失败提示。Android 修复 HTTP 外链无动作，HTTP/HTTPS 进入确认流程，文件链接进入已有认证预览路径；补自动化的路径和查询形式。iOS 新增 [MessageLink.swift](/Users/micjoyce/develop/github/xopc/apps/mobile-ios/XopcMobile/Core/Models/MessageLink.swift) 与统一 openURL 分流，支持笔记、任务、项目、会话、自动化、工作流运行、受管理文件和工作区文件，普通 HTTP(S) 由系统打开。外部网页即使路径类似产品路由，也保持外链属性。
+鸿蒙保留原有内部路由、工作区文件、外链确认和失败提示。Android 修复 HTTP 外链无动作，HTTP/HTTPS 进入确认流程，文件链接进入已有认证预览路径；补自动化的路径和查询形式。iOS 新增 [MessageLink.swift](/Users/micjoyce/develop/github/xopc/apps/mobile-ios/XopcMobile/Core/Models/MessageLink.swift) 与统一 openURL 分流，支持笔记、任务、项目、会话、自动化运行、受管理文件和工作区文件，普通 HTTP(S) 由系统打开。外部网页即使路径类似产品路由，也保持外链属性。
 
-确认代码复制不受折叠影响；表格各行列宽一致；列表换行对齐正文。Android 的任务链接 UI 测试改为点击实际链接文字，因为填满气泡的 Text 中心可能是空白区域，不能把这类测试点击当成链接命中。工作流运行链接现在会打开既有原生运行详情页，补上过去解析成功但没有导航的入口。
 
-保留的能力边界：Android 行内 Markdown 图片仍沿用 alt 文本行为，独立媒体附件继续正常预览；工作流定义的编辑/详情仍需既有产品功能扩展，与本次运行详情链接不同。鸿蒙/iOS 自研块解析的引用式链接、复杂列表等兼容性不等同 Android CommonMark。后续扩展这些能力应另做契约与 fixture，避免用本次性能优化替代语法兼容验收。
 
 ## 5. 已删除的旧路径
 
@@ -81,8 +79,6 @@ Gradle 验证问题及回答：
 
 1. “Android 流式渲染修改后的单元测试、编译和 lint 是否通过？”——通过，任务见上表。
 2. “Android 流式输出时的尾部跟随、上滑阅读和历史分页是否正常？”——2 项定向设备测试通过；发现并修复分页与跟随竞争。
-3. “Android Markdown 排版、代码复制、内部链接和 compact 事件解析是否正常？”——11 项定向设备测试通过，包括 HTTP 外链确认和工作流运行导航。
 
-Gradle 工作流结束仅清理 wrapper 管理的临时日志。没有更改发布、Web UI 或其它并行工作。
 
 后续验收仍需在鸿蒙、Android、iOS 真机上固定刷新率与构建配置，重放 20KB/100KB 回复、长段落、展开后的长代码/表格、图片与大量历史，记录帧时间、显示积压、峰值内存和功耗，再调整合并间隔与动效参数。

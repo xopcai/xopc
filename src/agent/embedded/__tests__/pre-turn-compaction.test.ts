@@ -137,7 +137,6 @@ function configWithCompaction(enabled: boolean) {
         models: { chat: { primary: 'test/test-model', fallbacks: [] }, intents: {} },
         skills: { mode: 'all-enabled', exclude: [] },
         tools: {},
-        workflows: {},
         runtime: {},
       },
       list: [

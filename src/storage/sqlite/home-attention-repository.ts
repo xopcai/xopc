@@ -1,6 +1,6 @@
 import { getSqliteDatabase, runSqliteWriteTransaction } from './transaction.js';
 
-export type HomeAttentionSubjectKind = 'automation_run' | 'workflow_run';
+export type HomeAttentionSubjectKind = 'automation_run';
 
 export function acknowledgeHomeAttention(
   subjectKind: HomeAttentionSubjectKind,

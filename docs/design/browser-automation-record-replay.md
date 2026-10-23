@@ -39,7 +39,6 @@ Codex 的公开流程包含开始录制前的权限确认。xopc 可采用其演
 
 | 当前实现 | 对方案的影响 |
 | --- | --- |
-| 自动化页面通过聊天创建/修改，已有列表、参数运行和历史 | 扩展现有页面，不新增独立工作流产品。 |
 | `BrowserAutomationService.save` 校验结构、递增 revision，没有执行验证门槛 | 允许保存草稿，但“已验证”必须由实际运行证据产生。 |
 | runner 支持 navigate/click/fill/select/press/scroll/wait | 沿用执行链路，逐步扩展 assert/extract 和必要控件。 |
 | 目标只有 role + name/nameIncludes，必须唯一匹配 | 保留唯一性要求，增加区域、标签、frame 等定位上下文。 |
@@ -185,7 +184,6 @@ Web 和扩展订阅录制、编译、运行事件；断线恢复读取快照和�
 
 ## 6. Skill 与依赖选择
 
-需要区分“指导模型创建流程的 builder skill”和“从一次演示生成的工作流 skill”。前者可提升写作一致性，无法替代服务端验证；后者适合自然语言调用及跨工具流程，是 Codex 经验可借鉴的部分。
 
 首期增强现有工具说明与结构化生命周期即可。以后可自动派生轻量 skill：描述何时调用、输入与成功条件，引用 automationId/version，执行仍调用 `browser_automation`。skill 不是另一份可以独立漂移的脚本。
 
@@ -207,4 +205,4 @@ Puppeteer Replay 可在需要互通时评估导入导出；Stagehand 先借鉴 o
 
 用户体验验收：开始即录制、完成即保存、没有追加批准卡；任务结果可理解；无法自动处理时给出具体下一步。服务端验收：证据绑定实际版本和运行，未知结果不宣称成功，新增 API 的认证和 lazy loading 在真实 Gateway 可达。
 
-P0 与 P1 已按精简技术实现落地，具体接口、验证和边界见 [实现说明](./browser-automation-record-replay-technical.md)。这两个阶段同时解决“生成不稳定”和“用户容易创建”两个问题；跨应用工作流、复杂分支循环和全面视觉录制留到真实需求出现后扩展。
+P0 与 P1 已按精简技术实现落地，具体接口、验证和边界见 [实现说明](./browser-automation-record-replay-technical.md)。这两个阶段同时解决“生成不稳定”和“用户容易创建”两个问题；跨应用复杂分支循环和全面视觉录制留到真实需求出现后扩展。

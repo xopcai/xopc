@@ -7,7 +7,6 @@ export * from './project-agent-suggestion.js';
 export * from './project-kind.js';
 export * from './project-loop.js';
 export * from './session-bind.js';
-export * from './workflow-bind.js';
 export * from './automation-bind.js';
 export * from './knowledge-bind.js';
 export * from './workspace.js';

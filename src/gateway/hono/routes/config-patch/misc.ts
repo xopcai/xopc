@@ -294,9 +294,7 @@ export async function applyMiscPatch(config: Config, body: any): Promise<PatchRe
   if (body.voice !== undefined) {
     if (!body.voice || typeof body.voice !== 'object' || Array.isArray(body.voice)) return patchError('voice must be an object');
     if (body.voice.realtime !== undefined && (!body.voice.realtime || typeof body.voice.realtime !== 'object' || Array.isArray(body.voice.realtime))) return patchError('voice.realtime must be an object');
-    if (body.voicePatchMode !== undefined && body.voicePatchMode !== 'merge') return patchError('Invalid voice patch mode');
-    // Capability details patch the voice root; legacy clients keep replacement semantics.
-    const voicePatch = body.voicePatchMode === 'merge' ? { ...config.voice, ...body.voice } : body.voice;
+    const voicePatch = { ...config.voice, ...body.voice };
     const parsed = VoiceConfigSchema.safeParse(mergeRealtimeVoiceConfigPatch(config.voice, voicePatch));
     if (!parsed.success) {
       return patchError(parsed.error.issues.map((i) => i.message).join('; '));

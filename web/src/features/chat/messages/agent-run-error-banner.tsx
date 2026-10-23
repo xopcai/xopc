@@ -229,6 +229,3 @@ export function AgentRunErrorBanner({ errorText }: { errorText: string }) {
     </div>
   );
 }
-
-/** @deprecated Use {@link AgentRunErrorBanner} */
-export const ProviderSetupRequiredBanner = AgentRunErrorBanner;

@@ -353,7 +353,7 @@ export function GlobalDiscussionCaptureHost() {
     let releaseLease: (() => void) | undefined;
     try {
       releaseLease = await acquireRecordingLease(candidate.id);
-      if (candidate.gatewayUrl && candidate.gatewayUrl !== gatewayUrl) throw new Error(language === 'zh' ? '请切回录制时的 Gateway 后恢复' : 'Return to the original Gateway to recover');
+      if (candidate.gatewayUrl !== gatewayUrl) throw new Error(language === 'zh' ? '请切回录制时的 Gateway 后恢复' : 'Return to the original Gateway to recover');
       candidate = await recorder.restore(candidate);
       setLocalReleased(false); setLocallyFinalized(candidate);
       const settings = readDiscussionConsent() ?? await getDiscussionCaptureSettings();
@@ -409,7 +409,7 @@ export function GlobalDiscussionCaptureHost() {
     if (busyRecovery.current || finishInFlightRef.current || ['recording', 'waiting_for_audio', 'paused', 'requesting_permission', 'stopping'].includes(recorder.phase)) return;
     busyRecovery.current = true; setRecovering(true); setOperationError(null);
     try {
-      if (candidate.gatewayUrl && candidate.gatewayUrl !== gatewayUrl) throw new Error('Return to the original Gateway before continuing.');
+      if (candidate.gatewayUrl !== gatewayUrl) throw new Error('Return to the original Gateway before continuing.');
       // A seal request may have committed even when its HTTP response was lost.
       if (candidate.sealRequested) throw new Error('Recover and sync this submitted recording first.');
       const existing = candidate.serverDiscussionId ? await getDiscussion(candidate.serverDiscussionId) : null;
@@ -456,7 +456,7 @@ export function GlobalDiscussionCaptureHost() {
         {!recorder.recoverableDrafts.length ? <p>{language === 'zh' ? '没有待恢复录音' : 'No recordings to recover'}</p> : null}
         {recorder.recoverableDrafts.map(candidate => <article key={candidate.id} className="mb-3 rounded-lg border border-edge p-3">
           <p>{new Date(candidate.startedAt).toLocaleString()} · {candidate.id.slice(0, 8)}</p>
-          <p className="text-xs text-fg-muted">{candidate.gatewayUrl ?? (language === 'zh' ? '旧版录音 · 当前 Gateway' : 'Legacy recording · current Gateway')} · {candidate.state === 'upload_failed' ? copy.status.failed : candidate.sealRequested ? copy.status.verifying : copy.status.pending}</p>
+          <p className="text-xs text-fg-muted">{candidate.gatewayUrl} · {candidate.state === 'upload_failed' ? copy.status.failed : candidate.sealRequested ? copy.status.verifying : copy.status.pending}</p>
           <p className="text-sm">{language === 'zh' ? '本机已保存' : 'Saved locally'} · {verifiedSavedThrough(candidate) !== null ? formatDuration(verifiedSavedThrough(candidate)!) : language === 'zh' ? '时长待核实' : 'duration unverified'} · {formatDuration(candidate.durationMs)} {language === 'zh' ? '录制时长（中断处可能缺失）' : 'capture duration (may contain interruptions)'}</p>
           {candidate.epochs?.slice(1).map(epoch => <p key={epoch.firstChunk} className="text-xs text-fg-muted">{language === 'zh' ? '中断后续录' : 'Resumed after interruption'} · {new Date(epoch.previousEndedAt ?? epoch.startedAt).toLocaleString()} → {new Date(epoch.startedAt).toLocaleString()}</p>)}
           <div className="mt-3 flex flex-wrap gap-2">

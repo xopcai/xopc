@@ -109,8 +109,8 @@ export function createDevice(input: {
   const createdAt = input.now ?? Date.now();
   getSqliteDatabase().prepare(`
     INSERT INTO devices (
-      device_id, display_name, platform, extension_id, public_key_jwk, scopes_json, created_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?)
+      device_id, display_name, platform, extension_id, public_key_jwk, scopes_json, created_at, request_proof_version
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, 1)
   `).run(
     id,
     input.displayName,
@@ -226,9 +226,9 @@ export function buildRefreshProofMessage(input: {
   nonce: string;
   requestId: string;
   nextRefreshToken: string;
-  requestProofVersion?: number;
+  requestProofVersion: 1;
 }): string {
-  return `xopc-device-refresh-v2\n${input.credentialId}\n${input.timestamp}\n${input.nonce}\n${input.requestId}\n${input.nextRefreshToken}${input.requestProofVersion ? `\nrequest-proof:${input.requestProofVersion}` : ''}`;
+  return `xopc-device-refresh-v2\n${input.credentialId}\n${input.timestamp}\n${input.nonce}\n${input.requestId}\n${input.nextRefreshToken}\nrequest-proof:${input.requestProofVersion}`;
 }
 
 function verifyRefreshProof(
@@ -260,7 +260,7 @@ export function rotateDeviceRefreshToken(input: {
   requestId: string;
   nextRefreshToken: string;
   signature: string;
-  requestProofVersion?: number;
+  requestProofVersion: 1;
   now?: number;
 }): DeviceTokenPair {
   const now = input.now ?? Date.now();
@@ -295,11 +295,7 @@ export function rotateDeviceRefreshToken(input: {
     }
     const refreshBudget = buckets.deviceRefresh().consume(credential.device_id);
     if (!refreshBudget.allowed) throw new DeviceRefreshRateLimitError(refreshBudget.retryAfterMs);
-    if (deviceRow.request_proof_version > (input.requestProofVersion ?? 0)) throw new Error('Request proof downgrade denied');
-    if (input.requestProofVersion === 1 && deviceRow.request_proof_version === 0) {
-      db.prepare('UPDATE devices SET request_proof_version = 1 WHERE device_id = ?').run(credential.device_id);
-      db.prepare('UPDATE device_access_sessions SET revoked_at = ? WHERE device_id = ? AND revoked_at IS NULL').run(now, credential.device_id);
-    }
+    if (deviceRow.request_proof_version !== 1 || input.requestProofVersion !== 1) throw new Error('Unsupported request proof version');
     if (
       credential.replaced_by === nextParsed.id
       && credential.rotation_request_id === input.requestId

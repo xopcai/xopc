@@ -8,8 +8,6 @@ import ai.xopc.mobile.gateway.ProgressHomeAction
 import ai.xopc.mobile.gateway.ProgressTask
 import ai.xopc.mobile.gateway.ProgressProject
 import ai.xopc.mobile.gateway.ProgressProjectSession
-import ai.xopc.mobile.gateway.WorkflowDetail
-import ai.xopc.mobile.gateway.WorkflowRun
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -91,10 +89,6 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
   onCreateProjectChat: (String) -> Unit = {},
   onHomeAction: (ProgressHomeAction) -> Unit = {},
   onLoadAutomations: () -> Unit = {},
-  onWorkflowRuns: suspend () -> List<WorkflowRun> = { emptyList() },
-  onWorkflowDetail: suspend (String) -> WorkflowDetail = { throw IllegalStateException("WORKFLOW_UNAVAILABLE") },
-  onCancelWorkflow: suspend (String) -> Unit = {},
-  onCreateWorkflowChat: () -> Unit = {},
   onOpenAutomation: (String) -> Unit = {},
   onOpenAutomationRun: (String) -> Unit = {},
   onAutomationAction: (String, String) -> Unit = { _, _ -> },
@@ -105,17 +99,9 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
   onTopLevelChange: (Boolean) -> Unit = {},
   chatBusy: Boolean = false,
   bottomChromeHeight: Dp = 0.dp,
-  requestedWorkflowRunId: String? = null, onWorkflowLinkHandled: () -> Unit = {}) {
+  ) {
   var pendingHomeAction by remember(state.gatewayId) { mutableStateOf<ProgressHomeAction?>(null) }
   var page by rememberSaveable(state.gatewayId) { mutableStateOf("overview") }
-  var linkedWorkflowRunId by rememberSaveable(state.gatewayId) { mutableStateOf<String?>(null) }
-  LaunchedEffect(requestedWorkflowRunId) {
-    if (requestedWorkflowRunId != null) {
-      linkedWorkflowRunId = requestedWorkflowRunId
-      page = "workflows"
-      onWorkflowLinkHandled()
-    }
-  }
   LaunchedEffect(page) { onTopLevelChange(page == "overview") }
   var selectedTaskId by rememberSaveable(state.gatewayId) { mutableStateOf<String?>(null) }
   var detailReturnPage by rememberSaveable(state.gatewayId) { mutableStateOf("overview") }
@@ -283,7 +269,7 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
     if (page == "automation-run") state.automations.rerunNavigationId?.let(::openRun)
   }
   Column(modifier = Modifier.fillMaxSize().padding(insets).padding(horizontal = 20.dp, vertical = 12.dp)) {
-    if (page != "workflows") Row(modifier = Modifier.fillMaxWidth()
+    Row(modifier = Modifier.fillMaxWidth()
       .padding(bottom = if (page == "overview") 12.dp else 0.dp).testTag("progress-header"),
       horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
       if (page != "overview") androidx.compose.material3.IconButton(onClick = { goBack() },
@@ -300,7 +286,6 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
         "project" -> state.project?.name ?: stringResource(R.string.progress_projects)
         "create" -> stringResource(R.string.progress_new_task)
         "automations" -> stringResource(R.string.progress_automations)
-        "workflows" -> stringResource(R.string.workflows)
         "automation-create" -> stringResource(R.string.automation_new)
         "automation-edit" -> stringResource(R.string.automation_edit)
         "automation" -> state.automations.detail?.name ?: stringResource(R.string.progress_automations)
@@ -402,9 +387,6 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
         automationCreateStartedId = state.automations.createdId
         page = "automation-create"
       }
-      "workflows" -> WorkflowScreen(state.gatewayId.orEmpty(), onBack = { page = "overview"; linkedWorkflowRunId = null },
-        list = onWorkflowRuns, detail = onWorkflowDetail, cancel = onCancelWorkflow,
-        onCreateWithChat = onCreateWorkflowChat, initialRunId = linkedWorkflowRunId)
       "automation-create" -> AutomationCreateContent(automationName,
         { automationName = it; automationCreateKey = UUID.randomUUID().toString() },
         automationInstruction,
@@ -1093,7 +1075,7 @@ private fun progressPhaseLabel(phase: String): String = stringResource(when (pha
   "active", "in_progress" -> R.string.progress_phase_active
   "review" -> R.string.progress_phase_review
   "closed" -> R.string.progress_phase_closed
-  else -> R.string.workflow_status_unknown
+  else -> R.string.execution_status_unknown
 })
 
 @Composable
@@ -1125,10 +1107,10 @@ private fun TaskChoiceField(label: String, selected: String, options: List<Pair<
 
 @Composable
 private fun taskExecutionLabel(state: String): String = stringResource(when (state) {
-  "queued" -> R.string.workflow_status_queued
-  "running" -> R.string.workflow_status_running
-  "failed" -> R.string.workflow_status_failed
-  "cancelled" -> R.string.workflow_status_cancelled
+  "queued" -> R.string.execution_status_queued
+  "running" -> R.string.execution_status_running
+  "failed" -> R.string.execution_status_failed
+  "cancelled" -> R.string.execution_status_cancelled
   "waiting" -> R.string.progress_execution_waiting
   "verifying" -> R.string.progress_execution_verifying
   "blocked" -> R.string.progress_execution_blocked

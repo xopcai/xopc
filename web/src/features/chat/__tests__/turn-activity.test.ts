@@ -13,12 +13,10 @@ describe('turn activity', () => {
       { type: 'text', text: 'I will check that.' },
       { type: 'tool_use', id: 'read-1', name: 'read_file', status: 'done' },
       { type: 'text', text: 'Done.' },
-      { type: 'tool_use', id: 'workflow-1', name: 'workflow', status: 'running' },
     ];
 
     expect(collectTurnActivityBlocks(content).map((block) => block.type)).toEqual([
       'thinking',
-      'tool_use',
       'tool_use',
     ]);
   });

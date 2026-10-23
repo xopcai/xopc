@@ -5,7 +5,6 @@ import type { WelcomeSuggestionContext, WelcomeSuggestionContextStatus } from '@
 import { fetchProject, fetchProjectOperatingView, type Project } from '@/features/projects/api';
 import { getSessionDetail } from '@/features/sessions/session-api';
 import type { TaskDetail } from '@/features/tasks/home-api';
-import type { WorkflowRunView } from '@/features/workflows/workflow-api';
 
 type UseWelcomeSuggestionContextOptions = {
   enabled: boolean;
@@ -15,7 +14,6 @@ type UseWelcomeSuggestionContextOptions = {
   suppressProjectContext?: boolean;
   project?: Pick<Project, 'id' | 'name'> | null;
   task?: TaskDetail | null;
-  workflow?: WorkflowRunView | null;
 };
 
 export type WelcomeSuggestionContextState = {
@@ -31,7 +29,7 @@ function contextStateKey(options: UseWelcomeSuggestionContextOptions): string {
   if (!options.enabled) return 'disabled';
   if (options.sourceContextPending) return `pending:${options.conversationId ?? ''}`;
   if (options.task) return `task:${options.task.task.id}:${options.task.task.version}`;
-  if (options.workflow) return `workflow:${options.workflow.run.id}:${options.workflow.run.status}`;
+
   if (options.suppressProjectContext) return `suppressed:${options.conversationId ?? ''}`;
   if (options.project) return `project:${options.project.id}:${options.project.name}`;
   if (options.conversationId) {
@@ -61,20 +59,7 @@ function immediateContextState(options: UseWelcomeSuggestionContextOptions): Int
       status: 'ready',
     };
   }
-  if (options.workflow) {
-    const run = options.workflow.run;
-    return {
-      key,
-      context: {
-        kind: 'workflow',
-        workflowName: run.goal.trim() || run.title || run.definitionId,
-        status: run.status,
-        nextAction: run.result?.followUps?.[0]?.prompt ?? run.result?.actions?.[0]?.label,
-        recentFailure: run.error?.message,
-      },
-      status: 'ready',
-    };
-  }
+
   if (options.suppressProjectContext) {
     return {
       key,
@@ -109,7 +94,6 @@ export function useWelcomeSuggestionContext(options: UseWelcomeSuggestionContext
     suppressProjectContext,
     project,
     task,
-    workflow,
   } = options;
   const currentKey = contextStateKey(options);
   const [state, setState] = useState<InternalWelcomeSuggestionContextState>(() => immediateContextState(options));
@@ -124,22 +108,12 @@ export function useWelcomeSuggestionContext(options: UseWelcomeSuggestionContext
       suppressProjectContext,
       project,
       task,
-      workflow,
     };
     const immediate = immediateContextState(currentOptions);
-    if (
-      !enabled ||
-      sourceContextPending ||
-      task ||
-      workflow ||
-      suppressProjectContext ||
-      !conversationId
-    ) {
-      setState(immediate);
-      return undefined;
-    }
+
 
     setState(immediate);
+    if (!enabled || !conversationId || sourceContextPending || task || suppressProjectContext) return;
     void (async () => {
       let degraded = Boolean(sourceContextFailed);
       let projectId: string | null = project?.id ?? null;
@@ -212,7 +186,6 @@ export function useWelcomeSuggestionContext(options: UseWelcomeSuggestionContext
     suppressProjectContext,
     project,
     task,
-    workflow,
   ]);
 
   const visibleState = state.key === currentKey ? state : immediateContextState(options);

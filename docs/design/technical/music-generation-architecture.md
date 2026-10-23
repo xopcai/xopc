@@ -40,7 +40,6 @@
 ```mermaid
 flowchart TD
   A[Personal AI 快速对话] --> D[音乐能力 Dispatcher]
-  B[其他 Agent / Workflow] --> D
   C[音乐创作模块] --> D
   D --> E[SQLite Job + 幂等回执]
   E --> F[Music Worker]
@@ -194,7 +193,6 @@ queued/preparing 可以在重启后恢复；preparedInput 持久化后不重复�
 
 Cloud Adapter 保存远端 jobId；轮询超时继续查询原任务。本地下载失败保留远端 artifact handle，重新下载，不创建新云端任务。临时下载授权过期时重新授权，而非重新生成。
 
-CLI 优先通过 Gateway 提交；无 Gateway 的嵌入执行模式必须运行到终态或显式托管给持久执行器。不能输出“后台生成”后进程退出且无人处理队列。Workflow 等待通过 Job 事件／查询实现，不占住普通 Agent 对话 run。
 
 ### 6.4 写词
 

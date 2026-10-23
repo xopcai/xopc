@@ -30,7 +30,7 @@ export interface NoteAiMeta {
 
 export interface NoteCatalysisAction {
   text: string;
-  kind: 'task' | 'workflow' | 'research' | 'share' | 'chat';
+  kind: 'task' | 'research' | 'share' | 'chat';
 }
 
 export interface NoteCatalysisReport {
@@ -80,7 +80,6 @@ export interface NoteCatalysisMeta {
   reportNoteId?: string;
   sourceConversationId?: string;
   linkedConversationIds?: string[];
-  linkedWorkflowRunIds?: string[];
   linkedShareIds?: string[];
 }
 

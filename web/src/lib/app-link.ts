@@ -22,7 +22,6 @@ const INTERNAL_ROUTE_ROOTS = new Set([
   'settings',
   'skills',
   'tasks',
-  'workflows',
   'you',
 ]);
 

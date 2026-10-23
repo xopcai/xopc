@@ -102,7 +102,6 @@ XOPC 当前 `ChatComposer` 将 `streaming || disabled` 视为 `runBusy`；普通
 | 功能发现 | 抽屉有待关注、任务、项目、收件箱、笔记、文件、自动化、Agents、设置九项 | 高频对象前置，配置下沉；抽屉保留历史对话 |
 | 进展 | 已有 AttentionScreen、ChatAttentionTray；TaskList 有概览/项目/任务 | 统一待我处理、进行中和最近交付的阅读入口，不新造第二套任务数据 |
 | 成果 | 已有 ProductDeliveryCard、AssistantDeliverablesCard、附件渲染和 HTML 文件预览 | 增强预览与对象连续性，不能说“目前不支持 Artifact” |
-| 成果边界 | `mobileProductRoute` 对 local_app、workflow_definition 返回 null | 原生无详情的类型需要明确降级；HTML 文件预览不等于完整应用运行支持 |
 | 资料找回 | FilesHub 有最近/位置、搜索，行内显示路径 | 默认按成果与资料浏览，路径放详情；保留高级文件视图 |
 | 待处理提醒 | ChatAttentionTray 展示 `needsUser`，可关闭；详情 sheet 显式关闭动画 | 将“未读”与“尚未处理”分开，关闭横条不意味着决策完成 |
 | 聊天动效 | 流式标记刻意静态；步骤可展开/收起 | 保留稳定正文，增加受用户动作驱动的过渡 |

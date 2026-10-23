@@ -925,11 +925,9 @@
     { "name": "workspace_description", "value": "说明" },
     { "name": "workspace_no_description", "value": "暂无说明" },
     { "name": "workspace_no_matches", "value": "当前筛选下没有内容" },
-    { "name": "new_workflow", "value": "新建工作流" },
     { "name": "create_task_chat_prompt", "value": "在「项目名称」下创建任务：任务内容" },
     { "name": "create_project_chat_prompt", "value": "创建一个「项目名称」项目，用来：项目目标" },
     { "name": "create_automation_chat_prompt", "value": "每天早上 9 点检索 AI 新闻，并把摘要发给我" },
-    { "name": "create_workflow_chat_prompt", "value": "创建一个工作流，用来：要完成的事情" },
     { "name": "quick_chat_conversations_placeholder", "value": "开始一个新对话" },
     { "name": "quick_chat_progress_placeholder", "value": "询问进展，或推进下一步" },
     { "name": "quick_chat_library_placeholder", "value": "查找、整理或引用资料" },
@@ -962,14 +960,10 @@
     { "name": "rerun", "value": "再次运行" },
     { "name": "result", "value": "结果" },
     { "name": "open_chat", "value": "打开会话" },
-    { "name": "open_workflow", "value": "打开工作流" },
     { "name": "view_automation", "value": "查看自动化" },
     { "name": "timeline", "value": "运行记录" },
     { "name": "no_events", "value": "暂无运行事件。" },
     { "name": "automation_run", "value": "自动化运行" },
-    { "name": "workflow_overview", "value": "运行概览" },
-    { "name": "workflow_run_unavailable", "value": "这条运行记录已不可用，请刷新列表后继续。" },
-    { "name": "workflow_progress", "value": "%d / %d 个助手已完成" },
     { "name": "goal", "value": "目标" },
     { "name": "phases", "value": "阶段" },
     { "name": "agent_work", "value": "助手执行" },
@@ -1004,10 +998,6 @@
     {
       "name": "all_work",
       "value": "全部工作"
-    },
-    {
-      "name": "workflows",
-      "value": "工作流"
     },
     {
       "name": "inbox",

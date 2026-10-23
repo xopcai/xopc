@@ -16,7 +16,6 @@ xcodebuild -project XopcMobile.xcodeproj -scheme XopcMobile \
 
 ## TestFlight
 
-The [Native iOS TestFlight workflow](../../.github/workflows/mobile-ios-testflight.yml) runs the Swift checks and unit tests, archives the Release app on a macOS runner, verifies the signed IPA, and uploads it to App Store Connect. It runs when a `mobile-ios-vX.Y.Z` tag is pushed, or manually with a version and an optional upload toggle. Manual builds with upload disabled still produce a downloadable IPA artifact.
 
 The workflow uses the existing iOS distribution secrets for the **main app only**:
 

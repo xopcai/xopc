@@ -7,18 +7,7 @@ export {
   readSchemaVersionForTest,
   readSchemaVersion,
 } from './schema.js';
-export {
-  applyPendingMigrations,
-  inspectSchemaMigrationStatus,
-  resolveMigrationsDir,
-  type SchemaMigrationStatus,
-} from './migrations/runner.js';
-export {
-  DatabaseSchemaMigrationGapError,
-  DatabaseSchemaTooNewError,
-  DatabaseSchemaTooOldError,
-} from './migrations/errors.js';
-export { discoverSqlMigrations, listRegisteredMigrationTargets } from './migrations/discover.js';
+export { DatabaseSchemaTooNewError, DatabaseSchemaTooOldError } from './schema-errors.js';
 export {
   closeXopcDatabase,
   getXopcDatabase,

@@ -639,7 +639,6 @@
 "重启后已恢复排队运行" = "Queued run recovered after restart";
 "系统操作" = "system action";
 "助手操作" = "agent action";
-"工作流" = "workflow";
 "浏览器自动化" = "browser automation";
 "任务操作" = "task action";
 "正在执行%@" = "Running %@";

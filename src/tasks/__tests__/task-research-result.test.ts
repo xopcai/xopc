@@ -203,10 +203,10 @@ describe('personal research benchmark v1', () => {
     coordinator.finalize({ status: 'succeeded', summary: 'Text result', assistantText: 'Unsubstantiated report.' });
     expect(new TaskRunRepository().getReceipt(runId)!.verification.checks.map(check => check.status)).toEqual(['unverified', 'unverified']);
   });
-  it('S03-prose: valid concise prose and legacy JSON share the same validation', () => {
+  it('S03-prose: accepts current prose and rejects retired structured drafts', () => {
     const packet = { report: 'Price is uncertain. https://example.test/pricing' } as PersonalReplyPacket;
     expect(parsePersonalReplyDraft('Price is uncertain.', packet)).toBe('Price is uncertain.');
-    expect(parsePersonalReplyDraft('{"text":"Price is uncertain."}', packet)).toBe('Price is uncertain.');
+    expect(() => parsePersonalReplyDraft('{"text":"Price is uncertain."}', packet)).toThrow('plain text');
     expect(() => parsePersonalReplyDraft('{"text":', packet)).toThrow();
     expect(() => parsePersonalReplyDraft('Source: https://invented.test', packet)).toThrow(/invented/);
     const research = { ...seedResult(), sources: bindResearchSources({ ...input,

@@ -55,7 +55,7 @@ Implementation: `src/agent/bootstrap/`, assembled in `src/agent/prompt/system-pr
 
 ## Startup context (`/new`, `/reset`)
 
-When a session is cleared or a new webchat session starts, runtime-provided profile context may be injected with a `[Startup context loaded by runtime]` marker when the selected manifest/workflow enables that behavior.
+When a session is cleared or a new webchat session starts, runtime-provided profile context may be injected with a `[Startup context loaded by runtime]` marker when the selected profile enables that behavior.
 
 Agents must not claim they manually read files when startup context was injected by runtime.
 

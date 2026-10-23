@@ -7,7 +7,7 @@ import { Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 
 import { requireNodeSqlite } from '../infra/node-sqlite.js';
-import { assertDatabaseOffline } from '../storage/sqlite/migrations/conversation-backup.js';
+import { assertDatabaseOffline } from '../storage/sqlite/offline-access.js';
 import { expandWorkspacePathString } from '../config/workspace-path.js';
 
 const FORMAT = 'xopc-state-backup';

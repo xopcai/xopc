@@ -21,7 +21,6 @@ The gateway supports one realtime protocol version at a time. An older client re
 | `sessions` | Cross-session lifecycle events | 1,000 events |
 | `session:<sessionKey>` | Conversation-scoped state | 200 events |
 | `run:<runId>` | Ordered agent-run stream | 8,000 events, removed after completion TTL |
-| `workflow:<runId>` | Workflow-scoped progress | Policy-defined |
 | `logs` | Live log entries | 500 events |
 
 Every event has a topic-local monotonic sequence. Clients reconnect with their last applied cursor; the gateway replays newer events and suppresses duplicates. Subscription acknowledgements establish a cursor even before the first event arrives. If the cursor predates the replay window, the gateway emits a recoverable `realtime.gap`; chat clients reload the durable session snapshot and then consume the retained suffix. A missing or expired run topic emits a terminal gap and clients reconcile from REST only.

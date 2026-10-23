@@ -16,7 +16,6 @@ describe('patchSessionAgentConfigView', () => {
     patchSessionAgentConfigView(conversationId, {
       model: 'openai/gpt-4o',
       thinkingLevel: 'high',
-      reasoningLevel: 'off',
       activityDetail: {
         default: 'on',
         override: 'off',

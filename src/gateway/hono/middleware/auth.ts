@@ -274,10 +274,10 @@ export function auth(config?: AuthConfig) {
       let releaseBodyBudget = () => {};
       try {
         const proofHeader = c.req.header(PROOF_HEADER);
-        if (device?.requestProofVersion || proofHeader) {
+        if (device || proofHeader) {
           const proof = parseRequestProof(proofHeader);
           const url = new URL(c.req.url);
-          if (!device || !proof || Math.abs(Date.now() - proof.timestamp) > REQUEST_PROOF_WINDOW_MS
+          if (!device || device.requestProofVersion !== 1 || !proof || Math.abs(Date.now() - proof.timestamp) > REQUEST_PROOF_WINDOW_MS
             || !verifyRequestProofSignature(device, proof, requestProofMessage({
               gatewayId: getOrCreateGatewayIdentity().id, credential: providedCredential!, method: c.req.method,
               target: url.pathname + url.search, headers: name => c.req.header(name), proof,

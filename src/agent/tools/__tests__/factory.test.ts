@@ -202,17 +202,6 @@ describe('AgentToolsFactory', () => {
     ]);
   });
 
-  it('registers conversational workflow management for primary agents', () => {
-    const factory = new AgentToolsFactory({
-      workspace: '/tmp/xopc-tools-factory-test',
-      bus: {} as MessageBus,
-      getCurrentContext: () => null,
-      getPrimaryModel: () => ({ input: ['text'] }) as never,
-    });
-
-    expect(factory.createCoreTools().map((tool) => tool.name)).toContain('workflow_manage');
-  });
-
   it('registers marketplace discovery without requiring a CLI or local skill manager', () => {
     const factory = new AgentToolsFactory({
       workspace: '/tmp/xopc-tools-factory-test',
@@ -275,7 +264,6 @@ describe('AgentToolsFactory', () => {
       expect.arrayContaining([
         'desktop-pet-authoring',
         'automation-authoring',
-        'workflow-authoring',
         'extension-authoring',
         'skill-authoring',
         'visual-asset-authoring',

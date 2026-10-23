@@ -127,8 +127,6 @@ export class FeishuChannelPlugin implements ChannelPlugin<ResolvedFeishuAccount>
   private cfg!: Config;
   private abortControllers = new Map<string, AbortController>();
   private inboundPipeline?: ReturnType<typeof createFeishuInboundPipeline>;
-  /** Unregister fn for the workflow-progress capability registered against the global broker. */
-  private workflowProgressUnregister: (() => void) | null = null;
 
   config = {
     listAccountIds: (cfg: Config) => listFeishuAccountIds(cfg),
@@ -318,21 +316,8 @@ export class FeishuChannelPlugin implements ChannelPlugin<ResolvedFeishuAccount>
       },
     });
 
-    await this.registerWorkflowProgressCapability();
 
     log.debug('Feishu plugin initialized');
-  }
-
-  private async registerWorkflowProgressCapability(): Promise<void> {
-    // Lazy-load workflow progress so Feishu runtime startup does not pull the
-    // agent/workflow/provider graph into Electron's dynamic extension path.
-    const [{ getWorkflowProgressBroker }, { createFeishuWorkflowProgressCapability }] = await Promise.all([
-      import('@xopcai/xopc/agent/workflow/progress-broker.js'),
-      import('./workflow-progress.js'),
-    ]);
-    this.workflowProgressUnregister = getWorkflowProgressBroker().registerChannel(
-      createFeishuWorkflowProgressCapability({ getConfig: () => this.cfg }),
-    );
   }
 
   async start(options?: ChannelPluginStartOptions): Promise<void> {
@@ -404,8 +389,6 @@ export class FeishuChannelPlugin implements ChannelPlugin<ResolvedFeishuAccount>
     // still leave other accounts capable of delivering progress through the
     // same registered cap.
     if (!accountId) {
-      this.workflowProgressUnregister?.();
-      this.workflowProgressUnregister = null;
     }
   }
 

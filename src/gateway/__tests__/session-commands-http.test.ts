@@ -22,7 +22,7 @@ import type { GatewayService } from '../service.js';
 vi.mock('../../providers/index.js', async importOriginal => ({ ...await importOriginal<object>(), resolveModel: () => ({ id: 'model' }) }));
 vi.mock('../../providers/model-thinking.js', () => ({ getModelThinking: () => ({ options: ['off'] }) }));
 vi.mock('../../tui/tui-startup-resources.js', () => ({ collectTuiStartupResources: (_config: object, conversationId?: string, options?: { agentId?: string }) => ({
-  context: [], skills: [], workflows: [], connectors: [], conversationId, agentId: options?.agentId,
+  context: [], skills: [], connectors: [], conversationId, agentId: options?.agentId,
 }) }));
 vi.mock('../../review/review-git.js', () => ({ resolveGitRoot: async (workspace: string) => workspace, buildReviewContext: async (workspace: string) => ({ workspace }) }));
 

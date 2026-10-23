@@ -250,7 +250,7 @@ try {
   assert.deepEqual((await (await request(editPath)).json()).automation, recreatedAutomation);
   assert.equal((await request(editPath, 'DELETE', deleteBody, { 'idempotency-key': 'stale-delete' })).status, 409);
   const runnableResponse = await request('/api/automations', 'POST', {
-    name: 'Safe queue fixture', trigger: { kind: 'manual' }, action: { kind: 'workflow', workflowId: 'never-executed' },
+    name: 'Safe queue fixture', trigger: { kind: 'manual' }, action: { kind: 'browser_automation', automationId: 'never-executed' },
     safety: { mode: 'suggest_only' },
   });
   assert.equal(runnableResponse.status, 201, await runnableResponse.clone().text());

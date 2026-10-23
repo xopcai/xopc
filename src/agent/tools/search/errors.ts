@@ -29,9 +29,9 @@ export function classifySearchError(error: unknown, signal?: AbortSignal): Searc
   if (error instanceof SearchError) return error;
   const value = error as { name?: unknown; status?: unknown; statusCode?: unknown; code?: unknown } | undefined;
   const message = error instanceof Error ? error.message : String(error);
-  const legacyStatus = /^HTTP (\d{3})\b/.exec(message)?.[1];
+  const httpStatus = /^HTTP (\d{3})\b/.exec(message)?.[1];
   const status = typeof value?.status === 'number' ? value.status : typeof value?.statusCode === 'number' ? value.statusCode
-    : legacyStatus ? Number(legacyStatus) : undefined;
+    : httpStatus ? Number(httpStatus) : undefined;
   const denied = ['EACCES', 'EPERM', 'PERMISSION_DENIED', 'permission_denied', 'ACCESS_DENIED'].includes(String(value?.code))
     || /\b(permission denied|access denied|forbidden|unauthorized|not authorized)\b/i.test(message);
   const kind = status === 401 || status === 403 || denied ? 'permission_denied' : status === 429 ? 'rate_limited'

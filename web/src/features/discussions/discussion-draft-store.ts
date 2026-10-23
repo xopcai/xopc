@@ -27,7 +27,8 @@ function openDraftDatabase(): Promise<IDBDatabase> {
   if (typeof indexedDB === 'undefined') return Promise.reject(new Error('Local recording storage is unavailable'));
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(DATABASE_NAME, DATABASE_VERSION);
-    request.onupgradeneeded = () => {
+    request.onupgradeneeded = (event) => {
+      if (event.oldVersion !== 0) { request.transaction?.abort(); reject(new Error('Unsupported recording database version')); return; }
       const db = request.result;
       if (!db.objectStoreNames.contains(DRAFTS)) db.createObjectStore(DRAFTS, { keyPath: 'id' });
       if (!db.objectStoreNames.contains(CHUNKS)) {

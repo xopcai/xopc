@@ -1,3 +1,4 @@
+import type { FeishuConfig } from '../schema/config-schema.js';
 import type { Config } from '@xopcai/xopc/config/schema.js';
 import type {
   ChannelRuntimeActionAdapter,
@@ -42,7 +43,7 @@ function normalizeDomain(input: unknown): FeishuDomain {
 }
 
 function buildFeishuConfig(config: Config, result: AppRegistrationResult): Config {
-  const existing = config.channels?.feishu as Record<string, unknown> | undefined;
+  const existing = config.channels?.feishu as FeishuConfig | undefined;
   const ownerOpenId = result.openId?.trim();
   const previousAllowFrom = Array.isArray(existing?.allowFrom)
     ? (existing.allowFrom as Array<string | number>)
@@ -58,8 +59,7 @@ function buildFeishuConfig(config: Config, result: AppRegistrationResult): Confi
       feishu: {
         ...(existing ?? {}),
         enabled: true,
-        appId: result.appId,
-        appSecret: result.appSecret,
+        accounts: { ...existing?.accounts, default: { ...existing?.accounts?.default, enabled: true, appId: result.appId, appSecret: result.appSecret } },
         domain: result.domain,
         connectionMode: 'websocket',
         dmPolicy: existing?.dmPolicy ?? 'open',
@@ -67,7 +67,6 @@ function buildFeishuConfig(config: Config, result: AppRegistrationResult): Confi
         allowFrom,
         groupAllowFrom: Array.isArray(existing?.groupAllowFrom) ? existing.groupAllowFrom : allowFrom,
         requireMention: typeof existing?.requireMention === 'boolean' ? existing.requireMention : true,
-        renderMode: existing?.renderMode ?? 'auto',
         streaming: typeof existing?.streaming === 'boolean' ? existing.streaming : false,
         reactionNotifications: existing?.reactionNotifications ?? 'own',
         actions: { ...(existing?.actions as Record<string, unknown> | undefined), reactions: true },

@@ -142,11 +142,6 @@ export function resolveEffectiveAgentConfig(params: {
     markObjectSources(skills, 'agent', 'skills', sources);
   }
 
-  const workflows = {
-    ...structuredClone(defaults.workflows),
-    ...structuredClone(agent.workflows ?? {}),
-  };
-  if (agent.workflows) markObjectSources(agent.workflows, 'agent', 'workflows', sources);
 
   const runtime = {
     ...structuredClone(defaults.runtime),
@@ -173,7 +168,6 @@ export function resolveEffectiveAgentConfig(params: {
       skills,
       tools,
       ...(agent.toolAllowlist ? { toolAllowlist: [...agent.toolAllowlist] } : {}),
-      workflows,
       runtime,
     }),
     sources,

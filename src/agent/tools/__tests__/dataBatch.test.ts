@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Type } from '@sinclair/typebox';
 
-import { createDataBatchTool, withDataToolPermissions } from '../dataBatch.js';
+
 import { acquireData } from '../../data-acquisition/service.js';
 import { renderDataBatch } from '../../data-acquisition/render.js';
 import { dataOperationCalls } from '../../data-acquisition/schema.js';
@@ -62,16 +62,6 @@ describe('data_batch', () => {
     ] }, new Set(['read_file']));
     expect(result.operations.map(op => op.status)).toEqual(['ok', 'error', 'denied']);
     expect(result.fragments[0]?.text).toBe('decision');
-  });
-
-  it('intersects runtime tools with factory permissions for workflow and child execution', async () => {
-    await writeFile(join(root, 'ok.md'), 'private');
-    const tool = createDataBatchTool(root, () => allowed);
-    const result = await withDataToolPermissions(new Set(['data_batch']), () => tool.execute('x', {
-      operations: [{ id: 'a', kind: 'file_read', path: 'ok.md' }],
-    }));
-    expect(result.content).not.toEqual(expect.arrayContaining([expect.objectContaining({ text: expect.stringContaining('private') })]));
-    expect(result.details).toMatchObject({ sourceRequests: 0, status: 'failed' });
   });
 
   it('validates the whole envelope before any reads', async () => {

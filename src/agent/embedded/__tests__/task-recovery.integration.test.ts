@@ -72,7 +72,7 @@ describe('task model recovery over the real execution chain', () => {
     resetXopcDatabaseSingletonForTest();
     openXopcDatabase({ path: join(root, 'xopc.db') });
     seedTestAgentCatalog({ defaults: { models: { chat: { primary: 'openai/gpt-4o-mini', fallbacks: [] }, intents: {} },
-      skills: { mode: 'all-enabled', exclude: [] }, tools: {}, workflows: {}, runtime: {} },
+      skills: { mode: 'all-enabled', exclude: [] }, tools: {}, runtime: {} },
       agents: [{ id: 'main', enabled: true, workspace: root }] });
     store = new SessionStore({ config: ConfigSchema.parse({}) });
     unsubscribe = onSessionTranscriptUpdate(update => { void store.syncEmbeddedTranscriptUpdate(update); });
@@ -217,7 +217,7 @@ describe('task model recovery over the real execution chain', () => {
     runs.start({ runId: queued.id, expectedVersion: queued.version, contextSnapshotId: snapshot.id, policySnapshot: {}, conversationId, timeoutAt: deadline });
     const executionId = crypto.randomUUID();
     insertSessionInput({ id: crypto.randomUUID(), conversationId, clientMessageId: 'deadline-input', requestedDelivery: 'next',
-      effectiveDelivery: 'next', status: 'queued', content: 'Commit once', origin: { type: 'system', source: 'workflow' }, taskRunId: queued.id });
+      effectiveDelivery: 'next', status: 'queued', content: 'Commit once', origin: { type: 'system', source: 'task' }, taskRunId: queued.id });
     claimNextSessionInput(conversationId, executionId);
     const { result, events } = await run({ runId: executionId, taskRunId: queued.id });
     expect(result).toMatchObject({ status: 'error', summary: 'Agent run deadline expired' });
@@ -248,7 +248,7 @@ describe('task model recovery over the real execution chain', () => {
         const clientMessageId = runs.nextAgentInputClientMessageId(id);
         insertSessionInput({ id: crypto.randomUUID(), conversationId: conversation, clientMessageId,
           expectedTranscriptId: (await store.getMetadata(conversation))!.transcriptId, requestedDelivery: 'next',
-          effectiveDelivery: 'next', status: 'queued', content, origin: { type: 'system', source: 'workflow' }, taskRunId: id });
+          effectiveDelivery: 'next', status: 'queued', content, origin: { type: 'system', source: 'task' }, taskRunId: id });
         void coordinator.drain(conversation);
         await coordinator.waitForCompletion(conversation, clientMessageId);
       } });

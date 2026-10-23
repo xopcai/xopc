@@ -76,7 +76,6 @@
 | Skill 发现与读取 | 模型先看到 name／description，再按需读取正文；支持显式和隐式调用 | 产品引导需要清晰触发描述，不应把整本手册塞进每轮 prompt。[Build skills](https://learn.chatgpt.com/docs/build-skills) |
 | Skill 与工具分工 | Skill 描述如何组合工具完成工作；MCP 工具提供实时信息与受控动作 | 指南不能代替后端验证、配置写入和权限检查。[Skills 概念](https://developers.openai.com/plugins/concepts/skills) |
 | 插件安装后引导 | 插件可声明 `extensions.com.openai.onboardingSkill`；用户运行 setup 时调用包内 skill，可进入新对话或安装所在对话 | 后续可为 xopc 扩展提供同类引导入口；第一期先做内置产品引导，不增加插件协议。[Package your plugin](https://developers.openai.com/plugins/build/plugins) |
-| Skill 创建和安装 | 官方文档展示 Skill Creator、Skill Installer，并说明可通过 `$skill-creator` 创建工作流 | 用户自然语言需求可进入结构化的创建／安装流程。[Build skills](https://learn.chatgpt.com/docs/build-skills) |
 | 使用引导 | 官方提示指南围绕目标、上下文、输出和边界组织请求，给出操作及验证示例 | 引导询问用户想完成的成果，按需补充信息；用结果验证是否完成。[Prompting](https://learn.chatgpt.com/docs/prompting) |
 
 上表是产品设计参考，不据此推断 Codex 的内部持久化、权限或自动恢复实现。官方页面支持 onboarding skill，不代表 Codex 所有设置都能通过自然语言修改。

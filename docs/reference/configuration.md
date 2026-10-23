@@ -33,7 +33,6 @@ xopc config validate
 | `heartbeat` | Periodic Agent checks when enabled |
 | `platform` | Standalone or connected mode, the platform base URL, optional workspace, and validated discovery snapshot |
 
-Workflows and Automations are normally managed in their own Gateway pages rather than written directly into `xopc.json`.
 
 Agent definitions, inherited defaults, routing bindings, and surface defaults live in `~/.xopc/xopc.db`. Manage them from **Agents**, `xopc agents`, or an Agent conversation; they are intentionally absent from `xopc.json`.
 

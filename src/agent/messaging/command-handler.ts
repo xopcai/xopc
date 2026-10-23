@@ -20,7 +20,6 @@ import {
   type CommandStreamEvent,
 } from '../../chat-commands/index.js';
 import { getAllProviders, getModelsByProvider, getProviderDisplayName } from '../../providers/index.js';
-import type { WorkflowRunServiceLike } from '../../workflows/service/workflow-run-service.types.js';
 import type {
   SkillInstallToolOptions,
   SkillInstallToolResult,
@@ -79,8 +78,6 @@ export interface CommandHandlerConfig {
     conversationId: string,
     mode: 'list' | 'detail' | 'json',
   ) => Promise<string>;
-
-  getWorkflowRunService?: () => WorkflowRunServiceLike | undefined;
 }
 
 export class CommandHandler {
@@ -99,7 +96,6 @@ export class CommandHandler {
   private btwQuery?: CommandHandlerConfig['btwQuery'];
   private getSessionContextReport?: CommandHandlerConfig['getSessionContextReport'];
   private resetSession?: CommandHandlerConfig['resetSession'];
-  private getWorkflowRunService?: CommandHandlerConfig['getWorkflowRunService'];
 
   constructor(handlerConfig: CommandHandlerConfig) {
     this.config = handlerConfig.config;
@@ -117,7 +113,6 @@ export class CommandHandler {
     this.btwQuery = handlerConfig.btwQuery;
     this.getSessionContextReport = handlerConfig.getSessionContextReport;
     this.resetSession = handlerConfig.resetSession;
-    this.getWorkflowRunService = handlerConfig.getWorkflowRunService;
   }
 
   /** Replace config reference after hot reload or gateway PATCH so commands see current defaults. */
@@ -244,7 +239,6 @@ export class CommandHandler {
       btwQuery: this.btwQuery,
       emitEvent,
       getSessionContextReport: this.getSessionContextReport,
-      workflowRunService: this.getWorkflowRunService?.(),
     });
     commandContext.sourceContexts = context.sourceContexts;
     return commandContext;

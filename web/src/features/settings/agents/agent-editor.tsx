@@ -152,7 +152,7 @@ export function AgentEditor({
     draft.models ? (zh ? '模型' : 'Models') : null,
     draft.skills ? (zh ? '技能' : 'Skills') : null,
     draft.tools ? (zh ? '工具权限' : 'Tool access') : null,
-    draft.runtime || draft.workflows ? (zh ? '运行限制' : 'Runtime') : null,
+    null,
   ].filter((label): label is string => Boolean(label));
   const toolAllowlist = draft.toolAllowlist;
   const availableToolCount = toolAllowlist
@@ -210,7 +210,6 @@ export function AgentEditor({
         skills: draft.skills ?? null,
         tools: draft.tools ?? null,
         toolAllowlist: draft.toolAllowlist ?? null,
-        workflows: draft.workflows ?? null,
         runtime: draft.runtime ?? null,
       });
       const saved = next.agents.find((candidate) => candidate.id === agent.id);
@@ -277,7 +276,7 @@ export function AgentEditor({
   const identityChanged = JSON.stringify({ ...draft.profile, instructions: undefined }) !== JSON.stringify({ ...agent.override.profile, instructions: undefined });
   const profileDirty = identityChanged || documentDirty.soul || pendingAvatar !== null;
   const capabilityDirty = differs(['models', 'skills', 'tools', 'toolAllowlist', 'specialistProfile']);
-  const workDirty = differs(['workspace', 'runtime', 'workflows']) || draft.profile?.instructions !== agent.override.profile?.instructions || documentDirty.agents || documentDirty.tools;
+  const workDirty = differs(['workspace', 'runtime']) || draft.profile?.instructions !== agent.override.profile?.instructions || documentDirty.agents || documentDirty.tools;
   const dirtySuffix = (value: boolean) => value ? <span className="size-1.5 shrink-0 rounded-full bg-accent" aria-label={zh ? '有未保存的更改' : 'Unsaved changes'} /> : undefined;
   const navItems = [
     { id: 'overview' as const, label: zh ? '概览' : 'Overview' },
@@ -520,7 +519,7 @@ export function AgentEditor({
                 { id: 'directory' as const, label: zh ? '工作目录' : 'Directory', suffix: dirtySuffix(differs(['workspace'])) },
                 { id: 'instructions' as const, label: zh ? '工作规范' : 'Instructions', suffix: dirtySuffix(documentDirty.agents || draft.profile?.instructions !== agent.override.profile?.instructions) },
                 { id: 'tools' as const, label: zh ? '工具约定' : 'Tool guidance', suffix: dirtySuffix(documentDirty.tools) },
-                { id: 'runtime' as const, label: zh ? '运行策略' : 'Runtime', suffix: dirtySuffix(differs(['runtime', 'workflows'])) },
+                { id: 'runtime' as const, label: zh ? '运行策略' : 'Runtime', suffix: dirtySuffix(differs(['runtime'])) },
               ]} activeTab={workPanel} onChange={next => switchPanel('work', capabilityPanel, next)}
                 ariaLabel={zh ? '工作设置分区' : 'Work settings sections'} tabIdPrefix="agent-work-tab" panelIdPrefix="agent-work-panel" />
               <div role="tabpanel" id="agent-work-panel-directory" aria-labelledby="agent-work-tab-directory" hidden={workPanel !== 'directory'} className="space-y-6">
@@ -554,7 +553,7 @@ export function AgentEditor({
                 <AgentProfileEditor ref={toolEditorRef} file="TOOLS.md" agentId={agent.id} zh={zh} onDirtyChange={handleToolFilesDirty} />
               </div>
               <div role="tabpanel" id="agent-work-panel-runtime" aria-labelledby="agent-work-tab-runtime" hidden={workPanel !== 'runtime'} className="space-y-6">
-                <SectionTitle title={zh ? '运行限制' : 'Runtime limits'} description={zh ? '留空即继承全局限制。' : 'Leave blank to inherit global limits. Use overrides only to tighten or relax a specialist agent.'} action={draft.runtime || draft.workflows ? <Button variant="ghost" onClick={() => setDraft({ ...draft, runtime: undefined, workflows: undefined })}><RotateCcw className="size-4" />{zh ? '全部继承' : 'Inherit all'}</Button> : undefined} />
+                <SectionTitle title={zh ? '运行限制' : 'Runtime limits'} description={zh ? '留空即继承全局限制。' : 'Leave blank to inherit global limits. Use overrides only to tighten or relax a specialist agent.'} action={undefined} />
                 <AdvancedSection title={zh ? "执行限制" : "Execution limits"} summary={zh ? "保留当前运行限制；未覆盖的字段继承全局设置。" : "Current limits remain active; unspecified limits inherit globally."}>
                   <div className="grid gap-4 sm:grid-cols-2">
                     {([
@@ -564,15 +563,7 @@ export function AgentEditor({
                     ] as const).map(([key, label]) => <label key={key} className="text-xs font-medium text-fg-muted"><span className="flex items-center gap-2">{label}{draft.runtime?.[key] === undefined ? <InheritedBadge>{zh ? '继承' : 'Inherited'}</InheritedBadge> : null}</span><NumberInput allowEmpty type="number" min={1} className={`${inputClass} mt-1.5`} value={draft.runtime?.[key] ?? ''} placeholder={String(agent.effective.runtime[key] ?? '')} onChange={(event) => { const runtime = cleanObject({ ...(draft.runtime ?? {}), [key]: optionalPositiveInt(event.target.value) }); setDraft({ ...draft, runtime }); }} /></label>)}
                   </div>
                 </AdvancedSection>
-                <section className="rounded-2xl border border-edge bg-surface-base p-4">
-                  <h4 className="text-sm font-semibold text-fg">{zh ? '工作流' : 'Workflows'}</h4>
-                  <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                    <AdvancedSection title={zh ? "默认工作流" : "Default workflow"} summary={draft.workflows?.default ?? agent.effective.workflows.default ?? (zh ? "未自动绑定工作流" : "No workflow bound automatically")} >
-                      <label className="text-xs font-medium text-fg-muted">{zh ? '默认工作流' : 'Default workflow'}<input className={`${inputClass} mt-1.5`} value={draft.workflows?.default ?? ''} placeholder={agent.effective.workflows.default} onChange={(event) => { const workflows = cleanObject({ ...(draft.workflows ?? {}), default: event.target.value || undefined }); setDraft({ ...draft, workflows }); }} /></label>
-                    </AdvancedSection>
-                    <label className="text-xs font-medium text-fg-muted">{zh ? '允许的工作流' : 'Allowed workflows'}<input className={`${inputClass} mt-1.5`} value={draft.workflows?.allowed?.join(', ') ?? ''} placeholder={agent.effective.workflows.allowed?.join(', ')} onChange={(event) => { const allowed = splitList(event.target.value); const workflows = cleanObject({ ...(draft.workflows ?? {}), allowed: allowed.length > 0 ? allowed : undefined }); setDraft({ ...draft, workflows }); }} /></label>
-                  </div>
-                </section>
+
                 <AdvancedSection title={zh ? "提示词缓存" : "Prompt cache"} summary={draft.runtime?.promptCache?.mode ?? (zh ? "继承全局" : "Inherited globally")}>
                   <section className="rounded-2xl border border-edge bg-surface-base p-4">
                     <div className="flex items-center justify-between gap-3"><div><h4 className="text-sm font-semibold text-fg">{zh ? '提示词缓存' : 'Prompt cache'}</h4><p className="mt-1 text-xs text-fg-muted">{draft.runtime?.promptCache ? (zh ? '使用单独设置' : 'Using agent override') : (zh ? '继承全局' : 'Inherited globally')}</p></div>{draft.runtime?.promptCache ? <Button variant="ghost" onClick={() => { const runtime = cleanObject({ ...(draft.runtime ?? {}), promptCache: undefined }); setDraft({ ...draft, runtime }); }}><RotateCcw className="size-4" />{zh ? '继承' : 'Inherit'}</Button> : null}</div>

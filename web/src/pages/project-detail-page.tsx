@@ -51,7 +51,6 @@ import {
   type ProjectStatus,
   type ProjectWithDetails,
 } from '@/features/projects/api';
-import { ProjectWorkflowRunButton } from '@/features/projects/project-workflow-run-dialog';
 import { ProjectSkillsPanel } from '@/features/projects/project-skills-panel';
 import { mergeProjectSettingsDraft, projectSettingsDraft, type ProjectSettingsDraft } from '@/features/projects/project-settings-draft';
 import { ProjectUnderstandingCheckbox, ProjectUnderstandingPanel } from '@/features/projects/project-understanding';
@@ -1171,7 +1170,7 @@ export function ProjectDetailPage() {
     () => project ? (
       <>
         <PageContextCaptureButton resource={{ kind: 'project', id: project.id, revision: String(project.version) }} disabled={saving || projectSettingsDirty(draft, project)} />
-        <ProjectWorkflowRunButton key={project.id} projectId={project.id} />
+
         <Button variant="secondary" className="h-9 rounded-lg" onClick={openTaskCreate}>
           <Plus className="size-4" aria-hidden />
           {pm.board.create}

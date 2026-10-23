@@ -6,7 +6,6 @@ import {
   requireXopcDatabase,
 } from '../../storage/sqlite/index.js';
 import { storedRowsToFileEntries } from '../../session/stored-rows-to-file-entries.js';
-import { repairAssistantUsageInSessionManager } from './session-manager-init.js';
 
 type SessionManagerHydrationTarget = {
   fileEntries: FileEntry[];
@@ -43,6 +42,5 @@ export function openSqliteHydratingSessionManager(params: {
   internal.sessionId = params.transcriptId;
   internal.flushed = true;
   internal._buildIndex();
-  repairAssistantUsageInSessionManager(sm);
   return sm;
 }

@@ -15,7 +15,7 @@ const fallbackConfig = ConfigSchema.parse({});
 
 beforeEach(() => initializeTestAgentCatalog({ defaults: {
   models: { chat: { primary: 'anthropic/claude-sonnet-4-5', fallbacks: [] }, intents: {} },
-  skills: { mode: 'selected', include: [] }, tools: {}, workflows: {}, runtime: {},
+  skills: { mode: 'selected', include: [] }, tools: {}, runtime: {},
 } }));
 
 describe('Failover Reason Classification', () => {

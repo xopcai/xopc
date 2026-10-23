@@ -117,8 +117,6 @@ export async function longRecordingReview(id: string, notes: NotesService, optio
       const referenced = source.filter(s => s.status === 'confirmed' && fact.evidenceSegmentIds.includes(s.sequence));
       entries.push({ id: `analysis:${record!.revision}:${fact.id}`,kind: 'analysis',title: '',text: fact.text,transcriptRevision: rev,provisional: false,stale: rev !== capture.transcriptRevision,startedAtMs: referenced[0]?.startedAtMs,endedAtMs: referenced.at(-1)?.endedAtMs,segments: referenced.slice(0,3).map(segment),playback: referenced.slice(0,3).flatMap(s => playable(s.startedAtMs,s.endedAtMs)) });
     }
-    // Legacy key points stay searchable without invented references.
-    if (!organization.keyPointEvidence?.length) organization.keyPoints.forEach((text,index) => entries.push({ id: `keypoint:${index}`,kind: 'analysis',title: '',text,provisional: false,stale: revision !== capture.transcriptRevision,transcriptRevision: revision,segments: [],playback: [] }));
   }
   for (const a of annotations.filter(a => !a.annotation.deleted)) entries.push({ id: `annotation:${a.annotation.id}`,kind: 'annotation',title: a.annotation.kind,text: a.annotation.text,transcriptRevision: a.evidence?.transcriptRevision,provisional: a.state === 'pending',stale: a.evidence?.stale ?? false,startedAtMs: a.positionMs ?? a.evidence?.segments[0]?.startedAtMs,segments: a.evidence?.segments.slice(0,3) ?? [],playback: a.playback });
   const currentProcessed = (capture.status === 'organizing' || capture.status === 'completed') && capture.canonicalTranscript && duration > 0

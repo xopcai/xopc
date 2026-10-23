@@ -86,7 +86,7 @@ if (!bundledOpenAiChatGPTOAuth) {
 
 console.log(`[build-electron-server] Wrote ${outfile}${minify ? ' (minified)' : ''}`);
 
-copySqliteAssets(join(root, 'src/storage/sqlite'), join(root, 'out/server'), { clean: true });
+copySqliteAssets(join(root, 'src/storage/sqlite'), join(root, 'out/server'));
 
 // workspace-seed.ts resolves bundled templates next to the running module (`__dirname/workspace-templates`).
 // The esbuild bundle is a single file under out/server/, so copy templates beside index.js for packaged Electron.

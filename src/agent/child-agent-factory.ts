@@ -74,7 +74,7 @@ export interface DelegateChildHandleOptions {
    * factory ↔ delegate-tool ↔ child-agent-factory cycle).
    */
   buildChildTools: (opts: BuildChildToolsOptions) => AgentTool<any, any>[];
-  /** Optional live progress for workflow subagents. */
+  /** Optional live progress for delegated agents. */
   progressHooks?: DelegateChildProgressHooks;
   transcriptRuntime?: EmbeddedTranscriptRuntime;
   conversationId?: string;

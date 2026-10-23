@@ -7,7 +7,7 @@ import { ConfigSchema } from '../../../../../config/schema.js';
 import { seedTestAgentCatalog } from '../../../../../agent-catalog/test-support.js';
 import { SessionStore } from '../../../../../session/store.js';
 import { closeXopcDatabase, openXopcDatabase, resetXopcDatabaseSingletonForTest } from '../../../../../storage/sqlite/connection.js';
-import { XOPC_DB_SCHEMA_VERSION } from '../../../../../storage/sqlite/migrations/runner.js';
+import { XOPC_DB_SCHEMA_VERSION } from '../../../../../storage/sqlite/schema.js';
 import { checkDatabaseSchema } from '../database-schema.js';
 
 const testConfig = ConfigSchema.parse({});

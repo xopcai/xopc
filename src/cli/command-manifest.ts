@@ -41,7 +41,7 @@ export const ROOT_HELP_COMMANDS: RootHelpCommand[] = [
   { name: 'platform', description: 'Connect to XOPC Cloud or an enterprise platform' },
   { name: 'update [options]', description: 'Check for and install xopc updates' },
   { name: 'logs', description: 'Manage and query logs' },
-  { name: 'config [options]', description: 'View and edit configuration' },
+  { name: 'config', description: 'View and edit configuration' },
   { name: 'image', description: 'Inspect image provider availability' },
   { name: 'models [options]', description: 'List and manage models and model auth' },
   { name: 'providers', description: 'Manage LLM provider credentials (user-friendly hub over `xopc auth`)' },

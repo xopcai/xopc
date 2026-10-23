@@ -115,7 +115,7 @@ Vitest 新增/扩展覆盖：copy-on-write 与 part 身份、无 payload 身份�
 | 类型 | 验证内容与结果 |
 | --- | --- |
 | 内部会话 | xopc deep link、裸链接、尖括号、转义链接和 reference link 均生成内部 href 并路由到目标会话 |
-| 内部产物 | 笔记、任务、项目、工作流、自动化、本地应用沿用项目 opener；聊天中保留 note/task/preview 模式，设置与编辑页仍正常导航 |
+| 内部产物 | 笔记、任务、项目、自动化、本地应用沿用项目 opener；聊天中保留 note/task/preview 模式，设置与编辑页仍正常导航 |
 | 文件 | 中文文件名、相对路径、绝对路径、file URL、xopc workspace URL、行号、空格编码；浏览器点击回调收到正确的 path/kind/line |
 | 外部 URL | HTTP(S)、localhost 服务、query/hash 和中文参数；保持 `_blank`、noopener/noreferrer，使用现有 Electron bridge/browser opener |
 | 修饰键 | Ctrl/⌘/Shift 点击不被普通 opener 截获，保留浏览器原生行为 |

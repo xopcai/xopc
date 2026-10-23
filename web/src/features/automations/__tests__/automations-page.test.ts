@@ -7,34 +7,7 @@ import {
   initialForm,
 } from '../automation-form';
 import type { Automation, AutomationInput } from '../automation-api';
-import type { WorkflowDefinition } from '@/features/workflows/workflow-api';
 import { isSystemManagedAutomation } from '../automation-management';
-
-const workflow: WorkflowDefinition = {
-  id: 'wf-report',
-  name: 'report',
-  title: 'Report',
-  description: 'Prepare a report.',
-  version: '1.0.0',
-  revision: 1,
-  graph: { schemaVersion: 1, nodes: [], edges: [] },
-  inputSchema: {
-    type: 'object',
-    required: ['topic'],
-    properties: {
-      topic: { type: 'string', title: 'Topic' },
-    },
-  },
-  phases: [],
-  defaults: { concurrency: 1, timeoutSec: 300, maxSubagents: 2 },
-  metadata: {
-    tags: [],
-    builtIn: false,
-    source: 'user',
-    createdAtMs: 1,
-    updatedAtMs: 1,
-  },
-};
 
 describe('automation buildInput', () => {
   it('classifies only explicitly managed automations as system-owned', () => {
@@ -73,7 +46,7 @@ describe('automation buildInput', () => {
     const form = formFromAutomation(automation);
 
     expect(form).toMatchObject({ triggerMode: 'weekly', time: '17:00', weekday: '5' });
-    expect(buildInput(form, null).trigger).toEqual(automation.trigger);
+    expect(buildInput(form).trigger).toEqual(automation.trigger);
   });
 
   it('stores and restores the model selected for an agent automation', () => {
@@ -83,7 +56,7 @@ describe('automation buildInput', () => {
       triggerMode: 'manual',
       instruction: 'Prepare a detailed report.',
       model: 'anthropic/claude-sonnet-4',
-    }, null);
+    });
 
     expect(input.action).toEqual({
       kind: 'agent',
@@ -102,7 +75,7 @@ describe('automation buildInput', () => {
       actionMode: 'task_command',
       agentId: 'release-agent',
       safetyMode: 'suggest_only',
-    }, null);
+    });
 
     expect(input.action).toEqual({
       kind: 'task_command',
@@ -161,7 +134,7 @@ describe('automation buildInput', () => {
       description: '',
       projectId: '',
       agentId: '',
-    }, null);
+    });
 
     expect(form).toMatchObject({
       triggerMode: 'event',
@@ -198,7 +171,7 @@ describe('automation buildInput', () => {
     const edited = buildAutomationEditInput(automation, {
       ...formFromAutomation(automation),
       model: '',
-    }, null);
+    });
 
     expect(edited.action.kind === 'agent' ? edited.action.model : 'not-agent').toBeUndefined();
   });
@@ -215,7 +188,7 @@ describe('automation buildInput', () => {
       notificationPolicy: 'all',
       resultWebhookEndpoint: 'https://example.com/completed',
       resultWebhookSecretId: 'primary',
-    }, null);
+    });
 
     expect(input).toMatchObject({
       projectId: 'project-1',
@@ -225,72 +198,6 @@ describe('automation buildInput', () => {
         { key: 'result_webhook', kind: 'webhook', endpoint: 'https://example.com/completed', secretId: 'primary' },
       ] },
     });
-  });
-
-  it('includes structured workflow input when creating a workflow automation', () => {
-    const input = buildInput({
-      ...initialForm,
-      name: 'Morning report',
-      description: '',
-      triggerMode: 'daily',
-      time: '09:30',
-      weekday: '1',
-      intervalValue: '1',
-      intervalUnit: 'hour',
-      cronExpr: '30 9 * * *',
-      webhookSecretId: '',
-      onceAt: '',
-      eventType: '',
-      eventSource: '',
-      eventPayloadMatch: '',
-      actionMode: 'workflow',
-      agentId: 'main',
-      instruction: '',
-      workflowId: 'wf-report',
-      workflowGoal: '',
-      workflowInput: {
-        goal: 'Summarize overnight changes.',
-        argValues: {},
-        schemaInput: { topic: 'overnight changes' },
-        concurrency: '3',
-        maxSubagents: '5',
-      },
-      workflowInputValid: true,
-      browserAutomationId: '',
-      browserAutomationInputs: {},
-      safetyMode: 'suggest_only',
-      timeoutSeconds: '300',
-    }, workflow);
-
-    expect(input.action).toMatchObject({
-      kind: 'workflow',
-      workflowId: 'wf-report',
-      agentId: 'main',
-      goal: 'Summarize overnight changes.',
-      input: { topic: 'overnight changes' },
-      concurrency: 3,
-      maxSubagents: 5,
-    });
-    expect(input.safety).toEqual({ mode: 'suggest_only' });
-  });
-
-  it('builds a browser workflow automation with typed form inputs', () => {
-    const input = buildInput({
-      ...initialForm,
-      name: 'Collect title',
-      triggerMode: 'manual',
-      actionMode: 'browser_automation',
-      browserAutomationId: 'collect-title',
-      browserAutomationInputs: { query: 'xopc', limit: 2 },
-      safetyMode: 'auto_apply',
-    }, null);
-
-    expect(input.action).toEqual({
-      kind: 'browser_automation',
-      automationId: 'collect-title',
-      inputs: { query: 'xopc', limit: 2 },
-    });
-    expect(input.reliability?.executionTimeoutSeconds).toBe(1800);
   });
 
   it('keeps result delivery independent from action safety mode', () => {
@@ -312,17 +219,13 @@ describe('automation buildInput', () => {
       actionMode: 'agent',
       agentId: '',
       instruction: 'Prepare a recommendation.',
-      workflowId: '',
-      workflowGoal: '',
-      workflowInput: { goal: '', argValues: {}, schemaInput: {}, concurrency: '', maxSubagents: '' },
-      workflowInputValid: true,
       browserAutomationId: '',
       browserAutomationInputs: {},
       safetyMode: 'ask_before_apply',
       timeoutSeconds: '300',
       resultWebhookEndpoint: 'https://example.com/hook',
       resultWebhookSecretId: 'primary',
-    }, null);
+    });
 
     expect(input.safety).toEqual({ mode: 'ask_before_apply' });
     expect(input.delivery.destinations).toEqual([
@@ -350,15 +253,11 @@ describe('automation buildInput', () => {
       actionMode: 'agent',
       agentId: '',
       instruction: 'Prepare a recommendation.',
-      workflowId: '',
-      workflowGoal: '',
-      workflowInput: { goal: '', argValues: {}, schemaInput: {}, concurrency: '', maxSubagents: '' },
-      workflowInputValid: true,
       browserAutomationId: '',
       browserAutomationInputs: {},
       safetyMode: 'suggest_only',
       timeoutSeconds: '300',
-    }, null);
+    });
 
     expect(input.trigger).toEqual({
       kind: 'schedule',

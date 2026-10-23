@@ -36,18 +36,10 @@ function insertSessionAndTranscript(
       conversation_id, agent_id, active_transcript_id, status, name, tags_json,
       created_at, updated_at, last_accessed_at, session_started_at, last_interaction_at,
       source_channel, source_chat_id, session_type, hidden_from_session_list,
-      parent_conversation_id, workflow_run_id, workflow_definition_id, workflow_agent_id, workflow_agent_label,
-      project_id, routing_json, custom_data_json,
+      parent_conversation_id, project_id, routing_json, custom_data_json,
       message_count, estimated_tokens, compacted_count,
       last_flushed_at, flush_count
-    ) VALUES (
-      ?, ?, ?, ?, ?,
-      ?, ?, ?, ?, ?,
-      ?, ?, ?, ?,
-      ?, ?, ?, ?, ?,
-      ?, ?, ?,
-      ?, ?, ?, ?, ?, ?
-    )`,
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(
     row.conversationId,
     row.agentId,
@@ -65,10 +57,6 @@ function insertSessionAndTranscript(
     row.sessionType,
     row.hiddenFromSessionList,
     row.parentConversationId,
-    row.workflowRunId,
-    row.workflowDefinitionId,
-    row.workflowAgentId,
-    row.workflowAgentLabel,
     row.projectId,
     row.routingJson,
     row.customDataJson,
@@ -134,30 +122,8 @@ export function listSessionMetadata(query: SessionListQuery = {}): PaginatedResu
 
   if (!query.includeHidden) {
     conditions.push(`s.hidden_from_session_list = 0`);
-    // Deterministic memory-maintenance automations are operational records, not
-    // user conversations. Keep both newly marked and legacy rows out of every
-    // user-facing session query even if older metadata revealed the session.
-    conditions.push(`NOT (
-      s.source_channel = 'automation'
-      AND (
-        COALESCE(CASE WHEN json_valid(s.custom_data_json)
-          THEN json_extract(s.custom_data_json, '$.systemInternal') END, 0) = 1
-        OR COALESCE(CASE WHEN json_valid(s.custom_data_json)
-          THEN json_extract(s.custom_data_json, '$.automationId') END, '') LIKE 'system-memory-%'
-      )
-    )`);
-    // Legacy background sessions may have been revealed by their internal user
-    // prompt before any assistant/result output was persisted. Keep those
-    // shells out of user-facing lists without deleting their run linkage.
-    conditions.push(`(
-      s.source_channel NOT IN ('automation', 'workflow')
-      OR COALESCE(TRIM(s.name), '') != ''
-      OR EXISTS (
-        SELECT 1 FROM transcript_entries visible_output
-        WHERE visible_output.transcript_id = s.active_transcript_id
-          AND visible_output.role IN ('assistant', 'toolResult')
-      )
-    )`);
+    conditions.push(`NOT (s.source_channel = 'automation' AND (COALESCE(CASE WHEN json_valid(s.custom_data_json) THEN json_extract(s.custom_data_json, '$.systemInternal') END, 0) = 1 OR COALESCE(CASE WHEN json_valid(s.custom_data_json) THEN json_extract(s.custom_data_json, '$.automationId') END, '') LIKE 'system-memory-%'))`);
+
   }
 
   if (query.rootConversationsOnly && !query.search?.trim()) {
@@ -347,10 +313,6 @@ export function patchSessionMetadata(
         session_type = ?,
         hidden_from_session_list = ?,
         parent_conversation_id = ?,
-        workflow_run_id = ?,
-        workflow_definition_id = ?,
-        workflow_agent_id = ?,
-        workflow_agent_label = ?,
         project_id = ?,
         routing_json = ?,
         custom_data_json = ?,
@@ -373,10 +335,6 @@ export function patchSessionMetadata(
       merged.sessionType,
       merged.hiddenFromSessionList ? 1 : 0,
       merged.parentConversationId ?? null,
-      merged.workflowRunId ?? null,
-      merged.workflowDefinitionId ?? null,
-      merged.workflowAgentId ?? null,
-      merged.workflowAgentLabel ?? null,
       merged.projectId ?? null,
       merged.routing ? JSON.stringify(merged.routing) : null,
       merged.customData ? JSON.stringify(merged.customData) : null,

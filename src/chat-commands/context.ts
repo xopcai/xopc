@@ -1,6 +1,6 @@
 /**
  * Command Context Implementation
- * 
+ *
  * Provides the concrete implementation of CommandContext interface,
  * bridging commands to core services (AgentService, SessionStore, etc.)
  */
@@ -33,7 +33,6 @@ import { join } from 'path';
 import { effectiveWorkspacePathForSession } from '../session/session-workspace.js';
 import { wrapMarkdownExportAsHtml } from '../session/chat-export.js';
 import type { CompactionResult } from '../agent/memory/compaction.js';
-import type { WorkflowRunServiceLike } from '../workflows/service/workflow-run-service.types.js';
 import { getProjectForSession } from '../projects/workspace.js';
 
 const log = createLogger('CommandContext');
@@ -91,8 +90,6 @@ export interface CommandContextDeps {
     conversationId: string,
     mode: 'list' | 'detail' | 'json',
   ) => Promise<string>;
-
-  workflowRunService?: WorkflowRunServiceLike;
 }
 
 export class CommandContextImpl implements CommandContext {
@@ -108,7 +105,6 @@ export class CommandContextImpl implements CommandContext {
   readonly abortCurrentTurn?: () => Promise<void>;
   readonly reloadSkills?: () => Promise<void>;
   readonly installSkillFromSource?: CommandContext['installSkillFromSource'];
-  readonly workflowRunApis?: CommandContext['workflowRunApis'];
 
   private deps: CommandContextDeps;
 
@@ -142,12 +138,7 @@ export class CommandContextImpl implements CommandContext {
       this.installSkillFromSource = deps.installSkillFromSource;
     }
 
-    if (deps.workflowRunService) {
-      this.workflowRunApis = {
-        service: deps.workflowRunService,
-        startWorkflowRun: (params) => deps.workflowRunService!.startWorkflowRun(params),
-      };
-    }
+
   }
 
   private outboundMetadata(extra?: Record<string, unknown>): Record<string, unknown> {
@@ -261,7 +252,7 @@ export class CommandContextImpl implements CommandContext {
     // This is mainly for CLI/Web UI where you can switch between sessions
     // For Telegram, each chat has its own session
     log.info({ from: this.conversationId, to: conversationId }, 'Session switch requested');
-    
+
     // Note: In the current architecture, switching session means
     // the next message will use a different conversationId
     // The actual switch happens at the adapter level
@@ -273,7 +264,7 @@ export class CommandContextImpl implements CommandContext {
     if (this.deps.getCurrentModel) {
       return this.deps.getCurrentModel();
     }
-    
+
     return getAgentDefaultModelRef();
   }
 
@@ -281,7 +272,7 @@ export class CommandContextImpl implements CommandContext {
     if (this.deps.listModels) {
       return this.deps.listModels();
     }
-    
+
     // Fallback to empty list
     return [];
   }
@@ -290,7 +281,7 @@ export class CommandContextImpl implements CommandContext {
     if (this.deps.switchModel) {
       return this.deps.switchModel(modelId);
     }
-    
+
     // No model manager available
     await this.reply('❌ Model switching not available in this context.');
     return false;
@@ -300,19 +291,19 @@ export class CommandContextImpl implements CommandContext {
     if (this.deps.getUsage) {
       return this.deps.getUsage();
     }
-    
+
     // Fallback: calculate from session
     const messages = await this.getSession();
     let promptTokens = 0;
     let completionTokens = 0;
-    
+
     for (const msg of messages) {
       if ('usage' in msg && msg.usage) {
         promptTokens += msg.usage.input || 0;
         completionTokens += msg.usage.output || 0;
       }
     }
-    
+
     return {
       promptTokens,
       completionTokens,
@@ -338,7 +329,7 @@ export class CommandContextImpl implements CommandContext {
       // Update config object using path
       const keys = path.split('.');
       let target: Record<string, unknown> = this.config as Record<string, unknown>;
-      
+
       for (let i = 0; i < keys.length - 1; i++) {
         const key = keys[i];
         if (!(key in target) || typeof target[key] !== 'object' || target[key] === null) {
@@ -346,12 +337,12 @@ export class CommandContextImpl implements CommandContext {
         }
         target = target[key] as Record<string, unknown>;
       }
-      
+
       target[keys[keys.length - 1]] = value;
-      
+
       // Save to disk
       await saveConfig(this.config);
-      
+
       log.info({ path, value }, 'Config updated via command');
       return true;
     } catch (error) {
@@ -513,29 +504,29 @@ export class CommandContextImpl implements CommandContext {
     switch (component.type) {
       case 'buttons':
         return component.buttons.map(b => `[${b.text}]`).join(' ');
-      
+
       case 'select':
         return component.options.map(o => `- ${o.label}`).join('\n');
-      
+
       case 'model-picker':
-        return component.providers.map(p => 
+        return component.providers.map(p =>
           `**${p.name}**\n${p.models.map(m => `  - ${m.name}`).join('\n')}`
         ).join('\n\n');
-      
+
       case 'usage-display':
         return `📊 Usage Stats:\n` +
           `📥 Prompt: ${component.stats.promptTokens.toLocaleString()} tokens\n` +
           `📤 Completion: ${component.stats.completionTokens.toLocaleString()} tokens\n` +
           `📊 Total: ${component.stats.totalTokens.toLocaleString()} tokens`;
-      
+
       case 'session-list':
-        return component.sessions.map(s => 
+        return component.sessions.map(s =>
           `${s.isActive ? '▶️' : '  '} ${s.key} (${s.messageCount} messages)`
         ).join('\n');
-      
+
       case 'text-input':
         return component.placeholder || 'Enter text...';
-      
+
       default:
         return '[UI Component]';
     }

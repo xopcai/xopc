@@ -55,7 +55,6 @@ for (const definition of [
   ['projects', 'project.deleted', 'project', 'A Project was deleted.'],
   ['discussions', 'discussion.completed', 'discussion', 'A Discussion completed.'],
   ['sessions', 'session.transcript.updated', 'session', 'A Session transcript changed.'],
-  ['workflows', 'workflow.run.completed', 'workflow_run', 'A Workflow run completed.'],
 ] as const) {
   registerBusinessEvent({
     source: definition[0],

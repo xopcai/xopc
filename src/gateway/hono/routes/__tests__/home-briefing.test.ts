@@ -17,17 +17,7 @@ describe('home workbench', () => {
         updatedAt: 200,
         response: { kind: 'connector_approval', approvalId: 'approval-1' },
       }],
-      attention: [{
-        id: 'workflow_run:run-1',
-        kind: 'workflow_run',
-        runId: 'run-1',
-        title: 'Research',
-        detail: 'The workflow failed.',
-        reason: 'run_failed',
-        href: '/workflows?runId=run-1',
-        updatedAt: 300,
-      }],
-      activeWorkflowRuns: [],
+      attention: [{ id: 'failed', kind: 'automation_run', runId: 'failed', title: 'Report', reason: 'run_failed', href: '/automations?run=failed', updatedAt: 300 }],
       runningTasks: [],
       scheduled: [],
       nowMs: 400,
@@ -56,7 +46,7 @@ describe('home workbench', () => {
         { id: 'waiting', kind: 'task', title: 'Waiting', reason: 'retry', urgency: 'now', href: '/tasks/waiting', updatedAt: 0,
           response: { kind: 'task', taskId: 'waiting', canRetry: false } },
       ],
-      attention: [], activeWorkflowRuns: [], runningTasks: [], scheduled: [], nowMs: 3,
+      attention: [], runningTasks: [], scheduled: [], nowMs: 3,
     });
     expect(workbench.needsUser[0]?.primaryAction).toEqual({ type: 'task_review', taskId: 'review', label: '查看结果并验收' });
     expect(workbench.needsUser[1]?.primaryAction).toEqual({ type: 'retry_task', taskId: 'failed', label: '重试' });
@@ -69,7 +59,6 @@ describe('home workbench', () => {
       locale: 'en',
       decisions: [],
       attention: [],
-      activeWorkflowRuns: [],
       runningTasks: [],
       scheduled: [],
       nowMs: 500,
@@ -83,14 +72,6 @@ describe('home workbench', () => {
       locale: 'en',
       decisions: [],
       attention: [],
-      activeWorkflowRuns: [{
-        id: 'run-1',
-        definitionId: 'workflow-1',
-        title: 'Research',
-        status: 'running',
-        createdAtMs: 100,
-        metrics: { agentCount: 2, doneAgentCount: 1, errorAgentCount: 0, skippedAgentCount: 0, artifactCount: 0 },
-      }],
       runningTasks: [],
       scheduled: [
         { id: 'morning', trigger: '0 8 * * *', action: 'agent:main', nextRunAt: '2026-08-29T00:00:00.000Z' },
@@ -100,9 +81,9 @@ describe('home workbench', () => {
       nowMs: 500,
     });
 
-    expect(workbench.backgroundCount).toBe(4);
-    expect(workbench.background).toHaveLength(4);
-    expect(workbench.background.map((item) => item.kind)).toEqual(['running', 'scheduled', 'scheduled', 'scheduled']);
+    expect(workbench.backgroundCount).toBe(3);
+    expect(workbench.background).toHaveLength(3);
+    expect(workbench.background.map((item) => item.kind)).toEqual(['scheduled', 'scheduled', 'scheduled']);
   });
 
   it('localizes known system failures while preserving arbitrary task details', () => {
@@ -157,7 +138,7 @@ describe('home workbench', () => {
 
   it('retains paused tasks as reachable background items with their wait reason', () => {
     const task = { id: 'paused-task', title: 'Paused', updatedAt: 1 } as Parameters<typeof buildHomeWorkbench>[0]['runningTasks'][number];
-    const home = buildHomeWorkbench({ locale: 'en', decisions: [], attention: [], activeWorkflowRuns: [], runningTasks: [task], waitingTaskReasons: { 'paused-task': 'Paused by user' }, scheduled: [], nowMs: 1 });
+    const home = buildHomeWorkbench({ locale: 'en', decisions: [], attention: [], runningTasks: [task], waitingTaskReasons: { 'paused-task': 'Paused by user' }, scheduled: [], nowMs: 1 });
     expect(home.background[0]).toMatchObject({ summary: 'Paused by user', statusLabel: 'Waiting', openAction: { type: 'open', href: '/tasks/paused-task' } });
   });
 

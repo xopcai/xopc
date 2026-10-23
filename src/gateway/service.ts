@@ -29,7 +29,7 @@ import { voiceMemoryBudget, voicePersonaBudget } from '../voice/realtime/convers
 import { getSessionConfig } from '../storage/sqlite/config-repository.js';
 import { notifyUserContextChange } from '../user-context/changes.js';
 import { resolveEffectiveAgentProfileForSession } from '../config/agent-profile.js';
-import { listAgentEntries, normalizeAgentId, resolveDefaultAgentId, resolveAgentWorkspaceDir } from '../agent/agent-scope.js';
+import { listAgentEntries, resolveDefaultAgentId, resolveAgentWorkspaceDir } from '../agent/agent-scope.js';
 import { AgentService } from '../agent/service.js';
 import { getEmbeddedExecutionSession } from '../agent/embedded/execution-context.js';
 import { bootstrapApplicationStateSync } from '../bootstrap/application-state.js';
@@ -56,9 +56,6 @@ import {
   DiscussionService,
 } from '../discussions/index.js';
 import { buildNoteAgentContext, NotesService, NotesStore } from '../notes/index.js';
-import { buildWorkflowChildTools } from '../agent/workflow/workflow-child-tools.js';
-import { WorkflowRunService } from '../workflows/service/workflow-run-service.js';
-import { WorkflowSessionBridge } from '../workflows/service/workflow-session-bridge.js';
 import { ExtensionLoader, areExtensionsGloballyDisabled, buildExtensionMetadataSnapshot } from '../extensions/index.js';
 import type { ManifestRegistryEntry } from '../extensions/manifest-registry.js';
 import type { ResolvedExtensionConfig } from '../extensions/types/index.js';
@@ -323,8 +320,6 @@ export class GatewayService {
 
   private readonly readiness = new GatewayReadiness();
   private startupTrace: GatewayStartupTrace | null = null;
-  private workflowSessionBridge: WorkflowSessionBridge | null = null;
-  private workflowRunServiceInstance: WorkflowRunService | null = null;
   private taskAllocationDispatcher: TaskAllocationDispatcher | null = null;
   private taskRunDispatcher: TaskRunDispatcher | null = null;
   private taskRunDispatchTimer: ReturnType<typeof setInterval> | null = null;
@@ -388,7 +383,7 @@ export class GatewayService {
   constructor(private serviceConfig: GatewayServiceConfig = {}) {
     this.bus = new MessageBus();
     this.configPath = serviceConfig.configPath || resolveConfigPath();
-    bootstrapApplicationStateSync(this.configPath);
+    bootstrapApplicationStateSync();
     const now = Date.now();
     markStaleAiUsageEventsUnknown(now - 6 * 60 * 60 * 1000, now);
     pruneAiUsageEvents(now - AI_USAGE_RETENTION_MS);
@@ -753,7 +748,6 @@ export class GatewayService {
       dispatchTaskEvents: () => this.dispatchTaskEvents(),
       dispatchTaskRuns: () => this.dispatchTaskRuns(),
       onAgentCatalogMutate: () => this.refreshAgentCatalog(),
-      getWorkflowRunService: () => this.createWorkflowRunService(),
       sourceContextResolver: async (binding) => {
         if (binding.kind === 'note') {
           const note = await this.notesService.getNote(binding.sourceId);
@@ -796,7 +790,6 @@ export class GatewayService {
         this.projects,
         input,
       ),
-      workflowRunService: this.createWorkflowRunService(),
       browserAutomationService: this.browserAutomations,
       executeTaskCommand: ({ taskId, idempotencyKey, command, triggerEvent }) => {
         const task = new TaskRepository().get(taskId);
@@ -844,7 +837,7 @@ export class GatewayService {
           if (!session) throw new Error('Task session is unavailable');
           insertSessionInput({ id: crypto.randomUUID(), conversationId, clientMessageId, expectedTranscriptId: session.transcriptId,
             requestedDelivery: 'next', effectiveDelivery: 'next', status: 'queued', content: message,
-            origin: { type: 'system', source: 'workflow' }, taskRunId: runId,
+            origin: { type: 'system', source: 'task' }, taskRunId: runId,
           });
           void this.agentRunner.inputs.drain(conversationId);
           await this.agentRunner.inputs.waitForCompletion(conversationId, clientMessageId);
@@ -877,13 +870,12 @@ export class GatewayService {
         clientMessageId: input.clientMessageId,
         delivery: state.activeRunId ? 'steer' : 'next',
         content: input.content,
-        origin: { type: 'system', source: 'workflow' },
+        origin: { type: 'system', source: 'task' },
       });
       return result.ok;
     });
     if (this.stopping) return;
     this.createTaskRunDispatcher().dispatch();
-    await this.createWorkflowRunService().dispatchTaskRuns();
   }, (err) => {
     const errorMessage = err instanceof Error ? err.message : String(err);
     log.error({ err, errorMessage, phase: 'task_run_dispatch' }, `Task dispatch failed: ${errorMessage}`);
@@ -1511,7 +1503,6 @@ export class GatewayService {
         this.projects,
         input,
       ),
-      workflowRunService: this.createWorkflowRunService(),
       browserAutomationService: this.browserAutomations,
       executeTaskCommand: ({ taskId, idempotencyKey, command, triggerEvent }) => {
         const task = new TaskRepository().get(taskId);
@@ -1532,7 +1523,6 @@ export class GatewayService {
     });
     this.startSessionTranscriptEventIngestion();
 
-    await trace.measure('workflows.reconcile', () => this.reconcileInterruptedWorkflowRuns());
 
     this.sessionIndex.on('sessionUpdated', (data: { key: string; name?: string; tags?: string[] }) => {
       this.emit('session.updated', { key: data.key, name: data.name, tags: data.tags });
@@ -2059,7 +2049,7 @@ export class GatewayService {
     };
   } {
     const runningChannels = this.channelManager.getRunningChannels();
-    const allChannels = this.channelManager.getAllChannels();
+    const allChannels = this.channelManager.getAllPlugins();
     const logStats = getRuntimeLogStats();
     const readiness = this.readiness.getSnapshot();
 
@@ -2190,49 +2180,6 @@ export class GatewayService {
 
   get sessionIndexInstance(): SessionIndex {
     return this.sessionIndex;
-  }
-
-  /** Shared workflow run orchestrator + session bridge (one instance per gateway). */
-  createWorkflowRunService(): WorkflowRunService {
-    if (!this.workflowRunServiceInstance) {
-      this.workflowSessionBridge = new WorkflowSessionBridge(this);
-      this.workflowRunServiceInstance = new WorkflowRunService({
-        service: this,
-        sessionBridge: this.workflowSessionBridge,
-        buildChildTools: buildWorkflowChildTools,
-      });
-    }
-    return this.workflowRunServiceInstance;
-  }
-
-  private async reconcileInterruptedWorkflowRuns(): Promise<void> {
-    const workflowService = this.createWorkflowRunService();
-    const agentIds = this.collectWorkflowAgentIds();
-    let total = 0;
-    for (const agentId of agentIds) {
-      try {
-        total += await workflowService.reconcileInterruptedRuns(agentId);
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        log.warn(
-          { err, agentId, errorMessage: msg },
-          `Workflow run reconcile failed for agent ${agentId}: ${msg}`,
-        );
-      }
-    }
-    if (total > 0) {
-      log.info({ count: total, agentIds }, 'Reconciled interrupted workflow runs');
-    }
-  }
-
-  private collectWorkflowAgentIds(): string[] {
-    const ids = new Set<string>();
-    ids.add(resolveDefaultAgentId());
-    for (const entry of listAgentEntries()) {
-      if (entry.enabled === false) continue;
-      ids.add(normalizeAgentId(entry.id));
-    }
-    return [...ids];
   }
 
   /** Process a message directly through the agent (for CLI mode). */
@@ -2380,10 +2327,10 @@ export class GatewayService {
 
     // Generate new token
     const newToken = crypto.randomBytes(24).toString('hex');
-    
+
     // Update in-memory auth
     this.auth.token = newToken;
-    
+
     // Update config
     this.config = {
       ...this.config,
@@ -2396,11 +2343,11 @@ export class GatewayService {
         },
       },
     };
-    
+
     await this.saveConfig(this.config);
 
     log.info({ tokenPreview: `${newToken.slice(0, 8)}...` }, 'Gateway token refreshed');
-    
+
     return newToken;
   }
 }

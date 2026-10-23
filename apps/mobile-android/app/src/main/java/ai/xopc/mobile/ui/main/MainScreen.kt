@@ -33,8 +33,6 @@ import ai.xopc.mobile.gateway.ProgressHomeAction
 import ai.xopc.mobile.gateway.NoteMetadataPatch
 import ai.xopc.mobile.gateway.NoteAiPreview
 import ai.xopc.mobile.gateway.VoiceCallConnection
-import ai.xopc.mobile.gateway.WorkflowRun
-import ai.xopc.mobile.gateway.WorkflowDetail
 import ai.xopc.mobile.gateway.ManagedFile
 import ai.xopc.mobile.gateway.ManagedFileSpace
 import ai.xopc.mobile.gateway.PersonalAssertion
@@ -445,9 +443,6 @@ fun MainScreen(
   onRefreshProgressHome: () -> Unit = {},
   onProgressHomeAction: (ProgressHomeAction) -> Unit = {},
   onLoadAutomations: () -> Unit = {},
-  onWorkflowRuns: suspend () -> List<WorkflowRun> = { emptyList() },
-  onWorkflowDetail: suspend (String) -> WorkflowDetail = { throw IllegalStateException("WORKFLOW_UNAVAILABLE") },
-  onCancelWorkflow: suspend (String) -> Unit = {},
   onOpenAutomation: (String) -> Unit = {},
   onOpenAutomationRun: (String) -> Unit = {},
   onAutomationAction: (String, String) -> Unit = { _, _ -> },
@@ -641,7 +636,7 @@ fun MainScreen(
       } else CameraCaptureStore.discard(context, uri)
     }
   }
-  val launchCamera: (String, String?, Boolean) -> Unit = { gatewayId, conversationId, quick ->
+  val capturePhoto: (String, String?, Boolean) -> Unit = { gatewayId, conversationId, quick ->
     var uri: Uri? = null
     try {
       uri = CameraCaptureStore.create(context)
@@ -657,6 +652,31 @@ fun MainScreen(
       cameraConversationId = null
       cameraQuick = false
       Toast.makeText(context, R.string.camera_capture_error, Toast.LENGTH_SHORT).show()
+    }
+  }
+  var pendingCameraGatewayId by rememberSaveable { mutableStateOf<String?>(null) }
+  var pendingCameraConversationId by rememberSaveable { mutableStateOf<String?>(null) }
+  var pendingCameraQuick by rememberSaveable { mutableStateOf(false) }
+  val capturePermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+    val gatewayId = pendingCameraGatewayId
+    val conversationId = pendingCameraConversationId
+    val quick = pendingCameraQuick
+    pendingCameraGatewayId = null
+    pendingCameraConversationId = null
+    pendingCameraQuick = false
+    if (granted && gatewayId != null && connection.profile?.gatewayId == gatewayId &&
+      (quick || conversationId == connection.selectedConversationId)) {
+      capturePhoto(gatewayId, conversationId, quick)
+    }
+  }
+  val launchCamera: (String, String?, Boolean) -> Unit = { gatewayId, conversationId, quick ->
+    if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
+      capturePhoto(gatewayId, conversationId, quick)
+    } else if (pendingCameraGatewayId == null) {
+      pendingCameraGatewayId = gatewayId
+      pendingCameraConversationId = conversationId
+      pendingCameraQuick = quick
+      capturePermission.launch(Manifest.permission.CAMERA)
     }
   }
   var selectedTab by rememberSaveable { mutableStateOf(HomeTab.Assistant) }
@@ -773,8 +793,6 @@ fun MainScreen(
     onRefreshProgressHome = onRefreshProgressHome, onRefreshProgressTasks = onRefreshProgressTasks,
     onProgressHomeAction = onProgressHomeAction,
     onLoadAutomations = onLoadAutomations,
-    onWorkflowRuns = onWorkflowRuns, onWorkflowDetail = onWorkflowDetail,
-    onCancelWorkflow = onCancelWorkflow,
     onOpenAutomation = onOpenAutomation,
     onOpenAutomationRun = onOpenAutomationRun,
     onAutomationAction = onAutomationAction,
@@ -967,9 +985,6 @@ internal fun MainContent(
   onRefreshProgressHome: () -> Unit = {},
   onProgressHomeAction: (ProgressHomeAction) -> Unit = {},
   onLoadAutomations: () -> Unit = {},
-  onWorkflowRuns: suspend () -> List<WorkflowRun> = { emptyList() },
-  onWorkflowDetail: suspend (String) -> WorkflowDetail = { throw IllegalStateException("WORKFLOW_UNAVAILABLE") },
-  onCancelWorkflow: suspend (String) -> Unit = {},
   onOpenAutomation: (String) -> Unit = {},
   onOpenAutomationRun: (String) -> Unit = {},
   onAutomationAction: (String, String) -> Unit = { _, _ -> },
@@ -1190,7 +1205,6 @@ internal fun MainContent(
   }
   var personalPage by rememberSaveable(connection.profile?.gatewayId) { mutableStateOf("home") }
   var progressAtRoot by rememberSaveable(connection.profile?.gatewayId) { mutableStateOf(true) }
-  var linkedWorkflowRunId by remember(connection.profile?.gatewayId) { mutableStateOf<String?>(null) }
   var notesAtRoot by rememberSaveable(connection.profile?.gatewayId) { mutableStateOf(true) }
   var personalReturnPage by rememberSaveable(connection.profile?.gatewayId) { mutableStateOf("home") }
   var personalStartSection by rememberSaveable(connection.profile?.gatewayId) { mutableStateOf("overview") }
@@ -1590,7 +1604,6 @@ internal fun MainContent(
               "task" -> { onOpenProgressTask(target.id); onSelectTab(HomeTab.Progress) }
               "project" -> { onOpenProgressProject(target.id); onSelectTab(HomeTab.Progress) }
               "automation" -> { onOpenAutomation(target.id); onSelectTab(HomeTab.Progress) }
-              "workflow_run" -> { linkedWorkflowRunId = target.id; onSelectTab(HomeTab.Progress) }
               "session" -> { onSelectConversation(target.id); onSelectTab(HomeTab.Assistant) }
               "user_assertion" -> {
                 personalReturnPage = "home"; personalDetailId = target.id; personalPage = "detail"
@@ -1634,12 +1647,6 @@ internal fun MainContent(
         onLoadProgressProjects, onOpenProgressProject, onCreateProgressTask,
         onOpenTaskChat, onSaveProgressTask, onHomeAction = onProgressHomeAction,
         onLoadAutomations = onLoadAutomations, onOpenAutomation = onOpenAutomation,
-        onWorkflowRuns = onWorkflowRuns, onWorkflowDetail = onWorkflowDetail,
-        onCancelWorkflow = onCancelWorkflow,
-        onCreateWorkflowChat = {
-          onCreateConversation()
-          onSelectTab(HomeTab.Assistant)
-        },
         onOpenAutomationRun = onOpenAutomationRun, onAutomationAction = onAutomationAction,
         onCreateAutomation = onCreateAutomation,
         onUpdateAutomation = onUpdateAutomation,
@@ -1658,7 +1665,7 @@ internal fun MainContent(
           onSelectTab(HomeTab.Assistant)
         }
       }, chatBusy = connection.creatingConversation, bottomChromeHeight = bottomChromeHeight,
-        requestedWorkflowRunId = linkedWorkflowRunId, onWorkflowLinkHandled = { linkedWorkflowRunId = null })
+      )
       HomeTab.Notes -> if (connection.profile == null) PairingScreen(
         stringResource(R.string.tab_notes), connection, onPair, onCancelPairing, onScanPairing,
         pairingScanning, pairingScanError, insets)
@@ -2819,7 +2826,7 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
 
       }
       connection.pendingInput?.let { pending ->
-        Card(modifier = Modifier.fillMaxWidth().testTag("assistant-pending")) {
+        Card(modifier = Modifier.fillMaxWidth().padding(bottom = bottomChromeHeight).testTag("assistant-pending")) {
           Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(stringResource(R.string.assistant_pending_input), style = MaterialTheme.typography.labelMedium)
             if (pending.content.isNotBlank()) Text(pending.content, style = MaterialTheme.typography.bodyMedium)

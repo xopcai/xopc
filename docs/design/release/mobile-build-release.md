@@ -38,7 +38,6 @@ pnpm run mobile:ios:test
 pnpm run mobile:ios:build
 ```
 
-常规提交由 `.github/workflows/mobile-ios-ci.yml` 检查格式、Lint、XcodeGen 工程同步和单元测试；正式签名仍只发生在 TestFlight 工作流。
 
 共享移动协议客户端：
 
@@ -69,13 +68,10 @@ pnpm run mobile:release:patch
 7. 在同一个提交上创建 Android 和 iOS 两个标签。
 8. 原子推送分支和两个标签。
 
-两个标签分别触发独立工作流；其中一端失败时，不要再次运行 Patch 发布脚本，否则会错误地产生下一个版本。应修复并重新运行失败的工作流，或在确认发布状态后补齐同一版本。
 
 ## Android 正式发布
 
-工作流：`.github/workflows/mobile-android-release.yml`
 
-Android 工作流会：
 
 - 使用现有 `ANDROID_PRODUCTION_*` Secrets 安装生产签名；
 - 运行单元测试；
@@ -83,13 +79,10 @@ Android 工作流会：
 - 校验包名、版本以及固定的生产签名证书；
 - 发布 GitHub Release 和 SHA-256 校验文件。
 
-该工作流当前不自动上传 Google Play。上传 Play Console 后，应验证旧版移动客户端可以升级到原生版本。原生 Android 尚未迁移旧客户端本地数据，升级用户可能需要重新配对。
 
 ## iOS TestFlight
 
-工作流：`.github/workflows/mobile-ios-testflight.yml`
 
-iOS 工作流会：
 
 - 拒绝与 `apps/mobile-ios/project.yml` 不一致的标签或手动版本；
 - 运行 SwiftFormat、SwiftLint 和单元测试；
@@ -108,7 +101,6 @@ iOS 工作流会：
 - `APP_STORE_CONNECT_API_ISSUER`
 - `APP_STORE_CONNECT_PRIVATE_KEY_BASE64`
 
-手动运行工作流且不上传时，可用于验证签名 IPA。正式接管完成的外部证据应至少包括一次成功 TestFlight 上传、真机安装以及从已发布旧版本升级到原生版本的验证。
 
 ## 回滚基线
 

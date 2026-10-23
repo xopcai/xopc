@@ -28,6 +28,5 @@ describe('home attention repository', () => {
 
     expect(isHomeAttentionAcknowledged('automation_run', 'run-1')).toBe(true);
     expect(isHomeAttentionAcknowledged('automation_run', 'run-2')).toBe(false);
-    expect(isHomeAttentionAcknowledged('workflow_run', 'run-1')).toBe(false);
   });
 });

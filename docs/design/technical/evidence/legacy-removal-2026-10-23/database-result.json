@@ -1,0 +1,17 @@
+{
+  "removedTables": {
+    "application_migrations": 2,
+    "composer_input_history_legacy": 0
+  },
+  "unrelatedCountChanges": {},
+  "integrity": "ok",
+  "foreignKeyViolations": 0,
+  "schemaLegacyNames": [],
+  "pairedDevicesWithoutCurrentProof": 0,
+  "currentConstraintsRebuilt": [
+    "devices.request_proof_version = 1",
+    "agent_selection_records.selection_source excludes legacy"
+  ],
+  "constraintRebuildRowCountChanges": {},
+  "legacySchemaDefinitions": []
+}

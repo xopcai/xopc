@@ -37,12 +37,12 @@ describe('retryHomeTask', () => {
     vi.mocked(fetchTask).mockResolvedValue(taskDetail({
       runs: [
         taskRun({ id: 'child', queuedAt: 3, parentRunId: 'root' }),
-        taskRun({ queuedAt: 2, executorKind: 'workflow', executorRef: { workflowId: 'chart', input: { symbol: 'ABC' } } }),
+        taskRun({ queuedAt: 2, executorKind: 'agent', executorRef: { agentId: 'main' } }),
         taskRun({ id: 'old', rootRunId: 'old', executorRef: { agentId: 'old' } }),
       ],
     }));
     await retryHomeTask('task-1');
-    expect(commandTask).toHaveBeenCalledWith('task-1', { type: 'start', executor: { kind: 'workflow', workflowId: 'chart', input: { symbol: 'ABC' } } }, 7);
+    expect(commandTask).toHaveBeenCalledWith('task-1', { type: 'start', executor: { kind: 'agent', agentId: 'main' } }, 7);
   });
   it.each([
     { allowedCommands: [], runs: [taskRun()] },

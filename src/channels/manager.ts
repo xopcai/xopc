@@ -101,11 +101,6 @@ export class ChannelManager {
     return this.registry.all();
   }
 
-  /** Backward-compat alias for `getAllPlugins`. */
-  getAllChannels(): ChannelPlugin[] {
-    return this.registry.all();
-  }
-
   /** Channel IDs whose runtime reports connected (e.g. Telegram polling active). */
   getRunningChannels(): string[] {
     return this.registry.runningChannelIds(this.config, (id) => this.lifecycle.isInitialized(id));

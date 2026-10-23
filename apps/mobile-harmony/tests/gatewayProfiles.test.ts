@@ -13,17 +13,13 @@ const profile = (id: string) => ({ gatewayId: id, name: id, gatewayPublicKey: `p
   routes: [{ id: 'secure', kind: 'custom-https', url: `https://${id}.example.com` }], activeRouteId: 'secure' });
 describe('Gateway catalog', () => {
   beforeEach(() => records.clear());
-  it('migrates the legacy profile, refresh credential and pending rotation without pairing again', async () => {
-    records.set('profile', JSON.stringify(profile('a'))); records.set('refresh', 'secret-a'); records.set('refresh-attempt', 'pending-a');
+  it('does not import a retired single-profile record', async () => {
+    records.set('profile', JSON.stringify(profile('a')));
     const store = new XopcGatewayProfiles(new XopcSecureStore()); await store.restore();
-    expect(store.active()?.gatewayId).toBe('a'); expect(store.list()).toHaveLength(1);
-    expect(records.get(gatewayCredentialKey('a', 'refresh'))).toBe('secret-a');
-    expect(records.get(gatewayCredentialKey('a', 'refresh-attempt'))).toBe('pending-a');
-    expect(records.has('profile')).toBe(false);
-    records.set(gatewayCredentialKey('a', 'refresh'), 'rotated-a');
-    const restarted = new XopcGatewayProfiles(new XopcSecureStore()); await restarted.restore();
-    expect(restarted.active()?.gatewayId).toBe('a'); expect(records.get(gatewayCredentialKey('a', 'refresh'))).toBe('rotated-a');
+    expect(store.active()).toBeUndefined(); expect(store.list()).toEqual([]);
+    expect(records.has('gateway-catalog')).toBe(false);
   });
+
   it('keeps profiles across save, rename, activation and restart', async () => {
     const store = new XopcGatewayProfiles(new XopcSecureStore());
     await store.save(profile('a')); await store.save(profile('b')); await store.rename('a', ' Office '); await store.activate('a');

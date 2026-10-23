@@ -18,7 +18,7 @@ function createConfig() {
     defaults: {
       models: { chat: { primary: 'openai/gpt-5', fallbacks: [] }, intents: {} },
       skills: { mode: 'all-enabled', exclude: [] },
-      tools: {}, workflows: {}, runtime: {},
+      tools: {}, runtime: {},
     },
     agents: [
       { id: 'main', enabled: true, workspace: '/tmp/main' },

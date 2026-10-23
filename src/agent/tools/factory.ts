@@ -68,7 +68,6 @@ import {
   createBrowserAutomationTool,
   createXopcUseTool,
   createDesktopPetTool,
-  createWorkflowManageTool,
   createSkillInstallTool,
   createSkillsMarketplaceSearchTool,
   type SkillInstallToolOptions,
@@ -106,14 +105,11 @@ import { createReviewWorkspaceTool } from './review-workspace.js';
 import { createLanguageDiagnosticsTool } from './language-diagnostics.js';
 import { createDelegateTool } from './delegate-tool.js';
 import { createNoninteractiveToolPolicy } from './noninteractive-tool-policy.js';
-import { createWorkflowTool } from './workflow-tool.js';
-import { createWorkflowCatalog } from '../workflow/catalog.js';
 import type { AutomationService } from '../../automations/index.js';
 import type { BrowserAutomationService } from '../../browser/automations/index.js';
 import type { NotesService } from '../../notes/index.js';
 import type { ProjectService } from '../../projects/index.js';
 import type { LocalAppService } from '../../local-apps/index.js';
-import type { WorkflowRunServiceLike } from '../../workflows/service/workflow-run-service.types.js';
 import { createLogger } from '../../utils/logger.js';
 import { skillEnvironmentId } from '../skills/installer.js';
 import type { SkillManager } from '../skills/skill-manager.js';
@@ -178,8 +174,6 @@ export interface ToolFactoryDeps {
   dispatchTaskRuns?: () => void;
   /** Gateway: refreshes Agent runtime state after xopc_use mutates the catalog. */
   onAgentCatalogMutate?: () => void;
-  /** Gateway: starts persisted workflow runs (dedicated chat session per run). */
-  getWorkflowRunService?: () => WorkflowRunServiceLike | undefined;
   /** Current session skill indexing (tool gating + allowlist); used by skills_list / skill_view. */
   getSkillIndexingContext?: () =>
     | { registeredToolNames: string[]; skillAllowlist?: string[] }
@@ -736,19 +730,6 @@ export class AgentToolsFactory {
               getRuntime: () => this.ensureBrowserRuntime(),
               getTaskId: () => options?.conversationId ?? this.deps.getCurrentContext()?.conversationId ?? 'default',
               getReadiness: () => this.checkBrowserReadinessCached(),
-            }),
-          ]
-        : []),
-      ...(primary
-        ? [
-            createWorkflowManageTool(),
-            createWorkflowTool({
-              catalog: createWorkflowCatalog(),
-              getCurrentConversationId: () => this.deps.getCurrentContext()?.conversationId,
-              getConfig: () => this.deps.getConfig?.(),
-              startWorkflowRun: this.deps.getWorkflowRunService
-                ? (params) => this.deps.getWorkflowRunService!().startWorkflowRun(params)
-                : undefined,
             }),
           ]
         : []),

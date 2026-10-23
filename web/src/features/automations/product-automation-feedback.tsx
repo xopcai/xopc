@@ -5,7 +5,6 @@ import {
   CheckCircle2,
   Clock3,
   ExternalLink,
-  GitBranch,
   MessageSquare,
   PauseCircle,
   RotateCw,
@@ -472,14 +471,7 @@ export function ProductAutomationFeedback({
                     </Link>
                   </Button>
                 ) : null}
-                {run.workflowRunId ? (
-                  <Button asChild variant="ghost" className="h-7 rounded-md px-2 text-xs">
-                    <Link to={`/workflows?run=${encodeURIComponent(run.workflowRunId)}`}>
-                      <GitBranch className="size-3.5" aria-hidden />
-                      {labels.feedback.workflow}
-                    </Link>
-                  </Button>
-                ) : null}
+                {null}
                 {isLatestForAutomation && canSuggestRepair(run.status) && !repair ? (
                   <Button
                     variant="ghost"

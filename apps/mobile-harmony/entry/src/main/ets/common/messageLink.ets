@@ -2,7 +2,7 @@ export interface XopcMessageLink { kind: string; page: string; itemId: string; p
 
 const PRODUCT_PAGES: Record<string, string> = {
   'session': 'chat', 'note': 'notes', 'task': 'tasks', 'project': 'projects', 'automation': 'automations',
-  'file': 'files', 'workflow_run': 'workflows', 'settings': 'settings'
+  'file': 'files', 'settings': 'settings'
 };
 
 export function internalMessageLink(raw: string): XopcMessageLink | undefined {
@@ -33,7 +33,7 @@ export function internalMessageLink(raw: string): XopcMessageLink | undefined {
     const route = target.startsWith('xopc://settings') ? target.replace(/^xopc:\/\/settings(?=\/|$|\?)/, '/settings')
       : target.startsWith('#/') ? target.slice(1) : target;
     const parts = route.split(/[?#]/)[0].split('/');
-    if (parts[0] === '' && ['chat', 'sessions', 'tasks', 'projects', 'notes', 'automations', 'files', 'workflows', 'settings'].includes(parts[1])) {
+    if (parts[0] === '' && ['chat', 'sessions', 'tasks', 'projects', 'notes', 'automations', 'files', 'settings'].includes(parts[1])) {
       const itemId = decodeURIComponent(parts.slice(2).join('/'));
       if (/[\u0000-\u001f\u007f]/.test(itemId) || itemId.split('/').includes('..')) return undefined;
       return { kind: 'route', page: parts[1], itemId, path: '' };

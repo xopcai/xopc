@@ -63,11 +63,9 @@ xopc 是开源、本地优先的个人 AI 助理，帮你处理工作与生活�
 | Session | 可以从任一已连接客户端继续的对话 | [聊天与会话](./session.md) |
 | Agent | 有独立角色、模型、工具和工作区的助手 | [Agent](./routing-system.md) |
 | Project 与 Task | 有明确结果、状态和下一步的长期工作 | [Project、Task 与笔记](./projects-tasks-notes.md) |
-| Workflow | 可重复使用的多步骤工作流程 | [工作流](./workflows.md) |
 | Automation | 按时间、Webhook 或手动触发工作 | [自动化](./automations.md) |
 | Channel | 从 Telegram、微信或飞书使用同一个助手 | [消息通道](./channels/index.md) |
 
-只把 xopc 当作普通聊天助手时，不需要创建 Project、Workflow 或 Automation。工作需要持续或重复时再添加即可。
 
 ## 推荐的下一步
 

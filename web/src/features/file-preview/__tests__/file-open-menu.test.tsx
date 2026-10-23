@@ -53,10 +53,10 @@ describe('file open menu', () => {
     expect(items.map((item) => item.textContent)).toEqual([
       m.openSystemApp, 'Visual Studio Code', 'TextEdit', m.chooseApp,
     ]);
-    await act(async () => items[0]!.click());
-    await act(async () => items[1]!.click());
-    await act(async () => items[2]!.click());
-    await act(async () => items[3]!.click());
+    await act(async () => items[0].click());
+    await act(async () => items[1].click());
+    await act(async () => items[2].click());
+    await act(async () => items[3].click());
     expect(systemOpen).toHaveBeenCalledOnce();
     expect(openWith.mock.calls).toEqual([[recommendedApps[0].path], [otherApp.path]]);
     expect(chooseApp).toHaveBeenCalledOnce();

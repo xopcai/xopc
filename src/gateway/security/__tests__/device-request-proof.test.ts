@@ -68,8 +68,8 @@ describe('device request proofs through HTTP authentication', () => {
     expect(response.status).toBe(200); expect(await response.json()).toEqual({ name: 'test.txt', text: 'hello 你好' });
   });
 
-  it('keeps legacy devices and owner credentials working, but fails closed after upgrade', async () => {
-    expect((await request()).status).toBe(200); enable();
+  it('requires signed device requests while preserving owner authentication', async () => {
+    expect((await request()).status).toBe(401);
     expect((await request()).status).toBe(401);
     expect((await request(undefined, '{}', ownerToken)).status).toBe(200);
     expect((await request('invalid')).status).toBe(401);
@@ -116,7 +116,7 @@ describe('device request proofs through HTTP authentication', () => {
     getSqliteDatabase().prepare('UPDATE devices SET revoked_at = ? WHERE device_id = ?').run(Date.now(), deviceId);
     expect(verifyDeviceConnectionProof(deviceId, ticket, target, header)).toBe(false);
   });
-  it('atomically enables proofs, revokes old tokens and rejects signed downgrade', () => {
+  it('requires the current refresh proof contract and rejects omitted proof versions', () => {
     const initial = issueDeviceTokenPair(deviceId);
     const input = { refreshToken: initial.refreshToken, nextRefreshToken: `xopc_rt_${crypto.randomUUID()}_${crypto.randomBytes(32).toString('base64url')}`,
       requestId: crypto.randomUUID(), timestamp: Date.now(), nonce: crypto.randomBytes(24).toString('base64url'), requestProofVersion: 1 };
@@ -124,7 +124,7 @@ describe('device request proofs through HTTP authentication', () => {
     const signature = crypto.sign('sha256', Buffer.from(message), { key, dsaEncoding: 'ieee-p1363' }).toString('base64url');
     const next = rotateDeviceRefreshToken({ ...input, signature });
     expect(getDevice(deviceId)?.requestProofVersion).toBe(1);
-    expect(authenticateDeviceAccessToken(token)).toBeUndefined();
+    expect(authenticateDeviceAccessToken(token)).toBeDefined();
     expect(authenticateDeviceAccessToken(next.accessToken)).toBeDefined();
     expect(() => rotateDeviceRefreshToken({ ...input, requestProofVersion: undefined, signature })).toThrow();
     expect(rotateDeviceRefreshToken({ ...input, signature }).refreshToken).toBe(next.refreshToken);

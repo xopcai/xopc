@@ -40,7 +40,6 @@ export type AgentDefaults = {
   models: AgentModelsDefaults;
   skills: SkillDefaults;
   tools: Record<string, ToolPolicy>;
-  workflows: { default?: string; allowed?: string[] };
   runtime: {
     codemode?: { enabled: boolean; timeoutMs?: number; maxConcurrentCalls?: number; maxCalls?: number; maxOutputTokens?: number };
     cloudCreditLimitPerRunMicro?: string;
@@ -60,7 +59,6 @@ export type AgentOverride = {
   skills?: SkillOverride;
   tools?: Record<string, ToolPolicy>;
   toolAllowlist?: string[];
-  workflows?: AgentDefaults['workflows'];
   runtime?: AgentDefaults['runtime'];
 };
 export type EffectiveAgentConfig = Omit<AgentOverride, 'models' | 'skills' | 'tools' | 'workspace'> & {
@@ -69,7 +67,6 @@ export type EffectiveAgentConfig = Omit<AgentOverride, 'models' | 'skills' | 'to
   skills: SkillDefaults;
   tools: Record<string, ToolPolicy>;
   toolAllowlist?: string[];
-  workflows: AgentDefaults['workflows'];
   runtime: AgentDefaults['runtime'];
 };
 export type GatewayAgentRow = {

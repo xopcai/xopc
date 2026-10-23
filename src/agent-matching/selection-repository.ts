@@ -22,7 +22,7 @@ export interface SelectionRecord {
   requirements: SpecialistTaskRequirements;
   assessment: SpecialistAssessment;
   candidates?: Array<Pick<SpecialistAssessment, 'id' | 'revision' | 'eligibility' | 'checks' | 'matched' | 'missing'>>;
-  selectionSource: 'snapshot' | 'match' | 'explicit' | 'legacy';
+  selectionSource: 'snapshot' | 'match' | 'explicit';
   selectionReason: string;
   reasonSource: 'model' | 'system';
   status: SelectionStatus;
@@ -98,7 +98,7 @@ export class AgentSelectionRepository {
       input.requestId ?? null, previous?.decision_group_id ?? id, previous?.id ?? null, input.key, input.requestHash,
       input.assessment.id, input.assessment.revision ?? null, input.assessment.matcherVersion, input.assessment.catalogRevision,
       JSON.stringify(input.requirements), input.assessment.specialistProfile ? JSON.stringify(input.assessment.specialistProfile) : null,
-      JSON.stringify(input.assessment), input.candidates ? JSON.stringify(input.candidates.slice(0, 10)) : null, input.source, input.reasonSource ?? (input.reason ? 'model' : 'system'), (input.reason ?? 'Legacy delegation; selected Agent revalidated').slice(0, 500),
+      JSON.stringify(input.assessment), input.candidates ? JSON.stringify(input.candidates.slice(0, 10)) : null, input.source, input.reasonSource ?? (input.reason ? 'model' : 'system'), (input.reason ?? 'Selected Agent validated').slice(0, 500),
       input.status, input.status === 'rejected' ? input.assessment.checks.find(check => check.state === 'blocked' || check.state === 'unknown')?.reasonCode ?? 'unavailable' : null, now, now);
     return this.find(input.conversationId, input.key)!;
   }

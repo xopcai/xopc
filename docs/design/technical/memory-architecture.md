@@ -197,7 +197,7 @@ src/gateway/hono/routes/         user-model and knowledge API
 web/src/features/user-model/     management UI
 ```
 
-Routes, tools, connectors, compaction, projects, scene context, voice context, and workflows call these domains. They do not read the removed tables.
+Routes, tools, connectors, compaction, projects, scene context, voice context, call these domains. They do not read the removed tables.
 
 ## One-way migration
 

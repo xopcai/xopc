@@ -1,5 +1,4 @@
 import { create } from 'zustand';
-import { readUnmigratedGatewayCredential, removeUnmigratedGatewayCredential } from '@/lib/storage';
 
 export type GatewayState = {
   baseUrl: string;
@@ -17,7 +16,6 @@ export const useGatewayStore = create<GatewayState>((set) => ({
   baseUrl: typeof window !== 'undefined' ? window.location.origin : '',
   conversationId: undefined, tokenDialogOpen: false, tokenExpired: false,
   setBrowserSession: (conversationId) => {
-    removeUnmigratedGatewayCredential();
     set({ conversationId, tokenDialogOpen: false, tokenExpired: false });
     window.dispatchEvent(new CustomEvent('gateway-authenticated'));
   },
@@ -46,7 +44,7 @@ export async function initGatewayFromWindow(): Promise<void> {
     }
     if (response.status !== 401) return;
     const getCredential = window.electronAPI?.gateway?.getCredential;
-    const credential = typeof getCredential === 'function' ? await getCredential() : readUnmigratedGatewayCredential();
+    const credential = typeof getCredential === 'function' ? await getCredential() : undefined;
     if (!credential) return;
     const exchanged = await establishBrowserSession(credential);
     if (!exchanged.ok) return;

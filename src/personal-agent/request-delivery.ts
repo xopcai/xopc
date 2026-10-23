@@ -61,7 +61,7 @@ export function drainPersonalRequestContinuations(notify?: (conversationId: stri
   }
 }
 
-/** Stage personal results in the shared delivery outbox; legacy requests retain their own delivery marker. */
+/** Stage Task-backed personal results in the shared delivery outbox. */
 export function drainPersonalRequestResults(notify?: (conversationId: string, requestId: string) => void): void {
   const db = getSqliteDatabase();
   const rows = db.prepare(`SELECT request_id, delivery_attempts FROM personal_requests request WHERE task_id IS NOT NULL

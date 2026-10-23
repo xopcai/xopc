@@ -53,8 +53,6 @@ export interface PatchSessionAgentConfigInput {
   model?: string | null;
   /** Preferred activity-detail field. `null` clears the session override. */
   activityDetailLevel?: string | null;
-  /** @deprecated Use activityDetailLevel. */
-  reasoningLevel?: string | null;
   verboseLevel?: string;
   workingDirectory?: string;
   responseLanguage?: string | null;
@@ -122,9 +120,7 @@ export class SessionConfigService {
       }
     }
 
-    const activityDetailLevel = partial.activityDetailLevel !== undefined
-      ? partial.activityDetailLevel
-      : partial.reasoningLevel;
+    const activityDetailLevel = partial.activityDetailLevel;
     if (activityDetailLevel !== undefined) {
       if (activityDetailLevel === null) {
         await this.opts.sessionConfigStore.update(conversationId, { reasoningLevel: undefined });

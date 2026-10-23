@@ -92,7 +92,8 @@ export async function tryRunSlashCommand(
   },
 ): Promise<SlashCommandTask> {
   // Background task material is data, even when a line starts with an absolute path or a control command.
-  if (options?.origin?.type === 'system' && options.origin.source === 'workflow') return { matched: false, aggregatedText: '' };
+  if (options?.origin?.type === 'system' && options.origin.source === 'task') return { matched: false, aggregatedText: '' };
+
   const personal = isPersonalConversation(ctx.conversationId);
   // Personal chat treats paths, inline slashes and unregistered slash text as ordinary input.
   const parsed = personal

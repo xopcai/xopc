@@ -63,7 +63,7 @@ export async function loadAgentActivityDetailLevel(
     };
     const effective = body.payload?.activityDetail?.effective;
     if (isActivityDetailLevel(effective)) return effective;
-    const fallback = body.payload?.activityDetail?.default ?? body.payload?.reasoningLevel;
+    const fallback = body.payload?.activityDetail?.default;
     return isActivityDetailLevel(fallback) ? fallback : 'on';
   } catch {
     return 'on';

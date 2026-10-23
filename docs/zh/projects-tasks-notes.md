@@ -12,7 +12,6 @@
 | 让一个结果跨时间持续推进 | Task |
 | 为多个相关 Task 共享上下文 | Project |
 | 保存来源材料或产物 | Note 或工作区文件 |
-| 重复确定的步骤 | Workflow |
 | 按计划或事件启动工作 | Automation |
 
 ## 创建有用的 Task
@@ -42,11 +41,9 @@ Project 用于组织相关 Task、对话、文件和活动。它是上下文，�
 1. 创建 Project 保存发布背景和参考文件。
 2. 为不同可验证结果创建 Task，例如“发布软件包”和“发送发布公告”。
 3. 为每个 Task 定义完成检查。
-4. 只有步骤会重复时才使用 Workflow。
 5. 只有时间或外部触发重要时才添加 Automation。
 6. 检查结果后再关闭 Task，不要只因为 Agent 运行结束就标记完成。
 
-继续阅读 [Task 闭环](./concepts/loops.md)、[Workflow](./workflows.md)和[Automation](./automations.md)。
 
 ## 在工作台处理结果与重试
 

@@ -14,7 +14,7 @@ const fingerprintPaths = ['src/personal-agent/result-reader.ts', 'src/personal-a
   'src/personal-agent/result-read-continuations.ts', 'src/agent/tools/personal-result-tool.ts',
   'src/agent/source-context/result-context.ts', 'src/personal-agent/prompts.ts', 'src/personal-agent/policy.ts',
   'src/personal-agent/request-delivery.ts', 'src/session/session-context-for-llm.ts', 'src/gateway/service.ts',
-  'src/storage/sqlite/migrations/251_personal_result_reads.sql', 'src/agent/tools/factory.ts',
+  'src/storage/sqlite/schema.sql', 'src/agent/tools/factory.ts',
   'web/src/features/chat/messages/message-bubble.tsx', 'web/src/features/chat/composer/chat-composer.tsx',
   'web/src/features/chat/messages/message-context-attachments.tsx', 'scripts/build-personal-result-worker.mjs',
   'scripts/build-electron-server.mjs', 'scripts/tsdown-build.mjs', 'tsdown.config.ts',
@@ -22,7 +22,7 @@ const fingerprintPaths = ['src/personal-agent/result-reader.ts', 'src/personal-a
   'src/agent/service/direct-turn-helpers.ts', 'src/agent/service/process-direct-streaming.ts', 'src/agent/service/process-direct-one-shot.ts',
   'src/agent/tools/personal-task-tool.ts', 'src/agent/tools/xopc-use-tool.ts', 'src/tasks/task-application-service.ts', 'src/tasks/task-context-assembler.ts', 'src/tasks/task-allocation-service.ts', 'src/tasks/task-research-result.ts', 'src/tasks/task-contract-planner.ts',
   'src/agent/tools/task-evidence.ts', 'src/agent/tools/task-collaboration-tool.ts', 'src/agent/tools/task-result-tool.ts', 'src/tasks/task-run-dispatcher.ts', 'src/tasks/task-run-coordinator.ts', 'src/tasks/task-read-model-projector.ts', 'src/tasks/task-conversation-repository.ts', 'src/media/session-references.ts', 'src/agent/tools/task-evidence.ts', 'src/tasks/task-result-delivery-repository.ts', 'src/tasks/task-result-delivery-service.ts',
-  'src/personal-agent/reply-composer.ts', 'src/personal-agent/communication.ts', 'src/storage/sqlite/migrations/252_task_work_revisions.sql',
+  'src/personal-agent/reply-composer.ts', 'src/personal-agent/communication.ts', 'src/storage/sqlite/schema.sql',
   'packages/gateway-contract/src/task-result-delivery.ts', 'packages/gateway-contract/src/task-research-result.ts',
   'packages/gateway-contract/src/turn-outcome.ts', 'src/tasks/task-research-repair.ts', 'scripts/personal-task-revision-live-smoke.mts', 'pnpm-lock.yaml'];
 const sourceFingerprint = () => Object.fromEntries(fingerprintPaths

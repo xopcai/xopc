@@ -3,7 +3,6 @@ import { basename } from 'node:path';
 import { resolveBootstrapFilesSync } from '../agent/bootstrap/bootstrap-files.js';
 import { loadSkills } from '../agent/skills/index.js';
 import { isSkillEnabled, createSkillConfigManager } from '../agent/skills/config.js';
-import { createWorkflowCatalog } from '../agent/workflow/catalog.js';
 import { resolveEffectiveAgentProfile, resolveEffectiveAgentProfileForSession } from '../config/agent-profile.js';
 import { getWorkspacePath } from '../config/index.js';
 import {
@@ -45,11 +44,9 @@ export function collectTuiStartupResources(
       .filter((skill) => !skill.disableModelInvocation && isSkillEnabled(skill, skillsConfig))
       .map((skill) => skill.name),
   );
-
-  const workflows = uniqueSorted(createWorkflowCatalog().list().map((entry) => entry.name));
   const connectors = uniqueSorted(
     listConnectorInstances(config).map((instance) => instance.displayName || instance.connectorId || instance.instanceId),
   );
 
-  return { context, skills, workflows, connectors };
+  return { context, skills, connectors };
 }

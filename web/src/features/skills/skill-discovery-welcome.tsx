@@ -17,7 +17,7 @@ export function SkillDiscoveryWelcome({ sk, onPick, disabled }: {
       <h1 className="text-xl font-semibold text-fg">{sk.findWelcome}</h1>
       <p className="text-sm leading-relaxed text-fg-muted">{sk.findDescription}</p>
       <div className="flex flex-wrap gap-2">
-        {sk.findExamples.map((text) => (
+        {sk.findExamples.map((text: string) => (
           <Button key={text} disabled={disabled} onClick={() => onPick(text)}>{text}</Button>
         ))}
       </div>
