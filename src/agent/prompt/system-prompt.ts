@@ -151,7 +151,10 @@ export function buildSystemPrompt(workspaceDir: string, options: SystemPromptOpt
     ...(customInstructions?.trim()
       ? [`<custom_instructions>\n${customInstructions.trim()}\n</custom_instructions>`]
       : []),
-    buildToolingSection({ toolNames, toolSummaries }),
+    // Full tool descriptions are already present in provider schemas; avoid duplicating them in the personal overview.
+    buildToolingSection({ toolNames, toolSummaries: isPersonal && toolSummaries
+      ? Object.fromEntries(Object.entries(toolSummaries).map(([name, summary]) =>
+          [name, summary.split(/(?<=[.!?])\s+/)[0].slice(0, 300)])) : toolSummaries }),
     ...(normalizedTools.size ? [buildOverridablePromptSection({
       override: sectionOverrides.tool_call_style,
       fallback: buildToolCallStyleSection(),

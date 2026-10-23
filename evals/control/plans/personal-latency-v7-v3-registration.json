@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "registeredAt": "2026-10-23T18:06:02.913024+00:00",
+  "scope": "Personal v7 submission and foreground acknowledgement latency with full mixed delivery protection",
+  "problem": "Prior submit25167ms, acknowledgement9992ms, ping5666ms exceed20000/5000/5000ms gates.",
+  "hypothesis": "Use a plain required command enum and flat submit branches, preserving strict validation and all fields, to prevent costly missing-command recovery. Retain short acknowledgement and host-bound original input.",
+  "jobs": [
+    {
+      "id": "personal",
+      "kind": "personal",
+      "expected": 1
+    }
+  ],
+  "budget": {
+    "maxRequests": 80,
+    "maxWallMs": 900000
+  },
+  "gate": {
+    "submitHostMs": 250,
+    "requestToSubmitMs": 20000,
+    "acknowledgementMs": 5000,
+    "pingMs": 5000,
+    "totalMs": 600000,
+    "quality": "All original v7 assertions, real router, correct downloads, research negative review, requirement adoption and file-loss recovery; no threshold relaxed"
+  },
+  "candidateSourceHashes": {
+    "src/agent/tools/personal-task-tool.ts": "4d8439328e3ed5c95d8e6f86a41c0ea6ab8890d5ca88184abd2b87779a148739",
+    "src/personal-agent/prompts.ts": "0337a869f46b230b66d53551eee982a143b7a0e6cff3ab265a0230e5e47102e2",
+    "src/agent/prompt/system-prompt.ts": "def0c7a466d9cf05c736fec5054663b9b911d4311bb3df3529ff9b4f51503178",
+    "scripts/personal-repair-live-smoke-v2.mts": "277a89c45b5215fb7964724fb658dc30fbd0ffeda13aa441f2c4b89a05777477",
+    "scripts/personal-repair-live-benchmark.mts": "4a0b297c4171773e5a2088a03166c8ee8c69131aa890c13650b2350b9a88ec60"
+  },
+  "modelSelection": "Existing configured Personal/router/worker/review; no model/thinking setting changes",
+  "independence": "Disclosed mixed regression; no unseen family claim. Another preregistered validation required before general SLA claims.",
+  "protection": [
+    "Original requests forwarded verbatim only from active conversation input",
+    "No deterministic echo shortcut for ping",
+    "Safety, permissions, sourceRefs, full tool schemas preserved",
+    "Every failure retained; no original record overwritten"
+  ],
+  "previousRejectedImprovement": "1f7404fc-bfb3-40c3-8ad7-ef0034987cee",
+  "developmentObservation": "Both first drafts omitted command; instruction-only v2 did not correct this. No missing-command defaulting or invalid call acceptance is added.",
+  "previousCandidate": "personal-latency-v7-20261024-v2",
+  "candidateLimit": "Third and final candidate of this turn; no unchanged rerun to seek a passing sample."
+}

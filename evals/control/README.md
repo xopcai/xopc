@@ -180,3 +180,10 @@ The 2026-10-23 follow-up is recorded in [the stage-one acceptance ledger](../../
 - `assess-verification` accepts `kind: "cancellation"` jobs and validates aborted status, response timings, source hashes, HTTP/runtime identity and observed usage components. Review the original decision and the later supplements separately.
 
 A settled receipt with zero charge does not establish zero consumed tokens. Missing final usage stays unknown, even after the platform releases its reservation.
+
+
+### Fixed Personal v7 latency gate
+
+`assess-personal-latency --file <preregistration.json> --output <completed-campaign> --candidate-root <frozen-source> --id <improvement-id>` records an immutable decision. It requires one full mixed v7 trial, original quality success, unchanged 20s submit / 5s acknowledgement / 5s ping / 10min delivery gates, the local250ms persistence gate, frozen candidate file hashes and independent request reconciliation. A fast partial trial never replaces a failed full trial. Register a fresh candidate/output before each changed implementation; preserve every attempt.
+
+The three 2026-10-24 latency plans are historical preregistrations. They were run sequentially with unchanged configured models; all three were rejected. Local private retained evidence excludes configuration and credential files. New latency/diagnostic observations append supplements to the original decision.

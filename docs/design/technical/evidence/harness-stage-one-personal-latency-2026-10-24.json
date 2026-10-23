@@ -1,0 +1,655 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-24",
+  "scope": "Personal fixed-model v7 submission, acknowledgement and ping latency",
+  "phaseOneComplete": false,
+  "allCandidatesPromoted": false,
+  "expectedCandidates": 3,
+  "passedFullV7": 0,
+  "failedFullV7": 3,
+  "baseline": {
+    "source": "docs/design/technical/evidence/harness-stage-one-personal-convergence-2026-10-23.json",
+    "sha256": "2bc2a3a540bc64b206b790b9eb58b6488e95d21df8e2815a8cbf050fe73aed8e",
+    "protocol": 6,
+    "latency": {
+      "requestToSubmit": 25167,
+      "initialReplyAfterSubmit": 9992,
+      "pingResponse": 5666,
+      "total": 421191
+    }
+  },
+  "gates": {
+    "requestToSubmitMs": 20000,
+    "acknowledgementMs": 5000,
+    "pingMs": 5000,
+    "submitToolMs": 250,
+    "totalMs": 600000
+  },
+  "candidates": [
+    {
+      "version": 1,
+      "improvementId": "060806bf-4a60-45e2-a283-0f73e09caff5",
+      "promotion": "rejected",
+      "fullV7Passed": false,
+      "originalFailure": "Main transcript must not contain tool argument or execution errors",
+      "latency": {
+        "requestToSubmit": 18138,
+        "initialReplyAfterSubmit": 7207,
+        "pingResponse": 5640,
+        "total": 307616
+      },
+      "thresholds": {
+        "requestToSubmit": 20000,
+        "initialReplyAfterSubmit": 5000,
+        "pingResponse": 5000,
+        "total": 600000
+      },
+      "physicalRequests": 35,
+      "runtimeEvents": 35,
+      "providerTokens": 720948,
+      "knownProviderTokens": 720948,
+      "perRequestMatched": true,
+      "knownPerRequestUsageMatched": true,
+      "physicalUnknownFinalUsage": 0,
+      "nonDispatchedRuntimeEvents": [],
+      "mainToolErrors": [
+        {
+          "toolName": "personal_task",
+          "toolCallId": "call_1e7ced4c5c1540f09b14777d",
+          "error": "Validation failed for tool \"personal_task\":"
+        }
+      ],
+      "foregroundCalls": [
+        {
+          "usageEventId": "c0fac3e1-03ee-45fd-b32d-396b4d83e0bf",
+          "operation": "agent.answer",
+          "status": "succeeded",
+          "totalMs": 11304,
+          "preTransportMs": 2065,
+          "httpMs": 9233,
+          "outputTokens": 125
+        },
+        {
+          "usageEventId": "6ddedc10-f430-4db6-990a-8cea83da5104",
+          "operation": "agent.continue_after_tool",
+          "status": "succeeded",
+          "totalMs": 6403,
+          "preTransportMs": 3,
+          "httpMs": 6396,
+          "outputTokens": 91
+        },
+        {
+          "usageEventId": "5969d9f2-be2f-45e5-a1e8-5178cb514fc4",
+          "operation": "agent.continue_after_tool",
+          "status": "succeeded",
+          "totalMs": 7152,
+          "preTransportMs": 3,
+          "httpMs": 7146,
+          "outputTokens": 70
+        },
+        {
+          "usageEventId": "3ee147b1-fe07-40a5-9c54-43c1dc257e6b",
+          "operation": "agent.answer",
+          "status": "succeeded",
+          "totalMs": 5305,
+          "preTransportMs": 3,
+          "httpMs": 5299,
+          "outputTokens": 15
+        },
+        {
+          "usageEventId": "30acb3fe-f5d7-4311-bfa9-b52a1508f7c3",
+          "operation": "agent.answer",
+          "status": "succeeded",
+          "totalMs": 7200,
+          "preTransportMs": 4,
+          "httpMs": 7194,
+          "outputTokens": 191
+        },
+        {
+          "usageEventId": "f2597773-0967-4077-9a15-9edc84053a97",
+          "operation": "agent.continue_after_tool",
+          "status": "succeeded",
+          "totalMs": 7094,
+          "preTransportMs": 3,
+          "httpMs": 7088,
+          "outputTokens": 85
+        },
+        {
+          "usageEventId": "718e9b4a-a9dd-4bef-b705-99f99dec7c66",
+          "operation": "agent.answer",
+          "status": "succeeded",
+          "totalMs": 6387,
+          "preTransportMs": 3,
+          "httpMs": 6380,
+          "outputTokens": 74
+        },
+        {
+          "usageEventId": "4c9d7648-0d74-47a5-ad47-68aa2f17e6eb",
+          "operation": "personal.reply_composition",
+          "status": "succeeded",
+          "totalMs": 4295,
+          "preTransportMs": 2,
+          "httpMs": 4290,
+          "outputTokens": 251
+        }
+      ],
+      "actualResearchChecks": [
+        {
+          "criterion": "monthly_summary.csv 存在，包含各月总额及环比列，数值与 reproduce.mjs 实际运行结果一致",
+          "status": "passed"
+        },
+        {
+          "criterion": "reproduce.mjs 存在且在执行者工作区实际运行成功，输出与 monthly_summary.csv 相符",
+          "status": "passed"
+        },
+        {
+          "criterion": "report.md 说明统计口径，给出各月总额、环比关键数字，结论逐条引用来源",
+          "status": "passed"
+        },
+        {
+          "criterion": "report.md 仅基于 pricing-sources.md 对比 A/B 的 ASR 每小时价格及换算后的每分钟价格，TTS 未公开报价处如实标注未公开，未补造完整通话成本且未引入互联网补价",
+          "status": "passed"
+        },
+        {
+          "criterion": "report.md 包含通过 web_fetch 实际读取 https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status/404 后得出的 HTTP 404 含义及其不能单独证明永久删除的结论，并附本次实际读取来源与访问时间",
+          "status": "passed"
+        },
+        {
+          "criterion": "report.md 明确指出 conflicting-note.md 与官方文档的冲突，并引用本次实际读取的官方原文判断，未将两者平均或视为一致",
+          "status": "passed"
+        },
+        {
+          "criterion": "三份最终文件 monthly_summary.csv、report.md、reproduce.mjs 已发布，且作为输入的 sales.csv、pricing-sources.md、conflicting-note.md 字节未被修改",
+          "status": "passed"
+        }
+      ],
+      "negativePriceRejected": true,
+      "sourceChanged": false,
+      "models": {
+        "personal": "xopc-cloud/auto",
+        "global": "xopc-cloud/auto"
+      },
+      "retention": {
+        "copiedAt": "2026-10-23T18:08:56.130Z",
+        "originalState": "/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-personal-allocation-live-LrwKVH",
+        "files": [
+          "xopc.db",
+          "logs",
+          "media",
+          "shared",
+          "workspace-coder",
+          "workspace-conductor",
+          "workspace-creative",
+          "workspace-data-analyst",
+          "workspace-main",
+          "workspace-personal-f815d4b478fa",
+          "workspace-researcher",
+          "workspace-task-router",
+          "workspace-writer"
+        ],
+        "databaseSha256": "195bfb1c47f4ae9eb5bd34566cc814389bc0373f310390a417bbbf5e43663a4a",
+        "originalUnchanged": true,
+        "configAndCredentialsExcluded": true,
+        "scope": "Local private synthetic benchmark evidence; do not publish raw transcripts."
+      },
+      "decisionPath": "/Users/micjoyce/develop/github/xopc/.xopc-evals/control/personal-latency-v7-20261024-v1/verification.json",
+      "decisionSha256": "e82b491a891513e72060fe9d2f16025153b9590a59ee1ed8166a17d33f124b0e"
+    },
+    {
+      "version": 2,
+      "improvementId": "c4dc2d9c-342a-4940-a8b2-ef8692a213b3",
+      "promotion": "rejected",
+      "fullV7Passed": false,
+      "originalFailure": "Specialist execution failed",
+      "latency": {
+        "requestToSubmit": 28418,
+        "initialReplyAfterSubmit": 6852,
+        "pingResponse": 7459,
+        "total": null
+      },
+      "thresholds": {
+        "requestToSubmit": 20000,
+        "initialReplyAfterSubmit": 5000,
+        "pingResponse": 5000,
+        "total": 600000
+      },
+      "physicalRequests": 27,
+      "runtimeEvents": 32,
+      "providerTokens": 592388,
+      "knownProviderTokens": 592388,
+      "perRequestMatched": false,
+      "knownPerRequestUsageMatched": true,
+      "physicalUnknownFinalUsage": 0,
+      "nonDispatchedRuntimeEvents": [
+        {
+          "id": "cf368e83-daaa-42cd-b8e1-1ea91dfcc6f3",
+          "operation": "agent.continue_after_tool",
+          "status": "failed",
+          "errorSummary": "OAuth refresh failed for xopc-cloud: fetch failed"
+        },
+        {
+          "id": "d91e1018-ecd1-4c06-8807-dd2393438b7d",
+          "operation": "agent.answer",
+          "status": "failed",
+          "errorSummary": "OAuth refresh failed for xopc-cloud: fetch failed"
+        },
+        {
+          "id": "40afc323-5f6c-43b3-bcd6-89395fc60122",
+          "operation": "agent.answer",
+          "status": "failed",
+          "errorSummary": "OAuth refresh failed for xopc-cloud: fetch failed"
+        },
+        {
+          "id": "f0af6ddc-d51b-4673-9d6b-0cc377d1daa8",
+          "operation": "agent.answer",
+          "status": "failed",
+          "errorSummary": "OAuth refresh failed for xopc-cloud: fetch failed"
+        },
+        {
+          "id": "2b85b920-df55-4888-9296-ac12feec7a6b",
+          "operation": "agent.answer",
+          "status": "running",
+          "errorSummary": null
+        }
+      ],
+      "mainToolErrors": [
+        {
+          "toolName": "personal_task",
+          "toolCallId": "call_ab2e7c1e04d8472bae6f2dc2",
+          "error": "Validation failed for tool \"personal_task\":"
+        }
+      ],
+      "foregroundCalls": [
+        {
+          "usageEventId": "b0acb6f9-36eb-4655-8f48-d2aadb383fa0",
+          "operation": "agent.answer",
+          "status": "succeeded",
+          "totalMs": 16723,
+          "preTransportMs": 1161,
+          "httpMs": 15549,
+          "outputTokens": 601
+        },
+        {
+          "usageEventId": "5a448273-69b2-44f4-bbef-f9c44a8af279",
+          "operation": "agent.continue_after_tool",
+          "status": "succeeded",
+          "totalMs": 11242,
+          "preTransportMs": 6,
+          "httpMs": 11231,
+          "outputTokens": 542
+        },
+        {
+          "usageEventId": "7469aa0b-71f4-4d03-8b4a-b6a0494f8df0",
+          "operation": "agent.continue_after_tool",
+          "status": "succeeded",
+          "totalMs": 6779,
+          "preTransportMs": 3,
+          "httpMs": 6771,
+          "outputTokens": 51
+        },
+        {
+          "usageEventId": "feaf3c18-f144-4931-b0be-bfd549a280d8",
+          "operation": "agent.answer",
+          "status": "succeeded",
+          "totalMs": 7099,
+          "preTransportMs": 3,
+          "httpMs": 7093,
+          "outputTokens": 20
+        },
+        {
+          "usageEventId": "0cdfe143-59d3-45f6-b83f-8bab048aeeef",
+          "operation": "agent.answer",
+          "status": "succeeded",
+          "totalMs": 12438,
+          "preTransportMs": 3,
+          "httpMs": 12434,
+          "outputTokens": 156
+        },
+        {
+          "usageEventId": "3f262e7b-df71-47c7-b20e-83670bf6a266",
+          "operation": "agent.continue_after_tool",
+          "status": "succeeded",
+          "totalMs": 28102,
+          "preTransportMs": 3,
+          "httpMs": 28094,
+          "outputTokens": 79
+        },
+        {
+          "usageEventId": "0fcf64b5-3e4d-4720-9919-19dce551ea60",
+          "operation": "agent.answer",
+          "status": "succeeded",
+          "totalMs": 5726,
+          "preTransportMs": 3,
+          "httpMs": 5719,
+          "outputTokens": 27
+        },
+        {
+          "usageEventId": "f0af6ddc-d51b-4673-9d6b-0cc377d1daa8",
+          "operation": "agent.answer",
+          "status": "failed",
+          "totalMs": 111,
+          "preTransportMs": null,
+          "httpMs": null,
+          "outputTokens": null
+        },
+        {
+          "usageEventId": "2b85b920-df55-4888-9296-ac12feec7a6b",
+          "operation": "agent.answer",
+          "status": "running",
+          "totalMs": null,
+          "preTransportMs": null,
+          "httpMs": null,
+          "outputTokens": null
+        }
+      ],
+      "actualResearchChecks": null,
+      "negativePriceRejected": null,
+      "sourceChanged": false,
+      "models": {
+        "personal": "xopc-cloud/auto",
+        "global": "xopc-cloud/auto"
+      },
+      "retention": {
+        "copiedAt": "2026-10-23T18:08:56.149Z",
+        "originalState": "/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-personal-allocation-live-JLgTbr",
+        "files": [
+          "xopc.db",
+          "logs",
+          "media",
+          "shared",
+          "workspace-coder",
+          "workspace-conductor",
+          "workspace-creative",
+          "workspace-data-analyst",
+          "workspace-main",
+          "workspace-personal-f815d4b478fa",
+          "workspace-researcher",
+          "workspace-task-router",
+          "workspace-writer"
+        ],
+        "databaseSha256": "8b489f664cd7679050a1a79aa4cdb8fb7f6fcbd6b3c95ea8bb2b3d948694e1ea",
+        "originalUnchanged": true,
+        "configAndCredentialsExcluded": true,
+        "scope": "Local private synthetic benchmark evidence; do not publish raw transcripts."
+      },
+      "decisionPath": "/Users/micjoyce/develop/github/xopc/.xopc-evals/control/personal-latency-v7-20261024-v2/verification.json",
+      "decisionSha256": "26a2b9d74c2360999aa8fef90a765831e1d653c17c2435566a3cefa872e8b03c"
+    },
+    {
+      "version": 3,
+      "improvementId": "c9ed040b-4969-4651-88b3-6f3f36c0b587",
+      "promotion": "rejected",
+      "fullV7Passed": false,
+      "originalFailure": "Main transcript must not contain tool argument or execution errors",
+      "latency": {
+        "requestToSubmit": 10631,
+        "initialReplyAfterSubmit": 5870,
+        "pingResponse": 5565,
+        "total": 296713
+      },
+      "thresholds": {
+        "requestToSubmit": 20000,
+        "initialReplyAfterSubmit": 5000,
+        "pingResponse": 5000,
+        "total": 600000
+      },
+      "physicalRequests": 40,
+      "runtimeEvents": 40,
+      "providerTokens": 737788,
+      "knownProviderTokens": 737788,
+      "perRequestMatched": true,
+      "knownPerRequestUsageMatched": true,
+      "physicalUnknownFinalUsage": 0,
+      "nonDispatchedRuntimeEvents": [],
+      "mainToolErrors": [
+        {
+          "toolName": "personal_task",
+          "toolCallId": "call_7a7fdfc5e57144928bc98113",
+          "error": "Validation failed for tool \"personal_task\":"
+        }
+      ],
+      "foregroundCalls": [
+        {
+          "usageEventId": "ee186a73-fa28-4bd9-a79d-8438a6544eee",
+          "operation": "agent.answer",
+          "status": "succeeded",
+          "totalMs": 10187,
+          "preTransportMs": 1876,
+          "httpMs": 8297,
+          "outputTokens": 94
+        },
+        {
+          "usageEventId": "b09e1176-284d-44c7-8279-c6f160260b72",
+          "operation": "agent.continue_after_tool",
+          "status": "succeeded",
+          "totalMs": 5794,
+          "preTransportMs": 4,
+          "httpMs": 5786,
+          "outputTokens": 18
+        },
+        {
+          "usageEventId": "7c7e1068-37e8-4425-a595-30712eb02db0",
+          "operation": "agent.answer",
+          "status": "succeeded",
+          "totalMs": 5195,
+          "preTransportMs": 2,
+          "httpMs": 5190,
+          "outputTokens": 18
+        },
+        {
+          "usageEventId": "a52c3175-a6b0-46aa-b285-16006ce13d6d",
+          "operation": "agent.answer",
+          "status": "succeeded",
+          "totalMs": 6085,
+          "preTransportMs": 3,
+          "httpMs": 6078,
+          "outputTokens": 71
+        },
+        {
+          "usageEventId": "62d77662-bb3b-4770-b75c-7a1abcd58a01",
+          "operation": "agent.continue_after_tool",
+          "status": "succeeded",
+          "totalMs": 5357,
+          "preTransportMs": 3,
+          "httpMs": 5350,
+          "outputTokens": 51
+        },
+        {
+          "usageEventId": "5617ae8f-268d-4457-844c-a0c0f2665bcd",
+          "operation": "agent.continue_after_tool",
+          "status": "succeeded",
+          "totalMs": 8779,
+          "preTransportMs": 3,
+          "httpMs": 8772,
+          "outputTokens": 301
+        },
+        {
+          "usageEventId": "043edfb5-2d53-4a8e-afd8-c941715389f1",
+          "operation": "agent.continue_after_tool",
+          "status": "succeeded",
+          "totalMs": 6858,
+          "preTransportMs": 4,
+          "httpMs": 6852,
+          "outputTokens": 165
+        },
+        {
+          "usageEventId": "245c2c5f-1a0d-4569-871c-813714b6b92b",
+          "operation": "agent.continue_after_tool",
+          "status": "succeeded",
+          "totalMs": 6198,
+          "preTransportMs": 3,
+          "httpMs": 6191,
+          "outputTokens": 141
+        },
+        {
+          "usageEventId": "db9540e5-acc8-4767-ba43-e1880ac5044c",
+          "operation": "agent.continue_after_tool",
+          "status": "succeeded",
+          "totalMs": 6934,
+          "preTransportMs": 3,
+          "httpMs": 6928,
+          "outputTokens": 69
+        },
+        {
+          "usageEventId": "73b65058-c6f6-4078-8ee2-7376b48a1fc7",
+          "operation": "agent.answer",
+          "status": "succeeded",
+          "totalMs": 7577,
+          "preTransportMs": 2,
+          "httpMs": 7571,
+          "outputTokens": 85
+        },
+        {
+          "usageEventId": "9390a00c-d742-451c-8c28-b2e921db5326",
+          "operation": "personal.reply_composition",
+          "status": "succeeded",
+          "totalMs": 5195,
+          "preTransportMs": 2,
+          "httpMs": 5189,
+          "outputTokens": 349
+        }
+      ],
+      "actualResearchChecks": [
+        {
+          "criterion": "monthly_summary.csv 包含 sales.csv 中每个月份的销售额合计及相邻月份环比，且数值与 reproduce.mjs 实际运行输出一致",
+          "status": "passed"
+        },
+        {
+          "criterion": "reproduce.mjs 可在执行者工作区实际运行且能复现 monthly_summary.csv 的数据结果",
+          "status": "passed"
+        },
+        {
+          "criterion": "report.md 说明统计口径（如按月份汇总的销售额定义与环比计算公式）并包含各月关键数字",
+          "status": "passed"
+        },
+        {
+          "criterion": "report.md 的 TTS A/B 价格对比仅基于 pricing-sources.md 的冻结内容，包含 A/B 的 ASR 每小时价格及换算后的每分钟价格，TTS 未公开报价处如实标注，未补造完整通话成本",
+          "status": "passed"
+        },
+        {
+          "criterion": "report.md 中价格与数据结论均逐条引用对应来源（pricing-sources.md 原文摘录或本次工具实际读取内容）",
+          "status": "passed"
+        },
+        {
+          "criterion": "report.md 包含通过 web_fetch 实际读取 https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status/404 后得出的 HTTP 404 含义及'404 不能单独证明永久删除'的结论，并附实际读取来源与访问时间",
+          "status": "passed"
+        },
+        {
+          "criterion": "report.md 明确指出 conflicting-note.md 与官方文档的冲突，并以本次实际读取的官方说明为判断依据，未将两者平均或视为一致",
+          "status": "passed"
+        },
+        {
+          "criterion": "sales.csv 原始字节未被修改",
+          "status": "passed"
+        }
+      ],
+      "negativePriceRejected": true,
+      "sourceChanged": false,
+      "models": {
+        "personal": "xopc-cloud/auto",
+        "global": "xopc-cloud/auto"
+      },
+      "retention": {
+        "copiedAt": "2026-10-23T18:13:30.550Z",
+        "originalState": "/var/folders/28/dgsfghyj33xbpbt4l29st_tc0000gn/T/xopc-personal-allocation-live-d9l2cT",
+        "files": [
+          "xopc.db",
+          "logs",
+          "media",
+          "shared",
+          "workspace-coder",
+          "workspace-conductor",
+          "workspace-creative",
+          "workspace-data-analyst",
+          "workspace-main",
+          "workspace-personal-f815d4b478fa",
+          "workspace-researcher",
+          "workspace-task-router",
+          "workspace-writer"
+        ],
+        "databaseSha256": "f511534aa0a08beb4121933acfc7ec20777fddcfe82add5ab0c3de3fc2a69413",
+        "originalUnchanged": true,
+        "configAndCredentialsExcluded": true
+      },
+      "decisionPath": "/Users/micjoyce/develop/github/xopc/.xopc-evals/control/personal-latency-v7-20261024-v3/verification.json",
+      "decisionSha256": "2816a01c5fbd41417f41a1b7bf995a1a319d7da475c32eb0de3c101938a40585"
+    }
+  ],
+  "requests": {
+    "physical": 102,
+    "knownFinalUsage": 102,
+    "knownProviderTokens": 2051124,
+    "runtimeEvents": 107,
+    "nonDispatchedRuntimeEvents": 5,
+    "actualCharge": null
+  },
+  "typeOnlyCorrection": {
+    "frozenCandidate": "v3",
+    "currentProviderJsonSchemaIdentical": true,
+    "actualSdkValidationEquivalent": true,
+    "explanation": "Replaced legacy Type.Unsafe with Type.String to satisfy current TypeScript inference; provider JSON schema and strict SDK validation are identical. No new model behavior or trial replacement."
+  },
+  "limitations": [
+    "Three changing candidates; no unchanged reruns to seek a lucky passing sample",
+    "Raw latency differences do not establish causal improvement or a provider SLA",
+    "v2 OAuth refresh failures and a nonterminal runtime row remain visible; do not invent zero usage",
+    "Existing model and thinking configuration unchanged; no echo shortcut or relaxed gate",
+    "All earlier failures and decisions retained, private local databases/media/logs copied without credentials"
+  ],
+  "validation": {
+    "runtime": {
+      "files": 5,
+      "passed": 75
+    },
+    "personalRegression": {
+      "files": 3,
+      "passed": 15
+    },
+    "controlRunner": {
+      "files": 13,
+      "passed": 45
+    },
+    "coder": {
+      "files": 27,
+      "passed": 85
+    },
+    "rootTypecheck": "passed",
+    "dashboardBrowserVerified": true,
+    "dashboardUrl": "http://127.0.0.1:4310/#improvements/c9ed040b-4969-4651-88b3-6f3f36c0b587",
+    "originalDecisionsAndRetainedDatabasesUnchanged": true,
+    "artifacts": [
+      {
+        "path": ".xopc-evals/control/personal-latency-final-integrity-20261024.json",
+        "sha256": "a408bd8628c9c602207d5f574f87d723e5cc48e2612802d55e1cbef4ffbb3820"
+      },
+      {
+        "path": ".xopc-evals/control/personal-latency-export-20261024.json",
+        "sha256": "b7083cda21001e7416ef74683dbbde02fbb413b5960b6642405ee4ddf0e8ad8a"
+      },
+      {
+        "path": ".xopc-evals/control/personal-latency-dashboard-20261024.png",
+        "sha256": "239d1c95317575dba6ae13d8c4d7984391f2a5468e388b7ab94828afa89e953a"
+      },
+      {
+        "path": ".xopc-evals/control/personal-latency-runtime-corrected-20261024.log",
+        "sha256": "ed6da84a0f410999bf9882522585deb91ced94c6912a06995072d04cc200c677"
+      },
+      {
+        "path": ".xopc-evals/control/personal-latency-regression-20261024.log",
+        "sha256": "0333a76cf95860e180d6183e10660a7a208ae1764645531829e9694d5b8d1c8f"
+      },
+      {
+        "path": ".xopc-evals/control/personal-latency-control-v2-20261024.log",
+        "sha256": "0a7b14ac4e3cac370b858ea593c07c7d55d8d679d163c465226eaab78d880806"
+      },
+      {
+        "path": ".xopc-evals/control/personal-latency-typecheck-corrected-20261024.log",
+        "sha256": "70685b4df7789c854b9e1ceab7d78a6d0f9a0831c11eb0010b7b5fdbe0e50c39"
+      },
+      {
+        "path": ".xopc-evals/control/personal-latency-coder-dashboard-final-20261024.log",
+        "sha256": "c9e8b338159c7dec56e5e9abfc13fcea645789daf51d86515cdf35d4aa9fb31f"
+      }
+    ]
+  }
+}

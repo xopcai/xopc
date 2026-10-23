@@ -2,6 +2,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 
+import { assessPersonalLatency } from './personal-latency.js';
 import { queueTiming } from './performance.js';
 import { assessVerification } from './verification.js';
 import { assessCycle } from './reconciliation.js';
@@ -14,7 +15,7 @@ import { RequestPool, startPool, type PoolEndpoint } from './request-pool.js';
 const [command, ...args] = process.argv.slice(2);
 const { values } = parseArgs({ args, options: {
   index: { type: 'string', default: '.xopc-evals/control/index.db' }, sources: { type: 'string', default: 'evals/control/sources.json' },
-  'validation-output': { type: 'string' },
+  'validation-output': { type: 'string' }, 'candidate-root': { type: 'string' },
   plan: { type: 'string' }, output: { type: 'string' }, file: { type: 'string' }, id: { type: 'string' }, action: { type: 'string' },
   model: { type: 'string' }, origins: { type: 'string' }, 'include-personal': { type: 'boolean', default: false },
   'pool-endpoint': { type: 'string' }, generation: { type: 'string', default: '4' }, judge: { type: 'string', default: '2' }, parent: { type: 'string', default: '4' },
@@ -52,15 +53,16 @@ try {
   else if (command === 'improvement') {
     if (!values.file) throw new Error('--file required');
     console.log(store.improvement(record(JSON.parse(readFileSync(values.file, 'utf8')))));
-  } else if (['assess-cycle', 'assess-verification'].includes(command ?? '')) {
+  } else if (['assess-cycle', 'assess-verification', 'assess-personal-latency'].includes(command ?? '')) {
     if (!values.file || !values.output || !values.id) throw new Error('--file registration, --output campaign directory and --id improvement required');
-    const result = command === 'assess-verification' ? assessVerification(resolve(values.output), resolve(values.file)) : assessCycle(resolve(values.output), resolve(values.file), values['validation-output'] ? resolve(values['validation-output']) : undefined);
+    if (command === 'assess-personal-latency' && !values['candidate-root']) throw new Error('--candidate-root frozen source directory required');
+    const result = command === 'assess-personal-latency' ? assessPersonalLatency(resolve(values.output), resolve(values.file), resolve(values['candidate-root']!)) : command === 'assess-verification' ? assessVerification(resolve(values.output), resolve(values.file)) : assessCycle(resolve(values.output), resolve(values.file), values['validation-output'] ? resolve(values['validation-output']) : undefined);
     const directories = [resolve(values.output), ...(values['validation-output'] ? [resolve(values['validation-output'])] : [])];
     const evidence = store.list({limit:100}).items.filter(e => directories.some(d => e.source.startsWith(d + '/')));
     const targetCampaign = store.campaigns().find(c => c.output === resolve(values.output!));
     const poolEvents = targetCampaign ? store.db.prepare("SELECT at,data FROM events WHERE type='request.pool' AND json_extract(data,'$.campaignId')=? ORDER BY seq").all(String(targetCampaign.id)).map(e=>({at:e.at,data:JSON.parse(String(e.data))})) : [];
     const decision = { ...result, queueTiming:queueTiming(poolEvents), evidenceIds: evidence.map(e => e.id) };
-    writeFileSync(resolve(values.output, command === 'assess-verification' ? 'verification.json' : 'decision.json'), JSON.stringify(decision, null, 2) + '\n', {flag:'wx'});
+    writeFileSync(resolve(values.output, command === 'assess-cycle' ? 'decision.json' : 'verification.json'), JSON.stringify(decision, null, 2) + '\n', {flag:'wx'});
     store.decideImprovement(values.id, decision);
     for (const campaign of store.campaigns().filter(c => directories.includes(String(c.output)))) {
       const audit = result.audit.filter(a => a.files.wire.startsWith(String(campaign.output) + '/'));
