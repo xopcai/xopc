@@ -1,17 +1,18 @@
 import { createHash } from 'node:crypto';
 
-import type { PhoneObservation } from './contracts.js';
+import { PhoneError, type PhoneObservation } from './contracts.js';
 
 /** Active execution time excludes explicit human intervention. */
 export class PhoneOperationBudget {
   readonly controller = new AbortController();
-  private remaining = 90_000;
+  private remaining: number;
+  constructor(durationMs = 300_000) { this.remaining = durationMs; }
   private started = 0;
   private timer?: ReturnType<typeof setTimeout>;
   resume(): void {
     if (this.timer || this.controller.signal.aborted) return;
     this.started = Date.now();
-    this.timer = setTimeout(() => this.controller.abort(), this.remaining);
+    this.timer = setTimeout(() => this.controller.abort(new PhoneError('PHONE_OPERATION_TIMEOUT', 'The phone goal reached its active execution limit. The session is paused; inspect the current screen before continuing.', 409)), this.remaining);
     this.timer.unref();
   }
   pause(): void {

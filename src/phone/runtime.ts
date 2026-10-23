@@ -4,6 +4,8 @@ import { PhoneInteractiveSession } from './interactive-session.js';
 import { LocalScrcpyProvider } from './scrcpy.js';
 import type { PhoneInteractiveProvider } from './live-provider.js';
 
+import { createLogger } from '../utils/logger.js';
+
 import type { Config } from '../config/schema.js';
 import { resolveEffectiveAgentConfigForAgent } from '../config/agent-profile.js';
 import { CloudPhones } from './cloud-phones.js';
@@ -27,6 +29,7 @@ type Session = {
   streamOpening?: Promise<PhoneInteractiveSession>;
 
 };
+const log = createLogger('PhoneRuntime');
 const terminal = new Set(['cancelled', 'closed', 'failed', 'outcome_unknown']);
 
 export class PhoneRuntime {
@@ -145,7 +148,7 @@ export class PhoneRuntime {
       return this.publish(session);
     }
     if (session.report.status === 'paused' || session.report.status === 'needs_user') throw new PhoneError('PHONE_PAUSED', 'Complete manual interaction and resume the phone session');
-    session.budget = new PhoneOperationBudget(); if (session.report.controlOwner === 'agent') session.budget.resume();
+    session.budget = new PhoneOperationBudget(context.config.phone.maxOperationDurationMs); if (session.report.controlOwner === 'agent') session.budget.resume();
     const combined = AbortSignal.any([signal, session.controller.signal, session.budget.controller.signal]);
     const operation = this.perform(session, input, context, combined);
     session.active = operation;
@@ -155,11 +158,12 @@ export class PhoneRuntime {
   private async perform(session: Session, input: Exclude<PhoneInput, { op: 'open' | 'discover' }>, context: ExecutionContext, signal: AbortSignal): Promise<PhoneReport> {
     let observation: PhoneObservation | undefined;
     let heartbeat: ReturnType<typeof setInterval> | undefined;
+    const startedAt = Date.now();
     session.report.errorCode = undefined; session.report.verified = false;
     try {
       await this.waitForAgent(session, signal); session.report.status = 'running';
       this.publish(session);
-      heartbeat = setInterval(() => { try { this.guard(session, context); } catch { session.controller.abort(); } }, 10_000);
+      heartbeat = setInterval(() => { try { this.guard(session, context); } catch (error) { session.controller.abort(error); } }, 10_000);
       heartbeat.unref();
       observation = await this.observe(session, signal);
       this.allowedScreen(session, observation);
@@ -224,17 +228,38 @@ export class PhoneRuntime {
         observation.frame.fill(0); observation = await this.observe(session, signal);
       }
     } catch (error) {
+      const failure = signal.aborted && signal.reason instanceof PhoneError ? signal.reason : error;
+      if (failure instanceof PhoneError && failure.code === 'PHONE_OPERATION_TIMEOUT'
+        && !terminal.has(session.report.status) && session.report.status !== 'paused') {
+        session.report.status = 'paused'; session.report.controlOwner = 'none'; session.report.controlEpoch!++;
+        session.report.handoff = 'idle'; session.report.errorCode = failure.code;
+        session.report.stopReason = 'operation_timeout'; session.report.message = failure.message;
+        session.budget?.pause();
+        await session.stream?.revoke();
+        log.warn({ sessionId: session.report.sessionId, conversationId: session.report.owner,
+          durationMs: Date.now() - startedAt, actions: session.report.actions, modelRequests: session.report.modelRequests,
+          errorCode: failure.code, phase: 'goal_timeout' }, 'Phone goal timed out; session remains paused for inspection');
+        return this.publish(session);
+      }
+      log.warn({ sessionId: session.report.sessionId, conversationId: session.report.owner,
+        durationMs: Date.now() - startedAt, errorCode: failure instanceof PhoneError ? failure.code : signal.aborted ? 'PHONE_CANCELLED' : 'PHONE_OPERATION_FAILED',
+        phase: 'goal_failed' }, 'Phone goal stopped before completion');
       if (!['paused', 'cancelled', 'closed'].includes(session.report.status)) {
         if (String(session.report.status) !== 'outcome_unknown') session.report.status = signal.aborted ? 'cancelled' : 'failed';
-        session.report.errorCode = error instanceof PhoneError ? error.code : signal.aborted ? 'PHONE_CANCELLED' : 'PHONE_OPERATION_FAILED';
-        session.report.message = error instanceof PhoneError ? error.message : signal.aborted ? 'Phone operation stopped' : 'Phone operation failed; inspect device diagnostics';
+        session.report.errorCode = failure instanceof PhoneError ? failure.code : signal.aborted ? 'PHONE_CANCELLED' : 'PHONE_OPERATION_FAILED';
+        session.report.message = failure instanceof PhoneError ? failure.message : signal.aborted ? 'Phone operation stopped' : 'Phone operation failed; inspect device diagnostics';
         session.report.stopReason = String(session.report.status) === 'outcome_unknown' ? 'inspect_before_retry' : 'operation_failed';
       }
       if (terminal.has(session.report.status)) this.repository.release(session.device.serial, session.lease);
       this.publish(session);
-      if (error instanceof PhoneError) throw error;
+      if (failure instanceof PhoneError) throw failure;
       throw new PhoneError(signal.aborted ? 'PHONE_CANCELLED' : 'PHONE_OPERATION_FAILED', signal.aborted ? 'Phone operation stopped' : 'Phone operation failed; inspect device diagnostics');
-    } finally { if (heartbeat) clearInterval(heartbeat); observation?.frame.fill(0); }
+    } finally {
+      if (heartbeat) clearInterval(heartbeat); observation?.frame.fill(0);
+      log.info({ sessionId: session.report.sessionId, conversationId: session.report.owner, phase: 'goal_end',
+        durationMs: Date.now() - startedAt, status: session.report.status, stopReason: session.report.stopReason,
+        actions: session.report.actions, modelRequests: session.report.modelRequests }, 'Phone goal finished');
+    }
   }
   private recordObservation(session: Session, observation: PhoneObservation): void {
     session.report.foregroundApp = observation.package;
@@ -480,13 +505,21 @@ export class PhoneRuntime {
         session.report.status = 'paused'; session.report.stopReason = 'user_paused'; this.publish(session);
       } else if (input.op === 'handback') {
         if (session.report.controlOwner === 'agent') throw new PhoneError('PHONE_NOT_PAUSED', 'The Agent already controls this phone', 409);
+        // Tool pause aborts its controller after draining the previous operation.
+        if (session.controller.signal.aborted && !session.active) session.controller = new AbortController();
         session.report.handoff = 'returning'; session.report.controlEpoch!++; session.human = undefined;
         session.report.controlOwner = 'none'; this.publish(session);
         await session.stream?.revoke();
-        const observation = await this.observe(session, session.controller.signal);
-        try { this.guard(session, context); this.allowedScreen(session, observation); this.recordObservation(session, observation); }
-        catch (error) { session.frames.clear(); session.report.handoff = 'idle'; this.publish(session); throw error; }
-        finally { observation.frame.fill(0); }
+        let observation: PhoneObservation | undefined;
+        try {
+          observation = await this.observe(session, session.controller.signal);
+          if (terminal.has(session.report.status)) throw new PhoneError('PHONE_OPEN_REQUIRED', 'Phone session ended during handback', 409);
+          this.guard(session, context); this.allowedScreen(session, observation); this.recordObservation(session, observation);
+        } catch (error) {
+          session.frames.clear(); session.report.handoff = 'idle';
+          if (!terminal.has(session.report.status)) session.report.status = 'paused';
+          this.publish(session); throw error;
+        } finally { observation?.frame.fill(0); }
         session.report.controlOwner = 'agent'; session.report.status = session.active ? 'running' : 'ready';
         session.report.handoff = 'idle'; session.report.message = undefined; session.report.stopReason = undefined;
         session.budget?.resume(); this.publish(session); for (const wake of session.wake) wake();

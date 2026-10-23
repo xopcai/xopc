@@ -1,0 +1,174 @@
+{
+  "conversationId": "1adb2ac7-b82c-4f32-92ae-6aa6e0bb11fa",
+  "observations": [
+    {
+      "sessionId": "1abe1ff2-ed3b-47f0-821f-cb413be03c2a",
+      "status": "running",
+      "controlOwner": "agent",
+      "controlEpoch": 5,
+      "actions": 6,
+      "humanActions": 1,
+      "modelRequests": 7,
+      "currentAction": null,
+      "verified": false,
+      "verificationLevel": "none",
+      "errorCode": null,
+      "stopReason": null,
+      "updatedAt": 1792777659569,
+      "versionFacts": []
+    },
+    {
+      "sessionId": "1abe1ff2-ed3b-47f0-821f-cb413be03c2a",
+      "status": "running",
+      "controlOwner": "agent",
+      "controlEpoch": 5,
+      "actions": 6,
+      "humanActions": 1,
+      "modelRequests": 8,
+      "currentAction": null,
+      "verified": false,
+      "verificationLevel": "none",
+      "errorCode": null,
+      "stopReason": null,
+      "updatedAt": 1792777671646,
+      "versionFacts": [
+        "Android 版本",
+        "12"
+      ]
+    },
+    {
+      "sessionId": "1abe1ff2-ed3b-47f0-821f-cb413be03c2a",
+      "status": "running",
+      "controlOwner": "agent",
+      "controlEpoch": 5,
+      "actions": 6,
+      "humanActions": 1,
+      "modelRequests": 9,
+      "currentAction": null,
+      "verified": false,
+      "verificationLevel": "none",
+      "errorCode": null,
+      "stopReason": null,
+      "updatedAt": 1792777686623,
+      "versionFacts": []
+    },
+    {
+      "sessionId": "1abe1ff2-ed3b-47f0-821f-cb413be03c2a",
+      "status": "running",
+      "controlOwner": "agent",
+      "controlEpoch": 5,
+      "actions": 7,
+      "humanActions": 1,
+      "modelRequests": 9,
+      "currentAction": "tap",
+      "verified": false,
+      "verificationLevel": "none",
+      "errorCode": null,
+      "stopReason": null,
+      "updatedAt": 1792777702993,
+      "versionFacts": []
+    },
+    {
+      "sessionId": "1abe1ff2-ed3b-47f0-821f-cb413be03c2a",
+      "status": "completed",
+      "controlOwner": "agent",
+      "controlEpoch": 5,
+      "actions": 7,
+      "humanActions": 1,
+      "modelRequests": 9,
+      "currentAction": "tap",
+      "verified": true,
+      "verificationLevel": "ui",
+      "errorCode": null,
+      "stopReason": "condition_satisfied",
+      "updatedAt": 1792777705535,
+      "versionFacts": [
+        "Android 版本",
+        "12",
+        "Android 安全更新"
+      ]
+    },
+    {
+      "sessionId": "1abe1ff2-ed3b-47f0-821f-cb413be03c2a",
+      "status": "closed",
+      "controlOwner": "none",
+      "controlEpoch": 6,
+      "actions": 7,
+      "humanActions": 1,
+      "modelRequests": 9,
+      "currentAction": "tap",
+      "verified": true,
+      "verificationLevel": "ui",
+      "errorCode": null,
+      "stopReason": "close",
+      "updatedAt": 1792777711807,
+      "versionFacts": []
+    }
+  ],
+  "date": "2026-10-24",
+  "device": "阿里云测试手机",
+  "modelRef": "phone-bigmodel/autoglm-phone",
+  "mock": false,
+  "configuredActiveBudgetMs": 300000,
+  "chatContinuationDurationSeconds": 163,
+  "result": "Android 12",
+  "final": {
+    "sessionId": "1abe1ff2-ed3b-47f0-821f-cb413be03c2a",
+    "status": "closed",
+    "controlOwner": "none",
+    "actions": 7,
+    "humanActions": 1,
+    "modelRequests": 9,
+    "verified": true,
+    "verificationLevel": "ui",
+    "errorCode": null,
+    "steps": [
+      {
+        "action": "launch",
+        "at": 1792777516267,
+        "dispatch": "completed",
+        "actor": "agent"
+      },
+      {
+        "action": "swipe",
+        "at": 1792777549152,
+        "actor": "human",
+        "dispatch": "completed"
+      },
+      {
+        "action": "swipe",
+        "at": 1792777578847,
+        "dispatch": "completed",
+        "actor": "agent"
+      },
+      {
+        "action": "swipe",
+        "at": 1792777587091,
+        "dispatch": "completed",
+        "actor": "agent"
+      },
+      {
+        "action": "tap",
+        "at": 1792777595952,
+        "dispatch": "completed",
+        "actor": "agent"
+      },
+      {
+        "action": "swipe",
+        "at": 1792777646521,
+        "dispatch": "completed",
+        "actor": "agent"
+      },
+      {
+        "action": "tap",
+        "at": 1792777702611,
+        "dispatch": "completed",
+        "actor": "agent"
+      }
+    ]
+  },
+  "regressionTests": {
+    "files": 16,
+    "testsPassed": 139
+  }
+}

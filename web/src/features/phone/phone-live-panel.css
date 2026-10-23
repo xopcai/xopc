@@ -1,0 +1,13 @@
+.phone-live-stage {
+  container-type: size;
+}
+
+.phone-device-shell {
+  /* Keep the complete source image inside the bezel at any panel size. */
+  width: max(0px, min(100cqw, 420px, calc((100cqh - 28px) * var(--phone-screen-ratio) + 14px)));
+  padding: 16px 6px 10px;
+}
+
+.phone-device-screen {
+  aspect-ratio: var(--phone-screen-ratio);
+}
