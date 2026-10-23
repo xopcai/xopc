@@ -1,10 +1,11 @@
 import { randomBytes } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 
 import type { Config } from '../../config/schema.js';
 import { ConfigSchema } from '../../config/schema.js';
 import { saveConfig } from '../../config/loader.js';
+import { readConfigFileSnapshot } from '../../config/config-file.js';
 import { ensureStarterAgentsInitialized } from '../../agent/starter-agents.js';
 import { AgentCatalogRepository } from '../../agent-catalog/repository.js';
 import { AgentCatalogService } from '../../agent-catalog/service.js';
@@ -50,9 +51,10 @@ async function readDiskConfig(
   configPath: string,
   assertChannelPlugins?: InitWorkspaceCoreOptions['assertChannelPlugins'],
 ): Promise<Config> {
-  const raw = readFileSync(configPath, 'utf-8');
-  const cfg = ConfigSchema.parse(JSON.parse(raw) as unknown);
+  const snapshot = readConfigFileSnapshot(configPath);
+  const cfg = snapshot.config;
   await assertChannelPluginsIfNeeded(cfg, assertChannelPlugins);
+  snapshot.discardRetiredFields();
   return cfg;
 }
 

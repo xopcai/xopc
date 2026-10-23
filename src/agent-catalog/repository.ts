@@ -112,6 +112,11 @@ export class AgentCatalogRepository {
   ensureInitialized(defaults: AgentDefaults = DEFAULT_AGENT_DEFAULTS): void {
     runSqliteWriteTransaction((db) => {
       const now = Date.now();
+      // Installed releases may still contain the removed Workflow policy.
+      db.prepare(`UPDATE agent_catalog_settings SET defaults_json = json_remove(defaults_json, '$.workflows')
+        WHERE json_type(defaults_json, '$.workflows') IS NOT NULL`).run();
+      db.prepare(`UPDATE agents SET overrides_json = json_remove(overrides_json, '$.workflows')
+        WHERE json_type(overrides_json, '$.workflows') IS NOT NULL`).run();
       db.prepare(`INSERT OR IGNORE INTO agents
         (id, enabled, workspace_override, profile_json, overrides_json, provisioning_state,
          provisioning_error, revision, created_at, updated_at, deleted_at)

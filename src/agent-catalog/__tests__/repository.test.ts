@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { closeXopcDatabase, openXopcDatabase } from '../../storage/sqlite/index.js';
+import { closeXopcDatabase, getSqliteDatabase, openXopcDatabase } from '../../storage/sqlite/index.js';
 import { AgentCatalogRepository } from '../repository.js';
 
 describe('AgentCatalogRepository', () => {
@@ -20,6 +20,32 @@ describe('AgentCatalogRepository', () => {
     ]);
     expect(repository.snapshot().agents).toEqual([]);
     expect(repository.listPendingProvisioningAgentIds()).toEqual(['main']);
+  });
+
+  it('discards retired persisted Workflow policies before parsing existing Agents', () => {
+    const repository = new AgentCatalogRepository();
+    repository.ensureInitialized();
+    repository.create({ id: 'coder', enabled: true, profile: { name: 'Coder' },
+      tools: { exec_command: { mode: 'ask' } } }, { ready: true });
+    const before = repository.getSettings();
+    const coder = repository.get('coder');
+    const db = getSqliteDatabase();
+    db.prepare(`UPDATE agent_catalog_settings SET defaults_json = json_set(defaults_json, '$.workflows', json(?))`)
+      .run('{"enabled":true}');
+    db.prepare(`UPDATE agents SET overrides_json = json_set(overrides_json, '$.workflows', json(?)) WHERE id = 'coder'`)
+      .run('{"allowlist":["retired-flow"]}');
+    expect(() => repository.getSettings()).toThrow();
+    expect(() => repository.get('coder')).toThrow();
+
+    repository.ensureInitialized();
+    expect(repository.getSettings()).toEqual(before);
+    expect(repository.get('coder')).toEqual(coder);
+    expect(db.prepare(`SELECT json_type(defaults_json, '$.workflows') AS retired FROM agent_catalog_settings`).get())
+      .toEqual({ retired: null });
+    expect(db.prepare(`SELECT json_type(overrides_json, '$.workflows') AS retired FROM agents WHERE id = 'coder'`).get())
+      .toEqual({ retired: null });
+    repository.ensureInitialized();
+    expect(repository.getSettings()).toEqual(before);
   });
 
   it('creates ready Agents and returns a validated snapshot', () => {

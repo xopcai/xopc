@@ -1,0 +1,35 @@
+{
+  "reportedRelease": "0.0.411",
+  "reportedError": "unrecognized_keys: workflows",
+  "scope": "Discard retired Workflow fields in existing config files and Agent catalog JSON before strict current validation",
+  "preserved": [
+    "gateway token and port",
+    "current MCP and Agent configuration",
+    "Agent identity and revisions",
+    "unrelated user data"
+  ],
+  "focused": {
+    "files": 4,
+    "passed": 22,
+    "failed": 0
+  },
+  "regression": {
+    "filesPassed": 1649,
+    "filesSkipped": 3,
+    "passed": 10676,
+    "skipped": 14,
+    "failed": 0,
+    "durationSeconds": 228.65
+  },
+  "checks": {
+    "typecheck": "passed",
+    "changedScopeLint": "passed",
+    "nodeWebBuild": "passed",
+    "electronArtifactsBuild": "passed",
+    "publishManifest": "passed",
+    "docsCheck": "passed",
+    "diffCheck": "passed"
+  },
+  "deployment": "Source/build repair only; no release, installation or publication",
+  "databaseScope": "Existing supported v259 schema; no historical schema upgrade chain restored"
+}

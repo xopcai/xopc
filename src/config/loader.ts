@@ -1,4 +1,4 @@
-import { readFileSync, existsSync, mkdirSync, promises as fsPromises } from 'fs';
+import { existsSync, mkdirSync, promises as fsPromises } from 'fs';
 import { dirname } from 'path';
 import { writeTextAtomic } from '../infra/write-file-atomic.js';
 import { type Config, ConfigSchema } from './schema.js';
@@ -7,6 +7,7 @@ import { config } from 'dotenv';
 import { createLogger } from '../utils/logger.js';
 import { assertChannelPluginConfigs } from './validate-channel-configs.js';
 import { setActivePlatformDiscovery } from '../platform/resolution.js';
+import { readConfigFileSnapshot } from './config-file.js';
 
 const log = createLogger('ConfigLoader');
 
@@ -68,10 +69,10 @@ export function loadConfig(configPath?: string): Config {
 
   if (existsSync(path)) {
     try {
-      const content = readFileSync(path, 'utf-8');
-      const json = JSON.parse(content);
-      const cfg = ConfigSchema.parse(json);
+      const snapshot = readConfigFileSnapshot(path);
+      const cfg = snapshot.config;
       assertChannelPluginConfigs(cfg);
+      snapshot.discardRetiredFields();
       return activateConfig(cfg);
     } catch (error) {
       log.error({ err: error, path }, `Failed to load config`);
