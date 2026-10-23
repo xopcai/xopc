@@ -7,6 +7,8 @@ export function createDashboard(store: ControlStore) {
   const assets = new Map([
     ['/', ['index.html', 'text/html; charset=utf-8']],
     ['/dashboard.js', ['dashboard.js', 'text/javascript; charset=utf-8']],
+    ['/i18n.js', ['i18n.js', 'text/javascript; charset=utf-8']],
+    ['/preferences.js', ['preferences.js', 'text/javascript; charset=utf-8']],
     ['/dashboard.css', ['dashboard.css', 'text/css; charset=utf-8']],
   ]);
   const clients = new Set<() => void>();
