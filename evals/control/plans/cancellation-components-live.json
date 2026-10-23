@@ -1,0 +1,37 @@
+{
+  "id": "cancellation-components-v3",
+  "concurrency": 1,
+  "maxWallMs": 180000,
+  "maxRequests": 2,
+  "modelOrigins": [
+    "https://router.xopc.ai"
+  ],
+  "pool": {
+    "generation": 1,
+    "judge": 1,
+    "parent": 1
+  },
+  "jobs": [
+    {
+      "id": "cancellation",
+      "timeoutMs": 150000,
+      "args": [
+        "--import",
+        "tsx",
+        "scripts/verify-cloud-cancellation-live.mts",
+        "--configured-models",
+        "--output",
+        "{output}/cancellation"
+      ],
+      "evidence": [
+        {
+          "path": "{output}/cancellation/summary.json",
+          "kind": "delivery",
+          "benchmark": "personal-delivery",
+          "evidenceClass": "live_controlled",
+          "expected": 2
+        }
+      ]
+    }
+  ]
+}

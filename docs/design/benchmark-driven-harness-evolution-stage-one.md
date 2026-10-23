@@ -1,16 +1,16 @@
 # Benchmark 驱动 Harness 自我迭代：第一阶段实施与验收
 
-日期：2026-10-23。状态：Cloud token 总量修复、正常结束尾部采集与新结构封存复验已通过；Personal mixed 仍有真实超时与一次中断用量 unknown，第一阶段不标整体全绿。对应[建设方案](./benchmark-driven-harness-evolution-plan.md)。本文件持续记录实际交付，不把校准或历史成绩当作当前模型能力提升。
+日期：2026-10-23。状态：Cloud 正常尾部与中止请求的有限排空/分项用量修复已通过；Personal mixed 新批次 421,191ms 完成交付、独立 15 项内容检查通过，但三项延迟门槛未过。原失败与两项历史中止 token unknown 保留，第一阶段不标整体全绿。对应[建设方案](./benchmark-driven-harness-evolution-plan.md)。本文件持续记录实际交付，不把校准或历史成绩当作当前模型能力提升。
 
 ## 1. 工作包进度
 
 | 工作包 | 当前状态 | 已交付 | 后续验收边界 |
 |---|---|---|---|
-| S1-01 注册与协议 | 首版完成 | 场景/能力/owner/L0–L2 registry；执行、评分、有效性、晋级分开；15 个登记族含计划项 | 扩展 owner 分工与更多原生评分协议 |
+| S1-01 注册与协议 | 首版完成 | 场景/能力/owner/L0–L2 registry；执行、评分、有效性、晋级分开；16 个登记族含计划项；取消用量独立登记，不冒充 Personal 质量 | 扩展 owner 分工与更多原生评分协议 |
 | S1-02 统一证据 | 首版完成 | 显式来源导入；只读源 SQLite；可重建索引；幂等版本记录；4 类 importer；来源缺失/损坏可见 | 大规模索引 SQL 优化、完整产物归档哈希、结构化复核/重评分 lineage |
 | S1-03 Dashboard | 五视图首版可用 | 能力概览、运行中心、证据/run 详情、成对比较、改进记录；分页、筛选、链接、SSE 游标恢复 | 更细粒度能力趋势、统计区间、多条件过滤与自动导出 |
 | S1-04 并发调度 | 本地并发与真实传输试点验收通过 | worker 作业/资源互斥、依赖波次、取消/暂停/恢复、独立 attempt、总时间/请求预算、共享 generation/judge/父级额度及跨 campaign 公共 broker | 已补 Cloud 逐请求 ID/总 token 一致性与正常尾部复验；中断 unknown、owner 心跳/接管和 CPU grader 单独额度仍明确保留；当前不宣称生产级分布式调度 |
-| S1-05 收敛/交付试点 | 校准与真实试点均已运行 | C01/C02、E01/E02/P01、F01/F02 正负校准，以及 Personal P0 8 项；真实模型计划生成/独立 Gateway 入口 | 新结构 H02 三次复验通过；Personal mixed 已真实执行并保留超时，完整 token unknown（见第 7 节） |
+| S1-05 收敛/交付试点 | 校准与真实试点均已运行 | C01/C02、E01/E02/P01、F01/F02 正负校准，以及 Personal P0 8 项；真实模型计划生成/独立 Gateway 入口 | H02 三次通过；Personal 新批次已在 7 分钟内交付，独立检查 15/15；三项延迟超门槛（见第 8 节） |
 | S1-06 候选闭环 | 首个配置候选拒绝闭环完成 | 40→8 轮单变量候选；调用前登记；开发/独立验证；不可变拒绝决策、证据链接与 Dashboard | 不是模型或生产质量提升；用量修复已在新的 H02 家族通过范围内采用；原 8 轮候选和宽批次拒绝不变 |
 
 第一阶段整体仍为进行中。当前交付先解决“跑起来、看得见、证据不混淆”，没有自动合并、部署或创建定时任务。
@@ -67,13 +67,13 @@
 ## 4. 当前限制与剩余验收
 
 1. **已销项的用量差额与正常尾部**：已独立复验 E01/E02、F01/F02 和新结构 H02。总量沿用 Cloud 原始 `total_tokens`，逐请求 ID 与账本关联；不再按不完整分量重算总量。详情见第 7 节。
-2. **尚未销项的 L2 中断用量**：Personal mixed 超时，服务停止中断 1 次请求。所有 start 都有 terminal/账本记录，但该次没有 provider 最终 usage。Cloud 回执接口实查 404，不能凭 SDK 的默认零补齐未知消耗。完整账单与完整总 token 仍 unknown。
-3. **L2 产品质量未通过**：Personal mixed 为 0/1，存在 evidence materialization/span 和研究复核修复循环。保留原超时、错误、运行 DB、原报告，不用重跑替换它。后续需另立能力候选修复交付收敛，而不是靠增加超时或删验收条件变绿。
+2. **中止采集修复通过，历史缺口保留**：新取消试验两次均保留 aborted 并完整取得 total/input/output，逐请求对账差额 0。旧超时的一次请求现有 settled/charged=0 回执，但无 token；本轮首个取消试验也留下 unknown。两项历史 token 不补零，完整累计 token 与账单仍 unknown。
+3. **L2 整体验收尚未通过**：新 mixed 421,191ms 完成交付并通过独立 15 项内容检查；v6 原评分失败保留，三个既定延迟门槛仍失败（25,167/20,000ms、9,992/5,000ms、5,666/5,000ms）。下一候选应改善提交和前台响应；不增加超时、不放宽门槛。
 4. **独立验收边界**：H02 新日志重放结构已在候选代码不变的条件下完成三次封存运行；被评 Gateway/子进程受 OS 路径权限约束，宿主 grader 在模型结束后判定。未建立跨账号/远端 evaluator 服务；本轮没有启动通用 optimizer。
 5. **调度与覆盖范围**：真实父级峰值 4、judge 峰值 1；独立批次结束 active/queued 为 0。仍不声称任意 SDK、native HTTP、WebSocket、跨机器失联接管都已覆盖。中断未知值不会转成成功或自动重放。
 6. **评分协议**：H01 的额外文件规则未在公开契约明确，其原 2/3 分数保留并附 blocking protocol review，当前投影 validity=unknown。H02 是另一结构家族，不是修改原题后重跑。后续新版本必须先公开完整契约、校准并封存。
 
-第一阶段的评测基础、真实 L1 用量修复、独立复验和采用/拒绝记录已具备；由于 L2 超时与一项中断最终用量未知，整体仍标进行中，不把局部 promoted 解释为所有产品场景通过。
+第一阶段的评测基础、真实 L1 用量修复、独立复验和采用/拒绝记录已具备；由于 Personal 延迟未过、历史最终用量仍未知与旧评分协议待复核，整体仍标进行中，不把局部 promoted 解释为所有产品场景通过。
 
 ## 5. 首批基础设施增量验收（真实调用之前）
 
@@ -187,3 +187,46 @@ H02 三次全部通过，44 个 HTTP 请求与 44 个 ledger 行和 41 个任务
 仍未通过的范围只有清晰保留：Personal mixed 交付质量（0/1）、该次强制中断的 provider 最终用量，以及 H01 的旧协议复核。Cloud receipt 实查 `404/not_found`，不能把金额或截断请求记作零。应另立 Personal 交付收敛候选并要求 provider 提供中断最终用量/可查询回执；本地代码无法追溯补造该数据。整体 `phaseOneComplete` 保持 false，范围内用量修复已接受。
 
 机器可读记录：[token/尾部修复验收](./technical/evidence/harness-stage-one-usage-tail-2026-10-23.json)。
+
+
+## 8. Personal 超时与取消请求分项用量复验（2026-10-23）
+
+汇总见[本轮便携验收证据](./technical/evidence/harness-stage-one-personal-convergence-2026-10-23.json)。原始记录位于 `.xopc-evals/control/`，新增输出目录，不覆盖第 6/7 节的任何 trial、数据库、HTTP 日志或不可变决定。
+
+### 8.1 修复与协议
+
+- 旧 mixed 的多数内容已正确，评审却要求本次 `publish_task_result` 提供尚未返回的自身回执。现在向评审提供宿主直接观测的本次提交及 claim/source 绑定，明确它只能证明关联，不能证明事实正确、未来交付成功。错误价格的真实负例仍被拒绝。
+- 错误 `excerptRange` 返回对应真实 toolCallId 与合法范围，避免只报通用跨度错误而盲目重试。范围、原文、逐条审查门禁不放宽。
+- Cloud 逻辑取消仍传给 SDK；物理流最多排空 15 秒以获得尾部 usage。修复取消与预取并发导致提前结束采集的竞态；尾部可见时覆盖 SDK 的 total/input/output 零默认值。没有最终 usage 的失败/中止事件在账本保留 null。正常流仍沿用 SDK 分项和 provider 原始 total。
+- v6 断言将已隐藏的 routine allocation custom 行当普通 assistant 文本，并要求原始 agent ID 而非显示名，因此新批次原评分仍失败。未来 adapter **v7** 改读带 taskId/selectedAgentId 的结构化执行状态，补齐源码指纹，并让失败报告保留全部已观测耗时。新协议未用于回改原评分，20s/5s/5s 延迟门槛不变。
+
+### 8.2 真实执行与独立验证
+
+Personal 保留当前 `xopc-cloud/auto` Personal、router、worker 与 reviewer 配置；取消试验使用已有可用 `xopc-cloud/openai-codex/gpt-5.6-sol` / low。没有修改生产模型配置。
+
+| 新输出批次 | 结果 | 物理请求 | 已知 provider tokens | 未知 usage |
+|---|---|---:|---:|---:|
+| personal-convergence / personal | 421,191ms 内交付；原 v6 整体评分 0/1 | 38 | 784,950 | 0 |
+| personal-convergence / cancellation | 取消/预取竞态暴露，失败保留 | 1 | unknown | 1 |
+| cancellation-drain | 两次 aborted 均采到最终总量；SDK 分项零值单列为后续问题 | 2 | 474 | 0 |
+| cancellation-components | 两次 aborted，总量及输入/输出分项全部对齐 | 2 | 474 | 0 |
+| personal-independent-verified / inspection | 独立内容检查 15/15，含真实错误价格负例 | 1 | 1,000 | 0 |
+
+本轮共 44 次受控物理请求，43 次具有最终 usage，逐请求总量差额均为 0；已知部分 786,898 tokens，完整总量仍 unknown。另有 1 次未挂 HTTP instrumentation 的前置独立审查，仅列 diagnostic，不混入验收请求分母。所有新 campaign 结束时 active/queued 为 0、无 source drift；Personal 在冻结源码运行，后续两个短批次由受控运行的指纹确认未漂移。
+
+最终两次取消分别为 input=34、output=203、total=237；取消后约 1.49/1.55 秒返回，终态仍为 aborted。新 `assess-verification` 支持 cancellation 的终态、15s+2s 容差、指纹、逐请求身份、total/input/output 门禁；原预登记文件可重复生成同一晋级结论。
+
+独立检查只读原 DB，并用克隆 DB 运行模型审查和新 Gateway：四份最终文件可经原 conversation 的鉴权路径下载，匿名请求均 401，鉴权请求均 200，内容与哈希一致；下载的脚本在禁止联网和外部写入的 sandbox 中复算得到 150/210/+40%，与最终 CSV 相同；新增 change_notes 标记存在；丢失的旧报告 publication ID 不在最终清单；错误 100.00 CNY/h 价格被真实 reviewer 拒绝。原报告/DB 哈希前后不变。这是事后独立补充验证，**不是新的未见质量 holdout，也不改变旧 trial 评分**。
+
+### 8.3 晋级、拒绝与人可见状态
+
+- Personal 修复首轮 `1f7404fc-bfb3-40c3-8ad7-ef0034987cee`：**rejected**。交付超时已不再出现，但 v6 协议问题、三个实测延迟失败及首个取消 unknown 保留；独立验证以 supplement 追加。
+- 中止用量修复 `8efaa3dc-f9a6-46f5-9b27-3c0c27b1e0f9`：**promoted，仅限有限排空与可观测用量分项**。2/2、474 tokens、逐请求与分项一致、空闲收尾。没有据此晋级 Personal 整体质量或旧 8 轮候选。
+- Dashboard 增加 Personal 分项验收面板，显示内容 15/15、实际总交付耗时和未通过的三项延迟；读取最近一个包含 audit 的 supplement，避免后加账单回执把已有对账显示回退成旧值。取消用量归入独立 `cloud-cancellation-accounting` 登记族，避免它的 2/2 被误读为 Personal mixed 通过。
+- 38 次 Personal 调用的权威账单回执全部 settled，共 **2,447,160 credit-micro**；本轮全体请求没有完整结算回执，因此整体金额仍 unknown。旧中止请求回执重查已 settled、charged=0、预留全额返还，但不含 token；零收费不能证明零消耗。本轮首次取消失败请求回执仍 404。均追加到原决定，不改源库。
+
+### 8.4 验证与未销项
+
+运行时/评审定向回归 6 文件 35 项通过；含真实 HTTP 预取取消、15 秒上限、SDK 零默认值不写作实际用量、错误价格证据不能由提交行为自证。控制面检查 12 文件 40 项通过，覆盖分项不匹配、取消被替换为成功、源码变化和超时拒绝；根目录 typecheck 通过。完整 coder 回归 26 文件 80 项通过；Dashboard 浏览器实查可见分项验收、2/2 取消晋级和原拒绝，SSE 重启后恢复。旧决定、campaign 和本轮失败报告的哈希核对均未变化。
+
+剩余：Personal 提交/首答/ping 三项延迟优化及 v7 全链路预登记复验；原 H01 协议复核；历史两次被截断请求的最终 token 仍需上游可查询用量。`phaseOneComplete=false`，不靠删除失败或假设零消耗完成验收。

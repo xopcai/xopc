@@ -1,6 +1,7 @@
 import type { RegistryEntry } from './types.js';
 
 export const registry: RegistryEntry[] = [
+  { id: 'cloud-cancellation-accounting', owner: 'xopc runtime', scenarios: ['cancellation'], capabilities: ['usage-accounting', 'bounded-drain'], level: 'L1', lifecycle: 'available' },
   { id: 'coding-core', owner: 'xopc harness', scenarios: ['coding'], capabilities: ['editing', 'verification'], level: 'L1', lifecycle: 'available' },
   { id: 'xopc-core', owner: 'xopc harness', scenarios: ['research', 'data', 'work'], capabilities: ['evidence', 'convergence', 'recovery'], level: 'L1', lifecycle: 'available' },
   { id: 'xopc-ledger-holdout', owner: 'xopc harness', scenarios: ['files', 'recovery'], capabilities: ['idempotency', 'recovery', 'partial-input'], level: 'L1', lifecycle: 'available' },

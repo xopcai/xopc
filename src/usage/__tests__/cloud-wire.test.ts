@@ -1,3 +1,4 @@
+import { createServer } from 'node:http';
 import { completeSimple, streamSimple, normalizeContext, type Model, type Api } from '@earendil-works/pi-ai/compat';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -32,4 +33,61 @@ describe('Cloud authoritative usage',()=>{
     expect(wire.apply(await completeSimple(model,context,wire.options)).usage.totalTokens).toBe(140);
     expect(wire.apply(await completeSimple(model,context,wire.options)).usage.totalTokens).toBe(4);
   });
+  it('drains a canceled SDK stream and records final authoritative usage without delivering success', async () => {
+    const controller = new AbortController();
+    let physicalAborted = false;
+    const encoder = new TextEncoder();
+    const wire = cloudWireUsage({apiKey:'test', signal:controller.signal, fetch: (async (_input, init) => {
+      init?.signal?.addEventListener('abort', () => { physicalAborted = true; });
+      return new Response(new ReadableStream({start(destination) {
+        destination.enqueue(encoder.encode('data: '+JSON.stringify({id:'wire',object:'chat.completion.chunk',choices:[{index:0,delta:{role:'assistant',content:'OK'},finish_reason:null}]})+'\n\n'));
+        setTimeout(() => {
+          destination.enqueue(encoder.encode('data: '+JSON.stringify({id:'wire',object:'chat.completion.chunk',choices:[{index:0,delta:{},finish_reason:'stop'}],usage:{prompt_tokens:10,completion_tokens:2,total_tokens:140}})+'\n\ndata: [DONE]\n\n'));
+          destination.close();
+        }, 40);
+      }}), {headers:{'Content-Type':'text/event-stream'}});
+    }) as typeof fetch});
+    const stream = wire.wrap(streamSimple(model,normalizeContext(context),wire.options));
+    for await (const event of stream) if (event.type === 'text_delta') controller.abort();
+    const message = await stream.result();
+    expect(message.stopReason).toBe('aborted');
+    expect(message.usage).toMatchObject({input:10,output:2,totalTokens:140});
+    expect(physicalAborted).toBe(false);
+  });
+
+  it('keeps a prefetched HTTP chunk from prematurely finishing a canceled tail', async () => {
+    const frame = (delta: object, usage?: object) => 'data: '+JSON.stringify({id:'wire',object:'chat.completion.chunk',choices:[{index:0,delta,finish_reason:usage?'stop':null}],...(usage?{usage}:{})})+'\n\n';
+    const server = createServer((_request, response) => {
+      response.writeHead(200, {'Content-Type':'text/event-stream'});
+      response.write(frame({role:'assistant',content:'first'}));
+      setTimeout(() => response.write(frame({content:'second'})), 30);
+      setTimeout(() => response.end(frame({}, {prompt_tokens:10,completion_tokens:2,total_tokens:140})+'data: [DONE]\n\n'), 70);
+    });
+    await new Promise<void>(resolve => server.listen(0,'127.0.0.1',resolve));
+    try {
+      const controller = new AbortController();
+      const wire = cloudWireUsage({apiKey:'test',signal:controller.signal});
+      const local = {...model,baseUrl:'http://127.0.0.1:'+ (server.address() as {port:number}).port+'/v1'};
+      const stream = wire.wrap(streamSimple(local,normalizeContext(context),wire.options));
+      for await (const event of stream) if(event.type==='text_delta') controller.abort();
+      expect((await stream.result()).usage.totalTokens).toBe(140);
+    } finally { server.closeAllConnections(); await new Promise<void>(resolve => server.close(()=>resolve())); }
+  });
+
+  it('bounds an unresponsive canceled transport and retains unknown usage', async () => {
+    vi.useFakeTimers();
+    try {
+      const controller = new AbortController(); let physicalAborted = false;
+      const wire = cloudWireUsage({fetch:(async (_input,init) => new Response(new ReadableStream({start(destination) {
+        init?.signal?.addEventListener('abort',()=>{physicalAborted=true;destination.error(new Error('grace expired'));});
+      }}))) as typeof fetch});
+      const response = await wire.options.fetch!('https://example.invalid', {signal:controller.signal});
+      controller.abort();
+      const canceled = response.body!.cancel();
+      await vi.advanceTimersByTimeAsync(14_999); expect(physicalAborted).toBe(false);
+      await vi.advanceTimersByTimeAsync(1); await canceled; await wire.settle();
+      expect(physicalAborted).toBe(true);
+    } finally { vi.useRealTimers(); }
+  });
+
 });

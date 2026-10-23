@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "registeredAt": "2026-10-23T12:52:55.774552+00:00",
+  "scope": "Bounded cancellation accounting including directly observed prompt/output components",
+  "hypothesis": "Final usage collected during the drain must replace SDK zero defaults for aborted total and observed input/output, while status remains aborted.",
+  "jobs": [
+    {
+      "id": "cancellation",
+      "kind": "cancellation",
+      "expected": 2
+    }
+  ],
+  "budget": {
+    "maxRequests": 2,
+    "maxWallMs": 180000
+  },
+  "gate": "Two first-delta aborted responses, raw total/input/output equal ledger and response; no more than17s drain; no source drift; pool idle.",
+  "candidateSourceHashes": {
+    "src/usage/cloud-wire.ts": "e1400c34529bad5781463872841c6aa485a7796d98493ea04ffaf2eec14bfec3",
+    "src/usage/recorder.ts": "2b565502a38e39bd191a8a1b6afed463a798e3b561c65f7e810b3424108b788b",
+    "src/providers/model-call.ts": "15160060ce1700c8733cded818c8251d9b7fe9a07ddbfbf18a2ea02bb42e299c",
+    "src/providers/extension-stream-bridge.ts": "d80042843fd2c14508205a690e8c1adc3b98c982f55eb97bfdc9c312e2780efe",
+    "scripts/verify-cloud-cancellation-live.mts": "965ee1cfc4cb977cb4aa896f4258e9de8d7950d3a568f60f7c2e377c38541dd4"
+  },
+  "independence": "Separate disclosed cancellation trial, does not certify general task quality.",
+  "priorBatch": "cancellation-drain-20261023"
+}

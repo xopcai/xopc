@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { continuesAfterTool } from '../recorder.js';
+import { cloudWireUsage } from '../cloud-wire.js';
+import type { AssistantMessage } from '@earendil-works/pi-ai/compat';
+import { vi } from 'vitest';
+import { continuesAfterTool, finishAiUsageFromMessage } from '../recorder.js';
 import { classifyCostSource } from '../cost.js';
 
 describe('AI usage recorder', () => {
@@ -14,4 +17,12 @@ describe('AI usage recorder', () => {
       { role: 'user' }, { role: 'assistant' }, { role: 'toolResult' }, { role: 'assistant' }, { role: 'user' },
     ])).toBe(false);
   });
+  it('does not persist the SDK zero default as observed usage for a canceled Cloud request', () => {
+    const finish = vi.fn();
+    const message = {stopReason:'aborted',usage:{input:0,output:0,totalTokens:0}} as AssistantMessage;
+    cloudWireUsage().apply(message);
+    finishAiUsageFromMessage({id:'test',run:fn=>fn(),finish},message);
+    expect(finish).toHaveBeenCalledWith(expect.objectContaining({status:'aborted',usage:undefined}));
+  });
+
 });

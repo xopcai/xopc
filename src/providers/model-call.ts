@@ -101,6 +101,7 @@ async function completeWithResolvedCredentialsInner(
     }
     const wire = model.provider === 'xopc-cloud' ? cloudWireUsage(resolvedOptions) : undefined;
     const result = await usageCall.run(() => completeSimple(model, context, wire?.options ?? resolvedOptions));
+    await wire?.settle();
     wire?.apply(result);
     if (result.errorMessage) reportCloudCreditError(result.errorMessage);
     finishAiUsageFromMessage(usageCall, result);

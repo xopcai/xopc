@@ -1,0 +1,53 @@
+{
+  "id": "personal-convergence-v1",
+  "concurrency": 2,
+  "maxWallMs": 900000,
+  "maxRequests": 110,
+  "modelOrigins": [
+    "https://router.xopc.ai"
+  ],
+  "pool": {
+    "generation": 3,
+    "judge": 1,
+    "parent": 3
+  },
+  "jobs": [
+    {
+      "id": "personal",
+      "timeoutMs": 780000,
+      "args": [
+        "--import",
+        "tsx",
+        "scripts/personal-repair-live-benchmark.mts",
+        "--configured-models",
+        "--rounds",
+        "1",
+        "--scenarios",
+        "mixed",
+        "--output-dir",
+        "{output}/personal"
+      ],
+      "evidence": [
+        {
+          "path": "{output}/personal/summary.json",
+          "kind": "delivery",
+          "benchmark": "personal-delivery",
+          "evidenceClass": "live_product",
+          "expected": 1
+        }
+      ]
+    },
+    {
+      "id": "cancellation",
+      "timeoutMs": 150000,
+      "args": [
+        "--import",
+        "tsx",
+        "scripts/verify-cloud-cancellation-live.mts",
+        "--configured-models",
+        "--output",
+        "{output}/cancellation"
+      ]
+    }
+  ]
+}

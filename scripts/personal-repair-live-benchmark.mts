@@ -23,7 +23,7 @@ const save = () => {
   const groups = Object.fromEntries(scenarios.map(scenario => { const group = trials.filter(trial => trial.scenario === scenario);
     return [scenario, { total: group.length, passed: group.filter(trial => trial.success).length }]; }));
   const hashes = new Set(trials.map(trial => JSON.stringify(trial.sourceHashes)).filter(value => value !== undefined));
-  const report = { schemaVersion: 1, suite: 'personal-delivery-live-repair', suiteVersion: adapter.endsWith('-v2.mts') ? 6 : 1, adapter, mode: 'real-model-isolated-gateway',
+  const report = { schemaVersion: 1, suite: 'personal-delivery-live-repair', suiteVersion: adapter.endsWith('-v2.mts') ? 7 : 1, adapter, mode: 'real-model-isolated-gateway',
     createdAt: new Date().toISOString(), requestedRounds: rounds, requestedScenarios: scenarios,
     total: trials.length, passed, failed: trials.length - passed, sourceVersions: hashes.size,
     sameSourceAcrossTrials: hashes.size === 1, groups,
