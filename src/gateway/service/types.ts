@@ -28,6 +28,8 @@ export interface GatewayChannelStartupPhase2Metrics {
 }
 
 export interface GatewayServiceConfig {
+  /** Embed a foreground-only Gateway without starting durable task dispatch. */
+  taskDispatchEnabled?: boolean;
   configPath?: string;
   /** CLI `--bind` override for startup security guards. */
   listenBind?: GatewayBindMode;

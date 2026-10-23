@@ -5,12 +5,14 @@ import { join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import { EvalStore, ArtifactStore } from '../../coder/packages/storage/src/index.js';
 import { TraceEmitter } from '../../coder/packages/protocol/src/index.js';
+import { freezeMemoryConfig } from './config-snapshot.mjs';
+import { scoreEpisode } from './score-episodes.mjs';
 import { provenanceCoverage } from './metrics.mjs';
 
 const { values } = parseArgs({ options: { fixtures: { type: 'string', default: '.xopc-evals/memory-fixtures-v1' },
   out: { type: 'string' }, model: { type: 'string', default: 'xopc-cloud/openai-codex/gpt-5.6-sol' },
   judge: { type: 'string', default: 'xopc-cloud/openai-codex/gpt-6.1-sol' },
-  suite: { type: 'string', default: 'all' }, limit: { type: 'string' }, 'dry-run': { type: 'boolean' } } });
+  suite: { type: 'string', default: 'all' }, limit: { type: 'string' }, 'dry-run': { type: 'boolean' }, 'config-snapshot': { type: 'string' }, endpoint: { type: 'string' }, label: { type: 'string', default: 'current' } } });
 if (!values.out || !['all', 'longmemeval', 'chinese'].includes(values.suite!)) throw new Error('Specify --out and valid --suite');
 const fixtures = resolve(values.fixtures!), out = resolve(values.out);
 if (existsSync(out)) throw new Error('Refusing to overwrite an existing run');
@@ -33,16 +35,16 @@ const sourceHash = () => {
   const paths = execFileSync('git', ['ls-files', '--cached', '--others', '--exclude-standard', 'src', 'packages', 'evals/personal/memory', 'evals/personal/style/request-pools.mts', 'evals/personal/style/request_pools.py', 'pnpm-lock.yaml'], { encoding: 'utf8' }).trim().split('\n');
   return sha(JSON.stringify([...new Set(paths)].sort().map(p => [p, sha(readFileSync(p))])));
 };
-const manifest = { version: 1, suite: 'personal-memory-baseline', createdAt: new Date().toISOString(),
+const manifest = { version: 2, variant: values.label, suite: 'personal-memory-baseline', createdAt: new Date().toISOString(),
   commit: execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(), sourceHash: sourceHash(),
   selectionHash: sha(selectionBytes), models: { candidate: values.model, extractor: values.model, judge: values.judge },
   reasoning: { candidate: 'off', extractor: 'off', judge: 'low' }, diagnosticVersion: 3,
   pools: { generation: 4, judge: 4, independent: true }, cases,
   protocol: 'Full history imported through SQLite transcript API; production runPersistentLearningJob; complete-state QA through authenticated Personal Gateway/realtime. No gold in candidate worker. Fresh isolated DB per question.',
-  limitations: ['Current XOPC only; no no-memory/oracle comparison in this first capture',
+  limitations: ['Paired source-frozen product comparison when labels A/B are supplied; no no-memory/oracle condition',
     'Forced learning flush measures completed-state quality, not natural learning latency',
     'Historical question timestamp is explicit user context; host wall clock stays real',
-    'History rows keep original roles/dates; no new assistant answers are generated',
+    'Imported history rows keep original roles/dates; live controls generate and learn actual foreground replies',
     'Inference errors are retained; internal production schema correction remains enabled',
     'Model routing aliases do not pin underlying provider weights',
     'Stage attribution is evidence-checked diagnostic judgment, not proof of the exact internal cause'] };
@@ -50,14 +52,18 @@ const save = (name: string, data: any) => writeFileSync(join(out, name), JSON.st
 save('manifest.json', manifest);
 if (values['dry-run']) { console.log(JSON.stringify({ out, cases: cases.length, ...manifest.models })); process.exit(0); }
 
+const frozenConfig = freezeMemoryConfig(values['config-snapshot']);
+Object.assign(manifest, { protocolVersion: 2, configSnapshotHash: frozenConfig.hash, physicalRequestPools: true, liveEvidenceIncluded: true, autonomousBackground: 'task dispatch disabled by host option; home disabled; memory scheduler stopped', isolatedDefaultWorkspace: true, judgeServiceRetries: { maximum: 2, onlyEmptyTransportErrors: true, candidateRegeneration: false } });
+save('manifest.json', manifest);
 const poolDir = join(out, 'pools');
-const pool = spawn('python3', ['evals/personal/style/request_pools.py', '--out', poolDir], { stdio: ['ignore', 'ignore', 'inherit'] });
-for (let i = 0; !existsSync(join(poolDir, 'endpoint.json')); i++) {
-  if (i > 200 || pool.exitCode !== null) throw new Error('Request pool startup failed');
+const pool = values.endpoint ? undefined : spawn('python3', ['evals/personal/style/request_pools.py', '--out', poolDir], { stdio: ['ignore', 'ignore', 'inherit'] });
+const endpointFile = values.endpoint ? resolve(values.endpoint) : join(poolDir, 'endpoint.json');
+for (let i = 0; !existsSync(endpointFile); i++) {
+  if (i > 200 || (pool && pool.exitCode !== null)) throw new Error('Request pool startup failed');
   await new Promise(r => setTimeout(r, 100));
 }
-const endpoint = JSON.parse(readFileSync(join(poolDir, 'endpoint.json'), 'utf8'));
-const environment = { ...process.env, XOPC_STYLE_POOL_URL: endpoint.url, XOPC_STYLE_POOL_TOKEN: endpoint.token };
+const endpoint = JSON.parse(readFileSync(endpointFile, 'utf8'));
+const environment = { ...process.env, XOPC_MEMORY_VARIANT: values.label, XOPC_MEMORY_CONFIG_SNAPSHOT: frozenConfig.path, XOPC_MEMORY_CONFIG_HASH: frozenConfig.hash, XOPC_STYLE_POOL_URL: endpoint.url, XOPC_STYLE_POOL_TOKEN: endpoint.token };
 class Queue {
   active = 0; pending: Array<() => void> = [];
   async run<T>(action: () => Promise<T>): Promise<T> {
@@ -117,12 +123,46 @@ try {
       result.provenance = provenanceCoverage(gold.evidenceRefs, learning, captured.auditItems, captured.toolText);
       const sourceEvidence = publicCase.sessions.flatMap((s: any) => s.messages.filter((m: any) => gold.evidenceRefs.includes(m.id)));
       const sourceContext = publicCase.sessions.filter((s: any) => gold.evidenceSessionIds.includes(s.id));
+      const liveFile = join(dir, 'capture/live-control.json');
+      const live = existsSync(liveFile) ? JSON.parse(readFileSync(liveFile, 'utf8')) : null;
+      for (const [index, turn] of (live?.liveReceipts ?? []).entries()) {
+        const messages = turn.transcript.map((row: any) => ({ id: row.entry_id, role: row.role, content: JSON.parse(row.payload_json), timestamp: row.created_at }));
+        sourceContext.push({ id: `actual-live-${index}`, messages });
+        sourceEvidence.push(...messages.filter((row: any) => row.role === 'user'));
+      }
+      const protocol = JSON.parse(readFileSync(join(dir, 'capture/protocol-audit.json'), 'utf8'));
+      if (!protocol.valid) throw new Error('Capture protocol audit failed');
+      if (gold.episode) {
+        result.episode = scoreEpisode(gold.episode, join(dir, 'capture'));
+        save(`cases/${item.id}/episode-checks.json`, result.episode);
+      }
       const gradeInput = { id: item.id, query: publicCase.query, queryTime: publicCase.queryTime, gold,
         sourceEvidence, sourceContext, answer: captured.answer, storedText: captured.storedText, selectedText: captured.selectedText,
-        toolText: captured.toolText, learningErrors: captured.learningErrors, diagnosticsTruncated: false };
+        toolText: captured.toolText, learningErrors: captured.learningErrors, diagnosticsTruncated: false, liveEvidence: live };
       const gradePath = join(dir, 'judge-input.json'); writeFileSync(gradePath, JSON.stringify(gradeInput));
-      await judge.run(() => worker('judge', gradePath, join(dir, 'judge')));
-      result.judgment = JSON.parse(readFileSync(join(dir, 'judge/result.json'), 'utf8'));
+      let judgeDir = join(dir, 'judge');
+      result.judgeAttempts = [];
+      await judge.run(async () => {
+        for (let attempt = 0; ; attempt++) {
+          judgeDir = join(dir, attempt ? `judge-service-retry-${attempt}` : 'judge');
+          try {
+            await worker('judge', gradePath, judgeDir);
+            result.judgeAttempts.push({ directory: judgeDir, status: 'completed' });
+            break;
+          } catch (error) {
+            result.judgeAttempts.push({ directory: judgeDir, status: 'error', error: String(error) });
+            const rawFile = join(judgeDir, 'raw.json');
+            const raw = existsSync(rawFile) ? JSON.parse(readFileSync(rawFile, 'utf8')) : null;
+            if (attempt >= 2 || !raw || String(raw.raw ?? '').trim()
+              || !/overload|rate.?limit|429|timed?\s*out|timeout|provider_error|502|503/iu.test(raw.error ?? '')) throw error;
+            await new Promise(resolve => setTimeout(resolve, 10_000));
+          }
+        }
+      });
+      result.judgeSelected = judgeDir;
+      const judgeProtocol = JSON.parse(readFileSync(join(judgeDir, 'protocol-audit.json'), 'utf8'));
+      if (!judgeProtocol.valid) throw new Error('Judge protocol audit failed');
+      result.judgment = JSON.parse(readFileSync(join(judgeDir, 'result.json'), 'utf8'));
       await trace.emit('model.response', { role: 'judge', ...result.judgment });
       const artifact = artifacts.putText(runId, 'memory-result', JSON.stringify(result), 'application/json'); store.recordArtifact(artifact);
       store.recordGrade(runId, { graderIndex: 0, graderType: 'external_model_judge', category: 'quality', required: true,
@@ -146,5 +186,5 @@ try {
 } finally {
   const status = await fetch(endpoint.url+'/status', { method: 'POST', headers: { Authorization: `Bearer ${endpoint.token}`, 'Content-Type': 'application/json' }, body: '{}' });
   save('pool-status.json', await status.json());
-  pool.kill('SIGINT'); store.close();
+  pool?.kill('SIGINT'); store.close(); frozenConfig.close();
 }

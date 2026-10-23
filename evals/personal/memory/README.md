@@ -2,7 +2,7 @@
 
 This evaluation-only adapter imports timestamped histories into isolated SQLite transcripts,
 uses the checked-out production `runPersistentLearningJob`, and asks a fresh Personal session
-through the authenticated Gateway/realtime interface. The adapter does not patch product behavior;
+through the authenticated Gateway/realtime interface. The adapter preserves the checked-out memory algorithms;
 product changes under evaluation must be frozen with their source fingerprint and lockfile.
 No existing history, memory, project files or connected-source business data are copied. Shared credentials
 and OAuth refresh locks are reused; copied configuration is temporary and removed at shutdown.
@@ -70,16 +70,21 @@ unchanged. Current XOPC only is captured; no-memory, raw-transcript and oracle v
 future comparison tracks. Synthetic project names test semantic separation, not real project
 ACL isolation. Deletion probes test natural forget requests, not a direct UI deletion guarantee.
 
-The supervisor has separate generation=4 and judge=4 queues. All extraction jobs and Personal
-turns acquire the shared generation pool; judges acquire only the shared judge pool. Completed
-captures are judged immediately while other captures continue. Transport overload halves the
-affected shared pool's target, with a floor of one. A single case's history remains sequential.
-Production schema-format correction calls remain inside its generation lease. Other auxiliary
-calls during a Personal turn share its lease; no detached evaluator requests bypass the pools.
-This caps outer leases, not each physical RPC launched by production tools. Audit auxiliary
-operations, background model aliases, and calls that outlive the turn separately; canceled
-requests with zero reported tokens do not prove zero server-side cost. An asynchronous task
-handoff is not a completed recommendation in this single-turn QA protocol.
+The supervisor has separate case-admission queues. Protocol v2 independently leases every
+physical model HTTP request from shared generation=4 / judge=4 pools, including extraction,
+schema repair and tool-internal calls. A streaming response keeps its lease until EOF/cancel.
+Different variants share one pool endpoint. No outer turn holds a second generation lease.
+Pool overload adaptation remains enabled. `request-protocol.test.mts` exercises actual streaming
+concurrency, cleanup and foreign-model blocking. `model-requests.jsonl` and `protocol-audit.json`
+reconcile physical calls with successful production usage rows; canceled and failed calls remain.
+
+Before capture, config/defaults are frozen once in a private temporary snapshot. `--config-snapshot`
+reuses it across A/B; `--endpoint` reuses their pool. The manifest records only its SHA-256, never
+credentials. All model intents use the declared candidate; unexpected model bodies are blocked.
+Unrelated autonomous Home/task dispatchers and the learning scheduler are stopped in this
+completed-state track. Foreground tools and internal repair remain production code. Resolved
+provider weights are not available from routing aliases; requested thinking and actual request
+reasoning are separately recorded, not assumed equal. Async handoff is not final QA delivery.
 
 ## Results and attribution
 
@@ -224,3 +229,61 @@ write policy, drains learning after each, then asks fresh QA under the standard 
 protocol. Inspect each `live-control.json` knowledge/suppression receipt and the actual live
 answer; unchanged state during write-denied QA alone cannot establish non-restoration in
 ordinary chat. This is a public development control, not an unseen acceptance set.
+
+## Protocol-v2 writable P0 episodes and staged comparison
+
+`prepare-episodes.py --out NEW_DIR` freezes eight development worlds and eight validation worlds
+with different event structures. They are separate from the original 184 fixtures. Each world has
+four checkpoint gates; worlds, not checkpoints, are the independent units. Live turns are writable,
+learning is drained after each turn, same-chat ordinary queries follow the authorized read, and
+fresh QA follows a Gateway/database restart. `initial-learning.json` is the positive admission
+witness. `live-control.json` preserves actual roles/tools/actions and is included in judge evidence.
+
+`score-episodes.mts` runs only in the parent with gold. It checks active facts, retained non-target
+facts, successful single-turn reread, and actual model input payloads on ordinary turns. Original
+at-rest audit provenance may retain source values; ordinary LLM-visible provenance may not.
+A polite final answer cannot erase an earlier input leak. A fact never admitted cannot pass the
+forget checkpoint. Quote-only deletion is a separate negative control. Regex-based checks are
+synthetic-field diagnostics, with semantic QA judged separately; they are not a general DLP proof.
+
+`run-p0-stages.mts --a BASE_WORKTREE --b CANDIDATE_WORKTREE --episodes NEW_DIR
+--fixtures ORIGINAL_184_DIR --out NEW_RUN` requires identical A/B evaluator bytes and lockfiles,
+freezes one config, and shares one physical 4+4 endpoint throughout. Development A/B precedes
+candidate freeze and B-only independent validation. Only all eight B worlds passing all gates and
+QA can unlock full184 A/B and native grading. Failure leaves raw artifacts and stops the expensive
+stage. No candidate output is regenerated to improve score. Any analyzed validation failure loses
+its unseen status. Source edits during capture invalidate that run.
+
+The episode fixture generator currently defaults to v3. Exploratory v1/v2 runs are retained:
+v1 had a broad unnamed-other query, an overbroad gold restriction, and a question-time collision;
+v2 named both activities and separated the fields. V3 also changes held-out structures (two
+real corrections, repeated single-turn permission, and fenced quoted deletion). The checkpoint
+validator v2 normalizes English month dates before both admission/read and disclosure checks.
+`revalidate-episodes.mts --run RUN --fixtures FIXTURES --out NEW_DIR` applies that validator to
+saved payloads with zero model calls, preserving the original scores. This is a versioned
+measurement correction, not a fresh candidate run or a hidden replacement of low grades.
+
+The protocol-v2 runner retries only empty judge transport/service failures, at most twice,
+into separate `judge-service-retry-N` folders. It records every attempt and the first valid
+selected judgment; valid low grades and all candidate outputs are never resampled. The
+revalidator follows this recorded selection. A/B capture fixtures and all final answer bytes
+remain unchanged by retries and analysis.
+
+The completed-state host uses `GatewayService({ taskDispatchEnabled:false })`, with the same
+lifecycle option applied to both variants. It prevents lazy dispatchers from starting after a
+foreground task submission; ordinary product Gateways keep dispatch enabled by default.
+Home is disabled only in temporary evaluation config, the learning timer is stopped, and the
+default Agent workspace is isolated. Foreground submissions still persist, but queued work is
+not final delivery. Any successful task-allocation or Home model call invalidates this track.
+
+The 2026-10-23 v6 holdout stopped at QA 7/8 despite all P0 checkpoints passing. Do not run the
+expensive original184 on the strength of checkpoint scores alone. A zero-model query replay
+matched the original query hash and showed that the evaluator time prefix plus host timestamp
+exhausted the first32 FTS terms before the second event name. Raw grades remain unchanged.
+`reproduce-query-selection.mts --run CLOSED_RUN --fixtures FIXTURES --case ID --out NEW_JSON`
+compares the stored wire/author query, evaluator wrapper, and plain query on a disposable DB.
+Run it from the intended frozen source checkout; network is forbidden and usage must not grow.
+The next protocol should keep historical question time visible to the model separately from
+retrieval input. The consumed validation worlds are development regressions after diagnosis;
+a revised protocol needs newly sealed validation before full184. No runtime alteration was made
+after opening this holdout to turn the failed case into a pass.

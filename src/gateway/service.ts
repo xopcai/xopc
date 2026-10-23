@@ -971,7 +971,7 @@ export class GatewayService {
   });
 
   dispatchTaskRuns(): void {
-    if (this.stopping) return;
+    if (this.stopping || this.serviceConfig.taskDispatchEnabled === false) return;
     this.taskAllocationDispatcher ??= new TaskAllocationDispatcher({
       context: conversationId => ({
         ownAgentId: getSessionMetadata(conversationId)?.agentId ?? '',
@@ -1355,9 +1355,13 @@ export class GatewayService {
     this.createNotificationService().start();
     this.startTime = Date.now();
     this.running = true;
-    this.stopTaskResultQueued = onTaskResultQueued(() => this.taskResultDispatch());
-    this.taskRunDispatchTimer = setInterval(() => this.dispatchTaskRuns(), 1_000);
-    this.taskRunDispatchTimer.unref?.();
+    this.stopTaskResultQueued = onTaskResultQueued(() => {
+      if (this.serviceConfig.taskDispatchEnabled !== false) this.taskResultDispatch();
+    });
+    if (this.serviceConfig.taskDispatchEnabled !== false) {
+      this.taskRunDispatchTimer = setInterval(() => this.dispatchTaskRuns(), 1_000);
+      this.taskRunDispatchTimer.unref?.();
+    }
     this.startupTrace = createGatewayStartupTrace();
     this.readiness.markStarting(this.startTime);
     const trace = this.startupTrace;
