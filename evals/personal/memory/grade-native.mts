@@ -28,7 +28,7 @@ const endpoint = JSON.parse(readFileSync(values.endpoint ?? join(run, 'pools/end
 process.env.XOPC_STYLE_POOL_URL = endpoint.url; process.env.XOPC_STYLE_POOL_TOKEN = endpoint.token;
 const originState = process.env.XOPC_STATE_DIR ?? join(homedir(), '.xopc');
 const credentials = process.env.XOPC_CREDENTIALS_DIR ?? join(originState, 'credentials');
-const config = JSON.parse(readFileSync(process.env.XOPC_CONFIG_PATH ?? join(originState, 'xopc.json'), 'utf8'));
+const config = process.env.XOPC_MEMORY_CONFIG_SNAPSHOT ? JSON.parse(readFileSync(process.env.XOPC_MEMORY_CONFIG_SNAPSHOT, 'utf8')).config : JSON.parse(readFileSync(process.env.XOPC_CONFIG_PATH ?? join(originState, 'xopc.json'), 'utf8'));
 const state = mkdtempSync(join(tmpdir(), 'xopc-memory-native-'));
 const configPath = join(state, 'xopc.json'); writeFileSync(configPath, JSON.stringify(config), { mode: 0o600 });
 if (existsSync(join(originState, 'cache/model-catalog'))) cpSync(join(originState, 'cache/model-catalog'), join(state, 'cache/model-catalog'), { recursive: true });
@@ -40,7 +40,8 @@ const { openXopcDatabase, closeXopcDatabase } = await load('src/storage/sqlite/i
 const { AgentCatalogRepository } = await load('src/agent-catalog/repository.ts');
 const { resolveModel } = await load('src/providers/index.ts');
 const { completeWithResolvedCredentials } = await load('src/providers/model-call.ts');
-const { withSharedPool } = await load('evals/personal/style/request-pools.mts');
+const { installRequestProtocol } = await load('evals/personal/memory/request-protocol.mts');
+const requestProtocol = installRequestProtocol({ out, expectedModel: values.model!, pool: 'judge', caseId: 'native-qa', phase: () => 'native_qa' });
 openXopcDatabase({ path: join(out, 'usage.sqlite') });
 const catalog = new AgentCatalogRepository(); catalog.ensureInitialized(); catalog.markProvisioned('main');
 const resolved = resolveModel(values.model!);
@@ -77,7 +78,7 @@ async function grade(item: any) {
     const prompt = formatted.stdout.trimEnd();
     const dir = join(out, item.id); mkdirSync(dir);
     writeFileSync(join(dir, 'prompt.txt'), prompt);
-    const response = await withSharedPool('judge', { caseId: item.id, phase: 'native_qa' }, () => completeWithResolvedCredentials(resolved,
+    const response = await completeWithResolvedCredentials(resolved,
       { messages: [{ role: 'user', content: prompt, timestamp: Date.now() }] },
       { maxTokens: 512, reasoning: 'low', temperature: 0, signal: AbortSignal.timeout(240_000) }, undefined,
       { operation: 'memory_eval.native_qa', trigger: 'user' }).then(response => {
@@ -87,7 +88,7 @@ async function grade(item: any) {
           throw new Error(response.errorMessage);
         }
         return response;
-      }));
+      });
     const raw = response.content.filter((c: any) => c.type === 'text').map((c: any) => c.text).join('\n').trim();
     writeFileSync(join(dir, 'raw.json'), JSON.stringify({ raw, usage: response.usage, error: response.errorMessage }, null, 2));
     if (response.errorMessage || !/^(yes|no)[.!]?$/i.test(raw)) throw new Error(response.errorMessage ?? 'Invalid native yes/no judgment');
@@ -118,6 +119,6 @@ try {
   save('completion.json', { completed: results.length, target: targets.length, errors: results.filter(r => r.error).length,
     finishedAt: new Date().toISOString() });
 } finally {
-  closeXopcDatabase(); rmSync(state, { recursive: true, force: true });
+  await requestProtocol.close(); closeXopcDatabase(); rmSync(state, { recursive: true, force: true });
 }
 process.exit(results.some(r => r.error) ? 1 : 0);

@@ -1,21 +1,27 @@
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync, realpathSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import { attribution, validateJudgment } from './scoring.mjs';
 const { values } = parseArgs({ options: { run: { type:'string' }, out: { type:'string' }, 'judge-retries': { type:'string' } } });
-const run=resolve(values.run!), out=resolve(values.out!);
+const run=realpathSync(resolve(values.run!)), out=resolve(values.out!);
 if(existsSync(out)) throw new Error('Refusing existing revalidation output');
 mkdirSync(out,{recursive:true});
 const sha=(value:string|Buffer)=>createHash('sha256').update(value).digest('hex');
 const read=(path:string)=>JSON.parse(readFileSync(path,'utf8'));
 const original=read(join(run,'summary.json')), captureManifest=read(join(run,'manifest.json'));
 const results:any[]=[], receipts:any[]=[], recovered:string[]=[], newErrors:string[]=[];
-const retryRoot=values['judge-retries']?resolve(values['judge-retries']):undefined;
+const retryRoot=values['judge-retries']?realpathSync(resolve(values['judge-retries'])):undefined;
 const retries=retryRoot?read(join(retryRoot,'summary.json')).results:[];
 for(const old of original.results){
  const row=structuredClone(old), dir=join(run,'cases',old.id);
  let rawPath=join(dir,'judge/raw.json');
+ if(old.judgeSelected){
+  const selected=realpathSync(resolve(old.judgeSelected));
+  if(selected!==join(dir,'judge')&&!/^judge-service-retry-[12]$/.test(selected.slice(dir.length+1)))throw new Error('Invalid recorded service retry directory');
+  if(!selected.startsWith(dir+'/'))throw new Error('Recorded judge belongs to another case');
+  rawPath=join(selected,'raw.json');
+ }
  const receipt:any={id:old.id,originalError:old.error??null};
  try{
   const retry=retries.find((r:any)=>r.id===old.id&&r.resolved);
@@ -23,7 +29,7 @@ for(const old of original.results){
    const originalRaw=read(rawPath);
    if(old.judgment||!old.error||originalRaw.raw?.trim()||!/overload|rate.?limit|429|timed?\s*out|timeout|provider_error|502|503/i.test(originalRaw.error??''))throw new Error('Ineligible judge retry');
    if(retry.originalRawHash!==sha(readFileSync(rawPath))||retry.inputHash!==sha(readFileSync(join(dir,'judge-input.json')))||retry.captureHash!==sha(readFileSync(join(dir,'capture/result.json'))))throw new Error('Retry input provenance mismatch');
-   const selected=resolve(retry.selected);
+   const selected=realpathSync(resolve(retry.selected));
    if(!selected.startsWith(join(retryRoot!,'cases',old.id)+'/'))throw new Error('Retry output belongs to another case');
    receipt.originalRawJudgeHash=sha(readFileSync(rawPath));rawPath=join(selected,'raw.json');receipt.usedJudgeServiceRetry=true;
   }
