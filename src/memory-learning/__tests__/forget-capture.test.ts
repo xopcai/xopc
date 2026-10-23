@@ -6,7 +6,7 @@ import { writeKnowledgeItem, listKnowledgeItems } from '../../knowledge-memory/i
 import { getSqliteDatabase } from '../../storage/sqlite/transaction.js';
 import { listCollaborationRules } from '../../storage/sqlite/collaboration-rule-repository.js';
 import { parseUserModelInterpretation } from '../../user-model/capture/semantic.js';
-import { projectForgottenHistoryMessages } from '../forgotten-history.js';
+import { projectUnadmittedForgottenFields, projectForgottenHistoryMessages } from '../forgotten-history.js';
 import { isUnquotedOwnerEvidence } from '../owner-directive.js';
 import { applyKnowledgeDeletions } from '../forget-capture.js';
 
@@ -26,6 +26,17 @@ function parse(ids: string[], role: 'user' | 'assistant' = 'user', quote = text,
 describe('grounded knowledge forgetting', () => {
   beforeEach(() => { resetXopcDatabaseSingletonForTest(); openXopcDatabase({ path: ':memory:' }); });
   afterEach(() => { closeXopcDatabase(); resetXopcDatabaseSingletonForTest(); });
+  it('registers an owner-grounded boundary even when no derived target was ever admitted', () => {
+    const interpretation = parse([]);
+    const operation = { targetKnowledgeIds: [], reread: { subject: '木星项目', property: 'date_time' }, boundary: '不要保存或主动披露木星项目日期。', evidence: [{ ref: 'command', quote: text }], selfContained: true, unresolvedReferences: [] };
+    const parsed = parseUserModelInterpretation(JSON.stringify({ intent: 'forget', assertions: [], knowledgeDeletions: [operation], targetAssertionIds: [] }), evidence, [], undefined, [])!;
+    expect(parsed.knowledgeDeletions).toHaveLength(1);
+    applyKnowledgeDeletions({ interpretation: parsed, evidence, context, allowedTargetIds: [] });
+    expect(listCollaborationRules()).toHaveLength(1);
+    expect(projectUnadmittedForgottenFields('木星项目11月2日发布，负责人林青。', context)).not.toContain('11月2日');
+    expect(projectUnadmittedForgottenFields('木星项目11月2日发布，负责人林青。', context)).toContain('负责人林青');
+    expect(interpretation.knowledgeDeletions).toEqual([]);
+  });
   it('removes old and corrected dates, suppresses relearning, retains the owner and value-free boundary', () => {
     const old = seed('木星项目计划11月2日发布。', 'jupiter.release.old');
     const current = seed('木星项目更正为11月6日发布。', 'jupiter.release.current');

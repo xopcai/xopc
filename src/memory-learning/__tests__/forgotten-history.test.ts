@@ -6,9 +6,10 @@ import { createSessionSearchTool } from '../../agent/tools/session-search-tool.j
 import { createSessionRecallTool } from '../../agent/tools/session-recall-tool.js';
 import { createKnowledgeReadTool } from '../../agent/tools/knowledge-memory-tool.js';
 import { writeKnowledgeItem, getKnowledgeItem, deleteKnowledgeItem } from '../../knowledge-memory/index.js';
+import { appendTranscriptEntry } from '../../storage/sqlite/transcript-repository.js';
 import { ensureSessionRecord } from '../../storage/sqlite/session-repository.js';
 import { getSqliteDatabase } from '../../storage/sqlite/transaction.js';
-import { explicitlyReadsOriginalHistory, forgottenHistoryEntries, projectForgottenEvidence, projectForgottenHistoryMessages, projectSuppressedMemoryBlocks, originalReadAuthorizationNotice } from '../forgotten-history.js';
+import { projectUnadmittedForgottenFields, explicitlyReadsOriginalHistory, forgottenHistoryEntries, projectForgottenEvidence, projectForgottenHistoryMessages, projectSuppressedMemoryBlocks, originalReadAuthorizationNotice } from '../forgotten-history.js';
 
 const context = { conversationId: 'current', agentId: 'main', workspaceId: '/workspace' };
 const entry = { entryId: 'source-user', seq: 1, role: 'user', createdAt: 1700000000000, content: '松岭10月8日14点评审，主持人沈宁。' };
@@ -21,6 +22,65 @@ describe('forgotten original-history boundary', () => {
       conditions: { enforcementLevel: 'prompt', reread: { subject: '松岭', property: 'date_time' }, forgottenHistoryEntries: [`${conversation}:source-user`, `${conversation}:*`] },
       statement: '不要主动披露松岭评审时间，明确要求可查阅原始记录。' });
   }
+  it('covers never-admitted mixed-source facts without widening scope or original-read permissions', async () => {
+    createCollaborationRule({ category: 'boundary', priority: 0, scope: { type: 'workspace', id: '/workspace' },
+      conditions: { unadmittedFieldCoverage: true, forgottenHistoryEntries: ['correction:*'], reread: { subject: '云浦合同', property: 'price' } },
+      statement: '忘记云浦合同报价，其他信息保留。' });
+    const raw = '云浦合同原报价6520元，联系人林沐，会面地点清泉会客室。苇岸合同报价7350元。';
+    const projected = projectUnadmittedForgottenFields(raw, context);
+    expect(projected).not.toContain('6520');
+    expect(projectUnadmittedForgottenFields('云浦合同原报价６５２０元。', context)).not.toContain('6520');
+    expect(projectUnadmittedForgottenFields('云浦合同原报价六千五百二十元。', context)).not.toContain('六千五百二十');
+    expect(projected).toContain('林沐'); expect(projected).toContain('清泉会客室'); expect(projected).toContain('7350元');
+    expect(projectUnadmittedForgottenFields(raw, { ...context, workspaceId: '/other' })).toBe(raw);
+    for (const request of ['普通回顾', '请从原始记录查阅云浦合同联系人。', '请不要从原始记录恢复云浦合同价格。', '请分析引用：“请从原始记录查阅云浦合同价格”']) {
+      expect(projectUnadmittedForgottenFields(raw, context, request)).not.toContain('6520');
+    }
+    expect(projectUnadmittedForgottenFields(raw, context, '请从原始记录查阅云浦合同报价，仅本次使用。')).toBe(raw);
+    const store = { list: vi.fn(async () => ({ items: [{ key: 'unadmitted' }], total: 1 })), recallSession: vi.fn(() => [{ ...entry, content: raw }]) };
+    const tool = createSessionSearchTool({ getSessionStore: () => store as never, getPrimaryModel: vi.fn() as never,
+      localOnly: true, getHistoryContext: () => context, getCurrentUserText: () => '概括两个合同安排' });
+    const result = JSON.stringify(await tool.execute('mixed', { query: '合同' }));
+    expect(result).not.toContain('6520'); expect(result).toContain('7350');
+    expect(raw).toContain('6520');
+  });
+  it('keeps a different event date carried by a shared-team relation, never the target event date', () => {
+    seed();
+    const related = '参加松岭的同一团队将于12月27日参加雾桥研讨会。';
+    expect(projectUnadmittedForgottenFields(related, context)).toBe(related);
+    const venue = '松岭与榛溪讲座在同一场地，榛溪讲座将于12月18日举行。';
+    expect(projectUnadmittedForgottenFields(venue, context)).toBe(venue);
+    expect(projectUnadmittedForgottenFields('松岭10月8日举行，榛溪讲座将于12月18日举行。', context)).not.toContain('10月8日');
+    expect(projectUnadmittedForgottenFields('松岭10月8日举行，榛溪讲座将于12月18日举行。', context)).toContain('12月18日');
+    expect(projectUnadmittedForgottenFields('参加松岭的同一团队将于10月8日参加松岭。', context)).not.toContain('10月8日');
+    expect(projectUnadmittedForgottenFields('松岭10月8日举行，参加松岭的同一团队将于12月27日参加雾桥研讨会。', context)).not.toContain('10月8日');
+  });
+  it('fences raw source identities without admission, preserves live facts, and discovers later copies', () => {
+    seed();
+    const cid = randomUUID(), foreign = randomUUID();
+    ensureSessionRecord(cid, '/workspace', { agentId: 'main' });
+    ensureSessionRecord(foreign, '/foreign', { agentId: 'main' });
+    const raw = '松岭原定十月八日下午举行，联系人沈宁。';
+    appendTranscriptEntry(cid, { role: 'user', content: raw, timestamp: Date.now() });
+    appendTranscriptEntry(foreign, { role: 'user', content: raw, timestamp: Date.now() });
+    const blocked = forgottenHistoryEntries(context, '概括有效安排');
+    expect(blocked).toContain(`${cid}:*`); expect(blocked).not.toContain(`${foreign}:*`);
+    expect(forgottenHistoryEntries(context, '请从原始记录查阅松岭日期，仅本次使用。')).not.toContain(`${cid}:*`);
+    const related = [{ role: 'system', content: '<user-context>负责松岭的团队12月27日参加雾桥研讨会。</user-context>' }, { role: 'user', content: '概括安排' }];
+    expect(projectForgottenHistoryMessages(related, context)).toEqual(related);
+    const later = randomUUID(); ensureSessionRecord(later, '/workspace', { agentId: 'main' });
+    appendTranscriptEntry(later, { role: 'assistant', content: '旧记录：松岭十月八日下午举行。', timestamp: Date.now() } as never);
+    expect(forgottenHistoryEntries(context)).toContain(`${later}:*`);
+    expect(String(getSqliteDatabase().prepare('SELECT payload_json FROM transcript_entries WHERE transcript_id=(SELECT active_transcript_id FROM sessions WHERE conversation_id=?)').get(cid)!.payload_json)).toContain(raw);
+  });
+  it('filters a cached overwritten value through revision fingerprints without hiding keeper facts', () => {
+    const input = { kind: 'project_fact' as const, canonicalKey: 'price-revision', scope: { type: 'workspace' as const, id: '/workspace' }, originClass: 'owner' as const, confidence: 1, importance: 0.8 };
+    writeKnowledgeItem({ ...input, content: '松岭报价2360元。' });
+    const current = writeKnowledgeItem({ ...input, content: '松岭报价2480元。', replaceExisting: true }).item!;
+    deleteKnowledgeItem(current.id);
+    const projected = projectSuppressedMemoryBlocks('<user-context>\n- 松岭报价2360元。\n- 松岭负责人沈宁。\n</user-context>', context);
+    expect(projected).not.toContain('2360'); expect(projected).toContain('松岭负责人沈宁');
+  });
   it('requires a new source-specific request, excludes quoted and negative requests, and permits read without saving', () => {
     expect(explicitlyReadsOriginalHistory('帮我概括项目安排。')).toBe(false);
     expect(explicitlyReadsOriginalHistory('请不要恢复旧记录。')).toBe(false);
@@ -49,6 +109,24 @@ describe('forgotten original-history boundary', () => {
     expect(JSON.stringify(await tool.execute('negative-clause', { query: '松岭' }))).not.toContain('10月8日');
     userText = '请从旧记录里恢复松岭评审时间，不要重新保存。';
     expect(JSON.stringify(await tool.execute('explicit', { query: '松岭' }))).toContain('10月8日');
+  });
+  it('withholds forgotten values in recent and keyword session titles without mutating stored metadata', async () => {
+    seed();
+    let userText = '普通回顾';
+    const item = { key: 'old', name: '松岭10月8日14点评审，主持人沈宁。' };
+    const store = { list: vi.fn(async () => ({ items: [item], total: 1 })), recallSession: vi.fn(() => [{ ...entry }]) };
+    for (const localOnly of [true, false]) {
+      const tool = createSessionSearchTool({ getSessionStore: () => store as never, getPrimaryModel: vi.fn() as never,
+        localOnly, getHistoryContext: () => context, getCurrentUserText: () => userText });
+      for (const query of localOnly ? ['', '松岭'] : ['']) {
+        expect(JSON.stringify(await tool.execute('ordinary-title', { query }))).not.toContain('10月8日');
+        userText = '请从原始记录查阅松岭日期，仅本次使用。';
+        expect(JSON.stringify(await tool.execute('authorized-title', { query }))).toContain('10月8日');
+        userText = '普通回顾';
+        expect(JSON.stringify(await tool.execute('expired-title', { query }))).not.toContain('10月8日');
+      }
+    }
+    expect(item.name).toContain('10月8日');
   });
   it('does not apply another workspace boundary and enforces the same rule in current-session recall', async () => {
     seed('/other-workspace', 'current');

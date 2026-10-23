@@ -57,20 +57,22 @@ export function applyKnowledgeDeletions(input: {
               WHERE r.knowledge_id=?))`)
         .all(item.id, item.id) as Array<{ conversation_id: string; message_id: string }>).flatMap(entry =>
           [`${entry.conversation_id}:${entry.message_id}`, `${entry.conversation_id}:*`]))
-        .concat(targets.length && input.context.conversationId ? [`${input.context.conversationId}:*`] : []);
+        .concat((targets.length || (!operation.targetKnowledgeIds.length && operation.reread)) && input.context.conversationId ? [`${input.context.conversationId}:*`] : []);
       for (const item of targets) {
         deleteKnowledgeItem(item.id, Date.now(), { includeRelated: false });
         outputs.push({ candidateKey: item.id, objectType: 'knowledge', objectId: item.id, outcome: 'rejected' });
       }
       // Retain the disclosure boundary, never the deleted values. Original transcripts stay intact.
-      for (const scope of new Map(targets.map(item => [JSON.stringify(item.scope), item.scope])).values()) {
+      const scopes = targets.map(item => item.scope);
+      if (!operation.targetKnowledgeIds.length && operation.reread && input.context.workspaceId) scopes.push(input.context.projectId ? { type: 'project', id: input.context.projectId } : { type: 'workspace', id: input.context.workspaceId });
+      for (const scope of new Map(scopes.map(scope => [JSON.stringify(scope), scope])).values()) {
         if (scope.type === 'agent') continue;
         const exists = listCollaborationRules().some(rule => rule.category === 'boundary' && rule.status === 'active'
           && JSON.stringify(rule.scope) === JSON.stringify(scope) && rule.statement === operation.boundary
           && forgottenEntries.every(entry => Array.isArray(rule.conditions.forgottenHistoryEntries)
             && rule.conditions.forgottenHistoryEntries.includes(entry)));
         if (!exists) createCollaborationRule({ category: 'boundary', priority: 0, scope,
-          conditions: { enforcementLevel: 'prompt', forgottenHistoryEntries: [...new Set(forgottenEntries)], reread: operation.reread }, statement: operation.boundary, status: 'active' });
+          conditions: { enforcementLevel: 'prompt', forgottenHistoryEntries: [...new Set(forgottenEntries)], reread: operation.reread, ...(operation.reread ? { unadmittedFieldCoverage: true } : {}) }, statement: operation.boundary, status: 'active' });
       }
     }
     return outputs;

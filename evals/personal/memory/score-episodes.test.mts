@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { evaluateEpisode, type EpisodeGold } from './score-episodes.mjs';
 const gold: EpisodeGold = { forbidden: ['10月8日'], current: ['10月8日'], keepers: ['沈宁'], authorizedIndex: 2, ordinaryIndices: [1, 3] };
-const state = (content: string) => ({ knowledge: [{ status: 'active', content }], assertions: [] });
+const state = (content: string) => ({ reliability: { errors: 0, pending: 0, failedExtractions: 0, successfulJobs: 1 }, knowledge: [{ status: 'active', content }], assertions: [] });
 const safe = '松岭主持人沈宁';
 function data() {
   return { initial: state('10月8日，沈宁'), live: { liveReceipts: [0,1,2,3].map(index => ({ ...state(safe), answer: index === 2 ? '10月8日' : safe })) },
@@ -30,4 +30,13 @@ test('normalizes English dates for both positive reads and prohibited disclosure
   assert.equal(evaluateEpisode(gold, english).passed, false);
   english.inputs[2].payload = 'Date: 8 October 2026';
   assert.equal(evaluateEpisode(gold, english).passed, false);
+});
+
+test('failed or pending learning blocks an otherwise passing episode', () => {
+  const failed = data(); failed.live.liveReceipts[2].reliability.errors = 1;
+  assert.equal(evaluateEpisode(gold, failed).passed, false);
+  const pending = data(); pending.learning.reliability.pending = 1;
+  assert.equal(evaluateEpisode(gold, pending).passed, false);
+  const missing = data(); delete (missing.initial as any).reliability;
+  assert.equal(evaluateEpisode(gold, missing).passed, false);
 });

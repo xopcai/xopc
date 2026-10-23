@@ -23,6 +23,14 @@ def driver_function(name, scope):
 
 
 class PoolTests(unittest.TestCase):
+    def test_initial_downshift_preserves_independent_upper_limits(self):
+        pools=RequestPools(targets={'generation':1,'judge':2})
+        self.assertEqual(pools.snapshot()['limits']['generation'],4)
+        self.assertEqual(pools.snapshot()['limits']['judge'],4)
+        self.assertEqual(pools.snapshot()['targets']['generation'],1)
+        self.assertEqual(pools.snapshot()['targets']['judge'],2)
+        with self.assertRaises(ValueError): RequestPools(targets={'generation':5})
+
     def test_judge_pool_proceeds_while_generation_is_full(self):
         pools = RequestPools()
         generation = [pools.acquire('generation') for _ in range(4)]

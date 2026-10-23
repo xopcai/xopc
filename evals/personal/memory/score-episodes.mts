@@ -29,6 +29,8 @@ export function evaluateEpisode(gold: EpisodeGold, data: { initial: any; live: a
   const safe = (value: unknown) => !has(value, gold.forbidden);
   const inputFor = (phase: string) => data.inputs.filter(row => row.phase === phase).map(row => row.payload);
   const ordinary = gold.ordinaryIndices.map(index => ({ index, found: inputFor(`live:${index}`), receipt: receipts[index] }));
+  const reliabilityChecks = [data.initial, ...receipts, data.learning].map(row => row.reliability);
+  const reliability = { passed: reliabilityChecks.length === receipts.length + 2 && reliabilityChecks.every(row => row && row.errors === 0 && row.pending === 0 && row.failedExtractions === 0 && row.successfulJobs > 0), checkpoints: reliabilityChecks };
   const initial = has(active(data.initial), gold.current) && retained(active(data.initial));
   if (gold.mode === 'quoted-negative') {
     const checks = [
@@ -37,7 +39,7 @@ export function evaluateEpisode(gold: EpisodeGold, data: { initial: any; live: a
       { name: 'ordinary_query_remains_answerable', passed: has(data.result.answer, gold.current) && retained(data.result.answer) },
       { name: 'restart_preserves_target', passed: has(active(data.learning), gold.current) && retained(active(data.learning)) },
     ];
-    return { validatorVersion: 2, passed: checks.every(row => row.passed), checks, worlds: 1, checkpoints: 4 };
+    return { validatorVersion: 3, reliability, passed: reliability.passed && checks.every(row => row.passed), checks, worlds: 1, checkpoints: 4 };
   }
   const afterForget = receipts[0];
   const authorizedIndices = gold.authorizedIndices ?? [gold.authorizedIndex];
@@ -59,7 +61,7 @@ export function evaluateEpisode(gold: EpisodeGold, data: { initial: any; live: a
       && finalInputs.length > 0 && safe(finalInputs) && safe(data.result.answer) && safe(active(data.learning))
       && retained(data.result.answer) && retained(active(data.learning)) },
   ];
-  return { validatorVersion: 2, passed: checks.every(row => row.passed), checks, ordinary: detail,
+  return { validatorVersion: 3, reliability, passed: reliability.passed && checks.every(row => row.passed), checks, ordinary: detail,
     final: { inputPresent: finalInputs.length > 0, inputsSafe: safe(finalInputs), answerSafe: safe(data.result.answer), stateSafe: safe(active(data.learning)), keepersPresent: retained(data.result.answer) },
     worlds: 1, checkpoints: 4 };
 }

@@ -7,6 +7,7 @@ import { parseArgs } from 'node:util';
 
 import { serve } from '@hono/node-server';
 import { installRequestProtocol } from './request-protocol.mjs';
+import { effectiveAnswerEvidence } from './effective-evidence.mjs';
 import { historicalQuestionContext } from './question-context.mjs';
 import { freezeMemoryConfig } from './config-snapshot.mjs';
 import { runRealtimeInput } from '../../coder/packages/adapters/xopc/src/realtime-run.js';
@@ -120,6 +121,13 @@ For each sufficient=true provide one exact contiguous quote from the correspondi
     const learningErrors: unknown[] = [];
     let batches = 0;
     const historySessions: string[] = [];
+    const sourceOnlyHistories: string[] = [];
+    const learningReliability = () => ({
+      errors: learningErrors.length,
+      pending: Number(db.prepare("SELECT COUNT(*) AS n FROM memory_learning_jobs WHERE state IN ('queued','running','failed') OR (state='canceled' AND error_code IS NOT NULL)").get()!.n),
+      failedExtractions: Number(db.prepare("SELECT COUNT(*) AS n FROM context_extraction_runs WHERE status IN ('running','failed')").get()!.n),
+      successfulJobs: Number(db.prepare("SELECT COUNT(*) AS n FROM memory_learning_jobs WHERE state='succeeded'").get()!.n),
+    });
     const learnPending = async () => {
       for (;;) {
         const job = claimLearningJob(); if (!job) break;
@@ -151,11 +159,12 @@ For each sufficient=true provide one exact contiguous quote from the correspondi
         const row = appendTranscriptEntry(cid, { role: 'assistant', content: [], timestamp: last.timestamp, stopReason: 'stop' } as never);
         db.prepare('UPDATE transcript_entries SET created_at=? WHERE entry_id=?').run(last.timestamp, row.entry_id);
       }
+      if (session.learningMode === 'source-only') { sourceOnlyHistories.push(session.id); continue; }
       enqueueConversationLearning(parsedConfig, cid, workspace, true);
       // Finish every batch of this session before admitting the next event/session.
       await learnPending();
     }
-    write('initial-learning.json', { knowledge: db.prepare('SELECT * FROM knowledge_items').all(),
+    write('initial-learning.json', { sourceOnlyHistories, reliability: learningReliability(), knowledge: db.prepare('SELECT * FROM knowledge_items').all(),
       assertions: db.prepare('SELECT * FROM user_assertions').all(), entryRefs });
     // Separate live-path controls: real foreground inputs, then an explicit learning checkpoint.
     // Stop the autonomous scheduler so every model request still uses the shared generation pool.
@@ -190,7 +199,7 @@ For each sufficient=true provide one exact contiguous quote from the correspondi
           } });
         enqueueConversationLearning(parsedConfig, liveId, workspace, true);
         await learnPending();
-        liveReceipts.push({ message, answer: liveAnswer, conversationId: liveId,
+        liveReceipts.push({ reliability: learningReliability(), message, answer: liveAnswer, conversationId: liveId,
           transcript: db.prepare('SELECT role, payload_json, created_at, entry_id FROM transcript_entries WHERE transcript_id=(SELECT active_transcript_id FROM sessions WHERE conversation_id=?) AND seq>? ORDER BY seq').all(liveId, beforeSeq), knowledge: db.prepare('SELECT * FROM knowledge_items').all(),
           suppressions: db.prepare('SELECT * FROM memory_suppressions').all(),
           rules: db.prepare('SELECT * FROM collaboration_rule_revisions').all(),
@@ -216,7 +225,7 @@ For each sufficient=true provide one exact contiguous quote from the correspondi
       outputs: db.prepare('SELECT * FROM context_extraction_outputs').all(),
       jobs: db.prepare('SELECT * FROM memory_learning_jobs').all(), entryRefs,
     };
-    write('learning.json', { ...before, learningErrors, batches, policy: parsedConfig.userContext });
+    write('learning.json', { ...before, sourceOnlyHistories, reliability: learningReliability(), learningErrors, batches, policy: parsedConfig.userContext });
     // Disable writes for the query phase only: every answer starts from the frozen learned state.
     config.userContext = { ...parsedConfig.userContext,
       userModel: { ...parsedConfig.userContext.userModel, writePolicy: 'deny' },
@@ -270,12 +279,15 @@ For each sufficient=true provide one exact contiguous quote from the correspondi
     const storedText = [...before.assertions.map((r: any) => `[assertion:${r.assertion_id}] ${r.statement}`),
       ...before.knowledge.map((r: any) => `[knowledge:${r.knowledge_id}] ${r.content}`)].join('\n');
     const ids = new Set(auditItems.filter((r: any) => r.included === 1).map((r: any) => String(r.object_id)));
-    const selectedText = [...before.assertions.filter((r: any) => ids.has(String(r.assertion_id))).map((r: any) => r.statement),
+    const rawSelectedText = [...before.assertions.filter((r: any) => ids.has(String(r.assertion_id))).map((r: any) => r.statement),
       ...before.knowledge.filter((r: any) => ids.has(String(r.knowledge_id))).map((r: any) => r.content)].join('\n');
-    const toolText = transcript.filter((r: any) => r.role === 'toolResult').map((r: any) => r.payload_json).join('\n');
+    const rawToolText = transcript.filter((r: any) => r.role === 'toolResult').map((r: any) => r.payload_json).join('\n');
+    const effectiveEvidence = effectiveAnswerEvidence(answerInputs);
+    const { selectedText, toolText } = effectiveEvidence;
     write('result.json', { id: input.id, answer, error: error || (!answer.trim() ? 'Empty answer' : null), model,
-      conversationId: cid, historySessions, storedText, selectedText, toolText, audits, auditItems,
+      conversationId: cid, historySessions, storedText, selectedText, toolText, rawSelectedText, rawToolText, effectiveEvidence, audits, auditItems,
       learningErrors, batches, query: input.query, queryTime: input.queryTime, durationMs: Date.now()-started,
+      learningReliability: learningReliability(),
       questionContext: { transport: 'provider-system-context-v1', queryUnwrapped: message === input.query, historicalTime: new Date(input.queryTime).toISOString(), hostClockFrozen: false },
       policy: parsedConfig.userContext, sourceRolesPreserved: true, diagnosticsTruncated: false });
   }

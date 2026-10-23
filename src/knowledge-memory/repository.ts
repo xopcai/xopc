@@ -487,6 +487,8 @@ export function deleteKnowledgeItem(id: string, now = Date.now(), options: { inc
     ) SELECT * FROM knowledge_items WHERE knowledge_id IN (SELECT id FROM deleted)`).all(id, options.includeRelated === false ? 0 : 1) as KnowledgeRow[];
     for (const row of rows) {
       const item = fromRow(row);
+      const revisions = db.prepare('SELECT content FROM knowledge_revisions WHERE knowledge_id = ?').all(item.id) as Array<{ content: string }>;
+      for (const revision of revisions) suppressMemory(db, knowledgeFingerprints({ ...item, content: revision.content }), now);
       suppressMemory(db, knowledgeFingerprints(item), now);
       clearMemoryAudit(db, 'knowledge', item.id);
       if (item.recordClass === 'source_index' && typeof item.source.sourceItemId === 'string') {

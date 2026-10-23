@@ -5,7 +5,7 @@ import { resolve, join } from 'node:path';
 import { parseArgs } from 'node:util';
 import { freezeMemoryConfig } from './config-snapshot.mjs';
 const { values } = parseArgs({ options: { a: { type: 'string' }, b: { type: 'string' }, episodes: { type: 'string' },
-  fixtures: { type: 'string' }, out: { type: 'string' } } });
+  fixtures: { type: 'string' }, out: { type: 'string' }, 'development-only-b': { type: 'boolean', default: false } } });
 for (const key of ['a','b','episodes','fixtures','out'] as const) if (!values[key]) throw new Error(`Missing --${key}`);
 const a = resolve(values.a!), b = resolve(values.b!), out = resolve(values.out!), episodes = resolve(values.episodes!), fixtures = resolve(values.fixtures!);
 if (existsSync(out)) throw new Error('Refusing to overwrite stage results');
@@ -18,22 +18,22 @@ if (hashFile(join(fixtures,'selection.json')) !== '29b5c620c8ba3b31b298a5aab968b
 const protocolFiles = readdirSync(join(a,'evals/personal/memory')).filter(file => /\.(mts|py)$/.test(file));
 for (const file of protocolFiles) if (hashFile(join(a,'evals/personal/memory',file)) !== hashFile(join(b,'evals/personal/memory',file))) throw new Error(`A/B evaluator differs: ${file}`);
 const episodeCounts = Object.fromEntries(['development','validation'].map(split => [split, JSON.parse(readFileSync(join(episodes,split,'selection.json'),'utf8')).cases.length]));
-if (episodeCounts.development !== 16 || episodeCounts.validation !== 8) throw new Error('Expected predeclared 16 consumed development / 8 new validation worlds');
+if (episodeCounts.development !== 24 || episodeCounts.validation !== 8) throw new Error('Expected predeclared 24 consumed development / 8 new validation worlds');
 const frozen = freezeMemoryConfig();
 const poolPath = join(out, 'pools');
-const pool = spawn('python3', [join(a,'evals/personal/style/request_pools.py'), '--out', poolPath], { stdio: ['ignore','ignore','inherit'] });
+const pool = spawn('python3', [join(a,'evals/personal/style/request_pools.py'), '--out', poolPath, '--generation-target', '1', '--judge-target', '2'], { stdio: ['ignore','ignore','inherit'] });
 const endpoint = join(poolPath,'endpoint.json');
 const statuses: Record<string, unknown> = {};
-const manifest = { version: 3, orchestratorHash: hashFile(new URL(import.meta.url).pathname),
-  createdAt: new Date().toISOString(), a, b, episodeCounts, questionTimeTransport: 'provider-system-context-v1',
+const manifest = { version: 6, orchestratorHash: hashFile(new URL(import.meta.url).pathname),
+  createdAt: new Date().toISOString(), a, b, episodeCounts, developmentMode: values['development-only-b'] ? 'B_only_no_historical_control_reuse' : 'paired_A_B', questionTimeTransport: 'provider-system-context-v1',
   lockHash: hashFile(join(a,'pnpm-lock.yaml')), configSnapshotHash: frozen.hash,
   selectionHash: hashFile(join(fixtures,'selection.json')),
   episodeSelections: Object.fromEntries(['development','validation'].map(split => [split, hashFile(join(episodes,split,'selection.json'))])),
   protocolHashes: Object.fromEntries(protocolFiles.map(file => [file, hashFile(join(a,'evals/personal/memory',file))])),
   models: { candidate: 'xopc-cloud/openai-codex/gpt-5.6-sol', judge: 'xopc-cloud/openai-codex/gpt-6.1-sol' },
-  pools: { generation: 4, judge: 4, sharedAcrossVariants: true, physicalRequests: true },
-  predeclaredGate: 'B development and validation: every world/all 4 checkpoint gates and QA correct, no capture/judge protocol errors, source unchanged. A may fail quality but not protocol. Validation failure stops full184; analyzed validation becomes development.',
-  stages: ['development A/B', 'candidate frozen', 'independent validation B', 'full184 A/B only after validation pass', 'native grading same saved answers'],
+  pools: { generation: 4, judge: 4, initialTargets: { generation: 1, judge: 2 }, sharedAcrossVariants: true, physicalRequests: true },
+  predeclaredGate: 'B development and validation: every world/all 4 checkpoint gates and QA correct, zero failed/pending learning at every checkpoint, no capture/judge protocol errors, source unchanged. A may fail quality but not protocol. Validation failure stops full184; analyzed validation becomes development.',
+  stages: [values['development-only-b'] ? 'development B only; earlier A retained as historical context, not a paired score' : 'development A/B', 'candidate frozen', 'independent validation B', 'full184 A/B only after validation pass', 'native grading same saved answers'],
   repetitions: 1, resultsNeverRegeneratedForScore: true };
 save('manifest.json',manifest);
 save('full-regression-protocol.json', { frozenAt: new Date().toISOString(), nativeNonInferiorityMarginCases: 2, chineseNonInferiorityMarginCases: 1, temporalAndUpdateMarginCases: 1, zeroNewObservedP0LeakRequired: true, importantRegressionsRequireCaseReview: true, generationCombinedBudget: 130_000_000, judgeCombinedBudget: 8_000_000, generationBOverAUpperRatio: 1.20, fullWallClockBudgetHours: 10, billingCostUsd: null, note: 'Engineering resource and promotion criteria; no statistical noninferiority claim. All paired gains/losses and errors retained.' });
@@ -55,7 +55,8 @@ const accepted = (key: string) => {
 };
 try {
   while (!existsSync(endpoint)) { if (pool.exitCode !== null) throw new Error('Pool failed'); await new Promise(r => setTimeout(r,100)); }
-  const dev = await Promise.all([capture(a,join(episodes,'development'),'A','development-A'), capture(b,join(episodes,'development'),'B','development-B')]);
+  const dev = values['development-only-b'] ? [await capture(b,join(episodes,'development'),'B','development-B')]
+    : await Promise.all([capture(a,join(episodes,'development'),'A','development-A'), capture(b,join(episodes,'development'),'B','development-B')]);
   if (dev.some(code => code !== 0) || !accepted('development-B')) {
     save('gate.json',{ stage: 'development', passed: false, full184Started: false, validationOpened: false });
     process.exitCode = 2;
