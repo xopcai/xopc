@@ -24,8 +24,8 @@ const snapshot = (needsAttention: boolean): HomeResponse => ({
 let root: Root;
 let container: HTMLDivElement;
 let current: ReturnType<typeof useHomeSnapshot>;
-function Probe({ navigationKey = 'home' }: { navigationKey?: string }) {
-  current = useHomeSnapshot('zh', navigationKey);
+function Probe({ navigationKey = 'home', includeAll = false }: { navigationKey?: string; includeAll?: boolean }) {
+  current = useHomeSnapshot('zh', navigationKey, includeAll);
   return <span>{current.home?.needsUser.length}</span>;
 }
 
@@ -102,4 +102,10 @@ it('cleans up queued refreshes when leaving the workbench', async () => {
   window.dispatchEvent(new Event('focus'));
   await act(async () => vi.advanceTimersByTime(1000));
   expect(fetchHome).toHaveBeenCalledOnce();
+});
+
+it('requests the uncapped snapshot when the user expands pending items', async () => {
+  await act(async () => root.render(<Probe />));
+  await act(async () => root.render(<Probe includeAll />));
+  expect(fetchHome).toHaveBeenLastCalledWith('zh', true);
 });

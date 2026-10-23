@@ -157,8 +157,10 @@ export class TaskRunCoordinator {
     const unconfirmedEffects = status === 'failed' && Boolean(run.conversationId
       && !canResumeAfterModelFailure(loadTranscriptRowsForSession(run.conversationId), recoveryOptions));
     const systemSummaries: Record<string, string> = { 'Message processed': '消息已处理', Interrupted: '执行已中断', 'Agent run ended unexpectedly': '助手执行意外结束' };
+    const resultSummary = status === 'succeeded' && hasAssistantResult && /^Message processed(?: successfully)?$/.test(input.summary)
+      ? input.assistantText!.trim() : input.summary;
     const summary = emptySuccess ? (zh ? '助手执行未返回结果或证据' : 'Agent run returned no result or evidence')
-      : zh ? systemSummaries[input.summary] ?? input.summary : input.summary;
+      : zh ? systemSummaries[resultSummary] ?? resultSummary : resultSummary;
     const research = currentTaskResearchResult(run.id);
     const currentResearch = research && research.contractVersion === task.latestContractVersion
       && research.instructionSequence === taskInstructionSequence(task.id) ? research : undefined;

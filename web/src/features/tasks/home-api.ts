@@ -155,8 +155,11 @@ export async function submitTaskFeedback(
   });
 }
 
-export function fetchHome(locale?: 'en' | 'zh'): Promise<HomeResponse> {
-  const suffix = locale ? `?locale=${encodeURIComponent(locale)}` : '';
+export function fetchHome(locale?: 'en' | 'zh', includeAll = false): Promise<HomeResponse> {
+  const params = new URLSearchParams();
+  if (locale) params.set('locale', locale);
+  if (includeAll) params.set('attention', 'all');
+  const suffix = params.size ? `?${params.toString()}` : '';
   return fetchJson<unknown>(apiUrl(`/api/home${suffix}`)).then(parseHomeResponse);
 }
 

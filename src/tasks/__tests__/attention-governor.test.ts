@@ -59,4 +59,11 @@ describe('AttentionGovernor', () => {
     });
   });
 
+  it('keeps capped items reachable when the user explicitly expands the list', () => {
+    const decisions = Array.from({ length: 9 }, (_, index) => decision({ id: `task-${index}`, title: `Task ${index}`, response: { kind: 'task', taskId: `task-${index}`, canRetry: false } }));
+    const result = new AttentionGovernor().project({ decisions, attention: [], includeAll: true });
+    expect(result.decisions).toHaveLength(9);
+    expect(result.policy.suppressedDecisionCount).toBe(0);
+  });
+
 });

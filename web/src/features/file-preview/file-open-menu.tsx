@@ -12,6 +12,8 @@ export type ChooseAppAction = { onClick: () => void | OpenWithApp | Promise<void
 type OpenAction = { onClick: () => void; disabled?: boolean; loading?: boolean };
 
 type FileOpenMenuProps = {
+  variant?: 'split' | 'menu';
+  onAction?: (action: () => void) => void;
   systemApp?: OpenAction;
   chooseApp?: ChooseAppAction;
   recommendedApps: OpenWithApp[];
@@ -27,7 +29,7 @@ function ApplicationIcon({ app }: { app?: OpenWithApp }) {
 }
 
 /** Keep the selected application and its open action together in a split button. */
-export function FileOpenMenu({ systemApp, chooseApp, recommendedApps, recentApps, onOpenWithApp }: FileOpenMenuProps) {
+export function FileOpenMenu({ variant = 'split', onAction, systemApp, chooseApp, recommendedApps, recentApps, onOpenWithApp }: FileOpenMenuProps) {
   const language = useLocaleStore((state) => state.language);
   const m = messages(language).workspace;
   // undefined follows the first suggestion; null explicitly uses the system default.
@@ -43,6 +45,35 @@ export function FileOpenMenu({ systemApp, chooseApp, recommendedApps, recentApps
   const separatorClass = 'my-1 h-px bg-edge-subtle';
 
   if (!systemApp && !chooseApp && (!onOpenWithApp || !apps.length)) return null;
+
+  if (variant === 'menu') {
+    const runAction = (action: () => void) => onAction ? onAction(action) : action();
+    const menuItemClass = 'flex min-h-9 w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-sm text-fg hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-not-allowed disabled:opacity-40';
+    return <>
+      {systemApp ? <button type="button" role="menuitem" className={menuItemClass} disabled={disabled}
+        onClick={() => runAction(systemApp.onClick)}>
+        <ExternalLink className="size-5 shrink-0 text-fg-muted" aria-hidden />
+        <span className="min-w-0 flex-1 truncate">{m.openSystemApp}</span>
+      </button> : null}
+      {onOpenWithApp ? [
+        { label: m.recommendedApps, apps: recommendedApps },
+        { label: m.recentApps, apps: recentApps.filter((app) => !recommendedApps.some((candidate) => candidate.path === app.path)) },
+      ].map((group) => group.apps.length ? <div role="group" aria-label={group.label} key={group.label}>
+        <div className="px-2.5 pb-1 pt-1.5 text-xs font-medium text-fg-muted">{group.label}</div>
+        {group.apps.map((app) => <button key={app.path} type="button" role="menuitem" className={menuItemClass} disabled={disabled}
+          onClick={() => runAction(() => onOpenWithApp(app.path))}>
+          <ApplicationIcon app={app} />
+          <span className="min-w-0 flex-1 truncate">{app.name}</span>
+        </button>)}
+      </div> : null) : null}
+      {chooseApp ? <button type="button" role="menuitem" className={menuItemClass} disabled={disabled || chooseApp.disabled}
+        onClick={() => runAction(() => { void chooseApp.onClick(); })}>
+        <AppWindow className="size-5 shrink-0 text-fg-muted" aria-hidden />
+        <span className="min-w-0 truncate">{m.chooseApp}</span>
+      </button> : null}
+      <div className="my-1 border-t border-edge-subtle dark:border-edge" />
+    </>;
+  }
 
   return <div className="inline-flex h-9 shrink-0 items-stretch rounded-full border border-edge-subtle bg-surface-panel">
     <button type="button" aria-label={openLabel} title={openLabel}

@@ -30,7 +30,7 @@ export function registerHomeRoutes(authenticated: Hono, deps: AuthenticatedRoute
 
   authenticated.get('/api/home', async (c) => {
     const locale = c.req.query('locale');
-    return c.json(await home.getSnapshot(locale));
+    return c.json(await home.getSnapshot(locale, c.req.query('attention') === 'all'));
   });
 
   authenticated.get('/api/home/advisor/metrics', (c) => {

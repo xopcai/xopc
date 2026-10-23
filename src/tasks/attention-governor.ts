@@ -30,6 +30,7 @@ export class AttentionGovernor {
   project(input: {
     decisions: HomeDecision[];
     attention: HomeAttention[];
+    includeAll?: boolean;
     maxDecisions?: number;
     maxAttention?: number;
   }): AttentionProjection {
@@ -46,8 +47,8 @@ export class AttentionGovernor {
       });
     const attention = [...input.attention]
       .sort((left, right) => right.updatedAt - left.updatedAt)
-      .slice(0, maxAttention);
-    const decisions = eligible.slice(0, maxDecisions);
+      .slice(0, input.includeAll ? undefined : maxAttention);
+    const decisions = eligible.slice(0, input.includeAll ? undefined : maxDecisions);
     return {
       decisions,
       attention,
