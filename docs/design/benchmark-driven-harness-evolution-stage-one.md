@@ -1,6 +1,6 @@
 # Benchmark 驱动 Harness 自我迭代：第一阶段实施与验收
 
-日期：2026-10-23。状态：Cloud 正常尾部与中止请求的有限排空/分项用量修复已通过；Personal mixed 新批次 421,191ms 完成交付、独立 15 项内容检查通过，但三项延迟门槛未过。原失败与两项历史中止 token unknown 保留，第一阶段不标整体全绿。对应[建设方案](./benchmark-driven-harness-evolution-plan.md)。本文件持续记录实际交付，不把校准或历史成绩当作当前模型能力提升。
+最后更新：2026-10-24。状态：用量修复维持原范围内通过；最新三轮 v7 延迟候选均拒绝，v3 提交 10,631ms 已过 20s 门槛，首答 5,870ms、ping 5,565ms 仍未过 5s，方向转发参数错误也保留。历史失败及 token 缺口不回写，第一阶段仍进行中（见第 9 节）。对应[建设方案](./benchmark-driven-harness-evolution-plan.md)。本文件持续记录实际交付，不把校准或历史成绩当作当前模型能力提升。
 
 ## 1. 工作包进度
 
@@ -230,3 +230,60 @@ Personal 保留当前 `xopc-cloud/auto` Personal、router、worker 与 reviewer 
 运行时/评审定向回归 6 文件 35 项通过；含真实 HTTP 预取取消、15 秒上限、SDK 零默认值不写作实际用量、错误价格证据不能由提交行为自证。控制面检查 12 文件 40 项通过，覆盖分项不匹配、取消被替换为成功、源码变化和超时拒绝；根目录 typecheck 通过。完整 coder 回归 26 文件 80 项通过；Dashboard 浏览器实查可见分项验收、2/2 取消晋级和原拒绝，SSE 重启后恢复。旧决定、campaign 和本轮失败报告的哈希核对均未变化。
 
 剩余：Personal 提交/首答/ping 三项延迟优化及 v7 全链路预登记复验；原 H01 协议复核；历史两次被截断请求的最终 token 仍需上游可查询用量。`phaseOneComplete=false`，不靠删除失败或假设零消耗完成验收。
+
+
+## 9. Personal v7 固定门槛延迟迭代（2026-10-24）
+
+[本轮完整便携证据](./technical/evidence/harness-stage-one-personal-latency-2026-10-24.json)记录三份预登记、冻结源码、真实配置、不可变拒绝与只读诊断。三轮**顺序执行**，避免试验之间争用同一模型额度。三轮全量 v7 评分为 0/3，不丢弃任何失败，不重跑未改动候选来寻找偶然通过。
+
+### 9.1 实施内容
+
+- 新增 `personal_task` 的显式 `useOriginalRequest=true` 提交路径：只从当前 conversation 的 active message 读取原文，宿主完整绑定到 Task brief，保留 handoff 原请求、sourceRefs、显式 Agent/Skills 与幂等键。无 active input 则拒绝，不从别的会话或任意历史猜测。上下文依赖请求仍支持完整 description。
+- Personal 提示要求目标短、提交后仅确认已保存状态，不再重述整个任务；精确短答仍由现有模型生成，没有预置 ping 文本或确定性 echo。
+- Personal 工具概览去除重复长描述；提供给模型的完整工具 schema、权限与安全规则保留。
+- v1/v2 暴露首次调用漏 `command` 的纠正开销。v3 将命令联合展开为等价的普通字符串 enum、拆平 submit 分支；缺失命令、非法命令、缺必需参数仍被真实 SDK validator 拒绝。第三轮首次提交不再纠正，但后续方向变更仍有一次漏字段，因此未证明整个接口可靠性通过。
+- 新增 [固定门槛评估器](../../evals/control/personal-latency.ts)与 `eval:control assess-personal-latency --candidate-root <frozen-source>`：联合验证预登记先于执行、候选文件哈希、v7 mixed 完整分母、原始 trial 成败、20s/5s/5s/10min 和本地 250ms、逐请求用量及空闲收尾。放宽门槛、仅延迟过但原 trial 失败、源码变化或缺失尾部均拒绝。
+
+### 9.2 真实结果
+
+模型继续使用当前已配置的 `xopc-cloud/auto` Personal、router、worker 和 reviewer，session thinking 维持原设置。未修改用户模型配置。下表耗时为本批次观测，不作跨日或小样本因果/SLA 结论。
+
+| 批次 | 提交（≤20,000ms） | 提交后首答（≤5,000ms） | ping（≤5,000ms） | 完整交付 | 判定 |
+|---|---:|---:|---:|---:|---|
+| 上轮 v6 参考 | 25,167 | 9,992 | 5,666 | 421,191ms | 原拒绝保留 |
+| v7-v1 | 18,138，通过 | 7,207，失败 | 5,640，失败 | 307,616ms | rejected：首次工具漏命令及延迟未过 |
+| v7-v2 | 28,418，失败 | 6,852，失败 | 7,459，失败 | 未交付 | rejected：参数错误、OAuth 刷新失败、整体对账未过 |
+| v7-v3 | 10,631，通过 | 5,870，失败 | 5,565，失败 | 296,713ms | rejected：首答/ping 与方向转发参数错误 |
+
+v1 的 7 项研究检查通过，v3 的 8 项研究检查通过；两者实际错误价格负例均被拒绝，模型生成的四份文件经原 Chat 鉴权下载。v7 原全量评分仍因主对话工具参数错误等断言失败，不能把这些局部检查记作完整 v7 通过。v2 没有完整交付，不将其 failure 解释为所有内容推理不合格。
+
+三个 improvement：
+
+- v1：`060806bf-4a60-45e2-a283-0f73e09caff5`。
+- v2：`c4dc2d9c-342a-4940-a8b2-ef8692a213b3`。
+- v3：`c9ed040b-4969-4651-88b3-6f3f36c0b587`。
+
+原始 `verification.json` 不可覆盖；后续逐调用耗时和保留证明通过 `latency-analysis-supplement.json` 追加。Dashboard 三张候选卡显示全部四个延迟项及其门槛，提交过线与整体拒绝同时可见。
+
+### 9.3 调用对账与失败保留
+
+| 批次 | 物理模型请求 | runtime 事件 | 已知 provider tokens | 物理最终 usage 缺失 |
+|---|---:|---:|---:|---:|
+| v1 | 35 | 35 | 720,948 | 0 |
+| v2 | 27 | 32 | 592,388 | 0 |
+| v3 | 40 | 40 | 737,788 | 0 |
+
+共 102 次实际模型 HTTP 请求、2,051,124 个已观测 provider tokens，已知逐请求用量均相符。v2 另有 5 个未对应物理请求的运行时事件：4 个记录 `OAuth refresh failed for xopc-cloud: fetch failed`，1 个在最终快照仍 running。它们单列为未分发/未完成事件；不补零、不当作成功模型请求。因此 v2 全量请求/账本门禁仍失败，全部运行的财务总额仍 unknown。
+
+前台 ping 的本地准备仅数百毫秒，主要耗时在物理模型 HTTP 请求。请求参数与上游代码检查只能确认现有 off 的显式投影边界，不能据此宣称已修好远端推理/服务延迟；本轮没有修改上游服务或模型设置。后续需要减少前台往返和明确协调 API，再以同门槛复验，不能靠反复抽样或把完成时延改成首 token 时延过线。
+
+每轮结束后，把隔离 DB、产物 media、日志、输入和 worker 工作区复制到该轮 `retained-private-evidence/`；原 DB 和副本哈希一致，配置与 credentials 不复制。原 trial、HTTP JSONL、源 SQLite、失败测试日志均保留；没有改写第 6–8 节历史证据。raw 仅保存在本地 ignored 目录，不提交原始会话。
+
+### 9.4 验证与剩余项
+
+- 运行时及提示回归：5 文件 75 项通过；额外 Personal 产品回归 3 文件 15 项通过。
+- 控制面/runner：13 文件 45 项通过；完整 coder 回归 27 文件 85 项通过。根目录 typecheck 通过。
+- Dashboard 浏览器实查确认三轮拒绝、完整 v7 原失败及四项固定门槛同屏可见；本地元数据已导出，原决定、历史失败及保留数据库哈希核对均未变化。
+- v3 冻结候选使用 `Type.Unsafe` 表达同一 JSON enum，当前源码改用 `Type.String` 修正跨 TypeBox 版本的 TS 推断；已断言两者 provider JSON schema 深度相同、实际 SDK 的接受/拒绝行为相同。该修正没有新模型行为或替换真实试验。
+
+剩余仍明确：首答与 ping 的 5s 门槛、协调工具参数可靠性、v2 credential/运行收尾异常，以及此前 token 缺口与旧评分协议。`phaseOneComplete=false`。本轮只确认提交项已有达标样本，没有晋级任何整体 Personal 延迟候选。

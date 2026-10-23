@@ -22,7 +22,7 @@ let injectDirection: (() => Promise<void>) | undefined;
 const injections: Array<Record<string, unknown>> = [];
 let fileInjected = false;
 let directionInjected = false;
-const fingerprintPaths = ['src/agent/tools/personal-task-tool.ts', 'src/personal-agent/prompts.ts',
+const fingerprintPaths = ['src/agent/tools/personal-task-tool.ts', 'src/personal-agent/prompts.ts', 'src/agent/prompt/system-prompt.ts',
   'src/personal-agent/reply-style.ts', 'src/personal-agent/reply-composer.ts', 'src/personal-agent/result-file-links.ts',
   'src/tasks/task-result-delivery-repository.ts', 'src/tasks/task-result-delivery-service.ts',
   'src/tasks/task-allocation-service.ts', 'src/tasks/task-research-result.ts', 'src/tasks/task-run-coordinator.ts',

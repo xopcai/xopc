@@ -9,7 +9,7 @@ import { normalizeSpecialistRequirements, type SpecialistTaskRequirements } from
 import { assertSpecialistEligible, createSelectedTask } from '../../agent-matching/delegation-service.js';
 import { AgentSelectionRepository, selectionRequestHash } from '../../agent-matching/selection-repository.js';
 import { getSessionMetadata } from '../../storage/sqlite/index.js';
-import { getSessionInputState } from '../../storage/sqlite/session-input-repository.js';
+import { getSessionInputById, getSessionInputState } from '../../storage/sqlite/session-input-repository.js';
 export { getAvailablePersonalAgentTools, personalAgentModelAvailability } from '../../personal-agent/specialist-capabilities.js';
 import { isPersonalConversation } from '../../personal-agent/repository.js';
 import { PERSONAL_WORKER_RESULT_GUIDANCE } from '../../personal-agent/communication.js';
@@ -44,6 +44,7 @@ const PersonalTaskSchema = Type.Object({
   limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 20 })),
   title: Type.Optional(Type.String({ description: 'Short task title, ideally under 60 characters. Do not put the full instructions here.' })),
   objective: Type.Optional(Type.String({ minLength: 1, description: 'One-sentence outcome for a new delegated Task.' })),
+  useOriginalRequest: Type.Optional(Type.Boolean({ description: 'For a self-contained current user request, true copies its complete host-stored text into the Task brief without rewriting it. Requires an active input. Supply sourceRefs and explicitly requested Agent/Skills normally. Use description instead when earlier conversation must be synthesized.' })),
   description: Type.Optional(Type.String({ minLength: 1, description: 'Complete Markdown brief preserving the user request, input references, and delivery expectations. Optional structured fields need not repeat it.' })),
   agentId: Type.Optional(Type.String({ description: 'Specialist Agent ID. Never use your own ID.' })),
   taskId: Type.Optional(Type.String()),
@@ -65,6 +66,8 @@ const PersonalTaskSchema = Type.Object({
   idempotencyKey: Type.Optional(Type.String()),
 });
 
+const PERSONAL_MODEL_COMMANDS = ['revise', 'submit', 'list', 'get', 'collaboration', 'entry', 'instruct', 'answer', 'retry_allocation', 'selection', 'cancel'] as const;
+
 // Keep historical commands executable for internal replay callers, without advertising executor selection to the personal model.
 const PersonalTaskModelSchema = Type.Object({
   sourceRefs: Type.Optional(Type.Array(Type.Object({
@@ -76,10 +79,11 @@ const PersonalTaskModelSchema = Type.Object({
   ] }), { maxItems: 5 })),
   ...Type.Omit(PersonalTaskSchema, ['agentId', 'selectionReason', 'selectionSource', 'previousSelectionId', 'matchId', 'cursor', 'requiredTools', 'acceptanceCriteria']).properties,
   requirements: Type.Optional(Type.Omit(PersonalTaskSchema.properties.requirements, ['requiredTools', 'requiredSkills'], { additionalProperties: false })),
-  command: Type.Union((['revise', 'submit', 'list', 'get', 'collaboration', 'entry', 'instruct', 'answer', 'retry_allocation', 'selection', 'cancel'] as const).map(command => Type.Literal(command))),
+  command: Type.String({ enum: [...PERSONAL_MODEL_COMMANDS], description: 'Required on every call. For a new Task always send command=submit, including when useOriginalRequest=true.' }),
 }, { additionalProperties: false, anyOf: [
   { properties: { command: { const: 'revise' } }, required: ['taskId', 'instruction', 'baselineResultId', 'baselineVersion', 'expectedVersion'] },
-  { properties: { command: { const: 'submit' } }, required: ['objective', 'description'] },
+  { properties: { command: { const: 'submit' } }, required: ['command', 'objective', 'description'] },
+  { properties: { command: { const: 'submit' }, useOriginalRequest: { const: true } }, required: ['command', 'objective', 'useOriginalRequest'] },
   { properties: { command: { enum: ['list', 'selection'] } } },
   { properties: { command: { enum: ['get', 'collaboration', 'retry_allocation', 'cancel'] } }, required: ['taskId'] },
   { properties: { command: { const: 'entry' } }, required: ['taskId', 'entryId'] },
@@ -119,7 +123,7 @@ export function createPersonalTaskTool(deps: PersonalTaskToolDeps): AgentTool<ty
   return {
     name: 'personal_task',
     label: 'Personal Task',
-    description: 'For changes to a completed ordinary Task use revise on the SAME taskId, with instruction and the exact revisionBaseline fields from get(section=revision), or baselineResultId/baselineVersion from personal_result get/list plus expected Task version. get(section=revision) is a small local metadata lookup; do not read the whole task body just to revise. This atomically saves a new work revision and queues fresh background allocation. Reuse idempotencyKey on uncertain retries. sourceRefs adds necessary inputs; the baseline body and selected artifacts are retained automatically. Explicit supersedesEntryIds replaces only named earlier directions; all others remain applicable. A new independent goal uses submit with pinned old-result sources. Connected Request side effects require a new authorized Request. For workspace file work, include every required input in sourceRefs as {kind:"file",sourceId:"relative/or/absolute/path"} without pre-reading it; the host pins only files in this conversation workspace. Owner workspace paths are input locations, not the executor cwd. For necessary prior inputs not selected in the current message, pass sourceRefs with their stable sourceId and optional expectedVersion; no pre-read is required. For a prior result use {kind:"result",resultId:"directory result ID",sourceId:"exact artifact ID or unique file title"}; omit sourceId only for the retained result body. Do not invent composite IDs. The host authorizes and pins the exact artifact version in the background. Prefer the exact selected reference when provided. Submit objective and a concise complete description, then return after local persistence. Preserve the user request and source references without inventing an execution plan or extra requirements. Omit optional structured fields when they merely repeat the description. Describe required capabilities in the brief; the background Task Router selects one executor and checks its tools. Do not read input files, select Agents or invent tool names before submit. Set requirements.requestedAgentId only for an executor explicitly named by the user, using their ID or display name; preserve explicitly requested requiredSkills. get reads Task state, waits, runs, receipts and context; use section and limit/offset for complete paginated details. collaboration reads ordered message previews with afterSequence; entry reads exact message bodies using entryId and nextBodyOffset. Read full questions before answering. Delivery pending means saved, delivered means sent, confirmed means the executor acknowledged it; confirmation alone is not verified completion. get/list inspect existing Tasks with limit/offset; cancel stops a Task on explicit user instruction and reports execution stop confirmation; instruct/answer send context; retry_allocation retries selection before execution; selection explains assignment. Status and results return automatically. Preserve idempotencyKey on uncertain retries. Report only confirmed states.',
+    description: 'For changes to a completed ordinary Task use revise on the SAME taskId, with instruction and the exact revisionBaseline fields from get(section=revision), or baselineResultId/baselineVersion from personal_result get/list plus expected Task version. get(section=revision) is a small local metadata lookup; do not read the whole task body just to revise. This atomically saves a new work revision and queues fresh background allocation. Reuse idempotencyKey on uncertain retries. sourceRefs adds necessary inputs; the baseline body and selected artifacts are retained automatically. Explicit supersedesEntryIds replaces only named earlier directions; all others remain applicable. A new independent goal uses submit with pinned old-result sources. Connected Request side effects require a new authorized Request. For workspace file work, include every required input in sourceRefs as {kind:"file",sourceId:"relative/or/absolute/path"} without pre-reading it; the host pins only files in this conversation workspace. Owner workspace paths are input locations, not the executor cwd. For necessary prior inputs not selected in the current message, pass sourceRefs with their stable sourceId and optional expectedVersion; no pre-read is required. For a prior result use {kind:"result",resultId:"directory result ID",sourceId:"exact artifact ID or unique file title"}; omit sourceId only for the retained result body. Do not invent composite IDs. The host authorizes and pins the exact artifact version in the background. Prefer the exact selected reference when provided. For a self-contained current user request prefer submit with objective and useOriginalRequest=true: the host copies its entire stored text, without model rewriting. Keep sourceRefs and explicitly requested Agent/Skills. Use a complete description when the request depends on earlier conversation. Return after local persistence. Preserve the user request and source references without inventing an execution plan or extra requirements. Omit optional structured fields when they merely repeat the description. Describe required capabilities in the brief; the background Task Router selects one executor and checks its tools. Do not read input files, select Agents or invent tool names before submit. Set requirements.requestedAgentId only for an executor explicitly named by the user, using their ID or display name; preserve explicitly requested requiredSkills. get reads Task state, waits, runs, receipts and context; use section and limit/offset for complete paginated details. collaboration reads ordered message previews with afterSequence; entry reads exact message bodies using entryId and nextBodyOffset. Read full questions before answering. Delivery pending means saved, delivered means sent, confirmed means the executor acknowledged it; confirmation alone is not verified completion. get/list inspect existing Tasks with limit/offset; cancel stops a Task on explicit user instruction and reports execution stop confirmation; instruct/answer send context; retry_allocation retries selection before execution; selection explains assignment. Status and results return automatically. Preserve idempotencyKey on uncertain retries. Report only confirmed states.',
     parameters: PersonalTaskModelSchema,
     mutatesWorkspace: true,
     mutationScope: 'external',
@@ -127,8 +131,8 @@ export function createPersonalTaskTool(deps: PersonalTaskToolDeps): AgentTool<ty
     finalGuardRelevant: true,
     async execute(toolCallId, modelInput, signal) {
       if (!PersonalTaskSchema.properties.command.anyOf.some(command => command.const === modelInput.command)) throw new Error('Unsupported personal_task command; completed work uses atomic revise, not manual start/reopen');
-      if (modelInput.sourceRefs?.length && !['submit', 'revise'].includes(modelInput.command)) throw new Error('sourceRefs is supported only by submit/revise; it cannot be silently ignored by a coordination command');
-      const input: Static<typeof PersonalTaskSchema> = modelInput;
+      const input = modelInput as Static<typeof PersonalTaskSchema>;
+      if (modelInput.sourceRefs?.length && !['submit', 'revise'].includes(input.command)) throw new Error('sourceRefs is supported only by submit/revise; it cannot be silently ignored by a coordination command');
       const conversationId = deps.getCurrentConversationId?.();
       const ownAgentId = deps.getCurrentAgentId?.();
       if (!conversationId || !ownAgentId || !isPersonalConversation(conversationId)) {
@@ -174,10 +178,15 @@ export function createPersonalTaskTool(deps: PersonalTaskToolDeps): AgentTool<ty
       let args: Record<string, unknown> = {};
       if (command === 'submit') {
         const objective = input.objective?.trim();
-        if (!objective || !input.description?.trim()) throw new Error('objective and a complete description are required');
-        if (input.agentId) throw new Error('Use requirements.requestedAgentId for an explicitly requested executor');
-        const brief = buildPersonalTaskBrief({ title: input.title, objective, description: input.description });
         const inputId = getSessionInputState(conversationId).activeInputId;
+        const original = input.useOriginalRequest && inputId ? getSessionInputById(conversationId, inputId) : undefined;
+        if (input.useOriginalRequest && (!original || original.kind !== 'message' || !original.content.trim())) {
+          throw new Error('The active original user request is unavailable; submit a complete description instead');
+        }
+        const description = [original?.content, input.description?.trim()].filter(Boolean).join('\n\n');
+        if (!objective || !description) throw new Error('objective and a complete description or active original request are required');
+        if (input.agentId) throw new Error('Use requirements.requestedAgentId for an explicitly requested executor');
+        const brief = buildPersonalTaskBrief({ title: input.title, objective, description });
         const submissionKey = input.idempotencyKey?.trim() || selectionRequestHash({
           sourceInput: inputId ?? toolCallId, brief, requirements, sourceRefs: modelInput.sourceRefs,
           expectedOutputs: input.expectedOutputs, acceptanceCriteria: input.acceptanceCriteria, constraints: input.constraints,
