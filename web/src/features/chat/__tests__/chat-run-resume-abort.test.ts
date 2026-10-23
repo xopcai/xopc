@@ -227,7 +227,8 @@ describe('MessageSender terminal state', () => {
       transcriptId: 'transcript', lifecycle: lifecycle === 'not_received' ? 'preparing' : lifecycle };
     vi.mocked(apiFetch).mockImplementation(async (url, init) => {
       if (String(url).endsWith('/agent-config')) return new Response(JSON.stringify({ ok: true, payload: {
-        model: 'test/model', configVersion: 7, thinkingLevel: 'off', reasoningLevel: 'on',
+        model: 'test/model', configVersion: 7, thinkingLevel: 'off',
+        activityDetail: { default: 'on', override: null, effective: 'on', source: 'default' },
         effectiveWorkspacePath: '', workingDirectoryLocked: false, workspaceSource: 'agent_default_root', userContextMode: 'enabled',
       } }));
       if (String(url).includes('/input-receipts/')) {
