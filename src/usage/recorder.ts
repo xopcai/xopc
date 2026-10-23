@@ -70,7 +70,7 @@ export function startAiUsageCall(model: AiUsageModel, context: AiUsageContext, i
   let completed = false;
   return {
     id,
-    run: fn => observation.run(() => withUsageReceiptContext(id, fn)),
+    run: fn => observation.run(() => withUsageReceiptContext(id, fn, operation)),
     finish(result) {
       if (completed) return;
       completed = true;

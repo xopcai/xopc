@@ -1,0 +1,2312 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-23",
+  "scope": "Authoritative Cloud token totals, request-tail and independent structural acceptance; all prior failures retained",
+  "phaseOneComplete": false,
+  "usageFixAccepted": true,
+  "normalL1TailAcceptance": true,
+  "l2MixedPassed": false,
+  "requests": {
+    "acceptance": 195,
+    "knownFinalUsage": 194,
+    "explicitInterruptedUnknown": 1,
+    "knownProviderTokens": 2849027,
+    "completeProviderTokens": null,
+    "actualCharge": null,
+    "diagnosticOnly": 10,
+    "allKnownPerRequestUsageMatched": true
+  },
+  "fix": {
+    "module": "src/usage/cloud-wire.ts",
+    "method": "Preserve raw total_tokens through scoped SDK fetch, terminal events and completion result; never infer unidentified cache components",
+    "cases": {
+      "before": {
+        "prompt_tokens": 386,
+        "completion_tokens": 156,
+        "sdkTotal": 542,
+        "providerTotal": 7454
+      },
+      "after": "Per physical response equality verified against isolated runtime and task events"
+    },
+    "rawUsageNeverRewritten": true
+  },
+  "batches": [
+    {
+      "path": ".xopc-evals/control/usage-tail-verification-20261023/campaign.json",
+      "sha256": "afcf30f912fb1ff48cbed4331f7e92ab709e27beac989b7a05b81981fb7363e2",
+      "sourceHash": "2c642165efab3b5011aa8793d9577327a84122f6a3c5f059d8486af832d964a9",
+      "sourceChanged": false,
+      "status": "failed",
+      "validity": "invalid",
+      "physicalRequests": 151,
+      "elapsedMs": 811075,
+      "pool": {
+        "parent": 4,
+        "limits": {
+          "generation": 4,
+          "judge": 2
+        },
+        "targets": {
+          "generation": 4,
+          "judge": 2
+        },
+        "active": 1,
+        "queued": 0,
+        "admitted": 151,
+        "maxRequests": 240,
+        "byRole": {
+          "generation": 1,
+          "judge": 0
+        },
+        "peaks": {
+          "total": 4,
+          "generation": 4,
+          "judge": 1
+        },
+        "closed": true
+      },
+      "decision": {
+        "path": ".xopc-evals/control/usage-tail-verification-20261023/verification.json",
+        "sha256": "457d5bb851d6aac9817eb033b1711e79253107a214222776c06b7fe56a05f921",
+        "promotion": "rejected",
+        "reasons": [
+          "Source or infrastructure invalid",
+          "sealed-release: quality assertions failed (2/3)",
+          "personal: quality assertions failed (0/1)",
+          "Independent grading protocol concern requires review; original grades retained",
+          "personal: physical identity/usage/tail reconciliation failed"
+        ],
+        "reports": [
+          {
+            "id": "convergence",
+            "passed": 2,
+            "expected": 2,
+            "complete": true
+          },
+          {
+            "id": "delivery",
+            "passed": 2,
+            "expected": 2,
+            "complete": true
+          },
+          {
+            "id": "sealed-release",
+            "passed": 2,
+            "expected": 3,
+            "complete": true
+          },
+          {
+            "id": "personal",
+            "passed": 0,
+            "expected": 1,
+            "complete": true
+          }
+        ]
+      },
+      "supplement": {
+        "path": ".xopc-evals/control/usage-tail-verification-20261023/reconciliation-supplement-v2.json",
+        "sha256": "9c7f9c3ff119e7b7a331dac61fae1a48a357916807c14bb76fafbb21e557db54"
+      }
+    },
+    {
+      "path": ".xopc-evals/control/usage-tail-independent-20261023/campaign.json",
+      "sha256": "9fb53ca5ca13bfa85532f77a3d0735c39decac839e7d43460abc2086ff920aa7",
+      "sourceHash": "c5c82643e40ea4cd6b7e0d2a35453e29712ade0ed0230c027308c4d58678b650",
+      "sourceChanged": false,
+      "status": "completed",
+      "validity": "valid",
+      "physicalRequests": 44,
+      "elapsedMs": 221319,
+      "pool": {
+        "parent": 2,
+        "limits": {
+          "generation": 2,
+          "judge": 1
+        },
+        "targets": {
+          "generation": 2,
+          "judge": 1
+        },
+        "active": 0,
+        "queued": 0,
+        "admitted": 44,
+        "maxRequests": 80,
+        "byRole": {
+          "generation": 0,
+          "judge": 0
+        },
+        "peaks": {
+          "total": 2,
+          "generation": 2
+        },
+        "closed": true
+      },
+      "decision": {
+        "path": ".xopc-evals/control/usage-tail-independent-20261023/verification.json",
+        "sha256": "61ab67a0ebe24400368f64af0f9cf218351a16ccbb949c80cb3952e97e892293",
+        "promotion": "promoted",
+        "reasons": [],
+        "reports": [
+          {
+            "id": "sealed-ledger",
+            "passed": 3,
+            "expected": 3,
+            "complete": true
+          }
+        ]
+      }
+    }
+  ],
+  "audit": [
+    {
+      "id": "convergence",
+      "taskEventsAvailable": true,
+      "knownPerRequestUsageMatched": true,
+      "knownUsageRequests": 19,
+      "perRequestMatched": true,
+      "requestLinks": [
+        {
+          "requestId": "dad1f3e7-1cc7-40e7-a236-834947c8749b",
+          "cloudRequestId": "c4e54c81-a3e7-413c-9115-5c4f33b3c787",
+          "runtimeEventId": "42e31b8e-1ad4-4452-83e8-d23791a9cc47",
+          "providerTokens": 7180,
+          "runtimeTokens": 7180,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "64f6ce48-9a58-45ab-8c8c-f9ad101dc2ec",
+          "cloudRequestId": "f5efd725-8703-417d-8d8f-e786524b0d78",
+          "runtimeEventId": "697442bf-d949-482a-9341-a6ab23953714",
+          "providerTokens": 7427,
+          "runtimeTokens": 7427,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "6c6c75f6-c24a-4e2a-b3bb-246f49fa1c65",
+          "cloudRequestId": "b5a08b04-9ab0-479d-804f-7fce03396a12",
+          "runtimeEventId": "2b21c6ac-7a9c-43fd-aed2-2303c83a3eea",
+          "providerTokens": 7798,
+          "runtimeTokens": 7798,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "e119a13a-b4a4-4e38-a23d-ccac6895f3c2",
+          "cloudRequestId": "a499940e-ced4-4f3b-84d0-3a48fa192b97",
+          "runtimeEventId": "d17c62d3-ed6c-491f-acb2-efc666a63566",
+          "providerTokens": 8844,
+          "runtimeTokens": 8844,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "8aedf741-4566-4aea-abfe-d6e4c16a2f9b",
+          "cloudRequestId": "26c1db26-ce12-44dc-8d6b-7fa211854791",
+          "runtimeEventId": "281272bc-57b9-49a5-97d9-aabec38e3c06",
+          "providerTokens": 9358,
+          "runtimeTokens": 9358,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "49f3d843-2141-4fb9-84ed-4d2f809d9b1d",
+          "cloudRequestId": "3b4a4469-dec4-48c2-ade7-8365e73dd625",
+          "runtimeEventId": "68be1396-d966-4009-bd5f-f27cd7e7e2e1",
+          "providerTokens": 9670,
+          "runtimeTokens": 9670,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "afc58b8b-45c4-435a-8d29-6d54bca94bf6",
+          "cloudRequestId": "81fab16b-84f0-4ba1-823e-0e4b41f9e648",
+          "runtimeEventId": "181dfc3f-7cea-405c-a67c-3584fd925991",
+          "providerTokens": 9666,
+          "runtimeTokens": 9666,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "ff5abfd0-dc7d-49c1-9fb5-2d9ae22873e8",
+          "cloudRequestId": "996d1411-1aa9-430a-84b9-af07c5a1b780",
+          "runtimeEventId": "264e80c1-2ddd-4f5e-9bbd-e6e0ddd6cbd6",
+          "providerTokens": 10098,
+          "runtimeTokens": 10098,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "2158adb2-e349-4aaa-bc3f-86a8d3cac3c1",
+          "cloudRequestId": "1fcc0c01-2c83-421d-9118-c8c7643d5130",
+          "runtimeEventId": "fd70c03e-e20e-4926-a454-f52c3759c334",
+          "providerTokens": 233,
+          "runtimeTokens": 233,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "95d9b8d9-c725-4214-8425-3a6814485519",
+          "cloudRequestId": "8f6e5dc4-564f-44f5-ae1d-817df002c961",
+          "runtimeEventId": "d89c83a9-4484-48f4-9344-de0cd0519c7f",
+          "providerTokens": 7205,
+          "runtimeTokens": 7205,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "1e65abcf-bd71-43b0-9a41-aae40c8ede28",
+          "cloudRequestId": "880d45a4-5799-4148-944c-7babe31e29f4",
+          "runtimeEventId": "49d10ec3-80dd-4279-9833-adddcb91e9ed",
+          "providerTokens": 7480,
+          "runtimeTokens": 7480,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "7518a01c-38b5-4347-b31d-a2baacc0f58b",
+          "cloudRequestId": "38e5f3b8-1a19-49ae-ae27-e86678403d91",
+          "runtimeEventId": "1dcaeb2f-7c45-4c36-abfa-3411562a5424",
+          "providerTokens": 8373,
+          "runtimeTokens": 8373,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "af0e02ae-f0cb-4099-a410-e00620a92e7c",
+          "cloudRequestId": "cb5b3587-2391-42d9-967c-36ab2d828670",
+          "runtimeEventId": "e9a95fbb-b291-424c-b995-1bff6d26ead0",
+          "providerTokens": 8571,
+          "runtimeTokens": 8571,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "0a33769d-7e52-4bcd-8f45-8406a3bd18fd",
+          "cloudRequestId": "406bf5f7-bb09-4ec4-8589-8d0b86f9cade",
+          "runtimeEventId": "0a8d8efa-ded7-4292-8c77-43673a0fc75a",
+          "providerTokens": 9106,
+          "runtimeTokens": 9106,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "08de5bbe-e96c-423a-bfc6-e64943494ccd",
+          "cloudRequestId": "c0eeef53-ea88-4859-bbc9-82efa5e4b72d",
+          "runtimeEventId": "b4471df0-b7e7-4f2e-9a54-20135f5493b5",
+          "providerTokens": 9234,
+          "runtimeTokens": 9234,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "b3eecca4-2cf7-4f7d-af35-c4cdbbe3b700",
+          "cloudRequestId": "e9e22adc-92c6-45b3-9fa7-399f7d839ebd",
+          "runtimeEventId": "af75e9ce-c2ee-4042-939e-a14b51b164b0",
+          "providerTokens": 9362,
+          "runtimeTokens": 9362,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "d76032cb-e844-46bb-b86a-52ed21171b92",
+          "cloudRequestId": "e12450af-dc3e-442b-864a-8ae9323b5664",
+          "runtimeEventId": "635f55f5-a8b3-4e0b-9886-bc8cd91d533a",
+          "providerTokens": 9585,
+          "runtimeTokens": 9585,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "63cc3349-5748-4150-baa9-0ecf779c30a3",
+          "cloudRequestId": "3ff07e22-f8b0-4567-9676-accf43cea345",
+          "runtimeEventId": "f8a9a492-902c-431f-8cfb-f7a8b32f203f",
+          "providerTokens": 10608,
+          "runtimeTokens": 10608,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "18c485ea-4420-4481-9820-89c736f640e6",
+          "cloudRequestId": "58c08833-e9aa-4678-a029-828e2c03f93c",
+          "runtimeEventId": "6bcd3df7-34b3-48a6-96e6-9f1ebce7f4a5",
+          "providerTokens": 225,
+          "runtimeTokens": 225,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        }
+      ],
+      "settledChargeCreditMicro": null,
+      "billingUnit": "credit-micro",
+      "physicalRequests": 19,
+      "completedRequests": 19,
+      "runtimeRequests": 19,
+      "taskResponses": 17,
+      "auxiliaryRequests": 2,
+      "auxiliaryOperations": [
+        "session.generate_title"
+      ],
+      "observedRuntimeTokens": 150023,
+      "observedProviderMinusRuntimeTokens": 0,
+      "unknownRequests": 0,
+      "observedWireTokens": 150023,
+      "wireTokens": 150023,
+      "runtimeTokens": 150023,
+      "taskTokens": 149565,
+      "auxiliaryTokens": 458,
+      "providerMinusRuntimeTokens": 0,
+      "requestInventoryMatched": true,
+      "requestCountMatched": true,
+      "usageMatched": true,
+      "requestedModels": [
+        "openai-codex/gpt-5.6-sol"
+      ],
+      "responseModels": [
+        "openai-codex/gpt-5.6-sol"
+      ],
+      "ledgerMode": "post-gateway-stop",
+      "ledgerFinalSnapshotGuaranteed": true,
+      "actualCharge": null,
+      "actualChargeReason": "No complete settled per-request billing receipts; local estimates are not charges.",
+      "coverage": "Declared model endpoint fetch transport only; counts cross-checked against isolated runtime ledger and task events.",
+      "files": {
+        "wire": ".xopc-evals/control/usage-tail-verification-20261023/convergence-model-requests.jsonl",
+        "ledger": ".xopc-evals/control/usage-tail-verification-20261023/convergence/runtime-usage.json"
+      },
+      "hashes": {
+        "wire": "e4891eeb263d6337e99d82a4b17b245312ead29932667a767ab6aa635f814f53",
+        "ledger": "9eb77cda7a75f78ae56890084dac16f12eb999e72b6949f306190dc621a59126"
+      }
+    },
+    {
+      "id": "delivery",
+      "taskEventsAvailable": true,
+      "knownPerRequestUsageMatched": true,
+      "knownUsageRequests": 25,
+      "perRequestMatched": true,
+      "requestLinks": [
+        {
+          "requestId": "6717eef0-99ac-4412-951f-78d6d284d814",
+          "cloudRequestId": "f25aeaf0-ca48-4201-a360-ac96e7871a25",
+          "runtimeEventId": "3546557e-f762-46cf-95fa-06f3d1c9aba5",
+          "providerTokens": 7066,
+          "runtimeTokens": 7066,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "af774bb0-4bee-4386-90ab-487dabf63797",
+          "cloudRequestId": "e709fa89-5ce3-427b-ad3b-03be3dca1854",
+          "runtimeEventId": "a7fee0df-ae19-45e3-b879-cd8699382e5d",
+          "providerTokens": 7417,
+          "runtimeTokens": 7417,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "2a70e1fb-1a83-4c31-9e16-bb6bd60d95c3",
+          "cloudRequestId": "7124230f-f107-4428-b15b-b1c8fc14ccf3",
+          "runtimeEventId": "668536d9-e497-467a-b7b8-6e6ded636441",
+          "providerTokens": 8029,
+          "runtimeTokens": 8029,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "f7f3a2a0-321b-4e44-a920-b227eda6b7db",
+          "cloudRequestId": "6062ecce-577d-4810-945f-8b49f0dd27fa",
+          "runtimeEventId": "8cafd7e1-6f3a-489e-8985-1e7630aba032",
+          "providerTokens": 8337,
+          "runtimeTokens": 8337,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "81990168-97e6-4233-a62a-3ed749ceb346",
+          "cloudRequestId": "23947615-9c23-4d6c-a1d7-c59473f8fc54",
+          "runtimeEventId": "3eeeaebc-ad9d-4b45-ba64-a03fb732aba4",
+          "providerTokens": 8967,
+          "runtimeTokens": 8967,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "ab1f915e-1b14-4b61-a36b-2aaad82d961a",
+          "cloudRequestId": "12b06498-94e8-40fb-b063-79f64850f22a",
+          "runtimeEventId": "836b9453-f3b7-43b6-9e36-5b7cc20e1a83",
+          "providerTokens": 9220,
+          "runtimeTokens": 9220,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "58d1c8b7-8a37-4e8a-8825-fe54d6e3ecd4",
+          "cloudRequestId": "3cb09009-7af1-4e88-94f4-2297a71424c8",
+          "runtimeEventId": "24d6027d-3b4b-4cd6-a646-518243da5500",
+          "providerTokens": 9434,
+          "runtimeTokens": 9434,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "b2dc6735-db64-4894-bc8e-def3d49ed99b",
+          "cloudRequestId": "60467476-cc7b-43a0-b93b-894add0151b0",
+          "runtimeEventId": "b169210d-3800-4c0a-9833-2b563f0a15ef",
+          "providerTokens": 9868,
+          "runtimeTokens": 9868,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "ce2861ab-06e5-4d6c-ba8e-3528aca3ea74",
+          "cloudRequestId": "cfbddcf9-a1c5-4c80-aed7-77dcdd9a050a",
+          "runtimeEventId": "bb6331b8-7c8a-4965-857a-458bdd0f1d0c",
+          "providerTokens": 169,
+          "runtimeTokens": 169,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "25a1d0bd-2537-4153-8a3d-9a1cd4d1b6c6",
+          "cloudRequestId": "859cd0b2-c380-4fd5-b4b9-97527cee19b7",
+          "runtimeEventId": "f4ccd4fd-df25-4671-8308-f966b533e6b1",
+          "providerTokens": 10075,
+          "runtimeTokens": 10075,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "42835638-923f-4ab9-a33d-afbeb8f3f5cf",
+          "cloudRequestId": "b4c7ad7b-6084-420b-85e8-1aee31531e86",
+          "runtimeEventId": "18257daf-9026-471a-bffe-919d38e8ce0d",
+          "providerTokens": 10577,
+          "runtimeTokens": 10577,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "50fd796b-762f-4cba-86d1-bb977a608cfc",
+          "cloudRequestId": "c76569f9-cf20-4fa1-b92d-87e83b961a1d",
+          "runtimeEventId": "f91e7476-7e56-4640-9bac-96b8f445ee6f",
+          "providerTokens": 11105,
+          "runtimeTokens": 11105,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "ed295dfa-3640-4a96-b4f5-54c1dda87cd1",
+          "cloudRequestId": "a1a4c1d0-17b5-4eef-873a-17a8ebcf105d",
+          "runtimeEventId": "6add3cc8-686f-4a63-9043-1c1f0830fe81",
+          "providerTokens": 11118,
+          "runtimeTokens": 11118,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "7dc59725-4c4c-4802-bad4-8ea031894ec1",
+          "cloudRequestId": "5cf16201-1be3-4058-adc9-711e007fe063",
+          "runtimeEventId": "062c2534-1ff6-4366-80f5-f1d6000f7751",
+          "providerTokens": 11333,
+          "runtimeTokens": 11333,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "988231a1-9010-4dc9-89d1-d0aebdb7f092",
+          "cloudRequestId": "31fd967d-a02a-4554-97fa-c2902ccb0fe9",
+          "runtimeEventId": "7f154feb-56f4-4d15-8235-82e034724cdc",
+          "providerTokens": 11893,
+          "runtimeTokens": 11893,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "3b717f81-382a-44b3-87e7-9800d75ffc06",
+          "cloudRequestId": "f9a17103-1c00-4bd1-b69b-45bad9f5faab",
+          "runtimeEventId": "6b5167d5-c592-49ec-9128-4ca998b16eb6",
+          "providerTokens": 7104,
+          "runtimeTokens": 7104,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "b3f19303-bbca-4a41-8311-fb22f2241095",
+          "cloudRequestId": "a142c7f9-708f-4c9f-a4f0-df4f28720e35",
+          "runtimeEventId": "52025143-da59-4559-bc3a-de3b45fd255a",
+          "providerTokens": 7269,
+          "runtimeTokens": 7269,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "e883bd96-5cf9-4e45-8d27-7c6d170e6e87",
+          "cloudRequestId": "7f88a37e-18ac-4c05-9106-78090e8e7282",
+          "runtimeEventId": "253b3c21-e586-426e-be65-17c1f1dc7294",
+          "providerTokens": 7516,
+          "runtimeTokens": 7516,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "e8e83e3d-7bfa-4307-abab-c9a86d528ec7",
+          "cloudRequestId": "754eabc6-6e01-4024-9e72-4474fe1d273b",
+          "runtimeEventId": "53a0f854-4c33-4edc-9280-213b97607507",
+          "providerTokens": 7972,
+          "runtimeTokens": 7972,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "801e22c8-7875-4718-9f25-87e1d4b53b3f",
+          "cloudRequestId": "de379939-ffd7-425d-ba56-255897bcf1ec",
+          "runtimeEventId": "0f046721-201b-49f7-8e10-1ffcb7bf8ec4",
+          "providerTokens": 8480,
+          "runtimeTokens": 8480,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "1e221195-1d19-4d34-a01b-9a6a88951290",
+          "cloudRequestId": "92213568-3b4a-4650-93ec-9d353d61b527",
+          "runtimeEventId": "4ee1cb65-6c6f-4bec-93d4-0053e3928702",
+          "providerTokens": 8851,
+          "runtimeTokens": 8851,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "a92ecff9-af79-4463-8c48-38c81cd541db",
+          "cloudRequestId": "622f62c3-e262-4ca8-a26d-78a7c9d1eb73",
+          "runtimeEventId": "855ea3dd-abfa-453d-b8ec-03c8e1d3901a",
+          "providerTokens": 8970,
+          "runtimeTokens": 8970,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "992181a3-c586-4aea-b150-f4d38061b796",
+          "cloudRequestId": "9c699a2f-0d50-436e-87cf-4ac846b42b6c",
+          "runtimeEventId": "a116bd9d-8f50-49f1-b40f-871066a40b79",
+          "providerTokens": 9161,
+          "runtimeTokens": 9161,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "ecfe9bef-0e29-4cb4-ac70-3c6ee0aff337",
+          "cloudRequestId": "1bcdc6ea-1009-4fd3-a2c8-4f8ff11f28b5",
+          "runtimeEventId": "b37cbdb4-ddf6-452b-9132-19a13a66502b",
+          "providerTokens": 9701,
+          "runtimeTokens": 9701,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "bf6e0b71-1f87-4a58-9a31-1c2bf684b67e",
+          "cloudRequestId": "0db2188e-e068-4bf3-b2ae-33ff8b8e6761",
+          "runtimeEventId": "3af00a00-a494-4f45-baa3-ca4ea1275dd7",
+          "providerTokens": 205,
+          "runtimeTokens": 205,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        }
+      ],
+      "settledChargeCreditMicro": null,
+      "billingUnit": "credit-micro",
+      "physicalRequests": 25,
+      "completedRequests": 25,
+      "runtimeRequests": 25,
+      "taskResponses": 23,
+      "auxiliaryRequests": 2,
+      "auxiliaryOperations": [
+        "session.generate_title"
+      ],
+      "observedRuntimeTokens": 209837,
+      "observedProviderMinusRuntimeTokens": 0,
+      "unknownRequests": 0,
+      "observedWireTokens": 209837,
+      "wireTokens": 209837,
+      "runtimeTokens": 209837,
+      "taskTokens": 209463,
+      "auxiliaryTokens": 374,
+      "providerMinusRuntimeTokens": 0,
+      "requestInventoryMatched": true,
+      "requestCountMatched": true,
+      "usageMatched": true,
+      "requestedModels": [
+        "openai-codex/gpt-5.6-sol"
+      ],
+      "responseModels": [
+        "openai-codex/gpt-5.6-sol"
+      ],
+      "ledgerMode": "post-gateway-stop",
+      "ledgerFinalSnapshotGuaranteed": true,
+      "actualCharge": null,
+      "actualChargeReason": "No complete settled per-request billing receipts; local estimates are not charges.",
+      "coverage": "Declared model endpoint fetch transport only; counts cross-checked against isolated runtime ledger and task events.",
+      "files": {
+        "wire": ".xopc-evals/control/usage-tail-verification-20261023/delivery-model-requests.jsonl",
+        "ledger": ".xopc-evals/control/usage-tail-verification-20261023/delivery/runtime-usage.json"
+      },
+      "hashes": {
+        "wire": "35e9dfe4c1271fe72c4265202455fc95030586a4b355440b5f83c1c52e03388a",
+        "ledger": "923375e60584359dd826c5956eaccdb9d288635cc833efd1ba4396bb93256527"
+      }
+    },
+    {
+      "id": "sealed-release",
+      "taskEventsAvailable": true,
+      "knownPerRequestUsageMatched": true,
+      "knownUsageRequests": 48,
+      "perRequestMatched": true,
+      "requestLinks": [
+        {
+          "requestId": "b23d3565-0af6-49e1-bf19-91555bb22e08",
+          "cloudRequestId": "3b0ddcb4-ca81-4838-b931-50ba0bd46910",
+          "runtimeEventId": "99d80355-bd34-45a3-a029-25bbc92d5c84",
+          "providerTokens": 7087,
+          "runtimeTokens": 7087,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "e95ddbad-ef5f-4693-8099-d0fce1b77f68",
+          "cloudRequestId": "fa8a7002-9e24-4aaa-bab9-895a8815ac56",
+          "runtimeEventId": "22696daf-c9dd-4b88-ad70-21fa7a5e8ab6",
+          "providerTokens": 7266,
+          "runtimeTokens": 7266,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "1b9b79b4-a8f7-4f25-a254-5ba6db4a2e00",
+          "cloudRequestId": "0c7c65ba-ed02-4865-b323-d81ef6dca013",
+          "runtimeEventId": "4ec57d92-ef15-41cd-b412-35e954fed536",
+          "providerTokens": 7548,
+          "runtimeTokens": 7548,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "74d4b895-59c6-4e8e-b2c5-27e1c9405ad4",
+          "cloudRequestId": "550a003e-500e-4395-91b2-a7e3b30b96e4",
+          "runtimeEventId": "2f16b675-82b1-4750-b3fe-388d26b1e4dd",
+          "providerTokens": 7552,
+          "runtimeTokens": 7552,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "ba4c32e1-d87d-41bf-84a3-37fae89c4aab",
+          "cloudRequestId": "50d4e051-0cd5-4e0c-9e9f-4103435be8b2",
+          "runtimeEventId": "e4cde24d-925e-4a52-aedc-2c1f5a940c96",
+          "providerTokens": 8156,
+          "runtimeTokens": 8156,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "293efcb7-421f-4e40-ae04-8c52c49a60f9",
+          "cloudRequestId": "27902ab7-7ef9-414e-afe5-b494a89daebc",
+          "runtimeEventId": "65382f56-a4a6-49b7-be76-278f655ee131",
+          "providerTokens": 8801,
+          "runtimeTokens": 8801,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "3f2cbc9d-c820-4ed4-8419-dca1c3caada4",
+          "cloudRequestId": "7f69e335-2a9f-4f3b-95ff-29e5cae07f0e",
+          "runtimeEventId": "7decc268-7e46-457d-bf77-b9cf1af0f605",
+          "providerTokens": 8723,
+          "runtimeTokens": 8723,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "b617eee5-88ef-482a-9cf4-f7bee7875d75",
+          "cloudRequestId": "2235618c-431b-48d3-bc63-fbc1ed1b2312",
+          "runtimeEventId": "07af996d-fe3c-4c94-835d-4f9b7923cd97",
+          "providerTokens": 8935,
+          "runtimeTokens": 8935,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "70f8587e-b753-49dd-8e63-67b0dea7a544",
+          "cloudRequestId": "70d7fe34-e45f-4d75-9d75-12504886706b",
+          "runtimeEventId": "94d01f16-3563-475e-821d-3555dae459eb",
+          "providerTokens": 9919,
+          "runtimeTokens": 9919,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "f32916f6-01c4-4846-aced-bf9b44ca4b6a",
+          "cloudRequestId": "8d506cd6-3213-4069-b27b-b8bbfaf56a89",
+          "runtimeEventId": "f8a15774-e2b0-4290-a3eb-a0e775b996c3",
+          "providerTokens": 137,
+          "runtimeTokens": 137,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "8e3e0869-343e-4beb-9385-a86fc8b6d804",
+          "cloudRequestId": "a9e75a27-3448-4567-81b7-35b26aed0605",
+          "runtimeEventId": "46f1e16b-8229-4843-af7e-1290c85cc95c",
+          "providerTokens": 10138,
+          "runtimeTokens": 10138,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "ff35a5a9-c5b6-40d1-8302-b10b4b06033d",
+          "cloudRequestId": "1523d002-1406-412b-a83f-34dd80aaf3bf",
+          "runtimeEventId": "a45aee3e-4883-4455-ba65-413f13121470",
+          "providerTokens": 10674,
+          "runtimeTokens": 10674,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "e916a69a-6e98-45b7-bea7-52bde6cde2f6",
+          "cloudRequestId": "d55cec8e-8969-4ae0-a3f6-8dd15656d6bf",
+          "runtimeEventId": "ab639da5-8880-4677-9eec-e445939f5661",
+          "providerTokens": 10718,
+          "runtimeTokens": 10718,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "bea32214-467c-4633-809c-d1fc229ae5fb",
+          "cloudRequestId": "3bb94506-7b37-494b-b3e2-c143d66a98e9",
+          "runtimeEventId": "090f8c22-0ee7-462e-9a8a-064bb0f461a3",
+          "providerTokens": 11341,
+          "runtimeTokens": 11341,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "8f5cea9f-2008-4300-95e9-21bc2dd65563",
+          "cloudRequestId": "de4f3dbf-0fab-4b29-9521-81f34eae8daa",
+          "runtimeEventId": "8d4990d5-6574-41cc-8c29-ccc26629a30b",
+          "providerTokens": 11427,
+          "runtimeTokens": 11427,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "721a84b7-8910-481e-98e2-2d6beb908df3",
+          "cloudRequestId": "0b7be0ac-83d2-4bda-ab22-6d6dccce33af",
+          "runtimeEventId": "03d33078-de88-4dfb-9fd8-64658e5955d3",
+          "providerTokens": 11628,
+          "runtimeTokens": 11628,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "00618bb6-c40b-4f4a-966c-62384a1689c5",
+          "cloudRequestId": "f71d9757-a384-4233-a380-408e690588eb",
+          "runtimeEventId": "df74f322-57a6-4857-9369-05c20836e731",
+          "providerTokens": 12655,
+          "runtimeTokens": 12655,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "9a080c7c-a24b-424c-ae15-ef09b9612a41",
+          "cloudRequestId": "55d674a5-8abf-4f0b-8986-5ab26f3bec6f",
+          "runtimeEventId": "b06e22a2-d996-4bff-a328-af9f51f90a18",
+          "providerTokens": 7090,
+          "runtimeTokens": 7090,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "7a88be83-d395-422a-b317-961daeb34b5e",
+          "cloudRequestId": "a2339b03-268e-407d-9239-5315dbbab592",
+          "runtimeEventId": "c6b924a5-5bd8-4256-89b1-82830bf7528a",
+          "providerTokens": 7291,
+          "runtimeTokens": 7291,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "6d029725-0dda-4169-a13e-da6282e14c23",
+          "cloudRequestId": "1dc7318e-2fd0-4f7d-822d-4610ae44492e",
+          "runtimeEventId": "f0201bc5-2fa2-40d1-a415-5329668dd467",
+          "providerTokens": 7457,
+          "runtimeTokens": 7457,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "41c0d09d-6747-444c-ab13-188ff408aefa",
+          "cloudRequestId": "b0552e78-6e5c-49ac-93aa-554bde777b4b",
+          "runtimeEventId": "8f575659-9178-449f-8c1c-24b0a35d84b2",
+          "providerTokens": 7462,
+          "runtimeTokens": 7462,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "e79298f6-1262-4c5c-a9d0-e152afa34cfa",
+          "cloudRequestId": "21813c96-86a2-4612-9301-325b3fd022d9",
+          "runtimeEventId": "5e5067fd-b65e-42fb-a04a-c609b3a390d3",
+          "providerTokens": 8441,
+          "runtimeTokens": 8441,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "579740ff-8343-4bc8-809b-3458ecb79ced",
+          "cloudRequestId": "8815e339-c28e-413f-a630-1d73d8af9208",
+          "runtimeEventId": "4075ab31-8162-42b3-b11f-c199a9a65187",
+          "providerTokens": 8539,
+          "runtimeTokens": 8539,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "970091dc-eefe-4f65-89e8-39fd002e0a77",
+          "cloudRequestId": "f8b6816a-0ed2-4fa5-a577-0116ccaa30dc",
+          "runtimeEventId": "fc2dbd19-f04d-4f59-9fc7-e65139022c42",
+          "providerTokens": 8736,
+          "runtimeTokens": 8736,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "3767be30-b085-4dc4-b96c-9e363e9a0a57",
+          "cloudRequestId": "a11879ab-c5a7-468b-a40b-69a41c2d21df",
+          "runtimeEventId": "f8e12b5b-4152-4dd7-abab-a13fe6d32f1b",
+          "providerTokens": 9678,
+          "runtimeTokens": 9678,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "e35a4c84-2976-4320-a91e-73e4d66f6f0d",
+          "cloudRequestId": "76fd41c5-9505-4b1f-a21f-b5ba375eb188",
+          "runtimeEventId": "492dd53e-cf23-43fb-8a1e-a2c21c692142",
+          "providerTokens": 140,
+          "runtimeTokens": 140,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "7d13734d-8251-41a6-9707-04862c479491",
+          "cloudRequestId": "776a8a10-40f7-454e-ad85-1adb8450b01e",
+          "runtimeEventId": "c089d703-65c4-4365-a091-c851d1bc5aa6",
+          "providerTokens": 9920,
+          "runtimeTokens": 9920,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "7e1ab051-2222-4f4f-8a37-e54ae52587f5",
+          "cloudRequestId": "145fafa7-3152-420e-9afd-052aac8e7db8",
+          "runtimeEventId": "1cb4b78b-a6aa-4a5c-9fcb-bea5dc9d39ef",
+          "providerTokens": 10417,
+          "runtimeTokens": 10417,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "8ef646d8-dbef-46fb-a342-7fa27db589a4",
+          "cloudRequestId": "1ad29ade-0eef-470e-bc65-e54d7ba6c07b",
+          "runtimeEventId": "42cbeafd-ffa9-4c27-bccb-5fe717c8874b",
+          "providerTokens": 10461,
+          "runtimeTokens": 10461,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "53d25970-5bfe-4fec-a353-ff84c770e34a",
+          "cloudRequestId": "ddf3f6d6-3b28-41e3-b1f0-5b007cde43ac",
+          "runtimeEventId": "ff9a55d7-c309-4808-a531-183047d59e60",
+          "providerTokens": 11259,
+          "runtimeTokens": 11259,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "988cca5d-80ca-45f4-baba-7342e69ad1c5",
+          "cloudRequestId": "8f2d3841-37a9-4e21-a5dd-2db6c5c25311",
+          "runtimeEventId": "b2224c82-6cab-4c12-baf1-747f3cdbe440",
+          "providerTokens": 11345,
+          "runtimeTokens": 11345,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "50f3392d-79c3-4591-825d-99c23d2ab89c",
+          "cloudRequestId": "6986ae37-b3fc-488e-b41c-baffbf736f0c",
+          "runtimeEventId": "092644d9-3beb-4bc4-853f-8b9b10661284",
+          "providerTokens": 11544,
+          "runtimeTokens": 11544,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "ce26542b-052d-4c33-80e9-f368d5975507",
+          "cloudRequestId": "6b6de0c9-d301-417c-81d6-ed4dbce11ea9",
+          "runtimeEventId": "46569817-5179-4aab-b3e4-aff045ed100d",
+          "providerTokens": 12561,
+          "runtimeTokens": 12561,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "c77bcad0-381f-4fed-a360-6d13a29b0268",
+          "cloudRequestId": "36f06db8-72b1-474e-aefa-5220618d7ce7",
+          "runtimeEventId": "6b3580de-dfcc-47a9-be09-a0131ef1dd6c",
+          "providerTokens": 7073,
+          "runtimeTokens": 7073,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "c2a9d98b-681f-47e8-8ec1-449b12f2d01a",
+          "cloudRequestId": "ce36810b-658d-4a03-a8ad-cc11634c5daa",
+          "runtimeEventId": "7675915e-2776-4076-8d56-fed731c80791",
+          "providerTokens": 7397,
+          "runtimeTokens": 7397,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "3e5fa313-a2da-4e90-a72f-12635761da86",
+          "cloudRequestId": "0454175e-8924-4395-9fbd-5c778112bc3a",
+          "runtimeEventId": "576b42f9-d7fb-4f52-9f24-e21a67cf6f05",
+          "providerTokens": 7454,
+          "runtimeTokens": 7454,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "c552c092-3bef-44e3-a9f5-1ff5fac2d39a",
+          "cloudRequestId": "81a159f6-70c9-4041-b190-e806f991e7e8",
+          "runtimeEventId": "d1dcc90a-ce78-4f6e-b547-b164bff19d8c",
+          "providerTokens": 8367,
+          "runtimeTokens": 8367,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "585d56b0-f239-46f6-9d4c-b0e3649fafa1",
+          "cloudRequestId": "1d590d4d-aace-4f6c-9dd7-64100992ff84",
+          "runtimeEventId": "02353d56-54e9-409f-848c-a8d385753c1e",
+          "providerTokens": 8517,
+          "runtimeTokens": 8517,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "43f45923-16af-4266-bb22-2f9f4ad91aca",
+          "cloudRequestId": "c2b8ac34-4536-406d-b859-aa8a1138a960",
+          "runtimeEventId": "313716dd-ab64-402b-b748-45269fd4c8e8",
+          "providerTokens": 8668,
+          "runtimeTokens": 8668,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "5d39c214-72f9-45cb-99eb-cc69cfee51d4",
+          "cloudRequestId": "e4594d27-5671-4ea5-9ad3-223d71d72d5d",
+          "runtimeEventId": "de688e15-2839-4596-b311-b7674b9c8b52",
+          "providerTokens": 9624,
+          "runtimeTokens": 9624,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "dbb8ea73-ebda-4a9c-95ff-0d378c1dfa85",
+          "cloudRequestId": "122881bf-e0cd-44c3-ab31-d87c732a6c71",
+          "runtimeEventId": "aab6bd0f-5d47-4b62-909a-06cb9da5ef12",
+          "providerTokens": 146,
+          "runtimeTokens": 146,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "4bff1b2d-0f11-48ee-ae71-8728e5a673ce",
+          "cloudRequestId": "1681b057-50fd-4ebe-a567-8cefdf61195d",
+          "runtimeEventId": "afc18402-1bc3-411f-8246-283bff058213",
+          "providerTokens": 9873,
+          "runtimeTokens": 9873,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "fcb3cd6f-08bd-4a77-99fe-f8cb9e3e782e",
+          "cloudRequestId": "e534d710-819e-4b68-8cc7-0cd4f5e1c332",
+          "runtimeEventId": "9e41f630-0a79-4013-8efe-6a8464bc8781",
+          "providerTokens": 10707,
+          "runtimeTokens": 10707,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "765bebc6-a2f6-4514-959e-cc8852b7c613",
+          "cloudRequestId": "c51f03c5-e2fb-49b5-827c-ec0ed4130fdb",
+          "runtimeEventId": "114c5f7f-3d0e-4db3-abe9-60213b4ba401",
+          "providerTokens": 10764,
+          "runtimeTokens": 10764,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "d418baed-8619-4d9d-837e-8e6fb0e145cc",
+          "cloudRequestId": "026ae7b7-0d71-4997-b5da-89dd40907e3d",
+          "runtimeEventId": "9149c445-0d34-4a7a-9329-fb63f5ee16d8",
+          "providerTokens": 11546,
+          "runtimeTokens": 11546,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "850099e0-2cb3-408b-ba9b-b1bfa5d547fc",
+          "cloudRequestId": "b26c6b57-6d08-4b13-8461-5ef93e968270",
+          "runtimeEventId": "451f559a-cc4d-4735-a1d2-1e090c68e999",
+          "providerTokens": 11538,
+          "runtimeTokens": 11538,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "18552eeb-d8c1-4696-8fa7-8a33237303c4",
+          "cloudRequestId": "1c933b9e-aea7-4f3d-ba31-abbfb57dfcf2",
+          "runtimeEventId": "cf13fb06-7858-468d-9253-e57bf0b1d758",
+          "providerTokens": 11735,
+          "runtimeTokens": 11735,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "d1eccfc2-fd2a-4302-9642-264bb8c2a18f",
+          "cloudRequestId": "6d3f9ee3-b2fa-45e2-bfb5-49288be63bb8",
+          "runtimeEventId": "25775ba1-8520-41f0-86fd-91cc149fd1d6",
+          "providerTokens": 12716,
+          "runtimeTokens": 12716,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        }
+      ],
+      "settledChargeCreditMicro": null,
+      "billingUnit": "credit-micro",
+      "physicalRequests": 48,
+      "completedRequests": 48,
+      "runtimeRequests": 48,
+      "taskResponses": 45,
+      "auxiliaryRequests": 3,
+      "auxiliaryOperations": [
+        "session.generate_title"
+      ],
+      "observedRuntimeTokens": 431171,
+      "observedProviderMinusRuntimeTokens": 0,
+      "unknownRequests": 0,
+      "observedWireTokens": 431171,
+      "wireTokens": 431171,
+      "runtimeTokens": 431171,
+      "taskTokens": 430748,
+      "auxiliaryTokens": 423,
+      "providerMinusRuntimeTokens": 0,
+      "requestInventoryMatched": true,
+      "requestCountMatched": true,
+      "usageMatched": true,
+      "requestedModels": [
+        "openai-codex/gpt-5.6-sol"
+      ],
+      "responseModels": [
+        "openai-codex/gpt-5.6-sol"
+      ],
+      "ledgerMode": "post-gateway-stop",
+      "ledgerFinalSnapshotGuaranteed": true,
+      "actualCharge": null,
+      "actualChargeReason": "No complete settled per-request billing receipts; local estimates are not charges.",
+      "coverage": "Declared model endpoint fetch transport only; counts cross-checked against isolated runtime ledger and task events.",
+      "files": {
+        "wire": ".xopc-evals/control/usage-tail-verification-20261023/sealed-release-model-requests.jsonl",
+        "ledger": ".xopc-evals/control/usage-tail-verification-20261023/sealed-release/runtime-usage.json"
+      },
+      "hashes": {
+        "wire": "267b7ec14129e09e34b95365558b6f7e3629de9986393a4ca813bac5587c91e1",
+        "ledger": "94251448c0ea099ac71355dcb68ae605a17753d3890d40de0caccb3427485756"
+      }
+    },
+    {
+      "id": "personal",
+      "taskEventsAvailable": false,
+      "knownPerRequestUsageMatched": true,
+      "knownUsageRequests": 58,
+      "perRequestMatched": false,
+      "requestLinks": [
+        {
+          "requestId": "3beb6124-7b1a-4200-abf8-469515bcd2c7",
+          "cloudRequestId": "d0649d25-ff12-4eb5-b458-a8d68305f78a",
+          "runtimeEventId": "77a86025-4f3f-41d6-b6a0-910da06e2faf",
+          "providerTokens": 13636,
+          "runtimeTokens": 13636,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "7e22cb91-aa4d-4d19-93a9-b71b189d223e",
+          "cloudRequestId": "8a80bbdb-1302-43f2-81aa-305f6123c13e",
+          "runtimeEventId": "ecd22972-bf29-407b-a054-b89accbe5cf9",
+          "providerTokens": 14291,
+          "runtimeTokens": 14291,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "2f653eb8-d2ee-4e76-ad48-3e31f293d232",
+          "cloudRequestId": "f5ace738-3341-4cd7-8e25-a4d85784f3e3",
+          "runtimeEventId": "e1d53c93-f8a9-4151-a439-0d2ece7acebf",
+          "providerTokens": 2216,
+          "runtimeTokens": 2216,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "376f1f6d-bd52-4e16-83bd-3e685019a0d7",
+          "cloudRequestId": "5211f55c-6f6f-4cc6-8d16-2d250421e9ee",
+          "runtimeEventId": "7ef424f5-24e7-4d36-a856-27630e752e29",
+          "providerTokens": 4174,
+          "runtimeTokens": 4174,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "f39d60cb-c52f-46cb-98e9-c8b0745478c0",
+          "cloudRequestId": "7bff674d-f353-4da5-afbd-d6e5506a3e49",
+          "runtimeEventId": "6787d3e2-a086-4726-804d-7fae87815174",
+          "providerTokens": 14632,
+          "runtimeTokens": 14632,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "29fcc2cd-3c11-4b23-ad0b-c533f6d3186e",
+          "cloudRequestId": "f67b9056-4747-4113-b58e-36c86f70ee6a",
+          "runtimeEventId": "897ff73c-acd3-4c69-a563-e832954a6d40",
+          "providerTokens": 16057,
+          "runtimeTokens": 16057,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "43139ba3-9f71-4ee8-b7f3-24f5dd35c055",
+          "cloudRequestId": "d1e94ab5-909d-48de-be84-de54b139c9ed",
+          "runtimeEventId": "e01d0988-99bb-4377-83c0-3070ac1bb39e",
+          "providerTokens": 16746,
+          "runtimeTokens": 16746,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "130a38db-c8cc-4653-9150-0b46d7084f85",
+          "cloudRequestId": "b0942346-2867-4135-8ea5-038d5b5f6832",
+          "runtimeEventId": "98f19b35-a33e-41fe-9b25-34644d418530",
+          "providerTokens": 16794,
+          "runtimeTokens": 16794,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "9f2c9833-1030-4a82-b6da-24171bb6c189",
+          "cloudRequestId": "37ce1e44-06d1-43b7-ac3b-59b601b5d75f",
+          "runtimeEventId": "dd57cbd0-c953-4795-b25d-4c5a6120d05e",
+          "providerTokens": 16835,
+          "runtimeTokens": 16835,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "0121d3f8-6bfc-4c85-95b6-77883050cd56",
+          "cloudRequestId": "4d765c86-4903-42a0-b56e-947fa05410ab",
+          "runtimeEventId": "e7ef9a65-b5a8-4105-8d49-8e5282e44f19",
+          "providerTokens": 16874,
+          "runtimeTokens": 16874,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "3aab6d47-8c7f-4b6e-ba52-d227bbc2c484",
+          "cloudRequestId": "64e99272-bde1-47b2-a05e-629f60d720ca",
+          "runtimeEventId": "e20a07b3-3238-42a9-bdcd-3212ff54be61",
+          "providerTokens": 18379,
+          "runtimeTokens": 18379,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "a29d2d52-fb79-432a-912a-bb6bd502dddc",
+          "cloudRequestId": "91b26527-b306-4dfe-985a-4c88c128e97d",
+          "runtimeEventId": "fe368ee4-3cf2-4a8d-9110-6db072b76e84",
+          "providerTokens": 18671,
+          "runtimeTokens": 18671,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "40567ee8-e08f-470b-8aba-6db2dbe3e74d",
+          "cloudRequestId": "ffe4490d-db00-4a53-ba79-9b197d071aec",
+          "runtimeEventId": "7e7b7692-cd55-40a7-b4ec-72d2f1bc35f3",
+          "providerTokens": 19075,
+          "runtimeTokens": 19075,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "7cdb7a00-0ddc-41ff-85c7-9bc5b131eb40",
+          "cloudRequestId": "6f968b43-2ef7-43e8-8702-0b1007fe658d",
+          "runtimeEventId": "465628b2-ed00-4920-92dd-8b44664f9753",
+          "providerTokens": 19418,
+          "runtimeTokens": 19418,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "da3403be-0a71-4dda-b5f8-1409508623e3",
+          "cloudRequestId": "051d3351-b0ae-4467-aee7-2dded42f7f23",
+          "runtimeEventId": "5ceca706-7274-41bf-bbfb-0fbfb07d300e",
+          "providerTokens": 23347,
+          "runtimeTokens": 23347,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "7b0b3e2f-3b0e-4d98-b93b-fd1289b930a0",
+          "cloudRequestId": "d8a12c3a-4812-4e7f-9b81-591a2ab880e9",
+          "runtimeEventId": "ac7332e5-245b-4b61-a7b1-348f70905509",
+          "providerTokens": 25236,
+          "runtimeTokens": 25236,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "44d83fb2-d3a6-43e8-af64-ffa4478c8874",
+          "cloudRequestId": "7708e03c-c318-4b78-b2b9-a9cd0e0f66b1",
+          "runtimeEventId": "b712e41d-5fd8-4f21-bb6d-83cb4b05b059",
+          "providerTokens": 26652,
+          "runtimeTokens": 26652,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "eb16cb1e-5957-409d-8b96-3b412d92fa3e",
+          "cloudRequestId": "3a018f19-782f-4cc2-999a-5feebc10b061",
+          "runtimeEventId": "e1fcd8bc-dd97-4033-b756-55e0ad831f6c",
+          "providerTokens": 26907,
+          "runtimeTokens": 26907,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "5573eee7-d57c-4f61-831d-f811444d44fe",
+          "cloudRequestId": "733c97f5-ae38-4836-be82-6181d444ca83",
+          "runtimeEventId": "45805c4a-da69-49bf-8390-376b80291523",
+          "providerTokens": 28359,
+          "runtimeTokens": 28359,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "e6fe3f90-3b07-4f3c-b03b-08e9830d24df",
+          "cloudRequestId": "58c62030-024b-46e7-97a3-a9f6605b030c",
+          "runtimeEventId": "c0367568-c7c1-47fb-9a27-b124edaf1822",
+          "providerTokens": 29588,
+          "runtimeTokens": 29588,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "37cc20d5-d87d-427a-9004-91ea81fe1b08",
+          "cloudRequestId": "d6eccfe4-de59-4ffe-88b1-cf144f0447fb",
+          "runtimeEventId": "6277401a-aff1-4824-a462-976241e4282d",
+          "providerTokens": 6873,
+          "runtimeTokens": 6873,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "1109771c-a5e6-4e4a-9168-c18f426f61b4",
+          "cloudRequestId": "b96c3490-54fa-4695-baa9-ea595965da0b",
+          "runtimeEventId": "2c84e31c-46ef-45fa-bd3b-34477b4d48d9",
+          "providerTokens": 6644,
+          "runtimeTokens": 6644,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "354752a4-cac4-497e-a5df-f653f88a8a9b",
+          "cloudRequestId": "d66eb528-8105-41f5-b5a2-9b7cd3e1aab4",
+          "runtimeEventId": "a8cdb540-e6a5-42cb-99fa-375547f8c1a7",
+          "providerTokens": 14830,
+          "runtimeTokens": 14830,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "4a16c708-3645-462e-98a4-18aa03d9382e",
+          "cloudRequestId": "b3b73da5-f315-400e-9f71-a2a2bbd68cc0",
+          "runtimeEventId": "18d39409-71e1-4a10-b94b-1d8e889111b2",
+          "providerTokens": 15075,
+          "runtimeTokens": 15075,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "7f8e72a2-67be-4c17-8480-80e442f2949f",
+          "cloudRequestId": "d746fa75-b46e-434f-af88-2130a2f54d27",
+          "runtimeEventId": "2cad4348-8009-4f46-b2ab-98e0056cdd4e",
+          "providerTokens": 15292,
+          "runtimeTokens": 15292,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "f8e83203-bc2f-44b1-bc3e-715eb9ac11d6",
+          "cloudRequestId": "463c452f-2eb0-41c2-8bc3-6b10832f1079",
+          "runtimeEventId": "fe137138-199c-4f21-b92e-32f0a822c7f5",
+          "providerTokens": 15654,
+          "runtimeTokens": 15654,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "9ad1f66a-dff5-4f08-9764-6d9094946a0e",
+          "cloudRequestId": "cb8c25a6-ae28-4f3f-b0bc-d55945de1fe1",
+          "runtimeEventId": "196ffef9-bbce-48f3-85e5-5015061f4116",
+          "providerTokens": 31408,
+          "runtimeTokens": 31408,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "c94456b3-779d-4da2-b4ca-a0a6e4a27274",
+          "cloudRequestId": "df5cf9d4-a3c0-4c5a-b625-f11d7e9ccc0d",
+          "runtimeEventId": "f74a9a17-3ccf-4e5c-8b53-fcb515bc87d0",
+          "providerTokens": 16475,
+          "runtimeTokens": 16475,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "c85bd8f4-81a2-4783-a3d4-f9fd619bd55f",
+          "cloudRequestId": "4f127766-6c28-4564-a146-ca035fcccfd6",
+          "runtimeEventId": "3ac7dce9-73d1-47be-a524-3b288c9e9a31",
+          "providerTokens": 31864,
+          "runtimeTokens": 31864,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "29ebb073-d198-42c1-be13-328b8f80777f",
+          "cloudRequestId": "ef83fbfb-2667-4c0b-81e2-67347a76d2eb",
+          "runtimeEventId": "7d2c12ab-2014-4906-a1ce-aa25d89887c0",
+          "providerTokens": 32376,
+          "runtimeTokens": 32376,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "31cc874c-7378-4c99-970f-1fef9ba219d4",
+          "cloudRequestId": "284cd5be-1aa1-4fc0-b4ab-87417c718df5",
+          "runtimeEventId": "3abdb7ef-9337-4900-9d9a-71faafbc741b",
+          "providerTokens": 32640,
+          "runtimeTokens": 32640,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "6af4af76-df9e-43d5-9607-706016204b0d",
+          "cloudRequestId": "d4407afe-92e5-4f83-8070-0cfe4fb2c259",
+          "runtimeEventId": "52d83634-ba76-4357-818e-1ccf4d2513ea",
+          "providerTokens": 32976,
+          "runtimeTokens": 32976,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "f76eb9a9-d95f-4c67-b1a8-4abb80569995",
+          "cloudRequestId": "6c579136-3154-4ba8-9f97-5375fad53ea3",
+          "runtimeEventId": "dcdcea31-d4cb-4e9b-9fd7-9495c1d2e443",
+          "providerTokens": 34746,
+          "runtimeTokens": 34746,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "82fcd5fd-83ff-4bb4-8ef4-ed6a1e553a38",
+          "cloudRequestId": "8e0151d6-f01e-4747-9295-6577b3c2fa76",
+          "runtimeEventId": "c31214ee-2fbe-4c1f-ac9f-80c09f82ee79",
+          "providerTokens": 37033,
+          "runtimeTokens": 37033,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "2537974c-0ffc-4ebd-b3a1-5d52f27f3bd6",
+          "cloudRequestId": "f0e7dcb6-71bf-422f-9440-50e4587cb64d",
+          "runtimeEventId": "e3cce974-9064-48d4-9033-2842884b1d4b",
+          "providerTokens": 8159,
+          "runtimeTokens": 8159,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "4d4e0e9d-c5e3-4c98-bf72-0176d641e9ed",
+          "cloudRequestId": "c1a53e45-7a60-48a4-939d-c8317d5c81b3",
+          "runtimeEventId": "76002828-0724-4f9e-9658-21f026a46fdb",
+          "providerTokens": 8069,
+          "runtimeTokens": 8069,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "67c96861-46e0-4b21-923b-62b3c8b1b98b",
+          "cloudRequestId": "7acf3e29-6a7c-407d-913d-04a425faf167",
+          "runtimeEventId": "97d2a59f-9087-40f9-b89f-f18aa47dc067",
+          "providerTokens": 38983,
+          "runtimeTokens": 38983,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "f6558163-4d0a-4a37-9c19-21e3fe3bd371",
+          "cloudRequestId": "404eed83-9f6c-4f3c-802f-4eabe5df93fd",
+          "runtimeEventId": "8e6388eb-2517-4416-a93e-e1bcde5fa9ef",
+          "providerTokens": 39404,
+          "runtimeTokens": 39404,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "9f111586-d80a-4972-ae63-a8b431836080",
+          "cloudRequestId": "c5ffba16-cf0e-45a0-b7f8-2208d5bd1cf1",
+          "runtimeEventId": "99ff4f09-1bd7-4cbe-a9e8-22f486f203a6",
+          "providerTokens": 41508,
+          "runtimeTokens": 41508,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "a50aa6e9-065e-46a3-86f4-ff1594962f2c",
+          "cloudRequestId": "d047d1f0-3e45-4c7f-8a58-41106bfdf733",
+          "runtimeEventId": "92db6696-8be4-4ad0-a384-9bab39ebca19",
+          "providerTokens": 724,
+          "runtimeTokens": 724,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "79ef14eb-f85e-4938-a1c0-54231ca9ff08",
+          "cloudRequestId": "247471e5-15e2-4107-9459-a0422e4c77af",
+          "runtimeEventId": "802aa34a-72c8-462f-92c0-68d18bc2537f",
+          "providerTokens": 41749,
+          "runtimeTokens": 41749,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "3708801d-38f1-4383-8f2b-4dcff67e0a04",
+          "cloudRequestId": "15421876-3497-4e3b-a9a2-8a7183e77d4e",
+          "runtimeEventId": "08050d49-a8cd-485f-9723-e16d9d049c55",
+          "providerTokens": 41679,
+          "runtimeTokens": 41679,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "4bae993b-ccbe-4048-886d-e40a90df2aef",
+          "cloudRequestId": "fa7bd2bd-5727-45dd-ae4b-fc29d51dc912",
+          "runtimeEventId": "338965ae-eff6-4d8b-98ff-31a1e0294528",
+          "providerTokens": 43870,
+          "runtimeTokens": 43870,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "0caa997b-9790-4929-9b9f-573710aa0c33",
+          "cloudRequestId": "8306bb2c-bc59-4bc2-9c22-5cad2436d7da",
+          "runtimeEventId": "f294c582-b33b-4c78-9788-48710c6dc5ce",
+          "providerTokens": 8457,
+          "runtimeTokens": 8457,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "1dcafda1-c5df-4d47-ab0a-a2262ae9218f",
+          "cloudRequestId": "9711c666-909b-44ad-9a53-1a26035c47d1",
+          "runtimeEventId": "74648b15-f6ad-4c2b-a482-a72547423b60",
+          "providerTokens": 45968,
+          "runtimeTokens": 45968,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "c73e691a-0c1d-4502-83c1-f3ca55a88d82",
+          "cloudRequestId": "3cb703c5-c884-4e55-84f2-dc9d155bb08c",
+          "runtimeEventId": "345074f8-45ce-49e0-98bc-8a354c99851a",
+          "providerTokens": 46262,
+          "runtimeTokens": 46262,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "440ebf97-129a-47a9-a095-098c8290afcd",
+          "cloudRequestId": "14132cd5-2d4a-4328-b81c-2e1c37243cf9",
+          "runtimeEventId": "7c8dcbd0-635c-4a32-9ec0-1de339b31d15",
+          "providerTokens": 46714,
+          "runtimeTokens": 46714,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "1ea2c39e-505d-4ed2-8f67-7a020834d27c",
+          "cloudRequestId": "79c403c3-84a9-44d0-be41-46fa144506d7",
+          "runtimeEventId": "9190bab5-e10f-43a6-964a-810a016be80d",
+          "providerTokens": 47391,
+          "runtimeTokens": 47391,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "d6236c1f-95af-4037-bf8f-82f525f9f493",
+          "cloudRequestId": "0212cea5-72bb-4209-98b4-8695c4235d76",
+          "runtimeEventId": "61107641-d45a-406d-9de0-2eb5baf6c6af",
+          "providerTokens": 48729,
+          "runtimeTokens": 48729,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "2d40298e-4075-48dd-902e-92bd4de5b232",
+          "cloudRequestId": "178e0b94-2002-4fe5-b2ad-f41cc06de3cf",
+          "runtimeEventId": "5df3ab4a-ba09-4978-a621-6277b8f8e3a0",
+          "providerTokens": 49573,
+          "runtimeTokens": 49573,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "bb7aea52-ad56-4710-8761-fa77d1e5a466",
+          "cloudRequestId": "eb94006b-1c7b-4395-87a6-b28eb2509c93",
+          "runtimeEventId": "7806faa1-e800-4946-80d3-c47f579f9eb1",
+          "providerTokens": 49963,
+          "runtimeTokens": 49963,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "f84772e1-fb05-477e-9ad3-3e58cccf9610",
+          "cloudRequestId": "7d67461d-67b8-4ef5-b443-44343d9090db",
+          "runtimeEventId": "c2af65c1-b4ca-4546-b3ca-50553d647a86",
+          "providerTokens": 50034,
+          "runtimeTokens": 50034,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "9e6cfc9a-cb06-40db-8735-26288b4dddc3",
+          "cloudRequestId": "68add892-36aa-4c92-9eff-755e8a3168ec",
+          "runtimeEventId": "ae0a49b7-5205-4e00-9a3a-35f79450ab5d",
+          "providerTokens": 50434,
+          "runtimeTokens": 50434,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "2661d067-1a50-43e2-8a22-64227153a20f",
+          "cloudRequestId": "2ba065e8-b5b0-4816-b061-c6d2eae0ec0a",
+          "runtimeEventId": "4739dafe-cb48-472d-8c4d-7b3196df80ca",
+          "providerTokens": 50844,
+          "runtimeTokens": 50844,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "efcf78c9-4eea-4b89-9160-bdbe68b6dffb",
+          "cloudRequestId": "9cc96a7e-f019-4244-8357-b346bc8486ff",
+          "runtimeEventId": "e7ff45fa-2863-441e-bd1d-8650e4fb65c0",
+          "providerTokens": 51250,
+          "runtimeTokens": 51250,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "1e78d721-1296-4a23-ac70-9881f32d471c",
+          "cloudRequestId": "8f53f106-6223-4e4b-9841-76890baad58f",
+          "runtimeEventId": "a5b00fd7-5f4a-423d-807d-fe47962ad3d1",
+          "providerTokens": 51638,
+          "runtimeTokens": 51638,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "e278191f-ae35-498f-afbe-1a4026c49d6e",
+          "cloudRequestId": "7e0f8576-e20d-4f26-b0c3-904b36e81ae6",
+          "runtimeEventId": "1e794936-e816-490a-b348-3a95ec13e3bf",
+          "providerTokens": 52031,
+          "runtimeTokens": 52031,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "43790189-55a8-4c4e-b822-30ae3aed3020",
+          "cloudRequestId": "f5e017ed-be67-4f7f-84b7-d9493ca48f44",
+          "runtimeEventId": "acd44bce-14ac-480e-98fc-5ce593027b2a",
+          "providerTokens": 52422,
+          "runtimeTokens": 52422,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "3f648088-bb86-4ada-940a-4712e16e9c5f",
+          "cloudRequestId": "f9fd7375-05ba-4b33-836f-7263ac22ffad",
+          "runtimeEventId": "355c385c-9d54-4c3b-90b6-9a0512008b9e",
+          "providerTokens": null,
+          "runtimeTokens": 0,
+          "usageEventIdentityMatched": true,
+          "matched": false
+        }
+      ],
+      "settledChargeCreditMicro": null,
+      "billingUnit": "credit-micro",
+      "physicalRequests": 59,
+      "completedRequests": 59,
+      "runtimeRequests": 59,
+      "taskResponses": 0,
+      "auxiliaryRequests": 8,
+      "auxiliaryOperations": [
+        "task.plan_contract",
+        "task.allocation",
+        "task.research_review",
+        "session.generate_title"
+      ],
+      "observedRuntimeTokens": 1657628,
+      "observedProviderMinusRuntimeTokens": 0,
+      "unknownRequests": 1,
+      "observedWireTokens": 1657628,
+      "wireTokens": null,
+      "runtimeTokens": 1657628,
+      "taskTokens": null,
+      "auxiliaryTokens": 45316,
+      "providerMinusRuntimeTokens": null,
+      "requestInventoryMatched": true,
+      "requestCountMatched": false,
+      "usageMatched": false,
+      "requestedModels": [
+        "auto"
+      ],
+      "responseModels": [
+        "auto"
+      ],
+      "ledgerMode": "read-only-recovery-after-owner-exit",
+      "ledgerFinalSnapshotGuaranteed": true,
+      "actualCharge": null,
+      "actualChargeReason": "No complete settled per-request billing receipts; local estimates are not charges.",
+      "coverage": "Declared model endpoint fetch transport only; counts cross-checked against isolated runtime ledger and task events.",
+      "files": {
+        "wire": ".xopc-evals/control/usage-tail-verification-20261023/personal-model-requests.jsonl",
+        "ledger": ".xopc-evals/control/usage-tail-verification-20261023/personal/runtime-usage-recovered.json"
+      },
+      "hashes": {
+        "wire": "c880e80559826113520473d106d6e66711d3c7d2d2e11612317cb4bcc85e7f08",
+        "ledger": "e4182ea5a4e3a84f3ecbc1701fe5f2dcf88b23251bc480acb9e064a368b81f63"
+      }
+    },
+    {
+      "id": "sealed-ledger",
+      "taskEventsAvailable": true,
+      "knownPerRequestUsageMatched": true,
+      "knownUsageRequests": 44,
+      "perRequestMatched": true,
+      "requestLinks": [
+        {
+          "requestId": "b97a889f-5eed-49ad-8354-889ca35c2148",
+          "cloudRequestId": "b261602f-c72e-48e1-b4b6-b3c561460b87",
+          "runtimeEventId": "dda0ca9b-1e4b-47be-a3b9-46cdef4e9674",
+          "providerTokens": 7068,
+          "runtimeTokens": 7068,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "a2d51279-300d-41d7-99d9-821fb7d4042f",
+          "cloudRequestId": "c43351b6-9dfd-4a21-bc43-bce25c98a165",
+          "runtimeEventId": "44b10497-2d2f-4b04-91d9-d4f9223d4ec2",
+          "providerTokens": 7354,
+          "runtimeTokens": 7354,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "b8e46b7e-c292-451a-acdb-be872eba6137",
+          "cloudRequestId": "634a4b09-c4e0-48b5-96d7-cca40d8e9f98",
+          "runtimeEventId": "c2ad3e3f-f3ce-469e-9d66-ccd2de90e798",
+          "providerTokens": 7618,
+          "runtimeTokens": 7618,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "4779527f-3e7c-4b47-ad80-975f15fbc56a",
+          "cloudRequestId": "d5c0417c-3cd6-48a0-976a-c53c341b6984",
+          "runtimeEventId": "f57fa6c8-f759-4503-929f-8f1a37e19aaf",
+          "providerTokens": 8037,
+          "runtimeTokens": 8037,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "00ff1949-4cdc-482f-8a0b-2b6917e4e1f0",
+          "cloudRequestId": "a41ddb7d-3cf2-4ccb-b0eb-5611e179efa7",
+          "runtimeEventId": "553920f3-c839-4433-bfa8-aa16b3f8ce3f",
+          "providerTokens": 8788,
+          "runtimeTokens": 8788,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "05532f61-a703-4f9a-b595-61ee28dc04d6",
+          "cloudRequestId": "c3b8f2e7-f3b7-4f77-a18d-bed04548e650",
+          "runtimeEventId": "104b79b8-0017-4f17-9afa-1a6385f34327",
+          "providerTokens": 8845,
+          "runtimeTokens": 8845,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "9d319a25-b5a5-462e-84b3-e7e15e0ccb10",
+          "cloudRequestId": "17694b49-8cbc-4b09-af80-acb8f5b1e04c",
+          "runtimeEventId": "e3659d5f-4b5f-45c0-8501-80a00ea6a0c4",
+          "providerTokens": 9053,
+          "runtimeTokens": 9053,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "0edb49c5-f905-47a6-a8cf-8952a8657303",
+          "cloudRequestId": "bedfd78c-a250-485d-94c5-7c14ade5aacc",
+          "runtimeEventId": "c0534786-0625-454d-94f4-a9c94cc0617f",
+          "providerTokens": 9928,
+          "runtimeTokens": 9928,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "9766b5e9-e3de-4ca3-a519-494608a0cac0",
+          "cloudRequestId": "24a0f0d7-43e0-4c6e-81c2-105f0e4732e3",
+          "runtimeEventId": "6987de4b-bc68-4f82-856c-a4955788a502",
+          "providerTokens": 154,
+          "runtimeTokens": 154,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "ce680148-69d1-4f99-9fb6-251671b705b0",
+          "cloudRequestId": "d60daa1f-f673-4ea4-bef8-2a6edf448a94",
+          "runtimeEventId": "d9b40b35-24cc-41e5-bfc8-6d58dc0a4698",
+          "providerTokens": 10185,
+          "runtimeTokens": 10185,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "531eb137-f7fa-4056-8bea-cffcee52f402",
+          "cloudRequestId": "6ed70f19-f439-4a95-9886-bbc15124376f",
+          "runtimeEventId": "5226a106-be66-4e2d-ad57-e3f29992f0f9",
+          "providerTokens": 10850,
+          "runtimeTokens": 10850,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "ba52449b-ebbc-458e-a4f7-a552a676eaa1",
+          "cloudRequestId": "621af5e7-1d26-4f55-a5e7-4958aab316d8",
+          "runtimeEventId": "c27059d1-a63f-426e-b257-05df2b429b20",
+          "providerTokens": 10910,
+          "runtimeTokens": 10910,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "17c11b11-5e52-49cb-9ca3-cee4dd2f5bbf",
+          "cloudRequestId": "5ad2e5c1-cd6c-4716-84ea-fd655a9eff4c",
+          "runtimeEventId": "53c8d45a-a181-4295-89a9-0e504e554cb8",
+          "providerTokens": 11117,
+          "runtimeTokens": 11117,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "eb8d9568-ac24-4232-8e77-29e6a8ccf424",
+          "cloudRequestId": "7c769a68-8bcf-4120-9aa0-3076a31578cf",
+          "runtimeEventId": "99408a18-1c65-484d-9334-dcf2c54fc9cb",
+          "providerTokens": 12089,
+          "runtimeTokens": 12089,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "e4d00d16-7161-4e24-a133-c532e94b85c9",
+          "cloudRequestId": "7b355ef0-2054-4ba4-ab2d-7f9b748a9275",
+          "runtimeEventId": "442435bd-521f-444d-9aa5-57f42675cf5e",
+          "providerTokens": 7074,
+          "runtimeTokens": 7074,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "055b3cdf-eb58-473f-8ba2-6eecae0b94d9",
+          "cloudRequestId": "92e18ba0-2553-4877-b354-a71cc99861b5",
+          "runtimeEventId": "4160e313-20ae-47b9-b72a-1d9dcecde458",
+          "providerTokens": 7663,
+          "runtimeTokens": 7663,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "84786c78-6d9e-489d-b236-f66c5a79b1d7",
+          "cloudRequestId": "4c1827a6-34ab-4acc-9824-c889163b2ce2",
+          "runtimeEventId": "efae30bd-f204-4c3a-b17b-ebc16f3bbf2f",
+          "providerTokens": 7976,
+          "runtimeTokens": 7976,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "29ccc549-b8bb-4712-97c9-d20ceebad4b3",
+          "cloudRequestId": "157a8532-699e-4cea-befe-cf4ceeed323a",
+          "runtimeEventId": "42bade8f-75ed-44d8-9f87-d064f6daa4b9",
+          "providerTokens": 8635,
+          "runtimeTokens": 8635,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "fd2b1a30-7030-481c-bf0a-c8aefaaa6ca5",
+          "cloudRequestId": "6223863d-4c5a-4289-8a3b-5a85da111cbe",
+          "runtimeEventId": "1e460b92-dbce-4247-afb7-20dd0e9ed2ba",
+          "providerTokens": 8676,
+          "runtimeTokens": 8676,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "90986626-cf75-4160-936c-daf2d064bc70",
+          "cloudRequestId": "2116ede5-7bdf-429f-aea7-4c2702283c51",
+          "runtimeEventId": "201f7d6e-8049-4a60-888f-f6615aa71a22",
+          "providerTokens": 8869,
+          "runtimeTokens": 8869,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "4ddc6b67-2cec-4beb-b082-8613a7943484",
+          "cloudRequestId": "67530c5c-5f02-4ba4-b4fc-16baf752bd2a",
+          "runtimeEventId": "e17a9b0a-4bb2-4a49-8603-4e306ce8bc1d",
+          "providerTokens": 9637,
+          "runtimeTokens": 9637,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "9c82bd29-8bb5-4c6c-b4c0-81bba6cdc118",
+          "cloudRequestId": "ccb710c0-65f5-4909-aae9-cbbfcc036973",
+          "runtimeEventId": "731f2803-9fd3-4963-8900-18341d741431",
+          "providerTokens": 152,
+          "runtimeTokens": 152,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "4ddf129f-f952-4d35-a531-ecfa05e53cbf",
+          "cloudRequestId": "ac26590d-ae1d-428b-89d5-324aafa077bb",
+          "runtimeEventId": "020124e0-1a08-4e06-ac4a-4fee47be235d",
+          "providerTokens": 9891,
+          "runtimeTokens": 9891,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "44df9f6f-a441-4c92-8f98-8a84ec02504c",
+          "cloudRequestId": "e8c067c3-3940-4a6c-906c-37e501e63623",
+          "runtimeEventId": "61bb2ce3-97fc-4531-98f7-e699c3b75f98",
+          "providerTokens": 10566,
+          "runtimeTokens": 10566,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "48ac521e-1c1b-4d3f-b854-00c6d498842f",
+          "cloudRequestId": "cbc12d53-9abd-4013-807d-239846c0c591",
+          "runtimeEventId": "c5bd6966-73c4-4c08-b5b7-a5d09107abf5",
+          "providerTokens": 10672,
+          "runtimeTokens": 10672,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "d2285fe4-1481-42fb-ac38-c4e2f9b69c7d",
+          "cloudRequestId": "857d89d4-15db-4954-ba39-5b3158012e53",
+          "runtimeEventId": "c13ddabb-8e54-4ac2-b33b-7f2a05fc940d",
+          "providerTokens": 10856,
+          "runtimeTokens": 10856,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "b4ade0cc-8fb8-47ab-9a03-b59e3f2903fa",
+          "cloudRequestId": "9f843aea-34cb-435e-b171-091e1503464f",
+          "runtimeEventId": "a559f2a6-bd5c-4461-8578-7f7e15d2dffe",
+          "providerTokens": 11753,
+          "runtimeTokens": 11753,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "234e21a8-c0e5-4007-a2ce-378c1f498b62",
+          "cloudRequestId": "16a2f3aa-d952-48dd-8003-93a96f3c93a8",
+          "runtimeEventId": "7a4e8d32-fbd2-4180-9dac-6db573a0fc1d",
+          "providerTokens": 7056,
+          "runtimeTokens": 7056,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "84769c21-38fb-4fb9-aada-b2a2f02b431b",
+          "cloudRequestId": "d7213732-ddfd-4ab8-841f-2750f6afa397",
+          "runtimeEventId": "8ab8eda9-b8c6-48e4-9ac4-500a2332e0b1",
+          "providerTokens": 7309,
+          "runtimeTokens": 7309,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "a8910e87-0098-400f-89b8-dda84a29e1dd",
+          "cloudRequestId": "aa07bbf1-0732-4660-be6f-23d523c9b0a6",
+          "runtimeEventId": "66df1f39-0005-47b6-8864-43bdac732df8",
+          "providerTokens": 7611,
+          "runtimeTokens": 7611,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "23d7fadf-d671-4acd-b4e7-b837a9b9a5fa",
+          "cloudRequestId": "810311c1-9067-4ad6-a588-9d45129a2b3f",
+          "runtimeEventId": "5417e40c-12f4-42cd-87b2-b7aae0369396",
+          "providerTokens": 8075,
+          "runtimeTokens": 8075,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "e83ae86c-bb0f-4531-94ca-64f46f1586ca",
+          "cloudRequestId": "b14a5363-f7fe-463b-8e31-6446cb23e607",
+          "runtimeEventId": "8f30656b-baa9-4a2f-9309-062b5cefc138",
+          "providerTokens": 9139,
+          "runtimeTokens": 9139,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "9cffe3a2-308d-4c15-82ed-4d54d6d33333",
+          "cloudRequestId": "d0f90af3-6e6a-485b-a380-6d21f1727d68",
+          "runtimeEventId": "63e400cd-408a-4a23-93ac-0328743b7540",
+          "providerTokens": 9188,
+          "runtimeTokens": 9188,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "780fb875-fde1-49d8-86cf-414708a4ddea",
+          "cloudRequestId": "1cfb0248-c083-4218-a9da-72ba7a87f252",
+          "runtimeEventId": "be7c7bcd-b873-4fff-a517-f5fe36a18067",
+          "providerTokens": 9430,
+          "runtimeTokens": 9430,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "2a21e165-2c17-4c92-a862-7ed9cdfe4489",
+          "cloudRequestId": "36d09c00-3d05-4506-b53d-364fbc50fddf",
+          "runtimeEventId": "b030dbb7-de0d-4109-8374-d9016c7fe37a",
+          "providerTokens": 10698,
+          "runtimeTokens": 10698,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "43ee51ce-ebd8-491d-ac8d-ff0c79432bb7",
+          "cloudRequestId": "90e4a793-0e3b-41a6-97cd-0ae445fb444e",
+          "runtimeEventId": "f8fb1188-ec43-4de4-9be1-f0dd69d3701d",
+          "providerTokens": 10727,
+          "runtimeTokens": 10727,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "0df56bd7-c597-42a8-9b8c-d521704dbb83",
+          "cloudRequestId": "697c37bb-f3b1-4cff-b232-9e64e894f2a0",
+          "runtimeEventId": "3fa6eaa9-1de0-4ede-b3af-78c9bf0c4ee3",
+          "providerTokens": 10915,
+          "runtimeTokens": 10915,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "9d359d39-f9d8-4bc6-b37c-6281ac2f66f6",
+          "cloudRequestId": "0459eb83-1da3-4ed2-a960-e17cd19bc577",
+          "runtimeEventId": "cb1158d0-7244-406c-ab6d-eff55b7b9491",
+          "providerTokens": 11666,
+          "runtimeTokens": 11666,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "923f9a87-c6f7-414b-a58b-903543994b9c",
+          "cloudRequestId": "126b3683-bcce-41d7-bf8c-de63f10cb691",
+          "runtimeEventId": "e3fca994-9e36-4964-a0b4-7184b1bf50d7",
+          "providerTokens": 152,
+          "runtimeTokens": 152,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "881dbe5c-3b9e-49f0-a92d-f1720cf1bbc4",
+          "cloudRequestId": "6be6cfe3-8850-4afb-9ec7-4775a8e06576",
+          "runtimeEventId": "fc6d21ac-a2a5-42d4-8e12-64febce56c81",
+          "providerTokens": 11917,
+          "runtimeTokens": 11917,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "5197fc20-bd33-4cbf-8a5b-cb931e3cd58c",
+          "cloudRequestId": "617bd897-6b26-4610-9746-102082b9aee0",
+          "runtimeEventId": "a22c519c-4ae0-426b-96a5-7383725412c5",
+          "providerTokens": 12631,
+          "runtimeTokens": 12631,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "3e9476e0-f7f0-4a2d-a538-5e8543d744a0",
+          "cloudRequestId": "a08e96e8-03ba-48b3-9ede-6fc9b8443774",
+          "runtimeEventId": "bdbf155f-b00f-4e5f-95aa-9b5915bc7a70",
+          "providerTokens": 12692,
+          "runtimeTokens": 12692,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "18179c25-ed90-47f4-b91b-9c6299ec67dc",
+          "cloudRequestId": "fc58e099-9246-4be8-9bbe-db55c195210c",
+          "runtimeEventId": "dbac8569-ab0f-4598-8c55-f14de80ec38d",
+          "providerTokens": 12886,
+          "runtimeTokens": 12886,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        },
+        {
+          "requestId": "a06a372b-86d7-4433-8769-20fbecfa7d60",
+          "cloudRequestId": "453a90ed-e65d-43bc-8f09-d917d684a73e",
+          "runtimeEventId": "4f08ef64-6342-41d1-b2de-faafb90493be",
+          "providerTokens": 13860,
+          "runtimeTokens": 13860,
+          "usageEventIdentityMatched": true,
+          "matched": true
+        }
+      ],
+      "settledChargeCreditMicro": null,
+      "billingUnit": "credit-micro",
+      "physicalRequests": 44,
+      "completedRequests": 44,
+      "runtimeRequests": 44,
+      "taskResponses": 41,
+      "auxiliaryRequests": 3,
+      "auxiliaryOperations": [
+        "session.generate_title"
+      ],
+      "observedRuntimeTokens": 400368,
+      "observedProviderMinusRuntimeTokens": 0,
+      "unknownRequests": 0,
+      "observedWireTokens": 400368,
+      "wireTokens": 400368,
+      "runtimeTokens": 400368,
+      "taskTokens": 399910,
+      "auxiliaryTokens": 458,
+      "providerMinusRuntimeTokens": 0,
+      "requestInventoryMatched": true,
+      "requestCountMatched": true,
+      "usageMatched": true,
+      "requestedModels": [
+        "openai-codex/gpt-5.6-sol"
+      ],
+      "responseModels": [
+        "openai-codex/gpt-5.6-sol"
+      ],
+      "ledgerMode": "post-gateway-stop",
+      "ledgerFinalSnapshotGuaranteed": true,
+      "actualCharge": null,
+      "actualChargeReason": "No complete settled per-request billing receipts; local estimates are not charges.",
+      "coverage": "Declared model endpoint fetch transport only; counts cross-checked against isolated runtime ledger and task events.",
+      "files": {
+        "wire": ".xopc-evals/control/usage-tail-independent-20261023/sealed-ledger-model-requests.jsonl",
+        "ledger": ".xopc-evals/control/usage-tail-independent-20261023/sealed-ledger/runtime-usage.json"
+      },
+      "hashes": {
+        "wire": "76cdcd7f2748f905ed3baa710569a215bc77fe37ef5a36875995ec8e3b4e725c",
+        "ledger": "70e9ec59f7646ee25f490c36b781d1edbf4d0425d990305ec81d8f2787c531bb"
+      }
+    }
+  ],
+  "independent": {
+    "family": "xopc-ledger-holdout",
+    "repetitions": 3,
+    "passed": 3,
+    "model": "xopc-cloud/openai-codex/gpt-5.6-sol",
+    "reasoning": "low",
+    "candidateRuntimeHashes": {
+      "src/usage/cloud-wire.ts": "a3a1b0636e57bc8045c17286b5ca6ce15f66ec29d2da8725fd5cd0d94c7cb248",
+      "src/usage/cloud-receipts.ts": "ddf6070356993fdb9802bbb814864f71e9cd9b251b39c021878db86694a2cc3d",
+      "src/usage/recorder.ts": "13aebd13e035c9aadb8c6d4c22c6faea97afba25442a86b2944020e2394448e9",
+      "src/providers/model-call.ts": "161050e944219a00aa302503047959030ddcfac89a5a3ef76eaf2cd4a11c5e07",
+      "src/providers/extension-stream-bridge.ts": "d80042843fd2c14508205a690e8c1adc3b98c982f55eb97bfdc9c312e2780efe",
+      "src/agent/embedded/xopc-stream-bridge.ts": "18c272dad0996028648d2a618fc7098c92c8d0f8b4747ae17312502b309981c9"
+    },
+    "boundary": {
+      "mechanism": "macOS sandbox-exec",
+      "deniedRoots": [
+        ".xopc-evals/control/usage-tail-independent-source-20261023/evals/coder/suites/xopc-ledger-holdout",
+        "evals/coder/suites/xopc-ledger-holdout"
+      ],
+      "readAndWriteDenied": true,
+      "denialProbePassed": true,
+      "appliesToGatewayAndDescendants": true
+    },
+    "writeProof": {
+      "at": "2026-10-23T12:19:55.101Z",
+      "writeDenied": true,
+      "rootsTested": 2,
+      "profileMatchesGateway": true,
+      "profileHash": "8e93f0eebf5650d70b04495e22a53ec8a72dcf6af940bac81c28940550312a31"
+    },
+    "timing": [
+      {
+        "id": "sealed-ledger",
+        "jobWallMs": 220886,
+        "startAfterCampaignMs": 6,
+        "httpOccupiedMs": 189282,
+        "toolOccupiedMs": 4455,
+        "graderOccupiedMs": 139,
+        "firstScorableMs": 82208,
+        "firstFailureMs": null,
+        "limitations": "Occupied spans overlap across requests/tools/jobs; they are not additive wall time. Missing failure means no observed failure, not zero latency."
+      }
+    ],
+    "queueTiming": {
+      "observedAdmissions": 44,
+      "sumWaitMs": 4,
+      "maxWaitMs": 1,
+      "scope": "Local broker queue event to acquired event; shared upstream queue is separate when configured."
+    }
+  },
+  "review": {
+    "schemaVersion": 1,
+    "blocking": true,
+    "reviewedAt": "2026-10-23T12:11:24.103Z",
+    "caseId": "H01-content-addressed-recovery",
+    "runId": "8e778ee2-7d16-4743-96cb-d7a923395aad",
+    "originalAssessment": "failed",
+    "finding": "The hidden grader forbids any extra release directory files and enforces report length, but the public contract did not state both constraints explicitly. Actual failure was an extra release.test.mjs; numeric and digest checks passed.",
+    "disposition": "manual_review_protocol; do not call this a proven product regression or rescore the original run",
+    "next": "A fresh idempotent truncated-ledger structural family with explicit scope and report contract, frozen for three repetitions; original failure and decision retained.",
+    "revision": 2,
+    "priorReviewSha256": "7d7f836ab23f87fbd03bad0c95afb5ccaaff4678c7f55507399e105ebd7c8a3b",
+    "projectionNote": "Published after restarting the Dashboard with review-aware normalization; earlier projections and raw scores retained.",
+    "latestEvidenceId": "34e48e8fef389c07b5f8f96cac8c917eae617280bf3df51f94c5fca588f19a95",
+    "latestValidity": "unknown"
+  },
+  "priorIntegrity": {
+    "checkedAt": "2026-10-23T12:11:24.101Z",
+    "checks": [
+      {
+        "path": ".xopc-evals/control/live-cycle-20261023/decision.json",
+        "sha256": "0187e4ce93992175425a439fda4aff657014ea7454ad37e9328cd36fcb1bf2ba",
+        "unchanged": true
+      },
+      {
+        "path": ".xopc-evals/control/live-cycle-20261023/campaign.json",
+        "sha256": "e563bcbfcba124356fdbe93c192451e9581dc57c575b69367da1d336ecd591b2",
+        "unchanged": true
+      },
+      {
+        "path": ".xopc-evals/control/live-cycle-validation-20261023/campaign.json",
+        "sha256": "90ae63f7a6ec55002ce350f6a0a21d1319810e38d392b59eb5cfed64ead27ffb",
+        "unchanged": true
+      }
+    ]
+  },
+  "postStopExport": {
+    "at": "2026-10-23T12:19:53.861Z",
+    "actualStoppedModelState": true,
+    "rows": 59,
+    "identicalToReadOnlyRecovery": true,
+    "helperHash": "860e671739975f732293aa7cbf7e86831384a586efb66971f0fda4fe4f015494"
+  },
+  "billing": {
+    "requestId": "c4e54c81-a3e7-413c-9115-5c4f33b3c787",
+    "available": false,
+    "errorName": "XopcCloudAccountError",
+    "status": 404,
+    "code": "not_found"
+  },
+  "validation": {
+    "workspaceTypecheck": "passed",
+    "evalsTypecheck": "passed",
+    "coderEvals": {
+      "files": 25,
+      "tests": 76,
+      "status": "passed"
+    },
+    "runtimeTargeted": {
+      "files": 5,
+      "tests": 16,
+      "status": "passed"
+    },
+    "intermediateFailuresRetained": [
+      "Parallel phone type errors in intermediate/frozen full-workspace checks; final current-workspace check passes",
+      "Personal original closed-database export error; read-only recovery and reopened-handle helper verified",
+      "H01 underspecified output-directory/report grading constraints; original score remains and review blocks validity"
+    ],
+    "diffCheck": "passed",
+    "finalTargetedControl": {
+      "files": 11,
+      "tests": 36,
+      "status": "passed"
+    },
+    "browser": [
+      "Dashboard restarted; durable decisions and reconnect state preserved",
+      "Accepted 44-request / 400368-token / three-repetition result visible",
+      "Original 8-turn rejection and broad-batch rejection visible",
+      "Latest partial audit and original immutable decision both available",
+      "Protocol review blocks historical snapshot comparisons"
+    ],
+    "localLinks": {
+      "missing": []
+    }
+  },
+  "remaining": [
+    "Personal mixed delivery timeout and research-evidence repair loop: 0/1, not rerun or replaced",
+    "One interrupted provider final usage unavailable; receipt endpoint returned 404/not_found; unknown is retained",
+    "Historical H01 protocol review unresolved; replaced only as an independent validation family, not rescored",
+    "Arbitrary native/WebSocket/multi-host coverage and remote optimizer/evaluator roles are beyond this scoped acceptance"
+  ]
+}

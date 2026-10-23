@@ -1,3 +1,4 @@
+import { cloudWireUsage } from '../../usage/cloud-wire.js';
 import { assertProviderUsage } from '../../providers/model-usage.js';
 import {
   getCurrentSystemPrompt,
@@ -39,6 +40,10 @@ export function wrapStreamFnForXopcExtensions(
     assertCloudCreditBudgetActive();
     assertProviderUsage(model.provider, model.baseUrl);
     if (model.provider === 'xopc-cloud') options = withCloudUsageResponse(options);
+    const wire = model.provider === 'xopc-cloud' ? cloudWireUsage(options) : undefined;
+    if (wire) options = wire.options;
+    const streamWithUsage: StreamFn = wire
+      ? async (...args) => wire.wrap(await originalStreamFn(...args)) : originalStreamFn;
     const promptContext = {
       systemPrompt: getCurrentSystemPrompt(context.messages),
       tools: getCurrentTools(context.messages),
@@ -57,7 +62,7 @@ export function wrapStreamFnForXopcExtensions(
     if (model.provider === 'xopc-cloud' && hasCloudCreditBudget()) {
       return (async () => {
         const headers = await cloudCreditBudgetHeaders();
-        const stream = await originalStreamFn(model, providerContext,
+        const stream = await streamWithUsage(model, providerContext,
           withPromptCachePayloadTransform(model, promptContext,
             { ...options, headers: { ...options?.headers, ...headers } }, promptCachePolicy));
         void stream.result().then(message => {
@@ -66,7 +71,7 @@ export function wrapStreamFnForXopcExtensions(
         return stream;
       })();
     }
-    return originalStreamFn(
+    return streamWithUsage(
       model,
       providerContext,
       withPromptCachePayloadTransform(model, promptContext, options, promptCachePolicy),

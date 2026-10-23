@@ -1,0 +1,135 @@
+{
+  "id": "usage-tail-verification",
+  "concurrency": 2,
+  "maxWallMs": 1500000,
+  "maxRequests": 240,
+  "modelOrigins": [
+    "https://router.xopc.ai"
+  ],
+  "pool": {
+    "generation": 4,
+    "judge": 2,
+    "parent": 4
+  },
+  "jobs": [
+    {
+      "id": "convergence",
+      "timeoutMs": 900000,
+      "args": [
+        "--import",
+        "tsx",
+        "evals/coder/scripts/run-benchmark-live.mjs",
+        "--suite",
+        "xopc-agent-growth",
+        "--model",
+        "xopc-cloud/openai-codex/gpt-5.6-sol",
+        "--reasoning",
+        "low",
+        "--cases",
+        "E01-verified-stop,E02-green-incomplete",
+        "--repetitions",
+        "1",
+        "--output",
+        "{output}/convergence"
+      ],
+      "evidence": [
+        {
+          "path": "{output}/convergence/benchmark/evals.db",
+          "manifest": "{output}/convergence/benchmark/manifest.json",
+          "kind": "coder-db",
+          "benchmark": "xopc-agent-growth",
+          "evidenceClass": "live_controlled",
+          "expected": 2
+        }
+      ]
+    },
+    {
+      "id": "delivery",
+      "timeoutMs": 900000,
+      "args": [
+        "--import",
+        "tsx",
+        "evals/coder/scripts/run-benchmark-live.mjs",
+        "--suite",
+        "xopc-core",
+        "--model",
+        "xopc-cloud/openai-codex/gpt-5.6-sol",
+        "--reasoning",
+        "low",
+        "--cases",
+        "F01-lost-artifact,F02-transient-read",
+        "--repetitions",
+        "1",
+        "--output",
+        "{output}/delivery"
+      ],
+      "evidence": [
+        {
+          "path": "{output}/delivery/benchmark/evals.db",
+          "manifest": "{output}/delivery/benchmark/manifest.json",
+          "kind": "coder-db",
+          "benchmark": "xopc-core",
+          "evidenceClass": "live_controlled",
+          "expected": 2
+        }
+      ]
+    },
+    {
+      "id": "sealed-release",
+      "timeoutMs": 900000,
+      "args": [
+        "--import",
+        "tsx",
+        "evals/coder/scripts/run-benchmark-live.mjs",
+        "--suite",
+        "xopc-delivery-holdout",
+        "--model",
+        "xopc-cloud/openai-codex/gpt-5.6-sol",
+        "--reasoning",
+        "low",
+        "--cases",
+        "H01-content-addressed-recovery",
+        "--repetitions",
+        "3",
+        "--seal-grader",
+        "--output",
+        "{output}/sealed-release"
+      ],
+      "evidence": [
+        {
+          "path": "{output}/sealed-release/benchmark/evals.db",
+          "manifest": "{output}/sealed-release/benchmark/manifest.json",
+          "kind": "coder-db",
+          "benchmark": "xopc-delivery-holdout",
+          "evidenceClass": "live_controlled",
+          "expected": 3
+        }
+      ]
+    },
+    {
+      "id": "personal",
+      "timeoutMs": 900000,
+      "args": [
+        "--import",
+        "tsx",
+        "scripts/personal-repair-live-benchmark.mts",
+        "--configured-models",
+        "--rounds",
+        "1",
+        "--scenarios",
+        "mixed",
+        "--output-dir",
+        "{output}/personal"
+      ],
+      "evidence": [
+        {
+          "path": "{output}/personal/summary.json",
+          "kind": "delivery",
+          "benchmark": "personal-delivery",
+          "evidenceClass": "live_product",
+          "expected": 1
+        }
+      ]
+    }
+  ]
+}

@@ -4,6 +4,8 @@ Private monorepo tooling for continuously improving the xopc coder agent. It run
 
 The evaluator lives in the xopc repository but stays outside the production runtime. Evaluated workspaces are sanitized before agent execution: `evals/`, local evaluator state, and the original Git history are removed, then setup changes are committed as the fixture baseline.
 
+The proposed [benchmark-driven harness evolution plan](../../docs/design/benchmark-driven-harness-evolution-plan.md) defines unified evidence, concurrent validation, a developer dashboard, and the initial execution-convergence and reliable-delivery pilot. The [stage-one implementation ledger](../../docs/design/benchmark-driven-harness-evolution-stage-one.md) records the shipped local control plane and remaining validation; see [control-plane operations](../control/README.md) for imports, concurrent pilots and the dashboard.
+
 ## Architecture
 
 ```text

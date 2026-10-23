@@ -1,0 +1,55 @@
+{
+  "id": "xopc-delivery-holdout",
+  "version": "1.0.0",
+  "description": "New content-addressed release family. Frozen verification only; hidden directory denied to Gateway by OS sandbox.",
+  "cases": [
+    {
+      "id": "H01-content-addressed-recovery",
+      "repo": {
+        "source": "local",
+        "path": "${EVAL_FIXTURE_REPO}",
+        "commit": "${EVAL_FIXTURE_COMMIT}"
+      },
+      "task": "Read contract.md and orders.json. Produce the specified release and report.md. Work offline with local files only. Verify aggregation and the byte digest yourself. Report evidence and limitations honestly; do not edit inputs.",
+      "followUps": [
+        {
+          "message": "A delivery fault removed release/rows.json after your completed turn. Recover the complete release from the original inputs. Recompute the manifest from the delivered bytes rather than trusting stale metadata. Keep inputs unchanged and update report.md with actual recovery and verification evidence.",
+          "removeFiles": [
+            "release/rows.json"
+          ]
+        }
+      ],
+      "budget": {
+        "timeoutMs": 300000,
+        "maxModelRequests": 40,
+        "maxTokens": 300000
+      },
+      "tags": [
+        "recovery",
+        "delivery",
+        "independent-holdout",
+        "content-addressed"
+      ],
+      "graders": [
+        {
+          "type": "command",
+          "command": "node .xopc-eval-hidden/check.mjs",
+          "hiddenFiles": [
+            {
+              "source": "hidden/check.mjs",
+              "target": ".xopc-eval-hidden/check.mjs"
+            }
+          ],
+          "timeoutMs": 25000
+        },
+        {
+          "type": "unchanged",
+          "paths": [
+            "orders.json",
+            "contract.md"
+          ]
+        }
+      ]
+    }
+  ]
+}

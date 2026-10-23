@@ -10,8 +10,11 @@ const { values } = parseArgs({ options: {
   output: { type: 'string' },
   repetitions: { type: 'string', default: '1' },
   reasoning: { type: 'string' },
+  cases: { type: 'string' },
+  'seal-grader': { type: 'boolean', default: false },
+  'max-turns': { type: 'string', default: '40' },
 } });
-if (!['xopc-core', 'xopc-agent-growth'].includes(values.suite)) throw new Error('Unknown benchmark suite');
+if (!['xopc-core', 'xopc-agent-growth', 'xopc-delivery-holdout', 'xopc-ledger-holdout'].includes(values.suite)) throw new Error('Unknown benchmark suite');
 if (!values.model) throw new Error('Pass --model provider/model; credentials are resolved locally and passed only to the isolated Gateway.');
 const output = resolve(values.output ?? `.xopc-evals/live-core-v1-${new Date().toISOString().replaceAll(':', '-')}`);
 mkdirSync(dirname(output), { recursive: true });
@@ -27,4 +30,7 @@ process.env.CODER_EVAL_MODEL = values.model;
 process.env.CODER_EVAL_API_KEY = key;
 process.env.CODER_EVAL_REASONING = reasoning;
 process.env.CODER_EVAL_REPETITIONS = values.repetitions;
-await main({ benchmark: true, benchmarkSuite: values.suite, outputDirectory: output });
+const maxTurns = Number(values['max-turns']);
+if (!Number.isInteger(maxTurns) || maxTurns < 1 || maxTurns > 40) throw new Error('--max-turns must be 1–40');
+process.env.XOPC_EVAL_MAX_TURNS = String(maxTurns);
+await main({ sealGrader: values['seal-grader'], maxTurns, benchmark: true, benchmarkSuite: values.suite, benchmarkCases: values.cases, outputDirectory: output });

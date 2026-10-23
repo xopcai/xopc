@@ -1,0 +1,140 @@
+{
+  "id": "convergence-turn-cap-live",
+  "concurrency": 2,
+  "maxWallMs": 1200000,
+  "maxRequests": 160,
+  "modelOrigins": [
+    "https://router.xopc.ai"
+  ],
+  "pool": {
+    "generation": 2,
+    "judge": 1,
+    "parent": 2
+  },
+  "jobs": [
+    {
+      "id": "development-baseline",
+      "timeoutMs": 660000,
+      "args": [
+        "--import",
+        "tsx",
+        "evals/coder/scripts/run-benchmark-live.mjs",
+        "--suite",
+        "xopc-agent-growth",
+        "--model",
+        "xopc-cloud/openai-codex/gpt-5.6-sol",
+        "--reasoning",
+        "low",
+        "--cases",
+        "E01-verified-stop,E02-green-incomplete",
+        "--max-turns",
+        "40",
+        "--output",
+        "{output}/development-baseline"
+      ],
+      "evidence": [
+        {
+          "path": "{output}/development-baseline/benchmark/evals.db",
+          "manifest": "{output}/development-baseline/benchmark/manifest.json",
+          "kind": "coder-db",
+          "benchmark": "xopc-agent-growth",
+          "evidenceClass": "live_controlled",
+          "expected": 2
+        }
+      ]
+    },
+    {
+      "id": "development-candidate",
+      "timeoutMs": 660000,
+      "args": [
+        "--import",
+        "tsx",
+        "evals/coder/scripts/run-benchmark-live.mjs",
+        "--suite",
+        "xopc-agent-growth",
+        "--model",
+        "xopc-cloud/openai-codex/gpt-5.6-sol",
+        "--reasoning",
+        "low",
+        "--cases",
+        "E01-verified-stop,E02-green-incomplete",
+        "--max-turns",
+        "8",
+        "--output",
+        "{output}/development-candidate"
+      ],
+      "evidence": [
+        {
+          "path": "{output}/development-candidate/benchmark/evals.db",
+          "manifest": "{output}/development-candidate/benchmark/manifest.json",
+          "kind": "coder-db",
+          "benchmark": "xopc-agent-growth",
+          "evidenceClass": "live_controlled",
+          "expected": 2
+        }
+      ]
+    },
+    {
+      "id": "validation-baseline",
+      "timeoutMs": 660000,
+      "args": [
+        "--import",
+        "tsx",
+        "evals/coder/scripts/run-benchmark-live.mjs",
+        "--suite",
+        "xopc-core",
+        "--model",
+        "xopc-cloud/openai-codex/gpt-5.6-sol",
+        "--reasoning",
+        "low",
+        "--cases",
+        "F01-lost-artifact,F02-transient-read",
+        "--max-turns",
+        "40",
+        "--output",
+        "{output}/validation-baseline"
+      ],
+      "evidence": [
+        {
+          "path": "{output}/validation-baseline/benchmark/evals.db",
+          "manifest": "{output}/validation-baseline/benchmark/manifest.json",
+          "kind": "coder-db",
+          "benchmark": "xopc-core",
+          "evidenceClass": "live_controlled",
+          "expected": 2
+        }
+      ]
+    },
+    {
+      "id": "validation-candidate",
+      "timeoutMs": 660000,
+      "args": [
+        "--import",
+        "tsx",
+        "evals/coder/scripts/run-benchmark-live.mjs",
+        "--suite",
+        "xopc-core",
+        "--model",
+        "xopc-cloud/openai-codex/gpt-5.6-sol",
+        "--reasoning",
+        "low",
+        "--cases",
+        "F01-lost-artifact,F02-transient-read",
+        "--max-turns",
+        "8",
+        "--output",
+        "{output}/validation-candidate"
+      ],
+      "evidence": [
+        {
+          "path": "{output}/validation-candidate/benchmark/evals.db",
+          "manifest": "{output}/validation-candidate/benchmark/manifest.json",
+          "kind": "coder-db",
+          "benchmark": "xopc-core",
+          "evidenceClass": "live_controlled",
+          "expected": 2
+        }
+      ]
+    }
+  ]
+}

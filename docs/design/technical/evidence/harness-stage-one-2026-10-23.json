@@ -1,0 +1,122 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-23",
+  "scope": "stage-one evaluation infrastructure and deterministic/calibration pilots",
+  "newPaidModelCalls": 0,
+  "phaseOneComplete": false,
+  "concurrencyAcceptance": {
+    "evidenceClass": "harness_calibration",
+    "source": ".xopc-evals/control/concurrency-acceptance-20261023-v1.json",
+    "sha256": "013399392f1b19439e0204fdc95952b9fe5fd452a15daeab2ee1d5e884030c88",
+    "serial": {
+      "concurrency": 1,
+      "durationMs": 5317.779792,
+      "peak": 1,
+      "total": 8,
+      "passed": 8
+    },
+    "parallel": {
+      "concurrency": 4,
+      "durationMs": 1441.1110829999998,
+      "peak": 4,
+      "total": 8,
+      "passed": 8
+    },
+    "ratio": 0.2709986384107121,
+    "passed": true
+  },
+  "pilot": {
+    "source": ".xopc-evals/control/stage-one-pilot-20261023-v4/campaign.json",
+    "sha256": "c416e715867628046701213cd4680de34c8894ac569e955a84b7311b284b9978",
+    "sourceHash": "00127a657cf52d28db4796c37c90a01da151b3959dc4bae92f8689c804928a1e",
+    "sourceChanged": false,
+    "status": "completed",
+    "validity": "valid",
+    "elapsedMs": 6000,
+    "jobs": {
+      "convergence-core": {
+        "status": "passed",
+        "attempt": 1,
+        "exitCode": 0,
+        "stopReason": null,
+        "durationMs": 1926,
+        "log": "convergence-core-1.log",
+        "endedAt": "2026-10-23T11:10:00.079Z",
+        "evidenceErrors": []
+      },
+      "convergence-growth": {
+        "status": "passed",
+        "attempt": 1,
+        "exitCode": 0,
+        "stopReason": null,
+        "durationMs": 2947,
+        "log": "convergence-growth-1.log",
+        "endedAt": "2026-10-23T11:10:01.101Z",
+        "evidenceErrors": []
+      },
+      "delivery-core": {
+        "status": "passed",
+        "attempt": 1,
+        "exitCode": 0,
+        "stopReason": null,
+        "durationMs": 1997,
+        "log": "delivery-core-1.log",
+        "endedAt": "2026-10-23T11:10:00.152Z",
+        "evidenceErrors": []
+      },
+      "delivery-p0": {
+        "status": "passed",
+        "attempt": 1,
+        "exitCode": 0,
+        "stopReason": null,
+        "durationMs": 3968,
+        "log": "delivery-p0-1.log",
+        "endedAt": "2026-10-23T11:10:04.053Z",
+        "evidenceErrors": []
+      }
+    },
+    "calibrationTrials": 14,
+    "deterministicDeliveryCases": 8,
+    "promotion": "not_evaluated"
+  },
+  "transportIntegration": {
+    "scope": "two local brokers and Node child processes under one shared parent, streamed HTTP",
+    "requests": 8,
+    "observedParentPeak": 2,
+    "parentLimit": 2,
+    "finalActive": 0,
+    "finalQueued": 0,
+    "realProviderCoverageVerified": false
+  },
+  "validation": {
+    "typecheck": "passed",
+    "fullEvalSuite": {
+      "files": 19,
+      "tests": 57,
+      "status": "passed"
+    },
+    "browser": [
+      "overview rendered",
+      "live campaign progress and completed state",
+      "evidence list",
+      "matched comparison: six ties and calibration_only",
+      "improvement records"
+    ],
+    "sourceWrites": "original evidence databases read-only",
+    "initialFailures": {
+      "files": 2,
+      "cause": "retired workflows field in live evaluation catalog seed",
+      "resolution": "removed retired evaluator seed field; schema unchanged"
+    }
+  },
+  "remaining": [
+    "real-model wire/usage reconciliation",
+    "fresh live baseline",
+    "sealed independent validation",
+    "product candidate decision"
+  ],
+  "notes": [
+    "The final comparison-only and importer normalization fixes are covered by the full test suite; v4 pilot records its own earlier frozen source identity.",
+    "No source outputs or valid failures were replaced. Incremental pilot v1-v4 remain separate."
+  ]
+}

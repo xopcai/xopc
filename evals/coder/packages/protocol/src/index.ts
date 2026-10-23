@@ -179,6 +179,7 @@ export interface ExperimentSpec {
   repetitions?: number;
   randomizeVariantOrder?: boolean;
   randomSeed?: string;
+  concurrency?: number;
 }
 
 export interface PreparedEnvironment {

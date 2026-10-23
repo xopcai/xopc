@@ -1,3 +1,4 @@
+import { cloudWireUsage } from '../usage/cloud-wire.js';
 import { assertProviderUsage } from './model-usage.js';
 import {
 	streamSimple,
@@ -79,7 +80,11 @@ export function createExtensionAwareStreamFn(): StreamFn {
 	return ((model: Model<Api>, context: TranscriptContext, options?: SimpleStreamOptions) => {
 		assertProviderUsage(model.provider, model.baseUrl);
 		if (model.baseUrl !== EXTENSION_PROVIDER_BASE_URL) {
-			return streamSimple(model, context, options);
+			if (model.provider === 'xopc-cloud') {
+                const wire = cloudWireUsage(options);
+                return wire.wrap(streamSimple(model, context, wire.options));
+            }
+            return streamSimple(model, context, options);
 		}
 
 		const plugin = getProviderRegistry().get(model.provider);

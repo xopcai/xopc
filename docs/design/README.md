@@ -14,6 +14,7 @@ See [Documentation information architecture](./documentation-information-archite
 
 Active proposed designs:
 
+- [Benchmark 驱动 Harness 持续自我迭代](./benchmark-driven-harness-evolution-plan.md)：统一评测证据、并发快速验证、开发者 Dashboard 与执行收敛/可靠交付试点的分阶段建设计划。
 - [Personal AI work continuity](./personal-ai-work-continuity-plan.md): result reading, durable handoffs, follow-up revisions, and foreground latency targets.
 - [Personal result reading, stage A](./technical/personal-result-reading-stage-a-2026-10-15.md): implementation, access boundaries, cold-read continuation, and verification evidence.
 - [Realtime voice product requirements](./realtime-voice-prd.md)

@@ -1,0 +1,48 @@
+{
+  "id": "usage-tail-independent-ledger",
+  "concurrency": 1,
+  "maxWallMs": 600000,
+  "maxRequests": 80,
+  "modelOrigins": [
+    "https://router.xopc.ai"
+  ],
+  "pool": {
+    "generation": 2,
+    "judge": 1,
+    "parent": 2
+  },
+  "jobs": [
+    {
+      "id": "sealed-ledger",
+      "timeoutMs": 570000,
+      "args": [
+        "--import",
+        "tsx",
+        "evals/coder/scripts/run-benchmark-live.mjs",
+        "--suite",
+        "xopc-ledger-holdout",
+        "--model",
+        "xopc-cloud/openai-codex/gpt-5.6-sol",
+        "--reasoning",
+        "low",
+        "--cases",
+        "H02-idempotent-ledger-recovery",
+        "--repetitions",
+        "3",
+        "--seal-grader",
+        "--output",
+        "{output}/sealed-ledger"
+      ],
+      "evidence": [
+        {
+          "path": "{output}/sealed-ledger/benchmark/evals.db",
+          "manifest": "{output}/sealed-ledger/benchmark/manifest.json",
+          "kind": "coder-db",
+          "benchmark": "xopc-ledger-holdout",
+          "evidenceClass": "live_controlled",
+          "expected": 3
+        }
+      ]
+    }
+  ]
+}

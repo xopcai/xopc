@@ -1,0 +1,11 @@
+[
+  {"path":"evals/personal/baselines/p0-candidate.json","kind":"delivery","benchmark":"personal-delivery","evidenceClass":"deterministic","expected":8},
+  {"path":"evals/personal/baselines/p1-candidate.json","kind":"delivery","benchmark":"personal-delivery","evidenceClass":"deterministic","expected":20},
+  {"path":"evals/personal/baselines/p2-recovery-final-frozen.json","kind":"delivery","benchmark":"personal-delivery","evidenceClass":"deterministic","expected":48},
+  {"path":"evals/personal/baselines/p2-live-v8-mixed/summary.json","kind":"delivery","benchmark":"personal-delivery","evidenceClass":"live_product"},
+  {"path":".xopc-evals/qwen-core-v1-execution-contract-final/benchmark/evals.db","kind":"coder-db","benchmark":"xopc-core","evidenceClass":"live_controlled","expected":10,"manifest":".xopc-evals/qwen-core-v1-execution-contract-final/benchmark/manifest.json"},
+  {"path":".xopc-evals/qwen-agent-growth-v0.1.0-final/benchmark/evals.db","kind":"coder-db","benchmark":"xopc-agent-growth","evidenceClass":"live_controlled","expected":18,"manifest":".xopc-evals/qwen-agent-growth-v0.1.0-final/benchmark/manifest.json"},
+  {"path":".xopc-evals/personal-style/style-round3-full-v1/follow-summary.json","kind":"style","benchmark":"personal-style","evidenceClass":"live_product","expected":150},
+  {"path":".xopc-evals/personal-style/style-round3-full-v1/eq-summary.json","kind":"style","benchmark":"personal-style","evidenceClass":"live_product","expected":12},
+  {"path":".xopc-evals/memory-baseline-20261022-v3/summary.json","kind":"memory","benchmark":"personal-memory","evidenceClass":"live_product","expected":184}
+]

@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "registeredAt": "2026-10-23T11:27:17.028Z",
+  "problem": "Unproductive execution can consume the full 40 assistant-turn budget.",
+  "hypothesis": "An 8-turn hard cap reduces total provider tokens by at least 20% without incomplete or false delivery.",
+  "treatment": {
+    "baseline": {
+      "maxTurns": 40
+    },
+    "candidate": {
+      "maxTurns": 8
+    }
+  },
+  "model": "xopc-cloud/openai-codex/gpt-5.6-sol",
+  "reasoning": "low",
+  "development": [
+    "E01-verified-stop",
+    "E02-green-incomplete"
+  ],
+  "independentValidation": [
+    "F01-lost-artifact",
+    "F02-transient-read"
+  ],
+  "independence": "Disjoint cross-suite cases; hidden deterministic graders execute after agent completion outside model workspace visibility. No model judge. Existing synthetic cases, not newly authored blind generalization.",
+  "gate": {
+    "allFourCandidateCasesPass": true,
+    "noRegression": true,
+    "completeRequestAndUsageReconciliation": true,
+    "minTokenReduction": 0.2
+  },
+  "budget": {
+    "maxPhysicalRequests": 160,
+    "maxWallMs": 1200000,
+    "launchers": 2
+  },
+  "retries": "No quality retries or holdout-driven tuning; infrastructure attempts retained.",
+  "decision": "pending"
+}

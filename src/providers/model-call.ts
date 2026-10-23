@@ -1,3 +1,4 @@
+import { cloudWireUsage } from '../usage/cloud-wire.js';
 import { assertProviderUsage, withModelUsageOrigin, modelUsageOriginForCall } from './model-usage.js';
 import {
   completeSimple,
@@ -98,7 +99,9 @@ async function completeWithResolvedCredentialsInner(
       finishAiUsageFromMessage(usageCall, result);
       return result;
     }
-    const result = await usageCall.run(() => completeSimple(model, context, resolvedOptions));
+    const wire = model.provider === 'xopc-cloud' ? cloudWireUsage(resolvedOptions) : undefined;
+    const result = await usageCall.run(() => completeSimple(model, context, wire?.options ?? resolvedOptions));
+    wire?.apply(result);
     if (result.errorMessage) reportCloudCreditError(result.errorMessage);
     finishAiUsageFromMessage(usageCall, result);
     return result;
