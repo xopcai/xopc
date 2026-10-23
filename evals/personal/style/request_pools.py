@@ -18,9 +18,13 @@ def is_transport_error(error):
 
 
 class RequestPools:
-    def __init__(self, limits=None, journal=None):
+    def __init__(self, limits=None, journal=None, targets=None):
         self.limits = dict(limits or {'generation': 4, 'judge': 4, 'scene': 3})
         self.targets = dict(self.limits)
+        for key,value in (targets or {}).items():
+            if key not in self.limits or not isinstance(value,int) or not 1 <= value <= self.limits[key]:
+                raise ValueError('Initial target must stay within its pool limit')
+            self.targets[key] = value
         self.active = {}
         self.queues = {key: deque() for key in self.limits}
         self.condition = threading.Condition()
@@ -98,11 +102,11 @@ def shared_lease(pool, context):
         request('/release', {'lease': lease, 'error': error})
 
 
-def serve(out):
+def serve(out, targets=None):
     out = Path(out)
     out.mkdir(parents=True, exist_ok=False)
     token = uuid.uuid4().hex
-    pools = RequestPools(journal=out / 'events.jsonl')
+    pools = RequestPools(journal=out / 'events.jsonl', targets=targets)
 
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, *_args):
@@ -149,4 +153,7 @@ def serve(out):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--out', required=True)
-    serve(parser.parse_args().out)
+    parser.add_argument('--generation-target',type=int,default=4)
+    parser.add_argument('--judge-target',type=int,default=4)
+    args=parser.parse_args()
+    serve(args.out,{'generation':args.generation_target,'judge':args.judge_target})

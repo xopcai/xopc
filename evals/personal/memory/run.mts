@@ -53,7 +53,7 @@ save('manifest.json', manifest);
 if (values['dry-run']) { console.log(JSON.stringify({ out, cases: cases.length, ...manifest.models })); process.exit(0); }
 
 const frozenConfig = freezeMemoryConfig(values['config-snapshot']);
-Object.assign(manifest, { protocolVersion: 3, questionTimeTransport: 'provider-system-context-v1', configSnapshotHash: frozenConfig.hash, physicalRequestPools: true, liveEvidenceIncluded: true, autonomousBackground: 'task dispatch disabled by host option; home disabled; memory scheduler stopped', isolatedDefaultWorkspace: true, judgeServiceRetries: { maximum: 2, onlyEmptyTransportErrors: true, candidateRegeneration: false } });
+Object.assign(manifest, { protocolVersion: 6, questionTimeTransport: 'provider-system-context-v1', configSnapshotHash: frozenConfig.hash, physicalRequestPools: true, liveEvidenceIncluded: true, autonomousBackground: 'task dispatch disabled by host option; home disabled; memory scheduler stopped', isolatedDefaultWorkspace: true, judgeServiceRetries: { maximum: 2, onlyEmptyTransportErrors: true, candidateRegeneration: false } });
 save('manifest.json', manifest);
 const poolDir = join(out, 'pools');
 const pool = values.endpoint ? undefined : spawn('python3', ['evals/personal/style/request_pools.py', '--out', poolDir], { stdio: ['ignore', 'ignore', 'inherit'] });
@@ -175,7 +175,7 @@ try {
       await trace.emit('run.failed', { error: result.error });
     }
     results.push(result); appendFileSync(join(out, 'progress.jsonl'), JSON.stringify({ ...result, at: Date.now() })+'\n');
-    summarize(); console.log(`${results.length}/${cases.length} ${item.id}: ${result.error ? 'ERROR' : result.judgment.correct ? 'PASS' : result.judgment.attribution}`);
+    summarize(); console.log(`${results.length}/${cases.length} ${item.id}: ${result.error ? 'ERROR' : result.judgment.correct ? 'QA_PASS' : result.judgment.attribution}${result.episode ? result.episode.passed ? ' EPISODE_PASS' : ' EPISODE_FAIL' : ''}`);
   }));
   summarize();
   const unchanged = sourceHash() === manifest.sourceHash;

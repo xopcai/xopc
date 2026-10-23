@@ -1,10 +1,14 @@
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
 
+import { projectUnadmittedForgottenFields } from './forgotten-history.js';
+import { createLogger } from '../utils/logger.js';
 import { inferMemorySensitivity } from '../agent/memory/sensitivity.js';
 import { writeKnowledgeItem, listKnowledgeItems } from '../knowledge-memory/index.js';
 import { createContextEvidence } from '../storage/sqlite/context-evidence-repository.js';
 import type { CaptureEvidence } from '../user-model/capture/semantic.js';
+
+const log = createLogger('MemoryLearning:Admission');
 
 export const WorkCandidateSchema = z.object({
   kind: z.enum(['work_thread', 'project_fact', 'workspace_fact', 'decision', 'task_lesson', 'commitment', 'open_question', 'episode', 'note']),
@@ -20,19 +24,25 @@ export function applyWorkCandidates(input: {
   candidates: WorkCandidate[]; evidence: CaptureEvidence[]; conversationId: string; agentId: string;
   workspaceId: string; projectId?: string; processingPolicy: 'local_only' | 'remote_allowed'; runId: string;
   source?: { instanceId: string; itemId: string; contentHash: string; consentReceiptId: string };
-}): Array<{ candidateKey: string; objectType?: 'knowledge'; objectId?: string; outcome: 'created' | 'deduplicated' | 'rejected' }> {
-  return input.candidates.map(candidate => {
+}): Array<{ candidateKey: string; objectType?: 'knowledge'; objectId?: string; outcome: 'created' | 'deduplicated' | 'rejected'; reasonCode?: string }> {
+  return input.candidates.map((candidate, ordinal) => {
     const canonicalKey = `work:${candidate.topicKey.normalize('NFKC').toLowerCase()}:${candidate.predicate}`;
+    const reject = (reasonCode: string) => {
+      log.info({ phase: 'work_admission', runId: input.runId, ordinal, reasonCode }, 'Work candidate rejected');
+      return { candidateKey: canonicalKey, outcome: 'rejected' as const, reasonCode };
+    };
+    const scopedClaim = `${candidate.topicKey} ${candidate.statement}`;
+    if (projectUnadmittedForgottenFields(scopedClaim, input) !== scopedClaim) return reject('forgotten_field_boundary');
     const sensitivity = inferMemorySensitivity(candidate.statement);
-    if (sensitivity === 'secret' || sensitivity === 'regulated') return { candidateKey: canonicalKey, outcome: 'rejected' };
+    if (sensitivity === 'secret' || sensitivity === 'regulated') return reject('statement_sensitive');
     if (candidate.evidence.some(claim => ['secret', 'regulated'].includes(inferMemorySensitivity(claim.quote)))) {
-      return { candidateKey: canonicalKey, outcome: 'rejected' };
+      return reject('evidence_sensitive');
     }
+    if (candidate.evidence.some(claim => !input.evidence.some(entry => entry.ref === claim.ref))) return reject('evidence_ref_missing');
     const sources = candidate.evidence.map(claim => input.evidence.find(entry => entry.ref === claim.ref
       && entry.text.normalize('NFKC').includes(claim.quote.normalize('NFKC'))));
-    if (sources.some(source => !source) || (candidate.scope === 'project' && !input.projectId)) {
-      return { candidateKey: canonicalKey, outcome: 'rejected' };
-    }
+    if (sources.some(source => !source)) return reject('evidence_quote_mismatch');
+    if (candidate.scope === 'project' && !input.projectId) return reject('missing_project_scope');
     const scope = candidate.scope === 'project' ? { type: 'project' as const, id: input.projectId! }
       : candidate.scope === 'workspace' ? { type: 'workspace' as const, id: input.workspaceId }
         : { type: 'session' as const, id: input.conversationId };
@@ -53,7 +63,7 @@ export function applyWorkCandidates(input: {
     // Conflicting automatic statements must not replace an established decision.
     const conflict = Boolean(existing && existing.content !== candidate.statement.trim()
       && candidate.kind === 'decision' && existing.originClass !== 'owner');
-    if (conflict) return { candidateKey: canonicalKey, outcome: 'rejected' };
+    if (conflict) return reject('protected_decision_conflict');
     const result = writeKnowledgeItem({ kind: candidate.kind, scope, content: candidate.statement,
       canonicalKey, confidence: candidate.confidence, importance: candidate.importance,
       verification: independentSupport && candidate.confidence >= 0.7 ? 'supported' : 'tentative',
@@ -66,6 +76,7 @@ export function applyWorkCandidates(input: {
       reviewAt: ['commitment', 'open_question', 'episode', 'work_thread'].includes(candidate.kind)
         ? Date.now() + 30 * 86_400_000 : undefined,
     });
+    if (!result.item) return reject('write_policy_or_suppression');
     return { candidateKey: canonicalKey, ...(result.item ? { objectType: 'knowledge' as const, objectId: result.item.id } : {}),
       outcome: result.item ? result.created ? 'created' : 'deduplicated' : 'rejected' };
   });

@@ -313,3 +313,52 @@ original price whose first fact admission had been rejected and whose source was
 the later forgotten target's evidence lineage. Answer omission does not negate input disclosure.
 See [the completed report](../../../docs/design/technical/personal-memory-time-separation-comparison-2026-10-23.md).
 These eight newly used validation worlds are now consumed development regressions.
+
+
+Protocol v4 adds a separate required learning-reliability gate at initial admission, every
+writable live checkpoint and the final learned state: zero retained learning exceptions,
+zero pending/failed jobs (including errored cancellations), zero failed/running extraction
+runs, and at least one successful learning job. Superseded cancellations without errors are
+allowed. An otherwise correct QA or clean disclosure check cannot override this gate.
+
+`prepare-source-coverage.py` reclassifies all previous 24 worlds as development regression,
+retaining their bytes and provenance. Eight new sealed worlds include four explicitly declared
+`learningMode:"source-only"` historical controls: raw history predating memory indexing.
+Those controls schedule no learning job, are logged as source-only, and do not hide actual
+failures of scheduled jobs. Later admitted history supplies the current value and keeper facts.
+The original184 fixtures remain unchanged. `run-p0-stages.mts` requires the 24/8 split.
+
+
+Protocol v5 derives selected and tool diagnostic evidence from the actual post-projection
+answer request payloads. Pre-projection selections/transcript tool rows remain separately
+available as rawSelectedText/rawToolText; they cannot prove that the model saw a fact.
+The four content checkpoints and strict learning-reliability gate are unchanged. In development,
+field association also distinguishes a different named event's date in shared-team/venue
+relations; this never grants a read of the forgotten event's own field.
+
+
+Protocol v6 continues the observed overload downshift at generation1/judge2 when starting a
+new staged campaign; the independent hard limits remain generation4/judge4. Ordinary runners
+and pool users retain their default initial4/4. This avoids treating a new campaign as evidence
+that the rate limit has disappeared; failures and the strict reliability gate are unchanged.
+
+The final source-lineage candidate discovers original conversation identities by normalized
+entity name within the rule's workspace/project/session scope, including never-admitted,
+archived and later copied records. It preserves existing provenance/re-read fences. Active
+knowledge content is not reinterpreted with sentence-level date ownership guesses; compound
+raw source excerpts stay conservatively withheld. Revision content fingerprints also fence
+cached overwritten values. This measures local SQLite history sources, not every external
+connector or natural-language alias.
+
+For development-only candidate retesting, `--development-only-b` declares that no fresh paired
+A development score is being produced. Earlier A results remain historical context and are not
+pooled or reused as a new control. Passing B development still opens the new validation only
+once; passing validation still starts a fresh same-protocol full184 A/B run. It does not bypass
+any QA, content, learning-reliability or source-integrity gate.
+
+The source-coverage development campaign finished at QA23/24, episode23/24 and learning
+reliability24/24. A retained owner failed admission and was later represented as unknown;
+the strict development gate stopped the new8 validation and full184. A subsequent deterministic
+title-output regression test found and fixed forgotten values exposed by recent/keyword session
+names. That engineering patch and finer ref/quote rejection codes are not included in the frozen
+model score. See [the source-coverage report](../../../docs/design/technical/personal-memory-source-coverage-comparison-2026-10-23.md).

@@ -135,7 +135,7 @@ const CollaborationRuleSchema = z.object({
 const InterpretationSchema = z.object({
   knowledge: z.array(WorkCandidateSchema).max(8).default([]),
   knowledgeDeletions: z.array(z.object({
-    targetKnowledgeIds: z.array(z.string().min(1)).min(1).max(16),
+    targetKnowledgeIds: z.array(z.string().min(1)).max(16),
     boundary: z.string().min(4).max(600),
     reread: z.object({ subject: z.string().min(1).max(160), property: z.enum(['date_time', 'price']) }).strict().optional(),
     retained: z.array(z.object({ targetKnowledgeId: z.string().min(1),
@@ -291,7 +291,7 @@ export function parseUserModelInterpretation(
       const evidenceRefs = groundedEvidenceRefs(item, evidenceByRef);
       if (!evidenceRefs || (item.intent ?? parsed.intent) !== 'forget') return [];
       const targetKnowledgeIds = [...new Set(item.targetKnowledgeIds.filter(id => allowedKnowledgeIds.includes(id)))];
-      return targetKnowledgeIds.length ? [{ targetKnowledgeIds, boundary: item.boundary, evidenceRefs, evidence: item.evidence,
+      return (targetKnowledgeIds.length || (!item.targetKnowledgeIds.length && item.reread && item.evidence.some(claim => claim.quote.includes(item.reread!.subject)))) ? [{ targetKnowledgeIds, boundary: item.boundary, evidenceRefs, evidence: item.evidence,
         retained: item.retained.filter(retained => targetKnowledgeIds.includes(retained.targetKnowledgeId)),
         ...(item.reread && item.evidence.some(claim => claim.quote.includes(item.reread!.subject)) ? { reread: item.reread } : {}) }] : [];
     }),

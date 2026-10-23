@@ -30,6 +30,7 @@ export type ContextExtractionOutput = {
   objectId?: string;
   versionId?: string;
   outcome: 'created' | 'deduplicated' | 'rejected';
+  reasonCode?: string;
   createdAt: number;
 };
 
@@ -117,8 +118,11 @@ export function finishContextExtractionRun(input: {
 }): ContextExtractionRun | null {
   const now = input.nowMs ?? Date.now();
   return runSqliteWriteTransaction((db) => {
+    // Completed runs may contain rejected candidates; persist value-free per-output diagnostics.
+    const reasons = Object.fromEntries((input.outputs ?? []).flatMap((output, index) => output.reasonCode && /^[a-z_]{1,80}$/.test(output.reasonCode) ? [[index, output.reasonCode]] : []));
+    const diagnostic = input.errorCode ?? (Object.keys(reasons).length ? 'admission_rejections:' + JSON.stringify(reasons) : null);
     const result = db.prepare(`UPDATE context_extraction_runs SET status = ?, error_code = ?, completed_at = ?
-      WHERE extraction_run_id = ?`).run(input.status, input.errorCode ?? null, now, input.runId);
+      WHERE extraction_run_id = ?`).run(input.status, diagnostic, now, input.runId);
     if (!result.changes) return null;
     db.prepare('DELETE FROM context_extraction_outputs WHERE extraction_run_id = ?').run(input.runId);
     const insert = db.prepare(`INSERT INTO context_extraction_outputs (
@@ -160,6 +164,11 @@ export function getContextExtractionRun(id: string): ContextExtractionRun | null
 }
 
 export function listContextExtractionOutputs(runId: string): ContextExtractionOutput[] {
+  const code = getContextExtractionRun(runId)?.errorCode;
+  let reasons: Record<string, string> = {};
+  if (code?.startsWith('admission_rejections:')) {
+    try { reasons = JSON.parse(code.slice('admission_rejections:'.length)); } catch {}
+  }
   return (getSqliteDatabase().prepare(`SELECT * FROM context_extraction_outputs
-    WHERE extraction_run_id = ? ORDER BY ordinal`).all(runId) as unknown as OutputRow[]).map(outputFromRow);
+    WHERE extraction_run_id = ? ORDER BY ordinal`).all(runId) as unknown as OutputRow[]).map(row => ({ ...outputFromRow(row), ...(reasons[row.ordinal] ? { reasonCode: reasons[row.ordinal] } : {}) }));
 }

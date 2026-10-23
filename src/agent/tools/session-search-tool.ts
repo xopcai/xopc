@@ -8,7 +8,7 @@ import { completeWithResolvedCredentials } from '../../providers/model-call.js';
 import type { SessionStore } from '../../session/store.js';
 import { createLogger } from '../../utils/logger.js';
 import { readAgentMessageContent } from '../memory/agent-message-access.js';
-import { forgottenHistoryEntries, FORGOTTEN_HISTORY_EXCERPT } from '../../memory-learning/forgotten-history.js';
+import { projectUnadmittedForgottenFields, forgottenHistoryEntries, FORGOTTEN_HISTORY_EXCERPT } from '../../memory-learning/forgotten-history.js';
 import type { CaptureScopeContext } from '../../user-model/capture/executor.js';
 import { sessionSearchTerms } from '../../storage/sqlite/fts.js';
 import { LOCAL_READ_MAX_CHARS } from './local-read-budget.js';
@@ -190,6 +190,13 @@ export function createSessionSearchTool(deps: SessionSearchToolDeps): AgentTool 
       const store = deps.getSessionStore();
 
       try {
+        const protectedEntries = deps.getHistoryContext ? forgottenHistoryEntries(deps.getHistoryContext(), deps.getCurrentUserText?.()) : new Set<string>();
+        const projectTitle = (key: string, name: string | undefined) => {
+          if (name === undefined) return name;
+          const projected = [...protectedEntries].some(entry => entry.startsWith(`${key}:`)) ? FORGOTTEN_HISTORY_EXCERPT
+            : deps.getHistoryContext ? projectUnadmittedForgottenFields(name, deps.getHistoryContext(), deps.getCurrentUserText?.()) : name;
+          return deps.localOnly ? projected.slice(0, 200) : projected;
+        };
         if (!query) {
           const listed = await store.list({
             limit: limit + 5,
@@ -198,7 +205,7 @@ export function createSessionSearchTool(deps: SessionSearchToolDeps): AgentTool 
           });
           const items = listed.items.slice(0, limit).map((s) => ({
             key: s.key,
-            name: deps.localOnly ? s.name?.slice(0, 200) : s.name,
+            name: projectTitle(s.key, s.name),
             updatedAt: s.updatedAt,
             messageCount: s.messageCount,
             sourceChannel: s.sourceChannel,
@@ -233,16 +240,14 @@ export function createSessionSearchTool(deps: SessionSearchToolDeps): AgentTool 
         }
 
         const top = matches.slice(0, limit);
-        const protectedEntries = deps.getHistoryContext ? forgottenHistoryEntries(deps.getHistoryContext(), deps.getCurrentUserText?.()) : new Set<string>();
-
         if (deps.localOnly) {
           const results = top.map(({ key }) => ({
             conversationId: key,
-            name: listed.items.find(item => item.key === key)?.name?.slice(0, 200),
+            name: projectTitle(key, listed.items.find(item => item.key === key)?.name),
             excerpts: store.recallSession(key, query, { limit: 2, matchMode: 'keyword' })
               .filter(match => !p.roleFilter || match.role === p.roleFilter)
               .map(match => {
-                const content = (protectedEntries.has(`${key}:*`) || protectedEntries.has(`${key}:${match.entryId}`)) ? FORGOTTEN_HISTORY_EXCERPT : match.content;
+                const content = (protectedEntries.has(`${key}:*`) || protectedEntries.has(`${key}:${match.entryId}`)) ? FORGOTTEN_HISTORY_EXCERPT : deps.getHistoryContext ? projectUnadmittedForgottenFields(match.content, deps.getHistoryContext(), deps.getCurrentUserText?.()) : match.content;
                 const positions = sessionSearchTerms(query).map(term => content.toLowerCase().indexOf(term.toLowerCase())).filter(at => at >= 0);
                 const at = positions.length ? Math.min(...positions) : 0;
                 const start = Math.max(0, at - 200);
@@ -273,6 +278,7 @@ export function createSessionSearchTool(deps: SessionSearchToolDeps): AgentTool 
               return { conversationId: key, score, summary: FORGOTTEN_HISTORY_EXCERPT };
             }
             let messages = await store.load(key);
+            if (deps.getHistoryContext) messages = projectUnadmittedForgottenFields(messages, deps.getHistoryContext(), deps.getCurrentUserText?.());
 
             if (p.roleFilter) {
               messages = messages.filter((m) => m.role === p.roleFilter);
