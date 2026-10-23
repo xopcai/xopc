@@ -197,7 +197,7 @@ const messages = {
   "startup-performance.question": ["启动与首轮响应是否足够及时？", "Are startup and initial responses timely?"],
   "locomo.question": ["长时间对话中的记忆能否帮助后续任务？", "Does memory from long conversations help later tasks?"],
 
-  skip: ['跳至内容', 'Skip to content'], workspace: ['持续改进工作台', 'Continuous improvement'], navigation: ['主导航', 'Main navigation'],
+  skip: ['跳至内容', 'Skip to content'], workspace: ['自进化工作台', 'Self-evolution workspace'], navigation: ['主导航', 'Main navigation'],
   overview: ['评测总览', 'Overview'], runs: ['运行记录', 'Runs'], evidence: ['评测证据', 'Evidence'], compare: ['实验比较', 'Compare'], improvements: ['改进验收', 'Improvements'],
   theme: ['主题', 'Appearance'], light: ['浅色主题', 'Light theme'], dark: ['深色主题', 'Dark theme'], system: ['跟随系统', 'System theme'], language: ['语言', 'Language'], localReadonly: ['本地 · 只读控制面', 'Local · Read-only workspace'],
   connected: ['已连接 · 实时更新', 'Connected · Live updates'], reconnecting: ['连接中断 · 自动恢复', 'Reconnecting automatically'], connecting: ['正在连接', 'Connecting'], updated: ['更新于 {time}', 'Updated {time}'],
