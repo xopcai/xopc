@@ -58,6 +58,43 @@ describe('SessionManager.forkSessionAtTurn', () => {
   });
 });
 
+describe('SessionManager agent config', () => {
+  const payload = {
+    model: 'xopc-cloud/auto', thinkingLevel: 'low', configVersion: 7, fixedModel: true,
+    activityDetail: { default: 'on', override: 'stream', effective: 'stream', source: 'session' },
+    verboseLevel: 'full', effectiveWorkspacePath: '/tmp/workspace',
+    workingDirectoryLocked: false, userContextMode: 'enabled', workspaceSource: 'agent_workspace',
+  };
+
+  beforeEach(() => {
+    mockedApiFetch.mockReset();
+    drafts.read.mockResolvedValue(undefined);
+  });
+
+  it('loads the current Gateway config without the removed reasoningLevel field', async () => {
+    mockedApiFetch.mockResolvedValueOnce(jsonResponse({ ok: true, payload }));
+    const config = await new SessionManager().loadSessionAgentConfig('config-session');
+    expect(config).toMatchObject({ model: payload.model, activityDetail: payload.activityDetail });
+  });
+
+  it.each(['session', 'task'])('parses the config returned when changing a %s model', async (kind) => {
+    mockedApiFetch.mockResolvedValueOnce(jsonResponse({ ok: true, payload }));
+    const manager = new SessionManager();
+    const config = kind === 'session'
+      ? await manager.patchSessionAgentConfig('config-session', { model: payload.model })
+      : await manager.patchTaskConversationModel('task', payload.model);
+    expect(config).toMatchObject({ model: payload.model, activityDetail: payload.activityDetail });
+  });
+
+  it('rejects malformed activity detail instead of silently defaulting it', async () => {
+    mockedApiFetch.mockResolvedValueOnce(jsonResponse({
+      ok: true, payload: { ...payload, activityDetail: { ...payload.activityDetail, effective: 'invalid' } },
+    }));
+    await expect(new SessionManager().loadSessionAgentConfig('invalid-config-session'))
+      .rejects.toThrow('Invalid session agent config response');
+  });
+});
+
 describe('SessionManager local drafts', () => {
   beforeEach(() => {
     mockedApiFetch.mockReset();
