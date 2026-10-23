@@ -1,6 +1,7 @@
 import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
 import { Type } from '@sinclair/typebox';
 import { LOCAL_READ_MAX_CHARS } from './local-read-budget.js';
+import { projectForgottenEvidence } from '../../memory-learning/forgotten-history.js';
 
 import { retrievalLexicalSimilarity } from '../../retrieval/textFeatures.js';
 import {
@@ -114,7 +115,9 @@ export function createUserContextGetTool(options: UserContextToolOptions): Agent
       const result = {
         assertion,
         slot: getAssertionSlot(assertion.slotId),
-        sources: listUserAssertionSources([assertion.id]).get(assertion.id) ?? [],
+        sources: projectForgottenEvidence(listUserAssertionSources([assertion.id]).get(assertion.id) ?? [], {
+          agentId: options.agentId, workspaceId: options.workspaceId, conversationId: options.getSessionId() ?? '', projectId: options.getProjectId?.(),
+        }, options.getCurrentUserText?.()),
       };
       return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }], details: result };
     },

@@ -73,6 +73,8 @@ import type { CompactionDiscardedAttempt } from '../memory/compaction.js';
 import { continuesAfterTool, trackAiUsageStream } from '../../usage/recorder.js';
 import { isXopcDatabaseOpen } from '../../storage/sqlite/index.js';
 import { getSessionMetadata } from '../../storage/sqlite/session-repository.js';
+import { projectForgottenHistoryMessages, projectSuppressedMemoryBlocks, originalReadAuthorizationNotice } from '../../memory-learning/forgotten-history.js';
+import { getActiveTranscriptUserText } from '../inbound/attachment-pipeline.js';
 import { resolveEffectiveAgentConfigForSession } from '../../config/agent-profile.js';
 import { getModelThinking } from '../../providers/model-thinking.js';
 import { NO_REPLY } from '../messaging/no-reply.js';
@@ -551,14 +553,29 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
     };
     const loggingStreamFn: typeof session.agent.streamFunction = (streamModel, context, options) => {
       instructions.acknowledge();
-      const sourceMessages = [...context.messages];
+      const memoryMetadata = isXopcDatabaseOpen() ? getSessionMetadata(conversationId) : undefined;
+      const historyContext = {
+        conversationId, agentId: memoryMetadata?.agentId ?? '', workspaceId: workspaceDir,
+        projectId: memoryMetadata?.projectId,
+      };
+      const sourceMessages = projectForgottenHistoryMessages([...context.messages], historyContext,
+        getActiveTranscriptUserText(conversationId) ?? (typeof userMessage === 'string' ? userMessage : ''))
+        .map(message => message.role !== 'system' ? message : { ...message,
+          ...(typeof message.content === 'string' ? { content: projectSuppressedMemoryBlocks(message.content, historyContext) } : {}),
+          ...(message.sections ? { sections: Object.fromEntries(Object.entries(message.sections).map(([key, value]) =>
+            [key, projectSuppressedMemoryBlocks(value, historyContext)])) } : {}),
+        });
       const hygienicMessages = tryApplySessionTranscriptHygiene(sourceMessages, streamModel) as typeof sourceMessages;
       const recentToolCalls = extractRecentToolCalls(session.agent.state.messages);
       const loopGuard = detectToolLoops(recentToolCalls);
 
       let effectiveContext: typeof context = { ...context, messages: hygienicMessages };
+      const readAuthorization = originalReadAuthorizationNotice(historyContext,
+        getActiveTranscriptUserText(conversationId) ?? (typeof userMessage === 'string' ? userMessage : ''));
+      if (readAuthorization) effectiveContext = { ...effectiveContext, messages: [...effectiveContext.messages,
+        { role: 'system' as const, content: '', sections: { 'xopc.original-read-authorization': readAuthorization }, timestamp: 0 }] };
       if (loopGuard.injection) {
-        effectiveContext = { ...effectiveContext, messages: [...hygienicMessages,
+        effectiveContext = { ...effectiveContext, messages: [...effectiveContext.messages,
           { role: 'user' as const, content: loopGuard.injection, timestamp: Date.now() }] };
       }
       const executionGuidance = verification.modelGuidance();

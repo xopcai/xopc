@@ -8,6 +8,8 @@ import { createCollaborationRule, listCollaborationRules } from '../storage/sqli
 import type { CaptureScopeContext } from '../user-model/capture/executor.js';
 import type { CaptureEvidence, UserModelInterpretation } from '../user-model/capture/semantic.js';
 
+import { isUnquotedOwnerEvidence } from './owner-directive.js';
+
 const log = createLogger('MemoryLearning:Forget');
 
 /** Only grounded owner requests can forget derived knowledge visible in this scope. */
@@ -21,8 +23,7 @@ export function applyKnowledgeDeletions(input: {
       if (!operation.evidenceRefs.length || operation.evidenceRefs.some(ref =>
         !input.evidence.some(entry => entry.ref === ref && entry.role === 'user'))) continue;
       if (!operation.evidence?.length || operation.evidence.some(claim => !input.evidence.some(entry =>
-        entry.ref === claim.ref && entry.role === 'user' && entry.text.normalize('NFKC').toLowerCase()
-          .includes(claim.quote.normalize('NFKC').toLowerCase())))) continue;
+        entry.ref === claim.ref && entry.role === 'user' && isUnquotedOwnerEvidence(entry.text, claim.quote)))) continue;
       let targets = operation.targetKnowledgeIds.flatMap(id => {
         const item = input.allowedTargetIds.includes(id) ? getKnowledgeItem(id) : undefined;
         return item && item.recordClass === 'memory' && canUseKnowledge(item, input.context) ? [item] : [];
@@ -55,7 +56,8 @@ export function applyKnowledgeDeletions(input: {
             OR e.message_id IN (SELECT value FROM knowledge_revisions r, json_each(r.source_json, '$.evidenceRefs')
               WHERE r.knowledge_id=?))`)
         .all(item.id, item.id) as Array<{ conversation_id: string; message_id: string }>).flatMap(entry =>
-          [`${entry.conversation_id}:${entry.message_id}`, `${entry.conversation_id}:*`]));
+          [`${entry.conversation_id}:${entry.message_id}`, `${entry.conversation_id}:*`]))
+        .concat(targets.length && input.context.conversationId ? [`${input.context.conversationId}:*`] : []);
       for (const item of targets) {
         deleteKnowledgeItem(item.id, Date.now(), { includeRelated: false });
         outputs.push({ candidateKey: item.id, objectType: 'knowledge', objectId: item.id, outcome: 'rejected' });
