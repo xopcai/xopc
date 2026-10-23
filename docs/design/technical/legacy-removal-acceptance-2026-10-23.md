@@ -27,7 +27,7 @@
 - 清理及约束重建均未改变其他业务表行数；`integrity_check=ok`、外键违规 0；schema 定义不含 Workflow 或 legacy。
 - `doctor --deep`：12 通过、0 失败、3 警告、3 跳过。警告涉及现有运行环境，包括 Gateway 未启动/未作为系统服务安装。
 
-结构化证据：[数据库结果](./evidence/legacy-removal-2026-10-23/database-result.json)、[检查结果](./evidence/legacy-removal-2026-10-23/checks.json)。本机数据结果不代表其他设备或远程实例已经清理。
+数据库与检查结果汇总于本报告，逐次执行 JSON 不单独保留。本机数据结果不代表其他设备或远程实例已经清理。
 
 ## 保留项及理由
 
@@ -85,7 +85,7 @@
 | Android 全量 connectedDebugAndroidTest | **308 项通过、0 失败、0 错误、0 跳过**；API 35 / Android 15 模拟器；约 321 秒 |
 | git diff --check | **通过** |
 
-Android 首轮全量暴露 10 项失败；经过源码与测试检查、定向修复后，再次执行完整套件通过，没有跳过、禁用用例或降低断言强度。[按测试类统计的 Android 结果](./evidence/legacy-removal-2026-10-23/android-full-suite.json)。[更新后的完整检查摘要](./evidence/legacy-removal-2026-10-23/checks.json)。
+Android 首轮全量暴露 10 项失败；经过源码与测试检查、定向修复后，再次执行完整套件通过，没有跳过、禁用用例或降低断言强度。最终结果见上表；重复的逐类统计及检查 JSON 不单独保留。
 
 gradle-run 管理器验证问题及最终回答：
 
@@ -106,6 +106,6 @@ gradle-run 管理器验证问题及最终回答：
 - Agent catalog 初始化在事务内删除 `agent_catalog_settings.defaults_json` 和 `agents.overrides_json` 中的废弃 Workflow 策略，再解析当前结构；保留其他配置、Agent 身份、修订号和时间戳。
 - 当前写入 schema 和运行时仍不提供 Workflow 配置或执行能力。这是已安装数据的退役清理，不导入 Workflow 定义或将其转换为其他产品对象。
 
-新增专项覆盖配置文件残留、catalog 残留、两者同时残留三种打包桌面初始化路径，验证 token、端口、Agent 能力、workspace 和重复启动；还覆盖读取期间并发编辑、写回失败、其他字段/渠道验证失败时不覆盖原文。专项 4 文件、22 项测试通过；全量 1649 文件通过、10676 项通过、14 项跳过、0 失败。类型检查、修改范围 lint、Node/Web 构建、Electron 构建产物、发布清单检查、docs:check 和差异检查均通过。[结构化结果](./evidence/legacy-removal-2026-10-23/upgrade-startup-fix.json)。
+新增专项覆盖配置文件残留、catalog 残留、两者同时残留三种打包桌面初始化路径，验证 token、端口、Agent 能力、workspace 和重复启动；还覆盖读取期间并发编辑、写回失败、其他字段/渠道验证失败时不覆盖原文。专项 4 文件、22 项测试通过；全量 1649 文件通过、10676 项通过、14 项跳过、0 失败。类型检查、修改范围 lint、Node/Web 构建、Electron 构建产物、发布清单检查、docs:check 和差异检查均通过。
 
 本轮针对已支持的当前数据库版本中残留的 Workflow 配置。未恢复更早数据库版本的历史升级链；新构建需发布/安装后，用户已有的 0.0.411 应用才会获得该修复。

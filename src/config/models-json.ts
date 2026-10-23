@@ -1,3 +1,4 @@
+import { PhoneModelMetadataSchema } from '../phone/contracts.js';
 /**
  * Models.json configuration types and schema
  * 
@@ -129,6 +130,7 @@ export const ImageGenerationProviderSchema = z.object({
 export const CustomModelSchema = z.object({
   supportsTools: z.boolean().optional(),
   computerUse: z.object({ profile: ComputerProfileSchema }).strict().optional(),
+  phoneUse: PhoneModelMetadataSchema.optional(),
 	id: z.string().min(1),
 	name: z.string().min(1).optional(),
 	api: z.enum([
@@ -163,6 +165,7 @@ export const CustomModelSchema = z.object({
 export const ModelOverrideSchema = z.object({
   supportsTools: z.boolean().optional(),
   computerUse: z.object({ profile: ComputerProfileSchema }).strict().optional(),
+  phoneUse: PhoneModelMetadataSchema.optional(),
 	name: z.string().min(1).optional(),
 	reasoning: z.boolean().optional(),
 	thinkingLevelMap: z.partialRecord(z.enum(['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max']), z.string().nullable()).optional(),
@@ -416,6 +419,9 @@ export function validateModelsConfig(config: unknown): ValidationResult {
 		if (providerConfig.models) {
 			for (let i = 0; i < providerConfig.models.length; i++) {
 				const model = providerConfig.models[i];
+                if (model.phoneUse && (!model.input?.includes('image') || (model.api ?? providerConfig.api) !== 'openai-completions')) {
+                  errors.push({ path: `providers.${providerName}.models[${i}].phoneUse`, message: 'Phone Use requires image input and OpenAI Chat Completions', severity: 'error' });
+                }
 				if (model.computerUse && !isComputerModel({ ...model, api: model.api ?? providerConfig.api })) {
 					errors.push({ path: `providers.${providerName}.models[${i}].computerUse`,
 						message: 'Computer Use requires image input and an API matching its protocol', severity: 'error' });

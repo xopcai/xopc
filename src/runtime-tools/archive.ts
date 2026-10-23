@@ -5,7 +5,7 @@ import { isAbsolute, join, posix, relative, resolve } from 'node:path';
 import AdmZip from 'adm-zip';
 
 import { RuntimeError } from './errors.js';
-import type { RuntimeKind } from './types.js';
+import type { RuntimeArtifactKind } from './types.js';
 
 const MAX_ARCHIVE_ENTRIES = 50_000;
 const MAX_TAR_OUTPUT_BYTES = 16 * 1024 * 1024;
@@ -96,7 +96,7 @@ async function singleArchiveRoot(destination: string): Promise<string> {
 }
 
 export async function extractRuntimeArchive(params: {
-  runtime: RuntimeKind;
+  runtime: RuntimeArtifactKind;
   archivePath: string;
   archiveType: 'zip' | 'tar.gz';
   stagingDir: string;

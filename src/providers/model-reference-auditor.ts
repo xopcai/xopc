@@ -1,3 +1,5 @@
+import { phoneModelProfile } from '../phone/model-adapter.js';
+import { MOCK_PHONE_MODEL } from '../phone/contracts.js';
 import { getImageGenerationProvider } from '../agent/image/generation/provider-registry.js';
 import { AgentCatalogRepository } from '../agent-catalog/repository.js';
 import { parseImageGenerationModelRef } from '../agent/image/generation/model-ref.js';
@@ -16,7 +18,7 @@ export interface ModelReferenceHealth {
 interface CollectedReference {
   ref: string;
   location: string;
-  kind: 'text' | 'image-generation' | 'computer-use';
+  kind: 'text' | 'image-generation' | 'computer-use' | 'phone-use';
 }
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
@@ -78,6 +80,7 @@ function collectModelPolicy(out: CollectedReference[], value: unknown, location:
     }
   }
   collectToolModel(out, policy.imageUnderstanding, `${location}.imageUnderstanding`);
+  collectToolModel(out, policy.phoneUse, `${location}.phoneUse`, 'phone-use');
   collectToolModel(out, policy.computerUse, `${location}.computerUse`, 'computer-use');
   collectToolModel(
     out,
@@ -145,6 +148,7 @@ export function auditModelReferences(
     .map(([ref, references]): ModelReferenceHealth => {
       const available = references.every((reference) => reference.kind === 'image-generation'
         ? resolveImageGenerationModel(ref)
+        : reference.kind === 'phone-use' ? ref === MOCK_PHONE_MODEL || Boolean(phoneModelProfile(registry.resolve(ref)))
         : reference.kind === 'computer-use' ? isComputerModel(registry.resolve(ref)) : Boolean(registry.resolve(ref)));
       const availability = available ? 'available' : 'unavailable';
       const textOnly = references.every((reference) => reference.kind === 'text');

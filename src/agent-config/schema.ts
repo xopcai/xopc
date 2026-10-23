@@ -35,6 +35,10 @@ export const ComputerModelRouteSchema = ModelRouteSchema.extend({
   fallbacks: z.array(ModelRefSchema).max(0, 'Computer Use does not support fallback models').default([]),
 }).strict();
 
+export const PhoneModelRouteSchema = ModelRouteSchema.extend({
+  fallbacks: z.array(ModelRefSchema).max(0, 'Phone Use does not support fallback models').default([]),
+}).strict();
+
 export const ModelIntentSchema = z.enum([
   'fast',
   'reasoning',
@@ -53,6 +57,7 @@ export const AgentModelsDefaultsSchema = z.object({
   intents: ModelIntentRoutesSchema.default({}),
   imageUnderstanding: ModelRouteSchema.optional(),
   computerUse: ComputerModelRouteSchema.optional(),
+  phoneUse: PhoneModelRouteSchema.optional(),
   imageGeneration: ImageGenerationRouteSchema.optional(),
 }).strict();
 
@@ -62,6 +67,7 @@ export const AgentModelsOverrideSchema = z.object({
   intents: ModelIntentOverridesSchema.optional(),
   imageUnderstanding: ModelRouteSchema.nullable().optional(),
   computerUse: ComputerModelRouteSchema.nullable().optional(),
+  phoneUse: PhoneModelRouteSchema.nullable().optional(),
   imageGeneration: ImageGenerationRouteSchema.nullable().optional(),
 }).strict();
 

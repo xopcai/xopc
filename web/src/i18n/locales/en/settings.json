@@ -5,6 +5,7 @@
     "agent": "Agent",
     "agent-browser": "Browser",
     "computer-use": "Computer use",
+    "phone-use": "Phone Use",
     "agent-defaults": "Agent settings",
     "connectors": "Connections",
     "channels": "Channels",

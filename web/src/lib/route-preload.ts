@@ -12,6 +12,7 @@ export const loadUserModelPage = () => import('@/features/user-model/user-model-
 export const loadLogsPage = () => import('@/pages/logs-page');
 export const loadSettingsPage = () => import('@/pages/settings-page');
 export const loadAgentBrowserSettingsPage = () => import('@/features/settings/browser/browser-settings-page');
+export const loadPhoneSettingsPage = () => import('@/features/settings/phone/phone-settings-page');
 export const loadComputerSettingsPage = () => import('@/features/settings/computer/computer-settings-page');
 export const loadExtensionPage = () => import('@/features/extensions/extension-page');
 export const loadExtensionSettingsPage = () => import('@/features/extensions/extension-settings-page');
@@ -76,6 +77,7 @@ function preloadSettingsSection(path: string) {
   if (section === 'shares') return preload(loadSharesSettingsPanel);
   if (section === 'agent-defaults') return preload(loadAgentDefaultsSettingsPanel);
   if (section === 'agent-browser') return preload(loadAgentBrowserSettingsPage);
+  if (section === 'phone-use') return preload(loadPhoneSettingsPage);
   if (section === 'computer-use') return preload(loadComputerSettingsPage);
 }
 

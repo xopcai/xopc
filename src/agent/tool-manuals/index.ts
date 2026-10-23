@@ -1,6 +1,7 @@
 import { browserUseManual } from './browser.js';
 import { xopcUseManual } from './xopc-use.js';
 import { computerUseManual } from './computer.js';
+import { phoneUseManual } from './phone.js';
 
 export interface ToolManual {
   toolName: string;
@@ -12,6 +13,7 @@ export interface ToolManual {
 export type ToolManualSummary = Omit<ToolManual, 'content'>;
 
 const TOOL_MANUALS: Record<string, ToolManual> = {
+  phone_use: { toolName: 'phone_use', title: 'Phone Use Manual', description: 'Android device selection, scoped observation, bounded actions and emulator testing.', content: phoneUseManual },
   computer_use: { toolName: 'computer_use', title: 'Computer Use Manual', description: 'App discovery, read-only inspection and bounded desktop control.', content: computerUseManual },
   browser_use: {
     toolName: 'browser_use',

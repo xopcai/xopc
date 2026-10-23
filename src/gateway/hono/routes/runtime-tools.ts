@@ -9,6 +9,7 @@ import { pruneRuntimeTools } from '../../../runtime-tools/prune.js';
 import { normalizeRuntimeVersionRequest } from '../../../runtime-tools/probe.js';
 import { createGatewayRouteLogger } from '../lib/route-logger.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
+import { registerPhoneDependencyRoutes } from './phone-dependencies.js';
 
 const log = createGatewayRouteLogger('RuntimeTools');
 const RUNTIMES = new Set<RuntimeKind>(['node', 'uv', 'python']);
@@ -37,6 +38,7 @@ export function registerRuntimeToolsRoutes(
   deps: AuthenticatedRouteDeps,
 ): void {
   const { service, strictRateLimitMiddleware } = deps;
+  registerPhoneDependencyRoutes(authenticated, deps);
 
   authenticated.get('/api/runtime-tools', async (c) => {
     const statuses = await runtimeManager(service.currentConfig).statusAll();

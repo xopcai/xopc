@@ -4,6 +4,7 @@ export type ModelRoute = { primary: string; fallbacks: string[] };
 export type ModelIntent = 'fast' | 'reasoning' | 'coding' | 'review' | 'vision' | 'understanding';
 export type AgentModelsDefaults = {
   computerUse?: ModelRoute;
+  phoneUse?: ModelRoute;
   chat: ModelRoute;
   background?: ModelRoute;
   intents: Partial<Record<ModelIntent, ModelRoute>>;
@@ -12,6 +13,7 @@ export type AgentModelsDefaults = {
 };
 export type AgentModelsOverride = {
   computerUse?: ModelRoute | null;
+  phoneUse?: ModelRoute | null;
   chat?: ModelRoute;
   background?: ModelRoute | null;
   intents?: Partial<Record<ModelIntent, ModelRoute | null>>;

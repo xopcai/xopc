@@ -1,3 +1,4 @@
+import { PhoneModelOverride } from '../phone/phone-model-picker';
 import {
   AlertTriangle,
   MessageSquarePlus,
@@ -403,6 +404,11 @@ export function AgentEditor({
           {panel === 'capabilities' && capabilityPanel === 'models' ? (
             <div role="tabpanel" id="agent-capability-panel-models" aria-labelledby="agent-capability-tab-models" className="space-y-6">
               <SectionTitle title={zh ? '模型路由' : 'Model routing'} description={zh ? '日常对话使用 Chat；固定意图只在对应任务中生效。默认继承全局。' : 'Chat handles normal turns; fixed intents apply only to matching work. Everything inherits by default.'} action={draft.models ? <Button variant="ghost" onClick={() => setDraft({ ...draft, models: undefined })}><RotateCcw className="size-4" />{zh ? '全部继承' : 'Inherit all'}</Button> : undefined} />
+              <PhoneModelOverride zh={zh} value={draft.models?.phoneUse} inherited={agent.effective.models.phoneUse} onChange={phoneUse => {
+                const models = { ...(draft.models ?? {}) };
+                if (phoneUse === undefined) delete models.phoneUse; else models.phoneUse = phoneUse;
+                setDraft({ ...draft, models: Object.keys(models).length ? models : undefined });
+              }} />
               <ModelRouteEditor label={messages.editorChatModel} inherited={agent.effective.models.chat} value={draft.models?.chat} zh={zh} onChange={(chat) => {
                 const models = { ...(draft.models ?? {}) };
                 if (chat) models.chat = chat;

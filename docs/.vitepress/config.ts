@@ -90,6 +90,8 @@ export default defineConfig({
               { text: 'Automations', link: '/automations' },
               { text: 'Browser automations', link: '/browser-automations' },
               { text: 'Computer Use preview', link: '/computer-use' },
+              { text: 'Phone Use preview', link: '/phone-use' },
+              { text: 'Connect Alibaba Cloud Phone', link: '/how-to/connect-aliyun-cloud-phone' },
               { text: 'Voice (STT/TTS)', link: '/voice' },
               { text: 'Images and vision', link: '/image-multimodal' }
             ]
@@ -210,6 +212,8 @@ export default defineConfig({
               { text: '自动化', link: '/zh/automations' },
               { text: '浏览器自动化', link: '/zh/browser-automations' },
               { text: '电脑控制预览', link: '/zh/computer-use' },
+              { text: '手机控制预览', link: '/zh/phone-use' },
+              { text: '连接阿里云手机', link: '/zh/how-to/connect-aliyun-cloud-phone' },
               { text: '语音（STT/TTS）', link: '/zh/voice' },
               { text: '图像与视觉', link: '/zh/image-multimodal' }
             ]

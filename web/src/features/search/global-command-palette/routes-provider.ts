@@ -22,10 +22,11 @@ export type RouteHitSeed = {
  * Agent management lives in the capability center; browser automation
  * remains a standalone agent-related settings route.
  */
-const AGENT_SETTINGS_PALETTE_TABS: readonly Tab[] = ['settingsAgentBrowser', 'settingsComputerUse'];
+const AGENT_SETTINGS_PALETTE_TABS: readonly Tab[] = ['settingsAgentBrowser', 'settingsComputerUse', 'settingsPhoneUse'];
 
 const AGENT_SETTINGS_ROUTE_KEYWORDS: Partial<Record<Tab, string[]>> = {
   settingsAgentBrowser: ['browser', 'playwright', 'automation'],
+  settingsPhoneUse: ['phone use', 'Android', 'ADB', 'AutoGLM', '手机控制', '模拟器'],
   settingsComputerUse: ['computer use', 'compute use', 'desktop', '电脑控制', '电脑操作', '桌面控制', 'GUI', 'BYOK'],
 };
 

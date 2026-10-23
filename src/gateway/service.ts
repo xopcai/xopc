@@ -1,4 +1,5 @@
 import type { ClarificationSubmission } from '@xopcai/gateway-contract';
+import { PhoneStreamGateway } from '../phone/stream-gateway.js';
 import { configureGatewayHttpProxy } from '../infra/http-proxy-env.js';
 import { buildResultAgentContext } from '../agent/source-context/result-context.js';
 import { drainPersonalResultReads } from '../personal-agent/result-read-continuations.js';
@@ -225,6 +226,7 @@ export class GatewayService {
     try { return isBrowserSessionActive(principalId.slice('browser:'.length), this.auth); } catch { return false; }
   };
   readonly realtime = new RealtimeRuntime(this.endpointTools, this.isRealtimePrincipalActive);
+  readonly phoneStreams = new PhoneStreamGateway(this.isRealtimePrincipalActive);
   readonly voiceRealtime = new VoiceRealtimeRuntime({
     isPrincipalActive: this.isRealtimePrincipalActive,
     getConversationContext: async (conversationId, expectedTranscriptId) => {
@@ -1730,6 +1732,9 @@ export class GatewayService {
     await flushTracing();
     if (!this.running) return;
     this.stopping = true;
+    const { getPhoneRuntime } = await import('../phone/runtime.js');
+    await getPhoneRuntime().shutdown();
+    this.phoneStreams.close();
     const { cancelAllPluginCliAuthorizations } = await import('../extensions/agent-plugins/cli-authorization.js');
     cancelAllPluginCliAuthorizations();
     this.taskAllocationDispatcher?.stop();
