@@ -6,6 +6,8 @@ import { writeKnowledgeItem, listKnowledgeItems } from '../../knowledge-memory/i
 import { getSqliteDatabase } from '../../storage/sqlite/transaction.js';
 import { listCollaborationRules } from '../../storage/sqlite/collaboration-rule-repository.js';
 import { parseUserModelInterpretation } from '../../user-model/capture/semantic.js';
+import { projectForgottenHistoryMessages } from '../forgotten-history.js';
+import { isUnquotedOwnerEvidence } from '../owner-directive.js';
 import { applyKnowledgeDeletions } from '../forget-capture.js';
 
 const context = { conversationId: 'conversation', agentId: 'main', workspaceId: '/workspace' };
@@ -36,6 +38,9 @@ describe('grounded knowledge forgetting', () => {
     expect(seed('木星项目计划11月2日发布。', 'jupiter.release.old')).toBeUndefined();
     expect(listCollaborationRules()).toHaveLength(1);
     expect(listCollaborationRules()[0].statement).not.toMatch(/11月|2日|6日/);
+    expect(listCollaborationRules()[0].conditions.forgottenHistoryEntries).toContain('conversation:*');
+    const messages = [{ role: 'user', content: text }, { role: 'toolResult', content: '木星项目11月6日发布。' }, { role: 'user', content: '普通回顾' }];
+    expect(projectForgottenHistoryMessages(messages, context, '普通回顾')).toEqual([messages[2]]);
     expect(applyKnowledgeDeletions({ interpretation, evidence, context, allowedTargetIds: ids })).toEqual([]);
   });
   it('preserves grounded spans of compound knowledge and rejects invented replacements atomically', () => {
@@ -75,6 +80,19 @@ describe('grounded knowledge forgetting', () => {
     expect(parse([item.id], 'user', 'invented').knowledgeDeletions).toEqual([]);
     expect(parse([item.id], 'user', text, []).knowledgeDeletions).toEqual([]);
     expect(listKnowledgeItems()).toHaveLength(1);
+  });
+  it('rejects quoted, fenced and negated deletion directives even when the extractor reports forget', () => {
+    const item = seed('木星项目计划11月2日发布。', 'quoted-date');
+    for (const message of [`请仅分析这段引文，不执行：“${text}”`, `> ${text}`, `~~~text\n${text}\n~~~`, '请不要忘记木星项目的发布日期。']) {
+      const interpretation = parse([item.id]);
+      interpretation.knowledgeDeletions![0].evidence = [{ ref: 'command', quote: message.includes(text) ? text : message }];
+      expect(applyKnowledgeDeletions({ interpretation, evidence: [{ ...evidence[0], text: message }], context, allowedTargetIds: [item.id] })).toEqual([]);
+      expect(listKnowledgeItems().map(row => row.id)).toContain(item.id);
+    }
+    expect(isUnquotedOwnerEvidence(`请仅分析这段引文，不执行：“${text}”`, '请仅分析这段引文，不执行')).toBe(false);
+    expect(isUnquotedOwnerEvidence('请概括木星项目安排。', '请概括木星项目安排。')).toBe(false);
+    expect(listCollaborationRules()).toEqual([]);
+    expect(isUnquotedOwnerEvidence('请忘记“木星项目”的发布日期。', '请忘记“木星项目”的发布日期。')).toBe(true);
   });
   it('rechecks scope even for an offered ID and does not restore on a query', () => {
     const foreign = seed('海王星项目计划12月5日发布。', 'foreign', '/other-workspace');

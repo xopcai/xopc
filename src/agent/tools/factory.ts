@@ -587,6 +587,7 @@ export class AgentToolsFactory {
           ]
         : []),
       ...(personalToolsConfigured || allowed?.has('user_context_read') ? [createUserContextReadTool({
+        getCurrentUserText: () => currentConversationId() ? getActiveTranscriptUserText(currentConversationId()!) : undefined,
         agentId: resolvedAgentId,
         workspaceId: workspace,
         getSessionId: currentConversationId,
@@ -594,6 +595,7 @@ export class AgentToolsFactory {
         canRead: () => currentAccess().userModel,
       }, command => !disabled?.has(`user_context_${command}`) && (!isXopcDatabaseOpen() || resolveEffectiveAgentConfigForAgent(resolvedAgentId).config.tools[`user_context_${command}`]?.mode !== 'deny'))] : []),
       createUserContextSearchTool({
+        getCurrentUserText: () => currentConversationId() ? getActiveTranscriptUserText(currentConversationId()!) : undefined,
         agentId: resolvedAgentId,
         workspaceId: workspace,
         getSessionId: currentConversationId,
@@ -601,6 +603,7 @@ export class AgentToolsFactory {
         canRead: () => currentAccess().userModel,
       }),
       createUserContextGetTool({
+        getCurrentUserText: () => currentConversationId() ? getActiveTranscriptUserText(currentConversationId()!) : undefined,
         agentId: resolvedAgentId,
         workspaceId: workspace,
         getSessionId: currentConversationId,
@@ -620,6 +623,7 @@ export class AgentToolsFactory {
         },
       }),
       ...(personalToolsConfigured || allowed?.has('knowledge_read') ? [createKnowledgeReadTool({
+        getCurrentUserText: () => currentConversationId() ? getActiveTranscriptUserText(currentConversationId()!) : undefined,
         agentId: resolvedAgentId,
         workspaceId: workspace,
         getSessionId: currentConversationId,
@@ -630,6 +634,7 @@ export class AgentToolsFactory {
         getReadPolicy: () => currentAccess().knowledgePolicy,
       }, command => !disabled?.has(`knowledge_${command}`) && (!isXopcDatabaseOpen() || resolveEffectiveAgentConfigForAgent(resolvedAgentId).config.tools[`knowledge_${command}`]?.mode !== 'deny'))] : []),
       createKnowledgeSearchTool({
+        getCurrentUserText: () => currentConversationId() ? getActiveTranscriptUserText(currentConversationId()!) : undefined,
         agentId: resolvedAgentId,
         workspaceId: workspace,
         getSessionId: currentConversationId,
@@ -640,6 +645,7 @@ export class AgentToolsFactory {
         getReadPolicy: () => currentAccess().knowledgePolicy,
       }),
       createKnowledgeGetTool({
+        getCurrentUserText: () => currentConversationId() ? getActiveTranscriptUserText(currentConversationId()!) : undefined,
         agentId: resolvedAgentId,
         workspaceId: workspace,
         getSessionId: currentConversationId,

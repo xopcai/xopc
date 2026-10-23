@@ -1,7 +1,7 @@
 import type { AgentTool } from '@earendil-works/pi-agent-core';
 import { Type } from '@sinclair/typebox';
 
-import { forgottenHistoryEntries, FORGOTTEN_HISTORY_EXCERPT } from '../../memory-learning/forgotten-history.js';
+import { explicitlyReadsOriginalHistory, forgottenHistoryEntries, FORGOTTEN_HISTORY_EXCERPT } from '../../memory-learning/forgotten-history.js';
 import type { CaptureScopeContext } from '../../user-model/capture/executor.js';
 import type { SessionStore } from '../../session/store.js';
 
@@ -87,6 +87,10 @@ export function createSessionRecallTool(deps: SessionRecallToolDeps): AgentTool 
         const nextBeforeSeq = results.length && (results.length < matches.length || matches.length === limit)
           ? Math.min(...results.map(result => result.seq)) : undefined;
         return { success: true, query, results, count: results.length,
+          ...(explicitlyReadsOriginalHistory(deps.getCurrentUserText?.() ?? '') ? {
+            historyScope: 'current_conversation_only',
+            guidance: 'This tool cannot search other conversations. Use session_search for original records elsewhere; these results do not establish that no original record exists.',
+          } : {}),
           ...(deps.maxOutputChars ? { excerpts: true, truncated: results.length < matches.length || results.some(result => result.truncated) } : {}),
           ...(nextBeforeSeq ? { nextBeforeSeq } : {}) };
       };
