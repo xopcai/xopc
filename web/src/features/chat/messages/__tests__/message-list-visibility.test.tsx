@@ -85,13 +85,20 @@ describe('MessageList visible rows', () => {
     expect(container.querySelector('img')).not.toBeNull();
   });
 
-  it('preserves failed outcomes and failed tool details even with work logs hidden', () => {
+  it('keeps final failures but removes tool-only failure rows in Personal', () => {
     render([{ ...empty, outcome }, { role: 'assistant', content: [
       { type: 'tool_use', id: 'failed-tool', name: 'read', status: 'error', result: 'Tool failed' },
     ] }]);
-    expect(rows()).toHaveLength(2);
+    expect(rows()).toHaveLength(1);
     expect(container.querySelector('[role="alert"]')?.textContent).toContain('Provider capacity exhausted');
-    expect(rows()[1].textContent?.replace('Assistant', '').trim()).not.toBe('');
+  });
+
+  it('preserves failed tool details outside Personal even with work logs hidden', () => {
+    render([{ role: 'assistant', content: [
+      { type: 'tool_use', id: 'failed-tool', name: 'read', status: 'error', result: 'Tool failed' },
+    ] }], { personal: false });
+    expect(rows()).toHaveLength(1);
+    expect(container.querySelector('button[aria-expanded]')).not.toBeNull();
   });
 
   it('keeps task result follow-ups without answer text and drops empty successful outcomes', () => {

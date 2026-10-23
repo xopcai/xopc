@@ -555,7 +555,7 @@ export const MessageBubble = memo(function MessageBubble({
   }, [isUser, userCopyText]);
 
   const retryDisabled = deleteRoundDisabled || !userMessageCanRetry;
-  const assistantStepsBlock = assistantTurnView && shouldShowAssistantWorkLog(assistantTurnView, showAssistantWorkLog)
+  const assistantStepsBlock = assistantTurnView && shouldShowAssistantWorkLog(assistantTurnView, showAssistantWorkLog, personal)
     && (assistantTurnView.workLog.active || assistantTurnView.workLog.items.length > 0)
     ? <AssistantStepsBlock
         workLog={assistantTurnView.workLog}
