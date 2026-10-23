@@ -53,6 +53,6 @@ Create and update operations provision directories through durable jobs. Purge r
 
 ## Current-only initialization
 
-The database baseline is v259. Bootstrap opens that schema, initializes an empty Agent catalog with current defaults, and resumes current directory provisioning jobs. Older database versions are rejected without writes. There is no host schema upgrade chain, legacy JSON import, identity Markdown import, import marker, or automatic configuration rewrite.
+The database baseline is v259. Bootstrap opens that schema, initializes an empty Agent catalog with current defaults, and resumes current directory provisioning jobs. Older database versions are rejected without writes. There is no host schema upgrade chain, legacy Agent JSON import, identity Markdown import, or import marker. On existing installations, the file reader discards the retired root `workflows` field before current-schema validation, and catalog initialization removes that field from stored Agent defaults and overrides. Current credentials, model/tool policy values and Agent identities are preserved. New configuration writes still use the strict current schema.
 
 Current catalog operations still validate revisions, ready-only selection, historical reads after deletion and purge path boundaries. Durable provisioning recovery concerns current jobs and does not convert historical formats.
