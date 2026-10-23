@@ -5,6 +5,7 @@
     "agent": "智能体",
     "agent-browser": "浏览器",
     "computer-use": "电脑控制",
+    "phone-use": "手机控制",
     "agent-defaults": "智能体设置",
     "connectors": "连接",
     "channels": "消息通道",

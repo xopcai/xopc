@@ -21,7 +21,7 @@ Workflow 产品与执行子系统已从当前源码、共享契约、新库 sche
 
 清除事务前后，无关表行数变化为零；`integrity_check = ok`，`foreign_key_check` 为零，最终 schema 内 Workflow 对象为零。清除后再次检查仍通过完整性与外键检查。此结论不涵盖未指定的远程部署或其他状态目录。
 
-机器结果：[数据库](./evidence/workflow-removal-2026-10-23/database-result.json)。
+数据库结果已汇总于本节，一次性执行 JSON 不单独保留。
 
 ## 验收矩阵
 
@@ -55,7 +55,6 @@ Workflow 产品与执行子系统已从当前源码、共享契约、新库 sche
 - 最终全量 Vitest：1,656 文件通过、1 文件失败、3 文件跳过；10,718 测试通过、1 测试失败、14 测试跳过。唯一失败为下述 HEAD 基线已复现的工作簿预览测试。最后清理的导航/attention 夹具另行 9 项通过。
 - `eslint src`：零错误、7 个未使用变量告警。Web lint 四项原有错误见下。
 - Android 设备问题：“Do Android connected instrumentation tests pass after removing Workflow?”：否，308 项中 283 项通过、25 项失败；不计为通过。14 项由测试 Gateway 缺少 requestProofVersion 导致，其余涉及界面断言、布局或相机等待；代表性 HEAD 对照另记。
-- 最终机器摘要：[checks.json](./evidence/workflow-removal-2026-10-23/checks.json)。
 - HEAD 对照问题：“Are representative Android instrumentation failures also present at HEAD?”：是，选取的 Gateway 鉴权、欢迎布局、HTTP 链接确认、Task header 四项均在 HEAD 复现。仅证明代表性失败，未把全部 25 项标为原有问题。对照复用同版数学/图表静态资源，跳过其生成步骤；没有修改 HEAD 应用源码。
 - gradle-run 已 finish，仅删除其包装器拥有的日志。隔离 HEAD 源码副本随后清除；测试模拟器恢复当前清理后的 APK。
 
@@ -70,13 +69,9 @@ Workflow 产品与执行子系统已从当前源码、共享契约、新库 sche
 
 ## 运行验证证据
 
-[认证 API 结果](./evidence/workflow-removal-2026-10-23/gateway-api-result.json) · [Task/Automation 结果](./evidence/workflow-removal-2026-10-23/runtime-result.json)
+真实认证请求验证 `/health`、`/api/sessions`、`/api/tasks`、`/api/projects`、`/api/automations`、`/api/home` 返回 JSON 200；旧 `/api/workflows/definitions`、`runs`、`drafts`、`project-presets`、`stats` 返回 JSON 404，没有 HTML fallback。Task 的 run/receipt 均为 succeeded，但 verification 为 unverified，按 manual 策略进入 review；Agent Automation 为 succeeded。浏览器验证聊天发送与响应、自动化页面及旧地址的通用未找到页面，console error 为零。
 
-![移除后的自动化界面](./evidence/workflow-removal-2026-10-23/automations.png)
-
-![旧地址进入通用未找到页面](./evidence/workflow-removal-2026-10-23/unknown-route.png)
-
-![普通聊天发送与响应](./evidence/workflow-removal-2026-10-23/chat.png)
+结果已汇总至本报告，逐次执行 JSON 和开发截图不单独保留。
 
 旧安装版桌面进程已停止，避免用旧代码重新创建删除的结构；新包没有自动安装。所有真实 API 写入验证使用隔离合成状态目录，不修改用户业务 Task 或 Automation。
 

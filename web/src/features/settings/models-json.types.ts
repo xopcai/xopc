@@ -8,6 +8,7 @@ export interface ModelCost {
 }
 
 export interface CustomModel {
+  phoneUse?: { profile: 'autoglm-phone-v1' | 'structured-phone-v1' };
   id: string;
   name?: string;
   input?: string[];

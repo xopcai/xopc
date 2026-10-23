@@ -24,7 +24,8 @@ export type FileTab = {
   visitedAt: number;
 };
 export type BrowserTab = { id: string; kind: 'browser'; title: string; initialUrl?: string; visitedAt: number; returnTo?: string };
-export type WorkspaceTab = BrowserTab | { id: string; kind: 'home' | 'files'; title: string; visitedAt: number; returnTo?: string } | FileTab | { id: string; kind: 'sidechat'; sideChatId: string; title: string; visitedAt: number; returnTo?: string };
+export type PhoneTab = { id: string; kind: 'phone'; phoneSessionId: string; title: string; visitedAt: number; returnTo?: string };
+export type WorkspaceTab = PhoneTab | BrowserTab | { id: string; kind: 'home' | 'files'; title: string; visitedAt: number; returnTo?: string } | FileTab | { id: string; kind: 'sidechat'; sideChatId: string; title: string; visitedAt: number; returnTo?: string };
 export type WorkspacePane = { open: boolean; tabs: WorkspaceTab[]; activeId: string | null };
 export const EMPTY_WORKSPACE_PANE: WorkspacePane = { open: false, tabs: [], activeId: null };
 
@@ -39,7 +40,7 @@ function read(): Stored {
       const p = value as WorkspacePane;
       if (!p || !Array.isArray(p.tabs)) continue;
       const tabs = p.tabs.filter((t) => t && typeof t.id === 'string' && typeof t.title === 'string'
-        && ((t.kind === 'file' && typeof t.path === 'string') || (t.kind === 'sidechat' && typeof t.sideChatId === 'string') || t.kind === 'home' || t.kind === 'files'));
+        && ((t.kind === 'phone' && typeof t.phoneSessionId === 'string') || (t.kind === 'file' && typeof t.path === 'string') || (t.kind === 'sidechat' && typeof t.sideChatId === 'string') || t.kind === 'home' || t.kind === 'files'));
       panes[scope] = { open: p.open === true && tabs.length > 0, tabs, activeId: tabs.some((t) => t.id === p.activeId) ? p.activeId : tabs[0]?.id ?? null };
     }
     return { ...defaults, panes };
@@ -79,6 +80,7 @@ type State = Stored & {
   keepFileOpen: (id: string) => void;
   scope: string;
   migrateScope: (from: string, to: string) => void;
+  openPhone: (phoneSessionId: string, title: string, scope: string, activate?: boolean) => void;
   openTools: (scope?: string) => string;
   openFiles: (scope?: string) => void;
   openBrowser: (url?: string, scope?: string, returnTo?: string) => string;
@@ -128,6 +130,14 @@ export const useRightWorkspaceStore = create<State>((set, get) => {
       delete panes[from];
       set({ panes, scope: get().scope === from ? to : get().scope });
       persist(get());
+    },
+    openPhone: (phoneSessionId, title, scope, activate = true) => {
+      const id = `phone:${phoneSessionId}`;
+      commit(scope, pane => ({
+        ...pane, open: activate ? true : pane.open,
+        activeId: activate || !pane.activeId ? id : pane.activeId,
+        tabs: pane.tabs.some(tab => tab.id === id) ? pane.tabs : [...pane.tabs, { id, kind: 'phone', phoneSessionId, title, visitedAt: Date.now(), returnTo: pane.activeId ?? undefined }],
+      }));
     },
     openTools: (scope = get().scope) => {
       const id = crypto.randomUUID();

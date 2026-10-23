@@ -21,6 +21,7 @@ describe('settings navigation information architecture', () => {
     expect(SETTINGS_SHELL_NAV_GROUPS.find(group => group.id === 'integrations')?.tabs).toEqual([
       'settingsAgentBrowser',
       'settingsComputerUse',
+      'settingsPhoneUse',
     ]);
     expect(connection?.tabs).toEqual(['settingsDevices', 'settingsTunnel', 'settingsShares']);
     expect(system?.tabs).toEqual(['settingsGateway', 'settingsRuntimes', 'settingsImports', 'sessions', 'usage', 'tracing', 'logs']);

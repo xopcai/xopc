@@ -64,14 +64,22 @@ export async function runRuntimeOperation(params: {
   version?: string;
   onProgress: (event: RuntimeProgress) => void;
 }): Promise<void> {
-  const response = await apiFetch(apiUrl(
-    `/api/runtime-tools/${params.runtime}/${params.action}/stream`,
-  ), {
-    method: 'POST',
-    headers: { Accept: 'text/event-stream' },
-    body: JSON.stringify({ version: params.version }),
+  return streamManagedToolOperation<RuntimeProgress>({
+    path: `/api/runtime-tools/${params.runtime}/${params.action}/stream`,
+    body: { version: params.version }, onProgress: params.onProgress,
   });
-  if (!response.ok || !response.body) throw new Error(`HTTP ${response.status}`);
+}
+
+export async function streamManagedToolOperation<T>(params: {
+  path: string; body: unknown; onProgress(event: T): void;
+}): Promise<void> {
+  const response = await apiFetch(apiUrl(params.path), {
+    method: 'POST', headers: { Accept: 'text/event-stream' }, body: JSON.stringify(params.body),
+  });
+  if (!response.ok || !response.body) {
+    const error = await response.json().catch(() => ({})) as { message?: string };
+    throw new Error(error.message ?? `HTTP ${response.status}`);
+  }
 
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
@@ -92,11 +100,11 @@ export async function runRuntimeOperation(params: {
           if (line.startsWith('data:')) data += line.slice(5).trimStart();
         }
         if (!data) continue;
-        const payload = JSON.parse(data) as { ok?: boolean; message?: string } & RuntimeProgress;
+        const payload = JSON.parse(data) as { ok?: boolean; message?: string } & T;
         if (event === 'progress') params.onProgress(payload);
         if (event === 'result') {
           resultSeen = true;
-          if (!payload.ok) throw new Error(payload.message ?? `${params.action} failed`);
+          if (!payload.ok) throw new Error(payload.message ?? 'Dependency operation failed');
         }
       }
     }

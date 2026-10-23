@@ -1,4 +1,4 @@
-import type { RuntimeKind } from './types.js';
+import type { RuntimeArtifactKind } from './types.js';
 
 export type RuntimeErrorCode =
   | 'RUNTIME_DISABLED'
@@ -17,7 +17,7 @@ export class RuntimeError extends Error {
   constructor(
     message: string,
     readonly code: RuntimeErrorCode,
-    readonly runtime: RuntimeKind,
+    readonly runtime: RuntimeArtifactKind,
     readonly phase: string,
     readonly repairable: boolean,
     readonly hints: string[] = [],

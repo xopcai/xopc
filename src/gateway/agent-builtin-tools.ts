@@ -7,6 +7,7 @@ export type GatewayBuiltinToolSummary = {
 
 /** Built-in agent tools exposed by the gateway configuration UI. */
 export const GATEWAY_BUILTIN_TOOLS = [
+  { id: 'phone_use', description: { en: 'Observe and control an authorized Android phone through the local ADB runner.', zh: '通过本地 ADB 执行端观察和操作已授权的 Android 手机。' } },
   { id: 'computer_use', description: { en: 'Observe and control a locally authorized desktop application.', zh: '观察和操作在本机授权的桌面应用。' } },
   { id: 'read_file', description: { en: 'Read file contents from the workspace.', zh: '读取工作区中的文件内容。' } },
   { id: 'write_file', description: { en: 'Create or replace a file in the workspace.', zh: '在工作区中创建或覆盖文件。' } },

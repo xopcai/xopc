@@ -6,6 +6,12 @@ import {
 } from '../lazy-bundles.js';
 
 describe('lazy route bundles', () => {
+  it('maps phone dependency management through runtime tools without capturing neighboring prefixes', () => {
+    for (const path of ['/api/runtime-tools/phone-dependencies', '/api/runtime-tools/phone-dependencies/adb/path', '/api/runtime-tools/phone-dependencies/adb/install/stream', '/api/runtime-tools/phone-dependencies/scrcpy/repair/stream', '/api/runtime-tools/phone-dependencies/scrcpy/import/stream'])
+      expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('runtime-tools');
+    expect(findAuthenticatedLazyRouteBundle('/api/runtime-tools-other/phone-dependencies')).toBeUndefined();
+    expect(findAuthenticatedLazyRouteBundle('/api/phone/devices')?.id).not.toBe('runtime-tools');
+  });
   it('maps provider setup preview and apply through the models bundle', () => {
     for (const path of ['/api/models/setup/qwen-token-plan-cn', '/api/models/setup/xopc-cloud/preview', '/api/models/setup/xiaomi-token-plan-cn/apply']) expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('models');
     expect(findAuthenticatedLazyRouteBundle('/api/models-setup/xopc-cloud')).toBeUndefined();
@@ -360,4 +366,12 @@ it('routes MCP draft testing, OAuth, tools, deletion and commit without overlapp
   for (const path of ['/api/mcp/drafts-extra', '/api/mcp/drafts/id/extra', '/api/mcp/drafts/id/commit/extra', '/api/mcp/drafts/id/auth/extra']) {
     expect(findAuthenticatedLazyRouteBundle(path)).toBeUndefined();
   }
+});
+
+
+it('maps all Phone Use route families without swallowing nearby paths', () => {
+  for (const path of ['/api/phone/cloud/aliyun/test', '/api/phone/cloud/aliyun/add', '/api/phone/cloud/aliyun/tests/token', '/api/phone/conversations/conversation-id', '/api/phone/conversations/conversation-id/session-id/frame', '/api/phone/conversations/conversation-id/session-id/control', '/api/phone/conversations/conversation-id/session-id/video-ticket', '/api/phone/live/v1/ws', '/api/phone/settings', '/api/phone/devices', '/api/phone/devices/id', '/api/phone/devices/id/default', '/api/phone/devices/id/diagnostics', '/api/phone/devices/id/screen', '/api/phone/models', '/api/phone/models/autoglm-preset', '/api/phone/sessions', '/api/phone/sessions/id', '/api/phone/sessions/id/execute', '/api/phone/sessions/id/screen']) {
+    expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('phone');
+  }
+  for (const path of ['/api/phones', '/api/phone-extra/settings', '/api/browser/status']) expect(findAuthenticatedLazyRouteBundle(path)?.id).not.toBe('phone');
 });

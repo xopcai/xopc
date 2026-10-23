@@ -89,7 +89,7 @@ export const SETTINGS_SHELL_NAV_GROUPS: readonly SettingsShellNavGroup[] = [
       'settingsAgentDefaults',
     ],
   },
-  { id: 'integrations', tabs: ['settingsAgentBrowser', 'settingsComputerUse'] },
+  { id: 'integrations', tabs: ['settingsAgentBrowser', 'settingsComputerUse', 'settingsPhoneUse'] },
   {
     id: 'connection',
     tabs: ['settingsDevices', 'settingsTunnel', 'settingsShares'],
@@ -146,6 +146,7 @@ export function browserDocsUrl(language: StoredLanguage): string {
 export function pathForTab(tab: Tab): string {
   if (tab === 'settingsKeyboardShortcuts') return '/settings/keyboard-shortcuts';
   if (tab === 'settingsAgentBrowser') return '/settings/agent-browser';
+  if (tab === 'settingsPhoneUse') return '/settings/phone-use';
   if (tab === 'settingsComputerUse') return '/settings/computer-use';
   if (tab === 'settingsModels') return capabilitySettingsPath('models');
   if (tab === 'settingsSearch') return capabilitySettingsPath('search');

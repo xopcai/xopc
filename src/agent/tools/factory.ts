@@ -1,3 +1,5 @@
+import { getPhoneRuntime, phoneExecutionContext } from '../../phone/runtime.js';
+import { createPhoneUseTool } from './phone-use-tool.js';
 import { createPersonalAttentionTool } from './personal-attention-tool.js';
 import { withCoreToolExposure } from './toolExposure.js';
 import { markCodemodeCoreRead } from './codemode-permissions.js';
@@ -354,6 +356,7 @@ export class AgentToolsFactory {
 
   /** Drop the tab for a session when its agent instance is removed. */
   async closeBrowserPageForSession(conversationId: string): Promise<void> {
+    await getPhoneRuntime().stop(conversationId, 'close');
     await this.computerRuntime?.close(conversationId);
     await this.browserRuntime?.closeTaskSession(conversationId);
   }
@@ -713,6 +716,15 @@ export class AgentToolsFactory {
             ] : []),
           ]
         : []),
+      ...(cfg?.phone?.enabled ? [createPhoneUseTool({
+        runtime: getPhoneRuntime(),
+        context: () => {
+          const config = this.deps.getConfig?.();
+          const conversationId = getEmbeddedExecutionSession() ?? currentConversationId();
+          if (!config || !conversationId) throw new Error('Phone Use requires an active conversation');
+          return { owner: conversationId, ...phoneExecutionContext(config, resolvedAgentId) };
+        },
+      })] : []),
       ...(cfg?.computer.enabled && this.deps.endpointTools
         ? [createComputerUseTool({
             runtime: this.ensureComputerRuntime(),

@@ -21,6 +21,7 @@ import {
   type RuntimeToolsConfig,
 } from './runtime-tools-api';
 import { runtimeNeedsInstall } from './runtime-tools-state';
+import { PhoneDependenciesCard } from './phone-dependencies-card';
 
 const RUNTIMES: RuntimeKind[] = ['node', 'python', 'uv'];
 
@@ -211,6 +212,7 @@ export function RuntimeToolsSettingsPanel() {
       </section>
       </SettingsAdvancedGate>
 
+      <PhoneDependenciesCard />
       <div className="flex flex-col gap-4">
         {RUNTIMES.map((runtime) => {
           const status = statusMap.get(runtime);

@@ -6,7 +6,7 @@ import { pipeline } from 'node:stream/promises';
 
 import { RuntimeError } from './errors.js';
 import { fetchRuntimeResource, readRuntimeResponseText } from './network.js';
-import type { RuntimeKind } from './types.js';
+import type { RuntimeArtifactKind } from './types.js';
 
 const MAX_ARCHIVE_BYTES = 500 * 1024 * 1024;
 const MAX_CHECKSUM_BYTES = 1024 * 1024;
@@ -77,7 +77,7 @@ export async function sha256File(path: string): Promise<string> {
 }
 
 export async function downloadVerifiedArchive(params: {
-  runtime: RuntimeKind;
+  runtime: RuntimeArtifactKind;
   url: string;
   targetPath: string;
   expectedSha256: string;

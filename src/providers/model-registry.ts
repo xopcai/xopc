@@ -129,6 +129,7 @@ function applyModelOverride(model: Model<Api>, override: ModelOverride): Model<A
 	result.compat = mergeCompat(model.compat, override.compat);
 	if (override.supportsTools !== undefined) Object.assign(result, { supportsTools: override.supportsTools });
 	if (override.computerUse) Object.assign(result, { computerUse: override.computerUse });
+	if (override.phoneUse) Object.assign(result, { phoneUse: override.phoneUse });
 
 	return result;
 }
@@ -351,6 +352,7 @@ export class ModelRegistry {
 			.map((model) => ({
 				id: model.id,
 				computerUse: model.computerUse,
+				phoneUse: model.phoneUse,
 				name: model.name,
 				api: source.api as Api,
 				provider: source.providerId,
@@ -524,6 +526,7 @@ export class ModelRegistry {
 				models.push({
 					id: modelDef.id,
 					computerUse: modelDef.computerUse,
+					phoneUse: modelDef.phoneUse,
 					supportsTools: modelDef.supportsTools,
 					name: modelDef.name ?? modelDef.id,
 					api: api as Api,

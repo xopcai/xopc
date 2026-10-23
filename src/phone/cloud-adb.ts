@@ -1,0 +1,125 @@
+import { createPrivateKey, randomUUID } from 'node:crypto';
+import { chmod, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { connect, type Socket } from 'node:net';
+import { join } from 'node:path';
+
+import { Adb, AdbDaemonTransport, AdbPacket, AdbPacketSerializeStream, AdbSignatureAuthenticator } from '@yume-chan/adb';
+import { Consumable, ReadableStream, StructDeserializeStream } from '@yume-chan/stream-extra';
+
+import { resolveCredentialsDir } from '../config/paths.js';
+import { AdbPhoneDriver } from './adb-driver.js';
+import { PhoneError } from './contracts.js';
+
+/** Accept only an explicit TCP endpoint, never URLs, paths or ADB commands. */
+export function parseCloudEndpoint(value: string): { host: string; port: number; endpoint: string } {
+  const match = /^(\[[a-fA-F0-9:]+\]|[a-zA-Z0-9](?:[a-zA-Z0-9.-]*[a-zA-Z0-9])?):([0-9]{1,5})$/.exec(value.trim());
+  if (!match || Number(match[2]) < 1 || Number(match[2]) > 65535) throw new PhoneError('PHONE_ENDPOINT_INVALID', 'Enter the cloud ADB address as host:port');
+  return { host: match[1].replace(/^\[|\]$/g, ''), port: Number(match[2]), endpoint: `${match[1].toLowerCase()}:${Number(match[2])}` };
+}
+export function parseCloudPrivateKey(pem: string): Buffer {
+  try {
+    if (Buffer.byteLength(pem) > 16_384) throw new Error();
+    const key = createPrivateKey(pem);
+    if (key.asymmetricKeyType !== 'rsa' || key.asymmetricKeyDetails?.modulusLength !== 2048 || key.asymmetricKeyDetails?.publicExponent !== 65537n) throw new Error();
+    return key.export({ format: 'der', type: 'pkcs8' });
+  } catch { throw new PhoneError('PHONE_KEY_INVALID', 'Upload the unencrypted RSA 2048 private adbkey downloaded from the cloud console'); }
+}
+
+export class PhoneCloudKeyStore {
+  constructor(private root = join(resolveCredentialsDir(), 'phone-adb')) {}
+  private path(id: string) {
+    if (!/^[0-9a-f-]{36}$/i.test(id)) throw new PhoneError('PHONE_KEY_INVALID', 'Invalid phone credential reference');
+    return join(this.root, `${id}.der`);
+  }
+  async save(key: Buffer): Promise<string> {
+    await mkdir(this.root, { recursive: true, mode: 0o700 }); await chmod(this.root, 0o700);
+    const id = randomUUID(); await writeFile(this.path(id), key, { mode: 0o600, flag: 'wx' }); return id;
+  }
+  async load(id: string): Promise<Buffer> {
+    try { return await readFile(this.path(id)); }
+    catch { throw new PhoneError('PHONE_KEY_MISSING', 'Phone private key is unavailable. Remove this connection and add it again.'); }
+  }
+  async remove(id: string): Promise<void> { await rm(this.path(id), { force: true }); }
+}
+
+/** Direct daemon transport never starts or modifies the host ADB server. */
+export class CloudAdbConnection {
+  private socket?: Socket;
+  private adb?: Adb;
+  private pending?: Promise<Adb>;
+  private idle?: ReturnType<typeof setTimeout>;
+  constructor(readonly endpoint: string, private key: Buffer) { parseCloudEndpoint(endpoint); }
+  close(): void {
+    clearTimeout(this.idle); this.socket?.destroy(); this.socket = undefined; this.adb = undefined;
+  }
+  dispose(): void { this.close(); this.key.fill(0); }
+  /** A dedicated media connection can multiplex sync, video and control sockets. */
+  async client(): Promise<Adb> {
+    if (this.adb) return this.adb;
+    if (this.pending) return this.pending;
+    const opening = this.open(); this.pending = opening;
+    try { return await opening; } finally { if (this.pending === opening) this.pending = undefined; }
+  }
+  private async open(): Promise<Adb> {
+    const { host, port } = parseCloudEndpoint(this.endpoint);
+    const socket = connect({ host, port }); this.socket = socket; socket.setNoDelay(true);
+    // Keep a permanent error listener: late errors after cancellation must not crash Gateway.
+    socket.on('error', () => {});
+    try {
+      await new Promise<void>((resolve, reject) => { socket.once('connect', resolve); socket.once('error', reject); socket.once('close', () => reject(new Error('closed'))); });
+      const iterator = socket[Symbol.asyncIterator]();
+      const raw = new ReadableStream<Uint8Array>({
+        async pull(controller) { const next = await iterator.next(); if (next.done) controller.close(); else controller.enqueue(next.value); },
+        cancel() { socket.destroy(); },
+      });
+      const serializer = new AdbPacketSerializeStream();
+      // Observe pipe termination immediately, including cancellation before close().
+      void serializer.readable.pipeTo(new Consumable.WritableStream<Uint8Array>({
+        write(chunk) { return new Promise<void>((resolve, reject) => socket.write(chunk, error => error ? reject(error) : resolve())); },
+        close() { socket.destroy(); }, abort() { socket.destroy(); },
+      })).catch(() => { socket.destroy(); });
+      const key = this.key;
+      const transport = await AdbDaemonTransport.authenticate({ serial: this.endpoint,
+        connection: { readable: raw.pipeThrough(new StructDeserializeStream(AdbPacket)), writable: serializer.writable },
+        credentialStore: { *iterateKeys() { yield { buffer: key, name: 'xopc-cloud-phone' }; }, generateKey() { throw new Error('Key generation disabled'); } },
+        authenticators: [AdbSignatureAuthenticator],
+      });
+      if (socket.destroyed) { await transport.close(); throw new Error('closed'); }
+      const adb = new Adb(transport); this.adb = adb;
+      void adb.disconnected.catch(() => {}).finally(() => { if (this.adb === adb) this.close(); });
+      return adb;
+    } catch { socket.destroy(); throw new PhoneError('PHONE_CLOUD_AUTH_FAILED', 'Cloud ADB connection failed. Check address, network access and the bound private key.', 502); }
+  }
+  async command(_path: string, args: string[], signal?: AbortSignal, timeout = 15_000): Promise<Buffer> {
+    const combined = AbortSignal.any([...(signal ? [signal] : []), AbortSignal.timeout(timeout)]);
+    combined.throwIfAborted();
+    let abort: () => void;
+    const cancelled = new Promise<never>((_resolve, reject) => {
+      abort = () => { this.close(); reject(new PhoneError('PHONE_CLOUD_TIMEOUT', 'Cloud phone connection stopped or timed out. Check its ADB address and network.', 502)); };
+      combined.addEventListener('abort', abort, { once: true });
+    });
+    try {
+      return await Promise.race([cancelled, (async () => {
+        const adb = await this.client();
+        if (args[0] === 'devices') return Buffer.from(`List of devices attached\n${this.endpoint}\tdevice model:${adb.banner.model ?? 'Cloud_Phone'}\n`);
+        if (args[0] !== '-s' || args[1] !== this.endpoint || !['shell', 'exec-out'].includes(args[2])) throw new PhoneError('PHONE_CLOUD_COMMAND_INVALID', 'Unsupported cloud ADB command');
+        const quote = (value: string) => `'${value.replaceAll("'", "'\\''")}'`;
+        const channel = await adb.createSocket(`${args[2] === 'exec-out' ? 'exec' : 'shell'}:${args.slice(3).map(quote).join(' ')}`);
+        const chunks: Buffer[] = []; let length = 0;
+        try {
+          for await (const chunk of channel.readable) {
+            length += chunk.length; if (length > 16 * 1024 * 1024) throw new Error('Output exceeded'); chunks.push(Buffer.from(chunk));
+          }
+          return Buffer.concat(chunks);
+        } finally { await channel.close(); }
+      })()]);
+    } catch (error) {
+      this.close(); if (error instanceof PhoneError) throw error;
+      throw new PhoneError('PHONE_CLOUD_ADB_FAILED', 'Cloud phone operation failed. Reconnect or run diagnostics.', 502);
+    } finally {
+      combined.removeEventListener('abort', abort!);
+      clearTimeout(this.idle); this.idle = setTimeout(() => this.close(), 30_000); this.idle.unref();
+    }
+  }
+  driver(): AdbPhoneDriver { return new AdbPhoneDriver('', this.command.bind(this), false); }
+}

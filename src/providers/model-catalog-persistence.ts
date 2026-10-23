@@ -1,3 +1,4 @@
+import { PhoneModelMetadataSchema } from '../phone/contracts.js';
 import { ImageGenerationCapabilitiesSchema } from '../config/models-json.js';
 import { voiceManifestSchema } from '@xopcai/realtime-protocol/voice';
 import { readFileSync, rmSync } from 'node:fs';
@@ -60,6 +61,7 @@ const catalogModelSchema = z.object({
   kind: z.enum(['language', 'image', 'stt', 'tts', 'omni']),
   voice: voiceManifestSchema.optional(),
   computerUse: z.object({ profile: ComputerProfileSchema }).strict().optional(),
+  phoneUse: PhoneModelMetadataSchema.optional(),
   input: z.array(z.enum(['text', 'image', 'audio'])),
   output: z.array(z.enum(['text', 'image', 'audio'])),
   operations: z.array(z.enum([

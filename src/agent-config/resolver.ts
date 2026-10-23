@@ -86,6 +86,8 @@ export function resolveEffectiveAgentConfig(params: {
   }
 
   const models = {
+    ...((agent.models?.phoneUse ?? defaults.models.phoneUse)
+      ? { phoneUse: structuredClone(agent.models?.phoneUse ?? defaults.models.phoneUse) } : {}),
     chat: structuredClone(agent.models?.chat ?? defaults.models.chat),
     intents,
     ...(agent.models?.background === null ? {} : (agent.models?.background ?? defaults.models.background)
@@ -114,6 +116,10 @@ export function resolveEffectiveAgentConfig(params: {
     if (agent.models.background) markObjectSources(agent.models.background, 'agent', 'models.background', sources);
   }
   if (agent.models?.chat) markObjectSources(agent.models.chat, 'agent', 'models.chat', sources);
+  if (agent.models?.phoneUse) {
+    clearSources('models.phoneUse', sources);
+    markObjectSources(agent.models.phoneUse, 'agent', 'models.phoneUse', sources);
+  }
   if (agent.models?.computerUse) {
     clearSources('models.computerUse', sources);
     markObjectSources(agent.models.computerUse, 'agent', 'models.computerUse', sources);

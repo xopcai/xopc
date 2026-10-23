@@ -8,6 +8,7 @@ import { getShellChromeRuntime, resolveShellChromeLayout } from '@/components/sh
 import { SettingsModeToggle } from '@/components/shell/settings-mode-toggle';
 import { SettingsAdvancedSection } from '@/features/settings/settings-advanced-section';
 import { TabIcon } from '@/components/shell/tab-icons';
+import { BetaBadge } from '@/components/ui/beta-badge';
 import { messages, tabLabel } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import { ExtensionSettingsNav } from '@/features/extensions/extension-settings-nav';
@@ -111,6 +112,7 @@ function SettingsNavGroupBlock({
           >
             <TabIcon tab={tab} className="size-5 shrink-0 opacity-90" />
             <span className="min-w-0 flex-1 truncate">{tabLabel(language, tab)}</span>
+            {tab === 'settingsPhoneUse' ? <BetaBadge /> : null}
           </NavLink>
         ))}
       </div>

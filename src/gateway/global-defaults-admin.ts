@@ -1,3 +1,4 @@
+import { validatePhoneModelChange } from '../phone/model-adapter.js';
 import { isDeepStrictEqual } from 'node:util';
 
 import { AgentDefaultsSchema, type AgentDefaults } from '../agent-config/index.js';
@@ -48,6 +49,7 @@ export function prepareUpdateGlobalDefaults(
     return { ok: false, error: `defaults ${parsed.error.issues[0]?.message ?? 'is invalid'}`, status: 400 };
   }
   try {
+    validatePhoneModelChange(parsed.data.models.phoneUse, current.models.phoneUse);
     validateComputerModelChange(parsed.data.models.computerUse, current.models.computerUse);
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : String(error), status: 400 };

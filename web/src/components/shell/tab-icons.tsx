@@ -38,6 +38,7 @@ const TAB_ICONS: Record<Tab, LucideIcon> = {
   settingsDesktopApp: Package,
   settingsAgentBrowser: Globe,
   settingsComputerUse: MousePointer2,
+  settingsPhoneUse: Smartphone,
   settingsAgentDefaults: Layers,
   settingsGateway: Globe,
   settingsRuntimes: TerminalSquare,

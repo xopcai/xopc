@@ -251,6 +251,18 @@ function ModelEditForm({
           </div>
 
       <details className="mt-4 rounded-lg border border-edge p-3 text-sm text-fg">
+        <summary className="cursor-pointer">{zh ? '高级：手机操作协议' : 'Advanced: Phone Use protocol'}</summary>
+        <div className="mt-3 space-y-2">
+          <Select aria-label={zh ? '手机操作协议' : 'Phone Use protocol'} value={form.phoneUse?.profile ?? ''}
+            onChange={event => update('phoneUse', event.target.value ? { profile: event.target.value as NonNullable<CustomModel['phoneUse']>['profile'] } : undefined)}>
+            <SelectOption value="">{zh ? '未声明' : 'Not declared'}</SelectOption>
+            <SelectOption value="autoglm-phone-v1">AutoGLM Phone</SelectOption>
+            <SelectOption value="structured-phone-v1">Structured Phone</SelectOption>
+          </Select>
+          <p className="text-xs text-fg-muted">{zh ? '需要图片输入与 OpenAI Chat Completions API；配置后在手机控制中选择。' : 'Requires image input and an OpenAI Chat Completions API. Select the model in Phone Use settings.'}</p>
+        </div>
+      </details>
+      <details className="mt-4 rounded-lg border border-edge p-3 text-sm text-fg">
         <summary className="cursor-pointer">{zh ? '高级：电脑控制协议' : 'Advanced: Computer Use protocol'}</summary>
         <div className="mt-3 space-y-2">
           <Select aria-label={zh ? '电脑控制协议' : 'Computer Use protocol'} value={form.computerUse?.profile ?? ''}

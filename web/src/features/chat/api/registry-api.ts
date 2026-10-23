@@ -13,6 +13,7 @@ export type ConfiguredModel = {
   thinking?: ModelThinkingCapabilities;
   vision?: boolean;
   computerUse?: { dedicated?: boolean; profile: 'gui-plus-2026-02-26' | 'structured-tools-v1' | 'openai-responses-computer-v1' };
+  phoneUse?: { profile: 'autoglm-phone-v1' | 'structured-phone-v1' };
   recommended?: boolean;
 };
 

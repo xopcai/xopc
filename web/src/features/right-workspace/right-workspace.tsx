@@ -1,7 +1,9 @@
-import { PanelRight, Globe, FileText, Folders, FolderOpen, Maximize2, MessageSquare, Minimize2, Plus, X } from 'lucide-react';
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { PanelRight, Smartphone, Globe, FileText, Folders, FolderOpen, Maximize2, MessageSquare, Minimize2, Plus, X } from 'lucide-react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { useLocation } from 'react-router-dom';
 
+import { PhoneLivePanel } from '@/features/phone/phone-live-panel';
+import { phoneEnded, useConversationPhone, type PhoneLiveState } from '@/features/phone/phone-live-api';
 import { FileIcon } from '@/features/file-tree/file-icon';
 import { SlidingTabList } from '@/components/ui/sliding-tab-list';
 import { BrowserTabView, useBrowserEvents } from '@/features/browser/browser-tab';
@@ -71,9 +73,23 @@ export function RightWorkspace({ scope, enabled = true, elevated = false, onDock
       }
     }
   }, [visible]);
-  const single = available < 840;
+  const phone = useConversationPhone(scope, enabled);
+  const seenPhones = useRef(new Set<string>());
+  useEffect(() => {
+    const report = phone.data?.report;
+    if (!report || phoneEnded(report.status) || seenPhones.current.has(report.sessionId)) return;
+    seenPhones.current.add(report.sessionId);
+    const current = useRightWorkspaceStore.getState().panes[scope];
+    useRightWorkspaceStore.getState().openPhone(report.sessionId, report.deviceName, scope,
+      available >= 900 && (!current?.open || current.tabs.find(t => t.id === current.activeId)?.kind === 'home'));
+  }, [phone.data, scope, available]);
+  const updatePhone = useCallback((value?: PhoneLiveState) => { if (value) void phone.mutate(value, false); else void phone.mutate(); }, [phone.mutate]);
+  const phoneLayout = active?.kind === 'phone';
+  const minPanelWidth = phoneLayout ? 360 : 460;
+  const chatMinimum = phoneLayout ? 420 : 380;
+  const single = available < (phoneLayout ? 900 : 840);
   const treePreference = active?.kind === 'browser' ? browserTreeOpen : active?.kind === 'sidechat' ? sideTreeOpen : fileTreeOpen;
-  const panelWidth = active ? Math.max(460, Math.min(width || available * 0.6, available - 380)) : 320;
+  const panelWidth = active ? Math.max(minPanelWidth, Math.min(width || (phoneLayout ? 420 : available * 0.6), available - chatMinimum)) : 320;
   useLayoutEffect(() => {
     onDockedWidthChange?.(visible && !single && !expanded ? panelWidth : 0);
   }, [expanded, onDockedWidthChange, panelWidth, single, visible]);
@@ -170,7 +186,7 @@ export function RightWorkspace({ scope, enabled = true, elevated = false, onDock
     else if (active.kind === 'browser') setBrowserTreeOpen(!browserTreeOpen);
     else store.setTreeOpen(active.kind === 'sidechat' ? 'sidechat' : 'file', !treePreference);
   }
-  const treeControl = active && !treeHome && active.kind !== 'home' ? <button type="button" className={cn(buttonClass, 'rounded-full border border-edge-subtle', treeShown && 'border-accent/20 bg-accent-soft text-accent-fg')} aria-label={zh ? '切换文件树' : 'Toggle file tree'} aria-pressed={treeShown} onClick={toggleTree}><Folders className="size-4" strokeWidth={1.75} aria-hidden /></button> : null;
+  const treeControl = active && !treeHome && active.kind !== 'home' && active.kind !== 'phone' ? <button type="button" className={cn(buttonClass, 'rounded-full border border-edge-subtle', treeShown && 'border-accent/20 bg-accent-soft text-accent-fg')} aria-label={zh ? '切换文件树' : 'Toggle file tree'} aria-pressed={treeShown} onClick={toggleTree}><Folders className="size-4" strokeWidth={1.75} aria-hidden /></button> : null;
   function drag(event: ReactPointerEvent<HTMLDivElement>, tree = false) {
     event.preventDefault();
     const startX = event.clientX;
@@ -181,7 +197,7 @@ export function RightWorkspace({ scope, enabled = true, elevated = false, onDock
     let committed = startWidth;
     const move = (e: PointerEvent) => {
       const value = startWidth + startX - e.clientX;
-      committed = tree ? Math.max(200, Math.min(320, contentWidth - minimumPreviewWidth - 8, value)) : Math.max(460, Math.min(available - 380, value));
+      committed = tree ? Math.max(200, Math.min(320, contentWidth - minimumPreviewWidth - 8, value)) : Math.max(minPanelWidth, Math.min(available - chatMinimum, value));
       const node = tree ? panelRef.current?.querySelector<HTMLElement>('[data-workspace-tree]') : panelRef.current;
       if (node) node.style.width = `${committed}px`;
     };
@@ -208,9 +224,9 @@ export function RightWorkspace({ scope, enabled = true, elevated = false, onDock
     className={cn('relative min-h-0 shrink-0 flex-col overflow-hidden bg-surface-base', present ? 'flex' : 'hidden',
       present && (single || expanded) && 'absolute inset-0', elevated ? 'z-[110]' : 'z-40')}
     style={{ width: single || expanded ? undefined : panelWidth }}>
-    {!single && !expanded && active ? <div role="separator" aria-orientation="vertical" tabIndex={0} aria-label={zh ? '调整工作区宽度' : 'Resize workspace'} aria-valuemin={460} aria-valuemax={Math.max(460, available - 380)} aria-valuenow={Math.round(panelWidth)}
+    {!single && !expanded && active ? <div role="separator" aria-orientation="vertical" tabIndex={0} aria-label={zh ? '调整工作区宽度' : 'Resize workspace'} aria-valuemin={minPanelWidth} aria-valuemax={Math.max(minPanelWidth, available - chatMinimum)} aria-valuenow={Math.round(panelWidth)}
       className="absolute left-0 top-0 z-20 h-full w-2 -translate-x-1/2 cursor-col-resize touch-none focus-visible:bg-accent/30" onPointerDown={(e) => drag(e)}
-      onKeyDown={(e) => { if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { e.preventDefault(); store.setWidth(Math.max(460, Math.min(available - 380, panelWidth + (e.key === 'ArrowLeft' ? 20 : -20)))); } if (e.key === 'Home') store.setWidth(0); }} /> : null}
+      onKeyDown={(e) => { if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { e.preventDefault(); store.setWidth(Math.max(minPanelWidth, Math.min(available - chatMinimum, panelWidth + (e.key === 'ArrowLeft' ? 20 : -20)))); } if (e.key === 'Home') store.setWidth(0); }} /> : null}
     {resizing ? <div data-browser-occluder className="fixed inset-0 z-[120] cursor-col-resize" /> : null}
     <div data-workspace-tab-bar className="flex h-14 shrink-0 items-center gap-1 bg-surface-base px-2">
       <SlidingTabList ref={tabListRef} role="tablist" aria-label={zh ? '工作区标签' : 'Workspace tabs'} className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
@@ -227,7 +243,7 @@ export function RightWorkspace({ scope, enabled = true, elevated = false, onDock
           return <div key={tab.id} data-sliding-active={tab.id === pane.activeId} className={cn('group flex h-9 shrink-0 items-center rounded-md transition-colors', tab.id === pane.activeId ? 'bg-surface-panel text-fg' : 'text-fg-muted hover:bg-surface-hover')}>
             <button role="tab" id={`workspace-tab-${tab.id}`} aria-controls="workspace-content" aria-selected={tab.id === pane.activeId} tabIndex={tab.id === pane.activeId ? 0 : -1}
               title={tab.kind === 'file' ? tab.path || title : title} className="flex max-w-56 items-center gap-1.5 rounded-md px-2 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent" onClick={() => select(tab.id)} onDoubleClick={() => { if (tab.kind === 'file') store.keepFileOpen(tab.id); }}>
-              {tab.kind === 'browser' ? <Globe className="size-4 shrink-0" aria-hidden /> : tab.kind === 'sidechat' ? <MessageSquare className="size-4 shrink-0" aria-hidden /> : tab.kind === 'files' ? <FolderOpen className="size-4 shrink-0" aria-hidden /> : <FileIcon name={tab.title} />}
+              {tab.kind === 'phone' ? <Smartphone className="size-4 shrink-0" aria-hidden /> : tab.kind === 'browser' ? <Globe className="size-4 shrink-0" aria-hidden /> : tab.kind === 'sidechat' ? <MessageSquare className="size-4 shrink-0" aria-hidden /> : tab.kind === 'files' ? <FolderOpen className="size-4 shrink-0" aria-hidden /> : <FileIcon name={tab.title} />}
               <span className={cn("truncate", tab.kind === 'file' && tab.preview && "italic")}>{title}</span>{stateLabel ? <span className="shrink-0 text-xs text-fg-muted">{stateLabel}</span> : null}
             </button>
             <button className={cn(buttonClass, 'size-7')} tabIndex={tab.id === pane.activeId ? 0 : -1} aria-label={`${zh ? '关闭' : 'Close'} ${title}`} disabled={closing === tab.id} onClick={() => {
@@ -260,6 +276,9 @@ export function RightWorkspace({ scope, enabled = true, elevated = false, onDock
     <WorkspaceTreeControlContext.Provider value={treeControl ? { button: treeControl, label: zh ? (treeShown ? '隐藏文件树' : '显示文件树') : (treeShown ? 'Hide file tree' : 'Show file tree'), active: treeShown, onToggle: toggleTree } : null}>
     <div id="workspace-content" role="tabpanel" aria-labelledby={active ? `workspace-tab-${active.id}` : undefined} className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden">
       <div className={cn('min-h-0 min-w-0 flex-1 flex-col overflow-hidden', !treeOnly ? 'flex' : 'hidden')}>
+        {visible && phoneLayout ? phone.data && phone.data.report.sessionId === active.phoneSessionId
+          ? <PhoneLivePanel key={`${scope}:${active.phoneSessionId}`} conversationId={scope} state={phone.data} onChange={updatePhone} />
+          : <div className="p-6 text-sm text-fg-muted">{zh ? '此手机会话已结束，新的操作会在新标签中显示。' : 'This phone session ended. New operations open in a new tab.'}</div> : null}
         {treeHome && !treeOnly ? <div data-workspace-file-placeholder className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
           <FileText className="size-9 text-fg-muted" strokeWidth={1.25} aria-hidden />
           <p className="text-sm font-medium text-fg">{zh ? '选择文件预览' : 'Select a file to preview'}</p>

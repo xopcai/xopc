@@ -7,6 +7,12 @@ import type { RuntimeKind } from '../../runtime-tools/types.js';
 import { pruneRuntimeTools } from '../../runtime-tools/prune.js';
 import { formatExamples, register, type CLIContext } from '../registry.js';
 
+async function phoneDependencies(ctx: CLIContext) {
+  const { PhoneDependencyManager } = await import('../../runtime-tools/phone-dependencies.js');
+  const config = loadConfig(ctx.configPath);
+  return new PhoneDependencyManager({ stateDir: resolveStateDir(), config: config.runtimeTools, adbPath: config.phone.adbPath });
+}
+
 const RUNTIMES = ['node', 'uv', 'python'] as const;
 
 function parseRuntime(value: string): RuntimeKind {
@@ -28,11 +34,13 @@ function printStatuses(statuses: Awaited<ReturnType<ManagedRuntimeManager['statu
 
 function createRuntimeCommand(ctx: CLIContext): Command {
   const command = new Command('runtime')
-    .description('Manage Node.js and Python tool runtimes used by agents')
+    .description('Manage agent runtimes and phone dependencies')
     .addHelpText('after', formatExamples([
       'xopc runtime status',
       'xopc runtime install node',
       'xopc runtime install python --version 3.12',
+      'xopc runtime install adb',
+      'xopc runtime install scrcpy',
       'xopc runtime repair python',
       'xopc runtime prune',
     ]));
@@ -40,7 +48,14 @@ function createRuntimeCommand(ctx: CLIContext): Command {
   command.command('status')
     .description('Show managed tool runtime status')
     .option('--json', 'Output JSON')
-    .action(async (options: { json?: boolean }) => {
+    .option('--phone', 'Show ADB and scrcpy server dependencies')
+    .action(async (options: { json?: boolean; phone?: boolean }) => {
+      if (options.phone) {
+        const statuses = await (await phoneDependencies(ctx)).status();
+        console.log(options.json ? JSON.stringify(statuses, null, 2) : statuses.map(status => `${status.kind.padEnd(6)} ${status.state.padEnd(10)} ${status.version ?? status.requestedVersion}${status.path ? ` — ${status.path}` : ''}`).join('\n'));
+        if (statuses.some(status => status.state === 'corrupted')) process.exitCode = 1;
+        return;
+      }
       const statuses = await manager(ctx).statusAll();
       if (options.json) console.log(JSON.stringify(statuses, null, 2));
       else printStatuses(statuses);
@@ -51,9 +66,14 @@ function createRuntimeCommand(ctx: CLIContext): Command {
 
   command.command('install')
     .description('Install one managed runtime')
-    .argument('<runtime>', 'node, uv, or python')
+    .argument('<runtime>', 'node, uv, python, adb, or scrcpy')
     .option('--version <version>', 'Requested runtime version')
     .action(async (runtimeValue: string, options: { version?: string }) => {
+      if (runtimeValue === 'adb' || runtimeValue === 'scrcpy') {
+        if (options.version) throw new Error('Phone dependencies use the pinned catalog version; omit --version');
+        await (await phoneDependencies(ctx)).install(runtimeValue);
+        console.log(`${runtimeValue} installed in the Gateway state directory`); return;
+      }
       const runtime = parseRuntime(runtimeValue);
       const resolved = await manager(ctx).install(runtime, options.version);
       console.log(`${runtime} ${resolved.version} installed at ${resolved.executable}`);
@@ -61,8 +81,12 @@ function createRuntimeCommand(ctx: CLIContext): Command {
 
   command.command('repair')
     .description('Reinstall one invalid managed runtime')
-    .argument('<runtime>', 'node, uv, or python')
+    .argument('<runtime>', 'node, uv, python, adb, or scrcpy')
     .action(async (runtimeValue: string) => {
+      if (runtimeValue === 'adb' || runtimeValue === 'scrcpy') {
+        await (await phoneDependencies(ctx)).install(runtimeValue, { repair: true });
+        console.log(`${runtimeValue} managed installation repaired`); return;
+      }
       const runtime = parseRuntime(runtimeValue);
       const resolved = await manager(ctx).repair(runtime);
       console.log(`${runtime} ${resolved.version} repaired at ${resolved.executable}`);

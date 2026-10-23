@@ -1,3 +1,4 @@
+import { PhoneConfigSchema } from '../phone/contracts.js';
 import { getModelUsageOrigin } from '../providers/model-usage.js';
 import { z } from 'zod';
 
@@ -1135,6 +1136,7 @@ export const ConfigSchema = z.object({
   gateway: GatewayConfigSchema,
   browser: BrowserConfigSchema,
   computer: ComputerConfigSchema,
+  phone: PhoneConfigSchema,
   tunnel: TunnelConfigSchema.optional(),
   workspace: WorkspaceConfigSchema,
   tools: ToolsConfigSchema,
@@ -1244,6 +1246,7 @@ export const ConfigSchema = z.object({
     skillsStoreBaseUrl: 'https://store.xopc.ai',
   },
   computer: ComputerConfigSchema.parse({}),
+  phone: PhoneConfigSchema.parse({}),
   browser: {
     enabled: true,
     driver: { kind: 'extension' as const },

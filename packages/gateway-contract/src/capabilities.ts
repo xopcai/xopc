@@ -20,7 +20,7 @@ export {
 export const CapabilitySurfaceSchema = z.enum(['http', 'agent', 'cli', 'automation', 'mcp', 'extension']);
 export type CapabilitySurface = z.infer<typeof CapabilitySurfaceSchema>;
 export const SettingsSectionSchema = z.union([
-  z.enum(['overview', 'imports', 'sessions', 'tracing', 'usage', 'logs', 'computer-use',
+  z.enum(['overview', 'imports', 'sessions', 'tracing', 'usage', 'logs', 'computer-use', 'phone-use',
     'agent-browser', 'extensions/debug', 'connector-service', 'appearance', 'keyboard-shortcuts',
     'system', 'desktop-pet', 'desktop-app', 'agent-defaults', 'gateway', 'runtimes', 'devices',
     'remote-access', 'shares', 'capabilities/models', 'capabilities/image', 'capabilities/voice',
