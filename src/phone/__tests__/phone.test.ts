@@ -458,3 +458,98 @@ it('keeps manual input outside the Agent action budget', async () => {
   expect(f.runtime.status('budget')).toMatchObject({ actions: 4, humanActions: 3 });
   await f.runtime.shutdown();
 });
+
+it('finishes a slow real-model goal beyond the old 90-second limit', async () => {
+  vi.useFakeTimers();
+  const f = fixture({ predict: async (_input, signal) => new Promise((resolve, reject) => {
+    const timer = setTimeout(() => resolve({ kind: 'action', action: { type: 'back' } }), 100_000);
+    signal.addEventListener('abort', () => { clearTimeout(timer); reject(signal.reason); }, { once: true });
+  }) });
+  const context = { ...f.context, modelRef: 'phone/real' };
+  try {
+    await f.runtime.execute('slow', { op: 'open', mode: 'control' }, context);
+    const operation = f.runtime.execute('slow', { op: 'step', goal: 'Go back' }, context);
+    await vi.advanceTimersByTimeAsync(100_001);
+    expect(await operation).toMatchObject({ status: 'ready', actions: 1, stopReason: 'action_limit' });
+  } finally { await f.runtime.shutdown(); vi.useRealTimers(); }
+});
+
+it('pauses a timed-out goal with facts intact and permits explicit handback without reopening', async () => {
+  vi.useFakeTimers();
+  const f = fixture({ predict: async (_input, signal) => new Promise((_resolve, reject) => {
+    signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+  }) });
+  f.context.config.phone.maxOperationDurationMs = 1000;
+  try {
+    await f.runtime.execute('deadline', { op: 'open', mode: 'control' }, f.context);
+    const id = f.runtime.status('deadline')!.sessionId;
+    const operation = f.runtime.execute('deadline', { op: 'run', goal: 'Read', scenario: 'settings-about' }, f.context);
+    await vi.advanceTimersByTimeAsync(1001);
+    expect(await operation).toMatchObject({ sessionId: id, status: 'paused', controlOwner: 'none',
+      errorCode: 'PHONE_OPERATION_TIMEOUT', stopReason: 'operation_timeout', verified: false, facts: ['About emulated device'] });
+    expect(f.driver.execute).not.toHaveBeenCalled();
+    await f.runtime.liveControl('deadline', id, f.context, 'browser', { op: 'handback', epoch: f.runtime.status('deadline')!.controlEpoch!, operationId: randomUUID() });
+    expect(await f.runtime.execute('deadline', { op: 'observe' }, f.context)).toMatchObject({ sessionId: id, status: 'ready' });
+  } finally { await f.runtime.shutdown(); vi.useRealTimers(); }
+});
+
+it('retains outcome_unknown if the deadline occurs inside a device dispatch', async () => {
+  vi.useFakeTimers();
+  const f = fixture({ predict: async () => ({ kind: 'action', action: { type: 'back' } }) });
+  f.context.config.phone.maxOperationDurationMs = 1000;
+  vi.mocked(f.driver.execute).mockImplementation(async (_serial, _action, _observation, signal) => new Promise((_resolve, reject) => {
+    signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+  }));
+  try {
+    await f.runtime.execute('unknown-deadline', { op: 'open', mode: 'control' }, f.context);
+    const operation = f.runtime.execute('unknown-deadline', { op: 'step', goal: 'Back', scenario: 'settings-about' }, f.context);
+    const rejected = expect(operation).rejects.toMatchObject({ code: 'PHONE_OPERATION_TIMEOUT' });
+    await vi.advanceTimersByTimeAsync(1001); await rejected;
+    expect(f.runtime.status('unknown-deadline')).toMatchObject({ status: 'outcome_unknown', stopReason: 'inspect_before_retry', steps: [{ dispatch: 'unknown' }] });
+    expect(f.driver.execute).toHaveBeenCalledOnce();
+  } finally { await f.runtime.shutdown(); vi.useRealTimers(); }
+});
+
+it('can hand back directly after tool pause without reusing the aborted operation signal', async () => {
+  const f = fixture();
+  try {
+    await f.runtime.execute('paused-tool', { op: 'open', mode: 'control' }, f.context);
+    await f.runtime.execute('paused-tool', { op: 'pause' }, f.context);
+    const report = f.runtime.status('paused-tool')!;
+    const result = await f.runtime.liveControl('paused-tool', report.sessionId, f.context, 'browser', { op: 'handback', epoch: report.controlEpoch!, operationId: randomUUID() });
+    expect(result).toMatchObject({ report: { status: 'ready', controlOwner: 'agent', handoff: 'idle' }, resumeTurnRequired: true });
+    expect(await f.runtime.execute('paused-tool', { op: 'observe' }, f.context)).toMatchObject({ status: 'ready' });
+  } finally { await f.runtime.shutdown(); }
+});
+
+it('preserves explicit caller cancellation instead of reporting an operation deadline', async () => {
+  let started!: () => void;
+  const ready = new Promise<void>(resolve => { started = resolve; });
+  const f = fixture({ predict: async (_input, signal) => new Promise((_resolve, reject) => {
+    signal.addEventListener('abort', () => reject(signal.reason), { once: true }); started();
+  }) });
+  const controller = new AbortController();
+  try {
+    await f.runtime.execute('user-cancel', { op: 'open', mode: 'control' }, f.context);
+    const operation = f.runtime.execute('user-cancel', { op: 'step', goal: 'Read', scenario: 'settings-about' }, f.context, controller.signal);
+    const rejected = expect(operation).rejects.toMatchObject({ code: 'PHONE_CANCELLED' });
+    await ready; controller.abort(); await rejected;
+    expect(f.runtime.status('user-cancel')).toMatchObject({ status: 'cancelled', errorCode: 'PHONE_CANCELLED' });
+  } finally { await f.runtime.shutdown(); }
+});
+
+it('does not leave control stuck in returning when the handback observation fails', async () => {
+  const f = fixture();
+  try {
+    await f.runtime.execute('handback-failure', { op: 'open', mode: 'control' }, f.context);
+    await f.runtime.execute('handback-failure', { op: 'pause' }, f.context);
+    const report = f.runtime.status('handback-failure')!;
+    vi.mocked(f.driver.observe).mockRejectedValueOnce(new Error('Observation unavailable'));
+    await expect(f.runtime.liveControl('handback-failure', report.sessionId, f.context, 'browser',
+      { op: 'handback', epoch: report.controlEpoch!, operationId: randomUUID() })).rejects.toThrow('Observation unavailable');
+    expect(f.runtime.status('handback-failure')).toMatchObject({ status: 'paused', controlOwner: 'none', handoff: 'idle' });
+    expect(await f.runtime.liveControl('handback-failure', report.sessionId, f.context, 'browser',
+      { op: 'handback', epoch: f.runtime.status('handback-failure')!.controlEpoch!, operationId: randomUUID() }))
+      .toMatchObject({ report: { status: 'ready', controlOwner: 'agent', handoff: 'idle' } });
+  } finally { await f.runtime.shutdown(); }
+});

@@ -10,6 +10,7 @@ export const PhoneConfigSchema = z.object({
   adbPath: z.string().min(1).optional(),
   maxActionsPerSession: z.number().int().min(1).max(80).default(40),
   maxModelRequests: z.number().int().min(1).max(120).default(60),
+  maxOperationDurationMs: z.number().int().min(1000).max(900_000).default(300_000),
   maxSessionDurationMs: z.number().int().min(1000).max(900_000).default(900_000),
 }).strict().prefault({});
 export type PhoneConfig = z.infer<typeof PhoneConfigSchema>;
