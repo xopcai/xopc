@@ -1,3 +1,4 @@
+import { PhoneModelMetadataSchema } from '../phone/contracts.js';
 import { ImageGenerationCapabilitiesSchema } from '../config/models-json.js';
 import type { ComputerProfile } from '@xopcai/computer-control-contract';
 import { voiceManifestSchema } from '@xopcai/realtime-protocol/voice';
@@ -59,6 +60,7 @@ export class XopcCloudModelSource {
           operations?: unknown;
           capabilities?: {
             computerUse?: { profile?: unknown };
+            phoneUse?: unknown;
             input?: unknown;
             output?: unknown;
             operations?: unknown;
@@ -139,7 +141,9 @@ export class XopcCloudModelSource {
         const stt = kind === 'stt' ? parseSttCapabilities(model.xopc?.capabilities) : undefined;
         const tts = kind === 'tts' ? parseTtsCapabilities(model.xopc?.capabilities, model.xopc?.defaultVoice) : undefined;
         const voice = voiceManifestSchema.safeParse(model.xopc?.voice);
+        const phone = PhoneModelMetadataSchema.safeParse(model.xopc?.capabilities?.phoneUse);
         const catalogModel: AvailableCatalogModel = {
+          ...(phone.success ? { phoneUse: phone.data } : {}),
           ...(voice.success ? { voice: voice.data } : {}),
           ...(['gui-plus-2026-02-26', 'structured-tools-v1'].includes(String(model.xopc?.capabilities?.computerUse?.profile))
             ? { computerUse: { profile: model.xopc!.capabilities!.computerUse!.profile as ComputerProfile } } : {}),
@@ -182,7 +186,7 @@ export class XopcCloudModelSource {
         baseUrl: this.routerUrl,
         api: 'openai-completions',
         etag: response.headers.get('x-xopc-model-catalog-version'),
-        recommendedModel: models.find(model => model.id === 'auto')?.id ?? models.find(model => !isDedicatedComputerProfile(model.computerUse?.profile))?.id ?? null,
+        recommendedModel: models.find(model => model.id === 'auto')?.id ?? models.find(model => !model.phoneUse && !isDedicatedComputerProfile(model.computerUse?.profile))?.id ?? null,
         ...(Object.keys(recommended).length > 0 ? { recommended } : {}),
         ...(search ? { search } : {}),
         lastSuccessAt: Date.now(),
@@ -253,7 +257,7 @@ function modelMatchesRecommendation(
   capability: 'vision' | 'image-generation' | 'stt' | 'tts',
 ): boolean {
   switch (capability) {
-    case 'vision': return model.kind === 'language' && model.input.includes('image') && !isDedicatedComputerProfile(model.computerUse?.profile);
+    case 'vision': return model.kind === 'language' && model.input.includes('image') && !model.phoneUse && !isDedicatedComputerProfile(model.computerUse?.profile);
     case 'image-generation': return model.kind === 'image' && model.operations.includes('images.generate');
     case 'stt': return model.kind === 'stt' && model.operations.includes('audio.transcription');
     case 'tts': return model.kind === 'tts' && model.operations.includes('audio.speech');

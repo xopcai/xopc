@@ -2,12 +2,14 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { voiceManifestSchema } from '@xopcai/realtime-protocol/voice';
 
 import { initializeTestAgentCatalog } from '../../agent-catalog/test-support.js';
+import { AgentModelsDefaultsSchema } from '../../agent-config/schema.js';
 import { ConfigSchema } from '../../config/schema.js';
 import { closeXopcDatabase } from '../../storage/sqlite/index.js';
 import type { CatalogModel, CatalogSource } from '../../providers/model-catalog-store.js';
 import { getModelCatalogStore } from '../../providers/model-catalog-store.js';
 import { AgentCatalogRepository } from '../../agent-catalog/repository.js';
 import {
+  completeXopcCloudModelRoutes,
   applyXopcCloudCapabilitySetup,
   prepareXopcCloudCapabilitySetup,
   selectXopcCloudCapabilities,
@@ -57,6 +59,7 @@ function voice(modes: Array<'transcription.stream' | 'speech.stream' | 'conversa
 }
 
 const completeCatalog = source([
+  model({ id: 'phone', kind: 'language', input: ['text', 'image'], phoneUse: { profile: 'autoglm-phone-v1' }, maxOutputTokens: 2048 }),
   model({ id: 'chat', kind: 'language' }),
   model({ id: 'vision-other', kind: 'language', input: ['text', 'image'], priority: 0 }),
   model({ id: 'vision-recommended', kind: 'language', input: ['text', 'image'], priority: 10 }),
@@ -141,6 +144,7 @@ describe('XOPC Cloud capability setup', () => {
       chat: { primary: 'xopc-cloud/chat' },
       imageUnderstanding: { primary: 'xopc-cloud/vision-recommended' },
       imageGeneration: { primary: 'xopc-cloud/image-recommended' },
+      phoneUse: { primary: 'xopc-cloud/phone' },
       background: { primary: 'xopc-cloud/chat' },
       intents: { fast: { primary: 'xopc-cloud/chat' }, understanding: { primary: 'xopc-cloud/chat' }, coding: { primary: 'xopc-cloud/chat' } },
     });
@@ -325,4 +329,13 @@ describe('XOPC Cloud capability setup', () => {
 
     expect(prepared).toMatchObject({ ok: false, missing: ['chat', 'vision'] });
   });
+});
+
+ it('fills only an absent phone default and preserves BYOK choices', () => {
+  const models = AgentModelsDefaultsSchema.parse({ chat: { primary: 'xopc-cloud/auto', fallbacks: [] } });
+  const cloud = source([model({ id: 'phone', kind: 'language', input: ['text', 'image'], phoneUse: { profile: 'autoglm-phone-v1' } })]);
+  expect(completeXopcCloudModelRoutes(models, cloud).phoneUse).toEqual({ primary: 'xopc-cloud/phone', fallbacks: [] });
+  models.phoneUse = { primary: 'zhipu-cn/autoglm-phone', fallbacks: [] };
+  expect(completeXopcCloudModelRoutes(models, cloud).phoneUse).toEqual(models.phoneUse);
+  expect(completeXopcCloudModelRoutes(AgentModelsDefaultsSchema.parse({ chat: { primary: 'xopc-cloud/auto', fallbacks: [] } }), source([])).phoneUse).toBeUndefined();
 });

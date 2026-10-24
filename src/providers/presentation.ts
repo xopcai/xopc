@@ -180,7 +180,7 @@ export function modelToCatalogView(model: Model<Api>): ModelCatalogView {
     ...(model.contextWindow ? { contextWindow: model.contextWindow } : {}),
     ...(model.maxTokens ? { maxTokens: model.maxTokens } : {}),
     vision: input.includes('image'),
-    recommended: !isDedicatedComputerModel(model) && isRecommendedModel(model.provider, model.id),
+    recommended: !('phoneUse' in model && model.phoneUse) && !isDedicatedComputerModel(model) && isRecommendedModel(model.provider, model.id),
   };
 }
 
@@ -213,7 +213,7 @@ export function sortModelsForPicker(models: readonly Model<Api>[]): Model<Api>[]
 export function getRecommendedModelsForProvider(provider: string, limit = 4): ModelCatalogView[] {
   const models = sortModelsForPicker(getModelsByProvider(provider));
   const fromRegistry = models
-    .filter((model) => !isDedicatedComputerModel(model) && isRecommendedModel(provider, model.id))
+    .filter((model) => !('phoneUse' in model && model.phoneUse) && !isDedicatedComputerModel(model) && isRecommendedModel(provider, model.id))
     .slice(0, limit)
     .map(modelToCatalogView);
   if (fromRegistry.length > 0) return fromRegistry;

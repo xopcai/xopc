@@ -4,6 +4,20 @@ import { describe, expect, it, vi } from 'vitest';
 import { XopcCloudModelError, XopcCloudModelSource } from '../xopc-cloud-model-source.js';
 
 describe('XopcCloudModelSource', () => {
+  it('retains phone metadata without recommending it for chat or vision', async () => {
+    const source = new XopcCloudModelSource({
+      credentials: { resolveApiKey: async () => 'cloud-key' },
+      fetchImpl: async () => Response.json({ data: [{ id: 'phone', xopc: {
+        maxOutputTokens: 2048, capabilities: { input: ['text', 'image'], operations: ['chat.completions'], phoneUse: { profile: 'autoglm-phone-v1' } },
+      } }], xopc: { defaults: { vision: 'phone' } } }),
+    });
+    const result = await source.fetch();
+    if (result.status !== 'fetched') throw new Error('Expected catalog');
+    expect(result.models[0].phoneUse).toEqual({ profile: 'autoglm-phone-v1' });
+    expect(result.source.recommendedModel).toBeNull();
+    expect(result.source.recommended?.vision).toBeUndefined();
+  });
+
   it('preserves unified speech and realtime manifests with mode-scoped voices', async () => {
     const speech = { ...voiceFixture(['speech', 'speech.stream']), serviceVersion: 5, voices: [
       { id: 'default', name: 'Default voice', languages: ['zh'], modes: ['speech', 'speech.stream'] },

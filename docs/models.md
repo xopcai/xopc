@@ -127,7 +127,7 @@ Use `xopc logs tail` to find the provider's first error. Do not post full reques
 
 ## XOPC Cloud public services
 
-After signing in to XOPC Cloud, choose `xopc-cloud/auto` for ordinary chat or `xopc-cloud/advanced` for the advanced tier. Images, recognition, synthesis and realtime voice use the public `image`, `stt`, `tts` and `realtime` entries. Computer Use has its own `xopc-cloud/computer` entry; select it in Computer Use settings, separately from chat. Availability depends on the signed-in catalog and account permissions. Codex retains its separate authorization and catalog entries.
+After signing in to XOPC Cloud, choose `xopc-cloud/auto` for ordinary chat or `xopc-cloud/advanced` for the advanced tier. Images, recognition, synthesis and realtime voice use the public `image`, `stt`, `tts` and `realtime` entries. Phone Use has a dedicated `xopc-cloud/phone` entry, filled after Cloud connection only when the global phone model is unset; existing independent models and Agent overrides are preserved. Computer Use has its own `xopc-cloud/computer` entry; select it in Computer Use settings, separately from chat. Availability depends on the signed-in catalog and account permissions. Codex retains its separate authorization and catalog entries.
 
 1. Sign in through Model settings and wait for the catalog to load.
 2. Select a chat service and send a test message.
