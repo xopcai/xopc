@@ -1,6 +1,6 @@
 ---
 name: configure-xopc
-description: Guide xopc App configuration, connection, repair, and verification, including Browser Use and local Chrome setup. Use for App setup requests or missing capability recovery.
+description: Guide xopc App configuration, connection, repair, and verification, including Browser Use, Phone Use, local Android, and Alibaba Cloud phones. Use for App setup requests or missing capability recovery.
 metadata:
   i18n:
     en:
@@ -29,7 +29,8 @@ Keep the user-facing explanation focused on the product panel and one next actio
 exposing setup IDs, internal state keys, or narrating every document/tool read.
 
 Read [the scene index](references/scene-index.md) when the target is unclear. For Browser Use,
-read [Browser overview](references/browser/overview.md) directly. Load only the selected branch;
+read [Browser overview](references/browser/overview.md) directly. For Phone Use / Android / 云手机,
+read [Phone overview](references/phone/overview.md) directly. Load only the selected branch;
 read matching troubleshooting guidance on failure and acceptance guidance before testing.
 Other configuration areas currently use their existing settings; do not invent setup tools.
 

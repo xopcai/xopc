@@ -1,3 +1,4 @@
+import { createPhoneSetupService } from './hono/routes/phone-setup.js';
 import { BrowserSetupService } from '../browser/setup/service.js';
 import type { ClarificationSubmission } from '@xopcai/gateway-contract';
 import { PhoneStreamGateway } from '../phone/stream-gateway.js';
@@ -299,6 +300,9 @@ export class GatewayService {
   getModelCatalogSync(): ModelCatalogSyncService {
     return this.modelCatalogSync;
   }
+
+  private _phoneSetup?: import('../phone/setup/service.js').PhoneSetupService;
+  get phoneSetup() { return this._phoneSetup ??= createPhoneSetupService(this); }
 
   private _browserSetup?: BrowserSetupService;
   get browserSetup(): BrowserSetupService {
@@ -771,6 +775,7 @@ export class GatewayService {
       getAutomationService: () => this.automationService,
       getBrowserAutomationService: () => this.browserAutomations,
       getBrowserSetupService: () => this.browserSetup,
+      getPhoneSetupService: () => this.phoneSetup,
       emitBrowserEvent: (type, payload) => this.emit(type, payload),
       getNotesService: () => this.notesService,
       getProjectService: () => this.projects,

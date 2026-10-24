@@ -1,0 +1,159 @@
+{
+  "date": "2026-10-24",
+  "status": "blocked",
+  "initialInput": "帮我配置 Phone Use",
+  "chatModel": "xopc-cloud/openai-codex/gpt-5.6-sol",
+  "phoneModel": "xopc-cloud/phone",
+  "blocker": {
+    "code": "free_quota_exhausted",
+    "phoneModelOnly": true,
+    "cloudCatalogPhoneModels": [
+      "phone"
+    ],
+    "noFallbackOrBillingChange": true
+  },
+  "cases": [
+    {
+      "source": "local",
+      "scenario": "interruption_and_restart",
+      "sameConversation": true,
+      "sameSetup": true,
+      "released": true
+    },
+    {
+      "scenario": "owner_ui_approval_and_same_chat_continuation",
+      "conversationId": "4a38de56-df13-43df-b12c-bbf534ebeae7",
+      "dispatched": true
+    },
+    {
+      "source": "local",
+      "conversationId": "cc694e39-f492-4022-bd1e-adc9ff93d311",
+      "setupId": "29454b21-7fff-4065-b758-b199c3835894",
+      "independentlyReacquiredAndReleased": true,
+      "checks": {
+        "configured": true,
+        "read": true,
+        "operated": false,
+        "verified": false,
+        "released": true
+      },
+      "resources": [
+        "SKILL.md",
+        "references/phone/overview.md",
+        "references/phone/local.md",
+        "references/phone/acceptance.md",
+        "references/phone/acceptance.md"
+      ],
+      "operations": [
+        "open",
+        "status",
+        "open",
+        "observe",
+        "run",
+        "close"
+      ],
+      "phoneReports": [
+        {
+          "sessionId": "60bc5f44-95ac-4441-be2a-182df40744d7",
+          "status": "closed",
+          "verified": false,
+          "modelRequests": 1,
+          "actions": 1,
+          "controlOwner": "none",
+          "verificationLevel": "none",
+          "mock": false
+        },
+        {
+          "sessionId": "60bc5f44-95ac-4441-be2a-182df40744d7",
+          "status": "closed",
+          "verified": false,
+          "modelRequests": 1,
+          "actions": 1,
+          "controlOwner": "none",
+          "verificationLevel": "none",
+          "mock": false
+        },
+        {
+          "sessionId": "d5fa2197-2935-470b-9693-81611ffce1e6",
+          "status": "closed",
+          "verified": false,
+          "modelRequests": 0,
+          "actions": 1,
+          "controlOwner": "none",
+          "verificationLevel": "none",
+          "mock": false
+        }
+      ]
+    },
+    {
+      "source": "aliyun",
+      "conversationId": "4a38de56-df13-43df-b12c-bbf534ebeae7",
+      "setupId": "18f540d9-d849-4fc9-97dc-dd77fe3d3c29",
+      "independentlyReacquiredAndReleased": true,
+      "checks": {
+        "configured": true,
+        "read": true,
+        "operated": false,
+        "verified": false,
+        "released": true
+      },
+      "resources": [
+        "SKILL.md",
+        "references/phone/overview.md",
+        "references/phone/aliyun.md",
+        "references/phone/acceptance.md"
+      ],
+      "operations": [
+        "open",
+        "observe",
+        "run",
+        "close"
+      ],
+      "phoneReports": [
+        {
+          "sessionId": "da8647d6-73f9-4634-9b52-938d2d15ce14",
+          "status": "closed",
+          "verified": false,
+          "modelRequests": 1,
+          "actions": 1,
+          "controlOwner": "none",
+          "verificationLevel": "none",
+          "mock": false
+        },
+        {
+          "sessionId": "da8647d6-73f9-4634-9b52-938d2d15ce14",
+          "status": "closed",
+          "verified": false,
+          "modelRequests": 1,
+          "actions": 1,
+          "controlOwner": "none",
+          "verificationLevel": "none",
+          "mock": false
+        }
+      ]
+    }
+  ],
+  "nativeUiFix": {
+    "plainDump": "ERROR: could not get idle state.",
+    "compressedDumpNativeNodes": 23,
+    "realDriverAfterFallbackNativeNodes": 49,
+    "finalCloudSetupReadPassed": true
+  },
+  "guidanceRequests": {
+    "count": 83,
+    "allHttp200": true
+  },
+  "validation": {
+    "regressionTests": 186,
+    "rootTypecheck": true,
+    "webTypecheck": true,
+    "webLint": true,
+    "webProductionBuild": true,
+    "skillValidation": true
+  },
+  "boundaries": [
+    "Actual phone model navigation was not verified successfully because free quota was exhausted",
+    "Physical USB RSA prompts and cloud purchase were not exercised",
+    "Cloud device registration and credentials reused; app policy narrowed only in isolated test state"
+  ]
+}

@@ -17,6 +17,19 @@ requested change once with the new revision and a new intent key. After an uncer
 inspect first and retain the original idempotency key. A permission denial is not a conflict:
 do not switch identity, target or tools to bypass it. Inspect returned product ok and saved
 fields before reporting success. A saved model reference does not prove it can be called.`,
+  phone_setup: `# Phone setup
+Use configure-xopc and references/phone/overview.md. mode phone_setup commands inspect/preview,
+start, get/recheck/verification_report/cancel {setupId}. Only inspect readiness and orchestrate;
+configure models, install managed ADB/scrcpy, and upload cloud adbkey in existing product forms.
+Never paste keys into chat or modify permissions or cloud billing yourself. Phone model is
+independent of chat model. Cloud ADB does not need local adb; scrcpy provides video/Unicode.
+Owner selects local/aliyun and the exact registered device in the same chat panel. Only the
+owner can start a test. Get returns attempt.goal/completion/maxActions. Discover phone_use if
+not declared, open this device in control mode with appPackage com.android.settings, observe,
+run the exact returned goal and completion, then close and read verification_report. Host
+records actual PhoneRuntime evidence; mock or model finish alone cannot pass. On cancellation,
+unknown outcome or restart, release first. Keep the original conversation and never substitute
+another phone, widen app access, replay input or claim control released from cancellation.`,
   browser_setup: `# Browser setup
 Use configure-xopc and its Browser references. Commands on xopc_use mode browser_setup:
 inspect/preview {} read current shared configuration and available endpoints; start {} creates

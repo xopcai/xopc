@@ -169,7 +169,7 @@ export class PhoneRuntime {
             if (input.mode !== 'control' || !phoneAllowsApp(device, input.appPackage)) throw new PhoneError('PHONE_APP_DENIED', 'Launching requires control mode and an allowed application');
             const epoch = session.report.controlEpoch;
             const observation = await this.observe(session, signal);
-            try { await this.dispatch(session, { type: 'launch', package: input.appPackage }, observation, context, signal, epoch); } finally { observation.frame.fill(0); }
+            try { await this.dispatch(session, { type: 'launch', package: input.appPackage }, observation, context, signal, epoch, false, input.settingsPage); } finally { observation.frame.fill(0); }
           }
           return this.publish(session);
         } catch (error) { this.repository.release(device.serial, lease); this.sessions.delete(owner); throw error; }
@@ -496,7 +496,7 @@ export class PhoneRuntime {
     session.report.foregroundApp = observation.package;
     session.report.facts = [...new Set(observation.elements.flatMap(node => node.password ? [] : [node.text, node.description]).filter(Boolean))].slice(0, 60);
   }
-  private async dispatch(session: Session, action: PhoneAction, observation: PhoneObservation, context: ExecutionContext, signal: AbortSignal, epoch = session.report.controlEpoch, resetTask = false): Promise<boolean> {
+  private async dispatch(session: Session, action: PhoneAction, observation: PhoneObservation, context: ExecutionContext, signal: AbortSignal, epoch = session.report.controlEpoch, resetTask = false, settingsPage?: 'about-phone'): Promise<boolean> {
     return this.io(session, async () => {
       signal.throwIfAborted(); this.guard(session, context);
       if (epoch !== session.report.controlEpoch || session.report.controlOwner === 'none' || session.report.handoff !== 'idle') return false;
@@ -521,7 +521,7 @@ export class PhoneRuntime {
         session.trajectorySummary.push(JSON.stringify({ action: earlier.action, effect: earlier.effect, afterApp: earlier.afterApp }).slice(0, 250));
         session.trajectorySummary = session.trajectorySummary.slice(-12);
       }
-      try { await session.driver.execute(session.device.serial, action, observation, signal, session.human ? { settleMs: 0, ...(resetTask ? { resetTask: true } : {}) } : undefined); step.dispatch = 'completed'; entry.dispatch = 'completed'; }
+      try { await session.driver.execute(session.device.serial, action, observation, signal, settingsPage ? { settleMs: session.human ? 0 : 350, settingsPage } : session.human ? { settleMs: 0, ...(resetTask ? { resetTask: true } : {}) } : undefined); step.dispatch = 'completed'; entry.dispatch = 'completed'; }
       catch (error) {
         const textFailure = error instanceof PhoneError && ['PHONE_TEXT_INPUT_UNAVAILABLE', 'PHONE_TEXT_INPUT_UNCONFIRMED'].includes(error.code);
         if (textFailure && error.code === 'PHONE_TEXT_INPUT_UNAVAILABLE') {

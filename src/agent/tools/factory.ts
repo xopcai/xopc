@@ -162,6 +162,7 @@ export interface ToolFactoryDeps {
   gatewayClarify?: { requestClarification: GatewayClarifyRequestFn };
   /** Gateway: enables the `automation` tool. */
   getAutomationService?: () => AutomationService | undefined;
+  getPhoneSetupService?: () => import('../../phone/setup/service.js').PhoneSetupService | undefined;
   getBrowserSetupService?: () => import('../../browser/setup/service.js').BrowserSetupService | undefined;
   getBrowserAutomationService?: () => BrowserAutomationService | undefined;
   emitBrowserEvent?: (type: string, payload: unknown) => void;
@@ -471,6 +472,7 @@ export class AgentToolsFactory {
       getLocalAppService: this.deps.getLocalAppService,
       getChatPreviewService: this.deps.getChatPreviewService,
       getBrowserSetupService: this.deps.getBrowserSetupService,
+      getPhoneSetupService: this.deps.getPhoneSetupService,
       dispatchTaskEvents: this.deps.dispatchTaskEvents,
       dispatchTaskRuns: this.deps.dispatchTaskRuns,
       onAgentCatalogMutate: this.deps.onAgentCatalogMutate,
@@ -704,7 +706,8 @@ export class AgentToolsFactory {
       ...(browserEnabled && this.deps.getBrowserAutomationService
         ? [createBrowserAutomationTool({ getBrowserAutomationService: this.deps.getBrowserAutomationService })]
         : []),
-      ...(this.deps.getBrowserSetupService
+      ...(this.deps.getPhoneSetupService
+        || this.deps.getBrowserSetupService
         || this.deps.getAutomationService
         || this.deps.getProjectService
         || this.deps.getNotesService
@@ -725,6 +728,7 @@ export class AgentToolsFactory {
         : []),
       ...(cfg?.phone?.enabled ? [createPhoneUseTool({
         runtime: getPhoneRuntime(),
+        getSetupService: this.deps.getPhoneSetupService,
         context: () => {
           const config = this.deps.getConfig?.();
           const conversationId = getEmbeddedExecutionSession() ?? currentConversationId();

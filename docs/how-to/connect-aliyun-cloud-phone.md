@@ -70,7 +70,7 @@ A working cloud browser viewer does not prove ADB connectivity. Complete any pro
 4. Select the downloaded private file under **Private key file (adbkey)**. The browser sends the selected file to the connected Gateway; entering a filesystem path is not a substitute for uploading it.
 5. Click **Test connection**. Check the device model, Android version and screenshot. This does not call a phone model or require its API key.
 6. Click **Add phone**, optionally selecting **Set as default phone**. A test expires after ten minutes. Editing the endpoint or key requires another test.
-7. Check the app list under **Manage**. Initially only `com.android.settings` is allowed. Explicitly allow other package names before previewing or operating those apps.
+7. Check the app list under **Manage**. New connections default to all-app access. Review this choice; use selected-only access to restrict the phone to explicitly chosen apps. The basic setup test needs Android Settings.
 
 To run Agent tasks, configure a real phone model in Models and select it in Phone Use. The deterministic mock only supports local emulators. See [phone model configuration](../phone-use.md#configure-a-phone-model).
 

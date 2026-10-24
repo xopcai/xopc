@@ -1,0 +1,25 @@
+# Phone basic acceptance
+
+Read phone_setup get {setupId}. Only a verifying, non-stale attempt is approved. Otherwise
+explain the remaining owner action. Read tool_manual phone_use; discover that exact tool only
+if not already declared. Use only the attempt's selected device, goal, completion and budget.
+
+1. phone_use open {deviceId:<attempt.deviceId>,mode:"control",appPackage:"com.android.settings"}.
+   The host opens About phone using Android’s standard Settings intent, avoiding stale subpages.
+   The real model must still navigate to Android version details and produce changed native UI evidence.
+2. observe. If login, password, verification code or sensitive business screen appears, stop
+   and ask the user to prepare an appropriate screen; do not type into it.
+3. run using exactly attempt.goal, attempt.completion and attempt.maxActions. Native verified
+   UI evidence, real modelRequests and actual actions are required; mock/finish is not proof.
+4. Always close this setup session, including on failure, then read phone_setup verification_report.
+   Only completed, non-stale checks including released prove basic readiness.
+
+For interruption, inspect status and saved setup before any action; do not open over an active
+session or replay an uncertain action. A resumed test still uses the same pinned owner/device.
+If already verified, only close and report. If paused, stopped, stale, expired, failed or a Gateway restart
+lost the runtime session, use the owner's Release test phone action, confirm lease expiry if
+needed, then let the owner begin a new test. Never adopt another phone or prior session report.
+
+This test verifies screenshot observation, model-driven Settings navigation, native UI matching
+and control release. It does not verify payment, login, arbitrary apps, typing or live video.
+Explain those boundaries and suggest one small subsequent task with the intended app allowed.

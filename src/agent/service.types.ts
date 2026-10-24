@@ -31,6 +31,7 @@ export interface AgentServiceConfig {
     requestClarification: GatewayClarifyRequestFn;
   };
   getAutomationService?: () => AutomationService | undefined;
+  getPhoneSetupService?: () => import('../phone/setup/service.js').PhoneSetupService | undefined;
   getBrowserSetupService?: () => import('../browser/setup/service.js').BrowserSetupService | undefined;
   getBrowserAutomationService?: () => import('../browser/automations/index.js').BrowserAutomationService | undefined;
   emitBrowserEvent?: (type: string, payload: unknown) => void;
