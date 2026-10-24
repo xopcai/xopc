@@ -112,7 +112,6 @@ export function registerPhoneRoutes(parent: Hono, deps: AuthenticatedRouteDeps, 
   });
 
   app.get('/api/phone/models', c => c.json({ ok: true, payload: { models: [
-    { id: MOCK_PHONE_MODEL, name: 'Mock · Android Settings test', profile: 'mock-settings-about', mock: true, configured: true },
     ...getModelRegistry().getAll().flatMap(model => {
       const profile = phoneModelProfile(model);
       return profile ? [{ id: `${model.provider}/${model.id}`, name: model.name, profile, mock: false, configured: isProviderConfiguredSync(model.provider) }] : [];

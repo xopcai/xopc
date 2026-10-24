@@ -16,7 +16,7 @@ vi.mock('@/features/settings/global-defaults-api', () => ({
 }));
 vi.mock('../phone-model-connection', () => ({ PhoneModelConnection: ({ onSave }: { onSave(value: string): Promise<void> }) => <button onClick={() => { void onSave('phone-bigmodel/autoglm-phone'); }}>Save AutoGLM</button> }));
 vi.mock('../phone-api', () => ({
-  MOCK_MODEL: 'phone-mock/settings-about', MOCK_GOAL: 'Open Android Settings and inspect About phone',
+  MOCK_MODEL: 'phone-mock/settings-about',
   fetchPhoneSettings: async () => ({ config: { enabled: true }, agentId: 'main' }),
   fetchPhoneDevices: async () => ({ devices: [{ id: 'phone-one', name: 'Local emulator', serial: 'emulator-5554', enabled: true, allowedApps: ['com.android.settings'], ...(fixture.cloudOnly ? { connection: { kind: 'aliyun-adb', endpoint: 'cloud.example:10001' } } : {}) }], discovery: [{ serial: 'emulator-5554', state: 'device', emulator: true }], defaultDeviceId: 'phone-one', diagnostic: fixture.cloudOnly ? 'PHONE_ADB_UNAVAILABLE' : undefined }),
   fetchPhoneApplications: vi.fn(async () => [{ packageName: 'com.android.settings', label: '设置' }, { packageName: 'com.android.deskclock', label: '时钟' }]),
@@ -48,7 +48,8 @@ async function click(label: string) { await act(async () => [...container.queryS
 it('shows model, device and test setup without triggering input actions on load', async () => {
   await render();
   expect(container.textContent).toContain('手机管理'); expect(container.textContent).toContain('Local emulator');
-  expect(container.textContent).toContain('固定测试');
+  expect(container.textContent).not.toContain('运行模拟测试');
+  expect(container.textContent).toContain('本次授权的小目标');
   expect(phoneRequest).not.toHaveBeenCalled();
 });
 it('does not report missing host ADB as an error for cloud-only phones', async () => {
@@ -62,10 +63,12 @@ it('saves only the model route while preserving chat and unrelated tool policies
     chat: { primary: 'chat/model', fallbacks: [] }, phoneUse: { primary: 'phone-bigmodel/autoglm-phone', fallbacks: [] },
   }, tools: { exec_command: { mode: 'deny' } } }), expect.objectContaining({ scope: 'models' }));
 });
-it('starts the emulator mock only after an explicit user action', async () => {
-  await render(); await click('运行模拟测试');
-  expect(phoneRequest).toHaveBeenCalledWith('/sessions', { deviceId: 'phone-one', mode: 'control', appPackage: 'com.android.settings' });
-  expect(phoneRequest).toHaveBeenCalledWith('/sessions/session-one/execute', expect.objectContaining({ op: 'run', scenario: 'settings-about', maxActions: 8 }));
+it('disables test runs for a previously saved mock model', async () => {
+  await render();
+  const start = [...container.querySelectorAll('button')].find(button => button.textContent === '开始试运行')!;
+  expect(start.disabled).toBe(true);
+  await act(async () => start.click());
+  expect(phoneRequest).not.toHaveBeenCalled();
 });
 
 it('manages phones without a second Agent allowlist', async () => {

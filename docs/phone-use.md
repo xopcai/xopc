@@ -8,11 +8,9 @@ For an existing cloud phone, start with the [Alibaba Cloud Phone setup guide](ho
 
 1. Start an Android emulator with Android Studio or `android emulator start <AVD name>`.
 2. Open **Settings → Phone Use** and enable Phone Use.
-3. Select **Mock · Android Settings test** and save the model selection.
+3. Select a configured real phone model and save it; see **Configure a phone model** below.
 4. Refresh devices and add the emulator. New connections allow all applications by default; choose **Only selected apps** to restrict access using the installed app list. Agents with the phone_use tool enabled can use it without a separate device Agent list.
-5. Select the phone and click **Run mock test**.
-
-The mock navigates Android Settings to About phone using native UI elements. It executes real ADB actions, captures real screenshots and verifies native UI evidence, but does not perform AI inference or handle arbitrary tasks. It is restricted to local emulators. Native inspection uses the official Android CLI when installed; otherwise it attempts `uiautomator dump`. The CLI's non-idle capture is useful for animated Settings pages. If UI text is unavailable, the mock pauses instead of guessing.
+5. Open an allowed app manually, select the phone, enter a small goal and click **Start test run**.
 
 The Gateway host must have Android SDK Platform Tools. The runner searches `ANDROID_HOME`, `ANDROID_SDK_ROOT`, common SDK directories and PATH. A custom executable can be set through `phone.adbPath` in `xopc.json`. The browser running the console does not provide USB access to a remote Gateway.
 
@@ -22,7 +20,7 @@ After connecting to XOPC Cloud, an unset global phone model defaults to `xopc-cl
 
 Select a supported phone model in Phone Use and save it. The page shows its provider and credential status. Add or edit providers, API keys, model IDs and Phone Use action profiles centrally under **Intelligence → Models**.
 
-For BigModel, configure Zhipu GLM China with model ID `autoglm-phone`, image input and the AutoGLM Phone action profile. Vision support alone does not qualify a model for Phone Use. The phone model selection is separate from the chat model. The local emulator mock needs no key.
+For BigModel, configure Zhipu GLM China with model ID `autoglm-phone`, image input and the AutoGLM Phone action profile. Vision support alone does not qualify a model for Phone Use. The phone model selection is separate from the chat model. The mock model is reserved for internal development tests and is not listed in model settings.
 
 Select AutoGLM and save it as the phone model. **Test model connection** sends a synthetic test image, not the current phone screen, and reports protocol validity and button grounding separately. This is a real model request and may incur provider charges. A successful connection test is not a task-success benchmark.
 
@@ -32,7 +30,7 @@ Other compatible models can be added in Models settings using image input, OpenA
 
 Each registered device has a name, an enabled flag and an application access policy. New local and cloud connections default to **Allow all apps**. **Only selected apps** reads native application names from the phone and supports search and checkboxes, without entering package names. Existing allowlists remain selected-only until explicitly changed. Changing to selected-only requires at least one app. The app list uses the same pinned scrcpy server dependency as live video. Agents with the phone_use tool enabled can use authorized devices without a separate device Agent list. Changing access or removing the registration stops existing control. Removing a registration does not delete the emulator or its apps. A default device avoids repeated selection; disconnected devices are never silently replaced.
 
-In mock mode, use the fixed test button. In real-model mode, first open an allowed app, then enter one small authorized goal and optional expected completion text. Task controls support pause, resume, continue, stop and release. Resume clears held predictions; the next execution observes the screen again. A screen preview is temporary and available when execution is idle or paused.
+First open an allowed app, then enter one small authorized goal and optional expected completion text. Task controls support pause, resume, continue, stop and release. Resume clears held predictions; the next execution observes the screen again. A screen preview is temporary and available when execution is idle or paused.
 
 The Agent tool is `phone_use`: `discover` → `open` (`observe` or `control`, optional allowed `appPackage`) → `observe` / `run` / `step` → `close`. `run` executes up to 6 actions by default, at most 12, and uses a configurable active execution budget (`phone.maxOperationDurationMs`, default 300,000 ms). Human intervention pauses this budget. On expiry it returns `operation_timeout` with the session paused and its facts/steps intact, rather than reporting user cancellation. Inspect and hand back before continuing. The session also has separate action, model-request and duration limits.
 

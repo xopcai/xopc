@@ -10,8 +10,8 @@ export function PhoneModelPicker({ value, onChange, zh, disabled = false }: { va
   return <div className="space-y-2">
     <Select aria-label={zh ? '手机模型' : 'Phone model'} value={value} disabled={disabled || Boolean(models.error)} onChange={event => onChange(event.target.value)}>
       <SelectOption value="">{zh ? '未配置' : 'Not configured'}</SelectOption>
-      {value && !models.data?.models.some(model => model.id === value) && <SelectOption value={value}>{value}</SelectOption>}
-      {models.data?.models.map(model => <SelectOption key={model.id} value={model.id}>{model.mock ? (zh ? '模拟模型 · 系统设置测试' : 'Mock · Android Settings test') : `${model.name} · ${model.id.split('/')[0]}${model.configured ? '' : zh ? ' · 待配置凭据' : ' · Credentials needed'}`}</SelectOption>)}
+      {value && !models.data?.models.some(model => model.id === value) && <SelectOption value={value} disabled>{zh ? '当前模型不可用，请重新选择' : 'Current model unavailable; choose another'}</SelectOption>}
+      {models.data?.models.map(model => <SelectOption key={model.id} value={model.id}>{`${model.name} · ${model.id.split('/')[0]}${model.configured ? '' : zh ? ' · 待配置凭据' : ' · Credentials needed'}`}</SelectOption>)}
     </Select>
     {models.error && <p role="alert" className="text-sm text-danger">{String(models.error)}</p>}
   </div>;
