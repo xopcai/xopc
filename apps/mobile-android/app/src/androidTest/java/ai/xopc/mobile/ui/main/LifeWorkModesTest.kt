@@ -17,6 +17,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
@@ -41,6 +43,7 @@ class LifeWorkModesTest {
   @get:Rule val rule = createAndroidComposeRule<ComponentActivity>()
 
   @Test fun lifeHidesDockLocksAgentAndRestoresWorkChrome() {
+    var avatarBackground = 0
     val agent = PersonalAgentRecord("personal", "personal-chat", "ready", "Ada", "loopi", null)
     val state = mutableStateOf(ConnectionUiState(
       profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), ""),
@@ -49,6 +52,7 @@ class LifeWorkModesTest {
     ))
     rule.setContent {
       XopcTheme {
+        avatarBackground = MaterialTheme.colorScheme.surfaceContainer.toArgb()
         MainContent(HomeTab.Assistant, {}, state.value, onSwitchLifeMode = { life ->
           state.value = state.value.copy(lifeMode = life,
             selectedConversationId = if (life) "personal-chat" else "work-chat")
@@ -56,11 +60,17 @@ class LifeWorkModesTest {
       }
     }
     rule.onNodeWithTag("main-tab-dock").assertIsDisplayed()
+    val workAvatarBounds = rule.onNodeWithTag("chat-agent-switch").getUnclippedBoundsInRoot()
     rule.onNodeWithTag("home-mode-life").performClick()
     rule.waitForIdle()
     rule.onNodeWithTag("home-mode-life").assertIsSelected()
     rule.onNodeWithTag("main-tab-dock").assertDoesNotExist()
     rule.onNodeWithTag("chat-agent-switch").assertIsNotEnabled()
+    rule.onNodeWithTag("chat-agent-switch").assertIsDisplayed()
+    val lifeAvatar = rule.onNodeWithTag("chat-agent-switch")
+    assertEquals(workAvatarBounds, lifeAvatar.getUnclippedBoundsInRoot())
+    val avatarBitmap = lifeAvatar.captureToImage().asAndroidBitmap()
+    assertEquals(avatarBackground, avatarBitmap.getPixel(avatarBitmap.width / 16, avatarBitmap.height / 2))
     rule.onNodeWithTag("chat-header-search").assertIsDisplayed()
     rule.onNodeWithTag("assistant-options").assertIsDisplayed()
     capture("life-mode")
@@ -69,6 +79,7 @@ class LifeWorkModesTest {
     rule.onNodeWithTag("home-mode-work").assertIsSelected()
     rule.onNodeWithTag("main-tab-dock").assertIsDisplayed()
     rule.onNodeWithTag("tab-Assistant").assertIsSelected()
+    assertEquals(workAvatarBounds, rule.onNodeWithTag("chat-agent-switch").getUnclippedBoundsInRoot())
     capture("work-mode")
   }
 

@@ -55,7 +55,7 @@ internal fun AssistantWaitingBubble(runId: String, narration: String?, connected
       style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     else {
       Row(horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally), verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.width(104.dp).height(64.dp).background(MaterialTheme.colorScheme.surfaceContainer, CircleShape)
+        modifier = Modifier.width(72.dp).height(44.dp).background(MaterialTheme.colorScheme.surfaceContainer, CircleShape)
           .padding(horizontal = 12.dp).semantics { contentDescription = waitingLabel }) {
         repeat(3) { index ->
           WaitingReplyDot(index, android.animation.ValueAnimator.areAnimatorsEnabled())

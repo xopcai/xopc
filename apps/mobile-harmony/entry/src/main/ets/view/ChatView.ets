@@ -1801,8 +1801,9 @@ export struct XopcChatView {
       .bindSheet($$this.sheetOpen, this.optionsSheet, { height: this.sheetHeight, dragBar: true, showClose: false, backgroundColor: this.colors.panel })
       if (!this.embedded) {
         Column().id('chat-status-bar-background').width('100%').height(this.chatTopInset)
-          .align(Alignment.TopStart).backgroundColor(this.colors.surface).hitTestBehavior(HitTestMode.None)
+          .align(Alignment.TopStart).backgroundColor(this.colors.surface).hitTestBehavior(HitTestMode.None).zIndex(1)
         Row({ space: this.showSceneSwitch ? 4 : 12 }) {
+          // Disabling an ArkUI Button also fades its background, exposing messages behind the avatar.
           Button({ type: ButtonType.Normal }) {
             Row({ space: 8 }) {
               XopcPersonalAgentAvatar({ extent: 36, compact: true, activePage: this.activePage,
@@ -1819,7 +1820,11 @@ export struct XopcChatView {
             }.padding({ left: 6, right: this.showSceneSwitch ? 6 : 14 })
           }.height(48).backgroundColor(this.colors.panel)
             .border({ width: 1, color: this.colors.border }).borderRadius(24).clip(true)
-            .enabled(!this.lifeMode).accessibilityText($r('app.string.chat_agent')).id('chat-agent-switch').onClick((): void => {
+            .stateEffect(!this.lifeMode).focusable(!this.lifeMode)
+            .hitTestBehavior(this.lifeMode ? HitTestMode.None : HitTestMode.Default)
+            .accessibilityLevel(this.lifeMode ? 'no-hide-descendants' : 'auto')
+            .accessibilityText($r('app.string.chat_agent')).id('chat-agent-switch').onClick((): void => {
+              if (this.lifeMode) return;
               if (this.personalConversation) this.personalSettingsOpen = true; else this.openSheet('agent');
             })
           Blank().layoutWeight(1)
@@ -1843,7 +1848,7 @@ export struct XopcChatView {
             .border({ width: 1, color: this.colors.border })
         }.id('chat-floating-header').width('100%').padding({ left: this.showSceneSwitch ? 12 : 20,
           right: this.showSceneSwitch ? 12 : 20, top: this.chatTopInset + 8, bottom: 6 })
-          .align(Alignment.TopStart).backgroundColor(Color.Transparent).hitTestBehavior(HitTestMode.Transparent)
+          .align(Alignment.TopStart).backgroundColor(Color.Transparent).hitTestBehavior(HitTestMode.Transparent).zIndex(2)
       }
     if (this.sendFlightActive) {
       Text(this.sendFlightText).fontSize(16).lineHeight(20).fontColor(this.colors.foreground)
