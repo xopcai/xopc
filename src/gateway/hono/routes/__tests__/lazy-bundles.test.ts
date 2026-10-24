@@ -6,6 +6,10 @@ import {
 } from '../lazy-bundles.js';
 
 describe('lazy route bundles', () => {
+  it('routes guided Phone setup through the authenticated Phone admin bundle', () => {
+    expect(findAuthenticatedLazyRouteBundle('/api/phone/setup')?.id).toBe('phone');
+    expect(findAuthenticatedLazyRouteBundle('/api/phone-other/setup')).toBeUndefined();
+  });
   it('maps Browser guided setup before general browser routes without capturing neighboring shapes', () => {
     expect(findAuthenticatedLazyRouteBundle('/api/browser/setup')?.id).toBe('browser-setup');
     expect(findAuthenticatedLazyRouteBundle('/api/browser/setup-other')?.id).not.toBe('browser-setup');

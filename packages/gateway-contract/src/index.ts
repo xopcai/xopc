@@ -53,3 +53,5 @@ export * from './provider-setup.js';
 export * from './recording-outcome.js';
 
 export * from './browser-setup.js';
+
+export * from './phone-setup.js';

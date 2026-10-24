@@ -1,3 +1,5 @@
+import { Link, useSearchParams } from 'react-router-dom';
+import { PhoneSetupPanel } from './phone-setup-panel';
 import * as Dialog from '@radix-ui/react-dialog';
 import { FlaskConical, Play, RefreshCw, Smartphone, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
@@ -66,6 +68,7 @@ function DeviceForm({ device, serial, name, onSave, onClose, zh }: {
 }
 
 export function PhoneSettingsPage() {
+  const [searchParams] = useSearchParams();
   const zh = useLocaleStore(state => state.language) === 'zh';
   const settings = useSWR('phone-settings', fetchPhoneSettings);
   const devices = useSWR('phone-devices', fetchPhoneDevices, { refreshInterval: 15_000 });
@@ -124,6 +127,9 @@ export function PhoneSettingsPage() {
 
   return <SettingsPageFrame gap="gap-7">
     <SettingsPageHeader title={<span className="inline-flex items-center gap-2">{zh ? '手机控制' : 'Phone Use'}<BetaBadge /></span>} subtitle={zh ? '连接 Android 手机或模拟器，配置独立的手机操作模型。' : 'Connect an Android phone or emulator and choose a dedicated phone model.'} />
+    <Link className="block text-sm text-accent-fg" to={`/chat/new?skill=configure-xopc&scene=configure-phone&draft=${encodeURIComponent(zh ? '帮我配置 Phone Use，从模型、依赖、手机连接到验收。' : 'Help configure Phone Use: model, dependencies, phone connection and verification.')}&autoSend=1`}>{zh ? '帮我配置 Phone Use' : 'Configure Phone Use with me'}</Link>
+    {searchParams.get('conversationId') && <PhoneSetupPanel conversationId={searchParams.get('conversationId')!} />}
+
     {error && <p role="alert" className="rounded-xl bg-danger-soft p-3 text-sm text-danger">{error}</p>}
     {notice && <p role="status" className="text-sm text-fg-muted">{notice}</p>}
     {settings.error && <p role="alert" className="text-sm text-danger">{String(settings.error)}</p>}

@@ -52,6 +52,7 @@ export class PhoneRepository {
       return { value: { token, expiresAt: Date.now() + 120_000 }, result: undefined };
     });
   }
+  leaseActive(serial: string): boolean { return (this.leases.get(serial)?.expiresAt ?? 0) > Date.now(); }
   release(serial: string, token: string): void {
     this.leases.update(serial, lease => ({ value: lease?.token === token ? undefined : lease, result: undefined }));
   }

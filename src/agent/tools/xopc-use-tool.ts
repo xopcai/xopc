@@ -80,6 +80,7 @@ const XopcUseToolSchema = Type.Object({
     Type.Literal('agent'),
     Type.Literal('settings'),
     Type.Literal('browser_setup'),
+    Type.Literal('phone_setup'),
   ]),
   command: Type.String({
     description:
@@ -97,7 +98,7 @@ const XopcUseToolSchema = Type.Object({
   })),
 });
 
-export type XopcUseMode = 'context' | 'project' | 'automation' | 'note' | 'task' | 'task_run' | 'chat_preview' | 'local_app' | 'agent' | 'settings' | 'browser_setup';
+export type XopcUseMode = 'context' | 'project' | 'automation' | 'note' | 'task' | 'task_run' | 'chat_preview' | 'local_app' | 'agent' | 'settings' | 'browser_setup' | 'phone_setup';
 
 export interface XopcUseToolInput {
   mode: XopcUseMode;
@@ -107,6 +108,7 @@ export interface XopcUseToolInput {
 }
 
 export interface XopcUseToolDeps {
+  getPhoneSetupService?: () => import('../../phone/setup/service.js').PhoneSetupService | undefined;
   getBrowserSetupService?: () => import('../../browser/setup/service.js').BrowserSetupService | undefined;
   authorizeCapability?: CapabilityContext['authorize'];
   getWorkspace?: () => string;
@@ -1293,6 +1295,16 @@ export function createXopcUseTool(deps: XopcUseToolDeps): AgentTool<typeof XopcU
       const args = ensureArgs(input);
       const details: XopcUseDetails = { mode, command, dryRun };
       if (!command) return errorText('command is required', details);
+      if (mode === 'phone_setup') {
+        const service = deps.getPhoneSetupService?.();
+        const conversationId = deps.getCurrentConversationId?.();
+        const agentId = deps.getCurrentAgentId?.();
+        if (!service || !conversationId || !agentId) return errorText('Phone setup requires a Gateway conversation. Open Settings → Phone Use.', details);
+        if (deps.authorizeCapability && !await deps.authorizeCapability(`xopc.phone_setup.${command}`, args)) return errorText('Phone setup access denied', details);
+        try {
+          return okText({ ...details, result: await service.command(command, args, { conversationId, agentId }, dryRun) });
+        } catch (error) { return errorText(error instanceof Error ? error.message : String(error), details); }
+      }
       if (mode === 'browser_setup') {
         const service = deps.getBrowserSetupService?.();
         const conversationId = deps.getCurrentConversationId?.();

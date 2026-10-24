@@ -183,3 +183,13 @@ it('attaches the Cloud run budget and prevents another prediction after exhausti
     });
   } finally { budget.mockRestore(); }
 });
+
+it('distinguishes exhausted Cloud free quota from device failure and does not retry inference', async () => {
+  vi.mocked(resolveModel).mockReturnValueOnce({ id: 'phone', provider: 'xopc-cloud', api: 'openai-completions', input: ['image'],
+    baseUrl: 'https://cloud.example/v1', phoneUse: { profile: 'autoglm-phone-v1' }, maxTokens: 2048 } as any);
+  const request = vi.fn<typeof globalThis.fetch>(async () => Response.json({ error: { code: 'free_quota_exhausted', message: 'untrusted upstream detail' } }, { status: 429, headers: { 'Retry-After': '3600' } }));
+  vi.stubGlobal('fetch', request);
+  const adapter = await createPhoneModel('xopc-cloud/phone', {} as Config, 'main');
+  await expect(adapter.predict(prediction(), new AbortController().signal)).rejects.toMatchObject({ code: 'PHONE_MODEL_QUOTA_EXHAUSTED', message: expect.stringContaining('3600 seconds') });
+  expect(request).toHaveBeenCalledOnce();
+});

@@ -217,8 +217,13 @@ async function boundedJson(response: Response, cloud = false): Promise<unknown> 
   if (!response.ok) {
     if (cloud) {
       const error = await readBoundedJson(response).catch(() => null);
-      const parsed = z.object({ error: z.object({ code: z.literal('credit_budget_exhausted') }) }).safeParse(error);
-      if (parsed.success) reportCloudCreditError(parsed.data.error.code);
+      const parsed = z.object({ error: z.object({ code: z.string() }) }).safeParse(error);
+      if (parsed.success && parsed.data.error.code === 'credit_budget_exhausted') reportCloudCreditError(parsed.data.error.code);
+      if (parsed.success && parsed.data.error.code === 'free_quota_exhausted') {
+        const retry = Number(response.headers.get('retry-after'));
+        const wait = Number.isFinite(retry) && retry > 0 ? ` Retry after ${Math.min(Math.ceil(retry), 86400)} seconds.` : '';
+        throw new PhoneError('PHONE_MODEL_QUOTA_EXHAUSTED', `XOPC Cloud Phone model free quota exhausted.${wait} Wait for quota reset or choose another configured compatible Phone model in settings. Do not retry immediately or change device permissions.`, 502);
+      }
     } else await response.body?.cancel();
     throw new PhoneError('PHONE_MODEL_HTTP', `Phone model request failed (HTTP ${response.status})`, 502);
   }

@@ -73,7 +73,7 @@ export const PhoneCompletionSchema = z.object({
 export type PhoneCompletion = z.infer<typeof PhoneCompletionSchema>;
 export const PhoneInputSchema = z.discriminatedUnion('op', [
   z.object({ op: z.literal('discover') }).strict(),
-  z.object({ op: z.literal('open'), deviceId: z.string().uuid().optional(), mode: z.enum(['observe', 'control']), appPackage: z.string().regex(/^[a-zA-Z][\w]*(?:\.[\w]+)+$/).optional() }).strict(),
+  z.object({ op: z.literal('open'), deviceId: z.string().uuid().optional(), mode: z.enum(['observe', 'control']), appPackage: z.string().regex(/^[a-zA-Z][\w]*(?:\.[\w]+)+$/).optional(), settingsPage: z.literal('about-phone').optional() }).strict().refine(input => !input.settingsPage || input.mode === 'control' && input.appPackage === 'com.android.settings', 'About phone requires authorized Settings control'),
   z.object({ op: z.literal('observe') }).strict(),
   z.object({ op: z.enum(['run', 'step']), goal: z.string().trim().min(1).max(2000),
     scenario: z.literal('settings-about').optional(),

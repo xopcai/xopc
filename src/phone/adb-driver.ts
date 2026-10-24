@@ -83,7 +83,7 @@ export interface PhoneDriver {
   observe(serial: string, signal: AbortSignal): Promise<PhoneObservation>;
   capture?(serial: string, signal: AbortSignal): Promise<PhoneObservation>;
   observeForText?(serial: string, signal: AbortSignal): Promise<PhoneObservation>;
-  execute(serial: string, action: PhoneAction, observation: PhoneObservation, signal: AbortSignal, options?: { settleMs: number; resetTask?: boolean }): Promise<void>;
+  execute(serial: string, action: PhoneAction, observation: PhoneObservation, signal: AbortSignal, options?: { settleMs: number; resetTask?: boolean; settingsPage?: 'about-phone' }): Promise<void>;
 }
 
 /** Read only the active native editor, never historical input-method entries. */
@@ -157,13 +157,17 @@ export class AdbPhoneDriver implements PhoneDriver {
         if (!elements.length) await delay(350, undefined, { signal });
       }
     }
-    if (!elements.length) try {
-      const path = `/data/local/tmp/xopc-phone-${randomUUID()}.xml`;
+    // Some cloud builds need compressed nodes when a full hierarchy never reaches idle.
+    if (!elements.length) for (const flags of [[], ['--compressed']]) {
       try {
-        await this.shell(serial, ['uiautomator', 'dump', path], signal);
-        elements = parsePhoneUi(await this.shell(serial, ['cat', path], signal));
-      } finally { await this.shell(serial, ['rm', '-f', path], signal).catch(() => {}); }
-    } catch (error) { signal.throwIfAborted(); if (error instanceof Error && error.message === 'PHONE_UI_INVALID') throw error; }
+        const path = `/data/local/tmp/xopc-phone-${randomUUID()}.xml`;
+        try {
+          await this.shell(serial, ['uiautomator', 'dump', ...flags, path], signal);
+          elements = parsePhoneUi(await this.shell(serial, ['cat', path], signal));
+        } finally { await this.shell(serial, ['rm', '-f', path], signal).catch(() => {}); }
+      } catch (error) { signal.throwIfAborted(); if (error instanceof Error && error.message === 'PHONE_UI_INVALID') throw error; }
+      if (elements.length) break;
+    }
     return { ...await this.capture(serial, signal), elements };
   }
   async observeForText(serial: string, signal: AbortSignal): Promise<PhoneObservation> {
@@ -217,12 +221,18 @@ export class AdbPhoneDriver implements PhoneDriver {
     }
     throw new PhoneError('PHONE_TEXT_INPUT_UNCONFIRMED', 'Text was sent but the target field value could not be verified. Take over and inspect the input field before retrying.', 409);
   }
-  async execute(serial: string, action: PhoneAction, observation: PhoneObservation, signal: AbortSignal, options?: { settleMs: number; resetTask?: boolean }): Promise<void> {
+  async execute(serial: string, action: PhoneAction, observation: PhoneObservation, signal: AbortSignal, options?: { settleMs: number; resetTask?: boolean; settingsPage?: 'about-phone' }): Promise<void> {
     const point = ([x, y]: number[]) => [String(Math.min(observation.width - 1, Math.round(x * observation.width / 1000))), String(Math.min(observation.height - 1, Math.round(y * observation.height / 1000)))];
     const input = (args: string[]) => this.shell(serial, ['input', ...args], signal);
     switch (action.type) {
       case 'tapElement': throw new PhoneError('PHONE_SEMANTIC_UNRESOLVED', 'Resolve the native element against a fresh observation before dispatch', 409);
       case 'launch': {
+        if (options?.settingsPage) {
+          if (action.package !== 'com.android.settings') throw new PhoneError('PHONE_APP_DENIED', 'About phone requires the Settings application');
+          const output = await this.shell(serial, ['am', 'start', '-a', 'android.settings.DEVICE_INFO_SETTINGS', '-p', action.package], signal);
+          if (/Error|Exception/.test(output)) throw new PhoneError('PHONE_LAUNCH_FAILED', 'Unable to open About phone');
+          break;
+        }
         const result = await this.shell(serial, ['cmd', 'package', 'resolve-activity', '--brief', action.package], signal);
         const component = result.trim().split(/\r?\n/).find(line => /^[\w.]+\/[\w.$]+$/.test(line));
         if (!component) throw new PhoneError('PHONE_APP_UNAVAILABLE', 'The selected application has no launchable activity');

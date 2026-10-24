@@ -24,6 +24,7 @@ const Schema = Type.Object({
 
 export function createPhoneUseTool(deps: {
   runtime: PhoneRuntime;
+  getSetupService?: () => import('../../phone/setup/service.js').PhoneSetupService | undefined;
   context(): ReturnType<typeof phoneExecutionContext> & { owner: string };
 }): AgentTool {
   return {
@@ -31,7 +32,12 @@ export function createPhoneUseTool(deps: {
     description: 'Use an authorized Android phone via local ADB or a configured cloud connection. Load tool_manual for phone_use before first use. Discover registered devices, appAccess and allowedApps first; open with mode observe/control and optional authorized appPackage, observe native UI text, then run one small goal or step once. Device and model configuration live in Phone Use settings. Connections originate from the Gateway host; cloud credentials are configured in phone management. Mock mode only supports the explicitly requested settings-about emulator test. Never silently switch phones, execute shell commands, bypass app restrictions, or repeat a dispatch with unknown outcome. Request user assistance for login, CAPTCHA or an effect not already authorized. Pause before manual takeover; resume re-observes. Inspect verified, verificationLevel and stopReason before claiming success. Close releases device control. Raw screenshots never enter the chat transcript.',
     async execute(_id, raw, signal) {
       const { owner, ...context } = deps.context();
-      const result = await deps.runtime.execute(owner, PhoneInputSchema.parse(raw), context, signal);
+      const input = PhoneInputSchema.parse(raw);
+      const setup = deps.getSetupService?.();
+      const setupContext = { conversationId: owner, agentId: context.agentId };
+      const setupOwner = setup?.beforeInput(setupContext, input);
+      const result = await deps.runtime.execute(setupOwner?.owner ?? owner, setupOwner?.input ?? input, context, signal);
+      if (setupOwner) setup!.afterInput(setupContext, setupOwner.owner, input.op);
       return { content: [{ type: 'text', text: JSON.stringify(result) }], details: result };
     },
   };

@@ -1,3 +1,4 @@
+import { PhoneSetupPanel } from '@/features/settings/phone/phone-setup-panel';
 import { BrowserSetupPanel } from '@/features/settings/browser/browser-setup-panel';
 import { chatVirtualScroll, pauseChatTailFollowing } from '@/features/chat/scroll/chat-virtual-scroll';
 import * as Dialog from '@radix-ui/react-dialog';
@@ -211,6 +212,10 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
   const latestBrowserSetup = latestMessage?.role === 'assistant'
     ? findLatestBrowserSetupRequired(latestMessage.content)
     : null;
+  const phoneSetupRequested = searchParams.get('scene') === 'configure-phone'
+    || msgSlice.items.some(message => message.role === 'assistant' && message.content.some(block =>
+      block.type === 'tool_use' && block.name === 'xopc_use' && block.details && typeof block.details === 'object'
+      && (block.details as Record<string, unknown>).mode === 'phone_setup'));
   const browserSetupRequested = searchParams.get('scene') === 'configure-xopc'
     || msgSlice.items.some(message => message.role === 'assistant' && message.content.some(block => {
       if (block.type !== 'tool_use' || block.name !== 'xopc_use' || !block.details || typeof block.details !== 'object') return false;
@@ -1210,7 +1215,10 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
                         ? handleForkAssistantTurn
                         : undefined
                     }
-                    trailingContent={browserSetupRequested && session.conversationId ? (
+                    trailingContent={phoneSetupRequested && session.conversationId ? (
+                      <PhoneSetupPanel conversationId={session.conversationId} disabled={stream.streaming || stream.sending}
+                        onContinue={prompt => { void handleComposerSend(prompt); }} />
+                    ) : browserSetupRequested && session.conversationId ? (
                       <BrowserSetupPanel conversationId={session.conversationId} requested disabled={stream.streaming || stream.sending}
                         onContinue={prompt => { void handleComposerSend(prompt); }} />
                     ) : latestBrowserSetup?.driver === 'extension' ? (

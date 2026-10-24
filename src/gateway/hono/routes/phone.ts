@@ -14,6 +14,7 @@ import { getPhoneRuntime, phoneExecutionContext, type PhoneRuntime } from '../..
 import { getGatewayPrincipal } from '../../security/gateway-principal.js';
 import { createLogger } from '../../../utils/logger.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
+import { registerPhoneSetupRoutes } from './phone-setup.js';
 
 const log = createLogger('Hono:Phone');
 const deviceInput = PhoneDeviceSchema.omit({ id: true, createdAt: true, revision: true, connection: true });
@@ -31,6 +32,8 @@ export function registerPhoneRoutes(parent: Hono, deps: AuthenticatedRouteDeps, 
     if ((principal.kind !== 'owner' && principal.kind !== 'trusted-proxy') || !principal.scopes.includes('gateway.admin')) return c.json({ ok: false, error: { code: 'PHONE_ADMIN_REQUIRED', message: 'Phone settings require Gateway administrator access' } }, 403);
     return next();
   });
+
+  registerPhoneSetupRoutes(app, deps);
 
   app.use('/api/phone/cloud/aliyun/*', bodyLimit({ maxSize: 24 * 1024, onError: c => c.json({ ok: false, error: { code: 'PHONE_UPLOAD_TOO_LARGE', message: 'Phone key upload exceeds 24 KB' } }, 413) }));
   app.post('/api/phone/cloud/aliyun/test', strictRateLimitMiddleware, async c => {
