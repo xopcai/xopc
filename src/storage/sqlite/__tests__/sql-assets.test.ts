@@ -66,12 +66,14 @@ describe('SQLite assets in distribution layouts', () => {
     expect(missing.stderr).toContain('ENOENT');
   });
 
-  it('copies only current SQL, removes stale Electron assets, and preserves unbundled JavaScript', () => {
+  it('copies the baseline and supported upgrades and removes stale Electron assets', () => {
     const directory = mkdtempSync(join(tmpdir(), 'xopc-sql-copy-')); temporary.push(directory);
     const stale = join(directory, 'migrations/stale.sql');
     mkdirSync(dirname(stale), { recursive: true }); writeFileSync(stale, 'STALE');
     copySqliteAssets(source, directory);
     expect(existsSync(join(directory, 'migrations'))).toBe(false);
+    expect(existsSync(join(directory, 'upgrades/203_remove_retired_proactive_contracts.sql'))).toBe(true);
+    expect(existsSync(join(directory, 'upgrades/259_personal_default_style.sql'))).toBe(true);
     expect(readFileSync(join(directory, 'schema.sql'), 'utf8'))
       .toBe(readFileSync(join(source, 'schema.sql'), 'utf8'));
     const runtime = join(directory, 'migrations/runner.js'); mkdirSync(dirname(runtime)); writeFileSync(runtime, 'retired runtime');

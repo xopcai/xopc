@@ -22,7 +22,7 @@ const auditTable = rows => table(['task', 'httpLedgerResponses', 'auxiliaryUnkno
   esc(a.id), `${esc(a.physicalRequests)} / ${esc(a.runtimeRequests)} / ${esc(a.taskResponses)}`, `${esc(a.auxiliaryRequests)} / ${esc(a.unknownRequests)}`,
   `${esc(a.wireTokens)} (${tx('observed', { value: a.observedWireTokens ?? t('unknown') })}) / ${esc(a.runtimeTokens)}`, esc(a.providerMinusRuntimeTokens), badge(a.usageMatched ? 'matched' : a.knownPerRequestUsageMatched ? 'partial_unknown' : 'mismatch') + badge(a.perRequestMatched ? 'identity_matched' : 'identity_unverified'), esc(a.settledChargeCreditMicro),
 ]))).replace('class="table-wrap"', 'class="table-wrap audit-table"');
-const acceptancePanel = value => !value ? '' : `<div class="card"><h3>${tx('personalAcceptance')}</h3><p>${tx('deliveredIn', { value: value.deliveredInMs })} · ${value.qualityLabel ? esc(value.qualityLabel) : tx('independentChecks', { count: value.qualityChecks })} ${badge(value.qualityPassed ? 'passed' : 'failed')} · ${tx('overall')} ${badge(value.overallAccepted ? 'passed' : 'failed')}</p><p class="muted">${tx('originalGradeNote')}</p>${value.latencyThresholds ? table(['latencyMetric', 'measured', 'threshold', 'state'].map(k => t(k)), Object.entries(value.latencyThresholds).map(([key, limit]) => tr([esc(key), esc(value.latency?.[key]), esc(limit), badge(typeof value.latency?.[key] === 'number' && value.latency[key] >= 0 && value.latency[key] <= limit ? 'passed' : 'failed')]))) : table(['latencyFailure', 'measured', 'threshold'].map(k => t(k)), (value.latencyFailures ?? []).map(item => tr([esc(item.key), esc(item.actual), esc(item.limit)])))}</div>`;
+const acceptancePanel = value => !value ? '' : `<div class="card"><h3>${tx('personalAcceptance')}</h3><p>${tx('deliveredIn', { value: value.deliveredInMs })} · ${value.qualityLabel ? esc(value.qualityLabel) : tx('independentChecks', { count: value.qualityChecks })} ${badge(value.qualityPassed ? 'passed' : 'failed')} · ${tx('overall')} ${badge(value.overallAccepted ? 'passed' : 'failed')}</p><p class="muted">${tx('originalGradeNote')}</p>${value.latencyThresholds ? table(['latencyMetric', 'measured', 'threshold', 'state'].map(k => t(k)), Object.entries(value.latencyThresholds).map(([key, limit]) => tr([tx('latency.' + key), esc(value.latency?.[key]), esc(limit), badge(typeof value.latency?.[key] === 'number' && value.latency[key] >= 0 && value.latency[key] <= limit ? 'passed' : 'failed')]))) : table(['latencyFailure', 'measured', 'threshold'].map(k => t(k)), (value.latencyFailures ?? []).map(item => tr([esc(item.key), esc(item.actual), esc(item.limit)])))}</div>`;
 async function api(path) {
   const response = await fetch(path);
   const data = await response.json();
@@ -166,6 +166,9 @@ function comparisonReason(reason) {
   return keys[key] ? t('comparisonMismatch', { condition: t(keys[key]) }) : reason;
 }
 function decisionIssue(reason) {
+  const latency = /^Latency failed: (\w+) \(([^/]+)\/(\d+) ms\)$/.exec(reason);
+  if (latency) return `${t('latency.' + latency[1])}: ${latency[2]} ms / ${latency[3]} ms`;
+
   const patterns = [
     [/Original Personal v6|assistant-text executor/, 'issueProtocol'],
     [/latency|acknowledgement|request-to-submit/i, 'issueLatency'],

@@ -37,7 +37,7 @@ export const PhoneActionSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('doubleTap'), point: Point }).strict(),
   z.object({ type: z.literal('longPress'), point: Point, durationMs: z.number().int().min(100).max(3000).default(800) }).strict(),
   z.object({ type: z.literal('swipe'), start: Point, end: Point, durationMs: z.number().int().min(100).max(2000).default(500) }).strict(),
-  z.object({ type: z.literal('typeText'), text: z.string().min(1).max(4000) }).strict(),
+  z.object({ type: z.literal('typeText'), text: z.string().min(1).max(4000), mode: z.enum(['insert', 'replace']).optional() }).strict(),
   z.object({ type: z.enum(['back', 'home']) }).strict(),
   z.object({ type: z.literal('wait'), durationMs: z.number().int().min(100).max(3000) }).strict(),
 ]);
@@ -53,6 +53,14 @@ export type PhoneObservation = {
   frameId: string; capturedAt: number; width: number; height: number; rotation: number;
   package: string; frame: Buffer; elements: PhoneElement[];
 };
+export const PhoneCompletionSchema = z.object({
+  appPackage: z.string().regex(/^[a-zA-Z][\w]*(?:\.[\w]+)+$/).optional(),
+  textAny: z.array(z.string().min(1).max(200)).min(1).max(20).optional(),
+  textAll: z.array(z.string().min(1).max(200)).min(1).max(20).optional(),
+  field: z.object({ resourceId: z.string().min(1).max(300), value: z.string().max(4000) }).strict().optional(),
+  requireChange: z.boolean().optional(),
+}).strict().refine(value => value.appPackage || value.textAny || value.textAll || value.field, 'Specify at least one UI condition');
+export type PhoneCompletion = z.infer<typeof PhoneCompletionSchema>;
 export const PhoneInputSchema = z.discriminatedUnion('op', [
   z.object({ op: z.literal('discover') }).strict(),
   z.object({ op: z.literal('open'), deviceId: z.string().uuid().optional(), mode: z.enum(['observe', 'control']), appPackage: z.string().regex(/^[a-zA-Z][\w]*(?:\.[\w]+)+$/).optional() }).strict(),
@@ -60,6 +68,7 @@ export const PhoneInputSchema = z.discriminatedUnion('op', [
   z.object({ op: z.enum(['run', 'step']), goal: z.string().trim().min(1).max(2000),
     scenario: z.literal('settings-about').optional(),
     expectText: z.string().min(1).max(200).optional(),
+    completion: PhoneCompletionSchema.optional(),
     maxActions: z.number().int().min(1).max(12).default(6),
   }).strict(),
   z.object({ op: z.enum(['status', 'pause', 'resume', 'cancel', 'close']) }).strict(),
@@ -75,6 +84,7 @@ export type PhoneReport = {
   steps: Array<{ action: PhoneAction['type']; at: number; dispatch: 'completed' | 'unknown'; actor?: 'agent' | 'human' }>;
   controlOwner?: 'agent' | 'human' | 'none'; controlEpoch?: number; handoff?: 'idle' | 'acquiring' | 'returning';
   currentAction?: PhoneAction['type'];
+  diagnostics?: { stalePredictions: number; protocolRepairs: number; unchangedActions: number; completionCorrections: number };
 };
 
 export class PhoneError extends Error {

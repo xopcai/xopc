@@ -1,5 +1,7 @@
 export type GatewayStartupFailureKind =
   | 'database_schema_too_new'
+  | 'database_schema_too_old'
+  | 'database_migration_failed'
   | 'database_migration_gap'
   | 'port_in_use'
   | 'gateway_protocol_incompatible'
@@ -16,6 +18,7 @@ export type GatewayStartupFailure = {
   dbVersion?: number;
   appVersion?: number;
   missingVersion?: number;
+  minimumVersion?: number;
   configPath?: string;
   stateDir?: string;
   dbPath?: string;
@@ -68,6 +71,30 @@ export function classifyGatewayStartupFailure(params: {
   signal?: string | null;
 }): GatewayStartupFailure {
   const text = [params.message, params.rawOutput].filter(Boolean).join('\n');
+
+  if (/DatabaseSchemaTooOldError|database schema version\s+\d+\s+is older than the minimum supported version/i.test(text)) {
+    const dbVersion = numberFromMatch(text, /dbVersion:\s*(\d+)/) ?? numberFromMatch(text, /database schema version\s+(\d+)\s+is older/i);
+    const minimumVersion = numberFromMatch(text, /minimumVersion:\s*(\d+)/) ?? numberFromMatch(text, /minimum supported version\s+\((\d+)\)/i);
+    return {
+      ...params,
+      kind: 'database_schema_too_old',
+      dbVersion,
+      minimumVersion,
+      message: dbVersion !== undefined && minimumVersion !== undefined
+        ? `Database schema v${dbVersion} is older than the supported upgrade minimum (v${minimumVersion}).`
+        : 'The local database needs an upgrade path supported by another xopc release.',
+    };
+  }
+
+  if (/DatabaseSchemaMigrationFailedError|SQLite database upgrade from v\d+ to v\d+ failed/i.test(text)) {
+    return {
+      ...params,
+      kind: 'database_migration_failed',
+      dbVersion: numberFromMatch(text, /upgrade from v(\d+)/i),
+      appVersion: numberFromMatch(text, /upgrade from v\d+ to v(\d+)/i),
+      message: 'The local database upgrade failed and was rolled back. Keep the database and pre-upgrade backup for recovery.',
+    };
+  }
 
   const tooNew =
     /DatabaseSchemaTooNewError/.test(text) ||

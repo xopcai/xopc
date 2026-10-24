@@ -77,3 +77,31 @@ Follow the [Alibaba Cloud Phone setup guide](how-to/connect-aliyun-cloud-phone.m
 Choose **Settings → Phone Use → Add phone → Alibaba Cloud Phone**, enter a name and `host:port`, and upload the matching private key. Test the connection, check the device information and screenshot, then confirm Add phone. No Alibaba account AccessKey is required; configure the phone model separately in Models.
 
 Cloud connections use direct TCP ADB with scrcpy video and continuous touch, with snapshot fallback, without modifying host ADB services or keys. Removing a connection only cleans up xopc registration and credentials; it does not destroy the paid instance or close the cloud-side endpoint.
+
+### Reliability and UI evidence
+
+Phone predictions include a bounded, in-memory action trajectory and native UI facts. AutoGLM retains the validated single-user JSON observation format; experimental dialogue, coordinate and sampling changes were withdrawn after real-app regressions. Recent action parameters, observed changes and recovery hints help the model avoid repeating failed paths. Screenshots, typed text and trajectory facts are not persisted in operational reports. A protocol failure can receive one format repair per run; that request counts toward the existing model budget. Repeating the same action at the same semantic screen state pauses with `no_progress`; inspect the phone and explicitly hand back before continuing.
+
+AutoGLM `Type` and `Type_Name` replace the focused non-password field. The driver checks field identity, selects existing text when supported, sends input once and verifies the exact final value. Structured `typeText` keeps insertion as its default and accepts `mode: "replace"`. Verification may poll the screen but never resends uncertain input.
+
+`run` and `step` accept optional `completion` conditions:
+
+```json
+{
+  "op": "run",
+  "goal": "Open About phone and read the Android version",
+  "completion": {
+    "appPackage": "com.android.settings",
+    "textAny": ["Android version", "Android 版本"],
+    "textAll": ["15"],
+    "requireChange": true
+  },
+  "maxActions": 8
+}
+```
+
+All supplied conditions must hold. Choose stable page identity and task-relevant evidence; do not add unrelated simultaneous-row requirements. `textAny` supports visible alternatives; `textAll` requires every string. Optional `field: { "resourceId": "package:id/query", "value": "coffee" }` checks an exact editable-field value. Existing `expectText` remains supported and is combined with these conditions. Conditions inspect all collected native nodes, independently of the shortened display facts. `requireChange` means an observed UI change during this run, not proof of a particular backend transaction. Completion must match two consecutive fresh observations, with cancellation, control ownership and authorization rechecked before publication. Model `finish` remains unverified.
+
+For regression comparison, run `pnpm exec tsx scripts/benchmark-phone-reliability.mts --baseline <commit> --repeats 3 --output /tmp/phone-reliability.json`. This uses simulated devices and a scripted policy, comparing the old runtime with current orchestration; it does not measure real-model success. The opt-in `scripts/benchmark-phone-reliability-live.mts` performs bounded, paid AutoGLM calls on a local test emulator only. See the [optimization report](design/technical/phone-use-reliability-optimization-2026-10-24.md) for evidence and limitations.
+
+Real-app follow-up results and rejected experiments are documented in the [real-app optimization report](design/technical/phone-use-real-app-optimization-2026-10-24.md).

@@ -7,6 +7,18 @@ import {
 } from '../startup-failure.js';
 
 describe('classifyGatewayStartupFailure', () => {
+  it('recognizes the v257 startup report even without an error class name', () => {
+    const failure = classifyGatewayStartupFailure({ message: 'xopc database schema version 257 is older than the minimum supported version (259). Start with a new xopc.db.' });
+    expect(failure.kind).toBe('database_schema_too_old');
+    expect(failure.dbVersion).toBe(257);
+    expect(failure.minimumVersion).toBe(259);
+    expect(failure.message).not.toContain('Start with a new');
+  });
+
+  it('recognizes older databases and failed transactional upgrades from subprocess output', () => {
+    expect(classifyGatewayStartupFailure({ rawOutput: 'DatabaseSchemaTooOldError: unsupported\n{ dbVersion: 201, minimumVersion: 202 }' })).toMatchObject({ kind: 'database_schema_too_old', dbVersion: 201, minimumVersion: 202 });
+    expect(classifyGatewayStartupFailure({ rawOutput: 'DatabaseSchemaMigrationFailedError: SQLite database upgrade from v257 to v259 failed; the upgrade was rolled back.' })).toMatchObject({ kind: 'database_migration_failed', dbVersion: 257, appVersion: 259 });
+  });
   it('recognizes a database schema that is newer than the app supports', () => {
     const failure = classifyGatewayStartupFailure({
       port: 18790,

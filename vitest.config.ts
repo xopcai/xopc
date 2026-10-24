@@ -62,7 +62,7 @@ export default defineConfig({
         extends: true,
         test: {
           name: 'unit',
-          include: [...coreTests, 'electron/__tests__/auto-updater.test.ts'],
+          include: [...coreTests, 'electron/__tests__/auto-updater.test.ts', 'electron/__tests__/startup-failure.test.ts', 'electron/__tests__/loading-page.test.ts'],
           exclude: [...componentTests, ...integrationTests],
           setupFiles: [setupFile],
           maxWorkers: '40%',

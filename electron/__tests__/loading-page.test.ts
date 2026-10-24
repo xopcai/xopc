@@ -80,6 +80,20 @@ describe('getLoadingPageDataUrl', () => {
 });
 
 describe('getStartupRecoveryPageDataUrl', () => {
+  it('explains unsupported old databases and failed upgrades in both locales without asking users to reset data', () => {
+    const failure = { kind: 'database_schema_too_old' as const, message: 'too old', dbVersion: 201, minimumVersion: 202, isPackaged: true };
+    const en = decodePage(getStartupRecoveryPageDataUrl('en', failure));
+    const zh = decodePage(getStartupRecoveryPageDataUrl('zh-CN', failure));
+    expect(en).toContain('This database needs an earlier upgrade path');
+    expect(en).toContain('Minimum supported upgrade version');
+    expect(en).toContain('<dd>202</dd>');
+    expect(en).toContain('Do not delete xopc.db');
+    expect(zh).toContain('数据库需要更早版本的升级路径');
+    expect(zh).toContain('最低可升级版本');
+    expect(zh).toContain('请勿删除 xopc.db');
+    expect(decodePage(getStartupRecoveryPageDataUrl('en', { ...failure, kind: 'database_migration_failed' }))).toContain('The database upgrade was rolled back');
+    expect(decodePage(getStartupRecoveryPageDataUrl('zh-CN', { ...failure, kind: 'database_migration_failed' }))).toContain('数据库升级已回滚');
+  });
   it('keeps the window background draggable without swallowing recovery interactions', () => {
     const failure = {
       kind: 'unknown' as const,

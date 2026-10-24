@@ -1,0 +1,74 @@
+{
+  "notOnePooledRandomizedPanel": true,
+  "conclusion": "Neither frozen candidate improved real completion; both should be withdrawn. Counts are descriptive small-sample results on one AVD and model.",
+  "panels": [
+    {
+      "version": "v1",
+      "finishedTrials": 42,
+      "actualModelRequests": 154,
+      "matchedPairEfficacy": [
+        {
+          "arm": "baseline",
+          "completed": 15,
+          "total": 21,
+          "falseVerified": 0,
+          "actualModelRequests": 67
+        },
+        {
+          "arm": "optimized",
+          "completed": 9,
+          "total": 21,
+          "falseVerified": 0,
+          "actualModelRequests": 87
+        }
+      ]
+    },
+    {
+      "version": "v2",
+      "finishedTrials": 28,
+      "actualModelTrials": 27,
+      "actualModelRequests": 98,
+      "matchedPairEfficacy": [
+        {
+          "arm": "baseline",
+          "completed": 11,
+          "total": 13,
+          "falseVerified": 0,
+          "actualModelRequests": 47
+        },
+        {
+          "arm": "optimized",
+          "completed": 8,
+          "total": 13,
+          "falseVerified": 0,
+          "actualModelRequests": 49
+        }
+      ],
+      "excludedPairs": 1
+    }
+  ],
+  "descriptiveMatchedTotals": {
+    "baseline": {
+      "completed": 26,
+      "total": 34
+    },
+    "candidates": {
+      "completed": 17,
+      "total": 34
+    }
+  },
+  "requestAccounting": {
+    "rootAboutDiagnosisReportedByParent": 16,
+    "v1Panel": 154,
+    "v2Panel": 98,
+    "protocolDiagnostic1": 3,
+    "protocolDiagnostic2": 3,
+    "total": 274,
+    "verifiedFromThisHarness": 258
+  },
+  "protocolConclusion": "Failed normal-stop response contains no recognized do/finish, variant spelling, known typing shorthand, balanced JSON, or final action shape. No wrapper compatibility defect proved.",
+  "diagnosticsSourceArchive": {
+    "path": "docs/design/technical/evidence/phone-real-app-protocol-diagnostics-source-2026-10-24.tar.gz",
+    "sha256": "f22ffcacc88dc3c854621344790e0f582e4a5af7148c8d60b4efbc491991d31f"
+  }
+}

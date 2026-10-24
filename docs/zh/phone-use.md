@@ -75,3 +75,31 @@ pnpm exec tsx scripts/verify-phone-use.mts
 在「设置 → 手机控制 → 添加手机 → 阿里云手机」填写名称、`IP:端口` 并上传对应私钥。测试成功后检查型号、Android 版本和画面，再确认添加。无需阿里云 AccessKey；手机模型在模型管理中独立配置。
 
 云手机使用独立 TCP ADB 连接，支持 scrcpy 实时视频与持续触控；视频不可用时降级为截图，不修改本机 ADB 服务或密钥。移除连接仅清理 xopc 注册与凭据，不销毁收费云实例或关闭云端 ADB 入口。
+
+### 执行可靠性与完成证据
+
+手机模型会收到有界的会话内动作轨迹、原生 UI 节点和执行变化反馈。AutoGLM 保留已验证的单个 JSON 用户观察消息；真实 App 对照中回退的对话重排、中心点提示及采样试验已撤回。轨迹与输入内容不保存到运行报告。格式错误最多允许每次 run 修复一次，计入模型请求预算；同一页面状态反复执行相同动作时以 `no_progress` 暂停，需要查看手机并显式交还后继续。
+
+AutoGLM 的 `Type` / `Type_Name` 会替换当前聚焦的非密码字段：重新确认字段身份，在支持时选中原内容，只输入一次，并验证最终准确值。结构化 `typeText` 默认仍为插入，可指定 `mode: "replace"`。延迟验证只重新观察，不重发输入。
+
+`run` / `step` 可传入组合完成条件，例如：
+
+```json
+{
+  "op": "run",
+  "goal": "进入关于手机并查看 Android 版本",
+  "completion": {
+    "appPackage": "com.android.settings",
+    "textAny": ["Android version", "Android 版本"],
+    "textAll": ["15"],
+    "requireChange": true
+  },
+  "maxActions": 8
+}
+```
+
+所有已提供条件都必须满足。应选择稳定的页面身份和与目标直接相关的证据，不额外要求无关条目同时可见。`textAny` 支持界面语言别名，`textAll` 要求每条文本都出现；`field: { "resourceId": "package:id/query", "value": "coffee" }` 要求可编辑字段准确匹配。旧 `expectText` 继续兼容，与组合条件同时生效。验证检查全部已采集原生节点，不受显示事实的 60 条上限影响。`requireChange` 仅表示本次执行观察到了 UI 变化，不能证明具体业务结果；完成条件必须在连续两次新观察中成立，期间仍检查取消、控制权与授权变更；模型自行结束仍未验证。
+
+复验脚本、模拟回放对比和真实模拟器证据见[优化报告](../design/technical/phone-use-reliability-optimization-2026-10-24.md)。
+
+真实 App 续轮评测及未采纳方案见[真实 App 优化报告](../design/technical/phone-use-real-app-optimization-2026-10-24.md)。

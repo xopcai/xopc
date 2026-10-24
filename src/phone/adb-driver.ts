@@ -108,6 +108,11 @@ export function parseAndroidFocusedEditor(raw: string, app: string): PhoneElemen
   return undefined;
 }
 
+function sameTextEditor(target: PhoneElement, node: PhoneElement): boolean {
+  return node.focused && Boolean(node.editable) && !node.password
+    && (target.resourceId ? node.resourceId === target.resourceId : node.bounds.every((value, index) => value === target.bounds[index]));
+}
+
 export class AdbPhoneDriver implements PhoneDriver {
   constructor(private readonly adbPath = resolveAdbPath(), private readonly command = runAdb, private readonly useAndroidCli = true,
     private readonly readApplications?: (signal: AbortSignal) => Promise<PhoneApplication[]>,
@@ -198,6 +203,20 @@ export class AdbPhoneDriver implements PhoneDriver {
       return { frameId: randomUUID(), capturedAt, width: info.width, height: info.height, rotation, package: app, frame, elements: [] };
     } catch (error) { frame.fill(0); throw error; }
   }
+  private async confirmText(serial: string, app: string, target: PhoneElement, matches: (text: string) => boolean, signal: AbortSignal): Promise<void> {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      await delay(150, undefined, { signal });
+      const after = await this.observe(serial, signal);
+      try {
+        if (after.package !== app) break;
+        const candidates = after.elements.filter(node => target.resourceId === 'android:active-editor'
+          ? node.focused && node.editable && !node.password : sameTextEditor(target, node));
+        if (candidates.length === 1 && matches(candidates[0].text)) return;
+        if (candidates.length !== 1) break;
+      } finally { after.frame.fill(0); }
+    }
+    throw new PhoneError('PHONE_TEXT_INPUT_UNCONFIRMED', 'Text was sent but the target field value could not be verified. Take over and inspect the input field before retrying.', 409);
+  }
   async execute(serial: string, action: PhoneAction, observation: PhoneObservation, signal: AbortSignal, options?: { settleMs: number; resetTask?: boolean }): Promise<void> {
     const point = ([x, y]: number[]) => [String(Math.min(observation.width - 1, Math.round(x * observation.width / 1000))), String(Math.min(observation.height - 1, Math.round(y * observation.height / 1000)))];
     const input = (args: string[]) => this.shell(serial, ['input', ...args], signal);
@@ -215,28 +234,55 @@ export class AdbPhoneDriver implements PhoneDriver {
       case 'longPress': { const p = point(action.point); await input(['swipe', ...p, ...p, String(action.durationMs)]); break; }
       case 'swipe': await input(['swipe', ...point(action.start), ...point(action.end), String(action.durationMs)]); break;
       case 'typeText': {
-        if (!observation.elements.some(node => node.focused && node.editable && !node.password)) throw new PhoneError('PHONE_INPUT_NOT_FOCUSED', 'Focus a non-password editable field before typing');
-        // The remote adb shell still parses arguments. Only a conservative ASCII subset uses input text.
-        if (/^[a-zA-Z0-9 .,_@+-]+$/.test(action.text) && !action.text.includes('%')) await input(['text', action.text.replaceAll(' ', '%s')]);
-        else {
+        const editors = observation.elements.filter(node => node.focused && node.editable && !node.password);
+        if (editors.length !== 1) throw new PhoneError('PHONE_INPUT_NOT_FOCUSED', 'Focus one non-password editable field before typing');
+        const ascii = /^[a-zA-Z0-9 .,_@+-]+$/.test(action.text) && !action.text.includes('%');
+        if (!ascii) {
           const capability = await this.textInputStatus(serial, signal);
           if (capability.unicode !== 'available') throw new PhoneError('PHONE_TEXT_INPUT_UNAVAILABLE', 'Automatic text input is unavailable. Check Phone settings or take over and type with the phone keyboard.', 409);
-          if (this.pasteText) await this.pasteText(action.text, signal);
+        }
+        let target = editors[0];
+        if (action.mode === 'replace') {
+          // Replacement requires an accessible identity and current value, not an IME-only focus hint.
+          if (target.resourceId === 'android:active-editor') throw new PhoneError('PHONE_TEXT_INPUT_UNAVAILABLE', 'Replacing text requires a visible editable field. Take over and inspect the field.', 409);
+          const fresh = await this.observe(serial, signal);
+          try {
+            const current = fresh.elements.filter(node => sameTextEditor(target, node));
+            if (fresh.package !== observation.package || current.length !== 1) throw new PhoneError('PHONE_INPUT_NOT_FOCUSED', 'The focused input field changed before replacement', 409);
+            target = current[0];
+          } finally { fresh.frame.fill(0); }
+          if (target.text) {
+            const help = await this.shell(serial, ['input'], signal);
+            if (!help.includes('keycombination')) throw new PhoneError('PHONE_TEXT_INPUT_UNAVAILABLE', 'This phone cannot safely select all text. Take over and replace the field manually.', 409);
+            try {
+              await input(['keycombination', 'KEYCODE_CTRL_LEFT', 'KEYCODE_A']);
+              const selected = await this.observe(serial, signal);
+              try {
+                if (selected.package !== observation.package || selected.elements.filter(node => sameTextEditor(target, node) && node.text === target.text).length !== 1)
+                  throw new Error('Editor changed during selection');
+              } finally { selected.frame.fill(0); }
+            } catch {
+              signal.throwIfAborted();
+              throw new PhoneError('PHONE_TEXT_INPUT_UNCONFIRMED', 'Text selection started but the target field could not be verified. Take over and inspect the input field before retrying.', 409);
+            }
+          }
+        }
+        try {
+          // The remote adb shell still parses arguments. Only a conservative ASCII subset uses input text.
+          if (ascii) await input(['text', action.text.replaceAll(' ', '%s')]);
+          else if (this.pasteText) await this.pasteText(action.text, signal);
           else {
             const { LocalScrcpyProvider } = await import('./scrcpy.js');
             const provider = new LocalScrcpyProvider(this.adbPath, serial, () => {}, undefined, true);
             try { await provider.pasteText(action.text, signal); } finally { await provider.close(); }
           }
-          // The scrcpy ACK confirms receipt, not successful insertion by the app.
-          await delay(350, undefined, { signal });
-          const after = await this.observe(serial, signal).catch(() => {
-            signal.throwIfAborted();
-            throw new PhoneError('PHONE_TEXT_INPUT_UNCONFIRMED', 'Text was sent but insertion could not be verified. Take over and inspect the input field before retrying.', 409);
-          });
-          try {
-            if (after.package !== observation.package || !after.elements.some(node => node.editable && !node.password && node.text.includes(action.text)))
-              throw new PhoneError('PHONE_TEXT_INPUT_UNCONFIRMED', 'Text was sent but insertion could not be verified. Take over and inspect the input field before retrying.', 409);
-          } finally { after.frame.fill(0); }
+          // Transport receipt does not prove insertion. Poll observations, never repeat input.
+          await this.confirmText(serial, observation.package, target,
+            text => action.mode === 'replace' ? text === action.text : text.includes(action.text), signal);
+        } catch (error) {
+          signal.throwIfAborted();
+          if (error instanceof PhoneError && error.code === 'PHONE_TEXT_INPUT_UNCONFIRMED') throw error;
+          throw new PhoneError('PHONE_TEXT_INPUT_UNCONFIRMED', 'Text may have been sent but insertion could not be verified. Take over and inspect the input field before retrying.', 409);
         }
         break;
       }
