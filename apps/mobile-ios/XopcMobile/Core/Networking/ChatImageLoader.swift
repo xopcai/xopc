@@ -43,8 +43,8 @@ struct ChatAudioLoader: Sendable {
 
     func load(uri: String, conversationID: String) async throws -> Data {
         guard uri.hasPrefix("media://"),
-              let request = ChatImageSource.resolve(uri, conversationID: conversationID)?
-                  .request(configuration: configuration)
+              let source = ChatImageSource.resolve(uri, conversationID: conversationID),
+              let request = source.request(configuration: configuration)
         else { throw ChatImageError.invalidSource }
         let (bytes, response) = try await session.bytes(for: GatewayPairingService.shared.signedRequest(request), delegate: ChatImageRedirectBlocker())
         guard let response = response as? HTTPURLResponse, response.statusCode == 200,
