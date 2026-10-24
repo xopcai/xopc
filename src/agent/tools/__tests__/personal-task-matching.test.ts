@@ -61,7 +61,7 @@ describe('Personal task matching and diagnostics', () => {
     const factory = new AgentToolsFactory({ workspace: '/tmp', bus: {} as MessageBus, dispatchTaskRuns: vi.fn(),
       getCurrentContext: () => ({ channel: 'webchat', chatId: 'owner', conversationId, origin: { type: 'local' } }) as any });
     const personal = factory.createAllTools({ agentId: ownAgentId, conversationId }).find(item => item.name === 'personal_task')!;
-    expect(personal.description).toContain('explicitly named by the user');
+    expect(personal.description).toContain('Use requirements.requestedAgentId only for an explicitly named executor');
     const result = read(await personal.execute('match', { command: 'match', requirements: { summary: 'Read file', requiredTools: ['read_file'] } }));
     expect(result.candidates.find((item: { id: string }) => item.id === 'reader').checks)
       .toContainEqual(expect.objectContaining({ condition: 'tool:read_file', state: 'verified', reasonCode: 'tool_registered' }));
