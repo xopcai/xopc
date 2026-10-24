@@ -7,6 +7,8 @@ import type { BrowserRuntime } from '../../../../browser/runtime/browser-runtime
 import { BrowserUseSchema, decodeBrowserUseInput, type BrowserUseInput } from './schemas.js';
 
 export interface CreateBrowserUseToolDeps {
+  getSetupService?: () => import('../../../../browser/setup/service.js').BrowserSetupService | undefined;
+  getAgentId?: () => string;
   getRuntime: () => BrowserRuntime;
   getTaskId: () => string;
   getReadiness?: () => Promise<BrowserNotReadyError | null>;
@@ -35,18 +37,21 @@ export function createBrowserUseTool(
         };
       }
       const readiness = await deps.getReadiness?.();
-      if (readiness) {
+      if (readiness && input.action !== 'close') {
         return {
           content: [{ type: 'text', text: `Browser is not ready: ${readiness.hint.detail || readiness.hint.reason}. Open Settings → Browser.` }],
           details: { ok: false, kind: 'browser_setup_required', hint: readiness.hint },
         };
       }
 
+      const setupService = deps.getSetupService?.();
+      const verification = setupService?.beforeAction(deps.getTaskId(), deps.getAgentId?.() ?? '', input);
       const result = await deps.getRuntime().execute(
-        deps.getTaskId(),
-        input,
+        verification?.taskKey ?? deps.getTaskId(),
+        verification?.input ?? input,
         signal,
       );
+      if (verification) setupService!.afterAction(verification.setupId, verification.attemptId, verification.input, result);
       return presentResult(result);
     },
   };

@@ -17,6 +17,18 @@ requested change once with the new revision and a new intent key. After an uncer
 inspect first and retain the original idempotency key. A permission denial is not a conflict:
 do not switch identity, target or tools to bypass it. Inspect returned product ok and saved
 fields before reporting success. A saved model reference does not prove it can be called.`,
+  browser_setup: `# Browser setup
+Use configure-xopc and its Browser references. Commands on xopc_use mode browser_setup:
+inspect/preview {} read current shared configuration and available endpoints; start {} creates
+or reuses this Agent conversation's setup. get/recheck/advance/request_interaction/
+begin_verification/verification_report/cancel take {setupId}. dryRun never creates or mutates.
+Mutations require local-owner approval in the returned settingsPath. The UI selects the Chrome
+endpoint and begins verification; never bypass that step with file writes or shell commands.
+During verification get returns attempt.fixtureUrl, sample and evidence. Use normal browser_use
+navigate, observe, click, fill, close; the host binds these calls to the approved test endpoint.
+Read guidanceRefs progressively with skill_view(name:"configure-xopc",path:<returned path>).
+Report completed only when all checks and control release pass. No API Key is needed for Chrome.
+settingsPath is navigation; opening it is not proof of installation or connection.`,
   settings: `# xopc settings and capability checks
 settings open is navigation only; it does not read, apply or verify configuration.
 Voice: {section:"capabilities/voice",title:"语音设置"}; models: section:"capabilities/models";

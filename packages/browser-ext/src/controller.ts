@@ -78,7 +78,7 @@ async function resolveAttachedTarget(input: BrowserActionInput): Promise<Attache
   if (origin !== binding.urlOrigin) {
     return fail('STALE_OBSERVATION', 'The attached tab navigated to another site. Bind it again.');
   }
-  if (await markerDigest(tabId) !== binding.documentId) {
+  if (input.action !== 'close' && await markerDigest(tabId) !== binding.documentId) {
     return fail('STALE_OBSERVATION', 'The attached tab document changed. Bind it again.');
   }
   return { binding, tabId, stateKey: `attached:${binding.id}` };
@@ -127,6 +127,7 @@ async function execute(
   startedAt: number,
   signal?: AbortSignal,
 ): Promise<BrowserControlResult> {
+  if (input.action !== 'close' && await cdp.isControlPaused()) return fail('DRIVER_UNAVAILABLE', 'BROWSER_CONTROL_REVOKED: You stopped Chrome control. Resume browser control in the xopc extension before retrying.');
   const sessionId = input.sessionId;
   if (!sessionId) return fail('INVALID_INPUT', 'Extension actions require a session id.');
   const attached = await resolveAttachedTarget(input);

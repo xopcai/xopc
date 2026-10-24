@@ -1,3 +1,6 @@
+import { Link } from 'react-router-dom';
+import { BrowserSetupPanel } from './browser-setup-panel';
+
 import { Eye, Gauge, LockKeyhole, MousePointerClick } from 'lucide-react';
 import { useEffect, useRef, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router-dom';
@@ -45,6 +48,11 @@ export function AgentBrowserSettingsPage() {
       vm={vm}
     >
       {form ? <>
+        <div className="rounded-xl border border-edge bg-surface-panel p-4">
+          <p className="text-sm text-fg-muted">{zh ? '不知道如何配置？让助手检查环境，带你连接 Chrome 并完成演示验收。' : 'Need help? Let your assistant inspect your environment, connect Chrome and verify a demo.'}</p>
+          <Link className="mt-2 inline-block text-sm text-accent-fg hover:underline" to={`/chat/new?skill=configure-xopc&scene=configure-xopc&draft=${encodeURIComponent(zh ? '帮我配置 Browser Use，连接本机 Chrome 并完成验收。' : 'Help me configure Browser Use with local Chrome and verify it.')}&autoSend=1`}>{zh ? '帮我配置 Browser Use' : 'Configure Browser Use with me'}</Link>
+        </div>
+        {searchParams.get('browserSetup') && searchParams.get('conversationId') && <BrowserSetupPanel conversationId={searchParams.get('conversationId')!} requested />}
         <BrowserStatusPanel enabled={form.enabled} driverKind={form.driverKind} autosaveStatus={vm.autosaveStatus} zh={zh} />
 
         <Section

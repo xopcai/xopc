@@ -499,3 +499,33 @@ it('retains native MCP readiness hooks through real turns and pooled reuse', asy
     await new Promise<void>(resolve => server.close(() => resolve()));
   }
 }, 20000);
+
+
+it('loads configuration guidance before discovering task-specific product declarations', async () => {
+  const { params } = await fixture();
+  const readGuidance = vi.fn(async () => ({ content: [{ type: 'text' as const, text: 'configuration guidance loaded' }], details: {} }));
+  params.tools = [
+    withCoreToolExposure({ name: 'skill_view', label: 'Skill', description: 'Read setup guidance', parameters: Type.Object({ name: Type.String() }), execute: readGuidance }),
+    withCoreToolExposure({ name: 'tool_manual', label: 'Manual', description: 'Read product contracts', parameters: Type.Object({}), execute: readGuidance }),
+    withCoreToolExposure({ name: 'xopc_use', label: 'Product', description: 'Configure App capabilities', parameters: Type.Object({}), execute: vi.fn() }),
+  ];
+  const loaded = await runScript({ ...params, codemode: undefined }, '', 'skill_view', { name: 'configure-xopc' });
+  expect(JSON.stringify(loaded.calls[0])).toContain('skill_view');
+  expect(JSON.stringify(loaded.calls[0])).toContain('tool_manual');
+  expect(JSON.stringify(loaded.calls[0])).not.toContain('xopc_use');
+  expect(JSON.stringify(loaded.result)).toContain('configuration guidance loaded');
+  expect(readGuidance).toHaveBeenCalledOnce();
+});
+
+it('distinguishes an already loaded tool from an unavailable tool on repeated discovery', async () => {
+  const { params } = await fixture();
+  const execute = vi.fn(async () => ({ content: [{ type: 'text' as const, text: 'browser available' }], details: {} }));
+  params.tools.push(withCoreToolExposure({ name: 'browser_use', label: 'Browser', description: 'Control a browser', parameters: Type.Object({}), execute }));
+  await runScript(params, '', 'tool_search', { query: 'browser_use', limit: 1 });
+  const repeated = await runScript({ ...params, runId: crypto.randomUUID() }, '', 'tool_search', { query: 'browser_use navigate observe click', limit: 1 });
+  expect(JSON.stringify(repeated.result)).toContain('Already loaded: browser_use');
+  expect(JSON.stringify(repeated.calls[0])).toContain('browser_use');
+  const used = await runScript({ ...params, runId: crypto.randomUUID() }, '', 'browser_use', {});
+  expect(JSON.stringify(used.result)).toContain('browser available');
+  expect(execute).toHaveBeenCalledOnce();
+}, 15000);

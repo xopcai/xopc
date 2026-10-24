@@ -4,6 +4,7 @@ import type {
   BrowserObservation,
   BrowserObserveInput,
   BrowserTabsInput,
+  BrowserTarget,
 } from '@xopcai/browser-control-contract';
 
 import type { BrowserDriver, BrowserPrimitiveInput } from './browser-driver.js';
@@ -37,8 +38,10 @@ export class ExtensionDriver implements BrowserDriver {
     await this.connect();
   }
 
-  async closeSession(sessionId: string): Promise<void> {
-    await this.send({ action: 'close', sessionId });
+  async closeSession(sessionId: string, target?: BrowserTarget): Promise<void> {
+    const result = await this.send({ action: 'close', sessionId, ...(target ? { target } : {}) });
+    if ('error' in result) throw new Error(result.error.message);
+    if (!result.receipt.verified) throw new Error('Browser control release was not verified');
   }
 
   navigate(sessionId: string, input: BrowserNavigateInput, signal?: AbortSignal): Promise<BrowserControlResult> {

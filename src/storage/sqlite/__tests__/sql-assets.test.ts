@@ -74,6 +74,7 @@ describe('SQLite assets in distribution layouts', () => {
     expect(existsSync(join(directory, 'migrations'))).toBe(false);
     expect(existsSync(join(directory, 'upgrades/203_remove_retired_proactive_contracts.sql'))).toBe(true);
     expect(existsSync(join(directory, 'upgrades/259_personal_default_style.sql'))).toBe(true);
+    expect(existsSync(join(directory, 'upgrades/260_browser_setup.sql'))).toBe(true);
     expect(readFileSync(join(directory, 'schema.sql'), 'utf8'))
       .toBe(readFileSync(join(source, 'schema.sql'), 'utf8'));
     const runtime = join(directory, 'migrations/runner.js'); mkdirSync(dirname(runtime)); writeFileSync(runtime, 'retired runtime');

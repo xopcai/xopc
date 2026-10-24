@@ -95,7 +95,7 @@ async function extensionStatus(
   };
 }
 
-function isLocalOwnerRequest(c: Context, service: AuthenticatedRouteDeps['service']): boolean {
+export function isLocalOwnerRequest(c: Context, service: AuthenticatedRouteDeps['service']): boolean {
   const principal = getGatewayPrincipal(c);
   if (principal.kind !== 'owner' && principal.kind !== 'trusted-proxy') return false;
   if (service.currentConfig.gateway?.bind === 'loopback') return true;

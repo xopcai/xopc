@@ -247,9 +247,10 @@ export class RealtimeRuntime {
           socket.close(4401, 'First realtime message must be hello');
           return;
         }
+        // Browser WebSocket cannot set upgrade headers; verify the same proof in hello.
         const pendingClaim = this.tickets.peek(message.payload.ticket);
         if (!pendingClaim || (pendingClaim.deviceId && !verifyDeviceConnectionProof(pendingClaim.deviceId, message.payload.ticket,
-          new URL(request.url!, 'http://localhost').pathname + new URL(request.url!, 'http://localhost').search, typeof request.headers['x-xopc-proof'] === 'string' ? request.headers['x-xopc-proof'] : undefined))) {
+          new URL(request.url!, 'http://localhost').pathname + new URL(request.url!, 'http://localhost').search, typeof request.headers['x-xopc-proof'] === 'string' ? request.headers['x-xopc-proof'] : message.payload.connectionProof))) {
           socket.close(4401, 'Realtime authentication failed');
           return;
         }

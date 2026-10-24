@@ -1,0 +1,296 @@
+{
+  "ok": true,
+  "model": "qwen3.8-flash",
+  "gateway": "production CLI",
+  "extension": "production manifest/background/sidepanel",
+  "stages": [
+    {
+      "stage": "isolated_gateway",
+      "productionEntry": true,
+      "originalStateUntouched": true
+    },
+    {
+      "stage": "owner_approved_and_prepared",
+      "nativeHostFilesInIsolatedHome": true
+    },
+    {
+      "stage": "native_bootstrap_pairing_realtime",
+      "productionAuth": true,
+      "endpointCount": 1,
+      "transport": "gateway-realtime"
+    }
+  ],
+  "initialInput": "帮我配置 Browser Use",
+  "progressiveResources": [
+    "SKILL.md",
+    "references/browser/overview.md",
+    "references/browser/chrome-extension.md",
+    "references/browser/acceptance.md"
+  ],
+  "browserActions": [
+    "navigate",
+    "click",
+    "fill",
+    "close"
+  ],
+  "debuggerReleased": true,
+  "demoTabsClosed": true,
+  "checks": {
+    "configured": true,
+    "read": true,
+    "clicked": true,
+    "filled": true,
+    "released": true
+  },
+  "modelRequests": [
+    {
+      "id": 1,
+      "toolNames": [
+        "skill_view",
+        "skills_list",
+        "tool_manual",
+        "tool_search"
+      ],
+      "skillCatalogHasConfigureXopc": true,
+      "status": 200,
+      "elapsedMs": 2689
+    },
+    {
+      "id": 2,
+      "toolNames": [
+        "skill_view",
+        "skills_list",
+        "tool_manual",
+        "tool_search"
+      ],
+      "skillCatalogHasConfigureXopc": true,
+      "status": 200,
+      "elapsedMs": 991
+    },
+    {
+      "id": 3,
+      "toolNames": [
+        "skill_view",
+        "skills_list",
+        "tool_manual",
+        "tool_search"
+      ],
+      "skillCatalogHasConfigureXopc": true,
+      "status": 200,
+      "elapsedMs": 1360
+    },
+    {
+      "id": 4,
+      "toolNames": [
+        "skill_view",
+        "skills_list",
+        "tool_manual",
+        "tool_search"
+      ],
+      "skillCatalogHasConfigureXopc": true,
+      "status": 200,
+      "elapsedMs": 1507
+    },
+    {
+      "id": 5,
+      "toolNames": [
+        "skill_view",
+        "skills_list",
+        "tool_manual",
+        "tool_search",
+        "xopc_use",
+        "clarify"
+      ],
+      "skillCatalogHasConfigureXopc": true,
+      "status": 200,
+      "elapsedMs": 1087
+    },
+    {
+      "id": 6,
+      "toolNames": [
+        "skill_view",
+        "skills_list",
+        "tool_manual",
+        "tool_search",
+        "xopc_use",
+        "clarify"
+      ],
+      "skillCatalogHasConfigureXopc": true,
+      "status": 200,
+      "elapsedMs": 1501
+    },
+    {
+      "id": 7,
+      "toolNames": [
+        "skill_view",
+        "skills_list",
+        "tool_manual",
+        "tool_search",
+        "xopc_use",
+        "clarify"
+      ],
+      "skillCatalogHasConfigureXopc": true,
+      "status": 200,
+      "elapsedMs": 1779
+    },
+    {
+      "id": 8,
+      "toolNames": [
+        "skill_view",
+        "skills_list",
+        "tool_manual",
+        "tool_search",
+        "xopc_use",
+        "clarify"
+      ],
+      "skillCatalogHasConfigureXopc": true,
+      "status": 200,
+      "elapsedMs": 4169
+    },
+    {
+      "id": 9,
+      "toolNames": [],
+      "skillCatalogHasConfigureXopc": false,
+      "status": 200,
+      "elapsedMs": 705
+    },
+    {
+      "id": 10,
+      "toolNames": [
+        "skill_view",
+        "skills_list",
+        "tool_manual",
+        "clarify",
+        "xopc_use",
+        "tool_search"
+      ],
+      "skillCatalogHasConfigureXopc": true,
+      "status": 200,
+      "elapsedMs": 2557
+    },
+    {
+      "id": 11,
+      "toolNames": [
+        "skill_view",
+        "skills_list",
+        "tool_manual",
+        "clarify",
+        "xopc_use",
+        "tool_search"
+      ],
+      "skillCatalogHasConfigureXopc": true,
+      "status": 200,
+      "elapsedMs": 1833
+    },
+    {
+      "id": 12,
+      "toolNames": [
+        "skill_view",
+        "skills_list",
+        "tool_manual",
+        "clarify",
+        "xopc_use",
+        "tool_search",
+        "browser_use"
+      ],
+      "skillCatalogHasConfigureXopc": true,
+      "status": 200,
+      "elapsedMs": 3049
+    },
+    {
+      "id": 13,
+      "toolNames": [
+        "skill_view",
+        "skills_list",
+        "tool_manual",
+        "clarify",
+        "xopc_use",
+        "tool_search",
+        "browser_use"
+      ],
+      "skillCatalogHasConfigureXopc": true,
+      "status": 200,
+      "elapsedMs": 3041
+    },
+    {
+      "id": 14,
+      "toolNames": [
+        "skill_view",
+        "skills_list",
+        "tool_manual",
+        "clarify",
+        "xopc_use",
+        "tool_search",
+        "browser_use"
+      ],
+      "skillCatalogHasConfigureXopc": true,
+      "status": 200,
+      "elapsedMs": 2921
+    },
+    {
+      "id": 15,
+      "toolNames": [
+        "skill_view",
+        "skills_list",
+        "tool_manual",
+        "clarify",
+        "xopc_use",
+        "tool_search",
+        "browser_use"
+      ],
+      "skillCatalogHasConfigureXopc": true,
+      "status": 200,
+      "elapsedMs": 2373
+    },
+    {
+      "id": 16,
+      "toolNames": [
+        "skill_view",
+        "skills_list",
+        "tool_manual",
+        "clarify",
+        "xopc_use",
+        "tool_search",
+        "browser_use"
+      ],
+      "skillCatalogHasConfigureXopc": true,
+      "status": 200,
+      "elapsedMs": 2037
+    },
+    {
+      "id": 17,
+      "toolNames": [
+        "skill_view",
+        "skills_list",
+        "tool_manual",
+        "clarify",
+        "xopc_use",
+        "tool_search",
+        "browser_use"
+      ],
+      "skillCatalogHasConfigureXopc": true,
+      "status": 200,
+      "elapsedMs": 4769
+    }
+  ],
+  "browser": "148.0.7778.96",
+  "boundaries": [
+    "Extension loaded with Chromium launch flags rather than the manual Load unpacked picker",
+    "Production-generated native host manifest copied into the isolated Chromium user-data-dir, matching Chromium host lookup",
+    "Native messaging, device pairing and Realtime use production code with isolated state and HOME"
+  ],
+  "date": "2026-10-24",
+  "platform": "macOS",
+  "modelRequestCount": 17,
+  "modelCallsAllSucceeded": true,
+  "browserToolErrors": 0,
+  "validation": {
+    "testFiles": 15,
+    "testsPassed": 173,
+    "rootTypecheck": true,
+    "extensionTypecheck": true,
+    "managedSourceEslint": true,
+    "extensionProductionBuild": true,
+    "skillValidation": true
+  }
+}

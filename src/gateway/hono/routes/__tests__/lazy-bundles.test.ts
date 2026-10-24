@@ -6,6 +6,11 @@ import {
 } from '../lazy-bundles.js';
 
 describe('lazy route bundles', () => {
+  it('maps Browser guided setup before general browser routes without capturing neighboring shapes', () => {
+    expect(findAuthenticatedLazyRouteBundle('/api/browser/setup')?.id).toBe('browser-setup');
+    expect(findAuthenticatedLazyRouteBundle('/api/browser/setup-other')?.id).not.toBe('browser-setup');
+    expect(findAuthenticatedLazyRouteBundle('/api/browser/status')?.id).toBe('browser');
+  });
   it('maps phone dependency management through runtime tools without capturing neighboring prefixes', () => {
     for (const path of ['/api/runtime-tools/phone-dependencies', '/api/runtime-tools/phone-dependencies/adb/path', '/api/runtime-tools/phone-dependencies/adb/install/stream', '/api/runtime-tools/phone-dependencies/scrcpy/repair/stream', '/api/runtime-tools/phone-dependencies/scrcpy/import/stream'])
       expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('runtime-tools');

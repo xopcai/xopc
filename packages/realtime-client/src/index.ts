@@ -59,6 +59,7 @@ export interface RealtimeClientOptions {
 }
 
 export interface RealtimeTicket {
+  connectionProof?: string;
   ticket: string;
   realtime: {
     minVersion: number;
@@ -244,6 +245,7 @@ export class RealtimeClient {
         }));
         this.send(this.clientMessage('realtime.hello', {
           ticket,
+          ...(issuedTicket.connectionProof ? { connectionProof: issuedTicket.connectionProof } : {}),
           clientId: this.options.clientId,
           clientKind: this.options.clientKind,
           subscriptions,

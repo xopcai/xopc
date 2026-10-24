@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { EventEmitter } from 'node:events';
 import * as childProcess from 'node:child_process';
 import { tmpdir } from 'node:os';
@@ -310,6 +310,8 @@ describe('browser-ext-install', () => {
       installed: true,
       manifestPaths: result.manifestPaths,
     });
+    chmodSync(manifest.path, 0o600);
+    expect(browserNativeHostDoctor('linux', nativeHome).installed).toBe(false);
   });
 
   it('registers a Windows batch host and diagnoses the registry manifest', async () => {

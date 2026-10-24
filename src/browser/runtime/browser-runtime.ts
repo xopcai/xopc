@@ -19,6 +19,8 @@ export interface BrowserRuntimeOptions {
   getConfig: () => Config['browser'];
   createDriver: () => Promise<BrowserDriver>;
   allowedUploadRoots?: string[];
+  canRestoreSetupSession?: (taskKey: string, sessionId: string) => boolean;
+  isTrustedSetupUrl?: (taskKey: string, url: string) => boolean;
   emit?: (type: string, payload: unknown) => void;
   resolveTarget?: (taskKey: string) => BrowserTarget | undefined;
 }
@@ -38,7 +40,7 @@ export class BrowserRuntime {
 
   async execute(taskKey: string, input: BrowserActionInput, signal?: AbortSignal): Promise<BrowserControlResult> {
     this.evictExpiredSessions();
-    if (!this.options.getConfig().enabled) return failure('DRIVER_UNAVAILABLE', 'Browser Control is disabled.');
+    if (!this.options.getConfig().enabled && input.action !== 'close') return failure('DRIVER_UNAVAILABLE', 'Browser Control is disabled.');
     if (signal?.aborted) return failure('ABORTED', 'Operation was aborted.');
     const resolvedTarget = input.target ? undefined : this.options.resolveTarget?.(taskKey);
     const effectiveInput = input.target || !resolvedTarget ? input : { ...input, target: resolvedTarget };
@@ -75,16 +77,18 @@ export class BrowserRuntime {
     return result;
   }
 
+  hasSessions(): boolean { return this.sessionsByTask.size > 0; }
+
   async shutdown(): Promise<void> {
     await this.driver?.disconnect();
     this.driver = null;
     this.sessionsByTask.clear();
   }
 
-  async closeTaskSession(taskKey: string): Promise<void> {
+  async closeTaskSession(taskKey: string, target?: BrowserTarget): Promise<void> {
     const session = this.sessionsByTask.get(taskKey);
     if (!session) return;
-    await this.driver?.closeSession(session.id);
+    await this.driver?.closeSession(session.id, target);
     this.sessionsByTask.delete(taskKey);
     this.options.emit?.('browser.session.closed', { sessionId: session.id });
   }
@@ -96,7 +100,7 @@ export class BrowserRuntime {
     signal?: AbortSignal,
   ): Promise<BrowserControlResult> {
     if (input.action === 'close') {
-      await this.closeTaskSession(session.taskKey);
+      await this.closeTaskSession(session.taskKey, input.target);
       return { ok: true, receipt: { action: 'close', risk: 'read', durationMs: 0, verified: true } };
     }
     if (input.action === 'observe') {
@@ -104,16 +108,16 @@ export class BrowserRuntime {
       return { ok: true, receipt: { action: 'observe', risk: 'read', durationMs: 0, verified: true, observation } };
     }
     if (input.action === 'navigate') {
-      const blocked = this.validateUrl(input.url);
+      const blocked = this.validateUrl(input.url, session.taskKey);
       if (blocked) return failure('BLOCKED_URL', blocked);
       const crossDomainPolicy = this.crossDomainPolicy(session.observation?.url, input.url);
       if (crossDomainPolicy === 'deny') return failure('BLOCKED_URL', 'Cross-domain navigation is denied by policy.');
       const result = await driver.navigate(session.id, input, signal);
-      return this.validateRedirect(input.url, result);
+      return this.validateRedirect(input.url, result, session.taskKey);
     }
     if (input.action === 'tabs') {
       if (input.url) {
-        const blocked = this.validateUrl(input.url);
+        const blocked = this.validateUrl(input.url, session.taskKey);
         if (blocked) return failure('BLOCKED_URL', blocked);
         const crossDomainPolicy = this.crossDomainPolicy(session.observation?.url, input.url);
         if (crossDomainPolicy === 'deny') return failure('BLOCKED_URL', 'Cross-domain navigation is denied by policy.');
@@ -121,7 +125,7 @@ export class BrowserRuntime {
       const result = await driver.tabs(session.id, input, signal);
       if (!input.url || !result.ok) return result;
       const finalUrl = result.receipt.tabs?.find((tab) => tab.active)?.url;
-      const blocked = finalUrl ? this.blockedRedirect(finalUrl) : 'The created tab did not report its final URL.';
+      const blocked = finalUrl ? this.blockedRedirect(finalUrl, session.taskKey) : 'The created tab did not report its final URL.';
       return blocked ? failure('BLOCKED_URL', blocked) : result;
     }
     if (input.action === 'sequence') return this.executeSequence(driver, session, input, signal);
@@ -135,12 +139,12 @@ export class BrowserRuntime {
     }
     if (this.actionDenied(input, risk)) return failure('INVALID_INPUT', `Browser action is denied by policy (${risk}).`);
     if (input.action === 'click' && target?.href) {
-      const blocked = this.validateUrl(target.href);
+      const blocked = this.validateUrl(target.href, session.taskKey);
       if (blocked) return failure('BLOCKED_URL', blocked);
       if (this.crossDomainPolicy(session.observation?.url, target.href) === 'deny') return failure('BLOCKED_URL', 'Cross-domain navigation is denied by policy.');
     }
     const result = await driver.perform(session.id, input, signal);
-    return withRisk(this.validateRedirect(session.observation?.url ?? '', result), risk);
+    return withRisk(this.validateRedirect(session.observation?.url ?? '', result, session.taskKey), risk);
   }
 
   private async executeSequence(
@@ -190,12 +194,13 @@ export class BrowserRuntime {
     return policy === 'deny' && ['external_effect', 'destructive', 'sensitive'].includes(risk);
   }
 
-  private validateUrl(url: string): string | null {
+  private validateUrl(url: string, taskKey: string): string | null {
     if (containsApiKeyPattern(url)) return 'URL contains a credential-like value.';
     try {
       const host = new URL(url).hostname.toLowerCase();
       const allowed = this.options.getConfig().security.allowedPrivateHosts
-        .some((candidate) => candidate.toLowerCase() === host);
+        .some((candidate) => candidate.toLowerCase() === host)
+        || this.options.isTrustedSetupUrl?.(taskKey, url) === true;
       assertBrowserUrlAllowed(url, { privateHostAllowed: allowed });
       return null;
     } catch (error) {
@@ -203,19 +208,20 @@ export class BrowserRuntime {
     }
   }
 
-  private validateRedirect(requestedUrl: string, result: BrowserControlResult): BrowserControlResult {
+  private validateRedirect(requestedUrl: string, result: BrowserControlResult, taskKey: string): BrowserControlResult {
     if (!result.ok || !result.receipt.observation) return result;
     const finalUrl = result.receipt.observation.url;
     if (finalUrl === requestedUrl) return result;
-    const blocked = this.blockedRedirect(finalUrl);
+    const blocked = this.blockedRedirect(finalUrl, taskKey);
     return blocked ? failure('BLOCKED_URL', blocked, result.receipt.observation) : result;
   }
 
-  private blockedRedirect(finalUrl: string): string | undefined {
+  private blockedRedirect(finalUrl: string, taskKey: string): string | undefined {
     try {
       const host = new URL(finalUrl).hostname.toLowerCase();
       const allowed = this.options.getConfig().security.allowedPrivateHosts
-        .some((candidate) => candidate.toLowerCase() === host);
+        .some((candidate) => candidate.toLowerCase() === host)
+        || this.options.isTrustedSetupUrl?.(taskKey, finalUrl) === true;
       return checkPostRedirectUrl(finalUrl, { privateHostAllowed: allowed });
     } catch {
       return 'Browser returned an invalid final URL.';
@@ -250,7 +256,12 @@ export class BrowserRuntime {
   private async resolveSession(taskKey: string, requestedId?: string): Promise<RuntimeSession | null> {
     const existing = this.sessionsByTask.get(taskKey);
     if (existing) return !requestedId || requestedId === existing.id ? existing : null;
-    if (requestedId) return null;
+    if (requestedId) {
+      if (!this.options.canRestoreSetupSession?.(taskKey, requestedId)) return null;
+      const restored = { id: requestedId, taskKey, lastUsedAt: Date.now() };
+      this.sessionsByTask.set(taskKey, restored);
+      return restored;
+    }
     const session = { id: randomUUID(), taskKey, lastUsedAt: Date.now() };
     const driver = await this.getDriver();
     await driver.createSession(session.id);

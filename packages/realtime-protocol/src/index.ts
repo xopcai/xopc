@@ -61,6 +61,7 @@ export const realtimeSubscriptionSchema = z.object({
 export const clientRealtimeMessageSchema = z.discriminatedUnion('kind', [
   envelope('realtime.hello', z.object({
     ticket: z.string().min(32).max(512),
+    connectionProof: z.string().min(1).max(256).optional(),
     clientId: z.string().min(1).max(160),
     clientKind: realtimeClientKindSchema,
     subscriptions: z.array(realtimeSubscriptionSchema).max(100).default([]),

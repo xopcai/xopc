@@ -19,7 +19,7 @@ function isDismissed(now = Date.now()): boolean {
   }
 }
 
-export function BrowserExtensionNudge({ enabled }: { enabled: boolean }) {
+export function BrowserExtensionNudge({ enabled, onConfigure }: { enabled: boolean; onConfigure?: () => void }) {
   const language = useLocaleStore((state) => state.language);
   const copy = messages(language).chat;
   const [dismissed, setDismissed] = useState(() => isDismissed());
@@ -66,6 +66,7 @@ export function BrowserExtensionNudge({ enabled }: { enabled: boolean }) {
         </div>
       </div>
       <div className="flex shrink-0 items-center justify-end gap-1">
+        {onConfigure && <Button variant="secondary" onClick={onConfigure}>{language === 'zh' ? '对话配置并验收' : 'Guided setup and test'}</Button>}
         <Button
           type="button"
           variant="primary"

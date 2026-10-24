@@ -187,6 +187,14 @@ export const AUTHENTICATED_LAZY_ROUTE_BUNDLES: readonly AuthenticatedLazyRouteBu
     },
   },
   {
+    id: 'browser-setup',
+    match: path => path === '/api/browser/setup',
+    load: async () => {
+      const { registerBrowserSetupRoutes } = await import('./browser-setup.js');
+      return { register: registerBrowserSetupRoutes };
+    },
+  },
+  {
     id: 'browser',
     // `browser-install` above already matched the SSE install streams; this
     // catches the remaining Browser Control v2 setup handlers.

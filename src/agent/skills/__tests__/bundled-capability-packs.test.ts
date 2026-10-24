@@ -32,11 +32,13 @@ describe('bundled capability packs', () => {
 
     expect([...byName.keys()]).toEqual(expect.arrayContaining([
       'define-task',
+      'configure-xopc',
       'pdf',
       'docx',
       'pptx',
       'doc-coauthoring',
     ]));
+    expect(byName.get('configure-xopc')?.toolConditions?.requiresTools).toEqual(['xopc_use', 'tool_manual']);
     expect(byName.get('pdf')?.toolConditions?.requiresTools).toEqual([
       'read_file',
       'write_file',

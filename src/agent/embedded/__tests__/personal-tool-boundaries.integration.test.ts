@@ -164,3 +164,24 @@ it('rebuilds a cached Agent when its ordinary conversation becomes a Task execut
     expect(superseded.state.tools.some(tool => ['task_collaboration', 'publish_task_result'].includes(tool.name))).toBe(false);
   } finally { manager.dispose(); }
 }, 15000);
+
+it('refreshes Browser tool discovery in the same chat after shared configuration changes', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'xopc-browser-tool-refresh-'));
+  roots.push(root);
+  initializeTestAgentCatalog({ agents: [{ id: 'main', workspace: root, models: { chat: { primary: 'openai/gpt-4o-mini' } } }] });
+  const conversationId = createConversation({ agentId: 'main' }).key;
+  const config = ConfigSchema.parse({ userContext: { enabled: false }, browser: { enabled: false } });
+  const manager = new AgentManager({ workspace: root, model: 'openai/gpt-4o-mini', config,
+    bus: {} as MessageBus, getCurrentContext: () => null });
+  try {
+    const before = manager.getOrCreateAgent(conversationId);
+    expect(before.state.tools.some(tool => tool.name === 'browser_use')).toBe(false);
+    manager.updateRuntimeConfiguration(ConfigSchema.parse({ ...config, browser: { ...config.browser, enabled: true } }));
+    const after = manager.getOrCreateAgent(conversationId);
+    expect(after).not.toBe(before);
+    expect(after.state.tools.some(tool => tool.name === 'browser_use')).toBe(true);
+    expect(manager.getOrCreateAgent(conversationId)).toBe(after);
+    manager.updateRuntimeConfiguration(config);
+    expect(manager.getOrCreateAgent(conversationId).state.tools.some(tool => tool.name === 'browser_use')).toBe(false);
+  } finally { manager.dispose(); }
+}, 15000);

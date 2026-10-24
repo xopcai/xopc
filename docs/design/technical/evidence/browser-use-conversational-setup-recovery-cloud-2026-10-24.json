@@ -1,0 +1,811 @@
+{
+  "ok": true,
+  "model": "openai-codex/gpt-5.6-sol",
+  "gateway": "production CLI",
+  "extension": "production manifest/background/sidepanel",
+  "stages": [
+    {
+      "stage": "isolated_gateway",
+      "productionEntry": true,
+      "originalStateUntouched": true
+    },
+    {
+      "stage": "owner_approved_and_prepared",
+      "nativeHostFilesInIsolatedHome": true
+    },
+    {
+      "stage": "native_bootstrap_pairing_realtime",
+      "productionAuth": true,
+      "endpointCount": 1,
+      "transport": "gateway-realtime"
+    }
+  ],
+  "upstreamProvider": "xopc-cloud",
+  "recoveryResults": [
+    {
+      "scenario": "existing_installation_repair",
+      "sameConversation": true,
+      "pairedEndpointPreserved": true,
+      "checks": {
+        "configured": true,
+        "read": true,
+        "clicked": true,
+        "filled": true,
+        "released": true
+      }
+    },
+    {
+      "scenario": "permission_denial_recovery",
+      "deniedWithoutSession": true,
+      "permissionPreservedUntilOwnerChanged": true,
+      "sameConversation": true,
+      "checks": {
+        "configured": true,
+        "read": true,
+        "clicked": true,
+        "filled": true,
+        "released": true
+      }
+    },
+    {
+      "scenario": "interruption_and_gateway_restart",
+      "persistedSetup": true,
+      "persistedAttempt": true,
+      "sameConversation": true,
+      "resumedAttempt": true,
+      "checks": {
+        "configured": true,
+        "read": true,
+        "clicked": true,
+        "filled": true,
+        "released": true
+      }
+    }
+  ],
+  "initialInput": "帮我配置 Browser Use",
+  "progressiveResources": [
+    "SKILL.md",
+    "references/browser/overview.md",
+    "references/browser/chrome-extension.md",
+    "references/browser/acceptance.md",
+    "references/browser/troubleshooting.md",
+    "references/browser/acceptance.md",
+    "references/browser/acceptance.md"
+  ],
+  "browserActions": [
+    "navigate",
+    "click",
+    "fill",
+    "close",
+    "navigate",
+    "click",
+    "fill",
+    "close",
+    "navigate",
+    "observe",
+    "click",
+    "fill",
+    "close"
+  ],
+  "browserToolErrors": 0,
+  "debuggerReleased": true,
+  "demoTabsClosed": true,
+  "checks": {
+    "configured": true,
+    "read": true,
+    "clicked": true,
+    "filled": true,
+    "released": true
+  },
+  "modelRequests": [
+    {
+      "id": 1,
+      "toolNames": [
+        "skill_view",
+        "skills_list",
+        "tool_manual",
+        "tool_search"
+      ],
+      "skillCatalogHasConfigureXopc": true,
+      "status": 200,
+      "elapsedMs": 2440
+    },
+    {
+      "id": 2,
+      "toolNames": [
+        "skill_view",
+        "skills_list",
+        "tool_manual",
+        "tool_search"
+      ],
+      "skillCatalogHasConfigureXopc": true,
+      "status": 200,
+      "elapsedMs": 2318
+    },
+    {
+      "id": 3,
+      "toolNames": [
+        "skill_view",
+        "skills_list",
+        "tool_manual",
+        "tool_search"
+      ],
+      "skillCatalogHasConfigureXopc": true,
+      "status": 200,
+      "elapsedMs": 1578
+    },
+    {
+      "id": 4,
+      "toolNames": [
+        "skill_view",
+        "skills_list",
+        "tool_manual",
+        "tool_search"
+      ],
+      "skillCatalogHasConfigureXopc": true,
+      "status": 200,
+      "elapsedMs": 2553
+    },
+    {
+      "id": 5,
+      "toolNames": [
+        "skill_view",
+        "skills_list",
+        "tool_manual",
+        "tool_search",
+        "xopc_use",
+        "clarify"
+      ],
+      "skillCatalogHasConfigureXopc": true,
+      "status": 200,
+      "elapsedMs": 1715
+    },
+    {
+      "id": 6,
+      "toolNames": [
+        "skill_view",
+        "skills_list",
+        "tool_manual",
+        "tool_search",
+        "xopc_use",
+        "clarify"
+      ],
+      "skillCatalogHasConfigureXopc": true,
+      "status": 200,
+      "elapsedMs": 1789
+    },
+    {
+      "id": 7,
+      "toolNames": [
+        "skill_view",
+        "skills_list",
+        "tool_manual",
+        "tool_search",
+        "xopc_use",
+        "clarify"
+      ],
+      "skillCatalogHasConfigureXopc": true,
+      "status": 200,
+      "elapsedMs": 1747
+    },
+    {
+      "id": 8,
+      "toolNames": [
+        "skill_view",
+        "skills_list",
+        "tool_manual",
+        "tool_search",
+        "xopc_use",
+        "clarify"
+      ],
+      "skillCatalogHasConfigureXopc": true,
+      "status": 200,
+      "elapsedMs": 2594
+    },
+    {
+      "id": 9,
+      "toolNames": [],
+      "skillCatalogHasConfigureXopc": false,
+      "status": 200,
+      "elapsedMs": 1454
+    },
+    {
+      "id": 10,
+      "toolNames": [
+        "skill_view",
+        "skills_list",
+        "tool_manual",
+        "clarify",
+        "xopc_use",
+        "tool_search"
+      ],
+      "skillCatalogHasConfigureXopc": true,
+      "status": 200,
+      "elapsedMs": 2525
+    },
+    {
+      "id": 11,
+      "toolNames": [
+        "skill_view",
+        "skills_list",
+        "tool_manual",
+        "clarify",
+        "xopc_use",
+        "tool_search"
+      ],
+      "skillCatalogHasConfigureXopc": true,
+      "status": 200,
+      "elapsedMs": 2128
+    },
+    {
+      "id": 12,
+      "toolNames": [
+        "skill_view",
+        "skills_list",
+        "tool_manual",
+        "clarify",
+        "xopc_use",
+        "tool_search"
+      ],
+      "skillCatalogHasConfigureXopc": true,
+      "status": 200,
+      "elapsedMs": 2573
+    },
+    {
+      "id": 13,
+      "toolNames": [
+        "skill_view",
+        "skills_list",
+        "tool_manual",
+        "clarify",
+        "xopc_use",
+        "tool_search",
+        "browser_use"
+      ],
+      "skillCatalogHasConfigureXopc": true,
+      "status": 200,
+      "elapsedMs": 3137
+    },
+    {
+      "id": 14,
+      "toolNames": [
+        "skill_view",
+        "skills_list",
+        "tool_manual",
+        "clarify",
+        "xopc_use",
+        "tool_search",
+        "browser_use"
+      ],
+      "skillCatalogHasConfigureXopc": true,
+      "status": 200,
+      "elapsedMs": 2329
+    },
+    {
+      "id": 15,
+      "toolNames": [
+        "skill_view",
+        "skills_list",
+        "tool_manual",
+        "clarify",
+        "xopc_use",
+        "tool_search",
+        "browser_use"
+      ],
+      "skillCatalogHasConfigureXopc": true,
+      "status": 200,
+      "elapsedMs": 2781
+    },
+    {
+      "id": 16,
+      "toolNames": [
+        "skill_view",
+        "skills_list",
+        "tool_manual",
+        "clarify",
+        "xopc_use",
+        "tool_search",
+        "browser_use"
+      ],
+      "skillCatalogHasConfigureXopc": true,
+      "status": 200,
+      "elapsedMs": 3105
+    },
+    {
+      "id": 17,
+      "toolNames": [
+        "skill_view",
+        "skills_list",
+        "tool_manual",
+        "clarify",
+        "xopc_use",
+        "tool_search",
+        "browser_use"
+      ],
+      "skillCatalogHasConfigureXopc": true,
+      "status": 200,
+      "elapsedMs": 2605
+    },
+    {
+      "id": 18,
+      "toolNames": [
+        "skill_view",
+        "skills_list",
+        "tool_manual",
+        "clarify",
+        "xopc_use",
+        "tool_search",
+        "browser_use"
+      ],
+      "skillCatalogHasConfigureXopc": true,
+      "status": 200,
+      "elapsedMs": 2980
+    },
+    {
+      "id": 19,
+      "toolNames": [],
+      "skillCatalogHasConfigureXopc": false,
+      "status": 200,
+      "elapsedMs": 1813
+    },
+    {
+      "id": 20,
+      "toolNames": [
+        "skill_view",
+        "skills_list",
+        "tool_manual",
+        "clarify",
+        "xopc_use",
+        "tool_search",
+        "browser_use"
+      ],
+      "skillCatalogHasConfigureXopc": true,
+      "status": 200,
+      "elapsedMs": 3865
+    },
+    {
+      "id": 21,
+      "toolNames": [
+        "skill_view",
+        "skills_list",
+        "tool_manual",
+        "clarify",
+        "xopc_use",
+        "tool_search",
+        "browser_use"
+      ],
+      "skillCatalogHasConfigureXopc": true,
+      "status": 200,
+      "elapsedMs": 3344
+    },
+    {
+      "id": 22,
+      "toolNames": [
+        "skill_view",
+        "skills_list",
+        "tool_manual",
+        "clarify",
+        "xopc_use",
+        "tool_search",
+        "browser_use"
+      ],
+      "skillCatalogHasConfigureXopc": true,
+      "status": 200,
+      "elapsedMs": 2674
+    },
+    {
+      "id": 23,
+      "toolNames": [
+        "skill_view",
+        "skills_list",
+        "tool_manual",
+        "clarify",
+        "xopc_use",
+        "tool_search",
+        "browser_use"
+      ],
+      "skillCatalogHasConfigureXopc": true,
+      "status": 200,
+      "elapsedMs": 5165
+    },
+    {
+      "id": 24,
+      "toolNames": [
+        "skill_view",
+        "skills_list",
+        "tool_manual",
+        "clarify",
+        "xopc_use",
+        "tool_search",
+        "browser_use"
+      ],
+      "skillCatalogHasConfigureXopc": true,
+      "status": 200,
+      "elapsedMs": 1792
+    },
+    {
+      "id": 25,
+      "toolNames": [
+        "skill_view",
+        "skills_list",
+        "tool_manual",
+        "clarify",
+        "xopc_use",
+        "tool_search",
+        "browser_use"
+      ],
+      "skillCatalogHasConfigureXopc": true,
+      "status": 200,
+      "elapsedMs": 7841
+    },
+    {
+      "id": 26,
+      "toolNames": [
+        "skill_view",
+        "skills_list",
+        "tool_manual",
+        "clarify",
+        "xopc_use",
+        "tool_search",
+        "browser_use"
+      ],
+      "skillCatalogHasConfigureXopc": true,
+      "status": 200,
+      "elapsedMs": 2126
+    },
+    {
+      "id": 27,
+      "toolNames": [
+        "skill_view",
+        "skills_list",
+        "tool_manual",
+        "clarify",
+        "xopc_use",
+        "tool_search",
+        "browser_use"
+      ],
+      "skillCatalogHasConfigureXopc": true,
+      "status": 200,
+      "elapsedMs": 2176
+    },
+    {
+      "id": 28,
+      "toolNames": [
+        "skill_view",
+        "skills_list",
+        "tool_manual",
+        "clarify",
+        "xopc_use",
+        "tool_search",
+        "browser_use"
+      ],
+      "skillCatalogHasConfigureXopc": true,
+      "status": 200,
+      "elapsedMs": 2392
+    },
+    {
+      "id": 29,
+      "toolNames": [],
+      "skillCatalogHasConfigureXopc": false,
+      "status": 200,
+      "elapsedMs": 3904
+    },
+    {
+      "id": 30,
+      "toolNames": [
+        "skill_view",
+        "skills_list",
+        "tool_manual",
+        "clarify",
+        "xopc_use",
+        "tool_search",
+        "browser_use"
+      ],
+      "skillCatalogHasConfigureXopc": true,
+      "status": 200,
+      "elapsedMs": 3532
+    },
+    {
+      "id": 31,
+      "toolNames": [
+        "skill_view",
+        "skills_list",
+        "tool_manual",
+        "clarify",
+        "xopc_use",
+        "tool_search",
+        "browser_use"
+      ],
+      "skillCatalogHasConfigureXopc": true,
+      "status": 200,
+      "elapsedMs": 2536
+    },
+    {
+      "id": 32,
+      "toolNames": [
+        "skill_view",
+        "skills_list",
+        "tool_manual",
+        "clarify",
+        "xopc_use",
+        "tool_search",
+        "browser_use"
+      ],
+      "skillCatalogHasConfigureXopc": true,
+      "status": 200,
+      "elapsedMs": 2247
+    },
+    {
+      "id": 33,
+      "toolNames": [],
+      "skillCatalogHasConfigureXopc": false,
+      "status": 200,
+      "elapsedMs": 4665
+    },
+    {
+      "id": 34,
+      "toolNames": [
+        "skill_view",
+        "skills_list",
+        "tool_manual",
+        "clarify",
+        "xopc_use",
+        "tool_search",
+        "browser_use"
+      ],
+      "skillCatalogHasConfigureXopc": true,
+      "status": 200,
+      "elapsedMs": 2505
+    },
+    {
+      "id": 35,
+      "toolNames": [],
+      "skillCatalogHasConfigureXopc": false,
+      "status": 200,
+      "elapsedMs": 9108
+    },
+    {
+      "id": 36,
+      "toolNames": [
+        "skill_view",
+        "skills_list",
+        "tool_manual",
+        "clarify",
+        "xopc_use",
+        "tool_search",
+        "browser_use"
+      ],
+      "skillCatalogHasConfigureXopc": true,
+      "status": 200,
+      "elapsedMs": 1996
+    },
+    {
+      "id": 37,
+      "toolNames": [
+        "skill_view",
+        "skills_list",
+        "tool_manual",
+        "clarify",
+        "xopc_use",
+        "tool_search",
+        "browser_use"
+      ],
+      "skillCatalogHasConfigureXopc": true,
+      "status": 200,
+      "elapsedMs": 3091
+    },
+    {
+      "id": 38,
+      "toolNames": [
+        "skill_view",
+        "skills_list",
+        "tool_manual",
+        "clarify",
+        "xopc_use",
+        "tool_search"
+      ],
+      "skillCatalogHasConfigureXopc": true,
+      "status": 200,
+      "elapsedMs": 3363
+    },
+    {
+      "id": 39,
+      "toolNames": [
+        "skill_view",
+        "skills_list",
+        "tool_manual",
+        "browser_use",
+        "clarify",
+        "xopc_use",
+        "tool_search"
+      ],
+      "skillCatalogHasConfigureXopc": true,
+      "status": 200,
+      "elapsedMs": 3236
+    },
+    {
+      "id": 40,
+      "toolNames": [
+        "skill_view",
+        "skills_list",
+        "tool_manual",
+        "browser_use",
+        "clarify",
+        "xopc_use",
+        "tool_search"
+      ],
+      "skillCatalogHasConfigureXopc": true,
+      "status": 200,
+      "elapsedMs": 2945
+    },
+    {
+      "id": 41,
+      "toolNames": [
+        "skill_view",
+        "skills_list",
+        "tool_manual",
+        "browser_use",
+        "clarify",
+        "xopc_use",
+        "tool_search"
+      ],
+      "skillCatalogHasConfigureXopc": true,
+      "status": 200,
+      "elapsedMs": 2103
+    },
+    {
+      "id": 42,
+      "toolNames": [
+        "skill_view",
+        "skills_list",
+        "tool_manual",
+        "browser_use",
+        "clarify",
+        "xopc_use",
+        "tool_search"
+      ],
+      "skillCatalogHasConfigureXopc": true,
+      "status": 200,
+      "elapsedMs": 2715
+    },
+    {
+      "id": 43,
+      "toolNames": [
+        "skill_view",
+        "skills_list",
+        "tool_manual",
+        "browser_use",
+        "clarify",
+        "xopc_use",
+        "tool_search"
+      ],
+      "skillCatalogHasConfigureXopc": true,
+      "status": 200,
+      "elapsedMs": 6560
+    },
+    {
+      "id": 44,
+      "toolNames": [
+        "skill_view",
+        "skills_list",
+        "tool_manual",
+        "browser_use",
+        "clarify",
+        "xopc_use",
+        "tool_search"
+      ],
+      "skillCatalogHasConfigureXopc": true,
+      "status": 200,
+      "elapsedMs": 3542
+    },
+    {
+      "id": 45,
+      "toolNames": [
+        "skill_view",
+        "skills_list",
+        "tool_manual",
+        "browser_use",
+        "clarify",
+        "xopc_use",
+        "tool_search"
+      ],
+      "skillCatalogHasConfigureXopc": true,
+      "status": 200,
+      "elapsedMs": 2806
+    },
+    {
+      "id": 46,
+      "toolNames": [
+        "skill_view",
+        "skills_list",
+        "tool_manual",
+        "browser_use",
+        "clarify",
+        "xopc_use",
+        "tool_search"
+      ],
+      "skillCatalogHasConfigureXopc": true,
+      "status": 200,
+      "elapsedMs": 2431
+    },
+    {
+      "id": 47,
+      "toolNames": [
+        "skill_view",
+        "skills_list",
+        "tool_manual",
+        "browser_use",
+        "clarify",
+        "xopc_use",
+        "tool_search"
+      ],
+      "skillCatalogHasConfigureXopc": true,
+      "status": 200,
+      "elapsedMs": 4299
+    },
+    {
+      "id": 48,
+      "toolNames": [
+        "skill_view",
+        "skills_list",
+        "tool_manual",
+        "browser_use",
+        "clarify",
+        "xopc_use",
+        "tool_search"
+      ],
+      "skillCatalogHasConfigureXopc": true,
+      "status": 200,
+      "elapsedMs": 2346
+    },
+    {
+      "id": 49,
+      "toolNames": [
+        "skill_view",
+        "skills_list",
+        "tool_manual",
+        "browser_use",
+        "clarify",
+        "xopc_use",
+        "tool_search"
+      ],
+      "skillCatalogHasConfigureXopc": true,
+      "status": 200,
+      "elapsedMs": 2044
+    },
+    {
+      "id": 50,
+      "toolNames": [
+        "skill_view",
+        "skills_list",
+        "tool_manual",
+        "browser_use",
+        "clarify",
+        "xopc_use",
+        "tool_search"
+      ],
+      "skillCatalogHasConfigureXopc": true,
+      "status": 200,
+      "elapsedMs": 3242
+    }
+  ],
+  "browser": "148.0.7778.96",
+  "boundaries": [
+    "Extension loaded with Chromium launch flags rather than the manual Load unpacked picker",
+    "Production-generated native host manifest copied into the isolated Chromium user-data-dir, matching Chromium host lookup",
+    "Native messaging, device pairing and Realtime use production code with isolated state and HOME"
+  ],
+  "date": "2026-10-24",
+  "platform": "macOS",
+  "modelRequestCount": 50,
+  "modelCallsAllSucceeded": true,
+  "validation": {
+    "testFiles": 15,
+    "testsPassed": 179,
+    "rootTypecheck": true,
+    "webTypecheck": true,
+    "webProductionBuild": true,
+    "relevantEslint": true,
+    "skillValidation": true
+  }
+}

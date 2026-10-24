@@ -379,12 +379,13 @@ async function refreshAccessToken(
   const timestamp = Date.now();
   const nonce = randomNonce();
   const credentialId = refreshToken.slice('xopc_rt_'.length).split('_')[0]!;
-  const proof = `xopc-device-refresh-v2\n${credentialId}\n${timestamp}\n${nonce}\n${requestId}\n${nextRefreshToken}`;
+  const proof = `xopc-device-refresh-v2\n${credentialId}\n${timestamp}\n${nonce}\n${requestId}\n${nextRefreshToken}\nrequest-proof:1`;
   const signature = await sign(pair, proof);
   const body = {
     refreshToken,
     nextRefreshToken,
     requestId,
+    requestProofVersion: 1,
     timestamp,
     nonce,
     signature,
@@ -407,10 +408,10 @@ async function refreshAccessToken(
   }
   if (typeof response.signedPayload !== 'string' || typeof response.signature !== 'string'
     || !await verifyGateway(gateway.gatewayPublicKey, response.signedPayload, response.signature)) throw new Error(t('errorGatewayVerification'));
-  const responseProof = decodeJson<{ purpose: string; gatewayId: string; requestId: string; nonce: string; expiresAt: number;
+  const responseProof = decodeJson<{ purpose: string; gatewayId: string; requestId: string; nonce: string; expiresAt: number; requestProofVersion: number;
     tokens: { accessToken?: string; accessTokenExpiresAt?: number; refreshToken?: string } }>(response.signedPayload);
   if (responseProof.purpose !== 'device-refresh-v3' || responseProof.gatewayId !== gateway.gatewayId || responseProof.requestId !== requestId
-    || responseProof.nonce !== nonce || !(responseProof.expiresAt > Date.now()) || responseProof.expiresAt > Date.now() + 60_000) throw new Error('Gateway refresh response does not match this request');
+    || responseProof.requestProofVersion !== 1 || responseProof.nonce !== nonce || !(responseProof.expiresAt > Date.now()) || responseProof.expiresAt > Date.now() + 60_000) throw new Error('Gateway refresh response does not match this request');
   const payload = responseProof.tokens;
   if (!payload?.accessToken || !payload.accessTokenExpiresAt
     || payload.refreshToken !== nextRefreshToken) {
@@ -678,14 +679,36 @@ export async function getAccessProfile(options?: { rejectedAccessToken?: string 
   }
 }
 
+export async function createBrowserRequestProof(
+  profile: BrowserGatewayIdentity,
+  outgoing: Request,
+  credential?: string,
+  method?: string,
+): Promise<string> {
+  const bearer = credential ?? outgoing.headers.get('Authorization')!.slice('Bearer '.length);
+  const digest = async (bytes: BufferSource) => Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)))
+    .map(byte => byte.toString(16).padStart(2, '0')).join('');
+  const timestamp = Date.now();
+  const nonce = randomNonce();
+  const bodyDigest = await digest(await outgoing.clone().arrayBuffer());
+  const url = new URL(outgoing.url);
+  const signedHeaders = ['content-type', 'idempotency-key', 'x-xopc-expected-session-key', 'x-endpoint-id', 'x-endpoint-upload-token'];
+  const proof = ['xopc-request-v1', profile.gatewayId, await digest(new TextEncoder().encode(bearer)),
+    method ?? outgoing.method, url.pathname + url.search, bodyDigest, ...signedHeaders.map(name => outgoing.headers.get(name) ?? ''),
+    String(timestamp), nonce].join('\n');
+  return `${timestamp}.${nonce}.${bodyDigest}.${await sign(await getOrCreateKeyPair(), proof)}`;
+}
+
 export async function gatewayFetch(path: string, init: RequestInit = {}, expectedIdentity?: BrowserGatewayIdentity): Promise<Response> {
   let profile = await getAccessProfile();
   const identity = expectedIdentity ?? profile;
   assertProfileIdentity(profile, identity);
-  const request = () => {
+  const request = async () => {
     const headers = new Headers(init.headers);
     headers.set('Authorization', `Bearer ${profile.accessToken}`);
-    return fetch(`${profile.gatewayUrl}${path}`, { ...init, headers });
+    const outgoing = new Request(`${profile.gatewayUrl}${path}`, { ...init, headers });
+    outgoing.headers.set('X-Xopc-Proof', await createBrowserRequestProof(profile, outgoing));
+    return fetch(outgoing.url, { ...init, headers: outgoing.headers, body: outgoing.body ? await outgoing.arrayBuffer() : undefined } as RequestInit);
   };
   let response = await request();
   assertProfileIdentity(await readProfile(), identity);
@@ -747,10 +770,7 @@ export async function forgetProfile(): Promise<void> {
 export async function revokeAndForgetProfile(): Promise<void> {
   try {
     const profile = await getAccessProfile();
-    await fetch(`${profile.gatewayUrl}/api/devices/me`, {
-      method: 'DELETE',
-      headers: { Authorization: `Bearer ${profile.accessToken}` },
-    });
+    await gatewayFetch('/api/devices/me', { method: 'DELETE' }, profile);
   } finally {
     await forgetProfile();
     try {

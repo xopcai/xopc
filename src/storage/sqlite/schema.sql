@@ -3632,3 +3632,13 @@ END;
 INSERT INTO work_discovery_onboarding VALUES (1,'not_started',NULL,NULL,NULL,0);
 INSERT INTO discussion_capture_settings VALUES ('default',1,NULL,CAST(unixepoch('subsec') * 1000 AS INTEGER));
 INSERT INTO connector_runtime_identity VALUES (1,lower(hex(randomblob(16))));
+
+CREATE TABLE browser_setup_runs (
+  id TEXT PRIMARY KEY,
+  conversation_id TEXT NOT NULL,
+  agent_id TEXT NOT NULL,
+  revision INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  payload_json TEXT NOT NULL
+);
+CREATE INDEX browser_setup_conversation ON browser_setup_runs(conversation_id, agent_id, updated_at);

@@ -53,7 +53,7 @@ function historicalDatabase(version: number, path = ':memory:', clean = false): 
 }
 
 function expectPreserved(db: DatabaseSync): void {
-  expect(readSchemaVersion(db)).toBe(259);
+  expect(readSchemaVersion(db)).toBe(260);
   expect(db.prepare('SELECT conversation_id, active_transcript_id FROM sessions').all()).toEqual([{ conversation_id: 'conversation-1', active_transcript_id: 'transcript-1' }]);
   expect(db.prepare('SELECT payload_json FROM transcript_entries').get()?.payload_json).toBe('{"text":"keep my history"}');
   expect(db.prepare('SELECT title FROM notes').get()?.title).toBe('Keep my note');
@@ -67,7 +67,7 @@ function expectPreserved(db: DatabaseSync): void {
 }
 
 describe('supported installed database upgrades', () => {
-  it.each(Array.from({ length: 57 }, (_, index) => 202 + index))('preserves data upgrading historical schema v%i to v259', version => {
+  it.each(Array.from({ length: 58 }, (_, index) => 202 + index))('preserves data upgrading historical schema v%i to v260', version => {
     const db = historicalDatabase(version);
     try {
       db.exec('PRAGMA foreign_keys = ON');
@@ -138,9 +138,9 @@ describe('supported installed database upgrades', () => {
     const db = new DatabaseSync(':memory:');
     try {
       ensureXopcDatabaseSchema(db);
-      setSchemaVersion(db, 260);
+      setSchemaVersion(db, 261);
       expect(() => ensureXopcDatabaseSchema(db)).toThrow('newer than');
-      expect(readSchemaVersion(db)).toBe(260);
+      expect(readSchemaVersion(db)).toBe(261);
     } finally { db.close(); }
   });
 

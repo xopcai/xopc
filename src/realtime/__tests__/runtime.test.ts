@@ -95,6 +95,50 @@ describe('RealtimeRuntime', () => {
     } finally { endpoints.close(); }
   });
 
+  it.each(['valid', 'missing', 'wrong-ticket'])('checks browser hello device proof: %s', async variant => {
+    const { mkdtempSync, rmSync } = await import('node:fs');
+    const { tmpdir } = await import('node:os');
+    const { join } = await import('node:path');
+    const db = await import('../../storage/sqlite/connection.js');
+    const { createDevice } = await import('../../storage/sqlite/device-access-repository.js');
+    const { getOrCreateGatewayIdentity } = await import('../../storage/sqlite/gateway-identity-repository.js');
+    const { proofDigest, requestProofMessage } = await import('../../gateway/security/device-request-proof.js');
+    const dir = mkdtempSync(join(tmpdir(), 'xopc-browser-realtime-proof-'));
+    db.openXopcDatabase({ path: join(dir, 'test.db') });
+    try {
+      const keys = generateKeyPairSync('ec', { namedCurve: 'P-256' });
+      const device = createDevice({ displayName: 'Chrome', platform: 'chrome', extensionId: 'gopbfhaojnnhiheiikblejnpgmfmkmgd',
+        publicKeyJwk: keys.publicKey.export({ format: 'jwk' }), scopes: ['sessions.write'] });
+      runtime = new RealtimeRuntime();
+      server = createServer();
+      server.on('upgrade', (request, connection, head) => { runtime!.handleUpgrade(request, connection, head); });
+      await new Promise<void>(resolve => server!.listen(0, '127.0.0.1', resolve));
+      const address = server.address();
+      if (!address || typeof address === 'string') throw new Error('Missing address');
+      const issued = runtime.tickets.issue('browser-client', 'browser_extension', {
+        principalId: device.id, deviceId: device.id, scopes: ['sessions.write'],
+      });
+      const proof = { timestamp: Date.now(), nonce: crypto.randomUUID(), digest: proofDigest('') };
+      const message = requestProofMessage({ gatewayId: getOrCreateGatewayIdentity().id,
+        credential: variant === 'wrong-ticket' ? 'different-ticket' : issued.ticket,
+        method: 'CONNECT', target: '/api/realtime/v1/ws', headers: () => undefined, proof });
+      const signature = sign('sha256', Buffer.from(message), { key: keys.privateKey, dsaEncoding: 'ieee-p1363' }).toString('base64url');
+      const connectionProof = `${proof.timestamp}.${proof.nonce}.${proof.digest}.${signature}`;
+      socket = new WebSocket(`ws://127.0.0.1:${address.port}/api/realtime/v1/ws`);
+      await waitForOpen(socket);
+      const messages = collectMessages(socket);
+      const closed = new Promise<number>(resolve => socket!.once('close', resolve));
+      socket.send(JSON.stringify({ protocolVersion: REALTIME_PROTOCOL_VERSION, messageId: crypto.randomUUID(),
+        kind: 'realtime.hello', sentAt: Date.now(), payload: { ticket: issued.ticket, clientId: 'browser-client',
+          clientKind: 'browser_extension', subscriptions: [], ...(variant === 'missing' ? {} : { connectionProof }) } }));
+      if (variant === 'valid') expect(await messages.next()).toMatchObject({ kind: 'realtime.ready' });
+      else expect(await closed).toBe(4401);
+    } finally {
+      socket?.terminate(); runtime?.close();
+      db.closeXopcDatabase(); db.resetXopcDatabaseSingletonForTest(); rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it('authenticates with a one-time ticket and resumes a topic from a cursor', async () => {
     runtime = new RealtimeRuntime();
     server = createServer();
