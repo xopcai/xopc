@@ -36,3 +36,10 @@ Superseded `*-legacy.md` copies of public guides and the old documentation-quali
 - [Personal AI 阶段 B：任务交接与执行能力校验](./technical/personal-task-handoff-stage-b-2026-10-15.md)
 - [Personal AI 阶段 C：同任务修订、成果版本与最终交付](./technical/personal-task-revision-stage-c-2026-10-15.md)
 - [Personal AI 阶段 D：链路观测、性能预算与回归门禁](./technical/personal-performance-stage-d-2026-10-15.md)
+
+Removed obsolete documents on 2026-10-24:
+
+- The empty Project/Task/TaskRun RFC; object responsibilities remain in [foreground task orchestration](./foreground-agent-task-orchestration.md).
+- The old realtime voice review stub referring to protocol v2; use [persistent voice delivery](./persistent-voice-delivery.md) and the [v3 protocol](./realtime-voice-websocket-protocol.md).
+- The two early one-click discussion capture designs describing a 30-minute limit and whole-recording upload; use the [meeting technical design](./voice-meeting-technical-design.md), [recording reliability implementation](./note-recording-reliability-phase-one.md) and [recording roadmap](./note-recording-product-technical-roadmap.md).
+- Generated per-case chart answer Markdown; the [matrix acceptance report](./technical/chat-charts-default-agent-acceptance.md), structured results and screenshots retain the validation evidence.
