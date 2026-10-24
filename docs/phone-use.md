@@ -9,7 +9,7 @@ For an existing cloud phone, start with the [Alibaba Cloud Phone setup guide](ho
 1. Start an Android emulator with Android Studio or `android emulator start <AVD name>`.
 2. Open **Settings → Phone Use** and enable Phone Use.
 3. Select **Mock · Android Settings test** and save the model selection.
-4. Refresh devices and add the emulator. The initial allowed app is `com.android.settings`; Agents with the phone_use tool enabled can use it without a separate device Agent list.
+4. Refresh devices and add the emulator. New connections allow all applications by default; choose **Only selected apps** to restrict access using the installed app list. Agents with the phone_use tool enabled can use it without a separate device Agent list.
 5. Select the phone and click **Run mock test**.
 
 The mock navigates Android Settings to About phone using native UI elements. It executes real ADB actions, captures real screenshots and verifies native UI evidence, but does not perform AI inference or handle arbitrary tasks. It is restricted to local emulators. Native inspection uses the official Android CLI when installed; otherwise it attempts `uiautomator dump`. The CLI's non-idle capture is useful for animated Settings pages. If UI text is unavailable, the mock pauses instead of guessing.
@@ -28,7 +28,7 @@ Other compatible models can be added in Models settings using image input, OpenA
 
 ## Manage and operate a phone
 
-Each registered device has a name, an enabled flag and allowed app packages. Agents with the phone_use tool enabled can use authorized devices without a separate device Agent list. Changing access or removing the registration stops existing control. Removing a registration does not delete the emulator or its apps. A default device avoids repeated selection; disconnected devices are never silently replaced.
+Each registered device has a name, an enabled flag and an application access policy. New local and cloud connections default to **Allow all apps**. **Only selected apps** reads native application names from the phone and supports search and checkboxes, without entering package names. Existing allowlists remain selected-only until explicitly changed. Changing to selected-only requires at least one app. The app list uses the same pinned scrcpy server dependency as live video. Agents with the phone_use tool enabled can use authorized devices without a separate device Agent list. Changing access or removing the registration stops existing control. Removing a registration does not delete the emulator or its apps. A default device avoids repeated selection; disconnected devices are never silently replaced.
 
 In mock mode, use the fixed test button. In real-model mode, first open an allowed app, then enter one small authorized goal and optional expected completion text. Task controls support pause, resume, continue, stop and release. Resume clears held predictions; the next execution observes the screen again. A screen preview is temporary and available when execution is idle or paused.
 

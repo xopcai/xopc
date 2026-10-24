@@ -15,26 +15,27 @@ import { PhoneDependenciesCard } from '@/features/settings/runtime-tools/phone-d
 
 import { AddPhoneDialog } from './add-phone-dialog';
 import { PhoneScreenDialog } from './phone-screen-dialog';
+import { PhoneAppPicker } from './phone-app-picker';
 import { PhoneModelConnection } from './phone-model-connection';
 import { MOCK_GOAL, MOCK_MODEL, fetchPhoneDevices, fetchPhoneSettings, phoneRequest, type PhoneDevice, type PhoneReport } from './phone-api';
 
 const fieldClass = 'w-full rounded-lg border border-edge bg-surface-base px-3 py-2.5 text-sm text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent';
 const panelClass = 'space-y-4 rounded-2xl border border-edge bg-surface-panel p-4 sm:p-5';
-const split = (value: string) => [...new Set(value.split(',').map(text => text.trim()).filter(Boolean))];
 
 function DeviceForm({ device, serial, name, onSave, onClose, zh }: {
   device?: PhoneDevice; serial: string; name: string; zh: boolean;
   onSave(): Promise<void>; onClose(): void;
 }) {
   const [displayName, setDisplayName] = useState(device?.name ?? name);
-  const [apps, setApps] = useState(device?.allowedApps.join(', ') ?? 'com.android.settings');
+  const [appAccess, setAppAccess] = useState<'all' | 'selected'>(device?.appAccess ?? (device?.allowedApps.length ? 'selected' : 'all'));
+  const [apps, setApps] = useState<string[]>(device?.allowedApps ?? []);
   const [enabled, setEnabled] = useState(device?.enabled ?? true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const submit = async () => {
     setBusy(true); setError('');
     try {
-      const input = { name: displayName, allowedApps: split(apps), enabled };
+      const input = { name: displayName, appAccess, allowedApps: appAccess === 'all' ? [] : apps, enabled };
       await phoneRequest(device ? `/devices/${device.id}` : '/devices', device ? input : { ...input, serial }, device ? 'PATCH' : 'POST');
       await onSave(); onClose();
     } catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)); }
@@ -42,7 +43,7 @@ function DeviceForm({ device, serial, name, onSave, onClose, zh }: {
   };
   return <Dialog.Root open onOpenChange={open => { if (!open && !busy) onClose(); }}><Dialog.Portal>
     <Dialog.Overlay className="fixed inset-0 z-[80] bg-black/40" />
-    <Dialog.Content className="fixed left-1/2 top-1/2 z-[81] flex h-[min(36rem,90dvh)] w-[min(34rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-edge bg-surface-overlay p-5 text-fg">
+    <Dialog.Content className="fixed left-1/2 top-1/2 z-[81] flex h-[min(44rem,90dvh)] w-[min(34rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-edge bg-surface-overlay p-5 text-fg">
       <div className="flex shrink-0 items-start justify-between gap-3"><div>
         <Dialog.Title className="text-base font-semibold">{device ? (zh ? '管理手机' : 'Manage phone') : (zh ? '添加手机' : 'Add phone')}</Dialog.Title>
         <Dialog.Description className="mt-1 text-sm text-fg-muted">{zh ? '设备连接在 Gateway 所在电脑。修改权限会停止当前控制。' : 'This phone connects to the Gateway host. Changing access stops active control.'}</Dialog.Description>
@@ -51,12 +52,11 @@ function DeviceForm({ device, serial, name, onSave, onClose, zh }: {
         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto pr-1">
           <label className="block space-y-1.5 text-sm">{zh ? '名称' : 'Name'}<input className={fieldClass} value={displayName} maxLength={100} required onChange={event => setDisplayName(event.target.value)} /></label>
           <p className="break-all text-xs text-fg-muted">ADB: {serial}</p><p className="text-xs text-fg-muted">{zh ? '已启用 phone_use 工具的 Agent 可使用这台手机。' : 'Agents with the phone_use tool can use this phone.'}</p>
-          <label className="block space-y-1.5 text-sm">{zh ? '允许的应用包名（逗号分隔）' : 'Allowed app packages (comma separated)'}<input className={fieldClass} value={apps} required onChange={event => setApps(event.target.value)} /></label>
-          <p className="text-xs text-fg-muted">{zh ? '初次测试只需系统设置 com.android.settings。仅允许所列应用进入操作模型。' : 'Start with com.android.settings for testing. Only listed apps may be sent to the phone model.'}</p>
+          <PhoneAppPicker deviceId={device?.id} serial={serial} mode={appAccess} selected={apps} onModeChange={setAppAccess} onSelectedChange={setApps} zh={zh} disabled={busy} />
           <label className="flex min-h-11 cursor-pointer items-center gap-3 text-sm"><input type="checkbox" checked={enabled} onChange={event => setEnabled(event.target.checked)} />{zh ? '允许访问这台手机' : 'Enable access to this phone'}</label>
           {error && <p role="alert" className="text-sm text-danger">{error}</p>}
         </div>
-        <div className="mt-4 flex shrink-0 justify-end gap-2 border-t border-edge pt-4"><Button type="button" disabled={busy} onClick={onClose}>{zh ? '取消' : 'Cancel'}</Button><Button type="submit" variant="primary" disabled={busy || !displayName.trim() || !apps.trim()}>{busy ? (zh ? '保存中…' : 'Saving…') : (zh ? '保存手机' : 'Save phone')}</Button></div>
+        <div className="mt-4 flex shrink-0 justify-end gap-2 border-t border-edge pt-4"><Button type="button" disabled={busy} onClick={onClose}>{zh ? '取消' : 'Cancel'}</Button><Button type="submit" variant="primary" disabled={busy || !displayName.trim() || (appAccess === 'selected' && !apps.length)}>{busy ? (zh ? '保存中…' : 'Saving…') : (zh ? '保存手机' : 'Save phone')}</Button></div>
       </form>
     </Dialog.Content>
   </Dialog.Portal></Dialog.Root>;

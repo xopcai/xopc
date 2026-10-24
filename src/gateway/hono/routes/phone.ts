@@ -3,6 +3,8 @@ import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { z } from 'zod';
 
+import { normalizePhoneAppAccess, phoneAppAccess } from '../../../phone/app-access.js';
+
 import { getDefaultAgentId } from '../../../routing/resolve-route.js';
 import { getModelRegistry } from '../../../providers/model-registry.js';
 import { isProviderConfiguredSync } from '../../../providers/index.js';
@@ -60,6 +62,15 @@ export function registerPhoneRoutes(parent: Hono, deps: AuthenticatedRouteDeps, 
     catch (error) { diagnostic = error instanceof PhoneError ? error.code : 'PHONE_ADB_UNAVAILABLE'; }
     return c.json({ ok: true, payload: { devices: runtime.repository.list(), discovery, diagnostic, defaultDeviceId: runtime.repository.defaultDevice() } });
   });
+  app.get('/api/phone/apps', async c => {
+    const input = z.object({ serial: z.string().min(1).max(200) }).strict().parse(c.req.query());
+    const applications = await runtime.applications(input, service.currentConfig, c.req.raw.signal);
+    c.header('Cache-Control', 'no-store'); return c.json({ ok: true, payload: { applications } });
+  });
+  app.get('/api/phone/devices/:id/apps', async c => {
+    const applications = await runtime.applications({ deviceId: c.req.param('id') }, service.currentConfig, c.req.raw.signal);
+    c.header('Cache-Control', 'no-store'); return c.json({ ok: true, payload: { applications } });
+  });
   app.post('/api/phone/devices', strictRateLimitMiddleware, async c => {
     const input = deviceInput.parse(await c.req.json());
     const discovered = await runtime.discover(service.currentConfig, c.req.raw.signal);
@@ -71,8 +82,10 @@ export function registerPhoneRoutes(parent: Hono, deps: AuthenticatedRouteDeps, 
   app.patch('/api/phone/devices/:id', strictRateLimitMiddleware, async c => {
     const id = c.req.param('id'); const previous = runtime.repository.get(id);
     const patch = deviceInput.omit({ serial: true }).partial().parse(await c.req.json());
+    const next = normalizePhoneAppAccess({ ...previous, ...patch,
+      ...(patch.allowedApps && patch.appAccess === undefined ? { appAccess: 'selected' as const } : {}) });
     await runtime.stopDevice(id);
-    return c.json({ ok: true, payload: runtime.repository.save({ ...previous, ...patch }, id) });
+    return c.json({ ok: true, payload: runtime.repository.save(next, id) });
   });
   app.delete('/api/phone/devices/:id', strictRateLimitMiddleware, async c => {
     const id = c.req.param('id'); const device = runtime.repository.get(id); await runtime.stopDevice(id);
@@ -85,7 +98,7 @@ export function registerPhoneRoutes(parent: Hono, deps: AuthenticatedRouteDeps, 
   app.post('/api/phone/devices/:id/diagnostics', strictRateLimitMiddleware, async c => {
     const device = runtime.repository.get(c.req.param('id'));
     const found = (await (await runtime.driverFor(device, service.currentConfig)).discover(c.req.raw.signal)).find(item => item.serial === device.serial);
-    return c.json({ ok: true, payload: { state: found?.state ?? 'disconnected', emulator: found?.emulator ?? false, runner: 'gateway-local', allowedApps: device.allowedApps } });
+    return c.json({ ok: true, payload: { state: found?.state ?? 'disconnected', emulator: found?.emulator ?? false, runner: 'gateway-local', appAccess: phoneAppAccess(device), allowedApps: device.allowedApps } });
   });
   app.get('/api/phone/devices/:id/screen', async c => {
     const observation = await runtime.preview(c.req.param('id'), service.currentConfig, c.req.raw.signal);

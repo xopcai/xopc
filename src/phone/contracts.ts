@@ -19,11 +19,13 @@ export const PhoneDeviceSchema = z.object({
   id: z.string().uuid(), serial: z.string().min(1).max(200),
   name: z.string().trim().min(1).max(100),
   enabled: z.boolean().default(true),
-  allowedApps: z.array(z.string().regex(/^[a-zA-Z][\w]*(?:\.[\w]+)+$/)).min(1).max(50),
+  appAccess: z.enum(['all', 'selected']).optional(),
+  allowedApps: z.array(z.string().regex(/^[a-zA-Z][\w]*(?:\.[\w]+)+$/)).max(500).default([]),
   connection: z.object({ kind: z.literal('aliyun-adb'), endpoint: z.string().max(200), credentialId: z.string().uuid() }).strict().optional(),
   createdAt: z.number(), revision: z.number().int().positive(),
 }).strict();
 export type PhoneDevice = z.infer<typeof PhoneDeviceSchema>;
+export type PhoneApplication = { packageName: string; label: string };
 export type DiscoveredPhone = { serial: string; state: string; name: string; emulator: boolean };
 
 const Point = z.array(z.number().finite().min(0).max(1000)).length(2);

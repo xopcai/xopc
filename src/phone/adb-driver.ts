@@ -9,7 +9,9 @@ import sharp from 'sharp';
 
 import { runPhoneCommandBuffer, runPhoneCommandText } from '../process/phone-process.js';
 import { managedPhoneAdbPath } from '../runtime-tools/phone-dependency-catalog.js';
-import { PhoneError, type DiscoveredPhone, type PhoneAction, type PhoneElement, type PhoneObservation } from './contracts.js';
+import { parsePhoneApplications, phoneApplicationsCommand } from './applications.js';
+import { readScrcpyServer, scrcpyServerPath } from './scrcpy-assets.js';
+import { PhoneError, type PhoneApplication, type DiscoveredPhone, type PhoneAction, type PhoneElement, type PhoneObservation } from './contracts.js';
 
 export function resolveAdbPath(configured?: string, stateDir?: string): string {
   if (configured) return configured;
@@ -76,6 +78,7 @@ function androidCliPath(): string | undefined {
 
 export interface PhoneDriver {
   discover(signal?: AbortSignal): Promise<DiscoveredPhone[]>;
+  applications?(serial: string, signal: AbortSignal): Promise<PhoneApplication[]>;
   observe(serial: string, signal: AbortSignal): Promise<PhoneObservation>;
   capture?(serial: string, signal: AbortSignal): Promise<PhoneObservation>;
   observeForText?(serial: string, signal: AbortSignal): Promise<PhoneObservation>;
@@ -105,8 +108,18 @@ export function parseAndroidFocusedEditor(raw: string, app: string): PhoneElemen
 }
 
 export class AdbPhoneDriver implements PhoneDriver {
-  constructor(private readonly adbPath = resolveAdbPath(), private readonly command = runAdb, private readonly useAndroidCli = true) {}
+  constructor(private readonly adbPath = resolveAdbPath(), private readonly command = runAdb, private readonly useAndroidCli = true,
+    private readonly readApplications?: (signal: AbortSignal) => Promise<PhoneApplication[]>) {}
   async discover(signal?: AbortSignal): Promise<DiscoveredPhone[]> { return parseAdbDevices((await this.command(this.adbPath, ['devices', '-l'], signal)).toString()); }
+  async applications(serial: string, signal: AbortSignal): Promise<PhoneApplication[]> {
+    if (this.readApplications) return this.readApplications(signal);
+    await readScrcpyServer();
+    const remote = `/data/local/tmp/xopc-apps-${randomUUID()}.jar`;
+    try {
+      await this.command(this.adbPath, ['-s', serial, 'push', scrcpyServerPath(), remote], signal);
+      return parsePhoneApplications(await this.shell(serial, phoneApplicationsCommand(remote), signal));
+    } finally { await this.shell(serial, ['rm', '-f', remote], AbortSignal.timeout(3000)).catch(() => {}); }
+  }
   async foreground(serial: string, signal: AbortSignal): Promise<string> {
     // Filter on Android so cloud foreground sampling does not compete with video bandwidth.
     const activity = await this.shell(serial, ['sh', '-c', 'dumpsys activity activities | grep -m 1 -E "mResumedActivity|topResumedActivity"'], signal);

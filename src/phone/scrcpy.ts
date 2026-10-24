@@ -1,19 +1,17 @@
 import type { ChildProcess } from 'node:child_process';
-import { createHash, randomBytes } from 'node:crypto';
-import { readFile } from 'node:fs/promises';
+import { randomBytes } from 'node:crypto';
 import { connect, type Socket } from 'node:net';
 import { setTimeout as delay } from 'node:timers/promises';
 
 import { h264ParseConfiguration } from '@yume-chan/scrcpy';
 
 import { spawnPhoneCommand } from '../process/phone-process.js';
-import { managedScrcpyServerPath, SCRCPY_SHA256, SCRCPY_VERSION } from '../runtime-tools/phone-dependency-catalog.js';
+import { readScrcpyServer, scrcpyServerPath, SCRCPY_VERSION } from './scrcpy-assets.js';
 import { AdbPhoneDriver, runAdb } from './adb-driver.js';
 import { PhoneError } from './contracts.js';
 import type { PhoneInteractiveProvider, PhonePointer, PhoneVideoGeometry, PhoneVideoPacket } from './live-provider.js';
 
-export { SCRCPY_VERSION, SCRCPY_SHA256 };
-export const scrcpyServerPath = managedScrcpyServerPath;
+export { readScrcpyServer, scrcpyServerPath, SCRCPY_VERSION, SCRCPY_SHA256 } from './scrcpy-assets.js';
 
 /** The pinned server sends codec metadata followed by bounded, length-prefixed packets. */
 export class ScrcpyVideoParser {
@@ -48,12 +46,6 @@ export function scrcpyTouch(phase: PhonePointer['phase'], x: number, y: number, 
   buffer.writeUInt16BE(width, 18); buffer.writeUInt16BE(height, 20);
   buffer.writeUInt16BE(phase === 'up' || phase === 'cancel' ? 0 : 0xffff, 22);
   return buffer;
-}
-
-export async function readScrcpyServer(): Promise<Buffer> {
-  const binary = await readFile(scrcpyServerPath()).catch(() => { throw new PhoneError('PHONE_VIDEO_SETUP_REQUIRED', 'Install scrcpy server in Settings → Phone Use → Dependencies'); });
-  if (createHash('sha256').update(binary).digest('hex') !== SCRCPY_SHA256) throw new PhoneError('PHONE_VIDEO_HASH_MISMATCH', 'Phone video server checksum mismatch');
-  return binary;
 }
 
 /** Local and cloud transports share geometry, gesture sequencing and revocation. */

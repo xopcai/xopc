@@ -19,6 +19,7 @@ vi.mock('../phone-api', () => ({
   MOCK_MODEL: 'phone-mock/settings-about', MOCK_GOAL: 'Open Android Settings and inspect About phone',
   fetchPhoneSettings: async () => ({ config: { enabled: true }, agentId: 'main' }),
   fetchPhoneDevices: async () => ({ devices: [{ id: 'phone-one', name: 'Local emulator', serial: 'emulator-5554', enabled: true, allowedApps: ['com.android.settings'], ...(fixture.cloudOnly ? { connection: { kind: 'aliyun-adb', endpoint: 'cloud.example:10001' } } : {}) }], discovery: [{ serial: 'emulator-5554', state: 'device', emulator: true }], defaultDeviceId: 'phone-one', diagnostic: fixture.cloudOnly ? 'PHONE_ADB_UNAVAILABLE' : undefined }),
+  fetchPhoneApplications: vi.fn(async () => [{ packageName: 'com.android.settings', label: '设置' }, { packageName: 'com.android.deskclock', label: '时钟' }]),
   fetchPhoneScreen: vi.fn(),
   phoneRequest: vi.fn(async path => path === '/sessions' ? { id: 'session-one', report: {} } : path === '/sessions/session-one' ? { status: 'ready', actions: 0, modelRequests: 0, deviceName: 'Local emulator', facts: [] } : {}),
 }));
@@ -115,4 +116,27 @@ it('updates diagnostics in the reserved device row without inserting a page bann
   expect(row.textContent).toBe('ADB unavailable');
   expect(row.className).toContain('h-5');
   expect(container.querySelector('[role="alert"]')).toBeNull();
+});
+
+it('replaces package editing with a native app picker and saves explicit all-app access', async () => {
+  await render(); await click('管理');
+  const dialog = document.body.querySelector('[role="dialog"]')!;
+  expect(dialog.textContent).not.toContain('允许的应用包名');
+  expect(dialog.querySelector('input[aria-label="设置"]')).not.toBeNull();
+  await act(async () => (dialog.querySelector('input[type="radio"][value="all"]') as HTMLInputElement).click());
+  expect(dialog.querySelector('input[aria-label="设置"]')).toBeNull();
+  await act(async () => [...dialog.querySelectorAll('button')].find(b => b.textContent === '保存手机')!.click());
+  expect(phoneRequest).toHaveBeenCalledWith('/devices/phone-one', { name: 'Local emulator', appAccess: 'all', allowedApps: [], enabled: true }, 'PATCH');
+});
+
+it('saves selected applications by their native labels without editing package names', async () => {
+  await render(); await click('管理');
+  const dialog = document.body.querySelector('[role="dialog"]')!;
+  const settings = dialog.querySelector('input[aria-label="设置"]') as HTMLInputElement;
+  const clock = dialog.querySelector('input[aria-label="时钟"]') as HTMLInputElement;
+  expect(settings.checked).toBe(true);
+  await act(async () => { clock.click(); settings.click(); });
+  expect(dialog.querySelector('[role="status"]')?.textContent).toContain('1');
+  await act(async () => [...dialog.querySelectorAll('button')].find(b => b.textContent === '保存手机')!.click());
+  expect(phoneRequest).toHaveBeenCalledWith('/devices/phone-one', { name: 'Local emulator', appAccess: 'selected', allowedApps: ['com.android.deskclock'], enabled: true }, 'PATCH');
 });

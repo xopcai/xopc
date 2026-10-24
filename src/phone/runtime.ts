@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
+import { phoneAllowsApp, phoneAppAccess } from './app-access.js';
 import { PhoneFrameCache, PhoneOperationBudget } from './live-state.js';
 import { PhoneInteractiveSession } from './interactive-session.js';
 import { LocalScrcpyProvider } from './scrcpy.js';
@@ -14,7 +15,7 @@ import { createPhoneModel, isAboutScreen, type PhoneModelAdapter } from './model
 import { PhoneRepository } from './repository.js';
 import {
   MOCK_PHONE_MODEL, PhoneError, PhoneInputSchema, type PhoneAction, type PhoneDevice, type PhoneInput,
-  type PhoneObservation, type PhoneReport,
+  type PhoneApplication, type PhoneObservation, type PhoneReport,
 } from './contracts.js';
 
 type ExecutionContext = { config: Config; agentId: string; modelRef?: string; toolDenied?: boolean; validateBinding?: () => boolean };
@@ -25,6 +26,7 @@ type Session = {
   prediction?: AbortController; budget?: PhoneOperationBudget; wake: Set<() => void>;
   human?: string; humanExpiresAt?: number; viewedAt: number; preview?: Promise<void>;
   commands: Promise<unknown>; receipts: Map<string, { hash: string; result: Promise<unknown> }>;
+  applications: PhoneApplication[];
   stream?: PhoneInteractiveSession;
   streamOpening?: Promise<PhoneInteractiveSession>;
 
@@ -49,13 +51,27 @@ export class PhoneRuntime {
     return device.connection ? this.cloud.driver(device) : this.driverFactory(resolveAdbPath(config.phone.adbPath));
   }
   async discover(config: Config, signal?: AbortSignal) { return this.driverFactory(resolveAdbPath(config.phone.adbPath)).discover(signal); }
+  async applications(input: { deviceId?: string; serial?: string }, config: Config, signal: AbortSignal): Promise<PhoneApplication[]> {
+    let driver: PhoneDriver; let serial: string;
+    if (input.deviceId) {
+      const device = this.repository.get(input.deviceId);
+      if (!device.enabled) throw new PhoneError('PHONE_DEVICE_DENIED', 'Phone access is disabled', 403);
+      driver = await this.driverFor(device, config); serial = device.serial;
+    } else {
+      const found = (await this.discover(config, signal)).find(device => device.serial === input.serial && device.state === 'device');
+      if (!found) throw new PhoneError('PHONE_DEVICE_OFFLINE', 'Choose a connected and authorized phone');
+      driver = this.driverFactory(resolveAdbPath(config.phone.adbPath)); serial = found.serial;
+    }
+    if (!driver.applications) throw new PhoneError('PHONE_APPS_UNAVAILABLE', 'The phone provider cannot list applications');
+    return driver.applications(serial, signal);
+  }
   async preview(id: string, config: Config, signal: AbortSignal): Promise<PhoneObservation> {
     const device = this.repository.get(id);
     if (!device.enabled) throw new PhoneError('PHONE_DEVICE_DENIED', 'Phone access is disabled', 403);
     const lease = this.repository.acquire(device.serial);
     try {
       const observation = await (await this.driverFor(device, config)).observe(device.serial, signal);
-      if (!device.allowedApps.includes(observation.package)) { observation.frame.fill(0); throw new PhoneError('PHONE_APP_DENIED', 'Open an allowed app before previewing the screen'); }
+      if (!phoneAllowsApp(device, observation.package)) { observation.frame.fill(0); throw new PhoneError('PHONE_APP_DENIED', 'Open an allowed app before previewing the screen'); }
       return observation;
     } finally { this.repository.release(device.serial, lease); }
   }
@@ -87,7 +103,7 @@ export class PhoneRuntime {
     this.repository.renew(session.device.serial, session.lease);
   }
   private allowedScreen(session: Session, observation: PhoneObservation): void {
-    if (!session.device.allowedApps.includes(observation.package)) throw new PhoneError('PHONE_APP_DENIED', 'The foreground application is outside this phone session allowlist. Open an allowed app or reopen with appPackage.');
+    if (!phoneAllowsApp(session.device, observation.package)) throw new PhoneError('PHONE_APP_DENIED', 'The foreground application is outside this phone session allowlist. Open an allowed app or reopen with appPackage.');
   }
   async execute(owner: string, raw: PhoneInput, context: ExecutionContext, signal: AbortSignal = new AbortController().signal): Promise<unknown> {
     const input = PhoneInputSchema.parse(raw);
@@ -120,16 +136,21 @@ export class PhoneRuntime {
         try {
           const adapter = await this.modelFactory(modelRef, context.config, context.agentId);
           signal.throwIfAborted();
+          let applications: PhoneApplication[] = [];
+          if (input.mode === 'control' && modelRef !== MOCK_PHONE_MODEL && driver.applications) {
+            try { applications = await driver.applications(device.serial, signal); }
+            catch { signal.throwIfAborted(); }
+          }
           const now = Date.now();
           const session: Session = { device, driver, adapter, lease, controller: new AbortController(), createdAt: now, modelRef, adbPath,
-            context, frames: new PhoneFrameCache(), io: Promise.resolve(), ioBusy: false, wake: new Set(), viewedAt: 0,
+            context, applications, frames: new PhoneFrameCache(), io: Promise.resolve(), ioBusy: false, wake: new Set(), viewedAt: 0,
             commands: Promise.resolve(), receipts: new Map(),
             report: { sessionId: randomUUID(), deviceId: device.id, deviceName: device.name, owner, agentId: context.agentId, modelRef,
               mock: modelRef === MOCK_PHONE_MODEL, mode: input.mode, status: 'ready', actions: 0, modelRequests: 0, controlOwner: 'agent', controlEpoch: 1, handoff: 'idle',
               createdAt: now, updatedAt: now, verified: false, verificationLevel: 'none', steps: [] } };
           this.sessions.set(owner, session);
           if (input.appPackage) {
-            if (input.mode !== 'control' || !device.allowedApps.includes(input.appPackage)) throw new PhoneError('PHONE_APP_DENIED', 'Launching requires control mode and an allowed application');
+            if (input.mode !== 'control' || !phoneAllowsApp(device, input.appPackage)) throw new PhoneError('PHONE_APP_DENIED', 'Launching requires control mode and an allowed application');
             const epoch = session.report.controlEpoch;
             const observation = await this.observe(session, signal);
             try { await this.dispatch(session, { type: 'launch', package: input.appPackage }, observation, context, signal, epoch); } finally { observation.frame.fill(0); }
@@ -192,7 +213,8 @@ export class PhoneRuntime {
         session.prediction = new AbortController();
         let decision;
         try {
-          decision = await session.adapter.predict({ goal: input.goal, observation, allowedApps: session.device.allowedApps,
+          decision = await session.adapter.predict({ goal: input.goal, observation, allowedApps: session.device.allowedApps, appAccess: phoneAppAccess(session.device),
+            applications: session.applications.filter(app => phoneAllowsApp(session.device, app.packageName)),
             history: session.report.steps.map(step => step.action), scenario: input.scenario }, AbortSignal.any([signal, session.prediction.signal]));
         } catch (error) {
           if (!signal.aborted && epoch !== session.report.controlEpoch) {
@@ -272,8 +294,8 @@ export class PhoneRuntime {
       if (session.human && Date.now() > (session.humanExpiresAt ?? 0)) throw new PhoneError('PHONE_CONTROL_REQUIRED', 'Manual control expired', 409);
       if (!session.human && session.report.actions - (session.report.humanActions ?? 0) >= context.config.phone.maxActionsPerSession) throw new PhoneError('PHONE_ACTION_LIMIT', 'Phone action limit reached');
       if (session.human && (session.report.humanActions ?? 0) >= 1200) throw new PhoneError('PHONE_ACTION_LIMIT', 'Manual input limit reached; reopen the session');
-      if (action.type === 'launch' && !session.device.allowedApps.includes(action.package)) throw new PhoneError('PHONE_APP_DENIED', 'Application is not authorized');
-      if (action.type === 'home') throw new PhoneError('PHONE_APP_DENIED', 'Home leaves the app allowlist');
+      if (action.type === 'launch' && !phoneAllowsApp(session.device, action.package)) throw new PhoneError('PHONE_APP_DENIED', 'Application is not authorized');
+      if (action.type === 'home' && phoneAppAccess(session.device) !== 'all') throw new PhoneError('PHONE_APP_DENIED', 'Home leaves the app allowlist');
       if (action.type === 'typeText' && !observation.elements.some(node => node.focused && node.editable && !node.password))
         throw new PhoneError('PHONE_INPUT_NOT_FOCUSED', 'Focus a non-password editable field before typing', 409);
       const step: PhoneReport['steps'][number] = { action: action.type, at: Date.now(), dispatch: 'unknown', actor: session.human ? 'human' : 'agent' };
@@ -321,7 +343,7 @@ export class PhoneRuntime {
       signal.throwIfAborted();
       const observe = forText && session.driver.observeForText ? session.driver.observeForText : session.driver.observe;
       const observation = await observe.call(session.driver, session.device.serial, signal);
-      if (session.device.allowedApps.includes(observation.package)) {
+      if (phoneAllowsApp(session.device, observation.package)) {
         if (Date.now() - session.viewedAt < 30_000 && !terminal.has(session.report.status)) session.frames.set(observation);
       } else session.frames.clear();
       return observation;
@@ -382,7 +404,7 @@ export class PhoneRuntime {
   }
   liveStatus(owner: string, id: string, context: ExecutionContext, client: string) {
     const session = this.liveSession(owner, id, context);
-    return { report: structuredClone(session.report), ownControl: Boolean(session.human === client), allowedApps: [...session.device.allowedApps],
+    return { report: structuredClone(session.report), ownControl: Boolean(session.human === client), allowedApps: [...session.device.allowedApps], appAccess: phoneAppAccess(session.device),
       frame: session.frames.get() ? { seq: session.frames.get()!.seq, capturedAt: session.frames.get()!.capturedAt } : null };
   }
   async liveVideo(owner: string, id: string, context: ExecutionContext) {
@@ -412,7 +434,7 @@ export class PhoneRuntime {
           if (terminal.has(session.report.status)) throw new PhoneError('PHONE_VIDEO_ENDED', 'Phone session ended', 409);
           this.guard(session, session.context);
           const app = await provider.foreground(AbortSignal.timeout(2000));
-          if (!session.device.allowedApps.includes(app)) throw new PhoneError('PHONE_APP_DENIED', 'Current page is outside the authorized applications', 403);
+          if (!phoneAllowsApp(session.device, app)) throw new PhoneError('PHONE_APP_DENIED', 'Current page is outside the authorized applications', 403);
           session.viewedAt = Date.now();
         }, (client, epoch) => {
           if (terminal.has(session.report.status) || session.report.handoff !== 'idle' || session.report.controlOwner !== 'human'
@@ -525,7 +547,7 @@ export class PhoneRuntime {
         session.budget?.resume(); this.publish(session); for (const wake of session.wake) wake();
       } else if (input.op === 'recover') {
         if (session.human !== client || Date.now() > (session.humanExpiresAt ?? 0)) throw new PhoneError('PHONE_CONTROL_REQUIRED', 'Take over the phone first', 409);
-        if (input.action?.type !== 'launch' || !session.device.allowedApps.includes(input.action.package)) throw new PhoneError('PHONE_APP_DENIED', 'Choose an authorized recovery application', 403);
+        if (input.action?.type !== 'launch' || !phoneAllowsApp(session.device, input.action.package)) throw new PhoneError('PHONE_APP_DENIED', 'Choose an authorized recovery application', 403);
         // Inspect only for launch execution; never publish pixels from a refused application.
         const observation = await this.io(session, () => session.driver.capture ? session.driver.capture(session.device.serial, session.controller.signal) : session.driver.observe(session.device.serial, session.controller.signal));
         try {
