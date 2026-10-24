@@ -8,7 +8,6 @@ export type PhoneDevices = { devices: PhoneDevice[]; discovery: Array<{ serial: 
 export type PhoneModel = { id: string; name: string; profile: string; mock: boolean; configured: boolean };
 export type PhoneReport = { sessionId: string; deviceId: string; deviceName: string; modelRef: string; mock: boolean; status: string; mode: string; actions: number; modelRequests: number; verified: boolean; verificationLevel: string; stopReason?: string; errorCode?: string; facts?: string[]; foregroundApp?: string; message?: string; steps: Array<{ action: string; dispatch: string }> };
 export const MOCK_MODEL = 'phone-mock/settings-about';
-export const MOCK_GOAL = 'Open Android Settings and inspect About phone';
 
 export async function phoneRequest<T>(path: string, body?: unknown, method = body === undefined ? 'GET' : 'POST'): Promise<T> {
   const result = await fetchJson<{ ok: boolean; payload: T; error?: { message: string } }>(apiUrl(`/api/phone${path}`), {

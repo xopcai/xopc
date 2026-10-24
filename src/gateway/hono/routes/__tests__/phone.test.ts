@@ -43,6 +43,9 @@ it('issues the same origin-bound video ticket for a registered cloud phone', asy
 });
 it('registers local phones, persists default selection and validates settings', async () => {
   const { app, runtime } = fixture();
+  const models = await app.request('/api/phone/models');
+  expect(models.status).toBe(200);
+  expect((await models.json()).payload.models).not.toEqual(expect.arrayContaining([expect.objectContaining({ id: MOCK_PHONE_MODEL })]));
   const added = await app.request('/api/phone/devices', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ serial: 'emulator-5554', name: 'Emulator', allowedApps: ['com.android.settings'] }) });
   expect(added.status).toBe(201);
   const body = await added.json(); expect(runtime.repository.defaultDevice()).toBe(body.payload.id);

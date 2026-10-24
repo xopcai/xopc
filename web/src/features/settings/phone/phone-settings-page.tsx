@@ -18,7 +18,7 @@ import { PhoneScreenDialog } from './phone-screen-dialog';
 import { PhoneAppPicker } from './phone-app-picker';
 import { PhoneTextInput } from './phone-text-input';
 import { PhoneModelConnection } from './phone-model-connection';
-import { MOCK_GOAL, MOCK_MODEL, fetchPhoneDevices, fetchPhoneSettings, phoneRequest, type PhoneDevice, type PhoneReport } from './phone-api';
+import { MOCK_MODEL, fetchPhoneDevices, fetchPhoneSettings, phoneRequest, type PhoneDevice, type PhoneReport } from './phone-api';
 
 const fieldClass = 'w-full rounded-lg border border-edge bg-surface-base px-3 py-2.5 text-sm text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent';
 const panelClass = 'space-y-4 rounded-2xl border border-edge bg-surface-panel p-4 sm:p-5';
@@ -104,9 +104,9 @@ export function PhoneSettingsPage() {
   };
   const start = () => perform(async () => {
     if (sessionId && report && !['closed', 'cancelled', 'failed', 'outcome_unknown'].includes(report.status)) await phoneRequest(`/sessions/${sessionId}/execute`, { op: 'close' });
-    const created = await phoneRequest<{ id: string; report: PhoneReport }>('/sessions', { deviceId, mode: 'control', ...(mock ? { appPackage: 'com.android.settings' } : {}) });
+    const created = await phoneRequest<{ id: string; report: PhoneReport }>('/sessions', { deviceId, mode: 'control' });
     setSessionId(created.id); sessionStorage.setItem('phone-settings-session', created.id);
-    await phoneRequest(`/sessions/${created.id}/execute`, mock ? { op: 'run', scenario: 'settings-about', goal: MOCK_GOAL, maxActions: 8 } : { op: 'run', goal, ...(expectText ? { expectText } : {}), maxActions: 6 });
+    await phoneRequest(`/sessions/${created.id}/execute`, { op: 'run', goal, ...(expectText ? { expectText } : {}), maxActions: 6 });
   });
   const control = (op: string) => perform(async () => { await phoneRequest(`/sessions/${sessionId}/execute`, { op }); await session.mutate(); });
   const diagnose = async (device: PhoneDevice) => {
@@ -140,7 +140,7 @@ export function PhoneSettingsPage() {
       {!defaults.data && !defaults.error ? <Skeleton className="h-44 w-full" /> : <PhoneModelConnection value={savedModel} onSelect={setModel} onSave={saveModel} zh={zh} disabled={busy || running || !defaults.data} />}
       {defaults.error && <p role="alert" className="text-sm text-danger">{String(defaults.error)}</p>}
       <p className="text-xs leading-relaxed text-fg-muted">{zh ? '手机截图会发送给所选模型；页面摘要可能进入聊天模型。' : 'Phone screenshots go to the selected model; page summaries may reach the chat model.'}</p>
-      <div className="flex flex-wrap items-center gap-3"><Button disabled={busy || !model} onClick={() => { void perform(async () => {
+      <div className="flex flex-wrap items-center gap-3"><Button disabled={busy || !model || model === MOCK_MODEL} onClick={() => { void perform(async () => {
         const result = await phoneRequest<{ protocolValid: boolean; groundingVerified: boolean; mock: boolean }>('/models/diagnostics', { modelRef: model });
         setNotice(result.mock ? (zh ? '模拟适配器可用；此测试不验证真实模型。' : 'Mock adapter ready; this does not validate a real model.') : result.groundingVerified ? (zh ? '模型连接、动作协议和测试图定位通过；未操作真实手机。' : 'Connection, protocol and test-image grounding passed. No phone was operated.') : (zh ? '动作协议有效，但测试图定位未通过。' : 'Protocol valid, but test-image grounding did not pass.'));
       }); }}>{zh ? '测试模型连接' : 'Test model connection'}</Button></div>
@@ -165,15 +165,15 @@ export function PhoneSettingsPage() {
     <section className={panelClass} aria-label={zh ? '手机试运行' : 'Phone test run'}>
       <h2 className="flex items-center gap-2 text-sm font-semibold"><FlaskConical className="size-4" />{zh ? '试运行' : 'Test run'}</h2>
       <Select aria-label={zh ? '测试手机' : 'Test phone'} value={deviceId} disabled={busy || running} onChange={event => setSelected(event.target.value)}><SelectOption value="">{zh ? '选择手机' : 'Choose phone'}</SelectOption>{devices.data?.devices.filter(device => device.enabled).map(device => <SelectOption key={device.id} value={device.id}>{device.name}</SelectOption>)}</Select>
-      {mock ? <p className="text-sm text-fg-muted">{zh ? '固定测试：打开系统设置，进入关于手机，并通过界面文字验证结果。这是模拟模型，不是 AI 推理。' : 'Fixed test: open Settings, navigate to About phone and verify native UI evidence. This is a scripted mock, not AI inference.'}</p> : <div className="space-y-3"><label className="block space-y-1.5 text-sm">{zh ? '本次授权的小目标' : 'Authorized goal'}<textarea className={fieldClass} value={goal} maxLength={2000} onChange={event => setGoal(event.target.value)} /></label><label className="block space-y-1.5 text-sm">{zh ? '完成时应显示的文字（可选）' : 'Expected completion text (optional)'}<input className={fieldClass} value={expectText} maxLength={200} onChange={event => setExpectText(event.target.value)} /></label><p className="text-xs text-fg-muted">{zh ? '先手动打开允许的应用。模型说完成只表示执行结束，只有匹配界面证据才会显示验证通过。' : 'First open an allowed app manually. A model completion claim remains unverified until native UI evidence matches.'}</p></div>}
-      <Button variant="primary" disabled={busy || running || !settings.data?.config.enabled || !savedModel || model !== savedModel || !deviceId || (!mock && !goal.trim())} onClick={() => { void start(); }}><Play className="size-4" />{mock ? (zh ? '运行模拟测试' : 'Run mock test') : (zh ? '开始试运行' : 'Start test run')}</Button>
+      <div className="space-y-3"><label className="block space-y-1.5 text-sm">{zh ? '本次授权的小目标' : 'Authorized goal'}<textarea className={fieldClass} value={goal} maxLength={2000} onChange={event => setGoal(event.target.value)} /></label><label className="block space-y-1.5 text-sm">{zh ? '完成时应显示的文字（可选）' : 'Expected completion text (optional)'}<input className={fieldClass} value={expectText} maxLength={200} onChange={event => setExpectText(event.target.value)} /></label><p className="text-xs text-fg-muted">{zh ? '先手动打开允许的应用。模型说完成只表示执行结束，只有匹配界面证据才会显示验证通过。' : 'First open an allowed app manually. A model completion claim remains unverified until native UI evidence matches.'}</p></div>
+      <Button variant="primary" disabled={busy || running || !settings.data?.config.enabled || !savedModel || mock || model !== savedModel || !deviceId || !goal.trim()} onClick={() => { void start(); }}><Play className="size-4" />{zh ? '开始试运行' : 'Start test run'}</Button>
       {session.error && <p role="alert" className="text-sm text-danger">{String(session.error)}</p>}
       {report && <div className="space-y-3 rounded-xl border border-edge bg-surface-inset p-4" aria-live="polite">
         <p className="text-sm font-medium">{report.deviceName} · {statusLabels[report.status] ?? report.status}</p>
         <p className="text-xs text-fg-muted">{report.actions} {zh ? '动作' : 'actions'} · {report.modelRequests} {zh ? '模型请求' : 'model requests'} · {report.verified ? (zh ? '界面条件已验证' : 'UI condition verified') : (zh ? '尚未验证完成' : 'Completion unverified')}</p>
         {report.message && <p className="text-sm text-fg-muted">{report.message}</p>}
         {(report.errorCode || report.stopReason) && <p className="break-all text-xs text-fg-muted">{report.errorCode ?? report.stopReason}</p>}
-        <div className="flex flex-wrap gap-2"><Button disabled={busy || !running} onClick={() => { void control('pause'); }}>{zh ? '暂停' : 'Pause'}</Button><Button disabled={busy || !['paused', 'needs_user'].includes(report.status)} onClick={() => { void control('resume'); }}>{zh ? '恢复' : 'Resume'}</Button><Button disabled={busy || ['closed', 'cancelled'].includes(report.status)} onClick={() => { void control('cancel'); }}>{zh ? '停止' : 'Stop'}</Button><Button disabled={busy} onClick={() => { void control('close'); }}>{zh ? '释放手机' : 'Release phone'}</Button>{report.status === 'ready' && <Button disabled={busy} onClick={() => { void perform(async () => { await phoneRequest(`/sessions/${sessionId}/execute`, mock ? { op: 'run', scenario: 'settings-about', goal: MOCK_GOAL, maxActions: 8 } : { op: 'run', goal, ...(expectText ? { expectText } : {}) }); await session.mutate(); }); }}>{zh ? '继续当前目标' : 'Continue goal'}</Button>}</div>
+        <div className="flex flex-wrap gap-2"><Button disabled={busy || !running} onClick={() => { void control('pause'); }}>{zh ? '暂停' : 'Pause'}</Button><Button disabled={busy || !['paused', 'needs_user'].includes(report.status)} onClick={() => { void control('resume'); }}>{zh ? '恢复' : 'Resume'}</Button><Button disabled={busy || ['closed', 'cancelled'].includes(report.status)} onClick={() => { void control('cancel'); }}>{zh ? '停止' : 'Stop'}</Button><Button disabled={busy} onClick={() => { void control('close'); }}>{zh ? '释放手机' : 'Release phone'}</Button>{report.status === 'ready' && !report.mock && <Button disabled={busy} onClick={() => { void perform(async () => { await phoneRequest(`/sessions/${sessionId}/execute`, { op: 'run', goal, ...(expectText ? { expectText } : {}) }); await session.mutate(); }); }}>{zh ? '继续当前目标' : 'Continue goal'}</Button>}</div>
         {report.facts?.length ? <details><summary className="cursor-pointer text-xs text-fg-muted">{zh ? '本次观察到的界面文字' : 'Observed UI text'}</summary><ul className="mt-2 max-h-52 space-y-1 overflow-auto text-xs text-fg-muted">{report.facts.map((fact, index) => <li key={index} className="break-words">{fact}</li>)}</ul></details> : null}
       </div>}
     </section>
