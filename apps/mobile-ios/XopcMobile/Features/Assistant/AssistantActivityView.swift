@@ -16,7 +16,7 @@ struct AssistantActivityView: View {
                     }
                 }
                 .padding(.horizontal, 12)
-                .frame(width: 104, height: 64)
+                .frame(width: 72, height: 44)
                 .background(Color.secondary.opacity(0.1), in: .capsule)
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel("助手正在处理")
