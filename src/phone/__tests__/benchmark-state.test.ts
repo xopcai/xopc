@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { armOrder, fingerprint, nativeFacts, type ArmName } from '../../../scripts/phone-apps-live/support.js';
-import { tasks, CONTACTS, type TaskDevice } from '../../../scripts/phone-apps-live/tasks.js';
+import { tasks, CLOCK, CONTACTS, type TaskDevice } from '../../../scripts/phone-apps-live/tasks.js';
 import { initialStateReady } from '../../../scripts/phone-apps-live/initial-state.js';
 import type { PhoneObservation } from '../contracts.js';
 
@@ -91,5 +91,17 @@ describe('Contacts fixture navigation', () => {
     await tasks.find(task => task.id === 'contacts-search')!.prepare(f.device);
     expect(f.tap.mock.calls.map(call => call[0])).toEqual(['Back', 'Contacts']);
     expect(f.pressBack).not.toHaveBeenCalled();
+  });
+});
+
+describe('Clock fixture navigation', () => {
+  it('primes the stopped stopwatch before the shared Alarm initial state', async () => {
+    const value = screen(); value.package = CLOCK;
+    value.elements = [{ ...value.elements[0], resourceId: `${CLOCK}:id/timer_setup_time`, text: '00h 00m 00s' }];
+    const tap = vi.fn<TaskDevice['tap']>(async () => {});
+    const device: TaskDevice = { tap, observe: async () => value, start: async () => {}, forceStop: async () => {},
+      pressBack: async () => {}, pressTab: async () => {} };
+    await tasks.find(task => task.id === 'clock-stopwatch')!.prepare(device);
+    expect(tap.mock.calls.map(call => call[0])).toEqual(['Timer', 'Stopwatch', 'Alarm']);
   });
 });

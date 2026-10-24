@@ -52,6 +52,8 @@ async function clockAlarm(device: TaskDevice) {
     } finally { screen.frame.fill(0); }
     await device.tap('Backspace', { resourceId: `${CLOCK}:id/timer_setup_delete` });
   }
+  // Visit the stopped stopwatch before Alarm so its first visit cannot change retained view focus between arms.
+  await device.tap('Stopwatch', { resourceId: `${CLOCK}:id/tab_menu_stopwatch` });
   await device.tap('Alarm', { resourceId: `${CLOCK}:id/tab_menu_alarm` });
 }
 async function filesRoot(device: TaskDevice, label: string) {
