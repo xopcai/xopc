@@ -1,10 +1,12 @@
 import { z } from 'zod';
 
+import { phoneAllowsApp, type PhoneAppAccess } from './app-access.js';
+
 import { getApiKey, resolveModel } from '../providers/index.js';
 import type { Config } from '../config/schema.js';
 import {
   MOCK_PHONE_MODEL, PhoneDecisionSchema, PhoneError, PhoneModelMetadataSchema,
-  type PhoneAction, type PhoneDecision, type PhoneObservation,
+  type PhoneAction, type PhoneApplication, type PhoneDecision, type PhoneObservation,
 } from './contracts.js';
 
 export function phoneModelProfile(model: unknown) {
@@ -20,7 +22,7 @@ export function validatePhoneModelChange(next: { primary: string } | null | unde
 }
 
 /** Parse only a function name and literal keyword arguments; model text is never executable code. */
-export function parseAutoGlmResponse(raw: string, allowedApps: string[]): PhoneDecision {
+export function parseAutoGlmResponse(raw: string, allowedApps: string[], options?: { appAccess?: PhoneAppAccess['appAccess']; applications?: PhoneApplication[] }): PhoneDecision {
   let text = raw.trim();
   if (text.includes('<answer>')) text = text.split('<answer>').at(-1)!.replace(/<\/answer>[\s\S]*$/, '').trim();
   else { const marker = /(?:^|\n)\s*((?:do|finish)\s*\()/g; let match; let start = -1; while ((match = marker.exec(text))) start = match.index + match[0].indexOf(match[1]); if (start >= 0) text = text.slice(start); }
@@ -74,8 +76,12 @@ export function parseAutoGlmResponse(raw: string, allowedApps: string[]): PhoneD
   let action: unknown;
   switch (args.action) {
     case 'Launch': {
-      const app = args.app === '设置' || args.app === 'Settings' ? 'com.android.settings' : args.app;
-      if (typeof app !== 'string' || !allowedApps.includes(app)) throw new PhoneError('PHONE_APP_DENIED', 'Model requested an application outside the device allowlist');
+      let app = args.app === '设置' || args.app === 'Settings' ? 'com.android.settings' : args.app;
+      if (typeof app === 'string' && !/^[a-zA-Z]\w*(?:\.\w+)+$/.test(app)) {
+        const matches = options?.applications?.filter(candidate => candidate.label.toLocaleLowerCase() === String(app).toLocaleLowerCase()) ?? [];
+        if (matches.length === 1) app = matches[0].packageName;
+      }
+      if (typeof app !== 'string' || !/^[a-zA-Z]\w*(?:\.\w+)+$/.test(app) || !phoneAllowsApp({ allowedApps, appAccess: options?.appAccess ?? 'selected' }, app)) throw new PhoneError('PHONE_APP_DENIED', 'Model requested an application outside the device allowlist');
       action = { type: 'launch', package: app }; break;
     }
     case 'Tap': action = { type: 'tap', point: args.element }; break;
@@ -95,7 +101,7 @@ export function parseAutoGlmResponse(raw: string, allowedApps: string[]): PhoneD
 }
 
 export interface PhonePrediction {
-  goal: string; observation: PhoneObservation; allowedApps: string[]; history: PhoneAction['type'][]; scenario?: 'settings-about';
+  goal: string; observation: PhoneObservation; allowedApps: string[]; appAccess?: PhoneAppAccess['appAccess']; applications?: PhoneApplication[]; history: PhoneAction['type'][]; scenario?: 'settings-about';
 }
 export interface PhoneModelAdapter { predict(input: PhonePrediction, signal: AbortSignal): Promise<PhoneDecision> }
 
@@ -150,13 +156,13 @@ export async function createPhoneModel(modelRef: string, config: Config, agentId
       const response = await fetch(endpoint, { method: 'POST', redirect: 'error', signal: AbortSignal.any([signal, AbortSignal.timeout(45_000)]), headers,
         body: JSON.stringify({ model: model.id, temperature: 0, max_tokens: Math.min(2048, model.maxTokens ?? 2048), stream: false,
           messages: [{ role: 'system', content: system }, { role: 'user', content: [
-            { type: 'text', text: JSON.stringify({ goal: input.goal, allowedApps: input.allowedApps, currentApp: input.observation.package, recentActions: input.history.slice(-6) }) },
+            { type: 'text', text: JSON.stringify({ goal: input.goal, appAccess: input.appAccess ?? 'selected', allowedApps: input.allowedApps, applications: input.applications?.slice(0, 100), currentApp: input.observation.package, recentActions: input.history.slice(-6) }) },
             { type: 'image_url', image_url: { url: `data:image/png;base64,${input.observation.frame.toString('base64')}` } },
           ] }] }) });
       const payload = z.object({ choices: z.array(z.object({ message: z.object({ content: z.string() }) })).min(1) }).safeParse(await boundedJson(response));
       if (!payload.success) throw new PhoneError('PHONE_MODEL_PROTOCOL', 'Phone model returned no action');
       const text = payload.data.choices[0].message.content;
-      if (profile === 'autoglm-phone-v1') return parseAutoGlmResponse(text, input.allowedApps);
+      if (profile === 'autoglm-phone-v1') return parseAutoGlmResponse(text, input.allowedApps, input);
       try { return PhoneDecisionSchema.parse(JSON.parse(text)); } catch { throw new PhoneError('PHONE_MODEL_PROTOCOL', 'Phone model returned an invalid structured action'); }
     },
   };

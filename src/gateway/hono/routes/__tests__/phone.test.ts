@@ -19,7 +19,7 @@ afterEach(() => closeXopcDatabase());
 function fixture(admin = true) {
   const app = new Hono();
   app.use('*', async (c, next) => { setGatewayPrincipal(c, { kind: admin ? 'owner' : 'device', principalId: 'test', scopes: ['gateway.admin'] }); await next(); });
-  const driver = { discover: vi.fn(async () => [{ serial: 'emulator-5554', name: 'Emulator', state: 'device', emulator: true }]), observe: vi.fn(), execute: vi.fn() };
+  const driver = { discover: vi.fn(async () => [{ serial: 'emulator-5554', name: 'Emulator', state: 'device', emulator: true }]), applications: vi.fn(async () => [{ packageName: 'com.android.settings', label: '设置' }, { packageName: 'com.android.deskclock', label: '时钟' }]), observe: vi.fn(), execute: vi.fn() };
   const conversationId = randomUUID();
   const config = ConfigSchema.parse({ phone: { enabled: true } });
   const runtime = new PhoneRuntime(new PhoneRepository(), () => driver);
@@ -50,7 +50,7 @@ it('registers local phones, persists default selection and validates settings', 
   expect(await response.json()).toMatchObject({ ok: true, payload: { devices: [{ name: 'Emulator' }], discovery: [{ emulator: true }] } });
   const invalid = await app.request(`/api/phone/devices/${body.payload.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ allowedApps: [] }) });
   expect(invalid.status).toBe(400);
-  expect(await invalid.json()).toMatchObject({ ok: false, error: { code: 'PHONE_INVALID_INPUT' } });
+  expect(await invalid.json()).toMatchObject({ ok: false, error: { code: 'PHONE_APPS_REQUIRED' } });
 });
 it('does not let a paired device use the owner phone management surface', async () => {
   const { app, driver } = fixture(false);
@@ -104,4 +104,28 @@ it('protects cloud credentials routes and rejects uploaded keys on ordinary devi
   expect(forged.status).toBe(400);
   const oversized = await app.request('/api/phone/cloud/aliyun/test', { method: 'POST', body: 'x'.repeat(25000) }); expect(oversized.status).toBe(413);
   await runtime.shutdown();
+});
+
+it('defaults a new phone to all apps and persists explicit selected-only policies', async () => {
+  const { app, runtime } = fixture();
+  const added = await app.request('/api/phone/devices', { method: 'POST', body: JSON.stringify({ serial: 'emulator-5554', name: 'All apps' }), headers: { 'Content-Type': 'application/json' } });
+  expect(added.status).toBe(201);
+  const { payload } = await added.json(); expect(payload).toMatchObject({ appAccess: 'all', allowedApps: [] });
+  const patch = (body: unknown) => app.request(`/api/phone/devices/${payload.id}`, { method: 'PATCH', body: JSON.stringify(body), headers: { 'Content-Type': 'application/json' } });
+  expect(await (await patch({ appAccess: 'selected', allowedApps: ['com.android.settings'] })).json()).toMatchObject({ payload: { appAccess: 'selected', allowedApps: ['com.android.settings'] } });
+  expect((await patch({ appAccess: 'selected', allowedApps: [] })).status).toBe(400);
+  expect(runtime.repository.get(payload.id).appAccess).toBe('selected');
+  expect(await (await patch({ appAccess: 'all', allowedApps: [] })).json()).toMatchObject({ payload: { appAccess: 'all', allowedApps: [] } });
+});
+it('lists applications for registered cloud phones and discovered local phones through owner-only APIs', async () => {
+  const { app, runtime, driver } = fixture();
+  const cloud = runtime.repository.save({ serial: 'cloud.example:10001', name: 'Cloud', enabled: true, allowedApps: [], connection: { kind: 'aliyun-adb', endpoint: 'cloud.example:10001', credentialId: randomUUID() } });
+  vi.spyOn(runtime, 'driverFor').mockResolvedValue(driver);
+  const cloudApps = await app.request(`/api/phone/devices/${cloud.id}/apps`);
+  expect(cloudApps.status).toBe(200); expect(cloudApps.headers.get('Cache-Control')).toBe('no-store');
+  expect(await cloudApps.json()).toMatchObject({ payload: { applications: [{ label: '设置' }, { label: '时钟' }] } });
+  expect((await app.request('/api/phone/apps?serial=emulator-5554')).status).toBe(200);
+  expect((await app.request('/api/phone/apps?serial=unknown')).status).toBe(400);
+  expect((await fixture(false).app.request(`/api/phone/devices/${cloud.id}/apps`)).status).toBe(403);
+  expect((await fixture(false).app.request('/api/phone/apps?serial=emulator-5554')).status).toBe(403);
 });

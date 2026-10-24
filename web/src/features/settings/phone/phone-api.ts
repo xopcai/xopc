@@ -1,7 +1,7 @@
 import { fetchJson, apiFetch } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 
-export type PhoneDevice = { id: string; serial: string; name: string; enabled: boolean; allowedApps: string[]; revision: number; createdAt: number; connection?: { kind: 'aliyun-adb'; endpoint: string; credentialId: string } };
+export type PhoneDevice = { id: string; serial: string; name: string; enabled: boolean; appAccess?: 'all' | 'selected'; allowedApps: string[]; revision: number; createdAt: number; connection?: { kind: 'aliyun-adb'; endpoint: string; credentialId: string } };
 export type PhoneConfig = { enabled: boolean; adbPath?: string; maxActionsPerSession: number; maxModelRequests: number; maxOperationDurationMs: number; maxSessionDurationMs: number };
 export type PhoneSettings = { config: PhoneConfig; defaultDeviceId?: string; runner: string; agentId: string };
 export type PhoneDevices = { devices: PhoneDevice[]; discovery: Array<{ serial: string; state: string; name: string; emulator: boolean }>; diagnostic?: string; defaultDeviceId?: string };
@@ -28,4 +28,10 @@ export async function fetchPhoneScreen(id: string, signal?: AbortSignal): Promis
     throw new Error(data.error?.message ?? `HTTP ${result.status}`);
   }
   return result.blob();
+}
+
+export type PhoneApplication = { packageName: string; label: string };
+export async function fetchPhoneApplications(deviceId: string | undefined, serial: string): Promise<PhoneApplication[]> {
+  const result = await phoneRequest<{ applications: PhoneApplication[] }>(deviceId ? `/devices/${encodeURIComponent(deviceId)}/apps` : `/apps?serial=${encodeURIComponent(serial)}`);
+  return result.applications;
 }

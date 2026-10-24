@@ -553,3 +553,19 @@ it('does not leave control stuck in returning when the handback observation fail
       .toMatchObject({ report: { status: 'ready', controlOwner: 'agent', handoff: 'idle' } });
   } finally { await f.runtime.shutdown(); }
 });
+
+it('permits Home and cross-app observation only for all-app devices', async () => {
+  const f = fixture({ predict: async () => ({ kind: 'action', action: { type: 'home' } }) });
+  f.repository.save({ ...f.device, appAccess: 'all', allowedApps: [] }, f.device.id);
+  try {
+    await f.runtime.execute('all-apps', { op: 'open', mode: 'control' }, f.context);
+    await f.runtime.execute('all-apps', { op: 'step', goal: 'Go home', scenario: 'settings-about' }, f.context);
+    expect(f.driver.execute).toHaveBeenCalledWith(f.device.serial, { type: 'home' }, expect.any(Object), expect.any(AbortSignal), undefined);
+    vi.mocked(f.driver.observe).mockImplementation(async () => ({ ...screen(['Clock']), package: 'com.android.deskclock' }));
+    const observation = await f.runtime.previewSession('all-apps', f.context, new AbortController().signal); observation.frame.fill(0);
+    await f.runtime.stop('all-apps', 'close');
+    f.repository.save({ ...f.device, appAccess: 'selected', allowedApps: ['com.android.settings'] }, f.device.id);
+    await f.runtime.execute('selected-apps', { op: 'open', mode: 'control' }, f.context);
+    await expect(f.runtime.previewSession('selected-apps', f.context, new AbortController().signal)).rejects.toMatchObject({ code: 'PHONE_APP_DENIED' });
+  } finally { await f.runtime.shutdown(); }
+});

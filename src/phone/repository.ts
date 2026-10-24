@@ -1,11 +1,13 @@
 import { randomUUID } from 'node:crypto';
 
+import { normalizePhoneAppAccess } from './app-access.js';
+
 import { DurableState } from '../storage/sqlite/durable-state.js';
 import { PhoneDeviceSchema, PhoneError, type PhoneDevice, type PhoneReport } from './contracts.js';
 
 function parseDevice(value: PhoneDevice): PhoneDevice {
   const { agentIds: _removed, ...device } = value as PhoneDevice & { agentIds?: unknown };
-  return PhoneDeviceSchema.parse(device);
+  return normalizePhoneAppAccess(PhoneDeviceSchema.parse(device));
 }
 
 type Lease = { token: string; expiresAt: number };
@@ -26,7 +28,7 @@ export class PhoneRepository {
   save(input: Omit<PhoneDevice, 'id' | 'createdAt' | 'revision'>, id?: string): PhoneDevice {
     const previous = id ? this.get(id) : undefined;
     if (this.list().some(device => device.serial === input.serial && device.id !== id)) throw new PhoneError('PHONE_DEVICE_DUPLICATE', 'This ADB device is already registered');
-    const next = PhoneDeviceSchema.parse({ ...input, id: id ?? randomUUID(), createdAt: previous?.createdAt ?? Date.now(), revision: (previous?.revision ?? 0) + 1 });
+    const next = normalizePhoneAppAccess(PhoneDeviceSchema.parse({ ...input, id: id ?? randomUUID(), createdAt: previous?.createdAt ?? Date.now(), revision: (previous?.revision ?? 0) + 1 }));
     this.devices.set(next.id, next);
     return next;
   }

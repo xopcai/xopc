@@ -7,6 +7,8 @@ import { Adb, AdbDaemonTransport, AdbPacket, AdbPacketSerializeStream, AdbSignat
 import { Consumable, ReadableStream, StructDeserializeStream } from '@yume-chan/stream-extra';
 
 import { resolveCredentialsDir } from '../config/paths.js';
+import { parsePhoneApplications, phoneApplicationsCommand } from './applications.js';
+import { readScrcpyServer } from './scrcpy-assets.js';
 import { AdbPhoneDriver } from './adb-driver.js';
 import { PhoneError } from './contracts.js';
 
@@ -121,5 +123,27 @@ export class CloudAdbConnection {
       clearTimeout(this.idle); this.idle = setTimeout(() => this.close(), 30_000); this.idle.unref();
     }
   }
-  driver(): AdbPhoneDriver { return new AdbPhoneDriver('', this.command.bind(this), false); }
+  async applications(signal: AbortSignal) {
+    const combined = AbortSignal.any([signal, AbortSignal.timeout(30_000)]);
+    const abort = () => this.close(); combined.addEventListener('abort', abort, { once: true });
+    const remote = `/data/local/tmp/xopc-apps-${randomUUID()}.jar`;
+    try {
+      combined.throwIfAborted(); const binary = await readScrcpyServer(); const adb = await this.client();
+      combined.throwIfAborted(); const sync = await adb.sync();
+      try { await sync.write({ filename: remote, permission: 0o600, file: new ReadableStream<Uint8Array>({ start(controller) { controller.enqueue(binary); controller.close(); } }) }); }
+      finally { await sync.dispose(); }
+      const raw = await this.command('', ['-s', this.endpoint, 'shell', ...phoneApplicationsCommand(remote)], combined);
+      return parsePhoneApplications(raw.toString());
+    } finally {
+      combined.removeEventListener('abort', abort);
+      await this.command('', ['-s', this.endpoint, 'shell', 'rm', '-f', remote], undefined, 3000).catch(() => {});
+    }
+  }
+  driver(): AdbPhoneDriver {
+    return new AdbPhoneDriver('', this.command.bind(this), false, async signal => {
+      // Management metadata must not abort a concurrent control connection.
+      const listing = new CloudAdbConnection(this.endpoint, Buffer.from(this.key));
+      try { return await listing.applications(signal); } finally { listing.dispose(); }
+    });
+  }
 }

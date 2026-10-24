@@ -45,7 +45,7 @@ export class CloudPhones {
     let credentialId: string | undefined;
     try {
       credentialId = await this.keys.save(draft.key);
-      const device = this.repository.save({ serial: draft.endpoint, name, enabled: true, allowedApps: ['com.android.settings'],
+      const device = this.repository.save({ serial: draft.endpoint, name, enabled: true, appAccess: 'all', allowedApps: [],
         connection: { kind: 'aliyun-adb', endpoint: draft.endpoint, credentialId } });
       if (makeDefault || !this.repository.defaultDevice()) this.repository.setDefault(device.id);
       return device;
