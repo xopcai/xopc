@@ -468,8 +468,7 @@ extension AssistantState {
         in conversation: ConversationSelection,
         using gateway: any GatewayServing
     ) async {
-        guard let clarification, !isRespondingToClarification else { return }
-        guard !clarification.isExpired else { return }
+        guard let clarification, !isRespondingToClarification, !clarification.isExpired else { return }
         if action == "answer" && submission == nil {
             return
         }

@@ -201,8 +201,7 @@ actor DeviceEndpointHost {
     }
 
     private func invoke(_ requestData: Data) async throws {
-        guard let request = try JSONSerialization.jsonObject(with: requestData) as? [String: Any] else { throw GatewayClientError.invalidResponse }
-        guard let id = request["invocationId"] as? String else { throw GatewayClientError.invalidResponse }
+        guard let request = try JSONSerialization.jsonObject(with: requestData) as? [String: Any], let id = request["invocationId"] as? String else { throw GatewayClientError.invalidResponse }
         if request["toolName"] as? String == "mobile.device.get_location" {
             try await invokeLocation(request, id: id)
             return
