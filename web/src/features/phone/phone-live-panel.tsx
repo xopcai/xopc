@@ -117,6 +117,8 @@ export function PhoneLivePanel({ conversationId, state, onChange }: {
         : snapshot ? (age !== null && age > 4 ? (zh ? '画面更新较慢' : 'Preview delayed') : (zh ? '定时更新画面' : 'Snapshot preview'))
           : connected ? (zh ? '已连接' : 'Connected') : (zh ? '正在连接…' : 'Connecting…');
   const helper = ended ? (zh ? '在聊天中让 Agent 重新打开手机，即可继续使用。' : 'Ask the Agent in chat to reopen the phone to continue.')
+    : state.report.stopReason === 'text_input_required' ? (human ? (zh ? '请使用手机自带键盘输入，完成后交还 Agent。' : 'Type with the phone keyboard, then hand back to the Agent.') : (zh ? '请接管并使用手机自带键盘输入，完成后交还 Agent。' : 'Take over, type with the phone keyboard, then hand back to the Agent.'))
+      : state.report.stopReason === 'text_input_unconfirmed' ? (human ? (zh ? '请检查输入框，避免重复输入；确认后交还 Agent。' : 'Inspect the field to avoid duplicate text, then hand back to the Agent.') : (zh ? '请先接管检查输入框，避免重复输入；确认后交还 Agent。' : 'Take over and inspect the field before retrying to avoid duplicate text. Then hand back to the Agent.'))
     : video.status === 'blocked' ? (zh ? '当前页面不在授权范围内，请先返回授权应用。' : 'This page is outside the allowed apps. Return to an authorized app first.')
       : working || busy === 'takeover' || busy === 'handback' ? (zh ? '控制权交接完成后，即可继续操作。' : 'Controls become available once the handoff completes.')
       : human ? (snapshot ? (zh ? '当前画面定时更新，拖动可能稍有延迟。' : 'Snapshot preview; dragging may be delayed.') : (zh ? '可以点击、滑动和输入文字，Agent 已暂停。' : 'Click, swipe or type. The Agent is paused.'))
@@ -147,9 +149,9 @@ export function PhoneLivePanel({ conversationId, state, onChange }: {
       </DropdownMenu.Root>
     </header>
     <div className="phone-live-stage relative flex min-h-0 flex-1 items-center justify-center bg-surface-inset p-4">
-      <div className={cn('phone-device-shell relative shrink-0 rounded-[28px] border border-edge bg-surface-rail shadow-surface', human && 'ring-2 ring-accent/60')} style={{ '--phone-screen-ratio': ratio } as CSSProperties} data-phone-device-shell>
-        <span className="pointer-events-none absolute left-1/2 top-1.5 h-[3px] w-8 -translate-x-1/2 rounded-full bg-fg-muted/50" aria-hidden />
-        <span className="pointer-events-none absolute -right-[3px] top-20 h-9 w-0.5 rounded-r bg-edge" aria-hidden />
+      <div className={cn('phone-device-shell relative shrink-0 rounded-[28px] border border-phone-rim bg-phone-shell shadow-phone-device', human && 'ring-2 ring-accent/60 ring-offset-2 ring-offset-surface-inset')} style={{ '--phone-screen-ratio': ratio } as CSSProperties} data-phone-device-shell>
+        <span className="pointer-events-none absolute left-1/2 top-1.5 h-[3px] w-8 -translate-x-1/2 rounded-full bg-phone-rim" aria-hidden />
+        <span className="pointer-events-none absolute -right-[3px] top-20 h-9 w-0.5 rounded-r bg-phone-rim" aria-hidden />
         <div className="phone-device-screen relative w-full overflow-hidden rounded-[18px] bg-surface-base">
           <canvas ref={canvas} aria-label={zh ? '手机视频画面' : 'Phone video screen'}
             data-phone-video-status={video.status} data-phone-video-error={video.error} data-phone-video-frames={video.frames} data-phone-video-fps={video.fps.toFixed(1)} data-phone-input-ack-ms={video.ackMs?.toFixed(1)}
@@ -196,7 +198,7 @@ export function PhoneLivePanel({ conversationId, state, onChange }: {
         <p className="mb-2 text-center text-xs leading-relaxed text-fg-muted">{helper}</p>
         {error ? <p role="alert" className="mb-2 text-xs text-danger">{zh ? '操作未完成，请重试。详细原因可在连接详情中查看。' : 'Action failed. Try again or check connection details.'}</p> : null}
         {!ended ? <div className="flex flex-wrap gap-2">
-          {controlMode ? <Button variant="primary" className="min-h-11 min-w-0 flex-1 rounded-lg" disabled={disabled} onClick={() => void command(human ? 'handback' : 'takeover')}>
+          {controlMode ? <Button variant={human ? 'primary' : 'ghost'} className={cn('min-h-11 min-w-0 flex-1 rounded-lg', !human && 'border border-accent/20 bg-accent-soft text-accent-fg hover:border-accent/40 hover:bg-accent-soft hover:text-accent-fg dark:border-accent/30 dark:hover:bg-accent/30')} disabled={disabled} onClick={() => void command(human ? 'handback' : 'takeover')}>
             {busy || working ? <Loader2 className="size-4 animate-spin motion-reduce:animate-none" aria-hidden /> : human ? <Play className="size-4" aria-hidden /> : <Hand className="size-4" aria-hidden />}{primaryLabel}
           </Button> : null}
           {!otherHuman && controlMode ? <Button variant="ghost" className="min-h-11 rounded-lg" disabled={disabled} onClick={() => void command(human ? 'release' : paused ? 'handback' : 'pause')}>
@@ -205,8 +207,8 @@ export function PhoneLivePanel({ conversationId, state, onChange }: {
         </div> : null}
         {human ? <div className="mt-2 flex flex-wrap items-center gap-1.5">
           <Button variant="ghost" className="size-9 rounded-lg p-0" aria-label={zh ? '手机返回' : 'Phone back'} disabled={Boolean(busy) || working || (!frame && !videoPlaying)} onClick={() => void command('input', { type: 'back' }, frame?.seq)}><ArrowLeft className="size-4" aria-hidden /></Button>
-          <Button variant="ghost" className="size-9 rounded-lg p-0" aria-label={zh ? '手机输入' : 'Phone keyboard'} aria-expanded={showText} disabled={Boolean(busy) || working || (!frame && !videoPlaying)} onClick={() => setShowText(value => !value)}><Keyboard className="size-4" aria-hidden /></Button>
-          <span className="text-xs text-fg-muted">{zh ? '仅查看会保持任务暂停' : 'View only keeps the task paused'}</span>
+          <Button variant="ghost" className="size-9 rounded-lg p-0" aria-label={zh ? '手机输入' : 'Phone keyboard'} aria-expanded={showText} disabled={state.textInput === 'manual' || Boolean(busy) || working || (!frame && !videoPlaying)} onClick={() => setShowText(value => !value)}><Keyboard className="size-4" aria-hidden /></Button>
+          <span className="text-xs text-fg-muted">{state.textInput === 'manual' ? (zh ? '请使用手机自带键盘输入' : 'Use the phone keyboard to type') : (zh ? '仅查看会保持任务暂停' : 'View only keeps the task paused')}</span>
         </div> : null}
         {human && showText ? <form className="mt-2 flex gap-2" onSubmit={event => { event.preventDefault(); void sendText(); }}>
           <input aria-label={zh ? '发送到手机的文本' : 'Text to send to phone'} placeholder={zh ? '输入非密码文本…' : 'Type non-password text…'} autoComplete="off" value={text} disabled={Boolean(busy) || working || (!frame && !videoPlaying)} onChange={event => setText(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && event.nativeEvent.isComposing) event.preventDefault(); }} className="min-h-11 min-w-0 flex-1 rounded-lg border border-edge bg-surface-panel px-3 text-sm focus-visible:outline-2 focus-visible:outline-accent" />

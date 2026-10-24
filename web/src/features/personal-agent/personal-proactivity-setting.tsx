@@ -58,10 +58,10 @@ export function PersonalProactivitySetting({ zh }: { zh: boolean }) {
         { value: 'balanced', label: zh ? '适度主动' : 'Thoughtful participation' },
       ]} onChange={mode => void save({ mode: mode as PersonalProactivitySettings['mode'] })} />
       <div className="grid grid-cols-2 gap-3">
-        <label className="text-xs text-fg-muted">{zh ? '静默开始' : 'Quiet from'}<PopoverSelect placeholder={zh ? '选择时间' : 'Choose time'} value={String(settings.quietStart)} disabled={busy} allowEmpty={false}
+        <label className="text-xs text-fg-muted">{zh ? '免打扰开始' : 'Quiet from'}<PopoverSelect placeholder={zh ? '选择时间' : 'Choose time'} value={String(settings.quietStart)} disabled={busy} allowEmpty={false}
           options={Array.from({ length: 24 }, (_, hour) => ({ value: String(hour), label: `${String(hour).padStart(2, '0')}:00` }))}
           onChange={hour => void save({ quietStart: Number(hour) })} /></label>
-        <label className="text-xs text-fg-muted">{zh ? '静默结束' : 'Quiet until'}<PopoverSelect placeholder={zh ? '选择时间' : 'Choose time'} value={String(settings.quietEnd)} disabled={busy} allowEmpty={false}
+        <label className="text-xs text-fg-muted">{zh ? '免打扰结束' : 'Quiet until'}<PopoverSelect placeholder={zh ? '选择时间' : 'Choose time'} value={String(settings.quietEnd)} disabled={busy} allowEmpty={false}
           options={Array.from({ length: 24 }, (_, hour) => ({ value: String(hour), label: `${String(hour).padStart(2, '0')}:00` }))}
           onChange={hour => void save({ quietEnd: Number(hour) })} /></label>
       </div>

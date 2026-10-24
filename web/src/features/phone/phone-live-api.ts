@@ -10,7 +10,7 @@ export type PhoneLiveState = {
   report: { sessionId: string; deviceName: string; agentId: string; modelRef: string; status: string; mode: string;
     controlOwner?: 'agent' | 'human' | 'none'; controlEpoch?: number; handoff?: string; message?: string; stopReason?: string;
     currentAction?: string; actions: number; modelRequests: number; updatedAt: number };
-  ownControl: boolean; appAccess?: 'all' | 'selected'; allowedApps?: string[]; frame: { seq: number; capturedAt: number } | null;
+  ownControl: boolean; appAccess?: 'all' | 'selected'; textInput?: 'auto' | 'manual'; allowedApps?: string[]; frame: { seq: number; capturedAt: number } | null;
 };
 export const phoneClientId = crypto.randomUUID();
 export const phoneEnded = (status: string) => ['closed', 'cancelled', 'failed', 'outcome_unknown'].includes(status);

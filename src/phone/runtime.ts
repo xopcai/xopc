@@ -65,6 +65,13 @@ export class PhoneRuntime {
     if (!driver.applications) throw new PhoneError('PHONE_APPS_UNAVAILABLE', 'The phone provider cannot list applications');
     return driver.applications(serial, signal);
   }
+  async textInputStatus(id: string, config: Config, signal: AbortSignal) {
+    const device = this.repository.get(id);
+    if (!device.enabled) throw new PhoneError('PHONE_DEVICE_DENIED', 'Phone access is disabled', 403);
+    const driver = await this.driverFor(device, config);
+    if (!driver.textInputStatus) throw new PhoneError('PHONE_TEXT_INPUT_UNAVAILABLE', 'This phone provider does not expose text input diagnostics', 409);
+    return { ...await driver.textInputStatus(device.serial, signal), policy: device.textInput ?? 'auto' };
+  }
   async preview(id: string, config: Config, signal: AbortSignal): Promise<PhoneObservation> {
     const device = this.repository.get(id);
     if (!device.enabled) throw new PhoneError('PHONE_DEVICE_DENIED', 'Phone access is disabled', 403);
@@ -251,6 +258,14 @@ export class PhoneRuntime {
       }
     } catch (error) {
       const failure = signal.aborted && signal.reason instanceof PhoneError ? signal.reason : error;
+      if (!signal.aborted && failure instanceof PhoneError && ['PHONE_TEXT_INPUT_UNAVAILABLE', 'PHONE_TEXT_INPUT_UNCONFIRMED'].includes(failure.code)) {
+        session.report.status = 'needs_user'; session.human = undefined; session.report.controlOwner = 'none'; session.report.controlEpoch!++;
+        session.report.errorCode = failure.code; session.report.message = failure.message;
+        session.report.currentAction = undefined;
+        session.report.stopReason = failure.code === 'PHONE_TEXT_INPUT_UNAVAILABLE' ? 'text_input_required' : 'text_input_unconfirmed';
+        session.budget?.pause(); await session.stream?.revoke();
+        return this.publish(session);
+      }
       if (failure instanceof PhoneError && failure.code === 'PHONE_OPERATION_TIMEOUT'
         && !terminal.has(session.report.status) && session.report.status !== 'paused') {
         session.report.status = 'paused'; session.report.controlOwner = 'none'; session.report.controlEpoch!++;
@@ -296,6 +311,8 @@ export class PhoneRuntime {
       if (session.human && (session.report.humanActions ?? 0) >= 1200) throw new PhoneError('PHONE_ACTION_LIMIT', 'Manual input limit reached; reopen the session');
       if (action.type === 'launch' && !phoneAllowsApp(session.device, action.package)) throw new PhoneError('PHONE_APP_DENIED', 'Application is not authorized');
       if (action.type === 'home' && phoneAppAccess(session.device) !== 'all') throw new PhoneError('PHONE_APP_DENIED', 'Home leaves the app allowlist');
+      if (action.type === 'typeText' && session.device.textInput === 'manual')
+        throw new PhoneError('PHONE_TEXT_INPUT_UNAVAILABLE', 'Automatic text input is disabled for this phone. Ask the user to take over and type with the phone keyboard.', 409);
       if (action.type === 'typeText' && !observation.elements.some(node => node.focused && node.editable && !node.password))
         throw new PhoneError('PHONE_INPUT_NOT_FOCUSED', 'Focus a non-password editable field before typing', 409);
       const step: PhoneReport['steps'][number] = { action: action.type, at: Date.now(), dispatch: 'unknown', actor: session.human ? 'human' : 'agent' };
@@ -304,7 +321,18 @@ export class PhoneRuntime {
       if (session.human) { session.report.humanActions = (session.report.humanActions ?? 0) + 1; session.report.steps = session.report.steps.slice(-200); }
       this.publish(session);
       try { await session.driver.execute(session.device.serial, action, observation, signal, session.human ? { settleMs: 0, ...(resetTask ? { resetTask: true } : {}) } : undefined); step.dispatch = 'completed'; }
-      catch (error) { session.report.status = 'outcome_unknown'; session.frames.clear(); throw error; }
+      catch (error) {
+        const textFailure = error instanceof PhoneError && ['PHONE_TEXT_INPUT_UNAVAILABLE', 'PHONE_TEXT_INPUT_UNCONFIRMED'].includes(error.code);
+        if (textFailure && error.code === 'PHONE_TEXT_INPUT_UNAVAILABLE') {
+          session.report.steps.pop(); session.report.actions--; if (session.human) session.report.humanActions!--;
+        } else session.report.status = 'outcome_unknown';
+        if (textFailure && session.human) {
+          session.report.status = 'paused'; session.report.errorCode = error.code; session.report.message = error.message;
+          session.report.stopReason = error.code === 'PHONE_TEXT_INPUT_UNAVAILABLE' ? 'text_input_required' : 'text_input_unconfirmed';
+          session.report.currentAction = undefined; this.publish(session);
+        }
+        session.frames.clear(); throw error;
+      }
       signal.throwIfAborted(); this.publish(session);
       return true;
     });
@@ -404,7 +432,7 @@ export class PhoneRuntime {
   }
   liveStatus(owner: string, id: string, context: ExecutionContext, client: string) {
     const session = this.liveSession(owner, id, context);
-    return { report: structuredClone(session.report), ownControl: Boolean(session.human === client), allowedApps: [...session.device.allowedApps], appAccess: phoneAppAccess(session.device),
+    return { report: structuredClone(session.report), ownControl: Boolean(session.human === client), allowedApps: [...session.device.allowedApps], appAccess: phoneAppAccess(session.device), textInput: session.device.textInput ?? 'auto',
       frame: session.frames.get() ? { seq: session.frames.get()!.seq, capturedAt: session.frames.get()!.capturedAt } : null };
   }
   async liveVideo(owner: string, id: string, context: ExecutionContext) {

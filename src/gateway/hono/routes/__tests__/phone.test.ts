@@ -19,7 +19,7 @@ afterEach(() => closeXopcDatabase());
 function fixture(admin = true) {
   const app = new Hono();
   app.use('*', async (c, next) => { setGatewayPrincipal(c, { kind: admin ? 'owner' : 'device', principalId: 'test', scopes: ['gateway.admin'] }); await next(); });
-  const driver = { discover: vi.fn(async () => [{ serial: 'emulator-5554', name: 'Emulator', state: 'device', emulator: true }]), applications: vi.fn(async () => [{ packageName: 'com.android.settings', label: '设置' }, { packageName: 'com.android.deskclock', label: '时钟' }]), observe: vi.fn(), execute: vi.fn() };
+  const driver = { discover: vi.fn(async () => [{ serial: 'emulator-5554', name: 'Emulator', state: 'device', emulator: true }]), applications: vi.fn(async () => [{ packageName: 'com.android.settings', label: '设置' }, { packageName: 'com.android.deskclock', label: '时钟' }]), textInputStatus: vi.fn(async () => ({ androidSdk: 31, unicode: 'available' as const, method: 'scrcpy-clipboard' as const, keyboardRequired: false as const })), observe: vi.fn(), execute: vi.fn() };
   const conversationId = randomUUID();
   const config = ConfigSchema.parse({ phone: { enabled: true } });
   const runtime = new PhoneRuntime(new PhoneRepository(), () => driver);
@@ -128,4 +128,21 @@ it('lists applications for registered cloud phones and discovered local phones t
   expect((await app.request('/api/phone/apps?serial=unknown')).status).toBe(400);
   expect((await fixture(false).app.request(`/api/phone/devices/${cloud.id}/apps`)).status).toBe(403);
   expect((await fixture(false).app.request('/api/phone/apps?serial=emulator-5554')).status).toBe(403);
+});
+
+it('checks text input through the selected phone provider without changing phone configuration', async () => {
+ const {app,runtime,driver}=fixture();
+ const device=runtime.repository.save({serial:'cloud.example:10001',name:'Cloud',enabled:true,allowedApps:[],textInput:'manual',connection:{kind:'aliyun-adb',endpoint:'cloud.example:10001',credentialId:randomUUID()}});
+ vi.spyOn(runtime.cloud,'driver').mockResolvedValue(driver as never);
+ const response=await app.request(`/api/phone/devices/${device.id}/input-status`);
+ expect(response.status).toBe(200); expect(response.headers.get('cache-control')).toBe('no-store');
+ expect(await response.json()).toMatchObject({payload:{unicode:'available',keyboardRequired:false,policy:'manual'}});
+ expect(driver.textInputStatus).toHaveBeenCalledWith(device.serial,expect.any(AbortSignal));
+ expect(runtime.repository.get(device.id)).toEqual(device);
+});
+it('refuses non-admin input diagnostics and diagnostics for a disabled phone', async () => {
+ const guest=fixture(false); expect((await guest.app.request('/api/phone/devices/anything/input-status')).status).toBe(403);
+ const {app,runtime,driver}=fixture(); const device=runtime.repository.save({serial:'emulator-5554',name:'Disabled',enabled:false,allowedApps:[]});
+ expect((await app.request(`/api/phone/devices/${device.id}/input-status`)).status).toBe(403);
+ expect(driver.textInputStatus).not.toHaveBeenCalled();
 });

@@ -5,6 +5,7 @@ import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
 
 import { APP_CHROME_DRAG_CLASS, APP_CHROME_NO_DRAG_CLASS } from '@/components/shell/app-chrome';
 import { getShellChromeRuntime, resolveShellChromeLayout } from '@/components/shell/chrome-layout';
+import { usePersonalProfile } from '@/features/personal-agent/use-personal-profile';
 import { SettingsModeToggle } from '@/components/shell/settings-mode-toggle';
 import { SettingsAdvancedSection } from '@/features/settings/settings-advanced-section';
 import { TabIcon } from '@/components/shell/tab-icons';
@@ -73,7 +74,9 @@ function SettingsNavGroupBlock({
   language,
   location,
   settingsMode,
+  personalName,
 }: {
+  personalName: string;
   group: SettingsShellNavGroup;
   groupIndex: number;
   language: StoredLanguage;
@@ -111,7 +114,7 @@ function SettingsNavGroupBlock({
             }
           >
             <TabIcon tab={tab} className="size-5 shrink-0 opacity-90" />
-            <span className="min-w-0 flex-1 truncate">{tabLabel(language, tab)}</span>
+            <span className="min-w-0 flex-1 truncate">{tab === 'settingsPersonal' ? personalName : tabLabel(language, tab)}</span>
             {tab === 'settingsPhoneUse' ? <BetaBadge /> : null}
           </NavLink>
         ))}
@@ -124,6 +127,7 @@ function SettingsNavGroupBlock({
 export const SettingsPageLayout = memo(function SettingsPageLayout() {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
+  const { displayName: personalName } = usePersonalProfile();
   const location = useLocation();
   const settingsMode = useSettingsModeStore((s) => s.mode);
   const settingsRailWidthPx = useSettingsRailStore((s) => s.widthPx);
@@ -221,7 +225,7 @@ export const SettingsPageLayout = memo(function SettingsPageLayout() {
 
   const settingsPathBlocked = !isSettingsPathVisibleInMode(location.pathname, settingsMode);
 
-  const activeTitle = activeSettingsTab ? tabLabel(language, activeSettingsTab) : m.nav.settings;
+  const activeTitle = activeSettingsTab === 'settingsPersonal' ? personalName : activeSettingsTab ? tabLabel(language, activeSettingsTab) : m.nav.settings;
 
   useEffect(() => {
     setMobileNavOpen(false);
@@ -242,6 +246,7 @@ export const SettingsPageLayout = memo(function SettingsPageLayout() {
               language={language}
               location={location}
               settingsMode={settingsMode}
+              personalName={personalName}
             />
           ))}
           <ExtensionSettingsNav

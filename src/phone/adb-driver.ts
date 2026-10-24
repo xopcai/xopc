@@ -11,7 +11,7 @@ import { runPhoneCommandBuffer, runPhoneCommandText } from '../process/phone-pro
 import { managedPhoneAdbPath } from '../runtime-tools/phone-dependency-catalog.js';
 import { parsePhoneApplications, phoneApplicationsCommand } from './applications.js';
 import { readScrcpyServer, scrcpyServerPath } from './scrcpy-assets.js';
-import { PhoneError, type PhoneApplication, type DiscoveredPhone, type PhoneAction, type PhoneElement, type PhoneObservation } from './contracts.js';
+import { PhoneError, type PhoneApplication, type PhoneTextInputStatus, type DiscoveredPhone, type PhoneAction, type PhoneElement, type PhoneObservation } from './contracts.js';
 
 export function resolveAdbPath(configured?: string, stateDir?: string): string {
   if (configured) return configured;
@@ -79,6 +79,7 @@ function androidCliPath(): string | undefined {
 export interface PhoneDriver {
   discover(signal?: AbortSignal): Promise<DiscoveredPhone[]>;
   applications?(serial: string, signal: AbortSignal): Promise<PhoneApplication[]>;
+  textInputStatus?(serial: string, signal: AbortSignal): Promise<PhoneTextInputStatus>;
   observe(serial: string, signal: AbortSignal): Promise<PhoneObservation>;
   capture?(serial: string, signal: AbortSignal): Promise<PhoneObservation>;
   observeForText?(serial: string, signal: AbortSignal): Promise<PhoneObservation>;
@@ -109,7 +110,14 @@ export function parseAndroidFocusedEditor(raw: string, app: string): PhoneElemen
 
 export class AdbPhoneDriver implements PhoneDriver {
   constructor(private readonly adbPath = resolveAdbPath(), private readonly command = runAdb, private readonly useAndroidCli = true,
-    private readonly readApplications?: (signal: AbortSignal) => Promise<PhoneApplication[]>) {}
+    private readonly readApplications?: (signal: AbortSignal) => Promise<PhoneApplication[]>,
+    private readonly pasteText?: (text: string, signal: AbortSignal) => Promise<void>) {}
+  async textInputStatus(serial: string, signal: AbortSignal): Promise<PhoneTextInputStatus> {
+    const androidSdk = Number((await this.shell(serial, ['getprop', 'ro.build.version.sdk'], signal)).trim()) || 0;
+    let ready = false;
+    try { await readScrcpyServer(); ready = true; } catch { signal.throwIfAborted(); }
+    return { androidSdk, unicode: androidSdk < 24 ? 'unsupported' : ready ? 'available' : 'setup_required', method: 'scrcpy-clipboard', keyboardRequired: false };
+  }
   async discover(signal?: AbortSignal): Promise<DiscoveredPhone[]> { return parseAdbDevices((await this.command(this.adbPath, ['devices', '-l'], signal)).toString()); }
   async applications(serial: string, signal: AbortSignal): Promise<PhoneApplication[]> {
     if (this.readApplications) return this.readApplications(signal);
@@ -211,17 +219,24 @@ export class AdbPhoneDriver implements PhoneDriver {
         // The remote adb shell still parses arguments. Only a conservative ASCII subset uses input text.
         if (/^[a-zA-Z0-9 .,_@+-]+$/.test(action.text) && !action.text.includes('%')) await input(['text', action.text.replaceAll(' ', '%s')]);
         else {
-          const previous = (await this.shell(serial, ['settings', 'get', 'secure', 'default_input_method'], signal)).trim();
-          const keyboard = 'com.android.adbkeyboard/.AdbIME';
-          const available = await this.shell(serial, ['ime', 'list', '-s'], signal);
-          if (!available.split(/\s+/).includes(keyboard)) throw new PhoneError('PHONE_KEYBOARD_REQUIRED', 'Unicode input requires ADB Keyboard. Install and enable it on the device first.');
-          try {
-            await this.shell(serial, ['ime', 'set', keyboard], signal);
-            const result = await this.shell(serial, ['am', 'broadcast', '-a', 'ADB_INPUT_B64', '--es', 'msg', Buffer.from(action.text).toString('base64')], signal);
-            if (!/Broadcast completed/.test(result)) throw new PhoneError('PHONE_INPUT_FAILED', 'Keyboard input was not acknowledged');
-          } finally {
-            if (/^[\w.]+\/[\w.$]+$/.test(previous)) await this.shell(serial, ['ime', 'set', previous], AbortSignal.timeout(3000));
+          const capability = await this.textInputStatus(serial, signal);
+          if (capability.unicode !== 'available') throw new PhoneError('PHONE_TEXT_INPUT_UNAVAILABLE', 'Automatic text input is unavailable. Check Phone settings or take over and type with the phone keyboard.', 409);
+          if (this.pasteText) await this.pasteText(action.text, signal);
+          else {
+            const { LocalScrcpyProvider } = await import('./scrcpy.js');
+            const provider = new LocalScrcpyProvider(this.adbPath, serial, () => {}, undefined, true);
+            try { await provider.pasteText(action.text, signal); } finally { await provider.close(); }
           }
+          // The scrcpy ACK confirms receipt, not successful insertion by the app.
+          await delay(350, undefined, { signal });
+          const after = await this.observe(serial, signal).catch(() => {
+            signal.throwIfAborted();
+            throw new PhoneError('PHONE_TEXT_INPUT_UNCONFIRMED', 'Text was sent but insertion could not be verified. Take over and inspect the input field before retrying.', 409);
+          });
+          try {
+            if (after.package !== observation.package || !after.elements.some(node => node.editable && !node.password && node.text.includes(action.text)))
+              throw new PhoneError('PHONE_TEXT_INPUT_UNCONFIRMED', 'Text was sent but insertion could not be verified. Take over and inspect the input field before retrying.', 409);
+          } finally { after.frame.fill(0); }
         }
         break;
       }
