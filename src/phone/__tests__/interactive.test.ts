@@ -1,7 +1,15 @@
+import { randomUUID } from 'node:crypto';
+
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
+import { ConfigSchema } from '../../config/schema.js';
+import { closeXopcDatabase, openXopcDatabase } from '../../storage/sqlite/connection.js';
+import type { PhoneDriver } from '../adb-driver.js';
 import { PhoneInteractiveSession } from '../interactive-session.js';
 import { ScrcpyVideoParser, scrcpyTouch } from '../scrcpy.js';
-import { PhoneError } from '../contracts.js';
+import { PhoneError, type PhoneObservation } from '../contracts.js';
+import { PhoneRepository } from '../repository.js';
+import { PhoneRuntime } from '../runtime.js';
 import type { PhoneInteractiveProvider, PhonePointer, PhoneVideoPacket } from '../live-provider.js';
 
 const streams: PhoneInteractiveSession[] = [];
@@ -75,4 +83,31 @@ it('gates video after foreground verification, hides refused pixels and waits fo
   emit(frame(true)); await vi.advanceTimersByTimeAsync(40); expect(packet).toHaveBeenCalledTimes(1);
   deny(); emit(frame(true)); await vi.advanceTimersByTimeAsync(40);
   expect(packet).toHaveBeenCalledTimes(1); expect(fault).toHaveBeenCalledWith('PHONE_APP_DENIED'); expect(provider.revoke).toHaveBeenCalled();
+});
+
+it('rejects manual semantic actions before capture or dispatch without poisoning the control lease', async () => {
+  closeXopcDatabase(); openXopcDatabase({ path: ':memory:' });
+  const repository = new PhoneRepository();
+  const device = repository.save({ serial: 'manual-semantic-test', name: 'Test phone', enabled: true, allowedApps: ['com.android.settings'] });
+  repository.setDefault(device.id);
+  const observe = async (): Promise<PhoneObservation> => ({ frameId: randomUUID(), capturedAt: Date.now(), width: 1000, height: 1000,
+    rotation: 0, package: 'com.android.settings', frame: Buffer.from('pixels'), elements: [] });
+  const driver: PhoneDriver = { discover: async () => [{ serial: device.serial, name: device.name, state: 'device', emulator: true }],
+    observe: vi.fn(observe), capture: vi.fn(observe), execute: vi.fn(async () => {}) };
+  const runtime = new PhoneRuntime(repository, () => driver, async () => ({ predict: async () => ({ kind: 'complete', summary: 'unused' }) }));
+  const context = { config: ConfigSchema.parse({ phone: { enabled: true, semanticControls: true } }), agentId: 'main', modelRef: 'test/manual' };
+  try {
+    await runtime.execute('manual', { op: 'open', mode: 'control' }, context);
+    const id = runtime.status('manual')!.sessionId;
+    await runtime.liveControl('manual', id, context, 'human', { op: 'takeover', epoch: 1, operationId: randomUUID() });
+    const frame = await runtime.liveFrame('manual', id, context, new AbortController().signal);
+    vi.mocked(driver.capture!).mockClear(); vi.mocked(driver.observe).mockClear();
+    await expect(runtime.liveControl('manual', id, context, 'human', { op: 'input', epoch: 2, operationId: randomUUID(), frameSeq: frame.seq,
+      action: { type: 'tapElement', frameId: 'untrusted-frame', selector: { text: 'Search' } } })).rejects.toMatchObject({ code: 'PHONE_INVALID_INPUT' });
+    expect(driver.capture).not.toHaveBeenCalled(); expect(driver.observe).not.toHaveBeenCalled(); expect(driver.execute).not.toHaveBeenCalled();
+    expect(runtime.status('manual')).toMatchObject({ status: 'paused', controlOwner: 'human', actions: 0, steps: [] });
+    await runtime.liveControl('manual', id, context, 'human', { op: 'input', epoch: 2, operationId: randomUUID(), frameSeq: frame.seq, action: { type: 'back' } });
+    expect(driver.execute).toHaveBeenCalledOnce();
+    expect(runtime.status('manual')).toMatchObject({ status: 'paused', controlOwner: 'human', actions: 1, steps: [{ action: 'back', dispatch: 'completed' }] });
+  } finally { await runtime.shutdown(); closeXopcDatabase(); }
 });

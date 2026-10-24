@@ -105,3 +105,8 @@ diagnosis/
 
 
 /reports
+
+# Local Phone Use benchmark output and temporary source snapshots
+/.phone-apps-baseline-*/
+/docs/design/technical/evidence/phone-recovery-*
+/docs/design/technical/evidence/phone-semantic-planning-*

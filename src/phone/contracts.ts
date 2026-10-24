@@ -8,6 +8,8 @@ export const MOCK_PHONE_GOAL = 'Open Android Settings and inspect About phone';
 export const PhoneConfigSchema = z.object({
   enabled: z.boolean().default(false),
   adbPath: z.string().min(1).optional(),
+  semanticControls: z.boolean().default(false),
+  hierarchicalPlanning: z.boolean().default(false),
   maxActionsPerSession: z.number().int().min(1).max(80).default(40),
   maxModelRequests: z.number().int().min(1).max(120).default(60),
   maxOperationDurationMs: z.number().int().min(1000).max(900_000).default(300_000),
@@ -31,9 +33,17 @@ export type PhoneTextInputStatus = { androidSdk: number; unicode: 'available' | 
 export type DiscoveredPhone = { serial: string; state: string; name: string; emulator: boolean };
 
 const Point = z.array(z.number().finite().min(0).max(1000)).length(2);
+export const PhoneElementSelectorSchema = z.object({
+  resourceId: z.string().min(1).max(300).optional(),
+  text: z.string().min(1).max(4000).optional(),
+  description: z.string().min(1).max(1000).optional(),
+}).strict().refine(value => Boolean(value.resourceId || value.text || value.description), 'Specify an exact native element identity');
+export type PhoneElementSelector = z.infer<typeof PhoneElementSelectorSchema>;
+export type PhoneCapabilities = { semanticControls?: boolean; hierarchicalPlanning?: boolean };
 export const PhoneActionSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('launch'), package: z.string().regex(/^[a-zA-Z][\w]*(?:\.[\w]+)+$/) }).strict(),
   z.object({ type: z.literal('tap'), point: Point }).strict(),
+  z.object({ type: z.literal('tapElement'), frameId: z.string().min(1).max(200), selector: PhoneElementSelectorSchema }).strict(),
   z.object({ type: z.literal('doubleTap'), point: Point }).strict(),
   z.object({ type: z.literal('longPress'), point: Point, durationMs: z.number().int().min(100).max(3000).default(800) }).strict(),
   z.object({ type: z.literal('swipe'), start: Point, end: Point, durationMs: z.number().int().min(100).max(2000).default(500) }).strict(),
@@ -84,7 +94,10 @@ export type PhoneReport = {
   steps: Array<{ action: PhoneAction['type']; at: number; dispatch: 'completed' | 'unknown'; actor?: 'agent' | 'human' }>;
   controlOwner?: 'agent' | 'human' | 'none'; controlEpoch?: number; handoff?: 'idle' | 'acquiring' | 'returning';
   currentAction?: PhoneAction['type'];
-  diagnostics?: { stalePredictions: number; protocolRepairs: number; unchangedActions: number; completionCorrections: number };
+  diagnostics?: { stalePredictions: number; protocolRepairs: number; unchangedActions: number; completionCorrections: number;
+    semanticActions?: number; semanticRejections?: number; plannedSubgoals?: number; completedSubgoals?: number;
+    backReplans?: number; focusReplans?: number; focusRecoveries?: number; resumedTextInputs?: number;
+    numericActions?: number; numericConfirmedSteps?: number; numericMismatches?: number };
 };
 
 export class PhoneError extends Error {

@@ -38,6 +38,22 @@ The Agent tool is `phone_use`: `discover` → `open` (`observe` or `control`, op
 
 ## Current boundaries
 
+Two experimental execution capabilities can be enabled independently in the top-level `phone` configuration:
+
+```json
+{
+  "phone": {
+    "enabled": true,
+    "semanticControls": true,
+    "hierarchicalPlanning": true
+  }
+}
+```
+
+Both default to `false`. Semantic execution supports observation-scoped exact native selectors and resolves a unique, fully visible non-password node to a tap immediately before the existing freshness and dispatch checks. AutoGLM retains its original prompt and observation payload for semantic-only execution; structured models receive the explicit selector protocol. Ordinary coordinate taps can also be anchored to a unique bounded native control without requiring a new model action format; ambiguous targets keep their original coordinates. Hierarchical execution compiles observable phases from explicit completion conditions and adds bounded execution recovery. AutoGLM keeps its original request protocol; the host handles risky Back replanning, missing focus and supported numeric input. Structured models can also receive the active phase. A Back boundary is a conservative native-UI heuristic, not Android back-stack proof. A model-requested Type can receive one focus tap only for the unique declared non-password field and matching intended value; a fresh observation must confirm focus and unchanged source text before that original input is sent once. An absent field produces bounded replanning feedback. Pending input is discarded on cancellation or control handoff, and an unknown dispatch is never retried. Stopped Clock-style keypads support canonical `HHh MMm SSs` entry only for a fully recognized direct setting command, an explicit matching completion app and duration, and a complete unique native keypad. Unknown or descriptive command clauses stay model-driven; completion values alone never authorize a write. Every key is confirmed from a new observation before the next key; a mismatch pauses for inspection. No timer is started by this controller. All generated actions share the existing action, request and time budgets. Final task verification is independent of phase progress. Plans and pending intents last for one `run` or `step` and are not persisted.
+
+The four-arm real-app harness compares baseline, semantic execution, planning and their combination separately. See the [semantic execution and planning report](design/technical/phone-use-semantic-planning-benchmark-2026-10-24.md) for measured completion rates and limitations.
+
 - Device control is exclusive within the Gateway's SQLite state. Use one Gateway/runner for a phone; separate Gateway state directories are not coordinated.
 - App permissions are enforced before model requests and before dispatch. An app can still transition after a check; this is not an OS sandbox or a guarantee against all UI races.
 - Unicode text on Android 7+ uses a control-only scrcpy clipboard paste channel, without installing or switching input methods. Supplied text may remain on the phone clipboard; existing clipboard contents are never read or synced. Receipt ACKs are followed by native UI verification. Missing dependencies or unconfirmed insertion pauses for manual inspection; no automatic retry or APK installation occurs. Device settings can disable automatic text input. Password fields remain protected.
